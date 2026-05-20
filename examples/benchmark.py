@@ -38,7 +38,7 @@ def main() -> None:
         claims_cv=0.10,
     )
 
-    print("fastcashflow benchmark -- single core, term = 120 months")
+    print("fastcashflow benchmark -- parallel kernels, term = 120 months")
     for n_mp in (10_000, 50_000, 200_000, 500_000):
         mps = make_portfolio(n_mp)
         run(mps, asmp)                       # warm-up (triggers JIT compilation)

@@ -22,7 +22,7 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **Phase 0** -- single fixed-benefit protection product, deterministic
   projection, BEL / RA / CSM, validated against hand calculation.
 - **Phase 1** -- confidence-level RA, acquisition + maintenance expenses.
-- **Phase 3a** -- numba-compiled projection and CSM kernels.
+- **Phase 3a** -- numba parallel (`@njit` + `prange`) kernels.
 
 Later phases: duration-based lapse and select-ultimate mortality, polars
 I/O at scale, monthly roll-forward / movement analysis.

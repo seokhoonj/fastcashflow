@@ -15,7 +15,7 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
@@ -32,13 +32,22 @@ def discount_factors(asmp: Assumptions, n_time: int) -> FloatArray:
     return (1.0 + asmp.discount_monthly) ** (-t)
 
 
-def _pv(cashflow: FloatArray, discount: FloatArray) -> FloatArray:
+@njit(parallel=True, cache=True)
+def _pv(cashflow, discount):
     """Present value of a monthly cash flow stream, per model point.
 
     ``cashflow`` is ``(n_mp, n_time)`` and ``discount`` is ``(n_time,)``;
-    the result is ``(n_mp,)``.
+    the result is ``(n_mp,)``. Parallel reduction over the model-point axis,
+    which also avoids materialising the ``cashflow * discount`` product.
     """
-    return (cashflow * discount).sum(axis=1)
+    n_mp, n_time = cashflow.shape
+    out = np.empty(n_mp)
+    for mp in prange(n_mp):
+        total = 0.0
+        for t in range(n_time):
+            total += cashflow[mp, t] * discount[t]
+        out[mp] = total
+    return out
 
 
 # Coefficients of Acklam's rational approximation of the standard-normal
@@ -122,19 +131,20 @@ class CSMResult:
     loss_component: FloatArray  # (n_mp,)          -- loss component at inception
 
 
-@njit(cache=True)
+@njit(parallel=True, cache=True)
 def _csm_kernel(csm0, coverage_units, monthly_rate):
     """Compiled CSM roll-forward kernel -- raw numpy arrays and scalars only.
 
-    Per model point: interest accretion at the locked-in rate, then release
-    proportional to coverage units. The coverage-unit tail sum is built in a
-    single backward pass so the roll-forward stays linear in time.
+    Per model point (run in parallel across cores): interest accretion at the
+    locked-in rate, then release proportional to coverage units. The
+    coverage-unit tail sum is built in a single backward pass so the
+    roll-forward stays linear in time.
     """
     n_mp, n_time = coverage_units.shape
     csm = np.zeros((n_mp, n_time + 1))
     release = np.zeros((n_mp, n_time))
 
-    for mp in range(n_mp):
+    for mp in prange(n_mp):
         csm[mp, 0] = csm0[mp]
 
         cu_tail = np.empty(n_time)          # cu_tail[s] = sum of coverage_units[mp, s:]
