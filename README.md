@@ -52,7 +52,7 @@ mps = ModelPointSet.single(
     issue_age=40, sum_assured=100_000_000,
     monthly_premium=70_000, term_months=120,
 )
-res = run(mps, asmp)
+res = run(mps, asmp)   # mps: model points, asmp: assumptions
 print(res.bel[0], res.ra[0], res.csm0[0])
 ```
 
