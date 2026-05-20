@@ -19,12 +19,14 @@ def _with_premium(mps: ModelPointSet, premium: float) -> ModelPointSet:
     """A copy of ``mps`` with every monthly premium set to ``premium``."""
     return ModelPointSet(
         issue_age=mps.issue_age,
-        death_benefit=mps.death_benefit,
         monthly_premium=np.full(mps.n_mp, premium),
         term_months=mps.term_months,
         maturity_benefit=mps.maturity_benefit,
         annuity_payment=mps.annuity_payment,
         single_premium=mps.single_premium,
+        cov_kind=mps.cov_kind,
+        cov_amount=mps.cov_amount,
+        cov_offset=mps.cov_offset,
     )
 
 

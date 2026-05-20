@@ -27,6 +27,7 @@ from fastcashflow.gmm import (
     compute_csm,
     discount_factors,
 )
+from fastcashflow.coverage import coverage_rates
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.projection import Cashflows, project_cashflows
 
@@ -99,21 +100,23 @@ class Valuation:
 
 
 @njit(parallel=True, cache=True)
-def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
-                  monthly_premium, single_premium, death_benefit,
-                  maturity_benefit, annuity_payment, expense_acquisition,
-                  maint_monthly, inflation, discount_start, discount_mid,
-                  mortality_factor, longevity_factor):
+def _value_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
+                  monthly_premium, single_premium, cov_kind, cov_amount,
+                  cov_offset, cov_rates, maturity_benefit, annuity_payment,
+                  expense_acquisition, maint_monthly, inflation,
+                  discount_start, discount_mid, mortality_factor,
+                  longevity_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
     Per model point the in-force amount is carried as a scalar through the
     time loop while the present values are accumulated directly -- death
-    claims, premiums (level, plus the single premium at t=0), expenses,
-    annuity payments and the maturity benefit. BEL, RA, CSM and the loss
-    component are derived in the same pass. The RA adds a mortality-risk
-    component (death claims) and a longevity-risk component (annuity and
-    maturity benefits). The only memory written is the four ``(n_mp,)``
-    result arrays, so the kernel is compute-bound and scales near-linearly.
+    claims (summed over the coverage list), premiums (level, plus the single
+    premium at t=0), expenses, annuity payments and the maturity benefit.
+    BEL, RA, CSM and the loss component are derived in the same pass. The RA
+    adds a mortality-risk component (death claims) and a longevity-risk
+    component (annuity and maturity benefits). The only memory written is the
+    four ``(n_mp,)`` result arrays, so the kernel is compute-bound and scales
+    near-linearly.
     """
     n_mp = issue_index.shape[0]
     bel = np.empty(n_mp)
@@ -125,21 +128,31 @@ def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
         term = term_months[mp]
         ridx = issue_index[mp]
         premium = monthly_premium[mp]
-        db = death_benefit[mp]
         annuity = annuity_payment[mp]
+        c_start = cov_offset[mp]
+        c_end = cov_offset[mp + 1]
         inforce = 1.0
         pc = 0.0
         pp = 0.0
         pe = 0.0
         pa = 0.0
+        last_year = -1
+        claim_rate = 0.0      # aggregate claim per unit in-force, current year
         for t in range(term):
             year = t // 12
-            q = rates_grid[ridx, year]
+            # Coverage rates change only once a year, so the per-coverage sum
+            # is rebuilt on a year boundary, not every month.
+            if year != last_year:
+                claim_rate = 0.0
+                for k in range(c_start, c_end):
+                    claim_rate += cov_rates[cov_kind[k], ridx, year] * cov_amount[k]
+                last_year = year
+            q = mortality_grid[ridx, year]
             ds = discount_start[t]
             dm = discount_mid[t]
             single = single_premium[mp] if t == 0 else 0.0
             pp += (inforce * premium + single) * ds
-            pc += inforce * q * db * dm
+            pc += inforce * claim_rate * dm
             pa += inforce * annuity * ds
             acquisition = expense_acquisition if t == 0 else 0.0
             pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
@@ -185,13 +198,14 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
     issue_age_grid, duration_grid = np.meshgrid(
         np.arange(min_age, max_age + 1), durations, indexing="ij"
     )
-    rates_grid = np.ascontiguousarray(
+    mortality_grid = np.ascontiguousarray(
         asmp.mortality_monthly(issue_age_grid, duration_grid), dtype=np.float64
     )
     issue_index = (mps.issue_age - min_age).astype(np.int64)
     lapse_by_year = np.ascontiguousarray(
         asmp.lapse_monthly(durations), dtype=np.float64
     )
+    cov_rates = coverage_rates(mortality_grid)
 
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
     discount_start, discount_mid = discount_factors(asmp, n_time)
@@ -200,13 +214,16 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
     longevity_factor = z * asmp.longevity_cv
 
     args = (
-        rates_grid,
+        mortality_grid,
         issue_index,
         mps.term_months,
         lapse_by_year,
         mps.monthly_premium,
         mps.single_premium,
-        mps.death_benefit,
+        mps.cov_kind,
+        mps.cov_amount,
+        mps.cov_offset,
+        cov_rates,
         mps.maturity_benefit,
         mps.annuity_payment,
         asmp.expense_acquisition,
