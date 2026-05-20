@@ -1,0 +1,45 @@
+"""Phase 0 worked example -- one level-premium protection policy.
+
+Run from the project root::
+
+    python examples/phase0_term.py
+"""
+import numpy as np
+
+from fastcashflow import Assumptions, ModelPointSet, run
+
+
+def main() -> None:
+    # Illustrative age-based monthly mortality.
+    def mortality_monthly(ages: np.ndarray) -> np.ndarray:
+        annual_q = 0.0005 * (1.0 + 0.04 * (ages - 30.0))
+        return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)
+
+    asmp = Assumptions(
+        mortality_monthly=mortality_monthly,
+        lapse_monthly=0.01,
+        discount_annual=0.03,
+        ra_rate=0.05,
+    )
+
+    mps = ModelPointSet.single(
+        issue_age=40,
+        sum_assured=100_000_000,
+        monthly_premium=70_000,
+        term_months=120,
+    )
+
+    res = run(mps, asmp)
+
+    print("Phase 0 -- single protection policy")
+    print(f"  BEL            : {res.bel[0]:>16,.0f}")
+    print(f"  RA             : {res.ra[0]:>16,.0f}")
+    print(f"  FCF (BEL + RA) : {res.bel[0] + res.ra[0]:>16,.0f}")
+    print(f"  CSM (t=0)      : {res.csm0[0]:>16,.0f}")
+    print(f"  loss component : {res.loss_component[0]:>16,.0f}")
+    print(f"  CSM[0..5]      : {np.round(res.csm[0, :6], 0)}")
+    print(f"  CSM[t=term]    : {res.csm[0, -1]:>16,.2f}  (should be ~0)")
+
+
+if __name__ == "__main__":
+    main()

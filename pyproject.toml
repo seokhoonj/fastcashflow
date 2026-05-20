@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fastcashflow"
+version = "0.0.1"
+description = "Fast IFRS 17 GMM cash flow projection engine (BEL, RA, CSM)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Seokhoon Joo" }]
+keywords = [
+    "IFRS 17", "GMM", "CSM", "BEL", "risk adjustment",
+    "actuarial", "cashflow projection", "insurance", "life", "health",
+]
+dependencies = ["numpy>=1.24"]
+
+# License: TBD (OSS vs commercial split not yet decided).
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fastcashflow"]
