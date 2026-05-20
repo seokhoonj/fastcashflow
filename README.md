@@ -37,8 +37,14 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **GPU backend** -- `value(..., backend="gpu")` runs the same kernel
   on a CUDA device (optional; requires a CUDA GPU).
 
-Beyond the phase plan: more product types, and the VFA / PAA measurement
-models.
+Beyond the phase plan:
+
+- **Products** -- term life, whole life, endowment and pure endowment, as
+  combinations of a death benefit and a maturity benefit.
+- **Pricing** -- `solve_premium` solves the level premium for a break-even,
+  margin or target-CSM objective.
+
+Further out: annuity and health products; the VFA / PAA measurement models.
 
 ## Quick start
 
@@ -59,7 +65,7 @@ asmp = Assumptions(
     claims_cv=0.10,
 )
 mps = ModelPointSet.single(
-    issue_age=40, sum_assured=100_000_000,
+    issue_age=40, death_benefit=100_000_000,
     monthly_premium=70_000, term_months=120,
 )
 res = measure(mps, asmp)   # mps: model points, asmp: assumptions
@@ -76,6 +82,19 @@ from fastcashflow import value
 val = value(mps, asmp)                      # parallel CPU kernel
 val_gpu = value(mps, asmp, backend="gpu")   # CUDA device, if available
 print(val.bel, val.ra, val.csm, val.loss_component)
+```
+
+The product is a combination of benefits -- a positive `maturity_benefit`
+makes the contract an endowment, and `solve_premium` prices it:
+
+```python
+from fastcashflow import solve_premium
+
+endowment = ModelPointSet.single(
+    issue_age=40, death_benefit=100_000_000,
+    monthly_premium=0, term_months=120, maturity_benefit=50_000_000,
+)
+premium = solve_premium(endowment, asmp, margin=0.10)   # 10% profit margin
 ```
 
 At portfolio scale, read model points from a parquet or CSV file and

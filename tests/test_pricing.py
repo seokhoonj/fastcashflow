@@ -26,7 +26,7 @@ def _portfolio(n: int = 300) -> ModelPointSet:
     rng = np.random.default_rng(8)
     return ModelPointSet(
         issue_age=rng.integers(30, 55, n),
-        sum_assured=rng.integers(20, 100, n) * 1_000_000,
+        death_benefit=rng.integers(20, 100, n) * 1_000_000,
         monthly_premium=np.zeros(n),          # ignored by solve_premium
         term_months=rng.integers(60, 180, n),
     )
@@ -35,7 +35,7 @@ def _portfolio(n: int = 300) -> ModelPointSet:
 def _priced(mps: ModelPointSet, premium) -> ModelPointSet:
     return ModelPointSet(
         issue_age=mps.issue_age,
-        sum_assured=mps.sum_assured,
+        death_benefit=mps.death_benefit,
         monthly_premium=premium,
         term_months=mps.term_months,
     )

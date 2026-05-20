@@ -5,6 +5,7 @@ Sign convention (liability perspective, used consistently across the engine):
     premium_cf : insurer INFLOW  -- reduces the insurance liability
     claim_cf   : insurer OUTFLOW -- increases the insurance liability
     expense_cf : insurer OUTFLOW -- increases the insurance liability
+    maturity_cf: insurer OUTFLOW -- increases the insurance liability
 
 Getting this convention consistent everywhere is the single most error-prone
 part of a GMM engine, so it is stated once here and never re-decided.
@@ -17,6 +18,7 @@ Timing convention (monthly steps, month ``t`` spans ``[t, t+1)``):
     lapses      : occur during month t, on the mortality survivors
     claim       : death benefit for deaths during month t
     expense     : acquisition at t = 0; maintenance every in-force month
+    maturity    : maturity benefit at time = term, paid to the survivors
 
 Two layers: a compiled, parallel kernel (``_project_kernel``) runs the raw
 time loop; a Pythonic wrapper (``project_cashflows``) prepares its inputs.
@@ -35,13 +37,18 @@ from fastcashflow.modelpoint import ModelPointSet
 
 @dataclass(frozen=True, slots=True)
 class Cashflows:
-    """Projected monthly cash flows. Every array is shaped ``(n_mp, n_time)``."""
+    """Projected cash flows.
+
+    The per-month arrays are shaped ``(n_mp, n_time)``; ``maturity_cf`` is
+    ``(n_mp,)`` -- one payment per policy, at that policy's term.
+    """
 
     inforce: FloatArray      # policies in force at the start of each month
     deaths: FloatArray       # deaths during each month
     premium_cf: FloatArray   # premium inflow per month
-    claim_cf: FloatArray     # claim outflow per month
+    claim_cf: FloatArray     # death-benefit outflow per month
     expense_cf: FloatArray   # expense outflow per month
+    maturity_cf: FloatArray  # (n_mp,) maturity benefit, paid at time = term
 
     @property
     def n_time(self) -> int:
@@ -51,8 +58,8 @@ class Cashflows:
 
 @njit(parallel=True, cache=True)
 def _project_kernel(rates_by_year, term_months, lapse_by_year, monthly_premium,
-                    sum_assured, expense_acquisition, maint_monthly,
-                    inflation, n_time):
+                    death_benefit, maturity_benefit, expense_acquisition,
+                    maint_monthly, inflation, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -60,7 +67,8 @@ def _project_kernel(rates_by_year, term_months, lapse_by_year, monthly_premium,
     in-force recursion depends on the previous month.
 
     Mortality and lapse are supplied per policy year (``rates_by_year``,
-    ``lapse_by_year``); both change only once every twelve months.
+    ``lapse_by_year``); both change only once every twelve months. The
+    maturity benefit is paid to the in-force survivors at time = term.
     """
     n_mp = rates_by_year.shape[0]
     inforce = np.zeros((n_mp, n_time))
@@ -68,6 +76,7 @@ def _project_kernel(rates_by_year, term_months, lapse_by_year, monthly_premium,
     premium_cf = np.zeros((n_mp, n_time))
     claim_cf = np.zeros((n_mp, n_time))
     expense_cf = np.zeros((n_mp, n_time))
+    maturity_cf = np.zeros(n_mp)
 
     for mp in prange(n_mp):
         term = term_months[mp]
@@ -78,17 +87,20 @@ def _project_kernel(rates_by_year, term_months, lapse_by_year, monthly_premium,
             q = rates_by_year[mp, year]
             deaths[mp, t] = ift * q
             premium_cf[mp, t] = ift * monthly_premium[mp]
-            claim_cf[mp, t] = ift * q * sum_assured[mp]
+            claim_cf[mp, t] = ift * q * death_benefit[mp]
             acquisition = expense_acquisition if t == 0 else 0.0
             expense_cf[mp, t] = acquisition + ift * maint_monthly * inflation[t]
+            survivors = ift * (1.0 - q) * (1.0 - lapse_by_year[year])
             if t + 1 < term:
-                inforce[mp, t + 1] = ift * (1.0 - q) * (1.0 - lapse_by_year[year])
+                inforce[mp, t + 1] = survivors
+            else:
+                maturity_cf[mp] = survivors * maturity_benefit[mp]
 
-    return inforce, deaths, premium_cf, claim_cf, expense_cf
+    return inforce, deaths, premium_cf, claim_cf, expense_cf, maturity_cf
 
 
 def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
-    """Project monthly cash flows for every model point.
+    """Project cash flows for every model point.
 
     The Pythonic wrapper: it extracts raw arrays from the inputs and
     evaluates the assumptions. Mortality and lapse are evaluated on the
@@ -112,12 +124,13 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
     )
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
 
-    inforce, deaths, premium_cf, claim_cf, expense_cf = _project_kernel(
+    inforce, deaths, premium_cf, claim_cf, expense_cf, maturity_cf = _project_kernel(
         rates_by_year,
         mps.term_months,
         lapse_by_year,
         mps.monthly_premium,
-        mps.sum_assured,
+        mps.death_benefit,
+        mps.maturity_benefit,
         asmp.expense_acquisition,
         asmp.expense_maintenance_annual / 12.0,
         inflation,
@@ -129,4 +142,5 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
         premium_cf=premium_cf,
         claim_cf=claim_cf,
         expense_cf=expense_cf,
+        maturity_cf=maturity_cf,
     )

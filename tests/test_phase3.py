@@ -31,7 +31,7 @@ def test_value_matches_measure():
     # distinct and repeated issue ages -- exercises the unique-age grid
     mps = ModelPointSet(
         issue_age=np.array([30, 45, 45, 55, 38]),
-        sum_assured=np.array([1e8, 5e7, 8e7, 3e7, 6e7]),
+        death_benefit=np.array([1e8, 5e7, 8e7, 3e7, 6e7]),
         monthly_premium=np.array([70_000, 90_000, 110_000, 130_000, 80_000]),
         term_months=np.array([120, 120, 120, 120, 120]),
     )
@@ -58,7 +58,7 @@ def test_value_onerous():
         claims_cv=0.05,
     )
     mps = ModelPointSet.single(
-        issue_age=40, sum_assured=1_000_000.0,
+        issue_age=40, death_benefit=1_000_000.0,
         monthly_premium=100.0, term_months=12,
     )
     v = value(mps, asmp)
@@ -88,7 +88,7 @@ def test_value_gpu_matches_cpu():
     n = 5_000
     mps = ModelPointSet(
         issue_age=rng.integers(25, 60, n),
-        sum_assured=rng.integers(10, 100, n) * 1_000_000,
+        death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(3, 15, n) * 10_000,
         term_months=np.full(n, 120),
     )

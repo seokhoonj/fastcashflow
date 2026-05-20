@@ -30,13 +30,13 @@ def _assumptions(**overrides) -> Assumptions:
 
 
 def test_hand_calculation():
-    sum_assured = 1_000_000.0
+    death_benefit = 1_000_000.0
     premium = 12_000.0
     term = 2
 
     res = measure(
         ModelPointSet.single(
-            issue_age=40, sum_assured=sum_assured,
+            issue_age=40, death_benefit=death_benefit,
             monthly_premium=premium, term_months=term,
         ),
         _assumptions(),
@@ -49,7 +49,7 @@ def test_hand_calculation():
     # cash flows (discount factors are all 1 -- zero discount)
     deaths = [inforce[0] * 0.01, inforce[1] * 0.01]
     premium_cf = [inforce[0] * premium, inforce[1] * premium]
-    claim_cf = [deaths[0] * sum_assured, deaths[1] * sum_assured]
+    claim_cf = [deaths[0] * death_benefit, deaths[1] * death_benefit]
     pv_claims = sum(claim_cf)        # 10000 + 9702 = 19702
     pv_premiums = sum(premium_cf)    # 12000 + 11642.4 = 23642.4
 
@@ -79,7 +79,7 @@ def test_onerous_contract():
     """Premium far too low -> onerous -> CSM floored at 0, loss component > 0."""
     res = measure(
         ModelPointSet.single(
-            issue_age=40, sum_assured=1_000_000.0,
+            issue_age=40, death_benefit=1_000_000.0,
             monthly_premium=100.0, term_months=12,
         ),
         _assumptions(
@@ -94,7 +94,7 @@ def test_csm_fully_releases():
     """A profitable contract's CSM must run off to ~0 by the end of term."""
     res = measure(
         ModelPointSet.single(
-            issue_age=35, sum_assured=50_000_000.0,
+            issue_age=35, death_benefit=50_000_000.0,
             monthly_premium=80_000.0, term_months=60,
         ),
         _assumptions(

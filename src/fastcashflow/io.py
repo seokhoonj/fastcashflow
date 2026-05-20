@@ -25,7 +25,7 @@ from fastcashflow.assumptions import Assumptions
 from fastcashflow.engine import Valuation, value
 from fastcashflow.modelpoint import ModelPointSet
 
-_REQUIRED_COLUMNS = ("issue_age", "sum_assured", "monthly_premium", "term_months")
+_REQUIRED_COLUMNS = ("issue_age", "death_benefit", "monthly_premium", "term_months")
 
 
 def _read_frame(path) -> pl.DataFrame:
@@ -52,21 +52,25 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 def read_model_points(path) -> ModelPointSet:
     """Read model points from a parquet or CSV file into a ``ModelPointSet``.
 
-    The file must contain the columns ``issue_age``, ``sum_assured``,
-    ``monthly_premium`` and ``term_months``; any other column (a policy
-    identifier, say) is ignored. To carry an identifier through to the
-    results, read it separately and pass it to :func:`write_valuation`.
+    The file must contain the columns ``issue_age``, ``death_benefit``,
+    ``monthly_premium`` and ``term_months``; ``maturity_benefit`` is read if
+    present, else defaults to zero. Any other column (a policy identifier,
+    say) is ignored -- to carry an identifier through to the results, read it
+    separately and pass it to :func:`write_valuation`.
     """
     df = _read_frame(path)
     missing = [c for c in _REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"{path!r} is missing required column(s): {missing}")
-    return ModelPointSet(
+    fields = dict(
         issue_age=df["issue_age"].to_numpy(),
-        sum_assured=df["sum_assured"].to_numpy(),
+        death_benefit=df["death_benefit"].to_numpy(),
         monthly_premium=df["monthly_premium"].to_numpy(),
         term_months=df["term_months"].to_numpy(),
     )
+    if "maturity_benefit" in df.columns:
+        fields["maturity_benefit"] = df["maturity_benefit"].to_numpy()
+    return ModelPointSet(**fields)
 
 
 def write_valuation(valuation: Valuation, path, *, ids=None) -> None:
@@ -147,6 +151,9 @@ def value_file(
         raise ValueError(
             f"{str(input_path)!r} is missing required column(s): {missing}"
         )
+    has_maturity = "maturity_benefit" in available
+    if has_maturity:
+        columns = [*columns, "maturity_benefit"]
 
     output_dir.mkdir(parents=True, exist_ok=True)
     if any(output_dir.glob("part-*.parquet")):
@@ -161,12 +168,15 @@ def value_file(
     processed = 0
     for part, offset in enumerate(range(0, n_total, chunk_size)):
         chunk = projected.slice(offset, chunk_size).collect()
-        mps = ModelPointSet(
+        fields = dict(
             issue_age=chunk["issue_age"].to_numpy(),
-            sum_assured=chunk["sum_assured"].to_numpy(),
+            death_benefit=chunk["death_benefit"].to_numpy(),
             monthly_premium=chunk["monthly_premium"].to_numpy(),
             term_months=chunk["term_months"].to_numpy(),
         )
+        if has_maturity:
+            fields["maturity_benefit"] = chunk["maturity_benefit"].to_numpy()
+        mps = ModelPointSet(**fields)
         ids = chunk[id_column].to_numpy() if id_column is not None else None
         write_valuation(
             value(mps, assumptions, backend=backend),

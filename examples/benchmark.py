@@ -24,7 +24,7 @@ def make_portfolio(n_mp: int, seed: int = 42) -> ModelPointSet:
     rng = np.random.default_rng(seed)
     return ModelPointSet(
         issue_age=rng.integers(25, 60, n_mp),
-        sum_assured=rng.integers(10, 100, n_mp) * 1_000_000,
+        death_benefit=rng.integers(10, 100, n_mp) * 1_000_000,
         monthly_premium=rng.integers(3, 15, n_mp) * 10_000,
         term_months=np.full(n_mp, 120),
     )

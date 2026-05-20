@@ -22,18 +22,19 @@ from fastcashflow.projection import Cashflows
 
 
 def discount_factors(asmp: Assumptions, n_time: int) -> tuple[FloatArray, FloatArray]:
-    """Monthly discount factors back to time 0, by cash-flow timing.
+    """Discount factors back to time 0, by cash-flow timing.
 
-    Returns ``(discount_start, discount_mid)``, each of shape ``(n_time,)``:
+    Returns ``(discount_start, discount_mid)``:
 
-    * ``discount_start[t] = (1 + i)^-t``       -- start-of-month flows
-      (premiums, charged at the start of the month).
-    * ``discount_mid[t]   = (1 + i)^-(t+0.5)`` -- mid-month flows (claims and
-      expenses, which arise during the month).
+    * ``discount_start[t] = (1 + i)^-t``, shape ``(n_time+1,)`` -- start-of-
+      month flows (premiums) and the maturity benefit at time = term.
+    * ``discount_mid[t]   = (1 + i)^-(t+0.5)``, shape ``(n_time,)`` -- mid-
+      month flows (claims and expenses, which arise during the month).
     """
-    t = np.arange(n_time)
     base = 1.0 + asmp.discount_monthly
-    return base ** (-t), base ** (-(t + 0.5))
+    start = np.arange(n_time + 1)
+    mid = np.arange(n_time)
+    return base ** (-start), base ** (-(mid + 0.5))
 
 
 # Coefficients of Acklam's rational approximation of the standard-normal
@@ -77,7 +78,8 @@ def _norm_ppf(p: float) -> float:
 
 
 @njit(parallel=True, cache=True)
-def _rollforward_kernel(claim_cf, expense_cf, premium_cf, monthly_rate):
+def _rollforward_kernel(claim_cf, expense_cf, premium_cf, maturity_cf,
+                        term_months, monthly_rate):
     """Backward pass -- the BEL and PV-of-claims trajectories.
 
     ``BEL[t]`` is the present value, at month boundary ``t``, of the cash
@@ -87,9 +89,11 @@ def _rollforward_kernel(claim_cf, expense_cf, premium_cf, monthly_rate):
         BEL[t] = (claim[t] + expense[t]) * (1+i)^-0.5 - premium[t]
                  + BEL[t+1] * (1+i)^-1
 
-    so ``BEL[:, 0]`` is the inception BEL. The claims-only present value is
-    rolled back the same way; the Risk Adjustment is a scalar multiple of it.
-    Both trajectories have shape ``(n_mp, n_time+1)`` and end at zero.
+    The maturity benefit is a single payment at ``t = term``, so it seeds
+    ``BEL[term]``. ``BEL[:, 0]`` is then the inception BEL. The claims-only
+    present value is rolled back the same way, excluding maturity benefits
+    (the Risk Adjustment is keyed to claims volatility). Both trajectories
+    have shape ``(n_mp, n_time+1)``.
     """
     n_mp, n_time = claim_cf.shape
     bel = np.zeros((n_mp, n_time + 1))
@@ -99,7 +103,9 @@ def _rollforward_kernel(claim_cf, expense_cf, premium_cf, monthly_rate):
     full = 1.0 / (1.0 + monthly_rate)
 
     for mp in prange(n_mp):
-        for t in range(n_time - 1, -1, -1):
+        term = term_months[mp]
+        bel[mp, term] = maturity_cf[mp]
+        for t in range(term - 1, -1, -1):
             claim = claim_cf[mp, t]
             bel[mp, t] = (
                 (claim + expense_cf[mp, t]) * half

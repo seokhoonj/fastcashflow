@@ -34,7 +34,7 @@ def test_risk_adjustment():
     """RA = z(confidence) * claims_cv * PV(claims), hand-checked."""
     res = measure(
         ModelPointSet.single(
-            issue_age=40, sum_assured=1_000_000.0,
+            issue_age=40, death_benefit=1_000_000.0,
             monthly_premium=12_000.0, term_months=2,
         ),
         _assumptions(ra_confidence=0.75, claims_cv=0.20),
@@ -49,7 +49,7 @@ def test_expenses():
     """Acquisition (t=0) and maintenance expense, hand-checked."""
     res = measure(
         ModelPointSet.single(
-            issue_age=40, sum_assured=1_000_000.0,
+            issue_age=40, death_benefit=1_000_000.0,
             monthly_premium=12_000.0, term_months=2,
         ),
         _assumptions(
@@ -75,7 +75,7 @@ def test_expense_inflation():
     """Maintenance expense grows with inflation; acquisition does not recur."""
     res = measure(
         ModelPointSet.single(
-            issue_age=40, sum_assured=1_000_000.0,
+            issue_age=40, death_benefit=1_000_000.0,
             monthly_premium=12_000.0, term_months=13,
         ),
         _assumptions(

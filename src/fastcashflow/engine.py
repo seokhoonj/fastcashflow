@@ -61,7 +61,8 @@ def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
     discount_start, discount_mid = discount_factors(asmp, proj.n_time)
 
     bel, pv_claims = _rollforward_kernel(
-        proj.claim_cf, proj.expense_cf, proj.premium_cf, asmp.discount_monthly
+        proj.claim_cf, proj.expense_cf, proj.premium_cf,
+        proj.maturity_cf, mps.term_months, asmp.discount_monthly
     )
     ra = _norm_ppf(asmp.ra_confidence) * asmp.claims_cv * pv_claims
     csm, csm_accretion, csm_release, loss_component = compute_csm(
@@ -97,9 +98,9 @@ class Valuation:
 
 @njit(parallel=True, cache=True)
 def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
-                  monthly_premium, sum_assured, expense_acquisition,
-                  maint_monthly, inflation, discount_start, discount_mid,
-                  ra_factor):
+                  monthly_premium, death_benefit, maturity_benefit,
+                  expense_acquisition, maint_monthly, inflation,
+                  discount_start, discount_mid, ra_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
     Per model point the in-force amount is carried as a scalar through the
@@ -118,7 +119,7 @@ def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
         term = term_months[mp]
         ridx = issue_index[mp]
         premium = monthly_premium[mp]
-        sa = sum_assured[mp]
+        db = death_benefit[mp]
         inforce = 1.0
         pc = 0.0
         pp = 0.0
@@ -129,11 +130,12 @@ def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
             ds = discount_start[t]
             dm = discount_mid[t]
             pp += inforce * premium * ds
-            pc += inforce * q * sa * dm
+            pc += inforce * q * db * dm
             acquisition = expense_acquisition if t == 0 else 0.0
             pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
             inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
-        bel_mp = pc + pe - pp
+        pm = inforce * maturity_benefit[mp] * discount_start[term]
+        bel_mp = pc + pm + pe - pp
         ra_mp = ra_factor * pc
         fcf = bel_mp + ra_mp
         bel[mp] = bel_mp
@@ -191,7 +193,8 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
         mps.term_months,
         lapse_by_year,
         mps.monthly_premium,
-        mps.sum_assured,
+        mps.death_benefit,
+        mps.maturity_benefit,
         asmp.expense_acquisition,
         asmp.expense_maintenance_annual / 12.0,
         inflation,

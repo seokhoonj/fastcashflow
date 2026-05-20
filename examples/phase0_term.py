@@ -29,7 +29,7 @@ def main() -> None:
 
     mps = ModelPointSet.single(
         issue_age=40,
-        sum_assured=100_000_000,
+        death_benefit=100_000_000,
         monthly_premium=70_000,
         term_months=120,
     )

@@ -26,14 +26,14 @@ def _flat_assumptions(**overrides) -> Assumptions:
 
 def test_mid_month_discounting():
     """Claims discounted mid-month, premiums start-of-month -- hand-checked."""
-    sum_assured = 1_000_000.0
+    death_benefit = 1_000_000.0
     premium = 12_000.0
     term = 2
     q = 0.01
 
     res = measure(
         ModelPointSet.single(
-            issue_age=40, sum_assured=sum_assured,
+            issue_age=40, death_benefit=death_benefit,
             monthly_premium=premium, term_months=term,
         ),
         _flat_assumptions(),
@@ -46,12 +46,12 @@ def test_mid_month_discounting():
     d_start = (1.0 + i) ** (-t)
     d_mid = (1.0 + i) ** (-(t + 0.5))
 
-    pv_claims = float(np.sum(deaths * sum_assured * d_mid))
+    pv_claims = float(np.sum(deaths * death_benefit * d_mid))
     pv_premiums = float(np.sum(inforce * premium * d_start))
     assert np.isclose(res.bel[0, 0], pv_claims - pv_premiums)
 
     # the timing genuinely differs from the old all-start-of-month basis
-    bel_all_start = float(np.sum(deaths * sum_assured * d_start)
+    bel_all_start = float(np.sum(deaths * death_benefit * d_start)
                           - np.sum(inforce * premium * d_start))
     assert not np.isclose(res.bel[0, 0], bel_all_start)
 
@@ -66,7 +66,7 @@ def test_csm_movement_identity():
     n = 200
     mps = ModelPointSet(
         issue_age=rng.integers(25, 55, n),
-        sum_assured=rng.integers(10, 100, n) * 1_000_000,
+        death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(8, 20, n) * 10_000,
         term_months=rng.integers(60, 120, n),
     )

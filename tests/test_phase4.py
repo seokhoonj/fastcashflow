@@ -28,7 +28,7 @@ def test_bel_rollforward():
     """The BEL trajectory matches an independent backward recursion."""
     asmp = _assumptions()
     one = ModelPointSet.single(
-        issue_age=45, sum_assured=80_000_000,
+        issue_age=45, death_benefit=80_000_000,
         monthly_premium=150_000, term_months=36,
     )
     res = measure(one, asmp)
@@ -60,7 +60,7 @@ def test_liability_runs_off():
     n = 150
     mps = ModelPointSet(
         issue_age=rng.integers(30, 55, n),
-        sum_assured=rng.integers(20, 100, n) * 1_000_000,
+        death_benefit=rng.integers(20, 100, n) * 1_000_000,
         monthly_premium=rng.integers(10, 25, n) * 10_000,
         term_months=rng.integers(48, 120, n),
     )

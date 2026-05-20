@@ -17,7 +17,7 @@ def _portfolio(n: int = 400) -> ModelPointSet:
     rng = np.random.default_rng(3)
     return ModelPointSet(
         issue_age=rng.integers(25, 60, n),
-        sum_assured=rng.integers(10, 100, n) * 1_000_000,
+        death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
     )
@@ -39,7 +39,7 @@ def _assumptions() -> Assumptions:
 def _frame(mps: ModelPointSet) -> pl.DataFrame:
     return pl.DataFrame({
         "issue_age": mps.issue_age,
-        "sum_assured": mps.sum_assured,
+        "death_benefit": mps.death_benefit,
         "monthly_premium": mps.monthly_premium,
         "term_months": mps.term_months,
     })
@@ -56,7 +56,7 @@ def test_model_points_round_trip(tmp_path, suffix):
     loaded = read_model_points(path)
     assert loaded.n_mp == mps.n_mp
     assert np.allclose(loaded.issue_age, mps.issue_age)
-    assert np.allclose(loaded.sum_assured, mps.sum_assured)
+    assert np.allclose(loaded.death_benefit, mps.death_benefit)
     assert np.allclose(loaded.monthly_premium, mps.monthly_premium)
     assert np.allclose(loaded.term_months, mps.term_months)
 
@@ -123,7 +123,7 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
     n = 1000
     mps = ModelPointSet(
         issue_age=rng.integers(25, 60, n),
-        sum_assured=rng.integers(10, 100, n) * 1_000_000,
+        death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
     )

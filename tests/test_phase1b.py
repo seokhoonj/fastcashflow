@@ -42,13 +42,13 @@ def _assumptions(**overrides) -> Assumptions:
 
 def test_select_ultimate_and_duration_lapse():
     """Mortality and lapse both step at the policy-year boundary -- hand-checked."""
-    sum_assured = 1_000_000.0
+    death_benefit = 1_000_000.0
     premium = 10_000.0
     term = 24
 
     res = measure(
         ModelPointSet.single(
-            issue_age=40, sum_assured=sum_assured,
+            issue_age=40, death_benefit=death_benefit,
             monthly_premium=premium, term_months=term,
         ),
         _assumptions(),
@@ -84,7 +84,7 @@ def test_select_ultimate_and_duration_lapse():
     )
 
     # BEL = PV(claims) - PV(premiums); zero discount, zero expenses
-    pv_claims = sum_assured * deaths.sum()
+    pv_claims = death_benefit * deaths.sum()
     pv_premiums = premium * inforce.sum()
     assert np.isclose(res.bel[0, 0], pv_claims - pv_premiums)
 
@@ -95,7 +95,7 @@ def test_value_matches_run_phase1b():
     n = 500
     mps = ModelPointSet(
         issue_age=rng.integers(25, 55, n),
-        sum_assured=rng.integers(10, 100, n) * 1_000_000,
+        death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(13, 36, n),
     )
