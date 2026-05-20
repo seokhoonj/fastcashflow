@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from fastcashflow._typing import FloatArray
+from fastcashflow._typing import FloatArray, IntArray
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,10 +14,15 @@ class Assumptions:
     Parameters
     ----------
     mortality_monthly :
-        Maps an array of attained ages (years) to an array of monthly
-        mortality rates of the same shape.
+        Maps ``(issue_age, duration_years)`` -- arrays of issue age (years)
+        and completed policy years (0-based), of the same shape -- to an
+        array of monthly mortality rates. A select-and-ultimate basis is
+        expressed by letting the rate depend on duration within the select
+        period and on attained age (issue_age + duration) beyond it; the
+        select-period logic lives in this callable, not the engine.
     lapse_monthly :
-        Flat monthly lapse rate.
+        Maps an array of completed policy years (0-based) to an array of
+        monthly lapse rates of the same shape.
     discount_annual :
         Flat annual discount rate. Locked in at initial recognition and used
         both for discounting cash flows and for CSM interest accretion.
@@ -35,8 +40,8 @@ class Assumptions:
         Coefficient of variation of claims, used by the RA.
     """
 
-    mortality_monthly: Callable[[FloatArray], FloatArray]
-    lapse_monthly: float
+    mortality_monthly: Callable[[FloatArray, IntArray], FloatArray]
+    lapse_monthly: Callable[[IntArray], FloatArray]
     discount_annual: float
     expense_acquisition: float
     expense_maintenance_annual: float

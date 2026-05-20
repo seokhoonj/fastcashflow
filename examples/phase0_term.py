@@ -11,13 +11,14 @@ from fastcashflow import Assumptions, ModelPointSet, run
 
 def main() -> None:
     # Illustrative age-based monthly mortality.
-    def mortality_monthly(ages: np.ndarray) -> np.ndarray:
-        annual_q = 0.0005 * (1.0 + 0.04 * (ages - 30.0))
+    def mortality_monthly(issue_age: np.ndarray, duration: np.ndarray) -> np.ndarray:
+        attained = issue_age + duration
+        annual_q = 0.0005 * (1.0 + 0.04 * (attained - 30.0))
         return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)
 
     asmp = Assumptions(
         mortality_monthly=mortality_monthly,
-        lapse_monthly=0.01,
+        lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
         discount_annual=0.03,
         expense_acquisition=300_000.0,
         expense_maintenance_annual=60_000.0,

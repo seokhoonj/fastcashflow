@@ -1,0 +1,110 @@
+"""Phase 1b validation -- select-and-ultimate mortality and duration-based lapse.
+
+Both assumptions step at the first policy-year boundary, so a 24-month case
+exercises the select period, the ultimate period and the duration switch in
+both mortality and lapse. The in-force recursion is recomputed independently
+in plain Python as the correctness anchor.
+"""
+import numpy as np
+
+from fastcashflow import Assumptions, ModelPointSet, run, value
+
+SELECT_Q = 0.005      # monthly mortality, policy year 0 (select)
+ULT_Q = 0.02          # monthly mortality, policy year 1+ (ultimate)
+SELECT_LAPSE = 0.03   # monthly lapse, policy year 0
+ULT_LAPSE = 0.01      # monthly lapse, policy year 1+
+
+
+def _mortality(issue_age, duration):
+    """Select for the first policy year, ultimate thereafter."""
+    return np.where(duration < 1, SELECT_Q, ULT_Q)
+
+
+def _lapse(duration):
+    """Higher lapse in the first policy year, lower thereafter."""
+    return np.where(duration < 1, SELECT_LAPSE, ULT_LAPSE)
+
+
+def _assumptions(**overrides) -> Assumptions:
+    base = dict(
+        mortality_monthly=_mortality,
+        lapse_monthly=_lapse,
+        discount_annual=0.0,
+        expense_acquisition=0.0,
+        expense_maintenance_annual=0.0,
+        expense_inflation=0.0,
+        ra_confidence=0.75,
+        claims_cv=0.0,
+    )
+    base.update(overrides)
+    return Assumptions(**base)
+
+
+def test_select_ultimate_and_duration_lapse():
+    """Mortality and lapse both step at the policy-year boundary -- hand-checked."""
+    sum_assured = 1_000_000.0
+    premium = 10_000.0
+    term = 24
+
+    res = run(
+        ModelPointSet.single(
+            issue_age=40, sum_assured=sum_assured,
+            monthly_premium=premium, term_months=term,
+        ),
+        _assumptions(),
+    )
+
+    # Independent recomputation of the in-force / death recursion.
+    inforce = np.empty(term)
+    deaths = np.empty(term)
+    inforce[0] = 1.0
+    for t in range(term):
+        q = SELECT_Q if t < 12 else ULT_Q
+        lapse = SELECT_LAPSE if t < 12 else ULT_LAPSE
+        deaths[t] = inforce[t] * q
+        if t + 1 < term:
+            inforce[t + 1] = inforce[t] * (1.0 - q) * (1.0 - lapse)
+
+    assert np.allclose(res.projection.inforce[0], inforce)
+    assert np.allclose(res.projection.deaths[0], deaths)
+
+    # The select -> ultimate step is visible at the year boundary.
+    select_factor = (1.0 - SELECT_Q) * (1.0 - SELECT_LAPSE)
+    assert np.isclose(res.projection.inforce[0, 12], select_factor ** 12)
+    assert np.isclose(
+        res.projection.inforce[0, 13],
+        select_factor ** 12 * (1.0 - ULT_Q) * (1.0 - ULT_LAPSE),
+    )
+    # mortality switches from select to ultimate at month 12
+    assert np.isclose(
+        res.projection.deaths[0, 11] / res.projection.inforce[0, 11], SELECT_Q
+    )
+    assert np.isclose(
+        res.projection.deaths[0, 12] / res.projection.inforce[0, 12], ULT_Q
+    )
+
+    # BEL = PV(claims) - PV(premiums); zero discount, zero expenses
+    pv_claims = sum_assured * deaths.sum()
+    pv_premiums = premium * inforce.sum()
+    assert np.isclose(res.bel[0], pv_claims - pv_premiums)
+
+
+def test_value_matches_run_phase1b():
+    """The fast path reproduces run() under duration-varying assumptions."""
+    rng = np.random.default_rng(11)
+    n = 500
+    mps = ModelPointSet(
+        issue_age=rng.integers(25, 55, n),
+        sum_assured=rng.integers(10, 100, n) * 1_000_000,
+        monthly_premium=rng.integers(3, 15, n) * 10_000,
+        term_months=rng.integers(13, 36, n),
+    )
+    asmp = _assumptions(claims_cv=0.10, discount_annual=0.03)
+
+    fast = value(mps, asmp)
+    detailed = run(mps, asmp)
+
+    assert np.allclose(fast.bel, detailed.bel)
+    assert np.allclose(fast.ra, detailed.ra)
+    assert np.allclose(fast.csm, detailed.csm0)
+    assert np.allclose(fast.loss_component, detailed.loss_component)

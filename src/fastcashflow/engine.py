@@ -89,9 +89,9 @@ class Valuation:
 
 
 @njit(parallel=True, cache=True)
-def _value_kernel(rates_grid, issue_index, term_months, lapse, monthly_premium,
-                  sum_assured, expense_acquisition, maint_monthly,
-                  inflation, discount, ra_factor):
+def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
+                  monthly_premium, sum_assured, expense_acquisition,
+                  maint_monthly, inflation, discount, ra_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
     Per model point the in-force amount is carried as a scalar through the
@@ -116,13 +116,14 @@ def _value_kernel(rates_grid, issue_index, term_months, lapse, monthly_premium,
         pp = 0.0
         pe = 0.0
         for t in range(term):
-            q = rates_grid[ridx, t // 12]
+            year = t // 12
+            q = rates_grid[ridx, year]
             d = discount[t]
             pp += inforce * premium * d
             pc += inforce * q * sa * d
             acquisition = expense_acquisition if t == 0 else 0.0
             pe += (acquisition + inforce * maint_monthly * inflation[t]) * d
-            inforce *= (1.0 - q) * (1.0 - lapse)
+            inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
         bel_mp = pc + pe - pp
         ra_mp = ra_factor * pc
         fcf = bel_mp + ra_mp
@@ -152,17 +153,24 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
     n_years = (n_time + 11) // 12
     months = np.arange(n_time)
 
-    # Mortality is evaluated on a dense [min, max] age grid. Using the age
-    # range rather than the exact distinct ages avoids an O(n log n) sort
-    # (np.unique): min/max and the index subtraction are O(n), and the few
-    # unused ages cost nothing -- the mortality grid is tiny.
+    # Mortality and lapse are evaluated on a dense [min, max] issue-age x
+    # duration grid. Using the age range rather than the exact distinct ages
+    # avoids an O(n log n) sort (np.unique): min/max and the index
+    # subtraction are O(n), and the few unused ages cost nothing -- the
+    # assumption grid is tiny.
     min_age = int(mps.issue_age.min())
     max_age = int(mps.issue_age.max())
-    age_grid = np.arange(min_age, max_age + 1)[:, None] + np.arange(n_years)[None, :]
+    durations = np.arange(n_years)
+    issue_age_grid, duration_grid = np.meshgrid(
+        np.arange(min_age, max_age + 1), durations, indexing="ij"
+    )
     rates_grid = np.ascontiguousarray(
-        asmp.mortality_monthly(age_grid), dtype=np.float64
+        asmp.mortality_monthly(issue_age_grid, duration_grid), dtype=np.float64
     )
     issue_index = (mps.issue_age - min_age).astype(np.int64)
+    lapse_by_year = np.ascontiguousarray(
+        asmp.lapse_monthly(durations), dtype=np.float64
+    )
 
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
     discount = discount_factors(asmp, n_time)
@@ -172,7 +180,7 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
         rates_grid,
         issue_index,
         mps.term_months,
-        asmp.lapse_monthly,
+        lapse_by_year,
         mps.monthly_premium,
         mps.sum_assured,
         asmp.expense_acquisition,

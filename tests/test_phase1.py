@@ -8,8 +8,8 @@ from fastcashflow.gmm import _norm_ppf
 def _assumptions(**overrides) -> Assumptions:
     """Build an Assumptions with simple defaults, overridable per test."""
     base = dict(
-        mortality_monthly=lambda ages: np.full(ages.shape, 0.01),
-        lapse_monthly=0.02,
+        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.01),
+        lapse_monthly=lambda duration: np.full(duration.shape, 0.02),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -79,8 +79,8 @@ def test_expense_inflation():
             monthly_premium=12_000.0, term_months=13,
         ),
         _assumptions(
-            mortality_monthly=lambda ages: np.full(ages.shape, 0.0),
-            lapse_monthly=0.0,
+            mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.0),
+            lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
             expense_maintenance_annual=120.0,   # 10 per month
             expense_inflation=0.06,
         ),

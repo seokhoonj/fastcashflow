@@ -16,8 +16,8 @@ Z_75 = 0.6744897501960817
 def _assumptions(**overrides) -> Assumptions:
     """Build an Assumptions with simple defaults, overridable per test."""
     base = dict(
-        mortality_monthly=lambda ages: np.full(ages.shape, 0.01),
-        lapse_monthly=0.02,
+        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.01),
+        lapse_monthly=lambda duration: np.full(duration.shape, 0.02),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -82,7 +82,9 @@ def test_onerous_contract():
             issue_age=40, sum_assured=1_000_000.0,
             monthly_premium=100.0, term_months=12,
         ),
-        _assumptions(mortality_monthly=lambda ages: np.full(ages.shape, 0.05)),
+        _assumptions(
+            mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.05)
+        ),
     )
     assert res.csm0[0] == 0.0
     assert res.loss_component[0] > 0.0
@@ -96,8 +98,8 @@ def test_csm_fully_releases():
             monthly_premium=80_000.0, term_months=60,
         ),
         _assumptions(
-            mortality_monthly=lambda ages: np.full(ages.shape, 0.001),
-            lapse_monthly=0.01,
+            mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.001),
+            lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
             discount_annual=0.03,
         ),
     )

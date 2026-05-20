@@ -14,7 +14,7 @@ from numba import cuda
 
 
 @cuda.jit
-def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse,
+def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse_by_year,
                        monthly_premium, sum_assured, expense_acquisition,
                        maint_monthly, inflation, discount, ra_factor,
                        bel, ra, csm, loss_component):
@@ -32,13 +32,14 @@ def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse,
     pp = 0.0
     pe = 0.0
     for t in range(term):
-        q = rates_grid[ridx, t // 12]
+        year = t // 12
+        q = rates_grid[ridx, year]
         d = discount[t]
         pp += inforce * premium * d
         pc += inforce * q * sa * d
         acquisition = expense_acquisition if t == 0 else 0.0
         pe += (acquisition + inforce * maint_monthly * inflation[t]) * d
-        inforce *= (1.0 - q) * (1.0 - lapse)
+        inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
     bel_mp = pc + pe - pp
     ra_mp = ra_factor * pc
     fcf = bel_mp + ra_mp
@@ -48,8 +49,8 @@ def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse,
     loss_component[mp] = max(0.0, fcf)
 
 
-def value_gpu(rates_grid, issue_index, term_months, lapse, monthly_premium,
-              sum_assured, expense_acquisition, maint_monthly,
+def value_gpu(rates_grid, issue_index, term_months, lapse_by_year,
+              monthly_premium, sum_assured, expense_acquisition, maint_monthly,
               inflation, discount, ra_factor):
     """Run the fused valuation kernel on the GPU.
 
@@ -65,6 +66,7 @@ def value_gpu(rates_grid, issue_index, term_months, lapse, monthly_premium,
     d_rates = cuda.to_device(rates_grid)
     d_issue = cuda.to_device(issue_index)
     d_term = cuda.to_device(term_months)
+    d_lapse = cuda.to_device(lapse_by_year)
     d_premium = cuda.to_device(monthly_premium)
     d_sum_assured = cuda.to_device(sum_assured)
     d_inflation = cuda.to_device(inflation)
@@ -77,7 +79,7 @@ def value_gpu(rates_grid, issue_index, term_months, lapse, monthly_premium,
     threads = 256
     blocks = (n_mp + threads - 1) // threads
     _value_cuda_kernel[blocks, threads](
-        d_rates, d_issue, d_term, lapse, d_premium, d_sum_assured,
+        d_rates, d_issue, d_term, d_lapse, d_premium, d_sum_assured,
         expense_acquisition, maint_monthly, d_inflation, d_discount, ra_factor,
         d_bel, d_ra, d_csm, d_loss,
     )
