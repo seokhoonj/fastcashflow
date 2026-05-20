@@ -52,4 +52,4 @@ print(res.bel[0], res.ra[0], res.csm0[0])
 
 ## License
 
-TBD.
+MPL-2.0 (Mozilla Public License 2.0).

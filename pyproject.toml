@@ -7,6 +7,8 @@ name = "fastcashflow"
 version = "0.0.1"
 description = "Fast IFRS 17 GMM cash flow projection engine (BEL, RA, CSM)"
 readme = "README.md"
+license = "MPL-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Seokhoon Joo" }]
 keywords = [
@@ -14,8 +16,6 @@ keywords = [
     "actuarial", "cashflow projection", "insurance", "life", "health",
 ]
 dependencies = ["numpy>=1.24"]
-
-# License: TBD (OSS vs commercial split not yet decided).
 
 [project.optional-dependencies]
 dev = ["pytest"]
