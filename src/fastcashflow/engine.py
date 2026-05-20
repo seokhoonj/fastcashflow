@@ -146,20 +146,24 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
     n_years = (n_time + 11) // 12
     months = np.arange(n_time)
 
-    # Mortality depends only on the (small) set of distinct issue ages, so it
-    # is evaluated on that grid -- the transcendental cost becomes negligible.
-    unique_issue, issue_index = np.unique(mps.issue_age, return_inverse=True)
-    age_grid = unique_issue[:, None] + np.arange(n_years)[None, :]
+    # Mortality is evaluated on a dense [min, max] age grid. Using the age
+    # range rather than the exact distinct ages avoids an O(n log n) sort
+    # (np.unique): min/max and the index subtraction are O(n), and the few
+    # unused ages cost nothing -- the mortality grid is tiny.
+    min_age = int(mps.issue_age.min())
+    max_age = int(mps.issue_age.max())
+    age_grid = np.arange(min_age, max_age + 1)[:, None] + np.arange(n_years)[None, :]
     rates_grid = np.ascontiguousarray(
         asmp.mortality_monthly(age_grid), dtype=np.float64
     )
+    issue_index = (mps.issue_age - min_age).astype(np.int64)
 
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
     discount = discount_factors(asmp, n_time)
 
     args = (
         rates_grid,
-        issue_index.astype(np.int64),
+        issue_index,
         mps.term_months,
         asmp.lapse_monthly,
         mps.monthly_premium,
