@@ -42,7 +42,7 @@ def test_risk_adjustment():
     # zero discount; PV(claims) = 10000 + 9702 = 19702 (see test_phase0)
     pv_claims = 19702.0
     z_75 = 0.6744897501960817
-    assert np.isclose(res.ra[0], z_75 * 0.20 * pv_claims)
+    assert np.isclose(res.ra[0, 0], z_75 * 0.20 * pv_claims)
 
 
 def test_expenses():
@@ -68,7 +68,7 @@ def test_expenses():
     pv_claims = 19702.0
     pv_expenses = 510.0 + 9.702
     pv_premiums = 12_000.0 + inforce[1] * 12_000.0
-    assert np.isclose(res.bel[0], pv_claims + pv_expenses - pv_premiums)
+    assert np.isclose(res.bel[0, 0], pv_claims + pv_expenses - pv_premiums)
 
 
 def test_expense_inflation():

@@ -39,9 +39,9 @@ def test_value_matches_measure():
     fast = value(mps, asmp)
     detailed = measure(mps, asmp)
 
-    assert np.allclose(fast.bel, detailed.bel)
-    assert np.allclose(fast.ra, detailed.ra)
-    assert np.allclose(fast.csm, detailed.csm0)
+    assert np.allclose(fast.bel, detailed.bel[:, 0])
+    assert np.allclose(fast.ra, detailed.ra[:, 0])
+    assert np.allclose(fast.csm, detailed.csm[:, 0])
     assert np.allclose(fast.loss_component, detailed.loss_component)
 
 

@@ -36,24 +36,6 @@ def discount_factors(asmp: Assumptions, n_time: int) -> tuple[FloatArray, FloatA
     return base ** (-t), base ** (-(t + 0.5))
 
 
-@njit(parallel=True, cache=True)
-def _pv(cashflow, discount):
-    """Present value of a monthly cash flow stream, per model point.
-
-    ``cashflow`` is ``(n_mp, n_time)`` and ``discount`` is ``(n_time,)``;
-    the result is ``(n_mp,)``. Parallel reduction over the model-point axis,
-    which also avoids materialising the ``cashflow * discount`` product.
-    """
-    n_mp, n_time = cashflow.shape
-    out = np.empty(n_mp)
-    for mp in prange(n_mp):
-        total = 0.0
-        for t in range(n_time):
-            total += cashflow[mp, t] * discount[t]
-        out[mp] = total
-    return out
-
-
 # Coefficients of Acklam's rational approximation of the standard-normal
 # inverse CDF -- the published constants of the algorithm.
 _ACKLAM_A = (-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
@@ -94,41 +76,39 @@ def _norm_ppf(p: float) -> float:
             / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0))
 
 
-def compute_bel(
-    proj: Cashflows,
-    discount_start: FloatArray,
-    discount_mid: FloatArray,
-) -> FloatArray:
-    """Best Estimate of Liability, per model point. Shape ``(n_mp,)``.
+@njit(parallel=True, cache=True)
+def _rollforward_kernel(claim_cf, expense_cf, premium_cf, monthly_rate):
+    """Backward pass -- the BEL and PV-of-claims trajectories.
 
-    ``BEL = PV(claims) + PV(expenses) - PV(premiums)``. Claims and expenses
-    arise during the month (discounted mid-month); premiums are charged at
-    the start of the month. A negative BEL means the contract is profitable.
+    ``BEL[t]`` is the present value, at month boundary ``t``, of the cash
+    flows from month ``t`` onward. It is built by a backward recursion;
+    claims and expenses arise mid-month, premiums at the start of the month::
+
+        BEL[t] = (claim[t] + expense[t]) * (1+i)^-0.5 - premium[t]
+                 + BEL[t+1] * (1+i)^-1
+
+    so ``BEL[:, 0]`` is the inception BEL. The claims-only present value is
+    rolled back the same way; the Risk Adjustment is a scalar multiple of it.
+    Both trajectories have shape ``(n_mp, n_time+1)`` and end at zero.
     """
-    return (_pv(proj.claim_cf, discount_mid)
-            + _pv(proj.expense_cf, discount_mid)
-            - _pv(proj.premium_cf, discount_start))
+    n_mp, n_time = claim_cf.shape
+    bel = np.zeros((n_mp, n_time + 1))
+    pv_claims = np.zeros((n_mp, n_time + 1))
 
+    half = (1.0 + monthly_rate) ** (-0.5)
+    full = 1.0 / (1.0 + monthly_rate)
 
-def compute_ra(
-    proj: Cashflows,
-    discount_mid: FloatArray,
-    ra_confidence: float,
-    claims_cv: float,
-) -> FloatArray:
-    """Risk Adjustment, per model point. Shape ``(n_mp,)``.
+    for mp in prange(n_mp):
+        for t in range(n_time - 1, -1, -1):
+            claim = claim_cf[mp, t]
+            bel[mp, t] = (
+                (claim + expense_cf[mp, t]) * half
+                - premium_cf[mp, t]
+                + bel[mp, t + 1] * full
+            )
+            pv_claims[mp, t] = claim * half + pv_claims[mp, t + 1] * full
 
-    Confidence-level method: the RA is the margin that lifts the liability
-    from its best estimate to the ``ra_confidence`` percentile, under a
-    normal approximation::
-
-        RA = z(ra_confidence) * claims_cv * PV(claims)
-
-    where ``z`` is the standard-normal quantile. A cost-of-capital RA, which
-    needs a capital projection, is left for a later phase.
-    """
-    z = _norm_ppf(ra_confidence)
-    return z * claims_cv * _pv(proj.claim_cf, discount_mid)
+    return bel, pv_claims
 
 
 @njit(parallel=True, cache=True)

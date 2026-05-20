@@ -23,9 +23,8 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.gmm import (
     _norm_ppf,
-    compute_bel,
+    _rollforward_kernel,
     compute_csm,
-    compute_ra,
     discount_factors,
 )
 from fastcashflow.modelpoint import ModelPointSet
@@ -38,42 +37,44 @@ from fastcashflow.projection import Cashflows, project_cashflows
 
 @dataclass(frozen=True, slots=True)
 class Measurement:
-    """Detailed measurement -- full cash flow and CSM trajectories.
+    """Detailed measurement -- BEL, RA and CSM rolled forward over time.
 
-    Per-model-point arrays have shape ``(n_mp,)`` unless stated otherwise.
-    The CSM roll-forward decomposes as
+    ``bel``, ``ra`` and ``csm`` are ``(n_mp, n_time+1)`` trajectories; column
+    0 is the inception measurement. The CSM roll-forward decomposes as
     ``csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
     """
 
-    bel: FloatArray              # Best Estimate of Liability
-    ra: FloatArray               # Risk Adjustment
-    csm0: FloatArray             # CSM at initial recognition
-    loss_component: FloatArray   # loss component at inception (onerous contracts)
+    bel: FloatArray              # (n_mp, n_time+1) -- BEL trajectory
+    ra: FloatArray               # (n_mp, n_time+1) -- RA trajectory
     csm: FloatArray              # (n_mp, n_time+1) -- CSM trajectory
     csm_accretion: FloatArray    # (n_mp, n_time)   -- CSM interest accreted each month
     csm_release: FloatArray      # (n_mp, n_time)   -- CSM released each month
+    loss_component: FloatArray   # (n_mp,)          -- loss component at inception
     cashflows: Cashflows
     discount_start: FloatArray   # (n_time,) -- start-of-month discount factors
     discount_mid: FloatArray     # (n_time,) -- mid-month discount factors
 
 
 def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
-    """Detailed GMM measurement: full cash flow and CSM trajectories."""
+    """Detailed GMM measurement: BEL, RA and CSM rolled forward over time."""
     proj = project_cashflows(mps, asmp)
     discount_start, discount_mid = discount_factors(asmp, proj.n_time)
 
-    bel = compute_bel(proj, discount_start, discount_mid)
-    ra = compute_ra(proj, discount_mid, asmp.ra_confidence, asmp.claims_cv)
-    csm, csm_accretion, csm_release, loss_component = compute_csm(bel, ra, proj, asmp)
+    bel, pv_claims = _rollforward_kernel(
+        proj.claim_cf, proj.expense_cf, proj.premium_cf, asmp.discount_monthly
+    )
+    ra = _norm_ppf(asmp.ra_confidence) * asmp.claims_cv * pv_claims
+    csm, csm_accretion, csm_release, loss_component = compute_csm(
+        bel[:, 0], ra[:, 0], proj, asmp
+    )
 
     return Measurement(
         bel=bel,
         ra=ra,
-        csm0=csm[:, 0],
-        loss_component=loss_component,
         csm=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
+        loss_component=loss_component,
         cashflows=proj,
         discount_start=discount_start,
         discount_mid=discount_mid,

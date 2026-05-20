@@ -86,7 +86,7 @@ def test_select_ultimate_and_duration_lapse():
     # BEL = PV(claims) - PV(premiums); zero discount, zero expenses
     pv_claims = sum_assured * deaths.sum()
     pv_premiums = premium * inforce.sum()
-    assert np.isclose(res.bel[0], pv_claims - pv_premiums)
+    assert np.isclose(res.bel[0, 0], pv_claims - pv_premiums)
 
 
 def test_value_matches_run_phase1b():
@@ -104,7 +104,7 @@ def test_value_matches_run_phase1b():
     fast = value(mps, asmp)
     detailed = measure(mps, asmp)
 
-    assert np.allclose(fast.bel, detailed.bel)
-    assert np.allclose(fast.ra, detailed.ra)
-    assert np.allclose(fast.csm, detailed.csm0)
+    assert np.allclose(fast.bel, detailed.bel[:, 0])
+    assert np.allclose(fast.ra, detailed.ra[:, 0])
+    assert np.allclose(fast.csm, detailed.csm[:, 0])
     assert np.allclose(fast.loss_component, detailed.loss_component)

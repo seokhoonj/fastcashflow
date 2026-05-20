@@ -32,10 +32,13 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **Phase 3b** -- polars file I/O (parquet / CSV); a chunked streaming
   path (`value_file`) values portfolios past what memory holds, to ~1e9
   model points and beyond.
+- **Phase 4** -- BEL / RA / CSM roll-forward: month-by-month liability
+  trajectories with the CSM movement decomposition.
 - **GPU backend** -- `value(..., backend="gpu")` runs the same kernel
   on a CUDA device (optional; requires a CUDA GPU).
 
-Later phases: monthly roll-forward / movement analysis.
+Beyond the phase plan: more product types, and the VFA / PAA measurement
+models.
 
 ## Quick start
 
@@ -44,8 +47,10 @@ import numpy as np
 from fastcashflow import Assumptions, ModelPointSet, measure
 
 asmp = Assumptions(
-    mortality_monthly=lambda ages: np.full(ages.shape, 1.0 - (1.0 - 0.001) ** (1.0 / 12.0)),
-    lapse_monthly=0.01,
+    mortality_monthly=lambda issue_age, duration: np.full(
+        issue_age.shape, 1.0 - (1.0 - 0.001) ** (1.0 / 12.0)
+    ),
+    lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
     discount_annual=0.03,
     expense_acquisition=300_000.0,
     expense_maintenance_annual=60_000.0,
@@ -58,13 +63,12 @@ mps = ModelPointSet.single(
     monthly_premium=70_000, term_months=120,
 )
 res = measure(mps, asmp)   # mps: model points, asmp: assumptions
-print(res.bel[0], res.ra[0], res.csm0[0])
+print(res.bel[0, 0], res.ra[0, 0], res.csm[0, 0])   # [model point, month]
 ```
 
-`measure()` returns the full detail -- cash flow and CSM trajectories. For
-portfolio-scale valuation use `value()`: it returns only the headline
-numbers (BEL, RA, CSM, loss component) per model point and is much
-faster.
+`measure()` returns the full detail -- cash flows and the BEL / RA / CSM
+roll-forward. For portfolio-scale valuation use `value()`: it returns only
+the headline numbers (BEL, RA, CSM, loss component) per model point.
 
 ```python
 from fastcashflow import value

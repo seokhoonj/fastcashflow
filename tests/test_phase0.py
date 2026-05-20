@@ -55,22 +55,22 @@ def test_hand_calculation():
 
     # BEL = PV(claims) + PV(expenses) - PV(premiums); expenses = 0 here
     bel = pv_claims - pv_premiums
-    assert np.isclose(res.bel[0], bel)
-    assert np.isclose(res.bel[0], -3940.4)
+    assert np.isclose(res.bel[0, 0], bel)
+    assert np.isclose(res.bel[0, 0], -3940.4)
 
     # RA = z(0.75) * claims_cv * PV(claims)
     ra = Z_75 * 0.10 * pv_claims
-    assert np.isclose(res.ra[0], ra)
+    assert np.isclose(res.ra[0, 0], ra)
 
     # FCF = BEL + RA ; CSM_0 = max(0, -FCF)
     fcf = bel + ra
-    assert np.isclose(res.csm0[0], max(0.0, -fcf))
+    assert np.isclose(res.csm[0, 0], max(0.0, -fcf))
     assert np.isclose(res.loss_component[0], max(0.0, fcf))
 
     # CSM roll-forward (zero discount, coverage units = in force):
     #   t=1: release = CSM_0 * cu[0] / (cu[0] + cu[1]) ; CSM[1] = CSM_0 - release
-    release0 = res.csm0[0] * inforce[0] / (inforce[0] + inforce[1])
-    assert np.isclose(res.csm[0, 1], res.csm0[0] - release0)
+    release0 = res.csm[0, 0] * inforce[0] / (inforce[0] + inforce[1])
+    assert np.isclose(res.csm[0, 1], res.csm[0, 0] - release0)
     #   t=2: the remaining CSM is fully released
     assert np.isclose(res.csm[0, 2], 0.0)
 
@@ -86,7 +86,7 @@ def test_onerous_contract():
             mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.05)
         ),
     )
-    assert res.csm0[0] == 0.0
+    assert res.csm[0, 0] == 0.0
     assert res.loss_component[0] > 0.0
 
 
@@ -103,5 +103,5 @@ def test_csm_fully_releases():
             discount_annual=0.03,
         ),
     )
-    assert res.csm0[0] > 0.0
+    assert res.csm[0, 0] > 0.0
     assert np.isclose(res.csm[0, -1], 0.0, atol=1e-6)
