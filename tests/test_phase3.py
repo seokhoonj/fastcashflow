@@ -1,9 +1,12 @@
 """Phase 3 -- the fused fast path (`value`) agrees with the detailed `run`.
 
 `run` is anchored by hand calculation (test_phase0 / test_phase1). `value`
-is then validated transitively: it must reproduce `run`'s headline numbers.
+is then validated transitively: it must reproduce `run`'s headline numbers,
+and the GPU backend must reproduce the CPU backend.
 """
 import numpy as np
+import pytest
+from numba import cuda
 
 from fastcashflow import Assumptions, ModelPointSet, run, value
 
@@ -60,3 +63,38 @@ def test_value_onerous():
     v = value(mps, asmp)
     assert v.csm[0] == 0.0
     assert v.loss_component[0] > 0.0
+
+
+@pytest.mark.skipif(not cuda.is_available(), reason="no CUDA device available")
+def test_value_gpu_matches_cpu():
+    """The GPU backend reproduces the CPU backend exactly."""
+    def mortality_monthly(ages):
+        annual_q = 0.0008 * (1.0 + 0.05 * (ages - 30.0))
+        return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)
+
+    asmp = Assumptions(
+        mortality_monthly=mortality_monthly,
+        lapse_monthly=0.012,
+        discount_annual=0.03,
+        expense_acquisition=250_000.0,
+        expense_maintenance_annual=48_000.0,
+        expense_inflation=0.02,
+        ra_confidence=0.85,
+        claims_cv=0.12,
+    )
+    rng = np.random.default_rng(7)
+    n = 5_000
+    mps = ModelPointSet(
+        issue_age=rng.integers(25, 60, n),
+        sum_assured=rng.integers(10, 100, n) * 1_000_000,
+        monthly_premium=rng.integers(3, 15, n) * 10_000,
+        term_months=np.full(n, 120),
+    )
+
+    cpu = value(mps, asmp, backend="cpu")
+    gpu = value(mps, asmp, backend="gpu")
+
+    assert np.allclose(gpu.bel, cpu.bel)
+    assert np.allclose(gpu.ra, cpu.ra)
+    assert np.allclose(gpu.csm, cpu.csm)
+    assert np.allclose(gpu.loss_component, cpu.loss_component)

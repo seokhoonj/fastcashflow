@@ -1,5 +1,7 @@
 """Benchmark -- fast valuation of large synthetic portfolios.
 
+Times the CPU backend, and the GPU backend too when a CUDA device is found.
+
 Run from the project root::
 
     python examples/benchmark.py
@@ -7,6 +9,7 @@ Run from the project root::
 import time
 
 import numpy as np
+from numba import cuda
 
 from fastcashflow import Assumptions, ModelPointSet, value
 
@@ -26,6 +29,13 @@ def make_portfolio(n_mp: int, seed: int = 42) -> ModelPointSet:
     )
 
 
+def _time(mps: ModelPointSet, asmp: Assumptions, backend: str) -> float:
+    value(mps, asmp, backend=backend)        # warm-up (triggers compilation)
+    start = time.perf_counter()
+    value(mps, asmp, backend=backend)
+    return time.perf_counter() - start
+
+
 def main() -> None:
     asmp = Assumptions(
         mortality_monthly=mortality_monthly,
@@ -37,16 +47,18 @@ def main() -> None:
         ra_confidence=0.75,
         claims_cv=0.10,
     )
+    gpu = cuda.is_available()
+    print("fastcashflow benchmark -- value(), term = 120 months"
+          + ("  (CPU + GPU)" if gpu else "  (CPU only)"))
 
-    print("fastcashflow benchmark -- value(), term = 120 months")
     for n_mp in (10_000, 100_000, 1_000_000, 5_000_000):
         mps = make_portfolio(n_mp)
-        value(mps, asmp)                     # warm-up (triggers JIT compilation)
-        start = time.perf_counter()
-        value(mps, asmp)
-        elapsed = time.perf_counter() - start
-        rows = n_mp * 120
-        print(f"  {n_mp:>10,} MP  ({rows:>14,} cells) : {elapsed:8.3f} s")
+        cpu_t = _time(mps, asmp, "cpu")
+        line = f"  {n_mp:>10,} MP  ({n_mp * 120:>14,} cells) : CPU {cpu_t:8.3f} s"
+        if gpu:
+            gpu_t = _time(mps, asmp, "gpu")
+            line += f"  |  GPU {gpu_t:8.3f} s  ({cpu_t / gpu_t:5.1f}x)"
+        print(line)
 
 
 if __name__ == "__main__":

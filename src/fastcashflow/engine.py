@@ -128,12 +128,19 @@ def _value_kernel(rates_grid, issue_index, term_months, lapse, monthly_premium,
     return pv_claim, pv_premium, pv_expense
 
 
-def value(mps: ModelPointSet, asmp: Assumptions) -> Valuation:
+def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Valuation:
     """Fast GMM valuation: BEL, RA and CSM per model point.
 
-    One fused, parallel kernel; no per-month arrays are materialised. This
-    is the memory-minimal, fastest path for large-scale valuation. For full
-    cash flow / CSM trajectories use :func:`run`.
+    One fused kernel; no per-month arrays are materialised. This is the
+    memory-minimal, fastest path for large-scale valuation. For full cash
+    flow / CSM trajectories use :func:`run`.
+
+    Parameters
+    ----------
+    backend :
+        ``"cpu"`` (default) runs the numba parallel kernel across cores.
+        ``"gpu"`` runs the CUDA kernel; it needs a CUDA device and is worth
+        it only at large scale (kernel-launch and transfer cost is fixed).
     """
     n_time = int(mps.term_months.max())
     n_years = (n_time + 11) // 12
@@ -150,7 +157,7 @@ def value(mps: ModelPointSet, asmp: Assumptions) -> Valuation:
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
     discount = discount_factors(asmp, n_time)
 
-    pv_claim, pv_premium, pv_expense = _value_kernel(
+    args = (
         rates_grid,
         issue_index.astype(np.int64),
         mps.term_months,
@@ -162,6 +169,14 @@ def value(mps: ModelPointSet, asmp: Assumptions) -> Valuation:
         inflation,
         discount,
     )
+
+    if backend == "cpu":
+        pv_claim, pv_premium, pv_expense = _value_kernel(*args)
+    elif backend == "gpu":
+        from fastcashflow._gpu import value_pv_gpu
+        pv_claim, pv_premium, pv_expense = value_pv_gpu(*args)
+    else:
+        raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
 
     bel = pv_claim + pv_expense - pv_premium
     ra = _norm_ppf(asmp.ra_confidence) * asmp.claims_cv * pv_claim
