@@ -15,7 +15,7 @@ keywords = [
     "IFRS 17", "GMM", "CSM", "BEL", "risk adjustment",
     "actuarial", "cashflow projection", "insurance", "life", "health",
 ]
-dependencies = ["numpy>=1.24", "numba>=0.59"]
+dependencies = ["numpy>=1.24", "numba>=0.59", "polars>=1.0"]
 
 [project.optional-dependencies]
 dev = ["pytest"]

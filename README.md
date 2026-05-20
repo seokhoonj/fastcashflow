@@ -27,11 +27,12 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **Phase 3 (fusion)** -- `value()`: a single fused kernel that
   materialises no per-month arrays and derives BEL / RA / CSM in the
   same pass -- the memory-minimal fast path.
+- **Phase 3b** -- polars file I/O (parquet / CSV) for model points and
+  results, sized for ~1e8-row portfolios.
 - **GPU backend** -- `value(..., backend="gpu")` runs the same kernel
   on a CUDA device (optional; requires a CUDA GPU).
 
-Later phases: polars I/O at scale, monthly roll-forward / movement
-analysis.
+Later phases: monthly roll-forward / movement analysis.
 
 ## Quick start
 
@@ -70,6 +71,17 @@ val_gpu = value(mps, asmp, backend="gpu")   # CUDA device, if available
 print(val.bel, val.ra, val.csm, val.loss_component)
 ```
 
+At portfolio scale, read model points from a parquet or CSV file and
+write the results back:
+
+```python
+from fastcashflow import read_model_points, write_valuation
+
+mps = read_model_points("policies.parquet")
+val = value(mps, asmp)
+write_valuation(val, "results.parquet")     # pass ids=... to keep a join key
+```
+
 ## Performance
 
 `value()` carries the in-force amount as a scalar through the time loop
@@ -84,6 +96,10 @@ arrays are materialised. Measured on an 8-core / 16-thread desktop CPU
 
 That is roughly 2.7 billion cell-updates per second (one cell = one
 model point x one month). Run `examples/benchmark.py` to reproduce.
+
+File I/O scales on the same budget: a 10M-model-point parquet round-trip
+-- read, value, write -- takes about one second, so a ~1e8-row portfolio
+is a tens-of-seconds batch.
 
 ## GPU backend
 
