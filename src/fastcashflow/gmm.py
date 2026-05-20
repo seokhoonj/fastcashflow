@@ -15,6 +15,7 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+from numba import njit
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
@@ -121,6 +122,40 @@ class CSMResult:
     loss_component: FloatArray  # (n_mp,)          -- loss component at inception
 
 
+@njit(cache=True)
+def _csm_kernel(csm0, coverage_units, monthly_rate):
+    """Compiled CSM roll-forward kernel -- raw numpy arrays and scalars only.
+
+    Per model point: interest accretion at the locked-in rate, then release
+    proportional to coverage units. The coverage-unit tail sum is built in a
+    single backward pass so the roll-forward stays linear in time.
+    """
+    n_mp, n_time = coverage_units.shape
+    csm = np.zeros((n_mp, n_time + 1))
+    release = np.zeros((n_mp, n_time))
+
+    for mp in range(n_mp):
+        csm[mp, 0] = csm0[mp]
+
+        cu_tail = np.empty(n_time)          # cu_tail[s] = sum of coverage_units[mp, s:]
+        running = 0.0
+        for s in range(n_time - 1, -1, -1):
+            running += coverage_units[mp, s]
+            cu_tail[s] = running
+
+        for t in range(1, n_time + 1):
+            accreted = csm[mp, t - 1] * (1.0 + monthly_rate)
+            cu_remaining = cu_tail[t - 1]
+            if cu_remaining > 0.0:
+                rel = accreted * coverage_units[mp, t - 1] / cu_remaining
+            else:
+                rel = 0.0
+            release[mp, t - 1] = rel
+            csm[mp, t] = accreted - rel
+
+    return csm, release
+
+
 def compute_csm(
     bel: FloatArray,
     ra: FloatArray,
@@ -135,35 +170,15 @@ def compute_csm(
         ``CSM_0 = max(0, -FCF)``           -- profitable contract
         ``loss_component = max(0, FCF)``   -- onerous contract
 
-    Roll-forward (deterministic -- no assumption changes):
-        - interest accretion at the locked-in monthly rate
-        - release proportional to coverage units (in-force is the coverage unit)
+    Roll-forward (deterministic -- no assumption changes): interest accretion
+    at the locked-in monthly rate, then release proportional to coverage
+    units (in-force is the coverage unit). The sequential time loop runs in
+    the compiled ``_csm_kernel``.
     """
-    n_mp = bel.shape[0]
-    n_time = proj.n_time
-    monthly_rate = asmp.discount_monthly
-
     fcf = bel + ra                          # Fulfilment Cash Flows
-    csm = np.zeros((n_mp, n_time + 1))
-    release = np.zeros((n_mp, n_time))
-    csm[:, 0] = np.maximum(0.0, -fcf)
+    csm0 = np.maximum(0.0, -fcf)
     loss_component = np.maximum(0.0, fcf)
 
-    coverage_units = proj.inforce           # shape (n_mp, n_time)
-    # Tail sum of coverage units: cu_tail[:, t] == coverage_units[:, t:].sum(1).
-    # Precomputed once in O(n) so the roll-forward loop stays linear, not O(n^2).
-    cu_tail = np.cumsum(coverage_units[:, ::-1], axis=1)[:, ::-1]
-
-    for t in range(1, n_time + 1):
-        accreted = csm[:, t - 1] * (1.0 + monthly_rate)
-        cu_now = coverage_units[:, t - 1]
-        cu_remaining = cu_tail[:, t - 1]
-        released_fraction = np.divide(
-            cu_now, cu_remaining,
-            out=np.zeros_like(cu_now),
-            where=cu_remaining > 0.0,
-        )
-        release[:, t - 1] = accreted * released_fraction
-        csm[:, t] = accreted - release[:, t - 1]
+    csm, release = _csm_kernel(csm0, proj.inforce, asmp.discount_monthly)
 
     return CSMResult(csm=csm, release=release, loss_component=loss_component)

@@ -22,9 +22,10 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **Phase 0** -- single fixed-benefit protection product, deterministic
   projection, BEL / RA / CSM, validated against hand calculation.
 - **Phase 1** -- confidence-level RA, acquisition + maintenance expenses.
+- **Phase 3a** -- numba-compiled projection and CSM kernels.
 
-Later phases: duration-based lapse and select-ultimate mortality, 1e8-row
-scale (numba / polars), monthly roll-forward / movement analysis.
+Later phases: duration-based lapse and select-ultimate mortality, polars
+I/O at scale, monthly roll-forward / movement analysis.
 
 ## Quick start
 
