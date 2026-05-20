@@ -18,7 +18,7 @@ def _flat_assumptions(**overrides) -> Assumptions:
         expense_maintenance_annual=0.0,
         expense_inflation=0.0,
         ra_confidence=0.75,
-        claims_cv=0.0,
+        mortality_cv=0.0,
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -60,7 +60,7 @@ def test_csm_movement_identity():
     """The CSM roll-forward decomposes exactly into accretion and release."""
     asmp = _flat_assumptions(
         mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.001),
-        claims_cv=0.05,
+        mortality_cv=0.05,
     )
     rng = np.random.default_rng(2)
     n = 200

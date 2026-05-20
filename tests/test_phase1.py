@@ -15,7 +15,7 @@ def _assumptions(**overrides) -> Assumptions:
         expense_maintenance_annual=0.0,
         expense_inflation=0.0,
         ra_confidence=0.75,
-        claims_cv=0.0,
+        mortality_cv=0.0,
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -31,13 +31,13 @@ def test_norm_ppf_known_quantiles():
 
 
 def test_risk_adjustment():
-    """RA = z(confidence) * claims_cv * PV(claims), hand-checked."""
+    """RA = z(confidence) * mortality_cv * PV(claims), hand-checked."""
     res = measure(
         ModelPointSet.single(
             issue_age=40, death_benefit=1_000_000.0,
             monthly_premium=12_000.0, term_months=2,
         ),
-        _assumptions(ra_confidence=0.75, claims_cv=0.20),
+        _assumptions(ra_confidence=0.75, mortality_cv=0.20),
     )
     # zero discount; PV(claims) = 10000 + 9702 = 19702 (see test_phase0)
     pv_claims = 19702.0

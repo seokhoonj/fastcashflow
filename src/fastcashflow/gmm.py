@@ -78,9 +78,9 @@ def _norm_ppf(p: float) -> float:
 
 
 @njit(parallel=True, cache=True)
-def _rollforward_kernel(claim_cf, expense_cf, premium_cf, annuity_cf,
-                        maturity_cf, term_months, monthly_rate):
-    """Backward pass -- the BEL, claims-PV and survival-PV trajectories.
+def _rollforward_kernel(claim_cf, morbidity_cf, expense_cf, premium_cf,
+                        annuity_cf, maturity_cf, term_months, monthly_rate):
+    """Backward pass -- the BEL and the three RA present-value trajectories.
 
     ``BEL[t]`` is the present value, at month boundary ``t``, of the cash
     flows from month ``t`` onward, built by a backward recursion. Premiums
@@ -88,20 +88,22 @@ def _rollforward_kernel(claim_cf, expense_cf, premium_cf, annuity_cf,
     mid-month::
 
         BEL[t] = annuity[t] - premium[t]
-                 + (claim[t] + expense[t]) * (1+i)^-0.5
+                 + (claim[t] + morbidity[t] + expense[t]) * (1+i)^-0.5
                  + BEL[t+1] * (1+i)^-1
 
     The maturity benefit is a single payment at ``t = term``, so it seeds
     ``BEL[term]``. ``BEL[:, 0]`` is then the inception BEL.
 
-    Two more trajectories feed the Risk Adjustment, one per risk class:
-    ``pv_claims`` (death claims -- mortality risk) and ``pv_survival``
-    (annuity payments and the maturity benefit -- longevity risk). All three
-    trajectories have shape ``(n_mp, n_time+1)``.
+    Three more trajectories feed the Risk Adjustment, one per risk class:
+    ``pv_claims`` (death claims -- mortality risk), ``pv_morbidity`` (health
+    claims -- morbidity risk) and ``pv_survival`` (annuity payments and the
+    maturity benefit -- longevity risk). All four trajectories have shape
+    ``(n_mp, n_time+1)``.
     """
     n_mp, n_time = claim_cf.shape
     bel = np.zeros((n_mp, n_time + 1))
     pv_claims = np.zeros((n_mp, n_time + 1))
+    pv_morbidity = np.zeros((n_mp, n_time + 1))
     pv_survival = np.zeros((n_mp, n_time + 1))
 
     half = (1.0 + monthly_rate) ** (-0.5)
@@ -113,16 +115,18 @@ def _rollforward_kernel(claim_cf, expense_cf, premium_cf, annuity_cf,
         pv_survival[mp, term] = maturity_cf[mp]
         for t in range(term - 1, -1, -1):
             claim = claim_cf[mp, t]
+            morbidity = morbidity_cf[mp, t]
             annuity = annuity_cf[mp, t]
             bel[mp, t] = (
                 annuity - premium_cf[mp, t]
-                + (claim + expense_cf[mp, t]) * half
+                + (claim + morbidity + expense_cf[mp, t]) * half
                 + bel[mp, t + 1] * full
             )
             pv_claims[mp, t] = claim * half + pv_claims[mp, t + 1] * full
+            pv_morbidity[mp, t] = morbidity * half + pv_morbidity[mp, t + 1] * full
             pv_survival[mp, t] = annuity + pv_survival[mp, t + 1] * full
 
-    return bel, pv_claims, pv_survival
+    return bel, pv_claims, pv_morbidity, pv_survival
 
 
 @njit(parallel=True, cache=True)

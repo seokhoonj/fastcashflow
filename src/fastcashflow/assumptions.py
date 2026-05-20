@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 from fastcashflow._typing import FloatArray, IntArray
 
+RateFn = Callable[[FloatArray, IntArray], FloatArray]
+
 
 @dataclass(frozen=True, slots=True)
 class Assumptions:
@@ -36,25 +38,35 @@ class Assumptions:
     ra_confidence :
         Confidence level for the Risk Adjustment (e.g. 0.75). The RA lifts
         the liability from its best estimate to this percentile.
-    claims_cv :
+    mortality_cv :
         Coefficient of variation of death claims -- the mortality-risk
         component of the RA.
     longevity_cv :
         Coefficient of variation of survival benefits (maturity benefits and
-        annuity payments) -- the longevity-risk component of the RA. Defaults
-        to zero. The two RA components are added (the natural mortality /
-        longevity hedge is not credited -- conservative for mixed contracts).
+        annuity payments) -- the longevity-risk component of the RA. The RA
+        components are added (the natural mortality / longevity hedge is not
+        credited -- conservative for mixed contracts).
+    morbidity_cv :
+        Coefficient of variation of morbidity claims (hospitalisation,
+        surgery, outpatient) -- the morbidity-risk component of the RA.
+    morbidity_rates :
+        ``{coverage kind: callable}`` map giving the monthly morbidity rate
+        of each health coverage kind (see :mod:`fastcashflow.coverage`). Each
+        callable has the same signature as ``mortality_monthly``. Required
+        only for the kinds a portfolio actually uses.
     """
 
-    mortality_monthly: Callable[[FloatArray, IntArray], FloatArray]
+    mortality_monthly: RateFn
     lapse_monthly: Callable[[IntArray], FloatArray]
     discount_annual: float
     expense_acquisition: float
     expense_maintenance_annual: float
     expense_inflation: float
     ra_confidence: float
-    claims_cv: float
+    mortality_cv: float
     longevity_cv: float = 0.0
+    morbidity_cv: float = 0.0
+    morbidity_rates: dict[int, RateFn] | None = None
 
     @property
     def discount_monthly(self) -> float:

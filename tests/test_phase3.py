@@ -26,7 +26,7 @@ def test_value_matches_measure():
         expense_maintenance_annual=48_000.0,
         expense_inflation=0.02,
         ra_confidence=0.85,
-        claims_cv=0.12,
+        mortality_cv=0.12,
     )
     # distinct and repeated issue ages -- exercises the unique-age grid
     mps = ModelPointSet(
@@ -55,7 +55,7 @@ def test_value_onerous():
         expense_maintenance_annual=0.0,
         expense_inflation=0.0,
         ra_confidence=0.75,
-        claims_cv=0.05,
+        mortality_cv=0.05,
     )
     mps = ModelPointSet.single(
         issue_age=40, death_benefit=1_000_000.0,
@@ -82,7 +82,7 @@ def test_value_gpu_matches_cpu():
         expense_maintenance_annual=48_000.0,
         expense_inflation=0.02,
         ra_confidence=0.85,
-        claims_cv=0.12,
+        mortality_cv=0.12,
     )
     rng = np.random.default_rng(7)
     n = 5_000

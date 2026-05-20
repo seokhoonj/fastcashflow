@@ -34,7 +34,7 @@ def _assumptions(**overrides) -> Assumptions:
         expense_maintenance_annual=0.0,
         expense_inflation=0.0,
         ra_confidence=0.75,
-        claims_cv=0.0,
+        mortality_cv=0.0,
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -99,7 +99,7 @@ def test_value_matches_run_phase1b():
         monthly_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(13, 36, n),
     )
-    asmp = _assumptions(claims_cv=0.10, discount_annual=0.03)
+    asmp = _assumptions(mortality_cv=0.10, discount_annual=0.03)
 
     fast = value(mps, asmp)
     detailed = measure(mps, asmp)

@@ -22,11 +22,18 @@ import numpy as np
 import polars as pl
 
 from fastcashflow.assumptions import Assumptions
+from fastcashflow.coverage import INPATIENT, OUTPATIENT, SURGERY
 from fastcashflow.engine import Valuation, value
 from fastcashflow.modelpoint import ModelPointSet
 
 _REQUIRED_COLUMNS = ("issue_age", "death_benefit", "monthly_premium", "term_months")
 _OPTIONAL_COLUMNS = ("maturity_benefit", "annuity_payment", "single_premium")
+# Health benefit columns -- each maps to a morbidity coverage kind.
+_BENEFIT_COLUMNS = {
+    "inpatient_benefit": INPATIENT,
+    "surgery_benefit": SURGERY,
+    "outpatient_benefit": OUTPATIENT,
+}
 
 
 def _read_frame(path) -> pl.DataFrame:
@@ -56,9 +63,11 @@ def read_model_points(path) -> ModelPointSet:
     The file must contain the columns ``issue_age``, ``death_benefit``,
     ``monthly_premium`` and ``term_months``. The optional columns
     ``maturity_benefit``, ``annuity_payment`` and ``single_premium`` are read
-    if present, else default to zero. Any other column (a policy identifier,
-    say) is ignored -- to carry an identifier through to the results, read it
-    separately and pass it to :func:`write_valuation`.
+    if present, else default to zero. Health benefit columns --
+    ``inpatient_benefit``, ``surgery_benefit``, ``outpatient_benefit`` -- are
+    read into the coverage list if present. Any other column (a policy
+    identifier, say) is ignored -- to carry an identifier through to the
+    results, read it separately and pass it to :func:`write_valuation`.
     """
     df = _read_frame(path)
     missing = [c for c in _REQUIRED_COLUMNS if c not in df.columns]
@@ -73,6 +82,10 @@ def read_model_points(path) -> ModelPointSet:
     for optional in _OPTIONAL_COLUMNS:
         if optional in df.columns:
             fields[optional] = df[optional].to_numpy()
+    benefits = {kind: df[col].to_numpy()
+                for col, kind in _BENEFIT_COLUMNS.items() if col in df.columns}
+    if benefits:
+        fields["benefits"] = benefits
     return ModelPointSet(**fields)
 
 
@@ -155,7 +168,8 @@ def value_file(
             f"{str(input_path)!r} is missing required column(s): {missing}"
         )
     optional = [c for c in _OPTIONAL_COLUMNS if c in available]
-    columns = [*columns, *optional]
+    benefit_cols = [c for c in _BENEFIT_COLUMNS if c in available]
+    columns = [*columns, *optional, *benefit_cols]
 
     output_dir.mkdir(parents=True, exist_ok=True)
     if any(output_dir.glob("part-*.parquet")):
@@ -178,6 +192,9 @@ def value_file(
         )
         for name in optional:
             fields[name] = chunk[name].to_numpy()
+        benefits = {_BENEFIT_COLUMNS[c]: chunk[c].to_numpy() for c in benefit_cols}
+        if benefits:
+            fields["benefits"] = benefits
         mps = ModelPointSet(**fields)
         ids = chunk[id_column].to_numpy() if id_column is not None else None
         write_valuation(

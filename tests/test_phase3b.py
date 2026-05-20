@@ -32,7 +32,7 @@ def _assumptions() -> Assumptions:
         expense_maintenance_annual=48_000.0,
         expense_inflation=0.02,
         ra_confidence=0.85,
-        claims_cv=0.10,
+        mortality_cv=0.10,
     )
 
 

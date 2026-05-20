@@ -13,6 +13,7 @@ Conventional import alias::
 quantity this engine computes.
 """
 from fastcashflow.assumptions import Assumptions
+from fastcashflow.coverage import DEATH, INPATIENT, OUTPATIENT, SURGERY
 from fastcashflow.engine import Measurement, Valuation, measure, value
 from fastcashflow.io import read_model_points, value_file, write_valuation
 from fastcashflow.modelpoint import ModelPointSet
@@ -22,4 +23,5 @@ __version__ = "0.0.1"
 __all__ = [
     "Assumptions", "ModelPointSet", "measure", "value", "Measurement", "Valuation",
     "read_model_points", "write_valuation", "value_file", "solve_premium",
+    "DEATH", "INPATIENT", "OUTPATIENT", "SURGERY",
 ]

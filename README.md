@@ -39,15 +39,15 @@ measures the insurance contract liability -- BEL, RA and CSM.
 
 Beyond the phase plan:
 
-- **Products** -- term and whole life, endowment, pure endowment and
-  immediate annuity, as combinations of death, maturity and annuity
-  benefits.
-- **Risk Adjustment** -- a mortality-risk component (death claims) and a
-  longevity-risk component (annuity and maturity benefits).
+- **Products** -- term and whole life, endowment, pure endowment, immediate
+  annuity, and health (inpatient, surgery, outpatient), built as a
+  variable-length coverage list per policy.
+- **Risk Adjustment** -- separate mortality, morbidity and longevity
+  components, one coefficient of variation per risk class.
 - **Pricing** -- `solve_premium` solves the level premium for a break-even,
   margin or target-CSM objective.
 
-Further out: health products; the VFA / PAA measurement models.
+Further out: the VFA / PAA measurement models.
 
 ## Quick start
 
@@ -65,7 +65,7 @@ asmp = Assumptions(
     expense_maintenance_annual=60_000.0,
     expense_inflation=0.02,
     ra_confidence=0.75,
-    claims_cv=0.10,
+    mortality_cv=0.10,
 )
 mps = ModelPointSet.single(
     issue_age=40, death_benefit=100_000_000,
@@ -130,11 +130,11 @@ arrays are materialised. Measured on an 8-core / 16-thread desktop CPU
 
 | Model points | `value()` |
 |---|---|
-| 1,000,000 | 0.045 s |
-| 5,000,000 | 0.218 s |
+| 1,000,000 | 0.05 s |
+| 5,000,000 | 0.30 s |
 
-That is roughly 2.7 billion cell-updates per second (one cell = one
-model point x one month). Run `examples/benchmark.py` to reproduce.
+That is roughly 2 billion cell-updates per second (one cell = one model
+point x one month). Run `examples/benchmark.py` to reproduce.
 
 File I/O scales on the same budget: a 10M-model-point parquet round-trip
 -- read, value, write -- takes about one second. Past what memory holds,

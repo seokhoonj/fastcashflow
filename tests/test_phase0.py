@@ -23,7 +23,7 @@ def _assumptions(**overrides) -> Assumptions:
         expense_maintenance_annual=0.0,
         expense_inflation=0.0,
         ra_confidence=0.75,
-        claims_cv=0.10,
+        mortality_cv=0.10,
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -58,7 +58,7 @@ def test_hand_calculation():
     assert np.isclose(res.bel[0, 0], bel)
     assert np.isclose(res.bel[0, 0], -3940.4)
 
-    # RA = z(0.75) * claims_cv * PV(claims)
+    # RA = z(0.75) * mortality_cv * PV(claims)
     ra = Z_75 * 0.10 * pv_claims
     assert np.isclose(res.ra[0, 0], ra)
 
