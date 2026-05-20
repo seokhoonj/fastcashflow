@@ -24,7 +24,10 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **Phase 1** -- confidence-level RA, acquisition + maintenance expenses.
 - **Phase 3a** -- numba parallel (`@njit` + `prange`) kernels.
 - **Phase 3 (fusion)** -- `value()`: a single fused kernel that
-  materialises no per-month arrays -- the memory-minimal fast path.
+  materialises no per-month arrays and derives BEL / RA / CSM in the
+  same pass -- the memory-minimal fast path.
+- **GPU backend** -- `value(..., backend="gpu")` runs the same kernel
+  on a CUDA device (optional; requires a CUDA GPU).
 
 Later phases: duration-based lapse and select-ultimate mortality, polars
 I/O at scale, monthly roll-forward / movement analysis.
@@ -52,6 +55,54 @@ mps = ModelPointSet.single(
 res = run(mps, asmp)
 print(res.bel[0], res.ra[0], res.csm0[0])
 ```
+
+`run()` returns the full detail -- cash flow and CSM trajectories. For
+portfolio-scale valuation use `value()`: it returns only the headline
+numbers (BEL, RA, CSM, loss component) per model point and is much
+faster.
+
+```python
+from fastcashflow import value
+
+val = value(mps, asmp)                      # parallel CPU kernel
+val_gpu = value(mps, asmp, backend="gpu")   # CUDA device, if available
+print(val.bel, val.ra, val.csm, val.loss_component)
+```
+
+## Performance
+
+`value()` carries the in-force amount as a scalar through the time loop
+and derives BEL / RA / CSM in one pass, so no per-month or intermediate
+arrays are materialised. Measured on an 8-core / 16-thread desktop CPU
+(Ryzen 7 3700X), 120-month projection:
+
+| Model points | `value()` |
+|---|---|
+| 1,000,000 | 0.045 s |
+| 5,000,000 | 0.218 s |
+
+That is roughly 2.7 billion cell-updates per second (one cell = one
+model point x one month). Run `examples/benchmark.py` to reproduce.
+
+## GPU backend
+
+`value(..., backend="gpu")` runs the same kernel on a CUDA device.
+Before reaching for it:
+
+- **It needs a CUDA setup** -- a CUDA-capable GPU and driver, and a numba
+  build with CUDA support. Without one, `backend="gpu"` raises; the
+  default `backend="cpu"` always works.
+- **The fixed cost is only amortised at scale.** Each call pays a kernel
+  launch and a host-to-device transfer, so the GPU is slower than the CPU
+  for small portfolios and roughly breaks even near a million model
+  points.
+- **The first call is slow** -- a one-time CUDA JIT compile and context
+  initialisation of a few hundred milliseconds.
+- **GPU memory bounds the portfolio** -- device arrays take ~64 bytes per
+  model point, so an 8 GB card holds on the order of 100M.
+- **Consumer cards give no speedup.** float64 throughput is deliberately
+  capped on consumer GeForce hardware, so there the GPU only matches the
+  CPU; the advantage shows on data-centre cards with full-rate float64.
 
 ## License
 
