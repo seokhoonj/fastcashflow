@@ -41,6 +41,8 @@ class Measurement:
     """Detailed measurement -- full cash flow and CSM trajectories.
 
     Per-model-point arrays have shape ``(n_mp,)`` unless stated otherwise.
+    The CSM roll-forward decomposes as
+    ``csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
     """
 
     bel: FloatArray              # Best Estimate of Liability
@@ -48,19 +50,21 @@ class Measurement:
     csm0: FloatArray             # CSM at initial recognition
     loss_component: FloatArray   # loss component at inception (onerous contracts)
     csm: FloatArray              # (n_mp, n_time+1) -- CSM trajectory
+    csm_accretion: FloatArray    # (n_mp, n_time)   -- CSM interest accreted each month
     csm_release: FloatArray      # (n_mp, n_time)   -- CSM released each month
     cashflows: Cashflows
-    discount: FloatArray         # (n_time,) -- monthly discount factors
+    discount_start: FloatArray   # (n_time,) -- start-of-month discount factors
+    discount_mid: FloatArray     # (n_time,) -- mid-month discount factors
 
 
 def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
     """Detailed GMM measurement: full cash flow and CSM trajectories."""
     proj = project_cashflows(mps, asmp)
-    discount = discount_factors(asmp, proj.n_time)
+    discount_start, discount_mid = discount_factors(asmp, proj.n_time)
 
-    bel = compute_bel(proj, discount)
-    ra = compute_ra(proj, discount, asmp.ra_confidence, asmp.claims_cv)
-    csm, csm_release, loss_component = compute_csm(bel, ra, proj, asmp)
+    bel = compute_bel(proj, discount_start, discount_mid)
+    ra = compute_ra(proj, discount_mid, asmp.ra_confidence, asmp.claims_cv)
+    csm, csm_accretion, csm_release, loss_component = compute_csm(bel, ra, proj, asmp)
 
     return Measurement(
         bel=bel,
@@ -68,9 +72,11 @@ def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
         csm0=csm[:, 0],
         loss_component=loss_component,
         csm=csm,
+        csm_accretion=csm_accretion,
         csm_release=csm_release,
         cashflows=proj,
-        discount=discount,
+        discount_start=discount_start,
+        discount_mid=discount_mid,
     )
 
 
@@ -91,7 +97,8 @@ class Valuation:
 @njit(parallel=True, cache=True)
 def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
                   monthly_premium, sum_assured, expense_acquisition,
-                  maint_monthly, inflation, discount, ra_factor):
+                  maint_monthly, inflation, discount_start, discount_mid,
+                  ra_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
     Per model point the in-force amount is carried as a scalar through the
@@ -118,11 +125,12 @@ def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
         for t in range(term):
             year = t // 12
             q = rates_grid[ridx, year]
-            d = discount[t]
-            pp += inforce * premium * d
-            pc += inforce * q * sa * d
+            ds = discount_start[t]
+            dm = discount_mid[t]
+            pp += inforce * premium * ds
+            pc += inforce * q * sa * dm
             acquisition = expense_acquisition if t == 0 else 0.0
-            pe += (acquisition + inforce * maint_monthly * inflation[t]) * d
+            pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
             inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
         bel_mp = pc + pe - pp
         ra_mp = ra_factor * pc
@@ -173,7 +181,7 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
     )
 
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
-    discount = discount_factors(asmp, n_time)
+    discount_start, discount_mid = discount_factors(asmp, n_time)
     ra_factor = _norm_ppf(asmp.ra_confidence) * asmp.claims_cv
 
     args = (
@@ -186,7 +194,8 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
         asmp.expense_acquisition,
         asmp.expense_maintenance_annual / 12.0,
         inflation,
-        discount,
+        discount_start,
+        discount_mid,
         ra_factor,
     )
 

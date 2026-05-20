@@ -16,8 +16,8 @@ from numba import cuda
 @cuda.jit
 def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse_by_year,
                        monthly_premium, sum_assured, expense_acquisition,
-                       maint_monthly, inflation, discount, ra_factor,
-                       bel, ra, csm, loss_component):
+                       maint_monthly, inflation, discount_start, discount_mid,
+                       ra_factor, bel, ra, csm, loss_component):
     """One CUDA thread per model point; the per-month loop runs in the thread."""
     mp = cuda.grid(1)
     if mp >= issue_index.shape[0]:
@@ -34,11 +34,12 @@ def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse_by_year,
     for t in range(term):
         year = t // 12
         q = rates_grid[ridx, year]
-        d = discount[t]
-        pp += inforce * premium * d
-        pc += inforce * q * sa * d
+        ds = discount_start[t]
+        dm = discount_mid[t]
+        pp += inforce * premium * ds
+        pc += inforce * q * sa * dm
         acquisition = expense_acquisition if t == 0 else 0.0
-        pe += (acquisition + inforce * maint_monthly * inflation[t]) * d
+        pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
         inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
     bel_mp = pc + pe - pp
     ra_mp = ra_factor * pc
@@ -51,7 +52,7 @@ def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse_by_year,
 
 def value_gpu(rates_grid, issue_index, term_months, lapse_by_year,
               monthly_premium, sum_assured, expense_acquisition, maint_monthly,
-              inflation, discount, ra_factor):
+              inflation, discount_start, discount_mid, ra_factor):
     """Run the fused valuation kernel on the GPU.
 
     Returns the four ``(n_mp,)`` valuation arrays: BEL, RA, CSM and the
@@ -70,7 +71,8 @@ def value_gpu(rates_grid, issue_index, term_months, lapse_by_year,
     d_premium = cuda.to_device(monthly_premium)
     d_sum_assured = cuda.to_device(sum_assured)
     d_inflation = cuda.to_device(inflation)
-    d_discount = cuda.to_device(discount)
+    d_discount_start = cuda.to_device(discount_start)
+    d_discount_mid = cuda.to_device(discount_mid)
     d_bel = cuda.device_array(n_mp, dtype=np.float64)
     d_ra = cuda.device_array(n_mp, dtype=np.float64)
     d_csm = cuda.device_array(n_mp, dtype=np.float64)
@@ -80,7 +82,8 @@ def value_gpu(rates_grid, issue_index, term_months, lapse_by_year,
     blocks = (n_mp + threads - 1) // threads
     _value_cuda_kernel[blocks, threads](
         d_rates, d_issue, d_term, d_lapse, d_premium, d_sum_assured,
-        expense_acquisition, maint_monthly, d_inflation, d_discount, ra_factor,
+        expense_acquisition, maint_monthly, d_inflation,
+        d_discount_start, d_discount_mid, ra_factor,
         d_bel, d_ra, d_csm, d_loss,
     )
     cuda.synchronize()

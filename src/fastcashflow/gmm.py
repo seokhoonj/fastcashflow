@@ -21,14 +21,19 @@ from fastcashflow.assumptions import Assumptions
 from fastcashflow.projection import Cashflows
 
 
-def discount_factors(asmp: Assumptions, n_time: int) -> FloatArray:
-    """Monthly discount factors back to time 0. Shape ``(n_time,)``.
+def discount_factors(asmp: Assumptions, n_time: int) -> tuple[FloatArray, FloatArray]:
+    """Monthly discount factors back to time 0, by cash-flow timing.
 
-    Simplification: every month-t cash flow is discounted with the same
-    factor ``(1 + i)^-t``, i.e. claims are treated as start-of-month.
+    Returns ``(discount_start, discount_mid)``, each of shape ``(n_time,)``:
+
+    * ``discount_start[t] = (1 + i)^-t``       -- start-of-month flows
+      (premiums, charged at the start of the month).
+    * ``discount_mid[t]   = (1 + i)^-(t+0.5)`` -- mid-month flows (claims and
+      expenses, which arise during the month).
     """
     t = np.arange(n_time)
-    return (1.0 + asmp.discount_monthly) ** (-t)
+    base = 1.0 + asmp.discount_monthly
+    return base ** (-t), base ** (-(t + 0.5))
 
 
 @njit(parallel=True, cache=True)
@@ -89,20 +94,25 @@ def _norm_ppf(p: float) -> float:
             / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0))
 
 
-def compute_bel(proj: Cashflows, discount: FloatArray) -> FloatArray:
+def compute_bel(
+    proj: Cashflows,
+    discount_start: FloatArray,
+    discount_mid: FloatArray,
+) -> FloatArray:
     """Best Estimate of Liability, per model point. Shape ``(n_mp,)``.
 
-    ``BEL = PV(claims) + PV(expenses) - PV(premiums)``. A negative BEL means
-    the contract is profitable -- premium inflows outweigh the outflows.
+    ``BEL = PV(claims) + PV(expenses) - PV(premiums)``. Claims and expenses
+    arise during the month (discounted mid-month); premiums are charged at
+    the start of the month. A negative BEL means the contract is profitable.
     """
-    return (_pv(proj.claim_cf, discount)
-            + _pv(proj.expense_cf, discount)
-            - _pv(proj.premium_cf, discount))
+    return (_pv(proj.claim_cf, discount_mid)
+            + _pv(proj.expense_cf, discount_mid)
+            - _pv(proj.premium_cf, discount_start))
 
 
 def compute_ra(
     proj: Cashflows,
-    discount: FloatArray,
+    discount_mid: FloatArray,
     ra_confidence: float,
     claims_cv: float,
 ) -> FloatArray:
@@ -118,7 +128,7 @@ def compute_ra(
     needs a capital projection, is left for a later phase.
     """
     z = _norm_ppf(ra_confidence)
-    return z * claims_cv * _pv(proj.claim_cf, discount)
+    return z * claims_cv * _pv(proj.claim_cf, discount_mid)
 
 
 @njit(parallel=True, cache=True)
@@ -128,10 +138,13 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
     Per model point (run in parallel across cores): interest accretion at the
     locked-in rate, then release proportional to coverage units. The
     coverage-unit tail sum is built in a single backward pass so the
-    roll-forward stays linear in time.
+    roll-forward stays linear in time. Monthly interest and release are
+    returned too, so the roll-forward is fully decomposable:
+    ``csm[t+1] = csm[t] + accretion[t] - release[t]``.
     """
     n_mp, n_time = coverage_units.shape
     csm = np.zeros((n_mp, n_time + 1))
+    accretion = np.zeros((n_mp, n_time))
     release = np.zeros((n_mp, n_time))
 
     for mp in prange(n_mp):
@@ -144,16 +157,18 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
             cu_tail[s] = running
 
         for t in range(1, n_time + 1):
-            accreted = csm[mp, t - 1] * (1.0 + monthly_rate)
+            interest = csm[mp, t - 1] * monthly_rate
+            accreted = csm[mp, t - 1] + interest
             cu_remaining = cu_tail[t - 1]
             if cu_remaining > 0.0:
                 rel = accreted * coverage_units[mp, t - 1] / cu_remaining
             else:
                 rel = 0.0
+            accretion[mp, t - 1] = interest
             release[mp, t - 1] = rel
             csm[mp, t] = accreted - rel
 
-    return csm, release
+    return csm, accretion, release
 
 
 def compute_csm(
@@ -179,6 +194,6 @@ def compute_csm(
     csm0 = np.maximum(0.0, -fcf)
     loss_component = np.maximum(0.0, fcf)
 
-    csm, release = _csm_kernel(csm0, proj.inforce, asmp.discount_monthly)
+    csm, accretion, release = _csm_kernel(csm0, proj.inforce, asmp.discount_monthly)
 
-    return csm, release, loss_component
+    return csm, accretion, release, loss_component

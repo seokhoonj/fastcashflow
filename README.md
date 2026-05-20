@@ -23,6 +23,8 @@ measures the insurance contract liability -- BEL, RA and CSM.
   projection, BEL / RA / CSM, validated against hand calculation.
 - **Phase 1** -- confidence-level RA, acquisition + maintenance expenses.
 - **Phase 1b** -- select-and-ultimate mortality, duration-based lapse.
+- **Phase 2** -- mid-month discounting of claims and expenses, CSM
+  movement detail (per-month interest accretion).
 - **Phase 3a** -- numba parallel (`@njit` + `prange`) kernels.
 - **Phase 3 (fusion)** -- `value()`: a single fused kernel that
   materialises no per-month arrays and derives BEL / RA / CSM in the
