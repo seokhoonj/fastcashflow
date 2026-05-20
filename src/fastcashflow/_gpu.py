@@ -16,8 +16,8 @@ from numba import cuda
 @cuda.jit
 def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse,
                        monthly_premium, sum_assured, expense_acquisition,
-                       maint_monthly, inflation, discount,
-                       pv_claim, pv_premium, pv_expense):
+                       maint_monthly, inflation, discount, ra_factor,
+                       bel, ra, csm, loss_component):
     """One CUDA thread per model point; the per-month loop runs in the thread."""
     mp = cuda.grid(1)
     if mp >= issue_index.shape[0]:
@@ -39,15 +39,23 @@ def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse,
         acquisition = expense_acquisition if t == 0 else 0.0
         pe += (acquisition + inforce * maint_monthly * inflation[t]) * d
         inforce *= (1.0 - q) * (1.0 - lapse)
-    pv_claim[mp] = pc
-    pv_premium[mp] = pp
-    pv_expense[mp] = pe
+    bel_mp = pc + pe - pp
+    ra_mp = ra_factor * pc
+    fcf = bel_mp + ra_mp
+    bel[mp] = bel_mp
+    ra[mp] = ra_mp
+    csm[mp] = max(0.0, -fcf)
+    loss_component[mp] = max(0.0, fcf)
 
 
-def value_pv_gpu(rates_grid, issue_index, term_months, lapse, monthly_premium,
-                 sum_assured, expense_acquisition, maint_monthly,
-                 inflation, discount):
-    """Run the fused valuation kernel on the GPU; return the three PV arrays."""
+def value_gpu(rates_grid, issue_index, term_months, lapse, monthly_premium,
+              sum_assured, expense_acquisition, maint_monthly,
+              inflation, discount, ra_factor):
+    """Run the fused valuation kernel on the GPU.
+
+    Returns the four ``(n_mp,)`` valuation arrays: BEL, RA, CSM and the
+    loss component.
+    """
     if not cuda.is_available():
         raise RuntimeError(
             "backend='gpu' requires a CUDA device; none is available"
@@ -61,21 +69,23 @@ def value_pv_gpu(rates_grid, issue_index, term_months, lapse, monthly_premium,
     d_sum_assured = cuda.to_device(sum_assured)
     d_inflation = cuda.to_device(inflation)
     d_discount = cuda.to_device(discount)
-    d_pv_claim = cuda.device_array(n_mp, dtype=np.float64)
-    d_pv_premium = cuda.device_array(n_mp, dtype=np.float64)
-    d_pv_expense = cuda.device_array(n_mp, dtype=np.float64)
+    d_bel = cuda.device_array(n_mp, dtype=np.float64)
+    d_ra = cuda.device_array(n_mp, dtype=np.float64)
+    d_csm = cuda.device_array(n_mp, dtype=np.float64)
+    d_loss = cuda.device_array(n_mp, dtype=np.float64)
 
     threads = 256
     blocks = (n_mp + threads - 1) // threads
     _value_cuda_kernel[blocks, threads](
         d_rates, d_issue, d_term, lapse, d_premium, d_sum_assured,
-        expense_acquisition, maint_monthly, d_inflation, d_discount,
-        d_pv_claim, d_pv_premium, d_pv_expense,
+        expense_acquisition, maint_monthly, d_inflation, d_discount, ra_factor,
+        d_bel, d_ra, d_csm, d_loss,
     )
     cuda.synchronize()
 
     return (
-        d_pv_claim.copy_to_host(),
-        d_pv_premium.copy_to_host(),
-        d_pv_expense.copy_to_host(),
+        d_bel.copy_to_host(),
+        d_ra.copy_to_host(),
+        d_csm.copy_to_host(),
+        d_loss.copy_to_host(),
     )

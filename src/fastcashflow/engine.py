@@ -91,18 +91,20 @@ class Valuation:
 @njit(parallel=True, cache=True)
 def _value_kernel(rates_grid, issue_index, term_months, lapse, monthly_premium,
                   sum_assured, expense_acquisition, maint_monthly,
-                  inflation, discount):
+                  inflation, discount, ra_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
     Per model point the in-force amount is carried as a scalar through the
-    time loop while the three present values are accumulated directly. The
-    only memory written is the three ``(n_mp,)`` result arrays, so the
-    kernel is compute-bound and scales near-linearly across cores.
+    time loop while the present values are accumulated directly; BEL, RA,
+    CSM and the loss component are then derived in the same pass. The only
+    memory written is the four ``(n_mp,)`` result arrays, so the kernel is
+    compute-bound and scales near-linearly across cores.
     """
     n_mp = issue_index.shape[0]
-    pv_claim = np.zeros(n_mp)
-    pv_premium = np.zeros(n_mp)
-    pv_expense = np.zeros(n_mp)
+    bel = np.empty(n_mp)
+    ra = np.empty(n_mp)
+    csm = np.empty(n_mp)
+    loss_component = np.empty(n_mp)
 
     for mp in prange(n_mp):
         term = term_months[mp]
@@ -121,11 +123,15 @@ def _value_kernel(rates_grid, issue_index, term_months, lapse, monthly_premium,
             acquisition = expense_acquisition if t == 0 else 0.0
             pe += (acquisition + inforce * maint_monthly * inflation[t]) * d
             inforce *= (1.0 - q) * (1.0 - lapse)
-        pv_claim[mp] = pc
-        pv_premium[mp] = pp
-        pv_expense[mp] = pe
+        bel_mp = pc + pe - pp
+        ra_mp = ra_factor * pc
+        fcf = bel_mp + ra_mp
+        bel[mp] = bel_mp
+        ra[mp] = ra_mp
+        csm[mp] = max(0.0, -fcf)
+        loss_component[mp] = max(0.0, fcf)
 
-    return pv_claim, pv_premium, pv_expense
+    return bel, ra, csm, loss_component
 
 
 def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Valuation:
@@ -160,6 +166,7 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
 
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
     discount = discount_factors(asmp, n_time)
+    ra_factor = _norm_ppf(asmp.ra_confidence) * asmp.claims_cv
 
     args = (
         rates_grid,
@@ -172,22 +179,15 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
         asmp.expense_maintenance_annual / 12.0,
         inflation,
         discount,
+        ra_factor,
     )
 
     if backend == "cpu":
-        pv_claim, pv_premium, pv_expense = _value_kernel(*args)
+        bel, ra, csm, loss_component = _value_kernel(*args)
     elif backend == "gpu":
-        from fastcashflow._gpu import value_pv_gpu
-        pv_claim, pv_premium, pv_expense = value_pv_gpu(*args)
+        from fastcashflow._gpu import value_gpu
+        bel, ra, csm, loss_component = value_gpu(*args)
     else:
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
 
-    bel = pv_claim + pv_expense - pv_premium
-    ra = _norm_ppf(asmp.ra_confidence) * asmp.claims_cv * pv_claim
-    fcf = bel + ra
-    return Valuation(
-        bel=bel,
-        ra=ra,
-        csm=np.maximum(0.0, -fcf),
-        loss_component=np.maximum(0.0, fcf),
-    )
+    return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
