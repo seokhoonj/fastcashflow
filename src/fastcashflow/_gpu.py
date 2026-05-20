@@ -15,9 +15,10 @@ from numba import cuda
 
 @cuda.jit
 def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse_by_year,
-                       monthly_premium, death_benefit, maturity_benefit,
-                       expense_acquisition, maint_monthly, inflation,
-                       discount_start, discount_mid, ra_factor,
+                       monthly_premium, single_premium, death_benefit,
+                       maturity_benefit, annuity_payment, expense_acquisition,
+                       maint_monthly, inflation, discount_start, discount_mid,
+                       mortality_factor, longevity_factor,
                        bel, ra, csm, loss_component):
     """One CUDA thread per model point; the per-month loop runs in the thread."""
     mp = cuda.grid(1)
@@ -28,23 +29,27 @@ def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse_by_year,
     ridx = issue_index[mp]
     premium = monthly_premium[mp]
     db = death_benefit[mp]
+    annuity = annuity_payment[mp]
     inforce = 1.0
     pc = 0.0
     pp = 0.0
     pe = 0.0
+    pa = 0.0
     for t in range(term):
         year = t // 12
         q = rates_grid[ridx, year]
         ds = discount_start[t]
         dm = discount_mid[t]
-        pp += inforce * premium * ds
+        single = single_premium[mp] if t == 0 else 0.0
+        pp += (inforce * premium + single) * ds
         pc += inforce * q * db * dm
+        pa += inforce * annuity * ds
         acquisition = expense_acquisition if t == 0 else 0.0
         pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
         inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
     pm = inforce * maturity_benefit[mp] * discount_start[term]
-    bel_mp = pc + pm + pe - pp
-    ra_mp = ra_factor * pc
+    bel_mp = pc + pm + pa + pe - pp
+    ra_mp = mortality_factor * pc + longevity_factor * (pm + pa)
     fcf = bel_mp + ra_mp
     bel[mp] = bel_mp
     ra[mp] = ra_mp
@@ -53,9 +58,10 @@ def _value_cuda_kernel(rates_grid, issue_index, term_months, lapse_by_year,
 
 
 def value_gpu(rates_grid, issue_index, term_months, lapse_by_year,
-              monthly_premium, death_benefit, maturity_benefit,
-              expense_acquisition, maint_monthly, inflation,
-              discount_start, discount_mid, ra_factor):
+              monthly_premium, single_premium, death_benefit,
+              maturity_benefit, annuity_payment, expense_acquisition,
+              maint_monthly, inflation, discount_start, discount_mid,
+              mortality_factor, longevity_factor):
     """Run the fused valuation kernel on the GPU.
 
     Returns the four ``(n_mp,)`` valuation arrays: BEL, RA, CSM and the
@@ -72,8 +78,10 @@ def value_gpu(rates_grid, issue_index, term_months, lapse_by_year,
     d_term = cuda.to_device(term_months)
     d_lapse = cuda.to_device(lapse_by_year)
     d_premium = cuda.to_device(monthly_premium)
+    d_single = cuda.to_device(single_premium)
     d_death = cuda.to_device(death_benefit)
     d_maturity = cuda.to_device(maturity_benefit)
+    d_annuity = cuda.to_device(annuity_payment)
     d_inflation = cuda.to_device(inflation)
     d_discount_start = cuda.to_device(discount_start)
     d_discount_mid = cuda.to_device(discount_mid)
@@ -85,9 +93,10 @@ def value_gpu(rates_grid, issue_index, term_months, lapse_by_year,
     threads = 256
     blocks = (n_mp + threads - 1) // threads
     _value_cuda_kernel[blocks, threads](
-        d_rates, d_issue, d_term, d_lapse, d_premium, d_death, d_maturity,
-        expense_acquisition, maint_monthly, d_inflation,
-        d_discount_start, d_discount_mid, ra_factor,
+        d_rates, d_issue, d_term, d_lapse, d_premium, d_single, d_death,
+        d_maturity, d_annuity, expense_acquisition, maint_monthly,
+        d_inflation, d_discount_start, d_discount_mid,
+        mortality_factor, longevity_factor,
         d_bel, d_ra, d_csm, d_loss,
     )
     cuda.synchronize()

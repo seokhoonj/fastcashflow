@@ -39,12 +39,15 @@ measures the insurance contract liability -- BEL, RA and CSM.
 
 Beyond the phase plan:
 
-- **Products** -- term life, whole life, endowment and pure endowment, as
-  combinations of a death benefit and a maturity benefit.
+- **Products** -- term and whole life, endowment, pure endowment and
+  immediate annuity, as combinations of death, maturity and annuity
+  benefits.
+- **Risk Adjustment** -- a mortality-risk component (death claims) and a
+  longevity-risk component (annuity and maturity benefits).
 - **Pricing** -- `solve_premium` solves the level premium for a break-even,
   margin or target-CSM objective.
 
-Further out: annuity and health products; the VFA / PAA measurement models.
+Further out: health products; the VFA / PAA measurement models.
 
 ## Quick start
 

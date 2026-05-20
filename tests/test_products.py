@@ -1,12 +1,14 @@
-"""Product validation -- the maturity benefit (endowment / pure endowment).
+"""Product validation -- survival benefits (endowment and annuity).
 
-A maturity benefit is paid to the policies still in force at the end of the
-term. It must raise the BEL by exactly its present value; a contract with no
-death benefit carries no death claims and so no Risk Adjustment.
+The maturity benefit (endowment) and the annuity payment (immediate annuity)
+are both paid on survival. The maturity benefit must raise the BEL by exactly
+its present value; survival benefits carry longevity risk, priced through the
+``longevity_cv`` component of the Risk Adjustment.
 """
 import numpy as np
 
 from fastcashflow import Assumptions, ModelPointSet, measure, value
+from fastcashflow.gmm import _norm_ppf
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.005      # flat monthly lapse
@@ -88,3 +90,63 @@ def test_value_matches_measure_endowment():
     assert np.allclose(fast.ra, detailed.ra[:, 0])
     assert np.allclose(fast.csm, detailed.csm[:, 0])
     assert np.allclose(fast.loss_component, detailed.loss_component)
+
+
+def test_immediate_annuity_hand_calc():
+    """A pure immediate annuity -- hand-checked inception BEL and RA."""
+    asmp = _assumptions(longevity_cv=0.08)
+    single, annuity, term = 1.2e8, 600_000.0, 24
+    res = measure(
+        ModelPointSet.single(
+            40, 0.0, 0.0, term, annuity_payment=annuity, single_premium=single
+        ),
+        asmp,
+    )
+
+    i = asmp.discount_monthly
+    surv = (1.0 - Q) * (1.0 - LAPSE)
+    full = 1.0 / (1.0 + i)
+    t = np.arange(term)
+    pv_annuity = float(np.sum((surv * full) ** t)) * annuity
+
+    # BEL = PV(annuity outgo) - the single premium (paid at t=0, discount 1)
+    assert np.isclose(res.bel[0, 0], pv_annuity - single)
+    # longevity RA = z(confidence) * longevity_cv * PV(survival benefits)
+    z = _norm_ppf(asmp.ra_confidence)
+    assert np.isclose(res.ra[0, 0], z * asmp.longevity_cv * pv_annuity)
+
+
+def test_value_matches_measure_annuity():
+    """value() and measure() agree on immediate-annuity contracts."""
+    rng = np.random.default_rng(7)
+    n = 300
+    mps = ModelPointSet(
+        issue_age=rng.integers(55, 75, n),
+        death_benefit=np.zeros(n),
+        monthly_premium=np.zeros(n),
+        term_months=rng.integers(120, 300, n),
+        annuity_payment=rng.integers(30, 100, n) * 10_000,
+        single_premium=rng.integers(80, 200, n) * 1_000_000,
+    )
+    asmp = _assumptions(longevity_cv=0.08)
+    fast = value(mps, asmp)
+    detailed = measure(mps, asmp)
+
+    assert np.allclose(fast.bel, detailed.bel[:, 0])
+    assert np.allclose(fast.ra, detailed.ra[:, 0])
+    assert np.allclose(fast.csm, detailed.csm[:, 0])
+    assert np.allclose(fast.loss_component, detailed.loss_component)
+
+
+def test_longevity_ra_responds_to_its_cv():
+    """The longevity RA is zero without longevity_cv and linear in it."""
+    annuity = ModelPointSet.single(
+        60, 0.0, 0.0, 180, annuity_payment=500_000.0, single_premium=8e7
+    )
+    no_cv = measure(annuity, _assumptions(longevity_cv=0.0))
+    full_cv = measure(annuity, _assumptions(longevity_cv=0.10))
+    half_cv = measure(annuity, _assumptions(longevity_cv=0.05))
+
+    assert np.allclose(no_cv.ra, 0.0)            # no longevity_cv -> no RA
+    assert full_cv.ra[0, 0] > 0.0                # longevity risk is now priced
+    assert np.isclose(half_cv.ra[0, 0], 0.5 * full_cv.ra[0, 0])

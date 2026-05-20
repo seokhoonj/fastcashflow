@@ -23,6 +23,8 @@ def _with_premium(mps: ModelPointSet, premium: float) -> ModelPointSet:
         monthly_premium=np.full(mps.n_mp, premium),
         term_months=mps.term_months,
         maturity_benefit=mps.maturity_benefit,
+        annuity_payment=mps.annuity_payment,
+        single_premium=mps.single_premium,
     )
 
 
@@ -43,9 +45,10 @@ def solve_premium(
       (e.g. ``0.10`` for 10%); must satisfy ``0 <= margin < 1``.
     * ``csm``        -- an absolute target CSM (profit) per model point.
 
-    ``mps``'s ``issue_age``, ``death_benefit``, ``maturity_benefit`` and
-    ``term_months`` define the product; its ``monthly_premium`` is ignored --
-    it is the unknown.
+    Every product field of ``mps`` is used as given -- only ``monthly_premium``
+    is ignored, since it is the unknown being solved for. (A fixed
+    ``single_premium``, if any, stays as given: the level premium is solved
+    on top of it.)
     Returns the solved premium per model point, shape ``(n_mp,)``.
     """
     chosen = (break_even, margin is not None, csm is not None)

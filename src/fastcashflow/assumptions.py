@@ -37,7 +37,13 @@ class Assumptions:
         Confidence level for the Risk Adjustment (e.g. 0.75). The RA lifts
         the liability from its best estimate to this percentile.
     claims_cv :
-        Coefficient of variation of claims, used by the RA.
+        Coefficient of variation of death claims -- the mortality-risk
+        component of the RA.
+    longevity_cv :
+        Coefficient of variation of survival benefits (maturity benefits and
+        annuity payments) -- the longevity-risk component of the RA. Defaults
+        to zero. The two RA components are added (the natural mortality /
+        longevity hedge is not credited -- conservative for mixed contracts).
     """
 
     mortality_monthly: Callable[[FloatArray, IntArray], FloatArray]
@@ -48,6 +54,7 @@ class Assumptions:
     expense_inflation: float
     ra_confidence: float
     claims_cv: float
+    longevity_cv: float = 0.0
 
     @property
     def discount_monthly(self) -> float:

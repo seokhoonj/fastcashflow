@@ -5,6 +5,7 @@ Sign convention (liability perspective, used consistently across the engine):
     premium_cf : insurer INFLOW  -- reduces the insurance liability
     claim_cf   : insurer OUTFLOW -- increases the insurance liability
     expense_cf : insurer OUTFLOW -- increases the insurance liability
+    annuity_cf : insurer OUTFLOW -- increases the insurance liability
     maturity_cf: insurer OUTFLOW -- increases the insurance liability
 
 Getting this convention consistent everywhere is the single most error-prone
@@ -14,6 +15,8 @@ Timing convention (monthly steps, month ``t`` spans ``[t, t+1)``):
 
     inforce[t]  : policies in force at the START of month t (per policy)
     premium     : charged at the start of month t, on inforce[t]
+                  (the single premium, if any, is added at t = 0)
+    annuity     : paid at the start of month t, on inforce[t]
     deaths[t]   : occur during month t -- inforce[t] * monthly mortality
     lapses      : occur during month t, on the mortality survivors
     claim       : death benefit for deaths during month t
@@ -45,9 +48,10 @@ class Cashflows:
 
     inforce: FloatArray      # policies in force at the start of each month
     deaths: FloatArray       # deaths during each month
-    premium_cf: FloatArray   # premium inflow per month
+    premium_cf: FloatArray   # premium inflow per month (single premium at t=0)
     claim_cf: FloatArray     # death-benefit outflow per month
     expense_cf: FloatArray   # expense outflow per month
+    annuity_cf: FloatArray   # annuity (survival income) outflow per month
     maturity_cf: FloatArray  # (n_mp,) maturity benefit, paid at time = term
 
     @property
@@ -58,8 +62,9 @@ class Cashflows:
 
 @njit(parallel=True, cache=True)
 def _project_kernel(rates_by_year, term_months, lapse_by_year, monthly_premium,
-                    death_benefit, maturity_benefit, expense_acquisition,
-                    maint_monthly, inflation, n_time):
+                    single_premium, death_benefit, maturity_benefit,
+                    annuity_payment, expense_acquisition, maint_monthly,
+                    inflation, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -76,6 +81,7 @@ def _project_kernel(rates_by_year, term_months, lapse_by_year, monthly_premium,
     premium_cf = np.zeros((n_mp, n_time))
     claim_cf = np.zeros((n_mp, n_time))
     expense_cf = np.zeros((n_mp, n_time))
+    annuity_cf = np.zeros((n_mp, n_time))
     maturity_cf = np.zeros(n_mp)
 
     for mp in prange(n_mp):
@@ -86,8 +92,10 @@ def _project_kernel(rates_by_year, term_months, lapse_by_year, monthly_premium,
             year = t // 12
             q = rates_by_year[mp, year]
             deaths[mp, t] = ift * q
-            premium_cf[mp, t] = ift * monthly_premium[mp]
+            single = single_premium[mp] if t == 0 else 0.0
+            premium_cf[mp, t] = ift * monthly_premium[mp] + single
             claim_cf[mp, t] = ift * q * death_benefit[mp]
+            annuity_cf[mp, t] = ift * annuity_payment[mp]
             acquisition = expense_acquisition if t == 0 else 0.0
             expense_cf[mp, t] = acquisition + ift * maint_monthly * inflation[t]
             survivors = ift * (1.0 - q) * (1.0 - lapse_by_year[year])
@@ -96,7 +104,8 @@ def _project_kernel(rates_by_year, term_months, lapse_by_year, monthly_premium,
             else:
                 maturity_cf[mp] = survivors * maturity_benefit[mp]
 
-    return inforce, deaths, premium_cf, claim_cf, expense_cf, maturity_cf
+    return (inforce, deaths, premium_cf, claim_cf, expense_cf, annuity_cf,
+            maturity_cf)
 
 
 def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
@@ -124,13 +133,16 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
     )
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
 
-    inforce, deaths, premium_cf, claim_cf, expense_cf, maturity_cf = _project_kernel(
+    (inforce, deaths, premium_cf, claim_cf, expense_cf, annuity_cf,
+     maturity_cf) = _project_kernel(
         rates_by_year,
         mps.term_months,
         lapse_by_year,
         mps.monthly_premium,
+        mps.single_premium,
         mps.death_benefit,
         mps.maturity_benefit,
+        mps.annuity_payment,
         asmp.expense_acquisition,
         asmp.expense_maintenance_annual / 12.0,
         inflation,
@@ -142,5 +154,6 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
         premium_cf=premium_cf,
         claim_cf=claim_cf,
         expense_cf=expense_cf,
+        annuity_cf=annuity_cf,
         maturity_cf=maturity_cf,
     )

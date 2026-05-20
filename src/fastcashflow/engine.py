@@ -60,11 +60,13 @@ def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
     proj = project_cashflows(mps, asmp)
     discount_start, discount_mid = discount_factors(asmp, proj.n_time)
 
-    bel, pv_claims = _rollforward_kernel(
+    bel, pv_claims, pv_survival = _rollforward_kernel(
         proj.claim_cf, proj.expense_cf, proj.premium_cf,
-        proj.maturity_cf, mps.term_months, asmp.discount_monthly
+        proj.annuity_cf, proj.maturity_cf, mps.term_months,
+        asmp.discount_monthly,
     )
-    ra = _norm_ppf(asmp.ra_confidence) * asmp.claims_cv * pv_claims
+    z = _norm_ppf(asmp.ra_confidence)
+    ra = z * (asmp.claims_cv * pv_claims + asmp.longevity_cv * pv_survival)
     csm, csm_accretion, csm_release, loss_component = compute_csm(
         bel[:, 0], ra[:, 0], proj, asmp
     )
@@ -98,16 +100,20 @@ class Valuation:
 
 @njit(parallel=True, cache=True)
 def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
-                  monthly_premium, death_benefit, maturity_benefit,
-                  expense_acquisition, maint_monthly, inflation,
-                  discount_start, discount_mid, ra_factor):
+                  monthly_premium, single_premium, death_benefit,
+                  maturity_benefit, annuity_payment, expense_acquisition,
+                  maint_monthly, inflation, discount_start, discount_mid,
+                  mortality_factor, longevity_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
     Per model point the in-force amount is carried as a scalar through the
-    time loop while the present values are accumulated directly; BEL, RA,
-    CSM and the loss component are then derived in the same pass. The only
-    memory written is the four ``(n_mp,)`` result arrays, so the kernel is
-    compute-bound and scales near-linearly across cores.
+    time loop while the present values are accumulated directly -- death
+    claims, premiums (level, plus the single premium at t=0), expenses,
+    annuity payments and the maturity benefit. BEL, RA, CSM and the loss
+    component are derived in the same pass. The RA adds a mortality-risk
+    component (death claims) and a longevity-risk component (annuity and
+    maturity benefits). The only memory written is the four ``(n_mp,)``
+    result arrays, so the kernel is compute-bound and scales near-linearly.
     """
     n_mp = issue_index.shape[0]
     bel = np.empty(n_mp)
@@ -120,23 +126,27 @@ def _value_kernel(rates_grid, issue_index, term_months, lapse_by_year,
         ridx = issue_index[mp]
         premium = monthly_premium[mp]
         db = death_benefit[mp]
+        annuity = annuity_payment[mp]
         inforce = 1.0
         pc = 0.0
         pp = 0.0
         pe = 0.0
+        pa = 0.0
         for t in range(term):
             year = t // 12
             q = rates_grid[ridx, year]
             ds = discount_start[t]
             dm = discount_mid[t]
-            pp += inforce * premium * ds
+            single = single_premium[mp] if t == 0 else 0.0
+            pp += (inforce * premium + single) * ds
             pc += inforce * q * db * dm
+            pa += inforce * annuity * ds
             acquisition = expense_acquisition if t == 0 else 0.0
             pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
             inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
         pm = inforce * maturity_benefit[mp] * discount_start[term]
-        bel_mp = pc + pm + pe - pp
-        ra_mp = ra_factor * pc
+        bel_mp = pc + pm + pa + pe - pp
+        ra_mp = mortality_factor * pc + longevity_factor * (pm + pa)
         fcf = bel_mp + ra_mp
         bel[mp] = bel_mp
         ra[mp] = ra_mp
@@ -185,7 +195,9 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
 
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
     discount_start, discount_mid = discount_factors(asmp, n_time)
-    ra_factor = _norm_ppf(asmp.ra_confidence) * asmp.claims_cv
+    z = _norm_ppf(asmp.ra_confidence)
+    mortality_factor = z * asmp.claims_cv
+    longevity_factor = z * asmp.longevity_cv
 
     args = (
         rates_grid,
@@ -193,14 +205,17 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
         mps.term_months,
         lapse_by_year,
         mps.monthly_premium,
+        mps.single_premium,
         mps.death_benefit,
         mps.maturity_benefit,
+        mps.annuity_payment,
         asmp.expense_acquisition,
         asmp.expense_maintenance_annual / 12.0,
         inflation,
         discount_start,
         discount_mid,
-        ra_factor,
+        mortality_factor,
+        longevity_factor,
     )
 
     if backend == "cpu":
