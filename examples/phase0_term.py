@@ -1,4 +1,4 @@
-"""Phase 0 worked example -- one level-premium protection policy.
+"""Worked example -- a single level-premium protection policy.
 
 Run from the project root::
 
@@ -19,7 +19,11 @@ def main() -> None:
         mortality_monthly=mortality_monthly,
         lapse_monthly=0.01,
         discount_annual=0.03,
-        ra_rate=0.05,
+        expense_acquisition=300_000.0,
+        expense_maintenance_annual=60_000.0,
+        expense_inflation=0.02,
+        ra_confidence=0.75,
+        claims_cv=0.10,
     )
 
     mps = ModelPointSet.single(
@@ -31,7 +35,7 @@ def main() -> None:
 
     res = run(mps, asmp)
 
-    print("Phase 0 -- single protection policy")
+    print("fastcashflow -- single protection policy")
     print(f"  BEL            : {res.bel[0]:>16,.0f}")
     print(f"  RA             : {res.ra[0]:>16,.0f}")
     print(f"  FCF (BEL + RA) : {res.bel[0] + res.ra[0]:>16,.0f}")

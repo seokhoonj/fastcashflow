@@ -3,7 +3,7 @@
 A fast IFRS 17 GMM (General Measurement Model) cash flow projection engine.
 
 Takes model points and actuarial assumptions, projects monthly cash flows, and
-measures the insurance contract liability — BEL, RA and CSM.
+measures the insurance contract liability -- BEL, RA and CSM.
 
 ## Design
 
@@ -13,21 +13,18 @@ measures the insurance contract liability — BEL, RA and CSM.
   engine fast at portfolio scale.
 - **Fixed projection structure.** The GMM recursion is built into the engine;
   new products are added as code modules, not user-written formulas. The
-  trade-off — less flexibility — buys raw speed.
+  trade-off -- less flexibility -- buys raw speed.
 - **From scratch.** All code is original. The methodology references the
   IFRS 17 standard (paragraphs) directly; no third-party code is copied.
 
-## Status — Phase 0
+## Status
 
-Phase 0 is the correctness foundation:
+- **Phase 0** -- single fixed-benefit protection product, deterministic
+  projection, BEL / RA / CSM, validated against hand calculation.
+- **Phase 1** -- confidence-level RA, acquisition + maintenance expenses.
 
-- single fixed-benefit protection product (level premium)
-- deterministic projection, no assumption changes
-- BEL, a placeholder RA, and CSM (initial recognition + roll-forward)
-- validated against an independent hand calculation (`tests/test_phase0.py`)
-
-Later phases: proper RA methodology, multi-product, 1e8-row scale
-(numba / polars), monthly roll-forward / movement analysis.
+Later phases: duration-based lapse and select-ultimate mortality, 1e8-row
+scale (numba / polars), monthly roll-forward / movement analysis.
 
 ## Quick start
 
@@ -36,10 +33,14 @@ import numpy as np
 from fastcashflow import Assumptions, ModelPointSet, run
 
 asmp = Assumptions(
-    mortality_monthly=lambda ages: 1 - (1 - 0.001) ** (1 / 12),
+    mortality_monthly=lambda ages: np.full(ages.shape, 1.0 - (1.0 - 0.001) ** (1.0 / 12.0)),
     lapse_monthly=0.01,
     discount_annual=0.03,
-    ra_rate=0.05,
+    expense_acquisition=300_000.0,
+    expense_maintenance_annual=60_000.0,
+    expense_inflation=0.02,
+    ra_confidence=0.75,
+    claims_cv=0.10,
 )
 mps = ModelPointSet.single(
     issue_age=40, sum_assured=100_000_000,

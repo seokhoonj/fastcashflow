@@ -39,7 +39,7 @@ def run(mps: ModelPointSet, asmp: Assumptions) -> GMMResult:
     discount = discount_factors(asmp, proj.n_time)
 
     bel = compute_bel(proj, discount)
-    ra = compute_ra(proj, discount, asmp.ra_rate)
+    ra = compute_ra(proj, discount, asmp.ra_confidence, asmp.claims_cv)
     csm = compute_csm(bel, ra, proj, asmp)
 
     return GMMResult(

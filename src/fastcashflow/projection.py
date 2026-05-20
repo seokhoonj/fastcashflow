@@ -4,6 +4,7 @@ Sign convention (liability perspective, used consistently across the engine):
 
     premium_cf : insurer INFLOW  -- reduces the insurance liability
     claim_cf   : insurer OUTFLOW -- increases the insurance liability
+    expense_cf : insurer OUTFLOW -- increases the insurance liability
 
 Getting this convention consistent everywhere is the single most error-prone
 part of a GMM engine, so it is stated once here and never re-decided.
@@ -15,6 +16,7 @@ Timing convention (monthly steps, month ``t`` spans ``[t, t+1)``):
     deaths[t]   : occur during month t -- inforce[t] * monthly mortality
     lapses      : occur during month t, on the mortality survivors
     claim       : death benefit for deaths during month t
+    expense     : acquisition at t = 0; maintenance every in-force month
 """
 from __future__ import annotations
 
@@ -35,6 +37,7 @@ class CashflowProjection:
     deaths: FloatArray       # deaths during each month
     premium_cf: FloatArray   # premium inflow per month
     claim_cf: FloatArray     # claim outflow per month
+    expense_cf: FloatArray   # expense outflow per month
 
     @property
     def n_time(self) -> int:
@@ -70,9 +73,19 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> CashflowProjecti
     premium_cf = inforce * mps.monthly_premium[:, None] * active
     claim_cf = deaths * mps.sum_assured[:, None]
 
+    # Expenses: a one-off acquisition cost at t = 0, plus an inflation-adjusted
+    # maintenance cost every in-force month.
+    months = np.arange(n_time)
+    inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
+    maintenance = inforce * (asmp.expense_maintenance_annual / 12.0) * inflation
+    acquisition = np.zeros((n_mp, n_time))
+    acquisition[:, 0] = inforce[:, 0] * asmp.expense_acquisition
+    expense_cf = (acquisition + maintenance) * active
+
     return CashflowProjection(
         inforce=inforce,
         deaths=deaths,
         premium_cf=premium_cf,
         claim_cf=claim_cf,
+        expense_cf=expense_cf,
     )
