@@ -27,7 +27,7 @@ from fastcashflow.gmm import (
     compute_csm,
     discount_factors,
 )
-from fastcashflow.coverage import COVERAGE_RISK, coverage_rates
+from fastcashflow.coverage import COVERAGE_RISK, FIRST_DIAGNOSIS_KIND, coverage_rates
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.projection import Cashflows, project_cashflows
 
@@ -151,6 +151,8 @@ def _value_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
                 morb_rate = 0.0
                 for k in range(c_start, c_end):
                     kind = cov_kind[k]
+                    if kind >= FIRST_DIAGNOSIS_KIND:
+                        continue          # diagnosis coverages run separately
                     rate = cov_rates[kind, ridx, year] * cov_amount[k]
                     if cov_risk[kind] == 0:
                         claim_rate += rate
@@ -169,6 +171,27 @@ def _value_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
             pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
             inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
         pm = inforce * maturity_benefit[mp] * discount_start[term]
+        # Diagnosis coverages pay once on first diagnosis, so each one's
+        # claims run off a depleting "not yet diagnosed" pool -- a separate
+        # pass over the time axis, into the morbidity PV.
+        for k in range(c_start, c_end):
+            kind = cov_kind[k]
+            if kind < FIRST_DIAGNOSIS_KIND:
+                continue
+            benefit = cov_amount[k]
+            healthy = 1.0       # in force and not yet diagnosed
+            d_year = -1
+            d_rate = 0.0
+            surv = 0.0
+            for t in range(term):
+                year = t // 12
+                if year != d_year:
+                    d_rate = cov_rates[kind, ridx, year]
+                    surv = ((1.0 - mortality_grid[ridx, year])
+                            * (1.0 - lapse_by_year[year]))
+                    d_year = year
+                pcm += healthy * d_rate * benefit * discount_mid[t]
+                healthy *= surv * (1.0 - d_rate)
         bel_mp = pc + pcm + pm + pa + pe - pp
         ra_mp = (mortality_factor * pc + morbidity_factor * pcm
                  + longevity_factor * (pm + pa))

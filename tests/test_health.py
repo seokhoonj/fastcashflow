@@ -7,6 +7,7 @@ morbidity, priced by its own RA component (``morbidity_cv``).
 import numpy as np
 
 from fastcashflow import (
+    DIAGNOSIS,
     INPATIENT,
     OUTPATIENT,
     SURGERY,
@@ -34,7 +35,7 @@ def _assumptions(**overrides) -> Assumptions:
         ra_confidence=0.80,
         mortality_cv=0.10,
         morbidity_rates={INPATIENT: flat_morb, SURGERY: flat_morb,
-                         OUTPATIENT: flat_morb},
+                         OUTPATIENT: flat_morb, DIAGNOSIS: flat_morb},
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -107,6 +108,71 @@ def test_value_matches_measure_health():
             INPATIENT: rng.integers(0, 5, n) * 10_000,
             SURGERY: rng.integers(0, 3, n) * 1_000_000,
             OUTPATIENT: rng.integers(0, 4, n) * 5_000,
+        },
+    )
+    asmp = _assumptions(morbidity_cv=0.15)
+    fast = value(mps, asmp)
+    detailed = measure(mps, asmp)
+
+    assert np.allclose(fast.bel, detailed.bel[:, 0])
+    assert np.allclose(fast.ra, detailed.ra[:, 0])
+    assert np.allclose(fast.csm, detailed.csm[:, 0])
+    assert np.allclose(fast.loss_component, detailed.loss_component)
+
+
+def test_diagnosis_benefit_hand_calc():
+    """A diagnosis benefit -- hand-checked inception BEL and morbidity RA."""
+    asmp = _assumptions(morbidity_cv=0.12)
+    benefit, term = 5e7, 24
+    res = measure(
+        ModelPointSet.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: benefit}),
+        asmp,
+    )
+
+    i = asmp.discount_monthly
+    d = MORB_RATE
+    half = (1.0 + i) ** (-0.5)
+    full = 1.0 / (1.0 + i)
+    g = (1.0 - Q) * (1.0 - LAPSE) * (1.0 - d)   # not-yet-diagnosed survival
+    t = np.arange(term)
+    # claim each month is the not-yet-diagnosed pool g^t times the rate
+    pv = d * benefit * half * float(np.sum((g * full) ** t))
+
+    assert np.isclose(res.bel[0, 0], pv)
+    z = _norm_ppf(asmp.ra_confidence)
+    assert np.isclose(res.ra[0, 0], z * asmp.morbidity_cv * pv)
+
+
+def test_diagnosis_pool_depletes():
+    """A diagnosis benefit pays once on a shrinking pool -- at the same rate
+    it is worth less than a multiple-occurrence inpatient benefit."""
+    asmp = _assumptions()
+    term, amount = 120, 1e7
+    diagnosis = measure(
+        ModelPointSet.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: amount}),
+        asmp,
+    )
+    inpatient = measure(
+        ModelPointSet.single(40, 0.0, 0.0, term, benefits={INPATIENT: amount}),
+        asmp,
+    )
+    # inpatient claims on the full in-force each month; diagnosis on the
+    # depleting not-yet-diagnosed pool -- so diagnosis is worth strictly less
+    assert 0.0 < diagnosis.bel[0, 0] < inpatient.bel[0, 0]
+
+
+def test_value_matches_measure_diagnosis():
+    """value() and measure() agree on contracts with diagnosis coverages."""
+    rng = np.random.default_rng(19)
+    n = 250
+    mps = ModelPointSet(
+        issue_age=rng.integers(30, 55, n),
+        monthly_premium=rng.integers(5, 20, n) * 10_000,
+        term_months=rng.integers(60, 180, n),
+        death_benefit=rng.integers(10, 80, n) * 1_000_000,
+        benefits={
+            DIAGNOSIS: rng.integers(0, 6, n) * 10_000_000,
+            INPATIENT: rng.integers(0, 4, n) * 10_000,
         },
     )
     asmp = _assumptions(morbidity_cv=0.15)

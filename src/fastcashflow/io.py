@@ -22,7 +22,7 @@ import numpy as np
 import polars as pl
 
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.coverage import INPATIENT, OUTPATIENT, SURGERY
+from fastcashflow.coverage import DIAGNOSIS, INPATIENT, OUTPATIENT, SURGERY
 from fastcashflow.engine import Valuation, value
 from fastcashflow.modelpoint import ModelPointSet
 
@@ -33,6 +33,7 @@ _BENEFIT_COLUMNS = {
     "inpatient_benefit": INPATIENT,
     "surgery_benefit": SURGERY,
     "outpatient_benefit": OUTPATIENT,
+    "diagnosis_benefit": DIAGNOSIS,
 }
 
 
@@ -64,8 +65,9 @@ def read_model_points(path) -> ModelPointSet:
     ``monthly_premium`` and ``term_months``. The optional columns
     ``maturity_benefit``, ``annuity_payment`` and ``single_premium`` are read
     if present, else default to zero. Health benefit columns --
-    ``inpatient_benefit``, ``surgery_benefit``, ``outpatient_benefit`` -- are
-    read into the coverage list if present. Any other column (a policy
+    ``inpatient_benefit``, ``surgery_benefit``, ``outpatient_benefit``,
+    ``diagnosis_benefit`` -- are read into the coverage list if present. Any
+    other column (a policy
     identifier, say) is ignored -- to carry an identifier through to the
     results, read it separately and pass it to :func:`write_valuation`.
     """

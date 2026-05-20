@@ -40,8 +40,8 @@ measures the insurance contract liability -- BEL, RA and CSM.
 Beyond the phase plan:
 
 - **Products** -- term and whole life, endowment, pure endowment, immediate
-  annuity, and health (inpatient, surgery, outpatient), built as a
-  variable-length coverage list per policy.
+  annuity, and health (inpatient, surgery, outpatient, diagnosis), built as
+  a variable-length coverage list per policy.
 - **Risk Adjustment** -- separate mortality, morbidity and longevity
   components, one coefficient of variation per risk class.
 - **Pricing** -- `solve_premium` solves the level premium for a break-even,

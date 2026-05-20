@@ -20,19 +20,25 @@ DEATH = 0        # lump sum on death; driven by the mortality rate
 INPATIENT = 1    # inpatient (hospitalisation) benefit; driven by its rate
 SURGERY = 2      # surgery benefit; driven by the surgery rate
 OUTPATIENT = 3   # outpatient benefit; driven by the outpatient-visit rate
+DIAGNOSIS = 4    # lump sum on first diagnosis; the benefit is then used up
 
-# The morbidity kinds, in rate-grid order. DEATH (kind 0) is the mortality
-# kind; these are non-decrementing -- a claim does not remove the policy, so
-# the same policy can claim repeatedly (multiple-occurrence health benefits).
-MORBIDITY_KINDS = (INPATIENT, SURGERY, OUTPATIENT)
+# The morbidity kinds, in rate-grid order (DEATH, kind 0, is the mortality
+# kind). None of them decrement -- a health claim leaves the policy in
+# force. Inpatient / surgery / outpatient are multiple-occurrence: the policy
+# may claim them repeatedly. A diagnosis benefit is single-payment -- paid on
+# first diagnosis and then used up -- so its claims run off a shrinking "not
+# yet diagnosed" pool. Kinds at or above FIRST_DIAGNOSIS_KIND are that type.
+MORBIDITY_KINDS = (INPATIENT, SURGERY, OUTPATIENT, DIAGNOSIS)
 N_KINDS = 1 + len(MORBIDITY_KINDS)
+FIRST_DIAGNOSIS_KIND = DIAGNOSIS
 
 # Risk class of a coverage's claims, indexed by kind: 0 mortality, 1 morbidity.
 # The Risk Adjustment prices the two with separate coefficients of variation.
 RISK_MORTALITY = 0
 RISK_MORBIDITY = 1
 COVERAGE_RISK: IntArray = np.array(
-    [RISK_MORTALITY, RISK_MORBIDITY, RISK_MORBIDITY, RISK_MORBIDITY], np.int64
+    [RISK_MORTALITY, RISK_MORBIDITY, RISK_MORBIDITY, RISK_MORBIDITY,
+     RISK_MORBIDITY], np.int64
 )
 
 

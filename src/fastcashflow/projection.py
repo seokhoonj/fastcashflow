@@ -38,7 +38,7 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.coverage import COVERAGE_RISK, coverage_rates
+from fastcashflow.coverage import COVERAGE_RISK, FIRST_DIAGNOSIS_KIND, coverage_rates
 from fastcashflow.modelpoint import ModelPointSet
 
 
@@ -112,6 +112,8 @@ def _project_kernel(mortality, term_months, lapse_by_year, monthly_premium,
                 morb_rate = 0.0
                 for k in range(c_start, c_end):
                     kind = cov_kind[k]
+                    if kind >= FIRST_DIAGNOSIS_KIND:
+                        continue          # diagnosis coverages run separately
                     rate = cov_rates[kind, mp, year] * cov_amount[k]
                     if cov_risk[kind] == 0:
                         claim_rate += rate
@@ -132,6 +134,25 @@ def _project_kernel(mortality, term_months, lapse_by_year, monthly_premium,
                 inforce[mp, t + 1] = survivors
             else:
                 maturity_cf[mp] = survivors * maturity_benefit[mp]
+
+        # Diagnosis coverages pay once on first diagnosis, so each one's
+        # claims run off a "not yet diagnosed" fraction of the in-force that
+        # the diagnosis rate depletes (on top of mortality and lapse).
+        for k in range(c_start, c_end):
+            kind = cov_kind[k]
+            if kind < FIRST_DIAGNOSIS_KIND:
+                continue
+            benefit = cov_amount[k]
+            frac = 1.0          # fraction of the in-force still undiagnosed
+            d_year = -1
+            d_rate = 0.0
+            for t in range(term):
+                year = t // 12
+                if year != d_year:
+                    d_rate = cov_rates[kind, mp, year]
+                    d_year = year
+                morbidity_cf[mp, t] += inforce[mp, t] * frac * d_rate * benefit
+                frac *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
             annuity_cf, maturity_cf)
