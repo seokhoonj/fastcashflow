@@ -1,7 +1,7 @@
 """Phase 1 validation -- Risk Adjustment and expense cash flows."""
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, run
+from fastcashflow import Assumptions, ModelPointSet, measure
 from fastcashflow.gmm import _norm_ppf
 
 
@@ -32,7 +32,7 @@ def test_norm_ppf_known_quantiles():
 
 def test_risk_adjustment():
     """RA = z(confidence) * claims_cv * PV(claims), hand-checked."""
-    res = run(
+    res = measure(
         ModelPointSet.single(
             issue_age=40, sum_assured=1_000_000.0,
             monthly_premium=12_000.0, term_months=2,
@@ -47,7 +47,7 @@ def test_risk_adjustment():
 
 def test_expenses():
     """Acquisition (t=0) and maintenance expense, hand-checked."""
-    res = run(
+    res = measure(
         ModelPointSet.single(
             issue_age=40, sum_assured=1_000_000.0,
             monthly_premium=12_000.0, term_months=2,
@@ -61,8 +61,8 @@ def test_expenses():
     inforce = [1.0, 0.99 * 0.98]
     # expense_cf[0] = acquisition + maintenance = 1*500 + 1*(120/12) = 510
     # expense_cf[1] = maintenance only         = 0.9702*(120/12)     = 9.702
-    assert np.isclose(res.projection.expense_cf[0, 0], 510.0)
-    assert np.isclose(res.projection.expense_cf[0, 1], 9.702)
+    assert np.isclose(res.cashflows.expense_cf[0, 0], 510.0)
+    assert np.isclose(res.cashflows.expense_cf[0, 1], 9.702)
 
     # BEL = PV(claims) + PV(expenses) - PV(premiums)
     pv_claims = 19702.0
@@ -73,7 +73,7 @@ def test_expenses():
 
 def test_expense_inflation():
     """Maintenance expense grows with inflation; acquisition does not recur."""
-    res = run(
+    res = measure(
         ModelPointSet.single(
             issue_age=40, sum_assured=1_000_000.0,
             monthly_premium=12_000.0, term_months=13,
@@ -87,5 +87,5 @@ def test_expense_inflation():
     )
     # no mortality/lapse -> in force stays 1.0
     # maintenance[t] = 1.0 * 10 * (1.06)^(t/12)
-    assert np.isclose(res.projection.expense_cf[0, 0], 10.0)
-    assert np.isclose(res.projection.expense_cf[0, 12], 10.0 * 1.06)
+    assert np.isclose(res.cashflows.expense_cf[0, 0], 10.0)
+    assert np.isclose(res.cashflows.expense_cf[0, 12], 10.0 * 1.06)

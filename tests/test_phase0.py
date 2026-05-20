@@ -6,7 +6,7 @@ This is the engine's correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, run
+from fastcashflow import Assumptions, ModelPointSet, measure
 
 # Standard-normal 75th percentile -- a known mathematical constant, used so
 # the RA check does not depend on the engine's own quantile code.
@@ -34,7 +34,7 @@ def test_hand_calculation():
     premium = 12_000.0
     term = 2
 
-    res = run(
+    res = measure(
         ModelPointSet.single(
             issue_age=40, sum_assured=sum_assured,
             monthly_premium=premium, term_months=term,
@@ -44,7 +44,7 @@ def test_hand_calculation():
 
     # in force: inforce[0] = 1.0 ; inforce[1] = 1 * (1-0.01) * (1-0.02) = 0.9702
     inforce = [1.0, 0.99 * 0.98]
-    assert np.isclose(res.projection.inforce[0, 1], inforce[1])
+    assert np.isclose(res.cashflows.inforce[0, 1], inforce[1])
 
     # cash flows (discount factors are all 1 -- zero discount)
     deaths = [inforce[0] * 0.01, inforce[1] * 0.01]
@@ -77,7 +77,7 @@ def test_hand_calculation():
 
 def test_onerous_contract():
     """Premium far too low -> onerous -> CSM floored at 0, loss component > 0."""
-    res = run(
+    res = measure(
         ModelPointSet.single(
             issue_age=40, sum_assured=1_000_000.0,
             monthly_premium=100.0, term_months=12,
@@ -92,7 +92,7 @@ def test_onerous_contract():
 
 def test_csm_fully_releases():
     """A profitable contract's CSM must run off to ~0 by the end of term."""
-    res = run(
+    res = measure(
         ModelPointSet.single(
             issue_age=35, sum_assured=50_000_000.0,
             monthly_premium=80_000.0, term_months=60,

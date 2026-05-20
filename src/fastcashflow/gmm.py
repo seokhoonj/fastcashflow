@@ -12,14 +12,13 @@ References are to the IFRS 17 standard:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 
 import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.projection import CashflowProjection
+from fastcashflow.projection import Cashflows
 
 
 def discount_factors(asmp: Assumptions, n_time: int) -> FloatArray:
@@ -90,7 +89,7 @@ def _norm_ppf(p: float) -> float:
             / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0))
 
 
-def compute_bel(proj: CashflowProjection, discount: FloatArray) -> FloatArray:
+def compute_bel(proj: Cashflows, discount: FloatArray) -> FloatArray:
     """Best Estimate of Liability, per model point. Shape ``(n_mp,)``.
 
     ``BEL = PV(claims) + PV(expenses) - PV(premiums)``. A negative BEL means
@@ -102,7 +101,7 @@ def compute_bel(proj: CashflowProjection, discount: FloatArray) -> FloatArray:
 
 
 def compute_ra(
-    proj: CashflowProjection,
+    proj: Cashflows,
     discount: FloatArray,
     ra_confidence: float,
     claims_cv: float,
@@ -120,15 +119,6 @@ def compute_ra(
     """
     z = _norm_ppf(ra_confidence)
     return z * claims_cv * _pv(proj.claim_cf, discount)
-
-
-@dataclass(frozen=True, slots=True)
-class CSMResult:
-    """Outcome of the CSM measurement."""
-
-    csm: FloatArray             # (n_mp, n_time+1) -- CSM at each month boundary
-    release: FloatArray         # (n_mp, n_time)   -- CSM released each month
-    loss_component: FloatArray  # (n_mp,)          -- loss component at inception
 
 
 @njit(parallel=True, cache=True)
@@ -169,9 +159,9 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
 def compute_csm(
     bel: FloatArray,
     ra: FloatArray,
-    proj: CashflowProjection,
+    proj: Cashflows,
     asmp: Assumptions,
-) -> CSMResult:
+):
     """CSM at initial recognition (Sec. 38) and deterministic roll-forward (Sec. 44).
 
     Fulfilment cash flows ``FCF = BEL + RA``.
@@ -191,4 +181,4 @@ def compute_csm(
 
     csm, release = _csm_kernel(csm0, proj.inforce, asmp.discount_monthly)
 
-    return CSMResult(csm=csm, release=release, loss_component=loss_component)
+    return csm, release, loss_component

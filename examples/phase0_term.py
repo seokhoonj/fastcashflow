@@ -6,7 +6,7 @@ Run from the project root::
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, run
+from fastcashflow import Assumptions, ModelPointSet, measure
 
 
 def main() -> None:
@@ -34,7 +34,7 @@ def main() -> None:
         term_months=120,
     )
 
-    res = run(mps, asmp)
+    res = measure(mps, asmp)
 
     print("fastcashflow -- single protection policy")
     print(f"  BEL            : {res.bel[0]:>16,.0f}")

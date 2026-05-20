@@ -2,14 +2,14 @@
 
 Two paths:
 
-* ``run``   -- detailed: full monthly cash flow and CSM trajectories. Use it
+* ``measure`` -- detailed: full monthly cash flow and CSM trajectories. Use it
   for inspection, validation and movement analysis.
-* ``value`` -- fast: a single fused, parallel kernel producing only the
+* ``value``   -- fast: a single fused, parallel kernel producing only the
   headline valuation (BEL, RA, CSM, loss component) per model point. It
   materialises no per-month arrays, so it is memory-minimal and the fastest
   path for large-scale valuation.
 
-Both paths share the same arithmetic, so ``value`` reproduces ``run``'s
+Both paths share the same arithmetic, so ``value`` reproduces ``measure``'s
 headline numbers exactly (cross-checked in the tests).
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ from fastcashflow.gmm import (
     discount_factors,
 )
 from fastcashflow.modelpoint import ModelPointSet
-from fastcashflow.projection import CashflowProjection, project_cashflows
+from fastcashflow.projection import Cashflows, project_cashflows
 
 
 # ---------------------------------------------------------------------------
@@ -37,8 +37,8 @@ from fastcashflow.projection import CashflowProjection, project_cashflows
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True, slots=True)
-class GMMResult:
-    """Detailed GMM result.
+class Measurement:
+    """Detailed measurement -- full cash flow and CSM trajectories.
 
     Per-model-point arrays have shape ``(n_mp,)`` unless stated otherwise.
     """
@@ -49,27 +49,27 @@ class GMMResult:
     loss_component: FloatArray   # loss component at inception (onerous contracts)
     csm: FloatArray              # (n_mp, n_time+1) -- CSM trajectory
     csm_release: FloatArray      # (n_mp, n_time)   -- CSM released each month
-    projection: CashflowProjection
+    cashflows: Cashflows
     discount: FloatArray         # (n_time,) -- monthly discount factors
 
 
-def run(mps: ModelPointSet, asmp: Assumptions) -> GMMResult:
-    """Detailed GMM projection: full cash flow and CSM trajectories."""
+def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
+    """Detailed GMM measurement: full cash flow and CSM trajectories."""
     proj = project_cashflows(mps, asmp)
     discount = discount_factors(asmp, proj.n_time)
 
     bel = compute_bel(proj, discount)
     ra = compute_ra(proj, discount, asmp.ra_confidence, asmp.claims_cv)
-    csm = compute_csm(bel, ra, proj, asmp)
+    csm, csm_release, loss_component = compute_csm(bel, ra, proj, asmp)
 
-    return GMMResult(
+    return Measurement(
         bel=bel,
         ra=ra,
-        csm0=csm.csm[:, 0],
-        loss_component=csm.loss_component,
-        csm=csm.csm,
-        csm_release=csm.release,
-        projection=proj,
+        csm0=csm[:, 0],
+        loss_component=loss_component,
+        csm=csm,
+        csm_release=csm_release,
+        cashflows=proj,
         discount=discount,
     )
 
@@ -140,7 +140,7 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
 
     One fused kernel; no per-month arrays are materialised. This is the
     memory-minimal, fastest path for large-scale valuation. For full cash
-    flow / CSM trajectories use :func:`run`.
+    flow / CSM trajectories use :func:`measure`.
 
     Parameters
     ----------

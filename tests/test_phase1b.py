@@ -7,7 +7,7 @@ in plain Python as the correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, run, value
+from fastcashflow import Assumptions, ModelPointSet, measure, value
 
 SELECT_Q = 0.005      # monthly mortality, policy year 0 (select)
 ULT_Q = 0.02          # monthly mortality, policy year 1+ (ultimate)
@@ -46,7 +46,7 @@ def test_select_ultimate_and_duration_lapse():
     premium = 10_000.0
     term = 24
 
-    res = run(
+    res = measure(
         ModelPointSet.single(
             issue_age=40, sum_assured=sum_assured,
             monthly_premium=premium, term_months=term,
@@ -65,22 +65,22 @@ def test_select_ultimate_and_duration_lapse():
         if t + 1 < term:
             inforce[t + 1] = inforce[t] * (1.0 - q) * (1.0 - lapse)
 
-    assert np.allclose(res.projection.inforce[0], inforce)
-    assert np.allclose(res.projection.deaths[0], deaths)
+    assert np.allclose(res.cashflows.inforce[0], inforce)
+    assert np.allclose(res.cashflows.deaths[0], deaths)
 
     # The select -> ultimate step is visible at the year boundary.
     select_factor = (1.0 - SELECT_Q) * (1.0 - SELECT_LAPSE)
-    assert np.isclose(res.projection.inforce[0, 12], select_factor ** 12)
+    assert np.isclose(res.cashflows.inforce[0, 12], select_factor ** 12)
     assert np.isclose(
-        res.projection.inforce[0, 13],
+        res.cashflows.inforce[0, 13],
         select_factor ** 12 * (1.0 - ULT_Q) * (1.0 - ULT_LAPSE),
     )
     # mortality switches from select to ultimate at month 12
     assert np.isclose(
-        res.projection.deaths[0, 11] / res.projection.inforce[0, 11], SELECT_Q
+        res.cashflows.deaths[0, 11] / res.cashflows.inforce[0, 11], SELECT_Q
     )
     assert np.isclose(
-        res.projection.deaths[0, 12] / res.projection.inforce[0, 12], ULT_Q
+        res.cashflows.deaths[0, 12] / res.cashflows.inforce[0, 12], ULT_Q
     )
 
     # BEL = PV(claims) - PV(premiums); zero discount, zero expenses
@@ -90,7 +90,7 @@ def test_select_ultimate_and_duration_lapse():
 
 
 def test_value_matches_run_phase1b():
-    """The fast path reproduces run() under duration-varying assumptions."""
+    """The fast path reproduces measure() under duration-varying assumptions."""
     rng = np.random.default_rng(11)
     n = 500
     mps = ModelPointSet(
@@ -102,7 +102,7 @@ def test_value_matches_run_phase1b():
     asmp = _assumptions(claims_cv=0.10, discount_annual=0.03)
 
     fast = value(mps, asmp)
-    detailed = run(mps, asmp)
+    detailed = measure(mps, asmp)
 
     assert np.allclose(fast.bel, detailed.bel)
     assert np.allclose(fast.ra, detailed.ra)

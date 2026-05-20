@@ -34,7 +34,7 @@ from fastcashflow.modelpoint import ModelPointSet
 
 
 @dataclass(frozen=True, slots=True)
-class CashflowProjection:
+class Cashflows:
     """Projected monthly cash flows. Every array is shaped ``(n_mp, n_time)``."""
 
     inforce: FloatArray      # policies in force at the start of each month
@@ -87,7 +87,7 @@ def _project_kernel(rates_by_year, term_months, lapse_by_year, monthly_premium,
     return inforce, deaths, premium_cf, claim_cf, expense_cf
 
 
-def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> CashflowProjection:
+def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
     """Project monthly cash flows for every model point.
 
     The Pythonic wrapper: it extracts raw arrays from the inputs and
@@ -123,7 +123,7 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> CashflowProjecti
         inflation,
         n_time,
     )
-    return CashflowProjection(
+    return Cashflows(
         inforce=inforce,
         deaths=deaths,
         premium_cf=premium_cf,

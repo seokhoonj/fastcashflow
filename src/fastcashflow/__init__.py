@@ -2,8 +2,8 @@
 
 Two entry points:
 
-* :func:`value` -- fast, fused valuation (BEL, RA, CSM per model point).
-* :func:`run`   -- detailed projection with full cash flow / CSM trajectories.
+* :func:`value`   -- fast, fused valuation (BEL, RA, CSM per model point).
+* :func:`measure` -- detailed: full cash flow and CSM trajectories.
 
 Conventional import alias::
 
@@ -13,12 +13,12 @@ Conventional import alias::
 quantity this engine computes.
 """
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.engine import GMMResult, Valuation, run, value
+from fastcashflow.engine import Measurement, Valuation, measure, value
 from fastcashflow.io import read_model_points, value_file, write_valuation
 from fastcashflow.modelpoint import ModelPointSet
 
 __version__ = "0.0.1"
 __all__ = [
-    "Assumptions", "ModelPointSet", "run", "value", "GMMResult", "Valuation",
+    "Assumptions", "ModelPointSet", "measure", "value", "Measurement", "Valuation",
     "read_model_points", "write_valuation", "value_file",
 ]

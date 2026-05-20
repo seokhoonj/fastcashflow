@@ -1,17 +1,17 @@
-"""Phase 3 -- the fused fast path (`value`) agrees with the detailed `run`.
+"""Phase 3 -- the fused fast path (`value`) agrees with the detailed `measure`.
 
-`run` is anchored by hand calculation (test_phase0 / test_phase1). `value`
-is then validated transitively: it must reproduce `run`'s headline numbers,
+`measure` is anchored by hand calculation (test_phase0 / test_phase1). `value`
+is then validated transitively: it must reproduce `measure`'s headline numbers,
 and the GPU backend must reproduce the CPU backend.
 """
 import numpy as np
 import pytest
 from numba import cuda
 
-from fastcashflow import Assumptions, ModelPointSet, run, value
+from fastcashflow import Assumptions, ModelPointSet, measure, value
 
 
-def test_value_matches_run():
+def test_value_matches_measure():
     """The fast fused path reproduces the detailed path's headline numbers."""
     def mortality_monthly(issue_age, duration):
         attained = issue_age + duration
@@ -37,7 +37,7 @@ def test_value_matches_run():
     )
 
     fast = value(mps, asmp)
-    detailed = run(mps, asmp)
+    detailed = measure(mps, asmp)
 
     assert np.allclose(fast.bel, detailed.bel)
     assert np.allclose(fast.ra, detailed.ra)

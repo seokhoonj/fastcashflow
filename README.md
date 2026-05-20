@@ -39,7 +39,7 @@ Later phases: monthly roll-forward / movement analysis.
 
 ```python
 import numpy as np
-from fastcashflow import Assumptions, ModelPointSet, run
+from fastcashflow import Assumptions, ModelPointSet, measure
 
 asmp = Assumptions(
     mortality_monthly=lambda ages: np.full(ages.shape, 1.0 - (1.0 - 0.001) ** (1.0 / 12.0)),
@@ -55,11 +55,11 @@ mps = ModelPointSet.single(
     issue_age=40, sum_assured=100_000_000,
     monthly_premium=70_000, term_months=120,
 )
-res = run(mps, asmp)   # mps: model points, asmp: assumptions
+res = measure(mps, asmp)   # mps: model points, asmp: assumptions
 print(res.bel[0], res.ra[0], res.csm0[0])
 ```
 
-`run()` returns the full detail -- cash flow and CSM trajectories. For
+`measure()` returns the full detail -- cash flow and CSM trajectories. For
 portfolio-scale valuation use `value()`: it returns only the headline
 numbers (BEL, RA, CSM, loss component) per model point and is much
 faster.
