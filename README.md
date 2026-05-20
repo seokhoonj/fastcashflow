@@ -27,8 +27,9 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **Phase 3 (fusion)** -- `value()`: a single fused kernel that
   materialises no per-month arrays and derives BEL / RA / CSM in the
   same pass -- the memory-minimal fast path.
-- **Phase 3b** -- polars file I/O (parquet / CSV) for model points and
-  results, sized for ~1e8-row portfolios.
+- **Phase 3b** -- polars file I/O (parquet / CSV); a chunked streaming
+  path (`value_file`) values portfolios past what memory holds, to ~1e9
+  model points and beyond.
 - **GPU backend** -- `value(..., backend="gpu")` runs the same kernel
   on a CUDA device (optional; requires a CUDA GPU).
 
@@ -82,6 +83,16 @@ val = value(mps, asmp)
 write_valuation(val, "results.parquet")     # pass ids=... to keep a join key
 ```
 
+Past what fits in memory, stream a parquet file chunk by chunk straight
+to a result dataset:
+
+```python
+from fastcashflow import value_file
+
+value_file("policies.parquet", "results/", asmp, id_column="id")
+# -> results/part-00000.parquet, part-00001.parquet, ...
+```
+
 ## Performance
 
 `value()` carries the in-force amount as a scalar through the time loop
@@ -98,8 +109,10 @@ That is roughly 2.7 billion cell-updates per second (one cell = one
 model point x one month). Run `examples/benchmark.py` to reproduce.
 
 File I/O scales on the same budget: a 10M-model-point parquet round-trip
--- read, value, write -- takes about one second, so a ~1e8-row portfolio
-is a tens-of-seconds batch.
+-- read, value, write -- takes about one second. Past what memory holds,
+`value_file` streams a parquet file chunk by chunk -- 50M model points in
+under five seconds, peak memory one chunk -- so portfolio size is bounded
+by disk and time, not RAM.
 
 ## GPU backend
 

@@ -8,6 +8,7 @@ from fastcashflow import (
     ModelPointSet,
     read_model_points,
     value,
+    value_file,
     write_valuation,
 )
 
@@ -114,3 +115,44 @@ def test_file_workflow_matches_in_memory(tmp_path):
     assert np.allclose(from_file.ra, in_memory.ra)
     assert np.allclose(from_file.csm, in_memory.csm)
     assert np.allclose(from_file.loss_component, in_memory.loss_component)
+
+
+def test_value_file_streaming_matches_in_memory(tmp_path):
+    """Chunked file-to-file valuation equals the in-memory valuation exactly."""
+    rng = np.random.default_rng(5)
+    n = 1000
+    mps = ModelPointSet(
+        issue_age=rng.integers(25, 60, n),
+        sum_assured=rng.integers(10, 100, n) * 1_000_000,
+        monthly_premium=rng.integers(3, 15, n) * 10_000,
+        term_months=rng.integers(60, 180, n),
+    )
+    asmp = _assumptions()
+
+    in_path = tmp_path / "mps.parquet"
+    _frame(mps).with_columns(pl.Series("id", np.arange(n))).write_parquet(in_path)
+
+    out_dir = tmp_path / "results"
+    processed = value_file(in_path, out_dir, asmp, chunk_size=300, id_column="id")
+    assert processed == n
+    assert len(sorted(out_dir.glob("part-*.parquet"))) == 4  # 300+300+300+100
+
+    results = pl.read_parquet(str(out_dir / "part-*.parquet")).sort("id")
+    in_memory = value(mps, asmp)
+    assert np.array_equal(results["id"].to_numpy(), np.arange(n))
+    assert np.array_equal(results["bel"].to_numpy(), in_memory.bel)
+    assert np.array_equal(results["ra"].to_numpy(), in_memory.ra)
+    assert np.array_equal(results["csm"].to_numpy(), in_memory.csm)
+    assert np.array_equal(results["loss_component"].to_numpy(), in_memory.loss_component)
+
+
+def test_value_file_rejects_existing_output(tmp_path):
+    """A directory that already holds part files is rejected."""
+    mps = _portfolio(100)
+    in_path = tmp_path / "mps.parquet"
+    _frame(mps).write_parquet(in_path)
+    out_dir = tmp_path / "results"
+
+    value_file(in_path, out_dir, _assumptions())
+    with pytest.raises(ValueError, match="already contains part"):
+        value_file(in_path, out_dir, _assumptions())
