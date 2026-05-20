@@ -1,7 +1,9 @@
 """fastcashflow -- fast IFRS 17 GMM cash flow projection engine.
 
-Phase 0: single fixed-benefit protection product, deterministic projection,
-BEL / RA / CSM measurement.
+Two entry points:
+
+* :func:`value` -- fast, fused valuation (BEL, RA, CSM per model point).
+* :func:`run`   -- detailed projection with full cash flow / CSM trajectories.
 
 Conventional import alias::
 
@@ -11,8 +13,8 @@ Conventional import alias::
 quantity this engine computes.
 """
 from fastcashflow.assumptions import Assumptions
+from fastcashflow.engine import GMMResult, Valuation, run, value
 from fastcashflow.modelpoint import ModelPointSet
-from fastcashflow.engine import run, GMMResult
 
 __version__ = "0.0.1"
-__all__ = ["Assumptions", "ModelPointSet", "run", "GMMResult"]
+__all__ = ["Assumptions", "ModelPointSet", "run", "value", "GMMResult", "Valuation"]

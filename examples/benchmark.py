@@ -1,4 +1,4 @@
-"""Benchmark -- project large synthetic portfolios and report run times.
+"""Benchmark -- fast valuation of large synthetic portfolios.
 
 Run from the project root::
 
@@ -8,7 +8,7 @@ import time
 
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, run
+from fastcashflow import Assumptions, ModelPointSet, value
 
 
 def mortality_monthly(ages: np.ndarray) -> np.ndarray:
@@ -38,15 +38,15 @@ def main() -> None:
         claims_cv=0.10,
     )
 
-    print("fastcashflow benchmark -- parallel kernels, term = 120 months")
-    for n_mp in (10_000, 50_000, 200_000, 500_000):
+    print("fastcashflow benchmark -- value(), term = 120 months")
+    for n_mp in (10_000, 100_000, 1_000_000, 5_000_000):
         mps = make_portfolio(n_mp)
-        run(mps, asmp)                       # warm-up (triggers JIT compilation)
+        value(mps, asmp)                     # warm-up (triggers JIT compilation)
         start = time.perf_counter()
-        run(mps, asmp)
+        value(mps, asmp)
         elapsed = time.perf_counter() - start
         rows = n_mp * 120
-        print(f"  {n_mp:>9,} MP  ({rows:>12,} cells) : {elapsed:8.3f} s")
+        print(f"  {n_mp:>10,} MP  ({rows:>14,} cells) : {elapsed:8.3f} s")
 
 
 if __name__ == "__main__":
