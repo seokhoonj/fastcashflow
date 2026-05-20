@@ -22,6 +22,7 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **Phase 0** -- single fixed-benefit protection product, deterministic
   projection, BEL / RA / CSM, validated against hand calculation.
 - **Phase 1** -- confidence-level RA, acquisition + maintenance expenses.
+- **Phase 1b** -- select-and-ultimate mortality, duration-based lapse.
 - **Phase 3a** -- numba parallel (`@njit` + `prange`) kernels.
 - **Phase 3 (fusion)** -- `value()`: a single fused kernel that
   materialises no per-month arrays and derives BEL / RA / CSM in the
@@ -29,8 +30,8 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **GPU backend** -- `value(..., backend="gpu")` runs the same kernel
   on a CUDA device (optional; requires a CUDA GPU).
 
-Later phases: duration-based lapse and select-ultimate mortality, polars
-I/O at scale, monthly roll-forward / movement analysis.
+Later phases: polars I/O at scale, monthly roll-forward / movement
+analysis.
 
 ## Quick start
 
