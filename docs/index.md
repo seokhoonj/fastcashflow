@@ -14,21 +14,21 @@ fastcashflow는 보험계약부채 — 최선추정부채(BEL), 위험조정(RA)
 ::::{grid} 1 2 2 4
 :gutter: 3
 
-:::{grid-item-card} 빠름
-numba로 컴파일한 수치 커널 — 계약 건별 대규모 평가를 위해
-설계했습니다.
+:::{grid-item-card} 속도
+numba로 컴파일한 수치 커널 — 계약 건별 대규모 평가를 위한
+설계.
 :::
 
-:::{grid-item-card} 완전함
+:::{grid-item-card} 폭넓은 기능
 세 가지 회계모형(GMM·PAA·VFA)을 모두 — 재보험, 확률론적 평가,
-기말 변동분석까지.
+기말 변동분석.
 :::
 
-:::{grid-item-card} 명확함
-읽기 쉬운 코드, 교육 수준의 docstring, 모든 수치를 그리는 내장 차트.
+:::{grid-item-card} 투명성
+읽기 쉬운 코드, 교육 수준의 docstring, 이해를 돕는 내장 차트.
 :::
 
-:::{grid-item-card} 열림
+:::{grid-item-card} 오픈소스
 자유로운 오픈소스, MPL-2.0 라이선스.
 :::
 
