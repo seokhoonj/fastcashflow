@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Seokhoon Joo" }]
 keywords = [
-    "IFRS 17", "GMM", "CSM", "BEL", "risk adjustment",
+    "IFRS 17", "GMM", "BEL", "risk adjustment", "CSM",
     "actuarial", "cashflow projection", "insurance", "life", "health",
 ]
 dependencies = ["numpy>=1.24", "numba>=0.59", "polars>=1.0", "openpyxl>=3.1"]
