@@ -103,3 +103,6 @@ CLAUDE.md
 
 # Local-only dev scripts and data
 dev/
+
+# Local-only Korean reference material (regulator guides)
+references/
