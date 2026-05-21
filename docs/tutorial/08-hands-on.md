@@ -76,7 +76,7 @@ import fastcashflow as fcf
 
 ```python
 asmp = fcf.Assumptions(
-    mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.01),
+    mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
     lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
     discount_annual=1.005 ** 12 - 1,
     expense_acquisition=0.0,
@@ -90,9 +90,9 @@ asmp = fcf.Assumptions(
 괄호 안은 `이름=값` 꼴로 가정을 하나씩 적은 것입니다. 한 줄씩 보면:
 
 - `mortality_monthly` — 월 사망률. 숫자 하나가 아니라 **함수**로
-  줍니다. 사망률이 나이와 경과에 따라 달라질 수 있기 때문이죠(3.2절).
+  줍니다. 사망률이 성별·나이·경과에 따라 달라질 수 있기 때문이죠(3.2절).
   `lambda`는 간단한 함수를 한 줄로 적는 파이썬 문법인데, 여기서는
-  나이·경과와 상관없이 늘 0.01(월 1%)을 돌려주는 함수입니다.
+  성별·나이·경과와 상관없이 늘 0.01(월 1%)을 돌려주는 함수입니다.
 - `lapse_monthly` — 월 해지율. 같은 방식으로 늘 0(해지 없음)을
   돌려줍니다.
 - `discount_annual` — 연 할인율. `**`는 거듭제곱이라
@@ -104,8 +104,8 @@ asmp = fcf.Assumptions(
 
 사망률 함수 속 `np.full(issue_age.shape, 0.01)`은 "`issue_age`와 같은
 모양의 배열을 만들어 전부 0.01로 채워라"는 뜻입니다. 엔진이 사망률
-함수를 부를 때 나이를 배열로 통째로 넘기므로, 함수도 같은 모양의
-배열을 돌려줘야 합니다.
+함수를 부를 때 성별·나이·경과를 배열로 통째로 넘기므로, 함수도 같은
+모양의 배열을 돌려줘야 합니다.
 
 모델포인트는 `ModelPointSet`으로 만듭니다. 계약 한 건이면 `single()`이
 편합니다.
@@ -168,7 +168,7 @@ import numpy as np
 import fastcashflow as fcf
 
 asmp = fcf.Assumptions(
-    mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.01),
+    mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
     lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
     discount_annual=1.005 ** 12 - 1,
     expense_acquisition=0.0,
@@ -206,10 +206,11 @@ print(val.bel)
 print(val.csm)
 ```
 
-`load_sample_model_points()`는 패키지에 든 작은 정기보험
-포트폴리오(계약 8건)를, `load_sample_assumptions()`는 그에 맞는 가정을
-돌려줍니다. 파일을 따로 준비할 필요가 없죠. `value()`의 결과는
-모델포인트 순서대로 늘어선 배열이라, 8건이면 길이 8입니다.
+`load_sample_model_points()`는 패키지에 든 작은 포트폴리오(계약 8건,
+정기보험과 건강보험)를, `load_sample_assumptions()`는 그에 맞는 가정을
+돌려줍니다. 계약마다 주계약 사망에 더해 진단·입원·재해사망·연금·생존
+같은 특약이 붙어 있습니다. 파일을 따로 준비할 필요가 없죠. `value()`의
+결과는 모델포인트 순서대로 늘어선 배열이라, 8건이면 길이 8입니다.
 
 샘플 8건은 모두 보험료가 보장에 견주어 넉넉히 매겨진 계약이라, BEL이
 음수(이익이 예상됨)이고 CSM이 0보다 크며 손실요소는 0입니다.

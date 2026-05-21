@@ -78,17 +78,16 @@ assembles the disclosure, and rolls a reporting period forward:
 python examples/worked_example.py
 ```
 
-It reads the basis from an Excel workbook (`read_assumptions`) and the
-policies from a CSV (`read_model_points`) -- copy `examples/sample_basis.xlsx`
-and `examples/sample_policies.csv`, edit them, and point it at your own
-book. The rest of this section builds the same inputs in code instead.
+It loads fastcashflow's bundled sample basis and portfolio
+(`load_sample_assumptions`, `load_sample_model_points`), so it runs with no
+files to prepare. The rest of this section builds the same inputs in code.
 
 ```python
 import numpy as np
 from fastcashflow import Assumptions, ModelPointSet, measure
 
 asmp = Assumptions(
-    mortality_monthly=lambda issue_age, duration: np.full(
+    mortality_monthly=lambda sex, issue_age, duration: np.full(
         issue_age.shape, 1.0 - (1.0 - 0.001) ** (1.0 / 12.0)
     ),
     lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
@@ -138,7 +137,7 @@ write the results back:
 ```python
 from fastcashflow import read_model_points, write_valuation
 
-mps = read_model_points("policies.parquet")
+mps = read_model_points("policies.parquet", asmp)
 val = value(mps, asmp)
 write_valuation(val, "results.parquet")     # pass ids=... to keep a join key
 ```

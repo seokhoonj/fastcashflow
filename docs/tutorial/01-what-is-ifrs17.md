@@ -225,7 +225,7 @@ import fastcashflow as fcf
 asmp = fcf.read_assumptions("basis.xlsx")
 
 # 입력 2: 모델포인트 (측정 대상 계약들)
-mps = fcf.read_model_points("portfolio.csv")
+mps = fcf.read_model_points("portfolio.csv", asmp)
 
 # 측정: 각 계약의 현금흐름을 월별로 추정한다
 m = fcf.measure(mps, asmp)

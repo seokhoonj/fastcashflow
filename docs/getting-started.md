@@ -14,14 +14,14 @@ engine alone.
 ## A first valuation
 
 A valuation needs two inputs -- a set of model points (the policies) and an
-actuarial basis (the assumptions). The simplest way to supply them is from
-files: an Excel workbook for the basis, a CSV for the portfolio.
+actuarial basis (the assumptions). The quickest start is fastcashflow's
+bundled sample, which loads with no files to prepare.
 
 ```python
 import fastcashflow as fcf
 
-asmp = fcf.read_assumptions("sample_basis.xlsx")
-mps = fcf.read_model_points("sample_policies.csv")
+asmp = fcf.load_sample_assumptions()
+mps = fcf.load_sample_model_points()
 
 m = fcf.measure(mps, asmp)
 print(m.bel[:, 0])      # best estimate liability at inception
