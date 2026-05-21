@@ -17,9 +17,12 @@ or loss, so the account-value cash flows are discounted, and the CSM is
 accreted, at the underlying-items return -- not a locked-in rate.
 fastcashflow is deterministic (a single scenario), so the VFA's hallmark --
 the CSM absorbing the variability of the underlying items -- reduces here to
-that return-rate accretion. Guarantees and surrender penalties, where the
-real non-financial risk of VFA business sits, are left for a later phase,
-so the v1 RA is zero.
+that return-rate accretion. A minimum guaranteed credited rate is supported
+-- the account is credited ``max(return, guarantee)`` each period. Its
+intrinsic cost appears in this deterministic measurement; the time value of
+the guarantee, the extra cost from return volatility, is measured
+stochastically by ``measure_tvog``. Surrender penalties and a guarantee
+risk adjustment are left for later, so the v1 RA is zero.
 """
 from __future__ import annotations
 
@@ -62,10 +65,12 @@ class VFAMeasurement:
 def measure_vfa(mps: ModelPointSet, asmp: Assumptions) -> VFAMeasurement:
     """Measure a direct-participation portfolio under the Variable Fee Approach.
 
-    The account value rolls forward as ``AV[t+1] = AV[t] * (1 + r) * (1 - f)``
-    -- the underlying-items return ``r`` less the variable fee ``f`` -- from
-    ``AV[0]`` = the model point's ``account_value``. The benefit on every exit
-    (death, surrender, maturity) is the account value at that time.
+    The account value rolls forward as
+    ``AV[t+1] = AV[t] * (1 + max(r, g)) * (1 - f)`` -- the credited rate (the
+    underlying-items return ``r`` floored at any guaranteed rate ``g``) less
+    the variable fee ``f`` -- from ``AV[0]`` = the model point's
+    ``account_value``. The benefit on every exit (death, surrender, maturity)
+    is the account value at that time.
 
     BEL is the present value of benefits and expenses less the premium, all
     at the underlying-items return; the CSM is ``max(0, -BEL)`` -- the
@@ -78,7 +83,12 @@ def measure_vfa(mps: ModelPointSet, asmp: Assumptions) -> VFAMeasurement:
 
     r_m = (1.0 + asmp.investment_return) ** (1.0 / 12.0) - 1.0
     f_m = (1.0 + asmp.fund_fee) ** (1.0 / 12.0) - 1.0
-    growth = (1.0 + r_m) * (1.0 - f_m)
+    # A minimum guarantee credits max(return, guarantee) to the account.
+    credit_m = r_m
+    if asmp.guaranteed_credit_rate is not None:
+        g_m = (1.0 + asmp.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+        credit_m = max(r_m, g_m)
+    growth = (1.0 + credit_m) * (1.0 - f_m)
 
     # Account-value trajectory -- flat rates, so a closed form.
     av = mps.account_value[:, None] * growth ** np.arange(n_time + 1)[None, :]
@@ -88,7 +98,7 @@ def measure_vfa(mps: ModelPointSet, asmp: Assumptions) -> VFAMeasurement:
     exits = inforce_pad[:, :-1] - inforce_pad[:, 1:]      # (n_mp, n_time)
     benefit_cf = exits * av[:, :n_time]
     # Variable fee -- the entity's share, deducted from the grown account value.
-    fee_cf = inforce * av[:, :n_time] * (1.0 + r_m) * f_m
+    fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m) * f_m
 
     # Discount at the underlying-items return -- the VFA basis. Benefits are
     # discounted start-of-month, consistent with the account value, so a

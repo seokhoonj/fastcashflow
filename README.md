@@ -59,9 +59,12 @@ Beyond the phase plan:
 - **Stochastic** -- `value_stochastic` values a portfolio under many
   economic scenarios and reports the liability distribution, for the
   percentile-based risk and capital measures a single run cannot give.
+- **Guarantees** -- `measure_tvog` values a VFA minimum-rate guarantee over
+  return scenarios and splits its cost into intrinsic value and time value
+  (the TVOG -- the cost a deterministic run cannot see).
 
-Further out: scenario paths, and stochastic guarantees (the time value of
-options and guarantees for participating business).
+Further out: discount-rate scenario paths; a non-financial-risk adjustment
+for guarantees.
 
 ## Quick start
 

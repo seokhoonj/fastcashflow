@@ -63,6 +63,11 @@ class Assumptions:
     fund_fee :
         Annual variable-fee rate -- the entity's share of the underlying
         items, deducted from the account value each period (VFA).
+    guaranteed_credit_rate :
+        Annual minimum credited rate guaranteed on an account-value (VFA)
+        contract. The account is credited ``max(return, guarantee)`` each
+        period, so the guarantee has a cost whenever the return falls short.
+        ``None`` means no guarantee.
     morbidity_rates :
         ``{coverage kind: callable}`` map giving the monthly morbidity rate
         of each health coverage kind (see :mod:`fastcashflow.coverage`). Each
@@ -84,6 +89,7 @@ class Assumptions:
     cost_of_capital_rate: float = 0.06
     investment_return: float = 0.0
     fund_fee: float = 0.0
+    guaranteed_credit_rate: float | None = None
     morbidity_rates: dict[int, RateFn] | None = None
 
     @property
