@@ -6,8 +6,16 @@ checks here are identities -- the CSM waterfall reconciles, and the service
 result equals revenue less expense -- plus that the whole CSM releases.
 """
 import numpy as np
+import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, measure, report
+from fastcashflow import (
+    Assumptions,
+    ModelPointSet,
+    measure,
+    measure_paa,
+    measure_vfa,
+    report,
+)
 
 
 def _assumptions() -> Assumptions:
@@ -20,6 +28,8 @@ def _assumptions() -> Assumptions:
         expense_inflation=0.02,
         ra_confidence=0.75,
         mortality_cv=0.10,
+        investment_return=0.06,
+        fund_fee=0.015,
     )
 
 
@@ -71,3 +81,41 @@ def test_report_annual_totals_match_the_monthly_sum():
     )
     assert np.isclose(ann["csm_release"].sum(), res.csm_release.sum())
     assert np.isclose(ann["insurance_revenue"].sum(), res.insurance_revenue.sum())
+
+
+def test_report_handles_paa():
+    """report() accepts a PAA measurement -- which has no CSM."""
+    m = measure_paa(ModelPointSet.single(40, 1e8, 50_000.0, 12), _assumptions())
+    res = report(m)
+    assert np.allclose(res.insurance_revenue, m.revenue)
+    assert np.allclose(res.insurance_service_result, m.service_result)
+    assert np.allclose(res.csm_opening, 0.0)
+    assert np.allclose(res.csm_release, 0.0)
+
+
+def test_report_handles_vfa():
+    """report() accepts a VFA measurement -- the result is the CSM release."""
+    m = measure_vfa(
+        ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8), _assumptions()
+    )
+    res = report(m)
+    assert np.allclose(
+        res.csm_opening + res.csm_accretion - res.csm_release, res.csm_closing
+    )
+    assert np.allclose(res.insurance_service_result, res.csm_release)
+
+
+def test_report_loss_component():
+    """The loss component is zero when profitable, positive when onerous."""
+    profitable = report(measure(
+        ModelPointSet.single(40, 1e8, 150_000.0, 120), _assumptions()))
+    onerous = report(measure(
+        ModelPointSet.single(40, 1e8, 1_000.0, 120), _assumptions()))
+    assert np.allclose(profitable.loss_component, 0.0)
+    assert onerous.loss_component[0] > 0.0
+
+
+def test_report_rejects_unknown_measurement():
+    """A non-measurement input is an error."""
+    with pytest.raises(TypeError, match="GMM, PAA or VFA"):
+        report(object())

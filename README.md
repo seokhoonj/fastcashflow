@@ -44,8 +44,8 @@ Beyond the phase plan:
   and the VFA (the variable-fee model for direct-participation /
   account-value contracts).
 - **Disclosure** -- the IFRS 17 insurance service result (insurance revenue,
-  service expense, finance expense) and the CSM analysis of change,
-  assembled from a GMM measurement.
+  service expense, finance expense), the loss component and the CSM analysis
+  of change, assembled from a GMM, PAA or VFA measurement.
 - **Products** -- term and whole life, endowment, pure endowment, immediate
   annuity, and health (inpatient, surgery, outpatient, diagnosis), built as
   a variable-length coverage list per policy.

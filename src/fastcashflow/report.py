@@ -1,23 +1,24 @@
 """IFRS 17 financial-statement disclosure -- the insurance service result.
 
-Turns a GMM measurement into the period-by-period IFRS 17 reporting figures:
-the insurance service result and its build-up (insurance revenue and service
-expense), the insurance finance expense, and the contractual service margin
-analysis of change.
+``report`` turns a measurement -- GMM, PAA or VFA -- into the period-by-period
+IFRS 17 reporting figures: the insurance service result and its build-up
+(insurance revenue and service expense), the insurance finance expense, the
+loss component of onerous contracts, and the contractual service margin
+analysis of change. Producing the same ``Report`` shape for every measurement
+model lets a mixed portfolio's disclosure be compared and consolidated.
 
 Insurance revenue follows IFRS 17 paragraphs B120-B124: the revenue of a
 period is the reduction in the liability for remaining coverage that relates
 to services -- the insurance service expenses expected to be incurred, plus
-the release of the risk adjustment, plus the release of the CSM. The
-insurance service result is revenue less the service expenses actually
-incurred; in a deterministic projection expected equals actual, so the
-result is exactly the RA release plus the CSM release -- the profit emerging
-as service is provided.
+the release of the risk adjustment and of the CSM. The insurance service
+result is revenue less the service expenses actually incurred.
 
-v1 scope: investment-component benefits (maturity, annuity and surrender
-values) are excluded from the revenue and service-expense lines -- a full
-investment-component split is left for later, as is the liability-for-
-incurred-claims reconciliation and the loss-component detail.
+v1 scope: investment-component benefits (maturity, annuity, surrender and
+account values) are excluded from the revenue and service-expense lines.
+The liability for incurred claims is zero -- the engine settles claims when
+incurred, with no settlement lag -- so it carries no separate reconciliation.
+The loss component is reported at inception; its release trajectory and the
+full incurred-claims movement are left for later.
 """
 from __future__ import annotations
 
@@ -27,6 +28,8 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import Measurement
+from fastcashflow.paa import PAAMeasurement
+from fastcashflow.vfa import VFAMeasurement
 
 
 def _to_years(monthly: FloatArray) -> FloatArray:
@@ -42,17 +45,20 @@ def _to_years(monthly: FloatArray) -> FloatArray:
 class Report:
     """IFRS 17 disclosure figures, period by period.
 
-    Every array is shaped ``(n_mp, n_time)`` -- one row per model point, one
-    column per month. ``insurance_service_result`` is revenue less service
-    expense; ``insurance_finance_expense`` is signed (positive an expense,
-    negative income). The CSM analysis of change reconciles as
-    ``csm_opening + csm_accretion - csm_release = csm_closing``.
+    Each flow array is shaped ``(n_mp, n_time)`` -- one row per model point,
+    one column per month; ``loss_component`` is ``(n_mp,)`` -- the onerous
+    loss at inception. ``insurance_service_result`` is revenue less service
+    expense; ``insurance_finance_expense`` is signed (positive an expense).
+    The CSM analysis of change reconciles as
+    ``csm_opening + csm_accretion - csm_release = csm_closing`` (the CSM
+    columns are zero for a PAA measurement, which has no CSM).
     """
 
     insurance_revenue: FloatArray
     insurance_service_expense: FloatArray
     insurance_service_result: FloatArray
     insurance_finance_expense: FloatArray
+    loss_component: FloatArray
     csm_opening: FloatArray
     csm_accretion: FloatArray
     csm_release: FloatArray
@@ -61,8 +67,8 @@ class Report:
     def annual(self) -> dict[str, FloatArray]:
         """Portfolio totals aggregated to policy years.
 
-        Each line item is summed across model points and then across the
-        twelve months of each policy year, giving a ``(n_years,)`` array.
+        Each per-period line item is summed across model points and then
+        across the twelve months of each policy year.
         """
         return {
             name: _to_years(getattr(self, name).sum(axis=0))
@@ -74,43 +80,78 @@ class Report:
         }
 
 
-def report(measurement: Measurement) -> Report:
-    """Assemble the IFRS 17 disclosure from a GMM measurement.
+def report(measurement: Measurement | PAAMeasurement | VFAMeasurement) -> Report:
+    """Assemble the IFRS 17 disclosure from a GMM, PAA or VFA measurement.
 
     See the module docstring for the basis (IFRS 17 paragraphs B120-B124).
     """
-    bel, ra, csm = measurement.bel, measurement.ra, measurement.csm
-    cf = measurement.cashflows
-    monthly_rate = 1.0 / measurement.discount_start[1] - 1.0
-    full = 1.0 / (1.0 + monthly_rate)
-
-    # Insurance service expenses incurred in the period -- death and health
-    # claims and expenses (investment-component benefits excluded, see the
-    # module docstring).
-    service_expense = cf.claim_cf + cf.morbidity_cf + cf.expense_cf
-
-    # The risk adjustment and CSM released to profit or loss in the period.
-    ra_release = ra[:, :-1] - ra[:, 1:] * full
-    csm_release = measurement.csm_release
-
-    # Insurance revenue (B124): the service expenses plus the RA and CSM
-    # released. The service result is revenue less the expenses incurred.
-    insurance_revenue = service_expense + ra_release + csm_release
-    insurance_service_result = ra_release + csm_release
-
-    # Insurance finance expense -- the unwind of discount on the fulfilment
-    # cash flows plus the interest accreted on the CSM.
-    insurance_finance_expense = (
-        monthly_rate * (bel[:, :-1] + ra[:, :-1]) + measurement.csm_accretion
+    if isinstance(measurement, Measurement):
+        return _report_gmm(measurement)
+    if isinstance(measurement, PAAMeasurement):
+        return _report_paa(measurement)
+    if isinstance(measurement, VFAMeasurement):
+        return _report_vfa(measurement)
+    raise TypeError(
+        "report() expects a GMM, PAA or VFA measurement, got "
+        f"{type(measurement).__name__}"
     )
 
+
+def _report_gmm(m: Measurement) -> Report:
+    """GMM: revenue grosses up the RA release and the CSM release."""
+    bel, ra, csm = m.bel, m.ra, m.csm
+    cf = m.cashflows
+    monthly_rate = 1.0 / m.discount_start[1] - 1.0
+    full = 1.0 / (1.0 + monthly_rate)
+
+    service_expense = cf.claim_cf + cf.morbidity_cf + cf.expense_cf
+    ra_release = ra[:, :-1] - ra[:, 1:] * full
+    csm_release = m.csm_release
+
     return Report(
-        insurance_revenue=insurance_revenue,
+        insurance_revenue=service_expense + ra_release + csm_release,
         insurance_service_expense=service_expense,
-        insurance_service_result=insurance_service_result,
-        insurance_finance_expense=insurance_finance_expense,
+        insurance_service_result=ra_release + csm_release,
+        insurance_finance_expense=(
+            monthly_rate * (bel[:, :-1] + ra[:, :-1]) + m.csm_accretion
+        ),
+        loss_component=m.loss_component,
         csm_opening=csm[:, :-1],
-        csm_accretion=measurement.csm_accretion,
+        csm_accretion=m.csm_accretion,
+        csm_release=csm_release,
+        csm_closing=csm[:, 1:],
+    )
+
+
+def _report_paa(m: PAAMeasurement) -> Report:
+    """PAA: the service result is already revenue less expense; no CSM."""
+    zeros = np.zeros_like(m.revenue)
+    return Report(
+        insurance_revenue=m.revenue,
+        insurance_service_expense=m.service_expense,
+        insurance_service_result=m.revenue - m.service_expense,
+        insurance_finance_expense=zeros,          # LRC held undiscounted
+        loss_component=m.loss_component,
+        csm_opening=zeros,
+        csm_accretion=zeros,
+        csm_release=zeros,
+        csm_closing=zeros,
+    )
+
+
+def _report_vfa(m: VFAMeasurement) -> Report:
+    """VFA: the profit emerges as the CSM releases (no RA in v1)."""
+    csm = m.csm
+    service_expense = m.cashflows.expense_cf       # account value is investment comp.
+    csm_release = m.csm_release
+    return Report(
+        insurance_revenue=service_expense + csm_release,
+        insurance_service_expense=service_expense,
+        insurance_service_result=csm_release,
+        insurance_finance_expense=m.csm_accretion,
+        loss_component=m.loss_component,
+        csm_opening=csm[:, :-1],
+        csm_accretion=m.csm_accretion,
         csm_release=csm_release,
         csm_closing=csm[:, 1:],
     )
