@@ -345,22 +345,28 @@ def _vfa_contract() -> ModelPointSet:
     return ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
 
 
-def test_roll_forward_vfa_reconciles_the_csm():
-    """The VFA movement reconciles: opening + accretion - release = closing."""
+def test_roll_forward_vfa_reconciles():
+    """The VFA movement reconciles BEL, RA and CSM, opening to closing."""
     m = measure_vfa(_vfa_contract(), _vfa_assumptions())
     for p in roll_forward(m, 12):
+        assert np.allclose(
+            p.bel_opening + p.bel_interest - p.bel_release, p.bel_closing)
+        assert np.allclose(
+            p.ra_opening + p.ra_interest - p.ra_release, p.ra_closing)
         assert np.allclose(
             p.csm_opening + p.csm_accretion - p.csm_release, p.csm_closing)
 
 
 def test_roll_forward_vfa_chains_and_runs_off():
-    """The VFA CSM builds at inception and runs off to zero, periods chaining."""
+    """The VFA balances build at inception and run off to zero, periods chaining."""
     periods = roll_forward(measure_vfa(_vfa_contract(), _vfa_assumptions()), 12)
     assert periods[0].csm_opening[0] > 0.0
     assert np.allclose(periods[-1].csm_closing, 0.0, atol=1.0)
+    assert np.allclose(periods[-1].bel_closing, 0.0, atol=1.0)
     for prev, nxt in zip(periods, periods[1:]):
         assert prev.month_end == nxt.month_start
         assert np.allclose(prev.csm_closing, nxt.csm_opening)
+        assert np.allclose(prev.bel_closing, nxt.bel_opening)
 
 
 def test_roll_forward_vfa_rejects_gmm_options():
@@ -378,5 +384,7 @@ def test_reconcile_vfa():
     assert len(recons) == 10
     for r in recons:
         assert np.isclose(
-            r.csm_opening + r.csm_accretion + r.csm_release, r.csm_closing)
-    assert "CSM" in str(recons[0])
+            r.bel_opening + r.bel_finance + r.bel_release, r.bel_closing)
+        assert np.isclose(
+            r.csm_opening + r.csm_finance + r.csm_release, r.csm_closing)
+    assert "BEL" in str(recons[0]) and "CSM" in str(recons[0])

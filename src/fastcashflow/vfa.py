@@ -44,28 +44,30 @@ from fastcashflow.tvog import tvog_weights
 class VFAMeasurement:
     """VFA measurement of a direct-participation (account-value) portfolio.
 
-    ``account_value`` is the ``(n_mp, n_time+1)`` account-value trajectory.
-    ``bel``, ``ra`` and ``loss_component`` are ``(n_mp,)`` inception figures
-    -- the RA being a confidence-level margin for expense risk. ``csm`` is
-    the ``(n_mp, n_time+1)`` trajectory, accreted at the underlying-items
-    return and released by coverage units::
+    ``account_value``, ``bel``, ``ra`` and ``csm`` are ``(n_mp, n_time+1)``
+    trajectories -- column 0 is the inception figure, the RA being a
+    confidence-level margin for expense risk. The BEL is reported net of the
+    account value the entity holds. The CSM is accreted at the
+    underlying-items return and released by coverage units::
 
         csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]
 
     ``variable_fee`` is the present value of the entity's fee -- its share
-    of the underlying items. ``time_value`` is the guarantee time value
-    folded into ``bel`` -- zero unless return scenarios were supplied.
+    of the underlying items. ``loss_component`` and ``time_value`` are
+    ``(n_mp,)`` inception figures; the time value of the guarantee drives
+    the CSM but is reported separately from ``bel``.
     """
 
     account_value: FloatArray    # (n_mp, n_time+1) -- account-value trajectory
-    bel: FloatArray              # (n_mp,)          -- inception BEL
-    ra: FloatArray               # (n_mp,)          -- inception RA (expense risk)
+    bel: FloatArray              # (n_mp, n_time+1) -- BEL trajectory
+    ra: FloatArray               # (n_mp, n_time+1) -- RA trajectory (expense risk)
     csm: FloatArray              # (n_mp, n_time+1) -- CSM trajectory
     csm_accretion: FloatArray    # (n_mp, n_time)   -- CSM accreted each month
     csm_release: FloatArray      # (n_mp, n_time)   -- CSM released each month
     variable_fee: FloatArray     # (n_mp,)          -- PV of the entity's fee
     loss_component: FloatArray   # (n_mp,)          -- onerous loss at inception
-    time_value: FloatArray       # (n_mp,)          -- guarantee TVOG in the BEL
+    time_value: FloatArray       # (n_mp,)          -- guarantee TVOG at inception
+    discount_start: FloatArray   # (n_time+1,)      -- start-of-month discount factors
     cashflows: Cashflows
 
 
@@ -89,11 +91,12 @@ def measure_vfa(
     released by coverage units. The RA is a confidence-level margin for
     expense risk.
 
-    The deterministic BEL carries the guarantee's intrinsic value only. When
+    BEL, RA and CSM are returned as month-by-month trajectories. The
+    deterministic BEL carries the guarantee's intrinsic value only; when
     ``return_scenarios`` -- an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns -- is supplied, the time value of the guarantee
-    is folded into the BEL as well, so the CSM absorbs it; ``time_value``
-    records the amount folded in per model point.
+    enters the inception fulfilment cash flows too, so the CSM absorbs it,
+    and ``time_value`` records that amount per model point.
     """
     proj = project_cashflows(mps, asmp)
     inforce = proj.inforce
@@ -122,11 +125,19 @@ def measure_vfa(
     # discounted start-of-month, consistent with the account value, so a
     # zero fee leaves no profit.
     base = 1.0 + r_m
-    disc_start = base ** (-np.arange(n_time))
+    disc_start = base ** (-np.arange(n_time + 1))
     disc_mid = base ** (-(np.arange(n_time) + 0.5))
 
-    pv_benefits = (benefit_cf * disc_start).sum(axis=1)
-    pv_expenses = (proj.expense_cf * disc_mid).sum(axis=1)
+    # Present-value trajectories -- the PV at each month t of the cash flows
+    # from t onward, by a reverse cumulative discounted sum.
+    def _pv_trajectory(cashflow: FloatArray, discount: FloatArray) -> FloatArray:
+        tail = np.cumsum((cashflow * discount)[:, ::-1], axis=1)[:, ::-1]
+        pv = np.zeros((n_mp, n_time + 1))
+        pv[:, :n_time] = tail
+        return pv / disc_start
+
+    pv_benefits = _pv_trajectory(benefit_cf, disc_start[:n_time])
+    pv_expenses = _pv_trajectory(proj.expense_cf, disc_mid)
     variable_fee = (fee_cf * disc_mid).sum(axis=1)
 
     # The deterministic BEL carries the guarantee's intrinsic value only.
@@ -147,12 +158,18 @@ def measure_vfa(
             )
         time_value = mps.account_value * (exits @ tvog_weights(asmp, return_scenarios))
 
-    bel = pv_benefits + pv_expenses - mps.account_value + time_value
+    # BEL and RA as trajectories. The BEL is reported net of the account
+    # value the entity holds -- a smooth, modest figure that at inception
+    # nets to benefits and expenses less the premium (= the account value).
+    fund = inforce_pad * av
+    bel = pv_benefits + pv_expenses - fund
     # RA -- a confidence-level margin for expense risk, the non-financial
     # risk an account-value contract carries (mortality risk on the amount
     # is near zero, every exit paying the account value).
     ra = _norm_ppf(asmp.ra_confidence) * asmp.expense_cv * pv_expenses
-    fcf = bel + ra
+    # The inception fulfilment cash flows -- with the guarantee time value --
+    # drive the CSM and the loss component.
+    fcf = bel[:, 0] + ra[:, 0] + time_value
     loss_component = np.maximum(0.0, fcf)
     csm0 = np.maximum(0.0, -fcf)
     csm, csm_accretion, csm_release = _csm_kernel(csm0, inforce, r_m)
@@ -167,5 +184,6 @@ def measure_vfa(
         variable_fee=variable_fee,
         loss_component=loss_component,
         time_value=time_value,
+        discount_start=disc_start,
         cashflows=proj,
     )

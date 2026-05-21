@@ -24,7 +24,7 @@ reconciliation tables, in the layout of IFRS 17 paragraph 101.
 
 ``roll_forward`` and ``reconcile`` also accept a PAA measurement -- the roll
 of the liability for remaining coverage -- or a VFA measurement -- the roll
-of the contractual service margin.
+of its BEL, RA and CSM.
 """
 from __future__ import annotations
 
@@ -108,21 +108,31 @@ class PAAPeriodMovement:
 
 @dataclass(frozen=True, slots=True)
 class VFAPeriodMovement:
-    """One reporting period's movement of the VFA contractual service margin.
+    """One reporting period's movement of the VFA insurance contract liability.
 
     The period covers months ``[month_start, month_end)``. Every array is
-    ``(n_mp,)`` and the block reconciles exactly::
+    ``(n_mp,)`` and each block reconciles exactly::
 
-        csm_opening + csm_accretion - csm_release == csm_closing
+        bel_opening + bel_interest  - bel_release  == bel_closing
+        ra_opening  + ra_interest   - ra_release   == ra_closing
+        csm_opening + csm_accretion - csm_release  == csm_closing
 
-    Under the VFA the CSM absorbs the variability of the underlying items,
-    so the entity's profit emerges as the CSM is released. The VFA
-    measurement carries the CSM as a trajectory but the BEL only at
-    inception, so the movement here is of the CSM.
+    ``*_interest`` / ``csm_accretion`` is the unwind at the underlying-items
+    return; ``*_release`` is the expected run-off over the period. Under the
+    VFA the CSM absorbs the variability of the underlying items, so the
+    entity's profit emerges as the CSM is released.
     """
 
     month_start: int
     month_end: int
+    bel_opening: FloatArray
+    bel_interest: FloatArray
+    bel_release: FloatArray
+    bel_closing: FloatArray
+    ra_opening: FloatArray
+    ra_interest: FloatArray
+    ra_release: FloatArray
+    ra_closing: FloatArray
     csm_opening: FloatArray
     csm_accretion: FloatArray
     csm_release: FloatArray
@@ -313,17 +323,29 @@ def _roll_forward_paa(
 def _roll_forward_vfa(
     measurement: VFAMeasurement, period_months: int
 ) -> list[VFAPeriodMovement]:
-    """Slice a VFA measurement into contractual-service-margin movements."""
-    csm = measurement.csm
+    """Slice a VFA measurement into BEL, RA and CSM movements."""
+    bel, ra, csm = measurement.bel, measurement.ra, measurement.csm
     csm_accretion = measurement.csm_accretion
     csm_release = measurement.csm_release
     n_time = csm.shape[1] - 1
+    discount_start = measurement.discount_start
+    monthly_rate = discount_start[:-1] / discount_start[1:] - 1.0
     movements: list[VFAPeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
+        bel_interest = (bel[:, a:b] * monthly_rate[a:b]).sum(axis=1)
+        ra_interest = (ra[:, a:b] * monthly_rate[a:b]).sum(axis=1)
         movements.append(VFAPeriodMovement(
             month_start=a,
             month_end=b,
+            bel_opening=bel[:, a],
+            bel_interest=bel_interest,
+            bel_release=bel[:, a] + bel_interest - bel[:, b],
+            bel_closing=bel[:, b],
+            ra_opening=ra[:, a],
+            ra_interest=ra_interest,
+            ra_release=ra[:, a] + ra_interest - ra[:, b],
+            ra_closing=ra[:, b],
             csm_opening=csm[:, a],
             csm_accretion=csm_accretion[:, a:b].sum(axis=1),
             csm_release=csm_release[:, a:b].sum(axis=1),
@@ -436,32 +458,42 @@ def _reconcile_paa(
 
 @dataclass(frozen=True, slots=True)
 class VFAReconciliation:
-    """An IFRS 17 VFA reconciliation of the contractual service margin.
+    """An IFRS 17 VFA reconciliation of the insurance contract liability.
 
-    Portfolio totals for one reporting period: ``csm_release`` is shown
-    negative -- it releases the CSM -- so opening plus every row equals
-    closing.
+    Portfolio totals for one reporting period -- the BEL, RA and CSM each
+    reconciled from opening to closing. ``*_finance`` is the unwind at the
+    underlying-items return; ``*_release`` is the run-off, shown negative --
+    so opening plus every row equals closing.
     """
 
     month_start: int
     month_end: int
+    bel_opening: float
+    bel_finance: float
+    bel_release: float
+    bel_closing: float
+    ra_opening: float
+    ra_finance: float
+    ra_release: float
+    ra_closing: float
     csm_opening: float
-    csm_accretion: float
+    csm_finance: float
     csm_release: float
     csm_closing: float
 
     def __str__(self) -> str:
         rows = (
-            ("Opening CSM", self.csm_opening),
-            ("Interest accretion", self.csm_accretion),
-            ("CSM released", self.csm_release),
-            ("Closing CSM", self.csm_closing),
+            ("Opening", self.bel_opening, self.ra_opening, self.csm_opening),
+            ("Finance", self.bel_finance, self.ra_finance, self.csm_finance),
+            ("Release", self.bel_release, self.ra_release, self.csm_release),
+            ("Closing", self.bel_closing, self.ra_closing, self.csm_closing),
         )
         lines = [
-            f"VFA reconciliation -- months {self.month_start}-{self.month_end}"
+            f"VFA reconciliation -- months {self.month_start}-{self.month_end}",
+            f"{'':16}{'BEL':>18}{'RA':>18}{'CSM':>18}",
         ]
-        for name, value in rows:
-            lines.append(f"{name:20}{value:>18,.0f}")
+        for name, bel, ra, csm in rows:
+            lines.append(f"{name:16}{bel:>18,.0f}{ra:>18,.0f}{csm:>18,.0f}")
         return "\n".join(lines)
 
 
@@ -473,8 +505,16 @@ def _reconcile_vfa(
         VFAReconciliation(
             month_start=m.month_start,
             month_end=m.month_end,
+            bel_opening=float(m.bel_opening.sum()),
+            bel_finance=float(m.bel_interest.sum()),
+            bel_release=float(-m.bel_release.sum()),
+            bel_closing=float(m.bel_closing.sum()),
+            ra_opening=float(m.ra_opening.sum()),
+            ra_finance=float(m.ra_interest.sum()),
+            ra_release=float(-m.ra_release.sum()),
+            ra_closing=float(m.ra_closing.sum()),
             csm_opening=float(m.csm_opening.sum()),
-            csm_accretion=float(m.csm_accretion.sum()),
+            csm_finance=float(m.csm_accretion.sum()),
             csm_release=float(-m.csm_release.sum()),
             csm_closing=float(m.csm_closing.sum()),
         )

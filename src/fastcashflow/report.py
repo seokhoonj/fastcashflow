@@ -147,7 +147,8 @@ def _report_vfa(m: VFAMeasurement) -> Report:
     # Release the expense-risk RA over the coverage period, in proportion to
     # the coverage units (in-force).
     inforce = m.cashflows.inforce
-    ra_release = m.ra[:, None] * inforce / inforce.sum(axis=1, keepdims=True)
+    ra0 = m.ra[:, 0]                                # inception RA
+    ra_release = ra0[:, None] * inforce / inforce.sum(axis=1, keepdims=True)
     return Report(
         insurance_revenue=service_expense + ra_release + csm_release,
         insurance_service_expense=service_expense,

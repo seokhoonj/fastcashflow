@@ -52,7 +52,7 @@ def test_vfa_account_value_and_csm_hand_calc():
     exits[-1] = inforce[-1]
     pv_benefits = av0 * np.sum(exits * (1 - f_m) ** np.arange(term))
     bel = pv_benefits - av0
-    assert np.isclose(res.bel[0], bel)
+    assert np.isclose(res.bel[0, 0], bel)
     assert np.isclose(res.csm[0, 0], max(0.0, -bel))
 
 
@@ -116,7 +116,9 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
     stoch = measure_vfa(mp, asmp, scenarios)
     assert np.allclose(plain.time_value, 0.0)          # no scenarios -> no TVOG
     assert stoch.time_value[0] > 0.0
-    assert stoch.bel[0] > plain.bel[0]                 # TVOG raises the liability
+    # the TVOG raises the liability -- it is carried in time_value
+    assert (stoch.bel[0, 0] + stoch.time_value[0]
+            > plain.bel[0, 0] + plain.time_value[0])
     assert stoch.csm[0, 0] < plain.csm[0, 0]           # the CSM absorbs it
 
 
@@ -168,8 +170,8 @@ def test_vfa_ra_scales_with_expense_cv():
                                       expense_cv=0.10))
     r2 = measure_vfa(mp, _assumptions(expense_maintenance_annual=120_000.0,
                                       expense_cv=0.20))
-    assert r1.ra[0] > 0.0
-    assert np.isclose(r2.ra[0], 2.0 * r1.ra[0])
+    assert r1.ra[0, 0] > 0.0
+    assert np.isclose(r2.ra[0, 0], 2.0 * r1.ra[0, 0])
 
 
 def test_vfa_ra_reduces_the_csm():
@@ -189,4 +191,4 @@ def test_vfa_report_releases_the_ra_into_revenue():
     rep = report(m)
     ra_in_revenue = (rep.insurance_revenue - rep.insurance_service_expense
                      - m.csm_release)
-    assert np.isclose(ra_in_revenue[0].sum(), m.ra[0])
+    assert np.isclose(ra_in_revenue[0].sum(), m.ra[0, 0])

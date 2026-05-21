@@ -47,8 +47,8 @@ Beyond the phase plan:
   service expense, finance expense), the loss component and the CSM analysis
   of change, assembled from a GMM, PAA or VFA measurement.
 - **Analysis of change** -- `roll_forward` slices a GMM, PAA or VFA
-  measurement into reporting-period movements (the BEL, RA and CSM, the
-  liability for remaining coverage, or the contractual service margin),
+  measurement into reporting-period movements (the BEL, RA and CSM for the
+  GMM and VFA, the liability for remaining coverage for the PAA),
   recognising assumption revisions and in-force experience as CSM
   adjustments; `reconcile` aggregates them into IFRS 17 reconciliation
   tables -- the period-close reporting cycle.
