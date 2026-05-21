@@ -22,6 +22,8 @@ from fastcashflow.movement import (
     PAAReconciliation,
     PeriodMovement,
     Reconciliation,
+    VFAPeriodMovement,
+    VFAReconciliation,
     reconcile,
     roll_forward,
 )
@@ -41,6 +43,7 @@ __all__ = [
     "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
+    "VFAPeriodMovement", "VFAReconciliation",
     "read_model_points", "write_valuation", "value_file", "solve_premium",
     "DEATH", "DIAGNOSIS", "INPATIENT", "OUTPATIENT", "SURGERY",
 ]

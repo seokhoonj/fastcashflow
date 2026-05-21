@@ -22,9 +22,9 @@ profit or loss.
 ``reconcile`` aggregates the per-model-point movements into portfolio-total
 reconciliation tables, in the layout of IFRS 17 paragraph 101.
 
-``roll_forward`` and ``reconcile`` also accept a PAA measurement, for which
-the movement is the simpler roll of the liability for remaining coverage --
-premiums build it up, insurance revenue releases it.
+``roll_forward`` and ``reconcile`` also accept a PAA measurement -- the roll
+of the liability for remaining coverage -- or a VFA measurement -- the roll
+of the contractual service margin.
 """
 from __future__ import annotations
 
@@ -36,6 +36,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.engine import Measurement
 from fastcashflow.gmm import _csm_kernel
 from fastcashflow.paa import PAAMeasurement
+from fastcashflow.vfa import VFAMeasurement
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,15 +106,38 @@ class PAAPeriodMovement:
     lrc_closing: FloatArray
 
 
+@dataclass(frozen=True, slots=True)
+class VFAPeriodMovement:
+    """One reporting period's movement of the VFA contractual service margin.
+
+    The period covers months ``[month_start, month_end)``. Every array is
+    ``(n_mp,)`` and the block reconciles exactly::
+
+        csm_opening + csm_accretion - csm_release == csm_closing
+
+    Under the VFA the CSM absorbs the variability of the underlying items,
+    so the entity's profit emerges as the CSM is released. The VFA
+    measurement carries the CSM as a trajectory but the BEL only at
+    inception, so the movement here is of the CSM.
+    """
+
+    month_start: int
+    month_end: int
+    csm_opening: FloatArray
+    csm_accretion: FloatArray
+    csm_release: FloatArray
+    csm_closing: FloatArray
+
+
 def roll_forward(
-    measurement: Measurement | PAAMeasurement,
+    measurement: Measurement | PAAMeasurement | VFAMeasurement,
     period_months: int = 12,
     *,
     revised: Measurement | None = None,
     revised_at: int | None = None,
     actual_inforce: FloatArray | None = None,
     experience_at: int | None = None,
-) -> list[PeriodMovement] | list[PAAPeriodMovement]:
+) -> list[PeriodMovement] | list[PAAPeriodMovement] | list[VFAPeriodMovement]:
     """Slice a GMM measurement into reporting-period movements.
 
     Returns one :class:`PeriodMovement` per reporting period of
@@ -132,20 +156,23 @@ def roll_forward(
     falling into the loss component); v1 recognises one or the other, not
     both in a single call.
 
-    A PAA measurement is also accepted -- its movement is the simpler roll
-    of the liability for remaining coverage, to which the revision and
-    experience options do not apply.
+    A PAA or VFA measurement is also accepted -- the movement is then the
+    roll of the liability for remaining coverage or of the contractual
+    service margin, to which the revision and experience options do not
+    apply.
     """
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
-    if isinstance(measurement, PAAMeasurement):
+    if isinstance(measurement, (PAAMeasurement, VFAMeasurement)):
         if any(opt is not None for opt in
                (revised, revised_at, actual_inforce, experience_at)):
             raise ValueError(
                 "the revision and experience options apply to a GMM "
                 "measurement only"
             )
-        return _roll_forward_paa(measurement, period_months)
+        if isinstance(measurement, PAAMeasurement):
+            return _roll_forward_paa(measurement, period_months)
+        return _roll_forward_vfa(measurement, period_months)
     n_time = measurement.bel.shape[1] - 1
     n_mp = measurement.bel.shape[0]
     if (revised is None) != (revised_at is None):
@@ -283,6 +310,28 @@ def _roll_forward_paa(
     return movements
 
 
+def _roll_forward_vfa(
+    measurement: VFAMeasurement, period_months: int
+) -> list[VFAPeriodMovement]:
+    """Slice a VFA measurement into contractual-service-margin movements."""
+    csm = measurement.csm
+    csm_accretion = measurement.csm_accretion
+    csm_release = measurement.csm_release
+    n_time = csm.shape[1] - 1
+    movements: list[VFAPeriodMovement] = []
+    for a in range(0, n_time, period_months):
+        b = min(a + period_months, n_time)
+        movements.append(VFAPeriodMovement(
+            month_start=a,
+            month_end=b,
+            csm_opening=csm[:, a],
+            csm_accretion=csm_accretion[:, a:b].sum(axis=1),
+            csm_release=csm_release[:, a:b].sum(axis=1),
+            csm_closing=csm[:, b],
+        ))
+    return movements
+
+
 @dataclass(frozen=True, slots=True)
 class Reconciliation:
     """An IFRS 17 reconciliation of the insurance contract liability.
@@ -385,19 +434,72 @@ def _reconcile_paa(
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class VFAReconciliation:
+    """An IFRS 17 VFA reconciliation of the contractual service margin.
+
+    Portfolio totals for one reporting period: ``csm_release`` is shown
+    negative -- it releases the CSM -- so opening plus every row equals
+    closing.
+    """
+
+    month_start: int
+    month_end: int
+    csm_opening: float
+    csm_accretion: float
+    csm_release: float
+    csm_closing: float
+
+    def __str__(self) -> str:
+        rows = (
+            ("Opening CSM", self.csm_opening),
+            ("Interest accretion", self.csm_accretion),
+            ("CSM released", self.csm_release),
+            ("Closing CSM", self.csm_closing),
+        )
+        lines = [
+            f"VFA reconciliation -- months {self.month_start}-{self.month_end}"
+        ]
+        for name, value in rows:
+            lines.append(f"{name:20}{value:>18,.0f}")
+        return "\n".join(lines)
+
+
+def _reconcile_vfa(
+    movements: list[VFAPeriodMovement],
+) -> list[VFAReconciliation]:
+    """Aggregate VFA period movements into portfolio-total reconciliations."""
+    return [
+        VFAReconciliation(
+            month_start=m.month_start,
+            month_end=m.month_end,
+            csm_opening=float(m.csm_opening.sum()),
+            csm_accretion=float(m.csm_accretion.sum()),
+            csm_release=float(-m.csm_release.sum()),
+            csm_closing=float(m.csm_closing.sum()),
+        )
+        for m in movements
+    ]
+
+
 def reconcile(
-    movements: list[PeriodMovement] | list[PAAPeriodMovement],
-) -> list[Reconciliation] | list[PAAReconciliation]:
+    movements: (list[PeriodMovement] | list[PAAPeriodMovement]
+                | list[VFAPeriodMovement]),
+) -> list[Reconciliation] | list[PAAReconciliation] | list[VFAReconciliation]:
     """Aggregate period movements into IFRS 17 reconciliation tables.
 
     Each :class:`PeriodMovement` -- per model point -- becomes one
     portfolio-total :class:`Reconciliation` in the layout of IFRS 17
     paragraph 101. Run-off rows are shown negative, so opening plus every
-    row equals closing. A list of :class:`PAAPeriodMovement` is reconciled
-    instead into PAA liability-for-remaining-coverage tables.
+    row equals closing. A list of :class:`PAAPeriodMovement` or
+    :class:`VFAPeriodMovement` is reconciled instead into the PAA
+    liability-for-remaining-coverage or VFA contractual-service-margin
+    tables.
     """
     if movements and isinstance(movements[0], PAAPeriodMovement):
         return _reconcile_paa(movements)
+    if movements and isinstance(movements[0], VFAPeriodMovement):
+        return _reconcile_vfa(movements)
     out: list[Reconciliation] = []
     for m in movements:
         out.append(Reconciliation(

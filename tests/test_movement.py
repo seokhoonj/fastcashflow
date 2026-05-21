@@ -14,6 +14,7 @@ from fastcashflow import (
     ModelPointSet,
     measure,
     measure_paa,
+    measure_vfa,
     reconcile,
     roll_forward,
 )
@@ -323,3 +324,59 @@ def test_reconcile_paa():
     for r in recons:
         assert np.isclose(r.lrc_opening + r.premiums + r.revenue, r.lrc_closing)
     assert "LRC" in str(recons[0])
+
+
+def _vfa_assumptions() -> Assumptions:
+    return Assumptions(
+        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.002),
+        lapse_monthly=lambda duration: np.full(duration.shape, 0.004),
+        discount_annual=0.03,
+        expense_acquisition=0.0,
+        expense_maintenance_annual=0.0,
+        expense_inflation=0.0,
+        ra_confidence=0.75,
+        mortality_cv=0.10,
+        investment_return=0.06,
+        fund_fee=0.015,
+    )
+
+
+def _vfa_contract() -> ModelPointSet:
+    return ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+
+
+def test_roll_forward_vfa_reconciles_the_csm():
+    """The VFA movement reconciles: opening + accretion - release = closing."""
+    m = measure_vfa(_vfa_contract(), _vfa_assumptions())
+    for p in roll_forward(m, 12):
+        assert np.allclose(
+            p.csm_opening + p.csm_accretion - p.csm_release, p.csm_closing)
+
+
+def test_roll_forward_vfa_chains_and_runs_off():
+    """The VFA CSM builds at inception and runs off to zero, periods chaining."""
+    periods = roll_forward(measure_vfa(_vfa_contract(), _vfa_assumptions()), 12)
+    assert periods[0].csm_opening[0] > 0.0
+    assert np.allclose(periods[-1].csm_closing, 0.0, atol=1.0)
+    for prev, nxt in zip(periods, periods[1:]):
+        assert prev.month_end == nxt.month_start
+        assert np.allclose(prev.csm_closing, nxt.csm_opening)
+
+
+def test_roll_forward_vfa_rejects_gmm_options():
+    """The revision and experience options do not apply to a VFA measurement."""
+    m = measure_vfa(_vfa_contract(), _vfa_assumptions())
+    with pytest.raises(ValueError, match="GMM"):
+        roll_forward(m, 12, revised=measure(_portfolio(), _assumptions()),
+                     revised_at=24)
+
+
+def test_reconcile_vfa():
+    """The VFA reconciliation aggregates, reconciles and renders."""
+    recons = reconcile(roll_forward(measure_vfa(_vfa_contract(),
+                                                _vfa_assumptions()), 12))
+    assert len(recons) == 10
+    for r in recons:
+        assert np.isclose(
+            r.csm_opening + r.csm_accretion + r.csm_release, r.csm_closing)
+    assert "CSM" in str(recons[0])
