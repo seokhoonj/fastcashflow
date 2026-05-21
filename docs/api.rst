@@ -124,12 +124,12 @@ fastcashflow[viz]``).
 
 .. autofunction:: fastcashflow.plot_liability
 
+.. autofunction:: fastcashflow.plot_cashflows
+
 .. autofunction:: fastcashflow.plot_csm_runoff
 
-.. autofunction:: fastcashflow.plot_cashflows
+.. autofunction:: fastcashflow.plot_risk_adjustment
 
 .. autofunction:: fastcashflow.plot_analysis_of_change
 
 .. autofunction:: fastcashflow.plot_stochastic
-
-.. autofunction:: fastcashflow.plot_risk_adjustment
