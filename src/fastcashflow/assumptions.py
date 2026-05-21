@@ -49,6 +49,12 @@ class Assumptions:
     morbidity_cv :
         Coefficient of variation of morbidity claims (hospitalisation,
         surgery, outpatient) -- the morbidity-risk component of the RA.
+    investment_return :
+        Annual return earned on the underlying items backing an
+        account-value (VFA) contract.
+    fund_fee :
+        Annual variable-fee rate -- the entity's share of the underlying
+        items, deducted from the account value each period (VFA).
     morbidity_rates :
         ``{coverage kind: callable}`` map giving the monthly morbidity rate
         of each health coverage kind (see :mod:`fastcashflow.coverage`). Each
@@ -66,6 +72,8 @@ class Assumptions:
     mortality_cv: float
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
+    investment_return: float = 0.0
+    fund_fee: float = 0.0
     morbidity_rates: dict[int, RateFn] | None = None
 
     @property

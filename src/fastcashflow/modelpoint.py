@@ -50,6 +50,7 @@ class ModelPointSet:
     maturity_benefit: FloatArray | None = None   # benefit on survival to term
     annuity_payment: FloatArray | None = None    # survival income, each month
     single_premium: FloatArray | None = None     # one-off premium at t = 0
+    account_value: FloatArray | None = None      # account value at issue (VFA)
     cov_kind: IntArray | None = None             # CSR: coverage kind
     cov_amount: FloatArray | None = None         # CSR: coverage amount
     cov_offset: IntArray | None = None           # CSR: per-policy slice bounds
@@ -64,7 +65,8 @@ class ModelPointSet:
             object.__setattr__(self, name, np.asarray(getattr(self, name), dtype=dtype))
         n_mp = self.issue_age.shape[0]
         # Premiums / survival benefits default to zero (absent).
-        for name in ("maturity_benefit", "annuity_payment", "single_premium"):
+        for name in ("maturity_benefit", "annuity_payment", "single_premium",
+                     "account_value"):
             value = getattr(self, name)
             value = np.zeros(n_mp) if value is None else np.asarray(value, np.float64)
             object.__setattr__(self, name, value)
@@ -108,6 +110,7 @@ class ModelPointSet:
         maturity_benefit: float = 0.0,
         annuity_payment: float = 0.0,
         single_premium: float = 0.0,
+        account_value: float = 0.0,
         benefits: dict[int, float] | None = None,
     ) -> ModelPointSet:
         """Build a one-policy set -- a convenience for hand checks."""
@@ -119,6 +122,7 @@ class ModelPointSet:
             maturity_benefit=np.array([maturity_benefit]),
             annuity_payment=np.array([annuity_payment]),
             single_premium=np.array([single_premium]),
+            account_value=np.array([account_value]),
             benefits=(
                 None if benefits is None
                 else {k: np.array([v]) for k, v in benefits.items()}
