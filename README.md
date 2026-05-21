@@ -49,8 +49,8 @@ Beyond the phase plan:
 - **Products** -- term and whole life, endowment, pure endowment, immediate
   annuity, and health (inpatient, surgery, outpatient, diagnosis), built as
   a variable-length coverage list per policy.
-- **Risk Adjustment** -- separate mortality, morbidity and longevity
-  components, one coefficient of variation per risk class.
+- **Risk Adjustment** -- the confidence-level and cost-of-capital methods,
+  each with separate mortality, morbidity and longevity components.
 - **Pricing** -- `solve_premium` solves the level premium for a break-even,
   margin or target-CSM objective.
 

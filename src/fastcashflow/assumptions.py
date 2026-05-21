@@ -49,6 +49,14 @@ class Assumptions:
     morbidity_cv :
         Coefficient of variation of morbidity claims (hospitalisation,
         surgery, outpatient) -- the morbidity-risk component of the RA.
+    ra_method :
+        Which Risk Adjustment technique to use -- ``"confidence_level"``
+        (the default; a percentile margin on the benefit present values) or
+        ``"cost_of_capital"``. The cost-of-capital method is available
+        through ``measure``; ``value`` computes the confidence-level RA.
+    cost_of_capital_rate :
+        Annual cost-of-capital rate for the cost-of-capital RA -- the rate
+        charged on the non-financial-risk capital held over the run-off.
     investment_return :
         Annual return earned on the underlying items backing an
         account-value (VFA) contract.
@@ -72,6 +80,8 @@ class Assumptions:
     mortality_cv: float
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
+    ra_method: str = "confidence_level"
+    cost_of_capital_rate: float = 0.06
     investment_return: float = 0.0
     fund_fee: float = 0.0
     morbidity_rates: dict[int, RateFn] | None = None

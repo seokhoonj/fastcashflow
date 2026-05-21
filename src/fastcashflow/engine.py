@@ -56,6 +56,23 @@ class Measurement:
     discount_mid: FloatArray     # (n_time,) -- mid-month discount factors
 
 
+def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
+    """Cost-of-capital RA -- the cost of holding the confidence-level margin
+    as non-financial-risk capital over the contract's run-off.
+
+    The capital required at each future month is taken as the confidence-
+    level margin there; the RA at month ``t`` is the cost-of-capital rate
+    times the present value, at ``t``, of that capital over months ``t``
+    onward.
+    """
+    full = 1.0 / (1.0 + monthly_rate)
+    cap_pv = np.empty_like(cl_margin)
+    cap_pv[:, -1] = cl_margin[:, -1]
+    for t in range(cl_margin.shape[1] - 2, -1, -1):
+        cap_pv[:, t] = cl_margin[:, t] + full * cap_pv[:, t + 1]
+    return coc_rate * cap_pv
+
+
 def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
     """Detailed GMM measurement: BEL, RA and CSM rolled forward over time."""
     proj = project_cashflows(mps, asmp)
@@ -67,8 +84,20 @@ def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
         asmp.discount_monthly,
     )
     z = _norm_ppf(asmp.ra_confidence)
-    ra = z * (asmp.mortality_cv * pv_claims + asmp.morbidity_cv * pv_morbidity
-              + asmp.longevity_cv * pv_survival)
+    cl_margin = z * (asmp.mortality_cv * pv_claims
+                     + asmp.morbidity_cv * pv_morbidity
+                     + asmp.longevity_cv * pv_survival)
+    if asmp.ra_method == "confidence_level":
+        ra = cl_margin
+    elif asmp.ra_method == "cost_of_capital":
+        ra = _cost_of_capital_ra(
+            cl_margin, asmp.discount_monthly, asmp.cost_of_capital_rate
+        )
+    else:
+        raise ValueError(
+            "ra_method must be 'confidence_level' or 'cost_of_capital', "
+            f"got {asmp.ra_method!r}"
+        )
     csm, csm_accretion, csm_release, loss_component = compute_csm(
         bel[:, 0], ra[:, 0], proj, asmp
     )
@@ -218,6 +247,11 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
         ``"gpu"`` runs the CUDA kernel; it needs a CUDA device and is worth
         it only at large scale (kernel-launch and transfer cost is fixed).
     """
+    if asmp.ra_method != "confidence_level":
+        raise ValueError(
+            "value() computes the confidence-level RA only; use measure() "
+            f"for ra_method={asmp.ra_method!r}"
+        )
     n_time = int(mps.term_months.max())
     n_years = (n_time + 11) // 12
     months = np.arange(n_time)
