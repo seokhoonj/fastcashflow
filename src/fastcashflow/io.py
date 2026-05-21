@@ -18,6 +18,7 @@ file-boundary concern -- pass them to :func:`write_valuation` (or via
 """
 from __future__ import annotations
 
+import importlib.resources as resources
 from pathlib import Path
 
 import numpy as np
@@ -174,6 +175,30 @@ def read_assumptions(path) -> Assumptions:
     if params.get("ra_method") is not None:
         kwargs["ra_method"] = str(params["ra_method"]).strip()
     return Assumptions(**kwargs)
+
+
+def load_sample_model_points() -> ModelPointSet:
+    """Read fastcashflow's bundled sample portfolio.
+
+    A small term-insurance portfolio packaged with the library, so the
+    engine can be tried without preparing an input file. See
+    :func:`read_model_points` for the file format.
+    """
+    source = resources.files("fastcashflow") / "sample_data" / "sample_policies.csv"
+    with resources.as_file(source) as path:
+        return read_model_points(path)
+
+
+def load_sample_assumptions() -> Assumptions:
+    """Read fastcashflow's bundled sample actuarial basis.
+
+    A filled-in basis packaged with the library, the companion to
+    :func:`load_sample_model_points`. See :func:`read_assumptions` for the
+    workbook format.
+    """
+    source = resources.files("fastcashflow") / "sample_data" / "sample_basis.xlsx"
+    with resources.as_file(source) as path:
+        return read_assumptions(path)
 
 
 def write_valuation(valuation: Valuation, path, *, ids=None) -> None:

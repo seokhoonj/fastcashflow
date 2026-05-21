@@ -17,6 +17,8 @@ from fastcashflow.coverage import DEATH, DIAGNOSIS, INPATIENT, OUTPATIENT, SURGE
 from fastcashflow.engine import Measurement, Valuation, measure, value
 from fastcashflow.grouping import group
 from fastcashflow.io import (
+    load_sample_assumptions,
+    load_sample_model_points,
     read_assumptions,
     read_model_points,
     value_file,
@@ -60,6 +62,7 @@ __all__ = [
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
     "read_model_points", "read_assumptions", "write_valuation", "value_file",
+    "load_sample_model_points", "load_sample_assumptions",
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",

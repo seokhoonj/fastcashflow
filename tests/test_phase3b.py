@@ -6,6 +6,8 @@ import pytest
 from fastcashflow import (
     Assumptions,
     ModelPointSet,
+    load_sample_assumptions,
+    load_sample_model_points,
     read_model_points,
     value,
     value_file,
@@ -174,3 +176,13 @@ def test_value_file_rejects_existing_output(tmp_path):
     value_file(in_path, out_dir, _assumptions())
     with pytest.raises(ValueError, match="already contains part"):
         value_file(in_path, out_dir, _assumptions())
+
+
+def test_load_sample_data_runs():
+    """The bundled sample data loads and values without error."""
+    mps = load_sample_model_points()
+    asmp = load_sample_assumptions()
+    assert mps.n_mp > 0
+    val = value(mps, asmp)
+    assert val.bel.shape == (mps.n_mp,)
+    assert val.csm.shape == (mps.n_mp,)
