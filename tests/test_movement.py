@@ -4,6 +4,8 @@
 Each period must reconcile (opening + movements = closing) and consecutive
 periods must chain.
 """
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -95,3 +97,78 @@ def test_roll_forward_rejects_bad_period():
     """A non-positive period length is an error."""
     with pytest.raises(ValueError, match="period_months"):
         roll_forward(measure(_portfolio(), _assumptions()), 0)
+
+
+def _revised(mps: ModelPointSet):
+    """A measurement of the same book under markedly higher mortality."""
+    worse = replace(
+        _assumptions(),
+        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.003),
+    )
+    return measure(mps, worse)
+
+
+def test_roll_forward_assumption_change_reconciles():
+    """With a revision, every period still reconciles exactly."""
+    mps = _portfolio()
+    periods = roll_forward(measure(mps, _assumptions()), 12,
+                           revised=_revised(mps), revised_at=24)
+    for p in periods:
+        assert np.allclose(
+            p.bel_opening + p.bel_assumption_change + p.bel_interest
+            - p.bel_release, p.bel_closing)
+        assert np.allclose(
+            p.csm_opening + p.csm_assumption_change + p.csm_accretion
+            - p.csm_release, p.csm_closing)
+
+
+def test_roll_forward_assumption_change_only_in_revision_period():
+    """The assumption-change line is non-zero only in the revision period."""
+    mps = _portfolio()
+    periods = roll_forward(measure(mps, _assumptions()), 12,
+                           revised=_revised(mps), revised_at=24)
+    for p in periods:
+        if p.month_start == 24:
+            assert not np.allclose(p.csm_assumption_change, 0.0)
+        else:
+            assert np.allclose(p.csm_assumption_change, 0.0)
+            assert np.allclose(p.bel_assumption_change, 0.0)
+
+
+def test_roll_forward_worse_assumptions_reduce_csm():
+    """A revision that raises the liability adjusts the CSM downwards."""
+    mps = _portfolio()
+    periods = roll_forward(measure(mps, _assumptions()), 12,
+                           revised=_revised(mps), revised_at=24)
+    rev = next(p for p in periods if p.month_start == 24)
+    assert np.all(rev.bel_assumption_change > 0.0)        # higher claims
+    assert np.all(rev.csm_assumption_change <= 0.0)       # CSM absorbs it
+
+
+def test_roll_forward_pre_revision_periods_unaffected():
+    """Periods before the revision match the no-revision roll, and chain."""
+    mps = _portfolio()
+    m = measure(mps, _assumptions())
+    plain = roll_forward(m, 12)
+    revised = roll_forward(m, 12, revised=_revised(mps), revised_at=24)
+    for plain_p, rev_p in zip(plain[:2], revised[:2]):
+        assert np.allclose(plain_p.csm_closing, rev_p.csm_closing)
+        assert np.allclose(plain_p.bel_closing, rev_p.bel_closing)
+    for prev, nxt in zip(revised, revised[1:]):
+        assert np.allclose(prev.csm_closing, nxt.csm_opening)
+        assert np.allclose(prev.bel_closing, nxt.bel_opening)
+
+
+def test_roll_forward_rejects_lonely_revised():
+    """revised and revised_at must be passed together."""
+    m = measure(_portfolio(), _assumptions())
+    with pytest.raises(ValueError, match="together"):
+        roll_forward(m, 12, revised=m)
+
+
+def test_roll_forward_rejects_off_boundary_revision():
+    """revised_at must be a multiple of the period length."""
+    mps = _portfolio()
+    m = measure(mps, _assumptions())
+    with pytest.raises(ValueError, match="revised_at"):
+        roll_forward(m, 12, revised=_revised(mps), revised_at=20)
