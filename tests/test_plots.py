@@ -68,6 +68,12 @@ def test_plot_stochastic_returns_axes(book):
     assert isinstance(fcf.plot_stochastic(dist), Axes)
 
 
+def test_plot_stochastic_without_kde(book):
+    mps, asmp, _ = book
+    dist = fcf.value_stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
+    assert isinstance(fcf.plot_stochastic(dist, kde=False), Axes)
+
+
 def test_plot_stochastic_rejects_bad_line(book):
     mps, asmp, _ = book
     dist = fcf.value_stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))

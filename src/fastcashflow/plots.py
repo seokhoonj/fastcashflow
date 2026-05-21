@@ -70,6 +70,22 @@ def _compact(value: float, _pos: object = None) -> str:
     return f"{value:,.0f}"
 
 
+def _gaussian_kde(data, grid):
+    """A Gaussian kernel density estimate -- numpy only, no SciPy.
+
+    The bandwidth follows Silverman's rule of thumb.
+    """
+    n = data.size
+    std = data.std(ddof=1)
+    q75, q25 = np.percentile(data, [75, 25])
+    iqr = q75 - q25
+    spread = min(std, iqr / 1.349) if iqr > 0.0 else std
+    bandwidth = 0.9 * spread * n ** (-0.2)
+    z = (grid[:, None] - data[None, :]) / bandwidth
+    kernel = np.exp(-0.5 * z * z) / np.sqrt(2.0 * np.pi)
+    return kernel.sum(axis=1) / (n * bandwidth)
+
+
 def _format_money_axis(ax, axis: str) -> None:
     """Format a whole axis as money in one consistent unit (K, M or B)."""
     from matplotlib.ticker import FuncFormatter
@@ -259,11 +275,12 @@ def plot_analysis_of_change(reconciliation: Reconciliation, *,
 
 def plot_stochastic(result: StochasticResult, *, line: str = "bel",
                     ax: Axes | None = None, bins: int = 30,
-                    title: str | None = None) -> Axes:
+                    kde: bool = True, title: str | None = None) -> Axes:
     """Plot the distribution of a figure across the stochastic scenarios.
 
     ``line`` selects ``"bel"``, ``"ra"``, ``"csm"`` or ``"loss_component"``.
-    The dashed line marks the mean across the scenarios.
+    A smooth Gaussian kernel density estimate is drawn over the histogram
+    unless ``kde`` is ``False``; the dashed line marks the mean.
     """
     line = line.lower()
     valid = ("bel", "ra", "csm", "loss_component")
@@ -272,11 +289,18 @@ def plot_stochastic(result: StochasticResult, *, line: str = "bel",
     data = np.asarray(getattr(result, line), dtype=float)
 
     ax = _axes(ax)
-    ax.hist(data, bins=bins, color=_COLOR["bel"], alpha=0.85,
-            edgecolor="white", linewidth=0.6, zorder=3)
+    _counts, edges, _patches = ax.hist(
+        data, bins=bins, color=_COLOR["bel"], alpha=0.6,
+        edgecolor="white", linewidth=0.6, zorder=3,
+    )
+    if kde and data.size > 1 and data.std() > 0.0:
+        grid = np.linspace(data.min(), data.max(), 256)
+        density = _gaussian_kde(data, grid)
+        ax.plot(grid, density * data.size * (edges[1] - edges[0]),
+                color=_COLOR["ink"], linewidth=2.0, zorder=5)
     mean = float(data.mean())
     ax.axvline(mean, color=_COLOR["loss"], linewidth=1.8, linestyle="--",
-               zorder=4, label=f"mean {_compact(mean)}")
+               zorder=6, label=f"mean {_compact(mean)}")
     if title is None:
         title = f"{line.upper()} distribution over {data.size} scenarios"
     _finish(ax, title, xlabel=line.upper(), ylabel="scenarios",
