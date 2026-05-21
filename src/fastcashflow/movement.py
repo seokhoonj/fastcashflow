@@ -21,6 +21,10 @@ profit or loss.
 
 ``reconcile`` aggregates the per-model-point movements into portfolio-total
 reconciliation tables, in the layout of IFRS 17 paragraph 101.
+
+``roll_forward`` and ``reconcile`` also accept a PAA measurement, for which
+the movement is the simpler roll of the liability for remaining coverage --
+premiums build it up, insurance revenue releases it.
 """
 from __future__ import annotations
 
@@ -31,6 +35,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import Measurement
 from fastcashflow.gmm import _csm_kernel
+from fastcashflow.paa import PAAMeasurement
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,15 +83,37 @@ class PeriodMovement:
     loss_component_recognised: FloatArray
 
 
+@dataclass(frozen=True, slots=True)
+class PAAPeriodMovement:
+    """One reporting period's movement of the PAA liability for remaining
+    coverage (LRC).
+
+    The period covers months ``[month_start, month_end)``. Every array is
+    ``(n_mp,)`` and the block reconciles exactly::
+
+        lrc_opening + premiums - revenue == lrc_closing
+
+    Premiums received build the LRC up; insurance revenue earned releases
+    it. The LRC is held undiscounted, so there is no interest row.
+    """
+
+    month_start: int
+    month_end: int
+    lrc_opening: FloatArray
+    premiums: FloatArray
+    revenue: FloatArray
+    lrc_closing: FloatArray
+
+
 def roll_forward(
-    measurement: Measurement,
+    measurement: Measurement | PAAMeasurement,
     period_months: int = 12,
     *,
     revised: Measurement | None = None,
     revised_at: int | None = None,
     actual_inforce: FloatArray | None = None,
     experience_at: int | None = None,
-) -> list[PeriodMovement]:
+) -> list[PeriodMovement] | list[PAAPeriodMovement]:
     """Slice a GMM measurement into reporting-period movements.
 
     Returns one :class:`PeriodMovement` per reporting period of
@@ -104,9 +131,21 @@ def roll_forward(
     resulting change in fulfilment cash flows (floored at zero, any excess
     falling into the loss component); v1 recognises one or the other, not
     both in a single call.
+
+    A PAA measurement is also accepted -- its movement is the simpler roll
+    of the liability for remaining coverage, to which the revision and
+    experience options do not apply.
     """
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
+    if isinstance(measurement, PAAMeasurement):
+        if any(opt is not None for opt in
+               (revised, revised_at, actual_inforce, experience_at)):
+            raise ValueError(
+                "the revision and experience options apply to a GMM "
+                "measurement only"
+            )
+        return _roll_forward_paa(measurement, period_months)
     n_time = measurement.bel.shape[1] - 1
     n_mp = measurement.bel.shape[0]
     if (revised is None) != (revised_at is None):
@@ -222,6 +261,28 @@ def roll_forward(
     return movements
 
 
+def _roll_forward_paa(
+    measurement: PAAMeasurement, period_months: int
+) -> list[PAAPeriodMovement]:
+    """Slice a PAA measurement into liability-for-remaining-coverage movements."""
+    lrc = measurement.lrc
+    premium_cf = measurement.cashflows.premium_cf
+    revenue = measurement.revenue
+    n_time = lrc.shape[1] - 1
+    movements: list[PAAPeriodMovement] = []
+    for a in range(0, n_time, period_months):
+        b = min(a + period_months, n_time)
+        movements.append(PAAPeriodMovement(
+            month_start=a,
+            month_end=b,
+            lrc_opening=lrc[:, a],
+            premiums=premium_cf[:, a:b].sum(axis=1),
+            revenue=revenue[:, a:b].sum(axis=1),
+            lrc_closing=lrc[:, b],
+        ))
+    return movements
+
+
 @dataclass(frozen=True, slots=True)
 class Reconciliation:
     """An IFRS 17 reconciliation of the insurance contract liability.
@@ -277,14 +338,66 @@ class Reconciliation:
         return "\n".join(lines)
 
 
-def reconcile(movements: list[PeriodMovement]) -> list[Reconciliation]:
+@dataclass(frozen=True, slots=True)
+class PAAReconciliation:
+    """An IFRS 17 PAA reconciliation of the liability for remaining coverage.
+
+    Portfolio totals for one reporting period: ``revenue`` is shown negative
+    -- it releases the LRC -- so opening plus every row equals closing.
+    """
+
+    month_start: int
+    month_end: int
+    lrc_opening: float
+    premiums: float
+    revenue: float
+    lrc_closing: float
+
+    def __str__(self) -> str:
+        rows = (
+            ("Opening LRC", self.lrc_opening),
+            ("Premiums received", self.premiums),
+            ("Insurance revenue", self.revenue),
+            ("Closing LRC", self.lrc_closing),
+        )
+        lines = [
+            f"PAA reconciliation -- months {self.month_start}-{self.month_end}"
+        ]
+        for name, value in rows:
+            lines.append(f"{name:20}{value:>18,.0f}")
+        return "\n".join(lines)
+
+
+def _reconcile_paa(
+    movements: list[PAAPeriodMovement],
+) -> list[PAAReconciliation]:
+    """Aggregate PAA period movements into portfolio-total reconciliations."""
+    return [
+        PAAReconciliation(
+            month_start=m.month_start,
+            month_end=m.month_end,
+            lrc_opening=float(m.lrc_opening.sum()),
+            premiums=float(m.premiums.sum()),
+            revenue=float(-m.revenue.sum()),
+            lrc_closing=float(m.lrc_closing.sum()),
+        )
+        for m in movements
+    ]
+
+
+def reconcile(
+    movements: list[PeriodMovement] | list[PAAPeriodMovement],
+) -> list[Reconciliation] | list[PAAReconciliation]:
     """Aggregate period movements into IFRS 17 reconciliation tables.
 
     Each :class:`PeriodMovement` -- per model point -- becomes one
     portfolio-total :class:`Reconciliation` in the layout of IFRS 17
     paragraph 101. Run-off rows are shown negative, so opening plus every
-    row equals closing.
+    row equals closing. A list of :class:`PAAPeriodMovement` is reconciled
+    instead into PAA liability-for-remaining-coverage tables.
     """
+    if movements and isinstance(movements[0], PAAPeriodMovement):
+        return _reconcile_paa(movements)
     out: list[Reconciliation] = []
     for m in movements:
         out.append(Reconciliation(

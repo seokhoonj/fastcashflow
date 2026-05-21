@@ -46,11 +46,11 @@ Beyond the phase plan:
 - **Disclosure** -- the IFRS 17 insurance service result (insurance revenue,
   service expense, finance expense), the loss component and the CSM analysis
   of change, assembled from a GMM, PAA or VFA measurement.
-- **Analysis of change** -- `roll_forward` slices a measurement into
-  reporting-period movements that reconcile the opening and closing BEL, RA
-  and CSM, recognising assumption revisions and in-force experience as
-  adjustments to the CSM; `reconcile` aggregates those movements into
-  IFRS 17 reconciliation tables -- the period-close reporting cycle.
+- **Analysis of change** -- `roll_forward` slices a GMM or PAA measurement
+  into reporting-period movements (the BEL, RA and CSM, or the liability
+  for remaining coverage), recognising assumption revisions and in-force
+  experience as CSM adjustments; `reconcile` aggregates them into IFRS 17
+  reconciliation tables -- the period-close reporting cycle.
 - **Reinsurance** -- reinsurance contracts held, measured as a quota-share
   treaty over a direct portfolio; the CSM carries the net cost or gain of
   the cover.

@@ -13,6 +13,7 @@ from fastcashflow import (
     Assumptions,
     ModelPointSet,
     measure,
+    measure_paa,
     reconcile,
     roll_forward,
 )
@@ -289,3 +290,36 @@ def test_reconcile_renders_a_table():
     m = measure(_portfolio(), _assumptions())
     text = str(reconcile(roll_forward(m, 12))[0])
     assert "Opening" in text and "Closing" in text and "CSM" in text
+
+
+def test_roll_forward_paa_reconciles_the_lrc():
+    """The PAA movement reconciles: opening + premiums - revenue = closing."""
+    m = measure_paa(_portfolio(), _assumptions())
+    for p in roll_forward(m, 12):
+        assert np.allclose(p.lrc_opening + p.premiums - p.revenue, p.lrc_closing)
+
+
+def test_roll_forward_paa_chains_from_zero():
+    """The PAA LRC opens at zero and each period chains to the next."""
+    periods = roll_forward(measure_paa(_portfolio(), _assumptions()), 12)
+    assert np.allclose(periods[0].lrc_opening, 0.0)
+    for prev, nxt in zip(periods, periods[1:]):
+        assert prev.month_end == nxt.month_start
+        assert np.allclose(prev.lrc_closing, nxt.lrc_opening)
+
+
+def test_roll_forward_paa_rejects_gmm_options():
+    """The revision and experience options do not apply to a PAA measurement."""
+    paa = measure_paa(_portfolio(), _assumptions())
+    gmm = measure(_portfolio(), _assumptions())
+    with pytest.raises(ValueError, match="GMM"):
+        roll_forward(paa, 12, revised=gmm, revised_at=24)
+
+
+def test_reconcile_paa():
+    """The PAA reconciliation aggregates, reconciles and renders."""
+    recons = reconcile(roll_forward(measure_paa(_portfolio(), _assumptions()), 12))
+    assert len(recons) == 10
+    for r in recons:
+        assert np.isclose(r.lrc_opening + r.premiums + r.revenue, r.lrc_closing)
+    assert "LRC" in str(recons[0])

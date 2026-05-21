@@ -18,6 +18,8 @@ from fastcashflow.engine import Measurement, Valuation, measure, value
 from fastcashflow.io import read_model_points, value_file, write_valuation
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.movement import (
+    PAAPeriodMovement,
+    PAAReconciliation,
     PeriodMovement,
     Reconciliation,
     reconcile,
@@ -38,7 +40,7 @@ __all__ = [
     "report", "roll_forward", "reconcile",
     "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
-    "PeriodMovement", "Reconciliation",
+    "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "read_model_points", "write_valuation", "value_file", "solve_premium",
     "DEATH", "DIAGNOSIS", "INPATIENT", "OUTPATIENT", "SURGERY",
 ]
