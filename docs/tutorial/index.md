@@ -43,7 +43,7 @@
   - 모델포인트와 가정을 넣어 BEL·RA·CSM을 산출하고 결과를 읽기
 ```
 
-7장 이후는 차례로 추가됩니다.
+마지막 8장은 곧 추가됩니다.
 
 ```{toctree}
 :maxdepth: 1
@@ -55,4 +55,5 @@
 04-how-the-engine-runs
 05-bel-calculation
 06-risk-adjustment
+07-csm
 ```
