@@ -49,7 +49,7 @@ html_show_sourcelink = False
 html_copy_source = False
 
 html_theme_options = {
-    "show_prev_next": False,
+    "show_prev_next": True,
     "navbar_align": "content",
     "logo": {
         "image_light": "_static/logo-light.png",
