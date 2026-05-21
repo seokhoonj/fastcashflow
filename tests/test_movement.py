@@ -9,7 +9,13 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, measure, roll_forward
+from fastcashflow import (
+    Assumptions,
+    ModelPointSet,
+    measure,
+    reconcile,
+    roll_forward,
+)
 
 
 def _assumptions() -> Assumptions:
@@ -239,3 +245,47 @@ def test_roll_forward_rejects_lonely_actual_inforce():
     m = measure(_portfolio(), _assumptions())
     with pytest.raises(ValueError, match="actual_inforce"):
         roll_forward(m, 12, actual_inforce=m.cashflows.inforce[:, 24])
+
+
+def test_reconcile_period_count_and_aggregation():
+    """reconcile gives one portfolio-total table per movement."""
+    m = measure(_portfolio(), _assumptions())
+    movements = roll_forward(m, 12)
+    recons = reconcile(movements)
+    assert len(recons) == len(movements)
+    assert np.isclose(recons[0].csm_opening, movements[0].csm_opening.sum())
+    assert np.isclose(recons[0].bel_closing, movements[0].bel_closing.sum())
+
+
+def test_reconcile_reconciles():
+    """opening + future service + finance + release == closing, per column."""
+    m = measure(_portfolio(), _assumptions())
+    for r in reconcile(roll_forward(m, 12)):
+        assert np.isclose(
+            r.bel_opening + r.bel_future_service + r.bel_finance
+            + r.bel_release, r.bel_closing)
+        assert np.isclose(
+            r.ra_opening + r.ra_future_service + r.ra_finance
+            + r.ra_release, r.ra_closing)
+        assert np.isclose(
+            r.csm_opening + r.csm_future_service + r.csm_finance
+            + r.csm_release, r.csm_closing)
+
+
+def test_reconcile_carries_the_assumption_change():
+    """The future-service row carries an assumption revision, and reconciles."""
+    mps = _portfolio()
+    m = measure(mps, _assumptions())
+    recons = reconcile(roll_forward(m, 12, revised=_revised(mps), revised_at=24))
+    rev = next(r for r in recons if r.month_start == 24)
+    assert not np.isclose(rev.csm_future_service, 0.0)
+    assert np.isclose(
+        rev.csm_opening + rev.csm_future_service + rev.csm_finance
+        + rev.csm_release, rev.csm_closing)
+
+
+def test_reconcile_renders_a_table():
+    """str(Reconciliation) is a readable three-column table."""
+    m = measure(_portfolio(), _assumptions())
+    text = str(reconcile(roll_forward(m, 12))[0])
+    assert "Opening" in text and "Closing" in text and "CSM" in text

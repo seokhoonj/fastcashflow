@@ -49,7 +49,8 @@ Beyond the phase plan:
 - **Analysis of change** -- `roll_forward` slices a measurement into
   reporting-period movements that reconcile the opening and closing BEL, RA
   and CSM, recognising assumption revisions and in-force experience as
-  adjustments to the CSM -- the period-close reporting cycle.
+  adjustments to the CSM; `reconcile` aggregates those movements into
+  IFRS 17 reconciliation tables -- the period-close reporting cycle.
 - **Reinsurance** -- reinsurance contracts held, measured as a quota-share
   treaty over a direct portfolio; the CSM carries the net cost or gain of
   the cover.
