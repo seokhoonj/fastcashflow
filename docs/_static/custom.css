@@ -20,3 +20,9 @@ img.hero {
     margin: 1.5rem auto 2.25rem auto;
     border-radius: 8px;
 }
+
+/* the navbar wordmark logo -- constrain its height */
+.navbar-brand img.logo__image {
+    height: 1.6rem;
+    width: auto;
+}
