@@ -16,7 +16,7 @@ LAPSE = 0.005
 
 def _assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, Q),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, Q),
         lapse_monthly=lambda duration: np.full(duration.shape, LAPSE),
         discount_annual=0.03,
         expense_acquisition=200_000.0,

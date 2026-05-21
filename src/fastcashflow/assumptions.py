@@ -6,7 +6,34 @@ from dataclasses import dataclass
 
 from fastcashflow._typing import FloatArray, IntArray
 
-RateFn = Callable[[FloatArray, IntArray], FloatArray]
+RateFn = Callable[[IntArray, FloatArray, IntArray], FloatArray]
+
+
+@dataclass(frozen=True, slots=True)
+class RiderRate:
+    """One rate-driven rider's assumption -- a coverage code and how it runs.
+
+    Parameters
+    ----------
+    code :
+        The rider's 특약코드 label. The engine works in the integer grid
+        index this factorises to; the label is what the model-point file
+        names a coverage by.
+    rate :
+        Monthly-rate callable, the same signature as ``mortality_monthly``.
+    is_diagnosis :
+        True for a single-payment diagnosis benefit -- its claims run off a
+        depleting "not yet diagnosed" pool. False for a recurring claim
+        (a death-type rider or a multiple-occurrence health benefit).
+    risk :
+        Risk class for the Risk Adjustment -- ``RISK_MORTALITY`` (a
+        death-type rider) or ``RISK_MORBIDITY`` (a health rider).
+    """
+
+    code: str
+    rate: RateFn
+    is_diagnosis: bool
+    risk: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,9 +43,9 @@ class Assumptions:
     Parameters
     ----------
     mortality_monthly :
-        Maps ``(issue_age, duration_years)`` -- arrays of issue age (years)
-        and completed policy years (0-based), of the same shape -- to an
-        array of monthly mortality rates. A select-and-ultimate basis is
+        Maps ``(sex, issue_age, duration_years)`` -- arrays of sex (0 male,
+        1 female), issue age (years) and completed policy years (0-based),
+        of the same shape -- to an array of monthly mortality rates. A select-and-ultimate basis is
         expressed by letting the rate depend on duration within the select
         period and on attained age (issue_age + duration) beyond it; the
         select-period logic lives in this callable, not the engine.
@@ -77,11 +104,16 @@ class Assumptions:
         ``None`` settles every claim immediately. It measures the liability
         for incurred claims and discounts claims to their payment dates in
         the best-estimate liability.
-    morbidity_rates :
-        ``{coverage kind: callable}`` map giving the monthly morbidity rate
-        of each health coverage kind (see :mod:`fastcashflow.coverage`). Each
-        callable has the same signature as ``mortality_monthly``. Required
-        only for the kinds a portfolio actually uses.
+    riders :
+        Ordered tuple of :class:`RiderRate` -- the rate-driven riders
+        (death-type, morbidity and diagnosis coverages), one per 특약코드.
+        Their order fixes the integer coverage codes: rider ``i`` is code
+        ``i + 1``; code 0 is the main-contract death coverage, driven by
+        ``mortality_monthly``. Empty for a death-only portfolio.
+    coverage_types :
+        Map of every 특약코드 to its type string -- the riders master. Set
+        by :func:`read_assumptions` and used by :func:`read_model_points`
+        to route long-form coverage rows; ``None`` when built in code.
     """
 
     mortality_monthly: RateFn
@@ -101,7 +133,8 @@ class Assumptions:
     fund_fee: float = 0.0
     guaranteed_credit_rate: float | None = None
     settlement_pattern: FloatArray | None = None
-    morbidity_rates: dict[int, RateFn] | None = None
+    riders: tuple[RiderRate, ...] = ()
+    coverage_types: dict[str, str] | None = None
 
     @property
     def discount_monthly(self) -> float:

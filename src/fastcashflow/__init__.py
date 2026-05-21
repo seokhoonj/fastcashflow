@@ -12,8 +12,8 @@ Conventional import alias::
 `fcf` also reads as Fulfilment Cash Flows (IFRS 17: BEL + RA) -- the very
 quantity this engine computes.
 """
-from fastcashflow.assumptions import Assumptions
-from fastcashflow.coverage import DEATH, DIAGNOSIS, INPATIENT, OUTPATIENT, SURGERY
+from fastcashflow.assumptions import Assumptions, RiderRate
+from fastcashflow.coverage import DEATH, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import Measurement, Valuation, measure, value
 from fastcashflow.grouping import group
 from fastcashflow.io import (
@@ -66,5 +66,5 @@ __all__ = [
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
-    "DEATH", "DIAGNOSIS", "INPATIENT", "OUTPATIENT", "SURGERY",
+    "DEATH", "RiderRate", "RISK_MORTALITY", "RISK_MORBIDITY",
 ]

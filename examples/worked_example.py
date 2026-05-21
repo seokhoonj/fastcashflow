@@ -4,24 +4,19 @@ Run it::
 
     python examples/worked_example.py
 
-It loads an actuarial basis and a portfolio from the sample files here,
-prices a contract, measures the IFRS 17 liability, assembles the
-disclosure, rolls a reporting period forward into the analysis of change,
-aggregates to IFRS 17 groups, and closes with a tour of the other
-measurement models.
+It loads fastcashflow's bundled sample basis and portfolio, prices a
+contract, measures the IFRS 17 liability, assembles the disclosure, rolls a
+reporting period forward into the analysis of change, aggregates to IFRS 17
+groups, and closes with a tour of the other measurement models.
 
-To value your own book: copy ``sample_basis.xlsx`` and
-``sample_policies.csv``, edit them with your own numbers, and point the two
-``read_*`` calls below at your files.
+To value your own book, prepare an assumptions workbook and model-point
+files of your own -- see ``read_assumptions`` and ``read_model_points``.
 """
 from dataclasses import replace
-from pathlib import Path
 
 import numpy as np
 
 import fastcashflow as fcf
-
-HERE = Path(__file__).parent
 
 
 def section(title: str) -> None:
@@ -34,8 +29,8 @@ def section(title: str) -> None:
 # mortality and lapse tables into the monthly-rate functions the engine
 # uses. The portfolio is a CSV of model points.
 section("1. The inputs")
-asmp = fcf.read_assumptions(HERE / "sample_basis.xlsx")
-mps = fcf.read_model_points(HERE / "sample_policies.csv")
+asmp = fcf.load_sample_assumptions()
+mps = fcf.load_sample_model_points()
 print(f"Loaded {mps.n_mp} model points and the actuarial basis.")
 
 

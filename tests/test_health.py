@@ -7,12 +7,10 @@ morbidity, priced by its own RA component (``morbidity_cv``).
 import numpy as np
 
 from fastcashflow import (
-    DIAGNOSIS,
-    INPATIENT,
-    OUTPATIENT,
-    SURGERY,
+    RISK_MORBIDITY,
     Assumptions,
     ModelPointSet,
+    RiderRate,
     measure,
     value,
 )
@@ -22,11 +20,15 @@ Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
 MORB_RATE = 0.03     # flat monthly morbidity rate (events per in-force month)
 
+# Rider codes -- the riders' order in _assumptions fixes them: rider i is
+# coverage code i + 1.
+INPATIENT, SURGERY, OUTPATIENT, DIAGNOSIS = 1, 2, 3, 4
+
 
 def _assumptions(**overrides) -> Assumptions:
-    flat_morb = lambda issue_age, duration: np.full(issue_age.shape, MORB_RATE)
+    flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, MORB_RATE)
     base = dict(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, Q),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, Q),
         lapse_monthly=lambda duration: np.full(duration.shape, LAPSE),
         discount_annual=0.04,
         expense_acquisition=0.0,
@@ -34,8 +36,12 @@ def _assumptions(**overrides) -> Assumptions:
         expense_inflation=0.0,
         ra_confidence=0.80,
         mortality_cv=0.10,
-        morbidity_rates={INPATIENT: flat_morb, SURGERY: flat_morb,
-                         OUTPATIENT: flat_morb, DIAGNOSIS: flat_morb},
+        riders=(
+            RiderRate("inpatient", flat_morb, is_diagnosis=False, risk=RISK_MORBIDITY),
+            RiderRate("surgery", flat_morb, is_diagnosis=False, risk=RISK_MORBIDITY),
+            RiderRate("outpatient", flat_morb, is_diagnosis=False, risk=RISK_MORBIDITY),
+            RiderRate("diagnosis", flat_morb, is_diagnosis=True, risk=RISK_MORBIDITY),
+        ),
     )
     base.update(overrides)
     return Assumptions(**base)

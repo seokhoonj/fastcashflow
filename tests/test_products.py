@@ -16,7 +16,7 @@ LAPSE = 0.005      # flat monthly lapse
 
 def _assumptions(**overrides) -> Assumptions:
     base = dict(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, Q),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, Q),
         lapse_monthly=lambda duration: np.full(duration.shape, LAPSE),
         discount_annual=0.04,
         expense_acquisition=0.0,

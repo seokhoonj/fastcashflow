@@ -1,15 +1,19 @@
 """File I/O for model points, the actuarial basis and valuation results.
 
-Model points and results go through polars, which parses parquet and CSV in
-parallel and hands columns to numpy near-zero-copy. The actuarial basis --
-read by :func:`read_assumptions` -- comes from an Excel workbook (the form
-a practitioner keeps assumptions in), via openpyxl.
+Model points and results go through polars; the actuarial basis -- read by
+:func:`read_assumptions` -- comes from an Excel workbook via openpyxl.
 
-* :func:`read_model_points` / :func:`write_valuation` are eager -- they hold
-  the whole file in memory, which is fine up to ~1e8 model points.
-* :func:`value_file` streams a parquet file chunk by chunk (read, value,
-  write), so peak memory is one chunk and the portfolio size is bounded by
-  disk, not RAM -- the path to ~1e9 model points and beyond.
+Model points come in two shapes, both producing the same ``ModelPointSet``:
+
+* **wide** -- one row per policy, every benefit a column: ``death_benefit``,
+  ``maturity_benefit``, ``annuity_payment`` and a ``<rider_code>_benefit``
+  column per rider. The convenient form for a single, homogeneous product.
+* **long-form** -- a policies frame (contract attributes) plus a coverages
+  frame, one row per policy x rider carrying ``amount`` and ``premium``. The
+  form for a heterogeneous, multi-product portfolio.
+
+:func:`read_model_points` reads either; ``ModelPointSet.to_wide`` /
+``ModelPointSet.to_long`` convert between them.
 
 The core engine stays identifier-free: the kernel never needs a policy id, so
 none is carried through ``ModelPointSet`` or ``Valuation``. Identifiers are a
@@ -25,21 +29,21 @@ import numpy as np
 import openpyxl
 import polars as pl
 
-from fastcashflow.assumptions import Assumptions
-from fastcashflow.coverage import DIAGNOSIS, INPATIENT, OUTPATIENT, SURGERY
+from fastcashflow.assumptions import Assumptions, RiderRate
+from fastcashflow.coverage import (
+    RATE_DRIVEN_TYPES, RISK_MORBIDITY, RISK_MORTALITY, TYPE_ANNUITY,
+    TYPE_DEATH, TYPE_DEATH_MAIN, TYPE_DIAGNOSIS, TYPE_MATURITY,
+)
 from fastcashflow.engine import Valuation, value
 from fastcashflow.modelpoint import ModelPointSet
 
-_REQUIRED_COLUMNS = ("issue_age", "death_benefit", "monthly_premium", "term_months")
-_OPTIONAL_COLUMNS = ("maturity_benefit", "annuity_payment", "single_premium",
-                     "count")
-# Health benefit columns -- each maps to a morbidity coverage kind.
-_BENEFIT_COLUMNS = {
-    "inpatient_benefit": INPATIENT,
-    "surgery_benefit": SURGERY,
-    "outpatient_benefit": OUTPATIENT,
-    "diagnosis_benefit": DIAGNOSIS,
-}
+# Wide model-point columns with a fixed meaning. Any other ``*_benefit``
+# column names a rider by its 특약코드.
+_NAMED_WIDE = frozenset((
+    "policy_id", "product", "issue_age", "term_months", "sex", "count",
+    "monthly_premium", "single_premium", "death_benefit", "maturity_benefit",
+    "annuity_payment",
+))
 
 
 def _read_frame(path) -> pl.DataFrame:
@@ -63,57 +67,104 @@ def _write_frame(df: pl.DataFrame, path) -> None:
         )
 
 
-def read_model_points(path) -> ModelPointSet:
-    """Read model points from a parquet or CSV file into a ``ModelPointSet``.
+# ---------------------------------------------------------------------------
+# Actuarial basis -- the assumption workbook
+# ---------------------------------------------------------------------------
 
-    The file must contain the columns ``issue_age``, ``death_benefit``,
-    ``monthly_premium`` and ``term_months``. The optional columns
-    ``maturity_benefit``, ``annuity_payment`` and ``single_premium`` are read
-    if present, else default to zero; ``count`` likewise, but it defaults to
-    one. Health benefit columns --
-    ``inpatient_benefit``, ``surgery_benefit``, ``outpatient_benefit``,
-    ``diagnosis_benefit`` -- are read into the coverage list if present. Any
-    other column (a policy
-    identifier, say) is ignored -- to carry an identifier through to the
-    results, read it separately and pass it to :func:`write_valuation`.
+def _read_rate_grid(ws):
+    """Read a long-form ``sex, age, rate`` sheet into a sex x age grid.
+
+    Each row after the header is a sex (0 male, 1 female), an attained age,
+    and the annual rate at that age. Returns the grid shaped ``(2, n_ages)``
+    and the minimum age; the ages are the same contiguous set for both sexes.
     """
-    df = _read_frame(path)
-    missing = [c for c in _REQUIRED_COLUMNS if c not in df.columns]
-    if missing:
-        raise ValueError(f"{path!r} is missing required column(s): {missing}")
-    fields = dict(
-        issue_age=df["issue_age"].to_numpy(),
-        death_benefit=df["death_benefit"].to_numpy(),
-        monthly_premium=df["monthly_premium"].to_numpy(),
-        term_months=df["term_months"].to_numpy(),
+    by_sex: dict[int, dict[int, float]] = {0: {}, 1: {}}
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None or row[1] is None:
+            continue
+        by_sex[int(row[0])][int(row[1])] = float(row[2])
+    ages = sorted(by_sex[0])
+    grid = np.asarray(
+        [[by_sex[s][a] for a in ages] for s in (0, 1)], dtype=np.float64
     )
-    for optional in _OPTIONAL_COLUMNS:
-        if optional in df.columns:
-            fields[optional] = df[optional].to_numpy()
-    benefits = {kind: df[col].to_numpy()
-                for col, kind in _BENEFIT_COLUMNS.items() if col in df.columns}
-    if benefits:
-        fields["benefits"] = benefits
-    return ModelPointSet(**fields)
+    return grid, ages[0]
+
+
+def _rate_closure(grid, age_min):
+    """Wrap a ``(2, n_ages)`` annual-rate grid in a monthly-rate lookup.
+
+    The returned callable has the ``(sex, issue_age, duration)`` signature
+    ``Assumptions`` expects; it reads the rate at the attained age
+    ``issue_age + duration``, clipping to the grid.
+    """
+    n_sex, n_ages = grid.shape
+
+    def rate(sex, issue_age, duration):
+        s = np.clip(np.asarray(sex, np.int64), 0, n_sex - 1)
+        attained = (np.asarray(issue_age, np.int64)
+                    + np.asarray(duration, np.int64))
+        a = np.clip(attained - age_min, 0, n_ages - 1)
+        return 1.0 - (1.0 - grid[s, a]) ** (1.0 / 12.0)
+
+    return rate
+
+
+def _read_rates_sheet(ws):
+    """Read the long-form ``rates`` sheet -- ``rider_code, sex, age, rate`` --
+    into a per-rider sex x age grid keyed by 특약코드."""
+    by_code: dict[str, dict[int, dict[int, float]]] = {}
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None or row[1] is None or row[2] is None:
+            continue
+        code = str(row[0]).strip()
+        by_code.setdefault(code, {0: {}, 1: {}})[int(row[1])][int(row[2])] = (
+            float(row[3])
+        )
+    grids: dict[str, tuple] = {}
+    for code, by_sex in by_code.items():
+        ages = sorted(by_sex[0])
+        grid = np.asarray(
+            [[by_sex[s][a] for a in ages] for s in (0, 1)], dtype=np.float64
+        )
+        grids[code] = (grid, ages[0])
+    return grids
+
+
+def _read_riders_sheet(ws):
+    """Read the riders master sheet -- ``rider_code, rider_name, product,
+    type`` -- returning ``(code, type)`` pairs in sheet order."""
+    riders = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None or row[3] is None:
+            continue
+        riders.append((str(row[0]).strip(), str(row[3]).strip()))
+    return riders
 
 
 def read_assumptions(path) -> Assumptions:
     """Read an actuarial basis from an Excel workbook into ``Assumptions``.
 
-    The workbook has three sheets:
+    Required sheets:
 
     * ``parameters`` -- two columns, name and value: ``discount_annual``,
       the expense scalars, the risk-adjustment scalars, and so on.
-    * ``mortality`` -- a grid: the first column issue ages, the header row
-      durations (completed policy years), the cells annual mortality rates.
+    * ``mortality`` -- long-form ``sex, age, rate``: the base mortality, one
+      shared table. It drives the in-force decrement and the main-contract
+      death claim.
     * ``lapse`` -- two columns, duration (completed policy years) and the
       annual lapse rate.
 
-    Annual rates are converted to the monthly rates the engine works in and
-    wrapped in the lookup callables ``Assumptions`` expects.
-    ``examples/sample_basis.xlsx`` is a filled-in template to copy and edit.
-    Issue ages in the mortality grid, and durations in the lapse sheet, are
-    taken to be contiguous.
+    A product with riders adds two more sheets:
+
+    * ``riders`` -- the riders master: ``rider_code, rider_name, product,
+      type``, one row per 특약코드. ``type`` is one of ``death_main``,
+      ``death``, ``morbidity``, ``diagnosis``, ``annuity``, ``maturity``.
+    * ``rates`` -- long-form ``rider_code, sex, age, rate`` for every
+      rate-driven rider (``death`` / ``morbidity`` / ``diagnosis``).
+
+    Annual rates are converted to monthly and wrapped in the lookup callables
+    ``Assumptions`` expects. The bundled sample basis
+    (:func:`load_sample_assumptions`) is a filled-in template to copy.
     """
     wb = openpyxl.load_workbook(path, data_only=True)
     for sheet in ("parameters", "mortality", "lapse"):
@@ -126,17 +177,7 @@ def read_assumptions(path) -> Assumptions:
         if name is not None:
             params[str(name).strip()] = value
 
-    # mortality -- an (issue age) x (duration) grid of annual rates
-    mort_rows = list(wb["mortality"].iter_rows(values_only=True))
-    n_dur = sum(1 for d in mort_rows[0][1:] if d is not None)
-    ages, grid = [], []
-    for row in mort_rows[1:]:
-        if row[0] is None:
-            continue
-        ages.append(int(row[0]))
-        grid.append([float(r) for r in row[1:1 + n_dur]])
-    mort_grid = np.asarray(grid, dtype=np.float64)
-    age_min, n_ages = ages[0], len(ages)
+    mortality_monthly = _rate_closure(*_read_rate_grid(wb["mortality"]))
 
     # lapse -- duration -> annual rate
     lapse_by_dur: dict[int, float] = {}
@@ -147,14 +188,34 @@ def read_assumptions(path) -> Assumptions:
         [lapse_by_dur[d] for d in range(len(lapse_by_dur))], dtype=np.float64
     )
 
-    def mortality_monthly(issue_age, duration):
-        a = np.clip(np.asarray(issue_age, np.int64) - age_min, 0, n_ages - 1)
-        d = np.clip(np.asarray(duration, np.int64), 0, n_dur - 1)
-        return 1.0 - (1.0 - mort_grid[a, d]) ** (1.0 / 12.0)
-
     def lapse_monthly(duration):
         d = np.clip(np.asarray(duration, np.int64), 0, lapse_arr.shape[0] - 1)
         return 1.0 - (1.0 - lapse_arr[d]) ** (1.0 / 12.0)
+
+    # riders master + rates -> the rate-driven coverage list
+    riders: tuple[RiderRate, ...] = ()
+    coverage_types: dict[str, str] | None = None
+    if "riders" in wb.sheetnames:
+        rider_rows = _read_riders_sheet(wb["riders"])
+        coverage_types = {code: rtype for code, rtype in rider_rows}
+        rate_grids = (_read_rates_sheet(wb["rates"])
+                      if "rates" in wb.sheetnames else {})
+        rider_list = []
+        for code, rtype in rider_rows:
+            if rtype not in RATE_DRIVEN_TYPES:
+                continue          # death_main / annuity / maturity carry no rate
+            if code not in rate_grids:
+                raise ValueError(
+                    f"rider {code!r} is rate-driven ({rtype}) but has no rows "
+                    "in the 'rates' sheet"
+                )
+            rider_list.append(RiderRate(
+                code=code,
+                rate=_rate_closure(*rate_grids[code]),
+                is_diagnosis=(rtype == TYPE_DIAGNOSIS),
+                risk=RISK_MORTALITY if rtype == TYPE_DEATH else RISK_MORBIDITY,
+            ))
+        riders = tuple(rider_list)
 
     required = ("discount_annual", "expense_acquisition",
                 "expense_maintenance_annual", "expense_inflation",
@@ -165,8 +226,11 @@ def read_assumptions(path) -> Assumptions:
     kwargs: dict[str, object] = dict(
         mortality_monthly=mortality_monthly,
         lapse_monthly=lapse_monthly,
+        riders=riders,
         **{k: float(params[k]) for k in required},
     )
+    if coverage_types is not None:
+        kwargs["coverage_types"] = coverage_types
     for opt in ("longevity_cv", "morbidity_cv", "expense_cv",
                 "cost_of_capital_rate", "investment_return", "fund_fee",
                 "guaranteed_credit_rate"):
@@ -177,16 +241,150 @@ def read_assumptions(path) -> Assumptions:
     return Assumptions(**kwargs)
 
 
-def load_sample_model_points() -> ModelPointSet:
-    """Read fastcashflow's bundled sample portfolio.
+# ---------------------------------------------------------------------------
+# Model points -- wide and long-form
+# ---------------------------------------------------------------------------
 
-    A small term-insurance portfolio packaged with the library, so the
-    engine can be tried without preparing an input file. See
-    :func:`read_model_points` for the file format.
+def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPointSet:
+    """Build a ``ModelPointSet`` from a wide frame -- one row per policy, each
+    rider a ``<rider_code>_benefit`` column."""
+    for need in ("issue_age", "term_months"):
+        if need not in df.columns:
+            raise ValueError(
+                f"the model-point file is missing required column {need!r}"
+            )
+    n_mp = df.height
+    fields: dict[str, object] = dict(
+        issue_age=df["issue_age"].to_numpy(),
+        term_months=df["term_months"].to_numpy(),
+        monthly_premium=(df["monthly_premium"].to_numpy()
+                         if "monthly_premium" in df.columns
+                         else np.zeros(n_mp)),
+    )
+    for opt in ("sex", "count", "single_premium", "death_benefit",
+                "maturity_benefit", "annuity_payment"):
+        if opt in df.columns:
+            fields[opt] = df[opt].to_numpy()
+
+    code_to_kind = {r.code: i + 1 for i, r in enumerate(
+        assumptions.riders if assumptions is not None else ())}
+    benefits: dict[int, np.ndarray] = {}
+    for col in df.columns:
+        if not col.endswith("_benefit") or col in _NAMED_WIDE:
+            continue
+        code = col[: -len("_benefit")]
+        if code not in code_to_kind:
+            raise ValueError(
+                f"wide column {col!r} names rider {code!r}, which is not a "
+                "rate-driven rider in the assumptions"
+            )
+        benefits[code_to_kind[code]] = df[col].to_numpy()
+    if benefits:
+        fields["benefits"] = benefits
+    return ModelPointSet(**fields)
+
+
+def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
+                       assumptions) -> ModelPointSet:
+    """Build a ``ModelPointSet`` from a long-form policies + coverages pair."""
+    if assumptions is None:
+        raise ValueError(
+            "long-form model points need the assumptions -- the 특약코드 "
+            "registry maps coverage rows to engine codes"
+        )
+    for need in ("policy_id", "issue_age", "term_months"):
+        if need not in pol.columns:
+            raise ValueError(
+                f"the policies frame is missing required column {need!r}"
+            )
+    for need in ("policy_id", "rider_code", "amount"):
+        if need not in cov.columns:
+            raise ValueError(
+                f"the coverages frame is missing required column {need!r}"
+            )
+    n_mp = pol.height
+    ctypes = assumptions.coverage_types or {}
+    code_to_kind = {r.code: i + 1 for i, r in enumerate(assumptions.riders)}
+
+    # Resolve every coverage row to its policy index and coverage type.
+    pol = pol.with_row_index("_mp")
+    cmap = pl.DataFrame({
+        "rider_code": list(ctypes.keys()),
+        "_type": list(ctypes.values()),
+        "_kind": [code_to_kind.get(c, 0) for c in ctypes],
+    })
+    cov = (cov.join(pol.select("policy_id", "_mp"), on="policy_id", how="left")
+              .join(cmap, on="rider_code", how="left"))
+    if cov["_mp"].null_count():
+        raise ValueError("a coverage row references an unknown policy_id")
+    if cov["_type"].null_count():
+        raise ValueError("a coverage row references an unregistered rider_code")
+
+    mp = cov["_mp"].to_numpy()
+    ctype = cov["_type"].to_numpy()
+    kind = cov["_kind"].to_numpy().astype(np.int64)
+    amount = cov["amount"].to_numpy().astype(np.float64)
+
+    fields: dict[str, object] = dict(
+        issue_age=pol["issue_age"].to_numpy(),
+        term_months=pol["term_months"].to_numpy(),
+    )
+    for opt in ("sex", "count", "single_premium"):
+        if opt in pol.columns:
+            fields[opt] = pol[opt].to_numpy()
+
+    def _by_policy(mask) -> np.ndarray:
+        return np.bincount(mp[mask], weights=amount[mask], minlength=n_mp)
+
+    fields["maturity_benefit"] = _by_policy(ctype == TYPE_MATURITY)
+    fields["annuity_payment"] = _by_policy(ctype == TYPE_ANNUITY)
+
+    # Premium -- the coverages frame carries it per rider; sum to the policy.
+    if "premium" in cov.columns:
+        prem = cov["premium"].fill_null(0.0).to_numpy().astype(np.float64)
+        fields["monthly_premium"] = np.bincount(mp, weights=prem, minlength=n_mp)
+    elif "monthly_premium" in pol.columns:
+        fields["monthly_premium"] = pol["monthly_premium"].to_numpy()
+    else:
+        fields["monthly_premium"] = np.zeros(n_mp)
+
+    # Coverage list: the main-contract death (code 0) and the rate-driven
+    # riders (codes 1..n). annuity / maturity are survival scalars, not here.
+    is_cov = (ctype == TYPE_DEATH_MAIN) | np.isin(ctype, RATE_DRIVEN_TYPES)
+    order = np.argsort(mp[is_cov], kind="stable")
+    cov_mp = mp[is_cov][order]
+    fields["cov_kind"] = kind[is_cov][order]
+    fields["cov_amount"] = amount[is_cov][order]
+    fields["cov_offset"] = np.concatenate((
+        np.zeros(1, np.int64),
+        np.cumsum(np.bincount(cov_mp, minlength=n_mp), dtype=np.int64),
+    ))
+    return ModelPointSet(**fields)
+
+
+def read_model_points(path, assumptions=None, coverages=None) -> ModelPointSet:
+    """Read model points from a parquet or CSV file into a ``ModelPointSet``.
+
+    Two forms:
+
+    * **wide** -- ``read_model_points(path, assumptions)``. One row per
+      policy. ``issue_age`` and ``term_months`` are required; ``sex``,
+      ``count``, ``monthly_premium``, ``single_premium``, ``death_benefit``,
+      ``maturity_benefit`` and ``annuity_payment`` are read if present. A
+      ``<rider_code>_benefit`` column adds that rider's coverage; the
+      ``assumptions`` resolve the 특약코드 to an engine code.
+    * **long-form** -- ``read_model_points(policies, assumptions,
+      coverages=coverages_path)``. A policies frame (``policy_id``,
+      ``issue_age``, ``term_months``, optional ``sex`` / ``count``) and a
+      coverages frame (``policy_id``, ``rider_code``, ``amount``, optional
+      ``premium``), one coverage row per policy x rider.
+
+    ``assumptions`` is optional only for a wide file with no rider columns.
     """
-    source = resources.files("fastcashflow") / "sample_data" / "sample_policies.csv"
-    with resources.as_file(source) as path:
-        return read_model_points(path)
+    pol = _read_frame(path)
+    if coverages is not None:
+        return _long_model_points(pol, _read_frame(coverages), assumptions)
+    return _wide_model_points(pol, assumptions)
 
 
 def load_sample_assumptions() -> Assumptions:
@@ -196,10 +394,28 @@ def load_sample_assumptions() -> Assumptions:
     :func:`load_sample_model_points`. See :func:`read_assumptions` for the
     workbook format.
     """
-    source = resources.files("fastcashflow") / "sample_data" / "sample_basis.xlsx"
+    source = resources.files("fastcashflow") / "sample_data" / "sample_assumptions.xlsx"
     with resources.as_file(source) as path:
         return read_assumptions(path)
 
+
+def load_sample_model_points() -> ModelPointSet:
+    """Read fastcashflow's bundled sample portfolio.
+
+    A small long-form portfolio -- a policies file and a coverages file --
+    packaged with the library, so the engine can be tried without preparing
+    an input file. See :func:`read_model_points` for the file format.
+    """
+    asmp = load_sample_assumptions()
+    base = resources.files("fastcashflow") / "sample_data"
+    with resources.as_file(base / "sample_policies.csv") as policies, \
+            resources.as_file(base / "sample_coverages.csv") as coverages:
+        return read_model_points(policies, asmp, coverages=coverages)
+
+
+# ---------------------------------------------------------------------------
+# Valuation results
+# ---------------------------------------------------------------------------
 
 def write_valuation(valuation: Valuation, path, *, ids=None) -> None:
     """Write a ``Valuation`` to a parquet or CSV file.
@@ -227,39 +443,17 @@ def value_file(
     backend: str = "cpu",
     id_column: str | None = None,
 ) -> int:
-    """Stream a valuation through a parquet file one chunk at a time.
+    """Stream a valuation through a wide parquet file one chunk at a time.
 
     Reads ``input_path`` in chunks of ``chunk_size`` model points, values each
     chunk with :func:`value`, and writes the results as a parquet dataset --
     one ``part-NNNNN.parquet`` file per chunk -- under ``output_dir``. Peak
     memory is a single chunk, so this scales past what an in-memory run could
-    hold (portfolios on the order of 1e9 model points and beyond).
+    hold.
 
-    The kernel is per-model-point independent, so the chunked result is
-    identical to valuing the whole file at once.
+    The input must be a wide parquet file (see :func:`read_model_points`).
 
-    Parameters
-    ----------
-    input_path :
-        Parquet file with the model-point columns (see
-        :func:`read_model_points`). CSV is not supported here -- it has no
-        row-group metadata for chunked reads.
-    output_dir :
-        Directory for the result parts; created if absent, and must not
-        already contain ``part-*.parquet`` files. Read the results back with
-        ``polars.read_parquet(f"{output_dir}/part-*.parquet")``.
-    chunk_size :
-        Model points per chunk. The default keeps a chunk near 1-2 GB.
-    backend :
-        Passed to :func:`value` -- ``"cpu"`` or ``"gpu"``.
-    id_column :
-        Name of an identifier column in the input file; when given it is read
-        per chunk and written alongside each result part.
-
-    Returns
-    -------
-    int
-        The total number of model points processed.
+    Returns the total number of model points processed.
     """
     input_path = Path(input_path)
     output_dir = Path(output_dir)
@@ -268,20 +462,17 @@ def value_file(
             f"value_file streams parquet input only; got {str(input_path)!r}"
         )
 
-    columns = list(_REQUIRED_COLUMNS)
-    if id_column is not None:
-        columns = [id_column, *columns]
-
     scan = pl.scan_parquet(input_path)
     available = scan.collect_schema().names()
-    missing = [c for c in columns if c not in available]
-    if missing:
-        raise ValueError(
-            f"{str(input_path)!r} is missing required column(s): {missing}"
-        )
-    optional = [c for c in _OPTIONAL_COLUMNS if c in available]
-    benefit_cols = [c for c in _BENEFIT_COLUMNS if c in available]
-    columns = [*columns, *optional, *benefit_cols]
+    for need in ("issue_age", "term_months"):
+        if need not in available:
+            raise ValueError(
+                f"{str(input_path)!r} is missing required column {need!r}"
+            )
+    columns = [c for c in available
+               if c in _NAMED_WIDE or c.endswith("_benefit") or c == id_column]
+    if id_column is not None and id_column not in available:
+        raise ValueError(f"{str(input_path)!r} has no id column {id_column!r}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     if any(output_dir.glob("part-*.parquet")):
@@ -296,18 +487,10 @@ def value_file(
     processed = 0
     for part, offset in enumerate(range(0, n_total, chunk_size)):
         chunk = projected.slice(offset, chunk_size).collect()
-        fields = dict(
-            issue_age=chunk["issue_age"].to_numpy(),
-            death_benefit=chunk["death_benefit"].to_numpy(),
-            monthly_premium=chunk["monthly_premium"].to_numpy(),
-            term_months=chunk["term_months"].to_numpy(),
+        mps = _wide_model_points(
+            chunk.drop(id_column) if id_column is not None else chunk,
+            assumptions,
         )
-        for name in optional:
-            fields[name] = chunk[name].to_numpy()
-        benefits = {_BENEFIT_COLUMNS[c]: chunk[c].to_numpy() for c in benefit_cols}
-        if benefits:
-            fields["benefits"] = benefits
-        mps = ModelPointSet(**fields)
         ids = chunk[id_column].to_numpy() if id_column is not None else None
         write_valuation(
             value(mps, assumptions, backend=backend),

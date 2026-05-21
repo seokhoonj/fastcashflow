@@ -11,7 +11,7 @@ from fastcashflow import Assumptions, ModelPointSet, measure, value
 
 def _assumptions(**overrides) -> Assumptions:
     base = dict(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.002),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.002),
         lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
         discount_annual=0.04,
         expense_acquisition=100_000.0,

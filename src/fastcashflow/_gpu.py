@@ -12,15 +12,14 @@ from __future__ import annotations
 import numpy as np
 from numba import cuda
 
-from fastcashflow.coverage import FIRST_DIAGNOSIS_KIND
-
 
 @cuda.jit
-def _value_cuda_kernel(mortality_grid, issue_index, term_months, count,
+def _value_cuda_kernel(mortality_grid, issue_index, sex, term_months, count,
                        lapse_by_year, monthly_premium, single_premium,
                        cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
-                       maturity_benefit, annuity_payment, expense_acquisition,
-                       maint_monthly, inflation, discount_start, discount_mid,
+                       cov_is_diagnosis, maturity_benefit, annuity_payment,
+                       expense_acquisition, maint_monthly, inflation,
+                       discount_start, discount_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
                        bel, ra, csm, loss_component):
     """One CUDA thread per model point; the per-month loop runs in the thread."""
@@ -30,6 +29,7 @@ def _value_cuda_kernel(mortality_grid, issue_index, term_months, count,
 
     term = term_months[mp]
     ridx = issue_index[mp]
+    sx = sex[mp]
     cnt = count[mp]
     premium = monthly_premium[mp]
     annuity = annuity_payment[mp]
@@ -51,15 +51,15 @@ def _value_cuda_kernel(mortality_grid, issue_index, term_months, count,
             morb_rate = 0.0
             for k in range(c_start, c_end):
                 kind = cov_kind[k]
-                if kind >= FIRST_DIAGNOSIS_KIND:
+                if cov_is_diagnosis[kind]:
                     continue
-                rate = cov_rates[kind, ridx, year] * cov_amount[k]
+                rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]
                 if cov_risk[kind] == 0:
                     claim_rate += rate
                 else:
                     morb_rate += rate
             last_year = year
-        q = mortality_grid[ridx, year]
+        q = mortality_grid[sx, ridx, year]
         ds = discount_start[t]
         dm = discount_mid[t]
         single = cnt * single_premium[mp] if t == 0 else 0.0
@@ -74,7 +74,7 @@ def _value_cuda_kernel(mortality_grid, issue_index, term_months, count,
     # Diagnosis coverages: claims run off a depleting "not yet diagnosed" pool.
     for k in range(c_start, c_end):
         kind = cov_kind[k]
-        if kind < FIRST_DIAGNOSIS_KIND:
+        if not cov_is_diagnosis[kind]:
             continue
         benefit = cov_amount[k]
         healthy = cnt
@@ -84,8 +84,8 @@ def _value_cuda_kernel(mortality_grid, issue_index, term_months, count,
         for t in range(term):
             year = t // 12
             if year != d_year:
-                d_rate = cov_rates[kind, ridx, year]
-                surv = ((1.0 - mortality_grid[ridx, year])
+                d_rate = cov_rates[kind, sx, ridx, year]
+                surv = ((1.0 - mortality_grid[sx, ridx, year])
                         * (1.0 - lapse_by_year[year]))
                 d_year = year
             pcm += healthy * d_rate * benefit * discount_mid[t]
@@ -100,12 +100,12 @@ def _value_cuda_kernel(mortality_grid, issue_index, term_months, count,
     loss_component[mp] = max(0.0, fcf)
 
 
-def value_gpu(mortality_grid, issue_index, term_months, count, lapse_by_year,
+def value_gpu(mortality_grid, issue_index, sex, term_months, count, lapse_by_year,
               monthly_premium, single_premium, cov_kind, cov_amount,
-              cov_offset, cov_rates, cov_risk, maturity_benefit,
-              annuity_payment, expense_acquisition, maint_monthly, inflation,
-              discount_start, discount_mid, mortality_factor, morbidity_factor,
-              longevity_factor):
+              cov_offset, cov_rates, cov_risk, cov_is_diagnosis,
+              maturity_benefit, annuity_payment, expense_acquisition,
+              maint_monthly, inflation, discount_start, discount_mid,
+              mortality_factor, morbidity_factor, longevity_factor):
     """Run the fused valuation kernel on the GPU.
 
     Returns the four ``(n_mp,)`` valuation arrays: BEL, RA, CSM and the
@@ -119,6 +119,7 @@ def value_gpu(mortality_grid, issue_index, term_months, count, lapse_by_year,
     n_mp = issue_index.shape[0]
     d_mortality = cuda.to_device(mortality_grid)
     d_issue = cuda.to_device(issue_index)
+    d_sex = cuda.to_device(sex)
     d_term = cuda.to_device(term_months)
     d_count = cuda.to_device(count)
     d_lapse = cuda.to_device(lapse_by_year)
@@ -129,6 +130,7 @@ def value_gpu(mortality_grid, issue_index, term_months, count, lapse_by_year,
     d_cov_offset = cuda.to_device(cov_offset)
     d_cov_rates = cuda.to_device(cov_rates)
     d_cov_risk = cuda.to_device(cov_risk)
+    d_cov_is_diagnosis = cuda.to_device(cov_is_diagnosis)
     d_maturity = cuda.to_device(maturity_benefit)
     d_annuity = cuda.to_device(annuity_payment)
     d_inflation = cuda.to_device(inflation)
@@ -142,10 +144,10 @@ def value_gpu(mortality_grid, issue_index, term_months, count, lapse_by_year,
     threads = 256
     blocks = (n_mp + threads - 1) // threads
     _value_cuda_kernel[blocks, threads](
-        d_mortality, d_issue, d_term, d_count, d_lapse, d_premium, d_single,
+        d_mortality, d_issue, d_sex, d_term, d_count, d_lapse, d_premium, d_single,
         d_cov_kind, d_cov_amount, d_cov_offset, d_cov_rates, d_cov_risk,
-        d_maturity, d_annuity, expense_acquisition, maint_monthly,
-        d_inflation, d_discount_start, d_discount_mid,
+        d_cov_is_diagnosis, d_maturity, d_annuity, expense_acquisition,
+        maint_monthly, d_inflation, d_discount_start, d_discount_mid,
         mortality_factor, morbidity_factor, longevity_factor,
         d_bel, d_ra, d_csm, d_loss,
     )

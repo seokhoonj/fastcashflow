@@ -38,7 +38,7 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.coverage import COVERAGE_RISK, FIRST_DIAGNOSIS_KIND, coverage_rates
+from fastcashflow.coverage import coverage_arrays, coverage_rates
 from fastcashflow.modelpoint import ModelPointSet
 
 
@@ -71,9 +71,9 @@ class Cashflows:
 def _project_kernel(mortality, term_months, count, lapse_by_year,
                     monthly_premium, single_premium, cov_kind, cov_amount,
                     cov_offset, cov_waiting, cov_reduction_end,
-                    cov_reduction_factor, cov_rates, cov_risk, maturity_benefit,
-                    annuity_payment, expense_acquisition, maint_monthly,
-                    inflation, n_time):
+                    cov_reduction_factor, cov_rates, cov_risk, cov_is_diagnosis,
+                    maturity_benefit, annuity_payment, expense_acquisition,
+                    maint_monthly, inflation, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -115,7 +115,7 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
                 morb_rate = 0.0
                 for k in range(c_start, c_end):
                     kind = cov_kind[k]
-                    if kind >= FIRST_DIAGNOSIS_KIND:
+                    if cov_is_diagnosis[kind]:
                         continue          # diagnosis coverages run separately
                     if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
                         continue          # rule-bearing coverages run separately
@@ -145,7 +145,7 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
         # the benefit multiplier can change partway through a year.
         for k in range(c_start, c_end):
             kind = cov_kind[k]
-            if kind >= FIRST_DIAGNOSIS_KIND:
+            if cov_is_diagnosis[kind]:
                 continue
             wait = cov_waiting[k]
             red_end = cov_reduction_end[k]
@@ -168,7 +168,7 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
         # the diagnosis rate depletes (on top of mortality and lapse).
         for k in range(c_start, c_end):
             kind = cov_kind[k]
-            if kind < FIRST_DIAGNOSIS_KIND:
+            if not cov_is_diagnosis[kind]:
                 continue
             benefit = cov_amount[k]
             wait = cov_waiting[k]
@@ -208,17 +208,21 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
     months = np.arange(n_time)
     durations = np.arange(n_years)
 
+    sex_grid, _ = np.meshgrid(mps.sex, durations, indexing="ij")
     issue_age_grid, duration_grid = np.meshgrid(
         mps.issue_age, durations, indexing="ij"
     )
     mortality = np.ascontiguousarray(
-        asmp.mortality_monthly(issue_age_grid, duration_grid), dtype=np.float64
+        asmp.mortality_monthly(sex_grid, issue_age_grid, duration_grid),
+        dtype=np.float64,
     )
     lapse_by_year = np.ascontiguousarray(
         asmp.lapse_monthly(durations), dtype=np.float64
     )
+    cov_is_diagnosis, cov_risk = coverage_arrays(asmp.riders)
     cov_rates = coverage_rates(
-        mortality, asmp.morbidity_rates, issue_age_grid, duration_grid
+        mortality, [r.rate for r in asmp.riders], sex_grid, issue_age_grid,
+        duration_grid,
     )
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
 
@@ -237,7 +241,8 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
         mps.cov_reduction_end,
         mps.cov_reduction_factor,
         cov_rates,
-        COVERAGE_RISK,
+        cov_risk,
+        cov_is_diagnosis,
         mps.maturity_benefit,
         mps.annuity_payment,
         asmp.expense_acquisition,

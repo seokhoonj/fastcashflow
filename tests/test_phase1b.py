@@ -15,7 +15,7 @@ SELECT_LAPSE = 0.03   # monthly lapse, policy year 0
 ULT_LAPSE = 0.01      # monthly lapse, policy year 1+
 
 
-def _mortality(issue_age, duration):
+def _mortality(sex, issue_age, duration):
     """Select for the first policy year, ultimate thereafter."""
     return np.where(duration < 1, SELECT_Q, ULT_Q)
 

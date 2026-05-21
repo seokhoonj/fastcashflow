@@ -13,7 +13,7 @@ from fastcashflow import Assumptions, ModelPointSet, measure_tvog
 
 def _assumptions(**overrides) -> Assumptions:
     base = dict(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.002),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.002),
         lapse_monthly=lambda duration: np.full(duration.shape, 0.004),
         discount_annual=0.03,
         expense_acquisition=0.0,

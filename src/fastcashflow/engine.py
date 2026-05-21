@@ -30,7 +30,7 @@ from fastcashflow.gmm import (
     discount_factors,
     discount_factors_from_curve,
 )
-from fastcashflow.coverage import COVERAGE_RISK, FIRST_DIAGNOSIS_KIND, coverage_rates
+from fastcashflow.coverage import coverage_arrays, coverage_rates
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.projection import Cashflows, project_cashflows
 
@@ -148,9 +148,9 @@ class Valuation:
 
 
 @njit(parallel=True, cache=True)
-def _value_kernel(mortality_grid, issue_index, term_months, count,
+def _value_kernel(mortality_grid, issue_index, sex, term_months, count,
                   lapse_by_year, monthly_premium, single_premium, cov_kind,
-                  cov_amount, cov_offset, cov_rates, cov_risk,
+                  cov_amount, cov_offset, cov_rates, cov_risk, cov_is_diagnosis,
                   maturity_benefit, annuity_payment, expense_acquisition,
                   maint_monthly, inflation, discount_start, discount_mid,
                   mortality_factor, morbidity_factor, longevity_factor,
@@ -177,6 +177,7 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
     for mp in prange(n_mp):
         term = term_months[mp]
         ridx = issue_index[mp]
+        sx = sex[mp]
         cnt = count[mp]
         premium = monthly_premium[mp]
         annuity = annuity_payment[mp]
@@ -200,17 +201,17 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
                 morb_rate = 0.0
                 for k in range(c_start, c_end):
                     kind = cov_kind[k]
-                    if kind >= FIRST_DIAGNOSIS_KIND:
+                    if cov_is_diagnosis[kind]:
                         continue          # diagnosis coverages run separately
                     if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
                         continue          # rule-bearing coverages run separately
-                    rate = cov_rates[kind, ridx, year] * cov_amount[k]
+                    rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]
                     if cov_risk[kind] == 0:
                         claim_rate += rate
                     else:
                         morb_rate += rate
                 last_year = year
-            q = mortality_grid[ridx, year]
+            q = mortality_grid[sx, ridx, year]
             ds = discount_start[t]
             dm = discount_mid[t]
             single = cnt * single_premium[mp] if t == 0 else 0.0
@@ -227,7 +228,7 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
         # benefit multiplier (which can change mid-year) applies cleanly.
         for k in range(c_start, c_end):
             kind = cov_kind[k]
-            if kind >= FIRST_DIAGNOSIS_KIND:
+            if cov_is_diagnosis[kind]:
                 continue
             wait = cov_waiting[k]
             red_end = cov_reduction_end[k]
@@ -241,20 +242,20 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
                 year = t // 12
                 if t >= wait:
                     mult = red_factor if t < red_end else 1.0
-                    contrib = (inf * cov_rates[kind, ridx, year]
+                    contrib = (inf * cov_rates[kind, sx, ridx, year]
                                * benefit * mult * discount_mid[t])
                     if mortality_risk:
                         pc += contrib
                     else:
                         pcm += contrib
-                inf *= ((1.0 - mortality_grid[ridx, year])
+                inf *= ((1.0 - mortality_grid[sx, ridx, year])
                         * (1.0 - lapse_by_year[year]))
         # Diagnosis coverages pay once on first diagnosis, so each one's
         # claims run off a depleting "not yet diagnosed" pool -- a separate
         # pass over the time axis, into the morbidity PV.
         for k in range(c_start, c_end):
             kind = cov_kind[k]
-            if kind < FIRST_DIAGNOSIS_KIND:
+            if not cov_is_diagnosis[kind]:
                 continue
             benefit = cov_amount[k]
             wait = cov_waiting[k]
@@ -267,8 +268,8 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
             for t in range(term):
                 year = t // 12
                 if year != d_year:
-                    d_rate = cov_rates[kind, ridx, year]
-                    surv = ((1.0 - mortality_grid[ridx, year])
+                    d_rate = cov_rates[kind, sx, ridx, year]
+                    surv = ((1.0 - mortality_grid[sx, ridx, year])
                             * (1.0 - lapse_by_year[year]))
                     d_year = year
                 # A waiting period suppresses the payment, not the diagnosis:
@@ -322,26 +323,30 @@ def value(
     n_years = (n_time + 11) // 12
     months = np.arange(n_time)
 
-    # Mortality and lapse are evaluated on a dense [min, max] issue-age x
-    # duration grid. Using the age range rather than the exact distinct ages
-    # avoids an O(n log n) sort (np.unique): min/max and the index
+    # Mortality and lapse are evaluated on a dense sex x [min, max] issue-age
+    # x duration grid. Using the age range rather than the exact distinct
+    # ages avoids an O(n log n) sort (np.unique): min/max and the index
     # subtraction are O(n), and the few unused ages cost nothing -- the
     # assumption grid is tiny.
     min_age = int(mps.issue_age.min())
     max_age = int(mps.issue_age.max())
     durations = np.arange(n_years)
-    issue_age_grid, duration_grid = np.meshgrid(
-        np.arange(min_age, max_age + 1), durations, indexing="ij"
+    sex_grid, issue_age_grid, duration_grid = np.meshgrid(
+        np.array([0, 1]), np.arange(min_age, max_age + 1), durations,
+        indexing="ij",
     )
     mortality_grid = np.ascontiguousarray(
-        asmp.mortality_monthly(issue_age_grid, duration_grid), dtype=np.float64
+        asmp.mortality_monthly(sex_grid, issue_age_grid, duration_grid),
+        dtype=np.float64,
     )
     issue_index = (mps.issue_age - min_age).astype(np.int64)
     lapse_by_year = np.ascontiguousarray(
         asmp.lapse_monthly(durations), dtype=np.float64
     )
+    cov_is_diagnosis, cov_risk = coverage_arrays(asmp.riders)
     cov_rates = coverage_rates(
-        mortality_grid, asmp.morbidity_rates, issue_age_grid, duration_grid
+        mortality_grid, [r.rate for r in asmp.riders], sex_grid,
+        issue_age_grid, duration_grid,
     )
 
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
@@ -372,6 +377,7 @@ def value(
     args = (
         mortality_grid,
         issue_index,
+        mps.sex,
         mps.term_months,
         mps.count,
         lapse_by_year,
@@ -381,7 +387,8 @@ def value(
         cov_amount,
         mps.cov_offset,
         cov_rates,
-        COVERAGE_RISK,
+        cov_risk,
+        cov_is_diagnosis,
         mps.maturity_benefit,
         mps.annuity_payment,
         asmp.expense_acquisition,

@@ -17,7 +17,7 @@ MORTALITY_CV = 0.10
 
 def _assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, Q),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, Q),
         lapse_monthly=lambda duration: np.full(duration.shape, LAPSE),
         discount_annual=0.03,
         expense_acquisition=0.0,

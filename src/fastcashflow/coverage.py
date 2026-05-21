@@ -1,64 +1,78 @@
-"""Coverage kinds -- the benefit-trigger registry.
+"""Coverage codes -- the benefit-trigger registry.
 
 A policy's benefits are a variable-length list of *coverages* rather than a
-fixed set of fields. Each coverage has a *kind*; the kind selects the rate
-that drives it and the risk class it belongs to. New benefit types are added
-here as kinds, with no change to the projection kernels -- they loop the
-coverage list generically.
+fixed set of fields. Each coverage carries a numeric *code* -- a factorised
+rider identifier (특약코드). Code 0 is reserved for the main-contract death
+benefit, driven by the base mortality so its claim rate matches the in-force
+decrement exactly. Codes 1.. are the rate-driven riders the assumptions
+register (see :class:`fastcashflow.assumptions.RiderRate`), in registration
+order.
 
-The integer value of a kind indexes the first axis of the rate grid the
-kernels read (see :func:`coverage_rates`), so the values are stable.
+The kernels loop the coverage list generically. A coverage's mechanic is
+given by two per-code arrays -- ``cov_is_diagnosis`` (a single-payment
+benefit whose claims run off a depleting pool) and ``cov_risk`` (the risk
+class the Risk Adjustment prices) -- built by :func:`coverage_arrays`, so a
+new rider needs no kernel change.
 """
 from __future__ import annotations
 
 import numpy as np
 
-from fastcashflow._typing import IntArray
+# Code 0 -- the main-contract death coverage, driven by the base mortality.
+DEATH = 0
 
-# Coverage kinds. The integer is the rate-grid index.
-DEATH = 0        # lump sum on death; driven by the mortality rate
-INPATIENT = 1    # inpatient (hospitalisation) benefit; driven by its rate
-SURGERY = 2      # surgery benefit; driven by the surgery rate
-OUTPATIENT = 3   # outpatient benefit; driven by the outpatient-visit rate
-DIAGNOSIS = 4    # lump sum on first diagnosis; the benefit is then used up
+# Coverage mechanic types. The riders sheet tags each 특약코드 with one of
+# these; the type fixes how the engine drives the coverage.
+TYPE_DEATH_MAIN = "death_main"  # main-contract death; base mortality; code 0
+TYPE_DEATH = "death"            # death-type rider; own rate; non-decrementing
+TYPE_MORBIDITY = "morbidity"    # recurring health claim (inpatient, surgery..)
+TYPE_DIAGNOSIS = "diagnosis"    # single-payment benefit; depleting pool
+TYPE_ANNUITY = "annuity"        # monthly survival income
+TYPE_MATURITY = "maturity"      # survival benefit paid at the end of the term
 
-# The morbidity kinds, in rate-grid order (DEATH, kind 0, is the mortality
-# kind). None of them decrement -- a health claim leaves the policy in
-# force. Inpatient / surgery / outpatient are multiple-occurrence: the policy
-# may claim them repeatedly. A diagnosis benefit is single-payment -- paid on
-# first diagnosis and then used up -- so its claims run off a shrinking "not
-# yet diagnosed" pool. Kinds at or above FIRST_DIAGNOSIS_KIND are that type.
-MORBIDITY_KINDS = (INPATIENT, SURGERY, OUTPATIENT, DIAGNOSIS)
-N_KINDS = 1 + len(MORBIDITY_KINDS)
-FIRST_DIAGNOSIS_KIND = DIAGNOSIS
+# Rate-driven types carry a sex x age rate table and go in the coverage list.
+# Survival types (annuity, maturity) are paid to the in-force survivors and
+# need no rate; they are summed into per-policy amounts, not the rate grid.
+RATE_DRIVEN_TYPES = (TYPE_DEATH, TYPE_MORBIDITY, TYPE_DIAGNOSIS)
+SURVIVAL_TYPES = (TYPE_ANNUITY, TYPE_MATURITY)
+COVERAGE_TYPES = (TYPE_DEATH_MAIN,) + RATE_DRIVEN_TYPES + SURVIVAL_TYPES
 
-# Risk class of a coverage's claims, indexed by kind: 0 mortality, 1 morbidity.
-# The Risk Adjustment prices the two with separate coefficients of variation.
+# Risk class of a coverage's claims: 0 mortality, 1 morbidity. The Risk
+# Adjustment prices the two with separate coefficients of variation.
 RISK_MORTALITY = 0
 RISK_MORBIDITY = 1
-COVERAGE_RISK: IntArray = np.array(
-    [RISK_MORTALITY, RISK_MORBIDITY, RISK_MORBIDITY, RISK_MORBIDITY,
-     RISK_MORBIDITY], np.int64
-)
 
 
-def coverage_rates(mortality, morbidity_rates, issue_age_grid, duration_grid):
-    """Stack the per-kind rate grids into one ``(N_KINDS, ..., n_year)`` array.
+def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
+                   duration_grid):
+    """Stack the per-code rate grids into one ``(n_codes, ..., n_year)`` array.
 
-    A kernel reads a coverage's rate as ``cov_rates[kind, age_or_mp, year]``,
-    so the kinds share one 3-D grid whose first axis is the kind. Kind 0
-    (death) is the mortality grid; the morbidity kinds are evaluated from
-    ``morbidity_rates`` -- a ``{kind: callable}`` map, each callable having
-    the same signature as ``Assumptions.mortality_monthly``. A kind absent
-    from the map gets a zero grid; a portfolio must not then use it.
+    A kernel reads a coverage's rate as ``cov_rates[code, age_or_mp, year]``,
+    so the codes share one grid whose first axis is the code. Slab 0 is the
+    base ``mortality`` grid (the main-contract death coverage); slabs 1.. are
+    the rate-driven riders, evaluated from ``rate_fns`` -- an ordered list of
+    callables, each with the ``Assumptions.mortality_monthly`` signature.
     """
     slabs = [mortality]
-    for kind in MORBIDITY_KINDS:
-        rate = None if morbidity_rates is None else morbidity_rates.get(kind)
-        if rate is None:
-            slabs.append(np.zeros_like(mortality))
-        else:
-            slabs.append(np.ascontiguousarray(
-                rate(issue_age_grid, duration_grid), dtype=np.float64
-            ))
+    for rate in rate_fns:
+        slabs.append(np.ascontiguousarray(
+            rate(sex_grid, issue_age_grid, duration_grid), dtype=np.float64
+        ))
     return np.ascontiguousarray(np.stack(slabs))
+
+
+def coverage_arrays(riders):
+    """Per-code kernel flag arrays for the coverage list.
+
+    ``riders`` is the ordered rate-driven riders (codes 1..n); code 0, the
+    main-contract death coverage, is prepended -- a recurring claim of
+    mortality risk. Returns ``(cov_is_diagnosis, cov_risk)``, each indexed
+    by coverage code.
+    """
+    cov_is_diagnosis = np.array(
+        [False] + [r.is_diagnosis for r in riders], np.bool_
+    )
+    cov_risk = np.array(
+        [RISK_MORTALITY] + [r.risk for r in riders], np.int64
+    )
+    return cov_is_diagnosis, cov_risk

@@ -6,7 +6,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow.coverage import DEATH
+from fastcashflow.coverage import (
+    DEATH, TYPE_ANNUITY, TYPE_DEATH_MAIN, TYPE_MATURITY,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +25,8 @@ class ModelPointSet:
     :mod:`fastcashflow.coverage`), held in CSR (Compressed Sparse Row) form
     so the kernels loop them generically -- new benefit types add no fields:
 
-    * ``cov_kind[k]``   -- the coverage kind (``DEATH``, ``INPATIENT``, ...).
+    * ``cov_kind[k]``   -- the coverage code (0 = main-contract death, 1..
+      the rate-driven riders the assumptions register).
     * ``cov_amount[k]`` -- the benefit amount of coverage ``k``.
     * ``cov_offset``    -- ``(n_mp+1,)``; policy ``mp``'s coverages are the
       slice ``[cov_offset[mp] : cov_offset[mp+1]]``.
@@ -66,6 +69,7 @@ class ModelPointSet:
     cov_reduction_end: IntArray | None = None    # CSR: reduced-benefit end, months
     cov_reduction_factor: FloatArray | None = None  # CSR: reduced-benefit factor
     count: FloatArray | None = None              # policies the row stands for
+    sex: IntArray | None = None                  # 0 = male, 1 = female
 
     def __post_init__(self) -> None:
         # Normalise the required fields to numpy arrays of the right dtype.
@@ -86,6 +90,10 @@ class ModelPointSet:
         cnt = self.count
         cnt = np.ones(n_mp) if cnt is None else np.asarray(cnt, np.float64)
         object.__setattr__(self, "count", cnt)
+        # sex defaults to 0 (male) for every model point.
+        sex = self.sex
+        sex = np.zeros(n_mp, np.int64) if sex is None else np.asarray(sex, np.int64)
+        object.__setattr__(self, "sex", sex)
         # Coverage CSR: explicit arrays win; otherwise build from the
         # death_benefit shortcut and/or the general benefits map.
         if self.cov_kind is not None:
@@ -144,6 +152,7 @@ class ModelPointSet:
         single_premium: float = 0.0,
         account_value: float = 0.0,
         count: float = 1.0,
+        sex: int = 0,
         benefits: dict[int, float] | None = None,
     ) -> ModelPointSet:
         """Build a single-model-point set -- a convenience for hand checks."""
@@ -157,11 +166,95 @@ class ModelPointSet:
             single_premium=np.array([single_premium]),
             account_value=np.array([account_value]),
             count=np.array([count]),
+            sex=np.array([sex]),
             benefits=(
                 None if benefits is None
                 else {k: np.array([v]) for k, v in benefits.items()}
             ),
         )
+
+    def to_wide(self, assumptions):
+        """Convert to a wide polars DataFrame -- one row per policy.
+
+        Every benefit becomes a column: ``death_benefit``,
+        ``maturity_benefit``, ``annuity_payment`` and a
+        ``<rider_code>_benefit`` column for each rate-driven rider in
+        ``assumptions``. The companion to ``read_model_points``'s wide form;
+        lossless only for a simple portfolio -- a wide table cannot carry
+        per-coverage waiting / reduction rules.
+        """
+        import polars as pl
+
+        mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.cov_offset))
+        cols: dict[str, np.ndarray] = {
+            "policy_id": np.arange(self.n_mp),
+            "issue_age": self.issue_age,
+            "sex": self.sex,
+            "term_months": self.term_months,
+            "count": self.count,
+            "monthly_premium": self.monthly_premium,
+            "single_premium": self.single_premium,
+            "death_benefit": self.death_benefit,
+            "maturity_benefit": self.maturity_benefit,
+            "annuity_payment": self.annuity_payment,
+        }
+        for i, rider in enumerate(assumptions.riders):
+            mask = self.cov_kind == i + 1
+            cols[f"{rider.code}_benefit"] = np.bincount(
+                mp_of_cov[mask], weights=self.cov_amount[mask],
+                minlength=self.n_mp,
+            )
+        return pl.DataFrame(cols)
+
+    def to_long(self, assumptions):
+        """Convert to a long-form ``(policies, coverages)`` polars pair.
+
+        ``policies`` is one row per policy (contract attributes);
+        ``coverages`` is one row per policy x coverage, carrying
+        ``rider_code`` and ``amount``. The companion to
+        ``read_model_points``'s long-form input.
+        """
+        import polars as pl
+
+        policies = pl.DataFrame({
+            "policy_id": np.arange(self.n_mp),
+            "issue_age": self.issue_age,
+            "sex": self.sex,
+            "term_months": self.term_months,
+            "monthly_premium": self.monthly_premium,
+            "single_premium": self.single_premium,
+            "count": self.count,
+        })
+        # CSR coverages -- code 0 is the main-contract death, 1.. the riders.
+        label = {0: _coverage_label(assumptions, TYPE_DEATH_MAIN, "death")}
+        for i, rider in enumerate(assumptions.riders):
+            label[i + 1] = rider.code
+        mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.cov_offset))
+        policy_id = [int(m) for m in mp_of_cov]
+        rider_code = [label[int(k)] for k in self.cov_kind]
+        amount = [float(a) for a in self.cov_amount]
+        # Survival benefits are scalar fields -- emit them as coverage rows.
+        for ctype, scalar in ((TYPE_ANNUITY, self.annuity_payment),
+                              (TYPE_MATURITY, self.maturity_benefit)):
+            code = _coverage_label(assumptions, ctype, ctype)
+            for mp in np.nonzero(scalar)[0]:
+                policy_id.append(int(mp))
+                rider_code.append(code)
+                amount.append(float(scalar[mp]))
+        coverages = pl.DataFrame({
+            "policy_id": policy_id, "rider_code": rider_code, "amount": amount,
+        })
+        return policies, coverages
+
+
+def _coverage_label(assumptions, ctype, default):
+    """The 특약코드 of the first coverage of type ``ctype`` in the
+    assumptions' riders master, or ``default`` if none is registered."""
+    registry = getattr(assumptions, "coverage_types", None) or {}
+    for code, t in registry.items():
+        if t == ctype:
+            return code
+    return default
 
 
 def _build_csr(

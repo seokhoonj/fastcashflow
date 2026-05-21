@@ -13,7 +13,7 @@ from fastcashflow import Assumptions, ModelPointSet, measure, value
 
 def test_value_matches_measure():
     """The fast fused path reproduces the detailed path's headline numbers."""
-    def mortality_monthly(issue_age, duration):
+    def mortality_monthly(sex, issue_age, duration):
         attained = issue_age + duration
         annual_q = 0.0008 * (1.0 + 0.05 * (attained - 30.0))
         return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)
@@ -48,7 +48,7 @@ def test_value_matches_measure():
 def test_value_onerous():
     """The fast path also flags onerous contracts -- CSM floored at 0."""
     asmp = Assumptions(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.05),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.05),
         lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
         discount_annual=0.0,
         expense_acquisition=0.0,
@@ -70,7 +70,7 @@ def test_value_onerous():
 @pytest.mark.filterwarnings("ignore::numba.core.errors.NumbaPerformanceWarning")
 def test_value_gpu_matches_cpu():
     """The GPU backend reproduces the CPU backend exactly."""
-    def mortality_monthly(issue_age, duration):
+    def mortality_monthly(sex, issue_age, duration):
         attained = issue_age + duration
         annual_q = 0.0008 * (1.0 + 0.05 * (attained - 30.0))
         return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)

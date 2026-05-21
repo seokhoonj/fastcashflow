@@ -23,7 +23,7 @@ from fastcashflow import (
 
 def _assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.001),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
         lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
@@ -174,7 +174,7 @@ def _revised(mps: ModelPointSet):
     """A measurement of the same book under markedly higher mortality."""
     worse = replace(
         _assumptions(),
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.003),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.003),
     )
     return measure(mps, worse)
 
@@ -455,7 +455,7 @@ def test_reconcile_paa():
 
 def _vfa_assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.002),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.002),
         lapse_monthly=lambda duration: np.full(duration.shape, 0.004),
         discount_annual=0.03,
         expense_acquisition=0.0,

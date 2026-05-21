@@ -1,6 +1,5 @@
 """Smoke tests for the plotting helpers (the viz extra)."""
 from dataclasses import replace
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -13,19 +12,11 @@ from matplotlib.axes import Axes
 
 import fastcashflow as fcf
 
-_SAMPLE = Path(__file__).resolve().parent.parent / "examples" / "sample_basis.xlsx"
-
-
 @pytest.fixture(scope="module")
 def book():
     """A small measured book: model points, assumptions, measurement."""
-    asmp = fcf.read_assumptions(_SAMPLE)
-    mps = fcf.ModelPointSet(
-        issue_age=np.array([40, 45]),
-        death_benefit=np.array([1e8, 8e7]),
-        monthly_premium=np.array([25_000.0, 22_000.0]),
-        term_months=np.array([120, 120]),
-    )
+    asmp = fcf.load_sample_assumptions()
+    mps = fcf.load_sample_model_points()
     return mps, asmp, fcf.measure(mps, asmp)
 
 

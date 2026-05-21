@@ -27,7 +27,7 @@ def _portfolio(n: int = 400) -> ModelPointSet:
 
 def _assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.001),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
         lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
@@ -186,3 +186,28 @@ def test_load_sample_data_runs():
     val = value(mps, asmp)
     assert val.bel.shape == (mps.n_mp,)
     assert val.csm.shape == (mps.n_mp,)
+
+
+def test_to_long_round_trips(tmp_path):
+    """ModelPointSet.to_long written out and re-read reproduces the valuation."""
+    asmp = load_sample_assumptions()
+    mps = load_sample_model_points()
+    policies, coverages = mps.to_long(asmp)
+    policies.write_csv(tmp_path / "pol.csv")
+    coverages.write_csv(tmp_path / "cov.csv")
+    back = read_model_points(tmp_path / "pol.csv", asmp,
+                             coverages=tmp_path / "cov.csv")
+    a, b = value(mps, asmp), value(back, asmp)
+    assert np.allclose(a.bel, b.bel)
+    assert np.allclose(a.csm, b.csm)
+
+
+def test_to_wide_round_trips(tmp_path):
+    """ModelPointSet.to_wide written out and re-read reproduces the valuation."""
+    asmp = load_sample_assumptions()
+    mps = load_sample_model_points()
+    mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")
+    back = read_model_points(tmp_path / "wide.csv", asmp)
+    a, b = value(mps, asmp), value(back, asmp)
+    assert np.allclose(a.bel, b.bel)
+    assert np.allclose(a.csm, b.csm)

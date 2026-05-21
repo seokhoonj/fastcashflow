@@ -14,7 +14,7 @@ from numba import cuda
 from fastcashflow import Assumptions, ModelPointSet, value
 
 
-def mortality_monthly(issue_age: np.ndarray, duration: np.ndarray) -> np.ndarray:
+def mortality_monthly(sex: np.ndarray, issue_age: np.ndarray, duration: np.ndarray) -> np.ndarray:
     attained = issue_age + duration
     annual_q = 0.0005 * (1.0 + 0.04 * (attained - 30.0))
     return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)

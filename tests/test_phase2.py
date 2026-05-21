@@ -11,7 +11,7 @@ from fastcashflow import Assumptions, ModelPointSet, measure
 
 def _flat_assumptions(**overrides) -> Assumptions:
     base = dict(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.01),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
         lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
         discount_annual=0.06,
         expense_acquisition=0.0,
@@ -59,7 +59,7 @@ def test_mid_month_discounting():
 def test_csm_movement_identity():
     """The CSM roll-forward decomposes exactly into accretion and release."""
     asmp = _flat_assumptions(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.001),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
         mortality_cv=0.05,
     )
     rng = np.random.default_rng(2)

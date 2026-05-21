@@ -16,7 +16,7 @@ Z_75 = 0.6744897501960817
 def _assumptions(**overrides) -> Assumptions:
     """Build an Assumptions with simple defaults, overridable per test."""
     base = dict(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.01),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
         lapse_monthly=lambda duration: np.full(duration.shape, 0.02),
         discount_annual=0.0,
         expense_acquisition=0.0,
@@ -83,7 +83,7 @@ def test_onerous_contract():
             monthly_premium=100.0, term_months=12,
         ),
         _assumptions(
-            mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.05)
+            mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.05)
         ),
     )
     assert res.csm[0, 0] == 0.0
@@ -98,7 +98,7 @@ def test_csm_fully_releases():
             monthly_premium=80_000.0, term_months=60,
         ),
         _assumptions(
-            mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.001),
+            mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
             lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
             discount_annual=0.03,
         ),
@@ -118,7 +118,7 @@ def test_count_scales_linearly():
     kw = dict(issue_age=40, death_benefit=1_000_000.0, monthly_premium=12_000.0,
               term_months=24, single_premium=5_000.0)
     asmp = _assumptions(
-        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.001),
+        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
         discount_annual=0.03, expense_acquisition=300.0,
         expense_maintenance_annual=120.0,
     )
