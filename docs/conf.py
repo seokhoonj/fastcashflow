@@ -15,6 +15,7 @@ version = release
 
 extensions = [
     "myst_parser",
+    "sphinx_design",
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
@@ -33,5 +34,19 @@ myst_enable_extensions = ["colon_fence", "deflist"]
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
-html_theme = "furo"
+html_theme = "pydata_sphinx_theme"
 html_title = "fastcashflow"
+html_static_path = ["_static"]
+html_css_files = ["custom.css"]
+
+html_theme_options = {
+    "show_prev_next": False,
+    "navbar_align": "content",
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/seokhoonj/fastcashflow",
+            "icon": "fa-brands fa-github",
+        },
+    ],
+}

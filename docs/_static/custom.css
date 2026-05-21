@@ -1,0 +1,22 @@
+/* fastcashflow documentation -- brand colours and landing polish. */
+
+html[data-theme="light"] {
+    --pst-color-primary: #3b6ea5;
+    --pst-color-secondary: #2a9d8f;
+    --pst-color-link: #3b6ea5;
+    --pst-color-link-hover: #2a9d8f;
+}
+
+html[data-theme="dark"] {
+    --pst-color-primary: #6b9bd1;
+    --pst-color-secondary: #4cb3a5;
+    --pst-color-link: #6b9bd1;
+    --pst-color-link-hover: #4cb3a5;
+}
+
+/* the home-page hero image */
+img.hero {
+    display: block;
+    margin: 1.5rem auto 2.25rem auto;
+    border-radius: 8px;
+}
