@@ -6,7 +6,7 @@ This is the engine's correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, measure
+from fastcashflow import Assumptions, ModelPointSet, measure, value
 
 # Standard-normal 75th percentile -- a known mathematical constant, used so
 # the RA check does not depend on the engine's own quantile code.
@@ -105,3 +105,36 @@ def test_csm_fully_releases():
     )
     assert res.csm[0, 0] > 0.0
     assert np.isclose(res.csm[0, -1], 0.0, atol=1e-6)
+
+
+def test_count_scales_linearly():
+    """count=N scales the whole valuation by N -- in both measure() and value().
+
+    The projection is linear in the policy: a model point standing for N
+    policies gives exactly N times the BEL, RA and CSM of one policy. The
+    non-zero acquisition, maintenance and single premium exercise the flat
+    cash flow terms that do not ride the in-force amount.
+    """
+    kw = dict(issue_age=40, death_benefit=1_000_000.0, monthly_premium=12_000.0,
+              term_months=24, single_premium=5_000.0)
+    asmp = _assumptions(
+        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.001),
+        discount_annual=0.03, expense_acquisition=300.0,
+        expense_maintenance_annual=120.0,
+    )
+    n = 1000.0
+
+    one = measure(ModelPointSet.single(**kw), asmp)
+    many = measure(ModelPointSet.single(**kw, count=n), asmp)
+    assert many.csm[0, 0] > 0.0          # profitable contract -- the CSM scales
+    for field in ("bel", "ra", "csm"):
+        assert np.isclose(getattr(many, field)[0, 0],
+                          n * getattr(one, field)[0, 0])
+    assert np.isclose(many.cashflows.inforce[0, 0], n)
+
+    # the fused fast path scales identically
+    v_one = value(ModelPointSet.single(**kw), asmp)
+    v_many = value(ModelPointSet.single(**kw, count=n), asmp)
+    for field in ("bel", "ra", "csm"):
+        assert np.isclose(getattr(v_many, field)[0],
+                          n * getattr(v_one, field)[0])

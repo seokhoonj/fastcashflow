@@ -14,8 +14,10 @@ class ModelPointSet:
     """Columnar model point data.
 
     Every scalar field is a numpy array of length ``n_mp``; the model-point
-    axis is the vectorised dimension throughout the engine. All monetary
-    amounts are per single policy.
+    axis is the vectorised dimension throughout the engine. Monetary amounts
+    are stated per single policy; ``count`` is how many policies the model
+    point stands for -- it defaults to one (one row per policy: seriatim),
+    and a larger value scales the policy linearly through the projection.
 
     A policy's claim benefits are a variable-length list of *coverages* (see
     :mod:`fastcashflow.coverage`), held in CSR (Compressed Sparse Row) form
@@ -54,6 +56,7 @@ class ModelPointSet:
     cov_kind: IntArray | None = None             # CSR: coverage kind
     cov_amount: FloatArray | None = None         # CSR: coverage amount
     cov_offset: IntArray | None = None           # CSR: per-policy slice bounds
+    count: FloatArray | None = None              # policies the row stands for
 
     def __post_init__(self) -> None:
         # Normalise the required fields to numpy arrays of the right dtype.
@@ -70,6 +73,10 @@ class ModelPointSet:
             value = getattr(self, name)
             value = np.zeros(n_mp) if value is None else np.asarray(value, np.float64)
             object.__setattr__(self, name, value)
+        # count defaults to one policy per model point (seriatim).
+        cnt = self.count
+        cnt = np.ones(n_mp) if cnt is None else np.asarray(cnt, np.float64)
+        object.__setattr__(self, "count", cnt)
         # Coverage CSR: explicit arrays win; otherwise build from the
         # death_benefit shortcut and/or the general benefits map.
         if self.cov_kind is not None:
@@ -111,9 +118,10 @@ class ModelPointSet:
         annuity_payment: float = 0.0,
         single_premium: float = 0.0,
         account_value: float = 0.0,
+        count: float = 1.0,
         benefits: dict[int, float] | None = None,
     ) -> ModelPointSet:
-        """Build a one-policy set -- a convenience for hand checks."""
+        """Build a single-model-point set -- a convenience for hand checks."""
         return cls(
             issue_age=np.array([issue_age]),
             death_benefit=np.array([death_benefit]),
@@ -123,6 +131,7 @@ class ModelPointSet:
             annuity_payment=np.array([annuity_payment]),
             single_premium=np.array([single_premium]),
             account_value=np.array([account_value]),
+            count=np.array([count]),
             benefits=(
                 None if benefits is None
                 else {k: np.array([v]) for k, v in benefits.items()}

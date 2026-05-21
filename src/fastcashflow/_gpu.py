@@ -16,11 +16,11 @@ from fastcashflow.coverage import FIRST_DIAGNOSIS_KIND
 
 
 @cuda.jit
-def _value_cuda_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
-                       monthly_premium, single_premium, cov_kind, cov_amount,
-                       cov_offset, cov_rates, cov_risk, maturity_benefit,
-                       annuity_payment, expense_acquisition, maint_monthly,
-                       inflation, discount_start, discount_mid,
+def _value_cuda_kernel(mortality_grid, issue_index, term_months, count,
+                       lapse_by_year, monthly_premium, single_premium,
+                       cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
+                       maturity_benefit, annuity_payment, expense_acquisition,
+                       maint_monthly, inflation, discount_start, discount_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
                        bel, ra, csm, loss_component):
     """One CUDA thread per model point; the per-month loop runs in the thread."""
@@ -30,11 +30,12 @@ def _value_cuda_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
 
     term = term_months[mp]
     ridx = issue_index[mp]
+    cnt = count[mp]
     premium = monthly_premium[mp]
     annuity = annuity_payment[mp]
     c_start = cov_offset[mp]
     c_end = cov_offset[mp + 1]
-    inforce = 1.0
+    inforce = cnt
     pc = 0.0
     pcm = 0.0
     pp = 0.0
@@ -61,12 +62,12 @@ def _value_cuda_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
         q = mortality_grid[ridx, year]
         ds = discount_start[t]
         dm = discount_mid[t]
-        single = single_premium[mp] if t == 0 else 0.0
+        single = cnt * single_premium[mp] if t == 0 else 0.0
         pp += (inforce * premium + single) * ds
         pc += inforce * claim_rate * dm
         pcm += inforce * morb_rate * dm
         pa += inforce * annuity * ds
-        acquisition = expense_acquisition if t == 0 else 0.0
+        acquisition = cnt * expense_acquisition if t == 0 else 0.0
         pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
         inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
     pm = inforce * maturity_benefit[mp] * discount_start[term]
@@ -76,7 +77,7 @@ def _value_cuda_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
         if kind < FIRST_DIAGNOSIS_KIND:
             continue
         benefit = cov_amount[k]
-        healthy = 1.0
+        healthy = cnt
         d_year = -1
         d_rate = 0.0
         surv = 0.0
@@ -99,7 +100,7 @@ def _value_cuda_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
     loss_component[mp] = max(0.0, fcf)
 
 
-def value_gpu(mortality_grid, issue_index, term_months, lapse_by_year,
+def value_gpu(mortality_grid, issue_index, term_months, count, lapse_by_year,
               monthly_premium, single_premium, cov_kind, cov_amount,
               cov_offset, cov_rates, cov_risk, maturity_benefit,
               annuity_payment, expense_acquisition, maint_monthly, inflation,
@@ -119,6 +120,7 @@ def value_gpu(mortality_grid, issue_index, term_months, lapse_by_year,
     d_mortality = cuda.to_device(mortality_grid)
     d_issue = cuda.to_device(issue_index)
     d_term = cuda.to_device(term_months)
+    d_count = cuda.to_device(count)
     d_lapse = cuda.to_device(lapse_by_year)
     d_premium = cuda.to_device(monthly_premium)
     d_single = cuda.to_device(single_premium)
@@ -140,7 +142,7 @@ def value_gpu(mortality_grid, issue_index, term_months, lapse_by_year,
     threads = 256
     blocks = (n_mp + threads - 1) // threads
     _value_cuda_kernel[blocks, threads](
-        d_mortality, d_issue, d_term, d_lapse, d_premium, d_single,
+        d_mortality, d_issue, d_term, d_count, d_lapse, d_premium, d_single,
         d_cov_kind, d_cov_amount, d_cov_offset, d_cov_rates, d_cov_risk,
         d_maturity, d_annuity, expense_acquisition, maint_monthly,
         d_inflation, d_discount_start, d_discount_mid,

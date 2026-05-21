@@ -148,12 +148,12 @@ class Valuation:
 
 
 @njit(parallel=True, cache=True)
-def _value_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
-                  monthly_premium, single_premium, cov_kind, cov_amount,
-                  cov_offset, cov_rates, cov_risk, maturity_benefit,
-                  annuity_payment, expense_acquisition, maint_monthly,
-                  inflation, discount_start, discount_mid, mortality_factor,
-                  morbidity_factor, longevity_factor):
+def _value_kernel(mortality_grid, issue_index, term_months, count,
+                  lapse_by_year, monthly_premium, single_premium, cov_kind,
+                  cov_amount, cov_offset, cov_rates, cov_risk,
+                  maturity_benefit, annuity_payment, expense_acquisition,
+                  maint_monthly, inflation, discount_start, discount_mid,
+                  mortality_factor, morbidity_factor, longevity_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
     Per model point the in-force amount is carried as a scalar through the
@@ -176,11 +176,12 @@ def _value_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
     for mp in prange(n_mp):
         term = term_months[mp]
         ridx = issue_index[mp]
+        cnt = count[mp]
         premium = monthly_premium[mp]
         annuity = annuity_payment[mp]
         c_start = cov_offset[mp]
         c_end = cov_offset[mp + 1]
-        inforce = 1.0
+        inforce = cnt
         pc = 0.0          # PV of death claims (mortality risk)
         pcm = 0.0         # PV of health claims (morbidity risk)
         pp = 0.0
@@ -209,12 +210,12 @@ def _value_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
             q = mortality_grid[ridx, year]
             ds = discount_start[t]
             dm = discount_mid[t]
-            single = single_premium[mp] if t == 0 else 0.0
+            single = cnt * single_premium[mp] if t == 0 else 0.0
             pp += (inforce * premium + single) * ds
             pc += inforce * claim_rate * dm
             pcm += inforce * morb_rate * dm
             pa += inforce * annuity * ds
-            acquisition = expense_acquisition if t == 0 else 0.0
+            acquisition = cnt * expense_acquisition if t == 0 else 0.0
             pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
             inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
         pm = inforce * maturity_benefit[mp] * discount_start[term]
@@ -226,7 +227,7 @@ def _value_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
             if kind < FIRST_DIAGNOSIS_KIND:
                 continue
             benefit = cov_amount[k]
-            healthy = 1.0       # in force and not yet diagnosed
+            healthy = cnt       # in force and not yet diagnosed
             d_year = -1
             d_rate = 0.0
             surv = 0.0
@@ -335,6 +336,7 @@ def value(
         mortality_grid,
         issue_index,
         mps.term_months,
+        mps.count,
         lapse_by_year,
         mps.monthly_premium,
         mps.single_premium,

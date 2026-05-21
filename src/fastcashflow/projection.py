@@ -14,7 +14,7 @@ part of a GMM engine, so it is stated once here and never re-decided.
 
 Timing convention (monthly steps, month ``t`` spans ``[t, t+1)``):
 
-    inforce[t]  : policies in force at the START of month t (per policy)
+    inforce[t]  : policies in force at the START of month t
     premium     : charged at the start of month t, on inforce[t]
                   (the single premium, if any, is added at t = 0)
     annuity     : paid at the start of month t, on inforce[t]
@@ -68,10 +68,11 @@ class Cashflows:
 
 
 @njit(parallel=True, cache=True)
-def _project_kernel(mortality, term_months, lapse_by_year, monthly_premium,
-                    single_premium, cov_kind, cov_amount, cov_offset, cov_rates,
-                    cov_risk, maturity_benefit, annuity_payment,
-                    expense_acquisition, maint_monthly, inflation, n_time):
+def _project_kernel(mortality, term_months, count, lapse_by_year,
+                    monthly_premium, single_premium, cov_kind, cov_amount,
+                    cov_offset, cov_rates, cov_risk, maturity_benefit,
+                    annuity_payment, expense_acquisition, maint_monthly,
+                    inflation, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -98,9 +99,10 @@ def _project_kernel(mortality, term_months, lapse_by_year, monthly_premium,
 
     for mp in prange(n_mp):
         term = term_months[mp]
+        cnt = count[mp]
         c_start = cov_offset[mp]
         c_end = cov_offset[mp + 1]
-        inforce[mp, 0] = 1.0
+        inforce[mp, 0] = cnt
         last_year = -1
         claim_rate = 0.0      # aggregate mortality claim per unit in-force
         morb_rate = 0.0       # aggregate morbidity claim per unit in-force
@@ -122,12 +124,12 @@ def _project_kernel(mortality, term_months, lapse_by_year, monthly_premium,
                 last_year = year
             q = mortality[mp, year]
             deaths[mp, t] = ift * q
-            single = single_premium[mp] if t == 0 else 0.0
+            single = cnt * single_premium[mp] if t == 0 else 0.0
             premium_cf[mp, t] = ift * monthly_premium[mp] + single
             claim_cf[mp, t] = ift * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = ift * annuity_payment[mp]
-            acquisition = expense_acquisition if t == 0 else 0.0
+            acquisition = cnt * expense_acquisition if t == 0 else 0.0
             expense_cf[mp, t] = acquisition + ift * maint_monthly * inflation[t]
             survivors = ift * (1.0 - q) * (1.0 - lapse_by_year[year])
             if t + 1 < term:
@@ -190,6 +192,7 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
      annuity_cf, maturity_cf) = _project_kernel(
         mortality,
         mps.term_months,
+        mps.count,
         lapse_by_year,
         mps.monthly_premium,
         mps.single_premium,
