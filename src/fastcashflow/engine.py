@@ -24,6 +24,7 @@ from fastcashflow.assumptions import Assumptions
 from fastcashflow.gmm import (
     _norm_ppf,
     _rollforward_kernel,
+    _settlement_lic,
     compute_csm,
     discount_factors,
     discount_factors_from_curve,
@@ -44,6 +45,10 @@ class Measurement:
     ``bel``, ``ra`` and ``csm`` are ``(n_mp, n_time+1)`` trajectories; column
     0 is the inception measurement. The CSM roll-forward decomposes as
     ``csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
+    ``lic`` is the liability for incurred claims -- zero unless a claims
+    settlement pattern is set. The BEL discounts claims at incurrence; the
+    settlement lag's effect on its present value is immaterial for the
+    long-duration business the GMM measures and is not reflected.
     """
 
     bel: FloatArray              # (n_mp, n_time+1) -- BEL trajectory
@@ -52,6 +57,7 @@ class Measurement:
     csm_accretion: FloatArray    # (n_mp, n_time)   -- CSM interest accreted each month
     csm_release: FloatArray      # (n_mp, n_time)   -- CSM released each month
     loss_component: FloatArray   # (n_mp,)          -- loss component at inception
+    lic: FloatArray              # (n_mp, n_time+1) -- liability for incurred claims
     cashflows: Cashflows
     discount_start: FloatArray   # (n_time,) -- start-of-month discount factors
     discount_mid: FloatArray     # (n_time,) -- mid-month discount factors
@@ -77,6 +83,12 @@ def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
 def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
     """Detailed GMM measurement: BEL, RA and CSM rolled forward over time."""
     proj = project_cashflows(mps, asmp)
+    if asmp.settlement_pattern is None:
+        lic = np.zeros((proj.claim_cf.shape[0], proj.n_time + 1))
+    else:
+        lic = _settlement_lic(
+            proj.claim_cf + proj.morbidity_cf, asmp.settlement_pattern
+        )
     discount_start, discount_mid = discount_factors(asmp, proj.n_time)
 
     bel, pv_claims, pv_morbidity, pv_survival = _rollforward_kernel(
@@ -110,6 +122,7 @@ def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
         csm_accretion=csm_accretion,
         csm_release=csm_release,
         loss_component=loss_component,
+        lic=lic,
         cashflows=proj,
         discount_start=discount_start,
         discount_mid=discount_mid,

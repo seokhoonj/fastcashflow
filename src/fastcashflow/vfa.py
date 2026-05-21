@@ -34,7 +34,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.gmm import _csm_kernel, _norm_ppf
+from fastcashflow.gmm import _csm_kernel, _norm_ppf, _settlement_lic
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.tvog import tvog_weights
@@ -67,6 +67,7 @@ class VFAMeasurement:
     variable_fee: FloatArray     # (n_mp,)          -- PV of the entity's fee
     loss_component: FloatArray   # (n_mp,)          -- onerous loss at inception
     time_value: FloatArray       # (n_mp,)          -- guarantee TVOG at inception
+    lic: FloatArray              # (n_mp, n_time+1) -- liability for incurred claims
     discount_start: FloatArray   # (n_time+1,)      -- start-of-month discount factors
     cashflows: Cashflows
 
@@ -120,6 +121,11 @@ def measure_vfa(
     benefit_cf = exits * av[:, :n_time]
     # Variable fee -- the entity's share, deducted from the grown account value.
     fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m) * f_m
+    # Liability for incurred claims -- exit benefits settled over the pattern.
+    if asmp.settlement_pattern is None:
+        lic = np.zeros((n_mp, n_time + 1))
+    else:
+        lic = _settlement_lic(benefit_cf, asmp.settlement_pattern)
 
     # Discount at the underlying-items return -- the VFA basis. Benefits are
     # discounted start-of-month, consistent with the account value, so a
@@ -184,6 +190,7 @@ def measure_vfa(
         variable_fee=variable_fee,
         loss_component=loss_component,
         time_value=time_value,
+        lic=lic,
         discount_start=disc_start,
         cashflows=proj,
     )

@@ -92,6 +92,7 @@ def group(measurement: Measurement, group_ids: FloatArray) -> Measurement:
         csm_accretion=csm_accretion,
         csm_release=csm_release,
         loss_component=loss_component,
+        lic=_sum_by_group(measurement.lic, inverse, n_groups),
         cashflows=grouped_cf,
         discount_start=measurement.discount_start,
         discount_mid=measurement.discount_mid,

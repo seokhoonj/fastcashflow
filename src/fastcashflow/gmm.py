@@ -55,6 +55,30 @@ def discount_factors_from_curve(
     return discount_start, discount_mid
 
 
+def _settlement_lic(
+    incurred: FloatArray, settlement_pattern: FloatArray
+) -> FloatArray:
+    """Liability for incurred claims over a claims settlement pattern.
+
+    ``incurred`` is the ``(n_mp, n_time)`` claims incurred each month;
+    ``settlement_pattern`` is the run-off pattern, summing to 1. Returns the
+    ``(n_mp, n_time+1)`` LIC trajectory -- claims build it up as incurred and
+    run it off as paid -- held undiscounted.
+    """
+    incurred = np.asarray(incurred, dtype=np.float64)
+    pattern = np.asarray(settlement_pattern, dtype=np.float64)
+    if not np.isclose(pattern.sum(), 1.0):
+        raise ValueError(f"settlement_pattern must sum to 1, got {pattern.sum()}")
+    n_mp, n_time = incurred.shape
+    paid = np.zeros_like(incurred)
+    for k, weight in enumerate(pattern):
+        if k < n_time:
+            paid[:, k:] += weight * incurred[:, :n_time - k]
+    lic = np.zeros((n_mp, n_time + 1))
+    lic[:, 1:] = np.cumsum(incurred - paid, axis=1)
+    return lic
+
+
 # Coefficients of Acklam's rational approximation of the standard-normal
 # inverse CDF -- the published constants of the algorithm.
 _ACKLAM_A = (-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,

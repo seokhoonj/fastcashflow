@@ -400,6 +400,25 @@ def test_paa_lic_builds_with_a_settlement_pattern():
     assert np.allclose(immediate.lic, 0.0)
 
 
+def test_gmm_lic_builds_with_a_settlement_pattern():
+    """A settlement pattern gives the GMM measurement a non-zero LIC."""
+    pattern = np.array([0.5, 0.3, 0.2])
+    lagged = measure(_portfolio(), replace(_assumptions(), settlement_pattern=pattern))
+    immediate = measure(_portfolio(), _assumptions())
+    assert np.any(lagged.lic > 0.0)
+    assert np.allclose(immediate.lic, 0.0)
+
+
+def test_vfa_lic_builds_with_a_settlement_pattern():
+    """A settlement pattern gives the VFA measurement a non-zero LIC."""
+    pattern = np.array([0.6, 0.4])
+    lagged = measure_vfa(_vfa_contract(),
+                         replace(_vfa_assumptions(), settlement_pattern=pattern))
+    immediate = measure_vfa(_vfa_contract(), _vfa_assumptions())
+    assert np.any(lagged.lic > 0.0)
+    assert np.allclose(immediate.lic, 0.0)
+
+
 def test_reconcile_paa():
     """The PAA reconciliation aggregates the three components and renders."""
     asmp = replace(_assumptions(), settlement_pattern=np.array([0.6, 0.4]))

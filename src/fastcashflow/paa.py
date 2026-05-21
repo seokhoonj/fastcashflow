@@ -37,7 +37,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.gmm import _norm_ppf, _rollforward_kernel
+from fastcashflow.gmm import _norm_ppf, _rollforward_kernel, _settlement_lic
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.projection import Cashflows, project_cashflows
 
@@ -105,20 +105,9 @@ def measure_paa(
     # undiscounted, consistent with the LRC.
     incurred = proj.claim_cf + proj.morbidity_cf
     if asmp.settlement_pattern is None:
-        paid = incurred
+        lic = np.zeros((incurred.shape[0], incurred.shape[1] + 1))
     else:
-        pattern = np.asarray(asmp.settlement_pattern, dtype=np.float64)
-        if not np.isclose(pattern.sum(), 1.0):
-            raise ValueError(
-                f"settlement_pattern must sum to 1, got {pattern.sum()}"
-            )
-        paid = np.zeros_like(incurred)
-        horizon = incurred.shape[1]
-        for k, weight in enumerate(pattern):
-            if k < horizon:
-                paid[:, k:] += weight * incurred[:, :horizon - k]
-    lic = np.zeros((incurred.shape[0], incurred.shape[1] + 1))
-    lic[:, 1:] = np.cumsum(incurred - paid, axis=1)
+        lic = _settlement_lic(incurred, asmp.settlement_pattern)
 
     # Insurance revenue -- total premium allocated across the periods of
     # service (Sec. B126), so total revenue equals total premium.

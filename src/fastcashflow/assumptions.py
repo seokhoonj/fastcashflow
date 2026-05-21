@@ -74,8 +74,8 @@ class Assumptions:
     settlement_pattern :
         Claims run-off pattern -- the fractions of an incurred claim paid in
         the month it is incurred, the next month, and so on, summing to 1.
-        ``None`` settles every claim immediately. Used by the PAA to measure
-        the liability for incurred claims.
+        ``None`` settles every claim immediately. Used to measure the
+        liability for incurred claims (held undiscounted).
     morbidity_rates :
         ``{coverage kind: callable}`` map giving the monthly morbidity rate
         of each health coverage kind (see :mod:`fastcashflow.coverage`). Each
