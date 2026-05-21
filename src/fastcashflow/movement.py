@@ -86,16 +86,19 @@ class PeriodMovement:
 
 @dataclass(frozen=True, slots=True)
 class PAAPeriodMovement:
-    """One reporting period's movement of the PAA liability for remaining
-    coverage (LRC).
+    """One reporting period's movement of the PAA insurance contract liability.
 
     The period covers months ``[month_start, month_end)``. Every array is
-    ``(n_mp,)`` and the block reconciles exactly::
+    ``(n_mp,)``; the three components each reconcile exactly::
 
-        lrc_opening + premiums - revenue == lrc_closing
+        lrc_opening + premiums        - revenue     == lrc_closing
+        lc_opening                    - lc_release  == lc_closing
+        lic_opening + claims_incurred - claims_paid == lic_closing
 
-    Premiums received build the LRC up; insurance revenue earned releases
-    it. The LRC is held undiscounted, so there is no interest row.
+    The LRC (liability for remaining coverage) is built up by premiums and
+    released by insurance revenue; the loss component runs off over the
+    coverage; the LIC (liability for incurred claims) is built up as claims
+    are incurred and run off as they are paid. All are held undiscounted.
     """
 
     month_start: int
@@ -104,6 +107,13 @@ class PAAPeriodMovement:
     premiums: FloatArray
     revenue: FloatArray
     lrc_closing: FloatArray
+    lc_opening: FloatArray
+    lc_release: FloatArray
+    lc_closing: FloatArray
+    lic_opening: FloatArray
+    claims_incurred: FloatArray
+    claims_paid: FloatArray
+    lic_closing: FloatArray
 
 
 @dataclass(frozen=True, slots=True)
@@ -428,14 +438,23 @@ def _roll_forward_experience_chain(
 def _roll_forward_paa(
     measurement: PAAMeasurement, period_months: int
 ) -> list[PAAPeriodMovement]:
-    """Slice a PAA measurement into liability-for-remaining-coverage movements."""
+    """Slice a PAA measurement into LRC, loss-component and LIC movements."""
     lrc = measurement.lrc
+    lic = measurement.lic
     premium_cf = measurement.cashflows.premium_cf
     revenue = measurement.revenue
+    incurred = measurement.cashflows.claim_cf + measurement.cashflows.morbidity_cf
+    loss_component = measurement.loss_component
     n_time = lrc.shape[1] - 1
+    total_revenue = revenue.sum(axis=1)
+    safe_revenue = np.where(total_revenue > 0.0, total_revenue, 1.0)
     movements: list[PAAPeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
+        period_incurred = incurred[:, a:b].sum(axis=1)
+        # the loss component runs off in proportion to insurance revenue
+        lc_open = loss_component * revenue[:, a:].sum(axis=1) / safe_revenue
+        lc_close = loss_component * revenue[:, b:].sum(axis=1) / safe_revenue
         movements.append(PAAPeriodMovement(
             month_start=a,
             month_end=b,
@@ -443,6 +462,13 @@ def _roll_forward_paa(
             premiums=premium_cf[:, a:b].sum(axis=1),
             revenue=revenue[:, a:b].sum(axis=1),
             lrc_closing=lrc[:, b],
+            lc_opening=lc_open,
+            lc_release=lc_open - lc_close,
+            lc_closing=lc_close,
+            lic_opening=lic[:, a],
+            claims_incurred=period_incurred,
+            claims_paid=period_incurred - (lic[:, b] - lic[:, a]),
+            lic_closing=lic[:, b],
         ))
     return movements
 
@@ -538,10 +564,13 @@ class Reconciliation:
 
 @dataclass(frozen=True, slots=True)
 class PAAReconciliation:
-    """An IFRS 17 PAA reconciliation of the liability for remaining coverage.
+    """An IFRS 17 paragraph-100 reconciliation of the PAA liability.
 
-    Portfolio totals for one reporting period: ``revenue`` is shown negative
-    -- it releases the LRC -- so opening plus every row equals closing.
+    Portfolio totals for one reporting period, split into the three
+    components -- the liability for remaining coverage (excluding the loss
+    component), the loss component, and the liability for incurred claims.
+    Run-off rows are shown negative, so opening plus every row equals
+    closing.
     """
 
     month_start: int
@@ -550,19 +579,41 @@ class PAAReconciliation:
     premiums: float
     revenue: float
     lrc_closing: float
+    lc_opening: float
+    lc_release: float
+    lc_closing: float
+    lic_opening: float
+    claims_incurred: float
+    claims_paid: float
+    lic_closing: float
 
     def __str__(self) -> str:
-        rows = (
-            ("Opening LRC", self.lrc_opening),
-            ("Premiums received", self.premiums),
-            ("Insurance revenue", self.revenue),
-            ("Closing LRC", self.lrc_closing),
+        blocks = (
+            ("LRC (excluding loss component)", (
+                ("Opening", self.lrc_opening),
+                ("Premiums received", self.premiums),
+                ("Insurance revenue", self.revenue),
+                ("Closing", self.lrc_closing),
+            )),
+            ("Loss component", (
+                ("Opening", self.lc_opening),
+                ("Released", self.lc_release),
+                ("Closing", self.lc_closing),
+            )),
+            ("Liability for incurred claims", (
+                ("Opening", self.lic_opening),
+                ("Claims incurred", self.claims_incurred),
+                ("Claims paid", self.claims_paid),
+                ("Closing", self.lic_closing),
+            )),
         )
         lines = [
             f"PAA reconciliation -- months {self.month_start}-{self.month_end}"
         ]
-        for name, value in rows:
-            lines.append(f"{name:20}{value:>18,.0f}")
+        for title, rows in blocks:
+            lines.append(f"  {title}")
+            for name, value in rows:
+                lines.append(f"    {name:22}{value:>18,.0f}")
         return "\n".join(lines)
 
 
@@ -578,6 +629,13 @@ def _reconcile_paa(
             premiums=float(m.premiums.sum()),
             revenue=float(-m.revenue.sum()),
             lrc_closing=float(m.lrc_closing.sum()),
+            lc_opening=float(m.lc_opening.sum()),
+            lc_release=float(-m.lc_release.sum()),
+            lc_closing=float(m.lc_closing.sum()),
+            lic_opening=float(m.lic_opening.sum()),
+            claims_incurred=float(m.claims_incurred.sum()),
+            claims_paid=float(-m.claims_paid.sum()),
+            lic_closing=float(m.lic_closing.sum()),
         )
         for m in movements
     ]

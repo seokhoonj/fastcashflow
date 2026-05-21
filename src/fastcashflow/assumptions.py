@@ -71,6 +71,11 @@ class Assumptions:
         contract. The account is credited ``max(return, guarantee)`` each
         period, so the guarantee has a cost whenever the return falls short.
         ``None`` means no guarantee.
+    settlement_pattern :
+        Claims run-off pattern -- the fractions of an incurred claim paid in
+        the month it is incurred, the next month, and so on, summing to 1.
+        ``None`` settles every claim immediately. Used by the PAA to measure
+        the liability for incurred claims.
     morbidity_rates :
         ``{coverage kind: callable}`` map giving the monthly morbidity rate
         of each health coverage kind (see :mod:`fastcashflow.coverage`). Each
@@ -94,6 +99,7 @@ class Assumptions:
     investment_return: float = 0.0
     fund_fee: float = 0.0
     guaranteed_credit_rate: float | None = None
+    settlement_pattern: FloatArray | None = None
     morbidity_rates: dict[int, RateFn] | None = None
 
     @property

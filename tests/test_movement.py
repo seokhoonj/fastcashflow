@@ -379,13 +379,38 @@ def test_roll_forward_paa_rejects_gmm_options():
         roll_forward(paa, 12, revised=gmm, revised_at=24)
 
 
+def test_roll_forward_paa_reconciles_all_three_components():
+    """LRC, loss component and LIC each reconcile, with a settlement pattern."""
+    asmp = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
+    for p in roll_forward(measure_paa(_portfolio(), asmp), 12):
+        assert np.allclose(p.lrc_opening + p.premiums - p.revenue, p.lrc_closing)
+        assert np.allclose(p.lc_opening - p.lc_release, p.lc_closing)
+        assert np.allclose(
+            p.lic_opening + p.claims_incurred - p.claims_paid, p.lic_closing)
+
+
+def test_paa_lic_builds_with_a_settlement_pattern():
+    """A settlement pattern makes the LIC non-zero; immediate settlement zeroes it."""
+    lagged = measure_paa(
+        _portfolio(),
+        replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2])),
+    )
+    immediate = measure_paa(_portfolio(), _assumptions())
+    assert np.any(lagged.lic > 0.0)
+    assert np.allclose(immediate.lic, 0.0)
+
+
 def test_reconcile_paa():
-    """The PAA reconciliation aggregates, reconciles and renders."""
-    recons = reconcile(roll_forward(measure_paa(_portfolio(), _assumptions()), 12))
+    """The PAA reconciliation aggregates the three components and renders."""
+    asmp = replace(_assumptions(), settlement_pattern=np.array([0.6, 0.4]))
+    recons = reconcile(roll_forward(measure_paa(_portfolio(), asmp), 12))
     assert len(recons) == 10
     for r in recons:
         assert np.isclose(r.lrc_opening + r.premiums + r.revenue, r.lrc_closing)
-    assert "LRC" in str(recons[0])
+        assert np.isclose(
+            r.lic_opening + r.claims_incurred + r.claims_paid, r.lic_closing)
+    text = str(recons[0])
+    assert "LRC" in text and "incurred claims" in text
 
 
 def _vfa_assumptions() -> Assumptions:

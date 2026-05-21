@@ -24,8 +24,10 @@ Scope and simplifications, each with the standard's basis:
   ``max(0, fulfilment cash flows for remaining coverage - LRC)``, which at
   inception equals ``max(0, the GMM fulfilment cash flows)``. It is
   reported separately rather than folded into the LRC carrying amount.
-* Claims are taken to settle when incurred, so the Liability for Incurred
-  Claims (Sec. 59(b)) is zero -- a settlement lag is left for later.
+* The Liability for Incurred Claims (Sec. 59(b)) runs off a claims
+  settlement pattern; with no pattern set, claims settle when incurred and
+  it is zero. It is held undiscounted -- Sec. 59(b) permits this when
+  claims are paid within a year of being incurred.
 """
 from __future__ import annotations
 
@@ -48,13 +50,16 @@ class PAAMeasurement:
     ``lrc`` is an ``(n_mp, n_time+1)`` trajectory; column 0 is the inception
     LRC. ``revenue`` and ``service_expense`` are ``(n_mp, n_time)`` -- the
     insurance revenue earned and the insurance service expense incurred each
-    month. ``service_result`` (a property) is their difference.
+    month. ``service_result`` (a property) is their difference. ``lic`` is
+    the ``(n_mp, n_time+1)`` liability for incurred claims -- claims build it
+    up as they are incurred and run it off as they are paid.
     """
 
     lrc: FloatArray              # (n_mp, n_time+1) -- liability for remaining coverage
     revenue: FloatArray          # (n_mp, n_time)   -- insurance revenue earned
     service_expense: FloatArray  # (n_mp, n_time)   -- claims + expenses incurred
     loss_component: FloatArray   # (n_mp,)          -- onerous-contract loss at inception
+    lic: FloatArray              # (n_mp, n_time+1) -- liability for incurred claims
     cashflows: Cashflows
 
     @property
@@ -95,6 +100,26 @@ def measure_paa(
     premium_total = proj.premium_cf.sum(axis=1)          # (n_mp,)
     service_expense = proj.claim_cf + proj.morbidity_cf + proj.expense_cf
 
+    # Liability for incurred claims -- claims incurred build it up, claims
+    # paid (spread over the settlement pattern) run it off. Held
+    # undiscounted, consistent with the LRC.
+    incurred = proj.claim_cf + proj.morbidity_cf
+    if asmp.settlement_pattern is None:
+        paid = incurred
+    else:
+        pattern = np.asarray(asmp.settlement_pattern, dtype=np.float64)
+        if not np.isclose(pattern.sum(), 1.0):
+            raise ValueError(
+                f"settlement_pattern must sum to 1, got {pattern.sum()}"
+            )
+        paid = np.zeros_like(incurred)
+        horizon = incurred.shape[1]
+        for k, weight in enumerate(pattern):
+            if k < horizon:
+                paid[:, k:] += weight * incurred[:, :horizon - k]
+    lic = np.zeros((incurred.shape[0], incurred.shape[1] + 1))
+    lic[:, 1:] = np.cumsum(incurred - paid, axis=1)
+
     # Insurance revenue -- total premium allocated across the periods of
     # service (Sec. B126), so total revenue equals total premium.
     if revenue_basis == "time":
@@ -133,5 +158,6 @@ def measure_paa(
         revenue=revenue,
         service_expense=service_expense,
         loss_component=loss_component,
+        lic=lic,
         cashflows=proj,
     )
