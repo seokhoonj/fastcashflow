@@ -38,7 +38,6 @@ Free and open source, MPL-2.0 licensed.
 ```{toctree}
 :hidden:
 
-getting-started
-concepts
-api
+한국어 <ko/index>
+English <en/index>
 ```

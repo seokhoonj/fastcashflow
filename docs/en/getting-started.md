@@ -36,7 +36,7 @@ liability forward. One more line charts the result:
 fcf.plot_liability(m)
 ```
 
-```{image} images/first-valuation.png
+```{image} ../images/first-valuation.png
 :alt: BEL, RA and CSM trajectories over the contract's life
 :class: hero
 ```
