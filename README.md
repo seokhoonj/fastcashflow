@@ -56,8 +56,12 @@ Beyond the phase plan:
   each with separate mortality, morbidity and longevity components.
 - **Pricing** -- `solve_premium` solves the level premium for a break-even,
   margin or target-CSM objective.
+- **Stochastic** -- `value_stochastic` values a portfolio under many
+  economic scenarios and reports the liability distribution, for the
+  percentile-based risk and capital measures a single run cannot give.
 
-Further out: stochastic projection.
+Further out: scenario paths, and stochastic guarantees (the time value of
+options and guarantees for participating business).
 
 ## Quick start
 
@@ -151,6 +155,10 @@ File I/O scales on the same budget: a 10M-model-point parquet round-trip
 `value_file` streams a parquet file chunk by chunk -- 50M model points in
 under five seconds, peak memory one chunk -- so portfolio size is bounded
 by disk and time, not RAM.
+
+Stochastic valuation runs the same kernel once per scenario: 500 scenarios
+over 1,000,000 model points complete in about 35 seconds -- seriatim
+stochastic at a scale a slow engine cannot reach.
 
 ## GPU backend
 

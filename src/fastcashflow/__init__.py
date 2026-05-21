@@ -21,14 +21,15 @@ from fastcashflow.paa import PAAMeasurement, measure_paa
 from fastcashflow.pricing import solve_premium
 from fastcashflow.reinsurance import ReinsuranceMeasurement, measure_reinsurance
 from fastcashflow.report import Report, report
+from fastcashflow.stochastic import StochasticResult, value_stochastic
 from fastcashflow.vfa import VFAMeasurement, measure_vfa
 
 __version__ = "0.0.1"
 __all__ = [
-    "Assumptions", "ModelPointSet", "measure", "value",
+    "Assumptions", "ModelPointSet", "measure", "value", "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "report",
     "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
-    "ReinsuranceMeasurement", "Report",
+    "ReinsuranceMeasurement", "Report", "StochasticResult",
     "read_model_points", "write_valuation", "value_file", "solve_premium",
     "DEATH", "DIAGNOSIS", "INPATIENT", "OUTPATIENT", "SURGERY",
 ]
