@@ -1,0 +1,137 @@
+"""IFRS 17 Premium Allocation Approach (PAA) -- the simplified measurement.
+
+The PAA is the simplified model the standard permits for short-coverage
+contracts -- IFRS 17 paragraphs 53-59 (eligibility, Sec. 53; the liability
+for remaining coverage, Sec. 55; insurance revenue, Sec. B126). Instead of
+the GMM's BEL / RA / CSM, the Liability for Remaining Coverage (LRC) is
+measured like an unearned premium: premiums build it up, insurance revenue
+draws it down as coverage is provided. There is no CSM -- profit emerges
+as revenue is earned.
+
+Scope and simplifications, each with the standard's basis:
+
+* Acquisition cash flows are expensed as incurred -- the Sec. 59(a) option,
+  available when the coverage period is one year or less -- so they are not
+  held in the LRC.
+* The LRC is held undiscounted: Sec. 56 does not require a financing
+  adjustment when the time between providing service and the related
+  premium due date is one year or less.
+* Insurance revenue is allocated by ``revenue_basis``: Sec. B126(a)
+  (passage of time -- premium earned straight-line over the coverage
+  period, the default) or Sec. B126(b) (the expected timing of incurred
+  claims and expenses).
+* The onerous test (Sec. 57-58) is applied at inception. The loss is
+  ``max(0, fulfilment cash flows for remaining coverage - LRC)``, which at
+  inception equals ``max(0, the GMM fulfilment cash flows)``. It is
+  reported separately rather than folded into the LRC carrying amount.
+* Claims are taken to settle when incurred, so the Liability for Incurred
+  Claims (Sec. 59(b)) is zero -- a settlement lag is left for later.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+
+from fastcashflow._typing import FloatArray
+from fastcashflow.assumptions import Assumptions
+from fastcashflow.gmm import _norm_ppf, _rollforward_kernel
+from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.projection import Cashflows, project_cashflows
+
+
+@dataclass(frozen=True, slots=True)
+class PAAMeasurement:
+    """PAA measurement -- the Liability for Remaining Coverage and the
+    underwriting result released from it.
+
+    ``lrc`` is an ``(n_mp, n_time+1)`` trajectory; column 0 is the inception
+    LRC. ``revenue`` and ``service_expense`` are ``(n_mp, n_time)`` -- the
+    insurance revenue earned and the insurance service expense incurred each
+    month. ``service_result`` (a property) is their difference.
+    """
+
+    lrc: FloatArray              # (n_mp, n_time+1) -- liability for remaining coverage
+    revenue: FloatArray          # (n_mp, n_time)   -- insurance revenue earned
+    service_expense: FloatArray  # (n_mp, n_time)   -- claims + expenses incurred
+    loss_component: FloatArray   # (n_mp,)          -- onerous-contract loss at inception
+    cashflows: Cashflows
+
+    @property
+    def service_result(self) -> FloatArray:
+        """Insurance service result -- revenue less service expense."""
+        return self.revenue - self.service_expense
+
+
+def measure_paa(
+    mps: ModelPointSet,
+    asmp: Assumptions,
+    *,
+    revenue_basis: str = "time",
+) -> PAAMeasurement:
+    """Measure a portfolio under the Premium Allocation Approach.
+
+    The LRC rolls forward as ``LRC[t+1] = LRC[t] + premium[t] - revenue[t]``
+    from ``LRC[0] = 0`` -- premiums received build it up, insurance revenue
+    releases it. A single-premium contract gives the textbook pro-rata
+    unearned premium reserve.
+
+    ``revenue_basis`` selects the Sec. B126 allocation of insurance revenue,
+    which always sums to the total premium:
+
+    * ``"time"``   -- B126(a), passage of time: the premium earned
+      straight-line over the coverage period (the default).
+    * ``"claims"`` -- B126(b), the expected timing of incurred claims and
+      expenses; for when the release of risk differs significantly from the
+      passage of time. A policy with no service expense has no such pattern
+      and falls back to ``"time"``.
+
+    The onerous test reuses the GMM fulfilment cash flows: a contract whose
+    inception fulfilment cash flows are a net outflow carries that outflow
+    as a loss component.
+    """
+    proj = project_cashflows(mps, asmp)
+
+    premium_total = proj.premium_cf.sum(axis=1)          # (n_mp,)
+    service_expense = proj.claim_cf + proj.morbidity_cf + proj.expense_cf
+
+    # Insurance revenue -- total premium allocated across the periods of
+    # service (Sec. B126), so total revenue equals total premium.
+    if revenue_basis == "time":
+        # B126(a): premium earned straight-line over the coverage period.
+        in_coverage = np.arange(proj.n_time)[None, :] < mps.term_months[:, None]
+        weight = in_coverage.astype(np.float64)
+    elif revenue_basis == "claims":
+        weight = service_expense.copy()                  # B126(b)
+        empty = weight.sum(axis=1) == 0.0                # no pattern -> B126(a)
+        weight[empty] = proj.inforce[empty]
+    else:
+        raise ValueError(
+            f"revenue_basis must be 'time' or 'claims', got {revenue_basis!r}"
+        )
+    revenue = premium_total[:, None] * weight / weight.sum(axis=1)[:, None]
+
+    # LRC roll-forward -- premiums build it up, revenue releases it.
+    net = proj.premium_cf - revenue
+    n_mp, n_time = net.shape
+    lrc = np.zeros((n_mp, n_time + 1))
+    lrc[:, 1:] = np.cumsum(net, axis=1)
+
+    # Onerous test -- the GMM inception fulfilment cash flows.
+    bel, pv_claims, pv_morbidity, pv_survival = _rollforward_kernel(
+        proj.claim_cf, proj.morbidity_cf, proj.expense_cf, proj.premium_cf,
+        proj.annuity_cf, proj.maturity_cf, mps.term_months, asmp.discount_monthly,
+    )
+    z = _norm_ppf(asmp.ra_confidence)
+    ra0 = z * (asmp.mortality_cv * pv_claims[:, 0]
+               + asmp.morbidity_cv * pv_morbidity[:, 0]
+               + asmp.longevity_cv * pv_survival[:, 0])
+    loss_component = np.maximum(0.0, bel[:, 0] + ra0)
+
+    return PAAMeasurement(
+        lrc=lrc,
+        revenue=revenue,
+        service_expense=service_expense,
+        loss_component=loss_component,
+        cashflows=proj,
+    )

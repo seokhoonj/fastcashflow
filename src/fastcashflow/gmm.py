@@ -2,7 +2,7 @@
 
 References are to the IFRS 17 standard:
 
-    BEL   estimates of future cash flows, discounted   (Sec. 33-35)
+    BEL   estimates of future cash flows, discounted   (Sec. 33-36)
     RA    risk adjustment for non-financial risk       (Sec. 37)
     CSM   contractual service margin
             - initial recognition                      (Sec. 38)
