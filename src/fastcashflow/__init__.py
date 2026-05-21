@@ -19,13 +19,14 @@ from fastcashflow.io import read_model_points, value_file, write_valuation
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.paa import PAAMeasurement, measure_paa
 from fastcashflow.pricing import solve_premium
+from fastcashflow.report import Report, report
 from fastcashflow.vfa import VFAMeasurement, measure_vfa
 
 __version__ = "0.0.1"
 __all__ = [
     "Assumptions", "ModelPointSet", "measure", "value",
-    "measure_paa", "measure_vfa",
-    "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
+    "measure_paa", "measure_vfa", "report",
+    "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement", "Report",
     "read_model_points", "write_valuation", "value_file", "solve_premium",
     "DEATH", "DIAGNOSIS", "INPATIENT", "OUTPATIENT", "SURGERY",
 ]
