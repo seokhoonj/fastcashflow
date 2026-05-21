@@ -5,8 +5,9 @@ fee. The benefit on every exit is the account value, so the entity's profit
 is the variable fee it keeps -- which is the inception CSM.
 """
 import numpy as np
+import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, measure_vfa
+from fastcashflow import Assumptions, ModelPointSet, measure_tvog, measure_vfa
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.004      # flat monthly lapse
@@ -97,3 +98,55 @@ def test_vfa_onerous_when_expenses_exceed_the_fee():
     )
     assert np.isclose(profitable.loss_component[0], 0.0)
     assert onerous.loss_component[0] > 0.0
+
+
+def _return_paths(annual: float, vol: float, n: int, n_time: int, seed: int):
+    """N monthly return paths centred on the central monthly return."""
+    r_m = (1.0 + annual) ** (1.0 / 12.0) - 1.0
+    return r_m + np.random.default_rng(seed).normal(0.0, vol, size=(n, n_time))
+
+
+def test_vfa_tvog_folds_into_bel_and_reduces_csm():
+    """Return scenarios fold the guarantee's time value into the BEL."""
+    asmp = _assumptions(investment_return=0.05, guaranteed_credit_rate=0.05)
+    mp = ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+    scenarios = _return_paths(0.05, vol=0.008, n=2000, n_time=120, seed=7)
+
+    plain = measure_vfa(mp, asmp)
+    stoch = measure_vfa(mp, asmp, scenarios)
+    assert np.allclose(plain.time_value, 0.0)          # no scenarios -> no TVOG
+    assert stoch.time_value[0] > 0.0
+    assert stoch.bel[0] > plain.bel[0]                 # TVOG raises the liability
+    assert stoch.csm[0, 0] < plain.csm[0, 0]           # the CSM absorbs it
+
+
+def test_vfa_large_tvog_turns_the_contract_onerous():
+    """A guarantee time value beyond the unearned fee makes the contract onerous."""
+    asmp = _assumptions(investment_return=0.05, guaranteed_credit_rate=0.05)
+    mp = ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+    scenarios = _return_paths(0.05, vol=0.03, n=2000, n_time=120, seed=8)
+
+    plain = measure_vfa(mp, asmp)
+    stoch = measure_vfa(mp, asmp, scenarios)
+    assert np.isclose(plain.loss_component[0], 0.0)
+    assert stoch.loss_component[0] > 0.0
+    assert np.isclose(stoch.csm[0, 0], 0.0)
+
+
+def test_vfa_tvog_matches_measure_tvog():
+    """The TVOG folded into measure_vfa equals the stand-alone measure_tvog."""
+    asmp = _assumptions(investment_return=0.04, guaranteed_credit_rate=0.045)
+    mp = ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+    scenarios = _return_paths(0.04, vol=0.012, n=1500, n_time=120, seed=9)
+
+    folded = measure_vfa(mp, asmp, scenarios).time_value.sum()
+    standalone = measure_tvog(mp, asmp, scenarios).time_value
+    assert np.isclose(folded, standalone)
+
+
+def test_vfa_scenarios_without_a_guarantee_is_rejected():
+    """Passing return scenarios with no guarantee set is an error."""
+    asmp = _assumptions(investment_return=0.04)        # no guaranteed_credit_rate
+    mp = ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+    with pytest.raises(ValueError, match="guarantee"):
+        measure_vfa(mp, asmp, np.full((10, 120), 0.003))

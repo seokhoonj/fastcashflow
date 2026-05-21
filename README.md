@@ -60,8 +60,9 @@ Beyond the phase plan:
   economic scenarios and reports the liability distribution, for the
   percentile-based risk and capital measures a single run cannot give.
 - **Guarantees** -- `measure_tvog` values a VFA minimum-rate guarantee over
-  return scenarios and splits its cost into intrinsic value and time value
-  (the TVOG -- the cost a deterministic run cannot see).
+  return scenarios, splitting its cost into intrinsic value and time value
+  (TVOG); `measure_vfa` folds that time value into the BEL, where the CSM
+  absorbs it.
 
 Further out: discount-rate scenario paths; a non-financial-risk adjustment
 for guarantees.

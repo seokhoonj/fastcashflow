@@ -35,6 +35,7 @@ from fastcashflow.assumptions import Assumptions
 from fastcashflow.gmm import _csm_kernel
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.projection import Cashflows, project_cashflows
+from fastcashflow.tvog import tvog_weights
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +50,8 @@ class VFAMeasurement:
         csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]
 
     ``variable_fee`` is the present value of the entity's fee -- its share
-    of the underlying items.
+    of the underlying items. ``time_value`` is the guarantee time value
+    folded into ``bel`` -- zero unless return scenarios were supplied.
     """
 
     account_value: FloatArray    # (n_mp, n_time+1) -- account-value trajectory
@@ -59,10 +61,15 @@ class VFAMeasurement:
     csm_release: FloatArray      # (n_mp, n_time)   -- CSM released each month
     variable_fee: FloatArray     # (n_mp,)          -- PV of the entity's fee
     loss_component: FloatArray   # (n_mp,)          -- onerous loss at inception
+    time_value: FloatArray       # (n_mp,)          -- guarantee TVOG in the BEL
     cashflows: Cashflows
 
 
-def measure_vfa(mps: ModelPointSet, asmp: Assumptions) -> VFAMeasurement:
+def measure_vfa(
+    mps: ModelPointSet,
+    asmp: Assumptions,
+    return_scenarios: FloatArray | None = None,
+) -> VFAMeasurement:
     """Measure a direct-participation portfolio under the Variable Fee Approach.
 
     The account value rolls forward as
@@ -76,6 +83,12 @@ def measure_vfa(mps: ModelPointSet, asmp: Assumptions) -> VFAMeasurement:
     at the underlying-items return; the CSM is ``max(0, -BEL)`` -- the
     entity's unearned variable fee -- accreted at the same return and
     released by coverage units.
+
+    The deterministic BEL carries the guarantee's intrinsic value only. When
+    ``return_scenarios`` -- an ``(n_scenarios, n_time)`` array of monthly
+    underlying-items returns -- is supplied, the time value of the guarantee
+    is folded into the BEL as well, so the CSM absorbs it; ``time_value``
+    records the amount folded in per model point.
     """
     proj = project_cashflows(mps, asmp)
     inforce = proj.inforce
@@ -111,7 +124,25 @@ def measure_vfa(mps: ModelPointSet, asmp: Assumptions) -> VFAMeasurement:
     pv_expenses = (proj.expense_cf * disc_mid).sum(axis=1)
     variable_fee = (fee_cf * disc_mid).sum(axis=1)
 
-    bel = pv_benefits + pv_expenses - mps.account_value
+    # The deterministic BEL carries the guarantee's intrinsic value only.
+    # Given return scenarios, fold in its time value too -- under the VFA
+    # the CSM absorbs it.
+    time_value = np.zeros(n_mp)
+    if return_scenarios is not None:
+        if asmp.guaranteed_credit_rate is None:
+            raise ValueError(
+                "return_scenarios given but asmp.guaranteed_credit_rate is "
+                "None -- there is no guarantee to value"
+            )
+        return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
+        if return_scenarios.ndim != 2 or return_scenarios.shape[1] != n_time:
+            raise ValueError(
+                f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
+                "the projection horizon"
+            )
+        time_value = mps.account_value * (exits @ tvog_weights(asmp, return_scenarios))
+
+    bel = pv_benefits + pv_expenses - mps.account_value + time_value
     loss_component = np.maximum(0.0, bel)                 # RA is zero in v1
     csm0 = np.maximum(0.0, -bel)
     csm, csm_accretion, csm_release = _csm_kernel(csm0, inforce, r_m)
@@ -124,5 +155,6 @@ def measure_vfa(mps: ModelPointSet, asmp: Assumptions) -> VFAMeasurement:
         csm_release=csm_release,
         variable_fee=variable_fee,
         loss_component=loss_component,
+        time_value=time_value,
         cashflows=proj,
     )

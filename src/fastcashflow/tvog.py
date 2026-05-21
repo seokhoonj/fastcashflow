@@ -55,6 +55,25 @@ class TVOGResult:
         return self.intrinsic_value + self.time_value
 
 
+def _discounted_growth(
+    monthly_credit: FloatArray, monthly_return: FloatArray, fund_fee_m: float
+) -> FloatArray:
+    """The ``(n_scenarios, n_time)`` factor ``av_factor * discount``.
+
+    The account grows each month at the credited rate net of the fund fee;
+    the exit benefit discounts at the underlying-items return. Entry
+    ``[s, t]`` is the product of those two over the months before ``t``.
+    """
+    growth = (1.0 + monthly_credit) * (1.0 - fund_fee_m)
+    n = monthly_credit.shape[0]
+    ones = np.ones((n, 1))
+    av_factor = np.concatenate([ones, np.cumprod(growth, axis=1)[:, :-1]], axis=1)
+    discount = np.concatenate(
+        [ones, np.cumprod(1.0 / (1.0 + monthly_return), axis=1)[:, :-1]], axis=1
+    )
+    return av_factor * discount
+
+
 def _pv_account_benefits(
     exit_value: FloatArray,
     monthly_credit: FloatArray,
@@ -64,20 +83,33 @@ def _pv_account_benefits(
     """PV of account-value exit benefits given monthly credit and return paths.
 
     ``exit_value`` is the ``(n_time,)`` portfolio total of account value times
-    exiting policies per month, before any growth. ``monthly_credit`` and
-    ``monthly_return`` are ``(n_scenarios, n_time)`` paths: the account grows
-    at the credited rate, and the benefits discount at the underlying return.
-    Returns the ``(n_scenarios,)`` present value.
+    exiting policies per month, before any growth. Returns the
+    ``(n_scenarios,)`` present value.
     """
-    growth = (1.0 + monthly_credit) * (1.0 - fund_fee_m)
-    n = monthly_credit.shape[0]
-    ones = np.ones((n, 1))
-    # av_factor[s, t] and discount[s, t] are products over months before t.
-    av_factor = np.concatenate([ones, np.cumprod(growth, axis=1)[:, :-1]], axis=1)
-    discount = np.concatenate(
-        [ones, np.cumprod(1.0 / (1.0 + monthly_return), axis=1)[:, :-1]], axis=1
-    )
-    return (av_factor * discount) @ exit_value
+    return _discounted_growth(monthly_credit, monthly_return, fund_fee_m) @ exit_value
+
+
+def tvog_weights(asmp: Assumptions, return_scenarios: FloatArray) -> FloatArray:
+    """Per-month weights for the time value of a minimum guarantee.
+
+    Returns a ``(n_time,)`` vector ``w`` for which the TVOG of a book equals
+    ``w @ e``, where ``e[t]`` is the book's total of account value times
+    policies exiting in month ``t``. The weight is the mean over scenarios of
+    the guaranteed discounted-growth factor less that factor in the central
+    scenario -- the extra account-value cost the convex guarantee adds once
+    returns vary. ``asmp.guaranteed_credit_rate`` must be set.
+    """
+    return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
+    n_time = return_scenarios.shape[1]
+    f_m = (1.0 + asmp.fund_fee) ** (1.0 / 12.0) - 1.0
+    g_m = (1.0 + asmp.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + asmp.investment_return) ** (1.0 / 12.0) - 1.0
+    stochastic = _discounted_growth(
+        np.maximum(return_scenarios, g_m), return_scenarios, f_m
+    ).mean(axis=0)
+    central = np.full((1, n_time), r_m)
+    central_factor = _discounted_growth(np.maximum(central, g_m), central, f_m)[0]
+    return stochastic - central_factor
 
 
 def measure_tvog(
