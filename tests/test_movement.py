@@ -107,6 +107,68 @@ def test_roll_forward_rejects_bad_period():
         roll_forward(measure(_portfolio(), _assumptions()), 0)
 
 
+def _actuals(m, factors):
+    """Actual in-force at successive boundaries -- expected scaled by factors."""
+    return np.array([m.cashflows.inforce[:, (j + 1) * 12] * f
+                     for j, f in enumerate(factors)])
+
+
+def test_roll_forward_multi_experience_reconciles():
+    """Experience at every period boundary -- each period reconciles exactly."""
+    m = measure(_portfolio(), _assumptions())
+    actuals = _actuals(m, [0.97, 0.93, 0.88])
+    for p in roll_forward(m, 12, actual_inforce=actuals):
+        assert np.allclose(
+            p.bel_opening + p.bel_assumption_change + p.bel_experience
+            + p.bel_interest - p.bel_release, p.bel_closing)
+        assert np.allclose(
+            p.csm_opening + p.csm_assumption_change + p.csm_experience
+            + p.csm_accretion - p.csm_release, p.csm_closing)
+
+
+def test_roll_forward_multi_experience_chains_and_isolates():
+    """Periods chain, and an experience line sits in each boundary period."""
+    m = measure(_portfolio(), _assumptions())
+    # distinct ratios per boundary, so each period has its own experience
+    periods = roll_forward(m, 12, actual_inforce=_actuals(m, [0.95, 0.90, 0.85]))
+    for prev, nxt in zip(periods, periods[1:]):
+        assert np.allclose(prev.csm_closing, nxt.csm_opening)
+        assert np.allclose(prev.bel_closing, nxt.bel_opening)
+    for p in periods:
+        if p.month_start in (12, 24, 36):
+            assert not np.allclose(p.bel_experience, 0.0)
+        else:
+            assert np.allclose(p.bel_experience, 0.0)
+
+
+def test_roll_forward_multi_single_row_matches_single_experience():
+    """A one-row 2-D actual_inforce equals the single-experience roll."""
+    m = measure(_portfolio(), _assumptions())
+    actual_12 = m.cashflows.inforce[:, 12] * 0.9
+    multi = roll_forward(m, 12, actual_inforce=actual_12.reshape(1, -1))
+    single = roll_forward(m, 12, actual_inforce=actual_12, experience_at=12)
+    for p_multi, p_single in zip(multi, single):
+        assert np.allclose(p_multi.bel_closing, p_single.bel_closing)
+        assert np.allclose(p_multi.csm_closing, p_single.csm_closing)
+        assert np.allclose(p_multi.csm_experience, p_single.csm_experience)
+
+
+def test_roll_forward_multi_rejects_revision_or_experience_at():
+    """A 2-D actual_inforce does not combine with revised or experience_at."""
+    m = measure(_portfolio(), _assumptions())
+    actuals = _actuals(m, [0.95, 0.95])
+    with pytest.raises(ValueError, match="do not apply"):
+        roll_forward(m, 12, actual_inforce=actuals, revised=m, revised_at=24)
+
+
+def test_roll_forward_multi_rejects_too_many_rows():
+    """Experience rows past the projection horizon are an error."""
+    m = measure(_portfolio(), _assumptions())          # 120-month horizon
+    actuals = np.ones((11, m.bel.shape[0]))            # boundary 132 > 120
+    with pytest.raises(ValueError, match="horizon"):
+        roll_forward(m, 12, actual_inforce=actuals)
+
+
 def _revised(mps: ModelPointSet):
     """A measurement of the same book under markedly higher mortality."""
     worse = replace(

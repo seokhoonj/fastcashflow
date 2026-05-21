@@ -160,7 +160,10 @@ def roll_forward(
     ``revised_at``, the month it takes effect. In-force experience is
     recognised by passing ``actual_inforce`` -- the ``(n_mp,)`` in-force
     actually remaining at the period end -- and ``experience_at``, that
-    month. The revision month and the experience month must be positive
+    month. Passing ``actual_inforce`` as a 2-D ``(n_periods, n_mp)`` array
+    instead rolls experience through every reporting period, row ``j`` being
+    the in-force at month ``(j+1) * period_months``.
+    The revision month and the single experience month must be positive
     multiples of ``period_months``. Either change adjusts the CSM by the
     resulting change in fulfilment cash flows (floored at zero, any excess
     falling into the loss component); v1 recognises one or the other, not
@@ -185,6 +188,22 @@ def roll_forward(
         return _roll_forward_vfa(measurement, period_months)
     n_time = measurement.bel.shape[1] - 1
     n_mp = measurement.bel.shape[0]
+    if actual_inforce is not None:
+        actual_inforce = np.asarray(actual_inforce, dtype=np.float64)
+        if actual_inforce.ndim == 2:
+            if experience_at is not None or revised is not None:
+                raise ValueError(
+                    "a 2-D actual_inforce rolls experience through every "
+                    "reporting period; experience_at and revised do not apply"
+                )
+            if actual_inforce.shape[1] != n_mp:
+                raise ValueError(
+                    f"actual_inforce must have {n_mp} columns -- one per "
+                    "model point"
+                )
+            return _roll_forward_experience_chain(
+                measurement, period_months, actual_inforce
+            )
     if (revised is None) != (revised_at is None):
         raise ValueError("pass revised and revised_at together, or neither")
     if (actual_inforce is None) != (experience_at is None):
@@ -294,6 +313,114 @@ def roll_forward(
             csm_release=csm_release[:, a:b].sum(axis=1),
             csm_closing=csm[:, b],
             loss_component_recognised=loss_line,
+        ))
+    return movements
+
+
+def _roll_forward_experience_chain(
+    measurement: Measurement, period_months: int, actual_inforce: FloatArray
+) -> list[PeriodMovement]:
+    """Roll a GMM measurement through in-force experience at every period.
+
+    Row ``j`` of ``actual_inforce`` is the in-force actually remaining at
+    month ``(j+1) * period_months``. The cumulative ratio at each boundary
+    is the actual over the originally expected in-force; the CSM is rolled
+    segment by segment, each segment releasing over the in-force expected at
+    its start, with the experience jump applied at each boundary.
+    """
+    base_bel = measurement.bel
+    base_ra = measurement.ra
+    base_inforce = measurement.cashflows.inforce
+    n_mp, n_time = base_inforce.shape
+    n_known = actual_inforce.shape[0]
+    boundaries = [(j + 1) * period_months for j in range(n_known)]
+    if boundaries[-1] >= n_time:
+        raise ValueError(
+            f"actual_inforce has {n_known} rows; the last boundary "
+            f"({boundaries[-1]}) reaches the projection horizon ({n_time})"
+        )
+    discount_start = measurement.discount_start
+    monthly_rate = discount_start[:-1] / discount_start[1:] - 1.0
+    rate = 1.0 / discount_start[1] - 1.0
+
+    # Cumulative in-force ratio at each boundary, laid out as a per-month
+    # step factor -- 1 up to the first boundary, then each ratio onward.
+    step = np.ones((n_mp, n_time + 1))
+    cumratios: list[FloatArray] = []
+    for j, b in enumerate(boundaries):
+        expected = base_inforce[:, b]
+        safe = np.where(expected > 1e-12, expected, 1.0)
+        cr = np.where(expected > 1e-12, actual_inforce[j] / safe, 1.0)
+        cumratios.append(cr)
+        step[:, b + 1:] = cr[:, None]
+    bel = base_bel * step
+    ra = base_ra * step
+
+    # CSM -- rolled segment by segment, with the experience jump at each
+    # boundary. Each segment releases over the in-force expected at its
+    # start, so later boundaries do not disturb the earlier releases.
+    csm = np.empty((n_mp, n_time + 1))
+    csm_accretion = np.empty((n_mp, n_time))
+    csm_release = np.empty((n_mp, n_time))
+    csm[:, 0] = measurement.csm[:, 0]
+    cur = measurement.csm[:, 0]
+    exp_lines: dict[int, tuple] = {}
+    s = 0
+    for j, e in enumerate(boundaries + [n_time]):
+        seg_csm, seg_acc, seg_rel = _csm_kernel(
+            np.ascontiguousarray(cur),
+            np.ascontiguousarray(base_inforce[:, s:]),
+            rate,
+        )
+        width = e - s
+        csm[:, s + 1:e + 1] = seg_csm[:, 1:width + 1]
+        csm_accretion[:, s:e] = seg_acc[:, :width]
+        csm_release[:, s:e] = seg_rel[:, :width]
+        if e < n_time:
+            cr_prev = cumratios[j - 1] if j > 0 else np.ones(n_mp)
+            bel_ex = base_bel[:, e] * (cumratios[j] - cr_prev)
+            ra_ex = base_ra[:, e] * (cumratios[j] - cr_prev)
+            delta_fcf = bel_ex + ra_ex
+            csm_before = csm[:, e]
+            csm_after = np.maximum(0.0, csm_before - delta_fcf)
+            exp_lines[e] = (
+                bel_ex, ra_ex, csm_after - csm_before,
+                np.maximum(0.0, delta_fcf - csm_before),
+            )
+            cur = csm_after
+        s = e
+
+    zero = np.zeros(n_mp)
+    movements: list[PeriodMovement] = []
+    for a in range(0, n_time, period_months):
+        b = min(a + period_months, n_time)
+        bel_ex, ra_ex, csm_ex, loss = exp_lines.get(a, (zero, zero, zero, zero))
+        bel_interest = ((bel[:, a:b] * monthly_rate[a:b]).sum(axis=1)
+                        + bel_ex * monthly_rate[a])
+        ra_interest = ((ra[:, a:b] * monthly_rate[a:b]).sum(axis=1)
+                       + ra_ex * monthly_rate[a])
+        movements.append(PeriodMovement(
+            month_start=a,
+            month_end=b,
+            bel_opening=bel[:, a],
+            bel_assumption_change=zero,
+            bel_experience=bel_ex,
+            bel_interest=bel_interest,
+            bel_release=bel[:, a] + bel_ex + bel_interest - bel[:, b],
+            bel_closing=bel[:, b],
+            ra_opening=ra[:, a],
+            ra_assumption_change=zero,
+            ra_experience=ra_ex,
+            ra_interest=ra_interest,
+            ra_release=ra[:, a] + ra_ex + ra_interest - ra[:, b],
+            ra_closing=ra[:, b],
+            csm_opening=csm[:, a],
+            csm_assumption_change=zero,
+            csm_experience=csm_ex,
+            csm_accretion=csm_accretion[:, a:b].sum(axis=1),
+            csm_release=csm_release[:, a:b].sum(axis=1),
+            csm_closing=csm[:, b],
+            loss_component_recognised=loss,
         ))
     return movements
 
