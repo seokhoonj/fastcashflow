@@ -79,6 +79,22 @@ def _settlement_lic(
     return lic
 
 
+def _settlement_factor(
+    settlement_pattern: FloatArray, monthly_rate: float
+) -> float:
+    """Present-value factor for a claim spread over a settlement pattern.
+
+    The present value, at the month a claim is incurred, of paying a unit
+    claim over ``settlement_pattern`` -- discounted at ``monthly_rate``.
+    A pattern that pays everything immediately gives 1.
+    """
+    pattern = np.asarray(settlement_pattern, dtype=np.float64)
+    if not np.isclose(pattern.sum(), 1.0):
+        raise ValueError(f"settlement_pattern must sum to 1, got {pattern.sum()}")
+    months = np.arange(pattern.shape[0])
+    return float(np.sum(pattern / (1.0 + monthly_rate) ** months))
+
+
 # Coefficients of Acklam's rational approximation of the standard-normal
 # inverse CDF -- the published constants of the algorithm.
 _ACKLAM_A = (-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,

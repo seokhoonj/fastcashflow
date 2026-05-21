@@ -17,6 +17,7 @@ from fastcashflow import (
     measure_vfa,
     reconcile,
     roll_forward,
+    value,
 )
 
 
@@ -417,6 +418,26 @@ def test_vfa_lic_builds_with_a_settlement_pattern():
     immediate = measure_vfa(_vfa_contract(), _vfa_assumptions())
     assert np.any(lagged.lic > 0.0)
     assert np.allclose(immediate.lic, 0.0)
+
+
+def test_settlement_lag_lowers_the_bel():
+    """A settlement lag discounts claims to their payment dates -- a lower BEL."""
+    immediate = measure(_portfolio(), _assumptions())
+    lagged = measure(_portfolio(), replace(
+        _assumptions(), settlement_pattern=np.array([0.2, 0.3, 0.5])))
+    assert np.all(lagged.bel[:, 0] <= immediate.bel[:, 0])
+    assert lagged.bel[:, 0].sum() < immediate.bel[:, 0].sum()
+
+
+def test_settlement_lag_value_matches_measure():
+    """value() and measure() agree once the settlement lag is reflected."""
+    asmp = replace(_assumptions(), settlement_pattern=np.array([0.4, 0.6]))
+    mps = _portfolio()
+    v = value(mps, asmp)
+    m = measure(mps, asmp)
+    assert np.allclose(v.bel, m.bel[:, 0])
+    assert np.allclose(v.ra, m.ra[:, 0])
+    assert np.allclose(v.csm, m.csm[:, 0])
 
 
 def test_reconcile_paa():

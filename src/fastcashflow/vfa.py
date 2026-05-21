@@ -34,7 +34,12 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.gmm import _csm_kernel, _norm_ppf, _settlement_lic
+from fastcashflow.gmm import (
+    _csm_kernel,
+    _norm_ppf,
+    _settlement_factor,
+    _settlement_lic,
+)
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.tvog import tvog_weights
@@ -142,7 +147,14 @@ def measure_vfa(
         pv[:, :n_time] = tail
         return pv / disc_start
 
-    pv_benefits = _pv_trajectory(benefit_cf, disc_start[:n_time])
+    # A settlement pattern pays the exit benefit over later months -- so
+    # discount it to those payment dates in the present value.
+    benefit_for_pv = benefit_cf
+    if asmp.settlement_pattern is not None:
+        benefit_for_pv = benefit_cf * _settlement_factor(
+            asmp.settlement_pattern, r_m
+        )
+    pv_benefits = _pv_trajectory(benefit_for_pv, disc_start[:n_time])
     pv_expenses = _pv_trajectory(proj.expense_cf, disc_mid)
     variable_fee = (fee_cf * disc_mid).sum(axis=1)
 

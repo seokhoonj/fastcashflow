@@ -24,6 +24,7 @@ from fastcashflow.assumptions import Assumptions
 from fastcashflow.gmm import (
     _norm_ppf,
     _rollforward_kernel,
+    _settlement_factor,
     _settlement_lic,
     compute_csm,
     discount_factors,
@@ -46,9 +47,8 @@ class Measurement:
     0 is the inception measurement. The CSM roll-forward decomposes as
     ``csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
     ``lic`` is the liability for incurred claims -- zero unless a claims
-    settlement pattern is set. The BEL discounts claims at incurrence; the
-    settlement lag's effect on its present value is immaterial for the
-    long-duration business the GMM measures and is not reflected.
+    settlement pattern is set, which also discounts claims to their payment
+    dates in the BEL.
     """
 
     bel: FloatArray              # (n_mp, n_time+1) -- BEL trajectory
@@ -83,16 +83,20 @@ def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
 def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
     """Detailed GMM measurement: BEL, RA and CSM rolled forward over time."""
     proj = project_cashflows(mps, asmp)
+    claim_cf, morbidity_cf = proj.claim_cf, proj.morbidity_cf
     if asmp.settlement_pattern is None:
-        lic = np.zeros((proj.claim_cf.shape[0], proj.n_time + 1))
+        lic = np.zeros((claim_cf.shape[0], proj.n_time + 1))
     else:
-        lic = _settlement_lic(
-            proj.claim_cf + proj.morbidity_cf, asmp.settlement_pattern
-        )
+        lic = _settlement_lic(claim_cf + morbidity_cf, asmp.settlement_pattern)
+        # Claims are paid over the pattern, not at incurrence -- discount
+        # them to their payment dates in the fulfilment cash flows.
+        factor = _settlement_factor(asmp.settlement_pattern, asmp.discount_monthly)
+        claim_cf = claim_cf * factor
+        morbidity_cf = morbidity_cf * factor
     discount_start, discount_mid = discount_factors(asmp, proj.n_time)
 
     bel, pv_claims, pv_morbidity, pv_survival = _rollforward_kernel(
-        proj.claim_cf, proj.morbidity_cf, proj.expense_cf, proj.premium_cf,
+        claim_cf, morbidity_cf, proj.expense_cf, proj.premium_cf,
         proj.annuity_cf, proj.maturity_cf, mps.term_months,
         asmp.discount_monthly,
     )
@@ -319,6 +323,14 @@ def value(
     morbidity_factor = z * asmp.morbidity_cv
     longevity_factor = z * asmp.longevity_cv
 
+    # A claims settlement pattern discounts claims to their payment dates;
+    # scaling the coverage amounts carries that into the fused kernel.
+    cov_amount = mps.cov_amount
+    if asmp.settlement_pattern is not None:
+        cov_amount = cov_amount * _settlement_factor(
+            asmp.settlement_pattern, asmp.discount_monthly
+        )
+
     args = (
         mortality_grid,
         issue_index,
@@ -327,7 +339,7 @@ def value(
         mps.monthly_premium,
         mps.single_premium,
         mps.cov_kind,
-        mps.cov_amount,
+        cov_amount,
         mps.cov_offset,
         cov_rates,
         COVERAGE_RISK,
