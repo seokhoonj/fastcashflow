@@ -79,6 +79,32 @@ class Report:
             )
         }
 
+    def __str__(self) -> str:
+        annual = self.annual()
+        n_years = len(annual["insurance_revenue"])
+        shown = min(n_years, 5)
+        rows = (
+            ("Insurance revenue", annual["insurance_revenue"]),
+            ("Service expense",   annual["insurance_service_expense"]),
+            ("Service result",    annual["insurance_service_result"]),
+            ("Finance expense",   annual["insurance_finance_expense"]),
+            ("CSM accretion",     annual["csm_accretion"]),
+            ("CSM release",       annual["csm_release"]),
+        )
+        title = "IFRS 17 report -- annual portfolio totals"
+        if n_years > shown:
+            title += f" (first {shown} of {n_years} years)"
+        header = f"{'':18}" + "".join(
+            f"{f'Year {y + 1}':>12}" for y in range(shown)
+        )
+        lines = [title, header]
+        for name, series in rows:
+            lines.append(
+                f"{name:18}"
+                + "".join(f"{series[y]:>12,.0f}" for y in range(shown))
+            )
+        return "\n".join(lines)
+
 
 def report(measurement: Measurement | PAAMeasurement | VFAMeasurement) -> Report:
     """Assemble the IFRS 17 disclosure from a GMM, PAA or VFA measurement.

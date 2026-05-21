@@ -60,8 +60,8 @@ Pricing
 
 .. autofunction:: fastcashflow.solve_premium
 
-Disclosure
-----------
+Reporting
+---------
 
 .. autofunction:: fastcashflow.report
 

@@ -1,6 +1,6 @@
 # Welcome
 
-**현금흐름 추정부터 공시까지 — 빠른 IFRS 17 평가 엔진**
+**현금흐름 추정부터 손익 리포트까지 — 빠른 IFRS 17 평가 엔진**
 
 ```{image} images/hero.png
 :alt: fastcashflow가 산출하는 IFRS 17 수치 — 부채 구성요소, 보험계약마진 상각, 변동분석

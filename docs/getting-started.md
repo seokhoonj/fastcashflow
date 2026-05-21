@@ -51,7 +51,7 @@ use `value` in place of `measure`.
 :link: https://github.com/seokhoonj/fastcashflow/blob/main/examples/worked_example.py
 :link-type: url
 
-A full valuation end to end -- pricing, measurement, the disclosure and the
+A full valuation end to end -- pricing, measurement, the report and the
 period-close analysis of change.
 :::
 

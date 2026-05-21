@@ -83,6 +83,17 @@ def test_report_annual_totals_match_the_monthly_sum():
     assert np.isclose(ann["insurance_revenue"].sum(), res.insurance_revenue.sum())
 
 
+def test_report_str_renders_the_annual_table():
+    """str(report) shows the annual table -- title, labels, year-1 figure."""
+    res = report(measure(_portfolio(), _assumptions()))
+    text = str(res)
+    ann = res.annual()
+    assert "IFRS 17 report" in text
+    assert "Insurance revenue" in text
+    assert "Year 1" in text
+    assert f"{ann['insurance_revenue'][0]:,.0f}" in text
+
+
 def test_report_handles_paa():
     """report() accepts a PAA measurement -- which has no CSM."""
     m = measure_paa(ModelPointSet.single(40, 1e8, 50_000.0, 12), _assumptions())
