@@ -153,7 +153,8 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
                   cov_amount, cov_offset, cov_rates, cov_risk,
                   maturity_benefit, annuity_payment, expense_acquisition,
                   maint_monthly, inflation, discount_start, discount_mid,
-                  mortality_factor, morbidity_factor, longevity_factor):
+                  mortality_factor, morbidity_factor, longevity_factor,
+                  cov_waiting, cov_reduction_end, cov_reduction_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
     Per model point the in-force amount is carried as a scalar through the
@@ -201,6 +202,8 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
                     kind = cov_kind[k]
                     if kind >= FIRST_DIAGNOSIS_KIND:
                         continue          # diagnosis coverages run separately
+                    if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
+                        continue          # rule-bearing coverages run separately
                     rate = cov_rates[kind, ridx, year] * cov_amount[k]
                     if cov_risk[kind] == 0:
                         claim_rate += rate
@@ -219,6 +222,33 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
             pe += (acquisition + inforce * maint_monthly * inflation[t]) * dm
             inforce *= (1.0 - q) * (1.0 - lapse_by_year[year])
         pm = inforce * maturity_benefit[mp] * discount_start[term]
+        # Non-diagnosis coverages with a waiting or reduced-benefit rule: a
+        # per-coverage pass, re-deriving the in-force month by month so the
+        # benefit multiplier (which can change mid-year) applies cleanly.
+        for k in range(c_start, c_end):
+            kind = cov_kind[k]
+            if kind >= FIRST_DIAGNOSIS_KIND:
+                continue
+            wait = cov_waiting[k]
+            red_end = cov_reduction_end[k]
+            if wait == 0 and red_end == 0:
+                continue          # rule-free -- already in the aggregate
+            benefit = cov_amount[k]
+            red_factor = cov_reduction_factor[k]
+            mortality_risk = cov_risk[kind] == 0
+            inf = cnt
+            for t in range(term):
+                year = t // 12
+                if t >= wait:
+                    mult = red_factor if t < red_end else 1.0
+                    contrib = (inf * cov_rates[kind, ridx, year]
+                               * benefit * mult * discount_mid[t])
+                    if mortality_risk:
+                        pc += contrib
+                    else:
+                        pcm += contrib
+                inf *= ((1.0 - mortality_grid[ridx, year])
+                        * (1.0 - lapse_by_year[year]))
         # Diagnosis coverages pay once on first diagnosis, so each one's
         # claims run off a depleting "not yet diagnosed" pool -- a separate
         # pass over the time axis, into the morbidity PV.
@@ -227,6 +257,9 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
             if kind < FIRST_DIAGNOSIS_KIND:
                 continue
             benefit = cov_amount[k]
+            wait = cov_waiting[k]
+            red_end = cov_reduction_end[k]
+            red_factor = cov_reduction_factor[k]
             healthy = cnt       # in force and not yet diagnosed
             d_year = -1
             d_rate = 0.0
@@ -238,7 +271,11 @@ def _value_kernel(mortality_grid, issue_index, term_months, count,
                     surv = ((1.0 - mortality_grid[ridx, year])
                             * (1.0 - lapse_by_year[year]))
                     d_year = year
-                pcm += healthy * d_rate * benefit * discount_mid[t]
+                # A waiting period suppresses the payment, not the diagnosis:
+                # the not-yet-diagnosed pool depletes either way.
+                if t >= wait:
+                    mult = red_factor if t < red_end else 1.0
+                    pcm += healthy * d_rate * benefit * mult * discount_mid[t]
                 healthy *= surv * (1.0 - d_rate)
         bel_mp = pc + pcm + pm + pa + pe - pp
         ra_mp = (mortality_factor * pc + morbidity_factor * pcm
@@ -358,8 +395,16 @@ def value(
     )
 
     if backend == "cpu":
-        bel, ra, csm, loss_component = _value_kernel(*args)
+        bel, ra, csm, loss_component = _value_kernel(
+            *args, mps.cov_waiting, mps.cov_reduction_end,
+            mps.cov_reduction_factor,
+        )
     elif backend == "gpu":
+        if np.any(mps.cov_waiting) or np.any(mps.cov_reduction_end):
+            raise ValueError(
+                "value(backend='gpu') does not support coverage waiting / "
+                "reduction periods yet; use backend='cpu'"
+            )
         from fastcashflow._gpu import value_gpu
         bel, ra, csm, loss_component = value_gpu(*args)
     else:

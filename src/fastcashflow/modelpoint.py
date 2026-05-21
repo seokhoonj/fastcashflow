@@ -23,10 +23,16 @@ class ModelPointSet:
     :mod:`fastcashflow.coverage`), held in CSR (Compressed Sparse Row) form
     so the kernels loop them generically -- new benefit types add no fields:
 
-    * ``cov_kind[k]``   -- the coverage kind (``DEATH``, ``HOSPITAL``, ...).
+    * ``cov_kind[k]``   -- the coverage kind (``DEATH``, ``INPATIENT``, ...).
     * ``cov_amount[k]`` -- the benefit amount of coverage ``k``.
     * ``cov_offset``    -- ``(n_mp+1,)``; policy ``mp``'s coverages are the
       slice ``[cov_offset[mp] : cov_offset[mp+1]]``.
+
+    Each coverage may carry a benefit rule: ``cov_waiting`` (months from
+    issue with no benefit) and ``cov_reduction_end`` / ``cov_reduction_factor``
+    (a benefit multiplier in force until a cut-off month). Both are CSR
+    arrays aligned with ``cov_kind`` and default to off -- no waiting, full
+    benefit.
 
     The coverage list is built one of three ways. ``death_benefit`` is the
     shortcut for the common case -- one death coverage per policy with a
@@ -56,6 +62,9 @@ class ModelPointSet:
     cov_kind: IntArray | None = None             # CSR: coverage kind
     cov_amount: FloatArray | None = None         # CSR: coverage amount
     cov_offset: IntArray | None = None           # CSR: per-policy slice bounds
+    cov_waiting: IntArray | None = None          # CSR: waiting period, months
+    cov_reduction_end: IntArray | None = None    # CSR: reduced-benefit end, months
+    cov_reduction_factor: FloatArray | None = None  # CSR: reduced-benefit factor
     count: FloatArray | None = None              # policies the row stands for
 
     def __post_init__(self) -> None:
@@ -101,6 +110,22 @@ class ModelPointSet:
         object.__setattr__(self, "cov_kind", cov_kind)
         object.__setattr__(self, "cov_amount", cov_amount)
         object.__setattr__(self, "cov_offset", cov_offset)
+        # Per-coverage benefit rules, CSR-aligned with cov_kind. A waiting
+        # period (months with no benefit) and a reduced-benefit period (a
+        # multiplier until a cut-off month) both default to off.
+        n_cov = cov_amount.shape[0]
+        cov_waiting = self.cov_waiting
+        cov_waiting = (np.zeros(n_cov, np.int64) if cov_waiting is None
+                       else np.asarray(cov_waiting, np.int64))
+        cov_reduction_end = self.cov_reduction_end
+        cov_reduction_end = (np.zeros(n_cov, np.int64) if cov_reduction_end is None
+                             else np.asarray(cov_reduction_end, np.int64))
+        cov_reduction_factor = self.cov_reduction_factor
+        cov_reduction_factor = (np.ones(n_cov) if cov_reduction_factor is None
+                                else np.asarray(cov_reduction_factor, np.float64))
+        object.__setattr__(self, "cov_waiting", cov_waiting)
+        object.__setattr__(self, "cov_reduction_end", cov_reduction_end)
+        object.__setattr__(self, "cov_reduction_factor", cov_reduction_factor)
 
     @property
     def n_mp(self) -> int:

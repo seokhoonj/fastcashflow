@@ -70,7 +70,8 @@ class Cashflows:
 @njit(parallel=True, cache=True)
 def _project_kernel(mortality, term_months, count, lapse_by_year,
                     monthly_premium, single_premium, cov_kind, cov_amount,
-                    cov_offset, cov_rates, cov_risk, maturity_benefit,
+                    cov_offset, cov_waiting, cov_reduction_end,
+                    cov_reduction_factor, cov_rates, cov_risk, maturity_benefit,
                     annuity_payment, expense_acquisition, maint_monthly,
                     inflation, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
@@ -116,6 +117,8 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
                     kind = cov_kind[k]
                     if kind >= FIRST_DIAGNOSIS_KIND:
                         continue          # diagnosis coverages run separately
+                    if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
+                        continue          # rule-bearing coverages run separately
                     rate = cov_rates[kind, mp, year] * cov_amount[k]
                     if cov_risk[kind] == 0:
                         claim_rate += rate
@@ -137,6 +140,29 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
             else:
                 maturity_cf[mp] = survivors * maturity_benefit[mp]
 
+        # Non-diagnosis coverages carrying a waiting or reduced-benefit rule
+        # run per month here, not in the year-aggregated rate above, because
+        # the benefit multiplier can change partway through a year.
+        for k in range(c_start, c_end):
+            kind = cov_kind[k]
+            if kind >= FIRST_DIAGNOSIS_KIND:
+                continue
+            wait = cov_waiting[k]
+            red_end = cov_reduction_end[k]
+            if wait == 0 and red_end == 0:
+                continue          # rule-free -- already in the aggregate
+            benefit = cov_amount[k]
+            red_factor = cov_reduction_factor[k]
+            mortality_risk = cov_risk[kind] == 0
+            for t in range(wait, term):
+                mult = red_factor if t < red_end else 1.0
+                amt = (inforce[mp, t] * cov_rates[kind, mp, t // 12]
+                       * benefit * mult)
+                if mortality_risk:
+                    claim_cf[mp, t] += amt
+                else:
+                    morbidity_cf[mp, t] += amt
+
         # Diagnosis coverages pay once on first diagnosis, so each one's
         # claims run off a "not yet diagnosed" fraction of the in-force that
         # the diagnosis rate depletes (on top of mortality and lapse).
@@ -145,6 +171,9 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
             if kind < FIRST_DIAGNOSIS_KIND:
                 continue
             benefit = cov_amount[k]
+            wait = cov_waiting[k]
+            red_end = cov_reduction_end[k]
+            red_factor = cov_reduction_factor[k]
             frac = 1.0          # fraction of the in-force still undiagnosed
             d_year = -1
             d_rate = 0.0
@@ -153,7 +182,12 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
                 if year != d_year:
                     d_rate = cov_rates[kind, mp, year]
                     d_year = year
-                morbidity_cf[mp, t] += inforce[mp, t] * frac * d_rate * benefit
+                # A waiting period suppresses the payment, not the diagnosis:
+                # the not-yet-diagnosed pool depletes either way.
+                if t >= wait:
+                    mult = red_factor if t < red_end else 1.0
+                    morbidity_cf[mp, t] += (inforce[mp, t] * frac * d_rate
+                                            * benefit * mult)
                 frac *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
@@ -199,6 +233,9 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
         mps.cov_kind,
         mps.cov_amount,
         mps.cov_offset,
+        mps.cov_waiting,
+        mps.cov_reduction_end,
+        mps.cov_reduction_factor,
         cov_rates,
         COVERAGE_RISK,
         mps.maturity_benefit,
