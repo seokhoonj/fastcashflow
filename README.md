@@ -52,6 +52,10 @@ Beyond the phase plan:
   recognising assumption revisions and in-force experience as CSM
   adjustments; `reconcile` aggregates them into IFRS 17 reconciliation
   tables -- the period-close reporting cycle.
+- **Aggregation** -- `group` re-expresses a measurement at the IFRS 17 unit
+  of account (portfolio x annual cohort x profitability bucket), the CSM
+  and loss component re-derived at the group level so the floor nets
+  contracts within a group but not across groups.
 - **Reinsurance** -- reinsurance contracts held, measured as a quota-share
   treaty over a direct portfolio; the CSM carries the net cost or gain of
   the cover.

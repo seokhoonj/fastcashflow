@@ -15,6 +15,7 @@ quantity this engine computes.
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.coverage import DEATH, DIAGNOSIS, INPATIENT, OUTPATIENT, SURGERY
 from fastcashflow.engine import Measurement, Valuation, measure, value
+from fastcashflow.grouping import group
 from fastcashflow.io import read_model_points, value_file, write_valuation
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.movement import (
@@ -39,7 +40,7 @@ __version__ = "0.0.1"
 __all__ = [
     "Assumptions", "ModelPointSet", "measure", "value", "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "measure_tvog",
-    "report", "roll_forward", "reconcile",
+    "report", "roll_forward", "reconcile", "group",
     "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",

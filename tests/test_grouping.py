@@ -1,0 +1,82 @@
+"""Aggregation validation -- grouping a measurement into IFRS 17 groups.
+
+The CSM floor applies to the group: contracts within a group are netted
+before ``max(0, ...)``, contracts in different groups are not.
+"""
+import numpy as np
+import pytest
+
+from fastcashflow import Assumptions, ModelPointSet, group, measure, roll_forward
+
+
+def _assumptions() -> Assumptions:
+    return Assumptions(
+        mortality_monthly=lambda issue_age, duration: np.full(issue_age.shape, 0.002),
+        lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
+        discount_annual=0.03,
+        expense_acquisition=100_000.0,
+        expense_maintenance_annual=60_000.0,
+        expense_inflation=0.02,
+        ra_confidence=0.75,
+        mortality_cv=0.10,
+    )
+
+
+def _portfolio(n: int = 60) -> ModelPointSet:
+    rng = np.random.default_rng(7)
+    return ModelPointSet(
+        issue_age=rng.integers(30, 55, n),
+        death_benefit=rng.integers(20, 90, n) * 1_000_000,
+        monthly_premium=rng.integers(8, 20, n) * 10_000,
+        term_months=np.full(n, 120),
+    )
+
+
+def _two_contracts() -> ModelPointSet:
+    """Two term-life model points -- the first profitable, the second onerous."""
+    return ModelPointSet(
+        issue_age=np.array([40, 40]),
+        death_benefit=np.array([1e8, 1e8]),
+        monthly_premium=np.array([300_000.0, 60_000.0]),
+        term_months=np.array([120, 120]),
+    )
+
+
+def test_group_count_and_sums():
+    """group() returns one row per group; BEL is summed within each."""
+    m = measure(_portfolio(), _assumptions())
+    g = group(m, np.arange(len(m.bel)) % 3)
+    assert g.bel.shape[0] == 3
+    assert np.isclose(g.bel[:, 0].sum(), m.bel[:, 0].sum())   # BEL is additive
+
+
+def test_group_nets_within_a_group_not_across():
+    """A profitable contract absorbs an onerous one only inside the same group."""
+    m = measure(_two_contracts(), _assumptions())
+    together = group(m, np.array([0, 0]))          # one group
+    apart = group(m, np.array([0, 1]))             # two groups
+    assert apart.loss_component.sum() > 0.0        # the onerous one stands alone
+    assert together.loss_component[0] < apart.loss_component.sum()
+
+
+def test_group_csm_reconciles():
+    """The grouped CSM trajectory reconciles."""
+    m = measure(_portfolio(), _assumptions())
+    g = group(m, np.arange(len(m.bel)) % 4)
+    step = g.csm[:, :-1] + g.csm_accretion - g.csm_release
+    assert np.allclose(step, g.csm[:, 1:])
+
+
+def test_group_composes_with_roll_forward():
+    """A grouped measurement flows into the period-close roll-forward."""
+    m = measure(_portfolio(), _assumptions())
+    g = group(m, np.arange(len(m.bel)) % 5)
+    periods = roll_forward(g, 12)
+    assert periods[0].csm_opening.shape == (5,)
+
+
+def test_group_rejects_wrong_length():
+    """group_ids must have one entry per model point."""
+    m = measure(_portfolio(), _assumptions())
+    with pytest.raises(ValueError, match="one entry per model point"):
+        group(m, np.array([0, 1, 2]))
