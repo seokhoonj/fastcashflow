@@ -1,7 +1,9 @@
-"""File I/O for model points and valuation results -- the polars layer.
+"""File I/O for model points, the actuarial basis and valuation results.
 
-Reading and writing go through polars, which parses parquet and CSV in
-parallel and hands columns to numpy near-zero-copy.
+Model points and results go through polars, which parses parquet and CSV in
+parallel and hands columns to numpy near-zero-copy. The actuarial basis --
+read by :func:`read_assumptions` -- comes from an Excel workbook (the form
+a practitioner keeps assumptions in), via openpyxl.
 
 * :func:`read_model_points` / :func:`write_valuation` are eager -- they hold
   the whole file in memory, which is fine up to ~1e8 model points.
@@ -19,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import openpyxl
 import polars as pl
 
 from fastcashflow.assumptions import Assumptions
@@ -89,6 +92,86 @@ def read_model_points(path) -> ModelPointSet:
     if benefits:
         fields["benefits"] = benefits
     return ModelPointSet(**fields)
+
+
+def read_assumptions(path) -> Assumptions:
+    """Read an actuarial basis from an Excel workbook into ``Assumptions``.
+
+    The workbook has three sheets:
+
+    * ``parameters`` -- two columns, name and value: ``discount_annual``,
+      the expense scalars, the risk-adjustment scalars, and so on.
+    * ``mortality`` -- a grid: the first column issue ages, the header row
+      durations (completed policy years), the cells annual mortality rates.
+    * ``lapse`` -- two columns, duration (completed policy years) and the
+      annual lapse rate.
+
+    Annual rates are converted to the monthly rates the engine works in and
+    wrapped in the lookup callables ``Assumptions`` expects.
+    ``examples/sample_basis.xlsx`` is a filled-in template to copy and edit.
+    Issue ages in the mortality grid, and durations in the lapse sheet, are
+    taken to be contiguous.
+    """
+    wb = openpyxl.load_workbook(path, data_only=True)
+    for sheet in ("parameters", "mortality", "lapse"):
+        if sheet not in wb.sheetnames:
+            raise ValueError(f"{path!r} has no '{sheet}' sheet")
+
+    # parameters -- a name/value sheet
+    params: dict[str, object] = {}
+    for name, value, *_ in wb["parameters"].iter_rows(min_row=2, values_only=True):
+        if name is not None:
+            params[str(name).strip()] = value
+
+    # mortality -- an (issue age) x (duration) grid of annual rates
+    mort_rows = list(wb["mortality"].iter_rows(values_only=True))
+    n_dur = sum(1 for d in mort_rows[0][1:] if d is not None)
+    ages, grid = [], []
+    for row in mort_rows[1:]:
+        if row[0] is None:
+            continue
+        ages.append(int(row[0]))
+        grid.append([float(r) for r in row[1:1 + n_dur]])
+    mort_grid = np.asarray(grid, dtype=np.float64)
+    age_min, n_ages = ages[0], len(ages)
+
+    # lapse -- duration -> annual rate
+    lapse_by_dur: dict[int, float] = {}
+    for dur, rate, *_ in wb["lapse"].iter_rows(min_row=2, values_only=True):
+        if dur is not None:
+            lapse_by_dur[int(dur)] = float(rate)
+    lapse_arr = np.asarray(
+        [lapse_by_dur[d] for d in range(len(lapse_by_dur))], dtype=np.float64
+    )
+
+    def mortality_monthly(issue_age, duration):
+        a = np.clip(np.asarray(issue_age, np.int64) - age_min, 0, n_ages - 1)
+        d = np.clip(np.asarray(duration, np.int64), 0, n_dur - 1)
+        return 1.0 - (1.0 - mort_grid[a, d]) ** (1.0 / 12.0)
+
+    def lapse_monthly(duration):
+        d = np.clip(np.asarray(duration, np.int64), 0, lapse_arr.shape[0] - 1)
+        return 1.0 - (1.0 - lapse_arr[d]) ** (1.0 / 12.0)
+
+    required = ("discount_annual", "expense_acquisition",
+                "expense_maintenance_annual", "expense_inflation",
+                "ra_confidence", "mortality_cv")
+    missing = [k for k in required if params.get(k) is None]
+    if missing:
+        raise ValueError(f"the 'parameters' sheet is missing: {missing}")
+    kwargs: dict[str, object] = dict(
+        mortality_monthly=mortality_monthly,
+        lapse_monthly=lapse_monthly,
+        **{k: float(params[k]) for k in required},
+    )
+    for opt in ("longevity_cv", "morbidity_cv", "expense_cv",
+                "cost_of_capital_rate", "investment_return", "fund_fee",
+                "guaranteed_credit_rate"):
+        if params.get(opt) is not None:
+            kwargs[opt] = float(params[opt])
+    if params.get("ra_method") is not None:
+        kwargs["ra_method"] = str(params["ra_method"]).strip()
+    return Assumptions(**kwargs)
 
 
 def write_valuation(valuation: Valuation, path, *, ids=None) -> None:

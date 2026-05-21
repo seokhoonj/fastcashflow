@@ -16,7 +16,12 @@ from fastcashflow.assumptions import Assumptions
 from fastcashflow.coverage import DEATH, DIAGNOSIS, INPATIENT, OUTPATIENT, SURGERY
 from fastcashflow.engine import Measurement, Valuation, measure, value
 from fastcashflow.grouping import group
-from fastcashflow.io import read_model_points, value_file, write_valuation
+from fastcashflow.io import (
+    read_assumptions,
+    read_model_points,
+    value_file,
+    write_valuation,
+)
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.movement import (
     PAAPeriodMovement,
@@ -46,6 +51,7 @@ __all__ = [
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
-    "read_model_points", "write_valuation", "value_file", "solve_premium",
+    "read_model_points", "read_assumptions", "write_valuation", "value_file",
+    "solve_premium",
     "DEATH", "DIAGNOSIS", "INPATIENT", "OUTPATIENT", "SURGERY",
 ]
