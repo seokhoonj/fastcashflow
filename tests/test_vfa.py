@@ -7,7 +7,7 @@ is the variable fee it keeps -- which is the inception CSM.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, measure_tvog, measure_vfa
+from fastcashflow import Assumptions, ModelPointSet, measure_tvog, measure_vfa, report
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.004      # flat monthly lapse
@@ -150,3 +150,43 @@ def test_vfa_scenarios_without_a_guarantee_is_rejected():
     mp = ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
     with pytest.raises(ValueError, match="guarantee"):
         measure_vfa(mp, asmp, np.full((10, 120), 0.003))
+
+
+def test_vfa_ra_zero_without_expense_cv():
+    """With no expense_cv the VFA RA is zero -- the v1 default."""
+    res = measure_vfa(
+        ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8),
+        _assumptions(expense_maintenance_annual=120_000.0),
+    )
+    assert np.allclose(res.ra, 0.0)
+
+
+def test_vfa_ra_scales_with_expense_cv():
+    """The VFA RA is a confidence-level margin linear in the expense CV."""
+    mp = ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8)
+    r1 = measure_vfa(mp, _assumptions(expense_maintenance_annual=120_000.0,
+                                      expense_cv=0.10))
+    r2 = measure_vfa(mp, _assumptions(expense_maintenance_annual=120_000.0,
+                                      expense_cv=0.20))
+    assert r1.ra[0] > 0.0
+    assert np.isclose(r2.ra[0], 2.0 * r1.ra[0])
+
+
+def test_vfa_ra_reduces_the_csm():
+    """The RA is part of the fulfilment cash flows, so it reduces the CSM."""
+    mp = ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8)
+    no_ra = measure_vfa(mp, _assumptions(expense_maintenance_annual=120_000.0,
+                                         expense_cv=0.0))
+    with_ra = measure_vfa(mp, _assumptions(expense_maintenance_annual=120_000.0,
+                                           expense_cv=0.30))
+    assert with_ra.csm[0, 0] < no_ra.csm[0, 0]
+
+
+def test_vfa_report_releases_the_ra_into_revenue():
+    """The disclosure releases the VFA RA into insurance revenue."""
+    asmp = _assumptions(expense_maintenance_annual=120_000.0, expense_cv=0.25)
+    m = measure_vfa(ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8), asmp)
+    rep = report(m)
+    ra_in_revenue = (rep.insurance_revenue - rep.insurance_service_expense
+                     - m.csm_release)
+    assert np.isclose(ra_in_revenue[0].sum(), m.ra[0])

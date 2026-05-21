@@ -21,8 +21,10 @@ that return-rate accretion. A minimum guaranteed credited rate is supported
 -- the account is credited ``max(return, guarantee)`` each period. Its
 intrinsic cost appears in this deterministic measurement; the time value of
 the guarantee, the extra cost from return volatility, is measured
-stochastically by ``measure_tvog``. Surrender penalties and a guarantee
-risk adjustment are left for later, so the v1 RA is zero.
+stochastically by ``measure_tvog``. Surrender penalties and a lapse-risk
+adjustment are left for later; the risk adjustment here covers expense risk
+-- the main non-financial risk an account-value contract carries, with the
+policyholder bearing the investment risk.
 """
 from __future__ import annotations
 
@@ -32,7 +34,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.gmm import _csm_kernel
+from fastcashflow.gmm import _csm_kernel, _norm_ppf
 from fastcashflow.modelpoint import ModelPointSet
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.tvog import tvog_weights
@@ -43,8 +45,9 @@ class VFAMeasurement:
     """VFA measurement of a direct-participation (account-value) portfolio.
 
     ``account_value`` is the ``(n_mp, n_time+1)`` account-value trajectory.
-    ``bel`` and ``loss_component`` are ``(n_mp,)`` inception figures. ``csm``
-    is the ``(n_mp, n_time+1)`` trajectory, accreted at the underlying-items
+    ``bel``, ``ra`` and ``loss_component`` are ``(n_mp,)`` inception figures
+    -- the RA being a confidence-level margin for expense risk. ``csm`` is
+    the ``(n_mp, n_time+1)`` trajectory, accreted at the underlying-items
     return and released by coverage units::
 
         csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]
@@ -56,6 +59,7 @@ class VFAMeasurement:
 
     account_value: FloatArray    # (n_mp, n_time+1) -- account-value trajectory
     bel: FloatArray              # (n_mp,)          -- inception BEL
+    ra: FloatArray               # (n_mp,)          -- inception RA (expense risk)
     csm: FloatArray              # (n_mp, n_time+1) -- CSM trajectory
     csm_accretion: FloatArray    # (n_mp, n_time)   -- CSM accreted each month
     csm_release: FloatArray      # (n_mp, n_time)   -- CSM released each month
@@ -80,9 +84,10 @@ def measure_vfa(
     is the account value at that time.
 
     BEL is the present value of benefits and expenses less the premium, all
-    at the underlying-items return; the CSM is ``max(0, -BEL)`` -- the
+    at the underlying-items return; the CSM is ``max(0, -(BEL + RA))`` -- the
     entity's unearned variable fee -- accreted at the same return and
-    released by coverage units.
+    released by coverage units. The RA is a confidence-level margin for
+    expense risk.
 
     The deterministic BEL carries the guarantee's intrinsic value only. When
     ``return_scenarios`` -- an ``(n_scenarios, n_time)`` array of monthly
@@ -143,13 +148,19 @@ def measure_vfa(
         time_value = mps.account_value * (exits @ tvog_weights(asmp, return_scenarios))
 
     bel = pv_benefits + pv_expenses - mps.account_value + time_value
-    loss_component = np.maximum(0.0, bel)                 # RA is zero in v1
-    csm0 = np.maximum(0.0, -bel)
+    # RA -- a confidence-level margin for expense risk, the non-financial
+    # risk an account-value contract carries (mortality risk on the amount
+    # is near zero, every exit paying the account value).
+    ra = _norm_ppf(asmp.ra_confidence) * asmp.expense_cv * pv_expenses
+    fcf = bel + ra
+    loss_component = np.maximum(0.0, fcf)
+    csm0 = np.maximum(0.0, -fcf)
     csm, csm_accretion, csm_release = _csm_kernel(csm0, inforce, r_m)
 
     return VFAMeasurement(
         account_value=av,
         bel=bel,
+        ra=ra,
         csm=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,

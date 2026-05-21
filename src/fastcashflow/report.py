@@ -140,14 +140,18 @@ def _report_paa(m: PAAMeasurement) -> Report:
 
 
 def _report_vfa(m: VFAMeasurement) -> Report:
-    """VFA: the profit emerges as the CSM releases (no RA in v1)."""
+    """VFA: profit emerges as the CSM releases; the RA covers expense risk."""
     csm = m.csm
     service_expense = m.cashflows.expense_cf       # account value is investment comp.
     csm_release = m.csm_release
+    # Release the expense-risk RA over the coverage period, in proportion to
+    # the coverage units (in-force).
+    inforce = m.cashflows.inforce
+    ra_release = m.ra[:, None] * inforce / inforce.sum(axis=1, keepdims=True)
     return Report(
-        insurance_revenue=service_expense + csm_release,
+        insurance_revenue=service_expense + ra_release + csm_release,
         insurance_service_expense=service_expense,
-        insurance_service_result=csm_release,
+        insurance_service_result=ra_release + csm_release,
         insurance_finance_expense=m.csm_accretion,
         loss_component=m.loss_component,
         csm_opening=csm[:, :-1],

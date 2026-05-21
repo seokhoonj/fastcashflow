@@ -49,6 +49,9 @@ class Assumptions:
     morbidity_cv :
         Coefficient of variation of morbidity claims (hospitalisation,
         surgery, outpatient) -- the morbidity-risk component of the RA.
+    expense_cv :
+        Coefficient of variation of expense cash flows -- the expense-risk
+        component of the Risk Adjustment for account-value (VFA) contracts.
     ra_method :
         Which Risk Adjustment technique to use -- ``"confidence_level"``
         (the default; a percentile margin on the benefit present values) or
@@ -85,6 +88,7 @@ class Assumptions:
     mortality_cv: float
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
+    expense_cv: float = 0.0
     ra_method: str = "confidence_level"
     cost_of_capital_rate: float = 0.06
     investment_return: float = 0.0

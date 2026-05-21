@@ -53,7 +53,8 @@ Beyond the phase plan:
   annuity, and health (inpatient, surgery, outpatient, diagnosis), built as
   a variable-length coverage list per policy.
 - **Risk Adjustment** -- the confidence-level and cost-of-capital methods,
-  each with separate mortality, morbidity and longevity components.
+  with separate mortality, morbidity and longevity components, and an
+  expense-risk component for account-value contracts.
 - **Pricing** -- `solve_premium` solves the level premium for a break-even,
   margin or target-CSM objective.
 - **Stochastic** -- `value_stochastic` values a portfolio under many
