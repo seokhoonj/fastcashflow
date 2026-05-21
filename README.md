@@ -82,6 +82,19 @@ Further out: a non-financial-risk adjustment for guarantees.
 
 ## Quick start
 
+The quickest way in is the worked example -- it loads an actuarial basis
+and a portfolio from sample files, measures the IFRS 17 liability,
+assembles the disclosure, and rolls a reporting period forward:
+
+```
+python examples/worked_example.py
+```
+
+It reads the basis from an Excel workbook (`read_assumptions`) and the
+policies from a CSV (`read_model_points`) -- copy `examples/sample_basis.xlsx`
+and `examples/sample_policies.csv`, edit them, and point it at your own
+book. The rest of this section builds the same inputs in code instead.
+
 ```python
 import numpy as np
 from fastcashflow import Assumptions, ModelPointSet, measure
