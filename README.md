@@ -46,6 +46,9 @@ Beyond the phase plan:
 - **Disclosure** -- the IFRS 17 insurance service result (insurance revenue,
   service expense, finance expense), the loss component and the CSM analysis
   of change, assembled from a GMM, PAA or VFA measurement.
+- **Reinsurance** -- reinsurance contracts held, measured as a quota-share
+  treaty over a direct portfolio; the CSM carries the net cost or gain of
+  the cover.
 - **Products** -- term and whole life, endowment, pure endowment, immediate
   annuity, and health (inpatient, surgery, outpatient, diagnosis), built as
   a variable-length coverage list per policy.
@@ -54,7 +57,7 @@ Beyond the phase plan:
 - **Pricing** -- `solve_premium` solves the level premium for a break-even,
   margin or target-CSM objective.
 
-Further out: stochastic projection; reinsurance contracts held.
+Further out: stochastic projection.
 
 ## Quick start
 
