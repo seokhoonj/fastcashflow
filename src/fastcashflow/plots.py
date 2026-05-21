@@ -1,0 +1,245 @@
+"""Visualisation -- charts of the IFRS 17 figures the engine produces.
+
+Turn a measurement, a reconciliation or a stochastic result into a chart.
+Plotting is an optional extra::
+
+    pip install fastcashflow[viz]
+
+matplotlib is imported lazily, so the core engine carries no plotting
+dependency. Every function draws onto a matplotlib Axes -- it creates one
+if none is given, and returns it -- so the charts compose into larger
+figures and stay easy to save or restyle.
+"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+
+    from fastcashflow.engine import Measurement
+    from fastcashflow.movement import Reconciliation
+    from fastcashflow.stochastic import StochasticResult
+
+__all__ = [
+    "plot_liability",
+    "plot_csm_runoff",
+    "plot_analysis_of_change",
+    "plot_stochastic",
+]
+
+# fastcashflow chart palette -- one colour per IFRS 17 quantity, kept
+# consistent across every chart.
+_COLOR = {
+    "bel": "#3b6ea5",       # blue
+    "ra": "#e0a458",        # amber
+    "csm": "#2a9d8f",       # teal-green
+    "loss": "#c1466b",      # rose
+    "ink": "#1d2b35",       # near-black -- text and axes
+    "grid": "#e6e8eb",      # light grid
+    "up": "#2a9d8f",        # waterfall increase
+    "down": "#e07a5f",      # waterfall decrease
+    "total": "#52677a",     # waterfall opening / closing bars
+}
+
+
+def _plt():
+    """Import matplotlib lazily, with a helpful error if it is missing."""
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as exc:                           # pragma: no cover
+        raise ImportError(
+            "plotting requires matplotlib -- install it with "
+            "'pip install fastcashflow[viz]'"
+        ) from exc
+    return plt
+
+
+def _compact(value: float, _pos: object = None) -> str:
+    """Format a single monetary value compactly -- 1.4M, 320K, -184K, ..."""
+    a = abs(value)
+    if a >= 1e9:
+        return f"{value / 1e9:,.1f}B"
+    if a >= 1e6:
+        return f"{value / 1e6:,.1f}M"
+    if a >= 1e3:
+        return f"{value / 1e3:,.0f}K"
+    return f"{value:,.0f}"
+
+
+def _format_money_axis(ax, axis: str) -> None:
+    """Format a whole axis as money in one consistent unit (K, M or B)."""
+    from matplotlib.ticker import FuncFormatter
+
+    lo, hi = ax.get_ylim() if axis == "y" else ax.get_xlim()
+    peak = max(abs(lo), abs(hi))
+    div, suffix = 1.0, ""
+    if peak >= 1e9:
+        div, suffix = 1e9, "B"
+    elif peak >= 1e6:
+        div, suffix = 1e6, "M"
+    elif peak >= 1e3:
+        div, suffix = 1e3, "K"
+
+    def fmt(value, _pos=None):
+        if value == 0:
+            return "0"
+        text = f"{value / div:,.2f}".rstrip("0").rstrip(".")
+        return f"{text}{suffix}"
+
+    target = ax.yaxis if axis == "y" else ax.xaxis
+    target.set_major_formatter(FuncFormatter(fmt))
+
+
+def _axes(ax, figsize: tuple[float, float] = (9.0, 5.5)):
+    """Return ``ax``, or a fresh Axes if it is ``None``."""
+    if ax is not None:
+        return ax
+    _, ax = _plt().subplots(figsize=figsize, dpi=120)
+    return ax
+
+
+def _finish(ax, title, *, xlabel=None, ylabel=None, money_axis="y"):
+    """Apply the fastcashflow house style to ``ax``."""
+    ink = _COLOR["ink"]
+    ax.set_title(title, fontsize=13, fontweight="bold", color=ink,
+                 loc="left", pad=12)
+    if xlabel:
+        ax.set_xlabel(xlabel, fontsize=10, color=ink)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontsize=10, color=ink)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(_COLOR["grid"])
+    ax.tick_params(colors=ink, labelsize=9, length=0)
+    ax.grid(axis="y", color=_COLOR["grid"], linewidth=0.8)
+    ax.set_axisbelow(True)
+    if money_axis in ("x", "y"):
+        _format_money_axis(ax, money_axis)
+    return ax
+
+
+def _legend(ax) -> None:
+    ax.legend(frameon=False, fontsize=9, labelcolor=_COLOR["ink"])
+
+
+def plot_liability(measurement: Measurement, *, ax: Axes | None = None,
+                   title: str = "Liability components over time") -> Axes:
+    """Plot the BEL, RA and CSM trajectories over the contract's life.
+
+    Each line is the portfolio total of that component at each month.
+    """
+    ax = _axes(ax)
+    bel = measurement.bel.sum(axis=0)
+    ra = measurement.ra.sum(axis=0)
+    csm = measurement.csm.sum(axis=0)
+    months = np.arange(bel.shape[0])
+    ax.axhline(0.0, color=_COLOR["ink"], linewidth=0.8)
+    ax.plot(months, bel, color=_COLOR["bel"], linewidth=2.2, label="BEL")
+    ax.plot(months, ra, color=_COLOR["ra"], linewidth=2.2, label="RA")
+    ax.plot(months, csm, color=_COLOR["csm"], linewidth=2.2, label="CSM")
+    ax.set_xlim(0, max(int(months[-1]), 1))
+    _finish(ax, title, xlabel="month", ylabel="amount")
+    _legend(ax)
+    return ax
+
+
+def plot_csm_runoff(measurement: Measurement, *, ax: Axes | None = None,
+                    title: str = "CSM run-off") -> Axes:
+    """Plot the contractual service margin running off to zero.
+
+    The CSM is the unearned profit in the contract; its run-off is the
+    profit emerging into the income statement as service is provided.
+    """
+    ax = _axes(ax)
+    csm = measurement.csm.sum(axis=0)
+    months = np.arange(csm.shape[0])
+    ax.fill_between(months, csm, color=_COLOR["csm"], alpha=0.22)
+    ax.plot(months, csm, color=_COLOR["csm"], linewidth=2.6)
+    ax.set_xlim(0, max(int(months[-1]), 1))
+    ax.set_ylim(bottom=0.0)
+    _finish(ax, title, xlabel="month", ylabel="CSM")
+    return ax
+
+
+def plot_analysis_of_change(reconciliation: Reconciliation, *,
+                            component: str = "csm",
+                            ax: Axes | None = None,
+                            title: str | None = None) -> Axes:
+    """Plot one reporting period's analysis of change as a waterfall.
+
+    ``component`` selects ``"bel"``, ``"ra"`` or ``"csm"``. The waterfall
+    bridges the opening balance to the closing balance through the
+    future-service, finance and release drivers.
+    """
+    component = component.lower()
+    if component not in ("bel", "ra", "csm"):
+        raise ValueError(
+            f"component must be 'bel', 'ra' or 'csm', got {component!r}"
+        )
+    r = reconciliation
+    opening = getattr(r, f"{component}_opening")
+    future = getattr(r, f"{component}_future_service")
+    finance = getattr(r, f"{component}_finance")
+    release = getattr(r, f"{component}_release")
+    closing = getattr(r, f"{component}_closing")
+
+    ax = _axes(ax)
+    after_fs = opening + future
+    after_fin = after_fs + finance
+    spans = ((0.0, opening), (opening, after_fs), (after_fs, after_fin),
+             (after_fin, closing), (0.0, closing))
+    deltas = (opening, future, finance, release, closing)
+    for i, (lo, hi) in enumerate(spans):
+        if i in (0, 4):
+            color = _COLOR["total"]
+        else:
+            color = _COLOR["up"] if hi >= lo else _COLOR["down"]
+        ax.bar(i, hi - lo, bottom=lo, width=0.62, color=color, zorder=3)
+    for i, level in enumerate((opening, after_fs, after_fin, closing)):
+        ax.plot([i + 0.31, i + 0.69], [level, level], color=_COLOR["ink"],
+                linewidth=1.0, linestyle=(0, (4, 2)), zorder=2)
+    for i, (lo, hi) in enumerate(spans):
+        ax.annotate(_compact(deltas[i]), (i, max(lo, hi)),
+                    textcoords="offset points", xytext=(0, 5), ha="center",
+                    fontsize=8.5, fontweight="bold", color=_COLOR["ink"])
+    ax.axhline(0.0, color=_COLOR["ink"], linewidth=0.8)
+    ax.set_xticks(range(5))
+    ax.set_xticklabels(["Opening", "Future\nservice", "Finance",
+                        "Release", "Closing"])
+    if title is None:
+        title = (f"{component.upper()} analysis of change "
+                 f"-- months {r.month_start}-{r.month_end}")
+    _finish(ax, title, ylabel=component.upper())
+    return ax
+
+
+def plot_stochastic(result: StochasticResult, *, line: str = "bel",
+                    ax: Axes | None = None, bins: int = 30,
+                    title: str | None = None) -> Axes:
+    """Plot the distribution of a figure across the stochastic scenarios.
+
+    ``line`` selects ``"bel"``, ``"ra"``, ``"csm"`` or ``"loss_component"``.
+    The dashed line marks the mean across the scenarios.
+    """
+    line = line.lower()
+    valid = ("bel", "ra", "csm", "loss_component")
+    if line not in valid:
+        raise ValueError(f"line must be one of {valid}, got {line!r}")
+    data = np.asarray(getattr(result, line), dtype=float)
+
+    ax = _axes(ax)
+    ax.hist(data, bins=bins, color=_COLOR["bel"], alpha=0.85,
+            edgecolor="white", linewidth=0.6, zorder=3)
+    mean = float(data.mean())
+    ax.axvline(mean, color=_COLOR["loss"], linewidth=1.8, linestyle="--",
+               zorder=4, label=f"mean {_compact(mean)}")
+    if title is None:
+        title = f"{line.upper()} distribution over {data.size} scenarios"
+    _finish(ax, title, xlabel=line.upper(), ylabel="scenarios",
+            money_axis="x")
+    _legend(ax)
+    return ax

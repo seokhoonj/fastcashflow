@@ -115,3 +115,17 @@ Input and output
 .. autofunction:: fastcashflow.write_valuation
 
 .. autofunction:: fastcashflow.value_file
+
+Visualisation
+-------------
+
+The plotting helpers require the ``viz`` extra (``pip install
+fastcashflow[viz]``).
+
+.. autofunction:: fastcashflow.plot_liability
+
+.. autofunction:: fastcashflow.plot_csm_runoff
+
+.. autofunction:: fastcashflow.plot_analysis_of_change
+
+.. autofunction:: fastcashflow.plot_stochastic

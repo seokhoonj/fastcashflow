@@ -34,6 +34,12 @@ from fastcashflow.movement import (
     roll_forward,
 )
 from fastcashflow.paa import PAAMeasurement, measure_paa
+from fastcashflow.plots import (
+    plot_analysis_of_change,
+    plot_csm_runoff,
+    plot_liability,
+    plot_stochastic,
+)
 from fastcashflow.pricing import solve_premium
 from fastcashflow.reinsurance import ReinsuranceMeasurement, measure_reinsurance
 from fastcashflow.report import Report, report
@@ -53,5 +59,7 @@ __all__ = [
     "VFAPeriodMovement", "VFAReconciliation",
     "read_model_points", "read_assumptions", "write_valuation", "value_file",
     "solve_premium",
+    "plot_liability", "plot_csm_runoff", "plot_analysis_of_change",
+    "plot_stochastic",
     "DEATH", "DIAGNOSIS", "INPATIENT", "OUTPATIENT", "SURGERY",
 ]
