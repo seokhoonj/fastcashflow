@@ -12,6 +12,7 @@ author = "Seokhoon Joo"
 copyright = "2026, Seokhoon Joo"
 release = fastcashflow.__version__
 version = release
+language = "ko"
 
 extensions = [
     "myst_parser",
@@ -32,7 +33,13 @@ intersphinx_mapping = {
 
 myst_enable_extensions = ["colon_fence", "deflist"]
 
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+# The site is Korean for now. The English starter pages are kept on disk but
+# left unbuilt; an English edition would become a separate Read the Docs
+# project when it is actually written.
+exclude_patterns = [
+    "_build", "Thumbs.db", ".DS_Store",
+    "getting-started.md", "concepts.md", "api.rst",
+]
 
 html_theme = "pydata_sphinx_theme"
 html_title = "fastcashflow"

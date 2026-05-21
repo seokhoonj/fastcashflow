@@ -1,36 +1,35 @@
-# Welcome
+# 환영합니다
 
-**Fast IFRS 17 valuation -- from cash flow projection to the disclosure.**
+**현금흐름 투영부터 공시까지 -- 빠른 IFRS 17 평가 엔진**
 
 ```{image} images/hero.png
-:alt: The IFRS 17 figures fastcashflow produces -- the liability components, the CSM run-off and the analysis of change
+:alt: fastcashflow가 산출하는 IFRS 17 수치 -- 부채 구성요소, 보험계약마진 상각, 변동분석
 :class: hero
 ```
 
-fastcashflow measures the insurance contract liability -- the best estimate
-liability, the risk adjustment and the contractual service margin -- policy
-by policy, under all three IFRS 17 measurement models.
+fastcashflow는 보험계약 부채 -- 최선추정부채(BEL), 위험조정(RA),
+보험계약마진(CSM) -- 를 계약 건별로, IFRS 17의 세 가지 측정모형 모두에
+대해 측정합니다.
 
 ::::{grid} 1 2 2 4
 :gutter: 3
 
-:::{grid-item-card} Fast
-numba-compiled kernels, built for seriatim (policy-by-policy) valuation at
-scale.
+:::{grid-item-card} 빠름
+numba로 컴파일한 수치 커널 -- 계약 건별(seriatim) 대규모 평가를 위해
+설계했습니다.
 :::
 
-:::{grid-item-card} Complete
-All three measurement models -- GMM, PAA, VFA -- with reinsurance,
-stochastic valuation and the period-close analysis of change.
+:::{grid-item-card} 완전함
+세 측정모형(GMM·PAA·VFA)을 모두 -- 재보험, 확률론적 평가, 기말
+변동분석까지.
 :::
 
-:::{grid-item-card} Clear
-Readable code, teaching-quality docstrings, and built-in charts of every
-figure.
+:::{grid-item-card} 명확함
+읽기 쉬운 코드, 교육 수준의 docstring, 모든 수치를 그리는 내장 차트.
 :::
 
-:::{grid-item-card} Open
-Free and open source, MPL-2.0 licensed.
+:::{grid-item-card} 열림
+자유로운 오픈소스, MPL-2.0 라이선스.
 :::
 
 ::::
@@ -38,6 +37,5 @@ Free and open source, MPL-2.0 licensed.
 ```{toctree}
 :hidden:
 
-한국어 <ko/index>
-English <en/index>
+튜토리얼 <tutorial/index>
 ```
