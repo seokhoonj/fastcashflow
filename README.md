@@ -46,6 +46,9 @@ Beyond the phase plan:
 - **Disclosure** -- the IFRS 17 insurance service result (insurance revenue,
   service expense, finance expense), the loss component and the CSM analysis
   of change, assembled from a GMM, PAA or VFA measurement.
+- **Analysis of change** -- `roll_forward` slices a measurement into
+  reporting-period movements that reconcile the opening and closing BEL, RA
+  and CSM -- the expected-basis skeleton of the period-close cycle.
 - **Reinsurance** -- reinsurance contracts held, measured as a quota-share
   treaty over a direct portfolio; the CSM carries the net cost or gain of
   the cover.

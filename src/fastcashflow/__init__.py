@@ -17,6 +17,7 @@ from fastcashflow.coverage import DEATH, DIAGNOSIS, INPATIENT, OUTPATIENT, SURGE
 from fastcashflow.engine import Measurement, Valuation, measure, value
 from fastcashflow.io import read_model_points, value_file, write_valuation
 from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.movement import PeriodMovement, roll_forward
 from fastcashflow.paa import PAAMeasurement, measure_paa
 from fastcashflow.pricing import solve_premium
 from fastcashflow.reinsurance import ReinsuranceMeasurement, measure_reinsurance
@@ -29,9 +30,10 @@ __version__ = "0.0.1"
 __all__ = [
     "Assumptions", "ModelPointSet", "measure", "value", "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "measure_tvog",
-    "report",
+    "report", "roll_forward",
     "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
+    "PeriodMovement",
     "read_model_points", "write_valuation", "value_file", "solve_premium",
     "DEATH", "DIAGNOSIS", "INPATIENT", "OUTPATIENT", "SURGERY",
 ]
