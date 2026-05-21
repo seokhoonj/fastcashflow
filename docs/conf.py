@@ -33,12 +33,13 @@ intersphinx_mapping = {
 
 myst_enable_extensions = ["colon_fence", "deflist"]
 
-# The site is Korean for now. The English starter pages are kept on disk but
-# left unbuilt; an English edition would become a separate Read the Docs
-# project when it is actually written.
+# The site is Korean. The API reference is built as is -- its autodoc bodies
+# are English, which is fine for a reference. The English starter pages
+# (getting-started.md, concepts.md) are kept on disk but left unbuilt, for a
+# future separate English edition.
 exclude_patterns = [
     "_build", "Thumbs.db", ".DS_Store",
-    "getting-started.md", "concepts.md", "api.rst",
+    "getting-started.md", "concepts.md",
 ]
 
 html_theme = "pydata_sphinx_theme"

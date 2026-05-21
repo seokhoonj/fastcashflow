@@ -10,6 +10,9 @@ Inputs
 .. autoclass:: fastcashflow.Assumptions
    :members:
 
+.. autoclass:: fastcashflow.RiderRate
+   :members:
+
 Measurement (GMM)
 -----------------
 
@@ -111,6 +114,10 @@ Input and output
 .. autofunction:: fastcashflow.read_model_points
 
 .. autofunction:: fastcashflow.read_assumptions
+
+.. autofunction:: fastcashflow.load_sample_model_points
+
+.. autofunction:: fastcashflow.load_sample_assumptions
 
 .. autofunction:: fastcashflow.write_valuation
 

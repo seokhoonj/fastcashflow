@@ -2,10 +2,8 @@
 
 ## Installation
 
-Until the package is published to PyPI, install it from GitHub:
-
 ```bash
-pip install "fastcashflow[viz] @ git+https://github.com/seokhoonj/fastcashflow.git"
+pip install fastcashflow[viz]
 ```
 
 The `viz` extra adds the charting helpers used below; drop it for the core
