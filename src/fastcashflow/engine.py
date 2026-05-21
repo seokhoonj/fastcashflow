@@ -26,6 +26,7 @@ from fastcashflow.gmm import (
     _rollforward_kernel,
     compute_csm,
     discount_factors,
+    discount_factors_from_curve,
 )
 from fastcashflow.coverage import COVERAGE_RISK, FIRST_DIAGNOSIS_KIND, coverage_rates
 from fastcashflow.modelpoint import ModelPointSet
@@ -233,7 +234,13 @@ def _value_kernel(mortality_grid, issue_index, term_months, lapse_by_year,
     return bel, ra, csm, loss_component
 
 
-def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Valuation:
+def value(
+    mps: ModelPointSet,
+    asmp: Assumptions,
+    *,
+    backend: str = "cpu",
+    discount_curve: FloatArray | None = None,
+) -> Valuation:
     """Fast GMM valuation: BEL, RA and CSM per model point.
 
     One fused kernel; no per-month arrays are materialised. This is the
@@ -246,6 +253,10 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
         ``"cpu"`` (default) runs the numba parallel kernel across cores.
         ``"gpu"`` runs the CUDA kernel; it needs a CUDA device and is worth
         it only at large scale (kernel-launch and transfer cost is fixed).
+    discount_curve :
+        Optional ``(n_time,)`` array of annual discount rates -- one per
+        projection month, a locked-in rate curve that replaces the flat
+        ``asmp.discount_annual``. ``None`` uses the flat rate.
     """
     if asmp.ra_method != "confidence_level":
         raise ValueError(
@@ -279,7 +290,17 @@ def value(mps: ModelPointSet, asmp: Assumptions, *, backend: str = "cpu") -> Val
     )
 
     inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
-    discount_start, discount_mid = discount_factors(asmp, n_time)
+    if discount_curve is None:
+        discount_start, discount_mid = discount_factors(asmp, n_time)
+    else:
+        discount_curve = np.asarray(discount_curve, dtype=np.float64)
+        if discount_curve.shape != (n_time,):
+            raise ValueError(
+                f"discount_curve must have shape ({n_time},) -- one annual "
+                f"rate per projection month -- got {discount_curve.shape}"
+            )
+        monthly_curve = (1.0 + discount_curve) ** (1.0 / 12.0) - 1.0
+        discount_start, discount_mid = discount_factors_from_curve(monthly_curve)
     z = _norm_ppf(asmp.ra_confidence)
     mortality_factor = z * asmp.mortality_cv
     morbidity_factor = z * asmp.morbidity_cv

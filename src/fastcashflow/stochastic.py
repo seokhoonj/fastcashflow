@@ -11,9 +11,9 @@ fused ``value`` kernel. Running N scenarios over millions of seriatim
 policies is precisely what the engine's speed exists for: a slow engine
 cannot do seriatim stochastic at scale at all.
 
-v1 scope: each scenario is a flat annual discount rate. Scenario paths (a
-rate that varies over the projection) and investment-return scenarios for
-participating business are left for later.
+Each scenario is either a flat annual discount rate or a full discount-rate
+curve -- one annual rate per projection month. Investment-return scenarios
+for participating business are handled separately, by ``measure_tvog``.
 """
 from __future__ import annotations
 
@@ -57,19 +57,37 @@ def value_stochastic(
 ) -> StochasticResult:
     """Value a portfolio under each economic scenario -- the liability distribution.
 
-    ``scenarios`` is a 1-D array of annual discount rates, one per scenario.
+    ``scenarios`` is either
+
+    * a 1-D ``(n_scenarios,)`` array -- one flat annual discount rate per
+      scenario; or
+    * a 2-D ``(n_scenarios, n_time)`` array -- one discount-rate curve per
+      scenario, an annual rate for each projection month.
+
     Each scenario is valued with the fused :func:`value` kernel and the
     portfolio total of every figure is recorded, so the distribution -- mean,
     percentiles -- can be read from the result.
     """
     scenarios = np.asarray(scenarios, dtype=np.float64)
+    if scenarios.ndim not in (1, 2):
+        raise ValueError("scenarios must be 1-D (flat rates) or 2-D (rate curves)")
+    if scenarios.ndim == 2:
+        n_time = int(mps.term_months.max())
+        if scenarios.shape[1] != n_time:
+            raise ValueError(
+                f"a 2-D scenarios array must have {n_time} columns (the "
+                f"projection horizon), got {scenarios.shape[1]}"
+            )
     n = int(scenarios.shape[0])
     bel = np.empty(n)
     ra = np.empty(n)
     csm = np.empty(n)
     loss_component = np.empty(n)
     for s in range(n):
-        v = value(mps, replace(asmp, discount_annual=float(scenarios[s])))
+        if scenarios.ndim == 1:
+            v = value(mps, replace(asmp, discount_annual=float(scenarios[s])))
+        else:
+            v = value(mps, asmp, discount_curve=scenarios[s])
         bel[s] = v.bel.sum()
         ra[s] = v.ra.sum()
         csm[s] = v.csm.sum()

@@ -37,6 +37,24 @@ def discount_factors(asmp: Assumptions, n_time: int) -> tuple[FloatArray, FloatA
     return base ** (-start), base ** (-(mid + 0.5))
 
 
+def discount_factors_from_curve(
+    monthly_rates: FloatArray,
+) -> tuple[FloatArray, FloatArray]:
+    """Discount factors from a per-month rate curve.
+
+    ``monthly_rates`` is a ``(n_time,)`` array of monthly forward rates --
+    the rate applied across each projection month. Returns the same
+    ``(discount_start, discount_mid)`` pair as :func:`discount_factors`; a
+    constant curve reproduces it bar floating-point rounding.
+    """
+    monthly_rates = np.asarray(monthly_rates, dtype=np.float64)
+    discount_start = np.empty(monthly_rates.shape[0] + 1)
+    discount_start[0] = 1.0
+    np.cumprod(1.0 / (1.0 + monthly_rates), out=discount_start[1:])
+    discount_mid = discount_start[:-1] / np.sqrt(1.0 + monthly_rates)
+    return discount_start, discount_mid
+
+
 # Coefficients of Acklam's rational approximation of the standard-normal
 # inverse CDF -- the published constants of the algorithm.
 _ACKLAM_A = (-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,

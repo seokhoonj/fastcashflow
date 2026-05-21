@@ -57,15 +57,15 @@ Beyond the phase plan:
 - **Pricing** -- `solve_premium` solves the level premium for a break-even,
   margin or target-CSM objective.
 - **Stochastic** -- `value_stochastic` values a portfolio under many
-  economic scenarios and reports the liability distribution, for the
-  percentile-based risk and capital measures a single run cannot give.
+  economic scenarios -- a flat rate or a full discount-rate curve each --
+  and reports the liability distribution, for the percentile-based risk and
+  capital measures a single run cannot give.
 - **Guarantees** -- `measure_tvog` values a VFA minimum-rate guarantee over
   return scenarios, splitting its cost into intrinsic value and time value
   (TVOG); `measure_vfa` folds that time value into the BEL, where the CSM
   absorbs it.
 
-Further out: discount-rate scenario paths; a non-financial-risk adjustment
-for guarantees.
+Further out: a non-financial-risk adjustment for guarantees.
 
 ## Quick start
 
