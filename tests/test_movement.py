@@ -167,8 +167,75 @@ def test_roll_forward_rejects_lonely_revised():
 
 
 def test_roll_forward_rejects_off_boundary_revision():
-    """revised_at must be a multiple of the period length."""
+    """The change month must be a multiple of the period length."""
     mps = _portfolio()
     m = measure(mps, _assumptions())
-    with pytest.raises(ValueError, match="revised_at"):
+    with pytest.raises(ValueError, match="change month"):
         roll_forward(m, 12, revised=_revised(mps), revised_at=20)
+
+
+def test_roll_forward_experience_scales_the_fcf():
+    """In-force experience scales the closing FCF by the actual/expected ratio."""
+    m = measure(_portfolio(), _assumptions())
+    k = 24
+    actual = 0.5 * m.cashflows.inforce[:, k]          # half the book remains
+    periods = roll_forward(m, 12, actual_inforce=actual, experience_at=k)
+    exp = next(p for p in periods if p.month_start == k)
+    assert np.allclose(exp.bel_experience, m.bel[:, k] * -0.5)
+    assert np.allclose(exp.ra_experience, m.ra[:, k] * -0.5)
+
+
+def test_roll_forward_experience_reconciles():
+    """With an experience adjustment, every period still reconciles exactly."""
+    m = measure(_portfolio(), _assumptions())
+    actual = 0.8 * m.cashflows.inforce[:, 24]
+    for p in roll_forward(m, 12, actual_inforce=actual, experience_at=24):
+        assert np.allclose(
+            p.bel_opening + p.bel_assumption_change + p.bel_experience
+            + p.bel_interest - p.bel_release, p.bel_closing)
+        assert np.allclose(
+            p.csm_opening + p.csm_assumption_change + p.csm_experience
+            + p.csm_accretion - p.csm_release, p.csm_closing)
+
+
+def test_roll_forward_experience_isolated_to_its_period():
+    """The experience line is non-zero only in the experience period."""
+    m = measure(_portfolio(), _assumptions())
+    actual = 0.8 * m.cashflows.inforce[:, 24]
+    for p in roll_forward(m, 12, actual_inforce=actual, experience_at=24):
+        if p.month_start == 24:
+            assert not np.allclose(p.bel_experience, 0.0)
+        else:
+            assert np.allclose(p.bel_experience, 0.0)
+            assert np.allclose(p.csm_experience, 0.0)
+
+
+def test_roll_forward_experience_pre_periods_unaffected():
+    """Periods before the experience match the no-experience roll, and chain."""
+    m = measure(_portfolio(), _assumptions())
+    actual = 0.8 * m.cashflows.inforce[:, 24]
+    plain = roll_forward(m, 12)
+    exp = roll_forward(m, 12, actual_inforce=actual, experience_at=24)
+    for plain_p, exp_p in zip(plain[:2], exp[:2]):
+        assert np.allclose(plain_p.csm_closing, exp_p.csm_closing)
+        assert np.allclose(plain_p.bel_closing, exp_p.bel_closing)
+    for prev, nxt in zip(exp, exp[1:]):
+        assert np.allclose(prev.csm_closing, nxt.csm_opening)
+        assert np.allclose(prev.bel_closing, nxt.bel_opening)
+
+
+def test_roll_forward_rejects_experience_and_revision_together():
+    """v1 recognises a revision or experience, not both in one call."""
+    mps = _portfolio()
+    m = measure(mps, _assumptions())
+    actual = 0.8 * m.cashflows.inforce[:, 24]
+    with pytest.raises(ValueError, match="not both"):
+        roll_forward(m, 12, revised=_revised(mps), revised_at=24,
+                     actual_inforce=actual, experience_at=24)
+
+
+def test_roll_forward_rejects_lonely_actual_inforce():
+    """actual_inforce and experience_at must be passed together."""
+    m = measure(_portfolio(), _assumptions())
+    with pytest.raises(ValueError, match="actual_inforce"):
+        roll_forward(m, 12, actual_inforce=m.cashflows.inforce[:, 24])

@@ -48,8 +48,8 @@ Beyond the phase plan:
   of change, assembled from a GMM, PAA or VFA measurement.
 - **Analysis of change** -- `roll_forward` slices a measurement into
   reporting-period movements that reconcile the opening and closing BEL, RA
-  and CSM, and recognises an assumption revision as an adjustment to the
-  CSM -- part of the period-close reporting cycle.
+  and CSM, recognising assumption revisions and in-force experience as
+  adjustments to the CSM -- the period-close reporting cycle.
 - **Reinsurance** -- reinsurance contracts held, measured as a quota-share
   treaty over a direct portfolio; the CSM carries the net cost or gain of
   the cover.
