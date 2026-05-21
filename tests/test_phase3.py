@@ -67,6 +67,7 @@ def test_value_onerous():
 
 
 @pytest.mark.skipif(not cuda.is_available(), reason="no CUDA device available")
+@pytest.mark.filterwarnings("ignore::numba.core.errors.NumbaPerformanceWarning")
 def test_value_gpu_matches_cpu():
     """The GPU backend reproduces the CPU backend exactly."""
     def mortality_monthly(issue_age, duration):
