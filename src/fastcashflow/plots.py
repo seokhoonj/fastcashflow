@@ -16,9 +16,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from fastcashflow.gmm import _norm_ppf
+
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
 
+    from fastcashflow.assumptions import Assumptions
     from fastcashflow.engine import Measurement
     from fastcashflow.movement import Reconciliation
     from fastcashflow.stochastic import StochasticResult
@@ -29,6 +32,7 @@ __all__ = [
     "plot_cashflows",
     "plot_analysis_of_change",
     "plot_stochastic",
+    "plot_risk_adjustment",
 ]
 
 # fastcashflow chart palette -- one colour per IFRS 17 quantity, kept
@@ -305,5 +309,55 @@ def plot_stochastic(result: StochasticResult, *, line: str = "bel",
         title = f"{line.upper()} distribution over {data.size} scenarios"
     _finish(ax, title, xlabel=line.upper(), ylabel="scenarios",
             money_axis="x")
+    _legend(ax)
+    return ax
+
+
+def plot_risk_adjustment(measurement: Measurement, assumptions: Assumptions,
+                         *, bands: tuple[float, ...] = (0.75, 0.85),
+                         ax: Axes | None = None,
+                         title: str = "The risk adjustment as a confidence level",
+                         ) -> Axes:
+    """Plot the risk adjustment as a percentile of the liability distribution.
+
+    The confidence-level method models the liability arising from
+    non-financial risk as a normal distribution centred on the best
+    estimate; the risk adjustment is the margin from that mean out to a
+    chosen percentile. This chart draws that normal distribution and shades
+    the margin up to each confidence level in ``bands``. It applies to the
+    confidence-level method only.
+    """
+    if assumptions.ra_method != "confidence_level":
+        raise ValueError(
+            "plot_risk_adjustment shows the confidence-level risk "
+            "adjustment; these assumptions use the cost-of-capital method"
+        )
+    mu = float(measurement.bel[:, 0].sum())
+    ra = float(measurement.ra[:, 0].sum())
+    if ra <= 0.0:
+        raise ValueError("the risk adjustment is zero -- nothing to plot")
+    sigma = ra / _norm_ppf(assumptions.ra_confidence)
+
+    ax = _axes(ax)
+    x = np.linspace(mu - 3.6 * sigma, mu + 3.6 * sigma, 400)
+    pdf = np.exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * np.sqrt(2.0 * np.pi))
+    ax.plot(x, pdf, color=_COLOR["bel"], linewidth=2.0, zorder=4)
+    ax.fill_between(x, pdf, color=_COLOR["bel"], alpha=0.10, zorder=1)
+
+    ax.axvline(mu, color=_COLOR["ink"], linewidth=1.6, zorder=5,
+               label="best estimate (BEL)")
+    for band in sorted(bands):
+        z_band = _norm_ppf(band)
+        percentile = mu + z_band * sigma
+        region = (x >= mu) & (x <= percentile)
+        ax.fill_between(x[region], pdf[region], color=_COLOR["ra"],
+                        alpha=0.22, zorder=2)
+        ax.axvline(percentile, color=_COLOR["ra"], linewidth=1.5,
+                   linestyle="--", zorder=5,
+                   label=f"{band:.0%} confidence -- RA {_compact(z_band * sigma)}")
+    ax.set_ylim(bottom=0.0)
+    _finish(ax, title, xlabel="liability from non-financial risk",
+            ylabel="density", money_axis="x")
+    ax.set_yticks([])
     _legend(ax)
     return ax

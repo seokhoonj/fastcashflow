@@ -1,4 +1,5 @@
 """Smoke tests for the plotting helpers (the viz extra)."""
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -79,3 +80,15 @@ def test_plot_stochastic_rejects_bad_line(book):
     dist = fcf.value_stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
     with pytest.raises(ValueError):
         fcf.plot_stochastic(dist, line="xxx")
+
+
+def test_plot_risk_adjustment_returns_axes(book):
+    _, asmp, m = book
+    assert isinstance(fcf.plot_risk_adjustment(m, asmp), Axes)
+
+
+def test_plot_risk_adjustment_rejects_cost_of_capital(book):
+    _, asmp, m = book
+    coc = replace(asmp, ra_method="cost_of_capital")
+    with pytest.raises(ValueError):
+        fcf.plot_risk_adjustment(m, coc)

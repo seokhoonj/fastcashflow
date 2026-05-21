@@ -39,6 +39,7 @@ from fastcashflow.plots import (
     plot_cashflows,
     plot_csm_runoff,
     plot_liability,
+    plot_risk_adjustment,
     plot_stochastic,
 )
 from fastcashflow.pricing import solve_premium
@@ -61,6 +62,6 @@ __all__ = [
     "read_model_points", "read_assumptions", "write_valuation", "value_file",
     "solve_premium",
     "plot_liability", "plot_csm_runoff", "plot_cashflows",
-    "plot_analysis_of_change", "plot_stochastic",
+    "plot_analysis_of_change", "plot_stochastic", "plot_risk_adjustment",
     "DEATH", "DIAGNOSIS", "INPATIENT", "OUTPATIENT", "SURGERY",
 ]

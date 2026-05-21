@@ -131,3 +131,5 @@ fastcashflow[viz]``).
 .. autofunction:: fastcashflow.plot_analysis_of_change
 
 .. autofunction:: fastcashflow.plot_stochastic
+
+.. autofunction:: fastcashflow.plot_risk_adjustment
