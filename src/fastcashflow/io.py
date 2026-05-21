@@ -131,13 +131,13 @@ def _read_rates_sheet(ws):
 
 
 def _read_riders_sheet(ws):
-    """Read the riders master sheet -- ``rider_code, rider_name, product,
+    """Read the riders master sheet -- ``product, rider_code, rider_name,
     type`` -- returning ``(code, type)`` pairs in sheet order."""
     riders = []
     for row in ws.iter_rows(min_row=2, values_only=True):
-        if row[0] is None or row[3] is None:
+        if row[1] is None or row[3] is None:
             continue
-        riders.append((str(row[0]).strip(), str(row[3]).strip()))
+        riders.append((str(row[1]).strip(), str(row[3]).strip()))
     return riders
 
 
@@ -156,7 +156,7 @@ def read_assumptions(path) -> Assumptions:
 
     A product with riders adds two more sheets:
 
-    * ``riders`` -- the riders master: ``rider_code, rider_name, product,
+    * ``riders`` -- the riders master: ``product, rider_code, rider_name,
       type``, one row per 특약코드. ``type`` is one of ``death_main``,
       ``death``, ``morbidity``, ``diagnosis``, ``annuity``, ``maturity``.
     * ``rates`` -- long-form ``rider_code, sex, age, rate`` for every
@@ -439,19 +439,27 @@ def value_file(
     output_dir,
     assumptions: Assumptions,
     *,
+    coverages=None,
     chunk_size: int = 20_000_000,
     backend: str = "cpu",
     id_column: str | None = None,
 ) -> int:
-    """Stream a valuation through a wide parquet file one chunk at a time.
+    """Stream a valuation through a parquet file one chunk at a time.
 
-    Reads ``input_path`` in chunks of ``chunk_size`` model points, values each
+    Reads the input in chunks of ``chunk_size`` model points, values each
     chunk with :func:`value`, and writes the results as a parquet dataset --
     one ``part-NNNNN.parquet`` file per chunk -- under ``output_dir``. Peak
     memory is a single chunk, so this scales past what an in-memory run could
     hold.
 
-    The input must be a wide parquet file (see :func:`read_model_points`).
+    The input format mirrors :func:`read_model_points`:
+
+    * **wide** -- ``input_path`` is a wide parquet file; ``coverages`` is
+      ``None``. Each chunk of rows is a self-contained set of model points.
+    * **long-form** -- ``input_path`` is the policies parquet and
+      ``coverages`` the coverages parquet. Each chunk of policies pulls its
+      coverage rows by ``policy_id``, so sorting the coverages file by
+      ``policy_id`` lets the parquet reader prune row groups.
 
     Returns the total number of model points processed.
     """
@@ -461,19 +469,6 @@ def value_file(
         raise ValueError(
             f"value_file streams parquet input only; got {str(input_path)!r}"
         )
-
-    scan = pl.scan_parquet(input_path)
-    available = scan.collect_schema().names()
-    for need in ("issue_age", "term_months"):
-        if need not in available:
-            raise ValueError(
-                f"{str(input_path)!r} is missing required column {need!r}"
-            )
-    columns = [c for c in available
-               if c in _NAMED_WIDE or c.endswith("_benefit") or c == id_column]
-    if id_column is not None and id_column not in available:
-        raise ValueError(f"{str(input_path)!r} has no id column {id_column!r}")
-
     output_dir.mkdir(parents=True, exist_ok=True)
     if any(output_dir.glob("part-*.parquet")):
         raise ValueError(
@@ -481,10 +476,40 @@ def value_file(
             "files; use a fresh directory"
         )
 
+    scan = pl.scan_parquet(input_path)
     n_total = scan.select(pl.len()).collect().item()
-    projected = scan.select(columns)
-
     processed = 0
+
+    if coverages is not None:
+        # long-form: chunk the policies, pull each chunk's coverage rows.
+        cov_scan = pl.scan_parquet(Path(coverages))
+        for part, offset in enumerate(range(0, n_total, chunk_size)):
+            pol = scan.slice(offset, chunk_size).collect()
+            ids = pol["policy_id"]
+            cov = cov_scan.join(
+                pol.lazy().select("policy_id"), on="policy_id", how="semi"
+            ).collect()
+            mps = _long_model_points(pol, cov, assumptions)
+            write_valuation(
+                value(mps, assumptions, backend=backend),
+                output_dir / f"part-{part:05d}.parquet",
+                ids=ids.to_numpy(),
+            )
+            processed += mps.n_mp
+        return processed
+
+    # wide: each chunk of rows is a self-contained set of model points.
+    available = scan.collect_schema().names()
+    for need in ("issue_age", "term_months"):
+        if need not in available:
+            raise ValueError(
+                f"{str(input_path)!r} is missing required column {need!r}"
+            )
+    if id_column is not None and id_column not in available:
+        raise ValueError(f"{str(input_path)!r} has no id column {id_column!r}")
+    columns = [c for c in available
+               if c in _NAMED_WIDE or c.endswith("_benefit") or c == id_column]
+    projected = scan.select(columns)
     for part, offset in enumerate(range(0, n_total, chunk_size)):
         chunk = projected.slice(offset, chunk_size).collect()
         mps = _wide_model_points(

@@ -211,3 +211,24 @@ def test_to_wide_round_trips(tmp_path):
     a, b = value(mps, asmp), value(back, asmp)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.csm, b.csm)
+
+
+def test_value_file_streams_long_form(tmp_path):
+    """value_file streams a long-form policies + coverages pair in chunks."""
+    asmp = load_sample_assumptions()
+    mps = load_sample_model_points()
+    policies, coverages = mps.to_long(asmp)
+    policies.write_parquet(tmp_path / "pol.parquet")
+    coverages.write_parquet(tmp_path / "cov.parquet")
+
+    out_dir = tmp_path / "results"
+    processed = value_file(
+        tmp_path / "pol.parquet", out_dir, asmp,
+        coverages=tmp_path / "cov.parquet", chunk_size=3,
+    )
+    assert processed == mps.n_mp
+
+    results = pl.read_parquet(str(out_dir / "part-*.parquet")).sort("id")
+    in_memory = value(mps, asmp)
+    assert np.allclose(results["bel"].to_numpy(), in_memory.bel)
+    assert np.allclose(results["csm"].to_numpy(), in_memory.csm)
