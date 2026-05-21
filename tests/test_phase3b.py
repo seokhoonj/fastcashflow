@@ -61,6 +61,24 @@ def test_model_points_round_trip(tmp_path, suffix):
     assert np.allclose(loaded.term_months, mps.term_months)
 
 
+def test_read_model_points_reads_count(tmp_path):
+    """read_model_points reads an optional count column, else defaults to one."""
+    mps = _portfolio(50)
+    counts = np.arange(1, mps.n_mp + 1, dtype=float)
+    _frame(mps).with_columns(pl.Series("count", counts)).write_parquet(
+        tmp_path / "with_count.parquet"
+    )
+    assert np.allclose(
+        read_model_points(tmp_path / "with_count.parquet").count, counts
+    )
+
+    _frame(mps).write_parquet(tmp_path / "no_count.parquet")
+    assert np.allclose(
+        read_model_points(tmp_path / "no_count.parquet").count,
+        np.ones(mps.n_mp),
+    )
+
+
 @pytest.mark.parametrize("suffix", [".parquet", ".csv"])
 def test_write_valuation_round_trip(tmp_path, suffix):
     """write_valuation persists the four valuation columns with an id column."""

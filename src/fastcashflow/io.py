@@ -30,7 +30,8 @@ from fastcashflow.engine import Valuation, value
 from fastcashflow.modelpoint import ModelPointSet
 
 _REQUIRED_COLUMNS = ("issue_age", "death_benefit", "monthly_premium", "term_months")
-_OPTIONAL_COLUMNS = ("maturity_benefit", "annuity_payment", "single_premium")
+_OPTIONAL_COLUMNS = ("maturity_benefit", "annuity_payment", "single_premium",
+                     "count")
 # Health benefit columns -- each maps to a morbidity coverage kind.
 _BENEFIT_COLUMNS = {
     "inpatient_benefit": INPATIENT,
@@ -67,7 +68,8 @@ def read_model_points(path) -> ModelPointSet:
     The file must contain the columns ``issue_age``, ``death_benefit``,
     ``monthly_premium`` and ``term_months``. The optional columns
     ``maturity_benefit``, ``annuity_payment`` and ``single_premium`` are read
-    if present, else default to zero. Health benefit columns --
+    if present, else default to zero; ``count`` likewise, but it defaults to
+    one. Health benefit columns --
     ``inpatient_benefit``, ``surgery_benefit``, ``outpatient_benefit``,
     ``diagnosis_benefit`` -- are read into the coverage list if present. Any
     other column (a policy
