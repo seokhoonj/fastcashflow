@@ -38,6 +38,17 @@ def test_plot_csm_runoff_returns_axes(book):
     assert isinstance(fcf.plot_csm_runoff(m), Axes)
 
 
+def test_plot_cashflows_returns_axes(book):
+    _, _, m = book
+    assert isinstance(fcf.plot_cashflows(m), Axes)
+
+
+def test_plot_cashflows_rejects_bad_period(book):
+    _, _, m = book
+    with pytest.raises(ValueError):
+        fcf.plot_cashflows(m, period_months=0)
+
+
 def test_plot_analysis_of_change_returns_axes(book):
     _, _, m = book
     recon = fcf.reconcile(fcf.roll_forward(m, period_months=12))[0]

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 __all__ = [
     "plot_liability",
     "plot_csm_runoff",
+    "plot_cashflows",
     "plot_analysis_of_change",
     "plot_stochastic",
 ]
@@ -162,6 +163,45 @@ def plot_csm_runoff(measurement: Measurement, *, ax: Axes | None = None,
     ax.set_xlim(0, max(int(months[-1]), 1))
     ax.set_ylim(bottom=0.0)
     _finish(ax, title, xlabel="month", ylabel="CSM")
+    return ax
+
+
+def plot_cashflows(measurement: Measurement, *, period_months: int = 12,
+                   ax: Axes | None = None,
+                   title: str = "Projected cash flows") -> Axes:
+    """Plot projected premium income against claim and expense outgo.
+
+    The monthly cash flows are aggregated into buckets of ``period_months``
+    months -- a policy year by default. Premiums are drawn upward, claims
+    and expenses downward, and the marked line is the net cash flow each
+    period. Bucketing keeps the front-loaded acquisition expense from
+    dominating the chart while the cash-flow shape stays visible.
+    """
+    if period_months < 1:
+        raise ValueError(f"period_months must be >= 1, got {period_months}")
+    ax = _axes(ax)
+    cf = measurement.cashflows
+    premium = cf.premium_cf.sum(axis=0)
+    outgo = (cf.claim_cf + cf.morbidity_cf + cf.annuity_cf
+             + cf.expense_cf).sum(axis=0)
+    starts = np.arange(0, premium.shape[0], period_months)
+    premium_b = np.add.reduceat(premium, starts)
+    outgo_b = np.add.reduceat(outgo, starts)
+    x = np.arange(premium_b.shape[0])
+
+    ax.bar(x, premium_b, width=0.62, color=_COLOR["csm"],
+           label="premiums in", zorder=3)
+    ax.bar(x, -outgo_b, width=0.62, color=_COLOR["down"],
+           label="claims & expenses out", zorder=3)
+    ax.plot(x, premium_b - outgo_b, color=_COLOR["ink"], linewidth=1.6,
+            marker="o", markersize=4, label="net", zorder=4)
+    ax.axhline(0.0, color=_COLOR["ink"], linewidth=0.8)
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(i + 1) for i in x])
+    _finish(ax, title,
+            xlabel="policy year" if period_months == 12 else "period",
+            ylabel="amount")
+    _legend(ax)
     return ax
 
 
