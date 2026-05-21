@@ -17,68 +17,56 @@ measures the insurance contract liability -- BEL, RA and CSM.
 - **From scratch.** All code is original. The methodology references the
   IFRS 17 standard (paragraphs) directly; no third-party code is copied.
 
-## Status
+## Features
 
-- **Phase 0** -- single fixed-benefit protection product, deterministic
-  projection, BEL / RA / CSM, validated against hand calculation.
-- **Phase 1** -- confidence-level RA, acquisition + maintenance expenses.
-- **Phase 1b** -- select-and-ultimate mortality, duration-based lapse.
-- **Phase 2** -- mid-month discounting of claims and expenses, CSM
-  movement detail (per-month interest accretion).
-- **Phase 3a** -- numba parallel (`@njit` + `prange`) kernels.
-- **Phase 3 (fusion)** -- `value()`: a single fused kernel that
-  materialises no per-month arrays and derives BEL / RA / CSM in the
-  same pass -- the memory-minimal fast path.
-- **Phase 3b** -- polars file I/O (parquet / CSV); a chunked streaming
-  path (`value_file`) values portfolios past what memory holds, to ~1e9
-  model points and beyond.
-- **Phase 4** -- BEL / RA / CSM roll-forward: month-by-month liability
-  trajectories with the CSM movement decomposition.
-- **GPU backend** -- `value(..., backend="gpu")` runs the same kernel
-  on a CUDA device (optional; requires a CUDA GPU).
+fastcashflow measures the IFRS 17 insurance contract liability and the
+reporting that surrounds it.
 
-Beyond the phase plan:
-
-- **Measurement** -- all three IFRS 17 models: the GMM (BEL / RA / CSM with
-  roll-forward), the PAA (the simplified model for short-coverage contracts)
-  and the VFA (the variable-fee model for direct-participation /
-  account-value contracts).
-- **Disclosure** -- the IFRS 17 insurance service result (insurance revenue,
-  service expense, finance expense), the loss component and the CSM analysis
-  of change, assembled from a GMM, PAA or VFA measurement.
-- **Analysis of change** -- `roll_forward` slices a GMM, PAA or VFA
-  measurement into reporting-period movements (the BEL, RA and CSM for the
-  GMM and VFA, the liability for remaining coverage for the PAA),
-  recognising assumption revisions and in-force experience as CSM
-  adjustments; `reconcile` aggregates them into IFRS 17 reconciliation
-  tables -- the period-close reporting cycle.
-- **Aggregation** -- `group` re-expresses a measurement at the IFRS 17 unit
-  of account (portfolio x annual cohort x profitability bucket), the CSM
-  and loss component re-derived at the group level so the floor nets
-  contracts within a group but not across groups.
-- **Transition** -- `transition` re-sets the CSM on the IFRS 17 fair value
-  approach for measuring in-force contracts at first adoption.
-- **Reinsurance** -- reinsurance contracts held, measured as a quota-share
-  treaty over a direct portfolio; the CSM carries the net cost or gain of
-  the cover.
-- **Products** -- term and whole life, endowment, pure endowment, immediate
-  annuity, and health (inpatient, surgery, outpatient, diagnosis), built as
-  a variable-length coverage list per policy.
+- **Measurement** -- all three IFRS 17 models: the GMM (BEL / RA / CSM),
+  the PAA (the simplified model for short-coverage contracts) and the VFA
+  (the variable-fee model for direct-participation / account-value
+  contracts).
+- **Projection** -- deterministic monthly cash flows; select-and-ultimate
+  mortality, duration-based lapse, mid-month discounting of claims and
+  expenses, and acquisition and maintenance expenses.
 - **Risk Adjustment** -- the confidence-level and cost-of-capital methods,
   with separate mortality, morbidity and longevity components, and an
   expense-risk component for account-value contracts.
-- **Pricing** -- `solve_premium` solves the level premium for a break-even,
-  margin or target-CSM objective.
+- **Roll-forward** -- month-by-month BEL / RA / CSM trajectories with the
+  CSM movement decomposition; `roll_forward` and `reconcile` assemble the
+  reporting-period analysis of change into IFRS 17 reconciliation tables.
+- **Disclosure** -- the IFRS 17 insurance service result (insurance
+  revenue, service expense, finance expense), the loss component and the
+  CSM analysis of change.
+- **Aggregation** -- `group` re-expresses a measurement at the IFRS 17
+  unit of account (portfolio x annual cohort x profitability bucket).
+- **Transition** -- `transition` re-sets the CSM on the fair value
+  approach for in-force contracts at first adoption.
+- **Reinsurance** -- reinsurance contracts held, measured as a quota-share
+  treaty over a direct portfolio.
+- **Pricing** -- `solve_premium` solves the level premium for a
+  break-even, margin or target-CSM objective.
 - **Stochastic** -- `value_stochastic` values a portfolio under many
-  economic scenarios -- a flat rate or a full discount-rate curve each --
-  and reports the liability distribution, for the percentile-based risk and
-  capital measures a single run cannot give.
-- **Guarantees** -- `measure_tvog` values a VFA minimum-rate guarantee over
-  return scenarios, splitting its cost into intrinsic value and time value
-  (TVOG); `measure_vfa` folds that time value into the BEL, where the CSM
-  absorbs it.
+  economic scenarios and reports the liability distribution.
+- **Guarantees** -- `measure_tvog` values a VFA minimum-rate guarantee,
+  splitting its cost into intrinsic value and time value (TVOG).
+- **Products** -- term and whole life, endowment, pure endowment,
+  immediate annuity, and health (inpatient, surgery, outpatient,
+  diagnosis), built as a variable-length coverage list per policy --
+  each coverage able to carry a waiting or reduced-benefit period.
+- **Speed and scale** -- numba parallel (`@njit` + `prange`) kernels and a
+  fused `value()` path that materialises no per-month arrays; polars
+  parquet / CSV I/O; a chunked `value_file` stream for portfolios past
+  what memory holds; an optional CUDA GPU backend.
 
-Further out: a non-financial-risk adjustment for guarantees.
+**Maturity.** The deterministic GMM core -- projection, BEL / RA / CSM,
+`measure()` and `value()` -- is the most exercised path and is validated
+against hand calculations. The wider surface (PAA, VFA, reinsurance,
+disclosure, roll-forward, stochastic) is implemented and tested, but the
+package is pre-1.0 (`0.0.1.dev1`) and its API may still change.
+
+*Planned:* re-diagnosis benefits, waiver of premium, and a
+non-financial-risk adjustment on the guarantee time value.
 
 ## Quick start
 
