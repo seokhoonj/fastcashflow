@@ -1,0 +1,61 @@
+"""IFRS 17 transition -- the fair value approach.
+
+On first applying IFRS 17 an entity must measure its in-force contracts.
+Where the full retrospective approach -- measuring as if the standard had
+always applied, which is what ``measure`` does from inception -- is
+impracticable, IFRS 17 permits the fair value approach (paragraphs
+C20-C24): the CSM at the transition date is the fair value of the
+contracts less their fulfilment cash flows.
+
+``transition`` takes a measurement of the in-force book at the transition
+date and a supplied fair value, and re-sets the CSM on that basis. Contract
+modification and derecognition are not separate machinery here: a
+modification that does not derecognise the contract (paragraph 73) is a
+change in fulfilment cash flows for future service -- the assumption
+revision of ``roll_forward`` -- and derecognition through lapse or
+surrender is the in-force experience of ``roll_forward``.
+"""
+from __future__ import annotations
+
+from dataclasses import replace
+
+import numpy as np
+
+from fastcashflow._typing import FloatArray
+from fastcashflow.engine import Measurement
+from fastcashflow.gmm import _csm_kernel
+
+
+def transition(measurement: Measurement, fair_value: FloatArray) -> Measurement:
+    """Re-set the CSM on the IFRS 17 fair value transition basis.
+
+    ``measurement`` is a measurement of the in-force book at the transition
+    date -- its inception column being that date. ``fair_value`` is the
+    ``(n_mp,)`` fair value of each contract or group. The CSM becomes
+    ``max(0, fair_value - fulfilment cash flows)``, any excess of the
+    fulfilment cash flows over the fair value falling into the loss
+    component, and is rolled forward from there.
+
+    Returns a measurement with the re-set CSM and loss component; the BEL
+    and RA are unchanged. It flows on into :func:`~fastcashflow.roll_forward`,
+    :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.report`.
+    """
+    fair_value = np.asarray(fair_value, dtype=np.float64)
+    n_mp = measurement.bel.shape[0]
+    if fair_value.shape != (n_mp,):
+        raise ValueError(f"fair_value must have one entry per row ({n_mp})")
+
+    fcf0 = measurement.bel[:, 0] + measurement.ra[:, 0]
+    csm0 = np.maximum(0.0, fair_value - fcf0)
+    loss_component = np.maximum(0.0, fcf0 - fair_value)
+    rate = 1.0 / measurement.discount_start[1] - 1.0
+    csm, csm_accretion, csm_release = _csm_kernel(
+        csm0, np.ascontiguousarray(measurement.cashflows.inforce), rate
+    )
+    return replace(
+        measurement,
+        csm=csm,
+        csm_accretion=csm_accretion,
+        csm_release=csm_release,
+        loss_component=loss_component,
+    )

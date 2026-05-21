@@ -56,6 +56,8 @@ Beyond the phase plan:
   of account (portfolio x annual cohort x profitability bucket), the CSM
   and loss component re-derived at the group level so the floor nets
   contracts within a group but not across groups.
+- **Transition** -- `transition` re-sets the CSM on the IFRS 17 fair value
+  approach for measuring in-force contracts at first adoption.
 - **Reinsurance** -- reinsurance contracts held, measured as a quota-share
   treaty over a direct portfolio; the CSM carries the net cost or gain of
   the cover.

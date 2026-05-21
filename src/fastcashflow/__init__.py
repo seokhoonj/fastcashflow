@@ -33,6 +33,7 @@ from fastcashflow.pricing import solve_premium
 from fastcashflow.reinsurance import ReinsuranceMeasurement, measure_reinsurance
 from fastcashflow.report import Report, report
 from fastcashflow.stochastic import StochasticResult, value_stochastic
+from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult, measure_tvog
 from fastcashflow.vfa import VFAMeasurement, measure_vfa
 
@@ -40,7 +41,7 @@ __version__ = "0.0.1"
 __all__ = [
     "Assumptions", "ModelPointSet", "measure", "value", "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "measure_tvog",
-    "report", "roll_forward", "reconcile", "group",
+    "report", "roll_forward", "reconcile", "group", "transition",
     "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
