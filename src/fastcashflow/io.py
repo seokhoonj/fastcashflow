@@ -365,6 +365,16 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     cov_mp = mp[is_cov][order]
     fields["cov_kind"] = kind[is_cov][order]
     fields["cov_amount"] = amount[is_cov][order]
+
+    # Optional per-coverage benefit rules -- a waiting period and a
+    # reduced-benefit period, each CSR-aligned with cov_kind.
+    for col, field, default in (("waiting", "cov_waiting", 0),
+                                ("reduction_end", "cov_reduction_end", 0),
+                                ("reduction_factor", "cov_reduction_factor", 1.0)):
+        if col in cov.columns:
+            rule = cov[col].fill_null(default).to_numpy()
+            fields[field] = rule[is_cov][order]
+
     fields["cov_offset"] = np.concatenate((
         np.zeros(1, np.int64),
         np.cumsum(np.bincount(cov_mp, minlength=n_mp), dtype=np.int64),
@@ -386,8 +396,10 @@ def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
     * **long-form** -- ``read_model_points(policies, assumptions,
       coverages=coverages_path)``. A policies frame (``policy_id``,
       ``issue_age``, ``term_months``, optional ``sex`` / ``count``) and a
-      coverages frame (``policy_id``, ``rider_code``, ``amount``, optional
-      ``premium``), one coverage row per policy x rider. A single ``.xlsx``
+      coverages frame (``policy_id``, ``rider_code``, ``amount``, and
+      optional ``premium`` / ``waiting`` / ``reduction_end`` /
+      ``reduction_factor``), one coverage row per policy x rider. A single
+      ``.xlsx``
       with ``policies`` and ``coverages`` sheets is read as long-form too.
 
     ``assumptions`` is optional only for a wide file with no rider columns.

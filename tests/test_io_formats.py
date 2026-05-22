@@ -1,4 +1,5 @@
-"""Model-point I/O formats -- read_model_points reads xlsx and feather.
+"""Model-point I/O formats -- read_model_points reads xlsx and feather,
+and the long-form reader picks up the optional benefit-rule columns.
 
 xlsx: a single-sheet wide workbook and a two-sheet (policies + coverages)
 long-form workbook. feather: the Arrow IPC format. All round-trip to the
@@ -6,6 +7,7 @@ same valuation as the bundled in-memory sample.
 """
 import numpy as np
 import openpyxl
+import polars as pl
 
 from fastcashflow import (
     load_sample_assumptions,
@@ -72,3 +74,24 @@ def test_write_valuation_feather(tmp_path):
     path = tmp_path / "results.feather"
     write_valuation(value(mps, asmp), path)
     assert path.exists()
+
+
+def test_long_form_reads_benefit_rules(tmp_path):
+    """The long-form coverages frame reads the waiting / reduction columns."""
+    asmp = load_sample_assumptions()
+    mps = load_sample_model_points()
+    policies, coverages = mps.to_long(asmp)
+    coverages = coverages.with_columns(
+        pl.lit(6).alias("waiting"),
+        pl.lit(24).alias("reduction_end"),
+        pl.lit(0.5).alias("reduction_factor"),
+    )
+    pol_path = tmp_path / "policies.csv"
+    cov_path = tmp_path / "coverages.csv"
+    policies.write_csv(pol_path)
+    coverages.write_csv(cov_path)
+
+    back = read_model_points(pol_path, asmp, coverages=cov_path)
+    assert np.all(back.cov_waiting == 6)
+    assert np.all(back.cov_reduction_end == 24)
+    assert np.allclose(back.cov_reduction_factor, 0.5)
