@@ -1,4 +1,4 @@
-"""Disclosure validation -- the IFRS 17 report assembled from a GMM measurement.
+"""Report validation -- the IFRS 17 report assembled from a GMM measurement.
 
 The report turns a measurement into the insurance service result, its
 build-up (revenue and service expense) and the CSM analysis of change. The

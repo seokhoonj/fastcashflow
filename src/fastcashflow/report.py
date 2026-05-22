@@ -1,11 +1,11 @@
-"""IFRS 17 financial-statement disclosure -- the insurance service result.
+"""IFRS 17 reporting -- the insurance service result.
 
 ``report`` turns a measurement -- GMM, PAA or VFA -- into the period-by-period
 IFRS 17 reporting figures: the insurance service result and its build-up
 (insurance revenue and service expense), the insurance finance expense, the
 loss component of onerous contracts, and the contractual service margin
 analysis of change. Producing the same ``Report`` shape for every measurement
-model lets a mixed portfolio's disclosure be compared and consolidated.
+model lets a mixed portfolio's report be compared and consolidated.
 
 Insurance revenue follows IFRS 17 paragraphs B120-B124: the revenue of a
 period is the reduction in the liability for remaining coverage that relates
@@ -43,7 +43,7 @@ def _to_years(monthly: FloatArray) -> FloatArray:
 
 @dataclass(frozen=True, slots=True)
 class Report:
-    """IFRS 17 disclosure figures, period by period.
+    """IFRS 17 reporting figures, period by period.
 
     Each flow array is shaped ``(n_mp, n_time)`` -- one row per model point,
     one column per month; ``loss_component`` is ``(n_mp,)`` -- the onerous
@@ -107,7 +107,7 @@ class Report:
 
 
 def report(measurement: Measurement | PAAMeasurement | VFAMeasurement) -> Report:
-    """Assemble the IFRS 17 disclosure from a GMM, PAA or VFA measurement.
+    """Assemble the IFRS 17 report from a GMM, PAA or VFA measurement.
 
     See the module docstring for the basis (IFRS 17 paragraphs B120-B124).
     """

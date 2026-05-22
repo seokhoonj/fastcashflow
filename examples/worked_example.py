@@ -5,7 +5,7 @@ Run it::
     python examples/worked_example.py
 
 It loads fastcashflow's bundled sample basis and portfolio, prices a
-contract, measures the IFRS 17 liability, assembles the disclosure, rolls a
+contract, measures the IFRS 17 liability, assembles the report, rolls a
 reporting period forward into the analysis of change, aggregates to IFRS 17
 groups, and closes with a tour of the other measurement models.
 
@@ -60,9 +60,9 @@ v = fcf.value(mps, asmp)
 print(f"value() agrees -- CSM {v.csm.sum():,.0f}")
 
 
-# --- the disclosure --------------------------------------------------------
+# --- the report ------------------------------------------------------------
 # report() turns the measurement into the IFRS 17 insurance service result.
-section("4. The disclosure")
+section("4. The report")
 rep = fcf.report(m)
 print(f"Insurance revenue over the contract  {rep.insurance_revenue.sum():>16,.0f}")
 print(f"Insurance service result             "

@@ -185,7 +185,7 @@ def test_vfa_ra_reduces_the_csm():
 
 
 def test_vfa_report_releases_the_ra_into_revenue():
-    """The disclosure releases the VFA RA into insurance revenue."""
+    """The report releases the VFA RA into insurance revenue."""
     asmp = _assumptions(expense_maintenance_annual=120_000.0, expense_cv=0.25)
     m = measure_vfa(ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8), asmp)
     rep = report(m)

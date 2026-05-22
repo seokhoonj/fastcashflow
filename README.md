@@ -35,7 +35,7 @@ reporting that surrounds it.
 - **Roll-forward** -- month-by-month BEL / RA / CSM trajectories with the
   CSM movement decomposition; `roll_forward` and `reconcile` assemble the
   reporting-period analysis of change into IFRS 17 reconciliation tables.
-- **Disclosure** -- the IFRS 17 insurance service result (insurance
+- **Reporting** -- the IFRS 17 insurance service result (insurance
   revenue, service expense, finance expense), the loss component and the
   CSM analysis of change.
 - **Aggregation** -- `group` re-expresses a measurement at the IFRS 17
@@ -62,7 +62,7 @@ reporting that surrounds it.
 **Maturity.** The deterministic GMM core -- projection, BEL / RA / CSM,
 `measure()` and `value()` -- is the most exercised path and is validated
 against hand calculations. The wider surface (PAA, VFA, reinsurance,
-disclosure, roll-forward, stochastic) is implemented and tested, but the
+reporting, roll-forward, stochastic) is implemented and tested, but the
 package is pre-1.0 (`0.0.1.dev1`) and its API may still change.
 
 *Planned:* re-diagnosis benefits, waiver of premium, and a
@@ -72,7 +72,7 @@ non-financial-risk adjustment on the guarantee time value.
 
 The quickest way in is the worked example -- it loads an actuarial basis
 and a portfolio from sample files, measures the IFRS 17 liability,
-assembles the disclosure, and rolls a reporting period forward:
+assembles the report, and rolls a reporting period forward:
 
 ```
 python examples/worked_example.py
