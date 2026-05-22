@@ -41,8 +41,8 @@ from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 # column names a rider by its 특약코드.
 _NAMED_WIDE = frozenset((
     "policy_id", "product", "issue_age", "term_months", "sex", "count",
-    "state", "monthly_premium", "single_premium", "death_benefit",
-    "maturity_benefit", "annuity_payment",
+    "state", "monthly_premium", "single_premium", "premium_term_months",
+    "death_benefit", "maturity_benefit", "annuity_payment",
 ))
 
 
@@ -297,8 +297,9 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
                          if "monthly_premium" in df.columns
                          else np.zeros(n_mp)),
     )
-    for opt in ("sex", "count", "single_premium", "death_benefit",
-                "maturity_benefit", "annuity_payment", "account_value"):
+    for opt in ("sex", "count", "single_premium", "premium_term_months",
+                "death_benefit", "maturity_benefit", "annuity_payment",
+                "account_value"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     if "state" in df.columns:
@@ -367,7 +368,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         issue_age=pol["issue_age"].to_numpy(),
         term_months=pol["term_months"].to_numpy(),
     )
-    for opt in ("sex", "count", "single_premium"):
+    for opt in ("sex", "count", "single_premium", "premium_term_months"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
     if "state" in pol.columns:
@@ -420,13 +421,15 @@ def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
     * **wide** -- ``read_model_points(path, assumptions)``. One row per
       policy. ``issue_age`` and ``term_months`` are required; ``sex``,
       ``count``, ``state``, ``monthly_premium``, ``single_premium``,
-      ``death_benefit``, ``maturity_benefit`` and ``annuity_payment`` are
-      read if present. A ``<rider_code>_benefit`` column adds that rider's
-      coverage; the ``assumptions`` resolve the 특약코드 to an engine code.
+      ``premium_term_months``, ``death_benefit``, ``maturity_benefit`` and
+      ``annuity_payment`` are read if present. A ``<rider_code>_benefit``
+      column adds that rider's coverage; the ``assumptions`` resolve the
+      특약코드 to an engine code.
     * **long-form** -- ``read_model_points(policies, assumptions,
       coverages=coverages_path)``. A policies frame (``policy_id``,
       ``issue_age``, ``term_months``, optional ``sex`` / ``count`` /
-      ``state``) and a coverages frame (``policy_id``, ``rider_code``,
+      ``state`` / ``premium_term_months``) and a coverages frame
+      (``policy_id``, ``rider_code``,
       ``amount``, and
       optional ``premium`` / ``waiting`` / ``reduction_end`` /
       ``reduction_factor``), one coverage row per policy x rider. A single

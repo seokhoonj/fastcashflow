@@ -149,8 +149,10 @@ class Valuation:
 
 @njit(parallel=True, cache=True)
 def _value_kernel(mortality_grid, issue_index, sex, term_months, count,
-                  lapse_by_year, monthly_premium, single_premium, cov_kind,
-                  cov_amount, cov_offset, cov_rates, cov_risk, cov_is_diagnosis,
+                  lapse_by_year, monthly_premium, single_premium,
+                  premium_term_months, cov_kind, cov_amount, cov_offset,
+                  cov_rates, cov_risk,
+                  cov_is_diagnosis,
                   maturity_benefit, annuity_payment, expense_acquisition,
                   maint_monthly, inflation, discount_start, discount_mid,
                   mortality_factor, morbidity_factor, longevity_factor,
@@ -176,6 +178,7 @@ def _value_kernel(mortality_grid, issue_index, sex, term_months, count,
 
     for mp in prange(n_mp):
         term = term_months[mp]
+        premium_term = premium_term_months[mp]   # months the premium is paid
         ridx = issue_index[mp]
         sx = sex[mp]
         cnt = count[mp]
@@ -215,7 +218,8 @@ def _value_kernel(mortality_grid, issue_index, sex, term_months, count,
             ds = discount_start[t]
             dm = discount_mid[t]
             single = cnt * single_premium[mp] if t == 0 else 0.0
-            pp += (inforce * premium + single) * ds
+            level = inforce * premium if t < premium_term else 0.0
+            pp += (level + single) * ds
             pc += inforce * claim_rate * dm
             pcm += inforce * morb_rate * dm
             pa += inforce * annuity * ds
@@ -383,6 +387,7 @@ def value(
         lapse_by_year,
         model_points.effective_premium,
         model_points.effective_single_premium,
+        model_points.premium_term_months,
         model_points.cov_kind,
         cov_amount,
         model_points.cov_offset,

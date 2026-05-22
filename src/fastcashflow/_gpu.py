@@ -16,7 +16,8 @@ from numba import cuda
 @cuda.jit
 def _value_cuda_kernel(mortality_grid, issue_index, sex, term_months, count,
                        lapse_by_year, monthly_premium, single_premium,
-                       cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
+                       premium_term_months, cov_kind, cov_amount, cov_offset,
+                       cov_rates, cov_risk,
                        cov_is_diagnosis, maturity_benefit, annuity_payment,
                        expense_acquisition, maint_monthly, inflation,
                        discount_start, discount_mid,
@@ -28,6 +29,7 @@ def _value_cuda_kernel(mortality_grid, issue_index, sex, term_months, count,
         return
 
     term = term_months[mp]
+    premium_term = premium_term_months[mp]   # months the premium is paid
     ridx = issue_index[mp]
     sx = sex[mp]
     cnt = count[mp]
@@ -63,7 +65,8 @@ def _value_cuda_kernel(mortality_grid, issue_index, sex, term_months, count,
         ds = discount_start[t]
         dm = discount_mid[t]
         single = cnt * single_premium[mp] if t == 0 else 0.0
-        pp += (inforce * premium + single) * ds
+        level = inforce * premium if t < premium_term else 0.0
+        pp += (level + single) * ds
         pc += inforce * claim_rate * dm
         pcm += inforce * morb_rate * dm
         pa += inforce * annuity * ds
@@ -101,7 +104,8 @@ def _value_cuda_kernel(mortality_grid, issue_index, sex, term_months, count,
 
 
 def value_gpu(mortality_grid, issue_index, sex, term_months, count, lapse_by_year,
-              monthly_premium, single_premium, cov_kind, cov_amount,
+              monthly_premium, single_premium, premium_term_months, cov_kind,
+              cov_amount,
               cov_offset, cov_rates, cov_risk, cov_is_diagnosis,
               maturity_benefit, annuity_payment, expense_acquisition,
               maint_monthly, inflation, discount_start, discount_mid,
@@ -125,6 +129,7 @@ def value_gpu(mortality_grid, issue_index, sex, term_months, count, lapse_by_yea
     d_lapse = cuda.to_device(lapse_by_year)
     d_premium = cuda.to_device(monthly_premium)
     d_single = cuda.to_device(single_premium)
+    d_premium_term = cuda.to_device(premium_term_months)
     d_cov_kind = cuda.to_device(cov_kind)
     d_cov_amount = cuda.to_device(cov_amount)
     d_cov_offset = cuda.to_device(cov_offset)
@@ -144,8 +149,9 @@ def value_gpu(mortality_grid, issue_index, sex, term_months, count, lapse_by_yea
     threads = 256
     blocks = (n_mp + threads - 1) // threads
     _value_cuda_kernel[blocks, threads](
-        d_mortality, d_issue, d_sex, d_term, d_count, d_lapse, d_premium, d_single,
-        d_cov_kind, d_cov_amount, d_cov_offset, d_cov_rates, d_cov_risk,
+        d_mortality, d_issue, d_sex, d_term, d_count, d_lapse, d_premium,
+        d_single, d_premium_term, d_cov_kind, d_cov_amount, d_cov_offset,
+        d_cov_rates, d_cov_risk,
         d_cov_is_diagnosis, d_maturity, d_annuity, expense_acquisition,
         maint_monthly, d_inflation, d_discount_start, d_discount_mid,
         mortality_factor, morbidity_factor, longevity_factor,

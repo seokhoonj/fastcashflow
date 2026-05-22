@@ -69,7 +69,8 @@ class Cashflows:
 
 @njit(parallel=True, cache=True)
 def _project_kernel(mortality, term_months, count, lapse_by_year,
-                    monthly_premium, single_premium, cov_kind, cov_amount,
+                    monthly_premium, single_premium, premium_term_months,
+                    cov_kind, cov_amount,
                     cov_offset, cov_waiting, cov_reduction_end,
                     cov_reduction_factor, cov_rates, cov_risk, cov_is_diagnosis,
                     maturity_benefit, annuity_payment, expense_acquisition,
@@ -100,6 +101,7 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
 
     for mp in prange(n_mp):
         term = term_months[mp]
+        premium_term = premium_term_months[mp]   # months the premium is paid
         cnt = count[mp]
         c_start = cov_offset[mp]
         c_end = cov_offset[mp + 1]
@@ -128,7 +130,8 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
             q = mortality[mp, year]
             deaths[mp, t] = ift * q
             single = cnt * single_premium[mp] if t == 0 else 0.0
-            premium_cf[mp, t] = ift * monthly_premium[mp] + single
+            level = ift * monthly_premium[mp] if t < premium_term else 0.0
+            premium_cf[mp, t] = level + single
             claim_cf[mp, t] = ift * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = ift * annuity_payment[mp]
@@ -234,6 +237,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         lapse_by_year,
         model_points.effective_premium,
         model_points.effective_single_premium,
+        model_points.premium_term_months,
         model_points.cov_kind,
         model_points.cov_amount,
         model_points.cov_offset,

@@ -68,10 +68,12 @@ class ModelPoints:
     Premiums and survival benefits stay as plain fields -- they do not
     proliferate the way claim benefits do:
 
-    * ``monthly_premium``  -- level premium charged each in-force month.
-    * ``single_premium``   -- one-off premium at t = 0.
-    * ``maturity_benefit`` -- benefit on survival to the end of the term.
-    * ``annuity_payment``  -- survival income paid each in-force month.
+    * ``monthly_premium``     -- level premium charged each in-force month.
+    * ``single_premium``      -- one-off premium at t = 0.
+    * ``premium_term_months`` -- months the level premium is collected,
+      defaulting to the full coverage term.
+    * ``maturity_benefit``    -- benefit on survival to the end of the term.
+    * ``annuity_payment``     -- survival income paid each in-force month.
     """
 
     issue_age: FloatArray          # attained age at issue, in years
@@ -82,6 +84,7 @@ class ModelPoints:
     maturity_benefit: FloatArray | None = None   # benefit on survival to term
     annuity_payment: FloatArray | None = None    # survival income, each month
     single_premium: FloatArray | None = None     # one-off premium at t = 0
+    premium_term_months: IntArray | None = None  # months premium is collected
     account_value: FloatArray | None = None      # account value at issue (VFA)
     cov_kind: IntArray | None = None             # CSR: coverage kind
     cov_amount: FloatArray | None = None         # CSR: coverage amount
@@ -121,6 +124,12 @@ class ModelPoints:
         state = (np.zeros(n_mp, np.int64) if state is None
                  else np.asarray(state, np.int64))
         object.__setattr__(self, "state", state)
+        # premium_term_months defaults to the full coverage term -- the level
+        # premium is collected every in-force month, the ordinary case.
+        premium_term = self.premium_term_months
+        premium_term = (self.term_months.copy() if premium_term is None
+                        else np.asarray(premium_term, np.int64))
+        object.__setattr__(self, "premium_term_months", premium_term)
         # Coverage CSR: explicit arrays win; otherwise build from the
         # death_benefit shortcut and/or the general benefits map.
         if self.cov_kind is not None:
@@ -198,6 +207,7 @@ class ModelPoints:
         maturity_benefit: float = 0.0,
         annuity_payment: float = 0.0,
         single_premium: float = 0.0,
+        premium_term_months: int | None = None,
         account_value: float = 0.0,
         count: float = 1.0,
         sex: int = 0,
@@ -213,6 +223,8 @@ class ModelPoints:
             maturity_benefit=np.array([maturity_benefit]),
             annuity_payment=np.array([annuity_payment]),
             single_premium=np.array([single_premium]),
+            premium_term_months=(None if premium_term_months is None
+                                 else np.array([premium_term_months])),
             account_value=np.array([account_value]),
             count=np.array([count]),
             sex=np.array([sex]),
@@ -245,6 +257,7 @@ class ModelPoints:
             "state": np.array([STATE_LABELS[int(s)] for s in self.state]),
             "monthly_premium": self.monthly_premium,
             "single_premium": self.single_premium,
+            "premium_term_months": self.premium_term_months,
             "death_benefit": self.death_benefit,
             "maturity_benefit": self.maturity_benefit,
             "annuity_payment": self.annuity_payment,
@@ -274,6 +287,7 @@ class ModelPoints:
             "term_months": self.term_months,
             "monthly_premium": self.monthly_premium,
             "single_premium": self.single_premium,
+            "premium_term_months": self.premium_term_months,
             "count": self.count,
             "state": np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
