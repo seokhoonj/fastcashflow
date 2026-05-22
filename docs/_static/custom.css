@@ -21,8 +21,13 @@ img.hero {
     border-radius: 8px;
 }
 
-/* the navbar wordmark logo -- constrain its height */
-.navbar-brand img.logo__image {
-    height: 1.6rem;
-    width: auto;
+/* the navbar wordmark -- two-colour text in place of the logo image
+   (logo-light.png / logo-dark.png are kept in _static/ but unused) */
+.navbar-brand .logo__title {
+    margin-bottom: 0;
+    font-weight: 700;
+    font-size: 1.3rem;
 }
+.logo__fast { color: #2a9d8f; }
+html[data-theme="light"] .logo__cashflow { color: #1d2b35; }
+html[data-theme="dark"] .logo__cashflow { color: #e8ecef; }

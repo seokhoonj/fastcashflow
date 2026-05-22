@@ -1,0 +1,6 @@
+{# fastcashflow: a two-colour text wordmark in the navbar, in place of the
+   logo image. logo-light.png / logo-dark.png are kept in _static/ but are
+   no longer rendered. Overrides pydata_sphinx_theme/components/navbar-logo.html. #}
+<a class="navbar-brand logo" href="{{ theme_logo_link or pathto(root_doc) }}">
+  <p class="title logo__title"><span class="logo__fast">fast</span><span class="logo__cashflow">cashflow</span></p>
+</a>

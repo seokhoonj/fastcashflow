@@ -23,6 +23,8 @@ extensions = [
     "sphinx.ext.intersphinx",
 ]
 
+templates_path = ["_templates"]
+
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
 
@@ -52,11 +54,6 @@ html_copy_source = False
 html_theme_options = {
     "show_prev_next": True,
     "navbar_align": "content",
-    "logo": {
-        "image_light": "_static/logo-light.png",
-        "image_dark": "_static/logo-dark.png",
-        "alt_text": "fastcashflow",
-    },
     "icon_links": [
         {
             "name": "GitHub",
