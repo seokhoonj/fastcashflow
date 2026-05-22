@@ -5,6 +5,22 @@ A fast IFRS 17 GMM (General Measurement Model) cash flow projection engine.
 Takes model points and actuarial assumptions, projects monthly cash flows, and
 measures the insurance contract liability -- BEL, RA and CSM.
 
+## Installation
+
+```bash
+pip install fastcashflow
+```
+
+The plotting helpers (`plot_liability`, `plot_csm_runoff`, ...) additionally
+need matplotlib:
+
+```bash
+pip install "fastcashflow[viz]"
+```
+
+fastcashflow requires Python 3.10 or newer. Its core dependencies -- numpy,
+numba and polars -- install automatically.
+
 ## Design
 
 - **Speed first.** Model points are the vectorised axis; the time axis is a
@@ -63,30 +79,33 @@ reporting that surrounds it.
 `measure()` and `value()` -- is the most exercised path and is validated
 against hand calculations. The wider surface (PAA, VFA, reinsurance,
 reporting, roll-forward, stochastic) is implemented and tested, but the
-package is pre-1.0 (`0.0.1.dev1`) and its API may still change.
+package is pre-1.0 and its API may still change.
 
 *Planned:* re-diagnosis benefits, waiver of premium, and a
 non-financial-risk adjustment on the guarantee time value.
 
 ## Quick start
 
-The quickest way in is the worked example -- it loads an actuarial basis
-and a portfolio from sample files, measures the IFRS 17 liability,
-assembles the report, and rolls a reporting period forward:
+After installing, this runs with no files to prepare -- it measures
+fastcashflow's bundled sample portfolio:
 
-```
-python examples/worked_example.py
+```python
+import fastcashflow as fcf
+
+mps  = fcf.load_sample_model_points()   # bundled sample portfolio
+asmp = fcf.load_sample_assumptions()    # bundled sample assumptions
+m    = fcf.measure(mps, asmp)
+print(m.bel[:, 0], m.ra[:, 0], m.csm[:, 0])   # BEL / RA / CSM at issue
 ```
 
-It loads fastcashflow's bundled sample basis and portfolio
-(`load_sample_assumptions`, `load_sample_model_points`), so it runs with no
-files to prepare. The rest of this section builds the same inputs in code.
+Outside the samples you build the two inputs yourself -- a set of model
+points and the actuarial assumptions:
 
 ```python
 import numpy as np
-from fastcashflow import Assumptions, ModelPointSet, measure
+import fastcashflow as fcf
 
-asmp = Assumptions(
+asmp = fcf.Assumptions(
     mortality_monthly=lambda sex, issue_age, duration: np.full(
         issue_age.shape, 1.0 - (1.0 - 0.001) ** (1.0 / 12.0)
     ),
@@ -98,11 +117,11 @@ asmp = Assumptions(
     ra_confidence=0.75,
     mortality_cv=0.10,
 )
-mps = ModelPointSet.single(
+mps = fcf.ModelPointSet.single(
     issue_age=40, death_benefit=100_000_000,
     monthly_premium=70_000, term_months=120,
 )
-res = measure(mps, asmp)   # mps: model points, asmp: assumptions
+res = fcf.measure(mps, asmp)
 print(res.bel[0, 0], res.ra[0, 0], res.csm[0, 0])   # [model point, month]
 ```
 
@@ -111,10 +130,8 @@ roll-forward. For portfolio-scale valuation use `value()`: it returns only
 the headline numbers (BEL, RA, CSM, loss component) per model point.
 
 ```python
-from fastcashflow import value
-
-val = value(mps, asmp)                      # parallel CPU kernel
-val_gpu = value(mps, asmp, backend="gpu")   # CUDA device, if available
+val     = fcf.value(mps, asmp)                  # parallel CPU kernel
+val_gpu = fcf.value(mps, asmp, backend="gpu")   # CUDA device, if available
 print(val.bel, val.ra, val.csm, val.loss_component)
 ```
 
@@ -122,35 +139,40 @@ The product is a combination of benefits -- a positive `maturity_benefit`
 makes the contract an endowment, and `solve_premium` prices it:
 
 ```python
-from fastcashflow import solve_premium
-
-endowment = ModelPointSet.single(
+endowment = fcf.ModelPointSet.single(
     issue_age=40, death_benefit=100_000_000,
     monthly_premium=0, term_months=120, maturity_benefit=50_000_000,
 )
-premium = solve_premium(endowment, asmp, margin=0.10)   # 10% profit margin
+premium = fcf.solve_premium(endowment, asmp, margin=0.10)   # 10% profit margin
 ```
 
 At portfolio scale, read model points from a parquet or CSV file and
 write the results back:
 
 ```python
-from fastcashflow import read_model_points, write_valuation
-
-mps = read_model_points("policies.parquet", asmp)
-val = value(mps, asmp)
-write_valuation(val, "results.parquet")     # pass ids=... to keep a join key
+mps = fcf.read_model_points("policies.parquet", asmp)
+val = fcf.value(mps, asmp)
+fcf.write_valuation(val, "results.parquet")   # pass ids=... to keep a join key
 ```
 
 Past what fits in memory, stream a parquet file chunk by chunk straight
 to a result dataset:
 
 ```python
-from fastcashflow import value_file
-
-value_file("policies.parquet", "results/", asmp, id_column="id")
+fcf.value_file("policies.parquet", "results/", asmp, id_column="id")
 # -> results/part-00000.parquet, part-00001.parquet, ...
 ```
+
+The `examples/worked_example.py` script in the
+[GitHub repository](https://github.com/seokhoonj/fastcashflow) runs the
+whole flow end to end -- measure, assemble the report, and roll a
+reporting period forward.
+
+## Documentation
+
+The full documentation -- a guided tutorial that builds up the IFRS 17
+measurement step by step, and the API reference -- is at
+<https://fastcashflow.readthedocs.io>.
 
 ## Performance
 
@@ -199,4 +221,5 @@ Before reaching for it:
 
 ## License
 
-MPL-2.0 (Mozilla Public License 2.0).
+Licensed under the Mozilla Public License 2.0 (MPL-2.0). See
+[LICENSE](https://github.com/seokhoonj/fastcashflow/blob/main/LICENSE).
