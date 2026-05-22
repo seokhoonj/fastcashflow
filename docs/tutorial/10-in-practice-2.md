@@ -43,6 +43,14 @@ fcf.plot_risk_adjustment(m, asmp)   # 위험조정
 - `plot_csm_runoff` — 7장의 CSM이 보장기간에 걸쳐 풀려 나가는 모습.
 - `plot_risk_adjustment` — 위험조정. 가정도 함께 넘깁니다.
 
+예를 들어 `plot_liability(m)`는 위 샘플 포트폴리오의 BEL·RA·CSM이
+보험기간에 걸쳐 어떻게 변해 가는지를 이렇게 그립니다.
+
+```{image} ../images/liability-trajectory.png
+:alt: 내장 샘플 포트폴리오의 BEL·RA·CSM이 보험기간에 걸쳐 변해 가는 궤적
+:class: hero
+```
+
 각 함수는 차트를 그려 matplotlib의 `Axes` 객체로 돌려줍니다. 함수 자체는
 화면에 띄우지는 않습니다 — Jupyter 노트북에서는 셀 결과로 바로 그래프가
 나오고, 스크립트에서는 `matplotlib.pyplot.show()`를 불러야 창이 뜹니다.
@@ -108,6 +116,15 @@ Closing                -16,631,907         1,197,309        14,892,767
 
 ```python
 fcf.plot_analysis_of_change(recon[0])
+```
+
+기본값은 CSM 성분이며(`component`로 BEL·RA도 선택할 수 있습니다), 표의
+다섯 행 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지 — 을 폭포꼴
+막대로 잇습니다.
+
+```{image} ../images/analysis-of-change.png
+:alt: 첫 보고기간 CSM의 변동분석 폭포 차트 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지
+:class: hero
 ```
 
 ## 10.3 리포트
