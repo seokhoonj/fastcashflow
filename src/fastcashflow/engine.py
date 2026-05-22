@@ -96,14 +96,15 @@ def measure(model_points: ModelPoints, assumptions: Assumptions) -> Measurement:
         morbidity_cf = morbidity_cf * factor
     discount_start, discount_mid = discount_factors(assumptions, proj.n_time)
 
-    bel, pv_claims, pv_morbidity, pv_survival = _rollforward_kernel(
-        claim_cf, morbidity_cf, proj.expense_cf, proj.premium_cf,
-        proj.annuity_cf, proj.maturity_cf, model_points.term_months,
-        assumptions.discount_monthly,
+    bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
+        claim_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
+        proj.premium_cf, proj.annuity_cf, proj.maturity_cf,
+        model_points.term_months, assumptions.discount_monthly,
     )
     z = _norm_ppf(assumptions.ra_confidence)
     cl_margin = z * (assumptions.mortality_cv * pv_claims
                      + assumptions.morbidity_cv * pv_morbidity
+                     + assumptions.disability_cv * pv_disability
                      + assumptions.longevity_cv * pv_survival)
     if assumptions.ra_method == "confidence_level":
         ra = cl_margin
@@ -149,16 +150,17 @@ class Valuation:
 
 
 @njit(parallel=True, cache=True)
-def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
-                  start_state, issue_index, sex, term_months, count,
-                  level_premium, single_premium, premium_term_months,
-                  premium_frequency, annuity_frequency,
+def _value_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
+                  premium_state, benefit_state, start_state, issue_index, sex,
+                  term_months, count, level_premium, single_premium,
+                  premium_term_months, premium_frequency, annuity_frequency,
                   cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
                   cov_is_diagnosis, maturity_benefit, annuity_payment,
+                  disability_income, disability_benefit,
                   expense_acquisition, maint_monthly, inflation,
                   discount_start, discount_mid, mortality_factor,
-                  morbidity_factor, longevity_factor, cov_waiting,
-                  cov_reduction_end, cov_reduction_factor):
+                  morbidity_factor, longevity_factor, disability_factor,
+                  cov_waiting, cov_reduction_end, cov_reduction_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
     Per model point the in-force is an occupancy vector over ``n_states``
@@ -169,7 +171,8 @@ def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
     the total occupancy. The present values are accumulated directly and
     BEL, RA, CSM and the loss component derived in the same pass. The RA
     sums a mortality-risk component (death claims), a morbidity-risk
-    component (health claims) and a longevity-risk component (annuity and
+    component (health claims), a disability-risk component (disability
+    income and the lump sum) and a longevity-risk component (annuity and
     maturity benefits). The only memory written is the four ``(n_mp,)``
     result arrays, so the kernel is compute-bound and scales near-linearly.
     """
@@ -197,6 +200,7 @@ def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
         occ_next = np.zeros(n_states)
         pc = 0.0          # PV of death claims (mortality risk)
         pcm = 0.0         # PV of health claims (morbidity risk)
+        pd = 0.0          # PV of disability income + lump sum
         pp = 0.0
         pe = 0.0
         pa = 0.0
@@ -226,10 +230,13 @@ def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
                 last_year = year
             ift = 0.0          # total in-force
             prem_occ = 0.0     # in-force on the premium-paying states
+            benefit_occ = 0.0  # in-force on the benefit-paying states
             for s in range(n_states):
                 ift += occ[s]
                 if premium_state[s]:
                     prem_occ += occ[s]
+                if benefit_state[s]:
+                    benefit_occ += occ[s]
             ds = discount_start[t]
             dm = discount_mid[t]
             single = prem_occ * single_premium[mp] if t == 0 else 0.0
@@ -240,14 +247,17 @@ def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
             pcm += ift * morb_rate * dm
             if t % ann_freq == 0:
                 pa += ift * annuity * ds
+            pd += benefit_occ * disability_income[mp] * dm
             acquisition = cnt * expense_acquisition if t == 0 else 0.0
             pe += (acquisition + ift * maint_monthly * inflation[t]) * dm
-            # Advance the occupancy along the transition edges.
+            # Advance the occupancy; a lump-sum transition pays on its flow.
             for s in range(n_states):
                 occ_next[s] = 0.0
             for e in range(n_edges):
-                occ_next[edge_to[e]] += (occ[edge_from[e]]
-                                         * edge_prob[e, sx, ridx, year])
+                flow = occ[edge_from[e]] * edge_prob[e, sx, ridx, year]
+                occ_next[edge_to[e]] += flow
+                if edge_lump_sum[e]:
+                    pd += flow * disability_benefit[mp] * dm
             for s in range(n_states):
                 occ[s] = occ_next[s]
         total = 0.0
@@ -330,9 +340,9 @@ def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
                                              * edge_prob[e, sx, ridx, year])
                 for s in range(n_states):
                     occ[s] = occ_next[s]
-        bel_mp = pc + pcm + pm + pa + pe - pp
+        bel_mp = pc + pcm + pd + pm + pa + pe - pp
         ra_mp = (mortality_factor * pc + morbidity_factor * pcm
-                 + longevity_factor * (pm + pa))
+                 + disability_factor * pd + longevity_factor * (pm + pa))
         fcf = bel_mp + ra_mp
         bel[mp] = bel_mp
         ra[mp] = ra_mp
@@ -405,7 +415,8 @@ def value(
     # for the generic occupancy recursion (see fastcashflow.statemodel). The
     # rates are on the sex x age x duration grid the kernel indexes.
     state_model = assumptions.state_model or WAIVER_MODEL
-    edge_from, edge_to, edge_prob, n_states, premium_state = compile_state_model(
+    (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
+     benefit_state) = compile_state_model(
         state_model,
         {"mortality": mortality_grid, "waiver_inception": waiver_grid,
          "lapse": lapse_by_year[None, None, :]},
@@ -435,6 +446,7 @@ def value(
     mortality_factor = z * assumptions.mortality_cv
     morbidity_factor = z * assumptions.morbidity_cv
     longevity_factor = z * assumptions.longevity_cv
+    disability_factor = z * assumptions.disability_cv
 
     # A claims settlement pattern discounts claims to their payment dates;
     # scaling the coverage amounts carries that into the fused kernel.
@@ -448,8 +460,10 @@ def value(
         edge_from,
         edge_to,
         edge_prob,
+        edge_lump_sum,
         n_states,
         premium_state,
+        benefit_state,
         start_state,
         issue_index,
         model_points.sex,
@@ -468,6 +482,8 @@ def value(
         cov_is_diagnosis,
         model_points.maturity_benefit,
         model_points.annuity_payment,
+        model_points.disability_income,
+        model_points.disability_benefit,
         assumptions.expense_acquisition,
         assumptions.expense_maintenance_annual / 12.0,
         inflation,
@@ -476,6 +492,7 @@ def value(
         mortality_factor,
         morbidity_factor,
         longevity_factor,
+        disability_factor,
     )
 
     if backend == "cpu":

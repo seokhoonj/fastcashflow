@@ -132,13 +132,15 @@ def measure_paa(
     lrc[:, 1:] = np.cumsum(net, axis=1)
 
     # Onerous test -- the GMM inception fulfilment cash flows.
-    bel, pv_claims, pv_morbidity, pv_survival = _rollforward_kernel(
-        proj.claim_cf, proj.morbidity_cf, proj.expense_cf, proj.premium_cf,
-        proj.annuity_cf, proj.maturity_cf, model_points.term_months, assumptions.discount_monthly,
+    bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
+        proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
+        proj.premium_cf, proj.annuity_cf, proj.maturity_cf,
+        model_points.term_months, assumptions.discount_monthly,
     )
     z = _norm_ppf(assumptions.ra_confidence)
     ra0 = z * (assumptions.mortality_cv * pv_claims[:, 0]
                + assumptions.morbidity_cv * pv_morbidity[:, 0]
+               + assumptions.disability_cv * pv_disability[:, 0]
                + assumptions.longevity_cv * pv_survival[:, 0])
     loss_component = np.maximum(0.0, bel[:, 0] + ra0)
 

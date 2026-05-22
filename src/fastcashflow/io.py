@@ -44,6 +44,7 @@ _NAMED_WIDE = frozenset((
     "state", "level_premium", "single_premium", "premium_term_months",
     "premium_frequency_months", "annuity_frequency_months",
     "death_benefit", "maturity_benefit", "annuity_payment",
+    "disability_income", "disability_benefit",
 ))
 
 
@@ -254,7 +255,7 @@ def read_assumptions(path) -> Assumptions:
     )
     if coverage_types is not None:
         kwargs["coverage_types"] = coverage_types
-    for opt in ("longevity_cv", "morbidity_cv", "expense_cv",
+    for opt in ("longevity_cv", "morbidity_cv", "expense_cv", "disability_cv",
                 "cost_of_capital_rate", "investment_return", "fund_fee",
                 "guaranteed_credit_rate"):
         if params.get(opt) is not None:
@@ -313,7 +314,7 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
     for opt in ("sex", "count", "single_premium", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",
                 "death_benefit", "maturity_benefit", "annuity_payment",
-                "account_value"):
+                "disability_income", "disability_benefit", "account_value"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     if "state" in df.columns:
@@ -383,7 +384,8 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         term_months=pol["term_months"].to_numpy(),
     )
     for opt in ("sex", "count", "single_premium", "premium_term_months",
-                "premium_frequency_months", "annuity_frequency_months"):
+                "premium_frequency_months", "annuity_frequency_months",
+                "disability_income", "disability_benefit"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
     if "state" in pol.columns:

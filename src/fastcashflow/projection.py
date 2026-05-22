@@ -52,17 +52,20 @@ class Cashflows:
     The per-month arrays are shaped ``(n_mp, n_time)``; ``maturity_cf`` is
     ``(n_mp,)`` -- one payment per policy, at that policy's term. Death and
     health claims are kept apart -- ``claim_cf`` and ``morbidity_cf`` -- so
-    the Risk Adjustment can price the two risks separately.
+    the Risk Adjustment can price the two risks separately; ``disability_cf``
+    is a third risk class -- the income paid while in a benefit state plus
+    the on-transition lump sum.
     """
 
-    inforce: FloatArray      # policies in force at the start of each month
-    deaths: FloatArray       # deaths during each month
-    premium_cf: FloatArray   # premium inflow per month (single premium at t=0)
-    claim_cf: FloatArray     # death-benefit outflow per month (mortality risk)
-    morbidity_cf: FloatArray # health-benefit outflow per month (morbidity risk)
-    expense_cf: FloatArray   # expense outflow per month
-    annuity_cf: FloatArray   # annuity (survival income) outflow per month
-    maturity_cf: FloatArray  # (n_mp,) maturity benefit, paid at time = term
+    inforce: FloatArray       # policies in force at the start of each month
+    deaths: FloatArray        # deaths during each month
+    premium_cf: FloatArray    # premium inflow per month (single premium at t=0)
+    claim_cf: FloatArray      # death-benefit outflow per month (mortality risk)
+    morbidity_cf: FloatArray  # health-benefit outflow per month (morbidity risk)
+    expense_cf: FloatArray    # expense outflow per month
+    annuity_cf: FloatArray    # annuity (survival income) outflow per month
+    disability_cf: FloatArray # disability income + lump-sum outflow per month
+    maturity_cf: FloatArray   # (n_mp,) maturity benefit, paid at time = term
 
     @property
     def n_time(self) -> int:
@@ -71,15 +74,15 @@ class Cashflows:
 
 
 @njit(parallel=True, cache=True)
-def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
-                    premium_state, start_state, term_months, count,
-                    level_premium, single_premium, premium_term_months,
-                    premium_frequency, annuity_frequency,
+def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
+                    n_states, premium_state, benefit_state, start_state,
+                    term_months, count, level_premium, single_premium,
+                    premium_term_months, premium_frequency, annuity_frequency,
                     cov_kind, cov_amount, cov_offset, cov_waiting,
                     cov_reduction_end, cov_reduction_factor, cov_rates,
                     cov_risk, cov_is_diagnosis, maturity_benefit,
-                    annuity_payment, expense_acquisition, maint_monthly,
-                    inflation, n_time):
+                    annuity_payment, disability_income, disability_benefit,
+                    expense_acquisition, maint_monthly, inflation, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -91,8 +94,10 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
     ``edge_prob[e, mp, year]`` of the occupancy from state ``edge_from[e]``
     to ``edge_to[e]``. Premium accrues on the states flagged in
     ``premium_state``; claims, expenses and survival benefits on the total
-    occupancy. The transition probabilities are composed by the caller, so
-    the kernel itself is state-machine-agnostic.
+    occupancy; disability income on the ``benefit_state`` occupancy, and a
+    lump-sum transition pays on the flow it carries. The transition
+    probabilities are composed by the caller, so the kernel itself is
+    state-machine-agnostic.
 
     A policy's claim is the sum over its coverage list: coverage ``k`` pays
     ``cov_amount[k]`` at rate ``cov_rates[cov_kind[k], mp, year]``, summed
@@ -109,6 +114,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
     morbidity_cf = np.zeros((n_mp, n_time))
     expense_cf = np.zeros((n_mp, n_time))
     annuity_cf = np.zeros((n_mp, n_time))
+    disability_cf = np.zeros((n_mp, n_time))
     maturity_cf = np.zeros(n_mp)
 
     n_edges = edge_from.shape[0]
@@ -131,10 +137,13 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
         for t in range(term):
             ift = 0.0         # total in-force
             prem_occ = 0.0    # in-force on the premium-paying states
+            benefit_occ = 0.0 # in-force on the benefit-paying states
             for s in range(n_states):
                 ift += occ[s]
                 if premium_state[s]:
                     prem_occ += occ[s]
+                if benefit_state[s]:
+                    benefit_occ += occ[s]
             inforce[mp, t] = ift
             year = t // 12
             if year != last_year:
@@ -162,14 +171,18 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = (ift * annuity_payment[mp]
                                  if t % ann_freq == 0 else 0.0)
+            disability_cf[mp, t] = benefit_occ * disability_income[mp]
             acquisition = cnt * expense_acquisition if t == 0 else 0.0
             expense_cf[mp, t] = acquisition + ift * maint_monthly * inflation[t]
-            # Advance the occupancy along the transition edges.
+            # Advance the occupancy along the transition edges; a lump-sum
+            # transition pays its benefit on the occupancy it carries.
             for s in range(n_states):
                 occ_next[s] = 0.0
             for e in range(n_edges):
-                occ_next[edge_to[e]] += (occ[edge_from[e]]
-                                         * edge_prob[e, mp, year])
+                flow = occ[edge_from[e]] * edge_prob[e, mp, year]
+                occ_next[edge_to[e]] += flow
+                if edge_lump_sum[e]:
+                    disability_cf[mp, t] += flow * disability_benefit[mp]
             if t + 1 == term:
                 total_next = 0.0
                 for s in range(n_states):
@@ -229,7 +242,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
                 frac *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-            annuity_cf, maturity_cf)
+            annuity_cf, disability_cf, maturity_cf)
 
 
 def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Cashflows:
@@ -277,7 +290,8 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     # set of its own. The default is the active / waiver model; a product
     # overrides it through assumptions.state_model.
     state_model = assumptions.state_model or WAIVER_MODEL
-    edge_from, edge_to, edge_prob, n_states, premium_state = compile_state_model(
+    (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
+     benefit_state) = compile_state_model(
         state_model,
         {"mortality": mortality, "waiver_inception": waiver,
          "lapse": lapse_by_year[None, :]},
@@ -285,13 +299,15 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
 
     (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-     annuity_cf, maturity_cf) = _project_kernel(
+     annuity_cf, disability_cf, maturity_cf) = _project_kernel(
         mortality,
         edge_from,
         edge_to,
         edge_prob,
+        edge_lump_sum,
         n_states,
         premium_state,
+        benefit_state,
         start_state,
         model_points.term_months,
         model_points.count,
@@ -311,6 +327,8 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         cov_is_diagnosis,
         model_points.maturity_benefit,
         model_points.annuity_payment,
+        model_points.disability_income,
+        model_points.disability_benefit,
         assumptions.expense_acquisition,
         assumptions.expense_maintenance_annual / 12.0,
         inflation,
@@ -324,5 +342,6 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         morbidity_cf=morbidity_cf,
         expense_cf=expense_cf,
         annuity_cf=annuity_cf,
+        disability_cf=disability_cf,
         maturity_cf=maturity_cf,
     )

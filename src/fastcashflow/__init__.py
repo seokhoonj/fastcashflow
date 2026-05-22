@@ -52,7 +52,7 @@ from fastcashflow.plots import (
 from fastcashflow.pricing import solve_premium
 from fastcashflow.reinsurance import ReinsuranceMeasurement, measure_reinsurance
 from fastcashflow.report import Report, report
-from fastcashflow.statemodel import WAIVER_MODEL, Decrement, State, StateModel
+from fastcashflow.statemodel import WAIVER_MODEL, State, StateModel, Transition
 from fastcashflow.stochastic import StochasticResult, value_stochastic
 from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult, measure_tvog
@@ -74,5 +74,5 @@ __all__ = [
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "DEATH", "RiderRate", "RISK_MORTALITY", "RISK_MORBIDITY",
     "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAIDUP",
-    "StateModel", "State", "Decrement", "WAIVER_MODEL",
+    "StateModel", "State", "Transition", "WAIVER_MODEL",
 ]

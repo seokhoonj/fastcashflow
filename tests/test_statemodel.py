@@ -1,6 +1,6 @@
 """The in-force state machine -- StateModel as product input.
 
-Phase (b) Stage 2: a product declares its states, decrements and
+Phase (b) Stage 2: a product declares its states, transitions and
 premium-paying states as data. The default active / waiver model is one
 StateModel among many; these tests drive custom ones through both the fused
 ``value`` and the detailed ``measure`` path, with the figures derived by hand
@@ -15,10 +15,10 @@ from fastcashflow import (
     STATE_WAIVER,
     WAIVER_MODEL,
     Assumptions,
-    Decrement,
     ModelPoints,
     State,
     StateModel,
+    Transition,
     measure,
     value,
 )
@@ -69,11 +69,12 @@ def test_compile_waiver_edges():
         "waiver_inception": np.array([[0.05]]),
         "lapse": np.array([[0.02]]),
     }
-    edge_from, edge_to, edge_prob, n_states, premium_state = compile_state_model(
-        WAIVER_MODEL, rates
-    )
+    (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
+     benefit_state) = compile_state_model(WAIVER_MODEL, rates)
     assert n_states == 2
     assert list(premium_state) == [True, False]
+    assert list(benefit_state) == [False, False]   # waiver model: no benefit
+    assert not edge_lump_sum.any()                 # ... and no lump sums
 
     prob = {(int(f), int(t)): float(edge_prob[i, 0, 0])
             for i, (f, t) in enumerate(zip(edge_from, edge_to))}
@@ -105,7 +106,7 @@ def test_unknown_destination_state_rejected():
     with pytest.raises(ValueError, match="unknown state"):
         StateModel(states=(
             State("active", premium=True,
-                  decrements=(Decrement("waiver_inception", to="ghost"),)),
+                  transitions=(Transition("waiver_inception", to="ghost"),)),
         ))
 
 
@@ -128,12 +129,12 @@ def test_explicit_waiver_model_matches_default():
     reproduces it exactly -- the default path is just one StateModel."""
     rebuilt = StateModel(
         states=(
-            State("active", premium=True, decrements=(
-                Decrement("mortality"),
-                Decrement("waiver_inception", to="waiver"),
-                Decrement("lapse"),
+            State("active", premium=True, transitions=(
+                Transition("mortality"),
+                Transition("waiver_inception", to="waiver"),
+                Transition("lapse"),
             )),
-            State("waiver", decrements=(Decrement("mortality"),)),
+            State("waiver", transitions=(Transition("mortality"),)),
         ),
         seating=(0, 1, 1),
     )
@@ -150,7 +151,7 @@ def test_single_state_no_lapse_hand_calculation():
     """A one-state model -- mortality only, no lapse, no waiver. With a flat
     1% mortality the in-force is [1, 0.99, 0.99^2]; every figure by hand."""
     no_lapse = StateModel(states=(
-        State("active", premium=True, decrements=(Decrement("mortality"),)),
+        State("active", premium=True, transitions=(Transition("mortality"),)),
     ))
     death_benefit = 1_000_000.0
     premium = 12_000.0
@@ -175,12 +176,12 @@ def test_decrement_order_matters():
     waiver-before-lapse order, a different BEL -- derived by hand."""
     lapse_first = StateModel(
         states=(
-            State("active", premium=True, decrements=(
-                Decrement("mortality"),
-                Decrement("lapse"),
-                Decrement("waiver_inception", to="waiver"),
+            State("active", premium=True, transitions=(
+                Transition("mortality"),
+                Transition("lapse"),
+                Transition("waiver_inception", to="waiver"),
             )),
-            State("waiver", decrements=(Decrement("mortality"),)),
+            State("waiver", transitions=(Transition("mortality"),)),
         ),
         seating=(0, 1, 1),
     )
@@ -214,13 +215,13 @@ def test_three_state_model_runs():
     values a paid-up contract exactly as the two-state default does."""
     three = StateModel(
         states=(
-            State("active", premium=True, decrements=(
-                Decrement("mortality"),
-                Decrement("waiver_inception", to="waiver"),
-                Decrement("lapse"),
+            State("active", premium=True, transitions=(
+                Transition("mortality"),
+                Transition("waiver_inception", to="waiver"),
+                Transition("lapse"),
             )),
-            State("waiver", decrements=(Decrement("mortality"),)),
-            State("paidup", decrements=(Decrement("mortality"),)),
+            State("waiver", transitions=(Transition("mortality"),)),
+            State("paidup", transitions=(Transition("mortality"),)),
         ),
         seating=(0, 1, 2),       # active / waiver / paid-up each own a state
     )
@@ -247,13 +248,13 @@ def test_measure_and_value_agree_under_custom_model():
     valued on a custom three-state model."""
     three = StateModel(
         states=(
-            State("active", premium=True, decrements=(
-                Decrement("mortality"),
-                Decrement("waiver_inception", to="waiver"),
-                Decrement("lapse"),
+            State("active", premium=True, transitions=(
+                Transition("mortality"),
+                Transition("waiver_inception", to="waiver"),
+                Transition("lapse"),
             )),
-            State("waiver", decrements=(Decrement("mortality"),)),
-            State("paidup", decrements=(Decrement("mortality"),)),
+            State("waiver", transitions=(Transition("mortality"),)),
+            State("paidup", transitions=(Transition("mortality"),)),
         ),
         seating=(0, 1, 2),
     )

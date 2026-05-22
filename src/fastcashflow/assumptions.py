@@ -107,6 +107,10 @@ class Assumptions:
     expense_cv :
         Coefficient of variation of expense cash flows -- the expense-risk
         component of the Risk Adjustment for account-value (VFA) contracts.
+    disability_cv :
+        Coefficient of variation of disability cash flows -- disability
+        income and the on-transition lump sum -- the disability-risk
+        component of the Risk Adjustment.
     ra_method :
         Which Risk Adjustment technique to use -- ``"confidence_level"``
         (the default; a percentile margin on the benefit present values) or
@@ -144,8 +148,9 @@ class Assumptions:
         to route long-form coverage rows; ``None`` when built in code.
     state_model :
         The product's in-force state machine -- a :class:`~fastcashflow.statemodel.StateModel`
-        declaring the transient states, their decrements and which states pay
-        premium. ``None`` uses the default active / waiver model
+        declaring the transient states, their transitions and which states
+        pay premium or a benefit. ``None`` uses the default active / waiver
+        model
         (:data:`~fastcashflow.statemodel.WAIVER_MODEL`); the
         ``waiver_inception_annual`` rate then drives the active -> waiver
         transition. A product with a different state set supplies its own.
@@ -163,6 +168,7 @@ class Assumptions:
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
     expense_cv: float = 0.0
+    disability_cv: float = 0.0
     ra_method: str = "confidence_level"
     cost_of_capital_rate: float = 0.06
     investment_return: float = 0.0

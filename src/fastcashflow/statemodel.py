@@ -8,24 +8,24 @@ a small set of transient states; each month a transition matrix advances it,
 edge list and are state-machine-agnostic: they carry no hardcoded state set.
 
 This module is the product-facing layer. A :class:`StateModel` declares the
-states, their decrements and which states pay premium, all as data. States can
-*be* data -- rather than a per-product DSL -- because the occupancy recursion
-treats every state identically; there is no per-state engine logic. (Coverage
-``type``, by contrast, needs per-type logic and so stays a fixed vocabulary.)
+states, their transitions and which states pay premium or a benefit, all as
+data. States can *be* data -- rather than a per-product DSL -- because the
+occupancy recursion treats every state identically; there is no per-state
+engine logic. (Coverage ``type``, by contrast, needs per-type logic and so
+stays a fixed vocabulary.)
 
 :func:`compile_state_model` turns a :class:`StateModel` plus the evaluated
-assumption rates into the flat ``(edge_from, edge_to, edge_prob, n_states,
-premium_state)`` arrays the kernels consume.
+assumption rates into the flat edge arrays the kernels consume.
 
-The decrement convention is the standard actuarial multiple-decrement model.
-A state's decrements are applied IN ORDER as competing decrements: decrement
-``i`` fires, among the entrants to the state, with the dependent probability
-``rate_i * prod_{j<i}(1 - rate_j)`` -- it acts on the survivors of every
-earlier decrement. The residual ``prod_j(1 - rate_j)`` stays in the state. A
-decrement either moves occupancy to another transient state (waiver inception:
-active -> waiver) or removes it from the in-force set entirely (death, lapse).
-The fulfilment cash flows reflect the contract's actual terms at the
-measurement date (IFRS 17 Sec. 33-34).
+The transition probabilities follow the standard ordered multiple-decrement
+model. A state's transitions are applied IN ORDER as competing decrements:
+transition ``i`` fires, among the entrants to the state, with the dependent
+probability ``rate_i * prod_{j<i}(1 - rate_j)`` -- it acts on the survivors of
+every earlier transition. The residual ``prod_j(1 - rate_j)`` stays in the
+state. A transition either moves occupancy to another transient state (waiver
+inception: active -> waiver; recovery: disabled -> active) or removes it from
+the in-force set entirely (death, lapse). The fulfilment cash flows reflect
+the contract's actual terms at the measurement date (IFRS 17 Sec. 33-34).
 """
 from __future__ import annotations
 
@@ -37,18 +37,25 @@ from fastcashflow._typing import FloatArray, IntArray
 
 
 @dataclass(frozen=True, slots=True)
-class Decrement:
-    """One force of exit from a state.
+class Transition:
+    """One transition out of a state.
 
     ``rate`` names an assumption rate -- ``"mortality"``, ``"lapse"`` or
     ``"waiver_inception"`` -- evaluated by the engine and supplied to
     :func:`compile_state_model`. ``to`` is the destination state's name when
-    the decrement moves occupancy to another transient state, or ``None``
-    when it removes occupancy from the in-force set entirely (death, lapse).
+    the transition moves occupancy to another transient state (waiver
+    inception, recovery), or ``None`` when it removes occupancy from the
+    in-force set entirely (death, lapse).
+
+    ``lump_sum`` flags a transition that pays a one-off benefit when it
+    fires -- the ``ModelPoints.disability_benefit`` amount times the
+    transitioning occupancy. It applies only to a transition with a
+    destination; death and diagnosis lump sums stay on the coverage list.
     """
 
     rate: str
     to: str | None = None
+    lump_sum: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,18 +63,21 @@ class State:
     """One transient state of the in-force model.
 
     ``premium`` flags a premium-paying state -- the level and single premium
-    accrue on the occupancy of the states so flagged. ``decrements`` are the
-    forces of exit, held in application order: the competing-decrement
-    convention (see the module docstring) applies each in turn to the
-    survivors of the previous.
+    accrue on the occupancy of the states so flagged. ``benefit`` flags a
+    benefit-paying state -- the ``ModelPoints.disability_income`` amount is
+    paid each month its occupancy is held (disability income on a disabled
+    state). ``transitions`` are the transitions out of the state, held in
+    application order: the competing-decrement convention (see the module
+    docstring) applies each in turn to the survivors of the previous.
     """
 
     name: str
     premium: bool = False
-    decrements: tuple[Decrement, ...] = ()
+    benefit: bool = False
+    transitions: tuple[Transition, ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "decrements", tuple(self.decrements))
+        object.__setattr__(self, "transitions", tuple(self.transitions))
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,11 +109,16 @@ class StateModel:
         if len(names) != len(states):
             raise ValueError("state names must be unique")
         for s in states:
-            for d in s.decrements:
-                if d.to is not None and d.to not in names:
+            for tr in s.transitions:
+                if tr.to is not None and tr.to not in names:
                     raise ValueError(
-                        f"state {s.name!r} has a decrement to an unknown "
-                        f"state {d.to!r}"
+                        f"state {s.name!r} has a transition to an unknown "
+                        f"state {tr.to!r}"
+                    )
+                if tr.lump_sum and tr.to is None:
+                    raise ValueError(
+                        f"state {s.name!r} has a lump-sum transition with no "
+                        f"destination; a lump sum attaches to a transition"
                     )
         if any(not 0 <= i < len(states) for i in self.seating):
             raise ValueError(
@@ -120,20 +135,20 @@ class StateModel:
 # and is subject to mortality, waiver inception and lapse; ``waiver`` (premium
 # waived on a triggering event) keeps the coverage in force, pays no premium
 # and is subject to mortality alone -- it does not lapse. The waiver-inception
-# decrement moves active in-force onto the waiver state. ``seating`` seats
+# transition moves active in-force onto the waiver state. ``seating`` seats
 # STATE_ACTIVE (code 0) on the active state and both STATE_WAIVER (1) and
 # STATE_PAIDUP (2) on the waiver state: a paid-up contract and a waiver
 # contract have identical cash flows, differing only in the cause premiums
 # ceased.
 WAIVER_MODEL = StateModel(
     states=(
-        State("active", premium=True, decrements=(
-            Decrement("mortality"),
-            Decrement("waiver_inception", to="waiver"),
-            Decrement("lapse"),
+        State("active", premium=True, transitions=(
+            Transition("mortality"),
+            Transition("waiver_inception", to="waiver"),
+            Transition("lapse"),
         )),
-        State("waiver", premium=False, decrements=(
-            Decrement("mortality"),
+        State("waiver", premium=False, transitions=(
+            Transition("mortality"),
         )),
     ),
     seating=(0, 1, 1),
@@ -142,24 +157,28 @@ WAIVER_MODEL = StateModel(
 
 def compile_state_model(
     model: StateModel, rates: dict[str, FloatArray]
-) -> tuple[IntArray, IntArray, FloatArray, int, np.ndarray]:
+) -> tuple[IntArray, IntArray, FloatArray, np.ndarray, int,
+           np.ndarray, np.ndarray]:
     """Compile a StateModel and its rates into the kernel edge arrays.
 
-    ``rates`` maps each rate name a decrement references to its evaluated
+    ``rates`` maps each rate name a transition references to its evaluated
     array; the arrays broadcast to a common grid shape -- the kernels index
     its trailing axes (per model point, or per sex / age / duration).
 
-    Returns ``(edge_from, edge_to, edge_prob, n_states, premium_state)``:
+    Returns ``(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
+    premium_state, benefit_state)``:
 
     * ``edge_from`` / ``edge_to`` -- ``(n_edges,)`` state indices.
     * ``edge_prob`` -- ``(n_edges, *grid)`` transition probabilities.
+    * ``edge_lump_sum`` -- ``(n_edges,)`` bool, the lump-sum transitions.
     * ``n_states`` -- the number of transient states.
     * ``premium_state`` -- ``(n_states,)`` bool, the premium-paying states.
+    * ``benefit_state`` -- ``(n_states,)`` bool, the benefit-paying states.
 
-    Each state contributes one edge per decrement with a transient
-    destination -- carrying that decrement's dependent probability -- plus one
-    stay-in-state edge carrying the residual (see the module docstring). A
-    decrement that exits the in-force set contributes no edge: its occupancy
+    Each state contributes one edge per transition with a transient
+    destination -- carrying that transition's dependent probability -- plus
+    one stay-in-state edge carrying the residual (see the module docstring). A
+    transition that exits the in-force set contributes no edge: its occupancy
     simply leaves the recursion.
     """
     arrays = {name: np.asarray(arr, dtype=np.float64)
@@ -172,31 +191,36 @@ def compile_state_model(
     edge_from: list[int] = []
     edge_to: list[int] = []
     edge_prob: list[FloatArray] = []
+    edge_lump: list[bool] = []
     for i, state in enumerate(model.states):
-        # ``survive`` accumulates prod_{j}(1 - rate_j) across the decrements
-        # applied so far; a leaving decrement fires on those survivors.
+        # ``survive`` accumulates prod_{j}(1 - rate_j) across the transitions
+        # applied so far; a leaving transition fires on those survivors.
         survive = np.ones(grid)
-        for dec in state.decrements:
+        for tr in state.transitions:
             try:
-                rate = arrays[dec.rate]
+                rate = arrays[tr.rate]
             except KeyError:
                 raise ValueError(
-                    f"state {state.name!r} references rate {dec.rate!r}, "
+                    f"state {state.name!r} references rate {tr.rate!r}, "
                     f"which was not supplied to compile_state_model"
                 ) from None
-            if dec.to is not None:
+            if tr.to is not None:
                 edge_from.append(i)
-                edge_to.append(index[dec.to])
+                edge_to.append(index[tr.to])
                 edge_prob.append(survive * rate)
+                edge_lump.append(tr.lump_sum)
             survive = survive * (1.0 - rate)
         edge_from.append(i)        # the residual stays in the state
         edge_to.append(i)
         edge_prob.append(survive)
+        edge_lump.append(False)
 
     return (
         np.array(edge_from, dtype=np.int64),
         np.array(edge_to, dtype=np.int64),
         np.ascontiguousarray(np.stack(edge_prob)),
+        np.array(edge_lump, dtype=np.bool_),
         len(model.states),
         np.array([s.premium for s in model.states], dtype=np.bool_),
+        np.array([s.benefit for s in model.states], dtype=np.bool_),
     )

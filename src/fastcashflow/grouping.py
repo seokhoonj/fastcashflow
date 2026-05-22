@@ -73,6 +73,7 @@ def group(measurement: Measurement, group_ids: FloatArray) -> Measurement:
         morbidity_cf=_sum_by_group(cf.morbidity_cf, inverse, n_groups),
         expense_cf=_sum_by_group(cf.expense_cf, inverse, n_groups),
         annuity_cf=_sum_by_group(cf.annuity_cf, inverse, n_groups),
+        disability_cf=_sum_by_group(cf.disability_cf, inverse, n_groups),
         maturity_cf=_sum_by_group(cf.maturity_cf, inverse, n_groups),
     )
 

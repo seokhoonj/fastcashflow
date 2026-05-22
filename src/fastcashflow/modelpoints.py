@@ -75,6 +75,10 @@ class ModelPoints:
     * ``annuity_payment``          -- survival income paid each payout occurrence.
     * ``annuity_frequency_months`` -- months between annuity payouts,
       defaulting to 1.
+    * ``disability_income``        -- income paid each month a benefit state
+      is occupied (disability income on a disabled state).
+    * ``disability_benefit``       -- lump sum paid when a lump-sum transition
+      fires (a disability lump sum on becoming disabled).
     """
 
     issue_age: FloatArray          # attained age at issue, in years
@@ -84,6 +88,8 @@ class ModelPoints:
     benefits: dict[int, FloatArray] | None = None  # general {kind: amount}
     maturity_benefit: FloatArray | None = None   # benefit on survival to term
     annuity_payment: FloatArray | None = None    # survival income, each month
+    disability_income: FloatArray | None = None  # income while in a benefit state
+    disability_benefit: FloatArray | None = None # lump sum on a flagged transition
     single_premium: FloatArray | None = None     # one-off premium at t = 0
     premium_term_months: IntArray | None = None  # months premium is collected
     premium_frequency_months: IntArray | None = None  # months between premiums
@@ -109,8 +115,8 @@ class ModelPoints:
             object.__setattr__(self, name, np.asarray(getattr(self, name), dtype=dtype))
         n_mp = self.issue_age.shape[0]
         # Premiums / survival benefits default to zero (absent).
-        for name in ("maturity_benefit", "annuity_payment", "single_premium",
-                     "account_value"):
+        for name in ("maturity_benefit", "annuity_payment", "disability_income",
+                     "disability_benefit", "single_premium", "account_value"):
             value = getattr(self, name)
             value = np.zeros(n_mp) if value is None else np.asarray(value, np.float64)
             object.__setattr__(self, name, value)
@@ -197,6 +203,8 @@ class ModelPoints:
         term_months: int,
         maturity_benefit: float = 0.0,
         annuity_payment: float = 0.0,
+        disability_income: float = 0.0,
+        disability_benefit: float = 0.0,
         single_premium: float = 0.0,
         premium_term_months: int | None = None,
         premium_frequency_months: int = 1,
@@ -215,6 +223,8 @@ class ModelPoints:
             term_months=np.array([term_months]),
             maturity_benefit=np.array([maturity_benefit]),
             annuity_payment=np.array([annuity_payment]),
+            disability_income=np.array([disability_income]),
+            disability_benefit=np.array([disability_benefit]),
             single_premium=np.array([single_premium]),
             premium_term_months=(None if premium_term_months is None
                                  else np.array([premium_term_months])),
@@ -258,6 +268,8 @@ class ModelPoints:
             "death_benefit": self.death_benefit,
             "maturity_benefit": self.maturity_benefit,
             "annuity_payment": self.annuity_payment,
+            "disability_income": self.disability_income,
+            "disability_benefit": self.disability_benefit,
         }
         for i, rider in enumerate(assumptions.riders):
             mask = self.cov_kind == i + 1
@@ -287,6 +299,8 @@ class ModelPoints:
             "premium_term_months": self.premium_term_months,
             "premium_frequency_months": self.premium_frequency_months,
             "annuity_frequency_months": self.annuity_frequency_months,
+            "disability_income": self.disability_income,
+            "disability_benefit": self.disability_benefit,
             "count": self.count,
             "state": np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
