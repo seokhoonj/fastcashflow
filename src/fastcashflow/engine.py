@@ -148,29 +148,31 @@ class Valuation:
 
 
 @njit(parallel=True, cache=True)
-def _value_kernel(mortality_grid, waiver_grid, issue_index, sex, term_months,
-                  count, state, lapse_by_year, monthly_premium,
-                  single_premium, premium_term_months, cov_kind, cov_amount,
-                  cov_offset, cov_rates, cov_risk, cov_is_diagnosis,
-                  maturity_benefit, annuity_payment, expense_acquisition,
-                  maint_monthly, inflation, discount_start, discount_mid,
-                  mortality_factor, morbidity_factor, longevity_factor,
-                  cov_waiting, cov_reduction_end, cov_reduction_factor):
+def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
+                  start_state, issue_index, sex, term_months, count,
+                  monthly_premium, single_premium, premium_term_months,
+                  cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
+                  cov_is_diagnosis, maturity_benefit, annuity_payment,
+                  expense_acquisition, maint_monthly, inflation,
+                  discount_start, discount_mid, mortality_factor,
+                  morbidity_factor, longevity_factor, cov_waiting,
+                  cov_reduction_end, cov_reduction_factor):
     """Fused valuation kernel -- one parallel pass, no per-month arrays.
 
-    Per model point the in-force amount is carried as two scalars through
-    the time loop -- an active track (paying premium) and a waiver track
-    (premium waived, coverage continuing), the waiver-inception rate moving
-    a fraction of the active track across each month. Premiums accrue on the
-    active track; claims, expenses and survival benefits on both. The present
-    values are accumulated directly and BEL, RA, CSM and the loss component
-    derived in the same pass. The RA sums a mortality-risk component
-    (death claims), a morbidity-risk component (health claims) and a
-    longevity-risk component (annuity and maturity benefits). The only
-    memory written is the four ``(n_mp,)`` result arrays, so the kernel is
-    compute-bound and scales near-linearly.
+    Per model point the in-force is an occupancy vector over ``n_states``
+    transient states, advanced each month along the transition edges -- edge
+    ``e`` carries ``edge_prob[e, sex, age, year]`` of the occupancy from
+    ``edge_from[e]`` to ``edge_to[e]``. Premium accrues on the states
+    flagged in ``premium_state``; claims, expenses and survival benefits on
+    the total occupancy. The present values are accumulated directly and
+    BEL, RA, CSM and the loss component derived in the same pass. The RA
+    sums a mortality-risk component (death claims), a morbidity-risk
+    component (health claims) and a longevity-risk component (annuity and
+    maturity benefits). The only memory written is the four ``(n_mp,)``
+    result arrays, so the kernel is compute-bound and scales near-linearly.
     """
     n_mp = issue_index.shape[0]
+    n_edges = edge_from.shape[0]
     bel = np.empty(n_mp)
     ra = np.empty(n_mp)
     csm = np.empty(n_mp)
@@ -186,19 +188,16 @@ def _value_kernel(mortality_grid, waiver_grid, issue_index, sex, term_months,
         annuity = annuity_payment[mp]
         c_start = cov_offset[mp]
         c_end = cov_offset[mp + 1]
-        # Two in-force tracks -- active (paying premium) and waiver (premium
-        # waived, coverage continuing). The input state seats the count.
-        if state[mp] == STATE_ACTIVE:
-            act = cnt
-            wav = 0.0
-        else:
-            act = 0.0
-            wav = cnt
+        ss = start_state[mp]
+        occ = np.zeros(n_states)
+        occ_next = np.zeros(n_states)
         pc = 0.0          # PV of death claims (mortality risk)
         pcm = 0.0         # PV of health claims (morbidity risk)
         pp = 0.0
         pe = 0.0
         pa = 0.0
+        # Main pass -- the rule-free, non-diagnosis coverages.
+        occ[ss] = cnt
         last_year = -1
         claim_rate = 0.0  # aggregate mortality claim per unit in-force
         morb_rate = 0.0   # aggregate morbidity claim per unit in-force
@@ -221,28 +220,36 @@ def _value_kernel(mortality_grid, waiver_grid, issue_index, sex, term_months,
                     else:
                         morb_rate += rate
                 last_year = year
-            q = mortality_grid[sx, ridx, year]
-            w = waiver_grid[sx, ridx, year]
-            lapse = lapse_by_year[year]
+            ift = 0.0          # total in-force
+            prem_occ = 0.0     # in-force on the premium-paying states
+            for s in range(n_states):
+                ift += occ[s]
+                if premium_state[s]:
+                    prem_occ += occ[s]
             ds = discount_start[t]
             dm = discount_mid[t]
-            total = act + wav
-            single = act * single_premium[mp] if t == 0 else 0.0
-            level = act * premium if t < premium_term else 0.0
+            single = prem_occ * single_premium[mp] if t == 0 else 0.0
+            level = prem_occ * premium if t < premium_term else 0.0
             pp += (level + single) * ds
-            pc += total * claim_rate * dm
-            pcm += total * morb_rate * dm
-            pa += total * annuity * ds
+            pc += ift * claim_rate * dm
+            pcm += ift * morb_rate * dm
+            pa += ift * annuity * ds
             acquisition = cnt * expense_acquisition if t == 0 else 0.0
-            pe += (acquisition + total * maint_monthly * inflation[t]) * dm
-            # Decrement: active loses mortality, waiver-inception and lapse;
-            # the waiver track loses mortality only and gains the inceptions.
-            act_next = act * (1.0 - q) * (1.0 - w) * (1.0 - lapse)
-            wav = wav * (1.0 - q) + act * (1.0 - q) * w
-            act = act_next
-        pm = (act + wav) * maturity_benefit[mp] * discount_start[term]
+            pe += (acquisition + ift * maint_monthly * inflation[t]) * dm
+            # Advance the occupancy along the transition edges.
+            for s in range(n_states):
+                occ_next[s] = 0.0
+            for e in range(n_edges):
+                occ_next[edge_to[e]] += (occ[edge_from[e]]
+                                         * edge_prob[e, sx, ridx, year])
+            for s in range(n_states):
+                occ[s] = occ_next[s]
+        total = 0.0
+        for s in range(n_states):
+            total += occ[s]
+        pm = total * maturity_benefit[mp] * discount_start[term]
         # Non-diagnosis coverages with a waiting or reduced-benefit rule: a
-        # per-coverage pass, re-deriving the in-force month by month so the
+        # per-coverage pass, re-deriving the occupancy month by month so the
         # benefit multiplier (which can change mid-year) applies cleanly.
         for k in range(c_start, c_end):
             kind = cov_kind[k]
@@ -255,32 +262,32 @@ def _value_kernel(mortality_grid, waiver_grid, issue_index, sex, term_months,
             benefit = cov_amount[k]
             red_factor = cov_reduction_factor[k]
             mortality_risk = cov_risk[kind] == 0
-            if state[mp] == STATE_ACTIVE:
-                inf_act = cnt
-                inf_wav = 0.0
-            else:
-                inf_act = 0.0
-                inf_wav = cnt
+            for s in range(n_states):
+                occ[s] = 0.0
+            occ[ss] = cnt
             for t in range(term):
                 year = t // 12
                 if t >= wait:
                     mult = red_factor if t < red_end else 1.0
-                    contrib = ((inf_act + inf_wav)
-                               * cov_rates[kind, sx, ridx, year]
+                    inf = 0.0
+                    for s in range(n_states):
+                        inf += occ[s]
+                    contrib = (inf * cov_rates[kind, sx, ridx, year]
                                * benefit * mult * discount_mid[t])
                     if mortality_risk:
                         pc += contrib
                     else:
                         pcm += contrib
-                q = mortality_grid[sx, ridx, year]
-                w = waiver_grid[sx, ridx, year]
-                lapse = lapse_by_year[year]
-                inf_act_next = inf_act * (1.0 - q) * (1.0 - w) * (1.0 - lapse)
-                inf_wav = inf_wav * (1.0 - q) + inf_act * (1.0 - q) * w
-                inf_act = inf_act_next
+                for s in range(n_states):
+                    occ_next[s] = 0.0
+                for e in range(n_edges):
+                    occ_next[edge_to[e]] += (occ[edge_from[e]]
+                                             * edge_prob[e, sx, ridx, year])
+                for s in range(n_states):
+                    occ[s] = occ_next[s]
         # Diagnosis coverages pay once on first diagnosis, so each one's
-        # claims run off a depleting "not yet diagnosed" pool -- a separate
-        # pass over the time axis, into the morbidity PV.
+        # claims run off a depleting "not yet diagnosed" occupancy -- a
+        # separate pass over the time axis, into the morbidity PV.
         for k in range(c_start, c_end):
             kind = cov_kind[k]
             if not cov_is_diagnosis[kind]:
@@ -289,13 +296,11 @@ def _value_kernel(mortality_grid, waiver_grid, issue_index, sex, term_months,
             wait = cov_waiting[k]
             red_end = cov_reduction_end[k]
             red_factor = cov_reduction_factor[k]
-            # The not-yet-diagnosed pool, carried over the two in-force tracks.
-            if state[mp] == STATE_ACTIVE:
-                h_act = cnt
-                h_wav = 0.0
-            else:
-                h_act = 0.0
-                h_wav = cnt
+            # The not-yet-diagnosed occupancy -- depletes by the diagnosis
+            # rate on top of the ordinary transitions.
+            for s in range(n_states):
+                occ[s] = 0.0
+            occ[ss] = cnt
             d_year = -1
             d_rate = 0.0
             for t in range(term):
@@ -307,17 +312,18 @@ def _value_kernel(mortality_grid, waiver_grid, issue_index, sex, term_months,
                 # the not-yet-diagnosed pool depletes either way.
                 if t >= wait:
                     mult = red_factor if t < red_end else 1.0
-                    pcm += ((h_act + h_wav) * d_rate * benefit * mult
-                            * discount_mid[t])
-                q = mortality_grid[sx, ridx, year]
-                w = waiver_grid[sx, ridx, year]
-                lapse = lapse_by_year[year]
+                    healthy = 0.0
+                    for s in range(n_states):
+                        healthy += occ[s]
+                    pcm += healthy * d_rate * benefit * mult * discount_mid[t]
                 undiag = 1.0 - d_rate
-                h_act_next = (h_act * undiag * (1.0 - q) * (1.0 - w)
-                              * (1.0 - lapse))
-                h_wav = (h_wav * undiag * (1.0 - q)
-                         + h_act * undiag * (1.0 - q) * w)
-                h_act = h_act_next
+                for s in range(n_states):
+                    occ_next[s] = 0.0
+                for e in range(n_edges):
+                    occ_next[edge_to[e]] += (occ[edge_from[e]] * undiag
+                                             * edge_prob[e, sx, ridx, year])
+                for s in range(n_states):
+                    occ[s] = occ_next[s]
         bel_mp = pc + pcm + pm + pa + pe - pp
         ra_mp = (mortality_factor * pc + morbidity_factor * pcm
                  + longevity_factor * (pm + pa))
@@ -391,6 +397,22 @@ def value(
     lapse_by_year = np.ascontiguousarray(
         assumptions.lapse_monthly(durations), dtype=np.float64
     )
+    # Waiver model -- the in-force state machine, evaluated on the rate grid.
+    # Two transient states (0 active, 1 waiver); the kernel runs the generic
+    # occupancy recursion on these composed transition probabilities.
+    surv = 1.0 - mortality_grid
+    lapse_grid = lapse_by_year[None, None, :]
+    edge_from = np.array([0, 0, 1], dtype=np.int64)
+    edge_to = np.array([0, 1, 1], dtype=np.int64)
+    edge_prob = np.ascontiguousarray(np.stack((
+        surv * (1.0 - waiver_grid) * (1.0 - lapse_grid),   # 0 -> 0
+        surv * waiver_grid,                                # 0 -> 1
+        surv,                                              # 1 -> 1
+    )))
+    n_states = 2
+    premium_state = np.array([True, False])
+    start_state = np.where(model_points.state == STATE_ACTIVE,
+                           0, 1).astype(np.int64)
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
     cov_rates = coverage_rates(
         mortality_grid, [r.rate for r in assumptions.riders], sex_grid,
@@ -423,14 +445,16 @@ def value(
         )
 
     args = (
-        mortality_grid,
-        waiver_grid,
+        edge_from,
+        edge_to,
+        edge_prob,
+        n_states,
+        premium_state,
+        start_state,
         issue_index,
         model_points.sex,
         model_points.term_months,
         model_points.count,
-        model_points.state,
-        lapse_by_year,
         model_points.monthly_premium,
         model_points.single_premium,
         model_points.premium_term_months,

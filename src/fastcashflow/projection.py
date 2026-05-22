@@ -68,26 +68,34 @@ class Cashflows:
 
 
 @njit(parallel=True, cache=True)
-def _project_kernel(mortality, waiver, term_months, count, state,
-                    lapse_by_year, monthly_premium, single_premium,
-                    premium_term_months, cov_kind, cov_amount,
-                    cov_offset, cov_waiting, cov_reduction_end,
-                    cov_reduction_factor, cov_rates, cov_risk, cov_is_diagnosis,
-                    maturity_benefit, annuity_payment, expense_acquisition,
-                    maint_monthly, inflation, n_time):
+def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
+                    premium_state, start_state, term_months, count,
+                    monthly_premium, single_premium, premium_term_months,
+                    cov_kind, cov_amount, cov_offset, cov_waiting,
+                    cov_reduction_end, cov_reduction_factor, cov_rates,
+                    cov_risk, cov_is_diagnosis, maturity_benefit,
+                    annuity_payment, expense_acquisition, maint_monthly,
+                    inflation, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
     across cores; the time axis is the sequential (inner) loop, because the
     in-force recursion depends on the previous month.
 
+    In-force is an occupancy vector over ``n_states`` transient states. Each
+    month it is advanced along the transition edges: edge ``e`` carries
+    ``edge_prob[e, mp, year]`` of the occupancy from state ``edge_from[e]``
+    to ``edge_to[e]``. Premium accrues on the states flagged in
+    ``premium_state``; claims, expenses and survival benefits on the total
+    occupancy. The transition probabilities are composed by the caller, so
+    the kernel itself is state-machine-agnostic.
+
     A policy's claim is the sum over its coverage list: coverage ``k`` pays
     ``cov_amount[k]`` at rate ``cov_rates[cov_kind[k], mp, year]``, summed
     into the mortality or morbidity total by the kind's risk class. Coverage
     rates change only once a year, so the per-coverage sum is rebuilt on a
-    year boundary, not every month. Mortality (the decrement) and lapse are
-    likewise supplied per policy year. The maturity benefit is paid to the
-    in-force survivors at time = term.
+    year boundary. The maturity benefit is paid to the in-force survivors at
+    time = term.
     """
     n_mp = mortality.shape[0]
     inforce = np.zeros((n_mp, n_time))
@@ -99,25 +107,28 @@ def _project_kernel(mortality, waiver, term_months, count, state,
     annuity_cf = np.zeros((n_mp, n_time))
     maturity_cf = np.zeros(n_mp)
 
+    n_edges = edge_from.shape[0]
     for mp in prange(n_mp):
         term = term_months[mp]
         premium_term = premium_term_months[mp]   # months the premium is paid
         cnt = count[mp]
         c_start = cov_offset[mp]
         c_end = cov_offset[mp + 1]
-        # Two in-force tracks -- active (paying premium) and waiver (premium
-        # waived, coverage continuing). The input state seats the count.
-        if state[mp] == STATE_ACTIVE:
-            act = cnt
-            wav = 0.0
-        else:
-            act = 0.0
-            wav = cnt
+        # In-force occupancy over the transient states; the input state
+        # seats the model point's count on its starting state.
+        occ = np.zeros(n_states)
+        occ_next = np.zeros(n_states)
+        occ[start_state[mp]] = cnt
         last_year = -1
         claim_rate = 0.0      # aggregate mortality claim per unit in-force
         morb_rate = 0.0       # aggregate morbidity claim per unit in-force
         for t in range(term):
-            ift = act + wav                      # total in-force
+            ift = 0.0         # total in-force
+            prem_occ = 0.0    # in-force on the premium-paying states
+            for s in range(n_states):
+                ift += occ[s]
+                if premium_state[s]:
+                    prem_occ += occ[s]
             inforce[mp, t] = ift
             year = t // 12
             if year != last_year:
@@ -136,26 +147,28 @@ def _project_kernel(mortality, waiver, term_months, count, state,
                         morb_rate += rate
                 last_year = year
             q = mortality[mp, year]
-            w = waiver[mp, year]                 # waiver-inception rate
-            lapse = lapse_by_year[year]
             deaths[mp, t] = ift * q
-            single = act * single_premium[mp] if t == 0 else 0.0
-            level = act * monthly_premium[mp] if t < premium_term else 0.0
+            single = prem_occ * single_premium[mp] if t == 0 else 0.0
+            level = prem_occ * monthly_premium[mp] if t < premium_term else 0.0
             premium_cf[mp, t] = level + single
             claim_cf[mp, t] = ift * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = ift * annuity_payment[mp]
             acquisition = cnt * expense_acquisition if t == 0 else 0.0
             expense_cf[mp, t] = acquisition + ift * maint_monthly * inflation[t]
-            # Decrement: active loses mortality, waiver-inception and lapse;
-            # the waiver track loses mortality only and gains the inceptions.
-            act_next = act * (1.0 - q) * (1.0 - w) * (1.0 - lapse)
-            wav_next = wav * (1.0 - q) + act * (1.0 - q) * w
-            if t + 1 < term:
-                act = act_next
-                wav = wav_next
-            else:
-                maturity_cf[mp] = (act_next + wav_next) * maturity_benefit[mp]
+            # Advance the occupancy along the transition edges.
+            for s in range(n_states):
+                occ_next[s] = 0.0
+            for e in range(n_edges):
+                occ_next[edge_to[e]] += (occ[edge_from[e]]
+                                         * edge_prob[e, mp, year])
+            if t + 1 == term:
+                total_next = 0.0
+                for s in range(n_states):
+                    total_next += occ_next[s]
+                maturity_cf[mp] = total_next * maturity_benefit[mp]
+            for s in range(n_states):
+                occ[s] = occ_next[s]
 
         # Non-diagnosis coverages carrying a waiting or reduced-benefit rule
         # run per month here, not in the year-aggregated rate above, because
@@ -251,14 +264,35 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     )
     inflation = (1.0 + assumptions.expense_inflation) ** (months / 12.0)
 
+    # Waiver model -- the in-force state machine. Two transient states
+    # (0 active, 1 waiver); the monthly transition probabilities are composed
+    # here, so the kernel runs a generic occupancy recursion. (a-2 is this
+    # 2-state instance; phase (b) opens the state set up.)
+    surv = 1.0 - mortality
+    lapse_grid = lapse_by_year[None, :]
+    edge_from = np.array([0, 0, 1], dtype=np.int64)
+    edge_to = np.array([0, 1, 1], dtype=np.int64)
+    edge_prob = np.ascontiguousarray(np.stack((
+        surv * (1.0 - waiver) * (1.0 - lapse_grid),   # 0 -> 0  active stays
+        surv * waiver,                                # 0 -> 1  active -> waiver
+        surv,                                         # 1 -> 1  waiver stays
+    )))
+    n_states = 2
+    premium_state = np.array([True, False])
+    start_state = np.where(model_points.state == STATE_ACTIVE,
+                           0, 1).astype(np.int64)
+
     (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
      annuity_cf, maturity_cf) = _project_kernel(
         mortality,
-        waiver,
+        edge_from,
+        edge_to,
+        edge_prob,
+        n_states,
+        premium_state,
+        start_state,
         model_points.term_months,
         model_points.count,
-        model_points.state,
-        lapse_by_year,
         model_points.monthly_premium,
         model_points.single_premium,
         model_points.premium_term_months,
