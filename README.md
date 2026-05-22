@@ -163,10 +163,10 @@ fcf.value_file("policies.parquet", "results/", assumptions, id_column="id")
 # -> results/part-00000.parquet, part-00001.parquet, ...
 ```
 
-The `examples/worked_example.py` script in the
-[GitHub repository](https://github.com/seokhoonj/fastcashflow) runs the
-whole flow end to end -- measure, assemble the report, and roll a
-reporting period forward.
+The [`examples/` directory](https://github.com/seokhoonj/fastcashflow/tree/main/examples)
+has runnable scripts -- `quickstart.py`, `reporting.py`, `pricing.py` and
+more. Each reads its inputs from the Excel files in `examples/data/`, so a
+practitioner can value their own book by editing those files alone.
 
 ## Documentation
 

@@ -47,12 +47,12 @@ use `value` in place of `measure`.
 ::::{grid} 1 1 3 3
 :gutter: 3
 
-:::{grid-item-card} The worked example
-:link: https://github.com/seokhoonj/fastcashflow/blob/main/examples/worked_example.py
+:::{grid-item-card} Examples
+:link: https://github.com/seokhoonj/fastcashflow/tree/main/examples
 :link-type: url
 
-A full valuation end to end -- pricing, measurement, the report and the
-period-close analysis of change.
+Runnable scripts -- quickstart, reporting, pricing and more. Each reads
+its inputs from the Excel files in examples/data/.
 :::
 
 :::{grid-item-card} Concepts

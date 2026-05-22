@@ -52,7 +52,14 @@ def _read_frame(path) -> pl.DataFrame:
         return pl.read_parquet(p)
     if p.endswith(".csv"):
         return pl.read_csv(p)
-    raise ValueError(f"unsupported file type: {path!r} (expected .parquet or .csv)")
+    if p.endswith(".xlsx"):
+        return pl.read_excel(p, engine="openpyxl")
+    if p.endswith((".feather", ".arrow")):
+        return pl.read_ipc(p)
+    raise ValueError(
+        f"unsupported file type: {path!r} "
+        "(expected .parquet, .csv, .xlsx or .feather)"
+    )
 
 
 def _write_frame(df: pl.DataFrame, path) -> None:
@@ -61,9 +68,12 @@ def _write_frame(df: pl.DataFrame, path) -> None:
         df.write_parquet(p)
     elif p.endswith(".csv"):
         df.write_csv(p)
+    elif p.endswith((".feather", ".arrow")):
+        df.write_ipc(p)
     else:
         raise ValueError(
-            f"unsupported file type: {path!r} (expected .parquet or .csv)"
+            f"unsupported file type: {path!r} "
+            "(expected .parquet, .csv or .feather)"
         )
 
 
@@ -262,7 +272,7 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
                          else np.zeros(n_mp)),
     )
     for opt in ("sex", "count", "single_premium", "death_benefit",
-                "maturity_benefit", "annuity_payment"):
+                "maturity_benefit", "annuity_payment", "account_value"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
 
@@ -363,7 +373,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
 
 
 def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
-    """Read model points from a parquet or CSV file into a ``ModelPoints``.
+    """Read model points from a parquet, CSV, Excel or feather file.
 
     Two forms:
 
@@ -377,10 +387,22 @@ def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
       coverages=coverages_path)``. A policies frame (``policy_id``,
       ``issue_age``, ``term_months``, optional ``sex`` / ``count``) and a
       coverages frame (``policy_id``, ``rider_code``, ``amount``, optional
-      ``premium``), one coverage row per policy x rider.
+      ``premium``), one coverage row per policy x rider. A single ``.xlsx``
+      with ``policies`` and ``coverages`` sheets is read as long-form too.
 
     ``assumptions`` is optional only for a wide file with no rider columns.
     """
+    p = str(path)
+    if coverages is None and p.endswith(".xlsx"):
+        wb = openpyxl.load_workbook(p, read_only=True)
+        sheets = wb.sheetnames
+        wb.close()
+        if "policies" in sheets and "coverages" in sheets:
+            return _long_model_points(
+                pl.read_excel(p, sheet_name="policies", engine="openpyxl"),
+                pl.read_excel(p, sheet_name="coverages", engine="openpyxl"),
+                assumptions,
+            )
     pol = _read_frame(path)
     if coverages is not None:
         return _long_model_points(pol, _read_frame(coverages), assumptions)
