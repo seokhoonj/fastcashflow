@@ -30,7 +30,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.modelpoint import ModelPoints
+from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import project_cashflows
 
 

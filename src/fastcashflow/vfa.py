@@ -40,7 +40,7 @@ from fastcashflow.gmm import (
     _settlement_factor,
     _settlement_lic,
 )
-from fastcashflow.modelpoint import ModelPoints
+from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.tvog import tvog_weights
 

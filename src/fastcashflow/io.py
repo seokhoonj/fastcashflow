@@ -35,7 +35,7 @@ from fastcashflow.coverage import (
     TYPE_DEATH, TYPE_DEATH_MAIN, TYPE_DIAGNOSIS, TYPE_MATURITY,
 )
 from fastcashflow.engine import Valuation, value
-from fastcashflow.modelpoint import ModelPoints
+from fastcashflow.modelpoints import ModelPoints
 
 # Wide model-point columns with a fixed meaning. Any other ``*_benefit``
 # column names a rider by its 특약코드.

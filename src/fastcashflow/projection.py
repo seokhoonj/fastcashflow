@@ -39,7 +39,7 @@ from numba import njit, prange
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.coverage import coverage_arrays, coverage_rates
-from fastcashflow.modelpoint import ModelPoints
+from fastcashflow.modelpoints import ModelPoints
 
 
 @dataclass(frozen=True, slots=True)

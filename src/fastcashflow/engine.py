@@ -31,7 +31,7 @@ from fastcashflow.gmm import (
     discount_factors_from_curve,
 )
 from fastcashflow.coverage import coverage_arrays, coverage_rates
-from fastcashflow.modelpoint import ModelPoints
+from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
 

@@ -24,7 +24,7 @@ from fastcashflow.io import (
     value_file,
     write_valuation,
 )
-from fastcashflow.modelpoint import ModelPoints
+from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.movement import (
     PAAPeriodMovement,
     PAAReconciliation,

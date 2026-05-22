@@ -12,7 +12,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.engine import value
-from fastcashflow.modelpoint import ModelPoints
+from fastcashflow.modelpoints import ModelPoints
 
 
 def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:

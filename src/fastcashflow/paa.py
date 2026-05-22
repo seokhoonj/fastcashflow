@@ -38,7 +38,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.gmm import _norm_ppf, _rollforward_kernel, _settlement_lic
-from fastcashflow.modelpoint import ModelPoints
+from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
 
