@@ -18,7 +18,7 @@
   - 제목
   - 내용
 * - 1
-  - IFRS 17이란 무엇인가
+  - IFRS 17이란
   - 왜 새 회계기준인가, "보험계약부채를 측정한다"는 것의 의미, 세 가지 회계모형 개관
 * - 2
   - 보험계약부채의 세 가지 구성요소
@@ -56,7 +56,7 @@
 :maxdepth: 1
 :caption: 차례
 
-01-what-is-ifrs17
+01-ifrs17
 02-bel-ra-csm
 03-cashflow-basis
 04-how-the-engine-runs
