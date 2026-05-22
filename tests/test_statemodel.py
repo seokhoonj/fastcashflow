@@ -25,16 +25,29 @@ from fastcashflow import (
 from fastcashflow.statemodel import compile_state_model
 
 
+def _annual(monthly):
+    """The annual rate whose constant-force monthly equivalent is ``monthly``."""
+    return 1.0 - (1.0 - monthly) ** 12
+
+
 def _asmp(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Assumptions:
-    """Flat-rate, zero-discount, zero-expense basis -- every figure by hand."""
+    """Flat-rate, zero-discount, zero-expense basis -- every figure by hand.
+
+    ``q``, ``lapse`` and ``waiver_rate`` are the monthly rates the hand
+    calculations use; each is supplied to the engine as the annual rate the
+    engine converts straight back to that monthly rate.
+    """
     waiver = None
     if waiver_rate != 0.0:
+        waiver_a = _annual(waiver_rate)
         def waiver(sex, issue_age, duration):
-            return np.full(issue_age.shape, waiver_rate)
+            return np.full(issue_age.shape, waiver_a)
+    q_a = _annual(q)
+    lapse_a = _annual(lapse)
     return Assumptions(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, q),
-        lapse_monthly=lambda duration: np.full(duration.shape, lapse),
-        waiver_inception_monthly=waiver,
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, q_a),
+        lapse_annual=lambda duration: np.full(duration.shape, lapse_a),
+        waiver_inception_annual=waiver,
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -53,7 +66,7 @@ def test_compile_waiver_edges():
     """The waiver model compiles to the expected competing-decrement edges."""
     rates = {
         "mortality": np.array([[0.01]]),
-        "waiver": np.array([[0.05]]),
+        "waiver_inception": np.array([[0.05]]),
         "lapse": np.array([[0.02]]),
     }
     edge_from, edge_to, edge_prob, n_states, premium_state = compile_state_model(
@@ -80,7 +93,7 @@ def test_compile_missing_rate_raises():
     """A decrement naming a rate that was not supplied is a clear error."""
     with pytest.raises(ValueError, match="lapse"):
         compile_state_model(WAIVER_MODEL, {"mortality": np.array([[0.01]]),
-                                           "waiver": np.array([[0.0]])})
+                                           "waiver_inception": np.array([[0.0]])})
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +105,7 @@ def test_unknown_destination_state_rejected():
     with pytest.raises(ValueError, match="unknown state"):
         StateModel(states=(
             State("active", premium=True,
-                  decrements=(Decrement("waiver", to="ghost"),)),
+                  decrements=(Decrement("waiver_inception", to="ghost"),)),
         ))
 
 
@@ -117,7 +130,7 @@ def test_explicit_waiver_model_matches_default():
         states=(
             State("active", premium=True, decrements=(
                 Decrement("mortality"),
-                Decrement("waiver", to="waiver"),
+                Decrement("waiver_inception", to="waiver"),
                 Decrement("lapse"),
             )),
             State("waiver", decrements=(Decrement("mortality"),)),
@@ -125,7 +138,7 @@ def test_explicit_waiver_model_matches_default():
         seating=(0, 1, 1),
     )
     kw = dict(issue_age=45, death_benefit=50_000_000.0,
-              monthly_premium=30_000.0, term_months=120)
+              level_premium=30_000.0, term_months=120)
     for state in (STATE_ACTIVE, STATE_WAIVER, STATE_PAIDUP):
         mp = ModelPoints.single(**kw, state=state)
         default = value(mp, _asmp(waiver_rate=0.03))
@@ -142,7 +155,7 @@ def test_single_state_no_lapse_hand_calculation():
     death_benefit = 1_000_000.0
     premium = 12_000.0
     mp = ModelPoints.single(issue_age=40, death_benefit=death_benefit,
-                            monthly_premium=premium, term_months=3)
+                            level_premium=premium, term_months=3)
     asmp = _asmp(state_model=no_lapse)
 
     inforce = [1.0, 0.99, 0.99 ** 2]
@@ -165,7 +178,7 @@ def test_decrement_order_matters():
             State("active", premium=True, decrements=(
                 Decrement("mortality"),
                 Decrement("lapse"),
-                Decrement("waiver", to="waiver"),
+                Decrement("waiver_inception", to="waiver"),
             )),
             State("waiver", decrements=(Decrement("mortality"),)),
         ),
@@ -174,7 +187,7 @@ def test_decrement_order_matters():
     death_benefit = 1_000_000.0
     premium = 12_000.0
     mp = ModelPoints.single(issue_age=40, death_benefit=death_benefit,
-                            monthly_premium=premium, term_months=2)
+                            level_premium=premium, term_months=2)
     asmp = _asmp(waiver_rate=0.05, lapse=0.02, state_model=lapse_first)
 
     # t=0: act=1, wav=0.
@@ -203,7 +216,7 @@ def test_three_state_model_runs():
         states=(
             State("active", premium=True, decrements=(
                 Decrement("mortality"),
-                Decrement("waiver", to="waiver"),
+                Decrement("waiver_inception", to="waiver"),
                 Decrement("lapse"),
             )),
             State("waiver", decrements=(Decrement("mortality"),)),
@@ -213,7 +226,7 @@ def test_three_state_model_runs():
     )
     assert three.n_states == 3
     kw = dict(issue_age=42, death_benefit=80_000_000.0,
-              monthly_premium=40_000.0, term_months=180)
+              level_premium=40_000.0, term_months=180)
 
     # A paid-up contract: identical to the default, which seats paid-up on
     # the waiver state -- both are mortality-only, premium-free.
@@ -236,7 +249,7 @@ def test_measure_and_value_agree_under_custom_model():
         states=(
             State("active", premium=True, decrements=(
                 Decrement("mortality"),
-                Decrement("waiver", to="waiver"),
+                Decrement("waiver_inception", to="waiver"),
                 Decrement("lapse"),
             )),
             State("waiver", decrements=(Decrement("mortality"),)),
@@ -249,7 +262,7 @@ def test_measure_and_value_agree_under_custom_model():
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(float),
         death_benefit=rng.integers(10, 80, n) * 1_000_000.0,
-        monthly_premium=rng.integers(2, 10, n) * 10_000.0,
+        level_premium=rng.integers(2, 10, n) * 10_000.0,
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),
     )

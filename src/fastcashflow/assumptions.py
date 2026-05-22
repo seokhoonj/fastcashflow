@@ -4,10 +4,27 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+import numpy as np
+
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.statemodel import StateModel
 
 RateFn = Callable[[IntArray, FloatArray, IntArray], FloatArray]
+
+
+def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
+    """Convert an annual decrement / incidence rate to its monthly equivalent.
+
+    Constant-force basis: the rate acts at a constant intensity across the
+    year, so twelve monthly applications reproduce the annual rate exactly --
+    ``1 - (1 - q_monthly)**12 == q_annual``. This is the conversion
+    consistent with the engine's per-policy-year rate grid, where one rate is
+    held flat across the year's twelve monthly steps; a within-year varying
+    method (uniform distribution of decrements) cannot be expressed on that
+    grid.
+    """
+    annual = np.asarray(annual_rate, dtype=np.float64)
+    return 1.0 - (1.0 - annual) ** (1.0 / 12.0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,11 +34,13 @@ class RiderRate:
     Parameters
     ----------
     code :
-        The rider's 특약코드 label. The engine works in the integer grid
+        The rider's code label. The engine works in the integer grid
         index this factorises to; the label is what the model-point file
         names a coverage by.
     rate :
-        Monthly-rate callable, the same signature as ``mortality_monthly``.
+        Annual-rate callable, the same signature as ``mortality_annual``;
+        the engine converts it to a monthly rate (see
+        :func:`annual_to_monthly`).
     is_diagnosis :
         True for a single-payment diagnosis benefit -- its claims run off a
         depleting "not yet diagnosed" pool. False for a recurring claim
@@ -43,16 +62,18 @@ class Assumptions:
 
     Parameters
     ----------
-    mortality_monthly :
+    mortality_annual :
         Maps ``(sex, issue_age, duration_years)`` -- arrays of sex (0 male,
         1 female), issue age (years) and completed policy years (0-based),
-        of the same shape -- to an array of monthly mortality rates. A select-and-ultimate basis is
-        expressed by letting the rate depend on duration within the select
-        period and on attained age (issue_age + duration) beyond it; the
-        select-period logic lives in this callable, not the engine.
-    lapse_monthly :
+        of the same shape -- to an array of annual mortality rates. The
+        engine converts each to a monthly rate (see
+        :func:`annual_to_monthly`). A select-and-ultimate basis is expressed
+        by letting the rate depend on duration within the select period and
+        on attained age (issue_age + duration) beyond it; the select-period
+        logic lives in this callable, not the engine.
+    lapse_annual :
         Maps an array of completed policy years (0-based) to an array of
-        monthly lapse rates of the same shape.
+        annual lapse rates of the same shape.
     discount_annual :
         Flat annual discount rate. Locked in at initial recognition and used
         both for discounting cash flows and for CSM interest accretion.
@@ -69,11 +90,11 @@ class Assumptions:
     mortality_cv :
         Coefficient of variation of death claims -- the mortality-risk
         component of the RA.
-    waiver_inception_monthly :
-        Maps ``(sex, issue_age, duration_years)`` to an array of monthly
+    waiver_inception_annual :
+        Maps ``(sex, issue_age, duration_years)`` to an array of annual
         waiver-inception rates -- the rate at which active in-force
         transitions to the premium-waived state. Same signature as
-        ``mortality_monthly``. ``None`` means no transitions: every model
+        ``mortality_annual``. ``None`` means no transitions: every model
         point keeps its input state for the whole projection.
     longevity_cv :
         Coefficient of variation of survival benefits (maturity benefits and
@@ -113,12 +134,12 @@ class Assumptions:
         the best-estimate liability.
     riders :
         Ordered tuple of :class:`RiderRate` -- the rate-driven riders
-        (death-type, morbidity and diagnosis coverages), one per 특약코드.
+        (death-type, morbidity and diagnosis coverages), one per rider code.
         Their order fixes the integer coverage codes: rider ``i`` is code
         ``i + 1``; code 0 is the main-contract death coverage, driven by
-        ``mortality_monthly``. Empty for a death-only portfolio.
+        ``mortality_annual``. Empty for a death-only portfolio.
     coverage_types :
-        Map of every 특약코드 to its type string -- the riders master. Set
+        Map of every rider code to its type string -- the riders master. Set
         by :func:`read_assumptions` and used by :func:`read_model_points`
         to route long-form coverage rows; ``None`` when built in code.
     state_model :
@@ -126,19 +147,19 @@ class Assumptions:
         declaring the transient states, their decrements and which states pay
         premium. ``None`` uses the default active / waiver model
         (:data:`~fastcashflow.statemodel.WAIVER_MODEL`); the
-        ``waiver_inception_monthly`` rate then drives the active -> waiver
+        ``waiver_inception_annual`` rate then drives the active -> waiver
         transition. A product with a different state set supplies its own.
     """
 
-    mortality_monthly: RateFn
-    lapse_monthly: Callable[[IntArray], FloatArray]
+    mortality_annual: RateFn
+    lapse_annual: Callable[[IntArray], FloatArray]
     discount_annual: float
     expense_acquisition: float
     expense_maintenance_annual: float
     expense_inflation: float
     ra_confidence: float
     mortality_cv: float
-    waiver_inception_monthly: RateFn | None = None
+    waiver_inception_annual: RateFn | None = None
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
     expense_cv: float = 0.0

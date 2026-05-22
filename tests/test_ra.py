@@ -13,10 +13,15 @@ Q = 0.002          # flat monthly mortality
 LAPSE = 0.005      # flat monthly lapse
 
 
+def _annual(m):
+    """Convert a monthly rate to the equivalent annual rate the engine expects."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions(**overrides) -> Assumptions:
     base = dict(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, Q),
-        lapse_monthly=lambda duration: np.full(duration.shape, LAPSE),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.03,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,

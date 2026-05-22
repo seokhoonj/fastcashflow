@@ -21,10 +21,15 @@ from fastcashflow import (
 )
 
 
+def _annual(m: float) -> float:
+    """Convert a monthly rate to its annual equivalent so the engine converts back."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
         expense_maintenance_annual=60_000.0,
@@ -39,7 +44,7 @@ def _portfolio(n: int = 50) -> ModelPoints:
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 90, n) * 1_000_000,
-        monthly_premium=rng.integers(8, 20, n) * 10_000,
+        level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=np.full(n, 120),
     )
 
@@ -174,7 +179,7 @@ def _revised(mps: ModelPoints):
     """A measurement of the same book under markedly higher mortality."""
     worse = replace(
         _assumptions(),
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.003),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.003)),
     )
     return measure(mps, worse)
 
@@ -455,8 +460,8 @@ def test_reconcile_paa():
 
 def _vfa_assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.002),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.004),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.004)),
         discount_annual=0.03,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,

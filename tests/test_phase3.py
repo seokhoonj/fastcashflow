@@ -18,16 +18,21 @@ from fastcashflow import (
 )
 
 
+def _annual(m):
+    """Convert a monthly rate to its annual equivalent (engine converts back)."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def test_value_matches_measure():
     """The fast fused path reproduces the detailed path's headline numbers."""
-    def mortality_monthly(sex, issue_age, duration):
+    def mortality_annual(sex, issue_age, duration):
         attained = issue_age + duration
         annual_q = 0.0008 * (1.0 + 0.05 * (attained - 30.0))
-        return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)
+        return annual_q
 
     asmp = Assumptions(
-        mortality_monthly=mortality_monthly,
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.012),
+        mortality_annual=mortality_annual,
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
         expense_acquisition=250_000.0,
         expense_maintenance_annual=48_000.0,
@@ -39,7 +44,7 @@ def test_value_matches_measure():
     mps = ModelPoints(
         issue_age=np.array([30, 45, 45, 55, 38]),
         death_benefit=np.array([1e8, 5e7, 8e7, 3e7, 6e7]),
-        monthly_premium=np.array([70_000, 90_000, 110_000, 130_000, 80_000]),
+        level_premium=np.array([70_000, 90_000, 110_000, 130_000, 80_000]),
         term_months=np.array([120, 120, 120, 120, 120]),
     )
 
@@ -55,8 +60,8 @@ def test_value_matches_measure():
 def test_value_onerous():
     """The fast path also flags onerous contracts -- CSM floored at 0."""
     asmp = Assumptions(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.05),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05)),
+        lapse_annual=lambda duration: np.full(duration.shape, 0.0),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -66,7 +71,7 @@ def test_value_onerous():
     )
     mps = ModelPoints.single(
         issue_age=40, death_benefit=1_000_000.0,
-        monthly_premium=100.0, term_months=12,
+        level_premium=100.0, term_months=12,
     )
     v = value(mps, asmp)
     assert v.csm[0] == 0.0
@@ -77,14 +82,14 @@ def test_value_onerous():
 @pytest.mark.filterwarnings("ignore::numba.core.errors.NumbaPerformanceWarning")
 def test_value_gpu_matches_cpu():
     """The GPU backend reproduces the CPU backend exactly."""
-    def mortality_monthly(sex, issue_age, duration):
+    def mortality_annual(sex, issue_age, duration):
         attained = issue_age + duration
         annual_q = 0.0008 * (1.0 + 0.05 * (attained - 30.0))
-        return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)
+        return annual_q
 
     asmp = Assumptions(
-        mortality_monthly=mortality_monthly,
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.012),
+        mortality_annual=mortality_annual,
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
         expense_acquisition=250_000.0,
         expense_maintenance_annual=48_000.0,
@@ -97,7 +102,7 @@ def test_value_gpu_matches_cpu():
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
-        monthly_premium=rng.integers(3, 15, n) * 10_000,
+        level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=np.full(n, 120),
     )
 
@@ -116,12 +121,12 @@ def test_value_gpu_matches_cpu_with_transition():
     """GPU and CPU agree under a waiver transition with a diagnosis rider --
     the GPU two-track in-force and diagnosis pool reproduce the CPU kernel."""
     def flat(rate):
-        return lambda sex, issue_age, duration: np.full(issue_age.shape, rate)
+        return lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(rate))
 
     asmp = Assumptions(
-        mortality_monthly=flat(0.001),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.012),
-        waiver_inception_monthly=flat(0.02),
+        mortality_annual=flat(0.001),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.012)),
+        waiver_inception_annual=flat(0.02),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
         expense_maintenance_annual=48_000.0,
@@ -137,7 +142,7 @@ def test_value_gpu_matches_cpu_with_transition():
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n).astype(float),
         death_benefit=rng.integers(10, 100, n) * 1_000_000.0,
-        monthly_premium=rng.integers(3, 15, n) * 10_000.0,
+        level_premium=rng.integers(3, 15, n) * 10_000.0,
         term_months=np.full(n, 120),
         benefits={1: rng.integers(5, 30, n) * 1_000_000.0},
         state=rng.integers(0, 3, n),

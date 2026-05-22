@@ -15,20 +15,25 @@ SELECT_LAPSE = 0.03   # monthly lapse, policy year 0
 ULT_LAPSE = 0.01      # monthly lapse, policy year 1+
 
 
+def _annual(m):
+    """Convert a monthly rate to its annual equivalent (engine converts back)."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _mortality(sex, issue_age, duration):
     """Select for the first policy year, ultimate thereafter."""
-    return np.where(duration < 1, SELECT_Q, ULT_Q)
+    return np.where(duration < 1, _annual(SELECT_Q), _annual(ULT_Q))
 
 
 def _lapse(duration):
     """Higher lapse in the first policy year, lower thereafter."""
-    return np.where(duration < 1, SELECT_LAPSE, ULT_LAPSE)
+    return np.where(duration < 1, _annual(SELECT_LAPSE), _annual(ULT_LAPSE))
 
 
 def _assumptions(**overrides) -> Assumptions:
     base = dict(
-        mortality_monthly=_mortality,
-        lapse_monthly=_lapse,
+        mortality_annual=_mortality,
+        lapse_annual=_lapse,
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -49,7 +54,7 @@ def test_select_ultimate_and_duration_lapse():
     res = measure(
         ModelPoints.single(
             issue_age=40, death_benefit=death_benefit,
-            monthly_premium=premium, term_months=term,
+            level_premium=premium, term_months=term,
         ),
         _assumptions(),
     )
@@ -96,7 +101,7 @@ def test_value_matches_run_phase1b():
     mps = ModelPoints(
         issue_age=rng.integers(25, 55, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
-        monthly_premium=rng.integers(3, 15, n) * 10_000,
+        level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(13, 36, n),
     )
     asmp = _assumptions(mortality_cv=0.10, discount_annual=0.03)

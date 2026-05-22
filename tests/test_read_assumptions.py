@@ -22,10 +22,10 @@ def test_read_assumptions_loads_the_sample_basis():
 def test_read_assumptions_builds_working_rate_callables():
     """Mortality and lapse callables return sensible monthly rates."""
     asmp = load_sample_assumptions()
-    young = asmp.mortality_monthly(np.array([0]), np.array([30]), np.array([0]))
-    old = asmp.mortality_monthly(np.array([0]), np.array([60]), np.array([0]))
+    young = asmp.mortality_annual(np.array([0]), np.array([30]), np.array([0]))
+    old = asmp.mortality_annual(np.array([0]), np.array([60]), np.array([0]))
     assert 0.0 < young[0] < old[0] < 1.0          # mortality rises with age
-    lapse = asmp.lapse_monthly(np.array([0, 5]))
+    lapse = asmp.lapse_annual(np.array([0, 5]))
     assert np.all((lapse > 0.0) & (lapse < 1.0))
 
 

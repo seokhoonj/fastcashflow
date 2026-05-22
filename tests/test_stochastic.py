@@ -12,10 +12,15 @@ import pytest
 from fastcashflow import Assumptions, ModelPoints, value, value_stochastic
 
 
+def _annual(m: float) -> float:
+    """Convert a monthly rate to its annual equivalent so the engine converts back."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
         expense_maintenance_annual=60_000.0,
@@ -30,7 +35,7 @@ def _portfolio(n: int = 200) -> ModelPoints:
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 90, n) * 1_000_000,
-        monthly_premium=rng.integers(8, 20, n) * 10_000,
+        level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
     )
 

@@ -27,11 +27,16 @@ MORB_RATE = 0.03     # flat monthly diagnosis rate
 DIAGNOSIS = 1        # the single diagnosis rider -> coverage code 1
 
 
+def _annual(m):
+    """Convert a monthly rate to its annual equivalent (engine converts back)."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions(**overrides) -> Assumptions:
-    flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, MORB_RATE)
+    flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(MORB_RATE))
     base = dict(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, Q),
-        lapse_monthly=lambda duration: np.full(duration.shape, LAPSE),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.04,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -50,7 +55,7 @@ def _one_coverage(kind, benefit, term, *, waiting=0,
     """A single-policy, single-coverage model point carrying a benefit rule."""
     return ModelPoints(
         issue_age=np.array([40.0]),
-        monthly_premium=np.array([0.0]),
+        level_premium=np.array([0.0]),
         term_months=np.array([term]),
         cov_kind=np.array([kind]),
         cov_amount=np.array([float(benefit)]),
@@ -155,7 +160,7 @@ def test_default_rule_is_inert():
                              waiting=0, reduction_end=0, reduction_factor=1.0)
     omitted = ModelPoints(
         issue_age=np.array([40.0]),
-        monthly_premium=np.array([0.0]),
+        level_premium=np.array([0.0]),
         term_months=np.array([36]),
         cov_kind=np.array([DIAGNOSIS]),
         cov_amount=np.array([4e7]),
@@ -181,7 +186,7 @@ def test_value_matches_measure_with_rules():
 
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(float),
-        monthly_premium=rng.integers(5, 20, n) * 10_000.0,
+        level_premium=rng.integers(5, 20, n) * 10_000.0,
         term_months=rng.integers(60, 180, n),
         cov_kind=cov_kind,
         cov_amount=cov_amount,

@@ -15,20 +15,25 @@ from fastcashflow import (
 )
 
 
+def _annual(m):
+    """Convert a monthly rate to its annual equivalent (engine converts back)."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _portfolio(n: int = 400) -> ModelPoints:
     rng = np.random.default_rng(3)
     return ModelPoints(
         issue_age=rng.integers(25, 60, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
-        monthly_premium=rng.integers(3, 15, n) * 10_000,
+        level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
     )
 
 
 def _assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
         expense_maintenance_annual=48_000.0,
@@ -42,7 +47,7 @@ def _frame(mps: ModelPoints) -> pl.DataFrame:
     return pl.DataFrame({
         "issue_age": mps.issue_age,
         "death_benefit": mps.death_benefit,
-        "monthly_premium": mps.monthly_premium,
+        "level_premium": mps.level_premium,
         "term_months": mps.term_months,
     })
 
@@ -59,7 +64,7 @@ def test_model_points_round_trip(tmp_path, suffix):
     assert loaded.n_mp == mps.n_mp
     assert np.allclose(loaded.issue_age, mps.issue_age)
     assert np.allclose(loaded.death_benefit, mps.death_benefit)
-    assert np.allclose(loaded.monthly_premium, mps.monthly_premium)
+    assert np.allclose(loaded.level_premium, mps.level_premium)
     assert np.allclose(loaded.term_months, mps.term_months)
 
 
@@ -144,7 +149,7 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
-        monthly_premium=rng.integers(3, 15, n) * 10_000,
+        level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
     )
     asmp = _assumptions()

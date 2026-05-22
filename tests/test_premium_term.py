@@ -11,11 +11,16 @@ import numpy as np
 from fastcashflow import Assumptions, ModelPoints, measure, read_model_points, value
 
 
+def _annual(m):
+    """Convert a monthly rate to the equivalent annual rate the engine expects."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions(**overrides) -> Assumptions:
     """Flat-rate, zero-discount, zero-expense basis -- every figure by hand."""
     base = dict(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.02),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.02)),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -33,7 +38,7 @@ def test_premium_term_hand_calculation():
     death_benefit = 1_000_000.0
     premium = 12_000.0
     mp = ModelPoints.single(
-        issue_age=40, death_benefit=death_benefit, monthly_premium=premium,
+        issue_age=40, death_benefit=death_benefit, level_premium=premium,
         term_months=3, premium_term_months=2,
     )
     asmp = _assumptions()
@@ -62,7 +67,7 @@ def test_premium_term_defaults_to_full_term():
     """With no `premium_term_months`, premium is collected the whole term --
     the same result as setting it equal to `term_months`."""
     kw = dict(issue_age=40, death_benefit=1_000_000.0,
-              monthly_premium=12_000.0, term_months=120)
+              level_premium=12_000.0, term_months=120)
     asmp = _assumptions()
 
     default = ModelPoints.single(**kw)
@@ -76,7 +81,7 @@ def test_shorter_premium_term_raises_the_liability():
     """Collecting premium for fewer months drops a premium inflow, so the
     liability is larger than the same contract paid for the full term."""
     kw = dict(issue_age=45, death_benefit=50_000_000.0,
-              monthly_premium=30_000.0, term_months=240)
+              level_premium=30_000.0, term_months=240)
     asmp = _assumptions()
 
     full_pay = value(ModelPoints.single(**kw, premium_term_months=240), asmp)
@@ -90,7 +95,7 @@ def test_premium_term_round_trips(tmp_path):
     asmp = _assumptions()
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
-        monthly_premium=np.array([12_000.0, 12_000.0]),
+        level_premium=np.array([12_000.0, 12_000.0]),
         term_months=np.array([120, 120]),
         death_benefit=np.array([1_000_000.0, 1_000_000.0]),
         premium_term_months=np.array([120, 60]),

@@ -14,10 +14,14 @@ from numba import cuda
 from fastcashflow import Assumptions, ModelPoints, value
 
 
-def mortality_monthly(sex: np.ndarray, issue_age: np.ndarray, duration: np.ndarray) -> np.ndarray:
+def _annual(m):
+    return 1.0 - (1.0 - m) ** 12
+
+
+def mortality_annual(sex: np.ndarray, issue_age: np.ndarray, duration: np.ndarray) -> np.ndarray:
     attained = issue_age + duration
     annual_q = 0.0005 * (1.0 + 0.04 * (attained - 30.0))
-    return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)
+    return annual_q
 
 
 def make_portfolio(n_mp: int, seed: int = 42) -> ModelPoints:
@@ -25,7 +29,7 @@ def make_portfolio(n_mp: int, seed: int = 42) -> ModelPoints:
     return ModelPoints(
         issue_age=rng.integers(25, 60, n_mp),
         death_benefit=rng.integers(10, 100, n_mp) * 1_000_000,
-        monthly_premium=rng.integers(3, 15, n_mp) * 10_000,
+        level_premium=rng.integers(3, 15, n_mp) * 10_000,
         term_months=np.full(n_mp, 120),
     )
 
@@ -39,8 +43,8 @@ def _time(model_points: ModelPoints, assumptions: Assumptions, backend: str) -> 
 
 def main() -> None:
     assumptions = Assumptions(
-        mortality_monthly=mortality_monthly,
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
+        mortality_annual=mortality_annual,
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
         expense_acquisition=300_000.0,
         expense_maintenance_annual=60_000.0,

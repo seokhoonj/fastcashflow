@@ -31,6 +31,11 @@ from fastcashflow import (
 Z_75 = 0.6744897501960817
 
 
+def _annual(m):
+    """Convert a flat monthly rate to its annual equivalent."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions(waiver_rate: float = 0.0, **overrides) -> Assumptions:
     """Flat-rate, zero-discount, zero-expense basis -- every figure by hand.
 
@@ -40,11 +45,11 @@ def _assumptions(waiver_rate: float = 0.0, **overrides) -> Assumptions:
     waiver = None
     if waiver_rate != 0.0:
         def waiver(sex, issue_age, duration):
-            return np.full(issue_age.shape, waiver_rate)
+            return np.full(issue_age.shape, _annual(waiver_rate))
     base = dict(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.02),
-        waiver_inception_monthly=waiver,
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.02)),
+        waiver_inception_annual=waiver,
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -83,7 +88,7 @@ def _two_track_bel(death_benefit, premium, term, state, *,
 def test_state_default_is_active():
     """A model point with no `state` is an ordinary active contract."""
     kw = dict(issue_age=40, death_benefit=1_000_000.0,
-              monthly_premium=12_000.0, term_months=12)
+              level_premium=12_000.0, term_months=12)
     asmp = _assumptions()
     default = ModelPoints.single(**kw)
     assert np.all(default.state == STATE_ACTIVE)
@@ -96,7 +101,7 @@ def test_state_default_is_active():
 def test_waiver_track_does_not_lapse():
     """A waiver contract's in-force decays by mortality alone -- no lapse."""
     mp = ModelPoints.single(issue_age=40, death_benefit=1_000_000.0,
-                            monthly_premium=12_000.0, term_months=3,
+                            level_premium=12_000.0, term_months=3,
                             state=STATE_WAIVER)
     res = measure(mp, _assumptions())
     # mortality only: 1 -> 0.99 -> 0.99**2.
@@ -107,7 +112,7 @@ def test_waiver_hand_calculation():
     """Input-waiver, 2-month term: coverage continues, no premium, no lapse."""
     death_benefit = 1_000_000.0
     mp = ModelPoints.single(issue_age=40, death_benefit=death_benefit,
-                            monthly_premium=12_000.0, term_months=2,
+                            level_premium=12_000.0, term_months=2,
                             state=STATE_WAIVER)
     asmp = _assumptions()
     val = value(mp, asmp)
@@ -127,7 +132,7 @@ def test_waiver_hand_calculation():
 def test_waiver_collects_no_premium():
     """The waiver track pays no premium -- every premium cash flow is zero."""
     mp = ModelPoints.single(issue_age=40, death_benefit=1_000_000.0,
-                            monthly_premium=12_000.0, term_months=24,
+                            level_premium=12_000.0, term_months=24,
                             state=STATE_WAIVER)
     res = measure(mp, _assumptions())
     assert np.all(res.cashflows.premium_cf[0] == 0.0)
@@ -137,7 +142,7 @@ def test_paidup_matches_waiver():
     """Paid-up and waiver differ in cause, not cash flows -- identical
     BEL, RA, CSM and loss component."""
     kw = dict(issue_age=42, death_benefit=80_000_000.0,
-              monthly_premium=40_000.0, term_months=180)
+              level_premium=40_000.0, term_months=180)
     asmp = _assumptions()
     waiver = value(ModelPoints.single(**kw, state=STATE_WAIVER), asmp)
     paidup = value(ModelPoints.single(**kw, state=STATE_PAIDUP), asmp)
@@ -149,7 +154,7 @@ def test_zero_waiver_rate_is_no_transition():
     """With no waiver-inception assumption the active track never leaks --
     the result is the ordinary single-track projection."""
     kw = dict(issue_age=45, death_benefit=50_000_000.0,
-              monthly_premium=30_000.0, term_months=120)
+              level_premium=30_000.0, term_months=120)
     plain = value(ModelPoints.single(**kw), _assumptions())
     with_zero = value(ModelPoints.single(**kw), _assumptions(waiver_rate=0.0))
     assert np.isclose(plain.bel[0], with_zero.bel[0])
@@ -162,7 +167,7 @@ def test_dynamic_transition_hand_calculation():
     premium = 12_000.0
     asmp = _assumptions(waiver_rate=0.05)
     mp = ModelPoints.single(issue_age=40, death_benefit=death_benefit,
-                            monthly_premium=premium, term_months=2)
+                            level_premium=premium, term_months=2)
 
     # t=0: act=1, wav=0, total=1.
     #   act[1] = 1 * 0.99 * 0.95 * 0.98 = 0.92169
@@ -191,7 +196,7 @@ def test_dynamic_transition_matches_reference():
             asmp = _assumptions(waiver_rate=w)
             mp = ModelPoints.single(
                 issue_age=40, death_benefit=death_benefit,
-                monthly_premium=premium, term_months=term, state=state,
+                level_premium=premium, term_months=term, state=state,
             )
             ref_bel, ref_inforce = _two_track_bel(
                 death_benefit, premium, term, state, w=w)
@@ -203,7 +208,7 @@ def test_dynamic_transition_matches_reference():
 def test_measure_and_value_agree_under_transition():
     """The detailed and the fused path give the same BEL with a transition."""
     mp = ModelPoints.single(issue_age=50, death_benefit=30_000_000.0,
-                            monthly_premium=25_000.0, term_months=240)
+                            level_premium=25_000.0, term_months=240)
     asmp = _assumptions(waiver_rate=0.03)
     assert np.isclose(measure(mp, asmp).bel[0, 0], value(mp, asmp).bel[0])
 
@@ -214,7 +219,7 @@ def test_state_column_round_trips(tmp_path):
     asmp = _assumptions()
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
-        monthly_premium=np.array([12_000.0, 12_000.0]),
+        level_premium=np.array([12_000.0, 12_000.0]),
         term_months=np.array([24, 24]),
         death_benefit=np.array([1_000_000.0, 1_000_000.0]),
         state=np.array([STATE_ACTIVE, STATE_WAIVER]),
@@ -233,7 +238,7 @@ def test_paidup_state_spelling_is_normalised(tmp_path):
     and underscores are ignored."""
     path = tmp_path / "model_points.csv"
     path.write_text(
-        "issue_age,term_months,monthly_premium,death_benefit,state\n"
+        "issue_age,term_months,level_premium,death_benefit,state\n"
         "40,24,12000,1000000,Paid-up\n"
         "40,24,12000,1000000,paid_up\n"
         "40,24,12000,1000000,paid up\n"
@@ -244,8 +249,8 @@ def test_paidup_state_spelling_is_normalised(tmp_path):
 
 
 def _flat(rate):
-    """A flat ``(sex, issue_age, duration)`` rate callable."""
-    return lambda sex, issue_age, duration: np.full(issue_age.shape, rate)
+    """A flat ``(sex, issue_age, duration)`` rate callable -- returns annual equivalent."""
+    return lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(rate))
 
 
 def test_diagnosis_transition_measure_value_agree():
@@ -262,7 +267,7 @@ def test_diagnosis_transition_measure_value_agree():
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(float),
         death_benefit=rng.integers(10, 80, n) * 1_000_000.0,
-        monthly_premium=rng.integers(2, 10, n) * 10_000.0,
+        level_premium=rng.integers(2, 10, n) * 10_000.0,
         term_months=np.full(n, 120),
         benefits={1: rng.integers(5, 30, n) * 1_000_000.0},
         state=rng.integers(0, 3, n),
@@ -280,7 +285,7 @@ def test_waiting_rule_transition_measure_value_agree():
     )
     mps = ModelPoints(
         issue_age=np.array([40.0, 45.0]),
-        monthly_premium=np.array([30_000.0, 30_000.0]),
+        level_premium=np.array([30_000.0, 30_000.0]),
         term_months=np.array([120, 120]),
         cov_kind=np.array([1, 1]),
         cov_amount=np.array([2_000_000.0, 2_000_000.0]),

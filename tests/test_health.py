@@ -20,16 +20,21 @@ Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
 MORB_RATE = 0.03     # flat monthly morbidity rate (events per in-force month)
 
+
+def _annual(m):
+    """Convert a monthly rate to the equivalent annual rate the engine expects."""
+    return 1.0 - (1.0 - m) ** 12
+
 # Rider codes -- the riders' order in _assumptions fixes them: rider i is
 # coverage code i + 1.
 INPATIENT, SURGERY, OUTPATIENT, DIAGNOSIS = 1, 2, 3, 4
 
 
 def _assumptions(**overrides) -> Assumptions:
-    flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, MORB_RATE)
+    flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(MORB_RATE))
     base = dict(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, Q),
-        lapse_monthly=lambda duration: np.full(duration.shape, LAPSE),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.04,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -107,7 +112,7 @@ def test_value_matches_measure_health():
     n = 300
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        monthly_premium=rng.integers(5, 20, n) * 10_000,
+        level_premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         death_benefit=rng.integers(10, 80, n) * 1_000_000,
         benefits={
@@ -173,7 +178,7 @@ def test_value_matches_measure_diagnosis():
     n = 250
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        monthly_premium=rng.integers(5, 20, n) * 10_000,
+        level_premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         death_benefit=rng.integers(10, 80, n) * 1_000_000,
         benefits={

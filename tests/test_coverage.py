@@ -14,10 +14,15 @@ Q = 0.002
 LAPSE = 0.005
 
 
+def _annual(m):
+    """Convert a monthly rate to its annual equivalent (engine converts back)."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, Q),
-        lapse_monthly=lambda duration: np.full(duration.shape, LAPSE),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
         expense_maintenance_annual=60_000.0,
@@ -34,7 +39,7 @@ def test_multiple_death_coverages_sum_to_one():
 
     split = ModelPoints(
         issue_age=np.array([40.0]),
-        monthly_premium=np.array([80_000.0]),
+        level_premium=np.array([80_000.0]),
         term_months=np.array([term]),
         cov_kind=np.array([DEATH, DEATH]),
         cov_amount=np.array([a, b]),
@@ -59,7 +64,7 @@ def test_no_coverages_matches_zero_death_benefit():
     explicit_zero = ModelPoints.single(45, 0.0, 50_000.0, 60)
     no_coverages = ModelPoints(
         issue_age=np.array([45.0]),
-        monthly_premium=np.array([50_000.0]),
+        level_premium=np.array([50_000.0]),
         term_months=np.array([60]),
     )
     a, b = value(explicit_zero, asmp), value(no_coverages, asmp)

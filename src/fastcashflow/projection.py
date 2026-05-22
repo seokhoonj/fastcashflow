@@ -15,9 +15,11 @@ part of a GMM engine, so it is stated once here and never re-decided.
 Timing convention (monthly steps, month ``t`` spans ``[t, t+1)``):
 
     inforce[t]  : policies in force at the START of month t
-    premium     : charged at the start of month t, on inforce[t]
+    premium     : level premium charged at the start of month t, on
+                  inforce[t], every premium_frequency months it is in force
                   (the single premium, if any, is added at t = 0)
-    annuity     : paid at the start of month t, on inforce[t]
+    annuity     : paid at the start of month t, on inforce[t], every
+                  annuity_frequency months
     deaths[t]   : occur during month t -- inforce[t] * monthly mortality
     lapses      : occur during month t, on the mortality survivors
     claim       : sum of the policy's coverages for events during month t;
@@ -37,7 +39,7 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.assumptions import Assumptions, annual_to_monthly
 from fastcashflow.coverage import coverage_arrays, coverage_rates
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.statemodel import WAIVER_MODEL, compile_state_model
@@ -71,7 +73,8 @@ class Cashflows:
 @njit(parallel=True, cache=True)
 def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
                     premium_state, start_state, term_months, count,
-                    monthly_premium, single_premium, premium_term_months,
+                    level_premium, single_premium, premium_term_months,
+                    premium_frequency, annuity_frequency,
                     cov_kind, cov_amount, cov_offset, cov_waiting,
                     cov_reduction_end, cov_reduction_factor, cov_rates,
                     cov_risk, cov_is_diagnosis, maturity_benefit,
@@ -112,6 +115,8 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
     for mp in prange(n_mp):
         term = term_months[mp]
         premium_term = premium_term_months[mp]   # months the premium is paid
+        prem_freq = premium_frequency[mp]        # months between premiums
+        ann_freq = annuity_frequency[mp]         # months between annuity payouts
         cnt = count[mp]
         c_start = cov_offset[mp]
         c_end = cov_offset[mp + 1]
@@ -150,11 +155,13 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, n_states,
             q = mortality[mp, year]
             deaths[mp, t] = ift * q
             single = prem_occ * single_premium[mp] if t == 0 else 0.0
-            level = prem_occ * monthly_premium[mp] if t < premium_term else 0.0
+            level = (prem_occ * level_premium[mp]
+                     if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level + single
             claim_cf[mp, t] = ift * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
-            annuity_cf[mp, t] = ift * annuity_payment[mp]
+            annuity_cf[mp, t] = (ift * annuity_payment[mp]
+                                 if t % ann_freq == 0 else 0.0)
             acquisition = cnt * expense_acquisition if t == 0 else 0.0
             expense_cf[mp, t] = acquisition + ift * maint_monthly * inflation[t]
             # Advance the occupancy along the transition edges.
@@ -243,26 +250,26 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     issue_age_grid, duration_grid = np.meshgrid(
         model_points.issue_age, durations, indexing="ij"
     )
-    mortality = np.ascontiguousarray(
-        assumptions.mortality_monthly(sex_grid, issue_age_grid, duration_grid),
-        dtype=np.float64,
-    )
-    if assumptions.waiver_inception_monthly is None:
+    # Rates are supplied annual; the engine converts each to a monthly rate
+    # on the constant-force basis (see assumptions.annual_to_monthly).
+    mortality_annual = assumptions.mortality_annual(
+        sex_grid, issue_age_grid, duration_grid)
+    mortality = np.ascontiguousarray(annual_to_monthly(mortality_annual))
+    if assumptions.waiver_inception_annual is None:
         waiver = np.zeros_like(mortality)
     else:
-        waiver = np.ascontiguousarray(
-            assumptions.waiver_inception_monthly(
-                sex_grid, issue_age_grid, duration_grid),
-            dtype=np.float64,
-        )
-    lapse_by_year = np.ascontiguousarray(
-        assumptions.lapse_monthly(durations), dtype=np.float64
-    )
+        waiver = np.ascontiguousarray(annual_to_monthly(
+            assumptions.waiver_inception_annual(
+                sex_grid, issue_age_grid, duration_grid)))
+    lapse_by_year = np.ascontiguousarray(annual_to_monthly(
+        assumptions.lapse_annual(durations)))
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
-    cov_rates = coverage_rates(
-        mortality, [r.rate for r in assumptions.riders], sex_grid, issue_age_grid,
-        duration_grid,
-    )
+    # coverage_rates stacks the annual mortality and rider rates; the whole
+    # stack is converted to monthly. Slab 0 is the monthly mortality above.
+    cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(
+        mortality_annual, [r.rate for r in assumptions.riders],
+        sex_grid, issue_age_grid, duration_grid,
+    )))
     inflation = (1.0 + assumptions.expense_inflation) ** (months / 12.0)
 
     # In-force state machine -- the StateModel composes the transition edges
@@ -272,7 +279,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     state_model = assumptions.state_model or WAIVER_MODEL
     edge_from, edge_to, edge_prob, n_states, premium_state = compile_state_model(
         state_model,
-        {"mortality": mortality, "waiver": waiver,
+        {"mortality": mortality, "waiver_inception": waiver,
          "lapse": lapse_by_year[None, :]},
     )
     start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
@@ -288,9 +295,11 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         start_state,
         model_points.term_months,
         model_points.count,
-        model_points.monthly_premium,
+        model_points.level_premium,
         model_points.single_premium,
         model_points.premium_term_months,
+        model_points.premium_frequency_months,
+        model_points.annuity_frequency_months,
         model_points.cov_kind,
         model_points.cov_amount,
         model_points.cov_offset,

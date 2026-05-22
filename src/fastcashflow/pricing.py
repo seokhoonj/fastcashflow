@@ -7,6 +7,8 @@ profitability target then has a closed form -- no iteration.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 
 from fastcashflow._typing import FloatArray
@@ -16,17 +18,14 @@ from fastcashflow.modelpoints import ModelPoints
 
 
 def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:
-    """A copy of ``model_points`` with every monthly premium set to ``premium``."""
-    return ModelPoints(
-        issue_age=model_points.issue_age,
-        monthly_premium=np.full(model_points.n_mp, premium),
-        term_months=model_points.term_months,
-        maturity_benefit=model_points.maturity_benefit,
-        annuity_payment=model_points.annuity_payment,
-        single_premium=model_points.single_premium,
-        cov_kind=model_points.cov_kind,
-        cov_amount=model_points.cov_amount,
-        cov_offset=model_points.cov_offset,
+    """A copy of ``model_points`` with every level premium set to ``premium``.
+
+    Every other field -- including the payment frequency -- is carried over
+    unchanged, so the two valuations that pin down the premium see the same
+    contract bar the premium itself.
+    """
+    return replace(
+        model_points, level_premium=np.full(model_points.n_mp, premium)
     )
 
 
@@ -38,7 +37,7 @@ def solve_premium(
     margin: float | None = None,
     csm: float | None = None,
 ) -> FloatArray:
-    """Solve the level monthly premium that meets a profitability target.
+    """Solve the level premium that meets a profitability target.
 
     Exactly one target must be given:
 
@@ -47,10 +46,10 @@ def solve_premium(
       (e.g. ``0.10`` for 10%); must satisfy ``0 <= margin < 1``.
     * ``csm``        -- an absolute target CSM (profit) per model point.
 
-    Every product field of ``model_points`` is used as given -- only ``monthly_premium``
-    is ignored, since it is the unknown being solved for. (A fixed
-    ``single_premium``, if any, stays as given: the level premium is solved
-    on top of it.)
+    Every product field of ``model_points`` is used as given -- only
+    ``level_premium`` is ignored, since it is the unknown being solved for.
+    (A fixed ``single_premium``, if any, stays as given: the level premium
+    is solved on top of it.)
     Returns the solved premium per model point, shape ``(n_mp,)``.
     """
     chosen = (break_even, margin is not None, csm is not None)

@@ -38,10 +38,11 @@ from fastcashflow.engine import Valuation, value
 from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 
 # Wide model-point columns with a fixed meaning. Any other ``*_benefit``
-# column names a rider by its 특약코드.
+# column names a rider by its rider code.
 _NAMED_WIDE = frozenset((
     "policy_id", "product", "issue_age", "term_months", "sex", "count",
-    "state", "monthly_premium", "single_premium", "premium_term_months",
+    "state", "level_premium", "single_premium", "premium_term_months",
+    "premium_frequency_months", "annuity_frequency_months",
     "death_benefit", "maturity_benefit", "annuity_payment",
 ))
 
@@ -101,11 +102,12 @@ def _read_rate_grid(ws):
 
 
 def _rate_closure(grid, age_min):
-    """Wrap a ``(2, n_ages)`` annual-rate grid in a monthly-rate lookup.
+    """Wrap a ``(2, n_ages)`` annual-rate grid in an annual-rate lookup.
 
     The returned callable has the ``(sex, issue_age, duration)`` signature
-    ``Assumptions`` expects; it reads the rate at the attained age
-    ``issue_age + duration``, clipping to the grid.
+    ``Assumptions`` expects; it reads the annual rate at the attained age
+    ``issue_age + duration``, clipping to the grid. The engine converts the
+    annual rate to its monthly equivalent.
     """
     n_sex, n_ages = grid.shape
 
@@ -114,14 +116,14 @@ def _rate_closure(grid, age_min):
         attained = (np.asarray(issue_age, np.int64)
                     + np.asarray(duration, np.int64))
         a = np.clip(attained - age_min, 0, n_ages - 1)
-        return 1.0 - (1.0 - grid[s, a]) ** (1.0 / 12.0)
+        return grid[s, a]
 
     return rate
 
 
 def _read_rates_sheet(ws):
     """Read the long-form ``rates`` sheet -- ``rider_code, sex, age, rate`` --
-    into a per-rider sex x age grid keyed by 특약코드."""
+    into a per-rider sex x age grid keyed by rider code."""
     by_code: dict[str, dict[int, dict[int, float]]] = {}
     for row in ws.iter_rows(min_row=2, values_only=True):
         if row[0] is None or row[1] is None or row[2] is None:
@@ -167,7 +169,7 @@ def read_assumptions(path) -> Assumptions:
     A product with riders adds two more sheets:
 
     * ``riders`` -- the riders master: ``product, rider_code, rider_name,
-      type``, one row per 특약코드. ``type`` is one of ``death_main``,
+      type``, one row per rider code. ``type`` is one of ``death_main``,
       ``death``, ``morbidity``, ``diagnosis``, ``annuity``, ``maturity``.
     * ``rates`` -- long-form ``rider_code, sex, age, rate`` for every
       rate-driven rider (``death`` / ``morbidity`` / ``diagnosis``).
@@ -177,8 +179,8 @@ def read_assumptions(path) -> Assumptions:
     which active in-force transitions to the premium-waived state. Absent,
     no waiver transitions occur.
 
-    Annual rates are converted to monthly and wrapped in the lookup callables
-    ``Assumptions`` expects. The bundled sample basis
+    The annual rates are wrapped in the lookup callables ``Assumptions``
+    expects; the engine converts them to monthly. The bundled sample basis
     (:func:`load_sample_assumptions`) is a filled-in template to copy.
     """
     wb = openpyxl.load_workbook(path, data_only=True)
@@ -192,12 +194,12 @@ def read_assumptions(path) -> Assumptions:
         if name is not None:
             params[str(name).strip()] = value
 
-    mortality_monthly = _rate_closure(*_read_rate_grid(wb["mortality"]))
+    mortality_annual = _rate_closure(*_read_rate_grid(wb["mortality"]))
 
     # waiver -- optional sex/age waiver-inception table, like mortality
-    waiver_inception_monthly = None
+    waiver_inception_annual = None
     if "waiver" in wb.sheetnames:
-        waiver_inception_monthly = _rate_closure(*_read_rate_grid(wb["waiver"]))
+        waiver_inception_annual = _rate_closure(*_read_rate_grid(wb["waiver"]))
 
     # lapse -- duration -> annual rate
     lapse_by_dur: dict[int, float] = {}
@@ -208,9 +210,9 @@ def read_assumptions(path) -> Assumptions:
         [lapse_by_dur[d] for d in range(len(lapse_by_dur))], dtype=np.float64
     )
 
-    def lapse_monthly(duration):
+    def lapse_annual(duration):
         d = np.clip(np.asarray(duration, np.int64), 0, lapse_arr.shape[0] - 1)
-        return 1.0 - (1.0 - lapse_arr[d]) ** (1.0 / 12.0)
+        return lapse_arr[d]
 
     # riders master + rates -> the rate-driven coverage list
     riders: tuple[RiderRate, ...] = ()
@@ -244,9 +246,9 @@ def read_assumptions(path) -> Assumptions:
     if missing:
         raise ValueError(f"the 'parameters' sheet is missing: {missing}")
     kwargs: dict[str, object] = dict(
-        mortality_monthly=mortality_monthly,
-        lapse_monthly=lapse_monthly,
-        waiver_inception_monthly=waiver_inception_monthly,
+        mortality_annual=mortality_annual,
+        lapse_annual=lapse_annual,
+        waiver_inception_annual=waiver_inception_annual,
         riders=riders,
         **{k: float(params[k]) for k in required},
     )
@@ -304,11 +306,12 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
     fields: dict[str, object] = dict(
         issue_age=df["issue_age"].to_numpy(),
         term_months=df["term_months"].to_numpy(),
-        monthly_premium=(df["monthly_premium"].to_numpy()
-                         if "monthly_premium" in df.columns
-                         else np.zeros(n_mp)),
+        level_premium=(df["level_premium"].to_numpy()
+                       if "level_premium" in df.columns
+                       else np.zeros(n_mp)),
     )
     for opt in ("sex", "count", "single_premium", "premium_term_months",
+                "premium_frequency_months", "annuity_frequency_months",
                 "death_benefit", "maturity_benefit", "annuity_payment",
                 "account_value"):
         if opt in df.columns:
@@ -339,7 +342,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     """Build a ``ModelPoints`` from a long-form policies + coverages pair."""
     if assumptions is None:
         raise ValueError(
-            "long-form model points need the assumptions -- the 특약코드 "
+            "long-form model points need the assumptions -- the rider-code "
             "registry maps coverage rows to engine codes"
         )
     for need in ("policy_id", "issue_age", "term_months"):
@@ -379,7 +382,8 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         issue_age=pol["issue_age"].to_numpy(),
         term_months=pol["term_months"].to_numpy(),
     )
-    for opt in ("sex", "count", "single_premium", "premium_term_months"):
+    for opt in ("sex", "count", "single_premium", "premium_term_months",
+                "premium_frequency_months", "annuity_frequency_months"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
     if "state" in pol.columns:
@@ -394,11 +398,11 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     # Premium -- the coverages frame carries it per rider; sum to the policy.
     if "premium" in cov.columns:
         prem = cov["premium"].fill_null(0.0).to_numpy().astype(np.float64)
-        fields["monthly_premium"] = np.bincount(mp, weights=prem, minlength=n_mp)
-    elif "monthly_premium" in pol.columns:
-        fields["monthly_premium"] = pol["monthly_premium"].to_numpy()
+        fields["level_premium"] = np.bincount(mp, weights=prem, minlength=n_mp)
+    elif "level_premium" in pol.columns:
+        fields["level_premium"] = pol["level_premium"].to_numpy()
     else:
-        fields["monthly_premium"] = np.zeros(n_mp)
+        fields["level_premium"] = np.zeros(n_mp)
 
     # Coverage list: the main-contract death (code 0) and the rate-driven
     # riders (codes 1..n). annuity / maturity are survival scalars, not here.
@@ -431,11 +435,12 @@ def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
 
     * **wide** -- ``read_model_points(path, assumptions)``. One row per
       policy. ``issue_age`` and ``term_months`` are required; ``sex``,
-      ``count``, ``state``, ``monthly_premium``, ``single_premium``,
-      ``premium_term_months``, ``death_benefit``, ``maturity_benefit`` and
-      ``annuity_payment`` are read if present. A ``<rider_code>_benefit``
+      ``count``, ``state``, ``level_premium``, ``single_premium``,
+      ``premium_term_months``, ``premium_frequency_months``,
+      ``annuity_frequency_months``, ``death_benefit``, ``maturity_benefit``
+      and ``annuity_payment`` are read if present. A ``<rider_code>_benefit``
       column adds that rider's coverage; the ``assumptions`` resolve the
-      특약코드 to an engine code.
+      rider code to an engine code.
     * **long-form** -- ``read_model_points(policies, assumptions,
       coverages=coverages_path)``. A policies frame (``policy_id``,
       ``issue_age``, ``term_months``, optional ``sex`` / ``count`` /

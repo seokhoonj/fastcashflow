@@ -5,11 +5,16 @@ from fastcashflow import Assumptions, ModelPoints, measure
 from fastcashflow.gmm import _norm_ppf
 
 
+def _annual(m):
+    """Convert a monthly rate to its annual equivalent (engine converts back)."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions(**overrides) -> Assumptions:
     """Build an Assumptions with simple defaults, overridable per test."""
     base = dict(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.02),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.02)),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -35,7 +40,7 @@ def test_risk_adjustment():
     res = measure(
         ModelPoints.single(
             issue_age=40, death_benefit=1_000_000.0,
-            monthly_premium=12_000.0, term_months=2,
+            level_premium=12_000.0, term_months=2,
         ),
         _assumptions(ra_confidence=0.75, mortality_cv=0.20),
     )
@@ -50,7 +55,7 @@ def test_expenses():
     res = measure(
         ModelPoints.single(
             issue_age=40, death_benefit=1_000_000.0,
-            monthly_premium=12_000.0, term_months=2,
+            level_premium=12_000.0, term_months=2,
         ),
         _assumptions(
             expense_acquisition=500.0,
@@ -76,11 +81,11 @@ def test_expense_inflation():
     res = measure(
         ModelPoints.single(
             issue_age=40, death_benefit=1_000_000.0,
-            monthly_premium=12_000.0, term_months=13,
+            level_premium=12_000.0, term_months=13,
         ),
         _assumptions(
-            mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0),
-            lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
+            mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0)),
+            lapse_annual=lambda duration: np.full(duration.shape, _annual(0.0)),
             expense_maintenance_annual=120.0,   # 10 per month
             expense_inflation=0.06,
         ),

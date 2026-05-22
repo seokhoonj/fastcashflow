@@ -11,10 +11,15 @@ import pytest
 from fastcashflow import Assumptions, ModelPoints, measure_tvog
 
 
+def _annual(m: float) -> float:
+    """Convert a monthly rate to its annual equivalent so the engine converts back."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions(**overrides) -> Assumptions:
     base = dict(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.002),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.004),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.004)),
         discount_annual=0.03,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,

@@ -41,7 +41,7 @@ class Decrement:
     """One force of exit from a state.
 
     ``rate`` names an assumption rate -- ``"mortality"``, ``"lapse"`` or
-    ``"waiver"`` -- evaluated by the engine and supplied to
+    ``"waiver_inception"`` -- evaluated by the engine and supplied to
     :func:`compile_state_model`. ``to`` is the destination state's name when
     the decrement moves occupancy to another transient state, or ``None``
     when it removes occupancy from the in-force set entirely (death, lapse).
@@ -129,7 +129,7 @@ WAIVER_MODEL = StateModel(
     states=(
         State("active", premium=True, decrements=(
             Decrement("mortality"),
-            Decrement("waiver", to="waiver"),
+            Decrement("waiver_inception", to="waiver"),
             Decrement("lapse"),
         )),
         State("waiver", premium=False, decrements=(

@@ -2,7 +2,7 @@
 
 A policy's benefits are a variable-length list of *coverages* rather than a
 fixed set of fields. Each coverage carries a numeric *code* -- a factorised
-rider identifier (특약코드). Code 0 is reserved for the main-contract death
+rider identifier. Code 0 is reserved for the main-contract death
 benefit, driven by the base mortality so its claim rate matches the in-force
 decrement exactly. Codes 1.. are the rate-driven riders the assumptions
 register (see :class:`fastcashflow.assumptions.RiderRate`), in registration
@@ -21,7 +21,7 @@ import numpy as np
 # Code 0 -- the main-contract death coverage, driven by the base mortality.
 DEATH = 0
 
-# Coverage mechanic types. The riders sheet tags each 특약코드 with one of
+# Coverage mechanic types. The riders sheet tags each rider code with one of
 # these; the type fixes how the engine drives the coverage.
 TYPE_DEATH_MAIN = "death_main"  # main-contract death; base mortality; code 0
 TYPE_DEATH = "death"            # death-type rider; own rate; non-decrementing
@@ -51,7 +51,10 @@ def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
     so the codes share one grid whose first axis is the code. Slab 0 is the
     base ``mortality`` grid (the main-contract death coverage); slabs 1.. are
     the rate-driven riders, evaluated from ``rate_fns`` -- an ordered list of
-    callables, each with the ``Assumptions.mortality_monthly`` signature.
+    callables, each with the ``Assumptions.mortality_annual`` signature.
+
+    The rates are passed through as supplied -- annual; the caller converts
+    the whole stack to monthly (see ``assumptions.annual_to_monthly``).
     """
     slabs = [mortality]
     for rate in rate_fns:

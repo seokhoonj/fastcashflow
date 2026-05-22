@@ -20,7 +20,8 @@ MAX_STATES = 8
 @cuda.jit
 def _value_cuda_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
                        start_state, issue_index, sex, term_months, count,
-                       monthly_premium, single_premium, premium_term_months,
+                       level_premium, single_premium, premium_term_months,
+                       premium_frequency, annuity_frequency,
                        cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
                        cov_is_diagnosis, maturity_benefit, annuity_payment,
                        expense_acquisition, maint_monthly, inflation,
@@ -41,10 +42,12 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
     n_edges = edge_from.shape[0]
     term = term_months[mp]
     premium_term = premium_term_months[mp]
+    prem_freq = premium_frequency[mp]
+    ann_freq = annuity_frequency[mp]
     ridx = issue_index[mp]
     sx = sex[mp]
     cnt = count[mp]
-    premium = monthly_premium[mp]
+    premium = level_premium[mp]
     annuity = annuity_payment[mp]
     c_start = cov_offset[mp]
     c_end = cov_offset[mp + 1]
@@ -86,11 +89,13 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
         ds = discount_start[t]
         dm = discount_mid[t]
         single = prem_occ * single_premium[mp] if t == 0 else 0.0
-        level = prem_occ * premium if t < premium_term else 0.0
+        level = (prem_occ * premium
+                 if (t < premium_term and t % prem_freq == 0) else 0.0)
         pp += (level + single) * ds
         pc += ift * claim_rate * dm
         pcm += ift * morb_rate * dm
-        pa += ift * annuity * ds
+        if t % ann_freq == 0:
+            pa += ift * annuity * ds
         acquisition = cnt * expense_acquisition if t == 0 else 0.0
         pe += (acquisition + ift * maint_monthly * inflation[t]) * dm
         for s in range(n_states):
@@ -145,7 +150,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
 
 def value_gpu(edge_from, edge_to, edge_prob, n_states, premium_state,
               start_state, issue_index, sex, term_months, count,
-              monthly_premium, single_premium, premium_term_months, cov_kind,
+              level_premium, single_premium, premium_term_months,
+              premium_frequency, annuity_frequency, cov_kind,
               cov_amount, cov_offset, cov_rates, cov_risk, cov_is_diagnosis,
               maturity_benefit, annuity_payment, expense_acquisition,
               maint_monthly, inflation, discount_start, discount_mid,
@@ -175,9 +181,11 @@ def value_gpu(edge_from, edge_to, edge_prob, n_states, premium_state,
     d_sex = cuda.to_device(sex)
     d_term = cuda.to_device(term_months)
     d_count = cuda.to_device(count)
-    d_premium = cuda.to_device(monthly_premium)
+    d_premium = cuda.to_device(level_premium)
     d_single = cuda.to_device(single_premium)
     d_premium_term = cuda.to_device(premium_term_months)
+    d_premium_freq = cuda.to_device(premium_frequency)
+    d_annuity_freq = cuda.to_device(annuity_frequency)
     d_cov_kind = cuda.to_device(cov_kind)
     d_cov_amount = cuda.to_device(cov_amount)
     d_cov_offset = cuda.to_device(cov_offset)
@@ -199,7 +207,8 @@ def value_gpu(edge_from, edge_to, edge_prob, n_states, premium_state,
     _value_cuda_kernel[blocks, threads](
         d_edge_from, d_edge_to, d_edge_prob, n_states, d_premium_state,
         d_start_state, d_issue, d_sex, d_term, d_count, d_premium, d_single,
-        d_premium_term, d_cov_kind, d_cov_amount, d_cov_offset, d_cov_rates,
+        d_premium_term, d_premium_freq, d_annuity_freq,
+        d_cov_kind, d_cov_amount, d_cov_offset, d_cov_rates,
         d_cov_risk, d_cov_is_diagnosis, d_maturity, d_annuity,
         expense_acquisition, maint_monthly, d_inflation, d_discount_start,
         d_discount_mid, mortality_factor, morbidity_factor, longevity_factor,

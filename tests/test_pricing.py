@@ -9,10 +9,15 @@ import pytest
 from fastcashflow import Assumptions, ModelPoints, solve_premium, value
 
 
+def _annual(m):
+    """Convert a monthly rate to the equivalent annual rate the engine expects."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _assumptions() -> Assumptions:
     return Assumptions(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0008),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0008)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
         expense_maintenance_annual=36_000.0,
@@ -27,7 +32,7 @@ def _portfolio(n: int = 300) -> ModelPoints:
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 100, n) * 1_000_000,
-        monthly_premium=np.zeros(n),          # ignored by solve_premium
+        level_premium=np.zeros(n),          # ignored by solve_premium
         term_months=rng.integers(60, 180, n),
     )
 
@@ -36,7 +41,7 @@ def _priced(mps: ModelPoints, premium) -> ModelPoints:
     return ModelPoints(
         issue_age=mps.issue_age,
         death_benefit=mps.death_benefit,
-        monthly_premium=premium,
+        level_premium=premium,
         term_months=mps.term_months,
     )
 

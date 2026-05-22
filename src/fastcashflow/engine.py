@@ -20,7 +20,7 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.assumptions import Assumptions, annual_to_monthly
 from fastcashflow.gmm import (
     _norm_ppf,
     _rollforward_kernel,
@@ -151,7 +151,8 @@ class Valuation:
 @njit(parallel=True, cache=True)
 def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
                   start_state, issue_index, sex, term_months, count,
-                  monthly_premium, single_premium, premium_term_months,
+                  level_premium, single_premium, premium_term_months,
+                  premium_frequency, annuity_frequency,
                   cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
                   cov_is_diagnosis, maturity_benefit, annuity_payment,
                   expense_acquisition, maint_monthly, inflation,
@@ -182,10 +183,12 @@ def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
     for mp in prange(n_mp):
         term = term_months[mp]
         premium_term = premium_term_months[mp]   # months the premium is paid
+        prem_freq = premium_frequency[mp]        # months between premiums
+        ann_freq = annuity_frequency[mp]         # months between annuity payouts
         ridx = issue_index[mp]
         sx = sex[mp]
         cnt = count[mp]
-        premium = monthly_premium[mp]
+        premium = level_premium[mp]
         annuity = annuity_payment[mp]
         c_start = cov_offset[mp]
         c_end = cov_offset[mp + 1]
@@ -230,11 +233,13 @@ def _value_kernel(edge_from, edge_to, edge_prob, n_states, premium_state,
             ds = discount_start[t]
             dm = discount_mid[t]
             single = prem_occ * single_premium[mp] if t == 0 else 0.0
-            level = prem_occ * premium if t < premium_term else 0.0
+            level = (prem_occ * premium
+                     if (t < premium_term and t % prem_freq == 0) else 0.0)
             pp += (level + single) * ds
             pc += ift * claim_rate * dm
             pcm += ift * morb_rate * dm
-            pa += ift * annuity * ds
+            if t % ann_freq == 0:
+                pa += ift * annuity * ds
             acquisition = cnt * expense_acquisition if t == 0 else 0.0
             pe += (acquisition + ift * maint_monthly * inflation[t]) * dm
             # Advance the occupancy along the transition edges.
@@ -382,37 +387,37 @@ def value(
         np.array([0, 1]), np.arange(min_age, max_age + 1), durations,
         indexing="ij",
     )
-    mortality_grid = np.ascontiguousarray(
-        assumptions.mortality_monthly(sex_grid, issue_age_grid, duration_grid),
-        dtype=np.float64,
-    )
-    if assumptions.waiver_inception_monthly is None:
+    # Rates are supplied annual; the engine converts each to a monthly rate
+    # on the constant-force basis (see assumptions.annual_to_monthly).
+    mortality_annual_grid = assumptions.mortality_annual(
+        sex_grid, issue_age_grid, duration_grid)
+    mortality_grid = np.ascontiguousarray(annual_to_monthly(mortality_annual_grid))
+    if assumptions.waiver_inception_annual is None:
         waiver_grid = np.zeros_like(mortality_grid)
     else:
-        waiver_grid = np.ascontiguousarray(
-            assumptions.waiver_inception_monthly(
-                sex_grid, issue_age_grid, duration_grid),
-            dtype=np.float64,
-        )
+        waiver_grid = np.ascontiguousarray(annual_to_monthly(
+            assumptions.waiver_inception_annual(
+                sex_grid, issue_age_grid, duration_grid)))
     issue_index = (model_points.issue_age - min_age).astype(np.int64)
-    lapse_by_year = np.ascontiguousarray(
-        assumptions.lapse_monthly(durations), dtype=np.float64
-    )
+    lapse_by_year = np.ascontiguousarray(annual_to_monthly(
+        assumptions.lapse_annual(durations)))
     # In-force state machine -- the StateModel composes the transition edges
     # for the generic occupancy recursion (see fastcashflow.statemodel). The
     # rates are on the sex x age x duration grid the kernel indexes.
     state_model = assumptions.state_model or WAIVER_MODEL
     edge_from, edge_to, edge_prob, n_states, premium_state = compile_state_model(
         state_model,
-        {"mortality": mortality_grid, "waiver": waiver_grid,
+        {"mortality": mortality_grid, "waiver_inception": waiver_grid,
          "lapse": lapse_by_year[None, None, :]},
     )
     start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
-    cov_rates = coverage_rates(
-        mortality_grid, [r.rate for r in assumptions.riders], sex_grid,
+    # coverage_rates stacks the annual mortality and rider rates; the whole
+    # stack is converted to monthly. Slab 0 is the monthly mortality above.
+    cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(
+        mortality_annual_grid, [r.rate for r in assumptions.riders], sex_grid,
         issue_age_grid, duration_grid,
-    )
+    )))
 
     inflation = (1.0 + assumptions.expense_inflation) ** (months / 12.0)
     if discount_curve is None:
@@ -450,9 +455,11 @@ def value(
         model_points.sex,
         model_points.term_months,
         model_points.count,
-        model_points.monthly_premium,
+        model_points.level_premium,
         model_points.single_premium,
         model_points.premium_term_months,
+        model_points.premium_frequency_months,
+        model_points.annuity_frequency_months,
         model_points.cov_kind,
         cov_amount,
         model_points.cov_offset,

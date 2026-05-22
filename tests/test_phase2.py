@@ -9,10 +9,15 @@ import numpy as np
 from fastcashflow import Assumptions, ModelPoints, measure
 
 
+def _annual(m):
+    """Convert a monthly rate to its annual equivalent (engine converts back)."""
+    return 1.0 - (1.0 - m) ** 12
+
+
 def _flat_assumptions(**overrides) -> Assumptions:
     base = dict(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
-        lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
+        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.0)),
         discount_annual=0.06,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -34,7 +39,7 @@ def test_mid_month_discounting():
     res = measure(
         ModelPoints.single(
             issue_age=40, death_benefit=death_benefit,
-            monthly_premium=premium, term_months=term,
+            level_premium=premium, term_months=term,
         ),
         _flat_assumptions(),
     )
@@ -59,7 +64,7 @@ def test_mid_month_discounting():
 def test_csm_movement_identity():
     """The CSM roll-forward decomposes exactly into accretion and release."""
     asmp = _flat_assumptions(
-        mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
+        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         mortality_cv=0.05,
     )
     rng = np.random.default_rng(2)
@@ -67,7 +72,7 @@ def test_csm_movement_identity():
     mps = ModelPoints(
         issue_age=rng.integers(25, 55, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
-        monthly_premium=rng.integers(8, 20, n) * 10_000,
+        level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=rng.integers(60, 120, n),
     )
     res = measure(mps, asmp)

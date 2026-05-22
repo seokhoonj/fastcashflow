@@ -65,16 +65,20 @@ class ModelPoints:
     Premiums and survival benefits stay as plain fields -- they do not
     proliferate the way claim benefits do:
 
-    * ``monthly_premium``     -- level premium charged each in-force month.
-    * ``single_premium``      -- one-off premium at t = 0.
-    * ``premium_term_months`` -- months the level premium is collected,
+    * ``level_premium``            -- premium charged each payment occurrence.
+    * ``single_premium``           -- one-off premium at t = 0.
+    * ``premium_term_months``      -- months the level premium is collected,
       defaulting to the full coverage term.
-    * ``maturity_benefit``    -- benefit on survival to the end of the term.
-    * ``annuity_payment``     -- survival income paid each in-force month.
+    * ``premium_frequency_months`` -- months between level-premium payments
+      (1 monthly, 3 quarterly, 6 half-yearly, 12 annual), defaulting to 1.
+    * ``maturity_benefit``         -- benefit on survival to the end of the term.
+    * ``annuity_payment``          -- survival income paid each payout occurrence.
+    * ``annuity_frequency_months`` -- months between annuity payouts,
+      defaulting to 1.
     """
 
     issue_age: FloatArray          # attained age at issue, in years
-    monthly_premium: FloatArray    # level premium, charged each in-force month
+    level_premium: FloatArray      # premium charged each payment occurrence
     term_months: IntArray          # coverage term, in months
     death_benefit: FloatArray | None = None      # shortcut -> a death coverage
     benefits: dict[int, FloatArray] | None = None  # general {kind: amount}
@@ -82,6 +86,8 @@ class ModelPoints:
     annuity_payment: FloatArray | None = None    # survival income, each month
     single_premium: FloatArray | None = None     # one-off premium at t = 0
     premium_term_months: IntArray | None = None  # months premium is collected
+    premium_frequency_months: IntArray | None = None  # months between premiums
+    annuity_frequency_months: IntArray | None = None  # months between payouts
     account_value: FloatArray | None = None      # account value at issue (VFA)
     cov_kind: IntArray | None = None             # CSR: coverage kind
     cov_amount: FloatArray | None = None         # CSR: coverage amount
@@ -97,7 +103,7 @@ class ModelPoints:
         # Normalise the required fields to numpy arrays of the right dtype.
         for name, dtype in (
             ("issue_age", np.float64),
-            ("monthly_premium", np.float64),
+            ("level_premium", np.float64),
             ("term_months", np.int64),
         ):
             object.__setattr__(self, name, np.asarray(getattr(self, name), dtype=dtype))
@@ -127,6 +133,15 @@ class ModelPoints:
         premium_term = (self.term_months.copy() if premium_term is None
                         else np.asarray(premium_term, np.int64))
         object.__setattr__(self, "premium_term_months", premium_term)
+        # Payment frequencies -- months between successive level-premium
+        # payments and annuity payouts; default 1 (monthly), must be >= 1.
+        for name in ("premium_frequency_months", "annuity_frequency_months"):
+            freq = getattr(self, name)
+            freq = (np.ones(n_mp, np.int64) if freq is None
+                    else np.asarray(freq, np.int64))
+            if np.any(freq < 1):
+                raise ValueError(f"{name} must be >= 1")
+            object.__setattr__(self, name, freq)
         # Coverage CSR: explicit arrays win; otherwise build from the
         # death_benefit shortcut and/or the general benefits map.
         if self.cov_kind is not None:
@@ -178,12 +193,14 @@ class ModelPoints:
         cls,
         issue_age: float,
         death_benefit: float,
-        monthly_premium: float,
+        level_premium: float,
         term_months: int,
         maturity_benefit: float = 0.0,
         annuity_payment: float = 0.0,
         single_premium: float = 0.0,
         premium_term_months: int | None = None,
+        premium_frequency_months: int = 1,
+        annuity_frequency_months: int = 1,
         account_value: float = 0.0,
         count: float = 1.0,
         sex: int = 0,
@@ -194,13 +211,15 @@ class ModelPoints:
         return cls(
             issue_age=np.array([issue_age]),
             death_benefit=np.array([death_benefit]),
-            monthly_premium=np.array([monthly_premium]),
+            level_premium=np.array([level_premium]),
             term_months=np.array([term_months]),
             maturity_benefit=np.array([maturity_benefit]),
             annuity_payment=np.array([annuity_payment]),
             single_premium=np.array([single_premium]),
             premium_term_months=(None if premium_term_months is None
                                  else np.array([premium_term_months])),
+            premium_frequency_months=np.array([premium_frequency_months]),
+            annuity_frequency_months=np.array([annuity_frequency_months]),
             account_value=np.array([account_value]),
             count=np.array([count]),
             sex=np.array([sex]),
@@ -231,9 +250,11 @@ class ModelPoints:
             "term_months": self.term_months,
             "count": self.count,
             "state": np.array([STATE_LABELS[int(s)] for s in self.state]),
-            "monthly_premium": self.monthly_premium,
+            "level_premium": self.level_premium,
             "single_premium": self.single_premium,
             "premium_term_months": self.premium_term_months,
+            "premium_frequency_months": self.premium_frequency_months,
+            "annuity_frequency_months": self.annuity_frequency_months,
             "death_benefit": self.death_benefit,
             "maturity_benefit": self.maturity_benefit,
             "annuity_payment": self.annuity_payment,
@@ -261,9 +282,11 @@ class ModelPoints:
             "issue_age": self.issue_age,
             "sex": self.sex,
             "term_months": self.term_months,
-            "monthly_premium": self.monthly_premium,
+            "level_premium": self.level_premium,
             "single_premium": self.single_premium,
             "premium_term_months": self.premium_term_months,
+            "premium_frequency_months": self.premium_frequency_months,
+            "annuity_frequency_months": self.annuity_frequency_months,
             "count": self.count,
             "state": np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
@@ -290,7 +313,7 @@ class ModelPoints:
 
 
 def _coverage_label(assumptions, ctype, default):
-    """The 특약코드 of the first coverage of type ``ctype`` in the
+    """The rider code of the first coverage of type ``ctype`` in the
     assumptions' riders master, or ``default`` if none is registered."""
     registry = getattr(assumptions, "coverage_types", None) or {}
     for code, t in registry.items():
