@@ -68,6 +68,12 @@ class Assumptions:
     mortality_cv :
         Coefficient of variation of death claims -- the mortality-risk
         component of the RA.
+    waiver_inception_monthly :
+        Maps ``(sex, issue_age, duration_years)`` to an array of monthly
+        waiver-inception rates -- the rate at which active in-force
+        transitions to the premium-waived state. Same signature as
+        ``mortality_monthly``. ``None`` means no transitions: every model
+        point keeps its input state for the whole projection.
     longevity_cv :
         Coefficient of variation of survival benefits (maturity benefits and
         annuity payments) -- the longevity-risk component of the RA. The RA
@@ -124,6 +130,7 @@ class Assumptions:
     expense_inflation: float
     ra_confidence: float
     mortality_cv: float
+    waiver_inception_monthly: RateFn | None = None
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
     expense_cv: float = 0.0

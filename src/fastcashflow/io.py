@@ -172,6 +172,11 @@ def read_assumptions(path) -> Assumptions:
     * ``rates`` -- long-form ``rider_code, sex, age, rate`` for every
       rate-driven rider (``death`` / ``morbidity`` / ``diagnosis``).
 
+    An optional ``waiver`` sheet -- long-form ``sex, age, rate``, the same
+    shape as ``mortality`` -- gives the waiver-inception rate: the rate at
+    which active in-force transitions to the premium-waived state. Absent,
+    no waiver transitions occur.
+
     Annual rates are converted to monthly and wrapped in the lookup callables
     ``Assumptions`` expects. The bundled sample basis
     (:func:`load_sample_assumptions`) is a filled-in template to copy.
@@ -188,6 +193,11 @@ def read_assumptions(path) -> Assumptions:
             params[str(name).strip()] = value
 
     mortality_monthly = _rate_closure(*_read_rate_grid(wb["mortality"]))
+
+    # waiver -- optional sex/age waiver-inception table, like mortality
+    waiver_inception_monthly = None
+    if "waiver" in wb.sheetnames:
+        waiver_inception_monthly = _rate_closure(*_read_rate_grid(wb["waiver"]))
 
     # lapse -- duration -> annual rate
     lapse_by_dur: dict[int, float] = {}
@@ -236,6 +246,7 @@ def read_assumptions(path) -> Assumptions:
     kwargs: dict[str, object] = dict(
         mortality_monthly=mortality_monthly,
         lapse_monthly=lapse_monthly,
+        waiver_inception_monthly=waiver_inception_monthly,
         riders=riders,
         **{k: float(params[k]) for k in required},
     )

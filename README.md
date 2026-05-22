@@ -45,6 +45,9 @@ reporting that surrounds it.
 - **Projection** -- deterministic monthly cash flows; select-and-ultimate
   mortality, duration-based lapse, mid-month discounting of claims and
   expenses, and acquisition and maintenance expenses.
+- **Contract states** -- active, waiver of premium and paid-up. In-force is
+  carried on an active track and a premium-waived track; a waiver-inception
+  rate moves in-force from one to the other during the projection.
 - **Risk Adjustment** -- the confidence-level and cost-of-capital methods,
   with separate mortality, morbidity and longevity components, and an
   expense-risk component for account-value contracts.
@@ -81,8 +84,8 @@ against hand calculations. The wider surface (PAA, VFA, reinsurance,
 reporting, roll-forward, stochastic) is implemented and tested, but the
 package is pre-1.0 and its API may still change.
 
-*Planned:* re-diagnosis benefits, waiver of premium, and a
-non-financial-risk adjustment on the guarantee time value.
+*Planned:* re-diagnosis benefits and a non-financial-risk adjustment on
+the guarantee time value.
 
 ## Quick start
 

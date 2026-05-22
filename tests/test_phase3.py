@@ -8,7 +8,14 @@ import numpy as np
 import pytest
 from numba import cuda
 
-from fastcashflow import Assumptions, ModelPoints, measure, value
+from fastcashflow import (
+    RISK_MORBIDITY,
+    Assumptions,
+    ModelPoints,
+    RiderRate,
+    measure,
+    value,
+)
 
 
 def test_value_matches_measure():
@@ -94,6 +101,47 @@ def test_value_gpu_matches_cpu():
         term_months=np.full(n, 120),
     )
 
+    cpu = value(mps, asmp, backend="cpu")
+    gpu = value(mps, asmp, backend="gpu")
+
+    assert np.allclose(gpu.bel, cpu.bel)
+    assert np.allclose(gpu.ra, cpu.ra)
+    assert np.allclose(gpu.csm, cpu.csm)
+    assert np.allclose(gpu.loss_component, cpu.loss_component)
+
+
+@pytest.mark.skipif(not cuda.is_available(), reason="no CUDA device available")
+@pytest.mark.filterwarnings("ignore::numba.core.errors.NumbaPerformanceWarning")
+def test_value_gpu_matches_cpu_with_transition():
+    """GPU and CPU agree under a waiver transition with a diagnosis rider --
+    the GPU two-track in-force and diagnosis pool reproduce the CPU kernel."""
+    def flat(rate):
+        return lambda sex, issue_age, duration: np.full(issue_age.shape, rate)
+
+    asmp = Assumptions(
+        mortality_monthly=flat(0.001),
+        lapse_monthly=lambda duration: np.full(duration.shape, 0.012),
+        waiver_inception_monthly=flat(0.02),
+        discount_annual=0.03,
+        expense_acquisition=200_000.0,
+        expense_maintenance_annual=48_000.0,
+        expense_inflation=0.02,
+        ra_confidence=0.85,
+        mortality_cv=0.12,
+        morbidity_cv=0.10,
+        riders=(RiderRate("dx", flat(0.003), is_diagnosis=True,
+                          risk=RISK_MORBIDITY),),
+    )
+    rng = np.random.default_rng(13)
+    n = 4_000
+    mps = ModelPoints(
+        issue_age=rng.integers(25, 60, n).astype(float),
+        death_benefit=rng.integers(10, 100, n) * 1_000_000.0,
+        monthly_premium=rng.integers(3, 15, n) * 10_000.0,
+        term_months=np.full(n, 120),
+        benefits={1: rng.integers(5, 30, n) * 1_000_000.0},
+        state=rng.integers(0, 3, n),
+    )
     cpu = value(mps, asmp, backend="cpu")
     gpu = value(mps, asmp, backend="gpu")
 

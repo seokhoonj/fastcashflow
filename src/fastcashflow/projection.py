@@ -39,7 +39,7 @@ from numba import njit, prange
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.coverage import coverage_arrays, coverage_rates
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.modelpoints import STATE_ACTIVE, ModelPoints
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,9 +68,9 @@ class Cashflows:
 
 
 @njit(parallel=True, cache=True)
-def _project_kernel(mortality, term_months, count, lapse_by_year,
-                    monthly_premium, single_premium, premium_term_months,
-                    cov_kind, cov_amount,
+def _project_kernel(mortality, waiver, term_months, count, state,
+                    lapse_by_year, monthly_premium, single_premium,
+                    premium_term_months, cov_kind, cov_amount,
                     cov_offset, cov_waiting, cov_reduction_end,
                     cov_reduction_factor, cov_rates, cov_risk, cov_is_diagnosis,
                     maturity_benefit, annuity_payment, expense_acquisition,
@@ -105,12 +105,20 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
         cnt = count[mp]
         c_start = cov_offset[mp]
         c_end = cov_offset[mp + 1]
-        inforce[mp, 0] = cnt
+        # Two in-force tracks -- active (paying premium) and waiver (premium
+        # waived, coverage continuing). The input state seats the count.
+        if state[mp] == STATE_ACTIVE:
+            act = cnt
+            wav = 0.0
+        else:
+            act = 0.0
+            wav = cnt
         last_year = -1
         claim_rate = 0.0      # aggregate mortality claim per unit in-force
         morb_rate = 0.0       # aggregate morbidity claim per unit in-force
         for t in range(term):
-            ift = inforce[mp, t]
+            ift = act + wav                      # total in-force
+            inforce[mp, t] = ift
             year = t // 12
             if year != last_year:
                 claim_rate = 0.0
@@ -128,20 +136,26 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
                         morb_rate += rate
                 last_year = year
             q = mortality[mp, year]
+            w = waiver[mp, year]                 # waiver-inception rate
+            lapse = lapse_by_year[year]
             deaths[mp, t] = ift * q
-            single = cnt * single_premium[mp] if t == 0 else 0.0
-            level = ift * monthly_premium[mp] if t < premium_term else 0.0
+            single = act * single_premium[mp] if t == 0 else 0.0
+            level = act * monthly_premium[mp] if t < premium_term else 0.0
             premium_cf[mp, t] = level + single
             claim_cf[mp, t] = ift * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = ift * annuity_payment[mp]
             acquisition = cnt * expense_acquisition if t == 0 else 0.0
             expense_cf[mp, t] = acquisition + ift * maint_monthly * inflation[t]
-            survivors = ift * (1.0 - q) * (1.0 - lapse_by_year[year])
+            # Decrement: active loses mortality, waiver-inception and lapse;
+            # the waiver track loses mortality only and gains the inceptions.
+            act_next = act * (1.0 - q) * (1.0 - w) * (1.0 - lapse)
+            wav_next = wav * (1.0 - q) + act * (1.0 - q) * w
             if t + 1 < term:
-                inforce[mp, t + 1] = survivors
+                act = act_next
+                wav = wav_next
             else:
-                maturity_cf[mp] = survivors * maturity_benefit[mp]
+                maturity_cf[mp] = (act_next + wav_next) * maturity_benefit[mp]
 
         # Non-diagnosis coverages carrying a waiting or reduced-benefit rule
         # run per month here, not in the year-aggregated rate above, because
@@ -219,6 +233,14 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         assumptions.mortality_monthly(sex_grid, issue_age_grid, duration_grid),
         dtype=np.float64,
     )
+    if assumptions.waiver_inception_monthly is None:
+        waiver = np.zeros_like(mortality)
+    else:
+        waiver = np.ascontiguousarray(
+            assumptions.waiver_inception_monthly(
+                sex_grid, issue_age_grid, duration_grid),
+            dtype=np.float64,
+        )
     lapse_by_year = np.ascontiguousarray(
         assumptions.lapse_monthly(durations), dtype=np.float64
     )
@@ -232,11 +254,13 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
      annuity_cf, maturity_cf) = _project_kernel(
         mortality,
+        waiver,
         model_points.term_months,
         model_points.count,
+        model_points.state,
         lapse_by_year,
-        model_points.effective_premium,
-        model_points.effective_single_premium,
+        model_points.monthly_premium,
+        model_points.single_premium,
         model_points.premium_term_months,
         model_points.cov_kind,
         model_points.cov_amount,
