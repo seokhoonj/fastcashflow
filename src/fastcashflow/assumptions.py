@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow.statemodel import StateModel
 
 RateFn = Callable[[IntArray, FloatArray, IntArray], FloatArray]
 
@@ -120,6 +121,13 @@ class Assumptions:
         Map of every 특약코드 to its type string -- the riders master. Set
         by :func:`read_assumptions` and used by :func:`read_model_points`
         to route long-form coverage rows; ``None`` when built in code.
+    state_model :
+        The product's in-force state machine -- a :class:`~fastcashflow.statemodel.StateModel`
+        declaring the transient states, their decrements and which states pay
+        premium. ``None`` uses the default active / waiver model
+        (:data:`~fastcashflow.statemodel.WAIVER_MODEL`); the
+        ``waiver_inception_monthly`` rate then drives the active -> waiver
+        transition. A product with a different state set supplies its own.
     """
 
     mortality_monthly: RateFn
@@ -142,6 +150,7 @@ class Assumptions:
     settlement_pattern: FloatArray | None = None
     riders: tuple[RiderRate, ...] = ()
     coverage_types: dict[str, str] | None = None
+    state_model: StateModel | None = None
 
     @property
     def discount_monthly(self) -> float:

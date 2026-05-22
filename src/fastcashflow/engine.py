@@ -31,8 +31,9 @@ from fastcashflow.gmm import (
     discount_factors_from_curve,
 )
 from fastcashflow.coverage import coverage_arrays, coverage_rates
-from fastcashflow.modelpoints import STATE_ACTIVE, ModelPoints
+from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
+from fastcashflow.statemodel import WAIVER_MODEL, compile_state_model
 
 
 # ---------------------------------------------------------------------------
@@ -397,22 +398,16 @@ def value(
     lapse_by_year = np.ascontiguousarray(
         assumptions.lapse_monthly(durations), dtype=np.float64
     )
-    # Waiver model -- the in-force state machine, evaluated on the rate grid.
-    # Two transient states (0 active, 1 waiver); the kernel runs the generic
-    # occupancy recursion on these composed transition probabilities.
-    surv = 1.0 - mortality_grid
-    lapse_grid = lapse_by_year[None, None, :]
-    edge_from = np.array([0, 0, 1], dtype=np.int64)
-    edge_to = np.array([0, 1, 1], dtype=np.int64)
-    edge_prob = np.ascontiguousarray(np.stack((
-        surv * (1.0 - waiver_grid) * (1.0 - lapse_grid),   # 0 -> 0
-        surv * waiver_grid,                                # 0 -> 1
-        surv,                                              # 1 -> 1
-    )))
-    n_states = 2
-    premium_state = np.array([True, False])
-    start_state = np.where(model_points.state == STATE_ACTIVE,
-                           0, 1).astype(np.int64)
+    # In-force state machine -- the StateModel composes the transition edges
+    # for the generic occupancy recursion (see fastcashflow.statemodel). The
+    # rates are on the sex x age x duration grid the kernel indexes.
+    state_model = assumptions.state_model or WAIVER_MODEL
+    edge_from, edge_to, edge_prob, n_states, premium_state = compile_state_model(
+        state_model,
+        {"mortality": mortality_grid, "waiver": waiver_grid,
+         "lapse": lapse_by_year[None, None, :]},
+    )
+    start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
     cov_rates = coverage_rates(
         mortality_grid, [r.rate for r in assumptions.riders], sex_grid,

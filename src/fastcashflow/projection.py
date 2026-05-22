@@ -39,7 +39,8 @@ from numba import njit, prange
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.coverage import coverage_arrays, coverage_rates
-from fastcashflow.modelpoints import STATE_ACTIVE, ModelPoints
+from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.statemodel import WAIVER_MODEL, compile_state_model
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,23 +265,17 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     )
     inflation = (1.0 + assumptions.expense_inflation) ** (months / 12.0)
 
-    # Waiver model -- the in-force state machine. Two transient states
-    # (0 active, 1 waiver); the monthly transition probabilities are composed
-    # here, so the kernel runs a generic occupancy recursion. (a-2 is this
-    # 2-state instance; phase (b) opens the state set up.)
-    surv = 1.0 - mortality
-    lapse_grid = lapse_by_year[None, :]
-    edge_from = np.array([0, 0, 1], dtype=np.int64)
-    edge_to = np.array([0, 1, 1], dtype=np.int64)
-    edge_prob = np.ascontiguousarray(np.stack((
-        surv * (1.0 - waiver) * (1.0 - lapse_grid),   # 0 -> 0  active stays
-        surv * waiver,                                # 0 -> 1  active -> waiver
-        surv,                                         # 1 -> 1  waiver stays
-    )))
-    n_states = 2
-    premium_state = np.array([True, False])
-    start_state = np.where(model_points.state == STATE_ACTIVE,
-                           0, 1).astype(np.int64)
+    # In-force state machine -- the StateModel composes the transition edges
+    # the generic occupancy recursion advances; the kernel carries no state
+    # set of its own. The default is the active / waiver model; a product
+    # overrides it through assumptions.state_model.
+    state_model = assumptions.state_model or WAIVER_MODEL
+    edge_from, edge_to, edge_prob, n_states, premium_state = compile_state_model(
+        state_model,
+        {"mortality": mortality, "waiver": waiver,
+         "lapse": lapse_by_year[None, :]},
+    )
+    start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
 
     (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
      annuity_cf, maturity_cf) = _project_kernel(
