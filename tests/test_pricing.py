@@ -6,7 +6,7 @@ the target it was solved for.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, solve_premium, value
+from fastcashflow import Assumptions, ModelPoints, solve_premium, value
 
 
 def _assumptions() -> Assumptions:
@@ -22,9 +22,9 @@ def _assumptions() -> Assumptions:
     )
 
 
-def _portfolio(n: int = 300) -> ModelPointSet:
+def _portfolio(n: int = 300) -> ModelPoints:
     rng = np.random.default_rng(8)
-    return ModelPointSet(
+    return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 100, n) * 1_000_000,
         monthly_premium=np.zeros(n),          # ignored by solve_premium
@@ -32,8 +32,8 @@ def _portfolio(n: int = 300) -> ModelPointSet:
     )
 
 
-def _priced(mps: ModelPointSet, premium) -> ModelPointSet:
-    return ModelPointSet(
+def _priced(mps: ModelPoints, premium) -> ModelPoints:
+    return ModelPoints(
         issue_age=mps.issue_age,
         death_benefit=mps.death_benefit,
         monthly_premium=premium,

@@ -7,7 +7,7 @@ gain of the cover -- it may be negative, and there is no loss component.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, measure_reinsurance
+from fastcashflow import Assumptions, ModelPoints, measure_reinsurance
 from fastcashflow.gmm import _norm_ppf
 
 Q = 0.002          # flat monthly mortality
@@ -33,7 +33,7 @@ def test_reinsurance_hand_calc():
     asmp = _assumptions()
     death_benefit, premium, term, cession = 1e8, 80_000.0, 60, 0.4
     res = measure_reinsurance(
-        ModelPointSet.single(40, death_benefit, premium, term), asmp, cession
+        ModelPoints.single(40, death_benefit, premium, term), asmp, cession
     )
 
     i = asmp.discount_monthly
@@ -55,7 +55,7 @@ def test_reinsurance_hand_calc():
 def test_reinsurance_csm_can_be_negative():
     """Ceding a profitable book has a net cost -- a negative CSM, no loss component."""
     res = measure_reinsurance(
-        ModelPointSet.single(40, 1e8, 300_000.0, 60), _assumptions(), 0.5
+        ModelPoints.single(40, 1e8, 300_000.0, 60), _assumptions(), 0.5
     )
     assert res.bel[0] > 0.0           # reinsurance premiums ceded exceed recoveries
     assert res.csm[0, 0] < 0.0        # the net cost is carried as a negative CSM
@@ -64,7 +64,7 @@ def test_reinsurance_csm_can_be_negative():
 def test_reinsurance_csm_analysis_of_change_reconciles():
     """The reinsurance CSM waterfall reconciles opening to closing."""
     res = measure_reinsurance(
-        ModelPointSet.single(40, 1e8, 80_000.0, 120), _assumptions(), 0.3
+        ModelPoints.single(40, 1e8, 80_000.0, 120), _assumptions(), 0.3
     )
     assert np.allclose(
         res.csm[:, :-1] + res.csm_accretion - res.csm_release, res.csm[:, 1:]
@@ -74,7 +74,7 @@ def test_reinsurance_csm_analysis_of_change_reconciles():
 def test_reinsurance_zero_cession_is_nothing():
     """A zero cession rate cedes nothing -- every figure is zero."""
     res = measure_reinsurance(
-        ModelPointSet.single(40, 1e8, 80_000.0, 60), _assumptions(), 0.0
+        ModelPoints.single(40, 1e8, 80_000.0, 60), _assumptions(), 0.0
     )
     assert np.allclose(res.bel, 0.0)
     assert np.allclose(res.ra, 0.0)
@@ -86,5 +86,5 @@ def test_reinsurance_rejects_bad_cession_rate():
     """A cession rate outside [0, 1] is an error."""
     with pytest.raises(ValueError, match="cession_rate"):
         measure_reinsurance(
-            ModelPointSet.single(40, 1e8, 80_000.0, 60), _assumptions(), 1.5
+            ModelPoints.single(40, 1e8, 80_000.0, 60), _assumptions(), 1.5
         )

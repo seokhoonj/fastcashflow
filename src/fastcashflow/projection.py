@@ -39,7 +39,7 @@ from numba import njit, prange
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.coverage import coverage_arrays, coverage_rates
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,7 +194,7 @@ def _project_kernel(mortality, term_months, count, lapse_by_year,
             annuity_cf, maturity_cf)
 
 
-def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
+def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Cashflows:
     """Project cash flows for every model point.
 
     The Pythonic wrapper: it extracts raw arrays from the inputs and
@@ -203,50 +203,50 @@ def project_cashflows(mps: ModelPointSet, asmp: Assumptions) -> Cashflows:
     grid -- all change only once a year, so this is an identical result for
     a twelfth of the work.
     """
-    n_time = int(mps.term_months.max())     # months 0 .. n_time-1
+    n_time = int(model_points.term_months.max())     # months 0 .. n_time-1
     n_years = (n_time + 11) // 12
     months = np.arange(n_time)
     durations = np.arange(n_years)
 
-    sex_grid, _ = np.meshgrid(mps.sex, durations, indexing="ij")
+    sex_grid, _ = np.meshgrid(model_points.sex, durations, indexing="ij")
     issue_age_grid, duration_grid = np.meshgrid(
-        mps.issue_age, durations, indexing="ij"
+        model_points.issue_age, durations, indexing="ij"
     )
     mortality = np.ascontiguousarray(
-        asmp.mortality_monthly(sex_grid, issue_age_grid, duration_grid),
+        assumptions.mortality_monthly(sex_grid, issue_age_grid, duration_grid),
         dtype=np.float64,
     )
     lapse_by_year = np.ascontiguousarray(
-        asmp.lapse_monthly(durations), dtype=np.float64
+        assumptions.lapse_monthly(durations), dtype=np.float64
     )
-    cov_is_diagnosis, cov_risk = coverage_arrays(asmp.riders)
+    cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
     cov_rates = coverage_rates(
-        mortality, [r.rate for r in asmp.riders], sex_grid, issue_age_grid,
+        mortality, [r.rate for r in assumptions.riders], sex_grid, issue_age_grid,
         duration_grid,
     )
-    inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
+    inflation = (1.0 + assumptions.expense_inflation) ** (months / 12.0)
 
     (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
      annuity_cf, maturity_cf) = _project_kernel(
         mortality,
-        mps.term_months,
-        mps.count,
+        model_points.term_months,
+        model_points.count,
         lapse_by_year,
-        mps.monthly_premium,
-        mps.single_premium,
-        mps.cov_kind,
-        mps.cov_amount,
-        mps.cov_offset,
-        mps.cov_waiting,
-        mps.cov_reduction_end,
-        mps.cov_reduction_factor,
+        model_points.monthly_premium,
+        model_points.single_premium,
+        model_points.cov_kind,
+        model_points.cov_amount,
+        model_points.cov_offset,
+        model_points.cov_waiting,
+        model_points.cov_reduction_end,
+        model_points.cov_reduction_factor,
         cov_rates,
         cov_risk,
         cov_is_diagnosis,
-        mps.maturity_benefit,
-        mps.annuity_payment,
-        asmp.expense_acquisition,
-        asmp.expense_maintenance_annual / 12.0,
+        model_points.maturity_benefit,
+        model_points.annuity_payment,
+        assumptions.expense_acquisition,
+        assumptions.expense_maintenance_annual / 12.0,
         inflation,
         n_time,
     )

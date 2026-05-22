@@ -29,17 +29,17 @@ def section(title: str) -> None:
 # mortality and lapse tables into the monthly-rate functions the engine
 # uses. The portfolio is a CSV of model points.
 section("1. The inputs")
-asmp = fcf.load_sample_assumptions()
-mps = fcf.load_sample_model_points()
-print(f"Loaded {mps.n_mp} model points and the actuarial basis.")
+assumptions = fcf.load_sample_assumptions()
+model_points = fcf.load_sample_model_points()
+print(f"Loaded {model_points.n_mp} model points and the actuarial basis.")
 
 
 # --- pricing ---------------------------------------------------------------
 # solve_premium finds the level monthly premium meeting a profitability
 # target -- here a 10% margin. (The sample policies were priced this way.)
 section("2. Pricing a contract")
-new_contract = fcf.ModelPointSet.single(45, 50_000_000, 0, 120)
-premium = fcf.solve_premium(new_contract, asmp, margin=0.10)
+new_contract = fcf.ModelPoints.single(45, 50_000_000, 0, 120)
+premium = fcf.solve_premium(new_contract, assumptions, margin=0.10)
 print("A 45-year-old, 50m cover, 10-year term, priced for a 10% margin:")
 print(f"  level premium  {premium[0]:,.0f} per month")
 
@@ -49,14 +49,14 @@ print(f"  level premium  {premium[0]:,.0f} per month")
 # liability forward: the best-estimate liability, the risk adjustment, the
 # contractual service margin (unearned profit), and any loss component.
 section("3. Measuring the liability (GMM)")
-m = fcf.measure(mps, asmp)
+m = fcf.measure(model_points, assumptions)
 print("Inception measurement (portfolio totals):")
 print(f"  BEL             {m.bel[:, 0].sum():>16,.0f}")
 print(f"  RA              {m.ra[:, 0].sum():>16,.0f}")
 print(f"  CSM             {m.csm[:, 0].sum():>16,.0f}")
 print(f"  loss component  {m.loss_component.sum():>16,.0f}")
 # value() is the fast path -- the same headline numbers, no trajectories.
-v = fcf.value(mps, asmp)
+v = fcf.value(model_points, assumptions)
 print(f"value() agrees -- CSM {v.csm.sum():,.0f}")
 
 
@@ -84,7 +84,7 @@ print(reconciliations[0])
 # the book is split into two groups by issue age; the CSM is re-derived at
 # the group level, so the floor nets contracts within a group.
 section("6. Aggregation into IFRS 17 groups")
-group_ids = (mps.issue_age >= 45).astype(int)        # 0 = under 45, 1 = 45+
+group_ids = (model_points.issue_age >= 45).astype(int)        # 0 = under 45, 1 = 45+
 grouped = fcf.group(m, group_ids)
 for g, label in enumerate(("under 45", "45 and over")):
     print(f"  group '{label}':  CSM {grouped.csm[g, 0]:>14,.0f}")
@@ -97,21 +97,21 @@ section("7. The other measurement models")
 # PAA -- the simplified model for short-coverage business. A one-year
 # contract carries a far smaller acquisition cost than a ten-year sale, so
 # the basis is adjusted accordingly.
-short_book = fcf.ModelPointSet(
+short_book = fcf.ModelPoints(
     issue_age=np.array([40, 45]),
     death_benefit=np.array([3e7, 3e7]),
     monthly_premium=np.array([18_000.0, 20_000.0]),
     term_months=np.array([12, 12]),
 )
-paa = fcf.measure_paa(short_book, replace(asmp, expense_acquisition=20_000.0))
+paa = fcf.measure_paa(short_book, replace(assumptions, expense_acquisition=20_000.0))
 print(f"  PAA  -- insurance service result  {paa.service_result.sum():>14,.0f}")
 
 # VFA -- account-value (unit-linked / with-profits) contracts.
-account = fcf.ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8)
-vfa = fcf.measure_vfa(account, replace(asmp, investment_return=0.06, fund_fee=0.015))
+account = fcf.ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8)
+vfa = fcf.measure_vfa(account, replace(assumptions, investment_return=0.06, fund_fee=0.015))
 print(f"  VFA  -- CSM (the entity's variable fee)  {vfa.csm[:, 0].sum():>9,.0f}")
 
 # Stochastic -- the liability distribution over economic scenarios.
-dist = fcf.value_stochastic(mps, asmp, np.array([0.02, 0.03, 0.04, 0.05]))
+dist = fcf.value_stochastic(model_points, assumptions, np.array([0.02, 0.03, 0.04, 0.05]))
 print(f"  Stochastic -- BEL from {dist.bel.min():,.0f} to {dist.bel.max():,.0f}"
       f" across the discount-rate scenarios")

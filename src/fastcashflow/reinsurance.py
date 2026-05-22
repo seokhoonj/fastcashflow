@@ -29,7 +29,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.gmm import _csm_kernel, _norm_ppf, discount_factors
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
 
@@ -56,7 +56,7 @@ class ReinsuranceMeasurement:
 
 
 def measure_reinsurance(
-    mps: ModelPointSet, asmp: Assumptions, cession_rate: float
+    model_points: ModelPoints, assumptions: Assumptions, cession_rate: float
 ) -> ReinsuranceMeasurement:
     """Measure a quota-share reinsurance contract held over a direct portfolio.
 
@@ -73,8 +73,8 @@ def measure_reinsurance(
     if not 0.0 <= cession_rate <= 1.0:
         raise ValueError(f"cession_rate must be in [0, 1], got {cession_rate}")
 
-    proj = project_cashflows(mps, asmp)
-    discount_start, discount_mid = discount_factors(asmp, proj.n_time)
+    proj = project_cashflows(model_points, assumptions)
+    discount_start, discount_mid = discount_factors(assumptions, proj.n_time)
 
     # The cedant cedes a fraction of claims (recovered) and of premiums (paid).
     recovery = cession_rate * (proj.claim_cf + proj.morbidity_cf)
@@ -85,17 +85,17 @@ def measure_reinsurance(
     bel = pv_reins_premium - pv_recovery
 
     # RA -- the risk transferred, i.e. the margin on the ceded claims.
-    z = _norm_ppf(asmp.ra_confidence)
+    z = _norm_ppf(assumptions.ra_confidence)
     pv_ceded_mortality = (cession_rate * proj.claim_cf * discount_mid).sum(axis=1)
     pv_ceded_morbidity = (cession_rate * proj.morbidity_cf * discount_mid).sum(axis=1)
-    ra = z * (asmp.mortality_cv * pv_ceded_mortality
-              + asmp.morbidity_cv * pv_ceded_morbidity)
+    ra = z * (assumptions.mortality_cv * pv_ceded_mortality
+              + assumptions.morbidity_cv * pv_ceded_morbidity)
 
     # CSM -- the net cost or gain of the cover. No loss component: a net cost
     # is a negative CSM, deferred and amortised over the coverage.
     csm0 = -(bel - ra)
     csm, csm_accretion, csm_release = _csm_kernel(
-        csm0, proj.inforce, asmp.discount_monthly
+        csm0, proj.inforce, assumptions.discount_monthly
     )
 
     return ReinsuranceMeasurement(

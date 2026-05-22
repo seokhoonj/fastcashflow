@@ -7,7 +7,7 @@ amount, and an empty list equals a zero death benefit.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, measure, value
+from fastcashflow import Assumptions, ModelPoints, measure, value
 from fastcashflow.coverage import DEATH
 
 Q = 0.002
@@ -32,7 +32,7 @@ def test_multiple_death_coverages_sum_to_one():
     asmp = _assumptions()
     a, b, term = 6e7, 4e7, 36
 
-    split = ModelPointSet(
+    split = ModelPoints(
         issue_age=np.array([40.0]),
         monthly_premium=np.array([80_000.0]),
         term_months=np.array([term]),
@@ -40,7 +40,7 @@ def test_multiple_death_coverages_sum_to_one():
         cov_amount=np.array([a, b]),
         cov_offset=np.array([0, 2]),
     )
-    combined = ModelPointSet.single(40, a + b, 80_000.0, term)
+    combined = ModelPoints.single(40, a + b, 80_000.0, term)
 
     m_split, m_comb = measure(split, asmp), measure(combined, asmp)
     assert np.allclose(m_split.bel, m_comb.bel)
@@ -56,8 +56,8 @@ def test_multiple_death_coverages_sum_to_one():
 def test_no_coverages_matches_zero_death_benefit():
     """An empty coverage list equals a death benefit of zero."""
     asmp = _assumptions()
-    explicit_zero = ModelPointSet.single(45, 0.0, 50_000.0, 60)
-    no_coverages = ModelPointSet(
+    explicit_zero = ModelPoints.single(45, 0.0, 50_000.0, 60)
+    no_coverages = ModelPoints(
         issue_age=np.array([45.0]),
         monthly_premium=np.array([50_000.0]),
         term_months=np.array([60]),

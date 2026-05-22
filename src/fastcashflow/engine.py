@@ -31,7 +31,7 @@ from fastcashflow.gmm import (
     discount_factors_from_curve,
 )
 from fastcashflow.coverage import coverage_arrays, coverage_rates
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
 
@@ -80,43 +80,43 @@ def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
     return coc_rate * cap_pv
 
 
-def measure(mps: ModelPointSet, asmp: Assumptions) -> Measurement:
+def measure(model_points: ModelPoints, assumptions: Assumptions) -> Measurement:
     """Detailed GMM measurement: BEL, RA and CSM rolled forward over time."""
-    proj = project_cashflows(mps, asmp)
+    proj = project_cashflows(model_points, assumptions)
     claim_cf, morbidity_cf = proj.claim_cf, proj.morbidity_cf
-    if asmp.settlement_pattern is None:
+    if assumptions.settlement_pattern is None:
         lic = np.zeros((claim_cf.shape[0], proj.n_time + 1))
     else:
-        lic = _settlement_lic(claim_cf + morbidity_cf, asmp.settlement_pattern)
+        lic = _settlement_lic(claim_cf + morbidity_cf, assumptions.settlement_pattern)
         # Claims are paid over the pattern, not at incurrence -- discount
         # them to their payment dates in the fulfilment cash flows.
-        factor = _settlement_factor(asmp.settlement_pattern, asmp.discount_monthly)
+        factor = _settlement_factor(assumptions.settlement_pattern, assumptions.discount_monthly)
         claim_cf = claim_cf * factor
         morbidity_cf = morbidity_cf * factor
-    discount_start, discount_mid = discount_factors(asmp, proj.n_time)
+    discount_start, discount_mid = discount_factors(assumptions, proj.n_time)
 
     bel, pv_claims, pv_morbidity, pv_survival = _rollforward_kernel(
         claim_cf, morbidity_cf, proj.expense_cf, proj.premium_cf,
-        proj.annuity_cf, proj.maturity_cf, mps.term_months,
-        asmp.discount_monthly,
+        proj.annuity_cf, proj.maturity_cf, model_points.term_months,
+        assumptions.discount_monthly,
     )
-    z = _norm_ppf(asmp.ra_confidence)
-    cl_margin = z * (asmp.mortality_cv * pv_claims
-                     + asmp.morbidity_cv * pv_morbidity
-                     + asmp.longevity_cv * pv_survival)
-    if asmp.ra_method == "confidence_level":
+    z = _norm_ppf(assumptions.ra_confidence)
+    cl_margin = z * (assumptions.mortality_cv * pv_claims
+                     + assumptions.morbidity_cv * pv_morbidity
+                     + assumptions.longevity_cv * pv_survival)
+    if assumptions.ra_method == "confidence_level":
         ra = cl_margin
-    elif asmp.ra_method == "cost_of_capital":
+    elif assumptions.ra_method == "cost_of_capital":
         ra = _cost_of_capital_ra(
-            cl_margin, asmp.discount_monthly, asmp.cost_of_capital_rate
+            cl_margin, assumptions.discount_monthly, assumptions.cost_of_capital_rate
         )
     else:
         raise ValueError(
             "ra_method must be 'confidence_level' or 'cost_of_capital', "
-            f"got {asmp.ra_method!r}"
+            f"got {assumptions.ra_method!r}"
         )
     csm, csm_accretion, csm_release, loss_component = compute_csm(
-        bel[:, 0], ra[:, 0], proj, asmp
+        bel[:, 0], ra[:, 0], proj, assumptions
     )
 
     return Measurement(
@@ -291,8 +291,8 @@ def _value_kernel(mortality_grid, issue_index, sex, term_months, count,
 
 
 def value(
-    mps: ModelPointSet,
-    asmp: Assumptions,
+    model_points: ModelPoints,
+    assumptions: Assumptions,
     *,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
@@ -312,14 +312,14 @@ def value(
     discount_curve :
         Optional ``(n_time,)`` array of annual discount rates -- one per
         projection month, a locked-in rate curve that replaces the flat
-        ``asmp.discount_annual``. ``None`` uses the flat rate.
+        ``assumptions.discount_annual``. ``None`` uses the flat rate.
     """
-    if asmp.ra_method != "confidence_level":
+    if assumptions.ra_method != "confidence_level":
         raise ValueError(
             "value() computes the confidence-level RA only; use measure() "
-            f"for ra_method={asmp.ra_method!r}"
+            f"for ra_method={assumptions.ra_method!r}"
         )
-    n_time = int(mps.term_months.max())
+    n_time = int(model_points.term_months.max())
     n_years = (n_time + 11) // 12
     months = np.arange(n_time)
 
@@ -328,30 +328,30 @@ def value(
     # ages avoids an O(n log n) sort (np.unique): min/max and the index
     # subtraction are O(n), and the few unused ages cost nothing -- the
     # assumption grid is tiny.
-    min_age = int(mps.issue_age.min())
-    max_age = int(mps.issue_age.max())
+    min_age = int(model_points.issue_age.min())
+    max_age = int(model_points.issue_age.max())
     durations = np.arange(n_years)
     sex_grid, issue_age_grid, duration_grid = np.meshgrid(
         np.array([0, 1]), np.arange(min_age, max_age + 1), durations,
         indexing="ij",
     )
     mortality_grid = np.ascontiguousarray(
-        asmp.mortality_monthly(sex_grid, issue_age_grid, duration_grid),
+        assumptions.mortality_monthly(sex_grid, issue_age_grid, duration_grid),
         dtype=np.float64,
     )
-    issue_index = (mps.issue_age - min_age).astype(np.int64)
+    issue_index = (model_points.issue_age - min_age).astype(np.int64)
     lapse_by_year = np.ascontiguousarray(
-        asmp.lapse_monthly(durations), dtype=np.float64
+        assumptions.lapse_monthly(durations), dtype=np.float64
     )
-    cov_is_diagnosis, cov_risk = coverage_arrays(asmp.riders)
+    cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
     cov_rates = coverage_rates(
-        mortality_grid, [r.rate for r in asmp.riders], sex_grid,
+        mortality_grid, [r.rate for r in assumptions.riders], sex_grid,
         issue_age_grid, duration_grid,
     )
 
-    inflation = (1.0 + asmp.expense_inflation) ** (months / 12.0)
+    inflation = (1.0 + assumptions.expense_inflation) ** (months / 12.0)
     if discount_curve is None:
-        discount_start, discount_mid = discount_factors(asmp, n_time)
+        discount_start, discount_mid = discount_factors(assumptions, n_time)
     else:
         discount_curve = np.asarray(discount_curve, dtype=np.float64)
         if discount_curve.shape != (n_time,):
@@ -361,38 +361,38 @@ def value(
             )
         monthly_curve = (1.0 + discount_curve) ** (1.0 / 12.0) - 1.0
         discount_start, discount_mid = discount_factors_from_curve(monthly_curve)
-    z = _norm_ppf(asmp.ra_confidence)
-    mortality_factor = z * asmp.mortality_cv
-    morbidity_factor = z * asmp.morbidity_cv
-    longevity_factor = z * asmp.longevity_cv
+    z = _norm_ppf(assumptions.ra_confidence)
+    mortality_factor = z * assumptions.mortality_cv
+    morbidity_factor = z * assumptions.morbidity_cv
+    longevity_factor = z * assumptions.longevity_cv
 
     # A claims settlement pattern discounts claims to their payment dates;
     # scaling the coverage amounts carries that into the fused kernel.
-    cov_amount = mps.cov_amount
-    if asmp.settlement_pattern is not None:
+    cov_amount = model_points.cov_amount
+    if assumptions.settlement_pattern is not None:
         cov_amount = cov_amount * _settlement_factor(
-            asmp.settlement_pattern, asmp.discount_monthly
+            assumptions.settlement_pattern, assumptions.discount_monthly
         )
 
     args = (
         mortality_grid,
         issue_index,
-        mps.sex,
-        mps.term_months,
-        mps.count,
+        model_points.sex,
+        model_points.term_months,
+        model_points.count,
         lapse_by_year,
-        mps.monthly_premium,
-        mps.single_premium,
-        mps.cov_kind,
+        model_points.monthly_premium,
+        model_points.single_premium,
+        model_points.cov_kind,
         cov_amount,
-        mps.cov_offset,
+        model_points.cov_offset,
         cov_rates,
         cov_risk,
         cov_is_diagnosis,
-        mps.maturity_benefit,
-        mps.annuity_payment,
-        asmp.expense_acquisition,
-        asmp.expense_maintenance_annual / 12.0,
+        model_points.maturity_benefit,
+        model_points.annuity_payment,
+        assumptions.expense_acquisition,
+        assumptions.expense_maintenance_annual / 12.0,
         inflation,
         discount_start,
         discount_mid,
@@ -403,11 +403,11 @@ def value(
 
     if backend == "cpu":
         bel, ra, csm, loss_component = _value_kernel(
-            *args, mps.cov_waiting, mps.cov_reduction_end,
-            mps.cov_reduction_factor,
+            *args, model_points.cov_waiting, model_points.cov_reduction_end,
+            model_points.cov_reduction_factor,
         )
     elif backend == "gpu":
-        if np.any(mps.cov_waiting) or np.any(mps.cov_reduction_end):
+        if np.any(model_points.cov_waiting) or np.any(model_points.cov_reduction_end):
             raise ValueError(
                 "value(backend='gpu') does not support coverage waiting / "
                 "reduction periods yet; use backend='cpu'"

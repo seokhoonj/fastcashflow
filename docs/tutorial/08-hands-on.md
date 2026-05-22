@@ -75,7 +75,7 @@ import fastcashflow as fcf
 옮깁니다.
 
 ```python
-asmp = fcf.Assumptions(
+assumptions = fcf.Assumptions(
     mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
     lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
     discount_annual=1.005 ** 12 - 1,
@@ -107,11 +107,11 @@ asmp = fcf.Assumptions(
 함수를 부를 때 성별·나이·경과를 배열로 통째로 넘기므로, 함수도 같은
 모양의 배열을 돌려줘야 합니다.
 
-모델포인트는 `ModelPointSet`으로 만듭니다. 계약 한 건이면 `single()`이
+모델포인트는 `ModelPoints`로 만듭니다. 계약 한 건이면 `single()`이
 편합니다.
 
 ```python
-mps = fcf.ModelPointSet.single(
+model_points = fcf.ModelPoints.single(
     issue_age=40, death_benefit=12_000,
     monthly_premium=100, term_months=2,
 )
@@ -126,7 +126,7 @@ mps = fcf.ModelPointSet.single(
 입력이 준비됐으면 측정은 한 줄입니다.
 
 ```python
-m = fcf.measure(mps, asmp)
+m = fcf.measure(model_points, assumptions)
 ```
 
 `measure()`에 모델포인트와 가정을 넘기면, 1.2절의 4단계 — 추정, 할인,
@@ -167,7 +167,7 @@ CSM은 0, 손실요소는 55.14입니다.
 import numpy as np
 import fastcashflow as fcf
 
-asmp = fcf.Assumptions(
+assumptions = fcf.Assumptions(
     mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
     lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
     discount_annual=1.005 ** 12 - 1,
@@ -177,11 +177,11 @@ asmp = fcf.Assumptions(
     ra_confidence=0.75,
     mortality_cv=0.10,
 )
-mps = fcf.ModelPointSet.single(
+model_points = fcf.ModelPoints.single(
     issue_age=40, death_benefit=12_000,
     monthly_premium=100, term_months=2,
 )
-m = fcf.measure(mps, asmp)
+m = fcf.measure(model_points, assumptions)
 print(m.bel[0, 0], m.ra[0, 0], m.csm[0, 0], m.loss_component[0])
 ```
 
@@ -198,9 +198,9 @@ print(m.bel[0, 0], m.ra[0, 0], m.csm[0, 0], m.loss_component[0])
 fastcashflow에 들어 있는 **샘플 데이터**를 쓰면 됩니다.
 
 ```python
-mps  = fcf.load_sample_model_points()
-asmp = fcf.load_sample_assumptions()
-val  = fcf.value(mps, asmp)
+model_points = fcf.load_sample_model_points()
+assumptions  = fcf.load_sample_assumptions()
+val          = fcf.value(model_points, assumptions)
 
 print(val.bel)
 print(val.csm)

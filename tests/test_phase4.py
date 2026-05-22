@@ -6,7 +6,7 @@ the total liability must run off to zero by the end of the term.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, measure, value
+from fastcashflow import Assumptions, ModelPoints, measure, value
 
 
 def _assumptions(**overrides) -> Assumptions:
@@ -27,7 +27,7 @@ def _assumptions(**overrides) -> Assumptions:
 def test_bel_rollforward():
     """The BEL trajectory matches an independent backward recursion."""
     asmp = _assumptions()
-    one = ModelPointSet.single(
+    one = ModelPoints.single(
         issue_age=45, death_benefit=80_000_000,
         monthly_premium=150_000, term_months=36,
     )
@@ -58,7 +58,7 @@ def test_liability_runs_off():
     asmp = _assumptions()
     rng = np.random.default_rng(4)
     n = 150
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 100, n) * 1_000_000,
         monthly_premium=rng.integers(10, 25, n) * 10_000,

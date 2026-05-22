@@ -77,12 +77,12 @@ IFRS 17은 두 가지 기준을 둡니다(B126).
 
 **시간 경과**(B126(a))는 보험료를 보장기간에 걸쳐 **직선으로** 나눕니다.
 4개월 계약이면 매달 보험료의 1/4씩이죠. fastcashflow의 기본값이며,
-`measure_paa(mps, asmp)`처럼 그냥 부르면 이 기준을 씁니다.
+`measure_paa(model_points, assumptions)`처럼 그냥 부르면 이 기준을 씁니다.
 
 **발생 예상**(B126(b))은 보험금과 사업비가 **발생하리라 예상되는
 시기**에 맞춰 보험료를 나눕니다. 위험이 보장기간에 고르게 퍼져 있지
 않을 때 — 예컨대 사업비가 계약 초기에 몰리거나 보험금이 특정 시기에
-쏠릴 때 — 씁니다. `measure_paa(mps, asmp, revenue_basis="claims")`로
+쏠릴 때 — 씁니다. `measure_paa(model_points, assumptions, revenue_basis="claims")`로
 선택합니다.
 
 어느 기준이든 인식한 보험수익을 모두 더하면 총보험료와 같습니다.
@@ -159,7 +159,7 @@ LRC가 쌓였다 풀리는 과정을 작은 계약 하나로 따라가 봅니다
 import numpy as np
 import fastcashflow as fcf
 
-asmp = fcf.Assumptions(
+assumptions = fcf.Assumptions(
     mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
     lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
     discount_annual=0.03,
@@ -169,11 +169,11 @@ asmp = fcf.Assumptions(
     ra_confidence=0.75,
     mortality_cv=0.10,
 )
-mps = fcf.ModelPointSet.single(
+model_points = fcf.ModelPoints.single(
     issue_age=40, death_benefit=100_000_000,
     monthly_premium=0, term_months=4, single_premium=1_200_000,
 )
-m = fcf.measure_paa(mps, asmp)
+m = fcf.measure_paa(model_points, assumptions)
 print(m.lrc[0])              # 잔여보장부채 궤적
 print(m.revenue[0])          # 월별 보험수익
 print(m.loss_component[0])   # 손실요소

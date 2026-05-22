@@ -7,7 +7,7 @@ charges the cost-of-capital rate on it over the contract's run-off.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, measure, value
+from fastcashflow import Assumptions, ModelPoints, measure, value
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.005      # flat monthly lapse
@@ -31,7 +31,7 @@ def _assumptions(**overrides) -> Assumptions:
 def test_cost_of_capital_ra_hand_calc():
     """The CoC RA at inception is the cost-of-capital rate times the present
     value of the confidence-level margin held as capital."""
-    mp = ModelPointSet.single(40, 1e8, 60_000.0, 60)
+    mp = ModelPoints.single(40, 1e8, 60_000.0, 60)
     coc_rate = 0.06
     cl = measure(mp, _assumptions())
     coc = measure(mp, _assumptions(ra_method="cost_of_capital",
@@ -46,7 +46,7 @@ def test_cost_of_capital_ra_hand_calc():
 
 def test_coc_ra_scales_with_the_rate():
     """The cost-of-capital RA is linear in the cost-of-capital rate."""
-    mp = ModelPointSet.single(40, 1e8, 60_000.0, 60)
+    mp = ModelPoints.single(40, 1e8, 60_000.0, 60)
     coc1 = measure(mp, _assumptions(ra_method="cost_of_capital",
                                     cost_of_capital_rate=0.04))
     coc2 = measure(mp, _assumptions(ra_method="cost_of_capital",
@@ -56,7 +56,7 @@ def test_coc_ra_scales_with_the_rate():
 
 def test_coc_ra_differs_from_confidence_level():
     """The two methods give genuinely different RAs of the same order."""
-    mp = ModelPointSet.single(40, 1e8, 60_000.0, 60)
+    mp = ModelPoints.single(40, 1e8, 60_000.0, 60)
     cl = measure(mp, _assumptions())
     coc = measure(mp, _assumptions(ra_method="cost_of_capital"))
     assert not np.isclose(cl.ra[0, 0], coc.ra[0, 0])
@@ -65,13 +65,13 @@ def test_coc_ra_differs_from_confidence_level():
 
 def test_value_rejects_cost_of_capital():
     """value() computes the confidence-level RA only."""
-    mp = ModelPointSet.single(40, 1e8, 60_000.0, 60)
+    mp = ModelPoints.single(40, 1e8, 60_000.0, 60)
     with pytest.raises(ValueError, match="confidence-level"):
         value(mp, _assumptions(ra_method="cost_of_capital"))
 
 
 def test_invalid_ra_method_is_rejected():
     """An unrecognised ra_method is an error."""
-    mp = ModelPointSet.single(40, 1e8, 60_000.0, 60)
+    mp = ModelPoints.single(40, 1e8, 60_000.0, 60)
     with pytest.raises(ValueError, match="ra_method"):
         measure(mp, _assumptions(ra_method="margins"))

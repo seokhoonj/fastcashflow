@@ -92,9 +92,9 @@ fastcashflow's bundled sample portfolio:
 ```python
 import fastcashflow as fcf
 
-mps  = fcf.load_sample_model_points()   # bundled sample portfolio
-asmp = fcf.load_sample_assumptions()    # bundled sample assumptions
-m    = fcf.measure(mps, asmp)
+model_points = fcf.load_sample_model_points()   # bundled sample portfolio
+assumptions  = fcf.load_sample_assumptions()    # bundled sample assumptions
+m            = fcf.measure(model_points, assumptions)
 print(m.bel[:, 0], m.ra[:, 0], m.csm[:, 0])   # BEL / RA / CSM at issue
 ```
 
@@ -105,7 +105,7 @@ points and the actuarial assumptions:
 import numpy as np
 import fastcashflow as fcf
 
-asmp = fcf.Assumptions(
+assumptions = fcf.Assumptions(
     mortality_monthly=lambda sex, issue_age, duration: np.full(
         issue_age.shape, 1.0 - (1.0 - 0.001) ** (1.0 / 12.0)
     ),
@@ -117,11 +117,11 @@ asmp = fcf.Assumptions(
     ra_confidence=0.75,
     mortality_cv=0.10,
 )
-mps = fcf.ModelPointSet.single(
+model_points = fcf.ModelPoints.single(
     issue_age=40, death_benefit=100_000_000,
     monthly_premium=70_000, term_months=120,
 )
-res = fcf.measure(mps, asmp)
+res = fcf.measure(model_points, assumptions)
 print(res.bel[0, 0], res.ra[0, 0], res.csm[0, 0])   # [model point, month]
 ```
 
@@ -130,8 +130,8 @@ roll-forward. For portfolio-scale valuation use `value()`: it returns only
 the headline numbers (BEL, RA, CSM, loss component) per model point.
 
 ```python
-val     = fcf.value(mps, asmp)                  # parallel CPU kernel
-val_gpu = fcf.value(mps, asmp, backend="gpu")   # CUDA device, if available
+val     = fcf.value(model_points, assumptions)                  # parallel CPU kernel
+val_gpu = fcf.value(model_points, assumptions, backend="gpu")   # CUDA device, if available
 print(val.bel, val.ra, val.csm, val.loss_component)
 ```
 
@@ -139,19 +139,19 @@ The product is a combination of benefits -- a positive `maturity_benefit`
 makes the contract an endowment, and `solve_premium` prices it:
 
 ```python
-endowment = fcf.ModelPointSet.single(
+endowment = fcf.ModelPoints.single(
     issue_age=40, death_benefit=100_000_000,
     monthly_premium=0, term_months=120, maturity_benefit=50_000_000,
 )
-premium = fcf.solve_premium(endowment, asmp, margin=0.10)   # 10% profit margin
+premium = fcf.solve_premium(endowment, assumptions, margin=0.10)   # 10% profit margin
 ```
 
 At portfolio scale, read model points from a parquet or CSV file and
 write the results back:
 
 ```python
-mps = fcf.read_model_points("policies.parquet", asmp)
-val = fcf.value(mps, asmp)
+model_points = fcf.read_model_points("policies.parquet", assumptions)
+val = fcf.value(model_points, assumptions)
 fcf.write_valuation(val, "results.parquet")   # pass ids=... to keep a join key
 ```
 
@@ -159,7 +159,7 @@ Past what fits in memory, stream a parquet file chunk by chunk straight
 to a result dataset:
 
 ```python
-fcf.value_file("policies.parquet", "results/", asmp, id_column="id")
+fcf.value_file("policies.parquet", "results/", assumptions, id_column="id")
 # -> results/part-00000.parquet, part-00001.parquet, ...
 ```
 

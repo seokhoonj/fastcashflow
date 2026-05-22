@@ -18,10 +18,10 @@ pip install fastcashflow[viz]
 ```python
 import fastcashflow as fcf
 
-asmp = fcf.load_sample_assumptions()
-mps  = fcf.load_sample_model_points()
+assumptions  = fcf.load_sample_assumptions()
+model_points = fcf.load_sample_model_points()
 
-m = fcf.measure(mps, asmp)
+m = fcf.measure(model_points, assumptions)
 print(m.bel[:, 0])   # 최선추정부채
 print(m.ra[:, 0])    # 위험조정
 print(m.csm[:, 0])   # 보험계약마진

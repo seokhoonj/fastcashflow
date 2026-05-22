@@ -1,7 +1,7 @@
 """Phase 1 validation -- Risk Adjustment and expense cash flows."""
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, measure
+from fastcashflow import Assumptions, ModelPoints, measure
 from fastcashflow.gmm import _norm_ppf
 
 
@@ -33,7 +33,7 @@ def test_norm_ppf_known_quantiles():
 def test_risk_adjustment():
     """RA = z(confidence) * mortality_cv * PV(claims), hand-checked."""
     res = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             issue_age=40, death_benefit=1_000_000.0,
             monthly_premium=12_000.0, term_months=2,
         ),
@@ -48,7 +48,7 @@ def test_risk_adjustment():
 def test_expenses():
     """Acquisition (t=0) and maintenance expense, hand-checked."""
     res = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             issue_age=40, death_benefit=1_000_000.0,
             monthly_premium=12_000.0, term_months=2,
         ),
@@ -74,7 +74,7 @@ def test_expenses():
 def test_expense_inflation():
     """Maintenance expense grows with inflation; acquisition does not recur."""
     res = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             issue_age=40, death_benefit=1_000_000.0,
             monthly_premium=12_000.0, term_months=13,
         ),

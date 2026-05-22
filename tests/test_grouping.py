@@ -6,7 +6,7 @@ before ``max(0, ...)``, contracts in different groups are not.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, group, measure, roll_forward
+from fastcashflow import Assumptions, ModelPoints, group, measure, roll_forward
 
 
 def _assumptions() -> Assumptions:
@@ -22,9 +22,9 @@ def _assumptions() -> Assumptions:
     )
 
 
-def _portfolio(n: int = 60) -> ModelPointSet:
+def _portfolio(n: int = 60) -> ModelPoints:
     rng = np.random.default_rng(7)
-    return ModelPointSet(
+    return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 90, n) * 1_000_000,
         monthly_premium=rng.integers(8, 20, n) * 10_000,
@@ -32,9 +32,9 @@ def _portfolio(n: int = 60) -> ModelPointSet:
     )
 
 
-def _two_contracts() -> ModelPointSet:
+def _two_contracts() -> ModelPoints:
     """Two term-life model points -- the first profitable, the second onerous."""
-    return ModelPointSet(
+    return ModelPoints(
         issue_age=np.array([40, 40]),
         death_benefit=np.array([1e8, 1e8]),
         monthly_premium=np.array([300_000.0, 60_000.0]),

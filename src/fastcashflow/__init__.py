@@ -24,7 +24,7 @@ from fastcashflow.io import (
     value_file,
     write_valuation,
 )
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 from fastcashflow.movement import (
     PAAPeriodMovement,
     PAAReconciliation,
@@ -54,7 +54,7 @@ from fastcashflow.vfa import VFAMeasurement, measure_vfa
 
 __version__ = "0.0.1.dev1"
 __all__ = [
-    "Assumptions", "ModelPointSet", "measure", "value", "value_stochastic",
+    "Assumptions", "ModelPoints", "measure", "value", "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "measure_tvog",
     "report", "roll_forward", "reconcile", "group", "transition",
     "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",

@@ -18,10 +18,10 @@ bundled sample, which loads with no files to prepare.
 ```python
 import fastcashflow as fcf
 
-asmp = fcf.load_sample_assumptions()
-mps = fcf.load_sample_model_points()
+assumptions = fcf.load_sample_assumptions()
+model_points = fcf.load_sample_model_points()
 
-m = fcf.measure(mps, asmp)
+m = fcf.measure(model_points, assumptions)
 print(m.bel[:, 0])      # best estimate liability at inception
 print(m.ra[:, 0])       # risk adjustment
 print(m.csm[:, 0])      # contractual service margin

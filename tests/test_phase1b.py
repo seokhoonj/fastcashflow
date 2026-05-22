@@ -7,7 +7,7 @@ in plain Python as the correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, measure, value
+from fastcashflow import Assumptions, ModelPoints, measure, value
 
 SELECT_Q = 0.005      # monthly mortality, policy year 0 (select)
 ULT_Q = 0.02          # monthly mortality, policy year 1+ (ultimate)
@@ -47,7 +47,7 @@ def test_select_ultimate_and_duration_lapse():
     term = 24
 
     res = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             issue_age=40, death_benefit=death_benefit,
             monthly_premium=premium, term_months=term,
         ),
@@ -93,7 +93,7 @@ def test_value_matches_run_phase1b():
     """The fast path reproduces measure() under duration-varying assumptions."""
     rng = np.random.default_rng(11)
     n = 500
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(25, 55, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(3, 15, n) * 10_000,

@@ -5,7 +5,7 @@ import pytest
 
 from fastcashflow import (
     Assumptions,
-    ModelPointSet,
+    ModelPoints,
     load_sample_assumptions,
     load_sample_model_points,
     read_model_points,
@@ -15,9 +15,9 @@ from fastcashflow import (
 )
 
 
-def _portfolio(n: int = 400) -> ModelPointSet:
+def _portfolio(n: int = 400) -> ModelPoints:
     rng = np.random.default_rng(3)
-    return ModelPointSet(
+    return ModelPoints(
         issue_age=rng.integers(25, 60, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(3, 15, n) * 10_000,
@@ -38,7 +38,7 @@ def _assumptions() -> Assumptions:
     )
 
 
-def _frame(mps: ModelPointSet) -> pl.DataFrame:
+def _frame(mps: ModelPoints) -> pl.DataFrame:
     return pl.DataFrame({
         "issue_age": mps.issue_age,
         "death_benefit": mps.death_benefit,
@@ -49,7 +49,7 @@ def _frame(mps: ModelPointSet) -> pl.DataFrame:
 
 @pytest.mark.parametrize("suffix", [".parquet", ".csv"])
 def test_model_points_round_trip(tmp_path, suffix):
-    """read_model_points reconstructs a ModelPointSet written to disk."""
+    """read_model_points reconstructs a ModelPoints written to disk."""
     mps = _portfolio()
     path = tmp_path / f"mps{suffix}"
     df = _frame(mps)
@@ -141,7 +141,7 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
     """Chunked file-to-file valuation equals the in-memory valuation exactly."""
     rng = np.random.default_rng(5)
     n = 1000
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(3, 15, n) * 10_000,
@@ -189,7 +189,7 @@ def test_load_sample_data_runs():
 
 
 def test_to_long_round_trips(tmp_path):
-    """ModelPointSet.to_long written out and re-read reproduces the valuation."""
+    """ModelPoints.to_long written out and re-read reproduces the valuation."""
     asmp = load_sample_assumptions()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
@@ -203,7 +203,7 @@ def test_to_long_round_trips(tmp_path):
 
 
 def test_to_wide_round_trips(tmp_path):
-    """ModelPointSet.to_wide written out and re-read reproduces the valuation."""
+    """ModelPoints.to_wide written out and re-read reproduces the valuation."""
     asmp = load_sample_assumptions()
     mps = load_sample_model_points()
     mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")

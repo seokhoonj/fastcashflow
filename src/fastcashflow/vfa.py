@@ -40,7 +40,7 @@ from fastcashflow.gmm import (
     _settlement_factor,
     _settlement_lic,
 )
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.tvog import tvog_weights
 
@@ -78,8 +78,8 @@ class VFAMeasurement:
 
 
 def measure_vfa(
-    mps: ModelPointSet,
-    asmp: Assumptions,
+    model_points: ModelPoints,
+    assumptions: Assumptions,
     return_scenarios: FloatArray | None = None,
 ) -> VFAMeasurement:
     """Measure a direct-participation portfolio under the Variable Fee Approach.
@@ -104,21 +104,21 @@ def measure_vfa(
     enters the inception fulfilment cash flows too, so the CSM absorbs it,
     and ``time_value`` records that amount per model point.
     """
-    proj = project_cashflows(mps, asmp)
+    proj = project_cashflows(model_points, assumptions)
     inforce = proj.inforce
     n_mp, n_time = inforce.shape
 
-    r_m = (1.0 + asmp.investment_return) ** (1.0 / 12.0) - 1.0
-    f_m = (1.0 + asmp.fund_fee) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + assumptions.investment_return) ** (1.0 / 12.0) - 1.0
+    f_m = (1.0 + assumptions.fund_fee) ** (1.0 / 12.0) - 1.0
     # A minimum guarantee credits max(return, guarantee) to the account.
     credit_m = r_m
-    if asmp.guaranteed_credit_rate is not None:
-        g_m = (1.0 + asmp.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    if assumptions.guaranteed_credit_rate is not None:
+        g_m = (1.0 + assumptions.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
         credit_m = max(r_m, g_m)
     growth = (1.0 + credit_m) * (1.0 - f_m)
 
     # Account-value trajectory -- flat rates, so a closed form.
-    av = mps.account_value[:, None] * growth ** np.arange(n_time + 1)[None, :]
+    av = model_points.account_value[:, None] * growth ** np.arange(n_time + 1)[None, :]
 
     # Every policy eventually exits and receives its account value.
     inforce_pad = np.concatenate([inforce, np.zeros((n_mp, 1))], axis=1)
@@ -127,10 +127,10 @@ def measure_vfa(
     # Variable fee -- the entity's share, deducted from the grown account value.
     fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m) * f_m
     # Liability for incurred claims -- exit benefits settled over the pattern.
-    if asmp.settlement_pattern is None:
+    if assumptions.settlement_pattern is None:
         lic = np.zeros((n_mp, n_time + 1))
     else:
-        lic = _settlement_lic(benefit_cf, asmp.settlement_pattern)
+        lic = _settlement_lic(benefit_cf, assumptions.settlement_pattern)
 
     # Discount at the underlying-items return -- the VFA basis. Benefits are
     # discounted start-of-month, consistent with the account value, so a
@@ -150,9 +150,9 @@ def measure_vfa(
     # A settlement pattern pays the exit benefit over later months -- so
     # discount it to those payment dates in the present value.
     benefit_for_pv = benefit_cf
-    if asmp.settlement_pattern is not None:
+    if assumptions.settlement_pattern is not None:
         benefit_for_pv = benefit_cf * _settlement_factor(
-            asmp.settlement_pattern, r_m
+            assumptions.settlement_pattern, r_m
         )
     pv_benefits = _pv_trajectory(benefit_for_pv, disc_start[:n_time])
     pv_expenses = _pv_trajectory(proj.expense_cf, disc_mid)
@@ -163,9 +163,9 @@ def measure_vfa(
     # the CSM absorbs it.
     time_value = np.zeros(n_mp)
     if return_scenarios is not None:
-        if asmp.guaranteed_credit_rate is None:
+        if assumptions.guaranteed_credit_rate is None:
             raise ValueError(
-                "return_scenarios given but asmp.guaranteed_credit_rate is "
+                "return_scenarios given but assumptions.guaranteed_credit_rate is "
                 "None -- there is no guarantee to value"
             )
         return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
@@ -174,7 +174,7 @@ def measure_vfa(
                 f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
                 "the projection horizon"
             )
-        time_value = mps.account_value * (exits @ tvog_weights(asmp, return_scenarios))
+        time_value = model_points.account_value * (exits @ tvog_weights(assumptions, return_scenarios))
 
     # BEL and RA as trajectories. The BEL is reported net of the account
     # value the entity holds -- a smooth, modest figure that at inception
@@ -184,7 +184,7 @@ def measure_vfa(
     # RA -- a confidence-level margin for expense risk, the non-financial
     # risk an account-value contract carries (mortality risk on the amount
     # is near zero, every exit paying the account value).
-    ra = _norm_ppf(asmp.ra_confidence) * asmp.expense_cv * pv_expenses
+    ra = _norm_ppf(assumptions.ra_confidence) * assumptions.expense_cv * pv_expenses
     # The inception fulfilment cash flows -- with the guarantee time value --
     # drive the CSM and the loss component.
     fcf = bel[:, 0] + ra[:, 0] + time_value

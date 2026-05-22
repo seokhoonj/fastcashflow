@@ -21,7 +21,7 @@ from fastcashflow.assumptions import Assumptions
 from fastcashflow.projection import Cashflows
 
 
-def discount_factors(asmp: Assumptions, n_time: int) -> tuple[FloatArray, FloatArray]:
+def discount_factors(assumptions: Assumptions, n_time: int) -> tuple[FloatArray, FloatArray]:
     """Discount factors back to time 0, by cash-flow timing.
 
     Returns ``(discount_start, discount_mid)``:
@@ -31,7 +31,7 @@ def discount_factors(asmp: Assumptions, n_time: int) -> tuple[FloatArray, FloatA
     * ``discount_mid[t]   = (1 + i)^-(t+0.5)``, shape ``(n_time,)`` -- mid-
       month flows (claims and expenses, which arise during the month).
     """
-    base = 1.0 + asmp.discount_monthly
+    base = 1.0 + assumptions.discount_monthly
     start = np.arange(n_time + 1)
     mid = np.arange(n_time)
     return base ** (-start), base ** (-(mid + 0.5))
@@ -231,7 +231,7 @@ def compute_csm(
     bel: FloatArray,
     ra: FloatArray,
     proj: Cashflows,
-    asmp: Assumptions,
+    assumptions: Assumptions,
 ):
     """CSM at initial recognition (Sec. 38) and deterministic roll-forward (Sec. 44).
 
@@ -250,6 +250,6 @@ def compute_csm(
     csm0 = np.maximum(0.0, -fcf)
     loss_component = np.maximum(0.0, fcf)
 
-    csm, accretion, release = _csm_kernel(csm0, proj.inforce, asmp.discount_monthly)
+    csm, accretion, release = _csm_kernel(csm0, proj.inforce, assumptions.discount_monthly)
 
     return csm, accretion, release, loss_component

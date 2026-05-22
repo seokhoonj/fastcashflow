@@ -9,7 +9,7 @@ import numpy as np
 from fastcashflow import (
     RISK_MORBIDITY,
     Assumptions,
-    ModelPointSet,
+    ModelPoints,
     RiderRate,
     measure,
     value,
@@ -52,7 +52,7 @@ def test_inpatient_benefit_adds_its_present_value():
     asmp = _assumptions(morbidity_cv=0.15)
     benefit, term = 30_000.0, 24
     res = measure(
-        ModelPointSet.single(40, 0.0, 0.0, term, benefits={INPATIENT: benefit}),
+        ModelPoints.single(40, 0.0, 0.0, term, benefits={INPATIENT: benefit}),
         asmp,
     )
 
@@ -73,9 +73,9 @@ def test_health_claim_is_non_decrementing():
     """A health claim leaves the policy in force -- it does not decrement."""
     asmp = _assumptions()
     term = 36
-    plain = measure(ModelPointSet.single(40, 1e8, 50_000.0, term), asmp)
+    plain = measure(ModelPoints.single(40, 1e8, 50_000.0, term), asmp)
     with_health = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             40, 1e8, 50_000.0, term, benefits={INPATIENT: 30_000.0, SURGERY: 2e6}
         ),
         asmp,
@@ -91,7 +91,7 @@ def test_health_claim_is_non_decrementing():
 
 def test_morbidity_ra_responds_to_its_cv():
     """The morbidity RA is zero without morbidity_cv and linear in it."""
-    health = ModelPointSet.single(40, 0.0, 0.0, 60, benefits={INPATIENT: 30_000.0})
+    health = ModelPoints.single(40, 0.0, 0.0, 60, benefits={INPATIENT: 30_000.0})
     no_cv = measure(health, _assumptions(morbidity_cv=0.0))
     full_cv = measure(health, _assumptions(morbidity_cv=0.20))
     half_cv = measure(health, _assumptions(morbidity_cv=0.10))
@@ -105,7 +105,7 @@ def test_value_matches_measure_health():
     """value() and measure() agree on contracts with health coverages."""
     rng = np.random.default_rng(11)
     n = 300
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
         monthly_premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
@@ -131,7 +131,7 @@ def test_diagnosis_benefit_hand_calc():
     asmp = _assumptions(morbidity_cv=0.12)
     benefit, term = 5e7, 24
     res = measure(
-        ModelPointSet.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: benefit}),
+        ModelPoints.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: benefit}),
         asmp,
     )
 
@@ -155,11 +155,11 @@ def test_diagnosis_pool_depletes():
     asmp = _assumptions()
     term, amount = 120, 1e7
     diagnosis = measure(
-        ModelPointSet.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: amount}),
+        ModelPoints.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: amount}),
         asmp,
     )
     inpatient = measure(
-        ModelPointSet.single(40, 0.0, 0.0, term, benefits={INPATIENT: amount}),
+        ModelPoints.single(40, 0.0, 0.0, term, benefits={INPATIENT: amount}),
         asmp,
     )
     # inpatient claims on the full in-force each month; diagnosis on the
@@ -171,7 +171,7 @@ def test_value_matches_measure_diagnosis():
     """value() and measure() agree on contracts with diagnosis coverages."""
     rng = np.random.default_rng(19)
     n = 250
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
         monthly_premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),

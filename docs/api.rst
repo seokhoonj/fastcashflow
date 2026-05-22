@@ -4,7 +4,7 @@ API reference
 Inputs
 ------
 
-.. autoclass:: fastcashflow.ModelPointSet
+.. autoclass:: fastcashflow.ModelPoints
    :members:
 
 .. autoclass:: fastcashflow.Assumptions

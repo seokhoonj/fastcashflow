@@ -24,7 +24,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.engine import value
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +53,7 @@ class StochasticResult:
 
 
 def value_stochastic(
-    mps: ModelPointSet, asmp: Assumptions, scenarios: FloatArray
+    model_points: ModelPoints, assumptions: Assumptions, scenarios: FloatArray
 ) -> StochasticResult:
     """Value a portfolio under each economic scenario -- the liability distribution.
 
@@ -72,7 +72,7 @@ def value_stochastic(
     if scenarios.ndim not in (1, 2):
         raise ValueError("scenarios must be 1-D (flat rates) or 2-D (rate curves)")
     if scenarios.ndim == 2:
-        n_time = int(mps.term_months.max())
+        n_time = int(model_points.term_months.max())
         if scenarios.shape[1] != n_time:
             raise ValueError(
                 f"a 2-D scenarios array must have {n_time} columns (the "
@@ -85,9 +85,9 @@ def value_stochastic(
     loss_component = np.empty(n)
     for s in range(n):
         if scenarios.ndim == 1:
-            v = value(mps, replace(asmp, discount_annual=float(scenarios[s])))
+            v = value(model_points, replace(assumptions, discount_annual=float(scenarios[s])))
         else:
-            v = value(mps, asmp, discount_curve=scenarios[s])
+            v = value(model_points, assumptions, discount_curve=scenarios[s])
         bel[s] = v.bel.sum()
         ra[s] = v.ra.sum()
         csm[s] = v.csm.sum()

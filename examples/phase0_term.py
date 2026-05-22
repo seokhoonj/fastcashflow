@@ -6,7 +6,7 @@ Run from the project root::
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, measure
+from fastcashflow import Assumptions, ModelPoints, measure
 
 
 def main() -> None:
@@ -16,7 +16,7 @@ def main() -> None:
         annual_q = 0.0005 * (1.0 + 0.04 * (attained - 30.0))
         return 1.0 - (1.0 - annual_q) ** (1.0 / 12.0)
 
-    asmp = Assumptions(
+    assumptions = Assumptions(
         mortality_monthly=mortality_monthly,
         lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
         discount_annual=0.03,
@@ -27,14 +27,14 @@ def main() -> None:
         mortality_cv=0.10,
     )
 
-    mps = ModelPointSet.single(
+    model_points = ModelPoints.single(
         issue_age=40,
         death_benefit=100_000_000,
         monthly_premium=70_000,
         term_months=120,
     )
 
-    res = measure(mps, asmp)
+    res = measure(model_points, assumptions)
 
     print("fastcashflow -- single protection policy")
     print(f"  BEL            : {res.bel[0, 0]:>16,.0f}")

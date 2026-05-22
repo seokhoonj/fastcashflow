@@ -38,7 +38,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.gmm import _norm_ppf, _rollforward_kernel, _settlement_lic
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
 
@@ -69,8 +69,8 @@ class PAAMeasurement:
 
 
 def measure_paa(
-    mps: ModelPointSet,
-    asmp: Assumptions,
+    model_points: ModelPoints,
+    assumptions: Assumptions,
     *,
     revenue_basis: str = "time",
 ) -> PAAMeasurement:
@@ -95,7 +95,7 @@ def measure_paa(
     inception fulfilment cash flows are a net outflow carries that outflow
     as a loss component.
     """
-    proj = project_cashflows(mps, asmp)
+    proj = project_cashflows(model_points, assumptions)
 
     premium_total = proj.premium_cf.sum(axis=1)          # (n_mp,)
     service_expense = proj.claim_cf + proj.morbidity_cf + proj.expense_cf
@@ -104,16 +104,16 @@ def measure_paa(
     # paid (spread over the settlement pattern) run it off. Held
     # undiscounted, consistent with the LRC.
     incurred = proj.claim_cf + proj.morbidity_cf
-    if asmp.settlement_pattern is None:
+    if assumptions.settlement_pattern is None:
         lic = np.zeros((incurred.shape[0], incurred.shape[1] + 1))
     else:
-        lic = _settlement_lic(incurred, asmp.settlement_pattern)
+        lic = _settlement_lic(incurred, assumptions.settlement_pattern)
 
     # Insurance revenue -- total premium allocated across the periods of
     # service (Sec. B126), so total revenue equals total premium.
     if revenue_basis == "time":
         # B126(a): premium earned straight-line over the coverage period.
-        in_coverage = np.arange(proj.n_time)[None, :] < mps.term_months[:, None]
+        in_coverage = np.arange(proj.n_time)[None, :] < model_points.term_months[:, None]
         weight = in_coverage.astype(np.float64)
     elif revenue_basis == "claims":
         weight = service_expense.copy()                  # B126(b)
@@ -134,12 +134,12 @@ def measure_paa(
     # Onerous test -- the GMM inception fulfilment cash flows.
     bel, pv_claims, pv_morbidity, pv_survival = _rollforward_kernel(
         proj.claim_cf, proj.morbidity_cf, proj.expense_cf, proj.premium_cf,
-        proj.annuity_cf, proj.maturity_cf, mps.term_months, asmp.discount_monthly,
+        proj.annuity_cf, proj.maturity_cf, model_points.term_months, assumptions.discount_monthly,
     )
-    z = _norm_ppf(asmp.ra_confidence)
-    ra0 = z * (asmp.mortality_cv * pv_claims[:, 0]
-               + asmp.morbidity_cv * pv_morbidity[:, 0]
-               + asmp.longevity_cv * pv_survival[:, 0])
+    z = _norm_ppf(assumptions.ra_confidence)
+    ra0 = z * (assumptions.mortality_cv * pv_claims[:, 0]
+               + assumptions.morbidity_cv * pv_morbidity[:, 0]
+               + assumptions.longevity_cv * pv_survival[:, 0])
     loss_component = np.maximum(0.0, bel[:, 0] + ra0)
 
     return PAAMeasurement(

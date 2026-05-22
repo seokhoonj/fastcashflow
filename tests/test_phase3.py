@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from numba import cuda
 
-from fastcashflow import Assumptions, ModelPointSet, measure, value
+from fastcashflow import Assumptions, ModelPoints, measure, value
 
 
 def test_value_matches_measure():
@@ -29,7 +29,7 @@ def test_value_matches_measure():
         mortality_cv=0.12,
     )
     # distinct and repeated issue ages -- exercises the unique-age grid
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=np.array([30, 45, 45, 55, 38]),
         death_benefit=np.array([1e8, 5e7, 8e7, 3e7, 6e7]),
         monthly_premium=np.array([70_000, 90_000, 110_000, 130_000, 80_000]),
@@ -57,7 +57,7 @@ def test_value_onerous():
         ra_confidence=0.75,
         mortality_cv=0.05,
     )
-    mps = ModelPointSet.single(
+    mps = ModelPoints.single(
         issue_age=40, death_benefit=1_000_000.0,
         monthly_premium=100.0, term_months=12,
     )
@@ -87,7 +87,7 @@ def test_value_gpu_matches_cpu():
     )
     rng = np.random.default_rng(7)
     n = 5_000
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(3, 15, n) * 10_000,

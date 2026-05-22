@@ -19,9 +19,9 @@
 ```python
 import fastcashflow as fcf
 
-mps  = fcf.load_sample_model_points()   # 패키지에 저장된 샘플 포트폴리오
-asmp = fcf.load_sample_assumptions()    # 그에 맞는 샘플 가정
-m    = fcf.measure(mps, asmp)
+model_points = fcf.load_sample_model_points()   # 패키지에 저장된 샘플 포트폴리오
+assumptions  = fcf.load_sample_assumptions()    # 그에 맞는 샘플 가정
+m            = fcf.measure(model_points, assumptions)
 ```
 
 ## 12.1 결과를 그래프로
@@ -34,7 +34,7 @@ m    = fcf.measure(mps, asmp)
 fcf.plot_liability(m)               # BEL·RA·CSM 궤적
 fcf.plot_cashflows(m)               # 현금흐름의 여섯 갈래
 fcf.plot_csm_runoff(m)              # CSM 런오프
-fcf.plot_risk_adjustment(m, asmp)   # 위험조정
+fcf.plot_risk_adjustment(m, assumptions)   # 위험조정
 ```
 
 - `plot_liability` — 5·6·7장의 BEL·RA·CSM이 시간에 따라 어떻게

@@ -14,7 +14,7 @@ from fastcashflow import (
     DEATH,
     RISK_MORBIDITY,
     Assumptions,
-    ModelPointSet,
+    ModelPoints,
     RiderRate,
     measure,
     value,
@@ -46,9 +46,9 @@ def _assumptions(**overrides) -> Assumptions:
 
 
 def _one_coverage(kind, benefit, term, *, waiting=0,
-                  reduction_end=0, reduction_factor=1.0) -> ModelPointSet:
+                  reduction_end=0, reduction_factor=1.0) -> ModelPoints:
     """A single-policy, single-coverage model point carrying a benefit rule."""
-    return ModelPointSet(
+    return ModelPoints(
         issue_age=np.array([40.0]),
         monthly_premium=np.array([0.0]),
         term_months=np.array([term]),
@@ -153,7 +153,7 @@ def test_default_rule_is_inert():
     asmp = _assumptions(morbidity_cv=0.10)
     explicit = _one_coverage(DIAGNOSIS, 4e7, 36,
                              waiting=0, reduction_end=0, reduction_factor=1.0)
-    omitted = ModelPointSet(
+    omitted = ModelPoints(
         issue_age=np.array([40.0]),
         monthly_premium=np.array([0.0]),
         term_months=np.array([36]),
@@ -179,7 +179,7 @@ def test_value_matches_measure_with_rules():
     cov_amount[0::2] = rng.integers(10, 80, n) * 1_000_000
     cov_amount[1::2] = rng.integers(10, 50, n) * 1_000_000
 
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(float),
         monthly_premium=rng.integers(5, 20, n) * 10_000.0,
         term_months=rng.integers(60, 180, n),

@@ -8,7 +8,7 @@ import pytest
 
 from fastcashflow import (
     Assumptions,
-    ModelPointSet,
+    ModelPoints,
     measure,
     roll_forward,
     transition,
@@ -28,9 +28,9 @@ def _assumptions() -> Assumptions:
     )
 
 
-def _portfolio(n: int = 50) -> ModelPointSet:
+def _portfolio(n: int = 50) -> ModelPoints:
     rng = np.random.default_rng(8)
-    return ModelPointSet(
+    return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 90, n) * 1_000_000,
         monthly_premium=rng.integers(8, 20, n) * 10_000,

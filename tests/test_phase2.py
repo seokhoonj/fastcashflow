@@ -6,7 +6,7 @@ roll-forward identity is checked exactly.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, measure
+from fastcashflow import Assumptions, ModelPoints, measure
 
 
 def _flat_assumptions(**overrides) -> Assumptions:
@@ -32,7 +32,7 @@ def test_mid_month_discounting():
     q = 0.01
 
     res = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             issue_age=40, death_benefit=death_benefit,
             monthly_premium=premium, term_months=term,
         ),
@@ -64,7 +64,7 @@ def test_csm_movement_identity():
     )
     rng = np.random.default_rng(2)
     n = 200
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(25, 55, n),
         death_benefit=rng.integers(10, 100, n) * 1_000_000,
         monthly_premium=rng.integers(8, 20, n) * 10_000,

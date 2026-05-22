@@ -3,7 +3,7 @@
 Model points and results go through polars; the actuarial basis -- read by
 :func:`read_assumptions` -- comes from an Excel workbook via openpyxl.
 
-Model points come in two shapes, both producing the same ``ModelPointSet``:
+Model points come in two shapes, both producing the same ``ModelPoints``:
 
 * **wide** -- one row per policy, every benefit a column: ``death_benefit``,
   ``maturity_benefit``, ``annuity_payment`` and a ``<rider_code>_benefit``
@@ -12,11 +12,11 @@ Model points come in two shapes, both producing the same ``ModelPointSet``:
   frame, one row per policy x rider carrying ``amount`` and ``premium``. The
   form for a heterogeneous, multi-product portfolio.
 
-:func:`read_model_points` reads either; ``ModelPointSet.to_wide`` /
-``ModelPointSet.to_long`` convert between them.
+:func:`read_model_points` reads either; ``ModelPoints.to_wide`` /
+``ModelPoints.to_long`` convert between them.
 
 The core engine stays identifier-free: the kernel never needs a policy id, so
-none is carried through ``ModelPointSet`` or ``Valuation``. Identifiers are a
+none is carried through ``ModelPoints`` or ``Valuation``. Identifiers are a
 file-boundary concern -- pass them to :func:`write_valuation` (or via
 ``value_file``'s ``id_column``) to join results back to policies.
 """
@@ -35,7 +35,7 @@ from fastcashflow.coverage import (
     TYPE_DEATH, TYPE_DEATH_MAIN, TYPE_DIAGNOSIS, TYPE_MATURITY,
 )
 from fastcashflow.engine import Valuation, value
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 
 # Wide model-point columns with a fixed meaning. Any other ``*_benefit``
 # column names a rider by its 특약코드.
@@ -245,8 +245,8 @@ def read_assumptions(path) -> Assumptions:
 # Model points -- wide and long-form
 # ---------------------------------------------------------------------------
 
-def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPointSet:
-    """Build a ``ModelPointSet`` from a wide frame -- one row per policy, each
+def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
+    """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
     rider a ``<rider_code>_benefit`` column."""
     for need in ("issue_age", "term_months"):
         if need not in df.columns:
@@ -281,12 +281,12 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPointSet:
         benefits[code_to_kind[code]] = df[col].to_numpy()
     if benefits:
         fields["benefits"] = benefits
-    return ModelPointSet(**fields)
+    return ModelPoints(**fields)
 
 
 def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
-                       assumptions) -> ModelPointSet:
-    """Build a ``ModelPointSet`` from a long-form policies + coverages pair."""
+                       assumptions) -> ModelPoints:
+    """Build a ``ModelPoints`` from a long-form policies + coverages pair."""
     if assumptions is None:
         raise ValueError(
             "long-form model points need the assumptions -- the 특약코드 "
@@ -359,11 +359,11 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         np.zeros(1, np.int64),
         np.cumsum(np.bincount(cov_mp, minlength=n_mp), dtype=np.int64),
     ))
-    return ModelPointSet(**fields)
+    return ModelPoints(**fields)
 
 
-def read_model_points(path, assumptions=None, coverages=None) -> ModelPointSet:
-    """Read model points from a parquet or CSV file into a ``ModelPointSet``.
+def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
+    """Read model points from a parquet or CSV file into a ``ModelPoints``.
 
     Two forms:
 
@@ -399,18 +399,18 @@ def load_sample_assumptions() -> Assumptions:
         return read_assumptions(path)
 
 
-def load_sample_model_points() -> ModelPointSet:
+def load_sample_model_points() -> ModelPoints:
     """Read fastcashflow's bundled sample portfolio.
 
     A small long-form portfolio -- a policies file and a coverages file --
     packaged with the library, so the engine can be tried without preparing
     an input file. See :func:`read_model_points` for the file format.
     """
-    asmp = load_sample_assumptions()
+    assumptions = load_sample_assumptions()
     base = resources.files("fastcashflow") / "sample_data"
     with resources.as_file(base / "sample_policies.csv") as policies, \
             resources.as_file(base / "sample_coverages.csv") as coverages:
-        return read_model_points(policies, asmp, coverages=coverages)
+        return read_model_points(policies, assumptions, coverages=coverages)
 
 
 # ---------------------------------------------------------------------------
@@ -489,13 +489,13 @@ def value_file(
             cov = cov_scan.join(
                 pol.lazy().select("policy_id"), on="policy_id", how="semi"
             ).collect()
-            mps = _long_model_points(pol, cov, assumptions)
+            model_points = _long_model_points(pol, cov, assumptions)
             write_valuation(
-                value(mps, assumptions, backend=backend),
+                value(model_points, assumptions, backend=backend),
                 output_dir / f"part-{part:05d}.parquet",
                 ids=ids.to_numpy(),
             )
-            processed += mps.n_mp
+            processed += model_points.n_mp
         return processed
 
     # wide: each chunk of rows is a self-contained set of model points.
@@ -512,16 +512,16 @@ def value_file(
     projected = scan.select(columns)
     for part, offset in enumerate(range(0, n_total, chunk_size)):
         chunk = projected.slice(offset, chunk_size).collect()
-        mps = _wide_model_points(
+        model_points = _wide_model_points(
             chunk.drop(id_column) if id_column is not None else chunk,
             assumptions,
         )
         ids = chunk[id_column].to_numpy() if id_column is not None else None
         write_valuation(
-            value(mps, assumptions, backend=backend),
+            value(model_points, assumptions, backend=backend),
             output_dir / f"part-{part:05d}.parquet",
             ids=ids,
         )
-        processed += mps.n_mp
+        processed += model_points.n_mp
 
     return processed

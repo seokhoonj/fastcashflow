@@ -12,27 +12,27 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.engine import value
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 
 
-def _with_premium(mps: ModelPointSet, premium: float) -> ModelPointSet:
-    """A copy of ``mps`` with every monthly premium set to ``premium``."""
-    return ModelPointSet(
-        issue_age=mps.issue_age,
-        monthly_premium=np.full(mps.n_mp, premium),
-        term_months=mps.term_months,
-        maturity_benefit=mps.maturity_benefit,
-        annuity_payment=mps.annuity_payment,
-        single_premium=mps.single_premium,
-        cov_kind=mps.cov_kind,
-        cov_amount=mps.cov_amount,
-        cov_offset=mps.cov_offset,
+def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:
+    """A copy of ``model_points`` with every monthly premium set to ``premium``."""
+    return ModelPoints(
+        issue_age=model_points.issue_age,
+        monthly_premium=np.full(model_points.n_mp, premium),
+        term_months=model_points.term_months,
+        maturity_benefit=model_points.maturity_benefit,
+        annuity_payment=model_points.annuity_payment,
+        single_premium=model_points.single_premium,
+        cov_kind=model_points.cov_kind,
+        cov_amount=model_points.cov_amount,
+        cov_offset=model_points.cov_offset,
     )
 
 
 def solve_premium(
-    mps: ModelPointSet,
-    asmp: Assumptions,
+    model_points: ModelPoints,
+    assumptions: Assumptions,
     *,
     break_even: bool = False,
     margin: float | None = None,
@@ -47,7 +47,7 @@ def solve_premium(
       (e.g. ``0.10`` for 10%); must satisfy ``0 <= margin < 1``.
     * ``csm``        -- an absolute target CSM (profit) per model point.
 
-    Every product field of ``mps`` is used as given -- only ``monthly_premium``
+    Every product field of ``model_points`` is used as given -- only ``monthly_premium``
     is ignored, since it is the unknown being solved for. (A fixed
     ``single_premium``, if any, stays as given: the level premium is solved
     on top of it.)
@@ -63,8 +63,8 @@ def solve_premium(
 
     # FCF is linear in the premium -- FCF = A - premium * B -- so two
     # valuations (premium 0 and 1) pin the line down exactly.
-    at_zero = value(_with_premium(mps, 0.0), asmp)
-    at_one = value(_with_premium(mps, 1.0), asmp)
+    at_zero = value(_with_premium(model_points, 0.0), assumptions)
+    at_one = value(_with_premium(model_points, 1.0), assumptions)
     a = at_zero.bel + at_zero.ra
     b = a - (at_one.bel + at_one.ra)
 

@@ -9,7 +9,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, value, value_stochastic
+from fastcashflow import Assumptions, ModelPoints, value, value_stochastic
 
 
 def _assumptions() -> Assumptions:
@@ -25,9 +25,9 @@ def _assumptions() -> Assumptions:
     )
 
 
-def _portfolio(n: int = 200) -> ModelPointSet:
+def _portfolio(n: int = 200) -> ModelPoints:
     rng = np.random.default_rng(6)
-    return ModelPointSet(
+    return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 90, n) * 1_000_000,
         monthly_premium=rng.integers(8, 20, n) * 10_000,

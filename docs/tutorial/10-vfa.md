@@ -194,7 +194,7 @@ CSM을 손익으로 풀어 냅니다.
 import numpy as np
 import fastcashflow as fcf
 
-asmp = fcf.Assumptions(
+assumptions = fcf.Assumptions(
     mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0),
     lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
     discount_annual=0.03,
@@ -206,11 +206,11 @@ asmp = fcf.Assumptions(
     investment_return=1.01 ** 12 - 1,   # 기초항목 월 수익률 1%
     fund_fee=1.005 ** 12 - 1,           # 월 수수료율 0.5%
 )
-mps = fcf.ModelPointSet.single(
+model_points = fcf.ModelPoints.single(
     issue_age=40, death_benefit=0, monthly_premium=0,
     term_months=3, account_value=1_000_000,
 )
-m = fcf.measure_vfa(mps, asmp)
+m = fcf.measure_vfa(model_points, assumptions)
 print(m.account_value[0])   # 계좌가치 궤적
 print(m.csm[0])             # CSM 궤적
 ```

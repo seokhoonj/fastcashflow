@@ -127,7 +127,7 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 계약 한 건이 한 줄로 끝나는 **wide** 형식도 받습니다. 담보를 열로
 펼친 것이라 단일 상품의 작은 포트폴리오에 편하지만, 특약이 많은 이종
 포트폴리오에는 long-form이 자연스럽습니다.
-`ModelPointSet.to_wide()`·`.to_long()`로 두 형식을 오갈 수 있습니다.
+`ModelPoints.to_wide()`·`.to_long()`로 두 형식을 오갈 수 있습니다.
 
 ### 가정 파일 — 엑셀 워크북
 
@@ -188,22 +188,22 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 ```python
 import fastcashflow as fcf
 
-asmp = fcf.read_assumptions("basis.xlsx")
-mps  = fcf.read_model_points("policies.csv", asmp, coverages="coverages.csv")
-val  = fcf.value(mps, asmp)
+assumptions  = fcf.read_assumptions("basis.xlsx")
+model_points = fcf.read_model_points("policies.csv", assumptions, coverages="coverages.csv")
+val          = fcf.value(model_points, assumptions)
 fcf.write_valuation(val, "results.csv")
 ```
 
 - `read_assumptions` — 가정 엑셀을 읽어 들입니다.
 - `read_model_points` — 계약 파일과 담보 파일을 읽어 모델포인트를
   만듭니다. 담보 파일의 특약코드를 가정에 등록된 특약과 맞춰야 하므로,
-  가정(`asmp`)을 함께 넘깁니다.
+  가정(`assumptions`)을 함께 넘깁니다.
 - `value` — 평가합니다.
 - `write_valuation` — BEL·RA·CSM·손실요소를 모델포인트마다 한 줄씩
   파일로 저장합니다.
 
 wide 한 파일이면 `coverages` 없이 `read_model_points("portfolio.csv",
-asmp)`로 읽습니다. 8장의 `load_sample_*`도 사실 이 `read_*`로 패키지
+assumptions)`로 읽습니다. 8장의 `load_sample_*`도 사실 이 `read_*`로 패키지
 안의 샘플 파일을 읽는 것입니다. 자기 파일이 준비되면 경로만 바꾸면
 됩니다.
 
@@ -215,7 +215,7 @@ asmp)`로 읽습니다. 8장의 `load_sample_*`도 사실 이 `read_*`로 패키
 한 조각만 올립니다.
 
 ```python
-fcf.value_file("portfolio.parquet", "results/", asmp)
+fcf.value_file("portfolio.parquet", "results/", assumptions)
 ```
 
 이 방식이면 포트폴리오 크기는 메모리가 아니라 디스크가 허락하는

@@ -10,7 +10,7 @@ import pytest
 
 from fastcashflow import (
     Assumptions,
-    ModelPointSet,
+    ModelPoints,
     measure,
     measure_paa,
     measure_vfa,
@@ -33,9 +33,9 @@ def _assumptions() -> Assumptions:
     )
 
 
-def _portfolio(n: int = 300) -> ModelPointSet:
+def _portfolio(n: int = 300) -> ModelPoints:
     rng = np.random.default_rng(4)
-    return ModelPointSet(
+    return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 90, n) * 1_000_000,
         monthly_premium=rng.integers(5, 18, n) * 10_000,
@@ -66,7 +66,7 @@ def test_report_service_result_is_revenue_less_expense():
 
 def test_report_csm_fully_releases_with_non_negative_profit():
     """A profitable contract releases its whole CSM, earning profit each month."""
-    res = report(measure(ModelPointSet.single(40, 1e8, 150_000.0, 120), _assumptions()))
+    res = report(measure(ModelPoints.single(40, 1e8, 150_000.0, 120), _assumptions()))
     assert res.csm_opening[0, 0] > 0.0                  # there is a CSM
     assert np.isclose(res.csm_closing[0, -1], 0.0)      # all released by term end
     assert np.all(res.insurance_service_result[0] >= -1e-6)   # profit emerges >= 0
@@ -96,7 +96,7 @@ def test_report_str_renders_the_annual_table():
 
 def test_report_handles_paa():
     """report() accepts a PAA measurement -- which has no CSM."""
-    m = measure_paa(ModelPointSet.single(40, 1e8, 50_000.0, 12), _assumptions())
+    m = measure_paa(ModelPoints.single(40, 1e8, 50_000.0, 12), _assumptions())
     res = report(m)
     assert np.allclose(res.insurance_revenue, m.revenue)
     assert np.allclose(res.insurance_service_result, m.service_result)
@@ -107,7 +107,7 @@ def test_report_handles_paa():
 def test_report_handles_vfa():
     """report() accepts a VFA measurement -- the result is the CSM release."""
     m = measure_vfa(
-        ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8), _assumptions()
+        ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8), _assumptions()
     )
     res = report(m)
     assert np.allclose(
@@ -119,9 +119,9 @@ def test_report_handles_vfa():
 def test_report_loss_component():
     """The loss component is zero when profitable, positive when onerous."""
     profitable = report(measure(
-        ModelPointSet.single(40, 1e8, 150_000.0, 120), _assumptions()))
+        ModelPoints.single(40, 1e8, 150_000.0, 120), _assumptions()))
     onerous = report(measure(
-        ModelPointSet.single(40, 1e8, 1_000.0, 120), _assumptions()))
+        ModelPoints.single(40, 1e8, 1_000.0, 120), _assumptions()))
     assert np.allclose(profitable.loss_component, 0.0)
     assert onerous.loss_component[0] > 0.0
 

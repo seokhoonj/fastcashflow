@@ -11,7 +11,7 @@ import pytest
 
 from fastcashflow import (
     Assumptions,
-    ModelPointSet,
+    ModelPoints,
     measure,
     measure_paa,
     measure_vfa,
@@ -34,9 +34,9 @@ def _assumptions() -> Assumptions:
     )
 
 
-def _portfolio(n: int = 50) -> ModelPointSet:
+def _portfolio(n: int = 50) -> ModelPoints:
     rng = np.random.default_rng(4)
-    return ModelPointSet(
+    return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(20, 90, n) * 1_000_000,
         monthly_premium=rng.integers(8, 20, n) * 10_000,
@@ -170,7 +170,7 @@ def test_roll_forward_multi_rejects_too_many_rows():
         roll_forward(m, 12, actual_inforce=actuals)
 
 
-def _revised(mps: ModelPointSet):
+def _revised(mps: ModelPoints):
     """A measurement of the same book under markedly higher mortality."""
     worse = replace(
         _assumptions(),
@@ -468,8 +468,8 @@ def _vfa_assumptions() -> Assumptions:
     )
 
 
-def _vfa_contract() -> ModelPointSet:
-    return ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+def _vfa_contract() -> ModelPoints:
+    return ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
 
 
 def test_roll_forward_vfa_reconciles():

@@ -12,7 +12,7 @@ from fastcashflow.coverage import (
 
 
 @dataclass(frozen=True, slots=True)
-class ModelPointSet:
+class ModelPoints:
     """Columnar model point data.
 
     Every scalar field is a numpy array of length ``n_mp``; the model-point
@@ -154,7 +154,7 @@ class ModelPointSet:
         count: float = 1.0,
         sex: int = 0,
         benefits: dict[int, float] | None = None,
-    ) -> ModelPointSet:
+    ) -> ModelPoints:
         """Build a single-model-point set -- a convenience for hand checks."""
         return cls(
             issue_age=np.array([issue_age]),

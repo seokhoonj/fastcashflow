@@ -30,9 +30,9 @@ def _save(ax, name: str) -> None:
 
 
 def main() -> None:
-    mps = fcf.load_sample_model_points()
-    asmp = fcf.load_sample_assumptions()
-    m = fcf.measure(mps, asmp)
+    model_points = fcf.load_sample_model_points()
+    assumptions = fcf.load_sample_assumptions()
+    m = fcf.measure(model_points, assumptions)
 
     # 10.1 -- BEL/RA/CSM trajectories over the contract's life
     _save(fcf.plot_liability(m), "liability-trajectory.png")

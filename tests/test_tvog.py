@@ -8,7 +8,7 @@ many return scenarios and recovers the time value -- the cost the convex
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, measure_tvog
+from fastcashflow import Assumptions, ModelPoints, measure_tvog
 
 
 def _assumptions(**overrides) -> Assumptions:
@@ -27,8 +27,8 @@ def _assumptions(**overrides) -> Assumptions:
     return Assumptions(**base)
 
 
-def _contract(term: int = 120) -> ModelPointSet:
-    return ModelPointSet.single(40, 0.0, 0.0, term, account_value=1e8)
+def _contract(term: int = 120) -> ModelPoints:
+    return ModelPoints.single(40, 0.0, 0.0, term, account_value=1e8)
 
 
 def _return_paths(annual_return: float, vol: float, n: int, n_time: int, seed: int):

@@ -7,7 +7,7 @@ is the variable fee it keeps -- which is the inception CSM.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPointSet, measure_tvog, measure_vfa, report
+from fastcashflow import Assumptions, ModelPoints, measure_tvog, measure_vfa, report
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.004      # flat monthly lapse
@@ -35,7 +35,7 @@ def test_vfa_account_value_and_csm_hand_calc():
     asmp = _assumptions()
     av0, term = 1e8, 60
     res = measure_vfa(
-        ModelPointSet.single(40, 0.0, 0.0, term, account_value=av0), asmp
+        ModelPoints.single(40, 0.0, 0.0, term, account_value=av0), asmp
     )
 
     r_m = 1.06 ** (1 / 12) - 1
@@ -59,7 +59,7 @@ def test_vfa_account_value_and_csm_hand_calc():
 def test_vfa_zero_fee_gives_no_profit():
     """With no variable fee the contract is a pure pass-through -- no CSM."""
     res = measure_vfa(
-        ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8),
+        ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8),
         _assumptions(fund_fee=0.0),
     )
     assert np.isclose(res.csm[0, 0], 0.0, atol=1.0)   # ~0 vs a 1e8 contract
@@ -69,7 +69,7 @@ def test_vfa_zero_fee_gives_no_profit():
 def test_vfa_csm_releases_over_the_term():
     """The CSM builds at inception and releases to zero over the term."""
     res = measure_vfa(
-        ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8), _assumptions()
+        ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8), _assumptions()
     )
     assert res.csm[0, 0] > 0.0
     assert np.isclose(res.csm[0, -1], 0.0)
@@ -79,9 +79,9 @@ def test_vfa_csm_releases_over_the_term():
 
 def test_vfa_variable_fee_scales_with_the_fee():
     """A larger fund fee leaves the entity a larger variable fee and CSM."""
-    small = measure_vfa(ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8),
+    small = measure_vfa(ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8),
                         _assumptions(fund_fee=0.01))
-    large = measure_vfa(ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8),
+    large = measure_vfa(ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8),
                         _assumptions(fund_fee=0.03))
     assert large.variable_fee[0] > small.variable_fee[0] > 0.0
     assert large.csm[0, 0] > small.csm[0, 0] > 0.0
@@ -90,10 +90,10 @@ def test_vfa_variable_fee_scales_with_the_fee():
 def test_vfa_onerous_when_expenses_exceed_the_fee():
     """Heavy acquisition expense makes the contract onerous."""
     profitable = measure_vfa(
-        ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8), _assumptions()
+        ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8), _assumptions()
     )
     onerous = measure_vfa(
-        ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8),
+        ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8),
         _assumptions(expense_acquisition=10_000_000.0),
     )
     assert np.isclose(profitable.loss_component[0], 0.0)
@@ -109,7 +109,7 @@ def _return_paths(annual: float, vol: float, n: int, n_time: int, seed: int):
 def test_vfa_tvog_folds_into_bel_and_reduces_csm():
     """Return scenarios fold the guarantee's time value into the BEL."""
     asmp = _assumptions(investment_return=0.05, guaranteed_credit_rate=0.05)
-    mp = ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+    mp = ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
     scenarios = _return_paths(0.05, vol=0.008, n=2000, n_time=120, seed=7)
 
     plain = measure_vfa(mp, asmp)
@@ -125,7 +125,7 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
 def test_vfa_large_tvog_turns_the_contract_onerous():
     """A guarantee time value beyond the unearned fee makes the contract onerous."""
     asmp = _assumptions(investment_return=0.05, guaranteed_credit_rate=0.05)
-    mp = ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+    mp = ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
     scenarios = _return_paths(0.05, vol=0.03, n=2000, n_time=120, seed=8)
 
     plain = measure_vfa(mp, asmp)
@@ -138,7 +138,7 @@ def test_vfa_large_tvog_turns_the_contract_onerous():
 def test_vfa_tvog_matches_measure_tvog():
     """The TVOG folded into measure_vfa equals the stand-alone measure_tvog."""
     asmp = _assumptions(investment_return=0.04, guaranteed_credit_rate=0.045)
-    mp = ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+    mp = ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
     scenarios = _return_paths(0.04, vol=0.012, n=1500, n_time=120, seed=9)
 
     folded = measure_vfa(mp, asmp, scenarios).time_value.sum()
@@ -149,7 +149,7 @@ def test_vfa_tvog_matches_measure_tvog():
 def test_vfa_scenarios_without_a_guarantee_is_rejected():
     """Passing return scenarios with no guarantee set is an error."""
     asmp = _assumptions(investment_return=0.04)        # no guaranteed_credit_rate
-    mp = ModelPointSet.single(40, 0.0, 0.0, 120, account_value=1e8)
+    mp = ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
     with pytest.raises(ValueError, match="guarantee"):
         measure_vfa(mp, asmp, np.full((10, 120), 0.003))
 
@@ -157,7 +157,7 @@ def test_vfa_scenarios_without_a_guarantee_is_rejected():
 def test_vfa_ra_zero_without_expense_cv():
     """With no expense_cv the VFA RA is zero -- the v1 default."""
     res = measure_vfa(
-        ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8),
+        ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8),
         _assumptions(expense_maintenance_annual=120_000.0),
     )
     assert np.allclose(res.ra, 0.0)
@@ -165,7 +165,7 @@ def test_vfa_ra_zero_without_expense_cv():
 
 def test_vfa_ra_scales_with_expense_cv():
     """The VFA RA is a confidence-level margin linear in the expense CV."""
-    mp = ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8)
+    mp = ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8)
     r1 = measure_vfa(mp, _assumptions(expense_maintenance_annual=120_000.0,
                                       expense_cv=0.10))
     r2 = measure_vfa(mp, _assumptions(expense_maintenance_annual=120_000.0,
@@ -176,7 +176,7 @@ def test_vfa_ra_scales_with_expense_cv():
 
 def test_vfa_ra_reduces_the_csm():
     """The RA is part of the fulfilment cash flows, so it reduces the CSM."""
-    mp = ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8)
+    mp = ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8)
     no_ra = measure_vfa(mp, _assumptions(expense_maintenance_annual=120_000.0,
                                          expense_cv=0.0))
     with_ra = measure_vfa(mp, _assumptions(expense_maintenance_annual=120_000.0,
@@ -187,7 +187,7 @@ def test_vfa_ra_reduces_the_csm():
 def test_vfa_report_releases_the_ra_into_revenue():
     """The report releases the VFA RA into insurance revenue."""
     asmp = _assumptions(expense_maintenance_annual=120_000.0, expense_cv=0.25)
-    m = measure_vfa(ModelPointSet.single(40, 0.0, 0.0, 60, account_value=1e8), asmp)
+    m = measure_vfa(ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8), asmp)
     rep = report(m)
     ra_in_revenue = (rep.insurance_revenue - rep.insurance_service_expense
                      - m.csm_release)

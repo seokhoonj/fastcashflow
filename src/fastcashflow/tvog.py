@@ -30,7 +30,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.modelpoint import ModelPointSet
+from fastcashflow.modelpoint import ModelPoints
 from fastcashflow.projection import project_cashflows
 
 
@@ -89,7 +89,7 @@ def _pv_account_benefits(
     return _discounted_growth(monthly_credit, monthly_return, fund_fee_m) @ exit_value
 
 
-def tvog_weights(asmp: Assumptions, return_scenarios: FloatArray) -> FloatArray:
+def tvog_weights(assumptions: Assumptions, return_scenarios: FloatArray) -> FloatArray:
     """Per-month weights for the time value of a minimum guarantee.
 
     Returns a ``(n_time,)`` vector ``w`` for which the TVOG of a book equals
@@ -97,13 +97,13 @@ def tvog_weights(asmp: Assumptions, return_scenarios: FloatArray) -> FloatArray:
     policies exiting in month ``t``. The weight is the mean over scenarios of
     the guaranteed discounted-growth factor less that factor in the central
     scenario -- the extra account-value cost the convex guarantee adds once
-    returns vary. ``asmp.guaranteed_credit_rate`` must be set.
+    returns vary. ``assumptions.guaranteed_credit_rate`` must be set.
     """
     return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
     n_time = return_scenarios.shape[1]
-    f_m = (1.0 + asmp.fund_fee) ** (1.0 / 12.0) - 1.0
-    g_m = (1.0 + asmp.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
-    r_m = (1.0 + asmp.investment_return) ** (1.0 / 12.0) - 1.0
+    f_m = (1.0 + assumptions.fund_fee) ** (1.0 / 12.0) - 1.0
+    g_m = (1.0 + assumptions.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + assumptions.investment_return) ** (1.0 / 12.0) - 1.0
     stochastic = _discounted_growth(
         np.maximum(return_scenarios, g_m), return_scenarios, f_m
     ).mean(axis=0)
@@ -113,13 +113,13 @@ def tvog_weights(asmp: Assumptions, return_scenarios: FloatArray) -> FloatArray:
 
 
 def measure_tvog(
-    mps: ModelPointSet, asmp: Assumptions, return_scenarios: FloatArray
+    model_points: ModelPoints, assumptions: Assumptions, return_scenarios: FloatArray
 ) -> TVOGResult:
     """Measure the time value of a VFA contract's minimum guarantee.
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns -- one path per scenario, ``n_time`` being the
-    projection horizon. ``asmp`` must set ``guaranteed_credit_rate``; the
+    projection horizon. ``assumptions`` must set ``guaranteed_credit_rate``; the
     account is credited ``max(return, guarantee)`` and the entity funds any
     shortfall.
 
@@ -128,14 +128,14 @@ def measure_tvog(
     total value; the cost in the central scenario (``investment_return``) is
     the intrinsic value; the difference is the time value (TVOG).
     """
-    if asmp.guaranteed_credit_rate is None:
-        raise ValueError("measure_tvog requires asmp.guaranteed_credit_rate to be set")
+    if assumptions.guaranteed_credit_rate is None:
+        raise ValueError("measure_tvog requires assumptions.guaranteed_credit_rate to be set")
 
     return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
     if return_scenarios.ndim != 2:
         raise ValueError("return_scenarios must be 2-D (n_scenarios, n_time)")
 
-    proj = project_cashflows(mps, asmp)
+    proj = project_cashflows(model_points, assumptions)
     inforce = proj.inforce
     n_mp, n_time = inforce.shape
     if return_scenarios.shape[1] != n_time:
@@ -148,10 +148,10 @@ def measure_tvog(
     # benefit base before any return growth.
     inforce_pad = np.concatenate([inforce, np.zeros((n_mp, 1))], axis=1)
     exits = inforce_pad[:, :-1] - inforce_pad[:, 1:]
-    exit_value = (mps.account_value[:, None] * exits).sum(axis=0)   # (n_time,)
+    exit_value = (model_points.account_value[:, None] * exits).sum(axis=0)   # (n_time,)
 
-    f_m = (1.0 + asmp.fund_fee) ** (1.0 / 12.0) - 1.0
-    g_m = (1.0 + asmp.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    f_m = (1.0 + assumptions.fund_fee) ** (1.0 / 12.0) - 1.0
+    g_m = (1.0 + assumptions.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
 
     # Without a guarantee the return cancels between growth and discount, so
     # the no-guarantee benefit is identical in every scenario.
@@ -163,7 +163,7 @@ def measure_tvog(
     guarantee_cost = pv_stochastic - no_guarantee
 
     # Deterministic central scenario -- a flat return path.
-    r_m = (1.0 + asmp.investment_return) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + assumptions.investment_return) ** (1.0 / 12.0) - 1.0
     central = np.full((1, n_time), r_m)
     pv_central = _pv_account_benefits(
         exit_value, np.maximum(central, g_m), central, f_m

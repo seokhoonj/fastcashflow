@@ -7,7 +7,7 @@ its present value; survival benefits carry longevity risk, priced through the
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, measure, value
+from fastcashflow import Assumptions, ModelPoints, measure, value
 from fastcashflow.gmm import _norm_ppf
 
 Q = 0.002          # flat monthly mortality
@@ -35,10 +35,10 @@ def test_maturity_benefit_adds_its_present_value():
     death_benefit, maturity, premium, term = 1e8, 5e7, 50_000.0, 24
 
     term_life = measure(
-        ModelPointSet.single(40, death_benefit, premium, term), asmp
+        ModelPoints.single(40, death_benefit, premium, term), asmp
     )
     endowment = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             40, death_benefit, premium, term, maturity_benefit=maturity
         ),
         asmp,
@@ -55,7 +55,7 @@ def test_pure_endowment():
     asmp = _assumptions()
     maturity, premium, term = 5e7, 50_000.0, 24
     res = measure(
-        ModelPointSet.single(40, 0.0, premium, term, maturity_benefit=maturity),
+        ModelPoints.single(40, 0.0, premium, term, maturity_benefit=maturity),
         asmp,
     )
 
@@ -75,7 +75,7 @@ def test_value_matches_measure_endowment():
     """value() and measure() agree on endowment contracts."""
     rng = np.random.default_rng(12)
     n = 400
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
         death_benefit=rng.integers(10, 80, n) * 1_000_000,
         monthly_premium=rng.integers(5, 20, n) * 10_000,
@@ -97,7 +97,7 @@ def test_immediate_annuity_hand_calc():
     asmp = _assumptions(longevity_cv=0.08)
     single, annuity, term = 1.2e8, 600_000.0, 24
     res = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             40, 0.0, 0.0, term, annuity_payment=annuity, single_premium=single
         ),
         asmp,
@@ -120,7 +120,7 @@ def test_value_matches_measure_annuity():
     """value() and measure() agree on immediate-annuity contracts."""
     rng = np.random.default_rng(7)
     n = 300
-    mps = ModelPointSet(
+    mps = ModelPoints(
         issue_age=rng.integers(55, 75, n),
         death_benefit=np.zeros(n),
         monthly_premium=np.zeros(n),
@@ -140,7 +140,7 @@ def test_value_matches_measure_annuity():
 
 def test_longevity_ra_responds_to_its_cv():
     """The longevity RA is zero without longevity_cv and linear in it."""
-    annuity = ModelPointSet.single(
+    annuity = ModelPoints.single(
         60, 0.0, 0.0, 180, annuity_payment=500_000.0, single_premium=8e7
     )
     no_cv = measure(annuity, _assumptions(longevity_cv=0.0))

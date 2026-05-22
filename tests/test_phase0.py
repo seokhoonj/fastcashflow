@@ -6,7 +6,7 @@ This is the engine's correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPointSet, measure, value
+from fastcashflow import Assumptions, ModelPoints, measure, value
 
 # Standard-normal 75th percentile -- a known mathematical constant, used so
 # the RA check does not depend on the engine's own quantile code.
@@ -35,7 +35,7 @@ def test_hand_calculation():
     term = 2
 
     res = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             issue_age=40, death_benefit=death_benefit,
             monthly_premium=premium, term_months=term,
         ),
@@ -78,7 +78,7 @@ def test_hand_calculation():
 def test_onerous_contract():
     """Premium far too low -> onerous -> CSM floored at 0, loss component > 0."""
     res = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             issue_age=40, death_benefit=1_000_000.0,
             monthly_premium=100.0, term_months=12,
         ),
@@ -93,7 +93,7 @@ def test_onerous_contract():
 def test_csm_fully_releases():
     """A profitable contract's CSM must run off to ~0 by the end of term."""
     res = measure(
-        ModelPointSet.single(
+        ModelPoints.single(
             issue_age=35, death_benefit=50_000_000.0,
             monthly_premium=80_000.0, term_months=60,
         ),
@@ -124,8 +124,8 @@ def test_count_scales_linearly():
     )
     n = 1000.0
 
-    one = measure(ModelPointSet.single(**kw), asmp)
-    many = measure(ModelPointSet.single(**kw, count=n), asmp)
+    one = measure(ModelPoints.single(**kw), asmp)
+    many = measure(ModelPoints.single(**kw, count=n), asmp)
     assert many.csm[0, 0] > 0.0          # profitable contract -- the CSM scales
     for field in ("bel", "ra", "csm"):
         assert np.isclose(getattr(many, field)[0, 0],
@@ -133,8 +133,8 @@ def test_count_scales_linearly():
     assert np.isclose(many.cashflows.inforce[0, 0], n)
 
     # the fused fast path scales identically
-    v_one = value(ModelPointSet.single(**kw), asmp)
-    v_many = value(ModelPointSet.single(**kw, count=n), asmp)
+    v_one = value(ModelPoints.single(**kw), asmp)
+    v_many = value(ModelPoints.single(**kw, count=n), asmp)
     for field in ("bel", "ra", "csm"):
         assert np.isclose(getattr(v_many, field)[0],
                           n * getattr(v_one, field)[0])
