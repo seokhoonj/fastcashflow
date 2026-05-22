@@ -10,6 +10,19 @@ from fastcashflow.coverage import (
     DEATH, TYPE_ANNUITY, TYPE_DEATH_MAIN, TYPE_MATURITY,
 )
 
+# Contract states -- a model point's in-force valuation state. ACTIVE is the
+# ordinary premium-paying contract. WAIVER is a premium-waived policy: its
+# coverage stays in force and claims are still projected, but no premium is
+# collected (IFRS 17 Sec. 33-34 -- the fulfilment cash flows reflect the
+# contract's actual terms at the measurement date).
+STATE_ACTIVE = 0
+STATE_WAIVER = 1
+
+# Names for the file layer -- a model-point ``state`` column reads and writes
+# these strings, the readable form a practitioner edits in a spreadsheet.
+STATE_NAMES = {"active": STATE_ACTIVE, "waiver": STATE_WAIVER}
+STATE_LABELS = {code: name for name, code in STATE_NAMES.items()}
+
 
 @dataclass(frozen=True, slots=True)
 class ModelPoints:
@@ -70,6 +83,7 @@ class ModelPoints:
     cov_reduction_factor: FloatArray | None = None  # CSR: reduced-benefit factor
     count: FloatArray | None = None              # policies the row stands for
     sex: IntArray | None = None                  # 0 = male, 1 = female
+    state: IntArray | None = None                # contract state (STATE_*)
 
     def __post_init__(self) -> None:
         # Normalise the required fields to numpy arrays of the right dtype.
@@ -94,6 +108,11 @@ class ModelPoints:
         sex = self.sex
         sex = np.zeros(n_mp, np.int64) if sex is None else np.asarray(sex, np.int64)
         object.__setattr__(self, "sex", sex)
+        # state defaults to ACTIVE -- an ordinary premium-paying contract.
+        state = self.state
+        state = (np.zeros(n_mp, np.int64) if state is None
+                 else np.asarray(state, np.int64))
+        object.__setattr__(self, "state", state)
         # Coverage CSR: explicit arrays win; otherwise build from the
         # death_benefit shortcut and/or the general benefits map.
         if self.cov_kind is not None:
@@ -140,6 +159,22 @@ class ModelPoints:
         """Number of model points."""
         return int(self.issue_age.shape[0])
 
+    @property
+    def effective_premium(self) -> FloatArray:
+        """Monthly premium actually collected -- zero for a waiver policy.
+
+        A waiver-of-premium contract (``state == STATE_WAIVER``) keeps its
+        coverage in force but collects no premium; every other state pays the
+        stated ``monthly_premium``. The projection uses this, not the raw
+        field, so the stated premium is preserved for round-trip and pricing.
+        """
+        return np.where(self.state == STATE_WAIVER, 0.0, self.monthly_premium)
+
+    @property
+    def effective_single_premium(self) -> FloatArray:
+        """Single premium actually collected -- zero for a waiver policy."""
+        return np.where(self.state == STATE_WAIVER, 0.0, self.single_premium)
+
     @classmethod
     def single(
         cls,
@@ -153,6 +188,7 @@ class ModelPoints:
         account_value: float = 0.0,
         count: float = 1.0,
         sex: int = 0,
+        state: int = STATE_ACTIVE,
         benefits: dict[int, float] | None = None,
     ) -> ModelPoints:
         """Build a single-model-point set -- a convenience for hand checks."""
@@ -167,6 +203,7 @@ class ModelPoints:
             account_value=np.array([account_value]),
             count=np.array([count]),
             sex=np.array([sex]),
+            state=np.array([state]),
             benefits=(
                 None if benefits is None
                 else {k: np.array([v]) for k, v in benefits.items()}
@@ -192,6 +229,7 @@ class ModelPoints:
             "sex": self.sex,
             "term_months": self.term_months,
             "count": self.count,
+            "state": np.array([STATE_LABELS[int(s)] for s in self.state]),
             "monthly_premium": self.monthly_premium,
             "single_premium": self.single_premium,
             "death_benefit": self.death_benefit,
@@ -224,6 +262,7 @@ class ModelPoints:
             "monthly_premium": self.monthly_premium,
             "single_premium": self.single_premium,
             "count": self.count,
+            "state": np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
         # CSR coverages -- code 0 is the main-contract death, 1.. the riders.
         label = {0: _coverage_label(assumptions, TYPE_DEATH_MAIN, "death")}

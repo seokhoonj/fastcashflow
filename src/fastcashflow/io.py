@@ -35,14 +35,14 @@ from fastcashflow.coverage import (
     TYPE_DEATH, TYPE_DEATH_MAIN, TYPE_DIAGNOSIS, TYPE_MATURITY,
 )
 from fastcashflow.engine import Valuation, value
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 
 # Wide model-point columns with a fixed meaning. Any other ``*_benefit``
 # column names a rider by its 특약코드.
 _NAMED_WIDE = frozenset((
     "policy_id", "product", "issue_age", "term_months", "sex", "count",
-    "monthly_premium", "single_premium", "death_benefit", "maturity_benefit",
-    "annuity_payment",
+    "state", "monthly_premium", "single_premium", "death_benefit",
+    "maturity_benefit", "annuity_payment",
 ))
 
 
@@ -255,6 +255,30 @@ def read_assumptions(path) -> Assumptions:
 # Model points -- wide and long-form
 # ---------------------------------------------------------------------------
 
+def _read_state(col: pl.Series) -> np.ndarray:
+    """Convert a model-point ``state`` column to engine state codes.
+
+    Accepts the readable names a practitioner edits in a spreadsheet --
+    ``active`` / ``waiver`` -- or the integer codes directly. A blank cell
+    means an ordinary active contract.
+    """
+    if col.dtype == pl.String:
+        out = np.empty(len(col), dtype=np.int64)
+        for i, v in enumerate(col):
+            name = "" if v is None else str(v).strip().lower()
+            if name == "":
+                out[i] = STATE_ACTIVE
+            elif name in STATE_NAMES:
+                out[i] = STATE_NAMES[name]
+            else:
+                raise ValueError(
+                    f"unknown contract state {v!r}; "
+                    f"expected one of {sorted(STATE_NAMES)}"
+                )
+        return out
+    return col.fill_null(STATE_ACTIVE).to_numpy().astype(np.int64)
+
+
 def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
     """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
     rider a ``<rider_code>_benefit`` column."""
@@ -275,6 +299,8 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
                 "maturity_benefit", "annuity_payment", "account_value"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
+    if "state" in df.columns:
+        fields["state"] = _read_state(df["state"])
 
     code_to_kind = {r.code: i + 1 for i, r in enumerate(
         assumptions.riders if assumptions is not None else ())}
@@ -342,6 +368,8 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     for opt in ("sex", "count", "single_premium"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
+    if "state" in pol.columns:
+        fields["state"] = _read_state(pol["state"])
 
     def _by_policy(mask) -> np.ndarray:
         return np.bincount(mp[mask], weights=amount[mask], minlength=n_mp)
@@ -389,14 +417,15 @@ def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
 
     * **wide** -- ``read_model_points(path, assumptions)``. One row per
       policy. ``issue_age`` and ``term_months`` are required; ``sex``,
-      ``count``, ``monthly_premium``, ``single_premium``, ``death_benefit``,
-      ``maturity_benefit`` and ``annuity_payment`` are read if present. A
-      ``<rider_code>_benefit`` column adds that rider's coverage; the
-      ``assumptions`` resolve the 특약코드 to an engine code.
+      ``count``, ``state``, ``monthly_premium``, ``single_premium``,
+      ``death_benefit``, ``maturity_benefit`` and ``annuity_payment`` are
+      read if present. A ``<rider_code>_benefit`` column adds that rider's
+      coverage; the ``assumptions`` resolve the 특약코드 to an engine code.
     * **long-form** -- ``read_model_points(policies, assumptions,
       coverages=coverages_path)``. A policies frame (``policy_id``,
-      ``issue_age``, ``term_months``, optional ``sex`` / ``count``) and a
-      coverages frame (``policy_id``, ``rider_code``, ``amount``, and
+      ``issue_age``, ``term_months``, optional ``sex`` / ``count`` /
+      ``state``) and a coverages frame (``policy_id``, ``rider_code``,
+      ``amount``, and
       optional ``premium`` / ``waiting`` / ``reduction_end`` /
       ``reduction_factor``), one coverage row per policy x rider. A single
       ``.xlsx``
