@@ -11,16 +11,24 @@ from fastcashflow.coverage import (
 )
 
 # Contract states -- a model point's in-force valuation state. ACTIVE is the
-# ordinary premium-paying contract. WAIVER is a premium-waived policy: its
-# coverage stays in force and claims are still projected, but no premium is
-# collected (IFRS 17 Sec. 33-34 -- the fulfilment cash flows reflect the
-# contract's actual terms at the measurement date).
+# ordinary premium-paying contract. WAIVER (premium waived on a triggering
+# event) and PAIDUP (the premium-paying term has ended) both keep the
+# coverage in force and claims projected, but collect no further premium --
+# the fulfilment cash flows reflect the contract's actual terms at the
+# measurement date (IFRS 17 Sec. 33-34). WAIVER and PAIDUP differ in cause,
+# not in the projected cash flows.
 STATE_ACTIVE = 0
 STATE_WAIVER = 1
+STATE_PAIDUP = 2
+
+# States that collect no premium -- the coverage continues, the premium has
+# stopped. The projection zeroes the premium for a model point in any of them.
+_NO_PREMIUM_STATES = (STATE_WAIVER, STATE_PAIDUP)
 
 # Names for the file layer -- a model-point ``state`` column reads and writes
 # these strings, the readable form a practitioner edits in a spreadsheet.
-STATE_NAMES = {"active": STATE_ACTIVE, "waiver": STATE_WAIVER}
+STATE_NAMES = {"active": STATE_ACTIVE, "waiver": STATE_WAIVER,
+               "paidup": STATE_PAIDUP}
 STATE_LABELS = {code: name for name, code in STATE_NAMES.items()}
 
 
@@ -161,19 +169,24 @@ class ModelPoints:
 
     @property
     def effective_premium(self) -> FloatArray:
-        """Monthly premium actually collected -- zero for a waiver policy.
+        """Monthly premium actually collected -- zero where the premium has
+        stopped.
 
-        A waiver-of-premium contract (``state == STATE_WAIVER``) keeps its
-        coverage in force but collects no premium; every other state pays the
-        stated ``monthly_premium``. The projection uses this, not the raw
-        field, so the stated premium is preserved for round-trip and pricing.
+        A waiver-of-premium or paid-up contract (``state`` in
+        ``_NO_PREMIUM_STATES``) keeps its coverage in force but collects no
+        premium; an active contract pays the stated ``monthly_premium``. The
+        projection uses this, not the raw field, so the stated premium is
+        preserved for round-trip and pricing.
         """
-        return np.where(self.state == STATE_WAIVER, 0.0, self.monthly_premium)
+        no_premium = np.isin(self.state, _NO_PREMIUM_STATES)
+        return np.where(no_premium, 0.0, self.monthly_premium)
 
     @property
     def effective_single_premium(self) -> FloatArray:
-        """Single premium actually collected -- zero for a waiver policy."""
-        return np.where(self.state == STATE_WAIVER, 0.0, self.single_premium)
+        """Single premium actually collected -- zero where the premium has
+        stopped (a waiver-of-premium or paid-up contract)."""
+        no_premium = np.isin(self.state, _NO_PREMIUM_STATES)
+        return np.where(no_premium, 0.0, self.single_premium)
 
     @classmethod
     def single(

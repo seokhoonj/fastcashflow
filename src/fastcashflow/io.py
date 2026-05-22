@@ -259,13 +259,15 @@ def _read_state(col: pl.Series) -> np.ndarray:
     """Convert a model-point ``state`` column to engine state codes.
 
     Accepts the readable names a practitioner edits in a spreadsheet --
-    ``active`` / ``waiver`` -- or the integer codes directly. A blank cell
-    means an ordinary active contract.
+    ``active`` / ``waiver`` / ``paidup`` -- or the integer codes directly.
+    Case, spaces, hyphens and underscores are ignored, so ``Paid-up`` and
+    ``paid up`` read the same. A blank cell means an ordinary active contract.
     """
     if col.dtype == pl.String:
         out = np.empty(len(col), dtype=np.int64)
         for i, v in enumerate(col):
             name = "" if v is None else str(v).strip().lower()
+            name = name.replace(" ", "").replace("-", "").replace("_", "")
             if name == "":
                 out[i] = STATE_ACTIVE
             elif name in STATE_NAMES:

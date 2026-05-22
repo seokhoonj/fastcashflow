@@ -1,15 +1,16 @@
-"""Contract state -- waiver of premium.
+"""Contract state -- waiver of premium and paid-up.
 
-A model point in the WAIVER state keeps its coverage in force but collects
-no premium (IFRS 17 Sec. 33-34 -- the fulfilment cash flows reflect the
-contract's actual terms). The hand case is the 2-month flat-rate contract
-of test_phase0, valued once active and once in waiver: the two differ only
-by the dropped premium stream.
+A model point in the WAIVER or PAIDUP state keeps its coverage in force but
+collects no premium (IFRS 17 Sec. 33-34 -- the fulfilment cash flows reflect
+the contract's actual terms at the measurement date). The hand case is the
+2-month flat-rate contract of test_phase0, valued once active and once with
+the premium stopped: the two differ only by the dropped premium stream.
 """
 import numpy as np
 
 from fastcashflow import (
     STATE_ACTIVE,
+    STATE_PAIDUP,
     STATE_WAIVER,
     Assumptions,
     ModelPoints,
@@ -124,3 +125,47 @@ def test_state_column_round_trips(tmp_path):
     val = value(back, asmp)
     # same contract, but the waiver row collects no premium -> larger liability.
     assert val.bel[1] > val.bel[0]
+
+
+def test_paidup_drops_premium():
+    """A paid-up contract collects no premium -- the BEL rises by the
+    projected premium PV, exactly as a waiver does."""
+    kw = dict(issue_age=40, death_benefit=1_000_000.0,
+              monthly_premium=12_000.0, term_months=2)
+    asmp = _assumptions()
+
+    active = value(ModelPoints.single(**kw, state=STATE_ACTIVE), asmp)
+    paidup = value(ModelPoints.single(**kw, state=STATE_PAIDUP), asmp)
+
+    inforce = [1.0, 0.99 * 0.98]
+    pv_premiums = sum(i * 12_000.0 for i in inforce)           # 23642.4
+    assert np.isclose(paidup.bel[0] - active.bel[0], pv_premiums)
+
+
+def test_paidup_matches_waiver():
+    """Paid-up and waiver differ in cause, not in cash flows -- a contract
+    valued in either state gives identical BEL, RA, CSM and loss component."""
+    kw = dict(issue_age=42, death_benefit=80_000_000.0,
+              monthly_premium=40_000.0, term_months=180)
+    asmp = _assumptions()
+
+    waiver = value(ModelPoints.single(**kw, state=STATE_WAIVER), asmp)
+    paidup = value(ModelPoints.single(**kw, state=STATE_PAIDUP), asmp)
+
+    for field in ("bel", "ra", "csm", "loss_component"):
+        assert np.isclose(getattr(paidup, field)[0], getattr(waiver, field)[0])
+
+
+def test_paidup_state_spelling_is_normalised(tmp_path):
+    """The `state` column accepts paid-up spellings -- case, spaces, hyphens
+    and underscores are ignored."""
+    path = tmp_path / "model_points.csv"
+    path.write_text(
+        "issue_age,term_months,monthly_premium,death_benefit,state\n"
+        "40,24,12000,1000000,Paid-up\n"
+        "40,24,12000,1000000,paid_up\n"
+        "40,24,12000,1000000,paid up\n"
+        "40,24,12000,1000000,PAIDUP\n"
+    )
+    back = read_model_points(path, _assumptions())
+    assert list(back.state) == [STATE_PAIDUP] * 4
