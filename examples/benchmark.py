@@ -44,7 +44,7 @@ def _time(model_points: ModelPoints, assumptions: Assumptions, backend: str) -> 
 def main() -> None:
     assumptions = Assumptions(
         mortality_annual=mortality_annual,
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.01)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
         expense_acquisition=300_000.0,
         expense_maintenance_annual=60_000.0,
