@@ -726,6 +726,35 @@ def load_sample_model_points() -> ModelPoints:
 
 
 # ---------------------------------------------------------------------------
+# Economic scenarios
+# ---------------------------------------------------------------------------
+
+def read_scenarios(path) -> np.ndarray:
+    """Read a stochastic scenario set from a file.
+
+    The file is a 2-D table -- one row per scenario, one column per
+    projection month, every cell a rate or return. Reads ``.parquet``,
+    ``.csv``, ``.xlsx`` or ``.feather`` / ``.arrow`` via :func:`_read_frame`.
+
+    Returns a numpy ``float64`` array of shape ``(n_scenarios, n_time)``,
+    or ``(n_scenarios,)`` when the file has a single column (flat-rate
+    scenarios). The result is what :func:`value_stochastic` and
+    :func:`measure_tvog` accept as their ``scenarios`` / ``return_scenarios``
+    input.
+
+    Calibration -- Hull-White, Vasicek, regime-switching, climate paths,
+    etc. -- is left to a separate scenario-generator step; this reader is
+    just the storage / handover layer. For large scenario sets (thousands
+    of paths) prefer ``.parquet`` or ``.feather`` over ``.xlsx``.
+    """
+    df = _read_frame(path)
+    arr = df.to_numpy().astype(np.float64)
+    if arr.shape[1] == 1:
+        return arr[:, 0]
+    return arr
+
+
+# ---------------------------------------------------------------------------
 # Valuation results
 # ---------------------------------------------------------------------------
 

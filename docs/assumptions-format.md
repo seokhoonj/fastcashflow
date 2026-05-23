@@ -318,6 +318,29 @@ reader (`read_assumptions(path)`) 가 워크북을 읽어 세그먼트별 `Assum
 
 ---
 
+## 7.5 Economic scenarios (별도 파일)
+
+확률론 평가용 시나리오 (할인율 경로 · 투자수익률 경로 등) 은 워크북이
+아니라 **별도 파일**로 받습니다. 큰 시나리오 집합 (수천 path × 수백 month)
+은 xlsx 보다 binary 형식이 훨씬 효율적이라 분리.
+
+```python
+import fastcashflow as fcf
+
+# wide-format 2-D table: 한 행 = 한 scenario, 한 열 = 한 projection month
+scenarios = fcf.read_scenarios("discount_scenarios.parquet")
+# shape (n_scenarios, n_time) 의 numpy array
+
+# value_stochastic / measure_tvog 에 직접 전달
+result = fcf.value_stochastic(model_points, assumptions, scenarios)
+```
+
+지원 형식: `.parquet`, `.csv`, `.xlsx`, `.feather`. 한 열짜리 파일은
+flat-rate 시나리오로 해석되어 `(n_scenarios,)` 로 반환.
+
+시나리오 생성 (Hull-White, Vasicek, regime-switching, climate path 등)
+은 fastcashflow 범위 밖 — 별도 ESG 도구로 만든 결과를 파일로 받는 구조.
+
 ## 8. 입력 layer의 향후 확장 (Task #7~#10)
 
 현재 워크북은 **단순 입력 layer**입니다. 엔진은 더 풍부한 callable signature를

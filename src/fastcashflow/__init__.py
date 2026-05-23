@@ -23,6 +23,7 @@ from fastcashflow.io import (
     load_sample_model_points,
     read_assumptions,
     read_model_points,
+    read_scenarios,
     value_file,
     write_valuation,
 )
@@ -70,7 +71,8 @@ __all__ = [
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
-    "read_model_points", "read_assumptions", "write_valuation", "value_file",
+    "read_model_points", "read_assumptions", "read_scenarios",
+    "write_valuation", "value_file",
     "load_sample_model_points", "load_sample_assumptions",
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
