@@ -108,7 +108,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         for s in range(n_states):
             occ_next[s] = 0.0
         for e in range(n_edges):
-            flow = occ[edge_from[e]] * edge_prob[e, sx, ridx, year]
+            flow = occ[edge_from[e]] * edge_prob[sx, ridx, year, e]
             occ_next[edge_to[e]] += flow
             if edge_lump_sum[e]:
                 pd += flow * disability_benefit[mp] * dm
@@ -144,7 +144,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 occ_next[s] = 0.0
             for e in range(n_edges):
                 occ_next[edge_to[e]] += (occ[edge_from[e]] * undiag
-                                         * edge_prob[e, sx, ridx, year])
+                                         * edge_prob[sx, ridx, year, e])
             for s in range(n_states):
                 occ[s] = occ_next[s]
     bel_mp = pc + pcm + pd + pm + pa + pe - pp
