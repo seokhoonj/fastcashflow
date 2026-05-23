@@ -1,7 +1,7 @@
 # 계리 가정 입력 포맷 (assumptions input)
 
-fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포맷입니다. 현업
-담당자가 이 스펙에 맞춰 요율·파라미터를 채워 넣습니다.
+fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포맷입니다.
+사용자가 이 스펙에 맞춰 요율·파라미터를 채워 넣습니다.
 
 명명 규칙 전반은 `docs/naming-conventions.md`, 각 결정의 근거는
 `docs/design-decisions.md` 참조.
