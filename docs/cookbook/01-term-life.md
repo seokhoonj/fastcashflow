@@ -13,22 +13,18 @@
 다른 자료로 점프할 필요 없음.
 ```
 
-## 1.1 상품 소개 — 한국 시장의 정기보험
+## 1.1 상품 소개 — 정기보험
 
 **정기보험 (term life insurance)** 은 미리 정한 보험기간 동안 피보험자가
 사망하면 사망보험금을 지급하는, 가장 단순한 형태의 생명보험입니다.
 기간이 지나 만기 도달 시에는 어떤 환급도 없습니다.
 
-한국 시장의 전형적 모양:
+본 챕터의 **단순 정기보험** 은 다음 구조를 가정합니다:
 
-- 가입연령 25-65세
-- 보험기간 10년 / 15년 / 20년 / 60세까지 / 80세까지
-- 보험료 납입기간 = 보험기간 (전기납), 또는 짧게 (단기납 — 예: 20년
-  만기 10년납)
 - 보험료는 매월 동일액 (level premium) 납입
-- 보험금은 일정 금액 (level death benefit), 또는 가입 후 일정 기간만
-  감액 (감액기간 — 본 챕터에선 단순화 위해 생략)
+- 보험금은 일정 금액 (level death benefit) — 감액 없음
 - 사망 이외에 만기시 어떤 지급도 없음 (만기환급금 0)
+- 보험료 납입기간 = 보험기간 (전기납), 또는 짧게 (단기납)
 
 이 챕터는 **단순 정기보험** 만 다룹니다. 보험료 납입면제 (waiver) /
 다종 진단담보 / 만기환급금 결합 같은 변형은 2장 이후에서 다룹니다.
@@ -59,6 +55,14 @@
 다음 코드는 그대로 복사해서 실행하면 됩니다. 40세 남성, 사망보험금 1억
 원, 월 보험료 7만원, 보험기간 10년 (120개월) 의 정기보험 1건을 평가:
 
+```{admonition} 걱정하지 마세요
+:class: tip
+
+여기에 나오는 예제들의 복잡성은 **보유계약과 가정의 엑셀 업로드** 로
+나중에 해결되는 문제들입니다. 코드 가독성과 사용자의 이해를 돕기 위해 부득이하게 함수를
+이용하였으니 가볍게 읽고 실행하시면 됩니다.
+```
+
 ```python
 import numpy as np
 import fastcashflow as fcf
@@ -74,15 +78,17 @@ assumptions = fcf.Assumptions(
     lapse_annual=lambda sex, issue_age, duration: np.full(
         duration.shape, 0.01,
     ),
-    # 할인율 (연): 3% — 한국 보험사가 IFRS 17 평가에 흔히 쓰는 수준.
+    # 할인율 (연): 3% — 예시값. 실제 평가에는 자사의 IFRS 17 할인곡선 사용.
     discount_annual=0.03,
+
     # 사업비
     expense_acquisition=300_000.0,        # 가입 시 1회
     expense_maintenance_annual=60_000.0,  # 연 6만원
-    expense_inflation=0.02,                # 연 2% 인상
+    expense_inflation=0.02,               # 연 2% 인상
+
     # 위험조정 (RA)
-    ra_confidence=0.75,                    # 75% 신뢰수준
-    mortality_cv=0.10,                     # 사망위험 변동계수 10%
+    ra_confidence=0.75,                   # 75% 신뢰수준
+    mortality_cv=0.10,                    # 사망위험 변동계수 10%
 )
 
 # 모델포인트 (계약 한 건)
@@ -98,23 +104,23 @@ detail = fcf.measure(model_points, assumptions)
 fast = fcf.value(model_points, assumptions)
 
 # 결과 출력 (시점 0 = 가입 시점)
-print(f"BEL (최선추정부채):     {detail.bel[0, 0]:>15,.0f}")
+print(f"BEL (최선추정부채):       {detail.bel[0, 0]:>15,.0f}")
 print(f"RA  (위험조정):           {detail.ra[0, 0]:>15,.0f}")
-print(f"CSM (보험계약마진):      {detail.csm[0, 0]:>15,.0f}")
-print(f"손실요소:                {detail.loss_component[0]:>15,.0f}")
+print(f"CSM (보험계약마진):       {detail.csm[0, 0]:>15,.0f}")
+print(f"손실요소:                 {detail.loss_component[0]:>15,.0f}")
 print()
-print(f"fast 경로 BEL: {fast.bel[0]:>15,.0f}   (detail 과 동일)")
+print(f"fast 경로 BEL:            {fast.bel[0]:>15,.0f}   (detail 과 동일)")
 ```
 
 실행하면 다음과 같은 출력이 나옵니다 (가정 그대로 사용 시):
 
 ```
-BEL (최선추정부채):       -5,251,566
-RA  (위험조정):                55,485
-CSM (보험계약마진):         5,196,081
-손실요소:                          0
+BEL (최선추정부채):            -5,251,566
+RA  (위험조정):                    55,485
+CSM (보험계약마진):             5,196,081
+손실요소:                              0
 
-fast 경로 BEL:        -5,251,566   (detail 과 동일)
+fast 경로 BEL:                 -5,251,566   (detail 과 동일)
 ```
 
 코드 한 번 돌리면 BEL / RA / CSM 의 시점 0 값을 얻습니다.
@@ -123,10 +129,11 @@ fast 경로 BEL:        -5,251,566   (detail 과 동일)
 
 ### 부호 규약 (sign convention)
 
-fastcashflow 는 **부채 관점, 유출 양수** (outflow-positive) 규약을 씁니다:
+fastcashflow 는 **부채 관점에서 유출을 양수, 유입을 음수로**
+부호화하는 규약(outflow-positive)을 씁니다:
 
-- **유입** (insurer 가 받는 돈, 보험료) — 부채를 **감소** 시킴
-- **유출** (insurer 가 내는 돈, 사망보험금 + 사업비) — 부채를 **증가** 시킴
+- **유입** (보험사가 받는 돈, 보험료) — 부채를 **감소** 시킴
+- **유출** (보험사가 내는 돈, 사망보험금 + 사업비) — 부채를 **증가** 시킴
 - 따라서 `BEL = PV(claims) + PV(expenses) - PV(premiums)`
 
 ### BEL = -5,251,566 의 의미
@@ -219,9 +226,9 @@ portfolio = fcf.ModelPoints(
 
 result = fcf.value(portfolio, assumptions)
 # 시점 0 의 BEL 등이 (n_contracts,) shape 배열로 나옴
-print(f"포트폴리오 BEL 합계: {result.bel.sum():>15,.0f}")
+print(f"포트폴리오 BEL 합계:  {result.bel.sum():>15,.0f}")
 print(f"평균 계약 BEL:        {result.bel.mean():>15,.0f}")
-print(f"손실 계약 개수:        {(result.loss_component > 0).sum()}")
+print(f"손실 계약 개수:       {(result.loss_component > 0).sum():>15,d}")
 ```
 
 ### 보험료 납입기간 단기납 (보장기간 ≠ 납입기간)
@@ -230,7 +237,8 @@ print(f"손실 계약 개수:        {(result.loss_component > 0).sum()}")
 
 ```python
 mp = fcf.ModelPoints.single(
-    issue_age=40, death_benefit=100_000_000,
+    issue_age=40,
+    death_benefit=100_000_000,
     level_premium=140_000,            # 5년만 내므로 더 큰 금액
     term_months=120,                  # 보장 10년
     premium_term_months=60,           # 납입 5년
@@ -243,7 +251,8 @@ mp = fcf.ModelPoints.single(
 
 ```python
 mp = fcf.ModelPoints.single(
-    issue_age=40, death_benefit=100_000_000,
+    issue_age=40,
+    death_benefit=100_000_000,
     level_premium=70_000,                  # 매 분기 7만원
     term_months=120,
     premium_frequency_months=3,            # 분기납 (3개월에 한 번)
@@ -322,12 +331,6 @@ mortality_annual=lambda sex, age, dur: np.full(age.shape, 0.001)
 | 0 | 0 | 0 | 손익분기 계약 |
 | 양수 | 0 | 양수 | 손실 계약 (onerous) — 즉시 손실 인식 |
 
-### 함정 6 — `level_premium` 인지 `monthly_premium` 인지
-
-이전 API 에선 `monthly_premium` 이라는 이름이 사용됐으나 현재는
-`level_premium` (level = "매 회 동일액") 으로 통일됨. 옛 자료의
-`monthly_premium=` 을 보면 `level_premium=` 으로 바꿔서 사용.
-
 ### 검증 — 손계산 한 번
 
 신뢰성 빌드업의 가장 쉬운 방법은 **2개월 계약 손계산**:
@@ -335,8 +338,10 @@ mortality_annual=lambda sex, age, dur: np.full(age.shape, 0.001)
 ```python
 # 가입 후 2개월, 사망률 1% 월, 사망보험금 12,000, 보험료 100, 할인 0%
 mp = fcf.ModelPoints.single(
-    issue_age=40, death_benefit=12_000,
-    level_premium=100, term_months=2,
+    issue_age=40,
+    death_benefit=12_000,
+    level_premium=100,
+    term_months=2,
 )
 asmp = fcf.Assumptions(
     mortality_annual=lambda s, a, d: np.full(a.shape, 1 - (1-0.01)**12),
@@ -382,7 +387,7 @@ print(f"손계산 BEL: 39.80")
 할인율, 위험조정 변동계수) 에 100% 의존합니다. precision (계산 정밀도)
 이 높다고 accuracy (현실 정확도) 가 자동으로 보장되지 않습니다.
 
-자기 회사의 best estimate 가정 / 경험률 표 / 시나리오를 입력해야
-**자기 상품의** BEL 이 됩니다. 본 예제의 가정 값들은 자동차 매뉴얼의
+자사의 best estimate 가정 / 경험률 표 / 시나리오를 입력해야
+**자사 상품의** BEL 이 됩니다. 본 예제의 가정 값들은 자동차 매뉴얼의
 "60 km/h 정속 주행 시" 수준의 illustration 입니다.
 ```
