@@ -163,221 +163,248 @@ class Valuation:
     loss_component: FloatArray  # loss component at inception (onerous contracts)
 
 
-@njit(parallel=True, cache=True)
-def _value_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
-                  premium_state, benefit_state, start_state, issue_index, sex,
-                  term_months, count, level_premium, single_premium,
-                  premium_term_months, premium_frequency, annuity_frequency,
-                  cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
-                  cov_is_diagnosis, maturity_benefit, annuity_payment,
-                  disability_income, disability_benefit,
-                  expense_acquisition, maint_inflated_monthly,
-                  discount_start, discount_mid, mortality_factor,
-                  morbidity_factor, longevity_factor, disability_factor,
-                  cov_waiting, cov_reduction_end, cov_reduction_factor):
-    """Fused valuation kernel -- one parallel pass, no per-month arrays.
+def _make_value_kernel(N_STATES, N_EDGES):
+    """Generate the fused valuation kernel for a specific (n_states, n_edges).
 
-    Per model point the in-force is an occupancy vector over ``n_states``
-    transient states, advanced each month along the transition edges -- edge
-    ``e`` carries ``edge_prob[sex, age, year, e]`` of the occupancy from
-    ``edge_from[e]`` to ``edge_to[e]``. The edge axis is innermost so all
-    edges for a given (sex, age, year) lookup land in one cache line. Premium
-    accrues on the states flagged in ``premium_state``; claims, expenses and
-    survival benefits on the total occupancy. The present values are
-    accumulated directly and BEL, RA, CSM and the loss component derived in
-    the same pass. The RA sums a mortality-risk component (death claims), a
-    morbidity-risk component (health claims), a disability-risk component
-    (disability income and the lump sum) and a longevity-risk component
-    (annuity and maturity benefits). The only memory written is the four
-    ``(n_mp,)`` result arrays, so the kernel is compute-bound and scales
-    near-linearly.
+    The state count and edge count enter via the Python closure, not as
+    runtime parameters. numba treats integer closure variables as
+    compile-time constants, so the per-state and per-edge inner loops
+    unroll, ``occ[s]`` lookups become register operations and the kernel
+    runs roughly twice as fast as a generic n_states variant.
+
+    Per model point the in-force is an occupancy vector over ``N_STATES``
+    transient states, advanced each month along ``N_EDGES`` transition
+    edges -- edge ``e`` carries ``edge_prob[sex, age, year, e]`` of the
+    occupancy from ``edge_from[e]`` to ``edge_to[e]``. The edge axis is
+    innermost so all edges for a given (sex, age, year) lookup land in one
+    cache line. Premium accrues on the states flagged in ``premium_state``;
+    claims, expenses and survival benefits on the total occupancy. The
+    present values are accumulated directly and BEL, RA, CSM and the loss
+    component derived in the same pass. The RA sums a mortality-risk
+    component (death claims), a morbidity-risk component (health claims), a
+    disability-risk component (disability income and the lump sum) and a
+    longevity-risk component (annuity and maturity benefits). The only
+    memory written is the four ``(n_mp,)`` result arrays, so the kernel is
+    compute-bound and scales near-linearly.
     """
-    n_mp = issue_index.shape[0]
-    n_edges = edge_from.shape[0]
-    bel = np.empty(n_mp)
-    ra = np.empty(n_mp)
-    csm = np.empty(n_mp)
-    loss_component = np.empty(n_mp)
+    @njit(parallel=True, cache=True)
+    def kernel(edge_from, edge_to, edge_prob, edge_lump_sum,
+               premium_state, benefit_state, start_state, issue_index, sex,
+               term_months, count, level_premium, single_premium,
+               premium_term_months, premium_frequency, annuity_frequency,
+               cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
+               cov_is_diagnosis, maturity_benefit, annuity_payment,
+               disability_income, disability_benefit,
+               expense_acquisition, maint_inflated_monthly,
+               discount_start, discount_mid, mortality_factor,
+               morbidity_factor, longevity_factor, disability_factor,
+               cov_waiting, cov_reduction_end, cov_reduction_factor):
+        n_mp = issue_index.shape[0]
+        bel = np.empty(n_mp)
+        ra = np.empty(n_mp)
+        csm = np.empty(n_mp)
+        loss_component = np.empty(n_mp)
 
-    for mp in prange(n_mp):
-        term = term_months[mp]
-        premium_term = premium_term_months[mp]   # months the premium is paid
-        prem_freq = premium_frequency[mp]        # months between premiums
-        ann_freq = annuity_frequency[mp]         # months between annuity payouts
-        ridx = issue_index[mp]
-        sx = sex[mp]
-        cnt = count[mp]
-        premium = level_premium[mp]
-        annuity = annuity_payment[mp]
-        c_start = cov_offset[mp]
-        c_end = cov_offset[mp + 1]
-        ss = start_state[mp]
-        occ = np.zeros(n_states)
-        occ_next = np.zeros(n_states)
-        pc = 0.0          # PV of death claims (mortality risk)
-        pcm = 0.0         # PV of health claims (morbidity risk)
-        pd = 0.0          # PV of disability income + lump sum
-        pp = 0.0
-        pe = 0.0
-        pa = 0.0
-        # Main pass -- the rule-free, non-diagnosis coverages.
-        occ[ss] = cnt
-        last_year = -1
-        claim_rate = 0.0  # aggregate mortality claim per unit in-force
-        morb_rate = 0.0   # aggregate morbidity claim per unit in-force
-        # Counters in place of the per-timestep modulo / less-than checks.
-        prem_due = 0
-        ann_due = 0
-        prem_left = premium_term
-        for t in range(term):
-            year = t // 12
-            # Coverage rates change only once a year, so the per-coverage sum
-            # is rebuilt on a year boundary, not every month.
-            if year != last_year:
-                claim_rate = 0.0
-                morb_rate = 0.0
-                for k in range(c_start, c_end):
-                    kind = cov_kind[k]
-                    if cov_is_diagnosis[kind]:
-                        continue          # diagnosis coverages run separately
-                    if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
-                        continue          # rule-bearing coverages run separately
-                    rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]
-                    if cov_risk[kind] == 0:
-                        claim_rate += rate
-                    else:
-                        morb_rate += rate
-                last_year = year
-            ift = 0.0          # total in-force
-            prem_occ = 0.0     # in-force on the premium-paying states
-            benefit_occ = 0.0  # in-force on the benefit-paying states
-            for s in range(n_states):
-                ift += occ[s]
-                if premium_state[s]:
-                    prem_occ += occ[s]
-                if benefit_state[s]:
-                    benefit_occ += occ[s]
-            ds = discount_start[t]
-            dm = discount_mid[t]
-            single = prem_occ * single_premium[mp] if t == 0 else 0.0
-            if prem_due == 0 and prem_left > 0:
-                level = prem_occ * premium
-                prem_due = prem_freq - 1
-            else:
-                level = 0.0
-                prem_due -= 1
-            prem_left -= 1
-            pp += (level + single) * ds
-            pc += ift * claim_rate * dm
-            pcm += ift * morb_rate * dm
-            if ann_due == 0:
-                pa += ift * annuity * ds
-                ann_due = ann_freq - 1
-            else:
-                ann_due -= 1
-            pd += benefit_occ * disability_income[mp] * dm
-            acquisition = cnt * expense_acquisition if t == 0 else 0.0
-            pe += (acquisition + ift * maint_inflated_monthly[t]) * dm
-            # Advance the occupancy; a lump-sum transition pays on its flow.
-            for s in range(n_states):
-                occ_next[s] = 0.0
-            for e in range(n_edges):
-                flow = occ[edge_from[e]] * edge_prob[sx, ridx, year, e]
-                occ_next[edge_to[e]] += flow
-                if edge_lump_sum[e]:
-                    pd += flow * disability_benefit[mp] * dm
-            for s in range(n_states):
-                occ[s] = occ_next[s]
-        total = 0.0
-        for s in range(n_states):
-            total += occ[s]
-        pm = total * maturity_benefit[mp] * discount_start[term]
-        # Non-diagnosis coverages with a waiting or reduced-benefit rule: a
-        # per-coverage pass, re-deriving the occupancy month by month so the
-        # benefit multiplier (which can change mid-year) applies cleanly.
-        for k in range(c_start, c_end):
-            kind = cov_kind[k]
-            if cov_is_diagnosis[kind]:
-                continue
-            wait = cov_waiting[k]
-            red_end = cov_reduction_end[k]
-            if wait == 0 and red_end == 0:
-                continue          # rule-free -- already in the aggregate
-            benefit = cov_amount[k]
-            red_factor = cov_reduction_factor[k]
-            mortality_risk = cov_risk[kind] == 0
-            for s in range(n_states):
-                occ[s] = 0.0
+        for mp in prange(n_mp):
+            term = term_months[mp]
+            premium_term = premium_term_months[mp]   # months the premium is paid
+            prem_freq = premium_frequency[mp]        # months between premiums
+            ann_freq = annuity_frequency[mp]         # months between annuity payouts
+            ridx = issue_index[mp]
+            sx = sex[mp]
+            cnt = count[mp]
+            premium = level_premium[mp]
+            annuity = annuity_payment[mp]
+            c_start = cov_offset[mp]
+            c_end = cov_offset[mp + 1]
+            ss = start_state[mp]
+            occ = np.zeros(N_STATES)
+            occ_next = np.zeros(N_STATES)
+            pc = 0.0          # PV of death claims (mortality risk)
+            pcm = 0.0         # PV of health claims (morbidity risk)
+            pd = 0.0          # PV of disability income + lump sum
+            pp = 0.0
+            pe = 0.0
+            pa = 0.0
+            # Main pass -- the rule-free, non-diagnosis coverages.
             occ[ss] = cnt
+            last_year = -1
+            claim_rate = 0.0  # aggregate mortality claim per unit in-force
+            morb_rate = 0.0   # aggregate morbidity claim per unit in-force
+            # Counters in place of the per-timestep modulo / less-than checks.
+            prem_due = 0
+            ann_due = 0
+            prem_left = premium_term
             for t in range(term):
                 year = t // 12
-                if t >= wait:
-                    mult = red_factor if t < red_end else 1.0
-                    inf = 0.0
-                    for s in range(n_states):
-                        inf += occ[s]
-                    contrib = (inf * cov_rates[kind, sx, ridx, year]
-                               * benefit * mult * discount_mid[t])
-                    if mortality_risk:
-                        pc += contrib
-                    else:
-                        pcm += contrib
-                for s in range(n_states):
+                # Coverage rates change only once a year, so the per-coverage sum
+                # is rebuilt on a year boundary, not every month.
+                if year != last_year:
+                    claim_rate = 0.0
+                    morb_rate = 0.0
+                    for k in range(c_start, c_end):
+                        kind = cov_kind[k]
+                        if cov_is_diagnosis[kind]:
+                            continue          # diagnosis coverages run separately
+                        if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
+                            continue          # rule-bearing coverages run separately
+                        rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]
+                        if cov_risk[kind] == 0:
+                            claim_rate += rate
+                        else:
+                            morb_rate += rate
+                    last_year = year
+                ift = 0.0          # total in-force
+                prem_occ = 0.0     # in-force on the premium-paying states
+                benefit_occ = 0.0  # in-force on the benefit-paying states
+                for s in range(N_STATES):
+                    ift += occ[s]
+                    if premium_state[s]:
+                        prem_occ += occ[s]
+                    if benefit_state[s]:
+                        benefit_occ += occ[s]
+                ds = discount_start[t]
+                dm = discount_mid[t]
+                single = prem_occ * single_premium[mp] if t == 0 else 0.0
+                if prem_due == 0 and prem_left > 0:
+                    level = prem_occ * premium
+                    prem_due = prem_freq - 1
+                else:
+                    level = 0.0
+                    prem_due -= 1
+                prem_left -= 1
+                pp += (level + single) * ds
+                pc += ift * claim_rate * dm
+                pcm += ift * morb_rate * dm
+                if ann_due == 0:
+                    pa += ift * annuity * ds
+                    ann_due = ann_freq - 1
+                else:
+                    ann_due -= 1
+                pd += benefit_occ * disability_income[mp] * dm
+                acquisition = cnt * expense_acquisition if t == 0 else 0.0
+                pe += (acquisition + ift * maint_inflated_monthly[t]) * dm
+                # Advance the occupancy; a lump-sum transition pays on its flow.
+                for s in range(N_STATES):
                     occ_next[s] = 0.0
-                for e in range(n_edges):
-                    occ_next[edge_to[e]] += (occ[edge_from[e]]
-                                             * edge_prob[sx, ridx, year, e])
-                for s in range(n_states):
+                for e in range(N_EDGES):
+                    flow = occ[edge_from[e]] * edge_prob[sx, ridx, year, e]
+                    occ_next[edge_to[e]] += flow
+                    if edge_lump_sum[e]:
+                        pd += flow * disability_benefit[mp] * dm
+                for s in range(N_STATES):
                     occ[s] = occ_next[s]
-        # Diagnosis coverages pay once on first diagnosis, so each one's
-        # claims run off a depleting "not yet diagnosed" occupancy -- a
-        # separate pass over the time axis, into the morbidity PV.
-        for k in range(c_start, c_end):
-            kind = cov_kind[k]
-            if not cov_is_diagnosis[kind]:
-                continue
-            benefit = cov_amount[k]
-            wait = cov_waiting[k]
-            red_end = cov_reduction_end[k]
-            red_factor = cov_reduction_factor[k]
-            # The not-yet-diagnosed occupancy -- depletes by the diagnosis
-            # rate on top of the ordinary transitions.
-            for s in range(n_states):
-                occ[s] = 0.0
-            occ[ss] = cnt
-            d_year = -1
-            d_rate = 0.0
-            for t in range(term):
-                year = t // 12
-                if year != d_year:
-                    d_rate = cov_rates[kind, sx, ridx, year]
-                    d_year = year
-                # A waiting period suppresses the payment, not the diagnosis:
-                # the not-yet-diagnosed pool depletes either way.
-                if t >= wait:
-                    mult = red_factor if t < red_end else 1.0
-                    healthy = 0.0
-                    for s in range(n_states):
-                        healthy += occ[s]
-                    pcm += healthy * d_rate * benefit * mult * discount_mid[t]
-                undiag = 1.0 - d_rate
-                for s in range(n_states):
-                    occ_next[s] = 0.0
-                for e in range(n_edges):
-                    occ_next[edge_to[e]] += (occ[edge_from[e]] * undiag
-                                             * edge_prob[sx, ridx, year, e])
-                for s in range(n_states):
-                    occ[s] = occ_next[s]
-        bel_mp = pc + pcm + pd + pm + pa + pe - pp
-        ra_mp = (mortality_factor * pc + morbidity_factor * pcm
-                 + disability_factor * pd + longevity_factor * (pm + pa))
-        fcf = bel_mp + ra_mp
-        bel[mp] = bel_mp
-        ra[mp] = ra_mp
-        csm[mp] = max(0.0, -fcf)
-        loss_component[mp] = max(0.0, fcf)
+            total = 0.0
+            for s in range(N_STATES):
+                total += occ[s]
+            pm = total * maturity_benefit[mp] * discount_start[term]
+            # Non-diagnosis coverages with a waiting or reduced-benefit rule: a
+            # per-coverage pass, re-deriving the occupancy month by month so the
+            # benefit multiplier (which can change mid-year) applies cleanly.
+            for k in range(c_start, c_end):
+                kind = cov_kind[k]
+                if cov_is_diagnosis[kind]:
+                    continue
+                wait = cov_waiting[k]
+                red_end = cov_reduction_end[k]
+                if wait == 0 and red_end == 0:
+                    continue          # rule-free -- already in the aggregate
+                benefit = cov_amount[k]
+                red_factor = cov_reduction_factor[k]
+                mortality_risk = cov_risk[kind] == 0
+                for s in range(N_STATES):
+                    occ[s] = 0.0
+                occ[ss] = cnt
+                for t in range(term):
+                    year = t // 12
+                    if t >= wait:
+                        mult = red_factor if t < red_end else 1.0
+                        inf = 0.0
+                        for s in range(N_STATES):
+                            inf += occ[s]
+                        contrib = (inf * cov_rates[kind, sx, ridx, year]
+                                   * benefit * mult * discount_mid[t])
+                        if mortality_risk:
+                            pc += contrib
+                        else:
+                            pcm += contrib
+                    for s in range(N_STATES):
+                        occ_next[s] = 0.0
+                    for e in range(N_EDGES):
+                        occ_next[edge_to[e]] += (occ[edge_from[e]]
+                                                 * edge_prob[sx, ridx, year, e])
+                    for s in range(N_STATES):
+                        occ[s] = occ_next[s]
+            # Diagnosis coverages pay once on first diagnosis, so each one's
+            # claims run off a depleting "not yet diagnosed" occupancy -- a
+            # separate pass over the time axis, into the morbidity PV.
+            for k in range(c_start, c_end):
+                kind = cov_kind[k]
+                if not cov_is_diagnosis[kind]:
+                    continue
+                benefit = cov_amount[k]
+                wait = cov_waiting[k]
+                red_end = cov_reduction_end[k]
+                red_factor = cov_reduction_factor[k]
+                # The not-yet-diagnosed occupancy -- depletes by the diagnosis
+                # rate on top of the ordinary transitions.
+                for s in range(N_STATES):
+                    occ[s] = 0.0
+                occ[ss] = cnt
+                d_year = -1
+                d_rate = 0.0
+                for t in range(term):
+                    year = t // 12
+                    if year != d_year:
+                        d_rate = cov_rates[kind, sx, ridx, year]
+                        d_year = year
+                    # A waiting period suppresses the payment, not the diagnosis:
+                    # the not-yet-diagnosed pool depletes either way.
+                    if t >= wait:
+                        mult = red_factor if t < red_end else 1.0
+                        healthy = 0.0
+                        for s in range(N_STATES):
+                            healthy += occ[s]
+                        pcm += healthy * d_rate * benefit * mult * discount_mid[t]
+                    undiag = 1.0 - d_rate
+                    for s in range(N_STATES):
+                        occ_next[s] = 0.0
+                    for e in range(N_EDGES):
+                        occ_next[edge_to[e]] += (occ[edge_from[e]] * undiag
+                                                 * edge_prob[sx, ridx, year, e])
+                    for s in range(N_STATES):
+                        occ[s] = occ_next[s]
+            bel_mp = pc + pcm + pd + pm + pa + pe - pp
+            ra_mp = (mortality_factor * pc + morbidity_factor * pcm
+                     + disability_factor * pd + longevity_factor * (pm + pa))
+            fcf = bel_mp + ra_mp
+            bel[mp] = bel_mp
+            ra[mp] = ra_mp
+            csm[mp] = max(0.0, -fcf)
+            loss_component[mp] = max(0.0, fcf)
 
-    return bel, ra, csm, loss_component
+        return bel, ra, csm, loss_component
+
+    return kernel
+
+
+_VALUE_KERNEL_CACHE: dict[tuple[int, int], object] = {}
+
+
+def _get_value_kernel(n_states: int, n_edges: int):
+    """Return the value kernel specialised for ``(n_states, n_edges)``.
+
+    First call for a new ``(N, E)`` pair triggers a numba compile (a few
+    seconds); subsequent calls reuse the cached function. With ``cache=True``
+    on the inner kernel, numba also persists the compile to disk so a fresh
+    Python process pays no compile cost on repeat runs.
+    """
+    key = (int(n_states), int(n_edges))
+    cached = _VALUE_KERNEL_CACHE.get(key)
+    if cached is None:
+        cached = _make_value_kernel(*key)
+        _VALUE_KERNEL_CACHE[key] = cached
+    return cached
 
 
 @njit(parallel=True, cache=True)
@@ -697,12 +724,15 @@ def value(
         )
         return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
-    args = (
+    # The CPU kernel takes (n_states, n_edges) via Python closure -- they are
+    # not in the args tuple. The GPU kernel still takes n_states explicitly
+    # as a runtime arg, so the two paths build the call list separately.
+    n_edges = int(edge_from.shape[0])
+    common_args = (
         edge_from,
         edge_to,
         edge_prob,
         edge_lump_sum,
-        n_states,
         premium_state,
         benefit_state,
         start_state,
@@ -736,8 +766,9 @@ def value(
     )
 
     if backend == "cpu":
-        bel, ra, csm, loss_component = _value_kernel(
-            *args, model_points.cov_waiting, model_points.cov_reduction_end,
+        kernel = _get_value_kernel(n_states, n_edges)
+        bel, ra, csm, loss_component = kernel(
+            *common_args, model_points.cov_waiting, model_points.cov_reduction_end,
             model_points.cov_reduction_factor,
         )
     elif backend == "gpu":
@@ -747,7 +778,10 @@ def value(
                 "reduction periods yet; use backend='cpu'"
             )
         from fastcashflow._gpu import value_gpu
-        bel, ra, csm, loss_component = value_gpu(*args)
+        bel, ra, csm, loss_component = value_gpu(
+            common_args[0], common_args[1], common_args[2], common_args[3],
+            n_states, *common_args[4:],
+        )
     else:
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
 
