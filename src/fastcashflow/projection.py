@@ -258,7 +258,8 @@ def _project_kernel_semi_markov(
     premium_state, benefit_state, start_state,
     term_months, count, level_premium, single_premium,
     premium_term_months, premium_frequency, annuity_frequency,
-    cov_kind, cov_amount, cov_offset, cov_rates,
+    cov_kind, cov_amount, cov_offset, cov_waiting,
+    cov_reduction_end, cov_reduction_factor, cov_rates,
     cov_risk, cov_is_diagnosis,
     maturity_benefit, annuity_payment, disability_income, disability_benefit,
     expense_acquisition, maint_inflated_monthly, n_time,
@@ -320,9 +321,9 @@ def _project_kernel_semi_markov(
                 for k in range(c_start, c_end):
                     kind = cov_kind[k]
                     if cov_is_diagnosis[kind]:
-                        continue
-                    # Semi-Markov prototype rejects rule-bearing coverages
-                    # upstream; the remaining year-aggregate is correct.
+                        continue          # diagnosis coverages run separately
+                    if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
+                        continue          # rule-bearing coverages run separately
                     rate = cov_rates[kind, mp, year] * cov_amount[k]
                     if cov_risk[kind] == 0:
                         claim_rate += rate
@@ -392,6 +393,57 @@ def _project_kernel_semi_markov(
             for i in range(total_cohorts):
                 occ[i] = occ_next[i]
 
+        # Coverage-rule pass -- non-diagnosis coverages with a waiting or
+        # reduction period. The benefit multiplier can change partway
+        # through a year, so we walk per-month and apply it to the
+        # saved total in-force. Cohort tracking is unnecessary here:
+        # the multiplier rides the same in-force trajectory the main
+        # pass already produced.
+        for k in range(c_start, c_end):
+            kind = cov_kind[k]
+            if cov_is_diagnosis[kind]:
+                continue
+            wait = cov_waiting[k]
+            red_end = cov_reduction_end[k]
+            if wait == 0 and red_end == 0:
+                continue          # rule-free -- already in the main pass
+            benefit = cov_amount[k]
+            red_factor = cov_reduction_factor[k]
+            mortality_risk = cov_risk[kind] == 0
+            for t in range(wait, term):
+                mult = red_factor if t < red_end else 1.0
+                amt = (inforce[mp, t] * cov_rates[kind, mp, t // 12]
+                       * benefit * mult)
+                if mortality_risk:
+                    claim_cf[mp, t] += amt
+                else:
+                    morbidity_cf[mp, t] += amt
+
+        # Diagnosis-coverage pass -- claims run off a depleting "not yet
+        # diagnosed" pool that drops by (1 - d_rate) each month. The pool
+        # multiplies the cohort-aware in-force from the main pass.
+        for k in range(c_start, c_end):
+            kind = cov_kind[k]
+            if not cov_is_diagnosis[kind]:
+                continue
+            benefit = cov_amount[k]
+            wait = cov_waiting[k]
+            red_end = cov_reduction_end[k]
+            red_factor = cov_reduction_factor[k]
+            frac = 1.0
+            d_year = -1
+            d_rate = 0.0
+            for t in range(term):
+                year = t // 12
+                if year != d_year:
+                    d_rate = cov_rates[kind, mp, year]
+                    d_year = year
+                if t >= wait:
+                    mult = red_factor if t < red_end else 1.0
+                    morbidity_cf[mp, t] += (inforce[mp, t] * frac
+                                            * d_rate * benefit * mult)
+                frac *= (1.0 - d_rate)
+
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
             annuity_cf, disability_cf, maturity_cf)
 
@@ -448,20 +500,10 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         # aware compile expects: static rates stay (n_mp, n_year); the
         # duration-dependent reincidence rate carries an extra cohort
         # axis of length ``max_cohort`` -- the largest ``duration_max``
-        # across the tracked states.
-        if np.any(model_points.cov_waiting) or np.any(
-                model_points.cov_reduction_end):
-            raise NotImplementedError(
-                "semi-Markov projection does not yet support coverage "
-                "waiting / reduction rules; clear them or use a Markov "
-                "StateModel"
-            )
-        if np.any(cov_is_diagnosis):
-            raise NotImplementedError(
-                "semi-Markov projection does not yet support diagnosis "
-                "coverages on the model points; reincidence and similar "
-                "lump-sum benefits ride a transition's lump_sum flag"
-            )
+        # across the tracked states. Coverage-rule and diagnosis-coverage
+        # passes ride the cohort-aware main pass: rule benefits scale the
+        # saved per-month total in-force, diagnosis pools multiply that
+        # same trajectory by a per-coverage depletion fraction.
         max_cohort = max(s.duration_max for s in state_model.states
                           if s.duration_max > 0)
         rate_dict = {"mortality": mortality, "lapse": lapse}
@@ -510,6 +552,9 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             model_points.cov_kind,
             model_points.cov_amount,
             model_points.cov_offset,
+            model_points.cov_waiting,
+            model_points.cov_reduction_end,
+            model_points.cov_reduction_factor,
             cov_rates,
             cov_risk,
             cov_is_diagnosis,

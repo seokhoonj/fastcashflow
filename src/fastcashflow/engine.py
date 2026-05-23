@@ -1354,7 +1354,8 @@ def _codegen_value_kernel_source_semi_markov(
             line(indent, f"elif ss == {s}:")
             line(indent + 4, f"{occ(s, 0)} = cnt")
 
-    def emit_edge_step(indent: int, include_lump: bool = True) -> None:
+    def emit_edge_step(indent: int, include_lump: bool = True,
+                       scale: str = "") -> None:
         """Emit a per-timestep advance: reset next-buffer, process every edge
         across every source cohort, then copy back.
 
@@ -1365,6 +1366,10 @@ def _codegen_value_kernel_source_semi_markov(
             cohort 0.
           - exits are not represented as edges; occupancy that doesn't go to
             any next-buffer slot simply leaves the in-force set.
+
+        ``scale`` (e.g. ``" * undiag"``) multiplies every flow -- used by
+        the diagnosis-coverage pass to deplete the not-yet-diagnosed
+        in-force fraction along the state machine.
         """
         for s in range(n_states):
             for tau in range(D[s]):
@@ -1376,7 +1381,7 @@ def _codegen_value_kernel_source_semi_markov(
             ls = edge_lump_sum[e]
             for tau in range(D[s_from]):
                 line(indent,
-                     f"flow_{e}_{tau} = {occ(s_from, tau)} "
+                     f"flow_{e}_{tau} = {occ(s_from, tau)}{scale} "
                      f"* edge_prob[sx, ridx, year, {e}, {tau}]")
                 if is_residual:
                     # Cohort advance; cap at D-1 (absorbing).
@@ -1416,7 +1421,9 @@ def _codegen_value_kernel_source_semi_markov(
     line(0, "           expense_acquisition, maint_inflated_monthly,")
     line(0, "           discount_start, discount_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
-            "disability_factor):")
+            "disability_factor,")
+    line(0, "           cov_waiting, cov_reduction_end, "
+            "cov_reduction_factor):")
     line(4, "n_mp = issue_index.shape[0]")
     line(4, "bel = np.empty(n_mp)")
     line(4, "ra = np.empty(n_mp)")
@@ -1459,7 +1466,9 @@ def _codegen_value_kernel_source_semi_markov(
     line(16, "for k in range(c_start, c_end):")
     line(20, "kind = cov_kind[k]")
     line(20, "if cov_is_diagnosis[kind]:")
-    line(24, "continue")
+    line(24, "continue          # diagnosis coverages run separately")
+    line(20, "if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:")
+    line(24, "continue          # rule-bearing coverages run separately")
     line(20, "rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]")
     line(20, "if cov_risk[kind] == 0:")
     line(24, "claim_rate += rate")
@@ -1494,6 +1503,63 @@ def _codegen_value_kernel_source_semi_markov(
 
     line(8, f"total = {sum_all}")
     line(8, "pm = total * maturity_benefit[mp] * discount_start[term]")
+
+    # --- Coverage-rule pass --------------------------------------------
+    # Rule-bearing non-diagnosis coverages: rerun the state machine on a
+    # fresh cohort occupancy and apply the per-month benefit multiplier
+    # (which can change partway through a year) to the total in-force.
+    line(8, "for k in range(c_start, c_end):")
+    line(12, "kind = cov_kind[k]")
+    line(12, "if cov_is_diagnosis[kind]:")
+    line(16, "continue")
+    line(12, "wait = cov_waiting[k]")
+    line(12, "red_end = cov_reduction_end[k]")
+    line(12, "if wait == 0 and red_end == 0:")
+    line(16, "continue          # rule-free -- already in the main pass")
+    line(12, "benefit = cov_amount[k]")
+    line(12, "red_factor = cov_reduction_factor[k]")
+    line(12, "mortality_risk = cov_risk[kind] == 0")
+    emit_init(12)
+    line(12, "for t in range(term):")
+    line(16, "year = t // 12")
+    line(16, "if t >= wait:")
+    line(20, "mult = red_factor if t < red_end else 1.0")
+    line(20, f"inf = {sum_all}")
+    line(20, "contrib = (inf * cov_rates[kind, sx, ridx, year]")
+    line(20, "           * benefit * mult * discount_mid[t])")
+    line(20, "if mortality_risk:")
+    line(24, "pc += contrib")
+    line(20, "else:")
+    line(24, "pcm += contrib")
+    emit_edge_step(16, include_lump=False)
+
+    # --- Diagnosis-coverage pass ---------------------------------------
+    # Diagnosis coverages pay once on first diagnosis. Each coverage runs
+    # its claims off a depleting not-yet-diagnosed pool, implemented by
+    # scaling every state-machine flow by (1 - d_rate) each timestep so
+    # the occupancy itself tracks the joint depletion.
+    line(8, "for k in range(c_start, c_end):")
+    line(12, "kind = cov_kind[k]")
+    line(12, "if not cov_is_diagnosis[kind]:")
+    line(16, "continue")
+    line(12, "benefit = cov_amount[k]")
+    line(12, "wait = cov_waiting[k]")
+    line(12, "red_end = cov_reduction_end[k]")
+    line(12, "red_factor = cov_reduction_factor[k]")
+    emit_init(12)
+    line(12, "d_year = -1")
+    line(12, "d_rate = 0.0")
+    line(12, "for t in range(term):")
+    line(16, "year = t // 12")
+    line(16, "if year != d_year:")
+    line(20, "d_rate = cov_rates[kind, sx, ridx, year]")
+    line(20, "d_year = year")
+    line(16, "if t >= wait:")
+    line(20, "mult = red_factor if t < red_end else 1.0")
+    line(20, f"healthy = {sum_all}")
+    line(20, "pcm += healthy * d_rate * benefit * mult * discount_mid[t]")
+    line(16, "undiag = 1.0 - d_rate")
+    emit_edge_step(16, include_lump=False, scale=" * undiag")
 
     # --- Final output --------------------------------------------------
     line(8, "bel_mp = pc + pcm + pd + pm + pa + pe - pp")
@@ -1972,25 +2038,13 @@ def value(
     if backend == "cpu":
         if state_duration_max is not None:
             # Phase (c) semi-Markov path. The kernel takes a thinner arg
-            # tuple -- the edge topology and per-state cohort counts are
-            # baked into the generated source (one cache file per unique
-            # StateModel + duration shape). Coverage-rule / diagnosis
-            # passes are intentionally not emitted in the prototype, so
-            # the model points used here must carry no waiting / reduction
-            # rules or diagnosis coverages.
-            if np.any(model_points.cov_waiting) or np.any(model_points.cov_reduction_end):
-                raise NotImplementedError(
-                    "semi-Markov path does not yet support coverage "
-                    "waiting / reduction rules; clear them or use a "
-                    "Markov StateModel"
-                )
-            if np.any(cov_is_diagnosis):
-                raise NotImplementedError(
-                    "semi-Markov path does not yet support diagnosis "
-                    "coverages on the model points; reincidence and "
-                    "similar lump-sum benefits ride a transition's "
-                    "lump_sum flag instead"
-                )
+            # tuple than the Markov codegen -- the edge topology and the
+            # per-state cohort counts are baked into the generated source
+            # (one cache file per unique StateModel + duration shape).
+            # Coverage-rule and diagnosis-coverage passes are emitted
+            # alongside the main pass so contracts mixing semi-Markov
+            # cohort tracking with rule-bearing or diagnosis riders work
+            # in a single value() call.
             kernel = _get_value_kernel_codegen_semi_markov(
                 n_states, state_duration_max, edge_from, edge_to,
                 edge_lump_sum, premium_state, benefit_state,
@@ -2023,6 +2077,9 @@ def value(
                 morbidity_factor,
                 longevity_factor,
                 disability_factor,
+                model_points.cov_waiting,
+                model_points.cov_reduction_end,
+                model_points.cov_reduction_factor,
             )
         else:
             # Markov path -- every multi-state model with no duration

@@ -257,3 +257,140 @@ def test_measure_value_agree_long_cohort():
                                      reincidence_monthly=0.012)
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
+
+
+
+# ---------------------------------------------------------------------------
+# Coverage rules + diagnosis coverages combined with semi-Markov (P)
+# ---------------------------------------------------------------------------
+#
+# Real cancer-reincidence products combine the state-duration mechanism
+# (reincidence exclusion) with contract-level coverage rules (가입 면책 /
+# 감액) and additional diagnosis coverages. State duration and policy
+# duration are orthogonal axes that must work on the same contract.
+
+
+def _reincidence_assumptions_with_rider(duration_max, exclusion_months,
+                                        rider_is_diagnosis, rider_rate):
+    """Reincidence model plus one rider whose rate is constant per month.
+
+    ``rider_is_diagnosis`` picks between a single-payment diagnosis rider
+    (claims run off a depleting not-yet-diagnosed pool) and a recurring
+    health rider (claim_rate accumulates each month).
+    """
+    from fastcashflow.assumptions import RiderRate
+    from fastcashflow.coverage import RISK_MORBIDITY
+
+    def rider_fn(sex, age, dur):
+        return np.full(dur.shape, _annual(rider_rate))
+
+    base = _reincidence_assumptions(duration_max=duration_max,
+                                     exclusion_months=exclusion_months,
+                                     reincidence_monthly=0.01)
+    return fcf.Assumptions(
+        mortality_annual=base.mortality_annual,
+        lapse_annual=base.lapse_annual,
+        ci_incidence_annual=base.ci_incidence_annual,
+        ci_reincidence_annual=base.ci_reincidence_annual,
+        discount_annual=base.discount_annual,
+        expense_acquisition=base.expense_acquisition,
+        expense_maintenance_annual=base.expense_maintenance_annual,
+        expense_inflation=base.expense_inflation,
+        ra_confidence=base.ra_confidence,
+        mortality_cv=base.mortality_cv,
+        morbidity_cv=0.10,
+        state_model=base.state_model,
+        riders=(RiderRate(code="rider", rate=rider_fn,
+                          is_diagnosis=rider_is_diagnosis,
+                          risk=RISK_MORBIDITY),),
+    )
+
+
+def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
+                                  rider_reduction_factor):
+    """A small portfolio with one death cov (rule-free) and one rider cov
+    (carrying the per-coverage rule). The DEATH coverage is at kind 0,
+    the rider at kind 1 (its index in the riders tuple plus the death
+    main offset).
+    """
+    rng = np.random.default_rng(seed)
+    # Build cov_kind / cov_amount: two coverages per mp (DEATH then rider).
+    death_amount = rng.integers(10, 80, n) * 1_000_000.0
+    rider_amount = rng.integers(3, 15, n) * 1_000_000.0
+    cov_kind = np.empty(n * 2, np.int64)
+    cov_amount = np.empty(n * 2)
+    cov_offset = np.arange(0, n * 2 + 1, 2, np.int64)
+    cov_waiting = np.zeros(n * 2, np.int64)
+    cov_reduction_end = np.zeros(n * 2, np.int64)
+    cov_reduction_factor = np.ones(n * 2)
+    for i in range(n):
+        cov_kind[2 * i] = 0    # DEATH
+        cov_kind[2 * i + 1] = 1  # rider (first registered)
+        cov_amount[2 * i] = death_amount[i]
+        cov_amount[2 * i + 1] = rider_amount[i]
+        cov_waiting[2 * i + 1] = rider_waiting
+        cov_reduction_end[2 * i + 1] = rider_reduction_end
+        cov_reduction_factor[2 * i + 1] = rider_reduction_factor
+    return fcf.ModelPoints(
+        issue_age=rng.integers(30, 55, n).astype(np.int64),
+        sex=rng.integers(0, 2, n).astype(np.int64),
+        level_premium=np.zeros(n),
+        term_months=np.full(n, 60, dtype=np.int64),
+        disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
+        cov_kind=cov_kind,
+        cov_amount=cov_amount,
+        cov_offset=cov_offset,
+        cov_waiting=cov_waiting,
+        cov_reduction_end=cov_reduction_end,
+        cov_reduction_factor=cov_reduction_factor,
+    )
+
+
+def test_semi_markov_with_waiting_period_on_rider():
+    """Reincidence model + recurring rider with a 3-month waiting period.
+    measure() and value() must agree.
+    """
+    asmp = _reincidence_assumptions_with_rider(
+        duration_max=12, exclusion_months=6,
+        rider_is_diagnosis=False, rider_rate=0.0008,
+    )
+    mp = _portfolio_with_rule_coverage(
+        n=30, seed=13,
+        rider_waiting=3, rider_reduction_end=0, rider_reduction_factor=1.0,
+    )
+    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
+    assert np.allclose(m.bel[:, 0], v.bel)
+
+
+def test_semi_markov_with_diagnosis_rider():
+    """Diagnosis rider on top of the reincidence state machine. The
+    rider's claim runs off a depleting not-yet-diagnosed pool that must
+    apply to the cohort-aware in-force trajectory.
+    """
+    asmp = _reincidence_assumptions_with_rider(
+        duration_max=12, exclusion_months=6,
+        rider_is_diagnosis=True, rider_rate=0.0008,
+    )
+    mp = _portfolio_with_rule_coverage(
+        n=30, seed=17,
+        rider_waiting=0, rider_reduction_end=0, rider_reduction_factor=1.0,
+    )
+    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
+    assert np.allclose(m.bel[:, 0], v.bel)
+
+
+def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
+    """All three axes at once: state-duration reincidence + policy-duration
+    waiting + reduction on a diagnosis rider. Each lives on its own axis
+    and the engine has to combine them correctly.
+    """
+    asmp = _reincidence_assumptions_with_rider(
+        duration_max=12, exclusion_months=6,
+        rider_is_diagnosis=True, rider_rate=0.001,
+    )
+    mp = _portfolio_with_rule_coverage(
+        n=25, seed=19,
+        rider_waiting=6, rider_reduction_end=24, rider_reduction_factor=0.5,
+    )
+    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
+    assert np.allclose(m.bel[:, 0], v.bel)
