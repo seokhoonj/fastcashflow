@@ -44,7 +44,7 @@ def _disability_model(*, lump_sum=True) -> StateModel:
         states=(
             State("active", premium=True, transitions=(
                 Transition("mortality"),
-                Transition("waiver_inception", to="disabled", lump_sum=lump_sum),
+                Transition("waiver_incidence", to="disabled", lump_sum=lump_sum),
                 Transition("lapse"),
             )),
             State("disabled", benefit=True, transitions=(
@@ -62,7 +62,7 @@ def _asmp(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
     return Assumptions(
         mortality_annual=lambda s, a, d: np.full(a.shape, _annual(q)),
         lapse_annual=lambda sex, issue_age, d: np.full(d.shape, _annual(lapse)),
-        waiver_inception_annual=lambda s, a, d: np.full(a.shape, _annual(inception)),
+        waiver_incidence_annual=lambda s, a, d: np.full(a.shape, _annual(inception)),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,

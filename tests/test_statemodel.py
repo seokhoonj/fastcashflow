@@ -47,7 +47,7 @@ def _asmp(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Assumptio
     return Assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, q_a),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, lapse_a),
-        waiver_inception_annual=waiver,
+        waiver_incidence_annual=waiver,
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -106,7 +106,7 @@ def test_unknown_destination_state_rejected():
     with pytest.raises(ValueError, match="unknown state"):
         StateModel(states=(
             State("active", premium=True,
-                  transitions=(Transition("waiver_inception", to="ghost"),)),
+                  transitions=(Transition("waiver_incidence", to="ghost"),)),
         ))
 
 
@@ -131,7 +131,7 @@ def test_explicit_waiver_model_matches_default():
         states=(
             State("active", premium=True, transitions=(
                 Transition("mortality"),
-                Transition("waiver_inception", to="waiver"),
+                Transition("waiver_incidence", to="waiver"),
                 Transition("lapse"),
             )),
             State("waiver", transitions=(Transition("mortality"),)),
@@ -179,7 +179,7 @@ def test_decrement_order_matters():
             State("active", premium=True, transitions=(
                 Transition("mortality"),
                 Transition("lapse"),
-                Transition("waiver_inception", to="waiver"),
+                Transition("waiver_incidence", to="waiver"),
             )),
             State("waiver", transitions=(Transition("mortality"),)),
         ),
@@ -217,7 +217,7 @@ def test_three_state_model_runs():
         states=(
             State("active", premium=True, transitions=(
                 Transition("mortality"),
-                Transition("waiver_inception", to="waiver"),
+                Transition("waiver_incidence", to="waiver"),
                 Transition("lapse"),
             )),
             State("waiver", transitions=(Transition("mortality"),)),
@@ -250,7 +250,7 @@ def test_measure_and_value_agree_under_custom_model():
         states=(
             State("active", premium=True, transitions=(
                 Transition("mortality"),
-                Transition("waiver_inception", to="waiver"),
+                Transition("waiver_incidence", to="waiver"),
                 Transition("lapse"),
             )),
             State("waiver", transitions=(Transition("mortality"),)),
@@ -366,86 +366,3 @@ def test_transition_waiver_inception_rate_name_deprecated():
             assert np.array_equal(a, b)
         else:
             assert a == b
-
-
-# ---------------------------------------------------------------------------
-# WAIVER_MODEL implicit fallback deprecation (U+W)
-# ---------------------------------------------------------------------------
-#
-# When Assumptions.state_model is None but the contract still implies a
-# multi-state path (waiver_incidence_annual set, or model_points.state has
-# non-zero codes), the engine falls back to WAIVER_MODEL. The fallback is
-# kept for backward compatibility but emits a DeprecationWarning -- a
-# future major version will require state_model to be set explicitly.
-
-
-def test_implicit_waiver_model_fallback_deprecated():
-    """value() warns when it has to default to WAIVER_MODEL because
-    waiver_incidence_annual is set but state_model is None.
-    """
-    asmp = Assumptions(
-        mortality_annual=lambda s, a, d: np.full(d.shape, 0.001),
-        lapse_annual=lambda s, a, d: np.full(d.shape, 0.005),
-        waiver_incidence_annual=lambda s, a, d: np.full(d.shape, 0.003),
-        discount_annual=0.03,
-        expense_acquisition=0.0,
-        expense_maintenance_annual=0.0,
-        expense_inflation=0.0,
-        ra_confidence=0.75,
-        mortality_cv=0.10,
-    )
-    mp = ModelPoints(
-        issue_age=np.array([45], dtype=np.int64),
-        death_benefit=np.array([10_000_000.0]),
-        level_premium=np.array([50_000.0]),
-        term_months=np.array([24], dtype=np.int64),
-    )
-    with pytest.warns(DeprecationWarning,
-                      match="WAIVER_MODEL"):
-        value(mp, asmp)
-
-
-def test_explicit_state_model_silences_fallback_warning():
-    """Setting ``state_model=STATE_MODELS['WAIVER']`` removes the implicit
-    fallback warning while preserving the same result.
-    """
-    import warnings
-    from fastcashflow import STATE_MODELS
-    asmp_no = Assumptions(
-        mortality_annual=lambda s, a, d: np.full(d.shape, 0.001),
-        lapse_annual=lambda s, a, d: np.full(d.shape, 0.005),
-        waiver_incidence_annual=lambda s, a, d: np.full(d.shape, 0.003),
-        discount_annual=0.03,
-        expense_acquisition=0.0,
-        expense_maintenance_annual=0.0,
-        expense_inflation=0.0,
-        ra_confidence=0.75,
-        mortality_cv=0.10,
-        state_model=STATE_MODELS["WAIVER"],
-    )
-    mp = ModelPoints(
-        issue_age=np.array([45], dtype=np.int64),
-        death_benefit=np.array([10_000_000.0]),
-        level_premium=np.array([50_000.0]),
-        term_months=np.array([24], dtype=np.int64),
-    )
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        # No DeprecationWarning raised here -- state_model is explicit.
-        v_explicit = value(mp, asmp_no)
-    # And the explicit-WAIVER result matches the implicit-fallback result.
-    asmp_implicit = Assumptions(
-        mortality_annual=lambda s, a, d: np.full(d.shape, 0.001),
-        lapse_annual=lambda s, a, d: np.full(d.shape, 0.005),
-        waiver_incidence_annual=lambda s, a, d: np.full(d.shape, 0.003),
-        discount_annual=0.03,
-        expense_acquisition=0.0,
-        expense_maintenance_annual=0.0,
-        expense_inflation=0.0,
-        ra_confidence=0.75,
-        mortality_cv=0.10,
-    )
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        v_implicit = value(mp, asmp_implicit)
-    assert np.allclose(v_explicit.bel, v_implicit.bel)

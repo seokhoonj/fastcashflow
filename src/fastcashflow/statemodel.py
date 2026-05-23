@@ -59,8 +59,9 @@ def _normalize_rate_name(name: str) -> str:
     if canonical is None:
         return name
     warnings.warn(
-        f"rate name {name!r} is deprecated; use {canonical!r}",
-        DeprecationWarning, stacklevel=4,
+        f"rate name {name!r} is deprecated and will be removed in the "
+        f"0.1.0 release; use {canonical!r}",
+        DeprecationWarning, stacklevel=2,
     )
     return canonical
 

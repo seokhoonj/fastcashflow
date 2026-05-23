@@ -18,7 +18,6 @@ import hashlib
 import importlib.util
 import os
 import sys
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -1081,19 +1080,13 @@ def value(
         # In-force state machine -- the StateModel composes the transition
         # edges for the generic occupancy recursion (see
         # fastcashflow.statemodel). The rates are on the sex x age x duration
-        # grid the kernel indexes.
-        if assumptions.state_model is None:
-            warnings.warn(
-                "value() defaulting to WAIVER_MODEL because "
-                "waiver_incidence_annual is set or model_points.state has "
-                "non-zero entries. Set assumptions.state_model explicitly "
-                "(e.g. STATE_MODELS['WAIVER']) -- the implicit fallback is "
-                "deprecated and will be removed in a future major version.",
-                DeprecationWarning, stacklevel=2,
-            )
-            state_model = WAIVER_MODEL
-        else:
-            state_model = assumptions.state_model
+        # grid the kernel indexes. If the caller hasn't supplied a
+        # StateModel but a multi-state mechanic is in play (waiver
+        # incidence rate set or a non-zero ModelPoints.state code), fall
+        # back to the bundled WAIVER_MODEL -- the most common Korean
+        # protection topology. The explicit form is
+        # ``assumptions.state_model = STATE_MODELS["WAIVER"]``.
+        state_model = assumptions.state_model or WAIVER_MODEL
         semi_markov = is_semi_markov(state_model)
         if semi_markov:
             # Phase (c) path -- a state declared ``duration_max > 0`` tracks

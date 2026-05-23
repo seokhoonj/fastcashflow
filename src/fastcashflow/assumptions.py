@@ -2,15 +2,12 @@
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
 
-from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow._typing import DurationRateFn, FloatArray, IntArray, RateFn
 from fastcashflow.statemodel import StateModel
-
-RateFn = Callable[[IntArray, FloatArray, IntArray], FloatArray]
 
 
 def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
@@ -196,17 +193,19 @@ class Assumptions:
     # natural place to express a 면책 (exclusion) period or any sojourn-
     # time effect.
     ci_incidence_annual: RateFn | None = None
-    ci_reincidence_annual: object | None = None    # (sex, age, p_dur, s_dur) -> rate
-    # Disability income / DI: ``disability_recovery_annual`` is the
-    # duration-dependent recovery rate (disabled -> active). Its callable
-    # receives the same four-argument signature as
-    # ``ci_reincidence_annual`` -- ``state_duration`` (months since
-    # disablement) is the standard DI valuation-table axis along which
+    # ``DurationRateFn`` takes (sex, age, policy_duration, state_duration).
+    # The fourth argument is the cohort index (months since entering the
+    # source state), the natural place to express a 면책 (exclusion)
+    # period or any sojourn-time effect on the rate.
+    ci_reincidence_annual: DurationRateFn | None = None
+    # ``disability_recovery_annual`` is the duration-dependent recovery
+    # rate (disabled -> active). Same DurationRateFn signature -- the
+    # state_duration is the standard DI valuation-table axis along which
     # the recovery rate drops off sharply with claim duration. Pair with
     # a Markov inception rate on the active state's transition (any of
     # ``waiver_incidence_annual`` or a custom slot) to model a full DI
     # contract.
-    disability_recovery_annual: object | None = None
+    disability_recovery_annual: DurationRateFn | None = None
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
     expense_cv: float = 0.0
@@ -232,9 +231,9 @@ class Assumptions:
                     "waiver_incidence_annual and waiver_inception_annual"
                 )
             warnings.warn(
-                "waiver_inception_annual is deprecated; "
-                "use waiver_incidence_annual",
-                DeprecationWarning, stacklevel=3,
+                "waiver_inception_annual is deprecated and will be removed "
+                "in the 0.1.0 release; use waiver_incidence_annual",
+                DeprecationWarning, stacklevel=2,
             )
             object.__setattr__(
                 self, "waiver_incidence_annual", self.waiver_inception_annual,

@@ -547,3 +547,93 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
+
+
+def _portfolio_with_two_riders(n, seed, rule_rider_waiting,
+                                rule_rider_reduction_end,
+                                rule_rider_reduction_factor):
+    """Portfolio with three coverages per mp: DEATH (rule-free) + a
+    recurring rider carrying a waiting/reduction rule (kind = 1) + a
+    diagnosis rider with no rules (kind = 2). Exercises both the
+    coverage-rule pass and the diagnosis pass on the same model points.
+    """
+    rng = np.random.default_rng(seed)
+    death_amount = rng.integers(10, 80, n) * 1_000_000.0
+    recur_amount = rng.integers(3, 15, n) * 1_000_000.0
+    diag_amount = rng.integers(2, 10, n) * 1_000_000.0
+    cov_kind = np.empty(n * 3, np.int64)
+    cov_amount = np.empty(n * 3)
+    cov_offset = np.arange(0, n * 3 + 1, 3, np.int64)
+    cov_waiting = np.zeros(n * 3, np.int64)
+    cov_reduction_end = np.zeros(n * 3, np.int64)
+    cov_reduction_factor = np.ones(n * 3)
+    for i in range(n):
+        cov_kind[3 * i + 0] = 0   # DEATH
+        cov_kind[3 * i + 1] = 1   # recurring rider (rule)
+        cov_kind[3 * i + 2] = 2   # diagnosis rider
+        cov_amount[3 * i + 0] = death_amount[i]
+        cov_amount[3 * i + 1] = recur_amount[i]
+        cov_amount[3 * i + 2] = diag_amount[i]
+        cov_waiting[3 * i + 1] = rule_rider_waiting
+        cov_reduction_end[3 * i + 1] = rule_rider_reduction_end
+        cov_reduction_factor[3 * i + 1] = rule_rider_reduction_factor
+    return fcf.ModelPoints(
+        issue_age=rng.integers(30, 55, n).astype(np.int64),
+        sex=rng.integers(0, 2, n).astype(np.int64),
+        level_premium=np.zeros(n),
+        term_months=np.full(n, 60, dtype=np.int64),
+        disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
+        cov_kind=cov_kind,
+        cov_amount=cov_amount,
+        cov_offset=cov_offset,
+        cov_waiting=cov_waiting,
+        cov_reduction_end=cov_reduction_end,
+        cov_reduction_factor=cov_reduction_factor,
+    )
+
+
+def test_semi_markov_with_rule_and_diagnosis_riders_together():
+    """The strongest parity case for the semi-Markov inforce-trajectory
+    caching: a single portfolio where both the coverage-rule pass and
+    the diagnosis pass fire on every contract. If the cached trajectory
+    is mis-saved or mis-read by either pass, BEL will diverge between
+    measure() and value().
+    """
+    from fastcashflow.assumptions import RiderRate
+    from fastcashflow.coverage import RISK_MORBIDITY
+
+    def recur_rate(sex, age, dur):
+        return np.full(dur.shape, _annual(0.0006))
+
+    def diag_rate(sex, age, dur):
+        return np.full(dur.shape, _annual(0.0009))
+
+    base = _reincidence_assumptions(duration_max=12, exclusion_months=6,
+                                     reincidence_monthly=0.01)
+    asmp = fcf.Assumptions(
+        mortality_annual=base.mortality_annual,
+        lapse_annual=base.lapse_annual,
+        ci_incidence_annual=base.ci_incidence_annual,
+        ci_reincidence_annual=base.ci_reincidence_annual,
+        discount_annual=base.discount_annual,
+        expense_acquisition=base.expense_acquisition,
+        expense_maintenance_annual=base.expense_maintenance_annual,
+        expense_inflation=base.expense_inflation,
+        ra_confidence=base.ra_confidence,
+        mortality_cv=base.mortality_cv,
+        morbidity_cv=0.10,
+        state_model=base.state_model,
+        riders=(
+            RiderRate(code="recur", rate=recur_rate,
+                      is_diagnosis=False, risk=RISK_MORBIDITY),
+            RiderRate(code="diag", rate=diag_rate,
+                      is_diagnosis=True, risk=RISK_MORBIDITY),
+        ),
+    )
+    mp = _portfolio_with_two_riders(
+        n=40, seed=29,
+        rule_rider_waiting=3, rule_rider_reduction_end=12,
+        rule_rider_reduction_factor=0.6,
+    )
+    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
+    assert np.allclose(m.bel[:, 0], v.bel)

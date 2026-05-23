@@ -16,6 +16,7 @@ import numpy as np
 from fastcashflow import (
     RISK_MORBIDITY,
     STATE_ACTIVE,
+    STATE_MODELS,
     STATE_PAIDUP,
     STATE_WAIVER,
     Assumptions,
@@ -49,7 +50,7 @@ def _assumptions(waiver_rate: float = 0.0, **overrides) -> Assumptions:
     base = dict(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
-        waiver_inception_annual=waiver,
+        waiver_incidence_annual=waiver,
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -57,6 +58,9 @@ def _assumptions(waiver_rate: float = 0.0, **overrides) -> Assumptions:
         ra_confidence=0.75,
         mortality_cv=0.10,
     )
+    if waiver is not None:
+        # Set state_model explicitly to silence the implicit-fallback warning.
+        base["state_model"] = STATE_MODELS["WAIVER"]
     base.update(overrides)
     return Assumptions(**base)
 
