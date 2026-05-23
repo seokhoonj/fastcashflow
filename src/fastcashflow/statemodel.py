@@ -40,22 +40,30 @@ from fastcashflow._typing import FloatArray, IntArray
 class Transition:
     """One transition out of a state.
 
-    ``rate`` names an assumption rate -- ``"mortality"``, ``"lapse"`` or
-    ``"waiver_inception"`` -- evaluated by the engine and supplied to
-    :func:`compile_state_model`. ``to`` is the destination state's name when
-    the transition moves occupancy to another transient state (waiver
-    inception, recovery), or ``None`` when it removes occupancy from the
-    in-force set entirely (death, lapse).
+    ``rate`` names an assumption rate -- ``"mortality"``, ``"lapse"``,
+    ``"waiver_inception"`` and so on -- evaluated by the engine and supplied
+    to :func:`compile_state_model`. ``to`` is the destination state's name
+    when the transition moves occupancy to another transient state (waiver
+    inception, recovery, reincidence), or ``None`` when it removes occupancy
+    from the in-force set entirely (death, lapse).
 
     ``lump_sum`` flags a transition that pays a one-off benefit when it
     fires -- the ``ModelPoints.disability_benefit`` amount times the
     transitioning occupancy. It applies only to a transition with a
     destination; death and diagnosis lump sums stay on the coverage list.
+
+    ``duration_dependent`` flags a semi-Markov transition: the rate depends
+    on the **sojourn time** in the source state (time since entering it),
+    not just on the policy duration. The source state must have
+    ``duration_max > 0`` -- the engine tracks per-cohort occupancy there.
+    The rate function for a duration-dependent transition takes a fourth
+    argument ``state_duration`` (months in source state).
     """
 
     rate: str
     to: str | None = None
     lump_sum: bool = False
+    duration_dependent: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,15 +77,32 @@ class State:
     state). ``transitions`` are the transitions out of the state, held in
     application order: the competing-decrement convention (see the module
     docstring) applies each in turn to the survivors of the previous.
+
+    ``duration_max`` switches the state to a **semi-Markov** model. When set
+    to ``D > 0``, the engine tracks ``D`` monthly cohorts of in-force in
+    this state (cohort 0 entered this month, cohort 1 entered last month,
+    and cohort ``D - 1`` absorbs everyone who has been here ``D - 1`` months
+    or longer). Transitions with ``duration_dependent=True`` then receive a
+    cohort index and may carry different rates per cohort -- the natural
+    way to express recovery, reincidence, exclusion (면책) periods, and
+    other duration-since-entry effects. The default ``0`` keeps the state
+    Markov (a single cohort, identical to the pre-Phase-(c) behaviour).
     """
 
     name: str
     premium: bool = False
     benefit: bool = False
     transitions: tuple[Transition, ...] = ()
+    duration_max: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "transitions", tuple(self.transitions))
+        object.__setattr__(self, "duration_max", int(self.duration_max))
+        if self.duration_max < 0:
+            raise ValueError(
+                f"state {self.name!r}: duration_max must be non-negative, "
+                f"got {self.duration_max}"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +145,12 @@ class StateModel:
                         f"state {s.name!r} has a lump-sum transition with no "
                         f"destination; a lump sum attaches to a transition"
                     )
+                if tr.duration_dependent and s.duration_max <= 0:
+                    raise ValueError(
+                        f"state {s.name!r} has a duration_dependent "
+                        f"transition {tr.rate!r} but its duration_max is 0; "
+                        f"set duration_max > 0 to track cohorts"
+                    )
         if any(not 0 <= i < len(states) for i in self.seating):
             raise ValueError(
                 f"seating index out of range for a {len(states)}-state model"
@@ -155,6 +186,17 @@ WAIVER_MODEL = StateModel(
 )
 
 
+def is_semi_markov(model: StateModel) -> bool:
+    """Return True if any state in the model tracks duration cohorts.
+
+    A semi-Markov state has ``duration_max > 0`` and tracks per-cohort
+    occupancy; its outgoing transitions may then be ``duration_dependent``.
+    A model with no such state is pure Markov and runs through the original
+    :func:`compile_state_model` path.
+    """
+    return any(s.duration_max > 0 for s in model.states)
+
+
 def compile_state_model(
     model: StateModel, rates: dict[str, FloatArray]
 ) -> tuple[IntArray, IntArray, FloatArray, np.ndarray, int,
@@ -180,7 +222,17 @@ def compile_state_model(
     one stay-in-state edge carrying the residual (see the module docstring). A
     transition that exits the in-force set contributes no edge: its occupancy
     simply leaves the recursion.
+
+    This function is **Markov-only**: it raises ``ValueError`` if the model
+    has any state with ``duration_max > 0``. Use
+    :func:`compile_state_model_with_duration` for semi-Markov models.
     """
+    if is_semi_markov(model):
+        raise ValueError(
+            "compile_state_model is Markov-only; use "
+            "compile_state_model_with_duration for a model with "
+            "duration-tracked states"
+        )
     arrays = {name: np.asarray(arr, dtype=np.float64)
               for name, arr in rates.items()}
     if not arrays:
@@ -223,4 +275,197 @@ def compile_state_model(
         len(model.states),
         np.array([s.premium for s in model.states], dtype=np.bool_),
         np.array([s.benefit for s in model.states], dtype=np.bool_),
+    )
+
+
+def compile_state_model_with_duration(
+    model: StateModel, rates: dict[str, FloatArray]
+) -> tuple[IntArray, IntArray, FloatArray, np.ndarray, int,
+           np.ndarray, np.ndarray, IntArray]:
+    """Compile a semi-Markov StateModel into duration-aware kernel arrays.
+
+    The cohort-aware counterpart of :func:`compile_state_model`. States
+    declared with ``duration_max > 0`` are tracked by monthly cohort: the
+    occupancy is a length-``duration_max`` vector indexed by sojourn time
+    (months since entering the state, with the last cohort absorbing
+    everyone who has been there at least ``duration_max - 1`` months).
+    Transitions marked ``duration_dependent=True`` may then carry different
+    rates per cohort.
+
+    ``rates`` carries one array per rate name referenced by the model's
+    transitions. Static (non-duration-dependent) rates broadcast to the
+    ``grid`` shape -- the same convention as the Markov path. A duration-
+    dependent rate has an extra trailing axis of length ``duration_max``
+    for the source state (cohort axis).
+
+    Returns ``(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
+    premium_state, benefit_state, state_duration_max)``:
+
+    * ``edge_from`` / ``edge_to`` -- ``(n_edges,)`` state indices.
+      ``edge_to == edge_from`` marks the residual stay edge (cohort
+      advances by one).
+    * ``edge_prob`` -- ``(n_edges, *grid, max_D)`` where ``max_D`` is the
+      max ``duration_max`` across states (1 if no state is tracked). The
+      tau axis carries the cohort index for the source state; for an edge
+      out of an untracked state only ``tau = 0`` is meaningful.
+    * ``edge_lump_sum`` -- ``(n_edges,)`` bool, the lump-sum transitions.
+    * ``n_states`` -- the number of transient states.
+    * ``premium_state`` / ``benefit_state`` -- ``(n_states,)`` bool.
+    * ``state_duration_max`` -- ``(n_states,)`` int. The effective cohort
+      count per state (``max(s.duration_max, 1)``). Untracked states have
+      value 1; tracked states have the declared ``duration_max``.
+    """
+    arrays = {name: np.asarray(arr, dtype=np.float64)
+              for name, arr in rates.items()}
+    if not arrays:
+        raise ValueError(
+            "compile_state_model_with_duration needs at least one rate array"
+        )
+    index = {s.name: i for i, s in enumerate(model.states)}
+    # Effective cohort count per state: untracked -> 1, tracked -> duration_max.
+    state_duration_max = np.array(
+        [max(s.duration_max, 1) for s in model.states], dtype=np.int64,
+    )
+    max_D = int(state_duration_max.max())
+
+    # The grid (sex, age, year, ...) is the broadcast of the static-rate
+    # shapes -- the duration-dependent rates share that grid with an extra
+    # trailing cohort axis. Inferring it from the *static* rates avoids
+    # baking the cohort axis into the grid.
+    static_shapes = []
+    for name, arr in arrays.items():
+        any_dyn = any(tr.rate == name and tr.duration_dependent
+                       for s in model.states for tr in s.transitions)
+        if any_dyn:
+            static_shapes.append(arr.shape[:-1])
+        else:
+            static_shapes.append(arr.shape)
+    grid = np.broadcast_shapes(*static_shapes)
+    grid_ndim = len(grid)
+
+    def rate_at(rate_name: str, src_state: State, tau: int) -> FloatArray:
+        """Evaluate a rate at cohort ``tau`` of the source state.
+
+        For a non-duration-dependent transition the array is returned as
+        is. For a duration-dependent one the tau-th slice of the trailing
+        cohort axis is taken.
+        """
+        arr = arrays[rate_name]
+        # Determine whether *this* transition reads the rate as dynamic;
+        # the same rate name may be referenced by both kinds across states.
+        # We pass the source state to look up the transition's flag.
+        for tr in src_state.transitions:
+            if tr.rate == rate_name:
+                if tr.duration_dependent:
+                    if arr.ndim != grid_ndim + 1:
+                        raise ValueError(
+                            f"rate {rate_name!r} is duration_dependent in "
+                            f"state {src_state.name!r} but its array shape "
+                            f"{arr.shape} has no cohort axis"
+                        )
+                    if arr.shape[-1] < src_state.duration_max:
+                        raise ValueError(
+                            f"rate {rate_name!r} cohort axis "
+                            f"{arr.shape[-1]} shorter than state "
+                            f"{src_state.name!r} duration_max "
+                            f"{src_state.duration_max}"
+                        )
+                    return arr[..., tau]
+                return arr
+        # Should be unreachable (caller is iterating this state's transitions).
+        return arr
+
+    edge_from: list[int] = []
+    edge_to: list[int] = []
+    edge_prob_blocks: list[FloatArray] = []   # one (max_D, *grid) per edge
+    edge_lump: list[bool] = []
+
+    for i, state in enumerate(model.states):
+        # Validate this state's transitions reference rates we have.
+        for tr in state.transitions:
+            if tr.rate not in arrays:
+                raise ValueError(
+                    f"state {state.name!r} references rate {tr.rate!r}, "
+                    f"which was not supplied to "
+                    f"compile_state_model_with_duration"
+                )
+
+        D = max(state.duration_max, 1)
+        # Edges produced by this state are emitted in declaration order:
+        # first the transient transitions (one per Transition with `to`),
+        # then the residual stay edge. We collect their per-edge cohort
+        # blocks here and pad to max_D below.
+        out_edges_to: list[int] = []
+        out_edges_lump: list[bool] = []
+        out_edges_blocks: list[np.ndarray] = []   # each shape (D, *grid)
+
+        # Compose one cohort at a time. For each cohort tau, run the
+        # ordered competing-decrement composition using rate values that
+        # depend on tau when the transition is duration_dependent.
+        # We accumulate per-edge probabilities along the tau axis.
+        per_edge_per_tau: list[list[np.ndarray]] = [
+            [] for _ in range(len([tr for tr in state.transitions
+                                   if tr.to is not None]))
+        ]
+        res_per_tau: list[np.ndarray] = []
+
+        for tau in range(D):
+            survive = np.ones(grid)
+            transient_idx = 0
+            for tr in state.transitions:
+                r = rate_at(tr.rate, state, tau)
+                if tr.to is not None:
+                    prob = survive * r
+                    per_edge_per_tau[transient_idx].append(prob)
+                    transient_idx += 1
+                survive = survive * (1.0 - r)
+            res_per_tau.append(survive)
+
+        # Stack tau slices per transient edge to (D, *grid), pad to
+        # max_D (extra cohorts hold zeros; codegen won't touch them).
+        for tr_idx, tr in enumerate([t for t in state.transitions
+                                      if t.to is not None]):
+            stacked = np.stack(per_edge_per_tau[tr_idx])  # (D, *grid)
+            if D < max_D:
+                pad = np.zeros((max_D - D,) + grid)
+                stacked = np.concatenate([stacked, pad], axis=0)
+            out_edges_to.append(index[tr.to])
+            out_edges_lump.append(tr.lump_sum)
+            out_edges_blocks.append(stacked)
+
+        residual = np.stack(res_per_tau)
+        if D < max_D:
+            pad = np.zeros((max_D - D,) + grid)
+            residual = np.concatenate([residual, pad], axis=0)
+        out_edges_to.append(i)
+        out_edges_lump.append(False)
+        out_edges_blocks.append(residual)
+
+        # All edges out of state i carry source index i.
+        for block, dst, lump in zip(out_edges_blocks, out_edges_to,
+                                     out_edges_lump):
+            edge_from.append(i)
+            edge_to.append(dst)
+            edge_prob_blocks.append(block)
+            edge_lump.append(lump)
+
+    # Stack edges to (n_edges, max_D, *grid), then move max_D axis to the
+    # *end* so the layout matches the Markov path's (..., edges) extension:
+    # final shape is (n_edges, *grid, max_D), cohort innermost. Codegen
+    # then transposes once more in engine.py to put edge index and cohort
+    # last for cache-friendly inner-loop access.
+    stacked = np.stack(edge_prob_blocks)  # (n_edges, max_D, *grid)
+    # Move axis 1 (max_D) to the end.
+    perm = (0,) + tuple(range(2, stacked.ndim)) + (1,)
+    edge_prob = np.ascontiguousarray(np.transpose(stacked, perm))
+
+    return (
+        np.array(edge_from, dtype=np.int64),
+        np.array(edge_to, dtype=np.int64),
+        edge_prob,
+        np.array(edge_lump, dtype=np.bool_),
+        len(model.states),
+        np.array([s.premium for s in model.states], dtype=np.bool_),
+        np.array([s.benefit for s in model.states], dtype=np.bool_),
+        state_duration_max,
     )

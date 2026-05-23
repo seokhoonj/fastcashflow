@@ -44,7 +44,12 @@ from fastcashflow.numerics import (
 from fastcashflow.coverage import coverage_arrays, coverage_rates
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
-from fastcashflow.statemodel import WAIVER_MODEL, compile_state_model
+from fastcashflow.statemodel import (
+    WAIVER_MODEL,
+    compile_state_model,
+    compile_state_model_with_duration,
+    is_semi_markov,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1271,6 +1276,288 @@ def _get_value_kernel_codegen(n_states, edge_from, edge_to, edge_lump_sum,
     return kernel
 
 
+# ---------------------------------------------------------------------------
+# Semi-Markov codegen (Phase (c) prototype -- cancer reincidence)
+# ---------------------------------------------------------------------------
+#
+# When the StateModel declares any state with ``duration_max > 0`` the engine
+# tracks per-cohort occupancy in that state -- ``occ[state, tau]`` where
+# ``tau`` is the sojourn time (months since entering the state). Transitions
+# marked ``duration_dependent=True`` then carry per-cohort rates, the natural
+# way to express recovery, reincidence and exclusion-period effects.
+#
+# The semi-Markov codegen extends the existing codegen pattern: every cohort
+# of every state becomes a scalar local (``occ_<s>_<tau>``), every edge
+# unrolls per-cohort (a residual stay advances the cohort with absorbing
+# semantics at the last cohort, a transient transition enters the destination
+# state's cohort 0). The generated source goes through the same disk-cached
+# numba compile path as the Markov codegen -- compile-once per topology.
+#
+# Coverage-rule and diagnosis-coverage passes are emitted as no-op stubs when
+# the StateModel is semi-Markov: this prototype targets the cancer-reincidence
+# product, which has no rule-bearing or diagnosis coverages on the model
+# points themselves -- the reincidence benefit rides the transition lump-sum.
+# Full coverage-rule / diagnosis support for semi-Markov is a follow-up.
+
+
+def _codegen_value_kernel_source_semi_markov(
+    n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
+    premium_state, benefit_state,
+) -> str:
+    """Generate the Python source of a semi-Markov-aware value kernel.
+
+    Same structure as :func:`_codegen_value_kernel_source` but with per-state
+    cohort scalars and per-cohort edge processing. State ``s`` with
+    ``state_duration_max[s] = D`` produces ``occ_s_0, occ_s_1, ..., occ_s_{D-1}``
+    local scalars; the last cohort absorbs everyone with sojourn time at
+    least ``D - 1`` months.
+    """
+    n_edges = len(edge_from)
+    edge_from = [int(x) for x in edge_from]
+    edge_to = [int(x) for x in edge_to]
+    edge_lump_sum = [bool(x) for x in edge_lump_sum]
+    premium_state = [bool(x) for x in premium_state]
+    benefit_state = [bool(x) for x in benefit_state]
+    D = [int(x) for x in state_duration_max]
+
+    def occ(s, tau):
+        return f"occ_{s}_{tau}"
+
+    def occ_next(s, tau):
+        return f"occ_next_{s}_{tau}"
+
+    # All cohort scalars across all states -- for sums and resets.
+    all_occ = [occ(s, tau) for s in range(n_states) for tau in range(D[s])]
+    all_next = [occ_next(s, tau) for s in range(n_states) for tau in range(D[s])]
+    sum_all = " + ".join(all_occ)
+    sum_prem = " + ".join(occ(s, tau) for s in range(n_states)
+                          if premium_state[s]
+                          for tau in range(D[s])) or "0.0"
+    sum_ben = " + ".join(occ(s, tau) for s in range(n_states)
+                         if benefit_state[s]
+                         for tau in range(D[s])) or "0.0"
+
+    L: list[str] = []
+
+    def line(indent: int, text: str) -> None:
+        L.append(" " * indent + text)
+
+    def emit_init(indent: int) -> None:
+        """Initialize all cohort scalars to 0, then seat ``cnt`` based on ss."""
+        for s in range(n_states):
+            for tau in range(D[s]):
+                line(indent, f"{occ(s, tau)} = 0.0")
+        # Seating: when entering a state via seating, always cohort 0.
+        line(indent, "if ss == 0:")
+        line(indent + 4, f"{occ(0, 0)} = cnt")
+        for s in range(1, n_states):
+            line(indent, f"elif ss == {s}:")
+            line(indent + 4, f"{occ(s, 0)} = cnt")
+
+    def emit_edge_step(indent: int, include_lump: bool = True) -> None:
+        """Emit a per-timestep advance: reset next-buffer, process every edge
+        across every source cohort, then copy back.
+
+        Edge semantics:
+          - residual (edge_from[e] == edge_to[e]): cohort tau advances to tau+1,
+            with cohort D-1 absorbing (long-tail).
+          - transient (edge_from[e] != edge_to[e]): enters destination state's
+            cohort 0.
+          - exits are not represented as edges; occupancy that doesn't go to
+            any next-buffer slot simply leaves the in-force set.
+        """
+        for s in range(n_states):
+            for tau in range(D[s]):
+                line(indent, f"{occ_next(s, tau)} = 0.0")
+        for e in range(n_edges):
+            s_from = edge_from[e]
+            s_to = edge_to[e]
+            is_residual = (s_from == s_to)
+            ls = edge_lump_sum[e]
+            for tau in range(D[s_from]):
+                line(indent,
+                     f"flow_{e}_{tau} = {occ(s_from, tau)} "
+                     f"* edge_prob[sx, ridx, year, {e}, {tau}]")
+                if is_residual:
+                    # Cohort advance; cap at D-1 (absorbing).
+                    next_tau = tau + 1 if tau + 1 < D[s_from] else D[s_from] - 1
+                    line(indent,
+                         f"{occ_next(s_from, next_tau)} += flow_{e}_{tau}")
+                else:
+                    # Transient: enter destination's cohort 0.
+                    line(indent,
+                         f"{occ_next(s_to, 0)} += flow_{e}_{tau}")
+                if include_lump and ls:
+                    line(indent,
+                         f"pd += flow_{e}_{tau} "
+                         f"* disability_benefit[mp] * dm")
+        # Copy back.
+        for s in range(n_states):
+            for tau in range(D[s]):
+                line(indent, f"{occ(s, tau)} = {occ_next(s, tau)}")
+
+    # --- Prologue: imports + decorator ----------------------------------
+    line(0, '"""Auto-generated by fastcashflow.engine.'
+            '_codegen_value_kernel_source_semi_markov -- do not edit."""')
+    line(0, "import numpy as np")
+    line(0, "from numba import njit, prange")
+    line(0, "")
+    line(0, "")
+    line(0, "@njit(parallel=True, cache=True)")
+    line(0, "def kernel(edge_prob, start_state, issue_index, sex,")
+    line(0, "           term_months, count, level_premium, single_premium,")
+    line(0, "           premium_term_months, premium_frequency, "
+            "annuity_frequency,")
+    line(0, "           cov_kind, cov_amount, cov_offset, cov_rates, "
+            "cov_risk,")
+    line(0, "           cov_is_diagnosis, maturity_benefit, "
+            "annuity_payment,")
+    line(0, "           disability_income, disability_benefit,")
+    line(0, "           expense_acquisition, maint_inflated_monthly,")
+    line(0, "           discount_start, discount_mid, mortality_factor,")
+    line(0, "           morbidity_factor, longevity_factor, "
+            "disability_factor):")
+    line(4, "n_mp = issue_index.shape[0]")
+    line(4, "bel = np.empty(n_mp)")
+    line(4, "ra = np.empty(n_mp)")
+    line(4, "csm = np.empty(n_mp)")
+    line(4, "loss_component = np.empty(n_mp)")
+
+    line(4, "for mp in prange(n_mp):")
+    line(8, "term = term_months[mp]")
+    line(8, "premium_term = premium_term_months[mp]")
+    line(8, "prem_freq = premium_frequency[mp]")
+    line(8, "ann_freq = annuity_frequency[mp]")
+    line(8, "ridx = issue_index[mp]")
+    line(8, "sx = sex[mp]")
+    line(8, "cnt = count[mp]")
+    line(8, "premium = level_premium[mp]")
+    line(8, "annuity = annuity_payment[mp]")
+    line(8, "c_start = cov_offset[mp]")
+    line(8, "c_end = cov_offset[mp + 1]")
+    line(8, "ss = start_state[mp]")
+    emit_init(8)
+    line(8, "pc = 0.0")
+    line(8, "pcm = 0.0")
+    line(8, "pd = 0.0")
+    line(8, "pp = 0.0")
+    line(8, "pe = 0.0")
+    line(8, "pa = 0.0")
+    line(8, "last_year = -1")
+    line(8, "claim_rate = 0.0")
+    line(8, "morb_rate = 0.0")
+    line(8, "prem_due = 0")
+    line(8, "ann_due = 0")
+    line(8, "prem_left = premium_term")
+
+    # --- Main t loop ---------------------------------------------------
+    line(8, "for t in range(term):")
+    line(12, "year = t // 12")
+    line(12, "if year != last_year:")
+    line(16, "claim_rate = 0.0")
+    line(16, "morb_rate = 0.0")
+    line(16, "for k in range(c_start, c_end):")
+    line(20, "kind = cov_kind[k]")
+    line(20, "if cov_is_diagnosis[kind]:")
+    line(24, "continue")
+    line(20, "rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]")
+    line(20, "if cov_risk[kind] == 0:")
+    line(24, "claim_rate += rate")
+    line(20, "else:")
+    line(24, "morb_rate += rate")
+    line(16, "last_year = year")
+    line(12, f"ift = {sum_all}")
+    line(12, f"prem_occ = {sum_prem}")
+    line(12, f"benefit_occ = {sum_ben}")
+    line(12, "ds = discount_start[t]")
+    line(12, "dm = discount_mid[t]")
+    line(12, "single = prem_occ * single_premium[mp] if t == 0 else 0.0")
+    line(12, "if prem_due == 0 and prem_left > 0:")
+    line(16, "level = prem_occ * premium")
+    line(16, "prem_due = prem_freq - 1")
+    line(12, "else:")
+    line(16, "level = 0.0")
+    line(16, "prem_due -= 1")
+    line(12, "prem_left -= 1")
+    line(12, "pp += (level + single) * ds")
+    line(12, "pc += ift * claim_rate * dm")
+    line(12, "pcm += ift * morb_rate * dm")
+    line(12, "if ann_due == 0:")
+    line(16, "pa += ift * annuity * ds")
+    line(16, "ann_due = ann_freq - 1")
+    line(12, "else:")
+    line(16, "ann_due -= 1")
+    line(12, "pd += benefit_occ * disability_income[mp] * dm")
+    line(12, "acquisition = cnt * expense_acquisition if t == 0 else 0.0")
+    line(12, "pe += (acquisition + ift * maint_inflated_monthly[t]) * dm")
+    emit_edge_step(12, include_lump=True)
+
+    line(8, f"total = {sum_all}")
+    line(8, "pm = total * maturity_benefit[mp] * discount_start[term]")
+
+    # --- Final output --------------------------------------------------
+    line(8, "bel_mp = pc + pcm + pd + pm + pa + pe - pp")
+    line(8, "ra_mp = (mortality_factor * pc + morbidity_factor * pcm")
+    line(8, "         + disability_factor * pd "
+            "+ longevity_factor * (pm + pa))")
+    line(8, "fcf = bel_mp + ra_mp")
+    line(8, "bel[mp] = bel_mp")
+    line(8, "ra[mp] = ra_mp")
+    line(8, "csm[mp] = max(0.0, -fcf)")
+    line(8, "loss_component[mp] = max(0.0, fcf)")
+    line(4, "return bel, ra, csm, loss_component")
+
+    return "\n".join(L)
+
+
+_VALUE_KERNEL_CODEGEN_SEMI_MARKOV_CACHE: dict = {}
+
+
+def _get_value_kernel_codegen_semi_markov(
+    n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
+    premium_state, benefit_state,
+):
+    """Return a semi-Markov codegen-specialised kernel for the given
+    topology + per-state cohort counts.
+
+    Same two-level cache pattern as :func:`_get_value_kernel_codegen` --
+    process-local dict for in-memory hits, content-addressed ``.py`` file
+    on disk so ``@njit(cache=True)`` persists the compiled native code
+    across processes.
+    """
+    key = (
+        int(n_states),
+        tuple(int(x) for x in state_duration_max),
+        tuple(int(x) for x in edge_from),
+        tuple(int(x) for x in edge_to),
+        tuple(bool(x) for x in edge_lump_sum),
+        tuple(bool(x) for x in premium_state),
+        tuple(bool(x) for x in benefit_state),
+    )
+    cached = _VALUE_KERNEL_CODEGEN_SEMI_MARKOV_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    src = _codegen_value_kernel_source_semi_markov(
+        n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
+        premium_state, benefit_state,
+    )
+    digest = hashlib.sha256(src.encode("utf-8")).hexdigest()[:16]
+    cache_path = _codegen_cache_dir() / f"value_kernel_sm_{digest}.py"
+    if not cache_path.exists():
+        _atomic_write_text(cache_path, src)
+    module_name = f"_fastcashflow_codegen_sm_{digest}"
+    module = sys.modules.get(module_name)
+    if module is None:
+        spec = importlib.util.spec_from_file_location(module_name, cache_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+    kernel = module.kernel
+    _VALUE_KERNEL_CODEGEN_SEMI_MARKOV_CACHE[key] = kernel
+    return kernel
+
+
 @njit(parallel=True, cache=True)
 def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          single_premium, premium_term_months, premium_frequency,
@@ -1505,17 +1792,70 @@ def value(
         # fastcashflow.statemodel). The rates are on the sex x age x duration
         # grid the kernel indexes.
         state_model = assumptions.state_model or WAIVER_MODEL
-        (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
-         benefit_state) = compile_state_model(
-            state_model,
-            {"mortality": mortality_grid, "waiver_inception": waiver_grid,
-             "lapse": lapse_grid},
-        )
-        # compile_state_model returns ``edge_prob`` with the edge axis first
-        # -- (n_edges, sex, age, year). Transpose so the edge axis is
-        # innermost: all edges for a given (sex, age, year) lookup land in
-        # one cache line, ~25% faster on the multi-state hot path.
-        edge_prob = np.ascontiguousarray(np.transpose(edge_prob, (1, 2, 3, 0)))
+        semi_markov = is_semi_markov(state_model)
+        if semi_markov:
+            # Phase (c) path -- a state declared ``duration_max > 0`` tracks
+            # per-cohort occupancy. The rate dict carries one entry per name
+            # the model references; duration-dependent rates land here as
+            # 4D arrays (sex, age, year, cohort), static rates as 3D.
+            max_cohort = max(s.duration_max for s in state_model.states
+                              if s.duration_max > 0)
+            rate_dict = {"mortality": mortality_grid,
+                          "lapse": lapse_grid}
+            if assumptions.waiver_inception_annual is not None:
+                waiver_grid = np.ascontiguousarray(annual_to_monthly(
+                    assumptions.waiver_inception_annual(
+                        sex_grid, issue_age_grid, duration_grid)))
+                rate_dict["waiver_inception"] = waiver_grid
+            if assumptions.ci_incidence_annual is not None:
+                ci_inc_grid = np.ascontiguousarray(annual_to_monthly(
+                    assumptions.ci_incidence_annual(
+                        sex_grid, issue_age_grid, duration_grid)))
+                rate_dict["ci_incidence"] = ci_inc_grid
+            if assumptions.ci_reincidence_annual is not None:
+                # Build the (sex, age, year, cohort) grid by sweeping cohort
+                # months 0..max_cohort-1. The rate function takes a fourth
+                # ``state_duration`` argument so 면책 (exclusion) periods
+                # and any other sojourn-time effect drop straight in.
+                cohort_idx = np.arange(max_cohort)
+                sg4, ag4, dg4, cg4 = np.meshgrid(
+                    np.array([0, 1]),
+                    np.arange(min_age, max_age + 1),
+                    durations,
+                    cohort_idx,
+                    indexing="ij",
+                )
+                ci_rein_grid = np.ascontiguousarray(annual_to_monthly(
+                    assumptions.ci_reincidence_annual(sg4, ag4, dg4, cg4)))
+                rate_dict["ci_reincidence"] = ci_rein_grid
+            (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
+             premium_state, benefit_state,
+             state_duration_max) = compile_state_model_with_duration(
+                state_model, rate_dict,
+            )
+            # compile_state_model_with_duration returns ``edge_prob`` shape
+            # ``(n_edges, sex, age, year, max_D)``. Transpose to put the
+            # (sex, age, year) lookup axes outermost and the edge / cohort
+            # indices last, so a per-edge per-cohort access for one
+            # (sex, age, year) stays in cache.
+            edge_prob = np.ascontiguousarray(
+                np.transpose(edge_prob, (1, 2, 3, 0, 4)))
+        else:
+            (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
+             premium_state, benefit_state) = compile_state_model(
+                state_model,
+                {"mortality": mortality_grid,
+                 "waiver_inception": waiver_grid,
+                 "lapse": lapse_grid},
+            )
+            # compile_state_model returns ``edge_prob`` with the edge axis
+            # first -- (n_edges, sex, age, year). Transpose so the edge axis
+            # is innermost: all edges for a given (sex, age, year) lookup
+            # land in one cache line, ~25% faster on the multi-state hot
+            # path.
+            edge_prob = np.ascontiguousarray(
+                np.transpose(edge_prob, (1, 2, 3, 0)))
+            state_duration_max = None
         start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
     # coverage_rates stacks the annual mortality and rider rates; the whole
@@ -1630,21 +1970,80 @@ def value(
     )
 
     if backend == "cpu":
-        # Every multi-state path goes through the codegen specialisation:
-        # the entire edge topology and the per-state premium / benefit
-        # flags become literals in the generated source so the inner loop
-        # has no array indirections left. The closure factory and the
-        # hand-unrolled n_states=2 / n_states=3 kernels stay in the file
-        # as a readable reference but are no longer on the default path.
-        kernel = _get_value_kernel_codegen(
-            n_states, edge_from, edge_to, edge_lump_sum,
-            premium_state, benefit_state,
-        )
-        bel, ra, csm, loss_component = kernel(
-            *common_args, model_points.cov_waiting, model_points.cov_reduction_end,
-            model_points.cov_reduction_factor,
-        )
+        if state_duration_max is not None:
+            # Phase (c) semi-Markov path. The kernel takes a thinner arg
+            # tuple -- the edge topology and per-state cohort counts are
+            # baked into the generated source (one cache file per unique
+            # StateModel + duration shape). Coverage-rule / diagnosis
+            # passes are intentionally not emitted in the prototype, so
+            # the model points used here must carry no waiting / reduction
+            # rules or diagnosis coverages.
+            if np.any(model_points.cov_waiting) or np.any(model_points.cov_reduction_end):
+                raise NotImplementedError(
+                    "semi-Markov path does not yet support coverage "
+                    "waiting / reduction rules; clear them or use a "
+                    "Markov StateModel"
+                )
+            if np.any(cov_is_diagnosis):
+                raise NotImplementedError(
+                    "semi-Markov path does not yet support diagnosis "
+                    "coverages on the model points; reincidence and "
+                    "similar lump-sum benefits ride a transition's "
+                    "lump_sum flag instead"
+                )
+            kernel = _get_value_kernel_codegen_semi_markov(
+                n_states, state_duration_max, edge_from, edge_to,
+                edge_lump_sum, premium_state, benefit_state,
+            )
+            bel, ra, csm, loss_component = kernel(
+                edge_prob, start_state, issue_index,
+                model_points.sex,
+                model_points.term_months,
+                model_points.count,
+                model_points.level_premium,
+                model_points.single_premium,
+                model_points.premium_term_months,
+                model_points.premium_frequency_months,
+                model_points.annuity_frequency_months,
+                model_points.cov_kind,
+                cov_amount,
+                model_points.cov_offset,
+                cov_rates,
+                cov_risk,
+                cov_is_diagnosis,
+                model_points.maturity_benefit,
+                model_points.annuity_payment,
+                model_points.disability_income,
+                model_points.disability_benefit,
+                assumptions.expense_acquisition,
+                maint_inflated_monthly,
+                discount_start,
+                discount_mid,
+                mortality_factor,
+                morbidity_factor,
+                longevity_factor,
+                disability_factor,
+            )
+        else:
+            # Markov path -- every multi-state model with no duration
+            # tracking. The closure factory and the hand-unrolled
+            # n_states=2 / n_states=3 kernels stay in the file as a
+            # readable reference but are no longer on the default path.
+            kernel = _get_value_kernel_codegen(
+                n_states, edge_from, edge_to, edge_lump_sum,
+                premium_state, benefit_state,
+            )
+            bel, ra, csm, loss_component = kernel(
+                *common_args, model_points.cov_waiting,
+                model_points.cov_reduction_end,
+                model_points.cov_reduction_factor,
+            )
     elif backend == "gpu":
+        if state_duration_max is not None:
+            raise NotImplementedError(
+                "value(backend='gpu') does not support semi-Markov "
+                "StateModels yet; use backend='cpu'"
+            )
         if np.any(model_points.cov_waiting) or np.any(model_points.cov_reduction_end):
             raise ValueError(
                 "value(backend='gpu') does not support coverage waiting / "

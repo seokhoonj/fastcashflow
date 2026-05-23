@@ -176,6 +176,15 @@ class Assumptions:
     ra_confidence: float
     mortality_cv: float
     waiver_inception_annual: RateFn | None = None
+    # Semi-Markov (Phase (c)) prototype rates. ``ci_incidence_annual`` is the
+    # first-cancer diagnosis rate (active -> post_first transition, Markov);
+    # ``ci_reincidence_annual`` is the duration-dependent reincidence rate
+    # (post_first -> post_second) -- its callable receives an extra
+    # ``state_duration`` argument (months since first diagnosis), the
+    # natural place to express a 면책 (exclusion) period or any sojourn-
+    # time effect.
+    ci_incidence_annual: RateFn | None = None
+    ci_reincidence_annual: object | None = None    # (sex, age, p_dur, s_dur) -> rate
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
     expense_cv: float = 0.0
