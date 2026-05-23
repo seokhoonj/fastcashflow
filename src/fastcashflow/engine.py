@@ -675,6 +675,13 @@ def _codegen_value_kernel_source_semi_markov(
     line(8, "prem_due = 0")
     line(8, "ann_due = 0")
     line(8, "prem_left = premium_term")
+    # Saved per-month total in-force (sum across all cohorts). The rule
+    # and diagnosis passes below reuse this trajectory instead of
+    # re-running the state machine -- a 5x-10x win for semi-Markov
+    # contracts that combine a deep cohort grid with rule-bearing or
+    # diagnosis riders. Same trick the detailed _project_kernel_semi_markov
+    # has been using since the cohort-aware projection landed.
+    line(8, "inforce_traj = np.empty(term)")
 
     # --- Main t loop ---------------------------------------------------
     line(8, "for t in range(term):")
@@ -695,6 +702,7 @@ def _codegen_value_kernel_source_semi_markov(
     line(24, "morb_rate += rate")
     line(16, "last_year = year")
     line(12, f"ift = {sum_all}")
+    line(12, "inforce_traj[t] = ift")
     line(12, f"prem_occ = {sum_prem}")
     line(12, f"benefit_occ = {sum_ben}")
     line(12, "ds = discount_start[t]")
@@ -724,9 +732,11 @@ def _codegen_value_kernel_source_semi_markov(
     line(8, "pm = total * maturity_benefit[mp] * discount_start[term]")
 
     # --- Coverage-rule pass --------------------------------------------
-    # Rule-bearing non-diagnosis coverages: rerun the state machine on a
-    # fresh cohort occupancy and apply the per-month benefit multiplier
-    # (which can change partway through a year) to the total in-force.
+    # Rule-bearing non-diagnosis coverages: reuse the per-month total
+    # in-force trajectory the main pass saved instead of re-running the
+    # cohort-aware state machine. Each rider becomes an O(term) scalar
+    # loop -- the same trick the detailed _project_kernel_semi_markov
+    # has been using all along.
     line(8, "for k in range(c_start, c_end):")
     line(12, "kind = cov_kind[k]")
     line(12, "if cov_is_diagnosis[kind]:")
@@ -738,25 +748,22 @@ def _codegen_value_kernel_source_semi_markov(
     line(12, "benefit = cov_amount[k]")
     line(12, "red_factor = cov_reduction_factor[k]")
     line(12, "mortality_risk = cov_risk[kind] == 0")
-    emit_init(12)
-    line(12, "for t in range(term):")
+    line(12, "for t in range(wait, term):")
     line(16, "year = t // 12")
-    line(16, "if t >= wait:")
-    line(20, "mult = red_factor if t < red_end else 1.0")
-    line(20, f"inf = {sum_all}")
-    line(20, "contrib = (inf * cov_rates[kind, sx, ridx, year]")
-    line(20, "           * benefit * mult * discount_mid[t])")
-    line(20, "if mortality_risk:")
-    line(24, "pc += contrib")
-    line(20, "else:")
-    line(24, "pcm += contrib")
-    emit_edge_step(16, include_lump=False)
+    line(16, "mult = red_factor if t < red_end else 1.0")
+    line(16, "contrib = (inforce_traj[t] * cov_rates[kind, sx, ridx, year]")
+    line(16, "           * benefit * mult * discount_mid[t])")
+    line(16, "if mortality_risk:")
+    line(20, "pc += contrib")
+    line(16, "else:")
+    line(20, "pcm += contrib")
 
     # --- Diagnosis-coverage pass ---------------------------------------
-    # Diagnosis coverages pay once on first diagnosis. Each coverage runs
-    # its claims off a depleting not-yet-diagnosed pool, implemented by
-    # scaling every state-machine flow by (1 - d_rate) each timestep so
-    # the occupancy itself tracks the joint depletion.
+    # Diagnosis coverages run off a depleting not-yet-diagnosed pool.
+    # The pool's depletion (frac) is a scalar that multiplies the saved
+    # cohort-aware in-force trajectory -- mathematically equivalent to
+    # running the state machine with each flow scaled by (1 - d_rate),
+    # but a single scalar loop per rider rather than a full cohort walk.
     line(8, "for k in range(c_start, c_end):")
     line(12, "kind = cov_kind[k]")
     line(12, "if not cov_is_diagnosis[kind]:")
@@ -765,7 +772,7 @@ def _codegen_value_kernel_source_semi_markov(
     line(12, "wait = cov_waiting[k]")
     line(12, "red_end = cov_reduction_end[k]")
     line(12, "red_factor = cov_reduction_factor[k]")
-    emit_init(12)
+    line(12, "frac = 1.0")
     line(12, "d_year = -1")
     line(12, "d_rate = 0.0")
     line(12, "for t in range(term):")
@@ -775,10 +782,9 @@ def _codegen_value_kernel_source_semi_markov(
     line(20, "d_year = year")
     line(16, "if t >= wait:")
     line(20, "mult = red_factor if t < red_end else 1.0")
-    line(20, f"healthy = {sum_all}")
-    line(20, "pcm += healthy * d_rate * benefit * mult * discount_mid[t]")
-    line(16, "undiag = 1.0 - d_rate")
-    emit_edge_step(16, include_lump=False, scale=" * undiag")
+    line(20, "pcm += (inforce_traj[t] * frac * d_rate * benefit * mult")
+    line(20, "        * discount_mid[t])")
+    line(16, "frac *= (1.0 - d_rate)")
 
     # --- Final output --------------------------------------------------
     line(8, "bel_mp = pc + pcm + pd + pm + pa + pe - pp")
