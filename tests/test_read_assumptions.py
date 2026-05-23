@@ -81,3 +81,69 @@ def test_resolved_basis_values():
     assert not np.isclose(ga, fc)
     # fused and detailed paths agree
     assert np.isclose(measure(mp, basis[("term_a", "GA")]).bel[0, 0], ga)
+
+
+# ---------------------------------------------------------------------------
+# state_model column + STATE_MODELS registry (U+W)
+# ---------------------------------------------------------------------------
+
+
+def test_state_model_column_resolves_to_registry_entry():
+    """The sample workbook's ``defaults`` row carries
+    ``state_model = WAIVER`` -- both segments inherit and resolve to
+    ``STATE_MODELS['WAIVER']``.
+    """
+    from fastcashflow import STATE_MODELS
+    basis = load_sample_assumptions()
+    for asmp in basis.values():
+        assert asmp.state_model is STATE_MODELS["WAIVER"]
+
+
+def test_state_model_column_blank_keeps_none():
+    """A segment row with a blank ``state_model`` cell falls back to the
+    defaults row; an empty defaults cell leaves ``Assumptions.state_model``
+    as ``None`` (matching the engine's pre-registry behaviour).
+    """
+    import openpyxl, tempfile, shutil
+    import importlib.resources as resources
+    from fastcashflow import read_assumptions
+    # Copy the sample workbook and clear the defaults row's state_model.
+    sample = resources.files("fastcashflow").joinpath(
+        "sample_data/sample_assumptions.xlsx")
+    with tempfile.TemporaryDirectory() as d:
+        dst = f"{d}/blank_state.xlsx"
+        shutil.copy(sample, dst)
+        wb = openpyxl.load_workbook(dst)
+        ws = wb["segments"]
+        col = None
+        for c in range(1, ws.max_column + 1):
+            if ws.cell(row=1, column=c).value == "state_model":
+                col = c; break
+        for r in range(2, ws.max_row + 1):
+            ws.cell(row=r, column=col).value = None
+        wb.save(dst)
+        basis = read_assumptions(dst)
+        for asmp in basis.values():
+            assert asmp.state_model is None
+
+
+def test_state_model_unknown_key_raises():
+    """An unrecognised state_model key is rejected at read time, with a
+    hint listing the registry contents."""
+    import openpyxl, tempfile, shutil, pytest
+    import importlib.resources as resources
+    from fastcashflow import read_assumptions
+    sample = resources.files("fastcashflow").joinpath(
+        "sample_data/sample_assumptions.xlsx")
+    with tempfile.TemporaryDirectory() as d:
+        dst = f"{d}/bad_state.xlsx"
+        shutil.copy(sample, dst)
+        wb = openpyxl.load_workbook(dst)
+        ws = wb["segments"]
+        for c in range(1, ws.max_column + 1):
+            if ws.cell(row=1, column=c).value == "state_model":
+                ws.cell(row=2, column=c).value = "NOT_A_MODEL"
+                break
+        wb.save(dst)
+        with pytest.raises(ValueError, match="NOT_A_MODEL"):
+            read_assumptions(dst)

@@ -35,6 +35,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import warnings
+
 import numpy as np
 from numba import njit, prange
 
@@ -490,9 +492,19 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
 
     # In-force state machine -- the StateModel composes the transition edges
     # the generic occupancy recursion advances; the kernel carries no state
-    # set of its own. The default is the active / waiver model; a product
-    # overrides it through assumptions.state_model.
-    state_model = assumptions.state_model or WAIVER_MODEL
+    # set of its own. A product overrides it through assumptions.state_model.
+    if assumptions.state_model is None:
+        warnings.warn(
+            "measure() defaulting to WAIVER_MODEL because "
+            "waiver_incidence_annual is set or model_points.state has "
+            "non-zero entries. Set assumptions.state_model explicitly "
+            "(e.g. STATE_MODELS['WAIVER']) -- the implicit fallback is "
+            "deprecated and will be removed in a future major version.",
+            DeprecationWarning, stacklevel=2,
+        )
+        state_model = WAIVER_MODEL
+    else:
+        state_model = assumptions.state_model
     start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
 
     if is_semi_markov(state_model):

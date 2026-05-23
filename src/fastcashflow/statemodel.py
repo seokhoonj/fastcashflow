@@ -217,6 +217,18 @@ WAIVER_MODEL = StateModel(
 )
 
 
+# Named registry of bundled StateModels. A non-programmer actuary can pick a
+# topology by name -- in the ``segments`` sheet's ``state_model`` column, in
+# Python via ``STATE_MODELS["WAIVER"]``, or anywhere else a string label is a
+# natural input. Additions land here as fixed-vocabulary entries (the same
+# pattern as the coverage types -- see [[phase5-coverage-design]] in the
+# project memory); users with a topology outside the registry still build
+# their own ``StateModel`` in code.
+STATE_MODELS: dict[str, StateModel] = {
+    "WAIVER": WAIVER_MODEL,
+}
+
+
 def is_semi_markov(model: StateModel) -> bool:
     """Return True if any state in the model tracks duration cohorts.
 

@@ -30,6 +30,7 @@ import openpyxl
 import polars as pl
 
 from fastcashflow.assumptions import Assumptions, RiderRate
+from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
     RATE_DRIVEN_TYPES, RISK_MORBIDITY, RISK_MORTALITY, TYPE_ANNUITY,
     TYPE_DEATH, TYPE_DEATH_MAIN, TYPE_DIAGNOSIS, TYPE_MATURITY,
@@ -475,6 +476,20 @@ def read_assumptions(path):
         method = cell("ra_method")
         if method is not None:
             kwargs["ra_method"] = str(method).strip()
+        # Optional state_model column -- non-programmer actuary picks a
+        # bundled topology by its registry key (e.g. "WAIVER"). Blank cell
+        # leaves Assumptions.state_model = None; an unknown key is an
+        # error with a hint listing the registered keys.
+        state_model_key = cell("state_model")
+        if state_model_key is not None:
+            key = str(state_model_key).strip()
+            try:
+                kwargs["state_model"] = STATE_MODELS[key]
+            except KeyError:
+                raise ValueError(
+                    f"{where}: state_model={key!r} is not in STATE_MODELS "
+                    f"(known: {sorted(STATE_MODELS)})"
+                ) from None
         result[(product, channel)] = Assumptions(**kwargs)
     return result
 
