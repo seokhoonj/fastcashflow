@@ -366,6 +366,164 @@ def _value_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     return bel, ra, csm, loss_component
 
 
+@njit(parallel=True, cache=True)
+def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
+                         single_premium, premium_term_months, premium_frequency,
+                         annuity_frequency, cov_kind, cov_amount, cov_offset,
+                         cov_rates, cov_risk, cov_is_diagnosis,
+                         maturity_benefit, annuity_payment, expense_acquisition,
+                         maint_inflated_monthly, discount_start, discount_mid,
+                         mortality_factor, morbidity_factor, longevity_factor,
+                         cov_waiting, cov_reduction_end, cov_reduction_factor,
+                         survival_monthly):
+    """Scalar-inforce fast path of :func:`_value_kernel`.
+
+    Used when the in-force projection collapses to a single survival track --
+    no user-supplied StateModel, no waiver inception, every model point
+    seated in the active state. The in-force is carried as a scalar; the
+    monthly decay is one multiply against the precomputed
+    ``survival_monthly[sex, age, year] = (1 - q_monthly) * (1 - l_monthly)``
+    table. Numerically identical to ``_value_kernel`` for this configuration
+    -- the disability income, disability lump-sum and benefit-state pieces
+    of the general kernel evaluate to zero here -- and recovers the
+    pre-Phase(b) speed (see ``docs/tutorial/13-why-fast.md``).
+    """
+    n_mp = issue_index.shape[0]
+    bel = np.empty(n_mp)
+    ra = np.empty(n_mp)
+    csm = np.empty(n_mp)
+    loss_component = np.empty(n_mp)
+
+    for mp in prange(n_mp):
+        term = term_months[mp]
+        premium_term = premium_term_months[mp]
+        prem_freq = premium_frequency[mp]
+        ann_freq = annuity_frequency[mp]
+        ridx = issue_index[mp]
+        sx = sex[mp]
+        cnt = count[mp]
+        premium = level_premium[mp]
+        annuity = annuity_payment[mp]
+        c_start = cov_offset[mp]
+        c_end = cov_offset[mp + 1]
+        inforce = cnt
+        pc = 0.0          # PV of death claims (mortality risk)
+        pcm = 0.0         # PV of health claims (morbidity risk)
+        pp = 0.0
+        pe = 0.0
+        pa = 0.0
+        last_year = -1
+        claim_rate = 0.0
+        morb_rate = 0.0
+        # Counters replace modulo / less-than checks in the inner loop --
+        # ``prem_due`` ticks down to the next premium-paying month,
+        # ``ann_due`` to the next annuity month, and ``prem_left`` to the
+        # end of the premium-paying term. Profiling shows the modulo /
+        # comparison form costs ~2/3 of the inner-loop time at large
+        # portfolios -- the counter form lets the compiler keep the loop
+        # branch-light and 1M MP runs in ~50 ms again.
+        prem_due = 0
+        ann_due = 0
+        prem_left = premium_term
+        for t in range(term):
+            year = t // 12
+            if year != last_year:
+                claim_rate = 0.0
+                morb_rate = 0.0
+                for k in range(c_start, c_end):
+                    kind = cov_kind[k]
+                    if cov_is_diagnosis[kind]:
+                        continue
+                    if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
+                        continue
+                    rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]
+                    if cov_risk[kind] == 0:
+                        claim_rate += rate
+                    else:
+                        morb_rate += rate
+                last_year = year
+            ds = discount_start[t]
+            dm = discount_mid[t]
+            single = inforce * single_premium[mp] if t == 0 else 0.0
+            if prem_due == 0 and prem_left > 0:
+                level = inforce * premium
+                prem_due = prem_freq - 1
+            else:
+                level = 0.0
+                prem_due -= 1
+            prem_left -= 1
+            pp += (level + single) * ds
+            pc += inforce * claim_rate * dm
+            pcm += inforce * morb_rate * dm
+            if ann_due == 0:
+                pa += inforce * annuity * ds
+                ann_due = ann_freq - 1
+            else:
+                ann_due -= 1
+            acquisition = cnt * expense_acquisition if t == 0 else 0.0
+            pe += (acquisition + inforce * maint_inflated_monthly[t]) * dm
+            inforce *= survival_monthly[sx, ridx, year]
+        pm = inforce * maturity_benefit[mp] * discount_start[term]
+        # Non-diagnosis coverages with a waiting or reduced-benefit rule:
+        # rerun the survival on the same scalar track so the benefit
+        # multiplier (which can change mid-year) applies cleanly.
+        for k in range(c_start, c_end):
+            kind = cov_kind[k]
+            if cov_is_diagnosis[kind]:
+                continue
+            wait = cov_waiting[k]
+            red_end = cov_reduction_end[k]
+            if wait == 0 and red_end == 0:
+                continue
+            benefit = cov_amount[k]
+            red_factor = cov_reduction_factor[k]
+            mortality_risk = cov_risk[kind] == 0
+            inf = cnt
+            for t in range(term):
+                year = t // 12
+                if t >= wait:
+                    mult = red_factor if t < red_end else 1.0
+                    contrib = (inf * cov_rates[kind, sx, ridx, year]
+                               * benefit * mult * discount_mid[t])
+                    if mortality_risk:
+                        pc += contrib
+                    else:
+                        pcm += contrib
+                inf *= survival_monthly[sx, ridx, year]
+        # Diagnosis coverages: claims run off a depleting "not yet diagnosed"
+        # pool, which depletes both by survival and by the diagnosis rate.
+        for k in range(c_start, c_end):
+            kind = cov_kind[k]
+            if not cov_is_diagnosis[kind]:
+                continue
+            benefit = cov_amount[k]
+            wait = cov_waiting[k]
+            red_end = cov_reduction_end[k]
+            red_factor = cov_reduction_factor[k]
+            healthy = cnt
+            d_year = -1
+            d_rate = 0.0
+            for t in range(term):
+                year = t // 12
+                if year != d_year:
+                    d_rate = cov_rates[kind, sx, ridx, year]
+                    d_year = year
+                if t >= wait:
+                    mult = red_factor if t < red_end else 1.0
+                    pcm += healthy * d_rate * benefit * mult * discount_mid[t]
+                healthy *= survival_monthly[sx, ridx, year] * (1.0 - d_rate)
+        bel_mp = pc + pcm + pm + pa + pe - pp
+        ra_mp = (mortality_factor * pc + morbidity_factor * pcm
+                 + longevity_factor * (pm + pa))
+        fcf = bel_mp + ra_mp
+        bel[mp] = bel_mp
+        ra[mp] = ra_mp
+        csm[mp] = max(0.0, -fcf)
+        loss_component[mp] = max(0.0, fcf)
+
+    return bel, ra, csm, loss_component
+
+
 def value(
     model_points: ModelPoints,
     assumptions: Assumptions,
@@ -418,26 +576,37 @@ def value(
     mortality_annual_grid = assumptions.mortality_annual(
         sex_grid, issue_age_grid, duration_grid)
     mortality_grid = np.ascontiguousarray(annual_to_monthly(mortality_annual_grid))
-    if assumptions.waiver_inception_annual is None:
-        waiver_grid = np.zeros_like(mortality_grid)
-    else:
-        waiver_grid = np.ascontiguousarray(annual_to_monthly(
-            assumptions.waiver_inception_annual(
-                sex_grid, issue_age_grid, duration_grid)))
     issue_index = (model_points.issue_age - min_age).astype(np.int64)
     lapse_grid = np.ascontiguousarray(annual_to_monthly(
         assumptions.lapse_annual(sex_grid, issue_age_grid, duration_grid)))
-    # In-force state machine -- the StateModel composes the transition edges
-    # for the generic occupancy recursion (see fastcashflow.statemodel). The
-    # rates are on the sex x age x duration grid the kernel indexes.
-    state_model = assumptions.state_model or WAIVER_MODEL
-    (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
-     benefit_state) = compile_state_model(
-        state_model,
-        {"mortality": mortality_grid, "waiver_inception": waiver_grid,
-         "lapse": lapse_grid},
-    )
-    start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
+    # Fast path: when no waiver / paid-up mechanic is active and every model
+    # point is seated in the active state, the in-force is a single survival
+    # track. The scalar kernel carries it as one number and runs the
+    # pre-Phase(b) speed path; the N-state kernel is reserved for products
+    # that genuinely need an occupancy vector.
+    fast_path = (backend == "cpu"
+                 and assumptions.state_model is None
+                 and assumptions.waiver_inception_annual is None
+                 and not np.any(model_points.state))
+    if not fast_path:
+        if assumptions.waiver_inception_annual is None:
+            waiver_grid = np.zeros_like(mortality_grid)
+        else:
+            waiver_grid = np.ascontiguousarray(annual_to_monthly(
+                assumptions.waiver_inception_annual(
+                    sex_grid, issue_age_grid, duration_grid)))
+        # In-force state machine -- the StateModel composes the transition
+        # edges for the generic occupancy recursion (see
+        # fastcashflow.statemodel). The rates are on the sex x age x duration
+        # grid the kernel indexes.
+        state_model = assumptions.state_model or WAIVER_MODEL
+        (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
+         benefit_state) = compile_state_model(
+            state_model,
+            {"mortality": mortality_grid, "waiver_inception": waiver_grid,
+             "lapse": lapse_grid},
+        )
+        start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
     # coverage_rates stacks the annual mortality and rider rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
@@ -472,6 +641,42 @@ def value(
         cov_amount = cov_amount * _settlement_factor(
             assumptions.settlement_pattern, assumptions.discount_monthly
         )
+
+    if fast_path:
+        survival_monthly = np.ascontiguousarray(
+            (1.0 - mortality_grid) * (1.0 - lapse_grid)
+        )
+        bel, ra, csm, loss_component = _value_kernel_scalar(
+            issue_index,
+            model_points.sex,
+            model_points.term_months,
+            model_points.count,
+            model_points.level_premium,
+            model_points.single_premium,
+            model_points.premium_term_months,
+            model_points.premium_frequency_months,
+            model_points.annuity_frequency_months,
+            model_points.cov_kind,
+            cov_amount,
+            model_points.cov_offset,
+            cov_rates,
+            cov_risk,
+            cov_is_diagnosis,
+            model_points.maturity_benefit,
+            model_points.annuity_payment,
+            assumptions.expense_acquisition,
+            maint_inflated_monthly,
+            discount_start,
+            discount_mid,
+            mortality_factor,
+            morbidity_factor,
+            longevity_factor,
+            model_points.cov_waiting,
+            model_points.cov_reduction_end,
+            model_points.cov_reduction_factor,
+            survival_monthly,
+        )
+        return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
     args = (
         edge_from,
