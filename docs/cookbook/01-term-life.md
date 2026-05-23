@@ -61,7 +61,7 @@
 여기에 나오는 예제들이 코드에 익숙하지 않은 분들께는 다소 복잡해 보일 수
 있지만 **보유계약과 가정 파일 업로드** 를 통해 쉽게 해결되는 문제들입니다.
 다만, 코드 가독성과 사용자의 이해를 돕기 위해 예제에서만 부득이하게
-함수를 이용하였으니 가볍게 읽고 실행해 주시면 됩니다.
+함수를 이용하였으니 가볍게 읽고 복사해서 실행해 주시면 됩니다.
 ```
 
 ```python
@@ -101,19 +101,19 @@ model_points = fcf.ModelPoints.single(
     term_months=120,              # 10년
 )
 
-# 측정 -- 두 방법
+# 측정 -- 두 가지 방법
 detail = fcf.measure(model_points, assumptions)
 fast = fcf.value(model_points, assumptions)
 
 # 결과 출력 (시점 0 = 가입 시점)
-print("Detail")
+print("<Detail>")
 print(f"BEL : {detail.bel[0, 0]:>15,.0f}")           # 최선추정부채
 print(f"RA  : {detail.ra[0, 0]:>15,.0f}")            # 위험조정
 print(f"CSM : {detail.csm[0, 0]:>15,.0f}")           # 보험계약마진
 print(f"Loss: {detail.loss_component[0]:>15,.0f}")   # 손실요소
 print()
 # value() 도 BEL/RA/CSM/Loss 4 개 모두 반환 — 시점 0 한 점만, 값은 detail 과 동일
-print("Fast path")
+print("<Fast path>")
 print(f"BEL : {fast.bel[0]:>15,.0f}")
 print(f"RA  : {fast.ra[0]:>15,.0f}")
 print(f"CSM : {fast.csm[0]:>15,.0f}")
@@ -123,13 +123,13 @@ print(f"Loss: {fast.loss_component[0]:>15,.0f}")
 실행하면 다음과 같은 출력이 나옵니다 (가정 그대로 사용 시):
 
 ```
-Detail
+<Detail>
 BEL :      -5,251,566
 RA  :          55,485
 CSM :       5,196,081
 Loss:               0
 
-Fast path
+<Fast path>
 BEL :      -5,251,566
 RA  :          55,485
 CSM :       5,196,081
@@ -184,15 +184,31 @@ CSM 은 IFRS 17 의 핵심 개념. 계약 가입 시점에 "이익이 날 거다
 
 ### measure() 와 value() 의 차이
 
-| | `measure()` | `value()` |
-|---|---|---|
-| 출력 | 시간 trajectory 전체 — BEL/RA/CSM 의 매월 값 + 현금흐름 6갈래 | 시점 0 의 4개 숫자만 |
-| 용도 | 상세 검증 / 변동분석 / 시각화 / 보고용 | 대량 portfolio 평가, 민감도, 1M+ 계약 |
-| 메모리 | 1M MP × 120개월 ≈ 9GB | 1M MP ≈ 32MB |
-| 속도 | 수 초 | 80-300 ms |
+```{list-table}
+:header-rows: 1
+:widths: 12 44 44
 
-**규칙**: 100계약 이하 검토는 `measure()`, 대량 portfolio 는 `value()`.
-두 결과는 시점 0 에서 **수치적으로 동일** (parity test 가 자동 검증).
+* -
+  - `measure()`
+  - `value()`
+* - 출력
+  - 시간 trajectory 전체 — BEL/RA/CSM/Loss 의 매월 값 + 현금흐름 6갈래
+  - 시점 0 의 BEL/RA/CSM/Loss 만
+* - 용도
+  - 상세 검증 / 변동분석 / 시각화 / 보고용
+  - 대량 portfolio 평가, 민감도, 100만+ 계약
+* - 메모리
+  - 100만 MP × 120개월 ≈ 9GB
+  - 100만 MP ≈ 32MB
+* - 속도 (100만 MP)
+  - 수 초
+  - 80-300 ms
+```
+
+**규칙**: 시간 trajectory 가 필요하면 (검증 / 변동분석 / 시각화 / 보고)
+`measure()`, 시점 0 의 결과 4 개만 필요하면 (대량 portfolio 평가, 민감도)
+`value()`. 두 결과는 시점 0 에서 **수치적으로 동일** (parity test 가 자동
+검증).
 
 ## 1.5 자주 쓰는 변형
 
@@ -201,7 +217,7 @@ CSM 은 IFRS 17 의 핵심 개념. 계약 가입 시점에 "이익이 날 거다
 `ModelPoints.single` 대신 `ModelPoints` 로 배열 직접:
 
 ```python
-n_contracts = 1000
+n_contracts = 1000               # 보유계약 1,000 건
 rng = np.random.default_rng(42)  # 난수 생성기 (시드 42 — 매번 같은 값 재현용)
 
 portfolio = fcf.ModelPoints(
@@ -213,6 +229,7 @@ portfolio = fcf.ModelPoints(
 )
 
 result = fcf.value(portfolio, assumptions)
+
 # 시점 0 의 BEL 등이 (n_contracts,) shape 배열로 나옴
 print(f"Total  : {result.bel.sum():>15,.0f}")                 # 포트폴리오 BEL 합계
 print(f"Mean   : {result.bel.mean():>15,.0f}")                # 평균 계약 BEL
@@ -239,11 +256,11 @@ mp = fcf.ModelPoints.single(
 
 ```python
 mp = fcf.ModelPoints.single(
-    issue_age=40,                          # 가입연령 40세
-    death_benefit=100_000_000,             # 사망보험금 1억
-    level_premium=70_000,                  # 매 분기 7만원
-    term_months=120,                       # 보장 10년
-    premium_frequency_months=3,            # 분기납 (3개월에 한 번)
+    issue_age=40,                     # 가입연령 40세
+    death_benefit=100_000_000,        # 사망보험금 1억
+    level_premium=70_000,             # 매 분기 7만원
+    term_months=120,                  # 보장 10년
+    premium_frequency_months=3,       # 분기납 (3개월에 한 번)
 )
 ```
 
@@ -270,7 +287,7 @@ assumptions = fcf.Assumptions(
 ### 함정 2 — 함수 인자 개수 틀림
 
 `mortality_annual` / `lapse_annual` 은 **3 인자** (sex, issue_age,
-duration). 일부 옛 자료가 1-2 인자만 보여주지만 항상 3 인자.
+duration) 를 받습니다.
 
 ```python
 # ✗ 안 됨 -- 2 인자
@@ -344,7 +361,7 @@ mp = fcf.ModelPoints.single(
     term_months=2,            # 보장 2개월
 )
 asmp = fcf.Assumptions(
-    # 사망률: 연 환산값. 엔진이 월로 내리면 정확히 1% 가 됨
+    # 사망률: 연 환산값. 엔진이 월 단위로 내리면 정확히 1% 가 됨
     mortality_annual=lambda s, a, d: np.full(a.shape, 1 - (1-0.01)**12),
 
     # 해지율: 해지 없음
@@ -369,15 +386,15 @@ result = fcf.measure(mp, asmp)
 # PV(claims) = 1.0 × 0.01 × 12000 + 0.99 × 0.01 × 12000 = 238.8
 # PV(premiums) = 1.0 × 100 + 0.99 × 100 = 199
 # BEL = 238.8 - 199 = 39.8
-print(f"엔진 BEL: {result.bel[0, 0]:.4f}")
-print(f"손계산 BEL: 39.80")
+print(f"Engine   : {result.bel[0, 0]:.2f}")
+print(f"Hand-calc: 39.80")
 ```
 
 출력:
 
 ```
-엔진 BEL: 39.8000
-손계산 BEL: 39.80
+Engine   : 39.80
+Hand-calc: 39.80
 ```
 
 두 값이 일치하면 엔진이 사용자의 의도대로 동작하고 있다는 강한 신호.
