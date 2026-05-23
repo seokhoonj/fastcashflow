@@ -1,0 +1,187 @@
+"""ModelPoints.subset + value_segmented -- per-segment portfolio valuation.
+
+`ModelPoints` may carry per-row `product` / `channel` strings naming each
+contract's segment. `value_segmented(mp, basis)` splits the portfolio by
+those keys, looks each segment's `Assumptions` up in the
+`{(product, channel): Assumptions}` dict, calls :func:`value` per segment,
+and writes the per-mp results back to a single ``(n_mp,)`` `Valuation`.
+"""
+import numpy as np
+import pytest
+
+from fastcashflow import (
+    Assumptions, ModelPoints, load_sample_assumptions, value, value_segmented,
+)
+
+
+def _flat_asmp(*, discount=0.05) -> Assumptions:
+    return Assumptions(
+        mortality_annual=lambda s, ia, d: np.full(s.shape, 0.001),
+        lapse_annual=lambda s, ia, d: np.full(s.shape, 0.05),
+        discount_annual=discount,
+        expense_acquisition=0.0,
+        expense_maintenance_annual=0.0,
+        expense_inflation=0.0,
+        ra_confidence=0.75,
+        mortality_cv=0.0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# ModelPoints.subset
+# ---------------------------------------------------------------------------
+
+def test_subset_keeps_selected_rows():
+    """Subsetting by indices preserves per-row scalar fields."""
+    mp = ModelPoints(
+        issue_age=np.array([30, 40, 50, 60]),
+        level_premium=np.array([100.0, 200.0, 300.0, 400.0]),
+        term_months=np.array([120, 120, 120, 120]),
+        death_benefit=np.array([1_000.0, 2_000.0, 3_000.0, 4_000.0]),
+    )
+    sub = mp.subset([0, 2])
+    assert sub.n_mp == 2
+    assert sub.issue_age.tolist() == [30, 50]
+    assert sub.level_premium.tolist() == [100.0, 300.0]
+    assert sub.death_benefit.tolist() == [1_000.0, 3_000.0]
+
+
+def test_subset_rebuilds_csr_coverages():
+    """Sub-MP's CSR coverage arrays are densified for the selected rows only."""
+    # mp 0 -> 1 coverage; mp 1 -> 2 coverages; mp 2 -> 1 coverage
+    mp = ModelPoints(
+        issue_age=np.array([30, 40, 50]),
+        level_premium=np.zeros(3),
+        term_months=np.array([120, 120, 120]),
+        death_benefit=np.array([1_000.0, 2_000.0, 3_000.0]),
+        benefits={2: np.array([0.0, 500.0, 0.0])},      # second coverage on mp 1
+    )
+    assert mp.cov_offset.tolist() == [0, 1, 3, 4]       # 1 + 2 + 1
+
+    sub = mp.subset([0, 2])                              # skip mp 1 (2 coverages)
+    assert sub.cov_offset.tolist() == [0, 1, 2]          # 1 + 1
+    assert sub.cov_kind.tolist() == [0, 0]               # both DEATH
+    assert sub.cov_amount.tolist() == [1_000.0, 3_000.0]
+
+
+def test_subset_slices_product_and_channel_when_set():
+    """Segment metadata is sliced alongside per-row fields."""
+    mp = ModelPoints(
+        issue_age=np.array([30, 40, 50]),
+        level_premium=np.zeros(3),
+        term_months=np.array([120, 120, 120]),
+        death_benefit=np.array([1_000.0, 2_000.0, 3_000.0]),
+        product=np.array(["term_a", "term_a", "term_b"]),
+        channel=np.array(["GA", "FC", "GA"]),
+    )
+    sub = mp.subset([1, 2])
+    assert sub.product.tolist() == ["term_a", "term_b"]
+    assert sub.channel.tolist() == ["FC", "GA"]
+
+
+def test_subset_leaves_product_none_when_unset():
+    mp = ModelPoints(
+        issue_age=np.array([30, 40]),
+        level_premium=np.zeros(2),
+        term_months=np.array([120, 120]),
+        death_benefit=np.array([1_000.0, 2_000.0]),
+    )
+    assert mp.subset([0]).product is None
+    assert mp.subset([0]).channel is None
+
+
+# ---------------------------------------------------------------------------
+# value_segmented
+# ---------------------------------------------------------------------------
+
+def test_value_segmented_routes_each_mp_to_its_segment():
+    """Each mp's BEL should equal the value() result on its own segment."""
+    asmp_high = _flat_asmp(discount=0.03)               # lower discount -> larger BEL
+    asmp_low = _flat_asmp(discount=0.10)                # higher discount -> smaller BEL
+    basis = {("term_a", "GA"): asmp_high, ("term_a", "FC"): asmp_low}
+
+    mp = ModelPoints(
+        issue_age=np.array([40, 40, 40]),
+        level_premium=np.zeros(3),
+        term_months=np.array([60, 60, 60]),
+        death_benefit=np.array([10_000.0, 10_000.0, 10_000.0]),
+        product=np.array(["term_a", "term_a", "term_a"]),
+        channel=np.array(["GA", "FC", "GA"]),
+    )
+    val = value_segmented(mp, basis)
+
+    # The two GA mps should match value() on a single-GA portfolio.
+    ga_only = mp.subset([0, 2])
+    expected_ga = value(ga_only, asmp_high)
+    assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
+    # The FC mp matches the FC valuation.
+    fc_only = mp.subset([1])
+    expected_fc = value(fc_only, asmp_low)
+    assert np.allclose(val.bel[1], expected_fc.bel[0])
+    # GA and FC give different per-mp BEL (different discount).
+    assert not np.isclose(val.bel[0], val.bel[1])
+
+
+def test_value_segmented_falls_back_to_single_segment_when_no_product():
+    """A single-segment basis works even when product/channel aren't set."""
+    asmp = _flat_asmp()
+    basis = {("term_a", ""): asmp}
+    mp = ModelPoints(
+        issue_age=np.array([40, 40]),
+        level_premium=np.zeros(2),
+        term_months=np.array([60, 60]),
+        death_benefit=np.array([10_000.0, 20_000.0]),
+    )
+    val = value_segmented(mp, basis)
+    expected = value(mp, asmp)
+    assert np.allclose(val.bel, expected.bel)
+
+
+def test_value_segmented_rejects_multi_segment_basis_without_keys():
+    """Multi-segment basis + no product/channel on MPs -> raise."""
+    basis = {("term_a", "GA"): _flat_asmp(), ("term_a", "FC"): _flat_asmp(discount=0.10)}
+    mp = ModelPoints(
+        issue_age=np.array([40]),
+        level_premium=np.zeros(1),
+        term_months=np.array([60]),
+        death_benefit=np.array([10_000.0]),
+    )
+    with pytest.raises(ValueError, match="product"):
+        value_segmented(mp, basis)
+
+
+def test_value_segmented_rejects_unknown_segment():
+    """A model point pointing at a segment not in basis -> raise."""
+    basis = {("term_a", "GA"): _flat_asmp()}
+    mp = ModelPoints(
+        issue_age=np.array([40, 40]),
+        level_premium=np.zeros(2),
+        term_months=np.array([60, 60]),
+        death_benefit=np.array([10_000.0, 10_000.0]),
+        product=np.array(["term_a", "term_b"]),
+        channel=np.array(["GA", "GA"]),
+    )
+    with pytest.raises(ValueError, match="not in the basis"):
+        value_segmented(mp, basis)
+
+
+def test_value_segmented_with_sample_basis():
+    """End-to-end smoke -- the bundled sample basis has two segments and
+    ``value_segmented`` routes per-mp valuations through it."""
+    basis = load_sample_assumptions()                    # term_a / GA + term_a / FC
+    mp = ModelPoints(
+        issue_age=np.array([40, 50, 45]),
+        level_premium=np.array([50_000.0, 60_000.0, 55_000.0]),
+        term_months=np.array([120, 120, 120]),
+        death_benefit=np.array([100_000_000.0, 80_000_000.0, 90_000_000.0]),
+        product=np.array(["term_a", "term_a", "term_a"]),
+        channel=np.array(["GA", "FC", "GA"]),
+    )
+    val = value_segmented(mp, basis)
+    assert val.bel.shape == (3,)
+    # GA segment has worse persistency than FC (different LAPSE table) ->
+    # the two GA mps should not match the FC mp's pattern.
+    expected_ga = value(mp.subset([0, 2]), basis[("term_a", "GA")])
+    expected_fc = value(mp.subset([1]), basis[("term_a", "FC")])
+    assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
+    assert np.allclose(val.bel[1], expected_fc.bel[0])

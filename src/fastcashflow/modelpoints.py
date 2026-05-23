@@ -104,6 +104,11 @@ class ModelPoints:
     count: FloatArray | None = None              # policies the row stands for
     sex: IntArray | None = None                  # 0 = male, 1 = female
     state: IntArray | None = None                # contract state (STATE_*)
+    # Segment metadata -- the (product, channel) keys that map a model point
+    # to its assumption set when ``value_segmented`` splits a portfolio.
+    # Object arrays of string labels (or None for a single-segment book).
+    product: np.ndarray | None = None
+    channel: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         # Normalise the required fields to numpy arrays of the right dtype.
@@ -188,6 +193,17 @@ class ModelPoints:
         object.__setattr__(self, "cov_waiting", cov_waiting)
         object.__setattr__(self, "cov_reduction_end", cov_reduction_end)
         object.__setattr__(self, "cov_reduction_factor", cov_reduction_factor)
+        # Segment metadata -- normalise to object arrays so they slice with
+        # the per-row fields. ``None`` stays None (a single-segment book).
+        for name in ("product", "channel"):
+            value = getattr(self, name)
+            if value is not None:
+                value = np.asarray(value, dtype=object)
+                if value.shape != (n_mp,):
+                    raise ValueError(
+                        f"{name} must have shape ({n_mp},), got {value.shape}"
+                    )
+            object.__setattr__(self, name, value)
 
     @property
     def n_mp(self) -> int:
@@ -239,6 +255,51 @@ class ModelPoints:
                 else {k: np.array([v]) for k, v in benefits.items()}
             ),
         )
+
+    def subset(self, indices) -> ModelPoints:
+        """Return a new ``ModelPoints`` carrying the rows at ``indices``.
+
+        Per-row fields (issue_age, level_premium, ...) and the segment
+        metadata (product, channel) are sliced. The coverage CSR is
+        rebuilt: each selected row's coverage slice
+        ``cov_kind[cov_offset[i]:cov_offset[i+1]]`` is concatenated, and
+        ``cov_offset`` is reset to the new running cumulative sum. Used by
+        :func:`fastcashflow.engine.value_segmented` to split a portfolio
+        by (product, channel) before per-segment valuation.
+        """
+        idx = np.asarray(indices, dtype=np.int64)
+
+        # Per-row scalar fields.
+        per_row = (
+            "issue_age", "level_premium", "term_months", "death_benefit",
+            "maturity_benefit", "annuity_payment", "disability_income",
+            "disability_benefit", "single_premium", "premium_term_months",
+            "premium_frequency_months", "annuity_frequency_months",
+            "account_value", "count", "sex", "state",
+        )
+        kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}
+
+        # CSR coverage arrays -- concatenate each selected row's slice and
+        # rebuild cov_offset as the new cumulative count.
+        starts = self.cov_offset[idx]
+        ends = self.cov_offset[idx + 1]
+        cov_idx = np.concatenate([np.arange(s, e) for s, e in zip(starts, ends)]) \
+            if idx.size > 0 else np.zeros(0, dtype=np.int64)
+        kwargs["cov_kind"] = self.cov_kind[cov_idx]
+        kwargs["cov_amount"] = self.cov_amount[cov_idx]
+        kwargs["cov_offset"] = np.concatenate(
+            ([0], np.cumsum(ends - starts, dtype=np.int64))
+        )
+        kwargs["cov_waiting"] = self.cov_waiting[cov_idx]
+        kwargs["cov_reduction_end"] = self.cov_reduction_end[cov_idx]
+        kwargs["cov_reduction_factor"] = self.cov_reduction_factor[cov_idx]
+
+        # Segment metadata -- slice if set; otherwise stay None.
+        for name in ("product", "channel"):
+            value = getattr(self, name)
+            kwargs[name] = None if value is None else value[idx]
+
+        return ModelPoints(**kwargs)
 
     def to_wide(self, assumptions):
         """Convert to a wide polars DataFrame -- one row per policy.

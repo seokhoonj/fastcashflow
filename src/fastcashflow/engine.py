@@ -528,3 +528,73 @@ def value(
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
 
     return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
+
+
+def value_segmented(
+    model_points: ModelPoints,
+    basis: dict[tuple[str, str], Assumptions],
+    **kwargs,
+) -> Valuation:
+    """Value a multi-segment portfolio: split, value each, concatenate.
+
+    ``basis`` is the ``{(product, channel): Assumptions}`` dictionary
+    returned by :func:`fastcashflow.read_assumptions`. ``model_points``
+    must carry ``product`` and ``channel`` columns identifying each row's
+    segment; for each unique (product, channel) the helper masks the
+    matching rows, builds a sub-:class:`~fastcashflow.ModelPoints` via
+    :meth:`~fastcashflow.ModelPoints.subset`, calls :func:`value` with the
+    segment's ``Assumptions``, and writes the per-row results back to a
+    single ``(n_mp,)`` :class:`Valuation`.
+
+    Extra keyword arguments (``backend``, ``discount_curve``) flow through
+    to :func:`value`. A single-segment ``basis`` is accepted as a
+    convenience when ``product`` / ``channel`` is not set.
+    """
+    if model_points.product is None or model_points.channel is None:
+        if len(basis) == 1:
+            (assumptions,) = basis.values()
+            return value(model_points, assumptions, **kwargs)
+        raise ValueError(
+            "model_points has no 'product'/'channel' set but the basis has "
+            f"{len(basis)} segments; either set the columns or pass a "
+            "single-segment basis"
+        )
+
+    product = model_points.product
+    channel = model_points.channel
+    n_mp = model_points.n_mp
+
+    bel = np.empty(n_mp)
+    ra = np.empty(n_mp)
+    csm = np.empty(n_mp)
+    loss_component = np.empty(n_mp)
+
+    # Run each unique (product, channel) once -- order is stable on the
+    # first-seen index, so debugging output reads top-to-bottom of the input.
+    seen: set[tuple] = set()
+    keys: list[tuple] = []
+    for p, c in zip(product, channel):
+        key = (str(p), str(c))
+        if key not in seen:
+            seen.add(key)
+            keys.append(key)
+
+    for key in keys:
+        if key not in basis:
+            raise ValueError(
+                f"segment {key!r} appears in model_points but is not in the "
+                f"basis (known segments: {sorted(basis)})"
+            )
+        mask = np.fromiter(
+            ((str(p), str(c)) == key for p, c in zip(product, channel)),
+            dtype=bool, count=n_mp,
+        )
+        idx = np.nonzero(mask)[0]
+        sub = model_points.subset(idx)
+        val = value(sub, basis[key], **kwargs)
+        bel[idx] = val.bel
+        ra[idx] = val.ra
+        csm[idx] = val.csm
+        loss_component[idx] = val.loss_component
+
+    return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
