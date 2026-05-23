@@ -160,8 +160,8 @@ import numpy as np
 import fastcashflow as fcf
 
 assumptions = fcf.Assumptions(
-    mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
-    lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
+    mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001),
+    lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
     discount_annual=0.03,
     expense_acquisition=0.0,
     expense_maintenance_annual=0.0,
@@ -171,7 +171,7 @@ assumptions = fcf.Assumptions(
 )
 model_points = fcf.ModelPoints.single(
     issue_age=40, death_benefit=100_000_000,
-    monthly_premium=0, term_months=4, single_premium=1_200_000,
+    level_premium=0, term_months=4, single_premium=1_200_000,
 )
 m = fcf.measure_paa(model_points, assumptions)
 print(m.lrc[0])              # 잔여보장부채 궤적

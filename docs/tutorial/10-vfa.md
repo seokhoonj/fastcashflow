@@ -195,8 +195,8 @@ import numpy as np
 import fastcashflow as fcf
 
 assumptions = fcf.Assumptions(
-    mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0),
-    lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
+    mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0),
+    lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
     discount_annual=0.03,
     expense_acquisition=0.0,
     expense_maintenance_annual=0.0,
@@ -207,7 +207,7 @@ assumptions = fcf.Assumptions(
     fund_fee=1.005 ** 12 - 1,           # 월 수수료율 0.5%
 )
 model_points = fcf.ModelPoints.single(
-    issue_age=40, death_benefit=0, monthly_premium=0,
+    issue_age=40, death_benefit=0, level_premium=0,
     term_months=3, account_value=1_000_000,
 )
 m = fcf.measure_vfa(model_points, assumptions)

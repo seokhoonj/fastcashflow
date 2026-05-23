@@ -78,8 +78,8 @@ import fastcashflow as fcf
 
 ```python
 assumptions = fcf.Assumptions(
-    mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
-    lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
+    mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
+    lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
     discount_annual=1.005 ** 12 - 1,
     expense_acquisition=0.0,
     expense_maintenance_annual=0.0,
@@ -91,11 +91,12 @@ assumptions = fcf.Assumptions(
 
 괄호 안은 `이름=값` 꼴로 가정을 하나씩 적은 것입니다. 한 줄씩 보면:
 
-- `mortality_monthly` — 월 사망률. 숫자 하나가 아니라 **함수**로
+- `mortality_annual` — 연 사망률. 숫자 하나가 아니라 **함수**로
   줍니다. 사망률이 성별·나이·경과에 따라 달라질 수 있기 때문이죠(3.2절).
   `lambda`는 간단한 함수를 한 줄로 적는 파이썬 문법인데, 여기서는
-  성별·나이·경과와 상관없이 늘 0.01(월 1%)을 돌려주는 함수입니다.
-- `lapse_monthly` — 월 해지율. 같은 방식으로 늘 0(해지 없음)을
+  성별·나이·경과와 상관없이 늘 0.01(연 1%)을 돌려주는 함수입니다.
+  엔진이 내부에서 constant-force 방식으로 월율로 환산합니다.
+- `lapse_annual` — 연 해지율. 같은 방식으로 늘 0(해지 없음)을
   돌려줍니다.
 - `discount_annual` — 연 할인율. `**`는 거듭제곱이라
   `1.005 ** 12 - 1`은 월 0.5%를 연 단위로 환산한 값입니다. 엔진은
@@ -115,7 +116,7 @@ assumptions = fcf.Assumptions(
 ```python
 model_points = fcf.ModelPoints.single(
     issue_age=40, death_benefit=12_000,
-    monthly_premium=100, term_months=2,
+    level_premium=100, term_months=2,
 )
 ```
 
@@ -170,8 +171,8 @@ import numpy as np
 import fastcashflow as fcf
 
 assumptions = fcf.Assumptions(
-    mortality_monthly=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
-    lapse_monthly=lambda duration: np.full(duration.shape, 0.0),
+    mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
+    lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
     discount_annual=1.005 ** 12 - 1,
     expense_acquisition=0.0,
     expense_maintenance_annual=0.0,
@@ -181,7 +182,7 @@ assumptions = fcf.Assumptions(
 )
 model_points = fcf.ModelPoints.single(
     issue_age=40, death_benefit=12_000,
-    monthly_premium=100, term_months=2,
+    level_premium=100, term_months=2,
 )
 m = fcf.measure(model_points, assumptions)
 print(m.bel[0, 0], m.ra[0, 0], m.csm[0, 0], m.loss_component[0])

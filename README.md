@@ -131,10 +131,12 @@ import numpy as np
 import fastcashflow as fcf
 
 assumptions = fcf.Assumptions(
-    mortality_monthly=lambda sex, issue_age, duration: np.full(
-        issue_age.shape, 1.0 - (1.0 - 0.001) ** (1.0 / 12.0)
+    mortality_annual=lambda sex, issue_age, duration: np.full(
+        issue_age.shape, 0.001,
     ),
-    lapse_monthly=lambda duration: np.full(duration.shape, 0.01),
+    lapse_annual=lambda sex, issue_age, duration: np.full(
+        duration.shape, 0.01,
+    ),
     discount_annual=0.03,
     expense_acquisition=300_000.0,
     expense_maintenance_annual=60_000.0,
@@ -144,7 +146,7 @@ assumptions = fcf.Assumptions(
 )
 model_points = fcf.ModelPoints.single(
     issue_age=40, death_benefit=100_000_000,
-    monthly_premium=70_000, term_months=120,
+    level_premium=70_000, term_months=120,
 )
 res = fcf.measure(model_points, assumptions)
 print(res.bel[0, 0], res.ra[0, 0], res.csm[0, 0])   # [model point, month]
@@ -166,7 +168,7 @@ makes the contract an endowment, and `solve_premium` prices it:
 ```python
 endowment = fcf.ModelPoints.single(
     issue_age=40, death_benefit=100_000_000,
-    monthly_premium=0, term_months=120, maturity_benefit=50_000_000,
+    level_premium=0, term_months=120, maturity_benefit=50_000_000,
 )
 premium = fcf.solve_premium(endowment, assumptions, margin=0.10)   # 10% profit margin
 ```
