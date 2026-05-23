@@ -23,7 +23,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import Measurement
-from fastcashflow.gmm import _csm_kernel
+from fastcashflow.numerics import _csm_kernel
 
 
 def transition(measurement: Measurement, fair_value: FloatArray) -> Measurement:
@@ -48,9 +48,13 @@ def transition(measurement: Measurement, fair_value: FloatArray) -> Measurement:
     fcf0 = measurement.bel[:, 0] + measurement.ra[:, 0]
     csm0 = np.maximum(0.0, fair_value - fcf0)
     loss_component = np.maximum(0.0, fcf0 - fair_value)
-    rate = 1.0 / measurement.discount_start[1] - 1.0
+    # Per-month rate curve implied by the measurement's discount factors --
+    # ratio of consecutive start-of-month factors. Carries the locked-in
+    # curve even if it is non-flat.
+    monthly_rate = (measurement.discount_start[:-1]
+                    / measurement.discount_start[1:]) - 1.0
     csm, csm_accretion, csm_release = _csm_kernel(
-        csm0, np.ascontiguousarray(measurement.cashflows.inforce), rate
+        csm0, np.ascontiguousarray(measurement.cashflows.inforce), monthly_rate
     )
     return replace(
         measurement,

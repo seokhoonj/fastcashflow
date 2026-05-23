@@ -34,7 +34,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import Measurement
-from fastcashflow.gmm import _csm_kernel
+from fastcashflow.numerics import _csm_kernel
 from fastcashflow.paa import PAAMeasurement
 from fastcashflow.vfa import VFAMeasurement
 
@@ -264,14 +264,14 @@ def roll_forward(
                 "the change month must be a positive multiple of "
                 f"period_months below the horizon ({n_time}), got {k}"
             )
-        rate = 1.0 / discount_start[1] - 1.0
         delta_fcf = ((post_bel[:, k] + post_ra[:, k])
                      - (measurement.bel[:, k] + measurement.ra[:, k]))
         csm_before = measurement.csm[:, k]
         csm_after = np.maximum(0.0, csm_before - delta_fcf)
         loss = np.maximum(0.0, delta_fcf - csm_before)
         re_csm, re_acc, re_rel = _csm_kernel(
-            csm_after, np.ascontiguousarray(post_inforce[:, k:]), rate
+            csm_after, np.ascontiguousarray(post_inforce[:, k:]),
+            monthly_rate[k:],
         )
         bel = np.concatenate([measurement.bel[:, :k + 1], post_bel[:, k + 1:]],
                              axis=1)
@@ -351,7 +351,6 @@ def _roll_forward_experience_chain(
         )
     discount_start = measurement.discount_start
     monthly_rate = discount_start[:-1] / discount_start[1:] - 1.0
-    rate = 1.0 / discount_start[1] - 1.0
 
     # Cumulative in-force ratio at each boundary, laid out as a per-month
     # step factor -- 1 up to the first boundary, then each ratio onward.
@@ -380,7 +379,7 @@ def _roll_forward_experience_chain(
         seg_csm, seg_acc, seg_rel = _csm_kernel(
             np.ascontiguousarray(cur),
             np.ascontiguousarray(base_inforce[:, s:]),
-            rate,
+            monthly_rate[s:],
         )
         width = e - s
         csm[:, s + 1:e + 1] = seg_csm[:, 1:width + 1]

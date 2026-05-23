@@ -1,13 +1,22 @@
-"""IFRS 17 General Measurement Model -- BEL, RA and CSM.
+"""Shared numerical primitives -- numpy arrays in, numpy arrays out.
 
-References are to the IFRS 17 standard:
+These functions know nothing about ``Assumptions`` / ``Cashflows`` / any
+other domain dataclass. The orchestration layer (engine, PAA, VFA, movement)
+unpacks domain objects to raw arrays + scalars and calls in here. The split
+keeps these primitives numba-friendly and unit-testable on bare numpy.
 
-    BEL   estimates of future cash flows, discounted   (Sec. 33-36)
-    RA    risk adjustment for non-financial risk       (Sec. 37)
-    CSM   contractual service margin
-            - initial recognition                      (Sec. 38)
-            - subsequent measurement / roll-forward    (Sec. 44)
-            - release by coverage units                (Sec. B119)
+The orchestration-specific ``@njit`` kernels (``_project_kernel`` in
+projection.py, ``_value_kernel`` in engine.py) stay next to their callers --
+they have only one call site each. The primitives below are the ones that
+genuinely cross modules.
+
+Contents:
+
+* settlement-pattern helpers (``_settlement_lic``, ``_settlement_factor``)
+* the standard-normal inverse CDF (``_norm_ppf``)
+* the cost-of-capital RA accumulator (``_cost_of_capital_ra``)
+* the BEL / RA / CSM time-loop kernels (``_rollforward_kernel``,
+  ``_csm_kernel``)
 """
 from __future__ import annotations
 
@@ -17,42 +26,6 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
-from fastcashflow.projection import Cashflows
-
-
-def discount_factors(assumptions: Assumptions, n_time: int) -> tuple[FloatArray, FloatArray]:
-    """Discount factors back to time 0, by cash-flow timing.
-
-    Returns ``(discount_start, discount_mid)``:
-
-    * ``discount_start[t] = (1 + i)^-t``, shape ``(n_time+1,)`` -- start-of-
-      month flows (premiums) and the maturity benefit at time = term.
-    * ``discount_mid[t]   = (1 + i)^-(t+0.5)``, shape ``(n_time,)`` -- mid-
-      month flows (claims and expenses, which arise during the month).
-    """
-    base = 1.0 + assumptions.discount_monthly
-    start = np.arange(n_time + 1)
-    mid = np.arange(n_time)
-    return base ** (-start), base ** (-(mid + 0.5))
-
-
-def discount_factors_from_curve(
-    monthly_rates: FloatArray,
-) -> tuple[FloatArray, FloatArray]:
-    """Discount factors from a per-month rate curve.
-
-    ``monthly_rates`` is a ``(n_time,)`` array of monthly forward rates --
-    the rate applied across each projection month. Returns the same
-    ``(discount_start, discount_mid)`` pair as :func:`discount_factors`; a
-    constant curve reproduces it bar floating-point rounding.
-    """
-    monthly_rates = np.asarray(monthly_rates, dtype=np.float64)
-    discount_start = np.empty(monthly_rates.shape[0] + 1)
-    discount_start[0] = 1.0
-    np.cumprod(1.0 / (1.0 + monthly_rates), out=discount_start[1:])
-    discount_mid = discount_start[:-1] / np.sqrt(1.0 + monthly_rates)
-    return discount_start, discount_mid
 
 
 def _settlement_lic(
@@ -135,6 +108,24 @@ def _norm_ppf(p: float) -> float:
             / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0))
 
 
+def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
+    """Cost-of-capital RA -- the cost of holding the confidence-level margin
+    as non-financial-risk capital over the contract's run-off.
+
+    The capital required at each future month is taken as the confidence-
+    level margin there; the RA at month ``t`` is the cost-of-capital rate
+    times the present value, at ``t``, of that capital over months ``t``
+    onward. ``monthly_rate`` is the per-month rate curve, shape
+    ``(n_time,)``; a flat rate and a yield curve share the same form.
+    """
+    full = 1.0 / (1.0 + monthly_rate)             # (n_time,)
+    cap_pv = np.empty_like(cl_margin)
+    cap_pv[:, -1] = cl_margin[:, -1]
+    for t in range(cl_margin.shape[1] - 2, -1, -1):
+        cap_pv[:, t] = cl_margin[:, t] + full[t] * cap_pv[:, t + 1]
+    return coc_rate * cap_pv
+
+
 @njit(parallel=True, cache=True)
 def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
                         premium_cf, annuity_cf, maturity_cf, term_months,
@@ -148,11 +139,13 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
 
         BEL[t] = annuity[t] - premium[t]
                  + (claim[t] + morbidity[t] + disability[t] + expense[t])
-                   * (1+i)^-0.5
-                 + BEL[t+1] * (1+i)^-1
+                   * (1+i[t])^-0.5
+                 + BEL[t+1] * (1+i[t])^-1
 
-    The maturity benefit is a single payment at ``t = term``, so it seeds
-    ``BEL[term]``. ``BEL[:, 0]`` is then the inception BEL.
+    ``monthly_rate`` is the per-month rate curve, shape ``(n_time,)``, so
+    the locked-in rate can be flat or a yield curve. The maturity benefit
+    is a single payment at ``t = term``, so it seeds ``BEL[term]``.
+    ``BEL[:, 0]`` is then the inception BEL.
 
     Four more trajectories feed the Risk Adjustment, one per risk class:
     ``pv_claims`` (death claims -- mortality risk), ``pv_morbidity`` (health
@@ -182,27 +175,28 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
             annuity = annuity_cf[mp, t]
             bel[mp, t] = (
                 annuity - premium_cf[mp, t]
-                + (claim + morbidity + disability + expense_cf[mp, t]) * half
-                + bel[mp, t + 1] * full
+                + (claim + morbidity + disability + expense_cf[mp, t]) * half[t]
+                + bel[mp, t + 1] * full[t]
             )
-            pv_claims[mp, t] = claim * half + pv_claims[mp, t + 1] * full
-            pv_morbidity[mp, t] = morbidity * half + pv_morbidity[mp, t + 1] * full
-            pv_disability[mp, t] = disability * half + pv_disability[mp, t + 1] * full
-            pv_survival[mp, t] = annuity + pv_survival[mp, t + 1] * full
+            pv_claims[mp, t] = claim * half[t] + pv_claims[mp, t + 1] * full[t]
+            pv_morbidity[mp, t] = morbidity * half[t] + pv_morbidity[mp, t + 1] * full[t]
+            pv_disability[mp, t] = disability * half[t] + pv_disability[mp, t + 1] * full[t]
+            pv_survival[mp, t] = annuity + pv_survival[mp, t + 1] * full[t]
 
     return bel, pv_claims, pv_morbidity, pv_disability, pv_survival
 
 
 @njit(parallel=True, cache=True)
 def _csm_kernel(csm0, coverage_units, monthly_rate):
-    """Compiled CSM roll-forward kernel -- raw numpy arrays and scalars only.
+    """Compiled CSM roll-forward kernel -- raw numpy arrays only.
 
     Per model point (run in parallel across cores): interest accretion at the
-    locked-in rate, then release proportional to coverage units. The
-    coverage-unit tail sum is built in a single backward pass so the
-    roll-forward stays linear in time. Monthly interest and release are
-    returned too, so the roll-forward is fully decomposable:
-    ``csm[t+1] = csm[t] + accretion[t] - release[t]``.
+    locked-in rate -- a per-month curve ``monthly_rate`` of length
+    ``n_time``, so flat scalar and yield curve share the kernel -- then
+    release proportional to coverage units. The coverage-unit tail sum is
+    built in a single backward pass so the roll-forward stays linear in
+    time. Monthly interest and release are returned too, so the roll-forward
+    is fully decomposable: ``csm[t+1] = csm[t] + accretion[t] - release[t]``.
     """
     n_mp, n_time = coverage_units.shape
     csm = np.zeros((n_mp, n_time + 1))
@@ -219,7 +213,7 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
             cu_tail[s] = running
 
         for t in range(1, n_time + 1):
-            interest = csm[mp, t - 1] * monthly_rate
+            interest = csm[mp, t - 1] * monthly_rate[t - 1]
             accreted = csm[mp, t - 1] + interest
             cu_remaining = cu_tail[t - 1]
             if cu_remaining > 0.0:
@@ -231,31 +225,3 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
             csm[mp, t] = accreted - rel
 
     return csm, accretion, release
-
-
-def compute_csm(
-    bel: FloatArray,
-    ra: FloatArray,
-    proj: Cashflows,
-    assumptions: Assumptions,
-):
-    """CSM at initial recognition (Sec. 38) and deterministic roll-forward (Sec. 44).
-
-    Fulfilment cash flows ``FCF = BEL + RA``.
-
-    Initial recognition:
-        ``CSM_0 = max(0, -FCF)``           -- profitable contract
-        ``loss_component = max(0, FCF)``   -- onerous contract
-
-    Roll-forward (deterministic -- no assumption changes): interest accretion
-    at the locked-in monthly rate, then release proportional to coverage
-    units (in-force is the coverage unit). The sequential time loop runs in
-    the compiled ``_csm_kernel``.
-    """
-    fcf = bel + ra                          # Fulfilment Cash Flows
-    csm0 = np.maximum(0.0, -fcf)
-    loss_component = np.maximum(0.0, fcf)
-
-    csm, accretion, release = _csm_kernel(csm0, proj.inforce, assumptions.discount_monthly)
-
-    return csm, accretion, release, loss_component

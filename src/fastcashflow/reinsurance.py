@@ -28,7 +28,8 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.gmm import _csm_kernel, _norm_ppf, discount_factors
+from fastcashflow.curves import discount_factors, discount_monthly_curve
+from fastcashflow.numerics import _csm_kernel, _norm_ppf
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
@@ -95,7 +96,8 @@ def measure_reinsurance(
     # is a negative CSM, deferred and amortised over the coverage.
     csm0 = -(bel - ra)
     csm, csm_accretion, csm_release = _csm_kernel(
-        csm0, proj.inforce, assumptions.discount_monthly
+        csm0, proj.inforce,
+        discount_monthly_curve(assumptions, proj.n_time),
     )
 
     return ReinsuranceMeasurement(

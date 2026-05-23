@@ -28,7 +28,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.engine import Measurement
-from fastcashflow.gmm import _csm_kernel
+from fastcashflow.numerics import _csm_kernel
 from fastcashflow.projection import Cashflows
 
 
@@ -82,9 +82,10 @@ def group(measurement: Measurement, group_ids: FloatArray) -> Measurement:
     fcf0 = bel[:, 0] + ra[:, 0]
     csm0 = np.maximum(0.0, -fcf0)
     loss_component = np.maximum(0.0, fcf0)
-    rate = 1.0 / measurement.discount_start[1] - 1.0
+    monthly_rate = (measurement.discount_start[:-1]
+                    / measurement.discount_start[1:]) - 1.0
     csm, csm_accretion, csm_release = _csm_kernel(
-        csm0, np.ascontiguousarray(grouped_cf.inforce), rate
+        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
     return Measurement(
         bel=bel,

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from fastcashflow.gmm import _norm_ppf
+from fastcashflow.numerics import _norm_ppf
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes

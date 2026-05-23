@@ -25,7 +25,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
                        cov_is_diagnosis, maturity_benefit, annuity_payment,
                        disability_income, disability_benefit,
-                       expense_acquisition, maint_monthly, inflation,
+                       expense_acquisition, maint_inflated_monthly,
                        discount_start, discount_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
                        disability_factor, bel, ra, csm, loss_component):
@@ -104,7 +104,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
             pa += ift * annuity * ds
         pd += benefit_occ * disability_income[mp] * dm
         acquisition = cnt * expense_acquisition if t == 0 else 0.0
-        pe += (acquisition + ift * maint_monthly * inflation[t]) * dm
+        pe += (acquisition + ift * maint_inflated_monthly[t]) * dm
         for s in range(n_states):
             occ_next[s] = 0.0
         for e in range(n_edges):
@@ -164,7 +164,7 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
               cov_is_diagnosis, maturity_benefit, annuity_payment,
               disability_income, disability_benefit, expense_acquisition,
-              maint_monthly, inflation, discount_start, discount_mid,
+              maint_inflated_monthly, discount_start, discount_mid,
               mortality_factor, morbidity_factor, longevity_factor,
               disability_factor):
     """Run the fused valuation kernel on the GPU.
@@ -209,7 +209,7 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_annuity = cuda.to_device(annuity_payment)
     d_disability_income = cuda.to_device(disability_income)
     d_disability_benefit = cuda.to_device(disability_benefit)
-    d_inflation = cuda.to_device(inflation)
+    d_maint_inflated = cuda.to_device(maint_inflated_monthly)
     d_discount_start = cuda.to_device(discount_start)
     d_discount_mid = cuda.to_device(discount_mid)
     d_bel = cuda.device_array(n_mp, dtype=np.float64)
@@ -226,7 +226,7 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         d_annuity_freq, d_cov_kind, d_cov_amount, d_cov_offset, d_cov_rates,
         d_cov_risk, d_cov_is_diagnosis, d_maturity, d_annuity,
         d_disability_income, d_disability_benefit,
-        expense_acquisition, maint_monthly, d_inflation, d_discount_start,
+        expense_acquisition, d_maint_inflated, d_discount_start,
         d_discount_mid, mortality_factor, morbidity_factor, longevity_factor,
         disability_factor, d_bel, d_ra, d_csm, d_loss,
     )

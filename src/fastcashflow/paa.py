@@ -37,7 +37,8 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.gmm import _norm_ppf, _rollforward_kernel, _settlement_lic
+from fastcashflow.curves import discount_monthly_curve
+from fastcashflow.numerics import _norm_ppf, _rollforward_kernel, _settlement_lic
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
@@ -135,7 +136,8 @@ def measure_paa(
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
         proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf,
-        model_points.term_months, assumptions.discount_monthly,
+        model_points.term_months,
+        discount_monthly_curve(assumptions, proj.n_time),
     )
     z = _norm_ppf(assumptions.ra_confidence)
     ra0 = z * (assumptions.mortality_cv * pv_claims[:, 0]

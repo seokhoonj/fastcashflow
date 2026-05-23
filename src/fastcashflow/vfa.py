@@ -34,7 +34,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.gmm import (
+from fastcashflow.numerics import (
     _csm_kernel,
     _norm_ppf,
     _settlement_factor,
@@ -190,7 +190,12 @@ def measure_vfa(
     fcf = bel[:, 0] + ra[:, 0] + time_value
     loss_component = np.maximum(0.0, fcf)
     csm0 = np.maximum(0.0, -fcf)
-    csm, csm_accretion, csm_release = _csm_kernel(csm0, inforce, r_m)
+    # VFA accretes at the underlying-items return -- flat across time in
+    # the deterministic measurement; broadcast to the per-month curve the
+    # kernel consumes.
+    csm, csm_accretion, csm_release = _csm_kernel(
+        csm0, inforce, np.full(n_time, r_m),
+    )
 
     return VFAMeasurement(
         account_value=av,

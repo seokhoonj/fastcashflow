@@ -41,6 +41,7 @@ from numba import njit, prange
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions, annual_to_monthly
 from fastcashflow.coverage import coverage_arrays, coverage_rates
+from fastcashflow.curves import inflation_index, maintenance_monthly_curve
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.statemodel import WAIVER_MODEL, compile_state_model
 
@@ -82,7 +83,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     cov_reduction_end, cov_reduction_factor, cov_rates,
                     cov_risk, cov_is_diagnosis, maturity_benefit,
                     annuity_payment, disability_income, disability_benefit,
-                    expense_acquisition, maint_monthly, inflation, n_time):
+                    expense_acquisition, maint_inflated_monthly, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -173,7 +174,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                                  if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             acquisition = cnt * expense_acquisition if t == 0 else 0.0
-            expense_cf[mp, t] = acquisition + ift * maint_monthly * inflation[t]
+            expense_cf[mp, t] = acquisition + ift * maint_inflated_monthly[t]
             # Advance the occupancy along the transition edges; a lump-sum
             # transition pays its benefit on the occupancy it carries.
             for s in range(n_states):
@@ -256,7 +257,6 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     """
     n_time = int(model_points.term_months.max())     # months 0 .. n_time-1
     n_years = (n_time + 11) // 12
-    months = np.arange(n_time)
     durations = np.arange(n_years)
 
     sex_grid, _ = np.meshgrid(model_points.sex, durations, indexing="ij")
@@ -283,7 +283,8 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         mortality_annual, [r.rate for r in assumptions.riders],
         sex_grid, issue_age_grid, duration_grid,
     )))
-    inflation = (1.0 + assumptions.expense_inflation) ** (months / 12.0)
+    maint_inflated_monthly = (maintenance_monthly_curve(assumptions, n_time)
+                              * inflation_index(assumptions, n_time))
 
     # In-force state machine -- the StateModel composes the transition edges
     # the generic occupancy recursion advances; the kernel carries no state
@@ -329,8 +330,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         model_points.disability_income,
         model_points.disability_benefit,
         assumptions.expense_acquisition,
-        assumptions.expense_maintenance_annual / 12.0,
-        inflation,
+        maint_inflated_monthly,
         n_time,
     )
     return Cashflows(

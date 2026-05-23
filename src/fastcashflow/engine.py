@@ -21,14 +21,20 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions, annual_to_monthly
-from fastcashflow.gmm import (
+from fastcashflow.curves import (
+    discount_factors,
+    discount_factors_from_curve,
+    discount_monthly_curve,
+    inflation_index,
+    maintenance_monthly_curve,
+)
+from fastcashflow.numerics import (
+    _cost_of_capital_ra,
+    _csm_kernel,
     _norm_ppf,
     _rollforward_kernel,
     _settlement_factor,
     _settlement_lic,
-    compute_csm,
-    discount_factors,
-    discount_factors_from_curve,
 )
 from fastcashflow.coverage import coverage_arrays, coverage_rates
 from fastcashflow.modelpoints import ModelPoints
@@ -64,42 +70,50 @@ class Measurement:
     discount_mid: FloatArray     # (n_time,) -- mid-month discount factors
 
 
-def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
-    """Cost-of-capital RA -- the cost of holding the confidence-level margin
-    as non-financial-risk capital over the contract's run-off.
+def _compute_csm(bel0, ra0, inforce, monthly_rate):
+    """CSM at initial recognition (Sec. 38) and deterministic roll-forward (Sec. 44).
 
-    The capital required at each future month is taken as the confidence-
-    level margin there; the RA at month ``t`` is the cost-of-capital rate
-    times the present value, at ``t``, of that capital over months ``t``
-    onward.
+    Pure-array orchestration: fulfilment cash flows ``FCF = BEL + RA``,
+    initial CSM = ``max(0, -FCF)``, loss component = ``max(0, FCF)``, then
+    the CSM is rolled forward in :func:`_csm_kernel` (interest accretion at
+    the locked-in monthly rate, release proportional to coverage units --
+    in-force here).
+
+    ``inforce`` is ``(n_mp, n_time)`` (the coverage-unit series), ``bel0`` /
+    ``ra0`` are ``(n_mp,)``. Returns
+    ``(csm, accretion, release, loss_component)``.
     """
-    full = 1.0 / (1.0 + monthly_rate)
-    cap_pv = np.empty_like(cl_margin)
-    cap_pv[:, -1] = cl_margin[:, -1]
-    for t in range(cl_margin.shape[1] - 2, -1, -1):
-        cap_pv[:, t] = cl_margin[:, t] + full * cap_pv[:, t + 1]
-    return coc_rate * cap_pv
+    fcf = bel0 + ra0
+    csm0 = np.maximum(0.0, -fcf)
+    loss_component = np.maximum(0.0, fcf)
+    csm, accretion, release = _csm_kernel(csm0, inforce, monthly_rate)
+    return csm, accretion, release, loss_component
 
 
 def measure(model_points: ModelPoints, assumptions: Assumptions) -> Measurement:
     """Detailed GMM measurement: BEL, RA and CSM rolled forward over time."""
     proj = project_cashflows(model_points, assumptions)
     claim_cf, morbidity_cf = proj.claim_cf, proj.morbidity_cf
+    monthly_rate = discount_monthly_curve(assumptions, proj.n_time)
     if assumptions.settlement_pattern is None:
         lic = np.zeros((claim_cf.shape[0], proj.n_time + 1))
     else:
         lic = _settlement_lic(claim_cf + morbidity_cf, assumptions.settlement_pattern)
         # Claims are paid over the pattern, not at incurrence -- discount
-        # them to their payment dates in the fulfilment cash flows.
+        # them to their payment dates in the fulfilment cash flows. With a
+        # discount curve we use the in-year scalar (Sec. 40 / B71 -- the
+        # rate at the month of incurrence is the right reference); the
+        # full-curve treatment would require a time-varying settlement
+        # factor inside the kernel, deferred.
         factor = _settlement_factor(assumptions.settlement_pattern, assumptions.discount_monthly)
         claim_cf = claim_cf * factor
         morbidity_cf = morbidity_cf * factor
-    discount_start, discount_mid = discount_factors(assumptions, proj.n_time)
+    discount_start, discount_mid = discount_factors_from_curve(monthly_rate)
 
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
         claim_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf,
-        model_points.term_months, assumptions.discount_monthly,
+        model_points.term_months, monthly_rate,
     )
     z = _norm_ppf(assumptions.ra_confidence)
     cl_margin = z * (assumptions.mortality_cv * pv_claims
@@ -110,15 +124,15 @@ def measure(model_points: ModelPoints, assumptions: Assumptions) -> Measurement:
         ra = cl_margin
     elif assumptions.ra_method == "cost_of_capital":
         ra = _cost_of_capital_ra(
-            cl_margin, assumptions.discount_monthly, assumptions.cost_of_capital_rate
+            cl_margin, monthly_rate, assumptions.cost_of_capital_rate
         )
     else:
         raise ValueError(
             "ra_method must be 'confidence_level' or 'cost_of_capital', "
             f"got {assumptions.ra_method!r}"
         )
-    csm, csm_accretion, csm_release, loss_component = compute_csm(
-        bel[:, 0], ra[:, 0], proj, assumptions
+    csm, csm_accretion, csm_release, loss_component = _compute_csm(
+        bel[:, 0], ra[:, 0], proj.inforce, monthly_rate,
     )
 
     return Measurement(
@@ -157,7 +171,7 @@ def _value_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                   cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
                   cov_is_diagnosis, maturity_benefit, annuity_payment,
                   disability_income, disability_benefit,
-                  expense_acquisition, maint_monthly, inflation,
+                  expense_acquisition, maint_inflated_monthly,
                   discount_start, discount_mid, mortality_factor,
                   morbidity_factor, longevity_factor, disability_factor,
                   cov_waiting, cov_reduction_end, cov_reduction_factor):
@@ -249,7 +263,7 @@ def _value_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 pa += ift * annuity * ds
             pd += benefit_occ * disability_income[mp] * dm
             acquisition = cnt * expense_acquisition if t == 0 else 0.0
-            pe += (acquisition + ift * maint_monthly * inflation[t]) * dm
+            pe += (acquisition + ift * maint_inflated_monthly[t]) * dm
             # Advance the occupancy; a lump-sum transition pays on its flow.
             for s in range(n_states):
                 occ_next[s] = 0.0
@@ -373,8 +387,11 @@ def value(
         it only at large scale (kernel-launch and transfer cost is fixed).
     discount_curve :
         Optional ``(n_time,)`` array of annual discount rates -- one per
-        projection month, a locked-in rate curve that replaces the flat
-        ``assumptions.discount_annual``. ``None`` uses the flat rate.
+        projection month, a power-user override for the stochastic case
+        where the rate must vary month by month. ``None`` (the default)
+        uses the scalar or per-year curve on
+        ``assumptions.discount_annual``; when supplied, it overrides that
+        and bypasses the curves layer for the discount step.
     """
     if assumptions.ra_method != "confidence_level":
         raise ValueError(
@@ -383,7 +400,6 @@ def value(
         )
     n_time = int(model_points.term_months.max())
     n_years = (n_time + 11) // 12
-    months = np.arange(n_time)
 
     # Mortality and lapse are evaluated on a dense sex x [min, max] issue-age
     # x duration grid. Using the age range rather than the exact distinct
@@ -430,7 +446,8 @@ def value(
         issue_age_grid, duration_grid,
     )))
 
-    inflation = (1.0 + assumptions.expense_inflation) ** (months / 12.0)
+    maint_inflated_monthly = (maintenance_monthly_curve(assumptions, n_time)
+                              * inflation_index(assumptions, n_time))
     if discount_curve is None:
         discount_start, discount_mid = discount_factors(assumptions, n_time)
     else:
@@ -485,8 +502,7 @@ def value(
         model_points.disability_income,
         model_points.disability_benefit,
         assumptions.expense_acquisition,
-        assumptions.expense_maintenance_annual / 12.0,
-        inflation,
+        maint_inflated_monthly,
         discount_start,
         discount_mid,
         mortality_factor,
