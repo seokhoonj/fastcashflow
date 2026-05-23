@@ -1,13 +1,13 @@
-# Welcome
+# {{ fcf }}
 
-**현금흐름 추정부터 손익 리포트까지 — 빠른 IFRS 17 평가 엔진**
+현금흐름 추정부터 손익 리포트까지 — 오픈소스 IFRS 평가 엔진
 
 ```{image} images/hero.png
 :alt: fastcashflow가 산출하는 IFRS 17 수치 — 부채 구성요소, 보험계약마진 상각, 변동분석
 :class: hero
 ```
 
-fastcashflow는 보험계약부채 — 최선추정부채(BEL), 위험조정(RA),
+{{ fcf }}는 보험계약부채 — 최선추정부채(BEL), 위험조정(RA),
 보험계약마진(CSM) — 를 계약 건별로, IFRS 17의 세 가지 회계모형
 모두에 대해 측정합니다.
 

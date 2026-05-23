@@ -58,9 +58,10 @@
 ```{admonition} 걱정하지 마세요
 :class: tip
 
-여기에 나오는 예제들의 복잡성은 **보유계약과 가정의 엑셀 업로드** 로
-나중에 해결되는 문제들입니다. 코드 가독성과 사용자의 이해를 돕기 위해 부득이하게 함수를
-이용하였으니 가볍게 읽고 실행하시면 됩니다.
+여기에 나오는 예제들이 코드에 익숙하지 않은 분들께는 다소 복잡해 보일 수
+있지만 **보유계약과 가정 파일 업로드** 를 통해 쉽게 해결되는 문제들입니다.
+다만, 코드 가독성과 사용자의 이해를 돕기 위해 예제에서만 부득이하게
+함수를 이용하였으니 가볍게 읽고 실행해 주시면 됩니다.
 ```
 
 ```python
@@ -74,10 +75,12 @@ assumptions = fcf.Assumptions(
     mortality_annual=lambda sex, issue_age, duration: np.full(
         issue_age.shape, 0.001,
     ),
+
     # 해지율: 연 1% 가정.
     lapse_annual=lambda sex, issue_age, duration: np.full(
         duration.shape, 0.01,
     ),
+
     # 할인율 (연): 3% — 예시값. 실제 평가에는 자사의 IFRS 17 할인곡선 사용.
     discount_annual=0.03,
 
@@ -104,23 +107,34 @@ detail = fcf.measure(model_points, assumptions)
 fast = fcf.value(model_points, assumptions)
 
 # 결과 출력 (시점 0 = 가입 시점)
-print(f"BEL (최선추정부채):       {detail.bel[0, 0]:>15,.0f}")
-print(f"RA  (위험조정):           {detail.ra[0, 0]:>15,.0f}")
-print(f"CSM (보험계약마진):       {detail.csm[0, 0]:>15,.0f}")
-print(f"손실요소:                 {detail.loss_component[0]:>15,.0f}")
+print("Detail")
+print(f"BEL : {detail.bel[0, 0]:>15,.0f}")           # 최선추정부채
+print(f"RA  : {detail.ra[0, 0]:>15,.0f}")            # 위험조정
+print(f"CSM : {detail.csm[0, 0]:>15,.0f}")           # 보험계약마진
+print(f"Loss: {detail.loss_component[0]:>15,.0f}")   # 손실요소
 print()
-print(f"fast 경로 BEL:            {fast.bel[0]:>15,.0f}   (detail 과 동일)")
+# value() 도 BEL/RA/CSM/Loss 4 개 모두 반환 — 시점 0 한 점만, 값은 detail 과 동일
+print("Fast path")
+print(f"BEL : {fast.bel[0]:>15,.0f}")
+print(f"RA  : {fast.ra[0]:>15,.0f}")
+print(f"CSM : {fast.csm[0]:>15,.0f}")
+print(f"Loss: {fast.loss_component[0]:>15,.0f}")
 ```
 
 실행하면 다음과 같은 출력이 나옵니다 (가정 그대로 사용 시):
 
 ```
-BEL (최선추정부채):            -5,251,566
-RA  (위험조정):                    55,485
-CSM (보험계약마진):             5,196,081
-손실요소:                              0
+Detail
+BEL :      -5,251,566
+RA  :          55,485
+CSM :       5,196,081
+Loss:               0
 
-fast 경로 BEL:                 -5,251,566   (detail 과 동일)
+Fast path
+BEL :      -5,251,566
+RA  :          55,485
+CSM :       5,196,081
+Loss:               0
 ```
 
 코드 한 번 돌리면 BEL / RA / CSM 의 시점 0 값을 얻습니다.
@@ -181,32 +195,7 @@ CSM 은 IFRS 17 의 핵심 개념. 계약 가입 시점에 "이익이 날 거다
 **규칙**: 100계약 이하 검토는 `measure()`, 대량 portfolio 는 `value()`.
 두 결과는 시점 0 에서 **수치적으로 동일** (parity test 가 자동 검증).
 
-## 1.5 변형 — 회사 / 채널 / 상품 차이
-
-### 가입연령에 따라 사망률 다르게
-
-```python
-def mortality_by_age(sex, issue_age, duration):
-    # 가입연령에 따른 base 사망률 — 40세에 0.001, 60세에 0.005
-    base = 0.001 + 0.0002 * np.maximum(issue_age - 40, 0)
-    # 경과년수에 따른 증가
-    return base * (1 + 0.05 * duration)
-
-assumptions = fcf.Assumptions(
-    mortality_annual=mortality_by_age,
-    # 나머지는 동일
-    ...
-)
-```
-
-### 성별에 따라 다르게
-
-```python
-def mortality_by_sex(sex, issue_age, duration):
-    # sex=0 남자, sex=1 여자. 여자가 더 낮은 사망률
-    base = np.where(sex == 0, 0.001, 0.0007)
-    return np.broadcast_to(base, issue_age.shape).copy()
-```
+## 1.5 자주 쓰는 변형
 
 ### 여러 계약 동시에 (portfolio)
 
@@ -214,7 +203,7 @@ def mortality_by_sex(sex, issue_age, duration):
 
 ```python
 n_contracts = 1000
-rng = np.random.default_rng(42)
+rng = np.random.default_rng(42)  # 난수 생성기 (시드 42 — 매번 같은 값 재현용)
 
 portfolio = fcf.ModelPoints(
     issue_age=rng.integers(25, 60, n_contracts),    # 25-60세 랜덤
@@ -226,9 +215,9 @@ portfolio = fcf.ModelPoints(
 
 result = fcf.value(portfolio, assumptions)
 # 시점 0 의 BEL 등이 (n_contracts,) shape 배열로 나옴
-print(f"포트폴리오 BEL 합계:  {result.bel.sum():>15,.0f}")
-print(f"평균 계약 BEL:        {result.bel.mean():>15,.0f}")
-print(f"손실 계약 개수:       {(result.loss_component > 0).sum():>15,d}")
+print(f"Total  : {result.bel.sum():>15,.0f}")                 # 포트폴리오 BEL 합계
+print(f"Mean   : {result.bel.mean():>15,.0f}")                # 평균 계약 BEL
+print(f"Onerous: {(result.loss_component > 0).sum():>15,d}")  # 손실 계약 개수
 ```
 
 ### 보험료 납입기간 단기납 (보장기간 ≠ 납입기간)

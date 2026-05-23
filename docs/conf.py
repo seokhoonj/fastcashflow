@@ -17,11 +17,19 @@ language = "ko"
 extensions = [
     "myst_parser",
     "sphinx_design",
+    "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
 ]
+
+# sphinx-copybutton -- strip Python REPL and shell prompts on copy.
+# `# ` is *not* a prompt here because it doubles as the Python comment
+# marker -- including it would also strip section-header lines like
+# `# Detail` from copied code.
+copybutton_prompt_text = r">>> |\.\.\. |\$ "
+copybutton_prompt_is_regexp = True
 
 templates_path = ["_templates"]
 
@@ -33,7 +41,14 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
 }
 
-myst_enable_extensions = ["colon_fence", "deflist"]
+myst_enable_extensions = ["colon_fence", "deflist", "substitution"]
+
+myst_substitutions = {
+    "fcf": (
+        '<span class="logo__fast">fast</span>'
+        '<span class="logo__cashflow">cashflow</span>'
+    ),
+}
 
 # The site is Korean. The API reference is built as is -- its autodoc bodies
 # are English, which is fine for a reference. The English starter pages

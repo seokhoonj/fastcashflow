@@ -15,7 +15,7 @@ git+https://github.com/seokhoonj/fastcashflow.git` 로 설치합니다.
 ## 첫 평가
 
 평가에는 입력이 둘 필요합니다 — 모델포인트(측정할 계약들)와 계리적
-가정. 가장 빠른 시작은 fastcashflow에 들어 있는 샘플 데이터입니다.
+가정. 가장 빠른 시작은 {{ fcf }}에 들어 있는 샘플 데이터입니다.
 파일을 따로 준비할 필요가 없습니다.
 
 ```python
