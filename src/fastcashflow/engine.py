@@ -1630,22 +1630,16 @@ def value(
     )
 
     if backend == "cpu":
-        # n_states=2 (WAIVER_MODEL, active/disabled, active/paid-up) and
-        # n_states=3 (active/waiver/paid-up split, disability with recovery,
-        # accumulation/annuity/post-guarantee) go through the codegen
-        # specialisation -- the entire edge topology and the per-state
-        # premium/benefit flags become literals in the generated source so
-        # the inner loop has no array indirections left. n_states>=4 still
-        # falls through to the generic closure factory; the
-        # _value_kernel_n2 / _value_kernel_n3 hand-unrolled kernels remain
+        # Every multi-state path goes through the codegen specialisation:
+        # the entire edge topology and the per-state premium / benefit
+        # flags become literals in the generated source so the inner loop
+        # has no array indirections left. The closure factory and the
+        # hand-unrolled n_states=2 / n_states=3 kernels stay in the file
         # as a readable reference but are no longer on the default path.
-        if n_states == 2 or n_states == 3:
-            kernel = _get_value_kernel_codegen(
-                n_states, edge_from, edge_to, edge_lump_sum,
-                premium_state, benefit_state,
-            )
-        else:
-            kernel = _get_value_kernel(n_states, n_edges)
+        kernel = _get_value_kernel_codegen(
+            n_states, edge_from, edge_to, edge_lump_sum,
+            premium_state, benefit_state,
+        )
         bel, ra, csm, loss_component = kernel(
             *common_args, model_points.cov_waiting, model_points.cov_reduction_end,
             model_points.cov_reduction_factor,
