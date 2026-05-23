@@ -176,3 +176,84 @@ def test_reincidence_rate_zero_in_exclusion_window():
     v_excl = fcf.value(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_with_excl))
     v_zero = fcf.value(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_all_zero))
     assert np.isclose(v_excl.bel[0], v_zero.bel[0])
+
+
+# ---------------------------------------------------------------------------
+# measure() <-> value() parity (Phase (c) -- semi-Markov detailed projection)
+# ---------------------------------------------------------------------------
+#
+# project_cashflows() drives measure() and used to be Markov-only. Phase (c)
+# adds a cohort-aware detailed kernel that mirrors value()'s semi-Markov
+# path. These tests confirm the two paths still produce identical headline
+# numbers on the cancer-reincidence model, across single contracts and a
+# mixed portfolio.
+
+
+def _reincidence_assumptions(*, duration_max, exclusion_months,
+                              reincidence_monthly):
+    def ci_rein(s, a, p, sd):
+        return np.where(sd < exclusion_months, 0.0, _annual(reincidence_monthly))
+    return fcf.Assumptions(
+        mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
+        lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
+        ci_incidence_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
+        ci_reincidence_annual=ci_rein,
+        discount_annual=0.03,
+        expense_acquisition=200_000.0,
+        expense_maintenance_annual=40_000.0,
+        expense_inflation=0.02,
+        ra_confidence=0.75,
+        mortality_cv=0.10,
+        state_model=_cancer_reincidence_model(duration_max),
+    )
+
+
+def test_measure_value_agree_single_contract():
+    """One contract, 36-month term, mid-exclusion -- measure().bel[:,0] must
+    equal value().bel within floating-point tolerance.
+    """
+    asmp = _reincidence_assumptions(duration_max=12, exclusion_months=6,
+                                     reincidence_monthly=0.01)
+    mp = _single_contract(36)
+    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
+    assert np.allclose(m.bel[:, 0], v.bel)
+
+
+def test_measure_value_agree_mixed_portfolio():
+    """50-contract portfolio across sexes / ages / terms / starting states.
+    """
+    rng = np.random.default_rng(7)
+    n = 50
+    mp = fcf.ModelPoints(
+        issue_age=rng.integers(30, 55, n).astype(np.int64),
+        sex=rng.integers(0, 2, n).astype(np.int64),
+        death_benefit=rng.integers(10, 80, n) * 1_000_000.0,
+        level_premium=np.zeros(n),
+        term_months=rng.integers(60, 180, n).astype(np.int64),
+        disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
+        state=rng.integers(0, 3, n).astype(np.int64),
+    )
+    asmp = _reincidence_assumptions(duration_max=24, exclusion_months=12,
+                                     reincidence_monthly=0.008)
+    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
+    assert np.allclose(m.bel[:, 0], v.bel)
+
+
+def test_measure_value_agree_long_cohort():
+    """Same portfolio shape as the mixed test but with a deeper cohort grid
+    (D = 60) to exercise the long-tail absorbing semantics.
+    """
+    rng = np.random.default_rng(11)
+    n = 20
+    mp = fcf.ModelPoints(
+        issue_age=rng.integers(30, 55, n).astype(np.int64),
+        sex=rng.integers(0, 2, n).astype(np.int64),
+        death_benefit=rng.integers(10, 80, n) * 1_000_000.0,
+        level_premium=np.zeros(n),
+        term_months=np.full(n, 120, dtype=np.int64),
+        disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
+    )
+    asmp = _reincidence_assumptions(duration_max=60, exclusion_months=24,
+                                     reincidence_monthly=0.012)
+    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
+    assert np.allclose(m.bel[:, 0], v.bel)
