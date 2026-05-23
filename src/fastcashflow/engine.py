@@ -407,6 +407,252 @@ def _get_value_kernel(n_states: int, n_edges: int):
     return cached
 
 
+def _make_value_kernel_n2(N_EDGES):
+    """Generate the two-state hand-unrolled valuation kernel for ``n_edges=N_EDGES``.
+
+    Specialisation of :func:`_make_value_kernel` for the n_states=2 case --
+    by far the most common multi-state shape in practice (the WAIVER_MODEL
+    and any active/disabled or active/paid-up product). The occupancy is
+    held as two scalar locals ``occ_0`` and ``occ_1`` rather than a length-2
+    numpy array; numba keeps them in registers and the per-mp
+    ``np.zeros(n_states)`` allocations of the generic kernel disappear.
+    The edge loop still runs over the runtime ``edge_from`` / ``edge_to``
+    arrays but reads and writes the scalars via small predictable branches.
+    Numerically identical to the generic kernel for n_states=2.
+    """
+    @njit(parallel=True, cache=True)
+    def kernel(edge_from, edge_to, edge_prob, edge_lump_sum,
+               premium_state, benefit_state, start_state, issue_index, sex,
+               term_months, count, level_premium, single_premium,
+               premium_term_months, premium_frequency, annuity_frequency,
+               cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
+               cov_is_diagnosis, maturity_benefit, annuity_payment,
+               disability_income, disability_benefit,
+               expense_acquisition, maint_inflated_monthly,
+               discount_start, discount_mid, mortality_factor,
+               morbidity_factor, longevity_factor, disability_factor,
+               cov_waiting, cov_reduction_end, cov_reduction_factor):
+        n_mp = issue_index.shape[0]
+        bel = np.empty(n_mp)
+        ra = np.empty(n_mp)
+        csm = np.empty(n_mp)
+        loss_component = np.empty(n_mp)
+
+        # State-shape flags are per-kernel-invariant -- load once.
+        prem_0 = premium_state[0]
+        prem_1 = premium_state[1]
+        ben_0 = benefit_state[0]
+        ben_1 = benefit_state[1]
+
+        for mp in prange(n_mp):
+            term = term_months[mp]
+            premium_term = premium_term_months[mp]
+            prem_freq = premium_frequency[mp]
+            ann_freq = annuity_frequency[mp]
+            ridx = issue_index[mp]
+            sx = sex[mp]
+            cnt = count[mp]
+            premium = level_premium[mp]
+            annuity = annuity_payment[mp]
+            c_start = cov_offset[mp]
+            c_end = cov_offset[mp + 1]
+            ss = start_state[mp]
+            if ss == 0:
+                occ_0 = cnt
+                occ_1 = 0.0
+            else:
+                occ_0 = 0.0
+                occ_1 = cnt
+            pc = 0.0          # PV of death claims (mortality risk)
+            pcm = 0.0         # PV of health claims (morbidity risk)
+            pd = 0.0          # PV of disability income + lump sum
+            pp = 0.0
+            pe = 0.0
+            pa = 0.0
+            last_year = -1
+            claim_rate = 0.0
+            morb_rate = 0.0
+            prem_due = 0
+            ann_due = 0
+            prem_left = premium_term
+            for t in range(term):
+                year = t // 12
+                if year != last_year:
+                    claim_rate = 0.0
+                    morb_rate = 0.0
+                    for k in range(c_start, c_end):
+                        kind = cov_kind[k]
+                        if cov_is_diagnosis[kind]:
+                            continue
+                        if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
+                            continue
+                        rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]
+                        if cov_risk[kind] == 0:
+                            claim_rate += rate
+                        else:
+                            morb_rate += rate
+                    last_year = year
+                ift = occ_0 + occ_1
+                prem_occ = 0.0
+                if prem_0:
+                    prem_occ += occ_0
+                if prem_1:
+                    prem_occ += occ_1
+                benefit_occ = 0.0
+                if ben_0:
+                    benefit_occ += occ_0
+                if ben_1:
+                    benefit_occ += occ_1
+                ds = discount_start[t]
+                dm = discount_mid[t]
+                single = prem_occ * single_premium[mp] if t == 0 else 0.0
+                if prem_due == 0 and prem_left > 0:
+                    level = prem_occ * premium
+                    prem_due = prem_freq - 1
+                else:
+                    level = 0.0
+                    prem_due -= 1
+                prem_left -= 1
+                pp += (level + single) * ds
+                pc += ift * claim_rate * dm
+                pcm += ift * morb_rate * dm
+                if ann_due == 0:
+                    pa += ift * annuity * ds
+                    ann_due = ann_freq - 1
+                else:
+                    ann_due -= 1
+                pd += benefit_occ * disability_income[mp] * dm
+                acquisition = cnt * expense_acquisition if t == 0 else 0.0
+                pe += (acquisition + ift * maint_inflated_monthly[t]) * dm
+                # Advance the two-state occupancy via the edge list. The
+                # edge loop is unrolled (N_EDGES is closure-constant); each
+                # iteration's edge_from / edge_to load is one bool branch
+                # against the scalars.
+                occ_next_0 = 0.0
+                occ_next_1 = 0.0
+                for e in range(N_EDGES):
+                    src = occ_0 if edge_from[e] == 0 else occ_1
+                    flow = src * edge_prob[sx, ridx, year, e]
+                    if edge_to[e] == 0:
+                        occ_next_0 += flow
+                    else:
+                        occ_next_1 += flow
+                    if edge_lump_sum[e]:
+                        pd += flow * disability_benefit[mp] * dm
+                occ_0 = occ_next_0
+                occ_1 = occ_next_1
+            total = occ_0 + occ_1
+            pm = total * maturity_benefit[mp] * discount_start[term]
+            # Coverage-with-rule pass -- rerun the same two-state recursion
+            # so a mid-year benefit multiplier applies cleanly.
+            for k in range(c_start, c_end):
+                kind = cov_kind[k]
+                if cov_is_diagnosis[kind]:
+                    continue
+                wait = cov_waiting[k]
+                red_end = cov_reduction_end[k]
+                if wait == 0 and red_end == 0:
+                    continue
+                benefit = cov_amount[k]
+                red_factor = cov_reduction_factor[k]
+                mortality_risk = cov_risk[kind] == 0
+                if ss == 0:
+                    occ_0 = cnt
+                    occ_1 = 0.0
+                else:
+                    occ_0 = 0.0
+                    occ_1 = cnt
+                for t in range(term):
+                    year = t // 12
+                    if t >= wait:
+                        mult = red_factor if t < red_end else 1.0
+                        inf = occ_0 + occ_1
+                        contrib = (inf * cov_rates[kind, sx, ridx, year]
+                                   * benefit * mult * discount_mid[t])
+                        if mortality_risk:
+                            pc += contrib
+                        else:
+                            pcm += contrib
+                    occ_next_0 = 0.0
+                    occ_next_1 = 0.0
+                    for e in range(N_EDGES):
+                        src = occ_0 if edge_from[e] == 0 else occ_1
+                        flow = src * edge_prob[sx, ridx, year, e]
+                        if edge_to[e] == 0:
+                            occ_next_0 += flow
+                        else:
+                            occ_next_1 += flow
+                    occ_0 = occ_next_0
+                    occ_1 = occ_next_1
+            # Diagnosis coverages -- claims off the not-yet-diagnosed pool.
+            for k in range(c_start, c_end):
+                kind = cov_kind[k]
+                if not cov_is_diagnosis[kind]:
+                    continue
+                benefit = cov_amount[k]
+                wait = cov_waiting[k]
+                red_end = cov_reduction_end[k]
+                red_factor = cov_reduction_factor[k]
+                if ss == 0:
+                    occ_0 = cnt
+                    occ_1 = 0.0
+                else:
+                    occ_0 = 0.0
+                    occ_1 = cnt
+                d_year = -1
+                d_rate = 0.0
+                for t in range(term):
+                    year = t // 12
+                    if year != d_year:
+                        d_rate = cov_rates[kind, sx, ridx, year]
+                        d_year = year
+                    if t >= wait:
+                        mult = red_factor if t < red_end else 1.0
+                        healthy = occ_0 + occ_1
+                        pcm += healthy * d_rate * benefit * mult * discount_mid[t]
+                    undiag = 1.0 - d_rate
+                    occ_next_0 = 0.0
+                    occ_next_1 = 0.0
+                    for e in range(N_EDGES):
+                        src = occ_0 if edge_from[e] == 0 else occ_1
+                        flow = src * undiag * edge_prob[sx, ridx, year, e]
+                        if edge_to[e] == 0:
+                            occ_next_0 += flow
+                        else:
+                            occ_next_1 += flow
+                    occ_0 = occ_next_0
+                    occ_1 = occ_next_1
+            bel_mp = pc + pcm + pd + pm + pa + pe - pp
+            ra_mp = (mortality_factor * pc + morbidity_factor * pcm
+                     + disability_factor * pd + longevity_factor * (pm + pa))
+            fcf = bel_mp + ra_mp
+            bel[mp] = bel_mp
+            ra[mp] = ra_mp
+            csm[mp] = max(0.0, -fcf)
+            loss_component[mp] = max(0.0, fcf)
+
+        return bel, ra, csm, loss_component
+
+    return kernel
+
+
+_VALUE_KERNEL_N2_CACHE: dict[int, object] = {}
+
+
+def _get_value_kernel_n2(n_edges: int):
+    """Return the n_states=2 hand-unrolled value kernel for ``n_edges``.
+
+    Two-state-specialised counterpart of :func:`_get_value_kernel`. The
+    cache is keyed on ``n_edges`` alone; n_states is fixed at 2.
+    """
+    key = int(n_edges)
+    cached = _VALUE_KERNEL_N2_CACHE.get(key)
+    if cached is None:
+        cached = _make_value_kernel_n2(key)
+        _VALUE_KERNEL_N2_CACHE[key] = cached
+    return cached
+
+
 @njit(parallel=True, cache=True)
 def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          single_premium, premium_term_months, premium_frequency,
@@ -766,7 +1012,13 @@ def value(
     )
 
     if backend == "cpu":
-        kernel = _get_value_kernel(n_states, n_edges)
+        # n_states=2 is the common case (WAIVER_MODEL, active/disabled,
+        # active/paid-up) and gets a hand-unrolled scalar-occupancy kernel;
+        # n_states>=3 falls through to the generic closure factory.
+        if n_states == 2:
+            kernel = _get_value_kernel_n2(n_edges)
+        else:
+            kernel = _get_value_kernel(n_states, n_edges)
         bel, ra, csm, loss_component = kernel(
             *common_args, model_points.cov_waiting, model_points.cov_reduction_end,
             model_points.cov_reduction_factor,
