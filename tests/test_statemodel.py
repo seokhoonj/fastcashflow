@@ -66,7 +66,7 @@ def test_compile_waiver_edges():
     """The waiver model compiles to the expected competing-decrement edges."""
     rates = {
         "mortality": np.array([[0.01]]),
-        "waiver_inception": np.array([[0.05]]),
+        "waiver_incidence": np.array([[0.05]]),
         "lapse": np.array([[0.02]]),
     }
     (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
@@ -94,7 +94,7 @@ def test_compile_missing_rate_raises():
     """A decrement naming a rate that was not supplied is a clear error."""
     with pytest.raises(ValueError, match="lapse"):
         compile_state_model(WAIVER_MODEL, {"mortality": np.array([[0.01]]),
-                                           "waiver_inception": np.array([[0.0]])})
+                                           "waiver_incidence": np.array([[0.0]])})
 
 
 # ---------------------------------------------------------------------------
@@ -269,3 +269,100 @@ def test_measure_and_value_agree_under_custom_model():
     )
     asmp = _asmp(waiver_rate=0.03, state_model=three)
     assert np.allclose(measure(mps, asmp).bel[:, 0], value(mps, asmp).bel)
+
+
+# ---------------------------------------------------------------------------
+# Deprecation of "waiver_inception" -> "waiver_incidence" (T)
+# ---------------------------------------------------------------------------
+#
+# The project standardised rate names on the actuarial term ``incidence``
+# (a per-unit-time event rate). The legacy ``inception`` spelling is still
+# accepted in two places -- the Assumptions field and the Transition rate
+# name -- with a ``DeprecationWarning`` so existing user code keeps working
+# until a future major version drops the alias.
+
+
+def test_assumptions_waiver_inception_alias_deprecated():
+    """Setting the deprecated ``waiver_inception_annual`` warns and routes
+    to ``waiver_incidence_annual``."""
+    rate = lambda s, a, d: np.full(d.shape, 0.05)
+    with pytest.warns(DeprecationWarning,
+                      match="waiver_inception_annual is deprecated"):
+        asmp = Assumptions(
+            mortality_annual=lambda s, a, d: np.full(d.shape, 0.01),
+            lapse_annual=lambda s, a, d: np.full(d.shape, 0.02),
+            discount_annual=0.03,
+            expense_acquisition=0.0,
+            expense_maintenance_annual=0.0,
+            expense_inflation=0.0,
+            ra_confidence=0.5,
+            mortality_cv=0.0,
+            waiver_inception_annual=rate,
+        )
+    # The alias is routed to the canonical field and the legacy field
+    # is cleared so downstream code never has to look at both.
+    assert asmp.waiver_incidence_annual is rate
+    assert asmp.waiver_inception_annual is None
+
+
+def test_assumptions_both_waiver_spellings_raise():
+    """Setting both ``waiver_incidence_annual`` and the deprecated
+    ``waiver_inception_annual`` is an error -- the caller has to pick one.
+    """
+    rate = lambda s, a, d: np.full(d.shape, 0.05)
+    with pytest.raises(ValueError, match="not both"):
+        Assumptions(
+            mortality_annual=lambda s, a, d: np.full(d.shape, 0.01),
+            lapse_annual=lambda s, a, d: np.full(d.shape, 0.02),
+            discount_annual=0.03,
+            expense_acquisition=0.0,
+            expense_maintenance_annual=0.0,
+            expense_inflation=0.0,
+            ra_confidence=0.5,
+            mortality_cv=0.0,
+            waiver_incidence_annual=rate,
+            waiver_inception_annual=rate,
+        )
+
+
+def test_transition_waiver_inception_rate_name_deprecated():
+    """A StateModel that names its transition with the legacy
+    ``"waiver_inception"`` still compiles, but compile_state_model emits
+    a DeprecationWarning at lookup time.
+    """
+    model = StateModel(states=(
+        State("active", premium=True, transitions=(
+            Transition("mortality"),
+            Transition("waiver_inception", to="waiver"),
+            Transition("lapse"),
+        )),
+        State("waiver", premium=False, transitions=(
+            Transition("mortality"),
+        )),
+    ), seating=(0, 1, 1))
+    rates = {
+        "mortality": np.array([[0.01]]),
+        "waiver_incidence": np.array([[0.05]]),
+        "lapse": np.array([[0.02]]),
+    }
+    with pytest.warns(DeprecationWarning,
+                      match="rate name 'waiver_inception' is deprecated"):
+        out = compile_state_model(model, rates)
+    # The compile output for the deprecated spelling matches the canonical
+    # spelling exactly.
+    canonical = StateModel(states=(
+        State("active", premium=True, transitions=(
+            Transition("mortality"),
+            Transition("waiver_incidence", to="waiver"),
+            Transition("lapse"),
+        )),
+        State("waiver", premium=False, transitions=(
+            Transition("mortality"),
+        )),
+    ), seating=(0, 1, 1))
+    expected = compile_state_model(canonical, rates)
+    for a, b in zip(out, expected):
+        if isinstance(a, np.ndarray):
+            assert np.array_equal(a, b)
+        else:
+            assert a == b

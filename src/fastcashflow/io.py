@@ -452,7 +452,7 @@ def read_assumptions(path):
         kwargs: dict = dict(
             mortality_annual=mortality_fn,
             lapse_annual=lookup(lapse_t, "lapse_table"),
-            waiver_inception_annual=waiver_fn,
+            waiver_incidence_annual=waiver_fn,
             # Pass the full per-year arrays through -- the engine expands
             # them to per-month curves via fastcashflow.curves. A one-row
             # table reproduces the original flat-scalar behaviour.

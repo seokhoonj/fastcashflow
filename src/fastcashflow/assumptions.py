@@ -1,6 +1,7 @@
 """Actuarial assumption set for the deterministic projection."""
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -101,12 +102,20 @@ class Assumptions:
     mortality_cv :
         Coefficient of variation of death claims -- the mortality-risk
         component of the RA.
-    waiver_inception_annual :
+    waiver_incidence_annual :
         Maps ``(sex, issue_age, duration_years)`` to an array of annual
-        waiver-inception rates -- the rate at which active in-force
+        waiver-incidence rates -- the rate at which active in-force
         transitions to the premium-waived state. Same signature as
         ``mortality_annual``. ``None`` means no transitions: every model
-        point keeps its input state for the whole projection.
+        point keeps its input state for the whole projection. The
+        spelling matches the standard actuarial term ``incidence`` -- a
+        per-unit-time event rate -- used by the rest of the engine for
+        analogous rates (``ci_incidence_annual``,
+        ``ci_reincidence_annual``).
+    waiver_inception_annual :
+        Deprecated alias for ``waiver_incidence_annual``; still accepted
+        for backward compatibility but raises ``DeprecationWarning``. Set
+        only one of the two.
     longevity_cv :
         Coefficient of variation of survival benefits (maturity benefits and
         annuity payments) -- the longevity-risk component of the RA. The RA
@@ -163,7 +172,7 @@ class Assumptions:
         pay premium or a benefit. ``None`` uses the default active / waiver
         model
         (:data:`~fastcashflow.statemodel.WAIVER_MODEL`); the
-        ``waiver_inception_annual`` rate then drives the active -> waiver
+        ``waiver_incidence_annual`` rate then drives the active -> waiver
         transition. A product with a different state set supplies its own.
     """
 
@@ -175,6 +184,9 @@ class Assumptions:
     expense_inflation: float | FloatArray
     ra_confidence: float
     mortality_cv: float
+    waiver_incidence_annual: RateFn | None = None
+    # Deprecated alias retained for source compatibility -- ``__post_init__``
+    # routes it to ``waiver_incidence_annual`` with a DeprecationWarning.
     waiver_inception_annual: RateFn | None = None
     # Semi-Markov (Phase (c)) prototype rates. ``ci_incidence_annual`` is the
     # first-cancer diagnosis rate (active -> post_first transition, Markov);
@@ -198,6 +210,26 @@ class Assumptions:
     riders: tuple[RiderRate, ...] = ()
     coverage_types: dict[str, str] | None = None
     state_model: StateModel | None = None
+
+    def __post_init__(self) -> None:
+        # Backward-compatibility: accept the deprecated ``waiver_inception_annual``
+        # spelling, warn, route to the canonical ``waiver_incidence_annual``.
+        # Setting both forms is an error -- the caller has to pick one.
+        if self.waiver_inception_annual is not None:
+            if self.waiver_incidence_annual is not None:
+                raise ValueError(
+                    "set waiver_incidence_annual, not both "
+                    "waiver_incidence_annual and waiver_inception_annual"
+                )
+            warnings.warn(
+                "waiver_inception_annual is deprecated; "
+                "use waiver_incidence_annual",
+                DeprecationWarning, stacklevel=3,
+            )
+            object.__setattr__(
+                self, "waiver_incidence_annual", self.waiver_inception_annual,
+            )
+            object.__setattr__(self, "waiver_inception_annual", None)
 
     @property
     def discount_monthly(self) -> float:

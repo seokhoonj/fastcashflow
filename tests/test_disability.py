@@ -81,7 +81,7 @@ def _asmp(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
 def test_compile_marks_benefit_state_and_lump_sum():
     """compile_state_model surfaces the benefit state and the lump-sum edge."""
     rates = {"mortality": np.array([[0.01]]),
-             "waiver_inception": np.array([[0.05]]),
+             "waiver_incidence": np.array([[0.05]]),
              "lapse": np.array([[0.0]])}
     edge_from, edge_to, _, edge_lump_sum, n_states, premium, benefit = (
         compile_state_model(_disability_model(), rates))

@@ -470,11 +470,11 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     mortality_annual = assumptions.mortality_annual(
         sex_grid, issue_age_grid, duration_grid)
     mortality = np.ascontiguousarray(annual_to_monthly(mortality_annual))
-    if assumptions.waiver_inception_annual is None:
+    if assumptions.waiver_incidence_annual is None:
         waiver = np.zeros_like(mortality)
     else:
         waiver = np.ascontiguousarray(annual_to_monthly(
-            assumptions.waiver_inception_annual(
+            assumptions.waiver_incidence_annual(
                 sex_grid, issue_age_grid, duration_grid)))
     lapse = np.ascontiguousarray(annual_to_monthly(
         assumptions.lapse_annual(sex_grid, issue_age_grid, duration_grid)))
@@ -507,8 +507,8 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         max_cohort = max(s.duration_max for s in state_model.states
                           if s.duration_max > 0)
         rate_dict = {"mortality": mortality, "lapse": lapse}
-        if assumptions.waiver_inception_annual is not None:
-            rate_dict["waiver_inception"] = waiver
+        if assumptions.waiver_incidence_annual is not None:
+            rate_dict["waiver_incidence"] = waiver
         if assumptions.ci_incidence_annual is not None:
             ci_inc = np.ascontiguousarray(annual_to_monthly(
                 assumptions.ci_incidence_annual(
@@ -570,7 +570,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
          premium_state, benefit_state) = compile_state_model(
             state_model,
-            {"mortality": mortality, "waiver_inception": waiver,
+            {"mortality": mortality, "waiver_incidence": waiver,
              "lapse": lapse},
         )
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,

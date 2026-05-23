@@ -1844,14 +1844,14 @@ def value(
     # that genuinely need an occupancy vector.
     fast_path = (backend == "cpu"
                  and assumptions.state_model is None
-                 and assumptions.waiver_inception_annual is None
+                 and assumptions.waiver_incidence_annual is None
                  and not np.any(model_points.state))
     if not fast_path:
-        if assumptions.waiver_inception_annual is None:
+        if assumptions.waiver_incidence_annual is None:
             waiver_grid = np.zeros_like(mortality_grid)
         else:
             waiver_grid = np.ascontiguousarray(annual_to_monthly(
-                assumptions.waiver_inception_annual(
+                assumptions.waiver_incidence_annual(
                     sex_grid, issue_age_grid, duration_grid)))
         # In-force state machine -- the StateModel composes the transition
         # edges for the generic occupancy recursion (see
@@ -1868,11 +1868,11 @@ def value(
                               if s.duration_max > 0)
             rate_dict = {"mortality": mortality_grid,
                           "lapse": lapse_grid}
-            if assumptions.waiver_inception_annual is not None:
+            if assumptions.waiver_incidence_annual is not None:
                 waiver_grid = np.ascontiguousarray(annual_to_monthly(
-                    assumptions.waiver_inception_annual(
+                    assumptions.waiver_incidence_annual(
                         sex_grid, issue_age_grid, duration_grid)))
-                rate_dict["waiver_inception"] = waiver_grid
+                rate_dict["waiver_incidence"] = waiver_grid
             if assumptions.ci_incidence_annual is not None:
                 ci_inc_grid = np.ascontiguousarray(annual_to_monthly(
                     assumptions.ci_incidence_annual(
@@ -1911,7 +1911,7 @@ def value(
              premium_state, benefit_state) = compile_state_model(
                 state_model,
                 {"mortality": mortality_grid,
-                 "waiver_inception": waiver_grid,
+                 "waiver_incidence": waiver_grid,
                  "lapse": lapse_grid},
             )
             # compile_state_model returns ``edge_prob`` with the edge axis

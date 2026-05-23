@@ -29,6 +29,7 @@ the contract's actual terms at the measurement date (IFRS 17 Sec. 33-34).
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -36,13 +37,43 @@ import numpy as np
 from fastcashflow._typing import FloatArray, IntArray
 
 
+# Rate-name aliases. ``compile_state_model`` / ``compile_state_model_with_duration``
+# normalise these before looking them up in the rates dict, so a user-supplied
+# StateModel that references an old rate name keeps working with a
+# DeprecationWarning. Map: deprecated -> canonical.
+_RATE_NAME_ALIASES: dict[str, str] = {
+    "waiver_inception": "waiver_incidence",
+}
+
+
+def _normalize_rate_name(name: str) -> str:
+    """Translate deprecated rate names to their canonical equivalents.
+
+    The mapping captures the project-wide rename from ``_inception`` to the
+    industry-standard ``_incidence`` for per-unit-time event rates (see
+    [[rate-naming-inception-vs-incidence]] in the project memory). Both
+    spellings are accepted at the StateModel level until a future major
+    version drops the alias.
+    """
+    canonical = _RATE_NAME_ALIASES.get(name)
+    if canonical is None:
+        return name
+    warnings.warn(
+        f"rate name {name!r} is deprecated; use {canonical!r}",
+        DeprecationWarning, stacklevel=4,
+    )
+    return canonical
+
+
 @dataclass(frozen=True, slots=True)
 class Transition:
     """One transition out of a state.
 
     ``rate`` names an assumption rate -- ``"mortality"``, ``"lapse"``,
-    ``"waiver_inception"`` and so on -- evaluated by the engine and supplied
-    to :func:`compile_state_model`. ``to`` is the destination state's name
+    ``"waiver_incidence"`` and so on -- evaluated by the engine and supplied
+    to :func:`compile_state_model`. The legacy spelling
+    ``"waiver_inception"`` is still accepted with a ``DeprecationWarning``.
+    ``to`` is the destination state's name
     when the transition moves occupancy to another transient state (waiver
     inception, recovery, reincidence), or ``None`` when it removes occupancy
     from the in-force set entirely (death, lapse).
@@ -175,7 +206,7 @@ WAIVER_MODEL = StateModel(
     states=(
         State("active", premium=True, transitions=(
             Transition("mortality"),
-            Transition("waiver_inception", to="waiver"),
+            Transition("waiver_incidence", to="waiver"),
             Transition("lapse"),
         )),
         State("waiver", premium=False, transitions=(
@@ -249,8 +280,9 @@ def compile_state_model(
         # applied so far; a leaving transition fires on those survivors.
         survive = np.ones(grid)
         for tr in state.transitions:
+            rate_name = _normalize_rate_name(tr.rate)
             try:
-                rate = arrays[tr.rate]
+                rate = arrays[rate_name]
             except KeyError:
                 raise ValueError(
                     f"state {state.name!r} references rate {tr.rate!r}, "
@@ -332,9 +364,16 @@ def compile_state_model_with_duration(
     # shapes -- the duration-dependent rates share that grid with an extra
     # trailing cohort axis. Inferring it from the *static* rates avoids
     # baking the cohort axis into the grid.
+    # Normalise rate names once per transition (deprecated aliases warn at
+    # the first lookup); downstream code looks up canonical names only.
+    tr_canonical: dict[int, str] = {
+        id(tr): _normalize_rate_name(tr.rate)
+        for s in model.states for tr in s.transitions
+    }
+
     static_shapes = []
     for name, arr in arrays.items():
-        any_dyn = any(tr.rate == name and tr.duration_dependent
+        any_dyn = any(tr_canonical[id(tr)] == name and tr.duration_dependent
                        for s in model.states for tr in s.transitions)
         if any_dyn:
             static_shapes.append(arr.shape[:-1])
@@ -343,29 +382,30 @@ def compile_state_model_with_duration(
     grid = np.broadcast_shapes(*static_shapes)
     grid_ndim = len(grid)
 
-    def rate_at(rate_name: str, src_state: State, tau: int) -> FloatArray:
+    def rate_at(canonical_name: str, src_state: State, tau: int) -> FloatArray:
         """Evaluate a rate at cohort ``tau`` of the source state.
 
         For a non-duration-dependent transition the array is returned as
         is. For a duration-dependent one the tau-th slice of the trailing
-        cohort axis is taken.
+        cohort axis is taken. ``canonical_name`` is the already-normalised
+        rate key (see ``_normalize_rate_name``).
         """
-        arr = arrays[rate_name]
+        arr = arrays[canonical_name]
         # Determine whether *this* transition reads the rate as dynamic;
         # the same rate name may be referenced by both kinds across states.
         # We pass the source state to look up the transition's flag.
         for tr in src_state.transitions:
-            if tr.rate == rate_name:
+            if tr_canonical[id(tr)] == canonical_name:
                 if tr.duration_dependent:
                     if arr.ndim != grid_ndim + 1:
                         raise ValueError(
-                            f"rate {rate_name!r} is duration_dependent in "
+                            f"rate {canonical_name!r} is duration_dependent in "
                             f"state {src_state.name!r} but its array shape "
                             f"{arr.shape} has no cohort axis"
                         )
                     if arr.shape[-1] < src_state.duration_max:
                         raise ValueError(
-                            f"rate {rate_name!r} cohort axis "
+                            f"rate {canonical_name!r} cohort axis "
                             f"{arr.shape[-1]} shorter than state "
                             f"{src_state.name!r} duration_max "
                             f"{src_state.duration_max}"
@@ -383,7 +423,7 @@ def compile_state_model_with_duration(
     for i, state in enumerate(model.states):
         # Validate this state's transitions reference rates we have.
         for tr in state.transitions:
-            if tr.rate not in arrays:
+            if tr_canonical[id(tr)] not in arrays:
                 raise ValueError(
                     f"state {state.name!r} references rate {tr.rate!r}, "
                     f"which was not supplied to "
@@ -413,7 +453,7 @@ def compile_state_model_with_duration(
             survive = np.ones(grid)
             transient_idx = 0
             for tr in state.transitions:
-                r = rate_at(tr.rate, state, tau)
+                r = rate_at(tr_canonical[id(tr)], state, tau)
                 if tr.to is not None:
                     prob = survive * r
                     per_edge_per_tau[transient_idx].append(prob)
