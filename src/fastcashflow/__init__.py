@@ -19,6 +19,8 @@ from fastcashflow.grouping import group
 from fastcashflow.io import (
     load_sample_assumptions,
     load_sample_model_points,
+    load_sample_registry,
+    read_assumption_registry,
     read_assumptions,
     read_model_points,
     value_file,
@@ -69,6 +71,7 @@ __all__ = [
     "VFAPeriodMovement", "VFAReconciliation",
     "read_model_points", "read_assumptions", "write_valuation", "value_file",
     "load_sample_model_points", "load_sample_assumptions",
+    "read_assumption_registry", "load_sample_registry",
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",

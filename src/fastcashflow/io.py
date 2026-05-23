@@ -266,6 +266,209 @@ def read_assumptions(path) -> Assumptions:
 
 
 # ---------------------------------------------------------------------------
+# Registry-format actuarial basis (v1)
+# ---------------------------------------------------------------------------
+#
+# The registry format splits the basis into two workbooks: a table-registry
+# workbook of named rate tables, and a basis workbook whose ``basis`` sheet
+# maps each (product, channel) segment to the tables it uses plus the scalar
+# parameters, with a ``defaults`` row that blank cells inherit. See
+# docs/assumptions-format.md.
+#
+# v1 limitations (deliberate -- a later round refines them): the discount,
+# inflation and maintenance tables are read but collapsed to their first
+# entry (treated flat); the result is a per-segment dict, and splitting model
+# points by segment and valuing each is left to the caller.
+
+
+def _sheet_dicts(ws):
+    """Yield each data row of a worksheet as a dict keyed by the header row."""
+    rows = ws.iter_rows(values_only=True)
+    try:
+        header = next(rows)
+    except StopIteration:
+        return
+    names = [str(h).strip() if h is not None else "" for h in header]
+    for row in rows:
+        if all(c is None for c in row):
+            continue
+        yield {n: v for n, v in zip(names, row) if n}
+
+
+def _sexage_tables(ws):
+    """``{table_id: (grid (2, n_ages), age_min)}`` from a sex / age sheet."""
+    by_id: dict[str, dict] = {}
+    for r in _sheet_dicts(ws):
+        tid = str(r["table_id"]).strip()
+        slot = by_id.setdefault(tid, {0: {}, 1: {}})
+        slot[int(r["sex"])][int(r["age"])] = float(r["rate"])
+    out = {}
+    for tid, by_sex in by_id.items():
+        ages = sorted(by_sex[0])
+        grid = np.asarray(
+            [[by_sex[s][a] for a in ages] for s in (0, 1)], dtype=np.float64
+        )
+        out[tid] = (grid, ages[0])
+    return out
+
+
+def _axis_tables(ws, axis):
+    """``{table_id: rate array}`` from a sheet keyed by ``axis`` (0-based)."""
+    by_id: dict[str, dict] = {}
+    for r in _sheet_dicts(ws):
+        tid = str(r["table_id"]).strip()
+        by_id.setdefault(tid, {})[int(r[axis])] = float(r["rate"])
+    return {tid: np.asarray([by_k[k] for k in range(len(by_k))], np.float64)
+            for tid, by_k in by_id.items()}
+
+
+def _duration_closure(arr):
+    """Wrap a 0-based annual-rate array in a duration lookup (clips past end)."""
+    n = arr.shape[0]
+
+    def rate(duration):
+        return arr[np.clip(np.asarray(duration, np.int64), 0, n - 1)]
+
+    return rate
+
+
+def read_assumption_registry(tables_path, basis_path):
+    """Read the registry-format actuarial basis.
+
+    ``tables_path`` is the table-registry workbook (named rate tables);
+    ``basis_path`` is the workbook whose ``basis`` sheet maps each (product,
+    channel) segment to those tables plus scalar parameters, with a
+    ``defaults`` row that blank cells inherit. The ``riders`` sheet attaches
+    riders to products. See docs/assumptions-format.md.
+
+    Returns ``{(product, channel): Assumptions}`` -- one basis per segment.
+
+    This is a v1 reader: the discount, inflation and maintenance tables are
+    read but used flat (their first entry); the per-segment dict is returned
+    for the caller to value segment by segment.
+    """
+    tb = openpyxl.load_workbook(tables_path, data_only=True)
+
+    def optional(sheet, reader):
+        return reader(tb[sheet]) if sheet in tb.sheetnames else {}
+
+    mortality_t = _sexage_tables(tb["mortality_tables"])
+    rider_rate_t = optional("rider_rate_tables", _sexage_tables)
+    waiver_t = optional("waiver_tables", _sexage_tables)
+    lapse_t = _axis_tables(tb["lapse_tables"], "duration")
+    maint_t = optional("maintenance_tables",
+                       lambda w: _axis_tables(w, "duration"))
+    discount_t = _axis_tables(tb["discount_tables"], "year")
+    inflation_t = _axis_tables(tb["inflation_tables"], "year")
+
+    ab = openpyxl.load_workbook(basis_path, data_only=True)
+    defaults: dict = {}
+    segments: list = []
+    for r in _sheet_dicts(ab["basis"]):
+        if str(r.get("product", "") or "").strip().lower() == "defaults":
+            defaults = r
+        else:
+            segments.append(r)
+    riders_by_product: dict[str, list] = {}
+    if "riders" in ab.sheetnames:
+        for r in _sheet_dicts(ab["riders"]):
+            rt = r.get("rate_table")
+            riders_by_product.setdefault(str(r["product"]).strip(), []).append((
+                str(r["rider_code"]).strip(), str(r["type"]).strip(),
+                str(rt).strip() if rt not in (None, "") else None,
+            ))
+
+    result = {}
+    for seg in segments:
+        product = str(seg["product"]).strip()
+        channel = str(seg.get("channel", "") or "").strip()
+        where = f"basis row ({product} / {channel})"
+
+        def cell(col):
+            v = seg.get(col)
+            if v is None or (isinstance(v, str) and not v.strip()):
+                v = defaults.get(col)
+            return None if (isinstance(v, str) and not v.strip()) else v
+
+        def lookup(registry, col, optional_ref=False):
+            tid = cell(col)
+            tid = str(tid).strip() if tid is not None else None
+            if tid is None:
+                if optional_ref:
+                    return None
+                raise ValueError(f"{where}: {col!r} is required")
+            if tid not in registry:
+                raise ValueError(f"{where}: {col}={tid!r} is not registered")
+            return registry[tid]
+
+        def scalar(col, required=False):
+            v = cell(col)
+            if v is None and required:
+                raise ValueError(f"{where}: {col!r} is required")
+            return None if v is None else float(v)
+
+        riders = []
+        coverage_types: dict[str, str] = {}
+        for code, rtype, rate_table in riders_by_product.get(product, []):
+            coverage_types[code] = rtype
+            if rtype not in RATE_DRIVEN_TYPES:
+                continue
+            if rate_table is None or rate_table not in rider_rate_t:
+                raise ValueError(
+                    f"rider {code!r} of product {product!r} is rate-driven "
+                    f"({rtype}) but rate_table {rate_table!r} is not in "
+                    "rider_rate_tables"
+                )
+            riders.append(RiderRate(
+                code=code,
+                rate=_rate_closure(*rider_rate_t[rate_table]),
+                is_diagnosis=(rtype == TYPE_DIAGNOSIS),
+                risk=RISK_MORTALITY if rtype == TYPE_DEATH else RISK_MORBIDITY,
+            ))
+
+        waiver = lookup(waiver_t, "waiver_table", optional_ref=True)
+        maint = lookup(maint_t, "maintenance_table", optional_ref=True)
+        kwargs: dict = dict(
+            mortality_annual=_rate_closure(*lookup(mortality_t, "mortality_table")),
+            lapse_annual=_duration_closure(lookup(lapse_t, "lapse_table")),
+            waiver_inception_annual=(
+                _rate_closure(*waiver) if waiver is not None else None),
+            # v1: the discount / inflation / maintenance tables are read but
+            # used flat -- their first entry.
+            discount_annual=float(lookup(discount_t, "discount_table")[0]),
+            expense_inflation=float(lookup(inflation_t, "inflation_table")[0]),
+            expense_maintenance_annual=(0.0 if maint is None else float(maint[0])),
+            expense_acquisition=scalar("expense_acquisition", required=True),
+            ra_confidence=scalar("ra_confidence", required=True),
+            mortality_cv=scalar("mortality_cv", required=True),
+            riders=tuple(riders),
+            coverage_types=coverage_types or None,
+        )
+        for opt_col in ("morbidity_cv", "longevity_cv", "disability_cv",
+                        "expense_cv", "cost_of_capital_rate"):
+            v = scalar(opt_col)
+            if v is not None:
+                kwargs[opt_col] = v
+        method = cell("ra_method")
+        if method is not None:
+            kwargs["ra_method"] = str(method).strip()
+        result[(product, channel)] = Assumptions(**kwargs)
+    return result
+
+
+def load_sample_registry():
+    """Read fastcashflow's bundled sample registry-format basis.
+
+    Returns ``{(product, channel): Assumptions}`` -- the registry-format
+    companion to :func:`load_sample_assumptions`.
+    """
+    base = resources.files("fastcashflow") / "sample_data"
+    with resources.as_file(base / "sample_tables.xlsx") as tables, \
+            resources.as_file(base / "sample_basis.xlsx") as basis:
+        return read_assumption_registry(tables, basis)
+
+
+# ---------------------------------------------------------------------------
 # Model points -- wide and long-form
 # ---------------------------------------------------------------------------
 
