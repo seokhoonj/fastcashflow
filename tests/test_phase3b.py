@@ -33,7 +33,7 @@ def _portfolio(n: int = 400) -> ModelPoints:
 def _assumptions() -> Assumptions:
     return Assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.01)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
         expense_maintenance_annual=48_000.0,
@@ -186,7 +186,7 @@ def test_value_file_rejects_existing_output(tmp_path):
 def test_load_sample_data_runs():
     """The bundled sample data loads and values without error."""
     mps = load_sample_model_points()
-    asmp = load_sample_assumptions()
+    asmp = next(iter(load_sample_assumptions().values()))
     assert mps.n_mp > 0
     val = value(mps, asmp)
     assert val.bel.shape == (mps.n_mp,)
@@ -195,7 +195,7 @@ def test_load_sample_data_runs():
 
 def test_to_long_round_trips(tmp_path):
     """ModelPoints.to_long written out and re-read reproduces the valuation."""
-    asmp = load_sample_assumptions()
+    asmp = next(iter(load_sample_assumptions().values()))
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     policies.write_csv(tmp_path / "pol.csv")
@@ -209,7 +209,7 @@ def test_to_long_round_trips(tmp_path):
 
 def test_to_wide_round_trips(tmp_path):
     """ModelPoints.to_wide written out and re-read reproduces the valuation."""
-    asmp = load_sample_assumptions()
+    asmp = next(iter(load_sample_assumptions().values()))
     mps = load_sample_model_points()
     mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")
     back = read_model_points(tmp_path / "wide.csv", asmp)
@@ -220,7 +220,7 @@ def test_to_wide_round_trips(tmp_path):
 
 def test_value_file_streams_long_form(tmp_path):
     """value_file streams a long-form policies + coverages pair in chunks."""
-    asmp = load_sample_assumptions()
+    asmp = next(iter(load_sample_assumptions().values()))
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     policies.write_parquet(tmp_path / "pol.parquet")

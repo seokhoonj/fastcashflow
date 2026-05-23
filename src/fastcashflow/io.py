@@ -80,205 +80,26 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Actuarial basis -- the assumption workbook
-# ---------------------------------------------------------------------------
-
-def _read_rate_grid(ws):
-    """Read a long-form ``sex, age, rate`` sheet into a sex x age grid.
-
-    Each row after the header is a sex (0 male, 1 female), an attained age,
-    and the annual rate at that age. Returns the grid shaped ``(2, n_ages)``
-    and the minimum age; the ages are the same contiguous set for both sexes.
-    """
-    by_sex: dict[int, dict[int, float]] = {0: {}, 1: {}}
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if row[0] is None or row[1] is None:
-            continue
-        by_sex[int(row[0])][int(row[1])] = float(row[2])
-    ages = sorted(by_sex[0])
-    grid = np.asarray(
-        [[by_sex[s][a] for a in ages] for s in (0, 1)], dtype=np.float64
-    )
-    return grid, ages[0]
-
-
-def _rate_closure(grid, age_min):
-    """Wrap a ``(2, n_ages)`` annual-rate grid in an annual-rate lookup.
-
-    The returned callable has the ``(sex, issue_age, duration)`` signature
-    ``Assumptions`` expects; it reads the annual rate at the attained age
-    ``issue_age + duration``, clipping to the grid. The engine converts the
-    annual rate to its monthly equivalent.
-    """
-    n_sex, n_ages = grid.shape
-
-    def rate(sex, issue_age, duration):
-        s = np.clip(np.asarray(sex, np.int64), 0, n_sex - 1)
-        attained = (np.asarray(issue_age, np.int64)
-                    + np.asarray(duration, np.int64))
-        a = np.clip(attained - age_min, 0, n_ages - 1)
-        return grid[s, a]
-
-    return rate
-
-
-def _read_rates_sheet(ws):
-    """Read the long-form ``rates`` sheet -- ``rider_code, sex, age, rate`` --
-    into a per-rider sex x age grid keyed by rider code."""
-    by_code: dict[str, dict[int, dict[int, float]]] = {}
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if row[0] is None or row[1] is None or row[2] is None:
-            continue
-        code = str(row[0]).strip()
-        by_code.setdefault(code, {0: {}, 1: {}})[int(row[1])][int(row[2])] = (
-            float(row[3])
-        )
-    grids: dict[str, tuple] = {}
-    for code, by_sex in by_code.items():
-        ages = sorted(by_sex[0])
-        grid = np.asarray(
-            [[by_sex[s][a] for a in ages] for s in (0, 1)], dtype=np.float64
-        )
-        grids[code] = (grid, ages[0])
-    return grids
-
-
-def _read_riders_sheet(ws):
-    """Read the riders master sheet -- ``product, rider_code, rider_name,
-    type`` -- returning ``(code, type)`` pairs in sheet order."""
-    riders = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if row[1] is None or row[3] is None:
-            continue
-        riders.append((str(row[1]).strip(), str(row[3]).strip()))
-    return riders
-
-
-def read_assumptions(path) -> Assumptions:
-    """Read an actuarial basis from an Excel workbook into ``Assumptions``.
-
-    Required sheets:
-
-    * ``parameters`` -- two columns, name and value: ``discount_annual``,
-      the expense scalars, the risk-adjustment scalars, and so on.
-    * ``mortality`` -- long-form ``sex, age, rate``: the base mortality, one
-      shared table. It drives the in-force decrement and the main-contract
-      death claim.
-    * ``lapse`` -- two columns, duration (completed policy years) and the
-      annual lapse rate.
-
-    A product with riders adds two more sheets:
-
-    * ``riders`` -- the riders master: ``product, rider_code, rider_name,
-      type``, one row per rider code. ``type`` is one of ``death_main``,
-      ``death``, ``morbidity``, ``diagnosis``, ``annuity``, ``maturity``.
-    * ``rates`` -- long-form ``rider_code, sex, age, rate`` for every
-      rate-driven rider (``death`` / ``morbidity`` / ``diagnosis``).
-
-    An optional ``waiver`` sheet -- long-form ``sex, age, rate``, the same
-    shape as ``mortality`` -- gives the waiver-inception rate: the rate at
-    which active in-force transitions to the premium-waived state. Absent,
-    no waiver transitions occur.
-
-    The annual rates are wrapped in the lookup callables ``Assumptions``
-    expects; the engine converts them to monthly. The bundled sample basis
-    (:func:`load_sample_assumptions`) is a filled-in template to copy.
-    """
-    wb = openpyxl.load_workbook(path, data_only=True)
-    for sheet in ("parameters", "mortality", "lapse"):
-        if sheet not in wb.sheetnames:
-            raise ValueError(f"{path!r} has no '{sheet}' sheet")
-
-    # parameters -- a name/value sheet
-    params: dict[str, object] = {}
-    for name, value, *_ in wb["parameters"].iter_rows(min_row=2, values_only=True):
-        if name is not None:
-            params[str(name).strip()] = value
-
-    mortality_annual = _rate_closure(*_read_rate_grid(wb["mortality"]))
-
-    # waiver -- optional sex/age waiver-inception table, like mortality
-    waiver_inception_annual = None
-    if "waiver" in wb.sheetnames:
-        waiver_inception_annual = _rate_closure(*_read_rate_grid(wb["waiver"]))
-
-    # lapse -- duration -> annual rate
-    lapse_by_dur: dict[int, float] = {}
-    for dur, rate, *_ in wb["lapse"].iter_rows(min_row=2, values_only=True):
-        if dur is not None:
-            lapse_by_dur[int(dur)] = float(rate)
-    lapse_arr = np.asarray(
-        [lapse_by_dur[d] for d in range(len(lapse_by_dur))], dtype=np.float64
-    )
-
-    def lapse_annual(duration):
-        d = np.clip(np.asarray(duration, np.int64), 0, lapse_arr.shape[0] - 1)
-        return lapse_arr[d]
-
-    # riders master + rates -> the rate-driven coverage list
-    riders: tuple[RiderRate, ...] = ()
-    coverage_types: dict[str, str] | None = None
-    if "riders" in wb.sheetnames:
-        rider_rows = _read_riders_sheet(wb["riders"])
-        coverage_types = {code: rtype for code, rtype in rider_rows}
-        rate_grids = (_read_rates_sheet(wb["rates"])
-                      if "rates" in wb.sheetnames else {})
-        rider_list = []
-        for code, rtype in rider_rows:
-            if rtype not in RATE_DRIVEN_TYPES:
-                continue          # death_main / annuity / maturity carry no rate
-            if code not in rate_grids:
-                raise ValueError(
-                    f"rider {code!r} is rate-driven ({rtype}) but has no rows "
-                    "in the 'rates' sheet"
-                )
-            rider_list.append(RiderRate(
-                code=code,
-                rate=_rate_closure(*rate_grids[code]),
-                is_diagnosis=(rtype == TYPE_DIAGNOSIS),
-                risk=RISK_MORTALITY if rtype == TYPE_DEATH else RISK_MORBIDITY,
-            ))
-        riders = tuple(rider_list)
-
-    required = ("discount_annual", "expense_acquisition",
-                "expense_maintenance_annual", "expense_inflation",
-                "ra_confidence", "mortality_cv")
-    missing = [k for k in required if params.get(k) is None]
-    if missing:
-        raise ValueError(f"the 'parameters' sheet is missing: {missing}")
-    kwargs: dict[str, object] = dict(
-        mortality_annual=mortality_annual,
-        lapse_annual=lapse_annual,
-        waiver_inception_annual=waiver_inception_annual,
-        riders=riders,
-        **{k: float(params[k]) for k in required},
-    )
-    if coverage_types is not None:
-        kwargs["coverage_types"] = coverage_types
-    for opt in ("longevity_cv", "morbidity_cv", "expense_cv", "disability_cv",
-                "cost_of_capital_rate", "investment_return", "fund_fee",
-                "guaranteed_credit_rate"):
-        if params.get(opt) is not None:
-            kwargs[opt] = float(params[opt])
-    if params.get("ra_method") is not None:
-        kwargs["ra_method"] = str(params["ra_method"]).strip()
-    return Assumptions(**kwargs)
-
-
-# ---------------------------------------------------------------------------
-# Registry-format actuarial basis (v1)
+# Actuarial basis -- the assumptions workbook
 # ---------------------------------------------------------------------------
 #
-# The registry format splits the basis into two workbooks: a table-registry
-# workbook of named rate tables, and a basis workbook whose ``basis`` sheet
-# maps each (product, channel) segment to the tables it uses plus the scalar
-# parameters, with a ``defaults`` row that blank cells inherit. See
-# docs/assumptions-format.md.
+# A single workbook (``assumptions.xlsx``) carries every assumption the engine
+# needs. Nine sheets:
 #
-# v1 limitations (deliberate -- a later round refines them): the discount,
-# inflation and maintenance tables are read but collapsed to their first
-# entry (treated flat); the result is a per-segment dict, and splitting model
-# points by segment and valuing each is left to the caller.
+#   * ``segments``       -- (product, channel) -> which tables + scalar params
+#                           (a ``defaults`` row that blank cells inherit).
+#   * ``riders``         -- (product) -> rider_code, type, optional rate_table.
+#   * ``mortality_tables``, ``rider_rate_tables``, ``waiver_tables``,
+#     ``lapse_tables``, ``maintenance_tables``, ``discount_tables``,
+#     ``inflation_tables`` -- the named rate tables the segments reference.
+#
+# See docs/assumptions-format.md for the column-level schema and
+# docs/naming-conventions.md for the value-case rules.
+#
+# v1 limitation (refined in a later round): the discount, inflation and
+# maintenance tables are read but used flat (their first entry). The reader
+# returns ``{(product, channel): Assumptions}`` -- splitting model points by
+# segment and valuing each is left to the caller.
 
 
 def _sheet_dicts(ws):
@@ -295,83 +116,263 @@ def _sheet_dicts(ws):
         yield {n: v for n, v in zip(names, row) if n}
 
 
-def _sexage_tables(ws):
-    """``{table_id: (grid (2, n_ages), age_min)}`` from a sex / age sheet."""
-    by_id: dict[str, dict] = {}
-    for r in _sheet_dicts(ws):
-        tid = str(r["table_id"]).strip()
-        slot = by_id.setdefault(tid, {0: {}, 1: {}})
-        slot[int(r["sex"])][int(r["age"])] = float(r["rate"])
-    out = {}
-    for tid, by_sex in by_id.items():
-        ages = sorted(by_sex[0])
-        grid = np.asarray(
-            [[by_sex[s][a] for a in ages] for s in (0, 1)], dtype=np.float64
+# Axes a rate table may carry, in the order they index the internal grid.
+# A sheet may include any subset; missing axes broadcast (the rate is held
+# flat over that axis at lookup time). ``age`` (attained) is mutually
+# exclusive with ``issue_age`` / ``duration`` (select-and-ultimate schema).
+_RATE_AXES = ("sex", "issue_age", "duration", "age")
+
+
+def _flex_rate_table(ws, *, value_col="rate"):
+    """Schema-detecting rate-table reader -- returns ``{table_id: callable}``.
+
+    The sheet may carry any subset of ``_RATE_AXES`` plus ``table_id`` and
+    ``value_col`` (``rate`` or ``amount``). The reader detects which axes are
+    present and returns a callable per table with the standard
+    ``(sex, issue_age, duration)`` signature; axes not in the sheet broadcast
+    (the rate is held flat over them), and lookups past the table's range
+    clip to the edge.
+
+    Supported schemas (any subset of ``{sex, age, issue_age, duration}``):
+
+    * ``[rate]``                          -- flat scalar
+    * ``[age, rate]``                     -- by attained age, sex broadcast
+    * ``[sex, age, rate]``                -- by sex x age (the historical default)
+    * ``[duration, rate]``                -- by duration, sex / age broadcast (lapse)
+    * ``[sex, issue_age, duration, rate]`` -- full select-and-ultimate
+
+    A sheet mixing ``age`` (attained) with ``issue_age`` / ``duration``
+    (select schema) is rejected -- pick one parameterisation.
+    """
+    rows = list(_sheet_dicts(ws))
+    if not rows:
+        return {}
+    header = set(rows[0].keys())
+    axes = tuple(a for a in _RATE_AXES if a in header)
+    if "age" in axes and ("issue_age" in axes or "duration" in axes):
+        raise ValueError(
+            f"sheet {ws.title!r} mixes 'age' (attained) with "
+            "'issue_age' / 'duration' (select schema) -- pick one"
         )
-        out[tid] = (grid, ages[0])
-    return out
+
+    by_id: dict[str, list] = {}
+    for r in rows:
+        tid = str(r["table_id"]).strip()
+        key = tuple(int(r[a]) for a in axes)
+        by_id.setdefault(tid, []).append((key, float(r[value_col])))
+    return {tid: _build_rate_callable(axes, entries, ws.title, tid)
+            for tid, entries in by_id.items()}
 
 
-def _axis_tables(ws, axis):
-    """``{table_id: rate array}`` from a sheet keyed by ``axis`` (0-based)."""
+def _build_rate_callable(axes, entries, sheet_title, table_id):
+    """Pack rows into a dense numpy grid and wrap in a lookup closure."""
+    if not axes:
+        # Flat scalar table -- one row, one rate.
+        if len(entries) != 1:
+            raise ValueError(
+                f"sheet {sheet_title!r} table {table_id!r}: a flat (axis-less) "
+                f"table must have exactly one row, got {len(entries)}"
+            )
+        val = entries[0][1]
+
+        def rate(sex, issue_age, duration):
+            shape = np.broadcast_shapes(
+                np.asarray(sex).shape, np.asarray(issue_age).shape,
+                np.asarray(duration).shape,
+            )
+            return np.full(shape, val, dtype=np.float64)
+        return rate
+
+    keys = np.array([k for k, _ in entries], dtype=np.int64)
+    values = np.array([v for _, v in entries], dtype=np.float64)
+    mins = keys.min(axis=0)
+    maxs = keys.max(axis=0)
+    shape = tuple(int(maxs[i] - mins[i] + 1) for i in range(len(axes)))
+    grid = np.full(shape, np.nan, dtype=np.float64)
+    for k, v in zip(keys, values):
+        idx = tuple(int(k[i] - mins[i]) for i in range(len(axes)))
+        grid[idx] = v
+    if np.isnan(grid).any():
+        raise ValueError(
+            f"sheet {sheet_title!r} table {table_id!r} is not dense over its "
+            f"axes {axes} -- some cells in the cartesian product are missing"
+        )
+
+    def rate(sex, issue_age, duration):
+        sex = np.asarray(sex, dtype=np.int64)
+        issue_age = np.asarray(issue_age, dtype=np.int64)
+        duration = np.asarray(duration, dtype=np.int64)
+        # One index array per axis present in the table.
+        idxs = []
+        for i, a in enumerate(axes):
+            if a == "sex":
+                raw = sex
+            elif a == "age":
+                raw = issue_age + duration                # attained age
+            elif a == "issue_age":
+                raw = issue_age
+            else:                                          # duration
+                raw = duration
+            idxs.append(np.clip(raw - int(mins[i]), 0, shape[i] - 1))
+        # Broadcast each index to the input's full broadcast shape so that
+        # numpy fancy-indexing returns a result of that shape (axes absent
+        # from the table contribute through broadcast, not indexing).
+        target = np.broadcast_shapes(sex.shape, issue_age.shape, duration.shape)
+        return grid[tuple(np.broadcast_to(ix, target) for ix in idxs)]
+    return rate
+
+
+def _read_ae_factors(ws):
+    """Read the optional ``ae_factors`` sheet.
+
+    Each row is one (product, channel, rider_code) -> factor (a runtime
+    multiplier on the base rate). Optional axis columns
+    ``{sex, age, issue_age, duration}`` let the factor vary along those
+    dimensions (same schema-detection rules as the base rate tables); missing
+    axes broadcast. ``channel`` empty matches the segment whose channel is
+    blank (a single-segment workbook).
+
+    Returns ``{(product, channel, rider_code): callable(sex, issue_age,
+    duration) -> factor}``. Missing sheet -> empty dict -> no A/E adjustment.
+    """
+    rows = list(_sheet_dicts(ws))
+    if not rows:
+        return {}
+    header = set(rows[0].keys())
+    axes = tuple(a for a in _RATE_AXES if a in header)
+    if "age" in axes and ("issue_age" in axes or "duration" in axes):
+        raise ValueError(
+            f"sheet {ws.title!r} mixes 'age' (attained) with "
+            "'issue_age' / 'duration' (select schema) -- pick one"
+        )
+
+    by_key: dict[tuple, list] = {}
+    for r in rows:
+        product = str(r["product"]).strip()
+        ch = r.get("channel")
+        channel = str(ch).strip() if ch not in (None, "") else ""
+        rider_code = str(r["rider_code"]).strip()
+        key = (product, channel, rider_code)
+        axes_key = tuple(int(r[a]) for a in axes)
+        by_key.setdefault(key, []).append((axes_key, float(r["factor"])))
+    return {
+        key: _build_rate_callable(axes, entries, ws.title, "/".join(key))
+        for key, entries in by_key.items()
+    }
+
+
+def _with_improvement(rate_fn, improvement_curve):
+    """Wrap a rate callable to multiply by an annual improvement factor.
+
+    ``improvement_curve`` is a ``(n_years,)`` array indexed by policy year
+    (= duration). ``factor[0] = 1.0`` typically, decreasing for genuine
+    improvement (mortality falls). Held flat past the curve's end.
+    ``None`` returns ``rate_fn`` unchanged.
+    """
+    if rate_fn is None or improvement_curve is None:
+        return rate_fn
+    n = improvement_curve.shape[0]
+
+    def improved(sex, issue_age, duration):
+        d = np.asarray(duration, dtype=np.int64)
+        idx = np.clip(d, 0, n - 1)
+        return rate_fn(sex, issue_age, duration) * improvement_curve[idx]
+    return improved
+
+
+def _with_ae_factor(rate_fn, factor_fn):
+    """Wrap a rate callable to multiply by an A/E factor at call time.
+
+    ``factor_fn`` shares the ``(sex, issue_age, duration) -> array``
+    signature; ``None`` (no factor configured for this rider) returns
+    ``rate_fn`` unchanged.
+    """
+    if factor_fn is None or rate_fn is None:
+        return rate_fn
+
+    def adjusted(sex, issue_age, duration):
+        return rate_fn(sex, issue_age, duration) * factor_fn(sex, issue_age, duration)
+    return adjusted
+
+
+def _with_age_shift(rate_fn, shift):
+    """Wrap a rate callable to shift its ``issue_age`` argument by ``shift``.
+
+    A positive shift treats every life as ``shift`` years older when looking
+    up the base table; negative shifts make them younger. Returns ``rate_fn``
+    unchanged when ``shift == 0`` (no allocation cost). ``rate_fn`` may be
+    ``None`` (an optional rate the segment did not configure), in which case
+    the wrapper is a no-op too.
+    """
+    if rate_fn is None or shift == 0:
+        return rate_fn
+
+    def shifted(sex, issue_age, duration):
+        return rate_fn(sex, issue_age + shift, duration)
+    return shifted
+
+
+def _axis_tables(ws, axis, *, value_col="rate"):
+    """``{table_id: value array}`` from a sheet keyed by ``axis`` (0-based).
+
+    ``value_col`` names the column carrying the per-axis value -- ``"rate"``
+    for rate / probability sheets, ``"amount"`` for currency sheets
+    (maintenance expense). The column-name distinction documents units;
+    a probability and a currency amount should not share a column name.
+    """
     by_id: dict[str, dict] = {}
     for r in _sheet_dicts(ws):
         tid = str(r["table_id"]).strip()
-        by_id.setdefault(tid, {})[int(r[axis])] = float(r["rate"])
+        by_id.setdefault(tid, {})[int(r[axis])] = float(r[value_col])
     return {tid: np.asarray([by_k[k] for k in range(len(by_k))], np.float64)
             for tid, by_k in by_id.items()}
 
 
-def _duration_closure(arr):
-    """Wrap a 0-based annual-rate array in a duration lookup (clips past end)."""
-    n = arr.shape[0]
+def read_assumptions(path):
+    """Read the assumptions workbook into a per-segment ``Assumptions`` dict.
 
-    def rate(duration):
-        return arr[np.clip(np.asarray(duration, np.int64), 0, n - 1)]
-
-    return rate
-
-
-def read_assumption_registry(tables_path, basis_path):
-    """Read the registry-format actuarial basis.
-
-    ``tables_path`` is the table-registry workbook (named rate tables);
-    ``basis_path`` is the workbook whose ``basis`` sheet maps each (product,
-    channel) segment to those tables plus scalar parameters, with a
-    ``defaults`` row that blank cells inherit. The ``riders`` sheet attaches
-    riders to products. See docs/assumptions-format.md.
+    ``path`` is a single ``assumptions.xlsx`` workbook holding both the rate
+    tables and the segment mapping (see the module header for the sheet
+    layout). The ``segments`` sheet maps each (product, channel) to which
+    tables it uses plus scalar parameters, with a ``defaults`` row whose
+    values blank cells inherit; the ``riders`` sheet attaches riders to
+    products.
 
     Returns ``{(product, channel): Assumptions}`` -- one basis per segment.
 
-    This is a v1 reader: the discount, inflation and maintenance tables are
-    read but used flat (their first entry); the per-segment dict is returned
-    for the caller to value segment by segment.
+    v1: the discount, inflation and maintenance tables are read but used
+    flat (their first entry); the per-segment dict is returned for the
+    caller to value segment by segment.
     """
-    tb = openpyxl.load_workbook(tables_path, data_only=True)
+    wb = openpyxl.load_workbook(path, data_only=True)
 
     def optional(sheet, reader):
-        return reader(tb[sheet]) if sheet in tb.sheetnames else {}
+        return reader(wb[sheet]) if sheet in wb.sheetnames else {}
 
-    mortality_t = _sexage_tables(tb["mortality_tables"])
-    rider_rate_t = optional("rider_rate_tables", _sexage_tables)
-    waiver_t = optional("waiver_tables", _sexage_tables)
-    lapse_t = _axis_tables(tb["lapse_tables"], "duration")
+    mortality_t = _flex_rate_table(wb["mortality_tables"])
+    rider_rate_t = optional("rider_rate_tables", _flex_rate_table)
+    waiver_t = optional("waiver_tables", _flex_rate_table)
+    lapse_t = _flex_rate_table(wb["lapse_tables"])
     maint_t = optional("maintenance_tables",
-                       lambda w: _axis_tables(w, "duration"))
-    discount_t = _axis_tables(tb["discount_tables"], "year")
-    inflation_t = _axis_tables(tb["inflation_tables"], "year")
+                       lambda w: _axis_tables(w, "duration", value_col="amount"))
+    discount_t = _axis_tables(wb["discount_tables"], "year")
+    inflation_t = _axis_tables(wb["inflation_tables"], "year")
+    ae_factors = optional("ae_factors", _read_ae_factors)
+    improvement_t = optional(
+        "improvement_tables",
+        lambda w: _axis_tables(w, "year", value_col="factor"),
+    )
 
-    ab = openpyxl.load_workbook(basis_path, data_only=True)
     defaults: dict = {}
     segments: list = []
-    for r in _sheet_dicts(ab["basis"]):
+    for r in _sheet_dicts(wb["segments"]):
         if str(r.get("product", "") or "").strip().lower() == "defaults":
             defaults = r
         else:
             segments.append(r)
     riders_by_product: dict[str, list] = {}
-    if "riders" in ab.sheetnames:
-        for r in _sheet_dicts(ab["riders"]):
+    if "riders" in wb.sheetnames:
+        for r in _sheet_dicts(wb["riders"]):
             rt = r.get("rate_table")
             riders_by_product.setdefault(str(r["product"]).strip(), []).append((
                 str(r["rider_code"]).strip(), str(r["type"]).strip(),
@@ -382,7 +383,7 @@ def read_assumption_registry(tables_path, basis_path):
     for seg in segments:
         product = str(seg["product"]).strip()
         channel = str(seg.get("channel", "") or "").strip()
-        where = f"basis row ({product} / {channel})"
+        where = f"segments row ({product} / {channel})"
 
         def cell(col):
             v = seg.get(col)
@@ -407,6 +408,13 @@ def read_assumption_registry(tables_path, basis_path):
                 raise ValueError(f"{where}: {col!r} is required")
             return None if v is None else float(v)
 
+        shift_mort = int(scalar("mortality_age_shift") or 0)
+        shift_morb = int(scalar("morbidity_age_shift") or 0)
+        shift_wvr = int(scalar("waiver_age_shift") or 0)
+
+        def ae(rider_code):
+            return ae_factors.get((product, channel, rider_code))
+
         riders = []
         coverage_types: dict[str, str] = {}
         for code, rtype, rate_table in riders_by_product.get(product, []):
@@ -419,25 +427,38 @@ def read_assumption_registry(tables_path, basis_path):
                     f"({rtype}) but rate_table {rate_table!r} is not in "
                     "rider_rate_tables"
                 )
+            rate_fn = rider_rate_t[rate_table]
+            rate_fn = _with_age_shift(rate_fn, shift_morb)
+            rate_fn = _with_ae_factor(rate_fn, ae(code))
             riders.append(RiderRate(
                 code=code,
-                rate=_rate_closure(*rider_rate_t[rate_table]),
+                rate=rate_fn,
                 is_diagnosis=(rtype == TYPE_DIAGNOSIS),
                 risk=RISK_MORTALITY if rtype == TYPE_DEATH else RISK_MORBIDITY,
             ))
 
+        mortality_fn = lookup(mortality_t, "mortality_table")
+        mortality_fn = _with_age_shift(mortality_fn, shift_mort)
+        mortality_fn = _with_ae_factor(mortality_fn, ae("dth_main"))
+        improvement_curve = lookup(
+            improvement_t, "mortality_improvement_table", optional_ref=True,
+        )
+        mortality_fn = _with_improvement(mortality_fn, improvement_curve)
+
         waiver = lookup(waiver_t, "waiver_table", optional_ref=True)
+        waiver_fn = _with_age_shift(waiver, shift_wvr)
+
         maint = lookup(maint_t, "maintenance_table", optional_ref=True)
         kwargs: dict = dict(
-            mortality_annual=_rate_closure(*lookup(mortality_t, "mortality_table")),
-            lapse_annual=_duration_closure(lookup(lapse_t, "lapse_table")),
-            waiver_inception_annual=(
-                _rate_closure(*waiver) if waiver is not None else None),
-            # v1: the discount / inflation / maintenance tables are read but
-            # used flat -- their first entry.
-            discount_annual=float(lookup(discount_t, "discount_table")[0]),
-            expense_inflation=float(lookup(inflation_t, "inflation_table")[0]),
-            expense_maintenance_annual=(0.0 if maint is None else float(maint[0])),
+            mortality_annual=mortality_fn,
+            lapse_annual=lookup(lapse_t, "lapse_table"),
+            waiver_inception_annual=waiver_fn,
+            # Pass the full per-year arrays through -- the engine expands
+            # them to per-month curves via fastcashflow.curves. A one-row
+            # table reproduces the original flat-scalar behaviour.
+            discount_annual=lookup(discount_t, "discount_table"),
+            expense_inflation=lookup(inflation_t, "inflation_table"),
+            expense_maintenance_annual=(0.0 if maint is None else maint),
             expense_acquisition=scalar("expense_acquisition", required=True),
             ra_confidence=scalar("ra_confidence", required=True),
             mortality_cv=scalar("mortality_cv", required=True),
@@ -445,7 +466,9 @@ def read_assumption_registry(tables_path, basis_path):
             coverage_types=coverage_types or None,
         )
         for opt_col in ("morbidity_cv", "longevity_cv", "disability_cv",
-                        "expense_cv", "cost_of_capital_rate"):
+                        "expense_cv", "cost_of_capital_rate",
+                        "investment_return", "fund_fee",
+                        "guaranteed_credit_rate"):
             v = scalar(opt_col)
             if v is not None:
                 kwargs[opt_col] = v
@@ -454,18 +477,6 @@ def read_assumption_registry(tables_path, basis_path):
             kwargs["ra_method"] = str(method).strip()
         result[(product, channel)] = Assumptions(**kwargs)
     return result
-
-
-def load_sample_registry():
-    """Read fastcashflow's bundled sample registry-format basis.
-
-    Returns ``{(product, channel): Assumptions}`` -- the registry-format
-    companion to :func:`load_sample_assumptions`.
-    """
-    base = resources.files("fastcashflow") / "sample_data"
-    with resources.as_file(base / "sample_tables.xlsx") as tables, \
-            resources.as_file(base / "sample_basis.xlsx") as basis:
-        return read_assumption_registry(tables, basis)
 
 
 # ---------------------------------------------------------------------------
@@ -518,6 +529,10 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
                 "premium_frequency_months", "annuity_frequency_months",
                 "death_benefit", "maturity_benefit", "annuity_payment",
                 "disability_income", "disability_benefit", "account_value"):
+        if opt in df.columns:
+            fields[opt] = df[opt].to_numpy()
+    # Segment metadata -- optional string columns; route to value_segmented.
+    for opt in ("product", "channel"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     if "state" in df.columns:
@@ -589,6 +604,9 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     for opt in ("sex", "count", "single_premium", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",
                 "disability_income", "disability_benefit"):
+        if opt in pol.columns:
+            fields[opt] = pol[opt].to_numpy()
+    for opt in ("product", "channel"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
     if "state" in pol.columns:
@@ -676,12 +694,14 @@ def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
     return _wide_model_points(pol, assumptions)
 
 
-def load_sample_assumptions() -> Assumptions:
-    """Read fastcashflow's bundled sample actuarial basis.
+def load_sample_assumptions() -> dict[tuple[str, str], Assumptions]:
+    """Read fastcashflow's bundled sample assumptions workbook.
 
-    A filled-in basis packaged with the library, the companion to
+    A filled-in workbook packaged with the library, the companion to
     :func:`load_sample_model_points`. See :func:`read_assumptions` for the
-    workbook format.
+    workbook format. The bundled sample has two segments
+    (``("term_a", "GA")`` and ``("term_a", "FC")``); pick one to use it as
+    a single ``Assumptions``.
     """
     source = resources.files("fastcashflow") / "sample_data" / "sample_assumptions.xlsx"
     with resources.as_file(source) as path:
@@ -693,9 +713,12 @@ def load_sample_model_points() -> ModelPoints:
 
     A small long-form portfolio -- a policies file and a coverages file --
     packaged with the library, so the engine can be tried without preparing
-    an input file. See :func:`read_model_points` for the file format.
+    an input file. See :func:`read_model_points` for the file format. The
+    coverage list comes from any segment's ``Assumptions`` -- all bundled
+    segments share the same product and so the same rider master.
     """
-    assumptions = load_sample_assumptions()
+    basis = load_sample_assumptions()
+    assumptions = next(iter(basis.values()))
     base = resources.files("fastcashflow") / "sample_data"
     with resources.as_file(base / "sample_policies.csv") as policies, \
             resources.as_file(base / "sample_coverages.csv") as coverages:

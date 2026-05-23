@@ -32,15 +32,17 @@ python --version
 파이썬을 먼저 설치합니다.
 
 이제 fastcashflow를 설치합니다. **pip**는 파이썬 패키지를 내려받아
-설치해 주는 도구로, 파이썬과 함께 깔려 있습니다. 같은 창에 입력하세요.
+설치해 주는 도구로, 파이썬과 함께 깔려 있습니다. fastcashflow는 아직
+PyPI에 올라가 있지 않아 GitHub에서 직접 받습니다. 같은 창에 입력하세요.
 
 ```
-pip install fastcashflow[viz]
+pip install "git+https://github.com/seokhoonj/fastcashflow.git#egg=fastcashflow[viz]"
 ```
 
 `[viz]`는 결과를 그리는 내장 차트에 필요한 matplotlib까지 함께
-설치합니다. 차트가 필요 없다면 `[viz]` 없이 설치해도 됩니다. 어느
-쪽이든 numpy·numba·polars 같은 핵심 의존 패키지는 자동으로 들어옵니다.
+설치합니다. 차트가 필요 없다면 `[viz]` 부분을 빼고
+`pip install git+https://github.com/seokhoonj/fastcashflow.git` 로 설치합니다.
+어느 쪽이든 numpy·numba·polars 같은 핵심 의존 패키지는 자동으로 들어옵니다.
 
 ```{admonition} 가상환경
 :class: note
@@ -199,7 +201,8 @@ fastcashflow에 들어 있는 **샘플 데이터**를 쓰면 됩니다.
 
 ```python
 model_points = fcf.load_sample_model_points()
-assumptions  = fcf.load_sample_assumptions()
+basis        = fcf.load_sample_assumptions()       # {(product, channel): Assumptions}
+assumptions  = basis[("term_a", "GA")]             # 한 세그먼트 선택
 val          = fcf.value(model_points, assumptions)
 
 print(val.bel)
@@ -208,9 +211,11 @@ print(val.csm)
 
 `load_sample_model_points()`는 패키지에 든 작은 포트폴리오(계약 8건,
 정기보험과 건강보험)를, `load_sample_assumptions()`는 그에 맞는 가정을
-돌려줍니다. 계약마다 주계약 사망에 더해 진단·입원·재해사망·연금·생존
-같은 특약이 붙어 있습니다. 파일을 따로 준비할 필요가 없죠. `value()`의
-결과는 모델포인트 순서대로 늘어선 배열이라, 8건이면 길이 8입니다.
+`{(product, channel): Assumptions}` 딕셔너리로 돌려줍니다. 샘플은
+`term_a` 상품의 GA / FC 두 세그먼트를 담고 있어, 한 줄로 한 세그먼트를
+골라 `value()`에 넘깁니다. 계약마다 주계약 사망에 더해 진단·입원·재해사망·
+연금·생존 같은 특약이 붙어 있습니다. 파일을 따로 준비할 필요가 없죠.
+`value()`의 결과는 모델포인트 순서대로 늘어선 배열이라, 8건이면 길이 8입니다.
 
 샘플 8건은 모두 보험료가 보장에 견주어 넉넉히 매겨진 계약이라, BEL이
 음수(이익이 예상됨)이고 CSM이 0보다 크며 손실요소는 0입니다.

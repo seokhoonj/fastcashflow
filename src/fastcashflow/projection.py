@@ -274,8 +274,8 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         waiver = np.ascontiguousarray(annual_to_monthly(
             assumptions.waiver_inception_annual(
                 sex_grid, issue_age_grid, duration_grid)))
-    lapse_by_year = np.ascontiguousarray(annual_to_monthly(
-        assumptions.lapse_annual(durations)))
+    lapse = np.ascontiguousarray(annual_to_monthly(
+        assumptions.lapse_annual(sex_grid, issue_age_grid, duration_grid)))
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
     # coverage_rates stacks the annual mortality and rider rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
@@ -293,8 +293,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
      benefit_state) = compile_state_model(
         state_model,
-        {"mortality": mortality, "waiver_inception": waiver,
-         "lapse": lapse_by_year[None, :]},
+        {"mortality": mortality, "waiver_inception": waiver, "lapse": lapse},
     )
     start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
 

@@ -72,18 +72,29 @@ class Assumptions:
         on attained age (issue_age + duration) beyond it; the select-period
         logic lives in this callable, not the engine.
     lapse_annual :
-        Maps an array of completed policy years (0-based) to an array of
-        annual lapse rates of the same shape.
+        Same ``(sex, issue_age, duration)`` signature as
+        ``mortality_annual``. Typical lapse depends only on duration, but the
+        signature also lets the reader pick up a per-sex or per-issue_age
+        lapse table when the workbook carries those axes (the engine reads
+        the callable on the full sex / age / duration grid either way).
     discount_annual :
-        Flat annual discount rate. Locked in at initial recognition and used
-        both for discounting cash flows and for CSM interest accretion.
+        Annual locked-in discount rate (Sec. 36). Either a flat scalar or a
+        per-year ``(n_years,)`` array; the engine expands either to a
+        per-month rate curve via
+        :func:`fastcashflow.curves.discount_monthly_curve`. Used for
+        discounting cash flows and for CSM interest accretion.
     expense_acquisition :
         One-off acquisition expense per policy, incurred at t = 0.
     expense_maintenance_annual :
         Annual maintenance expense per in-force policy; one twelfth is
-        charged each month.
+        charged each month. Either a flat scalar (the same amount every
+        year) or a per-year ``(n_years,)`` array (a step at each year
+        boundary). Held flat past the end of the array.
     expense_inflation :
-        Annual inflation rate applied to the maintenance expense.
+        Annual inflation rate applied to the maintenance expense. Either a
+        flat scalar (closed-form ``(1+i)^(t/12)`` growth) or a per-year
+        ``(n_years,)`` array (compounds across years, with the in-year
+        fractional ramp on the current year). Held flat past the end.
     ra_confidence :
         Confidence level for the Risk Adjustment (e.g. 0.75). The RA lifts
         the liability from its best estimate to this percentile.
@@ -157,11 +168,11 @@ class Assumptions:
     """
 
     mortality_annual: RateFn
-    lapse_annual: Callable[[IntArray], FloatArray]
-    discount_annual: float
+    lapse_annual: RateFn
+    discount_annual: float | FloatArray
     expense_acquisition: float
-    expense_maintenance_annual: float
-    expense_inflation: float
+    expense_maintenance_annual: float | FloatArray
+    expense_inflation: float | FloatArray
     ra_confidence: float
     mortality_cv: float
     waiver_inception_annual: RateFn | None = None
@@ -181,5 +192,15 @@ class Assumptions:
 
     @property
     def discount_monthly(self) -> float:
-        """Monthly discount rate equivalent to ``discount_annual``."""
-        return (1.0 + self.discount_annual) ** (1.0 / 12.0) - 1.0
+        """First-year monthly discount rate, used as a representative scalar.
+
+        Reserved for the few places that need a single rate -- the claims
+        settlement-pattern present-value factor (Sec. 40 / B71) -- where the
+        in-year rate is the right reference. The per-month rate curve the
+        kernels consume is composed by
+        :func:`fastcashflow.curves.discount_monthly_curve`, which handles
+        both a flat scalar and a per-year curve uniformly.
+        """
+        d = self.discount_annual
+        head = float(d) if np.ndim(d) == 0 else float(np.asarray(d).flat[0])
+        return (1.0 + head) ** (1.0 / 12.0) - 1.0

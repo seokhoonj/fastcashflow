@@ -409,8 +409,8 @@ def value(
             assumptions.waiver_inception_annual(
                 sex_grid, issue_age_grid, duration_grid)))
     issue_index = (model_points.issue_age - min_age).astype(np.int64)
-    lapse_by_year = np.ascontiguousarray(annual_to_monthly(
-        assumptions.lapse_annual(durations)))
+    lapse_grid = np.ascontiguousarray(annual_to_monthly(
+        assumptions.lapse_annual(sex_grid, issue_age_grid, duration_grid)))
     # In-force state machine -- the StateModel composes the transition edges
     # for the generic occupancy recursion (see fastcashflow.statemodel). The
     # rates are on the sex x age x duration grid the kernel indexes.
@@ -419,7 +419,7 @@ def value(
      benefit_state) = compile_state_model(
         state_model,
         {"mortality": mortality_grid, "waiver_inception": waiver_grid,
-         "lapse": lapse_by_year[None, None, :]},
+         "lapse": lapse_grid},
     )
     start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)

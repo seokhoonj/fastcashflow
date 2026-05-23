@@ -48,7 +48,7 @@ def _assumptions(waiver_rate: float = 0.0, **overrides) -> Assumptions:
             return np.full(issue_age.shape, _annual(waiver_rate))
     base = dict(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.02)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
         waiver_inception_annual=waiver,
         discount_annual=0.0,
         expense_acquisition=0.0,

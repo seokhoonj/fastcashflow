@@ -46,7 +46,7 @@ def _asmp(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Assumptio
     lapse_a = _annual(lapse)
     return Assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, q_a),
-        lapse_annual=lambda duration: np.full(duration.shape, lapse_a),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, lapse_a),
         waiver_inception_annual=waiver,
         discount_annual=0.0,
         expense_acquisition=0.0,

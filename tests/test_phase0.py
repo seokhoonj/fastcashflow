@@ -22,7 +22,7 @@ def _assumptions(**overrides) -> Assumptions:
     """Build an Assumptions with simple defaults, overridable per test."""
     base = dict(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.02)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -104,7 +104,7 @@ def test_csm_fully_releases():
         ),
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
-            lapse_annual=lambda duration: np.full(duration.shape, _annual(0.01)),
+            lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
             discount_annual=0.03,
         ),
     )

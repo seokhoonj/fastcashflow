@@ -17,7 +17,7 @@ def _annual(m):
 def _assumptions(**overrides) -> Assumptions:
     base = dict(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002)),
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.01)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.04,
         expense_acquisition=100_000.0,
         expense_maintenance_annual=24_000.0,

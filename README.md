@@ -1,21 +1,30 @@
 # fastcashflow
 
-A fast IFRS 17 GMM (General Measurement Model) cash flow projection engine.
+A fast IFRS 17 measurement engine in Python -- open source.
 
 Takes model points and actuarial assumptions, projects monthly cash flows, and
-measures the insurance contract liability -- BEL, RA and CSM.
+measures the insurance contract liability (BEL, RA and CSM) under the
+General Measurement Model. PAA and VFA are supported too.
+
+**Goal**: an open-source measurement engine that matches enterprise platforms
+on speed and correctness, so any actuary can open it, read the source, and
+run a real valuation -- no licence wall, no closed binaries. The IFRS 17
+standard is the only reference; everything is written from scratch with
+hand-validated tests.
 
 ## Installation
 
+Not yet on PyPI -- install directly from GitHub:
+
 ```bash
-pip install fastcashflow
+pip install git+https://github.com/seokhoonj/fastcashflow.git
 ```
 
 The plotting helpers (`plot_liability`, `plot_csm_runoff`, ...) additionally
 need matplotlib:
 
 ```bash
-pip install "fastcashflow[viz]"
+pip install "git+https://github.com/seokhoonj/fastcashflow.git#egg=fastcashflow[viz]"
 ```
 
 fastcashflow requires Python 3.10 or newer. Its core dependencies -- numpy,
@@ -45,6 +54,18 @@ reporting that surrounds it.
 - **Projection** -- deterministic monthly cash flows; select-and-ultimate
   mortality, duration-based lapse, mid-month discounting of claims and
   expenses, and acquisition and maintenance expenses.
+- **Assumption input layers** -- one workbook (`assumptions.xlsx`) with
+  schema-detecting axis-flex base rate tables (`sex` / `age` /
+  `issue_age` / `duration` columns, any subset), plus optional
+  `ae_factors` (A/E multipliers, vendor-style runtime calibration),
+  optional integer `age_shift` columns on segments, optional
+  `improvement_tables` (mortality improvement scales), and curve-shaped
+  discount / inflation / maintenance. Each layer is no-op when omitted,
+  so a simple workbook stays simple.
+- **Per-segment portfolios** -- `(product, channel)` model-point columns
+  let `value_segmented(mp, basis)` route each row to its segment's
+  `Assumptions` and stitch the results back to a single per-row
+  `Valuation`.
 - **Contract states** -- active, waiver of premium and paid-up. In-force is
   carried on an active track and a premium-waived track; a waiver-inception
   rate moves in-force from one to the other during the projection.
@@ -95,8 +116,9 @@ fastcashflow's bundled sample portfolio:
 ```python
 import fastcashflow as fcf
 
-model_points = fcf.load_sample_model_points()   # bundled sample portfolio
-assumptions  = fcf.load_sample_assumptions()    # bundled sample assumptions
+model_points = fcf.load_sample_model_points()              # bundled sample portfolio
+basis        = fcf.load_sample_assumptions()               # {(product, channel): Assumptions}
+assumptions  = basis[("term_a", "GA")]                     # pick one segment
 m            = fcf.measure(model_points, assumptions)
 print(m.bel[:, 0], m.ra[:, 0], m.csm[:, 0])   # BEL / RA / CSM at issue
 ```

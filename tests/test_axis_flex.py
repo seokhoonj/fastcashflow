@@ -1,0 +1,190 @@
+"""Schema-detecting rate-table reader -- axis-flex variants.
+
+The workbook rate tables (`mortality_tables`, `rider_rate_tables`,
+`waiver_tables`, `lapse_tables`) accept any subset of
+``{sex, age, issue_age, duration}`` as columns. The reader detects which
+axes are present, builds a numpy grid, and wraps it in the standard
+``(sex, issue_age, duration) -> rate`` callable. Axes the table does not
+carry broadcast; lookups past the table's range clip to the edge; ``age``
+(attained) and ``issue_age`` / ``duration`` (select schema) are mutually
+exclusive.
+"""
+import numpy as np
+import openpyxl
+import pytest
+
+from fastcashflow.io import _flex_rate_table
+
+
+def _sheet(rows):
+    """Build a worksheet from a list of (header, row, row, ...) tuples."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "test"
+    for r in rows:
+        ws.append(list(r))
+    return ws
+
+
+def _call(callable_, sex, issue_age, duration):
+    s = np.atleast_1d(np.asarray(sex, dtype=np.int64))
+    a = np.atleast_1d(np.asarray(issue_age, dtype=np.int64))
+    d = np.atleast_1d(np.asarray(duration, dtype=np.int64))
+    return callable_(s, a, d)
+
+
+def test_scalar_schema():
+    """Just (table_id, rate) -- one row per table, broadcast over everything."""
+    ws = _sheet([
+        ("table_id", "rate"),
+        ("FLAT", 0.005),
+    ])
+    out = _flex_rate_table(ws)
+    fn = out["FLAT"]
+    assert _call(fn, [0, 1, 0], [30, 40, 50], [0, 5, 10]).tolist() == [0.005, 0.005, 0.005]
+
+
+def test_age_only_schema():
+    """(table_id, age, rate) -- attained age; sex/duration broadcast."""
+    ws = _sheet([
+        ("table_id", "age", "rate"),
+        ("AGE", 30, 0.001),
+        ("AGE", 31, 0.002),
+        ("AGE", 32, 0.003),
+    ])
+    out = _flex_rate_table(ws)
+    fn = out["AGE"]
+    # attained = issue_age + duration
+    assert _call(fn, [0], [30], [0])[0] == 0.001       # attained 30
+    assert _call(fn, [0], [30], [1])[0] == 0.002       # attained 31
+    assert _call(fn, [1], [31], [1])[0] == 0.003       # attained 32; sex broadcast
+
+
+def test_sex_age_schema():
+    """(table_id, sex, age, rate) -- the historical default."""
+    ws = _sheet([
+        ("table_id", "sex", "age", "rate"),
+        ("MORT", 0, 30, 0.001),
+        ("MORT", 0, 31, 0.002),
+        ("MORT", 1, 30, 0.0008),
+        ("MORT", 1, 31, 0.0016),
+    ])
+    fn = _flex_rate_table(ws)["MORT"]
+    assert _call(fn, [0, 1], [30, 30], [0, 0]).tolist() == [0.001, 0.0008]
+    assert _call(fn, [0, 1], [30, 30], [1, 1]).tolist() == [0.002, 0.0016]
+
+
+def test_duration_only_schema_for_lapse():
+    """(table_id, duration, rate) -- lapse-style, sex/age broadcast."""
+    ws = _sheet([
+        ("table_id", "duration", "rate"),
+        ("LAPSE", 0, 0.20),
+        ("LAPSE", 1, 0.15),
+        ("LAPSE", 2, 0.10),
+    ])
+    fn = _flex_rate_table(ws)["LAPSE"]
+    # sex / issue_age vary, lapse depends only on duration
+    assert _call(fn, [0, 1, 0], [25, 40, 55], [0, 1, 2]).tolist() == [0.20, 0.15, 0.10]
+
+
+def test_select_and_ultimate_schema():
+    """(table_id, sex, issue_age, duration, rate) -- full select grid."""
+    ws = _sheet([
+        ("table_id", "sex", "issue_age", "duration", "rate"),
+        ("SEL", 0, 30, 0, 0.0003),
+        ("SEL", 0, 30, 1, 0.0004),
+        ("SEL", 0, 30, 2, 0.0005),
+        ("SEL", 0, 31, 0, 0.00035),
+        ("SEL", 0, 31, 1, 0.00045),
+        ("SEL", 0, 31, 2, 0.00055),
+        ("SEL", 1, 30, 0, 0.00025),
+        ("SEL", 1, 30, 1, 0.00035),
+        ("SEL", 1, 30, 2, 0.00045),
+        ("SEL", 1, 31, 0, 0.00030),
+        ("SEL", 1, 31, 1, 0.00040),
+        ("SEL", 1, 31, 2, 0.00050),
+    ])
+    fn = _flex_rate_table(ws)["SEL"]
+    # Same issue_age (30), duration grows -> select effect wears off
+    assert _call(fn, [0, 0, 0], [30, 30, 30], [0, 1, 2]).tolist() == [0.0003, 0.0004, 0.0005]
+    # Same duration (0), different issue_age
+    assert _call(fn, [0, 0], [30, 31], [0, 0]).tolist() == [0.0003, 0.00035]
+    # Different sex
+    assert _call(fn, [0, 1], [30, 30], [0, 0]).tolist() == [0.0003, 0.00025]
+
+
+def test_age_with_select_is_rejected():
+    """Mixing 'age' (attained) with 'issue_age'/'duration' (select) raises."""
+    ws = _sheet([
+        ("table_id", "age", "issue_age", "duration", "rate"),
+        ("BAD", 30, 30, 0, 0.001),
+    ])
+    with pytest.raises(ValueError, match="mixes 'age'"):
+        _flex_rate_table(ws)
+
+
+def test_missing_grid_cell_is_rejected():
+    """A non-dense grid (cartesian product has holes) raises."""
+    ws = _sheet([
+        ("table_id", "sex", "age", "rate"),
+        ("HOLE", 0, 30, 0.001),
+        ("HOLE", 0, 32, 0.003),                # age 31 missing for sex 0
+        ("HOLE", 1, 30, 0.0008),
+        ("HOLE", 1, 31, 0.0009),
+        ("HOLE", 1, 32, 0.0010),
+    ])
+    with pytest.raises(ValueError, match="not dense"):
+        _flex_rate_table(ws)
+
+
+def test_clip_past_table_range():
+    """Lookups past the table's range clip to the edge."""
+    ws = _sheet([
+        ("table_id", "age", "rate"),
+        ("CLAMP", 30, 0.001),
+        ("CLAMP", 31, 0.002),
+        ("CLAMP", 32, 0.003),
+    ])
+    fn = _flex_rate_table(ws)["CLAMP"]
+    # attained = 100 -> clipped to age 32 -> rate 0.003
+    assert _call(fn, [0], [80], [20])[0] == 0.003
+    # attained = 10 -> clipped to age 30 -> rate 0.001
+    assert _call(fn, [0], [5], [5])[0] == 0.001
+
+
+def test_multiple_tables_in_one_sheet():
+    """One sheet, two table_ids -- each becomes its own callable."""
+    ws = _sheet([
+        ("table_id", "sex", "age", "rate"),
+        ("A", 0, 30, 0.001),
+        ("A", 1, 30, 0.0008),
+        ("B", 0, 30, 0.005),
+        ("B", 1, 30, 0.004),
+    ])
+    out = _flex_rate_table(ws)
+    assert set(out) == {"A", "B"}
+    assert _call(out["A"], [0, 1], [30, 30], [0, 0]).tolist() == [0.001, 0.0008]
+    assert _call(out["B"], [0, 1], [30, 30], [0, 0]).tolist() == [0.005, 0.004]
+
+
+def test_broadcasts_to_engine_grid_shape():
+    """The callable matches numpy meshgrid shapes the engine passes in."""
+    ws = _sheet([
+        ("table_id", "sex", "age", "rate"),
+        ("MORT", 0, 30, 0.001),
+        ("MORT", 0, 31, 0.002),
+        ("MORT", 1, 30, 0.0008),
+        ("MORT", 1, 31, 0.0016),
+    ])
+    fn = _flex_rate_table(ws)["MORT"]
+    # Engine call style: meshgrid of sex / age / duration
+    sex_g, age_g, dur_g = np.meshgrid(
+        np.array([0, 1]), np.array([30]), np.array([0, 1]), indexing="ij",
+    )
+    out = fn(sex_g, age_g, dur_g)
+    assert out.shape == sex_g.shape
+    # sex=0, age=30, dur=0 -> attained 30 -> 0.001 ; dur=1 -> attained 31 -> 0.002
+    assert out[0, 0, 0] == 0.001
+    assert out[0, 0, 1] == 0.002
+    assert out[1, 0, 0] == 0.0008
+    assert out[1, 0, 1] == 0.0016

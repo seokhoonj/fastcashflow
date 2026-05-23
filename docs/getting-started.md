@@ -2,12 +2,15 @@
 
 ## Installation
 
+Not on PyPI yet -- install directly from GitHub:
+
 ```bash
-pip install fastcashflow[viz]
+pip install "git+https://github.com/seokhoonj/fastcashflow.git#egg=fastcashflow[viz]"
 ```
 
-The `viz` extra adds the charting helpers used below; drop it for the core
-engine alone.
+The `viz` extra adds the charting helpers used below; drop it (and use
+`pip install git+https://github.com/seokhoonj/fastcashflow.git`) for the
+core engine alone.
 
 ## A first valuation
 
@@ -18,7 +21,8 @@ bundled sample, which loads with no files to prepare.
 ```python
 import fastcashflow as fcf
 
-assumptions = fcf.load_sample_assumptions()
+basis        = fcf.load_sample_assumptions()       # {(product, channel): Assumptions}
+assumptions  = basis[("term_a", "GA")]             # pick one segment
 model_points = fcf.load_sample_model_points()
 
 m = fcf.measure(model_points, assumptions)

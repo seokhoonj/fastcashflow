@@ -1,49 +1,83 @@
-"""read_assumptions validation -- loading an actuarial basis from a workbook."""
+"""Assumptions workbook reader.
+
+A single ``assumptions.xlsx`` carries the segment mapping plus the named rate
+tables. The ``segments`` sheet has a ``defaults`` row whose values blank
+cells inherit, and one row per (product, channel) segment; the reader returns
+one ``Assumptions`` per segment. See docs/assumptions-format.md.
+"""
 import numpy as np
 
 from fastcashflow import (
-    Assumptions,
-    RiderRate,
-    load_sample_assumptions,
-    load_sample_model_points,
-    measure,
+    ModelPoints, load_sample_assumptions, measure, value,
 )
 
 
-def test_read_assumptions_loads_the_sample_basis():
-    """The bundled workbook loads into an Assumptions with the right scalars."""
-    asmp = load_sample_assumptions()
-    assert isinstance(asmp, Assumptions)
-    assert asmp.discount_annual == 0.03
-    assert asmp.ra_confidence == 0.75
-    assert asmp.mortality_cv == 0.10
+def test_segments_resolve():
+    """The sample workbook resolves to two segments -- term_a on GA and FC."""
+    basis = load_sample_assumptions()
+    assert set(basis) == {("term_a", "GA"), ("term_a", "FC")}
 
 
-def test_read_assumptions_builds_working_rate_callables():
-    """Mortality and lapse callables return sensible monthly rates."""
-    asmp = load_sample_assumptions()
-    young = asmp.mortality_annual(np.array([0]), np.array([30]), np.array([0]))
-    old = asmp.mortality_annual(np.array([0]), np.array([60]), np.array([0]))
-    assert 0.0 < young[0] < old[0] < 1.0          # mortality rises with age
-    lapse = asmp.lapse_annual(np.array([0, 5]))
-    assert np.all((lapse > 0.0) & (lapse < 1.0))
+def test_defaults_inherited():
+    """Blank cells in a segment row inherit from the ``defaults`` row."""
+    basis = load_sample_assumptions()
+    ga, fc = basis[("term_a", "GA")], basis[("term_a", "FC")]
+    # ra_confidence / mortality_cv / morbidity_cv live only on the defaults row
+    assert ga.ra_confidence == 0.75 and fc.ra_confidence == 0.75
+    assert ga.mortality_cv == 0.10 and fc.mortality_cv == 0.10
+    assert ga.morbidity_cv == 0.12 and fc.morbidity_cv == 0.12
+    # shared economic / maintenance tables -- inherited identically
+    assert ga.discount_annual == 0.03 and fc.discount_annual == 0.03
+    assert ga.expense_inflation == 0.02 and fc.expense_inflation == 0.02
+    assert ga.expense_maintenance_annual == 60_000.0
+    assert fc.expense_maintenance_annual == 60_000.0
 
 
-def test_read_assumptions_registers_riders():
-    """The riders master and rates sheets become rate-driven RiderRates."""
-    asmp = load_sample_assumptions()
-    assert len(asmp.riders) > 0
-    assert all(isinstance(r, RiderRate) for r in asmp.riders)
-    assert asmp.coverage_types is not None
-    for r in asmp.riders:                         # each rate is a monthly rate
-        rate = r.rate(np.array([0]), np.array([45]), np.array([0]))
-        assert 0.0 <= rate[0] < 1.0
+def test_channel_segmented_lapse():
+    """GA and FC reference different lapse tables -- the per-segment table
+    reference. GA persistency is worse than FC."""
+    basis = load_sample_assumptions()
+    dur = np.arange(6)
+    zero = np.zeros_like(dur)
+    ga_lapse = basis[("term_a", "GA")].lapse_annual(zero, zero, dur)
+    fc_lapse = basis[("term_a", "FC")].lapse_annual(zero, zero, dur)
+    assert np.all(ga_lapse > fc_lapse)
 
 
-def test_read_assumptions_basis_measures_a_portfolio():
-    """A basis read from the workbook drives a measurement end to end."""
-    asmp = load_sample_assumptions()
-    mps = load_sample_model_points()
-    m = measure(mps, asmp)
-    assert m.bel.shape[0] == mps.n_mp
-    assert np.all(np.isfinite(m.csm[:, 0]))
+def test_per_segment_scalar():
+    """``expense_acquisition`` is filled per segment row (GA vs FC commission)."""
+    basis = load_sample_assumptions()
+    assert basis[("term_a", "GA")].expense_acquisition == 150_000.0
+    assert basis[("term_a", "FC")].expense_acquisition == 80_000.0
+
+
+def test_riders_resolved():
+    """Rate-driven riders resolve from ``rider_rate_tables``; non-rate-driven
+    types stay in ``coverage_types`` only."""
+    basis = load_sample_assumptions()
+    asmp = basis[("term_a", "GA")]
+    # adb is rate-driven (death-type), so it joins the riders tuple too.
+    assert [r.code for r in asmp.riders] == ["hosp", "cancer", "adb"]
+    assert asmp.coverage_types == {
+        "dth_main": "death_main",
+        "hosp": "morbidity",
+        "cancer": "diagnosis",
+        "adb": "death",
+        "ann": "annuity",
+        "mat": "maturity",
+    }
+
+
+def test_resolved_basis_values():
+    """A resolved ``Assumptions`` runs through ``value`` and ``measure``; the
+    GA and FC segments give different BEL because lapse differs (channel
+    segmentation actually bites the valuation)."""
+    basis = load_sample_assumptions()
+    mp = ModelPoints.single(issue_age=40, death_benefit=100_000_000.0,
+                            level_premium=50_000.0, term_months=120)
+    ga = value(mp, basis[("term_a", "GA")]).bel[0]
+    fc = value(mp, basis[("term_a", "FC")]).bel[0]
+    assert np.isfinite(ga) and np.isfinite(fc)
+    assert not np.isclose(ga, fc)
+    # fused and detailed paths agree
+    assert np.isclose(measure(mp, basis[("term_a", "GA")]).bel[0, 0], ga)

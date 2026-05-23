@@ -2,7 +2,7 @@
 import numpy as np
 
 from fastcashflow import Assumptions, ModelPoints, measure
-from fastcashflow.gmm import _norm_ppf
+from fastcashflow.numerics import _norm_ppf
 
 
 def _annual(m):
@@ -14,7 +14,7 @@ def _assumptions(**overrides) -> Assumptions:
     """Build an Assumptions with simple defaults, overridable per test."""
     base = dict(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.02)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -85,7 +85,7 @@ def test_expense_inflation():
         ),
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0)),
-            lapse_annual=lambda duration: np.full(duration.shape, _annual(0.0)),
+            lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.0)),
             expense_maintenance_annual=120.0,   # 10 per month
             expense_inflation=0.06,
         ),

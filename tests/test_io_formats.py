@@ -32,7 +32,7 @@ def _write_sheets(path, sheets):
 
 def test_read_wide_xlsx(tmp_path):
     """A wide .xlsx reads to the same valuation as the in-memory book."""
-    asmp = load_sample_assumptions()
+    asmp = next(iter(load_sample_assumptions().values()))
     mps = load_sample_model_points()
     path = tmp_path / "wide.xlsx"
     _write_sheets(path, [("model_points", mps.to_wide(asmp))])
@@ -44,7 +44,7 @@ def test_read_wide_xlsx(tmp_path):
 
 def test_read_long_xlsx(tmp_path):
     """A long-form .xlsx -- policies and coverages sheets in one workbook."""
-    asmp = load_sample_assumptions()
+    asmp = next(iter(load_sample_assumptions().values()))
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     path = tmp_path / "long.xlsx"
@@ -57,7 +57,7 @@ def test_read_long_xlsx(tmp_path):
 
 def test_read_feather(tmp_path):
     """A .feather (Arrow IPC) model-point file round-trips."""
-    asmp = load_sample_assumptions()
+    asmp = next(iter(load_sample_assumptions().values()))
     mps = load_sample_model_points()
     path = tmp_path / "wide.feather"
     mps.to_wide(asmp).write_ipc(path)
@@ -69,7 +69,7 @@ def test_read_feather(tmp_path):
 
 def test_write_valuation_feather(tmp_path):
     """write_valuation writes a .feather result file."""
-    asmp = load_sample_assumptions()
+    asmp = next(iter(load_sample_assumptions().values()))
     mps = load_sample_model_points()
     path = tmp_path / "results.feather"
     write_valuation(value(mps, asmp), path)
@@ -78,7 +78,7 @@ def test_write_valuation_feather(tmp_path):
 
 def test_long_form_reads_benefit_rules(tmp_path):
     """The long-form coverages frame reads the waiting / reduction columns."""
-    asmp = load_sample_assumptions()
+    asmp = next(iter(load_sample_assumptions().values()))
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     coverages = coverages.with_columns(

@@ -22,7 +22,7 @@ def _annual(m):
 def _assumptions() -> Assumptions:
     return Assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(LAPSE)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.03,
         expense_acquisition=200_000.0,
         expense_maintenance_annual=60_000.0,

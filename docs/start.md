@@ -2,12 +2,15 @@
 
 ## 설치
 
+PyPI에는 아직 올라가 있지 않습니다. GitHub에서 직접 설치합니다:
+
 ```bash
-pip install fastcashflow[viz]
+pip install "git+https://github.com/seokhoonj/fastcashflow.git#egg=fastcashflow[viz]"
 ```
 
 `[viz]`는 아래에서 쓰는 내장 차트에 필요한 matplotlib을 함께 설치합니다.
-차트가 필요 없으면 `[viz]`를 빼도 됩니다.
+차트가 필요 없으면 `[viz]`를 빼고 `pip install
+git+https://github.com/seokhoonj/fastcashflow.git` 로 설치합니다.
 
 ## 첫 평가
 
@@ -18,7 +21,8 @@ pip install fastcashflow[viz]
 ```python
 import fastcashflow as fcf
 
-assumptions  = fcf.load_sample_assumptions()
+basis        = fcf.load_sample_assumptions()       # {(product, channel): Assumptions}
+assumptions  = basis[("term_a", "GA")]             # 한 세그먼트 선택
 model_points = fcf.load_sample_model_points()
 
 m = fcf.measure(model_points, assumptions)

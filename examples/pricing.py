@@ -12,7 +12,8 @@ DATA = Path(__file__).resolve().parent / "data"
 
 
 def main() -> None:
-    assumptions = fcf.read_assumptions(DATA / "assumptions.xlsx")
+    basis = fcf.read_assumptions(DATA / "assumptions.xlsx")
+    assumptions, = basis.values()
     book = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions)
     print(f"solving the level monthly premium for {book.n_mp} model points")
     print("(first model point shown)\n")

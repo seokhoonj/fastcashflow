@@ -21,7 +21,7 @@ def _asmp(*, q_annual=0.0, lapse_annual=0.0, **overrides) -> Assumptions:
     """Flat-rate, zero-discount, zero-expense basis."""
     base = dict(
         mortality_annual=lambda s, a, d: np.full(a.shape, q_annual),
-        lapse_annual=lambda d: np.full(d.shape, lapse_annual),
+        lapse_annual=lambda sex, issue_age, d: np.full(d.shape, lapse_annual),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,

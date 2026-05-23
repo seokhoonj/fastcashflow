@@ -25,7 +25,7 @@ def _mortality(sex, issue_age, duration):
     return np.where(duration < 1, _annual(SELECT_Q), _annual(ULT_Q))
 
 
-def _lapse(duration):
+def _lapse(sex, issue_age, duration):
     """Higher lapse in the first policy year, lower thereafter."""
     return np.where(duration < 1, _annual(SELECT_LAPSE), _annual(ULT_LAPSE))
 

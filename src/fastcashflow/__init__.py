@@ -14,13 +14,13 @@ quantity this engine computes.
 """
 from fastcashflow.assumptions import Assumptions, RiderRate
 from fastcashflow.coverage import DEATH, RISK_MORBIDITY, RISK_MORTALITY
-from fastcashflow.engine import Measurement, Valuation, measure, value
+from fastcashflow.engine import (
+    Measurement, Valuation, measure, value, value_segmented,
+)
 from fastcashflow.grouping import group
 from fastcashflow.io import (
     load_sample_assumptions,
     load_sample_model_points,
-    load_sample_registry,
-    read_assumption_registry,
     read_assumptions,
     read_model_points,
     value_file,
@@ -62,7 +62,8 @@ from fastcashflow.vfa import VFAMeasurement, measure_vfa
 
 __version__ = "0.0.1.dev1"
 __all__ = [
-    "Assumptions", "ModelPoints", "measure", "value", "value_stochastic",
+    "Assumptions", "ModelPoints", "measure", "value", "value_segmented",
+    "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "measure_tvog",
     "report", "roll_forward", "reconcile", "group", "transition",
     "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
@@ -71,7 +72,6 @@ __all__ = [
     "VFAPeriodMovement", "VFAReconciliation",
     "read_model_points", "read_assumptions", "write_valuation", "value_file",
     "load_sample_model_points", "load_sample_assumptions",
-    "read_assumption_registry", "load_sample_registry",
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",

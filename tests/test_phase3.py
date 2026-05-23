@@ -32,7 +32,7 @@ def test_value_matches_measure():
 
     asmp = Assumptions(
         mortality_annual=mortality_annual,
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.012)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
         expense_acquisition=250_000.0,
         expense_maintenance_annual=48_000.0,
@@ -61,7 +61,7 @@ def test_value_onerous():
     """The fast path also flags onerous contracts -- CSM floored at 0."""
     asmp = Assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05)),
-        lapse_annual=lambda duration: np.full(duration.shape, 0.0),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,
@@ -89,7 +89,7 @@ def test_value_gpu_matches_cpu():
 
     asmp = Assumptions(
         mortality_annual=mortality_annual,
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.012)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
         expense_acquisition=250_000.0,
         expense_maintenance_annual=48_000.0,
@@ -125,7 +125,7 @@ def test_value_gpu_matches_cpu_with_transition():
 
     asmp = Assumptions(
         mortality_annual=flat(0.001),
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.012)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         waiver_inception_annual=flat(0.02),
         discount_annual=0.03,
         expense_acquisition=200_000.0,

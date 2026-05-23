@@ -20,7 +20,7 @@ def _assumptions(**overrides) -> Assumptions:
     """Flat-rate, zero-discount, zero-expense basis -- every figure by hand."""
     base = dict(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(0.02)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
         discount_annual=0.0,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,

@@ -14,7 +14,7 @@ from fastcashflow import (
     measure,
     value,
 )
-from fastcashflow.gmm import _norm_ppf
+from fastcashflow.numerics import _norm_ppf
 
 Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
@@ -34,7 +34,7 @@ def _assumptions(**overrides) -> Assumptions:
     flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(MORB_RATE))
     base = dict(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
-        lapse_annual=lambda duration: np.full(duration.shape, _annual(LAPSE)),
+        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.04,
         expense_acquisition=0.0,
         expense_maintenance_annual=0.0,

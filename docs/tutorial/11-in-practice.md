@@ -192,13 +192,16 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 ```python
 import fastcashflow as fcf
 
-assumptions  = fcf.read_assumptions("basis.xlsx")
+basis        = fcf.read_assumptions("assumptions.xlsx")    # {(product, channel): Assumptions}
+assumptions  = basis[("term_a", "GA")]                     # 한 세그먼트 선택
 model_points = fcf.read_model_points("policies.csv", assumptions, coverages="coverages.csv")
 val          = fcf.value(model_points, assumptions)
 fcf.write_valuation(val, "results.csv")
 ```
 
-- `read_assumptions` — 가정 엑셀을 읽어 들입니다.
+- `read_assumptions` — 가정 엑셀을 읽어 `{(product, channel): Assumptions}`
+  딕셔너리로 돌려줍니다. 한 워크북에 여러 세그먼트(상품 × 채널)를 함께
+  관리하기 위함입니다. 한 세그먼트만 쓰려면 키로 골라냅니다.
 - `read_model_points` — 계약 파일과 담보 파일을 읽어 모델포인트를
   만듭니다. 담보 파일의 특약코드를 가정에 등록된 특약과 맞춰야 하므로,
   가정(`assumptions`)을 함께 넘깁니다.

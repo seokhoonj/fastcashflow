@@ -61,7 +61,7 @@ def _asmp(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
     the monthly rates the hand calculations use."""
     return Assumptions(
         mortality_annual=lambda s, a, d: np.full(a.shape, _annual(q)),
-        lapse_annual=lambda d: np.full(d.shape, _annual(lapse)),
+        lapse_annual=lambda sex, issue_age, d: np.full(d.shape, _annual(lapse)),
         waiver_inception_annual=lambda s, a, d: np.full(a.shape, _annual(inception)),
         discount_annual=0.0,
         expense_acquisition=0.0,
@@ -138,7 +138,7 @@ def test_disability_income_needs_a_benefit_state():
     # default model (no state_model) -- waiver state is not a benefit state
     plain = Assumptions(
         mortality_annual=lambda s, a, d: np.full(a.shape, _annual(0.01)),
-        lapse_annual=lambda d: np.full(d.shape, 0.0),
+        lapse_annual=lambda sex, issue_age, d: np.full(d.shape, 0.0),
         discount_annual=0.0, expense_acquisition=0.0,
         expense_maintenance_annual=0.0, expense_inflation=0.0,
         ra_confidence=0.75, mortality_cv=0.10)
