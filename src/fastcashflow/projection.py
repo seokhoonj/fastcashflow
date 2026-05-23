@@ -514,18 +514,27 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
                 assumptions.ci_incidence_annual(
                     sex_grid, issue_age_grid, duration_grid)))
             rate_dict["ci_incidence"] = ci_inc
-        if assumptions.ci_reincidence_annual is not None:
+        if (assumptions.ci_reincidence_annual is not None
+                or assumptions.disability_recovery_annual is not None):
             # Broadcast (n_mp, 1, 1) sex + (n_mp, 1, 1) age +
             # (1, n_year, 1) duration + (1, 1, max_cohort) cohort to
-            # (n_mp, n_year, max_cohort).
+            # (n_mp, n_year, max_cohort). Duration-dependent rate
+            # callables share the four-argument signature: the cohort
+            # axis is months since entering the source state.
             sex_4d = model_points.sex.reshape(-1, 1, 1)
             age_4d = model_points.issue_age.reshape(-1, 1, 1)
             dur_4d = np.arange(n_years).reshape(1, -1, 1)
             coh_4d = np.arange(max_cohort).reshape(1, 1, -1)
-            ci_rein = np.ascontiguousarray(annual_to_monthly(
-                assumptions.ci_reincidence_annual(
-                    sex_4d, age_4d, dur_4d, coh_4d)))
-            rate_dict["ci_reincidence"] = ci_rein
+            if assumptions.ci_reincidence_annual is not None:
+                rate_dict["ci_reincidence"] = np.ascontiguousarray(
+                    annual_to_monthly(
+                        assumptions.ci_reincidence_annual(
+                            sex_4d, age_4d, dur_4d, coh_4d)))
+            if assumptions.disability_recovery_annual is not None:
+                rate_dict["disability_recovery"] = np.ascontiguousarray(
+                    annual_to_monthly(
+                        assumptions.disability_recovery_annual(
+                            sex_4d, age_4d, dur_4d, coh_4d)))
         (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
          premium_state, benefit_state,
          state_duration_max) = compile_state_model_with_duration(

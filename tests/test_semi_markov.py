@@ -394,3 +394,156 @@ def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
+
+
+# ---------------------------------------------------------------------------
+# DI recovery (R) -- semi-Markov re-entry from disabled to active
+# ---------------------------------------------------------------------------
+#
+# Disability-income products are the canonical motivation for semi-Markov:
+# the disabled -> active recovery (termination) rate is sharply duration-
+# dependent. fastcashflow models this with a duration_dependent transition
+# back to the source state and a four-arg ``disability_recovery_annual``
+# rate. The disabled state is also a benefit state -- ``disability_income``
+# is paid each month its occupancy is held.
+
+
+def _di_model(duration_max: int) -> StateModel:
+    return StateModel(states=(
+        State("active", premium=True, transitions=(
+            Transition("mortality"),
+            Transition("waiver_incidence", to="disabled"),
+            Transition("lapse"),
+        )),
+        State("disabled", benefit=True, duration_max=duration_max,
+              transitions=(
+                  Transition("mortality"),
+                  Transition("disability_recovery", to="active",
+                             duration_dependent=True),
+              )),
+    ), seating=(0, 1, 1))
+
+
+def _di_assumptions(*, duration_max, recovery_monthly):
+    def recovery(s, a, p, sd):
+        return np.full(sd.shape, _annual(recovery_monthly), dtype=float)
+    return fcf.Assumptions(
+        mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
+        lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
+        waiver_incidence_annual=lambda s, a, d: np.full(
+            d.shape, _annual(0.003)),
+        disability_recovery_annual=recovery,
+        discount_annual=0.03,
+        expense_acquisition=0.0,
+        expense_maintenance_annual=0.0,
+        expense_inflation=0.0,
+        ra_confidence=0.75,
+        mortality_cv=0.10,
+        disability_cv=0.20,
+        state_model=_di_model(duration_max),
+    )
+
+
+def test_di_recovery_hand_calc_one_month_seated_on_disabled():
+    """Seat the contract directly on disabled (ss = 1, cohort 0). With
+    monthly mortality 0.001, monthly recovery 0.05 at cohort 0, monthly
+    disability income 1.0M, no discount and a one-month term:
+
+      t = 0: occ[disabled][cohort 0] = 1.0
+        Death claim (DEATH coverage, no death_benefit set here): 0
+        Disability income paid: benefit_occ * disability_income * dm
+                              = 1.0 * 1_000_000 * 1 = 1_000_000
+
+    BEL = 1_000_000 (only disability income; no premium since seated on
+    disabled which is premium=False, no maturity, no death claim).
+    """
+    asmp = fcf.Assumptions(
+        mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
+        lapse_annual=lambda s, a, d: np.full(d.shape, 0.0),
+        waiver_incidence_annual=lambda s, a, d: np.full(d.shape, 0.0),
+        disability_recovery_annual=lambda s, a, p, sd: np.full(
+            sd.shape, _annual(0.05), dtype=float),
+        discount_annual=0.0,
+        expense_acquisition=0.0,
+        expense_maintenance_annual=0.0,
+        expense_inflation=0.0,
+        ra_confidence=0.5,
+        mortality_cv=0.0,
+        disability_cv=0.0,
+        state_model=_di_model(12),
+    )
+    mp = fcf.ModelPoints(
+        issue_age=np.array([45], dtype=np.int64),
+        death_benefit=np.array([0.0]),
+        level_premium=np.array([0.0]),
+        term_months=np.array([1], dtype=np.int64),
+        disability_income=np.array([1_000_000.0]),
+        state=np.array([1], dtype=np.int64),
+    )
+    v = fcf.value(mp, asmp)
+    assert np.isclose(v.bel[0], 1_000_000.0), v.bel[0]
+
+
+def test_di_recovery_higher_rate_drains_disabled_occupancy_faster():
+    """A higher recovery rate must drain the disabled cohort faster:
+    after the same number of months the inforce-on-disabled (i.e. the
+    benefit_occ that pays disability income) is strictly smaller with a
+    higher recovery rate.
+    """
+    mp = fcf.ModelPoints(
+        issue_age=np.array([45], dtype=np.int64),
+        death_benefit=np.array([0.0]),
+        level_premium=np.array([0.0]),
+        term_months=np.array([24], dtype=np.int64),
+        disability_income=np.array([1_000_000.0]),
+        state=np.array([1], dtype=np.int64),
+    )
+    low = fcf.measure(mp, _di_assumptions(
+        duration_max=24, recovery_monthly=0.01))
+    high = fcf.measure(mp, _di_assumptions(
+        duration_max=24, recovery_monthly=0.10))
+    # By t = 6 months the high-recovery scenario has visibly drained the
+    # disabled occupancy more than the low-recovery one.
+    assert high.cashflows.disability_cf[0, 6] < low.cashflows.disability_cf[0, 6]
+    # Over the whole term, total disability paid is smaller too.
+    assert high.cashflows.disability_cf.sum() < low.cashflows.disability_cf.sum()
+
+
+def test_di_recovery_measure_value_agree_mixed_portfolio():
+    """50-contract DI portfolio with a duration-tapered recovery rate.
+    measure() and value() must agree.
+    """
+    def recovery(s, a, p, sd):
+        # DI valuation-table shape: high recovery in early months, dropping
+        # off sharply with claim duration.
+        return np.where(sd < 3, _annual(0.20),
+                        np.where(sd < 12, _annual(0.05),
+                                 _annual(0.01)))
+    asmp = fcf.Assumptions(
+        mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
+        lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
+        waiver_incidence_annual=lambda s, a, d: np.full(
+            d.shape, _annual(0.003)),
+        disability_recovery_annual=recovery,
+        discount_annual=0.03,
+        expense_acquisition=200_000.0,
+        expense_maintenance_annual=40_000.0,
+        expense_inflation=0.02,
+        ra_confidence=0.75,
+        mortality_cv=0.10,
+        disability_cv=0.20,
+        state_model=_di_model(36),
+    )
+    rng = np.random.default_rng(23)
+    n = 50
+    mp = fcf.ModelPoints(
+        issue_age=rng.integers(30, 55, n).astype(np.int64),
+        sex=rng.integers(0, 2, n).astype(np.int64),
+        death_benefit=rng.integers(10, 80, n) * 1_000_000.0,
+        level_premium=rng.integers(2, 10, n) * 10_000.0,
+        term_months=rng.integers(60, 180, n).astype(np.int64),
+        disability_income=rng.integers(3, 10, n) * 100_000.0,
+        state=rng.integers(0, 2, n).astype(np.int64),
+    )
+    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
+    assert np.allclose(m.bel[:, 0], v.bel)

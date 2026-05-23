@@ -1096,11 +1096,14 @@ def value(
                     assumptions.ci_incidence_annual(
                         sex_grid, issue_age_grid, duration_grid)))
                 rate_dict["ci_incidence"] = ci_inc_grid
-            if assumptions.ci_reincidence_annual is not None:
+            if (assumptions.ci_reincidence_annual is not None
+                    or assumptions.disability_recovery_annual is not None):
                 # Build the (sex, age, year, cohort) grid by sweeping cohort
-                # months 0..max_cohort-1. The rate function takes a fourth
-                # ``state_duration`` argument so 면책 (exclusion) periods
-                # and any other sojourn-time effect drop straight in.
+                # months 0..max_cohort-1. Duration-dependent rate callables
+                # take the four-argument signature -- ``state_duration``
+                # (the sojourn-time cohort index) lets a 면책 (exclusion)
+                # window on reincidence or the duration-since-disablement
+                # taper on a DI recovery rate drop straight in.
                 cohort_idx = np.arange(max_cohort)
                 sg4, ag4, dg4, cg4 = np.meshgrid(
                     np.array([0, 1]),
@@ -1109,9 +1112,16 @@ def value(
                     cohort_idx,
                     indexing="ij",
                 )
-                ci_rein_grid = np.ascontiguousarray(annual_to_monthly(
-                    assumptions.ci_reincidence_annual(sg4, ag4, dg4, cg4)))
-                rate_dict["ci_reincidence"] = ci_rein_grid
+                if assumptions.ci_reincidence_annual is not None:
+                    rate_dict["ci_reincidence"] = np.ascontiguousarray(
+                        annual_to_monthly(
+                            assumptions.ci_reincidence_annual(
+                                sg4, ag4, dg4, cg4)))
+                if assumptions.disability_recovery_annual is not None:
+                    rate_dict["disability_recovery"] = np.ascontiguousarray(
+                        annual_to_monthly(
+                            assumptions.disability_recovery_annual(
+                                sg4, ag4, dg4, cg4)))
             (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
              premium_state, benefit_state,
              state_duration_max) = compile_state_model_with_duration(

@@ -197,6 +197,16 @@ class Assumptions:
     # time effect.
     ci_incidence_annual: RateFn | None = None
     ci_reincidence_annual: object | None = None    # (sex, age, p_dur, s_dur) -> rate
+    # Disability income / DI: ``disability_recovery_annual`` is the
+    # duration-dependent recovery rate (disabled -> active). Its callable
+    # receives the same four-argument signature as
+    # ``ci_reincidence_annual`` -- ``state_duration`` (months since
+    # disablement) is the standard DI valuation-table axis along which
+    # the recovery rate drops off sharply with claim duration. Pair with
+    # a Markov inception rate on the active state's transition (any of
+    # ``waiver_incidence_annual`` or a custom slot) to model a full DI
+    # contract.
+    disability_recovery_annual: object | None = None
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
     expense_cv: float = 0.0
