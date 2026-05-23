@@ -947,6 +947,271 @@ def _get_value_kernel_n3(n_edges: int):
     return cached
 
 
+# ---------------------------------------------------------------------------
+# Codegen specialisation -- experimental
+# ---------------------------------------------------------------------------
+#
+# The hand-unrolled n_states=2 / n_states=3 kernels above keep the occupancy
+# in scalar registers but still walk a runtime ``edge_from`` / ``edge_to``
+# arrays inside the inner loop. The codegen variant goes one step further:
+# the state count, the full edge topology, the lump-sum flags, and which
+# states pay premium or a benefit all become part of the generated Python
+# source itself -- so after numba compilation the inner loop has no array
+# indirections left, only scalar arithmetic on register-resident occupancy.
+# Compared to the hand-unrolled kernels this generalises to any n_states
+# without writing a new kernel by hand; compared to the closure factory it
+# closes the remaining runtime-branch gap. Not currently the default
+# dispatch -- exposed for benchmarking against the other variants.
+
+
+def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
+                                 premium_state, benefit_state) -> str:
+    """Generate the Python source of a fully-specialised value kernel.
+
+    All structural parameters (n_states, edge topology, lump-sum flags,
+    premium- and benefit-paying states) are baked into the source as
+    literals. The returned text is intended for ``exec`` in a namespace
+    that exposes ``np``, ``njit`` and ``prange``.
+    """
+    n_edges = len(edge_from)
+    edge_from = [int(x) for x in edge_from]
+    edge_to = [int(x) for x in edge_to]
+    edge_lump_sum = [bool(x) for x in edge_lump_sum]
+    premium_state = [bool(x) for x in premium_state]
+    benefit_state = [bool(x) for x in benefit_state]
+
+    sum_all = " + ".join(f"occ_{i}" for i in range(n_states))
+    sum_prem = " + ".join(f"occ_{i}" for i in range(n_states)
+                          if premium_state[i]) or "0.0"
+    sum_ben = " + ".join(f"occ_{i}" for i in range(n_states)
+                         if benefit_state[i]) or "0.0"
+
+    L: list[str] = []
+
+    def line(indent: int, text: str) -> None:
+        L.append(" " * indent + text)
+
+    def emit_init(indent: int) -> None:
+        for i in range(n_states):
+            line(indent, f"occ_{i} = 0.0")
+        line(indent, "if ss == 0:")
+        line(indent + 4, "occ_0 = cnt")
+        for i in range(1, n_states):
+            line(indent, f"elif ss == {i}:")
+            line(indent + 4, f"occ_{i} = cnt")
+
+    def emit_edge_step(indent: int, scale: str = "",
+                       include_lump: bool = True) -> None:
+        for i in range(n_states):
+            line(indent, f"occ_next_{i} = 0.0")
+        for e in range(n_edges):
+            ef, et, ls = edge_from[e], edge_to[e], edge_lump_sum[e]
+            line(indent,
+                 f"flow_{e} = occ_{ef}{scale} * edge_prob[sx, ridx, year, {e}]")
+            line(indent, f"occ_next_{et} += flow_{e}")
+            if include_lump and ls:
+                line(indent,
+                     f"pd += flow_{e} * disability_benefit[mp] * dm")
+        for i in range(n_states):
+            line(indent, f"occ_{i} = occ_next_{i}")
+
+    # Header. ``cache=True`` is omitted: exec'd functions have no source
+    # file for numba to anchor the disk cache to, so codegen kernels live
+    # in-memory only (compile-once per Python process, per unique topology).
+    line(0, "@njit(parallel=True)")
+    line(0, "def kernel(edge_from, edge_to, edge_prob, edge_lump_sum,")
+    line(0, "           premium_state, benefit_state, start_state, "
+            "issue_index, sex,")
+    line(0, "           term_months, count, level_premium, single_premium,")
+    line(0, "           premium_term_months, premium_frequency, "
+            "annuity_frequency,")
+    line(0, "           cov_kind, cov_amount, cov_offset, cov_rates, "
+            "cov_risk,")
+    line(0, "           cov_is_diagnosis, maturity_benefit, "
+            "annuity_payment,")
+    line(0, "           disability_income, disability_benefit,")
+    line(0, "           expense_acquisition, maint_inflated_monthly,")
+    line(0, "           discount_start, discount_mid, mortality_factor,")
+    line(0, "           morbidity_factor, longevity_factor, "
+            "disability_factor,")
+    line(0, "           cov_waiting, cov_reduction_end, "
+            "cov_reduction_factor):")
+    line(4, "n_mp = issue_index.shape[0]")
+    line(4, "bel = np.empty(n_mp)")
+    line(4, "ra = np.empty(n_mp)")
+    line(4, "csm = np.empty(n_mp)")
+    line(4, "loss_component = np.empty(n_mp)")
+
+    line(4, "for mp in prange(n_mp):")
+    line(8, "term = term_months[mp]")
+    line(8, "premium_term = premium_term_months[mp]")
+    line(8, "prem_freq = premium_frequency[mp]")
+    line(8, "ann_freq = annuity_frequency[mp]")
+    line(8, "ridx = issue_index[mp]")
+    line(8, "sx = sex[mp]")
+    line(8, "cnt = count[mp]")
+    line(8, "premium = level_premium[mp]")
+    line(8, "annuity = annuity_payment[mp]")
+    line(8, "c_start = cov_offset[mp]")
+    line(8, "c_end = cov_offset[mp + 1]")
+    line(8, "ss = start_state[mp]")
+    emit_init(8)
+    line(8, "pc = 0.0")
+    line(8, "pcm = 0.0")
+    line(8, "pd = 0.0")
+    line(8, "pp = 0.0")
+    line(8, "pe = 0.0")
+    line(8, "pa = 0.0")
+    line(8, "last_year = -1")
+    line(8, "claim_rate = 0.0")
+    line(8, "morb_rate = 0.0")
+    line(8, "prem_due = 0")
+    line(8, "ann_due = 0")
+    line(8, "prem_left = premium_term")
+
+    # Main t loop
+    line(8, "for t in range(term):")
+    line(12, "year = t // 12")
+    line(12, "if year != last_year:")
+    line(16, "claim_rate = 0.0")
+    line(16, "morb_rate = 0.0")
+    line(16, "for k in range(c_start, c_end):")
+    line(20, "kind = cov_kind[k]")
+    line(20, "if cov_is_diagnosis[kind]:")
+    line(24, "continue")
+    line(20, "if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:")
+    line(24, "continue")
+    line(20, "rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]")
+    line(20, "if cov_risk[kind] == 0:")
+    line(24, "claim_rate += rate")
+    line(20, "else:")
+    line(24, "morb_rate += rate")
+    line(16, "last_year = year")
+    line(12, f"ift = {sum_all}")
+    line(12, f"prem_occ = {sum_prem}")
+    line(12, f"benefit_occ = {sum_ben}")
+    line(12, "ds = discount_start[t]")
+    line(12, "dm = discount_mid[t]")
+    line(12, "single = prem_occ * single_premium[mp] if t == 0 else 0.0")
+    line(12, "if prem_due == 0 and prem_left > 0:")
+    line(16, "level = prem_occ * premium")
+    line(16, "prem_due = prem_freq - 1")
+    line(12, "else:")
+    line(16, "level = 0.0")
+    line(16, "prem_due -= 1")
+    line(12, "prem_left -= 1")
+    line(12, "pp += (level + single) * ds")
+    line(12, "pc += ift * claim_rate * dm")
+    line(12, "pcm += ift * morb_rate * dm")
+    line(12, "if ann_due == 0:")
+    line(16, "pa += ift * annuity * ds")
+    line(16, "ann_due = ann_freq - 1")
+    line(12, "else:")
+    line(16, "ann_due -= 1")
+    line(12, "pd += benefit_occ * disability_income[mp] * dm")
+    line(12, "acquisition = cnt * expense_acquisition if t == 0 else 0.0")
+    line(12, "pe += (acquisition + ift * maint_inflated_monthly[t]) * dm")
+    emit_edge_step(12, scale="", include_lump=True)
+
+    line(8, f"total = {sum_all}")
+    line(8, "pm = total * maturity_benefit[mp] * discount_start[term]")
+
+    # Coverage-rule pass
+    line(8, "for k in range(c_start, c_end):")
+    line(12, "kind = cov_kind[k]")
+    line(12, "if cov_is_diagnosis[kind]:")
+    line(16, "continue")
+    line(12, "wait = cov_waiting[k]")
+    line(12, "red_end = cov_reduction_end[k]")
+    line(12, "if wait == 0 and red_end == 0:")
+    line(16, "continue")
+    line(12, "benefit = cov_amount[k]")
+    line(12, "red_factor = cov_reduction_factor[k]")
+    line(12, "mortality_risk = cov_risk[kind] == 0")
+    emit_init(12)
+    line(12, "for t in range(term):")
+    line(16, "year = t // 12")
+    line(16, "if t >= wait:")
+    line(20, "mult = red_factor if t < red_end else 1.0")
+    line(20, f"inf = {sum_all}")
+    line(20, "contrib = (inf * cov_rates[kind, sx, ridx, year]")
+    line(20, "           * benefit * mult * discount_mid[t])")
+    line(20, "if mortality_risk:")
+    line(24, "pc += contrib")
+    line(20, "else:")
+    line(24, "pcm += contrib")
+    emit_edge_step(16, scale="", include_lump=False)
+
+    # Diagnosis pass
+    line(8, "for k in range(c_start, c_end):")
+    line(12, "kind = cov_kind[k]")
+    line(12, "if not cov_is_diagnosis[kind]:")
+    line(16, "continue")
+    line(12, "benefit = cov_amount[k]")
+    line(12, "wait = cov_waiting[k]")
+    line(12, "red_end = cov_reduction_end[k]")
+    line(12, "red_factor = cov_reduction_factor[k]")
+    emit_init(12)
+    line(12, "d_year = -1")
+    line(12, "d_rate = 0.0")
+    line(12, "for t in range(term):")
+    line(16, "year = t // 12")
+    line(16, "if year != d_year:")
+    line(20, "d_rate = cov_rates[kind, sx, ridx, year]")
+    line(20, "d_year = year")
+    line(16, "if t >= wait:")
+    line(20, "mult = red_factor if t < red_end else 1.0")
+    line(20, f"healthy = {sum_all}")
+    line(20, "pcm += healthy * d_rate * benefit * mult * discount_mid[t]")
+    line(16, "undiag = 1.0 - d_rate")
+    emit_edge_step(16, scale=" * undiag", include_lump=False)
+
+    line(8, "bel_mp = pc + pcm + pd + pm + pa + pe - pp")
+    line(8, "ra_mp = (mortality_factor * pc + morbidity_factor * pcm")
+    line(8, "         + disability_factor * pd "
+            "+ longevity_factor * (pm + pa))")
+    line(8, "fcf = bel_mp + ra_mp")
+    line(8, "bel[mp] = bel_mp")
+    line(8, "ra[mp] = ra_mp")
+    line(8, "csm[mp] = max(0.0, -fcf)")
+    line(8, "loss_component[mp] = max(0.0, fcf)")
+    line(4, "return bel, ra, csm, loss_component")
+
+    return "\n".join(L)
+
+
+_VALUE_KERNEL_CODEGEN_CACHE: dict = {}
+
+
+def _get_value_kernel_codegen(n_states, edge_from, edge_to, edge_lump_sum,
+                              premium_state, benefit_state):
+    """Return a codegen-specialised kernel for the given state machine.
+
+    Cache key includes the full topology -- the same StateModel reuses
+    the compiled kernel, a different one triggers fresh codegen and
+    compilation.
+    """
+    key = (
+        int(n_states),
+        tuple(int(x) for x in edge_from),
+        tuple(int(x) for x in edge_to),
+        tuple(bool(x) for x in edge_lump_sum),
+        tuple(bool(x) for x in premium_state),
+        tuple(bool(x) for x in benefit_state),
+    )
+    cached = _VALUE_KERNEL_CODEGEN_CACHE.get(key)
+    if cached is None:
+        src = _codegen_value_kernel_source(
+            n_states, edge_from, edge_to, edge_lump_sum,
+            premium_state, benefit_state,
+        )
+        namespace = {"np": np, "njit": njit, "prange": prange}
+        exec(src, namespace)
+        cached = namespace["kernel"]
+        _VALUE_KERNEL_CODEGEN_CACHE[key] = cached
+    return cached
+
+
 @njit(parallel=True, cache=True)
 def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          single_premium, premium_term_months, premium_frequency,
