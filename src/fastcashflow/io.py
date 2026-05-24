@@ -709,6 +709,18 @@ def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
     return _wide_model_points(pol, assumptions)
 
 
+def sample_data_dir() -> Path:
+    """Return the on-disk path of the bundled sample data directory.
+
+    The directory contains ``sample_assumptions.xlsx``, ``sample_policies.csv``
+    and ``sample_coverages.csv`` -- the inputs behind
+    :func:`load_sample_assumptions` and :func:`load_sample_model_points`.
+    Use this to open the workbook in Excel and see what a complete
+    fastcashflow input looks like before preparing your own.
+    """
+    return Path(str(resources.files("fastcashflow") / "sample_data"))
+
+
 def load_sample_assumptions() -> dict[tuple[str, str], Assumptions]:
     """Read fastcashflow's bundled sample assumptions workbook.
 

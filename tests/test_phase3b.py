@@ -9,6 +9,7 @@ from fastcashflow import (
     load_sample_assumptions,
     load_sample_model_points,
     read_model_points,
+    sample_data_dir,
     value,
     value_file,
     write_valuation,
@@ -191,6 +192,16 @@ def test_load_sample_data_runs():
     val = value(mps, asmp)
     assert val.bel.shape == (mps.n_mp,)
     assert val.csm.shape == (mps.n_mp,)
+
+
+def test_sample_data_dir_exposes_bundled_files():
+    """sample_data_dir() points at the directory holding the bundled inputs."""
+    d = sample_data_dir()
+    assert d.is_dir()
+    names = {p.name for p in d.iterdir()}
+    assert {"sample_assumptions.xlsx",
+            "sample_policies.csv",
+            "sample_coverages.csv"}.issubset(names)
 
 
 def test_to_long_round_trips(tmp_path):
