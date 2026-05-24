@@ -19,7 +19,7 @@
 | `segments` | `(product, channel)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`expense_acquisition`, `ra_confidence`, `*_cv`, optional `*_age_shift` 등). `defaults` 행이 fallback |
 | `coverages` | 상품별 특약 부착: `(product) → (coverage_code, type, rate_table)` |
 | `mortality_tables` | 사망 발생률 가정 (`table_id` × `sex` × `age` → `rate`) |
-| `rider_rate_tables` | 특약 발생률 가정 (구조 동일) |
+| `incidence_rate_tables` | 특약 발생률 가정 (구조 동일) |
 | `waiver_tables` | 납입면제 발생률 가정 (구조 동일) |
 | `lapse_tables` | 해지율 발생률 가정 (`table_id` × `duration` → `rate`) |
 | `maintenance_tables` | 유지비 (maintenance expense) 가정 (`table_id` × `duration` → `amount`) |
@@ -42,7 +42,7 @@
 
 | 컬럼명 | 의미 | 단위 | 값 범위 | 사용 시트 |
 |---|---|---|---|---|
-| `rate` | 확률 / 발생률 / 환산률 | 무차원 (decimal) | 0~1 (또는 작은 양수) | mortality, rider_rate, waiver, lapse, discount, inflation |
+| `rate` | 확률 / 발생률 / 환산률 | 무차원 (decimal) | 0~1 (또는 작은 양수) | mortality, incidence_rate, waiver, lapse, discount, inflation |
 | `amount` | 화폐 금액 | 원 (또는 portfolio 통화) | 양의 실수 | maintenance |
 | `factor` | 곱셈자 (multiplier) | 무차원 | 보통 ~1.0 | **현재 없음** (장래 A/E factor 레이어 도입 시 예약) |
 

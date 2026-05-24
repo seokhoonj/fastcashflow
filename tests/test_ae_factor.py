@@ -40,7 +40,7 @@ def _build(path: Path, *, ae_rows=None):
         for age in range(20, 81):
             mt.append(["MORT", sex, age, 0.001])
 
-    rr = wb.create_sheet("rider_rate_tables")
+    rr = wb.create_sheet("incidence_rate_tables")
     rr.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
         for age in range(20, 81):

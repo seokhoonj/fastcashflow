@@ -54,7 +54,7 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
             mt.append(["MORT", sex, age, 0.001 * (age - 20 + 1)])     # 0.001, 0.002, ...
 
     # rider rate table for hosp -- linear in age too
-    rr = wb.create_sheet("rider_rate_tables")
+    rr = wb.create_sheet("incidence_rate_tables")
     rr.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
         for age in range(20, 81):

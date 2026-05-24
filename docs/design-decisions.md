@@ -89,7 +89,7 @@
 
 | 컬럼명 | 의미 | 단위 | 시트 |
 |---|---|---|---|
-| `rate` | 확률 / 발생률 / 환산률 | 무차원 (0~1) | mortality, rider_rate, waiver, lapse, discount, inflation |
+| `rate` | 확률 / 발생률 / 환산률 | 무차원 (0~1) | mortality, incidence_rate, waiver, lapse, discount, inflation |
 | `amount` | 화폐 금액 | 원 (또는 portfolio 통화) | maintenance |
 | `factor` | 곱셈자 (multiplier) | 무차원 (보통 ~1.0) | **현재 없음**; 향후 A/E layer 도입 시 (Task #8) |
 

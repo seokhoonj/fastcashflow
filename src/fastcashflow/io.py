@@ -90,7 +90,7 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 #   * ``segments``       -- (product, channel) -> which tables + scalar params
 #                           (a ``defaults`` row that blank cells inherit).
 #   * ``coverages``      -- (product) -> coverage_code, type, optional rate_table.
-#   * ``mortality_tables``, ``rider_rate_tables``, ``waiver_tables``,
+#   * ``mortality_tables``, ``incidence_rate_tables``, ``waiver_tables``,
 #     ``lapse_tables``, ``maintenance_tables``, ``discount_tables``,
 #     ``inflation_tables`` -- the named rate tables the segments reference.
 #
@@ -387,7 +387,7 @@ def read_assumptions(path):
         return reader(wb[sheet]) if sheet in wb.sheetnames else {}
 
     mortality_t = _flex_rate_table(wb["mortality_tables"])
-    rider_rate_t = optional("rider_rate_tables", _flex_rate_table)
+    incidence_rate_t = optional("incidence_rate_tables", _flex_rate_table)
     waiver_t = optional("waiver_tables", _flex_rate_table)
     lapse_t = _flex_rate_table(wb["lapse_tables"])
     maint_t = optional("maintenance_tables",
@@ -458,13 +458,13 @@ def read_assumptions(path):
             coverage_types[code] = rtype
             if rtype not in RATE_DRIVEN_TYPES:
                 continue
-            if rate_table is None or rate_table not in rider_rate_t:
+            if rate_table is None or rate_table not in incidence_rate_t:
                 raise ValueError(
                     f"rider {code!r} of product {product!r} is rate-driven "
                     f"({rtype}) but rate_table {rate_table!r} is not in "
-                    "rider_rate_tables"
+                    "incidence_rate_tables"
                 )
-            rate_fn = rider_rate_t[rate_table]
+            rate_fn = incidence_rate_t[rate_table]
             rate_fn = _with_age_shift(rate_fn, shift_morb)
             rate_fn = _with_ae_factor(rate_fn, ae(code))
             riders.append(RiderRate(

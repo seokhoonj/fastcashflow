@@ -1,6 +1,6 @@
 """Schema-detecting rate-table reader -- axis-flex variants.
 
-The workbook rate tables (`mortality_tables`, `rider_rate_tables`,
+The workbook rate tables (`mortality_tables`, `incidence_rate_tables`,
 `waiver_tables`, `lapse_tables`) accept any subset of
 ``{sex, age, issue_age, duration, issue_class}`` as columns. The reader
 detects which axes are present, builds a numpy grid, and wraps it in the

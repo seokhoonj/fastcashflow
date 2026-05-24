@@ -52,7 +52,7 @@ def test_per_segment_scalar():
 
 
 def test_riders_resolved():
-    """Rate-driven riders resolve from ``rider_rate_tables``; non-rate-driven
+    """Rate-driven riders resolve from ``incidence_rate_tables``; non-rate-driven
     types stay in ``coverage_types`` only."""
     basis = load_sample_assumptions()
     asmp = basis[("TERM_A", "GA")]
