@@ -5,7 +5,7 @@
 
 ## 1. 단일 워크북 (assumptions.xlsx)
 
-**결정**: rate tables (7시트) + segments + riders = 총 9시트를 한 워크북에
+**결정**: rate tables (7시트) + segments + coverages = 총 9시트를 한 워크북에
 담는다. 이전 v1 reader가 썼던 두 파일 분리 (`sample_tables.xlsx` +
 `sample_basis.xlsx`)는 폐기.
 
@@ -38,7 +38,7 @@
   - `mapping_tables`: `_tables` 접미사가 "여러 named table의 registry"
     의미로 일관되게 쓰여 (mortality_tables 등) 단일 매핑 시트엔 의미 부정확
   - `mapping_table` (단수): 워크북 내 유일한 단수형 — 패턴 일관성 깨짐
-  - `segments`: `riders`와 같은 패턴 (복수형 일반명사, 행의 정체를 직시).
+  - `segments`: `coverages`와 같은 패턴 (복수형 일반명사, 행의 정체를 직시).
     "각 행 = 한 segment". 채택.
 
 **관련 코드**: 리더 내부에서도 `segments`라는 변수명을 이미 사용 중.
@@ -67,7 +67,7 @@
 | `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE` |
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA` |
 | `table_id` | SCREAMING_SNAKE_CASE | `MORT_STD`, `LAPSE_GA` |
-| `rider_code` | snake_case 소문자 | `dth_main`, `hosp` |
+| `coverage_code` | snake_case 소문자 | `dth_main`, `hosp` |
 | `type` | snake_case 소문자 | `death_main`, `morbidity` |
 | 컬럼 헤더 | snake_case 소문자 | `expense_acquisition`, `mortality_cv` |
 
@@ -78,7 +78,7 @@
   이라 SCREAMING_SNAKE_CASE 로 데이터 값과 시각적으로 구분됨.
   product / channel / table_id 가 모두 대문자 family 로 통일되어
   컬럼명(소문자) 과 값(대문자) 의 시각적 구분도 강해짐.
-- rider_code 는 model points / 코드 enum 과 1:1 매핑되므로 snake_case
+- coverage_code 는 model points / 코드 enum 과 1:1 매핑되므로 snake_case
   소문자.
 
 ---

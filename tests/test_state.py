@@ -291,10 +291,10 @@ def test_waiting_rule_transition_measure_value_agree():
         issue_age=np.array([40.0, 45.0]),
         level_premium=np.array([30_000.0, 30_000.0]),
         term_months=np.array([120, 120]),
-        cov_kind=np.array([1, 1]),
-        cov_amount=np.array([2_000_000.0, 2_000_000.0]),
-        cov_offset=np.array([0, 1, 2]),
-        cov_waiting=np.array([12, 12]),
+        coverage_kind=np.array([1, 1]),
+        coverage_amount=np.array([2_000_000.0, 2_000_000.0]),
+        coverage_offset=np.array([0, 1, 2]),
+        coverage_waiting=np.array([12, 12]),
         state=np.array([STATE_ACTIVE, STATE_WAIVER]),
     )
     assert np.allclose(measure(mps, asmp).bel[:, 0], value(mps, asmp).bel)

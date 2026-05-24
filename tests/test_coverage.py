@@ -41,9 +41,9 @@ def test_multiple_death_coverages_sum_to_one():
         issue_age=np.array([40.0]),
         level_premium=np.array([80_000.0]),
         term_months=np.array([term]),
-        cov_kind=np.array([DEATH, DEATH]),
-        cov_amount=np.array([a, b]),
-        cov_offset=np.array([0, 2]),
+        coverage_kind=np.array([DEATH, DEATH]),
+        coverage_amount=np.array([a, b]),
+        coverage_offset=np.array([0, 2]),
     )
     combined = ModelPoints.single(40, a + b, 80_000.0, term)
 

@@ -512,7 +512,7 @@ def _describe_assumptions_lines(
         )
     cov_lines: list[object] = [f"{k!r:12} -> {v!r}" for k, v in cov.items()]
     sections.append((f"{marks[3]} 특약 / 담보 정의", [
-        (f"riders : tuple  (len={len(riders)})", rider_lines),
+        (f"coverages : tuple  (len={len(riders)})", rider_lines),
         (f"coverage_types : dict  (len={len(cov)})", cov_lines),
     ]))
 

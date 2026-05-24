@@ -1,4 +1,4 @@
-policy_id,product,issue_age,sex,term_months,count
+mp_id,product,issue_age,sex,term_months,count
 P001,TERM_LIFE,35,0,240,1
 P002,HEALTH,38,1,240,1
 P003,TERM_LIFE,42,0,120,1

@@ -8,16 +8,16 @@
 
 | 항목 | 규칙 | 예 | 비고 |
 |---|---|---|---|
-| Workbook 파일명 | `assumptions.xlsx` | `sample_assumptions.xlsx` | 단일 파일 (segments + riders + 7 rate tables 통합) |
+| Workbook 파일명 | `assumptions.xlsx` | `sample_assumptions.xlsx` | 단일 파일 (segments + coverages + 7 rate tables 통합) |
 | Rate-table registry 시트 | `<kind>_tables` (복수) | `mortality_tables`, `lapse_tables`, `discount_tables` | 한 시트에 같은 종류의 named table 여러 개 (`table_id` 컬럼으로 그룹) |
-| Mapping/configuration 시트 | 단수·복수 일반명사, 접미사 없음 | `segments`, `riders` | 각 행이 한 설정 entry |
+| Mapping/configuration 시트 | 단수·복수 일반명사, 접미사 없음 | `segments`, `coverages` | 각 행이 한 설정 entry |
 
 ## Sheets in `assumptions.xlsx`
 
 | 시트 | 역할 |
 |---|---|
 | `segments` | `(product, channel)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`expense_acquisition`, `ra_confidence`, `*_cv`, optional `*_age_shift` 등). `defaults` 행이 fallback |
-| `riders` | 상품별 특약 부착: `(product) → (rider_code, type, rate_table)` |
+| `coverages` | 상품별 특약 부착: `(product) → (coverage_code, type, rate_table)` |
 | `mortality_tables` | 사망 발생률 가정 (`table_id` × `sex` × `age` → `rate`) |
 | `rider_rate_tables` | 특약 발생률 가정 (구조 동일) |
 | `waiver_tables` | 납입면제 발생률 가정 (구조 동일) |
@@ -25,12 +25,12 @@
 | `maintenance_tables` | 유지비 (maintenance expense) 가정 (`table_id` × `duration` → `amount`) |
 | `discount_tables` | 할인율 곡선 (`table_id` × `year` → `rate`; locked-in, Sec. 36) |
 | `inflation_tables` | 유지비 인플레이션 곡선 (`table_id` × `year` → `rate`) |
-| `ae_factors` (optional) | A/E factor — `(product × channel × rider_code)` + 옵션 axes → `factor`. base rate에 런타임 곱셈 |
+| `ae_factors` (optional) | A/E factor — `(product × channel × coverage_code)` + 옵션 axes → `factor`. base rate에 런타임 곱셈 |
 | `improvement_tables` (optional) | mortality improvement 곡선 (`table_id` × `year` → `factor`). `segments`의 `mortality_improvement_table` 컬럼이 참조 |
 
 ## Column headers
 
-전부 **소문자 snake_case**. 예: `product`, `channel`, `rider_code`,
+전부 **소문자 snake_case**. 예: `product`, `channel`, `coverage_code`,
 `rate_table`, `mortality_table`, `expense_acquisition`, `ra_confidence`,
 `mortality_cv`, `table_id`, `sex`, `age`, `duration`, `year`, `rate`,
 `amount`.
@@ -56,7 +56,7 @@
 | `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE`, `VAR_UL` | `table_id` / `channel` 과 같은 대문자 외부 식별자 패밀리 — 컬럼명(소문자) 과 값(대문자) 의 시각적 구분 |
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA`, `DM` | 업계 관용 약어 (General Agency, Financial Consultant, Bancassurance, Direct Marketing) |
 | `table_id` | SCREAMING_SNAKE_CASE | `MORT_STD`, `LAPSE_GA`, `DISC_STD`, `HOSP_STD` | named reference (코드 상수처럼) — 실 데이터 값과 시각적 구분 |
-| `rider_code` | 소문자 snake_case | `dth_main`, `hosp`, `cancer`, `surgery` | 모델포인트와 매칭되는 식별자 |
+| `coverage_code` | 소문자 snake_case | `dth_main`, `hosp`, `cancer`, `surgery` | 모델포인트와 매칭되는 식별자 |
 | `type` (rider) | 소문자 snake_case | `death_main`, `morbidity`, `diagnosis` | 코드 상의 enum과 일치 |
 | `defaults` (특수 product 값) | 소문자 단어 | `defaults` | segments 시트의 fallback 행 마커 |
 
@@ -72,7 +72,7 @@
 
 ## 데이터 ID와 코드 식별자가 어긋날 때
 
-워크북 값 (예: `rider_code = "dth_main"`)이 Python 코드 enum
+워크북 값 (예: `coverage_code = "dth_main"`)이 Python 코드 enum
 (예: `TYPE_DEATH = "death_main"`)에 그대로 들어갑니다. 양쪽이 같은
 대소문자 규칙을 따라야 매핑 코드가 단순해집니다 — 둘 다 snake_case.
 

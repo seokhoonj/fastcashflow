@@ -92,6 +92,6 @@ def test_long_form_reads_benefit_rules(tmp_path):
     coverages.write_csv(cov_path)
 
     back = read_model_points(pol_path, asmp, coverages=cov_path)
-    assert np.all(back.cov_waiting == 6)
-    assert np.all(back.cov_reduction_end == 24)
-    assert np.allclose(back.cov_reduction_factor, 0.5)
+    assert np.all(back.coverage_waiting == 6)
+    assert np.all(back.coverage_reduction_end == 24)
+    assert np.allclose(back.coverage_reduction_factor, 0.5)

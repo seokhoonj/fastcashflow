@@ -25,8 +25,8 @@
 **담보**의 목록으로 다룹니다 — 주계약 사망도, 특약도 모두 담보
 하나씩입니다.
 
-담보마다 **`rider_code`**(특약코드)가 붙습니다. 이 코드가 가정 파일의
-`riders`·`rates` 시트와 맞물려 그 담보의 유형과 위험률을 끌어옵니다.
+담보마다 **`coverage_code`**(특약코드)가 붙습니다. 이 코드가 가정 파일의
+`coverages`·`rates` 시트와 맞물려 그 담보의 유형과 위험률을 끌어옵니다.
 유형(`type`)은 엔진이 그 담보를 어떻게 계산할지를 정합니다.
 
 ```{list-table}
@@ -50,7 +50,7 @@
 ```
 
 실무에서는 담보코드와 위험률코드가 별개입니다 — 한 위험률을 여러
-담보가 나눠 쓰기도 하니까요. fastcashflow의 `rider_code`는 그 둘을
+담보가 나눠 쓰기도 하니까요. fastcashflow의 `coverage_code`는 그 둘을
 미리 맺어 둔 키입니다. 담보와 위험률을 잇는 작업은 입력 파일을 만들기
 전에 끝내고, 엔진에는 담보마다 위험률이 정해진 상태로 들어옵니다.
 
@@ -70,7 +70,7 @@
 
 * - 열 이름
   - 뜻
-* - `policy_id`
+* - `mp_id`
   - 계약 식별자
 * - `product`
   - 상품명
@@ -85,7 +85,7 @@
 ```
 
 담보 파일은 한 줄이 한 담보입니다. 주계약 사망도, 특약도 모두 한
-줄씩이고 `policy_id`로 계약 파일과 묶입니다. 계약이 가진 담보 수만큼
+줄씩이고 `mp_id`로 계약 파일과 묶입니다. 계약이 가진 담보 수만큼
 줄이 생깁니다.
 
 ```{list-table}
@@ -94,10 +94,10 @@
 
 * - 열 이름
   - 뜻
-* - `policy_id`
+* - `mp_id`
   - 어느 계약의 담보인지
-* - `rider_code`
-  - 특약코드 (가정의 `riders` 시트와 맞물림)
+* - `coverage_code`
+  - 특약코드 (가정의 `coverages` 시트와 맞물림)
 * - `amount`
   - 가입금액
 * - `premium`
@@ -106,14 +106,14 @@
 
 샘플 파일을 보면 — 계약 파일:
 
-| policy_id | product | issue_age | sex | term_months | count |
+| mp_id | product | issue_age | sex | term_months | count |
 |---|---|---|---|---|---|
 | P001 | TERM_LIFE | 35 | 0 | 240 | 1 |
 | P002 | HEALTH | 38 | 1 | 240 | 1 |
 
 담보 파일:
 
-| policy_id | rider_code | amount | premium |
+| mp_id | coverage_code | amount | premium |
 |---|---|---|---|
 | P001 | dth_main | 80000000 | 45000 |
 | P001 | mat | 10000000 | 18000 |
@@ -163,10 +163,10 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 | 1 | 0.118 |
 | 2 | 0.106 |
 
-**`riders`** — 특약 마스터. 특약 하나에 한 줄. `type`은 그 특약을
+**`coverages`** — 특약 마스터. 특약 하나에 한 줄. `type`은 그 특약을
 엔진이 어떻게 다룰지를 정하며, 값은 앞의 담보 구조 표를 따릅니다.
 
-| product | rider_code | rider_name | type |
+| product | coverage_code | coverage_name | type |
 |---|---|---|---|
 | - | dth_main | 주계약사망 | death_main |
 | - | cancer | 암진단특약 | diagnosis |
@@ -176,7 +176,7 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 특약(`death`·`morbidity`·`diagnosis`)만 들어갑니다. `annuity`·`maturity`는
 위험률이 없습니다.
 
-| rider_code | sex | age | rate |
+| coverage_code | sex | age | rate |
 |---|---|---|---|
 | cancer | 0 | 40 | 0.002 |
 | cancer | 1 | 40 | 0.0022 |

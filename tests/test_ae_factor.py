@@ -1,11 +1,11 @@
 """Optional A/E factor layer.
 
 A workbook may carry an ``ae_factors`` sheet with rows
-``(product, channel, rider_code, factor)`` plus optional axis columns
+``(product, channel, coverage_code, factor)`` plus optional axis columns
 ``{sex, age, issue_age, duration}``. The reader looks up the (product,
-channel, rider_code) factor and wraps the base rate so the engine
+channel, coverage_code) factor and wraps the base rate so the engine
 multiplies by the factor at lookup time. Main mortality uses
-``rider_code = 'dth_main'`` to match the ``riders`` sheet convention.
+``coverage_code = 'dth_main'`` to match the ``riders`` sheet convention.
 Missing sheet or missing key = no adjustment (factor 1.0).
 """
 from pathlib import Path
@@ -29,8 +29,8 @@ def _build(path: Path, *, ae_rows=None):
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 100_000, 0.75, 0.10, 0.10])
 
-    rd = wb.create_sheet("riders")
-    rd.append(["product", "rider_code", "rider_name", "type", "rate_table"])
+    rd = wb.create_sheet("coverages")
+    rd.append(["product", "coverage_code", "coverage_name", "type", "rate_table"])
     rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
     rd.append(["TERM_A", "hosp", "hospitalization", "morbidity", "HOSP"])
 
@@ -82,10 +82,10 @@ def test_no_ae_factor_sheet(tmp_path):
 
 
 def test_scalar_ae_factor_per_rider(tmp_path):
-    """A single (product, channel, rider_code, factor) row scales the rider rate."""
+    """A single (product, channel, coverage_code, factor) row scales the rider rate."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
-        ["product", "channel", "rider_code", "factor"],
+        ["product", "channel", "coverage_code", "factor"],
         ["TERM_A", "GA", "hosp", 1.5],          # 손해율 150%
     ])
     asmp = _segment(p)
@@ -97,10 +97,10 @@ def test_scalar_ae_factor_per_rider(tmp_path):
 
 
 def test_ae_factor_on_main_mortality(tmp_path):
-    """rider_code 'dth_main' wires to the main mortality table."""
+    """coverage_code 'dth_main' wires to the main mortality table."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
-        ["product", "channel", "rider_code", "factor"],
+        ["product", "channel", "coverage_code", "factor"],
         ["TERM_A", "GA", "dth_main", 0.80],     # CI 80% — pricing 위험률에 마진 있음
     ])
     asmp = _segment(p)
@@ -115,7 +115,7 @@ def test_ae_factor_varies_by_age(tmp_path):
     every age, even when bands repeat. Three bands here: 25-29 = 3.0
     (heavy anti-selection), 30-49 = 1.5, 50-60 = 1.0 (ultimate).
     """
-    rows = [["product", "channel", "rider_code", "age", "factor"]]
+    rows = [["product", "channel", "coverage_code", "age", "factor"]]
     for age in range(25, 30):
         rows.append(["TERM_A", "GA", "hosp", age, 3.0])
     for age in range(30, 50):
@@ -134,7 +134,7 @@ def test_ae_factor_only_applies_to_matching_segment(tmp_path):
     """A factor for (TERM_A, FC, hosp) does NOT apply to (TERM_A, GA, hosp)."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
-        ["product", "channel", "rider_code", "factor"],
+        ["product", "channel", "coverage_code", "factor"],
         ["TERM_A", "FC", "hosp", 1.5],         # different channel
     ])
     asmp = _segment(p)
@@ -159,8 +159,8 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
                 "morbidity_cv", "mortality_age_shift"])
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 100_000, 0.75, 0.10, 0.10, 5])
-    rd = wb.create_sheet("riders")
-    rd.append(["product", "rider_code", "rider_name", "type", "rate_table"])
+    rd = wb.create_sheet("coverages")
+    rd.append(["product", "coverage_code", "coverage_name", "type", "rate_table"])
     rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
@@ -176,7 +176,7 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
         s_ws.append(header)
         s_ws.append(row)
     ae = wb.create_sheet("ae_factors")
-    ae.append(["product", "channel", "rider_code", "factor"])
+    ae.append(["product", "channel", "coverage_code", "factor"])
     ae.append(["TERM_A", "GA", "dth_main", 0.5])
     wb.save(p)
 

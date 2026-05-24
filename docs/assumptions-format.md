@@ -16,7 +16,7 @@ fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포
 | 시트 | 역할 |
 |---|---|
 | `segments` | (상품 × 채널) 세그먼트별 어느 표를 쓸지 + 스칼라 파라미터 |
-| `riders` | 상품별 특약 부착 (rider_code, type, rate_table) |
+| `coverages` | 상품별 특약 부착 (coverage_code, type, rate_table) |
 | `mortality_tables` | 사망 발생률 가정 (named tables) |
 | `rider_rate_tables` | 특약 발생률 가정 |
 | `waiver_tables` | 납입면제 발생률 가정 |
@@ -204,18 +204,18 @@ TERM_A    FC                        LAPSE_FC     ...   80000
 명시적으로 표현하려면 `ae_factors` 시트를 추가합니다. 시트가 없으면 모든
 factor가 1.0 (no-op).
 
-필수 컬럼: `product`, `channel`, `rider_code`, `factor`.
+필수 컬럼: `product`, `channel`, `coverage_code`, `factor`.
 
 선택 axis 컬럼 (rate table과 같은 schema 규약): `sex`, `age`, `issue_age`,
 `duration` — 채우면 factor가 그 차원으로 변동.
 
-main mortality는 `rider_code = "dth_main"` 으로 표기 (`riders` 시트의
+main mortality는 `coverage_code = "dth_main"` 으로 표기 (`coverages` 시트의
 death_main type 코드와 일치). lapse · waiver 는 v1에서 A/E factor 미지원.
 
 예시:
 
 ```
-product   channel  rider_code   factor
+product   channel  coverage_code   factor
 TERM_A    GA       hosp         1.5         # GA의 입원 손해율 150%
 TERM_A    FC       hosp         1.2         # FC는 좀 더 보수적
 TERM_A    GA       cancer       1.0         # 암 발생률은 위험률과 일치
@@ -225,7 +225,7 @@ TERM_A    GA       dth_main     0.8         # CI 80%
 age 차원 추가 — 20대 anti-selection 패턴:
 
 ```
-product   channel  rider_code   age   factor
+product   channel  coverage_code   age   factor
 TERM_A    GA       hosp         25    3.0
 TERM_A    GA       hosp         26    2.8
 ...                                          # 각 age마다 한 줄 (dense 요구)
@@ -291,15 +291,15 @@ final_mortality(year=d) = base × improvement_factor[d]
 V1 한계: mortality 한 layer만 적용. morbidity / lapse improvement는 별도
 확장 (필요 시 같은 패턴으로 추가).
 
-## 5. `riders` 시트
+## 5. `coverages` 시트
 
 각 상품이 어떤 특약을 갖는지, 특약별 유형과 요율표를 정의합니다.
 
 | 컬럼 | 의미 |
 |---|---|
 | `product` | 상품 |
-| `rider_code` | 특약 코드 (모델포인트가 담보를 이 코드로 지칭) |
-| `rider_name` | 특약명 (사람용 메모 — 엔진은 안 읽음) |
+| `coverage_code` | 특약 코드 (모델포인트가 담보를 이 코드로 지칭) |
+| `coverage_name` | 특약명 (사람용 메모 — 엔진은 안 읽음) |
 | `type` | `death_main` / `death` / `morbidity` / `diagnosis` / `annuity` / `maturity` |
 | `rate_table` | 요율 기반(`death`·`morbidity`·`diagnosis`)이면 `rider_rate_tables`의 `table_id`; 나머지는 빈칸 |
 
@@ -319,7 +319,7 @@ reader (`read_assumptions(path)`) 가 워크북을 읽어 세그먼트별 `Assum
 2. `segments` 시트의 `defaults` 행을 식별하고, 각 세그먼트 행에서 빈 칸을
    `defaults`로 채움.
 3. 표 참조 컬럼의 `table_id`를 실제 표로 해소.
-4. `riders` 시트에서 그 상품의 특약 목록을 붙임.
+4. `coverages` 시트에서 그 상품의 특약 목록을 붙임.
 5. → `{(product, channel): Assumptions}` 반환. 엔진이 세그먼트별로 평가.
 
 ---

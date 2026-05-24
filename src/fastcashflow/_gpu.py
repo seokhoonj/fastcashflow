@@ -22,7 +22,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        premium_state, benefit_state, start_state, issue_index,
                        sex, term_months, count, level_premium, single_premium,
                        premium_term_months, premium_frequency, annuity_frequency,
-                       cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
+                       coverage_kind, coverage_amount, coverage_offset, cov_rates, cov_risk,
                        cov_is_diagnosis, maturity_benefit, annuity_payment,
                        disability_income, disability_benefit,
                        expense_acquisition, maint_inflated_monthly,
@@ -51,8 +51,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     cnt = count[mp]
     premium = level_premium[mp]
     annuity = annuity_payment[mp]
-    c_start = cov_offset[mp]
-    c_end = cov_offset[mp + 1]
+    c_start = coverage_offset[mp]
+    c_end = coverage_offset[mp + 1]
     ss = start_state[mp]
     occ = cuda.local.array(MAX_STATES, float64)
     occ_next = cuda.local.array(MAX_STATES, float64)
@@ -74,10 +74,10 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
             claim_rate = 0.0
             morb_rate = 0.0
             for k in range(c_start, c_end):
-                kind = cov_kind[k]
+                kind = coverage_kind[k]
                 if cov_is_diagnosis[kind]:
                     continue
-                rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]
+                rate = cov_rates[kind, sx, ridx, year] * coverage_amount[k]
                 if cov_risk[kind] == 0:
                     claim_rate += rate
                 else:
@@ -121,10 +121,10 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     # Diagnosis coverages: claims run off a depleting "not yet diagnosed"
     # occupancy, carried over the transient states.
     for k in range(c_start, c_end):
-        kind = cov_kind[k]
+        kind = coverage_kind[k]
         if not cov_is_diagnosis[kind]:
             continue
-        benefit = cov_amount[k]
+        benefit = coverage_amount[k]
         for s in range(n_states):
             occ[s] = 0.0
         occ[ss] = cnt
@@ -161,7 +161,7 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               premium_state, benefit_state, start_state, issue_index, sex,
               term_months, count, level_premium, single_premium,
               premium_term_months, premium_frequency, annuity_frequency,
-              cov_kind, cov_amount, cov_offset, cov_rates, cov_risk,
+              coverage_kind, coverage_amount, coverage_offset, cov_rates, cov_risk,
               cov_is_diagnosis, maturity_benefit, annuity_payment,
               disability_income, disability_benefit, expense_acquisition,
               maint_inflated_monthly, discount_start, discount_mid,
@@ -199,9 +199,9 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_premium_term = cuda.to_device(premium_term_months)
     d_premium_freq = cuda.to_device(premium_frequency)
     d_annuity_freq = cuda.to_device(annuity_frequency)
-    d_cov_kind = cuda.to_device(cov_kind)
-    d_cov_amount = cuda.to_device(cov_amount)
-    d_cov_offset = cuda.to_device(cov_offset)
+    d_cov_kind = cuda.to_device(coverage_kind)
+    d_cov_amount = cuda.to_device(coverage_amount)
+    d_cov_offset = cuda.to_device(coverage_offset)
     d_cov_rates = cuda.to_device(cov_rates)
     d_cov_risk = cuda.to_device(cov_risk)
     d_cov_is_diagnosis = cuda.to_device(cov_is_diagnosis)

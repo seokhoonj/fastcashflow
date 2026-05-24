@@ -314,35 +314,35 @@ def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
     main offset).
     """
     rng = np.random.default_rng(seed)
-    # Build cov_kind / cov_amount: two coverages per mp (DEATH then rider).
+    # Build coverage_kind / coverage_amount: two coverages per mp (DEATH then rider).
     death_amount = rng.integers(10, 80, n) * 1_000_000.0
     rider_amount = rng.integers(3, 15, n) * 1_000_000.0
-    cov_kind = np.empty(n * 2, np.int64)
-    cov_amount = np.empty(n * 2)
-    cov_offset = np.arange(0, n * 2 + 1, 2, np.int64)
-    cov_waiting = np.zeros(n * 2, np.int64)
-    cov_reduction_end = np.zeros(n * 2, np.int64)
-    cov_reduction_factor = np.ones(n * 2)
+    coverage_kind = np.empty(n * 2, np.int64)
+    coverage_amount = np.empty(n * 2)
+    coverage_offset = np.arange(0, n * 2 + 1, 2, np.int64)
+    coverage_waiting = np.zeros(n * 2, np.int64)
+    coverage_reduction_end = np.zeros(n * 2, np.int64)
+    coverage_reduction_factor = np.ones(n * 2)
     for i in range(n):
-        cov_kind[2 * i] = 0    # DEATH
-        cov_kind[2 * i + 1] = 1  # rider (first registered)
-        cov_amount[2 * i] = death_amount[i]
-        cov_amount[2 * i + 1] = rider_amount[i]
-        cov_waiting[2 * i + 1] = rider_waiting
-        cov_reduction_end[2 * i + 1] = rider_reduction_end
-        cov_reduction_factor[2 * i + 1] = rider_reduction_factor
+        coverage_kind[2 * i] = 0    # DEATH
+        coverage_kind[2 * i + 1] = 1  # rider (first registered)
+        coverage_amount[2 * i] = death_amount[i]
+        coverage_amount[2 * i + 1] = rider_amount[i]
+        coverage_waiting[2 * i + 1] = rider_waiting
+        coverage_reduction_end[2 * i + 1] = rider_reduction_end
+        coverage_reduction_factor[2 * i + 1] = rider_reduction_factor
     return fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
         level_premium=np.zeros(n),
         term_months=np.full(n, 60, dtype=np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
-        cov_kind=cov_kind,
-        cov_amount=cov_amount,
-        cov_offset=cov_offset,
-        cov_waiting=cov_waiting,
-        cov_reduction_end=cov_reduction_end,
-        cov_reduction_factor=cov_reduction_factor,
+        coverage_kind=coverage_kind,
+        coverage_amount=coverage_amount,
+        coverage_offset=coverage_offset,
+        coverage_waiting=coverage_waiting,
+        coverage_reduction_end=coverage_reduction_end,
+        coverage_reduction_factor=coverage_reduction_factor,
     )
 
 
@@ -561,34 +561,34 @@ def _portfolio_with_two_riders(n, seed, rule_rider_waiting,
     death_amount = rng.integers(10, 80, n) * 1_000_000.0
     recur_amount = rng.integers(3, 15, n) * 1_000_000.0
     diag_amount = rng.integers(2, 10, n) * 1_000_000.0
-    cov_kind = np.empty(n * 3, np.int64)
-    cov_amount = np.empty(n * 3)
-    cov_offset = np.arange(0, n * 3 + 1, 3, np.int64)
-    cov_waiting = np.zeros(n * 3, np.int64)
-    cov_reduction_end = np.zeros(n * 3, np.int64)
-    cov_reduction_factor = np.ones(n * 3)
+    coverage_kind = np.empty(n * 3, np.int64)
+    coverage_amount = np.empty(n * 3)
+    coverage_offset = np.arange(0, n * 3 + 1, 3, np.int64)
+    coverage_waiting = np.zeros(n * 3, np.int64)
+    coverage_reduction_end = np.zeros(n * 3, np.int64)
+    coverage_reduction_factor = np.ones(n * 3)
     for i in range(n):
-        cov_kind[3 * i + 0] = 0   # DEATH
-        cov_kind[3 * i + 1] = 1   # recurring rider (rule)
-        cov_kind[3 * i + 2] = 2   # diagnosis rider
-        cov_amount[3 * i + 0] = death_amount[i]
-        cov_amount[3 * i + 1] = recur_amount[i]
-        cov_amount[3 * i + 2] = diag_amount[i]
-        cov_waiting[3 * i + 1] = rule_rider_waiting
-        cov_reduction_end[3 * i + 1] = rule_rider_reduction_end
-        cov_reduction_factor[3 * i + 1] = rule_rider_reduction_factor
+        coverage_kind[3 * i + 0] = 0   # DEATH
+        coverage_kind[3 * i + 1] = 1   # recurring rider (rule)
+        coverage_kind[3 * i + 2] = 2   # diagnosis rider
+        coverage_amount[3 * i + 0] = death_amount[i]
+        coverage_amount[3 * i + 1] = recur_amount[i]
+        coverage_amount[3 * i + 2] = diag_amount[i]
+        coverage_waiting[3 * i + 1] = rule_rider_waiting
+        coverage_reduction_end[3 * i + 1] = rule_rider_reduction_end
+        coverage_reduction_factor[3 * i + 1] = rule_rider_reduction_factor
     return fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
         level_premium=np.zeros(n),
         term_months=np.full(n, 60, dtype=np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
-        cov_kind=cov_kind,
-        cov_amount=cov_amount,
-        cov_offset=cov_offset,
-        cov_waiting=cov_waiting,
-        cov_reduction_end=cov_reduction_end,
-        cov_reduction_factor=cov_reduction_factor,
+        coverage_kind=coverage_kind,
+        coverage_amount=coverage_amount,
+        coverage_offset=coverage_offset,
+        coverage_waiting=coverage_waiting,
+        coverage_reduction_end=coverage_reduction_end,
+        coverage_reduction_factor=coverage_reduction_factor,
     )
 
 

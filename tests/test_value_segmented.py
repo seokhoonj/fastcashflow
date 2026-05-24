@@ -56,12 +56,12 @@ def test_subset_rebuilds_csr_coverages():
         death_benefit=np.array([1_000.0, 2_000.0, 3_000.0]),
         benefits={2: np.array([0.0, 500.0, 0.0])},      # second coverage on mp 1
     )
-    assert mp.cov_offset.tolist() == [0, 1, 3, 4]       # 1 + 2 + 1
+    assert mp.coverage_offset.tolist() == [0, 1, 3, 4]       # 1 + 2 + 1
 
     sub = mp.subset([0, 2])                              # skip mp 1 (2 coverages)
-    assert sub.cov_offset.tolist() == [0, 1, 2]          # 1 + 1
-    assert sub.cov_kind.tolist() == [0, 0]               # both DEATH
-    assert sub.cov_amount.tolist() == [1_000.0, 3_000.0]
+    assert sub.coverage_offset.tolist() == [0, 1, 2]          # 1 + 1
+    assert sub.coverage_kind.tolist() == [0, 0]               # both DEATH
+    assert sub.coverage_amount.tolist() == [1_000.0, 3_000.0]
 
 
 def test_subset_slices_product_and_channel_when_set():

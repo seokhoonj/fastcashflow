@@ -43,23 +43,23 @@ class ModelPoints:
     :mod:`fastcashflow.coverage`), held in CSR (Compressed Sparse Row) form
     so the kernels loop them generically -- new benefit types add no fields:
 
-    * ``cov_kind[k]``   -- the coverage code (0 = main-contract death, 1..
+    * ``coverage_kind[k]``   -- the coverage code (0 = main-contract death, 1..
       the rate-driven riders the assumptions register).
-    * ``cov_amount[k]`` -- the benefit amount of coverage ``k``.
-    * ``cov_offset``    -- ``(n_mp+1,)``; policy ``mp``'s coverages are the
-      slice ``[cov_offset[mp] : cov_offset[mp+1]]``.
+    * ``coverage_amount[k]`` -- the benefit amount of coverage ``k``.
+    * ``coverage_offset``    -- ``(n_mp+1,)``; policy ``mp``'s coverages are the
+      slice ``[coverage_offset[mp] : coverage_offset[mp+1]]``.
 
-    Each coverage may carry a benefit rule: ``cov_waiting`` (months from
-    issue with no benefit) and ``cov_reduction_end`` / ``cov_reduction_factor``
+    Each coverage may carry a benefit rule: ``coverage_waiting`` (months from
+    issue with no benefit) and ``coverage_reduction_end`` / ``coverage_reduction_factor``
     (a benefit multiplier in force until a cut-off month). Both are CSR
-    arrays aligned with ``cov_kind`` and default to off -- no waiting, full
+    arrays aligned with ``coverage_kind`` and default to off -- no waiting, full
     benefit.
 
     The coverage list is built one of three ways. ``death_benefit`` is the
     shortcut for the common case -- one death coverage per policy with a
     non-zero benefit. ``benefits`` is the general form: a ``{kind: amount
     array}`` map covering any mix of kinds. Or pass the CSR arrays
-    ``cov_kind`` / ``cov_amount`` / ``cov_offset`` directly. Whichever is
+    ``coverage_kind`` / ``coverage_amount`` / ``coverage_offset`` directly. Whichever is
     used, ``death_benefit`` stays a readable field.
 
     Premiums and survival benefits stay as plain fields -- they do not
@@ -95,12 +95,12 @@ class ModelPoints:
     premium_frequency_months: IntArray | None = None  # months between premiums
     annuity_frequency_months: IntArray | None = None  # months between payouts
     account_value: FloatArray | None = None      # account value at issue (VFA)
-    cov_kind: IntArray | None = None             # CSR: coverage kind
-    cov_amount: FloatArray | None = None         # CSR: coverage amount
-    cov_offset: IntArray | None = None           # CSR: per-policy slice bounds
-    cov_waiting: IntArray | None = None          # CSR: waiting period, months
-    cov_reduction_end: IntArray | None = None    # CSR: reduced-benefit end, months
-    cov_reduction_factor: FloatArray | None = None  # CSR: reduced-benefit factor
+    coverage_kind: IntArray | None = None             # CSR: coverage kind
+    coverage_amount: FloatArray | None = None         # CSR: coverage amount
+    coverage_offset: IntArray | None = None           # CSR: per-policy slice bounds
+    coverage_waiting: IntArray | None = None          # CSR: waiting period, months
+    coverage_reduction_end: IntArray | None = None    # CSR: reduced-benefit end, months
+    coverage_reduction_factor: FloatArray | None = None  # CSR: reduced-benefit factor
     count: FloatArray | None = None              # policies the row stands for
     sex: IntArray | None = None                  # 0 = male, 1 = female
     state: IntArray | None = None                # contract state (STATE_*)
@@ -167,10 +167,10 @@ class ModelPoints:
             object.__setattr__(self, name, freq)
         # Coverage CSR: explicit arrays win; otherwise build from the
         # death_benefit shortcut and/or the general benefits map.
-        if self.cov_kind is not None:
-            cov_kind = np.asarray(self.cov_kind, np.int64)
-            cov_amount = np.asarray(self.cov_amount, np.float64)
-            cov_offset = np.asarray(self.cov_offset, np.int64)
+        if self.coverage_kind is not None:
+            coverage_kind = np.asarray(self.coverage_kind, np.int64)
+            coverage_amount = np.asarray(self.coverage_amount, np.float64)
+            coverage_offset = np.asarray(self.coverage_offset, np.int64)
         else:
             items = []   # (kind, per-mp amount array), in coverage-list order
             db = self.death_benefit
@@ -179,32 +179,32 @@ class ModelPoints:
             if self.benefits is not None:
                 for kind, amount in self.benefits.items():
                     items.append((int(kind), np.asarray(amount, np.float64)))
-            cov_kind, cov_amount, cov_offset = _build_csr(items, n_mp)
+            coverage_kind, coverage_amount, coverage_offset = _build_csr(items, n_mp)
         # death_benefit stays a readable field, reconstructed from the CSR.
-        mp_of_cov = np.repeat(np.arange(n_mp), np.diff(cov_offset))
-        is_death = cov_kind == DEATH
+        mp_of_cov = np.repeat(np.arange(n_mp), np.diff(coverage_offset))
+        is_death = coverage_kind == DEATH
         object.__setattr__(self, "death_benefit", np.bincount(
-            mp_of_cov[is_death], weights=cov_amount[is_death], minlength=n_mp
+            mp_of_cov[is_death], weights=coverage_amount[is_death], minlength=n_mp
         ))
-        object.__setattr__(self, "cov_kind", cov_kind)
-        object.__setattr__(self, "cov_amount", cov_amount)
-        object.__setattr__(self, "cov_offset", cov_offset)
-        # Per-coverage benefit rules, CSR-aligned with cov_kind. A waiting
+        object.__setattr__(self, "coverage_kind", coverage_kind)
+        object.__setattr__(self, "coverage_amount", coverage_amount)
+        object.__setattr__(self, "coverage_offset", coverage_offset)
+        # Per-coverage benefit rules, CSR-aligned with coverage_kind. A waiting
         # period (months with no benefit) and a reduced-benefit period (a
         # multiplier until a cut-off month) both default to off.
-        n_cov = cov_amount.shape[0]
-        cov_waiting = self.cov_waiting
-        cov_waiting = (np.zeros(n_cov, np.int64) if cov_waiting is None
-                       else np.asarray(cov_waiting, np.int64))
-        cov_reduction_end = self.cov_reduction_end
-        cov_reduction_end = (np.zeros(n_cov, np.int64) if cov_reduction_end is None
-                             else np.asarray(cov_reduction_end, np.int64))
-        cov_reduction_factor = self.cov_reduction_factor
-        cov_reduction_factor = (np.ones(n_cov) if cov_reduction_factor is None
-                                else np.asarray(cov_reduction_factor, np.float64))
-        object.__setattr__(self, "cov_waiting", cov_waiting)
-        object.__setattr__(self, "cov_reduction_end", cov_reduction_end)
-        object.__setattr__(self, "cov_reduction_factor", cov_reduction_factor)
+        n_cov = coverage_amount.shape[0]
+        coverage_waiting = self.coverage_waiting
+        coverage_waiting = (np.zeros(n_cov, np.int64) if coverage_waiting is None
+                       else np.asarray(coverage_waiting, np.int64))
+        coverage_reduction_end = self.coverage_reduction_end
+        coverage_reduction_end = (np.zeros(n_cov, np.int64) if coverage_reduction_end is None
+                             else np.asarray(coverage_reduction_end, np.int64))
+        coverage_reduction_factor = self.coverage_reduction_factor
+        coverage_reduction_factor = (np.ones(n_cov) if coverage_reduction_factor is None
+                                else np.asarray(coverage_reduction_factor, np.float64))
+        object.__setattr__(self, "coverage_waiting", coverage_waiting)
+        object.__setattr__(self, "coverage_reduction_end", coverage_reduction_end)
+        object.__setattr__(self, "coverage_reduction_factor", coverage_reduction_factor)
         # Segment metadata -- normalise to object arrays so they slice with
         # the per-row fields. ``None`` stays None (a single-segment book).
         for name in ("product", "channel"):
@@ -274,8 +274,8 @@ class ModelPoints:
         Per-row fields (issue_age, level_premium, ...) and the segment
         metadata (product, channel) are sliced. The coverage CSR is
         rebuilt: each selected row's coverage slice
-        ``cov_kind[cov_offset[i]:cov_offset[i+1]]`` is concatenated, and
-        ``cov_offset`` is reset to the new running cumulative sum. Used by
+        ``coverage_kind[coverage_offset[i]:coverage_offset[i+1]]`` is concatenated, and
+        ``coverage_offset`` is reset to the new running cumulative sum. Used by
         :func:`fastcashflow.engine.value_segmented` to split a portfolio
         by (product, channel) before per-segment valuation.
         """
@@ -292,19 +292,19 @@ class ModelPoints:
         kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}
 
         # CSR coverage arrays -- concatenate each selected row's slice and
-        # rebuild cov_offset as the new cumulative count.
-        starts = self.cov_offset[idx]
-        ends = self.cov_offset[idx + 1]
+        # rebuild coverage_offset as the new cumulative count.
+        starts = self.coverage_offset[idx]
+        ends = self.coverage_offset[idx + 1]
         cov_idx = np.concatenate([np.arange(s, e) for s, e in zip(starts, ends)]) \
             if idx.size > 0 else np.zeros(0, dtype=np.int64)
-        kwargs["cov_kind"] = self.cov_kind[cov_idx]
-        kwargs["cov_amount"] = self.cov_amount[cov_idx]
-        kwargs["cov_offset"] = np.concatenate(
+        kwargs["coverage_kind"] = self.coverage_kind[cov_idx]
+        kwargs["coverage_amount"] = self.coverage_amount[cov_idx]
+        kwargs["coverage_offset"] = np.concatenate(
             ([0], np.cumsum(ends - starts, dtype=np.int64))
         )
-        kwargs["cov_waiting"] = self.cov_waiting[cov_idx]
-        kwargs["cov_reduction_end"] = self.cov_reduction_end[cov_idx]
-        kwargs["cov_reduction_factor"] = self.cov_reduction_factor[cov_idx]
+        kwargs["coverage_waiting"] = self.coverage_waiting[cov_idx]
+        kwargs["coverage_reduction_end"] = self.coverage_reduction_end[cov_idx]
+        kwargs["coverage_reduction_factor"] = self.coverage_reduction_factor[cov_idx]
 
         # Segment metadata -- slice if set; otherwise stay None.
         for name in ("product", "channel"):
@@ -314,20 +314,20 @@ class ModelPoints:
         return ModelPoints(**kwargs)
 
     def to_wide(self, assumptions):
-        """Convert to a wide polars DataFrame -- one row per policy.
+        """Convert to a wide polars DataFrame -- one row per model point.
 
         Every benefit becomes a column: ``death_benefit``,
         ``maturity_benefit``, ``annuity_payment`` and a
-        ``<rider_code>_benefit`` column for each rate-driven rider in
+        ``<coverage_code>_benefit`` column for each rate-driven coverage in
         ``assumptions``. The companion to ``read_model_points``'s wide form;
         lossless only for a simple portfolio -- a wide table cannot carry
         per-coverage waiting / reduction rules.
         """
         import polars as pl
 
-        mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.cov_offset))
+        mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
         cols: dict[str, np.ndarray] = {
-            "policy_id": np.arange(self.n_mp),
+            "mp_id": np.arange(self.n_mp),
             "issue_age": self.issue_age,
             "sex": self.sex,
             "term_months": self.term_months,
@@ -345,9 +345,9 @@ class ModelPoints:
             "disability_benefit": self.disability_benefit,
         }
         for i, rider in enumerate(assumptions.riders):
-            mask = self.cov_kind == i + 1
+            mask = self.coverage_kind == i + 1
             cols[f"{rider.code}_benefit"] = np.bincount(
-                mp_of_cov[mask], weights=self.cov_amount[mask],
+                mp_of_cov[mask], weights=self.coverage_amount[mask],
                 minlength=self.n_mp,
             )
         return pl.DataFrame(cols)
@@ -355,46 +355,46 @@ class ModelPoints:
     def to_long(self, assumptions):
         """Convert to a long-form ``(policies, coverages)`` polars pair.
 
-        ``policies`` is one row per policy (contract attributes);
-        ``coverages`` is one row per policy x coverage, carrying
-        ``rider_code`` and ``amount``. The companion to
+        ``policies`` is one row per model point (contract attributes);
+        ``coverages`` is one row per model point x coverage, carrying
+        ``coverage_code`` and ``amount``. The companion to
         ``read_model_points``'s long-form input.
         """
         import polars as pl
 
         policies = pl.DataFrame({
-            "policy_id": np.arange(self.n_mp),
-            "issue_age": self.issue_age,
-            "sex": self.sex,
-            "term_months": self.term_months,
-            "level_premium": self.level_premium,
-            "single_premium": self.single_premium,
-            "premium_term_months": self.premium_term_months,
+            "mp_id":                    np.arange(self.n_mp),
+            "issue_age":                self.issue_age,
+            "sex":                      self.sex,
+            "term_months":              self.term_months,
+            "level_premium":            self.level_premium,
+            "single_premium":           self.single_premium,
+            "premium_term_months":      self.premium_term_months,
             "premium_frequency_months": self.premium_frequency_months,
             "annuity_frequency_months": self.annuity_frequency_months,
-            "disability_income": self.disability_income,
-            "disability_benefit": self.disability_benefit,
-            "count": self.count,
-            "state": np.array([STATE_LABELS[int(s)] for s in self.state]),
+            "disability_income":        self.disability_income,
+            "disability_benefit":       self.disability_benefit,
+            "count":                    self.count,
+            "state":                    np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
         # CSR coverages -- code 0 is the main-contract death, 1.. the riders.
         label = {0: _coverage_label(assumptions, TYPE_DEATH_MAIN, "death")}
         for i, rider in enumerate(assumptions.riders):
             label[i + 1] = rider.code
-        mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.cov_offset))
-        policy_id = [int(m) for m in mp_of_cov]
-        rider_code = [label[int(k)] for k in self.cov_kind]
-        amount = [float(a) for a in self.cov_amount]
+        mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
+        mp_id = [int(m) for m in mp_of_cov]
+        coverage_code = [label[int(k)] for k in self.coverage_kind]
+        amount = [float(a) for a in self.coverage_amount]
         # Survival benefits are scalar fields -- emit them as coverage rows.
         for ctype, scalar in ((TYPE_ANNUITY, self.annuity_payment),
                               (TYPE_MATURITY, self.maturity_benefit)):
             code = _coverage_label(assumptions, ctype, ctype)
             for mp in np.nonzero(scalar)[0]:
-                policy_id.append(int(mp))
-                rider_code.append(code)
+                mp_id.append(int(mp))
+                coverage_code.append(code)
                 amount.append(float(scalar[mp]))
         coverages = pl.DataFrame({
-            "policy_id": policy_id, "rider_code": rider_code, "amount": amount,
+            "mp_id": mp_id, "coverage_code": coverage_code, "amount": amount,
         })
         return policies, coverages
 
@@ -428,10 +428,10 @@ def _build_csr(
     all_kind = np.concatenate(kind_parts)
     all_amount = np.concatenate(amount_parts)
     order = np.argsort(all_mp, kind="stable")     # group by mp, keep kind order
-    cov_kind = np.ascontiguousarray(all_kind[order])
-    cov_amount = np.ascontiguousarray(all_amount[order])
-    cov_offset = np.concatenate((
+    coverage_kind = np.ascontiguousarray(all_kind[order])
+    coverage_amount = np.ascontiguousarray(all_amount[order])
+    coverage_offset = np.concatenate((
         np.zeros(1, np.int64),
         np.cumsum(np.bincount(all_mp, minlength=n_mp), dtype=np.int64),
     ))
-    return cov_kind, cov_amount, cov_offset
+    return coverage_kind, coverage_amount, coverage_offset

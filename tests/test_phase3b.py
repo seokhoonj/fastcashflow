@@ -118,7 +118,7 @@ def test_read_ignores_extra_columns_and_flags_missing(tmp_path):
     """Extra columns are ignored; a missing required column is an error."""
     mps = _portfolio(50)
     full = _frame(mps).with_columns(
-        pl.Series("policy_id", np.arange(mps.n_mp))
+        pl.Series("mp_id", np.arange(mps.n_mp))
     )
     full.write_parquet(tmp_path / "full.parquet")
     assert read_model_points(tmp_path / "full.parquet").n_mp == mps.n_mp
@@ -215,7 +215,7 @@ def test_describe_assumptions_renders_both_shapes(capsys):
     assert out_one.startswith("Assumptions")
     assert "상태 전이율" in out_one
     assert "state_model" in out_one
-    assert "riders" in out_one
+    assert "coverages" in out_one
 
     describe_assumptions(basis)
     out_dict = capsys.readouterr().out

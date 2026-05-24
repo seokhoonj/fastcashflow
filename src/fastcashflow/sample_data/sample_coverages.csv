@@ -1,4 +1,4 @@
-policy_id,rider_code,amount,premium
+mp_id,coverage_code,amount,premium
 P001,dth_main,80000000,45000
 P001,mat,10000000,18000
 P002,dth_main,50000000,28000

@@ -84,8 +84,8 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
                     term_months, count, level_premium, single_premium,
                     premium_term_months, premium_frequency, annuity_frequency,
-                    cov_kind, cov_amount, cov_offset, cov_waiting,
-                    cov_reduction_end, cov_reduction_factor, cov_rates,
+                    coverage_kind, coverage_amount, coverage_offset, coverage_waiting,
+                    coverage_reduction_end, coverage_reduction_factor, cov_rates,
                     cov_risk, cov_is_diagnosis, maturity_benefit,
                     annuity_payment, disability_income, disability_benefit,
                     expense_acquisition, maint_inflated_monthly, n_time):
@@ -106,7 +106,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
     state-machine-agnostic.
 
     A policy's claim is the sum over its coverage list: coverage ``k`` pays
-    ``cov_amount[k]`` at rate ``cov_rates[cov_kind[k], mp, year]``, summed
+    ``coverage_amount[k]`` at rate ``cov_rates[coverage_kind[k], mp, year]``, summed
     into the mortality or morbidity total by the kind's risk class. Coverage
     rates change only once a year, so the per-coverage sum is rebuilt on a
     year boundary. The maturity benefit is paid to the in-force survivors at
@@ -130,8 +130,8 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
         prem_freq = premium_frequency[mp]        # months between premiums
         ann_freq = annuity_frequency[mp]         # months between annuity payouts
         cnt = count[mp]
-        c_start = cov_offset[mp]
-        c_end = cov_offset[mp + 1]
+        c_start = coverage_offset[mp]
+        c_end = coverage_offset[mp + 1]
         # In-force occupancy over the transient states; the input state
         # seats the model point's count on its starting state.
         occ = np.zeros(n_states)
@@ -156,12 +156,12 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                 claim_rate = 0.0
                 morb_rate = 0.0
                 for k in range(c_start, c_end):
-                    kind = cov_kind[k]
+                    kind = coverage_kind[k]
                     if cov_is_diagnosis[kind]:
                         continue          # diagnosis coverages run separately
-                    if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
+                    if coverage_waiting[k] != 0 or coverage_reduction_end[k] != 0:
                         continue          # rule-bearing coverages run separately
-                    rate = cov_rates[kind, mp, year] * cov_amount[k]
+                    rate = cov_rates[kind, mp, year] * coverage_amount[k]
                     if cov_risk[kind] == 0:
                         claim_rate += rate
                     else:
@@ -201,15 +201,15 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
         # run per month here, not in the year-aggregated rate above, because
         # the benefit multiplier can change partway through a year.
         for k in range(c_start, c_end):
-            kind = cov_kind[k]
+            kind = coverage_kind[k]
             if cov_is_diagnosis[kind]:
                 continue
-            wait = cov_waiting[k]
-            red_end = cov_reduction_end[k]
+            wait = coverage_waiting[k]
+            red_end = coverage_reduction_end[k]
             if wait == 0 and red_end == 0:
                 continue          # rule-free -- already in the aggregate
-            benefit = cov_amount[k]
-            red_factor = cov_reduction_factor[k]
+            benefit = coverage_amount[k]
+            red_factor = coverage_reduction_factor[k]
             mortality_risk = cov_risk[kind] == 0
             for t in range(wait, term):
                 mult = red_factor if t < red_end else 1.0
@@ -224,13 +224,13 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
         # claims run off a "not yet diagnosed" fraction of the in-force that
         # the diagnosis rate depletes (on top of mortality and lapse).
         for k in range(c_start, c_end):
-            kind = cov_kind[k]
+            kind = coverage_kind[k]
             if not cov_is_diagnosis[kind]:
                 continue
-            benefit = cov_amount[k]
-            wait = cov_waiting[k]
-            red_end = cov_reduction_end[k]
-            red_factor = cov_reduction_factor[k]
+            benefit = coverage_amount[k]
+            wait = coverage_waiting[k]
+            red_end = coverage_reduction_end[k]
+            red_factor = coverage_reduction_factor[k]
             frac = 1.0          # fraction of the in-force still undiagnosed
             d_year = -1
             d_rate = 0.0
@@ -258,8 +258,8 @@ def _project_kernel_semi_markov(
     premium_state, benefit_state, start_state,
     term_months, count, level_premium, single_premium,
     premium_term_months, premium_frequency, annuity_frequency,
-    cov_kind, cov_amount, cov_offset, cov_waiting,
-    cov_reduction_end, cov_reduction_factor, cov_rates,
+    coverage_kind, coverage_amount, coverage_offset, coverage_waiting,
+    coverage_reduction_end, coverage_reduction_factor, cov_rates,
     cov_risk, cov_is_diagnosis,
     maturity_benefit, annuity_payment, disability_income, disability_benefit,
     expense_acquisition, maint_inflated_monthly, n_time,
@@ -301,8 +301,8 @@ def _project_kernel_semi_markov(
         prem_freq = premium_frequency[mp]
         ann_freq = annuity_frequency[mp]
         cnt = count[mp]
-        c_start = cov_offset[mp]
-        c_end = cov_offset[mp + 1]
+        c_start = coverage_offset[mp]
+        c_end = coverage_offset[mp + 1]
 
         # Flat per-mp occupancy. cohort tau of state s lives at
         # state_offset[s] + tau. Seating goes to cohort 0 of the start state.
@@ -319,12 +319,12 @@ def _project_kernel_semi_markov(
                 claim_rate = 0.0
                 morb_rate = 0.0
                 for k in range(c_start, c_end):
-                    kind = cov_kind[k]
+                    kind = coverage_kind[k]
                     if cov_is_diagnosis[kind]:
                         continue          # diagnosis coverages run separately
-                    if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
+                    if coverage_waiting[k] != 0 or coverage_reduction_end[k] != 0:
                         continue          # rule-bearing coverages run separately
-                    rate = cov_rates[kind, mp, year] * cov_amount[k]
+                    rate = cov_rates[kind, mp, year] * coverage_amount[k]
                     if cov_risk[kind] == 0:
                         claim_rate += rate
                     else:
@@ -400,15 +400,15 @@ def _project_kernel_semi_markov(
         # the multiplier rides the same in-force trajectory the main
         # pass already produced.
         for k in range(c_start, c_end):
-            kind = cov_kind[k]
+            kind = coverage_kind[k]
             if cov_is_diagnosis[kind]:
                 continue
-            wait = cov_waiting[k]
-            red_end = cov_reduction_end[k]
+            wait = coverage_waiting[k]
+            red_end = coverage_reduction_end[k]
             if wait == 0 and red_end == 0:
                 continue          # rule-free -- already in the main pass
-            benefit = cov_amount[k]
-            red_factor = cov_reduction_factor[k]
+            benefit = coverage_amount[k]
+            red_factor = coverage_reduction_factor[k]
             mortality_risk = cov_risk[kind] == 0
             for t in range(wait, term):
                 mult = red_factor if t < red_end else 1.0
@@ -423,13 +423,13 @@ def _project_kernel_semi_markov(
         # diagnosed" pool that drops by (1 - d_rate) each month. The pool
         # multiplies the cohort-aware in-force from the main pass.
         for k in range(c_start, c_end):
-            kind = cov_kind[k]
+            kind = coverage_kind[k]
             if not cov_is_diagnosis[kind]:
                 continue
-            benefit = cov_amount[k]
-            wait = cov_waiting[k]
-            red_end = cov_reduction_end[k]
-            red_factor = cov_reduction_factor[k]
+            benefit = coverage_amount[k]
+            wait = coverage_waiting[k]
+            red_end = coverage_reduction_end[k]
+            red_factor = coverage_reduction_factor[k]
             frac = 1.0
             d_year = -1
             d_rate = 0.0
@@ -576,12 +576,12 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,
-            model_points.cov_kind,
-            model_points.cov_amount,
-            model_points.cov_offset,
-            model_points.cov_waiting,
-            model_points.cov_reduction_end,
-            model_points.cov_reduction_factor,
+            model_points.coverage_kind,
+            model_points.coverage_amount,
+            model_points.coverage_offset,
+            model_points.coverage_waiting,
+            model_points.coverage_reduction_end,
+            model_points.coverage_reduction_factor,
             cov_rates,
             cov_risk,
             cov_is_diagnosis,
@@ -618,12 +618,12 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,
-            model_points.cov_kind,
-            model_points.cov_amount,
-            model_points.cov_offset,
-            model_points.cov_waiting,
-            model_points.cov_reduction_end,
-            model_points.cov_reduction_factor,
+            model_points.coverage_kind,
+            model_points.coverage_amount,
+            model_points.coverage_offset,
+            model_points.coverage_waiting,
+            model_points.coverage_reduction_end,
+            model_points.coverage_reduction_factor,
             cov_rates,
             cov_risk,
             cov_is_diagnosis,

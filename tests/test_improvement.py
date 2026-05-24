@@ -33,8 +33,8 @@ def _build(path: Path, *, improvement_curve=None):
     seg.append(cols)
     seg.append(row)
 
-    rd = wb.create_sheet("riders")
-    rd.append(["product", "rider_code", "rider_name", "type", "rate_table"])
+    rd = wb.create_sheet("coverages")
+    rd.append(["product", "coverage_code", "coverage_name", "type", "rate_table"])
     rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
 
     mt = wb.create_sheet("mortality_tables")

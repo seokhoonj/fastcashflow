@@ -57,12 +57,12 @@ def _one_coverage(kind, benefit, term, *, waiting=0,
         issue_age=np.array([40.0]),
         level_premium=np.array([0.0]),
         term_months=np.array([term]),
-        cov_kind=np.array([kind]),
-        cov_amount=np.array([float(benefit)]),
-        cov_offset=np.array([0, 1]),
-        cov_waiting=np.array([waiting]),
-        cov_reduction_end=np.array([reduction_end]),
-        cov_reduction_factor=np.array([reduction_factor]),
+        coverage_kind=np.array([kind]),
+        coverage_amount=np.array([float(benefit)]),
+        coverage_offset=np.array([0, 1]),
+        coverage_waiting=np.array([waiting]),
+        coverage_reduction_end=np.array([reduction_end]),
+        coverage_reduction_factor=np.array([reduction_factor]),
     )
 
 
@@ -162,9 +162,9 @@ def test_default_rule_is_inert():
         issue_age=np.array([40.0]),
         level_premium=np.array([0.0]),
         term_months=np.array([36]),
-        cov_kind=np.array([DIAGNOSIS]),
-        cov_amount=np.array([4e7]),
-        cov_offset=np.array([0, 1]),
+        coverage_kind=np.array([DIAGNOSIS]),
+        coverage_amount=np.array([4e7]),
+        coverage_offset=np.array([0, 1]),
     )
     a, b = value(explicit, asmp), value(omitted, asmp)
     assert np.isclose(a.bel[0], b.bel[0])
@@ -177,23 +177,23 @@ def test_value_matches_measure_with_rules():
     rng = np.random.default_rng(23)
     n = 200
     n_cov = 2 * n                               # one death + one diagnosis each
-    cov_kind = np.empty(n_cov, np.int64)
-    cov_kind[0::2] = DEATH
-    cov_kind[1::2] = DIAGNOSIS
-    cov_amount = np.empty(n_cov)
-    cov_amount[0::2] = rng.integers(10, 80, n) * 1_000_000
-    cov_amount[1::2] = rng.integers(10, 50, n) * 1_000_000
+    coverage_kind = np.empty(n_cov, np.int64)
+    coverage_kind[0::2] = DEATH
+    coverage_kind[1::2] = DIAGNOSIS
+    coverage_amount = np.empty(n_cov)
+    coverage_amount[0::2] = rng.integers(10, 80, n) * 1_000_000
+    coverage_amount[1::2] = rng.integers(10, 50, n) * 1_000_000
 
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(float),
         level_premium=rng.integers(5, 20, n) * 10_000.0,
         term_months=rng.integers(60, 180, n),
-        cov_kind=cov_kind,
-        cov_amount=cov_amount,
-        cov_offset=np.arange(0, n_cov + 1, 2),
-        cov_waiting=rng.integers(0, 8, n_cov),
-        cov_reduction_end=rng.integers(0, 30, n_cov),
-        cov_reduction_factor=rng.choice([0.3, 0.5, 0.7], n_cov),
+        coverage_kind=coverage_kind,
+        coverage_amount=coverage_amount,
+        coverage_offset=np.arange(0, n_cov + 1, 2),
+        coverage_waiting=rng.integers(0, 8, n_cov),
+        coverage_reduction_end=rng.integers(0, 30, n_cov),
+        coverage_reduction_factor=rng.choice([0.3, 0.5, 0.7], n_cov),
     )
     asmp = _assumptions(morbidity_cv=0.15)
     fast = value(mps, asmp)

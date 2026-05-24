@@ -6,7 +6,7 @@ Model points and results go through polars; the actuarial basis -- read by
 Model points come in two shapes, both producing the same ``ModelPoints``:
 
 * **wide** -- one row per policy, every benefit a column: ``death_benefit``,
-  ``maturity_benefit``, ``annuity_payment`` and a ``<rider_code>_benefit``
+  ``maturity_benefit``, ``annuity_payment`` and a ``<coverage_code>_benefit``
   column per rider. The convenient form for a single, homogeneous product.
 * **long-form** -- a policies frame (contract attributes) plus a coverages
   frame, one row per policy x rider carrying ``amount`` and ``premium``. The
@@ -39,9 +39,9 @@ from fastcashflow.engine import Valuation, value
 from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 
 # Wide model-point columns with a fixed meaning. Any other ``*_benefit``
-# column names a rider by its rider code.
+# column names a rider by its coverage code.
 _NAMED_WIDE = frozenset((
-    "policy_id", "product", "issue_age", "term_months", "sex", "count",
+    "mp_id", "product", "issue_age", "term_months", "sex", "count",
     "state", "level_premium", "single_premium", "premium_term_months",
     "premium_frequency_months", "annuity_frequency_months",
     "death_benefit", "maturity_benefit", "annuity_payment",
@@ -89,7 +89,7 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 #
 #   * ``segments``       -- (product, channel) -> which tables + scalar params
 #                           (a ``defaults`` row that blank cells inherit).
-#   * ``riders``         -- (product) -> rider_code, type, optional rate_table.
+#   * ``coverages``      -- (product) -> coverage_code, type, optional rate_table.
 #   * ``mortality_tables``, ``rider_rate_tables``, ``waiver_tables``,
 #     ``lapse_tables``, ``maintenance_tables``, ``discount_tables``,
 #     ``inflation_tables`` -- the named rate tables the segments reference.
@@ -247,14 +247,14 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
 def _read_ae_factors(ws):
     """Read the optional ``ae_factors`` sheet.
 
-    Each row is one (product, channel, rider_code) -> factor (a runtime
+    Each row is one (product, channel, coverage_code) -> factor (a runtime
     multiplier on the base rate). Optional axis columns
     ``{sex, age, issue_age, duration}`` let the factor vary along those
     dimensions (same schema-detection rules as the base rate tables); missing
     axes broadcast. ``channel`` empty matches the segment whose channel is
     blank (a single-segment workbook).
 
-    Returns ``{(product, channel, rider_code): callable(sex, issue_age,
+    Returns ``{(product, channel, coverage_code): callable(sex, issue_age,
     duration) -> factor}``. Missing sheet -> empty dict -> no A/E adjustment.
     """
     rows = list(_sheet_dicts(ws))
@@ -273,8 +273,8 @@ def _read_ae_factors(ws):
         product = str(r["product"]).strip()
         ch = r.get("channel")
         channel = str(ch).strip() if ch not in (None, "") else ""
-        rider_code = str(r["rider_code"]).strip()
-        key = (product, channel, rider_code)
+        coverage_code = str(r["coverage_code"]).strip()
+        key = (product, channel, coverage_code)
         axes_key = tuple(int(r[a]) for a in axes)
         by_key.setdefault(key, []).append((axes_key, float(r["factor"])))
     return {
@@ -408,11 +408,11 @@ def read_assumptions(path):
         else:
             segments.append(r)
     riders_by_product: dict[str, list] = {}
-    if "riders" in wb.sheetnames:
-        for r in _sheet_dicts(wb["riders"]):
+    if "coverages" in wb.sheetnames:
+        for r in _sheet_dicts(wb["coverages"]):
             rt = r.get("rate_table")
             riders_by_product.setdefault(str(r["product"]).strip(), []).append((
-                str(r["rider_code"]).strip(), str(r["type"]).strip(),
+                str(r["coverage_code"]).strip(), str(r["type"]).strip(),
                 str(rt).strip() if rt not in (None, "") else None,
             ))
 
@@ -449,8 +449,8 @@ def read_assumptions(path):
         shift_morb = int(scalar("morbidity_age_shift") or 0)
         shift_wvr = int(scalar("waiver_age_shift") or 0)
 
-        def ae(rider_code):
-            return ae_factors.get((product, channel, rider_code))
+        def ae(coverage_code):
+            return ae_factors.get((product, channel, coverage_code))
 
         riders = []
         coverage_types: dict[str, str] = {}
@@ -562,7 +562,7 @@ def _read_state(col: pl.Series) -> np.ndarray:
 
 def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
     """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
-    rider a ``<rider_code>_benefit`` column."""
+    rider a ``<coverage_code>_benefit`` column."""
     for need in ("issue_age", "term_months"):
         if need not in df.columns:
             raise ValueError(
@@ -615,12 +615,12 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             "long-form model points need the assumptions -- the rider-code "
             "registry maps coverage rows to engine codes"
         )
-    for need in ("policy_id", "issue_age", "term_months"):
+    for need in ("mp_id", "issue_age", "term_months"):
         if need not in pol.columns:
             raise ValueError(
                 f"the policies frame is missing required column {need!r}"
             )
-    for need in ("policy_id", "rider_code", "amount"):
+    for need in ("mp_id", "coverage_code", "amount"):
         if need not in cov.columns:
             raise ValueError(
                 f"the coverages frame is missing required column {need!r}"
@@ -632,16 +632,18 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     # Resolve every coverage row to its policy index and coverage type.
     pol = pol.with_row_index("_mp")
     cmap = pl.DataFrame({
-        "rider_code": list(ctypes.keys()),
+        "coverage_code": list(ctypes.keys()),
         "_type": list(ctypes.values()),
         "_kind": [code_to_kind.get(c, 0) for c in ctypes],
     })
-    cov = (cov.join(pol.select("policy_id", "_mp"), on="policy_id", how="left")
-              .join(cmap, on="rider_code", how="left"))
+    cov = (cov.join(pol.select("mp_id", "_mp"), on="mp_id", how="left")
+              .join(cmap, on="coverage_code", how="left"))
     if cov["_mp"].null_count():
-        raise ValueError("a coverage row references an unknown policy_id")
+        raise ValueError("a coverage row references an unknown mp_id")
     if cov["_type"].null_count():
-        raise ValueError("a coverage row references an unregistered rider_code")
+        raise ValueError(
+            "a coverage row references an unregistered coverage_code"
+        )
 
     mp = cov["_mp"].to_numpy()
     ctype = cov["_type"].to_numpy()
@@ -683,19 +685,19 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     is_cov = (ctype == TYPE_DEATH_MAIN) | np.isin(ctype, RATE_DRIVEN_TYPES)
     order = np.argsort(mp[is_cov], kind="stable")
     cov_mp = mp[is_cov][order]
-    fields["cov_kind"] = kind[is_cov][order]
-    fields["cov_amount"] = amount[is_cov][order]
+    fields["coverage_kind"] = kind[is_cov][order]
+    fields["coverage_amount"] = amount[is_cov][order]
 
     # Optional per-coverage benefit rules -- a waiting period and a
-    # reduced-benefit period, each CSR-aligned with cov_kind.
-    for col, field, default in (("waiting", "cov_waiting", 0),
-                                ("reduction_end", "cov_reduction_end", 0),
-                                ("reduction_factor", "cov_reduction_factor", 1.0)):
+    # reduced-benefit period, each CSR-aligned with coverage_kind.
+    for col, field, default in (("waiting", "coverage_waiting", 0),
+                                ("reduction_end", "coverage_reduction_end", 0),
+                                ("reduction_factor", "coverage_reduction_factor", 1.0)):
         if col in cov.columns:
             rule = cov[col].fill_null(default).to_numpy()
             fields[field] = rule[is_cov][order]
 
-    fields["cov_offset"] = np.concatenate((
+    fields["coverage_offset"] = np.concatenate((
         np.zeros(1, np.int64),
         np.cumsum(np.bincount(cov_mp, minlength=n_mp), dtype=np.int64),
     ))
@@ -712,18 +714,18 @@ def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
       ``count``, ``state``, ``level_premium``, ``single_premium``,
       ``premium_term_months``, ``premium_frequency_months``,
       ``annuity_frequency_months``, ``death_benefit``, ``maturity_benefit``
-      and ``annuity_payment`` are read if present. A ``<rider_code>_benefit``
+      and ``annuity_payment`` are read if present. A ``<coverage_code>_benefit``
       column adds that rider's coverage; the ``assumptions`` resolve the
-      rider code to an engine code.
+      coverage code to an engine code.
     * **long-form** -- ``read_model_points(policies, assumptions,
-      coverages=coverages_path)``. A policies frame (``policy_id``,
+      coverages=coverages_path)``. A policies frame (``mp_id``,
       ``issue_age``, ``term_months``, optional ``sex`` / ``count`` /
       ``state`` / ``premium_term_months``) and a coverages frame
-      (``policy_id``, ``rider_code``,
+      (``mp_id``, ``coverage_code``,
       ``amount``, and
       optional ``premium`` / ``waiting`` / ``reduction_end`` /
-      ``reduction_factor``), one coverage row per policy x rider. A single
-      ``.xlsx``
+      ``reduction_factor``), one coverage row per policy x coverage.
+      A single ``.xlsx``
       with ``policies`` and ``coverages`` sheets is read as long-form too.
 
     ``assumptions`` is optional only for a wide file with no rider columns.
@@ -862,8 +864,8 @@ def value_file(
       ``None``. Each chunk of rows is a self-contained set of model points.
     * **long-form** -- ``input_path`` is the policies parquet and
       ``coverages`` the coverages parquet. Each chunk of policies pulls its
-      coverage rows by ``policy_id``, so sorting the coverages file by
-      ``policy_id`` lets the parquet reader prune row groups.
+      coverage rows by ``mp_id``, so sorting the coverages file by
+      ``mp_id`` lets the parquet reader prune row groups.
 
     Returns the total number of model points processed.
     """
@@ -889,9 +891,9 @@ def value_file(
         cov_scan = pl.scan_parquet(Path(coverages))
         for part, offset in enumerate(range(0, n_total, chunk_size)):
             pol = scan.slice(offset, chunk_size).collect()
-            ids = pol["policy_id"]
+            ids = pol["mp_id"]
             cov = cov_scan.join(
-                pol.lazy().select("policy_id"), on="policy_id", how="semi"
+                pol.lazy().select("mp_id"), on="mp_id", how="semi"
             ).collect()
             model_points = _long_model_points(pol, cov, assumptions)
             write_valuation(

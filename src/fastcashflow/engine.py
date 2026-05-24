@@ -261,7 +261,7 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           term_months, count, level_premium, single_premium,")
     line(0, "           premium_term_months, premium_frequency, "
             "annuity_frequency,")
-    line(0, "           cov_kind, cov_amount, cov_offset, cov_rates, "
+    line(0, "           coverage_kind, coverage_amount, coverage_offset, cov_rates, "
             "cov_risk,")
     line(0, "           cov_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
@@ -270,8 +270,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           discount_start, discount_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
-    line(0, "           cov_waiting, cov_reduction_end, "
-            "cov_reduction_factor):")
+    line(0, "           coverage_waiting, coverage_reduction_end, "
+            "coverage_reduction_factor):")
     line(4, "n_mp = issue_index.shape[0]")
     line(4, "bel = np.empty(n_mp)")
     line(4, "ra = np.empty(n_mp)")
@@ -288,8 +288,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(8, "cnt = count[mp]")
     line(8, "premium = level_premium[mp]")
     line(8, "annuity = annuity_payment[mp]")
-    line(8, "c_start = cov_offset[mp]")
-    line(8, "c_end = cov_offset[mp + 1]")
+    line(8, "c_start = coverage_offset[mp]")
+    line(8, "c_end = coverage_offset[mp + 1]")
     line(8, "ss = start_state[mp]")
     emit_init(8)
     line(8, "pc = 0.0")
@@ -312,12 +312,12 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "claim_rate = 0.0")
     line(16, "morb_rate = 0.0")
     line(16, "for k in range(c_start, c_end):")
-    line(20, "kind = cov_kind[k]")
+    line(20, "kind = coverage_kind[k]")
     line(20, "if cov_is_diagnosis[kind]:")
     line(24, "continue")
-    line(20, "if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:")
+    line(20, "if coverage_waiting[k] != 0 or coverage_reduction_end[k] != 0:")
     line(24, "continue")
-    line(20, "rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]")
+    line(20, "rate = cov_rates[kind, sx, ridx, year] * coverage_amount[k]")
     line(20, "if cov_risk[kind] == 0:")
     line(24, "claim_rate += rate")
     line(20, "else:")
@@ -354,15 +354,15 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
 
     # Coverage-rule pass
     line(8, "for k in range(c_start, c_end):")
-    line(12, "kind = cov_kind[k]")
+    line(12, "kind = coverage_kind[k]")
     line(12, "if cov_is_diagnosis[kind]:")
     line(16, "continue")
-    line(12, "wait = cov_waiting[k]")
-    line(12, "red_end = cov_reduction_end[k]")
+    line(12, "wait = coverage_waiting[k]")
+    line(12, "red_end = coverage_reduction_end[k]")
     line(12, "if wait == 0 and red_end == 0:")
     line(16, "continue")
-    line(12, "benefit = cov_amount[k]")
-    line(12, "red_factor = cov_reduction_factor[k]")
+    line(12, "benefit = coverage_amount[k]")
+    line(12, "red_factor = coverage_reduction_factor[k]")
     line(12, "mortality_risk = cov_risk[kind] == 0")
     emit_init(12)
     line(12, "for t in range(term):")
@@ -380,13 +380,13 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
 
     # Diagnosis pass
     line(8, "for k in range(c_start, c_end):")
-    line(12, "kind = cov_kind[k]")
+    line(12, "kind = coverage_kind[k]")
     line(12, "if not cov_is_diagnosis[kind]:")
     line(16, "continue")
-    line(12, "benefit = cov_amount[k]")
-    line(12, "wait = cov_waiting[k]")
-    line(12, "red_end = cov_reduction_end[k]")
-    line(12, "red_factor = cov_reduction_factor[k]")
+    line(12, "benefit = coverage_amount[k]")
+    line(12, "wait = coverage_waiting[k]")
+    line(12, "red_end = coverage_reduction_end[k]")
+    line(12, "red_factor = coverage_reduction_factor[k]")
     emit_init(12)
     line(12, "d_year = -1")
     line(12, "d_rate = 0.0")
@@ -631,7 +631,7 @@ def _codegen_value_kernel_source_semi_markov(
     line(0, "           term_months, count, level_premium, single_premium,")
     line(0, "           premium_term_months, premium_frequency, "
             "annuity_frequency,")
-    line(0, "           cov_kind, cov_amount, cov_offset, cov_rates, "
+    line(0, "           coverage_kind, coverage_amount, coverage_offset, cov_rates, "
             "cov_risk,")
     line(0, "           cov_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
@@ -640,8 +640,8 @@ def _codegen_value_kernel_source_semi_markov(
     line(0, "           discount_start, discount_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
-    line(0, "           cov_waiting, cov_reduction_end, "
-            "cov_reduction_factor):")
+    line(0, "           coverage_waiting, coverage_reduction_end, "
+            "coverage_reduction_factor):")
     line(4, "n_mp = issue_index.shape[0]")
     line(4, "bel = np.empty(n_mp)")
     line(4, "ra = np.empty(n_mp)")
@@ -658,8 +658,8 @@ def _codegen_value_kernel_source_semi_markov(
     line(8, "cnt = count[mp]")
     line(8, "premium = level_premium[mp]")
     line(8, "annuity = annuity_payment[mp]")
-    line(8, "c_start = cov_offset[mp]")
-    line(8, "c_end = cov_offset[mp + 1]")
+    line(8, "c_start = coverage_offset[mp]")
+    line(8, "c_end = coverage_offset[mp + 1]")
     line(8, "ss = start_state[mp]")
     emit_init(8)
     line(8, "pc = 0.0")
@@ -689,12 +689,12 @@ def _codegen_value_kernel_source_semi_markov(
     line(16, "claim_rate = 0.0")
     line(16, "morb_rate = 0.0")
     line(16, "for k in range(c_start, c_end):")
-    line(20, "kind = cov_kind[k]")
+    line(20, "kind = coverage_kind[k]")
     line(20, "if cov_is_diagnosis[kind]:")
     line(24, "continue          # diagnosis coverages run separately")
-    line(20, "if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:")
+    line(20, "if coverage_waiting[k] != 0 or coverage_reduction_end[k] != 0:")
     line(24, "continue          # rule-bearing coverages run separately")
-    line(20, "rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]")
+    line(20, "rate = cov_rates[kind, sx, ridx, year] * coverage_amount[k]")
     line(20, "if cov_risk[kind] == 0:")
     line(24, "claim_rate += rate")
     line(20, "else:")
@@ -737,15 +737,15 @@ def _codegen_value_kernel_source_semi_markov(
     # loop -- the same trick the detailed _project_kernel_semi_markov
     # has been using all along.
     line(8, "for k in range(c_start, c_end):")
-    line(12, "kind = cov_kind[k]")
+    line(12, "kind = coverage_kind[k]")
     line(12, "if cov_is_diagnosis[kind]:")
     line(16, "continue")
-    line(12, "wait = cov_waiting[k]")
-    line(12, "red_end = cov_reduction_end[k]")
+    line(12, "wait = coverage_waiting[k]")
+    line(12, "red_end = coverage_reduction_end[k]")
     line(12, "if wait == 0 and red_end == 0:")
     line(16, "continue          # rule-free -- already in the main pass")
-    line(12, "benefit = cov_amount[k]")
-    line(12, "red_factor = cov_reduction_factor[k]")
+    line(12, "benefit = coverage_amount[k]")
+    line(12, "red_factor = coverage_reduction_factor[k]")
     line(12, "mortality_risk = cov_risk[kind] == 0")
     line(12, "for t in range(wait, term):")
     line(16, "year = t // 12")
@@ -764,13 +764,13 @@ def _codegen_value_kernel_source_semi_markov(
     # running the state machine with each flow scaled by (1 - d_rate),
     # but a single scalar loop per rider rather than a full cohort walk.
     line(8, "for k in range(c_start, c_end):")
-    line(12, "kind = cov_kind[k]")
+    line(12, "kind = coverage_kind[k]")
     line(12, "if not cov_is_diagnosis[kind]:")
     line(16, "continue")
-    line(12, "benefit = cov_amount[k]")
-    line(12, "wait = cov_waiting[k]")
-    line(12, "red_end = cov_reduction_end[k]")
-    line(12, "red_factor = cov_reduction_factor[k]")
+    line(12, "benefit = coverage_amount[k]")
+    line(12, "wait = coverage_waiting[k]")
+    line(12, "red_end = coverage_reduction_end[k]")
+    line(12, "red_factor = coverage_reduction_factor[k]")
     line(12, "frac = 1.0")
     line(12, "d_year = -1")
     line(12, "d_rate = 0.0")
@@ -851,12 +851,12 @@ def _get_value_kernel_codegen_semi_markov(
 @njit(parallel=True, cache=True)
 def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          single_premium, premium_term_months, premium_frequency,
-                         annuity_frequency, cov_kind, cov_amount, cov_offset,
+                         annuity_frequency, coverage_kind, coverage_amount, coverage_offset,
                          cov_rates, cov_risk, cov_is_diagnosis,
                          maturity_benefit, annuity_payment, expense_acquisition,
                          maint_inflated_monthly, discount_start, discount_mid,
                          mortality_factor, morbidity_factor, longevity_factor,
-                         cov_waiting, cov_reduction_end, cov_reduction_factor,
+                         coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
                          survival_monthly):
     """Scalar-inforce fast path of :func:`_value_kernel`.
 
@@ -886,8 +886,8 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
         cnt = count[mp]
         premium = level_premium[mp]
         annuity = annuity_payment[mp]
-        c_start = cov_offset[mp]
-        c_end = cov_offset[mp + 1]
+        c_start = coverage_offset[mp]
+        c_end = coverage_offset[mp + 1]
         inforce = cnt
         pc = 0.0          # PV of death claims (mortality risk)
         pcm = 0.0         # PV of health claims (morbidity risk)
@@ -913,12 +913,12 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                 claim_rate = 0.0
                 morb_rate = 0.0
                 for k in range(c_start, c_end):
-                    kind = cov_kind[k]
+                    kind = coverage_kind[k]
                     if cov_is_diagnosis[kind]:
                         continue
-                    if cov_waiting[k] != 0 or cov_reduction_end[k] != 0:
+                    if coverage_waiting[k] != 0 or coverage_reduction_end[k] != 0:
                         continue
-                    rate = cov_rates[kind, sx, ridx, year] * cov_amount[k]
+                    rate = cov_rates[kind, sx, ridx, year] * coverage_amount[k]
                     if cov_risk[kind] == 0:
                         claim_rate += rate
                     else:
@@ -950,15 +950,15 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
         # rerun the survival on the same scalar track so the benefit
         # multiplier (which can change mid-year) applies cleanly.
         for k in range(c_start, c_end):
-            kind = cov_kind[k]
+            kind = coverage_kind[k]
             if cov_is_diagnosis[kind]:
                 continue
-            wait = cov_waiting[k]
-            red_end = cov_reduction_end[k]
+            wait = coverage_waiting[k]
+            red_end = coverage_reduction_end[k]
             if wait == 0 and red_end == 0:
                 continue
-            benefit = cov_amount[k]
-            red_factor = cov_reduction_factor[k]
+            benefit = coverage_amount[k]
+            red_factor = coverage_reduction_factor[k]
             mortality_risk = cov_risk[kind] == 0
             inf = cnt
             for t in range(term):
@@ -975,13 +975,13 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
         # Diagnosis coverages: claims run off a depleting "not yet diagnosed"
         # pool, which depletes both by survival and by the diagnosis rate.
         for k in range(c_start, c_end):
-            kind = cov_kind[k]
+            kind = coverage_kind[k]
             if not cov_is_diagnosis[kind]:
                 continue
-            benefit = cov_amount[k]
-            wait = cov_waiting[k]
-            red_end = cov_reduction_end[k]
-            red_factor = cov_reduction_factor[k]
+            benefit = coverage_amount[k]
+            wait = coverage_waiting[k]
+            red_end = coverage_reduction_end[k]
+            red_factor = coverage_reduction_factor[k]
             healthy = cnt
             d_year = -1
             d_rate = 0.0
@@ -1210,9 +1210,9 @@ def value(
 
     # A claims settlement pattern discounts claims to their payment dates;
     # scaling the coverage amounts carries that into the fused kernel.
-    cov_amount = model_points.cov_amount
+    coverage_amount = model_points.coverage_amount
     if assumptions.settlement_pattern is not None:
-        cov_amount = cov_amount * _settlement_factor(
+        coverage_amount = coverage_amount * _settlement_factor(
             assumptions.settlement_pattern, assumptions.discount_monthly
         )
 
@@ -1230,9 +1230,9 @@ def value(
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,
-            model_points.cov_kind,
-            cov_amount,
-            model_points.cov_offset,
+            model_points.coverage_kind,
+            coverage_amount,
+            model_points.coverage_offset,
             cov_rates,
             cov_risk,
             cov_is_diagnosis,
@@ -1245,9 +1245,9 @@ def value(
             mortality_factor,
             morbidity_factor,
             longevity_factor,
-            model_points.cov_waiting,
-            model_points.cov_reduction_end,
-            model_points.cov_reduction_factor,
+            model_points.coverage_waiting,
+            model_points.coverage_reduction_end,
+            model_points.coverage_reduction_factor,
             survival_monthly,
         )
         return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
@@ -1273,9 +1273,9 @@ def value(
         model_points.premium_term_months,
         model_points.premium_frequency_months,
         model_points.annuity_frequency_months,
-        model_points.cov_kind,
-        cov_amount,
-        model_points.cov_offset,
+        model_points.coverage_kind,
+        coverage_amount,
+        model_points.coverage_offset,
         cov_rates,
         cov_risk,
         cov_is_diagnosis,
@@ -1317,9 +1317,9 @@ def value(
                 model_points.premium_term_months,
                 model_points.premium_frequency_months,
                 model_points.annuity_frequency_months,
-                model_points.cov_kind,
-                cov_amount,
-                model_points.cov_offset,
+                model_points.coverage_kind,
+                coverage_amount,
+                model_points.coverage_offset,
                 cov_rates,
                 cov_risk,
                 cov_is_diagnosis,
@@ -1335,9 +1335,9 @@ def value(
                 morbidity_factor,
                 longevity_factor,
                 disability_factor,
-                model_points.cov_waiting,
-                model_points.cov_reduction_end,
-                model_points.cov_reduction_factor,
+                model_points.coverage_waiting,
+                model_points.coverage_reduction_end,
+                model_points.coverage_reduction_factor,
             )
         else:
             # Markov path -- every multi-state model with no duration
@@ -1349,9 +1349,9 @@ def value(
                 premium_state, benefit_state,
             )
             bel, ra, csm, loss_component = kernel(
-                *common_args, model_points.cov_waiting,
-                model_points.cov_reduction_end,
-                model_points.cov_reduction_factor,
+                *common_args, model_points.coverage_waiting,
+                model_points.coverage_reduction_end,
+                model_points.coverage_reduction_factor,
             )
     elif backend == "gpu":
         if state_duration_max is not None:
@@ -1359,7 +1359,7 @@ def value(
                 "value(backend='gpu') does not support semi-Markov "
                 "StateModels yet; use backend='cpu'"
             )
-        if np.any(model_points.cov_waiting) or np.any(model_points.cov_reduction_end):
+        if np.any(model_points.coverage_waiting) or np.any(model_points.coverage_reduction_end):
             raise ValueError(
                 "value(backend='gpu') does not support coverage waiting / "
                 "reduction periods yet; use backend='cpu'"
