@@ -163,16 +163,22 @@ Loss:               0
 
 ### 자기 워크북으로 바꾸기
 
-자사 워크북을 만들었다면 (포맷은 [`assumptions-format`](../tutorial/assumptions-format)
+자사 워크북을 만들었다면 (포맷은 [`assumptions-format`](../assumptions-format)
 또는 챕터 2 참조), `load_sample_*` 두 줄을 다음으로 교체:
 
 ```python
 basis = fcf.read_assumptions("path/to/your_assumptions.xlsx")
-mp = fcf.read_model_points("path/to/your_policies.xlsx", asmp)
+asmp  = basis[("your_product", "your_channel")]              # 평가할 segment 선택
+mp    = fcf.read_model_points("path/to/your_policies.xlsx",
+                              asmp,                          # rider 코드 해석용
+                              coverages="path/to/your_coverages.xlsx")
 ```
 
-`asmp = basis[(product, channel)]` 의 키만 자사 segment 에 맞게 바꾸면
-나머지는 동일합니다.
+`asmp` 를 `read_model_points` 에 넘기는 이유는 policies / coverages 파일의
+**특약 코드** 를 어셈션의 rider master (workbook 의 `riders` 시트) 와
+매칭하기 위해서입니다. 사망 단독 wide-form (rider 컬럼 없음) 이면 두 번째
+인자는 생략 가능하지만, 일반적인 한국 상품 (사망 + 다종 특약) 은 항상
+필요합니다.
 
 ## 1.4 결과 해석 — 숫자가 무엇을 말하는가
 
