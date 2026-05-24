@@ -637,3 +637,47 @@ def test_semi_markov_with_rule_and_diagnosis_riders_together():
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
+
+
+def test_workbook_elapsed_axis_drives_semi_markov_reincidence(tmp_path):
+    """End-to-end: a rate sheet with an ``elapsed`` column is loaded via the
+    schema-flex reader, plugged into ``ci_reincidence_annual``, and fed
+    through the semi-Markov engine. Swapping the sheet to all-zero
+    reincidence changes the BEL -- proving the Phase 1B-1 ``elapsed`` axis
+    actually flows from the workbook into the ``(sex, age, year, cohort)``
+    evaluation."""
+    import openpyxl
+    from fastcashflow.io import _flex_rate_table
+
+    # Sheet with the new sojourn axis. Six-month exclusion window then a
+    # flat 5% recurrence -- a 재진단암 면책기간 of one half-year.
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    ws = wb.create_sheet("rates")
+    ws.append(["table_id", "elapsed", "rate"])
+    for elapsed in range(6):
+        ws.append(["CAN_RE", elapsed, 0.0])      # exclusion window
+    for elapsed in range(6, 24):
+        ws.append(["CAN_RE", elapsed, _annual(0.05)])
+    ws_zero = wb.create_sheet("rates_zero")
+    ws_zero.append(["table_id", "elapsed", "rate"])
+    for elapsed in range(24):
+        ws_zero.append(["CAN_RE_Z", elapsed, 0.0])
+    p = tmp_path / "rates.xlsx"
+    wb.save(p)
+    reload = openpyxl.load_workbook(p)
+    reincidence_fn = _flex_rate_table(reload["rates"])["CAN_RE"]
+    zero_fn = _flex_rate_table(reload["rates_zero"])["CAN_RE_Z"]
+
+    asmp = _flat_assumptions(ci_reincidence_fn=reincidence_fn)
+    mp = _single_contract(term_months=24, death_benefit=10_000_000.0,
+                          reincidence_benefit=5_000_000.0)
+    # measure / value parity is the existing semi-Markov contract -- a
+    # workbook-sourced reincidence rate keeps it.
+    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
+    assert np.isclose(m.bel[0, 0], v.bel[0])
+    # Swap to a zero-rate sheet -- the BEL must move because the elapsed
+    # axis really drives the reincidence claim outflow.
+    asmp_zero = _flat_assumptions(ci_reincidence_fn=zero_fn)
+    v_zero = fcf.value(mp, asmp_zero)
+    assert not np.isclose(v.bel[0], v_zero.bel[0])
