@@ -64,7 +64,7 @@
 **결정**:
 | 컬럼 | 규칙 | 예 |
 |---|---|---|
-| `product` | snake_case 소문자 | `term_a`, `whole_life` |
+| `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE` |
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA` |
 | `table_id` | SCREAMING_SNAKE_CASE | `MORT_STD`, `LAPSE_GA` |
 | `rider_code` | snake_case 소문자 | `dth_main`, `hosp` |
@@ -74,10 +74,12 @@
 **근거**:
 - channel은 업계 관용 약어 (General Agency, Financial Consultant)
   대문자 표기 보존이 정보 손실 적음.
-- table_id는 코드 상수와 비슷한 named reference이라
-  SCREAMING_SNAKE_CASE가 데이터 값과 시각적으로 구분됨.
-- product / rider_code는 model points / 코드 enum과 매핑되므로 같은
-  snake_case 규칙.
+- table_id 와 product 는 외부 식별자 (코드 상수에 가까운 named reference)
+  이라 SCREAMING_SNAKE_CASE 로 데이터 값과 시각적으로 구분됨.
+  product / channel / table_id 가 모두 대문자 family 로 통일되어
+  컬럼명(소문자) 과 값(대문자) 의 시각적 구분도 강해짐.
+- rider_code 는 model points / 코드 enum 과 1:1 매핑되므로 snake_case
+  소문자.
 
 ---
 

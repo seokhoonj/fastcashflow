@@ -25,7 +25,7 @@ def _build(path: Path, *, improvement_curve=None):
             "discount_table", "inflation_table",
             "expense_acquisition", "ra_confidence", "mortality_cv",
             "morbidity_cv"]
-    row = ["term_a", "GA", "MORT", "LAPSE", "DISC", "INFL",
+    row = ["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
            100_000, 0.75, 0.10, 0.10]
     if improvement_curve is not None:
         cols.append("mortality_improvement_table")
@@ -35,7 +35,7 @@ def _build(path: Path, *, improvement_curve=None):
 
     rd = wb.create_sheet("riders")
     rd.append(["product", "rider_code", "rider_name", "type", "rate_table"])
-    rd.append(["term_a", "dth_main", "main death", "death_main", None])
+    rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
 
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
@@ -62,7 +62,7 @@ def _build(path: Path, *, improvement_curve=None):
 
 
 def _segment(path):
-    return read_assumptions(path)[("term_a", "GA")]
+    return read_assumptions(path)[("TERM_A", "GA")]
 
 
 def test_no_improvement_sheet(tmp_path):

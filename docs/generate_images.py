@@ -31,7 +31,7 @@ def _save(ax, name: str) -> None:
 
 def main() -> None:
     model_points = fcf.load_sample_model_points()
-    assumptions = fcf.load_sample_assumptions()[("term_a", "GA")]
+    assumptions = fcf.load_sample_assumptions()[("TERM_A", "GA")]
     m = fcf.measure(model_points, assumptions)
 
     # 10.1 -- BEL/RA/CSM trajectories over the contract's life

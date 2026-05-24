@@ -71,11 +71,11 @@ def test_subset_slices_product_and_channel_when_set():
         level_premium=np.zeros(3),
         term_months=np.array([120, 120, 120]),
         death_benefit=np.array([1_000.0, 2_000.0, 3_000.0]),
-        product=np.array(["term_a", "term_a", "term_b"]),
+        product=np.array(["TERM_A", "TERM_A", "term_b"]),
         channel=np.array(["GA", "FC", "GA"]),
     )
     sub = mp.subset([1, 2])
-    assert sub.product.tolist() == ["term_a", "term_b"]
+    assert sub.product.tolist() == ["TERM_A", "term_b"]
     assert sub.channel.tolist() == ["FC", "GA"]
 
 
@@ -98,14 +98,14 @@ def test_value_segmented_routes_each_mp_to_its_segment():
     """Each mp's BEL should equal the value() result on its own segment."""
     asmp_high = _flat_asmp(discount=0.03)               # lower discount -> larger BEL
     asmp_low = _flat_asmp(discount=0.10)                # higher discount -> smaller BEL
-    basis = {("term_a", "GA"): asmp_high, ("term_a", "FC"): asmp_low}
+    basis = {("TERM_A", "GA"): asmp_high, ("TERM_A", "FC"): asmp_low}
 
     mp = ModelPoints(
         issue_age=np.array([40, 40, 40]),
         level_premium=np.zeros(3),
         term_months=np.array([60, 60, 60]),
         death_benefit=np.array([10_000.0, 10_000.0, 10_000.0]),
-        product=np.array(["term_a", "term_a", "term_a"]),
+        product=np.array(["TERM_A", "TERM_A", "TERM_A"]),
         channel=np.array(["GA", "FC", "GA"]),
     )
     val = value_segmented(mp, basis)
@@ -125,7 +125,7 @@ def test_value_segmented_routes_each_mp_to_its_segment():
 def test_value_segmented_falls_back_to_single_segment_when_no_product():
     """A single-segment basis works even when product/channel aren't set."""
     asmp = _flat_asmp()
-    basis = {("term_a", ""): asmp}
+    basis = {("TERM_A", ""): asmp}
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
         level_premium=np.zeros(2),
@@ -139,7 +139,7 @@ def test_value_segmented_falls_back_to_single_segment_when_no_product():
 
 def test_value_segmented_rejects_multi_segment_basis_without_keys():
     """Multi-segment basis + no product/channel on MPs -> raise."""
-    basis = {("term_a", "GA"): _flat_asmp(), ("term_a", "FC"): _flat_asmp(discount=0.10)}
+    basis = {("TERM_A", "GA"): _flat_asmp(), ("TERM_A", "FC"): _flat_asmp(discount=0.10)}
     mp = ModelPoints(
         issue_age=np.array([40]),
         level_premium=np.zeros(1),
@@ -152,13 +152,13 @@ def test_value_segmented_rejects_multi_segment_basis_without_keys():
 
 def test_value_segmented_rejects_unknown_segment():
     """A model point pointing at a segment not in basis -> raise."""
-    basis = {("term_a", "GA"): _flat_asmp()}
+    basis = {("TERM_A", "GA"): _flat_asmp()}
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
         level_premium=np.zeros(2),
         term_months=np.array([60, 60]),
         death_benefit=np.array([10_000.0, 10_000.0]),
-        product=np.array(["term_a", "term_b"]),
+        product=np.array(["TERM_A", "term_b"]),
         channel=np.array(["GA", "GA"]),
     )
     with pytest.raises(ValueError, match="not in the basis"):
@@ -168,20 +168,20 @@ def test_value_segmented_rejects_unknown_segment():
 def test_value_segmented_with_sample_basis():
     """End-to-end smoke -- the bundled sample basis has two segments and
     ``value_segmented`` routes per-mp valuations through it."""
-    basis = load_sample_assumptions()                    # term_a / GA + term_a / FC
+    basis = load_sample_assumptions()                    # TERM_A / GA + TERM_A / FC
     mp = ModelPoints(
         issue_age=np.array([40, 50, 45]),
         level_premium=np.array([50_000.0, 60_000.0, 55_000.0]),
         term_months=np.array([120, 120, 120]),
         death_benefit=np.array([100_000_000.0, 80_000_000.0, 90_000_000.0]),
-        product=np.array(["term_a", "term_a", "term_a"]),
+        product=np.array(["TERM_A", "TERM_A", "TERM_A"]),
         channel=np.array(["GA", "FC", "GA"]),
     )
     val = value_segmented(mp, basis)
     assert val.bel.shape == (3,)
     # GA segment has worse persistency than FC (different LAPSE table) ->
     # the two GA mps should not match the FC mp's pattern.
-    expected_ga = value(mp.subset([0, 2]), basis[("term_a", "GA")])
-    expected_fc = value(mp.subset([1]), basis[("term_a", "FC")])
+    expected_ga = value(mp.subset([0, 2]), basis[("TERM_A", "GA")])
+    expected_fc = value(mp.subset([1]), basis[("TERM_A", "FC")])
     assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
     assert np.allclose(val.bel[1], expected_fc.bel[0])

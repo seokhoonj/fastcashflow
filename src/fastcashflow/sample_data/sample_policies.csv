@@ -1,9 +1,9 @@
 policy_id,product,issue_age,sex,term_months,count
-P001,term_life,35,0,240,1
-P002,health,38,1,240,1
-P003,term_life,42,0,120,1
-P004,health,45,1,240,1
-P005,health,48,0,120,1
-P006,term_life,40,1,240,1
-P007,health,52,0,120,1
-P008,health,36,1,240,1
+P001,TERM_LIFE,35,0,240,1
+P002,HEALTH,38,1,240,1
+P003,TERM_LIFE,42,0,120,1
+P004,HEALTH,45,1,240,1
+P005,HEALTH,48,0,120,1
+P006,TERM_LIFE,40,1,240,1
+P007,HEALTH,52,0,120,1
+P008,HEALTH,36,1,240,1

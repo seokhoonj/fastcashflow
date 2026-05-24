@@ -26,13 +26,13 @@ def _build(path: Path, *, ae_rows=None):
                 "discount_table", "inflation_table",
                 "expense_acquisition", "ra_confidence", "mortality_cv",
                 "morbidity_cv"])
-    seg.append(["term_a", "GA", "MORT", "LAPSE", "DISC", "INFL",
+    seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 100_000, 0.75, 0.10, 0.10])
 
     rd = wb.create_sheet("riders")
     rd.append(["product", "rider_code", "rider_name", "type", "rate_table"])
-    rd.append(["term_a", "dth_main", "main death", "death_main", None])
-    rd.append(["term_a", "hosp", "hospitalization", "morbidity", "HOSP"])
+    rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
+    rd.append(["TERM_A", "hosp", "hospitalization", "morbidity", "HOSP"])
 
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
@@ -68,7 +68,7 @@ def _build(path: Path, *, ae_rows=None):
 
 
 def _segment(path):
-    return read_assumptions(path)[("term_a", "GA")]
+    return read_assumptions(path)[("TERM_A", "GA")]
 
 
 def test_no_ae_factor_sheet(tmp_path):
@@ -86,7 +86,7 @@ def test_scalar_ae_factor_per_rider(tmp_path):
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
         ["product", "channel", "rider_code", "factor"],
-        ["term_a", "GA", "hosp", 1.5],          # 손해율 150%
+        ["TERM_A", "GA", "hosp", 1.5],          # 손해율 150%
     ])
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
@@ -101,7 +101,7 @@ def test_ae_factor_on_main_mortality(tmp_path):
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
         ["product", "channel", "rider_code", "factor"],
-        ["term_a", "GA", "dth_main", 0.80],     # CI 80% — pricing 위험률에 마진 있음
+        ["TERM_A", "GA", "dth_main", 0.80],     # CI 80% — pricing 위험률에 마진 있음
     ])
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
@@ -117,11 +117,11 @@ def test_ae_factor_varies_by_age(tmp_path):
     """
     rows = [["product", "channel", "rider_code", "age", "factor"]]
     for age in range(25, 30):
-        rows.append(["term_a", "GA", "hosp", age, 3.0])
+        rows.append(["TERM_A", "GA", "hosp", age, 3.0])
     for age in range(30, 50):
-        rows.append(["term_a", "GA", "hosp", age, 1.5])
+        rows.append(["TERM_A", "GA", "hosp", age, 1.5])
     for age in range(50, 61):
-        rows.append(["term_a", "GA", "hosp", age, 1.0])
+        rows.append(["TERM_A", "GA", "hosp", age, 1.0])
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=rows)
     asmp = _segment(p)
@@ -131,11 +131,11 @@ def test_ae_factor_varies_by_age(tmp_path):
 
 
 def test_ae_factor_only_applies_to_matching_segment(tmp_path):
-    """A factor for (term_a, FC, hosp) does NOT apply to (term_a, GA, hosp)."""
+    """A factor for (TERM_A, FC, hosp) does NOT apply to (TERM_A, GA, hosp)."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
         ["product", "channel", "rider_code", "factor"],
-        ["term_a", "FC", "hosp", 1.5],         # different channel
+        ["TERM_A", "FC", "hosp", 1.5],         # different channel
     ])
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
@@ -157,11 +157,11 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
                 "discount_table", "inflation_table",
                 "expense_acquisition", "ra_confidence", "mortality_cv",
                 "morbidity_cv", "mortality_age_shift"])
-    seg.append(["term_a", "GA", "MORT", "LAPSE", "DISC", "INFL",
+    seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 100_000, 0.75, 0.10, 0.10, 5])
     rd = wb.create_sheet("riders")
     rd.append(["product", "rider_code", "rider_name", "type", "rate_table"])
-    rd.append(["term_a", "dth_main", "main death", "death_main", None])
+    rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
@@ -177,7 +177,7 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
         s_ws.append(row)
     ae = wb.create_sheet("ae_factors")
     ae.append(["product", "channel", "rider_code", "factor"])
-    ae.append(["term_a", "GA", "dth_main", 0.5])
+    ae.append(["TERM_A", "GA", "dth_main", 0.5])
     wb.save(p)
 
     asmp = _segment(p)

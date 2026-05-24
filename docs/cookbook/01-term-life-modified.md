@@ -94,13 +94,13 @@ MORT_STD    1     30    0.000400    ← 여성 30세 (별도 행)
 product   channel   mortality_table   lapse_table   expense_acq   ...
 ───────   ───────   ───────────────   ───────────   ───────────   ───
 defaults  -         MORT_STD          -             -             ...
-term_a    GA        -                 LAPSE_GA      150,000       ...
-term_a    FC        -                 LAPSE_FC       80,000       ...
+TERM_A    GA        -                 LAPSE_GA      150,000       ...
+TERM_A    FC        -                 LAPSE_FC       80,000       ...
 ```
 
 `defaults` 행은 모든 segment 의 공통값. 개별 segment 행은 빈 셀이면
 defaults 를 상속, 채워진 셀은 그 segment 만 override.
-즉 `term_a / GA` 와 `term_a / FC` 는 **같은 사망률 표** 를 쓰지만
+즉 `TERM_A / GA` 와 `TERM_A / FC` 는 **같은 사망률 표** 를 쓰지만
 **해지율 / 신사업비** 가 다른 두 채널 segment.
 
 ```{admonition} 향후 실제 워크시트 스크린샷으로 교체 예정
@@ -132,7 +132,7 @@ basis = fcf.load_sample_assumptions()    # {(product, channel): Assumptions}
 mp = fcf.load_sample_model_points()      # ModelPoints, 보유계약 8건
 
 # 평가할 segment 선택 (한 상품에 두 채널)
-asmp = basis[("term_a", "GA")]           # 또는 ("term_a", "FC")
+asmp = basis[("TERM_A", "GA")]           # 또는 ("TERM_A", "FC")
 
 # 측정 -- 두 가지 방법
 detail = fcf.measure(mp, asmp)
@@ -268,7 +268,7 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 
 ### 채널만 바꾸기 — 같은 상품, 다른 channel
 
-같은 상품 (term_a) 의 GA / FC 두 채널은 해지율과 신사업비가 다릅니다.
+같은 상품 (TERM_A) 의 GA / FC 두 채널은 해지율과 신사업비가 다릅니다.
 segment 키만 바꿔서 비교:
 
 ```python
@@ -286,8 +286,8 @@ for key in basis:
 출력:
 
 ```
-('term_a', 'GA'): BEL=   -13,646,354  RA=  566,973  CSM=    13,079,382
-('term_a', 'FC'): BEL=   -20,091,741  RA=1,019,238  CSM=    19,072,503
+('TERM_A', 'GA'): BEL=   -13,646,354  RA=  566,973  CSM=    13,079,382
+('TERM_A', 'FC'): BEL=   -20,091,741  RA=1,019,238  CSM=    19,072,503
 ```
 
 같은 보유계약, 같은 사망률·할인율이지만 채널의 해지율·신사업비 차이가
@@ -312,7 +312,7 @@ portfolio = fcf.ModelPoints(
     term_months=np.full(n_contracts, 120),                         # 모두 10년
 )
 
-asmp = fcf.load_sample_assumptions()[("term_a", "GA")]
+asmp = fcf.load_sample_assumptions()[("TERM_A", "GA")]
 result = fcf.value(portfolio, asmp)
 
 print(f"Total  : {result.bel.sum():>15,.0f}")                 # 포트폴리오 BEL 합계
@@ -365,13 +365,13 @@ mp = fcf.ModelPoints.single(
 
 ```python
 basis = fcf.load_sample_assumptions()
-asmp = basis[("term_a", "TM")]   # KeyError: 샘플엔 GA / FC 만 있음
+asmp = basis[("TERM_A", "TM")]   # KeyError: 샘플엔 GA / FC 만 있음
 ```
 
 `basis.keys()` 로 어떤 segment 가 있는지 먼저 확인:
 
 ```python
-print(list(basis.keys()))   # [('term_a', 'GA'), ('term_a', 'FC')]
+print(list(basis.keys()))   # [('TERM_A', 'GA'), ('TERM_A', 'FC')]
 ```
 
 자기 워크북에서는 `segments` 시트의 `(product, channel)` 조합이 그대로

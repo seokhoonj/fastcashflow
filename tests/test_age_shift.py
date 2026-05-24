@@ -32,7 +32,7 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
     if morbidity_age_shift is not None:
         cols.append("morbidity_age_shift")
     seg.append(cols)
-    row = ["term_a", None, "MORT", "LAPSE", "DISC", "INFL",
+    row = ["TERM_A", None, "MORT", "LAPSE", "DISC", "INFL",
            100_000, 0.75, 0.10, 0.10]
     if mortality_age_shift is not None:
         row.append(mortality_age_shift)
@@ -43,8 +43,8 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
     # riders
     rd = wb.create_sheet("riders")
     rd.append(["product", "rider_code", "rider_name", "type", "rate_table"])
-    rd.append(["term_a", "dth_main", "main death", "death_main", None])
-    rd.append(["term_a", "hosp", "hospitalization", "morbidity", "HOSP"])
+    rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
+    rd.append(["TERM_A", "hosp", "hospitalization", "morbidity", "HOSP"])
 
     # mortality table -- linear in age so a shift is easy to verify
     mt = wb.create_sheet("mortality_tables")

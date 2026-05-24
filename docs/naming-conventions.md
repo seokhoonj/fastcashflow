@@ -53,7 +53,7 @@
 
 | 컬럼 | 규칙 | 예 | 이유 |
 |---|---|---|---|
-| `product` | 소문자 snake_case | `term_a`, `whole_life`, `var_ul` | 컬럼명과 일치, 식별자임을 명시 |
+| `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE`, `VAR_UL` | `table_id` / `channel` 과 같은 대문자 외부 식별자 패밀리 — 컬럼명(소문자) 과 값(대문자) 의 시각적 구분 |
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA`, `DM` | 업계 관용 약어 (General Agency, Financial Consultant, Bancassurance, Direct Marketing) |
 | `table_id` | SCREAMING_SNAKE_CASE | `MORT_STD`, `LAPSE_GA`, `DISC_STD`, `HOSP_STD` | named reference (코드 상수처럼) — 실 데이터 값과 시각적 구분 |
 | `rider_code` | 소문자 snake_case | `dth_main`, `hosp`, `cancer`, `surgery` | 모델포인트와 매칭되는 식별자 |

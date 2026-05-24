@@ -118,7 +118,7 @@ import fastcashflow as fcf
 
 model_points = fcf.load_sample_model_points()              # bundled sample portfolio
 basis        = fcf.load_sample_assumptions()               # {(product, channel): Assumptions}
-assumptions  = basis[("term_a", "GA")]                     # pick one segment
+assumptions  = basis[("TERM_A", "GA")]                     # pick one segment
 m            = fcf.measure(model_points, assumptions)
 print(m.bel[:, 0], m.ra[:, 0], m.csm[:, 0])   # BEL / RA / CSM at issue
 ```

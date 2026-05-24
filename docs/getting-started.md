@@ -22,7 +22,7 @@ bundled sample, which loads with no files to prepare.
 import fastcashflow as fcf
 
 basis        = fcf.load_sample_assumptions()       # {(product, channel): Assumptions}
-assumptions  = basis[("term_a", "GA")]             # pick one segment
+assumptions  = basis[("TERM_A", "GA")]             # pick one segment
 model_points = fcf.load_sample_model_points()
 
 m = fcf.measure(model_points, assumptions)
