@@ -254,3 +254,171 @@ class Assumptions:
         d = self.discount_annual
         head = float(d) if np.ndim(d) == 0 else float(np.asarray(d).flat[0])
         return (1.0 + head) ** (1.0 / 12.0) - 1.0
+
+
+_DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("위험률 (callable)", (
+        "mortality_annual",
+        "lapse_annual",
+        "waiver_incidence_annual",
+        "waiver_inception_annual",
+        "ci_incidence_annual",
+        "ci_reincidence_annual",
+        "disability_recovery_annual",
+    )),
+    ("경제 / 비용", (
+        "discount_annual",
+        "expense_acquisition",
+        "expense_maintenance_annual",
+        "expense_inflation",
+    )),
+    ("위험조정 (RA)", (
+        "ra_method",
+        "ra_confidence",
+        "cost_of_capital_rate",
+        "mortality_cv",
+        "morbidity_cv",
+        "longevity_cv",
+        "disability_cv",
+        "expense_cv",
+    )),
+    ("기타 (VFA / 정산)", (
+        "investment_return",
+        "fund_fee",
+        "guaranteed_credit_rate",
+        "settlement_pattern",
+    )),
+)
+
+
+def _fmt_value(v: object) -> str:
+    if v is None:
+        return "None"
+    if callable(v):
+        return "<callable>"
+    if isinstance(v, np.ndarray):
+        flat = v.flatten()
+        if flat.size <= 4:
+            preview = "[" + ", ".join(f"{x:g}" for x in flat) + "]"
+        else:
+            preview = f"[{flat[0]:g}, ..., {flat[-1]:g}]"
+        return f"ndarray shape={tuple(v.shape)} {preview}"
+    if isinstance(v, bool):
+        return repr(v)
+    if isinstance(v, float):
+        return f"{v:g}"
+    if isinstance(v, (int, str)):
+        return repr(v)
+    return repr(v)
+
+
+def _emit_tree(lines: list[object], out: list[str], prefix: str) -> None:
+    """Render a list of (str | (header, sub_lines)) items as ASCII tree rows."""
+    n = len(lines)
+    for i, item in enumerate(lines):
+        last = (i == n - 1)
+        head = "└─ " if last else "├─ "
+        child = prefix + ("    " if last else "│   ")
+        if isinstance(item, tuple):
+            header, subs = item
+            out.append(f"{prefix}{head}{header}")
+            _emit_tree(subs, out, child)
+        else:
+            out.append(f"{prefix}{head}{item}")
+
+
+def describe_assumptions(obj, *, file=None) -> None:
+    """Print the tree structure of an Assumptions (or read_assumptions dict).
+
+    Groups the fields by role -- rates, economic / expense, risk adjustment,
+    riders / coverage types, state machine, other -- so a reader can see
+    what is inside the object without scanning every dataclass field.
+
+    Pass a single :class:`Assumptions` to see one segment, or pass the dict
+    returned by :func:`fastcashflow.io.read_assumptions` /
+    :func:`fastcashflow.io.load_sample_assumptions` to also see the
+    ``(product, channel)`` keys.
+    """
+    import sys
+    out_lines: list[str] = []
+    if isinstance(obj, dict):
+        out_lines.append(
+            f"dict[(product, channel), Assumptions]  ({len(obj)} segments)"
+        )
+        keys = list(obj.keys())
+        for i, key in enumerate(keys):
+            last = (i == len(keys) - 1)
+            head = "└─ " if last else "├─ "
+            child = "    " if last else "│   "
+            out_lines.append(f"{head}{key!r}  ->  Assumptions")
+            if i == 0:
+                _describe_assumptions_lines(obj[key], out_lines, prefix=child)
+            else:
+                out_lines.append(
+                    f"{child}└─ (다른 segment 와 동일 구조; 값만 차이)"
+                )
+    elif isinstance(obj, Assumptions):
+        out_lines.append("Assumptions")
+        _describe_assumptions_lines(obj, out_lines, prefix="")
+    else:
+        raise TypeError(
+            f"describe_assumptions expects Assumptions or dict, got "
+            f"{type(obj).__name__}"
+        )
+    text = "\n".join(out_lines) + "\n"
+    (file or sys.stdout).write(text)
+
+
+def _describe_assumptions_lines(
+    asmp: "Assumptions", out: list[str], *, prefix: str,
+) -> None:
+    sections: list[tuple[str, list[object]]] = []
+    marks = ["1.", "2.", "3.", "4.", "5.", "6."]
+
+    def field_lines(names: tuple[str, ...]) -> list[object]:
+        width = max(len(n) for n in names)
+        return [f"{n:<{width}}  {_fmt_value(getattr(asmp, n))}" for n in names]
+
+    for i, (title, names) in enumerate(_DESCRIBE_GROUPS[:3]):
+        sections.append((f"{marks[i]} {title}", field_lines(names)))
+
+    riders = asmp.riders
+    cov = asmp.coverage_types
+    rider_lines: list[object] = []
+    width = max((len(r.code) for r in riders), default=0)
+    for r in riders:
+        rider_lines.append(
+            f"RiderRate(code={r.code!r:{width+2}}, risk={r.risk}, "
+            f"is_diagnosis={r.is_diagnosis}, rate=<callable>)"
+        )
+    cov_lines: list[object] = [f"{k!r:12} -> {v!r}" for k, v in cov.items()]
+    sections.append((f"{marks[3]} 특약 / 담보 정의", [
+        (f"riders : tuple  (len={len(riders)})", rider_lines),
+        (f"coverage_types : dict  (len={len(cov)})", cov_lines),
+    ]))
+
+    sm = asmp.state_model
+    if sm is None:
+        sm_body: list[object] = ["None"]
+    else:
+        state_items: list[object] = []
+        for st in sm.states:
+            trs: list[object] = []
+            for t in st.transitions:
+                target = "exit" if t.to is None else repr(t.to)
+                tag = " (lump_sum)" if t.lump_sum else ""
+                trs.append(f"{t.rate}  ->  {target}{tag}")
+            state_items.append((
+                f"State({st.name!r}, premium={st.premium}, "
+                f"benefit={st.benefit}, duration_max={st.duration_max})",
+                trs,
+            ))
+        sm_body = [(f"states : tuple  (len={len(sm.states)})", state_items)]
+    sections.append((f"{marks[4]} state_model : StateModel", sm_body))
+
+    sections.append((
+        f"{marks[5]} {_DESCRIBE_GROUPS[3][0]}",
+        field_lines(_DESCRIBE_GROUPS[3][1]),
+    ))
+
+    _emit_tree([(t, b) for t, b in sections], out, prefix)

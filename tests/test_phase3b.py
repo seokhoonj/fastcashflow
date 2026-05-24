@@ -204,6 +204,26 @@ def test_sample_data_dir_exposes_bundled_files():
             "sample_coverages.csv"}.issubset(names)
 
 
+def test_describe_assumptions_renders_both_shapes(capsys):
+    """describe_assumptions prints a tree for an Assumptions and for a dict."""
+    from fastcashflow import describe_assumptions
+    basis = load_sample_assumptions()
+    asmp = next(iter(basis.values()))
+
+    describe_assumptions(asmp)
+    out_one = capsys.readouterr().out
+    assert out_one.startswith("Assumptions")
+    assert "위험률" in out_one
+    assert "state_model" in out_one
+    assert "riders" in out_one
+
+    describe_assumptions(basis)
+    out_dict = capsys.readouterr().out
+    assert "(2 segments)" in out_dict
+    # only first segment is unfolded; others get the 'same shape' note
+    assert "동일 구조" in out_dict
+
+
 def test_to_long_round_trips(tmp_path):
     """ModelPoints.to_long written out and re-read reproduces the valuation."""
     asmp = next(iter(load_sample_assumptions().values()))

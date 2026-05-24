@@ -111,6 +111,15 @@ defaults 를 상속, 채워진 셀은 그 segment 만 override.
 설명합니다.
 ```
 
+```{admonition} 객체 안에 뭐가 들었는지 보고 싶다면
+:class: tip
+
+`fcf.describe_assumptions(basis)` 한 줄이면 위 워크북이 메모리에 어떤
+트리 구조로 들어왔는지 (segment 키, 위험률 callable, 경제 / 비용,
+RA 파라미터, riders, coverage_types, state_model) 한 번에 출력합니다.
+단일 segment 만 보려면 `describe_assumptions(asmp)`.
+```
+
 ### 코드 — 샘플로 즉시 평가
 
 다음 코드는 그대로 복사해서 실행:
