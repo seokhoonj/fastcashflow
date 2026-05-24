@@ -360,12 +360,7 @@ def describe_assumptions(obj, *, file=None) -> None:
             head = "└─ " if last else "├─ "
             child = "    " if last else "│   "
             out_lines.append(f"{head}{key!r}  ->  Assumptions")
-            if i == 0:
-                _describe_assumptions_lines(obj[key], out_lines, prefix=child)
-            else:
-                out_lines.append(
-                    f"{child}└─ (다른 segment 와 동일 구조; 값만 차이)"
-                )
+            _describe_assumptions_lines(obj[key], out_lines, prefix=child)
     elif isinstance(obj, Assumptions):
         out_lines.append("Assumptions")
         _describe_assumptions_lines(obj, out_lines, prefix="")
