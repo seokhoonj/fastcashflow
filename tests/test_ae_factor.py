@@ -77,8 +77,8 @@ def test_no_ae_factor_sheet(tmp_path):
     _build(p)
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d))[0] == 0.001
-    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d))[0] == 0.02
+    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
+    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.02
 
 
 def test_scalar_ae_factor_per_rider(tmp_path):
@@ -91,9 +91,9 @@ def test_scalar_ae_factor_per_rider(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # base 0.02 * factor 1.5 = 0.03
-    assert np.isclose(asmp.riders[0].rate(s, a, d, np.zeros_like(d))[0], 0.03)
+    assert np.isclose(asmp.riders[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.03)
     # mortality unchanged (no row for dth_main)
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d))[0] == 0.001
+    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
 
 
 def test_ae_factor_on_main_mortality(tmp_path):
@@ -105,7 +105,7 @@ def test_ae_factor_on_main_mortality(tmp_path):
     ])
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d))[0], 0.001 * 0.80)
+    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.001 * 0.80)
 
 
 def test_ae_factor_varies_by_age(tmp_path):
@@ -126,7 +126,7 @@ def test_ae_factor_varies_by_age(tmp_path):
     _build(p, ae_rows=rows)
     asmp = _segment(p)
     s = np.array([0, 0, 0]); a = np.array([25, 40, 60]); d = np.array([0, 0, 0])
-    out = asmp.riders[0].rate(s, a, d, np.zeros_like(d))
+    out = asmp.riders[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))
     assert np.allclose(out, [0.02 * 3.0, 0.02 * 1.5, 0.02 * 1.0])
 
 
@@ -140,7 +140,7 @@ def test_ae_factor_only_applies_to_matching_segment(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # GA segment: no matching A/E -> base rate unchanged
-    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d))[0] == 0.02
+    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.02
 
 
 def test_ae_factor_composes_with_age_shift(tmp_path):
@@ -183,4 +183,4 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # apparent age 30 + 5 = 35 -> base rate 0.001 * 16 = 0.016; A/E 0.5 -> 0.008
-    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d))[0], 0.001 * 16 * 0.5)
+    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.001 * 16 * 0.5)

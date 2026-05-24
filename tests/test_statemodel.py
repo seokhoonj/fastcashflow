@@ -306,7 +306,7 @@ def test_assumptions_waiver_inception_alias_deprecated():
     d_probe = np.arange(3)
     zero = np.zeros_like(d_probe)
     assert np.allclose(
-        asmp.waiver_incidence_annual(zero, zero, d_probe, zero),
+        asmp.waiver_incidence_annual(zero, zero, d_probe, zero, zero),
         rate(zero, zero, d_probe),
     )
     assert asmp.waiver_inception_annual is None

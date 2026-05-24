@@ -11,14 +11,10 @@ from fastcashflow._typing import DurationRateFn, FloatArray, IntArray, RateFn
 from fastcashflow.statemodel import StateModel
 
 
-# RateFn fields on Assumptions that follow the 4-arg
-# ``(sex, issue_age, duration, issue_class)`` signature. Legacy callers
-# wrote these as 3-arg lambdas (no issue_class); ``_adapt_rate_arity``
-# detects those at Assumptions construction and wraps them so the engine
-# can always pass four positional arguments. DurationRateFn fields
-# (ci_reincidence_annual, disability_recovery_annual) are NOT in this
-# list -- they use a different 4-arg shape whose fourth argument is the
-# semi-Markov cohort index, not issue_class.
+# RateFn fields on Assumptions that follow the standard
+# ``(sex, issue_age, duration, issue_class, elapsed)`` 5-arg signature
+# when a user lambda is written with 4 positional args, the 4th is
+# interpreted as ``issue_class`` (the post-Phase-1A shape).
 _RATE_FN_FIELDS: tuple[str, ...] = (
     "mortality_annual",
     "lapse_annual",
@@ -26,15 +22,37 @@ _RATE_FN_FIELDS: tuple[str, ...] = (
     "ci_incidence_annual",
 )
 
+# DurationRateFn-shape fields on Assumptions -- semi-Markov rates whose
+# legacy 4-arg user lambdas wrote the 4th argument as the cohort index
+# (state-duration since entering the source state). After the 5-arg
+# unification these map to the new ``elapsed`` axis (the 5th positional
+# argument). The adapter knows to shift the legacy 4th -> 5th for these
+# fields specifically.
+_DURATION_RATE_FN_FIELDS: tuple[str, ...] = (
+    "ci_reincidence_annual",
+    "disability_recovery_annual",
+)
 
-def _adapt_rate_arity(fn):
-    """Wrap a legacy 3-arg rate callable so it accepts the 4th issue_class arg.
 
-    A user lambda written as ``lambda sex, age, dur: ...`` (the pre-Phase-1A
-    shape) is wrapped to ``(sex, age, dur, issue_class)`` -- issue_class is
-    discarded by the wrapper. A callable that already accepts 4 positional
-    arguments (or ``*args``) is returned unchanged. ``None`` is also passed
-    through unchanged (an optional rate the segment did not configure).
+def _adapt_rate_arity(fn, *, is_duration: bool = False):
+    """Wrap a legacy rate callable to the 5-arg unified shape.
+
+    The engine now calls every rate as
+    ``(sex, issue_age, duration, issue_class, elapsed)``. User callables
+    written before the unification may be:
+
+    * 3-arg ``(sex, age, dur)`` -- the pre-axis-extension shape; the
+      wrapper discards ``issue_class`` and ``elapsed``.
+    * 4-arg, RateFn shape ``(sex, age, dur, issue_class)`` -- the
+      Phase-1A shape; the wrapper discards ``elapsed``.
+    * 4-arg, DurationRateFn shape ``(sex, age, dur, cohort_index)`` --
+      the pre-unification semi-Markov shape; the wrapper maps the
+      original 4th arg to ``elapsed`` (the 5th in the new signature).
+      Selected via ``is_duration=True`` (the caller knows the field is
+      a DurationRateFn slot).
+    * 5-arg or ``*args`` -- already the new shape, returned unchanged.
+
+    ``None`` is also passed through unchanged.
     """
     if fn is None:
         return fn
@@ -51,12 +69,22 @@ def _adapt_rate_arity(fn):
         if p.kind in (inspect.Parameter.POSITIONAL_ONLY,
                        inspect.Parameter.POSITIONAL_OR_KEYWORD)
     ]
-    if len(positional) >= 4:
-        return fn   # already 4-arg (or more) -- pass through
-    if len(positional) != 3:
+    if len(positional) >= 5:
+        return fn   # already 5-arg (or more) -- pass through
+    if len(positional) == 4:
+        if is_duration:
+            # Legacy DurationRateFn: 4th arg is cohort_index -> shift to elapsed.
+            def wrapped(sex, issue_age, duration, issue_class, elapsed):
+                return fn(sex, issue_age, duration, elapsed)
+        else:
+            # Legacy Phase-1A RateFn: 4th arg is issue_class.
+            def wrapped(sex, issue_age, duration, issue_class, elapsed):
+                return fn(sex, issue_age, duration, issue_class)
+    elif len(positional) == 3:
+        def wrapped(sex, issue_age, duration, issue_class, elapsed):
+            return fn(sex, issue_age, duration)
+    else:
         return fn   # unusual arity -- leave alone, let the engine error
-    def wrapped(sex, issue_age, duration, issue_class):
-        return fn(sex, issue_age, duration)
     # Preserve the source-table metadata so describe_assumptions still
     # surfaces the table_id when the wrapped fn came from io.py.
     for attr in ("_fcf_table_id", "_fcf_sheet", "_fcf_modifiers"):
@@ -295,17 +323,23 @@ class Assumptions:
             )
             object.__setattr__(self, "waiver_inception_annual", None)
 
-        # Wrap legacy 3-arg rate callables to the 4-arg
-        # ``(sex, issue_age, duration, issue_class)`` shape the engine now
-        # passes uniformly. Built-in callables from io.py are already 4-arg
-        # (a no-op detection), user lambdas that were written as 3-arg get
-        # an issue_class-discarding wrapper. Runs after the
-        # waiver_inception routing so the routed callable is wrapped too.
+        # Wrap legacy 3-arg / 4-arg rate callables to the unified 5-arg
+        # ``(sex, issue_age, duration, issue_class, elapsed)`` shape the
+        # engine now passes everywhere. Built-in callables from io.py are
+        # already 5-arg (a no-op detection); legacy user lambdas get an
+        # issue_class / elapsed-discarding wrapper. RateFn vs DurationRateFn
+        # fields differ in how a legacy 4-arg lambda is interpreted -- see
+        # ``_adapt_rate_arity``. Runs after the waiver_inception routing so
+        # the routed callable is wrapped too.
         for field in _RATE_FN_FIELDS:
             adapted = _adapt_rate_arity(getattr(self, field))
             if adapted is not getattr(self, field):
                 object.__setattr__(self, field, adapted)
-        # Rider rates take the same RateFn shape; wrap each rider's rate too.
+        for field in _DURATION_RATE_FN_FIELDS:
+            adapted = _adapt_rate_arity(getattr(self, field), is_duration=True)
+            if adapted is not getattr(self, field):
+                object.__setattr__(self, field, adapted)
+        # Rider rates take the RateFn shape; wrap each rider's rate too.
         # Riders are a tuple of frozen RiderRate dataclasses -- rebuild the
         # tuple with the adapted callables.
         new_riders = tuple(

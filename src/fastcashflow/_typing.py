@@ -3,8 +3,7 @@
 ``FloatArray`` / ``IntArray`` are the canonical names for the numpy 1D/2D
 arrays the engine moves around -- they exist so that an explicit
 ``NDArray[np.float64]`` doesn't appear in every signature. ``RateFn``
-and ``DurationRateFn`` describe the two callable shapes the engine
-accepts for rate assumptions.
+describes the unified callable shape every annual rate assumption uses.
 """
 from __future__ import annotations
 
@@ -16,21 +15,26 @@ from numpy.typing import NDArray
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
 
-# Per-policy-year rate (the standard shape -- mortality, lapse,
-# waiver_incidence, ci_incidence, etc). Called by the engine on the
-# ``(sex, issue_age, duration_year, issue_class)`` grid; returns the
-# annual rate per cell. The engine constant-force-converts the result to
-# monthly. ``issue_class`` is the at-issue classification axis (직업class
-# / UW class) the rate table may key on; a table without that axis
-# broadcasts over it. Legacy three-arg callables are auto-wrapped to this
-# four-arg shape in ``Assumptions.__post_init__``.
-RateFn = Callable[[IntArray, FloatArray, IntArray, IntArray], FloatArray]
-
-# Per-policy-year-and-state-duration rate (the semi-Markov shape -- the
-# rate depends not only on attained-age duration but also on the sojourn
-# time in the current state). ci_reincidence_annual and
-# disability_recovery_annual use this signature. The fourth argument is
-# the cohort index (months since entering the source state).
-DurationRateFn = Callable[
-    [IntArray, FloatArray, IntArray, IntArray], FloatArray
+# The unified rate callable shape -- every annual rate function in
+# Assumptions (mortality, lapse, waiver_incidence, ci_incidence, and the
+# duration-dependent ci_reincidence / disability_recovery) takes the same
+# five positional grids:
+#
+#   (sex, issue_age, duration, issue_class, elapsed) -> annual rate
+#
+# ``issue_class`` is the at-issue classification axis (직업class / UW
+# class) the rate table may key on. ``elapsed`` is the semi-Markov sojourn
+# axis (state-duration since entering the source state). A table without
+# a given axis broadcasts over it; the engine passes zeros for axes a
+# particular call does not exercise. Legacy 3-arg or 4-arg user callables
+# are auto-wrapped to this five-arg shape in ``Assumptions.__post_init__``
+# -- existing user lambdas continue to work without rewriting.
+RateFn = Callable[
+    [IntArray, FloatArray, IntArray, IntArray, IntArray], FloatArray
 ]
+
+# ``DurationRateFn`` is kept as an alias for ``RateFn`` after the
+# five-arg unification (ci_reincidence_annual / disability_recovery_annual
+# previously used a separate four-arg shape). Code that still imports the
+# name from earlier versions stays valid.
+DurationRateFn = RateFn

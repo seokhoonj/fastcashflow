@@ -123,7 +123,10 @@ def _sheet_dicts(ws):
 # exclusive with ``issue_age`` / ``duration`` (select-and-ultimate schema).
 # ``issue_class`` is the at-issue classification axis (직업class / UW
 # class) -- absent from most tables, broadcasts to a no-op when absent.
-_RATE_AXES = ("sex", "issue_age", "duration", "age", "issue_class")
+# ``elapsed`` is the semi-Markov sojourn axis (state-duration in years
+# since entering the source state) -- carried by re-incidence /
+# post-event mortality tables; broadcasts to a no-op when absent.
+_RATE_AXES = ("sex", "issue_age", "duration", "age", "issue_class", "elapsed")
 
 
 def _flex_rate_table(ws, *, value_col="rate"):
@@ -178,10 +181,11 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
             )
         val = entries[0][1]
 
-        def rate(sex, issue_age, duration, issue_class):
+        def rate(sex, issue_age, duration, issue_class, elapsed):
             shape = np.broadcast_shapes(
                 np.asarray(sex).shape, np.asarray(issue_age).shape,
                 np.asarray(duration).shape, np.asarray(issue_class).shape,
+                np.asarray(elapsed).shape,
             )
             return np.full(shape, val, dtype=np.float64)
         rate._fcf_table_id = table_id
@@ -204,11 +208,12 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
             f"axes {axes} -- some cells in the cartesian product are missing"
         )
 
-    def rate(sex, issue_age, duration, issue_class):
+    def rate(sex, issue_age, duration, issue_class, elapsed):
         sex = np.asarray(sex, dtype=np.int64)
         issue_age = np.asarray(issue_age, dtype=np.int64)
         duration = np.asarray(duration, dtype=np.int64)
         issue_class = np.asarray(issue_class, dtype=np.int64)
+        elapsed = np.asarray(elapsed, dtype=np.int64)
         # One index array per axis present in the table.
         idxs = []
         for i, a in enumerate(axes):
@@ -220,6 +225,8 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
                 raw = issue_age
             elif a == "issue_class":
                 raw = issue_class
+            elif a == "elapsed":
+                raw = elapsed
             else:                                          # duration
                 raw = duration
             idxs.append(np.clip(raw - int(mins[i]), 0, shape[i] - 1))
@@ -227,7 +234,8 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
         # numpy fancy-indexing returns a result of that shape (axes absent
         # from the table contribute through broadcast, not indexing).
         target = np.broadcast_shapes(
-            sex.shape, issue_age.shape, duration.shape, issue_class.shape,
+            sex.shape, issue_age.shape, duration.shape,
+            issue_class.shape, elapsed.shape,
         )
         return grid[tuple(np.broadcast_to(ix, target) for ix in idxs)]
     rate._fcf_table_id = table_id
@@ -297,10 +305,11 @@ def _with_improvement(rate_fn, improvement_curve):
         return rate_fn
     n = improvement_curve.shape[0]
 
-    def improved(sex, issue_age, duration, issue_class):
+    def improved(sex, issue_age, duration, issue_class, elapsed):
         d = np.asarray(duration, dtype=np.int64)
         idx = np.clip(d, 0, n - 1)
-        return rate_fn(sex, issue_age, duration, issue_class) * improvement_curve[idx]
+        return (rate_fn(sex, issue_age, duration, issue_class, elapsed)
+                * improvement_curve[idx])
     _propagate_table_id(improved, rate_fn, "improvement")
     return improved
 
@@ -315,9 +324,9 @@ def _with_ae_factor(rate_fn, factor_fn):
     if factor_fn is None or rate_fn is None:
         return rate_fn
 
-    def adjusted(sex, issue_age, duration, issue_class):
-        return (rate_fn(sex, issue_age, duration, issue_class)
-                * factor_fn(sex, issue_age, duration, issue_class))
+    def adjusted(sex, issue_age, duration, issue_class, elapsed):
+        return (rate_fn(sex, issue_age, duration, issue_class, elapsed)
+                * factor_fn(sex, issue_age, duration, issue_class, elapsed))
     _propagate_table_id(adjusted, rate_fn, "ae")
     return adjusted
 
@@ -334,8 +343,8 @@ def _with_age_shift(rate_fn, shift):
     if rate_fn is None or shift == 0:
         return rate_fn
 
-    def shifted(sex, issue_age, duration, issue_class):
-        return rate_fn(sex, issue_age + shift, duration, issue_class)
+    def shifted(sex, issue_age, duration, issue_class, elapsed):
+        return rate_fn(sex, issue_age + shift, duration, issue_class, elapsed)
     _propagate_table_id(shifted, rate_fn, f"shift{shift:+d}")
     return shifted
 

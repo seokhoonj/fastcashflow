@@ -27,13 +27,15 @@ def _sheet(rows):
     return ws
 
 
-def _call(callable_, sex, issue_age, duration, issue_class=None):
+def _call(callable_, sex, issue_age, duration, issue_class=None, elapsed=None):
     s = np.atleast_1d(np.asarray(sex, dtype=np.int64))
     a = np.atleast_1d(np.asarray(issue_age, dtype=np.int64))
     d = np.atleast_1d(np.asarray(duration, dtype=np.int64))
     c = (np.zeros_like(s) if issue_class is None
          else np.atleast_1d(np.asarray(issue_class, dtype=np.int64)))
-    return callable_(s, a, d, c)
+    e = (np.zeros_like(s) if elapsed is None
+         else np.atleast_1d(np.asarray(elapsed, dtype=np.int64)))
+    return callable_(s, a, d, c, e)
 
 
 def test_scalar_schema():
@@ -184,7 +186,7 @@ def test_broadcasts_to_engine_grid_shape():
     sex_g, age_g, dur_g = np.meshgrid(
         np.array([0, 1]), np.array([30]), np.array([0, 1]), indexing="ij",
     )
-    out = fn(sex_g, age_g, dur_g, np.zeros_like(dur_g))
+    out = fn(sex_g, age_g, dur_g, np.zeros_like(dur_g), np.zeros_like(dur_g))
     assert out.shape == sex_g.shape
     # sex=0, age=30, dur=0 -> attained 30 -> 0.001 ; dur=1 -> attained 31 -> 0.002
     assert out[0, 0, 0] == 0.001
@@ -205,17 +207,18 @@ def test_issue_class_axis_is_recognised():
     fn = _flex_rate_table(ws)["CLS"]
     # Same (sex, age, dur) but different issue_class -> different rate.
     s = np.array([0, 0, 0]); a = np.array([40, 40, 40]); d = np.array([0, 0, 0])
-    c = np.array([0, 1, 2])
-    out = fn(s, a, d, c)
+    c = np.array([0, 1, 2]); e = np.zeros_like(s)
+    out = fn(s, a, d, c, e)
     assert np.allclose(out, [0.0010, 0.0020, 0.0040])
     # An issue_class beyond the table's range clips to the edge.
     assert fn(np.array([0]), np.array([40]), np.array([0]),
-               np.array([99]))[0] == 0.0040
+               np.array([99]), np.array([0]))[0] == 0.0040
 
 
 def test_legacy_three_arg_user_lambda_is_adapted():
-    """User-supplied 3-arg rate lambdas are auto-wrapped to the 4-arg shape
-    the engine now passes; the issue_class argument is discarded."""
+    """User-supplied 3-arg rate lambdas are auto-wrapped to the 5-arg shape
+    the engine now passes; the issue_class and elapsed arguments are
+    discarded by the wrapper."""
     asmp = Assumptions(
         # Pre-Phase-1A user lambda style -- 3 positional args.
         mortality_annual=lambda sex, age, dur: np.full(dur.shape, 0.001),
@@ -227,7 +230,60 @@ def test_legacy_three_arg_user_lambda_is_adapted():
         ra_confidence=0.75,
         mortality_cv=0.0,
     )
-    # The adapter accepts the new 4-arg engine call without error.
-    s = np.array([0]); a = np.array([40]); d = np.array([0]); c = np.array([0])
-    assert asmp.mortality_annual(s, a, d, c)[0] == 0.001
-    assert asmp.lapse_annual(s, a, d, c)[0] == 0.01
+    # The adapter accepts the new 5-arg engine call without error.
+    s = np.array([0]); a = np.array([40]); d = np.array([0])
+    c = np.array([0]); e = np.array([0])
+    assert asmp.mortality_annual(s, a, d, c, e)[0] == 0.001
+    assert asmp.lapse_annual(s, a, d, c, e)[0] == 0.01
+
+
+def test_legacy_four_arg_duration_lambda_is_adapted():
+    """A pre-unification 4-arg DurationRateFn lambda (sex, age, dur, cohort)
+    is auto-wrapped: the wrapper maps the original 4th argument to the
+    new 5th ``elapsed`` slot, so the engine's 5-arg call routes the
+    cohort dimension through correctly."""
+    asmp = Assumptions(
+        mortality_annual=lambda s, a, d: np.full(d.shape, 0.001),
+        lapse_annual=lambda s, a, d: np.full(d.shape, 0.01),
+        # 4-arg legacy DurationRateFn user lambda -- rate doubles per
+        # cohort step (an exclusion-window style probe).
+        ci_reincidence_annual=lambda s, a, d, cohort: np.where(
+            cohort == 0, 0.10, 0.20,
+        ),
+        discount_annual=0.03,
+        expense_acquisition=0.0,
+        expense_maintenance_annual=0.0,
+        expense_inflation=0.0,
+        ra_confidence=0.75,
+        mortality_cv=0.0,
+    )
+    s = np.array([0, 0]); a = np.array([40, 40]); d = np.array([0, 0])
+    c = np.array([0, 0])
+    # cohort_index lands in the new 5th positional slot (``elapsed``).
+    elapsed_cohort_zero = np.array([0, 0])
+    elapsed_cohort_one = np.array([0, 1])
+    assert asmp.ci_reincidence_annual(s, a, d, c, elapsed_cohort_zero)[0] == 0.10
+    out = asmp.ci_reincidence_annual(s, a, d, c, elapsed_cohort_one)
+    assert out[0] == 0.10 and out[1] == 0.20
+
+
+def test_elapsed_axis_is_recognised():
+    """A table with an ``elapsed`` column varies by that sojourn axis;
+    lookups pass the per-call elapsed value through as the fifth
+    callable argument."""
+    ws = _sheet([
+        ("table_id", "sex", "elapsed", "rate"),
+        ("CAN_RE", 0, 0, 0.00),       # exclusion window -- no recurrence at t=0
+        ("CAN_RE", 0, 1, 0.05),
+        ("CAN_RE", 0, 2, 0.04),
+        ("CAN_RE", 0, 3, 0.03),
+    ])
+    fn = _flex_rate_table(ws)["CAN_RE"]
+    s = np.array([0, 0, 0, 0]); a = np.array([50, 50, 50, 50])
+    d = np.array([0, 0, 0, 0]); c = np.zeros_like(s)
+    e = np.array([0, 1, 2, 3])
+    out = fn(s, a, d, c, e)
+    assert np.allclose(out, [0.00, 0.05, 0.04, 0.03])
+    # An elapsed beyond the table's range clips to the edge.
+    assert fn(np.array([0]), np.array([50]), np.array([0]),
+               np.array([0]), np.array([99]))[0] == 0.03

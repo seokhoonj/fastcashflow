@@ -468,26 +468,36 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     issue_class_grid, _ = np.meshgrid(
         model_points.issue_class, durations, indexing="ij"
     )
+    # ``elapsed`` axis -- carried only by semi-Markov sojourn-aware rates.
+    # The standard (non-cohort) setup grid is elapsed=0 throughout: tables
+    # without the axis broadcast over it (no effect), tables that declare
+    # it are looked up at elapsed=0 here (a future cohort-aware pass plugs
+    # the per-MP per-cohort elapsed values in).
+    elapsed_grid = np.zeros_like(duration_grid)
     # Rates are supplied annual; the engine converts each to a monthly rate
     # on the constant-force basis (see assumptions.annual_to_monthly).
     mortality_annual = assumptions.mortality_annual(
-        sex_grid, issue_age_grid, duration_grid, issue_class_grid)
+        sex_grid, issue_age_grid, duration_grid,
+        issue_class_grid, elapsed_grid)
     mortality = np.ascontiguousarray(annual_to_monthly(mortality_annual))
     if assumptions.waiver_incidence_annual is None:
         waiver = np.zeros_like(mortality)
     else:
         waiver = np.ascontiguousarray(annual_to_monthly(
             assumptions.waiver_incidence_annual(
-                sex_grid, issue_age_grid, duration_grid, issue_class_grid)))
+                sex_grid, issue_age_grid, duration_grid,
+                issue_class_grid, elapsed_grid)))
     lapse = np.ascontiguousarray(annual_to_monthly(
         assumptions.lapse_annual(
-            sex_grid, issue_age_grid, duration_grid, issue_class_grid)))
+            sex_grid, issue_age_grid, duration_grid,
+            issue_class_grid, elapsed_grid)))
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
     # coverage_rates stacks the annual mortality and rider rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
     cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(
         mortality_annual, [r.rate for r in assumptions.riders],
-        sex_grid, issue_age_grid, duration_grid, issue_class_grid,
+        sex_grid, issue_age_grid, duration_grid,
+        issue_class_grid, elapsed_grid,
     )))
     maint_inflated_monthly = (maintenance_monthly_curve(assumptions, n_time)
                               * inflation_index(assumptions, n_time))
@@ -517,29 +527,32 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         if assumptions.ci_incidence_annual is not None:
             ci_inc = np.ascontiguousarray(annual_to_monthly(
                 assumptions.ci_incidence_annual(
-                    sex_grid, issue_age_grid, duration_grid, issue_class_grid)))
+                    sex_grid, issue_age_grid, duration_grid,
+                    issue_class_grid, elapsed_grid)))
             rate_dict["ci_incidence"] = ci_inc
         if (assumptions.ci_reincidence_annual is not None
                 or assumptions.disability_recovery_annual is not None):
             # Broadcast (n_mp, 1, 1) sex + (n_mp, 1, 1) age +
             # (1, n_year, 1) duration + (1, 1, max_cohort) cohort to
-            # (n_mp, n_year, max_cohort). Duration-dependent rate
-            # callables share the four-argument signature: the cohort
-            # axis is months since entering the source state.
+            # (n_mp, n_year, max_cohort). Sojourn-aware rate callables
+            # share the unified 5-arg signature; the ``elapsed`` axis
+            # carries the cohort (months since entering the source state),
+            # and ``issue_class`` is broadcast at zero on this setup grid.
             sex_4d = model_points.sex.reshape(-1, 1, 1)
             age_4d = model_points.issue_age.reshape(-1, 1, 1)
             dur_4d = np.arange(n_years).reshape(1, -1, 1)
             coh_4d = np.arange(max_cohort).reshape(1, 1, -1)
+            ic_4d = np.zeros_like(coh_4d)
             if assumptions.ci_reincidence_annual is not None:
                 rate_dict["ci_reincidence"] = np.ascontiguousarray(
                     annual_to_monthly(
                         assumptions.ci_reincidence_annual(
-                            sex_4d, age_4d, dur_4d, coh_4d)))
+                            sex_4d, age_4d, dur_4d, ic_4d, coh_4d)))
             if assumptions.disability_recovery_annual is not None:
                 rate_dict["disability_recovery"] = np.ascontiguousarray(
                     annual_to_monthly(
                         assumptions.disability_recovery_annual(
-                            sex_4d, age_4d, dur_4d, coh_4d)))
+                            sex_4d, age_4d, dur_4d, ic_4d, coh_4d)))
         (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
          premium_state, benefit_state,
          state_duration_max) = compile_state_model_with_duration(
