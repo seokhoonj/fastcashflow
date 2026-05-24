@@ -4,7 +4,7 @@
 :class: tip
 
 - **정기보험** 을 fastcashflow 로 평가하는 가장 짧은 코드
-- `Assumptions` / `ModelPoints` 가 무엇을 담는지
+- `Assumptions` / `ModelPoints` 가 무엇을 담는지 — Excel 워크북과의 1:1 매핑
 - `measure()` 와 `value()` 의 차이, 언제 어느 것을 쓰나
 - 결과의 BEL / RA / CSM 값이 의미하는 바와 부호 규약
 - 흔한 실수와 그 자리에서 잡는 방법
@@ -29,158 +29,212 @@
 이 챕터는 **단순 정기보험** 만 다룹니다. 보험료 납입면제 (waiver) /
 다종 진단담보 / 만기환급금 결합 같은 변형은 2장 이후에서 다룹니다.
 
-## 1.2 모델링 매핑 — 상품 → fastcashflow API
+## 1.2 모델링 매핑 — 상품 → fastcashflow 입력
 
-| 상품 mechanic | fastcashflow API | 비고 |
+실무에서 가정과 보유계약은 **Excel 워크북** 으로 관리됩니다.
+fastcashflow 의 입력도 그 워크북 구조를 그대로 따릅니다.
+
+| 상품 mechanic | 워크북 위치 | (참고) Python API |
 |---|---|---|
-| 피보험자 가입연령 | `ModelPoints(issue_age=...)` | 정수 (만 나이) |
-| 피보험자 성별 | `ModelPoints(sex=...)` | 0 = 남, 1 = 여 |
-| 보험기간 (개월) | `ModelPoints(term_months=...)` | 60개월 = 5년 |
-| 사망보험금 | `ModelPoints(death_benefit=...)` | 원 단위. 1억 = `100_000_000` |
-| 월 보험료 | `ModelPoints(level_premium=...)` | 매월 동일액 |
-| 사망률 | `Assumptions(mortality_annual=함수)` | (성별, 가입연령, 경과년수) → 연 사망률 |
-| 해지율 | `Assumptions(lapse_annual=함수)` | 같은 시그니처. 해지 없으면 0 |
-| 할인율 | `Assumptions(discount_annual=...)` | 연 단위 |
-| 신사업비 | `Assumptions(expense_acquisition=...)` | 가입 시 1회 |
-| 유지비 | `Assumptions(expense_maintenance_annual=...)` | 연 단위, 인플레이션 적용 |
-| 위험조정 신뢰수준 | `Assumptions(ra_confidence=...)` | 0.75 (75%) 등 |
-| 사망률 변동계수 | `Assumptions(mortality_cv=...)` | RA 계산에 사용 |
+| 피보험자 가입연령 | `policies.csv` 의 `issue_age` 열 | `ModelPoints(issue_age=...)` |
+| 피보험자 성별 | `policies.csv` 의 `sex` 열 | `ModelPoints(sex=...)` (0 = 남, 1 = 여) |
+| 보험기간 (개월) | `policies.csv` 의 `term_months` 열 | `ModelPoints(term_months=...)` |
+| 사망보험금 | `coverages.csv` 의 `benefit` 열 | `ModelPoints(death_benefit=...)` |
+| 월 보험료 | `coverages.csv` 의 `premium` 열 | `ModelPoints(level_premium=...)` |
+| 사망률 표 | `mortality_tables` 시트 | `Assumptions(mortality_annual=함수)` |
+| 해지율 표 | `lapse_tables` 시트 | `Assumptions(lapse_annual=함수)` |
+| 할인율 표 | `discount_tables` 시트 | `Assumptions(discount_annual=...)` |
+| 신사업비 | `segments` 시트의 `expense_acquisition` | `Assumptions(expense_acquisition=...)` |
+| 유지비 | `maintenance_tables` 시트 | `Assumptions(expense_maintenance_annual=...)` |
+| 위험조정 신뢰수준 | `segments` 시트의 `ra_confidence` | `Assumptions(ra_confidence=...)` |
+| 사망률 변동계수 | `segments` 시트의 `mortality_cv` | `Assumptions(mortality_cv=...)` |
 
-**중요한 점**: rate (사망률 / 해지율) 는 **숫자가 아니라 함수**로 줍니다.
-회사의 경험률 테이블이 (성별 × 가입연령 × 경과년수) 의 함수이기 때문.
-간단한 상수도 함수 형태로 감쌉니다.
+**중요한 점**: 실무에서는 거의 모든 입력이 Excel 워크북의 셀입니다.
+Python 의 `Assumptions(...)` / `ModelPoints(...)` 를 직접 채우는 것은
+워크북 로더 (`fcf.read_assumptions`) 가 내부에서 알아서 해줍니다.
+위 표의 우측 컬럼은 **워크북을 통하지 않고 코드로 직접 평가할 때** 의
+형태입니다.
 
-## 1.3 최소 작동 예제
+## 1.3 최소 작동 예제 — 샘플 워크북으로
 
-다음 코드는 그대로 복사해서 실행하면 됩니다. 40세 남성, 사망보험금 1억
-원, 월 보험료 7만원, 보험기간 10년 (120개월) 의 정기보험 1건을 평가:
+fastcashflow 는 **샘플 워크북** 을 함께 배포합니다. 패키지만 설치하면
+바로 실행 가능. 자기 데이터를 준비하기 전에 엔진이 어떻게 동작하는지
+먼저 확인하는 용도입니다.
 
-```{admonition} 걱정하지 마세요
-:class: tip
-
-여기에 나오는 예제들이 코드에 익숙하지 않은 분들께는 다소 복잡해 보일 수
-있지만 **보유계약과 가정 파일 업로드** 를 통해 쉽게 해결되는 문제들입니다.
-다만, 코드 가독성과 사용자의 이해를 돕기 위해 예제에서만 부득이하게
-함수를 이용하였으니 가볍게 읽고 복사해서 실행해 주시면 됩니다.
-```
+샘플 파일을 Excel 에서 직접 열어 보고 싶다면 (.xlsx 한 개 + .csv 두 개):
 
 ```python
-import numpy as np
 import fastcashflow as fcf
-
-# 가정 -- 회사의 best estimate 가정
-assumptions = fcf.Assumptions(
-    # 사망률: 연 0.1% 가정 — 실제로는 (성별, 가입연령, 경과년수) 함수
-    mortality_annual=lambda sex, issue_age, duration: np.full(
-        issue_age.shape, 0.001,
-    ),
-
-    # 해지율: 연 1% 가정
-    lapse_annual=lambda sex, issue_age, duration: np.full(
-        duration.shape, 0.01,
-    ),
-
-    # 할인율: 연 3% — 예시값, 실제 평가에는 자사의 IFRS 17 할인곡선 사용
-    discount_annual=0.03,
-
-    # 사업비
-    expense_acquisition=300_000.0,        # 가입 시 1회
-    expense_maintenance_annual=60_000.0,  # 연 6만원
-    expense_inflation=0.02,               # 연 2% 인상
-
-    # 위험조정 (RA)
-    ra_confidence=0.75,                   # 75% 신뢰수준
-    mortality_cv=0.10,                    # 사망위험 변동계수 10%
-)
-
-# 모델포인트 (계약 한 건)
-model_points = fcf.ModelPoints.single(
-    issue_age=40,
-    death_benefit=100_000_000,    # 1억원
-    level_premium=70_000,         # 월 7만원
-    term_months=120,              # 10년
-)
-
-# 측정 -- 두 가지 방법
-detail = fcf.measure(model_points, assumptions)
-fast = fcf.value(model_points, assumptions)
-
-# 결과 출력 (시점 0 = 가입 시점)
-print("<Detail>")
-print(f"BEL : {detail.bel[0, 0]:>15,.0f}")           # 최선추정부채
-print(f"RA  : {detail.ra[0, 0]:>15,.0f}")            # 위험조정
-print(f"CSM : {detail.csm[0, 0]:>15,.0f}")           # 보험계약마진
-print(f"Loss: {detail.loss_component[0]:>15,.0f}")   # 손실요소
-print()
-# value() 도 BEL/RA/CSM/Loss 4 개 모두 반환 — 시점 0 한 점만, 값은 detail 과 동일
-print("<Fast path>")
-print(f"BEL : {fast.bel[0]:>15,.0f}")
-print(f"RA  : {fast.ra[0]:>15,.0f}")
-print(f"CSM : {fast.csm[0]:>15,.0f}")
-print(f"Loss: {fast.loss_component[0]:>15,.0f}")
+print(fcf.sample_data_dir())
+# /.../site-packages/fastcashflow/sample_data
 ```
 
-실행하면 다음과 같은 출력이 나옵니다 (가정 그대로 사용 시):
+출력된 폴더에 `sample_assumptions.xlsx`, `sample_policies.csv`,
+`sample_coverages.csv` 세 파일이 있습니다. Excel 로 열어 시트 구조를
+한 번 보면 다음 절의 코드가 무엇을 읽고 있는지 한눈에 들어옵니다.
+
+### 샘플 워크북의 모양
+
+`mortality_tables` 시트 (사망률 표) 의 처음 몇 행:
+
+```
+table_id    sex   age   rate
+─────────   ───   ───   ────────
+MORT_STD    0     30    0.000500    ← 남성 30세
+MORT_STD    0     31    0.000550
+MORT_STD    0     32    0.000605
+...
+MORT_STD    1     30    0.000400    ← 여성 30세 (별도 행)
+...
+```
+
+`segments` 시트 (상품 × 채널 별 어떤 표를 쓸지 매핑):
+
+```
+product   channel   mortality_table   lapse_table   expense_acq   ...
+───────   ───────   ───────────────   ───────────   ───────────   ───
+defaults  -         MORT_STD          -             -             ...
+TERM_A    GA        -                 LAPSE_GA      150,000       ...
+TERM_A    FC        -                 LAPSE_FC       80,000       ...
+```
+
+`defaults` 행은 모든 segment 의 공통값. 개별 segment 행은 빈 셀이면
+defaults 를 상속, 채워진 셀은 그 segment 만 override.
+즉 `TERM_A / GA` 와 `TERM_A / FC` 는 **같은 사망률 표** 를 쓰지만
+**해지율 / 신사업비** 가 다른 두 채널 segment.
+
+```{admonition} 향후 실제 워크시트 스크린샷으로 교체 예정
+:class: note
+
+위 두 블록은 ASCII 로 워크북 모양을 흉내낸 것입니다. 향후 챕터 2
+(Excel 워크북 단일 segment) 에서 실제 워크시트 스크린샷으로 자세히
+설명합니다.
+```
+
+```{admonition} 객체 안에 뭐가 들었는지 보고 싶다면
+:class: tip
+
+`fcf.describe_assumptions(basis)` 한 줄이면 위 워크북이 메모리에 어떤
+트리 구조로 들어왔는지 (segment 키, 위험률 callable, 경제 / 비용,
+RA 파라미터, riders, coverage_types, state_model) 한 번에 출력합니다.
+단일 segment 만 보려면 `describe_assumptions(asmp)`.
+```
+
+### 코드 — 샘플로 즉시 평가
+
+다음 코드는 그대로 복사해서 실행:
+
+```python
+import fastcashflow as fcf
+
+# 샘플 워크북 로드 (패키지 내장)
+basis = fcf.load_sample_assumptions()    # {(product, channel): Assumptions}
+mp = fcf.load_sample_model_points()      # ModelPoints, 보유계약 8건
+
+# 평가할 segment 선택 (한 상품에 두 채널)
+asmp = basis[("TERM_A", "GA")]           # 또는 ("TERM_A", "FC")
+
+# 측정 -- 두 가지 방법
+detail = fcf.measure(mp, asmp)
+fast = fcf.value(mp, asmp)
+
+# 결과 출력 (포트폴리오 합계, 시점 0 = 가입 시점)
+print("<Detail>")
+print(f"BEL : {detail.bel[:, 0].sum():>15,.0f}")     # 최선추정부채
+print(f"RA  : {detail.ra[:, 0].sum():>15,.0f}")      # 위험조정
+print(f"CSM : {detail.csm[:, 0].sum():>15,.0f}")     # 보험계약마진
+print(f"Loss: {detail.loss_component.sum():>15,.0f}")  # 손실요소
+print()
+print("<Fast path>")
+print(f"BEL : {fast.bel.sum():>15,.0f}")
+print(f"RA  : {fast.ra.sum():>15,.0f}")
+print(f"CSM : {fast.csm.sum():>15,.0f}")
+print(f"Loss: {fast.loss_component.sum():>15,.0f}")
+```
+
+실행하면 (샘플 데이터 그대로 사용 시):
 
 ```
 <Detail>
-BEL :      -5,251,566
-RA  :          55,485
-CSM :       5,196,081
+BEL :     -13,646,354
+RA  :         566,973
+CSM :      13,079,382
 Loss:               0
 
 <Fast path>
-BEL :      -5,251,566
-RA  :          55,485
-CSM :       5,196,081
+BEL :     -13,646,354
+RA  :         566,973
+CSM :      13,079,382
 Loss:               0
 ```
 
-코드 한 번 돌리면 BEL / RA / CSM 의 시점 0 값을 얻습니다.
+코드 한 번 돌리면 포트폴리오 8건의 BEL / RA / CSM 합계를 얻습니다.
+
+### 자기 워크북으로 바꾸기
+
+자사 워크북을 만들었다면 (포맷은 [`assumptions-format`](../assumptions-format)
+또는 챕터 2 참조), `load_sample_*` 두 줄을 다음으로 교체:
+
+```python
+basis = fcf.read_assumptions("path/to/your_assumptions.xlsx")
+asmp  = basis[("your_product", "your_channel")]              # 평가할 segment 선택
+mp    = fcf.read_model_points("path/to/your_policies.xlsx",
+                              asmp,                          # rider 코드 해석용
+                              coverages="path/to/your_coverages.xlsx")
+```
+
+`asmp` 를 `read_model_points` 에 넘기는 이유는 policies / coverages 파일의
+**특약 코드** 를 어셈션의 rider master (workbook 의 `riders` 시트) 와
+매칭하기 위해서입니다. 사망 단독 wide-form (rider 컬럼 없음) 이면 두 번째
+인자는 생략 가능하지만, 일반적인 한국 상품 (사망 + 다종 특약) 은 항상
+필요합니다.
 
 ## 1.4 결과 해석 — 숫자가 무엇을 말하는가
 
 ### 부호 규약 (sign convention)
 
 fastcashflow 는 **부채 관점에서 유출을 양수, 유입을 음수로**
-부호화하는 규약(outflow-positive)을 씁니다:
+부호화하는 규약 (outflow-positive) 을 씁니다:
 
 - **유입** (보험사가 받는 돈, 보험료) — 부채를 **감소** 시킴
 - **유출** (보험사가 내는 돈, 사망보험금 + 사업비) — 부채를 **증가** 시킴
 - 따라서 `BEL = PV(claims) + PV(expenses) - PV(premiums)`
 
-### BEL = -5,251,566 의 의미
+### BEL = -13,646,354 의 의미
 
 BEL 이 **음수** 라는 것은 "예상 미래 보험료 유입" 이 "예상 미래 사망보험금
-+ 사업비 유출" 보다 크다는 뜻. 즉 보험사 입장에서 **이익이 나는 계약**.
++ 사업비 유출" 보다 크다는 뜻. 즉 포트폴리오 전체가 보험사 입장에서
+**이익이 나는 묶음**.
 
 만약 BEL 이 양수라면 "유출 > 유입" 으로 보험사가 손실을 보는 계약이고,
-그 차이는 **손실요소** 로 즉시 인식 (IFRS 17 Sec. 47).
+그 차이는 **손실요소 (loss component)** 로 즉시 인식 (IFRS 17 Sec. 47).
 
-### RA = 55,485 — 위험조정
+### RA = 566,973 — 위험조정
 
-RA 는 미래 사망률 / 비용 / 해지 의 **불확실성** 에 대해 보험사가 받는
-보상. 75% 신뢰수준이면 "BEL + RA" 가 75% 백분위 부채 추정치에 해당.
+RA (Risk Adjustment = 위험조정) 는 미래 사망률 / 비용 / 해지의
+**불확실성** 에 대해 보험사가 받는 보상. 75% 신뢰수준이면
+"BEL + RA" 가 75% 백분위 부채 추정치에 해당.
 
 ```{admonition} 확인 포인트
 :class: note
 
-RA 가 작으면 BEL 의 불확실성이 작다는 뜻. mortality_cv 를 0.10 → 0.50
-으로 바꾸면 RA 가 5배 커집니다. 한 번 실험해보세요 — 위 예제의
-`mortality_cv=0.10` 만 바꾸고 실행.
+RA 가 작으면 BEL 의 불확실성이 작다는 뜻. segments 시트의
+`mortality_cv` (변동계수) 를 0.10 → 0.50 으로 바꾸면 RA 가 5배 커집니다.
+한 번 실험해보세요.
 ```
 
-### CSM = 5,196,081 — 보험계약마진
+### CSM = 13,079,382 — 보험계약마진
 
-CSM 은 IFRS 17 의 핵심 개념. 계약 가입 시점에 "이익이 날 거다" 라고
-인식한 부분을 **미래에 걸쳐 분산해서** 손익으로 전환하기 위한 buffer.
+CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
+개념. 계약 가입 시점에 "이익이 날 거다" 라고 인식한 부분을 **미래에
+걸쳐 분산해서** 손익으로 전환하기 위한 buffer.
 
-- 가입 시점 (t=0): `CSM₀ = max(0, -FCF)` where `FCF = BEL + RA`
+- 가입 시점 (t=0): `CSM_0 = max(0, -FCF)` where `FCF = BEL + RA`
 - 매 기간 이자 부리 + 보장단위 비례 상각
 - 이익이 나는 계약 (FCF < 0) → CSM > 0, 손실요소 = 0
 - 손실이 나는 계약 (FCF > 0) → CSM = 0, 손실요소 = FCF
 
-위 예제는 이익 계약이므로 `CSM = 5,196,081`, `loss_component = 0`.
+위 예제는 이익 portfolio 이므로 `CSM = 13,079,382`, `loss_component = 0`.
 
 ### measure() 와 value() 의 차이
 
@@ -198,27 +252,57 @@ CSM 은 IFRS 17 의 핵심 개념. 계약 가입 시점에 "이익이 날 거다
   - 상세 검증 / 변동분석 / 시각화 / 보고용
   - 대량 portfolio 평가, 민감도, 100만+ 계약
 * - 메모리
-  - 100만 MP × 120개월 ≈ 9GB
-  - 100만 MP ≈ 32MB
+  - 100만 MP x 120개월 ~ 9GB
+  - 100만 MP ~ 32MB
 * - 속도 (100만 MP)
   - 수 초
   - 80-300 ms
 ```
 
 **규칙**: 시간 trajectory 가 필요하면 (검증 / 변동분석 / 시각화 / 보고)
-`measure()`, 시점 0 의 결과 4 개만 필요하면 (대량 portfolio 평가, 민감도)
+`measure()`, 시점 0 의 결과 4개만 필요하면 (대량 portfolio 평가, 민감도)
 `value()`. 두 결과는 시점 0 에서 **수치적으로 동일** (parity test 가 자동
 검증).
 
 ## 1.5 자주 쓰는 변형
 
-### 여러 계약 동시에 (portfolio)
+### 채널만 바꾸기 — 같은 상품, 다른 channel
 
-`ModelPoints.single` 대신 `ModelPoints` 로 배열 직접:
+같은 상품 (TERM_A) 의 GA / FC 두 채널은 해지율과 신사업비가 다릅니다.
+segment 키만 바꿔서 비교:
 
 ```python
-n_contracts = 1000               # 보유계약 1,000 건
-rng = np.random.default_rng(42)  # 난수 생성기 (시드 42 — 매번 같은 값 재현용)
+mp = fcf.load_sample_model_points()
+basis = fcf.load_sample_assumptions()
+
+for key in basis:
+    val = fcf.value(mp, basis[key])
+    bel = val.bel.sum()
+    ra  = val.ra.sum()
+    csm = val.csm.sum()
+    print(f"{key}: BEL={bel:>14,.0f}  RA={ra:>9,.0f}  CSM={csm:>14,.0f}")
+```
+
+출력:
+
+```
+('TERM_A', 'GA'): BEL=   -13,646,354  RA=  566,973  CSM=    13,079,382
+('TERM_A', 'FC'): BEL=   -20,091,741  RA=1,019,238  CSM=    19,072,503
+```
+
+같은 보유계약, 같은 사망률·할인율이지만 채널의 해지율·신사업비 차이가
+BEL 과 CSM 에 그대로 반영됩니다. 한국 상품 구조에서 **(상품, 채널)** 이
+실질적인 가정 단위인 이유.
+
+### 보유계약을 직접 만들기 — 빠른 실험용
+
+샘플 워크북 대신 코드로 가상의 portfolio 를 만들어 빠르게 실험:
+
+```python
+import numpy as np
+
+n_contracts = 1000               # 보유계약 1,000건
+rng = np.random.default_rng(42)  # 난수 생성기 (시드 42 - 매번 같은 값 재현용)
 
 portfolio = fcf.ModelPoints(
     issue_age=rng.integers(25, 60, n_contracts),                   # 25-60세 랜덤
@@ -228,15 +312,15 @@ portfolio = fcf.ModelPoints(
     term_months=np.full(n_contracts, 120),                         # 모두 10년
 )
 
-result = fcf.value(portfolio, assumptions)
+asmp = fcf.load_sample_assumptions()[("TERM_A", "GA")]
+result = fcf.value(portfolio, asmp)
 
-# 시점 0 의 BEL 등이 (n_contracts,) shape 배열로 나옴
 print(f"Total  : {result.bel.sum():>15,.0f}")                 # 포트폴리오 BEL 합계
 print(f"Mean   : {result.bel.mean():>15,.0f}")                # 평균 계약 BEL
 print(f"Onerous: {(result.loss_component > 0).sum():>15,d}")  # 손실 계약 개수
 ```
 
-### 보험료 납입기간 단기납 (보장기간 ≠ 납입기간)
+### 보험료 납입기간 단기납 (보장기간 != 납입기간)
 
 10년 만기, 5년만 보험료 납입:
 
@@ -266,75 +350,75 @@ mp = fcf.ModelPoints.single(
 
 `premium_frequency_months=12` 이면 연납, `=6` 이면 반기납.
 
+```{admonition} 사망률 / 해지율 표를 바꾸려면
+:class: note
+
+자사 경험률표로 평가하려면 워크북의 `mortality_tables` /
+`lapse_tables` 시트에 행을 추가하고 `segments` 시트의 `mortality_table`
+/ `lapse_table` 컬럼에서 그 `table_id` 를 가리키면 됩니다. 자세한
+워크북 편집 가이드는 챕터 2 (Excel 워크북 — 한 segment).
+```
+
 ## 1.6 함정 — 흔한 실수와 잡는 방법
 
-### 함정 1 — Rate 를 숫자로 직접 줌
+### 함정 1 — 존재하지 않는 segment 키
 
 ```python
-# ✗ 안 됨 -- mortality_annual 은 함수여야
-assumptions = fcf.Assumptions(
-    mortality_annual=0.001,   # TypeError
-    ...
-)
-
-# ✓ 함수로 감싸기
-assumptions = fcf.Assumptions(
-    mortality_annual=lambda sex, age, dur: np.full(dur.shape, 0.001),
-    ...
-)
+basis = fcf.load_sample_assumptions()
+asmp = basis[("TERM_A", "TM")]   # KeyError: 샘플엔 GA / FC 만 있음
 ```
 
-### 함정 2 — 함수 인자 개수 틀림
-
-`mortality_annual` / `lapse_annual` 은 **3 인자** (sex, issue_age,
-duration) 를 받습니다.
+`basis.keys()` 로 어떤 segment 가 있는지 먼저 확인:
 
 ```python
-# ✗ 안 됨 -- 2 인자
-lapse_annual=lambda issue_age, duration: ...   # 호출 시 에러
-
-# ✓ 3 인자
-lapse_annual=lambda sex, issue_age, duration: ...
+print(list(basis.keys()))   # [('TERM_A', 'GA'), ('TERM_A', 'FC')]
 ```
 
-### 함정 3 — rate 의 단위 혼동 (연 vs 월)
+자기 워크북에서는 `segments` 시트의 `(product, channel)` 조합이 그대로
+키가 됩니다 (`defaults` 행은 제외).
 
-`mortality_annual` 은 **연 사망률**. 0.01 은 1% 연 사망률 (=대략 월
-0.083%). 엔진이 내부에서 constant-force 방식으로 월율로 환산합니다.
+### 함정 2 — sex 코딩 (0/1)
 
-회사 경험률 표가 월율이면 연율로 변환해서 입력:
+`fastcashflow` 의 성별 인코딩은 **0 = 남, 1 = 여**. 워크북의 `policies`
+시트, `mortality_tables` 시트 모두 동일한 규약을 따라야 합니다. 일부
+사내 표준 (예: M/F, 1/2) 과 다르므로 로드 전에 변환 필요.
 
-```python
-def annual_from_monthly(q_monthly):
-    return 1.0 - (1.0 - q_monthly) ** 12
+### 함정 3 — 음수 BEL 을 보고 놀람
 
-monthly_q = 0.001
-annual_q = annual_from_monthly(monthly_q)   # ≈ 0.01194
-```
-
-### 함정 4 — 함수가 항상 같은 shape 의 배열을 돌려줘야
-
-```python
-# ✗ 안 됨 -- 스칼라 돌려줌
-mortality_annual=lambda sex, age, dur: 0.001    # shape mismatch
-
-# ✓ 입력과 같은 shape 의 배열
-mortality_annual=lambda sex, age, dur: np.full(age.shape, 0.001)
-```
-
-`np.full(age.shape, value)` 또는 `np.full(dur.shape, value)` 패턴
-사용. 일반적으로 **세 인자 중 어느 하나의 shape** 를 따라가면 됩니다 (셋 다 같은 shape).
-
-### 함정 5 — 음수 BEL 을 보고 놀람
-
-음수 BEL 은 "이익 계약" 의미. 정상입니다. 손실 계약은 BEL 양수 + CSM 0
-+ loss_component 양수의 조합. 신호 패턴:
+음수 BEL 은 **이익 계약** 이라는 의미. 정상입니다. 손실 계약은 BEL 양수
++ CSM 0 + loss_component 양수의 조합. 신호 패턴:
 
 | BEL | CSM | loss_component | 의미 |
 |---|---|---|---|
 | 음수 | 양수 | 0 | 이익 계약 — 정상 |
 | 0 | 0 | 0 | 손익분기 계약 |
 | 양수 | 0 | 양수 | 손실 계약 (onerous) — 즉시 손실 인식 |
+
+### 함정 4 — 자기 워크북의 `table_id` 매칭 누락
+
+`segments` 시트의 `mortality_table` 컬럼에 `MORT_STD` 라고 적었는데
+`mortality_tables` 시트엔 그런 `table_id` 가 없으면 로드 시 명확한
+에러로 알려줍니다. 새 segment 를 추가할 때 자주 발생.
+
+### 함정 5 — Assumptions 를 코드로 직접 채울 때 함수 형식
+
+위 1.3 / 1.5 의 예제는 모두 워크북 로더가 사망률 / 해지율을 함수로
+변환해줍니다. 만약 **워크북을 거치지 않고 직접 `Assumptions(...)`** 을
+호출한다면 (보통 검증 / 단위테스트 용도), rate 인자는 **숫자가 아닌
+함수** 여야 합니다.
+
+```python
+# 직접 작성하는 드문 경우 — 검증 / 단위테스트
+assumptions = fcf.Assumptions(
+    mortality_annual=lambda sex, age, dur: np.full(dur.shape, 0.001),
+    lapse_annual   =lambda sex, age, dur: np.full(dur.shape, 0.01),
+    discount_annual=0.03,
+    # ...
+)
+```
+
+3 인자 `(sex, issue_age, duration)`, 출력은 입력과 같은 shape 의 배열.
+이 형태는 다음 검증 절에서 다시 사용합니다.
 
 ### 검증 — 손계산 한 번
 
@@ -345,14 +429,14 @@ mortality_annual=lambda sex, age, dur: np.full(age.shape, 0.001)
 - **2개월 계약**, 가입 후 2 시점 (t=0, t=1) 만 평가
 - **월 사망률 1%**, 사망보험금 12,000, 월 보험료 100, 할인 0%
 
-엔진은 **연 사망률** 을 받아 내부에서 월로 환산합니다. 손계산 (월 1%) 과
-일치시키려면 `1 - (1-0.01)^12` (월 1% 의 연 환산값) 을 넣습니다 — 엔진이
-다시 월로 내리면 정확히 0.01 이 됩니다. 코드에 등장하는
-`lambda s, a, d: np.full(a.shape, X)` 는 "모든 계약에 같은 값 `X` 를 돌려주는
-함수" 라는 뜻입니다 (`s`/`a`/`d` 는 성별·가입연령·경과월수, `np.full` 은
-같은 모양의 배열에 값 채우기).
+엔진은 **연 사망률** 을 받아 내부에서 월로 환산합니다. 손계산 (월 1%)
+과 일치시키려면 `1 - (1-0.01)^12` (월 1% 의 연 환산값) 을 넣습니다 —
+엔진이 다시 월로 내리면 정확히 0.01 이 됩니다.
 
 ```python
+import numpy as np
+import fastcashflow as fcf
+
 # 가입 후 2개월, 월 사망률 1%, 사망보험금 12,000, 보험료 100, 할인 0%
 mp = fcf.ModelPoints.single(
     issue_age=40,             # 가입연령
@@ -377,14 +461,14 @@ asmp = fcf.Assumptions(
 
     # 위험조정 (RA = 0 으로 단순화)
     ra_confidence=0.75,              # 신뢰수준 (cv=0 이라 사용 안 됨)
-    mortality_cv=0.0,                # 변동계수 0 → RA = 0
+    mortality_cv=0.0,                # 변동계수 0 -> RA = 0
 )
 result = fcf.measure(mp, asmp)
 
 # 손계산:
 # 월 사망률 0.01, in-force trajectory = [1.0, 0.99]
-# PV(claims) = 1.0 × 0.01 × 12000 + 0.99 × 0.01 × 12000 = 238.8
-# PV(premiums) = 1.0 × 100 + 0.99 × 100 = 199
+# PV(claims) = 1.0 x 0.01 x 12000 + 0.99 x 0.01 x 12000 = 238.8
+# PV(premiums) = 1.0 x 100 + 0.99 x 100 = 199
 # BEL = 238.8 - 199 = 39.8
 print(f"Engine   : {result.bel[0, 0]:.2f}")
 print(f"Hand-calc: 39.80")
@@ -398,18 +482,21 @@ Hand-calc: 39.80
 ```
 
 두 값이 일치하면 엔진이 사용자의 의도대로 동작하고 있다는 강한 신호.
+이 패턴은 1.5 의 함정 5 처럼 **rate 를 직접 함수로 줘서** 의도된 값을
+정확히 통제할 수 있는 자리입니다 — 일반 평가에선 워크북 로더가
+대신 해주지만, 검증은 직접 작성하는 게 자연스럽습니다.
 
 ## 1.7 인접 레시피
 
 이 챕터를 읽고 나서 자연스럽게 갈 다음 자리들:
 
-- **2장 사망 + 단순 진단 일시금** — 사망보험에 진단보험금 (CI 진단 일시금)
-  결합. 첫 번째 rider 도입.
-- **3장 보험료 납입면제 (waiver)** — `STATE_MODELS["WAIVER"]` 입문.
-  active → waiver 상태 추적. 정기보험에 waiver 옵션 결합한 형태.
-- **8장 Excel 워크북 (단일 segment)** — 위 예제의 Python 가정을 Excel
-  워크북으로 옮기는 방법. 사용자가 자사 데이터로 적용하는 가장 빠른
-  경로.
+- **2장 Excel 워크북 — 한 segment** — 1.3 의 샘플 워크북을 분해해서
+  **자기 워크북** 을 만드는 방법. 9 시트의 매 컬럼 의미, 흔한 실수,
+  단일 segment 부터 시작.
+- **3장 사망 + 단순 진단 일시금** — 사망보험에 진단보험금 (CI =
+  Critical Illness = 진단) 일시금 결합. 첫 번째 rider 도입.
+- **4장 보험료 납입면제 (waiver)** — `STATE_MODELS["WAIVER"]` 입문.
+  active → waiver 상태 추적.
 
 기본 튜토리얼 (`튜토리얼`) 의 5장 (BEL 계산) / 6장 (RA 계산) /
 7장 (CSM 계산) 이 본 챕터의 출력값을 도출하는 IFRS 17 의 자세한 수식과
@@ -418,11 +505,11 @@ Hand-calc: 39.80
 ```{admonition} 가정의 정확성과 결과의 의미
 :class: warning
 
-이 챕터의 모든 BEL / RA / CSM 숫자는 **사용자가 입력한 가정** (사망률,
+이 챕터의 모든 BEL / RA / CSM 숫자는 **샘플 워크북의 가정** (사망률,
 할인율, 위험조정 변동계수) 에 100% 의존합니다. precision (계산 정밀도)
 이 높다고 accuracy (현실 정확도) 가 자동으로 보장되지 않습니다.
 
 자사의 best estimate 가정 / 경험률 표 / 시나리오를 입력해야
-**자사 상품의** BEL 이 됩니다. 본 예제의 가정 값들은 자동차 매뉴얼의
-"60 km/h 정속 주행 시" 수준의 illustration 입니다.
+**자사 상품의** BEL 이 됩니다. 본 예제의 샘플 가정값들은 자동차
+매뉴얼의 "60 km/h 정속 주행 시" 수준의 illustration 입니다.
 ```
