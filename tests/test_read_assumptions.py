@@ -39,8 +39,8 @@ def test_channel_segmented_lapse():
     basis = load_sample_assumptions()
     dur = np.arange(6)
     zero = np.zeros_like(dur)
-    ga_lapse = basis[("TERM_A", "GA")].lapse_annual(zero, zero, dur)
-    fc_lapse = basis[("TERM_A", "FC")].lapse_annual(zero, zero, dur)
+    ga_lapse = basis[("TERM_A", "GA")].lapse_annual(zero, zero, dur, zero)
+    fc_lapse = basis[("TERM_A", "FC")].lapse_annual(zero, zero, dur, zero)
     assert np.all(ga_lapse > fc_lapse)
 
 

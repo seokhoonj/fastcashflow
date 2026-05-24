@@ -44,14 +44,15 @@ RISK_MORBIDITY = 1
 
 
 def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
-                   duration_grid):
+                   duration_grid, issue_class_grid):
     """Stack the per-code rate grids into one ``(n_codes, ..., n_year)`` array.
 
     A kernel reads a coverage's rate as ``cov_rates[code, age_or_mp, year]``,
     so the codes share one grid whose first axis is the code. Slab 0 is the
     base ``mortality`` grid (the main-contract death coverage); slabs 1.. are
     the rate-driven riders, evaluated from ``rate_fns`` -- an ordered list of
-    callables, each with the ``Assumptions.mortality_annual`` signature.
+    callables, each with the ``Assumptions.mortality_annual`` signature
+    (``(sex, issue_age, duration, issue_class)``).
 
     The rates are passed through as supplied -- annual; the caller converts
     the whole stack to monthly (see ``assumptions.annual_to_monthly``).
@@ -59,7 +60,8 @@ def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
     slabs = [mortality]
     for rate in rate_fns:
         slabs.append(np.ascontiguousarray(
-            rate(sex_grid, issue_age_grid, duration_grid), dtype=np.float64
+            rate(sex_grid, issue_age_grid, duration_grid, issue_class_grid),
+            dtype=np.float64,
         ))
     return np.ascontiguousarray(np.stack(slabs))
 

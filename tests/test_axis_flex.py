@@ -2,17 +2,18 @@
 
 The workbook rate tables (`mortality_tables`, `rider_rate_tables`,
 `waiver_tables`, `lapse_tables`) accept any subset of
-``{sex, age, issue_age, duration}`` as columns. The reader detects which
-axes are present, builds a numpy grid, and wraps it in the standard
-``(sex, issue_age, duration) -> rate`` callable. Axes the table does not
-carry broadcast; lookups past the table's range clip to the edge; ``age``
-(attained) and ``issue_age`` / ``duration`` (select schema) are mutually
-exclusive.
+``{sex, age, issue_age, duration, issue_class}`` as columns. The reader
+detects which axes are present, builds a numpy grid, and wraps it in the
+standard ``(sex, issue_age, duration, issue_class) -> rate`` callable.
+Axes the table does not carry broadcast; lookups past the table's range
+clip to the edge; ``age`` (attained) and ``issue_age`` / ``duration``
+(select schema) are mutually exclusive.
 """
 import numpy as np
 import openpyxl
 import pytest
 
+from fastcashflow import Assumptions
 from fastcashflow.io import _flex_rate_table
 
 
@@ -26,11 +27,13 @@ def _sheet(rows):
     return ws
 
 
-def _call(callable_, sex, issue_age, duration):
+def _call(callable_, sex, issue_age, duration, issue_class=None):
     s = np.atleast_1d(np.asarray(sex, dtype=np.int64))
     a = np.atleast_1d(np.asarray(issue_age, dtype=np.int64))
     d = np.atleast_1d(np.asarray(duration, dtype=np.int64))
-    return callable_(s, a, d)
+    c = (np.zeros_like(s) if issue_class is None
+         else np.atleast_1d(np.asarray(issue_class, dtype=np.int64)))
+    return callable_(s, a, d, c)
 
 
 def test_scalar_schema():
@@ -181,10 +184,50 @@ def test_broadcasts_to_engine_grid_shape():
     sex_g, age_g, dur_g = np.meshgrid(
         np.array([0, 1]), np.array([30]), np.array([0, 1]), indexing="ij",
     )
-    out = fn(sex_g, age_g, dur_g)
+    out = fn(sex_g, age_g, dur_g, np.zeros_like(dur_g))
     assert out.shape == sex_g.shape
     # sex=0, age=30, dur=0 -> attained 30 -> 0.001 ; dur=1 -> attained 31 -> 0.002
     assert out[0, 0, 0] == 0.001
     assert out[0, 0, 1] == 0.002
     assert out[1, 0, 0] == 0.0008
     assert out[1, 0, 1] == 0.0016
+
+
+def test_issue_class_axis_is_recognised():
+    """A table with an ``issue_class`` column varies by that axis; lookups
+    pass the per-policy issue_class through as the fourth callable arg."""
+    ws = _sheet([
+        ("table_id", "sex", "issue_class", "rate"),
+        ("CLS", 0, 0, 0.0010),
+        ("CLS", 0, 1, 0.0020),
+        ("CLS", 0, 2, 0.0040),
+    ])
+    fn = _flex_rate_table(ws)["CLS"]
+    # Same (sex, age, dur) but different issue_class -> different rate.
+    s = np.array([0, 0, 0]); a = np.array([40, 40, 40]); d = np.array([0, 0, 0])
+    c = np.array([0, 1, 2])
+    out = fn(s, a, d, c)
+    assert np.allclose(out, [0.0010, 0.0020, 0.0040])
+    # An issue_class beyond the table's range clips to the edge.
+    assert fn(np.array([0]), np.array([40]), np.array([0]),
+               np.array([99]))[0] == 0.0040
+
+
+def test_legacy_three_arg_user_lambda_is_adapted():
+    """User-supplied 3-arg rate lambdas are auto-wrapped to the 4-arg shape
+    the engine now passes; the issue_class argument is discarded."""
+    asmp = Assumptions(
+        # Pre-Phase-1A user lambda style -- 3 positional args.
+        mortality_annual=lambda sex, age, dur: np.full(dur.shape, 0.001),
+        lapse_annual=lambda sex, age, dur: np.full(dur.shape, 0.01),
+        discount_annual=0.03,
+        expense_acquisition=0.0,
+        expense_maintenance_annual=0.0,
+        expense_inflation=0.0,
+        ra_confidence=0.75,
+        mortality_cv=0.0,
+    )
+    # The adapter accepts the new 4-arg engine call without error.
+    s = np.array([0]); a = np.array([40]); d = np.array([0]); c = np.array([0])
+    assert asmp.mortality_annual(s, a, d, c)[0] == 0.001
+    assert asmp.lapse_annual(s, a, d, c)[0] == 0.01

@@ -18,9 +18,13 @@ IntArray = NDArray[np.int64]
 
 # Per-policy-year rate (the standard shape -- mortality, lapse,
 # waiver_incidence, ci_incidence, etc). Called by the engine on the
-# ``(sex, issue_age, duration_year)`` grid; returns the annual rate per
-# cell. The engine constant-force-converts the result to monthly.
-RateFn = Callable[[IntArray, FloatArray, IntArray], FloatArray]
+# ``(sex, issue_age, duration_year, issue_class)`` grid; returns the
+# annual rate per cell. The engine constant-force-converts the result to
+# monthly. ``issue_class`` is the at-issue classification axis (직업class
+# / UW class) the rate table may key on; a table without that axis
+# broadcasts over it. Legacy three-arg callables are auto-wrapped to this
+# four-arg shape in ``Assumptions.__post_init__``.
+RateFn = Callable[[IntArray, FloatArray, IntArray, IntArray], FloatArray]
 
 # Per-policy-year-and-state-duration rate (the semi-Markov shape -- the
 # rate depends not only on attained-age duration but also on the sojourn

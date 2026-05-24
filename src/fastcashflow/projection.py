@@ -465,25 +465,29 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     issue_age_grid, duration_grid = np.meshgrid(
         model_points.issue_age, durations, indexing="ij"
     )
+    issue_class_grid, _ = np.meshgrid(
+        model_points.issue_class, durations, indexing="ij"
+    )
     # Rates are supplied annual; the engine converts each to a monthly rate
     # on the constant-force basis (see assumptions.annual_to_monthly).
     mortality_annual = assumptions.mortality_annual(
-        sex_grid, issue_age_grid, duration_grid)
+        sex_grid, issue_age_grid, duration_grid, issue_class_grid)
     mortality = np.ascontiguousarray(annual_to_monthly(mortality_annual))
     if assumptions.waiver_incidence_annual is None:
         waiver = np.zeros_like(mortality)
     else:
         waiver = np.ascontiguousarray(annual_to_monthly(
             assumptions.waiver_incidence_annual(
-                sex_grid, issue_age_grid, duration_grid)))
+                sex_grid, issue_age_grid, duration_grid, issue_class_grid)))
     lapse = np.ascontiguousarray(annual_to_monthly(
-        assumptions.lapse_annual(sex_grid, issue_age_grid, duration_grid)))
+        assumptions.lapse_annual(
+            sex_grid, issue_age_grid, duration_grid, issue_class_grid)))
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
     # coverage_rates stacks the annual mortality and rider rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
     cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(
         mortality_annual, [r.rate for r in assumptions.riders],
-        sex_grid, issue_age_grid, duration_grid,
+        sex_grid, issue_age_grid, duration_grid, issue_class_grid,
     )))
     maint_inflated_monthly = (maintenance_monthly_curve(assumptions, n_time)
                               * inflation_index(assumptions, n_time))
@@ -513,7 +517,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         if assumptions.ci_incidence_annual is not None:
             ci_inc = np.ascontiguousarray(annual_to_monthly(
                 assumptions.ci_incidence_annual(
-                    sex_grid, issue_age_grid, duration_grid)))
+                    sex_grid, issue_age_grid, duration_grid, issue_class_grid)))
             rate_dict["ci_incidence"] = ci_inc
         if (assumptions.ci_reincidence_annual is not None
                 or assumptions.disability_recovery_annual is not None):

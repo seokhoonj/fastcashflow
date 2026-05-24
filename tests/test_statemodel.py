@@ -300,8 +300,15 @@ def test_assumptions_waiver_inception_alias_deprecated():
             waiver_inception_annual=rate,
         )
     # The alias is routed to the canonical field and the legacy field
-    # is cleared so downstream code never has to look at both.
-    assert asmp.waiver_incidence_annual is rate
+    # is cleared so downstream code never has to look at both. The routed
+    # callable is wrapped by the 3->4-arg arity adapter, so check the
+    # behavior matches the original lambda rather than asserting identity.
+    d_probe = np.arange(3)
+    zero = np.zeros_like(d_probe)
+    assert np.allclose(
+        asmp.waiver_incidence_annual(zero, zero, d_probe, zero),
+        rate(zero, zero, d_probe),
+    )
     assert asmp.waiver_inception_annual is None
 
 

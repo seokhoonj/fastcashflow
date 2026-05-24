@@ -87,8 +87,8 @@ def test_no_age_shift(tmp_path):
     _build_workbook(p)
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert asmp.mortality_annual(s, a, d)[0] == 0.001 * 11      # age 30, base = 0.011
-    assert asmp.riders[0].rate(s, a, d)[0] == 0.01 * 11         # hosp at age 30
+    assert asmp.mortality_annual(s, a, d, np.zeros_like(d))[0] == 0.001 * 11      # age 30, base = 0.011
+    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d))[0] == 0.01 * 11         # hosp at age 30
 
 
 def test_mortality_age_shift_positive(tmp_path):
@@ -98,9 +98,9 @@ def test_mortality_age_shift_positive(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # mortality at apparent age 30 + 5 = 35 (sex 0)
-    assert asmp.mortality_annual(s, a, d)[0] == 0.001 * 16          # 0.016
+    assert asmp.mortality_annual(s, a, d, np.zeros_like(d))[0] == 0.001 * 16          # 0.016
     # morbidity (hosp) unaffected -- different rider, no morbidity shift
-    assert asmp.riders[0].rate(s, a, d)[0] == 0.01 * 11             # 0.11
+    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d))[0] == 0.01 * 11             # 0.11
 
 
 def test_mortality_age_shift_negative(tmp_path):
@@ -110,7 +110,7 @@ def test_mortality_age_shift_negative(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([40]); d = np.array([0])
     # apparent age 40 - 3 = 37 -> rate 0.001 * 18 = 0.018
-    assert np.isclose(asmp.mortality_annual(s, a, d)[0], 0.001 * 18)
+    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d))[0], 0.001 * 18)
 
 
 def test_morbidity_age_shift_applies_to_all_riders(tmp_path):
@@ -120,9 +120,9 @@ def test_morbidity_age_shift_applies_to_all_riders(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # mortality unaffected
-    assert asmp.mortality_annual(s, a, d)[0] == 0.001 * 11
+    assert asmp.mortality_annual(s, a, d, np.zeros_like(d))[0] == 0.001 * 11
     # hosp shifted -- apparent age 32 -> 0.01 * 13 = 0.13
-    assert asmp.riders[0].rate(s, a, d)[0] == 0.01 * 13
+    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d))[0] == 0.01 * 13
 
 
 def test_shifts_compose_independently(tmp_path):
@@ -131,8 +131,8 @@ def test_shifts_compose_independently(tmp_path):
     _build_workbook(p, mortality_age_shift=5, morbidity_age_shift=2)
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert asmp.mortality_annual(s, a, d)[0] == 0.001 * 16        # 30 + 5 = 35
-    assert asmp.riders[0].rate(s, a, d)[0] == 0.01 * 13            # 30 + 2 = 32
+    assert asmp.mortality_annual(s, a, d, np.zeros_like(d))[0] == 0.001 * 16        # 30 + 5 = 35
+    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d))[0] == 0.01 * 13            # 30 + 2 = 32
 
 
 def test_with_age_shift_zero_is_identity(tmp_path):
@@ -145,4 +145,4 @@ def test_with_age_shift_zero_is_identity(tmp_path):
     asmp2 = _segment(p2)
     # Both behave identically -- 0 shift is a no-op
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert asmp.mortality_annual(s, a, d)[0] == asmp2.mortality_annual(s, a, d)[0]
+    assert asmp.mortality_annual(s, a, d, np.zeros_like(d))[0] == asmp2.mortality_annual(s, a, d, np.zeros_like(d))[0]

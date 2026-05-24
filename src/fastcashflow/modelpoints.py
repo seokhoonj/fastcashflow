@@ -104,6 +104,11 @@ class ModelPoints:
     count: FloatArray | None = None              # policies the row stands for
     sex: IntArray | None = None                  # 0 = male, 1 = female
     state: IntArray | None = None                # contract state (STATE_*)
+    # At-issue classification axis (직업class / UW class) -- one integer per
+    # model point, default 0 for every policy. Rate tables that key on
+    # ``issue_class`` look up the per-policy value; tables without the axis
+    # broadcast over it (no effect).
+    issue_class: IntArray | None = None
     # Segment metadata -- the (product, channel) keys that map a model point
     # to its assumption set when ``value_segmented`` splits a portfolio.
     # Object arrays of string labels (or None for a single-segment book).
@@ -138,6 +143,13 @@ class ModelPoints:
         state = (np.zeros(n_mp, np.int64) if state is None
                  else np.asarray(state, np.int64))
         object.__setattr__(self, "state", state)
+        # issue_class defaults to 0 for every model point -- the conventional
+        # 'no class distinction' fallback. Rate tables without an issue_class
+        # axis ignore this; tables with the axis look up the per-policy value.
+        ic = self.issue_class
+        ic = (np.zeros(n_mp, np.int64) if ic is None
+              else np.asarray(ic, np.int64))
+        object.__setattr__(self, "issue_class", ic)
         # premium_term_months defaults to the full coverage term -- the level
         # premium is collected every in-force month, the ordinary case.
         premium_term = self.premium_term_months

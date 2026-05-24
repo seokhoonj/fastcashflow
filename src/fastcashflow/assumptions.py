@@ -1,6 +1,7 @@
 """Actuarial assumption set for the deterministic projection."""
 from __future__ import annotations
 
+import inspect
 import warnings
 from dataclasses import dataclass
 
@@ -8,6 +9,60 @@ import numpy as np
 
 from fastcashflow._typing import DurationRateFn, FloatArray, IntArray, RateFn
 from fastcashflow.statemodel import StateModel
+
+
+# RateFn fields on Assumptions that follow the 4-arg
+# ``(sex, issue_age, duration, issue_class)`` signature. Legacy callers
+# wrote these as 3-arg lambdas (no issue_class); ``_adapt_rate_arity``
+# detects those at Assumptions construction and wraps them so the engine
+# can always pass four positional arguments. DurationRateFn fields
+# (ci_reincidence_annual, disability_recovery_annual) are NOT in this
+# list -- they use a different 4-arg shape whose fourth argument is the
+# semi-Markov cohort index, not issue_class.
+_RATE_FN_FIELDS: tuple[str, ...] = (
+    "mortality_annual",
+    "lapse_annual",
+    "waiver_incidence_annual",
+    "ci_incidence_annual",
+)
+
+
+def _adapt_rate_arity(fn):
+    """Wrap a legacy 3-arg rate callable so it accepts the 4th issue_class arg.
+
+    A user lambda written as ``lambda sex, age, dur: ...`` (the pre-Phase-1A
+    shape) is wrapped to ``(sex, age, dur, issue_class)`` -- issue_class is
+    discarded by the wrapper. A callable that already accepts 4 positional
+    arguments (or ``*args``) is returned unchanged. ``None`` is also passed
+    through unchanged (an optional rate the segment did not configure).
+    """
+    if fn is None:
+        return fn
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return fn   # builtin / C-level callable -- assume the new shape
+    params = list(sig.parameters.values())
+    # *args absorbs any arity -- no wrapping needed.
+    if any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in params):
+        return fn
+    positional = [
+        p for p in params
+        if p.kind in (inspect.Parameter.POSITIONAL_ONLY,
+                       inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    ]
+    if len(positional) >= 4:
+        return fn   # already 4-arg (or more) -- pass through
+    if len(positional) != 3:
+        return fn   # unusual arity -- leave alone, let the engine error
+    def wrapped(sex, issue_age, duration, issue_class):
+        return fn(sex, issue_age, duration)
+    # Preserve the source-table metadata so describe_assumptions still
+    # surfaces the table_id when the wrapped fn came from io.py.
+    for attr in ("_fcf_table_id", "_fcf_sheet", "_fcf_modifiers"):
+        if hasattr(fn, attr):
+            setattr(wrapped, attr, getattr(fn, attr))
+    return wrapped
 
 
 def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
@@ -239,6 +294,32 @@ class Assumptions:
                 self, "waiver_incidence_annual", self.waiver_inception_annual,
             )
             object.__setattr__(self, "waiver_inception_annual", None)
+
+        # Wrap legacy 3-arg rate callables to the 4-arg
+        # ``(sex, issue_age, duration, issue_class)`` shape the engine now
+        # passes uniformly. Built-in callables from io.py are already 4-arg
+        # (a no-op detection), user lambdas that were written as 3-arg get
+        # an issue_class-discarding wrapper. Runs after the
+        # waiver_inception routing so the routed callable is wrapped too.
+        for field in _RATE_FN_FIELDS:
+            adapted = _adapt_rate_arity(getattr(self, field))
+            if adapted is not getattr(self, field):
+                object.__setattr__(self, field, adapted)
+        # Rider rates take the same RateFn shape; wrap each rider's rate too.
+        # Riders are a tuple of frozen RiderRate dataclasses -- rebuild the
+        # tuple with the adapted callables.
+        new_riders = tuple(
+            (r if r.rate is _adapt_rate_arity(r.rate)
+             else RiderRate(
+                 code=r.code,
+                 rate=_adapt_rate_arity(r.rate),
+                 is_diagnosis=r.is_diagnosis,
+                 risk=r.risk,
+             ))
+            for r in self.riders
+        )
+        if any(nr is not r for nr, r in zip(new_riders, self.riders)):
+            object.__setattr__(self, "riders", new_riders)
 
     @property
     def discount_monthly(self) -> float:

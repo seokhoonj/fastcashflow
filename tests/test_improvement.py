@@ -71,7 +71,7 @@ def test_no_improvement_sheet(tmp_path):
     _build(p)
     asmp = _segment(p)
     s = np.array([0, 0, 0]); a = np.array([30, 30, 30]); d = np.array([0, 5, 10])
-    out = asmp.mortality_annual(s, a, d)
+    out = asmp.mortality_annual(s, a, d, np.zeros_like(d))
     assert np.allclose(out, [0.001, 0.001, 0.001])
 
 
@@ -83,7 +83,7 @@ def test_improvement_curve_applied(tmp_path):
     _build(p, improvement_curve=curve)
     asmp = _segment(p)
     s = np.array([0, 0, 0]); a = np.array([30, 30, 30]); d = np.array([0, 5, 10])
-    out = asmp.mortality_annual(s, a, d)
+    out = asmp.mortality_annual(s, a, d, np.zeros_like(d))
     expected = [0.001 * curve[t] for t in (0, 5, 10)]
     assert np.allclose(out, expected)
 
@@ -96,7 +96,7 @@ def test_improvement_clips_past_end(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([10])
     # year 10 clips to year 2 -> factor 0.8
-    assert np.isclose(asmp.mortality_annual(s, a, d)[0], 0.001 * 0.8)
+    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d))[0], 0.001 * 0.8)
 
 
 def test_improvement_only_touches_mortality(tmp_path):
@@ -108,6 +108,6 @@ def test_improvement_only_touches_mortality(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # mortality scaled
-    assert np.isclose(asmp.mortality_annual(s, a, d)[0], 0.001 * 0.5)
+    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d))[0], 0.001 * 0.5)
     # lapse unaffected (no improvement applied)
-    assert np.isclose(asmp.lapse_annual(s, a, d)[0], 0.05)
+    assert np.isclose(asmp.lapse_annual(s, a, d, np.zeros_like(d))[0], 0.05)
