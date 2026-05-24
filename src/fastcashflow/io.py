@@ -182,6 +182,9 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
                 np.asarray(duration).shape,
             )
             return np.full(shape, val, dtype=np.float64)
+        rate._fcf_table_id = table_id
+        rate._fcf_sheet = sheet_title
+        rate._fcf_modifiers = ()
         return rate
 
     keys = np.array([k for k, _ in entries], dtype=np.int64)
@@ -220,6 +223,9 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
         # from the table contribute through broadcast, not indexing).
         target = np.broadcast_shapes(sex.shape, issue_age.shape, duration.shape)
         return grid[tuple(np.broadcast_to(ix, target) for ix in idxs)]
+    rate._fcf_table_id = table_id
+    rate._fcf_sheet = sheet_title
+    rate._fcf_modifiers = ()
     return rate
 
 
@@ -262,6 +268,16 @@ def _read_ae_factors(ws):
     }
 
 
+def _propagate_table_id(wrapper, inner, modifier_tag):
+    """Carry the source table_id from an inner rate callable to a wrapper."""
+    tid = getattr(inner, "_fcf_table_id", None)
+    if tid is None:
+        return
+    wrapper._fcf_table_id = tid
+    wrapper._fcf_sheet = getattr(inner, "_fcf_sheet", None)
+    wrapper._fcf_modifiers = getattr(inner, "_fcf_modifiers", ()) + (modifier_tag,)
+
+
 def _with_improvement(rate_fn, improvement_curve):
     """Wrap a rate callable to multiply by an annual improvement factor.
 
@@ -278,6 +294,7 @@ def _with_improvement(rate_fn, improvement_curve):
         d = np.asarray(duration, dtype=np.int64)
         idx = np.clip(d, 0, n - 1)
         return rate_fn(sex, issue_age, duration) * improvement_curve[idx]
+    _propagate_table_id(improved, rate_fn, "improvement")
     return improved
 
 
@@ -293,6 +310,7 @@ def _with_ae_factor(rate_fn, factor_fn):
 
     def adjusted(sex, issue_age, duration):
         return rate_fn(sex, issue_age, duration) * factor_fn(sex, issue_age, duration)
+    _propagate_table_id(adjusted, rate_fn, "ae")
     return adjusted
 
 
@@ -310,6 +328,7 @@ def _with_age_shift(rate_fn, shift):
 
     def shifted(sex, issue_age, duration):
         return rate_fn(sex, issue_age + shift, duration)
+    _propagate_table_id(shifted, rate_fn, f"shift{shift:+d}")
     return shifted
 
 

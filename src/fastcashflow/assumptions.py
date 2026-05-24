@@ -290,11 +290,21 @@ _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
+def _fmt_callable(v: object) -> str:
+    """Format a rate callable, surfacing its source table_id when known."""
+    tid = getattr(v, "_fcf_table_id", None)
+    if tid is None:
+        return "<callable>"
+    mods = getattr(v, "_fcf_modifiers", ())
+    suffix = f" (+{', +'.join(mods)})" if mods else ""
+    return f"<callable -> {tid}{suffix}>"
+
+
 def _fmt_value(v: object) -> str:
     if v is None:
         return "None"
     if callable(v):
-        return "<callable>"
+        return _fmt_callable(v)
     if isinstance(v, np.ndarray):
         flat = v.flatten()
         if flat.size <= 4:
@@ -383,14 +393,12 @@ def _describe_assumptions_lines(
 
     riders = asmp.riders
     cov = asmp.coverage_types
-    rider_lines: list[object] = [
-        "(rate 는 워크북 'rider_rate_tables' 시트의 row 를 wrap)",
-    ]
+    rider_lines: list[object] = []
     width = max((len(r.code) for r in riders), default=0)
     for r in riders:
         rider_lines.append(
             f"RiderRate(code={r.code!r:{width+2}}, risk={r.risk}, "
-            f"is_diagnosis={r.is_diagnosis}, rate=<callable>)"
+            f"is_diagnosis={r.is_diagnosis}, rate={_fmt_callable(r.rate)})"
         )
     cov_lines: list[object] = [f"{k!r:12} -> {v!r}" for k, v in cov.items()]
     sections.append((f"{marks[3]} 특약 / 담보 정의", [
