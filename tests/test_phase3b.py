@@ -213,7 +213,7 @@ def test_describe_assumptions_renders_both_shapes(capsys):
     describe_assumptions(asmp)
     out_one = capsys.readouterr().out
     assert out_one.startswith("Assumptions")
-    assert "위험률" in out_one
+    assert "상태 전이율" in out_one
     assert "state_model" in out_one
     assert "riders" in out_one
 

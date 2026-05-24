@@ -257,11 +257,10 @@ class Assumptions:
 
 
 _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("위험률 (callable)", (
+    ("상태 전이율 (state transition rate, callable)", (
         "mortality_annual",
         "lapse_annual",
         "waiver_incidence_annual",
-        "waiver_inception_annual",
         "ci_incidence_annual",
         "ci_reincidence_annual",
         "disability_recovery_annual",
@@ -384,7 +383,9 @@ def _describe_assumptions_lines(
 
     riders = asmp.riders
     cov = asmp.coverage_types
-    rider_lines: list[object] = []
+    rider_lines: list[object] = [
+        "(rate 는 워크북 'rider_rate_tables' 시트의 row 를 wrap)",
+    ]
     width = max((len(r.code) for r in riders), default=0)
     for r in riders:
         rider_lines.append(
