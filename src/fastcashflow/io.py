@@ -405,11 +405,17 @@ def read_assumptions(path):
             defaults = r
         else:
             segments.append(r)
-    riders_by_product: dict[str, list] = {}
+    # Coverages registry -- global, one row per coverage_code. The same code
+    # plugs into any segment's contracts (a HEALTH policy and a TERM_LIFE
+    # policy that both attach `CANCER` share the same incidence rate). When
+    # a company genuinely needs product-specific calibrations of the same
+    # disease, give them different coverage_codes (e.g. CANCER_HEALTH vs
+    # CANCER_WHOLELIFE) -- the engine then treats them as separate riders.
+    global_coverages: list = []
     if "coverages" in wb.sheetnames:
         for r in _sheet_dicts(wb["coverages"]):
             rt = r.get("rate_table")
-            riders_by_product.setdefault(str(r["product"]).strip(), []).append((
+            global_coverages.append((
                 str(r["coverage_code"]).strip(), str(r["benefit_type"]).strip(),
                 str(rt).strip() if rt not in (None, "") else None,
             ))
@@ -452,7 +458,7 @@ def read_assumptions(path):
 
         riders = []
         coverage_types: dict[str, str] = {}
-        for code, rtype, rate_table in riders_by_product.get(product, []):
+        for code, rtype, rate_table in global_coverages:
             coverage_types[code] = rtype
             if rtype not in RATE_DRIVEN_TYPES:
                 continue

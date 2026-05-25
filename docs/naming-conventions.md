@@ -17,7 +17,7 @@
 | 시트 | 역할 |
 |---|---|
 | `segments` | `(product, channel)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`alpha_flat`, `ra_confidence`, `*_cv`, optional `*_age_shift` 등). `defaults` 행이 fallback |
-| `coverages` | 상품별 특약 부착: `(product) → (coverage_code, type, rate_table)` |
+| `coverages` | 담보 정의 (전역): `coverage_code → (coverage_name, benefit_type, rate_table)`. 모든 상품 공통 (product 별로 다른 정의 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 다른 code 분리) |
 | `mortality_tables` | 사망 발생률 가정 (`table_id` × `sex` × `age` → `rate`) |
 | `incidence_rate_tables` | 특약 발생률 가정 (구조 동일) |
 | `waiver_tables` | 납입면제 발생률 가정 (구조 동일) |

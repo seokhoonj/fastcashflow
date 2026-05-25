@@ -30,9 +30,9 @@ def _build(path: Path, *, ae_rows=None):
                 100_000, 0.75, 0.10, 0.10])
 
     rd = wb.create_sheet("coverages")
-    rd.append(["product", "coverage_code", "coverage_name", "benefit_type", "rate_table"])
-    rd.append(["TERM_A", "DEATH_MAIN", "main death", "DEATH_MAIN", None])
-    rd.append(["TERM_A", "INPATIENT", "hospitalization", "MORBIDITY", "HOSP"])
+    rd.append(["coverage_code", "coverage_name", "benefit_type", "rate_table"])
+    rd.append(["DEATH_MAIN", "main death", "DEATH_MAIN", None])
+    rd.append(["INPATIENT", "hospitalization", "MORBIDITY", "HOSP"])
 
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
@@ -160,8 +160,8 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 100_000, 0.75, 0.10, 0.10, 5])
     rd = wb.create_sheet("coverages")
-    rd.append(["product", "coverage_code", "coverage_name", "benefit_type", "rate_table"])
-    rd.append(["TERM_A", "DEATH_MAIN", "main death", "DEATH_MAIN", None])
+    rd.append(["coverage_code", "coverage_name", "benefit_type", "rate_table"])
+    rd.append(["DEATH_MAIN", "main death", "DEATH_MAIN", None])
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
