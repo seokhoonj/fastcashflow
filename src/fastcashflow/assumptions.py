@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import inspect
-import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -206,10 +205,6 @@ class Assumptions:
         per-unit-time event rate -- used by the rest of the engine for
         analogous rates (``ci_incidence_annual``,
         ``ci_reincidence_annual``).
-    waiver_inception_annual :
-        Deprecated alias for ``waiver_incidence_annual``; still accepted
-        for backward compatibility but raises ``DeprecationWarning``. Set
-        only one of the two.
     longevity_cv :
         Coefficient of variation of survival benefits (maturity benefits and
         annuity payments) -- the longevity-risk component of the RA. The RA
@@ -281,9 +276,6 @@ class Assumptions:
     # (lapse silently removes the contract, the historical behaviour).
     surrender_value_curve: FloatArray | None = None
     waiver_incidence_annual: RateFn | None = None
-    # Deprecated alias retained for source compatibility -- ``__post_init__``
-    # routes it to ``waiver_incidence_annual`` with a DeprecationWarning.
-    waiver_inception_annual: RateFn | None = None
     # Semi-Markov (Phase (c)) prototype rates. ``ci_incidence_annual`` is the
     # first-cancer diagnosis rate (active -> post_first transition, Markov);
     # ``ci_reincidence_annual`` is the duration-dependent reincidence rate
@@ -319,33 +311,13 @@ class Assumptions:
     state_model: StateModel | None = None
 
     def __post_init__(self) -> None:
-        # Backward-compatibility: accept the deprecated ``waiver_inception_annual``
-        # spelling, warn, route to the canonical ``waiver_incidence_annual``.
-        # Setting both forms is an error -- the caller has to pick one.
-        if self.waiver_inception_annual is not None:
-            if self.waiver_incidence_annual is not None:
-                raise ValueError(
-                    "set waiver_incidence_annual, not both "
-                    "waiver_incidence_annual and waiver_inception_annual"
-                )
-            warnings.warn(
-                "waiver_inception_annual is deprecated and will be removed "
-                "in the 0.1.0 release; use waiver_incidence_annual",
-                DeprecationWarning, stacklevel=2,
-            )
-            object.__setattr__(
-                self, "waiver_incidence_annual", self.waiver_inception_annual,
-            )
-            object.__setattr__(self, "waiver_inception_annual", None)
-
         # Wrap legacy 3-arg / 4-arg rate callables to the unified 5-arg
         # ``(sex, issue_age, duration, issue_class, elapsed)`` shape the
         # engine now passes everywhere. Built-in callables from io.py are
         # already 5-arg (a no-op detection); legacy user lambdas get an
         # issue_class / elapsed-discarding wrapper. RateFn vs DurationRateFn
         # fields differ in how a legacy 4-arg lambda is interpreted -- see
-        # ``_adapt_rate_arity``. Runs after the waiver_inception routing so
-        # the routed callable is wrapped too.
+        # ``_adapt_rate_arity``.
         for field in _RATE_FN_FIELDS:
             adapted = _adapt_rate_arity(getattr(self, field))
             if adapted is not getattr(self, field):
