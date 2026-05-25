@@ -53,14 +53,22 @@ reporting that surrounds it.
   contracts).
 - **Projection** -- deterministic monthly cash flows; select-and-ultimate
   mortality, duration-based lapse, mid-month discounting of claims and
-  expenses, and acquisition and maintenance expenses.
+  expenses, and α / β / γ expenses (acquisition at issue, collection
+  during the premium-paying period, maintenance per policy per month).
+- **Surrender value** -- per-month surrender-value curve (해약환급금);
+  on lapse the insurer pays out a fraction of the cumulative premium,
+  routed into the BEL as an outflow.
+- **In-force valuation** -- `value_in_force(mp, basis)` measures
+  contracts mid-life: each model point carries its own `elapsed_months`
+  (= valuation date - inception), and the engine returns the BEL / RA /
+  CSM at that contract's valuation date.
 - **Assumption input layers** -- one workbook (`assumptions.xlsx`) with
   schema-detecting axis-flex base rate tables (`sex` / `age` /
   `issue_age` / `duration` columns, any subset), plus optional
   `ae_factors` (A/E multipliers, vendor-style runtime calibration),
   optional integer `age_shift` columns on segments, optional
   `improvement_tables` (mortality improvement scales), and curve-shaped
-  discount / inflation / maintenance. Each layer is no-op when omitted,
+  discount / inflation / γ-expense. Each layer is no-op when omitted,
   so a simple workbook stays simple.
 - **Per-segment portfolios** -- `(product, channel)` model-point columns
   let `value_segmented(mp, basis)` route each row to its segment's
@@ -105,8 +113,7 @@ against hand calculations. The wider surface (PAA, VFA, reinsurance,
 reporting, roll-forward, stochastic) is implemented and tested, but the
 package is pre-1.0 and its API may still change.
 
-*Planned:* re-diagnosis benefits and a non-financial-risk adjustment on
-the guarantee time value.
+*Planned:* a non-financial-risk adjustment on the guarantee time value.
 
 ## Quick start
 
@@ -118,7 +125,7 @@ import fastcashflow as fcf
 
 model_points = fcf.load_sample_model_points()              # bundled sample portfolio
 basis        = fcf.load_sample_assumptions()               # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_A", "GA")]                     # pick one segment
+assumptions  = basis[("TERM_LIFE", "FC")]                  # pick one segment
 m            = fcf.measure(model_points, assumptions)
 print(m.bel[:, 0], m.ra[:, 0], m.csm[:, 0])   # BEL / RA / CSM at issue
 ```
@@ -138,8 +145,8 @@ assumptions = fcf.Assumptions(
         duration.shape, 0.01,
     ),
     discount_annual=0.03,
-    expense_acquisition=300_000.0,
-    expense_maintenance_annual=60_000.0,
+    alpha_flat=300_000.0,           # acquisition expense at issue
+    gamma_flat=60_000.0,            # annual maintenance expense per policy
     expense_inflation=0.02,
     ra_confidence=0.75,
     mortality_cv=0.10,
