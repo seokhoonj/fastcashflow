@@ -846,3 +846,169 @@ def show_bel_step(
     ]
     _emit_tree(tree_items, out, "")
     file.write("\n".join(out) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# show_csm_step -- term-by-term unrolling of the CSM forward recursion
+# ---------------------------------------------------------------------------
+
+def show_csm_step(
+    mp_index: int,
+    model_points: ModelPoints,
+    assumptions: Assumptions | dict,
+    *,
+    months: list[int] | None = None,
+    file: IO | None = None,
+) -> None:
+    """Print, term by term, how one model point's CSM[t] is built.
+
+    The kernel runs the forward recursion::
+
+        csm[0]   = max(0, -(BEL[0] + RA[0]))
+        csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]
+        accretion[t-1] = csm[t-1] * i[t-1]
+        release[t-1]   = (csm[t-1] + accretion[t-1])
+                         * coverage_units[t-1] / sum(coverage_units[t-1:])
+
+    ``coverage_units`` is the in-force survival series. This function
+    unrolls the step at chosen months: prints the prior CSM, the
+    monthly rate, the accretion, the coverage-unit share consumed in
+    that month, the release amount, and the resulting CSM[t] against
+    the engine's value.
+
+    For an onerous contract (``csm[0] == 0``), every subsequent step is
+    zero too -- the printed trace then visibly says so, which is itself
+    useful when checking that the engine is honouring the floor.
+
+    Parameters
+    ----------
+    mp_index
+        0-based row index in ``model_points``.
+    model_points, assumptions, file
+        Same shape as :func:`show_bel_step`.
+    months
+        Months at which to unroll the step (each row shows the
+        computation that produced ``csm[t]`` from ``csm[t-1]``).
+        ``None`` uses ``{1, 12, term//2, term}``. Out-of-range entries
+        are ignored. ``t = 0`` is the seed and is always printed
+        regardless of ``months``.
+    """
+    out: list[str] = []
+    if file is None:
+        file = sys.stdout
+
+    n_mp = model_points.n_mp
+    if not 0 <= mp_index < n_mp:
+        raise IndexError(
+            f"mp_index {mp_index} out of range for n_mp={n_mp}"
+        )
+    i = mp_index
+    asmp = _resolve_basis(assumptions, model_points, i)
+    sub = model_points.subset([i])
+    m = measure(sub, asmp)
+
+    term = int(sub.term_months[0])
+    n_time = m.cashflows.n_time
+    if months is None:
+        months = sorted({1, 12, term // 2, term})
+    # Recursion produces csm[t] for t in 1..n_time. t = 0 is the seed.
+    months = [int(t) for t in months if 1 <= int(t) <= n_time]
+
+    monthly_rate = discount_monthly_curve(asmp, n_time)
+    inforce = m.cashflows.inforce[0]              # (n_time,)
+    bel0 = float(m.bel[0, 0])
+    ra0 = float(m.ra[0, 0])
+    fcf0 = bel0 + ra0
+    csm = m.csm[0]
+    csm_acc = m.csm_accretion[0]
+    csm_rel = m.csm_release[0]
+
+    # Pre-compute the reverse-cumulative coverage-unit tail the kernel
+    # uses for the release fraction; printing it makes the share that
+    # falls into ``t`` explicit.
+    cu_tail = np.empty(n_time)
+    running = 0.0
+    for s in range(n_time - 1, -1, -1):
+        running += inforce[s]
+        cu_tail[s] = running
+
+    sex_v = int(sub.sex[0]) if sub.sex is not None else 0
+    sex_label = "남" if sex_v == 0 else "여"
+    age = float(sub.issue_age[0])
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
+    header = (
+        f"mp[{i}] CSM step-by-step  ({product}/{channel}, sex={sex_label}, "
+        f"issue_age={age:g}, term={term}m)"
+    )
+
+    recursion_lines: list[object] = [
+        "csm[0]   = max(0, -(BEL[0] + RA[0]))",
+        "csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]",
+        "accretion[t-1] = csm[t-1] * i[t-1]",
+        "release[t-1]   = (csm[t-1] + accretion[t-1])"
+        " * coverage_units[t-1] / sum(coverage_units[t-1:])",
+    ]
+
+    seed_lines: list[object] = [
+        f"BEL[0]               = {bel0:>15,.2f}",
+        f"RA[0]                = {ra0:>15,.2f}",
+        f"FCF[0] = BEL + RA    = {fcf0:>15,.2f}",
+        f"csm[0] = max(0,-FCF) = {float(csm[0]):>15,.2f}",
+    ]
+    onerous = float(csm[0]) <= 0.0
+    if onerous:
+        seed_lines.append(
+            "onerous contract -- csm = 0 throughout; release/accretion "
+            "are 0 by construction."
+        )
+
+    step_blocks: list[object] = []
+    for t in months:
+        prior_csm = float(csm[t - 1])
+        rate = float(monthly_rate[t - 1])
+        acc = float(csm_acc[t - 1])
+        accreted = prior_csm + acc
+        cu = float(inforce[t - 1])
+        cu_rem = float(cu_tail[t - 1])
+        rel = float(csm_rel[t - 1])
+        if cu_rem > 1e-12:
+            rel_frac = cu / cu_rem
+            frac_line = (
+                f"release fraction          = cov_units / cu_tail "
+                f"= {cu:.6f} / {cu_rem:.6f} = {rel_frac:.6f}"
+            )
+        else:
+            frac_line = (
+                "release fraction          = 0 (cu_tail below epsilon -- "
+                "all in-force already exited)"
+            )
+        recomputed = accreted - rel
+        residual = recomputed - float(csm[t])
+        block: list[object] = [
+            f"csm[t-1]                  = {prior_csm:>15,.2f}",
+            f"i[t-1]                    = {rate:.6f}",
+            f"accretion[t-1] = csm*i    = {acc:>15,.2f}",
+            f"accreted = csm + acc      = {accreted:>15,.2f}",
+            f"coverage_units[t-1]       = {cu:.6f}",
+            f"cu_tail[t-1] = sum(cu[t-1:]) = {cu_rem:.6f}",
+            frac_line,
+            f"release[t-1] = accreted * frac = {rel:>15,.2f}",
+            f"recomputed csm[t]         = {recomputed:>15,.2f}",
+            f"engine csm[t]             = {float(csm[t]):>15,.2f}  "
+            f"(residual {residual:+.4e})",
+        ]
+        step_blocks.append((f"t={t:>4d}", block))
+
+    out.append(header)
+    tree_items: list[object] = [
+        ("Recursion (forward-pass)", recursion_lines),
+        ("Seed (t = 0)", seed_lines),
+        ("Steps", step_blocks if step_blocks else
+         ["(no recursion months requested in range)"]),
+        ("End CSM", [f"csm[{n_time}] = {float(csm[n_time]):>15,.2f}"]),
+    ]
+    _emit_tree(tree_items, out, "")
+    file.write("\n".join(out) + "\n")

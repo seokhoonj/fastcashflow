@@ -9,7 +9,9 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.modelpoints import ModelPoints
-from fastcashflow.trace import show_bel_step, show_trace, show_trace_diff
+from fastcashflow.trace import (
+    show_bel_step, show_csm_step, show_trace, show_trace_diff,
+)
 
 
 def _shock_mortality(rate_fn, factor: float):
@@ -260,3 +262,78 @@ def test_show_bel_step_seed_month_prints_only_the_seed():
     # at the seed row.
     assert "tail piece" not in text
     assert "recomputed BEL[t]" not in text
+
+
+# ---------------------------------------------------------------------------
+# show_csm_step
+# ---------------------------------------------------------------------------
+
+def _profitable_basis_and_mp():
+    """A tiny single-cell profitable contract -- CSM > 0 at inception."""
+    def mort(s, ia, d, ic, em):
+        return np.full(d.shape, 0.0005)
+    def lapse(s, ia, d, ic, em):
+        return np.full(d.shape, 0.02)
+    asmp = Assumptions(
+        mortality_annual=mort, lapse_annual=lapse,
+        discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
+        alpha_flat=0.0, gamma_flat=0.0,
+    )
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        level_premium=np.array([200_000.0]),
+        term_months=np.array([60]),
+        death_benefit=np.array([100_000_000.0]),
+    )
+    return asmp, mp
+
+
+def test_show_csm_step_renders_seed_and_steps():
+    """Recursion equations, seed values and at least one step row print."""
+    buf = io.StringIO()
+    show_csm_step(0, _portfolio(), _basis(), file=buf)
+    text = buf.getvalue()
+    assert "csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]" in text
+    assert "Seed (t = 0)" in text
+    assert "t=   1" in text
+    assert "End CSM" in text
+
+
+def test_show_csm_step_onerous_notes_zero_throughout():
+    """An onerous contract surfaces the explicit \"csm = 0 throughout\"
+    note in the seed block."""
+    buf = io.StringIO()
+    show_csm_step(0, _portfolio(), _basis(), file=buf)
+    assert "onerous contract -- csm = 0 throughout" in buf.getvalue()
+
+
+def test_show_csm_step_profitable_residuals_are_zero():
+    """On a profitable contract every printed recursion step holds the
+    ``csm[t-1] + acc - rel == csm[t]`` identity to float64 noise."""
+    asmp, mp = _profitable_basis_and_mp()
+    buf = io.StringIO()
+    show_csm_step(0, mp, asmp, months=[1, 12, 30, 60], file=buf)
+    for line in buf.getvalue().splitlines():
+        if "residual" not in line:
+            continue
+        token = line.rsplit("residual ", 1)[1].rstrip(")").strip()
+        assert abs(float(token)) < 1e-6, line
+
+
+def test_show_csm_step_terminal_release_drains_the_csm():
+    """At ``t = term`` the release fraction equals 1 and the CSM drops
+    to (essentially) zero -- the boundary condition the kernel enforces."""
+    asmp, mp = _profitable_basis_and_mp()
+    buf = io.StringIO()
+    show_csm_step(0, mp, asmp, months=[60], file=buf)
+    text = buf.getvalue()
+    # The terminal release fraction prints exactly as "= 1.000000".
+    assert "= 1.000000" in text
+    # End CSM is essentially zero (printed with two decimals).
+    assert "csm[60] =            0.00" in text
+
+
+def test_show_csm_step_rejects_out_of_range_index():
+    mp = _portfolio()
+    with pytest.raises(IndexError, match="mp_index"):
+        show_csm_step(mp.n_mp, mp, _basis(), file=io.StringIO())
