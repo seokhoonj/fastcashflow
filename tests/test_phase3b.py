@@ -219,10 +219,10 @@ def test_describe_assumptions_renders_both_shapes(capsys):
 
     describe_assumptions(basis)
     out_dict = capsys.readouterr().out
-    assert "(2 segments)" in out_dict
-    # every segment unfolded -- both ('TERM_A', 'GA') and ('TERM_A', 'FC') appear
-    assert "('TERM_A', 'GA')" in out_dict
-    assert "('TERM_A', 'FC')" in out_dict
+    assert "(7 segments)" in out_dict
+    # every segment unfolded -- both ('TERM_LIFE', 'GA') and ('TERM_LIFE', 'FC') appear
+    assert "('TERM_LIFE', 'GA')" in out_dict
+    assert "('TERM_LIFE', 'FC')" in out_dict
 
 
 def test_to_long_round_trips(tmp_path):

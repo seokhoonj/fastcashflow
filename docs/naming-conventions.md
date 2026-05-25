@@ -17,7 +17,7 @@
 | 시트 | 역할 |
 |---|---|
 | `segments` | `(product, channel)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`alpha_flat`, `ra_confidence`, `*_cv`, optional `*_age_shift` 등). `defaults` 행이 fallback |
-| `coverages` | 담보 정의 (전역): `coverage_code → (coverage_name, benefit_type, rate_table)`. 모든 상품 공통 (product 별로 다른 정의 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 다른 code 분리) |
+| `coverages` | 담보 정의 (전역): `coverage_code → (coverage_name, benefit_pattern, rate_table)`. 모든 상품 공통 (product 별로 다른 정의 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 다른 code 분리) |
 | `mortality_tables` | 사망 발생률 가정 (`table_id` × `sex` × `age` → `rate`) |
 | `incidence_rate_tables` | 특약 발생률 가정 (구조 동일) |
 | `waiver_tables` | 납입면제 발생률 가정 (구조 동일) |
@@ -57,7 +57,7 @@
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `TM` | 업계 관용 약어 (General Agency, Financial Consultant, Telemarketing) |
 | `table_id` | SCREAMING_SNAKE_CASE 풀네임 | `MORTALITY_STD`, `LAPSE_GA`, `DISCOUNT_STD`, `INPATIENT_STD`, `ADB_STD` | named reference. 줄임말 안 씀 (`MORT_STD` 같은 abbreviation 지양). 단 industry-universal abbr 인 `ADB` 같은 매우 짧은 것은 예외 |
 | `coverage_code` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH_MAIN`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자 — Python `TYPE_*` 상수와 같은 family |
-| `benefit_type` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH_MAIN`, `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | engine routing key. 6개 고정. 새 패턴 = engine 의 새 type 추가 작업 |
+| `benefit_pattern` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH_MAIN`, `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | **engine 의 cash flow 계산 방식 routing key**. 6 개 고정. 자세한 각 type 별 계산 패턴은 `assumptions-format.md` 의 coverages 시트 섹션 참조 |
 | `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAID_UP` | enum-like, 정책 status |
 | `defaults` (특수 product 값) | 소문자 단어 | `defaults` | segments 시트의 fallback 행 marker (값 아닌 keyword) |
 
@@ -73,13 +73,13 @@
 
 ## 데이터 ID와 Python 코드 enum 의 일관성
 
-워크북 값 (예: `coverage_code = "DEATH_MAIN"`, `benefit_type = "MORBIDITY"`) 이
+워크북 값 (예: `coverage_code = "DEATH_MAIN"`, `benefit_pattern = "MORBIDITY"`) 이
 Python 상수 (예: `TYPE_DEATH_MAIN = "DEATH_MAIN"`, `TYPE_MORBIDITY = "MORBIDITY"`)
 와 **bit-exact** 일치합니다. 모두 SCREAMING_SNAKE_CASE 풀네임.
 
 `enum-like 식별자 family`:
 
-- `product`, `channel`, `table_id`, `coverage_code`, `benefit_type`, `state`,
+- `product`, `channel`, `table_id`, `coverage_code`, `benefit_pattern`, `state`,
   `state_model` — 모두 외부 식별자 / 코드 상수 family. SCREAMING_SNAKE_CASE.
 - 줄임말 안 씀 (`MORT` 가 아닌 `MORTALITY`, `HOSP` 가 아닌 `INPATIENT` 등).
   단 industry-universal 한 매우 짧은 abbr 인 `ADB` 정도 예외.

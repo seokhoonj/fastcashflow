@@ -416,7 +416,7 @@ def read_assumptions(path):
         for r in _sheet_dicts(wb["coverages"]):
             rt = r.get("rate_table")
             global_coverages.append((
-                str(r["coverage_code"]).strip(), str(r["benefit_type"]).strip(),
+                str(r["coverage_code"]).strip(), str(r["benefit_pattern"]).strip(),
                 str(rt).strip() if rt not in (None, "") else None,
             ))
 

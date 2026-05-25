@@ -15,7 +15,10 @@ DATA = Path(__file__).resolve().parent / "data"
 
 def main() -> None:
     basis = fcf.read_assumptions(DATA / "assumptions.xlsx")
-    assumptions, = basis.values()
+    # The sample workbook now carries several (product, channel) segments;
+    # pick TERM_LIFE / FC for this single-segment quickstart. A real run
+    # over a multi-segment portfolio would use fcf.value_segmented.
+    assumptions = basis[("TERM_LIFE", "FC")]
     model_points = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions)
 
     m = fcf.measure(model_points, assumptions)

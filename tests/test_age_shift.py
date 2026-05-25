@@ -42,7 +42,7 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
 
     # riders
     rd = wb.create_sheet("coverages")
-    rd.append(["coverage_code", "coverage_name", "benefit_type", "rate_table"])
+    rd.append(["coverage_code", "coverage_name", "benefit_pattern", "rate_table"])
     rd.append(["DEATH_MAIN", "main death", "DEATH_MAIN", None])
     rd.append(["INPATIENT", "hospitalization", "MORBIDITY", "HOSP"])
 

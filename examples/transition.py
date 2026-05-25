@@ -13,7 +13,7 @@ DATA = Path(__file__).resolve().parent / "data"
 
 def main() -> None:
     basis = fcf.read_assumptions(DATA / "assumptions.xlsx")
-    assumptions, = basis.values()
+    assumptions = basis[("TERM_LIFE", "FC")]
     book = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions)
 
     # Measure the in-force book at the transition date.

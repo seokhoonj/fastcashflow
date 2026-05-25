@@ -168,20 +168,20 @@ def test_value_segmented_rejects_unknown_segment():
 def test_value_segmented_with_sample_basis():
     """End-to-end smoke -- the bundled sample basis has two segments and
     ``value_segmented`` routes per-mp valuations through it."""
-    basis = load_sample_assumptions()                    # TERM_A / GA + TERM_A / FC
+    basis = load_sample_assumptions()                    # multi-segment sample
     mp = ModelPoints(
         issue_age=np.array([40, 50, 45]),
         level_premium=np.array([50_000.0, 60_000.0, 55_000.0]),
         term_months=np.array([120, 120, 120]),
         death_benefit=np.array([100_000_000.0, 80_000_000.0, 90_000_000.0]),
-        product=np.array(["TERM_A", "TERM_A", "TERM_A"]),
+        product=np.array(["TERM_LIFE", "TERM_LIFE", "TERM_LIFE"]),
         channel=np.array(["GA", "FC", "GA"]),
     )
     val = value_segmented(mp, basis)
     assert val.bel.shape == (3,)
     # GA segment has worse persistency than FC (different LAPSE table) ->
     # the two GA mps should not match the FC mp's pattern.
-    expected_ga = value(mp.subset([0, 2]), basis[("TERM_A", "GA")])
-    expected_fc = value(mp.subset([1]), basis[("TERM_A", "FC")])
+    expected_ga = value(mp.subset([0, 2]), basis[("TERM_LIFE", "GA")])
+    expected_fc = value(mp.subset([1]), basis[("TERM_LIFE", "FC")])
     assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
     assert np.allclose(val.bel[1], expected_fc.bel[0])

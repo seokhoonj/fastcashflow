@@ -13,15 +13,20 @@ from fastcashflow import (
 
 
 def test_segments_resolve():
-    """The sample workbook resolves to two segments -- TERM_A on GA and FC."""
+    """The sample workbook resolves to several (product, channel) segments."""
     basis = load_sample_assumptions()
-    assert set(basis) == {("TERM_A", "GA"), ("TERM_A", "FC")}
+    # The sample carries three products on FC/GA (HEALTH also adds TM).
+    assert set(basis) >= {
+        ("TERM_LIFE", "FC"), ("TERM_LIFE", "GA"),
+        ("HEALTH", "FC"), ("HEALTH", "GA"), ("HEALTH", "TM"),
+        ("WHOLE_LIFE", "FC"), ("WHOLE_LIFE", "GA"),
+    }
 
 
 def test_defaults_inherited():
     """Blank cells in a segment row inherit from the ``defaults`` row."""
     basis = load_sample_assumptions()
-    ga, fc = basis[("TERM_A", "GA")], basis[("TERM_A", "FC")]
+    ga, fc = basis[("TERM_LIFE", "GA")], basis[("TERM_LIFE", "FC")]
     # ra_confidence / mortality_cv / morbidity_cv live only on the defaults row
     assert ga.ra_confidence == 0.75 and fc.ra_confidence == 0.75
     assert ga.mortality_cv == 0.10 and fc.mortality_cv == 0.10
@@ -39,23 +44,23 @@ def test_channel_segmented_lapse():
     basis = load_sample_assumptions()
     dur = np.arange(6)
     zero = np.zeros_like(dur)
-    ga_lapse = basis[("TERM_A", "GA")].lapse_annual(zero, zero, dur, zero, zero)
-    fc_lapse = basis[("TERM_A", "FC")].lapse_annual(zero, zero, dur, zero, zero)
+    ga_lapse = basis[("TERM_LIFE", "GA")].lapse_annual(zero, zero, dur, zero, zero)
+    fc_lapse = basis[("TERM_LIFE", "FC")].lapse_annual(zero, zero, dur, zero, zero)
     assert np.all(ga_lapse > fc_lapse)
 
 
 def test_per_segment_scalar():
     """``alpha_flat`` is filled per segment row (GA vs FC commission)."""
     basis = load_sample_assumptions()
-    assert basis[("TERM_A", "GA")].alpha_flat == 150_000.0
-    assert basis[("TERM_A", "FC")].alpha_flat == 80_000.0
+    assert basis[("TERM_LIFE", "GA")].alpha_flat == 150_000.0
+    assert basis[("TERM_LIFE", "FC")].alpha_flat == 80_000.0
 
 
 def test_riders_resolved():
     """Rate-driven riders resolve from ``incidence_rate_tables``; non-rate-driven
     types stay in ``coverage_types`` only."""
     basis = load_sample_assumptions()
-    asmp = basis[("TERM_A", "GA")]
+    asmp = basis[("TERM_LIFE", "GA")]
     # ADB is rate-driven (death-type), so it joins the riders tuple too.
     assert [r.code for r in asmp.riders] == ["INPATIENT", "CANCER", "ADB"]
     assert asmp.coverage_types == {
@@ -75,12 +80,12 @@ def test_resolved_basis_values():
     basis = load_sample_assumptions()
     mp = ModelPoints.single(issue_age=40, death_benefit=100_000_000.0,
                             level_premium=50_000.0, term_months=120)
-    ga = value(mp, basis[("TERM_A", "GA")]).bel[0]
-    fc = value(mp, basis[("TERM_A", "FC")]).bel[0]
+    ga = value(mp, basis[("TERM_LIFE", "GA")]).bel[0]
+    fc = value(mp, basis[("TERM_LIFE", "FC")]).bel[0]
     assert np.isfinite(ga) and np.isfinite(fc)
     assert not np.isclose(ga, fc)
     # fused and detailed paths agree
-    assert np.isclose(measure(mp, basis[("TERM_A", "GA")]).bel[0, 0], ga)
+    assert np.isclose(measure(mp, basis[("TERM_LIFE", "GA")]).bel[0, 0], ga)
 
 
 # ---------------------------------------------------------------------------

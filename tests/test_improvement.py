@@ -34,7 +34,7 @@ def _build(path: Path, *, improvement_curve=None):
     seg.append(row)
 
     rd = wb.create_sheet("coverages")
-    rd.append(["coverage_code", "coverage_name", "benefit_type", "rate_table"])
+    rd.append(["coverage_code", "coverage_name", "benefit_pattern", "rate_table"])
     rd.append(["DEATH_MAIN", "main death", "DEATH_MAIN", None])
 
     mt = wb.create_sheet("mortality_tables")
