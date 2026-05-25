@@ -29,7 +29,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        gamma_inflated_monthly,
                        discount_start, discount_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
-                       disability_factor, bel, ra, csm, loss_component):
+                       disability_factor, lapse_monthly, surrender_curve,
+                       bel, ra, csm, loss_component):
     """One CUDA thread per model point; the per-month loop runs in the thread.
 
     In-force is an occupancy vector over ``n_states`` transient states,
@@ -66,6 +67,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     pp = 0.0
     pe = 0.0
     pa = 0.0
+    ps = 0.0
+    cum_premium = 0.0
     last_year = -1
     claim_rate = 0.0
     morb_rate = 0.0
@@ -99,6 +102,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         level = (prem_occ * premium
                  if (t < premium_term and t % prem_freq == 0) else 0.0)
         pp += (level + single) * ds
+        cum_premium += level + single
         pc += ift * claim_rate * dm
         pcm += ift * morb_rate * dm
         if t % ann_freq == 0:
@@ -111,6 +115,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 if t < premium_term else 0.0)
         gamma = ift * gamma_inflated_monthly[t]
         pe += (alpha + beta + gamma) * dm
+        ps += (ift * lapse_monthly[sx, ridx, year]
+               * cum_premium * surrender_curve[t] * dm)
         for s in range(n_states):
             occ_next[s] = 0.0
         for e in range(n_edges):
@@ -153,7 +159,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                                          * edge_prob[sx, ridx, year, e])
             for s in range(n_states):
                 occ[s] = occ_next[s]
-    bel_mp = pc + pcm + pd + pm + pa + pe - pp
+    bel_mp = pc + pcm + pd + pm + pa + pe + ps - pp
     ra_mp = (mortality_factor * pc + morbidity_factor * pcm
              + disability_factor * pd + longevity_factor * (pm + pa))
     fcf = bel_mp + ra_mp
@@ -173,7 +179,7 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               alpha_pct, alpha_flat, beta_pct,
               gamma_inflated_monthly, discount_start, discount_mid,
               mortality_factor, morbidity_factor, longevity_factor,
-              disability_factor):
+              disability_factor, lapse_monthly, surrender_curve):
     """Run the fused valuation kernel on the GPU.
 
     Returns the four ``(n_mp,)`` valuation arrays: BEL, RA, CSM and the
@@ -219,6 +225,8 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_gamma_inflated = cuda.to_device(gamma_inflated_monthly)
     d_discount_start = cuda.to_device(discount_start)
     d_discount_mid = cuda.to_device(discount_mid)
+    d_lapse_monthly = cuda.to_device(lapse_monthly)
+    d_surrender_curve = cuda.to_device(surrender_curve)
     d_bel = cuda.device_array(n_mp, dtype=np.float64)
     d_ra = cuda.device_array(n_mp, dtype=np.float64)
     d_csm = cuda.device_array(n_mp, dtype=np.float64)
@@ -236,7 +244,8 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         alpha_pct, alpha_flat, beta_pct,
         d_gamma_inflated, d_discount_start,
         d_discount_mid, mortality_factor, morbidity_factor, longevity_factor,
-        disability_factor, d_bel, d_ra, d_csm, d_loss,
+        disability_factor, d_lapse_monthly, d_surrender_curve,
+        d_bel, d_ra, d_csm, d_loss,
     )
     cuda.synchronize()
 

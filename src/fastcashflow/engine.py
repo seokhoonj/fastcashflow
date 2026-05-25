@@ -314,7 +314,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
-            "coverage_reduction_factor):")
+            "coverage_reduction_factor,")
+    line(0, "           lapse_monthly, surrender_curve):")
     line(4, "n_mp = issue_index.shape[0]")
     line(4, "bel = np.empty(n_mp)")
     line(4, "ra = np.empty(n_mp)")
@@ -342,6 +343,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(8, "pp = 0.0")
     line(8, "pe = 0.0")
     line(8, "pa = 0.0")
+    line(8, "ps = 0.0")
+    line(8, "cum_premium = 0.0")
     line(8, "last_year = -1")
     line(8, "claim_rate = 0.0")
     line(8, "morb_rate = 0.0")
@@ -381,6 +384,7 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
     line(12, "pp += (level + single) * ds")
+    line(12, "cum_premium += level + single")
     line(12, "pc += ift * claim_rate * dm")
     line(12, "pcm += ift * morb_rate * dm")
     line(12, "if ann_due == 0:")
@@ -389,6 +393,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, "else:")
     line(16, "ann_due -= 1")
     line(12, "pd += benefit_occ * disability_income[mp] * dm")
+    line(12, "ps += (ift * lapse_monthly[sx, ridx, year]")
+    line(12, "       * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_inflated_monthly[t]")
@@ -448,7 +454,7 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "undiag = 1.0 - d_rate")
     emit_edge_step(16, scale=" * undiag", include_lump=False)
 
-    line(8, "bel_mp = pc + pcm + pd + pm + pa + pe - pp")
+    line(8, "bel_mp = pc + pcm + pd + pm + pa + pe + ps - pp")
     line(8, "ra_mp = (mortality_factor * pc + morbidity_factor * pcm")
     line(8, "         + disability_factor * pd "
             "+ longevity_factor * (pm + pa))")
@@ -688,7 +694,8 @@ def _codegen_value_kernel_source_semi_markov(
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
-            "coverage_reduction_factor):")
+            "coverage_reduction_factor,")
+    line(0, "           lapse_monthly, surrender_curve):")
     line(4, "n_mp = issue_index.shape[0]")
     line(4, "bel = np.empty(n_mp)")
     line(4, "ra = np.empty(n_mp)")
@@ -716,6 +723,8 @@ def _codegen_value_kernel_source_semi_markov(
     line(8, "pp = 0.0")
     line(8, "pe = 0.0")
     line(8, "pa = 0.0")
+    line(8, "ps = 0.0")
+    line(8, "cum_premium = 0.0")
     line(8, "last_year = -1")
     line(8, "claim_rate = 0.0")
     line(8, "morb_rate = 0.0")
@@ -763,6 +772,7 @@ def _codegen_value_kernel_source_semi_markov(
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
     line(12, "pp += (level + single) * ds")
+    line(12, "cum_premium += level + single")
     line(12, "pc += ift * claim_rate * dm")
     line(12, "pcm += ift * morb_rate * dm")
     line(12, "if ann_due == 0:")
@@ -771,6 +781,8 @@ def _codegen_value_kernel_source_semi_markov(
     line(12, "else:")
     line(16, "ann_due -= 1")
     line(12, "pd += benefit_occ * disability_income[mp] * dm")
+    line(12, "ps += (ift * lapse_monthly[sx, ridx, year]")
+    line(12, "       * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_inflated_monthly[t]")
@@ -836,7 +848,7 @@ def _codegen_value_kernel_source_semi_markov(
     line(16, "frac *= (1.0 - d_rate)")
 
     # --- Final output --------------------------------------------------
-    line(8, "bel_mp = pc + pcm + pd + pm + pa + pe - pp")
+    line(8, "bel_mp = pc + pcm + pd + pm + pa + pe + ps - pp")
     line(8, "ra_mp = (mortality_factor * pc + morbidity_factor * pcm")
     line(8, "         + disability_factor * pd "
             "+ longevity_factor * (pm + pa))")
@@ -908,7 +920,7 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          gamma_inflated_monthly, discount_start, discount_mid,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
-                         survival_monthly):
+                         survival_monthly, lapse_monthly, surrender_curve):
     """Scalar-inforce fast path of :func:`_value_kernel`.
 
     Used when the in-force projection collapses to a single survival track --
@@ -945,6 +957,8 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
         pp = 0.0
         pe = 0.0
         pa = 0.0
+        ps = 0.0          # PV of surrender value (해약환급금)
+        cum_premium = 0.0  # cumulative premium paid -- surrender basis
         last_year = -1
         claim_rate = 0.0
         morb_rate = 0.0
@@ -986,6 +1000,7 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                 prem_due -= 1
             prem_left -= 1
             pp += (level + single) * ds
+            cum_premium += level + single
             pc += inforce * claim_rate * dm
             pcm += inforce * morb_rate * dm
             if ann_due == 0:
@@ -1000,6 +1015,8 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                     if t < premium_term else 0.0)
             gamma = inforce * gamma_inflated_monthly[t]
             pe += (alpha + beta + gamma) * dm
+            ps += (inforce * lapse_monthly[sx, ridx, year]
+                   * cum_premium * surrender_curve[t] * dm)
             inforce *= survival_monthly[sx, ridx, year]
         pm = inforce * maturity_benefit[mp] * discount_start[term]
         # Non-diagnosis coverages with a waiting or reduced-benefit rule:
@@ -1050,7 +1067,7 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                     mult = red_factor if t < red_end else 1.0
                     pcm += healthy * d_rate * benefit * mult * discount_mid[t]
                 healthy *= survival_monthly[sx, ridx, year] * (1.0 - d_rate)
-        bel_mp = pc + pcm + pm + pa + pe - pp
+        bel_mp = pc + pcm + pm + pa + pe + ps - pp
         ra_mp = (mortality_factor * pc + morbidity_factor * pcm
                  + longevity_factor * (pm + pa))
         fcf = bel_mp + ra_mp
@@ -1272,6 +1289,18 @@ def value(
             assumptions.settlement_pattern, assumptions.discount_monthly
         )
 
+    # Surrender curve, padded to n_time and zero-filled when absent. Kept as
+    # an always-present (n_time,) array so the kernels do not need a branch:
+    # ``surrender_curve[t]`` is read once per month, and is zero whenever no
+    # surrender mechanic applies.
+    surr_user = assumptions.surrender_value_curve
+    if surr_user is None:
+        surrender_curve_kernel = np.zeros(n_time, dtype=np.float64)
+    else:
+        c = np.asarray(surr_user, dtype=np.float64)
+        idx = np.minimum(np.arange(n_time), c.shape[0] - 1)
+        surrender_curve_kernel = c[idx]
+
     if fast_path:
         survival_monthly = np.ascontiguousarray(
             (1.0 - mortality_grid) * (1.0 - lapse_grid)
@@ -1307,6 +1336,8 @@ def value(
             model_points.coverage_reduction_end,
             model_points.coverage_reduction_factor,
             survival_monthly,
+            lapse_grid,
+            surrender_curve_kernel,
         )
         return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
@@ -1400,6 +1431,8 @@ def value(
                 model_points.coverage_waiting,
                 model_points.coverage_reduction_end,
                 model_points.coverage_reduction_factor,
+                lapse_grid,
+                surrender_curve_kernel,
             )
         else:
             # Markov path -- every multi-state model with no duration
@@ -1414,6 +1447,8 @@ def value(
                 *common_args, model_points.coverage_waiting,
                 model_points.coverage_reduction_end,
                 model_points.coverage_reduction_factor,
+                lapse_grid,
+                surrender_curve_kernel,
             )
     elif backend == "gpu":
         if state_duration_max is not None:
@@ -1430,6 +1465,7 @@ def value(
         bel, ra, csm, loss_component = value_gpu(
             common_args[0], common_args[1], common_args[2], common_args[3],
             n_states, *common_args[4:],
+            lapse_grid, surrender_curve_kernel,
         )
     else:
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
