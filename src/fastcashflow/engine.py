@@ -214,6 +214,10 @@ def value_in_force(
       coverage-unit release only -- assumption-change unlocking and
       experience adjustments are future work and run via
       :func:`roll_forward` with full prior and current measurements.
+      Because the Sec. 44 onerous trigger needs CSM unlocking to fire
+      meaningfully, ``loss_component`` is returned as zeros in this mode;
+      do not interpret ``bel + ra > csm`` from a settlement call as a
+      Sec. 44 loss-component recognition.
 
     A ``ModelPoints`` with ``elapsed_months`` all zero and ``prior_csm``
     not given reproduces the new-business :func:`value` result.
@@ -270,10 +274,13 @@ def value_in_force(
     monthly_rates = np.full(max_len, lock_in_monthly)
     csm_traj, _, _ = _csm_kernel(prior_csm, inforce_seg, monthly_rates)
     csm = csm_traj[:, period_months]
-    # Loss component: an unfavourable FCF beyond the (carried-forward) CSM
-    # falls into the loss component at this measurement date.
-    fcf = bel + ra
-    loss = np.maximum(0.0, fcf - csm)
+    # Sec. 44 loss component is left as zeros here. v1 only rolls the prior
+    # CSM forward (accretion + coverage-unit release); the unlocking that
+    # would actually drive the carried CSM negative -- assumption changes
+    # and experience variances over the period -- is roll_forward()'s job.
+    # Returning max(0, bel + ra - csm) would conflate "carried CSM is short"
+    # with "true onerous recognition" and mis-signal a Sec. 44 hit.
+    loss = np.zeros(n_mp, dtype=np.float64)
     return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss)
 
 
@@ -332,6 +339,9 @@ def measure_in_force(
       release that :func:`roll_forward` uses. The BEL / RA trajectories
       and the cash flow detail are unchanged -- they are forward
       projections that do not depend on the prior period's CSM.
+      ``loss_component`` is returned as zeros in this mode for the same
+      reason as :func:`value_in_force`: Sec. 44 onerous recognition is
+      only meaningful with CSM unlocking, which v1 does not perform.
 
     Use this when the downstream needs a full trajectory (movement
     decomposition, period-close roll-forward) rather than just the
@@ -405,8 +415,11 @@ def measure_in_force(
     csm_accretion_new[ii_step, jj_step] = acc[dst_mask_step]
     csm_release_new[ii_step, jj_step] = rel[dst_mask_step]
 
-    fcf_at_em = m.bel[rows_arr, em] + m.ra[rows_arr, em]
-    loss_new = np.maximum(0.0, fcf_at_em - csm_new[rows_arr, em])
+    # See value_in_force(): Sec. 44 loss component is zeroed in settlement
+    # mode v1. Unlocking and experience adjustments belong to
+    # roll_forward() / Phase B v2; max(0, fcf - csm) here would mis-signal
+    # a Sec. 44 hit when the only thing missing is the unlocking step.
+    loss_new = np.zeros(n_mp, dtype=np.float64)
 
     return Measurement(
         bel=m.bel,
