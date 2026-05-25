@@ -215,7 +215,13 @@ class Assumptions:
         surgery, outpatient) -- the morbidity-risk component of the RA.
     expense_cv :
         Coefficient of variation of expense cash flows -- the expense-risk
-        component of the Risk Adjustment for account-value (VFA) contracts.
+        component of the Risk Adjustment. **VFA-only in v1**: ``measure_vfa``
+        uses it directly, but the GMM ``cl_margin`` in ``measure`` /
+        ``value`` does not yet read this field (it sums the mortality /
+        morbidity / disability / longevity components only). Adding the
+        expense term to the GMM RA -- and so closing the gap to the
+        IFRS 17 non-financial-risk RA -- is future work; setting
+        ``expense_cv`` on a GMM portfolio currently has no effect.
     disability_cv :
         Coefficient of variation of disability cash flows -- disability
         income and the on-transition lump sum -- the disability-risk
