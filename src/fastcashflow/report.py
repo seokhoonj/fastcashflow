@@ -127,8 +127,12 @@ def _report_gmm(m: Measurement) -> Report:
     """GMM: revenue grosses up the RA release and the CSM release."""
     bel, ra, csm = m.bel, m.ra, m.csm
     cf = m.cashflows
-    monthly_rate = 1.0 / m.discount_start[1] - 1.0
-    full = 1.0 / (1.0 + monthly_rate)
+    # Per-month forward rate from the discount-factor curve, so that a
+    # non-flat curve accretes the FCF and discounts the RA release at the
+    # right rate in every month -- the same pattern movement.py uses.
+    ds = m.discount_start
+    monthly_rate = ds[:-1] / ds[1:] - 1.0          # (n_time,)
+    full = 1.0 / (1.0 + monthly_rate)              # (n_time,)
 
     service_expense = cf.claim_cf + cf.morbidity_cf + cf.expense_cf
     ra_release = ra[:, :-1] - ra[:, 1:] * full

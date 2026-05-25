@@ -135,3 +135,28 @@ def test_report_rejects_unknown_measurement():
     """A non-measurement input is an error."""
     with pytest.raises(TypeError, match="GMM, PAA or VFA"):
         report(object())
+
+
+def test_report_finance_expense_is_curve_aware():
+    """With a per-year discount curve, finance_expense uses the per-month
+    forward rate at every month -- not just the first month's rate."""
+    a = Assumptions(
+        mortality_annual=lambda sex, ia, dur: np.full(ia.shape, _annual(0.001)),
+        lapse_annual=lambda sex, ia, dur: np.full(dur.shape, _annual(0.01)),
+        discount_annual=np.array([0.01, 0.05, 0.05, 0.05, 0.05,
+                                  0.05, 0.05, 0.05, 0.05, 0.05]),
+        alpha_flat=200_000.0,
+        gamma_flat=60_000.0,
+        expense_inflation=0.02,
+        ra_confidence=0.75,
+        mortality_cv=0.10,
+    )
+    m = measure(ModelPoints.single(40, 1e8, 50_000.0, 120), a)
+    r = report(m)
+    ds = m.discount_start
+    rate = ds[:-1] / ds[1:] - 1.0
+    expected = rate * (m.bel[0, :-1] + m.ra[0, :-1]) + m.csm_accretion[0]
+    assert np.allclose(r.insurance_finance_expense[0], expected)
+    # And the rate genuinely varies across the curve break -- without the
+    # fix, finance_expense would be off by the year-0 vs year-1 spread.
+    assert not np.isclose(rate[0], rate[12])
