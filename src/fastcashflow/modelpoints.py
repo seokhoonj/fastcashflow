@@ -313,7 +313,7 @@ class ModelPoints:
             "disability_benefit", "single_premium", "premium_term_months",
             "premium_frequency_months", "annuity_frequency_months",
             "account_value", "guaranteed_credit_rate",
-            "count", "sex", "state",
+            "count", "sex", "state", "issue_class", "elapsed_months",
         )
         kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}
 

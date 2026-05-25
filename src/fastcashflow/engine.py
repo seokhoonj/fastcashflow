@@ -179,7 +179,7 @@ def value_in_force(
     *,
     prior_csm: FloatArray | None = None,
     lock_in_rate: float | None = None,
-    period_months: int = 12,
+    period_months: int | None = None,
 ) -> Valuation:
     """In-force subsequent measurement (IFRS 17 Sec. 40-52).
 
@@ -218,18 +218,16 @@ def value_in_force(
     A ``ModelPoints`` with ``elapsed_months`` all zero and ``prior_csm``
     not given reproduces the new-business :func:`value` result.
     """
-    if (prior_csm is None) != (lock_in_rate is None):
-        raise ValueError(
-            "prior_csm and lock_in_rate must both be given (settlement mode) "
-            "or both omitted (hypothetical mode)"
-        )
+    settlement_mode = _validate_settlement_args(
+        prior_csm, lock_in_rate, period_months,
+    )
     m = measure(model_points, assumptions)
     n_mp = m.bel.shape[0]
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     rows = np.arange(n_mp)
     bel = m.bel[rows, em]
     ra = m.ra[rows, em]
-    if prior_csm is None:
+    if not settlement_mode:
         # Hypothetical: take the engine-computed CSM trajectory at t=elapsed.
         csm = m.csm[rows, em]
         return Valuation(
@@ -243,9 +241,8 @@ def value_in_force(
         raise ValueError(
             f"prior_csm must have shape ({n_mp},), got {prior_csm.shape}"
         )
-    if period_months < 1:
-        raise ValueError(f"period_months must be >= 1, got {period_months}")
-    prior_t = em - int(period_months)
+    period_months = int(period_months)
+    prior_t = em - period_months
     if np.any(prior_t < 0):
         bad = int(np.argmin(prior_t))
         raise ValueError(
@@ -272,12 +269,43 @@ def value_in_force(
     lock_in_monthly = (1.0 + float(lock_in_rate)) ** (1.0 / 12.0) - 1.0
     monthly_rates = np.full(max_len, lock_in_monthly)
     csm_traj, _, _ = _csm_kernel(prior_csm, inforce_seg, monthly_rates)
-    csm = csm_traj[:, int(period_months)]
+    csm = csm_traj[:, period_months]
     # Loss component: an unfavourable FCF beyond the (carried-forward) CSM
     # falls into the loss component at this measurement date.
     fcf = bel + ra
     loss = np.maximum(0.0, fcf - csm)
     return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss)
+
+
+def _validate_settlement_args(
+    prior_csm: FloatArray | None,
+    lock_in_rate: float | None,
+    period_months: int | None,
+) -> bool:
+    """Validate the in-force settlement triple. Returns True for settlement mode.
+
+    ``prior_csm`` and ``lock_in_rate`` are paired -- both or neither.
+    ``period_months`` is only meaningful in settlement mode; passing it in
+    hypothetical mode (without prior_csm / lock_in_rate) is rejected so a
+    misuse cannot silently no-op.
+    """
+    has_prior = prior_csm is not None
+    has_lock = lock_in_rate is not None
+    if has_prior != has_lock:
+        raise ValueError(
+            "prior_csm and lock_in_rate must both be given (settlement mode) "
+            "or both omitted (hypothetical mode)"
+        )
+    if not has_prior and period_months is not None:
+        raise ValueError(
+            "period_months applies only in settlement mode "
+            "(when prior_csm and lock_in_rate are given)"
+        )
+    if has_prior:
+        p = 12 if period_months is None else int(period_months)
+        if p < 1:
+            raise ValueError(f"period_months must be >= 1, got {period_months}")
+    return has_prior
 
 
 def measure_in_force(
@@ -286,7 +314,7 @@ def measure_in_force(
     *,
     prior_csm: FloatArray | None = None,
     lock_in_rate: float | None = None,
-    period_months: int = 12,
+    period_months: int | None = None,
 ) -> Measurement:
     """In-force subsequent measurement -- full-trajectory variant of
     :func:`value_in_force`.
@@ -309,13 +337,11 @@ def measure_in_force(
     decomposition, period-close roll-forward) rather than just the
     valuation-date headline numbers that :func:`value_in_force` returns.
     """
-    if (prior_csm is None) != (lock_in_rate is None):
-        raise ValueError(
-            "prior_csm and lock_in_rate must both be given (settlement mode) "
-            "or both omitted (hypothetical mode)"
-        )
+    settlement_mode = _validate_settlement_args(
+        prior_csm, lock_in_rate, period_months,
+    )
     m = measure(model_points, assumptions)
-    if prior_csm is None:
+    if not settlement_mode:
         return m
 
     prior_csm = np.asarray(prior_csm, dtype=np.float64)
@@ -324,10 +350,9 @@ def measure_in_force(
         raise ValueError(
             f"prior_csm must have shape ({n_mp},), got {prior_csm.shape}"
         )
-    if period_months < 1:
-        raise ValueError(f"period_months must be >= 1, got {period_months}")
+    period_months = int(period_months) if period_months is not None else 12
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    prior_t = em - int(period_months)
+    prior_t = em - period_months
     if np.any(prior_t < 0):
         bad = int(np.argmin(prior_t))
         raise ValueError(

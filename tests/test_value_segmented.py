@@ -79,6 +79,24 @@ def test_subset_slices_product_and_channel_when_set():
     assert sub.channel.tolist() == ["FC", "GA"]
 
 
+def test_subset_preserves_issue_class_and_elapsed_months():
+    """The newer per-row fields (issue_class for the UW class axis, and
+    elapsed_months for the in-force valuation date) must round-trip
+    through subset(); otherwise value_segmented silently resets them to
+    zero on the segmented portfolio."""
+    mp = ModelPoints(
+        issue_age=np.array([30, 40, 50]),
+        level_premium=np.zeros(3),
+        term_months=np.array([120, 120, 120]),
+        death_benefit=np.array([1_000.0, 2_000.0, 3_000.0]),
+        issue_class=np.array([0, 1, 2], dtype=np.int64),
+        elapsed_months=np.array([0, 24, 60], dtype=np.int64),
+    )
+    sub = mp.subset([1, 2])
+    assert sub.issue_class.tolist() == [1, 2]
+    assert sub.elapsed_months.tolist() == [24, 60]
+
+
 def test_subset_leaves_product_none_when_unset():
     mp = ModelPoints(
         issue_age=np.array([30, 40]),

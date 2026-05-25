@@ -112,6 +112,18 @@ def test_value_in_force_settlement_matches_trajectory():
     assert np.isclose(v.csm[0], m.csm[0, elapsed])
 
 
+def test_value_in_force_period_months_rejected_in_hypothetical_mode():
+    """period_months only applies in settlement mode; passing it without
+    prior_csm / lock_in_rate is a no-op trap and now raises."""
+    asmp = _basis()
+    mp = ModelPoints.single(
+        issue_age=40, death_benefit=100_000_000.0,
+        level_premium=50_000.0, term_months=120,
+    )
+    with pytest.raises(ValueError, match="period_months applies only in"):
+        value_in_force(mp, asmp, period_months=12)
+
+
 def test_value_in_force_settlement_paired_args():
     """``prior_csm`` and ``lock_in_rate`` must be supplied together; one
     without the other is a silent-wrong-result trap and raises."""
