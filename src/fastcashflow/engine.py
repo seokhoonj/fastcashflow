@@ -367,26 +367,46 @@ def measure_in_force(
     csm_release_new = m.csm_release.copy()
 
     # Re-roll each MP's CSM trajectory from t = prior_t onwards under the
-    # locked-in rate and inforce-proportional release. A per-MP loop is the
-    # cleanest expression: each contract has its own starting offset, and the
-    # _csm_kernel does the heavy lifting (parallel in n_mp axis, but here we
-    # feed it one MP at a time because of the per-MP offset).
-    for i in range(n_mp):
-        pt_i = int(prior_t[i])
-        inforce_i = m.cashflows.inforce[i, pt_i:]
-        monthly_rates_i = np.full(inforce_i.shape[0], lock_in_monthly)
-        csm_i, acc_i, rel_i = _csm_kernel(
-            np.array([prior_csm[i]], dtype=np.float64),
-            np.ascontiguousarray(inforce_i[None, :]),
-            monthly_rates_i,
-        )
-        csm_new[i, pt_i:] = csm_i[0]
-        csm_accretion_new[i, pt_i:] = acc_i[0]
-        csm_release_new[i, pt_i:] = rel_i[0]
+    # locked-in rate and inforce-proportional release. Pack the per-MP
+    # segments into a single (n_mp, max_len) zero-padded buffer and call
+    # the parallel _csm_kernel once -- a per-MP Python loop calling the
+    # njit kernel one MP at a time defeats the kernel's prange(n_mp) outer
+    # loop and pays the dispatch overhead n_mp times.
+    n_time_total = m.cashflows.inforce.shape[1]
+    rows_arr = np.arange(n_mp)
+    max_len = n_time_total - int(prior_t.min())
+    col_offsets = np.arange(max_len)
+    src_cols = prior_t[:, None] + col_offsets[None, :]
+    src_mask = src_cols < n_time_total
+    src_cols_safe = np.where(src_mask, src_cols, 0)
+    inforce_seg = np.where(
+        src_mask,
+        m.cashflows.inforce[rows_arr[:, None], src_cols_safe],
+        0.0,
+    )
+    inforce_seg = np.ascontiguousarray(inforce_seg)
+    monthly_rates = np.full(max_len, lock_in_monthly)
+    csm_traj, acc, rel = _csm_kernel(prior_csm, inforce_seg, monthly_rates)
 
-    rows = np.arange(n_mp)
-    fcf_at_em = m.bel[rows, em] + m.ra[rows, em]
-    loss_new = np.maximum(0.0, fcf_at_em - csm_new[rows, em])
+    # Scatter the per-MP segments back into the (n_mp, n_time_total+1) /
+    # (n_mp, n_time_total) trajectories. csm_traj has one more column
+    # (kernel returns t=0 onwards including endpoint) than the accretion /
+    # release arrays.
+    dst_cols_csm = prior_t[:, None] + np.arange(max_len + 1)[None, :]
+    dst_mask_csm = dst_cols_csm <= n_time_total
+    ii_csm = np.broadcast_to(rows_arr[:, None], dst_cols_csm.shape)[dst_mask_csm]
+    jj_csm = dst_cols_csm[dst_mask_csm]
+    csm_new[ii_csm, jj_csm] = csm_traj[dst_mask_csm]
+
+    dst_cols_step = prior_t[:, None] + col_offsets[None, :]
+    dst_mask_step = dst_cols_step < n_time_total
+    ii_step = np.broadcast_to(rows_arr[:, None], dst_cols_step.shape)[dst_mask_step]
+    jj_step = dst_cols_step[dst_mask_step]
+    csm_accretion_new[ii_step, jj_step] = acc[dst_mask_step]
+    csm_release_new[ii_step, jj_step] = rel[dst_mask_step]
+
+    fcf_at_em = m.bel[rows_arr, em] + m.ra[rows_arr, em]
+    loss_new = np.maximum(0.0, fcf_at_em - csm_new[rows_arr, em])
 
     return Measurement(
         bel=m.bel,
@@ -1702,27 +1722,37 @@ def value_segmented(
     csm = np.empty(n_mp)
     loss_component = np.empty(n_mp)
 
-    # Run each unique (product, channel) once -- order is stable on the
-    # first-seen index, so debugging output reads top-to-bottom of the input.
-    seen: set[tuple] = set()
-    keys: list[tuple] = []
-    for p, c in zip(product, channel):
-        key = (str(p), str(c))
-        if key not in seen:
-            seen.add(key)
-            keys.append(key)
+    # Factorise the (product, channel) key once: combine into a single
+    # array of pair-strings and run np.unique with return_inverse=True.
+    # Mask construction per segment becomes an integer comparison rather
+    # than a Python generator over n_mp policies -- the earlier
+    # `np.fromiter(((str(p),str(c)) == key for ...), ...)` was the
+    # dominant cost at large n_mp.
+    keys_arr = np.array(
+        [f"{p}|{c}" for p, c in zip(product, channel)], dtype=object,
+    )
+    unique_keys, inverse = np.unique(keys_arr, return_inverse=True)
+    # Preserve first-seen order so debugging output reads top-to-bottom
+    # of the input -- np.unique returns sorted, so re-index by first
+    # occurrence.
+    first_seen = np.array(
+        [int(np.argmax(inverse == k)) for k in range(len(unique_keys))]
+    )
+    order = np.argsort(first_seen)
+    # Rebuild parsed keys in first-seen order.
+    ordered_pairs: list[tuple] = []
+    for u_idx in order:
+        s = str(unique_keys[u_idx])
+        p_str, c_str = s.split("|", 1)
+        ordered_pairs.append((p_str, c_str))
 
-    for key in keys:
+    for ord_idx, key in zip(order, ordered_pairs):
         if key not in basis:
             raise ValueError(
                 f"segment {key!r} appears in model_points but is not in the "
                 f"basis (known segments: {sorted(basis)})"
             )
-        mask = np.fromiter(
-            ((str(p), str(c)) == key for p, c in zip(product, channel)),
-            dtype=bool, count=n_mp,
-        )
-        idx = np.nonzero(mask)[0]
+        idx = np.nonzero(inverse == ord_idx)[0]
         sub = model_points.subset(idx)
         val = value(sub, basis[key], **kwargs)
         bel[idx] = val.bel
