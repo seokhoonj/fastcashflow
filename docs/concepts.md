@@ -71,8 +71,18 @@ elapsed values -- the engine slices each one independently). With
 = E` the result is the PV of future cash flows from month `E` forward --
 the trajectory slice at duration `E`.
 
-This is an MVP for subsequent measurement (Sec. 40-52). The CSM returned is
-the one a freshly issued contract would have at duration `E` under the
-current basis; it does not yet carry forward the prior period's CSM with
-experience adjustments. Period-close roll-forward (`roll_forward`,
-`reconcile`) is the path for that.
+Two modes:
+
+* **Hypothetical** (default, `prior_csm=None`). The CSM returned is the
+  one a freshly issued contract would have at duration `E` under the
+  current basis -- useful for inspection, not a production-settlement CSM
+  (the real-world CSM is path-dependent: locked-in discount rate,
+  accumulated unlocking and experience adjustments).
+* **Settlement carry-forward** (`prior_csm=...`, `lock_in_rate=...`).
+  Implements Sec. 44: the prior period's closing CSM is accreted at the
+  locked-in rate and released over the coverage units forward to the
+  valuation date. `prior_csm` is the closing CSM at month `elapsed - period_months`,
+  `lock_in_rate` is the annual locked-in discount rate, `period_months`
+  defaults to 12. v1 covers interest accretion and coverage-unit release
+  only; assumption-change unlocking and experience adjustments go via
+  `roll_forward` with full prior and current measurements.

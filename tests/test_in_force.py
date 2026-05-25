@@ -11,6 +11,7 @@ new-business MP measured ``E`` months into its life. This is the BEL
 trajectory-slice property, and it pins the in-force semantics.
 """
 import numpy as np
+import pytest
 
 from fastcashflow import (
     Assumptions, ModelPoints, measure, value, value_in_force,
@@ -75,6 +76,75 @@ def test_value_in_force_matches_trajectory_slice():
     # The in-force BEL is the trajectory slice at t = elapsed.
     assert np.isclose(v_inf.bel[0], m.bel[0, elapsed])
     assert np.isclose(v_inf.ra[0], m.ra[0, elapsed])
+
+
+def test_value_in_force_settlement_matches_trajectory():
+    """Settlement-mode carry-forward: with ``prior_csm`` taken from the
+    measure() CSM trajectory at ``E - period_months`` and a ``lock_in_rate``
+    equal to the current discount, rolling one period forward must
+    reproduce the same trajectory's CSM at ``E``. This pins the §44
+    accretion + coverage-unit release path."""
+    asmp = _basis()
+    mp_new = ModelPoints.single(
+        issue_age=40, death_benefit=100_000_000.0,
+        level_premium=50_000.0, term_months=240,
+    )
+    m = measure(mp_new, asmp)
+    elapsed, period = 36, 12
+    prior_t = elapsed - period
+    prior_csm = m.csm[:, prior_t]
+
+    mp_inforce = ModelPoints(
+        issue_age=np.array([40]),
+        level_premium=np.array([50_000.0]),
+        term_months=np.array([240]),
+        death_benefit=np.array([100_000_000.0]),
+        elapsed_months=np.array([elapsed]),
+    )
+    v = value_in_force(
+        mp_inforce, asmp,
+        prior_csm=prior_csm,
+        lock_in_rate=asmp.discount_annual,
+        period_months=period,
+    )
+    assert np.isclose(v.bel[0], m.bel[0, elapsed])
+    assert np.isclose(v.ra[0], m.ra[0, elapsed])
+    assert np.isclose(v.csm[0], m.csm[0, elapsed])
+
+
+def test_value_in_force_settlement_paired_args():
+    """``prior_csm`` and ``lock_in_rate`` must be supplied together; one
+    without the other is a silent-wrong-result trap and raises."""
+    asmp = _basis()
+    mp = ModelPoints.single(
+        issue_age=40, death_benefit=100_000_000.0,
+        level_premium=50_000.0, term_months=240,
+    )
+    with pytest.raises(ValueError, match="both be given.*both omitted"):
+        value_in_force(mp, asmp, prior_csm=np.array([0.0]))
+    with pytest.raises(ValueError, match="both be given.*both omitted"):
+        value_in_force(mp, asmp, lock_in_rate=0.03)
+
+
+def test_value_in_force_settlement_elapsed_too_small():
+    """``elapsed_months < period_months`` means the prior closing date
+    precedes inception -- no CSM to carry forward, so the call errors out
+    rather than silently using a zero or out-of-range slice."""
+    asmp = _basis()
+    mp = ModelPoints(
+        issue_age=np.array([40]),
+        level_premium=np.array([50_000.0]),
+        term_months=np.array([240]),
+        death_benefit=np.array([100_000_000.0]),
+        elapsed_months=np.array([6]),
+    )
+    with pytest.raises(ValueError, match="precedes inception"):
+        value_in_force(
+            mp, asmp,
+            prior_csm=np.array([1.0]),
+            lock_in_rate=0.03,
+            period_months=12,
+        )
 
 
 def test_in_force_bel_smaller_term_left():

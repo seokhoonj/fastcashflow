@@ -173,8 +173,14 @@ class Valuation:
     loss_component: FloatArray  # loss component at inception (onerous contracts)
 
 
-def value_in_force(model_points: ModelPoints,
-                   assumptions: Assumptions) -> Valuation:
+def value_in_force(
+    model_points: ModelPoints,
+    assumptions: Assumptions,
+    *,
+    prior_csm: FloatArray | None = None,
+    lock_in_rate: float | None = None,
+    period_months: int = 12,
+) -> Valuation:
     """In-force subsequent measurement (IFRS 17 Sec. 40-52).
 
     Each model point is valued at its valuation date -- the moment that is
@@ -182,37 +188,96 @@ def value_in_force(model_points: ModelPoints,
     projection still runs from inception (so the rate lookups, the
     premium-paying window and the coverage-rule clocks all use policy
     duration); the trajectory is then sliced at ``t = elapsed_months[mp]``
-    per MP, which is the present value of the **future** cash flows at
-    the valuation date -- the IFRS 17 BEL / RA on subsequent measurement.
+    per MP, which is the present value of the **future** cash flows at the
+    valuation date -- the IFRS 17 BEL / RA on subsequent measurement.
 
-    MVP semantics:
+    Two modes, distinguished by whether ``prior_csm`` is supplied:
 
-    * ``count[mp]`` is the **current in-force** at the valuation date (the
-      user has already scaled it down for past lapses). The projection
-      seats this count on the contract's starting state at inception in
-      the kernel, so the inforce trajectory tracks the count *forward*
-      from the valuation date.
-    * α (acquisition) was paid at inception in the projection, and the
-      slice at ``t = elapsed`` is downstream of that, so α naturally drops
-      out of the in-force BEL -- as IFRS 17 §B65A requires.
-    * CSM here is the trajectory the engine produced under the assumption
-      "the contract has unfolded exactly as the current best estimate
-      predicts since inception". Real-world CSM includes experience
-      adjustments along the way and would be carried forward from a prior
-      reporting date; that is Phase B work.
+    * **Hypothetical** (``prior_csm=None``, default). The CSM returned is
+      the trajectory the engine produced under the assumption "the contract
+      has unfolded exactly as the current best estimate predicts since
+      inception". Useful for inspecting what a freshly issued contract
+      would look like at duration ``E`` under today's basis, but **not a
+      production-settlement CSM** -- the real-world CSM is path-dependent
+      (locked-in discount rate, accumulated unlocking and experience
+      adjustments) and is not the function of current basis and duration
+      alone.
 
-    A ``ModelPoints`` with ``elapsed_months`` all zero reproduces the
-    new-business :func:`value` result.
+    * **Settlement carry-forward** (``prior_csm`` and ``lock_in_rate``
+      both given). Implements IFRS 17 Sec. 44: the prior period's closing
+      CSM is accreted at the locked-in rate and released over the
+      coverage units forward to the valuation date. ``prior_csm`` is the
+      closing CSM at month ``elapsed_months - period_months``;
+      ``lock_in_rate`` is the annual locked-in discount rate for the
+      contract; ``period_months`` is the length of the period rolled
+      forward (default 12). v1 covers interest accretion and
+      coverage-unit release only -- assumption-change unlocking and
+      experience adjustments are future work and run via
+      :func:`roll_forward` with full prior and current measurements.
+
+    A ``ModelPoints`` with ``elapsed_months`` all zero and ``prior_csm``
+    not given reproduces the new-business :func:`value` result.
     """
+    if (prior_csm is None) != (lock_in_rate is None):
+        raise ValueError(
+            "prior_csm and lock_in_rate must both be given (settlement mode) "
+            "or both omitted (hypothetical mode)"
+        )
     m = measure(model_points, assumptions)
     n_mp = m.bel.shape[0]
-    em = model_points.elapsed_months
+    em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     rows = np.arange(n_mp)
     bel = m.bel[rows, em]
     ra = m.ra[rows, em]
-    csm = m.csm[rows, em]
-    # loss_component is set at inception in the engine; carry it through.
-    return Valuation(bel=bel, ra=ra, csm=csm, loss_component=m.loss_component)
+    if prior_csm is None:
+        # Hypothetical: take the engine-computed CSM trajectory at t=elapsed.
+        csm = m.csm[rows, em]
+        return Valuation(
+            bel=bel, ra=ra, csm=csm, loss_component=m.loss_component,
+        )
+
+    # Settlement carry-forward: roll the prior closing CSM one period over
+    # the coverage units from t = em - period_months to t = em.
+    prior_csm = np.asarray(prior_csm, dtype=np.float64)
+    if prior_csm.shape != (n_mp,):
+        raise ValueError(
+            f"prior_csm must have shape ({n_mp},), got {prior_csm.shape}"
+        )
+    if period_months < 1:
+        raise ValueError(f"period_months must be >= 1, got {period_months}")
+    prior_t = em - int(period_months)
+    if np.any(prior_t < 0):
+        bad = int(np.argmin(prior_t))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} < "
+            f"period_months={period_months}; the prior closing date precedes "
+            "inception, which has no CSM to carry forward"
+        )
+    # Each MP rolls forward from its own ``prior_t``; pack the per-MP
+    # inforce segments into a single (n_mp, max_len) array (zero-padded
+    # past each segment's true horizon -- zero coverage units release
+    # nothing, so the padded tail does not perturb the CSM step we want).
+    n_time_total = m.cashflows.inforce.shape[1]
+    max_len = n_time_total - int(prior_t.min())
+    col_offsets = np.arange(max_len)
+    src_cols = prior_t[:, None] + col_offsets[None, :]
+    mask = src_cols < n_time_total
+    src_cols_safe = np.where(mask, src_cols, 0)
+    inforce_seg = np.where(
+        mask,
+        m.cashflows.inforce[rows[:, None], src_cols_safe],
+        0.0,
+    )
+    inforce_seg = np.ascontiguousarray(inforce_seg)
+    lock_in_monthly = (1.0 + float(lock_in_rate)) ** (1.0 / 12.0) - 1.0
+    monthly_rates = np.full(max_len, lock_in_monthly)
+    csm_traj, _, _ = _csm_kernel(prior_csm, inforce_seg, monthly_rates)
+    csm = csm_traj[:, int(period_months)]
+    # Loss component: an unfavourable FCF beyond the (carried-forward) CSM
+    # falls into the loss component at this measurement date.
+    fcf = bel + ra
+    loss = np.maximum(0.0, fcf - csm)
+    return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss)
 
 
 # ---------------------------------------------------------------------------
