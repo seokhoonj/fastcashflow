@@ -17,7 +17,7 @@ from fastcashflow import (
     RISK_MORBIDITY,
     STATE_ACTIVE,
     STATE_MODELS,
-    STATE_PAID_UP,
+    STATE_PAIDUP,
     STATE_WAIVER,
     Assumptions,
     ModelPoints,
@@ -149,7 +149,7 @@ def test_paidup_matches_waiver():
               level_premium=40_000.0, term_months=180)
     asmp = _assumptions()
     waiver = value(ModelPoints.single(**kw, state=STATE_WAIVER), asmp)
-    paidup = value(ModelPoints.single(**kw, state=STATE_PAID_UP), asmp)
+    paidup = value(ModelPoints.single(**kw, state=STATE_PAIDUP), asmp)
     for field in ("bel", "ra", "csm", "loss_component"):
         assert np.isclose(getattr(paidup, field)[0], getattr(waiver, field)[0])
 
@@ -249,7 +249,7 @@ def test_paidup_state_spelling_is_normalised(tmp_path):
         "40,24,12000,1000000,PAIDUP\n"
     )
     back = read_model_points(path, _assumptions())
-    assert list(back.state) == [STATE_PAID_UP] * 4
+    assert list(back.state) == [STATE_PAIDUP] * 4
 
 
 def _flat(rate):

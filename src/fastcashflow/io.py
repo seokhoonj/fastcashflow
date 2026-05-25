@@ -570,7 +570,7 @@ def _read_state(col: pl.Series) -> np.ndarray:
     """
     if col.dtype == pl.String:
         # Normalised lookup -- canonical STATE_NAMES keys ("ACTIVE", "WAIVER",
-        # "PAID_UP") are uppercase, but any spelling (case, spaces, hyphens,
+        # "PAIDUP") are uppercase, but any spelling (case, spaces, hyphens,
         # underscores ignored) of the canonical name maps to the same code.
         normalised = {
             k.lower().replace("_", "").replace("-", "").replace(" ", ""): v
