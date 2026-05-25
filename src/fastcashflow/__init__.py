@@ -70,6 +70,7 @@ from fastcashflow.statemodel import (
     Transition,
 )
 from fastcashflow.stochastic import StochasticResult, value_stochastic
+from fastcashflow.trace import show_trace
 from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult, measure_tvog
 from fastcashflow.vfa import VFAMeasurement, measure_vfa
@@ -91,6 +92,7 @@ __all__ = [
     "load_sample_model_points", "load_sample_assumptions",
     "load_sample_inforce_state", "sample_data_dir",
     "describe_assumptions",
+    "show_trace",
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
