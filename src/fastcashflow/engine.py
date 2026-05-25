@@ -529,7 +529,7 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
     line(0, "           alpha_pct, alpha_flat, beta_pct,")
-    line(0, "           gamma_inflated_monthly,")
+    line(0, "           gamma_inflated_monthly, claim_pct_monthly,")
     line(0, "           discount_start, discount_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
@@ -621,7 +621,9 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_inflated_monthly[t]")
-    line(12, "pv_expense += (alpha + beta + gamma) * dm")
+    line(12, "claim_handling = claim_pct_monthly[t] * "
+            "ift * (claim_rate + morb_rate)")
+    line(12, "pv_expense += (alpha + beta + gamma + claim_handling) * dm")
     emit_edge_step(12, scale="", include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -960,7 +962,7 @@ def _codegen_value_kernel_source_semi_markov(
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
     line(0, "           alpha_pct, alpha_flat, beta_pct,")
-    line(0, "           gamma_inflated_monthly,")
+    line(0, "           gamma_inflated_monthly, claim_pct_monthly,")
     line(0, "           discount_start, discount_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
@@ -1060,7 +1062,9 @@ def _codegen_value_kernel_source_semi_markov(
     line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_inflated_monthly[t]")
-    line(12, "pv_expense += (alpha + beta + gamma) * dm")
+    line(12, "claim_handling = claim_pct_monthly[t] * "
+            "ift * (claim_rate + morb_rate)")
+    line(12, "pv_expense += (alpha + beta + gamma + claim_handling) * dm")
     emit_edge_step(12, include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -1192,7 +1196,8 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          cov_rates, cov_risk, cov_is_diagnosis,
                          maturity_benefit, annuity_payment,
                          alpha_pct, alpha_flat, beta_pct,
-                         gamma_inflated_monthly, discount_start, discount_mid,
+                         gamma_inflated_monthly, claim_pct_monthly,
+                         discount_start, discount_mid,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
                          survival_monthly, lapse_monthly, surrender_curve):
@@ -1289,7 +1294,8 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
             beta = (inforce * beta_pct * ann_prem / 12.0
                     if t < premium_term else 0.0)
             gamma = inforce * gamma_inflated_monthly[t]
-            pv_expense += (alpha + beta + gamma) * dm
+            claim_handling = claim_pct_monthly[t] * inforce * (claim_rate + morb_rate)
+            pv_expense += (alpha + beta + gamma + claim_handling) * dm
             # cum_premium already aggregates inforce * premium; multiplying
             # by lapse_rate alone gives the per-month surrender outflow.
             pv_surrender += (lapse_monthly[sx, ridx, year]
@@ -1544,8 +1550,16 @@ def value(
         issue_age_grid, duration_grid, issue_class_grid, elapsed_grid,
     )))
 
-    gamma_inflated_monthly = (gamma_monthly_curve(assumptions, n_time)
-                              * inflation_index(assumptions, n_time))
+    # Expense primitives -- the five inputs every value-side kernel
+    # consumes (alpha / beta / gamma scalars plus two per-month curves).
+    # See projection._expense_kernel_args -- this engine path uses the
+    # same helper so the row-form vs legacy dispatch is consistent across
+    # value() and measure().
+    from fastcashflow.projection import _expense_kernel_args
+    (expense_alpha_pct, expense_alpha_flat, expense_beta_pct,
+     gamma_inflated_monthly, claim_pct_monthly) = _expense_kernel_args(
+        assumptions, n_time,
+    )
     if discount_curve is None:
         discount_start, discount_mid = discount_factors(assumptions, n_time)
     else:
@@ -1605,10 +1619,11 @@ def value(
             cov_is_diagnosis,
             model_points.maturity_benefit,
             model_points.annuity_payment,
-            assumptions.alpha_pct,
-            assumptions.alpha_flat,
-            assumptions.beta_pct,
+            expense_alpha_pct,
+            expense_alpha_flat,
+            expense_beta_pct,
             gamma_inflated_monthly,
+            claim_pct_monthly,
             discount_start,
             discount_mid,
             mortality_factor,
@@ -1654,10 +1669,11 @@ def value(
         model_points.annuity_payment,
         model_points.disability_income,
         model_points.disability_benefit,
-        assumptions.alpha_pct,
-        assumptions.alpha_flat,
-        assumptions.beta_pct,
+        expense_alpha_pct,
+        expense_alpha_flat,
+        expense_beta_pct,
         gamma_inflated_monthly,
+        claim_pct_monthly,
         discount_start,
         discount_mid,
         mortality_factor,
@@ -1700,10 +1716,11 @@ def value(
                 model_points.annuity_payment,
                 model_points.disability_income,
                 model_points.disability_benefit,
-                assumptions.alpha_pct,
-                assumptions.alpha_flat,
-                assumptions.beta_pct,
+                expense_alpha_pct,
+                expense_alpha_flat,
+                expense_beta_pct,
                 gamma_inflated_monthly,
+                claim_pct_monthly,
                 discount_start,
                 discount_mid,
                 mortality_factor,

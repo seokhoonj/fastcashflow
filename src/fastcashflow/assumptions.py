@@ -409,6 +409,12 @@ class Assumptions:
     beta_pct: float = 0.0
     gamma_flat: float | FloatArray = 0.0
     expense_inflation: float | FloatArray = 0.0
+    # Row-form expense ledger -- the framework the engine is migrating to
+    # (see ExpenseRow / derive_expense_components). When non-empty it takes
+    # precedence over alpha / beta / gamma / expense_inflation above; when
+    # empty the legacy scalars are used as before. The two routes are
+    # mutually exclusive: setting both is a transition state, not a sum.
+    expense_rows: tuple[ExpenseRow, ...] = ()
     # Surrender value (해약환급금) curve -- per-month factor applied to the
     # cumulative premium paid. Engine: surrender_cf[t] = lapse_flow[t] x
     # cum_premium[t] x surrender_value_curve[t]. None = no surrender value
