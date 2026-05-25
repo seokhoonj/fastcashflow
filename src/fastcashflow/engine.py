@@ -173,6 +173,48 @@ class Valuation:
     loss_component: FloatArray  # loss component at inception (onerous contracts)
 
 
+def value_in_force(model_points: ModelPoints,
+                   assumptions: Assumptions) -> Valuation:
+    """In-force subsequent measurement (IFRS 17 Sec. 40-52).
+
+    Each model point is valued at its valuation date -- the moment that is
+    ``elapsed_months[mp]`` months after that contract's inception. The
+    projection still runs from inception (so the rate lookups, the
+    premium-paying window and the coverage-rule clocks all use policy
+    duration); the trajectory is then sliced at ``t = elapsed_months[mp]``
+    per MP, which is the present value of the **future** cash flows at
+    the valuation date -- the IFRS 17 BEL / RA on subsequent measurement.
+
+    MVP semantics:
+
+    * ``count[mp]`` is the **current in-force** at the valuation date (the
+      user has already scaled it down for past lapses). The projection
+      seats this count on the contract's starting state at inception in
+      the kernel, so the inforce trajectory tracks the count *forward*
+      from the valuation date.
+    * α (acquisition) was paid at inception in the projection, and the
+      slice at ``t = elapsed`` is downstream of that, so α naturally drops
+      out of the in-force BEL -- as IFRS 17 §B65A requires.
+    * CSM here is the trajectory the engine produced under the assumption
+      "the contract has unfolded exactly as the current best estimate
+      predicts since inception". Real-world CSM includes experience
+      adjustments along the way and would be carried forward from a prior
+      reporting date; that is Phase B work.
+
+    A ``ModelPoints`` with ``elapsed_months`` all zero reproduces the
+    new-business :func:`value` result.
+    """
+    m = measure(model_points, assumptions)
+    n_mp = m.bel.shape[0]
+    em = model_points.elapsed_months
+    rows = np.arange(n_mp)
+    bel = m.bel[rows, em]
+    ra = m.ra[rows, em]
+    csm = m.csm[rows, em]
+    # loss_component is set at inception in the engine; carry it through.
+    return Valuation(bel=bel, ra=ra, csm=csm, loss_component=m.loss_component)
+
+
 # ---------------------------------------------------------------------------
 # Codegen specialisation -- the multi-state value kernel
 # ---------------------------------------------------------------------------

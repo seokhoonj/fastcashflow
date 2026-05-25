@@ -109,6 +109,14 @@ class ModelPoints:
     # ``issue_class`` look up the per-policy value; tables without the axis
     # broadcast over it (no effect).
     issue_class: IntArray | None = None
+    # In-force valuation -- months since policy inception at the valuation
+    # date. Default 0 reproduces the new-business behaviour (every contract
+    # treated as just issued). Set per-MP for an in-force portfolio: each
+    # contract has its own inception, so at a single valuation date the
+    # array carries different elapsed values across rows. Rate lookups, the
+    # premium-paying-window check and surrender's cumulative-premium basis
+    # all shift by ``elapsed_months[mp]``.
+    elapsed_months: IntArray | None = None
     # Segment metadata -- the (product, channel) keys that map a model point
     # to its assumption set when ``value_segmented`` splits a portfolio.
     # Object arrays of string labels (or None for a single-segment book).
@@ -150,6 +158,13 @@ class ModelPoints:
         ic = (np.zeros(n_mp, np.int64) if ic is None
               else np.asarray(ic, np.int64))
         object.__setattr__(self, "issue_class", ic)
+        # elapsed_months defaults to 0 -- every contract treated as just
+        # issued (new-business mode). Non-zero values switch the model
+        # point into in-force mode (see the field docstring above).
+        em = self.elapsed_months
+        em = (np.zeros(n_mp, np.int64) if em is None
+              else np.asarray(em, np.int64))
+        object.__setattr__(self, "elapsed_months", em)
         # premium_term_months defaults to the full coverage term -- the level
         # premium is collected every in-force month, the ordinary case.
         premium_term = self.premium_term_months

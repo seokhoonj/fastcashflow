@@ -15,7 +15,7 @@ quantity this engine computes.
 from fastcashflow.assumptions import Assumptions, CoverageRate, describe_assumptions
 from fastcashflow.coverage import DEATH, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import (
-    Measurement, Valuation, measure, value, value_segmented,
+    Measurement, Valuation, measure, value, value_in_force, value_segmented,
 )
 from fastcashflow.grouping import group
 from fastcashflow.io import (
@@ -70,7 +70,8 @@ from fastcashflow.vfa import VFAMeasurement, measure_vfa
 
 __version__ = "0.0.1.dev1"
 __all__ = [
-    "Assumptions", "ModelPoints", "measure", "value", "value_segmented",
+    "Assumptions", "ModelPoints", "measure", "value", "value_in_force",
+    "value_segmented",
     "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "measure_tvog",
     "report", "roll_forward", "reconcile", "group", "transition",
