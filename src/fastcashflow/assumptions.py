@@ -132,6 +132,113 @@ class AssumptionsMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class ExpenseRow:
+    """One typed entry in the expense ledger.
+
+    A future-facing dataclass: the engine will dispatch every expense
+    line off ``basis`` and read ``value`` (and ``inflation_rate``),
+    so adding a new Korean practitioner category (지급비, overhead, ...)
+    becomes a data change rather than an engine change. ``Assumptions``
+    does not consume ``ExpenseRow`` yet -- the alpha / beta / gamma
+    scalar fields are still the live wiring -- this commit only
+    introduces the type and the projection helper. Migration of the
+    kernel, sample workbook and tests happens in follow-up commits.
+
+    Parameters
+    ----------
+    expense_type
+        Free-form label for reporting / audit (e.g. ``"acquisition"``,
+        ``"maintenance"``, ``"collection"``, ``"claim_handling"``,
+        ``"overhead"``). Engine ignores it; ``show_trace`` and
+        ``describe_assumptions`` echo it.
+    basis
+        Dispatch key -- one of :data:`EXPENSE_BASES`. The five values
+        cover acquisition (init), maintenance (monthly), premium-based
+        recurring, and claim-handling.
+    value
+        Numeric value -- a fraction (0..1) for the ``_pct`` bases, an
+        amount per policy for the ``per_policy_*`` bases.
+    inflation_rate
+        Annual inflation applied to ``value`` -- the effective rate at
+        month ``t`` is ``value * (1 + inflation_rate) ** (t / 12)``.
+        Only the recurring bases (``per_policy_monthly``, ``claim_pct``)
+        use it; the two ``_init`` bases pay once at ``t=0`` and
+        ``premium_pct`` rides the premium itself, so a second inflation
+        factor would double-count.
+    """
+
+    expense_type: str
+    basis: str
+    value: float
+    inflation_rate: float = 0.0
+
+
+#: All ``ExpenseRow.basis`` values the engine knows how to dispatch.
+EXPENSE_BASES = (
+    "per_policy_init",
+    "per_policy_monthly",
+    "premium_pct_init",
+    "premium_pct",
+    "claim_pct",
+)
+
+
+def derive_expense_components(
+    expense_rows: tuple["ExpenseRow", ...], n_time: int,
+) -> tuple[float, float, float, FloatArray, FloatArray]:
+    """Project ``expense_rows`` onto the five kernel-side primitives.
+
+    Returns ``(alpha_pct, alpha_flat, beta_pct, gamma_monthly,
+    claim_pct_monthly)``:
+
+    - ``alpha_pct`` -- sum of ``value`` over ``premium_pct_init`` rows.
+      Paid at ``t=0`` on annualized premium.
+    - ``alpha_flat`` -- sum of ``value`` over ``per_policy_init`` rows.
+      Paid at ``t=0`` per policy.
+    - ``beta_pct`` -- sum of ``value`` over ``premium_pct`` rows.
+      Charged each premium-paying month on the actual premium.
+    - ``gamma_monthly[t]`` -- per-month per-policy maintenance: each
+      ``per_policy_monthly`` row contributes ``value / 12 *
+      (1+inflation)^(t/12)``.
+    - ``claim_pct_monthly[t]`` -- claim-handling fraction: each
+      ``claim_pct`` row contributes ``value * (1+inflation)^(t/12)``.
+      Applied to the month's claim + morbidity + disability total when
+      the engine wires this curve in (follow-up commits).
+
+    This helper is the bridge between the row-form authoring surface
+    and the flat scalar / curve inputs the compiled kernel takes.
+    Direct kernel callers can stop populating
+    ``Assumptions.alpha_pct`` / ``Assumptions.gamma_flat`` once they
+    instead derive their kernel arguments from the row form.
+    """
+    alpha_pct = 0.0
+    alpha_flat = 0.0
+    beta_pct = 0.0
+    gamma_monthly = np.zeros(n_time, dtype=np.float64)
+    claim_pct_monthly = np.zeros(n_time, dtype=np.float64)
+    t_arr = np.arange(n_time)
+    for row in expense_rows:
+        if row.basis == "per_policy_init":
+            alpha_flat += row.value
+        elif row.basis == "premium_pct_init":
+            alpha_pct += row.value
+        elif row.basis == "premium_pct":
+            beta_pct += row.value
+        elif row.basis == "per_policy_monthly":
+            factor = (1.0 + row.inflation_rate) ** (t_arr / 12.0)
+            gamma_monthly += row.value * factor / 12.0
+        elif row.basis == "claim_pct":
+            factor = (1.0 + row.inflation_rate) ** (t_arr / 12.0)
+            claim_pct_monthly += row.value * factor
+        else:
+            raise ValueError(
+                f"unknown expense basis {row.basis!r}; expected one of "
+                f"{EXPENSE_BASES}"
+            )
+    return alpha_pct, alpha_flat, beta_pct, gamma_monthly, claim_pct_monthly
+
+
+@dataclass(frozen=True, slots=True)
 class CoverageRate:
     """One rate-driven rider's assumption -- a coverage code and how it runs.
 
