@@ -61,13 +61,13 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     for s in range(n_states):
         occ[s] = 0.0
     occ[ss] = cnt
-    pc = 0.0
-    pcm = 0.0
-    pd = 0.0
-    pp = 0.0
-    pe = 0.0
-    pa = 0.0
-    ps = 0.0
+    pv_mortality = 0.0
+    pv_morbidity = 0.0
+    pv_disability = 0.0
+    pv_premium = 0.0
+    pv_expense = 0.0
+    pv_annuity = 0.0
+    pv_surrender = 0.0
     cum_premium = 0.0
     last_year = -1
     claim_rate = 0.0
@@ -101,31 +101,31 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         single = prem_occ * single_premium[mp] if t == 0 else 0.0
         level = (prem_occ * premium
                  if (t < premium_term and t % prem_freq == 0) else 0.0)
-        pp += (level + single) * ds
+        pv_premium += (level + single) * ds
         cum_premium += level + single
-        pc += ift * claim_rate * dm
-        pcm += ift * morb_rate * dm
+        pv_mortality += ift * claim_rate * dm
+        pv_morbidity += ift * morb_rate * dm
         if t % ann_freq == 0:
-            pa += ift * annuity * ds
-        pd += benefit_occ * disability_income[mp] * dm
+            pv_annuity += ift * annuity * ds
+        pv_disability += benefit_occ * disability_income[mp] * dm
         ann_prem = level_premium[mp] * 12.0 / prem_freq
         alpha = (cnt * (alpha_pct * ann_prem + alpha_flat)
                  if t == 0 else 0.0)
         beta = (ift * beta_pct * ann_prem / 12.0
                 if t < premium_term else 0.0)
         gamma = ift * gamma_inflated_monthly[t]
-        pe += (alpha + beta + gamma) * dm
+        pv_expense += (alpha + beta + gamma) * dm
         # cum_premium already aggregates inforce * premium; multiply by
         # lapse_rate alone (no ift) -- otherwise cnt^2 over-attribution.
-        ps += (lapse_monthly[sx, ridx, year]
-               * cum_premium * surrender_curve[t] * dm)
+        pv_surrender += (lapse_monthly[sx, ridx, year]
+                         * cum_premium * surrender_curve[t] * dm)
         for s in range(n_states):
             occ_next[s] = 0.0
         for e in range(n_edges):
             flow = occ[edge_from[e]] * edge_prob[sx, ridx, year, e]
             occ_next[edge_to[e]] += flow
             if edge_lump_sum[e]:
-                pd += flow * disability_benefit[mp] * dm
+                pv_disability += flow * disability_benefit[mp] * dm
         for s in range(n_states):
             occ[s] = occ_next[s]
     total = 0.0
@@ -152,7 +152,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
             healthy = 0.0
             for s in range(n_states):
                 healthy += occ[s]
-            pcm += healthy * d_rate * benefit * discount_mid[t]
+            pv_morbidity += healthy * d_rate * benefit * discount_mid[t]
             undiag = 1.0 - d_rate
             for s in range(n_states):
                 occ_next[s] = 0.0
@@ -161,9 +161,11 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                                          * edge_prob[sx, ridx, year, e])
             for s in range(n_states):
                 occ[s] = occ_next[s]
-    bel_mp = pc + pcm + pd + pm + pa + pe + ps - pp
-    ra_mp = (mortality_factor * pc + morbidity_factor * pcm
-             + disability_factor * pd + longevity_factor * (pm + pa))
+    bel_mp = (pv_mortality + pv_morbidity + pv_disability + pm
+              + pv_annuity + pv_expense + pv_surrender - pv_premium)
+    ra_mp = (mortality_factor * pv_mortality + morbidity_factor * pv_morbidity
+             + disability_factor * pv_disability
+             + longevity_factor * (pm + pv_annuity))
     fcf = bel_mp + ra_mp
     bel[mp] = bel_mp
     ra[mp] = ra_mp

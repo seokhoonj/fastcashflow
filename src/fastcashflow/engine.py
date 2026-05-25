@@ -499,7 +499,7 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             line(indent, f"occ_next_{et} += flow_{e}")
             if include_lump and ls:
                 line(indent,
-                     f"pd += flow_{e} * disability_benefit[mp] * dm")
+                     f"pv_disability += flow_{e} * disability_benefit[mp] * dm")
         for i in range(n_states):
             line(indent, f"occ_{i} = occ_next_{i}")
 
@@ -544,13 +544,13 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(8, "ss = start_state[mp]")
     line(8, "ann_prem = premium * 12.0 / prem_freq")
     emit_init(8)
-    line(8, "pc = 0.0")
-    line(8, "pcm = 0.0")
-    line(8, "pd = 0.0")
-    line(8, "pp = 0.0")
-    line(8, "pe = 0.0")
-    line(8, "pa = 0.0")
-    line(8, "ps = 0.0")
+    line(8, "pv_mortality = 0.0")
+    line(8, "pv_morbidity = 0.0")
+    line(8, "pv_disability = 0.0")
+    line(8, "pv_premium = 0.0")
+    line(8, "pv_expense = 0.0")
+    line(8, "pv_annuity = 0.0")
+    line(8, "pv_surrender = 0.0")
     line(8, "cum_premium = 0.0")
     line(8, "last_year = -1")
     line(8, "claim_rate = 0.0")
@@ -590,25 +590,25 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "level = 0.0")
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
-    line(12, "pp += (level + single) * ds")
+    line(12, "pv_premium += (level + single) * ds")
     line(12, "cum_premium += level + single")
-    line(12, "pc += ift * claim_rate * dm")
-    line(12, "pcm += ift * morb_rate * dm")
+    line(12, "pv_mortality += ift * claim_rate * dm")
+    line(12, "pv_morbidity += ift * morb_rate * dm")
     line(12, "if ann_due == 0:")
-    line(16, "pa += ift * annuity * ds")
+    line(16, "pv_annuity += ift * annuity * ds")
     line(16, "ann_due = ann_freq - 1")
     line(12, "else:")
     line(16, "ann_due -= 1")
-    line(12, "pd += benefit_occ * disability_income[mp] * dm")
+    line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
     # cum_premium aggregates inforce * premium; multiplying by lapse_rate
     # alone gives the per-month surrender outflow (the count is already in
     # cum_premium, so multiplying by ift here would scale by cnt^2).
-    line(12, "ps += (lapse_monthly[sx, ridx, year]")
-    line(12, "       * cum_premium * surrender_curve[t] * dm)")
+    line(12, "pv_surrender += (lapse_monthly[sx, ridx, year]")
+    line(12, "                 * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_inflated_monthly[t]")
-    line(12, "pe += (alpha + beta + gamma) * dm")
+    line(12, "pv_expense += (alpha + beta + gamma) * dm")
     emit_edge_step(12, scale="", include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -635,9 +635,9 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(20, "contrib = (inf * cov_rates[kind, sx, ridx, year]")
     line(20, "           * benefit * mult * discount_mid[t])")
     line(20, "if mortality_risk:")
-    line(24, "pc += contrib")
+    line(24, "pv_mortality += contrib")
     line(20, "else:")
-    line(24, "pcm += contrib")
+    line(24, "pv_morbidity += contrib")
     emit_edge_step(16, scale="", include_lump=False)
 
     # Diagnosis pass
@@ -660,14 +660,15 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "if t >= wait:")
     line(20, "mult = red_factor if t < red_end else 1.0")
     line(20, f"healthy = {sum_all}")
-    line(20, "pcm += healthy * d_rate * benefit * mult * discount_mid[t]")
+    line(20, "pv_morbidity += healthy * d_rate * benefit * mult * discount_mid[t]")
     line(16, "undiag = 1.0 - d_rate")
     emit_edge_step(16, scale=" * undiag", include_lump=False)
 
-    line(8, "bel_mp = pc + pcm + pd + pm + pa + pe + ps - pp")
-    line(8, "ra_mp = (mortality_factor * pc + morbidity_factor * pcm")
-    line(8, "         + disability_factor * pd "
-            "+ longevity_factor * (pm + pa))")
+    line(8, "bel_mp = (pv_mortality + pv_morbidity + pv_disability + pm")
+    line(8, "          + pv_annuity + pv_expense + pv_surrender - pv_premium)")
+    line(8, "ra_mp = (mortality_factor * pv_mortality + morbidity_factor * pv_morbidity")
+    line(8, "         + disability_factor * pv_disability "
+            "+ longevity_factor * (pm + pv_annuity))")
     line(8, "fcf = bel_mp + ra_mp")
     line(8, "bel[mp] = bel_mp")
     line(8, "ra[mp] = ra_mp")
@@ -874,7 +875,7 @@ def _codegen_value_kernel_source_semi_markov(
                          f"{occ_next(s_to, 0)} += flow_{e}_{tau}")
                 if include_lump and ls:
                     line(indent,
-                         f"pd += flow_{e}_{tau} "
+                         f"pv_disability += flow_{e}_{tau} "
                          f"* disability_benefit[mp] * dm")
         # Copy back.
         for s in range(n_states):
@@ -927,13 +928,13 @@ def _codegen_value_kernel_source_semi_markov(
     line(8, "ss = start_state[mp]")
     line(8, "ann_prem = premium * 12.0 / prem_freq")
     emit_init(8)
-    line(8, "pc = 0.0")
-    line(8, "pcm = 0.0")
-    line(8, "pd = 0.0")
-    line(8, "pp = 0.0")
-    line(8, "pe = 0.0")
-    line(8, "pa = 0.0")
-    line(8, "ps = 0.0")
+    line(8, "pv_mortality = 0.0")
+    line(8, "pv_morbidity = 0.0")
+    line(8, "pv_disability = 0.0")
+    line(8, "pv_premium = 0.0")
+    line(8, "pv_expense = 0.0")
+    line(8, "pv_annuity = 0.0")
+    line(8, "pv_surrender = 0.0")
     line(8, "cum_premium = 0.0")
     line(8, "last_year = -1")
     line(8, "claim_rate = 0.0")
@@ -981,25 +982,25 @@ def _codegen_value_kernel_source_semi_markov(
     line(16, "level = 0.0")
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
-    line(12, "pp += (level + single) * ds")
+    line(12, "pv_premium += (level + single) * ds")
     line(12, "cum_premium += level + single")
-    line(12, "pc += ift * claim_rate * dm")
-    line(12, "pcm += ift * morb_rate * dm")
+    line(12, "pv_mortality += ift * claim_rate * dm")
+    line(12, "pv_morbidity += ift * morb_rate * dm")
     line(12, "if ann_due == 0:")
-    line(16, "pa += ift * annuity * ds")
+    line(16, "pv_annuity += ift * annuity * ds")
     line(16, "ann_due = ann_freq - 1")
     line(12, "else:")
     line(16, "ann_due -= 1")
-    line(12, "pd += benefit_occ * disability_income[mp] * dm")
+    line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
     # cum_premium aggregates inforce * premium; multiplying by lapse_rate
     # alone gives the per-month surrender outflow (the count is already in
     # cum_premium, so multiplying by ift here would scale by cnt^2).
-    line(12, "ps += (lapse_monthly[sx, ridx, year]")
-    line(12, "       * cum_premium * surrender_curve[t] * dm)")
+    line(12, "pv_surrender += (lapse_monthly[sx, ridx, year]")
+    line(12, "                 * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_inflated_monthly[t]")
-    line(12, "pe += (alpha + beta + gamma) * dm")
+    line(12, "pv_expense += (alpha + beta + gamma) * dm")
     emit_edge_step(12, include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -1028,9 +1029,9 @@ def _codegen_value_kernel_source_semi_markov(
     line(16, "contrib = (inforce_traj[t] * cov_rates[kind, sx, ridx, year]")
     line(16, "           * benefit * mult * discount_mid[t])")
     line(16, "if mortality_risk:")
-    line(20, "pc += contrib")
+    line(20, "pv_mortality += contrib")
     line(16, "else:")
-    line(20, "pcm += contrib")
+    line(20, "pv_morbidity += contrib")
 
     # --- Diagnosis-coverage pass ---------------------------------------
     # Diagnosis coverages run off a depleting not-yet-diagnosed pool.
@@ -1056,15 +1057,16 @@ def _codegen_value_kernel_source_semi_markov(
     line(20, "d_year = year")
     line(16, "if t >= wait:")
     line(20, "mult = red_factor if t < red_end else 1.0")
-    line(20, "pcm += (inforce_traj[t] * frac * d_rate * benefit * mult")
-    line(20, "        * discount_mid[t])")
+    line(20, "pv_morbidity += (inforce_traj[t] * frac * d_rate * benefit * mult")
+    line(20, "                 * discount_mid[t])")
     line(16, "frac *= (1.0 - d_rate)")
 
     # --- Final output --------------------------------------------------
-    line(8, "bel_mp = pc + pcm + pd + pm + pa + pe + ps - pp")
-    line(8, "ra_mp = (mortality_factor * pc + morbidity_factor * pcm")
-    line(8, "         + disability_factor * pd "
-            "+ longevity_factor * (pm + pa))")
+    line(8, "bel_mp = (pv_mortality + pv_morbidity + pv_disability + pm")
+    line(8, "          + pv_annuity + pv_expense + pv_surrender - pv_premium)")
+    line(8, "ra_mp = (mortality_factor * pv_mortality + morbidity_factor * pv_morbidity")
+    line(8, "         + disability_factor * pv_disability "
+            "+ longevity_factor * (pm + pv_annuity))")
     line(8, "fcf = bel_mp + ra_mp")
     line(8, "bel[mp] = bel_mp")
     line(8, "ra[mp] = ra_mp")
@@ -1165,12 +1167,12 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
         c_start = coverage_offset[mp]
         c_end = coverage_offset[mp + 1]
         inforce = cnt
-        pc = 0.0          # PV of death claims (mortality risk)
-        pcm = 0.0         # PV of health claims (morbidity risk)
-        pp = 0.0
-        pe = 0.0
-        pa = 0.0
-        ps = 0.0          # PV of surrender value (해약환급금)
+        pv_mortality = 0.0  # mortality-risk claim PV (death claims)
+        pv_morbidity = 0.0  # morbidity-risk claim PV (health claims)
+        pv_premium = 0.0
+        pv_expense = 0.0
+        pv_annuity = 0.0
+        pv_surrender = 0.0  # PV of surrender value (해약환급금)
         cum_premium = 0.0  # cumulative premium paid -- surrender basis
         last_year = -1
         claim_rate = 0.0
@@ -1212,12 +1214,12 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                 level = 0.0
                 prem_due -= 1
             prem_left -= 1
-            pp += (level + single) * ds
+            pv_premium += (level + single) * ds
             cum_premium += level + single
-            pc += inforce * claim_rate * dm
-            pcm += inforce * morb_rate * dm
+            pv_mortality += inforce * claim_rate * dm
+            pv_morbidity += inforce * morb_rate * dm
             if ann_due == 0:
-                pa += inforce * annuity * ds
+                pv_annuity += inforce * annuity * ds
                 ann_due = ann_freq - 1
             else:
                 ann_due -= 1
@@ -1227,11 +1229,11 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
             beta = (inforce * beta_pct * ann_prem / 12.0
                     if t < premium_term else 0.0)
             gamma = inforce * gamma_inflated_monthly[t]
-            pe += (alpha + beta + gamma) * dm
+            pv_expense += (alpha + beta + gamma) * dm
             # cum_premium already aggregates inforce * premium; multiplying
             # by lapse_rate alone gives the per-month surrender outflow.
-            ps += (lapse_monthly[sx, ridx, year]
-                   * cum_premium * surrender_curve[t] * dm)
+            pv_surrender += (lapse_monthly[sx, ridx, year]
+                             * cum_premium * surrender_curve[t] * dm)
             inforce *= survival_monthly[sx, ridx, year]
         pm = inforce * maturity_benefit[mp] * discount_start[term]
         # Non-diagnosis coverages with a waiting or reduced-benefit rule:
@@ -1256,9 +1258,9 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                     contrib = (inf * cov_rates[kind, sx, ridx, year]
                                * benefit * mult * discount_mid[t])
                     if mortality_risk:
-                        pc += contrib
+                        pv_mortality += contrib
                     else:
-                        pcm += contrib
+                        pv_morbidity += contrib
                 inf *= survival_monthly[sx, ridx, year]
         # Diagnosis coverages: claims run off a depleting "not yet diagnosed"
         # pool, which depletes both by survival and by the diagnosis rate.
@@ -1280,11 +1282,11 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                     d_year = year
                 if t >= wait:
                     mult = red_factor if t < red_end else 1.0
-                    pcm += healthy * d_rate * benefit * mult * discount_mid[t]
+                    pv_morbidity += healthy * d_rate * benefit * mult * discount_mid[t]
                 healthy *= survival_monthly[sx, ridx, year] * (1.0 - d_rate)
-        bel_mp = pc + pcm + pm + pa + pe + ps - pp
-        ra_mp = (mortality_factor * pc + morbidity_factor * pcm
-                 + longevity_factor * (pm + pa))
+        bel_mp = pv_mortality + pv_morbidity + pm + pv_annuity + pv_expense + pv_surrender - pv_premium
+        ra_mp = (mortality_factor * pv_mortality + morbidity_factor * pv_morbidity
+                 + longevity_factor * (pm + pv_annuity))
         fcf = bel_mp + ra_mp
         bel[mp] = bel_mp
         ra[mp] = ra_mp
