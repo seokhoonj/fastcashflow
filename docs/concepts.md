@@ -86,3 +86,77 @@ Two modes:
   defaults to 12. v1 covers interest accretion and coverage-unit release
   only; assumption-change unlocking and experience adjustments go via
   `roll_forward` with full prior and current measurements.
+
+## Calibrated rates and stateful product patterns
+
+`rate_tables` holds **current best estimate** rates (Sec. 33) -- not
+pricing-basis rates, and not raw industry incidence either. The number
+the engine multiplies is the *calibrated* rate at the valuation date,
+and that calibration is where stateful product mechanics -- claim
+limits, waiting periods, reset windows, severity caps -- are absorbed.
+The engine itself is deterministic and works with per-period mean rates;
+distribution / variance information that a stateful mechanic depends on
+is not visible to the kernel, so the mechanic's effect has to live in
+the rate itself.
+
+### The mapping to the calibration layers
+
+A common Korean calibration framework lays out the final rate as a
+product of layers, e.g. one large insurer's published shape:
+
+> 보험금 = 가입금액 × **최적위험률 × A/E × 선택효과 × Trend**
+
+fastcashflow's four assumption layers carry the same structure: the
+base `rate_tables`, an `ae_factors` multiplier, the duration axis of
+the base table (select-and-ultimate is expressed there), and an
+`improvement_tables` trend. A stateful mechanic's effect lands on one
+of these layers -- most often on `rate_tables` or `ae_factors` -- before
+the engine ever sees the number.
+
+### Example: a per-coverage claim-day limit
+
+Inpatient indemnity and inpatient-daily-cash coverages in Korea
+typically carry a per-period cap on claim days, sometimes with a reset
+window after a cap is reached. The cap is per-policy and depends on the
+individual claim path, but the engine only sees the per-period mean
+incidence.
+
+* **Uncalibrated**: pass the raw incidence rate. Expected claim cost
+  ignores the cap, so the BEL is overstated for portfolios that
+  routinely hit the cap.
+* **Calibrated**: the experience study replaces the raw incidence with
+  an *effective* incidence that already nets out the cap effect --
+  typically by measuring actual paid days against the uncapped
+  expectation in the cell (sex × age × duration × product) and folding
+  the resulting ratio into `ae_factors`, or by replacing the raw rate
+  itself with the post-cap empirical rate. Either flow keeps the
+  engine's kernel unchanged; the rate the kernel multiplies already has
+  the cap baked in.
+
+The calibration itself -- experience study, the A/E construction, the
+credibility-weighted blending against an industry reference, the
+expert-committee sign-off -- is an actuarial workflow outside
+fastcashflow. The engine takes the result and projects.
+
+### What this means -- and does not mean
+
+* **Portfolio-mean BEL is accurate** when the rate is properly
+  cap-adjusted: the projection's expected claim cost matches the
+  calibration's post-cap expectation.
+* **Per-policy distribution / tail is not exposed.** A stress scenario
+  that depends on the conditional shape of the claim distribution
+  (e.g., what fraction of policies hit the cap under deterioration)
+  needs more than a calibrated mean rate -- a stochastic scenario set
+  (`value_stochastic`) or a future per-coverage state extension.
+* **The engine does not validate the calibration.** The `rate(...)`
+  callable returns a number; the engine multiplies and accumulates.
+  Whether that number is a cap-adjusted best estimate or a raw pricing
+  rate is the caller's responsibility.
+
+This is the same principle as the existing waiting / reduced-benefit
+periods, which are expressed structurally on the coverage (because the
+duration clock is deterministic and visible to the kernel), and as the
+semi-Markov cohort path for reincidence (the sojourn-time effect is
+made visible by the cohort axis). State whose evolution depends on the
+per-policy claim history -- and so on the distribution rather than the
+mean -- is the part that lives in the calibration.
