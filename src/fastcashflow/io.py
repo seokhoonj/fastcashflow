@@ -23,6 +23,7 @@ file-boundary concern -- pass them to :func:`write_valuation` (or via
 from __future__ import annotations
 
 import importlib.resources as resources
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -376,6 +377,38 @@ def _axis_tables(ws, axis, *, value_col="rate"):
             for tid, by_k in by_id.items()}
 
 
+#: Assumptions schema versions this reader knows how to consume. A
+#: workbook with no ``_meta`` sheet (or no ``schema_version`` key) is
+#: treated as ``v1`` so older sample files keep working. Add the new
+#: version here when a breaking schema change ships.
+_SUPPORTED_SCHEMA_VERSIONS = frozenset({"v1"})
+
+
+def _check_schema_version(wb) -> None:
+    """Read the optional ``_meta`` sheet's ``schema_version`` and reject
+    versions this build does not understand.
+
+    The sheet shape is two columns -- ``key`` / ``value`` -- so additional
+    metadata (workbook owner, generation date, etc.) can land in later
+    rows without breaking the reader.
+    """
+    if "_meta" not in wb.sheetnames:
+        return                                            # legacy = v1
+    ws = wb["_meta"]
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return
+    meta = {str(r[0]).strip(): r[1] for r in rows[1:]
+            if r and r[0] is not None}
+    version = str(meta.get("schema_version", "v1")).strip()
+    if version not in _SUPPORTED_SCHEMA_VERSIONS:
+        raise ValueError(
+            f"unsupported assumptions schema_version {version!r}; this "
+            f"build understands {sorted(_SUPPORTED_SCHEMA_VERSIONS)}. "
+            "Upgrade fastcashflow or downgrade the workbook."
+        )
+
+
 def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     """Read the assumptions workbook into a per-segment ``Assumptions`` dict.
 
@@ -388,11 +421,18 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
 
     Returns ``{(product, channel): Assumptions}`` -- one basis per segment.
 
-    v1: the discount, inflation and maintenance tables are read but used
-    flat (their first entry); the per-segment dict is returned for the
-    caller to value segment by segment.
+    v1: the discount and inflation tables are read but used flat (their
+    first entry); the per-segment dict is returned for the caller to value
+    segment by segment.
+
+    A workbook may optionally carry a ``_meta`` sheet (``key | value``
+    layout) with a ``schema_version`` row. When absent the reader assumes
+    ``v1``. The version gates breaking schema changes -- a future ``v2``
+    that renames a column will be rejected by a ``v1``-only reader. The
+    sample workbook ships with ``schema_version = v1``.
     """
     wb = openpyxl.load_workbook(path, data_only=True)
+    _check_schema_version(wb)
 
     def optional(sheet, reader):
         return reader(wb[sheet]) if sheet in wb.sheetnames else {}
@@ -594,6 +634,28 @@ def _read_state(col: pl.Series) -> np.ndarray:
     return col.fill_null(STATE_ACTIVE).to_numpy().astype(np.int64)
 
 
+def _warn_if_elapsed_months(columns) -> None:
+    """Warn that ``elapsed_months`` on a policies frame is silently dropped.
+
+    The static-spec policies frame holds inception-time facts (issue_age,
+    term, sex ...). The in-force closing state lives in a separate
+    ``inforce_state`` file -- :func:`read_inforce_state` is the only
+    surface that fills the ``elapsed_months`` field of :class:`ModelPoints`.
+    A column on the policies side is a common mistake (mixed roles) and
+    would be silently ignored; the warning makes the source-of-truth
+    boundary explicit.
+    """
+    if "elapsed_months" in columns:
+        warnings.warn(
+            "policies frame has 'elapsed_months' column; this reader "
+            "ignores it. elapsed_months belongs in the in-force state file "
+            "(see read_inforce_state / apply_inforce_state) -- the policies "
+            "frame is the inception-time static spec.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+
 def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
     """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
     rider a ``<coverage_code>_benefit`` column."""
@@ -602,6 +664,7 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
             raise ValueError(
                 f"the model-point file is missing required column {need!r}"
             )
+    _warn_if_elapsed_months(df.columns)
     n_mp = df.height
     fields: dict[str, object] = dict(
         issue_age=df["issue_age"].to_numpy(),
@@ -660,6 +723,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             raise ValueError(
                 f"the coverages frame is missing required column {need!r}"
             )
+    _warn_if_elapsed_months(pol.columns)
     n_mp = pol.height
     ctypes = (
         assumptions.metadata.coverage_types
@@ -771,6 +835,13 @@ def read_model_points(
       with ``policies`` and ``coverages`` sheets is read as long-form too.
 
     ``assumptions`` is optional only for a wide file with no rider columns.
+
+    The policies frame is the **inception-time static spec** -- issue_age,
+    term, sex, and so on. The in-force closing state (elapsed_months,
+    prior_csm, lock_in_rate) belongs in a separate file read by
+    :func:`read_inforce_state`. An ``elapsed_months`` column on the
+    policies side is ignored and a :class:`UserWarning` is emitted; do
+    not encode the as-of date by mixing it into the static spec.
     """
     p = str(path)
     if coverages is None and p.endswith(".xlsx"):

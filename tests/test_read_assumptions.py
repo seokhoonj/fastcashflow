@@ -161,3 +161,55 @@ def test_state_model_unknown_key_raises():
         wb.save(dst)
         with pytest.raises(ValueError, match="NOT_A_MODEL"):
             read_assumptions(dst)
+
+
+# ---------------------------------------------------------------------------
+# schema_version
+# ---------------------------------------------------------------------------
+
+def test_meta_sheet_carries_schema_version():
+    """The sample workbook ships with a ``_meta`` sheet declaring
+    ``schema_version = v1`` -- absence triggers no error, presence
+    matching a supported version is silently accepted."""
+    import openpyxl, importlib.resources as resources
+    sample = resources.files("fastcashflow").joinpath(
+        "sample_data/sample_assumptions.xlsx")
+    wb = openpyxl.load_workbook(sample, read_only=True)
+    assert "_meta" in wb.sheetnames
+    rows = list(wb["_meta"].iter_rows(values_only=True))
+    rows = [(str(r[0]).strip(), r[1]) for r in rows[1:] if r and r[0]]
+    assert dict(rows)["schema_version"] == "v1"
+
+
+def test_legacy_workbook_without_meta_sheet_is_v1():
+    """A workbook predating the _meta sheet still reads -- legacy = v1."""
+    import openpyxl, tempfile, shutil, importlib.resources as resources
+    from fastcashflow import read_assumptions
+    sample = resources.files("fastcashflow").joinpath(
+        "sample_data/sample_assumptions.xlsx")
+    with tempfile.TemporaryDirectory() as d:
+        dst = f"{d}/legacy.xlsx"
+        shutil.copy(sample, dst)
+        wb = openpyxl.load_workbook(dst)
+        del wb["_meta"]
+        wb.save(dst)
+        basis = read_assumptions(dst)
+        assert basis                                  # reads fine
+
+
+def test_unsupported_schema_version_raises():
+    """A version the build does not recognise is rejected loudly rather
+    than silently mis-interpreted."""
+    import openpyxl, tempfile, shutil, pytest
+    import importlib.resources as resources
+    from fastcashflow import read_assumptions
+    sample = resources.files("fastcashflow").joinpath(
+        "sample_data/sample_assumptions.xlsx")
+    with tempfile.TemporaryDirectory() as d:
+        dst = f"{d}/futuristic.xlsx"
+        shutil.copy(sample, dst)
+        wb = openpyxl.load_workbook(dst)
+        wb["_meta"].cell(row=2, column=2).value = "v99"
+        wb.save(dst)
+        with pytest.raises(ValueError, match="schema_version"):
+            read_assumptions(dst)

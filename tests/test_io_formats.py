@@ -95,3 +95,50 @@ def test_long_form_reads_benefit_rules(tmp_path):
     assert np.all(back.coverage_waiting == 6)
     assert np.all(back.coverage_reduction_end == 24)
     assert np.allclose(back.coverage_reduction_factor, 0.5)
+
+
+# ---------------------------------------------------------------------------
+# elapsed_months -- inforce_state is the source of truth, the policies frame
+# silently ignores the column. The warning surfaces a common misuse.
+# ---------------------------------------------------------------------------
+
+def test_wide_policies_elapsed_months_emits_warning(tmp_path):
+    """A wide policies frame with an ``elapsed_months`` column triggers
+    a UserWarning -- the reader silently drops it and inforce_state is
+    the source of truth."""
+    import warnings
+    asmp = next(iter(load_sample_assumptions().values()))
+    mps = load_sample_model_points()
+    wide = mps.to_wide(asmp).with_columns(pl.lit(12).alias("elapsed_months"))
+    path = tmp_path / "wide_with_em.xlsx"
+    _write_sheets(path, [("model_points", wide)])
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        back = read_model_points(path, asmp)
+    msgs = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
+    assert any("elapsed_months" in m for m in msgs), msgs
+    # And the column was indeed ignored -- the ModelPoints default of zero
+    # stands (every contract is treated as just-issued, per show_trace's
+    # source-of-truth note).
+    assert np.all(back.elapsed_months == 0)
+
+
+def test_long_policies_elapsed_months_emits_warning(tmp_path):
+    """Same guard fires on the long-form (policies + coverages) path."""
+    import warnings
+    asmp = next(iter(load_sample_assumptions().values()))
+    mps = load_sample_model_points()
+    policies, coverages = mps.to_long(asmp)
+    policies = policies.with_columns(pl.lit(12).alias("elapsed_months"))
+    pol_path = tmp_path / "policies.csv"
+    cov_path = tmp_path / "coverages.csv"
+    policies.write_csv(pol_path)
+    coverages.write_csv(cov_path)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        back = read_model_points(pol_path, asmp, coverages=cov_path)
+    msgs = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
+    assert any("elapsed_months" in m for m in msgs), msgs
+    assert np.all(back.elapsed_months == 0)
