@@ -1686,7 +1686,9 @@ def value(
 def value_segmented(
     model_points: ModelPoints,
     basis: dict[tuple[str, str], Assumptions],
-    **kwargs,
+    *,
+    backend: str = "cpu",
+    discount_curve: FloatArray | None = None,
 ) -> Valuation:
     """Value a multi-segment portfolio: split, value each, concatenate.
 
@@ -1699,14 +1701,18 @@ def value_segmented(
     segment's ``Assumptions``, and writes the per-row results back to a
     single ``(n_mp,)`` :class:`Valuation`.
 
-    Extra keyword arguments (``backend``, ``discount_curve``) flow through
-    to :func:`value`. A single-segment ``basis`` is accepted as a
-    convenience when ``product`` / ``channel`` is not set.
+    ``backend`` and ``discount_curve`` flow through to :func:`value` --
+    declared explicitly so a typo (e.g. ``backed="gpu"``) is rejected
+    here rather than reaching the kernel. A single-segment ``basis`` is
+    accepted as a convenience when ``product`` / ``channel`` is not set.
     """
     if model_points.product is None or model_points.channel is None:
         if len(basis) == 1:
             (assumptions,) = basis.values()
-            return value(model_points, assumptions, **kwargs)
+            return value(
+                model_points, assumptions,
+                backend=backend, discount_curve=discount_curve,
+            )
         raise ValueError(
             "model_points has no 'product'/'channel' set but the basis has "
             f"{len(basis)} segments; either set the columns or pass a "
@@ -1754,7 +1760,10 @@ def value_segmented(
             )
         idx = np.nonzero(inverse == ord_idx)[0]
         sub = model_points.subset(idx)
-        val = value(sub, basis[key], **kwargs)
+        val = value(
+            sub, basis[key],
+            backend=backend, discount_curve=discount_curve,
+        )
         bel[idx] = val.bel
         ra[idx] = val.ra
         csm[idx] = val.csm

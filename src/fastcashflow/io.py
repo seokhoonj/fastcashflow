@@ -30,6 +30,7 @@ import numpy as np
 import openpyxl
 import polars as pl
 
+from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions, CoverageRate
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
@@ -375,7 +376,7 @@ def _axis_tables(ws, axis, *, value_col="rate"):
             for tid, by_k in by_id.items()}
 
 
-def read_assumptions(path):
+def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     """Read the assumptions workbook into a per-segment ``Assumptions`` dict.
 
     ``path`` is a single ``assumptions.xlsx`` workbook holding both the rate
@@ -570,7 +571,7 @@ def _read_state(col: pl.Series) -> np.ndarray:
     """
     if col.dtype == pl.String:
         # Normalised lookup -- canonical STATE_NAMES keys ("ACTIVE", "WAIVER",
-        # "PAIDUP") are uppercase, but any spelling (case, spaces, hyphens,
+        # "PAID_UP") are uppercase, but any spelling (case, spaces, hyphens,
         # underscores ignored) of the canonical name maps to the same code.
         normalised = {
             k.lower().replace("_", "").replace("-", "").replace(" ", ""): v
@@ -738,7 +739,11 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     return ModelPoints(**fields)
 
 
-def read_model_points(path, assumptions=None, coverages=None) -> ModelPoints:
+def read_model_points(
+    path: Path | str,
+    assumptions: Assumptions | None = None,
+    coverages: Path | str | None = None,
+) -> ModelPoints:
     """Read model points from a parquet, CSV, Excel or feather file.
 
     Two forms:
@@ -842,7 +847,7 @@ def load_sample_inforce_state() -> "InforceState":
 # Economic scenarios
 # ---------------------------------------------------------------------------
 
-def read_inforce_state(path) -> "InforceState":
+def read_inforce_state(path: Path | str) -> "InforceState":
     """Read an in-force state file -- the per-MP closing state from the
     prior reporting period.
 
@@ -885,7 +890,7 @@ def read_inforce_state(path) -> "InforceState":
     )
 
 
-def read_scenarios(path) -> np.ndarray:
+def read_scenarios(path: Path | str) -> FloatArray:
     """Read a stochastic scenario set from a file.
 
     The file is a 2-D table -- one row per scenario, one column per
@@ -914,7 +919,12 @@ def read_scenarios(path) -> np.ndarray:
 # Valuation results
 # ---------------------------------------------------------------------------
 
-def write_valuation(valuation: Valuation, path, *, ids=None) -> None:
+def write_valuation(
+    valuation: "Valuation",
+    path: Path | str,
+    *,
+    ids: np.ndarray | None = None,
+) -> None:
     """Write a ``Valuation`` to a parquet or CSV file.
 
     One row per model point, in model-point order, with columns ``bel``,
@@ -932,11 +942,11 @@ def write_valuation(valuation: Valuation, path, *, ids=None) -> None:
 
 
 def value_file(
-    input_path,
-    output_dir,
+    input_path: Path | str,
+    output_dir: Path | str,
     assumptions: Assumptions,
     *,
-    coverages=None,
+    coverages: Path | str | None = None,
     chunk_size: int = 20_000_000,
     backend: str = "cpu",
     id_column: str | None = None,
