@@ -655,23 +655,25 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             n_time,
         )
     # Surrender value (해약환급금) -- post-projection compute. The lapse
-    # flow per month is approximated as ``inforce[t] * lapse_monthly``;
-    # the basis is the cumulative premium paid (``cumsum(premium_cf)``);
-    # the surrender factor is the per-month curve set by the user.
-    # ``surrender_value_curve = None`` falls back to zero, the historical
-    # "lapse silently removes" behaviour.
+    # ``premium_cf`` is the portfolio-aggregate inflow (= inforce[t] *
+    # premium); its cumulative sum is the aggregate cumulative premium
+    # received from the surviving in-force, so ``lapse_rate * cum_premium``
+    # is already the per-month surrender-value outflow (count cancels out).
+    # The earlier formulation multiplied by ``inforce`` again, which gave a
+    # cnt^2 over-attribution for count > 1 or for inforce decaying off the
+    # initial level. ``surrender_value_curve = None`` falls back to zero,
+    # the historical "lapse silently removes" behaviour.
     surrender_cf = np.zeros_like(expense_cf)
     curve = assumptions.surrender_value_curve
     if curve is not None:
         # Per-month lapse rate, broadcast from per-year ``lapse`` array.
         lapse_per_month = lapse[:, np.arange(n_time) // 12]
-        lapse_flow = inforce * lapse_per_month
         cum_premium = np.cumsum(premium_cf, axis=1)
         # Curve held flat past its end; clip lookup to its length.
         c = np.asarray(curve, dtype=np.float64)
         idx = np.minimum(np.arange(n_time), c.shape[0] - 1)
         factor = c[idx]
-        surrender_cf = lapse_flow * cum_premium * factor
+        surrender_cf = lapse_per_month * cum_premium * factor
     return Cashflows(
         inforce=inforce,
         deaths=deaths,

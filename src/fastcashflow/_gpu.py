@@ -115,7 +115,9 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 if t < premium_term else 0.0)
         gamma = ift * gamma_inflated_monthly[t]
         pe += (alpha + beta + gamma) * dm
-        ps += (ift * lapse_monthly[sx, ridx, year]
+        # cum_premium already aggregates inforce * premium; multiply by
+        # lapse_rate alone (no ift) -- otherwise cnt^2 over-attribution.
+        ps += (lapse_monthly[sx, ridx, year]
                * cum_premium * surrender_curve[t] * dm)
         for s in range(n_states):
             occ_next[s] = 0.0

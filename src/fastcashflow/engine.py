@@ -580,7 +580,10 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, "else:")
     line(16, "ann_due -= 1")
     line(12, "pd += benefit_occ * disability_income[mp] * dm")
-    line(12, "ps += (ift * lapse_monthly[sx, ridx, year]")
+    # cum_premium aggregates inforce * premium; multiplying by lapse_rate
+    # alone gives the per-month surrender outflow (the count is already in
+    # cum_premium, so multiplying by ift here would scale by cnt^2).
+    line(12, "ps += (lapse_monthly[sx, ridx, year]")
     line(12, "       * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
@@ -968,7 +971,10 @@ def _codegen_value_kernel_source_semi_markov(
     line(12, "else:")
     line(16, "ann_due -= 1")
     line(12, "pd += benefit_occ * disability_income[mp] * dm")
-    line(12, "ps += (ift * lapse_monthly[sx, ridx, year]")
+    # cum_premium aggregates inforce * premium; multiplying by lapse_rate
+    # alone gives the per-month surrender outflow (the count is already in
+    # cum_premium, so multiplying by ift here would scale by cnt^2).
+    line(12, "ps += (lapse_monthly[sx, ridx, year]")
     line(12, "       * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
@@ -1202,7 +1208,9 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                     if t < premium_term else 0.0)
             gamma = inforce * gamma_inflated_monthly[t]
             pe += (alpha + beta + gamma) * dm
-            ps += (inforce * lapse_monthly[sx, ridx, year]
+            # cum_premium already aggregates inforce * premium; multiplying
+            # by lapse_rate alone gives the per-month surrender outflow.
+            ps += (lapse_monthly[sx, ridx, year]
                    * cum_premium * surrender_curve[t] * dm)
             inforce *= survival_monthly[sx, ridx, year]
         pm = inforce * maturity_benefit[mp] * discount_start[term]

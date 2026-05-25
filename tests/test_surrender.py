@@ -67,20 +67,18 @@ def test_surrender_cf_hand_calc_single_period():
 
 def test_surrender_cf_accumulates_with_cum_premium():
     """As cumulative premium grows, surrender_cf at the same factor grows
-    proportionally."""
+    proportionally. surrender_cf[t] = lapse_rate * cum_premium[t] * factor,
+    so with flat lapse and flat factor the ratio is just the cum_premium
+    ratio (the inforce-decay is already absorbed into cum_premium, which
+    aggregates inforce * premium each month)."""
     mp = ModelPoints.single(
         issue_age=40, death_benefit=100_000_000.0,
         level_premium=10_000.0, term_months=24,
     )
     asmp = _basis(lapse_rate=0.05, surrender_curve=np.full(25, 0.8))
     m = measure(mp, asmp)
-    # cum_premium grows linearly with months paid. The ratio of surrender_cf
-    # at month 11 vs month 0 should equal the ratio of cum_premium x inforce
-    # (factor is flat so it cancels).
     cum_prem = np.cumsum(m.cashflows.premium_cf[0])
-    expected_ratio = (m.cashflows.inforce[0, 11] * cum_prem[11]) / (
-        m.cashflows.inforce[0, 0] * cum_prem[0]
-    )
+    expected_ratio = cum_prem[11] / cum_prem[0]
     actual_ratio = m.cashflows.surrender_cf[0, 11] / m.cashflows.surrender_cf[0, 0]
     assert np.isclose(actual_ratio, expected_ratio)
 

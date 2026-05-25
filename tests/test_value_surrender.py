@@ -79,6 +79,28 @@ def test_value_surrender_increases_bel():
     assert value(mp, asmp_on).bel[0] > value(mp, asmp_off).bel[0]
 
 
+def test_surrender_scales_linearly_in_count():
+    """A 10-policy grouped MP must produce 10x the surrender flow of an
+    otherwise-identical 1-policy MP -- not 100x. Earlier the projection
+    multiplied lapse_flow (already inforce-weighted) by cum_premium (also
+    inforce-weighted), giving a cnt^2 scaling."""
+    n_time = 120
+    asmp = _basis(surrender_value_curve=np.full(n_time, 0.5))
+    mp_single = ModelPoints.single(
+        issue_age=40, death_benefit=100_000_000.0,
+        level_premium=50_000.0, term_months=n_time, count=1.0,
+    )
+    mp_grouped = ModelPoints.single(
+        issue_age=40, death_benefit=100_000_000.0,
+        level_premium=50_000.0, term_months=n_time, count=10.0,
+    )
+    m_single = measure(mp_single, asmp)
+    m_grouped = measure(mp_grouped, asmp)
+    ratio = m_grouped.cashflows.surrender_cf.sum() / m_single.cashflows.surrender_cf.sum()
+    # Linear in count -- ratio must be ~10, not ~100.
+    assert np.isclose(ratio, 10.0)
+
+
 def test_value_state_model_matches_measure_with_surrender():
     """Markov codegen path (WAIVER_MODEL) -- value() must agree with
     measure() once surrender is on."""
