@@ -39,6 +39,5 @@ numba로 컴파일한 수치 커널 — 계약 건별 대규모 평가를 위한
 
 시작하기 <start>
 튜토리얼 <tutorial/index>
-쿡북 <cookbook/index>
 api
 ```
