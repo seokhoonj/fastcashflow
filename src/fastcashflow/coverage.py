@@ -27,6 +27,17 @@ TYPE_DEATH_MAIN = "DEATH_MAIN"  # main-contract death; base mortality; code 0
 TYPE_DEATH      = "DEATH"       # death-type rider; own rate; non-decrementing
 TYPE_MORBIDITY  = "MORBIDITY"   # recurring health claim (inpatient, surgery..)
 TYPE_DIAGNOSIS  = "DIAGNOSIS"   # single-payment benefit; depleting pool
+# DIAGNOSIS uses an *independent* competing-risks convention: the "not yet
+# diagnosed" pool depletes by mortality / lapse / state transitions *and*
+# by the diagnosis rate, treated as if they were drawn independently each
+# month. That is a simplification -- in reality a diagnosis often
+# *precedes* and triggers correlated mortality / lapse. The independence
+# convention is fine at the rate ranges actuarial tables typically carry
+# (annual incidence well under 1%); the error grows with the rate (a
+# few tens of basis points of BEL difference at very high incidence vs a
+# dependent treatment). Calibrate the diagnosis rate to reflect the
+# convention, or wrap with a coverage rule (waiting / reduction) when the
+# product's mechanic requires it.
 TYPE_ANNUITY    = "ANNUITY"     # monthly survival income
 TYPE_MATURITY   = "MATURITY"    # survival benefit paid at the end of the term
 
