@@ -1,4 +1,4 @@
-"""fastcashflow -- fast IFRS 17 GMM cash flow projection engine.
+"""fastcashflow -- open-source IFRS 17 GMM cash flow projection engine.
 
 Two entry points:
 
