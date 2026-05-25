@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import importlib.resources as resources
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import openpyxl
@@ -35,8 +36,17 @@ from fastcashflow.coverage import (
     RATE_DRIVEN_TYPES, RISK_MORBIDITY, RISK_MORTALITY, TYPE_ANNUITY,
     TYPE_DEATH, TYPE_DEATH_MAIN, TYPE_DIAGNOSIS, TYPE_MATURITY,
 )
-from fastcashflow.engine import Valuation, value
 from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
+
+# ``engine`` is the largest module in the package (codegen + the numba CPU
+# kernels) and importing it at module load pulls all of that into any
+# downstream that needs the I/O layer. The two engine names used here --
+# ``Valuation`` for write_valuation's type hint and ``value`` for the
+# ``value_file`` stream -- are imported under TYPE_CHECKING (for the hint)
+# and lazily inside ``value_file`` (for the call), so a script that only
+# reads model points or writes a results frame never imports engine.py.
+if TYPE_CHECKING:  # pragma: no cover -- import only for type hints
+    from fastcashflow.engine import Valuation
 
 # Wide model-point columns with a fixed meaning. Any other ``*_benefit``
 # column names a rider by its coverage code.
@@ -950,6 +960,11 @@ def value_file(
 
     Returns the total number of model points processed.
     """
+    # Lazy import -- only ``value_file`` actually drives a valuation, so we
+    # keep the engine import off the I/O hot path. A script that only reads
+    # model points or writes results never pays the engine import cost.
+    from fastcashflow.engine import value
+
     input_path = Path(input_path)
     output_dir = Path(output_dir)
     if input_path.suffix != ".parquet":
