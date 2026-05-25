@@ -280,6 +280,103 @@ def value_in_force(
     return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss)
 
 
+def measure_in_force(
+    model_points: ModelPoints,
+    assumptions: Assumptions,
+    *,
+    prior_csm: FloatArray | None = None,
+    lock_in_rate: float | None = None,
+    period_months: int = 12,
+) -> Measurement:
+    """In-force subsequent measurement -- full-trajectory variant of
+    :func:`value_in_force`.
+
+    Calls :func:`measure` to build the BEL / RA / CSM trajectories from
+    inception. The two modes mirror :func:`value_in_force`:
+
+    * **Hypothetical** (``prior_csm=None``). Returns the measure() result
+      unchanged -- the CSM trajectory is the one a freshly issued contract
+      would produce under the current basis. Useful for inspection.
+    * **Settlement carry-forward** (``prior_csm`` and ``lock_in_rate``
+      given). The CSM trajectory is re-rolled from month ``elapsed_months
+      - period_months`` (where ``prior_csm`` is seated as the opening
+      CSM) under the locked-in rate using the same in-force-proportional
+      release that :func:`roll_forward` uses. The BEL / RA trajectories
+      and the cash flow detail are unchanged -- they are forward
+      projections that do not depend on the prior period's CSM.
+
+    Use this when the downstream needs a full trajectory (movement
+    decomposition, period-close roll-forward) rather than just the
+    valuation-date headline numbers that :func:`value_in_force` returns.
+    """
+    if (prior_csm is None) != (lock_in_rate is None):
+        raise ValueError(
+            "prior_csm and lock_in_rate must both be given (settlement mode) "
+            "or both omitted (hypothetical mode)"
+        )
+    m = measure(model_points, assumptions)
+    if prior_csm is None:
+        return m
+
+    prior_csm = np.asarray(prior_csm, dtype=np.float64)
+    n_mp = m.bel.shape[0]
+    if prior_csm.shape != (n_mp,):
+        raise ValueError(
+            f"prior_csm must have shape ({n_mp},), got {prior_csm.shape}"
+        )
+    if period_months < 1:
+        raise ValueError(f"period_months must be >= 1, got {period_months}")
+    em = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    prior_t = em - int(period_months)
+    if np.any(prior_t < 0):
+        bad = int(np.argmin(prior_t))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} < "
+            f"period_months={period_months}; the prior closing date precedes "
+            "inception, which has no CSM to carry forward"
+        )
+
+    lock_in_monthly = (1.0 + float(lock_in_rate)) ** (1.0 / 12.0) - 1.0
+    csm_new = m.csm.copy()
+    csm_accretion_new = m.csm_accretion.copy()
+    csm_release_new = m.csm_release.copy()
+
+    # Re-roll each MP's CSM trajectory from t = prior_t onwards under the
+    # locked-in rate and inforce-proportional release. A per-MP loop is the
+    # cleanest expression: each contract has its own starting offset, and the
+    # _csm_kernel does the heavy lifting (parallel in n_mp axis, but here we
+    # feed it one MP at a time because of the per-MP offset).
+    for i in range(n_mp):
+        pt_i = int(prior_t[i])
+        inforce_i = m.cashflows.inforce[i, pt_i:]
+        monthly_rates_i = np.full(inforce_i.shape[0], lock_in_monthly)
+        csm_i, acc_i, rel_i = _csm_kernel(
+            np.array([prior_csm[i]], dtype=np.float64),
+            np.ascontiguousarray(inforce_i[None, :]),
+            monthly_rates_i,
+        )
+        csm_new[i, pt_i:] = csm_i[0]
+        csm_accretion_new[i, pt_i:] = acc_i[0]
+        csm_release_new[i, pt_i:] = rel_i[0]
+
+    rows = np.arange(n_mp)
+    fcf_at_em = m.bel[rows, em] + m.ra[rows, em]
+    loss_new = np.maximum(0.0, fcf_at_em - csm_new[rows, em])
+
+    return Measurement(
+        bel=m.bel,
+        ra=m.ra,
+        csm=csm_new,
+        csm_accretion=csm_accretion_new,
+        csm_release=csm_release_new,
+        loss_component=loss_new,
+        lic=m.lic,
+        cashflows=m.cashflows,
+        discount_start=m.discount_start,
+        discount_mid=m.discount_mid,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Codegen specialisation -- the multi-state value kernel
 # ---------------------------------------------------------------------------

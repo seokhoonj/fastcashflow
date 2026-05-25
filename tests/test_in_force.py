@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    Assumptions, ModelPoints, measure, value, value_in_force,
+    Assumptions, ModelPoints, measure, measure_in_force, value, value_in_force,
 )
 
 
@@ -145,6 +145,74 @@ def test_value_in_force_settlement_elapsed_too_small():
             lock_in_rate=0.03,
             period_months=12,
         )
+
+
+def test_measure_in_force_hypothetical_is_measure():
+    """``measure_in_force`` without prior_csm returns the measure() result
+    unchanged -- it is the trajectory-variant of the hypothetical mode."""
+    asmp = _basis()
+    mp = ModelPoints(
+        issue_age=np.array([40]),
+        level_premium=np.array([50_000.0]),
+        term_months=np.array([240]),
+        death_benefit=np.array([100_000_000.0]),
+        elapsed_months=np.array([36]),
+    )
+    m = measure(mp, asmp)
+    mif = measure_in_force(mp, asmp)
+    assert np.allclose(m.csm, mif.csm)
+    assert np.allclose(m.csm_accretion, mif.csm_accretion)
+    assert np.allclose(m.csm_release, mif.csm_release)
+
+
+def test_measure_in_force_settlement_matches_value_in_force():
+    """Settlement-mode ``measure_in_force`` at the valuation date equals
+    the value_in_force settlement-mode CSM scalar."""
+    asmp = _basis()
+    mp = ModelPoints(
+        issue_age=np.array([40]),
+        level_premium=np.array([50_000.0]),
+        term_months=np.array([240]),
+        death_benefit=np.array([100_000_000.0]),
+        elapsed_months=np.array([36]),
+    )
+    m_baseline = measure(mp, asmp)
+    period = 12
+    prior_csm = m_baseline.csm[:, 36 - period]
+    lock_in = asmp.discount_annual
+    v = value_in_force(mp, asmp, prior_csm=prior_csm,
+                       lock_in_rate=lock_in, period_months=period)
+    mif = measure_in_force(mp, asmp, prior_csm=prior_csm,
+                            lock_in_rate=lock_in, period_months=period)
+    rows = np.arange(1)
+    assert np.isclose(mif.csm[rows, 36][0], v.csm[0])
+    assert np.isclose(mif.loss_component[0], v.loss_component[0])
+
+
+def test_measure_in_force_settlement_roundtrip_to_measure():
+    """When prior_csm and lock_in_rate are seeded from the engine's own
+    trajectory and discount, the carried-forward CSM trajectory from
+    t=prior_t onwards matches the measure() trajectory bit for bit."""
+    asmp = _basis()
+    mp = ModelPoints(
+        issue_age=np.array([40]),
+        level_premium=np.array([50_000.0]),
+        term_months=np.array([240]),
+        death_benefit=np.array([100_000_000.0]),
+        elapsed_months=np.array([36]),
+    )
+    m = measure(mp, asmp)
+    period = 12
+    prior_t = 36 - period
+    mif = measure_in_force(
+        mp, asmp,
+        prior_csm=m.csm[:, prior_t],
+        lock_in_rate=asmp.discount_annual,
+        period_months=period,
+    )
+    assert np.allclose(m.csm[:, prior_t:], mif.csm[:, prior_t:])
+    assert np.allclose(m.csm_accretion[:, prior_t:], mif.csm_accretion[:, prior_t:])
+    assert np.allclose(m.csm_release[:, prior_t:], mif.csm_release[:, prior_t:])
 
 
 def test_in_force_bel_smaller_term_left():
