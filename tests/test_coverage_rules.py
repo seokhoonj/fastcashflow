@@ -15,7 +15,7 @@ from fastcashflow import (
     RISK_MORBIDITY,
     Assumptions,
     ModelPoints,
-    RiderRate,
+    CoverageRate,
     measure,
     value,
 )
@@ -43,7 +43,7 @@ def _assumptions(**overrides) -> Assumptions:
         expense_inflation=0.0,
         ra_confidence=0.80,
         mortality_cv=0.10,
-        riders=(RiderRate("diagnosis", flat_morb, is_diagnosis=True,
+        coverages=(CoverageRate("diagnosis", flat_morb, is_diagnosis=True,
                           risk=RISK_MORBIDITY),),
     )
     base.update(overrides)

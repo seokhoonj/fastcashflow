@@ -5,7 +5,7 @@ fixed set of fields. Each coverage carries a numeric *code* -- a factorised
 rider identifier. Code 0 is reserved for the main-contract death
 benefit, driven by the base mortality so its claim rate matches the in-force
 decrement exactly. Codes 1.. are the rate-driven riders the assumptions
-register (see :class:`fastcashflow.assumptions.RiderRate`), in registration
+register (see :class:`fastcashflow.assumptions.CoverageRate`), in registration
 order.
 
 The kernels loop the coverage list generically. A coverage's mechanic is

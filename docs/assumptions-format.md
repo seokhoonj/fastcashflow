@@ -121,7 +121,38 @@ asmp = basis[("TERM_A", "GA")]
 - 컬럼이 `rate`가 아니라 `amount`인 이유: 값이 확률이 아니라 화폐 금액이기
   때문 (column semantics 참조).
 
-### 3.4 `discount_tables` · `inflation_tables`
+### 3.4 `surrender_value_tables` (optional)
+
+해약환급금 (surrender value) 곡선. 시트 자체가 없거나 segments 의
+`surrender_value_table` 컬럼이 비어 있으면 lapse 가 cash flow 없이
+in-force 만 제거 (해약환급금 = 0 가정, 무해약환급금형 protection).
+
+| 컬럼 | 의미 |
+|---|---|
+| `table_id` | 표 식별자 (예: `SURRENDER_STD`) |
+| `duration_month` | 가입 후 경과 월 (0 부터, contiguous) |
+| `factor` | 해약 시 환급률 (= 해약환급금 / 누적 납입보험료) |
+
+엔진 계산 (post-projection):
+```
+lapse_flow[mp, t]   = inforce[mp, t] x lapse_monthly[mp, year(t)]
+cum_premium[mp, t]  = cumsum(premium_cf[mp, :t+1])
+surrender_cf[mp, t] = lapse_flow x cum_premium x factor[duration_month]
+```
+
+BEL 에 future outflow 로 포함. 환급률이 substantial 한 한국 상품 (단기납
+종신, 경영인 정기, 저해지환급금형 등) 의 BEL 정확도 ↑.
+
+**제약 (v1)**:
+- 기준금액 = **누적 납입보험료** 만 (사용자 framework 의 다른 옵션 — 가입금액 /
+  책임준비금 / 적립금 — 미지원. 환급률 calibration 시 cum premium 기준으로
+  환산 필요).
+- `value()` fast path 는 surrender 미반영 — 정확한 BEL 은 `measure()`.
+- `lapse_flow` 계산이 approximation (in-force x monthly lapse rate). WAIVER /
+  semi-Markov 등 추가 state transition 동시 발생 시 약간 부정확. 단순
+  protection 에서는 정확.
+
+### 3.5 `discount_tables` · `inflation_tables`
 
 | 컬럼 | 의미 |
 |---|---|

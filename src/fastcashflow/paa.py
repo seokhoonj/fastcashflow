@@ -135,7 +135,7 @@ def measure_paa(
     # Onerous test -- the GMM inception fulfilment cash flows.
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
         proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
-        proj.premium_cf, proj.annuity_cf, proj.maturity_cf,
+        proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.term_months,
         discount_monthly_curve(assumptions, proj.n_time),
     )

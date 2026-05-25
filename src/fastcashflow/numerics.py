@@ -128,18 +128,18 @@ def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
 
 @njit(parallel=True, cache=True)
 def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
-                        premium_cf, annuity_cf, maturity_cf, term_months,
-                        monthly_rate):
+                        premium_cf, annuity_cf, maturity_cf, surrender_cf,
+                        term_months, monthly_rate):
     """Backward pass -- the BEL and the four RA present-value trajectories.
 
     ``BEL[t]`` is the present value, at month boundary ``t``, of the cash
     flows from month ``t`` onward, built by a backward recursion. Premiums
-    and annuity payments fall at the start of the month, claims and expenses
-    mid-month::
+    and annuity payments fall at the start of the month, claims, expenses
+    and surrender mid-month::
 
         BEL[t] = annuity[t] - premium[t]
-                 + (claim[t] + morbidity[t] + disability[t] + expense[t])
-                   * (1+i[t])^-0.5
+                 + (claim[t] + morbidity[t] + disability[t]
+                    + expense[t] + surrender[t]) * (1+i[t])^-0.5
                  + BEL[t+1] * (1+i[t])^-1
 
     ``monthly_rate`` is the per-month rate curve, shape ``(n_time,)``, so
@@ -173,9 +173,11 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
             morbidity = morbidity_cf[mp, t]
             disability = disability_cf[mp, t]
             annuity = annuity_cf[mp, t]
+            surrender = surrender_cf[mp, t]
             bel[mp, t] = (
                 annuity - premium_cf[mp, t]
-                + (claim + morbidity + disability + expense_cf[mp, t]) * half[t]
+                + (claim + morbidity + disability
+                   + expense_cf[mp, t] + surrender) * half[t]
                 + bel[mp, t + 1] * full[t]
             )
             pv_claims[mp, t] = claim * half[t] + pv_claims[mp, t + 1] * full[t]

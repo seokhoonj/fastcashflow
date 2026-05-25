@@ -109,7 +109,7 @@ def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
 
 
 @dataclass(frozen=True, slots=True)
-class RiderRate:
+class CoverageRate:
     """One rate-driven rider's assumption -- a coverage code and how it runs.
 
     Parameters
@@ -251,7 +251,7 @@ class Assumptions:
         for incurred claims and discounts claims to their payment dates in
         the best-estimate liability.
     riders :
-        Ordered tuple of :class:`RiderRate` -- the rate-driven riders
+        Ordered tuple of :class:`CoverageRate` -- the rate-driven riders
         (death-type, morbidity and diagnosis coverages), one per rider code.
         Their order fixes the integer coverage codes: rider ``i`` is code
         ``i + 1``; code 0 is the main-contract death coverage, driven by
@@ -280,6 +280,11 @@ class Assumptions:
     beta_pct: float = 0.0
     gamma_flat: float | FloatArray = 0.0
     expense_inflation: float | FloatArray = 0.0
+    # Surrender value (해약환급금) curve -- per-month factor applied to the
+    # cumulative premium paid. Engine: surrender_cf[t] = lapse_flow[t] x
+    # cum_premium[t] x surrender_value_curve[t]. None = no surrender value
+    # (lapse silently removes the contract, the historical behaviour).
+    surrender_value_curve: FloatArray | None = None
     waiver_incidence_annual: RateFn | None = None
     # Deprecated alias retained for source compatibility -- ``__post_init__``
     # routes it to ``waiver_incidence_annual`` with a DeprecationWarning.
@@ -315,7 +320,7 @@ class Assumptions:
     fund_fee: float = 0.0
     guaranteed_credit_rate: float | None = None
     settlement_pattern: FloatArray | None = None
-    riders: tuple[RiderRate, ...] = ()
+    coverages: tuple[CoverageRate, ...] = ()
     coverage_types: dict[str, str] | None = None
     state_model: StateModel | None = None
 
@@ -356,20 +361,20 @@ class Assumptions:
             if adapted is not getattr(self, field):
                 object.__setattr__(self, field, adapted)
         # Rider rates take the RateFn shape; wrap each rider's rate too.
-        # Riders are a tuple of frozen RiderRate dataclasses -- rebuild the
+        # Riders are a tuple of frozen CoverageRate dataclasses -- rebuild the
         # tuple with the adapted callables.
-        new_riders = tuple(
+        new_coverages = tuple(
             (r if r.rate is _adapt_rate_arity(r.rate)
-             else RiderRate(
+             else CoverageRate(
                  code=r.code,
                  rate=_adapt_rate_arity(r.rate),
                  is_diagnosis=r.is_diagnosis,
                  risk=r.risk,
              ))
-            for r in self.riders
+            for r in self.coverages
         )
-        if any(nr is not r for nr, r in zip(new_riders, self.riders)):
-            object.__setattr__(self, "riders", new_riders)
+        if any(nr is not r for nr, r in zip(new_coverages, self.coverages)):
+            object.__setattr__(self, "coverages", new_coverages)
 
     @property
     def discount_monthly(self) -> float:
@@ -519,18 +524,18 @@ def _describe_assumptions_lines(
     for i, (title, names) in enumerate(_DESCRIBE_GROUPS[:3]):
         sections.append((f"{marks[i]} {title}", field_lines(names)))
 
-    riders = asmp.riders
+    riders = asmp.coverages
     cov = asmp.coverage_types
-    rider_lines: list[object] = []
+    coverage_lines: list[object] = []
     width = max((len(r.code) for r in riders), default=0)
     for r in riders:
-        rider_lines.append(
-            f"RiderRate(code={r.code!r:{width+2}}, risk={r.risk}, "
+        coverage_lines.append(
+            f"CoverageRate(code={r.code!r:{width+2}}, risk={r.risk}, "
             f"is_diagnosis={r.is_diagnosis}, rate={_fmt_callable(r.rate)})"
         )
     cov_lines: list[object] = [f"{k!r:12} -> {v!r}" for k, v in cov.items()]
     sections.append((f"{marks[3]} 특약 / 담보 정의", [
-        (f"coverages : tuple  (len={len(riders)})", rider_lines),
+        (f"coverages : tuple  (len={len(riders)})", coverage_lines),
         (f"coverage_types : dict  (len={len(cov)})", cov_lines),
     ]))
 

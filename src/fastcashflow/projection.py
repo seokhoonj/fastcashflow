@@ -72,6 +72,7 @@ class Cashflows:
     annuity_cf: FloatArray    # annuity (survival income) outflow per month
     disability_cf: FloatArray # disability income + lump-sum outflow per month
     maturity_cf: FloatArray   # (n_mp,) maturity benefit, paid at time = term
+    surrender_cf: FloatArray  # surrender value (해약환급금) paid on lapse
 
     @property
     def n_time(self) -> int:
@@ -505,11 +506,11 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         assumptions.lapse_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid)))
-    cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
+    cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.coverages)
     # coverage_rates stacks the annual mortality and rider rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
     cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(
-        mortality_annual, [r.rate for r in assumptions.riders],
+        mortality_annual, [r.rate for r in assumptions.coverages],
         sex_grid, issue_age_grid, duration_grid,
         issue_class_grid, elapsed_grid,
     )))
@@ -656,6 +657,24 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             gamma_inflated_monthly,
             n_time,
         )
+    # Surrender value (해약환급금) -- post-projection compute. The lapse
+    # flow per month is approximated as ``inforce[t] * lapse_monthly``;
+    # the basis is the cumulative premium paid (``cumsum(premium_cf)``);
+    # the surrender factor is the per-month curve set by the user.
+    # ``surrender_value_curve = None`` falls back to zero, the historical
+    # "lapse silently removes" behaviour.
+    surrender_cf = np.zeros_like(expense_cf)
+    curve = assumptions.surrender_value_curve
+    if curve is not None:
+        # Per-month lapse rate, broadcast from per-year ``lapse`` array.
+        lapse_per_month = lapse[:, np.arange(n_time) // 12]
+        lapse_flow = inforce * lapse_per_month
+        cum_premium = np.cumsum(premium_cf, axis=1)
+        # Curve held flat past its end; clip lookup to its length.
+        c = np.asarray(curve, dtype=np.float64)
+        idx = np.minimum(np.arange(n_time), c.shape[0] - 1)
+        factor = c[idx]
+        surrender_cf = lapse_flow * cum_premium * factor
     return Cashflows(
         inforce=inforce,
         deaths=deaths,
@@ -666,4 +685,5 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         annuity_cf=annuity_cf,
         disability_cf=disability_cf,
         maturity_cf=maturity_cf,
+        surrender_cf=surrender_cf,
     )

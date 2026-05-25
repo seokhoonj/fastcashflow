@@ -29,7 +29,7 @@ import numpy as np
 import openpyxl
 import polars as pl
 
-from fastcashflow.assumptions import Assumptions, RiderRate
+from fastcashflow.assumptions import Assumptions, CoverageRate
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
     RATE_DRIVEN_TYPES, RISK_MORBIDITY, RISK_MORTALITY, TYPE_ANNUITY,
@@ -397,6 +397,12 @@ def read_assumptions(path):
         "improvement_tables",
         lambda w: _axis_tables(w, "year", value_col="factor"),
     )
+    # Surrender value curves -- per-month factor applied to cumulative
+    # premium paid. Optional; absent means lapse has no payout.
+    surrender_t = optional(
+        "surrender_value_tables",
+        lambda w: _axis_tables(w, "duration_month", value_col="factor"),
+    )
 
     defaults: dict = {}
     segments: list = []
@@ -456,7 +462,7 @@ def read_assumptions(path):
         def ae(coverage_code):
             return ae_factors.get((product, channel, coverage_code))
 
-        riders = []
+        coverage_rates = []
         coverage_types: dict[str, str] = {}
         for code, rtype, rate_table in global_coverages:
             coverage_types[code] = rtype
@@ -471,7 +477,7 @@ def read_assumptions(path):
             rate_fn = incidence_rate_t[rate_table]
             rate_fn = _with_age_shift(rate_fn, shift_morb)
             rate_fn = _with_ae_factor(rate_fn, ae(code))
-            riders.append(RiderRate(
+            coverage_rates.append(CoverageRate(
                 code=code,
                 rate=rate_fn,
                 is_diagnosis=(rtype == TYPE_DIAGNOSIS),
@@ -489,6 +495,9 @@ def read_assumptions(path):
         waiver = lookup(waiver_t, "waiver_table", optional_ref=True)
         waiver_fn = _with_age_shift(waiver, shift_wvr)
 
+        surrender_curve = lookup(
+            surrender_t, "surrender_value_table", optional_ref=True,
+        )
         kwargs: dict = dict(
             mortality_annual=mortality_fn,
             lapse_annual=lookup(lapse_t, "lapse_table"),
@@ -506,8 +515,9 @@ def read_assumptions(path):
             gamma_flat=scalar("gamma_flat") or 0.0,
             ra_confidence=scalar("ra_confidence", required=True),
             mortality_cv=scalar("mortality_cv", required=True),
-            riders=tuple(riders),
+            coverages=tuple(coverage_rates),
             coverage_types=coverage_types or None,
+            surrender_value_curve=surrender_curve,
         )
         for opt_col in ("morbidity_cv", "longevity_cv", "disability_cv",
                         "expense_cv", "cost_of_capital_rate",
@@ -604,7 +614,7 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
         fields["state"] = _read_state(df["state"])
 
     code_to_kind = {r.code: i + 1 for i, r in enumerate(
-        assumptions.riders if assumptions is not None else ())}
+        assumptions.coverages if assumptions is not None else ())}
     benefits: dict[int, np.ndarray] = {}
     for col in df.columns:
         if not col.endswith("_benefit") or col in _NAMED_WIDE:
@@ -641,7 +651,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             )
     n_mp = pol.height
     ctypes = assumptions.coverage_types or {}
-    code_to_kind = {r.code: i + 1 for i, r in enumerate(assumptions.riders)}
+    code_to_kind = {r.code: i + 1 for i, r in enumerate(assumptions.coverages)}
 
     # Resolve every coverage row to its policy index and coverage type.
     pol = pol.with_row_index("_mp")

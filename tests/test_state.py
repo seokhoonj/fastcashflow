@@ -21,7 +21,7 @@ from fastcashflow import (
     STATE_WAIVER,
     Assumptions,
     ModelPoints,
-    RiderRate,
+    CoverageRate,
     measure,
     read_model_points,
     value,
@@ -263,7 +263,7 @@ def test_diagnosis_transition_measure_value_agree():
     against the projection kernel over mixed input states."""
     asmp = _assumptions(
         waiver_rate=0.03,
-        riders=(RiderRate("dx", _flat(0.004), is_diagnosis=True,
+        coverages=(CoverageRate("dx", _flat(0.004), is_diagnosis=True,
                           risk=RISK_MORBIDITY),),
     )
     rng = np.random.default_rng(11)
@@ -284,7 +284,7 @@ def test_waiting_rule_transition_measure_value_agree():
     and measure() agree, cross-checking the two-track rule pass."""
     asmp = _assumptions(
         waiver_rate=0.04,
-        riders=(RiderRate("hosp", _flat(0.02), is_diagnosis=False,
+        coverages=(CoverageRate("hosp", _flat(0.02), is_diagnosis=False,
                           risk=RISK_MORBIDITY),),
     )
     mps = ModelPoints(

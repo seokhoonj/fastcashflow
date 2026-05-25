@@ -278,7 +278,7 @@ def _reincidence_assumptions_with_rider(duration_max, exclusion_months,
     (claims run off a depleting not-yet-diagnosed pool) and a recurring
     health rider (claim_rate accumulates each month).
     """
-    from fastcashflow.assumptions import RiderRate
+    from fastcashflow.assumptions import CoverageRate
     from fastcashflow.coverage import RISK_MORBIDITY
 
     def rider_fn(sex, age, dur):
@@ -300,7 +300,7 @@ def _reincidence_assumptions_with_rider(duration_max, exclusion_months,
         mortality_cv=base.mortality_cv,
         morbidity_cv=0.10,
         state_model=base.state_model,
-        riders=(RiderRate(code="rider", rate=rider_fn,
+        coverages=(CoverageRate(code="rider", rate=rider_fn,
                           is_diagnosis=rider_is_diagnosis,
                           risk=RISK_MORBIDITY),),
     )
@@ -599,7 +599,7 @@ def test_semi_markov_with_rule_and_diagnosis_riders_together():
     is mis-saved or mis-read by either pass, BEL will diverge between
     measure() and value().
     """
-    from fastcashflow.assumptions import RiderRate
+    from fastcashflow.assumptions import CoverageRate
     from fastcashflow.coverage import RISK_MORBIDITY
 
     def recur_rate(sex, age, dur):
@@ -623,10 +623,10 @@ def test_semi_markov_with_rule_and_diagnosis_riders_together():
         mortality_cv=base.mortality_cv,
         morbidity_cv=0.10,
         state_model=base.state_model,
-        riders=(
-            RiderRate(code="recur", rate=recur_rate,
+        coverages=(
+            CoverageRate(code="recur", rate=recur_rate,
                       is_diagnosis=False, risk=RISK_MORBIDITY),
-            RiderRate(code="diag", rate=diag_rate,
+            CoverageRate(code="diag", rate=diag_rate,
                       is_diagnosis=True, risk=RISK_MORBIDITY),
         ),
     )

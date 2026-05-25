@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import openpyxl
 
-from fastcashflow import RiderRate, RISK_MORTALITY, read_assumptions
+from fastcashflow import CoverageRate, RISK_MORTALITY, read_assumptions
 from fastcashflow.assumptions import Assumptions
 
 
@@ -88,7 +88,7 @@ def test_no_age_shift(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 11      # age 30, base = 0.011
-    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 11         # hosp at age 30
+    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 11         # hosp at age 30
 
 
 def test_mortality_age_shift_positive(tmp_path):
@@ -100,7 +100,7 @@ def test_mortality_age_shift_positive(tmp_path):
     # mortality at apparent age 30 + 5 = 35 (sex 0)
     assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 16          # 0.016
     # morbidity (hosp) unaffected -- different rider, no morbidity shift
-    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 11             # 0.11
+    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 11             # 0.11
 
 
 def test_mortality_age_shift_negative(tmp_path):
@@ -122,7 +122,7 @@ def test_morbidity_age_shift_applies_to_all_riders(tmp_path):
     # mortality unaffected
     assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 11
     # hosp shifted -- apparent age 32 -> 0.01 * 13 = 0.13
-    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 13
+    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 13
 
 
 def test_shifts_compose_independently(tmp_path):
@@ -132,7 +132,7 @@ def test_shifts_compose_independently(tmp_path):
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 16        # 30 + 5 = 35
-    assert asmp.riders[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 13            # 30 + 2 = 32
+    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 13            # 30 + 2 = 32
 
 
 def test_with_age_shift_zero_is_identity(tmp_path):

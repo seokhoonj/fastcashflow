@@ -344,7 +344,7 @@ class ModelPoints:
             "disability_income": self.disability_income,
             "disability_benefit": self.disability_benefit,
         }
-        for i, rider in enumerate(assumptions.riders):
+        for i, rider in enumerate(assumptions.coverages):
             mask = self.coverage_kind == i + 1
             cols[f"{rider.code}_benefit"] = np.bincount(
                 mp_of_cov[mask], weights=self.coverage_amount[mask],
@@ -379,7 +379,7 @@ class ModelPoints:
         })
         # CSR coverages -- code 0 is the main-contract death, 1.. the riders.
         label = {0: _coverage_label(assumptions, TYPE_DEATH_MAIN, "death")}
-        for i, rider in enumerate(assumptions.riders):
+        for i, rider in enumerate(assumptions.coverages):
             label[i + 1] = rider.code
         mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
         mp_id = [int(m) for m in mp_of_cov]

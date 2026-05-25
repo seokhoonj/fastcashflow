@@ -75,6 +75,7 @@ def group(measurement: Measurement, group_ids: FloatArray) -> Measurement:
         annuity_cf=_sum_by_group(cf.annuity_cf, inverse, n_groups),
         disability_cf=_sum_by_group(cf.disability_cf, inverse, n_groups),
         maturity_cf=_sum_by_group(cf.maturity_cf, inverse, n_groups),
+        surrender_cf=_sum_by_group(cf.surrender_cf, inverse, n_groups),
     )
 
     # The CSM and the loss component are re-derived on the group aggregate --

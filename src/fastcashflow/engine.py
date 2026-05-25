@@ -122,7 +122,7 @@ def measure(model_points: ModelPoints, assumptions: Assumptions) -> Measurement:
 
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
         claim_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
-        proj.premium_cf, proj.annuity_cf, proj.maturity_cf,
+        proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.term_months, monthly_rate,
     )
     z = _norm_ppf(assumptions.ra_confidence)
@@ -1195,11 +1195,11 @@ def value(
                 np.transpose(edge_prob, (1, 2, 3, 0)))
             state_duration_max = None
         start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
-    cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.riders)
+    cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.coverages)
     # coverage_rates stacks the annual mortality and rider rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
     cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(
-        mortality_annual_grid, [r.rate for r in assumptions.riders], sex_grid,
+        mortality_annual_grid, [r.rate for r in assumptions.coverages], sex_grid,
         issue_age_grid, duration_grid, issue_class_grid, elapsed_grid,
     )))
 

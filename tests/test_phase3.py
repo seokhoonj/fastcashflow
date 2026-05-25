@@ -13,7 +13,7 @@ from fastcashflow import (
     STATE_MODELS,
     Assumptions,
     ModelPoints,
-    RiderRate,
+    CoverageRate,
     measure,
     value,
 )
@@ -136,7 +136,7 @@ def test_value_gpu_matches_cpu_with_transition():
         ra_confidence=0.85,
         mortality_cv=0.12,
         morbidity_cv=0.10,
-        riders=(RiderRate("dx", flat(0.003), is_diagnosis=True,
+        coverages=(CoverageRate("dx", flat(0.003), is_diagnosis=True,
                           risk=RISK_MORBIDITY),),
     )
     rng = np.random.default_rng(13)
