@@ -23,6 +23,7 @@ from typing import IO
 import numpy as np
 
 from fastcashflow.assumptions import Assumptions
+from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.engine import measure
 from fastcashflow.modelpoints import ModelPoints
 
@@ -685,6 +686,163 @@ def show_trace_diff(
         ("BEL deltas (key months)", bel_lines),
         ("CSM deltas (key months)", csm_lines),
         ("Final (headline change, per policy)", final_lines),
+    ]
+    _emit_tree(tree_items, out, "")
+    file.write("\n".join(out) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# show_bel_step -- term-by-term unrolling of the BEL backward recursion
+# ---------------------------------------------------------------------------
+
+def show_bel_step(
+    mp_index: int,
+    model_points: ModelPoints,
+    assumptions: Assumptions | dict,
+    *,
+    months: list[int] | None = None,
+    file: IO | None = None,
+) -> None:
+    """Print, term by term, how one model point's BEL[t] is built.
+
+    The kernel runs the IFRS 17 backward recursion::
+
+        BEL[t] = annuity[t] - premium[t]
+               + (claim + morbidity + disability + expense + surrender)[t]
+                 * (1 + i[t])^(-1/2)
+               + BEL[t+1] * (1 + i[t])^(-1)
+
+    seeded by ``BEL[term] = maturity_benefit``. This function unrolls the
+    equation at chosen months: prints each cash-flow component at ``t``,
+    the half-month and full-month discount factors, the mid-term piece
+    (cash flows at mid-month) and the tail piece (carry from the next
+    month), then the resulting ``BEL[t]`` against the engine's value.
+    When the printed identity holds the engine and a hand calculation
+    are in agreement; when it does not, the offending term is right
+    there in the row.
+
+    Parameters
+    ----------
+    mp_index
+        0-based row index in ``model_points``.
+    model_points
+        Portfolio :class:`ModelPoints`. Subset to the single row before
+        running :func:`measure`.
+    assumptions
+        A :class:`Assumptions` or the dict from
+        :func:`fastcashflow.io.read_assumptions` (routed by the row's
+        ``(product, channel)`` like :func:`show_trace`).
+    months
+        Anchor months at which to unroll the recursion. ``None`` uses
+        ``{0, 12, term//2, term-1, term}`` -- inception, end of year 1,
+        the half-way point, the last recursion step, and the seed.
+        Out-of-range entries are ignored.
+    file
+        Where to write. ``None`` -> ``sys.stdout``.
+    """
+    out: list[str] = []
+    if file is None:
+        file = sys.stdout
+
+    n_mp = model_points.n_mp
+    if not 0 <= mp_index < n_mp:
+        raise IndexError(
+            f"mp_index {mp_index} out of range for n_mp={n_mp}"
+        )
+    i = mp_index
+    asmp = _resolve_basis(assumptions, model_points, i)
+    sub = model_points.subset([i])
+    m = measure(sub, asmp)
+
+    term = int(sub.term_months[0])
+    n_time = m.cashflows.n_time
+    if months is None:
+        months = sorted({0, 12, term // 2, term - 1, term})
+    months = [int(t) for t in months if 0 <= int(t) <= term]
+
+    # Monthly discount rate curve -- the kernel reads this directly. We
+    # recover ``i[t]`` from the same curve here so the printed identity
+    # uses the engine's numbers, not a parallel computation that could
+    # drift.
+    monthly_rate = discount_monthly_curve(asmp, n_time)
+
+    # Header
+    sex_v = int(sub.sex[0]) if sub.sex is not None else 0
+    sex_label = "남" if sex_v == 0 else "여"
+    age = float(sub.issue_age[0])
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
+    header = (
+        f"mp[{i}] BEL step-by-step  ({product}/{channel}, sex={sex_label}, "
+        f"issue_age={age:g}, term={term}m)"
+    )
+
+    recursion_lines: list[object] = [
+        "BEL[t] = annuity[t] - premium[t]",
+        "       + (claim + morbidity + disability + expense + surrender)[t]"
+        " * (1 + i[t])^(-1/2)",
+        "       + BEL[t+1] * (1 + i[t])^(-1)",
+        f"seed:   BEL[{term}] = maturity_benefit = "
+        f"{float(m.cashflows.maturity_cf[0]):,.2f}",
+    ]
+
+    step_blocks: list[object] = []
+    bel_engine = m.bel[0]
+    cf = m.cashflows
+    for t in months:
+        if t == term:
+            step_blocks.append((
+                f"t={t:>4d}  (seed -- no recursion below)",
+                [f"BEL[{t}] = {float(bel_engine[t]):>15,.2f}  "
+                 "(= maturity_benefit)"]
+            ))
+            continue
+        # Inside the recursion: 0 <= t < term.
+        rate = float(monthly_rate[t])
+        half = (1.0 + rate) ** (-0.5)
+        full = 1.0 / (1.0 + rate)
+        prem = float(cf.premium_cf[0, t])
+        ann = float(cf.annuity_cf[0, t])
+        claim = float(cf.claim_cf[0, t])
+        morb = float(cf.morbidity_cf[0, t])
+        disab = float(cf.disability_cf[0, t])
+        exp = float(cf.expense_cf[0, t])
+        surr = float(cf.surrender_cf[0, t])
+        mid_sum = claim + morb + disab + exp + surr
+        mid_piece = mid_sum * half
+        tail_piece = float(bel_engine[t + 1]) * full
+        bel_recompute = ann - prem + mid_piece + tail_piece
+        residual = bel_recompute - float(bel_engine[t])
+        block: list[object] = [
+            f"i[t]                      = {rate:.6f}",
+            f"half = (1+i)^(-1/2)       = {half:.6f}",
+            f"full = (1+i)^(-1)         = {full:.6f}",
+            f"premium[t]                = {prem:>15,.2f}",
+            f"annuity[t]                = {ann:>15,.2f}",
+            f"claim[t]                  = {claim:>15,.2f}",
+            f"morbidity[t]              = {morb:>15,.2f}",
+            f"disability[t]             = {disab:>15,.2f}",
+            f"expense[t]                = {exp:>15,.2f}",
+            f"surrender[t]              = {surr:>15,.2f}",
+            f"mid-month sum             = {mid_sum:>15,.2f}",
+            f"mid-month piece (×half)   = {mid_piece:>15,.2f}",
+            f"BEL[t+1]                  = {float(bel_engine[t + 1]):>15,.2f}",
+            f"tail piece (BEL[t+1]×full)= {tail_piece:>15,.2f}",
+            f"recomputed BEL[t]         = {bel_recompute:>15,.2f}",
+            f"engine BEL[t]             = {float(bel_engine[t]):>15,.2f}  "
+            f"(residual {residual:+.4e})",
+        ]
+        step_blocks.append((f"t={t:>4d}", block))
+
+    out.append(header)
+    tree_items: list[object] = [
+        ("Recursion (back-pass)", recursion_lines),
+        ("Steps", step_blocks),
+        ("Inception BEL", [
+            f"BEL[0] = {float(bel_engine[0]):>15,.2f}",
+        ]),
     ]
     _emit_tree(tree_items, out, "")
     file.write("\n".join(out) + "\n")

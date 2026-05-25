@@ -9,7 +9,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.modelpoints import ModelPoints
-from fastcashflow.trace import show_trace, show_trace_diff
+from fastcashflow.trace import show_bel_step, show_trace, show_trace_diff
 
 
 def _shock_mortality(rate_fn, factor: float):
@@ -195,3 +195,68 @@ def test_show_trace_diff_rejects_out_of_range_index():
     with pytest.raises(IndexError, match="mp_index"):
         show_trace_diff(mp.n_mp, mp, _basis(), _basis(),
                         file=io.StringIO())
+
+
+# ---------------------------------------------------------------------------
+# show_bel_step
+# ---------------------------------------------------------------------------
+
+def test_show_bel_step_renders_recursion_and_steps():
+    """The step view prints the recursion equation, the seed and at
+    least the inception step."""
+    buf = io.StringIO()
+    show_bel_step(0, _portfolio(), _basis(), file=buf)
+    text = buf.getvalue()
+    assert "BEL[t] = annuity[t] - premium[t]" in text
+    assert "seed:" in text
+    assert "t=   0" in text
+    assert "Inception BEL" in text
+    assert "residual" in text
+
+
+def test_show_bel_step_residuals_are_machine_zero():
+    """The recomputed BEL[t] in every printed step must agree with the
+    engine's BEL[t] to within float64 noise -- that is the contract the
+    step view is supposed to surface."""
+    buf = io.StringIO()
+    show_bel_step(0, _portfolio(), _basis(), file=buf)
+    for line in buf.getvalue().splitlines():
+        if "residual" not in line:
+            continue
+        # e.g. "... (residual +0.0000e+00)"
+        token = line.rsplit("residual ", 1)[1].rstrip(")").strip()
+        assert abs(float(token)) < 1e-6, line
+
+
+def test_show_bel_step_accepts_custom_months():
+    """Passing ``months=`` overrides the default anchor set."""
+    buf = io.StringIO()
+    show_bel_step(0, _portfolio(), _basis(),
+                  months=[0, 24, 36], file=buf)
+    text = buf.getvalue()
+    assert "t=   0" in text
+    assert "t=  24" in text
+    assert "t=  36" in text
+    assert "t=  12" not in text                 # not requested
+
+
+def test_show_bel_step_rejects_out_of_range_index():
+    mp = _portfolio()
+    with pytest.raises(IndexError, match="mp_index"):
+        show_bel_step(mp.n_mp, mp, _basis(), file=io.StringIO())
+
+
+def test_show_bel_step_seed_month_prints_only_the_seed():
+    """At ``t = term`` the recursion has no below, so the step row
+    states only the seed value, not a full equation expansion."""
+    mp = _portfolio()
+    term = int(mp.term_months[0])
+    buf = io.StringIO()
+    show_bel_step(0, mp, _basis(), months=[term], file=buf)
+    text = buf.getvalue()
+    assert "seed -- no recursion below" in text
+    # The component lines that only show up in a recursion expansion
+    # ("tail piece", "mid-month piece", "recomputed BEL[t]") are absent
+    # at the seed row.
+    assert "tail piece" not in text
+    assert "recomputed BEL[t]" not in text
