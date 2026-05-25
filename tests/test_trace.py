@@ -1,5 +1,7 @@
-"""Sanity tests for ``show_trace`` -- the per-mp calculation walk."""
+"""Sanity tests for ``show_trace`` / ``show_trace_diff`` -- the per-mp
+calculation walk and the two-basis comparison."""
 import io
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -7,7 +9,22 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.modelpoints import ModelPoints
-from fastcashflow.trace import show_trace
+from fastcashflow.trace import show_trace, show_trace_diff
+
+
+def _shock_mortality(rate_fn, factor: float):
+    """Wrap a rate callable to multiply its return by ``factor``.
+
+    Preserves ``_fcf_table_id`` and appends a modifier tag so the diff
+    can attribute the change to mortality.
+    """
+    def wrapped(sex, issue_age, duration, issue_class, elapsed):
+        return rate_fn(sex, issue_age, duration, issue_class, elapsed) * factor
+    wrapped._fcf_table_id = getattr(rate_fn, "_fcf_table_id", None)
+    wrapped._fcf_modifiers = (
+        getattr(rate_fn, "_fcf_modifiers", ()) + (f"x{factor:g}",)
+    )
+    return wrapped
 
 
 def _basis():
@@ -98,3 +115,83 @@ def test_show_trace_dict_basis_unknown_segment_raises():
     if partial:                           # only meaningful when dict is shrinkable
         with pytest.raises(KeyError, match="no assumptions for segment"):
             show_trace(0, mp, partial, file=io.StringIO())
+
+
+# ---------------------------------------------------------------------------
+# show_trace_diff
+# ---------------------------------------------------------------------------
+
+def test_show_trace_diff_renders_all_sections():
+    """The diff prints the seven headline sections plus the labels line."""
+    mp = _portfolio()
+    asmp = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
+    shocked = replace(asmp, mortality_annual=_shock_mortality(
+        asmp.mortality_annual, 1.10,
+    ))
+    buf = io.StringIO()
+    show_trace_diff(0, mp, asmp, shocked,
+                    label_a="baseline", label_b="mort+10%", file=buf)
+    text = buf.getvalue()
+    for section in (
+        "labels:",
+        "Assumption changes",
+        "Rate deltas",
+        "Cash flow deltas",
+        "Discount factor deltas",
+        "BEL deltas",
+        "CSM deltas",
+        "Final",
+    ):
+        assert section in text, f"missing section: {section}"
+    assert "'baseline'" in text and "'mort+10%'" in text
+
+
+def test_show_trace_diff_identical_basis_reports_no_changes():
+    """Diffing a basis against itself surfaces no rate / cash-flow
+    changes -- only the all-zero anchor-month and Final lines remain,
+    and the change-only sections explicitly say so."""
+    mp = _portfolio()
+    asmp = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
+    buf = io.StringIO()
+    show_trace_diff(0, mp, asmp, asmp, file=buf)
+    text = buf.getvalue()
+    assert "(no changes in tracked fields)" in text
+    assert "(no rate changes at sampled years)" in text
+    assert "(no cash flow changes)" in text
+
+
+def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
+    """A +10% mortality shock increases claim cash flows and the BEL
+    monotonically -- the propagation is visible in the printed diff."""
+    mp = _portfolio()
+    asmp = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
+    shocked = replace(asmp, mortality_annual=_shock_mortality(
+        asmp.mortality_annual, 1.10,
+    ))
+    ma = fcf.measure(mp.subset([0]), asmp)
+    mb = fcf.measure(mp.subset([0]), shocked)
+    assert mb.cashflows.claim_cf.sum() > ma.cashflows.claim_cf.sum()
+    assert mb.bel[0, 0] > ma.bel[0, 0]
+    # And the diff renders without raising.
+    buf = io.StringIO()
+    show_trace_diff(0, mp, asmp, shocked, file=buf)
+    assert "mortality(annual)" in buf.getvalue()
+    assert "+10.00%" in buf.getvalue()
+
+
+def test_show_trace_diff_routes_dict_bases_independently():
+    """Each basis (dict) is routed by the model point's segment, so
+    comparing two segment-keyed dicts that map the row to the same
+    Assumptions yields a no-change diff."""
+    mp = _portfolio()
+    basis = _basis()
+    buf = io.StringIO()
+    show_trace_diff(0, mp, basis, basis, file=buf)
+    assert "(no changes in tracked fields)" in buf.getvalue()
+
+
+def test_show_trace_diff_rejects_out_of_range_index():
+    mp = _portfolio()
+    with pytest.raises(IndexError, match="mp_index"):
+        show_trace_diff(mp.n_mp, mp, _basis(), _basis(),
+                        file=io.StringIO())

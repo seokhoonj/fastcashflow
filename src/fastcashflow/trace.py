@@ -7,8 +7,13 @@ forward to the headline numbers. Intended for hand-checking against an
 external pricing system or an actuary's own spreadsheet -- find the step
 where the engine and the expectation diverge.
 
-The function makes no new calculations; it slices the result of
-:func:`fastcashflow.engine.measure` and prints it.
+:func:`show_trace_diff` is the two-basis variant: it shows, at each step,
+how a change of assumption propagates -- which rate moved, by how much,
+which cash flow shifted, and what the net effect on BEL / RA / CSM is.
+The right tool for shock analysis and what-if questions.
+
+Both functions make no new calculations; they slice the result of
+:func:`fastcashflow.engine.measure` and print it.
 """
 from __future__ import annotations
 
@@ -335,6 +340,351 @@ def show_trace(
         ("BEL roll-forward (key months)", bel_lines),
         ("CSM roll-forward (key months)", csm_lines),
         ("Final (headline numbers, per policy)", final_lines),
+    ]
+    _emit_tree(tree_items, out, "")
+    file.write("\n".join(out) + "\n")
+
+
+# ---------------------------------------------------------------------------
+# show_trace_diff -- two-basis comparison
+# ---------------------------------------------------------------------------
+
+def _resolve_basis(
+    assumptions: Assumptions | dict, model_points: ModelPoints, i: int,
+) -> Assumptions:
+    """Return the :class:`Assumptions` to use for row ``i``.
+
+    Mirrors the dict-routing behaviour of :func:`show_trace`. Factored
+    out so the diff variant can resolve two bases the same way.
+    """
+    if not isinstance(assumptions, dict):
+        return assumptions
+    if model_points.product is None or model_points.channel is None:
+        raise ValueError(
+            "model_points has no product / channel columns -- a dict "
+            "basis cannot be routed; pass a single Assumptions instead"
+        )
+    key = (str(model_points.product[i]), str(model_points.channel[i]))
+    try:
+        return assumptions[key]
+    except KeyError:
+        raise KeyError(
+            f"no assumptions for segment {key}; available: {list(assumptions)}"
+        ) from None
+
+
+def _money_delta(a: float, b: float, *, width: int = 14) -> str:
+    """Format ``a -> b   (Δ, %Δ)`` for two money amounts."""
+    d = b - a
+    if abs(a) > 1e-12:
+        pct = 100.0 * d / a
+        pct_s = f"{pct:>+8.2f}%"
+    else:
+        pct_s = "       --"
+    return f"{a:>{width},.2f}  ->  {b:>{width},.2f}   ({d:>+{width-1},.2f}, {pct_s})"
+
+
+def _rate_delta(a: float, b: float) -> str:
+    """Format ``a -> b   (Δ)`` for two annual rates (6-dp probabilities)."""
+    d = b - a
+    if abs(a) > 1e-12:
+        pct = 100.0 * d / a
+        pct_s = f"{pct:>+8.2f}%"
+    else:
+        pct_s = "       --"
+    return f"{a:>10.6f}  ->  {b:>10.6f}   ({d:>+10.6f}, {pct_s})"
+
+
+def _diff_scalar(name: str, va, vb) -> str | None:
+    """Compare two non-callable values; return a one-line diff or None.
+
+    Returns ``None`` when the values are equal -- the diff view only
+    surfaces fields that *changed*.
+    """
+    if isinstance(va, np.ndarray) or isinstance(vb, np.ndarray):
+        if np.array_equal(np.asarray(va), np.asarray(vb)):
+            return None
+        a_str = f"ndarray len={np.asarray(va).size}"
+        b_str = f"ndarray len={np.asarray(vb).size}"
+        return f"{name:<22} = {a_str} -> {b_str}"
+    if va == vb:
+        return None
+    return f"{name:<22} = {va!r} -> {vb!r}"
+
+
+def _diff_callable(name: str, fa, fb) -> str | None:
+    """Compare two rate callables by their source ``_fcf_table_id`` and
+    modifier chain. Same identity / same metadata -> no diff line."""
+    if fa is fb:
+        return None
+    return f"{name:<22} : {_fmt_callable(fa)}  ->  {_fmt_callable(fb)}"
+
+
+def show_trace_diff(
+    mp_index: int,
+    model_points: ModelPoints,
+    basis_a: Assumptions | dict,
+    basis_b: Assumptions | dict,
+    *,
+    label_a: str = "before",
+    label_b: str = "after",
+    file: IO | None = None,
+) -> None:
+    """Print a tree of how the BEL / RA / CSM of one model point moves
+    when assumptions change.
+
+    Parameters
+    ----------
+    mp_index
+        0-based row index in ``model_points``.
+    model_points
+        Portfolio :class:`ModelPoints`. Subset to the single row before
+        each :func:`measure` so the diff cost stays proportional to one MP.
+    basis_a, basis_b
+        Two assumptions to compare. Either a :class:`Assumptions` or the
+        dict from :func:`fastcashflow.io.read_assumptions`. With dicts,
+        each is routed independently by the model point's
+        ``(product, channel)`` -- comparing two segments is also fine.
+    label_a, label_b
+        Short labels for the two columns in the printed diff (e.g.
+        ``"baseline"`` vs ``"mortality+10%"``). Default ``"before"`` /
+        ``"after"``.
+    file
+        Where to write. ``None`` writes to ``sys.stdout``.
+
+    Sections
+    --------
+    1. Header (the model-point identity)
+    2. Labels (the two basis names)
+    3. Assumption changes -- only the fields that differ
+    4. Rate deltas -- year-by-year annual rates side by side
+    5. Cash flow deltas -- annual sum of each cash-flow component
+    6. Discount factor deltas at anchor months
+    7. BEL / CSM deltas at anchor months
+    8. Final -- BEL / RA / FCF / CSM / loss_component, with absolute and
+       percentage change
+
+    Equal values are suppressed from the assumption-change section so
+    the eye lands on what actually moved.
+    """
+    out: list[str] = []
+    if file is None:
+        file = sys.stdout
+
+    n_mp = model_points.n_mp
+    if not 0 <= mp_index < n_mp:
+        raise IndexError(
+            f"mp_index {mp_index} out of range for n_mp={n_mp}"
+        )
+    i = mp_index
+
+    asmp_a = _resolve_basis(basis_a, model_points, i)
+    asmp_b = _resolve_basis(basis_b, model_points, i)
+
+    sub = model_points.subset([i])
+    ma = measure(sub, asmp_a)
+    mb = measure(sub, asmp_b)
+
+    # ---- Header
+    sex_v = int(sub.sex[0]) if sub.sex is not None else 0
+    sex_label = "남" if sex_v == 0 else "여"
+    age = float(sub.issue_age[0])
+    term = int(sub.term_months[0])
+    prem_term = (int(sub.premium_term_months[0])
+                 if sub.premium_term_months is not None else term)
+    count = float(sub.count[0]) if sub.count is not None else 1.0
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
+    header = (
+        f"diff mp[{i}]  ({product}/{channel}, sex={sex_label}, "
+        f"issue_age={age:g}, term={term}m, premium_term={prem_term}m, "
+        f"count={count:g})"
+    )
+    labels_line = f"labels: {label_a!r}  ->  {label_b!r}"
+
+    # ---- Assumption changes (suppressed when equal)
+    asmp_diffs: list[object] = []
+    for name in ("mortality_annual", "lapse_annual",
+                 "waiver_incidence_annual"):
+        line = _diff_callable(name,
+                              getattr(asmp_a, name),
+                              getattr(asmp_b, name))
+        if line is not None:
+            asmp_diffs.append(line)
+    for name in ("discount_annual", "expense_inflation", "alpha_pct",
+                 "alpha_flat", "beta_pct", "gamma_flat", "ra_method",
+                 "ra_confidence", "cost_of_capital_rate", "mortality_cv",
+                 "morbidity_cv", "longevity_cv", "disability_cv",
+                 "expense_cv"):
+        line = _diff_scalar(name,
+                            getattr(asmp_a, name),
+                            getattr(asmp_b, name))
+        if line is not None:
+            asmp_diffs.append(line)
+    # Coverages: per-rider rate table change.
+    codes_a = [r.code for r in asmp_a.coverages]
+    codes_b = [r.code for r in asmp_b.coverages]
+    if codes_a != codes_b:
+        asmp_diffs.append(
+            f"coverages (codes)      : {codes_a} -> {codes_b}"
+        )
+    else:
+        for ra, rb in zip(asmp_a.coverages, asmp_b.coverages):
+            line = _diff_callable(f"coverage[{ra.code}].rate",
+                                   ra.rate, rb.rate)
+            if line is not None:
+                asmp_diffs.append(line)
+    if not asmp_diffs:
+        asmp_diffs.append("(no changes in tracked fields)")
+
+    # ---- Rate deltas at sampled years
+    n_years = (term + 11) // 12
+    issue_class_v = (int(sub.issue_class[0])
+                     if sub.issue_class is not None else 0)
+    elapsed_v = (int(sub.elapsed_months[0])
+                 if sub.elapsed_months is not None else 0)
+    year_picks = sorted({0, 1, 2, 3, 4, n_years - 1, max(0, n_years // 2)})
+    year_picks = [y for y in year_picks if 0 <= y < n_years]
+    rate_lines: list[object] = []
+    rate_lines.append(
+        f"axes: sex={sex_v}, issue_age={age:g}, issue_class={issue_class_v}, "
+        f"elapsed_at_issue={elapsed_v}m"
+    )
+    def _maybe_row(label: str, av: float, bv: float) -> str | None:
+        return None if abs(av - bv) <= 1e-12 else f"{label}  {_rate_delta(av, bv)}"
+
+    for y in year_picks:
+        block: list[object] = []
+        row = _maybe_row(
+            "mortality(annual)",
+            _eval_rate(asmp_a.mortality_annual, sex_v, age, y,
+                       issue_class_v, elapsed_v),
+            _eval_rate(asmp_b.mortality_annual, sex_v, age, y,
+                       issue_class_v, elapsed_v),
+        )
+        if row is not None:
+            block.append(row)
+        row = _maybe_row(
+            "lapse(annual)    ",
+            _eval_rate(asmp_a.lapse_annual, sex_v, age, y,
+                       issue_class_v, elapsed_v),
+            _eval_rate(asmp_b.lapse_annual, sex_v, age, y,
+                       issue_class_v, elapsed_v),
+        )
+        if row is not None:
+            block.append(row)
+        if (asmp_a.waiver_incidence_annual is not None
+                or asmp_b.waiver_incidence_annual is not None):
+            row = _maybe_row(
+                "waiver(annual)   ",
+                _eval_rate(asmp_a.waiver_incidence_annual, sex_v, age, y,
+                           issue_class_v, elapsed_v),
+                _eval_rate(asmp_b.waiver_incidence_annual, sex_v, age, y,
+                           issue_class_v, elapsed_v),
+            )
+            if row is not None:
+                block.append(row)
+        if codes_a == codes_b:
+            for ra, rb in zip(asmp_a.coverages, asmp_b.coverages):
+                row = _maybe_row(
+                    f"{ra.code}(annual)".ljust(17),
+                    _eval_rate(ra.rate, sex_v, age, y,
+                               issue_class_v, elapsed_v),
+                    _eval_rate(rb.rate, sex_v, age, y,
+                               issue_class_v, elapsed_v),
+                )
+                if row is not None:
+                    block.append(row)
+        if block:
+            rate_lines.append((f"year {y:>2d}", block))
+    if len(rate_lines) == 1:                              # only the axes line
+        rate_lines.append("(no rate changes at sampled years)")
+
+    # ---- Cash flow deltas
+    cf_a = ma.cashflows
+    cf_b = mb.cashflows
+    cf_lines: list[object] = []
+    headers = ["year", "stream", f"sum({label_a})", f"sum({label_b})",
+               "Δ", "%Δ"]
+    cf_lines.append("  ".join(f"{h:>14}" for h in headers))
+    for y in range(n_years):
+        a0 = y * 12
+        a1 = min(a0 + 12, cf_a.n_time)
+        if a1 <= a0:
+            break
+        for name in ("premium_cf", "claim_cf", "morbidity_cf",
+                     "expense_cf", "annuity_cf", "surrender_cf",
+                     "disability_cf"):
+            sa = float(getattr(cf_a, name)[0, a0:a1].sum())
+            sb = float(getattr(cf_b, name)[0, a0:a1].sum())
+            if abs(sa) + abs(sb) < 0.5:
+                continue                          # both effectively zero
+            if abs(sb - sa) < 0.5:
+                continue                          # change rounds to nothing
+            d = sb - sa
+            pct = (100.0 * d / sa) if abs(sa) > 1e-12 else float("nan")
+            pct_s = f"{pct:>+8.2f}%" if not np.isnan(pct) else "      --"
+            cf_lines.append(
+                f"{y:>14d}  {name[:-3]:>14}  "
+                f"{sa:>14,.0f}  {sb:>14,.0f}  {d:>+14,.0f}  {pct_s:>14}"
+            )
+    if len(cf_lines) == 1:                                # only the header
+        cf_lines.append("(no cash flow changes)")
+    if float(cf_a.maturity_cf[0]) != 0.0 or float(cf_b.maturity_cf[0]) != 0.0:
+        sa = float(cf_a.maturity_cf[0])
+        sb = float(cf_b.maturity_cf[0])
+        cf_lines.append(
+            f"maturity benefit at t={term}m: {sa:,.0f}  ->  {sb:,.0f}  "
+            f"({sb - sa:+,.0f})"
+        )
+
+    # ---- Discount factor deltas
+    picks = _key_months(term, ma.discount_start.shape[0] - 1)
+    disc_lines: list[object] = [
+        f"t={t:>4d}m: ds  {ma.discount_start[t]:.6f}  ->  "
+        f"{mb.discount_start[t]:.6f}  ({mb.discount_start[t] - ma.discount_start[t]:+.6f})"
+        for t in picks
+    ]
+
+    # ---- BEL / CSM deltas at anchor months
+    bel_a, bel_b = ma.bel[0], mb.bel[0]
+    csm_a, csm_b = ma.csm[0], mb.csm[0]
+    bel_lines: list[object] = [
+        f"BEL[{t:>4d}]   {_money_delta(float(bel_a[t]), float(bel_b[t]))}"
+        for t in picks
+    ]
+    csm_lines: list[object] = [
+        f"CSM[{t:>4d}]   {_money_delta(float(csm_a[t]), float(csm_b[t]))}"
+        for t in picks
+    ]
+
+    # ---- Final headline
+    ra_a, ra_b = float(ma.ra[0, 0]), float(mb.ra[0, 0])
+    bel_a0, bel_b0 = float(bel_a[0]), float(bel_b[0])
+    fcf_a, fcf_b = bel_a0 + ra_a, bel_b0 + ra_b
+    csm_a0, csm_b0 = float(csm_a[0]), float(csm_b[0])
+    lc_a, lc_b = float(ma.loss_component[0]), float(mb.loss_component[0])
+    final_lines: list[object] = [
+        f"BEL              {_money_delta(bel_a0, bel_b0)}",
+        f"RA               {_money_delta(ra_a, ra_b)}",
+        f"FCF = BEL+RA     {_money_delta(fcf_a, fcf_b)}",
+        f"CSM = max(0,-FCF){_money_delta(csm_a0, csm_b0)}",
+        f"loss_component   {_money_delta(lc_a, lc_b)}",
+    ]
+
+    # ---- Assemble
+    out.append(header)
+    out.append(labels_line)
+    tree_items: list[object] = [
+        ("Assumption changes", asmp_diffs),
+        ("Rate deltas (per policy year)", rate_lines),
+        (f"Cash flow deltas (annual sum, non-zero rows only)", cf_lines),
+        ("Discount factor deltas (key months)", disc_lines),
+        ("BEL deltas (key months)", bel_lines),
+        ("CSM deltas (key months)", csm_lines),
+        ("Final (headline change, per policy)", final_lines),
     ]
     _emit_tree(tree_items, out, "")
     file.write("\n".join(out) + "\n")
