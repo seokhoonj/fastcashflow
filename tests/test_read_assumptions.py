@@ -56,15 +56,15 @@ def test_riders_resolved():
     types stay in ``coverage_types`` only."""
     basis = load_sample_assumptions()
     asmp = basis[("TERM_A", "GA")]
-    # adb is rate-driven (death-type), so it joins the riders tuple too.
-    assert [r.code for r in asmp.riders] == ["hosp", "cancer", "adb"]
+    # ADB is rate-driven (death-type), so it joins the riders tuple too.
+    assert [r.code for r in asmp.riders] == ["INPATIENT", "CANCER", "ADB"]
     assert asmp.coverage_types == {
-        "dth_main": "death_main",
-        "hosp": "morbidity",
-        "cancer": "diagnosis",
-        "adb": "death",
-        "ann": "annuity",
-        "mat": "maturity",
+        "DEATH_MAIN": "DEATH_MAIN",
+        "INPATIENT":  "MORBIDITY",
+        "CANCER":     "DIAGNOSIS",
+        "ADB":        "DEATH",
+        "ANNUITY":    "ANNUITY",
+        "MATURITY":   "MATURITY",
     }
 
 

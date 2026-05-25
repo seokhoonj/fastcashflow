@@ -66,9 +66,9 @@
 |---|---|---|
 | `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE` |
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA` |
-| `table_id` | SCREAMING_SNAKE_CASE | `MORT_STD`, `LAPSE_GA` |
-| `coverage_code` | snake_case 소문자 | `dth_main`, `hosp` |
-| `type` | snake_case 소문자 | `death_main`, `morbidity` |
+| `table_id` | SCREAMING_SNAKE_CASE | `MORTALITY_STD`, `LAPSE_GA` |
+| `coverage_code` | snake_case 소문자 | `DEATH_MAIN`, `INPATIENT` |
+| `type` | snake_case 소문자 | `DEATH_MAIN`, `MORBIDITY` |
 | 컬럼 헤더 | snake_case 소문자 | `expense_acquisition`, `mortality_cv` |
 
 **근거**:
@@ -166,17 +166,17 @@ calendar_year)을 받는다. 워크북 입력층은 base table (필수) + A/E fa
 ## 9. Sample identifier — generic placeholder
 
 **결정**: 샘플 워크북의 table_id는 generic placeholder.
-- `MORT_STD` (기존 `KMT_STD`)
-- `DISC_STD` (기존 `RFR_2025`)
-- `WVR_STD`, `MAINT_STD`, `INFL_STD`, `LAPSE_GA`, `LAPSE_FC`,
-  `HOSP_STD`, `CANCER_STD`, `ADB_STD` 등은 이미 generic
+- `MORTALITY_STD` (기존 `KMT_STD`)
+- `DISCOUNT_STD` (기존 `RFR_2025`)
+- `WAIVER_STD`, `MAINTENANCE_STD`, `INFLATION_STD`, `LAPSE_GA`, `LAPSE_FC`,
+  `INPATIENT_STD`, `CANCER_STD`, `ADB_STD` 등은 이미 generic
 
 **근거**:
 - `KMT_STD` (Korean Mortality Table Standard 패턴) 는 placeholder인데
   실제 한국 산업 표준 약어 (예: KIDI 경험생명표 9회) 와 혼동 가능. "이게
   KELT-9인가" 오해 회피.
 - `RFR_2025` 의 "2025"는 vintage 표시지만 sample에 박혀 있으면 시간
-  지나서 오래된 데이터로 보임. `DISC_STD` 로 단순화.
+  지나서 오래된 데이터로 보임. `DISCOUNT_STD` 로 단순화.
 - 실 사용 시엔 회사 경험분석 / 감독원 발표 자료의 정확한 식별자로 교체
   (docs에 명시).
 

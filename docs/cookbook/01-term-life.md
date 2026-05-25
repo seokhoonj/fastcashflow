@@ -80,11 +80,11 @@ print(fcf.sample_data_dir())
 ```
 table_id    sex   age   rate
 ─────────   ───   ───   ────────
-MORT_STD    0     30    0.000500    ← 남성 30세
-MORT_STD    0     31    0.000550
-MORT_STD    0     32    0.000605
+MORTALITY_STD    0     30    0.000500    ← 남성 30세
+MORTALITY_STD    0     31    0.000550
+MORTALITY_STD    0     32    0.000605
 ...
-MORT_STD    1     30    0.000400    ← 여성 30세 (별도 행)
+MORTALITY_STD    1     30    0.000400    ← 여성 30세 (별도 행)
 ...
 ```
 
@@ -93,7 +93,7 @@ MORT_STD    1     30    0.000400    ← 여성 30세 (별도 행)
 ```
 product   channel   mortality_table   lapse_table   expense_acq   ...
 ───────   ───────   ───────────────   ───────────   ───────────   ───
-defaults  -         MORT_STD          -             -             ...
+defaults  -         MORTALITY_STD          -             -             ...
 TERM_A    GA        -                 LAPSE_GA      150,000       ...
 TERM_A    FC        -                 LAPSE_FC       80,000       ...
 ```
@@ -396,7 +396,7 @@ print(list(basis.keys()))   # [('TERM_A', 'GA'), ('TERM_A', 'FC')]
 
 ### 함정 4 — 자기 워크북의 `table_id` 매칭 누락
 
-`segments` 시트의 `mortality_table` 컬럼에 `MORT_STD` 라고 적었는데
+`segments` 시트의 `mortality_table` 컬럼에 `MORTALITY_STD` 라고 적었는데
 `mortality_tables` 시트엔 그런 `table_id` 가 없으면 로드 시 명확한
 에러로 알려줍니다. 새 segment 를 추가할 때 자주 발생.
 

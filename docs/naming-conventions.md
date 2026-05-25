@@ -53,12 +53,13 @@
 
 | 컬럼 | 규칙 | 예 | 이유 |
 |---|---|---|---|
-| `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE`, `VAR_UL` | `table_id` / `channel` 과 같은 대문자 외부 식별자 패밀리 — 컬럼명(소문자) 과 값(대문자) 의 시각적 구분 |
-| `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA`, `DM` | 업계 관용 약어 (General Agency, Financial Consultant, Bancassurance, Direct Marketing) |
-| `table_id` | SCREAMING_SNAKE_CASE | `MORT_STD`, `LAPSE_GA`, `DISC_STD`, `HOSP_STD` | named reference (코드 상수처럼) — 실 데이터 값과 시각적 구분 |
-| `coverage_code` | 소문자 snake_case | `dth_main`, `hosp`, `cancer`, `surgery` | 모델포인트와 매칭되는 식별자 |
-| `type` (rider) | 소문자 snake_case | `death_main`, `morbidity`, `diagnosis` | 코드 상의 enum과 일치 |
-| `defaults` (특수 product 값) | 소문자 단어 | `defaults` | segments 시트의 fallback 행 마커 |
+| `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE`, `VAR_UL` | enum-like 외부 식별자 |
+| `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `TM` | 업계 관용 약어 (General Agency, Financial Consultant, Telemarketing) |
+| `table_id` | SCREAMING_SNAKE_CASE 풀네임 | `MORTALITY_STD`, `LAPSE_GA`, `DISCOUNT_STD`, `INPATIENT_STD`, `ADB_STD` | named reference. 줄임말 안 씀 (`MORT_STD` 같은 abbreviation 지양). 단 industry-universal abbr 인 `ADB` 같은 매우 짧은 것은 예외 |
+| `coverage_code` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH_MAIN`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자 — Python `TYPE_*` 상수와 같은 family |
+| `benefit_type` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH_MAIN`, `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | engine routing key. 6개 고정. 새 패턴 = engine 의 새 type 추가 작업 |
+| `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAID_UP` | enum-like, 정책 status |
+| `defaults` (특수 product 값) | 소문자 단어 | `defaults` | segments 시트의 fallback 행 marker (값 아닌 keyword) |
 
 ## Python code
 
@@ -70,24 +71,32 @@
 | 모듈 private | leading underscore | `_project_kernel`, `_norm_ppf`, `_axis_tables` |
 | 상수 | UPPER_SNAKE_CASE | `WAIVER_MODEL`, `RISK_MORTALITY`, `TYPE_DEATH` |
 
-## 데이터 ID와 코드 식별자가 어긋날 때
+## 데이터 ID와 Python 코드 enum 의 일관성
 
-워크북 값 (예: `coverage_code = "dth_main"`)이 Python 코드 enum
-(예: `TYPE_DEATH = "death_main"`)에 그대로 들어갑니다. 양쪽이 같은
-대소문자 규칙을 따라야 매핑 코드가 단순해집니다 — 둘 다 snake_case.
+워크북 값 (예: `coverage_code = "DEATH_MAIN"`, `benefit_type = "MORBIDITY"`) 이
+Python 상수 (예: `TYPE_DEATH_MAIN = "DEATH_MAIN"`, `TYPE_MORBIDITY = "MORBIDITY"`)
+와 **bit-exact** 일치합니다. 모두 SCREAMING_SNAKE_CASE 풀네임.
 
-`table_id`만 SCREAMING_SNAKE_CASE인 이유는 그것이 "데이터 행을 그룹짓는
-이름표"이지 의미가 있는 식별자가 아니기 때문입니다 (Python 상수처럼
-대문자가 어울림).
+`enum-like 식별자 family`:
+
+- `product`, `channel`, `table_id`, `coverage_code`, `benefit_type`, `state`,
+  `state_model` — 모두 외부 식별자 / 코드 상수 family. SCREAMING_SNAKE_CASE.
+- 줄임말 안 씀 (`MORT` 가 아닌 `MORTALITY`, `HOSP` 가 아닌 `INPATIENT` 등).
+  단 industry-universal 한 매우 짧은 abbr 인 `ADB` 정도 예외.
+
+`벤더 데이터 / 컬럼명` (소문자 snake_case):
+
+- 컬럼 헤더 (`product`, `coverage_code`, `rate_table`, `level_premium`, `count`,
+  `mp_id` 등) — 표/스키마 식별자, 행 안의 값들과 시각적 구분 위해 소문자.
 
 ## Sample workbook의 식별자는 generic placeholder
 
-번들 sample의 `MORT_STD`, `DISC_STD`, `LAPSE_GA`, `HOSP_STD` 같은 ID는
-**generic placeholder**입니다. 실제 한국 산업 표준 (예: 보험개발원 KIDI
+번들 sample의 `MORTALITY_STD`, `DISCOUNT_STD`, `LAPSE_GA`, `INPATIENT_STD` 같은
+ID는 **generic placeholder** 입니다. 실제 한국 산업 표준 (예: 보험개발원 KIDI
 경험생명표 9회) 의 식별자가 아닙니다.
 
 실 사용 시에는 회사가 채택한 위험률 / 발생률 가정의 정확한 식별자로
-교체하세요 (예: 회사 경험분석 결과 기반의 `MORT_2024_M_STD`,
+교체하세요 (예: 회사 경험분석 결과 기반의 `MORTALITY_2024_M_STD`,
 감독원 발표 RFR 곡선 기반의 `RFR_2025_12_KOR` 등).
 
 ## 보험계리 용어와의 관계

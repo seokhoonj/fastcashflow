@@ -24,8 +24,8 @@ STATE_PAIDUP = 2
 
 # Names for the file layer -- a model-point ``state`` column reads and writes
 # these strings, the readable form a practitioner edits in a spreadsheet.
-STATE_NAMES = {"active": STATE_ACTIVE, "waiver": STATE_WAIVER,
-               "paidup": STATE_PAIDUP}
+STATE_NAMES = {"ACTIVE": STATE_ACTIVE, "WAIVER": STATE_WAIVER,
+               "PAID_UP": STATE_PAIDUP}
 STATE_LABELS = {code: name for name, code in STATE_NAMES.items()}
 
 

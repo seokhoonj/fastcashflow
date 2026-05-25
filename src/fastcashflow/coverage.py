@@ -23,12 +23,12 @@ DEATH = 0
 
 # Coverage mechanic types. The riders sheet tags each rider code with one of
 # these; the type fixes how the engine drives the coverage.
-TYPE_DEATH_MAIN = "death_main"  # main-contract death; base mortality; code 0
-TYPE_DEATH = "death"            # death-type rider; own rate; non-decrementing
-TYPE_MORBIDITY = "morbidity"    # recurring health claim (inpatient, surgery..)
-TYPE_DIAGNOSIS = "diagnosis"    # single-payment benefit; depleting pool
-TYPE_ANNUITY = "annuity"        # monthly survival income
-TYPE_MATURITY = "maturity"      # survival benefit paid at the end of the term
+TYPE_DEATH_MAIN = "DEATH_MAIN"  # main-contract death; base mortality; code 0
+TYPE_DEATH      = "DEATH"       # death-type rider; own rate; non-decrementing
+TYPE_MORBIDITY  = "MORBIDITY"   # recurring health claim (inpatient, surgery..)
+TYPE_DIAGNOSIS  = "DIAGNOSIS"   # single-payment benefit; depleting pool
+TYPE_ANNUITY    = "ANNUITY"     # monthly survival income
+TYPE_MATURITY   = "MATURITY"    # survival benefit paid at the end of the term
 
 # Rate-driven types carry a sex x age rate table and go in the coverage list.
 # Survival types (annuity, maturity) are paid to the in-force survivors and

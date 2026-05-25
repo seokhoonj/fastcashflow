@@ -35,17 +35,17 @@
 
 * - `type`
   - 엔진의 동작
-* - `death_main`
+* - `DEATH_MAIN`
   - 주계약 사망. 기저 사망률로 지급하고 보유계약을 감소시킴
 * - `death`
   - 재해사망 등 사망형 특약. 자기 위험률로 지급, 보유계약은 그대로
-* - `morbidity`
+* - `MORBIDITY`
   - 입원·수술 등 반복지급 담보. 매번 지급하고 계약은 유지
-* - `diagnosis`
+* - `DIAGNOSIS`
   - 진단 등 1회 지급 담보. 미진단 풀에서 차감
-* - `annuity`
+* - `ANNUITY`
   - 매월 지급하는 생존급부
-* - `maturity`
+* - `MATURITY`
   - 보험기간 끝에 지급하는 생존급부
 ```
 
@@ -115,13 +115,13 @@
 
 | mp_id | coverage_code | amount | premium |
 |---|---|---|---|
-| P001 | dth_main | 80000000 | 45000 |
-| P001 | mat | 10000000 | 18000 |
-| P002 | dth_main | 50000000 | 28000 |
-| P002 | cancer | 30000000 | 22000 |
-| P002 | hosp | 1000000 | 9000 |
+| P001 | DEATH_MAIN | 80000000 | 45000 |
+| P001 | MATURITY | 10000000 | 18000 |
+| P002 | DEATH_MAIN | 50000000 | 28000 |
+| P002 | CANCER | 30000000 | 22000 |
+| P002 | INPATIENT | 1000000 | 9000 |
 
-P001은 담보 파일에 두 줄 — 주계약 사망(`dth_main`)과 생존특약(`mat`).
+P001은 담보 파일에 두 줄 — 주계약 사망(`DEATH_MAIN`)과 생존특약(`MATURITY`).
 P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅니다.
 
 담보에 면책기간이나 감액기간이 있으면 담보 파일에 `waiting`(면책 개월
@@ -168,19 +168,19 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 
 | product | coverage_code | coverage_name | type |
 |---|---|---|---|
-| - | dth_main | 주계약사망 | death_main |
-| - | cancer | 암진단특약 | diagnosis |
-| - | hosp | 입원특약 | morbidity |
+| - | DEATH_MAIN | 주계약사망 | DEATH_MAIN |
+| - | CANCER | 암진단특약 | DIAGNOSIS |
+| - | INPATIENT | 입원특약 | MORBIDITY |
 
 **`rates`** — 특약별 위험률. 위험률이 있는
-특약(`death`·`morbidity`·`diagnosis`)만 들어갑니다. `annuity`·`maturity`는
+특약(`death`·`MORBIDITY`·`DIAGNOSIS`)만 들어갑니다. `ANNUITY`·`MATURITY`는
 위험률이 없습니다.
 
 | coverage_code | sex | age | rate |
 |---|---|---|---|
-| cancer | 0 | 40 | 0.002 |
-| cancer | 1 | 40 | 0.0022 |
-| hosp | 0 | 40 | 0.08 |
+| CANCER | 0 | 40 | 0.002 |
+| CANCER | 1 | 40 | 0.0022 |
+| INPATIENT | 0 | 40 | 0.08 |
 
 8장에서 `lambda`로 적었던 사망률·위험률을, 여기서는 엑셀 표에 채워
 넣습니다 — 사용자들에게 익숙한 방식이죠.

@@ -5,7 +5,7 @@ A workbook may carry an ``ae_factors`` sheet with rows
 ``{sex, age, issue_age, duration}``. The reader looks up the (product,
 channel, coverage_code) factor and wraps the base rate so the engine
 multiplies by the factor at lookup time. Main mortality uses
-``coverage_code = 'dth_main'`` to match the ``riders`` sheet convention.
+``coverage_code = 'DEATH_MAIN'`` to match the ``riders`` sheet convention.
 Missing sheet or missing key = no adjustment (factor 1.0).
 """
 from pathlib import Path
@@ -30,9 +30,9 @@ def _build(path: Path, *, ae_rows=None):
                 100_000, 0.75, 0.10, 0.10])
 
     rd = wb.create_sheet("coverages")
-    rd.append(["product", "coverage_code", "coverage_name", "type", "rate_table"])
-    rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
-    rd.append(["TERM_A", "hosp", "hospitalization", "morbidity", "HOSP"])
+    rd.append(["product", "coverage_code", "coverage_name", "benefit_type", "rate_table"])
+    rd.append(["TERM_A", "DEATH_MAIN", "main death", "DEATH_MAIN", None])
+    rd.append(["TERM_A", "INPATIENT", "hospitalization", "MORBIDITY", "HOSP"])
 
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
@@ -86,7 +86,7 @@ def test_scalar_ae_factor_per_rider(tmp_path):
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
         ["product", "channel", "coverage_code", "factor"],
-        ["TERM_A", "GA", "hosp", 1.5],          # 손해율 150%
+        ["TERM_A", "GA", "INPATIENT", 1.5],          # 손해율 150%
     ])
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
@@ -97,11 +97,11 @@ def test_scalar_ae_factor_per_rider(tmp_path):
 
 
 def test_ae_factor_on_main_mortality(tmp_path):
-    """coverage_code 'dth_main' wires to the main mortality table."""
+    """coverage_code 'DEATH_MAIN' wires to the main mortality table."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
         ["product", "channel", "coverage_code", "factor"],
-        ["TERM_A", "GA", "dth_main", 0.80],     # CI 80% — pricing 위험률에 마진 있음
+        ["TERM_A", "GA", "DEATH_MAIN", 0.80],     # CI 80% — pricing 위험률에 마진 있음
     ])
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
@@ -117,11 +117,11 @@ def test_ae_factor_varies_by_age(tmp_path):
     """
     rows = [["product", "channel", "coverage_code", "age", "factor"]]
     for age in range(25, 30):
-        rows.append(["TERM_A", "GA", "hosp", age, 3.0])
+        rows.append(["TERM_A", "GA", "INPATIENT", age, 3.0])
     for age in range(30, 50):
-        rows.append(["TERM_A", "GA", "hosp", age, 1.5])
+        rows.append(["TERM_A", "GA", "INPATIENT", age, 1.5])
     for age in range(50, 61):
-        rows.append(["TERM_A", "GA", "hosp", age, 1.0])
+        rows.append(["TERM_A", "GA", "INPATIENT", age, 1.0])
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=rows)
     asmp = _segment(p)
@@ -135,7 +135,7 @@ def test_ae_factor_only_applies_to_matching_segment(tmp_path):
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
         ["product", "channel", "coverage_code", "factor"],
-        ["TERM_A", "FC", "hosp", 1.5],         # different channel
+        ["TERM_A", "FC", "INPATIENT", 1.5],         # different channel
     ])
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
@@ -160,8 +160,8 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 100_000, 0.75, 0.10, 0.10, 5])
     rd = wb.create_sheet("coverages")
-    rd.append(["product", "coverage_code", "coverage_name", "type", "rate_table"])
-    rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
+    rd.append(["product", "coverage_code", "coverage_name", "benefit_type", "rate_table"])
+    rd.append(["TERM_A", "DEATH_MAIN", "main death", "DEATH_MAIN", None])
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
@@ -177,7 +177,7 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
         s_ws.append(row)
     ae = wb.create_sheet("ae_factors")
     ae.append(["product", "channel", "coverage_code", "factor"])
-    ae.append(["TERM_A", "GA", "dth_main", 0.5])
+    ae.append(["TERM_A", "GA", "DEATH_MAIN", 0.5])
     wb.save(p)
 
     asmp = _segment(p)

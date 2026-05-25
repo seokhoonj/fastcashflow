@@ -412,7 +412,7 @@ def read_assumptions(path):
         for r in _sheet_dicts(wb["coverages"]):
             rt = r.get("rate_table")
             riders_by_product.setdefault(str(r["product"]).strip(), []).append((
-                str(r["coverage_code"]).strip(), str(r["type"]).strip(),
+                str(r["coverage_code"]).strip(), str(r["benefit_type"]).strip(),
                 str(rt).strip() if rt not in (None, "") else None,
             ))
 
@@ -476,7 +476,7 @@ def read_assumptions(path):
 
         mortality_fn = lookup(mortality_t, "mortality_table")
         mortality_fn = _with_age_shift(mortality_fn, shift_mort)
-        mortality_fn = _with_ae_factor(mortality_fn, ae("dth_main"))
+        mortality_fn = _with_ae_factor(mortality_fn, ae("DEATH_MAIN"))
         improvement_curve = lookup(
             improvement_t, "mortality_improvement_table", optional_ref=True,
         )
@@ -543,14 +543,21 @@ def _read_state(col: pl.Series) -> np.ndarray:
     ``paid up`` read the same. A blank cell means an ordinary active contract.
     """
     if col.dtype == pl.String:
+        # Normalised lookup -- canonical STATE_NAMES keys ("ACTIVE", "WAIVER",
+        # "PAID_UP") are uppercase, but any spelling (case, spaces, hyphens,
+        # underscores ignored) of the canonical name maps to the same code.
+        normalised = {
+            k.lower().replace("_", "").replace("-", "").replace(" ", ""): v
+            for k, v in STATE_NAMES.items()
+        }
         out = np.empty(len(col), dtype=np.int64)
         for i, v in enumerate(col):
             name = "" if v is None else str(v).strip().lower()
             name = name.replace(" ", "").replace("-", "").replace("_", "")
             if name == "":
                 out[i] = STATE_ACTIVE
-            elif name in STATE_NAMES:
-                out[i] = STATE_NAMES[name]
+            elif name in normalised:
+                out[i] = normalised[name]
             else:
                 raise ValueError(
                     f"unknown contract state {v!r}; "

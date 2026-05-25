@@ -42,9 +42,9 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
 
     # riders
     rd = wb.create_sheet("coverages")
-    rd.append(["product", "coverage_code", "coverage_name", "type", "rate_table"])
-    rd.append(["TERM_A", "dth_main", "main death", "death_main", None])
-    rd.append(["TERM_A", "hosp", "hospitalization", "morbidity", "HOSP"])
+    rd.append(["product", "coverage_code", "coverage_name", "benefit_type", "rate_table"])
+    rd.append(["TERM_A", "DEATH_MAIN", "main death", "DEATH_MAIN", None])
+    rd.append(["TERM_A", "INPATIENT", "hospitalization", "MORBIDITY", "HOSP"])
 
     # mortality table -- linear in age so a shift is easy to verify
     mt = wb.create_sheet("mortality_tables")
