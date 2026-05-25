@@ -76,8 +76,8 @@ class Measurement:
     loss_component: FloatArray   # (n_mp,)          -- loss component at inception
     lic: FloatArray              # (n_mp, n_time+1) -- liability for incurred claims
     cashflows: Cashflows
-    discount_start: FloatArray   # (n_time,) -- start-of-month discount factors
-    discount_mid: FloatArray     # (n_time,) -- mid-month discount factors
+    discount_start: FloatArray   # (n_time+1,) -- start-of-month discount factors, incl. t=term
+    discount_mid: FloatArray     # (n_time,)   -- mid-month discount factors
 
 
 def _compute_csm(bel0, ra0, inforce, monthly_rate):

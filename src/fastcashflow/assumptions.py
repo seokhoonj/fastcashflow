@@ -246,10 +246,10 @@ class Assumptions:
         ``None`` settles every claim immediately. It measures the liability
         for incurred claims and discounts claims to their payment dates in
         the best-estimate liability.
-    riders :
-        Ordered tuple of :class:`CoverageRate` -- the rate-driven riders
-        (death-type, morbidity and diagnosis coverages), one per rider code.
-        Their order fixes the integer coverage codes: rider ``i`` is code
+    coverages :
+        Ordered tuple of :class:`CoverageRate` -- the rate-driven coverages
+        (death-type, morbidity and diagnosis riders), one per coverage code.
+        Their order fixes the integer coverage codes: entry ``i`` is code
         ``i + 1``; code 0 is the main-contract death coverage, driven by
         ``mortality_annual``. Empty for a death-only portfolio.
     coverage_types :

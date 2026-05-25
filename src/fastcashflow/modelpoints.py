@@ -455,6 +455,24 @@ class InforceState:
     prior_csm: FloatArray
     lock_in_rate: float
 
+    def __post_init__(self) -> None:
+        # Coerce each array to its canonical dtype so a hand-built state
+        # (or a reader using a different default dtype) feeds the engine
+        # with the dtypes the kernels expect -- without this, an int64
+        # ``count`` or a float32 ``elapsed_months`` reaches the kernel and
+        # silently triggers a slow path or a numba dispatch error.
+        object.__setattr__(
+            self, "elapsed_months",
+            np.asarray(self.elapsed_months, dtype=np.int64),
+        )
+        object.__setattr__(
+            self, "count", np.asarray(self.count, dtype=np.float64),
+        )
+        object.__setattr__(
+            self, "prior_csm", np.asarray(self.prior_csm, dtype=np.float64),
+        )
+        object.__setattr__(self, "lock_in_rate", float(self.lock_in_rate))
+
 
 def apply_inforce_state(
     model_points: "ModelPoints", state: InforceState,

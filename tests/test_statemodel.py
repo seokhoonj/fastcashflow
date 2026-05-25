@@ -13,7 +13,7 @@ from fastcashflow import (
     STATE_ACTIVE,
     STATE_PAIDUP,
     STATE_WAIVER,
-    WAIVER_MODEL,
+    STATE_MODELS,
     Assumptions,
     ModelPoints,
     State,
@@ -70,7 +70,7 @@ def test_compile_waiver_edges():
         "lapse": np.array([[0.02]]),
     }
     (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
-     benefit_state) = compile_state_model(WAIVER_MODEL, rates)
+     benefit_state) = compile_state_model(STATE_MODELS["WAIVER"], rates)
     assert n_states == 2
     assert list(premium_state) == [True, False]
     assert list(benefit_state) == [False, False]   # waiver model: no benefit
@@ -93,7 +93,7 @@ def test_compile_waiver_edges():
 def test_compile_missing_rate_raises():
     """A decrement naming a rate that was not supplied is a clear error."""
     with pytest.raises(ValueError, match="lapse"):
-        compile_state_model(WAIVER_MODEL, {"mortality": np.array([[0.01]]),
+        compile_state_model(STATE_MODELS["WAIVER"], {"mortality": np.array([[0.01]]),
                                            "waiver_incidence": np.array([[0.0]])})
 
 

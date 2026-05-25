@@ -63,7 +63,6 @@ from fastcashflow.reinsurance import ReinsuranceMeasurement, measure_reinsurance
 from fastcashflow.report import Report, report
 from fastcashflow.statemodel import (
     STATE_MODELS,
-    WAIVER_MODEL,
     State,
     StateModel,
     Transition,
@@ -95,5 +94,5 @@ __all__ = [
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "DEATH", "CoverageRate", "RISK_MORTALITY", "RISK_MORBIDITY",
     "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAIDUP",
-    "StateModel", "State", "Transition", "WAIVER_MODEL", "STATE_MODELS",
+    "StateModel", "State", "Transition", "STATE_MODELS",
 ]
