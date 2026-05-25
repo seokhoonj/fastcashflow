@@ -521,8 +521,7 @@ def read_assumptions(path):
         )
         for opt_col in ("morbidity_cv", "longevity_cv", "disability_cv",
                         "expense_cv", "cost_of_capital_rate",
-                        "investment_return", "fund_fee",
-                        "guaranteed_credit_rate"):
+                        "investment_return", "fund_fee"):
             v = scalar(opt_col)
             if v is not None:
                 kwargs[opt_col] = v
@@ -603,7 +602,8 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
     for opt in ("sex", "count", "single_premium", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",
                 "death_benefit", "maturity_benefit", "annuity_payment",
-                "disability_income", "disability_benefit", "account_value"):
+                "disability_income", "disability_benefit", "account_value",
+                "guaranteed_credit_rate"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     # Segment metadata -- optional string columns; route to value_segmented.

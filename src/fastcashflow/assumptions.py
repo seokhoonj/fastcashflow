@@ -239,11 +239,6 @@ class Assumptions:
     fund_fee :
         Annual variable-fee rate -- the entity's share of the underlying
         items, deducted from the account value each period (VFA).
-    guaranteed_credit_rate :
-        Annual minimum credited rate guaranteed on an account-value (VFA)
-        contract. The account is credited ``max(return, guarantee)`` each
-        period, so the guarantee has a cost whenever the return falls short.
-        ``None`` means no guarantee.
     settlement_pattern :
         Claims run-off pattern -- the fractions of an incurred claim paid in
         the month it is incurred, the next month, and so on, summing to 1.
@@ -318,7 +313,6 @@ class Assumptions:
     cost_of_capital_rate: float = 0.06
     investment_return: float = 0.0
     fund_fee: float = 0.0
-    guaranteed_credit_rate: float | None = None
     settlement_pattern: FloatArray | None = None
     coverages: tuple[CoverageRate, ...] = ()
     coverage_types: dict[str, str] | None = None
@@ -422,7 +416,6 @@ _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("기타 (VFA / 정산)", (
         "investment_return",
         "fund_fee",
-        "guaranteed_credit_rate",
         "settlement_pattern",
     )),
 )

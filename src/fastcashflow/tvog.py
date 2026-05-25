@@ -89,7 +89,13 @@ def _pv_account_benefits(
     return _discounted_growth(monthly_credit, monthly_return, fund_fee_m) @ exit_value
 
 
-def tvog_weights(assumptions: Assumptions, return_scenarios: FloatArray) -> FloatArray:
+def tvog_weights(
+    *,
+    guaranteed_credit_rate: float,
+    fund_fee: float,
+    investment_return: float,
+    return_scenarios: FloatArray,
+) -> FloatArray:
     """Per-month weights for the time value of a minimum guarantee.
 
     Returns a ``(n_time,)`` vector ``w`` for which the TVOG of a book equals
@@ -97,13 +103,16 @@ def tvog_weights(assumptions: Assumptions, return_scenarios: FloatArray) -> Floa
     policies exiting in month ``t``. The weight is the mean over scenarios of
     the guaranteed discounted-growth factor less that factor in the central
     scenario -- the extra account-value cost the convex guarantee adds once
-    returns vary. ``assumptions.guaranteed_credit_rate`` must be set.
+    returns vary.
+
+    The guarantee is taken as a scalar: TVOG is a portfolio-level aggregate
+    in v1, so per-MP varying guarantees are not yet supported here.
     """
     return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
     n_time = return_scenarios.shape[1]
-    f_m = (1.0 + assumptions.fund_fee) ** (1.0 / 12.0) - 1.0
-    g_m = (1.0 + assumptions.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
-    r_m = (1.0 + assumptions.investment_return) ** (1.0 / 12.0) - 1.0
+    f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
+    g_m = (1.0 + guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
     stochastic = _discounted_growth(
         np.maximum(return_scenarios, g_m), return_scenarios, f_m
     ).mean(axis=0)
@@ -119,17 +128,31 @@ def measure_tvog(
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns -- one path per scenario, ``n_time`` being the
-    projection horizon. ``assumptions`` must set ``guaranteed_credit_rate``; the
-    account is credited ``max(return, guarantee)`` and the entity funds any
-    shortfall.
+    projection horizon. The model points must carry a non-zero
+    ``guaranteed_credit_rate`` (otherwise there is no guarantee to value); in
+    v1 the rate is taken as a portfolio-wide scalar (per-MP varying rates
+    with stochastic returns are a future extension), so the column is
+    required to be uniform across rows.
 
     The guarantee cost is the present value of account-value benefits in
     excess of the no-guarantee benefits. Its mean over the scenarios is the
     total value; the cost in the central scenario (``investment_return``) is
     the intrinsic value; the difference is the time value (TVOG).
     """
-    if assumptions.guaranteed_credit_rate is None:
-        raise ValueError("measure_tvog requires assumptions.guaranteed_credit_rate to be set")
+    g_unique = np.unique(np.asarray(model_points.guaranteed_credit_rate,
+                                     dtype=np.float64))
+    if g_unique.size > 1:
+        raise NotImplementedError(
+            "measure_tvog requires a uniform guaranteed_credit_rate across "
+            "model points in v1; per-MP varying rates with stochastic "
+            "returns are a future extension"
+        )
+    if g_unique.size == 0 or float(g_unique[0]) == 0.0:
+        raise ValueError(
+            "measure_tvog requires a non-zero guaranteed_credit_rate on the "
+            "model points -- there is no guarantee to value otherwise"
+        )
+    g_annual = float(g_unique[0])
 
     return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
     if return_scenarios.ndim != 2:
@@ -151,7 +174,7 @@ def measure_tvog(
     exit_value = (model_points.account_value[:, None] * exits).sum(axis=0)   # (n_time,)
 
     f_m = (1.0 + assumptions.fund_fee) ** (1.0 / 12.0) - 1.0
-    g_m = (1.0 + assumptions.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    g_m = (1.0 + g_annual) ** (1.0 / 12.0) - 1.0
 
     # Without a guarantee the return cancels between growth and discount, so
     # the no-guarantee benefit is identical in every scenario.

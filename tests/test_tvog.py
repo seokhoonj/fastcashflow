@@ -32,8 +32,10 @@ def _assumptions(**overrides) -> Assumptions:
     return Assumptions(**base)
 
 
-def _contract(term: int = 120) -> ModelPoints:
-    return ModelPoints.single(40, 0.0, 0.0, term, account_value=1e8)
+def _contract(term: int = 120, g: float = 0.0) -> ModelPoints:
+    return ModelPoints.single(
+        40, 0.0, 0.0, term, account_value=1e8, guaranteed_credit_rate=g,
+    )
 
 
 def _return_paths(annual_return: float, vol: float, n: int, n_time: int, seed: int):
@@ -46,9 +48,9 @@ def _return_paths(annual_return: float, vol: float, n: int, n_time: int, seed: i
 def test_tvog_positive_from_return_volatility():
     """An at-the-money guarantee has a positive time value -- the Jensen gap."""
     term = 120
-    asmp = _assumptions(investment_return=0.04, guaranteed_credit_rate=0.04)
+    asmp = _assumptions(investment_return=0.04)
     scenarios = _return_paths(0.04, vol=0.015, n=3000, n_time=term, seed=1)
-    res = measure_tvog(_contract(term), asmp, scenarios)
+    res = measure_tvog(_contract(term, g=0.04), asmp, scenarios)
     assert res.time_value > 0.0
     assert res.total_value > res.intrinsic_value
 
@@ -56,9 +58,9 @@ def test_tvog_positive_from_return_volatility():
 def test_tvog_decomposition():
     """total_value = intrinsic value + time value = the mean guarantee cost."""
     term = 120
-    asmp = _assumptions(investment_return=0.03, guaranteed_credit_rate=0.05)
+    asmp = _assumptions(investment_return=0.03)
     scenarios = _return_paths(0.03, vol=0.012, n=1000, n_time=term, seed=3)
-    res = measure_tvog(_contract(term), asmp, scenarios)
+    res = measure_tvog(_contract(term, g=0.05), asmp, scenarios)
     assert np.isclose(res.total_value, res.intrinsic_value + res.time_value)
     assert np.isclose(res.total_value, res.guarantee_cost.mean())
     # the guarantee (5%) is in the money even deterministically
@@ -68,10 +70,10 @@ def test_tvog_decomposition():
 def test_tvog_zero_when_every_scenario_is_central():
     """With no return volatility the time value vanishes; intrinsic value remains."""
     term = 120
-    asmp = _assumptions(investment_return=0.02, guaranteed_credit_rate=0.05)
+    asmp = _assumptions(investment_return=0.02)
     r_m = (1.02) ** (1.0 / 12.0) - 1.0
     scenarios = np.full((50, term), r_m)
-    res = measure_tvog(_contract(term), asmp, scenarios)
+    res = measure_tvog(_contract(term, g=0.05), asmp, scenarios)
     assert np.isclose(res.time_value, 0.0, atol=1.0)   # ~0 vs a 1e8 contract
     assert res.intrinsic_value > 0.0
 
@@ -79,21 +81,21 @@ def test_tvog_zero_when_every_scenario_is_central():
 def test_tvog_deep_out_of_the_money_is_nearly_zero():
     """A guarantee far below every scenario return costs almost nothing."""
     term = 120
-    asmp = _assumptions(investment_return=0.06, guaranteed_credit_rate=-0.20)
+    asmp = _assumptions(investment_return=0.06)
     scenarios = _return_paths(0.06, vol=0.005, n=500, n_time=term, seed=2)
-    res = measure_tvog(_contract(term), asmp, scenarios)
+    res = measure_tvog(_contract(term, g=-0.20), asmp, scenarios)
     assert abs(res.total_value) < 1.0          # the guarantee never bites
 
 
 def test_tvog_requires_a_guarantee():
-    """measure_tvog needs guaranteed_credit_rate to be set."""
-    asmp = _assumptions(investment_return=0.04, guaranteed_credit_rate=None)
+    """measure_tvog needs a non-zero guarantee on the model points."""
+    asmp = _assumptions(investment_return=0.04)
     with pytest.raises(ValueError, match="guaranteed_credit_rate"):
-        measure_tvog(_contract(120), asmp, np.full((10, 120), 0.003))
+        measure_tvog(_contract(120, g=0.0), asmp, np.full((10, 120), 0.003))
 
 
 def test_tvog_rejects_wrong_horizon():
     """The scenario width must match the projection horizon."""
-    asmp = _assumptions(investment_return=0.04, guaranteed_credit_rate=0.04)
+    asmp = _assumptions(investment_return=0.04)
     with pytest.raises(ValueError, match="columns"):
-        measure_tvog(_contract(120), asmp, np.full((10, 7), 0.003))
+        measure_tvog(_contract(120, g=0.04), asmp, np.full((10, 7), 0.003))

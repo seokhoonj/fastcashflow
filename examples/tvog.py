@@ -1,9 +1,10 @@
 """Time value of a guarantee (TVOG) -- a VFA minimum-rate guarantee.
 
-Inputs are in examples/data/. The guaranteed rate is the
-``guaranteed_credit_rate`` parameter in assumptions.xlsx. The return
-scenarios are generated here -- a 2,000 x term grid is not something to
-keep in a spreadsheet.
+Inputs are in examples/data/. The guaranteed rate is a per-policy contract
+term -- the ``guaranteed_credit_rate`` column on account_values.xlsx --
+locked at issue and varying by issue cohort. The return scenarios are
+generated here -- a 2,000 x term grid is not something to keep in a
+spreadsheet.
 
     python examples/tvog.py
 """

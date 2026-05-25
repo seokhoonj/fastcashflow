@@ -95,6 +95,13 @@ class ModelPoints:
     premium_frequency_months: IntArray | None = None  # months between premiums
     annuity_frequency_months: IntArray | None = None  # months between payouts
     account_value: FloatArray | None = None      # account value at issue (VFA)
+    # VFA contract terms -- locked at issue, per policy. A guaranteed minimum
+    # crediting rate (annual) credited to the account value when the
+    # underlying-items return falls short; cohort-dependent (a 4%-guarantee
+    # 2010 block vs a 1%-guarantee 2024 block can coexist in one portfolio,
+    # which a single Assumptions value could not represent). Default 0.0 = no
+    # guarantee; ignored by non-VFA measurements.
+    guaranteed_credit_rate: FloatArray | None = None
     coverage_kind: IntArray | None = None             # CSR: coverage kind
     coverage_amount: FloatArray | None = None         # CSR: coverage amount
     coverage_offset: IntArray | None = None           # CSR: per-policy slice bounds
@@ -134,7 +141,8 @@ class ModelPoints:
         n_mp = self.issue_age.shape[0]
         # Premiums / survival benefits default to zero (absent).
         for name in ("maturity_benefit", "annuity_payment", "disability_income",
-                     "disability_benefit", "single_premium", "account_value"):
+                     "disability_benefit", "single_premium", "account_value",
+                     "guaranteed_credit_rate"):
             value = getattr(self, name)
             value = np.zeros(n_mp) if value is None else np.asarray(value, np.float64)
             object.__setattr__(self, name, value)
@@ -253,6 +261,7 @@ class ModelPoints:
         premium_frequency_months: int = 1,
         annuity_frequency_months: int = 1,
         account_value: float = 0.0,
+        guaranteed_credit_rate: float = 0.0,
         count: float = 1.0,
         sex: int = 0,
         state: int = STATE_ACTIVE,
@@ -274,6 +283,7 @@ class ModelPoints:
             premium_frequency_months=np.array([premium_frequency_months]),
             annuity_frequency_months=np.array([annuity_frequency_months]),
             account_value=np.array([account_value]),
+            guaranteed_credit_rate=np.array([guaranteed_credit_rate]),
             count=np.array([count]),
             sex=np.array([sex]),
             state=np.array([state]),
@@ -302,7 +312,8 @@ class ModelPoints:
             "maturity_benefit", "annuity_payment", "disability_income",
             "disability_benefit", "single_premium", "premium_term_months",
             "premium_frequency_months", "annuity_frequency_months",
-            "account_value", "count", "sex", "state",
+            "account_value", "guaranteed_credit_rate",
+            "count", "sex", "state",
         )
         kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}
 

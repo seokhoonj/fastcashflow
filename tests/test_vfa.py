@@ -113,8 +113,9 @@ def _return_paths(annual: float, vol: float, n: int, n_time: int, seed: int):
 
 def test_vfa_tvog_folds_into_bel_and_reduces_csm():
     """Return scenarios fold the guarantee's time value into the BEL."""
-    asmp = _assumptions(investment_return=0.05, guaranteed_credit_rate=0.05)
-    mp = ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
+    asmp = _assumptions(investment_return=0.05)
+    mp = ModelPoints.single(40, 0.0, 0.0, 120,
+                             account_value=1e8, guaranteed_credit_rate=0.05)
     scenarios = _return_paths(0.05, vol=0.008, n=2000, n_time=120, seed=7)
 
     plain = measure_vfa(mp, asmp)
@@ -129,8 +130,9 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
 
 def test_vfa_large_tvog_turns_the_contract_onerous():
     """A guarantee time value beyond the unearned fee makes the contract onerous."""
-    asmp = _assumptions(investment_return=0.05, guaranteed_credit_rate=0.05)
-    mp = ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
+    asmp = _assumptions(investment_return=0.05)
+    mp = ModelPoints.single(40, 0.0, 0.0, 120,
+                             account_value=1e8, guaranteed_credit_rate=0.05)
     scenarios = _return_paths(0.05, vol=0.03, n=2000, n_time=120, seed=8)
 
     plain = measure_vfa(mp, asmp)
@@ -142,8 +144,9 @@ def test_vfa_large_tvog_turns_the_contract_onerous():
 
 def test_vfa_tvog_matches_measure_tvog():
     """The TVOG folded into measure_vfa equals the stand-alone measure_tvog."""
-    asmp = _assumptions(investment_return=0.04, guaranteed_credit_rate=0.045)
-    mp = ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
+    asmp = _assumptions(investment_return=0.04)
+    mp = ModelPoints.single(40, 0.0, 0.0, 120,
+                             account_value=1e8, guaranteed_credit_rate=0.045)
     scenarios = _return_paths(0.04, vol=0.012, n=1500, n_time=120, seed=9)
 
     folded = measure_vfa(mp, asmp, scenarios).time_value.sum()
@@ -151,11 +154,18 @@ def test_vfa_tvog_matches_measure_tvog():
     assert np.isclose(folded, standalone)
 
 
-def test_vfa_scenarios_without_a_guarantee_is_rejected():
-    """Passing return scenarios with no guarantee set is an error."""
-    asmp = _assumptions(investment_return=0.04)        # no guaranteed_credit_rate
-    mp = ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
-    with pytest.raises(ValueError, match="guarantee"):
+def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
+    """Per-MP varying guaranteed_credit_rate with stochastic return scenarios
+    is not supported in v1 -- the time-value pass is portfolio-level."""
+    asmp = _assumptions(investment_return=0.04)
+    mp = ModelPoints(
+        issue_age=np.array([40, 45]),
+        level_premium=np.array([0.0, 0.0]),
+        term_months=np.array([120, 120]),
+        account_value=np.array([1e8, 1e8]),
+        guaranteed_credit_rate=np.array([0.04, 0.05]),
+    )
+    with pytest.raises(NotImplementedError, match="per-MP varying"):
         measure_vfa(mp, asmp, np.full((10, 120), 0.003))
 
 

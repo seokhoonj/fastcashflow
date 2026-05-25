@@ -110,22 +110,26 @@ def measure_vfa(
 
     r_m = (1.0 + assumptions.investment_return) ** (1.0 / 12.0) - 1.0
     f_m = (1.0 + assumptions.fund_fee) ** (1.0 / 12.0) - 1.0
-    # A minimum guarantee credits max(return, guarantee) to the account.
-    credit_m = r_m
-    if assumptions.guaranteed_credit_rate is not None:
-        g_m = (1.0 + assumptions.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
-        credit_m = max(r_m, g_m)
-    growth = (1.0 + credit_m) * (1.0 - f_m)
+    # A minimum guarantee credits max(return, guarantee) to the account. The
+    # guarantee is a per-policy contract term (locked at issue, cohort-aware),
+    # carried on the model point -- zero means no effective guarantee when the
+    # central return is non-negative.
+    g_m = (1.0 + model_points.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    credit_m = np.maximum(r_m, g_m)                            # (n_mp,)
+    growth = (1.0 + credit_m) * (1.0 - f_m)                    # (n_mp,)
 
-    # Account-value trajectory -- flat rates, so a closed form.
-    av = model_points.account_value[:, None] * growth ** np.arange(n_time + 1)[None, :]
+    # Account-value trajectory -- per-policy closed form.
+    periods = np.arange(n_time + 1)
+    av = model_points.account_value[:, None] * (
+        growth[:, None] ** periods[None, :]
+    )
 
     # Every policy eventually exits and receives its account value.
     inforce_pad = np.concatenate([inforce, np.zeros((n_mp, 1))], axis=1)
     exits = inforce_pad[:, :-1] - inforce_pad[:, 1:]      # (n_mp, n_time)
     benefit_cf = exits * av[:, :n_time]
     # Variable fee -- the entity's share, deducted from the grown account value.
-    fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m) * f_m
+    fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m)[:, None] * f_m
     # Liability for incurred claims -- exit benefits settled over the pattern.
     if assumptions.settlement_pattern is None:
         lic = np.zeros((n_mp, n_time + 1))
@@ -163,18 +167,30 @@ def measure_vfa(
     # the CSM absorbs it.
     time_value = np.zeros(n_mp)
     if return_scenarios is not None:
-        if assumptions.guaranteed_credit_rate is None:
-            raise ValueError(
-                "return_scenarios given but assumptions.guaranteed_credit_rate is "
-                "None -- there is no guarantee to value"
-            )
         return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
         if return_scenarios.ndim != 2 or return_scenarios.shape[1] != n_time:
             raise ValueError(
                 f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
                 "the projection horizon"
             )
-        time_value = model_points.account_value * (exits @ tvog_weights(assumptions, return_scenarios))
+        # tvog_weights is portfolio-level in v1, so it expects a uniform
+        # guarantee across model points; per-MP varying guarantees with
+        # stochastic returns are a future extension.
+        g_unique = np.unique(model_points.guaranteed_credit_rate)
+        if g_unique.size > 1:
+            raise NotImplementedError(
+                "return_scenarios with per-MP varying guaranteed_credit_rate "
+                "is not supported yet; the time-value pass uses a scalar "
+                "guarantee in v1"
+            )
+        time_value = model_points.account_value * (
+            exits @ tvog_weights(
+                guaranteed_credit_rate=float(g_unique[0]),
+                fund_fee=assumptions.fund_fee,
+                investment_return=assumptions.investment_return,
+                return_scenarios=return_scenarios,
+            )
+        )
 
     # BEL and RA as trajectories. The BEL is reported net of the account
     # value the entity holds -- a smooth, modest figure that at inception
