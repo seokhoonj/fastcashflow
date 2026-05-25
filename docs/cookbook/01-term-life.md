@@ -44,8 +44,8 @@ fastcashflow 의 입력도 그 워크북 구조를 그대로 따릅니다.
 | 사망률 표 | `mortality_tables` 시트 | `Assumptions(mortality_annual=함수)` |
 | 해지율 표 | `lapse_tables` 시트 | `Assumptions(lapse_annual=함수)` |
 | 할인율 표 | `discount_tables` 시트 | `Assumptions(discount_annual=...)` |
-| 신사업비 | `segments` 시트의 `expense_acquisition` | `Assumptions(expense_acquisition=...)` |
-| 유지비 | `maintenance_tables` 시트 | `Assumptions(expense_maintenance_annual=...)` |
+| 신사업비 | `segments` 시트의 `alpha_flat` | `Assumptions(alpha_flat=...)` |
+| 유지비 | `maintenance_tables` 시트 | `Assumptions(gamma_flat=...)` |
 | 위험조정 신뢰수준 | `segments` 시트의 `ra_confidence` | `Assumptions(ra_confidence=...)` |
 | 사망률 변동계수 | `segments` 시트의 `mortality_cv` | `Assumptions(mortality_cv=...)` |
 
@@ -455,8 +455,8 @@ asmp = fcf.Assumptions(
     discount_annual=0.0,
 
     # 사업비: 전부 0 (검증 단순화)
-    expense_acquisition=0.0,         # 신사업비 (가입 시)
-    expense_maintenance_annual=0.0,  # 유지비 (연)
+    alpha_flat=0.0,         # 신사업비 (가입 시)
+    gamma_flat=0.0,  # 유지비 (연)
     expense_inflation=0.0,           # 비용 인플레이션
 
     # 위험조정 (RA = 0 으로 단순화)

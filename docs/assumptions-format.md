@@ -149,7 +149,7 @@ asmp = basis[("TERM_A", "GA")]
 - `waiver_table` — 납입면제 모델이 없는 상품이면 비웁니다.
 
 **스칼라 컬럼** (값 = 숫자/문자):
-`expense_acquisition`, `ra_confidence`, `mortality_cv`, `morbidity_cv`,
+`alpha_flat`, `ra_confidence`, `mortality_cv`, `morbidity_cv`,
 `longevity_cv`, `disability_cv`, `expense_cv`, `cost_of_capital_rate`,
 `ra_method`, `investment_return`, `fund_fee`, `guaranteed_credit_rate`.
 
@@ -182,7 +182,7 @@ no-op.
 예시 (`sample_assumptions.xlsx` 발췌):
 
 ```
-product   channel  mortality_table  lapse_table  ...  expense_acquisition  ra_confidence  mortality_cv
+product   channel  mortality_table  lapse_table  ...  alpha_flat  ra_confidence  mortality_cv
 defaults           MORTALITY_STD                      ...                       0.75           0.10
 TERM_A    GA                        LAPSE_GA     ...  150000
 TERM_A    FC                        LAPSE_FC     ...   80000
@@ -190,7 +190,7 @@ TERM_A    FC                        LAPSE_FC     ...   80000
 
 - `TERM_A / GA` — `mortality_table` 등 빈 칸은 `defaults`에서 상속
   (`MORTALITY_STD`, `ra_confidence` 0.75, `mortality_cv` 0.10). `lapse_table`과
-  `expense_acquisition`만 행에서 지정.
+  `alpha_flat`만 행에서 지정.
 - `TERM_A / FC` — 같은 패턴, lapse와 acquisition만 다름.
 
 전사 고정값 (`ra_confidence` 등) 은 `defaults`에 한 번만 적습니다 — 바꿀 때

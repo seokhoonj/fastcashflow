@@ -1,7 +1,7 @@
 """Curve-shaped discount / inflation / maintenance assumptions.
 
 ``Assumptions.discount_annual`` / ``expense_inflation`` /
-``expense_maintenance_annual`` accept either a flat scalar (historical
+``gamma_flat`` accept either a flat scalar (historical
 behaviour) or a per-year 1-D array (`(n_years,)`) for a time-varying basis
 locked in at initial recognition. The engine expands either form to a
 per-month curve via :mod:`fastcashflow.curves`. The flat scalar must
@@ -14,7 +14,7 @@ from fastcashflow import Assumptions, ModelPoints, measure, value
 from fastcashflow.curves import (
     discount_monthly_curve,
     inflation_index,
-    maintenance_monthly_curve,
+    gamma_monthly_curve,
 )
 
 
@@ -24,8 +24,8 @@ def _flat_asmp(**overrides) -> Assumptions:
         mortality_annual=lambda s, ia, d: np.zeros_like(s, dtype=np.float64),
         lapse_annual=lambda s, ia, d: np.zeros_like(s, dtype=np.float64),
         discount_annual=0.05,
-        expense_acquisition=0.0,
-        expense_maintenance_annual=12_000.0,
+        alpha_flat=0.0,
+        gamma_flat=12_000.0,
         expense_inflation=0.02,
         ra_confidence=0.75,
         mortality_cv=0.0,
@@ -93,8 +93,8 @@ def test_per_year_inflation_compounds_across_years():
 
 def test_per_year_maintenance_steps_at_year_boundary():
     """A 2-year ``[12000, 18000]`` maintenance curve gives monthly 1000 / 1500."""
-    asmp = _flat_asmp(expense_maintenance_annual=np.array([12_000.0, 18_000.0]))
-    monthly = maintenance_monthly_curve(asmp, 24)
+    asmp = _flat_asmp(gamma_flat=np.array([12_000.0, 18_000.0]))
+    monthly = gamma_monthly_curve(asmp, 24)
     assert np.allclose(monthly[:12], 1_000.0)
     assert np.allclose(monthly[12:], 1_500.0)
 
@@ -112,7 +112,7 @@ def test_bel_with_curve_discount_matches_hand_calc():
     asmp = _flat_asmp(
         # zero everything except maintenance + discount
         expense_inflation=0.0,
-        expense_maintenance_annual=12_000.0,       # 1,000 / month, flat
+        gamma_flat=12_000.0,       # 1,000 / month, flat
         discount_annual=np.array([0.03, 0.05]),    # 3% year 0, 5% year 1
     )
     mp = ModelPoints.single(issue_age=40, death_benefit=0.0,
@@ -136,7 +136,7 @@ def test_bel_value_matches_measure_with_curve_discount():
     """`value()` and `measure()` agree on BEL for a non-flat discount curve too."""
     asmp = _flat_asmp(
         expense_inflation=0.0,
-        expense_maintenance_annual=12_000.0,
+        gamma_flat=12_000.0,
         discount_annual=np.array([0.03, 0.05, 0.06]),
     )
     mp = ModelPoints.single(issue_age=40, death_benefit=100_000.0,
@@ -152,7 +152,7 @@ def test_csm_accretes_at_curve_rate():
     # Profitable contract: premium covers expenses with margin -> positive CSM
     asmp = _flat_asmp(
         expense_inflation=0.0,
-        expense_maintenance_annual=12_000.0,
+        gamma_flat=12_000.0,
         discount_annual=np.array([0.03, 0.10]),   # step UP at year 1
     )
     mp = ModelPoints.single(issue_age=40, death_benefit=0.0,

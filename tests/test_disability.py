@@ -64,8 +64,8 @@ def _asmp(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
         lapse_annual=lambda sex, issue_age, d: np.full(d.shape, _annual(lapse)),
         waiver_incidence_annual=lambda s, a, d: np.full(a.shape, _annual(inception)),
         discount_annual=0.0,
-        expense_acquisition=0.0,
-        expense_maintenance_annual=0.0,
+        alpha_flat=0.0,
+        gamma_flat=0.0,
         expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
@@ -139,8 +139,8 @@ def test_disability_income_needs_a_benefit_state():
     plain = Assumptions(
         mortality_annual=lambda s, a, d: np.full(a.shape, _annual(0.01)),
         lapse_annual=lambda sex, issue_age, d: np.full(d.shape, 0.0),
-        discount_annual=0.0, expense_acquisition=0.0,
-        expense_maintenance_annual=0.0, expense_inflation=0.0,
+        discount_annual=0.0, alpha_flat=0.0,
+        gamma_flat=0.0, expense_inflation=0.0,
         ra_confidence=0.75, mortality_cv=0.10)
     res = measure(ModelPoints.single(**kw), plain)
     assert np.all(res.cashflows.disability_cf[0] == 0.0)

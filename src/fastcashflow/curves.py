@@ -10,7 +10,7 @@ Three groups of helpers:
 
 * discount factors -- :func:`discount_factors`, :func:`discount_factors_from_curve`.
 * per-month rate / amount curves -- :func:`discount_monthly_curve`,
-  :func:`inflation_index`, :func:`maintenance_monthly_curve`. These read the
+  :func:`inflation_index`, :func:`gamma_monthly_curve`. These read the
   ``float | FloatArray`` fields on ``Assumptions`` and broadcast a per-year
   array to per-month length, holding the last value flat past the end.
 * (internal) :func:`_per_year_to_per_month` -- the shared broadcast helper.
@@ -81,16 +81,17 @@ def inflation_index(assumptions: Assumptions, n_time: int) -> FloatArray:
     return compounded[months // 12] * in_year_ramp
 
 
-def maintenance_monthly_curve(assumptions: Assumptions, n_time: int) -> FloatArray:
-    """Per-month maintenance expense per in-force policy, shape ``(n_time,)``.
+def gamma_monthly_curve(assumptions: Assumptions, n_time: int) -> FloatArray:
+    """Per-month gamma expense per in-force policy, shape ``(n_time,)``.
 
+    Gamma is the per-policy fixed maintenance expense (인건비, IT, 콜센터).
     The annual amount is paid in twelve monthly instalments. A scalar
     reproduces the flat ``annual / 12`` figure; a per-year curve steps at
-    each year boundary, held flat past the end.
+    each year boundary, held flat past the end. The engine multiplies the
+    result by :func:`inflation_index` to apply maintenance-expense inflation.
     """
     annual = _per_year_to_per_month(
-        assumptions.expense_maintenance_annual, n_time,
-        "expense_maintenance_annual",
+        assumptions.gamma_flat, n_time, "gamma_flat",
     )
     return annual / 12.0
 

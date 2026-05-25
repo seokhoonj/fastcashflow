@@ -41,7 +41,7 @@ from numba import njit, prange
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions, annual_to_monthly
 from fastcashflow.coverage import coverage_arrays, coverage_rates
-from fastcashflow.curves import inflation_index, maintenance_monthly_curve
+from fastcashflow.curves import gamma_monthly_curve, inflation_index
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.statemodel import (
     WAIVER_MODEL,
@@ -88,7 +88,8 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     coverage_reduction_end, coverage_reduction_factor, cov_rates,
                     cov_risk, cov_is_diagnosis, maturity_benefit,
                     annuity_payment, disability_income, disability_benefit,
-                    expense_acquisition, maint_inflated_monthly, n_time):
+                    alpha_pct, alpha_flat, beta_pct,
+                    gamma_inflated_monthly, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -178,8 +179,14 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
             annuity_cf[mp, t] = (ift * annuity_payment[mp]
                                  if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
-            acquisition = cnt * expense_acquisition if t == 0 else 0.0
-            expense_cf[mp, t] = acquisition + ift * maint_inflated_monthly[t]
+            # Alpha / beta / gamma expense framework.
+            ann_prem = level_premium[mp] * 12.0 / prem_freq
+            alpha = (cnt * (alpha_pct * ann_prem + alpha_flat)
+                     if t == 0 else 0.0)
+            beta = (ift * beta_pct * ann_prem / 12.0
+                    if t < premium_term else 0.0)
+            gamma = ift * gamma_inflated_monthly[t]
+            expense_cf[mp, t] = alpha + beta + gamma
             # Advance the occupancy along the transition edges; a lump-sum
             # transition pays its benefit on the occupancy it carries.
             for s in range(n_states):
@@ -262,7 +269,8 @@ def _project_kernel_semi_markov(
     coverage_reduction_end, coverage_reduction_factor, cov_rates,
     cov_risk, cov_is_diagnosis,
     maturity_benefit, annuity_payment, disability_income, disability_benefit,
-    expense_acquisition, maint_inflated_monthly, n_time,
+    alpha_pct, alpha_flat, beta_pct,
+    gamma_inflated_monthly, n_time,
 ):
     """Detailed semi-Markov projection -- main pass only.
 
@@ -358,8 +366,14 @@ def _project_kernel_semi_markov(
             annuity_cf[mp, t] = (ift * annuity_payment[mp]
                                   if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
-            acquisition = cnt * expense_acquisition if t == 0 else 0.0
-            expense_cf[mp, t] = acquisition + ift * maint_inflated_monthly[t]
+            # Alpha / beta / gamma expense framework.
+            ann_prem = level_premium[mp] * 12.0 / prem_freq
+            alpha = (cnt * (alpha_pct * ann_prem + alpha_flat)
+                     if t == 0 else 0.0)
+            beta = (ift * beta_pct * ann_prem / 12.0
+                    if t < premium_term else 0.0)
+            gamma = ift * gamma_inflated_monthly[t]
+            expense_cf[mp, t] = alpha + beta + gamma
 
             for i in range(total_cohorts):
                 occ_next[i] = 0.0
@@ -499,7 +513,10 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         sex_grid, issue_age_grid, duration_grid,
         issue_class_grid, elapsed_grid,
     )))
-    maint_inflated_monthly = (maintenance_monthly_curve(assumptions, n_time)
+    # Gamma (per-policy maintenance) curve, inflation applied. Alpha and
+    # beta are scalars and computed inline in the kernel; only gamma needs
+    # a per-month curve because of inflation.
+    gamma_inflated_monthly = (gamma_monthly_curve(assumptions, n_time)
                               * inflation_index(assumptions, n_time))
 
     # In-force state machine -- the StateModel composes the transition edges
@@ -589,8 +606,10 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             model_points.annuity_payment,
             model_points.disability_income,
             model_points.disability_benefit,
-            assumptions.expense_acquisition,
-            maint_inflated_monthly,
+            assumptions.alpha_pct,
+            assumptions.alpha_flat,
+            assumptions.beta_pct,
+            gamma_inflated_monthly,
             n_time,
         )
     else:
@@ -631,8 +650,10 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             model_points.annuity_payment,
             model_points.disability_income,
             model_points.disability_benefit,
-            assumptions.expense_acquisition,
-            maint_inflated_monthly,
+            assumptions.alpha_pct,
+            assumptions.alpha_flat,
+            assumptions.beta_pct,
+            gamma_inflated_monthly,
             n_time,
         )
     return Cashflows(

@@ -30,8 +30,8 @@ from fastcashflow.curves import (
     discount_factors,
     discount_factors_from_curve,
     discount_monthly_curve,
+    gamma_monthly_curve,
     inflation_index,
-    maintenance_monthly_curve,
 )
 from fastcashflow.numerics import (
     _cost_of_capital_ra,
@@ -266,7 +266,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           cov_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
-    line(0, "           expense_acquisition, maint_inflated_monthly,")
+    line(0, "           alpha_pct, alpha_flat, beta_pct,")
+    line(0, "           gamma_inflated_monthly,")
     line(0, "           discount_start, discount_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
@@ -291,6 +292,7 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(8, "c_start = coverage_offset[mp]")
     line(8, "c_end = coverage_offset[mp + 1]")
     line(8, "ss = start_state[mp]")
+    line(8, "ann_prem = premium * 12.0 / prem_freq")
     emit_init(8)
     line(8, "pc = 0.0")
     line(8, "pcm = 0.0")
@@ -345,8 +347,10 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, "else:")
     line(16, "ann_due -= 1")
     line(12, "pd += benefit_occ * disability_income[mp] * dm")
-    line(12, "acquisition = cnt * expense_acquisition if t == 0 else 0.0")
-    line(12, "pe += (acquisition + ift * maint_inflated_monthly[t]) * dm")
+    line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
+    line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
+    line(12, "gamma = ift * gamma_inflated_monthly[t]")
+    line(12, "pe += (alpha + beta + gamma) * dm")
     emit_edge_step(12, scale="", include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -636,7 +640,8 @@ def _codegen_value_kernel_source_semi_markov(
     line(0, "           cov_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
-    line(0, "           expense_acquisition, maint_inflated_monthly,")
+    line(0, "           alpha_pct, alpha_flat, beta_pct,")
+    line(0, "           gamma_inflated_monthly,")
     line(0, "           discount_start, discount_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
@@ -661,6 +666,7 @@ def _codegen_value_kernel_source_semi_markov(
     line(8, "c_start = coverage_offset[mp]")
     line(8, "c_end = coverage_offset[mp + 1]")
     line(8, "ss = start_state[mp]")
+    line(8, "ann_prem = premium * 12.0 / prem_freq")
     emit_init(8)
     line(8, "pc = 0.0")
     line(8, "pcm = 0.0")
@@ -723,8 +729,10 @@ def _codegen_value_kernel_source_semi_markov(
     line(12, "else:")
     line(16, "ann_due -= 1")
     line(12, "pd += benefit_occ * disability_income[mp] * dm")
-    line(12, "acquisition = cnt * expense_acquisition if t == 0 else 0.0")
-    line(12, "pe += (acquisition + ift * maint_inflated_monthly[t]) * dm")
+    line(12, "alpha = cnt * (alpha_pct * ann_prem + alpha_flat) if t == 0 else 0.0")
+    line(12, "beta = ift * beta_pct * ann_prem / 12.0 if t < premium_term else 0.0")
+    line(12, "gamma = ift * gamma_inflated_monthly[t]")
+    line(12, "pe += (alpha + beta + gamma) * dm")
     emit_edge_step(12, include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -853,8 +861,9 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          single_premium, premium_term_months, premium_frequency,
                          annuity_frequency, coverage_kind, coverage_amount, coverage_offset,
                          cov_rates, cov_risk, cov_is_diagnosis,
-                         maturity_benefit, annuity_payment, expense_acquisition,
-                         maint_inflated_monthly, discount_start, discount_mid,
+                         maturity_benefit, annuity_payment,
+                         alpha_pct, alpha_flat, beta_pct,
+                         gamma_inflated_monthly, discount_start, discount_mid,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
                          survival_monthly):
@@ -942,8 +951,13 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                 ann_due = ann_freq - 1
             else:
                 ann_due -= 1
-            acquisition = cnt * expense_acquisition if t == 0 else 0.0
-            pe += (acquisition + inforce * maint_inflated_monthly[t]) * dm
+            ann_prem = premium * 12.0 / prem_freq
+            alpha = (cnt * (alpha_pct * ann_prem + alpha_flat)
+                     if t == 0 else 0.0)
+            beta = (inforce * beta_pct * ann_prem / 12.0
+                    if t < premium_term else 0.0)
+            gamma = inforce * gamma_inflated_monthly[t]
+            pe += (alpha + beta + gamma) * dm
             inforce *= survival_monthly[sx, ridx, year]
         pm = inforce * maturity_benefit[mp] * discount_start[term]
         # Non-diagnosis coverages with a waiting or reduced-benefit rule:
@@ -1189,7 +1203,7 @@ def value(
         issue_age_grid, duration_grid, issue_class_grid, elapsed_grid,
     )))
 
-    maint_inflated_monthly = (maintenance_monthly_curve(assumptions, n_time)
+    gamma_inflated_monthly = (gamma_monthly_curve(assumptions, n_time)
                               * inflation_index(assumptions, n_time))
     if discount_curve is None:
         discount_start, discount_mid = discount_factors(assumptions, n_time)
@@ -1238,8 +1252,10 @@ def value(
             cov_is_diagnosis,
             model_points.maturity_benefit,
             model_points.annuity_payment,
-            assumptions.expense_acquisition,
-            maint_inflated_monthly,
+            assumptions.alpha_pct,
+            assumptions.alpha_flat,
+            assumptions.beta_pct,
+            gamma_inflated_monthly,
             discount_start,
             discount_mid,
             mortality_factor,
@@ -1283,8 +1299,10 @@ def value(
         model_points.annuity_payment,
         model_points.disability_income,
         model_points.disability_benefit,
-        assumptions.expense_acquisition,
-        maint_inflated_monthly,
+        assumptions.alpha_pct,
+        assumptions.alpha_flat,
+        assumptions.beta_pct,
+        gamma_inflated_monthly,
         discount_start,
         discount_mid,
         mortality_factor,
@@ -1327,8 +1345,10 @@ def value(
                 model_points.annuity_payment,
                 model_points.disability_income,
                 model_points.disability_benefit,
-                assumptions.expense_acquisition,
-                maint_inflated_monthly,
+                assumptions.alpha_pct,
+                assumptions.alpha_flat,
+                assumptions.beta_pct,
+                gamma_inflated_monthly,
                 discount_start,
                 discount_mid,
                 mortality_factor,

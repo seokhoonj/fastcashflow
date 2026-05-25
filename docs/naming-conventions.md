@@ -16,7 +16,7 @@
 
 | 시트 | 역할 |
 |---|---|
-| `segments` | `(product, channel)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`expense_acquisition`, `ra_confidence`, `*_cv`, optional `*_age_shift` 등). `defaults` 행이 fallback |
+| `segments` | `(product, channel)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`alpha_flat`, `ra_confidence`, `*_cv`, optional `*_age_shift` 등). `defaults` 행이 fallback |
 | `coverages` | 상품별 특약 부착: `(product) → (coverage_code, type, rate_table)` |
 | `mortality_tables` | 사망 발생률 가정 (`table_id` × `sex` × `age` → `rate`) |
 | `incidence_rate_tables` | 특약 발생률 가정 (구조 동일) |
@@ -31,7 +31,7 @@
 ## Column headers
 
 전부 **소문자 snake_case**. 예: `product`, `channel`, `coverage_code`,
-`rate_table`, `mortality_table`, `expense_acquisition`, `ra_confidence`,
+`rate_table`, `mortality_table`, `alpha_flat`, `ra_confidence`,
 `mortality_cv`, `table_id`, `sex`, `age`, `duration`, `year`, `rate`,
 `amount`.
 

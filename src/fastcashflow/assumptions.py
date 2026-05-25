@@ -164,18 +164,32 @@ class Assumptions:
         per-month rate curve via
         :func:`fastcashflow.curves.discount_monthly_curve`. Used for
         discounting cash flows and for CSM interest accretion.
-    expense_acquisition :
-        One-off acquisition expense per policy, incurred at t = 0.
-    expense_maintenance_annual :
-        Annual maintenance expense per in-force policy; one twelfth is
-        charged each month. Either a flat scalar (the same amount every
-        year) or a per-year ``(n_years,)`` array (a step at each year
-        boundary). Held flat past the end of the array.
+    alpha_pct :
+        Acquisition cost as a fraction of annualized premium (alpha,
+        신계약비 의 % 부분). Paid at t = 0 on the issued count. Korean
+        commission is typically dominated by this. Default 0.
+    alpha_flat :
+        Acquisition cost as a flat amount per policy issued (alpha 의
+        정액 부분, 예: 의료심사 / 발급비). Paid at t = 0 on the issued
+        count. Usually small or zero in Korean practice. Default 0.
+    beta_pct :
+        Premium-based recurring expense as a fraction of annualized
+        premium (beta, 수금비 + premium-비례 유지비). Charged each month
+        while ``t < premium_term_months``; one twelfth of the annual
+        amount per month. Default 0.
+    gamma_flat :
+        Per-policy maintenance expense as an annual flat amount per
+        in-force policy (gamma, per-policy 유지비 — 인건비 / IT / 콜센터).
+        Charged each month while ``t < term_months`` (continues after
+        premium fully paid). One twelfth per month, inflation applied via
+        :data:`expense_inflation`. Default 0.
     expense_inflation :
-        Annual inflation rate applied to the maintenance expense. Either a
-        flat scalar (closed-form ``(1+i)^(t/12)`` growth) or a per-year
+        Annual inflation rate applied to ``gamma_flat``. Either a flat
+        scalar (closed-form ``(1+i)^(t/12)`` growth) or a per-year
         ``(n_years,)`` array (compounds across years, with the in-year
         fractional ramp on the current year). Held flat past the end.
+        Does not apply to ``alpha_*`` (one-time at t=0) or ``beta_pct``
+        (% of locked premium).
     ra_confidence :
         Confidence level for the Risk Adjustment (e.g. 0.75). The RA lifts
         the liability from its best estimate to this percentile.
@@ -259,11 +273,13 @@ class Assumptions:
     mortality_annual: RateFn
     lapse_annual: RateFn
     discount_annual: float | FloatArray
-    expense_acquisition: float
-    expense_maintenance_annual: float | FloatArray
-    expense_inflation: float | FloatArray
     ra_confidence: float
     mortality_cv: float
+    alpha_pct: float = 0.0
+    alpha_flat: float = 0.0
+    beta_pct: float = 0.0
+    gamma_flat: float | FloatArray = 0.0
+    expense_inflation: float | FloatArray = 0.0
     waiver_incidence_annual: RateFn | None = None
     # Deprecated alias retained for source compatibility -- ``__post_init__``
     # routes it to ``waiver_incidence_annual`` with a DeprecationWarning.
@@ -382,8 +398,10 @@ _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     )),
     ("경제 / 비용", (
         "discount_annual",
-        "expense_acquisition",
-        "expense_maintenance_annual",
+        "alpha_pct",
+        "alpha_flat",
+        "beta_pct",
+        "gamma_flat",
         "expense_inflation",
     )),
     ("위험조정 (RA)", (

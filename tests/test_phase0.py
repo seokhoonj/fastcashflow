@@ -24,8 +24,8 @@ def _assumptions(**overrides) -> Assumptions:
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
         discount_annual=0.0,
-        expense_acquisition=0.0,
-        expense_maintenance_annual=0.0,
+        alpha_flat=0.0,
+        gamma_flat=0.0,
         expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
@@ -124,8 +124,8 @@ def test_count_scales_linearly():
               term_months=24, single_premium=5_000.0)
     asmp = _assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
-        discount_annual=0.03, expense_acquisition=300.0,
-        expense_maintenance_annual=120.0,
+        discount_annual=0.03, alpha_flat=300.0,
+        gamma_flat=120.0,
     )
     n = 1000.0
 

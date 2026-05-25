@@ -1,6 +1,6 @@
 # fastcashflow
 
-A fast IFRS 17 measurement engine in Python -- open source.
+An open-source IFRS 17 measurement engine in Python.
 
 Takes model points and actuarial assumptions, projects monthly cash flows, and
 measures the insurance contract liability (BEL, RA and CSM) under the

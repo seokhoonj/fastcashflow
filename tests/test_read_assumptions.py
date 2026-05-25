@@ -29,8 +29,8 @@ def test_defaults_inherited():
     # shared economic / maintenance tables -- inherited identically
     assert ga.discount_annual == 0.03 and fc.discount_annual == 0.03
     assert ga.expense_inflation == 0.02 and fc.expense_inflation == 0.02
-    assert ga.expense_maintenance_annual == 60_000.0
-    assert fc.expense_maintenance_annual == 60_000.0
+    assert ga.gamma_flat == 60_000.0
+    assert fc.gamma_flat == 60_000.0
 
 
 def test_channel_segmented_lapse():
@@ -45,10 +45,10 @@ def test_channel_segmented_lapse():
 
 
 def test_per_segment_scalar():
-    """``expense_acquisition`` is filled per segment row (GA vs FC commission)."""
+    """``alpha_flat`` is filled per segment row (GA vs FC commission)."""
     basis = load_sample_assumptions()
-    assert basis[("TERM_A", "GA")].expense_acquisition == 150_000.0
-    assert basis[("TERM_A", "FC")].expense_acquisition == 80_000.0
+    assert basis[("TERM_A", "GA")].alpha_flat == 150_000.0
+    assert basis[("TERM_A", "FC")].alpha_flat == 80_000.0
 
 
 def test_riders_resolved():

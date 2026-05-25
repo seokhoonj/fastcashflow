@@ -81,8 +81,8 @@ assumptions = fcf.Assumptions(
     mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
     lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
     discount_annual=1.005 ** 12 - 1,
-    expense_acquisition=0.0,
-    expense_maintenance_annual=0.0,
+    alpha_flat=0.0,
+    gamma_flat=0.0,
     expense_inflation=0.0,
     ra_confidence=0.75,
     mortality_cv=0.10,
@@ -101,7 +101,7 @@ assumptions = fcf.Assumptions(
 - `discount_annual` — 연 할인율. `**`는 거듭제곱이라
   `1.005 ** 12 - 1`은 월 0.5%를 연 단위로 환산한 값입니다. 엔진은
   연율을 받아 월율로 바꿔 씁니다.
-- `expense_acquisition` 등 — 사업비. 이 예제에서는 모두 0입니다.
+- `alpha_flat` 등 — 사업비. 이 예제에서는 모두 0입니다.
 - `ra_confidence` — 위험조정 신뢰수준 75%(6장).
 - `mortality_cv` — 사망위험 변동계수 0.10(6장).
 
@@ -174,8 +174,8 @@ assumptions = fcf.Assumptions(
     mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
     lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
     discount_annual=1.005 ** 12 - 1,
-    expense_acquisition=0.0,
-    expense_maintenance_annual=0.0,
+    alpha_flat=0.0,
+    gamma_flat=0.0,
     expense_inflation=0.0,
     ra_confidence=0.75,
     mortality_cv=0.10,

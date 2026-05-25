@@ -69,7 +69,7 @@
 | `table_id` | SCREAMING_SNAKE_CASE | `MORTALITY_STD`, `LAPSE_GA` |
 | `coverage_code` | snake_case 소문자 | `DEATH_MAIN`, `INPATIENT` |
 | `type` | snake_case 소문자 | `DEATH_MAIN`, `MORBIDITY` |
-| 컬럼 헤더 | snake_case 소문자 | `expense_acquisition`, `mortality_cv` |
+| 컬럼 헤더 | snake_case 소문자 | `alpha_flat`, `mortality_cv` |
 
 **근거**:
 - channel은 업계 관용 약어 (General Agency, Financial Consultant)

@@ -25,7 +25,7 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
     seg = wb.create_sheet("segments")
     cols = ["product", "channel", "mortality_table", "lapse_table",
             "discount_table", "inflation_table",
-            "expense_acquisition", "ra_confidence", "mortality_cv",
+            "alpha_flat", "ra_confidence", "mortality_cv",
             "morbidity_cv"]
     if mortality_age_shift is not None:
         cols.append("mortality_age_shift")

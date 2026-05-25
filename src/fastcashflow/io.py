@@ -91,8 +91,8 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 #                           (a ``defaults`` row that blank cells inherit).
 #   * ``coverages``      -- (product) -> coverage_code, type, optional rate_table.
 #   * ``mortality_tables``, ``incidence_rate_tables``, ``waiver_tables``,
-#     ``lapse_tables``, ``maintenance_tables``, ``discount_tables``,
-#     ``inflation_tables`` -- the named rate tables the segments reference.
+#     ``lapse_tables``, ``discount_tables``, ``inflation_tables`` -- the
+#     named rate tables the segments reference.
 #
 # See docs/assumptions-format.md for the column-level schema and
 # docs/naming-conventions.md for the value-case rules.
@@ -390,8 +390,6 @@ def read_assumptions(path):
     incidence_rate_t = optional("incidence_rate_tables", _flex_rate_table)
     waiver_t = optional("waiver_tables", _flex_rate_table)
     lapse_t = _flex_rate_table(wb["lapse_tables"])
-    maint_t = optional("maintenance_tables",
-                       lambda w: _axis_tables(w, "duration", value_col="amount"))
     discount_t = _axis_tables(wb["discount_tables"], "year")
     inflation_t = _axis_tables(wb["inflation_tables"], "year")
     ae_factors = optional("ae_factors", _read_ae_factors)
@@ -485,7 +483,6 @@ def read_assumptions(path):
         waiver = lookup(waiver_t, "waiver_table", optional_ref=True)
         waiver_fn = _with_age_shift(waiver, shift_wvr)
 
-        maint = lookup(maint_t, "maintenance_table", optional_ref=True)
         kwargs: dict = dict(
             mortality_annual=mortality_fn,
             lapse_annual=lookup(lapse_t, "lapse_table"),
@@ -495,8 +492,12 @@ def read_assumptions(path):
             # table reproduces the original flat-scalar behaviour.
             discount_annual=lookup(discount_t, "discount_table"),
             expense_inflation=lookup(inflation_t, "inflation_table"),
-            expense_maintenance_annual=(0.0 if maint is None else maint),
-            expense_acquisition=scalar("expense_acquisition", required=True),
+            # alpha / beta / gamma expense framework (Korean actuarial
+            # standard). All segment scalars; defaults to 0 when blank.
+            alpha_pct=scalar("alpha_pct") or 0.0,
+            alpha_flat=scalar("alpha_flat") or 0.0,
+            beta_pct=scalar("beta_pct") or 0.0,
+            gamma_flat=scalar("gamma_flat") or 0.0,
             ra_confidence=scalar("ra_confidence", required=True),
             mortality_cv=scalar("mortality_cv", required=True),
             riders=tuple(riders),

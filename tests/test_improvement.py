@@ -23,7 +23,7 @@ def _build(path: Path, *, improvement_curve=None):
     seg = wb.create_sheet("segments")
     cols = ["product", "channel", "mortality_table", "lapse_table",
             "discount_table", "inflation_table",
-            "expense_acquisition", "ra_confidence", "mortality_cv",
+            "alpha_flat", "ra_confidence", "mortality_cv",
             "morbidity_cv"]
     row = ["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
            100_000, 0.75, 0.10, 0.10]
