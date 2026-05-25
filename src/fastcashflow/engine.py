@@ -45,10 +45,10 @@ from fastcashflow.coverage import coverage_arrays, coverage_rates
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.statemodel import (
-    WAIVER_MODEL,
     compile_state_model,
     compile_state_model_with_duration,
     is_semi_markov,
+    resolve_state_model,
 )
 
 
@@ -1325,16 +1325,11 @@ def value(
                 assumptions.waiver_incidence_annual(
                     sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
-        # In-force state machine -- the StateModel composes the transition
-        # edges for the generic occupancy recursion (see
-        # fastcashflow.statemodel). The rates are on the sex x age x duration
-        # grid the kernel indexes. If the caller hasn't supplied a
-        # StateModel but a multi-state mechanic is in play (waiver
-        # incidence rate set or a non-zero ModelPoints.state code), fall
-        # back to the bundled WAIVER_MODEL -- the most common Korean
-        # protection topology. The explicit form is
-        # ``assumptions.state_model = STATE_MODELS["WAIVER"]``.
-        state_model = assumptions.state_model or WAIVER_MODEL
+        # In-force state machine -- see ``statemodel.resolve_state_model``
+        # for the fallback policy when ``assumptions.state_model`` is unset.
+        # The transition rates land on the sex x age x duration grid the
+        # kernel indexes.
+        state_model = resolve_state_model(assumptions)
         semi_markov = is_semi_markov(state_model)
         if semi_markov:
             # Phase (c) path -- a state declared ``duration_max > 0`` tracks

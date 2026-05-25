@@ -209,6 +209,17 @@ def is_semi_markov(model: StateModel) -> bool:
     return any(s.duration_max > 0 for s in model.states)
 
 
+def resolve_state_model(assumptions) -> "StateModel":
+    """Return the StateModel driving the projection for these assumptions.
+
+    Uses the caller-supplied ``assumptions.state_model`` when set, and falls
+    back to the bundled :data:`WAIVER_MODEL` -- the most common Korean
+    protection topology, active / waiver / paid-up. Centralising the
+    fallback keeps the engine and the projection layer from drifting.
+    """
+    return assumptions.state_model or WAIVER_MODEL
+
+
 def compile_state_model(
     model: StateModel, rates: dict[str, FloatArray]
 ) -> tuple[IntArray, IntArray, FloatArray, np.ndarray, int,

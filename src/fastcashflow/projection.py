@@ -44,10 +44,10 @@ from fastcashflow.coverage import coverage_arrays, coverage_rates
 from fastcashflow.curves import gamma_monthly_curve, inflation_index
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.statemodel import (
-    WAIVER_MODEL,
     compile_state_model,
     compile_state_model_with_duration,
     is_semi_markov,
+    resolve_state_model,
 )
 
 
@@ -520,12 +520,9 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     gamma_inflated_monthly = (gamma_monthly_curve(assumptions, n_time)
                               * inflation_index(assumptions, n_time))
 
-    # In-force state machine -- the StateModel composes the transition edges
-    # the generic occupancy recursion advances; the kernel carries no state
-    # set of its own. A product overrides it through assumptions.state_model;
-    # the unset default falls back to the bundled WAIVER_MODEL, the most
-    # common Korean protection topology.
-    state_model = assumptions.state_model or WAIVER_MODEL
+    # In-force state machine -- see ``statemodel.resolve_state_model`` for
+    # the fallback policy when ``assumptions.state_model`` is unset.
+    state_model = resolve_state_model(assumptions)
     start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
 
     if is_semi_markov(state_model):
