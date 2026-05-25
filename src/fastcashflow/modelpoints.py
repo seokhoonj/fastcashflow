@@ -414,6 +414,66 @@ class ModelPoints:
         return policies, coverages
 
 
+@dataclass(frozen=True, slots=True)
+class InforceState:
+    """Per-MP closing state from the prior reporting period.
+
+    The input layer for in-force / subsequent-measurement workflows. A
+    fresh ``inforce_state.csv`` is produced at each period close from the
+    company's policy administration system and joined onto the static
+    ``policies.csv`` to value the in-force at the next reporting date.
+
+    Fields:
+
+    * ``mp_id`` -- join key, matches the ``mp_id`` column on the policies
+      file.
+    * ``elapsed_months`` -- months since each contract's inception as of
+      the valuation date (= valuation date - inception date).
+    * ``count`` -- in-force at the valuation date (the user has already
+      scaled it down for past lapses); seats the projection.
+    * ``prior_csm`` -- closing CSM at month
+      ``elapsed_months - period_months``, the prior reporting date's
+      result carried into this period.
+    * ``lock_in_rate`` -- annual locked-in discount rate (Sec. B72(b)).
+      Scalar in v1; per-MP cohort-aware rates are a future extension.
+    """
+
+    mp_id: np.ndarray
+    elapsed_months: IntArray
+    count: FloatArray
+    prior_csm: FloatArray
+    lock_in_rate: float
+
+
+def apply_inforce_state(
+    model_points: "ModelPoints", state: InforceState,
+) -> "ModelPoints":
+    """Return a ``ModelPoints`` with the state's ``elapsed_months`` and
+    ``count`` substituted in.
+
+    The two inputs must already be aligned: row ``i`` of the model points
+    is the contract whose state is row ``i`` of ``state``. The expected
+    workflow is to sort both files by ``mp_id`` upstream; this helper
+    enforces only the length check (mp_id alignment is the user's
+    responsibility because a generic mp_id-keyed join would force a
+    polars / numpy reorganisation of every per-MP array on the
+    ``ModelPoints``).
+    """
+    from dataclasses import replace
+    n_mp = int(model_points.issue_age.shape[0])
+    if state.elapsed_months.shape[0] != n_mp:
+        raise ValueError(
+            f"state has {state.elapsed_months.shape[0]} rows; the "
+            f"model points have {n_mp}. Align the two files (sort both "
+            "by mp_id) before applying."
+        )
+    return replace(
+        model_points,
+        elapsed_months=np.asarray(state.elapsed_months, dtype=np.int64),
+        count=np.asarray(state.count, dtype=np.float64),
+    )
+
+
 def _coverage_label(assumptions, ctype, default):
     """The rider code of the first coverage of type ``ctype`` in the
     assumptions' riders master, or ``default`` if none is registered."""

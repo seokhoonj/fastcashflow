@@ -814,9 +814,66 @@ def load_sample_model_points() -> ModelPoints:
         return read_model_points(policies, assumptions, coverages=coverages)
 
 
+def load_sample_inforce_state() -> "InforceState":
+    """Read fastcashflow's bundled sample in-force state.
+
+    Aligned row-for-row with :func:`load_sample_model_points`. Pair with
+    :func:`apply_inforce_state` to fold ``elapsed_months`` and ``count``
+    into the sample model points, then call :func:`measure_in_force` or
+    :func:`value_in_force` with ``prior_csm`` and ``lock_in_rate`` taken
+    from the returned :class:`InforceState`.
+    """
+    base = resources.files("fastcashflow") / "sample_data"
+    with resources.as_file(base / "sample_inforce_state.csv") as path:
+        return read_inforce_state(path)
+
+
 # ---------------------------------------------------------------------------
 # Economic scenarios
 # ---------------------------------------------------------------------------
+
+def read_inforce_state(path) -> "InforceState":
+    """Read an in-force state file -- the per-MP closing state from the
+    prior reporting period.
+
+    The file has one row per model point with columns ``mp_id``,
+    ``elapsed_months``, ``count``, ``prior_csm`` and ``lock_in_rate``.
+    Reads ``.parquet``, ``.csv``, ``.xlsx`` or ``.feather`` / ``.arrow``
+    via :func:`_read_frame`.
+
+    Pair with :func:`apply_inforce_state` to join the state onto a
+    :class:`ModelPoints` built from the static policies file, then pass
+    the result to :func:`value_in_force` or :func:`measure_in_force` with
+    ``prior_csm`` and ``lock_in_rate`` taken from the returned
+    :class:`InforceState`.
+
+    ``lock_in_rate`` is required to be uniform across rows in v1 -- the
+    engine takes a scalar locked-in rate. Cohort-aware per-MP rates are
+    a future extension; for now the reader errors out if the column is
+    not constant rather than silently dropping the per-row detail.
+    """
+    from fastcashflow.modelpoints import InforceState
+    df = _read_frame(path)
+    needed = ("mp_id", "elapsed_months", "count", "prior_csm", "lock_in_rate")
+    for col in needed:
+        if col not in df.columns:
+            raise ValueError(
+                f"the in-force state file is missing required column {col!r}"
+            )
+    lock = df["lock_in_rate"].to_numpy().astype(np.float64)
+    if lock.size and not np.all(lock == lock[0]):
+        raise NotImplementedError(
+            "lock_in_rate must be uniform across rows in v1; per-MP "
+            "(cohort-aware) lock-in rates are a future extension"
+        )
+    return InforceState(
+        mp_id=df["mp_id"].to_numpy(),
+        elapsed_months=df["elapsed_months"].to_numpy().astype(np.int64),
+        count=df["count"].to_numpy().astype(np.float64),
+        prior_csm=df["prior_csm"].to_numpy().astype(np.float64),
+        lock_in_rate=float(lock[0]) if lock.size else 0.0,
+    )
+
 
 def read_scenarios(path) -> np.ndarray:
     """Read a stochastic scenario set from a file.

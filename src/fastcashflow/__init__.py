@@ -21,8 +21,10 @@ from fastcashflow.engine import (
 from fastcashflow.grouping import group
 from fastcashflow.io import (
     load_sample_assumptions,
+    load_sample_inforce_state,
     load_sample_model_points,
     read_assumptions,
+    read_inforce_state,
     read_model_points,
     read_scenarios,
     sample_data_dir,
@@ -33,7 +35,9 @@ from fastcashflow.modelpoints import (
     STATE_ACTIVE,
     STATE_PAIDUP,
     STATE_WAIVER,
+    InforceState,
     ModelPoints,
+    apply_inforce_state,
 )
 from fastcashflow.movement import (
     PAAPeriodMovement,
@@ -81,8 +85,10 @@ __all__ = [
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
     "read_model_points", "read_assumptions", "read_scenarios",
+    "read_inforce_state", "apply_inforce_state", "InforceState",
     "write_valuation", "value_file",
-    "load_sample_model_points", "load_sample_assumptions", "sample_data_dir",
+    "load_sample_model_points", "load_sample_assumptions",
+    "load_sample_inforce_state", "sample_data_dir",
     "describe_assumptions",
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
