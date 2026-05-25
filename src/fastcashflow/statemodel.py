@@ -112,7 +112,7 @@ class StateModel:
     ``states`` are the transient states; position fixes the kernel state
     index, and state 0 is the issue state. ``seating`` maps a model point's
     input contract state -- the ``ModelPoints.state`` code (``STATE_ACTIVE``,
-    ``STATE_WAIVER``, ``STATE_PAIDUP``) -- to the index of the state its
+    ``STATE_WAIVER``, ``STATE_PAID_UP``) -- to the index of the state its
     in-force is seated on at the valuation date: ``seating[code]`` is that
     index. It defaults to seating every model point on state 0.
 
@@ -168,7 +168,7 @@ class StateModel:
 # and is subject to mortality alone -- it does not lapse. The waiver-inception
 # transition moves active in-force onto the waiver state. ``seating`` seats
 # STATE_ACTIVE (code 0) on the active state and both STATE_WAIVER (1) and
-# STATE_PAIDUP (2) on the waiver state: a paid-up contract and a waiver
+# STATE_PAID_UP (2) on the waiver state: a paid-up contract and a waiver
 # contract have identical cash flows, differing only in the cause premiums
 # ceased.
 WAIVER_MODEL = StateModel(

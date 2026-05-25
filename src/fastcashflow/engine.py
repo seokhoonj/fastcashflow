@@ -508,8 +508,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           premium_state, benefit_state, start_state, "
             "issue_index, sex,")
     line(0, "           term_months, count, level_premium, single_premium,")
-    line(0, "           premium_term_months, premium_frequency, "
-            "annuity_frequency,")
+    line(0, "           premium_term_months, premium_frequency_months, "
+            "annuity_frequency_months,")
     line(0, "           coverage_kind, coverage_amount, coverage_offset, cov_rates, "
             "cov_risk,")
     line(0, "           cov_is_diagnosis, maturity_benefit, "
@@ -532,8 +532,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(4, "for mp in prange(n_mp):")
     line(8, "term = term_months[mp]")
     line(8, "premium_term = premium_term_months[mp]")
-    line(8, "prem_freq = premium_frequency[mp]")
-    line(8, "ann_freq = annuity_frequency[mp]")
+    line(8, "prem_freq = premium_frequency_months[mp]")
+    line(8, "ann_freq = annuity_frequency_months[mp]")
     line(8, "ridx = issue_index[mp]")
     line(8, "sx = sex[mp]")
     line(8, "cnt = count[mp]")
@@ -891,8 +891,8 @@ def _codegen_value_kernel_source_semi_markov(
     line(0, "@njit(parallel=True, cache=True)")
     line(0, "def kernel(edge_prob, start_state, issue_index, sex,")
     line(0, "           term_months, count, level_premium, single_premium,")
-    line(0, "           premium_term_months, premium_frequency, "
-            "annuity_frequency,")
+    line(0, "           premium_term_months, premium_frequency_months, "
+            "annuity_frequency_months,")
     line(0, "           coverage_kind, coverage_amount, coverage_offset, cov_rates, "
             "cov_risk,")
     line(0, "           cov_is_diagnosis, maturity_benefit, "
@@ -915,8 +915,8 @@ def _codegen_value_kernel_source_semi_markov(
     line(4, "for mp in prange(n_mp):")
     line(8, "term = term_months[mp]")
     line(8, "premium_term = premium_term_months[mp]")
-    line(8, "prem_freq = premium_frequency[mp]")
-    line(8, "ann_freq = annuity_frequency[mp]")
+    line(8, "prem_freq = premium_frequency_months[mp]")
+    line(8, "ann_freq = annuity_frequency_months[mp]")
     line(8, "ridx = issue_index[mp]")
     line(8, "sx = sex[mp]")
     line(8, "cnt = count[mp]")
@@ -1125,8 +1125,8 @@ def _get_value_kernel_codegen_semi_markov(
 
 @njit(parallel=True, cache=True)
 def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
-                         single_premium, premium_term_months, premium_frequency,
-                         annuity_frequency, coverage_kind, coverage_amount, coverage_offset,
+                         single_premium, premium_term_months, premium_frequency_months,
+                         annuity_frequency_months, coverage_kind, coverage_amount, coverage_offset,
                          cov_rates, cov_risk, cov_is_diagnosis,
                          maturity_benefit, annuity_payment,
                          alpha_pct, alpha_flat, beta_pct,
@@ -1155,8 +1155,8 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
     for mp in prange(n_mp):
         term = term_months[mp]
         premium_term = premium_term_months[mp]
-        prem_freq = premium_frequency[mp]
-        ann_freq = annuity_frequency[mp]
+        prem_freq = premium_frequency_months[mp]
+        ann_freq = annuity_frequency_months[mp]
         ridx = issue_index[mp]
         sx = sex[mp]
         cnt = count[mp]

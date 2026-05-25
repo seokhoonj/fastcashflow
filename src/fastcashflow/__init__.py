@@ -33,7 +33,7 @@ from fastcashflow.io import (
 )
 from fastcashflow.modelpoints import (
     STATE_ACTIVE,
-    STATE_PAIDUP,
+    STATE_PAID_UP,
     STATE_WAIVER,
     InforceState,
     ModelPoints,
@@ -93,6 +93,6 @@ __all__ = [
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "DEATH", "CoverageRate", "RISK_MORTALITY", "RISK_MORBIDITY",
-    "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAIDUP",
+    "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAID_UP",
     "StateModel", "State", "Transition", "STATE_MODELS",
 ]

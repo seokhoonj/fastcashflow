@@ -21,7 +21,7 @@ MAX_STATES = 8
 def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        premium_state, benefit_state, start_state, issue_index,
                        sex, term_months, count, level_premium, single_premium,
-                       premium_term_months, premium_frequency, annuity_frequency,
+                       premium_term_months, premium_frequency_months, annuity_frequency_months,
                        coverage_kind, coverage_amount, coverage_offset, cov_rates, cov_risk,
                        cov_is_diagnosis, maturity_benefit, annuity_payment,
                        disability_income, disability_benefit,
@@ -46,8 +46,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     n_edges = edge_from.shape[0]
     term = term_months[mp]
     premium_term = premium_term_months[mp]
-    prem_freq = premium_frequency[mp]
-    ann_freq = annuity_frequency[mp]
+    prem_freq = premium_frequency_months[mp]
+    ann_freq = annuity_frequency_months[mp]
     ridx = issue_index[mp]
     sx = sex[mp]
     cnt = count[mp]
@@ -174,7 +174,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
 def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               premium_state, benefit_state, start_state, issue_index, sex,
               term_months, count, level_premium, single_premium,
-              premium_term_months, premium_frequency, annuity_frequency,
+              premium_term_months, premium_frequency_months, annuity_frequency_months,
               coverage_kind, coverage_amount, coverage_offset, cov_rates, cov_risk,
               cov_is_diagnosis, maturity_benefit, annuity_payment,
               disability_income, disability_benefit,
@@ -212,8 +212,8 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_premium = cuda.to_device(level_premium)
     d_single = cuda.to_device(single_premium)
     d_premium_term = cuda.to_device(premium_term_months)
-    d_premium_freq = cuda.to_device(premium_frequency)
-    d_annuity_freq = cuda.to_device(annuity_frequency)
+    d_premium_freq = cuda.to_device(premium_frequency_months)
+    d_annuity_freq = cuda.to_device(annuity_frequency_months)
     d_cov_kind = cuda.to_device(coverage_kind)
     d_cov_amount = cuda.to_device(coverage_amount)
     d_cov_offset = cuda.to_device(coverage_offset)

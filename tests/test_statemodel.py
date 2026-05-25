@@ -11,7 +11,7 @@ import pytest
 
 from fastcashflow import (
     STATE_ACTIVE,
-    STATE_PAIDUP,
+    STATE_PAID_UP,
     STATE_WAIVER,
     STATE_MODELS,
     Assumptions,
@@ -140,7 +140,7 @@ def test_explicit_waiver_model_matches_default():
     )
     kw = dict(issue_age=45, death_benefit=50_000_000.0,
               level_premium=30_000.0, term_months=120)
-    for state in (STATE_ACTIVE, STATE_WAIVER, STATE_PAIDUP):
+    for state in (STATE_ACTIVE, STATE_WAIVER, STATE_PAID_UP):
         mp = ModelPoints.single(**kw, state=state)
         default = value(mp, _asmp(waiver_rate=0.03))
         custom = value(mp, _asmp(waiver_rate=0.03, state_model=rebuilt))
@@ -231,7 +231,7 @@ def test_three_state_model_runs():
 
     # A paid-up contract: identical to the default, which seats paid-up on
     # the waiver state -- both are mortality-only, premium-free.
-    paidup = ModelPoints.single(**kw, state=STATE_PAIDUP)
+    paidup = ModelPoints.single(**kw, state=STATE_PAID_UP)
     base = value(paidup, _asmp(waiver_rate=0.03))
     custom = value(paidup, _asmp(waiver_rate=0.03, state_model=three))
     for field in ("bel", "ra", "csm", "loss_component"):

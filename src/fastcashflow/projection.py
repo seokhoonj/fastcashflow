@@ -84,7 +84,7 @@ class Cashflows:
 def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
                     term_months, count, level_premium, single_premium,
-                    premium_term_months, premium_frequency, annuity_frequency,
+                    premium_term_months, premium_frequency_months, annuity_frequency_months,
                     coverage_kind, coverage_amount, coverage_offset, coverage_waiting,
                     coverage_reduction_end, coverage_reduction_factor, cov_rates,
                     cov_risk, cov_is_diagnosis, maturity_benefit,
@@ -129,8 +129,8 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
     for mp in prange(n_mp):
         term = term_months[mp]
         premium_term = premium_term_months[mp]   # months the premium is paid
-        prem_freq = premium_frequency[mp]        # months between premiums
-        ann_freq = annuity_frequency[mp]         # months between annuity payouts
+        prem_freq = premium_frequency_months[mp]        # months between premiums
+        ann_freq = annuity_frequency_months[mp]         # months between annuity payouts
         cnt = count[mp]
         c_start = coverage_offset[mp]
         c_end = coverage_offset[mp + 1]
@@ -265,7 +265,7 @@ def _project_kernel_semi_markov(
     n_states, state_duration_max, state_offset,
     premium_state, benefit_state, start_state,
     term_months, count, level_premium, single_premium,
-    premium_term_months, premium_frequency, annuity_frequency,
+    premium_term_months, premium_frequency_months, annuity_frequency_months,
     coverage_kind, coverage_amount, coverage_offset, coverage_waiting,
     coverage_reduction_end, coverage_reduction_factor, cov_rates,
     cov_risk, cov_is_diagnosis,
@@ -307,8 +307,8 @@ def _project_kernel_semi_markov(
     for mp in prange(n_mp):
         term = term_months[mp]
         premium_term = premium_term_months[mp]
-        prem_freq = premium_frequency[mp]
-        ann_freq = annuity_frequency[mp]
+        prem_freq = premium_frequency_months[mp]
+        ann_freq = annuity_frequency_months[mp]
         cnt = count[mp]
         c_start = coverage_offset[mp]
         c_end = coverage_offset[mp + 1]
