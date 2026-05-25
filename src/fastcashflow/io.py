@@ -31,7 +31,7 @@ import openpyxl
 import polars as pl
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions, CoverageRate
+from fastcashflow.assumptions import Assumptions, AssumptionsMetadata, CoverageRate
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
     RATE_DRIVEN_TYPES, RISK_MORBIDITY, RISK_MORTALITY, TYPE_ANNUITY,
@@ -527,7 +527,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             ra_confidence=scalar("ra_confidence", required=True),
             mortality_cv=scalar("mortality_cv", required=True),
             coverages=tuple(coverage_rates),
-            coverage_types=coverage_types or None,
+            metadata=AssumptionsMetadata(coverage_types=coverage_types or None),
             surrender_value_curve=surrender_curve,
         )
         for opt_col in ("morbidity_cv", "longevity_cv", "disability_cv",
@@ -661,7 +661,10 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
                 f"the coverages frame is missing required column {need!r}"
             )
     n_mp = pol.height
-    ctypes = assumptions.coverage_types or {}
+    ctypes = (
+        assumptions.metadata.coverage_types
+        if assumptions.metadata is not None else None
+    ) or {}
     code_to_kind = {r.code: i + 1 for i, r in enumerate(assumptions.coverages)}
 
     # Resolve every coverage row to its policy index and coverage type.

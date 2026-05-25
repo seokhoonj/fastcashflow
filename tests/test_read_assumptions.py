@@ -63,7 +63,7 @@ def test_riders_resolved():
     asmp = basis[("TERM_LIFE", "GA")]
     # ADB is rate-driven (death-type), so it joins the riders tuple too.
     assert [r.code for r in asmp.coverages] == ["INPATIENT", "CANCER", "ADB"]
-    assert asmp.coverage_types == {
+    assert asmp.metadata.coverage_types == {
         "DEATH_MAIN": "DEATH_MAIN",
         "INPATIENT":  "MORBIDITY",
         "CANCER":     "DIAGNOSIS",

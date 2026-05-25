@@ -506,7 +506,8 @@ def apply_inforce_state(
 def _coverage_label(assumptions, ctype, default):
     """The rider code of the first coverage of type ``ctype`` in the
     assumptions' riders master, or ``default`` if none is registered."""
-    registry = getattr(assumptions, "coverage_types", None) or {}
+    meta = getattr(assumptions, "metadata", None)
+    registry = (meta.coverage_types if meta is not None else None) or {}
     for code, t in registry.items():
         if t == ctype:
             return code

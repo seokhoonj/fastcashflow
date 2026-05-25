@@ -102,9 +102,33 @@ def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
     held flat across the year's twelve monthly steps; a within-year varying
     method (uniform distribution of decrements) cannot be expressed on that
     grid.
+
+    Algebraically equivalent to ``1 - (1 - q)**(1/12)`` but written via
+    ``-expm1(log1p(-q)/12)`` so that very small annual rates do not lose
+    precision to the ``1 - tiny`` catastrophic cancellation in float64.
     """
     annual = np.asarray(annual_rate, dtype=np.float64)
-    return 1.0 - (1.0 - annual) ** (1.0 / 12.0)
+    return -np.expm1(np.log1p(-annual) / 12.0)
+
+
+@dataclass(frozen=True, slots=True)
+class AssumptionsMetadata:
+    """Non-numeric labels carried alongside :class:`Assumptions`.
+
+    These fields do not enter the numerical projection. They live on the
+    side because the I/O layer (:mod:`fastcashflow.io`) needs them to
+    route long-form coverage rows, and the engine itself never reads them.
+    Keeping them out of :class:`Assumptions` makes the numerical surface
+    smaller and the I/O surface explicit.
+
+    Fields
+    ------
+    coverage_types
+        Map of every rider code to its type string -- the riders master.
+        ``None`` when built in code without an I/O round-trip.
+    """
+
+    coverage_types: dict[str, str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,10 +276,12 @@ class Assumptions:
         Their order fixes the integer coverage codes: entry ``i`` is code
         ``i + 1``; code 0 is the main-contract death coverage, driven by
         ``mortality_annual``. Empty for a death-only portfolio.
-    coverage_types :
-        Map of every rider code to its type string -- the riders master. Set
-        by :func:`read_assumptions` and used by :func:`read_model_points`
-        to route long-form coverage rows; ``None`` when built in code.
+    metadata :
+        Optional :class:`AssumptionsMetadata` carrying non-numeric labels
+        the I/O layer needs (the riders-master ``coverage_types`` map,
+        and similar future entries). The engine itself never reads it;
+        keeping these out of the main :class:`Assumptions` surface keeps
+        the numeric inputs distinct from the I/O bookkeeping.
     state_model :
         The product's in-force state machine -- a :class:`~fastcashflow.statemodel.StateModel`
         declaring the transient states, their transitions and which states
@@ -313,7 +339,7 @@ class Assumptions:
     fund_fee: float = 0.0
     settlement_pattern: FloatArray | None = None
     coverages: tuple[CoverageRate, ...] = ()
-    coverage_types: dict[str, str] | None = None
+    metadata: AssumptionsMetadata | None = None
     state_model: StateModel | None = None
 
     def __post_init__(self) -> None:
@@ -496,7 +522,7 @@ def _describe_assumptions_lines(
         sections.append((f"{marks[i]} {title}", field_lines(names)))
 
     riders = asmp.coverages
-    cov = asmp.coverage_types
+    cov = (asmp.metadata.coverage_types if asmp.metadata is not None else None) or {}
     coverage_lines: list[object] = []
     width = max((len(r.code) for r in riders), default=0)
     for r in riders:

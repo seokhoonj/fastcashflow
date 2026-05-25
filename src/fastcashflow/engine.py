@@ -770,6 +770,53 @@ def _get_value_kernel_codegen(n_states, edge_from, edge_to, edge_lump_sum,
     return kernel
 
 
+def clear_codegen_cache(*, prune_older_than_days: float | None = None) -> int:
+    """Remove generated kernel sources from the on-disk codegen cache.
+
+    Each unique state-machine topology persists a ``value_kernel_*.py``
+    (or ``value_kernel_sm_*.py``) source file plus its ``__pycache__``
+    sidecars. Over a session that explores many topologies these
+    accumulate. This helper sweeps them.
+
+    Parameters
+    ----------
+    prune_older_than_days
+        Only drop files whose mtime is older than this many days. ``None``
+        (the default) drops everything.
+
+    Returns
+    -------
+    int
+        Number of files removed (sources and ``__pycache__`` artefacts).
+
+    Notes
+    -----
+    Disk-only: modules already imported in the current process continue to
+    work via :data:`sys.modules`. Codegen for a still-needed topology will
+    transparently regenerate on the next call.
+    """
+    import time
+
+    cache_dir = _codegen_cache_dir()
+    cutoff = (
+        time.time() - 86400.0 * prune_older_than_days
+        if prune_older_than_days is not None else None
+    )
+
+    removed = 0
+    for entry in cache_dir.iterdir():
+        if entry.is_file() and entry.name.startswith("value_kernel_"):
+            if cutoff is None or entry.stat().st_mtime < cutoff:
+                entry.unlink()
+                removed += 1
+        elif entry.is_dir() and entry.name == "__pycache__":
+            for sub in entry.iterdir():
+                if cutoff is None or sub.stat().st_mtime < cutoff:
+                    sub.unlink()
+                    removed += 1
+    return removed
+
+
 # ---------------------------------------------------------------------------
 # Semi-Markov codegen (Phase (c) prototype -- cancer reincidence)
 # ---------------------------------------------------------------------------
@@ -1450,33 +1497,43 @@ def value(
                         annual_to_monthly(
                             assumptions.disability_recovery_annual(
                                 sg4, ag4, dg4, ic4, cg4)))
-            (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
-             premium_state, benefit_state,
-             state_duration_max) = compile_state_model_with_duration(
+            compiled = compile_state_model_with_duration(
                 state_model, rate_dict,
             )
+            edge_from = compiled.edge_from
+            edge_to = compiled.edge_to
+            edge_lump_sum = compiled.edge_lump_sum
+            n_states = compiled.n_states
+            premium_state = compiled.premium_state
+            benefit_state = compiled.benefit_state
+            state_duration_max = compiled.state_duration_max
             # compile_state_model_with_duration returns ``edge_prob`` shape
             # ``(n_edges, sex, age, year, max_D)``. Transpose to put the
             # (sex, age, year) lookup axes outermost and the edge / cohort
             # indices last, so a per-edge per-cohort access for one
             # (sex, age, year) stays in cache.
             edge_prob = np.ascontiguousarray(
-                np.transpose(edge_prob, (1, 2, 3, 0, 4)))
+                np.transpose(compiled.edge_prob, (1, 2, 3, 0, 4)))
         else:
-            (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
-             premium_state, benefit_state) = compile_state_model(
+            compiled = compile_state_model(
                 state_model,
                 {"mortality": mortality_grid,
                  "waiver_incidence": waiver_grid,
                  "lapse": lapse_grid},
             )
+            edge_from = compiled.edge_from
+            edge_to = compiled.edge_to
+            edge_lump_sum = compiled.edge_lump_sum
+            n_states = compiled.n_states
+            premium_state = compiled.premium_state
+            benefit_state = compiled.benefit_state
             # compile_state_model returns ``edge_prob`` with the edge axis
             # first -- (n_edges, sex, age, year). Transpose so the edge axis
             # is innermost: all edges for a given (sex, age, year) lookup
             # land in one cache line, ~25% faster on the multi-state hot
             # path.
             edge_prob = np.ascontiguousarray(
-                np.transpose(edge_prob, (1, 2, 3, 0)))
+                np.transpose(compiled.edge_prob, (1, 2, 3, 0)))
             state_duration_max = None
         start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
     cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.coverages)

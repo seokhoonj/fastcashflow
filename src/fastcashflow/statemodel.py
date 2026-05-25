@@ -37,6 +37,44 @@ from fastcashflow._typing import FloatArray, IntArray
 
 
 @dataclass(frozen=True, slots=True)
+class CompiledStateModel:
+    """Flat edge-tensor view of a compiled :class:`StateModel`.
+
+    Returned by both :func:`compile_state_model` (Markov) and
+    :func:`compile_state_model_with_duration` (semi-Markov). The two
+    paths share this shape; ``state_duration_max`` distinguishes them --
+    ``None`` from the Markov compile, an ``(n_states,)`` int array from
+    the semi-Markov compile (per-state cohort count, 1 for untracked
+    states).
+
+    Fields
+    ------
+    edge_from, edge_to
+        ``(n_edges,)`` int arrays of source and destination state indices.
+    edge_prob
+        Transition probabilities. Markov: ``(n_edges, *grid)``.
+        Semi-Markov: ``(n_edges, *grid, max_D)`` with cohort axis last.
+    edge_lump_sum
+        ``(n_edges,)`` bool, the lump-sum transitions.
+    n_states
+        The number of transient states.
+    premium_state, benefit_state
+        ``(n_states,)`` bool flags.
+    state_duration_max
+        ``None`` for Markov; ``(n_states,)`` int with the effective cohort
+        count per state for semi-Markov.
+    """
+    edge_from: IntArray
+    edge_to: IntArray
+    edge_prob: FloatArray
+    edge_lump_sum: np.ndarray
+    n_states: int
+    premium_state: np.ndarray
+    benefit_state: np.ndarray
+    state_duration_max: IntArray | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Transition:
     """One transition out of a state.
 
@@ -222,23 +260,14 @@ def resolve_state_model(assumptions) -> "StateModel":
 
 def compile_state_model(
     model: StateModel, rates: dict[str, FloatArray]
-) -> tuple[IntArray, IntArray, FloatArray, np.ndarray, int,
-           np.ndarray, np.ndarray]:
+) -> CompiledStateModel:
     """Compile a StateModel and its rates into the kernel edge arrays.
 
     ``rates`` maps each rate name a transition references to its evaluated
     array; the arrays broadcast to a common grid shape -- the kernels index
     its trailing axes (per model point, or per sex / age / duration).
 
-    Returns ``(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
-    premium_state, benefit_state)``:
-
-    * ``edge_from`` / ``edge_to`` -- ``(n_edges,)`` state indices.
-    * ``edge_prob`` -- ``(n_edges, *grid)`` transition probabilities.
-    * ``edge_lump_sum`` -- ``(n_edges,)`` bool, the lump-sum transitions.
-    * ``n_states`` -- the number of transient states.
-    * ``premium_state`` -- ``(n_states,)`` bool, the premium-paying states.
-    * ``benefit_state`` -- ``(n_states,)`` bool, the benefit-paying states.
+    Returns a :class:`CompiledStateModel` with ``state_duration_max=None``.
 
     Each state contributes one edge per transition with a transient
     destination -- carrying that transition's dependent probability -- plus
@@ -290,21 +319,21 @@ def compile_state_model(
         edge_prob.append(survive)
         edge_lump.append(False)
 
-    return (
-        np.array(edge_from, dtype=np.int64),
-        np.array(edge_to, dtype=np.int64),
-        np.ascontiguousarray(np.stack(edge_prob)),
-        np.array(edge_lump, dtype=np.bool_),
-        len(model.states),
-        np.array([s.premium for s in model.states], dtype=np.bool_),
-        np.array([s.benefit for s in model.states], dtype=np.bool_),
+    return CompiledStateModel(
+        edge_from=np.array(edge_from, dtype=np.int64),
+        edge_to=np.array(edge_to, dtype=np.int64),
+        edge_prob=np.ascontiguousarray(np.stack(edge_prob)),
+        edge_lump_sum=np.array(edge_lump, dtype=np.bool_),
+        n_states=len(model.states),
+        premium_state=np.array([s.premium for s in model.states], dtype=np.bool_),
+        benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),
+        state_duration_max=None,
     )
 
 
 def compile_state_model_with_duration(
     model: StateModel, rates: dict[str, FloatArray]
-) -> tuple[IntArray, IntArray, FloatArray, np.ndarray, int,
-           np.ndarray, np.ndarray, IntArray]:
+) -> CompiledStateModel:
     """Compile a semi-Markov StateModel into duration-aware kernel arrays.
 
     The cohort-aware counterpart of :func:`compile_state_model`. States
@@ -321,8 +350,7 @@ def compile_state_model_with_duration(
     dependent rate has an extra trailing axis of length ``duration_max``
     for the source state (cohort axis).
 
-    Returns ``(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
-    premium_state, benefit_state, state_duration_max)``:
+    Returns a :class:`CompiledStateModel`:
 
     * ``edge_from`` / ``edge_to`` -- ``(n_edges,)`` state indices.
       ``edge_to == edge_from`` marks the residual stay edge (cohort
@@ -482,13 +510,13 @@ def compile_state_model_with_duration(
     perm = (0,) + tuple(range(2, stacked.ndim)) + (1,)
     edge_prob = np.ascontiguousarray(np.transpose(stacked, perm))
 
-    return (
-        np.array(edge_from, dtype=np.int64),
-        np.array(edge_to, dtype=np.int64),
-        edge_prob,
-        np.array(edge_lump, dtype=np.bool_),
-        len(model.states),
-        np.array([s.premium for s in model.states], dtype=np.bool_),
-        np.array([s.benefit for s in model.states], dtype=np.bool_),
-        state_duration_max,
+    return CompiledStateModel(
+        edge_from=np.array(edge_from, dtype=np.int64),
+        edge_to=np.array(edge_to, dtype=np.int64),
+        edge_prob=edge_prob,
+        edge_lump_sum=np.array(edge_lump, dtype=np.bool_),
+        n_states=len(model.states),
+        premium_state=np.array([s.premium for s in model.states], dtype=np.bool_),
+        benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),
+        state_duration_max=state_duration_max,
     )

@@ -69,15 +69,15 @@ def test_compile_waiver_edges():
         "waiver_incidence": np.array([[0.05]]),
         "lapse": np.array([[0.02]]),
     }
-    (edge_from, edge_to, edge_prob, edge_lump_sum, n_states, premium_state,
-     benefit_state) = compile_state_model(STATE_MODELS["WAIVER"], rates)
-    assert n_states == 2
-    assert list(premium_state) == [True, False]
-    assert list(benefit_state) == [False, False]   # waiver model: no benefit
-    assert not edge_lump_sum.any()                 # ... and no lump sums
+    compiled = compile_state_model(STATE_MODELS["WAIVER"], rates)
+    assert compiled.n_states == 2
+    assert list(compiled.premium_state) == [True, False]
+    assert list(compiled.benefit_state) == [False, False]   # waiver: no benefit
+    assert not compiled.edge_lump_sum.any()                 # ... no lump sums
 
-    prob = {(int(f), int(t)): float(edge_prob[i, 0, 0])
-            for i, (f, t) in enumerate(zip(edge_from, edge_to))}
+    prob = {(int(f), int(t)): float(compiled.edge_prob[i, 0, 0])
+            for i, (f, t) in enumerate(
+                zip(compiled.edge_from, compiled.edge_to))}
     # active: survive death, then a fraction takes waiver, the rest survive
     # lapse too -- the standard ordered multiple-decrement composition.
     assert np.isclose(prob[(0, 1)], 0.99 * 0.05)

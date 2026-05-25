@@ -568,11 +568,15 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
                     annual_to_monthly(
                         assumptions.disability_recovery_annual(
                             sex_4d, age_4d, dur_4d, ic_4d, coh_4d)))
-        (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
-         premium_state, benefit_state,
-         state_duration_max) = compile_state_model_with_duration(
-            state_model, rate_dict,
-        )
+        compiled = compile_state_model_with_duration(state_model, rate_dict)
+        edge_from = compiled.edge_from
+        edge_to = compiled.edge_to
+        edge_prob = compiled.edge_prob
+        edge_lump_sum = compiled.edge_lump_sum
+        n_states = compiled.n_states
+        premium_state = compiled.premium_state
+        benefit_state = compiled.benefit_state
+        state_duration_max = compiled.state_duration_max
         # compile_state_model_with_duration returns ``edge_prob`` shape
         # ``(n_edges, n_mp, n_year, max_D)`` -- already in the layout the
         # detailed kernel reads (edge axis outer, cohort axis inner).
@@ -611,12 +615,18 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             n_time,
         )
     else:
-        (edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
-         premium_state, benefit_state) = compile_state_model(
+        compiled = compile_state_model(
             state_model,
             {"mortality": mortality, "waiver_incidence": waiver,
              "lapse": lapse},
         )
+        edge_from = compiled.edge_from
+        edge_to = compiled.edge_to
+        edge_prob = compiled.edge_prob
+        edge_lump_sum = compiled.edge_lump_sum
+        n_states = compiled.n_states
+        premium_state = compiled.premium_state
+        benefit_state = compiled.benefit_state
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
          annuity_cf, disability_cf, maturity_cf) = _project_kernel(
             mortality,

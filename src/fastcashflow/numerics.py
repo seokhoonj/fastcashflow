@@ -53,19 +53,55 @@ def _settlement_lic(
 
 
 def _settlement_factor(
-    settlement_pattern: FloatArray, monthly_rate: float
-) -> float:
+    settlement_pattern: FloatArray, monthly_rate: float | FloatArray
+) -> float | FloatArray:
     """Present-value factor for a claim spread over a settlement pattern.
 
     The present value, at the month a claim is incurred, of paying a unit
     claim over ``settlement_pattern`` -- discounted at ``monthly_rate``.
     A pattern that pays everything immediately gives 1.
+
+    ``monthly_rate`` may be either:
+
+    * a scalar -- the run-off is discounted at a flat per-month rate and
+      the result is a single scalar factor (the legacy behaviour, kept
+      for callers that need one number);
+    * a per-month rate curve of shape ``(n_time,)`` -- the result is an
+      ``(n_time,)`` factor whose element ``t`` discounts the run-off
+      starting at month ``t`` using ``monthly_rate[t:]``. The tail past
+      ``n_time`` is held flat at the last curve value, so a settlement
+      pattern with more lags than the curve still terminates.
+
+    The curve form is the right reference under a discount curve (Sec. 40
+    / B71 -- the rate at the month of incurrence). Callers may continue
+    to pass a scalar where a representative single factor is desired (the
+    fused fast path, in particular, multiplies a per-policy coverage
+    amount that is not month-indexed).
     """
     pattern = np.asarray(settlement_pattern, dtype=np.float64)
     if not np.isclose(pattern.sum(), 1.0):
         raise ValueError(f"settlement_pattern must sum to 1, got {pattern.sum()}")
-    months = np.arange(pattern.shape[0])
-    return float(np.sum(pattern / (1.0 + monthly_rate) ** months))
+
+    rate = np.asarray(monthly_rate, dtype=np.float64)
+    n_pat = pattern.shape[0]
+    if rate.ndim == 0:
+        months = np.arange(n_pat)
+        return float(np.sum(pattern / (1.0 + float(rate)) ** months))
+
+    if rate.ndim != 1:
+        raise ValueError(
+            f"monthly_rate must be a scalar or a 1-D curve, got shape {rate.shape}"
+        )
+    n_time = rate.shape[0]
+    # Hold the curve flat past its end so the run-off can extend into the
+    # tail when the pattern is longer than ``n_time - t``.
+    ext = np.concatenate([rate, np.full(n_pat - 1, rate[-1])])
+    # ``disc[t, k]`` is the cumulative discount from month ``t`` to ``t + k``,
+    # built one lag at a time so the operation stays vectorised over ``t``.
+    disc = np.ones((n_time, n_pat))
+    for k in range(1, n_pat):
+        disc[:, k] = disc[:, k - 1] / (1.0 + ext[k - 1 : k - 1 + n_time])
+    return (disc * pattern[None, :]).sum(axis=1)
 
 
 # Coefficients of Acklam's rational approximation of the standard-normal
@@ -83,9 +119,12 @@ _ACKLAM_D = (7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00
 def _norm_ppf(p: float) -> float:
     """Standard-normal inverse CDF (quantile function).
 
-    Rational-approximation algorithm (Acklam), accuracy ~1e-9. Implemented
-    from the published algorithm; avoids a scipy dependency for a value the
-    engine needs only once per run.
+    Rational-approximation algorithm (Acklam) followed by one Halley step.
+    Acklam alone is ~1e-9, which degrades in the extreme tails (p < 1e-7
+    or symmetric upper); the Halley refinement on the standard-normal CDF
+    -- accessible via :func:`math.erfc` -- restores essentially full
+    double precision across the whole open interval. Avoids a scipy
+    dependency for a value the engine needs only once per run.
     """
     if not 0.0 < p < 1.0:
         raise ValueError("p must be in the open interval (0, 1)")
@@ -96,16 +135,30 @@ def _norm_ppf(p: float) -> float:
 
     if p < p_low:
         q = math.sqrt(-2.0 * math.log(p))
-        return ((((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5])
-                / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0))
-    if p <= p_high:
+        x = ((((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5])
+             / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0))
+    elif p <= p_high:
         q = p - 0.5
         r = q * q
-        return ((((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5]) * q
-                / (((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1.0))
-    q = math.sqrt(-2.0 * math.log(1.0 - p))
-    return (-(((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5])
-            / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0))
+        x = ((((((a[0]*r + a[1])*r + a[2])*r + a[3])*r + a[4])*r + a[5]) * q
+             / (((((b[0]*r + b[1])*r + b[2])*r + b[3])*r + b[4])*r + 1.0))
+    else:
+        q = math.sqrt(-2.0 * math.log(1.0 - p))
+        x = (-(((((c[0]*q + c[1])*q + c[2])*q + c[3])*q + c[4])*q + c[5])
+             / ((((d[0]*q + d[1])*q + d[2])*q + d[3])*q + 1.0))
+
+    # Halley step: with f(x) = Phi(x) - p, f'(x) = phi(x), f''(x) = -x phi(x),
+    # the update simplifies to x - err / (phi + 0.5 * x * err) where
+    # err = Phi(x) - p. Compute err directly from erfc on the side that
+    # keeps the small quantity small -- avoids the catastrophic 1 - tiny
+    # cancellation that would otherwise wreck precision in the upper tail.
+    sqrt2 = math.sqrt(2.0)
+    if p < 0.5:
+        err = 0.5 * math.erfc(-x / sqrt2) - p
+    else:
+        err = (1.0 - p) - 0.5 * math.erfc(x / sqrt2)
+    pdf = math.exp(-0.5 * x * x) / math.sqrt(2.0 * math.pi)
+    return x - err / (pdf + 0.5 * x * err)
 
 
 def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
@@ -218,7 +271,10 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
             interest = csm[mp, t - 1] * monthly_rate[t - 1]
             accreted = csm[mp, t - 1] + interest
             cu_remaining = cu_tail[t - 1]
-            if cu_remaining > 0.0:
+            # Epsilon (not exact > 0) so the rounding residual of a
+            # reverse cumulative sum near the end of the run-off cannot
+            # produce a denormal ``cu_remaining`` and a runaway release.
+            if cu_remaining > 1e-12:
                 rel = accreted * coverage_units[mp, t - 1] / cu_remaining
             else:
                 rel = 0.0

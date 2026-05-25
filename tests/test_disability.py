@@ -83,13 +83,13 @@ def test_compile_marks_benefit_state_and_lump_sum():
     rates = {"mortality": np.array([[0.01]]),
              "waiver_incidence": np.array([[0.05]]),
              "lapse": np.array([[0.0]])}
-    edge_from, edge_to, _, edge_lump_sum, n_states, premium, benefit = (
-        compile_state_model(_disability_model(), rates))
-    assert n_states == 2
-    assert list(premium) == [True, False]    # active pays premium
-    assert list(benefit) == [False, True]    # disabled pays a benefit
+    compiled = compile_state_model(_disability_model(), rates)
+    assert compiled.n_states == 2
+    assert list(compiled.premium_state) == [True, False]    # active pays premium
+    assert list(compiled.benefit_state) == [False, True]    # disabled pays a benefit
     lump = {(int(f), int(t)): bool(s)
-            for f, t, s in zip(edge_from, edge_to, edge_lump_sum)}
+            for f, t, s in zip(compiled.edge_from, compiled.edge_to,
+                               compiled.edge_lump_sum)}
     assert lump[(0, 1)] is True              # active -> disabled carries it
     assert lump[(0, 0)] is False             # the stay edges do not
     assert lump[(1, 1)] is False
