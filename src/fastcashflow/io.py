@@ -32,7 +32,9 @@ import openpyxl
 import polars as pl
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions, AssumptionsMetadata, CoverageRate
+from fastcashflow.assumptions import (
+    Assumptions, AssumptionsMetadata, CoverageRate, ExpenseRow,
+)
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
     RATE_DRIVEN_TYPES, RISK_MORBIDITY, RISK_MORTALITY, TYPE_ANNUITY,
@@ -256,6 +258,29 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
     return rate
 
 
+def _read_expense_tables(ws) -> dict[str, tuple[ExpenseRow, ...]]:
+    """Read the optional ``expense_tables`` sheet.
+
+    Each row is one ``ExpenseRow`` -- the row-form expense ledger the
+    engine dispatches on. Columns: ``table_id``, ``expense_type``,
+    ``basis``, ``value``, ``inflation_rate`` (last optional, default 0).
+    The same ``table_id`` may span multiple rows (an acquisition row
+    plus a maintenance row, plus a claim_handling row, ...). Returns
+    ``{table_id: tuple[ExpenseRow, ...]}`` for the segments-side
+    ``expense_table`` lookup to consume.
+    """
+    by_id: dict[str, list[ExpenseRow]] = {}
+    for r in _sheet_dicts(ws):
+        tid = str(r["table_id"]).strip()
+        by_id.setdefault(tid, []).append(ExpenseRow(
+            expense_type=str(r["expense_type"]).strip(),
+            basis=str(r["basis"]).strip(),
+            value=float(r["value"]),
+            inflation_rate=float(r.get("inflation_rate") or 0.0),
+        ))
+    return {tid: tuple(rows) for tid, rows in by_id.items()}
+
+
 def _read_ae_factors(ws):
     """Read the optional ``ae_factors`` sheet.
 
@@ -454,6 +479,9 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
         "surrender_value_tables",
         lambda w: _axis_tables(w, "duration_month", value_col="factor"),
     )
+    # Expense ledger -- row form. Optional; per-segment ``expense_table``
+    # in the segments sheet selects which table_id to attach.
+    expense_t = optional("expense_tables", _read_expense_tables)
 
     defaults: dict = {}
     segments: list = []
@@ -576,6 +604,21 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             v = scalar(opt_col)
             if v is not None:
                 kwargs[opt_col] = v
+        # Optional row-form expense ledger -- when ``expense_table`` is
+        # set on the segments row (and the workbook ships an
+        # ``expense_tables`` sheet) the engine dispatches off the row
+        # form; the legacy alpha / beta / gamma / expense_inflation
+        # scalars are zeroed so the Assumptions object reflects the
+        # actual dispatch unambiguously. When ``expense_table`` is blank
+        # the legacy path stays live, exactly as before.
+        expense_rows = lookup(expense_t, "expense_table", optional_ref=True)
+        if expense_rows is not None:
+            kwargs["expense_rows"] = expense_rows
+            kwargs["alpha_pct"] = 0.0
+            kwargs["alpha_flat"] = 0.0
+            kwargs["beta_pct"] = 0.0
+            kwargs["gamma_flat"] = 0.0
+            kwargs["expense_inflation"] = 0.0
         method = cell("ra_method")
         if method is not None:
             kwargs["ra_method"] = str(method).strip()

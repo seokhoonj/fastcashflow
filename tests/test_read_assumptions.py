@@ -31,11 +31,16 @@ def test_defaults_inherited():
     assert ga.ra_confidence == 0.75 and fc.ra_confidence == 0.75
     assert ga.mortality_cv == 0.10 and fc.mortality_cv == 0.10
     assert ga.morbidity_cv == 0.12 and fc.morbidity_cv == 0.12
-    # shared economic / maintenance tables -- inherited identically
+    # Shared economic curve -- inherited identically.
     assert ga.discount_annual == 0.03 and fc.discount_annual == 0.03
-    assert ga.expense_inflation == 0.02 and fc.expense_inflation == 0.02
-    assert ga.gamma_flat == 60_000.0
-    assert fc.gamma_flat == 60_000.0
+    # Shared maintenance row in both segments' expense ledgers --
+    # 60_000 per-policy with 2% inflation.
+    for asmp in (ga, fc):
+        maint = [r for r in asmp.expense_rows
+                 if r.basis == "per_policy_monthly"]
+        assert len(maint) == 1
+        assert maint[0].value == 60_000.0
+        assert maint[0].inflation_rate == 0.02
 
 
 def test_channel_segmented_lapse():
@@ -49,11 +54,39 @@ def test_channel_segmented_lapse():
     assert np.all(ga_lapse > fc_lapse)
 
 
-def test_per_segment_scalar():
-    """``alpha_flat`` is filled per segment row (GA vs FC commission)."""
+def test_per_segment_acquisition_amount():
+    """Acquisition cost differs per segment row (GA vs FC commission) --
+    each segment points to its own expense_table_id in the
+    ``expense_tables`` sheet."""
     basis = load_sample_assumptions()
-    assert basis[("TERM_LIFE", "GA")].alpha_flat == 150_000.0
-    assert basis[("TERM_LIFE", "FC")].alpha_flat == 80_000.0
+    for (key, expected_acq) in (
+        (("TERM_LIFE", "GA"), 150_000.0),
+        (("TERM_LIFE", "FC"),  80_000.0),
+        (("HEALTH",    "FC"), 100_000.0),
+        (("HEALTH",    "GA"), 180_000.0),
+        (("HEALTH",    "TM"),  40_000.0),
+        (("WHOLE_LIFE","FC"), 200_000.0),
+        (("WHOLE_LIFE","GA"), 350_000.0),
+    ):
+        rows = basis[key].expense_rows
+        acq = [r for r in rows if r.basis == "per_policy_init"]
+        assert len(acq) == 1, f"{key}: expected one per_policy_init row"
+        assert acq[0].value == expected_acq, (key, expected_acq, acq[0].value)
+
+
+def test_expense_table_zeroes_legacy_scalars():
+    """When the segments row carries an ``expense_table``, the loader
+    zeroes the legacy alpha / beta / gamma / expense_inflation scalars
+    so the Assumptions object cannot be misread as having both routes
+    live simultaneously."""
+    basis = load_sample_assumptions()
+    for asmp in basis.values():
+        assert asmp.alpha_pct == 0.0
+        assert asmp.alpha_flat == 0.0
+        assert asmp.beta_pct == 0.0
+        assert asmp.gamma_flat == 0.0
+        assert asmp.expense_inflation == 0.0
+        assert asmp.expense_rows                       # populated
 
 
 def test_riders_resolved():
