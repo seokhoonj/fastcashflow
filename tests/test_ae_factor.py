@@ -24,10 +24,10 @@ def _build(path: Path, *, ae_rows=None):
     seg = wb.create_sheet("segments")
     seg.append(["product", "channel", "mortality_table", "lapse_table",
                 "discount_table", "inflation_table",
-                "alpha_flat", "ra_confidence", "mortality_cv",
+                "ra_confidence", "mortality_cv",
                 "morbidity_cv"])
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
-                100_000, 0.75, 0.10, 0.10])
+                0.75, 0.10, 0.10])
 
     rd = wb.create_sheet("coverages")
     rd.append(["coverage_code", "coverage_name", "benefit_pattern", "rate_table"])
@@ -155,10 +155,10 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
     seg = wb.create_sheet("segments")
     seg.append(["product", "channel", "mortality_table", "lapse_table",
                 "discount_table", "inflation_table",
-                "alpha_flat", "ra_confidence", "mortality_cv",
+                "ra_confidence", "mortality_cv",
                 "morbidity_cv", "mortality_age_shift"])
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
-                100_000, 0.75, 0.10, 0.10, 5])
+                0.75, 0.10, 0.10, 5])
     rd = wb.create_sheet("coverages")
     rd.append(["coverage_code", "coverage_name", "benefit_pattern", "rate_table"])
     rd.append(["DEATH_MAIN", "main death", "DEATH_MAIN", None])
