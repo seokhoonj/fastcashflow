@@ -14,8 +14,11 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import EXPENSE_BASES, ExpenseItem, derive_expense_components
+from fastcashflow import EXPENSE_BASES, ExpenseItem, derive_expense_components, CoverageRate
 
+
+
+PATTERNS = {"DEATH": fcf.BenefitPattern.DEATH}
 
 def test_empty_rows_emit_zero_primitives():
     """Empty rows: every primitive is zero across the projection horizon."""
@@ -128,9 +131,10 @@ def _term_life_mp():
     """A single-policy fixture exercising the value() and measure() paths."""
     return fcf.ModelPoints.single(
         issue_age=40,
-        death_benefit=100_000_000.0,
+        benefits={0: 100_000_000.0},
         level_premium=50_000.0,
         term_months=120,
+        benefit_patterns=PATTERNS,
     )
 
 
@@ -154,6 +158,7 @@ def _basis_rows():
             ExpenseItem("collection",   "beta_pro_rata",         0.02),
             ExpenseItem("maintenance",  "gamma_fixed",       36_000.0),
         ),
+        coverages=(CoverageRate("DEATH", mort),),
     )
 
 

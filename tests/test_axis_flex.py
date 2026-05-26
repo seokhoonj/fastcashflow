@@ -13,9 +13,12 @@ import numpy as np
 import openpyxl
 import pytest
 
-from fastcashflow import Assumptions
+from fastcashflow import BenefitPattern, Assumptions, CoverageRate
 from fastcashflow.io import _flex_rate_table
 
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 def _sheet(rows):
     """Build a worksheet from a list of (header, row, row, ...) tuples."""
@@ -226,6 +229,7 @@ def test_legacy_three_arg_user_lambda_is_adapted():
         discount_annual=0.03,
         ra_confidence=0.75,
         mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", lambda sex, age, dur: np.full(dur.shape, 0.001)),),
     )
     # The adapter accepts the new 5-arg engine call without error.
     s = np.array([0]); a = np.array([40]); d = np.array([0])
@@ -250,6 +254,7 @@ def test_legacy_four_arg_duration_lambda_is_adapted():
         discount_annual=0.03,
         ra_confidence=0.75,
         mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, 0.001)),),
     )
     s = np.array([0, 0]); a = np.array([40, 40]); d = np.array([0, 0])
     c = np.array([0, 0])

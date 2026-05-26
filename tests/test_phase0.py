@@ -6,7 +6,10 @@ This is the engine's correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure, value
+from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, measure, value, CoverageRate
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 # Standard-normal 75th percentile -- a known mathematical constant, used so
 # the RA check does not depend on the engine's own quantile code.
@@ -19,7 +22,12 @@ def _annual(m):
 
 
 def _assumptions(**overrides) -> Assumptions:
-    """Build an Assumptions with simple defaults, overridable per test."""
+    """Build an Assumptions with simple defaults, overridable per test.
+
+    The DEATH coverage's payout rate is wired to the same callable as
+    ``mortality_annual`` so an override of one is picked up by both --
+    the natural convention for a death-claim contract.
+    """
     base = dict(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
@@ -28,6 +36,7 @@ def _assumptions(**overrides) -> Assumptions:
         mortality_cv=0.10,
     )
     base.update(overrides)
+    base["coverages"] = (CoverageRate("DEATH", base["mortality_annual"]),)
     return Assumptions(**base)
 
 
@@ -38,8 +47,9 @@ def test_hand_calculation():
 
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=death_benefit,
+            issue_age=40, benefits={0: death_benefit},
             level_premium=premium, term_months=term,
+            benefit_patterns=PATTERNS,
         ),
         _assumptions(),
     )
@@ -81,8 +91,9 @@ def test_onerous_contract():
     """Premium far too low -> onerous -> CSM floored at 0, loss component > 0."""
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=1_000_000.0,
+            issue_age=40, benefits={0: 1_000_000.0},
             level_premium=100.0, term_months=12,
+            benefit_patterns=PATTERNS,
         ),
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05))
@@ -96,8 +107,9 @@ def test_csm_fully_releases():
     """A profitable contract's CSM must run off to ~0 by the end of term."""
     res = measure(
         ModelPoints.single(
-            issue_age=35, death_benefit=50_000_000.0,
+            issue_age=35, benefits={0: 50_000_000.0},
             level_premium=80_000.0, term_months=60,
+            benefit_patterns=PATTERNS,
         ),
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
@@ -117,7 +129,7 @@ def test_count_scales_linearly():
     non-zero acquisition, maintenance and single premium exercise the flat
     cash flow terms that do not ride the in-force amount.
     """
-    kw = dict(issue_age=40, death_benefit=1_000_000.0, level_premium=12_000.0,
+    kw = dict(issue_age=40, benefits={0: 1_000_000.0}, level_premium=12_000.0,
               term_months=24, single_premium=5_000.0)
     asmp = _assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
@@ -129,8 +141,8 @@ def test_count_scales_linearly():
     )
     n = 1000.0
 
-    one = measure(ModelPoints.single(**kw), asmp)
-    many = measure(ModelPoints.single(**kw, count=n), asmp)
+    one = measure(ModelPoints.single(**kw, benefit_patterns=PATTERNS), asmp)
+    many = measure(ModelPoints.single(**kw, count=n, benefit_patterns=PATTERNS), asmp)
     assert many.csm[0, 0] > 0.0          # profitable contract -- the CSM scales
     for field in ("bel", "ra", "csm"):
         assert np.isclose(getattr(many, field)[0, 0],
@@ -138,8 +150,8 @@ def test_count_scales_linearly():
     assert np.isclose(many.cashflows.inforce[0, 0], n)
 
     # the fused fast path scales identically
-    v_one = value(ModelPoints.single(**kw), asmp)
-    v_many = value(ModelPoints.single(**kw, count=n), asmp)
+    v_one = value(ModelPoints.single(**kw, benefit_patterns=PATTERNS), asmp)
+    v_many = value(ModelPoints.single(**kw, count=n, benefit_patterns=PATTERNS), asmp)
     for field in ("bel", "ra", "csm"):
         assert np.isclose(getattr(v_many, field)[0],
                           n * getattr(v_one, field)[0])

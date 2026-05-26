@@ -9,7 +9,7 @@ by hand against a small two-year contract.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure, value
+from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure, value, CoverageRate
 from fastcashflow.curves import discount_monthly_curve
 
 
@@ -25,6 +25,7 @@ def _flat_asmp(**overrides) -> Assumptions:
         ),
         ra_confidence=0.75,
         mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", lambda s, ia, d: np.zeros_like(s, dtype=np.float64)),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -80,7 +81,7 @@ def test_bel_with_curve_discount_matches_hand_calc():
         ),
         discount_annual=np.array([0.03, 0.05]),    # 3% year 0, 5% year 1
     )
-    mp = ModelPoints.single(issue_age=40, death_benefit=0.0,
+    mp = ModelPoints.single(issue_age=40, benefits={0: 0.0},
                             level_premium=0.0, term_months=24, count=1)
     m = measure(mp, asmp)
 
@@ -106,7 +107,7 @@ def test_bel_value_matches_measure_with_curve_discount():
         ),
         discount_annual=np.array([0.03, 0.05, 0.06]),
     )
-    mp = ModelPoints.single(issue_age=40, death_benefit=100_000.0,
+    mp = ModelPoints.single(issue_age=40, benefits={0: 100_000.0},
                             level_premium=1_000.0, term_months=36, count=1)
     m = measure(mp, asmp).bel[0, 0]
     v = value(mp, asmp).bel[0]
@@ -124,7 +125,7 @@ def test_csm_accretes_at_curve_rate():
         ),
         discount_annual=np.array([0.03, 0.10]),   # step UP at year 1
     )
-    mp = ModelPoints.single(issue_age=40, death_benefit=0.0,
+    mp = ModelPoints.single(issue_age=40, benefits={0: 0.0},
                             level_premium=5_000.0, term_months=24, count=1)
     m = measure(mp, asmp)
     csm_open = m.csm[0, 0]

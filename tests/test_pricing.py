@@ -6,8 +6,11 @@ the target it was solved for.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, solve_premium, value
+from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, solve_premium, value, CoverageRate
 
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 def _annual(m):
     """Convert a monthly rate to the equivalent annual rate the engine expects."""
@@ -26,6 +29,7 @@ def _assumptions() -> Assumptions:
         ),
         ra_confidence=0.80,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0008))),),
     )
 
 
@@ -33,18 +37,22 @@ def _portfolio(n: int = 300) -> ModelPoints:
     rng = np.random.default_rng(8)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        death_benefit=rng.integers(20, 100, n) * 1_000_000,
+        benefits={0: rng.integers(20, 100, n) * 1_000_000},
         level_premium=np.zeros(n),          # ignored by solve_premium
         term_months=rng.integers(60, 180, n),
+        benefit_patterns=PATTERNS,
     )
 
 
 def _priced(mps: ModelPoints, premium) -> ModelPoints:
     return ModelPoints(
         issue_age=mps.issue_age,
-        death_benefit=mps.death_benefit,
+        coverage_kind=mps.coverage_kind,
+        coverage_amount=mps.coverage_amount,
+        coverage_offset=mps.coverage_offset,
         level_premium=premium,
         term_months=mps.term_months,
+        benefit_patterns=mps.benefit_patterns,
     )
 
 

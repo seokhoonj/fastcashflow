@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow.coverage import BenefitPattern, DEATH, MAIN_DEATH_CODE
+from fastcashflow.coverage import BenefitPattern
 
 # Contract states -- a model point's in-force state at the valuation date.
 # ACTIVE is the ordinary premium-paying contract. WAIVER (premium waived on a
@@ -41,8 +41,9 @@ class ModelPoints:
     :mod:`fastcashflow.coverage`), held in CSR (Compressed Sparse Row) form
     so the kernels loop them generically -- new benefit types add no fields:
 
-    * ``coverage_kind[k]``   -- the coverage code (0 = main-contract death, 1..
-      the rate-driven coverages the assumptions register).
+    * ``coverage_kind[k]``   -- the coverage code; an integer index into
+      :attr:`Assumptions.coverages` (entry ``i`` of that tuple lives at
+      code ``i``). No code is reserved.
     * ``coverage_amount[k]`` -- the benefit amount of coverage ``k``.
     * ``coverage_offset``    -- ``(n_mp+1,)``; policy ``mp``'s coverages are the
       slice ``[coverage_offset[mp] : coverage_offset[mp+1]]``.
@@ -53,12 +54,12 @@ class ModelPoints:
     arrays aligned with ``coverage_kind`` and default to off -- no waiting, full
     benefit.
 
-    The coverage list is built one of three ways. ``death_benefit`` is the
-    shortcut for the common case -- one death coverage per policy with a
-    non-zero benefit. ``benefits`` is the general form: a ``{kind: amount
-    array}`` map covering any mix of kinds. Or pass the CSR arrays
-    ``coverage_kind`` / ``coverage_amount`` / ``coverage_offset`` directly. Whichever is
-    used, ``death_benefit`` stays a readable field.
+    The coverage list is built one of two ways. ``benefits`` is the general
+    form: a ``{kind: amount array}`` map keyed by coverage code (the index
+    into :attr:`Assumptions.coverages`). Or pass the CSR arrays
+    ``coverage_kind`` / ``coverage_amount`` / ``coverage_offset`` directly --
+    the preferred form for a portfolio with per-coverage benefit rules
+    (waiting / reduction periods).
 
     Premiums and survival benefits stay as plain fields -- they do not
     proliferate the way claim benefits do:
@@ -82,7 +83,6 @@ class ModelPoints:
     issue_age: FloatArray          # attained age at issue, in years
     level_premium: FloatArray      # premium charged each payment occurrence
     term_months: IntArray          # coverage term, in months
-    death_benefit: FloatArray | None = None      # shortcut -> a death coverage
     benefits: dict[int, FloatArray] | None = None  # general {kind: amount}
     maturity_benefit: FloatArray | None = None   # benefit on survival to term
     annuity_payment: FloatArray | None = None    # survival income, each month
@@ -135,7 +135,7 @@ class ModelPoints:
     # BenefitPattern}``. The dict is the company catalogue (the
     # ``benefit_patterns.csv`` file): every code a contract may attach is
     # registered here with its kernel-routing pattern (DEATH / MORBIDITY /
-    # DIAGNOSIS / ANNUITY / MATURITY / DEATH_MAIN). The engine derives
+    # DIAGNOSIS / ANNUITY / MATURITY). The engine derives
     # ``(is_diagnosis, risk)`` from the pattern via
     # :func:`fastcashflow.coverage.pattern_attrs`; the I/O long-form reader
     # routes coverage rows by it (annuity / maturity into scalar fields,
@@ -204,26 +204,20 @@ class ModelPoints:
                 raise ValueError(f"{name} must be >= 1")
             object.__setattr__(self, name, freq)
         # Coverage CSR: explicit arrays win; otherwise build from the
-        # death_benefit shortcut and/or the general benefits map.
+        # general benefits map. With no shortcut field, an empty input
+        # yields an empty coverage list -- a portfolio with no rate-driven
+        # claim benefits (premiums-only, or one with only survival
+        # benefits via maturity_benefit / annuity_payment).
         if self.coverage_kind is not None:
             coverage_kind = np.asarray(self.coverage_kind, np.int64)
             coverage_amount = np.asarray(self.coverage_amount, np.float64)
             coverage_offset = np.asarray(self.coverage_offset, np.int64)
         else:
             items = []   # (kind, per-mp amount array), in coverage-list order
-            db = self.death_benefit
-            db = np.zeros(n_mp) if db is None else np.asarray(db, np.float64)
-            items.append((DEATH, db))
             if self.benefits is not None:
                 for kind, amount in self.benefits.items():
                     items.append((int(kind), np.asarray(amount, np.float64)))
             coverage_kind, coverage_amount, coverage_offset = _build_csr(items, n_mp)
-        # death_benefit stays a readable field, reconstructed from the CSR.
-        mp_of_cov = np.repeat(np.arange(n_mp), np.diff(coverage_offset))
-        is_death = coverage_kind == DEATH
-        object.__setattr__(self, "death_benefit", np.bincount(
-            mp_of_cov[is_death], weights=coverage_amount[is_death], minlength=n_mp
-        ))
         object.__setattr__(self, "coverage_kind", coverage_kind)
         object.__setattr__(self, "coverage_amount", coverage_amount)
         object.__setattr__(self, "coverage_offset", coverage_offset)
@@ -271,9 +265,9 @@ class ModelPoints:
     def single(
         cls,
         issue_age: float,
-        death_benefit: float,
         level_premium: float,
         term_months: int,
+        benefits: dict[int, float] | None = None,
         maturity_benefit: float = 0.0,
         annuity_payment: float = 0.0,
         disability_income: float = 0.0,
@@ -287,13 +281,17 @@ class ModelPoints:
         count: float = 1.0,
         sex: int = 0,
         state: int = STATE_ACTIVE,
-        benefits: dict[int, float] | None = None,
         benefit_patterns: dict[str, "BenefitPattern"] | None = None,
     ) -> ModelPoints:
-        """Build a single-model-point set -- a convenience for hand checks."""
+        """Build a single-model-point set -- a convenience for hand checks.
+
+        ``benefits`` is the per-coverage benefit-amount map keyed by
+        coverage code (the index into :attr:`Assumptions.coverages`); pass
+        ``{0: 1_000_000.0}`` to attach the benefit to the first registered
+        coverage. None means no claim benefits.
+        """
         return cls(
             issue_age=np.array([issue_age]),
-            death_benefit=np.array([death_benefit]),
             level_premium=np.array([level_premium]),
             term_months=np.array([term_months]),
             maturity_benefit=np.array([maturity_benefit]),
@@ -332,7 +330,7 @@ class ModelPoints:
 
         # Per-row scalar fields.
         per_row = (
-            "issue_age", "level_premium", "term_months", "death_benefit",
+            "issue_age", "level_premium", "term_months",
             "maturity_benefit", "annuity_payment", "disability_income",
             "disability_benefit", "single_premium", "premium_term_months",
             "premium_frequency_months", "annuity_frequency_months",
@@ -369,12 +367,12 @@ class ModelPoints:
     def to_wide(self, assumptions):
         """Convert to a wide polars DataFrame -- one row per model point.
 
-        Every benefit becomes a column: ``death_benefit``,
-        ``maturity_benefit``, ``annuity_payment`` and a
-        ``<coverage_code>_benefit`` column for each rate-driven coverage in
-        ``assumptions``. The companion to ``read_model_points``'s wide form;
-        lossless only for a simple portfolio -- a wide table cannot carry
-        per-coverage waiting / reduction rules.
+        Each rate-driven coverage in ``assumptions`` becomes a
+        ``<coverage_code>_benefit`` column; the survival benefits
+        ``maturity_benefit`` and ``annuity_payment`` are scalar columns.
+        The companion to ``read_model_points``'s wide form; lossless only
+        for a simple portfolio -- a wide table cannot carry per-coverage
+        waiting / reduction rules.
         """
         import polars as pl
 
@@ -391,14 +389,13 @@ class ModelPoints:
             "premium_term_months": self.premium_term_months,
             "premium_frequency_months": self.premium_frequency_months,
             "annuity_frequency_months": self.annuity_frequency_months,
-            "death_benefit": self.death_benefit,
             "maturity_benefit": self.maturity_benefit,
             "annuity_payment": self.annuity_payment,
             "disability_income": self.disability_income,
             "disability_benefit": self.disability_benefit,
         }
         for i, coverage in enumerate(assumptions.coverages):
-            mask = self.coverage_kind == i + 1
+            mask = self.coverage_kind == i
             cols[f"{coverage.code}_benefit"] = np.bincount(
                 mp_of_cov[mask], weights=self.coverage_amount[mask],
                 minlength=self.n_mp,
@@ -430,11 +427,9 @@ class ModelPoints:
             "count":                    self.count,
             "state":                    np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
-        # CSR coverages -- code 0 is the main-contract death (label by the
-        # MAIN_DEATH_CODE convention), codes 1.. the rate-driven coverages.
-        label = {0: _main_death_label(self)}
-        for i, coverage in enumerate(assumptions.coverages):
-            label[i + 1] = coverage.code
+        # CSR coverages -- the integer ``coverage_kind`` indexes directly
+        # into ``assumptions.coverages``; no slot is reserved.
+        label = {i: coverage.code for i, coverage in enumerate(assumptions.coverages)}
         mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
         mp_id = [int(m) for m in mp_of_cov]
         coverage_code = [label[int(k)] for k in self.coverage_kind]
@@ -541,23 +536,22 @@ def _coverage_label(model_points, ctype, default):
     return default
 
 
-def _main_death_label(model_points):
-    """The reserved main-contract death code -- ``MAIN_DEATH_CODE`` when
-    registered in the portfolio's taxonomy, else the bare default."""
-    registry = model_points.benefit_patterns or {}
-    if MAIN_DEATH_CODE in registry:
-        return MAIN_DEATH_CODE
-    return "death"
-
-
 def _build_csr(
     items: list[tuple[int, FloatArray]], n_mp: int
 ) -> tuple[IntArray, FloatArray, IntArray]:
     """Pack ``(kind, per-mp amount)`` items into a coverage CSR.
 
     A zero amount is no coverage. Coverages are ordered by model point, and
-    within a model point by the order the kinds appear in ``items``.
+    within a model point by the order the kinds appear in ``items``. An
+    empty ``items`` list yields an empty coverage list -- no claim coverages
+    on any policy.
     """
+    if not items:
+        return (
+            np.zeros(0, np.int64),
+            np.zeros(0, np.float64),
+            np.zeros(n_mp + 1, np.int64),
+        )
     mp_parts, kind_parts, amount_parts = [], [], []
     for kind, amount in items:
         present = amount != 0.0

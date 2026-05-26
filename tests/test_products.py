@@ -7,8 +7,11 @@ its present value; survival benefits carry longevity risk, priced through the
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPoints, measure, value
+from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, value, CoverageRate
 from fastcashflow.numerics import _norm_ppf
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.005      # flat monthly lapse
@@ -26,6 +29,7 @@ def _assumptions(**overrides) -> Assumptions:
         discount_annual=0.04,
         ra_confidence=0.80,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q))),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -37,11 +41,12 @@ def test_maturity_benefit_adds_its_present_value():
     death_benefit, maturity, premium, term = 1e8, 5e7, 50_000.0, 24
 
     term_life = measure(
-        ModelPoints.single(40, death_benefit, premium, term), asmp
+        ModelPoints.single(40, premium, term, benefits={0: death_benefit}, benefit_patterns=PATTERNS), asmp
     )
     endowment = measure(
         ModelPoints.single(
-            40, death_benefit, premium, term, maturity_benefit=maturity
+            40, premium, term, benefits={0: death_benefit}, maturity_benefit=maturity,
+            benefit_patterns=PATTERNS,
         ),
         asmp,
     )
@@ -57,7 +62,7 @@ def test_pure_endowment():
     asmp = _assumptions()
     maturity, premium, term = 5e7, 50_000.0, 24
     res = measure(
-        ModelPoints.single(40, 0.0, premium, term, maturity_benefit=maturity),
+        ModelPoints.single(40, premium, term, maturity_benefit=maturity, benefit_patterns=PATTERNS),
         asmp,
     )
 
@@ -79,10 +84,11 @@ def test_value_matches_measure_endowment():
     n = 400
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        death_benefit=rng.integers(10, 80, n) * 1_000_000,
+        benefits={0: rng.integers(10, 80, n) * 1_000_000},
         level_premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         maturity_benefit=rng.integers(5, 40, n) * 1_000_000,
+        benefit_patterns=PATTERNS,
     )
     asmp = _assumptions()
     fast = value(mps, asmp)
@@ -100,7 +106,8 @@ def test_immediate_annuity_hand_calc():
     single, annuity, term = 1.2e8, 600_000.0, 24
     res = measure(
         ModelPoints.single(
-            40, 0.0, 0.0, term, annuity_payment=annuity, single_premium=single
+            40, 0.0, term, annuity_payment=annuity, single_premium=single,
+            benefit_patterns=PATTERNS,
         ),
         asmp,
     )
@@ -124,11 +131,12 @@ def test_value_matches_measure_annuity():
     n = 300
     mps = ModelPoints(
         issue_age=rng.integers(55, 75, n),
-        death_benefit=np.zeros(n),
+        benefits={0: np.zeros(n)},
         level_premium=np.zeros(n),
         term_months=rng.integers(120, 300, n),
         annuity_payment=rng.integers(30, 100, n) * 10_000,
         single_premium=rng.integers(80, 200, n) * 1_000_000,
+        benefit_patterns=PATTERNS,
     )
     asmp = _assumptions(longevity_cv=0.08)
     fast = value(mps, asmp)
@@ -143,7 +151,8 @@ def test_value_matches_measure_annuity():
 def test_longevity_ra_responds_to_its_cv():
     """The longevity RA is zero without longevity_cv and linear in it."""
     annuity = ModelPoints.single(
-        60, 0.0, 0.0, 180, annuity_payment=500_000.0, single_premium=8e7
+        60, 0.0, 180, annuity_payment=500_000.0, single_premium=8e7,
+        benefit_patterns=PATTERNS,
     )
     no_cv = measure(annuity, _assumptions(longevity_cv=0.0))
     full_cv = measure(annuity, _assumptions(longevity_cv=0.10))

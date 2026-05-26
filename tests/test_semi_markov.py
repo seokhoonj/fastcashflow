@@ -12,6 +12,9 @@ import fastcashflow as fcf
 from fastcashflow.statemodel import StateModel, State, Transition
 
 
+
+PATTERNS = {"DEATH": fcf.BenefitPattern.DEATH}
+
 def _annual(monthly: float) -> float:
     return 1.0 - (1.0 - monthly) ** 12
 
@@ -44,6 +47,7 @@ def _flat_assumptions(*, ci_reincidence_fn) -> fcf.Assumptions:
         ra_confidence=0.5,
         mortality_cv=0.0,
         state_model=_cancer_reincidence_model(12),
+        coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
 
 
@@ -51,10 +55,11 @@ def _single_contract(term_months: int, *, death_benefit: float = 10_000_000.0,
                      reincidence_benefit: float = 5_000_000.0) -> fcf.ModelPoints:
     return fcf.ModelPoints(
         issue_age=np.array([40], dtype=np.int64),
-        death_benefit=np.array([death_benefit]),
+        benefits={0: np.array([death_benefit])},
         level_premium=np.array([0.0]),
         term_months=np.array([term_months], dtype=np.int64),
         disability_benefit=np.array([reincidence_benefit]),
+        benefit_patterns=PATTERNS,
     )
 
 
@@ -141,11 +146,12 @@ def test_one_month_reincidence_active_via_seating():
     asmp = _flat_assumptions(ci_reincidence_fn=ci_rein)
     mp = fcf.ModelPoints(
         issue_age=np.array([40], dtype=np.int64),
-        death_benefit=np.array([10_000_000.0]),
+        benefits={0: np.array([10_000_000.0])},
         level_premium=np.array([0.0]),
         term_months=np.array([1], dtype=np.int64),
         disability_benefit=np.array([5_000_000.0]),
-        state=np.array([1], dtype=np.int64),    # seat on post_first
+        state=np.array([1], dtype=np.int64),    # seat on post_first,
+        benefit_patterns=PATTERNS,
     )
     v = fcf.value(mp, asmp)
     assert np.isclose(v.bel[0], 109_900.0), v.bel[0]
@@ -164,11 +170,12 @@ def test_reincidence_rate_zero_in_exclusion_window():
 
     mp = fcf.ModelPoints(
         issue_age=np.array([40], dtype=np.int64),
-        death_benefit=np.array([10_000_000.0]),
+        benefits={0: np.array([10_000_000.0])},
         level_premium=np.array([0.0]),
         term_months=np.array([1], dtype=np.int64),
         disability_benefit=np.array([5_000_000.0]),
         state=np.array([1], dtype=np.int64),
+        benefit_patterns=PATTERNS,
     )
     v_excl = fcf.value(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_with_excl))
     v_zero = fcf.value(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_all_zero))
@@ -204,6 +211,7 @@ def _reincidence_assumptions(*, duration_max, exclusion_months,
         ra_confidence=0.75,
         mortality_cv=0.10,
         state_model=_cancer_reincidence_model(duration_max),
+        coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
 
 
@@ -226,11 +234,12 @@ def test_measure_value_agree_mixed_portfolio():
     mp = fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
-        death_benefit=rng.integers(10, 80, n) * 1_000_000.0,
+        benefits={0: rng.integers(10, 80, n) * 1_000_000.0},
         level_premium=np.zeros(n),
         term_months=rng.integers(60, 180, n).astype(np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
         state=rng.integers(0, 3, n).astype(np.int64),
+        benefit_patterns=PATTERNS,
     )
     asmp = _reincidence_assumptions(duration_max=24, exclusion_months=12,
                                      reincidence_monthly=0.008)
@@ -247,10 +256,11 @@ def test_measure_value_agree_long_cohort():
     mp = fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
-        death_benefit=rng.integers(10, 80, n) * 1_000_000.0,
+        benefits={0: rng.integers(10, 80, n) * 1_000_000.0},
         level_premium=np.zeros(n),
         term_months=np.full(n, 120, dtype=np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
+        benefit_patterns=PATTERNS,
     )
     asmp = _reincidence_assumptions(duration_max=60, exclusion_months=24,
                                      reincidence_monthly=0.012)
@@ -296,7 +306,10 @@ def _reincidence_assumptions_with_rider(duration_max, exclusion_months,
         mortality_cv=base.mortality_cv,
         morbidity_cv=0.10,
         state_model=base.state_model,
-        coverages=(CoverageRate(code="rider", rate=rider_fn),),
+        coverages=(
+            fcf.CoverageRate(code="DEATH", rate=base.mortality_annual),
+            fcf.CoverageRate(code="rider", rate=rider_fn),
+        ),
     )
 
 
@@ -340,7 +353,7 @@ def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
         coverage_waiting=coverage_waiting,
         coverage_reduction_end=coverage_reduction_end,
         coverage_reduction_factor=coverage_reduction_factor,
-        benefit_patterns={"rider": rider_pattern},
+        benefit_patterns={"DEATH": fcf.BenefitPattern.DEATH, "rider": rider_pattern},
     )
 
 
@@ -439,6 +452,7 @@ def _di_assumptions(*, duration_max, recovery_monthly):
         mortality_cv=0.10,
         disability_cv=0.20,
         state_model=_di_model(duration_max),
+        coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
 
 
@@ -466,14 +480,16 @@ def test_di_recovery_hand_calc_one_month_seated_on_disabled():
         mortality_cv=0.0,
         disability_cv=0.0,
         state_model=_di_model(12),
+        coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
     mp = fcf.ModelPoints(
         issue_age=np.array([45], dtype=np.int64),
-        death_benefit=np.array([0.0]),
+        benefits={0: np.array([0.0])},
         level_premium=np.array([0.0]),
         term_months=np.array([1], dtype=np.int64),
         disability_income=np.array([1_000_000.0]),
         state=np.array([1], dtype=np.int64),
+        benefit_patterns=PATTERNS,
     )
     v = fcf.value(mp, asmp)
     assert np.isclose(v.bel[0], 1_000_000.0), v.bel[0]
@@ -487,11 +503,12 @@ def test_di_recovery_higher_rate_drains_disabled_occupancy_faster():
     """
     mp = fcf.ModelPoints(
         issue_age=np.array([45], dtype=np.int64),
-        death_benefit=np.array([0.0]),
+        benefits={0: np.array([0.0])},
         level_premium=np.array([0.0]),
         term_months=np.array([24], dtype=np.int64),
         disability_income=np.array([1_000_000.0]),
         state=np.array([1], dtype=np.int64),
+        benefit_patterns=PATTERNS,
     )
     low = fcf.measure(mp, _di_assumptions(
         duration_max=24, recovery_monthly=0.01))
@@ -530,17 +547,19 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
         mortality_cv=0.10,
         disability_cv=0.20,
         state_model=_di_model(36),
+        coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
     rng = np.random.default_rng(23)
     n = 50
     mp = fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
-        death_benefit=rng.integers(10, 80, n) * 1_000_000.0,
+        benefits={0: rng.integers(10, 80, n) * 1_000_000.0},
         level_premium=rng.integers(2, 10, n) * 10_000.0,
         term_months=rng.integers(60, 180, n).astype(np.int64),
         disability_income=rng.integers(3, 10, n) * 100_000.0,
         state=rng.integers(0, 2, n).astype(np.int64),
+        benefit_patterns=PATTERNS,
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
@@ -587,6 +606,7 @@ def _portfolio_with_two_riders(n, seed, rule_rider_waiting,
         coverage_reduction_end=coverage_reduction_end,
         coverage_reduction_factor=coverage_reduction_factor,
         benefit_patterns={
+            "DEATH": fcf.BenefitPattern.DEATH,
             "recur": fcf.BenefitPattern.MORBIDITY,
             "diag":  fcf.BenefitPattern.DIAGNOSIS,
         },
@@ -622,6 +642,7 @@ def test_semi_markov_with_rule_and_diagnosis_riders_together():
         morbidity_cv=0.10,
         state_model=base.state_model,
         coverages=(
+            CoverageRate(code="DEATH", rate=base.mortality_annual),
             CoverageRate(code="recur", rate=recur_rate),
             CoverageRate(code="diag", rate=diag_rate),
         ),

@@ -6,8 +6,11 @@ before ``max(0, ...)``, contracts in different groups are not.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, group, measure, roll_forward
+from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, group, measure, roll_forward, CoverageRate
 
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 def _annual(m):
     """Convert a monthly rate to the equivalent annual rate the engine expects."""
@@ -26,6 +29,7 @@ def _assumptions() -> Assumptions:
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002))),),
     )
 
 
@@ -33,9 +37,10 @@ def _portfolio(n: int = 60) -> ModelPoints:
     rng = np.random.default_rng(7)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        death_benefit=rng.integers(20, 90, n) * 1_000_000,
+        benefits={0: rng.integers(20, 90, n) * 1_000_000},
         level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=np.full(n, 120),
+        benefit_patterns=PATTERNS,
     )
 
 
@@ -43,9 +48,10 @@ def _two_contracts() -> ModelPoints:
     """Two term-life model points -- the first profitable, the second onerous."""
     return ModelPoints(
         issue_age=np.array([40, 40]),
-        death_benefit=np.array([1e8, 1e8]),
+        benefits={0: np.array([1e8, 1e8])},
         level_premium=np.array([300_000.0, 60_000.0]),
         term_months=np.array([120, 120]),
+        benefit_patterns=PATTERNS,
     )
 
 

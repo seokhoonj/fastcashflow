@@ -43,11 +43,12 @@ def test_value_matches_measure():
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,
+        coverages=(CoverageRate("DEATH", mortality_annual),),
     )
     # distinct and repeated issue ages -- exercises the unique-age grid
     mps = ModelPoints(
         issue_age=np.array([30, 45, 45, 55, 38]),
-        death_benefit=np.array([1e8, 5e7, 8e7, 3e7, 6e7]),
+        benefits={0: np.array([1e8, 5e7, 8e7, 3e7, 6e7])},
         level_premium=np.array([70_000, 90_000, 110_000, 130_000, 80_000]),
         term_months=np.array([120, 120, 120, 120, 120]),
     )
@@ -69,9 +70,10 @@ def test_value_onerous():
         discount_annual=0.0,
         ra_confidence=0.75,
         mortality_cv=0.05,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05))),),
     )
     mps = ModelPoints.single(
-        issue_age=40, death_benefit=1_000_000.0,
+        issue_age=40, benefits={0: 1_000_000.0},
         level_premium=100.0, term_months=12,
     )
     v = value(mps, asmp)
@@ -99,12 +101,13 @@ def test_value_gpu_matches_cpu():
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,
+        coverages=(CoverageRate("DEATH", mortality_annual),),
     )
     rng = np.random.default_rng(7)
     n = 5_000
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
-        death_benefit=rng.integers(10, 100, n) * 1_000_000,
+        benefits={0: rng.integers(10, 100, n) * 1_000_000},
         level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=np.full(n, 120),
     )
@@ -140,18 +143,20 @@ def test_value_gpu_matches_cpu_with_transition():
         ra_confidence=0.85,
         mortality_cv=0.12,
         morbidity_cv=0.10,
-        coverages=(CoverageRate("dx", flat(0.003)),),
+        coverages=(
+            CoverageRate("DEATH", flat(0.001)),
+            CoverageRate("dx", flat(0.003)),
+        ),
     )
     rng = np.random.default_rng(13)
     n = 4_000
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n).astype(float),
-        death_benefit=rng.integers(10, 100, n) * 1_000_000.0,
+        benefits={0: rng.integers(10, 100, n) * 1_000_000.0, 1: rng.integers(5, 30, n) * 1_000_000.0},
         level_premium=rng.integers(3, 15, n) * 10_000.0,
         term_months=np.full(n, 120),
-        benefits={1: rng.integers(5, 30, n) * 1_000_000.0},
         state=rng.integers(0, 3, n),
-        benefit_patterns={"dx": BenefitPattern.DIAGNOSIS},
+        benefit_patterns={"DEATH": BenefitPattern.DEATH, "dx": BenefitPattern.DIAGNOSIS},
     )
     cpu = value(mps, asmp, backend="cpu")
     gpu = value(mps, asmp, backend="gpu")

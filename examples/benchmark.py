@@ -11,7 +11,9 @@ import time
 import numpy as np
 from numba import cuda
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, value
+from fastcashflow import (
+    Assumptions, BenefitPattern, CoverageRate, ExpenseItem, ModelPoints, value,
+)
 
 
 def _annual(m):
@@ -28,9 +30,10 @@ def make_portfolio(n_mp: int, seed: int = 42) -> ModelPoints:
     rng = np.random.default_rng(seed)
     return ModelPoints(
         issue_age=rng.integers(25, 60, n_mp),
-        death_benefit=rng.integers(10, 100, n_mp) * 1_000_000,
+        benefits={0: rng.integers(10, 100, n_mp) * 1_000_000},
         level_premium=rng.integers(3, 15, n_mp) * 10_000,
         term_months=np.full(n_mp, 120),
+        benefit_patterns={"DEATH": BenefitPattern.DEATH},
     )
 
 
@@ -53,6 +56,7 @@ def main() -> None:
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", mortality_annual),),
     )
     gpu = cuda.is_available()
     print("fastcashflow benchmark -- value(), term = 120 months"

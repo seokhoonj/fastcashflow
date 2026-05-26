@@ -11,7 +11,6 @@ the same.
 import numpy as np
 
 from fastcashflow import (
-    DEATH,
     Assumptions,
     BenefitPattern,
     ModelPoints,
@@ -24,9 +23,14 @@ from fastcashflow.numerics import _norm_ppf
 Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
 MORB_RATE = 0.03     # flat monthly diagnosis rate
-DIAGNOSIS = 1        # the single diagnosis rider -> coverage code 1
+# Local coverage codes -- the order of CoverageRate entries in _assumptions().
+DEATH = 0            # the death coverage -> coverages[0]
+DIAGNOSIS = 1        # the diagnosis rider -> coverages[1]
 
-PATTERNS = {"diagnosis": BenefitPattern.DIAGNOSIS}
+PATTERNS = {
+    "death":     BenefitPattern.DEATH,
+    "diagnosis": BenefitPattern.DIAGNOSIS,
+}
 
 
 def _annual(m):
@@ -34,15 +38,22 @@ def _annual(m):
     return 1.0 - (1.0 - m) ** 12
 
 
+def _mortality(sex, issue_age, duration):
+    return np.full(issue_age.shape, _annual(Q))
+
+
 def _assumptions(**overrides) -> Assumptions:
     flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(MORB_RATE))
     base = dict(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
+        mortality_annual=_mortality,
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.04,
         ra_confidence=0.80,
         mortality_cv=0.10,
-        coverages=(CoverageRate("diagnosis", flat_morb),),
+        coverages=(
+            CoverageRate("death", _mortality),
+            CoverageRate("diagnosis", flat_morb),
+        ),
     )
     base.update(overrides)
     return Assumptions(**base)

@@ -6,8 +6,11 @@ roll-forward identity is checked exactly.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPoints, measure
+from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, CoverageRate
 
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 def _annual(m):
     """Convert a monthly rate to its annual equivalent (engine converts back)."""
@@ -21,6 +24,7 @@ def _flat_assumptions(**overrides) -> Assumptions:
         discount_annual=0.06,
         ra_confidence=0.75,
         mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01))),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -35,8 +39,9 @@ def test_mid_month_discounting():
 
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=death_benefit,
+            issue_age=40, benefits={0: death_benefit},
             level_premium=premium, term_months=term,
+            benefit_patterns=PATTERNS,
         ),
         _flat_assumptions(),
     )
@@ -68,9 +73,10 @@ def test_csm_movement_identity():
     n = 200
     mps = ModelPoints(
         issue_age=rng.integers(25, 55, n),
-        death_benefit=rng.integers(10, 100, n) * 1_000_000,
+        benefits={0: rng.integers(10, 100, n) * 1_000_000},
         level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=rng.integers(60, 120, n),
+        benefit_patterns=PATTERNS,
     )
     res = measure(mps, asmp)
 

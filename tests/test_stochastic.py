@@ -9,8 +9,11 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, value, value_stochastic
+from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, value, value_stochastic, CoverageRate
 
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 def _annual(m: float) -> float:
     """Convert a monthly rate to its annual equivalent so the engine converts back."""
@@ -29,6 +32,7 @@ def _assumptions() -> Assumptions:
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001))),),
     )
 
 
@@ -36,9 +40,10 @@ def _portfolio(n: int = 200) -> ModelPoints:
     rng = np.random.default_rng(6)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        death_benefit=rng.integers(20, 90, n) * 1_000_000,
+        benefits={0: rng.integers(20, 90, n) * 1_000_000},
         level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
+        benefit_patterns=PATTERNS,
     )
 
 

@@ -6,8 +6,11 @@ the total liability must run off to zero by the end of the term.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure, value
+from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, measure, value, CoverageRate
 
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 def _annual(m):
     """Convert a monthly rate to its annual equivalent (engine converts back)."""
@@ -26,6 +29,7 @@ def _assumptions(**overrides) -> Assumptions:
         ),
         ra_confidence=0.80,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002))),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -35,8 +39,9 @@ def test_bel_rollforward():
     """The BEL trajectory matches an independent backward recursion."""
     asmp = _assumptions()
     one = ModelPoints.single(
-        issue_age=45, death_benefit=80_000_000,
+        issue_age=45, benefits={0: 80_000_000},
         level_premium=150_000, term_months=36,
+        benefit_patterns=PATTERNS,
     )
     res = measure(one, asmp)
 
@@ -67,9 +72,10 @@ def test_liability_runs_off():
     n = 150
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        death_benefit=rng.integers(20, 100, n) * 1_000_000,
+        benefits={0: rng.integers(20, 100, n) * 1_000_000},
         level_premium=rng.integers(10, 25, n) * 10_000,
         term_months=rng.integers(48, 120, n),
+        benefit_patterns=PATTERNS,
     )
     res = measure(mps, asmp)
 

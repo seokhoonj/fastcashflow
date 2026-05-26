@@ -104,7 +104,7 @@ def test_show_trace_dict_basis_requires_segment_columns():
         issue_age=np.array([35.0]),
         level_premium=np.array([50_000.0]),
         term_months=np.array([120]),
-        death_benefit=np.array([100_000_000.0]),
+        benefits={0: np.array([100_000_000.0])},
     )
     with pytest.raises(ValueError, match="product / channel"):
         show_trace(0, bare, _basis(), file=io.StringIO())
@@ -164,12 +164,23 @@ def test_show_trace_diff_identical_basis_reports_no_changes():
 
 def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
     """A +10% mortality shock increases claim cash flows and the BEL
-    monotonically -- the propagation is visible in the printed diff."""
+    monotonically -- the propagation is visible in the printed diff. The
+    shock applies to BOTH the in-force decrement and the death coverage's
+    payment rate (the convention for the sample basis, where they share
+    a mortality table)."""
     mp = _portfolio()
     asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
-    shocked = replace(asmp, mortality_annual=_shock_mortality(
-        asmp.mortality_annual, 1.10,
-    ))
+    shocked_mort = _shock_mortality(asmp.mortality_annual, 1.10)
+    # Shock the DEATH coverage too so the payment rate moves with the
+    # decrement -- otherwise the higher decrement just lowers in-force
+    # without raising claims.
+    new_coverages = tuple(
+        fcf.CoverageRate(r.code, _shock_mortality(r.rate, 1.10))
+        if r.code in ("DEATH_GENERAL", "DEATH", "DEATH_MAIN")
+        else r
+        for r in asmp.coverages
+    )
+    shocked = replace(asmp, mortality_annual=shocked_mort, coverages=new_coverages)
     ma = fcf.measure(mp.subset([0]), asmp)
     mb = fcf.measure(mp.subset([0]), shocked)
     assert mb.cashflows.claim_cf.sum() > ma.cashflows.claim_cf.sum()
@@ -277,12 +288,13 @@ def _profitable_basis_and_mp():
     asmp = Assumptions(
         mortality_annual=mort, lapse_annual=lapse,
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
+        coverages=(fcf.CoverageRate("DEATH", mort),),
     )
     mp = ModelPoints(
         issue_age=np.array([40.0]),
         level_premium=np.array([200_000.0]),
         term_months=np.array([60]),
-        death_benefit=np.array([100_000_000.0]),
+        benefits={0: np.array([100_000_000.0])},
     )
     return asmp, mp
 

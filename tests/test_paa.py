@@ -8,7 +8,10 @@ result is just premiums less claims and expenses -- the underwriting profit.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure_paa
+from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, measure_paa, CoverageRate
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.005      # flat monthly lapse
@@ -26,6 +29,7 @@ def _assumptions(**overrides) -> Assumptions:
         discount_annual=0.03,
         ra_confidence=0.75,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q))),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -33,7 +37,7 @@ def _assumptions(**overrides) -> Assumptions:
 
 def test_paa_revenue_equals_total_premium():
     """Insurance revenue recognised over the contract equals total premium."""
-    res = measure_paa(ModelPoints.single(40, 1e8, 50_000.0, 12), _assumptions())
+    res = measure_paa(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}, benefit_patterns=PATTERNS), _assumptions())
     assert np.isclose(res.revenue.sum(), res.cashflows.premium_cf.sum())
 
 
@@ -42,7 +46,7 @@ def test_paa_lrc_hand_calc():
     asmp = _assumptions()
     single, term = 1_000_000.0, 12
     res = measure_paa(
-        ModelPoints.single(40, 1e8, 0.0, term, single_premium=single), asmp
+        ModelPoints.single(40, 0.0, term, benefits={0: 1e8}, single_premium=single, benefit_patterns=PATTERNS), asmp
     )
 
     # straight-line earning: the premium spread evenly over the coverage period
@@ -57,7 +61,7 @@ def test_paa_lrc_hand_calc():
 
 def test_paa_lrc_builds_and_releases():
     """The LRC builds from zero and releases back to zero over the term."""
-    res = measure_paa(ModelPoints.single(35, 5e7, 40_000.0, 24), _assumptions())
+    res = measure_paa(ModelPoints.single(35, 40_000.0, 24, benefits={0: 5e7}, benefit_patterns=PATTERNS), _assumptions())
     assert np.isclose(res.lrc[0, 0], 0.0)        # builds from zero
     assert np.isclose(res.lrc[0, -1], 0.0)       # releases back to zero
     assert np.all(res.lrc[0] >= -1e-6)           # a liability, never negative
@@ -70,7 +74,7 @@ def test_paa_service_result_is_the_underwriting_profit():
         ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
         ExpenseItem("maintenance",  "gamma_fixed",  12_000.0),
     ))
-    res = measure_paa(ModelPoints.single(45, 1e8, 60_000.0, 12), asmp)
+    res = measure_paa(ModelPoints.single(45, 60_000.0, 12, benefits={0: 1e8}, benefit_patterns=PATTERNS), asmp)
     cf = res.cashflows
     profit = (cf.premium_cf.sum() - cf.claim_cf.sum()
               - cf.morbidity_cf.sum() - cf.expense_cf.sum())
@@ -80,10 +84,10 @@ def test_paa_service_result_is_the_underwriting_profit():
 def test_paa_onerous_contract_carries_a_loss():
     """A contract whose claims exceed its premiums is flagged onerous."""
     profitable = measure_paa(
-        ModelPoints.single(40, 1e8, 500_000.0, 12), _assumptions()
+        ModelPoints.single(40, 500_000.0, 12, benefits={0: 1e8}, benefit_patterns=PATTERNS), _assumptions()
     )
     onerous = measure_paa(
-        ModelPoints.single(40, 1e8, 1_000.0, 12), _assumptions()
+        ModelPoints.single(40, 1_000.0, 12, benefits={0: 1e8}, benefit_patterns=PATTERNS), _assumptions()
     )
     assert np.allclose(profitable.loss_component, 0.0)
     assert onerous.loss_component[0] > 0.0
@@ -94,7 +98,7 @@ def test_paa_revenue_basis_claims():
     asmp = _assumptions(expense_items=(
         ExpenseItem("acquisition", "alpha_fixed", 500_000.0),
     ))
-    mps = ModelPoints.single(40, 1e8, 50_000.0, 12)
+    mps = ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}, benefit_patterns=PATTERNS)
     by_time = measure_paa(mps, asmp, revenue_basis="time")
     by_claims = measure_paa(mps, asmp, revenue_basis="claims")
 
@@ -110,5 +114,5 @@ def test_paa_revenue_basis_claims():
 def test_paa_rejects_unknown_revenue_basis():
     """An unrecognised revenue basis is an error."""
     with pytest.raises(ValueError, match="revenue_basis"):
-        measure_paa(ModelPoints.single(40, 1e8, 50_000.0, 12),
+        measure_paa(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}, benefit_patterns=PATTERNS),
                     _assumptions(), revenue_basis="weekly")

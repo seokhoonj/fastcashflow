@@ -1,9 +1,12 @@
 """Phase 1 validation -- Risk Adjustment and expense cash flows."""
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure
+from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, measure, CoverageRate
 from fastcashflow.numerics import _norm_ppf
 
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 def _annual(m):
     """Convert a monthly rate to its annual equivalent (engine converts back)."""
@@ -18,6 +21,7 @@ def _assumptions(**overrides) -> Assumptions:
         discount_annual=0.0,
         ra_confidence=0.75,
         mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01))),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -36,8 +40,9 @@ def test_risk_adjustment():
     """RA = z(confidence) * mortality_cv * PV(claims), hand-checked."""
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=1_000_000.0,
+            issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=2,
+            benefit_patterns=PATTERNS,
         ),
         _assumptions(ra_confidence=0.75, mortality_cv=0.20),
     )
@@ -51,8 +56,9 @@ def test_expenses():
     """Acquisition (t=0) and maintenance expense, hand-checked."""
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=1_000_000.0,
+            issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=2,
+            benefit_patterns=PATTERNS,
         ),
         _assumptions(
             expense_items=(
@@ -78,8 +84,9 @@ def test_expense_inflation():
     """Maintenance expense grows with inflation; acquisition does not recur."""
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=1_000_000.0,
+            issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=13,
+            benefit_patterns=PATTERNS,
         ),
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0)),

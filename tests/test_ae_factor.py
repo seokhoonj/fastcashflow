@@ -4,9 +4,11 @@ A workbook may carry an ``ae_factors`` sheet with rows
 ``(product, channel, coverage_code, factor)`` plus optional axis columns
 ``{sex, age, issue_age, duration}``. The reader looks up the (product,
 channel, coverage_code) factor and wraps the base rate so the engine
-multiplies by the factor at lookup time. Main mortality uses
-``coverage_code = 'DEATH_MAIN'`` to match the ``riders`` sheet convention.
-Missing sheet or missing key = no adjustment (factor 1.0).
+multiplies by the factor at lookup time. The layer applies to the
+rate-driven coverages on the ``coverages`` sheet; the in-force decrement
+``mortality_annual`` is not coverage-keyed, so its calibration goes
+through the underlying mortality table directly. Missing sheet or
+missing key = no adjustment (factor 1.0).
 """
 from pathlib import Path
 
@@ -95,16 +97,19 @@ def test_scalar_ae_factor_per_rider(tmp_path):
     assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
 
 
-def test_ae_factor_on_main_mortality(tmp_path):
-    """coverage_code 'DEATH_MAIN' wires to the main mortality table."""
+def test_ae_factor_does_not_apply_to_mortality_decrement(tmp_path):
+    """``mortality_annual`` is decrement-only; the A/E layer is coverage-keyed,
+    so an A/E row whose ``coverage_code`` would match a registered death
+    coverage does not adjust the in-force decrement rate (the death-claim
+    payment rate is a separate ``coverages`` entry that does receive A/E)."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
         ["product_code", "channel_code", "coverage_code", "factor"],
-        ["TERM_A", "GA", "DEATH_MAIN", 0.80],     # CI 80% — pricing 위험률에 마진 있음
+        ["TERM_A", "GA", "INPATIENT", 1.5],
     ])
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.001 * 0.80)
+    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
 
 
 def test_ae_factor_varies_by_age(tmp_path):
@@ -145,26 +150,33 @@ def test_ae_factor_only_applies_to_matching_segment(tmp_path):
 def test_ae_factor_composes_with_age_shift(tmp_path):
     """age_shift and A/E factor compose -- the shift moves the lookup, the factor scales it."""
     p = tmp_path / "a.xlsx"
-    # Mortality rate is flat 0.001 (so age shift doesn't change the lookup value),
-    # but the factor scales it.
-    wb = openpyxl.load_workbook(p) if p.exists() else None
-    # Easier to re-run _build but add age_shift column too. Inline:
+    # Build a workbook with an age-varying rate table on a rate-driven
+    # coverage (INPATIENT), apply morbidity_age_shift and an A/E factor for
+    # the same code, and verify the two layers compose on that coverage's
+    # rate. (The decrement ``mortality_annual`` is no longer coverage-keyed,
+    # so the composition is exercised on the coverage rate instead.)
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     seg = wb.create_sheet("segments")
     seg.append(["product_code", "channel_code", "mortality_table", "lapse_table",
                 "discount_table", "inflation_table",
                 "ra_confidence", "mortality_cv",
-                "morbidity_cv", "mortality_age_shift"])
+                "morbidity_cv", "morbidity_age_shift"])
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 0.75, 0.10, 0.10, 5])
     rd = wb.create_sheet("coverages")
     rd.append(["coverage_code", "rate_table"])
+    rd.append(["INPATIENT", "HOSP"])
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
         for age in range(20, 81):
-            mt.append(["MORT", sex, age, 0.001 * (age - 20 + 1)])   # 0.001, 0.002, ...
+            mt.append(["MORT", sex, age, 0.001])
+    rr = wb.create_sheet("incidence_rate_tables")
+    rr.append(["table_id", "sex", "age", "rate"])
+    for sex in (0, 1):
+        for age in range(20, 81):
+            rr.append(["HOSP", sex, age, 0.001 * (age - 20 + 1)])   # 0.001, 0.002, ...
     for sn, header, row in [
         ("lapse_tables", ["table_id", "duration", "rate"], ["LAPSE", 0, 0.05]),
         ("discount_tables", ["table_id", "year", "rate"], ["DISC", 0, 0.03]),
@@ -175,10 +187,13 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
         s_ws.append(row)
     ae = wb.create_sheet("ae_factors")
     ae.append(["product_code", "channel_code", "coverage_code", "factor"])
-    ae.append(["TERM_A", "GA", "DEATH_MAIN", 0.5])
+    ae.append(["TERM_A", "GA", "INPATIENT", 0.5])
     wb.save(p)
 
     asmp = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # apparent age 30 + 5 = 35 -> base rate 0.001 * 16 = 0.016; A/E 0.5 -> 0.008
-    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.001 * 16 * 0.5)
+    assert np.isclose(
+        asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0],
+        0.001 * 16 * 0.5,
+    )

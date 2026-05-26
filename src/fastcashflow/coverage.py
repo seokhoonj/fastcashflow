@@ -2,11 +2,18 @@
 
 A policy's benefits are a variable-length list of *coverages* rather than a
 fixed set of fields. Each coverage carries a numeric *code* -- a factorised
-coverage identifier. Code 0 is reserved for the main-contract death
-benefit, driven by the base mortality so its claim rate matches the in-force
-decrement exactly. Codes 1.. are the rate-driven coverages the assumptions
-register (see :class:`fastcashflow.assumptions.CoverageRate`), in registration
-order.
+coverage identifier that directly indexes the rate-driven coverages the
+assumptions register (see :class:`fastcashflow.assumptions.CoverageRate`),
+in registration order. No code is reserved: a contract's death coverage,
+if any, is just one entry in the user's coverage catalogue, distinguished
+by its :class:`BenefitPattern` (``DEATH``).
+
+The base mortality (``Assumptions.mortality_annual``) is a separate engine
+input: it drives the in-force decrement only. A death coverage's claim
+payout is driven by its own ``rate_table`` -- usually the same mortality
+table referenced from the coverages sheet, occasionally a separately
+calibrated death-claim experience table. The decrement and the payment
+are different mathematical quantities and the engine treats them as such.
 
 The kernels loop the coverage list generically. A coverage's mechanic is
 given by two per-code arrays -- ``cov_is_diagnosis`` (a single-payment
@@ -25,24 +32,16 @@ from enum import Enum
 
 import numpy as np
 
-# Code 0 -- the main-contract death coverage, driven by the base mortality.
-DEATH = 0
-
 
 class BenefitPattern(str, Enum):
     """How a benefit pays out -- the engine's calculation routing key.
 
-    Five uniform patterns: every rate-driven death coverage (main-contract
-    or rider, accidental or all-cause, ADB / disease / disaster) is the
-    same DEATH pattern; the rate table is what differentiates them.
-    DEATH_MAIN as a separate pattern is collapsed away -- it was a
-    routing detail of the engine's slot 0 (where ``mortality_annual``
-    drives both the in-force decrement and the main contract death
-    claim), not a kind of benefit. The reserved string code
-    ``"DEATH_MAIN"`` in the portfolio's :class:`ModelPoints`
-    ``benefit_patterns`` taxonomy is what marks the main-contract slot
-    today; future work removes that slot entirely and folds main-contract
-    death into the ordinary CSR coverage list.
+    Five uniform patterns: every rate-driven death coverage (main contract
+    or attached, accidental or all-cause, ADB / disease / disaster) is the
+    same DEATH pattern; the rate table is what differentiates them. The
+    pattern is purely a calculation-routing label -- there is no
+    "main-contract" pattern, because the engine has no reserved coverage
+    slot.
 
     ``str, Enum`` -- members compare equal to their string value
     (``BenefitPattern.MORBIDITY == "MORBIDITY"``), so existing numpy
@@ -76,16 +75,6 @@ class BenefitPattern(str, Enum):
         return self._value_
 
 
-# Reserved coverage_code naming the main-contract death slot. Until the
-# engine's code-0 slot is folded into the ordinary CSR coverage list (a
-# larger refactor in a later phase), this string code is what marks the
-# main-contract death amount on the portfolio: the ``death_benefit``
-# field of :class:`~fastcashflow.modelpoints.ModelPoints` (and the
-# ``death_benefit`` wide-form column) flow into the CSR slot whose rate
-# is :attr:`~fastcashflow.assumptions.Assumptions.mortality_annual`.
-MAIN_DEATH_CODE = "DEATH_MAIN"
-
-
 # Rate-driven patterns carry a sex x age rate table and go in the coverage
 # list. Survival patterns (annuity, maturity) are paid to the in-force
 # survivors and need no rate; they are summed into per-policy amounts, not
@@ -94,7 +83,6 @@ RATE_DRIVEN_PATTERNS = (
     BenefitPattern.DEATH, BenefitPattern.MORBIDITY, BenefitPattern.DIAGNOSIS,
 )
 SURVIVAL_PATTERNS = (BenefitPattern.ANNUITY, BenefitPattern.MATURITY)
-BENEFIT_PATTERNS = RATE_DRIVEN_PATTERNS + SURVIVAL_PATTERNS
 
 # Risk class of a coverage's claims: 0 mortality, 1 morbidity. The Risk
 # Adjustment prices the two with separate coefficients of variation.
@@ -117,21 +105,30 @@ def pattern_attrs(pattern: BenefitPattern) -> tuple[bool, int]:
     return is_diagnosis, risk
 
 
-def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
+def coverage_rates(rate_fns, sex_grid, issue_age_grid,
                    duration_grid, issue_class_grid, elapsed_grid):
     """Stack the per-code rate grids into one ``(n_codes, ..., n_year)`` array.
 
     A kernel reads a coverage's rate as ``cov_rates[code, age_or_mp, year]``,
-    so the codes share one grid whose first axis is the code. Slab 0 is the
-    base ``mortality`` grid (the main-contract death coverage); slabs 1.. are
-    the rate-driven coverages, evaluated from ``rate_fns`` -- an ordered
-    list of callables, each with the unified ``Assumptions.mortality_annual``
-    signature ``(sex, issue_age, duration, issue_class, elapsed)``.
+    so the codes share one grid whose first axis is the code. ``rate_fns`` is
+    an ordered list of callables, one per coverage in the assumptions'
+    registration order; each has the unified ``Assumptions.mortality_annual``
+    signature ``(sex, issue_age, duration, issue_class, elapsed)``. The
+    annual rates are returned as supplied -- the caller converts the whole
+    stack to monthly (see ``assumptions.annual_to_monthly``).
 
-    The rates are passed through as supplied -- annual; the caller converts
-    the whole stack to monthly (see ``assumptions.annual_to_monthly``).
+    When ``rate_fns`` is empty the result is an array of shape
+    ``(0,) + sex_grid.shape`` -- a zero-claim portfolio; kernel loops over
+    ``coverage_kind`` are empty for every MP so the leading-axis-zero array
+    is never indexed.
     """
-    slabs = [mortality]
+    if not rate_fns:
+        # No rate-driven coverages. The grid axes are taken from sex_grid
+        # so the result has the same ``ndim`` the kernel was compiled
+        # against -- numba dispatch keys on shape rank, not the leading
+        # axis length.
+        return np.zeros((0,) + sex_grid.shape, dtype=np.float64)
+    slabs = []
     for rate in rate_fns:
         slabs.append(np.ascontiguousarray(
             rate(sex_grid, issue_age_grid, duration_grid,
@@ -144,19 +141,17 @@ def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
 def coverage_arrays(coverages, benefit_patterns=None):
     """Per-code kernel flag arrays for the coverage list.
 
-    ``coverages`` is the ordered rate-driven coverages (codes 1..n);
-    code 0, the main-contract death coverage, is prepended -- a recurring
-    claim of mortality risk. ``benefit_patterns`` is the portfolio-level
-    taxonomy (``{coverage_code: BenefitPattern}``); each coverage's
-    pattern looked up by code gives the two flags via
-    :func:`pattern_attrs`. When ``benefit_patterns`` is ``None`` every
-    coverage falls back to :data:`BenefitPattern.MORBIDITY` -- the
-    conservative default the pre-Plan-B engine used for any rate-driven
-    coverage that was not flagged a diagnosis.
+    ``coverages`` is the ordered rate-driven coverages, in the same order as
+    :attr:`Assumptions.coverages`; ``benefit_patterns`` is the portfolio-level
+    taxonomy (``{coverage_code: BenefitPattern}``). Each coverage's pattern
+    looked up by code gives the two flags via :func:`pattern_attrs`. When
+    ``benefit_patterns`` is ``None`` every coverage falls back to
+    :data:`BenefitPattern.MORBIDITY` -- the conservative default for any
+    rate-driven coverage that was not flagged a diagnosis.
 
     Returns ``(cov_is_diagnosis, cov_risk)``, each indexed by coverage code.
     """
-    flags: list[tuple[bool, int]] = [(False, RISK_MORTALITY)]
+    flags: list[tuple[bool, int]] = []
     for r in coverages:
         pattern = (benefit_patterns.get(r.code) if benefit_patterns is not None
                    else None) or BenefitPattern.MORBIDITY
@@ -172,10 +167,9 @@ def order_coverages(rate_driven_codes, benefit_patterns):
     Returns the input sequence unchanged when validation passes -- the
     function name reflects that this is the *ordering* boundary: the
     rate-driven coverages keep their xlsx-coverages-sheet order (which
-    becomes the engine's integer code ordering, with code ``i+1`` for
-    entry ``i``), but every code must appear in the
-    ``benefit_patterns.csv`` taxonomy. Raises :class:`ValueError`
-    listing the missing codes when not.
+    becomes the engine's integer code ordering, with code ``i`` for entry
+    ``i``), but every code must appear in the ``benefit_patterns.csv``
+    taxonomy. Raises :class:`ValueError` listing the missing codes when not.
     """
     if benefit_patterns is None:
         return tuple(rate_driven_codes)

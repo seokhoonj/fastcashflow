@@ -13,6 +13,7 @@ import numpy as np
 
 from fastcashflow import (
     Assumptions, ExpenseItem, ModelPoints, STATE_MODELS, measure, value,
+    CoverageRate,
 )
 
 
@@ -35,6 +36,7 @@ def _basis(**overrides):
             ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
             ExpenseItem("maintenance",  "gamma_fixed",  30_000.0),
         ),
+        coverages=(CoverageRate("DEATH", _flat_rate(0.005)),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -42,7 +44,7 @@ def _basis(**overrides):
 
 def _mp():
     return ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=240,
     )
 
@@ -89,11 +91,11 @@ def test_surrender_scales_linearly_in_count():
     n_time = 120
     asmp = _basis(surrender_value_curve=np.full(n_time, 0.5))
     mp_single = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=n_time, count=1.0,
     )
     mp_grouped = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=n_time, count=10.0,
     )
     m_single = measure(mp_single, asmp)

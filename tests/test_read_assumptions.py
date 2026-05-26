@@ -83,24 +83,28 @@ def test_every_segment_has_expense_items():
         assert asmp.expense_items                       # populated
 
 
-def test_riders_resolved():
-    """Rate-driven riders resolve from ``incidence_rate_tables``; the
-    pattern taxonomy now lives in ``benefit_patterns.csv`` (read by
+def test_coverages_resolved():
+    """Rate-driven coverages resolve from ``incidence_rate_tables`` (or
+    ``mortality_tables`` for the general death coverage); the pattern
+    taxonomy now lives in ``benefit_patterns.csv`` (read by
     :func:`load_sample_benefit_patterns`), no longer on the
-    :class:`Assumptions`."""
+    :class:`Assumptions`. The order matches the workbook's ``coverages``
+    sheet rows; the engine treats every entry as an ordinary rate-driven
+    coverage (no slot reserved)."""
     from fastcashflow import load_sample_benefit_patterns, BenefitPattern
 
     basis = load_sample_assumptions()
     asmp = basis[("TERM_LIFE", "GA")]
-    # ADB is rate-driven (death-type), so it joins the riders tuple too.
-    assert [r.code for r in asmp.coverages] == ["INPATIENT", "CANCER", "ADB"]
+    assert [r.code for r in asmp.coverages] == [
+        "DEATH_GENERAL", "INPATIENT", "CANCER", "ADB"
+    ]
     assert load_sample_benefit_patterns() == {
-        "DEATH_MAIN": BenefitPattern.DEATH,
-        "INPATIENT":  BenefitPattern.MORBIDITY,
-        "CANCER":     BenefitPattern.DIAGNOSIS,
-        "ADB":        BenefitPattern.DEATH,
-        "ANNUITY":    BenefitPattern.ANNUITY,
-        "MATURITY":   BenefitPattern.MATURITY,
+        "DEATH_GENERAL": BenefitPattern.DEATH,
+        "INPATIENT":     BenefitPattern.MORBIDITY,
+        "CANCER":        BenefitPattern.DIAGNOSIS,
+        "ADB":           BenefitPattern.DEATH,
+        "ANNUITY":       BenefitPattern.ANNUITY,
+        "MATURITY":      BenefitPattern.MATURITY,
     }
 
 
@@ -109,7 +113,7 @@ def test_resolved_basis_values():
     GA and FC segments give different BEL because lapse differs (channel
     segmentation actually bites the valuation)."""
     basis = load_sample_assumptions()
-    mp = ModelPoints.single(issue_age=40, death_benefit=100_000_000.0,
+    mp = ModelPoints.single(issue_age=40, benefits={0: 100_000_000.0},
                             level_premium=50_000.0, term_months=120)
     # Use a copy of the basis without surrender for the value() / measure()
     # equivalence assertion -- the value() fast path doesn't yet include

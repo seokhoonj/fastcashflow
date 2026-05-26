@@ -16,7 +16,7 @@ from fastcashflow.assumptions import (
     Assumptions, CoverageRate, EXPENSE_BASES, ExpenseItem,
     derive_expense_components, describe_assumptions,
 )
-from fastcashflow.coverage import BenefitPattern, DEATH, RISK_MORBIDITY, RISK_MORTALITY
+from fastcashflow.coverage import BenefitPattern, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import (
     Measurement, Valuation, clear_codegen_cache, measure, measure_in_force,
     value, value_in_force, value_segmented,
@@ -101,7 +101,7 @@ __all__ = [
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
-    "BenefitPattern", "DEATH", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
+    "BenefitPattern", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
     "derive_expense_components",
     "RISK_MORTALITY", "RISK_MORBIDITY",
     "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAID_UP",

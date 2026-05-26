@@ -16,6 +16,7 @@ import pytest
 from fastcashflow import (
     Assumptions, ExpenseItem, ModelPoints, measure, measure_in_force, value,
     value_in_force,
+    CoverageRate,
 )
 
 
@@ -38,6 +39,7 @@ def _basis():
             ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
             ExpenseItem("maintenance",  "gamma_fixed",  30_000.0),
         ),
+        coverages=(CoverageRate("DEATH", _flat_rate(0.005)),),
     )
 
 
@@ -45,7 +47,7 @@ def test_value_in_force_zero_elapsed_matches_value():
     """When every ``elapsed_months`` is 0 the in-force valuation collapses
     to the new-business :func:`value` (= ``Measurement.bel[:, 0]``)."""
     mp = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=120,
     )
     asmp = _basis()
@@ -62,7 +64,7 @@ def test_value_in_force_matches_trajectory_slice():
     the valuation date forward."""
     elapsed = 36
     mp_new = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=120,
     )
     asmp = _basis()
@@ -72,7 +74,7 @@ def test_value_in_force_matches_trajectory_slice():
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
         term_months=np.array([120]),
-        death_benefit=np.array([100_000_000.0]),
+        benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([elapsed]),
     )
     v_inf = value_in_force(mp_inforce, asmp)
@@ -89,7 +91,7 @@ def test_value_in_force_settlement_matches_trajectory():
     accretion + coverage-unit release path."""
     asmp = _basis()
     mp_new = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=240,
     )
     m = measure(mp_new, asmp)
@@ -101,7 +103,7 @@ def test_value_in_force_settlement_matches_trajectory():
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        death_benefit=np.array([100_000_000.0]),
+        benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([elapsed]),
     )
     v = value_in_force(
@@ -120,7 +122,7 @@ def test_value_in_force_period_months_rejected_in_hypothetical_mode():
     prior_csm / lock_in_rate is a no-op trap and now raises."""
     asmp = _basis()
     mp = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=120,
     )
     with pytest.raises(ValueError, match="period_months applies only in"):
@@ -132,7 +134,7 @@ def test_value_in_force_settlement_paired_args():
     without the other is a silent-wrong-result trap and raises."""
     asmp = _basis()
     mp = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=240,
     )
     with pytest.raises(ValueError, match="both be given.*both omitted"):
@@ -150,7 +152,7 @@ def test_value_in_force_settlement_elapsed_too_small():
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        death_benefit=np.array([100_000_000.0]),
+        benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([6]),
     )
     with pytest.raises(ValueError, match="precedes inception"):
@@ -170,7 +172,7 @@ def test_measure_in_force_hypothetical_is_measure():
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        death_benefit=np.array([100_000_000.0]),
+        benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
     )
     m = measure(mp, asmp)
@@ -188,7 +190,7 @@ def test_measure_in_force_settlement_matches_value_in_force():
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        death_benefit=np.array([100_000_000.0]),
+        benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
     )
     m_baseline = measure(mp, asmp)
@@ -213,7 +215,7 @@ def test_measure_in_force_settlement_roundtrip_to_measure():
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        death_benefit=np.array([100_000_000.0]),
+        benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
     )
     m = measure(mp, asmp)
@@ -240,7 +242,7 @@ def test_in_force_bel_smaller_term_left():
             issue_age=np.array([40]),
             level_premium=np.array([50_000.0]),
             term_months=np.array([240]),
-            death_benefit=np.array([100_000_000.0]),
+            benefits={0: np.array([100_000_000.0])},
             elapsed_months=np.array([e]),
         )
         return abs(value_in_force(mp, asmp).bel[0])

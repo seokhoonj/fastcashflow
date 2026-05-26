@@ -7,7 +7,10 @@ in plain Python as the correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPoints, measure, value
+from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, value, CoverageRate
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 SELECT_Q = 0.005      # monthly mortality, policy year 0 (select)
 ULT_Q = 0.02          # monthly mortality, policy year 1+ (ultimate)
@@ -37,6 +40,7 @@ def _assumptions(**overrides) -> Assumptions:
         discount_annual=0.0,
         ra_confidence=0.75,
         mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", _mortality),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -50,8 +54,9 @@ def test_select_ultimate_and_duration_lapse():
 
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=death_benefit,
+            issue_age=40, benefits={0: death_benefit},
             level_premium=premium, term_months=term,
+            benefit_patterns=PATTERNS,
         ),
         _assumptions(),
     )
@@ -97,9 +102,10 @@ def test_value_matches_run_phase1b():
     n = 500
     mps = ModelPoints(
         issue_age=rng.integers(25, 55, n),
-        death_benefit=rng.integers(10, 100, n) * 1_000_000,
+        benefits={0: rng.integers(10, 100, n) * 1_000_000},
         level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(13, 36, n),
+        benefit_patterns=PATTERNS,
     )
     asmp = _assumptions(mortality_cv=0.10, discount_annual=0.03)
 

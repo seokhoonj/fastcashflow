@@ -19,6 +19,7 @@ from fastcashflow import (
     reconcile,
     roll_forward,
     value,
+    CoverageRate,
 )
 
 
@@ -39,6 +40,7 @@ def _assumptions() -> Assumptions:
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001))),),
     )
 
 
@@ -46,7 +48,7 @@ def _portfolio(n: int = 50) -> ModelPoints:
     rng = np.random.default_rng(4)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        death_benefit=rng.integers(20, 90, n) * 1_000_000,
+        benefits={0: rng.integers(20, 90, n) * 1_000_000},
         level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=np.full(n, 120),
     )
@@ -180,9 +182,11 @@ def test_roll_forward_multi_rejects_too_many_rows():
 
 def _revised(mps: ModelPoints):
     """A measurement of the same book under markedly higher mortality."""
+    worse_mort = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.003))
     worse = replace(
         _assumptions(),
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.003)),
+        mortality_annual=worse_mort,
+        coverages=(CoverageRate("DEATH", worse_mort),),
     )
     return measure(mps, worse)
 
@@ -470,11 +474,12 @@ def _vfa_assumptions() -> Assumptions:
         mortality_cv=0.10,
         investment_return=0.06,
         fund_fee=0.015,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002))),),
     )
 
 
 def _vfa_contract() -> ModelPoints:
-    return ModelPoints.single(40, 0.0, 0.0, 120, account_value=1e8)
+    return ModelPoints.single(40, 0.0, 120, account_value=1e8)
 
 
 def test_roll_forward_vfa_reconciles():

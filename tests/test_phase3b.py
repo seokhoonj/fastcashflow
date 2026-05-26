@@ -5,6 +5,8 @@ import pytest
 
 from fastcashflow import (
     Assumptions,
+    BenefitPattern,
+    CoverageRate,
     ExpenseItem,
     ModelPoints,
     load_sample_assumptions,
@@ -17,6 +19,9 @@ from fastcashflow import (
 )
 
 
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
+
+
 def _annual(m):
     """Convert a monthly rate to its annual equivalent (engine converts back)."""
     return 1.0 - (1.0 - m) ** 12
@@ -26,10 +31,22 @@ def _portfolio(n: int = 400) -> ModelPoints:
     rng = np.random.default_rng(3)
     return ModelPoints(
         issue_age=rng.integers(25, 60, n),
-        death_benefit=rng.integers(10, 100, n) * 1_000_000,
+        benefits={0: rng.integers(10, 100, n) * 1_000_000},
         level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
+        benefit_patterns=PATTERNS,
     )
+
+
+def _death_benefits(mps: ModelPoints) -> np.ndarray:
+    """Reconstruct the per-policy death benefit from the CSR -- the
+    post-(B) replacement for the previous ``ModelPoints.death_benefit``
+    field. Sums every coverage_amount whose coverage_kind is 0 (the
+    DEATH coverage in these tests)."""
+    mp_of_cov = np.repeat(np.arange(mps.n_mp), np.diff(mps.coverage_offset))
+    mask = mps.coverage_kind == 0
+    return np.bincount(mp_of_cov[mask], weights=mps.coverage_amount[mask],
+                       minlength=mps.n_mp)
 
 
 def _assumptions() -> Assumptions:
@@ -44,13 +61,18 @@ def _assumptions() -> Assumptions:
         ),
         ra_confidence=0.85,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001))),),
     )
 
 
 def _frame(mps: ModelPoints) -> pl.DataFrame:
+    # Wide form -- one row per policy, one column per coverage. The DEATH
+    # coverage in these tests sits at coverage_code "DEATH" (the first and
+    # only registered coverage in ``_assumptions()``); its wide column is
+    # ``DEATH_benefit`` per the reader convention.
     return pl.DataFrame({
         "issue_age": mps.issue_age,
-        "death_benefit": mps.death_benefit,
+        "DEATH_benefit": _death_benefits(mps),
         "level_premium": mps.level_premium,
         "term_months": mps.term_months,
     })
@@ -64,10 +86,10 @@ def test_model_points_round_trip(tmp_path, suffix):
     df = _frame(mps)
     df.write_parquet(path) if suffix == ".parquet" else df.write_csv(path)
 
-    loaded = read_model_points(path)
+    loaded = read_model_points(path, _assumptions(), benefit_patterns=PATTERNS)
     assert loaded.n_mp == mps.n_mp
     assert np.allclose(loaded.issue_age, mps.issue_age)
-    assert np.allclose(loaded.death_benefit, mps.death_benefit)
+    assert np.allclose(_death_benefits(loaded), _death_benefits(mps))
     assert np.allclose(loaded.level_premium, mps.level_premium)
     assert np.allclose(loaded.term_months, mps.term_months)
 
@@ -80,12 +102,12 @@ def test_read_model_points_reads_count(tmp_path):
         tmp_path / "with_count.parquet"
     )
     assert np.allclose(
-        read_model_points(tmp_path / "with_count.parquet").count, counts
+        read_model_points(tmp_path / "with_count.parquet", _assumptions(), benefit_patterns=PATTERNS).count, counts
     )
 
     _frame(mps).write_parquet(tmp_path / "no_count.parquet")
     assert np.allclose(
-        read_model_points(tmp_path / "no_count.parquet").count,
+        read_model_points(tmp_path / "no_count.parquet", _assumptions(), benefit_patterns=PATTERNS).count,
         np.ones(mps.n_mp),
     )
 
@@ -124,11 +146,13 @@ def test_read_ignores_extra_columns_and_flags_missing(tmp_path):
         pl.Series("mp_id", np.arange(mps.n_mp))
     )
     full.write_parquet(tmp_path / "full.parquet")
-    assert read_model_points(tmp_path / "full.parquet").n_mp == mps.n_mp
+    assert read_model_points(
+        tmp_path / "full.parquet", _assumptions()
+    ).n_mp == mps.n_mp
 
     pl.DataFrame({"issue_age": mps.issue_age}).write_parquet(tmp_path / "partial.parquet")
     with pytest.raises(ValueError, match="missing required column"):
-        read_model_points(tmp_path / "partial.parquet")
+        read_model_points(tmp_path / "partial.parquet", _assumptions())
 
 
 def test_file_workflow_matches_in_memory(tmp_path):
@@ -137,7 +161,7 @@ def test_file_workflow_matches_in_memory(tmp_path):
     asmp = _assumptions()
     _frame(mps).write_parquet(tmp_path / "mps.parquet")
 
-    from_file = value(read_model_points(tmp_path / "mps.parquet"), asmp)
+    from_file = value(read_model_points(tmp_path / "mps.parquet", asmp, benefit_patterns=PATTERNS), asmp)
     in_memory = value(mps, asmp)
 
     assert np.allclose(from_file.bel, in_memory.bel)
@@ -152,9 +176,10 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
     n = 1000
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
-        death_benefit=rng.integers(10, 100, n) * 1_000_000,
+        benefits={0: rng.integers(10, 100, n) * 1_000_000},
         level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
+        benefit_patterns=PATTERNS,
     )
     asmp = _assumptions()
 
@@ -162,7 +187,8 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
     _frame(mps).with_columns(pl.Series("id", np.arange(n))).write_parquet(in_path)
 
     out_dir = tmp_path / "results"
-    processed = value_file(in_path, out_dir, asmp, chunk_size=300, id_column="id")
+    processed = value_file(in_path, out_dir, asmp, chunk_size=300, id_column="id",
+                           benefit_patterns=PATTERNS)
     assert processed == n
     assert len(sorted(out_dir.glob("part-*.parquet"))) == 4  # 300+300+300+100
 

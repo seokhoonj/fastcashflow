@@ -6,8 +6,11 @@ verify the formula end-to-end against hand calculation.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPoints, measure
+from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, CoverageRate
 
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 def _flat_rate(value):
     """3-arg rate callable that returns a constant for any (sex, age, dur)."""
@@ -24,6 +27,7 @@ def _basis(lapse_rate, surrender_curve):
         ra_confidence=0.75,
         mortality_cv=0.0,
         surrender_value_curve=surrender_curve,
+        coverages=(CoverageRate("DEATH", _flat_rate(0.0)),),
     )
 
 
@@ -31,8 +35,9 @@ def test_surrender_cf_zero_when_curve_is_none():
     """``surrender_value_curve=None`` reproduces the historical behaviour:
     lapse silently removes the contract, no surrender cash flow."""
     mp = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=12,
+        benefit_patterns=PATTERNS,
     )
     asmp = _basis(lapse_rate=0.1, surrender_curve=None)
     m = measure(mp, asmp)
@@ -44,8 +49,9 @@ def test_surrender_cf_hand_calc_single_period():
     surrender_cf at month 0 equals
     ``lapse_flow * cum_premium * factor[0]``."""
     mp = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=10_000.0, term_months=12,
+        benefit_patterns=PATTERNS,
     )
     # 12% annual lapse -> ~1.06% monthly under constant-force conversion
     # (engine handles annual_to_monthly conversion internally).
@@ -72,8 +78,9 @@ def test_surrender_cf_accumulates_with_cum_premium():
     ratio (the inforce-decay is already absorbed into cum_premium, which
     aggregates inforce * premium each month)."""
     mp = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=10_000.0, term_months=24,
+        benefit_patterns=PATTERNS,
     )
     asmp = _basis(lapse_rate=0.05, surrender_curve=np.full(25, 0.8))
     m = measure(mp, asmp)
@@ -86,8 +93,9 @@ def test_surrender_cf_accumulates_with_cum_premium():
 def test_surrender_cf_widens_bel():
     """Enabling surrender increases BEL (more outflow on lapse)."""
     mp = ModelPoints.single(
-        issue_age=40, death_benefit=100_000_000.0,
+        issue_age=40, benefits={0: 100_000_000.0},
         level_premium=10_000.0, term_months=24,
+        benefit_patterns=PATTERNS,
     )
     asmp_no_surr = _basis(lapse_rate=0.05, surrender_curve=None)
     asmp_with_surr = _basis(

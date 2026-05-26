@@ -13,6 +13,7 @@ from fastcashflow import (
     measure,
     roll_forward,
     transition,
+    CoverageRate,
 )
 
 
@@ -33,6 +34,7 @@ def _assumptions() -> Assumptions:
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002))),),
     )
 
 
@@ -40,7 +42,7 @@ def _portfolio(n: int = 50) -> ModelPoints:
     rng = np.random.default_rng(8)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        death_benefit=rng.integers(20, 90, n) * 1_000_000,
+        benefits={0: rng.integers(20, 90, n) * 1_000_000},
         level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=np.full(n, 120),
     )

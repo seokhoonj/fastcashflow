@@ -7,11 +7,15 @@ amount, and an empty list equals a zero death benefit.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure, value
-from fastcashflow.coverage import DEATH
+from fastcashflow import (
+    Assumptions, BenefitPattern, CoverageRate, ExpenseItem, ModelPoints,
+    measure, value,
+)
 
 Q = 0.002
 LAPSE = 0.005
+DEATH = 0   # the death coverage's index in _assumptions().coverages
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 
 def _annual(m):
@@ -31,6 +35,7 @@ def _assumptions() -> Assumptions:
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q))),),
     )
 
 
@@ -46,8 +51,11 @@ def test_multiple_death_coverages_sum_to_one():
         coverage_kind=np.array([DEATH, DEATH]),
         coverage_amount=np.array([a, b]),
         coverage_offset=np.array([0, 2]),
+        benefit_patterns=PATTERNS,
     )
-    combined = ModelPoints.single(40, a + b, 80_000.0, term)
+    combined = ModelPoints.single(
+        40, 80_000.0, term, benefits={0: a + b}, benefit_patterns=PATTERNS,
+    )
 
     m_split, m_comb = measure(split, asmp), measure(combined, asmp)
     assert np.allclose(m_split.bel, m_comb.bel)
@@ -63,11 +71,14 @@ def test_multiple_death_coverages_sum_to_one():
 def test_no_coverages_matches_zero_death_benefit():
     """An empty coverage list equals a death benefit of zero."""
     asmp = _assumptions()
-    explicit_zero = ModelPoints.single(45, 0.0, 50_000.0, 60)
+    explicit_zero = ModelPoints.single(
+        45, 50_000.0, 60, benefits={0: 0.0}, benefit_patterns=PATTERNS,
+    )
     no_coverages = ModelPoints(
         issue_age=np.array([45.0]),
         level_premium=np.array([50_000.0]),
         term_months=np.array([60]),
+        benefit_patterns=PATTERNS,
     )
     a, b = value(explicit_zero, asmp), value(no_coverages, asmp)
     assert np.allclose(a.bel, b.bel)

@@ -5,9 +5,10 @@ Model points and results go through polars; the actuarial basis -- read by
 
 Model points come in two shapes, both producing the same ``ModelPoints``:
 
-* **wide** -- one row per policy, every benefit a column: ``death_benefit``,
-  ``maturity_benefit``, ``annuity_payment`` and a ``<coverage_code>_benefit``
-  column per coverage. The convenient form for a single, homogeneous product.
+* **wide** -- one row per policy, every benefit a column:
+  ``<coverage_code>_benefit`` per rate-driven coverage, plus the survival
+  benefits ``maturity_benefit`` and ``annuity_payment``. The convenient
+  form for a single, homogeneous product.
 * **long-form** -- a policies frame (contract attributes) plus a coverages
   frame, one row per policy x coverage carrying ``amount`` and ``premium``.
   The form for a heterogeneous, multi-product portfolio.
@@ -37,7 +38,7 @@ from fastcashflow.assumptions import (
 )
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
-    BenefitPattern, MAIN_DEATH_CODE, RATE_DRIVEN_PATTERNS,
+    BenefitPattern, RATE_DRIVEN_PATTERNS,
 )
 from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 
@@ -57,7 +58,7 @@ _NAMED_WIDE = frozenset((
     "mp_id", "product_code", "channel_code", "issue_age", "term_months",
     "sex", "count", "state", "level_premium", "single_premium",
     "premium_term_months", "premium_frequency_months",
-    "annuity_frequency_months", "death_benefit", "maturity_benefit",
+    "annuity_frequency_months", "maturity_benefit",
     "annuity_payment", "disability_income", "disability_benefit",
 ))
 
@@ -499,14 +500,17 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     # disease, give them different coverage_codes (e.g. CANCER_HEALTH vs
     # CANCER_WHOLELIFE) -- the engine then treats them as separate coverages.
     #
-    # Plan B (3-file split): this sheet now carries only ``coverage_code`` +
+    # Plan B (3-file split): this sheet carries only ``coverage_code`` +
     # ``rate_table`` -- the rate-driven entries. The pattern taxonomy
-    # (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY / DEATH_MAIN) moves
-    # to a separate ``benefit_patterns.csv`` file consumed by
+    # (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) moves to a
+    # separate ``benefit_patterns.csv`` file consumed by
     # :func:`read_model_points`, so the assumptions workbook is purely the
     # actuarial basis and the company catalogue lives elsewhere. Survival
-    # entries (ANNUITY, MATURITY) and DEATH_MAIN never carry a
-    # ``rate_table`` and so do not appear here.
+    # entries (ANNUITY, MATURITY) never carry a ``rate_table`` and so do
+    # not appear here. A death coverage's ``rate_table`` cell may point to
+    # either an ``incidence_rate_tables`` entry or a ``mortality_tables``
+    # entry: the engine reads the table as a per-coverage payment rate
+    # independently of how the same id is also used for in-force decrement.
     rate_driven_coverages: list[tuple[str, str]] = []
     if "coverages" in wb.sheetnames:
         for r in _sheet_dicts(wb["coverages"]):
@@ -516,8 +520,8 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
                 raise ValueError(
                     f"coverages row {code!r} has no rate_table; the "
                     "assumptions workbook only lists rate-driven coverages "
-                    "(survival / DEATH_MAIN entries belong in "
-                    "benefit_patterns.csv, not here)"
+                    "(survival entries belong in benefit_patterns.csv, "
+                    "not here)"
                 )
             rate_driven_coverages.append((code, str(rt).strip()))
 
@@ -559,19 +563,29 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
 
         coverage_rates = []
         for code, rate_table in rate_driven_coverages:
-            if rate_table not in incidence_rate_t:
+            # Death coverages share the mortality_tables namespace -- a
+            # rate_table cell may name either an incidence_rate_tables or
+            # a mortality_tables entry. Incidence wins on collision (the
+            # convention rare in practice; calibrating the same code with
+            # different tables under the same name is a workbook error).
+            if rate_table in incidence_rate_t:
+                rate_fn = incidence_rate_t[rate_table]
+                shift = shift_morb
+            elif rate_table in mortality_t:
+                rate_fn = mortality_t[rate_table]
+                shift = shift_mort
+            else:
                 raise ValueError(
-                    f"coverage {code!r} of product {product_code!r}: rate_table "
-                    f"{rate_table!r} is not in incidence_rate_tables"
+                    f"coverage {code!r} of product {product_code!r}: "
+                    f"rate_table {rate_table!r} is not in incidence_rate_tables "
+                    "nor mortality_tables"
                 )
-            rate_fn = incidence_rate_t[rate_table]
-            rate_fn = _with_age_shift(rate_fn, shift_morb)
+            rate_fn = _with_age_shift(rate_fn, shift)
             rate_fn = _with_ae_factor(rate_fn, ae(code))
             coverage_rates.append(CoverageRate(code=code, rate=rate_fn))
 
         mortality_fn = lookup(mortality_t, "mortality_table")
         mortality_fn = _with_age_shift(mortality_fn, shift_mort)
-        mortality_fn = _with_ae_factor(mortality_fn, ae("DEATH_MAIN"))
         improvement_curve = lookup(
             improvement_t, "mortality_improvement_table", optional_ref=True,
         )
@@ -757,7 +771,7 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
     )
     for opt in ("sex", "count", "single_premium", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",
-                "death_benefit", "maturity_benefit", "annuity_payment",
+                "maturity_benefit", "annuity_payment",
                 "disability_income", "disability_benefit", "account_value",
                 "guaranteed_credit_rate"):
         if opt in df.columns:
@@ -769,7 +783,7 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
     if "state" in df.columns:
         fields["state"] = _read_state(df["state"])
 
-    code_to_kind = {r.code: i + 1 for i, r in enumerate(
+    code_to_kind = {r.code: i for i, r in enumerate(
         assumptions.coverages if assumptions is not None else ())}
     benefits: dict[int, np.ndarray] = {}
     for col in df.columns:
@@ -817,7 +831,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     _warn_if_elapsed_months(pol.columns)
     n_mp = pol.height
     ctypes = {k: BenefitPattern(v) for k, v in benefit_patterns.items()}
-    code_to_kind = {r.code: i + 1 for i, r in enumerate(assumptions.coverages)}
+    code_to_kind = {r.code: i for i, r in enumerate(assumptions.coverages)}
     # V3 -- every rate-driven coverage in the assumptions must be registered
     # in the taxonomy. Detected here so the error surfaces at read time
     # rather than as a quiet routing miss inside the engine.
@@ -830,12 +844,15 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             "add each code (with its BenefitPattern) to benefit_patterns.csv"
         )
 
-    # Resolve every coverage row to its policy index and coverage type.
+    # Resolve every coverage row to its policy index and coverage type. A
+    # rate-driven coverage code that the taxonomy declares but the
+    # assumptions workbook does not register lands at -1, raised below as
+    # a missing-coverage error -- the engine cannot lookup a rate for it.
     pol = pol.with_row_index("_mp")
     cmap = pl.DataFrame({
         "coverage_code": list(ctypes.keys()),
         "_type": [str(v) for v in ctypes.values()],
-        "_kind": [code_to_kind.get(c, 0) for c in ctypes],
+        "_kind": [code_to_kind.get(c, -1) for c in ctypes],
     })
     cov = (cov.join(pol.select("mp_id", "_mp"), on="mp_id", how="left")
               .join(cmap, on="coverage_code", how="left"))
@@ -882,15 +899,24 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     else:
         fields["level_premium"] = np.zeros(n_mp)
 
-    # Coverage list: the main-contract death (code 0, the
-    # ``MAIN_DEATH_CODE`` slot) and the rate-driven coverages (codes 1..n).
-    # annuity / maturity are survival scalars, not here. The main-contract
-    # row is a DEATH pattern entry whose ``coverage_code`` matches
-    # ``MAIN_DEATH_CODE`` -- it lands at code 0 because the assumptions
-    # workbook does not register that code as a rate-driven coverage, so
-    # ``code_to_kind.get(..., 0)`` routes it to slot 0 where
-    # ``mortality_annual`` drives the rate.
+    # Coverage list: the rate-driven coverages (codes 0..n-1 indexing
+    # ``assumptions.coverages``). annuity / maturity are survival scalars
+    # and not part of the CSR. Every rate-driven row must map to a
+    # registered coverage in the assumptions workbook -- the catalogue
+    # may declare codes the workbook does not register (the operator can
+    # still attach amounts to them in the long-form coverages file, but
+    # the engine has no rate to apply), in which case ``code_to_kind``
+    # leaves them at -1 and we raise.
     is_cov = np.isin(ctype, RATE_DRIVEN_PATTERNS)
+    if np.any(kind[is_cov] < 0):
+        bad = sorted({str(c) for c, ok in zip(
+            cov["coverage_code"].to_list(), is_cov & (kind < 0)) if ok})
+        raise ValueError(
+            f"rate-driven coverage code(s) {bad} appear in the model-point "
+            "coverages frame but are not registered in the assumptions "
+            "workbook's coverages sheet -- add a row (with a rate_table) "
+            "so the engine has a rate to apply"
+        )
     order = np.argsort(mp[is_cov], kind="stable")
     cov_mp = mp[is_cov][order]
     fields["coverage_kind"] = kind[is_cov][order]
@@ -927,10 +953,10 @@ def read_model_points(
       policy. ``issue_age`` and ``term_months`` are required; ``sex``,
       ``count``, ``state``, ``level_premium``, ``single_premium``,
       ``premium_term_months``, ``premium_frequency_months``,
-      ``annuity_frequency_months``, ``death_benefit``, ``maturity_benefit``
-      and ``annuity_payment`` are read if present. A ``<coverage_code>_benefit``
-      column adds that coverage; the ``assumptions`` resolve the
-      coverage code to an engine code.
+      ``annuity_frequency_months``, ``maturity_benefit`` and
+      ``annuity_payment`` are read if present. Each
+      ``<coverage_code>_benefit`` column adds that coverage; the
+      ``assumptions`` resolve the coverage code to an engine code.
     * **long-form** -- ``read_model_points(policies, assumptions,
       coverages=coverages_path, benefit_patterns=benefit_patterns_path)``.
       A policies frame (``mp_id``, ``issue_age``, ``term_months``,

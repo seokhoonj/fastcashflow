@@ -23,8 +23,11 @@ Paragraph -> test name:
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPoints, measure
+from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, CoverageRate
 
+
+
+PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 def _annual(m):
     """Annual-equivalent of a monthly rate (engine converts back internally)."""
@@ -39,6 +42,7 @@ def _flat_assumptions(**overrides) -> Assumptions:
         discount_annual=0.0,
         ra_confidence=0.75,
         mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01))),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -61,8 +65,9 @@ def test_sec32_bel_is_pv_of_future_cashflows():
 
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=death_benefit,
+            issue_age=40, benefits={0: death_benefit},
             level_premium=premium, term_months=term,
+            benefit_patterns=PATTERNS,
         ),
         _flat_assumptions(),
     )
@@ -86,8 +91,9 @@ def test_sec34_b65_contract_boundary():
     term = 12
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=1_000_000.0,
+            issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=term,
+            benefit_patterns=PATTERNS,
         ),
         _flat_assumptions(),
     )
@@ -109,8 +115,9 @@ def test_sec37_ra_addition_to_bel():
     """
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=1_000_000.0,
+            issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=24,
+            benefit_patterns=PATTERNS,
         ),
         _flat_assumptions(mortality_cv=0.10),
     )
@@ -126,8 +133,9 @@ def test_sec38_initial_csm_profitable():
     """Sec.38(b): for a profitable group CSM_0 = max(0, -FCF), loss = 0."""
     res = measure(
         ModelPoints.single(
-            issue_age=35, death_benefit=1_000_000.0,
+            issue_age=35, benefits={0: 1_000_000.0},
             level_premium=15_000.0, term_months=36,
+            benefit_patterns=PATTERNS,
         ),
         _flat_assumptions(),
     )
@@ -141,9 +149,10 @@ def test_sec38_loss_component_onerous():
     """Sec.38(c): for an onerous group CSM_0 = 0, loss component = max(0, FCF)."""
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=1_000_000.0,
+            issue_age=40, benefits={0: 1_000_000.0},
             level_premium=100.0,                  # premium far too low
             term_months=12,
+            benefit_patterns=PATTERNS,
         ),
         _flat_assumptions(
             mortality_annual=lambda sex, issue_age, duration:
@@ -169,8 +178,9 @@ def test_sec44_csm_accretion_at_locked_in_rate():
     asmp = _flat_assumptions(discount_annual=0.06)
     res = measure(
         ModelPoints.single(
-            issue_age=35, death_benefit=1_000_000.0,
+            issue_age=35, benefits={0: 1_000_000.0},
             level_premium=15_000.0, term_months=36,
+            benefit_patterns=PATTERNS,
         ),
         asmp,
     )
@@ -196,8 +206,9 @@ def test_sec44_b119_csm_release_proportional_to_coverage_units():
     )
     res = measure(
         ModelPoints.single(
-            issue_age=40, death_benefit=1_000_000.0,
+            issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=term,
+            benefit_patterns=PATTERNS,
         ),
         asmp,
     )
@@ -223,11 +234,11 @@ def test_b96_higher_discount_reduces_pv_of_claims():
     unchanged), so only the discount factors differ.
     """
     kwargs = dict(
-        issue_age=40, death_benefit=1_000_000.0,
+        issue_age=40, benefits={0: 1_000_000.0},
         level_premium=12_000.0, term_months=60,
     )
-    res_lo = measure(ModelPoints.single(**kwargs), _flat_assumptions(discount_annual=0.0))
-    res_hi = measure(ModelPoints.single(**kwargs), _flat_assumptions(discount_annual=0.10))
+    res_lo = measure(ModelPoints.single(**kwargs, benefit_patterns=PATTERNS), _flat_assumptions(discount_annual=0.0))
+    res_hi = measure(ModelPoints.single(**kwargs, benefit_patterns=PATTERNS), _flat_assumptions(discount_annual=0.10))
     pv_claims_lo = float(np.sum(res_lo.cashflows.claim_cf[0] * res_lo.discount_mid))
     pv_claims_hi = float(np.sum(res_hi.cashflows.claim_cf[0] * res_hi.discount_mid))
     assert pv_claims_hi < pv_claims_lo

@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from fastcashflow import read_scenarios, value_stochastic
+from fastcashflow import read_scenarios, value_stochastic, CoverageRate
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.modelpoints import ModelPoints
 
@@ -22,6 +22,7 @@ def _flat_asmp() -> Assumptions:
         discount_annual=0.03,
         ra_confidence=0.75,
         mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", lambda s, ia, d: np.full(s.shape, 0.001)),),
     )
 
 
@@ -72,7 +73,7 @@ def test_read_scenarios_feeds_value_stochastic(tmp_path):
     df.write_parquet(p)
 
     asmp = _flat_asmp()
-    mp = ModelPoints.single(issue_age=40, death_benefit=1_000.0,
+    mp = ModelPoints.single(issue_age=40, benefits={0: 1_000.0},
                             level_premium=10.0, term_months=24, count=1)
 
     scenarios = read_scenarios(p)
