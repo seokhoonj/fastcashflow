@@ -36,7 +36,9 @@ from fastcashflow.assumptions import (
     Assumptions, CoverageRate, ExpenseItem,
 )
 from fastcashflow.statemodel import STATE_MODELS
-from fastcashflow.coverage import BenefitPattern, RATE_DRIVEN_PATTERNS
+from fastcashflow.coverage import (
+    BenefitPattern, MAIN_DEATH_CODE, RATE_DRIVEN_PATTERNS,
+)
 from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 
 # ``engine`` is the largest module in the package (codegen + the numba CPU
@@ -880,9 +882,15 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     else:
         fields["level_premium"] = np.zeros(n_mp)
 
-    # Coverage list: the main-contract death (code 0) and the rate-driven
-    # riders (codes 1..n). annuity / maturity are survival scalars, not here.
-    is_cov = (ctype == BenefitPattern.DEATH_MAIN) | np.isin(ctype, RATE_DRIVEN_PATTERNS)
+    # Coverage list: the main-contract death (code 0, the
+    # ``MAIN_DEATH_CODE`` slot) and the rate-driven riders (codes 1..n).
+    # annuity / maturity are survival scalars, not here. The main-contract
+    # row is a DEATH pattern entry whose ``coverage_code`` matches
+    # ``MAIN_DEATH_CODE`` -- it lands at code 0 because the assumptions
+    # workbook does not register that code as a rate-driven rider, so
+    # ``code_to_kind.get(..., 0)`` routes it to slot 0 where
+    # ``mortality_annual`` drives the rate.
+    is_cov = np.isin(ctype, RATE_DRIVEN_PATTERNS)
     order = np.argsort(mp[is_cov], kind="stable")
     cov_mp = mp[is_cov][order]
     fields["coverage_kind"] = kind[is_cov][order]

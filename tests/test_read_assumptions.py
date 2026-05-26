@@ -95,7 +95,7 @@ def test_riders_resolved():
     # ADB is rate-driven (death-type), so it joins the riders tuple too.
     assert [r.code for r in asmp.coverages] == ["INPATIENT", "CANCER", "ADB"]
     assert load_sample_benefit_patterns() == {
-        "DEATH_MAIN": BenefitPattern.DEATH_MAIN,
+        "DEATH_MAIN": BenefitPattern.DEATH,
         "INPATIENT":  BenefitPattern.MORBIDITY,
         "CANCER":     BenefitPattern.DIAGNOSIS,
         "ADB":        BenefitPattern.DEATH,

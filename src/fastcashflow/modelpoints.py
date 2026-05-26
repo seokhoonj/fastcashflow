@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow.coverage import BenefitPattern, DEATH
+from fastcashflow.coverage import BenefitPattern, DEATH, MAIN_DEATH_CODE
 
 # Contract states -- a model point's in-force state at the valuation date.
 # ACTIVE is the ordinary premium-paying contract. WAIVER (premium waived on a
@@ -426,8 +426,9 @@ class ModelPoints:
             "count":                    self.count,
             "state":                    np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
-        # CSR coverages -- code 0 is the main-contract death, 1.. the riders.
-        label = {0: _coverage_label(self, BenefitPattern.DEATH_MAIN, "death")}
+        # CSR coverages -- code 0 is the main-contract death (label by the
+        # MAIN_DEATH_CODE convention), codes 1.. the rate-driven riders.
+        label = {0: _main_death_label(self)}
         for i, rider in enumerate(assumptions.coverages):
             label[i + 1] = rider.code
         mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
@@ -534,6 +535,15 @@ def _coverage_label(model_points, ctype, default):
         if t == ctype:
             return code
     return default
+
+
+def _main_death_label(model_points):
+    """The reserved main-contract death code -- ``MAIN_DEATH_CODE`` when
+    registered in the portfolio's taxonomy, else the bare default."""
+    registry = model_points.benefit_patterns or {}
+    if MAIN_DEATH_CODE in registry:
+        return MAIN_DEATH_CODE
+    return "death"
 
 
 def _build_csr(

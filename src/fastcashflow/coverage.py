@@ -32,19 +32,24 @@ DEATH = 0
 class BenefitPattern(str, Enum):
     """How a benefit pays out -- the engine's calculation routing key.
 
-    The xlsx ``coverages`` sheet tags each rider code with one of these
-    patterns (column ``benefit_pattern``); the value fixes which kernel
-    branch processes the coverage's cash flows. The members are the closed
-    set the engine knows how to compute -- adding a new value requires
-    adding a kernel branch.
+    Five uniform patterns: every rate-driven death coverage (main-contract
+    or rider, accidental or all-cause, ADB / disease / disaster) is the
+    same DEATH pattern; the rate table is what differentiates them.
+    DEATH_MAIN as a separate pattern is collapsed away -- it was a
+    routing detail of the engine's slot 0 (where ``mortality_annual``
+    drives both the in-force decrement and the main contract death
+    claim), not a kind of benefit. The reserved string code
+    ``"DEATH_MAIN"`` in the portfolio's :class:`ModelPoints`
+    ``benefit_patterns`` taxonomy is what marks the main-contract slot
+    today; future work removes that slot entirely and folds main-contract
+    death into the ordinary CSR coverage list.
 
     ``str, Enum`` -- members compare equal to their string value
     (``BenefitPattern.MORBIDITY == "MORBIDITY"``), so existing numpy
     array comparisons and dict keys keep working unchanged.
     """
 
-    DEATH_MAIN = "DEATH_MAIN"   # main-contract death; base mortality; code 0
-    DEATH      = "DEATH"        # death-type rider; own rate; non-decrementing
+    DEATH      = "DEATH"        # death-type coverage; rate-driven; non-decrementing
     MORBIDITY  = "MORBIDITY"    # recurring health claim (inpatient, surgery..)
     DIAGNOSIS  = "DIAGNOSIS"    # single-payment benefit; depleting pool
     # DIAGNOSIS uses an *independent* competing-risks convention: the "not yet
@@ -71,6 +76,16 @@ class BenefitPattern(str, Enum):
         return self._value_
 
 
+# Reserved coverage_code naming the main-contract death slot. Until the
+# engine's code-0 slot is folded into the ordinary CSR coverage list (a
+# larger refactor in a later phase), this string code is what marks the
+# main-contract death amount on the portfolio: the ``death_benefit``
+# field of :class:`~fastcashflow.modelpoints.ModelPoints` (and the
+# ``death_benefit`` wide-form column) flow into the CSR slot whose rate
+# is :attr:`~fastcashflow.assumptions.Assumptions.mortality_annual`.
+MAIN_DEATH_CODE = "DEATH_MAIN"
+
+
 # Rate-driven patterns carry a sex x age rate table and go in the coverage
 # list. Survival patterns (annuity, maturity) are paid to the in-force
 # survivors and need no rate; they are summed into per-policy amounts, not
@@ -79,7 +94,7 @@ RATE_DRIVEN_PATTERNS = (
     BenefitPattern.DEATH, BenefitPattern.MORBIDITY, BenefitPattern.DIAGNOSIS,
 )
 SURVIVAL_PATTERNS = (BenefitPattern.ANNUITY, BenefitPattern.MATURITY)
-BENEFIT_PATTERNS = (BenefitPattern.DEATH_MAIN,) + RATE_DRIVEN_PATTERNS + SURVIVAL_PATTERNS
+BENEFIT_PATTERNS = RATE_DRIVEN_PATTERNS + SURVIVAL_PATTERNS
 
 # Risk class of a coverage's claims: 0 mortality, 1 morbidity. The Risk
 # Adjustment prices the two with separate coefficients of variation.
@@ -97,8 +112,7 @@ def pattern_attrs(pattern: BenefitPattern) -> tuple[bool, int]:
     :class:`~fastcashflow.assumptions.CoverageRate`.
     """
     is_diagnosis = (pattern == BenefitPattern.DIAGNOSIS)
-    risk = (RISK_MORTALITY
-            if pattern in (BenefitPattern.DEATH, BenefitPattern.DEATH_MAIN)
+    risk = (RISK_MORTALITY if pattern == BenefitPattern.DEATH
             else RISK_MORBIDITY)
     return is_diagnosis, risk
 

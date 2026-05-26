@@ -1,5 +1,5 @@
 coverage_code,coverage_name,benefit_pattern
-DEATH_MAIN,main contract death,DEATH_MAIN
+DEATH_MAIN,main contract death,DEATH
 INPATIENT,hospitalization rider,MORBIDITY
 CANCER,cancer diagnosis rider,DIAGNOSIS
 ADB,accidental death rider,DEATH
