@@ -43,6 +43,7 @@ from fastcashflow.assumptions import (
     Assumptions, annual_to_monthly, derive_expense_components,
 )
 from fastcashflow.coverage import coverage_arrays, coverage_rates
+from fastcashflow.curves import inflation_index
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.statemodel import (
     compile_state_model,
@@ -86,19 +87,24 @@ def _expense_kernel_args(
 ) -> tuple[float, float, float, FloatArray, FloatArray]:
     """Return the five expense primitives the kernels take.
 
-    Projects ``Assumptions.expense_rows`` onto the kernel-side inputs:
+    Projects ``Assumptions.expense_rows`` onto the kernel-side inputs,
+    threading ``Assumptions.expense_inflation`` through the recurring
+    rows via :func:`fastcashflow.curves.inflation_index`:
 
     - ``alpha_pct``, ``alpha_flat``, ``beta_pct`` -- scalars used at
       ``t=0`` (alpha) and every premium-paying month (beta).
     - ``gamma_monthly`` -- ``(n_time,)`` per-policy monthly maintenance
-      amount (with inflation already baked in).
+      amount (with global inflation baked in).
     - ``claim_pct_monthly`` -- ``(n_time,)`` claim-handling fraction
-      applied each month to ``(claim + morbidity + disability)``.
+      applied each month to ``(claim + morbidity + disability)``
+      (with global inflation baked in).
 
     An empty ``expense_rows`` produces five zeros -- the no-expense
     basis -- so the kernel can run unchanged.
     """
-    return derive_expense_components(assumptions.expense_rows, n_time)
+    return derive_expense_components(
+        assumptions.expense_rows, n_time, inflation_index(assumptions, n_time),
+    )
 
 
 @njit(parallel=True, cache=True)

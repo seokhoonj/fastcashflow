@@ -19,10 +19,10 @@ def _assumptions(**overrides) -> Assumptions:
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.04,
+        expense_inflation=0.02,
         expense_rows=(
             ExpenseRow("acquisition",  "per_policy_init",    100_000.0),
-            ExpenseRow("maintenance",  "per_policy_monthly",  24_000.0,
-                       inflation_rate=0.02),
+            ExpenseRow("maintenance",  "per_policy_monthly",  24_000.0),
         ),
         ra_confidence=0.80,
         mortality_cv=0.10,

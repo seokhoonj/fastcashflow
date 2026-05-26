@@ -135,14 +135,12 @@ class AssumptionsMetadata:
 class ExpenseRow:
     """One typed entry in the expense ledger.
 
-    A future-facing dataclass: the engine will dispatch every expense
-    line off ``basis`` and read ``value`` (and ``inflation_rate``),
-    so adding a new Korean practitioner category (지급비, overhead, ...)
-    becomes a data change rather than an engine change. ``Assumptions``
-    does not consume ``ExpenseRow`` yet -- the alpha / beta / gamma
-    scalar fields are still the live wiring -- this commit only
-    introduces the type and the projection helper. Migration of the
-    kernel, sample workbook and tests happens in follow-up commits.
+    Each row is dispatched by ``basis`` and contributes its ``value``
+    into the kernel-side expense primitives. Inflation is *not* a row
+    attribute -- it lives on :class:`Assumptions` (``expense_inflation``,
+    matching the way ``discount_annual`` lives on :class:`Assumptions`),
+    so a company's economic basis is named in one place and every
+    inflation-bearing row picks it up automatically.
 
     Parameters
     ----------
@@ -158,19 +156,19 @@ class ExpenseRow:
     value
         Numeric value -- a fraction (0..1) for the ``_pct`` bases, an
         amount per policy for the ``per_policy_*`` bases.
-    inflation_rate
-        Annual inflation applied to ``value`` -- the effective rate at
-        month ``t`` is ``value * (1 + inflation_rate) ** (t / 12)``.
-        Only the recurring bases (``per_policy_monthly``, ``claim_pct``)
-        use it; the two ``_init`` bases pay once at ``t=0`` and
-        ``premium_pct`` rides the premium itself, so a second inflation
-        factor would double-count.
+
+    Notes
+    -----
+    The basis decides whether the global ``expense_inflation`` applies:
+    ``per_policy_monthly`` and ``claim_pct`` recur every month and so
+    inflate; the two ``_init`` bases pay once at ``t=0`` and
+    ``premium_pct`` rides the premium itself, so a second inflation
+    factor would double-count.
     """
 
     expense_type: str
     basis: str
     value: float
-    inflation_rate: float = 0.0
 
 
 #: All ``ExpenseRow.basis`` values the engine knows how to dispatch.
@@ -185,6 +183,7 @@ EXPENSE_BASES = (
 
 def derive_expense_components(
     expense_rows: tuple["ExpenseRow", ...], n_time: int,
+    inflation_index: FloatArray | None = None,
 ) -> tuple[float, float, float, FloatArray, FloatArray]:
     """Project ``expense_rows`` onto the five kernel-side primitives.
 
@@ -199,24 +198,25 @@ def derive_expense_components(
       Charged each premium-paying month on the actual premium.
     - ``gamma_monthly[t]`` -- per-month per-policy maintenance: each
       ``per_policy_monthly`` row contributes ``value / 12 *
-      (1+inflation)^(t/12)``.
+      inflation_index[t]``.
     - ``claim_pct_monthly[t]`` -- claim-handling fraction: each
-      ``claim_pct`` row contributes ``value * (1+inflation)^(t/12)``.
-      Applied to the month's claim + morbidity + disability total when
-      the engine wires this curve in (follow-up commits).
+      ``claim_pct`` row contributes ``value * inflation_index[t]``.
+      Applied to the month's claim + morbidity + disability total.
 
-    This helper is the bridge between the row-form authoring surface
-    and the flat scalar / curve inputs the compiled kernel takes.
-    Direct kernel callers can stop populating
-    ``Assumptions.alpha_pct`` / ``Assumptions.gamma_flat`` once they
-    instead derive their kernel arguments from the row form.
+    ``inflation_index`` is the ``(n_time,)`` per-month inflation
+    multiplier produced by :func:`fastcashflow.curves.inflation_index`;
+    a scalar economic ``expense_inflation = i`` gives
+    ``inflation_index[t] = (1+i)^(t/12)`` and a per-year curve
+    compounds across years. Pass ``None`` for a no-inflation basis
+    (every month equal to 1.0).
     """
     alpha_pct = 0.0
     alpha_flat = 0.0
     beta_pct = 0.0
     gamma_monthly = np.zeros(n_time, dtype=np.float64)
     claim_pct_monthly = np.zeros(n_time, dtype=np.float64)
-    t_arr = np.arange(n_time)
+    if inflation_index is None:
+        inflation_index = np.ones(n_time, dtype=np.float64)
     for row in expense_rows:
         if row.basis == "per_policy_init":
             alpha_flat += row.value
@@ -225,11 +225,9 @@ def derive_expense_components(
         elif row.basis == "premium_pct":
             beta_pct += row.value
         elif row.basis == "per_policy_monthly":
-            factor = (1.0 + row.inflation_rate) ** (t_arr / 12.0)
-            gamma_monthly += row.value * factor / 12.0
+            gamma_monthly += row.value * inflation_index / 12.0
         elif row.basis == "claim_pct":
-            factor = (1.0 + row.inflation_rate) ** (t_arr / 12.0)
-            claim_pct_monthly += row.value * factor
+            claim_pct_monthly += row.value * inflation_index
         else:
             raise ValueError(
                 f"unknown expense basis {row.basis!r}; expected one of "
@@ -298,11 +296,22 @@ class Assumptions:
         Row-form expense ledger -- a tuple of :class:`ExpenseRow`. Each
         row carries an expense type label (acquisition / maintenance /
         collection / claim_handling / overhead -- free-form), a
-        :data:`EXPENSE_BASES` dispatch key, a numeric value and an annual
-        inflation rate. The engine projects every row through
+        :data:`EXPENSE_BASES` dispatch key and a numeric value. The
+        engine projects every row through
         :func:`derive_expense_components` into the kernel-side primitives
         (alpha / beta / gamma / claim-handling fractions). An empty tuple
         is the no-expense basis.
+    expense_inflation :
+        Global annual inflation applied to the recurring expense rows
+        (``per_policy_monthly`` and ``claim_pct``). Either a flat scalar
+        -- closed-form ``(1+i)^(t/12)`` growth -- or a per-year
+        ``(n_years,)`` array (compounds across years, in-year fractional
+        ramp on the current year, held flat past the end). Macro-economic
+        assumption, defined once per segment; the I/O layer points the
+        segments sheet at one named scenario in the ``inflation_tables``
+        sheet (analogous to ``discount_annual`` / ``discount_tables``).
+        Does not apply to the two ``_init`` bases (one-time at t=0) or
+        to ``premium_pct`` (which already rides the premium).
     ra_confidence :
         Confidence level for the Risk Adjustment (e.g. 0.75). The RA lifts
         the liability from its best estimate to this percentile.
@@ -392,6 +401,11 @@ class Assumptions:
     # gamma / claim-handling primitives; an empty tuple is the no-expense
     # basis.
     expense_rows: tuple[ExpenseRow, ...] = ()
+    # Global economic inflation applied to the recurring expense rows
+    # (per_policy_monthly, claim_pct). Scalar or per-year curve -- same
+    # shape contract as discount_annual; the engine expands either to a
+    # per-month inflation_index via fastcashflow.curves.
+    expense_inflation: float | FloatArray = 0.0
     # Surrender value (해약환급금) curve -- per-month factor applied to the
     # cumulative premium paid. Engine: surrender_cf[t] = lapse_flow[t] x
     # cum_premium[t] x surrender_value_curve[t]. None = no surrender value
@@ -491,6 +505,7 @@ _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     )),
     ("경제 / 비용", (
         "discount_annual",
+        "expense_inflation",
     )),
     ("위험조정 (RA)", (
         "ra_method",
@@ -609,7 +624,7 @@ def _describe_assumptions_lines(
             rows = asmp.expense_rows
             row_lines: list[object] = [
                 f"ExpenseRow({r.expense_type!r}, basis={r.basis!r}, "
-                f"value={r.value:g}, inflation_rate={r.inflation_rate:g})"
+                f"value={r.value:g})"
                 for r in rows
             ]
             body.append((f"expense_rows : tuple  (len={len(rows)})", row_lines))

@@ -46,27 +46,31 @@ def test_premium_pct_lands_in_beta_pct():
 
 
 def test_per_policy_monthly_grows_with_inflation():
-    """A maintenance row's monthly amount is ``value/12 * (1+infl)^(t/12)``.
+    """A maintenance row's monthly amount is ``value/12 * inflation_index[t]``.
 
-    At ``t=0`` the factor is 1; at ``t=12`` it equals ``1+inflation``.
+    Inflation is the macro-economic assumption on ``Assumptions``, not a
+    row attribute; the helper takes the curve as a parameter. At ``t=0``
+    the multiplier is 1; at ``t=12`` it equals ``1 + inflation``.
     """
     rows = (
-        ExpenseRow("maintenance", "per_policy_monthly", 36_000.0,
-                   inflation_rate=0.03),
+        ExpenseRow("maintenance", "per_policy_monthly", 36_000.0),
     )
-    _, _, _, gamma, _ = derive_expense_components(rows, 24)
+    n_time = 24
+    infl = (1.03) ** (np.arange(n_time) / 12.0)
+    _, _, _, gamma, _ = derive_expense_components(rows, n_time, infl)
     assert gamma[0] == pytest.approx(36_000.0 / 12.0)
     assert gamma[12] == pytest.approx((36_000.0 / 12.0) * 1.03)
-    assert gamma[24 - 1] == pytest.approx(
-        (36_000.0 / 12.0) * (1.03) ** (23 / 12.0)
+    assert gamma[n_time - 1] == pytest.approx(
+        (36_000.0 / 12.0) * (1.03) ** ((n_time - 1) / 12.0)
     )
 
 
 def test_claim_pct_grows_with_inflation():
-    """A ``claim_pct`` row's monthly fraction grows like ``(1+infl)^(t/12)``."""
-    rows = (ExpenseRow("claim_handling", "claim_pct", 0.02,
-                       inflation_rate=0.02),)
-    _, _, _, _, claim_pct = derive_expense_components(rows, 24)
+    """A ``claim_pct`` row's monthly fraction grows with the inflation curve."""
+    rows = (ExpenseRow("claim_handling", "claim_pct", 0.02),)
+    n_time = 24
+    infl = (1.02) ** (np.arange(n_time) / 12.0)
+    _, _, _, _, claim_pct = derive_expense_components(rows, n_time, infl)
     assert claim_pct[0] == pytest.approx(0.02)
     assert claim_pct[12] == pytest.approx(0.02 * 1.02)
 
@@ -76,8 +80,7 @@ def test_multiple_rows_sum_into_each_primitive():
     rows = (
         ExpenseRow("acquisition", "per_policy_init", 50_000.0),
         ExpenseRow("acquisition_extra", "per_policy_init", 10_000.0),
-        ExpenseRow("maintenance", "per_policy_monthly", 36_000.0,
-                   inflation_rate=0.03),
+        ExpenseRow("maintenance", "per_policy_monthly", 36_000.0),
         ExpenseRow("overhead", "per_policy_monthly", 12_000.0),
     )
     _, a_flat, _, gamma, _ = derive_expense_components(rows, 12)
@@ -136,12 +139,12 @@ def _basis_rows():
     return fcf.Assumptions(
         mortality_annual=mort, lapse_annual=lapse,
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
+        expense_inflation=0.03,
         expense_rows=(
             ExpenseRow("acquisition",  "per_policy_init",    120_000.0),
             ExpenseRow("acquisition",  "premium_pct_init",        0.20),
             ExpenseRow("collection",   "premium_pct",             0.02),
-            ExpenseRow("maintenance",  "per_policy_monthly",  36_000.0,
-                       inflation_rate=0.03),
+            ExpenseRow("maintenance",  "per_policy_monthly",  36_000.0),
         ),
     )
 

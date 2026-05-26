@@ -84,9 +84,9 @@ def test_expense_inflation():
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0)),
             lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.0)),
+            expense_inflation=0.06,
             expense_rows=(
-                ExpenseRow("maintenance",  "per_policy_monthly", 120.0,  # 10 per month
-                           inflation_rate=0.06),
+                ExpenseRow("maintenance",  "per_policy_monthly", 120.0),  # 10 per month
             ),
         ),
     )

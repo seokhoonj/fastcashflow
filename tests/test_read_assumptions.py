@@ -34,13 +34,14 @@ def test_defaults_inherited():
     # Shared economic curve -- inherited identically.
     assert ga.discount_annual == 0.03 and fc.discount_annual == 0.03
     # Shared maintenance row in both segments' expense ledgers --
-    # 60_000 per-policy with 2% inflation.
+    # 60_000 per-policy; the 2% inflation is the global economic
+    # assumption on the Assumptions object, not on the row itself.
     for asmp in (ga, fc):
         maint = [r for r in asmp.expense_rows
                  if r.basis == "per_policy_monthly"]
         assert len(maint) == 1
         assert maint[0].value == 60_000.0
-        assert maint[0].inflation_rate == 0.02
+        assert asmp.expense_inflation == 0.02
 
 
 def test_channel_segmented_lapse():

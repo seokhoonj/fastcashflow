@@ -19,9 +19,9 @@ def _flat_asmp(**overrides) -> Assumptions:
         mortality_annual=lambda s, ia, d: np.zeros_like(s, dtype=np.float64),
         lapse_annual=lambda s, ia, d: np.zeros_like(s, dtype=np.float64),
         discount_annual=0.05,
+        expense_inflation=0.02,
         expense_rows=(
-            ExpenseRow("maintenance", "per_policy_monthly", 12_000.0,
-                       inflation_rate=0.02),
+            ExpenseRow("maintenance", "per_policy_monthly", 12_000.0),
         ),
         ra_confidence=0.75,
         mortality_cv=0.0,
@@ -74,6 +74,7 @@ def test_bel_with_curve_discount_matches_hand_calc():
     """
     asmp = _flat_asmp(
         # zero everything except maintenance + discount
+        expense_inflation=0.0,
         expense_rows=(
             ExpenseRow("maintenance", "per_policy_monthly", 12_000.0),
         ),
@@ -99,6 +100,7 @@ def test_bel_with_curve_discount_matches_hand_calc():
 def test_bel_value_matches_measure_with_curve_discount():
     """`value()` and `measure()` agree on BEL for a non-flat discount curve too."""
     asmp = _flat_asmp(
+        expense_inflation=0.02,
         expense_rows=(
             ExpenseRow("maintenance", "per_policy_monthly", 12_000.0),
         ),
@@ -116,6 +118,7 @@ def test_csm_accretes_at_curve_rate():
     not at a single scalar. Two segments give different accretion factors."""
     # Profitable contract: premium covers expenses with margin -> positive CSM
     asmp = _flat_asmp(
+        expense_inflation=0.02,
         expense_rows=(
             ExpenseRow("maintenance", "per_policy_monthly", 12_000.0),
         ),

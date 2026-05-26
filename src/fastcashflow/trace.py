@@ -179,13 +179,22 @@ def show_trace(
             f"discount_annual      = ndarray len={arr.size} "
             f"[{arr.flat[0]:g}, ..., {arr.flat[-1]:g}]"
         )
+    infl = assumptions.expense_inflation
+    if np.ndim(infl) == 0:
+        asmp_lines.append(f"expense_inflation    = {float(infl):g} (flat)")
+    else:
+        arr = np.asarray(infl)
+        asmp_lines.append(
+            f"expense_inflation    = ndarray len={arr.size} "
+            f"[{arr.flat[0]:g}, ..., {arr.flat[-1]:g}]"
+        )
     rows = assumptions.expense_rows
     if not rows:
         asmp_lines.append("expense_rows         = ()  (no expense)")
     else:
         row_lines: list[object] = [
             (f"ExpenseRow({r.expense_type!r}, basis={r.basis!r}, "
-             f"value={r.value:g}, inflation_rate={r.inflation_rate:g})")
+             f"value={r.value:g})")
             for r in rows
         ]
         asmp_lines.append(
@@ -510,7 +519,7 @@ def show_trace_diff(
                               getattr(asmp_b, name))
         if line is not None:
             asmp_diffs.append(line)
-    for name in ("discount_annual", "ra_method",
+    for name in ("discount_annual", "expense_inflation", "ra_method",
                  "ra_confidence", "cost_of_capital_rate", "mortality_cv",
                  "morbidity_cv", "longevity_cv", "disability_cv",
                  "expense_cv"):

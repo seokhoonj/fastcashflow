@@ -23,8 +23,7 @@ fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포
 | `waiver_tables` | 납입면제 발생률 가정 |
 | `lapse_tables` | 해지율 가정 |
 | `discount_tables` | 할인율 곡선 (locked-in, Sec. 36) |
-| `inflation_tables` | 유지비 인플레이션 곡선 (legacy expense 경로용) |
-| `expense_tables` (권장) | row-form 사업비 ledger (basis dispatch — §3.3) |
+| `expense_tables` | row-form 사업비 ledger (basis dispatch — §3.3) |
 | `surrender_value_tables` (optional) | 해약환급금 곡선 |
 | `ae_factors` (optional) | A/E factor — base rate에 런타임 곱셈 (생략 시 1.0) |
 | `improvement_tables` (optional) | mortality improvement 곡선 (`table_id` × `year` → `factor`) |
@@ -86,7 +85,7 @@ reader 동작:
 
 | 컬럼명 | 의미 | 단위 | 사용 시트 |
 |---|---|---|---|
-| `rate` | 확률 / 발생률 / 환산률 | 무차원 (0~1) | mortality, incidence_rate, waiver, lapse, discount, inflation |
+| `rate` | 확률 / 발생률 / 환산률 | 무차원 (0~1) | mortality, incidence_rate, waiver, lapse, discount |
 | `factor` | 무차원 비율 / 환급률 | 무차원 | surrender_value, ae_factors, improvement |
 
 ---

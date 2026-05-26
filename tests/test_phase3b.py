@@ -37,10 +37,10 @@ def _assumptions() -> Assumptions:
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
+        expense_inflation=0.02,
         expense_rows=(
             ExpenseRow("acquisition",  "per_policy_init",    200_000.0),
-            ExpenseRow("maintenance",  "per_policy_monthly",  48_000.0,
-                       inflation_rate=0.02),
+            ExpenseRow("maintenance",  "per_policy_monthly",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.10,

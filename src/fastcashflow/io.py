@@ -263,11 +263,13 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseRow, ...]]:
 
     Each row is one ``ExpenseRow`` -- the row-form expense ledger the
     engine dispatches on. Columns: ``table_id``, ``expense_type``,
-    ``basis``, ``value``, ``inflation_rate`` (last optional, default 0).
-    The same ``table_id`` may span multiple rows (an acquisition row
-    plus a maintenance row, plus a claim_handling row, ...). Returns
-    ``{table_id: tuple[ExpenseRow, ...]}`` for the segments-side
-    ``expense_table`` lookup to consume.
+    ``basis``, ``value``. The same ``table_id`` may span multiple rows
+    (an acquisition row plus a maintenance row, plus a claim_handling
+    row, ...). Returns ``{table_id: tuple[ExpenseRow, ...]}`` for the
+    segments-side ``expense_table`` lookup to consume. Inflation is
+    *not* a row attribute -- it lives on the segment as the global
+    economic ``expense_inflation`` curve (see :data:`inflation_tables`
+    sheet).
     """
     by_id: dict[str, list[ExpenseRow]] = {}
     for r in _sheet_dicts(ws):
@@ -276,7 +278,6 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseRow, ...]]:
             expense_type=str(r["expense_type"]).strip(),
             basis=str(r["basis"]).strip(),
             value=float(r["value"]),
-            inflation_rate=float(r.get("inflation_rate") or 0.0),
         ))
     return {tid: tuple(rows) for tid, rows in by_id.items()}
 
@@ -467,6 +468,9 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     waiver_t = optional("waiver_tables", _flex_rate_table)
     lapse_t = _flex_rate_table(wb["lapse_tables"])
     discount_t = _axis_tables(wb["discount_tables"], "year")
+    inflation_t = optional(
+        "inflation_tables", lambda w: _axis_tables(w, "year"),
+    )
     ae_factors = optional("ae_factors", _read_ae_factors)
     improvement_t = optional(
         "improvement_tables",
@@ -579,9 +583,15 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
         # Row-form expense ledger -- the segments row points an
         # ``expense_table`` cell at one entry of the ``expense_tables``
         # sheet. Blank cell = no expense (empty ``expense_rows`` tuple,
-        # zero-expense projection). The legacy scalar columns
-        # (alpha / beta / gamma / expense_inflation) are no longer read.
+        # zero-expense projection).
         expense_rows = lookup(expense_t, "expense_table", optional_ref=True)
+        # Global economic inflation -- the segments row points an
+        # ``inflation_table`` cell at one named scenario in the
+        # ``inflation_tables`` sheet (analogous to ``discount_table``).
+        # Blank cell = zero inflation (recurring expense rows stay flat).
+        inflation_curve = lookup(
+            inflation_t, "inflation_table", optional_ref=True,
+        )
         kwargs: dict = dict(
             mortality_annual=mortality_fn,
             lapse_annual=lookup(lapse_t, "lapse_table"),
@@ -591,6 +601,9 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             # A one-row table reproduces the flat-scalar behaviour.
             discount_annual=lookup(discount_t, "discount_table"),
             expense_rows=expense_rows or (),
+            expense_inflation=(
+                inflation_curve if inflation_curve is not None else 0.0
+            ),
             ra_confidence=scalar("ra_confidence", required=True),
             mortality_cv=scalar("mortality_cv", required=True),
             coverages=tuple(coverage_rates),
