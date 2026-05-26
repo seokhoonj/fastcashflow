@@ -6,7 +6,7 @@ This is the engine's correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseRow, ModelPoints, measure, value
+from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure, value
 
 # Standard-normal 75th percentile -- a known mathematical constant, used so
 # the RA check does not depend on the engine's own quantile code.
@@ -122,9 +122,9 @@ def test_count_scales_linearly():
     asmp = _assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         discount_annual=0.03,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    300.0),
-            ExpenseRow("maintenance",  "gamma_fixed", 120.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    300.0),
+            ExpenseItem("maintenance",  "gamma_fixed", 120.0),
         ),
     )
     n = 1000.0

@@ -12,7 +12,7 @@ pins the invariant that the two paths return the same BEL when a
 import numpy as np
 
 from fastcashflow import (
-    Assumptions, ExpenseRow, ModelPoints, STATE_MODELS, measure, value,
+    Assumptions, ExpenseItem, ModelPoints, STATE_MODELS, measure, value,
 )
 
 
@@ -31,9 +31,9 @@ def _basis(**overrides):
         mortality_cv=0.10,
         morbidity_cv=0.10,
         expense_inflation=0.02,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    100_000.0),
-            ExpenseRow("maintenance",  "gamma_fixed",  30_000.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
+            ExpenseItem("maintenance",  "gamma_fixed",  30_000.0),
         ),
     )
     base.update(overrides)

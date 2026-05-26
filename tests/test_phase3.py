@@ -12,7 +12,7 @@ from fastcashflow import (
     RISK_MORBIDITY,
     STATE_MODELS,
     Assumptions,
-    ExpenseRow,
+    ExpenseItem,
     ModelPoints,
     CoverageRate,
     measure,
@@ -37,9 +37,9 @@ def test_value_matches_measure():
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
         expense_inflation=0.02,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    250_000.0),
-            ExpenseRow("maintenance",  "gamma_fixed",  48_000.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    250_000.0),
+            ExpenseItem("maintenance",  "gamma_fixed",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,
@@ -93,9 +93,9 @@ def test_value_gpu_matches_cpu():
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
         expense_inflation=0.02,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    250_000.0),
-            ExpenseRow("maintenance",  "gamma_fixed",  48_000.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    250_000.0),
+            ExpenseItem("maintenance",  "gamma_fixed",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,
@@ -133,9 +133,9 @@ def test_value_gpu_matches_cpu_with_transition():
         state_model=STATE_MODELS["WAIVER"],
         discount_annual=0.03,
         expense_inflation=0.02,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    200_000.0),
-            ExpenseRow("maintenance",  "gamma_fixed",  48_000.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    200_000.0),
+            ExpenseItem("maintenance",  "gamma_fixed",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,

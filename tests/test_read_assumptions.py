@@ -37,7 +37,7 @@ def test_defaults_inherited():
     # 60_000 per-policy; the 2% inflation is the global economic
     # assumption on the Assumptions object, not on the row itself.
     for asmp in (ga, fc):
-        maint = [r for r in asmp.expense_rows
+        maint = [r for r in asmp.expense_items
                  if r.basis == "gamma_fixed"]
         assert len(maint) == 1
         assert maint[0].value == 60_000.0
@@ -69,18 +69,18 @@ def test_per_segment_acquisition_amount():
         (("WHOLE_LIFE","FC"), 200_000.0),
         (("WHOLE_LIFE","GA"), 350_000.0),
     ):
-        rows = basis[key].expense_rows
+        rows = basis[key].expense_items
         acq = [r for r in rows if r.basis == "alpha_fixed"]
         assert len(acq) == 1, f"{key}: expected one per_policy_init row"
         assert acq[0].value == expected_acq, (key, expected_acq, acq[0].value)
 
 
-def test_every_segment_has_expense_rows():
+def test_every_segment_has_expense_items():
     """The sample workbook attaches an ``expense_table`` to every segment;
-    the loader populates ``Assumptions.expense_rows`` on each."""
+    the loader populates ``Assumptions.expense_items`` on each."""
     basis = load_sample_assumptions()
     for asmp in basis.values():
-        assert asmp.expense_rows                       # populated
+        assert asmp.expense_items                       # populated
 
 
 def test_riders_resolved():

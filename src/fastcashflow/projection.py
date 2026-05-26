@@ -87,7 +87,7 @@ def _expense_kernel_args(
 ) -> tuple[float, float, float, FloatArray, FloatArray]:
     """Return the five expense primitives the kernels take.
 
-    Projects ``Assumptions.expense_rows`` onto the kernel-side inputs,
+    Projects ``Assumptions.expense_items`` onto the kernel-side inputs,
     threading ``Assumptions.expense_inflation`` through the recurring
     rows via :func:`fastcashflow.curves.inflation_index`:
 
@@ -99,11 +99,11 @@ def _expense_kernel_args(
       month to ``(claim + morbidity + disability)`` (with global
       inflation baked in).
 
-    An empty ``expense_rows`` produces five zeros -- the no-expense
+    An empty ``expense_items`` produces five zeros -- the no-expense
     basis -- so the kernel can run unchanged.
     """
     return derive_expense_components(
-        assumptions.expense_rows, n_time, inflation_index(assumptions, n_time),
+        assumptions.expense_items, n_time, inflation_index(assumptions, n_time),
     )
 
 
@@ -209,7 +209,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: alpha / beta / gamma maintenance plus LAE on the
             # month's claim + morbidity total. Dispatched from
-            # Assumptions.expense_rows by basis (alpha_pro_rata /
+            # Assumptions.expense_items by basis (alpha_pro_rata /
             # alpha_fixed / beta_pro_rata / gamma_fixed / lae_pro_rata).
             ann_prem = level_premium[mp] * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
@@ -559,7 +559,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         issue_class_grid, elapsed_grid,
     )))
     # Expense primitives -- the five inputs the kernel consumes. Honours
-    # Assumptions.expense_rows when set, otherwise the legacy alpha / beta
+    # Assumptions.expense_items when set, otherwise the legacy alpha / beta
     # / gamma / expense_inflation scalars (see _expense_kernel_args).
     (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,
      gamma_fixed, lae_pro_rata) = _expense_kernel_args(

@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    Assumptions, ExpenseRow, ModelPoints, measure, measure_in_force, value,
+    Assumptions, ExpenseItem, ModelPoints, measure, measure_in_force, value,
     value_in_force,
 )
 
@@ -34,9 +34,9 @@ def _basis():
         mortality_cv=0.10,
         morbidity_cv=0.10,
         expense_inflation=0.02,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    100_000.0),
-            ExpenseRow("maintenance",  "gamma_fixed",  30_000.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
+            ExpenseItem("maintenance",  "gamma_fixed",  30_000.0),
         ),
     )
 

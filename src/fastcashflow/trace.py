@@ -188,17 +188,17 @@ def show_trace(
             f"expense_inflation    = ndarray len={arr.size} "
             f"[{arr.flat[0]:g}, ..., {arr.flat[-1]:g}]"
         )
-    rows = assumptions.expense_rows
+    rows = assumptions.expense_items
     if not rows:
-        asmp_lines.append("expense_rows         = ()  (no expense)")
+        asmp_lines.append("expense_items         = ()  (no expense)")
     else:
         row_lines: list[object] = [
-            (f"ExpenseRow({r.expense_type!r}, basis={r.basis!r}, "
+            (f"ExpenseItem({r.expense_type!r}, basis={r.basis!r}, "
              f"value={r.value:g})")
             for r in rows
         ]
         asmp_lines.append(
-            (f"expense_rows         = tuple  (len={len(rows)})", row_lines)
+            (f"expense_items         = tuple  (len={len(rows)})", row_lines)
         )
     asmp_lines.append(
         f"ra: method={assumptions.ra_method!r}, conf={assumptions.ra_confidence:g}"
@@ -528,12 +528,12 @@ def show_trace_diff(
                             getattr(asmp_b, name))
         if line is not None:
             asmp_diffs.append(line)
-    # ExpenseRow ledger -- detect added / dropped / changed rows.
-    rows_a = asmp_a.expense_rows
-    rows_b = asmp_b.expense_rows
+    # ExpenseItem ledger -- detect added / dropped / changed rows.
+    rows_a = asmp_a.expense_items
+    rows_b = asmp_b.expense_items
     if rows_a != rows_b:
         asmp_diffs.append(
-            f"expense_rows           : len {len(rows_a)} -> len {len(rows_b)}"
+            f"expense_items           : len {len(rows_a)} -> len {len(rows_b)}"
         )
     # Coverages: per-rider rate table change.
     codes_a = [r.code for r in asmp_a.coverages]

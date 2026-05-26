@@ -13,7 +13,7 @@ Conventional import alias::
 quantity this engine computes.
 """
 from fastcashflow.assumptions import (
-    Assumptions, AssumptionsMetadata, CoverageRate, EXPENSE_BASES, ExpenseRow,
+    Assumptions, AssumptionsMetadata, CoverageRate, EXPENSE_BASES, ExpenseItem,
     derive_expense_components, describe_assumptions,
 )
 from fastcashflow.coverage import DEATH, RISK_MORBIDITY, RISK_MORTALITY
@@ -99,7 +99,7 @@ __all__ = [
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
-    "DEATH", "CoverageRate", "ExpenseRow", "EXPENSE_BASES",
+    "DEATH", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
     "derive_expense_components",
     "RISK_MORTALITY", "RISK_MORBIDITY",
     "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAID_UP",

@@ -1,7 +1,7 @@
 """Phase 1 validation -- Risk Adjustment and expense cash flows."""
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseRow, ModelPoints, measure
+from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure
 from fastcashflow.numerics import _norm_ppf
 
 
@@ -55,9 +55,9 @@ def test_expenses():
             level_premium=12_000.0, term_months=2,
         ),
         _assumptions(
-            expense_rows=(
-                ExpenseRow("acquisition",  "alpha_fixed",    500.0),
-                ExpenseRow("maintenance",  "gamma_fixed", 120.0),  # 10 per month
+            expense_items=(
+                ExpenseItem("acquisition",  "alpha_fixed",    500.0),
+                ExpenseItem("maintenance",  "gamma_fixed", 120.0),  # 10 per month
             ),
         ),
     )
@@ -85,8 +85,8 @@ def test_expense_inflation():
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0)),
             lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.0)),
             expense_inflation=0.06,
-            expense_rows=(
-                ExpenseRow("maintenance",  "gamma_fixed", 120.0),  # 10 per month
+            expense_items=(
+                ExpenseItem("maintenance",  "gamma_fixed", 120.0),  # 10 per month
             ),
         ),
     )

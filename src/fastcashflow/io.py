@@ -33,7 +33,7 @@ import polars as pl
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import (
-    Assumptions, AssumptionsMetadata, CoverageRate, ExpenseRow,
+    Assumptions, AssumptionsMetadata, CoverageRate, ExpenseItem,
 )
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
@@ -258,23 +258,23 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
     return rate
 
 
-def _read_expense_tables(ws) -> dict[str, tuple[ExpenseRow, ...]]:
+def _read_expense_tables(ws) -> dict[str, tuple[ExpenseItem, ...]]:
     """Read the optional ``expense_tables`` sheet.
 
-    Each row is one ``ExpenseRow`` -- the row-form expense ledger the
+    Each row is one ``ExpenseItem`` -- the item-form expense ledger the
     engine dispatches on. Columns: ``table_id``, ``expense_type``,
     ``basis``, ``value``. The same ``table_id`` may span multiple rows
     (an acquisition row plus a maintenance row, plus an LAE row, ...).
-    Returns ``{table_id: tuple[ExpenseRow, ...]}`` for the
+    Returns ``{table_id: tuple[ExpenseItem, ...]}`` for the
     segments-side ``expense_table`` lookup to consume. Inflation is
     *not* a row attribute -- it lives on the segment as the global
     economic ``expense_inflation`` curve (see :data:`inflation_tables`
     sheet).
     """
-    by_id: dict[str, list[ExpenseRow]] = {}
+    by_id: dict[str, list[ExpenseItem]] = {}
     for r in _sheet_dicts(ws):
         tid = str(r["table_id"]).strip()
-        by_id.setdefault(tid, []).append(ExpenseRow(
+        by_id.setdefault(tid, []).append(ExpenseItem(
             expense_type=str(r["expense_type"]).strip(),
             basis=str(r["basis"]).strip(),
             value=float(r["value"]),
@@ -482,7 +482,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
         "surrender_value_tables",
         lambda w: _axis_tables(w, "duration_month", value_col="factor"),
     )
-    # Expense ledger -- row form. Optional; per-segment ``expense_table``
+    # Expense ledger -- item form. Optional; per-segment ``expense_table``
     # in the segments sheet selects which table_id to attach.
     expense_t = optional("expense_tables", _read_expense_tables)
 
@@ -582,13 +582,13 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
         )
         # Row-form expense ledger -- the segments row points an
         # ``expense_table`` cell at one entry of the ``expense_tables``
-        # sheet. Blank cell = no expense (empty ``expense_rows`` tuple,
+        # sheet. Blank cell = no expense (empty ``expense_items`` tuple,
         # zero-expense projection).
-        expense_rows = lookup(expense_t, "expense_table", optional_ref=True)
+        expense_items = lookup(expense_t, "expense_table", optional_ref=True)
         # Global economic inflation -- the segments row points an
         # ``inflation_table`` cell at one named scenario in the
         # ``inflation_tables`` sheet (analogous to ``discount_table``).
-        # Blank cell = zero inflation (recurring expense rows stay flat).
+        # Blank cell = zero inflation (recurring expense items stay flat).
         inflation_curve = lookup(
             inflation_t, "inflation_table", optional_ref=True,
         )
@@ -600,7 +600,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             # expands it to a per-month curve via fastcashflow.curves.
             # A one-row table reproduces the flat-scalar behaviour.
             discount_annual=lookup(discount_t, "discount_table"),
-            expense_rows=expense_rows or (),
+            expense_items=expense_items or (),
             expense_inflation=(
                 inflation_curve if inflation_curve is not None else 0.0
             ),

@@ -132,7 +132,7 @@ class AssumptionsMetadata:
 
 
 @dataclass(frozen=True, slots=True)
-class ExpenseRow:
+class ExpenseItem:
     """One typed entry in the expense ledger.
 
     Each row is dispatched by ``basis`` and contributes its ``value``
@@ -173,7 +173,7 @@ class ExpenseRow:
     value: float
 
 
-#: All ``ExpenseRow.basis`` values the engine knows how to dispatch.
+#: All ``ExpenseItem.basis`` values the engine knows how to dispatch.
 #: Follows the Korean actuarial alpha / beta / gamma convention:
 #: alpha = acquisition (one-off at t=0), beta = premium-prorated
 #: maintenance, gamma = per-policy fixed maintenance; LAE is the
@@ -188,10 +188,10 @@ EXPENSE_BASES = (
 
 
 def derive_expense_components(
-    expense_rows: tuple["ExpenseRow", ...], n_time: int,
+    expense_items: tuple["ExpenseItem", ...], n_time: int,
     inflation_index: FloatArray | None = None,
 ) -> tuple[float, float, float, FloatArray, FloatArray]:
-    """Project ``expense_rows`` onto the five kernel-side primitives.
+    """Project ``expense_items`` onto the five kernel-side primitives.
 
     Returns ``(alpha_pro_rata, alpha_fixed, beta_pro_rata, gamma_fixed,
     lae_pro_rata)``:
@@ -224,7 +224,7 @@ def derive_expense_components(
     lae_pro_rata = np.zeros(n_time, dtype=np.float64)
     if inflation_index is None:
         inflation_index = np.ones(n_time, dtype=np.float64)
-    for row in expense_rows:
+    for row in expense_items:
         if row.basis == "alpha_fixed":
             alpha_fixed += row.value
         elif row.basis == "alpha_pro_rata":
@@ -299,8 +299,8 @@ class Assumptions:
         per-month rate curve via
         :func:`fastcashflow.curves.discount_monthly_curve`. Used for
         discounting cash flows and for CSM interest accretion.
-    expense_rows :
-        Row-form expense ledger -- a tuple of :class:`ExpenseRow`. Each
+    expense_items :
+        Row-form expense ledger -- a tuple of :class:`ExpenseItem`. Each
         row carries an expense type label (acquisition / maintenance /
         collection / LAE / overhead -- free-form), a
         :data:`EXPENSE_BASES` dispatch key and a numeric value. The
@@ -309,7 +309,7 @@ class Assumptions:
         (alpha / beta / gamma / LAE fractions). An empty tuple is the
         no-expense basis.
     expense_inflation :
-        Global annual inflation applied to the recurring expense rows
+        Global annual inflation applied to the recurring expense items
         (``gamma_fixed`` and ``lae_pro_rata``). Either a flat scalar
         -- closed-form ``(1+i)^(t/12)`` growth -- or a per-year
         ``(n_years,)`` array (compounds across years, in-year fractional
@@ -403,12 +403,12 @@ class Assumptions:
     discount_annual: float | FloatArray
     ra_confidence: float
     mortality_cv: float
-    # Row-form expense ledger -- see ExpenseRow / derive_expense_components.
+    # Row-form expense ledger -- see ExpenseItem / derive_expense_components.
     # The engine projects every row into the kernel-side alpha / beta /
     # gamma / claim-handling primitives; an empty tuple is the no-expense
     # basis.
-    expense_rows: tuple[ExpenseRow, ...] = ()
-    # Global economic inflation applied to the recurring expense rows
+    expense_items: tuple[ExpenseItem, ...] = ()
+    # Global economic inflation applied to the recurring expense items
     # (per_policy_monthly, claim_pct). Scalar or per-year curve -- same
     # shape contract as discount_annual; the engine expands either to a
     # per-month inflation_index via fastcashflow.curves.
@@ -628,13 +628,13 @@ def _describe_assumptions_lines(
     for i, (title, names) in enumerate(_DESCRIBE_GROUPS[:3]):
         body = field_lines(names)
         if i == 1:
-            rows = asmp.expense_rows
+            rows = asmp.expense_items
             row_lines: list[object] = [
-                f"ExpenseRow({r.expense_type!r}, basis={r.basis!r}, "
+                f"ExpenseItem({r.expense_type!r}, basis={r.basis!r}, "
                 f"value={r.value:g})"
                 for r in rows
             ]
-            body.append((f"expense_rows : tuple  (len={len(rows)})", row_lines))
+            body.append((f"expense_items : tuple  (len={len(rows)})", row_lines))
         sections.append((f"{marks[i]} {title}", body))
 
     riders = asmp.coverages

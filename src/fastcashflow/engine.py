@@ -1551,7 +1551,7 @@ def value(
     # Expense primitives -- the five inputs every value-side kernel
     # consumes (alpha / beta / gamma scalars plus two per-month curves).
     # See projection._expense_kernel_args -- this engine path uses the
-    # same helper so the row-form vs legacy dispatch is consistent across
+    # same helper so the item-form vs legacy dispatch is consistent across
     # value() and measure().
     from fastcashflow.projection import _expense_kernel_args
     (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,

@@ -7,7 +7,7 @@ amount, and an empty list equals a zero death benefit.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseRow, ModelPoints, measure, value
+from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure, value
 from fastcashflow.coverage import DEATH
 
 Q = 0.002
@@ -25,9 +25,9 @@ def _assumptions() -> Assumptions:
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.03,
         expense_inflation=0.02,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    200_000.0),
-            ExpenseRow("maintenance",  "gamma_fixed",  60_000.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    200_000.0),
+            ExpenseItem("maintenance",  "gamma_fixed",  60_000.0),
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,

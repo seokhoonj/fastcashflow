@@ -10,7 +10,7 @@ import pytest
 
 from fastcashflow import (
     Assumptions,
-    ExpenseRow,
+    ExpenseItem,
     ModelPoints,
     measure,
     measure_paa,
@@ -30,9 +30,9 @@ def _assumptions() -> Assumptions:
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
         expense_inflation=0.02,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    200_000.0),
-            ExpenseRow("maintenance",  "gamma_fixed",  60_000.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    200_000.0),
+            ExpenseItem("maintenance",  "gamma_fixed",  60_000.0),
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
@@ -149,9 +149,9 @@ def test_report_finance_expense_is_curve_aware():
         discount_annual=np.array([0.01, 0.05, 0.05, 0.05, 0.05,
                                   0.05, 0.05, 0.05, 0.05, 0.05]),
         expense_inflation=0.02,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    200_000.0),
-            ExpenseRow("maintenance",  "gamma_fixed",  60_000.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    200_000.0),
+            ExpenseItem("maintenance",  "gamma_fixed",  60_000.0),
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,

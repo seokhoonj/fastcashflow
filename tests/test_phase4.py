@@ -6,7 +6,7 @@ the total liability must run off to zero by the end of the term.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseRow, ModelPoints, measure, value
+from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure, value
 
 
 def _annual(m):
@@ -20,9 +20,9 @@ def _assumptions(**overrides) -> Assumptions:
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.04,
         expense_inflation=0.02,
-        expense_rows=(
-            ExpenseRow("acquisition",  "alpha_fixed",    100_000.0),
-            ExpenseRow("maintenance",  "gamma_fixed",  24_000.0),
+        expense_items=(
+            ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
+            ExpenseItem("maintenance",  "gamma_fixed",  24_000.0),
         ),
         ra_confidence=0.80,
         mortality_cv=0.10,
