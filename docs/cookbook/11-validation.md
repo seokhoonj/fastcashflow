@@ -106,10 +106,10 @@ mp[0]  (TERM_LIFE/FC, sex=남, issue_age=35, term=240m, premium_term=240m, count
 │   ├─ gamma_flat           = 60000
 │   ├─ ra: method='confidence_level', conf=0.75
 │   └─ cv: mort=0.1 morb=0.12 long=0 disab=0
-├─ Coverages (rate-driven riders, n=3)
-│   ├─ 'INPATIENT'    risk=1  is_diagnosis=False  rate -> INPATIENT_STD
-│   ├─ 'CANCER'       risk=1  is_diagnosis=True  rate -> CANCER_STD
-│   └─ 'ADB'          risk=0  is_diagnosis=False  rate -> ADB_STD
+├─ Coverages (rate-driven, n=3)
+│   ├─ 'INPATIENT'    pattern=MORBIDITY  risk=1  is_diagnosis=False  rate -> INPATIENT_STD
+│   ├─ 'CANCER'       pattern=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> CANCER_STD
+│   └─ 'ADB'          pattern=DEATH      risk=0  is_diagnosis=False  rate -> ADB_STD
 ├─ Rates (annual, evaluated for this MP)
 │   ├─ axes: sex=0, issue_age=35, issue_class=0, elapsed_at_issue=0m
 │   ├─         year      mort(an)     lapse(an)    waiver(an)  INPATIENT(an)    CANCER(an)

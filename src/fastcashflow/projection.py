@@ -553,7 +553,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     cov_is_diagnosis, cov_risk = coverage_arrays(
         assumptions.coverages, model_points.benefit_patterns,
     )
-    # coverage_rates stacks the annual mortality and rider rates; the whole
+    # coverage_rates stacks the annual mortality and coverage rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
     cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(
         mortality_annual, [r.rate for r in assumptions.coverages],

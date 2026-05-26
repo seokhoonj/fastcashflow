@@ -208,7 +208,7 @@ def show_trace(
         f"long={assumptions.longevity_cv:g} disab={assumptions.disability_cv:g}"
     )
 
-    # ---- Coverages (rate-driven riders)
+    # ---- Coverages (rate-driven)
     cov_lines: list[object] = []
     from fastcashflow.coverage import pattern_attrs, BenefitPattern as _BP
     bp = model_points.benefit_patterns or {}
@@ -342,7 +342,7 @@ def show_trace(
     out.append(header)
     tree_items: list[object] = [
         ("Assumptions (segment-level)", asmp_lines),
-        (f"Coverages (rate-driven riders, n={len(assumptions.coverages)})",
+        (f"Coverages (rate-driven, n={len(assumptions.coverages)})",
          cov_lines),
         ("Rates (annual, evaluated for this MP)", rate_lines),
         (f"Cash flows (annual sum over {cf.n_time}m horizon)", cf_lines),
@@ -539,7 +539,7 @@ def show_trace_diff(
         asmp_diffs.append(
             f"expense_items           : len {len(rows_a)} -> len {len(rows_b)}"
         )
-    # Coverages: per-rider rate table change.
+    # Coverages: per-coverage rate table change.
     codes_a = [r.code for r in asmp_a.coverages]
     codes_b = [r.code for r in asmp_b.coverages]
     if codes_a != codes_b:

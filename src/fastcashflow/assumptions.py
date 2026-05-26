@@ -226,12 +226,12 @@ def derive_expense_components(
 
 @dataclass(frozen=True, slots=True)
 class CoverageRate:
-    """One rate-driven rider's assumption -- a coverage code and how it runs.
+    """One rate-driven coverage's assumption -- a coverage code and how it runs.
 
     Parameters
     ----------
     code :
-        The rider's code label. The engine works in the integer grid
+        The coverage's code label. The engine works in the integer grid
         index this factorises to; the label is what the model-point file
         names a coverage by.
     rate :
@@ -359,7 +359,7 @@ class Assumptions:
         the best-estimate liability.
     coverages :
         Ordered tuple of :class:`CoverageRate` -- the rate-driven coverages
-        (death-type, morbidity and diagnosis riders), one per coverage code.
+        (death-type, morbidity and diagnosis), one per coverage code.
         Their order fixes the integer coverage codes: entry ``i`` is code
         ``i + 1``; code 0 is the main-contract death coverage, driven by
         ``mortality_annual``. Empty for a death-only portfolio. The taxonomy
@@ -447,9 +447,9 @@ class Assumptions:
             adapted = _adapt_rate_arity(getattr(self, field), is_duration=True)
             if adapted is not getattr(self, field):
                 object.__setattr__(self, field, adapted)
-        # Rider rates take the RateFn shape; wrap each rider's rate too.
-        # Riders are a tuple of frozen CoverageRate dataclasses -- rebuild the
-        # tuple with the adapted callables.
+        # Coverage rates take the RateFn shape; wrap each coverage's rate too.
+        # ``coverages`` is a tuple of frozen CoverageRate dataclasses -- rebuild
+        # the tuple with the adapted callables.
         new_coverages = tuple(
             (r if r.rate is _adapt_rate_arity(r.rate)
              else CoverageRate(code=r.code, rate=_adapt_rate_arity(r.rate)))
@@ -555,7 +555,7 @@ def describe_assumptions(obj, *, file=None) -> None:
     """Print the tree structure of an Assumptions (or read_assumptions dict).
 
     Groups the fields by role -- rates, economic / expense, risk adjustment,
-    riders / coverage types, state machine, other -- so a reader can see
+    coverages / coverage types, state machine, other -- so a reader can see
     what is inside the object without scanning every dataclass field.
 
     Pass a single :class:`Assumptions` to see one segment, or pass the dict
@@ -610,16 +610,16 @@ def _describe_assumptions_lines(
             body.append((f"expense_items : tuple  (len={len(rows)})", row_lines))
         sections.append((f"{marks[i]} {title}", body))
 
-    riders = asmp.coverages
+    coverages = asmp.coverages
     coverage_lines: list[object] = []
-    width = max((len(r.code) for r in riders), default=0)
-    for r in riders:
+    width = max((len(r.code) for r in coverages), default=0)
+    for r in coverages:
         coverage_lines.append(
             f"CoverageRate(code={r.code!r:{width+2}}, "
             f"rate={_fmt_callable(r.rate)})"
         )
     sections.append((f"{marks[3]} 특약 / 담보 정의", [
-        (f"coverages : tuple  (len={len(riders)})", coverage_lines),
+        (f"coverages : tuple  (len={len(coverages)})", coverage_lines),
     ]))
 
     sm = asmp.state_model

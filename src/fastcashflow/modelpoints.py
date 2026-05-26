@@ -42,7 +42,7 @@ class ModelPoints:
     so the kernels loop them generically -- new benefit types add no fields:
 
     * ``coverage_kind[k]``   -- the coverage code (0 = main-contract death, 1..
-      the rate-driven riders the assumptions register).
+      the rate-driven coverages the assumptions register).
     * ``coverage_amount[k]`` -- the benefit amount of coverage ``k``.
     * ``coverage_offset``    -- ``(n_mp+1,)``; policy ``mp``'s coverages are the
       slice ``[coverage_offset[mp] : coverage_offset[mp+1]]``.
@@ -393,9 +393,9 @@ class ModelPoints:
             "disability_income": self.disability_income,
             "disability_benefit": self.disability_benefit,
         }
-        for i, rider in enumerate(assumptions.coverages):
+        for i, coverage in enumerate(assumptions.coverages):
             mask = self.coverage_kind == i + 1
-            cols[f"{rider.code}_benefit"] = np.bincount(
+            cols[f"{coverage.code}_benefit"] = np.bincount(
                 mp_of_cov[mask], weights=self.coverage_amount[mask],
                 minlength=self.n_mp,
             )
@@ -427,10 +427,10 @@ class ModelPoints:
             "state":                    np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
         # CSR coverages -- code 0 is the main-contract death (label by the
-        # MAIN_DEATH_CODE convention), codes 1.. the rate-driven riders.
+        # MAIN_DEATH_CODE convention), codes 1.. the rate-driven coverages.
         label = {0: _main_death_label(self)}
-        for i, rider in enumerate(assumptions.coverages):
-            label[i + 1] = rider.code
+        for i, coverage in enumerate(assumptions.coverages):
+            label[i + 1] = coverage.code
         mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
         mp_id = [int(m) for m in mp_of_cov]
         coverage_code = [label[int(k)] for k in self.coverage_kind]

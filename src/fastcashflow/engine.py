@@ -1006,7 +1006,7 @@ def _codegen_value_kernel_source_semi_markov(
     # and diagnosis passes below reuse this trajectory instead of
     # re-running the state machine -- a 5x-10x win for semi-Markov
     # contracts that combine a deep cohort grid with rule-bearing or
-    # diagnosis riders. Same trick the detailed _project_kernel_semi_markov
+    # diagnosis coverages. Same trick the detailed _project_kernel_semi_markov
     # has been using since the cohort-aware projection landed.
     line(8, "inforce_traj = np.empty(term)")
 
@@ -1071,7 +1071,7 @@ def _codegen_value_kernel_source_semi_markov(
     # --- Coverage-rule pass --------------------------------------------
     # Rule-bearing non-diagnosis coverages: reuse the per-month total
     # in-force trajectory the main pass saved instead of re-running the
-    # cohort-aware state machine. Each rider becomes an O(term) scalar
+    # cohort-aware state machine. Each coverage becomes an O(term) scalar
     # loop -- the same trick the detailed _project_kernel_semi_markov
     # has been using all along.
     line(8, "for k in range(c_start, c_end):")
@@ -1100,7 +1100,7 @@ def _codegen_value_kernel_source_semi_markov(
     # The pool's depletion (frac) is a scalar that multiplies the saved
     # cohort-aware in-force trajectory -- mathematically equivalent to
     # running the state machine with each flow scaled by (1 - d_rate),
-    # but a single scalar loop per rider rather than a full cohort walk.
+    # but a single scalar loop per coverage rather than a full cohort walk.
     line(8, "for k in range(c_start, c_end):")
     line(12, "kind = coverage_kind[k]")
     line(12, "if not cov_is_diagnosis[kind]:")
@@ -1543,7 +1543,7 @@ def value(
     cov_is_diagnosis, cov_risk = coverage_arrays(
         assumptions.coverages, model_points.benefit_patterns,
     )
-    # coverage_rates stacks the annual mortality and rider rates; the whole
+    # coverage_rates stacks the annual mortality and coverage rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
     cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(
         mortality_annual_grid, [r.rate for r in assumptions.coverages], sex_grid,
@@ -1690,7 +1690,7 @@ def value(
             # (one cache file per unique StateModel + duration shape).
             # Coverage-rule and diagnosis-coverage passes are emitted
             # alongside the main pass so contracts mixing semi-Markov
-            # cohort tracking with rule-bearing or diagnosis riders work
+            # cohort tracking with rule-bearing or diagnosis coverages work
             # in a single value() call.
             kernel = _get_value_kernel_codegen_semi_markov(
                 n_states, state_duration_max, edge_from, edge_to,

@@ -7,10 +7,10 @@ Model points come in two shapes, both producing the same ``ModelPoints``:
 
 * **wide** -- one row per policy, every benefit a column: ``death_benefit``,
   ``maturity_benefit``, ``annuity_payment`` and a ``<coverage_code>_benefit``
-  column per rider. The convenient form for a single, homogeneous product.
+  column per coverage. The convenient form for a single, homogeneous product.
 * **long-form** -- a policies frame (contract attributes) plus a coverages
-  frame, one row per policy x rider carrying ``amount`` and ``premium``. The
-  form for a heterogeneous, multi-product portfolio.
+  frame, one row per policy x coverage carrying ``amount`` and ``premium``.
+  The form for a heterogeneous, multi-product portfolio.
 
 :func:`read_model_points` reads either; ``ModelPoints.to_wide`` /
 ``ModelPoints.to_long`` convert between them.
@@ -52,7 +52,7 @@ if TYPE_CHECKING:  # pragma: no cover -- import only for type hints
     from fastcashflow.engine import Valuation
 
 # Wide model-point columns with a fixed meaning. Any other ``*_benefit``
-# column names a rider by its coverage code.
+# column names a coverage by its coverage code.
 _NAMED_WIDE = frozenset((
     "mp_id", "product", "issue_age", "term_months", "sex", "count",
     "state", "level_premium", "single_premium", "premium_term_months",
@@ -355,7 +355,7 @@ def _with_ae_factor(rate_fn, factor_fn):
     """Wrap a rate callable to multiply by an A/E factor at call time.
 
     ``factor_fn`` shares the ``(sex, issue_age, duration) -> array``
-    signature; ``None`` (no factor configured for this rider) returns
+    signature; ``None`` (no factor configured for this coverage) returns
     ``rate_fn`` unchanged.
     """
     if factor_fn is None or rate_fn is None:
@@ -441,8 +441,8 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     tables and the segment mapping (see the module header for the sheet
     layout). The ``segments`` sheet maps each (product, channel) to which
     tables it uses plus scalar parameters, with a ``defaults`` row whose
-    values blank cells inherit; the ``riders`` sheet attaches riders to
-    products.
+    values blank cells inherit; the ``coverages`` sheet attaches
+    rate-driven coverages to products.
 
     Returns ``{(product, channel): Assumptions}`` -- one basis per segment.
 
@@ -497,7 +497,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     # policy that both attach `CANCER` share the same incidence rate). When
     # a company genuinely needs product-specific calibrations of the same
     # disease, give them different coverage_codes (e.g. CANCER_HEALTH vs
-    # CANCER_WHOLELIFE) -- the engine then treats them as separate riders.
+    # CANCER_WHOLELIFE) -- the engine then treats them as separate coverages.
     #
     # Plan B (3-file split): this sheet now carries only ``coverage_code`` +
     # ``rate_table`` -- the rate-driven entries. The pattern taxonomy
@@ -561,7 +561,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
         for code, rate_table in rate_driven_coverages:
             if rate_table not in incidence_rate_t:
                 raise ValueError(
-                    f"rider {code!r} of product {product!r}: rate_table "
+                    f"coverage {code!r} of product {product!r}: rate_table "
                     f"{rate_table!r} is not in incidence_rate_tables"
                 )
             rate_fn = incidence_rate_t[rate_table]
@@ -740,7 +740,7 @@ def _parse_benefit_patterns(path: Path | str) -> dict[str, BenefitPattern]:
 def _wide_model_points(df: pl.DataFrame, assumptions,
                        benefit_patterns=None) -> ModelPoints:
     """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
-    rider a ``<coverage_code>_benefit`` column."""
+    coverage a ``<coverage_code>_benefit`` column."""
     for need in ("issue_age", "term_months"):
         if need not in df.columns:
             raise ValueError(
@@ -778,8 +778,8 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
         code = col[: -len("_benefit")]
         if code not in code_to_kind:
             raise ValueError(
-                f"wide column {col!r} names rider {code!r}, which is not a "
-                "rate-driven rider in the assumptions"
+                f"wide column {col!r} names coverage {code!r}, which is not "
+                "a rate-driven coverage in the assumptions"
             )
         benefits[code_to_kind[code]] = df[col].to_numpy()
     if benefits:
@@ -794,7 +794,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     """Build a ``ModelPoints`` from a long-form policies + coverages pair."""
     if assumptions is None:
         raise ValueError(
-            "long-form model points need the assumptions -- the rider-code "
+            "long-form model points need the assumptions -- the coverage-code "
             "registry maps coverage rows to engine codes"
         )
     if benefit_patterns is None:
@@ -873,7 +873,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     fields["maturity_benefit"] = _by_policy(ctype == BenefitPattern.MATURITY)
     fields["annuity_payment"] = _by_policy(ctype == BenefitPattern.ANNUITY)
 
-    # Premium -- the coverages frame carries it per rider; sum to the policy.
+    # Premium -- the coverages frame carries it per coverage; sum to the policy.
     if "premium" in cov.columns:
         prem = cov["premium"].fill_null(0.0).to_numpy().astype(np.float64)
         fields["level_premium"] = np.bincount(mp, weights=prem, minlength=n_mp)
@@ -883,11 +883,11 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         fields["level_premium"] = np.zeros(n_mp)
 
     # Coverage list: the main-contract death (code 0, the
-    # ``MAIN_DEATH_CODE`` slot) and the rate-driven riders (codes 1..n).
+    # ``MAIN_DEATH_CODE`` slot) and the rate-driven coverages (codes 1..n).
     # annuity / maturity are survival scalars, not here. The main-contract
     # row is a DEATH pattern entry whose ``coverage_code`` matches
     # ``MAIN_DEATH_CODE`` -- it lands at code 0 because the assumptions
-    # workbook does not register that code as a rate-driven rider, so
+    # workbook does not register that code as a rate-driven coverage, so
     # ``code_to_kind.get(..., 0)`` routes it to slot 0 where
     # ``mortality_annual`` drives the rate.
     is_cov = np.isin(ctype, RATE_DRIVEN_PATTERNS)
@@ -929,7 +929,7 @@ def read_model_points(
       ``premium_term_months``, ``premium_frequency_months``,
       ``annuity_frequency_months``, ``death_benefit``, ``maturity_benefit``
       and ``annuity_payment`` are read if present. A ``<coverage_code>_benefit``
-      column adds that rider's coverage; the ``assumptions`` resolve the
+      column adds that coverage; the ``assumptions`` resolve the
       coverage code to an engine code.
     * **long-form** -- ``read_model_points(policies, assumptions,
       coverages=coverages_path, benefit_patterns=benefit_patterns_path)``.
@@ -944,7 +944,7 @@ def read_model_points(
       split between *portfolio* (policies + coverages), *basis*
       (assumptions.xlsx) and *catalogue* (benefit_patterns.csv).
 
-    ``assumptions`` is optional only for a wide file with no rider columns.
+    ``assumptions`` is optional only for a wide file with no coverage columns.
 
     The policies frame is the **inception-time static spec** -- issue_age,
     term, sex, and so on. The in-force closing state (elapsed_months,
@@ -1027,7 +1027,7 @@ def load_sample_model_points() -> ModelPoints:
     engine can be tried without preparing an input file. See
     :func:`read_model_points` for the file format. The coverage list
     comes from any segment's ``Assumptions`` -- all bundled segments
-    share the same product and so the same rider master.
+    share the same product and so the same coverage master.
     """
     basis = load_sample_assumptions()
     assumptions = next(iter(basis.values()))

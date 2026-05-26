@@ -2,9 +2,9 @@
 
 A policy's benefits are a variable-length list of *coverages* rather than a
 fixed set of fields. Each coverage carries a numeric *code* -- a factorised
-rider identifier. Code 0 is reserved for the main-contract death
+coverage identifier. Code 0 is reserved for the main-contract death
 benefit, driven by the base mortality so its claim rate matches the in-force
-decrement exactly. Codes 1.. are the rate-driven riders the assumptions
+decrement exactly. Codes 1.. are the rate-driven coverages the assumptions
 register (see :class:`fastcashflow.assumptions.CoverageRate`), in registration
 order.
 
@@ -12,7 +12,7 @@ The kernels loop the coverage list generically. A coverage's mechanic is
 given by two per-code arrays -- ``cov_is_diagnosis`` (a single-payment
 benefit whose claims run off a depleting pool) and ``cov_risk`` (the risk
 class the Risk Adjustment prices) -- built by :func:`coverage_arrays`, so a
-new rider needs no kernel change. The two arrays are *derived* from the
+new coverage needs no kernel change. The two arrays are *derived* from the
 portfolio's ``benefit_patterns`` taxonomy (the
 :class:`~fastcashflow.modelpoints.ModelPoints` ``benefit_patterns`` dict);
 the company-level taxonomy is the single source of truth for whether a
@@ -124,8 +124,8 @@ def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
     A kernel reads a coverage's rate as ``cov_rates[code, age_or_mp, year]``,
     so the codes share one grid whose first axis is the code. Slab 0 is the
     base ``mortality`` grid (the main-contract death coverage); slabs 1.. are
-    the rate-driven riders, evaluated from ``rate_fns`` -- an ordered list of
-    callables, each with the unified ``Assumptions.mortality_annual``
+    the rate-driven coverages, evaluated from ``rate_fns`` -- an ordered
+    list of callables, each with the unified ``Assumptions.mortality_annual``
     signature ``(sex, issue_age, duration, issue_class, elapsed)``.
 
     The rates are passed through as supplied -- annual; the caller converts
@@ -141,23 +141,23 @@ def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
     return np.ascontiguousarray(np.stack(slabs))
 
 
-def coverage_arrays(riders, benefit_patterns=None):
+def coverage_arrays(coverages, benefit_patterns=None):
     """Per-code kernel flag arrays for the coverage list.
 
-    ``riders`` is the ordered rate-driven riders (codes 1..n); code 0, the
-    main-contract death coverage, is prepended -- a recurring claim of
-    mortality risk. ``benefit_patterns`` is the portfolio-level taxonomy
-    (``{coverage_code: BenefitPattern}``); each rider's pattern looked up
-    by code gives the two flags via :func:`pattern_attrs`. When
-    ``benefit_patterns`` is ``None`` every rider falls back to
-    :data:`BenefitPattern.MORBIDITY` -- the conservative default the
-    pre-Plan-B engine used for any rate-driven rider that was not flagged
-    a diagnosis.
+    ``coverages`` is the ordered rate-driven coverages (codes 1..n);
+    code 0, the main-contract death coverage, is prepended -- a recurring
+    claim of mortality risk. ``benefit_patterns`` is the portfolio-level
+    taxonomy (``{coverage_code: BenefitPattern}``); each coverage's
+    pattern looked up by code gives the two flags via
+    :func:`pattern_attrs`. When ``benefit_patterns`` is ``None`` every
+    coverage falls back to :data:`BenefitPattern.MORBIDITY` -- the
+    conservative default the pre-Plan-B engine used for any rate-driven
+    coverage that was not flagged a diagnosis.
 
     Returns ``(cov_is_diagnosis, cov_risk)``, each indexed by coverage code.
     """
     flags: list[tuple[bool, int]] = [(False, RISK_MORTALITY)]
-    for r in riders:
+    for r in coverages:
         pattern = (benefit_patterns.get(r.code) if benefit_patterns is not None
                    else None) or BenefitPattern.MORBIDITY
         flags.append(pattern_attrs(pattern))

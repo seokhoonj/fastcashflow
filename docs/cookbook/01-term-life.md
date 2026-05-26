@@ -116,7 +116,7 @@ defaults 를 상속, 채워진 셀은 그 segment 만 override.
 
 `fcf.describe_assumptions(basis)` 한 줄이면 위 워크북이 메모리에 어떤
 트리 구조로 들어왔는지 (segment 키, 위험률 callable, 경제 / 비용,
-RA 파라미터, riders, coverage_types, state_model) 한 번에 출력합니다.
+RA 파라미터, coverages, state_model) 한 번에 출력합니다.
 단일 segment 만 보려면 `describe_assumptions(asmp)`.
 ```
 
@@ -179,13 +179,13 @@ Loss:               0
 basis = fcf.read_assumptions("path/to/your_assumptions.xlsx")
 asmp  = basis[("your_product", "your_channel")]              # 평가할 segment 선택
 mp    = fcf.read_model_points("path/to/your_policies.xlsx",
-                              asmp,                          # rider 코드 해석용
+                              asmp,                          # 특약 코드 해석용
                               coverages="path/to/your_coverages.xlsx")
 ```
 
 `asmp` 를 `read_model_points` 에 넘기는 이유는 policies / coverages 파일의
-**특약 코드** 를 어셈션의 rider master (workbook 의 `riders` 시트) 와
-매칭하기 위해서입니다. 사망 단독 wide-form (rider 컬럼 없음) 이면 두 번째
+**특약 코드** 를 어셈션의 coverage master (workbook 의 `coverages` 시트) 와
+매칭하기 위해서입니다. 사망 단독 wide-form (특약 컬럼 없음) 이면 두 번째
 인자는 생략 가능하지만, 일반적인 한국 상품 (사망 + 다종 특약) 은 항상
 필요합니다.
 
