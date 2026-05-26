@@ -13,7 +13,7 @@ Conventional import alias::
 quantity this engine computes.
 """
 from fastcashflow.assumptions import (
-    Assumptions, AssumptionsMetadata, CoverageRate, EXPENSE_BASES, ExpenseItem,
+    Assumptions, CoverageRate, EXPENSE_BASES, ExpenseItem,
     derive_expense_components, describe_assumptions,
 )
 from fastcashflow.coverage import BenefitPattern, DEATH, RISK_MORBIDITY, RISK_MORTALITY
@@ -24,6 +24,7 @@ from fastcashflow.engine import (
 from fastcashflow.grouping import group
 from fastcashflow.io import (
     load_sample_assumptions,
+    load_sample_benefit_patterns,
     load_sample_inforce_state,
     load_sample_model_points,
     read_assumptions,
@@ -80,7 +81,7 @@ from fastcashflow.vfa import VFAMeasurement, measure_vfa
 
 __version__ = "0.0.1.dev1"
 __all__ = [
-    "Assumptions", "AssumptionsMetadata", "ModelPoints", "measure", "measure_in_force",
+    "Assumptions", "ModelPoints", "measure", "measure_in_force",
     "value", "value_in_force", "value_segmented", "clear_codegen_cache",
     "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "measure_tvog",
@@ -93,7 +94,8 @@ __all__ = [
     "read_inforce_state", "apply_inforce_state", "InforceState",
     "write_valuation", "value_file",
     "load_sample_model_points", "load_sample_assumptions",
-    "load_sample_inforce_state", "sample_data_dir",
+    "load_sample_benefit_patterns", "load_sample_inforce_state",
+    "sample_data_dir",
     "describe_assumptions",
     "show_bel_step", "show_csm_step", "show_trace", "show_trace_diff",
     "solve_premium",

@@ -14,12 +14,12 @@ an independent check on the compiled kernels.
 import numpy as np
 
 from fastcashflow import (
-    RISK_MORBIDITY,
     STATE_ACTIVE,
     STATE_MODELS,
     STATE_PAID_UP,
     STATE_WAIVER,
     Assumptions,
+    BenefitPattern,
     ModelPoints,
     CoverageRate,
     measure,
@@ -260,8 +260,7 @@ def test_diagnosis_transition_measure_value_agree():
     against the projection kernel over mixed input states."""
     asmp = _assumptions(
         waiver_rate=0.03,
-        coverages=(CoverageRate("dx", _flat(0.004), is_diagnosis=True,
-                          risk=RISK_MORBIDITY),),
+        coverages=(CoverageRate("dx", _flat(0.004)),),
     )
     rng = np.random.default_rng(11)
     n = 60
@@ -272,6 +271,7 @@ def test_diagnosis_transition_measure_value_agree():
         term_months=np.full(n, 120),
         benefits={1: rng.integers(5, 30, n) * 1_000_000.0},
         state=rng.integers(0, 3, n),
+        benefit_patterns={"dx": BenefitPattern.DIAGNOSIS},
     )
     assert np.allclose(measure(mps, asmp).bel[:, 0], value(mps, asmp).bel)
 
@@ -281,8 +281,7 @@ def test_waiting_rule_transition_measure_value_agree():
     and measure() agree, cross-checking the two-track rule pass."""
     asmp = _assumptions(
         waiver_rate=0.04,
-        coverages=(CoverageRate("hosp", _flat(0.02), is_diagnosis=False,
-                          risk=RISK_MORBIDITY),),
+        coverages=(CoverageRate("hosp", _flat(0.02)),),
     )
     mps = ModelPoints(
         issue_age=np.array([40.0, 45.0]),
@@ -293,5 +292,6 @@ def test_waiting_rule_transition_measure_value_agree():
         coverage_offset=np.array([0, 1, 2]),
         coverage_waiting=np.array([12, 12]),
         state=np.array([STATE_ACTIVE, STATE_WAIVER]),
+        benefit_patterns={"hosp": BenefitPattern.MORBIDITY},
     )
     assert np.allclose(measure(mps, asmp).bel[:, 0], value(mps, asmp).bel)

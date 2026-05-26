@@ -550,7 +550,9 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         assumptions.lapse_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid)))
-    cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.coverages)
+    cov_is_diagnosis, cov_risk = coverage_arrays(
+        assumptions.coverages, model_points.benefit_patterns,
+    )
     # coverage_rates stacks the annual mortality and rider rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
     cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(

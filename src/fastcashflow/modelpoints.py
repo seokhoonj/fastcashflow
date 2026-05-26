@@ -127,6 +127,19 @@ class ModelPoints:
     # Object arrays of string labels (or None for a single-segment book).
     product: np.ndarray | None = None
     channel: np.ndarray | None = None
+    # Portfolio-level taxonomy of coverage codes -- ``{coverage_code:
+    # BenefitPattern}``. The dict is the company catalogue (the
+    # ``benefit_patterns.csv`` file): every code a contract may attach is
+    # registered here with its kernel-routing pattern (DEATH / MORBIDITY /
+    # DIAGNOSIS / ANNUITY / MATURITY / DEATH_MAIN). The engine derives
+    # ``(is_diagnosis, risk)`` from the pattern via
+    # :func:`fastcashflow.coverage.pattern_attrs`; the I/O long-form reader
+    # routes coverage rows by it (annuity / maturity into scalar fields,
+    # rate-driven into the CSR). ``None`` lets the engine fall back to its
+    # default (every rate-driven coverage treated as a non-diagnosis
+    # morbidity claim) -- fine for a hand-written one-MP test that does
+    # not need the taxonomy.
+    benefit_patterns: dict[str, "BenefitPattern"] | None = None
 
     def __post_init__(self) -> None:
         # Normalise the required fields to numpy arrays of the right dtype.
@@ -237,6 +250,13 @@ class ModelPoints:
                         f"{name} must have shape ({n_mp},), got {value.shape}"
                     )
             object.__setattr__(self, name, value)
+        # Benefit-pattern taxonomy -- normalise dict values to BenefitPattern
+        # members so a CSV-derived ``{"CANCER": "DIAGNOSIS"}`` works the same
+        # as a hand-built ``{"CANCER": BenefitPattern.DIAGNOSIS}``.
+        bp = self.benefit_patterns
+        if bp is not None:
+            bp = {str(k): BenefitPattern(v) for k, v in bp.items()}
+            object.__setattr__(self, "benefit_patterns", bp)
 
     @property
     def n_mp(self) -> int:
@@ -264,6 +284,7 @@ class ModelPoints:
         sex: int = 0,
         state: int = STATE_ACTIVE,
         benefits: dict[int, float] | None = None,
+        benefit_patterns: dict[str, "BenefitPattern"] | None = None,
     ) -> ModelPoints:
         """Build a single-model-point set -- a convenience for hand checks."""
         return cls(
@@ -289,6 +310,7 @@ class ModelPoints:
                 None if benefits is None
                 else {k: np.array([v]) for k, v in benefits.items()}
             ),
+            benefit_patterns=benefit_patterns,
         )
 
     def subset(self, indices) -> ModelPoints:
@@ -334,6 +356,9 @@ class ModelPoints:
         for name in ("product", "channel"):
             value = getattr(self, name)
             kwargs[name] = None if value is None else value[idx]
+        # Taxonomy carries through unchanged -- subsetting drops rows, not
+        # the company-level catalogue of coverage codes.
+        kwargs["benefit_patterns"] = self.benefit_patterns
 
         return ModelPoints(**kwargs)
 
@@ -402,7 +427,7 @@ class ModelPoints:
             "state":                    np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
         # CSR coverages -- code 0 is the main-contract death, 1.. the riders.
-        label = {0: _coverage_label(assumptions, BenefitPattern.DEATH_MAIN, "death")}
+        label = {0: _coverage_label(self, BenefitPattern.DEATH_MAIN, "death")}
         for i, rider in enumerate(assumptions.coverages):
             label[i + 1] = rider.code
         mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
@@ -412,7 +437,7 @@ class ModelPoints:
         # Survival benefits are scalar fields -- emit them as coverage rows.
         for ctype, scalar in ((BenefitPattern.ANNUITY, self.annuity_payment),
                               (BenefitPattern.MATURITY, self.maturity_benefit)):
-            code = _coverage_label(assumptions, ctype, str(ctype))
+            code = _coverage_label(self, ctype, str(ctype))
             for mp in np.nonzero(scalar)[0]:
                 mp_id.append(int(mp))
                 coverage_code.append(code)
@@ -501,11 +526,10 @@ def apply_inforce_state(
     )
 
 
-def _coverage_label(assumptions, ctype, default):
-    """The rider code of the first coverage of type ``ctype`` in the
-    assumptions' riders master, or ``default`` if none is registered."""
-    meta = getattr(assumptions, "metadata", None)
-    registry = (meta.coverage_types if meta is not None else None) or {}
+def _coverage_label(model_points, ctype, default):
+    """The first coverage code of pattern ``ctype`` in the model points'
+    portfolio taxonomy, or ``default`` if none is registered."""
+    registry = model_points.benefit_patterns or {}
     for code, t in registry.items():
         if t == ctype:
             return code

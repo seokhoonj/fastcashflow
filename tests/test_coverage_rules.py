@@ -12,8 +12,8 @@ import numpy as np
 
 from fastcashflow import (
     DEATH,
-    RISK_MORBIDITY,
     Assumptions,
+    BenefitPattern,
     ModelPoints,
     CoverageRate,
     measure,
@@ -25,6 +25,8 @@ Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
 MORB_RATE = 0.03     # flat monthly diagnosis rate
 DIAGNOSIS = 1        # the single diagnosis rider -> coverage code 1
+
+PATTERNS = {"diagnosis": BenefitPattern.DIAGNOSIS}
 
 
 def _annual(m):
@@ -40,8 +42,7 @@ def _assumptions(**overrides) -> Assumptions:
         discount_annual=0.04,
         ra_confidence=0.80,
         mortality_cv=0.10,
-        coverages=(CoverageRate("diagnosis", flat_morb, is_diagnosis=True,
-                          risk=RISK_MORBIDITY),),
+        coverages=(CoverageRate("diagnosis", flat_morb),),
     )
     base.update(overrides)
     return Assumptions(**base)
@@ -60,6 +61,7 @@ def _one_coverage(kind, benefit, term, *, waiting=0,
         coverage_waiting=np.array([waiting]),
         coverage_reduction_end=np.array([reduction_end]),
         coverage_reduction_factor=np.array([reduction_factor]),
+        benefit_patterns=PATTERNS,
     )
 
 
@@ -162,6 +164,7 @@ def test_default_rule_is_inert():
         coverage_kind=np.array([DIAGNOSIS]),
         coverage_amount=np.array([4e7]),
         coverage_offset=np.array([0, 1]),
+        benefit_patterns=PATTERNS,
     )
     a, b = value(explicit, asmp), value(omitted, asmp)
     assert np.isclose(a.bel[0], b.bel[0])
@@ -191,6 +194,7 @@ def test_value_matches_measure_with_rules():
         coverage_waiting=rng.integers(0, 8, n_cov),
         coverage_reduction_end=rng.integers(0, 30, n_cov),
         coverage_reduction_factor=rng.choice([0.3, 0.5, 0.7], n_cov),
+        benefit_patterns=PATTERNS,
     )
     asmp = _assumptions(morbidity_cv=0.15)
     fast = value(mps, asmp)

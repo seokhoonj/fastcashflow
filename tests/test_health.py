@@ -7,14 +7,21 @@ morbidity, priced by its own RA component (``morbidity_cv``).
 import numpy as np
 
 from fastcashflow import (
-    RISK_MORBIDITY,
     Assumptions,
+    BenefitPattern,
     ModelPoints,
     CoverageRate,
     measure,
     value,
 )
 from fastcashflow.numerics import _norm_ppf
+
+PATTERNS = {
+    "inpatient": BenefitPattern.MORBIDITY,
+    "surgery": BenefitPattern.MORBIDITY,
+    "outpatient": BenefitPattern.MORBIDITY,
+    "diagnosis": BenefitPattern.DIAGNOSIS,
+}
 
 Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
@@ -39,10 +46,10 @@ def _assumptions(**overrides) -> Assumptions:
         ra_confidence=0.80,
         mortality_cv=0.10,
         coverages=(
-            CoverageRate("inpatient", flat_morb, is_diagnosis=False, risk=RISK_MORBIDITY),
-            CoverageRate("surgery", flat_morb, is_diagnosis=False, risk=RISK_MORBIDITY),
-            CoverageRate("outpatient", flat_morb, is_diagnosis=False, risk=RISK_MORBIDITY),
-            CoverageRate("diagnosis", flat_morb, is_diagnosis=True, risk=RISK_MORBIDITY),
+            CoverageRate("inpatient", flat_morb),
+            CoverageRate("surgery", flat_morb),
+            CoverageRate("outpatient", flat_morb),
+            CoverageRate("diagnosis", flat_morb),
         ),
     )
     base.update(overrides)
@@ -54,7 +61,7 @@ def test_inpatient_benefit_adds_its_present_value():
     asmp = _assumptions(morbidity_cv=0.15)
     benefit, term = 30_000.0, 24
     res = measure(
-        ModelPoints.single(40, 0.0, 0.0, term, benefits={INPATIENT: benefit}),
+        ModelPoints.single(40, 0.0, 0.0, term, benefits={INPATIENT: benefit}, benefit_patterns=PATTERNS),
         asmp,
     )
 
@@ -75,10 +82,15 @@ def test_health_claim_is_non_decrementing():
     """A health claim leaves the policy in force -- it does not decrement."""
     asmp = _assumptions()
     term = 36
-    plain = measure(ModelPoints.single(40, 1e8, 50_000.0, term), asmp)
+    plain = measure(
+        ModelPoints.single(40, 1e8, 50_000.0, term, benefit_patterns=PATTERNS),
+        asmp,
+    )
     with_health = measure(
         ModelPoints.single(
-            40, 1e8, 50_000.0, term, benefits={INPATIENT: 30_000.0, SURGERY: 2e6}
+            40, 1e8, 50_000.0, term,
+            benefits={INPATIENT: 30_000.0, SURGERY: 2e6},
+            benefit_patterns=PATTERNS,
         ),
         asmp,
     )
@@ -93,7 +105,7 @@ def test_health_claim_is_non_decrementing():
 
 def test_morbidity_ra_responds_to_its_cv():
     """The morbidity RA is zero without morbidity_cv and linear in it."""
-    health = ModelPoints.single(40, 0.0, 0.0, 60, benefits={INPATIENT: 30_000.0})
+    health = ModelPoints.single(40, 0.0, 0.0, 60, benefits={INPATIENT: 30_000.0}, benefit_patterns=PATTERNS)
     no_cv = measure(health, _assumptions(morbidity_cv=0.0))
     full_cv = measure(health, _assumptions(morbidity_cv=0.20))
     half_cv = measure(health, _assumptions(morbidity_cv=0.10))
@@ -117,6 +129,7 @@ def test_value_matches_measure_health():
             SURGERY: rng.integers(0, 3, n) * 1_000_000,
             OUTPATIENT: rng.integers(0, 4, n) * 5_000,
         },
+        benefit_patterns=PATTERNS,
     )
     asmp = _assumptions(morbidity_cv=0.15)
     fast = value(mps, asmp)
@@ -133,7 +146,7 @@ def test_diagnosis_benefit_hand_calc():
     asmp = _assumptions(morbidity_cv=0.12)
     benefit, term = 5e7, 24
     res = measure(
-        ModelPoints.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: benefit}),
+        ModelPoints.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: benefit}, benefit_patterns=PATTERNS),
         asmp,
     )
 
@@ -157,11 +170,11 @@ def test_diagnosis_pool_depletes():
     asmp = _assumptions()
     term, amount = 120, 1e7
     diagnosis = measure(
-        ModelPoints.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: amount}),
+        ModelPoints.single(40, 0.0, 0.0, term, benefits={DIAGNOSIS: amount}, benefit_patterns=PATTERNS),
         asmp,
     )
     inpatient = measure(
-        ModelPoints.single(40, 0.0, 0.0, term, benefits={INPATIENT: amount}),
+        ModelPoints.single(40, 0.0, 0.0, term, benefits={INPATIENT: amount}, benefit_patterns=PATTERNS),
         asmp,
     )
     # inpatient claims on the full in-force each month; diagnosis on the
@@ -182,6 +195,7 @@ def test_value_matches_measure_diagnosis():
             DIAGNOSIS: rng.integers(0, 6, n) * 10_000_000,
             INPATIENT: rng.integers(0, 4, n) * 10_000,
         },
+        benefit_patterns=PATTERNS,
     )
     asmp = _assumptions(morbidity_cv=0.15)
     fast = value(mps, asmp)

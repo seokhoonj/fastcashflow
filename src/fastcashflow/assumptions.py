@@ -113,27 +113,6 @@ def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
 
 
 @dataclass(frozen=True, slots=True)
-class AssumptionsMetadata:
-    """Non-numeric labels carried alongside :class:`Assumptions`.
-
-    These fields do not enter the numerical projection. They live on the
-    side because the I/O layer (:mod:`fastcashflow.io`) needs them to
-    route long-form coverage rows, and the engine itself never reads them.
-    Keeping them out of :class:`Assumptions` makes the numerical surface
-    smaller and the I/O surface explicit.
-
-    Fields
-    ------
-    coverage_types
-        Map of every rider code to its :class:`~fastcashflow.coverage.BenefitPattern`
-        -- the riders master. ``None`` when built in code without an I/O
-        round-trip.
-    """
-
-    coverage_types: dict[str, BenefitPattern] | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class ExpenseItem:
     """One typed entry in the expense ledger.
 
@@ -259,19 +238,19 @@ class CoverageRate:
         Annual-rate callable, the same signature as ``mortality_annual``;
         the engine converts it to a monthly rate (see
         :func:`annual_to_monthly`).
-    is_diagnosis :
-        True for a single-payment diagnosis benefit -- its claims run off a
-        depleting "not yet diagnosed" pool. False for a recurring claim
-        (a death-type rider or a multiple-occurrence health benefit).
-    risk :
-        Risk class for the Risk Adjustment -- ``RISK_MORTALITY`` (a
-        death-type rider) or ``RISK_MORBIDITY`` (a health rider).
+
+    Notes
+    -----
+    Whether a coverage runs as a depleting diagnosis pool vs a recurring
+    claim, and which risk class the RA prices it as, is *derived* from
+    the portfolio-level :class:`BenefitPattern` taxonomy (the
+    ``benefit_patterns.csv`` file, surfaced as
+    :attr:`fastcashflow.modelpoints.ModelPoints.benefit_patterns`). Those
+    two flags do not live on :class:`CoverageRate`.
     """
 
     code: str
     rate: RateFn
-    is_diagnosis: bool
-    risk: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -383,13 +362,11 @@ class Assumptions:
         (death-type, morbidity and diagnosis riders), one per coverage code.
         Their order fixes the integer coverage codes: entry ``i`` is code
         ``i + 1``; code 0 is the main-contract death coverage, driven by
-        ``mortality_annual``. Empty for a death-only portfolio.
-    metadata :
-        Optional :class:`AssumptionsMetadata` carrying non-numeric labels
-        the I/O layer needs (the riders-master ``coverage_types`` map,
-        and similar future entries). The engine itself never reads it;
-        keeping these out of the main :class:`Assumptions` surface keeps
-        the numeric inputs distinct from the I/O bookkeeping.
+        ``mortality_annual``. Empty for a death-only portfolio. The taxonomy
+        side -- whether a coverage code runs as a diagnosis pool vs a
+        recurring claim -- lives on the portfolio
+        (:attr:`fastcashflow.modelpoints.ModelPoints.benefit_patterns`),
+        not here.
     state_model :
         The product's in-force state machine -- a :class:`~fastcashflow.statemodel.StateModel`
         declaring the transient states, their transitions and which states
@@ -452,7 +429,6 @@ class Assumptions:
     fund_fee: float = 0.0
     settlement_pattern: FloatArray | None = None
     coverages: tuple[CoverageRate, ...] = ()
-    metadata: AssumptionsMetadata | None = None
     state_model: StateModel | None = None
 
     def __post_init__(self) -> None:
@@ -476,12 +452,7 @@ class Assumptions:
         # tuple with the adapted callables.
         new_coverages = tuple(
             (r if r.rate is _adapt_rate_arity(r.rate)
-             else CoverageRate(
-                 code=r.code,
-                 rate=_adapt_rate_arity(r.rate),
-                 is_diagnosis=r.is_diagnosis,
-                 risk=r.risk,
-             ))
+             else CoverageRate(code=r.code, rate=_adapt_rate_arity(r.rate)))
             for r in self.coverages
         )
         if any(nr is not r for nr, r in zip(new_coverages, self.coverages)):
@@ -640,18 +611,15 @@ def _describe_assumptions_lines(
         sections.append((f"{marks[i]} {title}", body))
 
     riders = asmp.coverages
-    cov = (asmp.metadata.coverage_types if asmp.metadata is not None else None) or {}
     coverage_lines: list[object] = []
     width = max((len(r.code) for r in riders), default=0)
     for r in riders:
         coverage_lines.append(
-            f"CoverageRate(code={r.code!r:{width+2}}, risk={r.risk}, "
-            f"is_diagnosis={r.is_diagnosis}, rate={_fmt_callable(r.rate)})"
+            f"CoverageRate(code={r.code!r:{width+2}}, "
+            f"rate={_fmt_callable(r.rate)})"
         )
-    cov_lines: list[object] = [f"{k!r:12} -> {v!r}" for k, v in cov.items()]
     sections.append((f"{marks[3]} 특약 / 담보 정의", [
         (f"coverages : tuple  (len={len(riders)})", coverage_lines),
-        (f"coverage_types : dict  (len={len(cov)})", cov_lines),
     ]))
 
     sm = asmp.state_model

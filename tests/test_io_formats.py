@@ -32,37 +32,43 @@ def _write_sheets(path, sheets):
 
 def test_read_wide_xlsx(tmp_path):
     """A wide .xlsx reads to the same valuation as the in-memory book."""
+    from fastcashflow import load_sample_benefit_patterns
     asmp = next(iter(load_sample_assumptions().values()))
+    patterns = load_sample_benefit_patterns()
     mps = load_sample_model_points()
     path = tmp_path / "wide.xlsx"
     _write_sheets(path, [("model_points", mps.to_wide(asmp))])
 
-    back = read_model_points(path, asmp)
+    back = read_model_points(path, asmp, benefit_patterns=patterns)
     assert back.n_mp == mps.n_mp
     assert np.allclose(value(back, asmp).bel, value(mps, asmp).bel)
 
 
 def test_read_long_xlsx(tmp_path):
     """A long-form .xlsx -- policies and coverages sheets in one workbook."""
+    from fastcashflow import load_sample_benefit_patterns
     asmp = next(iter(load_sample_assumptions().values()))
+    patterns = load_sample_benefit_patterns()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     path = tmp_path / "long.xlsx"
     _write_sheets(path, [("policies", policies), ("coverages", coverages)])
 
-    back = read_model_points(path, asmp)
+    back = read_model_points(path, asmp, benefit_patterns=patterns)
     assert back.n_mp == mps.n_mp
     assert np.allclose(value(back, asmp).bel, value(mps, asmp).bel)
 
 
 def test_read_feather(tmp_path):
     """A .feather (Arrow IPC) model-point file round-trips."""
+    from fastcashflow import load_sample_benefit_patterns
     asmp = next(iter(load_sample_assumptions().values()))
+    patterns = load_sample_benefit_patterns()
     mps = load_sample_model_points()
     path = tmp_path / "wide.feather"
     mps.to_wide(asmp).write_ipc(path)
 
-    back = read_model_points(path, asmp)
+    back = read_model_points(path, asmp, benefit_patterns=patterns)
     assert back.n_mp == mps.n_mp
     assert np.allclose(value(back, asmp).bel, value(mps, asmp).bel)
 
@@ -78,7 +84,9 @@ def test_write_valuation_feather(tmp_path):
 
 def test_long_form_reads_benefit_rules(tmp_path):
     """The long-form coverages frame reads the waiting / reduction columns."""
+    from fastcashflow import load_sample_benefit_patterns
     asmp = next(iter(load_sample_assumptions().values()))
+    patterns = load_sample_benefit_patterns()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     coverages = coverages.with_columns(
@@ -91,7 +99,8 @@ def test_long_form_reads_benefit_rules(tmp_path):
     policies.write_csv(pol_path)
     coverages.write_csv(cov_path)
 
-    back = read_model_points(pol_path, asmp, coverages=cov_path)
+    back = read_model_points(pol_path, asmp, coverages=cov_path,
+                             benefit_patterns=patterns)
     assert np.all(back.coverage_waiting == 6)
     assert np.all(back.coverage_reduction_end == 24)
     assert np.allclose(back.coverage_reduction_factor, 0.5)
@@ -127,7 +136,9 @@ def test_wide_policies_elapsed_months_emits_warning(tmp_path):
 def test_long_policies_elapsed_months_emits_warning(tmp_path):
     """Same guard fires on the long-form (policies + coverages) path."""
     import warnings
+    from fastcashflow import load_sample_benefit_patterns
     asmp = next(iter(load_sample_assumptions().values()))
+    patterns = load_sample_benefit_patterns()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     policies = policies.with_columns(pl.lit(12).alias("elapsed_months"))
@@ -138,7 +149,8 @@ def test_long_policies_elapsed_months_emits_warning(tmp_path):
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        back = read_model_points(pol_path, asmp, coverages=cov_path)
+        back = read_model_points(pol_path, asmp, coverages=cov_path,
+                                 benefit_patterns=patterns)
     msgs = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
     assert any("elapsed_months" in m for m in msgs), msgs
     assert np.all(back.elapsed_months == 0)

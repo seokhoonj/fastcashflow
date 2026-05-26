@@ -84,19 +84,23 @@ def test_every_segment_has_expense_items():
 
 
 def test_riders_resolved():
-    """Rate-driven riders resolve from ``incidence_rate_tables``; non-rate-driven
-    types stay in ``coverage_types`` only."""
+    """Rate-driven riders resolve from ``incidence_rate_tables``; the
+    pattern taxonomy now lives in ``benefit_patterns.csv`` (read by
+    :func:`load_sample_benefit_patterns`), no longer on the
+    :class:`Assumptions`."""
+    from fastcashflow import load_sample_benefit_patterns, BenefitPattern
+
     basis = load_sample_assumptions()
     asmp = basis[("TERM_LIFE", "GA")]
     # ADB is rate-driven (death-type), so it joins the riders tuple too.
     assert [r.code for r in asmp.coverages] == ["INPATIENT", "CANCER", "ADB"]
-    assert asmp.metadata.coverage_types == {
-        "DEATH_MAIN": "DEATH_MAIN",
-        "INPATIENT":  "MORBIDITY",
-        "CANCER":     "DIAGNOSIS",
-        "ADB":        "DEATH",
-        "ANNUITY":    "ANNUITY",
-        "MATURITY":   "MATURITY",
+    assert load_sample_benefit_patterns() == {
+        "DEATH_MAIN": BenefitPattern.DEATH_MAIN,
+        "INPATIENT":  BenefitPattern.MORBIDITY,
+        "CANCER":     BenefitPattern.DIAGNOSIS,
+        "ADB":        BenefitPattern.DEATH,
+        "ANNUITY":    BenefitPattern.ANNUITY,
+        "MATURITY":   BenefitPattern.MATURITY,
     }
 
 

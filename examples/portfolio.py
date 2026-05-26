@@ -15,7 +15,7 @@ DATA = Path(__file__).resolve().parent / "data"
 def main() -> None:
     basis = fcf.read_assumptions(DATA / "assumptions.xlsx")
     assumptions = basis[("TERM_LIFE", "FC")]
-    book = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions)
+    book = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions, benefit_patterns=DATA / "benefit_patterns.csv")
 
     # value() is the fast path -- BEL/RA/CSM/loss component per model point,
     # with no per-month trajectories materialised.

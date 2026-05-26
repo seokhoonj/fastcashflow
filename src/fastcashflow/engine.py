@@ -1540,7 +1540,9 @@ def value(
                 np.transpose(compiled.edge_prob, (1, 2, 3, 0)))
             state_duration_max = None
         start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
-    cov_is_diagnosis, cov_risk = coverage_arrays(assumptions.coverages)
+    cov_is_diagnosis, cov_risk = coverage_arrays(
+        assumptions.coverages, model_points.benefit_patterns,
+    )
     # coverage_rates stacks the annual mortality and rider rates; the whole
     # stack is converted to monthly. Slab 0 is the monthly mortality above.
     cov_rates = np.ascontiguousarray(annual_to_monthly(coverage_rates(

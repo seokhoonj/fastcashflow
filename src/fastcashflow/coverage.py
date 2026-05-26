@@ -12,7 +12,12 @@ The kernels loop the coverage list generically. A coverage's mechanic is
 given by two per-code arrays -- ``cov_is_diagnosis`` (a single-payment
 benefit whose claims run off a depleting pool) and ``cov_risk`` (the risk
 class the Risk Adjustment prices) -- built by :func:`coverage_arrays`, so a
-new rider needs no kernel change.
+new rider needs no kernel change. The two arrays are *derived* from the
+portfolio's ``benefit_patterns`` taxonomy (the
+:class:`~fastcashflow.modelpoints.ModelPoints` ``benefit_patterns`` dict);
+the company-level taxonomy is the single source of truth for whether a
+coverage is a diagnosis pool or a recurring claim, and which risk class
+the RA prices.
 """
 from __future__ import annotations
 
@@ -82,6 +87,22 @@ RISK_MORTALITY = 0
 RISK_MORBIDITY = 1
 
 
+def pattern_attrs(pattern: BenefitPattern) -> tuple[bool, int]:
+    """Derive ``(is_diagnosis, risk)`` from a :class:`BenefitPattern`.
+
+    The two flags drive the kernel branch a coverage takes -- a depleting
+    diagnosis pool vs a recurring claim, and the RA risk class. They are a
+    closed-form function of the pattern, so the engine derives them at
+    call time rather than carrying them as separate fields on
+    :class:`~fastcashflow.assumptions.CoverageRate`.
+    """
+    is_diagnosis = (pattern == BenefitPattern.DIAGNOSIS)
+    risk = (RISK_MORTALITY
+            if pattern in (BenefitPattern.DEATH, BenefitPattern.DEATH_MAIN)
+            else RISK_MORBIDITY)
+    return is_diagnosis, risk
+
+
 def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
                    duration_grid, issue_class_grid, elapsed_grid):
     """Stack the per-code rate grids into one ``(n_codes, ..., n_year)`` array.
@@ -106,18 +127,51 @@ def coverage_rates(mortality, rate_fns, sex_grid, issue_age_grid,
     return np.ascontiguousarray(np.stack(slabs))
 
 
-def coverage_arrays(riders):
+def coverage_arrays(riders, benefit_patterns=None):
     """Per-code kernel flag arrays for the coverage list.
 
     ``riders`` is the ordered rate-driven riders (codes 1..n); code 0, the
     main-contract death coverage, is prepended -- a recurring claim of
-    mortality risk. Returns ``(cov_is_diagnosis, cov_risk)``, each indexed
-    by coverage code.
+    mortality risk. ``benefit_patterns`` is the portfolio-level taxonomy
+    (``{coverage_code: BenefitPattern}``); each rider's pattern looked up
+    by code gives the two flags via :func:`pattern_attrs`. When
+    ``benefit_patterns`` is ``None`` every rider falls back to
+    :data:`BenefitPattern.MORBIDITY` -- the conservative default the
+    pre-Plan-B engine used for any rate-driven rider that was not flagged
+    a diagnosis.
+
+    Returns ``(cov_is_diagnosis, cov_risk)``, each indexed by coverage code.
     """
-    cov_is_diagnosis = np.array(
-        [False] + [r.is_diagnosis for r in riders], np.bool_
-    )
-    cov_risk = np.array(
-        [RISK_MORTALITY] + [r.risk for r in riders], np.int64
-    )
+    flags: list[tuple[bool, int]] = [(False, RISK_MORTALITY)]
+    for r in riders:
+        pattern = (benefit_patterns.get(r.code) if benefit_patterns is not None
+                   else None) or BenefitPattern.MORBIDITY
+        flags.append(pattern_attrs(pattern))
+    cov_is_diagnosis = np.array([f[0] for f in flags], np.bool_)
+    cov_risk = np.array([f[1] for f in flags], np.int64)
     return cov_is_diagnosis, cov_risk
+
+
+def order_coverages(rate_driven_codes, benefit_patterns):
+    """Validate that every rate-driven code is registered in the taxonomy.
+
+    Returns the input sequence unchanged when validation passes -- the
+    function name reflects that this is the *ordering* boundary: the
+    rate-driven coverages keep their xlsx-coverages-sheet order (which
+    becomes the engine's integer code ordering, with code ``i+1`` for
+    entry ``i``), but every code must appear in the
+    ``benefit_patterns.csv`` taxonomy. Raises :class:`ValueError`
+    listing the missing codes when not.
+    """
+    if benefit_patterns is None:
+        return tuple(rate_driven_codes)
+    missing = [c for c in rate_driven_codes if c not in benefit_patterns]
+    if missing:
+        raise ValueError(
+            f"rate-driven coverage code(s) {missing!r} are not in the "
+            "benefit_patterns taxonomy -- register them in benefit_patterns.csv "
+            f"or remove the rate_table cell in the assumptions workbook "
+            "(known patterns: "
+            f"{', '.join(sorted(set(benefit_patterns.values()), key=str))})"
+        )
+    return tuple(rate_driven_codes)

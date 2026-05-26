@@ -278,7 +278,6 @@ def _reincidence_assumptions_with_rider(duration_max, exclusion_months,
     health rider (claim_rate accumulates each month).
     """
     from fastcashflow.assumptions import CoverageRate
-    from fastcashflow.coverage import RISK_MORBIDITY
 
     def rider_fn(sex, age, dur):
         return np.full(dur.shape, _annual(rider_rate))
@@ -297,14 +296,13 @@ def _reincidence_assumptions_with_rider(duration_max, exclusion_months,
         mortality_cv=base.mortality_cv,
         morbidity_cv=0.10,
         state_model=base.state_model,
-        coverages=(CoverageRate(code="rider", rate=rider_fn,
-                          is_diagnosis=rider_is_diagnosis,
-                          risk=RISK_MORBIDITY),),
+        coverages=(CoverageRate(code="rider", rate=rider_fn),),
     )
 
 
 def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
-                                  rider_reduction_factor):
+                                  rider_reduction_factor,
+                                  rider_is_diagnosis=False):
     """A small portfolio with one death cov (rule-free) and one rider cov
     (carrying the per-coverage rule). The DEATH coverage is at kind 0,
     the rider at kind 1 (its index in the riders tuple plus the death
@@ -328,6 +326,8 @@ def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
         coverage_waiting[2 * i + 1] = rider_waiting
         coverage_reduction_end[2 * i + 1] = rider_reduction_end
         coverage_reduction_factor[2 * i + 1] = rider_reduction_factor
+    rider_pattern = (fcf.BenefitPattern.DIAGNOSIS if rider_is_diagnosis
+                     else fcf.BenefitPattern.MORBIDITY)
     return fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
@@ -340,6 +340,7 @@ def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
         coverage_waiting=coverage_waiting,
         coverage_reduction_end=coverage_reduction_end,
         coverage_reduction_factor=coverage_reduction_factor,
+        benefit_patterns={"rider": rider_pattern},
     )
 
 
@@ -354,6 +355,7 @@ def test_semi_markov_with_waiting_period_on_rider():
     mp = _portfolio_with_rule_coverage(
         n=30, seed=13,
         rider_waiting=3, rider_reduction_end=0, rider_reduction_factor=1.0,
+        rider_is_diagnosis=False,
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
@@ -371,6 +373,7 @@ def test_semi_markov_with_diagnosis_rider():
     mp = _portfolio_with_rule_coverage(
         n=30, seed=17,
         rider_waiting=0, rider_reduction_end=0, rider_reduction_factor=1.0,
+        rider_is_diagnosis=True,
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
@@ -388,6 +391,7 @@ def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
     mp = _portfolio_with_rule_coverage(
         n=25, seed=19,
         rider_waiting=6, rider_reduction_end=24, rider_reduction_factor=0.5,
+        rider_is_diagnosis=True,
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
@@ -582,6 +586,10 @@ def _portfolio_with_two_riders(n, seed, rule_rider_waiting,
         coverage_waiting=coverage_waiting,
         coverage_reduction_end=coverage_reduction_end,
         coverage_reduction_factor=coverage_reduction_factor,
+        benefit_patterns={
+            "recur": fcf.BenefitPattern.MORBIDITY,
+            "diag":  fcf.BenefitPattern.DIAGNOSIS,
+        },
     )
 
 
@@ -593,7 +601,6 @@ def test_semi_markov_with_rule_and_diagnosis_riders_together():
     measure() and value().
     """
     from fastcashflow.assumptions import CoverageRate
-    from fastcashflow.coverage import RISK_MORBIDITY
 
     def recur_rate(sex, age, dur):
         return np.full(dur.shape, _annual(0.0006))
@@ -615,10 +622,8 @@ def test_semi_markov_with_rule_and_diagnosis_riders_together():
         morbidity_cv=0.10,
         state_model=base.state_model,
         coverages=(
-            CoverageRate(code="recur", rate=recur_rate,
-                      is_diagnosis=False, risk=RISK_MORBIDITY),
-            CoverageRate(code="diag", rate=diag_rate,
-                      is_diagnosis=True, risk=RISK_MORBIDITY),
+            CoverageRate(code="recur", rate=recur_rate),
+            CoverageRate(code="diag", rate=diag_rate),
         ),
     )
     mp = _portfolio_with_two_riders(

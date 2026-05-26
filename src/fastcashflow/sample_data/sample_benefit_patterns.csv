@@ -1,0 +1,7 @@
+coverage_code,coverage_name,benefit_pattern
+DEATH_MAIN,main contract death,DEATH_MAIN
+INPATIENT,hospitalization rider,MORBIDITY
+CANCER,cancer diagnosis rider,DIAGNOSIS
+ADB,accidental death rider,DEATH
+ANNUITY,annuity rider,ANNUITY
+MATURITY,survival benefit rider,MATURITY

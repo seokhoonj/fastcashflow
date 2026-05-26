@@ -9,9 +9,9 @@ import pytest
 from numba import cuda
 
 from fastcashflow import (
-    RISK_MORBIDITY,
     STATE_MODELS,
     Assumptions,
+    BenefitPattern,
     ExpenseItem,
     ModelPoints,
     CoverageRate,
@@ -140,8 +140,7 @@ def test_value_gpu_matches_cpu_with_transition():
         ra_confidence=0.85,
         mortality_cv=0.12,
         morbidity_cv=0.10,
-        coverages=(CoverageRate("dx", flat(0.003), is_diagnosis=True,
-                          risk=RISK_MORBIDITY),),
+        coverages=(CoverageRate("dx", flat(0.003)),),
     )
     rng = np.random.default_rng(13)
     n = 4_000
@@ -152,6 +151,7 @@ def test_value_gpu_matches_cpu_with_transition():
         term_months=np.full(n, 120),
         benefits={1: rng.integers(5, 30, n) * 1_000_000.0},
         state=rng.integers(0, 3, n),
+        benefit_patterns={"dx": BenefitPattern.DIAGNOSIS},
     )
     cpu = value(mps, asmp, backend="cpu")
     gpu = value(mps, asmp, backend="gpu")

@@ -230,13 +230,16 @@ def test_describe_assumptions_renders_both_shapes(capsys):
 
 def test_to_long_round_trips(tmp_path):
     """ModelPoints.to_long written out and re-read reproduces the valuation."""
+    from fastcashflow import load_sample_benefit_patterns
     asmp = next(iter(load_sample_assumptions().values()))
+    patterns = load_sample_benefit_patterns()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     policies.write_csv(tmp_path / "pol.csv")
     coverages.write_csv(tmp_path / "cov.csv")
     back = read_model_points(tmp_path / "pol.csv", asmp,
-                             coverages=tmp_path / "cov.csv")
+                             coverages=tmp_path / "cov.csv",
+                             benefit_patterns=patterns)
     a, b = value(mps, asmp), value(back, asmp)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.csm, b.csm)
@@ -244,10 +247,13 @@ def test_to_long_round_trips(tmp_path):
 
 def test_to_wide_round_trips(tmp_path):
     """ModelPoints.to_wide written out and re-read reproduces the valuation."""
+    from fastcashflow import load_sample_benefit_patterns
     asmp = next(iter(load_sample_assumptions().values()))
+    patterns = load_sample_benefit_patterns()
     mps = load_sample_model_points()
     mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")
-    back = read_model_points(tmp_path / "wide.csv", asmp)
+    back = read_model_points(tmp_path / "wide.csv", asmp,
+                             benefit_patterns=patterns)
     a, b = value(mps, asmp), value(back, asmp)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.csm, b.csm)
@@ -255,7 +261,9 @@ def test_to_wide_round_trips(tmp_path):
 
 def test_value_file_streams_long_form(tmp_path):
     """value_file streams a long-form policies + coverages pair in chunks."""
+    from fastcashflow import load_sample_benefit_patterns
     asmp = next(iter(load_sample_assumptions().values()))
+    patterns = load_sample_benefit_patterns()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     policies.write_parquet(tmp_path / "pol.parquet")
@@ -264,7 +272,8 @@ def test_value_file_streams_long_form(tmp_path):
     out_dir = tmp_path / "results"
     processed = value_file(
         tmp_path / "pol.parquet", out_dir, asmp,
-        coverages=tmp_path / "cov.parquet", chunk_size=3,
+        coverages=tmp_path / "cov.parquet",
+        benefit_patterns=patterns, chunk_size=3,
     )
     assert processed == mps.n_mp
 

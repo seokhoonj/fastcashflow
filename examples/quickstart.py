@@ -19,7 +19,7 @@ def main() -> None:
     # pick TERM_LIFE / FC for this single-segment quickstart. A real run
     # over a multi-segment portfolio would use fcf.value_segmented.
     assumptions = basis[("TERM_LIFE", "FC")]
-    model_points = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions)
+    model_points = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions, benefit_patterns=DATA / "benefit_patterns.csv")
 
     m = fcf.measure(model_points, assumptions)
     print(f"measured {model_points.n_mp} model points -- portfolio totals at issue")

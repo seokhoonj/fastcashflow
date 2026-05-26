@@ -33,12 +33,10 @@ import polars as pl
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import (
-    Assumptions, AssumptionsMetadata, CoverageRate, ExpenseItem,
+    Assumptions, CoverageRate, ExpenseItem,
 )
 from fastcashflow.statemodel import STATE_MODELS
-from fastcashflow.coverage import (
-    RATE_DRIVEN_PATTERNS, RISK_MORBIDITY, RISK_MORTALITY, BenefitPattern,
-)
+from fastcashflow.coverage import BenefitPattern, RATE_DRIVEN_PATTERNS
 from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 
 # ``engine`` is the largest module in the package (codegen + the numba CPU
@@ -498,23 +496,28 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     # a company genuinely needs product-specific calibrations of the same
     # disease, give them different coverage_codes (e.g. CANCER_HEALTH vs
     # CANCER_WHOLELIFE) -- the engine then treats them as separate riders.
-    global_coverages: list = []
+    #
+    # Plan B (3-file split): this sheet now carries only ``coverage_code`` +
+    # ``rate_table`` -- the rate-driven entries. The pattern taxonomy
+    # (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY / DEATH_MAIN) moves
+    # to a separate ``benefit_patterns.csv`` file consumed by
+    # :func:`read_model_points`, so the assumptions workbook is purely the
+    # actuarial basis and the company catalogue lives elsewhere. Survival
+    # entries (ANNUITY, MATURITY) and DEATH_MAIN never carry a
+    # ``rate_table`` and so do not appear here.
+    rate_driven_coverages: list[tuple[str, str]] = []
     if "coverages" in wb.sheetnames:
         for r in _sheet_dicts(wb["coverages"]):
             rt = r.get("rate_table")
             code = str(r["coverage_code"]).strip()
-            try:
-                pattern = BenefitPattern(str(r["benefit_pattern"]).strip())
-            except ValueError as exc:
+            if rt in (None, ""):
                 raise ValueError(
-                    f"coverages row {code!r} has unknown benefit_pattern "
-                    f"{r['benefit_pattern']!r}; valid: "
-                    f"{', '.join(p.value for p in BenefitPattern)}"
-                ) from exc
-            global_coverages.append((
-                code, pattern,
-                str(rt).strip() if rt not in (None, "") else None,
-            ))
+                    f"coverages row {code!r} has no rate_table; the "
+                    "assumptions workbook only lists rate-driven coverages "
+                    "(survival / DEATH_MAIN entries belong in "
+                    "benefit_patterns.csv, not here)"
+                )
+            rate_driven_coverages.append((code, str(rt).strip()))
 
     result = {}
     for seg in segments:
@@ -553,26 +556,16 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             return ae_factors.get((product, channel, coverage_code))
 
         coverage_rates = []
-        coverage_types: dict[str, BenefitPattern] = {}
-        for code, rtype, rate_table in global_coverages:
-            coverage_types[code] = rtype
-            if rtype not in RATE_DRIVEN_PATTERNS:
-                continue
-            if rate_table is None or rate_table not in incidence_rate_t:
+        for code, rate_table in rate_driven_coverages:
+            if rate_table not in incidence_rate_t:
                 raise ValueError(
-                    f"rider {code!r} of product {product!r} is rate-driven "
-                    f"({rtype}) but rate_table {rate_table!r} is not in "
-                    "incidence_rate_tables"
+                    f"rider {code!r} of product {product!r}: rate_table "
+                    f"{rate_table!r} is not in incidence_rate_tables"
                 )
             rate_fn = incidence_rate_t[rate_table]
             rate_fn = _with_age_shift(rate_fn, shift_morb)
             rate_fn = _with_ae_factor(rate_fn, ae(code))
-            coverage_rates.append(CoverageRate(
-                code=code,
-                rate=rate_fn,
-                is_diagnosis=(rtype == BenefitPattern.DIAGNOSIS),
-                risk=RISK_MORTALITY if rtype == BenefitPattern.DEATH else RISK_MORBIDITY,
-            ))
+            coverage_rates.append(CoverageRate(code=code, rate=rate_fn))
 
         mortality_fn = lookup(mortality_t, "mortality_table")
         mortality_fn = _with_age_shift(mortality_fn, shift_mort)
@@ -615,7 +608,6 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             ra_confidence=scalar("ra_confidence", required=True),
             mortality_cv=scalar("mortality_cv", required=True),
             coverages=tuple(coverage_rates),
-            metadata=AssumptionsMetadata(coverage_types=coverage_types or None),
             surrender_value_curve=surrender_curve,
         )
         for opt_col in ("morbidity_cv", "longevity_cv", "disability_cv",
@@ -704,7 +696,47 @@ def _warn_if_elapsed_months(columns) -> None:
         )
 
 
-def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
+def _parse_benefit_patterns(path: Path | str) -> dict[str, BenefitPattern]:
+    """Read a ``benefit_patterns.csv`` taxonomy file into a dict.
+
+    The file has two required columns -- ``coverage_code`` and
+    ``benefit_pattern`` -- plus an optional human-friendly
+    ``coverage_name`` (read but not retained, since the engine routes by
+    code). Returns ``{coverage_code: BenefitPattern}``. Raises
+    :class:`ValueError` for an unknown pattern (V1) and a duplicate code
+    (V2); the messages name the offending row so the operator can fix
+    the file without scrolling through it.
+    """
+    df = _read_frame(path)
+    for need in ("coverage_code", "benefit_pattern"):
+        if need not in df.columns:
+            raise ValueError(
+                f"the benefit_patterns file is missing required column "
+                f"{need!r}"
+            )
+    result: dict[str, BenefitPattern] = {}
+    valid = ", ".join(p.value for p in BenefitPattern)
+    for row in df.iter_rows(named=True):
+        code = str(row["coverage_code"]).strip()
+        raw = str(row["benefit_pattern"]).strip()
+        try:
+            pattern = BenefitPattern(raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"benefit_patterns row {code!r}: benefit_pattern={raw!r} "
+                f"is not one of {{{valid}}}"
+            ) from exc
+        if code in result:
+            raise ValueError(
+                f"benefit_patterns row {code!r}: duplicate coverage_code "
+                "(every code may appear exactly once in the taxonomy)"
+            )
+        result[code] = pattern
+    return result
+
+
+def _wide_model_points(df: pl.DataFrame, assumptions,
+                       benefit_patterns=None) -> ModelPoints:
     """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
     rider a ``<coverage_code>_benefit`` column."""
     for need in ("issue_age", "term_months"):
@@ -750,16 +782,25 @@ def _wide_model_points(df: pl.DataFrame, assumptions) -> ModelPoints:
         benefits[code_to_kind[code]] = df[col].to_numpy()
     if benefits:
         fields["benefits"] = benefits
+    if benefit_patterns is not None:
+        fields["benefit_patterns"] = benefit_patterns
     return ModelPoints(**fields)
 
 
 def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
-                       assumptions) -> ModelPoints:
+                       assumptions, benefit_patterns=None) -> ModelPoints:
     """Build a ``ModelPoints`` from a long-form policies + coverages pair."""
     if assumptions is None:
         raise ValueError(
             "long-form model points need the assumptions -- the rider-code "
             "registry maps coverage rows to engine codes"
+        )
+    if benefit_patterns is None:
+        raise ValueError(
+            "long-form model points need the benefit_patterns taxonomy -- "
+            "the per-code pattern routes survival rows (ANNUITY / MATURITY) "
+            "to scalar fields and rate-driven rows to the coverage CSR. "
+            "Pass a benefit_patterns.csv path to read_model_points."
         )
     for need in ("mp_id", "issue_age", "term_months"):
         if need not in pol.columns:
@@ -773,17 +814,25 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             )
     _warn_if_elapsed_months(pol.columns)
     n_mp = pol.height
-    ctypes = (
-        assumptions.metadata.coverage_types
-        if assumptions.metadata is not None else None
-    ) or {}
+    ctypes = {k: BenefitPattern(v) for k, v in benefit_patterns.items()}
     code_to_kind = {r.code: i + 1 for i, r in enumerate(assumptions.coverages)}
+    # V3 -- every rate-driven coverage in the assumptions must be registered
+    # in the taxonomy. Detected here so the error surfaces at read time
+    # rather than as a quiet routing miss inside the engine.
+    missing_in_taxonomy = [r.code for r in assumptions.coverages
+                           if r.code not in ctypes]
+    if missing_in_taxonomy:
+        raise ValueError(
+            f"rate-driven coverage code(s) {missing_in_taxonomy!r} from the "
+            "assumptions workbook are not registered in benefit_patterns -- "
+            "add each code (with its BenefitPattern) to benefit_patterns.csv"
+        )
 
     # Resolve every coverage row to its policy index and coverage type.
     pol = pol.with_row_index("_mp")
     cmap = pl.DataFrame({
         "coverage_code": list(ctypes.keys()),
-        "_type": list(ctypes.values()),
+        "_type": [str(v) for v in ctypes.values()],
         "_kind": [code_to_kind.get(c, 0) for c in ctypes],
     })
     cov = (cov.join(pol.select("mp_id", "_mp"), on="mp_id", how="left")
@@ -792,7 +841,8 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         raise ValueError("a coverage row references an unknown mp_id")
     if cov["_type"].null_count():
         raise ValueError(
-            "a coverage row references an unregistered coverage_code"
+            "a coverage row references a coverage_code not in the "
+            "benefit_patterns taxonomy"
         )
 
     mp = cov["_mp"].to_numpy()
@@ -851,6 +901,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         np.zeros(1, np.int64),
         np.cumsum(np.bincount(cov_mp, minlength=n_mp), dtype=np.int64),
     ))
+    fields["benefit_patterns"] = ctypes
     return ModelPoints(**fields)
 
 
@@ -858,6 +909,7 @@ def read_model_points(
     path: Path | str,
     assumptions: Assumptions | None = None,
     coverages: Path | str | None = None,
+    benefit_patterns: Path | str | dict[str, BenefitPattern] | None = None,
 ) -> ModelPoints:
     """Read model points from a parquet, CSV, Excel or feather file.
 
@@ -872,15 +924,17 @@ def read_model_points(
       column adds that rider's coverage; the ``assumptions`` resolve the
       coverage code to an engine code.
     * **long-form** -- ``read_model_points(policies, assumptions,
-      coverages=coverages_path)``. A policies frame (``mp_id``,
-      ``issue_age``, ``term_months``, optional ``sex`` / ``count`` /
-      ``state`` / ``premium_term_months``) and a coverages frame
-      (``mp_id``, ``coverage_code``,
-      ``amount``, and
+      coverages=coverages_path, benefit_patterns=benefit_patterns_path)``.
+      A policies frame (``mp_id``, ``issue_age``, ``term_months``,
+      optional ``sex`` / ``count`` / ``state`` / ``premium_term_months``)
+      and a coverages frame (``mp_id``, ``coverage_code``, ``amount``, and
       optional ``premium`` / ``waiting`` / ``reduction_end`` /
       ``reduction_factor``), one coverage row per policy x coverage.
-      A single ``.xlsx``
-      with ``policies`` and ``coverages`` sheets is read as long-form too.
+      A single ``.xlsx`` with ``policies`` and ``coverages`` sheets is read
+      as long-form too. ``benefit_patterns`` is the company taxonomy file
+      (CSV / parquet / feather / xlsx) -- the third side of the Plan-B
+      split between *portfolio* (policies + coverages), *basis*
+      (assumptions.xlsx) and *catalogue* (benefit_patterns.csv).
 
     ``assumptions`` is optional only for a wide file with no rider columns.
 
@@ -891,6 +945,10 @@ def read_model_points(
     policies side is ignored and a :class:`UserWarning` is emitted; do
     not encode the as-of date by mixing it into the static spec.
     """
+    if isinstance(benefit_patterns, (str, Path)):
+        patterns_dict = _parse_benefit_patterns(benefit_patterns)
+    else:
+        patterns_dict = benefit_patterns
     p = str(path)
     if coverages is None and p.endswith(".xlsx"):
         wb = openpyxl.load_workbook(p, read_only=True)
@@ -900,12 +958,14 @@ def read_model_points(
             return _long_model_points(
                 pl.read_excel(p, sheet_name="policies", engine="openpyxl"),
                 pl.read_excel(p, sheet_name="coverages", engine="openpyxl"),
-                assumptions,
+                assumptions, patterns_dict,
             )
     pol = _read_frame(path)
     if coverages is not None:
-        return _long_model_points(pol, _read_frame(coverages), assumptions)
-    return _wide_model_points(pol, assumptions)
+        return _long_model_points(
+            pol, _read_frame(coverages), assumptions, patterns_dict,
+        )
+    return _wide_model_points(pol, assumptions, patterns_dict)
 
 
 def sample_data_dir() -> Path:
@@ -934,21 +994,43 @@ def load_sample_assumptions() -> dict[tuple[str, str], Assumptions]:
         return read_assumptions(path)
 
 
+def load_sample_benefit_patterns() -> dict[str, BenefitPattern]:
+    """Read fastcashflow's bundled sample benefit-pattern taxonomy.
+
+    The companion to :func:`load_sample_assumptions` and
+    :func:`load_sample_model_points` -- the company-level catalogue that
+    maps each ``coverage_code`` to its :class:`BenefitPattern`. The same
+    file format every portfolio uses (see :func:`read_model_points`
+    long-form, ``benefit_patterns`` argument).
+    """
+    source = (
+        resources.files("fastcashflow") / "sample_data"
+        / "sample_benefit_patterns.csv"
+    )
+    with resources.as_file(source) as path:
+        return _parse_benefit_patterns(path)
+
+
 def load_sample_model_points() -> ModelPoints:
     """Read fastcashflow's bundled sample portfolio.
 
-    A small long-form portfolio -- a policies file and a coverages file --
-    packaged with the library, so the engine can be tried without preparing
-    an input file. See :func:`read_model_points` for the file format. The
-    coverage list comes from any segment's ``Assumptions`` -- all bundled
-    segments share the same product and so the same rider master.
+    A small long-form portfolio -- a policies file, a coverages file and
+    the benefit-pattern taxonomy -- packaged with the library, so the
+    engine can be tried without preparing an input file. See
+    :func:`read_model_points` for the file format. The coverage list
+    comes from any segment's ``Assumptions`` -- all bundled segments
+    share the same product and so the same rider master.
     """
     basis = load_sample_assumptions()
     assumptions = next(iter(basis.values()))
+    patterns = load_sample_benefit_patterns()
     base = resources.files("fastcashflow") / "sample_data"
     with resources.as_file(base / "sample_policies.csv") as policies, \
             resources.as_file(base / "sample_coverages.csv") as coverages:
-        return read_model_points(policies, assumptions, coverages=coverages)
+        return read_model_points(
+            policies, assumptions, coverages=coverages,
+            benefit_patterns=patterns,
+        )
 
 
 def load_sample_inforce_state() -> "InforceState":
@@ -1069,6 +1151,7 @@ def value_file(
     assumptions: Assumptions,
     *,
     coverages: Path | str | None = None,
+    benefit_patterns: Path | str | dict[str, BenefitPattern] | None = None,
     chunk_size: int = 20_000_000,
     backend: str = "cpu",
     id_column: str | None = None,
@@ -1110,6 +1193,10 @@ def value_file(
             "files; use a fresh directory"
         )
 
+    if isinstance(benefit_patterns, (str, Path)):
+        patterns_dict = _parse_benefit_patterns(benefit_patterns)
+    else:
+        patterns_dict = benefit_patterns
     scan = pl.scan_parquet(input_path)
     n_total = scan.select(pl.len()).collect().item()
     processed = 0
@@ -1123,7 +1210,8 @@ def value_file(
             cov = cov_scan.join(
                 pol.lazy().select("mp_id"), on="mp_id", how="semi"
             ).collect()
-            model_points = _long_model_points(pol, cov, assumptions)
+            model_points = _long_model_points(pol, cov, assumptions,
+                                               patterns_dict)
             write_valuation(
                 value(model_points, assumptions, backend=backend),
                 output_dir / f"part-{part:05d}.parquet",
@@ -1148,7 +1236,7 @@ def value_file(
         chunk = projected.slice(offset, chunk_size).collect()
         model_points = _wide_model_points(
             chunk.drop(id_column) if id_column is not None else chunk,
-            assumptions,
+            assumptions, patterns_dict,
         )
         ids = chunk[id_column].to_numpy() if id_column is not None else None
         write_valuation(

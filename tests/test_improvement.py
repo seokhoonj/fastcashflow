@@ -34,8 +34,8 @@ def _build(path: Path, *, improvement_curve=None):
     seg.append(row)
 
     rd = wb.create_sheet("coverages")
-    rd.append(["coverage_code", "coverage_name", "benefit_pattern", "rate_table"])
-    rd.append(["DEATH_MAIN", "main death", "DEATH_MAIN", None])
+    rd.append(["coverage_code", "rate_table"])
+    # No rate-driven coverages -- mortality_table drives DEATH_MAIN.
 
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])

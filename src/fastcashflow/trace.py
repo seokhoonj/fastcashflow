@@ -210,10 +210,14 @@ def show_trace(
 
     # ---- Coverages (rate-driven riders)
     cov_lines: list[object] = []
+    from fastcashflow.coverage import pattern_attrs, BenefitPattern as _BP
+    bp = model_points.benefit_patterns or {}
     for r in assumptions.coverages:
+        pattern = bp.get(r.code, _BP.MORBIDITY)
+        is_diag, risk = pattern_attrs(pattern)
         cov_lines.append(
-            f"{r.code!r:14} risk={r.risk}  is_diagnosis={r.is_diagnosis}  "
-            f"rate -> {_fmt_callable(r.rate)}"
+            f"{r.code!r:14} pattern={str(pattern)}  risk={risk}  "
+            f"is_diagnosis={is_diag}  rate -> {_fmt_callable(r.rate)}"
         )
     if not cov_lines:
         cov_lines.append("(none -- main-coverage death only)")
