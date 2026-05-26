@@ -33,12 +33,10 @@
 :header-rows: 1
 :widths: 22 78
 
-* - `type`
+* - `benefit_pattern`
   - 엔진의 동작
-* - `DEATH_MAIN`
-  - 주계약 사망. 기저 사망률로 지급하고 보유계약을 감소시킴
-* - `death`
-  - 재해사망 등 사망형 특약. 자기 위험률로 지급, 보유계약은 그대로
+* - `DEATH`
+  - 사망형 담보 (일반사망 / 상해사망 / 재해사망 / ADB 등). 자기 위험률로 지급, 보유계약은 그대로 (in-force 감쇠는 별도 `mortality_annual` 입력이 담당)
 * - `MORBIDITY`
   - 입원·수술 등 반복지급 담보. 매번 지급하고 계약은 유지
 * - `DIAGNOSIS`
@@ -115,13 +113,13 @@
 
 | mp_id | coverage_code | amount | premium |
 |---|---|---|---|
-| P001 | DEATH_MAIN | 80000000 | 45000 |
+| P001 | DEATH_GENERAL | 80000000 | 45000 |
 | P001 | MATURITY | 10000000 | 18000 |
-| P002 | DEATH_MAIN | 50000000 | 28000 |
+| P002 | DEATH_GENERAL | 50000000 | 28000 |
 | P002 | CANCER | 30000000 | 22000 |
 | P002 | INPATIENT | 1000000 | 9000 |
 
-P001은 담보 파일에 두 줄 — 주계약 사망(`DEATH_MAIN`)과 생존특약(`MATURITY`).
+P001은 담보 파일에 두 줄 — 주계약 사망(`DEATH_GENERAL`)과 생존특약(`MATURITY`).
 P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅니다.
 
 담보에 면책기간이나 감액기간이 있으면 담보 파일에 `waiting`(면책 개월
@@ -163,17 +161,17 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 | 1 | 0.118 |
 | 2 | 0.106 |
 
-**`coverages`** — 특약 마스터. 특약 하나에 한 줄. `type`은 그 특약을
+**`coverages`** — 담보 마스터. 담보 하나에 한 줄. `benefit_pattern`은 그 담보를
 엔진이 어떻게 다룰지를 정하며, 값은 앞의 담보 구조 표를 따릅니다.
 
-| product | coverage_code | coverage_name | type |
+| product | coverage_code | coverage_name | benefit_pattern |
 |---|---|---|---|
-| - | DEATH_MAIN | 주계약사망 | DEATH_MAIN |
+| - | DEATH_GENERAL | 일반사망 | DEATH |
 | - | CANCER | 암진단특약 | DIAGNOSIS |
 | - | INPATIENT | 입원특약 | MORBIDITY |
 
-**`rates`** — 특약별 위험률. 위험률이 있는
-특약(`death`·`MORBIDITY`·`DIAGNOSIS`)만 들어갑니다. `ANNUITY`·`MATURITY`는
+**`rates`** — 담보별 위험률. 위험률이 있는
+담보(`DEATH`·`MORBIDITY`·`DIAGNOSIS`)만 들어갑니다. `ANNUITY`·`MATURITY`는
 위험률이 없습니다.
 
 | coverage_code | sex | age | rate |

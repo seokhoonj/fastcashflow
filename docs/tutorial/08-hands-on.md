@@ -115,7 +115,7 @@ assumptions = fcf.Assumptions(
 
 ```python
 model_points = fcf.ModelPoints.single(
-    issue_age=40, death_benefit=12_000,
+    issue_age=40, benefits={0: 12_000},
     level_premium=100, term_months=2,
 )
 ```
@@ -181,7 +181,7 @@ assumptions = fcf.Assumptions(
     mortality_cv=0.10,
 )
 model_points = fcf.ModelPoints.single(
-    issue_age=40, death_benefit=12_000,
+    issue_age=40, benefits={0: 12_000},
     level_premium=100, term_months=2,
 )
 m = fcf.measure(model_points, assumptions)

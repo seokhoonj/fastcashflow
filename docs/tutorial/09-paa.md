@@ -170,7 +170,7 @@ assumptions = fcf.Assumptions(
     mortality_cv=0.10,
 )
 model_points = fcf.ModelPoints.single(
-    issue_age=40, death_benefit=100_000_000,
+    issue_age=40, benefits={0: 100_000_000},
     level_premium=0, term_months=4, single_premium=1_200_000,
 )
 m = fcf.measure_paa(model_points, assumptions)

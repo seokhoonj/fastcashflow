@@ -308,12 +308,14 @@ profitable = Assumptions(
     mortality_annual=mort, lapse_annual=lapse,
     discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
     alpha_flat=0.0, gamma_flat=0.0,
+    coverages=(fcf.CoverageRate("DEATH", mort),),
 )
 mp_one = ModelPoints(
     issue_age=np.array([40.0]),
     level_premium=np.array([200_000.0]),
     term_months=np.array([60]),
-    death_benefit=np.array([100_000_000.0]),
+    benefits={0: np.array([100_000_000.0])},
+    benefit_patterns={"DEATH": fcf.BenefitPattern.DEATH},
 )
 fcf.show_csm_step(0, mp_one, profitable, months=[1, 30, 60])
 ```

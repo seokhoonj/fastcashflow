@@ -67,8 +67,8 @@
 | `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE` |
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA` |
 | `table_id` | SCREAMING_SNAKE_CASE | `MORTALITY_STD`, `LAPSE_GA` |
-| `coverage_code` | snake_case 소문자 | `DEATH_MAIN`, `INPATIENT` |
-| `type` | snake_case 소문자 | `DEATH_MAIN`, `MORBIDITY` |
+| `coverage_code` | SCREAMING_SNAKE_CASE | `DEATH_GENERAL`, `INPATIENT` |
+| `benefit_pattern` | SCREAMING_SNAKE_CASE | `DEATH`, `MORBIDITY` |
 | 컬럼 헤더 | snake_case 소문자 | `alpha_flat`, `mortality_cv` |
 
 **근거**:
