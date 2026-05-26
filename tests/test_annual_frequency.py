@@ -23,9 +23,6 @@ def _asmp(*, q_annual=0.0, lapse_annual=0.0, **overrides) -> Assumptions:
         mortality_annual=lambda s, a, d: np.full(a.shape, q_annual),
         lapse_annual=lambda sex, issue_age, d: np.full(d.shape, lapse_annual),
         discount_annual=0.0,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
     )

@@ -19,9 +19,6 @@ def _flat_asmp(*, discount=0.05) -> Assumptions:
         mortality_annual=lambda s, ia, d: np.full(s.shape, 0.001),
         lapse_annual=lambda s, ia, d: np.full(s.shape, 0.05),
         discount_annual=discount,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.0,
     )

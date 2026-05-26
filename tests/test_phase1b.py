@@ -35,9 +35,6 @@ def _assumptions(**overrides) -> Assumptions:
         mortality_annual=_mortality,
         lapse_annual=_lapse,
         discount_annual=0.0,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.0,
     )

@@ -52,9 +52,6 @@ def _assumptions(waiver_rate: float = 0.0, **overrides) -> Assumptions:
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
         waiver_incidence_annual=waiver,
         discount_annual=0.0,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
     )

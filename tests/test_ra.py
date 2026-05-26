@@ -23,9 +23,6 @@ def _assumptions(**overrides) -> Assumptions:
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.03,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
     )

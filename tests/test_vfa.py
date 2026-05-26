@@ -7,7 +7,7 @@ is the variable fee it keeps -- which is the inception CSM.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPoints, measure_tvog, measure_vfa, report
+from fastcashflow import Assumptions, ExpenseRow, ModelPoints, measure_tvog, measure_vfa, report
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.004      # flat monthly lapse
@@ -23,9 +23,6 @@ def _assumptions(**overrides) -> Assumptions:
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.03,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
         investment_return=0.06,
@@ -99,7 +96,9 @@ def test_vfa_onerous_when_expenses_exceed_the_fee():
     )
     onerous = measure_vfa(
         ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8),
-        _assumptions(alpha_flat=10_000_000.0),
+        _assumptions(expense_rows=(
+            ExpenseRow("acquisition", "per_policy_init", 10_000_000.0),
+        )),
     )
     assert np.isclose(profitable.loss_component[0], 0.0)
     assert onerous.loss_component[0] > 0.0
@@ -173,7 +172,9 @@ def test_vfa_ra_zero_without_expense_cv():
     """With no expense_cv the VFA RA is zero -- the v1 default."""
     res = measure_vfa(
         ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8),
-        _assumptions(gamma_flat=120_000.0),
+        _assumptions(expense_rows=(
+            ExpenseRow("maintenance", "per_policy_monthly", 120_000.0),
+        )),
     )
     assert np.allclose(res.ra, 0.0)
 
@@ -181,10 +182,9 @@ def test_vfa_ra_zero_without_expense_cv():
 def test_vfa_ra_scales_with_expense_cv():
     """The VFA RA is a confidence-level margin linear in the expense CV."""
     mp = ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8)
-    r1 = measure_vfa(mp, _assumptions(gamma_flat=120_000.0,
-                                      expense_cv=0.10))
-    r2 = measure_vfa(mp, _assumptions(gamma_flat=120_000.0,
-                                      expense_cv=0.20))
+    _g120k = (ExpenseRow("maintenance", "per_policy_monthly", 120_000.0),)
+    r1 = measure_vfa(mp, _assumptions(expense_rows=_g120k, expense_cv=0.10))
+    r2 = measure_vfa(mp, _assumptions(expense_rows=_g120k, expense_cv=0.20))
     assert r1.ra[0, 0] > 0.0
     assert np.isclose(r2.ra[0, 0], 2.0 * r1.ra[0, 0])
 
@@ -192,16 +192,17 @@ def test_vfa_ra_scales_with_expense_cv():
 def test_vfa_ra_reduces_the_csm():
     """The RA is part of the fulfilment cash flows, so it reduces the CSM."""
     mp = ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8)
-    no_ra = measure_vfa(mp, _assumptions(gamma_flat=120_000.0,
-                                         expense_cv=0.0))
-    with_ra = measure_vfa(mp, _assumptions(gamma_flat=120_000.0,
-                                           expense_cv=0.30))
+    _g120k = (ExpenseRow("maintenance", "per_policy_monthly", 120_000.0),)
+    no_ra = measure_vfa(mp, _assumptions(expense_rows=_g120k, expense_cv=0.0))
+    with_ra = measure_vfa(mp, _assumptions(expense_rows=_g120k, expense_cv=0.30))
     assert with_ra.csm[0, 0] < no_ra.csm[0, 0]
 
 
 def test_vfa_report_releases_the_ra_into_revenue():
     """The report releases the VFA RA into insurance revenue."""
-    asmp = _assumptions(gamma_flat=120_000.0, expense_cv=0.25)
+    asmp = _assumptions(expense_rows=(
+        ExpenseRow("maintenance", "per_policy_monthly", 120_000.0),
+    ), expense_cv=0.25)
     m = measure_vfa(ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8), asmp)
     rep = report(m)
     ra_in_revenue = (rep.insurance_revenue - rep.insurance_service_expense

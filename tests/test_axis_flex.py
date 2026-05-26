@@ -224,9 +224,6 @@ def test_legacy_three_arg_user_lambda_is_adapted():
         mortality_annual=lambda sex, age, dur: np.full(dur.shape, 0.001),
         lapse_annual=lambda sex, age, dur: np.full(dur.shape, 0.01),
         discount_annual=0.03,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.0,
     )
@@ -251,9 +248,6 @@ def test_legacy_four_arg_duration_lambda_is_adapted():
             cohort == 0, 0.10, 0.20,
         ),
         discount_annual=0.03,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.0,
     )

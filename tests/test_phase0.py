@@ -6,7 +6,7 @@ This is the engine's correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPoints, measure, value
+from fastcashflow import Assumptions, ExpenseRow, ModelPoints, measure, value
 
 # Standard-normal 75th percentile -- a known mathematical constant, used so
 # the RA check does not depend on the engine's own quantile code.
@@ -24,9 +24,6 @@ def _assumptions(**overrides) -> Assumptions:
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
         discount_annual=0.0,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
     )
@@ -124,8 +121,11 @@ def test_count_scales_linearly():
               term_months=24, single_premium=5_000.0)
     asmp = _assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
-        discount_annual=0.03, alpha_flat=300.0,
-        gamma_flat=120.0,
+        discount_annual=0.03,
+        expense_rows=(
+            ExpenseRow("acquisition",  "per_policy_init",    300.0),
+            ExpenseRow("maintenance",  "per_policy_monthly", 120.0),
+        ),
     )
     n = 1000.0
 

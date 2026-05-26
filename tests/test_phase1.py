@@ -1,7 +1,7 @@
 """Phase 1 validation -- Risk Adjustment and expense cash flows."""
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPoints, measure
+from fastcashflow import Assumptions, ExpenseRow, ModelPoints, measure
 from fastcashflow.numerics import _norm_ppf
 
 
@@ -16,9 +16,6 @@ def _assumptions(**overrides) -> Assumptions:
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
         discount_annual=0.0,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.0,
     )
@@ -58,9 +55,10 @@ def test_expenses():
             level_premium=12_000.0, term_months=2,
         ),
         _assumptions(
-            alpha_flat=500.0,
-            gamma_flat=120.0,   # 10 per month
-            expense_inflation=0.0,
+            expense_rows=(
+                ExpenseRow("acquisition",  "per_policy_init",    500.0),
+                ExpenseRow("maintenance",  "per_policy_monthly", 120.0),  # 10 per month
+            ),
         ),
     )
     inforce = [1.0, 0.99 * 0.98]
@@ -86,8 +84,10 @@ def test_expense_inflation():
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0)),
             lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.0)),
-            gamma_flat=120.0,   # 10 per month
-            expense_inflation=0.06,
+            expense_rows=(
+                ExpenseRow("maintenance",  "per_policy_monthly", 120.0,  # 10 per month
+                           inflation_rate=0.06),
+            ),
         ),
     )
     # no mortality/lapse -> in force stays 1.0

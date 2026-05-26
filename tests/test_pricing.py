@@ -6,7 +6,7 @@ the target it was solved for.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPoints, solve_premium, value
+from fastcashflow import Assumptions, ExpenseRow, ModelPoints, solve_premium, value
 
 
 def _annual(m):
@@ -19,9 +19,11 @@ def _assumptions() -> Assumptions:
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0008)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
-        alpha_flat=200_000.0,
-        gamma_flat=36_000.0,
-        expense_inflation=0.02,
+        expense_rows=(
+            ExpenseRow("acquisition",  "per_policy_init",    200_000.0),
+            ExpenseRow("maintenance",  "per_policy_monthly",  36_000.0,
+                       inflation_rate=0.02),
+        ),
         ra_confidence=0.80,
         mortality_cv=0.10,
     )

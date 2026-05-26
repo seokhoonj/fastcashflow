@@ -8,7 +8,7 @@ result is just premiums less claims and expenses -- the underwriting profit.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPoints, measure_paa
+from fastcashflow import Assumptions, ExpenseRow, ModelPoints, measure_paa
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.005      # flat monthly lapse
@@ -24,9 +24,6 @@ def _assumptions(**overrides) -> Assumptions:
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(LAPSE)),
         discount_annual=0.03,
-        alpha_flat=0.0,
-        gamma_flat=0.0,
-        expense_inflation=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
     )
@@ -69,8 +66,10 @@ def test_paa_lrc_builds_and_releases():
 
 def test_paa_service_result_is_the_underwriting_profit():
     """Total service result = premiums - claims - expenses."""
-    asmp = _assumptions(alpha_flat=100_000.0,
-                        gamma_flat=12_000.0)
+    asmp = _assumptions(expense_rows=(
+        ExpenseRow("acquisition",  "per_policy_init",    100_000.0),
+        ExpenseRow("maintenance",  "per_policy_monthly",  12_000.0),
+    ))
     res = measure_paa(ModelPoints.single(45, 1e8, 60_000.0, 12), asmp)
     cf = res.cashflows
     profit = (cf.premium_cf.sum() - cf.claim_cf.sum()
@@ -92,7 +91,9 @@ def test_paa_onerous_contract_carries_a_loss():
 
 def test_paa_revenue_basis_claims():
     """B126(b): revenue allocated by the expected timing of incurred claims."""
-    asmp = _assumptions(alpha_flat=500_000.0)
+    asmp = _assumptions(expense_rows=(
+        ExpenseRow("acquisition", "per_policy_init", 500_000.0),
+    ))
     mps = ModelPoints.single(40, 1e8, 50_000.0, 12)
     by_time = measure_paa(mps, asmp, revenue_basis="time")
     by_claims = measure_paa(mps, asmp, revenue_basis="claims")
