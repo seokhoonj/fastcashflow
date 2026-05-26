@@ -16,37 +16,65 @@ new rider needs no kernel change.
 """
 from __future__ import annotations
 
+from enum import Enum
+
 import numpy as np
 
 # Code 0 -- the main-contract death coverage, driven by the base mortality.
 DEATH = 0
 
-# Coverage mechanic types. The riders sheet tags each rider code with one of
-# these; the type fixes how the engine drives the coverage.
-TYPE_DEATH_MAIN = "DEATH_MAIN"  # main-contract death; base mortality; code 0
-TYPE_DEATH      = "DEATH"       # death-type rider; own rate; non-decrementing
-TYPE_MORBIDITY  = "MORBIDITY"   # recurring health claim (inpatient, surgery..)
-TYPE_DIAGNOSIS  = "DIAGNOSIS"   # single-payment benefit; depleting pool
-# DIAGNOSIS uses an *independent* competing-risks convention: the "not yet
-# diagnosed" pool depletes by mortality / lapse / state transitions *and*
-# by the diagnosis rate, treated as if they were drawn independently each
-# month. That is a simplification -- in reality a diagnosis often
-# *precedes* and triggers correlated mortality / lapse. The independence
-# convention is fine at the rate ranges actuarial tables typically carry
-# (annual incidence well under 1%); the error grows with the rate (a
-# few tens of basis points of BEL difference at very high incidence vs a
-# dependent treatment). Calibrate the diagnosis rate to reflect the
-# convention, or wrap with a coverage rule (waiting / reduction) when the
-# product's mechanic requires it.
-TYPE_ANNUITY    = "ANNUITY"     # monthly survival income
-TYPE_MATURITY   = "MATURITY"    # survival benefit paid at the end of the term
 
-# Rate-driven types carry a sex x age rate table and go in the coverage list.
-# Survival types (annuity, maturity) are paid to the in-force survivors and
-# need no rate; they are summed into per-policy amounts, not the rate grid.
-RATE_DRIVEN_TYPES = (TYPE_DEATH, TYPE_MORBIDITY, TYPE_DIAGNOSIS)
-SURVIVAL_TYPES = (TYPE_ANNUITY, TYPE_MATURITY)
-COVERAGE_TYPES = (TYPE_DEATH_MAIN,) + RATE_DRIVEN_TYPES + SURVIVAL_TYPES
+class BenefitPattern(str, Enum):
+    """How a benefit pays out -- the engine's calculation routing key.
+
+    The xlsx ``coverages`` sheet tags each rider code with one of these
+    patterns (column ``benefit_pattern``); the value fixes which kernel
+    branch processes the coverage's cash flows. The members are the closed
+    set the engine knows how to compute -- adding a new value requires
+    adding a kernel branch.
+
+    ``str, Enum`` -- members compare equal to their string value
+    (``BenefitPattern.MORBIDITY == "MORBIDITY"``), so existing numpy
+    array comparisons and dict keys keep working unchanged.
+    """
+
+    DEATH_MAIN = "DEATH_MAIN"   # main-contract death; base mortality; code 0
+    DEATH      = "DEATH"        # death-type rider; own rate; non-decrementing
+    MORBIDITY  = "MORBIDITY"    # recurring health claim (inpatient, surgery..)
+    DIAGNOSIS  = "DIAGNOSIS"    # single-payment benefit; depleting pool
+    # DIAGNOSIS uses an *independent* competing-risks convention: the "not yet
+    # diagnosed" pool depletes by mortality / lapse / state transitions *and*
+    # by the diagnosis rate, treated as if they were drawn independently each
+    # month. That is a simplification -- in reality a diagnosis often
+    # *precedes* and triggers correlated mortality / lapse. The independence
+    # convention is fine at the rate ranges actuarial tables typically carry
+    # (annual incidence well under 1%); the error grows with the rate (a
+    # few tens of basis points of BEL difference at very high incidence vs a
+    # dependent treatment). Calibrate the diagnosis rate to reflect the
+    # convention, or wrap with a coverage rule (waiting / reduction) when the
+    # product's mechanic requires it.
+    ANNUITY    = "ANNUITY"      # monthly survival income
+    MATURITY   = "MATURITY"     # survival benefit paid at the end of the term
+
+    def __str__(self) -> str:
+        # Default str() on a (str, Enum) returns "BenefitPattern.MEMBER" in
+        # Python 3.11+, which breaks numpy comparisons against string arrays
+        # (the value gets stringified to the qualified name before dtype
+        # casting). Override to return the bare value so str(member),
+        # f-strings, and numpy array casts all yield "DIAGNOSIS", not
+        # "BenefitPattern.DIAGNOSIS".
+        return self._value_
+
+
+# Rate-driven patterns carry a sex x age rate table and go in the coverage
+# list. Survival patterns (annuity, maturity) are paid to the in-force
+# survivors and need no rate; they are summed into per-policy amounts, not
+# the rate grid.
+RATE_DRIVEN_PATTERNS = (
+    BenefitPattern.DEATH, BenefitPattern.MORBIDITY, BenefitPattern.DIAGNOSIS,
+)
+SURVIVAL_PATTERNS = (BenefitPattern.ANNUITY, BenefitPattern.MATURITY)
+BENEFIT_PATTERNS = (BenefitPattern.DEATH_MAIN,) + RATE_DRIVEN_PATTERNS + SURVIVAL_PATTERNS
 
 # Risk class of a coverage's claims: 0 mortality, 1 morbidity. The Risk
 # Adjustment prices the two with separate coefficients of variation.

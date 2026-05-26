@@ -37,8 +37,7 @@ from fastcashflow.assumptions import (
 )
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
-    RATE_DRIVEN_TYPES, RISK_MORBIDITY, RISK_MORTALITY, TYPE_ANNUITY,
-    TYPE_DEATH, TYPE_DEATH_MAIN, TYPE_DIAGNOSIS, TYPE_MATURITY,
+    RATE_DRIVEN_PATTERNS, RISK_MORBIDITY, RISK_MORTALITY, BenefitPattern,
 )
 from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 
@@ -503,8 +502,17 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     if "coverages" in wb.sheetnames:
         for r in _sheet_dicts(wb["coverages"]):
             rt = r.get("rate_table")
+            code = str(r["coverage_code"]).strip()
+            try:
+                pattern = BenefitPattern(str(r["benefit_pattern"]).strip())
+            except ValueError as exc:
+                raise ValueError(
+                    f"coverages row {code!r} has unknown benefit_pattern "
+                    f"{r['benefit_pattern']!r}; valid: "
+                    f"{', '.join(p.value for p in BenefitPattern)}"
+                ) from exc
             global_coverages.append((
-                str(r["coverage_code"]).strip(), str(r["benefit_pattern"]).strip(),
+                code, pattern,
                 str(rt).strip() if rt not in (None, "") else None,
             ))
 
@@ -545,10 +553,10 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             return ae_factors.get((product, channel, coverage_code))
 
         coverage_rates = []
-        coverage_types: dict[str, str] = {}
+        coverage_types: dict[str, BenefitPattern] = {}
         for code, rtype, rate_table in global_coverages:
             coverage_types[code] = rtype
-            if rtype not in RATE_DRIVEN_TYPES:
+            if rtype not in RATE_DRIVEN_PATTERNS:
                 continue
             if rate_table is None or rate_table not in incidence_rate_t:
                 raise ValueError(
@@ -562,8 +570,8 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             coverage_rates.append(CoverageRate(
                 code=code,
                 rate=rate_fn,
-                is_diagnosis=(rtype == TYPE_DIAGNOSIS),
-                risk=RISK_MORTALITY if rtype == TYPE_DEATH else RISK_MORBIDITY,
+                is_diagnosis=(rtype == BenefitPattern.DIAGNOSIS),
+                risk=RISK_MORTALITY if rtype == BenefitPattern.DEATH else RISK_MORBIDITY,
             ))
 
         mortality_fn = lookup(mortality_t, "mortality_table")
@@ -810,8 +818,8 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     def _by_policy(mask) -> np.ndarray:
         return np.bincount(mp[mask], weights=amount[mask], minlength=n_mp)
 
-    fields["maturity_benefit"] = _by_policy(ctype == TYPE_MATURITY)
-    fields["annuity_payment"] = _by_policy(ctype == TYPE_ANNUITY)
+    fields["maturity_benefit"] = _by_policy(ctype == BenefitPattern.MATURITY)
+    fields["annuity_payment"] = _by_policy(ctype == BenefitPattern.ANNUITY)
 
     # Premium -- the coverages frame carries it per rider; sum to the policy.
     if "premium" in cov.columns:
@@ -824,7 +832,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
 
     # Coverage list: the main-contract death (code 0) and the rate-driven
     # riders (codes 1..n). annuity / maturity are survival scalars, not here.
-    is_cov = (ctype == TYPE_DEATH_MAIN) | np.isin(ctype, RATE_DRIVEN_TYPES)
+    is_cov = (ctype == BenefitPattern.DEATH_MAIN) | np.isin(ctype, RATE_DRIVEN_PATTERNS)
     order = np.argsort(mp[is_cov], kind="stable")
     cov_mp = mp[is_cov][order]
     fields["coverage_kind"] = kind[is_cov][order]

@@ -6,9 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow.coverage import (
-    DEATH, TYPE_ANNUITY, TYPE_DEATH_MAIN, TYPE_MATURITY,
-)
+from fastcashflow.coverage import BenefitPattern, DEATH
 
 # Contract states -- a model point's in-force state at the valuation date.
 # ACTIVE is the ordinary premium-paying contract. WAIVER (premium waived on a
@@ -404,7 +402,7 @@ class ModelPoints:
             "state":                    np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
         # CSR coverages -- code 0 is the main-contract death, 1.. the riders.
-        label = {0: _coverage_label(assumptions, TYPE_DEATH_MAIN, "death")}
+        label = {0: _coverage_label(assumptions, BenefitPattern.DEATH_MAIN, "death")}
         for i, rider in enumerate(assumptions.coverages):
             label[i + 1] = rider.code
         mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
@@ -412,9 +410,9 @@ class ModelPoints:
         coverage_code = [label[int(k)] for k in self.coverage_kind]
         amount = [float(a) for a in self.coverage_amount]
         # Survival benefits are scalar fields -- emit them as coverage rows.
-        for ctype, scalar in ((TYPE_ANNUITY, self.annuity_payment),
-                              (TYPE_MATURITY, self.maturity_benefit)):
-            code = _coverage_label(assumptions, ctype, ctype)
+        for ctype, scalar in ((BenefitPattern.ANNUITY, self.annuity_payment),
+                              (BenefitPattern.MATURITY, self.maturity_benefit)):
+            code = _coverage_label(assumptions, ctype, str(ctype))
             for mp in np.nonzero(scalar)[0]:
                 mp_id.append(int(mp))
                 coverage_code.append(code)

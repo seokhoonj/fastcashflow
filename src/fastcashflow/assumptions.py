@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import DurationRateFn, FloatArray, IntArray, RateFn
+from fastcashflow.coverage import BenefitPattern
 from fastcashflow.statemodel import StateModel
 
 
@@ -124,11 +125,12 @@ class AssumptionsMetadata:
     Fields
     ------
     coverage_types
-        Map of every rider code to its type string -- the riders master.
-        ``None`` when built in code without an I/O round-trip.
+        Map of every rider code to its :class:`~fastcashflow.coverage.BenefitPattern`
+        -- the riders master. ``None`` when built in code without an I/O
+        round-trip.
     """
 
-    coverage_types: dict[str, str] | None = None
+    coverage_types: dict[str, BenefitPattern] | None = None
 
 
 @dataclass(frozen=True, slots=True)
