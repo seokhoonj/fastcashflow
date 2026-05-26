@@ -23,7 +23,7 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
 
     # segments
     seg = wb.create_sheet("segments")
-    cols = ["product", "channel", "mortality_table", "lapse_table",
+    cols = ["product_code", "channel_code", "mortality_table", "lapse_table",
             "discount_table", "inflation_table",
             "ra_confidence", "mortality_cv",
             "morbidity_cv"]

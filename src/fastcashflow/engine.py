@@ -1793,9 +1793,10 @@ def value_segmented(
     ``backend`` and ``discount_curve`` flow through to :func:`value` --
     declared explicitly so a typo (e.g. ``backed="gpu"``) is rejected
     here rather than reaching the kernel. A single-segment ``basis`` is
-    accepted as a convenience when ``product`` / ``channel`` is not set.
+    accepted as a convenience when ``product_code`` / ``channel_code`` is
+    not set.
     """
-    if model_points.product is None or model_points.channel is None:
+    if model_points.product_code is None or model_points.channel_code is None:
         if len(basis) == 1:
             (assumptions,) = basis.values()
             return value(
@@ -1803,13 +1804,13 @@ def value_segmented(
                 backend=backend, discount_curve=discount_curve,
             )
         raise ValueError(
-            "model_points has no 'product'/'channel' set but the basis has "
-            f"{len(basis)} segments; either set the columns or pass a "
-            "single-segment basis"
+            "model_points has no 'product_code'/'channel_code' set but the "
+            f"basis has {len(basis)} segments; either set the columns or "
+            "pass a single-segment basis"
         )
 
-    product = model_points.product
-    channel = model_points.channel
+    product = model_points.product_code
+    channel = model_points.channel_code
     n_mp = model_points.n_mp
 
     bel = np.empty(n_mp)

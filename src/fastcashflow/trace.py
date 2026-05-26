@@ -122,12 +122,12 @@ def show_trace(
 
     # Multi-segment dict basis: route to the right segment by (product, channel).
     if isinstance(assumptions, dict):
-        if model_points.product is None or model_points.channel is None:
+        if model_points.product_code is None or model_points.channel_code is None:
             raise ValueError(
                 "model_points has no product / channel columns -- a dict "
                 "basis cannot be routed; pass a single Assumptions instead"
             )
-        key = (str(model_points.product[i]), str(model_points.channel[i]))
+        key = (str(model_points.product_code[i]), str(model_points.channel_code[i]))
         try:
             assumptions = assumptions[key]
         except KeyError:
@@ -149,10 +149,10 @@ def show_trace(
     prem_term = (int(sub.premium_term_months[0])
                  if sub.premium_term_months is not None else term)
     count = float(sub.count[0]) if sub.count is not None else 1.0
-    product = (str(model_points.product[i])
-               if model_points.product is not None else "-")
-    channel = (str(model_points.channel[i])
-               if model_points.channel is not None else "-")
+    product = (str(model_points.product_code[i])
+               if model_points.product_code is not None else "-")
+    channel = (str(model_points.channel_code[i])
+               if model_points.channel_code is not None else "-")
     header = (
         f"mp[{i}]  ({product}/{channel}, sex={sex_label}, issue_age={age:g}, "
         f"term={term}m, premium_term={prem_term}m, count={count:g})"
@@ -369,12 +369,12 @@ def _resolve_basis(
     """
     if not isinstance(assumptions, dict):
         return assumptions
-    if model_points.product is None or model_points.channel is None:
+    if model_points.product_code is None or model_points.channel_code is None:
         raise ValueError(
             "model_points has no product / channel columns -- a dict "
             "basis cannot be routed; pass a single Assumptions instead"
         )
-    key = (str(model_points.product[i]), str(model_points.channel[i]))
+    key = (str(model_points.product_code[i]), str(model_points.channel_code[i]))
     try:
         return assumptions[key]
     except KeyError:
@@ -503,10 +503,10 @@ def show_trace_diff(
     prem_term = (int(sub.premium_term_months[0])
                  if sub.premium_term_months is not None else term)
     count = float(sub.count[0]) if sub.count is not None else 1.0
-    product = (str(model_points.product[i])
-               if model_points.product is not None else "-")
-    channel = (str(model_points.channel[i])
-               if model_points.channel is not None else "-")
+    product = (str(model_points.product_code[i])
+               if model_points.product_code is not None else "-")
+    channel = (str(model_points.channel_code[i])
+               if model_points.channel_code is not None else "-")
     header = (
         f"diff mp[{i}]  ({product}/{channel}, sex={sex_label}, "
         f"issue_age={age:g}, term={term}m, premium_term={prem_term}m, "
@@ -785,10 +785,10 @@ def show_bel_step(
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
     sex_label = "남" if sex_v == 0 else "여"
     age = float(sub.issue_age[0])
-    product = (str(model_points.product[i])
-               if model_points.product is not None else "-")
-    channel = (str(model_points.channel[i])
-               if model_points.channel is not None else "-")
+    product = (str(model_points.product_code[i])
+               if model_points.product_code is not None else "-")
+    channel = (str(model_points.channel_code[i])
+               if model_points.channel_code is not None else "-")
     header = (
         f"mp[{i}] BEL step-by-step  ({product}/{channel}, sex={sex_label}, "
         f"issue_age={age:g}, term={term}m)"
@@ -950,10 +950,10 @@ def show_csm_step(
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
     sex_label = "남" if sex_v == 0 else "여"
     age = float(sub.issue_age[0])
-    product = (str(model_points.product[i])
-               if model_points.product is not None else "-")
-    channel = (str(model_points.channel[i])
-               if model_points.channel is not None else "-")
+    product = (str(model_points.product_code[i])
+               if model_points.product_code is not None else "-")
+    channel = (str(model_points.channel_code[i])
+               if model_points.channel_code is not None else "-")
     header = (
         f"mp[{i}] CSM step-by-step  ({product}/{channel}, sex={sex_label}, "
         f"issue_age={age:g}, term={term}m)"

@@ -54,11 +54,11 @@ if TYPE_CHECKING:  # pragma: no cover -- import only for type hints
 # Wide model-point columns with a fixed meaning. Any other ``*_benefit``
 # column names a coverage by its coverage code.
 _NAMED_WIDE = frozenset((
-    "mp_id", "product", "issue_age", "term_months", "sex", "count",
-    "state", "level_premium", "single_premium", "premium_term_months",
-    "premium_frequency_months", "annuity_frequency_months",
-    "death_benefit", "maturity_benefit", "annuity_payment",
-    "disability_income", "disability_benefit",
+    "mp_id", "product_code", "channel_code", "issue_age", "term_months",
+    "sex", "count", "state", "level_premium", "single_premium",
+    "premium_term_months", "premium_frequency_months",
+    "annuity_frequency_months", "death_benefit", "maturity_benefit",
+    "annuity_payment", "disability_income", "disability_benefit",
 ))
 
 
@@ -307,11 +307,11 @@ def _read_ae_factors(ws):
 
     by_key: dict[tuple, list] = {}
     for r in rows:
-        product = str(r["product"]).strip()
-        ch = r.get("channel")
-        channel = str(ch).strip() if ch not in (None, "") else ""
+        product_code = str(r["product_code"]).strip()
+        ch = r.get("channel_code")
+        channel_code = str(ch).strip() if ch not in (None, "") else ""
         coverage_code = str(r["coverage_code"]).strip()
-        key = (product, channel, coverage_code)
+        key = (product_code, channel_code, coverage_code)
         axes_key = tuple(int(r[a]) for a in axes)
         by_key.setdefault(key, []).append((axes_key, float(r["factor"])))
     return {
@@ -488,7 +488,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     defaults: dict = {}
     segments: list = []
     for r in _sheet_dicts(wb["segments"]):
-        if str(r.get("product", "") or "").strip().lower() == "defaults":
+        if str(r.get("product_code", "") or "").strip().lower() == "defaults":
             defaults = r
         else:
             segments.append(r)
@@ -523,9 +523,9 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
 
     result = {}
     for seg in segments:
-        product = str(seg["product"]).strip()
-        channel = str(seg.get("channel", "") or "").strip()
-        where = f"segments row ({product} / {channel})"
+        product_code = str(seg["product_code"]).strip()
+        channel_code = str(seg.get("channel_code", "") or "").strip()
+        where = f"segments row ({product_code} / {channel_code})"
 
         def cell(col):
             v = seg.get(col)
@@ -555,13 +555,13 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
         shift_wvr = int(scalar("waiver_age_shift") or 0)
 
         def ae(coverage_code):
-            return ae_factors.get((product, channel, coverage_code))
+            return ae_factors.get((product_code, channel_code, coverage_code))
 
         coverage_rates = []
         for code, rate_table in rate_driven_coverages:
             if rate_table not in incidence_rate_t:
                 raise ValueError(
-                    f"coverage {code!r} of product {product!r}: rate_table "
+                    f"coverage {code!r} of product {product_code!r}: rate_table "
                     f"{rate_table!r} is not in incidence_rate_tables"
                 )
             rate_fn = incidence_rate_t[rate_table]
@@ -635,7 +635,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
                     f"{where}: state_model={key!r} is not in STATE_MODELS "
                     f"(known: {sorted(STATE_MODELS)})"
                 ) from None
-        result[(product, channel)] = Assumptions(**kwargs)
+        result[(product_code, channel_code)] = Assumptions(**kwargs)
     return result
 
 
@@ -763,7 +763,7 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     # Segment metadata -- optional string columns; route to value_segmented.
-    for opt in ("product", "channel"):
+    for opt in ("product_code", "channel_code"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     if "state" in df.columns:
@@ -861,7 +861,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
                 "disability_income", "disability_benefit"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
-    for opt in ("product", "channel"):
+    for opt in ("product_code", "channel_code"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
     if "state" in pol.columns:

@@ -63,7 +63,7 @@ def test_show_trace_routes_dict_basis_by_segment():
     buf = io.StringIO()
     show_trace(0, mp, basis, file=buf)
     text = buf.getvalue()
-    seg = f"({mp.product[0]}/{mp.channel[0]}"
+    seg = f"({mp.product_code[0]}/{mp.channel_code[0]}"
     assert seg in text
 
 
@@ -71,7 +71,7 @@ def test_show_trace_accepts_single_assumptions():
     """A plain :class:`Assumptions` (not a dict) bypasses the segment
     lookup and is used directly."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
+    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     buf = io.StringIO()
     show_trace(0, mp, asmp, file=buf)
     assert "Assumptions (segment-level)" in buf.getvalue()
@@ -82,7 +82,7 @@ def test_show_trace_bel_and_ra_agree_with_measure():
     on the same portfolio for the same row -- the trace is just a view,
     not a recalculation."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
+    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     m = fcf.measure(mp.subset([0]), asmp)
     buf = io.StringIO()
     show_trace(0, mp, asmp, file=buf)
@@ -113,7 +113,7 @@ def test_show_trace_dict_basis_requires_segment_columns():
 def test_show_trace_dict_basis_unknown_segment_raises():
     """An unmapped (product, channel) is flagged with available keys."""
     mp = _portfolio()
-    partial = {k: v for k, v in _basis().items() if k[0] != mp.product[0]}
+    partial = {k: v for k, v in _basis().items() if k[0] != mp.product_code[0]}
     if partial:                           # only meaningful when dict is shrinkable
         with pytest.raises(KeyError, match="no assumptions for segment"):
             show_trace(0, mp, partial, file=io.StringIO())
@@ -126,7 +126,7 @@ def test_show_trace_dict_basis_unknown_segment_raises():
 def test_show_trace_diff_renders_all_sections():
     """The diff prints the seven headline sections plus the labels line."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
+    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     shocked = replace(asmp, mortality_annual=_shock_mortality(
         asmp.mortality_annual, 1.10,
     ))
@@ -153,7 +153,7 @@ def test_show_trace_diff_identical_basis_reports_no_changes():
     changes -- only the all-zero anchor-month and Final lines remain,
     and the change-only sections explicitly say so."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
+    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     buf = io.StringIO()
     show_trace_diff(0, mp, asmp, asmp, file=buf)
     text = buf.getvalue()
@@ -166,7 +166,7 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
     """A +10% mortality shock increases claim cash flows and the BEL
     monotonically -- the propagation is visible in the printed diff."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
+    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     shocked = replace(asmp, mortality_annual=_shock_mortality(
         asmp.mortality_annual, 1.10,
     ))

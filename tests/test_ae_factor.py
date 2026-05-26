@@ -22,7 +22,7 @@ def _build(path: Path, *, ae_rows=None):
     wb.remove(wb.active)
 
     seg = wb.create_sheet("segments")
-    seg.append(["product", "channel", "mortality_table", "lapse_table",
+    seg.append(["product_code", "channel_code", "mortality_table", "lapse_table",
                 "discount_table", "inflation_table",
                 "ra_confidence", "mortality_cv",
                 "morbidity_cv"])
@@ -84,7 +84,7 @@ def test_scalar_ae_factor_per_rider(tmp_path):
     """A single (product, channel, coverage_code, factor) row scales the rider rate."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
-        ["product", "channel", "coverage_code", "factor"],
+        ["product_code", "channel_code", "coverage_code", "factor"],
         ["TERM_A", "GA", "INPATIENT", 1.5],          # 손해율 150%
     ])
     asmp = _segment(p)
@@ -99,7 +99,7 @@ def test_ae_factor_on_main_mortality(tmp_path):
     """coverage_code 'DEATH_MAIN' wires to the main mortality table."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
-        ["product", "channel", "coverage_code", "factor"],
+        ["product_code", "channel_code", "coverage_code", "factor"],
         ["TERM_A", "GA", "DEATH_MAIN", 0.80],     # CI 80% — pricing 위험률에 마진 있음
     ])
     asmp = _segment(p)
@@ -114,7 +114,7 @@ def test_ae_factor_varies_by_age(tmp_path):
     every age, even when bands repeat. Three bands here: 25-29 = 3.0
     (heavy anti-selection), 30-49 = 1.5, 50-60 = 1.0 (ultimate).
     """
-    rows = [["product", "channel", "coverage_code", "age", "factor"]]
+    rows = [["product_code", "channel_code", "coverage_code", "age", "factor"]]
     for age in range(25, 30):
         rows.append(["TERM_A", "GA", "INPATIENT", age, 3.0])
     for age in range(30, 50):
@@ -133,7 +133,7 @@ def test_ae_factor_only_applies_to_matching_segment(tmp_path):
     """A factor for (TERM_A, FC, hosp) does NOT apply to (TERM_A, GA, hosp)."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
-        ["product", "channel", "coverage_code", "factor"],
+        ["product_code", "channel_code", "coverage_code", "factor"],
         ["TERM_A", "FC", "INPATIENT", 1.5],         # different channel
     ])
     asmp = _segment(p)
@@ -152,7 +152,7 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     seg = wb.create_sheet("segments")
-    seg.append(["product", "channel", "mortality_table", "lapse_table",
+    seg.append(["product_code", "channel_code", "mortality_table", "lapse_table",
                 "discount_table", "inflation_table",
                 "ra_confidence", "mortality_cv",
                 "morbidity_cv", "mortality_age_shift"])
@@ -174,7 +174,7 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
         s_ws.append(header)
         s_ws.append(row)
     ae = wb.create_sheet("ae_factors")
-    ae.append(["product", "channel", "coverage_code", "factor"])
+    ae.append(["product_code", "channel_code", "coverage_code", "factor"])
     ae.append(["TERM_A", "GA", "DEATH_MAIN", 0.5])
     wb.save(p)
 

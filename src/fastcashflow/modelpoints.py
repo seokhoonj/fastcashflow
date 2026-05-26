@@ -122,11 +122,15 @@ class ModelPoints:
     # premium-paying-window check and surrender's cumulative-premium basis
     # all shift by ``elapsed_months[mp]``.
     elapsed_months: IntArray | None = None
-    # Segment metadata -- the (product, channel) keys that map a model point
-    # to its assumption set when ``value_segmented`` splits a portfolio.
-    # Object arrays of string labels (or None for a single-segment book).
-    product: np.ndarray | None = None
-    channel: np.ndarray | None = None
+    # Segment metadata -- the (product_code, channel_code) keys that map a
+    # model point to its assumption set when ``value_segmented`` splits a
+    # portfolio. Object arrays of string labels (or None for a
+    # single-segment book). The ``_code`` suffix matches the rest of the
+    # codebase (coverage_code, table_id ...) -- short, machine-friendly
+    # join keys; an optional ``product_name`` / ``channel_name`` for
+    # human-friendly display is left to a future pass.
+    product_code: np.ndarray | None = None
+    channel_code: np.ndarray | None = None
     # Portfolio-level taxonomy of coverage codes -- ``{coverage_code:
     # BenefitPattern}``. The dict is the company catalogue (the
     # ``benefit_patterns.csv`` file): every code a contract may attach is
@@ -241,7 +245,7 @@ class ModelPoints:
         object.__setattr__(self, "coverage_reduction_factor", coverage_reduction_factor)
         # Segment metadata -- normalise to object arrays so they slice with
         # the per-row fields. ``None`` stays None (a single-segment book).
-        for name in ("product", "channel"):
+        for name in ("product_code", "channel_code"):
             value = getattr(self, name)
             if value is not None:
                 value = np.asarray(value, dtype=object)
@@ -353,7 +357,7 @@ class ModelPoints:
         kwargs["coverage_reduction_factor"] = self.coverage_reduction_factor[cov_idx]
 
         # Segment metadata -- slice if set; otherwise stay None.
-        for name in ("product", "channel"):
+        for name in ("product_code", "channel_code"):
             value = getattr(self, name)
             kwargs[name] = None if value is None else value[idx]
         # Taxonomy carries through unchanged -- subsetting drops rows, not
