@@ -109,8 +109,8 @@ def test_helper_exported_at_package_level():
 
 
 # ---------------------------------------------------------------------------
-# Wiring -- expense_rows reaches the kernels and produces the same BEL / CSM
-# as the equivalent legacy alpha / beta / gamma scalars.
+# Wiring -- expense_rows reaches the kernels and the empty-tuple state is
+# a clean no-expense basis (zero expense_cf, value/measure agree).
 # ---------------------------------------------------------------------------
 
 def _term_life_mp():
@@ -123,8 +123,8 @@ def _term_life_mp():
     )
 
 
-def _basis_legacy():
-    """Legacy alpha / beta / gamma scalars (the pre-row form)."""
+def _basis_rows():
+    """A populated expense ledger -- 4 rows covering every pre-claim basis."""
     import numpy as np
 
     def mort(s, ia, d, ic, em):
@@ -136,64 +136,20 @@ def _basis_legacy():
     return fcf.Assumptions(
         mortality_annual=mort, lapse_annual=lapse,
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
-        alpha_flat=120_000.0,
-        alpha_pct=0.20,
-        beta_pct=0.02,
-        gamma_flat=36_000.0,
-        expense_inflation=0.03,
+        expense_rows=(
+            ExpenseRow("acquisition",  "per_policy_init",    120_000.0),
+            ExpenseRow("acquisition",  "premium_pct_init",        0.20),
+            ExpenseRow("collection",   "premium_pct",             0.02),
+            ExpenseRow("maintenance",  "per_policy_monthly",  36_000.0,
+                       inflation_rate=0.03),
+        ),
     )
 
 
-def _basis_rows():
-    """The same expense ledger expressed as ExpenseRow tuples."""
-    import dataclasses
-    legacy = _basis_legacy()
-    rows = (
-        ExpenseRow("acquisition", "per_policy_init", 120_000.0),
-        ExpenseRow("acquisition", "premium_pct_init", 0.20),
-        ExpenseRow("collection", "premium_pct", 0.02),
-        ExpenseRow("maintenance", "per_policy_monthly", 36_000.0,
-                   inflation_rate=0.03),
-    )
-    # Row-form takes precedence; clear the legacy scalars so the dispatch
-    # is unambiguous (Assumptions accepts both during the migration).
-    return dataclasses.replace(
-        legacy,
-        alpha_flat=0.0, alpha_pct=0.0, beta_pct=0.0,
-        gamma_flat=0.0, expense_inflation=0.0,
-        expense_rows=rows,
-    )
-
-
-def test_rows_match_legacy_value_path():
-    """value() with the row-form basis matches the legacy scalar basis
-    when the rows describe the same expense ledger."""
-    import numpy as np
-    mp = _term_life_mp()
-    v_legacy = fcf.value(mp, _basis_legacy())
-    v_rows = fcf.value(mp, _basis_rows())
-    assert np.isclose(v_legacy.bel[0], v_rows.bel[0])
-    assert np.isclose(v_legacy.ra[0], v_rows.ra[0])
-    assert np.isclose(v_legacy.csm[0], v_rows.csm[0])
-    assert np.isclose(v_legacy.loss_component[0], v_rows.loss_component[0])
-
-
-def test_rows_match_legacy_measure_path():
-    """measure() likewise agrees -- the detailed projection sees the same
-    expense_cf trajectory from both routes."""
-    import numpy as np
-    mp = _term_life_mp()
-    m_legacy = fcf.measure(mp, _basis_legacy())
-    m_rows = fcf.measure(mp, _basis_rows())
-    assert np.allclose(m_legacy.cashflows.expense_cf,
-                       m_rows.cashflows.expense_cf)
-    assert np.isclose(m_legacy.bel[0, 0], m_rows.bel[0, 0])
-
-
-def test_claim_pct_row_raises_expense_above_legacy():
-    """A claim_pct row adds a new line the legacy scalars cannot express
-    (지급비), so the same baseline plus a claim_pct row produces a strictly
-    higher expense_cf and a different BEL."""
+def test_claim_pct_row_lifts_expense():
+    """Adding a claim_pct row (지급비) raises the expense cash flow in every
+    month with any claim activity -- the new line the engine could not
+    express before the row form."""
     import dataclasses
     import numpy as np
     mp = _term_life_mp()
@@ -215,15 +171,18 @@ def test_claim_pct_row_raises_expense_above_legacy():
                   > m_base.cashflows.expense_cf[0, has_claim])
 
 
-def test_empty_expense_rows_uses_legacy_path():
-    """Default ``expense_rows=()`` is the migration-friendly state: the
-    legacy alpha / beta / gamma scalars drive the kernel exactly as
-    before."""
+def test_empty_expense_rows_is_zero_expense_basis():
+    """Default ``expense_rows=()`` produces a zero expense cash flow and
+    a strictly lower (more profitable) BEL than the populated basis."""
     import dataclasses
     import numpy as np
     mp = _term_life_mp()
-    legacy = _basis_legacy()
-    legacy_with_empty_rows = dataclasses.replace(legacy, expense_rows=())
-    v_legacy = fcf.value(mp, legacy)
-    v_empty = fcf.value(mp, legacy_with_empty_rows)
-    assert np.isclose(v_legacy.bel[0], v_empty.bel[0])
+    populated = _basis_rows()
+    empty = dataclasses.replace(populated, expense_rows=())
+    m_empty = fcf.measure(mp, empty)
+    v_empty = fcf.value(mp, empty)
+    assert np.all(m_empty.cashflows.expense_cf == 0.0)
+    assert np.isclose(m_empty.bel[0, 0], v_empty.bel[0])
+    # populated basis has expense outflows, so it must have a higher BEL
+    populated_bel = fcf.value(mp, populated).bel[0]
+    assert populated_bel > v_empty.bel[0]

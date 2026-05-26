@@ -467,7 +467,6 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     waiver_t = optional("waiver_tables", _flex_rate_table)
     lapse_t = _flex_rate_table(wb["lapse_tables"])
     discount_t = _axis_tables(wb["discount_tables"], "year")
-    inflation_t = _axis_tables(wb["inflation_tables"], "year")
     ae_factors = optional("ae_factors", _read_ae_factors)
     improvement_t = optional(
         "improvement_tables",
@@ -577,21 +576,21 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
         surrender_curve = lookup(
             surrender_t, "surrender_value_table", optional_ref=True,
         )
+        # Row-form expense ledger -- the segments row points an
+        # ``expense_table`` cell at one entry of the ``expense_tables``
+        # sheet. Blank cell = no expense (empty ``expense_rows`` tuple,
+        # zero-expense projection). The legacy scalar columns
+        # (alpha / beta / gamma / expense_inflation) are no longer read.
+        expense_rows = lookup(expense_t, "expense_table", optional_ref=True)
         kwargs: dict = dict(
             mortality_annual=mortality_fn,
             lapse_annual=lookup(lapse_t, "lapse_table"),
             waiver_incidence_annual=waiver_fn,
-            # Pass the full per-year arrays through -- the engine expands
-            # them to per-month curves via fastcashflow.curves. A one-row
-            # table reproduces the original flat-scalar behaviour.
+            # Pass the full per-year discount through -- the engine
+            # expands it to a per-month curve via fastcashflow.curves.
+            # A one-row table reproduces the flat-scalar behaviour.
             discount_annual=lookup(discount_t, "discount_table"),
-            expense_inflation=lookup(inflation_t, "inflation_table"),
-            # alpha / beta / gamma expense framework (Korean actuarial
-            # standard). All segment scalars; defaults to 0 when blank.
-            alpha_pct=scalar("alpha_pct") or 0.0,
-            alpha_flat=scalar("alpha_flat") or 0.0,
-            beta_pct=scalar("beta_pct") or 0.0,
-            gamma_flat=scalar("gamma_flat") or 0.0,
+            expense_rows=expense_rows or (),
             ra_confidence=scalar("ra_confidence", required=True),
             mortality_cv=scalar("mortality_cv", required=True),
             coverages=tuple(coverage_rates),
@@ -604,21 +603,6 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             v = scalar(opt_col)
             if v is not None:
                 kwargs[opt_col] = v
-        # Optional row-form expense ledger -- when ``expense_table`` is
-        # set on the segments row (and the workbook ships an
-        # ``expense_tables`` sheet) the engine dispatches off the row
-        # form; the legacy alpha / beta / gamma / expense_inflation
-        # scalars are zeroed so the Assumptions object reflects the
-        # actual dispatch unambiguously. When ``expense_table`` is blank
-        # the legacy path stays live, exactly as before.
-        expense_rows = lookup(expense_t, "expense_table", optional_ref=True)
-        if expense_rows is not None:
-            kwargs["expense_rows"] = expense_rows
-            kwargs["alpha_pct"] = 0.0
-            kwargs["alpha_flat"] = 0.0
-            kwargs["beta_pct"] = 0.0
-            kwargs["gamma_flat"] = 0.0
-            kwargs["expense_inflation"] = 0.0
         method = cell("ra_method")
         if method is not None:
             kwargs["ra_method"] = str(method).strip()

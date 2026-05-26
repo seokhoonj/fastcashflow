@@ -1,21 +1,16 @@
-"""Curve-shaped discount / inflation / maintenance assumptions.
+"""Curve-shaped discount assumptions.
 
-``Assumptions.discount_annual`` / ``expense_inflation`` /
-``gamma_flat`` accept either a flat scalar (historical
-behaviour) or a per-year 1-D array (`(n_years,)`) for a time-varying basis
-locked in at initial recognition. The engine expands either form to a
-per-month curve via :mod:`fastcashflow.curves`. The flat scalar must
-reproduce the previous result exactly; the curve form is validated by hand
-against a small two-year contract.
+``Assumptions.discount_annual`` accepts either a flat scalar (historical
+behaviour) or a per-year 1-D array (``(n_years,)``) for a time-varying
+basis locked in at initial recognition. The engine expands either form
+to a per-month curve via :mod:`fastcashflow.curves`. The flat scalar
+must reproduce the previous result exactly; the curve form is validated
+by hand against a small two-year contract.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPoints, measure, value
-from fastcashflow.curves import (
-    discount_monthly_curve,
-    inflation_index,
-    gamma_monthly_curve,
-)
+from fastcashflow import Assumptions, ExpenseRow, ModelPoints, measure, value
+from fastcashflow.curves import discount_monthly_curve
 
 
 def _flat_asmp(**overrides) -> Assumptions:
@@ -24,9 +19,10 @@ def _flat_asmp(**overrides) -> Assumptions:
         mortality_annual=lambda s, ia, d: np.zeros_like(s, dtype=np.float64),
         lapse_annual=lambda s, ia, d: np.zeros_like(s, dtype=np.float64),
         discount_annual=0.05,
-        alpha_flat=0.0,
-        gamma_flat=12_000.0,
-        expense_inflation=0.02,
+        expense_rows=(
+            ExpenseRow("maintenance", "per_policy_monthly", 12_000.0,
+                       inflation_rate=0.02),
+        ),
         ra_confidence=0.75,
         mortality_cv=0.0,
     )
@@ -66,39 +62,6 @@ def test_per_year_discount_holds_flat_past_curve_end():
     assert np.allclose(curve[24:], m1)                   # year 2 -> held at year-1 value
 
 
-def test_scalar_inflation_index_matches_continuous_compound():
-    """Scalar ``expense_inflation`` -- ``(1+i)^(t/12)`` -- bit-equivalent path."""
-    asmp = _flat_asmp(expense_inflation=0.02)
-    idx = inflation_index(asmp, 24)
-    expected = (1.02) ** (np.arange(24) / 12.0)
-    assert np.allclose(idx, expected)
-
-
-def test_per_year_inflation_compounds_across_years():
-    """A 2-year ``[0.02, 0.05]`` inflation curve compounds:
-
-    * month 0: 1.0
-    * month 6: ``(1.02)^(6/12)``
-    * month 12: ``(1.02)^1`` (full year-0 factor)
-    * month 18: ``1.02 * (1.05)^(6/12)``
-    * month 24: ``1.02 * 1.05`` (had the array extended)
-    """
-    asmp = _flat_asmp(expense_inflation=np.array([0.02, 0.05]))
-    idx = inflation_index(asmp, 24)
-    assert idx[0] == 1.0
-    assert np.isclose(idx[6], (1.02) ** (6 / 12))
-    assert np.isclose(idx[12], 1.02)
-    assert np.isclose(idx[18], 1.02 * (1.05) ** (6 / 12))
-
-
-def test_per_year_maintenance_steps_at_year_boundary():
-    """A 2-year ``[12000, 18000]`` maintenance curve gives monthly 1000 / 1500."""
-    asmp = _flat_asmp(gamma_flat=np.array([12_000.0, 18_000.0]))
-    monthly = gamma_monthly_curve(asmp, 24)
-    assert np.allclose(monthly[:12], 1_000.0)
-    assert np.allclose(monthly[12:], 1_500.0)
-
-
 # ---------------------------------------------------------------------------
 # End-to-end -- BEL with a non-flat discount curve, hand-validated
 # ---------------------------------------------------------------------------
@@ -111,8 +74,9 @@ def test_bel_with_curve_discount_matches_hand_calc():
     """
     asmp = _flat_asmp(
         # zero everything except maintenance + discount
-        expense_inflation=0.0,
-        gamma_flat=12_000.0,       # 1,000 / month, flat
+        expense_rows=(
+            ExpenseRow("maintenance", "per_policy_monthly", 12_000.0),
+        ),
         discount_annual=np.array([0.03, 0.05]),    # 3% year 0, 5% year 1
     )
     mp = ModelPoints.single(issue_age=40, death_benefit=0.0,
@@ -135,8 +99,9 @@ def test_bel_with_curve_discount_matches_hand_calc():
 def test_bel_value_matches_measure_with_curve_discount():
     """`value()` and `measure()` agree on BEL for a non-flat discount curve too."""
     asmp = _flat_asmp(
-        expense_inflation=0.0,
-        gamma_flat=12_000.0,
+        expense_rows=(
+            ExpenseRow("maintenance", "per_policy_monthly", 12_000.0),
+        ),
         discount_annual=np.array([0.03, 0.05, 0.06]),
     )
     mp = ModelPoints.single(issue_age=40, death_benefit=100_000.0,
@@ -151,8 +116,9 @@ def test_csm_accretes_at_curve_rate():
     not at a single scalar. Two segments give different accretion factors."""
     # Profitable contract: premium covers expenses with margin -> positive CSM
     asmp = _flat_asmp(
-        expense_inflation=0.0,
-        gamma_flat=12_000.0,
+        expense_rows=(
+            ExpenseRow("maintenance", "per_policy_monthly", 12_000.0),
+        ),
         discount_annual=np.array([0.03, 0.10]),   # step UP at year 1
     )
     mp = ModelPoints.single(issue_age=40, death_benefit=0.0,

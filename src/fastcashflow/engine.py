@@ -30,8 +30,6 @@ from fastcashflow.curves import (
     discount_factors,
     discount_factors_from_curve,
     discount_monthly_curve,
-    gamma_monthly_curve,
-    inflation_index,
 )
 from fastcashflow.numerics import (
     _cost_of_capital_ra,

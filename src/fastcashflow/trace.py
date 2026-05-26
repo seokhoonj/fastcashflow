@@ -179,21 +179,17 @@ def show_trace(
             f"discount_annual      = ndarray len={arr.size} "
             f"[{arr.flat[0]:g}, ..., {arr.flat[-1]:g}]"
         )
-    asmp_lines.append(
-        f"alpha_pct / flat     = {assumptions.alpha_pct:g} / {assumptions.alpha_flat:g}"
-    )
-    asmp_lines.append(f"beta_pct             = {assumptions.beta_pct:g}")
-    g = assumptions.gamma_flat
-    if np.ndim(g) == 0:
-        asmp_lines.append(f"gamma_flat           = {float(g):g}")
+    rows = assumptions.expense_rows
+    if not rows:
+        asmp_lines.append("expense_rows         = ()  (no expense)")
     else:
-        asmp_lines.append(f"gamma_flat           = ndarray len={np.asarray(g).size}")
-    inf = assumptions.expense_inflation
-    if np.ndim(inf) == 0:
-        asmp_lines.append(f"expense_inflation    = {float(inf):g}")
-    else:
+        row_lines: list[object] = [
+            (f"ExpenseRow({r.expense_type!r}, basis={r.basis!r}, "
+             f"value={r.value:g}, inflation_rate={r.inflation_rate:g})")
+            for r in rows
+        ]
         asmp_lines.append(
-            f"expense_inflation    = ndarray len={np.asarray(inf).size}"
+            (f"expense_rows         = tuple  (len={len(rows)})", row_lines)
         )
     asmp_lines.append(
         f"ra: method={assumptions.ra_method!r}, conf={assumptions.ra_confidence:g}"
@@ -514,8 +510,7 @@ def show_trace_diff(
                               getattr(asmp_b, name))
         if line is not None:
             asmp_diffs.append(line)
-    for name in ("discount_annual", "expense_inflation", "alpha_pct",
-                 "alpha_flat", "beta_pct", "gamma_flat", "ra_method",
+    for name in ("discount_annual", "ra_method",
                  "ra_confidence", "cost_of_capital_rate", "mortality_cv",
                  "morbidity_cv", "longevity_cv", "disability_cv",
                  "expense_cv"):
@@ -524,6 +519,13 @@ def show_trace_diff(
                             getattr(asmp_b, name))
         if line is not None:
             asmp_diffs.append(line)
+    # ExpenseRow ledger -- detect added / dropped / changed rows.
+    rows_a = asmp_a.expense_rows
+    rows_b = asmp_b.expense_rows
+    if rows_a != rows_b:
+        asmp_diffs.append(
+            f"expense_rows           : len {len(rows_a)} -> len {len(rows_b)}"
+        )
     # Coverages: per-rider rate table change.
     codes_a = [r.code for r in asmp_a.coverages]
     codes_b = [r.code for r in asmp_b.coverages]

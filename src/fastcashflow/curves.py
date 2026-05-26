@@ -6,13 +6,13 @@ the numerical primitives consume. Keeping these in their own layer lets the
 numerical primitives stay domain-object-free (numpy arrays only) and the
 ``Assumptions`` dataclass stay math-free (just inputs).
 
-Three groups of helpers:
+Two groups of helpers:
 
-* discount factors -- :func:`discount_factors`, :func:`discount_factors_from_curve`.
-* per-month rate / amount curves -- :func:`discount_monthly_curve`,
-  :func:`inflation_index`, :func:`gamma_monthly_curve`. These read the
-  ``float | FloatArray`` fields on ``Assumptions`` and broadcast a per-year
-  array to per-month length, holding the last value flat past the end.
+* discount factors -- :func:`discount_factors`,
+  :func:`discount_factors_from_curve`, :func:`discount_monthly_curve`.
+  These read ``Assumptions.discount_annual`` (scalar or per-year array)
+  and broadcast a per-year array to per-month length, holding the last
+  value flat past the end.
 * (internal) :func:`_per_year_to_per_month` -- the shared broadcast helper.
 """
 from __future__ import annotations
@@ -56,44 +56,6 @@ def discount_monthly_curve(assumptions: Assumptions, n_time: int) -> FloatArray:
         assumptions.discount_annual, n_time, "discount_annual",
     )
     return (1.0 + annual) ** (1.0 / 12.0) - 1.0
-
-
-def inflation_index(assumptions: Assumptions, n_time: int) -> FloatArray:
-    """Per-month maintenance-expense inflation multiplier, shape ``(n_time,)``.
-
-    A flat ``expense_inflation`` reproduces the closed-form ``(1+i)^(t/12)``
-    growth. A per-year curve compounds annual factors across completed
-    policy years and applies the in-year fractional ramp on the current
-    year. Held flat past the end of the curve.
-    """
-    annual = _per_year_to_per_month(
-        assumptions.expense_inflation, n_time, "expense_inflation",
-    )
-    months = np.arange(n_time)
-    in_year_ramp = (1.0 + annual) ** ((months % 12) / 12.0)
-    # Compounded annual factors across completed years. Twelve months within
-    # a year share the same prior compounding, so a per-year cumprod over
-    # the year-boundary slice is enough.
-    annual_per_year = annual[::12]
-    compounded = np.empty(annual_per_year.shape[0] + 1)
-    compounded[0] = 1.0
-    np.cumprod(1.0 + annual_per_year, out=compounded[1:])
-    return compounded[months // 12] * in_year_ramp
-
-
-def gamma_monthly_curve(assumptions: Assumptions, n_time: int) -> FloatArray:
-    """Per-month gamma expense per in-force policy, shape ``(n_time,)``.
-
-    Gamma is the per-policy fixed maintenance expense (인건비, IT, 콜센터).
-    The annual amount is paid in twelve monthly instalments. A scalar
-    reproduces the flat ``annual / 12`` figure; a per-year curve steps at
-    each year boundary, held flat past the end. The engine multiplies the
-    result by :func:`inflation_index` to apply maintenance-expense inflation.
-    """
-    annual = _per_year_to_per_month(
-        assumptions.gamma_flat, n_time, "gamma_flat",
-    )
-    return annual / 12.0
 
 
 def discount_factors(assumptions: Assumptions, n_time: int) -> tuple[FloatArray, FloatArray]:

@@ -43,7 +43,6 @@ from fastcashflow.assumptions import (
     Assumptions, annual_to_monthly, derive_expense_components,
 )
 from fastcashflow.coverage import coverage_arrays, coverage_rates
-from fastcashflow.curves import gamma_monthly_curve, inflation_index
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.statemodel import (
     compile_state_model,
@@ -87,36 +86,19 @@ def _expense_kernel_args(
 ) -> tuple[float, float, float, FloatArray, FloatArray]:
     """Return the five expense primitives the kernels take.
 
-    Wires both the row-form expense ledger (``Assumptions.expense_rows``,
-    when set -- the framework the engine is migrating to) and the legacy
-    scalar fields (``alpha_pct`` / ``alpha_flat`` / ``beta_pct`` /
-    ``gamma_flat`` / ``expense_inflation``, the fallback while the
-    migration is in progress) to the same kernel inputs:
+    Projects ``Assumptions.expense_rows`` onto the kernel-side inputs:
 
     - ``alpha_pct``, ``alpha_flat``, ``beta_pct`` -- scalars used at
       ``t=0`` (alpha) and every premium-paying month (beta).
-    - ``gamma_monthly`` -- ``(n_time,)`` curve of per-policy monthly
-      maintenance amounts (with inflation already baked in).
-    - ``claim_pct_monthly`` -- ``(n_time,)`` curve of the claim-handling
-      fraction applied each month to ``(claim + morbidity + disability)``.
-      Always zero on the legacy path (the scalar fields cannot express
-      claim-based expense at all -- that line is new).
+    - ``gamma_monthly`` -- ``(n_time,)`` per-policy monthly maintenance
+      amount (with inflation already baked in).
+    - ``claim_pct_monthly`` -- ``(n_time,)`` claim-handling fraction
+      applied each month to ``(claim + morbidity + disability)``.
 
-    ``Assumptions.expense_rows`` takes precedence when populated; the
-    two routes are mutually exclusive by intent.
+    An empty ``expense_rows`` produces five zeros -- the no-expense
+    basis -- so the kernel can run unchanged.
     """
-    if assumptions.expense_rows:
-        return derive_expense_components(assumptions.expense_rows, n_time)
-    gamma_monthly = (gamma_monthly_curve(assumptions, n_time)
-                     * inflation_index(assumptions, n_time))
-    claim_pct_monthly = np.zeros(n_time, dtype=np.float64)
-    return (
-        float(assumptions.alpha_pct),
-        float(assumptions.alpha_flat),
-        float(assumptions.beta_pct),
-        gamma_monthly,
-        claim_pct_monthly,
-    )
+    return derive_expense_components(assumptions.expense_rows, n_time)
 
 
 @njit(parallel=True, cache=True)

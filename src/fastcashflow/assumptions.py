@@ -294,32 +294,15 @@ class Assumptions:
         per-month rate curve via
         :func:`fastcashflow.curves.discount_monthly_curve`. Used for
         discounting cash flows and for CSM interest accretion.
-    alpha_pct :
-        Acquisition cost as a fraction of annualized premium (alpha,
-        신계약비 의 % 부분). Paid at t = 0 on the issued count. Korean
-        commission is typically dominated by this. Default 0.
-    alpha_flat :
-        Acquisition cost as a flat amount per policy issued (alpha 의
-        정액 부분, 예: 의료심사 / 발급비). Paid at t = 0 on the issued
-        count. Usually small or zero in Korean practice. Default 0.
-    beta_pct :
-        Premium-based recurring expense as a fraction of annualized
-        premium (beta, 수금비 + premium-비례 유지비). Charged each month
-        while ``t < premium_term_months``; one twelfth of the annual
-        amount per month. Default 0.
-    gamma_flat :
-        Per-policy maintenance expense as an annual flat amount per
-        in-force policy (gamma, per-policy 유지비 — 인건비 / IT / 콜센터).
-        Charged each month while ``t < term_months`` (continues after
-        premium fully paid). One twelfth per month, inflation applied via
-        :data:`expense_inflation`. Default 0.
-    expense_inflation :
-        Annual inflation rate applied to ``gamma_flat``. Either a flat
-        scalar (closed-form ``(1+i)^(t/12)`` growth) or a per-year
-        ``(n_years,)`` array (compounds across years, with the in-year
-        fractional ramp on the current year). Held flat past the end.
-        Does not apply to ``alpha_*`` (one-time at t=0) or ``beta_pct``
-        (% of locked premium).
+    expense_rows :
+        Row-form expense ledger -- a tuple of :class:`ExpenseRow`. Each
+        row carries an expense type label (acquisition / maintenance /
+        collection / claim_handling / overhead -- free-form), a
+        :data:`EXPENSE_BASES` dispatch key, a numeric value and an annual
+        inflation rate. The engine projects every row through
+        :func:`derive_expense_components` into the kernel-side primitives
+        (alpha / beta / gamma / claim-handling fractions). An empty tuple
+        is the no-expense basis.
     ra_confidence :
         Confidence level for the Risk Adjustment (e.g. 0.75). The RA lifts
         the liability from its best estimate to this percentile.
@@ -404,16 +387,10 @@ class Assumptions:
     discount_annual: float | FloatArray
     ra_confidence: float
     mortality_cv: float
-    alpha_pct: float = 0.0
-    alpha_flat: float = 0.0
-    beta_pct: float = 0.0
-    gamma_flat: float | FloatArray = 0.0
-    expense_inflation: float | FloatArray = 0.0
-    # Row-form expense ledger -- the framework the engine is migrating to
-    # (see ExpenseRow / derive_expense_components). When non-empty it takes
-    # precedence over alpha / beta / gamma / expense_inflation above; when
-    # empty the legacy scalars are used as before. The two routes are
-    # mutually exclusive: setting both is a transition state, not a sum.
+    # Row-form expense ledger -- see ExpenseRow / derive_expense_components.
+    # The engine projects every row into the kernel-side alpha / beta /
+    # gamma / claim-handling primitives; an empty tuple is the no-expense
+    # basis.
     expense_rows: tuple[ExpenseRow, ...] = ()
     # Surrender value (해약환급금) curve -- per-month factor applied to the
     # cumulative premium paid. Engine: surrender_cf[t] = lapse_flow[t] x
@@ -514,11 +491,6 @@ _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     )),
     ("경제 / 비용", (
         "discount_annual",
-        "alpha_pct",
-        "alpha_flat",
-        "beta_pct",
-        "gamma_flat",
-        "expense_inflation",
     )),
     ("위험조정 (RA)", (
         "ra_method",
@@ -632,7 +604,16 @@ def _describe_assumptions_lines(
         return [f"{n:<{width}}  {_fmt_value(getattr(asmp, n))}" for n in names]
 
     for i, (title, names) in enumerate(_DESCRIBE_GROUPS[:3]):
-        sections.append((f"{marks[i]} {title}", field_lines(names)))
+        body = field_lines(names)
+        if i == 1:
+            rows = asmp.expense_rows
+            row_lines: list[object] = [
+                f"ExpenseRow({r.expense_type!r}, basis={r.basis!r}, "
+                f"value={r.value:g}, inflation_rate={r.inflation_rate:g})"
+                for r in rows
+            ]
+            body.append((f"expense_rows : tuple  (len={len(rows)})", row_lines))
+        sections.append((f"{marks[i]} {title}", body))
 
     riders = asmp.coverages
     cov = (asmp.metadata.coverage_types if asmp.metadata is not None else None) or {}

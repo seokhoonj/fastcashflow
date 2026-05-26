@@ -11,7 +11,7 @@ import time
 import numpy as np
 from numba import cuda
 
-from fastcashflow import Assumptions, ModelPoints, value
+from fastcashflow import Assumptions, ExpenseRow, ModelPoints, value
 
 
 def _annual(m):
@@ -46,9 +46,11 @@ def main() -> None:
         mortality_annual=mortality_annual,
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
-        alpha_flat=300_000.0,
-        gamma_flat=60_000.0,
-        expense_inflation=0.02,
+        expense_rows=(
+            ExpenseRow("acquisition",  "per_policy_init",    300_000.0),
+            ExpenseRow("maintenance",  "per_policy_monthly",  60_000.0,
+                       inflation_rate=0.02),
+        ),
         ra_confidence=0.75,
         mortality_cv=0.10,
     )

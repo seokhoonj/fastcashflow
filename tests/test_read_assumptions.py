@@ -74,18 +74,11 @@ def test_per_segment_acquisition_amount():
         assert acq[0].value == expected_acq, (key, expected_acq, acq[0].value)
 
 
-def test_expense_table_zeroes_legacy_scalars():
-    """When the segments row carries an ``expense_table``, the loader
-    zeroes the legacy alpha / beta / gamma / expense_inflation scalars
-    so the Assumptions object cannot be misread as having both routes
-    live simultaneously."""
+def test_every_segment_has_expense_rows():
+    """The sample workbook attaches an ``expense_table`` to every segment;
+    the loader populates ``Assumptions.expense_rows`` on each."""
     basis = load_sample_assumptions()
     for asmp in basis.values():
-        assert asmp.alpha_pct == 0.0
-        assert asmp.alpha_flat == 0.0
-        assert asmp.beta_pct == 0.0
-        assert asmp.gamma_flat == 0.0
-        assert asmp.expense_inflation == 0.0
         assert asmp.expense_rows                       # populated
 
 
