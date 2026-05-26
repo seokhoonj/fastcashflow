@@ -123,8 +123,8 @@ def test_count_scales_linearly():
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         discount_annual=0.03,
         expense_rows=(
-            ExpenseRow("acquisition",  "per_policy_init",    300.0),
-            ExpenseRow("maintenance",  "per_policy_monthly", 120.0),
+            ExpenseRow("acquisition",  "alpha_fixed",    300.0),
+            ExpenseRow("maintenance",  "gamma_fixed", 120.0),
         ),
     )
     n = 1000.0

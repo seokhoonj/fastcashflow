@@ -264,8 +264,8 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseRow, ...]]:
     Each row is one ``ExpenseRow`` -- the row-form expense ledger the
     engine dispatches on. Columns: ``table_id``, ``expense_type``,
     ``basis``, ``value``. The same ``table_id`` may span multiple rows
-    (an acquisition row plus a maintenance row, plus a claim_handling
-    row, ...). Returns ``{table_id: tuple[ExpenseRow, ...]}`` for the
+    (an acquisition row plus a maintenance row, plus an LAE row, ...).
+    Returns ``{table_id: tuple[ExpenseRow, ...]}`` for the
     segments-side ``expense_table`` lookup to consume. Inflation is
     *not* a row attribute -- it lives on the segment as the global
     economic ``expense_inflation`` curve (see :data:`inflation_tables`

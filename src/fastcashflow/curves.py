@@ -70,8 +70,8 @@ def inflation_index(assumptions: Assumptions, n_time: int) -> FloatArray:
     annual factors across completed policy years and applies the
     in-year fractional ramp on the current year. Held flat past the
     end of the curve. ``derive_expense_components`` multiplies the
-    recurring expense rows (``per_policy_monthly``, ``claim_pct``)
-    by this curve.
+    recurring expense rows (``gamma_fixed``, ``lae_pro_rata``) by
+    this curve.
     """
     annual = _per_year_to_per_month(
         assumptions.expense_inflation, n_time, "expense_inflation",

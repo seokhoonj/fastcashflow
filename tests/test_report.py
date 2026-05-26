@@ -31,8 +31,8 @@ def _assumptions() -> Assumptions:
         discount_annual=0.03,
         expense_inflation=0.02,
         expense_rows=(
-            ExpenseRow("acquisition",  "per_policy_init",    200_000.0),
-            ExpenseRow("maintenance",  "per_policy_monthly",  60_000.0),
+            ExpenseRow("acquisition",  "alpha_fixed",    200_000.0),
+            ExpenseRow("maintenance",  "gamma_fixed",  60_000.0),
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
@@ -150,8 +150,8 @@ def test_report_finance_expense_is_curve_aware():
                                   0.05, 0.05, 0.05, 0.05, 0.05]),
         expense_inflation=0.02,
         expense_rows=(
-            ExpenseRow("acquisition",  "per_policy_init",    200_000.0),
-            ExpenseRow("maintenance",  "per_policy_monthly",  60_000.0),
+            ExpenseRow("acquisition",  "alpha_fixed",    200_000.0),
+            ExpenseRow("maintenance",  "gamma_fixed",  60_000.0),
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,

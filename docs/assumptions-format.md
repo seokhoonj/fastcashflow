@@ -148,39 +148,28 @@ segments 의 `expense_table` 컬럼이 채워지면 row 형식이 우선이며,
 | 컬럼 | 의미 |
 |---|---|
 | `table_id` | 표 식별자 (예: `EXP_TE_FC`) |
-| `expense_type` | 자유 라벨 (`acquisition` / `maintenance` / `collection` / `claim_handling` / `overhead` 등). engine 은 무시; 리포트 / show_trace 가 echo. |
+| `expense_type` | 자유 라벨 (`acquisition` / `maintenance` / `collection` / `LAE` / `overhead` 등). engine 은 무시; 리포트 / show_trace 가 echo. |
 | `basis` | 엔진 dispatch 키. 아래 5 종 중 하나 |
-| `value` | 값 (`*_pct` 는 비율 0..1, `per_policy_*` 는 정액) |
-| `inflation_rate` | row 별 인플레이션 (선택, 기본 0) |
+| `value` | 값 (`*_pro_rata` 는 비율 0..1, `*_fixed` 는 계약당 정액) |
 
-`basis` vocabulary:
+`basis` vocabulary -- 한국 actuarial α / β / γ 분류 + LAE
+(Loss Adjustment Expense, 손해사정비):
 
 | basis | 의미 | 적용 시점 |
 |---|---|---|
-| `per_policy_init` | 가입 시 정액 신계약비 (`inforce[0] × value`) | t = 0 |
-| `per_policy_monthly` | 매월 per-policy 유지비 (`inforce × value / 12`) | 매월 |
-| `premium_pct_init` | 보험료 % 신계약비 (`annualized_premium × value`) | t = 0 |
-| `premium_pct` | 보험료 % 유지/수금비 (`premium × value`) | 매월 (납입 중) |
-| `claim_pct` | 청구 % 지급비 (`(claim + morbidity) × value`) | 매월 |
+| `alpha_pro_rata` | α 신계약비 -- 보험료 비례 (`annualized_premium × value`) | t = 0 |
+| `alpha_fixed` | α' 신계약비 -- 계약당 정액 (`inforce[0] × value`) | t = 0 |
+| `beta_pro_rata` | β 유지/수금비 -- 보험료 비례 (`premium × value`) | 매월 (납입 중) |
+| `gamma_fixed` | γ 유지비 -- 계약당 정액 (`inforce × value / 12`) | 매월 |
+| `lae_pro_rata` | LAE 손해사정비 -- 청구 비례 (`(claim + morbidity) × value`) | 매월 |
 
-`inflation_rate` 는 `per_policy_monthly` 와 `claim_pct` 에만 적용 — 두
-`_init` basis 는 t=0 일회성, `premium_pct` 는 이미 보험료 자체가 시간
-변동이라 이중 적용 회피.
+글로벌 `expense_inflation` (segments 의 `inflation_table` 참조) 은
+`gamma_fixed` 와 `lae_pro_rata` 에만 적용 -- 두 alpha basis 는 t=0
+일회성, `beta_pro_rata` 는 이미 보험료 자체가 시간 변동이라 이중
+적용 회피.
 
 segments 시트의 `expense_table` (선택) 컬럼이 segment 별 어느 table_id 를
-쓸지 결정. 빈 셀이면 legacy scalar 경로.
-
-#### segments 의 alpha / beta / gamma 스칼라 (legacy)
-
-`expense_table` 이 비어 있으면 reader 는 다음 스칼라를 그대로 읽습니다:
-
-- `alpha_pct` / `alpha_flat` — 신사업비. 가입 시 일회성.
-- `beta_pct` — 보험료 비례 유지/수금비. 매월 보험료에 곱함.
-- `gamma_flat` — 정액 유지비. 매월 in-force 에 곱함 + `inflation_tables`
-  로 시간 인플레이션 곱함.
-
-이 경로는 historical 3분법 (α/β/γ) 의 단순 형태이고, 미래 cleanup
-commit 에서 제거 예정. 신규 워크북은 `expense_tables` 권장.
+쓸지 결정. 빈 셀이면 expense 없음 (no-expense basis).
 
 ### 3.4 `surrender_value_tables` (optional)
 

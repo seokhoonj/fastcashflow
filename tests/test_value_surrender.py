@@ -32,8 +32,8 @@ def _basis(**overrides):
         morbidity_cv=0.10,
         expense_inflation=0.02,
         expense_rows=(
-            ExpenseRow("acquisition",  "per_policy_init",    100_000.0),
-            ExpenseRow("maintenance",  "per_policy_monthly",  30_000.0),
+            ExpenseRow("acquisition",  "alpha_fixed",    100_000.0),
+            ExpenseRow("maintenance",  "gamma_fixed",  30_000.0),
         ),
     )
     base.update(overrides)

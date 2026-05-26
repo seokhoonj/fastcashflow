@@ -146,23 +146,25 @@ class ExpenseRow:
     ----------
     expense_type
         Free-form label for reporting / audit (e.g. ``"acquisition"``,
-        ``"maintenance"``, ``"collection"``, ``"claim_handling"``,
+        ``"maintenance"``, ``"collection"``, ``"LAE"``,
         ``"overhead"``). Engine ignores it; ``show_trace`` and
         ``describe_assumptions`` echo it.
     basis
         Dispatch key -- one of :data:`EXPENSE_BASES`. The five values
-        cover acquisition (init), maintenance (monthly), premium-based
-        recurring, and claim-handling.
+        follow the Korean actuarial alpha / beta / gamma convention
+        plus a dedicated LAE (Loss Adjustment Expense) slot, each split
+        into ``pro_rata`` (proportional to a base amount) or ``fixed``
+        (per-policy flat).
     value
-        Numeric value -- a fraction (0..1) for the ``_pct`` bases, an
-        amount per policy for the ``per_policy_*`` bases.
+        Numeric value -- a fraction (0..1) for the ``_pro_rata`` bases,
+        an amount per policy for the ``_fixed`` bases.
 
     Notes
     -----
     The basis decides whether the global ``expense_inflation`` applies:
-    ``per_policy_monthly`` and ``claim_pct`` recur every month and so
-    inflate; the two ``_init`` bases pay once at ``t=0`` and
-    ``premium_pct`` rides the premium itself, so a second inflation
+    ``gamma_fixed`` and ``lae_pro_rata`` recur every month and so
+    inflate; the two ``alpha_*`` bases pay once at ``t=0`` and
+    ``beta_pro_rata`` rides the premium itself, so a second inflation
     factor would double-count.
     """
 
@@ -172,12 +174,16 @@ class ExpenseRow:
 
 
 #: All ``ExpenseRow.basis`` values the engine knows how to dispatch.
+#: Follows the Korean actuarial alpha / beta / gamma convention:
+#: alpha = acquisition (one-off at t=0), beta = premium-prorated
+#: maintenance, gamma = per-policy fixed maintenance; LAE is the
+#: claim-prorated Loss Adjustment Expense slot.
 EXPENSE_BASES = (
-    "per_policy_init",
-    "per_policy_monthly",
-    "premium_pct_init",
-    "premium_pct",
-    "claim_pct",
+    "alpha_pro_rata",   # acquisition, % of annualised premium, t=0
+    "alpha_fixed",      # acquisition, per policy, t=0
+    "beta_pro_rata",    # maintenance, % of premium, every paying month
+    "gamma_fixed",      # maintenance, per policy, every month
+    "lae_pro_rata",     # LAE, % of claim-type outflow, every month
 )
 
 
@@ -187,21 +193,22 @@ def derive_expense_components(
 ) -> tuple[float, float, float, FloatArray, FloatArray]:
     """Project ``expense_rows`` onto the five kernel-side primitives.
 
-    Returns ``(alpha_pct, alpha_flat, beta_pct, gamma_monthly,
-    claim_pct_monthly)``:
+    Returns ``(alpha_pro_rata, alpha_fixed, beta_pro_rata, gamma_fixed,
+    lae_pro_rata)``:
 
-    - ``alpha_pct`` -- sum of ``value`` over ``premium_pct_init`` rows.
-      Paid at ``t=0`` on annualized premium.
-    - ``alpha_flat`` -- sum of ``value`` over ``per_policy_init`` rows.
+    - ``alpha_pro_rata`` -- sum of ``value`` over ``alpha_pro_rata``
+      rows. Paid at ``t=0`` on annualized premium.
+    - ``alpha_fixed`` -- sum of ``value`` over ``alpha_fixed`` rows.
       Paid at ``t=0`` per policy.
-    - ``beta_pct`` -- sum of ``value`` over ``premium_pct`` rows.
+    - ``beta_pro_rata`` -- sum of ``value`` over ``beta_pro_rata`` rows.
       Charged each premium-paying month on the actual premium.
-    - ``gamma_monthly[t]`` -- per-month per-policy maintenance: each
-      ``per_policy_monthly`` row contributes ``value / 12 *
+    - ``gamma_fixed[t]`` -- per-month per-policy maintenance: each
+      ``gamma_fixed`` row contributes ``value / 12 *
       inflation_index[t]``.
-    - ``claim_pct_monthly[t]`` -- claim-handling fraction: each
-      ``claim_pct`` row contributes ``value * inflation_index[t]``.
-      Applied to the month's claim + morbidity + disability total.
+    - ``lae_pro_rata[t]`` -- LAE (Loss Adjustment Expense) fraction:
+      each ``lae_pro_rata`` row contributes
+      ``value * inflation_index[t]``. Applied to the month's
+      claim + morbidity + disability total.
 
     ``inflation_index`` is the ``(n_time,)`` per-month inflation
     multiplier produced by :func:`fastcashflow.curves.inflation_index`;
@@ -210,30 +217,30 @@ def derive_expense_components(
     compounds across years. Pass ``None`` for a no-inflation basis
     (every month equal to 1.0).
     """
-    alpha_pct = 0.0
-    alpha_flat = 0.0
-    beta_pct = 0.0
-    gamma_monthly = np.zeros(n_time, dtype=np.float64)
-    claim_pct_monthly = np.zeros(n_time, dtype=np.float64)
+    alpha_pro_rata = 0.0
+    alpha_fixed = 0.0
+    beta_pro_rata = 0.0
+    gamma_fixed = np.zeros(n_time, dtype=np.float64)
+    lae_pro_rata = np.zeros(n_time, dtype=np.float64)
     if inflation_index is None:
         inflation_index = np.ones(n_time, dtype=np.float64)
     for row in expense_rows:
-        if row.basis == "per_policy_init":
-            alpha_flat += row.value
-        elif row.basis == "premium_pct_init":
-            alpha_pct += row.value
-        elif row.basis == "premium_pct":
-            beta_pct += row.value
-        elif row.basis == "per_policy_monthly":
-            gamma_monthly += row.value * inflation_index / 12.0
-        elif row.basis == "claim_pct":
-            claim_pct_monthly += row.value * inflation_index
+        if row.basis == "alpha_fixed":
+            alpha_fixed += row.value
+        elif row.basis == "alpha_pro_rata":
+            alpha_pro_rata += row.value
+        elif row.basis == "beta_pro_rata":
+            beta_pro_rata += row.value
+        elif row.basis == "gamma_fixed":
+            gamma_fixed += row.value * inflation_index / 12.0
+        elif row.basis == "lae_pro_rata":
+            lae_pro_rata += row.value * inflation_index
         else:
             raise ValueError(
                 f"unknown expense basis {row.basis!r}; expected one of "
                 f"{EXPENSE_BASES}"
             )
-    return alpha_pct, alpha_flat, beta_pct, gamma_monthly, claim_pct_monthly
+    return alpha_pro_rata, alpha_fixed, beta_pro_rata, gamma_fixed, lae_pro_rata
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,15 +302,15 @@ class Assumptions:
     expense_rows :
         Row-form expense ledger -- a tuple of :class:`ExpenseRow`. Each
         row carries an expense type label (acquisition / maintenance /
-        collection / claim_handling / overhead -- free-form), a
+        collection / LAE / overhead -- free-form), a
         :data:`EXPENSE_BASES` dispatch key and a numeric value. The
         engine projects every row through
         :func:`derive_expense_components` into the kernel-side primitives
-        (alpha / beta / gamma / claim-handling fractions). An empty tuple
-        is the no-expense basis.
+        (alpha / beta / gamma / LAE fractions). An empty tuple is the
+        no-expense basis.
     expense_inflation :
         Global annual inflation applied to the recurring expense rows
-        (``per_policy_monthly`` and ``claim_pct``). Either a flat scalar
+        (``gamma_fixed`` and ``lae_pro_rata``). Either a flat scalar
         -- closed-form ``(1+i)^(t/12)`` growth -- or a per-year
         ``(n_years,)`` array (compounds across years, in-year fractional
         ramp on the current year, held flat past the end). Macro-economic

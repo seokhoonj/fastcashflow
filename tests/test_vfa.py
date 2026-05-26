@@ -97,7 +97,7 @@ def test_vfa_onerous_when_expenses_exceed_the_fee():
     onerous = measure_vfa(
         ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8),
         _assumptions(expense_rows=(
-            ExpenseRow("acquisition", "per_policy_init", 10_000_000.0),
+            ExpenseRow("acquisition", "alpha_fixed", 10_000_000.0),
         )),
     )
     assert np.isclose(profitable.loss_component[0], 0.0)
@@ -173,7 +173,7 @@ def test_vfa_ra_zero_without_expense_cv():
     res = measure_vfa(
         ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8),
         _assumptions(expense_rows=(
-            ExpenseRow("maintenance", "per_policy_monthly", 120_000.0),
+            ExpenseRow("maintenance", "gamma_fixed", 120_000.0),
         )),
     )
     assert np.allclose(res.ra, 0.0)
@@ -182,7 +182,7 @@ def test_vfa_ra_zero_without_expense_cv():
 def test_vfa_ra_scales_with_expense_cv():
     """The VFA RA is a confidence-level margin linear in the expense CV."""
     mp = ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8)
-    _g120k = (ExpenseRow("maintenance", "per_policy_monthly", 120_000.0),)
+    _g120k = (ExpenseRow("maintenance", "gamma_fixed", 120_000.0),)
     r1 = measure_vfa(mp, _assumptions(expense_rows=_g120k, expense_cv=0.10))
     r2 = measure_vfa(mp, _assumptions(expense_rows=_g120k, expense_cv=0.20))
     assert r1.ra[0, 0] > 0.0
@@ -192,7 +192,7 @@ def test_vfa_ra_scales_with_expense_cv():
 def test_vfa_ra_reduces_the_csm():
     """The RA is part of the fulfilment cash flows, so it reduces the CSM."""
     mp = ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8)
-    _g120k = (ExpenseRow("maintenance", "per_policy_monthly", 120_000.0),)
+    _g120k = (ExpenseRow("maintenance", "gamma_fixed", 120_000.0),)
     no_ra = measure_vfa(mp, _assumptions(expense_rows=_g120k, expense_cv=0.0))
     with_ra = measure_vfa(mp, _assumptions(expense_rows=_g120k, expense_cv=0.30))
     assert with_ra.csm[0, 0] < no_ra.csm[0, 0]
@@ -201,7 +201,7 @@ def test_vfa_ra_reduces_the_csm():
 def test_vfa_report_releases_the_ra_into_revenue():
     """The report releases the VFA RA into insurance revenue."""
     asmp = _assumptions(expense_rows=(
-        ExpenseRow("maintenance", "per_policy_monthly", 120_000.0),
+        ExpenseRow("maintenance", "gamma_fixed", 120_000.0),
     ), expense_cv=0.25)
     m = measure_vfa(ModelPoints.single(40, 0.0, 0.0, 60, account_value=1e8), asmp)
     rep = report(m)

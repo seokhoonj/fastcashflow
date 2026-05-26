@@ -38,7 +38,7 @@ def test_defaults_inherited():
     # assumption on the Assumptions object, not on the row itself.
     for asmp in (ga, fc):
         maint = [r for r in asmp.expense_rows
-                 if r.basis == "per_policy_monthly"]
+                 if r.basis == "gamma_fixed"]
         assert len(maint) == 1
         assert maint[0].value == 60_000.0
         assert asmp.expense_inflation == 0.02
@@ -70,7 +70,7 @@ def test_per_segment_acquisition_amount():
         (("WHOLE_LIFE","GA"), 350_000.0),
     ):
         rows = basis[key].expense_rows
-        acq = [r for r in rows if r.basis == "per_policy_init"]
+        acq = [r for r in rows if r.basis == "alpha_fixed"]
         assert len(acq) == 1, f"{key}: expected one per_policy_init row"
         assert acq[0].value == expected_acq, (key, expected_acq, acq[0].value)
 

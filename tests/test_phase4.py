@@ -21,8 +21,8 @@ def _assumptions(**overrides) -> Assumptions:
         discount_annual=0.04,
         expense_inflation=0.02,
         expense_rows=(
-            ExpenseRow("acquisition",  "per_policy_init",    100_000.0),
-            ExpenseRow("maintenance",  "per_policy_monthly",  24_000.0),
+            ExpenseRow("acquisition",  "alpha_fixed",    100_000.0),
+            ExpenseRow("maintenance",  "gamma_fixed",  24_000.0),
         ),
         ra_confidence=0.80,
         mortality_cv=0.10,

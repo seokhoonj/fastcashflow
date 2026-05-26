@@ -91,13 +91,13 @@ def _expense_kernel_args(
     threading ``Assumptions.expense_inflation`` through the recurring
     rows via :func:`fastcashflow.curves.inflation_index`:
 
-    - ``alpha_pct``, ``alpha_flat``, ``beta_pct`` -- scalars used at
+    - ``alpha_pro_rata``, ``alpha_fixed``, ``beta_pro_rata`` -- scalars used at
       ``t=0`` (alpha) and every premium-paying month (beta).
-    - ``gamma_monthly`` -- ``(n_time,)`` per-policy monthly maintenance
+    - ``gamma_fixed`` -- ``(n_time,)`` per-policy monthly maintenance
       amount (with global inflation baked in).
-    - ``claim_pct_monthly`` -- ``(n_time,)`` claim-handling fraction
-      applied each month to ``(claim + morbidity + disability)``
-      (with global inflation baked in).
+    - ``lae_pro_rata`` -- ``(n_time,)`` LAE fraction applied each
+      month to ``(claim + morbidity + disability)`` (with global
+      inflation baked in).
 
     An empty ``expense_rows`` produces five zeros -- the no-expense
     basis -- so the kernel can run unchanged.
@@ -116,8 +116,8 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     coverage_reduction_end, coverage_reduction_factor, cov_rates,
                     cov_risk, cov_is_diagnosis, maturity_benefit,
                     annuity_payment, disability_income, disability_benefit,
-                    alpha_pct, alpha_flat, beta_pct,
-                    gamma_inflated_monthly, claim_pct_monthly, n_time):
+                    alpha_pro_rata, alpha_fixed, beta_pro_rata,
+                    gamma_fixed, lae_pro_rata, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -207,27 +207,24 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
             annuity_cf[mp, t] = (ift * annuity_payment[mp]
                                  if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
-            # Expense: alpha / beta / gamma (legacy 3-component) plus a
-            # claim-handling fraction on the month's claim + morbidity +
-            # disability total (지급비). When the caller derived these
-            # primitives from Assumptions.expense_rows the same dispatch
-            # spans every Korean practitioner category; when it used the
-            # legacy alpha/beta/gamma scalars the claim_pct curve is zero
-            # and only the first three lines fire.
+            # Expense: alpha / beta / gamma maintenance plus LAE on the
+            # month's claim + morbidity total. Dispatched from
+            # Assumptions.expense_rows by basis (alpha_pro_rata /
+            # alpha_fixed / beta_pro_rata / gamma_fixed / lae_pro_rata).
             ann_prem = level_premium[mp] * 12.0 / prem_freq
-            alpha = (cnt * (alpha_pct * ann_prem + alpha_flat)
+            alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
-            beta = (ift * beta_pct * ann_prem / 12.0
+            beta = (ift * beta_pro_rata * ann_prem / 12.0
                     if t < premium_term else 0.0)
-            gamma = ift * gamma_inflated_monthly[t]
-            # claim_pct applies to mortality + morbidity claims only --
+            gamma = ift * gamma_fixed[t]
+            # LAE applies to mortality + morbidity claims only --
             # disability income is a periodic annuity-like benefit, lump
             # sums are one-off transitions, and conflating either with
-            # claim handling would double-count. Add a dedicated basis
-            # later if the practice ever needs it.
-            claim_handling = claim_pct_monthly[t] * (
+            # LAE would double-count. Add a dedicated basis later if the
+            # practice ever needs it.
+            lae = lae_pro_rata[t] * (
                 claim_cf[mp, t] + morbidity_cf[mp, t])
-            expense_cf[mp, t] = alpha + beta + gamma + claim_handling
+            expense_cf[mp, t] = alpha + beta + gamma + lae
             # Advance the occupancy along the transition edges; a lump-sum
             # transition pays its benefit on the occupancy it carries.
             for s in range(n_states):
@@ -310,8 +307,8 @@ def _project_kernel_semi_markov(
     coverage_reduction_end, coverage_reduction_factor, cov_rates,
     cov_risk, cov_is_diagnosis,
     maturity_benefit, annuity_payment, disability_income, disability_benefit,
-    alpha_pct, alpha_flat, beta_pct,
-    gamma_inflated_monthly, claim_pct_monthly, n_time,
+    alpha_pro_rata, alpha_fixed, beta_pro_rata,
+    gamma_fixed, lae_pro_rata, n_time,
 ):
     """Detailed semi-Markov projection -- main pass only.
 
@@ -409,19 +406,19 @@ def _project_kernel_semi_markov(
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: same dispatch as _project_kernel (see its comment).
             ann_prem = level_premium[mp] * 12.0 / prem_freq
-            alpha = (cnt * (alpha_pct * ann_prem + alpha_flat)
+            alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
-            beta = (ift * beta_pct * ann_prem / 12.0
+            beta = (ift * beta_pro_rata * ann_prem / 12.0
                     if t < premium_term else 0.0)
-            gamma = ift * gamma_inflated_monthly[t]
-            # claim_pct applies to mortality + morbidity claims only --
+            gamma = ift * gamma_fixed[t]
+            # LAE applies to mortality + morbidity claims only --
             # disability income is a periodic annuity-like benefit, lump
             # sums are one-off transitions, and conflating either with
-            # claim handling would double-count. Add a dedicated basis
-            # later if the practice ever needs it.
-            claim_handling = claim_pct_monthly[t] * (
+            # LAE would double-count. Add a dedicated basis later if the
+            # practice ever needs it.
+            lae = lae_pro_rata[t] * (
                 claim_cf[mp, t] + morbidity_cf[mp, t])
-            expense_cf[mp, t] = alpha + beta + gamma + claim_handling
+            expense_cf[mp, t] = alpha + beta + gamma + lae
 
             for i in range(total_cohorts):
                 occ_next[i] = 0.0
@@ -564,8 +561,8 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     # Expense primitives -- the five inputs the kernel consumes. Honours
     # Assumptions.expense_rows when set, otherwise the legacy alpha / beta
     # / gamma / expense_inflation scalars (see _expense_kernel_args).
-    (expense_alpha_pct, expense_alpha_flat, expense_beta_pct,
-     gamma_inflated_monthly, claim_pct_monthly) = _expense_kernel_args(
+    (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,
+     gamma_fixed, lae_pro_rata) = _expense_kernel_args(
         assumptions, n_time,
     )
 
@@ -657,11 +654,11 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             model_points.annuity_payment,
             model_points.disability_income,
             model_points.disability_benefit,
-            expense_alpha_pct,
-            expense_alpha_flat,
-            expense_beta_pct,
-            gamma_inflated_monthly,
-            claim_pct_monthly,
+            expense_alpha_pro_rata,
+            expense_alpha_fixed,
+            expense_beta_pro_rata,
+            gamma_fixed,
+            lae_pro_rata,
             n_time,
         )
     else:
@@ -708,11 +705,11 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             model_points.annuity_payment,
             model_points.disability_income,
             model_points.disability_benefit,
-            expense_alpha_pct,
-            expense_alpha_flat,
-            expense_beta_pct,
-            gamma_inflated_monthly,
-            claim_pct_monthly,
+            expense_alpha_pro_rata,
+            expense_alpha_fixed,
+            expense_beta_pro_rata,
+            gamma_fixed,
+            lae_pro_rata,
             n_time,
         )
     # Surrender value (해약환급금) -- post-projection compute. The lapse

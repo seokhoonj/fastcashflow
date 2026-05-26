@@ -25,8 +25,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        coverage_kind, coverage_amount, coverage_offset, cov_rates, cov_risk,
                        cov_is_diagnosis, maturity_benefit, annuity_payment,
                        disability_income, disability_benefit,
-                       alpha_pct, alpha_flat, beta_pct,
-                       gamma_inflated_monthly, claim_pct_monthly,
+                       alpha_pro_rata, alpha_fixed, beta_pro_rata,
+                       gamma_fixed, lae_pro_rata,
                        discount_start, discount_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
                        disability_factor, lapse_monthly, surrender_curve,
@@ -109,13 +109,13 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
             pv_annuity += ift * annuity * ds
         pv_disability += benefit_occ * disability_income[mp] * dm
         ann_prem = level_premium[mp] * 12.0 / prem_freq
-        alpha = (cnt * (alpha_pct * ann_prem + alpha_flat)
+        alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                  if t == 0 else 0.0)
-        beta = (ift * beta_pct * ann_prem / 12.0
+        beta = (ift * beta_pro_rata * ann_prem / 12.0
                 if t < premium_term else 0.0)
-        gamma = ift * gamma_inflated_monthly[t]
-        claim_handling = claim_pct_monthly[t] * ift * (claim_rate + morb_rate)
-        pv_expense += (alpha + beta + gamma + claim_handling) * dm
+        gamma = ift * gamma_fixed[t]
+        lae = lae_pro_rata[t] * ift * (claim_rate + morb_rate)
+        pv_expense += (alpha + beta + gamma + lae) * dm
         # cum_premium already aggregates inforce * premium; multiply by
         # lapse_rate alone (no ift) -- otherwise cnt^2 over-attribution.
         pv_surrender += (lapse_monthly[sx, ridx, year]
@@ -181,8 +181,8 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               coverage_kind, coverage_amount, coverage_offset, cov_rates, cov_risk,
               cov_is_diagnosis, maturity_benefit, annuity_payment,
               disability_income, disability_benefit,
-              alpha_pct, alpha_flat, beta_pct,
-              gamma_inflated_monthly, claim_pct_monthly,
+              alpha_pro_rata, alpha_fixed, beta_pro_rata,
+              gamma_fixed, lae_pro_rata,
               discount_start, discount_mid,
               mortality_factor, morbidity_factor, longevity_factor,
               disability_factor, lapse_monthly, surrender_curve):
@@ -228,8 +228,8 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_annuity = cuda.to_device(annuity_payment)
     d_disability_income = cuda.to_device(disability_income)
     d_disability_benefit = cuda.to_device(disability_benefit)
-    d_gamma_inflated = cuda.to_device(gamma_inflated_monthly)
-    d_claim_pct_monthly = cuda.to_device(claim_pct_monthly)
+    d_gamma_fixed = cuda.to_device(gamma_fixed)
+    d_lae_pro_rata = cuda.to_device(lae_pro_rata)
     d_discount_start = cuda.to_device(discount_start)
     d_discount_mid = cuda.to_device(discount_mid)
     d_lapse_monthly = cuda.to_device(lapse_monthly)
@@ -248,8 +248,8 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         d_annuity_freq, d_cov_kind, d_cov_amount, d_cov_offset, d_cov_rates,
         d_cov_risk, d_cov_is_diagnosis, d_maturity, d_annuity,
         d_disability_income, d_disability_benefit,
-        alpha_pct, alpha_flat, beta_pct,
-        d_gamma_inflated, d_claim_pct_monthly, d_discount_start,
+        alpha_pro_rata, alpha_fixed, beta_pro_rata,
+        d_gamma_fixed, d_lae_pro_rata, d_discount_start,
         d_discount_mid, mortality_factor, morbidity_factor, longevity_factor,
         disability_factor, d_lapse_monthly, d_surrender_curve,
         d_bel, d_ra, d_csm, d_loss,

@@ -38,8 +38,8 @@ def test_value_matches_measure():
         discount_annual=0.03,
         expense_inflation=0.02,
         expense_rows=(
-            ExpenseRow("acquisition",  "per_policy_init",    250_000.0),
-            ExpenseRow("maintenance",  "per_policy_monthly",  48_000.0),
+            ExpenseRow("acquisition",  "alpha_fixed",    250_000.0),
+            ExpenseRow("maintenance",  "gamma_fixed",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,
@@ -94,8 +94,8 @@ def test_value_gpu_matches_cpu():
         discount_annual=0.03,
         expense_inflation=0.02,
         expense_rows=(
-            ExpenseRow("acquisition",  "per_policy_init",    250_000.0),
-            ExpenseRow("maintenance",  "per_policy_monthly",  48_000.0),
+            ExpenseRow("acquisition",  "alpha_fixed",    250_000.0),
+            ExpenseRow("maintenance",  "gamma_fixed",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,
@@ -134,8 +134,8 @@ def test_value_gpu_matches_cpu_with_transition():
         discount_annual=0.03,
         expense_inflation=0.02,
         expense_rows=(
-            ExpenseRow("acquisition",  "per_policy_init",    200_000.0),
-            ExpenseRow("maintenance",  "per_policy_monthly",  48_000.0),
+            ExpenseRow("acquisition",  "alpha_fixed",    200_000.0),
+            ExpenseRow("maintenance",  "gamma_fixed",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,

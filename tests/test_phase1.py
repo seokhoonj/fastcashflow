@@ -56,8 +56,8 @@ def test_expenses():
         ),
         _assumptions(
             expense_rows=(
-                ExpenseRow("acquisition",  "per_policy_init",    500.0),
-                ExpenseRow("maintenance",  "per_policy_monthly", 120.0),  # 10 per month
+                ExpenseRow("acquisition",  "alpha_fixed",    500.0),
+                ExpenseRow("maintenance",  "gamma_fixed", 120.0),  # 10 per month
             ),
         ),
     )
@@ -86,7 +86,7 @@ def test_expense_inflation():
             lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.0)),
             expense_inflation=0.06,
             expense_rows=(
-                ExpenseRow("maintenance",  "per_policy_monthly", 120.0),  # 10 per month
+                ExpenseRow("maintenance",  "gamma_fixed", 120.0),  # 10 per month
             ),
         ),
     )
