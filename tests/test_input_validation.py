@@ -650,3 +650,161 @@ def test_value_segmented_matches_nfc_and_nfd_codes():
     basis = {(decomposed, "FC"): assumptions}
     out = fcf.value_segmented(mp, basis)
     assert out.bel.shape == (1,)
+
+
+# ---------------------------------------------------------------------------
+# P1 G -- test-gap fill: validation paths that had no regression net
+# ---------------------------------------------------------------------------
+
+def test_coverage_arrays_rejects_unresolved_code():
+    """A coverage code that is neither in benefit_patterns nor a bare
+    BenefitPattern name raises naming the offender."""
+    from fastcashflow.coverage import coverage_arrays
+    coverages = (CoverageRate("MYSTERY_CODE", _flat_rate()),)
+    with pytest.raises(ValueError, match="MYSTERY_CODE"):
+        coverage_arrays(coverages, benefit_patterns=None)
+
+
+def test_settlement_lic_rejects_bad_settlement_pattern_sum():
+    """numerics._settlement_lic's pattern.sum() != 1 guard."""
+    from fastcashflow.numerics import _settlement_lic
+    incurred = np.zeros((1, 12))
+    with pytest.raises(ValueError, match="settlement_pattern must sum to 1"):
+        _settlement_lic(incurred, np.array([0.3, 0.3, 0.3]))
+
+
+def test_settlement_factor_rejects_bad_pattern_sum():
+    """numerics._settlement_factor's pattern.sum() != 1 guard."""
+    from fastcashflow.numerics import _settlement_factor
+    with pytest.raises(ValueError, match="settlement_pattern must sum to 1"):
+        _settlement_factor(np.array([0.3, 0.3, 0.3]), monthly_rate=0.0)
+
+
+def test_settlement_factor_rejects_bad_rate_shape():
+    """_settlement_factor rejects a 2-D monthly_rate."""
+    from fastcashflow.numerics import _settlement_factor
+    with pytest.raises(ValueError, match="monthly_rate must be a scalar"):
+        _settlement_factor(
+            np.array([1.0]), monthly_rate=np.zeros((3, 3)),
+        )
+
+
+def test_norm_ppf_rejects_p_outside_open_interval():
+    """numerics._norm_ppf rejects p at the boundary and outside."""
+    from fastcashflow.numerics import _norm_ppf
+    for bad in (-0.1, 0.0, 1.0, 1.5):
+        with pytest.raises(ValueError, match="open interval"):
+            _norm_ppf(bad)
+
+
+def test_empty_portfolio_value_raises_loudly():
+    """A zero-policy ModelPoints does not silently return garbage.
+
+    The engine currently fails on n_mp=0 because ``term_months.max()`` has
+    no identity over an empty axis. The error is loud (ValueError from
+    numpy), not silent -- this test locks in that loud-fail behaviour so
+    a future change that returns empty-but-meaningful trajectories is an
+    intentional design move (and updates this test), not a regression.
+    Daily-ETL workflows that may hit an empty segment should filter
+    upstream.
+    """
+    mp = ModelPoints(
+        issue_age=np.array([], dtype=np.float64),
+        level_premium=np.array([], dtype=np.float64),
+        term_months=np.array([], dtype=np.int64),
+    )
+    assumptions = Assumptions(
+        mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
+        discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", _flat_rate()),),
+    )
+    with pytest.raises(ValueError):
+        fcf.value(mp, assumptions)
+
+
+def test_single_month_measure():
+    """term_months=1 -- the engine handles a one-step horizon without
+    off-by-one errors at the trajectory ends."""
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        level_premium=np.array([0.0]),
+        term_months=np.array([1]),
+    )
+    assumptions = Assumptions(
+        mortality_annual=_flat_rate(0.01), lapse_annual=_flat_rate(0.0),
+        discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", _flat_rate(0.01)),),
+    )
+    m = fcf.measure(mp, assumptions)
+    assert m.bel.shape == (1, 2)            # (n_mp, term+1)
+    assert np.isfinite(m.bel).all()
+
+
+def test_mixed_term_months_tail_padded_consistently():
+    """MPs with different term_months share a trajectory width = max(term);
+    the short-term MP's bel beyond its term must be either zero or held
+    flat (not garbage)."""
+    mp = ModelPoints(
+        issue_age=np.array([40.0, 40.0]),
+        level_premium=np.array([0.0, 0.0]),
+        term_months=np.array([3, 12]),       # mixed
+    )
+    assumptions = Assumptions(
+        mortality_annual=_flat_rate(0.01), lapse_annual=_flat_rate(0.0),
+        discount_annual=0.0,
+        ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", _flat_rate(0.01)),),
+    )
+    m = fcf.measure(mp, assumptions)
+    assert m.bel.shape == (2, 13)            # max term + 1
+    # The 3-month MP's BEL at t=12 must be a finite, well-defined value
+    # (zero or held-flat post-maturity), never NaN / inf.
+    assert np.isfinite(m.bel[0, 12])
+
+
+# ---------------------------------------------------------------------------
+# StateModel validation paths
+# ---------------------------------------------------------------------------
+
+def test_statemodel_rejects_negative_duration_max():
+    from fastcashflow import State
+    with pytest.raises(ValueError, match="duration_max must be non-negative"):
+        State(name="active", duration_max=-1)
+
+
+def test_statemodel_rejects_empty_states():
+    from fastcashflow import StateModel
+    with pytest.raises(ValueError, match="at least one state"):
+        StateModel(states=())
+
+
+def test_statemodel_rejects_duplicate_state_names():
+    from fastcashflow import State, StateModel
+    with pytest.raises(ValueError, match="state names must be unique"):
+        StateModel(states=(State(name="active"), State(name="active")))
+
+
+def test_statemodel_rejects_transition_to_unknown_state():
+    from fastcashflow import State, StateModel, Transition
+    s = State(name="active", transitions=(
+        Transition(rate="mortality", to="GHOST"),
+    ))
+    with pytest.raises(ValueError, match="transition to an unknown state"):
+        StateModel(states=(s,))
+
+
+def test_statemodel_rejects_lump_sum_without_destination():
+    from fastcashflow import State, StateModel, Transition
+    s = State(name="active", transitions=(
+        Transition(rate="mortality", to=None, lump_sum=True),
+    ))
+    with pytest.raises(ValueError, match="lump-sum transition with no destination"):
+        StateModel(states=(s,))
+
+
+def test_statemodel_rejects_seating_index_out_of_range():
+    from fastcashflow import State, StateModel
+    with pytest.raises(ValueError, match="seating index out of range"):
+        StateModel(states=(State(name="active"),), seating=(5,))
