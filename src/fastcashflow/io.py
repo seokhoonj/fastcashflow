@@ -131,6 +131,52 @@ def _sheet_dicts(ws):
         yield {n: v for n, v in zip(names, row) if n}
 
 
+def _require_sheet(wb, sheet_name):
+    """Return ``wb[sheet_name]`` or raise a friendly error.
+
+    Without this wrap a missing required sheet surfaces as a raw openpyxl
+    ``KeyError(sheet_name)`` -- non-obvious to a non-programmer actuary
+    reading the traceback.
+    """
+    if sheet_name not in wb.sheetnames:
+        raise ValueError(
+            f"assumptions workbook is missing required sheet "
+            f"{sheet_name!r}; known sheets: {sorted(wb.sheetnames)}"
+        )
+    return wb[sheet_name]
+
+
+def _require_row_cols(row, required, *, sheet, table_id=None, what="row"):
+    """Raise a friendly error if any required column is missing from ``row``.
+
+    ``row`` is a dict yielded by :func:`_sheet_dicts`. Without this wrap a
+    missing column surfaces as a bare ``KeyError(col)`` deep in the
+    reader -- the user gets a column name but no context.
+    """
+    missing = [c for c in required if c not in row]
+    if not missing:
+        return
+    ctx = f" (table_id={table_id!r})" if table_id is not None else ""
+    raise ValueError(
+        f"sheet {sheet!r}{ctx}: {what} is missing required column(s) "
+        f"{missing}; row has columns {sorted(row)}"
+    )
+
+
+def _truncate_list(items, cap=10):
+    """Format a list capped at ``cap`` items with a ``(... and N more)`` suffix.
+
+    Used for not-found errors that enumerate the registered alternatives --
+    a workbook with 100+ table_ids would otherwise produce an unreadable
+    multi-line traceback.
+    """
+    items = list(items)
+    if len(items) <= cap:
+        return repr(items)
+    extra = len(items) - cap
+    return f"{items[:cap]!r} (... and {extra} more)"
+
+
 # Axes a rate table may carry, in the order they index the internal grid.
 # A sheet may include any subset; missing axes broadcast (the rate is held
 # flat over that axis at lookup time). ``age`` (attained) is mutually
@@ -168,6 +214,17 @@ def _flex_rate_table(ws, *, value_col="rate"):
     if not rows:
         return {}
     header = set(rows[0].keys())
+    if "table_id" not in header:
+        raise ValueError(
+            f"sheet {ws.title!r} is missing required column 'table_id'; "
+            f"row has columns {sorted(header)}"
+        )
+    if value_col not in header:
+        raise ValueError(
+            f"sheet {ws.title!r} is missing required column {value_col!r} "
+            f"(every rate-table row carries the rate in this column); "
+            f"row has columns {sorted(header)}"
+        )
     axes = tuple(a for a in _RATE_AXES if a in header)
     if "age" in axes and ("issue_age" in axes or "duration" in axes):
         raise ValueError(
@@ -178,7 +235,14 @@ def _flex_rate_table(ws, *, value_col="rate"):
     by_id: dict[str, dict[tuple, float]] = {}
     for r in rows:
         tid = str(r["table_id"]).strip()
-        key = tuple(int(r[a]) for a in axes)
+        try:
+            key = tuple(int(r[a]) for a in axes)
+        except KeyError as exc:
+            raise ValueError(
+                f"sheet {ws.title!r} table {tid!r}: row is missing axis "
+                f"column {exc.args[0]!r} (header declares axes {axes!r}, "
+                "so every row must populate them)"
+            ) from None
         bucket = by_id.setdefault(tid, {})
         if key in bucket:
             raise ValueError(
@@ -280,7 +344,14 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseItem, ...]]:
     sheet).
     """
     by_id: dict[str, list[ExpenseItem]] = {}
+    first = True
     for r in _sheet_dicts(ws):
+        if first:
+            _require_row_cols(
+                r, ("table_id", "expense_type", "basis", "value"),
+                sheet=ws.title,
+            )
+            first = False
         tid = str(r["table_id"]).strip()
         by_id.setdefault(tid, []).append(ExpenseItem(
             expense_type=str(r["expense_type"]).strip(),
@@ -307,6 +378,9 @@ def _read_ae_factors(ws):
     if not rows:
         return {}
     header = set(rows[0].keys())
+    _require_row_cols(
+        rows[0], ("product_code", "coverage_code", "factor"), sheet=ws.title,
+    )
     axes = tuple(a for a in _RATE_AXES if a in header)
     if "age" in axes and ("issue_age" in axes or "duration" in axes):
         raise ValueError(
@@ -321,7 +395,13 @@ def _read_ae_factors(ws):
         channel_code = str(ch).strip() if ch not in (None, "") else ""
         coverage_code = str(r["coverage_code"]).strip()
         key = (product_code, channel_code, coverage_code)
-        axes_key = tuple(int(r[a]) for a in axes)
+        try:
+            axes_key = tuple(int(r[a]) for a in axes)
+        except KeyError as exc:
+            raise ValueError(
+                f"sheet {ws.title!r} row for {key!r} is missing axis "
+                f"column {exc.args[0]!r} (header declares axes {axes!r})"
+            ) from None
         by_key.setdefault(key, []).append((axes_key, float(r["factor"])))
     return {
         key: _build_rate_callable(axes, entries, ws.title, "/".join(key))
@@ -404,9 +484,21 @@ def _axis_tables(ws, axis, *, value_col="rate"):
     a probability and a currency amount should not share a column name.
     """
     by_id: dict[str, dict] = {}
+    first = True
     for r in _sheet_dicts(ws):
+        if first:
+            _require_row_cols(
+                r, ("table_id", axis, value_col), sheet=ws.title,
+            )
+            first = False
         tid = str(r["table_id"]).strip()
-        by_id.setdefault(tid, {})[int(r[axis])] = float(r[value_col])
+        try:
+            by_id.setdefault(tid, {})[int(r[axis])] = float(r[value_col])
+        except KeyError as exc:
+            raise ValueError(
+                f"sheet {ws.title!r} table {tid!r}: row is missing "
+                f"column {exc.args[0]!r} (row has columns {sorted(r)})"
+            ) from None
     return {tid: np.asarray([by_k[k] for k in range(len(by_k))], np.float64)
             for tid, by_k in by_id.items()}
 
@@ -471,11 +563,11 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     def optional(sheet, reader):
         return reader(wb[sheet]) if sheet in wb.sheetnames else {}
 
-    mortality_t = _flex_rate_table(wb["mortality_tables"])
+    mortality_t = _flex_rate_table(_require_sheet(wb, "mortality_tables"))
     incidence_rate_t = optional("incidence_rate_tables", _flex_rate_table)
     waiver_t = optional("waiver_tables", _flex_rate_table)
-    lapse_t = _flex_rate_table(wb["lapse_tables"])
-    discount_t = _axis_tables(wb["discount_tables"], "year")
+    lapse_t = _flex_rate_table(_require_sheet(wb, "lapse_tables"))
+    discount_t = _axis_tables(_require_sheet(wb, "discount_tables"), "year")
     inflation_t = optional(
         "inflation_tables", lambda w: _axis_tables(w, "year"),
     )
@@ -496,7 +588,18 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
 
     defaults: dict = {}
     segments: list = []
-    for r in _sheet_dicts(wb["segments"]):
+    seg_rows = list(_sheet_dicts(_require_sheet(wb, "segments")))
+    if seg_rows:
+        header = set(seg_rows[0].keys())
+        for new, legacy in (("product_code", "product"),
+                            ("channel_code", "channel")):
+            if new not in header and legacy in header:
+                raise ValueError(
+                    f"segments sheet has column {legacy!r} but not {new!r} "
+                    f"-- did you mean {new!r}? (the column was renamed; "
+                    "see docs/naming-conventions.md)"
+                )
+    for r in seg_rows:
         if str(r.get("product_code", "") or "").strip().lower() == "defaults":
             defaults = r
         else:
@@ -586,8 +689,10 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
                 raise ValueError(
                     f"coverage {code!r} of product {product_code!r}: "
                     f"rate_table {rate_table!r} is not registered. "
-                    f"incidence_rate_tables has {sorted(incidence_rate_t)}; "
-                    f"mortality_tables has {sorted(mortality_t)}"
+                    f"incidence_rate_tables has "
+                    f"{_truncate_list(sorted(incidence_rate_t))}; "
+                    f"mortality_tables has "
+                    f"{_truncate_list(sorted(mortality_t))}"
                 )
             rate_fn = _with_age_shift(rate_fn, shift)
             rate_fn = _with_ae_factor(rate_fn, ae(code))
@@ -919,11 +1024,20 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     cov = (cov.join(pol.select("mp_id", "_mp"), on="mp_id", how="left")
               .join(cmap, on="coverage_code", how="left"))
     if cov["_mp"].null_count():
-        raise ValueError("a coverage row references an unknown mp_id")
-    if cov["_type"].null_count():
+        bad = sorted({v for v in cov.filter(pl.col("_mp").is_null())
+                                    ["mp_id"].to_list() if v is not None})
         raise ValueError(
-            "a coverage row references a coverage_code not in the "
-            "benefit_patterns taxonomy"
+            f"coverages frame references {len(bad)} unknown mp_id "
+            f"value(s) not present in the policies frame: "
+            f"{_truncate_list(bad)}"
+        )
+    if cov["_type"].null_count():
+        bad = sorted({v for v in cov.filter(pl.col("_type").is_null())
+                                    ["coverage_code"].to_list() if v is not None})
+        raise ValueError(
+            f"coverages frame references {len(bad)} coverage_code "
+            f"value(s) not in the benefit_patterns taxonomy: "
+            f"{_truncate_list(bad)}"
         )
 
     mp = cov["_mp"].to_numpy()
@@ -959,6 +1073,17 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     elif "level_premium" in pol.columns:
         fields["level_premium"] = pol["level_premium"].to_numpy()
     else:
+        # Neither source provided -- premium is silently zero. A genuine
+        # paid-up portfolio is one valid case; a forgotten column is the
+        # other. Warn so the latter doesn't slip through.
+        warnings.warn(
+            "long-form model points have no premium source -- neither "
+            "'premium' on the coverages frame nor 'level_premium' on the "
+            "policies frame was found. level_premium defaults to zero; "
+            "if this portfolio is not fully paid-up, add the column.",
+            UserWarning,
+            stacklevel=3,
+        )
         fields["level_premium"] = np.zeros(n_mp)
 
     # Coverage list: the rate-driven coverages (codes 0..n-1 indexing
@@ -974,10 +1099,10 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         bad = sorted({str(c) for c, ok in zip(
             cov["coverage_code"].to_list(), is_cov & (kind < 0)) if ok})
         raise ValueError(
-            f"rate-driven coverage code(s) {bad} appear in the model-point "
-            "coverages frame but are not registered in the assumptions "
-            "workbook's coverages sheet -- add a row (with a rate_table) "
-            "so the engine has a rate to apply"
+            f"rate-driven coverage code(s) {_truncate_list(bad)} appear in "
+            "the model-point coverages frame but are not registered in the "
+            "assumptions workbook's coverages sheet -- add a row (with a "
+            "rate_table) so the engine has a rate to apply"
         )
     order = np.argsort(mp[is_cov], kind="stable")
     cov_mp = mp[is_cov][order]
