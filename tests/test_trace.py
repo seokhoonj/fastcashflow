@@ -56,13 +56,13 @@ def test_show_trace_renders_all_sections():
 
 
 def test_show_trace_emits_diagnosis_pool_only_when_present():
-    """The "Diagnosis pool frac" node appears for portfolios with a
+    """The "Undiagnosed share" node appears for portfolios with a
     DIAGNOSIS-pattern coverage and is omitted otherwise."""
     # DIAGNOSIS coverage: sample has CANCER on every MP.
     buf = io.StringIO()
     show_trace(0, _portfolio(), _basis(), file=buf)
     text_with = buf.getvalue()
-    assert "Diagnosis pool frac" in text_with
+    assert "Undiagnosed share" in text_with
     assert "'CANCER':" in text_with
 
     # DEATH-only: no DIAGNOSIS, so the node is suppressed.
@@ -80,13 +80,13 @@ def test_show_trace_emits_diagnosis_pool_only_when_present():
     )
     buf = io.StringIO()
     show_trace(0, mp_death, asmp_death, file=buf)
-    assert "Diagnosis pool frac" not in buf.getvalue()
+    assert "Undiagnosed share" not in buf.getvalue()
 
 
-def test_show_trace_diagnosis_pool_frac_matches_hand_calc():
-    """frac depletes by (1 - monthly_q) each month -- a single coverage
-    with a flat annual rate must reproduce the closed-form
-    (1 - monthly_q)**t at every key month the tree prints."""
+def test_show_trace_undiagnosed_matches_hand_calc():
+    """The undiagnosed scalar depletes by (1 - monthly_q) each month --
+    a single coverage with a flat annual rate must reproduce the
+    closed-form (1 - monthly_q)**t at every key month the tree prints."""
     annual_q = 1 - (1 - 0.01) ** 12        # monthly q = 0.01
     cancer_fn = lambda s, a, d: np.full(a.shape, annual_q)
     no_decr = lambda s, a, d: np.full(a.shape, 0.0)
@@ -104,11 +104,11 @@ def test_show_trace_diagnosis_pool_frac_matches_hand_calc():
     show_trace(0, mp, asmp, file=buf)
     text = buf.getvalue()
 
-    # Expected: frac(t) = (1 - 0.01)**t -- closed-form
+    # Expected: undiagnosed(t) = (1 - 0.01)**t -- closed-form
     for t in (0, 12, 60):
         expected = (1.0 - 0.01) ** t
-        assert f"t={t:>4d}m: frac={expected:.6f}" in text, (
-            f"missing or wrong frac at t={t}m"
+        assert f"t={t:>4d}m: undiagnosed={expected:.6f}" in text, (
+            f"missing or wrong undiagnosed at t={t}m"
         )
 
 

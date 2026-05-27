@@ -278,7 +278,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
             wait = coverage_waiting[k]
             red_end = coverage_reduction_end[k]
             red_factor = coverage_reduction_factor[k]
-            frac = 1.0          # fraction of the in-force still undiagnosed
+            undiagnosed = 1.0   # fraction of the in-force still undiagnosed
             d_year = -1
             d_rate = 0.0
             for t in range(term):
@@ -290,9 +290,9 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                 # the not-yet-diagnosed pool depletes either way.
                 if t >= wait:
                     mult = red_factor if t < red_end else 1.0
-                    morbidity_cf[mp, t] += (inforce[mp, t] * frac * d_rate
-                                            * benefit * mult)
-                frac *= (1.0 - d_rate)
+                    morbidity_cf[mp, t] += (inforce[mp, t] * undiagnosed
+                                            * d_rate * benefit * mult)
+                undiagnosed *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
             annuity_cf, disability_cf, maturity_cf)
@@ -491,7 +491,7 @@ def _project_kernel_semi_markov(
             wait = coverage_waiting[k]
             red_end = coverage_reduction_end[k]
             red_factor = coverage_reduction_factor[k]
-            frac = 1.0
+            undiagnosed = 1.0   # fraction of the in-force still undiagnosed
             d_year = -1
             d_rate = 0.0
             for t in range(term):
@@ -501,9 +501,9 @@ def _project_kernel_semi_markov(
                     d_year = year
                 if t >= wait:
                     mult = red_factor if t < red_end else 1.0
-                    morbidity_cf[mp, t] += (inforce[mp, t] * frac
+                    morbidity_cf[mp, t] += (inforce[mp, t] * undiagnosed
                                             * d_rate * benefit * mult)
-                frac *= (1.0 - d_rate)
+                undiagnosed *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
             annuity_cf, disability_cf, maturity_cf)

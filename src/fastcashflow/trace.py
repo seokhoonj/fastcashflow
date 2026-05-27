@@ -295,11 +295,12 @@ def show_trace(
             f"maturity benefit at t={term}m: {float(cf.maturity_cf[0]):,.0f}"
         )
 
-    # ---- Diagnosis pool fraction at key months (only when DIAGNOSIS coverages
-    # exist). `frac` is the kernel's per-coverage "still undiagnosed" scalar
-    # updated each month as ``frac *= (1 - monthly_rate)``. Storing it as a
-    # trajectory here makes the depleting-pool mechanism visible alongside
-    # the in-force trajectory it composes with.
+    # ---- Diagnosis pool undiagnosed share at key months (only when
+    # DIAGNOSIS coverages exist). `undiagnosed` is the kernel's per-coverage
+    # scalar (`# fraction of the in-force still undiagnosed`) updated each
+    # month as ``undiagnosed *= (1 - monthly_rate)``. Storing the trajectory
+    # here makes the depleting-pool mechanism visible alongside the in-force
+    # trajectory it composes with.
     picks = _key_months(term, discount_start.shape[0] - 1)
     diag_pool_lines: list[object] = []
     for r in assumptions.coverages:
@@ -307,10 +308,10 @@ def show_trace(
         is_diag, _ = pattern_attrs(pattern)
         if not is_diag:
             continue
-        # Simulate the kernel's frac update. Annual rate is held flat across
-        # the year so the closed-form within-year ramp is (1 - q_annual)
-        # ** (months_in_year / 12), and full-year multipliers compound at
-        # year boundaries.
+        # Simulate the kernel's `undiagnosed` update. Annual rate is held
+        # flat across the year so the closed-form within-year ramp is
+        # (1 - q_annual) ** (months_in_year / 12), and full-year multipliers
+        # compound at year boundaries.
         traj = np.empty(term + 1, dtype=np.float64)
         traj[0] = 1.0
         running = 1.0
@@ -324,7 +325,7 @@ def show_trace(
                 running *= (1.0 - q_annual) ** (1.0 / 12.0)
                 traj[year_start + m + 1] = running
         cov_pool_lines: list[object] = [
-            f"t={t:>4d}m: frac={traj[t]:.6f}" for t in picks
+            f"t={t:>4d}m: undiagnosed={traj[t]:.6f}" for t in picks
         ]
         diag_pool_lines.append((f"{r.code!r}:", cov_pool_lines))
 
@@ -386,7 +387,7 @@ def show_trace(
     ]
     if diag_pool_lines:
         tree_items.append(
-            ("Diagnosis pool frac (key months, per coverage)",
+            ("Undiagnosed share (key months, per coverage)",
              diag_pool_lines)
         )
     tree_items.extend([

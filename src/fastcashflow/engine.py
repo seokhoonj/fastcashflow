@@ -1125,9 +1125,9 @@ def _codegen_value_kernel_source_semi_markov(
 
     # --- Diagnosis-coverage pass ---------------------------------------
     # Diagnosis coverages run off a depleting not-yet-diagnosed pool.
-    # The pool's depletion (frac) is a scalar that multiplies the saved
-    # cohort-aware in-force trajectory -- mathematically equivalent to
-    # running the state machine with each flow scaled by (1 - d_rate),
+    # The pool's depletion (`undiagnosed`) is a scalar that multiplies the
+    # saved cohort-aware in-force trajectory -- mathematically equivalent
+    # to running the state machine with each flow scaled by (1 - d_rate),
     # but a single scalar loop per coverage rather than a full cohort walk.
     line(8, "for k in range(c_start, c_end):")
     line(12, "cov_idx = coverage_index[k]")
@@ -1137,7 +1137,7 @@ def _codegen_value_kernel_source_semi_markov(
     line(12, "wait = coverage_waiting[k]")
     line(12, "red_end = coverage_reduction_end[k]")
     line(12, "red_factor = coverage_reduction_factor[k]")
-    line(12, "frac = 1.0")
+    line(12, "undiagnosed = 1.0")
     line(12, "d_year = -1")
     line(12, "d_rate = 0.0")
     line(12, "for t in range(term):")
@@ -1147,9 +1147,9 @@ def _codegen_value_kernel_source_semi_markov(
     line(20, "d_year = year")
     line(16, "if t >= wait:")
     line(20, "mult = red_factor if t < red_end else 1.0")
-    line(20, "pv_morbidity += (inforce_traj[t] * frac * d_rate * benefit * mult")
-    line(20, "                 * discount_mid[t])")
-    line(16, "frac *= (1.0 - d_rate)")
+    line(20, "pv_morbidity += (inforce_traj[t] * undiagnosed * d_rate * benefit")
+    line(20, "                 * mult * discount_mid[t])")
+    line(16, "undiagnosed *= (1.0 - d_rate)")
 
     # --- Final output --------------------------------------------------
     line(8, "bel_mp = (pv_mortality + pv_morbidity + pv_disability + pm")
