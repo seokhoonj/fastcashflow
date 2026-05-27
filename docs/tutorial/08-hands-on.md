@@ -122,12 +122,12 @@ assumptions = fcf.Assumptions(
 
 ```python
 model_points = fcf.ModelPoints.single(
-    issue_age=85, benefits={0: 12_000},
+    issue_age=40, benefits={0: 12_000},
     level_premium=100, term_months=2,
 )
 ```
 
-가입연령 85세, 사망보험금 12,000, 월 보험료 100, 보험기간 2개월 —
+가입연령 40세, 사망보험금 12,000, 월 보험료 100, 보험기간 2개월 —
 5~7장의 그 계약입니다. `12_000`의 밑줄은 자릿수를 읽기 쉽게 나눈
 것일 뿐, `12000`과 같습니다. `benefits={0: 12_000}`은 위에서 등록한
 첫 번째(= 0번) 보장 — 곧 `"DEATH"` — 에 12,000을 매단다는 뜻입니다.
@@ -191,7 +191,7 @@ assumptions = fcf.Assumptions(
     coverages        = (fcf.CoverageRate("DEATH", mortality_annual),),
 )
 model_points = fcf.ModelPoints.single(
-    issue_age=85, benefits={0: 12_000},
+    issue_age=40, benefits={0: 12_000},
     level_premium=100, term_months=2,
 )
 m = fcf.measure(model_points, assumptions)
