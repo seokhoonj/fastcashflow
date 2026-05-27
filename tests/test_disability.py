@@ -28,14 +28,12 @@ from fastcashflow import (
 )
 from fastcashflow.statemodel import compile_state_model
 
+from conftest import annual_from_monthly as _annual
+
+
 # Standard-normal 75th percentile -- so the RA check does not lean on the
 # engine's own quantile code.
 Z_75 = 0.6744897501960817
-
-
-def _annual(monthly):
-    """The annual rate whose constant-force monthly equivalent is ``monthly``."""
-    return 1.0 - (1.0 - monthly) ** 12
 
 
 def _disability_model(*, lump_sum=True) -> StateModel:

@@ -25,10 +25,7 @@ from fastcashflow import (
 )
 from fastcashflow.statemodel import compile_state_model
 
-
-def _annual(monthly):
-    """The annual rate whose constant-force monthly equivalent is ``monthly``."""
-    return 1.0 - (1.0 - monthly) ** 12
+from conftest import annual_from_monthly as _annual
 
 
 def _asmp(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Assumptions:

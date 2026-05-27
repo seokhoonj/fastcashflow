@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from numba import cuda
 
+from conftest import annual_from_monthly as _annual
 from fastcashflow import (
     STATE_MODELS,
     Assumptions,
@@ -18,11 +19,6 @@ from fastcashflow import (
     measure,
     value,
 )
-
-
-def _annual(m):
-    """Convert a monthly rate to its annual equivalent (engine converts back)."""
-    return 1.0 - (1.0 - m) ** 12
 
 
 def test_value_matches_measure():

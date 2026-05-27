@@ -8,6 +8,7 @@ result equals revenue less expense -- plus that the whole CSM releases.
 import numpy as np
 import pytest
 
+from conftest import annual_from_monthly as _annual
 from fastcashflow import (
     Assumptions,
     ExpenseItem,
@@ -18,11 +19,6 @@ from fastcashflow import (
     report,
     CoverageRate,
 )
-
-
-def _annual(m):
-    """Convert a flat monthly rate to its annual equivalent."""
-    return 1.0 - (1.0 - m) ** 12
 
 
 def _assumptions() -> Assumptions:
