@@ -55,6 +55,63 @@ def test_show_trace_renders_all_sections():
         assert section in text, f"missing section: {section}"
 
 
+def test_show_trace_emits_diagnosis_pool_only_when_present():
+    """The "Diagnosis pool frac" node appears for portfolios with a
+    DIAGNOSIS-pattern coverage and is omitted otherwise."""
+    # DIAGNOSIS coverage: sample has CANCER on every MP.
+    buf = io.StringIO()
+    show_trace(0, _portfolio(), _basis(), file=buf)
+    text_with = buf.getvalue()
+    assert "Diagnosis pool frac" in text_with
+    assert "'CANCER':" in text_with
+
+    # DEATH-only: no DIAGNOSIS, so the node is suppressed.
+    death_fn = lambda s, a, d: np.full(a.shape, 0.001)
+    mp_death = fcf.ModelPoints.single(
+        issue_age=40, benefits={0: 1_000_000},
+        level_premium=100, term_months=12,
+        benefit_patterns={"DEATH": fcf.BenefitPattern.DEATH},
+    )
+    asmp_death = Assumptions(
+        mortality_annual=death_fn,
+        lapse_annual=lambda s, a, d: np.full(d.shape, 0.0),
+        discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.0,
+        coverages=(fcf.CoverageRate("DEATH", death_fn),),
+    )
+    buf = io.StringIO()
+    show_trace(0, mp_death, asmp_death, file=buf)
+    assert "Diagnosis pool frac" not in buf.getvalue()
+
+
+def test_show_trace_diagnosis_pool_frac_matches_hand_calc():
+    """frac depletes by (1 - monthly_q) each month -- a single coverage
+    with a flat annual rate must reproduce the closed-form
+    (1 - monthly_q)**t at every key month the tree prints."""
+    annual_q = 1 - (1 - 0.01) ** 12        # monthly q = 0.01
+    cancer_fn = lambda s, a, d: np.full(a.shape, annual_q)
+    no_decr = lambda s, a, d: np.full(a.shape, 0.0)
+    asmp = Assumptions(
+        mortality_annual=no_decr, lapse_annual=no_decr,
+        discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.0,
+        coverages=(fcf.CoverageRate("CANCER", cancer_fn),),
+    )
+    mp = fcf.ModelPoints.single(
+        issue_age=40, benefits={0: 1_000_000},
+        level_premium=0, term_months=60,
+        benefit_patterns={"CANCER": fcf.BenefitPattern.DIAGNOSIS},
+    )
+    buf = io.StringIO()
+    show_trace(0, mp, asmp, file=buf)
+    text = buf.getvalue()
+
+    # Expected: frac(t) = (1 - 0.01)**t -- closed-form
+    for t in (0, 12, 60):
+        expected = (1.0 - 0.01) ** t
+        assert f"t={t:>4d}m: frac={expected:.6f}" in text, (
+            f"missing or wrong frac at t={t}m"
+        )
+
+
 def test_show_trace_routes_dict_basis_by_segment():
     """Passing the read_assumptions dict picks the right segment from
     the model point's (product, channel)."""

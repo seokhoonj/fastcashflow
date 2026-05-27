@@ -191,7 +191,7 @@ def show_trace(
         )
     rows = assumptions.expense_items
     if not rows:
-        asmp_lines.append("expense_items         = ()  (no expense)")
+        asmp_lines.append("expense_items        = ()  (no expense)")
     else:
         row_lines: list[object] = [
             (f"ExpenseItem({r.expense_type!r}, basis={r.basis!r}, "
@@ -199,7 +199,7 @@ def show_trace(
             for r in rows
         ]
         asmp_lines.append(
-            (f"expense_items         = tuple  (len={len(rows)})", row_lines)
+            (f"expense_items        = tuple  (len={len(rows)})", row_lines)
         )
     asmp_lines.append(
         f"ra: method={assumptions.ra_method!r}, conf={assumptions.ra_confidence:g}"
@@ -215,9 +215,13 @@ def show_trace(
     for r in assumptions.coverages:
         pattern = bp.get(r.code, BenefitPattern.MORBIDITY)
         is_diag, risk = pattern_attrs(pattern)
+        # Pad each field to the longest possible value so columns line up:
+        # code   -> repr widest sample code in practice (~15 incl. quotes)
+        # pattern -> 9 (longest BenefitPattern member name = MORBIDITY)
+        # is_diagnosis -> 5 (longest str(bool) = "False")
         cov_lines.append(
-            f"{r.code!r:14} pattern={str(pattern)}  risk={risk}  "
-            f"is_diagnosis={is_diag}  rate -> {_fmt_callable(r.rate)}"
+            f"{r.code!r:<16}  pattern={str(pattern):<9}  risk={risk}  "
+            f"is_diagnosis={str(is_diag):<5}  rate -> {_fmt_callable(r.rate)}"
         )
     if not cov_lines:
         cov_lines.append("(none -- main-coverage death only)")
@@ -291,8 +295,39 @@ def show_trace(
             f"maturity benefit at t={term}m: {float(cf.maturity_cf[0]):,.0f}"
         )
 
-    # ---- Discount factors at key months
+    # ---- Diagnosis pool fraction at key months (only when DIAGNOSIS coverages
+    # exist). `frac` is the kernel's per-coverage "still undiagnosed" scalar
+    # updated each month as ``frac *= (1 - monthly_rate)``. Storing it as a
+    # trajectory here makes the depleting-pool mechanism visible alongside
+    # the in-force trajectory it composes with.
     picks = _key_months(term, discount_start.shape[0] - 1)
+    diag_pool_lines: list[object] = []
+    for r in assumptions.coverages:
+        pattern = bp.get(r.code, BenefitPattern.MORBIDITY)
+        is_diag, _ = pattern_attrs(pattern)
+        if not is_diag:
+            continue
+        # Simulate the kernel's frac update. Annual rate is held flat across
+        # the year so the closed-form within-year ramp is (1 - q_annual)
+        # ** (months_in_year / 12), and full-year multipliers compound at
+        # year boundaries.
+        traj = np.empty(term + 1, dtype=np.float64)
+        traj[0] = 1.0
+        running = 1.0
+        for y in range(n_years):
+            q_annual = _eval_rate(
+                r.rate, sex_v, age, y, issue_class_v, elapsed_v,
+            )
+            months_in_year = min(12, term - y * 12)
+            year_start = y * 12
+            for m in range(months_in_year):
+                running *= (1.0 - q_annual) ** (1.0 / 12.0)
+                traj[year_start + m + 1] = running
+        cov_pool_lines: list[object] = [
+            f"t={t:>4d}m: frac={traj[t]:.6f}" for t in picks
+        ]
+        diag_pool_lines.append((f"{r.code!r}:", cov_pool_lines))
+
     disc_lines: list[object] = [
         f"t={t:>4d}m: ds={discount_start[t]:.6f}" for t in picks
     ]
@@ -301,8 +336,10 @@ def show_trace(
     bel_lines: list[object] = [
         "BEL[t] = annuity[t] - premium[t] + (claim+morbidity+disability+"
         "expense+surrender)[t] * (1+i)^(-1/2) + BEL[t+1] * (1+i)^(-1)",
-        f"BEL[{term:>4d}] = maturity = {float(cf.maturity_cf[0]):>15,.2f} "
-        "(seed -- a single payment at term)",
+        # Keep the value column aligned with the rows below by putting the
+        # "maturity seed" annotation after the number, not in the middle.
+        f"BEL[{term:>4d}] = {float(cf.maturity_cf[0]):>15,.2f}  "
+        "(maturity seed -- a single payment at term)",
     ]
     for t in reversed(picks):
         if t == term:
@@ -346,11 +383,18 @@ def show_trace(
          cov_lines),
         ("Rates (annual, evaluated for this MP)", rate_lines),
         (f"Cash flows (annual sum over {cf.n_time}m horizon)", cf_lines),
+    ]
+    if diag_pool_lines:
+        tree_items.append(
+            ("Diagnosis pool frac (key months, per coverage)",
+             diag_pool_lines)
+        )
+    tree_items.extend([
         ("Discount factors (key months)", disc_lines),
         ("BEL roll-forward (key months)", bel_lines),
         ("CSM roll-forward (key months)", csm_lines),
         ("Final (headline numbers, per policy)", final_lines),
-    ]
+    ])
     _emit_tree(tree_items, out, "")
     file.write("\n".join(out) + "\n")
 
