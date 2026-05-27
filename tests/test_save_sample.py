@@ -54,3 +54,60 @@ def test_save_sample_policies_returns_destination_path(tmp_path):
     assert isinstance(path, Path)
     assert path == tmp_path / "mp.csv"
     assert path.read_text(encoding="utf-8").splitlines()[0].startswith("mp_id")
+
+
+def test_save_sample_converts_to_parquet(tmp_path):
+    """A non-csv extension routes through polars and converts the format,
+    preserving row count and column order."""
+    csv_path = fcf.save_sample_policies(tmp_path / "policies.csv")
+    parq_path = fcf.save_sample_policies(tmp_path / "policies.parquet")
+
+    import polars as pl
+    csv_df = pl.read_csv(csv_path)
+    parq_df = pl.read_parquet(parq_path)
+    assert csv_df.shape == parq_df.shape
+    assert csv_df.columns == parq_df.columns
+
+
+def test_save_sample_converts_to_feather(tmp_path):
+    """.feather / .arrow extension also routes through polars."""
+    path = fcf.save_sample_coverages(tmp_path / "coverages.feather")
+    assert path.exists()
+    import polars as pl
+    df = pl.read_ipc(path)
+    assert "mp_id" in df.columns
+    assert "coverage_code" in df.columns
+
+
+def test_save_sample_converts_to_xlsx_single_sheet(tmp_path):
+    """The three single-table sample files can land as .xlsx and round-trip
+    through read_model_points just like their .csv source."""
+    fcf.save_sample_assumptions(tmp_path / "assumptions.xlsx")
+    fcf.save_sample_policies(tmp_path / "policies.xlsx")
+    fcf.save_sample_coverages(tmp_path / "coverages.xlsx")
+    fcf.save_sample_benefit_patterns(tmp_path / "benefit_patterns.xlsx")
+
+    basis = fcf.read_assumptions(tmp_path / "assumptions.xlsx")
+    mp = fcf.read_model_points(
+        tmp_path / "policies.xlsx",
+        basis[("TERM_LIFE_A", "GA")],
+        coverages=tmp_path / "coverages.xlsx",
+        benefit_patterns=tmp_path / "benefit_patterns.xlsx",
+    )
+    assert mp.n_mp == fcf.load_sample_model_points().n_mp
+
+
+def test_save_sample_rejects_unsupported_extension(tmp_path):
+    """A path the writer cannot route (no recognised extension) errors
+    clearly instead of writing a silently empty file."""
+    import pytest
+    with pytest.raises(ValueError, match="unsupported file type"):
+        fcf.save_sample_benefit_patterns(tmp_path / "bp.json")
+
+
+def test_save_sample_assumptions_rejects_non_xlsx(tmp_path):
+    """The assumptions workbook is multi-sheet -- single-table formats
+    cannot represent it. A non-.xlsx path errors clearly."""
+    import pytest
+    with pytest.raises(ValueError, match="expected an .xlsx path"):
+        fcf.save_sample_assumptions(tmp_path / "assumptions.csv")

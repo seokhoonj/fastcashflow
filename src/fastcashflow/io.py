@@ -87,10 +87,21 @@ def _write_frame(df: pl.DataFrame, path) -> None:
         df.write_csv(p)
     elif p.endswith((".feather", ".arrow")):
         df.write_ipc(p)
+    elif p.endswith(".xlsx"):
+        # Single-sheet xlsx via openpyxl (polars's own write_excel needs an
+        # extra ``xlsxwriter`` dependency we do not require). The reader
+        # side already accepts .xlsx via ``_read_frame``.
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(list(df.columns))
+        for row in df.iter_rows():
+            ws.append(list(row))
+        wb.save(p)
     else:
         raise ValueError(
             f"unsupported file type: {path!r} "
-            "(expected .parquet, .csv or .feather)"
+            "(expected .parquet, .csv, .xlsx or .feather)"
         )
 
 
@@ -1277,18 +1288,28 @@ def load_sample_inforce_state() -> "InforceState":
         return read_inforce_state(path)
 
 
-def _copy_sample_file(filename: str, dest: Path | str) -> Path:
-    """Copy a packaged sample file to ``dest``. ``dest`` may be a file path
-    (used as-is) or a directory (file lands inside it with its original
-    name)."""
-    import shutil
+def _drop_sample_table(filename: str, dest: Path | str) -> Path:
+    """Drop a packaged single-table sample file at ``dest``, converting to
+    whatever format ``dest`` 's extension picks (``.csv`` / ``.parquet`` /
+    ``.feather`` / ``.arrow``).
+
+    ``dest`` may be a file path (used as-is) or a directory (file lands
+    inside with its original ``sample_*.csv`` name)."""
     src = resources.files("fastcashflow") / "sample_data" / filename
+    dest_path = Path(dest)
+    if dest_path.is_dir():
+        dest_path = dest_path / filename
     with resources.as_file(src) as src_path:
-        dest_path = Path(dest)
-        if dest_path.is_dir():
-            dest_path = dest_path / filename
-        shutil.copy2(src_path, dest_path)
-        return dest_path
+        if dest_path.suffix == src_path.suffix:
+            # Same format as the source -- a byte-for-byte copy preserves
+            # any formatting the workbook editor cared about.
+            import shutil
+            shutil.copy2(src_path, dest_path)
+        else:
+            # Different format -- read the source as a polars frame and
+            # let _write_frame route to the right writer by extension.
+            _write_frame(_read_frame(src_path), dest_path)
+    return dest_path
 
 
 def save_sample_assumptions(path: Path | str) -> Path:
@@ -1300,37 +1321,75 @@ def save_sample_assumptions(path: Path | str) -> Path:
     seven (product, channel) segments across three products
     (``TERM_LIFE_A``, ``HEALTH_A``, ``WHOLE_LIFE_A``).
 
+    Supported extension: ``.xlsx`` (the workbook carries multiple sheets,
+    so single-table formats like CSV are not appropriate here).
+
     ``path`` may be a file (the workbook lands there) or a directory (the
     workbook lands inside with its original ``sample_assumptions.xlsx``
     name). Returns the resolved destination path.
     """
-    return _copy_sample_file("sample_assumptions.xlsx", path)
+    import shutil
+    src = (resources.files("fastcashflow")
+           / "sample_data" / "sample_assumptions.xlsx")
+    dest_path = Path(path)
+    if dest_path.is_dir():
+        dest_path = dest_path / "sample_assumptions.xlsx"
+    if dest_path.suffix.lower() != ".xlsx":
+        raise ValueError(
+            f"save_sample_assumptions: expected an .xlsx path, got "
+            f"{str(path)!r}. The assumptions workbook carries multiple "
+            "sheets (mortality_tables, lapse_tables, segments, ...) and "
+            "single-table formats (csv / parquet / feather) cannot "
+            "represent it. Use .xlsx."
+        )
+    with resources.as_file(src) as src_path:
+        shutil.copy2(src_path, dest_path)
+    return dest_path
 
 
 def save_sample_policies(path: Path | str) -> Path:
-    """Drop the packaged sample policies CSV on disk at ``path``.
+    """Drop the packaged sample policies file on disk at ``path``.
 
     The companion to :func:`save_sample_coverages` and
     :func:`save_sample_benefit_patterns`. Use the three together with
     :func:`read_model_points` for a copy-paste workflow that mirrors how
-    you would read your own files."""
-    return _copy_sample_file("sample_policies.csv", path)
+    you would read your own files.
+
+    Supported extensions: ``.csv``, ``.xlsx``, ``.parquet``, ``.feather``
+    / ``.arrow``. The conversion runs through polars when the requested
+    extension differs from the packaged ``.csv`` source. ``.xlsx`` is
+    capped at 1,048,576 rows per sheet -- for production-scale
+    portfolios use ``.parquet`` or ``.feather``.
+    """
+    return _drop_sample_table("sample_policies.csv", path)
 
 
 def save_sample_coverages(path: Path | str) -> Path:
-    """Drop the packaged sample coverages CSV on disk at ``path``.
+    """Drop the packaged sample coverages file on disk at ``path``.
 
     Long-form coverage entries -- one row per (model point, coverage_code)
-    -- the companion to :func:`save_sample_policies`."""
-    return _copy_sample_file("sample_coverages.csv", path)
+    -- the companion to :func:`save_sample_policies`. A long-form
+    portfolio has roughly ``n_mp x avg_coverages_per_mp`` rows here, so
+    this is the file most likely to exceed the 1,048,576 row cap of
+    ``.xlsx``.
+
+    Supported extensions: ``.csv``, ``.xlsx``, ``.parquet``, ``.feather``
+    / ``.arrow``. ``.parquet`` or ``.feather`` for production scale.
+    """
+    return _drop_sample_table("sample_coverages.csv", path)
 
 
 def save_sample_benefit_patterns(path: Path | str) -> Path:
     """Drop the packaged sample benefit-pattern catalogue on disk at ``path``.
 
     The company catalogue file -- one row per ``coverage_code`` mapping
-    it to its :class:`BenefitPattern`."""
-    return _copy_sample_file("sample_benefit_patterns.csv", path)
+    it to its :class:`BenefitPattern`. Tens-to-hundreds of rows in
+    practice; ``.xlsx`` row cap never binds.
+
+    Supported extensions: ``.csv``, ``.xlsx``, ``.parquet``, ``.feather``
+    / ``.arrow``.
+    """
+    return _drop_sample_table("sample_benefit_patterns.csv", path)
 
 
 # ---------------------------------------------------------------------------

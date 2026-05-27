@@ -193,10 +193,11 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 현재 폴더에 떨어뜨림 (한 번만 — 이미 자기 파일이 있으면 생략)
-fcf.save_sample_assumptions("assumptions.xlsx")
-fcf.save_sample_policies("policies.csv")
-fcf.save_sample_coverages("coverages.csv")
-fcf.save_sample_benefit_patterns("benefit_patterns.csv")
+fcf.save_sample_assumptions("assumptions.xlsx")             # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_policies("policies.csv")                    # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_coverages("coverages.csv")                  # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_benefit_patterns("benefit_patterns.csv")    # .csv / .xlsx / .parquet / .feather
+# .xlsx 는 시트당 ~ 1M row 한계 -- 대형 portfolio 는 .parquet / .feather 권장
 
 # (2) 읽어서 평가하고 결과 저장
 basis        = fcf.read_assumptions("assumptions.xlsx")     # {(product_code, channel_code): Assumptions}
