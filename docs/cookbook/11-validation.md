@@ -76,7 +76,7 @@ backward / forward recursion 을 거쳐 BEL / RA / CSM 하나의 숫자로
 
 ## 11.3 최소 작동 예제 — show_trace 부터
 
-샘플 워크북의 첫 계약 (TERM_LIFE / FC 채널, 가입연령 35, 보험기간 20년)
+샘플 워크북의 첫 계약 (TERM_LIFE_A / FC 채널, 가입연령 35, 보험기간 20년)
 을 추적합니다.
 
 ```python
@@ -96,7 +96,7 @@ dict 일 때 — `read_assumptions()` / `load_sample_assumptions()` 가
 출력 (발췌):
 
 ```
-mp[0]  (TERM_LIFE/FC, sex=남, issue_age=35, term=240m, premium_term=240m, count=1)
+mp[0]  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m, premium_term=240m, count=1)
 ├─ Assumptions (segment-level)
 │   ├─ mortality_annual     -> MORTALITY_STD
 │   ├─ lapse_annual         -> LAPSE_FC
@@ -349,7 +349,7 @@ from dataclasses import replace
 
 mp = fcf.load_sample_model_points()
 basis = fcf.load_sample_assumptions()
-baseline = basis[('TERM_LIFE', 'FC')]
+baseline = basis[('TERM_LIFE_A', 'FC')]
 
 # mortality x 1.10 shock — rate 함수를 wrap
 def shock(rate_fn, factor):

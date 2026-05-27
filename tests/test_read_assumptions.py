@@ -17,16 +17,16 @@ def test_segments_resolve():
     basis = load_sample_assumptions()
     # The sample carries three products on FC/GA (HEALTH also adds TM).
     assert set(basis) >= {
-        ("TERM_LIFE", "FC"), ("TERM_LIFE", "GA"),
-        ("HEALTH", "FC"), ("HEALTH", "GA"), ("HEALTH", "TM"),
-        ("WHOLE_LIFE", "FC"), ("WHOLE_LIFE", "GA"),
+        ("TERM_LIFE_A", "FC"), ("TERM_LIFE_A", "GA"),
+        ("HEALTH_A", "FC"), ("HEALTH_A", "GA"), ("HEALTH_A", "TM"),
+        ("WHOLE_LIFE_A", "FC"), ("WHOLE_LIFE_A", "GA"),
     }
 
 
 def test_defaults_inherited():
     """Blank cells in a segment row inherit from the ``defaults`` row."""
     basis = load_sample_assumptions()
-    ga, fc = basis[("TERM_LIFE", "GA")], basis[("TERM_LIFE", "FC")]
+    ga, fc = basis[("TERM_LIFE_A", "GA")], basis[("TERM_LIFE_A", "FC")]
     # ra_confidence / mortality_cv / morbidity_cv live only on the defaults row
     assert ga.ra_confidence == 0.75 and fc.ra_confidence == 0.75
     assert ga.mortality_cv == 0.10 and fc.mortality_cv == 0.10
@@ -50,8 +50,8 @@ def test_channel_segmented_lapse():
     basis = load_sample_assumptions()
     dur = np.arange(6)
     zero = np.zeros_like(dur)
-    ga_lapse = basis[("TERM_LIFE", "GA")].lapse_annual(zero, zero, dur, zero, zero)
-    fc_lapse = basis[("TERM_LIFE", "FC")].lapse_annual(zero, zero, dur, zero, zero)
+    ga_lapse = basis[("TERM_LIFE_A", "GA")].lapse_annual(zero, zero, dur, zero, zero)
+    fc_lapse = basis[("TERM_LIFE_A", "FC")].lapse_annual(zero, zero, dur, zero, zero)
     assert np.all(ga_lapse > fc_lapse)
 
 
@@ -61,13 +61,13 @@ def test_per_segment_acquisition_amount():
     ``expense_tables`` sheet."""
     basis = load_sample_assumptions()
     for (key, expected_acq) in (
-        (("TERM_LIFE", "GA"), 150_000.0),
-        (("TERM_LIFE", "FC"),  80_000.0),
-        (("HEALTH",    "FC"), 100_000.0),
-        (("HEALTH",    "GA"), 180_000.0),
-        (("HEALTH",    "TM"),  40_000.0),
-        (("WHOLE_LIFE","FC"), 200_000.0),
-        (("WHOLE_LIFE","GA"), 350_000.0),
+        (("TERM_LIFE_A", "GA"), 150_000.0),
+        (("TERM_LIFE_A", "FC"),  80_000.0),
+        (("HEALTH_A",    "FC"), 100_000.0),
+        (("HEALTH_A",    "GA"), 180_000.0),
+        (("HEALTH_A",    "TM"),  40_000.0),
+        (("WHOLE_LIFE_A","FC"), 200_000.0),
+        (("WHOLE_LIFE_A","GA"), 350_000.0),
     ):
         rows = basis[key].expense_items
         acq = [r for r in rows if r.basis == "alpha_fixed"]
@@ -94,15 +94,16 @@ def test_coverages_resolved():
     from fastcashflow import load_sample_benefit_patterns, BenefitPattern
 
     basis = load_sample_assumptions()
-    asmp = basis[("TERM_LIFE", "GA")]
+    asmp = basis[("TERM_LIFE_A", "GA")]
     assert [r.code for r in asmp.coverages] == [
-        "DEATH_GENERAL", "INPATIENT", "CANCER", "ADB"
+        "DEATH", "INPATIENT", "CANCER", "ADB", "DISEASE_DEATH",
     ]
     assert load_sample_benefit_patterns() == {
-        "DEATH_GENERAL": BenefitPattern.DEATH,
+        "DEATH":         BenefitPattern.DEATH,
         "INPATIENT":     BenefitPattern.MORBIDITY,
         "CANCER":        BenefitPattern.DIAGNOSIS,
         "ADB":           BenefitPattern.DEATH,
+        "DISEASE_DEATH": BenefitPattern.DEATH,
         "ANNUITY":       BenefitPattern.ANNUITY,
         "MATURITY":      BenefitPattern.MATURITY,
     }
@@ -123,9 +124,9 @@ def test_resolved_basis_values():
     # does. With surrender disabled the two paths agree to machine precision.
     import dataclasses
     asmp_ga_no_surr = dataclasses.replace(
-        basis[("TERM_LIFE", "GA")], surrender_value_curve=None)
+        basis[("TERM_LIFE_A", "GA")], surrender_value_curve=None)
     asmp_fc_no_surr = dataclasses.replace(
-        basis[("TERM_LIFE", "FC")], surrender_value_curve=None)
+        basis[("TERM_LIFE_A", "FC")], surrender_value_curve=None)
     ga = value(mp, asmp_ga_no_surr).bel[0]
     fc = value(mp, asmp_fc_no_surr).bel[0]
     assert np.isfinite(ga) and np.isfinite(fc)

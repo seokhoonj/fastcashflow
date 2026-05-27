@@ -106,20 +106,20 @@
 
 | mp_id | product | issue_age | sex | term_months | count |
 |---|---|---|---|---|---|
-| P001 | TERM_LIFE | 35 | 0 | 240 | 1 |
-| P002 | HEALTH | 38 | 1 | 240 | 1 |
+| P001 | TERM_LIFE_A | 35 | 0 | 240 | 1 |
+| P002 | HEALTH_A | 38 | 1 | 240 | 1 |
 
 담보 파일:
 
 | mp_id | coverage_code | amount | premium |
 |---|---|---|---|
-| P001 | DEATH_GENERAL | 80000000 | 45000 |
+| P001 | DEATH | 80000000 | 45000 |
 | P001 | MATURITY | 10000000 | 18000 |
-| P002 | DEATH_GENERAL | 50000000 | 28000 |
+| P002 | DEATH | 50000000 | 28000 |
 | P002 | CANCER | 30000000 | 22000 |
 | P002 | INPATIENT | 1000000 | 9000 |
 
-P001은 담보 파일에 두 줄 — 주계약 사망(`DEATH_GENERAL`)과 생존특약(`MATURITY`).
+P001은 담보 파일에 두 줄 — 주계약 사망(`DEATH`)과 생존특약(`MATURITY`).
 P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅니다.
 
 담보에 면책기간이나 감액기간이 있으면 담보 파일에 `waiting`(면책 개월
@@ -166,7 +166,7 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 
 | product | coverage_code | coverage_name | benefit_pattern |
 |---|---|---|---|
-| - | DEATH_GENERAL | 일반사망 | DEATH |
+| - | DEATH | 일반사망 | DEATH |
 | - | CANCER | 암진단특약 | DIAGNOSIS |
 | - | INPATIENT | 입원특약 | MORBIDITY |
 
@@ -191,7 +191,7 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 import fastcashflow as fcf
 
 basis        = fcf.read_assumptions("assumptions.xlsx")    # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_LIFE", "GA")]                     # 한 세그먼트 선택
+assumptions  = basis[("TERM_LIFE_A", "GA")]                     # 한 세그먼트 선택
 model_points = fcf.read_model_points("policies.csv", assumptions, coverages="coverages.csv")
 val          = fcf.value(model_points, assumptions)
 fcf.write_valuation(val, "results.csv")

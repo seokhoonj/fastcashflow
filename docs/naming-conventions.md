@@ -53,10 +53,10 @@
 
 | 컬럼 | 규칙 | 예 | 이유 |
 |---|---|---|---|
-| `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE`, `VAR_UL` | enum-like 외부 식별자 |
+| `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE_A`, `VAR_UL` | enum-like 외부 식별자 |
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `TM` | 업계 관용 약어 (General Agency, Financial Consultant, Telemarketing) |
 | `table_id` | SCREAMING_SNAKE_CASE 풀네임 | `MORTALITY_STD`, `LAPSE_GA`, `DISCOUNT_STD`, `INPATIENT_STD`, `ADB_STD` | named reference. 줄임말 안 씀 (`MORT_STD` 같은 abbreviation 지양). 단 industry-universal abbr 인 `ADB` 같은 매우 짧은 것은 예외 |
-| `coverage_code` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH_GENERAL`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자. 사용자 카탈로그 — 엔진 reserved 코드 없음 |
+| `coverage_code` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자. 사용자 카탈로그 — 엔진 reserved 코드 없음 |
 | `benefit_pattern` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | **engine 의 cash flow 계산 방식 routing key**. 5 개 고정. 자세한 각 패턴별 계산은 `assumptions-format.md` 의 coverages 시트 섹션 참조 |
 | `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAID_UP` | enum-like, 정책 status |
 | `defaults` (특수 product 값) | 소문자 단어 | `defaults` | segments 시트의 fallback 행 marker (값 아닌 keyword) |
@@ -73,11 +73,11 @@
 
 ## 데이터 ID와 Python 코드 enum 의 일관성
 
-워크북 값 (예: `coverage_code = "DEATH_GENERAL"`, `benefit_pattern = "MORBIDITY"`) 이
+워크북 값 (예: `coverage_code = "DEATH"`, `benefit_pattern = "MORBIDITY"`) 이
 Python 상수 / enum (예: `BenefitPattern.MORBIDITY == "MORBIDITY"`)
 과 **bit-exact** 일치합니다. 모두 SCREAMING_SNAKE_CASE 풀네임.
 `coverage_code` 는 사용자 카탈로그 — 엔진이 reserved 코드를 가지고
-있지 않으므로 회사가 자유롭게 짓습니다 (`DEATH_GENERAL` 은 샘플 관용).
+있지 않으므로 회사가 자유롭게 짓습니다 (`DEATH` 은 샘플 관용).
 
 `enum-like 식별자 family`:
 

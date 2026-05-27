@@ -199,7 +199,7 @@ fastcashflow에 들어 있는 **샘플 데이터**를 쓰면 됩니다.
 ```python
 model_points = fcf.load_sample_model_points()
 basis        = fcf.load_sample_assumptions()       # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_LIFE", "GA")]             # 한 세그먼트 선택
+assumptions  = basis[("TERM_LIFE_A", "GA")]             # 한 세그먼트 선택
 val          = fcf.value(model_points, assumptions)
 
 print(val.bel)
@@ -209,7 +209,7 @@ print(val.csm)
 `load_sample_model_points()`는 패키지에 든 작은 포트폴리오(계약 8건,
 정기보험과 건강보험)를, `load_sample_assumptions()`는 그에 맞는 가정을
 `{(product, channel): Assumptions}` 딕셔너리로 돌려줍니다. 샘플은
-`TERM_LIFE` 상품의 GA / FC 두 세그먼트를 담고 있어, 한 줄로 한 세그먼트를
+`TERM_LIFE_A` 상품의 GA / FC 두 세그먼트를 담고 있어, 한 줄로 한 세그먼트를
 골라 `value()`에 넘깁니다. 계약마다 주계약 사망에 더해 진단·입원·재해사망·
 연금·생존 같은 특약이 붙어 있습니다. 파일을 따로 준비할 필요가 없죠.
 `value()`의 결과는 모델포인트 순서대로 늘어선 배열이라, 8건이면 길이 8입니다.

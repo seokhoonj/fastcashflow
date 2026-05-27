@@ -193,7 +193,7 @@ def test_value_segmented_with_sample_basis():
         level_premium=np.array([50_000.0, 60_000.0, 55_000.0]),
         term_months=np.array([120, 120, 120]),
         benefits={0: np.array([100_000_000.0, 80_000_000.0, 90_000_000.0])},
-        product_code=np.array(["TERM_LIFE", "TERM_LIFE", "TERM_LIFE"]),
+        product_code=np.array(["TERM_LIFE_A", "TERM_LIFE_A", "TERM_LIFE_A"]),
         channel_code=np.array(["GA", "FC", "GA"]),
         benefit_patterns=load_sample_benefit_patterns(),
     )
@@ -201,7 +201,7 @@ def test_value_segmented_with_sample_basis():
     assert val.bel.shape == (3,)
     # GA segment has worse persistency than FC (different LAPSE table) ->
     # the two GA mps should not match the FC mp's pattern.
-    expected_ga = value(mp.subset([0, 2]), basis[("TERM_LIFE", "GA")])
-    expected_fc = value(mp.subset([1]), basis[("TERM_LIFE", "FC")])
+    expected_ga = value(mp.subset([0, 2]), basis[("TERM_LIFE_A", "GA")])
+    expected_fc = value(mp.subset([1]), basis[("TERM_LIFE_A", "FC")])
     assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
     assert np.allclose(val.bel[1], expected_fc.bel[0])

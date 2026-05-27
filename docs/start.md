@@ -22,7 +22,7 @@ git+https://github.com/seokhoonj/fastcashflow.git` 로 설치합니다.
 import fastcashflow as fcf
 
 basis        = fcf.load_sample_assumptions()       # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_LIFE", "GA")]             # 한 세그먼트 선택
+assumptions  = basis[("TERM_LIFE_A", "GA")]             # 한 세그먼트 선택
 model_points = fcf.load_sample_model_points()
 
 m = fcf.measure(model_points, assumptions)

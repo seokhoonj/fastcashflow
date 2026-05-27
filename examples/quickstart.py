@@ -18,7 +18,7 @@ def main() -> None:
     # The sample workbook now carries several (product, channel) segments;
     # pick TERM_LIFE / FC for this single-segment quickstart. A real run
     # over a multi-segment portfolio would use fcf.value_segmented.
-    assumptions = basis[("TERM_LIFE", "FC")]
+    assumptions = basis[("TERM_LIFE_A", "FC")]
     model_points = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions, benefit_patterns=DATA / "benefit_patterns.csv")
 
     m = fcf.measure(model_points, assumptions)

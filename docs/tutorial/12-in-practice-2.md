@@ -21,7 +21,7 @@ import fastcashflow as fcf
 
 model_points = fcf.load_sample_model_points()              # 패키지 샘플 포트폴리오
 basis        = fcf.load_sample_assumptions()               # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_LIFE", "GA")]                     # 한 세그먼트 선택
+assumptions  = basis[("TERM_LIFE_A", "GA")]                     # 한 세그먼트 선택
 m            = fcf.measure(model_points, assumptions)
 ```
 

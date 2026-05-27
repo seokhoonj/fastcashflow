@@ -1,7 +1,8 @@
 coverage_code,coverage_name,benefit_pattern
-DEATH_GENERAL,general (all-cause) death,DEATH
+DEATH,general (all-cause) death,DEATH
 INPATIENT,hospitalization rider,MORBIDITY
 CANCER,cancer diagnosis rider,DIAGNOSIS
 ADB,accidental death rider,DEATH
+DISEASE_DEATH,disease death rider (질병사망),DEATH
 ANNUITY,annuity rider,ANNUITY
 MATURITY,survival benefit rider,MATURITY
