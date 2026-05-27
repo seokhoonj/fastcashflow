@@ -39,7 +39,7 @@ def _portfolio(n: int = 300) -> ModelPoints:
 def _priced(mps: ModelPoints, premium) -> ModelPoints:
     return ModelPoints(
         issue_age=mps.issue_age,
-        coverage_kind=mps.coverage_kind,
+        coverage_index=mps.coverage_index,
         coverage_amount=mps.coverage_amount,
         coverage_offset=mps.coverage_offset,
         level_premium=premium,

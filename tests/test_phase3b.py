@@ -31,10 +31,10 @@ def _portfolio(n: int = 400) -> ModelPoints:
 def _death_benefits(mps: ModelPoints) -> np.ndarray:
     """Reconstruct the per-policy death benefit from the CSR -- the
     post-(B) replacement for the previous ``ModelPoints.death_benefit``
-    field. Sums every coverage_amount whose coverage_kind is 0 (the
+    field. Sums every coverage_amount whose coverage_index is 0 (the
     DEATH coverage in these tests)."""
     mp_of_cov = np.repeat(np.arange(mps.n_mp), np.diff(mps.coverage_offset))
-    mask = mps.coverage_kind == 0
+    mask = mps.coverage_index == 0
     return np.bincount(mp_of_cov[mask], weights=mps.coverage_amount[mask],
                        minlength=mps.n_mp)
 

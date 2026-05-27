@@ -118,7 +118,7 @@ def coverage_rates(rate_fns, sex_grid, issue_age_grid,
 
     When ``rate_fns`` is empty the result is an array of shape
     ``(0,) + sex_grid.shape`` -- a zero-claim portfolio; kernel loops over
-    ``coverage_kind`` are empty for every MP so the leading-axis-zero array
+    ``coverage_index`` are empty for every MP so the leading-axis-zero array
     is never indexed.
     """
     if not rate_fns:
@@ -192,13 +192,13 @@ def coverage_arrays(coverages, benefit_patterns=None):
     return cov_is_diagnosis, cov_risk
 
 
-def validate_csr_codes(coverage_kind, n_coverages, *,
+def validate_csr_codes(coverage_index, n_coverages, *,
                        coverages=None, benefit_patterns=None):
-    """Check that every ``coverage_kind`` value indexes into the coverage list.
+    """Check that every ``coverage_index`` value indexes into the coverage list.
 
-    The CSR's ``coverage_kind`` is an integer index into
+    The CSR's ``coverage_index`` is an integer index into
     :attr:`Assumptions.coverages`; the kernel reads
-    ``cov_rates[coverage_kind[k], ...]`` directly. An out-of-range index
+    ``cov_rates[coverage_index[k], ...]`` directly. An out-of-range index
     would read past the rate-grid into adjacent contiguous memory, producing
     a silently wrong BEL rather than an :class:`IndexError`. This validator
     catches the mistake at engine entry with a clear message naming the
@@ -213,19 +213,19 @@ def validate_csr_codes(coverage_kind, n_coverages, *,
 
     Empty coverage lists are allowed when no CSR row references them.
     """
-    if coverage_kind.size == 0:
+    if coverage_index.size == 0:
         return
-    max_kind = int(coverage_kind.max())
-    min_kind = int(coverage_kind.min())
-    if min_kind < 0 or max_kind >= n_coverages:
-        bad = sorted({int(k) for k in coverage_kind
+    max_cov_idx = int(coverage_index.max())
+    min_cov_idx = int(coverage_index.min())
+    if min_cov_idx < 0 or max_cov_idx >= n_coverages:
+        bad = sorted({int(k) for k in coverage_index
                       if k < 0 or k >= n_coverages})
         raise ValueError(
-            f"coverage_kind value(s) {bad} are out of range: assumptions.coverages "
+            f"coverage_index value(s) {bad} are out of range: assumptions.coverages "
             f"has {n_coverages} entr{'y' if n_coverages == 1 else 'ies'} "
-            f"(valid kind range: 0..{max(n_coverages - 1, 0)}). Either "
+            f"(valid coverage_index range: 0..{max(n_coverages - 1, 0)}). Either "
             "register the missing coverage on Assumptions.coverages or "
-            "rebuild ModelPoints.benefits with a kind that maps to a "
+            "rebuild ModelPoints.benefits with a coverage_index that maps to a "
             "registered coverage."
         )
     if coverages is not None and benefit_patterns is not None:

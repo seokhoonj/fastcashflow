@@ -43,7 +43,7 @@ def test_subset_keeps_selected_rows():
     assert sub.issue_age.tolist() == [30, 50]
     assert sub.level_premium.tolist() == [100.0, 300.0]
     # Per-coverage amounts survive the subset (the CSR is rebuilt for the
-    # selected rows). The death coverage's per-mp amount is at coverage_kind=0.
+    # selected rows). The death coverage's per-mp amount is at coverage_index=0.
     assert sub.coverage_amount.tolist() == [1_000.0, 3_000.0]
 
 
@@ -60,7 +60,7 @@ def test_subset_rebuilds_csr_coverages():
 
     sub = mp.subset([0, 2])                              # skip mp 1 (2 coverages)
     assert sub.coverage_offset.tolist() == [0, 1, 2]          # 1 + 1
-    assert sub.coverage_kind.tolist() == [0, 0]               # both DEATH
+    assert sub.coverage_index.tolist() == [0, 0]               # both DEATH
     assert sub.coverage_amount.tolist() == [1_000.0, 3_000.0]
 
 

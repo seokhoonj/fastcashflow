@@ -374,7 +374,7 @@ class Assumptions:
         Ordered tuple of :class:`CoverageRate` -- the rate-driven coverages
         (death-type, morbidity and diagnosis), one per coverage code.
         No code is reserved: entry ``i`` lives at code ``i``, the integer
-        the portfolio's ``coverage_kind`` CSR uses to index this tuple. A
+        the portfolio's ``coverage_index`` CSR uses to index this tuple. A
         contract's death coverage, if any, is just one entry whose
         ``rate_table`` typically references the same mortality table the
         engine uses as the in-force decrement (``mortality_annual``) --

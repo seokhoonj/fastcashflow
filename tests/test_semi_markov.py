@@ -312,22 +312,22 @@ def _portfolio_with_rule_coverage(n, seed, extra_waiting, extra_reduction_end,
                                   extra_is_diagnosis=False):
     """A small portfolio with one death coverage (rule-free) and one extra
     coverage (carrying the per-coverage rule). The DEATH coverage is at
-    kind 0, the extra coverage at kind 1 -- their integer codes are positions
-    in ``assumptions.coverages`` in registration order.
+    cov_idx 0, the extra coverage at cov_idx 1 -- their integer codes are
+    positions in ``assumptions.coverages`` in registration order.
     """
     rng = np.random.default_rng(seed)
-    # Build coverage_kind / coverage_amount: two coverages per mp (DEATH then EXTRA).
+    # Build coverage_index / coverage_amount: two coverages per mp (DEATH then EXTRA).
     death_amount = rng.integers(10, 80, n) * 1_000_000.0
     extra_amount = rng.integers(3, 15, n) * 1_000_000.0
-    coverage_kind = np.empty(n * 2, np.int64)
+    coverage_index = np.empty(n * 2, np.int64)
     coverage_amount = np.empty(n * 2)
     coverage_offset = np.arange(0, n * 2 + 1, 2, np.int64)
     coverage_waiting = np.zeros(n * 2, np.int64)
     coverage_reduction_end = np.zeros(n * 2, np.int64)
     coverage_reduction_factor = np.ones(n * 2)
     for i in range(n):
-        coverage_kind[2 * i] = 0    # DEATH
-        coverage_kind[2 * i + 1] = 1  # EXTRA (first registered after DEATH)
+        coverage_index[2 * i] = 0    # DEATH
+        coverage_index[2 * i + 1] = 1  # EXTRA (first registered after DEATH)
         coverage_amount[2 * i] = death_amount[i]
         coverage_amount[2 * i + 1] = extra_amount[i]
         coverage_waiting[2 * i + 1] = extra_waiting
@@ -341,7 +341,7 @@ def _portfolio_with_rule_coverage(n, seed, extra_waiting, extra_reduction_end,
         level_premium=np.zeros(n),
         term_months=np.full(n, 60, dtype=np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
-        coverage_kind=coverage_kind,
+        coverage_index=coverage_index,
         coverage_amount=coverage_amount,
         coverage_offset=coverage_offset,
         coverage_waiting=coverage_waiting,
@@ -563,24 +563,24 @@ def _portfolio_with_rule_and_diagnosis_coverages(n, seed, rule_waiting,
                                                   rule_reduction_end,
                                                   rule_reduction_factor):
     """Portfolio with three coverages per mp: DEATH (rule-free) + a
-    recurring coverage carrying a waiting/reduction rule (kind = 1) + a
-    diagnosis coverage with no rules (kind = 2). Exercises both the
+    recurring coverage carrying a waiting/reduction rule (cov_idx = 1) + a
+    diagnosis coverage with no rules (cov_idx = 2). Exercises both the
     coverage-rule pass and the diagnosis pass on the same model points.
     """
     rng = np.random.default_rng(seed)
     death_amount = rng.integers(10, 80, n) * 1_000_000.0
     recur_amount = rng.integers(3, 15, n) * 1_000_000.0
     diag_amount = rng.integers(2, 10, n) * 1_000_000.0
-    coverage_kind = np.empty(n * 3, np.int64)
+    coverage_index = np.empty(n * 3, np.int64)
     coverage_amount = np.empty(n * 3)
     coverage_offset = np.arange(0, n * 3 + 1, 3, np.int64)
     coverage_waiting = np.zeros(n * 3, np.int64)
     coverage_reduction_end = np.zeros(n * 3, np.int64)
     coverage_reduction_factor = np.ones(n * 3)
     for i in range(n):
-        coverage_kind[3 * i + 0] = 0   # DEATH
-        coverage_kind[3 * i + 1] = 1   # recurring coverage (rule)
-        coverage_kind[3 * i + 2] = 2   # diagnosis coverage
+        coverage_index[3 * i + 0] = 0   # DEATH
+        coverage_index[3 * i + 1] = 1   # recurring coverage (rule)
+        coverage_index[3 * i + 2] = 2   # diagnosis coverage
         coverage_amount[3 * i + 0] = death_amount[i]
         coverage_amount[3 * i + 1] = recur_amount[i]
         coverage_amount[3 * i + 2] = diag_amount[i]
@@ -593,7 +593,7 @@ def _portfolio_with_rule_and_diagnosis_coverages(n, seed, rule_waiting,
         level_premium=np.zeros(n),
         term_months=np.full(n, 60, dtype=np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
-        coverage_kind=coverage_kind,
+        coverage_index=coverage_index,
         coverage_amount=coverage_amount,
         coverage_offset=coverage_offset,
         coverage_waiting=coverage_waiting,

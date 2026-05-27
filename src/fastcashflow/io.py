@@ -905,7 +905,7 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
     if "state" in df.columns:
         fields["state"] = _read_state(df["state"])
 
-    code_to_kind = {r.code: i for i, r in enumerate(
+    code_to_cov_idx = {r.code: i for i, r in enumerate(
         assumptions.coverages if assumptions is not None else ())}
     # Guard the reserved-name collision: a user coverage_code whose
     # ``<code>_benefit`` column name shadows a fixed-meaning column
@@ -913,7 +913,7 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
     # to the scalar field rather than into the CSR. Catch at read time.
     reserved_codes = {n[: -len("_benefit")] for n in _NAMED_WIDE
                       if n.endswith("_benefit")}
-    bad = sorted(set(code_to_kind) & reserved_codes)
+    bad = sorted(set(code_to_cov_idx) & reserved_codes)
     if bad:
         raise ValueError(
             f"coverage code(s) {bad} collide with reserved wide-form "
@@ -925,12 +925,12 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
         if not col.endswith("_benefit") or col in _NAMED_WIDE:
             continue
         code = col[: -len("_benefit")]
-        if code not in code_to_kind:
+        if code not in code_to_cov_idx:
             raise ValueError(
                 f"wide column {col!r} names coverage {code!r}, which is not "
                 "a rate-driven coverage in the assumptions"
             )
-        benefits[code_to_kind[code]] = df[col].to_numpy()
+        benefits[code_to_cov_idx[code]] = df[col].to_numpy()
     if benefits:
         fields["benefits"] = benefits
     if benefit_patterns is not None:
@@ -998,7 +998,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             "Add a reduction_end column (months) or drop the factor column."
         )
     ctypes = {k: BenefitPattern(v) for k, v in benefit_patterns.items()}
-    code_to_kind = {r.code: i for i, r in enumerate(assumptions.coverages)}
+    code_to_cov_idx = {r.code: i for i, r in enumerate(assumptions.coverages)}
     # V3 -- every rate-driven coverage in the assumptions must be registered
     # in the taxonomy. Detected here so the error surfaces at read time
     # rather than as a quiet routing miss inside the engine.
@@ -1019,7 +1019,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     cmap = pl.DataFrame({
         "coverage_code": list(ctypes.keys()),
         "_type": [str(v) for v in ctypes.values()],
-        "_kind": [code_to_kind.get(c, -1) for c in ctypes],
+        "_cov_idx": [code_to_cov_idx.get(c, -1) for c in ctypes],
     })
     cov = (cov.join(pol.select("mp_id", "_mp"), on="mp_id", how="left")
               .join(cmap, on="coverage_code", how="left"))
@@ -1042,7 +1042,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
 
     mp = cov["_mp"].to_numpy()
     ctype = cov["_type"].to_numpy()
-    kind = cov["_kind"].to_numpy().astype(np.int64)
+    cov_idx = cov["_cov_idx"].to_numpy().astype(np.int64)
     amount = cov["amount"].to_numpy().astype(np.float64)
 
     fields: dict[str, object] = dict(
@@ -1092,12 +1092,12 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     # registered coverage in the assumptions workbook -- the catalogue
     # may declare codes the workbook does not register (the operator can
     # still attach amounts to them in the long-form coverages file, but
-    # the engine has no rate to apply), in which case ``code_to_kind``
+    # the engine has no rate to apply), in which case ``code_to_cov_idx``
     # leaves them at -1 and we raise.
     is_cov = np.isin(ctype, RATE_DRIVEN_PATTERNS)
-    if np.any(kind[is_cov] < 0):
+    if np.any(cov_idx[is_cov] < 0):
         bad = sorted({str(c) for c, ok in zip(
-            cov["coverage_code"].to_list(), is_cov & (kind < 0)) if ok})
+            cov["coverage_code"].to_list(), is_cov & (cov_idx < 0)) if ok})
         raise ValueError(
             f"rate-driven coverage code(s) {_truncate_list(bad)} appear in "
             "the model-point coverages frame but are not registered in the "
@@ -1106,11 +1106,11 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         )
     order = np.argsort(mp[is_cov], kind="stable")
     cov_mp = mp[is_cov][order]
-    fields["coverage_kind"] = kind[is_cov][order]
+    fields["coverage_index"] = cov_idx[is_cov][order]
     fields["coverage_amount"] = amount[is_cov][order]
 
     # Optional per-coverage benefit rules -- a waiting period and a
-    # reduced-benefit period, each CSR-aligned with coverage_kind.
+    # reduced-benefit period, each CSR-aligned with coverage_index.
     for col, field, default in (("waiting", "coverage_waiting", 0),
                                 ("reduction_end", "coverage_reduction_end", 0),
                                 ("reduction_factor", "coverage_reduction_factor", 1.0)):

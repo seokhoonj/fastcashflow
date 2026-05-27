@@ -42,7 +42,7 @@ class ModelPoints:
     :mod:`fastcashflow.coverage`), held in CSR (Compressed Sparse Row) form
     so the kernels loop them generically -- new benefit types add no fields:
 
-    * ``coverage_kind[k]``   -- the coverage code; an integer index into
+    * ``coverage_index[k]``   -- the coverage code; an integer index into
       :attr:`Assumptions.coverages` (entry ``i`` of that tuple lives at
       code ``i``). No code is reserved.
     * ``coverage_amount[k]`` -- the benefit amount of coverage ``k``.
@@ -52,13 +52,13 @@ class ModelPoints:
     Each coverage may carry a benefit rule: ``coverage_waiting`` (months from
     issue with no benefit) and ``coverage_reduction_end`` / ``coverage_reduction_factor``
     (a benefit multiplier in force until a cut-off month). Both are CSR
-    arrays aligned with ``coverage_kind`` and default to off -- no waiting, full
+    arrays aligned with ``coverage_index`` and default to off -- no waiting, full
     benefit.
 
     The coverage list is built one of two ways. ``benefits`` is the general
-    form: a ``{kind: amount array}`` map keyed by coverage code (the index
+    form: a ``{cov_idx: amount array}`` map keyed by coverage code (the index
     into :attr:`Assumptions.coverages`). Or pass the CSR arrays
-    ``coverage_kind`` / ``coverage_amount`` / ``coverage_offset`` directly --
+    ``coverage_index`` / ``coverage_amount`` / ``coverage_offset`` directly --
     the preferred form for a portfolio with per-coverage benefit rules
     (waiting / reduction periods).
 
@@ -84,7 +84,7 @@ class ModelPoints:
     issue_age: FloatArray          # attained age at issue, in years
     level_premium: FloatArray      # premium charged each payment occurrence
     term_months: IntArray          # coverage term, in months
-    benefits: dict[int, FloatArray] | None = None  # general {kind: amount}
+    benefits: dict[int, FloatArray] | None = None  # general {cov_idx: amount}
     maturity_benefit: FloatArray | None = None   # benefit on survival to term
     annuity_payment: FloatArray | None = None    # survival income, each month
     disability_income: FloatArray | None = None  # income while in a benefit state
@@ -101,7 +101,7 @@ class ModelPoints:
     # which a single Assumptions value could not represent). Default 0.0 = no
     # guarantee; ignored by non-VFA measurements.
     guaranteed_credit_rate: FloatArray | None = None
-    coverage_kind: IntArray | None = None             # CSR: coverage kind
+    coverage_index: IntArray | None = None             # CSR: coverage index
     coverage_amount: FloatArray | None = None         # CSR: coverage amount
     coverage_offset: IntArray | None = None           # CSR: per-policy slice bounds
     coverage_waiting: IntArray | None = None          # CSR: waiting period, months
@@ -230,20 +230,20 @@ class ModelPoints:
         # yields an empty coverage list -- a portfolio with no rate-driven
         # claim benefits (premiums-only, or one with only survival
         # benefits via maturity_benefit / annuity_payment).
-        if self.coverage_kind is not None:
-            coverage_kind = np.asarray(self.coverage_kind, np.int64)
+        if self.coverage_index is not None:
+            coverage_index = np.asarray(self.coverage_index, np.int64)
             coverage_amount = np.asarray(self.coverage_amount, np.float64)
             coverage_offset = np.asarray(self.coverage_offset, np.int64)
         else:
-            items = []   # (kind, per-mp amount array), in coverage-list order
+            items = []   # (cov_idx, per-mp amount array), in coverage-list order
             if self.benefits is not None:
-                for kind, amount in self.benefits.items():
-                    items.append((int(kind), np.asarray(amount, np.float64)))
-            coverage_kind, coverage_amount, coverage_offset = _build_csr(items, n_mp)
-        object.__setattr__(self, "coverage_kind", coverage_kind)
+                for cov_idx, amount in self.benefits.items():
+                    items.append((int(cov_idx), np.asarray(amount, np.float64)))
+            coverage_index, coverage_amount, coverage_offset = _build_csr(items, n_mp)
+        object.__setattr__(self, "coverage_index", coverage_index)
         object.__setattr__(self, "coverage_amount", coverage_amount)
         object.__setattr__(self, "coverage_offset", coverage_offset)
-        # Per-coverage benefit rules, CSR-aligned with coverage_kind. A waiting
+        # Per-coverage benefit rules, CSR-aligned with coverage_index. A waiting
         # period (months with no benefit) and a reduced-benefit period (a
         # multiplier until a cut-off month) both default to off.
         n_cov = coverage_amount.shape[0]
@@ -343,7 +343,7 @@ class ModelPoints:
         Per-row fields (issue_age, level_premium, ...) and the segment
         metadata (product, channel) are sliced. The coverage CSR is
         rebuilt: each selected row's coverage slice
-        ``coverage_kind[coverage_offset[i]:coverage_offset[i+1]]`` is concatenated, and
+        ``coverage_index[coverage_offset[i]:coverage_offset[i+1]]`` is concatenated, and
         ``coverage_offset`` is reset to the new running cumulative sum. Used by
         :func:`fastcashflow.engine.value_segmented` to split a portfolio
         by (product, channel) before per-segment valuation.
@@ -367,7 +367,7 @@ class ModelPoints:
         ends = self.coverage_offset[idx + 1]
         cov_idx = np.concatenate([np.arange(s, e) for s, e in zip(starts, ends)]) \
             if idx.size > 0 else np.zeros(0, dtype=np.int64)
-        kwargs["coverage_kind"] = self.coverage_kind[cov_idx]
+        kwargs["coverage_index"] = self.coverage_index[cov_idx]
         kwargs["coverage_amount"] = self.coverage_amount[cov_idx]
         kwargs["coverage_offset"] = np.concatenate(
             ([0], np.cumsum(ends - starts, dtype=np.int64))
@@ -417,7 +417,7 @@ class ModelPoints:
             "disability_benefit": self.disability_benefit,
         }
         for i, coverage in enumerate(assumptions.coverages):
-            mask = self.coverage_kind == i
+            mask = self.coverage_index == i
             cols[f"{coverage.code}_benefit"] = np.bincount(
                 mp_of_cov[mask], weights=self.coverage_amount[mask],
                 minlength=self.n_mp,
@@ -449,12 +449,12 @@ class ModelPoints:
             "count":                    self.count,
             "state":                    np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
-        # CSR coverages -- the integer ``coverage_kind`` indexes directly
+        # CSR coverages -- the integer ``coverage_index`` indexes directly
         # into ``assumptions.coverages``; no slot is reserved.
         label = {i: coverage.code for i, coverage in enumerate(assumptions.coverages)}
         mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
         mp_id = [int(m) for m in mp_of_cov]
-        coverage_code = [label[int(k)] for k in self.coverage_kind]
+        coverage_code = [label[int(k)] for k in self.coverage_index]
         amount = [float(a) for a in self.coverage_amount]
         # Survival benefits are scalar fields -- emit them as coverage rows.
         for ctype, scalar in ((BenefitPattern.ANNUITY, self.annuity_payment),
@@ -561,12 +561,12 @@ def _coverage_label(model_points, ctype, default):
 def _build_csr(
     items: list[tuple[int, FloatArray]], n_mp: int
 ) -> tuple[IntArray, FloatArray, IntArray]:
-    """Pack ``(kind, per-mp amount)`` items into a coverage CSR.
+    """Pack ``(cov_idx, per-mp amount)`` items into a coverage CSR.
 
     A zero amount is no coverage. Coverages are ordered by model point, and
-    within a model point by the order the kinds appear in ``items``. An
-    empty ``items`` list yields an empty coverage list -- no claim coverages
-    on any policy.
+    within a model point by the order the cov_idx values appear in ``items``.
+    An empty ``items`` list yields an empty coverage list -- no claim
+    coverages on any policy.
     """
     if not items:
         return (
@@ -574,21 +574,21 @@ def _build_csr(
             np.zeros(0, np.float64),
             np.zeros(n_mp + 1, np.int64),
         )
-    mp_parts, kind_parts, amount_parts = [], [], []
-    for kind, amount in items:
+    mp_parts, cov_idx_parts, amount_parts = [], [], []
+    for cov_idx, amount in items:
         present = amount != 0.0
         mp_idx = np.nonzero(present)[0]
         mp_parts.append(mp_idx)
-        kind_parts.append(np.full(mp_idx.size, kind, np.int64))
+        cov_idx_parts.append(np.full(mp_idx.size, cov_idx, np.int64))
         amount_parts.append(amount[present])
     all_mp = np.concatenate(mp_parts)
-    all_kind = np.concatenate(kind_parts)
+    all_cov_idx = np.concatenate(cov_idx_parts)
     all_amount = np.concatenate(amount_parts)
-    order = np.argsort(all_mp, kind="stable")     # group by mp, keep kind order
-    coverage_kind = np.ascontiguousarray(all_kind[order])
+    order = np.argsort(all_mp, kind="stable")     # group by mp, keep cov_idx order
+    coverage_index = np.ascontiguousarray(all_cov_idx[order])
     coverage_amount = np.ascontiguousarray(all_amount[order])
     coverage_offset = np.concatenate((
         np.zeros(1, np.int64),
         np.cumsum(np.bincount(all_mp, minlength=n_mp), dtype=np.int64),
     ))
-    return coverage_kind, coverage_amount, coverage_offset
+    return coverage_index, coverage_amount, coverage_offset

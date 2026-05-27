@@ -55,14 +55,14 @@ def _assumptions(**overrides) -> Assumptions:
     return Assumptions(**base)
 
 
-def _one_coverage(kind, benefit, term, *, waiting=0,
+def _one_coverage(cov_idx, benefit, term, *, waiting=0,
                   reduction_end=0, reduction_factor=1.0) -> ModelPoints:
     """A single-policy, single-coverage model point carrying a benefit rule."""
     return ModelPoints(
         issue_age=np.array([40.0]),
         level_premium=np.array([0.0]),
         term_months=np.array([term]),
-        coverage_kind=np.array([kind]),
+        coverage_index=np.array([cov_idx]),
         coverage_amount=np.array([float(benefit)]),
         coverage_offset=np.array([0, 1]),
         coverage_waiting=np.array([waiting]),
@@ -168,7 +168,7 @@ def test_default_rule_is_inert():
         issue_age=np.array([40.0]),
         level_premium=np.array([0.0]),
         term_months=np.array([36]),
-        coverage_kind=np.array([DIAGNOSIS]),
+        coverage_index=np.array([DIAGNOSIS]),
         coverage_amount=np.array([4e7]),
         coverage_offset=np.array([0, 1]),
         benefit_patterns=PATTERNS,
@@ -184,9 +184,9 @@ def test_value_matches_measure_with_rules():
     rng = np.random.default_rng(23)
     n = 200
     n_cov = 2 * n                               # one death + one diagnosis each
-    coverage_kind = np.empty(n_cov, np.int64)
-    coverage_kind[0::2] = DEATH
-    coverage_kind[1::2] = DIAGNOSIS
+    coverage_index = np.empty(n_cov, np.int64)
+    coverage_index[0::2] = DEATH
+    coverage_index[1::2] = DIAGNOSIS
     coverage_amount = np.empty(n_cov)
     coverage_amount[0::2] = rng.integers(10, 80, n) * 1_000_000
     coverage_amount[1::2] = rng.integers(10, 50, n) * 1_000_000
@@ -195,7 +195,7 @@ def test_value_matches_measure_with_rules():
         issue_age=rng.integers(30, 55, n).astype(float),
         level_premium=rng.integers(5, 20, n) * 10_000.0,
         term_months=rng.integers(60, 180, n),
-        coverage_kind=coverage_kind,
+        coverage_index=coverage_index,
         coverage_amount=coverage_amount,
         coverage_offset=np.arange(0, n_cov + 1, 2),
         coverage_waiting=rng.integers(0, 8, n_cov),

@@ -310,7 +310,7 @@ def test_waiting_rule_transition_measure_value_agree():
         issue_age=np.array([40.0, 45.0]),
         level_premium=np.array([30_000.0, 30_000.0]),
         term_months=np.array([120, 120]),
-        coverage_kind=np.array([0, 0]),
+        coverage_index=np.array([0, 0]),
         coverage_amount=np.array([2_000_000.0, 2_000_000.0]),
         coverage_offset=np.array([0, 1, 2]),
         coverage_waiting=np.array([12, 12]),
