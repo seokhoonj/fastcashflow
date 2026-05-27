@@ -29,7 +29,9 @@ the contract's actual terms at the measurement date (IFRS 17 Sec. 33-34).
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 import numpy as np
 
@@ -231,9 +233,16 @@ WAIVER_MODEL = StateModel(
 # pattern as the coverage types -- see [[phase5-coverage-design]] in the
 # project memory); users with a topology outside the registry still build
 # their own ``StateModel`` in code.
-STATE_MODELS: dict[str, StateModel] = {
+#
+# Exposed through a read-only mapping so a stray ``STATE_MODELS["WAIVER"] =
+# my_custom_model`` from user / plugin code cannot silently swap the
+# bundled topology process-wide (which would change every later segment that
+# resolves "WAIVER" by name). Lookup (``STATE_MODELS["WAIVER"]``) and
+# iteration (``sorted(STATE_MODELS)``) work as before; mutation raises
+# ``TypeError``.
+STATE_MODELS: Mapping[str, StateModel] = MappingProxyType({
     "WAIVER": WAIVER_MODEL,
-}
+})
 
 
 def is_semi_markov(model: StateModel) -> bool:

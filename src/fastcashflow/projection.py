@@ -678,11 +678,20 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             n_time,
         )
     else:
-        compiled = compile_state_model(
-            state_model,
-            {"mortality": mortality, "waiver_incidence": waiver,
-             "lapse": lapse},
-        )
+        # Markov path -- mirror the semi-Markov branch above for the rates
+        # that are not duration-dependent. A custom Markov topology that
+        # references ``ci_incidence`` works the same way it does on the
+        # semi-Markov side; the two 4D sojourn rates (``ci_reincidence``,
+        # ``disability_recovery``) remain semi-Markov-only.
+        rate_dict = {"mortality": mortality, "waiver_incidence": waiver,
+                     "lapse": lapse}
+        if assumptions.ci_incidence_annual is not None:
+            ci_inc = np.ascontiguousarray(annual_to_monthly(
+                assumptions.ci_incidence_annual(
+                    sex_grid, issue_age_grid, duration_grid,
+                    issue_class_grid, elapsed_grid)))
+            rate_dict["ci_incidence"] = ci_inc
+        compiled = compile_state_model(state_model, rate_dict)
         edge_from = compiled.edge_from
         edge_to = compiled.edge_to
         edge_prob = compiled.edge_prob

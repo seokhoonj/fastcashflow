@@ -1556,12 +1556,24 @@ def value(
             edge_prob = np.ascontiguousarray(
                 np.transpose(compiled.edge_prob, (1, 2, 3, 0, 4)))
         else:
-            compiled = compile_state_model(
-                state_model,
-                {"mortality": mortality_grid,
-                 "waiver_incidence": waiver_grid,
-                 "lapse": lapse_grid},
-            )
+            # Markov path -- the rate dict mirrors the semi-Markov branch
+            # above for the rates that are not duration-dependent. A custom
+            # Markov topology that references ``ci_incidence`` works the same
+            # way it does on the semi-Markov side, instead of hitting
+            # ``compile_state_model``'s "rate not supplied" error. The two
+            # 4D sojourn rates (``ci_reincidence``, ``disability_recovery``)
+            # remain semi-Markov-only -- they need a cohort axis the Markov
+            # kernel does not carry.
+            rate_dict = {"mortality": mortality_grid,
+                         "waiver_incidence": waiver_grid,
+                         "lapse": lapse_grid}
+            if assumptions.ci_incidence_annual is not None:
+                ci_inc_grid = np.ascontiguousarray(annual_to_monthly(
+                    assumptions.ci_incidence_annual(
+                        sex_grid, issue_age_grid, duration_grid,
+                        issue_class_grid, elapsed_grid)))
+                rate_dict["ci_incidence"] = ci_inc_grid
+            compiled = compile_state_model(state_model, rate_dict)
             edge_from = compiled.edge_from
             edge_to = compiled.edge_to
             edge_lump_sum = compiled.edge_lump_sum

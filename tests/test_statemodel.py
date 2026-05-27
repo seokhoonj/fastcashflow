@@ -116,6 +116,53 @@ def test_seating_out_of_range_rejected():
         StateModel(states=(State("a"),), seating=(0, 1))
 
 
+def test_state_models_registry_is_read_only():
+    """STATE_MODELS is exposed as a read-only mapping -- a stray assignment
+    from user / plugin code cannot silently swap the bundled topology
+    process-wide. Lookup still works the same."""
+    assert STATE_MODELS["WAIVER"] is not None
+    with pytest.raises(TypeError):
+        STATE_MODELS["WAIVER"] = StateModel(states=(State("x"),))    # type: ignore[index]
+
+
+def test_markov_can_reference_ci_incidence_annual():
+    """A custom Markov topology that wires a transition to ci_incidence
+    works through both value() and measure(). The Markov rate dict now
+    threads ci_incidence_annual when the assumption is set -- before, the
+    same topology would fail at compile_state_model with a "rate not
+    supplied" ValueError, surprising anyone porting a Markov dx model
+    from the semi-Markov branch."""
+    healthy_to_diag = StateModel(
+        states=(
+            State("healthy", premium=True, transitions=(
+                Transition("mortality"),
+                Transition("ci_incidence", to="diagnosed", lump_sum=True),
+                Transition("lapse"),
+            )),
+            State("diagnosed", premium=False, transitions=(
+                Transition("mortality"),
+            )),
+        ),
+        seating=(0, 1, 1),
+    )
+    q_a = _annual(0.001)
+    asmp = Assumptions(
+        mortality_annual=lambda s, a, d: np.full(d.shape, q_a),
+        lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
+        ci_incidence_annual=lambda s, a, d: np.full(d.shape, _annual(0.003)),
+        discount_annual=0.0,
+        ra_confidence=0.75,
+        mortality_cv=0.10,
+        state_model=healthy_to_diag,
+        coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, q_a)),),
+    )
+    mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
+                            level_premium=0.0, term_months=12)
+    val = value(mp, asmp)
+    m = measure(mp, asmp)
+    assert np.isclose(m.bel[0, 0], val.bel[0])
+
+
 # ---------------------------------------------------------------------------
 # Custom state machines through the engine
 # ---------------------------------------------------------------------------
