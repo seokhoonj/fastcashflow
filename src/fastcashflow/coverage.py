@@ -16,10 +16,10 @@ calibrated death-claim experience table. The decrement and the payment
 are different mathematical quantities and the engine treats them as such.
 
 The kernels loop the coverage list generically. A coverage's mechanic is
-given by two per-code arrays -- ``cov_is_diagnosis`` (a single-payment
-benefit whose claims run off a depleting pool) and ``cov_risk`` (the risk
-class the Risk Adjustment prices) -- built by :func:`coverage_arrays`, so a
-new coverage needs no kernel change. The two arrays are *derived* from the
+given by two per-code arrays -- ``coverage_is_diagnosis`` (a single-payment
+benefit whose claims run off a depleting pool) and ``coverage_risk`` (the
+risk class the Risk Adjustment prices) -- built by :func:`coverage_arrays`,
+so a new coverage needs no kernel change. The two arrays are *derived* from the
 portfolio's ``benefit_patterns`` taxonomy (the
 :class:`~fastcashflow.modelpoints.ModelPoints` ``benefit_patterns`` dict);
 the company-level taxonomy is the single source of truth for whether a
@@ -104,11 +104,11 @@ def pattern_attrs(pattern: BenefitPattern) -> tuple[bool, int]:
     return is_diagnosis, risk
 
 
-def coverage_rates(rate_fns, sex_grid, issue_age_grid,
-                   duration_grid, issue_class_grid, elapsed_grid):
+def build_coverage_rates(rate_fns, sex_grid, issue_age_grid,
+                         duration_grid, issue_class_grid, elapsed_grid):
     """Stack the per-code rate grids into one ``(n_codes, ..., n_year)`` array.
 
-    A kernel reads a coverage's rate as ``cov_rates[code, age_or_mp, year]``,
+    A kernel reads a coverage's rate as ``coverage_rates[code, age_or_mp, year]``,
     so the codes share one grid whose first axis is the code. ``rate_fns`` is
     an ordered list of callables, one per coverage in the assumptions'
     registration order; each has the unified ``Assumptions.mortality_annual``
@@ -157,7 +157,8 @@ def coverage_arrays(coverages, benefit_patterns=None):
        mistake on the most error-prone surface (a DEATH-only contract whose
        claim payouts would otherwise score zero RA against ``mortality_cv``).
 
-    Returns ``(cov_is_diagnosis, cov_risk)``, each indexed by coverage code.
+    Returns ``(coverage_is_diagnosis, coverage_risk)``, each indexed by
+    coverage code.
     """
     flags: list[tuple[bool, int]] = []
     unresolved: list[str] = []
@@ -187,9 +188,9 @@ def coverage_arrays(coverages, benefit_patterns=None):
             f"{{{valid}}} -- or rename the coverage to a BenefitPattern "
             "member name (the auto-inference rule)."
         )
-    cov_is_diagnosis = np.array([f[0] for f in flags], np.bool_)
-    cov_risk = np.array([f[1] for f in flags], np.int64)
-    return cov_is_diagnosis, cov_risk
+    coverage_is_diagnosis = np.array([f[0] for f in flags], np.bool_)
+    coverage_risk = np.array([f[1] for f in flags], np.int64)
+    return coverage_is_diagnosis, coverage_risk
 
 
 def validate_csr_codes(coverage_index, n_coverages, *,
@@ -199,7 +200,7 @@ def validate_csr_codes(coverage_index, n_coverages, *,
 
     The CSR's ``coverage_index`` is an integer index into
     :attr:`Assumptions.coverages`; the kernel reads
-    ``cov_rates[coverage_index[k], ...]`` directly. An out-of-range index
+    ``coverage_rates[coverage_index[k], ...]`` directly. An out-of-range index
     would read past the rate-grid into adjacent contiguous memory, producing
     a silently wrong BEL rather than an :class:`IndexError`. This validator
     catches the mistake at engine entry with a clear message naming the

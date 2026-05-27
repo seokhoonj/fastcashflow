@@ -22,8 +22,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        premium_state, benefit_state, start_state, issue_index,
                        sex, term_months, count, level_premium, single_premium,
                        premium_term_months, premium_frequency_months, annuity_frequency_months,
-                       coverage_index, coverage_amount, coverage_offset, cov_rates, cov_risk,
-                       cov_is_diagnosis, maturity_benefit, annuity_payment,
+                       coverage_index, coverage_amount, coverage_offset, coverage_rates, coverage_risk,
+                       coverage_is_diagnosis, maturity_benefit, annuity_payment,
                        disability_income, disability_benefit,
                        alpha_pro_rata, alpha_fixed, beta_pro_rata,
                        gamma_fixed, lae_pro_rata,
@@ -79,10 +79,10 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
             morb_rate = 0.0
             for k in range(c_start, c_end):
                 cov_idx = coverage_index[k]
-                if cov_is_diagnosis[cov_idx]:
+                if coverage_is_diagnosis[cov_idx]:
                     continue
-                rate = cov_rates[cov_idx, sx, age_idx, year] * coverage_amount[k]
-                if cov_risk[cov_idx] == 0:
+                rate = coverage_rates[cov_idx, sx, age_idx, year] * coverage_amount[k]
+                if coverage_risk[cov_idx] == 0:
                     claim_rate += rate
                 else:
                     morb_rate += rate
@@ -137,7 +137,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     # occupancy, carried over the transient states.
     for k in range(c_start, c_end):
         cov_idx = coverage_index[k]
-        if not cov_is_diagnosis[cov_idx]:
+        if not coverage_is_diagnosis[cov_idx]:
             continue
         benefit = coverage_amount[k]
         for s in range(n_states):
@@ -148,7 +148,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         for t in range(term):
             year = t // 12
             if year != d_year:
-                d_rate = cov_rates[cov_idx, sx, age_idx, year]
+                d_rate = coverage_rates[cov_idx, sx, age_idx, year]
                 d_year = year
             healthy = 0.0
             for s in range(n_states):
@@ -178,8 +178,8 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               premium_state, benefit_state, start_state, issue_index, sex,
               term_months, count, level_premium, single_premium,
               premium_term_months, premium_frequency_months, annuity_frequency_months,
-              coverage_index, coverage_amount, coverage_offset, cov_rates, cov_risk,
-              cov_is_diagnosis, maturity_benefit, annuity_payment,
+              coverage_index, coverage_amount, coverage_offset, coverage_rates, coverage_risk,
+              coverage_is_diagnosis, maturity_benefit, annuity_payment,
               disability_income, disability_benefit,
               alpha_pro_rata, alpha_fixed, beta_pro_rata,
               gamma_fixed, lae_pro_rata,
@@ -221,9 +221,9 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_cov_cov_idx = cuda.to_device(coverage_index)
     d_cov_amount = cuda.to_device(coverage_amount)
     d_cov_offset = cuda.to_device(coverage_offset)
-    d_cov_rates = cuda.to_device(cov_rates)
-    d_cov_risk = cuda.to_device(cov_risk)
-    d_cov_is_diagnosis = cuda.to_device(cov_is_diagnosis)
+    d_coverage_rates = cuda.to_device(coverage_rates)
+    d_coverage_risk = cuda.to_device(coverage_risk)
+    d_coverage_is_diagnosis = cuda.to_device(coverage_is_diagnosis)
     d_maturity = cuda.to_device(maturity_benefit)
     d_annuity = cuda.to_device(annuity_payment)
     d_disability_income = cuda.to_device(disability_income)
@@ -245,8 +245,8 @@ def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         d_edge_from, d_edge_to, d_edge_prob, d_edge_lump, n_states,
         d_premium_state, d_benefit_state, d_start_state, d_issue, d_sex,
         d_term, d_count, d_premium, d_single, d_premium_term, d_premium_freq,
-        d_annuity_freq, d_cov_cov_idx, d_cov_amount, d_cov_offset, d_cov_rates,
-        d_cov_risk, d_cov_is_diagnosis, d_maturity, d_annuity,
+        d_annuity_freq, d_cov_cov_idx, d_cov_amount, d_cov_offset, d_coverage_rates,
+        d_coverage_risk, d_coverage_is_diagnosis, d_maturity, d_annuity,
         d_disability_income, d_disability_benefit,
         alpha_pro_rata, alpha_fixed, beta_pro_rata,
         d_gamma_fixed, d_lae_pro_rata, d_discount_start,

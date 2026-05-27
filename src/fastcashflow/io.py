@@ -672,7 +672,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
         def ae(coverage_code):
             return ae_factors.get((product_code, channel_code, coverage_code))
 
-        coverage_rates = []
+        coverage_list = []
         for code, rate_table in rate_driven_coverages:
             # Death coverages share the mortality_tables namespace -- a
             # rate_table cell may name either an incidence_rate_tables or
@@ -696,7 +696,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
                 )
             rate_fn = _with_age_shift(rate_fn, shift)
             rate_fn = _with_ae_factor(rate_fn, ae(code))
-            coverage_rates.append(CoverageRate(code=code, rate=rate_fn))
+            coverage_list.append(CoverageRate(code=code, rate=rate_fn))
 
         mortality_fn = lookup(mortality_t, "mortality_table")
         mortality_fn = _with_age_shift(mortality_fn, shift_mort)
@@ -737,7 +737,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             ),
             ra_confidence=scalar("ra_confidence", required=True),
             mortality_cv=scalar("mortality_cv", required=True),
-            coverages=tuple(coverage_rates),
+            coverages=tuple(coverage_list),
             surrender_value_curve=surrender_curve,
         )
         for opt_col in ("morbidity_cv", "longevity_cv", "disability_cv",
