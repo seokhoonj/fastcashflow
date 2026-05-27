@@ -299,15 +299,18 @@ import numpy as np
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.modelpoints import ModelPoints
 
-def mort(s, ia, d, ic, em):
+# 사망률 함수 -- 연 0.05% 의 평탄 사망률 (보험금 대비 매우 낮은 율)
+def death_fn(s, ia, d, ic, em):
     return np.full(d.shape, 0.0005)
-def lapse(s, ia, d, ic, em):
+
+# 해지율 함수 -- 연 2% 의 평탄 해지율
+def lapse_fn(s, ia, d, ic, em):
     return np.full(d.shape, 0.02)
 
 profitable = Assumptions(
-    mortality_annual=mort, lapse_annual=lapse,
+    mortality_annual=death_fn, lapse_annual=lapse_fn,
     discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
-    coverages=(fcf.CoverageRate("DEATH", mort),),
+    coverages=(fcf.CoverageRate("DEATH", death_fn),),
 )
 mp_one = ModelPoints(
     issue_age=np.array([40.0]),

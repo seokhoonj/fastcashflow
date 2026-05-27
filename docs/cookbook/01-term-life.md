@@ -127,11 +127,14 @@ RA 파라미터, coverages, state_model) 한 번에 출력합니다.
 import fastcashflow as fcf
 
 # 샘플 워크북 로드 (패키지 내장)
-basis = fcf.load_sample_assumptions()    # {(product, channel): Assumptions}
-mp = fcf.load_sample_model_points()      # ModelPoints, 보유계약 8건
+basis = fcf.load_sample_assumptions()    # {(product_code, channel_code): Assumptions}
+mp = fcf.load_sample_model_points()      # ModelPoints, 보유계약 11건 (정기·건강·종신 혼합)
 
-# 평가할 segment 선택 (한 상품에 두 채널)
-asmp = basis[("TERM_LIFE_A", "GA")]           # 또는 ("TERM_LIFE_A", "FC")
+# 평가할 segment 선택 — 여기서는 데모용으로 가정 하나만 골라 전체 11건에
+# 동일하게 적용합니다. 실무에서 segment 가 섞인 portfolio 는 각 계약을
+# 자기 (상품, 채널) segment 의 가정에 맞춰 라우팅하는
+# `value_segmented(mp, basis)` 를 씁니다.
+asmp = basis[("TERM_LIFE_A", "GA")]           # 또는 다른 키
 
 # 측정 -- 두 가지 방법
 detail = fcf.measure(mp, asmp)
@@ -167,10 +170,10 @@ CSM :               0
 Loss:      35,001,727
 ```
 
-코드 한 번 돌리면 포트폴리오 8건의 BEL / RA / CSM 합계를 얻습니다.
-샘플 portfolio 는 사업비가 보험료 유입을 넘어 **손실** 이 나는 묶음 —
-CSM = 0 이고 손실분이 즉시 `loss_component` 로 인식됩니다 (자세한
-해석은 다음 절).
+코드 한 번 돌리면 portfolio 11건 전체에 그 segment 의 가정을 적용한
+BEL / RA / CSM 합계를 얻습니다. 샘플 portfolio 는 보험료 대비 보장이
+빠듯하게 매겨져 **손실부담** 으로 잡히는 계약이 많아, CSM = 0 이고
+손실분이 즉시 `loss_component` 로 인식됩니다 (자세한 해석은 다음 절).
 
 ### 자기 워크북으로 바꾸기
 
@@ -475,8 +478,13 @@ assumptions = fcf.Assumptions(
 import numpy as np
 import fastcashflow as fcf
 
+# 사망률 함수 -- 월 사망률 1% 의 연 환산 (모든 sex/age/duration 에 동일)
+death_fn = lambda s, a, d: np.full(a.shape, 1 - (1-0.01)**12)
+
+# 해지율 함수 -- 해지 없음
+lapse_fn = lambda s, a, d: np.full(d.shape, 0.0)
+
 # 가입 후 2개월, 월 사망률 1%, 사망보험금 12,000, 보험료 100, 할인 0%
-mort = lambda s, a, d: np.full(a.shape, 1 - (1-0.01)**12)
 mp = fcf.ModelPoints.single(
     issue_age=40,                          # 가입연령
     benefits={0: 12_000},                  # 사망보험금 (코드 0 = DEATH)
@@ -485,25 +493,18 @@ mp = fcf.ModelPoints.single(
     benefit_patterns={"DEATH": fcf.BenefitPattern.DEATH},
 )
 asmp = fcf.Assumptions(
-    # 사망률: 연 환산값. 엔진이 월 단위로 내리면 정확히 1% 가 됨
-    mortality_annual=mort,
+    # mortality_annual = in-force 감쇠 (decrement)
+    # coverages.DEATH 의 rate = 사망보장 청구율
+    # 두 양은 별개지만 손계산은 같은 사망률을 가정하므로 같은 death_fn 을
+    # 두 자리에 공유
+    mortality_annual=death_fn,
+    coverages=(fcf.CoverageRate("DEATH", death_fn),),
 
-    # 해지율: 해지 없음
-    lapse_annual=lambda s, a, d: np.full(d.shape, 0.0),
-
-    # 할인율: 0% (검증 단순화)
-    discount_annual=0.0,
-
-    # 사업비: 전부 0 (검증 단순화)
-    expense_inflation=0.0,           # 비용 인플레이션
-
-    # 위험조정 (RA = 0 으로 단순화)
-    ra_confidence=0.75,              # 신뢰수준 (cv=0 이라 사용 안 됨)
-    mortality_cv=0.0,                # 변동계수 0 -> RA = 0
-
-    # 사망 보장 — 사망 사건의 지급 rate (decrement 의 mortality_annual 과
-    # 같은 값을 쓰면 손계산 PV(claims) 와 일치)
-    coverages=(fcf.CoverageRate("DEATH", mort),),
+    lapse_annual=lapse_fn,            # 해지 없음
+    discount_annual=0.0,              # 할인 0% (검증 단순화)
+    expense_inflation=0.0,            # 비용 인플레이션 0
+    ra_confidence=0.75,               # 신뢰수준 (cv=0 이라 사용 안 됨)
+    mortality_cv=0.0,                 # 변동계수 0 -> RA = 0
 )
 result = fcf.measure(mp, asmp)
 
