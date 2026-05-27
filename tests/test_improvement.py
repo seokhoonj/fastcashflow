@@ -101,8 +101,8 @@ def test_improvement_clips_past_end(tmp_path):
 
 
 def test_improvement_only_touches_mortality(tmp_path):
-    """Riders / lapse stay at their base values -- v1 improvement is mortality-only."""
-    # We don't have riders in this minimal workbook; check lapse instead.
+    """Coverages / lapse stay at their base values -- v1 improvement is mortality-only."""
+    # We don't have rate-driven coverages in this minimal workbook; check lapse instead.
     p = tmp_path / "a.xlsx"
     curve = [0.5] * 5                                       # extreme factor for visibility
     _build(p, improvement_curve=curve)

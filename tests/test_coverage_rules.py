@@ -26,7 +26,7 @@ LAPSE = 0.005        # flat monthly lapse
 MORB_RATE = 0.03     # flat monthly diagnosis rate
 # Local coverage codes -- the order of CoverageRate entries in _assumptions().
 DEATH = 0            # the death coverage -> coverages[0]
-DIAGNOSIS = 1        # the diagnosis rider -> coverages[1]
+DIAGNOSIS = 1        # the diagnosis coverage -> coverages[1]
 
 PATTERNS = {
     "death":     BenefitPattern.DEATH,

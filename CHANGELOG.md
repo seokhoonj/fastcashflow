@@ -32,7 +32,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `_codegen_value_kernel_source_semi_markov` -- per-topology generated
   semi-Markov kernel, disk-cached. The coverage-rule and diagnosis
   passes reuse the main pass's saved in-force trajectory (no second
-  state-machine walk), so combining cohort tracking with riders is
+  state-machine walk), so combining cohort tracking with coverages is
   near-free.
 - `Cookbook` documentation track (work in progress) -- product-by-
   product recipes for practicing actuaries.
@@ -68,7 +68,7 @@ user-visible change is the warning.
   on a Ryzen 3700X with the warm disk cache; n=6 (LTC-like) at ~117
   ms. Numbers are stable post-cleanup.
 - Semi-Markov 1M MP scales linearly in cohort depth `D`: D=12 -> ~280
-  ms, D=60 -> ~1.34 s, D=120 -> ~2.6 s. Adding a rider with a
+  ms, D=60 -> ~1.34 s, D=120 -> ~2.6 s. Adding a coverage with a
   waiting/reduction rule or a diagnosis-pool depletion costs ~5%
-  baseline overhead and ~0-10% per rider thanks to the in-force
+  baseline overhead and ~0-10% per coverage thanks to the in-force
   trajectory cache.

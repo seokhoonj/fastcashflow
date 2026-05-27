@@ -10,7 +10,7 @@ Inputs
 .. autoclass:: fastcashflow.Assumptions
    :members:
 
-.. autoclass:: fastcashflow.RiderRate
+.. autoclass:: fastcashflow.CoverageRate
    :members:
 
 Measurement (GMM)

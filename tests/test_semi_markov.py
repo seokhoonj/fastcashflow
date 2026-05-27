@@ -273,18 +273,18 @@ def test_measure_value_agree_long_cohort():
 # duration are orthogonal axes that must work on the same contract.
 
 
-def _reincidence_assumptions_with_rider(duration_max, exclusion_months,
-                                        rider_is_diagnosis, rider_rate):
-    """Reincidence model plus one rider whose rate is constant per month.
+def _reincidence_assumptions_with_extra_coverage(duration_max, exclusion_months,
+                                                  extra_is_diagnosis, extra_rate):
+    """Reincidence model plus one extra coverage whose rate is constant per month.
 
-    ``rider_is_diagnosis`` picks between a single-payment diagnosis rider
+    ``extra_is_diagnosis`` picks between a single-payment diagnosis coverage
     (claims run off a depleting not-yet-diagnosed pool) and a recurring
-    health rider (claim_rate accumulates each month).
+    health coverage (claim_rate accumulates each month).
     """
     from fastcashflow.assumptions import CoverageRate
 
-    def rider_fn(sex, age, dur):
-        return np.full(dur.shape, _annual(rider_rate))
+    def extra_fn(sex, age, dur):
+        return np.full(dur.shape, _annual(extra_rate))
 
     base = _reincidence_assumptions(duration_max=duration_max,
                                      exclusion_months=exclusion_months,
@@ -302,23 +302,23 @@ def _reincidence_assumptions_with_rider(duration_max, exclusion_months,
         state_model=base.state_model,
         coverages=(
             fcf.CoverageRate(code="DEATH", rate=base.mortality_annual),
-            fcf.CoverageRate(code="rider", rate=rider_fn),
+            fcf.CoverageRate(code="EXTRA", rate=extra_fn),
         ),
     )
 
 
-def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
-                                  rider_reduction_factor,
-                                  rider_is_diagnosis=False):
-    """A small portfolio with one death coverage (rule-free) and one rider
+def _portfolio_with_rule_coverage(n, seed, extra_waiting, extra_reduction_end,
+                                  extra_reduction_factor,
+                                  extra_is_diagnosis=False):
+    """A small portfolio with one death coverage (rule-free) and one extra
     coverage (carrying the per-coverage rule). The DEATH coverage is at
-    kind 0, the rider at kind 1 -- their integer codes are positions in
-    ``assumptions.coverages`` in registration order.
+    kind 0, the extra coverage at kind 1 -- their integer codes are positions
+    in ``assumptions.coverages`` in registration order.
     """
     rng = np.random.default_rng(seed)
-    # Build coverage_kind / coverage_amount: two coverages per mp (DEATH then rider).
+    # Build coverage_kind / coverage_amount: two coverages per mp (DEATH then EXTRA).
     death_amount = rng.integers(10, 80, n) * 1_000_000.0
-    rider_amount = rng.integers(3, 15, n) * 1_000_000.0
+    extra_amount = rng.integers(3, 15, n) * 1_000_000.0
     coverage_kind = np.empty(n * 2, np.int64)
     coverage_amount = np.empty(n * 2)
     coverage_offset = np.arange(0, n * 2 + 1, 2, np.int64)
@@ -327,13 +327,13 @@ def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
     coverage_reduction_factor = np.ones(n * 2)
     for i in range(n):
         coverage_kind[2 * i] = 0    # DEATH
-        coverage_kind[2 * i + 1] = 1  # rider (first registered)
+        coverage_kind[2 * i + 1] = 1  # EXTRA (first registered after DEATH)
         coverage_amount[2 * i] = death_amount[i]
-        coverage_amount[2 * i + 1] = rider_amount[i]
-        coverage_waiting[2 * i + 1] = rider_waiting
-        coverage_reduction_end[2 * i + 1] = rider_reduction_end
-        coverage_reduction_factor[2 * i + 1] = rider_reduction_factor
-    rider_pattern = (fcf.BenefitPattern.DIAGNOSIS if rider_is_diagnosis
+        coverage_amount[2 * i + 1] = extra_amount[i]
+        coverage_waiting[2 * i + 1] = extra_waiting
+        coverage_reduction_end[2 * i + 1] = extra_reduction_end
+        coverage_reduction_factor[2 * i + 1] = extra_reduction_factor
+    extra_pattern = (fcf.BenefitPattern.DIAGNOSIS if extra_is_diagnosis
                      else fcf.BenefitPattern.MORBIDITY)
     return fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
@@ -347,40 +347,40 @@ def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
         coverage_waiting=coverage_waiting,
         coverage_reduction_end=coverage_reduction_end,
         coverage_reduction_factor=coverage_reduction_factor,
-        benefit_patterns={"DEATH": fcf.BenefitPattern.DEATH, "rider": rider_pattern},
+        benefit_patterns={"DEATH": fcf.BenefitPattern.DEATH, "EXTRA": extra_pattern},
     )
 
 
-def test_semi_markov_with_waiting_period_on_rider():
-    """Reincidence model + recurring rider with a 3-month waiting period.
+def test_semi_markov_with_waiting_period_on_coverage():
+    """Reincidence model + recurring coverage with a 3-month waiting period.
     measure() and value() must agree.
     """
-    asmp = _reincidence_assumptions_with_rider(
+    asmp = _reincidence_assumptions_with_extra_coverage(
         duration_max=12, exclusion_months=6,
-        rider_is_diagnosis=False, rider_rate=0.0008,
+        extra_is_diagnosis=False, extra_rate=0.0008,
     )
     mp = _portfolio_with_rule_coverage(
         n=30, seed=13,
-        rider_waiting=3, rider_reduction_end=0, rider_reduction_factor=1.0,
-        rider_is_diagnosis=False,
+        extra_waiting=3, extra_reduction_end=0, extra_reduction_factor=1.0,
+        extra_is_diagnosis=False,
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
 
 
-def test_semi_markov_with_diagnosis_rider():
-    """Diagnosis rider on top of the reincidence state machine. The
-    rider's claim runs off a depleting not-yet-diagnosed pool that must
+def test_semi_markov_with_diagnosis_coverage():
+    """Diagnosis coverage on top of the reincidence state machine. The
+    coverage's claim runs off a depleting not-yet-diagnosed pool that must
     apply to the cohort-aware in-force trajectory.
     """
-    asmp = _reincidence_assumptions_with_rider(
+    asmp = _reincidence_assumptions_with_extra_coverage(
         duration_max=12, exclusion_months=6,
-        rider_is_diagnosis=True, rider_rate=0.0008,
+        extra_is_diagnosis=True, extra_rate=0.0008,
     )
     mp = _portfolio_with_rule_coverage(
         n=30, seed=17,
-        rider_waiting=0, rider_reduction_end=0, rider_reduction_factor=1.0,
-        rider_is_diagnosis=True,
+        extra_waiting=0, extra_reduction_end=0, extra_reduction_factor=1.0,
+        extra_is_diagnosis=True,
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
@@ -388,17 +388,17 @@ def test_semi_markov_with_diagnosis_rider():
 
 def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
     """All three axes at once: state-duration reincidence + policy-duration
-    waiting + reduction on a diagnosis rider. Each lives on its own axis
+    waiting + reduction on a diagnosis coverage. Each lives on its own axis
     and the engine has to combine them correctly.
     """
-    asmp = _reincidence_assumptions_with_rider(
+    asmp = _reincidence_assumptions_with_extra_coverage(
         duration_max=12, exclusion_months=6,
-        rider_is_diagnosis=True, rider_rate=0.001,
+        extra_is_diagnosis=True, extra_rate=0.001,
     )
     mp = _portfolio_with_rule_coverage(
         n=25, seed=19,
-        rider_waiting=6, rider_reduction_end=24, rider_reduction_factor=0.5,
-        rider_is_diagnosis=True,
+        extra_waiting=6, extra_reduction_end=24, extra_reduction_factor=0.5,
+        extra_is_diagnosis=True,
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
@@ -559,12 +559,12 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
     assert np.allclose(m.bel[:, 0], v.bel)
 
 
-def _portfolio_with_two_riders(n, seed, rule_rider_waiting,
-                                rule_rider_reduction_end,
-                                rule_rider_reduction_factor):
+def _portfolio_with_rule_and_diagnosis_coverages(n, seed, rule_waiting,
+                                                  rule_reduction_end,
+                                                  rule_reduction_factor):
     """Portfolio with three coverages per mp: DEATH (rule-free) + a
-    recurring rider carrying a waiting/reduction rule (kind = 1) + a
-    diagnosis rider with no rules (kind = 2). Exercises both the
+    recurring coverage carrying a waiting/reduction rule (kind = 1) + a
+    diagnosis coverage with no rules (kind = 2). Exercises both the
     coverage-rule pass and the diagnosis pass on the same model points.
     """
     rng = np.random.default_rng(seed)
@@ -579,14 +579,14 @@ def _portfolio_with_two_riders(n, seed, rule_rider_waiting,
     coverage_reduction_factor = np.ones(n * 3)
     for i in range(n):
         coverage_kind[3 * i + 0] = 0   # DEATH
-        coverage_kind[3 * i + 1] = 1   # recurring rider (rule)
-        coverage_kind[3 * i + 2] = 2   # diagnosis rider
+        coverage_kind[3 * i + 1] = 1   # recurring coverage (rule)
+        coverage_kind[3 * i + 2] = 2   # diagnosis coverage
         coverage_amount[3 * i + 0] = death_amount[i]
         coverage_amount[3 * i + 1] = recur_amount[i]
         coverage_amount[3 * i + 2] = diag_amount[i]
-        coverage_waiting[3 * i + 1] = rule_rider_waiting
-        coverage_reduction_end[3 * i + 1] = rule_rider_reduction_end
-        coverage_reduction_factor[3 * i + 1] = rule_rider_reduction_factor
+        coverage_waiting[3 * i + 1] = rule_waiting
+        coverage_reduction_end[3 * i + 1] = rule_reduction_end
+        coverage_reduction_factor[3 * i + 1] = rule_reduction_factor
     return fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
@@ -607,7 +607,7 @@ def _portfolio_with_two_riders(n, seed, rule_rider_waiting,
     )
 
 
-def test_semi_markov_with_rule_and_diagnosis_riders_together():
+def test_semi_markov_with_rule_and_diagnosis_coverages_together():
     """The strongest parity case for the semi-Markov inforce-trajectory
     caching: a single portfolio where both the coverage-rule pass and
     the diagnosis pass fire on every contract. If the cached trajectory
@@ -641,10 +641,10 @@ def test_semi_markov_with_rule_and_diagnosis_riders_together():
             CoverageRate(code="diag", rate=diag_rate),
         ),
     )
-    mp = _portfolio_with_two_riders(
+    mp = _portfolio_with_rule_and_diagnosis_coverages(
         n=40, seed=29,
-        rule_rider_waiting=3, rule_rider_reduction_end=12,
-        rule_rider_reduction_factor=0.6,
+        rule_waiting=3, rule_reduction_end=12,
+        rule_reduction_factor=0.6,
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)

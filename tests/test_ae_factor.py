@@ -82,8 +82,8 @@ def test_no_ae_factor_sheet(tmp_path):
     assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.02
 
 
-def test_scalar_ae_factor_per_rider(tmp_path):
-    """A single (product, channel, coverage_code, factor) row scales the rider rate."""
+def test_scalar_ae_factor_per_coverage(tmp_path):
+    """A single (product, channel, coverage_code, factor) row scales the coverage rate."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
         ["product_code", "channel_code", "coverage_code", "factor"],

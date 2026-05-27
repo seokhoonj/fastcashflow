@@ -40,7 +40,7 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
         row.append(morbidity_age_shift)
     seg.append(row)
 
-    # riders
+    # coverages
     rd = wb.create_sheet("coverages")
     rd.append(["coverage_code", "rate_table"])
     rd.append(["INPATIENT", "HOSP"])
@@ -52,7 +52,7 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
         for age in range(20, 81):
             mt.append(["MORT", sex, age, 0.001 * (age - 20 + 1)])     # 0.001, 0.002, ...
 
-    # rider rate table for hosp -- linear in age too
+    # coverage rate table for hosp -- linear in age too
     rr = wb.create_sheet("incidence_rate_tables")
     rr.append(["table_id", "sex", "age", "rate"])
     for sex in (0, 1):
@@ -98,7 +98,7 @@ def test_mortality_age_shift_positive(tmp_path):
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # mortality at apparent age 30 + 5 = 35 (sex 0)
     assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 16          # 0.016
-    # morbidity (hosp) unaffected -- different rider, no morbidity shift
+    # morbidity (hosp) unaffected -- mortality_age_shift does not touch coverage rates
     assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 11             # 0.11
 
 
@@ -112,8 +112,8 @@ def test_mortality_age_shift_negative(tmp_path):
     assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.001 * 18)
 
 
-def test_morbidity_age_shift_applies_to_all_riders(tmp_path):
-    """morbidity_age_shift shifts every rate-driven rider, mortality untouched."""
+def test_morbidity_age_shift_applies_to_all_coverages(tmp_path):
+    """morbidity_age_shift shifts every rate-driven coverage, mortality untouched."""
     p = tmp_path / "a.xlsx"
     _build_workbook(p, morbidity_age_shift=2)
     asmp = _segment(p)

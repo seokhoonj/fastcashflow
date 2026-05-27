@@ -124,7 +124,7 @@ def test_value_gpu_matches_cpu():
 @pytest.mark.skipif(not cuda.is_available(), reason="no CUDA device available")
 @pytest.mark.filterwarnings("ignore::numba.core.errors.NumbaPerformanceWarning")
 def test_value_gpu_matches_cpu_with_transition():
-    """GPU and CPU agree under a waiver transition with a diagnosis rider --
+    """GPU and CPU agree under a waiver transition with a diagnosis coverage --
     the GPU two-track in-force and diagnosis pool reproduce the CPU kernel."""
     def flat(rate):
         return lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(rate))

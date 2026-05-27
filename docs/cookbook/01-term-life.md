@@ -537,7 +537,7 @@ Hand-calc: 39.80
   **자기 워크북** 을 만드는 방법. 9 시트의 매 컬럼 의미, 흔한 실수,
   단일 segment 부터 시작.
 - **3장 사망 + 단순 진단 일시금** — 사망보험에 진단보험금 (CI =
-  Critical Illness = 진단) 일시금 결합. 첫 번째 rider 도입.
+  Critical Illness = 진단) 일시금 결합. 첫 번째 추가 담보 도입.
 - **4장 보험료 납입면제 (waiver)** — `STATE_MODELS["WAIVER"]` 입문.
   active → waiver 상태 추적.
 

@@ -271,7 +271,7 @@ def _flat(rate):
 
 
 def test_diagnosis_transition_measure_value_agree():
-    """A diagnosis rider attached to a death contract under a waiver
+    """A diagnosis coverage attached to a death contract under a waiver
     transition -- the fused value() and the detailed measure() agree,
     cross-checking the two-track diagnosis pool against the projection
     kernel over mixed input states."""
