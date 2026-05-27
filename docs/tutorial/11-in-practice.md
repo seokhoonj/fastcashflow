@@ -14,31 +14,68 @@
 그것은 보통 엑셀·CSV 파일로 들어옵니다. 이 장은 그 파일들의 구조와,
 파일을 읽어 평가하는 흐름을 다룹니다.
 
-## 11.1 입력 파일의 구조
+## 11.1 입력 파일 — 네 갈래
 
-입력은 두 갈래 — 모델포인트와 계리적 가정입니다. 파일을 보기 전에,
-담보가 어떻게 구성되는지부터 짚습니다.
+실무에서 fastcashflow 에 흘려보내는 입력은 **네 개의 파일**입니다.
+각각 *누가 / 언제 / 왜* 만드는지가 다릅니다:
 
-### 담보 구조
+```{list-table}
+:header-rows: 1
+:widths: 28 22 22 28
 
-계약 하나는 **주계약과 특약 여러 개**로 이뤄집니다. 엔진은 이 전부를
-**담보**의 목록으로 다룹니다 — 주계약 사망도, 특약도 모두 담보
-하나씩입니다.
+* - 파일
+  - 누가 만드나
+  - 갱신 주기
+  - 무엇
+* - `benefit_patterns.csv`
+  - 회사 (보험계리)
+  - 연 1 회 미만
+  - 회사 카탈로그 — 담보 코드 → 청구 패턴
+* - `assumptions.xlsx`
+  - 회사 (보험계리)
+  - 분기 / 연
+  - 계리적 가정 (사망률 · 해지율 · 할인율 · 사업비 · 위험조정)
+* - `policies.csv` 또는 `inforce_2026Q1.csv`
+  - 정책관리 시스템
+  - 일 / 분기
+  - 보유 계약 (영구 spec + 결산시 상태)
+* - `coverages.csv`
+  - 정책관리 시스템
+  - 일 / 분기
+  - 각 계약에 붙은 담보 (특약) 목록과 가입금액
+```
 
-담보마다 **`coverage_code`**(특약코드)가 붙습니다. 이 코드가 가정 파일의
-`coverages`·`rates` 시트와 맞물려 그 담보의 유형과 위험률을 끌어옵니다.
-유형(`type`)은 엔진이 그 담보를 어떻게 계산할지를 정합니다.
+이 절은 네 파일을 차례로 봅니다 — 회사 카탈로그 (한 번 정해두면 거의
+안 바뀜) 부터 시작해 계약 / 담보 (매일·매 분기 변함) 로 내려옵니다.
+
+### 회사 카탈로그 — `benefit_patterns.csv`
+
+회사가 다루는 모든 담보 코드를 모아둔 **목록 파일** 입니다. 각 담보가
+엔진 안에서 어떤 *청구 패턴* 으로 동작할지 한 줄씩 적어둡니다. 이 매핑은
+회사 차원의 결정이라 한 번 정해두면 거의 안 바뀝니다.
+
+| coverage_code | coverage_name | benefit_pattern |
+|---|---|---|
+| DEATH | 일반사망 | DEATH |
+| ADB | 재해사망 | DEATH |
+| INPATIENT | 입원특약 | MORBIDITY |
+| CANCER | 암진단특약 | DIAGNOSIS |
+| ANNUITY | 생존연금 | ANNUITY |
+| MATURITY | 만기환급 | MATURITY |
+
+`benefit_pattern` 칸의 값이 엔진의 **청구 알고리즘** 을 결정합니다.
+다섯 가지가 전부:
 
 ```{list-table}
 :header-rows: 1
 :widths: 22 78
 
-* - `benefit_pattern`
+* - 청구 패턴
   - 엔진의 동작
 * - `DEATH`
-  - 사망형 담보 (일반사망 / 상해사망 / 재해사망 / ADB 등). 자기 위험률로 지급, 보유계약은 그대로 (in-force 감쇠는 별도 `mortality_annual` 입력이 담당)
+  - 사망형 담보 (일반 / 상해 / 재해 / ADB 등). 자기 위험률로 지급, 보유계약은 그대로 (in-force 감쇠는 별도 사망률 입력이 담당)
 * - `MORBIDITY`
-  - 입원·수술 등 반복지급 담보. 매번 지급하고 계약은 유지
+  - 입원 · 수술 등 반복지급 담보. 매번 지급하고 계약은 유지
 * - `DIAGNOSIS`
   - 진단 등 1회 지급 담보. 미진단 풀에서 차감
 * - `ANNUITY`
@@ -47,69 +84,82 @@
   - 보험기간 끝에 지급하는 생존급부
 ```
 
-실무에서는 담보코드와 위험률코드가 별개입니다 — 한 위험률을 여러
-담보가 나눠 쓰기도 하니까요. fastcashflow의 `coverage_code`는 그 둘을
-미리 맺어 둔 키입니다. 담보와 위험률을 잇는 작업은 입력 파일을 만들기
-전에 끝내고, 엔진에는 담보마다 위험률이 정해진 상태로 들어옵니다.
+같은 사망 사건 (일반 / 재해 / 질병) 도 자기 *위험률 테이블* 은 따로
+갖되 청구 패턴은 모두 `DEATH` — 자세한 한국 상품 매핑은 쿡북의
+[BenefitPattern 결정 가이드](../cookbook/basics/benefit-patterns-catalog) 참조.
 
-### 모델포인트 — 계약 파일과 담보 파일
+### 가정 파일 — `assumptions.xlsx`
 
-모델포인트는 **long-form**, 두 개의 파일로 나뉩니다 — 계약 자체의
-속성을 담는 **계약 파일**과, 계약이 가진 담보를 담는 **담보
-파일**입니다. 두 파일 모두 CSV이거나 parquet(파케이 — Hadoop
-생태계에서 나온 컬럼 단위 데이터 파일 형식으로, CSV보다 빠르고
-작습니다)입니다.
+엑셀 워크북 한 권. 사망률 / 해지율 / 할인율 / 사업비 / 위험조정 같은
+**계리적 가정** 을 시트별로 정리합니다. 결산일마다 calibration 을 갱신
+하는 자리.
 
-계약 파일은 한 줄이 한 계약입니다.
+가장 중심이 되는 두 시트:
 
-```{list-table}
-:header-rows: 1
-:widths: 30 70
+**`segments`** — `(상품, 채널)` 매 조합에 어떤 위험률 / 해지율 / 할인율
+테이블을 쓸지 한 줄씩 매핑.
 
-* - 열 이름
-  - 뜻
-* - `mp_id`
-  - 계약 식별자
-* - `product`
-  - 상품명
-* - `issue_age`
-  - 가입연령
-* - `sex`
-  - 성별 (0 남, 1 여)
-* - `term_months`
-  - 보험기간 (개월)
-* - `count`
-  - 이 줄이 대표하는 계약 수 (없으면 1)
-```
+| product_code | channel_code | mortality_table | lapse_table | discount_table |
+|---|---|---|---|---|
+| TERM_LIFE_A | GA | MORTALITY_STD | LAPSE_GA | DISCOUNT_STD |
+| TERM_LIFE_A | FC | MORTALITY_STD | LAPSE_FC | DISCOUNT_STD |
+| HEALTH_A | TM | MORTALITY_STD | LAPSE_TM_HEALTH | DISCOUNT_STD |
 
-담보 파일은 한 줄이 한 담보입니다. 주계약 사망도, 특약도 모두 한
-줄씩이고 `mp_id`로 계약 파일과 묶입니다. 계약이 가진 담보 수만큼
-줄이 생깁니다.
+**`mortality_tables`** — 위에서 가리키는 사망률 테이블의 실제 값.
 
-```{list-table}
-:header-rows: 1
-:widths: 30 70
+| table_id | sex | age | rate |
+|---|---|---|---|
+| MORTALITY_STD | 0 | 40 | 0.00088 |
+| MORTALITY_STD | 0 | 41 | 0.00097 |
+| MORTALITY_STD | 1 | 40 | 0.00045 |
 
-* - 열 이름
-  - 뜻
-* - `mp_id`
-  - 어느 계약의 담보인지
-* - `coverage_code`
-  - 특약코드 (가정의 `coverages` 시트와 맞물림)
-* - `amount`
-  - 가입금액
-* - `premium`
-  - 월 보험료
-```
+위와 같은 패턴으로 `lapse_tables`, `discount_tables`, `expense_tables`
+시트가 자기 ID 별 곡선을 담습니다. `coverages` 시트 한 장이 각 담보
+코드를 어느 *위험률 테이블* 에 잇는지 한 줄씩 적습니다 — 회사
+카탈로그가 *코드 → 패턴* 매핑이라면 이쪽은 *코드 → 위험률* 매핑.
 
-샘플 파일을 보면 — 계약 파일:
+전체 시트 구조는 [`assumptions-format`](../assumptions-format) 에 정리되어
+있습니다. 8장에서 `lambda` 로 적었던 사망률을 여기서는 엑셀 표에 채워
+넣는다고 생각하면 됩니다.
 
-| mp_id | product | issue_age | sex | term_months | count |
-|---|---|---|---|---|---|
-| P001 | TERM_LIFE_A | 35 | 0 | 240 | 1 |
-| P002 | HEALTH_A | 38 | 1 | 240 | 1 |
+### 계약 파일 — `policies.csv`
 
-담보 파일:
+한 줄이 한 계약. **가입 시점의 영구 spec** 만 들어갑니다 — 가입 후 안
+바뀌는 값들입니다.
+
+| mp_id | product_code | channel_code | issue_age | sex | term_months | premium_term_months | count |
+|---|---|---|---|---|---|---|---|
+| P001 | TERM_LIFE_A | FC | 35 | 0 | 240 | 240 | 1 |
+| P002 | HEALTH_A | GA | 38 | 1 | 240 | 240 | 1 |
+| P003 | TERM_LIFE_A | GA | 42 | 0 | 240 | 240 | 1 |
+
+- `mp_id` — 계약 식별자
+- `product_code` / `channel_code` — `segments` 시트와 맞물려 어느 가정
+  세트를 적용할지
+- 나머지 — 가입연령 / 성별 / 보험기간 / 납입기간 / 계약 수
+
+**결산 모드** (보유계약 평가) 는 같은 파일에 *상태 컬럼 네 개* 가 더
+들어옵니다. 정책관리 시스템이 매 분기 끝에 떨어뜨리는 "보유계약
+마감파일" 형태:
+
+| ... | elapsed_months | count | prior_csm | lock_in_rate |
+|---|---|---|---|---|
+| ... | 36 | 0.92 | 55000 | 0.03 |
+| ... | 48 | 0.88 | 42000 | 0.03 |
+
+- `elapsed_months` — 가입 후 경과 개월수
+- `count` — 결산일 기준 잔존 (사망 / 해지 빠진 후)
+- `prior_csm` — 직전 분기 종가 CSM (이번 분기로 carry-forward)
+- `lock_in_rate` — 가입 시점에 잠긴 할인율
+
+이 결합 파일을 보통 `inforce_2026Q1.csv` 같은 분기명으로 부릅니다.
+신계약 평가는 영구 spec 만 있는 `policies.csv`, 결산 평가는 spec + 상태가
+합쳐진 `inforce_*.csv` — 같은 reader 가 둘 다 받습니다 (11.2 절).
+
+### 담보 파일 — `coverages.csv`
+
+한 줄이 한 (계약, 담보). 주계약도 특약도 모두 한 줄씩이고 `mp_id` 로
+계약 파일과 묶입니다.
 
 | mp_id | coverage_code | amount | premium |
 |---|---|---|---|
@@ -119,120 +169,123 @@
 | P002 | CANCER | 30000000 | 22000 |
 | P002 | INPATIENT | 1000000 | 9000 |
 
-P001은 담보 파일에 두 줄 — 주계약 사망(`DEATH`)과 생존특약(`MATURITY`).
-P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅니다.
+- `coverage_code` — 회사 카탈로그 (`benefit_patterns.csv`) 에 등록된 담보
+  코드. 그 매핑을 따라 엔진이 청구 알고리즘을 고름.
+- `amount` — 가입금액 (사망보험금 / 진단금 / 입원 일당 등)
+- `premium` — 그 담보 몫의 월 보험료 (선택, 없으면 0)
 
-담보에 면책기간이나 감액기간이 있으면 담보 파일에 `waiting`(면책 개월
-수)·`reduction_end`(감액 종료 시점)·`reduction_factor`(감액률) 열을
-더합니다. 없는 담보는 비워 두면 됩니다.
+담보에 *면책기간* / *감액기간* 이 있으면 `waiting` (면책 개월수) /
+`reduction_end` / `reduction_factor` 컬럼을 더합니다. 없는 담보는 비워
+둡니다.
 
-계약 한 건이 한 줄로 끝나는 **wide** 형식도 받습니다. 담보를 열로
-펼친 것이라 단일 상품의 작은 포트폴리오에 편하지만, 특약이 많은 이종
-포트폴리오에는 long-form이 자연스럽습니다.
-`ModelPoints.to_wide()`·`.to_long()`로 두 형식을 오갈 수 있습니다.
+P001 은 두 줄 (주계약 사망 + 만기환급), P002 는 세 줄. 계약마다 담보
+수가 다르니 행 수도 다릅니다 — **long-form** 입니다. 작은 동질
+포트폴리오는 한 행에 담보를 모두 펼친 *wide-form* 도 가능합니다 (한
+행 한 계약, `<code>_benefit` 컬럼들).
 
-### 가정 파일 — 엑셀 워크북
+### 네 파일을 한 번에 그림으로
 
-가정 파일은 엑셀 워크북이고, 시트 다섯 개로 이뤄집니다. 각 시트가
-실제로 어떻게 생겼는지 예시로 봅니다.
+```
+benefit_patterns.csv  ────────────┐
+   (회사 카탈로그)                │
+                                  │ 코드 → 패턴 매핑
+assumptions.xlsx  ──┬───────────  ┤
+   (계리적 가정)    │              │
+                    └─ 코드 → 위험률 매핑 (coverages 시트)
+                                  │
+policies.csv 또는    ────────────┤
+inforce_2026Q1.csv               │  mp_id 로 join
+   (보유 계약)                    │
+                                  │
+coverages.csv  ───────────────────┘
+   (담보 가입금액)
+                ▼
+            엔진 평가 (BEL / RA / CSM)
+```
 
-**`parameters`** — 할인율·사업비·위험조정 등 스칼라 가정을 이름과 값,
-두 열로 적습니다.
+코드 매핑은 두 갈래로 갈라집니다 — *패턴* (DEATH/MORBIDITY/...) 은
+카탈로그에서, *위험률* (실제 숫자) 은 가정 워크북에서. 한 자리에 모으지
+않고 분리한 이유는 갱신 주기가 다르기 때문 — 패턴은 거의 안 바뀌고,
+위험률은 분기마다 재calibration.
 
-| parameter | value |
-|---|---|
-| discount_annual | 0.03 |
-| ra_confidence | 0.75 |
-| mortality_cv | 0.10 |
+## 11.2 결산 워크플로 — 매 분기 한 파일
 
-**`mortality`** — 기저 사망률. 보유계약 감소와 주계약 사망에 쓰입니다.
+실무의 IFRS17 평가는 보통 분기마다 도는 **결산 사이클** 입니다. 정책관리
+시스템이 매 분기 끝에 "보유계약 마감파일" 한 장을 떨어뜨리고 — 그 안에
+계약의 영구 spec (가입연령 / 보험기간 / 보험금) 과 직전 분기 종가의
+상태 (경과월수 / 잔존 / 직전 분기 CSM / lock-in 할인율) 가 함께
+들어 있습니다.
 
-| sex | age | rate |
-|---|---|---|
-| 0 | 40 | 0.0013 |
-| 0 | 41 | 0.0014 |
-| 1 | 40 | 0.0007 |
-
-**`lapse`** — 경과연수별 연 해지율.
-
-| duration | rate |
-|---|---|
-| 0 | 0.13 |
-| 1 | 0.118 |
-| 2 | 0.106 |
-
-**`coverages`** — 담보 마스터. 담보 하나에 한 줄. `benefit_pattern`은 그 담보를
-엔진이 어떻게 다룰지를 정하며, 값은 앞의 담보 구조 표를 따릅니다.
-
-| product | coverage_code | coverage_name | benefit_pattern |
-|---|---|---|---|
-| - | DEATH | 일반사망 | DEATH |
-| - | CANCER | 암진단특약 | DIAGNOSIS |
-| - | INPATIENT | 입원특약 | MORBIDITY |
-
-**`rates`** — 담보별 위험률. 위험률이 있는
-담보(`DEATH`·`MORBIDITY`·`DIAGNOSIS`)만 들어갑니다. `ANNUITY`·`MATURITY`는
-위험률이 없습니다.
-
-| coverage_code | sex | age | rate |
-|---|---|---|---|
-| CANCER | 0 | 40 | 0.002 |
-| CANCER | 1 | 40 | 0.0022 |
-| INPATIENT | 0 | 40 | 0.08 |
-
-8장에서 `lambda`로 적었던 사망률·위험률을, 여기서는 엑셀 표에 채워
-넣습니다 — 사용자들에게 익숙한 방식이죠.
-
-## 11.2 파일로 평가하기
-
-파일이 준비됐으면 읽어서 평가하고, 결과를 저장합니다. 아래 코드는 두
-단계 — 먼저 샘플 파일을 디스크에 떨어뜨리고, 그 다음 자기 파일을 읽듯이
-`read_*` 로 평가. 그대로 paste 하면 됩니다.
+fastcashflow 는 그 한 파일을 그대로 받습니다. `read_inforce_policies`
+한 번의 호출이 spec 과 state 를 동시에 읽고 평가에 필요한 두 객체
+(`ModelPoints`, `InforceState`) 를 돌려줍니다.
 
 ```python
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 현재 폴더에 떨어뜨림 (한 번만 — 이미 자기 파일이 있으면 생략)
-fcf.save_sample_assumptions("assumptions.xlsx")             # .xlsx 만 (multi-sheet 워크북)
-fcf.save_sample_policies("policies.csv")                    # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_coverages("coverages.csv")                  # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_benefit_patterns("benefit_patterns.csv")    # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_assumptions("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_inforce_policies("inforce_2026Q1.csv")       # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_benefit_patterns("benefit_patterns.csv")     # .csv / .xlsx / .parquet / .feather
 # .xlsx 는 시트당 ~ 1M row 한계 -- 대형 portfolio 는 .parquet / .feather 권장
 
-# (2) 읽어서 평가하고 결과 저장
-basis        = fcf.read_assumptions("assumptions.xlsx")     # {(product_code, channel_code): Assumptions}
-assumptions  = basis[("TERM_LIFE_A", "GA")]                 # 한 세그먼트 선택
-model_points = fcf.read_model_points(
-    "policies.csv", assumptions,                            # 계약 파일 + 특약 코드 해석용
-    coverages="coverages.csv",                              # 담보 파일
-    benefit_patterns="benefit_patterns.csv",                # 회사 카탈로그
+# (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 in-force 측정
+basis       = fcf.read_assumptions("assumptions.xlsx")       # {(product_code, channel_code): Assumptions}
+assumptions = basis[("TERM_LIFE_A", "GA")]                   # 한 세그먼트 선택
+
+model_points, state = fcf.read_inforce_policies(
+    "inforce_2026Q1.csv", assumptions,                       # 결산 1-파일 (spec + state 결합)
+    coverages="coverages.csv",                               # 담보 파일 (long-form)
+    benefit_patterns="benefit_patterns.csv",                 # 회사 카탈로그
 )
-val = fcf.value(model_points, assumptions)
-fcf.write_valuation(val, "results.csv")                     # 결과 파일
+val = fcf.value_in_force(
+    model_points, assumptions, period_months=3,              # 다음 분기 (3 개월) 까지의 평가
+    prior_csm    = state.prior_csm,                          # 직전 분기 종가 CSM
+    lock_in_rate = state.lock_in_rate,                       # 가입 시점 lock-in 된 할인율
+)
+fcf.write_valuation(val, "results_2026Q1.csv")               # 결과 파일
 ```
 
 각 함수의 역할:
 
 - `save_sample_*` — 패키지 내장 샘플 파일을 디스크에 복사합니다. Excel /
-  텍스트 에디터로 열어 fastcashflow 워크북이 어떻게 생겼는지 직접
+  텍스트 에디터로 열어 fastcashflow 의 입력 파일이 어떻게 생겼는지 직접
   들여다 볼 수 있습니다. 자기 데이터를 쓸 땐 이 줄을 빼고 그 자리에
   자기 파일이 있다고 보면 됩니다.
 - `read_assumptions` — 가정 엑셀을 읽어 `{(product_code, channel_code):
   Assumptions}` 딕셔너리로 돌려줍니다. 한 워크북에 여러 세그먼트
   (상품 × 채널) 를 함께 관리하기 위함입니다. 한 세그먼트만 쓰려면
   키로 골라냅니다.
-- `read_model_points` — 계약 파일과 담보 파일을 읽어 모델포인트를
-  만듭니다. 담보 파일의 특약코드를 가정에 등록된 특약과 맞춰야 하므로,
-  가정 (`assumptions`) 을 함께 넘깁니다.
-- `value` — 평가합니다.
+- `read_inforce_policies` — 결산 1-파일을 읽어 **`(ModelPoints, InforceState)`
+  튜플** 을 돌려줍니다. ModelPoints 에는 `elapsed_months` / `count` 가
+  이미 fold 되어 있고, InforceState 는 `prior_csm` / `lock_in_rate` 을
+  carry — 다음 줄의 `value_in_force` 에 그대로 흘려보냅니다.
+- `value_in_force` — 결산 평가. 신계약 평가의 `value` 와 다른 점은:
+  (a) 가입 시 lock-in 된 할인율을 명시적으로 받음, (b) 직전 분기의 CSM
+  을 출발점으로 carry-forward, (c) `period_months` 로 이번 분기에만
+  release 될 부분을 잘라냄.
 - `write_valuation` — BEL·RA·CSM·손실요소를 모델포인트마다 한 줄씩
   파일로 저장합니다.
 
-wide 한 파일 (한 행 = 한 계약, 담보가 컬럼으로 펼쳐진 형태) 이면
-`coverages` 없이 `read_model_points("portfolio.csv", assumptions)` 로
-읽습니다. 8장의 `load_sample_*` 도 사실 이 `read_*` 로 패키지 안의
-샘플 파일을 직접 읽는 것입니다 — `save_sample_*` 으로 한 번 디스크에
-떨어뜨려 보면 그 안의 구조가 보입니다.
+```{admonition} 신계약 평가는 어떻게?
+:class: note
+
+위는 *결산* (보유계약) 평가입니다. 새로 인수한 계약은 *결산 상태가
+없으니* `inforce_state` 컬럼이 없는 보통의 policies 파일로:
+
+​    `model_points = fcf.read_model_points("new_business.csv", assumptions, coverages=..., benefit_patterns=...)`
+​    `val = fcf.value(model_points, assumptions)`
+
+`read_model_points` 와 `value` 의 흐름. 8 장에서 이미 본 형태와 같습니다.
+신계약과 보유계약은 같은 엔진이지만 입력 파일 / 함수가 다른 두 *모드*.
+```
+
+자기 데이터가 *두 파일* (영구 spec 의 `policies.csv` + 분기별 갱신의
+`inforce_state.csv`) 로 분리되어 들어오는 ETL 환경이라면, 그대로 둘로
+받는 path 도 있습니다 — `read_model_points("policies.csv", ...)` +
+`read_inforce_state("inforce_state.csv")` + `apply_inforce_state(mp,
+state)`. 결과는 위 1-파일과 동일.
 
 ## 11.3 메모리를 넘는 규모
 

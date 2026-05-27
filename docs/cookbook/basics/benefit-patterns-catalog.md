@@ -65,7 +65,7 @@ BenefitPattern.MATURITY     # 만기환급 — 만기 시 1 회 지급 (scalar f
 | **MATURITY** | 만기까지 생존 시 1 회 지급 | rate 없음 | `ModelPoints.maturity_benefit` |
 
 ```{note}
-주계약 (生保 의 주계약 / 損保 의 보통약관) 은 **상품마다 다른 패턴**입니다.
+주계약 (생보 의 주계약 / 손보 의 보통약관) 은 **상품마다 다른 패턴**입니다.
 정기 / 종신은 DEATH, 암보험은 DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은
 ANNUITY. 엔진은 "주계약" 을 모릅니다 — 카탈로그에 등록된 담보들 중 어느
 것이 주계약인지는 회사 / product 단위 결정입니다.
