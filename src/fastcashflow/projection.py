@@ -567,6 +567,13 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         sex_grid, issue_age_grid, duration_grid,
         issue_class_grid, elapsed_grid,
     )))
+    # Shape contract: _project_kernel / _project_kernel_semi_markov index
+    # cov_rates[coverage_kind[k], mp, year]. Lock the shape here so a future
+    # change to the grid construction surfaces at this assertion rather than
+    # silently broadcasting into a wrong claim rate.
+    assert cov_rates.shape == (
+        len(assumptions.coverages), len(model_points.issue_age), n_years
+    ), f"cov_rates shape {cov_rates.shape} != (n_cov, n_mp, n_years)"
     # Expense primitives -- the five inputs the kernel consumes. Honours
     # Assumptions.expense_items when set, otherwise the legacy alpha / beta
     # / gamma / expense_inflation scalars (see _expense_kernel_args).

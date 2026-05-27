@@ -1595,6 +1595,14 @@ def value(
         [r.rate for r in assumptions.coverages], sex_grid,
         issue_age_grid, duration_grid, issue_class_grid, elapsed_grid,
     )))
+    # Shape contract: _value_kernel_scalar indexes cov_rates[kind, sx, ridx,
+    # year] against the dense (sex, age, year) lookup grid. Lock the shape
+    # here so a future grid refactor surfaces at this assertion rather than
+    # producing a silently-broadcast wrong claim rate.
+    n_ages = max_age - min_age + 1
+    assert cov_rates.shape == (
+        len(assumptions.coverages), 2, n_ages, n_years
+    ), f"cov_rates shape {cov_rates.shape} != (n_cov, 2, n_ages, n_years)"
 
     # Expense primitives -- the five inputs every value-side kernel
     # consumes (alpha / beta / gamma scalars plus two per-month curves).
