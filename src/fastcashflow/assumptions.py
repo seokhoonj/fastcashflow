@@ -108,7 +108,21 @@ def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
     precision to the ``1 - tiny`` catastrophic cancellation in float64.
     """
     annual = np.asarray(annual_rate, dtype=np.float64)
-    return -np.expm1(np.log1p(-annual) / 12.0)
+    # A probability above 1.0 makes log1p(-annual) take log of a non-positive
+    # number, returning NaN that propagates silently through the engine.
+    # Reject up front so the operator sees the bad input, not a NaN BEL.
+    if np.any(annual > 1.0):
+        bad = float(np.max(annual))
+        raise ValueError(
+            f"annual_to_monthly: annual rate must be <= 1.0 (decrement "
+            f"probability), got max {bad!r}"
+        )
+    # annual == 1.0 lands on log1p(0) = -inf -> monthly_q = 1.0 (everyone
+    # decrements within the month), mathematically correct. Silence the
+    # accompanying numpy ``divide by zero in log1p`` RuntimeWarning since
+    # the result is well-defined.
+    with np.errstate(divide="ignore"):
+        return -np.expm1(np.log1p(-annual) / 12.0)
 
 
 @dataclass(frozen=True, slots=True)

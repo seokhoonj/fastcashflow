@@ -1,6 +1,7 @@
 """Model point data -- the contracts to be projected."""
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -158,6 +159,19 @@ class ModelPoints:
         # not at the bottom of a kernel where the error becomes a NaN BEL.
         if np.any(self.issue_age < 0):
             raise ValueError("issue_age must be >= 0")
+        # issue_age carries through into the rate-table lookup as an int64
+        # (rate grids are indexed by integer year). A fractional input is
+        # silently truncated toward zero -- issue_age=40.7 looks up age 40
+        # not 41. Warn so a stray .5 from a "midpoint of year" mistake or
+        # a date-arithmetic bug does not slip through.
+        if np.any(np.modf(self.issue_age)[0] != 0):
+            warnings.warn(
+                "issue_age has fractional values; the engine truncates "
+                "toward zero at rate-table lookup (issue_age=40.7 -> 40). "
+                "Round to whole years upstream if integer age was intended.",
+                UserWarning,
+                stacklevel=2,
+            )
         if np.any(self.term_months < 1):
             raise ValueError("term_months must be >= 1")
         # Premiums / survival benefits default to zero (absent).

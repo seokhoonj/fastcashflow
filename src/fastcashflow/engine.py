@@ -18,6 +18,7 @@ import hashlib
 import importlib.util
 import os
 import sys
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -226,6 +227,21 @@ def value_in_force(
     m = measure(model_points, assumptions)
     n_mp = m.bel.shape[0]
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    # ``elapsed_months > term_months`` means the policy is already past
+    # its original maturity; the trajectory has nothing meaningful at
+    # that column (the BEL trajectory only extends to t = term). Without
+    # this guard the indexing reads beyond the contract horizon and
+    # returns a silent zero / garbage valuation.
+    term = np.asarray(model_points.term_months, dtype=np.int64)
+    over = em > term
+    if np.any(over):
+        bad = int(np.argmax(over))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} > "
+            f"term_months[{bad}]={int(term[bad])}; the policy has run past "
+            "its original maturity. value_in_force needs an as-of date "
+            "within the contract horizon."
+        )
     rows = np.arange(n_mp)
     bel = m.bel[rows, em]
     ra = m.ra[rows, em]
@@ -360,6 +376,16 @@ def measure_in_force(
         )
     period_months = int(period_months) if period_months is not None else 12
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    term = np.asarray(model_points.term_months, dtype=np.int64)
+    over = em > term
+    if np.any(over):
+        bad = int(np.argmax(over))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} > "
+            f"term_months[{bad}]={int(term[bad])}; the policy has run past "
+            "its original maturity. roll_forward needs an as-of date within "
+            "the contract horizon."
+        )
     prior_t = em - period_months
     if np.any(prior_t < 0):
         bad = int(np.argmin(prior_t))
@@ -1829,8 +1855,24 @@ def value_segmented(
             "pass a single-segment basis"
         )
 
-    product = model_points.product_code
-    channel = model_points.channel_code
+    # Codes flowing in from the two source files may carry different
+    # Unicode normalisation forms (NFC vs NFD) for the same visible
+    # string -- a Korean / European character composed in one file and
+    # decomposed in the other compares unequal. NFC-normalise both sides
+    # so the segment lookup is text-identity, not byte-identity.
+    product = np.array(
+        [unicodedata.normalize("NFC", str(v)) for v in model_points.product_code],
+        dtype=object,
+    )
+    channel = np.array(
+        [unicodedata.normalize("NFC", str(v)) for v in model_points.channel_code],
+        dtype=object,
+    )
+    basis = {
+        (unicodedata.normalize("NFC", str(p)),
+         unicodedata.normalize("NFC", str(c))): a
+        for (p, c), a in basis.items()
+    }
     n_mp = model_points.n_mp
 
     # Segment keys are joined with '|' for factorisation; reject codes that

@@ -59,6 +59,15 @@ def discount_monthly_curve(assumptions: Assumptions, n_time: int) -> FloatArray:
     annual = _per_year_to_per_month(
         assumptions.discount_annual, n_time, "discount_annual",
     )
+    # ``(1+annual)**(1/12)`` is NaN when ``annual <= -1.0`` (a non-positive
+    # base raised to a fractional power). Reject so a silently-NaN discount
+    # curve does not propagate to BEL.
+    if np.any(annual <= -1.0):
+        bad = float(np.min(annual))
+        raise ValueError(
+            f"discount_annual must be > -1.0 (a rate <= -100% has no "
+            f"monthly equivalent), got min {bad!r}"
+        )
     return (1.0 + annual) ** (1.0 / 12.0) - 1.0
 
 

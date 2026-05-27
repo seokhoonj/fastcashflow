@@ -15,6 +15,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import Assumptions, BenefitPattern, CoverageRate, ModelPoints
+from fastcashflow.assumptions import annual_to_monthly
 from fastcashflow.io import (
     _axis_tables, _flex_rate_table, _read_expense_tables, _read_state,
     _truncate_list,
@@ -525,3 +526,127 @@ def test_rate_table_not_found_caps_alternatives(tmp_path):
     wb.save(book)
     with pytest.raises(ValueError, match="and 10 more"):
         fcf.read_assumptions(book)
+
+
+# ---------------------------------------------------------------------------
+# P1 F -- second-tier regression risk
+# ---------------------------------------------------------------------------
+
+def test_annual_to_monthly_rejects_rate_above_one():
+    """A decrement probability above 1.0 produces a silent NaN; reject."""
+    with pytest.raises(ValueError, match="annual rate must be <= 1.0"):
+        annual_to_monthly(np.array([0.5, 1.5]))
+
+
+def test_annual_to_monthly_accepts_boundary_one():
+    """annual = 1.0 is the everyone-leaves-in-the-year boundary -- still valid."""
+    out = annual_to_monthly(np.array([1.0]))
+    assert out[0] == pytest.approx(1.0)        # monthly q = 1.0
+
+
+def test_discount_curve_rejects_rate_at_negative_one():
+    """A discount annual <= -1.0 produces NaN; reject up front."""
+    from fastcashflow.curves import discount_monthly_curve
+    assumptions = Assumptions(
+        mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
+        discount_annual=-1.0,
+        ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", _flat_rate()),),
+    )
+    with pytest.raises(ValueError, match="discount_annual must be > -1.0"):
+        discount_monthly_curve(assumptions, n_time=12)
+
+
+def test_value_in_force_rejects_elapsed_past_term():
+    """elapsed_months > term_months silently read past the trajectory -- reject."""
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        level_premium=np.array([0.0]),
+        term_months=np.array([12]),
+        elapsed_months=np.array([15]),         # past maturity
+    )
+    assumptions = Assumptions(
+        mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
+        discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", _flat_rate()),),
+    )
+    with pytest.raises(ValueError, match="run past its original maturity"):
+        fcf.value_in_force(mp, assumptions)
+
+
+def test_measure_in_force_rejects_elapsed_past_term():
+    """Same elapsed > term guard on the trajectory-returning entry."""
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        level_premium=np.array([0.0]),
+        term_months=np.array([12]),
+        elapsed_months=np.array([15]),
+    )
+    assumptions = Assumptions(
+        mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
+        discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", _flat_rate()),),
+    )
+    with pytest.raises(ValueError, match="run past its original maturity"):
+        fcf.measure_in_force(
+            mp, assumptions, prior_csm=np.array([0.0]),
+            lock_in_rate=0.03, period_months=12,
+        )
+
+
+def test_issue_age_fractional_warns(recwarn):
+    """A fractional issue_age would silently truncate at rate lookup -- warn."""
+    ModelPoints(
+        issue_age=np.array([40.7, 50.0]),       # 40.7 truncates to 40
+        level_premium=np.array([0.0, 0.0]),
+        term_months=np.array([12, 12]),
+    )
+    matched = [w for w in recwarn.list
+               if issubclass(w.category, UserWarning)
+               and "fractional" in str(w.message)]
+    assert matched, [str(w.message) for w in recwarn.list]
+
+
+def test_issue_age_integer_does_not_warn(recwarn):
+    """Whole-year issue_age (the typical case) does not warn."""
+    ModelPoints(
+        issue_age=np.array([40.0, 50.0]),
+        level_premium=np.array([0.0, 0.0]),
+        term_months=np.array([12, 12]),
+    )
+    fractional = [w for w in recwarn.list
+                  if issubclass(w.category, UserWarning)
+                  and "fractional" in str(w.message)]
+    assert not fractional
+
+
+def test_value_segmented_matches_nfc_and_nfd_codes():
+    """Composed (NFC) vs decomposed (NFD) Unicode codes match the same segment.
+
+    A product_code on the model_points side composed (e.g. ``café`` =
+    'caf' + U+00E9) compared against a basis key decomposed (``café`` =
+    'cafe' + U+0301) used to mismatch by byte identity. NFC-normalising
+    both sides fixes the lookup.
+    """
+    composed = "café"            # NFC: single e-acute char
+    decomposed = "café"          # NFD: e + combining acute
+    assert composed != decomposed
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        level_premium=np.array([0.0]),
+        term_months=np.array([12]),
+        product_code=np.array([composed], dtype=object),
+        channel_code=np.array(["FC"], dtype=object),
+    )
+    assumptions = Assumptions(
+        mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
+        discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH", _flat_rate()),),
+    )
+    # Basis keyed under the decomposed form -- the lookup must still match.
+    basis = {(decomposed, "FC"): assumptions}
+    out = fcf.value_segmented(mp, basis)
+    assert out.bel.shape == (1,)
