@@ -28,7 +28,7 @@
 
 | 챕터 | 사용하는 자리 |
 |---|---|
-| [지급 패턴에 따른 계산방식의 결정](benefit-patterns-catalog) | `benefit_patterns.csv` 의 자리. 다섯 패턴의 의미. |
+| [지급 패턴과 계산방식](benefit-patterns-catalog) | `benefit_patterns.csv` 의 자리. 다섯 패턴의 의미. |
 | [보장 청구 메커니즘](coverage-mechanics) | DEATH / MORBIDITY / DIAGNOSIS 의 kernel 알고리즘. |
 | [정기보험 평가](../simple/term-life) | `save_sample_*` → `read_*` → `measure / value` → `print` |
 | [검증 패턴](../workflow/validation) | `show_trace` / `show_bel_step` / `show_csm_step` / `show_trace_diff` |

@@ -70,7 +70,7 @@
     assumptions) 과 fastcashflow 사용자 API 의 트리 구조. 후속 챕터를
     어디서 어떻게 호출하는지 미리 그림.
 * - 1.2
-  - [지급 패턴에 따른 계산방식의 결정](basics/benefit-patterns-catalog)
+  - [지급 패턴과 계산방식](basics/benefit-patterns-catalog)
   - 5 종 패턴 (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) 의
     의미. 회사 카탈로그 (`benefit_patterns.csv`) 작성.
 * - 1.3
