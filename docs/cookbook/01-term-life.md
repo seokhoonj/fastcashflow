@@ -379,17 +379,20 @@ mp = fcf.ModelPoints.single(
 
 ```python
 basis = fcf.load_sample_assumptions()
-asmp = basis[("TERM_LIFE_A", "TM")]   # KeyError: 샘플엔 GA / FC 만 있음
+asmp = basis[("TERM_LIFE_A", "TM")]   # KeyError: 샘플의 TERM_LIFE_A 는 GA / FC 만
 ```
 
 `basis.keys()` 로 어떤 segment 가 있는지 먼저 확인:
 
 ```python
-print(list(basis.keys()))   # [('TERM_LIFE_A', 'GA'), ('TERM_LIFE_A', 'FC')]
+print(sorted(basis.keys()))
+# [('HEALTH_A', 'FC'), ('HEALTH_A', 'GA'), ('HEALTH_A', 'TM'),
+#  ('TERM_LIFE_A', 'FC'), ('TERM_LIFE_A', 'GA'),
+#  ('WHOLE_LIFE_A', 'FC'), ('WHOLE_LIFE_A', 'GA')]
 ```
 
-자기 워크북에서는 `segments` 시트의 `(product, channel)` 조합이 그대로
-키가 됩니다 (`defaults` 행은 제외).
+자기 워크북에서는 `segments` 시트의 `(product_code, channel_code)` 조합이
+그대로 키가 됩니다 (`defaults` 행은 제외).
 
 ### 함정 2 — sex 코딩 (0/1)
 

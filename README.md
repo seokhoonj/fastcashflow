@@ -124,36 +124,40 @@ fastcashflow's bundled sample portfolio:
 import fastcashflow as fcf
 
 model_points = fcf.load_sample_model_points()              # bundled sample portfolio
-basis        = fcf.load_sample_assumptions()               # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_LIFE", "FC")]                  # pick one segment
+basis        = fcf.load_sample_assumptions()               # {(product_code, channel_code): Assumptions}
+assumptions  = basis[("TERM_LIFE_A", "FC")]                # pick one segment
 m            = fcf.measure(model_points, assumptions)
 print(m.bel[:, 0], m.ra[:, 0], m.csm[:, 0])   # BEL / RA / CSM at issue
 ```
 
-Outside the samples you build the two inputs yourself -- a set of model
-points and the actuarial assumptions:
+Outside the samples you build the inputs yourself -- the company catalogue
+(`benefit_patterns`) declaring how each coverage code pays out, the per-policy
+model points, and the actuarial assumptions:
 
 ```python
 import numpy as np
 import fastcashflow as fcf
 
+PATTERNS = {"DEATH": fcf.BenefitPattern.DEATH}             # company catalogue
+
+flat_mort = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
 assumptions = fcf.Assumptions(
-    mortality_annual=lambda sex, issue_age, duration: np.full(
-        issue_age.shape, 0.001,
-    ),
-    lapse_annual=lambda sex, issue_age, duration: np.full(
-        duration.shape, 0.01,
-    ),
+    mortality_annual=flat_mort,
+    lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.01),
     discount_annual=0.03,
-    alpha_flat=300_000.0,           # acquisition expense at issue
-    gamma_flat=60_000.0,            # annual maintenance expense per policy
+    expense_items=(
+        fcf.ExpenseItem("acquisition", "alpha_fixed", 300_000.0),    # at issue
+        fcf.ExpenseItem("maintenance", "gamma_fixed",  60_000.0),    # per policy per year
+    ),
     expense_inflation=0.02,
     ra_confidence=0.75,
     mortality_cv=0.10,
+    coverages=(fcf.CoverageRate("DEATH", flat_mort),),               # rate-driven coverage list
 )
 model_points = fcf.ModelPoints.single(
-    issue_age=40, death_benefit=100_000_000,
+    issue_age=40, benefits={0: 100_000_000},                         # 0 = first coverage (DEATH)
     level_premium=70_000, term_months=120,
+    benefit_patterns=PATTERNS,
 )
 res = fcf.measure(model_points, assumptions)
 print(res.bel[0, 0], res.ra[0, 0], res.csm[0, 0])   # [model point, month]
@@ -174,8 +178,9 @@ makes the contract an endowment, and `solve_premium` prices it:
 
 ```python
 endowment = fcf.ModelPoints.single(
-    issue_age=40, death_benefit=100_000_000,
+    issue_age=40, benefits={0: 100_000_000},
     level_premium=0, term_months=120, maturity_benefit=50_000_000,
+    benefit_patterns=PATTERNS,
 )
 premium = fcf.solve_premium(endowment, assumptions, margin=0.10)   # 10% profit margin
 ```
