@@ -77,13 +77,17 @@ import fastcashflow as fcf
 옮깁니다.
 
 ```python
+mortality_annual = lambda sex, issue_age, duration: np.full(
+    issue_age.shape, 1 - (1 - 0.01) ** 12,
+)
+
 assumptions = fcf.Assumptions(
-    mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
-    lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
-    discount_annual=1.005 ** 12 - 1,
-    expense_inflation=0.0,
-    ra_confidence=0.75,
-    mortality_cv=0.10,
+    mortality_annual = mortality_annual,
+    lapse_annual     = lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
+    discount_annual  = 1.005 ** 12 - 1,
+    ra_confidence    = 0.75,
+    mortality_cv     = 0.10,
+    coverages        = (fcf.CoverageRate("DEATH", mortality_annual),),
 )
 ```
 
@@ -92,20 +96,24 @@ assumptions = fcf.Assumptions(
 - `mortality_annual` — 연 사망률. 숫자 하나가 아니라 **함수**로
   줍니다. 사망률이 성별·나이·경과에 따라 달라질 수 있기 때문이죠(3.2절).
   `lambda`는 간단한 함수를 한 줄로 적는 파이썬 문법인데, 여기서는
-  성별·나이·경과와 상관없이 늘 0.01(연 1%)을 돌려주는 함수입니다.
-  엔진이 내부에서 constant-force 방식으로 월율로 환산합니다.
+  성별·나이·경과와 상관없이 늘 같은 값을 돌려주는 함수입니다. 5장의
+  월 사망률 1%를 연으로 환산하면 `1 - (1 - 0.01) ** 12 ≈ 0.1136`
+  (연 11.36%)이고, 엔진이 내부에서 다시 constant-force 방식으로 월
+  사망률 1%로 환산해 씁니다.
 - `lapse_annual` — 연 해지율. 같은 방식으로 늘 0(해지 없음)을
   돌려줍니다.
 - `discount_annual` — 연 할인율. `**`는 거듭제곱이라
   `1.005 ** 12 - 1`은 월 0.5%를 연 단위로 환산한 값입니다. 엔진은
   연율을 받아 월율로 바꿔 씁니다.
-- `expense_items` — 사업비 항목 묶음 (`ExpenseItem` 의 tuple). 이 예제에서는
-  비어 있어 사업비 0 입니다.
 - `ra_confidence` — 위험조정 신뢰수준 75%(6장).
 - `mortality_cv` — 사망위험 변동계수 0.10(6장).
+- `coverages` — 보험금이 어떤 율로 발생하는지를 엔진에 등록합니다.
+  여기서는 사망보장 한 갈래뿐이라 `"DEATH"` 코드에 위와 같은 사망률
+  함수를 묶어 줍니다. 사망 외에 다른 보장(진단·입원 ...)이 있다면
+  여기에 한 줄씩 더 등록합니다(11장에서 자세히).
 
-사망률 함수 속 `np.full(issue_age.shape, 0.01)`은 "`issue_age`와 같은
-모양의 배열을 만들어 전부 0.01로 채워라"는 뜻입니다. 엔진이 사망률
+사망률 함수 속 `np.full(issue_age.shape, ...)`은 "`issue_age`와 같은
+모양의 배열을 만들어 같은 값으로 채워라"는 뜻입니다. 엔진이 사망률
 함수를 부를 때 성별·나이·경과를 배열로 통째로 넘기므로, 함수도 같은
 모양의 배열을 돌려줘야 합니다.
 
@@ -114,14 +122,15 @@ assumptions = fcf.Assumptions(
 
 ```python
 model_points = fcf.ModelPoints.single(
-    issue_age=40, benefits={0: 12_000},
+    issue_age=85, benefits={0: 12_000},
     level_premium=100, term_months=2,
 )
 ```
 
-가입연령 40세, 사망보험금 12,000, 월 보험료 100, 보험기간 2개월 —
+가입연령 85세, 사망보험금 12,000, 월 보험료 100, 보험기간 2개월 —
 5~7장의 그 계약입니다. `12_000`의 밑줄은 자릿수를 읽기 쉽게 나눈
-것일 뿐, `12000`과 같습니다.
+것일 뿐, `12000`과 같습니다. `benefits={0: 12_000}`은 위에서 등록한
+첫 번째(= 0번) 보장 — 곧 `"DEATH"` — 에 12,000을 매단다는 뜻입니다.
 
 ## 8.3 측정 실행과 결과 읽기
 
@@ -169,24 +178,28 @@ CSM은 0, 손실요소는 55.14입니다.
 import numpy as np
 import fastcashflow as fcf
 
+mortality_annual = lambda sex, issue_age, duration: np.full(
+    issue_age.shape, 1 - (1 - 0.01) ** 12,
+)
+
 assumptions = fcf.Assumptions(
-    mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, 0.01),
-    lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
-    discount_annual=1.005 ** 12 - 1,
-    expense_inflation=0.0,
-    ra_confidence=0.75,
-    mortality_cv=0.10,
+    mortality_annual = mortality_annual,
+    lapse_annual     = lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
+    discount_annual  = 1.005 ** 12 - 1,
+    ra_confidence    = 0.75,
+    mortality_cv     = 0.10,
+    coverages        = (fcf.CoverageRate("DEATH", mortality_annual),),
 )
 model_points = fcf.ModelPoints.single(
-    issue_age=40, benefits={0: 12_000},
+    issue_age=85, benefits={0: 12_000},
     level_premium=100, term_months=2,
 )
 m = fcf.measure(model_points, assumptions)
 print(m.bel[0, 0], m.ra[0, 0], m.csm[0, 0], m.loss_component[0])
 ```
 
-일곱 장에 걸쳐 손으로 따라온 측정을, 엔진은 이 스무 줄로 똑같이
-해냅니다.
+일곱 장에 걸쳐 손으로 따라온 측정을, 엔진은 이 스무 줄 남짓으로
+똑같이 해냅니다.
 
 ## 8.4 대규모 평가
 
@@ -199,24 +212,27 @@ fastcashflow에 들어 있는 **샘플 데이터**를 쓰면 됩니다.
 
 ```python
 model_points = fcf.load_sample_model_points()
-basis        = fcf.load_sample_assumptions()       # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_LIFE_A", "GA")]             # 한 세그먼트 선택
-val          = fcf.value(model_points, assumptions)
+basis        = fcf.load_sample_assumptions()        # {(product_code, channel_code): Assumptions}
+val          = fcf.value_segmented(model_points, basis)
 
 print(val.bel)
 print(val.csm)
 ```
 
-`load_sample_model_points()`는 패키지에 든 작은 포트폴리오(계약 8건,
-정기보험과 건강보험)를, `load_sample_assumptions()`는 그에 맞는 가정을
-`{(product, channel): Assumptions}` 딕셔너리로 돌려줍니다. 샘플은
-`TERM_LIFE_A` 상품의 GA / FC 두 세그먼트를 담고 있어, 한 줄로 한 세그먼트를
-골라 `value()`에 넘깁니다. 계약마다 주계약 사망에 더해 진단·입원·재해사망·
-연금·생존 같은 특약이 붙어 있습니다. 파일을 따로 준비할 필요가 없죠.
-`value()`의 결과는 모델포인트 순서대로 늘어선 배열이라, 8건이면 길이 8입니다.
+`load_sample_model_points()`는 패키지에 든 작은 포트폴리오(계약 11건,
+정기보험·건강보험·종신보험)를, `load_sample_assumptions()`는 그에 맞는
+가정을 `{(product_code, channel_code): Assumptions}` 딕셔너리로
+돌려줍니다. `value_segmented()`는 각 계약을 자기 (상품, 채널) 세그먼트의
+가정에 맞춰 자동 라우팅해 한 번에 평가합니다. 계약마다 주계약에 더해
+진단·입원·재해사망·연금·생존 같은 특약이 붙어 있죠. 결과는 모델포인트
+순서대로 늘어선 배열이라, 11건이면 길이 11입니다.
 
-샘플 8건은 모두 보험료가 보장에 견주어 넉넉히 매겨진 계약이라, BEL이
-음수(이익이 예상됨)이고 CSM이 0보다 크며 손실요소는 0입니다.
+세그먼트가 하나뿐인 동질 포트폴리오라면 `value()`로 단일 가정을 그대로
+넘기면 됩니다. 샘플은 세 상품 × 여러 채널이 섞여 있어 라우팅이 필요합니다.
+
+샘플은 보험료가 보장에 견주어 빠듯하게 매겨진 계약이 대부분이라, 11건
+가운데 다수가 손실부담계약(BEL > 0, CSM = 0, 손실요소 > 0)이고 한 건만
+이익이 예상(CSM > 0)됩니다 — 7장에서 본 두 분기점이 모두 나타나는 셈입니다.
 
 속도는 이 패키지의 장점입니다. 100만 계약을 120개월 평가하는 데 약
 0.05초, 500만 건이면 약 0.3초입니다.
