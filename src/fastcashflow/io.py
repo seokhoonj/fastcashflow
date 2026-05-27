@@ -175,12 +175,20 @@ def _flex_rate_table(ws, *, value_col="rate"):
             "'issue_age' / 'duration' (select schema) -- pick one"
         )
 
-    by_id: dict[str, list] = {}
+    by_id: dict[str, dict[tuple, float]] = {}
     for r in rows:
         tid = str(r["table_id"]).strip()
         key = tuple(int(r[a]) for a in axes)
-        by_id.setdefault(tid, []).append((key, float(r[value_col])))
-    return {tid: _build_rate_callable(axes, entries, ws.title, tid)
+        bucket = by_id.setdefault(tid, {})
+        if key in bucket:
+            raise ValueError(
+                f"sheet {ws.title!r} table {tid!r}: duplicate row at "
+                f"{dict(zip(axes, key))} -- a rate table must have one "
+                "entry per axis combination (the last row would silently "
+                "overwrite the first)"
+            )
+        bucket[key] = float(r[value_col])
+    return {tid: _build_rate_callable(axes, list(entries.items()), ws.title, tid)
             for tid, entries in by_id.items()}
 
 
@@ -688,7 +696,15 @@ def _read_state(col: pl.Series) -> np.ndarray:
                     f"expected one of {sorted(STATE_NAMES)}"
                 )
         return out
-    return col.fill_null(STATE_ACTIVE).to_numpy().astype(np.int64)
+    out = col.fill_null(STATE_ACTIVE).to_numpy().astype(np.int64)
+    valid = set(STATE_NAMES.values())
+    bad = sorted(set(int(v) for v in out) - valid)
+    if bad:
+        raise ValueError(
+            f"state column has unknown integer value(s) {bad}; "
+            f"expected one of {sorted(valid)} (see STATE_NAMES)"
+        )
+    return out
 
 
 def _warn_if_elapsed_months(columns) -> None:
@@ -786,6 +802,19 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
 
     code_to_kind = {r.code: i for i, r in enumerate(
         assumptions.coverages if assumptions is not None else ())}
+    # Guard the reserved-name collision: a user coverage_code whose
+    # ``<code>_benefit`` column name shadows a fixed-meaning column
+    # (maturity_benefit, disability_benefit, ...) would be silently routed
+    # to the scalar field rather than into the CSR. Catch at read time.
+    reserved_codes = {n[: -len("_benefit")] for n in _NAMED_WIDE
+                      if n.endswith("_benefit")}
+    bad = sorted(set(code_to_kind) & reserved_codes)
+    if bad:
+        raise ValueError(
+            f"coverage code(s) {bad} collide with reserved wide-form "
+            f"column name(s) {[c + '_benefit' for c in bad]} -- rename "
+            "the coverage_code in the assumptions workbook"
+        )
     benefits: dict[int, np.ndarray] = {}
     for col in df.columns:
         if not col.endswith("_benefit") or col in _NAMED_WIDE:
@@ -831,6 +860,38 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             )
     _warn_if_elapsed_months(pol.columns)
     n_mp = pol.height
+    # mp_id uniqueness -- a duplicate id would fan out the coverages join
+    # (one-to-many) and silently inflate per-policy benefits.
+    if pol["mp_id"].n_unique() != n_mp:
+        dups = (pol.group_by("mp_id").len()
+                   .filter(pl.col("len") > 1)["mp_id"].to_list())
+        raise ValueError(
+            f"policies frame has duplicate mp_id value(s) {dups[:10]}"
+            f"{' (...)' if len(dups) > 10 else ''} -- mp_id must be unique"
+        )
+    # Premium double-source -- if both the coverages frame's ``premium``
+    # column and the policies frame's ``level_premium`` are present, the
+    # cov-side branch silently wins below. Reject up front so the operator
+    # picks one source.
+    if "premium" in cov.columns and "level_premium" in pol.columns:
+        raise ValueError(
+            "premium is specified twice -- 'premium' in the coverages "
+            "frame and 'level_premium' in the policies frame. Pick one: "
+            "the coverages-side column sums per coverage to the policy, "
+            "the policies-side column is a flat per-policy amount."
+        )
+    # Coverage-rule columns -- waiting / reduction_end / reduction_factor
+    # must arrive together. A reduction_factor without a reduction_end is
+    # silently inert (the factor applies for ``t < 0`` months, i.e. never)
+    # and almost certainly a user oversight.
+    has_rend = "reduction_end" in cov.columns
+    has_rfac = "reduction_factor" in cov.columns
+    if has_rfac and not has_rend:
+        raise ValueError(
+            "coverages frame has 'reduction_factor' without 'reduction_end' "
+            "-- the factor would never fire (reduction_end defaults to 0). "
+            "Add a reduction_end column (months) or drop the factor column."
+        )
     ctypes = {k: BenefitPattern(v) for k, v in benefit_patterns.items()}
     code_to_kind = {r.code: i for i, r in enumerate(assumptions.coverages)}
     # V3 -- every rate-driven coverage in the assumptions must be registered

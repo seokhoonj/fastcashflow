@@ -154,6 +154,12 @@ class ModelPoints:
         ):
             object.__setattr__(self, name, np.asarray(getattr(self, name), dtype=dtype))
         n_mp = self.issue_age.shape[0]
+        # Reject obviously-wrong scalar contract fields at construction time,
+        # not at the bottom of a kernel where the error becomes a NaN BEL.
+        if np.any(self.issue_age < 0):
+            raise ValueError("issue_age must be >= 0")
+        if np.any(self.term_months < 1):
+            raise ValueError("term_months must be >= 1")
         # Premiums / survival benefits default to zero (absent).
         for name in ("maturity_benefit", "annuity_payment", "disability_income",
                      "disability_benefit", "single_premium", "account_value",
@@ -164,6 +170,8 @@ class ModelPoints:
         # count defaults to one policy per model point (seriatim).
         cnt = self.count
         cnt = np.ones(n_mp) if cnt is None else np.asarray(cnt, np.float64)
+        if np.any(cnt < 0):
+            raise ValueError("count must be >= 0")
         object.__setattr__(self, "count", cnt)
         # sex defaults to 0 (male) for every model point.
         sex = self.sex

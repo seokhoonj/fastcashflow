@@ -435,6 +435,26 @@ class Assumptions:
     state_model: StateModel | None = None
 
     def __post_init__(self) -> None:
+        # Reject obviously-wrong scalar basis fields at construction time.
+        # ra_confidence is a probability; a value at the boundaries makes
+        # _norm_ppf hang or return inf.
+        if not (0.0 < self.ra_confidence < 1.0):
+            raise ValueError(
+                f"ra_confidence must be in the open interval (0, 1), "
+                f"got {self.ra_confidence!r}"
+            )
+        for name in ("mortality_cv", "morbidity_cv", "longevity_cv",
+                     "disability_cv", "expense_cv"):
+            v = getattr(self, name)
+            if v < 0:
+                raise ValueError(f"{name} must be >= 0, got {v!r}")
+        sp = self.settlement_pattern
+        if sp is not None:
+            sp_sum = float(np.asarray(sp).sum())
+            if abs(sp_sum - 1.0) > 1e-9:
+                raise ValueError(
+                    f"settlement_pattern must sum to 1.0, got {sp_sum!r}"
+                )
         # Wrap legacy 3-arg / 4-arg rate callables to the unified 5-arg
         # ``(sex, issue_age, duration, issue_class, elapsed)`` shape the
         # engine now passes everywhere. Built-in callables from io.py are
