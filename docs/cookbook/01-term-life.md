@@ -195,13 +195,19 @@ mp    = fcf.read_model_points("path/to/your_policies.xlsx",
 ### 면책 / 감액 컬럼 (optional)
 
 long-form `coverages` 프레임은 담보별 보장 룰을 세 개의 optional
-컬럼으로 받습니다:
+컬럼으로 받습니다. 두 룰은 **모두 가입 시점 (t=0) 에서 시작**하므로
+별도의 `*_start` 컬럼은 없습니다.
 
-| 컬럼 | 단위 | 의미 |
+| 컬럼 | 단위 | 적용 구간 |
 |---|---|---|
-| `waiting` | 정수 (개월) | 면책기간. 가입 후 이 개월 이전 사고는 미지급 (암 특약 90 일, CI 1 년 등) |
-| `reduction_end` | 정수 (개월) | 감액기간 종료 시점. 이전 사고는 부분 지급 |
+| `waiting` | 정수 (개월) | `[0, waiting)` 동안 미지급 (면책기간 — 암 특약 90 일, CI 1 년 등) |
+| `reduction_end` | 정수 (개월) | `[0, reduction_end)` 동안 부분 지급 (감액기간) |
 | `reduction_factor` | 실수 (0..1) | 감액기간 중 지급 비율 (보통 0.5) |
+
+따라서 `t < waiting` → 0%, `t < reduction_end` → `reduction_factor`%,
+그 이후 → 100%. 면책과 감액을 함께 두면 `waiting <= reduction_end` 가
+일반적입니다 (예: `waiting=3`, `reduction_end=24`, `reduction_factor=0.5`
+→ 첫 3 개월 면책, 4~24 개월 50%, 25 개월부터 100%).
 
 `reduction_factor` 만 있고 `reduction_end` 가 없으면 reader 가 거부합니다
 (factor 가 영영 발동하지 않으므로). 자세한 동작은 챕터 11 의 검증 절을
