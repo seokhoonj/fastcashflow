@@ -185,32 +185,53 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 
 ## 11.2 파일로 평가하기
 
-파일이 준비됐으면 읽어서 평가하고, 결과를 저장합니다.
+파일이 준비됐으면 읽어서 평가하고, 결과를 저장합니다. 아래 코드는 두
+단계 — 먼저 샘플 파일을 디스크에 떨어뜨리고, 그 다음 자기 파일을 읽듯이
+`read_*` 로 평가. 그대로 paste 하면 됩니다.
 
 ```python
 import fastcashflow as fcf
 
-basis        = fcf.read_assumptions("assumptions.xlsx")    # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_LIFE_A", "GA")]                     # 한 세그먼트 선택
-model_points = fcf.read_model_points("policies.csv", assumptions, coverages="coverages.csv")
-val          = fcf.value(model_points, assumptions)
-fcf.write_valuation(val, "results.csv")
+# (1) 샘플 파일을 현재 폴더에 떨어뜨림 (한 번만 — 이미 자기 파일이 있으면 생략)
+fcf.save_sample_assumptions("assumptions.xlsx")
+fcf.save_sample_policies("policies.csv")
+fcf.save_sample_coverages("coverages.csv")
+fcf.save_sample_benefit_patterns("benefit_patterns.csv")
+
+# (2) 읽어서 평가하고 결과 저장
+basis        = fcf.read_assumptions("assumptions.xlsx")     # {(product_code, channel_code): Assumptions}
+assumptions  = basis[("TERM_LIFE_A", "GA")]                 # 한 세그먼트 선택
+model_points = fcf.read_model_points(
+    "policies.csv", assumptions,                            # 계약 파일 + 특약 코드 해석용
+    coverages="coverages.csv",                              # 담보 파일
+    benefit_patterns="benefit_patterns.csv",                # 회사 카탈로그
+)
+val = fcf.value(model_points, assumptions)
+fcf.write_valuation(val, "results.csv")                     # 결과 파일
 ```
 
-- `read_assumptions` — 가정 엑셀을 읽어 `{(product, channel): Assumptions}`
-  딕셔너리로 돌려줍니다. 한 워크북에 여러 세그먼트(상품 × 채널)를 함께
-  관리하기 위함입니다. 한 세그먼트만 쓰려면 키로 골라냅니다.
+각 함수의 역할:
+
+- `save_sample_*` — 패키지 내장 샘플 파일을 디스크에 복사합니다. Excel /
+  텍스트 에디터로 열어 fastcashflow 워크북이 어떻게 생겼는지 직접
+  들여다 볼 수 있습니다. 자기 데이터를 쓸 땐 이 줄을 빼고 그 자리에
+  자기 파일이 있다고 보면 됩니다.
+- `read_assumptions` — 가정 엑셀을 읽어 `{(product_code, channel_code):
+  Assumptions}` 딕셔너리로 돌려줍니다. 한 워크북에 여러 세그먼트
+  (상품 × 채널) 를 함께 관리하기 위함입니다. 한 세그먼트만 쓰려면
+  키로 골라냅니다.
 - `read_model_points` — 계약 파일과 담보 파일을 읽어 모델포인트를
   만듭니다. 담보 파일의 특약코드를 가정에 등록된 특약과 맞춰야 하므로,
-  가정(`assumptions`)을 함께 넘깁니다.
+  가정 (`assumptions`) 을 함께 넘깁니다.
 - `value` — 평가합니다.
 - `write_valuation` — BEL·RA·CSM·손실요소를 모델포인트마다 한 줄씩
   파일로 저장합니다.
 
-wide 한 파일이면 `coverages` 없이 `read_model_points("portfolio.csv",
-assumptions)`로 읽습니다. 8장의 `load_sample_*`도 사실 이 `read_*`로 패키지
-안의 샘플 파일을 읽는 것입니다. 자기 파일이 준비되면 경로만 바꾸면
-됩니다.
+wide 한 파일 (한 행 = 한 계약, 담보가 컬럼으로 펼쳐진 형태) 이면
+`coverages` 없이 `read_model_points("portfolio.csv", assumptions)` 로
+읽습니다. 8장의 `load_sample_*` 도 사실 이 `read_*` 로 패키지 안의
+샘플 파일을 직접 읽는 것입니다 — `save_sample_*` 으로 한 번 디스크에
+떨어뜨려 보면 그 안의 구조가 보입니다.
 
 ## 11.3 메모리를 넘는 규모
 
@@ -220,7 +241,15 @@ assumptions)`로 읽습니다. 8장의 `load_sample_*`도 사실 이 `read_*`로
 한 조각만 올립니다.
 
 ```python
-fcf.value_file("portfolio.parquet", "results/", assumptions)
+# 시연용 셋업 -- long-form 샘플을 wide parquet 로 한 번 변환
+# (자기 데이터를 쓸 때는 이미 wide parquet 형태로 갖고 있다고 가정)
+model_points.to_wide(assumptions).write_parquet("portfolio.parquet")
+
+# 스트리밍 평가 -- 한 줄. 결과는 results/ 폴더에 분할 저장
+fcf.value_file(
+    "portfolio.parquet", "results/", assumptions,
+    benefit_patterns="benefit_patterns.csv",
+)
 ```
 
 이 방식이면 포트폴리오 크기는 메모리가 아니라 디스크가 허락하는

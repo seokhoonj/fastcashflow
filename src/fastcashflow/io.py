@@ -1277,6 +1277,62 @@ def load_sample_inforce_state() -> "InforceState":
         return read_inforce_state(path)
 
 
+def _copy_sample_file(filename: str, dest: Path | str) -> Path:
+    """Copy a packaged sample file to ``dest``. ``dest`` may be a file path
+    (used as-is) or a directory (file lands inside it with its original
+    name)."""
+    import shutil
+    src = resources.files("fastcashflow") / "sample_data" / filename
+    with resources.as_file(src) as src_path:
+        dest_path = Path(dest)
+        if dest_path.is_dir():
+            dest_path = dest_path / filename
+        shutil.copy2(src_path, dest_path)
+        return dest_path
+
+
+def save_sample_assumptions(path: Path | str) -> Path:
+    """Drop the packaged sample assumptions workbook on disk at ``path``.
+
+    Use this to bootstrap a workbook a reader can open in Excel, inspect,
+    and then re-read with :func:`read_assumptions` -- the same call shape
+    a real user types against their own file. The bundled sample carries
+    seven (product, channel) segments across three products
+    (``TERM_LIFE_A``, ``HEALTH_A``, ``WHOLE_LIFE_A``).
+
+    ``path`` may be a file (the workbook lands there) or a directory (the
+    workbook lands inside with its original ``sample_assumptions.xlsx``
+    name). Returns the resolved destination path.
+    """
+    return _copy_sample_file("sample_assumptions.xlsx", path)
+
+
+def save_sample_policies(path: Path | str) -> Path:
+    """Drop the packaged sample policies CSV on disk at ``path``.
+
+    The companion to :func:`save_sample_coverages` and
+    :func:`save_sample_benefit_patterns`. Use the three together with
+    :func:`read_model_points` for a copy-paste workflow that mirrors how
+    you would read your own files."""
+    return _copy_sample_file("sample_policies.csv", path)
+
+
+def save_sample_coverages(path: Path | str) -> Path:
+    """Drop the packaged sample coverages CSV on disk at ``path``.
+
+    Long-form coverage entries -- one row per (model point, coverage_code)
+    -- the companion to :func:`save_sample_policies`."""
+    return _copy_sample_file("sample_coverages.csv", path)
+
+
+def save_sample_benefit_patterns(path: Path | str) -> Path:
+    """Drop the packaged sample benefit-pattern catalogue on disk at ``path``.
+
+    The company catalogue file -- one row per ``coverage_code`` mapping
+    it to its :class:`BenefitPattern`."""
+    return _copy_sample_file("sample_benefit_patterns.csv", path)
+
+
 # ---------------------------------------------------------------------------
 # Economic scenarios
 # ---------------------------------------------------------------------------

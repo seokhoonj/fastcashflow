@@ -28,10 +28,17 @@
 ```python
 import fastcashflow as fcf
 
+# 패키지 샘플로 시연 -- 자기 데이터를 쓸 때는 이 네 줄을 빼고
+# 그 자리에 자기 파일이 있다고 보면 됩니다.
+fcf.save_sample_assumptions("assumptions.xlsx")
+fcf.save_sample_policies("policies.csv")
+fcf.save_sample_coverages("coverages.csv")
+fcf.save_sample_benefit_patterns("benefit_patterns.csv")
+
 basis = fcf.read_assumptions("assumptions.xlsx")
 mp    = fcf.read_model_points(
     "policies.csv",
-    assumptions=basis,
+    basis[("TERM_LIFE_A", "GA")],                 # 한 segment 의 Assumptions
     coverages="coverages.csv",
     benefit_patterns="benefit_patterns.csv",      # ← 회사 카탈로그
 )
