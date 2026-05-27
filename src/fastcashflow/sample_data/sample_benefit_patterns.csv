@@ -1,8 +1,8 @@
 coverage_code,coverage_name,benefit_pattern
-DEATH,general (all-cause) death,DEATH
-INPATIENT,hospitalization,MORBIDITY
-CANCER,cancer diagnosis,DIAGNOSIS
-ADB,accidental death,DEATH
-DISEASE_DEATH,disease death (질병사망),DEATH
-ANNUITY,annuity,ANNUITY
-MATURITY,survival benefit,MATURITY
+DEATH,일반사망,DEATH
+INPATIENT,입원,MORBIDITY
+CANCER,암 진단,DIAGNOSIS
+ADB,재해사망,DEATH
+DISEASE_DEATH,질병사망,DEATH
+ANNUITY,생존연금,ANNUITY
+MATURITY,만기환급,MATURITY

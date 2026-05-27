@@ -406,7 +406,7 @@ engine 이 그 패턴의 계산 방식 (몇 회 지급 / depleting pool / inforc
 
 | `benefit_pattern` | engine 계산 패턴 | 사용 case |
 |---|---|---|
-| `DEATH` | incidence (coverage 의 `rate_table` lookup) × benefit, **non-decrementing** | 일반 사망 / 상해사망 / 재해사망 / ADB 등. 사망 종류 별 자체 `rate_table` (보통 mortality table 가리킴) |
+| `DEATH` | incidence (coverage 의 `rate_table` lookup) × benefit, **non-decrementing** | 일반사망 / 질병사망 / 재해사망. 사망 종류 별 자체 `rate_table` (보통 mortality table 가리킴) |
 | `MORBIDITY` | incidence × benefit, **반복 발생** (in-force 안 감소) | 입원 / 수술 / 통원 등 |
 | `DIAGNOSIS` | incidence × benefit, **1회 지급** (depleting "not yet diagnosed" pool) | 암 진단 / CI / 진단 일시금 |
 | `ANNUITY` | in-force × `annuity_payment` (model_point scalar), `annuity_frequency_months` 주기 | 연금 |

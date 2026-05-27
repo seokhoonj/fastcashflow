@@ -6,7 +6,7 @@
 - 엔진이 *왜* 각 담보의 "지급 패턴" 을 미리 알아야 하는가
 - 패턴에 따라 어떤 계산 분기로 들어가는지 — 다섯 가지로 단순화
 - 사용자가 지정해주는 자리 (`benefit_patterns.csv`) 가 왜 별도 파일인가
-- 사망 종류 (일반 / 상해 / 질병 / 재해 / ADB) 가 모두 같은 패턴인 이유
+- 사망 종류 (일반사망 / 질병사망 / 재해사망) 가 모두 같은 패턴인 이유
 - 한국 상품의 매핑 표, 카탈로그 작성, 등록 누락 시 잡히는 자리
 ```
 
@@ -35,7 +35,7 @@
   - 한국 상품 예
 * - **DEATH**
   - 사망률 × 보유계약 × 보험금. 보유계약은 별도 사망률로 따로 감쇠 (한 번 죽으면 끝).
-  - 일반사망 / 상해사망 / 질병사망 / 재해사망 / ADB 등 *모든 사망형 담보*
+  - 일반사망 / 질병사망 / 재해사망 등 *모든 사망형 담보*
 * - **MORBIDITY**
   - 발생률 × 보유계약 × 보험금. 매월 반복 (같은 사람도 다시 발생 가능).
   - 입원 / 수술 / 통원
@@ -105,13 +105,13 @@ mp    = fcf.read_model_points(
   - 비고
 * - 일반사망 (정기 / 종신 주계약)
   - DEATH
-  - rate_table = mortality 류
-* - 상해사망 / 재해사망 / ADB / 80% 후유장해
+  - rate_table = mortality 류 (all-cause)
+* - 재해사망 (80% 후유장해 의제사망 포함)
   - DEATH
-  - rate_table = 자체 incidence
-* - 질병사망 특약
+  - rate_table = 자체 incidence (재해 사고 사망률)
+* - 질병사망
   - DEATH
-  - rate_table = 질병 사망률
+  - rate_table = 질병 사망률 (재해 제외)
 * - 입원 일당 / 수술비 / 통원 / 골절
   - MORBIDITY
   - 반복 발생, in-force 안 줄임
@@ -130,10 +130,10 @@ mp    = fcf.read_model_points(
 ```
 
 ```{warning}
-**모든 사망 종류는 DEATH 패턴**입니다 — 한국 시장의 사망 보장 분화 (일반
-/ 상해 / 질병 / 재해 / 80% 후유장해 의제사망 / ADB) 는 **같은 mechanic**
-입니다 (사건 발생 시 amount 지급). 차이는 *rate_table* 일 뿐. 카탈로그에
-각자 별도 `coverage_code` 로 등록하되 패턴은 모두 `DEATH`.
+**모든 사망 종류는 DEATH 패턴**입니다 — 한국 시장의 사망 보장 분화
+(일반사망 / 질병사망 / 재해사망) 는 **같은 mechanic** (사건 발생 시
+amount 지급). 차이는 *rate_table* 일 뿐. 카탈로그에 각자 별도
+`coverage_code` 로 등록하되 패턴은 모두 `DEATH`.
 ```
 
 ## 카탈로그 작성 — `benefit_patterns.csv`
@@ -161,7 +161,7 @@ MATURITY,만기환급,MATURITY
 엔진에는 reserved 코드가 없습니다. 사망 보장은 다른 담보와 똑같이
 `coverages.xlsx` 의 rate-driven 자리에 등록하고, `rate_table` 에
 mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
-합니다 — 일반사망 / 상해사망 / 재해사망 / ADB / 질병사망 모두 같은
+합니다 — 일반사망 / 질병사망 / 재해사망 모두 같은
 방식입니다. 엔진의 `mortality_annual` 입력은 **계약 종료 (decrement)**
 용도로만 쓰입니다 — 사람이 죽으면 in-force 가 종료되는 것은 모든
 상품에 항상 일어나는 사건이라 별도 입력으로 두지만, 사망 보장금의
