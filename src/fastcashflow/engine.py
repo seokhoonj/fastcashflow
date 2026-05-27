@@ -39,7 +39,7 @@ from fastcashflow.numerics import (
     _settlement_factor,
     _settlement_lic,
 )
-from fastcashflow.coverage import coverage_arrays, coverage_rates
+from fastcashflow.coverage import coverage_arrays, coverage_rates, validate_csr_codes
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.statemodel import (
@@ -1540,6 +1540,7 @@ def value(
                 np.transpose(compiled.edge_prob, (1, 2, 3, 0)))
             state_duration_max = None
         start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
+    validate_csr_codes(model_points.coverage_kind, len(assumptions.coverages))
     cov_is_diagnosis, cov_risk = coverage_arrays(
         assumptions.coverages, model_points.benefit_patterns,
     )

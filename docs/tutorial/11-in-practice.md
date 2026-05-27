@@ -191,7 +191,7 @@ P002는 세 줄입니다. 계약마다 담보 수가 다르니 줄 수도 다릅
 import fastcashflow as fcf
 
 basis        = fcf.read_assumptions("assumptions.xlsx")    # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_A", "GA")]                     # 한 세그먼트 선택
+assumptions  = basis[("TERM_LIFE", "GA")]                     # 한 세그먼트 선택
 model_points = fcf.read_model_points("policies.csv", assumptions, coverages="coverages.csv")
 val          = fcf.value(model_points, assumptions)
 fcf.write_valuation(val, "results.csv")

@@ -44,8 +44,8 @@ fastcashflow 의 입력도 그 워크북 구조를 그대로 따릅니다.
 | 사망률 표 | `mortality_tables` 시트 | `Assumptions(mortality_annual=함수)` |
 | 해지율 표 | `lapse_tables` 시트 | `Assumptions(lapse_annual=함수)` |
 | 할인율 표 | `discount_tables` 시트 | `Assumptions(discount_annual=...)` |
-| 신사업비 | `segments` 시트의 `alpha_flat` | `Assumptions(alpha_flat=...)` |
-| 유지비 | `maintenance_tables` 시트 | `Assumptions(gamma_flat=...)` |
+| 신사업비 | `expense_tables` 시트의 `alpha_fixed` row | `Assumptions(expense_items=(ExpenseItem('acquisition', 'alpha_fixed', ...),))` |
+| 유지비 | `expense_tables` 시트의 `gamma_fixed` row | `Assumptions(expense_items=(ExpenseItem('maintenance', 'gamma_fixed', ...),))` |
 | 위험조정 신뢰수준 | `segments` 시트의 `ra_confidence` | `Assumptions(ra_confidence=...)` |
 | 사망률 변동계수 | `segments` 시트의 `mortality_cv` | `Assumptions(mortality_cv=...)` |
 
@@ -94,13 +94,13 @@ MORTALITY_STD    1     30    0.000400    ← 여성 30세 (별도 행)
 product   channel   mortality_table   lapse_table   expense_acq   ...
 ───────   ───────   ───────────────   ───────────   ───────────   ───
 defaults  -         MORTALITY_STD          -             -             ...
-TERM_A    GA        -                 LAPSE_GA      150,000       ...
-TERM_A    FC        -                 LAPSE_FC       80,000       ...
+TERM_LIFE    GA        -                 LAPSE_GA      150,000       ...
+TERM_LIFE    FC        -                 LAPSE_FC       80,000       ...
 ```
 
 `defaults` 행은 모든 segment 의 공통값. 개별 segment 행은 빈 셀이면
 defaults 를 상속, 채워진 셀은 그 segment 만 override.
-즉 `TERM_A / GA` 와 `TERM_A / FC` 는 **같은 사망률 표** 를 쓰지만
+즉 `TERM_LIFE / GA` 와 `TERM_LIFE / FC` 는 **같은 사망률 표** 를 쓰지만
 **해지율 / 신사업비** 가 다른 두 채널 segment.
 
 ```{admonition} 향후 실제 워크시트 스크린샷으로 교체 예정
@@ -132,7 +132,7 @@ basis = fcf.load_sample_assumptions()    # {(product, channel): Assumptions}
 mp = fcf.load_sample_model_points()      # ModelPoints, 보유계약 8건
 
 # 평가할 segment 선택 (한 상품에 두 채널)
-asmp = basis[("TERM_A", "GA")]           # 또는 ("TERM_A", "FC")
+asmp = basis[("TERM_LIFE", "GA")]           # 또는 ("TERM_LIFE", "FC")
 
 # 측정 -- 두 가지 방법
 detail = fcf.measure(mp, asmp)
@@ -156,19 +156,22 @@ print(f"Loss: {fast.loss_component.sum():>15,.0f}")
 
 ```
 <Detail>
-BEL :     -13,646,354
-RA  :         566,973
-CSM :      13,079,382
-Loss:               0
+BEL :      33,927,108
+RA  :         846,963
+CSM :               0
+Loss:      34,774,071
 
 <Fast path>
-BEL :     -13,646,354
-RA  :         566,973
-CSM :      13,079,382
-Loss:               0
+BEL :      33,927,108
+RA  :         846,963
+CSM :               0
+Loss:      34,774,071
 ```
 
 코드 한 번 돌리면 포트폴리오 8건의 BEL / RA / CSM 합계를 얻습니다.
+샘플 portfolio 는 사업비가 보험료 유입을 넘어 **손실** 이 나는 묶음 —
+CSM = 0 이고 손실분이 즉시 `loss_component` 로 인식됩니다 (자세한
+해석은 다음 절).
 
 ### 자기 워크북으로 바꾸기
 
@@ -200,16 +203,18 @@ fastcashflow 는 **부채 관점에서 유출을 양수, 유입을 음수로**
 - **유출** (보험사가 내는 돈, 사망보험금 + 사업비) — 부채를 **증가** 시킴
 - 따라서 `BEL = PV(claims) + PV(expenses) - PV(premiums)`
 
-### BEL = -13,646,354 의 의미
+### BEL = +33,927,108 의 의미
 
-BEL 이 **음수** 라는 것은 "예상 미래 보험료 유입" 이 "예상 미래 사망보험금
-+ 사업비 유출" 보다 크다는 뜻. 즉 포트폴리오 전체가 보험사 입장에서
-**이익이 나는 묶음**.
+BEL 이 **양수** 라는 것은 "예상 미래 사망보험금 + 사업비 유출" 이
+"예상 미래 보험료 유입" 보다 크다는 뜻 — 즉 포트폴리오 전체가
+보험사 입장에서 **손실이 나는 묶음** (onerous). 가입 시점에 손실분이
+즉시 인식되어 `loss_component = 34,774,071` 으로 잡힙니다 (IFRS 17 Sec. 47).
 
-만약 BEL 이 양수라면 "유출 > 유입" 으로 보험사가 손실을 보는 계약이고,
-그 차이는 **손실요소 (loss component)** 로 즉시 인식 (IFRS 17 Sec. 47).
+샘플은 의도적으로 사업비가 크게 설정되어 onerous 가 되도록 조정되어
+있습니다 — `mortality_cv` / `alpha_flat` 을 낮춰 실험하면 같은 portfolio
+가 이익 묶음 (BEL < 0, CSM > 0) 으로 바뀝니다.
 
-### RA = 566,973 — 위험조정
+### RA = 846,963 — 위험조정
 
 RA (Risk Adjustment = 위험조정) 는 미래 사망률 / 비용 / 해지의
 **불확실성** 에 대해 보험사가 받는 보상. 75% 신뢰수준이면
@@ -223,7 +228,7 @@ RA 가 작으면 BEL 의 불확실성이 작다는 뜻. segments 시트의
 한 번 실험해보세요.
 ```
 
-### CSM = 13,079,382 — 보험계약마진
+### CSM = 0, loss_component = 34,774,071 — 보험계약마진과 손실요소
 
 CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 개념. 계약 가입 시점에 "이익이 날 거다" 라고 인식한 부분을 **미래에
@@ -234,7 +239,8 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 - 이익이 나는 계약 (FCF < 0) → CSM > 0, 손실요소 = 0
 - 손실이 나는 계약 (FCF > 0) → CSM = 0, 손실요소 = FCF
 
-위 예제는 이익 portfolio 이므로 `CSM = 13,079,382`, `loss_component = 0`.
+위 예제는 onerous portfolio 이므로 `CSM = 0`, `loss_component = 34,774,071`
+(= BEL + RA = 33,927,108 + 846,963).
 
 ### measure() 와 value() 의 차이
 
@@ -268,7 +274,7 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 
 ### 채널만 바꾸기 — 같은 상품, 다른 channel
 
-같은 상품 (TERM_A) 의 GA / FC 두 채널은 해지율과 신사업비가 다릅니다.
+같은 상품 (TERM_LIFE) 의 GA / FC 두 채널은 해지율과 신사업비가 다릅니다.
 segment 키만 바꿔서 비교:
 
 ```python
@@ -286,8 +292,13 @@ for key in basis:
 출력:
 
 ```
-('TERM_A', 'GA'): BEL=   -13,646,354  RA=  566,973  CSM=    13,079,382
-('TERM_A', 'FC'): BEL=   -20,091,741  RA=1,019,238  CSM=    19,072,503
+('TERM_LIFE', 'FC'): BEL=    21,887,271  RA=1,863,422  CSM=     1,280,849
+('TERM_LIFE', 'GA'): BEL=    33,927,108  RA=  846,963  CSM=             0
+('HEALTH', 'FC'): BEL=    22,107,000  RA=1,863,422  CSM=     1,200,948
+('HEALTH', 'GA'): BEL=    34,256,702  RA=  846,963  CSM=             0
+('HEALTH', 'TM'): BEL=    32,718,597  RA=  846,963  CSM=             0
+('WHOLE_LIFE', 'FC'): BEL=    23,205,646  RA=1,863,422  CSM=       938,118
+('WHOLE_LIFE', 'GA'): BEL=    36,124,400  RA=  846,963  CSM=             0
 ```
 
 같은 보유계약, 같은 사망률·할인율이지만 채널의 해지율·신사업비 차이가
@@ -313,7 +324,7 @@ portfolio = fcf.ModelPoints(
     benefit_patterns=fcf.load_sample_benefit_patterns(),
 )
 
-asmp = fcf.load_sample_assumptions()[("TERM_A", "GA")]
+asmp = fcf.load_sample_assumptions()[("TERM_LIFE", "GA")]
 result = fcf.value(portfolio, asmp)
 
 print(f"Total  : {result.bel.sum():>15,.0f}")                 # 포트폴리오 BEL 합계
@@ -368,13 +379,13 @@ mp = fcf.ModelPoints.single(
 
 ```python
 basis = fcf.load_sample_assumptions()
-asmp = basis[("TERM_A", "TM")]   # KeyError: 샘플엔 GA / FC 만 있음
+asmp = basis[("TERM_LIFE", "TM")]   # KeyError: 샘플엔 GA / FC 만 있음
 ```
 
 `basis.keys()` 로 어떤 segment 가 있는지 먼저 확인:
 
 ```python
-print(list(basis.keys()))   # [('TERM_A', 'GA'), ('TERM_A', 'FC')]
+print(list(basis.keys()))   # [('TERM_LIFE', 'GA'), ('TERM_LIFE', 'FC')]
 ```
 
 자기 워크북에서는 `segments` 시트의 `(product, channel)` 조합이 그대로
@@ -460,8 +471,6 @@ asmp = fcf.Assumptions(
     discount_annual=0.0,
 
     # 사업비: 전부 0 (검증 단순화)
-    alpha_flat=0.0,         # 신사업비 (가입 시)
-    gamma_flat=0.0,  # 유지비 (연)
     expense_inflation=0.0,           # 비용 인플레이션
 
     # 위험조정 (RA = 0 으로 단순화)

@@ -186,6 +186,7 @@ def test_value_segmented_rejects_unknown_segment():
 def test_value_segmented_with_sample_basis():
     """End-to-end smoke -- the bundled sample basis has two segments and
     ``value_segmented`` routes per-mp valuations through it."""
+    from fastcashflow import load_sample_benefit_patterns
     basis = load_sample_assumptions()                    # multi-segment sample
     mp = ModelPoints(
         issue_age=np.array([40, 50, 45]),
@@ -194,6 +195,7 @@ def test_value_segmented_with_sample_basis():
         benefits={0: np.array([100_000_000.0, 80_000_000.0, 90_000_000.0])},
         product_code=np.array(["TERM_LIFE", "TERM_LIFE", "TERM_LIFE"]),
         channel_code=np.array(["GA", "FC", "GA"]),
+        benefit_patterns=load_sample_benefit_patterns(),
     )
     val = value_segmented(mp, basis)
     assert val.bel.shape == (3,)

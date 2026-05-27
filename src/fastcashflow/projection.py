@@ -42,7 +42,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import (
     Assumptions, annual_to_monthly, derive_expense_components,
 )
-from fastcashflow.coverage import coverage_arrays, coverage_rates
+from fastcashflow.coverage import coverage_arrays, coverage_rates, validate_csr_codes
 from fastcashflow.curves import inflation_index
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.statemodel import (
@@ -550,6 +550,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         assumptions.lapse_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid)))
+    validate_csr_codes(model_points.coverage_kind, len(assumptions.coverages))
     cov_is_diagnosis, cov_risk = coverage_arrays(
         assumptions.coverages, model_points.benefit_patterns,
     )

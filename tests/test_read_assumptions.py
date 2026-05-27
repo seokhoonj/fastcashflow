@@ -112,9 +112,11 @@ def test_resolved_basis_values():
     """A resolved ``Assumptions`` runs through ``value`` and ``measure``; the
     GA and FC segments give different BEL because lapse differs (channel
     segmentation actually bites the valuation)."""
+    from fastcashflow import load_sample_benefit_patterns
     basis = load_sample_assumptions()
     mp = ModelPoints.single(issue_age=40, benefits={0: 100_000_000.0},
-                            level_premium=50_000.0, term_months=120)
+                            level_premium=50_000.0, term_months=120,
+                            benefit_patterns=load_sample_benefit_patterns())
     # Use a copy of the basis without surrender for the value() / measure()
     # equivalence assertion -- the value() fast path doesn't yet include
     # surrender cash flows (see surrender-value-gap memory); only measure()

@@ -307,7 +307,6 @@ def lapse(s, ia, d, ic, em):
 profitable = Assumptions(
     mortality_annual=mort, lapse_annual=lapse,
     discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
-    alpha_flat=0.0, gamma_flat=0.0,
     coverages=(fcf.CoverageRate("DEATH", mort),),
 )
 mp_one = ModelPoints(

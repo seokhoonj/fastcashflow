@@ -38,7 +38,7 @@ reader 호출:
 ```python
 basis = read_assumptions("assumptions.xlsx")
 # basis: dict[(product, channel), Assumptions]
-asmp = basis[("TERM_A", "GA")]
+asmp = basis[("TERM_LIFE", "GA")]
 ```
 
 ### 1.1 `_meta` 시트와 `schema_version`
@@ -270,14 +270,14 @@ no-op.
 ```
 product   channel  mortality_table  lapse_table  ...  alpha_flat  ra_confidence  mortality_cv
 defaults           MORTALITY_STD                      ...                       0.75           0.10
-TERM_A    GA                        LAPSE_GA     ...  150000
-TERM_A    FC                        LAPSE_FC     ...   80000
+TERM_LIFE    GA                        LAPSE_GA     ...  150000
+TERM_LIFE    FC                        LAPSE_FC     ...   80000
 ```
 
-- `TERM_A / GA` — `mortality_table` 등 빈 칸은 `defaults`에서 상속
+- `TERM_LIFE / GA` — `mortality_table` 등 빈 칸은 `defaults`에서 상속
   (`MORTALITY_STD`, `ra_confidence` 0.75, `mortality_cv` 0.10). `lapse_table`과
   `alpha_flat`만 행에서 지정.
-- `TERM_A / FC` — 같은 패턴, lapse와 acquisition만 다름.
+- `TERM_LIFE / FC` — 같은 패턴, lapse와 acquisition만 다름.
 
 전사 고정값 (`ra_confidence` 등) 은 `defaults`에 한 번만 적습니다 — 바꿀 때
 한 칸만 고치면 됨.
@@ -304,20 +304,20 @@ v1 에서 A/E factor 미지원.
 
 ```
 product   channel  coverage_code   factor
-TERM_A    GA       INPATIENT         1.5         # GA의 입원 손해율 150%
-TERM_A    FC       INPATIENT         1.2         # FC는 좀 더 보수적
-TERM_A    GA       CANCER            1.0         # 암 발생률은 위험률과 일치
-TERM_A    GA       DEATH_GENERAL     0.8         # 사망 보장 자체 calibration
+TERM_LIFE    GA       INPATIENT         1.5         # GA의 입원 손해율 150%
+TERM_LIFE    FC       INPATIENT         1.2         # FC는 좀 더 보수적
+TERM_LIFE    GA       CANCER            1.0         # 암 발생률은 위험률과 일치
+TERM_LIFE    GA       DEATH_GENERAL     0.8         # 사망 보장 자체 calibration
 ```
 
 age 차원 추가 — 20대 anti-selection 패턴:
 
 ```
 product   channel  coverage_code   age   factor
-TERM_A    GA       INPATIENT         25    3.0
-TERM_A    GA       INPATIENT         26    2.8
+TERM_LIFE    GA       INPATIENT         25    3.0
+TERM_LIFE    GA       INPATIENT         26    2.8
 ...                                          # 각 age마다 한 줄 (dense 요구)
-TERM_A    GA       INPATIENT         60    1.0
+TERM_LIFE    GA       INPATIENT         60    1.0
 ```
 
 엔진 평가 식:
@@ -365,7 +365,7 @@ improvement_tables:
 
 segments:
   product | channel | mortality_table | mortality_improvement_table | ...
-  TERM_A  | GA      | MORTALITY_STD        | IMPR_STD                    | ...
+  TERM_LIFE  | GA      | MORTALITY_STD        | IMPR_STD                    | ...
 ```
 
 엔진 적용:

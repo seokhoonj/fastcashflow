@@ -176,7 +176,7 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
     # without raising claims.
     new_coverages = tuple(
         fcf.CoverageRate(r.code, _shock_mortality(r.rate, 1.10))
-        if r.code in ("DEATH_GENERAL", "DEATH", "DEATH_MAIN")
+        if r.code in ("DEATH_GENERAL", "DEATH")
         else r
         for r in asmp.coverages
     )

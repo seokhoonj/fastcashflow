@@ -82,7 +82,6 @@ class BenefitPattern(str, Enum):
 RATE_DRIVEN_PATTERNS = (
     BenefitPattern.DEATH, BenefitPattern.MORBIDITY, BenefitPattern.DIAGNOSIS,
 )
-SURVIVAL_PATTERNS = (BenefitPattern.ANNUITY, BenefitPattern.MATURITY)
 
 # Risk class of a coverage's claims: 0 mortality, 1 morbidity. The Risk
 # Adjustment prices the two with separate coefficients of variation.
@@ -144,42 +143,80 @@ def coverage_arrays(coverages, benefit_patterns=None):
     ``coverages`` is the ordered rate-driven coverages, in the same order as
     :attr:`Assumptions.coverages`; ``benefit_patterns`` is the portfolio-level
     taxonomy (``{coverage_code: BenefitPattern}``). Each coverage's pattern
-    looked up by code gives the two flags via :func:`pattern_attrs`. When
-    ``benefit_patterns`` is ``None`` every coverage falls back to
-    :data:`BenefitPattern.MORBIDITY` -- the conservative default for any
-    rate-driven coverage that was not flagged a diagnosis.
+    looked up by code gives the two flags via :func:`pattern_attrs`.
+
+    Pattern resolution per coverage:
+
+    1. If ``benefit_patterns`` is a dict and the code is a key, use that.
+    2. Else, if the code itself is the bare name of a :class:`BenefitPattern`
+       member (``"DEATH"``, ``"MORBIDITY"``, ``"DIAGNOSIS"``, ``"ANNUITY"``,
+       ``"MATURITY"``), use that pattern -- the auto-inference convention
+       for terse Python construction.
+    3. Else, raise :class:`ValueError` naming the unresolved codes. This is a
+       deliberate choice: a silent MORBIDITY fallback hides a configuration
+       mistake on the most error-prone surface (a DEATH-only contract whose
+       claim payouts would otherwise score zero RA against ``mortality_cv``).
 
     Returns ``(cov_is_diagnosis, cov_risk)``, each indexed by coverage code.
     """
     flags: list[tuple[bool, int]] = []
+    unresolved: list[str] = []
     for r in coverages:
-        pattern = (benefit_patterns.get(r.code) if benefit_patterns is not None
-                   else None) or BenefitPattern.MORBIDITY
+        pattern = None
+        if benefit_patterns is not None:
+            pattern = benefit_patterns.get(r.code)
+        if pattern is None:
+            # Step 2 -- code-as-pattern auto-inference.
+            try:
+                pattern = BenefitPattern(r.code)
+            except ValueError:
+                pattern = None
+        if pattern is None:
+            unresolved.append(r.code)
+            # Append a placeholder so the loop builds a same-length list;
+            # the raise below short-circuits the result.
+            flags.append((False, RISK_MORBIDITY))
+            continue
         flags.append(pattern_attrs(pattern))
+    if unresolved:
+        valid = ", ".join(p.value for p in BenefitPattern)
+        raise ValueError(
+            f"coverage code(s) {unresolved!r} have no BenefitPattern: pass a "
+            "benefit_patterns dict on the model points (or load it from a "
+            "benefit_patterns.csv) mapping each code to one of "
+            f"{{{valid}}} -- or rename the coverage to a BenefitPattern "
+            "member name (the auto-inference rule)."
+        )
     cov_is_diagnosis = np.array([f[0] for f in flags], np.bool_)
     cov_risk = np.array([f[1] for f in flags], np.int64)
     return cov_is_diagnosis, cov_risk
 
 
-def order_coverages(rate_driven_codes, benefit_patterns):
-    """Validate that every rate-driven code is registered in the taxonomy.
+def validate_csr_codes(coverage_kind, n_coverages):
+    """Check that every ``coverage_kind`` value indexes into the coverage list.
 
-    Returns the input sequence unchanged when validation passes -- the
-    function name reflects that this is the *ordering* boundary: the
-    rate-driven coverages keep their xlsx-coverages-sheet order (which
-    becomes the engine's integer code ordering, with code ``i`` for entry
-    ``i``), but every code must appear in the ``benefit_patterns.csv``
-    taxonomy. Raises :class:`ValueError` listing the missing codes when not.
+    The CSR's ``coverage_kind`` is an integer index into
+    :attr:`Assumptions.coverages`; the kernel reads
+    ``cov_rates[coverage_kind[k], ...]`` directly. An out-of-range index
+    would read past the rate-grid into adjacent contiguous memory, producing
+    a silently wrong BEL rather than an :class:`IndexError`. This validator
+    catches the mistake at engine entry with a clear message naming the
+    offending value(s) and the registered coverage count.
+
+    Empty coverage lists are allowed when no CSR row references them.
     """
-    if benefit_patterns is None:
-        return tuple(rate_driven_codes)
-    missing = [c for c in rate_driven_codes if c not in benefit_patterns]
-    if missing:
+    if coverage_kind.size == 0:
+        return
+    max_kind = int(coverage_kind.max())
+    min_kind = int(coverage_kind.min())
+    if min_kind < 0 or max_kind >= n_coverages:
+        bad = sorted({int(k) for k in coverage_kind
+                      if k < 0 or k >= n_coverages})
         raise ValueError(
-            f"rate-driven coverage code(s) {missing!r} are not in the "
-            "benefit_patterns taxonomy -- register them in benefit_patterns.csv "
-            f"or remove the rate_table cell in the assumptions workbook "
-            "(known patterns: "
-            f"{', '.join(sorted(set(benefit_patterns.values()), key=str))})"
+            f"coverage_kind value(s) {bad} are out of range: assumptions.coverages "
+            f"has {n_coverages} entr{'y' if n_coverages == 1 else 'ies'} "
+            f"(valid kind range: 0..{max(n_coverages - 1, 0)}). Either "
+            "register the missing coverage on Assumptions.coverages or "
+            "rebuild ModelPoints.benefits with a kind that maps to a "
+            "registered coverage."
         )
-    return tuple(rate_driven_codes)

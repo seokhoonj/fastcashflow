@@ -360,9 +360,13 @@ class Assumptions:
     coverages :
         Ordered tuple of :class:`CoverageRate` -- the rate-driven coverages
         (death-type, morbidity and diagnosis), one per coverage code.
-        Their order fixes the integer coverage codes: entry ``i`` is code
-        ``i + 1``; code 0 is the main-contract death coverage, driven by
-        ``mortality_annual``. Empty for a death-only portfolio. The taxonomy
+        No code is reserved: entry ``i`` lives at code ``i``, the integer
+        the portfolio's ``coverage_kind`` CSR uses to index this tuple. A
+        contract's death coverage, if any, is just one entry whose
+        ``rate_table`` typically references the same mortality table the
+        engine uses as the in-force decrement (``mortality_annual``) --
+        the two are different mathematical quantities (decrement vs claim
+        payout) that happen to share a table in most products. The taxonomy
         side -- whether a coverage code runs as a diagnosis pool vs a
         recurring claim -- lives on the portfolio
         (:attr:`fastcashflow.modelpoints.ModelPoints.benefit_patterns`),

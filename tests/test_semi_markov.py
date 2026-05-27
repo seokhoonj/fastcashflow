@@ -316,10 +316,10 @@ def _reincidence_assumptions_with_rider(duration_max, exclusion_months,
 def _portfolio_with_rule_coverage(n, seed, rider_waiting, rider_reduction_end,
                                   rider_reduction_factor,
                                   rider_is_diagnosis=False):
-    """A small portfolio with one death cov (rule-free) and one rider cov
-    (carrying the per-coverage rule). The DEATH coverage is at kind 0,
-    the rider at kind 1 (its index in the riders tuple plus the death
-    main offset).
+    """A small portfolio with one death coverage (rule-free) and one rider
+    coverage (carrying the per-coverage rule). The DEATH coverage is at
+    kind 0, the rider at kind 1 -- their integer codes are positions in
+    ``assumptions.coverages`` in registration order.
     """
     rng = np.random.default_rng(seed)
     # Build coverage_kind / coverage_amount: two coverages per mp (DEATH then rider).

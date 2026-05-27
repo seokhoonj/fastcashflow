@@ -35,7 +35,8 @@ def _build(path: Path, *, improvement_curve=None):
 
     rd = wb.create_sheet("coverages")
     rd.append(["coverage_code", "rate_table"])
-    # No rate-driven coverages -- mortality_table drives DEATH_MAIN.
+    # No rate-driven coverages registered -- this segment has no claim
+    # benefits; mortality_table only drives the in-force decrement.
 
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
