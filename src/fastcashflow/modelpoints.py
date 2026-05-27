@@ -145,6 +145,17 @@ class ModelPoints:
     # morbidity claim) -- fine for a hand-written one-MP test that does
     # not need the taxonomy.
     benefit_patterns: dict[str, "BenefitPattern"] | None = None
+    # Rate-driven coverage codes in registration order, captured at
+    # construction time. The integers in ``coverage_index`` are positional
+    # indices into this tuple (equivalently, into the ``Assumptions.coverages``
+    # the model points were built against). At engine entry the tuple is
+    # matched against the current ``Assumptions.coverages`` order; a swap or
+    # an insertion would silently shift the meaning of every ``coverage_index``
+    # value, so a mismatch is refused with a clear error. ``None`` skips the
+    # strict check (a hand-written one-MP test that did not pin an
+    # assumptions order); the catalogue-consistency check on
+    # ``benefit_patterns`` still applies.
+    coverage_codes: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         # Normalise the required fields to numpy arrays of the right dtype.
@@ -277,6 +288,13 @@ class ModelPoints:
         if bp is not None:
             bp = {str(k): BenefitPattern(v) for k, v in bp.items()}
             object.__setattr__(self, "benefit_patterns", bp)
+        # Registered coverage codes -- normalise to an immutable tuple of str
+        # so a hand-built list or a polars Series passes through, and the
+        # stored value can never drift out of sync with itself.
+        cc = self.coverage_codes
+        if cc is not None:
+            object.__setattr__(self, "coverage_codes",
+                               tuple(str(c) for c in cc))
 
     @property
     def n_mp(self) -> int:
@@ -383,6 +401,9 @@ class ModelPoints:
         # Taxonomy carries through unchanged -- subsetting drops rows, not
         # the company-level catalogue of coverage codes.
         kwargs["benefit_patterns"] = self.benefit_patterns
+        # The registered coverage-code order is a property of the assumptions
+        # the model points were built against, not of the row subset.
+        kwargs["coverage_codes"] = self.coverage_codes
 
         return ModelPoints(**kwargs)
 

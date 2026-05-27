@@ -193,7 +193,8 @@ def coverage_arrays(coverages, benefit_patterns=None):
 
 
 def validate_csr_codes(coverage_index, n_coverages, *,
-                       coverages=None, benefit_patterns=None):
+                       coverages=None, benefit_patterns=None,
+                       expected_coverage_codes=None):
     """Check that every ``coverage_index`` value indexes into the coverage list.
 
     The CSR's ``coverage_index`` is an integer index into
@@ -210,6 +211,13 @@ def validate_csr_codes(coverage_index, n_coverages, *,
     ``benefit_patterns`` dict. A drift between the two (typically a swap
     of one without the other) lands a coverage with no routing pattern
     and the engine falls back to MORBIDITY -- silently wrong.
+
+    When ``expected_coverage_codes`` is provided (the rate-driven code tuple
+    the model points were built against), also verifies positional order:
+    the ``Assumptions.coverages`` order must match exactly. A reorder
+    leaves every code present and the catalogue check passes, but the
+    ``coverage_index`` integers now point at the wrong rows of the rate
+    stack -- DEATH amounts paid out at cancer rates and so on.
 
     Empty coverage lists are allowed when no CSR row references them.
     """
@@ -239,4 +247,17 @@ def validate_csr_codes(coverage_index, n_coverages, *,
                 "benefit_patterns catalogue. The two must agree on every "
                 "rate-driven code -- one was swapped without rebuilding "
                 "the other."
+            )
+    if expected_coverage_codes is not None and coverages is not None:
+        current = tuple(r.code for r in coverages)
+        expected = tuple(expected_coverage_codes)
+        if current != expected:
+            raise ValueError(
+                "Assumptions.coverages order does not match the order the "
+                "model points were built against: coverage_index integers "
+                "would silently mean different coverages. "
+                f"Assumptions.coverages = {list(current)}, "
+                f"ModelPoints.coverage_codes = {list(expected)}. "
+                "Rebuild the model points against the current Assumptions, "
+                "or restore the original coverage ordering."
             )

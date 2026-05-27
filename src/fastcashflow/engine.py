@@ -1593,6 +1593,7 @@ def value(
         model_points.coverage_index, len(assumptions.coverages),
         coverages=assumptions.coverages,
         benefit_patterns=model_points.benefit_patterns,
+        expected_coverage_codes=model_points.coverage_codes,
     )
     cov_is_diagnosis, cov_risk = coverage_arrays(
         assumptions.coverages, model_points.benefit_patterns,

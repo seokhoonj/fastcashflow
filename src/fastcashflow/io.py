@@ -935,6 +935,11 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
         fields["benefits"] = benefits
     if benefit_patterns is not None:
         fields["benefit_patterns"] = benefit_patterns
+    # Pin the assumptions ordering: the coverage_index integers we just
+    # built index into this tuple; validate_csr_codes will refuse a later
+    # Assumptions whose coverages got reordered.
+    if assumptions is not None:
+        fields["coverage_codes"] = tuple(r.code for r in assumptions.coverages)
     return ModelPoints(**fields)
 
 
@@ -1123,6 +1128,10 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         np.cumsum(np.bincount(cov_mp, minlength=n_mp), dtype=np.int64),
     ))
     fields["benefit_patterns"] = ctypes
+    # Pin the assumptions ordering: the coverage_index integers we just
+    # built index into this tuple; validate_csr_codes will refuse a later
+    # Assumptions whose coverages got reordered.
+    fields["coverage_codes"] = tuple(r.code for r in assumptions.coverages)
     return ModelPoints(**fields)
 
 
