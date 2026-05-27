@@ -1,17 +1,67 @@
-# BenefitPattern 결정 가이드
+# 지급 패턴에 따른 계산방식의 결정
 
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
 
-- `benefit_patterns.csv` 가 무엇인지, 왜 별도 파일인지 — 회사 카탈로그 (taxonomy)
-  / 결산 basis / portfolio 의 3-파일 분리
-- 다섯 가지 `BenefitPattern` (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY /
-  MATURITY) 의 의미와 한국 상품 매핑
-- 사망 종류 (일반 / 상해 / 질병 / 재해 / ADB) 가 모두 DEATH 패턴인 이유
-- 카탈로그 작성 절차와 등록 누락 시 어디서 에러가 나는가
+- 엔진이 *왜* 각 담보의 "지급 패턴" 을 미리 알아야 하는가
+- 패턴에 따라 어떤 계산 분기로 들어가는지 — 다섯 가지로 단순화
+- 사용자가 지정해주는 자리 (`benefit_patterns.csv`) 가 왜 별도 파일인가
+- 사망 종류 (일반 / 상해 / 질병 / 재해 / ADB) 가 모두 같은 패턴인 이유
+- 한국 상품의 매핑 표, 카탈로그 작성, 등록 누락 시 잡히는 자리
 ```
 
-## 왜 `benefit_patterns.csv` 인가 — 라이프사이클 분리
+## 왜 사용자가 패턴을 지정해야 하나
+
+엔진이 청구 (cash flow 발생) 를 계산하는 방식은 담보마다 다릅니다. **사망
+보장** 은 사람이 한 번 죽으면 더 발생하지 않고, **입원 보장** 은 같은
+사람이 매월 다시 발생할 수 있고, **진단 보장** 은 한 번 진단 받으면
+다음 달부터 발생하지 않습니다. 같은 수학식 한 줄로 세 경우를 다 풀 수
+없어, 엔진이 담보별로 *다른 계산 알고리즘* 을 골라 적용해야 합니다.
+
+문제는 엔진이 담보의 이름 (`'CANCER'`, `'INPATIENT'`, `'ADB'` 등) 만 보고
+어떤 알고리즘을 적용할지 자동 추론할 수 없다는 점 — 한국 시장의 담보
+이름은 회사마다, 상품마다 자유 형식입니다. 그래서 사용자가 **"이 담보는
+이런 식으로 지급된다"** 를 미리 알려줘야 합니다. 그 매핑이 *지급 패턴
+(benefit pattern)* 이고, 회사 단위로 한 번 정해두면 거의 안 바뀝니다.
+
+다섯 가지 분기로 단순화됩니다:
+
+```{list-table}
+:header-rows: 1
+:widths: 18 35 47
+
+* - 지급 패턴
+  - 어떤 계산
+  - 한국 상품 예
+* - **DEATH**
+  - 사망률 × 보유계약 × 보험금. 보유계약은 별도 사망률로 따로 감쇠 (한 번 죽으면 끝).
+  - 일반사망 / 상해사망 / 질병사망 / 재해사망 / ADB 등 *모든 사망형 담보*
+* - **MORBIDITY**
+  - 발생률 × 보유계약 × 보험금. 매월 반복 (같은 사람도 다시 발생 가능).
+  - 입원 / 수술 / 통원
+* - **DIAGNOSIS**
+  - 진단율 × 미진단풀 × 보험금. 풀이 매월 감쇠 (한 번 진단 받으면 끝).
+  - 암 / 뇌혈관 / 심혈관 진단보험금
+* - **ANNUITY**
+  - 생존계약 × 정액 (매월 / 매 N 개월). 위험률 없음.
+  - 생존연금
+* - **MATURITY**
+  - 만기 생존계약 × 정액. 만기 시 1 회.
+  - 만기환급금
+```
+
+세 가지 위험률 기반 패턴 (DEATH / MORBIDITY / DIAGNOSIS) 의 차이는 본질
+적으로 *어떤 풀에서 차감되는가* 의 차이입니다 — 자세한 메커니즘은
+[보장 청구 메커니즘](coverage-mechanics) 챕터.
+
+```{note}
+주계약은 **상품마다 다른 패턴** 입니다. 정기 / 종신은 DEATH, 암보험은
+DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은 ANNUITY. 엔진은 "주계약"
+자체를 모릅니다 — 카탈로그에 등록된 담보들 중 어느 것이 주계약인지는
+회사 / product 단위 결정.
+```
+
+## 왜 별도 파일인가 — 라이프사이클 분리
 
 회사가 평가 엔진에 넣는 입력은 갱신 주기가 서로 다릅니다.
 
@@ -42,33 +92,6 @@ mp    = fcf.read_model_points(
     coverages="coverages.csv",
     benefit_patterns="benefit_patterns.csv",      # ← 회사 카탈로그
 )
-```
-
-## 다섯 가지 `BenefitPattern`
-
-```python
-from fastcashflow import BenefitPattern
-
-BenefitPattern.DEATH        # 사망 — rate 가 mortality 류, in-force 줄이지 않음
-BenefitPattern.MORBIDITY    # 입원 / 수술 / 통원 — 반복 발생 (in-force 줄지 않음)
-BenefitPattern.DIAGNOSIS    # 진단 / 생활비 lump — 1 회 지급, depleting pool
-BenefitPattern.ANNUITY      # 생존 연금 — 월 정액 지급 (scalar field)
-BenefitPattern.MATURITY     # 만기환급 — 만기 시 1 회 지급 (scalar field)
-```
-
-| Pattern | 지급 mechanic | rate 출처 | engine 자리 |
-|---|---|---|---|
-| **DEATH** | 사망 사건 발생 시 amount 지급 | 자체 rate_table (사망률 / 상해사망률 / ADB 등) | rate-driven coverage 슬롯 |
-| **MORBIDITY** | 사건 발생 시 amount 지급, 다음 달에도 발생 가능 | 자체 incidence rate_table | rate-driven coverage 슬롯 |
-| **DIAGNOSIS** | 첫 발생 시 1 회 지급, 그 이후 미지급 | 자체 incidence rate_table | rate-driven coverage 슬롯 (depleting pool) |
-| **ANNUITY** | 생존 시 매월 / 매 N개월 정액 지급 | rate 없음 (생존자에게 지급) | `ModelPoints.annuity_payment` |
-| **MATURITY** | 만기까지 생존 시 1 회 지급 | rate 없음 | `ModelPoints.maturity_benefit` |
-
-```{note}
-주계약 (생보 의 주계약 / 손보 의 보통약관) 은 **상품마다 다른 패턴**입니다.
-정기 / 종신은 DEATH, 암보험은 DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은
-ANNUITY. 엔진은 "주계약" 을 모릅니다 — 카탈로그에 등록된 담보들 중 어느
-것이 주계약인지는 회사 / product 단위 결정입니다.
 ```
 
 ## 한국 상품 → 패턴 매핑 표
