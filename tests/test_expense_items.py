@@ -15,10 +15,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import EXPENSE_BASES, ExpenseItem, derive_expense_components, CoverageRate
-
-
-
-PATTERNS = {"DEATH": fcf.BenefitPattern.DEATH}
+from conftest import PATTERNS
 
 def test_empty_rows_emit_zero_primitives():
     """Empty rows: every primitive is zero across the projection horizon."""

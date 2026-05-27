@@ -15,6 +15,7 @@ from fastcashflow import (
     value,
 )
 from fastcashflow.numerics import _norm_ppf
+from conftest import annual_from_monthly as _annual
 
 PATTERNS = {
     "death":     BenefitPattern.DEATH,
@@ -27,11 +28,6 @@ PATTERNS = {
 Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
 MORB_RATE = 0.03     # flat monthly morbidity rate (events per in-force month)
-
-
-def _annual(m):
-    """Convert a monthly rate to the equivalent annual rate the engine expects."""
-    return 1.0 - (1.0 - m) ** 12
 
 # Coverage codes -- entry i of ``_assumptions().coverages`` lives at code i.
 DEATH, INPATIENT, SURGERY, OUTPATIENT, DIAGNOSIS = 0, 1, 2, 3, 4

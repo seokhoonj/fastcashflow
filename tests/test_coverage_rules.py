@@ -19,6 +19,7 @@ from fastcashflow import (
     value,
 )
 from fastcashflow.numerics import _norm_ppf
+from conftest import annual_from_monthly as _annual
 
 Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
@@ -31,11 +32,6 @@ PATTERNS = {
     "death":     BenefitPattern.DEATH,
     "diagnosis": BenefitPattern.DIAGNOSIS,
 }
-
-
-def _annual(m):
-    """Convert a monthly rate to its annual equivalent (engine converts back)."""
-    return 1.0 - (1.0 - m) ** 12
 
 
 def _mortality(sex, issue_age, duration):

@@ -23,29 +23,21 @@ Paragraph -> test name:
 """
 import numpy as np
 
-from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, CoverageRate
+from fastcashflow import ModelPoints, measure
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
-
-def _annual(m):
-    """Annual-equivalent of a monthly rate (engine converts back internally)."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _flat_assumptions(**overrides) -> Assumptions:
+def _flat_assumptions(**overrides):
     """Defaults: 1%/year mortality, 0 lapse, 0 discount, RA off, no expenses."""
-    base = dict(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.0)),
-        discount_annual=0.0,
-        ra_confidence=0.75,
-        mortality_cv=0.0,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01))),),
+    kw = dict(
+        mortality_q     = 0.01,
+        lapse_q         = 0.0,
+        discount_annual = 0.0,
+        ra_confidence   = 0.75,
+        mortality_cv    = 0.0,
     )
-    base.update(overrides)
-    return Assumptions(**base)
+    kw.update(overrides)
+    return make_death_assumptions(**kw)
 
 
 # ---------------------------------------------------------------------------

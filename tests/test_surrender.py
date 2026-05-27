@@ -6,11 +6,8 @@ verify the formula end-to-end against hand calculation.
 """
 import numpy as np
 
-from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, CoverageRate
-
-
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
+from fastcashflow import Assumptions, ModelPoints, measure, CoverageRate
+from conftest import PATTERNS
 
 def _flat_rate(value):
     """3-arg rate callable that returns a constant for any (sex, age, dur)."""

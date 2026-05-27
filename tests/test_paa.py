@@ -8,31 +8,24 @@ result is just premiums less claims and expenses -- the underwriting profit.
 import numpy as np
 import pytest
 
-from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, measure_paa, CoverageRate
+from fastcashflow import ExpenseItem, ModelPoints, measure_paa
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 Q = 0.002          # flat monthly mortality
 LAPSE = 0.005      # flat monthly lapse
 
 
-def _annual(m):
-    """Convert a flat monthly rate to its annual equivalent."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _assumptions(**overrides) -> Assumptions:
-    base = dict(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(LAPSE)),
-        discount_annual=0.03,
-        ra_confidence=0.75,
-        mortality_cv=0.10,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q))),),
+def _assumptions(**overrides):
+    kw = dict(
+        mortality_q     = Q,
+        lapse_q         = LAPSE,
+        discount_annual = 0.03,
+        ra_confidence   = 0.75,
+        mortality_cv    = 0.10,
     )
-    base.update(overrides)
-    return Assumptions(**base)
+    kw.update(overrides)
+    return make_death_assumptions(**kw)
 
 
 def test_paa_revenue_equals_total_premium():

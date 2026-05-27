@@ -6,38 +6,26 @@ This is the engine's correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, measure, value, CoverageRate
+from fastcashflow import ExpenseItem, ModelPoints, measure, value
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 # Standard-normal 75th percentile -- a known mathematical constant, used so
 # the RA check does not depend on the engine's own quantile code.
 Z_75 = 0.6744897501960817
 
 
-def _annual(m):
-    """Convert a monthly rate to its annual equivalent (engine converts back)."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _assumptions(**overrides) -> Assumptions:
-    """Build an Assumptions with simple defaults, overridable per test.
-
-    The DEATH coverage's payout rate is wired to the same callable as
-    ``mortality_annual`` so an override of one is picked up by both --
-    the natural convention for a death-claim contract.
-    """
-    base = dict(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
-        discount_annual=0.0,
-        ra_confidence=0.75,
-        mortality_cv=0.10,
+def _assumptions(**overrides):
+    """Defaults for the phase-0 hand calc -- 1%/month mortality, 2%/month lapse."""
+    kw = dict(
+        mortality_q     = 0.01,
+        lapse_q         = 0.02,
+        discount_annual = 0.0,
+        ra_confidence   = 0.75,
+        mortality_cv    = 0.10,
     )
-    base.update(overrides)
-    base["coverages"] = (CoverageRate("DEATH", base["mortality_annual"]),)
-    return Assumptions(**base)
+    kw.update(overrides)
+    return make_death_assumptions(**kw)
 
 
 def test_hand_calculation():

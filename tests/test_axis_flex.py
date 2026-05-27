@@ -13,12 +13,9 @@ import numpy as np
 import openpyxl
 import pytest
 
-from fastcashflow import BenefitPattern, Assumptions, CoverageRate
+from fastcashflow import Assumptions, CoverageRate
 from fastcashflow.io import _flex_rate_table
-
-
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
+from conftest import PATTERNS
 
 def _sheet(rows):
     """Build a worksheet from a list of (header, row, row, ...) tuples."""

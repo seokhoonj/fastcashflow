@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    Assumptions,
+    CoverageRate,
     ExpenseItem,
     ModelPoints,
     measure,
@@ -19,28 +19,22 @@ from fastcashflow import (
     reconcile,
     roll_forward,
     value,
-    CoverageRate,
 )
+from conftest import annual_from_monthly as _annual, make_death_assumptions
 
 
-def _annual(m: float) -> float:
-    """Convert a monthly rate to its annual equivalent so the engine converts back."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _assumptions() -> Assumptions:
-    return Assumptions(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
-        discount_annual=0.03,
-        expense_inflation=0.02,
-        expense_items=(
+def _assumptions():
+    return make_death_assumptions(
+        mortality_q       = 0.001,
+        lapse_q           = 0.01,
+        discount_annual   = 0.03,
+        expense_inflation = 0.02,
+        expense_items     = (
             ExpenseItem("acquisition",  "alpha_fixed",    200_000.0),
             ExpenseItem("maintenance",  "gamma_fixed",  60_000.0),
         ),
-        ra_confidence=0.75,
-        mortality_cv=0.10,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001))),),
+        ra_confidence     = 0.75,
+        mortality_cv      = 0.10,
     )
 
 
@@ -465,16 +459,15 @@ def test_reconcile_paa():
     assert "LRC" in text and "incurred claims" in text
 
 
-def _vfa_assumptions() -> Assumptions:
-    return Assumptions(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.004)),
-        discount_annual=0.03,
-        ra_confidence=0.75,
-        mortality_cv=0.10,
-        investment_return=0.06,
-        fund_fee=0.015,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002))),),
+def _vfa_assumptions():
+    return make_death_assumptions(
+        mortality_q       = 0.002,
+        lapse_q           = 0.004,
+        discount_annual   = 0.03,
+        ra_confidence     = 0.75,
+        mortality_cv      = 0.10,
+        investment_return = 0.06,
+        fund_fee          = 0.015,
     )
 
 

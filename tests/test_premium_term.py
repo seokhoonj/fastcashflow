@@ -8,29 +8,21 @@ ordinary case. The hand case is a 3-month contract paying premium for 2.
 """
 import numpy as np
 
-from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, read_model_points, value, CoverageRate
+from fastcashflow import ModelPoints, measure, read_model_points, value
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
-
-def _annual(m):
-    """Convert a monthly rate to the equivalent annual rate the engine expects."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _assumptions(**overrides) -> Assumptions:
+def _assumptions(**overrides):
     """Flat-rate, zero-discount, zero-expense basis -- every figure by hand."""
-    base = dict(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.02)),
-        discount_annual=0.0,
-        ra_confidence=0.75,
-        mortality_cv=0.10,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01))),),
+    kw = dict(
+        mortality_q     = 0.01,
+        lapse_q         = 0.02,
+        discount_annual = 0.0,
+        ra_confidence   = 0.75,
+        mortality_cv    = 0.10,
     )
-    base.update(overrides)
-    return Assumptions(**base)
+    kw.update(overrides)
+    return make_death_assumptions(**kw)
 
 
 def test_premium_term_hand_calculation():

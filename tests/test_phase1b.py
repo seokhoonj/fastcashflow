@@ -7,20 +7,14 @@ in plain Python as the correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, value, CoverageRate
+from fastcashflow import ModelPoints, measure, value
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 SELECT_Q = 0.005      # monthly mortality, policy year 0 (select)
 ULT_Q = 0.02          # monthly mortality, policy year 1+ (ultimate)
 SELECT_LAPSE = 0.03   # monthly lapse, policy year 0
 ULT_LAPSE = 0.01      # monthly lapse, policy year 1+
-
-
-def _annual(m):
-    """Convert a monthly rate to its annual equivalent (engine converts back)."""
-    return 1.0 - (1.0 - m) ** 12
 
 
 def _mortality(sex, issue_age, duration):
@@ -33,17 +27,16 @@ def _lapse(sex, issue_age, duration):
     return np.where(duration < 1, _annual(SELECT_LAPSE), _annual(ULT_LAPSE))
 
 
-def _assumptions(**overrides) -> Assumptions:
-    base = dict(
-        mortality_annual=_mortality,
-        lapse_annual=_lapse,
-        discount_annual=0.0,
-        ra_confidence=0.75,
-        mortality_cv=0.0,
-        coverages=(CoverageRate("DEATH", _mortality),),
+def _assumptions(**overrides):
+    kw = dict(
+        mortality_annual = _mortality,
+        lapse_annual     = _lapse,
+        discount_annual  = 0.0,
+        ra_confidence    = 0.75,
+        mortality_cv     = 0.0,
     )
-    base.update(overrides)
-    return Assumptions(**base)
+    kw.update(overrides)
+    return make_death_assumptions(**kw)
 
 
 def test_select_ultimate_and_duration_lapse():

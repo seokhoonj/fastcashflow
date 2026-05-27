@@ -8,29 +8,21 @@ many return scenarios and recovers the time value -- the cost the convex
 import numpy as np
 import pytest
 
-from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure_tvog, CoverageRate
+from fastcashflow import ModelPoints, measure_tvog
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
-
-def _annual(m: float) -> float:
-    """Convert a monthly rate to its annual equivalent so the engine converts back."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _assumptions(**overrides) -> Assumptions:
-    base = dict(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.004)),
-        discount_annual=0.03,
-        ra_confidence=0.75,
-        mortality_cv=0.10,
-        fund_fee=0.015,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002))),),
+def _assumptions(**overrides):
+    kw = dict(
+        mortality_q     = 0.002,
+        lapse_q         = 0.004,
+        discount_annual = 0.03,
+        ra_confidence   = 0.75,
+        mortality_cv    = 0.10,
+        fund_fee        = 0.015,
     )
-    base.update(overrides)
-    return Assumptions(**base)
+    kw.update(overrides)
+    return make_death_assumptions(**kw)
 
 
 def _contract(term: int = 120, g: float = 0.0) -> ModelPoints:

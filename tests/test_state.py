@@ -27,6 +27,8 @@ from fastcashflow import (
     value,
 )
 
+from conftest import annual_from_monthly as _annual
+
 # Standard-normal 75th percentile -- used so the RA check does not depend on
 # the engine's own quantile code.
 Z_75 = 0.6744897501960817
@@ -36,11 +38,6 @@ PATTERNS = {
     "dx":    BenefitPattern.DIAGNOSIS,
     "hosp":  BenefitPattern.MORBIDITY,
 }
-
-
-def _annual(m):
-    """Convert a flat monthly rate to its annual equivalent."""
-    return 1.0 - (1.0 - m) ** 12
 
 
 def _assumptions(waiver_rate: float = 0.0, **overrides) -> Assumptions:

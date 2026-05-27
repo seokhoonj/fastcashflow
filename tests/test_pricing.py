@@ -6,30 +6,22 @@ the target it was solved for.
 import numpy as np
 import pytest
 
-from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, solve_premium, value, CoverageRate
+from fastcashflow import ExpenseItem, ModelPoints, solve_premium, value
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
-
-def _annual(m):
-    """Convert a monthly rate to the equivalent annual rate the engine expects."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _assumptions() -> Assumptions:
-    return Assumptions(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0008)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
-        discount_annual=0.03,
-        expense_inflation=0.02,
-        expense_items=(
+def _assumptions():
+    return make_death_assumptions(
+        mortality_q       = 0.0008,
+        lapse_q           = 0.01,
+        discount_annual   = 0.03,
+        expense_inflation = 0.02,
+        expense_items     = (
             ExpenseItem("acquisition",  "alpha_fixed",    200_000.0),
             ExpenseItem("maintenance",  "gamma_fixed",  36_000.0),
         ),
-        ra_confidence=0.80,
-        mortality_cv=0.10,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0008))),),
+        ra_confidence     = 0.80,
+        mortality_cv      = 0.10,
     )
 
 

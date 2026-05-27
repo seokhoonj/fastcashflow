@@ -6,33 +6,25 @@ the total liability must run off to zero by the end of the term.
 """
 import numpy as np
 
-from fastcashflow import BenefitPattern, Assumptions, ExpenseItem, ModelPoints, measure, value, CoverageRate
+from fastcashflow import ExpenseItem, ModelPoints, measure, value
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
-
-def _annual(m):
-    """Convert a monthly rate to its annual equivalent (engine converts back)."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _assumptions(**overrides) -> Assumptions:
-    base = dict(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
-        discount_annual=0.04,
-        expense_inflation=0.02,
-        expense_items=(
+def _assumptions(**overrides):
+    kw = dict(
+        mortality_q       = 0.002,
+        lapse_q           = 0.01,
+        discount_annual   = 0.04,
+        expense_inflation = 0.02,
+        expense_items     = (
             ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
             ExpenseItem("maintenance",  "gamma_fixed",  24_000.0),
         ),
-        ra_confidence=0.80,
-        mortality_cv=0.10,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.002))),),
+        ra_confidence     = 0.80,
+        mortality_cv      = 0.10,
     )
-    base.update(overrides)
-    return Assumptions(**base)
+    kw.update(overrides)
+    return make_death_assumptions(**kw)
 
 
 def test_bel_rollforward():

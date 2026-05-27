@@ -6,28 +6,20 @@ roll-forward identity is checked exactly.
 """
 import numpy as np
 
-from fastcashflow import BenefitPattern, Assumptions, ModelPoints, measure, CoverageRate
+from fastcashflow import ModelPoints, measure
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
-
-def _annual(m):
-    """Convert a monthly rate to its annual equivalent (engine converts back)."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _flat_assumptions(**overrides) -> Assumptions:
-    base = dict(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.0)),
-        discount_annual=0.06,
-        ra_confidence=0.75,
-        mortality_cv=0.0,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01))),),
+def _flat_assumptions(**overrides):
+    kw = dict(
+        mortality_q     = 0.01,
+        lapse_q         = 0.0,
+        discount_annual = 0.06,
+        ra_confidence   = 0.75,
+        mortality_cv    = 0.0,
     )
-    base.update(overrides)
-    return Assumptions(**base)
+    kw.update(overrides)
+    return make_death_assumptions(**kw)
 
 
 def test_mid_month_discounting():

@@ -10,13 +10,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow.statemodel import StateModel, State, Transition
-
-
-
-PATTERNS = {"DEATH": fcf.BenefitPattern.DEATH}
-
-def _annual(monthly: float) -> float:
-    return 1.0 - (1.0 - monthly) ** 12
+from conftest import PATTERNS, annual_from_monthly as _annual
 
 
 def _cancer_reincidence_model(duration_max: int) -> StateModel:

@@ -7,35 +7,27 @@ amount, and an empty list equals a zero death benefit.
 """
 import numpy as np
 
-from fastcashflow import (
-    Assumptions, BenefitPattern, CoverageRate, ExpenseItem, ModelPoints,
-    measure, value,
-)
+from fastcashflow import ExpenseItem, ModelPoints, measure, value
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+
 
 Q = 0.002
 LAPSE = 0.005
 DEATH = 0   # the death coverage's index in _assumptions().coverages
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
 
 
-def _annual(m):
-    """Convert a monthly rate to its annual equivalent (engine converts back)."""
-    return 1.0 - (1.0 - m) ** 12
-
-
-def _assumptions() -> Assumptions:
-    return Assumptions(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(LAPSE)),
-        discount_annual=0.03,
-        expense_inflation=0.02,
-        expense_items=(
+def _assumptions():
+    return make_death_assumptions(
+        mortality_q       = Q,
+        lapse_q           = LAPSE,
+        discount_annual   = 0.03,
+        expense_inflation = 0.02,
+        expense_items     = (
             ExpenseItem("acquisition",  "alpha_fixed",    200_000.0),
             ExpenseItem("maintenance",  "gamma_fixed",  60_000.0),
         ),
-        ra_confidence=0.75,
-        mortality_cv=0.10,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(Q))),),
+        ra_confidence     = 0.75,
+        mortality_cv      = 0.10,
     )
 
 

@@ -4,9 +4,6 @@ import polars as pl
 import pytest
 
 from fastcashflow import (
-    Assumptions,
-    BenefitPattern,
-    CoverageRate,
     ExpenseItem,
     ModelPoints,
     load_sample_assumptions,
@@ -17,14 +14,7 @@ from fastcashflow import (
     value_file,
     write_valuation,
 )
-
-
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
-
-
-def _annual(m):
-    """Convert a monthly rate to its annual equivalent (engine converts back)."""
-    return 1.0 - (1.0 - m) ** 12
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
 def _portfolio(n: int = 400) -> ModelPoints:
@@ -49,19 +39,18 @@ def _death_benefits(mps: ModelPoints) -> np.ndarray:
                        minlength=mps.n_mp)
 
 
-def _assumptions() -> Assumptions:
-    return Assumptions(
-        mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
-        discount_annual=0.03,
-        expense_inflation=0.02,
-        expense_items=(
+def _assumptions():
+    return make_death_assumptions(
+        mortality_q       = 0.001,
+        lapse_q           = 0.01,
+        discount_annual   = 0.03,
+        expense_inflation = 0.02,
+        expense_items     = (
             ExpenseItem("acquisition",  "alpha_fixed",    200_000.0),
             ExpenseItem("maintenance",  "gamma_fixed",  48_000.0),
         ),
-        ra_confidence=0.85,
-        mortality_cv=0.10,
-        coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001))),),
+        ra_confidence     = 0.85,
+        mortality_cv      = 0.10,
     )
 
 
