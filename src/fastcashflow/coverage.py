@@ -192,7 +192,8 @@ def coverage_arrays(coverages, benefit_patterns=None):
     return cov_is_diagnosis, cov_risk
 
 
-def validate_csr_codes(coverage_kind, n_coverages):
+def validate_csr_codes(coverage_kind, n_coverages, *,
+                       coverages=None, benefit_patterns=None):
     """Check that every ``coverage_kind`` value indexes into the coverage list.
 
     The CSR's ``coverage_kind`` is an integer index into
@@ -202,6 +203,13 @@ def validate_csr_codes(coverage_kind, n_coverages):
     a silently wrong BEL rather than an :class:`IndexError`. This validator
     catches the mistake at engine entry with a clear message naming the
     offending value(s) and the registered coverage count.
+
+    When ``coverages`` and ``benefit_patterns`` are both provided, also
+    verifies catalogue consistency: every code registered on
+    ``Assumptions.coverages`` must appear in the model points'
+    ``benefit_patterns`` dict. A drift between the two (typically a swap
+    of one without the other) lands a coverage with no routing pattern
+    and the engine falls back to MORBIDITY -- silently wrong.
 
     Empty coverage lists are allowed when no CSR row references them.
     """
@@ -220,3 +228,15 @@ def validate_csr_codes(coverage_kind, n_coverages):
             "rebuild ModelPoints.benefits with a kind that maps to a "
             "registered coverage."
         )
+    if coverages is not None and benefit_patterns is not None:
+        registered = {r.code for r in coverages}
+        catalogue = set(benefit_patterns)
+        missing = sorted(registered - catalogue)
+        if missing:
+            raise ValueError(
+                f"coverage code(s) {missing} are registered on "
+                "Assumptions.coverages but absent from the model points' "
+                "benefit_patterns catalogue. The two must agree on every "
+                "rate-driven code -- one was swapped without rebuilding "
+                "the other."
+            )

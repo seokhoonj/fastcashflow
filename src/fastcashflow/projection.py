@@ -550,7 +550,11 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         assumptions.lapse_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid)))
-    validate_csr_codes(model_points.coverage_kind, len(assumptions.coverages))
+    validate_csr_codes(
+        model_points.coverage_kind, len(assumptions.coverages),
+        coverages=assumptions.coverages,
+        benefit_patterns=model_points.benefit_patterns,
+    )
     cov_is_diagnosis, cov_risk = coverage_arrays(
         assumptions.coverages, model_points.benefit_patterns,
     )

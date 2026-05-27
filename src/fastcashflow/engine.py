@@ -1551,7 +1551,11 @@ def value(
                 np.transpose(compiled.edge_prob, (1, 2, 3, 0)))
             state_duration_max = None
         start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
-    validate_csr_codes(model_points.coverage_kind, len(assumptions.coverages))
+    validate_csr_codes(
+        model_points.coverage_kind, len(assumptions.coverages),
+        coverages=assumptions.coverages,
+        benefit_patterns=model_points.benefit_patterns,
+    )
     cov_is_diagnosis, cov_risk = coverage_arrays(
         assumptions.coverages, model_points.benefit_patterns,
     )
@@ -1828,6 +1832,19 @@ def value_segmented(
     product = model_points.product_code
     channel = model_points.channel_code
     n_mp = model_points.n_mp
+
+    # Segment keys are joined with '|' for factorisation; reject codes that
+    # contain that separator to keep the round-trip lossless. The leak is
+    # easy to introduce via a careless ETL column rename.
+    for arr, name in ((product, "product_code"), (channel, "channel_code")):
+        bad = sorted({str(v) for v in arr if "|" in str(v)})
+        if bad:
+            raise ValueError(
+                f"{name} value(s) {bad} contain the '|' character, which "
+                "value_segmented uses as the (product, channel) key "
+                "separator. Pick a different separator in your ETL or "
+                "rename the offending code."
+            )
 
     bel = np.empty(n_mp)
     ra = np.empty(n_mp)

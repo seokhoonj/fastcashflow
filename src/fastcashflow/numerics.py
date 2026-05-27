@@ -267,14 +267,18 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
             running += coverage_units[mp, s]
             cu_tail[s] = running
 
+        # Epsilon (not exact > 0) so the rounding residual of a reverse
+        # cumulative sum near the end of the run-off cannot produce a
+        # denormal ``cu_remaining`` and a runaway release. Scaled to the
+        # total coverage units so a portfolio in tiny units (e.g. per-policy
+        # with sub-unit inforce) does not trip the guard for every contract.
+        eps = 1e-12 * cu_tail[0] if cu_tail[0] > 0.0 else 1e-12
+
         for t in range(1, n_time + 1):
             interest = csm[mp, t - 1] * monthly_rate[t - 1]
             accreted = csm[mp, t - 1] + interest
             cu_remaining = cu_tail[t - 1]
-            # Epsilon (not exact > 0) so the rounding residual of a
-            # reverse cumulative sum near the end of the run-off cannot
-            # produce a denormal ``cu_remaining`` and a runaway release.
-            if cu_remaining > 1e-12:
+            if cu_remaining > eps:
                 rel = accreted * coverage_units[mp, t - 1] / cu_remaining
             else:
                 rel = 0.0
