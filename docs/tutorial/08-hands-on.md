@@ -77,29 +77,46 @@ import fastcashflow as fcf
 옮깁니다.
 
 ```python
-mortality_annual = lambda sex, issue_age, duration: np.full(
+# 사망률 함수 -- 월 사망률 1% 의 연 환산 (모든 sex/age/duration 에 동일)
+death_fn = lambda sex, issue_age, duration: np.full(
     issue_age.shape, 1 - (1 - 0.01) ** 12,
 )
 
+# 해지율 함수 -- 해지 없음
+lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
+
 assumptions = fcf.Assumptions(
-    mortality_annual = mortality_annual,
-    lapse_annual     = lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
+    mortality_annual = death_fn,
+    lapse_annual     = lapse_fn,
     discount_annual  = 1.005 ** 12 - 1,
     ra_confidence    = 0.75,
     mortality_cv     = 0.10,
-    coverages        = (fcf.CoverageRate("DEATH", mortality_annual),),
+    coverages        = (fcf.CoverageRate("DEATH", death_fn),),
 )
 ```
 
-괄호 안은 `이름=값` 꼴로 가정을 하나씩 적은 것입니다. 한 줄씩 보면:
+먼저 `death_fn`은 사망률 함수입니다. 숫자 하나가 아니라 **함수**로 두는
+까닭은 사망률이 성별·나이·경과에 따라 달라질 수 있기 때문이죠(3.2절).
+`lambda`는 간단한 함수를 한 줄로 적는 파이썬 문법인데, 여기서는
+성별·나이·경과와 상관없이 늘 같은 값을 돌려주는 함수입니다. 5장의
+월 사망률 1%를 연으로 환산하면 `1 - (1 - 0.01) ** 12 ≈ 0.1136`
+(연 11.36%)이고, 엔진이 내부에서 다시 constant-force 방식으로 월
+사망률 1%로 환산해 씁니다.
 
-- `mortality_annual` — 연 사망률. 숫자 하나가 아니라 **함수**로
-  줍니다. 사망률이 성별·나이·경과에 따라 달라질 수 있기 때문이죠(3.2절).
-  `lambda`는 간단한 함수를 한 줄로 적는 파이썬 문법인데, 여기서는
-  성별·나이·경과와 상관없이 늘 같은 값을 돌려주는 함수입니다. 5장의
-  월 사망률 1%를 연으로 환산하면 `1 - (1 - 0.01) ** 12 ≈ 0.1136`
-  (연 11.36%)이고, 엔진이 내부에서 다시 constant-force 방식으로 월
-  사망률 1%로 환산해 씁니다.
+같은 `death_fn`을 `Assumptions`의 **두 자리에 함께** 넘긴 것이 눈에 띌
+겁니다. 그 둘은 다른 양입니다.
+
+- `mortality_annual` — **보유계약 감소율**. 사람이 죽으면 더 이상 보장이
+  진행되지 않으니, 4장의 보유계약 감쇠 식에 들어가는 사망률이죠.
+- `coverages`의 `CoverageRate("DEATH", death_fn)` — **사망보험금이 발생하는
+  율**. 그 달의 기대 사망보험금을 구하는 데 쓰이는 사망률입니다.
+
+엔진이 갈라 다루는 두 양이지만, 손계산 예제처럼 같은 사망률을 쓰는
+보통의 경우에는 한 변수를 두 자리에 같이 넘기면 됩니다. 이렇게 적으면
+한 자리만 바꾸다 두 값이 어긋날 일도 없죠.
+
+나머지 가정들을 한 줄씩 보면:
+
 - `lapse_annual` — 연 해지율. 같은 방식으로 늘 0(해지 없음)을
   돌려줍니다.
 - `discount_annual` — 연 할인율. `**`는 거듭제곱이라
@@ -107,10 +124,10 @@ assumptions = fcf.Assumptions(
   연율을 받아 월율로 바꿔 씁니다.
 - `ra_confidence` — 위험조정 신뢰수준 75%(6장).
 - `mortality_cv` — 사망위험 변동계수 0.10(6장).
-- `coverages` — 보험금이 어떤 율로 발생하는지를 엔진에 등록합니다.
-  여기서는 사망보장 한 갈래뿐이라 `"DEATH"` 코드에 위와 같은 사망률
-  함수를 묶어 줍니다. 사망 외에 다른 보장(진단·입원 ...)이 있다면
-  여기에 한 줄씩 더 등록합니다(11장에서 자세히).
+- `coverages` — 위 두 번째 자리. 보험금이 어떤 율로 발생하는지를 보장
+  코드별로 등록합니다. 여기서는 사망 한 갈래뿐이라 `"DEATH"` 한 줄입니다.
+  사망 외에 다른 보장(진단·입원 ...)이 있다면 여기에 한 줄씩 더 등록
+  합니다(11장에서 자세히).
 
 사망률 함수 속 `np.full(issue_age.shape, ...)`은 "`issue_age`와 같은
 모양의 배열을 만들어 같은 값으로 채워라"는 뜻입니다. 엔진이 사망률
@@ -178,17 +195,21 @@ CSM은 0, 손실요소는 55.14입니다.
 import numpy as np
 import fastcashflow as fcf
 
-mortality_annual = lambda sex, issue_age, duration: np.full(
+# 사망률 함수 -- 월 사망률 1% 의 연 환산 (모든 sex/age/duration 에 동일)
+death_fn = lambda sex, issue_age, duration: np.full(
     issue_age.shape, 1 - (1 - 0.01) ** 12,
 )
 
+# 해지율 함수 -- 해지 없음
+lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
+
 assumptions = fcf.Assumptions(
-    mortality_annual = mortality_annual,
-    lapse_annual     = lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
+    mortality_annual = death_fn,
+    lapse_annual     = lapse_fn,
     discount_annual  = 1.005 ** 12 - 1,
     ra_confidence    = 0.75,
     mortality_cv     = 0.10,
-    coverages        = (fcf.CoverageRate("DEATH", mortality_annual),),
+    coverages        = (fcf.CoverageRate("DEATH", death_fn),),
 )
 model_points = fcf.ModelPoints.single(
     issue_age=40, benefits={0: 12_000},

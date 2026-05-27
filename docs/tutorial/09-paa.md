@@ -159,15 +159,19 @@ LRC가 쌓였다 풀리는 과정을 작은 계약 하나로 따라가 봅니다
 import numpy as np
 import fastcashflow as fcf
 
-mortality_annual = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
+# 사망률 함수 -- 연 0.1% 의 평탄 사망률 (모든 sex/age/duration 에 동일)
+death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
+
+# 해지율 함수 -- 해지 없음
+lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 assumptions = fcf.Assumptions(
-    mortality_annual = mortality_annual,
-    lapse_annual     = lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
+    mortality_annual = death_fn,
+    lapse_annual     = lapse_fn,
     discount_annual  = 0.03,
     ra_confidence    = 0.75,
     mortality_cv     = 0.10,
-    coverages        = (fcf.CoverageRate("DEATH", mortality_annual),),
+    coverages        = (fcf.CoverageRate("DEATH", death_fn),),
 )
 model_points = fcf.ModelPoints.single(
     issue_age=40, benefits={0: 100_000_000},

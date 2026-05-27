@@ -194,9 +194,15 @@ CSM을 손익으로 풀어 냅니다.
 import numpy as np
 import fastcashflow as fcf
 
+# 사망률 함수 -- 사망 없음 (VFA 의 사망보장 외 흐름 집중)
+death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0)
+
+# 해지율 함수 -- 해지 없음
+lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
+
 assumptions = fcf.Assumptions(
-    mortality_annual  = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0),
-    lapse_annual      = lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
+    mortality_annual  = death_fn,
+    lapse_annual      = lapse_fn,
     discount_annual   = 0.03,
     ra_confidence     = 0.75,
     mortality_cv      = 0.10,
