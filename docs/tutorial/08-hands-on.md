@@ -99,7 +99,8 @@ assumptions = fcf.Assumptions(
 - `discount_annual` — 연 할인율. `**`는 거듭제곱이라
   `1.005 ** 12 - 1`은 월 0.5%를 연 단위로 환산한 값입니다. 엔진은
   연율을 받아 월율로 바꿔 씁니다.
-- `alpha_flat` 등 — 사업비. 이 예제에서는 모두 0입니다.
+- `expense_items` — 사업비 항목 묶음 (`ExpenseItem` 의 tuple). 이 예제에서는
+  비어 있어 사업비 0 입니다.
 - `ra_confidence` — 위험조정 신뢰수준 75%(6장).
 - `mortality_cv` — 사망위험 변동계수 0.10(6장).
 

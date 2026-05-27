@@ -28,13 +28,13 @@
 ```python
 import fastcashflow as fcf
 
+basis = fcf.read_assumptions("assumptions.xlsx")
 mp    = fcf.read_model_points(
     "policies.csv",
     assumptions=basis,
     coverages="coverages.csv",
     benefit_patterns="benefit_patterns.csv",      # ← 회사 카탈로그
 )
-basis = fcf.read_assumptions("assumptions.xlsx")
 ```
 
 ## 12.2 다섯 가지 `BenefitPattern`
