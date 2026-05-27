@@ -23,6 +23,7 @@ from typing import IO
 import numpy as np
 
 from fastcashflow.assumptions import Assumptions
+from fastcashflow.coverage import BenefitPattern, pattern_attrs
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.engine import measure
 from fastcashflow.modelpoints import ModelPoints
@@ -210,10 +211,9 @@ def show_trace(
 
     # ---- Coverages (rate-driven)
     cov_lines: list[object] = []
-    from fastcashflow.coverage import pattern_attrs, BenefitPattern as _BP
     bp = model_points.benefit_patterns or {}
     for r in assumptions.coverages:
-        pattern = bp.get(r.code, _BP.MORBIDITY)
+        pattern = bp.get(r.code, BenefitPattern.MORBIDITY)
         is_diag, risk = pattern_attrs(pattern)
         cov_lines.append(
             f"{r.code!r:14} pattern={str(pattern)}  risk={risk}  "

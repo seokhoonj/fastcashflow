@@ -6,8 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fastcashflow._typing import DurationRateFn, FloatArray, IntArray, RateFn
-from fastcashflow.coverage import BenefitPattern
+from fastcashflow._typing import DurationRateFn, FloatArray, RateFn
 from fastcashflow.statemodel import StateModel
 
 

@@ -577,8 +577,9 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             else:
                 raise ValueError(
                     f"coverage {code!r} of product {product_code!r}: "
-                    f"rate_table {rate_table!r} is not in incidence_rate_tables "
-                    "nor mortality_tables"
+                    f"rate_table {rate_table!r} is not registered. "
+                    f"incidence_rate_tables has {sorted(incidence_rate_t)}; "
+                    f"mortality_tables has {sorted(mortality_t)}"
                 )
             rate_fn = _with_age_shift(rate_fn, shift)
             rate_fn = _with_ae_factor(rate_fn, ae(code))

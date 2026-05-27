@@ -3,8 +3,8 @@
 Sign convention (liability perspective, used consistently across the engine):
 
     premium_cf  : insurer INFLOW  -- reduces the insurance liability
-    claim_cf    : insurer OUTFLOW -- death claims (mortality risk)
-    morbidity_cf: insurer OUTFLOW -- health claims (morbidity risk)
+    claim_cf    : insurer OUTFLOW -- DEATH-pattern claims (priced via mortality_cv)
+    morbidity_cf: insurer OUTFLOW -- MORBIDITY-pattern claims (priced via morbidity_cv)
     expense_cf  : insurer OUTFLOW -- increases the insurance liability
     annuity_cf  : insurer OUTFLOW -- increases the insurance liability
     maturity_cf : insurer OUTFLOW -- increases the insurance liability
@@ -68,8 +68,8 @@ class Cashflows:
     inforce: FloatArray       # policies in force at the start of each month
     deaths: FloatArray        # deaths during each month
     premium_cf: FloatArray    # premium inflow per month (single premium at t=0)
-    claim_cf: FloatArray      # death-benefit outflow per month (mortality risk)
-    morbidity_cf: FloatArray  # health-benefit outflow per month (morbidity risk)
+    claim_cf: FloatArray      # DEATH-pattern claim outflow per month (priced via mortality_cv)
+    morbidity_cf: FloatArray  # MORBIDITY-pattern claim outflow per month (priced via morbidity_cv)
     expense_cf: FloatArray    # expense outflow per month
     annuity_cf: FloatArray    # annuity (survival income) outflow per month
     disability_cf: FloatArray # disability income + lump-sum outflow per month
