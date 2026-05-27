@@ -57,6 +57,9 @@ myst_substitutions = {
 exclude_patterns = [
     "_build", "Thumbs.db", ".DS_Store",
     "getting-started.md", "concepts.md",
+    # Cookbook shared fragments -- pulled into other chapters via the MyST
+    # {include} directive, not built as standalone pages.
+    "cookbook/_shared/**",
 ]
 
 html_theme = "pydata_sphinx_theme"

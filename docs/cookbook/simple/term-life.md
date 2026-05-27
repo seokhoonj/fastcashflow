@@ -1,4 +1,4 @@
-# 정기보험 평가
+# 2.1 정기보험 평가
 
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
@@ -32,87 +32,10 @@
 ## 한눈에 보기 — 입력 파일과 사용자 함수
 
 평가에 들어가기 전, 어떤 파일을 어떤 함수로 다루는지 전체 그림을 한 번
-잡고 갑니다. 본 챕터의 코드는 이 트리를 그대로 따라갑니다.
+잡고 갑니다. 본 챕터의 코드는 이 트리를 그대로 따라갑니다. (같은 그림이
+기초 part 의 [한눈에 보기](../basics/overview) 에도 정리되어 있습니다.)
 
-### 입력 파일 네 갈래
-
-```
-입력 파일 (사용자 데이터)
-├── assumptions.xlsx          ── 계리적 가정 (multi-sheet workbook)
-│   ├── segments              · (product_code, channel_code) → 어느 테이블 쓸지
-│   ├── mortality_tables      · table_id × sex × age → 사망률
-│   ├── lapse_tables          · table_id × duration → 해지율
-│   ├── discount_tables       · table_id × year → 할인율
-│   ├── expense_tables        · table_id → 사업비 행 (acquisition / maintenance / ...)
-│   └── coverages             · 담보 코드 → 어느 위험률 테이블을 쓸지
-│
-├── benefit_patterns.csv      ── 회사 카탈로그 (담보 코드 → 지급 패턴)
-│   ├── coverage_code         · 담보 코드 (DEATH, CANCER, INPATIENT ...)
-│   ├── coverage_name         · 사람 친화 라벨 (선택)
-│   └── benefit_pattern       · DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY
-│
-├── policies.csv              ── 보유 계약 (한 줄 = 한 계약, 가입 시점 영구 spec)
-│   ├── mp_id                 · 계약 식별자 (다른 파일과 join 키)
-│   ├── product_code          · segments 시트와 맞물림
-│   ├── channel_code          · segments 시트와 맞물림
-│   ├── issue_age             · 가입연령
-│   ├── sex                   · 0 = 남, 1 = 여
-│   ├── term_months           · 보험기간 (개월)
-│   ├── premium_term_months   · 보험료 납입기간 (개월)
-│   └── count                 · 이 줄이 대표하는 계약 수 (없으면 1)
-│
-└── coverages.csv             ── 담보 가입금액 (long-form, 한 줄 = 한 (계약, 담보))
-    ├── mp_id                 · 어느 계약의 담보인지
-    ├── coverage_code         · 담보 코드 (benefit_patterns 의 코드와 맞물림)
-    ├── amount                · 가입금액 (보험금)
-    ├── premium               · 월 보험료 (선택)
-    ├── waiting               · 면책기간 개월수 (선택)
-    ├── reduction_end         · 감액기간 종료 개월수 (선택)
-    └── reduction_factor      · 감액기간 중 지급률 (선택, 0..1)
-```
-
-결산 모드 (보유계약 평가) 에서는 `policies.csv` 가 *분기말 상태 컬럼*
-네 개를 더 갖는 `inforce_2026Q1.csv` 같은 한 파일로 들어옵니다 —
-`elapsed_months` / `count` (잔존) / `prior_csm` (직전 분기 CSM) /
-`lock_in_rate` (가입 시점 lock-in 할인율). 자세한 건
-[튜토리얼 11장](../../tutorial/11-in-practice).
-
-### 사용자 함수
-
-```
-fastcashflow 사용자 API
-├── 샘플 파일 떨어뜨리기 (한 번만, 자기 파일이 있으면 생략)
-│   ├── fcf.save_sample_assumptions(path)         ── assumptions.xlsx
-│   ├── fcf.save_sample_policies(path)            ── policies.csv
-│   ├── fcf.save_sample_coverages(path)           ── coverages.csv
-│   ├── fcf.save_sample_benefit_patterns(path)    ── benefit_patterns.csv
-│   └── fcf.save_sample_inforce_policies(path)    ── 결산 1-파일 (spec + state)
-│
-├── 파일 → 객체 (read)
-│   ├── fcf.read_assumptions(path)                ── basis dict 반환
-│   ├── fcf.read_model_points(path, asmp, ...)    ── 신계약 평가용
-│   └── fcf.read_inforce_policies(path, asmp, ...) ── 결산 1-파일 reader
-│
-├── 평가
-│   ├── fcf.measure(mp, asmp)                     ── 신계약, 시간 trajectory 전체
-│   ├── fcf.value(mp, asmp)                       ── 신계약, 시점 0 의 4 숫자만 (빠름)
-│   ├── fcf.value_segmented(mp, basis)            ── (product, channel) 자동 라우팅
-│   ├── fcf.measure_in_force(mp, asmp, ...)       ── 결산, trajectory
-│   └── fcf.value_in_force(mp, asmp, ...)         ── 결산, 시점 0
-│
-├── 결과 저장
-│   ├── fcf.write_valuation(val, path)
-│   └── fcf.value_file(parquet, out_dir, asmp)    ── 메모리 초과 portfolio 스트리밍
-│
-├── 변동분해 (분기간 비교)
-│   ├── fcf.roll_forward(m, period_months=...)
-│   └── fcf.reconcile(movements)
-│
-└── 검증 / 시각화
-    ├── fcf.show_trace(mp_id, mp, basis)          ── 한 계약의 BEL 계산 ASCII 트리
-    ├── fcf.show_bel_step(mp_id, mp, basis, ...)  ── 월별 BEL 식 전개
-    ├── fcf.show_csm_step(mp_id, mp, basis, ...)  ── 월별 CSM 식 전개
-    └── fcf.plot_liability(m) / plot_cashflows(m) / plot_csm_runoff(m) ...
+```{include} ../_shared/inputs_and_api.md
 ```
 
 본 챕터는 위 그림 중 **save_sample_\* → read_\* → measure / value →

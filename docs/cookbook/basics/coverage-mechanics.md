@@ -1,4 +1,4 @@
-# 보장 청구 메커니즘 — `in_force` 와 `undiagnosed` 두 풀
+# 1.3 보장 청구 메커니즘
 
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
