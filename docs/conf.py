@@ -79,4 +79,7 @@ html_theme_options = {
             "icon": "fa-brands fa-github",
         },
     ],
+    "analytics": {
+        "google_analytics_id": "G-1W6DP2378L",
+    },
 }
