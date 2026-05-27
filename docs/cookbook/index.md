@@ -76,7 +76,7 @@
 * - 1.3
   - [사망률의 두 역할](basics/mortality-roles)
   - `mortality_annual` (보유계약 감쇠) 과 `coverages` 의 DEATH rate (보장
-    청구) 의 의도적 분리. 두 자리에 같은 callable 을 넘기는 wiring 패턴.
+    청구) 의 의도적 분리. 두 슬롯에 같은 callable 을 넘기는 wiring 패턴.
 * - 1.4
   - [보장 청구 메커니즘](basics/coverage-mechanics)
   - DEATH 의 공유 `in_force` vs DIAGNOSIS 의 `undiagnosed` 풀.
