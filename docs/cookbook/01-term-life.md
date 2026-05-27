@@ -529,6 +529,48 @@ Hand-calc: 39.80
 정확히 통제할 수 있는 자리입니다 — 일반 평가에선 워크북 로더가
 대신 해주지만, 검증은 직접 작성하는 게 자연스럽습니다.
 
+### show_trace 로 단계별 풀어 보기
+
+`measure()` 가 내놓은 `BEL = 39.80` 이 어디서 왔는지 한 번에 풀어
+보고 싶으면 `show_trace(mp_id, mp, asmp)` 를 호출합니다. 위 hand-calc
+설정 그대로:
+
+```python
+fcf.show_trace(0, mp, asmp)
+```
+
+출력 (요약, ASCII tree):
+
+```
+mp[0]  (-/-, sex=남, issue_age=40, term=2m, premium_term=2m, count=1)
+├─ Assumptions (segment-level)
+│   ├─ mortality_annual     -> <callable>
+│   ├─ discount_annual      = 0 (flat)
+│   └─ cv: mort=0 morb=0 long=0 disab=0
+├─ Coverages (rate-driven, n=1)
+│   └─ 'DEATH'        pattern=DEATH  risk=0  is_diagnosis=False  rate -> <callable>
+├─ Rates (annual, evaluated for this MP)
+│   ├─ axes: sex=0, issue_age=40, issue_class=0, elapsed_at_issue=0m
+│   ├─         year      mort(an)     lapse(an)     DEATH(an)
+│   └─            0      0.113615      0.000000      0.113615
+├─ Cash flows (annual sum over 2m horizon)
+│   ├─         year       premium         claim
+│   └─            0           199           239
+├─ BEL roll-forward (key months)
+│   ├─ BEL[   2] = maturity =            0.00 (seed)
+│   └─ BEL[   0] =           39.80
+└─ Final (headline numbers, per policy)
+    ├─ BEL              =           39.80
+    ├─ RA               =            0.00
+    ├─ CSM = max(0,-FCF)=            0.00
+    └─ loss_component   =           39.80
+```
+
+위 손계산의 각 단계 — 사망률 함수의 연 환산값 `0.113615`, 연 합산
+premium `199` 과 claim `239`, 후방재귀로 풀어진 `BEL[0] = 39.80` —
+이 모두 한 화면에 풀려 나옵니다. 손계산과 엔진이 어긋나는 경우에도
+**어느 단계에서 갈렸는지** 바로 보입니다. 자세한 사용은 챕터 11.
+
 ## 1.7 인접 레시피
 
 이 챕터를 읽고 나서 자연스럽게 갈 다음 자리들:
