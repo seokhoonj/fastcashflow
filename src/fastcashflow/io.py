@@ -1209,6 +1209,104 @@ def read_model_points(
     return _wide_model_points(pol, assumptions, patterns_dict)
 
 
+def read_inforce_policies(
+    path: Path | str,
+    assumptions: Assumptions | None = None,
+    coverages: Path | str | None = None,
+    benefit_patterns: "Path | str | dict[str, BenefitPattern] | None" = None,
+) -> "tuple[ModelPoints, InforceState]":
+    """Read a single combined policies + in-force state file.
+
+    A self-contained snapshot at a settlement date -- one file per
+    valuation date, one row per surviving contract. Columns combine the
+    permanent contract spec (``issue_age``, ``sex``, ``term_months``,
+    premiums, benefits, ...) and the closing state from the prior period
+    (``elapsed_months``, ``count``, ``prior_csm``, ``lock_in_rate``). This
+    matches the Korean industry "보유계약 마감파일" pattern -- one
+    self-contained snapshot per period, no separate state file to keep
+    in sync.
+
+    Returns a ``(ModelPoints, InforceState)`` tuple. The ``ModelPoints``
+    has the state's ``elapsed_months`` and ``count`` already folded in;
+    the ``InforceState`` carries ``prior_csm`` and ``lock_in_rate`` for
+    the in-force valuation call::
+
+        mp, state = fcf.read_inforce_policies(
+            "inforce_2026Q1.csv", assumptions,
+            coverages="coverages.csv",
+            benefit_patterns="benefit_patterns.csv",
+        )
+        val = fcf.value_in_force(
+            mp, assumptions, period_months=3,
+            prior_csm=state.prior_csm,
+            lock_in_rate=state.lock_in_rate,
+        )
+
+    For the two-file equivalent (separate ``policies.csv`` +
+    ``inforce_state.csv``), see :func:`read_model_points` +
+    :func:`read_inforce_state` + :func:`apply_inforce_state`. Both
+    workflows produce the same ``ModelPoints`` / ``InforceState`` pair
+    and so the same valuation; pick the form that fits the company's
+    extract pipeline.
+
+    Required columns: ``mp_id``, ``elapsed_months``, ``count``,
+    ``prior_csm``, ``lock_in_rate``, plus whatever the spec side of
+    :func:`read_model_points` needs (``issue_age``, ``term_months``,
+    optional ``sex``, premiums, ``<code>_benefit`` columns for wide form).
+    Variance / movement analysis (:func:`roll_forward`,
+    :func:`reconcile`) is unaffected -- mp_id-based matching across
+    periods works the same regardless of which reader built each
+    snapshot.
+    """
+    from fastcashflow.modelpoints import (
+        InforceState, ModelPoints, apply_inforce_state,
+    )
+
+    df = _read_frame(path)
+    needed = ("mp_id", "elapsed_months", "count", "prior_csm", "lock_in_rate")
+    for col in needed:
+        if col not in df.columns:
+            raise ValueError(
+                f"the in-force policies file is missing required column "
+                f"{col!r}. The combined file carries the policies spec "
+                "plus the closing-state columns "
+                "(elapsed_months, count, prior_csm, lock_in_rate)."
+            )
+    lock = df["lock_in_rate"].to_numpy().astype(np.float64)
+    if lock.size and not np.all(lock == lock[0]):
+        raise NotImplementedError(
+            "lock_in_rate must be uniform across rows in v1; per-MP "
+            "(cohort-aware) lock-in rates are a future extension"
+        )
+    state = InforceState(
+        mp_id=df["mp_id"].to_numpy(),
+        elapsed_months=df["elapsed_months"].to_numpy().astype(np.int64),
+        count=df["count"].to_numpy().astype(np.float64),
+        prior_csm=df["prior_csm"].to_numpy().astype(np.float64),
+        lock_in_rate=float(lock[0]) if lock.size else 0.0,
+    )
+
+    # Drop the state-only columns before handing the frame to the
+    # standard policies reader, which would otherwise warn about
+    # ``elapsed_months`` on a policies frame and ignore the rest. ``count``
+    # stays -- it is a valid policies column too, and ``apply_inforce_state``
+    # will overwrite it with the state value below anyway.
+    spec_df = df.drop("elapsed_months", "prior_csm", "lock_in_rate")
+
+    if isinstance(benefit_patterns, (str, Path)):
+        patterns_dict = _parse_benefit_patterns(benefit_patterns)
+    else:
+        patterns_dict = benefit_patterns
+    if coverages is not None:
+        mp = _long_model_points(
+            spec_df, _read_frame(coverages), assumptions, patterns_dict,
+        )
+    else:
+        mp = _wide_model_points(spec_df, assumptions, patterns_dict)
+    mp = apply_inforce_state(mp, state)
+    return mp, state
+
+
 def sample_data_dir() -> Path:
     """Return the on-disk path of the bundled sample data directory.
 
@@ -1390,6 +1488,55 @@ def save_sample_benefit_patterns(path: Path | str) -> Path:
     / ``.arrow``.
     """
     return _drop_sample_table("sample_benefit_patterns.csv", path)
+
+
+def save_sample_inforce_state(path: Path | str) -> Path:
+    """Drop the packaged sample in-force state file on disk at ``path``.
+
+    The dynamic state-at-valuation companion to the static
+    :func:`save_sample_policies` file: one row per ``mp_id`` carrying
+    the closing state from the prior reporting period
+    (``elapsed_months``, ``count``, ``prior_csm``, ``lock_in_rate``).
+    Pair the dropped file with :func:`read_inforce_state` and feed the
+    result through :func:`apply_inforce_state` before
+    :func:`measure_in_force` / :func:`value_in_force` -- the
+    subsequent-measurement workflow at each period close.
+
+    Supported extensions: ``.csv``, ``.xlsx``, ``.parquet``, ``.feather``
+    / ``.arrow``. One row per contract, so the ``.xlsx`` row cap
+    (~1M / sheet) binds at the same scale as the policies file.
+    """
+    return _drop_sample_table("sample_inforce_state.csv", path)
+
+
+def save_sample_inforce_policies(path: Path | str) -> Path:
+    """Drop a combined policies + in-force state sample file on disk at ``path``.
+
+    The companion to :func:`read_inforce_policies`. Each row carries
+    the permanent spec (issue_age, sex, term_months, premium_term_months,
+    product_code, channel_code) and the closing state from the prior
+    period (elapsed_months, count, prior_csm, lock_in_rate). Built on
+    the fly by joining the packaged ``sample_policies.csv`` and
+    ``sample_inforce_state.csv`` on ``mp_id``; ``count`` is the state
+    value (post-decrement), not the inception count.
+
+    Supported extensions: ``.csv``, ``.xlsx``, ``.parquet``, ``.feather``
+    / ``.arrow``. ``.xlsx`` is capped at ~1M rows / sheet.
+    """
+    base = resources.files("fastcashflow") / "sample_data"
+    with resources.as_file(base / "sample_policies.csv") as policies, \
+            resources.as_file(base / "sample_inforce_state.csv") as state:
+        pol = pl.read_csv(policies)
+        st = pl.read_csv(state)
+    # ``count`` is on both files; drop the inception count from policies so
+    # the state's post-decrement count is the one that survives the join.
+    pol = pol.drop("count")
+    combined = pol.join(st, on="mp_id", how="inner")
+    dest_path = Path(path)
+    if dest_path.is_dir():
+        dest_path = dest_path / "sample_inforce_policies.csv"
+    _write_frame(combined, dest_path)
+    return dest_path
 
 
 # ---------------------------------------------------------------------------

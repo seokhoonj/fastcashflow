@@ -79,6 +79,111 @@ def test_save_sample_converts_to_feather(tmp_path):
     assert "coverage_code" in df.columns
 
 
+def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
+    """The single-file inforce reader yields the same ModelPoints (after
+    state fold) and the same InforceState as the two-step workflow that
+    reads policies + inforce_state separately. So the same downstream
+    valuation."""
+    import numpy as np
+
+    fcf.save_sample_assumptions(tmp_path / "assumptions.xlsx")
+    fcf.save_sample_policies(tmp_path / "policies.csv")
+    fcf.save_sample_coverages(tmp_path / "coverages.csv")
+    fcf.save_sample_benefit_patterns(tmp_path / "benefit_patterns.csv")
+    fcf.save_sample_inforce_state(tmp_path / "inforce_state.csv")
+    fcf.save_sample_inforce_policies(tmp_path / "inforce_policies.csv")
+
+    basis = fcf.read_assumptions(tmp_path / "assumptions.xlsx")
+    asmp = basis[("TERM_LIFE_A", "GA")]
+
+    # Two-file workflow
+    mp_a = fcf.read_model_points(
+        tmp_path / "policies.csv", asmp,
+        coverages=tmp_path / "coverages.csv",
+        benefit_patterns=tmp_path / "benefit_patterns.csv",
+    )
+    state_a = fcf.read_inforce_state(tmp_path / "inforce_state.csv")
+    mp_a = fcf.apply_inforce_state(mp_a, state_a)
+
+    # One-file workflow
+    mp_b, state_b = fcf.read_inforce_policies(
+        tmp_path / "inforce_policies.csv", asmp,
+        coverages=tmp_path / "coverages.csv",
+        benefit_patterns=tmp_path / "benefit_patterns.csv",
+    )
+
+    assert mp_a.n_mp == mp_b.n_mp
+    assert np.array_equal(mp_a.elapsed_months, mp_b.elapsed_months)
+    assert np.allclose(mp_a.count, mp_b.count)
+    assert np.allclose(state_a.prior_csm, state_b.prior_csm)
+    assert state_a.lock_in_rate == state_b.lock_in_rate
+
+    val_a = fcf.value_in_force(mp_a, asmp, period_months=3,
+                               prior_csm=state_a.prior_csm,
+                               lock_in_rate=state_a.lock_in_rate)
+    val_b = fcf.value_in_force(mp_b, asmp, period_months=3,
+                               prior_csm=state_b.prior_csm,
+                               lock_in_rate=state_b.lock_in_rate)
+    assert np.allclose(val_a.bel, val_b.bel)
+    assert np.allclose(val_a.ra, val_b.ra)
+    assert np.allclose(val_a.csm, val_b.csm)
+
+
+def test_read_inforce_policies_rejects_missing_state_columns(tmp_path):
+    """Missing one of the state columns surfaces as a clear ValueError,
+    not as a silent fall-back to new-business defaults."""
+    import pytest
+    import polars as pl
+
+    fcf.save_sample_policies(tmp_path / "broken.csv")  # spec only, no state
+    fcf.save_sample_assumptions(tmp_path / "assumptions.xlsx")
+    fcf.save_sample_coverages(tmp_path / "coverages.csv")
+    fcf.save_sample_benefit_patterns(tmp_path / "benefit_patterns.csv")
+    asmp = fcf.read_assumptions(tmp_path / "assumptions.xlsx")[("TERM_LIFE_A", "GA")]
+
+    with pytest.raises(ValueError, match="missing required column"):
+        fcf.read_inforce_policies(
+            tmp_path / "broken.csv", asmp,
+            coverages=tmp_path / "coverages.csv",
+            benefit_patterns=tmp_path / "benefit_patterns.csv",
+        )
+
+
+def test_save_sample_inforce_policies_round_trip(tmp_path):
+    """The combined file written by save_sample_inforce_policies reads
+    back through read_inforce_policies to a usable ModelPoints / state
+    pair."""
+    path = fcf.save_sample_inforce_policies(tmp_path / "inforce.csv")
+    assert path.exists()
+
+    fcf.save_sample_assumptions(tmp_path / "assumptions.xlsx")
+    fcf.save_sample_coverages(tmp_path / "coverages.csv")
+    fcf.save_sample_benefit_patterns(tmp_path / "benefit_patterns.csv")
+    asmp = fcf.read_assumptions(tmp_path / "assumptions.xlsx")[("TERM_LIFE_A", "GA")]
+    mp, state = fcf.read_inforce_policies(
+        path, asmp,
+        coverages=tmp_path / "coverages.csv",
+        benefit_patterns=tmp_path / "benefit_patterns.csv",
+    )
+    assert mp.n_mp > 0
+    assert state.lock_in_rate == 0.03
+
+
+def test_save_sample_inforce_state_round_trips(tmp_path):
+    """The dropped in-force state file reads back through
+    read_inforce_state to the same state load_sample_inforce_state
+    produces in memory."""
+    import numpy as np
+    path = fcf.save_sample_inforce_state(tmp_path / "inforce_state.csv")
+    assert path.exists()
+
+    state_file = fcf.read_inforce_state(path)
+    state_mem = fcf.load_sample_inforce_state()
+    assert np.array_equal(state_file.mp_id, state_mem.mp_id)
+    assert np.allclose(state_file.count, state_mem.count)
+    assert np.allclose(state_file.elapsed_months, state_mem.elapsed_months)
+
+
 def test_save_sample_converts_to_xlsx_single_sheet(tmp_path):
     """The three single-table sample files can land as .xlsx and round-trip
     through read_model_points just like their .csv source."""
