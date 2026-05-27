@@ -1392,6 +1392,17 @@ def value(
             "value() computes the confidence-level RA only; use measure() "
             f"for ra_method={assumptions.ra_method!r}"
         )
+    # value() builds the rate grid at issue_class = 0 throughout; a portfolio
+    # with non-zero classes would silently look up the wrong row of any
+    # issue_class-bearing rate table. measure() handles it correctly.
+    if np.any(model_points.issue_class != 0):
+        raise NotImplementedError(
+            "value() currently evaluates rates on a single-issue-class grid "
+            "(class=0). The portfolio carries non-zero issue_class values, "
+            "which would land at class 0 in value() and produce a silently "
+            "wrong BEL. Use measure() until value() grows per-class grid "
+            "support."
+        )
     n_time = int(model_points.term_months.max())
     n_years = (n_time + 11) // 12
 
