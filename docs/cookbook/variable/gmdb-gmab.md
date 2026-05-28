@@ -217,5 +217,7 @@ stochastic 을 거는 건 미래 확장입니다. **GMDB / GMAB 보증액 자체
 
 - [2.1 정기보험](../simple/term-life) — 보장형 (GMM) 측정의 출발점. 변액은
   같은 in-force 감쇠 위에 계좌가치·수수료·보증을 얹은 다른 측정 모델.
-- [검증 패턴](../workflow/validation) — `show_trace` 로 한 계약의 계산 경로를
-  한 줄씩 확인.
+- `show_trace_vfa(mp_index, mp, basis)` — 이 계약의 계좌가치 궤적, GMDB / GMAB
+  floor 가 무는 자리, BEL / CSM 계산 경로를 트리로 확인 (GMM 의 `show_trace` 에
+  대응하는 VFA 버전; `return_scenarios` 를 주면 TVOG 까지). 보장형 계약의
+  `show_trace` 는 [검증 패턴](../workflow/validation) 챕터.
