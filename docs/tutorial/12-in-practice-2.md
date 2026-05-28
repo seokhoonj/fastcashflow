@@ -52,10 +52,10 @@ fcf.plot_risk_adjustment(m, assumptions)   # 위험조정
 :class: hero
 ```
 
-각 함수는 차트를 그려 matplotlib의 `Axes` 객체로 돌려줍니다. 함수 자체는
+각 함수는 차트를 그려 matplotlib의 `Axes` 개체로 돌려줍니다. 함수 자체는
 화면에 띄우지는 않습니다 — Jupyter 노트북에서는 셀 결과로 바로 그래프가
 나오고, 스크립트에서는 `matplotlib.pyplot.show()`를 불러야 창이 뜹니다.
-파일로 저장할 때는 돌려받은 객체를 씁니다.
+파일로 저장할 때는 돌려받은 개체를 씁니다.
 
 ```python
 import matplotlib.pyplot as plt

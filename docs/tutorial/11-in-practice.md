@@ -218,8 +218,8 @@ coverages.csv  ───────────────────┘
 들어 있습니다.
 
 fastcashflow 는 그 한 파일을 그대로 받습니다. `read_inforce_policies`
-한 번의 호출이 spec 과 state 를 동시에 읽고 평가에 필요한 두 객체
-(`ModelPoints`, `InforceState`) 를 돌려줍니다.
+한 번의 호출이 spec 과 state 를 동시에 읽고 평가에 필요한 두 개체
+(`ModelPoints`, `InforceState` 클래스의 개체) 를 돌려줍니다.
 
 ```python
 import fastcashflow as fcf

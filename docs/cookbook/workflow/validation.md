@@ -91,7 +91,7 @@ fcf.show_trace(0, mp, basis)
 `mp_index=0` 은 `model_points` 의 첫 행 (0-based) 입니다. `basis` 가
 dict 일 때 — `read_assumptions()` / `load_sample_assumptions()` 가
 돌려주는 형태 — 그 행의 `(product, channel)` 로 자동 라우팅합니다.
-단일 `Assumptions` 객체를 직접 넣어도 됩니다.
+단일 `Assumptions` 개체를 직접 넣어도 됩니다.
 
 출력 (발췌):
 

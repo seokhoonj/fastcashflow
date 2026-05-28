@@ -1,14 +1,17 @@
-### 입력 파일 — ModelPoints 와 Assumptions 두 묶음
+### 입력 파일과 입력 개체
 
-엔진은 두 객체만 받습니다 — **`measure(mp, asmp)`** 의 두 인자. 사용자가
-다루는 파일도 그 두 객체로 모입니다:
+엔진은 두 클래스의 *개체* 만 받습니다 — `ModelPoints` 와 `Assumptions`.
+**`measure(mp, asmp)`** 호출의 두 인자가 바로 이 개체들. 사용자가 다루는
+*입력 파일들* 은 reader 함수를 거쳐 이 두 개체로 모입니다:
 
-- **ModelPoints (보유 계약 데이터)** — `mp = fcf.read_model_points(...)`
-  가 세 파일을 읽어 하나로 합칩니다.
-- **Assumptions (계리적 가정)** — `basis = fcf.read_assumptions(...)` 가
-  한 엑셀 워크북을 읽습니다.
+- **`ModelPoints` 클래스** — `mp = fcf.read_model_points(...)` 가 세 입력
+  파일 (`policies.csv` / `coverages.csv` / `benefit_patterns.csv`) 을 읽어
+  한 개체로 합칩니다.
+- **`Assumptions` 클래스** — `basis = fcf.read_assumptions(...)` 가 한
+  입력 파일 (`assumptions.xlsx`, multi-sheet 워크북) 을 읽어 가정 개체를
+  만듭니다.
 
-#### ModelPoints — 보유 계약 데이터
+#### ModelPoints 클래스 — 세 입력 파일에서 만드는 개체
 
 ```
 ModelPoints (mp = fcf.read_model_points(...))
@@ -41,9 +44,9 @@ ModelPoints (mp = fcf.read_model_points(...))
 네 개를 더 갖는 `inforce_2026Q1.csv` 같은 한 파일로 들어옵니다 —
 `elapsed_months` / `count` (잔존) / `prior_csm` (직전 분기 CSM) /
 `lock_in_rate` (가입 시점 lock-in 할인율). reader 도
-`mp, state = fcf.read_inforce_policies(...)` 로 바뀝니다.
+`mp, state = fcf.read_inforce_policies(...)` 로 바뀌어 두 개체를 돌려줍니다.
 
-#### Assumptions — 계리적 가정
+#### Assumptions 클래스 — 한 입력 파일에서 만드는 개체
 
 ```
 Assumptions (basis = fcf.read_assumptions(...))

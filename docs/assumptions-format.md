@@ -261,7 +261,7 @@ no-op.
 가 `ValueError` 와 등록된 키 목록을 함께 반환.
 
 자유 형태 (사전에 없는 topology) 가 필요하면 Excel 대신 Python 으로
-`StateModel` 객체를 직접 만들어 `Assumptions(state_model=...)` 에 주입.
+`StateModel` 개체를 직접 만들어 `Assumptions(state_model=...)` 에 주입.
 
 샘플 워크북의 `defaults` 행은 `state_model = WAIVER` 로 설정되어 있어
 모든 세그먼트가 명시적으로 WAIVER_MODEL 을 사용.
