@@ -229,7 +229,7 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 * - 파일
   - 내용
 * - `benefit_patterns.csv`
-  - 담보 카탈로그 — 담보 코드 → 청구 패턴 (DEATH / MORBIDITY / ...)
+  - 담보 패턴 매핑 — 담보 코드 → 청구 패턴 (DEATH / MORBIDITY / ...)
 * - `assumptions.xlsx`
   - 계리적 가정 — 사망률 · 해지율 · 할인율 · 사업비 · 위험조정
 * - `policies.csv`
