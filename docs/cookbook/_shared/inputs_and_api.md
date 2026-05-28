@@ -60,7 +60,7 @@ Assumptions (basis = fcf.read_assumptions(...))
 
 ```
 fastcashflow 사용자 API
-├── 샘플 파일 떨어뜨리기 (한 번만, 자기 파일이 있으면 생략)
+├── 샘플 파일 폴더에 생성 (한 번만, 자기 파일이 있으면 생략)
 │   ├── fcf.save_sample_policies(path)              ── policies.csv
 │   ├── fcf.save_sample_coverages(path)             ── coverages.csv
 │   ├── fcf.save_sample_benefit_patterns(path)      ── benefit_patterns.csv
