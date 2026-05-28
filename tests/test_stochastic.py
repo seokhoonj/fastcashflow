@@ -114,3 +114,16 @@ def test_stochastic_curve_rejects_wrong_width():
     mps, asmp = _portfolio(), _assumptions()
     with pytest.raises(ValueError, match="columns"):
         value_stochastic(mps, asmp, np.full((5, 7), 0.03))
+
+
+def test_stochastic_settlement_pattern_fallback_matches_value():
+    """A claims settlement pattern routes to the per-scenario fallback, which
+    must still equal value() at each discount rate."""
+    mps = _portfolio()
+    asmp = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
+    rates = np.array([0.02, 0.03, 0.05])
+    res = value_stochastic(mps, asmp, rates)
+    for s, rate in enumerate(rates):
+        v = value(mps, replace(asmp, discount_annual=float(rate)))
+        assert np.isclose(res.bel[s], v.bel.sum())
+        assert np.isclose(res.csm[s], v.csm.sum())

@@ -6,10 +6,16 @@ valuation runs the projection under many economic scenarios and reports the
 capital measures a single deterministic run cannot give.
 
 ``value_stochastic`` takes the scenarios as input -- fastcashflow is the
-engine, not an economic scenario generator -- and values each one with the
-fused ``value`` kernel. Running N scenarios over millions of seriatim
-policies is precisely what the engine's speed exists for: a slow engine
-cannot do seriatim stochastic at scale at all.
+engine, not an economic scenario generator -- and values each one. Running N
+scenarios over millions of seriatim policies is precisely what the engine's
+speed exists for: a slow engine cannot do seriatim stochastic at scale at all.
+
+The scenario axis lives *inside* the kernel. Only the discount changes between
+scenarios -- the per-month cash flows do not -- so the projection runs once
+(``project_cashflows``) and a single parallel kernel sweeps every scenario,
+re-discounting the shared cash flows with ``prange`` over the scenario axis.
+This collapses what was one kernel dispatch per scenario into one dispatch
+total, and parallelises the sweep across cores.
 
 Each scenario is either a flat annual discount rate or a full discount-rate
 curve -- one annual rate per projection month. Investment-return scenarios
@@ -20,11 +26,14 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 import numpy as np
+from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.engine import value
 from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.numerics import _norm_ppf
+from fastcashflow.projection import project_cashflows
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +61,77 @@ class StochasticResult:
                 for name in ("bel", "ra", "csm", "loss_component")}
 
 
+@njit(parallel=True, cache=True)
+def _stochastic_inception_kernel(
+    claim_cf, morbidity_cf, disability_cf, expense_cf,
+    premium_cf, annuity_cf, maturity_cf, surrender_cf,
+    term_months, monthly_rate_all,
+    mort_factor, morb_factor, disab_factor, long_factor,
+):
+    """Per-scenario portfolio BEL / RA / CSM / loss from shared cash flows.
+
+    ``monthly_rate_all`` is ``(n_scenarios, n_time)`` -- one per-month discount
+    curve per scenario. The cash flows are scenario-independent; the outer
+    ``prange`` runs each scenario on its own core, re-discounting the shared
+    flows with that scenario's curve. The backward recursion reproduces
+    :func:`fastcashflow.numerics._rollforward_kernel` at the inception column
+    (``t = 0``): premiums and annuities fall at month start, claims / expenses
+    / surrender mid-month, the maturity benefit seeds ``t = term``. The RA is
+    the confidence-level margin; CSM and loss component are the per-MP
+    ``max(0, -FCF)`` / ``max(0, FCF)`` summed to the portfolio.
+    """
+    n_scen, n_time = monthly_rate_all.shape
+    n_mp = claim_cf.shape[0]
+    bel_out = np.empty(n_scen)
+    ra_out = np.empty(n_scen)
+    csm_out = np.empty(n_scen)
+    loss_out = np.empty(n_scen)
+
+    for s in prange(n_scen):
+        bel_s = 0.0
+        ra_s = 0.0
+        csm_s = 0.0
+        loss_s = 0.0
+        for mp in range(n_mp):
+            term = term_months[mp]
+            bel_v = maturity_cf[mp]   # bel[term]
+            pvc = 0.0                 # pv_claims (mortality risk)
+            pvm = 0.0                 # pv_morbidity
+            pvd = 0.0                 # pv_disability
+            pvs = maturity_cf[mp]     # pv_survival (longevity risk), seeded at term
+            for t in range(term - 1, -1, -1):
+                mr = monthly_rate_all[s, t]
+                half = (1.0 + mr) ** (-0.5)
+                full = 1.0 / (1.0 + mr)
+                claim = claim_cf[mp, t]
+                morb = morbidity_cf[mp, t]
+                disab = disability_cf[mp, t]
+                ann = annuity_cf[mp, t]
+                surr = surrender_cf[mp, t]
+                bel_v = (ann - premium_cf[mp, t]
+                         + (claim + morb + disab + expense_cf[mp, t] + surr) * half
+                         + bel_v * full)
+                pvc = claim * half + pvc * full
+                pvm = morb * half + pvm * full
+                pvd = disab * half + pvd * full
+                pvs = ann + pvs * full
+            ra_mp = (mort_factor * pvc + morb_factor * pvm
+                     + disab_factor * pvd + long_factor * pvs)
+            fcf = bel_v + ra_mp
+            bel_s += bel_v
+            ra_s += ra_mp
+            if fcf < 0.0:
+                csm_s += -fcf
+            else:
+                loss_s += fcf
+        bel_out[s] = bel_s
+        ra_out[s] = ra_s
+        csm_out[s] = csm_s
+        loss_out[s] = loss_s
+
+    return bel_out, ra_out, csm_out, loss_out
+
+
 def value_stochastic(
     model_points: ModelPoints, assumptions: Assumptions, scenarios: FloatArray
 ) -> StochasticResult:
@@ -64,13 +144,48 @@ def value_stochastic(
     * a 2-D ``(n_scenarios, n_time)`` array -- one discount-rate curve per
       scenario, an annual rate for each projection month.
 
-    Each scenario is valued with the fused :func:`value` kernel and the
-    portfolio total of every figure is recorded, so the distribution -- mean,
-    percentiles -- can be read from the result.
+    The portfolio total of every figure is recorded under each scenario, so
+    the distribution -- mean, percentiles -- can be read from the result. The
+    projection runs once and a single parallel kernel sweeps the scenario axis
+    (see module docstring); the settlement-pattern and cost-of-capital paths
+    fall back to a per-scenario :func:`value` loop.
     """
     scenarios = np.asarray(scenarios, dtype=np.float64)
     if scenarios.ndim not in (1, 2):
         raise ValueError("scenarios must be 1-D (flat rates) or 2-D (rate curves)")
+
+    # The scenario-axis kernel re-discounts shared cash flows -- it covers the
+    # confidence-level RA with no claims settlement pattern (the rate at the
+    # month of incurrence in the settlement factor would otherwise have to
+    # vary per scenario). Other configurations fall back to the per-scenario
+    # value() loop, which handles them correctly if more slowly.
+    if (assumptions.ra_method == "confidence_level"
+            and assumptions.settlement_pattern is None):
+        proj = project_cashflows(model_points, assumptions)
+        n_time = proj.claim_cf.shape[1]
+        if scenarios.ndim == 2:
+            if scenarios.shape[1] != n_time:
+                raise ValueError(
+                    f"a 2-D scenarios array must have {n_time} columns (the "
+                    f"projection horizon), got {scenarios.shape[1]}"
+                )
+            monthly_rate_all = (1.0 + scenarios) ** (1.0 / 12.0) - 1.0
+        else:
+            flat = (1.0 + scenarios) ** (1.0 / 12.0) - 1.0
+            monthly_rate_all = np.repeat(flat[:, None], n_time, axis=1)
+        monthly_rate_all = np.ascontiguousarray(monthly_rate_all)
+        z = _norm_ppf(assumptions.ra_confidence)
+        bel, ra, csm, loss_component = _stochastic_inception_kernel(
+            proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
+            proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
+            np.asarray(model_points.term_months, dtype=np.int64), monthly_rate_all,
+            z * assumptions.mortality_cv, z * assumptions.morbidity_cv,
+            z * assumptions.disability_cv, z * assumptions.longevity_cv,
+        )
+        return StochasticResult(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
+
+    # Fallback: settlement pattern or non-confidence-level RA. Value each
+    # scenario with the fused kernel one at a time.
     if scenarios.ndim == 2:
         n_time = int(model_points.term_months.max())
         if scenarios.shape[1] != n_time:
