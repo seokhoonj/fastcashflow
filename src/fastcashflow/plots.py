@@ -115,10 +115,16 @@ def _format_money_axis(ax, axis: str) -> None:
 
 
 def _axes(ax, figsize: tuple[float, float] = (9.0, 5.5)):
-    """Return ``ax``, or a fresh Axes if it is ``None``."""
+    """Return ``ax``, or a fresh Axes if it is ``None``.
+
+    A freshly created figure uses constrained layout so the left-aligned
+    title, the axis labels and the legend get their own space instead of
+    crowding the plot. When the caller supplies ``ax`` (composing into their
+    own figure) layout is their responsibility.
+    """
     if ax is not None:
         return ax
-    _, ax = _plt().subplots(figsize=figsize, dpi=120)
+    _, ax = _plt().subplots(figsize=figsize, dpi=120, constrained_layout=True)
     return ax
 
 
@@ -317,6 +323,9 @@ def plot_analysis_of_change(reconciliation: Reconciliation, *,
                     textcoords="offset points", xytext=(0, 5), ha="center",
                     fontsize=8.5, fontweight="bold", color=_COLOR["ink"])
     ax.axhline(0.0, color=_COLOR["ink"], linewidth=0.8)
+    # Headroom so the bold value labels sitting above each bar are not
+    # clipped at the top spine.
+    ax.margins(y=0.14)
     ax.set_xticks(range(5))
     ax.set_xticklabels(["Opening", "Future\nservice", "Finance",
                         "Release", "Closing"])
