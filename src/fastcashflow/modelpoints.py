@@ -101,6 +101,12 @@ class ModelPoints:
     # which a single Assumptions value could not represent). Default 0.0 = no
     # guarantee; ignored by non-VFA measurements.
     guaranteed_credit_rate: FloatArray | None = None
+    # Guaranteed minimum death benefit (GMDB) -- the floor the death benefit
+    # cannot fall below. On death the VFA pays max(account value, GDB); the
+    # excess over the account value is the guarantee's intrinsic cost. Locked
+    # at issue, per policy; cohort-dependent like the credit-rate guarantee.
+    # Default 0.0 = no floor (max(AV, 0) = AV); ignored by non-VFA measurements.
+    guaranteed_death_benefit: FloatArray | None = None
     coverage_index: IntArray | None = None             # CSR: coverage index
     coverage_amount: FloatArray | None = None         # CSR: coverage amount
     coverage_offset: IntArray | None = None           # CSR: per-policy slice bounds
@@ -188,7 +194,7 @@ class ModelPoints:
         # Premiums / survival benefits default to zero (absent).
         for name in ("maturity_benefit", "annuity_payment", "disability_income",
                      "disability_benefit", "single_premium", "account_value",
-                     "guaranteed_credit_rate"):
+                     "guaranteed_credit_rate", "guaranteed_death_benefit"):
             value = getattr(self, name)
             value = np.zeros(n_mp) if value is None else np.asarray(value, np.float64)
             object.__setattr__(self, name, value)
@@ -318,6 +324,7 @@ class ModelPoints:
         annuity_frequency_months: int = 1,
         account_value: float = 0.0,
         guaranteed_credit_rate: float = 0.0,
+        guaranteed_death_benefit: float = 0.0,
         count: float = 1.0,
         sex: int = 0,
         state: int = STATE_ACTIVE,
@@ -345,6 +352,7 @@ class ModelPoints:
             annuity_frequency_months=np.array([annuity_frequency_months]),
             account_value=np.array([account_value]),
             guaranteed_credit_rate=np.array([guaranteed_credit_rate]),
+            guaranteed_death_benefit=np.array([guaranteed_death_benefit]),
             count=np.array([count]),
             sex=np.array([sex]),
             state=np.array([state]),
@@ -374,7 +382,7 @@ class ModelPoints:
             "maturity_benefit", "annuity_payment", "disability_income",
             "disability_benefit", "single_premium", "premium_term_months",
             "premium_frequency_months", "annuity_frequency_months",
-            "account_value", "guaranteed_credit_rate",
+            "account_value", "guaranteed_credit_rate", "guaranteed_death_benefit",
             "count", "sex", "state", "issue_class", "elapsed_months",
         )
         kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}

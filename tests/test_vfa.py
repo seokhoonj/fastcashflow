@@ -55,6 +55,36 @@ def test_vfa_account_value_and_csm_hand_calc():
     assert np.isclose(res.csm[0, 0], max(0.0, -bel))
 
 
+def test_gmdb_floor_on_death_hand_calc():
+    """A GMDB lifts each death payout from the account value to the floor.
+
+    With zero return and zero fee the account value stays flat at ``av0`` and
+    r=0 means no discounting, so the BEL increase from the guarantee is the
+    total death decrement times the per-death excess ``(gdb - av0)``.
+    Surrender and maturity exits are unaffected (still pay the account value).
+    """
+    asmp = _assumptions(investment_return=0.0, fund_fee=0.0)
+    av0, gdb, term = 1000.0, 1200.0, 60
+    base = measure_vfa(
+        ModelPoints.single(40, 0.0, term, account_value=av0), asmp
+    )
+    floored = measure_vfa(
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           guaranteed_death_benefit=gdb), asmp
+    )
+    surv = (1 - Q) * (1 - LAPSE)
+    deaths = surv ** np.arange(term) * Q             # monthly death decrement
+    expected_delta = deaths.sum() * (gdb - av0)
+    assert np.isclose(floored.bel[0, 0] - base.bel[0, 0], expected_delta)
+
+    # A floor below the account value never bites -- max(AV, gdb) == AV.
+    low = measure_vfa(
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           guaranteed_death_benefit=500.0), asmp
+    )
+    assert np.isclose(low.bel[0, 0], base.bel[0, 0])
+
+
 def test_vfa_zero_fee_gives_no_profit():
     """With no variable fee the contract is a pure pass-through -- no CSM."""
     res = measure_vfa(
