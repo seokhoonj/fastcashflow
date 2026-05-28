@@ -51,6 +51,7 @@ from fastcashflow.statemodel import (
     compile_state_model,
     compile_state_model_with_duration,
     is_semi_markov,
+    model_references_rate,
     resolve_state_model,
 )
 
@@ -700,6 +701,12 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
                     sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
             rate_dict["ci_incidence"] = ci_inc
+        if model_references_rate(state_model, "lapse_paidup"):
+            paidup_fn = (assumptions.lapse_paidup_annual
+                         or assumptions.lapse_annual)
+            rate_dict["lapse_paidup"] = np.ascontiguousarray(annual_to_monthly(
+                paidup_fn(sex_grid, issue_age_grid, duration_grid,
+                          issue_class_grid, elapsed_grid)))
         compiled = compile_state_model(state_model, rate_dict)
         edge_from = compiled.edge_from
         edge_to = compiled.edge_to

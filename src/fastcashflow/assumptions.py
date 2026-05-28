@@ -17,6 +17,7 @@ from fastcashflow.statemodel import StateModel
 _RATE_FN_FIELDS: tuple[str, ...] = (
     "mortality_annual",
     "lapse_annual",
+    "lapse_paidup_annual",
     "waiver_incidence_annual",
     "ci_incidence_annual",
 )
@@ -415,6 +416,13 @@ class Assumptions:
     # (lapse silently removes the contract, the historical behaviour).
     surrender_value_curve: FloatArray | None = None
     waiver_incidence_annual: RateFn | None = None
+    # Lapse rate for the paid-up state (납입후) -- used only by a state model
+    # whose paid-up state references the ``lapse_paidup`` transition rate
+    # (e.g. STATE_MODELS["WAIVER_PAIDUP"]). Paid-up contracts (premium
+    # payment finished) typically surrender at a different rate than
+    # premium-paying actives -- the Korean post-payment lapse jump. When
+    # None the paid-up state falls back to ``lapse_annual``.
+    lapse_paidup_annual: RateFn | None = None
     # Semi-Markov (Phase (c)) prototype rates. ``ci_incidence_annual`` is the
     # first-cancer diagnosis rate (active -> post_first transition, Markov);
     # ``ci_reincidence_annual`` is the duration-dependent reincidence rate

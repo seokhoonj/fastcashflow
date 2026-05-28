@@ -11,7 +11,7 @@ import pytest
 
 from fastcashflow import (
     STATE_ACTIVE,
-    STATE_PAID_UP,
+    STATE_PAIDUP,
     STATE_WAIVER,
     STATE_MODELS,
     Assumptions,
@@ -183,7 +183,7 @@ def test_explicit_waiver_model_matches_default():
     )
     kw = dict(issue_age=45, benefits={0: 50_000_000.0},
               level_premium=30_000.0, term_months=120)
-    for state in (STATE_ACTIVE, STATE_WAIVER, STATE_PAID_UP):
+    for state in (STATE_ACTIVE, STATE_WAIVER, STATE_PAIDUP):
         mp = ModelPoints.single(**kw, state=state)
         default = value(mp, _asmp(waiver_rate=0.03))
         custom = value(mp, _asmp(waiver_rate=0.03, state_model=rebuilt))
@@ -274,7 +274,7 @@ def test_three_state_model_runs():
 
     # A paid-up contract: identical to the default, which seats paid-up on
     # the waiver state -- both are mortality-only, premium-free.
-    paidup = ModelPoints.single(**kw, state=STATE_PAID_UP)
+    paidup = ModelPoints.single(**kw, state=STATE_PAIDUP)
     base = value(paidup, _asmp(waiver_rate=0.03))
     custom = value(paidup, _asmp(waiver_rate=0.03, state_model=three))
     for field in ("bel", "ra", "csm", "loss_component"):
@@ -284,6 +284,45 @@ def test_three_state_model_runs():
     active = ModelPoints.single(**kw, state=STATE_ACTIVE)
     assert np.isclose(value(active, _asmp(waiver_rate=0.03)).bel[0],
                       value(active, _asmp(waiver_rate=0.03, state_model=three)).bel[0])
+
+
+def test_paidup_state_uses_its_own_lapse():
+    """STATE_MODELS["WAIVER_PAIDUP"] keeps paid-up a distinct state so it can
+    carry its own lapse (Assumptions.lapse_paidup_annual). A paid-up-seated
+    contract decrements by mortality + the paid-up lapse; with the paid-up
+    lapse above the active lapse its in-force falls faster than the active
+    track -- the Korean post-payment (납입후) lapse jump."""
+    q = _annual(0.01)
+    asmp = Assumptions(
+        mortality_annual=lambda s, a, d: np.full(a.shape, q),
+        lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.02)),
+        lapse_paidup_annual=lambda s, a, d: np.full(d.shape, _annual(0.10)),
+        discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH",
+                                lambda s, a, d: np.full(a.shape, q)),),
+        state_model=STATE_MODELS["WAIVER_PAIDUP"],
+    )
+    kw = dict(issue_age=40, benefits={0: 100_000.0}, level_premium=0.0,
+              term_months=3)
+    paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), asmp)
+    step = 0.99 * 0.90        # (1 - mortality)(1 - paid-up lapse)
+    assert np.allclose(paid.cashflows.inforce[0, :3], [1.0, step, step ** 2])
+    # falls faster than the active 2%-lapse track
+    act = measure(ModelPoints.single(**kw, state=STATE_ACTIVE), asmp)
+    assert paid.cashflows.inforce[0, 1] < act.cashflows.inforce[0, 1]
+
+
+def test_paidup_lapse_falls_back_to_lapse_annual():
+    """With lapse_paidup_annual unset, the paid-up state's lapse_paidup rate
+    falls back to lapse_annual -- the WAIVER_PAIDUP model still runs, the
+    paid-up state just lapses at the ordinary rate."""
+    asmp = _asmp(q=0.01, lapse=0.05,
+                 state_model=STATE_MODELS["WAIVER_PAIDUP"])
+    kw = dict(issue_age=40, benefits={0: 100_000.0}, level_premium=0.0,
+              term_months=3)
+    paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), asmp)
+    step = 0.99 * 0.95        # falls back to the 5% active lapse
+    assert np.allclose(paid.cashflows.inforce[0, :3], [1.0, step, step ** 2])
 
 
 def test_measure_and_value_agree_under_custom_model():

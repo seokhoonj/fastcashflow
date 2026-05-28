@@ -11,7 +11,7 @@ from fastcashflow.coverage import CalculationMethod
 
 # Contract states -- a model point's in-force state at the valuation date.
 # ACTIVE is the ordinary premium-paying contract. WAIVER (premium waived on a
-# triggering event) and PAID_UP (the premium-paying term has ended) both keep
+# triggering event) and PAIDUP (the premium-paying term has ended) both keep
 # the coverage in force while collecting no premium. The state places the
 # model point's starting in-force on the active or the waiver track; during
 # the projection active in-force can itself transition to waiver at the
@@ -19,12 +19,12 @@ from fastcashflow.coverage import CalculationMethod
 # reflect the contract's actual terms at the measurement date).
 STATE_ACTIVE = 0
 STATE_WAIVER = 1
-STATE_PAID_UP = 2
+STATE_PAIDUP = 2
 
 # Names for the file layer -- a model-point ``state`` column reads and writes
 # these strings, the readable form a practitioner edits in a spreadsheet.
 STATE_NAMES = {"ACTIVE": STATE_ACTIVE, "WAIVER": STATE_WAIVER,
-               "PAID_UP": STATE_PAID_UP}
+               "PAIDUP": STATE_PAIDUP}
 STATE_LABELS = {code: name for name, code in STATE_NAMES.items()}
 
 

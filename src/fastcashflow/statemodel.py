@@ -152,7 +152,7 @@ class StateModel:
     ``states`` are the transient states; position fixes the kernel state
     index, and state 0 is the issue state. ``seating`` maps a model point's
     input contract state -- the ``ModelPoints.state`` code (``STATE_ACTIVE``,
-    ``STATE_WAIVER``, ``STATE_PAID_UP``) -- to the index of the state its
+    ``STATE_WAIVER``, ``STATE_PAIDUP``) -- to the index of the state its
     in-force is seated on at the valuation date: ``seating[code]`` is that
     index. It defaults to seating every model point on state 0.
 
@@ -208,7 +208,7 @@ class StateModel:
 # and is subject to mortality alone -- it does not lapse. The waiver-inception
 # transition moves active in-force onto the waiver state. ``seating`` seats
 # STATE_ACTIVE (code 0) on the active state and both STATE_WAIVER (1) and
-# STATE_PAID_UP (2) on the waiver state: a paid-up contract and a waiver
+# STATE_PAIDUP (2) on the waiver state: a paid-up contract and a waiver
 # contract have identical cash flows, differing only in the cause premiums
 # ceased.
 WAIVER_MODEL = StateModel(
@@ -240,9 +240,56 @@ WAIVER_MODEL = StateModel(
 # resolves "WAIVER" by name). Lookup (``STATE_MODELS["WAIVER"]``) and
 # iteration (``sorted(STATE_MODELS)``) work as before; mutation raises
 # ``TypeError``.
+# Three-state variant -- active / waiver / paid-up as *separate* states.
+# Unlike WAIVER_MODEL (which seats paid-up onto the waiver state, giving the
+# two identical cash flows), this model keeps paid-up distinct so it can carry
+# its own lapse: the paid-up state references the ``lapse_paidup`` rate
+# (Assumptions.lapse_paidup_annual, falling back to lapse_annual). The Korean
+# post-payment (납입후) lapse jump is the motivating case -- a contract that
+# has finished paying premium typically surrenders at a different rate than a
+# premium-paying active. Paid-up still has no premium and is exposed to
+# mortality + its own lapse; there is no waiver-inception out of paid-up (you
+# cannot waive a premium you no longer pay). ``seating`` seats STATE_ACTIVE on
+# active (0), STATE_WAIVER on waiver (1) and STATE_PAIDUP on paid-up (2).
+# There is no active -> paid-up transition: paid-up contracts are seated on
+# the paid-up state at the valuation date (an in-force valuation of the
+# 납입후 cohort), since premium cessation is a ``premium_term_months`` control,
+# not a modelled transition.
+WAIVER_PAIDUP_MODEL = StateModel(
+    states=(
+        State("active", premium=True, transitions=(
+            Transition("mortality"),
+            Transition("waiver_incidence", to="waiver"),
+            Transition("lapse"),
+        )),
+        State("waiver", premium=False, transitions=(
+            Transition("mortality"),
+        )),
+        State("paidup", premium=False, transitions=(
+            Transition("mortality"),
+            Transition("lapse_paidup"),
+        )),
+    ),
+    seating=(0, 1, 2),
+)
+
+
 STATE_MODELS: Mapping[str, StateModel] = MappingProxyType({
     "WAIVER": WAIVER_MODEL,
+    "WAIVER_PAIDUP": WAIVER_PAIDUP_MODEL,
 })
+
+
+def model_references_rate(model: StateModel, rate_name: str) -> bool:
+    """Return True if any transition in the model references ``rate_name``.
+
+    The engine builds the rate dict it hands to :func:`compile_state_model`
+    from the rates the resolved model actually references, so an optional
+    rate (e.g. ``lapse_paidup``) is built only when the topology in play
+    uses it.
+    """
+    return any(tr.rate == rate_name
+               for s in model.states for tr in s.transitions)
 
 
 def is_semi_markov(model: StateModel) -> bool:
