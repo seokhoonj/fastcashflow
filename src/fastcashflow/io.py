@@ -38,7 +38,7 @@ from fastcashflow.assumptions import (
 )
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
-    CalculationMethod, RATE_DRIVEN_PATTERNS,
+    CalculationMethod, RATE_DRIVEN_METHODS,
 )
 from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 
@@ -934,7 +934,7 @@ def _wide_model_points(df: pl.DataFrame,
         wide_ctypes = {k: CalculationMethod(v)
                        for k, v in calculation_methods.items()}
         rate_driven = [c for c, m in wide_ctypes.items()
-                       if m in RATE_DRIVEN_PATTERNS]
+                       if m in RATE_DRIVEN_METHODS]
         candidate_codes = set(rate_driven)
     else:
         rate_driven = None
@@ -1044,7 +1044,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     # kept, in catalogue order.
     present_codes = set(cov["coverage_code"].to_list())
     rate_driven_codes = [c for c, m in ctypes.items()
-                         if m in RATE_DRIVEN_PATTERNS and c in present_codes]
+                         if m in RATE_DRIVEN_METHODS and c in present_codes]
     code_to_cov_idx = {c: i for i, c in enumerate(rate_driven_codes)}
 
     # Resolve every coverage row to its policy index and coverage type.
@@ -1126,7 +1126,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     # absent from the catalogue was already rejected (the ``_type`` null
     # check above). Whether the assumptions register a rate for each code is
     # checked at measure time (coverage.align_coverages, the V4 guard).
-    is_cov = np.isin(ctype, RATE_DRIVEN_PATTERNS)
+    is_cov = np.isin(ctype, RATE_DRIVEN_METHODS)
     order = np.argsort(mp[is_cov], kind="stable")
     cov_mp = mp[is_cov][order]
     fields["coverage_index"] = cov_idx[is_cov][order]
@@ -1196,9 +1196,9 @@ def read_model_points(
     not encode the as-of date by mixing it into the static spec.
     """
     if isinstance(calculation_methods, (str, Path)):
-        patterns_dict = _parse_calculation_methods(calculation_methods)
+        methods_dict = _parse_calculation_methods(calculation_methods)
     else:
-        patterns_dict = calculation_methods
+        methods_dict = calculation_methods
     p = str(path)
     if coverages is None and p.endswith(".xlsx"):
         wb = openpyxl.load_workbook(p, read_only=True)
@@ -1208,14 +1208,14 @@ def read_model_points(
             return _long_model_points(
                 pl.read_excel(p, sheet_name="policies", engine="openpyxl"),
                 pl.read_excel(p, sheet_name="coverages", engine="openpyxl"),
-                patterns_dict,
+                methods_dict,
             )
     pol = _read_frame(path)
     if coverages is not None:
         return _long_model_points(
-            pol, _read_frame(coverages), patterns_dict,
+            pol, _read_frame(coverages), methods_dict,
         )
-    return _wide_model_points(pol, patterns_dict)
+    return _wide_model_points(pol, methods_dict)
 
 
 def read_inforce_policies(
@@ -1302,15 +1302,15 @@ def read_inforce_policies(
     spec_df = df.drop("elapsed_months", "prior_csm", "lock_in_rate")
 
     if isinstance(calculation_methods, (str, Path)):
-        patterns_dict = _parse_calculation_methods(calculation_methods)
+        methods_dict = _parse_calculation_methods(calculation_methods)
     else:
-        patterns_dict = calculation_methods
+        methods_dict = calculation_methods
     if coverages is not None:
         mp = _long_model_points(
-            spec_df, _read_frame(coverages), patterns_dict,
+            spec_df, _read_frame(coverages), methods_dict,
         )
     else:
-        mp = _wide_model_points(spec_df, patterns_dict)
+        mp = _wide_model_points(spec_df, methods_dict)
     mp = apply_inforce_state(mp, state)
     return mp, state
 
@@ -1691,9 +1691,9 @@ def value_file(
         )
 
     if isinstance(calculation_methods, (str, Path)):
-        patterns_dict = _parse_calculation_methods(calculation_methods)
+        methods_dict = _parse_calculation_methods(calculation_methods)
     else:
-        patterns_dict = calculation_methods
+        methods_dict = calculation_methods
     scan = pl.scan_parquet(input_path)
     n_total = scan.select(pl.len()).collect().item()
     processed = 0
@@ -1707,7 +1707,7 @@ def value_file(
             cov = cov_scan.join(
                 pol.lazy().select("mp_id"), on="mp_id", how="semi"
             ).collect()
-            model_points = _long_model_points(pol, cov, patterns_dict)
+            model_points = _long_model_points(pol, cov, methods_dict)
             write_valuation(
                 value(model_points, assumptions, backend=backend),
                 output_dir / f"part-{part:05d}.parquet",
@@ -1732,7 +1732,7 @@ def value_file(
         chunk = projected.slice(offset, chunk_size).collect()
         model_points = _wide_model_points(
             chunk.drop(id_column) if id_column is not None else chunk,
-            patterns_dict,
+            methods_dict,
         )
         ids = chunk[id_column].to_numpy() if id_column is not None else None
         write_valuation(

@@ -36,11 +36,11 @@ import numpy as np
 class CalculationMethod(str, Enum):
     """How a benefit pays out -- the engine's calculation routing key.
 
-    Five uniform patterns: every rate-driven death coverage (main contract
+    Five uniform methods: every rate-driven death coverage (main contract
     or attached, accidental or all-cause, ADB / disease / disaster) is the
-    same DEATH pattern; the rate table is what differentiates them. The
-    pattern is purely a calculation-routing label -- there is no
-    "main-contract" pattern, because the engine has no reserved coverage
+    same DEATH method; the rate table is what differentiates them. The
+    method is purely a calculation-routing label -- there is no
+    "main-contract" method, because the engine has no reserved coverage
     slot.
 
     ``str, Enum`` -- members compare equal to their string value
@@ -75,11 +75,11 @@ class CalculationMethod(str, Enum):
         return self._value_
 
 
-# Rate-driven patterns carry a sex x age rate table and go in the coverage
-# list. Survival patterns (annuity, maturity) are paid to the in-force
+# Rate-driven methods carry a sex x age rate table and go in the coverage
+# list. Survival methods (annuity, maturity) are paid to the in-force
 # survivors and need no rate; they are summed into per-policy amounts, not
 # the rate grid.
-RATE_DRIVEN_PATTERNS = (
+RATE_DRIVEN_METHODS = (
     CalculationMethod.DEATH, CalculationMethod.MORBIDITY, CalculationMethod.DIAGNOSIS,
 )
 
@@ -244,7 +244,7 @@ def validate_csr_codes(coverage_index, n_coverages, *,
     verifies catalogue consistency: every code registered on
     ``Assumptions.coverages`` must appear in the model points'
     ``calculation_methods`` dict. A drift between the two (typically a swap
-    of one without the other) lands a coverage with no routing pattern
+    of one without the other) lands a coverage with no routing method
     and the engine falls back to MORBIDITY -- silently wrong.
 
     When ``expected_coverage_codes`` is provided (the rate-driven code tuple

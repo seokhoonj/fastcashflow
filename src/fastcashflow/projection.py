@@ -519,6 +519,11 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     grid -- all change only once a year, so this is an identical result for
     a twelfth of the work.
     """
+    if model_points.term_months.shape[0] == 0:
+        raise ValueError(
+            "model_points is empty (n_mp=0); measure() cannot project a "
+            "zero-policy portfolio. Filter empty segments upstream."
+        )
     n_time = int(model_points.term_months.max())     # months 0 .. n_time-1
     n_years = (n_time + 11) // 12
     durations = np.arange(n_years)

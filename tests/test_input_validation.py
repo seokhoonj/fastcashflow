@@ -693,13 +693,13 @@ def test_norm_ppf_rejects_p_outside_open_interval():
 def test_empty_portfolio_value_raises_loudly():
     """A zero-policy ModelPoints does not silently return garbage.
 
-    The engine currently fails on n_mp=0 because ``term_months.max()`` has
-    no identity over an empty axis. The error is loud (ValueError from
-    numpy), not silent -- this test locks in that loud-fail behaviour so
-    a future change that returns empty-but-meaningful trajectories is an
-    intentional design move (and updates this test), not a regression.
-    Daily-ETL workflows that may hit an empty segment should filter
-    upstream.
+    ``value()`` and ``measure()`` reject n_mp=0 up front with an explicit
+    ValueError naming the empty portfolio (rather than letting an opaque
+    ``term_months.max()`` zero-size reduction surface). This locks in the
+    loud-fail behaviour so a future change that returns empty-but-meaningful
+    trajectories is an intentional design move (and updates this test), not a
+    regression. Daily-ETL workflows that may hit an empty segment should
+    filter upstream.
     """
     mp = ModelPoints(
         issue_age=np.array([], dtype=np.float64),
@@ -712,8 +712,10 @@ def test_empty_portfolio_value_raises_loudly():
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="empty"):
         fcf.value(mp, assumptions)
+    with pytest.raises(ValueError, match="empty"):
+        fcf.measure(mp, assumptions)
 
 
 def test_single_month_measure():

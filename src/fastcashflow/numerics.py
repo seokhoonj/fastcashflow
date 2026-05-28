@@ -6,9 +6,9 @@ unpacks domain objects to raw arrays + scalars and calls in here. The split
 keeps these primitives numba-friendly and unit-testable on bare numpy.
 
 The orchestration-specific ``@njit`` kernels (``_project_kernel`` in
-projection.py, ``_value_kernel`` in engine.py) stay next to their callers --
-they have only one call site each. The primitives below are the ones that
-genuinely cross modules.
+projection.py, ``_value_kernel_scalar`` and the codegen value kernel in
+engine.py) stay next to their callers -- they have only one call site each.
+The primitives below are the ones that genuinely cross modules.
 
 Contents:
 

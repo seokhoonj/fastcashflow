@@ -4,7 +4,7 @@ Phase (b) generalises the in-force projection from a single survival track to
 an N-state Markov occupancy model. In-force is an occupancy vector ``occ`` over
 a small set of transient states; each month a transition matrix advances it,
 ``occ[t+1] = occ[t] @ P[t]``. The kernels -- ``projection._project_kernel``,
-``engine._value_kernel`` and the CUDA kernel -- run that recursion on a flat
+the engine's codegen value kernel and the CUDA kernel -- run that recursion on a flat
 edge list and are state-machine-agnostic: they carry no hardcoded state set.
 
 This module is the product-facing layer. A :class:`StateModel` declares the
@@ -226,20 +226,6 @@ WAIVER_MODEL = StateModel(
 )
 
 
-# Named registry of bundled StateModels. A non-programmer actuary can pick a
-# topology by name -- in the ``segments`` sheet's ``state_model`` column, in
-# Python via ``STATE_MODELS["WAIVER"]``, or anywhere else a string label is a
-# natural input. Additions land here as fixed-vocabulary entries (the same
-# pattern as the coverage types -- see [[phase5-coverage-design]] in the
-# project memory); users with a topology outside the registry still build
-# their own ``StateModel`` in code.
-#
-# Exposed through a read-only mapping so a stray ``STATE_MODELS["WAIVER"] =
-# my_custom_model`` from user / plugin code cannot silently swap the
-# bundled topology process-wide (which would change every later segment that
-# resolves "WAIVER" by name). Lookup (``STATE_MODELS["WAIVER"]``) and
-# iteration (``sorted(STATE_MODELS)``) work as before; mutation raises
-# ``TypeError``.
 # Three-state variant -- active / waiver / paid-up as *separate* states.
 # Unlike WAIVER_MODEL (which seats paid-up onto the waiver state, giving the
 # two identical cash flows), this model keeps paid-up distinct so it can carry
@@ -274,6 +260,19 @@ WAIVER_PAIDUP_MODEL = StateModel(
 )
 
 
+# Named registry of bundled StateModels. A non-programmer actuary can pick a
+# topology by name -- in the ``segments`` sheet's ``state_model`` column, in
+# Python via ``STATE_MODELS["WAIVER"]``, or anywhere else a string label is a
+# natural input. Additions land here as fixed-vocabulary entries -- the same
+# convention as the coverage CalculationMethods; users with a topology outside
+# the registry still build their own ``StateModel`` in code.
+#
+# Exposed through a read-only mapping so a stray ``STATE_MODELS["WAIVER"] =
+# my_custom_model`` from user / plugin code cannot silently swap the
+# bundled topology process-wide (which would change every later segment that
+# resolves "WAIVER" by name). Lookup (``STATE_MODELS["WAIVER"]``) and
+# iteration (``sorted(STATE_MODELS)``) work as before; mutation raises
+# ``TypeError``.
 STATE_MODELS: Mapping[str, StateModel] = MappingProxyType({
     "WAIVER": WAIVER_MODEL,
     "WAIVER_PAIDUP": WAIVER_PAIDUP_MODEL,

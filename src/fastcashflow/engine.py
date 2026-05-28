@@ -703,8 +703,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(20, "mult = red_factor if t < red_end else 1.0")
     line(20, f"healthy = {sum_all}")
     line(20, "pv_morbidity += healthy * d_rate * benefit * mult * discount_mid[t]")
-    line(16, "undiag = 1.0 - d_rate")
-    emit_edge_step(16, scale=" * undiag", include_lump=False)
+    line(16, "undiagnosed = 1.0 - d_rate")
+    emit_edge_step(16, scale=" * undiagnosed", include_lump=False)
 
     line(8, "bel_mp = (pv_mortality + pv_morbidity + pv_disability + pm")
     line(8, "          + pv_annuity + pv_expense + pv_surrender - pv_premium)")
@@ -937,7 +937,7 @@ def _codegen_value_kernel_source_semi_markov(
           - exits are not represented as edges; occupancy that doesn't go to
             any next-buffer slot simply leaves the in-force set.
 
-        ``scale`` (e.g. ``" * undiag"``) multiplies every flow -- used by
+        ``scale`` (e.g. ``" * undiagnosed"``) multiplies every flow -- used by
         the diagnosis-coverage pass to deplete the not-yet-diagnosed
         in-force fraction along the state machine.
         """
@@ -1228,14 +1228,15 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
                          survival_monthly, lapse_monthly, surrender_curve):
-    """Scalar-inforce fast path of :func:`_value_kernel`.
+    """Scalar-inforce fast path of the general codegen value kernel
+    (:func:`_codegen_value_kernel_source`).
 
     Used when the in-force projection collapses to a single survival track --
     no user-supplied StateModel, no waiver inception, every model point
     seated in the active state. The in-force is carried as a scalar; the
     monthly decay is one multiply against the precomputed
     ``survival_monthly[sex, age, year] = (1 - q_monthly) * (1 - l_monthly)``
-    table. Numerically identical to ``_value_kernel`` for this configuration
+    table. Numerically identical to the general codegen kernel for this configuration
     -- the disability income, disability lump-sum and benefit-state pieces
     of the general kernel evaluate to zero here -- and recovers the
     pre-Phase(b) speed (see ``docs/tutorial/13-why-fast.md``).
@@ -1431,6 +1432,11 @@ def value(
             "which would land at class 0 in value() and produce a silently "
             "wrong BEL. Use measure() until value() grows per-class grid "
             "support."
+        )
+    if model_points.term_months.shape[0] == 0:
+        raise ValueError(
+            "model_points is empty (n_mp=0); value() cannot project a "
+            "zero-policy portfolio. Filter empty segments upstream."
         )
     n_time = int(model_points.term_months.max())
     n_years = (n_time + 11) // 12
@@ -1938,12 +1944,13 @@ def value_segmented(
     keys_arr = np.array(
         [f"{p}|{c}" for p, c in zip(product, channel)], dtype=object,
     )
-    unique_keys, inverse = np.unique(keys_arr, return_inverse=True)
-    # Preserve first-seen order so debugging output reads top-to-bottom
-    # of the input -- np.unique returns sorted, so re-index by first
-    # occurrence.
-    first_seen = np.array(
-        [int(np.argmax(inverse == k)) for k in range(len(unique_keys))]
+    # Preserve first-seen order so debugging output reads top-to-bottom of
+    # the input -- np.unique returns sorted, so re-index by first occurrence.
+    # return_index gives each unique key's first-occurrence position in the
+    # single sort np.unique already runs; the earlier per-key argmax scan was
+    # O(n_unique x n_mp).
+    unique_keys, first_seen, inverse = np.unique(
+        keys_arr, return_index=True, return_inverse=True,
     )
     order = np.argsort(first_seen)
     # Rebuild parsed keys in first-seen order.

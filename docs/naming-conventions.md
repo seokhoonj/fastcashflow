@@ -66,7 +66,7 @@
 | `table_id` | SCREAMING_SNAKE_CASE 풀네임 | `MORTALITY_STD`, `LAPSE_GA`, `DISCOUNT_STD`, `INPATIENT_STD`, `ADB_STD` | named reference. 줄임말 안 씀 (`MORT_STD` 같은 abbreviation 지양). 단 industry-universal abbr 인 `ADB` 같은 매우 짧은 것은 예외 |
 | `coverage_code` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자. 사용자 카탈로그 — 엔진 reserved 코드 없음 |
 | `calculation_method` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | **engine 의 cash flow 산출방식 routing key**. 5 개 고정. 자세한 각 산출방식별 계산은 `assumptions-format.md` 의 coverages 시트 섹션 참조 |
-| `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAID_UP` | enum-like, 정책 status |
+| `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAIDUP` | enum-like, 정책 status |
 | `defaults` (특수 product 값) | 소문자 단어 | `defaults` | segments 시트의 fallback 행 marker (값 아닌 keyword) |
 
 ## Python code

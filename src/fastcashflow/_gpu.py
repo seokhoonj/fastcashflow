@@ -4,7 +4,8 @@ Imported lazily by ``engine.value(backend="gpu")``; never loaded for CPU-only
 use, so a machine without CUDA can still import and use the rest of the
 package.
 
-The kernel mirrors the CPU kernel in ``engine._value_kernel`` exactly; the
+The kernel mirrors the CPU codegen value kernel
+(``engine._get_value_kernel_codegen``) exactly; the
 cross-check test ``test_value_gpu_matches_cpu`` guards against divergence.
 """
 from __future__ import annotations
@@ -154,11 +155,11 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
             for s in range(n_states):
                 healthy += occ[s]
             pv_morbidity += healthy * d_rate * benefit * discount_mid[t]
-            undiag = 1.0 - d_rate
+            undiagnosed = 1.0 - d_rate
             for s in range(n_states):
                 occ_next[s] = 0.0
             for e in range(n_edges):
-                occ_next[edge_to[e]] += (occ[edge_from[e]] * undiag
+                occ_next[edge_to[e]] += (occ[edge_from[e]] * undiagnosed
                                          * edge_prob[sx, age_idx, year, e])
             for s in range(n_states):
                 occ[s] = occ_next[s]
