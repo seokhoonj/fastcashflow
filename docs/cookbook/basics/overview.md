@@ -11,15 +11,6 @@
 자세한 결산 모드 워크플로는 [튜토리얼 11장](../../tutorial/11-in-practice)
 참조.
 
-**왜 네 파일로 나눠 있나** — 갱신 주기가 모두 다릅니다:
-
-| 파일 | 갱신 주기 |
-|---|---|
-| `assumptions.xlsx` | 분기 / 연 |
-| `policies.csv` / `inforce_*.csv` | 일 / 분기 |
-| `coverages.csv` | 일 / 분기 |
-| `benefit_patterns.csv` | 연 1 회 미만 |
-
 코드에서 reader 가 도는 순서가 그대로입니다 — `read_assumptions` 가
 먼저 (engine 가정), 그 다음 `read_model_points` 가 policies / coverages /
 benefit_patterns 셋을 읽어 한 ModelPoints 개체로 묶습니다.

@@ -21,27 +21,22 @@
 
 ```{list-table}
 :header-rows: 1
-:widths: 16 30 18 36
+:widths: 16 34 50
 
 * - 입력 개체
   - 파일
-  - 갱신 주기
   - 무엇
 * - **Assumptions**
   - `assumptions.xlsx`
-  - 분기 / 연
   - 계리적 가정 (사망률 · 해지율 · 할인율 · 사업비 · 위험조정)
 * - **ModelPoints**
   - `policies.csv` 또는 `inforce_2026Q1.csv`
-  - 일 / 분기
   - 보유 계약 (영구 spec + 결산시 상태)
 * - **ModelPoints**
   - `coverages.csv`
-  - 일 / 분기
   - 각 계약에 붙은 담보 (특약) 목록과 가입금액
 * - **ModelPoints**
   - `benefit_patterns.csv`
-  - 연 1 회 미만
   - 담보 카탈로그 — 담보 코드 → 청구 패턴
 ```
 
@@ -199,8 +194,9 @@ benefit_patterns.csv  ──┘   담보 카탈로그 (코드 → 패턴 매핑)
 
 코드 매핑은 두 갈래로 갈라집니다 — *패턴* (DEATH/MORBIDITY/...) 은
 담보 카탈로그에서, *위험률* (실제 숫자) 은 가정 워크북의 `coverages`
-시트에서. 한 자리에 모으지 않고 분리한 이유는 갱신 주기가 다르기 때문
-— 패턴은 거의 안 바뀌고, 위험률은 분기마다 재calibration.
+시트에서. 한 자리에 모으지 않고 분리한 이유는 두 매핑이 다른 일을
+하기 때문 — 카탈로그는 "어느 알고리즘을 쓸지", 가정은 "어떤 숫자
+값을 넣을지".
 
 ## 11.2 결산 워크플로 — 매 분기 한 파일
 
