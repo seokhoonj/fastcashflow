@@ -85,6 +85,7 @@ lapse_fn = lambda s, a, d: np.full(d.shape, 0.0)
 # 모델 포인트 (계약 하나)
 mp = fcf.ModelPoints.single(
     issue_age     = 40,           # 가입연령 40세
+    sex           = 0,            # 성별 (0=남, 1=여)
     benefits      = {0: 12_000},  # 0번 보장 (= DEATH) 의 보험금 12,000
     level_premium = 100,          # 월납 보험료 100
     term_months   = 2,            # 보험기간 2개월

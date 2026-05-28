@@ -202,7 +202,7 @@
 
 ```{toctree}
 :hidden:
-:caption: 기초 (Basics)
+:caption: 1. 기초 (Basics)
 
 basics/overview
 basics/calculation-methods
@@ -212,7 +212,7 @@ basics/coverage-mechanics
 
 ```{toctree}
 :hidden:
-:caption: 단순 상품
+:caption: 2. 단순 상품
 
 simple/term-life
 simple/death-diagnosis
@@ -220,7 +220,7 @@ simple/death-diagnosis
 
 ```{toctree}
 :hidden:
-:caption: 분석 / 검증
+:caption: 6. 분석 / 검증
 
 workflow/validation
 ```

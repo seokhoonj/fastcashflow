@@ -78,11 +78,14 @@ asmp = fcf.Assumptions(
     coverages        = (fcf.CoverageRate("DEATH", death_fn),),  # 사망 보장 1 종 (청구 rate = 같은 death_fn)
 )
 mp = fcf.ModelPoints.single(
-    issue_age        = 40,                                      # 가입연령 40 세
-    benefits         = {0: 12_000},                             # 0 번 보장 (= DEATH) 의 보험금 12,000
-    level_premium    = 0,                                       # 월납 보험료 0 (보험료 cash flow 무시)
-    term_months      = 3,                                       # 보험기간 3 개월
-    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},     # 코드 → 패턴 매핑
+    issue_age     = 40,           # 가입연령 40세
+    sex           = 0,            # 성별 (0=남, 1=여)
+    benefits      = {0: 12_000},  # 0번 보장 (= DEATH) 의 보험금 12,000
+    level_premium = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
+    term_months   = 3,            # 보험기간 3개월
+    calculation_methods = {
+        "DEATH": fcf.CalculationMethod.DEATH,   # 코드 → 패턴 매핑
+    },
 )
 r = fcf.measure(mp, asmp)
 
@@ -138,11 +141,14 @@ asmp = fcf.Assumptions(
     coverages        = (fcf.CoverageRate("INPATIENT", inpatient_fn),),     # 입원 보장 1 종 (청구 rate = inpatient_fn)
 )
 mp = fcf.ModelPoints.single(
-    issue_age        = 40,                                                 # 가입연령 40 세
-    benefits         = {0: 12_000},                                        # 0 번 보장 (= INPATIENT) 의 입원 1 건당 12,000
-    level_premium    = 0,                                                  # 월납 보험료 0 (보험료 cash flow 무시)
-    term_months      = 3,                                                  # 보험기간 3 개월
-    calculation_methods = {"INPATIENT": fcf.CalculationMethod.MORBIDITY},        # 코드 → 패턴 매핑
+    issue_age     = 40,           # 가입연령 40세
+    sex           = 0,            # 성별 (0=남, 1=여)
+    benefits      = {0: 12_000},  # 0번 보장 (= INPATIENT) 의 입원 1건당 12,000
+    level_premium = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
+    term_months   = 3,            # 보험기간 3개월
+    calculation_methods = {
+        "INPATIENT": fcf.CalculationMethod.MORBIDITY,   # 코드 → 패턴 매핑
+    },
 )
 r = fcf.measure(mp, asmp)
 
@@ -203,11 +209,14 @@ asmp = fcf.Assumptions(
     coverages        = (fcf.CoverageRate("CANCER", cancer_fn),),      # 암 진단 보장 1 종 (청구 rate = cancer_fn)
 )
 mp = fcf.ModelPoints.single(
-    issue_age        = 40,                                            # 가입연령 40 세
-    benefits         = {0: 12_000},                                   # 0 번 보장 (= CANCER) 의 진단 일시금 12,000
-    level_premium    = 0,                                             # 월납 보험료 0 (보험료 cash flow 무시)
-    term_months      = 3,                                             # 보험기간 3 개월
-    calculation_methods = {"CANCER": fcf.CalculationMethod.DIAGNOSIS},      # 코드 → 패턴 매핑
+    issue_age     = 40,           # 가입연령 40세
+    sex           = 0,            # 성별 (0=남, 1=여)
+    benefits      = {0: 12_000},  # 0번 보장 (= CANCER) 의 진단 일시금 12,000
+    level_premium = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
+    term_months   = 3,            # 보험기간 3개월
+    calculation_methods = {
+        "CANCER": fcf.CalculationMethod.DIAGNOSIS,   # 코드 → 패턴 매핑
+    },
 )
 r = fcf.measure(mp, asmp)
 

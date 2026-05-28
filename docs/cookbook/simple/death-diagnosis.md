@@ -68,9 +68,9 @@
 import numpy as np
 import fastcashflow as fcf
 
-# 사망률 함수 -- 월 1% 의 연 환산 (보유계약 감쇠 + 사망 보장 청구 양쪽)
+# 사망률 함수 -- 월 1% 의 연 환산 (모든 sex/age/duration 에 동일한 평탄 요율)
 death_fn  = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
-# 암 진단율 함수 -- 월 0.5% 의 연 환산 (암 보장 청구 전용)
+# 암 진단율 함수 -- 월 0.5% 의 연 환산 (평탄 요율)
 cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.005) ** 12)
 # 해지율 함수 -- 해지 없음
 lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
@@ -92,6 +92,7 @@ asmp = fcf.Assumptions(
 # 모델 포인트 (계약 하나, 담보 둘)
 mp = fcf.ModelPoints.single(
     issue_age     = 40,                      # 가입연령 40세
+    sex           = 0,                       # 성별 (0=남, 1=여)
     benefits      = {0: 12_000, 1: 20_000},  # 0 = 사망보험금 12,000, 1 = 암 진단금 20,000
     level_premium = 100,                     # 월납 보험료 100
     term_months   = 2,                       # 보험기간 2개월
