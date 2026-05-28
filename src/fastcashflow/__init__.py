@@ -80,7 +80,8 @@ from fastcashflow.statemodel import (
 )
 from fastcashflow.stochastic import StochasticResult, value_stochastic
 from fastcashflow.trace import (
-    show_bel_step, show_csm_step, show_trace, show_trace_diff, show_trace_vfa,
+    show_bel_step, show_csm_step, show_trace, show_trace_diff, show_trace_paa,
+    show_trace_vfa,
 )
 from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult, measure_tvog
@@ -108,7 +109,8 @@ __all__ = [
     "save_sample_inforce_state", "save_sample_inforce_policies",
     "sample_data_dir",
     "describe_assumptions",
-    "show_bel_step", "show_csm_step", "show_trace", "show_trace_diff", "show_trace_vfa",
+    "show_bel_step", "show_csm_step", "show_trace", "show_trace_diff",
+    "show_trace_paa", "show_trace_vfa",
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",

@@ -10,7 +10,9 @@ import fastcashflow as fcf
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.trace import (
-    show_bel_step, show_csm_step, show_trace, show_trace_diff, show_trace_vfa,
+    _resolve_basis,
+    show_bel_step, show_csm_step, show_trace, show_trace_diff, show_trace_paa,
+    show_trace_vfa,
 )
 
 
@@ -459,3 +461,29 @@ def test_show_trace_vfa_rejects_out_of_range_index():
     mp, basis = _vfa_setup()
     with pytest.raises(IndexError, match="mp_index"):
         show_trace_vfa(mp.n_mp, mp, basis, file=io.StringIO())
+
+
+# ---------------------------------------------------------------------------
+# show_trace_paa -- the PAA (LRC / revenue / LIC) tracer
+# ---------------------------------------------------------------------------
+
+def test_show_trace_paa_renders_and_matches_measure_paa():
+    """The PAA tracer renders its sections and shows the engine's numbers."""
+    mp, basis = _portfolio(), _basis()
+    buf = io.StringIO()
+    show_trace_paa(0, mp, basis, file=buf)
+    text = buf.getvalue()
+    for section in ("PAA inputs", "LRC roll-forward",
+                    "Insurance service result", "LIC", "Final"):
+        assert section in text, f"missing section: {section}"
+    sub = mp.subset([0])
+    b = _resolve_basis(basis, mp, 0)
+    m = fcf.measure_paa(sub, b)
+    assert f"{m.loss_component[0]:,.2f}" in text         # onerous loss shown
+    assert f"{float(m.revenue[0].sum()):,.2f}" in text    # total revenue
+
+
+def test_show_trace_paa_rejects_out_of_range_index():
+    mp, basis = _portfolio(), _basis()
+    with pytest.raises(IndexError, match="mp_index"):
+        show_trace_paa(mp.n_mp, mp, basis, file=io.StringIO())

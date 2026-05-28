@@ -28,6 +28,7 @@ from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import measure
 from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.paa import measure_paa
 from fastcashflow.vfa import measure_vfa
 
 
@@ -540,6 +541,130 @@ def show_trace_vfa(
         ("Guarantee floors (GMDB / GMAB)", floor_lines),
         ("BEL / CSM trajectory (key months)", belcsm_lines),
         ("CSM roll-forward (key months)", csm_lines),
+        ("Final (headline numbers, per policy)", final_lines),
+    ]
+    _emit_tree(tree_items, out, "")
+    file.write("\n".join(out) + "\n")
+
+
+def show_trace_paa(
+    mp_index: int,
+    model_points: ModelPoints,
+    assumptions: Assumptions | dict,
+    *,
+    revenue_basis: str = "time",
+    file: IO | None = None,
+) -> None:
+    """Print a tree of how one PAA model point's LRC / revenue / LIC is built.
+
+    The PAA (Premium Allocation Approach, the short-duration simplification)
+    counterpart of :func:`show_trace`. PAA has no CSM -- the liability for
+    remaining coverage (LRC) is an unearned-premium-style balance -- so the
+    tree shows the LRC roll-forward (premium in, revenue released), the
+    insurance service result (revenue less service expense) and the
+    liability for incurred claims (LIC). Use it on PAA contracts;
+    :func:`show_trace` traces the GMM ``measure`` (BEL / RA / CSM).
+    """
+    out: list[str] = []
+    if file is None:
+        file = sys.stdout
+    n_mp = model_points.n_mp
+    if not 0 <= mp_index < n_mp:
+        raise IndexError(f"mp_index {mp_index} out of range for n_mp={n_mp}")
+    i = mp_index
+    assumptions = _resolve_basis(assumptions, model_points, i)
+    sub = model_points.subset([i])
+    m = measure_paa(sub, assumptions, revenue_basis=revenue_basis)
+
+    # ---- Header
+    sex_v = int(sub.sex[0]) if sub.sex is not None else 0
+    sex_label = "남" if sex_v == 0 else "여"
+    age = float(sub.issue_age[0])
+    term = int(sub.term_months[0])
+    count = float(sub.count[0]) if sub.count is not None else 1.0
+    product = (str(model_points.product_code[i])
+               if model_points.product_code is not None else "-")
+    channel = (str(model_points.channel_code[i])
+               if model_points.channel_code is not None else "-")
+    header = (
+        f"mp[{i}]  PAA  ({product}/{channel}, sex={sex_label}, "
+        f"issue_age={age:g}, term={term}m, count={count:g})"
+    )
+
+    cf = m.cashflows
+    premium = cf.premium_cf[0]
+    n_time = cf.n_time
+    picks = _key_months(term, n_time)
+    lrc = m.lrc[0]
+    revenue = m.revenue[0]
+    svc_exp = m.service_expense[0]
+    svc_result = m.service_result[0]
+    lic = m.lic[0]
+    lc = float(m.loss_component[0])
+
+    sp = assumptions.settlement_pattern
+    sp_desc = ("None (지급 lag 없음 -> LIC=0)" if sp is None
+               else f"len={np.asarray(sp).size}")
+    basis_desc = ("B126(a) 시간기준" if revenue_basis == "time"
+                  else "B126(b) 청구기준")
+
+    # ---- PAA inputs
+    paa_lines: list[object] = [
+        f"premium_total      = {float(premium.sum()):>15,.2f}",
+        f"revenue_basis      = {revenue_basis!r}  ({basis_desc})",
+        f"settlement_pattern = {sp_desc}  (발생 claim 의 지급 분산 = LIC)",
+        f"mortality_annual   -> {_fmt_callable(assumptions.mortality_annual)}",
+        f"lapse_annual       -> {_fmt_callable(assumptions.lapse_annual)}",
+        f"ra: method={assumptions.ra_method!r} conf={assumptions.ra_confidence:g} "
+        f"(onerous test 용)",
+    ]
+
+    # ---- LRC roll-forward
+    lrc_lines: list[object] = [
+        "LRC[t+1] = LRC[t] + premium[t] - revenue[t]   (LRC[0] = 0)",
+    ]
+    for t in picks:
+        if t >= n_time:
+            continue
+        lrc_lines.append(
+            f"t={t:>4d}m: prem={premium[t]:>13,.2f}  rev={revenue[t]:>13,.2f}  "
+            f"LRC[t]={lrc[t]:>15,.2f}"
+        )
+
+    # ---- Insurance service result
+    result_lines: list[object] = [
+        "service_result[t] = revenue[t] - service_expense[t]",
+    ]
+    for t in picks:
+        if t >= n_time:
+            continue
+        result_lines.append(
+            f"t={t:>4d}m: rev={revenue[t]:>13,.2f}  svc_exp={svc_exp[t]:>13,.2f}  "
+            f"result={svc_result[t]:>13,.2f}"
+        )
+
+    # ---- LIC
+    lic_lines: list[object] = [
+        f"t={t:>4d}m: LIC={lic[t]:>15,.2f}" for t in picks if t < lic.shape[0]
+    ]
+
+    # ---- Final headline
+    final_lines: list[object] = [
+        f"LRC[0]                = {lrc[0]:>15,.2f}  (= 0, 보험료 유입 전)",
+        f"total revenue         = {float(revenue.sum()):>15,.2f}  (= total premium)",
+        f"total service_expense = {float(svc_exp.sum()):>15,.2f}",
+        f"insurance svc result  = {float(svc_result.sum()):>15,.2f}",
+        f"loss_component        = {lc:>15,.2f}  (onerous; GMM FCF 로 산정)",
+        f"LIC (peak)            = {float(lic.max()):>15,.2f}",
+        "(PAA 는 CSM 없음 -- LRC 가 미경과보험료식 잔액)",
+    ]
+
+    out.append(header)
+    tree_items: list[object] = [
+        ("PAA inputs", paa_lines),
+        ("LRC roll-forward (key months)", lrc_lines),
+        ("Insurance service result (key months)", result_lines),
+        ("LIC -- liability for incurred claims (key months)", lic_lines),
         ("Final (headline numbers, per policy)", final_lines),
     ]
     _emit_tree(tree_items, out, "")
