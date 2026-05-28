@@ -110,7 +110,7 @@
   - 챕터
   - 다루는 것
 * - 3.1
-  - 보험료 납입면제 (waiver) (작성 예정)
+  - [보험료 납입면제 (waiver)](markov/waiver)
   - `STATE_MODELS["WAIVER"]` 입문. active → waiver 진입.
 * - 3.2
   - 다종 진단 + 면책 / 감액 (작성 예정)
@@ -216,6 +216,13 @@ basics/coverage-mechanics
 
 simple/term-life
 simple/death-diagnosis
+```
+
+```{toctree}
+:hidden:
+:caption: 3. Markov 상태
+
+markov/waiver
 ```
 
 ```{toctree}
