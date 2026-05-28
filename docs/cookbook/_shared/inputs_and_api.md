@@ -68,7 +68,7 @@ fastcashflow 사용자 API
 │   ├── fcf.save_sample_assumptions(path)           ── assumptions.xlsx
 │   ├── fcf.save_sample_policies(path)              ── policies.csv
 │   ├── fcf.save_sample_coverages(path)             ── coverages.csv
-│   ├── fcf.save_sample_calculation_methods(path)      ── calculation_methods.csv
+│   ├── fcf.save_sample_calculation_methods(path)   ── calculation_methods.csv
 │   └── fcf.save_sample_inforce_policies(path)      ── 결산 1-파일 (spec + state)
 │
 ├── 파일 읽어 들이기

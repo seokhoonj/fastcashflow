@@ -96,7 +96,7 @@
   - [정기보험 평가](simple/term-life)
   - 사망 단독 정기보험. fast_path. BEL / RA / CSM 의 의미와 부호.
 * - 2.2
-  - 사망 + 단순 진단 일시금 (작성 예정)
+  - [사망 + 단순 진단 일시금](simple/death-diagnosis)
   - 진단 담보 추가. 면책 / 감액 없는 간단한 결합.
 ```
 
@@ -215,6 +215,7 @@ basics/coverage-mechanics
 :caption: 단순 상품
 
 simple/term-life
+simple/death-diagnosis
 ```
 
 ```{toctree}
