@@ -21,32 +21,98 @@
 
 ```{list-table}
 :header-rows: 1
-:widths: 28 22 22 28
+:widths: 14 26 18 14 28
 
-* - 파일
+* - 입력 개체
+  - 파일
   - 누가 만드나
   - 갱신 주기
   - 무엇
-* - `benefit_patterns.csv`
-  - 회사 (보험계리)
-  - 연 1 회 미만
-  - 담보 카탈로그 — 담보 코드 → 청구 패턴
-* - `assumptions.xlsx`
-  - 회사 (보험계리)
-  - 분기 / 연
-  - 계리적 가정 (사망률 · 해지율 · 할인율 · 사업비 · 위험조정)
-* - `policies.csv` 또는 `inforce_2026Q1.csv`
+* - **ModelPoints**
+  - `policies.csv` 또는 `inforce_2026Q1.csv`
   - 정책관리 시스템
   - 일 / 분기
   - 보유 계약 (영구 spec + 결산시 상태)
-* - `coverages.csv`
+* - **ModelPoints**
+  - `coverages.csv`
   - 정책관리 시스템
   - 일 / 분기
   - 각 계약에 붙은 담보 (특약) 목록과 가입금액
+* - **ModelPoints**
+  - `benefit_patterns.csv`
+  - 회사 (보험계리)
+  - 연 1 회 미만
+  - 담보 카탈로그 — 담보 코드 → 청구 패턴
+* - **Assumptions**
+  - `assumptions.xlsx`
+  - 회사 (보험계리)
+  - 분기 / 연
+  - 계리적 가정 (사망률 · 해지율 · 할인율 · 사업비 · 위험조정)
 ```
 
-이 절은 네 파일을 차례로 봅니다 — 담보 카탈로그 (한 번 채우면 자주 손볼
-일 없음) 부터 시작해 계약 / 담보 (매일·매 분기 변함) 로 내려옵니다.
+이 절은 네 파일을 `policies` → `coverages` → `benefit_patterns` →
+`assumptions` 순서로 봅니다.
+
+### 계약 파일 — `policies.csv`
+
+한 줄이 한 계약. **가입 시점의 영구 spec** 만 들어갑니다 — 가입 후 안
+바뀌는 값들입니다.
+
+| mp_id | product_code | channel_code | issue_age | sex | term_months | premium_term_months | count |
+|---|---|---|---|---|---|---|---|
+| P001 | TERM_LIFE_A | FC | 35 | 0 | 240 | 240 | 1 |
+| P002 | HEALTH_A | GA | 38 | 1 | 240 | 240 | 1 |
+| P003 | TERM_LIFE_A | GA | 42 | 0 | 240 | 240 | 1 |
+
+- `mp_id` — 계약 식별자
+- `product_code` / `channel_code` — `segments` 시트와 맞물려 어느 가정
+  세트를 적용할지
+- 나머지 — 가입연령 / 성별 / 보험기간 / 납입기간 / 계약 수
+
+**결산 모드** (보유계약 평가) 는 같은 파일에 *상태 컬럼 네 개* 가 더
+들어옵니다. 정책관리 시스템이 매 분기 끝에 떨어뜨리는 "보유계약
+마감파일" 형태:
+
+| ... | elapsed_months | count | prior_csm | lock_in_rate |
+|---|---|---|---|---|
+| ... | 36 | 0.92 | 55000 | 0.03 |
+| ... | 48 | 0.88 | 42000 | 0.03 |
+
+- `elapsed_months` — 가입 후 경과 개월수
+- `count` — 결산일 기준 잔존 (사망 / 해지 빠진 후)
+- `prior_csm` — 직전 분기 종가 CSM (이번 분기로 carry-forward)
+- `lock_in_rate` — 가입 시점에 잠긴 할인율
+
+이 결합 파일을 보통 `inforce_2026Q1.csv` 같은 분기명으로 부릅니다.
+신계약 평가는 영구 spec 만 있는 `policies.csv`, 결산 평가는 spec + 상태가
+합쳐진 `inforce_*.csv` — 같은 reader 가 둘 다 받습니다 (11.2 절).
+
+### 담보 파일 — `coverages.csv`
+
+한 줄이 한 (계약, 담보). 주계약도 특약도 모두 한 줄씩이고 `mp_id` 로
+계약 파일과 묶입니다.
+
+| mp_id | coverage_code | amount | premium |
+|---|---|---|---|
+| P001 | DEATH | 80000000 | 45000 |
+| P001 | MATURITY | 10000000 | 18000 |
+| P002 | DEATH | 50000000 | 28000 |
+| P002 | CANCER | 30000000 | 22000 |
+| P002 | INPATIENT | 1000000 | 9000 |
+
+- `coverage_code` — 담보 카탈로그 (`benefit_patterns.csv`) 에 등록된 담보
+  코드. 그 매핑을 따라 엔진이 청구 알고리즘을 고름.
+- `amount` — 가입금액 (사망보험금 / 진단금 / 입원 일당 등)
+- `premium` — 그 담보 몫의 월 보험료 (선택, 없으면 0)
+
+담보에 *면책기간* / *감액기간* 이 있으면 `waiting` (면책 개월수) /
+`reduction_end` / `reduction_factor` 컬럼을 더합니다. 없는 담보는 비워
+둡니다.
+
+P001 은 두 줄 (주계약 사망 + 만기환급), P002 는 세 줄. 계약마다 담보
+수가 다르니 행 수도 다릅니다 — **long-form** 입니다. 작은 동질
+포트폴리오는 한 행에 담보를 모두 펼친 *wide-form* 도 가능합니다 (한
+행 한 계약, `<code>_benefit` 컬럼들).
 
 ### 담보 카탈로그 — `benefit_patterns.csv`
 
@@ -122,74 +188,13 @@
 있습니다. 8장에서 `lambda` 로 적었던 사망률을 여기서는 엑셀 표에 채워
 넣는다고 생각하면 됩니다.
 
-### 계약 파일 — `policies.csv`
-
-한 줄이 한 계약. **가입 시점의 영구 spec** 만 들어갑니다 — 가입 후 안
-바뀌는 값들입니다.
-
-| mp_id | product_code | channel_code | issue_age | sex | term_months | premium_term_months | count |
-|---|---|---|---|---|---|---|---|
-| P001 | TERM_LIFE_A | FC | 35 | 0 | 240 | 240 | 1 |
-| P002 | HEALTH_A | GA | 38 | 1 | 240 | 240 | 1 |
-| P003 | TERM_LIFE_A | GA | 42 | 0 | 240 | 240 | 1 |
-
-- `mp_id` — 계약 식별자
-- `product_code` / `channel_code` — `segments` 시트와 맞물려 어느 가정
-  세트를 적용할지
-- 나머지 — 가입연령 / 성별 / 보험기간 / 납입기간 / 계약 수
-
-**결산 모드** (보유계약 평가) 는 같은 파일에 *상태 컬럼 네 개* 가 더
-들어옵니다. 정책관리 시스템이 매 분기 끝에 떨어뜨리는 "보유계약
-마감파일" 형태:
-
-| ... | elapsed_months | count | prior_csm | lock_in_rate |
-|---|---|---|---|---|
-| ... | 36 | 0.92 | 55000 | 0.03 |
-| ... | 48 | 0.88 | 42000 | 0.03 |
-
-- `elapsed_months` — 가입 후 경과 개월수
-- `count` — 결산일 기준 잔존 (사망 / 해지 빠진 후)
-- `prior_csm` — 직전 분기 종가 CSM (이번 분기로 carry-forward)
-- `lock_in_rate` — 가입 시점에 잠긴 할인율
-
-이 결합 파일을 보통 `inforce_2026Q1.csv` 같은 분기명으로 부릅니다.
-신계약 평가는 영구 spec 만 있는 `policies.csv`, 결산 평가는 spec + 상태가
-합쳐진 `inforce_*.csv` — 같은 reader 가 둘 다 받습니다 (11.2 절).
-
-### 담보 파일 — `coverages.csv`
-
-한 줄이 한 (계약, 담보). 주계약도 특약도 모두 한 줄씩이고 `mp_id` 로
-계약 파일과 묶입니다.
-
-| mp_id | coverage_code | amount | premium |
-|---|---|---|---|
-| P001 | DEATH | 80000000 | 45000 |
-| P001 | MATURITY | 10000000 | 18000 |
-| P002 | DEATH | 50000000 | 28000 |
-| P002 | CANCER | 30000000 | 22000 |
-| P002 | INPATIENT | 1000000 | 9000 |
-
-- `coverage_code` — 담보 카탈로그 (`benefit_patterns.csv`) 에 등록된 담보
-  코드. 그 매핑을 따라 엔진이 청구 알고리즘을 고름.
-- `amount` — 가입금액 (사망보험금 / 진단금 / 입원 일당 등)
-- `premium` — 그 담보 몫의 월 보험료 (선택, 없으면 0)
-
-담보에 *면책기간* / *감액기간* 이 있으면 `waiting` (면책 개월수) /
-`reduction_end` / `reduction_factor` 컬럼을 더합니다. 없는 담보는 비워
-둡니다.
-
-P001 은 두 줄 (주계약 사망 + 만기환급), P002 는 세 줄. 계약마다 담보
-수가 다르니 행 수도 다릅니다 — **long-form** 입니다. 작은 동질
-포트폴리오는 한 행에 담보를 모두 펼친 *wide-form* 도 가능합니다 (한
-행 한 계약, `<code>_benefit` 컬럼들).
-
 ### 네 파일을 한 번에 그림으로
 
 ```
-benefit_patterns.csv  ──┐   담보 카탈로그 (코드 → 패턴 매핑)
-assumptions.xlsx      ──┤   계리적 가정 (위험률 / 할인 / 사업비)
-policies.csv          ──┤   보유 계약 spec
-coverages.csv         ──┘   담보 가입금액 (mp_id 로 policies 와 join)
+policies.csv          ──┐   보유 계약 spec
+coverages.csv         ──┤   담보 가입금액 (mp_id 로 policies 와 join)
+benefit_patterns.csv  ──┤   담보 카탈로그 (코드 → 패턴 매핑)
+assumptions.xlsx      ──┘   계리적 가정 (위험률 / 할인 / 사업비)
                         │
                         ▼
               엔진 평가 (BEL / RA / CSM)
@@ -216,10 +221,10 @@ fastcashflow 는 그 한 파일을 그대로 받습니다. `read_inforce_policie
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 현재 폴더에 생성 (한 번만 — 이미 자기 파일이 있으면 생략)
-fcf.save_sample_assumptions("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
 fcf.save_sample_inforce_policies("inforce_2026Q1.csv")       # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_benefit_patterns("benefit_patterns.csv")     # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_assumptions("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
 # .xlsx 는 시트당 ~ 1M row 한계 -- 대형 portfolio 는 .parquet / .feather 권장
 
 # (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 in-force 측정

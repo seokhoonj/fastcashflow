@@ -245,11 +245,11 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 ```python
 import fastcashflow as fcf
 
-# (1) 샘플 파일을 현재 폴더에 떨어뜨림 (한 번만 -- 이미 자기 파일이 있으면 생략)
-fcf.save_sample_assumptions("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
+# (1) 샘플 파일을 현재 폴더에 생성 (한 번만 -- 이미 자기 파일이 있으면 생략)
 fcf.save_sample_policies("policies.csv")                     # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_benefit_patterns("benefit_patterns.csv")     # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_assumptions("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
 
 # (2) 읽어서 평가
 basis = fcf.read_assumptions("assumptions.xlsx")             # {(product_code, channel_code): Assumptions}
