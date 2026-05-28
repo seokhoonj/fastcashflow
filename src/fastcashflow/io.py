@@ -1241,7 +1241,7 @@ def read_inforce_policies(
     the in-force valuation call::
 
         mp, state = fcf.read_inforce_policies(
-            "inforce_2026Q1.csv", assumptions,
+            "inforce_2026Q1.csv",
             coverages="coverages.csv",
             calculation_methods="calculation_methods.csv",
         )

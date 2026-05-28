@@ -225,9 +225,9 @@ basis       = fcf.read_assumptions("assumptions.xlsx")       # {(product_code, c
 assumptions = basis[("TERM_LIFE_A", "GA")]                   # 한 세그먼트 선택
 
 model_points, state = fcf.read_inforce_policies(
-    "inforce_2026Q1.csv", assumptions,                       # 결산 1-파일 (spec + state 결합)
+    "inforce_2026Q1.csv",                                    # 결산 1-파일 (spec + state 결합)
     coverages="coverages.csv",                               # 담보 파일 (long-form)
-    calculation_methods="calculation_methods.csv",                 # 담보 계산방식
+    calculation_methods="calculation_methods.csv",           # 담보 계산방식
 )
 val = fcf.value_in_force(
     model_points, assumptions, period_months=3,              # 다음 분기 (3 개월) 까지의 평가

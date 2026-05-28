@@ -73,7 +73,7 @@ fastcashflow 사용자 API
 ├── 파일 읽어 들이기
 │   ├── fcf.read_assumptions(path)                  ── basis dict 반환
 │   ├── fcf.read_model_points(path, coverages=, ...) ── 신계약 평가용
-│   └── fcf.read_inforce_policies(path, asmp, ...)  ── 결산 1-파일 reader
+│   └── fcf.read_inforce_policies(path, coverages=, ...) ── 결산 1-파일 reader
 │
 ├── 평가
 │   ├── fcf.measure(mp, asmp)                       ── 신계약, 시간 trajectory 전체

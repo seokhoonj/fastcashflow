@@ -31,7 +31,7 @@ def test_save_sample_full_round_trip(tmp_path):
     basis = fcf.read_assumptions(tmp_path / "assumptions.xlsx")
     asmp = next(iter(basis.values()))
     mp_file = fcf.read_model_points(
-        tmp_path / "policies.csv", asmp,
+        tmp_path / "policies.csv",
         coverages=tmp_path / "coverages.csv",
         calculation_methods=tmp_path / "calculation_methods.csv",
     )
@@ -98,7 +98,7 @@ def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
 
     # Two-file workflow
     mp_a = fcf.read_model_points(
-        tmp_path / "policies.csv", asmp,
+        tmp_path / "policies.csv",
         coverages=tmp_path / "coverages.csv",
         calculation_methods=tmp_path / "calculation_methods.csv",
     )
@@ -107,7 +107,7 @@ def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
 
     # One-file workflow
     mp_b, state_b = fcf.read_inforce_policies(
-        tmp_path / "inforce_policies.csv", asmp,
+        tmp_path / "inforce_policies.csv",
         coverages=tmp_path / "coverages.csv",
         calculation_methods=tmp_path / "calculation_methods.csv",
     )
@@ -143,7 +143,7 @@ def test_read_inforce_policies_rejects_missing_state_columns(tmp_path):
 
     with pytest.raises(ValueError, match="missing required column"):
         fcf.read_inforce_policies(
-            tmp_path / "broken.csv", asmp,
+            tmp_path / "broken.csv",
             coverages=tmp_path / "coverages.csv",
             calculation_methods=tmp_path / "calculation_methods.csv",
         )
@@ -161,7 +161,7 @@ def test_save_sample_inforce_policies_round_trip(tmp_path):
     fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
     asmp = fcf.read_assumptions(tmp_path / "assumptions.xlsx")[("TERM_LIFE_A", "GA")]
     mp, state = fcf.read_inforce_policies(
-        path, asmp,
+        path,
         coverages=tmp_path / "coverages.csv",
         calculation_methods=tmp_path / "calculation_methods.csv",
     )
