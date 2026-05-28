@@ -20,7 +20,7 @@ DATA = Path(__file__).resolve().parent / "data"
 def main() -> None:
     basis = fcf.read_assumptions(DATA / "assumptions.xlsx")
     assumptions = basis[("TERM_LIFE_A", "FC")]
-    account = fcf.read_model_points(DATA / "account_values.xlsx", assumptions, calculation_methods=DATA / "calculation_methods.csv")
+    account = fcf.read_model_points(DATA / "account_values.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 
     # 2,000 monthly underlying-items return paths around the central return.
     rng = np.random.default_rng(7)

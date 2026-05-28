@@ -1365,19 +1365,16 @@ def load_sample_model_points() -> ModelPoints:
     A small long-form portfolio -- a policies file, a coverages file and
     the benefit-pattern taxonomy -- packaged with the library, so the
     engine can be tried without preparing an input file. See
-    :func:`read_model_points` for the file format. The coverage list
-    comes from any segment's ``Assumptions`` -- all bundled segments
-    share the same product and so the same coverage master.
+    :func:`read_model_points` for the file format. The coverage order
+    comes from the ``calculation_methods`` catalogue; no assumptions are
+    needed to read the portfolio.
     """
-    basis = load_sample_assumptions()
-    assumptions = next(iter(basis.values()))
     patterns = load_sample_calculation_methods()
     base = resources.files("fastcashflow") / "sample_data"
     with resources.as_file(base / "sample_policies.csv") as policies, \
             resources.as_file(base / "sample_coverages.csv") as coverages:
         return read_model_points(
-            policies, assumptions, coverages=coverages,
-            calculation_methods=patterns,
+            policies, coverages=coverages, calculation_methods=patterns,
         )
 
 

@@ -16,7 +16,7 @@ DATA = Path(__file__).resolve().parent / "data"
 def main() -> None:
     basis = fcf.read_assumptions(DATA / "assumptions.xlsx")
     assumptions = basis[("TERM_LIFE_A", "FC")]
-    book = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions, calculation_methods=DATA / "calculation_methods.csv")
+    book = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 
     # Value the book under a range of discount-rate scenarios.
     rates = np.array([0.02, 0.03, 0.04, 0.05])

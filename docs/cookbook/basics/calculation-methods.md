@@ -86,12 +86,10 @@ fcf.save_sample_policies("policies.csv")                    # .csv / .xlsx / .pa
 fcf.save_sample_coverages("coverages.csv")                  # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_calculation_methods("calculation_methods.csv")    # .csv / .xlsx / .parquet / .feather
 
-basis = fcf.read_assumptions("assumptions.xlsx")
-mp    = fcf.read_model_points(
-    "policies.csv",
-    basis[("TERM_LIFE_A", "GA")],                 # 한 segment 의 Assumptions
-    coverages="coverages.csv",
-    calculation_methods="calculation_methods.csv",      # ← 담보 계산방식
+mp = fcf.read_model_points(
+    "policies.csv",                                 # 계약 spec 파일
+    coverages="coverages.csv",                      # 담보 가입금액 파일
+    calculation_methods="calculation_methods.csv",  # ← 담보 계산방식
 )
 ```
 
