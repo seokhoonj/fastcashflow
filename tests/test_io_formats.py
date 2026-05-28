@@ -39,7 +39,7 @@ def test_read_wide_xlsx(tmp_path):
     path = tmp_path / "wide.xlsx"
     _write_sheets(path, [("model_points", mps.to_wide(asmp))])
 
-    back = read_model_points(path, asmp, calculation_methods=patterns)
+    back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
     assert np.allclose(value(back, asmp).bel, value(mps, asmp).bel)
 
@@ -54,7 +54,7 @@ def test_read_long_xlsx(tmp_path):
     path = tmp_path / "long.xlsx"
     _write_sheets(path, [("policies", policies), ("coverages", coverages)])
 
-    back = read_model_points(path, asmp, calculation_methods=patterns)
+    back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
     assert np.allclose(value(back, asmp).bel, value(mps, asmp).bel)
 
@@ -68,7 +68,7 @@ def test_read_feather(tmp_path):
     path = tmp_path / "wide.feather"
     mps.to_wide(asmp).write_ipc(path)
 
-    back = read_model_points(path, asmp, calculation_methods=patterns)
+    back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
     assert np.allclose(value(back, asmp).bel, value(mps, asmp).bel)
 
@@ -99,7 +99,7 @@ def test_long_form_reads_benefit_rules(tmp_path):
     policies.write_csv(pol_path)
     coverages.write_csv(cov_path)
 
-    back = read_model_points(pol_path, asmp, coverages=cov_path,
+    back = read_model_points(pol_path, coverages=cov_path,
                              calculation_methods=patterns)
     assert np.all(back.coverage_waiting == 6)
     assert np.all(back.coverage_reduction_end == 24)
@@ -124,7 +124,7 @@ def test_wide_policies_elapsed_months_emits_warning(tmp_path):
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        back = read_model_points(path, asmp)
+        back = read_model_points(path)
     msgs = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
     assert any("elapsed_months" in m for m in msgs), msgs
     # And the column was indeed ignored -- the ModelPoints default of zero
@@ -149,7 +149,7 @@ def test_long_policies_elapsed_months_emits_warning(tmp_path):
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        back = read_model_points(pol_path, asmp, coverages=cov_path,
+        back = read_model_points(pol_path, coverages=cov_path,
                                  calculation_methods=patterns)
     msgs = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
     assert any("elapsed_months" in m for m in msgs), msgs

@@ -884,10 +884,14 @@ def _parse_calculation_methods(path: Path | str) -> dict[str, CalculationMethod]
     return result
 
 
-def _wide_model_points(df: pl.DataFrame, assumptions,
+def _wide_model_points(df: pl.DataFrame,
                        calculation_methods=None) -> ModelPoints:
     """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
-    coverage a ``<coverage_code>_benefit`` column."""
+    coverage a ``<coverage_code>_benefit`` column. Reads without any
+    assumptions: the coverage codes come from the column names, ordered by
+    the ``calculation_methods`` catalogue when given (else column order).
+    The engine aligns ``Assumptions.coverages`` to that order at measure
+    time."""
     for need in ("issue_age", "term_months"):
         if need not in df.columns:
             raise ValueError(
@@ -916,48 +920,51 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
     if "state" in df.columns:
         fields["state"] = _read_state(df["state"])
 
-    # Valid rate-driven codes + their order: from the *catalogue*
-    # (calculation_methods) when provided -- so the wide portfolio reads
-    # without assumptions, just like the long form -- else the assumptions
-    # registry (legacy fallback). coverage_index integers index this order;
-    # the engine aligns Assumptions.coverages to it at measure time.
+    # Candidate coverage codes come from the ``<code>_benefit`` columns.
+    present_cols: dict[str, np.ndarray] = {}
+    for col in df.columns:
+        if not col.endswith("_benefit") or col in _NAMED_WIDE:
+            continue
+        present_cols[col[: -len("_benefit")]] = df[col].to_numpy()
+    # Coverage order: the catalogue's rate-driven order when a catalogue is
+    # given (and every benefit column must be a rate-driven catalogue code),
+    # else the column order -- in which case the pattern is auto-inferred
+    # from the code name at measure time (coverage.coverage_arrays).
     if calculation_methods is not None:
         wide_ctypes = {k: CalculationMethod(v)
                        for k, v in calculation_methods.items()}
-        catalogue_order = [c for c, m in wide_ctypes.items()
-                           if m in RATE_DRIVEN_PATTERNS]
+        rate_driven = [c for c, m in wide_ctypes.items()
+                       if m in RATE_DRIVEN_PATTERNS]
+        candidate_codes = set(rate_driven)
     else:
-        catalogue_order = [r.code for r in (
-            assumptions.coverages if assumptions is not None else ())]
-    valid_codes = set(catalogue_order)
-    # Guard the reserved-name collision: a user coverage_code whose
+        rate_driven = None
+        candidate_codes = set(present_cols)
+    # Guard the reserved-name collision: a coverage_code whose
     # ``<code>_benefit`` column name shadows a fixed-meaning column
     # (maturity_benefit, disability_benefit, ...) would be silently routed
-    # to the scalar field rather than into the CSR. Catch at read time.
+    # to the scalar field rather than into the CSR. Catch at read time --
+    # against the catalogue codes when given (a registered code whose
+    # benefit column would be eaten by the reserved scalar).
     reserved_codes = {n[: -len("_benefit")] for n in _NAMED_WIDE
                       if n.endswith("_benefit")}
-    bad = sorted(valid_codes & reserved_codes)
+    bad = sorted(candidate_codes & reserved_codes)
     if bad:
         raise ValueError(
             f"coverage code(s) {bad} collide with reserved wide-form "
             f"column name(s) {[c + '_benefit' for c in bad]} -- rename "
             "the coverage_code"
         )
-    # Discover the <code>_benefit columns present and validate each code.
-    present_cols: dict[str, np.ndarray] = {}
-    for col in df.columns:
-        if not col.endswith("_benefit") or col in _NAMED_WIDE:
-            continue
-        code = col[: -len("_benefit")]
-        if code not in valid_codes:
+    if rate_driven is not None:
+        unknown = sorted(c for c in present_cols if c not in candidate_codes)
+        if unknown:
             raise ValueError(
-                f"wide column {col!r} names coverage {code!r}, which is not "
-                "a rate-driven coverage in the calculation_methods catalogue "
-                "(or assumptions when no catalogue is given)"
+                f"wide column(s) {[c + '_benefit' for c in unknown]} name "
+                f"coverage(s) {unknown} that are not rate-driven in the "
+                "calculation_methods catalogue"
             )
-        present_cols[code] = df[col].to_numpy()
-    # Coverage order: catalogue order, restricted to the codes present.
-    ordered = [c for c in catalogue_order if c in present_cols]
+        ordered = [c for c in rate_driven if c in present_cols]
+    else:
+        ordered = list(present_cols)
     code_to_cov_idx = {c: i for i, c in enumerate(ordered)}
     benefits = {code_to_cov_idx[c]: present_cols[c] for c in ordered}
     if benefits:
@@ -966,19 +973,16 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
         fields["calculation_methods"] = calculation_methods
     if ordered:
         fields["coverage_codes"] = tuple(ordered)
-    elif assumptions is not None:
-        fields["coverage_codes"] = tuple(r.code for r in assumptions.coverages)
     return ModelPoints(**fields)
 
 
 def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
-                       assumptions=None, calculation_methods=None) -> ModelPoints:
+                       calculation_methods=None) -> ModelPoints:
     """Build a ``ModelPoints`` from a long-form policies + coverages pair.
 
-    ``assumptions`` is accepted but unused -- the rate-driven coverage order
-    is taken from the ``calculation_methods`` catalogue, so the portfolio is
-    read without the actuarial basis. The engine aligns its coverages at
-    measure time. The parameter is kept for call-site compatibility.
+    The rate-driven coverage order is taken from the ``calculation_methods``
+    catalogue, so the portfolio is read without the actuarial basis. The
+    engine aligns its coverages to that order at measure time.
     """
     if calculation_methods is None:
         raise ValueError(
@@ -1150,22 +1154,27 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
 
 def read_model_points(
     path: Path | str,
-    assumptions: Assumptions | None = None,
     coverages: Path | str | None = None,
     calculation_methods: Path | str | dict[str, CalculationMethod] | None = None,
 ) -> ModelPoints:
     """Read model points from a parquet, CSV, Excel or feather file.
 
+    Reads the portfolio **without any assumptions** -- the model points and
+    the actuarial basis are separate inputs. The basis enters only at the
+    engine call (``measure`` / ``value``), which aligns its coverages to the
+    portfolio's coverage order.
+
     Two forms:
 
-    * **wide** -- ``read_model_points(path, assumptions)``. One row per
-      policy. ``issue_age`` and ``term_months`` are required; ``sex``,
-      ``count``, ``state``, ``level_premium``, ``single_premium``,
+    * **wide** -- ``read_model_points(path)``. One row per policy.
+      ``issue_age`` and ``term_months`` are required; ``sex``, ``count``,
+      ``state``, ``level_premium``, ``single_premium``,
       ``premium_term_months``, ``premium_frequency_months``,
       ``annuity_frequency_months``, ``maturity_benefit`` and
       ``annuity_payment`` are read if present. Each
-      ``<coverage_code>_benefit`` column adds that coverage; the
-      ``assumptions`` resolve the coverage code to an engine code.
+      ``<coverage_code>_benefit`` column adds that coverage; the coverage
+      order is the ``calculation_methods`` catalogue order when given, else
+      the column order (pattern then auto-inferred from the code name).
     * **long-form** -- ``read_model_points(policies,
       coverages=coverages_path, calculation_methods=calculation_methods_path)``.
       A policies frame (``mp_id``, ``issue_age``, ``term_months``,
@@ -1178,15 +1187,6 @@ def read_model_points(
       (CSV / parquet / feather / xlsx) -- the third side of the Plan-B
       split between *portfolio* (policies + coverages), *basis*
       (assumptions.xlsx) and *catalogue* (calculation_methods.csv).
-
-    Long-form needs **no assumptions**: the rate-driven coverage order is
-    taken from the ``calculation_methods`` catalogue, so the portfolio is
-    read independently of the actuarial basis. The basis enters only at the
-    engine call (``measure`` / ``value``), which aligns its coverages to the
-    catalogue order. The wide form still resolves ``<code>_benefit`` columns
-    against ``assumptions`` (or the catalogue when ``calculation_methods`` is
-    given). ``assumptions`` is accepted as the second positional for
-    call-site compatibility but ignored for long-form.
 
     The policies frame is the **inception-time static spec** -- issue_age,
     term, sex, and so on. The in-force closing state (elapsed_months,
@@ -1208,19 +1208,18 @@ def read_model_points(
             return _long_model_points(
                 pl.read_excel(p, sheet_name="policies", engine="openpyxl"),
                 pl.read_excel(p, sheet_name="coverages", engine="openpyxl"),
-                assumptions, patterns_dict,
+                patterns_dict,
             )
     pol = _read_frame(path)
     if coverages is not None:
         return _long_model_points(
-            pol, _read_frame(coverages), assumptions, patterns_dict,
+            pol, _read_frame(coverages), patterns_dict,
         )
-    return _wide_model_points(pol, assumptions, patterns_dict)
+    return _wide_model_points(pol, patterns_dict)
 
 
 def read_inforce_policies(
     path: Path | str,
-    assumptions: Assumptions | None = None,
     coverages: Path | str | None = None,
     calculation_methods: "Path | str | dict[str, CalculationMethod] | None" = None,
 ) -> "tuple[ModelPoints, InforceState]":
@@ -1308,10 +1307,10 @@ def read_inforce_policies(
         patterns_dict = calculation_methods
     if coverages is not None:
         mp = _long_model_points(
-            spec_df, _read_frame(coverages), assumptions, patterns_dict,
+            spec_df, _read_frame(coverages), patterns_dict,
         )
     else:
-        mp = _wide_model_points(spec_df, assumptions, patterns_dict)
+        mp = _wide_model_points(spec_df, patterns_dict)
     mp = apply_inforce_state(mp, state)
     return mp, state
 
@@ -1708,8 +1707,7 @@ def value_file(
             cov = cov_scan.join(
                 pol.lazy().select("mp_id"), on="mp_id", how="semi"
             ).collect()
-            model_points = _long_model_points(pol, cov, assumptions,
-                                               patterns_dict)
+            model_points = _long_model_points(pol, cov, patterns_dict)
             write_valuation(
                 value(model_points, assumptions, backend=backend),
                 output_dir / f"part-{part:05d}.parquet",
@@ -1734,7 +1732,7 @@ def value_file(
         chunk = projected.slice(offset, chunk_size).collect()
         model_points = _wide_model_points(
             chunk.drop(id_column) if id_column is not None else chunk,
-            assumptions, patterns_dict,
+            patterns_dict,
         )
         ids = chunk[id_column].to_numpy() if id_column is not None else None
         write_valuation(

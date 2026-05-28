@@ -195,7 +195,6 @@ def test_save_sample_converts_to_xlsx_single_sheet(tmp_path):
     basis = fcf.read_assumptions(tmp_path / "assumptions.xlsx")
     mp = fcf.read_model_points(
         tmp_path / "policies.xlsx",
-        basis[("TERM_LIFE_A", "GA")],
         coverages=tmp_path / "coverages.xlsx",
         calculation_methods=tmp_path / "calculation_methods.xlsx",
     )

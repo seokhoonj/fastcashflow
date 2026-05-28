@@ -193,7 +193,7 @@ def test_wide_reader_populates_coverage_codes(tmp_path):
         "issue_age": [40.0], "term_months": [60], "level_premium": [12_000.0],
         "DEATH_benefit": [1e8], "CANCER_benefit": [1e7],
     }).write_csv(path)
-    mp = read_model_points(path, asmp, calculation_methods={
+    mp = read_model_points(path, calculation_methods={
         "DEATH": CalculationMethod.DEATH, "CANCER": CalculationMethod.DIAGNOSIS,
     })
     assert mp.coverage_codes == ("DEATH", "CANCER")

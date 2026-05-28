@@ -98,7 +98,7 @@ def test_premium_term_round_trips(tmp_path):
     path = tmp_path / "model_points.csv"
     mp.to_wide(asmp).write_csv(path)
 
-    back = read_model_points(path, asmp)
+    back = read_model_points(path)
     assert list(back.premium_term_months) == [120, 60]
     # the 60-month-pay policy collects less premium -> larger liability.
     val = value(back, asmp)

@@ -150,7 +150,6 @@ def test_wide_reader_rejects_collision_with_reserved_name(tmp_path):
     with pytest.raises(ValueError, match="reserved wide-form"):
         fcf.read_model_points(
             pol_csv,
-            assumptions=basis[next(iter(basis))],
             calculation_methods=bp_csv,
         )
 
@@ -181,7 +180,6 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
     with pytest.raises(ValueError, match="duplicate mp_id"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            assumptions=basis[next(iter(basis))],
             calculation_methods=bp_csv,
         )
 
@@ -209,7 +207,6 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
     with pytest.raises(ValueError, match="premium is specified twice"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            assumptions=basis[next(iter(basis))],
             calculation_methods=bp_csv,
         )
 
@@ -237,7 +234,6 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
     with pytest.raises(ValueError, match="reduction_factor"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            assumptions=basis[next(iter(basis))],
             calculation_methods=bp_csv,
         )
 
@@ -433,7 +429,6 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
     with pytest.raises(ValueError, match="ORPHAN_X"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            assumptions=basis[next(iter(basis))],
             calculation_methods=bp_csv,
         )
 
@@ -460,7 +455,6 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
     with pytest.raises(ValueError, match="GHOST_CODE"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            assumptions=basis[next(iter(basis))],
             calculation_methods=bp_csv,
         )
 
@@ -488,7 +482,6 @@ def test_long_form_no_premium_source_warns(tmp_path, recwarn):
     basis = fcf.read_assumptions(asmp_book)
     fcf.read_model_points(
         pol_csv, coverages=cov_csv,
-        assumptions=basis[next(iter(basis))],
         calculation_methods=bp_csv,
     )
     matched = [w for w in recwarn.list

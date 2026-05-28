@@ -244,7 +244,7 @@ def test_state_column_round_trips(tmp_path):
     path = tmp_path / "model_points.csv"
     mp.to_wide(asmp).write_csv(path)
 
-    back = read_model_points(path, asmp)
+    back = read_model_points(path)
     assert list(back.state) == [STATE_ACTIVE, STATE_WAIVER]
     val = value(back, asmp)
     assert val.bel[1] > val.bel[0]
@@ -261,7 +261,7 @@ def test_paidup_state_spelling_is_normalised(tmp_path):
         "40,24,12000,1000000,paid up\n"
         "40,24,12000,1000000,PAIDUP\n"
     )
-    back = read_model_points(path, _assumptions(), calculation_methods=PATTERNS)
+    back = read_model_points(path, calculation_methods=PATTERNS)
     assert list(back.state) == [STATE_PAID_UP] * 4
 
 

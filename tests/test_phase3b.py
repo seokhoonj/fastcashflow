@@ -75,7 +75,7 @@ def test_model_points_round_trip(tmp_path, suffix):
     df = _frame(mps)
     df.write_parquet(path) if suffix == ".parquet" else df.write_csv(path)
 
-    loaded = read_model_points(path, _assumptions(), calculation_methods=PATTERNS)
+    loaded = read_model_points(path, calculation_methods=PATTERNS)
     assert loaded.n_mp == mps.n_mp
     assert np.allclose(loaded.issue_age, mps.issue_age)
     assert np.allclose(_death_benefits(loaded), _death_benefits(mps))
@@ -91,12 +91,12 @@ def test_read_model_points_reads_count(tmp_path):
         tmp_path / "with_count.parquet"
     )
     assert np.allclose(
-        read_model_points(tmp_path / "with_count.parquet", _assumptions(), calculation_methods=PATTERNS).count, counts
+        read_model_points(tmp_path / "with_count.parquet", calculation_methods=PATTERNS).count, counts
     )
 
     _frame(mps).write_parquet(tmp_path / "no_count.parquet")
     assert np.allclose(
-        read_model_points(tmp_path / "no_count.parquet", _assumptions(), calculation_methods=PATTERNS).count,
+        read_model_points(tmp_path / "no_count.parquet", calculation_methods=PATTERNS).count,
         np.ones(mps.n_mp),
     )
 
@@ -136,12 +136,12 @@ def test_read_ignores_extra_columns_and_flags_missing(tmp_path):
     )
     full.write_parquet(tmp_path / "full.parquet")
     assert read_model_points(
-        tmp_path / "full.parquet", _assumptions()
+        tmp_path / "full.parquet"
     ).n_mp == mps.n_mp
 
     pl.DataFrame({"issue_age": mps.issue_age}).write_parquet(tmp_path / "partial.parquet")
     with pytest.raises(ValueError, match="missing required column"):
-        read_model_points(tmp_path / "partial.parquet", _assumptions())
+        read_model_points(tmp_path / "partial.parquet")
 
 
 def test_file_workflow_matches_in_memory(tmp_path):
@@ -150,7 +150,7 @@ def test_file_workflow_matches_in_memory(tmp_path):
     asmp = _assumptions()
     _frame(mps).write_parquet(tmp_path / "mps.parquet")
 
-    from_file = value(read_model_points(tmp_path / "mps.parquet", asmp, calculation_methods=PATTERNS), asmp)
+    from_file = value(read_model_points(tmp_path / "mps.parquet", calculation_methods=PATTERNS), asmp)
     in_memory = value(mps, asmp)
 
     assert np.allclose(from_file.bel, in_memory.bel)
@@ -252,7 +252,7 @@ def test_to_long_round_trips(tmp_path):
     policies, coverages = mps.to_long(asmp)
     policies.write_csv(tmp_path / "pol.csv")
     coverages.write_csv(tmp_path / "cov.csv")
-    back = read_model_points(tmp_path / "pol.csv", asmp,
+    back = read_model_points(tmp_path / "pol.csv",
                              coverages=tmp_path / "cov.csv",
                              calculation_methods=patterns)
     a, b = value(mps, asmp), value(back, asmp)
@@ -267,7 +267,7 @@ def test_to_wide_round_trips(tmp_path):
     patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")
-    back = read_model_points(tmp_path / "wide.csv", asmp,
+    back = read_model_points(tmp_path / "wide.csv",
                              calculation_methods=patterns)
     a, b = value(mps, asmp), value(back, asmp)
     assert np.allclose(a.bel, b.bel)
