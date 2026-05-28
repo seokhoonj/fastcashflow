@@ -43,7 +43,7 @@ from fastcashflow.numerics import (
 )
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
-from fastcashflow.tvog import tvog_weights
+from fastcashflow.tvog import guarantee_floor_time_value, tvog_weights
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,9 +93,10 @@ def measure_vfa(
     ``max(account value, guaranteed_death_benefit)`` (GMDB) and the survivors
     reaching term pay ``max(account value, guaranteed_accumulation_benefit)``
     (GMAB), so the excess over the account value is each guarantee's intrinsic
-    cost. The guarantees' *time value* (the extra cost from return volatility)
-    is future work -- ``return_scenarios`` currently folds in the credit-rate
-    guarantee's time value only.
+    cost. When ``return_scenarios`` is given, each guarantee's *time value*
+    (the extra cost from return volatility) is folded into the CSM too -- the
+    credit-rate guarantee through the account-value growth, the GMDB and GMAB
+    floors as put options on the account value.
 
     BEL is the present value of benefits and expenses less the premium, all
     at the underlying-items return; the CSM is ``max(0, -(BEL + RA))`` -- the
@@ -215,6 +216,21 @@ def measure_vfa(
                 investment_return=assumptions.investment_return,
                 return_scenarios=return_scenarios,
             )
+        )
+        # The credit-rate guarantee above lifts the account growth; the GMDB
+        # and GMAB are put-option floors on the account value. Add their time
+        # value too -- each guarantee's intrinsic value is already in the BEL.
+        time_value = time_value + guarantee_floor_time_value(
+            account_value=model_points.account_value,
+            deaths=proj.deaths,
+            maturity_survivors=proj.maturity_survivors,
+            term_index=model_points.term_months - 1,
+            guaranteed_death_benefit=model_points.guaranteed_death_benefit,
+            guaranteed_accumulation_benefit=model_points.guaranteed_accumulation_benefit,
+            guaranteed_credit_rate=float(g_unique[0]),
+            fund_fee=assumptions.fund_fee,
+            investment_return=assumptions.investment_return,
+            return_scenarios=return_scenarios,
         )
 
     # BEL and RA as trajectories. The BEL is reported net of the account

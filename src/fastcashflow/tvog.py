@@ -55,6 +55,28 @@ class TVOGResult:
         return self.intrinsic_value + self.time_value
 
 
+def _av_and_discount(
+    monthly_credit: FloatArray, monthly_return: FloatArray, fund_fee_m: float
+) -> tuple[FloatArray, FloatArray]:
+    """Return ``(av_factor, discount)``, each ``(n_scenarios, n_time)``.
+
+    ``av_factor[s, t]`` is the account-value multiplier at the start of month
+    ``t`` -- the product of ``(1 + credit)(1 - fee)`` over the months before
+    ``t``. ``discount[s, t]`` is the product of ``1 / (1 + return)`` over those
+    months. Kept separate so a non-linear payoff (a guarantee floor on the
+    account value) can use the account-value path on its own; their product is
+    :func:`_discounted_growth`.
+    """
+    growth = (1.0 + monthly_credit) * (1.0 - fund_fee_m)
+    n = monthly_credit.shape[0]
+    ones = np.ones((n, 1))
+    av_factor = np.concatenate([ones, np.cumprod(growth, axis=1)[:, :-1]], axis=1)
+    discount = np.concatenate(
+        [ones, np.cumprod(1.0 / (1.0 + monthly_return), axis=1)[:, :-1]], axis=1
+    )
+    return av_factor, discount
+
+
 def _discounted_growth(
     monthly_credit: FloatArray, monthly_return: FloatArray, fund_fee_m: float
 ) -> FloatArray:
@@ -64,13 +86,7 @@ def _discounted_growth(
     the exit benefit discounts at the underlying-items return. Entry
     ``[s, t]`` is the product of those two over the months before ``t``.
     """
-    growth = (1.0 + monthly_credit) * (1.0 - fund_fee_m)
-    n = monthly_credit.shape[0]
-    ones = np.ones((n, 1))
-    av_factor = np.concatenate([ones, np.cumprod(growth, axis=1)[:, :-1]], axis=1)
-    discount = np.concatenate(
-        [ones, np.cumprod(1.0 / (1.0 + monthly_return), axis=1)[:, :-1]], axis=1
-    )
+    av_factor, discount = _av_and_discount(monthly_credit, monthly_return, fund_fee_m)
     return av_factor * discount
 
 
@@ -119,6 +135,77 @@ def tvog_weights(
     central = np.full((1, n_time), r_m)
     central_factor = _discounted_growth(np.maximum(central, g_m), central, f_m)[0]
     return stochastic - central_factor
+
+
+def guarantee_floor_time_value(
+    *,
+    account_value: FloatArray,
+    deaths: FloatArray,
+    maturity_survivors: FloatArray,
+    term_index: FloatArray,
+    guaranteed_death_benefit: FloatArray,
+    guaranteed_accumulation_benefit: FloatArray,
+    guaranteed_credit_rate: float,
+    fund_fee: float,
+    investment_return: float,
+    return_scenarios: FloatArray,
+) -> FloatArray:
+    """Per-model-point time value of the GMDB and GMAB account-value floors.
+
+    A death pays ``max(account value, GDB)`` and a maturity pays
+    ``max(account value, GAB)`` -- put options on the account value, struck at
+    the guarantee. The deterministic projection prices only their intrinsic
+    value (the cost in the central scenario); the *time value* -- the extra
+    cost convexity adds once returns vary -- is the mean cost over the return
+    scenarios less that central cost. Returns a ``(n_mp,)`` array, the amount
+    the CSM additionally absorbs at inception. Discounting is at the underlying
+    return -- the VFA basis, not a risk-neutral measure -- so this time value
+    is *not* sign-constrained: a deep in-the-money floor can carry a negative
+    time value, since volatility there mostly lets scenarios escape the floor.
+
+    The account value path uses the credited rate ``max(return, guarantee)``;
+    ``guaranteed_credit_rate`` is the (scalar, v1) crediting guarantee. The
+    GDB / GAB floors themselves may vary by model point.
+    """
+    return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
+    n_time = return_scenarios.shape[1]
+    f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
+    g_m = (1.0 + guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
+
+    # Account-value multiplier and discount under each scenario, and under the
+    # central flat-return path (whose floor cost is the intrinsic value).
+    av_s, disc_s = _av_and_discount(
+        np.maximum(return_scenarios, g_m), return_scenarios, f_m
+    )
+    central = np.full((1, n_time), r_m)
+    av_c, disc_c = _av_and_discount(np.maximum(central, g_m), central, f_m)
+    av_c, disc_c = av_c[0], disc_c[0]
+
+    n_mp = account_value.shape[0]
+    time_value = np.zeros(n_mp)
+    for mp in range(n_mp):
+        av0 = account_value[mp]
+        ti = int(term_index[mp])
+        # GMDB: floor excess on the death exits each month; GMAB: on the
+        # maturity survivors at the term column. Cost per scenario, then the
+        # mean less the central (intrinsic) cost.
+        gdb_excess_s = np.maximum(0.0, guaranteed_death_benefit[mp] - av0 * av_s)
+        cost_s = (deaths[mp] * gdb_excess_s * disc_s).sum(axis=1)
+        gab_excess_s = np.maximum(
+            0.0, guaranteed_accumulation_benefit[mp] - av0 * av_s[:, ti]
+        )
+        cost_s = cost_s + maturity_survivors[mp] * gab_excess_s * disc_s[:, ti]
+
+        gdb_excess_c = np.maximum(0.0, guaranteed_death_benefit[mp] - av0 * av_c)
+        cost_c = float((deaths[mp] * gdb_excess_c * disc_c).sum())
+        gab_excess_c = max(
+            0.0, guaranteed_accumulation_benefit[mp] - av0 * av_c[ti]
+        )
+        cost_c += maturity_survivors[mp] * gab_excess_c * disc_c[ti]
+
+        time_value[mp] = float(cost_s.mean()) - cost_c
+    return time_value
 
 
 def measure_tvog(

@@ -115,6 +115,78 @@ def test_gmab_floor_at_maturity_hand_calc():
     assert np.isclose(low.bel[0, 0], base.bel[0, 0])
 
 
+def test_floor_tvog_zero_under_flat_scenarios():
+    """A flat scenario set (every path = the central return) adds no TVOG.
+
+    With no return volatility the mean cost equals the central (intrinsic)
+    cost, so the GMDB/GMAB floor time value is zero and the measurement
+    matches the deterministic run.
+    """
+    asmp = _assumptions(investment_return=0.04, fund_fee=0.01)
+    av0, term = 1000.0, 36
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0,
+                            guaranteed_death_benefit=1100.0,
+                            guaranteed_accumulation_benefit=1100.0)
+    deterministic = measure_vfa(mp, asmp)
+    r_m = 1.04 ** (1 / 12) - 1
+    flat = np.full((8, term), r_m)
+    stochastic = measure_vfa(mp, asmp, return_scenarios=flat)
+    assert np.allclose(stochastic.time_value, 0.0, atol=1e-6)
+    assert np.isclose(stochastic.bel[0, 0], deterministic.bel[0, 0])
+
+
+def test_floor_tvog_matches_independent_reimplementation():
+    """The GMDB/GMAB floor time value equals an explicit per-scenario reimpl.
+
+    The floors are put options on the account value; their time value is the
+    mean put cost over the scenarios less the central put cost. Re-derive that
+    with a plain scenario loop and check the engine agrees. (The sign is not
+    constrained: discounting at the underlying return -- the VFA basis, not a
+    risk-neutral measure -- lets a deep in-the-money floor have negative time
+    value, since volatility mostly lets scenarios escape the floor here.)
+    """
+    from fastcashflow.projection import project_cashflows
+    from fastcashflow.tvog import guarantee_floor_time_value
+
+    asmp = _assumptions(investment_return=0.04, fund_fee=0.0)
+    av0, gdb, gab, term = 1000.0, 1100.0, 1100.0, 24
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0,
+                            guaranteed_death_benefit=gdb,
+                            guaranteed_accumulation_benefit=gab)
+    proj = project_cashflows(mp, asmp)
+    deaths, ms = proj.deaths[0], float(proj.maturity_survivors[0])
+
+    rng = np.random.default_rng(0)
+    r_m = 1.04 ** (1 / 12) - 1
+    scen = r_m + 0.02 * rng.standard_normal((300, term))
+
+    tv = guarantee_floor_time_value(
+        account_value=mp.account_value, deaths=proj.deaths,
+        maturity_survivors=proj.maturity_survivors,
+        term_index=mp.term_months - 1,
+        guaranteed_death_benefit=mp.guaranteed_death_benefit,
+        guaranteed_accumulation_benefit=mp.guaranteed_accumulation_benefit,
+        guaranteed_credit_rate=0.0, fund_fee=0.0, investment_return=0.04,
+        return_scenarios=scen,
+    )
+
+    def put_cost(returns):
+        credit = np.maximum(returns, 0.0)          # g_credit = 0
+        a = np.empty(term); a[0] = 1.0
+        a[1:] = np.cumprod((1 + credit))[:-1]      # fee = 0
+        d = np.empty(term); d[0] = 1.0
+        d[1:] = np.cumprod(1.0 / (1 + returns))[:-1]
+        av = av0 * a
+        c = (deaths * np.maximum(0.0, gdb - av) * d).sum()
+        c += ms * max(0.0, gab - av0 * a[term - 1]) * d[term - 1]
+        return c
+
+    cost_s = np.array([put_cost(scen[s]) for s in range(scen.shape[0])])
+    expected = cost_s.mean() - put_cost(np.full(term, r_m))
+    assert np.isclose(tv[0], expected)
+    assert not np.isclose(tv[0], 0.0)               # the floor does real work
+
+
 def test_vfa_zero_fee_gives_no_profit():
     """With no variable fee the contract is a pure pass-through -- no CSM."""
     res = measure_vfa(
