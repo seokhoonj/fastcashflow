@@ -107,7 +107,7 @@
 - `elapsed_months` — 가입 후 경과 개월수
 - `count` — 결산일 기준 잔존 (사망 / 해지 빠진 후)
 - `prior_csm` — 직전 분기 종가 CSM (이번 분기로 carry-forward)
-- `lock_in_rate` — 가입 시점에 잠긴 할인율
+- `lock_in_rate` — 가입 시점의 할인율
 
 이 결합 파일을 보통 `inforce_2026Q1.csv` 같은 분기명으로 부릅니다.
 신계약 평가는 영구 spec 만 있는 `policies.csv`, 결산 평가는 spec + 상태가
@@ -203,7 +203,7 @@ benefit_patterns.csv  ──┘   담보 카탈로그 (코드 → 패턴 매핑)
 실무의 IFRS17 평가는 보통 분기마다 도는 **결산 사이클** 입니다. 정책관리
 시스템이 매 분기 끝에 "보유계약 마감파일" 한 장을 떨어뜨리고 — 그 안에
 계약의 영구 spec (가입연령 / 보험기간 / 보험금) 과 직전 분기 종가의
-상태 (경과월수 / 잔존 / 직전 분기 CSM / lock-in 할인율) 가 함께
+상태 (경과월수 / 잔존 / 직전 분기 CSM / 가입 시점 할인율) 가 함께
 들어 있습니다.
 
 fastcashflow 는 그 한 파일을 그대로 받습니다. `read_inforce_policies`
@@ -232,7 +232,7 @@ model_points, state = fcf.read_inforce_policies(
 val = fcf.value_in_force(
     model_points, assumptions, period_months=3,              # 다음 분기 (3 개월) 까지의 평가
     prior_csm    = state.prior_csm,                          # 직전 분기 종가 CSM
-    lock_in_rate = state.lock_in_rate,                       # 가입 시점 lock-in 된 할인율
+    lock_in_rate = state.lock_in_rate,                       # 가입 시점의 할인율
 )
 fcf.write_valuation(val, "results_2026Q1.csv")               # 결과 파일
 ```

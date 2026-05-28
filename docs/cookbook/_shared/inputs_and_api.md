@@ -57,7 +57,7 @@ ModelPoints (mp = fcf.read_model_points(...))
 결산 모드 (보유계약 평가) 에서는 `policies.csv` 가 *분기말 상태 컬럼*
 네 개를 더 갖는 `inforce_2026Q1.csv` 같은 한 파일로 들어옵니다 —
 `elapsed_months` / `count` (잔존) / `prior_csm` (직전 분기 CSM) /
-`lock_in_rate` (가입 시점 lock-in 할인율). reader 도
+`lock_in_rate` (가입 시점의 할인율). reader 도
 `mp, state = fcf.read_inforce_policies(...)` 로 바뀌어 두 개체를 돌려줍니다.
 
 ### 사용자 함수
