@@ -21,7 +21,7 @@
 | `assumptions.xlsx` | 회사 (보험계리) | 분기 / 연 |
 
 가장 자주 갱신되는 정책관리 데이터 (policies + coverages) 가 위로, 가장
-드물게 갱신되는 회사 차원 결정 (benefit_patterns) 과 분기별 가정
+드물게 손대는 담보 패턴 매핑 (benefit_patterns) 과 분기별 가정
 (assumptions) 이 아래로.
 
 ## 어느 챕터에서 어디까지 쓰나
