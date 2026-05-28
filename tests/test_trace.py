@@ -10,7 +10,7 @@ import fastcashflow as fcf
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.trace import (
-    show_bel_step, show_csm_step, show_trace, show_trace_diff,
+    show_bel_step, show_csm_step, show_trace, show_trace_diff, show_trace_vfa,
 )
 
 
@@ -405,3 +405,57 @@ def test_show_csm_step_rejects_out_of_range_index():
     mp = _portfolio()
     with pytest.raises(IndexError, match="mp_index"):
         show_csm_step(mp.n_mp, mp, _basis(), file=io.StringIO())
+
+
+# ---------------------------------------------------------------------------
+# show_trace_vfa -- the VFA (account-value) tracer
+# ---------------------------------------------------------------------------
+
+def _vfa_setup():
+    death_fn = lambda s, a, d: np.full(np.shape(d), 0.005)
+    lapse_fn = lambda s, a, d: np.full(np.shape(d), 0.04)
+    basis = Assumptions(
+        mortality_annual=death_fn, lapse_annual=lapse_fn,
+        discount_annual=0.03, ra_confidence=0.95, mortality_cv=0.10,
+        expense_cv=0.10, investment_return=0.06, fund_fee=0.025,
+    )
+    mp = ModelPoints.single(
+        40, 0.0, 120, account_value=1.0e8,
+        guaranteed_death_benefit=1.02e8,
+        guaranteed_accumulation_benefit=1.05e8,
+    )
+    return mp, basis
+
+
+def test_show_trace_vfa_renders_and_matches_measure_vfa():
+    """The VFA tracer renders its sections and shows the engine's CSM."""
+    mp, basis = _vfa_setup()
+    buf = io.StringIO()
+    show_trace_vfa(0, mp, basis, file=buf)
+    text = buf.getvalue()
+    for section in ("VFA inputs", "Account value & in-force",
+                    "Guarantee floors", "BEL / CSM trajectory",
+                    "CSM roll-forward", "Final"):
+        assert section in text, f"missing section: {section}"
+    m = fcf.measure_vfa(mp, basis)
+    assert f"{m.csm[0, 0]:,.2f}" in text          # trace shows the engine CSM
+    assert f"{m.variable_fee[0]:,.2f}" in text     # and the variable fee
+
+
+def test_show_trace_vfa_scenarios_show_tvog():
+    """With return_scenarios the trace surfaces the (non-zero) guarantee TVOG."""
+    mp, basis = _vfa_setup()
+    rng = np.random.default_rng(7)
+    scen = (1.06 ** (1 / 12) - 1) + 0.005 * rng.standard_normal((500, 120))
+    buf = io.StringIO()
+    show_trace_vfa(0, mp, basis, return_scenarios=scen, file=buf)
+    text = buf.getvalue()
+    m = fcf.measure_vfa(mp, basis, return_scenarios=scen)
+    assert m.time_value[0] != 0.0
+    assert f"{m.time_value[0]:,.2f}" in text       # TVOG shown matches the engine
+
+
+def test_show_trace_vfa_rejects_out_of_range_index():
+    mp, basis = _vfa_setup()
+    with pytest.raises(IndexError, match="mp_index"):
+        show_trace_vfa(mp.n_mp, mp, basis, file=io.StringIO())

@@ -25,8 +25,10 @@ import numpy as np
 from fastcashflow.assumptions import Assumptions
 from fastcashflow.coverage import CalculationMethod, method_attrs
 from fastcashflow.curves import discount_monthly_curve
+from fastcashflow._typing import FloatArray
 from fastcashflow.engine import measure
 from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.vfa import measure_vfa
 
 
 def _emit_tree(items: list[object], out: list[str], prefix: str) -> None:
@@ -396,6 +398,150 @@ def show_trace(
         ("CSM roll-forward (key months)", csm_lines),
         ("Final (headline numbers, per policy)", final_lines),
     ])
+    _emit_tree(tree_items, out, "")
+    file.write("\n".join(out) + "\n")
+
+
+def show_trace_vfa(
+    mp_index: int,
+    model_points: ModelPoints,
+    assumptions: Assumptions | dict,
+    *,
+    return_scenarios: FloatArray | None = None,
+    file: IO | None = None,
+) -> None:
+    """Print a tree of how one VFA model point's BEL / RA / CSM is computed.
+
+    The VFA (variable-fee, account-value) counterpart of :func:`show_trace`.
+    It slices to a single row, runs :func:`measure_vfa`, and shows the
+    account-value trajectory, the GMDB / GMAB floors (where the guarantee
+    bites), the variable fee and the BEL / RA / CSM -- plus the guarantee
+    time value (TVOG) when ``return_scenarios`` is supplied. Use it on
+    direct-participation contracts; :func:`show_trace` traces the GMM
+    ``measure`` and does not cover the account-value mechanic.
+    """
+    out: list[str] = []
+    if file is None:
+        file = sys.stdout
+    n_mp = model_points.n_mp
+    if not 0 <= mp_index < n_mp:
+        raise IndexError(f"mp_index {mp_index} out of range for n_mp={n_mp}")
+    i = mp_index
+    assumptions = _resolve_basis(assumptions, model_points, i)
+    sub = model_points.subset([i])
+    m = measure_vfa(sub, assumptions, return_scenarios=return_scenarios)
+
+    # ---- Header
+    sex_v = int(sub.sex[0]) if sub.sex is not None else 0
+    sex_label = "남" if sex_v == 0 else "여"
+    age = float(sub.issue_age[0])
+    term = int(sub.term_months[0])
+    count = float(sub.count[0]) if sub.count is not None else 1.0
+    product = (str(model_points.product_code[i])
+               if model_points.product_code is not None else "-")
+    channel = (str(model_points.channel_code[i])
+               if model_points.channel_code is not None else "-")
+    av0 = float(sub.account_value[0])
+    gcr = float(sub.guaranteed_credit_rate[0])
+    gdb = float(sub.guaranteed_death_benefit[0])
+    gab = float(sub.guaranteed_accumulation_benefit[0])
+    header = (
+        f"mp[{i}]  VFA  ({product}/{channel}, sex={sex_label}, "
+        f"issue_age={age:g}, term={term}m, count={count:g})"
+    )
+
+    # ---- VFA inputs
+    vfa_lines: list[object] = [
+        f"account_value                          = {av0:>15,.2f}",
+        f"guaranteed_credit_rate                 = {gcr:g}",
+        f"guaranteed_death_benefit (GMDB)        = {gdb:>15,.2f}",
+        f"guaranteed_accumulation_benefit (GMAB) = {gab:>15,.2f}",
+        f"investment_return = {assumptions.investment_return:g}  (VFA 할인/적립 basis)",
+        f"fund_fee          = {assumptions.fund_fee:g}  (= 이익원)",
+        f"mortality_annual  -> {_fmt_callable(assumptions.mortality_annual)}",
+        f"lapse_annual      -> {_fmt_callable(assumptions.lapse_annual)}",
+        f"ra: method={assumptions.ra_method!r} conf={assumptions.ra_confidence:g} "
+        f"expense_cv={assumptions.expense_cv:g}",
+    ]
+
+    # ---- Trajectories (from the VFA measurement)
+    av = m.account_value[0]
+    cf = m.cashflows
+    inforce = cf.inforce[0]
+    deaths = cf.deaths[0]
+    survivors = float(cf.maturity_survivors[0])
+    n_time = cf.n_time
+    picks = _key_months(term, n_time)
+
+    av_lines: list[object] = []
+    for t in picks:
+        if t >= av.shape[0]:
+            continue
+        inf_v = inforce[t] if t < n_time else 0.0
+        av_lines.append(f"t={t:>4d}m: AV={av[t]:>15,.2f}  inforce={inf_v:.6f}")
+
+    # ---- Guarantee floors (where they bite)
+    floor_lines: list[object] = [
+        "death[t] = max(AV[t], GDB);  maturity = max(AV[term-1], GAB)",
+    ]
+    for t in picks:
+        if t >= n_time:
+            continue
+        excess = max(0.0, gdb - av[t])
+        floor_lines.append(
+            f"t={t:>4d}m: death=max(AV,GDB)={max(av[t], gdb):>15,.2f}  "
+            f"excess={excess:>12,.2f}  deaths={deaths[t]:.6f}"
+        )
+    ti = max(0, term - 1)
+    floor_lines.append(
+        f"maturity@t={ti}m: max(AV,GAB)={max(av[ti], gab):>15,.2f}  "
+        f"excess={max(0.0, gab - av[ti]):>12,.2f}  survivors={survivors:.6f}"
+    )
+
+    # ---- BEL / CSM trajectory + roll-forward
+    bel = m.bel[0]
+    ra = m.ra[0]
+    csm = m.csm[0]
+    csm_acc = m.csm_accretion[0]
+    csm_rel = m.csm_release[0]
+    belcsm_lines: list[object] = [
+        f"t={t:>4d}m: BEL={bel[t]:>15,.2f}  CSM={csm[t]:>15,.2f}"
+        for t in picks if t < bel.shape[0]
+    ]
+    csm_lines: list[object] = ["csm[t+1] = csm[t] + accretion[t] - release[t]"]
+    for t in picks:
+        if t >= csm_acc.shape[0]:
+            csm_lines.append(f"t={t:>4d}m: csm={csm[t]:>14,.2f}  (past last accretion)")
+        else:
+            csm_lines.append(
+                f"t={t:>4d}m: csm={csm[t]:>14,.2f}  "
+                f"acc={csm_acc[t]:>10,.2f}  rel={csm_rel[t]:>10,.2f}"
+            )
+
+    # ---- Final headline
+    fee = float(m.variable_fee[0])
+    tv = float(m.time_value[0])
+    lc = float(m.loss_component[0])
+    tv_note = ("(시나리오 없음 -> intrinsic 만)" if return_scenarios is None
+               else "(보증 시간가치 -- CSM 흡수)")
+    final_lines: list[object] = [
+        f"variable_fee     = {fee:>15,.2f}  (수수료 PV = 이익원)",
+        f"BEL              = {bel[0]:>15,.2f}",
+        f"RA               = {ra[0]:>15,.2f}",
+        f"TVOG (time_value)= {tv:>15,.2f}  {tv_note}",
+        f"CSM              = {csm[0]:>15,.2f}",
+        f"loss_component   = {lc:>15,.2f}",
+    ]
+
+    out.append(header)
+    tree_items: list[object] = [
+        ("VFA inputs", vfa_lines),
+        ("Account value & in-force (key months)", av_lines),
+        ("Guarantee floors (GMDB / GMAB)", floor_lines),
+        ("BEL / CSM trajectory (key months)", belcsm_lines),
+        ("CSM roll-forward (key months)", csm_lines),
+        ("Final (headline numbers, per policy)", final_lines),
+    ]
     _emit_tree(tree_items, out, "")
     file.write("\n".join(out) + "\n")
 
