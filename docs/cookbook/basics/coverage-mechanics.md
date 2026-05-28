@@ -354,7 +354,7 @@ asmp_buggy = fcf.Assumptions(
 
 ## 인접 레시피
 
-- [CalculationMethod 결정 가이드](calculation-methods) — 담보 산출방식의
+- [CalculationMethod 결정 가이드](calculation-methods) — 담보별 산출방식의
   매 코드를 어느 산출방식으로 등록할지. 본 챕터는 그 산출방식이 *엔진 안에서*
   어떻게 다르게 동작하는지.
 - [정기보험](../simple/term-life) — DEATH 만 사용하는 가장 단순한 사례.

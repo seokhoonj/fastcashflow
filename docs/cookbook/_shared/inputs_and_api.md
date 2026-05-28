@@ -47,7 +47,7 @@ ModelPoints (mp = fcf.read_model_points(...))
 │   ├── reduction_end         · 감액기간 종료 개월수 (선택)
 │   └── reduction_factor      · 감액기간 중 지급률 (선택, 0..1)
 │
-└── calculation_methods.csv      ── 담보 산출방식 (담보 코드 → 산출방식)
+└── calculation_methods.csv      ── 담보별 산출방식 (담보 코드 → 산출방식)
     ├── coverage_code         · 담보 코드 (DEATH, CANCER, INPATIENT ...)
     ├── coverage_name         · 사람 친화 라벨 (선택)
     └── calculation_method       · DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY

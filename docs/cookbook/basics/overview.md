@@ -43,7 +43,7 @@ import fastcashflow as fcf
 fcf.save_sample_assumptions("assumptions.xlsx")                 # 가정 워크북 (multi-sheet)
 fcf.save_sample_policies("policies.csv")                        # 계약 spec
 fcf.save_sample_coverages("coverages.csv")                      # 담보 가입금액
-fcf.save_sample_calculation_methods("calculation_methods.csv")  # 담보 산출방식
+fcf.save_sample_calculation_methods("calculation_methods.csv")  # 담보별 산출방식
 ```
 
 써진 파일을 Excel / 텍스트 편집기로 열어 컬럼 이름과 한두 행의 값만 훑어보면,

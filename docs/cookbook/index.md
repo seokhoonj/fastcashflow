@@ -72,7 +72,7 @@
 * - 1.2
   - [담보와 산출방식 매칭](basics/calculation-methods)
   - 5 종 산출방식 (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) 의
-    의미. 담보 산출방식 (`calculation_methods.csv`) 작성.
+    의미. 담보별 산출방식 (`calculation_methods.csv`) 작성.
 * - 1.3
   - [사망률의 두 역할](basics/mortality-roles)
   - `mortality_annual` (보유계약 감쇠) 과 `coverages` 의 DEATH rate (보장

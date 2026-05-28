@@ -17,7 +17,7 @@
 | 시트 | 역할 |
 |---|---|
 | `segments` | `(product_code, channel_code)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`ra_confidence`, `*_cv`, optional `*_age_shift`, `expense_table` 등). `defaults` 행이 fallback |
-| `coverages` | rate-driven 담보 registry: `coverage_code → rate_table`. 모든 상품 공통 (product 별로 다른 calibration 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 code 분리). `coverage_name` / `calculation_method` 은 별도 `calculation_methods.csv` (담보 산출방식) 에 |
+| `coverages` | rate-driven 담보 registry: `coverage_code → rate_table`. 모든 상품 공통 (product 별로 다른 calibration 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 code 분리). `coverage_name` / `calculation_method` 은 별도 `calculation_methods.csv` (담보별 산출방식) 에 |
 | `mortality_tables` | 사망 발생률 가정 (`table_id` × `sex` × `age` → `rate`) |
 | `incidence_rate_tables` | 특약 발생률 가정 (구조 동일) |
 | `waiver_tables` | 납입면제 발생률 가정 (구조 동일) |
@@ -33,7 +33,7 @@
 
 | 파일 | 역할 |
 |---|---|
-| `calculation_methods.csv` | 담보 산출방식 (`coverage_code → calculation_method` 분류). 5종 fixed pattern (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY). `assumptions.xlsx` 와 분리 — 신담보 추가 시에만 손댐 |
+| `calculation_methods.csv` | 담보별 산출방식 (`coverage_code → calculation_method` 분류). 5종 fixed pattern (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY). `assumptions.xlsx` 와 분리 — 신담보 추가 시에만 손댐 |
 | `inforce_state.csv` (optional) | 결산 시점 보유계약 상태 (`mp_id`, `elapsed_months`, `count`, `prior_csm`, `lock_in_rate`) |
 
 ## Column headers

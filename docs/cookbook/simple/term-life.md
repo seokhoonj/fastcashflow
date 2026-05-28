@@ -232,7 +232,7 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 * - 파일
   - 내용
 * - `calculation_methods.csv`
-  - 담보 산출방식 — 담보 코드 → 산출방식 (DEATH / MORBIDITY / ...)
+  - 담보별 산출방식 — 담보 코드 → 산출방식 (DEATH / MORBIDITY / ...)
 * - `assumptions.xlsx`
   - 계리적 가정 — 사망률 · 해지율 · 할인율 · 사업비 · 위험조정
 * - `policies.csv`
@@ -259,7 +259,7 @@ basis = fcf.read_assumptions("assumptions.xlsx")    # {(product_code, channel_co
 mp    = fcf.read_model_points(
     "policies.csv",                                 # 계약 spec 파일
     coverages="coverages.csv",                      # 담보 가입금액 파일
-    calculation_methods="calculation_methods.csv",  # 담보 산출방식 파일
+    calculation_methods="calculation_methods.csv",  # 담보별 산출방식 파일
 )
 
 # 한 segment 의 가정을 전체 portfolio 에 적용 — 상세 trajectory
