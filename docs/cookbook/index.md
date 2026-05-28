@@ -19,7 +19,7 @@
 오시면 가장 부드럽지만, 각 챕터는 **그 챕터만 봐도 충분히 이해되도록**
 필요한 배경을 짧게 도입합니다.
 
-## 6 단계 — 개념 → 상품 (단순 → 복잡) → I/O → 워크플로
+## 7 단계 — 개념 → 상품 (단순 → 복잡 → 변액) → I/O → 워크플로
 
 ```{list-table}
 :header-rows: 1
@@ -41,6 +41,9 @@
 * - Semi-Markov 상태
   - 상태 안에서의 경과 시간 의존
   - 재진단 / 회복 / 등급 진행 — 코호트 추적이 필요한 영역.
+* - 변액 (VFA)
+  - 계좌가치 + 최저보증
+  - 변액보험을 VFA 로 측정. GMDB / GMAB 의 intrinsic 과 시간가치 (TVOG).
 * - I/O (Excel 워크북)
   - 데이터 입출력
   - 회사 워크북을 fastcashflow 가 읽는 형식으로 맞추는 자리.
@@ -137,7 +140,7 @@
   - 매월 장해소득 + duration-since-disabled 의존 회복률.
 ```
 
-### 5. I/O (Excel 워크북)
+### 5. 변액 (VFA)
 
 ```{list-table}
 :header-rows: 1
@@ -147,14 +150,11 @@
   - 챕터
   - 다루는 것
 * - 5.1
-  - 워크북 — 단일 segment (작성 예정)
-  - `assumptions.xlsx` 의 매 시트 / 매 컬럼 자세히. 사용자 진입점.
-* - 5.2
-  - 워크북 — 다 segment / 다 상품 (작성 예정)
-  - `value_segmented` + 상품 / 채널 별 다른 StateModel.
+  - [변액보험 최저보증 (GMDB / GMAB)](variable/gmdb-gmab)
+  - 계좌가치 + 최저보증. `measure_vfa`, intrinsic vs 시간가치 (TVOG).
 ```
 
-### 6. 분석 / 검증
+### 6. I/O (Excel 워크북)
 
 ```{list-table}
 :header-rows: 1
@@ -164,9 +164,26 @@
   - 챕터
   - 다루는 것
 * - 6.1
+  - 워크북 — 단일 segment (작성 예정)
+  - `assumptions.xlsx` 의 매 시트 / 매 컬럼 자세히. 사용자 진입점.
+* - 6.2
+  - 워크북 — 다 segment / 다 상품 (작성 예정)
+  - `value_segmented` + 상품 / 채널 별 다른 StateModel.
+```
+
+### 7. 분석 / 검증
+
+```{list-table}
+:header-rows: 1
+:widths: 8 28 64
+
+* - 번호
+  - 챕터
+  - 다루는 것
+* - 7.1
   - 시나리오 / 민감도 분석 (작성 예정)
   - rate 함수 교체로 mortality +10% 등의 효과 측정.
-* - 6.2
+* - 7.2
   - [검증 패턴](workflow/validation)
   - 한 계약의 BEL / CSM 계산 경로 추적. 손계산 매칭, shock 전파, residual 검증.
 ```
@@ -228,7 +245,14 @@ markov/waiver
 
 ```{toctree}
 :hidden:
-:caption: 6. 분석 / 검증
+:caption: 5. 변액 (VFA)
+
+variable/gmdb-gmab
+```
+
+```{toctree}
+:hidden:
+:caption: 7. 분석 / 검증
 
 workflow/validation
 ```
