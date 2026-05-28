@@ -193,6 +193,40 @@ def coverage_arrays(coverages, calculation_methods=None):
     return coverage_is_diagnosis, coverage_risk
 
 
+def align_coverages(coverages, coverage_codes):
+    """Reorder ``Assumptions.coverages`` to the model points' coverage order.
+
+    The model points' ``coverage_index`` integers were built against
+    ``coverage_codes`` order (the calculation_methods catalogue, or whatever
+    order the model points were constructed in). The kernel reads
+    ``coverage_rates[coverage_index[k], ...]``, so the rate stack must be
+    built in that same order. This looks each code up in the assumptions'
+    coverage registry and returns the coverages reordered to match -- so
+    *reading the portfolio never has to know the assumptions' internal
+    coverage order*. The assumptions enter only here, at the engine call.
+
+    ``coverage_codes`` of ``None`` (model points built with no pinned order,
+    e.g. ``ModelPoints.single`` / direct construction whose ``coverage_index``
+    already follows ``Assumptions.coverages``) returns ``coverages`` unchanged.
+
+    Raises :class:`ValueError` if a code the model points reference has no
+    registered coverage in the assumptions -- the V4 check: every rate-driven
+    coverage the portfolio carries needs a ``rate_table`` in the workbook.
+    """
+    if not coverage_codes:
+        return tuple(coverages)
+    by_code = {r.code: r for r in coverages}
+    missing = [c for c in coverage_codes if c not in by_code]
+    if missing:
+        raise ValueError(
+            f"coverage code(s) {missing} are referenced by the model points "
+            "but have no registered coverage in Assumptions.coverages -- add "
+            "each code (with its rate_table) to the assumptions workbook's "
+            "coverages sheet so the engine has a rate to apply."
+        )
+    return tuple(by_code[c] for c in coverage_codes)
+
+
 def validate_csr_codes(coverage_index, n_coverages, *,
                        coverages=None, calculation_methods=None,
                        expected_coverage_codes=None):

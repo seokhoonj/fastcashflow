@@ -41,7 +41,7 @@ from fastcashflow.numerics import (
     _settlement_lic,
 )
 from fastcashflow.coverage import (
-    build_coverage_rates, coverage_arrays, validate_csr_codes,
+    align_coverages, build_coverage_rates, coverage_arrays, validate_csr_codes,
 )
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
@@ -1591,14 +1591,19 @@ def value(
                 np.transpose(compiled.edge_prob, (1, 2, 3, 0)))
             state_duration_max = None
         start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
+    # Align the assumptions' coverages to the order the model points were
+    # built against (the one place the assumptions enter the coverage
+    # indexing). Identity when the model points were built against this
+    # same Assumptions; a reorder when read built them catalogue-order.
+    aligned_coverages = align_coverages(
+        assumptions.coverages, model_points.coverage_codes)
     validate_csr_codes(
-        model_points.coverage_index, len(assumptions.coverages),
-        coverages=assumptions.coverages,
+        model_points.coverage_index, len(aligned_coverages),
+        coverages=aligned_coverages,
         calculation_methods=model_points.calculation_methods,
-        expected_coverage_codes=model_points.coverage_codes,
     )
     coverage_is_diagnosis, coverage_risk = coverage_arrays(
-        assumptions.coverages, model_points.calculation_methods,
+        aligned_coverages, model_points.calculation_methods,
     )
     # build_coverage_rates stacks the per-coverage annual rates; the whole
     # stack is converted to monthly. mortality_annual is a separate engine
@@ -1607,7 +1612,7 @@ def value(
     # same mortality table referenced from that sheet, occasionally a
     # separately calibrated death-claim experience table.
     coverage_rates = np.ascontiguousarray(annual_to_monthly(build_coverage_rates(
-        [r.rate for r in assumptions.coverages], sex_grid,
+        [r.rate for r in aligned_coverages], sex_grid,
         issue_age_grid, duration_grid, issue_class_grid, elapsed_grid,
     )))
     # Shape contract: _value_kernel_scalar indexes coverage_rates[cov_idx, sx, age_idx,
@@ -1616,7 +1621,7 @@ def value(
     # producing a silently-broadcast wrong claim rate.
     n_ages = max_age - min_age + 1
     assert coverage_rates.shape == (
-        len(assumptions.coverages), 2, n_ages, n_years
+        len(aligned_coverages), 2, n_ages, n_years
     ), f"coverage_rates shape {coverage_rates.shape} != (n_cov, 2, n_ages, n_years)"
 
     # Expense primitives -- the five inputs every value-side kernel

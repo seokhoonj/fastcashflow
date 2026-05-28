@@ -43,7 +43,7 @@ from fastcashflow.assumptions import (
     Assumptions, annual_to_monthly, derive_expense_components,
 )
 from fastcashflow.coverage import (
-    build_coverage_rates, coverage_arrays, validate_csr_codes,
+    align_coverages, build_coverage_rates, coverage_arrays, validate_csr_codes,
 )
 from fastcashflow.curves import inflation_index
 from fastcashflow.modelpoints import ModelPoints
@@ -552,21 +552,27 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         assumptions.lapse_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid)))
+    # Align the assumptions' coverages to the order the model points were
+    # built against, so coverage_index integers index the right rate row.
+    # Reading the portfolio never had to know this order -- it is resolved
+    # here, the one place the assumptions enter. (Identity when the model
+    # points were built against this same Assumptions.)
+    aligned_coverages = align_coverages(
+        assumptions.coverages, model_points.coverage_codes)
     validate_csr_codes(
-        model_points.coverage_index, len(assumptions.coverages),
-        coverages=assumptions.coverages,
+        model_points.coverage_index, len(aligned_coverages),
+        coverages=aligned_coverages,
         calculation_methods=model_points.calculation_methods,
-        expected_coverage_codes=model_points.coverage_codes,
     )
     coverage_is_diagnosis, coverage_risk = coverage_arrays(
-        assumptions.coverages, model_points.calculation_methods,
+        aligned_coverages, model_points.calculation_methods,
     )
     # build_coverage_rates stacks the per-coverage annual rates; the whole
     # stack is converted to monthly. mortality_annual above is the separate
     # in-force decrement input; a death coverage's claim payout is driven
     # by its own rate_table from assumptions.coverages.
     coverage_rates = np.ascontiguousarray(annual_to_monthly(build_coverage_rates(
-        [r.rate for r in assumptions.coverages],
+        [r.rate for r in aligned_coverages],
         sex_grid, issue_age_grid, duration_grid,
         issue_class_grid, elapsed_grid,
     )))
@@ -575,7 +581,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     # change to the grid construction surfaces at this assertion rather than
     # silently broadcasting into a wrong claim rate.
     assert coverage_rates.shape == (
-        len(assumptions.coverages), len(model_points.issue_age), n_years
+        len(aligned_coverages), len(model_points.issue_age), n_years
     ), f"coverage_rates shape {coverage_rates.shape} != (n_cov, n_mp, n_years)"
     # Expense primitives -- the five inputs the kernel consumes. Honours
     # Assumptions.expense_items when set, otherwise the legacy alpha / beta
