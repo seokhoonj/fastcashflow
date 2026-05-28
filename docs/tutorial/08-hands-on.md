@@ -85,13 +85,14 @@ death_fn = lambda sex, issue_age, duration: np.full(
 # 해지율 함수 -- 해지 없음
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
+# 계리적 가정
 assumptions = fcf.Assumptions(
-    mortality_annual = death_fn,
-    lapse_annual     = lapse_fn,
-    discount_annual  = 1.005 ** 12 - 1,
-    ra_confidence    = 0.75,
-    mortality_cv     = 0.10,
-    coverages        = (fcf.CoverageRate("DEATH", death_fn),),
+    mortality_annual = death_fn,                                # 보유계약 감쇠용 사망률 (위 death_fn)
+    lapse_annual     = lapse_fn,                                # 해지율 (해지 없음)
+    discount_annual  = 1.005 ** 12 - 1,                         # 연 할인율 (월 0.5% 의 연 환산)
+    ra_confidence    = 0.75,                                    # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.10,                                    # 사망률 변동계수 10%
+    coverages        = (fcf.CoverageRate("DEATH", death_fn),),  # 사망 보장 1 종 (청구 rate = death_fn)
 )
 ```
 
@@ -138,9 +139,12 @@ assumptions = fcf.Assumptions(
 편합니다.
 
 ```python
+# 모델 포인트 -- 5~7 장에서 손으로 따라온 그 한 계약
 model_points = fcf.ModelPoints.single(
-    issue_age=40, benefits={0: 12_000},
-    level_premium=100, term_months=2,
+    issue_age     = 40,                                         # 가입연령 40 세
+    benefits      = {0: 12_000},                                # 0 번 보장 (= DEATH) 의 보험금 12,000
+    level_premium = 100,                                        # 월납 보험료 100
+    term_months   = 2,                                          # 보험기간 2 개월
 )
 ```
 
@@ -203,20 +207,27 @@ death_fn = lambda sex, issue_age, duration: np.full(
 # 해지율 함수 -- 해지 없음
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
+# 계리적 가정
 assumptions = fcf.Assumptions(
-    mortality_annual = death_fn,
-    lapse_annual     = lapse_fn,
-    discount_annual  = 1.005 ** 12 - 1,
-    ra_confidence    = 0.75,
-    mortality_cv     = 0.10,
-    coverages        = (fcf.CoverageRate("DEATH", death_fn),),
+    mortality_annual = death_fn,                                # 보유계약 감쇠용 사망률 (위 death_fn)
+    lapse_annual     = lapse_fn,                                # 해지율 (해지 없음)
+    discount_annual  = 1.005 ** 12 - 1,                         # 연 할인율 (월 0.5% 의 연 환산)
+    ra_confidence    = 0.75,                                    # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.10,                                    # 사망률 변동계수 10%
+    coverages        = (fcf.CoverageRate("DEATH", death_fn),),  # 사망 보장 1 종 (청구 rate = death_fn)
 )
+
+# 모델 포인트 -- 5~7 장에서 손으로 따라온 그 한 계약
 model_points = fcf.ModelPoints.single(
-    issue_age=40, benefits={0: 12_000},
-    level_premium=100, term_months=2,
+    issue_age     = 40,                                         # 가입연령 40 세
+    benefits      = {0: 12_000},                                # 0 번 보장 (= DEATH) 의 보험금 12,000
+    level_premium = 100,                                        # 월납 보험료 100
+    term_months   = 2,                                          # 보험기간 2 개월
 )
+
+# 측정
 m = fcf.measure(model_points, assumptions)
-print(m.bel[0, 0], m.ra[0, 0], m.csm[0, 0], m.loss_component[0])
+print(m.bel[0, 0], m.ra[0, 0], m.csm[0, 0], m.loss_component[0])    # BEL, RA, CSM, 손실요소
 ```
 
 일곱 장에 걸쳐 손으로 따라온 측정을, 엔진은 이 스무 줄 남짓으로
@@ -232,12 +243,15 @@ print(m.bel[0, 0], m.ra[0, 0], m.csm[0, 0], m.loss_component[0])
 fastcashflow에 들어 있는 **샘플 데이터**를 쓰면 됩니다.
 
 ```python
-model_points = fcf.load_sample_model_points()
-basis        = fcf.load_sample_assumptions()        # {(product_code, channel_code): Assumptions}
-val          = fcf.value_segmented(model_points, basis)
+# 샘플 portfolio 로드 (정기보험 / 건강보험 / 종신보험 11 건)
+model_points = fcf.load_sample_model_points()              # ModelPoints 개체
+basis        = fcf.load_sample_assumptions()               # {(product_code, channel_code): Assumptions}
 
-print(val.bel)
-print(val.csm)
+# 세그먼트별 자동 라우팅으로 측정 -- 각 계약을 자기 (상품, 채널) 가정에 맞춤
+val = fcf.value_segmented(model_points, basis)
+
+print(val.bel)      # 모델포인트별 BEL 배열 (길이 11)
+print(val.csm)      # 모델포인트별 CSM 배열 (길이 11)
 ```
 
 `load_sample_model_points()`는 패키지에 든 작은 포트폴리오(계약 11건,
