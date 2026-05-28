@@ -916,40 +916,57 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
     if "state" in df.columns:
         fields["state"] = _read_state(df["state"])
 
-    code_to_cov_idx = {r.code: i for i, r in enumerate(
-        assumptions.coverages if assumptions is not None else ())}
+    # Valid rate-driven codes + their order: from the *catalogue*
+    # (calculation_methods) when provided -- so the wide portfolio reads
+    # without assumptions, just like the long form -- else the assumptions
+    # registry (legacy fallback). coverage_index integers index this order;
+    # the engine aligns Assumptions.coverages to it at measure time.
+    if calculation_methods is not None:
+        wide_ctypes = {k: CalculationMethod(v)
+                       for k, v in calculation_methods.items()}
+        catalogue_order = [c for c, m in wide_ctypes.items()
+                           if m in RATE_DRIVEN_PATTERNS]
+    else:
+        catalogue_order = [r.code for r in (
+            assumptions.coverages if assumptions is not None else ())]
+    valid_codes = set(catalogue_order)
     # Guard the reserved-name collision: a user coverage_code whose
     # ``<code>_benefit`` column name shadows a fixed-meaning column
     # (maturity_benefit, disability_benefit, ...) would be silently routed
     # to the scalar field rather than into the CSR. Catch at read time.
     reserved_codes = {n[: -len("_benefit")] for n in _NAMED_WIDE
                       if n.endswith("_benefit")}
-    bad = sorted(set(code_to_cov_idx) & reserved_codes)
+    bad = sorted(valid_codes & reserved_codes)
     if bad:
         raise ValueError(
             f"coverage code(s) {bad} collide with reserved wide-form "
             f"column name(s) {[c + '_benefit' for c in bad]} -- rename "
-            "the coverage_code in the assumptions workbook"
+            "the coverage_code"
         )
-    benefits: dict[int, np.ndarray] = {}
+    # Discover the <code>_benefit columns present and validate each code.
+    present_cols: dict[str, np.ndarray] = {}
     for col in df.columns:
         if not col.endswith("_benefit") or col in _NAMED_WIDE:
             continue
         code = col[: -len("_benefit")]
-        if code not in code_to_cov_idx:
+        if code not in valid_codes:
             raise ValueError(
                 f"wide column {col!r} names coverage {code!r}, which is not "
-                "a rate-driven coverage in the assumptions"
+                "a rate-driven coverage in the calculation_methods catalogue "
+                "(or assumptions when no catalogue is given)"
             )
-        benefits[code_to_cov_idx[code]] = df[col].to_numpy()
+        present_cols[code] = df[col].to_numpy()
+    # Coverage order: catalogue order, restricted to the codes present.
+    ordered = [c for c in catalogue_order if c in present_cols]
+    code_to_cov_idx = {c: i for i, c in enumerate(ordered)}
+    benefits = {code_to_cov_idx[c]: present_cols[c] for c in ordered}
     if benefits:
         fields["benefits"] = benefits
     if calculation_methods is not None:
         fields["calculation_methods"] = calculation_methods
-    # Pin the assumptions ordering: the coverage_index integers we just
-    # built index into this tuple; validate_csr_codes will refuse a later
-    # Assumptions whose coverages got reordered.
-    if assumptions is not None:
+    if ordered:
+        fields["coverage_codes"] = tuple(ordered)
+    elif assumptions is not None:
         fields["coverage_codes"] = tuple(r.code for r in assumptions.coverages)
     return ModelPoints(**fields)
 
