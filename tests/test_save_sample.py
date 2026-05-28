@@ -1,7 +1,7 @@
 """save_sample_* helpers -- drop the packaged sample files on disk so a
 reader's tutorial code can take a real path through read_*. The four
 helpers cover the four file types the cookbook / tutorials show
-(assumptions workbook, policies, coverages, benefit_patterns).
+(assumptions workbook, policies, coverages, calculation_methods).
 """
 from pathlib import Path
 
@@ -26,14 +26,14 @@ def test_save_sample_full_round_trip(tmp_path):
     fcf.save_sample_assumptions(tmp_path / "assumptions.xlsx")
     fcf.save_sample_policies(tmp_path / "policies.csv")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
-    fcf.save_sample_benefit_patterns(tmp_path / "benefit_patterns.csv")
+    fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
 
     basis = fcf.read_assumptions(tmp_path / "assumptions.xlsx")
     asmp = next(iter(basis.values()))
     mp_file = fcf.read_model_points(
         tmp_path / "policies.csv", asmp,
         coverages=tmp_path / "coverages.csv",
-        benefit_patterns=tmp_path / "benefit_patterns.csv",
+        calculation_methods=tmp_path / "calculation_methods.csv",
     )
     mp_mem = fcf.load_sample_model_points()
     assert mp_file.n_mp == mp_mem.n_mp
@@ -89,7 +89,7 @@ def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
     fcf.save_sample_assumptions(tmp_path / "assumptions.xlsx")
     fcf.save_sample_policies(tmp_path / "policies.csv")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
-    fcf.save_sample_benefit_patterns(tmp_path / "benefit_patterns.csv")
+    fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
     fcf.save_sample_inforce_state(tmp_path / "inforce_state.csv")
     fcf.save_sample_inforce_policies(tmp_path / "inforce_policies.csv")
 
@@ -100,7 +100,7 @@ def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
     mp_a = fcf.read_model_points(
         tmp_path / "policies.csv", asmp,
         coverages=tmp_path / "coverages.csv",
-        benefit_patterns=tmp_path / "benefit_patterns.csv",
+        calculation_methods=tmp_path / "calculation_methods.csv",
     )
     state_a = fcf.read_inforce_state(tmp_path / "inforce_state.csv")
     mp_a = fcf.apply_inforce_state(mp_a, state_a)
@@ -109,7 +109,7 @@ def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
     mp_b, state_b = fcf.read_inforce_policies(
         tmp_path / "inforce_policies.csv", asmp,
         coverages=tmp_path / "coverages.csv",
-        benefit_patterns=tmp_path / "benefit_patterns.csv",
+        calculation_methods=tmp_path / "calculation_methods.csv",
     )
 
     assert mp_a.n_mp == mp_b.n_mp
@@ -138,14 +138,14 @@ def test_read_inforce_policies_rejects_missing_state_columns(tmp_path):
     fcf.save_sample_policies(tmp_path / "broken.csv")  # spec only, no state
     fcf.save_sample_assumptions(tmp_path / "assumptions.xlsx")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
-    fcf.save_sample_benefit_patterns(tmp_path / "benefit_patterns.csv")
+    fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
     asmp = fcf.read_assumptions(tmp_path / "assumptions.xlsx")[("TERM_LIFE_A", "GA")]
 
     with pytest.raises(ValueError, match="missing required column"):
         fcf.read_inforce_policies(
             tmp_path / "broken.csv", asmp,
             coverages=tmp_path / "coverages.csv",
-            benefit_patterns=tmp_path / "benefit_patterns.csv",
+            calculation_methods=tmp_path / "calculation_methods.csv",
         )
 
 
@@ -158,12 +158,12 @@ def test_save_sample_inforce_policies_round_trip(tmp_path):
 
     fcf.save_sample_assumptions(tmp_path / "assumptions.xlsx")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
-    fcf.save_sample_benefit_patterns(tmp_path / "benefit_patterns.csv")
+    fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
     asmp = fcf.read_assumptions(tmp_path / "assumptions.xlsx")[("TERM_LIFE_A", "GA")]
     mp, state = fcf.read_inforce_policies(
         path, asmp,
         coverages=tmp_path / "coverages.csv",
-        benefit_patterns=tmp_path / "benefit_patterns.csv",
+        calculation_methods=tmp_path / "calculation_methods.csv",
     )
     assert mp.n_mp > 0
     assert state.lock_in_rate == 0.03
@@ -190,14 +190,14 @@ def test_save_sample_converts_to_xlsx_single_sheet(tmp_path):
     fcf.save_sample_assumptions(tmp_path / "assumptions.xlsx")
     fcf.save_sample_policies(tmp_path / "policies.xlsx")
     fcf.save_sample_coverages(tmp_path / "coverages.xlsx")
-    fcf.save_sample_benefit_patterns(tmp_path / "benefit_patterns.xlsx")
+    fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.xlsx")
 
     basis = fcf.read_assumptions(tmp_path / "assumptions.xlsx")
     mp = fcf.read_model_points(
         tmp_path / "policies.xlsx",
         basis[("TERM_LIFE_A", "GA")],
         coverages=tmp_path / "coverages.xlsx",
-        benefit_patterns=tmp_path / "benefit_patterns.xlsx",
+        calculation_methods=tmp_path / "calculation_methods.xlsx",
     )
     assert mp.n_mp == fcf.load_sample_model_points().n_mp
 
@@ -207,7 +207,7 @@ def test_save_sample_rejects_unsupported_extension(tmp_path):
     clearly instead of writing a silently empty file."""
     import pytest
     with pytest.raises(ValueError, match="unsupported file type"):
-        fcf.save_sample_benefit_patterns(tmp_path / "bp.json")
+        fcf.save_sample_calculation_methods(tmp_path / "bp.json")
 
 
 def test_save_sample_assumptions_rejects_non_xlsx(tmp_path):

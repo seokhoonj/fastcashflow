@@ -12,7 +12,7 @@ from conftest import annual_from_monthly as _annual
 from fastcashflow import (
     STATE_MODELS,
     Assumptions,
-    BenefitPattern,
+    CalculationMethod,
     ExpenseItem,
     ModelPoints,
     CoverageRate,
@@ -152,7 +152,7 @@ def test_value_gpu_matches_cpu_with_transition():
         level_premium=rng.integers(3, 15, n) * 10_000.0,
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),
-        benefit_patterns={"DEATH": BenefitPattern.DEATH, "dx": BenefitPattern.DIAGNOSIS},
+        calculation_methods={"DEATH": CalculationMethod.DEATH, "dx": CalculationMethod.DIAGNOSIS},
     )
     cpu = value(mps, asmp, backend="cpu")
     gpu = value(mps, asmp, backend="gpu")

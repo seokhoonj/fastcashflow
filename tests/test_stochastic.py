@@ -35,7 +35,7 @@ def _portfolio(n: int = 200) -> ModelPoints:
         benefits={0: rng.integers(20, 90, n) * 1_000_000},
         level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
 
 

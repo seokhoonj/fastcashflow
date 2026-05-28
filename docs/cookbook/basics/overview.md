@@ -13,13 +13,13 @@
 
 코드에서 reader 가 도는 순서가 그대로입니다 — `read_assumptions` 가
 먼저 (engine 가정), 그 다음 `read_model_points` 가 policies / coverages /
-benefit_patterns 셋을 읽어 한 ModelPoints 개체로 묶습니다.
+calculation_methods 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 
 ## 어느 챕터에서 어디까지 쓰나
 
 | 챕터 | 사용하는 자리 |
 |---|---|
-| [지급 패턴과 계산방식 매칭](benefit-patterns-catalog) | `benefit_patterns.csv` 의 자리. 다섯 패턴의 의미. |
+| [지급 패턴과 계산방식 매칭](calculation-methods) | `calculation_methods.csv` 의 자리. 다섯 패턴의 의미. |
 | [보장 청구 메커니즘](coverage-mechanics) | DEATH / MORBIDITY / DIAGNOSIS 의 kernel 알고리즘. |
 | [정기보험 평가](../simple/term-life) | `save_sample_*` → `read_*` → `measure / value` → `print` |
 | [검증 패턴](../workflow/validation) | `show_trace` / `show_bel_step` / `show_csm_step` / `show_trace_diff` |

@@ -33,7 +33,7 @@ def test_premium_term_hand_calculation():
     mp = ModelPoints.single(
         issue_age=40, benefits={0: death_benefit}, level_premium=premium,
         term_months=3, premium_term_months=2,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = _assumptions()
     res = measure(mp, asmp)
@@ -64,10 +64,10 @@ def test_premium_term_defaults_to_full_term():
               level_premium=12_000.0, term_months=120)
     asmp = _assumptions()
 
-    default = ModelPoints.single(**kw, benefit_patterns=PATTERNS)
+    default = ModelPoints.single(**kw, calculation_methods=PATTERNS)
     assert np.all(default.premium_term_months == 120)
 
-    explicit = ModelPoints.single(**kw, premium_term_months=120, benefit_patterns=PATTERNS)
+    explicit = ModelPoints.single(**kw, premium_term_months=120, calculation_methods=PATTERNS)
     assert np.isclose(value(default, asmp).bel[0], value(explicit, asmp).bel[0])
 
 
@@ -78,8 +78,8 @@ def test_shorter_premium_term_raises_the_liability():
               level_premium=30_000.0, term_months=240)
     asmp = _assumptions()
 
-    full_pay = value(ModelPoints.single(**kw, premium_term_months=240, benefit_patterns=PATTERNS), asmp)
-    short_pay = value(ModelPoints.single(**kw, premium_term_months=120, benefit_patterns=PATTERNS), asmp)
+    full_pay = value(ModelPoints.single(**kw, premium_term_months=240, calculation_methods=PATTERNS), asmp)
+    short_pay = value(ModelPoints.single(**kw, premium_term_months=120, calculation_methods=PATTERNS), asmp)
 
     assert short_pay.bel[0] > full_pay.bel[0]
 
@@ -93,7 +93,7 @@ def test_premium_term_round_trips(tmp_path):
         term_months=np.array([120, 120]),
         benefits={0: np.array([1_000_000.0, 1_000_000.0])},
         premium_term_months=np.array([120, 60]),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     path = tmp_path / "model_points.csv"
     mp.to_wide(asmp).write_csv(path)

@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from fastcashflow import Assumptions, BenefitPattern, CoverageRate
+from fastcashflow import Assumptions, CalculationMethod, CoverageRate
 
 
-PATTERNS = {"DEATH": BenefitPattern.DEATH}
+PATTERNS = {"DEATH": CalculationMethod.DEATH}
 
 
 def annual_from_monthly(m: float) -> float:

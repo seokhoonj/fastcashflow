@@ -256,9 +256,9 @@ class CoverageRate:
     -----
     Whether a coverage runs as a depleting diagnosis pool vs a recurring
     claim, and which risk class the RA prices it as, is *derived* from
-    the portfolio-level :class:`BenefitPattern` taxonomy (the
-    ``benefit_patterns.csv`` file, surfaced as
-    :attr:`fastcashflow.modelpoints.ModelPoints.benefit_patterns`). Those
+    the portfolio-level :class:`CalculationMethod` taxonomy (the
+    ``calculation_methods.csv`` file, surfaced as
+    :attr:`fastcashflow.modelpoints.ModelPoints.calculation_methods`). Those
     two flags do not live on :class:`CoverageRate`.
     """
 
@@ -382,7 +382,7 @@ class Assumptions:
         payout) that happen to share a table in most products. The taxonomy
         side -- whether a coverage code runs as a diagnosis pool vs a
         recurring claim -- lives on the portfolio
-        (:attr:`fastcashflow.modelpoints.ModelPoints.benefit_patterns`),
+        (:attr:`fastcashflow.modelpoints.ModelPoints.calculation_methods`),
         not here.
     state_model :
         The product's in-force state machine -- a :class:`~fastcashflow.statemodel.StateModel`

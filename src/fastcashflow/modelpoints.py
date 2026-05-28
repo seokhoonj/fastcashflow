@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow.coverage import BenefitPattern
+from fastcashflow.coverage import CalculationMethod
 
 # Contract states -- a model point's in-force state at the valuation date.
 # ACTIVE is the ordinary premium-paying contract. WAIVER (premium waived on a
@@ -133,8 +133,8 @@ class ModelPoints:
     product_code: np.ndarray | None = None
     channel_code: np.ndarray | None = None
     # Portfolio-level taxonomy of coverage codes -- ``{coverage_code:
-    # BenefitPattern}``. The dict is the company catalogue (the
-    # ``benefit_patterns.csv`` file): every code a contract may attach is
+    # CalculationMethod}``. The dict is the company catalogue (the
+    # ``calculation_methods.csv`` file): every code a contract may attach is
     # registered here with its kernel-routing pattern (DEATH / MORBIDITY /
     # DIAGNOSIS / ANNUITY / MATURITY). The engine derives
     # ``(is_diagnosis, risk)`` from the pattern via
@@ -144,7 +144,7 @@ class ModelPoints:
     # default (every rate-driven coverage treated as a non-diagnosis
     # morbidity claim) -- fine for a hand-written one-MP test that does
     # not need the taxonomy.
-    benefit_patterns: dict[str, "BenefitPattern"] | None = None
+    calculation_methods: dict[str, "CalculationMethod"] | None = None
     # Rate-driven coverage codes in registration order, captured at
     # construction time. The integers in ``coverage_index`` are positional
     # indices into this tuple (equivalently, into the ``Assumptions.coverages``
@@ -154,7 +154,7 @@ class ModelPoints:
     # value, so a mismatch is refused with a clear error. ``None`` skips the
     # strict check (a hand-written one-MP test that did not pin an
     # assumptions order); the catalogue-consistency check on
-    # ``benefit_patterns`` still applies.
+    # ``calculation_methods`` still applies.
     coverage_codes: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
@@ -281,13 +281,13 @@ class ModelPoints:
                         f"{name} must have shape ({n_mp},), got {value.shape}"
                     )
             object.__setattr__(self, name, value)
-        # Benefit-pattern taxonomy -- normalise dict values to BenefitPattern
+        # Benefit-pattern taxonomy -- normalise dict values to CalculationMethod
         # members so a CSV-derived ``{"CANCER": "DIAGNOSIS"}`` works the same
-        # as a hand-built ``{"CANCER": BenefitPattern.DIAGNOSIS}``.
-        bp = self.benefit_patterns
+        # as a hand-built ``{"CANCER": CalculationMethod.DIAGNOSIS}``.
+        bp = self.calculation_methods
         if bp is not None:
-            bp = {str(k): BenefitPattern(v) for k, v in bp.items()}
-            object.__setattr__(self, "benefit_patterns", bp)
+            bp = {str(k): CalculationMethod(v) for k, v in bp.items()}
+            object.__setattr__(self, "calculation_methods", bp)
         # Registered coverage codes -- normalise to an immutable tuple of str
         # so a hand-built list or a polars Series passes through, and the
         # stored value can never drift out of sync with itself.
@@ -321,7 +321,7 @@ class ModelPoints:
         count: float = 1.0,
         sex: int = 0,
         state: int = STATE_ACTIVE,
-        benefit_patterns: dict[str, "BenefitPattern"] | None = None,
+        calculation_methods: dict[str, "CalculationMethod"] | None = None,
     ) -> ModelPoints:
         """Build a single-model-point set -- a convenience for hand checks.
 
@@ -352,7 +352,7 @@ class ModelPoints:
                 None if benefits is None
                 else {k: np.array([v]) for k, v in benefits.items()}
             ),
-            benefit_patterns=benefit_patterns,
+            calculation_methods=calculation_methods,
         )
 
     def subset(self, indices) -> ModelPoints:
@@ -400,7 +400,7 @@ class ModelPoints:
             kwargs[name] = None if value is None else value[idx]
         # Taxonomy carries through unchanged -- subsetting drops rows, not
         # the company-level catalogue of coverage codes.
-        kwargs["benefit_patterns"] = self.benefit_patterns
+        kwargs["calculation_methods"] = self.calculation_methods
         # The registered coverage-code order is a property of the assumptions
         # the model points were built against, not of the row subset.
         kwargs["coverage_codes"] = self.coverage_codes
@@ -478,8 +478,8 @@ class ModelPoints:
         coverage_code = [label[int(k)] for k in self.coverage_index]
         amount = [float(a) for a in self.coverage_amount]
         # Survival benefits are scalar fields -- emit them as coverage rows.
-        for ctype, scalar in ((BenefitPattern.ANNUITY, self.annuity_payment),
-                              (BenefitPattern.MATURITY, self.maturity_benefit)):
+        for ctype, scalar in ((CalculationMethod.ANNUITY, self.annuity_payment),
+                              (CalculationMethod.MATURITY, self.maturity_benefit)):
             code = _coverage_label(self, ctype, str(ctype))
             for mp in np.nonzero(scalar)[0]:
                 mp_id.append(int(mp))
@@ -572,7 +572,7 @@ def apply_inforce_state(
 def _coverage_label(model_points, ctype, default):
     """The first coverage code of pattern ``ctype`` in the model points'
     portfolio taxonomy, or ``default`` if none is registered."""
-    registry = model_points.benefit_patterns or {}
+    registry = model_points.calculation_methods or {}
     for code, t in registry.items():
         if t == ctype:
             return code

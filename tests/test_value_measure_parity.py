@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    Assumptions, BenefitPattern, CoverageRate, ModelPoints, measure, value,
+    Assumptions, CalculationMethod, CoverageRate, ModelPoints, measure, value,
 )
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
@@ -56,7 +56,7 @@ def test_value_uses_coverage_rate_not_mortality_annual():
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1_000_000.0},
         level_premium=12_000.0, term_months=60,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     v_low  = value(mp, asmp_low)
     v_high = value(mp, asmp_high)
@@ -89,7 +89,7 @@ def test_measure_uses_coverage_rate_not_mortality_annual():
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1_000_000.0},
         level_premium=12_000.0, term_months=60,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     m_low  = measure(mp, asmp_low)
     m_high = measure(mp, asmp_high)
@@ -116,7 +116,7 @@ def test_value_and_measure_agree_with_settlement_pattern():
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1e8},
         level_premium=80_000.0, term_months=120,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     v = value(mp, asmp)
     m = measure(mp, asmp)
@@ -138,7 +138,7 @@ def test_value_rejects_nonzero_issue_class():
         term_months=np.array([60]),
         issue_class=np.array([1]),               # non-default class
         benefits={0: np.array([1e8])},
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = make_death_assumptions(mortality_q=0.005, lapse_q=0.01)
     with pytest.raises(NotImplementedError, match="issue_class"):
@@ -153,7 +153,7 @@ def test_value_accepts_default_issue_class():
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1e8},
         level_premium=12_000.0, term_months=60,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = make_death_assumptions(mortality_q=0.005, lapse_q=0.01)
     v = value(mp, asmp)

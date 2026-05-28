@@ -12,7 +12,7 @@ import numpy as np
 
 from fastcashflow import (
     Assumptions,
-    BenefitPattern,
+    CalculationMethod,
     ModelPoints,
     CoverageRate,
     measure,
@@ -29,8 +29,8 @@ DEATH = 0            # the death coverage -> coverages[0]
 DIAGNOSIS = 1        # the diagnosis coverage -> coverages[1]
 
 PATTERNS = {
-    "death":     BenefitPattern.DEATH,
-    "diagnosis": BenefitPattern.DIAGNOSIS,
+    "death":     CalculationMethod.DEATH,
+    "diagnosis": CalculationMethod.DIAGNOSIS,
 }
 
 
@@ -68,7 +68,7 @@ def _one_coverage(cov_idx, benefit, term, *, waiting=0,
         coverage_waiting=np.array([waiting]),
         coverage_reduction_end=np.array([reduction_end]),
         coverage_reduction_factor=np.array([reduction_factor]),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
 
 
@@ -171,7 +171,7 @@ def test_default_rule_is_inert():
         coverage_index=np.array([DIAGNOSIS]),
         coverage_amount=np.array([4e7]),
         coverage_offset=np.array([0, 1]),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     a, b = value(explicit, asmp), value(omitted, asmp)
     assert np.isclose(a.bel[0], b.bel[0])
@@ -201,7 +201,7 @@ def test_value_matches_measure_with_rules():
         coverage_waiting=rng.integers(0, 8, n_cov),
         coverage_reduction_end=rng.integers(0, 30, n_cov),
         coverage_reduction_factor=rng.choice([0.3, 0.5, 0.7], n_cov),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = _assumptions(morbidity_cv=0.15)
     fast = value(mps, asmp)

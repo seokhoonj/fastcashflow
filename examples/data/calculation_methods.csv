@@ -1,4 +1,4 @@
-coverage_code,coverage_name,benefit_pattern
+coverage_code,coverage_name,calculation_method
 DEATH,general (all-cause) death,DEATH
 INPATIENT,hospitalization,MORBIDITY
 CANCER,cancer diagnosis,DIAGNOSIS

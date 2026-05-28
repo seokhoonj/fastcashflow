@@ -14,7 +14,7 @@ import polars as pl
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import Assumptions, BenefitPattern, CoverageRate, ModelPoints
+from fastcashflow import Assumptions, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.assumptions import annual_to_monthly
 from fastcashflow.io import (
     _axis_tables, _flex_rate_table, _read_expense_tables, _read_state,
@@ -141,9 +141,9 @@ def test_wide_reader_rejects_collision_with_reserved_name(tmp_path):
         "issue_age": [40], "term_months": [12], "level_premium": [0.0],
         "maturity_benefit": [1_000_000.0],
     }).write_csv(pol_csv)
-    bp_csv = tmp_path / "benefit_patterns.csv"
+    bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["maturity"], "benefit_pattern": ["DEATH"],
+        "coverage_code": ["maturity"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_assumptions(asmp_book)
@@ -151,7 +151,7 @@ def test_wide_reader_rejects_collision_with_reserved_name(tmp_path):
         fcf.read_model_points(
             pol_csv,
             assumptions=basis[next(iter(basis))],
-            benefit_patterns=bp_csv,
+            calculation_methods=bp_csv,
         )
 
 
@@ -172,9 +172,9 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
     pl.DataFrame({
         "mp_id": ["A"], "coverage_code": ["DEATH"], "amount": [1e8],
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "benefit_patterns.csv"
+    bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "benefit_pattern": ["DEATH"],
+        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_assumptions(asmp_book)
@@ -182,7 +182,7 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
             assumptions=basis[next(iter(basis))],
-            benefit_patterns=bp_csv,
+            calculation_methods=bp_csv,
         )
 
 
@@ -200,9 +200,9 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
         "mp_id": ["A"], "coverage_code": ["DEATH"], "amount": [1e8],
         "premium": [1.0],               # source 2 -- silently overrode
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "benefit_patterns.csv"
+    bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "benefit_pattern": ["DEATH"],
+        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_assumptions(asmp_book)
@@ -210,7 +210,7 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
             assumptions=basis[next(iter(basis))],
-            benefit_patterns=bp_csv,
+            calculation_methods=bp_csv,
         )
 
 
@@ -228,9 +228,9 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
         "mp_id": ["A"], "coverage_code": ["DEATH"], "amount": [1e8],
         "reduction_factor": [0.5],      # no reduction_end -- never fires
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "benefit_patterns.csv"
+    bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "benefit_pattern": ["DEATH"],
+        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_assumptions(asmp_book)
@@ -238,7 +238,7 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
             assumptions=basis[next(iter(basis))],
-            benefit_patterns=bp_csv,
+            calculation_methods=bp_csv,
         )
 
 
@@ -424,9 +424,9 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
         "mp_id": ["ORPHAN_X"],            # not in policies
         "coverage_code": ["DEATH"], "amount": [1e8],
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "benefit_patterns.csv"
+    bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "benefit_pattern": ["DEATH"],
+        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_assumptions(asmp_book)
@@ -434,12 +434,12 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
             assumptions=basis[next(iter(basis))],
-            benefit_patterns=bp_csv,
+            calculation_methods=bp_csv,
         )
 
 
 def test_long_form_orphan_coverage_code_names_offender(tmp_path):
-    """``cov.coverage_code`` not in benefit_patterns: the error names the code."""
+    """``cov.coverage_code`` not in calculation_methods: the error names the code."""
     asmp_book = tmp_path / "assumptions.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
     pol_csv = tmp_path / "policies.csv"
@@ -451,9 +451,9 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
     pl.DataFrame({
         "mp_id": ["A"], "coverage_code": ["GHOST_CODE"], "amount": [1e8],
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "benefit_patterns.csv"
+    bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "benefit_pattern": ["DEATH"],
+        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_assumptions(asmp_book)
@@ -461,7 +461,7 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
             assumptions=basis[next(iter(basis))],
-            benefit_patterns=bp_csv,
+            calculation_methods=bp_csv,
         )
 
 
@@ -480,16 +480,16 @@ def test_long_form_no_premium_source_warns(tmp_path, recwarn):
         "mp_id": ["A"], "coverage_code": ["DEATH"], "amount": [1e8],
         # no premium
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "benefit_patterns.csv"
+    bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "benefit_pattern": ["DEATH"],
+        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_assumptions(asmp_book)
     fcf.read_model_points(
         pol_csv, coverages=cov_csv,
         assumptions=basis[next(iter(basis))],
-        benefit_patterns=bp_csv,
+        calculation_methods=bp_csv,
     )
     matched = [w for w in recwarn.list
                if issubclass(w.category, UserWarning)
@@ -657,12 +657,12 @@ def test_value_segmented_matches_nfc_and_nfd_codes():
 # ---------------------------------------------------------------------------
 
 def test_coverage_arrays_rejects_unresolved_code():
-    """A coverage code that is neither in benefit_patterns nor a bare
-    BenefitPattern name raises naming the offender."""
+    """A coverage code that is neither in calculation_methods nor a bare
+    CalculationMethod name raises naming the offender."""
     from fastcashflow.coverage import coverage_arrays
     coverages = (CoverageRate("MYSTERY_CODE", _flat_rate()),)
     with pytest.raises(ValueError, match="MYSTERY_CODE"):
-        coverage_arrays(coverages, benefit_patterns=None)
+        coverage_arrays(coverages, calculation_methods=None)
 
 
 def test_settlement_lic_rejects_bad_settlement_pattern_sum():

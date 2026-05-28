@@ -53,7 +53,7 @@ def _single_contract(term_months: int, *, death_benefit: float = 10_000_000.0,
         level_premium=np.array([0.0]),
         term_months=np.array([term_months], dtype=np.int64),
         disability_benefit=np.array([reincidence_benefit]),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
 
 
@@ -145,7 +145,7 @@ def test_one_month_reincidence_active_via_seating():
         term_months=np.array([1], dtype=np.int64),
         disability_benefit=np.array([5_000_000.0]),
         state=np.array([1], dtype=np.int64),    # seat on post_first,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     v = fcf.value(mp, asmp)
     assert np.isclose(v.bel[0], 109_900.0), v.bel[0]
@@ -169,7 +169,7 @@ def test_reincidence_rate_zero_in_exclusion_window():
         term_months=np.array([1], dtype=np.int64),
         disability_benefit=np.array([5_000_000.0]),
         state=np.array([1], dtype=np.int64),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     v_excl = fcf.value(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_with_excl))
     v_zero = fcf.value(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_all_zero))
@@ -233,7 +233,7 @@ def test_measure_value_agree_mixed_portfolio():
         term_months=rng.integers(60, 180, n).astype(np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
         state=rng.integers(0, 3, n).astype(np.int64),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = _reincidence_assumptions(duration_max=24, exclusion_months=12,
                                      reincidence_monthly=0.008)
@@ -254,7 +254,7 @@ def test_measure_value_agree_long_cohort():
         level_premium=np.zeros(n),
         term_months=np.full(n, 120, dtype=np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = _reincidence_assumptions(duration_max=60, exclusion_months=24,
                                      reincidence_monthly=0.012)
@@ -333,8 +333,8 @@ def _portfolio_with_rule_coverage(n, seed, extra_waiting, extra_reduction_end,
         coverage_waiting[2 * i + 1] = extra_waiting
         coverage_reduction_end[2 * i + 1] = extra_reduction_end
         coverage_reduction_factor[2 * i + 1] = extra_reduction_factor
-    extra_pattern = (fcf.BenefitPattern.DIAGNOSIS if extra_is_diagnosis
-                     else fcf.BenefitPattern.MORBIDITY)
+    extra_pattern = (fcf.CalculationMethod.DIAGNOSIS if extra_is_diagnosis
+                     else fcf.CalculationMethod.MORBIDITY)
     return fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
@@ -347,7 +347,7 @@ def _portfolio_with_rule_coverage(n, seed, extra_waiting, extra_reduction_end,
         coverage_waiting=coverage_waiting,
         coverage_reduction_end=coverage_reduction_end,
         coverage_reduction_factor=coverage_reduction_factor,
-        benefit_patterns={"DEATH": fcf.BenefitPattern.DEATH, "EXTRA": extra_pattern},
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH, "EXTRA": extra_pattern},
     )
 
 
@@ -483,7 +483,7 @@ def test_di_recovery_hand_calc_one_month_seated_on_disabled():
         term_months=np.array([1], dtype=np.int64),
         disability_income=np.array([1_000_000.0]),
         state=np.array([1], dtype=np.int64),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     v = fcf.value(mp, asmp)
     assert np.isclose(v.bel[0], 1_000_000.0), v.bel[0]
@@ -502,7 +502,7 @@ def test_di_recovery_higher_rate_drains_disabled_occupancy_faster():
         term_months=np.array([24], dtype=np.int64),
         disability_income=np.array([1_000_000.0]),
         state=np.array([1], dtype=np.int64),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     low = fcf.measure(mp, _di_assumptions(
         duration_max=24, recovery_monthly=0.01))
@@ -553,7 +553,7 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
         term_months=rng.integers(60, 180, n).astype(np.int64),
         disability_income=rng.integers(3, 10, n) * 100_000.0,
         state=rng.integers(0, 2, n).astype(np.int64),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
     assert np.allclose(m.bel[:, 0], v.bel)
@@ -599,10 +599,10 @@ def _portfolio_with_rule_and_diagnosis_coverages(n, seed, rule_waiting,
         coverage_waiting=coverage_waiting,
         coverage_reduction_end=coverage_reduction_end,
         coverage_reduction_factor=coverage_reduction_factor,
-        benefit_patterns={
-            "DEATH": fcf.BenefitPattern.DEATH,
-            "recur": fcf.BenefitPattern.MORBIDITY,
-            "diag":  fcf.BenefitPattern.DIAGNOSIS,
+        calculation_methods={
+            "DEATH": fcf.CalculationMethod.DEATH,
+            "recur": fcf.CalculationMethod.MORBIDITY,
+            "diag":  fcf.CalculationMethod.DIAGNOSIS,
         },
     )
 

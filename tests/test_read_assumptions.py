@@ -86,26 +86,26 @@ def test_every_segment_has_expense_items():
 def test_coverages_resolved():
     """Rate-driven coverages resolve from ``incidence_rate_tables`` (or
     ``mortality_tables`` for the general death coverage); the pattern
-    taxonomy now lives in ``benefit_patterns.csv`` (read by
-    :func:`load_sample_benefit_patterns`), no longer on the
+    taxonomy now lives in ``calculation_methods.csv`` (read by
+    :func:`load_sample_calculation_methods`), no longer on the
     :class:`Assumptions`. The order matches the workbook's ``coverages``
     sheet rows; the engine treats every entry as an ordinary rate-driven
     coverage (no slot reserved)."""
-    from fastcashflow import load_sample_benefit_patterns, BenefitPattern
+    from fastcashflow import load_sample_calculation_methods, CalculationMethod
 
     basis = load_sample_assumptions()
     asmp = basis[("TERM_LIFE_A", "GA")]
     assert [r.code for r in asmp.coverages] == [
         "DEATH", "INPATIENT", "CANCER", "ADB", "DISEASE_DEATH",
     ]
-    assert load_sample_benefit_patterns() == {
-        "DEATH":         BenefitPattern.DEATH,
-        "INPATIENT":     BenefitPattern.MORBIDITY,
-        "CANCER":        BenefitPattern.DIAGNOSIS,
-        "ADB":           BenefitPattern.DEATH,
-        "DISEASE_DEATH": BenefitPattern.DEATH,
-        "ANNUITY":       BenefitPattern.ANNUITY,
-        "MATURITY":      BenefitPattern.MATURITY,
+    assert load_sample_calculation_methods() == {
+        "DEATH":         CalculationMethod.DEATH,
+        "INPATIENT":     CalculationMethod.MORBIDITY,
+        "CANCER":        CalculationMethod.DIAGNOSIS,
+        "ADB":           CalculationMethod.DEATH,
+        "DISEASE_DEATH": CalculationMethod.DEATH,
+        "ANNUITY":       CalculationMethod.ANNUITY,
+        "MATURITY":      CalculationMethod.MATURITY,
     }
 
 
@@ -113,11 +113,11 @@ def test_resolved_basis_values():
     """A resolved ``Assumptions`` runs through ``value`` and ``measure``; the
     GA and FC segments give different BEL because lapse differs (channel
     segmentation actually bites the valuation)."""
-    from fastcashflow import load_sample_benefit_patterns
+    from fastcashflow import load_sample_calculation_methods
     basis = load_sample_assumptions()
     mp = ModelPoints.single(issue_age=40, benefits={0: 100_000_000.0},
                             level_premium=50_000.0, term_months=120,
-                            benefit_patterns=load_sample_benefit_patterns())
+                            calculation_methods=load_sample_calculation_methods())
     # Use a copy of the basis without surrender for the value() / measure()
     # equivalence assertion -- the value() fast path doesn't yet include
     # surrender cash flows (see surrender-value-gap memory); only measure()

@@ -30,7 +30,7 @@
   - 한 줄 요약
 * - 기초 (Basics)
   - 엔진의 기본 동작 원리
-  - 모든 상품 챕터의 사전 개념. BenefitPattern 의 의미와 엔진 안에서의
+  - 모든 상품 챕터의 사전 개념. CalculationMethod 의 의미와 엔진 안에서의
     청구 메커니즘.
 * - 단순 상품
   - 상태 추적 없는 정액형
@@ -66,13 +66,13 @@
   - 다루는 것
 * - 1.1
   - [한눈에 보기](basics/overview)
-  - 네 갈래의 입력 파일 (policies / coverages / benefit_patterns /
+  - 네 갈래의 입력 파일 (policies / coverages / calculation_methods /
     assumptions) 과 fastcashflow 사용자 API 의 트리 구조. 후속 챕터를
     어디서 어떻게 호출하는지 미리 그림.
 * - 1.2
-  - [지급 패턴과 계산방식 매칭](basics/benefit-patterns-catalog)
+  - [지급 패턴과 계산방식 매칭](basics/calculation-methods)
   - 5 종 패턴 (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) 의
-    의미. 담보 패턴 매핑 (`benefit_patterns.csv`) 작성.
+    의미. 담보 계산방식 (`calculation_methods.csv`) 작성.
 * - 1.3
   - [사망률의 두 역할](basics/mortality-roles)
   - `mortality_annual` (보유계약 감쇠) 과 `coverages` 의 DEATH rate (보장
@@ -205,7 +205,7 @@
 :caption: 기초 (Basics)
 
 basics/overview
-basics/benefit-patterns-catalog
+basics/calculation-methods
 basics/mortality-roles
 basics/coverage-mechanics
 ```

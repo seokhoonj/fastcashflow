@@ -323,7 +323,7 @@ mp_one = ModelPoints(
     level_premium    = np.array([200_000.0]),                     # 월납 보험료 20 만
     term_months      = np.array([60]),                            # 보험기간 60 개월 (5 년)
     benefits         = {0: np.array([100_000_000.0])},            # 0 번 보장 (= DEATH) 의 보험금 1 억
-    benefit_patterns = {"DEATH": fcf.BenefitPattern.DEATH},       # 코드 → 패턴 매핑
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},       # 코드 → 패턴 매핑
 )
 
 fcf.show_csm_step(0, mp_one, profitable, months=[1, 30, 60])

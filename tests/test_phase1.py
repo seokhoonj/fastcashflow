@@ -34,7 +34,7 @@ def test_risk_adjustment():
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=2,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _assumptions(ra_confidence=0.75, mortality_cv=0.20),
     )
@@ -50,7 +50,7 @@ def test_expenses():
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=2,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _assumptions(
             expense_items=(
@@ -78,7 +78,7 @@ def test_expense_inflation():
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=13,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0)),

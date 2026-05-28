@@ -68,7 +68,7 @@
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA` |
 | `table_id` | SCREAMING_SNAKE_CASE | `MORTALITY_STD`, `LAPSE_GA` |
 | `coverage_code` | SCREAMING_SNAKE_CASE | `DEATH`, `INPATIENT` |
-| `benefit_pattern` | SCREAMING_SNAKE_CASE | `DEATH`, `MORBIDITY` |
+| `calculation_method` | SCREAMING_SNAKE_CASE | `DEATH`, `MORBIDITY` |
 | 컬럼 헤더 | snake_case 소문자 | `alpha_flat`, `mortality_cv` |
 
 **근거**:

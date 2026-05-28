@@ -131,14 +131,14 @@ print(m.bel[:, 0], m.ra[:, 0], m.csm[:, 0])   # BEL / RA / CSM at issue
 ```
 
 Outside the samples you build the inputs yourself -- the company catalogue
-(`benefit_patterns`) declaring how each coverage code pays out, the per-policy
+(`calculation_methods`) declaring how each coverage code pays out, the per-policy
 model points, and the actuarial assumptions:
 
 ```python
 import numpy as np
 import fastcashflow as fcf
 
-PATTERNS = {"DEATH": fcf.BenefitPattern.DEATH}             # company catalogue
+PATTERNS = {"DEATH": fcf.CalculationMethod.DEATH}             # company catalogue
 
 flat_mort = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
 assumptions = fcf.Assumptions(
@@ -157,7 +157,7 @@ assumptions = fcf.Assumptions(
 model_points = fcf.ModelPoints.single(
     issue_age=40, benefits={0: 100_000_000},                         # 0 = first coverage (DEATH)
     level_premium=70_000, term_months=120,
-    benefit_patterns=PATTERNS,
+    calculation_methods=PATTERNS,
 )
 res = fcf.measure(model_points, assumptions)
 print(res.bel[0, 0], res.ra[0, 0], res.csm[0, 0])   # [model point, month]
@@ -180,7 +180,7 @@ makes the contract an endowment, and `solve_premium` prices it:
 endowment = fcf.ModelPoints.single(
     issue_age=40, benefits={0: 100_000_000},
     level_premium=0, term_months=120, maturity_benefit=50_000_000,
-    benefit_patterns=PATTERNS,
+    calculation_methods=PATTERNS,
 )
 premium = fcf.solve_premium(endowment, assumptions, margin=0.10)   # 10% profit margin
 ```

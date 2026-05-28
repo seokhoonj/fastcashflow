@@ -15,9 +15,9 @@
   서로를 검증하는가
 ```
 
-각 `BenefitPattern` 이 *카탈로그의 라벨* 이라면 — `DEATH` 라고 적는 것 vs
+각 `CalculationMethod` 이 *카탈로그의 라벨* 이라면 — `DEATH` 라고 적는 것 vs
 `DIAGNOSIS` 라고 적는 것의 차이는 어디서 결정나나? 카탈로그 결정은
-[BenefitPattern 결정 가이드](benefit-patterns-catalog) 의 자리이고, 본
+[CalculationMethod 결정 가이드](calculation-methods) 의 자리이고, 본
 챕터는 **엔진이 그 패턴을 받아서 무엇을 다르게 하는가** 입니다.
 
 이 챕터의 모든 예제는 동일한 toy 설정 — 월 사망/발생/진단율 1%, 보험금
@@ -82,7 +82,7 @@ mp = fcf.ModelPoints.single(
     benefits         = {0: 12_000},                             # 0 번 보장 (= DEATH) 의 보험금 12,000
     level_premium    = 0,                                       # 월납 보험료 0 (보험료 cash flow 무시)
     term_months      = 3,                                       # 보험기간 3 개월
-    benefit_patterns = {"DEATH": fcf.BenefitPattern.DEATH},     # 코드 → 패턴 매핑
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},     # 코드 → 패턴 매핑
 )
 r = fcf.measure(mp, asmp)
 
@@ -142,7 +142,7 @@ mp = fcf.ModelPoints.single(
     benefits         = {0: 12_000},                                        # 0 번 보장 (= INPATIENT) 의 입원 1 건당 12,000
     level_premium    = 0,                                                  # 월납 보험료 0 (보험료 cash flow 무시)
     term_months      = 3,                                                  # 보험기간 3 개월
-    benefit_patterns = {"INPATIENT": fcf.BenefitPattern.MORBIDITY},        # 코드 → 패턴 매핑
+    calculation_methods = {"INPATIENT": fcf.CalculationMethod.MORBIDITY},        # 코드 → 패턴 매핑
 )
 r = fcf.measure(mp, asmp)
 
@@ -207,7 +207,7 @@ mp = fcf.ModelPoints.single(
     benefits         = {0: 12_000},                                   # 0 번 보장 (= CANCER) 의 진단 일시금 12,000
     level_premium    = 0,                                             # 월납 보험료 0 (보험료 cash flow 무시)
     term_months      = 3,                                             # 보험기간 3 개월
-    benefit_patterns = {"CANCER": fcf.BenefitPattern.DIAGNOSIS},      # 코드 → 패턴 매핑
+    calculation_methods = {"CANCER": fcf.CalculationMethod.DIAGNOSIS},      # 코드 → 패턴 매핑
 )
 r = fcf.measure(mp, asmp)
 
@@ -345,7 +345,7 @@ asmp_buggy = fcf.Assumptions(
 
 ## 인접 레시피
 
-- [BenefitPattern 결정 가이드](benefit-patterns-catalog) — 담보 패턴 매핑의
+- [CalculationMethod 결정 가이드](calculation-methods) — 담보 계산방식의
   매 코드를 어느 패턴으로 등록할지. 본 챕터는 그 패턴이 *엔진 안에서*
   어떻게 다르게 동작하는지.
 - [정기보험 평가](../simple/term-life) — DEATH 만 사용하는 가장 단순한 사례.

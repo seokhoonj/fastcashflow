@@ -32,7 +32,7 @@ def _portfolio(n: int = 60) -> ModelPoints:
         benefits={0: rng.integers(20, 90, n) * 1_000_000},
         level_premium=rng.integers(8, 20, n) * 10_000,
         term_months=np.full(n, 120),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
 
 
@@ -43,7 +43,7 @@ def _two_contracts() -> ModelPoints:
         benefits={0: np.array([1e8, 1e8])},
         level_premium=np.array([300_000.0, 60_000.0]),
         term_months=np.array([120, 120]),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
 
 

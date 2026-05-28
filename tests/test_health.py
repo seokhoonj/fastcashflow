@@ -8,7 +8,7 @@ import numpy as np
 
 from fastcashflow import (
     Assumptions,
-    BenefitPattern,
+    CalculationMethod,
     ModelPoints,
     CoverageRate,
     measure,
@@ -18,11 +18,11 @@ from fastcashflow.numerics import _norm_ppf
 from conftest import annual_from_monthly as _annual
 
 PATTERNS = {
-    "death":     BenefitPattern.DEATH,
-    "inpatient": BenefitPattern.MORBIDITY,
-    "surgery":   BenefitPattern.MORBIDITY,
-    "outpatient":BenefitPattern.MORBIDITY,
-    "diagnosis": BenefitPattern.DIAGNOSIS,
+    "death":     CalculationMethod.DEATH,
+    "inpatient": CalculationMethod.MORBIDITY,
+    "surgery":   CalculationMethod.MORBIDITY,
+    "outpatient":CalculationMethod.MORBIDITY,
+    "diagnosis": CalculationMethod.DIAGNOSIS,
 }
 
 Q = 0.002            # flat monthly mortality
@@ -62,7 +62,7 @@ def test_inpatient_benefit_adds_its_present_value():
     asmp = _assumptions(morbidity_cv=0.15)
     benefit, term = 30_000.0, 24
     res = measure(
-        ModelPoints.single(40, 0.0, term, benefits={INPATIENT: benefit}, benefit_patterns=PATTERNS),
+        ModelPoints.single(40, 0.0, term, benefits={INPATIENT: benefit}, calculation_methods=PATTERNS),
         asmp,
     )
 
@@ -84,14 +84,14 @@ def test_health_claim_is_non_decrementing():
     asmp = _assumptions()
     term = 36
     plain = measure(
-        ModelPoints.single(40, 50_000.0, term, benefits={0: 1e8}, benefit_patterns=PATTERNS),
+        ModelPoints.single(40, 50_000.0, term, benefits={0: 1e8}, calculation_methods=PATTERNS),
         asmp,
     )
     with_health = measure(
         ModelPoints.single(
             40, 50_000.0, term,
             benefits={0: 1e8, INPATIENT: 30_000.0, SURGERY: 2e6},
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         asmp,
     )
@@ -106,7 +106,7 @@ def test_health_claim_is_non_decrementing():
 
 def test_morbidity_ra_responds_to_its_cv():
     """The morbidity RA is zero without morbidity_cv and linear in it."""
-    health = ModelPoints.single(40, 0.0, 60, benefits={INPATIENT: 30_000.0}, benefit_patterns=PATTERNS)
+    health = ModelPoints.single(40, 0.0, 60, benefits={INPATIENT: 30_000.0}, calculation_methods=PATTERNS)
     no_cv = measure(health, _assumptions(morbidity_cv=0.0))
     full_cv = measure(health, _assumptions(morbidity_cv=0.20))
     half_cv = measure(health, _assumptions(morbidity_cv=0.10))
@@ -127,7 +127,7 @@ def test_value_matches_measure_health():
         benefits={0: rng.integers(10, 80, n) * 1_000_000, INPATIENT: rng.integers(0, 5, n) * 10_000,
             SURGERY: rng.integers(0, 3, n) * 1_000_000,
             OUTPATIENT: rng.integers(0, 4, n) * 5_000},
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = _assumptions(morbidity_cv=0.15)
     fast = value(mps, asmp)
@@ -144,7 +144,7 @@ def test_diagnosis_benefit_hand_calc():
     asmp = _assumptions(morbidity_cv=0.12)
     benefit, term = 5e7, 24
     res = measure(
-        ModelPoints.single(40, 0.0, term, benefits={DIAGNOSIS: benefit}, benefit_patterns=PATTERNS),
+        ModelPoints.single(40, 0.0, term, benefits={DIAGNOSIS: benefit}, calculation_methods=PATTERNS),
         asmp,
     )
 
@@ -168,11 +168,11 @@ def test_diagnosis_pool_depletes():
     asmp = _assumptions()
     term, amount = 120, 1e7
     diagnosis = measure(
-        ModelPoints.single(40, 0.0, term, benefits={DIAGNOSIS: amount}, benefit_patterns=PATTERNS),
+        ModelPoints.single(40, 0.0, term, benefits={DIAGNOSIS: amount}, calculation_methods=PATTERNS),
         asmp,
     )
     inpatient = measure(
-        ModelPoints.single(40, 0.0, term, benefits={INPATIENT: amount}, benefit_patterns=PATTERNS),
+        ModelPoints.single(40, 0.0, term, benefits={INPATIENT: amount}, calculation_methods=PATTERNS),
         asmp,
     )
     # inpatient claims on the full in-force each month; diagnosis on the
@@ -190,7 +190,7 @@ def test_value_matches_measure_diagnosis():
         term_months=rng.integers(60, 180, n),
         benefits={0: rng.integers(10, 80, n) * 1_000_000, DIAGNOSIS: rng.integers(0, 6, n) * 10_000_000,
             INPATIENT: rng.integers(0, 4, n) * 10_000},
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = _assumptions(morbidity_cv=0.15)
     fast = value(mps, asmp)

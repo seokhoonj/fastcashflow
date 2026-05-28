@@ -28,7 +28,7 @@ def _assumptions(**overrides):
 def _contract(term: int = 120, g: float = 0.0) -> ModelPoints:
     return ModelPoints.single(
         40, 0.0, term, account_value=1e8, guaranteed_credit_rate=g,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
 
 

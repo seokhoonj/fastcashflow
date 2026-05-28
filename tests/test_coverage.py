@@ -43,10 +43,10 @@ def test_multiple_death_coverages_sum_to_one():
         coverage_index=np.array([DEATH, DEATH]),
         coverage_amount=np.array([a, b]),
         coverage_offset=np.array([0, 2]),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     combined = ModelPoints.single(
-        40, 80_000.0, term, benefits={0: a + b}, benefit_patterns=PATTERNS,
+        40, 80_000.0, term, benefits={0: a + b}, calculation_methods=PATTERNS,
     )
 
     m_split, m_comb = measure(split, asmp), measure(combined, asmp)
@@ -64,13 +64,13 @@ def test_no_coverages_matches_zero_death_benefit():
     """An empty coverage list equals a death benefit of zero."""
     asmp = _assumptions()
     explicit_zero = ModelPoints.single(
-        45, 50_000.0, 60, benefits={0: 0.0}, benefit_patterns=PATTERNS,
+        45, 50_000.0, 60, benefits={0: 0.0}, calculation_methods=PATTERNS,
     )
     no_coverages = ModelPoints(
         issue_age=np.array([45.0]),
         level_premium=np.array([50_000.0]),
         term_months=np.array([60]),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     a, b = value(explicit_zero, asmp), value(no_coverages, asmp)
     assert np.allclose(a.bel, b.bel)

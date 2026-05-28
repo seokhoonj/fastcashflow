@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    Assumptions, BenefitPattern, CoverageRate, ModelPoints,
+    Assumptions, CalculationMethod, CoverageRate, ModelPoints,
     measure, value, value_segmented,
 )
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
@@ -29,7 +29,7 @@ def test_value_segmented_rejects_pipe_in_product_code():
         product_code=np.array(["TERM|2020"]),         # the trap
         channel_code=np.array(["FC"]),
         benefits={0: np.array([1e8])},
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     basis = {("TERM|2020", "FC"): make_death_assumptions(
         mortality_q=0.005, lapse_q=0.01)}
@@ -45,7 +45,7 @@ def test_value_segmented_rejects_pipe_in_channel_code():
         product_code=np.array(["TERM_LIFE_A"]),
         channel_code=np.array(["FC|GA"]),            # the trap
         benefits={0: np.array([1e8])},
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     basis = {("TERM_LIFE_A", "FC|GA"): make_death_assumptions(
         mortality_q=0.005, lapse_q=0.01)}
@@ -59,12 +59,12 @@ def test_value_segmented_rejects_pipe_in_channel_code():
 
 def test_engine_rejects_catalogue_mismatch():
     """An Assumptions.coverages code that's absent from the model points'
-    benefit_patterns catalogue lands without a routing pattern and the
+    calculation_methods catalogue lands without a routing pattern and the
     engine falls back silently. Catch it loudly."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1e8},
         level_premium=12_000.0, term_months=60,
-        benefit_patterns={"DEATH": BenefitPattern.DEATH},  # catalogue: DEATH
+        calculation_methods={"DEATH": CalculationMethod.DEATH},  # catalogue: DEATH
     )
     asmp = Assumptions(
         mortality_annual=_flat(_annual(0.005)),
@@ -97,8 +97,8 @@ def test_engine_rejects_coverage_reorder():
         level_premium=np.array([12_000.0]),
         term_months=np.array([60]),
         benefits={0: np.array([1e8]), 1: np.array([1e7])},
-        benefit_patterns={"DEATH": BenefitPattern.DEATH,
-                          "CANCER": BenefitPattern.DIAGNOSIS},
+        calculation_methods={"DEATH": CalculationMethod.DEATH,
+                          "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),  # pinned order
     )
     asmp_swapped = Assumptions(
@@ -125,8 +125,8 @@ def test_engine_accepts_matching_coverage_codes():
         level_premium=np.array([12_000.0]),
         term_months=np.array([60]),
         benefits={0: np.array([1e8]), 1: np.array([1e7])},
-        benefit_patterns={"DEATH": BenefitPattern.DEATH,
-                          "CANCER": BenefitPattern.DIAGNOSIS},
+        calculation_methods={"DEATH": CalculationMethod.DEATH,
+                          "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
     )
     asmp = Assumptions(
@@ -162,8 +162,8 @@ def test_wide_reader_populates_coverage_codes(tmp_path):
         "issue_age": [40.0], "term_months": [60], "level_premium": [12_000.0],
         "DEATH_benefit": [1e8], "CANCER_benefit": [1e7],
     }).write_csv(path)
-    mp = read_model_points(path, asmp, benefit_patterns={
-        "DEATH": BenefitPattern.DEATH, "CANCER": BenefitPattern.DIAGNOSIS,
+    mp = read_model_points(path, asmp, calculation_methods={
+        "DEATH": CalculationMethod.DEATH, "CANCER": CalculationMethod.DIAGNOSIS,
     })
     assert mp.coverage_codes == ("DEATH", "CANCER")
 
@@ -180,8 +180,8 @@ def test_engine_rejects_coverage_length_mismatch():
         level_premium=np.array([12_000.0]),
         term_months=np.array([60]),
         benefits={0: np.array([1e8])},
-        benefit_patterns={"DEATH": BenefitPattern.DEATH,
-                          "CANCER": BenefitPattern.DIAGNOSIS},
+        calculation_methods={"DEATH": CalculationMethod.DEATH,
+                          "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH",),
     )
     asmp = Assumptions(

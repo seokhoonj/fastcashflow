@@ -6,7 +6,7 @@ coverage identifier that directly indexes the rate-driven coverages the
 assumptions register (see :class:`fastcashflow.assumptions.CoverageRate`),
 in registration order. No code is reserved: a contract's death coverage,
 if any, is just one entry in the user's coverage catalogue, distinguished
-by its :class:`BenefitPattern` (``DEATH``).
+by its :class:`CalculationMethod` (``DEATH``).
 
 The base mortality (``Assumptions.mortality_annual``) is a separate engine
 input: it drives the in-force decrement only. A death coverage's claim
@@ -20,8 +20,8 @@ given by two per-code arrays -- ``coverage_is_diagnosis`` (a single-payment
 benefit whose claims run off a depleting pool) and ``coverage_risk`` (the
 risk class the Risk Adjustment prices) -- built by :func:`coverage_arrays`,
 so a new coverage needs no kernel change. The two arrays are *derived* from the
-portfolio's ``benefit_patterns`` taxonomy (the
-:class:`~fastcashflow.modelpoints.ModelPoints` ``benefit_patterns`` dict);
+portfolio's ``calculation_methods`` taxonomy (the
+:class:`~fastcashflow.modelpoints.ModelPoints` ``calculation_methods`` dict);
 the company-level taxonomy is the single source of truth for whether a
 coverage is a diagnosis pool or a recurring claim, and which risk class
 the RA prices.
@@ -33,7 +33,7 @@ from enum import Enum
 import numpy as np
 
 
-class BenefitPattern(str, Enum):
+class CalculationMethod(str, Enum):
     """How a benefit pays out -- the engine's calculation routing key.
 
     Five uniform patterns: every rate-driven death coverage (main contract
@@ -44,7 +44,7 @@ class BenefitPattern(str, Enum):
     slot.
 
     ``str, Enum`` -- members compare equal to their string value
-    (``BenefitPattern.MORBIDITY == "MORBIDITY"``), so existing numpy
+    (``CalculationMethod.MORBIDITY == "MORBIDITY"``), so existing numpy
     array comparisons and dict keys keep working unchanged.
     """
 
@@ -66,12 +66,12 @@ class BenefitPattern(str, Enum):
     MATURITY   = "MATURITY"     # survival benefit paid at the end of the term
 
     def __str__(self) -> str:
-        # Default str() on a (str, Enum) returns "BenefitPattern.MEMBER" in
+        # Default str() on a (str, Enum) returns "CalculationMethod.MEMBER" in
         # Python 3.11+, which breaks numpy comparisons against string arrays
         # (the value gets stringified to the qualified name before dtype
         # casting). Override to return the bare value so str(member),
         # f-strings, and numpy array casts all yield "DIAGNOSIS", not
-        # "BenefitPattern.DIAGNOSIS".
+        # "CalculationMethod.DIAGNOSIS".
         return self._value_
 
 
@@ -80,7 +80,7 @@ class BenefitPattern(str, Enum):
 # survivors and need no rate; they are summed into per-policy amounts, not
 # the rate grid.
 RATE_DRIVEN_PATTERNS = (
-    BenefitPattern.DEATH, BenefitPattern.MORBIDITY, BenefitPattern.DIAGNOSIS,
+    CalculationMethod.DEATH, CalculationMethod.MORBIDITY, CalculationMethod.DIAGNOSIS,
 )
 
 # Risk class of a coverage's claims: 0 mortality, 1 morbidity. The Risk
@@ -89,8 +89,8 @@ RISK_MORTALITY = 0
 RISK_MORBIDITY = 1
 
 
-def pattern_attrs(pattern: BenefitPattern) -> tuple[bool, int]:
-    """Derive ``(is_diagnosis, risk)`` from a :class:`BenefitPattern`.
+def pattern_attrs(pattern: CalculationMethod) -> tuple[bool, int]:
+    """Derive ``(is_diagnosis, risk)`` from a :class:`CalculationMethod`.
 
     The two flags drive the kernel branch a coverage takes -- a depleting
     diagnosis pool vs a recurring claim, and the RA risk class. They are a
@@ -98,8 +98,8 @@ def pattern_attrs(pattern: BenefitPattern) -> tuple[bool, int]:
     call time rather than carrying them as separate fields on
     :class:`~fastcashflow.assumptions.CoverageRate`.
     """
-    is_diagnosis = (pattern == BenefitPattern.DIAGNOSIS)
-    risk = (RISK_MORTALITY if pattern == BenefitPattern.DEATH
+    is_diagnosis = (pattern == CalculationMethod.DIAGNOSIS)
+    risk = (RISK_MORTALITY if pattern == CalculationMethod.DEATH
             else RISK_MORBIDITY)
     return is_diagnosis, risk
 
@@ -137,18 +137,18 @@ def build_coverage_rates(rate_fns, sex_grid, issue_age_grid,
     return np.ascontiguousarray(np.stack(slabs))
 
 
-def coverage_arrays(coverages, benefit_patterns=None):
+def coverage_arrays(coverages, calculation_methods=None):
     """Per-code kernel flag arrays for the coverage list.
 
     ``coverages`` is the ordered rate-driven coverages, in the same order as
-    :attr:`Assumptions.coverages`; ``benefit_patterns`` is the portfolio-level
-    taxonomy (``{coverage_code: BenefitPattern}``). Each coverage's pattern
+    :attr:`Assumptions.coverages`; ``calculation_methods`` is the portfolio-level
+    taxonomy (``{coverage_code: CalculationMethod}``). Each coverage's pattern
     looked up by code gives the two flags via :func:`pattern_attrs`.
 
     Pattern resolution per coverage:
 
-    1. If ``benefit_patterns`` is a dict and the code is a key, use that.
-    2. Else, if the code itself is the bare name of a :class:`BenefitPattern`
+    1. If ``calculation_methods`` is a dict and the code is a key, use that.
+    2. Else, if the code itself is the bare name of a :class:`CalculationMethod`
        member (``"DEATH"``, ``"MORBIDITY"``, ``"DIAGNOSIS"``, ``"ANNUITY"``,
        ``"MATURITY"``), use that pattern -- the auto-inference convention
        for terse Python construction.
@@ -164,12 +164,12 @@ def coverage_arrays(coverages, benefit_patterns=None):
     unresolved: list[str] = []
     for r in coverages:
         pattern = None
-        if benefit_patterns is not None:
-            pattern = benefit_patterns.get(r.code)
+        if calculation_methods is not None:
+            pattern = calculation_methods.get(r.code)
         if pattern is None:
             # Step 2 -- code-as-pattern auto-inference.
             try:
-                pattern = BenefitPattern(r.code)
+                pattern = CalculationMethod(r.code)
             except ValueError:
                 pattern = None
         if pattern is None:
@@ -180,12 +180,12 @@ def coverage_arrays(coverages, benefit_patterns=None):
             continue
         flags.append(pattern_attrs(pattern))
     if unresolved:
-        valid = ", ".join(p.value for p in BenefitPattern)
+        valid = ", ".join(p.value for p in CalculationMethod)
         raise ValueError(
-            f"coverage code(s) {unresolved!r} have no BenefitPattern: pass a "
-            "benefit_patterns dict on the model points (or load it from a "
-            "benefit_patterns.csv) mapping each code to one of "
-            f"{{{valid}}} -- or rename the coverage to a BenefitPattern "
+            f"coverage code(s) {unresolved!r} have no CalculationMethod: pass a "
+            "calculation_methods dict on the model points (or load it from a "
+            "calculation_methods.csv) mapping each code to one of "
+            f"{{{valid}}} -- or rename the coverage to a CalculationMethod "
             "member name (the auto-inference rule)."
         )
     coverage_is_diagnosis = np.array([f[0] for f in flags], np.bool_)
@@ -194,7 +194,7 @@ def coverage_arrays(coverages, benefit_patterns=None):
 
 
 def validate_csr_codes(coverage_index, n_coverages, *,
-                       coverages=None, benefit_patterns=None,
+                       coverages=None, calculation_methods=None,
                        expected_coverage_codes=None):
     """Check that every ``coverage_index`` value indexes into the coverage list.
 
@@ -206,10 +206,10 @@ def validate_csr_codes(coverage_index, n_coverages, *,
     catches the mistake at engine entry with a clear message naming the
     offending value(s) and the registered coverage count.
 
-    When ``coverages`` and ``benefit_patterns`` are both provided, also
+    When ``coverages`` and ``calculation_methods`` are both provided, also
     verifies catalogue consistency: every code registered on
     ``Assumptions.coverages`` must appear in the model points'
-    ``benefit_patterns`` dict. A drift between the two (typically a swap
+    ``calculation_methods`` dict. A drift between the two (typically a swap
     of one without the other) lands a coverage with no routing pattern
     and the engine falls back to MORBIDITY -- silently wrong.
 
@@ -237,15 +237,15 @@ def validate_csr_codes(coverage_index, n_coverages, *,
             "rebuild ModelPoints.benefits with a coverage_index that maps to a "
             "registered coverage."
         )
-    if coverages is not None and benefit_patterns is not None:
+    if coverages is not None and calculation_methods is not None:
         registered = {r.code for r in coverages}
-        catalogue = set(benefit_patterns)
+        catalogue = set(calculation_methods)
         missing = sorted(registered - catalogue)
         if missing:
             raise ValueError(
                 f"coverage code(s) {missing} are registered on "
                 "Assumptions.coverages but absent from the model points' "
-                "benefit_patterns catalogue. The two must agree on every "
+                "calculation_methods catalogue. The two must agree on every "
                 "rate-driven code -- one was swapped without rebuilding "
                 "the other."
             )

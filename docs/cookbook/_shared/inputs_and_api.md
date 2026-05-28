@@ -8,7 +8,7 @@
   입력 파일 (`assumptions.xlsx`, multi-sheet 워크북) 을 읽어 가정 개체를
   만듭니다.
 - **`ModelPoints` 클래스** — `mp = fcf.read_model_points(...)` 가 세 입력
-  파일 (`policies.csv` / `coverages.csv` / `benefit_patterns.csv`) 을 읽어
+  파일 (`policies.csv` / `coverages.csv` / `calculation_methods.csv`) 을 읽어
   한 개체로 합칩니다. 이때 첫 인자로 Assumptions 개체를 넘기므로
   Assumptions 가 먼저 만들어져 있어야 합니다.
 
@@ -41,17 +41,17 @@ ModelPoints (mp = fcf.read_model_points(...))
 │
 ├── coverages.csv             ── 담보 가입금액 (long-form, 한 줄 = 한 (계약, 담보))
 │   ├── mp_id                 · 어느 계약의 담보인지
-│   ├── coverage_code         · 담보 코드 (benefit_patterns 의 코드와 맞물림)
+│   ├── coverage_code         · 담보 코드 (calculation_methods 의 코드와 맞물림)
 │   ├── amount                · 가입금액 (보험금)
 │   ├── premium               · 월 보험료 (선택)
 │   ├── waiting               · 면책기간 개월수 (선택)
 │   ├── reduction_end         · 감액기간 종료 개월수 (선택)
 │   └── reduction_factor      · 감액기간 중 지급률 (선택, 0..1)
 │
-└── benefit_patterns.csv      ── 담보 패턴 매핑 (담보 코드 → 지급 패턴)
+└── calculation_methods.csv      ── 담보 계산방식 (담보 코드 → 지급 패턴)
     ├── coverage_code         · 담보 코드 (DEATH, CANCER, INPATIENT ...)
     ├── coverage_name         · 사람 친화 라벨 (선택)
-    └── benefit_pattern       · DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY
+    └── calculation_method       · DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY
 ```
 
 결산 모드 (보유계약 평가) 에서는 `policies.csv` 가 *분기말 상태 컬럼*
@@ -68,7 +68,7 @@ fastcashflow 사용자 API
 │   ├── fcf.save_sample_assumptions(path)           ── assumptions.xlsx
 │   ├── fcf.save_sample_policies(path)              ── policies.csv
 │   ├── fcf.save_sample_coverages(path)             ── coverages.csv
-│   ├── fcf.save_sample_benefit_patterns(path)      ── benefit_patterns.csv
+│   ├── fcf.save_sample_calculation_methods(path)      ── calculation_methods.csv
 │   └── fcf.save_sample_inforce_policies(path)      ── 결산 1-파일 (spec + state)
 │
 ├── 파일 읽어 들이기

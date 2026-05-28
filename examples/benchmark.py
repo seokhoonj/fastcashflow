@@ -12,7 +12,7 @@ import numpy as np
 from numba import cuda
 
 from fastcashflow import (
-    Assumptions, BenefitPattern, CoverageRate, ExpenseItem, ModelPoints, value,
+    Assumptions, CalculationMethod, CoverageRate, ExpenseItem, ModelPoints, value,
 )
 
 
@@ -33,7 +33,7 @@ def make_portfolio(n_mp: int, seed: int = 42) -> ModelPoints:
         benefits={0: rng.integers(10, 100, n_mp) * 1_000_000},
         level_premium=rng.integers(3, 15, n_mp) * 10_000,
         term_months=np.full(n_mp, 120),
-        benefit_patterns={"DEATH": BenefitPattern.DEATH},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
 
 

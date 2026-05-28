@@ -59,7 +59,7 @@ def test_sec32_bel_is_pv_of_future_cashflows():
         ModelPoints.single(
             issue_age=40, benefits={0: death_benefit},
             level_premium=premium, term_months=term,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _flat_assumptions(),
     )
@@ -85,7 +85,7 @@ def test_sec34_b65_contract_boundary():
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=term,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _flat_assumptions(),
     )
@@ -109,7 +109,7 @@ def test_sec37_ra_addition_to_bel():
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=24,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _flat_assumptions(mortality_cv=0.10),
     )
@@ -127,7 +127,7 @@ def test_sec38_initial_csm_profitable():
         ModelPoints.single(
             issue_age=35, benefits={0: 1_000_000.0},
             level_premium=15_000.0, term_months=36,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _flat_assumptions(),
     )
@@ -144,7 +144,7 @@ def test_sec38_loss_component_onerous():
             issue_age=40, benefits={0: 1_000_000.0},
             level_premium=100.0,                  # premium far too low
             term_months=12,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _flat_assumptions(
             mortality_annual=lambda sex, issue_age, duration:
@@ -172,7 +172,7 @@ def test_sec44_csm_accretion_at_locked_in_rate():
         ModelPoints.single(
             issue_age=35, benefits={0: 1_000_000.0},
             level_premium=15_000.0, term_months=36,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         asmp,
     )
@@ -200,7 +200,7 @@ def test_sec44_b119_csm_release_proportional_to_coverage_units():
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
             level_premium=12_000.0, term_months=term,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         asmp,
     )
@@ -229,8 +229,8 @@ def test_b96_higher_discount_reduces_pv_of_claims():
         issue_age=40, benefits={0: 1_000_000.0},
         level_premium=12_000.0, term_months=60,
     )
-    res_lo = measure(ModelPoints.single(**kwargs, benefit_patterns=PATTERNS), _flat_assumptions(discount_annual=0.0))
-    res_hi = measure(ModelPoints.single(**kwargs, benefit_patterns=PATTERNS), _flat_assumptions(discount_annual=0.10))
+    res_lo = measure(ModelPoints.single(**kwargs, calculation_methods=PATTERNS), _flat_assumptions(discount_annual=0.0))
+    res_hi = measure(ModelPoints.single(**kwargs, calculation_methods=PATTERNS), _flat_assumptions(discount_annual=0.10))
     pv_claims_lo = float(np.sum(res_lo.cashflows.claim_cf[0] * res_lo.discount_mid))
     pv_claims_hi = float(np.sum(res_hi.cashflows.claim_cf[0] * res_hi.discount_mid))
     assert pv_claims_hi < pv_claims_lo

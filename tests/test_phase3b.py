@@ -24,7 +24,7 @@ def _portfolio(n: int = 400) -> ModelPoints:
         benefits={0: rng.integers(10, 100, n) * 1_000_000},
         level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
 
 
@@ -75,7 +75,7 @@ def test_model_points_round_trip(tmp_path, suffix):
     df = _frame(mps)
     df.write_parquet(path) if suffix == ".parquet" else df.write_csv(path)
 
-    loaded = read_model_points(path, _assumptions(), benefit_patterns=PATTERNS)
+    loaded = read_model_points(path, _assumptions(), calculation_methods=PATTERNS)
     assert loaded.n_mp == mps.n_mp
     assert np.allclose(loaded.issue_age, mps.issue_age)
     assert np.allclose(_death_benefits(loaded), _death_benefits(mps))
@@ -91,12 +91,12 @@ def test_read_model_points_reads_count(tmp_path):
         tmp_path / "with_count.parquet"
     )
     assert np.allclose(
-        read_model_points(tmp_path / "with_count.parquet", _assumptions(), benefit_patterns=PATTERNS).count, counts
+        read_model_points(tmp_path / "with_count.parquet", _assumptions(), calculation_methods=PATTERNS).count, counts
     )
 
     _frame(mps).write_parquet(tmp_path / "no_count.parquet")
     assert np.allclose(
-        read_model_points(tmp_path / "no_count.parquet", _assumptions(), benefit_patterns=PATTERNS).count,
+        read_model_points(tmp_path / "no_count.parquet", _assumptions(), calculation_methods=PATTERNS).count,
         np.ones(mps.n_mp),
     )
 
@@ -150,7 +150,7 @@ def test_file_workflow_matches_in_memory(tmp_path):
     asmp = _assumptions()
     _frame(mps).write_parquet(tmp_path / "mps.parquet")
 
-    from_file = value(read_model_points(tmp_path / "mps.parquet", asmp, benefit_patterns=PATTERNS), asmp)
+    from_file = value(read_model_points(tmp_path / "mps.parquet", asmp, calculation_methods=PATTERNS), asmp)
     in_memory = value(mps, asmp)
 
     assert np.allclose(from_file.bel, in_memory.bel)
@@ -168,7 +168,7 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
         benefits={0: rng.integers(10, 100, n) * 1_000_000},
         level_premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = _assumptions()
 
@@ -177,7 +177,7 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
 
     out_dir = tmp_path / "results"
     processed = value_file(in_path, out_dir, asmp, chunk_size=300, id_column="id",
-                           benefit_patterns=PATTERNS)
+                           calculation_methods=PATTERNS)
     assert processed == n
     assert len(sorted(out_dir.glob("part-*.parquet"))) == 4  # 300+300+300+100
 
@@ -245,16 +245,16 @@ def test_describe_assumptions_renders_both_shapes(capsys):
 
 def test_to_long_round_trips(tmp_path):
     """ModelPoints.to_long written out and re-read reproduces the valuation."""
-    from fastcashflow import load_sample_benefit_patterns
+    from fastcashflow import load_sample_calculation_methods
     asmp = next(iter(load_sample_assumptions().values()))
-    patterns = load_sample_benefit_patterns()
+    patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     policies.write_csv(tmp_path / "pol.csv")
     coverages.write_csv(tmp_path / "cov.csv")
     back = read_model_points(tmp_path / "pol.csv", asmp,
                              coverages=tmp_path / "cov.csv",
-                             benefit_patterns=patterns)
+                             calculation_methods=patterns)
     a, b = value(mps, asmp), value(back, asmp)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.csm, b.csm)
@@ -262,13 +262,13 @@ def test_to_long_round_trips(tmp_path):
 
 def test_to_wide_round_trips(tmp_path):
     """ModelPoints.to_wide written out and re-read reproduces the valuation."""
-    from fastcashflow import load_sample_benefit_patterns
+    from fastcashflow import load_sample_calculation_methods
     asmp = next(iter(load_sample_assumptions().values()))
-    patterns = load_sample_benefit_patterns()
+    patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")
     back = read_model_points(tmp_path / "wide.csv", asmp,
-                             benefit_patterns=patterns)
+                             calculation_methods=patterns)
     a, b = value(mps, asmp), value(back, asmp)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.csm, b.csm)
@@ -276,9 +276,9 @@ def test_to_wide_round_trips(tmp_path):
 
 def test_value_file_streams_long_form(tmp_path):
     """value_file streams a long-form policies + coverages pair in chunks."""
-    from fastcashflow import load_sample_benefit_patterns
+    from fastcashflow import load_sample_calculation_methods
     asmp = next(iter(load_sample_assumptions().values()))
-    patterns = load_sample_benefit_patterns()
+    patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
     policies.write_parquet(tmp_path / "pol.parquet")
@@ -288,7 +288,7 @@ def test_value_file_streams_long_form(tmp_path):
     processed = value_file(
         tmp_path / "pol.parquet", out_dir, asmp,
         coverages=tmp_path / "cov.parquet",
-        benefit_patterns=patterns, chunk_size=3,
+        calculation_methods=patterns, chunk_size=3,
     )
     assert processed == mps.n_mp
 

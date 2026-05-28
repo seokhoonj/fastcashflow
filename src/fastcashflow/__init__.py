@@ -16,7 +16,7 @@ from fastcashflow.assumptions import (
     Assumptions, CoverageRate, EXPENSE_BASES, ExpenseItem,
     derive_expense_components, describe_assumptions,
 )
-from fastcashflow.coverage import BenefitPattern, RISK_MORBIDITY, RISK_MORTALITY
+from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import (
     Measurement, Valuation, clear_codegen_cache, measure, measure_in_force,
     value, value_in_force, value_segmented,
@@ -24,7 +24,7 @@ from fastcashflow.engine import (
 from fastcashflow.grouping import group
 from fastcashflow.io import (
     load_sample_assumptions,
-    load_sample_benefit_patterns,
+    load_sample_calculation_methods,
     load_sample_inforce_state,
     load_sample_model_points,
     read_assumptions,
@@ -34,7 +34,7 @@ from fastcashflow.io import (
     read_scenarios,
     sample_data_dir,
     save_sample_assumptions,
-    save_sample_benefit_patterns,
+    save_sample_calculation_methods,
     save_sample_coverages,
     save_sample_inforce_policies,
     save_sample_inforce_state,
@@ -102,9 +102,9 @@ __all__ = [
     "apply_inforce_state", "InforceState",
     "write_valuation", "value_file",
     "load_sample_model_points", "load_sample_assumptions",
-    "load_sample_benefit_patterns", "load_sample_inforce_state",
+    "load_sample_calculation_methods", "load_sample_inforce_state",
     "save_sample_assumptions", "save_sample_policies",
-    "save_sample_coverages", "save_sample_benefit_patterns",
+    "save_sample_coverages", "save_sample_calculation_methods",
     "save_sample_inforce_state", "save_sample_inforce_policies",
     "sample_data_dir",
     "describe_assumptions",
@@ -112,7 +112,7 @@ __all__ = [
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
-    "BenefitPattern", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
+    "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
     "derive_expense_components",
     "RISK_MORTALITY", "RISK_MORBIDITY",
     "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAID_UP",

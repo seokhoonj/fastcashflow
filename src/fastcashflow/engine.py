@@ -1594,11 +1594,11 @@ def value(
     validate_csr_codes(
         model_points.coverage_index, len(assumptions.coverages),
         coverages=assumptions.coverages,
-        benefit_patterns=model_points.benefit_patterns,
+        calculation_methods=model_points.calculation_methods,
         expected_coverage_codes=model_points.coverage_codes,
     )
     coverage_is_diagnosis, coverage_risk = coverage_arrays(
-        assumptions.coverages, model_points.benefit_patterns,
+        assumptions.coverages, model_points.calculation_methods,
     )
     # build_coverage_rates stacks the per-coverage annual rates; the whole
     # stack is converted to monthly. mortality_annual is a separate engine

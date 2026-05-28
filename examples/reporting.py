@@ -14,7 +14,7 @@ DATA = Path(__file__).resolve().parent / "data"
 def main() -> None:
     basis = fcf.read_assumptions(DATA / "assumptions.xlsx")
     assumptions = basis[("TERM_LIFE_A", "FC")]
-    book = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions, benefit_patterns=DATA / "benefit_patterns.csv")
+    book = fcf.read_model_points(DATA / "model_points_wide.xlsx", assumptions, calculation_methods=DATA / "calculation_methods.csv")
     m = fcf.measure(book, assumptions)
 
     # The IFRS 17 report -- insurance revenue, service expense, service result.

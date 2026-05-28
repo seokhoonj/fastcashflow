@@ -228,8 +228,8 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 
 * - 파일
   - 내용
-* - `benefit_patterns.csv`
-  - 담보 패턴 매핑 — 담보 코드 → 청구 패턴 (DEATH / MORBIDITY / ...)
+* - `calculation_methods.csv`
+  - 담보 계산방식 — 담보 코드 → 청구 패턴 (DEATH / MORBIDITY / ...)
 * - `assumptions.xlsx`
   - 계리적 가정 — 사망률 · 해지율 · 할인율 · 사업비 · 위험조정
 * - `policies.csv`
@@ -249,7 +249,7 @@ import fastcashflow as fcf
 fcf.save_sample_assumptions("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
 fcf.save_sample_policies("policies.csv")                     # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_benefit_patterns("benefit_patterns.csv")     # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_calculation_methods("calculation_methods.csv")     # .csv / .xlsx / .parquet / .feather
 
 # (2) 읽어서 평가
 basis = fcf.read_assumptions("assumptions.xlsx")             # {(product_code, channel_code): Assumptions}
@@ -257,7 +257,7 @@ mp    = fcf.read_model_points(
     "policies.csv",
     basis[("TERM_LIFE_A", "GA")],                            # 한 segment 의 Assumptions 를 코드 해석에 사용
     coverages="coverages.csv",
-    benefit_patterns="benefit_patterns.csv",
+    calculation_methods="calculation_methods.csv",
 )
 
 # 한 segment 의 가정을 전체 portfolio 에 적용 — 상세 trajectory
@@ -309,7 +309,7 @@ Loss:      35,001,727
 
 자기 데이터로 돌리려면 (1) 단계를 건너뛰고 (2) 단계의 파일명을 자기
 파일 경로로 바꾸면 됩니다. wide-form (담보가 컬럼으로 펼쳐진 한
-파일) 이면 `coverages=` 와 `benefit_patterns=` 인자가 필요 없습니다.
+파일) 이면 `coverages=` 와 `calculation_methods=` 인자가 필요 없습니다.
 
 ### 면책 / 감액 컬럼 (optional)
 
@@ -380,7 +380,7 @@ portfolio = fcf.ModelPoints(
     benefits         = {0: rng.integers(10, 100, n_contracts) * 1_000_000}, # 1 ~ 10 억
     level_premium    = rng.integers(3, 15, n_contracts) * 10_000,           # 3 ~ 15 만원
     term_months      = np.full(n_contracts, 120),                           # 모두 10 년
-    benefit_patterns = fcf.load_sample_benefit_patterns(),
+    calculation_methods = fcf.load_sample_calculation_methods(),
 )
 
 asmp   = fcf.load_sample_assumptions()[("TERM_LIFE_A", "GA")]
@@ -402,7 +402,7 @@ mp = fcf.ModelPoints.single(
     level_premium       = 140_000,             # 5 년만 내므로 더 큰 금액
     term_months         = 120,                 # 보장 10 년
     premium_term_months = 60,                  # 납입 5 년
-    benefit_patterns    = fcf.load_sample_benefit_patterns(),
+    calculation_methods    = fcf.load_sample_calculation_methods(),
 )
 ```
 
@@ -417,7 +417,7 @@ mp = fcf.ModelPoints.single(
     level_premium            = 70_000,                # 매 분기 7 만원
     term_months              = 120,                   # 보장 10 년
     premium_frequency_months = 3,                     # 분기납
-    benefit_patterns         = fcf.load_sample_benefit_patterns(),
+    calculation_methods         = fcf.load_sample_calculation_methods(),
 )
 ```
 

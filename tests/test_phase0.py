@@ -37,7 +37,7 @@ def test_hand_calculation():
         ModelPoints.single(
             issue_age=40, benefits={0: death_benefit},
             level_premium=premium, term_months=term,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _assumptions(),
     )
@@ -81,7 +81,7 @@ def test_onerous_contract():
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
             level_premium=100.0, term_months=12,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05))
@@ -97,7 +97,7 @@ def test_csm_fully_releases():
         ModelPoints.single(
             issue_age=35, benefits={0: 50_000_000.0},
             level_premium=80_000.0, term_months=60,
-            benefit_patterns=PATTERNS,
+            calculation_methods=PATTERNS,
         ),
         _assumptions(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
@@ -129,8 +129,8 @@ def test_count_scales_linearly():
     )
     n = 1000.0
 
-    one = measure(ModelPoints.single(**kw, benefit_patterns=PATTERNS), asmp)
-    many = measure(ModelPoints.single(**kw, count=n, benefit_patterns=PATTERNS), asmp)
+    one = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), asmp)
+    many = measure(ModelPoints.single(**kw, count=n, calculation_methods=PATTERNS), asmp)
     assert many.csm[0, 0] > 0.0          # profitable contract -- the CSM scales
     for field in ("bel", "ra", "csm"):
         assert np.isclose(getattr(many, field)[0, 0],
@@ -138,8 +138,8 @@ def test_count_scales_linearly():
     assert np.isclose(many.cashflows.inforce[0, 0], n)
 
     # the fused fast path scales identically
-    v_one = value(ModelPoints.single(**kw, benefit_patterns=PATTERNS), asmp)
-    v_many = value(ModelPoints.single(**kw, count=n, benefit_patterns=PATTERNS), asmp)
+    v_one = value(ModelPoints.single(**kw, calculation_methods=PATTERNS), asmp)
+    v_many = value(ModelPoints.single(**kw, count=n, calculation_methods=PATTERNS), asmp)
     for field in ("bel", "ra", "csm"):
         assert np.isclose(getattr(v_many, field)[0],
                           n * getattr(v_one, field)[0])

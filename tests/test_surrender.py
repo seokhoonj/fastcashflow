@@ -34,7 +34,7 @@ def test_surrender_cf_zero_when_curve_is_none():
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=12,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = _basis(lapse_rate=0.1, surrender_curve=None)
     m = measure(mp, asmp)
@@ -48,7 +48,7 @@ def test_surrender_cf_hand_calc_single_period():
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=10_000.0, term_months=12,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     # 12% annual lapse -> ~1.06% monthly under constant-force conversion
     # (engine handles annual_to_monthly conversion internally).
@@ -77,7 +77,7 @@ def test_surrender_cf_accumulates_with_cum_premium():
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=10_000.0, term_months=24,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp = _basis(lapse_rate=0.05, surrender_curve=np.full(25, 0.8))
     m = measure(mp, asmp)
@@ -92,7 +92,7 @@ def test_surrender_cf_widens_bel():
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=10_000.0, term_months=24,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     asmp_no_surr = _basis(lapse_rate=0.05, surrender_curve=None)
     asmp_with_surr = _basis(

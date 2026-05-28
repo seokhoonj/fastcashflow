@@ -38,7 +38,7 @@ from fastcashflow.assumptions import (
 )
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
-    BenefitPattern, RATE_DRIVEN_PATTERNS,
+    CalculationMethod, RATE_DRIVEN_PATTERNS,
 )
 from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 
@@ -625,7 +625,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     # Plan B (3-file split): this sheet carries only ``coverage_code`` +
     # ``rate_table`` -- the rate-driven entries. The pattern taxonomy
     # (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) moves to a
-    # separate ``benefit_patterns.csv`` file consumed by
+    # separate ``calculation_methods.csv`` file consumed by
     # :func:`read_model_points`, so the assumptions workbook is purely the
     # actuarial basis and the company catalogue lives elsewhere. Survival
     # entries (ANNUITY, MATURITY) never carry a ``rate_table`` and so do
@@ -642,7 +642,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
                 raise ValueError(
                     f"coverages row {code!r} has no rate_table; the "
                     "assumptions workbook only lists rate-driven coverages "
-                    "(survival entries belong in benefit_patterns.csv, "
+                    "(survival entries belong in calculation_methods.csv, "
                     "not here)"
                 )
             rate_driven_coverages.append((code, str(rt).strip()))
@@ -845,39 +845,39 @@ def _warn_if_elapsed_months(columns) -> None:
         )
 
 
-def _parse_benefit_patterns(path: Path | str) -> dict[str, BenefitPattern]:
-    """Read a ``benefit_patterns.csv`` taxonomy file into a dict.
+def _parse_calculation_methods(path: Path | str) -> dict[str, CalculationMethod]:
+    """Read a ``calculation_methods.csv`` taxonomy file into a dict.
 
     The file has two required columns -- ``coverage_code`` and
-    ``benefit_pattern`` -- plus an optional human-friendly
+    ``calculation_method`` -- plus an optional human-friendly
     ``coverage_name`` (read but not retained, since the engine routes by
-    code). Returns ``{coverage_code: BenefitPattern}``. Raises
+    code). Returns ``{coverage_code: CalculationMethod}``. Raises
     :class:`ValueError` for an unknown pattern (V1) and a duplicate code
     (V2); the messages name the offending row so the operator can fix
     the file without scrolling through it.
     """
     df = _read_frame(path)
-    for need in ("coverage_code", "benefit_pattern"):
+    for need in ("coverage_code", "calculation_method"):
         if need not in df.columns:
             raise ValueError(
-                f"the benefit_patterns file is missing required column "
+                f"the calculation_methods file is missing required column "
                 f"{need!r}"
             )
-    result: dict[str, BenefitPattern] = {}
-    valid = ", ".join(p.value for p in BenefitPattern)
+    result: dict[str, CalculationMethod] = {}
+    valid = ", ".join(p.value for p in CalculationMethod)
     for row in df.iter_rows(named=True):
         code = str(row["coverage_code"]).strip()
-        raw = str(row["benefit_pattern"]).strip()
+        raw = str(row["calculation_method"]).strip()
         try:
-            pattern = BenefitPattern(raw)
+            pattern = CalculationMethod(raw)
         except ValueError as exc:
             raise ValueError(
-                f"benefit_patterns row {code!r}: benefit_pattern={raw!r} "
+                f"calculation_methods row {code!r}: calculation_method={raw!r} "
                 f"is not one of {{{valid}}}"
             ) from exc
         if code in result:
             raise ValueError(
-                f"benefit_patterns row {code!r}: duplicate coverage_code "
+                f"calculation_methods row {code!r}: duplicate coverage_code "
                 "(every code may appear exactly once in the taxonomy)"
             )
         result[code] = pattern
@@ -885,7 +885,7 @@ def _parse_benefit_patterns(path: Path | str) -> dict[str, BenefitPattern]:
 
 
 def _wide_model_points(df: pl.DataFrame, assumptions,
-                       benefit_patterns=None) -> ModelPoints:
+                       calculation_methods=None) -> ModelPoints:
     """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
     coverage a ``<coverage_code>_benefit`` column."""
     for need in ("issue_age", "term_months"):
@@ -944,8 +944,8 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
         benefits[code_to_cov_idx[code]] = df[col].to_numpy()
     if benefits:
         fields["benefits"] = benefits
-    if benefit_patterns is not None:
-        fields["benefit_patterns"] = benefit_patterns
+    if calculation_methods is not None:
+        fields["calculation_methods"] = calculation_methods
     # Pin the assumptions ordering: the coverage_index integers we just
     # built index into this tuple; validate_csr_codes will refuse a later
     # Assumptions whose coverages got reordered.
@@ -955,19 +955,19 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
 
 
 def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
-                       assumptions, benefit_patterns=None) -> ModelPoints:
+                       assumptions, calculation_methods=None) -> ModelPoints:
     """Build a ``ModelPoints`` from a long-form policies + coverages pair."""
     if assumptions is None:
         raise ValueError(
             "long-form model points need the assumptions -- the coverage-code "
             "registry maps coverage rows to engine codes"
         )
-    if benefit_patterns is None:
+    if calculation_methods is None:
         raise ValueError(
-            "long-form model points need the benefit_patterns taxonomy -- "
+            "long-form model points need the calculation_methods taxonomy -- "
             "the per-code pattern routes survival rows (ANNUITY / MATURITY) "
             "to scalar fields and rate-driven rows to the coverage CSR. "
-            "Pass a benefit_patterns.csv path to read_model_points."
+            "Pass a calculation_methods.csv path to read_model_points."
         )
     for need in ("mp_id", "issue_age", "term_months"):
         if need not in pol.columns:
@@ -1013,7 +1013,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             "-- the factor would never fire (reduction_end defaults to 0). "
             "Add a reduction_end column (months) or drop the factor column."
         )
-    ctypes = {k: BenefitPattern(v) for k, v in benefit_patterns.items()}
+    ctypes = {k: CalculationMethod(v) for k, v in calculation_methods.items()}
     code_to_cov_idx = {r.code: i for i, r in enumerate(assumptions.coverages)}
     # V3 -- every rate-driven coverage in the assumptions must be registered
     # in the taxonomy. Detected here so the error surfaces at read time
@@ -1023,8 +1023,8 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     if missing_in_taxonomy:
         raise ValueError(
             f"rate-driven coverage code(s) {missing_in_taxonomy!r} from the "
-            "assumptions workbook are not registered in benefit_patterns -- "
-            "add each code (with its BenefitPattern) to benefit_patterns.csv"
+            "assumptions workbook are not registered in calculation_methods -- "
+            "add each code (with its CalculationMethod) to calculation_methods.csv"
         )
 
     # Resolve every coverage row to its policy index and coverage type. A
@@ -1052,7 +1052,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
                                     ["coverage_code"].to_list() if v is not None})
         raise ValueError(
             f"coverages frame references {len(bad)} coverage_code "
-            f"value(s) not in the benefit_patterns taxonomy: "
+            f"value(s) not in the calculation_methods taxonomy: "
             f"{_truncate_list(bad)}"
         )
 
@@ -1079,8 +1079,8 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     def _by_policy(mask) -> np.ndarray:
         return np.bincount(mp[mask], weights=amount[mask], minlength=n_mp)
 
-    fields["maturity_benefit"] = _by_policy(ctype == BenefitPattern.MATURITY)
-    fields["annuity_payment"] = _by_policy(ctype == BenefitPattern.ANNUITY)
+    fields["maturity_benefit"] = _by_policy(ctype == CalculationMethod.MATURITY)
+    fields["annuity_payment"] = _by_policy(ctype == CalculationMethod.ANNUITY)
 
     # Premium -- the coverages frame carries it per coverage; sum to the policy.
     if "premium" in cov.columns:
@@ -1138,7 +1138,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         np.zeros(1, np.int64),
         np.cumsum(np.bincount(cov_mp, minlength=n_mp), dtype=np.int64),
     ))
-    fields["benefit_patterns"] = ctypes
+    fields["calculation_methods"] = ctypes
     # Pin the assumptions ordering: the coverage_index integers we just
     # built index into this tuple; validate_csr_codes will refuse a later
     # Assumptions whose coverages got reordered.
@@ -1150,7 +1150,7 @@ def read_model_points(
     path: Path | str,
     assumptions: Assumptions | None = None,
     coverages: Path | str | None = None,
-    benefit_patterns: Path | str | dict[str, BenefitPattern] | None = None,
+    calculation_methods: Path | str | dict[str, CalculationMethod] | None = None,
 ) -> ModelPoints:
     """Read model points from a parquet, CSV, Excel or feather file.
 
@@ -1165,17 +1165,17 @@ def read_model_points(
       ``<coverage_code>_benefit`` column adds that coverage; the
       ``assumptions`` resolve the coverage code to an engine code.
     * **long-form** -- ``read_model_points(policies, assumptions,
-      coverages=coverages_path, benefit_patterns=benefit_patterns_path)``.
+      coverages=coverages_path, calculation_methods=calculation_methods_path)``.
       A policies frame (``mp_id``, ``issue_age``, ``term_months``,
       optional ``sex`` / ``count`` / ``state`` / ``premium_term_months``)
       and a coverages frame (``mp_id``, ``coverage_code``, ``amount``, and
       optional ``premium`` / ``waiting`` / ``reduction_end`` /
       ``reduction_factor``), one coverage row per policy x coverage.
       A single ``.xlsx`` with ``policies`` and ``coverages`` sheets is read
-      as long-form too. ``benefit_patterns`` is the company taxonomy file
+      as long-form too. ``calculation_methods`` is the company taxonomy file
       (CSV / parquet / feather / xlsx) -- the third side of the Plan-B
       split between *portfolio* (policies + coverages), *basis*
-      (assumptions.xlsx) and *catalogue* (benefit_patterns.csv).
+      (assumptions.xlsx) and *catalogue* (calculation_methods.csv).
 
     ``assumptions`` is optional only for a wide file with no coverage columns.
 
@@ -1186,10 +1186,10 @@ def read_model_points(
     policies side is ignored and a :class:`UserWarning` is emitted; do
     not encode the as-of date by mixing it into the static spec.
     """
-    if isinstance(benefit_patterns, (str, Path)):
-        patterns_dict = _parse_benefit_patterns(benefit_patterns)
+    if isinstance(calculation_methods, (str, Path)):
+        patterns_dict = _parse_calculation_methods(calculation_methods)
     else:
-        patterns_dict = benefit_patterns
+        patterns_dict = calculation_methods
     p = str(path)
     if coverages is None and p.endswith(".xlsx"):
         wb = openpyxl.load_workbook(p, read_only=True)
@@ -1213,7 +1213,7 @@ def read_inforce_policies(
     path: Path | str,
     assumptions: Assumptions | None = None,
     coverages: Path | str | None = None,
-    benefit_patterns: "Path | str | dict[str, BenefitPattern] | None" = None,
+    calculation_methods: "Path | str | dict[str, CalculationMethod] | None" = None,
 ) -> "tuple[ModelPoints, InforceState]":
     """Read a single combined policies + in-force state file.
 
@@ -1234,7 +1234,7 @@ def read_inforce_policies(
         mp, state = fcf.read_inforce_policies(
             "inforce_2026Q1.csv", assumptions,
             coverages="coverages.csv",
-            benefit_patterns="benefit_patterns.csv",
+            calculation_methods="calculation_methods.csv",
         )
         val = fcf.value_in_force(
             mp, assumptions, period_months=3,
@@ -1293,10 +1293,10 @@ def read_inforce_policies(
     # will overwrite it with the state value below anyway.
     spec_df = df.drop("elapsed_months", "prior_csm", "lock_in_rate")
 
-    if isinstance(benefit_patterns, (str, Path)):
-        patterns_dict = _parse_benefit_patterns(benefit_patterns)
+    if isinstance(calculation_methods, (str, Path)):
+        patterns_dict = _parse_calculation_methods(calculation_methods)
     else:
-        patterns_dict = benefit_patterns
+        patterns_dict = calculation_methods
     if coverages is not None:
         mp = _long_model_points(
             spec_df, _read_frame(coverages), assumptions, patterns_dict,
@@ -1333,21 +1333,21 @@ def load_sample_assumptions() -> dict[tuple[str, str], Assumptions]:
         return read_assumptions(path)
 
 
-def load_sample_benefit_patterns() -> dict[str, BenefitPattern]:
+def load_sample_calculation_methods() -> dict[str, CalculationMethod]:
     """Read fastcashflow's bundled sample benefit-pattern taxonomy.
 
     The companion to :func:`load_sample_assumptions` and
     :func:`load_sample_model_points` -- the company-level catalogue that
-    maps each ``coverage_code`` to its :class:`BenefitPattern`. The same
+    maps each ``coverage_code`` to its :class:`CalculationMethod`. The same
     file format every portfolio uses (see :func:`read_model_points`
-    long-form, ``benefit_patterns`` argument).
+    long-form, ``calculation_methods`` argument).
     """
     source = (
         resources.files("fastcashflow") / "sample_data"
-        / "sample_benefit_patterns.csv"
+        / "sample_calculation_methods.csv"
     )
     with resources.as_file(source) as path:
-        return _parse_benefit_patterns(path)
+        return _parse_calculation_methods(path)
 
 
 def load_sample_model_points() -> ModelPoints:
@@ -1362,13 +1362,13 @@ def load_sample_model_points() -> ModelPoints:
     """
     basis = load_sample_assumptions()
     assumptions = next(iter(basis.values()))
-    patterns = load_sample_benefit_patterns()
+    patterns = load_sample_calculation_methods()
     base = resources.files("fastcashflow") / "sample_data"
     with resources.as_file(base / "sample_policies.csv") as policies, \
             resources.as_file(base / "sample_coverages.csv") as coverages:
         return read_model_points(
             policies, assumptions, coverages=coverages,
-            benefit_patterns=patterns,
+            calculation_methods=patterns,
         )
 
 
@@ -1449,7 +1449,7 @@ def save_sample_policies(path: Path | str) -> Path:
     """Drop the packaged sample policies file on disk at ``path``.
 
     The companion to :func:`save_sample_coverages` and
-    :func:`save_sample_benefit_patterns`. Use the three together with
+    :func:`save_sample_calculation_methods`. Use the three together with
     :func:`read_model_points` for a copy-paste workflow that mirrors how
     you would read your own files.
 
@@ -1477,17 +1477,17 @@ def save_sample_coverages(path: Path | str) -> Path:
     return _drop_sample_table("sample_coverages.csv", path)
 
 
-def save_sample_benefit_patterns(path: Path | str) -> Path:
+def save_sample_calculation_methods(path: Path | str) -> Path:
     """Drop the packaged sample benefit-pattern catalogue on disk at ``path``.
 
     The company catalogue file -- one row per ``coverage_code`` mapping
-    it to its :class:`BenefitPattern`. Tens-to-hundreds of rows in
+    it to its :class:`CalculationMethod`. Tens-to-hundreds of rows in
     practice; ``.xlsx`` row cap never binds.
 
     Supported extensions: ``.csv``, ``.xlsx``, ``.parquet``, ``.feather``
     / ``.arrow``.
     """
-    return _drop_sample_table("sample_benefit_patterns.csv", path)
+    return _drop_sample_table("sample_calculation_methods.csv", path)
 
 
 def save_sample_inforce_state(path: Path | str) -> Path:
@@ -1643,7 +1643,7 @@ def value_file(
     assumptions: Assumptions,
     *,
     coverages: Path | str | None = None,
-    benefit_patterns: Path | str | dict[str, BenefitPattern] | None = None,
+    calculation_methods: Path | str | dict[str, CalculationMethod] | None = None,
     chunk_size: int = 20_000_000,
     backend: str = "cpu",
     id_column: str | None = None,
@@ -1685,10 +1685,10 @@ def value_file(
             "files; use a fresh directory"
         )
 
-    if isinstance(benefit_patterns, (str, Path)):
-        patterns_dict = _parse_benefit_patterns(benefit_patterns)
+    if isinstance(calculation_methods, (str, Path)):
+        patterns_dict = _parse_calculation_methods(calculation_methods)
     else:
-        patterns_dict = benefit_patterns
+        patterns_dict = calculation_methods
     scan = pl.scan_parquet(input_path)
     n_total = scan.select(pl.len()).collect().item()
     processed = 0

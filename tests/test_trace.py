@@ -70,7 +70,7 @@ def test_show_trace_emits_diagnosis_pool_only_when_present():
     mp_death = fcf.ModelPoints.single(
         issue_age=40, benefits={0: 1_000_000},
         level_premium=100, term_months=12,
-        benefit_patterns={"DEATH": fcf.BenefitPattern.DEATH},
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH},
     )
     asmp_death = Assumptions(
         mortality_annual=death_fn,
@@ -98,7 +98,7 @@ def test_show_trace_undiagnosed_matches_hand_calc():
     mp = fcf.ModelPoints.single(
         issue_age=40, benefits={0: 1_000_000},
         level_premium=0, term_months=60,
-        benefit_patterns={"CANCER": fcf.BenefitPattern.DIAGNOSIS},
+        calculation_methods={"CANCER": fcf.CalculationMethod.DIAGNOSIS},
     )
     buf = io.StringIO()
     show_trace(0, mp, asmp, file=buf)

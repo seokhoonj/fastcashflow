@@ -5,7 +5,7 @@
 
 - 엔진이 *왜* 각 담보의 "지급 패턴" 을 미리 알아야 하는가
 - 패턴에 따라 어떤 계산 분기로 들어가는지 — 다섯 가지로 단순화
-- 사용자가 지정해주는 자리 (`benefit_patterns.csv`) 가 왜 별도 파일인가
+- 사용자가 지정해주는 자리 (`calculation_methods.csv`) 가 왜 별도 파일인가
 - 사망 종류 (일반사망 / 질병사망 / 재해사망) 가 모두 같은 패턴인 이유
 - 한국 상품의 매핑 표, 카탈로그 작성, 등록 누락 시 잡히는 자리
 ```
@@ -21,8 +21,8 @@
 문제는 엔진이 담보의 이름 (`'CANCER'`, `'INPATIENT'`, `'ADB'` 등) 만 보고
 어떤 알고리즘을 적용할지 자동 추론할 수 없다는 점 — 한국 시장의 담보
 이름은 회사마다, 상품마다 자유 형식입니다. 그래서 사용자가 **"이 담보는
-이런 식으로 지급된다"** 를 미리 알려줘야 합니다. 그 매핑이 *지급 패턴
-(benefit pattern)* 이고, 새로운 담보가 생길 때 추가로 매칭해주면 됩니다.
+이런 식으로 지급된다"** 를 미리 알려줘야 합니다. 그 매핑이 *담보 계산방식*
+(`calculation_method`) 이고, 새로운 담보가 생길 때 추가로 매칭해주면 됩니다.
 
 다섯 가지 분기로 단순화됩니다:
 
@@ -69,10 +69,10 @@ DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은 ANNUITY. 엔진은 "주계약
 |---|---|---|
 | 결산 basis | `assumptions.xlsx` | 위험률 / 할인율 / 사업비 / 위험조정 |
 | Portfolio | `policies.csv` + `coverages.csv` | 어떤 계약이 어떤 담보를 얼마에 |
-| 담보 패턴 매핑 | `benefit_patterns.csv` | 어떤 담보가 어떤 패턴인가 |
+| 담보 계산방식 | `calculation_methods.csv` | 어떤 담보가 어떤 패턴인가 |
 
 세 파일이 각자 자기 책임만 가지면 한 갱신이 다른 파일에 닿지 않습니다.
-담보 패턴 매핑은 *신담보 추가* 작업의 자리, basis 는 *위험률 calibration*
+담보 계산방식은 *신담보 추가* 작업의 자리, basis 는 *위험률 calibration*
 의 자리, portfolio 는 *정책관리* 의 자리 — 그래서 한 작업이 다른 자리를
 건드리지 않습니다.
 
@@ -84,14 +84,14 @@ import fastcashflow as fcf
 fcf.save_sample_assumptions("assumptions.xlsx")             # .xlsx 만 (multi-sheet 워크북)
 fcf.save_sample_policies("policies.csv")                    # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                  # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_benefit_patterns("benefit_patterns.csv")    # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_calculation_methods("calculation_methods.csv")    # .csv / .xlsx / .parquet / .feather
 
 basis = fcf.read_assumptions("assumptions.xlsx")
 mp    = fcf.read_model_points(
     "policies.csv",
     basis[("TERM_LIFE_A", "GA")],                 # 한 segment 의 Assumptions
     coverages="coverages.csv",
-    benefit_patterns="benefit_patterns.csv",      # ← 담보 패턴 매핑
+    calculation_methods="calculation_methods.csv",      # ← 담보 계산방식
 )
 ```
 
@@ -102,7 +102,7 @@ mp    = fcf.read_model_points(
 :widths: 25 25 50
 
 * - 상품 / 담보 종류
-  - BenefitPattern
+  - CalculationMethod
   - 비고
 * - 일반사망 (정기 / 종신 주계약)
   - DEATH
@@ -137,12 +137,12 @@ amount 지급). 차이는 *rate_table* 일 뿐. 카탈로그에 각자 별도
 `coverage_code` 로 등록하되 패턴은 모두 `DEATH`.
 ```
 
-## 카탈로그 작성 — `benefit_patterns.csv`
+## 카탈로그 작성 — `calculation_methods.csv`
 
 세 컬럼:
 
 ```
-coverage_code,coverage_name,benefit_pattern
+coverage_code,coverage_name,calculation_method
 DEATH,일반사망 (주계약),DEATH
 ADB,재해사망 특약,DEATH
 DISEASE_DEATH,질병사망 특약,DEATH
@@ -155,7 +155,7 @@ MATURITY,만기환급,MATURITY
 * `coverage_code` — 사용자 시스템의 코드 (cross-file join key).
   `coverages.csv` 와 `assumptions.xlsx` 의 `coverages` 시트가 같은 값을 씁니다.
 * `coverage_name` — 사람용 라벨. 엔진은 무시; show_trace 표시에만 쓰입니다.
-* `benefit_pattern` — 위 다섯 enum 값 중 하나. 다른 값이면
+* `calculation_method` — 위 다섯 enum 값 중 하나. 다른 값이면
   `ValueError` 가 어느 행에서 났는지 알려줍니다.
 
 ```{note}
@@ -170,7 +170,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 결정합니다.
 ```
 
-## 변형 — 담보 패턴 매핑을 어떻게 짜는가
+## 변형 — 담보 계산방식을 어떻게 짜는가
 
 회사가 사용하는 모든 담보를 카탈로그에 한 번 정리:
 
@@ -182,7 +182,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 5. 생활비 / 재진단 / DI 같은 sojourn-bounded 패턴은 v1 미지원 — semi-Markov
    영역. (별도 phase)
 
-담보 패턴 매핑은 **신담보가 추가될 때만** 한 줄을 더해줍니다. 분기 결산
+담보 계산방식은 **신담보가 추가될 때만** 한 줄을 더해줍니다. 분기 결산
 때 갱신되는 건 `assumptions.xlsx` 입니다 — 카탈로그가 분리되어 있어
 결산 워크플로가 카탈로그를 건드리지 않습니다.
 
@@ -198,8 +198,8 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
   - 어디서
   - 무엇
 * - V1
-  - `_parse_benefit_patterns` (read 시점)
-  - `benefit_pattern` 값이 다섯 enum 중 하나가 아닌 행
+  - `_parse_calculation_methods` (read 시점)
+  - `calculation_method` 값이 다섯 enum 중 하나가 아닌 행
 * - V2
   - 같음
   - `coverage_code` 가 중복인 행
@@ -213,21 +213,21 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 
 ```python
 # V1 예시 — 알 수 없는 패턴
-# benefit_patterns.csv 의 한 행:
+# calculation_methods.csv 의 한 행:
 #   ADB,재해사망,DEAATH    # 오타: DEATH → DEAATH
 # 결과:
-#   ValueError: benefit_patterns row 'ADB': benefit_pattern='DEAATH'
+#   ValueError: calculation_methods row 'ADB': calculation_method='DEAATH'
 #               is not one of {DEATH, MORBIDITY, DIAGNOSIS, ANNUITY, MATURITY}
 
 # V3 예시 — 카탈로그 누락
 # assumptions.xlsx coverages 시트:
 #   CA_DIAG | CANCER_STD       ← rate_table 등록
-# 그런데 benefit_patterns.csv 에는 CA_DIAG 행 없음.
+# 그런데 calculation_methods.csv 에는 CA_DIAG 행 없음.
 # 결과:
 #   ValueError: rate-driven coverage code(s) ['CA_DIAG'] from the
-#               assumptions workbook are not registered in benefit_patterns
-#               -- add each code (with its BenefitPattern) to
-#               benefit_patterns.csv
+#               assumptions workbook are not registered in calculation_methods
+#               -- add each code (with its CalculationMethod) to
+#               calculation_methods.csv
 ```
 
 `show_trace` 의 Coverages 섹션이 한 계약의 카탈로그 매핑을 그대로
@@ -245,7 +245,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 
 ## 인접 레시피
 
-- [보장 청구 메커니즘](coverage-mechanics) — 각 BenefitPattern 이
+- [보장 청구 메커니즘](coverage-mechanics) — 각 CalculationMethod 이
   엔진 안에서 어떤 알고리즘으로 처리되는지 (이 챕터는 *카탈로그* 결정,
   메커니즘 챕터는 *실행 알고리즘*).
 - [검증 패턴 — show_trace](../workflow/validation) — 카탈로그 변경이

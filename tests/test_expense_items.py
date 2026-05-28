@@ -131,7 +131,7 @@ def _term_life_mp():
         benefits={0: 100_000_000.0},
         level_premium=50_000.0,
         term_months=120,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
 
 

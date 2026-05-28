@@ -33,7 +33,7 @@ def test_bel_rollforward():
     one = ModelPoints.single(
         issue_age=45, benefits={0: 80_000_000},
         level_premium=150_000, term_months=36,
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     res = measure(one, asmp)
 
@@ -67,7 +67,7 @@ def test_liability_runs_off():
         benefits={0: rng.integers(20, 100, n) * 1_000_000},
         level_premium=rng.integers(10, 25, n) * 10_000,
         term_months=rng.integers(48, 120, n),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     res = measure(mps, asmp)
 

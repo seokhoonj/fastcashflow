@@ -19,7 +19,7 @@ from fastcashflow import (
     STATE_PAID_UP,
     STATE_WAIVER,
     Assumptions,
-    BenefitPattern,
+    CalculationMethod,
     ModelPoints,
     CoverageRate,
     measure,
@@ -34,9 +34,9 @@ from conftest import annual_from_monthly as _annual
 Z_75 = 0.6744897501960817
 
 PATTERNS = {
-    "DEATH": BenefitPattern.DEATH,
-    "dx":    BenefitPattern.DIAGNOSIS,
-    "hosp":  BenefitPattern.MORBIDITY,
+    "DEATH": CalculationMethod.DEATH,
+    "dx":    CalculationMethod.DIAGNOSIS,
+    "hosp":  CalculationMethod.MORBIDITY,
 }
 
 
@@ -95,11 +95,11 @@ def test_state_default_is_active():
     kw = dict(issue_age=40, benefits={0: 1_000_000.0},
               level_premium=12_000.0, term_months=12)
     asmp = _assumptions()
-    default = ModelPoints.single(**kw, benefit_patterns=PATTERNS)
+    default = ModelPoints.single(**kw, calculation_methods=PATTERNS)
     assert np.all(default.state == STATE_ACTIVE)
     assert np.isclose(
         value(default, asmp).bel[0],
-        value(ModelPoints.single(**kw, state=STATE_ACTIVE, benefit_patterns=PATTERNS), asmp).bel[0],
+        value(ModelPoints.single(**kw, state=STATE_ACTIVE, calculation_methods=PATTERNS), asmp).bel[0],
     )
 
 
@@ -108,7 +108,7 @@ def test_waiver_track_does_not_lapse():
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
                             level_premium=12_000.0, term_months=3,
                             state=STATE_WAIVER,
-                            benefit_patterns=PATTERNS,
+                            calculation_methods=PATTERNS,
                             )
     res = measure(mp, _assumptions())
     # mortality only: 1 -> 0.99 -> 0.99**2.
@@ -121,7 +121,7 @@ def test_waiver_hand_calculation():
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
                             level_premium=12_000.0, term_months=2,
                             state=STATE_WAIVER,
-                            benefit_patterns=PATTERNS,
+                            calculation_methods=PATTERNS,
                             )
     asmp = _assumptions()
     val = value(mp, asmp)
@@ -143,7 +143,7 @@ def test_waiver_collects_no_premium():
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
                             level_premium=12_000.0, term_months=24,
                             state=STATE_WAIVER,
-                            benefit_patterns=PATTERNS,
+                            calculation_methods=PATTERNS,
                             )
     res = measure(mp, _assumptions())
     assert np.all(res.cashflows.premium_cf[0] == 0.0)
@@ -155,8 +155,8 @@ def test_paidup_matches_waiver():
     kw = dict(issue_age=42, benefits={0: 80_000_000.0},
               level_premium=40_000.0, term_months=180)
     asmp = _assumptions()
-    waiver = value(ModelPoints.single(**kw, state=STATE_WAIVER, benefit_patterns=PATTERNS), asmp)
-    paidup = value(ModelPoints.single(**kw, state=STATE_PAID_UP, benefit_patterns=PATTERNS), asmp)
+    waiver = value(ModelPoints.single(**kw, state=STATE_WAIVER, calculation_methods=PATTERNS), asmp)
+    paidup = value(ModelPoints.single(**kw, state=STATE_PAID_UP, calculation_methods=PATTERNS), asmp)
     for field in ("bel", "ra", "csm", "loss_component"):
         assert np.isclose(getattr(paidup, field)[0], getattr(waiver, field)[0])
 
@@ -166,8 +166,8 @@ def test_zero_waiver_rate_is_no_transition():
     the result is the ordinary single-track projection."""
     kw = dict(issue_age=45, benefits={0: 50_000_000.0},
               level_premium=30_000.0, term_months=120)
-    plain = value(ModelPoints.single(**kw, benefit_patterns=PATTERNS), _assumptions())
-    with_zero = value(ModelPoints.single(**kw, benefit_patterns=PATTERNS), _assumptions(waiver_rate=0.0))
+    plain = value(ModelPoints.single(**kw, calculation_methods=PATTERNS), _assumptions())
+    with_zero = value(ModelPoints.single(**kw, calculation_methods=PATTERNS), _assumptions(waiver_rate=0.0))
     assert np.isclose(plain.bel[0], with_zero.bel[0])
 
 
@@ -179,7 +179,7 @@ def test_dynamic_transition_hand_calculation():
     asmp = _assumptions(waiver_rate=0.05)
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
                             level_premium=premium, term_months=2,
-                            benefit_patterns=PATTERNS,
+                            calculation_methods=PATTERNS,
                             )
 
     # t=0: act=1, wav=0, total=1.
@@ -210,7 +210,7 @@ def test_dynamic_transition_matches_reference():
             mp = ModelPoints.single(
                 issue_age=40, benefits={0: death_benefit},
                 level_premium=premium, term_months=term, state=state,
-                benefit_patterns=PATTERNS,
+                calculation_methods=PATTERNS,
             )
             ref_bel, ref_inforce = _two_track_bel(
                 death_benefit, premium, term, state, w=w)
@@ -223,7 +223,7 @@ def test_measure_and_value_agree_under_transition():
     """The detailed and the fused path give the same BEL with a transition."""
     mp = ModelPoints.single(issue_age=50, benefits={0: 30_000_000.0},
                             level_premium=25_000.0, term_months=240,
-                            benefit_patterns=PATTERNS,
+                            calculation_methods=PATTERNS,
                             )
     asmp = _assumptions(waiver_rate=0.03)
     assert np.isclose(measure(mp, asmp).bel[0, 0], value(mp, asmp).bel[0])
@@ -239,7 +239,7 @@ def test_state_column_round_trips(tmp_path):
         term_months=np.array([24, 24]),
         benefits={0: np.array([1_000_000.0, 1_000_000.0])},
         state=np.array([STATE_ACTIVE, STATE_WAIVER]),
-        benefit_patterns=PATTERNS,
+        calculation_methods=PATTERNS,
     )
     path = tmp_path / "model_points.csv"
     mp.to_wide(asmp).write_csv(path)
@@ -261,7 +261,7 @@ def test_paidup_state_spelling_is_normalised(tmp_path):
         "40,24,12000,1000000,paid up\n"
         "40,24,12000,1000000,PAIDUP\n"
     )
-    back = read_model_points(path, _assumptions(), benefit_patterns=PATTERNS)
+    back = read_model_points(path, _assumptions(), calculation_methods=PATTERNS)
     assert list(back.state) == [STATE_PAID_UP] * 4
 
 
@@ -294,7 +294,7 @@ def test_diagnosis_transition_measure_value_agree():
         level_premium=rng.integers(2, 10, n) * 10_000.0,
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),
-        benefit_patterns={"DEATH": BenefitPattern.DEATH, "dx": BenefitPattern.DIAGNOSIS},
+        calculation_methods={"DEATH": CalculationMethod.DEATH, "dx": CalculationMethod.DIAGNOSIS},
     )
     assert np.allclose(measure(mps, asmp).bel[:, 0], value(mps, asmp).bel)
 
@@ -315,6 +315,6 @@ def test_waiting_rule_transition_measure_value_agree():
         coverage_offset=np.array([0, 1, 2]),
         coverage_waiting=np.array([12, 12]),
         state=np.array([STATE_ACTIVE, STATE_WAIVER]),
-        benefit_patterns={"hosp": BenefitPattern.MORBIDITY},
+        calculation_methods={"hosp": CalculationMethod.MORBIDITY},
     )
     assert np.allclose(measure(mps, asmp).bel[:, 0], value(mps, asmp).bel)
