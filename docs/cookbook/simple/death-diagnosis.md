@@ -11,7 +11,7 @@
 - 진단율은 `mortality_annual` 에 **넣지 않는다** — 진단이 보유계약을
   줄이지 않는 이유
 
-면책 / 감액 기간 없는 *단순* 결합만 다룹니다. 90 일 면책 같은 룰은
+면책 / 감액 기간 없는 *단순* 결합만 다룹니다. 90일 면책 같은 룰은
 3.2 챕터에서.
 ```
 
@@ -77,24 +77,28 @@ lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
 
 # 계리적 가정
 asmp = fcf.Assumptions(
-    mortality_annual = death_fn,                              # 보유계약 감쇠용 사망률 (death_fn 만)
-    lapse_annual     = lapse_fn,                              # 해지율 (해지 없음)
-    discount_annual  = 1.005 ** 12 - 1,                       # 연 할인율 (월 0.5% 의 연 환산)
-    ra_confidence    = 0.75,                                  # 위험조정 신뢰수준 75%
-    mortality_cv     = 0.10,                                  # 사망률 변동계수 10%
-    morbidity_cv     = 0.12,                                  # 진단율 변동계수 12%
-    coverages        = (fcf.CoverageRate("DEATH",  death_fn),   # 0 번 담보 — 사망 청구율
-                        fcf.CoverageRate("CANCER", cancer_fn)), # 1 번 담보 — 암 진단율
+    mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (death_fn 만)
+    lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
+    discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
+    ra_confidence    = 0.75,             # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.10,             # 사망률 변동계수 10%
+    morbidity_cv     = 0.12,             # 진단율 변동계수 12%
+    coverages        = (
+        fcf.CoverageRate("DEATH",  death_fn),   # 0번 담보 — 사망 청구율
+        fcf.CoverageRate("CANCER", cancer_fn),  # 1번 담보 — 암 진단율
+    ),
 )
 
 # 모델 포인트 (계약 하나, 담보 둘)
 mp = fcf.ModelPoints.single(
-    issue_age     = 40,                                       # 가입연령 40 세
-    benefits      = {0: 12_000, 1: 20_000},                   # 0 = 사망보험금 12,000, 1 = 암 진단금 20,000
-    level_premium = 100,                                      # 월납 보험료 100
-    term_months   = 2,                                        # 보험기간 2 개월
-    calculation_methods = {"DEATH":  fcf.CalculationMethod.DEATH,       # 사망 = 사망형 계산
-                           "CANCER": fcf.CalculationMethod.DIAGNOSIS},  # 암 = 진단형 (미진단 풀)
+    issue_age     = 40,                      # 가입연령 40세
+    benefits      = {0: 12_000, 1: 20_000},  # 0 = 사망보험금 12,000, 1 = 암 진단금 20,000
+    level_premium = 100,                     # 월납 보험료 100
+    term_months   = 2,                       # 보험기간 2개월
+    calculation_methods = {
+        "DEATH":  fcf.CalculationMethod.DEATH,      # 사망 = 사망형 계산
+        "CANCER": fcf.CalculationMethod.DIAGNOSIS,  # 암 = 진단형 (미진단 풀)
+    },
 )
 
 m = fcf.measure(mp, asmp)
@@ -167,14 +171,14 @@ t=1 의 암 진단 청구는 *미진단 풀* 0.9851 을 씁니다 — 단순히 
 
 ### 진단금만 키우기
 
-진단 담보의 보장금액은 `benefits` 의 1 번 키:
+진단 담보의 보장금액은 `benefits` 의 1번 키:
 
 ```python
 mp = fcf.ModelPoints.single(
-    issue_age     = 40,                                       # 가입연령 40 세
-    benefits      = {0: 100_000_000, 1: 30_000_000},          # 사망 1 억, 암 진단 3,000 만
-    level_premium = 80_000,                                   # 월납 보험료 8 만
-    term_months   = 240,                                      # 보험기간 20 년
+    issue_age     = 40,                                       # 가입연령 40세
+    benefits      = {0: 100_000_000, 1: 30_000_000},          # 사망 1억, 암 진단 3,000만
+    level_premium = 80_000,                                   # 월납 보험료 8만
+    term_months   = 240,                                      # 보험기간 20년
     calculation_methods = {"DEATH":  fcf.CalculationMethod.DEATH,
                            "CANCER": fcf.CalculationMethod.DIAGNOSIS},
 )
@@ -222,7 +226,7 @@ mortality_annual = lambda s, a, d: death_fn(s,a,d) + cancer_fn(s,a,d)   # ✗
   엔진 안에서 어떻게 다르게 도는지.
 - [2.1 정기보험 평가](term-life) — 사망 단독, 본 챕터의 출발점.
 - 보험료 납입면제 (waiver) (작성 예정) — 상태 추적이 들어가는 첫 챕터.
-- 다종 진단 + 면책 / 감액 (작성 예정) — 90 일 면책 / 감액기간 같은
+- 다종 진단 + 면책 / 감액 (작성 예정) — 90일 면책 / 감액기간 같은
   보장 룰 추가.
 - [검증 패턴](../workflow/validation) — `show_trace` 로 두 담보의
   cash flow 를 한 줄씩 확인.
