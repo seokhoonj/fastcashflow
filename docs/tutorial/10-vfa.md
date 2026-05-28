@@ -200,6 +200,7 @@ death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0)
 # 해지율 함수 -- 해지 없음
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
+# 계리적 가정
 assumptions = fcf.Assumptions(
     mortality_annual  = death_fn,
     lapse_annual      = lapse_fn,
@@ -209,6 +210,8 @@ assumptions = fcf.Assumptions(
     investment_return = 1.01 ** 12 - 1,   # 기초항목 월 수익률 1%
     fund_fee          = 1.005 ** 12 - 1,  # 월 수수료율 0.5%
 )
+
+# 모델 포인트
 model_points = fcf.ModelPoints.single(
     issue_age=40, level_premium=0,
     term_months=3, account_value=1_000_000,
