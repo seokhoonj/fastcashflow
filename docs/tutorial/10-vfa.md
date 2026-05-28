@@ -202,21 +202,21 @@ lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 계리적 가정
 assumptions = fcf.Assumptions(
-    mortality_annual  = death_fn,           # 사망률 함수
-    lapse_annual      = lapse_fn,           # 해지율 함수
-    discount_annual   = 0.03,               # 할인율 (연 3%)
-    ra_confidence     = 0.75,               # 위험조정 신뢰수준
-    mortality_cv      = 0.10,               # 사망률 변동계수
-    investment_return = 1.01 ** 12 - 1,     # 기초항목 연 수익률 (월 1%)
-    fund_fee          = 1.005 ** 12 - 1,    # 연 펀드수수료 (월 0.5%)
+    mortality_annual  = death_fn,           # 사망률 함수 (사망 없음 가정)
+    lapse_annual      = lapse_fn,           # 해지율 함수 (해지 없음 가정)
+    discount_annual   = 0.03,               # 연 할인율 3%
+    ra_confidence     = 0.75,               # 위험조정 신뢰수준 75%
+    mortality_cv      = 0.10,               # 사망률 변동계수 10%
+    investment_return = 1.01 ** 12 - 1,     # 기초항목 월 수익률 1% (연 환산)
+    fund_fee          = 1.005 ** 12 - 1,    # 월 펀드수수료 0.5% (연 환산)
 )
 
 # 모델 포인트
 model_points = fcf.ModelPoints.single(
-    issue_age     = 40,                     # 가입연령
-    level_premium = 0,                      # 월납 보험료 (이 예제는 일시납 가정이라 0)
-    term_months   = 3,                      # 보험기간 (개월)
-    account_value = 1_000_000,              # 초기 계좌가치
+    issue_age     = 40,                     # 가입연령 40세
+    level_premium = 0,                      # 월납 보험료 0 (일시납 가정)
+    term_months   = 3,                      # 보험기간 3 개월
+    account_value = 1_000_000,              # 초기 계좌가치 100만원
 )
 m = fcf.measure_vfa(model_points, assumptions)
 print(m.account_value[0])   # 계좌가치 궤적
