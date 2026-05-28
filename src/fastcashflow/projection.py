@@ -77,6 +77,7 @@ class Cashflows:
     annuity_cf: FloatArray    # annuity (survival income) outflow per month
     disability_cf: FloatArray # disability income + lump-sum outflow per month
     maturity_cf: FloatArray   # (n_mp,) maturity benefit, paid at time = term
+    maturity_survivors: FloatArray  # (n_mp,) in-force reaching term (the maturity exit count)
     surrender_cf: FloatArray  # surrender value (해약환급금) paid on lapse
 
     @property
@@ -154,6 +155,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
     annuity_cf = np.zeros((n_mp, n_time))
     disability_cf = np.zeros((n_mp, n_time))
     maturity_cf = np.zeros(n_mp)
+    maturity_survivors = np.zeros(n_mp)
 
     n_edges = edge_from.shape[0]
     for mp in prange(n_mp):
@@ -242,6 +244,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                 for s in range(n_states):
                     total_next += occ_next[s]
                 maturity_cf[mp] = total_next * maturity_benefit[mp]
+                maturity_survivors[mp] = total_next
             for s in range(n_states):
                 occ[s] = occ_next[s]
 
@@ -296,7 +299,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                 undiagnosed *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-            annuity_cf, disability_cf, maturity_cf)
+            annuity_cf, disability_cf, maturity_cf, maturity_survivors)
 
 
 @njit(parallel=True, cache=True)
@@ -340,6 +343,7 @@ def _project_kernel_semi_markov(
     annuity_cf = np.zeros((n_mp, n_time))
     disability_cf = np.zeros((n_mp, n_time))
     maturity_cf = np.zeros(n_mp)
+    maturity_survivors = np.zeros(n_mp)
 
     n_edges = edge_from.shape[0]
     total_cohorts = state_offset[n_states]
@@ -451,6 +455,7 @@ def _project_kernel_semi_markov(
                 for i in range(total_cohorts):
                     total_next += occ_next[i]
                 maturity_cf[mp] = total_next * maturity_benefit[mp]
+                maturity_survivors[mp] = total_next
 
             for i in range(total_cohorts):
                 occ[i] = occ_next[i]
@@ -507,7 +512,7 @@ def _project_kernel_semi_markov(
                 undiagnosed *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-            annuity_cf, disability_cf, maturity_cf)
+            annuity_cf, disability_cf, maturity_cf, maturity_survivors)
 
 
 def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Cashflows:
@@ -661,7 +666,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         state_offset[1:] = np.cumsum(state_duration_max)
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
          annuity_cf, disability_cf,
-         maturity_cf) = _project_kernel_semi_markov(
+         maturity_cf, maturity_survivors) = _project_kernel_semi_markov(
             mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
             n_states, state_duration_max, state_offset,
             premium_state, benefit_state, start_state,
@@ -721,7 +726,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         premium_state = compiled.premium_state
         benefit_state = compiled.benefit_state
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-         annuity_cf, disability_cf, maturity_cf) = _project_kernel(
+         annuity_cf, disability_cf, maturity_cf, maturity_survivors) = _project_kernel(
             mortality,
             edge_from,
             edge_to,
@@ -788,5 +793,6 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         annuity_cf=annuity_cf,
         disability_cf=disability_cf,
         maturity_cf=maturity_cf,
+        maturity_survivors=maturity_survivors,
         surrender_cf=surrender_cf,
     )

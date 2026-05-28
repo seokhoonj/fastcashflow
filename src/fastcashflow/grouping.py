@@ -75,6 +75,7 @@ def group(measurement: Measurement, group_ids: FloatArray) -> Measurement:
         annuity_cf=_sum_by_group(cf.annuity_cf, inverse, n_groups),
         disability_cf=_sum_by_group(cf.disability_cf, inverse, n_groups),
         maturity_cf=_sum_by_group(cf.maturity_cf, inverse, n_groups),
+        maturity_survivors=_sum_by_group(cf.maturity_survivors, inverse, n_groups),
         surrender_cf=_sum_by_group(cf.surrender_cf, inverse, n_groups),
     )
 

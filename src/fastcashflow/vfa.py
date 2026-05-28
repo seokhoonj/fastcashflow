@@ -8,9 +8,10 @@ unit-linked and with-profits business.
 This module measures a single-premium account-value contract: a premium is
 paid into an account at issue; the account value grows at the underlying-
 items return less a variable fee; the benefit is the account value on
-surrender or maturity, and max(account value, a guaranteed minimum death
-benefit) on death. The entity's profit is the *variable fee* it deducts,
-its share of the underlying items.
+surrender, max(account value, a guaranteed minimum death benefit) on death,
+and max(account value, a guaranteed minimum accumulation benefit) at
+maturity. The entity's profit is the *variable fee* it deducts, its share
+of the underlying items.
 
 Under the VFA the financial result flows through the CSM rather than profit
 or loss, so the account-value cash flows are discounted, and the CSM is
@@ -88,12 +89,13 @@ def measure_vfa(
     ``AV[t+1] = AV[t] * (1 + max(r, g)) * (1 - f)`` -- the credited rate (the
     underlying-items return ``r`` floored at any guaranteed rate ``g``) less
     the variable fee ``f`` -- from ``AV[0]`` = the model point's
-    ``account_value``. Surrender and maturity exits pay the account value; a
-    death exit pays ``max(account value, guaranteed_death_benefit)``, so the
-    excess over the account value is the GMDB's intrinsic cost. The GMDB's
-    *time value* (the extra cost from return volatility) is future work --
-    ``return_scenarios`` currently folds in the credit-rate guarantee's time
-    value only.
+    ``account_value``. A surrender pays the account value; a death exit pays
+    ``max(account value, guaranteed_death_benefit)`` (GMDB) and the survivors
+    reaching term pay ``max(account value, guaranteed_accumulation_benefit)``
+    (GMAB), so the excess over the account value is each guarantee's intrinsic
+    cost. The guarantees' *time value* (the extra cost from return volatility)
+    is future work -- ``return_scenarios`` currently folds in the credit-rate
+    guarantee's time value only.
 
     BEL is the present value of benefits and expenses less the premium, all
     at the underlying-items return; the CSM is ``max(0, -(BEL + RA))`` -- the
@@ -140,6 +142,17 @@ def measure_vfa(
         av[:, :n_time], model_points.guaranteed_death_benefit[:, None]
     )
     benefit_cf = deaths * death_benefit + (exits - deaths) * av[:, :n_time]
+    # GMAB: the survivors reaching each policy's term receive max(account
+    # value, guaranteed_accumulation_benefit). They sit in the (exits - deaths)
+    # account-value payout at the maturity (term - 1) column; lift them by the
+    # excess over the account value there. Default zero GAB adds nothing.
+    rows = np.arange(n_mp)
+    term_idx = model_points.term_months - 1
+    av_at_maturity = av[rows, term_idx]
+    maturity_excess = proj.maturity_survivors * np.maximum(
+        0.0, model_points.guaranteed_accumulation_benefit - av_at_maturity
+    )
+    benefit_cf[rows, term_idx] += maturity_excess
     # Variable fee -- the entity's share, deducted from the grown account value.
     fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m)[:, None] * f_m
     # Liability for incurred claims -- exit benefits settled over the pattern.
