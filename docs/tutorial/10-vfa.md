@@ -213,10 +213,11 @@ assumptions = fcf.Assumptions(
 
 # 모델 포인트
 model_points = fcf.ModelPoints.single(
-    issue_age     = 40,                     # 가입연령 40세
-    level_premium = 0,                      # 월납 보험료 0 (일시납 가정)
-    term_months   = 3,                      # 보험기간 3 개월
-    account_value = 1_000_000,              # 초기 계좌가치 100만원
+    issue_age     = 40,         # 가입연령 40세
+    sex           = 0,          # 성별 (0=남, 1=여)
+    level_premium = 0,          # 월납 보험료 0 (일시납 가정)
+    term_months   = 3,          # 보험기간 3개월
+    account_value = 1_000_000,  # 초기 계좌가치 100만원
 )
 m = fcf.measure_vfa(model_points, assumptions)
 print(m.account_value[0])   # 계좌가치 궤적

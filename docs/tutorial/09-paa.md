@@ -167,21 +167,24 @@ lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 계리적 가정
 assumptions = fcf.Assumptions(
-    mortality_annual = death_fn,                                # 보유계약 감쇠용 사망률 (연 0.1%)
-    lapse_annual     = lapse_fn,                                # 해지율 (해지 없음)
-    discount_annual  = 0.03,                                    # 연 할인율 3%
-    ra_confidence    = 0.75,                                    # 위험조정 신뢰수준 75%
-    mortality_cv     = 0.10,                                    # 사망률 변동계수 10%
-    coverages        = (fcf.CoverageRate("DEATH", death_fn),),  # 사망 보장 1 종 (청구 rate = death_fn)
+    mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (연 0.1%)
+    lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
+    discount_annual  = 0.03,             # 연 할인율 3%
+    ra_confidence    = 0.75,             # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.10,             # 사망률 변동계수 10%
+    coverages        = (
+        fcf.CoverageRate("DEATH", death_fn),  # 사망 보장 1종 (청구 rate = death_fn)
+    ),
 )
 
-# 모델 포인트 -- 4 개월 단기 보장, 단일보험료 120 만 일시납
+# 모델 포인트 -- 4개월 단기 보장, 단일보험료 120만 일시납
 model_points = fcf.ModelPoints.single(
-    issue_age      = 40,                                        # 가입연령 40 세
-    benefits       = {0: 100_000_000},                          # 0 번 보장 (= DEATH) 의 보험금 1 억
-    level_premium  = 0,                                         # 월납 보험료 0 (단일보험료라서)
-    term_months    = 4,                                         # 보험기간 4 개월
-    single_premium = 1_200_000,                                 # 가입 시 한 번 받는 단일보험료 120 만
+    issue_age      = 40,                # 가입연령 40세
+    sex            = 0,                 # 성별 (0=남, 1=여)
+    benefits       = {0: 100_000_000},  # 0번 보장 (= DEATH) 의 보험금 1억
+    level_premium  = 0,                 # 월납 보험료 0 (단일보험료라서)
+    term_months    = 4,                 # 보험기간 4개월
+    single_premium = 1_200_000,         # 가입 시 한 번 받는 단일보험료 120만
 )
 
 # 측정 -- PAA 경로
