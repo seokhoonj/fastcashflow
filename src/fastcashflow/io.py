@@ -955,13 +955,14 @@ def _wide_model_points(df: pl.DataFrame, assumptions,
 
 
 def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
-                       assumptions, calculation_methods=None) -> ModelPoints:
-    """Build a ``ModelPoints`` from a long-form policies + coverages pair."""
-    if assumptions is None:
-        raise ValueError(
-            "long-form model points need the assumptions -- the coverage-code "
-            "registry maps coverage rows to engine codes"
-        )
+                       assumptions=None, calculation_methods=None) -> ModelPoints:
+    """Build a ``ModelPoints`` from a long-form policies + coverages pair.
+
+    ``assumptions`` is accepted but unused -- the rate-driven coverage order
+    is taken from the ``calculation_methods`` catalogue, so the portfolio is
+    read without the actuarial basis. The engine aligns its coverages at
+    measure time. The parameter is kept for call-site compatibility.
+    """
     if calculation_methods is None:
         raise ValueError(
             "long-form model points need the calculation_methods taxonomy -- "
@@ -1014,23 +1015,18 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             "Add a reduction_end column (months) or drop the factor column."
         )
     ctypes = {k: CalculationMethod(v) for k, v in calculation_methods.items()}
-    code_to_cov_idx = {r.code: i for i, r in enumerate(assumptions.coverages)}
-    # V3 -- every rate-driven coverage in the assumptions must be registered
-    # in the taxonomy. Detected here so the error surfaces at read time
-    # rather than as a quiet routing miss inside the engine.
-    missing_in_taxonomy = [r.code for r in assumptions.coverages
-                           if r.code not in ctypes]
-    if missing_in_taxonomy:
-        raise ValueError(
-            f"rate-driven coverage code(s) {missing_in_taxonomy!r} from the "
-            "assumptions workbook are not registered in calculation_methods -- "
-            "add each code (with its CalculationMethod) to calculation_methods.csv"
-        )
+    # Rate-driven coverage order comes from the *catalogue* (calculation_methods),
+    # not the assumptions -- so reading the portfolio needs no assumptions.
+    # coverage_index integers index this order; the engine aligns
+    # Assumptions.coverages to it at measure time (coverage.align_coverages).
+    # Only the rate-driven codes that actually appear in this portfolio are
+    # kept, in catalogue order.
+    present_codes = set(cov["coverage_code"].to_list())
+    rate_driven_codes = [c for c, m in ctypes.items()
+                         if m in RATE_DRIVEN_PATTERNS and c in present_codes]
+    code_to_cov_idx = {c: i for i, c in enumerate(rate_driven_codes)}
 
-    # Resolve every coverage row to its policy index and coverage type. A
-    # rate-driven coverage code that the taxonomy declares but the
-    # assumptions workbook does not register lands at -1, raised below as
-    # a missing-coverage error -- the engine cannot lookup a rate for it.
+    # Resolve every coverage row to its policy index and coverage type.
     pol = pol.with_row_index("_mp")
     cmap = pl.DataFrame({
         "coverage_code": list(ctypes.keys()),
@@ -1103,23 +1099,13 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         fields["level_premium"] = np.zeros(n_mp)
 
     # Coverage list: the rate-driven coverages (codes 0..n-1 indexing
-    # ``assumptions.coverages``). annuity / maturity are survival scalars
-    # and not part of the CSR. Every rate-driven row must map to a
-    # registered coverage in the assumptions workbook -- the catalogue
-    # may declare codes the workbook does not register (the operator can
-    # still attach amounts to them in the long-form coverages file, but
-    # the engine has no rate to apply), in which case ``code_to_cov_idx``
-    # leaves them at -1 and we raise.
+    # ``coverage_codes`` below). annuity / maturity are survival scalars and
+    # not part of the CSR. Every rate-driven present code is in
+    # ``rate_driven_codes`` by construction, so ``cov_idx >= 0`` here; a code
+    # absent from the catalogue was already rejected (the ``_type`` null
+    # check above). Whether the assumptions register a rate for each code is
+    # checked at measure time (coverage.align_coverages, the V4 guard).
     is_cov = np.isin(ctype, RATE_DRIVEN_PATTERNS)
-    if np.any(cov_idx[is_cov] < 0):
-        bad = sorted({str(c) for c, ok in zip(
-            cov["coverage_code"].to_list(), is_cov & (cov_idx < 0)) if ok})
-        raise ValueError(
-            f"rate-driven coverage code(s) {_truncate_list(bad)} appear in "
-            "the model-point coverages frame but are not registered in the "
-            "assumptions workbook's coverages sheet -- add a row (with a "
-            "rate_table) so the engine has a rate to apply"
-        )
     order = np.argsort(mp[is_cov], kind="stable")
     cov_mp = mp[is_cov][order]
     fields["coverage_index"] = cov_idx[is_cov][order]
@@ -1139,10 +1125,9 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         np.cumsum(np.bincount(cov_mp, minlength=n_mp), dtype=np.int64),
     ))
     fields["calculation_methods"] = ctypes
-    # Pin the assumptions ordering: the coverage_index integers we just
-    # built index into this tuple; validate_csr_codes will refuse a later
-    # Assumptions whose coverages got reordered.
-    fields["coverage_codes"] = tuple(r.code for r in assumptions.coverages)
+    # The catalogue order the coverage_index integers were built against.
+    # The engine aligns Assumptions.coverages to this at measure time.
+    fields["coverage_codes"] = tuple(rate_driven_codes)
     return ModelPoints(**fields)
 
 
@@ -1164,7 +1149,7 @@ def read_model_points(
       ``annuity_payment`` are read if present. Each
       ``<coverage_code>_benefit`` column adds that coverage; the
       ``assumptions`` resolve the coverage code to an engine code.
-    * **long-form** -- ``read_model_points(policies, assumptions,
+    * **long-form** -- ``read_model_points(policies,
       coverages=coverages_path, calculation_methods=calculation_methods_path)``.
       A policies frame (``mp_id``, ``issue_age``, ``term_months``,
       optional ``sex`` / ``count`` / ``state`` / ``premium_term_months``)
@@ -1177,7 +1162,14 @@ def read_model_points(
       split between *portfolio* (policies + coverages), *basis*
       (assumptions.xlsx) and *catalogue* (calculation_methods.csv).
 
-    ``assumptions`` is optional only for a wide file with no coverage columns.
+    Long-form needs **no assumptions**: the rate-driven coverage order is
+    taken from the ``calculation_methods`` catalogue, so the portfolio is
+    read independently of the actuarial basis. The basis enters only at the
+    engine call (``measure`` / ``value``), which aligns its coverages to the
+    catalogue order. The wide form still resolves ``<code>_benefit`` columns
+    against ``assumptions`` (or the catalogue when ``calculation_methods`` is
+    given). ``assumptions`` is accepted as the second positional for
+    call-site compatibility but ignored for long-form.
 
     The policies frame is the **inception-time static spec** -- issue_age,
     term, sex, and so on. The in-force closing state (elapsed_months,
