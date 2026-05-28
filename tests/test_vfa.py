@@ -7,7 +7,10 @@ is the variable fee it keeps -- which is the inception CSM.
 import numpy as np
 import pytest
 
-from fastcashflow import ExpenseItem, ModelPoints, measure_tvog, measure_vfa, report
+from fastcashflow import (
+    ExpenseItem, ModelPoints, load_sample_vfa_assumptions,
+    load_sample_vfa_model_points, measure_tvog, measure_vfa, report,
+)
 from conftest import annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -325,6 +328,22 @@ def test_vfa_ra_reduces_the_csm():
     no_ra = measure_vfa(mp, _assumptions(expense_items=_g120k, expense_cv=0.0))
     with_ra = measure_vfa(mp, _assumptions(expense_items=_g120k, expense_cv=0.30))
     assert with_ra.csm[0, 0] < no_ra.csm[0, 0]
+
+
+def test_load_sample_vfa_is_measurable():
+    """The bundled VFA sample measures, and its uniform credit rate lets the
+    stochastic time-value pass run."""
+    mp = load_sample_vfa_model_points()
+    asmp = load_sample_vfa_assumptions()
+    m = measure_vfa(mp, asmp)
+    assert m.csm[:, 0].sum() > 0.0          # the variable fee is unearned profit
+    assert np.allclose(m.loss_component, 0.0)
+
+    r_m = (1.0 + asmp.investment_return) ** (1.0 / 12.0) - 1.0
+    scen = r_m + np.random.default_rng(0).normal(
+        0.0, 0.01, size=(64, int(mp.term_months.max())))
+    tvog = measure_tvog(mp, asmp, scen)
+    assert tvog.time_value != 0.0           # the guarantees carry a time value
 
 
 def test_vfa_report_releases_the_ra_into_revenue():

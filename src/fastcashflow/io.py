@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import importlib.resources as resources
 import warnings
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -1389,6 +1390,46 @@ def load_sample_inforce_state() -> "InforceState":
     base = resources.files("fastcashflow") / "sample_data"
     with resources.as_file(base / "sample_inforce_state.csv") as path:
         return read_inforce_state(path)
+
+
+def load_sample_vfa_assumptions() -> Assumptions:
+    """Bundled VFA (variable, account-value) assumptions -- a single basis.
+
+    Built from the sample ``TERM_LIFE_A`` / ``FC`` basis (same mortality,
+    lapse and discount) with the protection coverages dropped and the two
+    VFA economic inputs set: ``investment_return`` (the underlying-items
+    return the account value grows at) and ``fund_fee`` (the variable fee the
+    entity keeps, which is the source of the CSM). Pair with
+    :func:`load_sample_vfa_model_points`; ``measure_vfa`` takes a single
+    :class:`Assumptions`.
+    """
+    seg = load_sample_assumptions()[("TERM_LIFE_A", "FC")]
+    return replace(seg, coverages=(), investment_return=0.05, fund_fee=0.015)
+
+
+def load_sample_vfa_model_points() -> ModelPoints:
+    """Bundled VFA sample -- variable annuities with minimum-rate, death and
+    maturity guarantees.
+
+    Three single-premium account-value contracts that share a 2% minimum
+    credited rate (``guaranteed_credit_rate``, uniform across the rows so the
+    stochastic time-value pass applies) and differ in their floors: one
+    carries both a death (GMDB) and a maturity (GMAB) guarantee, one a
+    maturity floor, one a death floor. Pair with
+    :func:`load_sample_vfa_assumptions`; generate underlying-return scenarios
+    to value the time value of the guarantees (see ``examples/vfa.py``).
+    """
+    return ModelPoints(
+        issue_age=np.array([45, 50, 40]),
+        level_premium=np.zeros(3),
+        term_months=np.array([120, 120, 180]),
+        account_value=np.array([1.0e8, 2.0e8, 5.0e7]),
+        guaranteed_credit_rate=np.array([0.02, 0.02, 0.02]),
+        guaranteed_death_benefit=np.array([1.1e8, 0.0, 5.5e7]),
+        guaranteed_accumulation_benefit=np.array([1.0e8, 2.1e8, 0.0]),
+        product_code=np.array(["VAR_ANNUITY_A"] * 3),
+        channel_code=np.array(["BANCA"] * 3),
+    )
 
 
 def _drop_sample_table(filename: str, dest: Path | str) -> Path:
