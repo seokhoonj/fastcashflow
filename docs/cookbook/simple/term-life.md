@@ -229,7 +229,7 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 * - 파일
   - 내용
 * - `benefit_patterns.csv`
-  - 회사 카탈로그 — 담보 코드 → 청구 패턴 (DEATH / MORBIDITY / ...)
+  - 담보 카탈로그 — 담보 코드 → 청구 패턴 (DEATH / MORBIDITY / ...)
 * - `assumptions.xlsx`
   - 계리적 가정 — 사망률 · 해지율 · 할인율 · 사업비 · 위험조정
 * - `policies.csv`
@@ -426,7 +426,7 @@ mp = fcf.ModelPoints.single(
 ```{admonition} 사망률 / 해지율 표를 바꾸려면
 :class: note
 
-자사 경험률표로 평가하려면 워크북의 `mortality_tables` / `lapse_tables`
+회사 경험률표로 평가하려면 워크북의 `mortality_tables` / `lapse_tables`
 시트에 행을 추가하고 `segments` 시트의 `mortality_table` /
 `lapse_table` 컬럼에서 그 `table_id` 를 가리키면 됩니다. 자세한 워크북
 편집 가이드는 [튜토리얼 11장](../../tutorial/11-in-practice).
@@ -511,7 +511,7 @@ fastcashflow 의 성별 인코딩은 **0 = 남, 1 = 여**. 워크북의 `policie
 :class: warning
 
 본 챕터의 BEL / RA / CSM 숫자는 **샘플 가정 그대로** 의 결과입니다.
-실제 자사 평가에서는 mortality_cv / discount_annual / 사업비를 자사
+실제 회사 평가에서는 mortality_cv / discount_annual / 사업비를 회사
 설정에 맞춰야 의미 있는 숫자가 나옵니다. fastcashflow 의 결과는
-"입력 가정에 충실한 산출" 이지, 자사 portfolio 의 진실값은 아닙니다.
+"입력 가정에 충실한 산출" 이지, 회사 portfolio 의 진실값은 아닙니다.
 ```

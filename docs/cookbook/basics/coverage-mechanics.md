@@ -345,7 +345,7 @@ asmp_buggy = fcf.Assumptions(
 
 ## 인접 레시피
 
-- [BenefitPattern 결정 가이드](benefit-patterns-catalog) — 회사 카탈로그의
+- [BenefitPattern 결정 가이드](benefit-patterns-catalog) — 담보 카탈로그의
   매 코드를 어느 패턴으로 등록할지. 본 챕터는 그 패턴이 *엔진 안에서*
   어떻게 다르게 동작하는지.
 - [정기보험 평가](../simple/term-life) — DEATH 만 사용하는 가장 단순한 사례.

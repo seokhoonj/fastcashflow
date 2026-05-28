@@ -34,7 +34,7 @@ ModelPoints (mp = fcf.read_model_points(...))
 │   ├── reduction_end         · 감액기간 종료 개월수 (선택)
 │   └── reduction_factor      · 감액기간 중 지급률 (선택, 0..1)
 │
-└── benefit_patterns.csv      ── 회사 카탈로그 (담보 코드 → 지급 패턴)
+└── benefit_patterns.csv      ── 담보 카탈로그 (담보 코드 → 지급 패턴)
     ├── coverage_code         · 담보 코드 (DEATH, CANCER, INPATIENT ...)
     ├── coverage_name         · 사람 친화 라벨 (선택)
     └── benefit_pattern       · DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY

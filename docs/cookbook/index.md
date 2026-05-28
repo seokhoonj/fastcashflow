@@ -10,7 +10,7 @@
 
 ## 누구를 위한 자료인가
 
-- **사용자** — 자사 상품을 fastcashflow 로 평가하려는 실무 actuary
+- **사용자** — 회사 상품을 fastcashflow 로 평가하려는 실무 actuary
 - **검토 / 검증 담당자** — 평가 엔진이 어떻게 동작하는지 확인하려는 분
 - **신규 도입을 검토하는 분** — 우리 회사 상품군이 fastcashflow 로
   표현 가능한지 사례로 확인
@@ -43,14 +43,14 @@
   - 재진단 / 회복 / 등급 진행 — 코호트 추적이 필요한 영역.
 * - I/O (Excel 워크북)
   - 데이터 입출력
-  - 자사 워크북을 fastcashflow 가 읽는 형식으로 맞추는 자리.
+  - 회사 워크북을 fastcashflow 가 읽는 형식으로 맞추는 자리.
 * - 분석 / 검증
   - 시나리오 / 손계산 검증
   - 가정을 흔들어 보고, 결과의 한 항씩 풀어 보는 워크플로 도구.
 ```
 
 기초 → 단순 → Markov → Semi-Markov 의 순서는 **학습 곡선**입니다.
-하지만 자사 상품에 해당하는 챕터로 바로 점프해도 됩니다 — 각 챕터는
+하지만 회사 상품에 해당하는 챕터로 바로 점프해도 됩니다 — 각 챕터는
 필요한 사전 개념을 짧게 도입하고 시작합니다.
 
 ## 챕터 목록
@@ -72,7 +72,7 @@
 * - 1.2
   - [지급 패턴과 계산방식 매칭](basics/benefit-patterns-catalog)
   - 5 종 패턴 (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) 의
-    의미. 회사 카탈로그 (`benefit_patterns.csv`) 작성.
+    의미. 담보 카탈로그 (`benefit_patterns.csv`) 작성.
 * - 1.3
   - [사망률의 두 역할](basics/mortality-roles)
   - `mortality_annual` (보유계약 감쇠) 과 `coverages` 의 DEATH rate (보장

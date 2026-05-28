@@ -22,7 +22,7 @@
 어떤 알고리즘을 적용할지 자동 추론할 수 없다는 점 — 한국 시장의 담보
 이름은 회사마다, 상품마다 자유 형식입니다. 그래서 사용자가 **"이 담보는
 이런 식으로 지급된다"** 를 미리 알려줘야 합니다. 그 매핑이 *지급 패턴
-(benefit pattern)* 이고, 회사 단위로 한 번 정해두면 거의 안 바뀝니다.
+(benefit pattern)* 이고, 새로운 담보가 생길 때 추가로 매칭해주면 됩니다.
 
 다섯 가지 분기로 단순화됩니다:
 
@@ -72,7 +72,7 @@ DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은 ANNUITY. 엔진은 "주계약
 | Portfolio | `policies.csv` + `coverages.csv` | 일 / 월 | 어떤 계약이 어떤 담보를 얼마에 |
 
 세 파일이 각자 자기 책임만 가지면 한 갱신이 다른 파일에 닿지 않습니다.
-**담보 패턴 매핑은 라인업이 바뀌지 않는 한 손댈 일이 드물고**, **위험률은
+**담보 패턴 매핑은 새 담보가 추가될 때만 한 줄 더해주면 되고**, **위험률은
 분기마다 다시 칼리브레이션** 되며, **보유계약은 매일 바뀝니다**.
 
 ```python
@@ -90,7 +90,7 @@ mp    = fcf.read_model_points(
     "policies.csv",
     basis[("TERM_LIFE_A", "GA")],                 # 한 segment 의 Assumptions
     coverages="coverages.csv",
-    benefit_patterns="benefit_patterns.csv",      # ← 회사 카탈로그
+    benefit_patterns="benefit_patterns.csv",      # ← 담보 카탈로그
 )
 ```
 
@@ -169,7 +169,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 결정합니다.
 ```
 
-## 변형 — 회사 카탈로그를 어떻게 짜는가
+## 변형 — 담보 카탈로그를 어떻게 짜는가
 
 회사가 사용하는 모든 담보를 카탈로그에 한 번 정리:
 
@@ -181,7 +181,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 5. 생활비 / 재진단 / DI 같은 sojourn-bounded 패턴은 v1 미지원 — semi-Markov
    영역. (별도 phase)
 
-회사 카탈로그는 **연 1 회 미만** 으로 바뀝니다. 분기 결산 때 갱신되는
+담보 카탈로그는 **연 1 회 미만** 으로 바뀝니다. 분기 결산 때 갱신되는
 건 `assumptions.xlsx` 입니다 — 카탈로그가 분리되어 있어 결산 워크플로가
 카탈로그를 건드리지 않습니다.
 
