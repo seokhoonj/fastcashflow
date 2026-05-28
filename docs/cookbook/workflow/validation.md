@@ -307,18 +307,25 @@ def death_fn(s, ia, d, ic, em):
 def lapse_fn(s, ia, d, ic, em):
     return np.full(d.shape, 0.02)
 
+# 계리적 가정 -- 이익이 나는 (CSM > 0) 시나리오
 profitable = Assumptions(
-    mortality_annual=death_fn, lapse_annual=lapse_fn,
-    discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
-    coverages=(fcf.CoverageRate("DEATH", death_fn),),
+    mortality_annual = death_fn,                                  # 보유계약 감쇠용 사망률 (연 0.05%)
+    lapse_annual     = lapse_fn,                                  # 해지율 (연 2%)
+    discount_annual  = 0.03,                                      # 연 할인율 3%
+    ra_confidence    = 0.75,                                      # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.05,                                      # 사망률 변동계수 5%
+    coverages        = (fcf.CoverageRate("DEATH", death_fn),),    # 사망 보장 1 종 (청구 rate = death_fn)
 )
+
+# 모델 포인트 -- 보험금 1 억, 월납 보험료 20 만, 5 년 만기 한 계약
 mp_one = ModelPoints(
-    issue_age=np.array([40.0]),
-    level_premium=np.array([200_000.0]),
-    term_months=np.array([60]),
-    benefits={0: np.array([100_000_000.0])},
-    benefit_patterns={"DEATH": fcf.BenefitPattern.DEATH},
+    issue_age        = np.array([40.0]),                          # 가입연령 40 세
+    level_premium    = np.array([200_000.0]),                     # 월납 보험료 20 만
+    term_months      = np.array([60]),                            # 보험기간 60 개월 (5 년)
+    benefits         = {0: np.array([100_000_000.0])},            # 0 번 보장 (= DEATH) 의 보험금 1 억
+    benefit_patterns = {"DEATH": fcf.BenefitPattern.DEATH},       # 코드 → 패턴 매핑
 )
+
 fcf.show_csm_step(0, mp_one, profitable, months=[1, 30, 60])
 ```
 
