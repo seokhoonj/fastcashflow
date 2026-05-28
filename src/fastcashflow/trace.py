@@ -520,18 +520,28 @@ def show_trace_vfa(
             )
 
     # ---- Final headline
+    # The guarantee time value is carried into the fulfilment cash flows:
+    # FCF = BEL + RA + TVOG, then CSM = max(0, -FCF) and loss = max(0, FCF).
+    # Showing the FCF line makes the CSM / loss split reconcile -- otherwise
+    # a reader cannot see why a negative BEL still leaves CSM = 0.
     fee = float(m.variable_fee[0])
     tv = float(m.time_value[0])
     lc = float(m.loss_component[0])
-    tv_note = ("(시나리오 없음 -> intrinsic 만)" if return_scenarios is None
-               else "(보증 시간가치 -- CSM 흡수)")
+    fcf0 = float(bel[0] + ra[0] + tv)
+    if return_scenarios is None:
+        fcf_label, tv_note = "FCF = BEL + RA   ", "(시나리오 없음 -> intrinsic 만)"
+    else:
+        fcf_label, tv_note = "FCF = BEL+RA+TVOG", "(보증 시간가치)"
+    outcome = ("-> onerous (TVOG 가 미실현 수수료 초과)" if lc > 0.0
+               else "-> 수익성 (CSM 이 흡수)")
     final_lines: list[object] = [
         f"variable_fee     = {fee:>15,.2f}  (수수료 PV = 이익원)",
         f"BEL              = {bel[0]:>15,.2f}",
         f"RA               = {ra[0]:>15,.2f}",
         f"TVOG (time_value)= {tv:>15,.2f}  {tv_note}",
-        f"CSM              = {csm[0]:>15,.2f}",
-        f"loss_component   = {lc:>15,.2f}",
+        f"{fcf_label}= {fcf0:>15,.2f}",
+        f"CSM = max(0,-FCF)= {csm[0]:>15,.2f}",
+        f"loss_component   = {lc:>15,.2f}  {outcome}",
     ]
 
     out.append(header)
