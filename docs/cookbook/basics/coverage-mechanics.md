@@ -15,10 +15,10 @@
   서로를 검증하는가
 ```
 
-각 `CalculationMethod` 이 *카탈로그의 라벨* 이라면 — `DEATH` 라고 적는 것 vs
-`DIAGNOSIS` 라고 적는 것의 차이는 어디서 결정나나? 카탈로그 결정은
-[CalculationMethod 결정 가이드](calculation-methods) 의 자리이고, 본
-챕터는 **엔진이 그 패턴을 받아서 무엇을 다르게 하는가** 입니다.
+각 `CalculationMethod` 값이 *`calculation_methods.csv` 에 적는 라벨* 이라면 —
+`DEATH` 라고 적는 것 vs `DIAGNOSIS` 라고 적는 것의 차이는 어디서 정해지나?
+그 선택은 [CalculationMethod 결정 가이드](calculation-methods) 의 자리이고,
+본 챕터는 **엔진이 그 패턴을 받아서 무엇을 다르게 하는가** 입니다.
 
 이 챕터의 모든 예제는 동일한 toy 설정 — 월 사망/발생/진단율 1%, 보험금
 12,000, 3 개월 — 위에서 패턴만 바꿔 결과를 비교합니다. 한 페이지에 세 모드의
