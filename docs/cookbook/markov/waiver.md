@@ -208,7 +208,7 @@ active / waiver 2-state 만 다룹니다.
 
 ## 인접 레시피
 
-- [2.1 정기보험 평가](../simple/term-life) — 상태 전이 없는 정액형, 본 챕터의
+- [2.1 정기보험](../simple/term-life) — 상태 전이 없는 정액형, 본 챕터의
   출발점.
 - [1.3 사망률의 두 역할](../basics/mortality-roles) — decrement 와 보장 청구의
   분리. 납입면제도 같은 결 (active 감쇠 vs 전체 보장).

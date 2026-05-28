@@ -19,11 +19,34 @@ calculation_methods 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 
 | 챕터 | 사용하는 자리 |
 |---|---|
-| [지급 패턴과 계산방식 매칭](calculation-methods) | `calculation_methods.csv` 의 자리. 다섯 패턴의 의미. |
+| [담보와 산출방식 매칭](calculation-methods) | `calculation_methods.csv` 의 자리. 다섯 산출방식의 의미. |
 | [보장 청구 메커니즘](coverage-mechanics) | DEATH / MORBIDITY / DIAGNOSIS 의 kernel 알고리즘. |
-| [정기보험 평가](../simple/term-life) | `save_sample_*` → `read_*` → `measure / value` → `print` |
+| [정기보험](../simple/term-life) | `save_sample_*` → `read_*` → `measure / value` → `print` |
 | [검증 패턴](../workflow/validation) | `show_trace` / `show_bel_step` / `show_csm_step` / `show_trace_diff` |
 | [튜토리얼 11장](../../tutorial/11-in-practice) | 파일 입출력의 자세한 schema 와 결산 워크플로 |
 
 각 챕터는 이 그림의 일부만 다룹니다. 챕터를 읽다 모르는 함수 / 파일이
 나오면 위 두 트리에서 어디에 있는지 한 번 확인.
+
+## 파일 구조가 처음이면 — `save_sample_*` 로 실물 보기
+
+:::{admonition} 샘플 파일을 떨어뜨려 컬럼을 직접 확인하세요
+:class: tip
+
+자기 데이터를 fastcashflow 형식으로 맞추기 전에, **어떤 컬럼이 어떤 순서로
+들어가는지** 실물로 보는 게 가장 빠릅니다. 패키지가 각 입력 파일의 작동하는
+예시를 디스크에 써 주는 `save_sample_*` 함수를 제공합니다:
+
+```python
+import fastcashflow as fcf
+
+fcf.save_sample_assumptions("assumptions.xlsx")                 # 가정 워크북 (multi-sheet)
+fcf.save_sample_policies("policies.csv")                        # 계약 spec
+fcf.save_sample_coverages("coverages.csv")                      # 담보 가입금액
+fcf.save_sample_calculation_methods("calculation_methods.csv")  # 담보 산출방식
+```
+
+써진 파일을 Excel / 텍스트 편집기로 열어 컬럼 이름과 한두 행의 값만 훑어보면,
+후속 챕터의 `read_*` 가 무엇을 기대하는지 바로 감이 옵니다. `.csv` 외에
+`.xlsx` / `.parquet` / `.feather` 로도 써집니다 (확장자로 결정).
+:::

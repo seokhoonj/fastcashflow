@@ -89,17 +89,17 @@ RISK_MORTALITY = 0
 RISK_MORBIDITY = 1
 
 
-def pattern_attrs(pattern: CalculationMethod) -> tuple[bool, int]:
+def method_attrs(method: CalculationMethod) -> tuple[bool, int]:
     """Derive ``(is_diagnosis, risk)`` from a :class:`CalculationMethod`.
 
     The two flags drive the kernel branch a coverage takes -- a depleting
     diagnosis pool vs a recurring claim, and the RA risk class. They are a
-    closed-form function of the pattern, so the engine derives them at
+    closed-form function of the method, so the engine derives them at
     call time rather than carrying them as separate fields on
     :class:`~fastcashflow.assumptions.CoverageRate`.
     """
-    is_diagnosis = (pattern == CalculationMethod.DIAGNOSIS)
-    risk = (RISK_MORTALITY if pattern == CalculationMethod.DEATH
+    is_diagnosis = (method == CalculationMethod.DIAGNOSIS)
+    risk = (RISK_MORTALITY if method == CalculationMethod.DEATH
             else RISK_MORBIDITY)
     return is_diagnosis, risk
 
@@ -142,15 +142,15 @@ def coverage_arrays(coverages, calculation_methods=None):
 
     ``coverages`` is the ordered rate-driven coverages, in the same order as
     :attr:`Assumptions.coverages`; ``calculation_methods`` is the portfolio-level
-    taxonomy (``{coverage_code: CalculationMethod}``). Each coverage's pattern
-    looked up by code gives the two flags via :func:`pattern_attrs`.
+    taxonomy (``{coverage_code: CalculationMethod}``). Each coverage's method
+    looked up by code gives the two flags via :func:`method_attrs`.
 
-    Pattern resolution per coverage:
+    Method resolution per coverage:
 
     1. If ``calculation_methods`` is a dict and the code is a key, use that.
     2. Else, if the code itself is the bare name of a :class:`CalculationMethod`
        member (``"DEATH"``, ``"MORBIDITY"``, ``"DIAGNOSIS"``, ``"ANNUITY"``,
-       ``"MATURITY"``), use that pattern -- the auto-inference convention
+       ``"MATURITY"``), use that method -- the auto-inference convention
        for terse Python construction.
     3. Else, raise :class:`ValueError` naming the unresolved codes. This is a
        deliberate choice: a silent MORBIDITY fallback hides a configuration
@@ -163,22 +163,22 @@ def coverage_arrays(coverages, calculation_methods=None):
     flags: list[tuple[bool, int]] = []
     unresolved: list[str] = []
     for r in coverages:
-        pattern = None
+        method = None
         if calculation_methods is not None:
-            pattern = calculation_methods.get(r.code)
-        if pattern is None:
-            # Step 2 -- code-as-pattern auto-inference.
+            method = calculation_methods.get(r.code)
+        if method is None:
+            # Step 2 -- code-as-method auto-inference.
             try:
-                pattern = CalculationMethod(r.code)
+                method = CalculationMethod(r.code)
             except ValueError:
-                pattern = None
-        if pattern is None:
+                method = None
+        if method is None:
             unresolved.append(r.code)
             # Append a placeholder so the loop builds a same-length list;
             # the raise below short-circuits the result.
             flags.append((False, RISK_MORBIDITY))
             continue
-        flags.append(pattern_attrs(pattern))
+        flags.append(method_attrs(method))
     if unresolved:
         valid = ", ".join(p.value for p in CalculationMethod)
         raise ValueError(

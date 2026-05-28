@@ -1,4 +1,4 @@
-# 2.1 정기보험 평가
+# 2.1 정기보험
 
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
@@ -232,7 +232,7 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 * - 파일
   - 내용
 * - `calculation_methods.csv`
-  - 담보 계산방식 — 담보 코드 → 청구 패턴 (DEATH / MORBIDITY / ...)
+  - 담보 산출방식 — 담보 코드 → 산출방식 (DEATH / MORBIDITY / ...)
 * - `assumptions.xlsx`
   - 계리적 가정 — 사망률 · 해지율 · 할인율 · 사업비 · 위험조정
 * - `policies.csv`
@@ -259,7 +259,7 @@ basis = fcf.read_assumptions("assumptions.xlsx")    # {(product_code, channel_co
 mp    = fcf.read_model_points(
     "policies.csv",                                 # 계약 spec 파일
     coverages="coverages.csv",                      # 담보 가입금액 파일
-    calculation_methods="calculation_methods.csv",  # 담보 계산방식 파일
+    calculation_methods="calculation_methods.csv",  # 담보 산출방식 파일
 )
 
 # 한 segment 의 가정을 전체 portfolio 에 적용 — 상세 trajectory
@@ -493,7 +493,7 @@ fastcashflow 의 성별 인코딩은 **0 = 남, 1 = 여**. 워크북의 `policie
 
 - [보장 청구 메커니즘](../basics/coverage-mechanics) — DEATH 외에 다른
   보장 (DIAGNOSIS / MORBIDITY) 이 엔진 안에서 어떻게 다른 알고리즘으로
-  처리되는지. 본 챕터가 한 가지 패턴만 다루는 이유.
+  처리되는지. 본 챕터가 한 가지 산출방식만 다루는 이유.
 - 사망 + 단순 진단 일시금 (작성 예정) — 사망보험에 진단보험금
   (CI = Critical Illness = 진단) 일시금 결합. 첫 번째 추가 담보 도입.
 - 보험료 납입면제 (waiver) (작성 예정) — `STATE_MODELS["WAIVER"]`

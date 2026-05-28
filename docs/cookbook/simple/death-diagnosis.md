@@ -42,7 +42,7 @@
 * - `ModelPoints.benefits`
   - `{0: 사망보험금, 1: 진단금}` — 정수 키가 `coverages` 의 순서 (0 = 첫째, 1 = 둘째)
 * - `ModelPoints.calculation_methods`
-  - `{"DEATH": DEATH, "CANCER": DIAGNOSIS}` — 각 담보가 어느 계산방식인지
+  - `{"DEATH": DEATH, "CANCER": DIAGNOSIS}` — 각 담보가 어느 산출방식인지
 ```
 
 **진단율 `cancer_fn` 은 `mortality_annual` 에 넣지 않습니다.** 사망은
@@ -164,7 +164,7 @@ t=1 의 암 진단 청구는 *미진단 풀* 0.9851 을 씁니다 — 단순히 
 :class: tip
 
 `fcf.show_trace(0, mp, asmp)` 의 Coverages 노드가 두 담보를 나란히
-보여줍니다 — `'DEATH' pattern=DEATH`, `'CANCER' pattern=DIAGNOSIS  is_diagnosis=True`.
+보여줍니다 — `'DEATH' method=DEATH`, `'CANCER' method=DIAGNOSIS  is_diagnosis=True`.
 `is_diagnosis=True` 인 CANCER 만 별도 `undiagnosed` 풀 노드가 붙습니다.
 ```
 
@@ -225,7 +225,7 @@ mortality_annual = lambda s, a, d: death_fn(s,a,d) + cancer_fn(s,a,d)   # ✗
 - [1.4 보장 청구 메커니즘](../basics/coverage-mechanics) — `DEATH` 의
   공유 `in_force` 와 `DIAGNOSIS` 의 per-coverage `undiagnosed` 풀이
   엔진 안에서 어떻게 다르게 도는지.
-- [2.1 정기보험 평가](term-life) — 사망 단독, 본 챕터의 출발점.
+- [2.1 정기보험](term-life) — 사망 단독, 본 챕터의 출발점.
 - [2.3 다종 진단 + 면책 / 감액](diagnosis-rules) — 90일 면책 / 감액기간
   같은 보장 룰 추가.
 - [3.1 보험료 납입면제 (waiver)](../markov/waiver) — 상태 추적이 들어가는

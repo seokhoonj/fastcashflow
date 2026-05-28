@@ -28,7 +28,7 @@
 * - Part
   - 다루는 영역
   - 한 줄 요약
-* - 기초 (Basics)
+* - 기초
   - 엔진의 기본 동작 원리
   - 모든 상품 챕터의 사전 개념. CalculationMethod 의 의미와 엔진 안에서의
     청구 메커니즘.
@@ -55,7 +55,7 @@
 
 ## 챕터 목록
 
-### 1. 기초 (Basics)
+### 1. 기초
 
 ```{list-table}
 :header-rows: 1
@@ -70,9 +70,9 @@
     assumptions) 과 fastcashflow 사용자 API 의 트리 구조. 후속 챕터를
     어디서 어떻게 호출하는지 미리 그림.
 * - 1.2
-  - [지급 패턴과 계산방식 매칭](basics/calculation-methods)
-  - 5 종 패턴 (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) 의
-    의미. 담보 계산방식 (`calculation_methods.csv`) 작성.
+  - [담보와 산출방식 매칭](basics/calculation-methods)
+  - 5 종 산출방식 (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) 의
+    의미. 담보 산출방식 (`calculation_methods.csv`) 작성.
 * - 1.3
   - [사망률의 두 역할](basics/mortality-roles)
   - `mortality_annual` (보유계약 감쇠) 과 `coverages` 의 DEATH rate (보장
@@ -93,7 +93,7 @@
   - 챕터
   - 다루는 것
 * - 2.1
-  - [정기보험 평가](simple/term-life)
+  - [정기보험](simple/term-life)
   - 사망 단독 정기보험. fast_path. BEL / RA / CSM 의 의미와 부호.
 * - 2.2
   - [사망 + 단순 진단 일시금](simple/death-diagnosis)
@@ -184,7 +184,7 @@
 6. **함정 / 검증** — 흔한 실수, 손계산으로 확인하는 방법
 7. **인접 레시피** — 관련된 다른 챕터와 기본 튜토리얼의 어느 장
 
-기초 (Basics) 의 *개념* 챕터는 상품 챕터와 성격이 달라 위 7 단계를
+기초의 *개념* 챕터는 상품 챕터와 성격이 달라 위 7 단계를
 강제하지 않습니다 — 개념의 정의 → 사례 → 함정 의 흐름을 따릅니다.
 
 ## 코드 실행 환경
@@ -202,7 +202,7 @@
 
 ```{toctree}
 :hidden:
-:caption: 1. 기초 (Basics)
+:caption: 1. 기초
 
 basics/overview
 basics/calculation-methods

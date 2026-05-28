@@ -3,7 +3,7 @@
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
 
-- **DEATH** / **MORBIDITY** / **DIAGNOSIS** 세 패턴이 엔진 안에서
+- **DEATH** / **MORBIDITY** / **DIAGNOSIS** 세 산출방식이 엔진 안에서
   어떻게 *서로 다른 알고리즘으로* 처리되는지
 - "DEATH 는 한 번만 / MORBIDITY 는 여러 번 / DIAGNOSIS 는 한 번만"
   이라는 의미가 엔진 코드 어디에 표현되어 있는가
@@ -18,10 +18,10 @@
 각 `CalculationMethod` 값이 *`calculation_methods.csv` 에 적는 라벨* 이라면 —
 `DEATH` 라고 적는 것 vs `DIAGNOSIS` 라고 적는 것의 차이는 어디서 정해지나?
 그 선택은 [CalculationMethod 결정 가이드](calculation-methods) 의 자리이고,
-본 챕터는 **엔진이 그 패턴을 받아서 무엇을 다르게 하는가** 입니다.
+본 챕터는 **엔진이 그 산출방식을 받아서 무엇을 다르게 하는가** 입니다.
 
 이 챕터의 모든 예제는 동일한 toy 설정 — 월 사망/발생/진단율 1%, 보험금
-12,000, 3 개월 — 위에서 패턴만 바꿔 결과를 비교합니다. 한 페이지에 세 모드의
+12,000, 3 개월 — 위에서 산출방식만 바꿔 결과를 비교합니다. 한 페이지에 세 모드의
 차이가 명료하게 드러나도록 의도된 셋업입니다.
 
 ## 청구 메커니즘 한눈에
@@ -33,7 +33,7 @@
 :widths: 22 18 60
 
 * - 알고리즘
-  - 사용 패턴
+  - 산출방식
   - 청구 식
 * - (A) `in_force × rate`
   - DEATH, MORBIDITY
@@ -84,7 +84,7 @@ mp = fcf.ModelPoints.single(
     level_premium = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
     term_months   = 3,            # 보험기간 3개월
     calculation_methods = {
-        "DEATH": fcf.CalculationMethod.DEATH,   # 코드 → 패턴 매핑
+        "DEATH": fcf.CalculationMethod.DEATH,   # 코드 → 산출방식 매핑
     },
 )
 r = fcf.measure(mp, asmp)
@@ -147,7 +147,7 @@ mp = fcf.ModelPoints.single(
     level_premium = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
     term_months   = 3,            # 보험기간 3개월
     calculation_methods = {
-        "INPATIENT": fcf.CalculationMethod.MORBIDITY,   # 코드 → 패턴 매핑
+        "INPATIENT": fcf.CalculationMethod.MORBIDITY,   # 코드 → 산출방식 매핑
     },
 )
 r = fcf.measure(mp, asmp)
@@ -215,7 +215,7 @@ mp = fcf.ModelPoints.single(
     level_premium = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
     term_months   = 3,            # 보험기간 3개월
     calculation_methods = {
-        "CANCER": fcf.CalculationMethod.DIAGNOSIS,   # 코드 → 패턴 매핑
+        "CANCER": fcf.CalculationMethod.DIAGNOSIS,   # 코드 → 산출방식 매핑
     },
 )
 r = fcf.measure(mp, asmp)
@@ -249,7 +249,7 @@ cumulative 3m : 356.41
 
 ## 세 모드 나란히
 
-| 패턴 | `in_force` | 별도 풀 | 청구 시계열 | 누적 |
+| 산출방식 | `in_force` | 별도 풀 | 청구 시계열 | 누적 |
 |---|---|---|---|---|
 | DEATH | `1 → 0.99 → 0.9801` (감쇠 ✓) | 없음 | `120, 118.8, 117.61` | 356.41 |
 | MORBIDITY | `1, 1, 1` (감쇠 ✗) | 없음 | `120, 120, 120` | 360.00 |
@@ -271,7 +271,7 @@ trace 의 Coverages 노드에는 매 보장마다 `is_diagnosis` flag 가 표시
 
 ```
 ├─ Coverages (rate-driven, n=1)
-│   └─ 'CANCER'   pattern=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> <callable>
+│   └─ 'CANCER'   method=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> <callable>
 ```
 
 `is_diagnosis` 의 진짜 의미는 **"한 번만 지급되는가"** 가 아닙니다. 정확한
@@ -344,7 +344,7 @@ asmp_buggy = fcf.Assumptions(
 1% 발생). 같은 사람이 매월 죽고 또 죽음. 누적 360 (위 MORBIDITY 결과와
 같음) — *손계산의 356 과 어긋남*.
 
-이 footgun 의 방어 패턴은 [정기보험 평가](../simple/term-life) 와 본 챕터의
+이 footgun 의 방어 패턴은 [정기보험](../simple/term-life) 와 본 챕터의
 모든 예제처럼 **`death_fn = lambda ...` 한 변수를 만들고 두 자리에 넘기는**
 방식. 한 자리만 바꾸려 해도 두 자리가 한 변수를 공유하니 silent 어긋남이
 구조적으로 차단됩니다.
@@ -354,10 +354,10 @@ asmp_buggy = fcf.Assumptions(
 
 ## 인접 레시피
 
-- [CalculationMethod 결정 가이드](calculation-methods) — 담보 계산방식의
-  매 코드를 어느 패턴으로 등록할지. 본 챕터는 그 패턴이 *엔진 안에서*
+- [CalculationMethod 결정 가이드](calculation-methods) — 담보 산출방식의
+  매 코드를 어느 산출방식으로 등록할지. 본 챕터는 그 산출방식이 *엔진 안에서*
   어떻게 다르게 동작하는지.
-- [정기보험 평가](../simple/term-life) — DEATH 만 사용하는 가장 단순한 사례.
+- [정기보험](../simple/term-life) — DEATH 만 사용하는 가장 단순한 사례.
 - 사망 + 단순 진단 일시금 (작성 예정) — DEATH 와 DIAGNOSIS 의 결합. 본
   챕터의 두 메커니즘을 한 contract 에 동시 사용.
 - [검증 패턴 — show_trace](../workflow/validation) — 본 챕터의 trace

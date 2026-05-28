@@ -23,7 +23,7 @@ from typing import IO
 import numpy as np
 
 from fastcashflow.assumptions import Assumptions
-from fastcashflow.coverage import CalculationMethod, pattern_attrs
+from fastcashflow.coverage import CalculationMethod, method_attrs
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.engine import measure
 from fastcashflow.modelpoints import ModelPoints
@@ -211,16 +211,16 @@ def show_trace(
 
     # ---- Coverages (rate-driven)
     cov_lines: list[object] = []
-    bp = model_points.calculation_methods or {}
+    methods = model_points.calculation_methods or {}
     for r in assumptions.coverages:
-        pattern = bp.get(r.code, CalculationMethod.MORBIDITY)
-        is_diag, risk = pattern_attrs(pattern)
+        method = methods.get(r.code, CalculationMethod.MORBIDITY)
+        is_diag, risk = method_attrs(method)
         # Pad each field to the longest possible value so columns line up:
         # code   -> repr widest sample code in practice (~15 incl. quotes)
-        # pattern -> 9 (longest CalculationMethod member name = MORBIDITY)
+        # method -> 9 (longest CalculationMethod member name = MORBIDITY)
         # is_diagnosis -> 5 (longest str(bool) = "False")
         cov_lines.append(
-            f"{r.code!r:<16}  pattern={str(pattern):<9}  risk={risk}  "
+            f"{r.code!r:<16}  method={str(method):<9}  risk={risk}  "
             f"is_diagnosis={str(is_diag):<5}  rate -> {_fmt_callable(r.rate)}"
         )
     if not cov_lines:
@@ -304,8 +304,8 @@ def show_trace(
     picks = _key_months(term, discount_start.shape[0] - 1)
     diag_pool_lines: list[object] = []
     for r in assumptions.coverages:
-        pattern = bp.get(r.code, CalculationMethod.MORBIDITY)
-        is_diag, _ = pattern_attrs(pattern)
+        method = methods.get(r.code, CalculationMethod.MORBIDITY)
+        is_diag, _ = method_attrs(method)
         if not is_diag:
             continue
         # Simulate the kernel's `undiagnosed` update. Annual rate is held

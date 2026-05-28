@@ -107,9 +107,9 @@ mp[0]  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m, premium_term=240m, cou
 │   ├─ ra: method='confidence_level', conf=0.75
 │   └─ cv: mort=0.1 morb=0.12 long=0 disab=0
 ├─ Coverages (rate-driven, n=3)
-│   ├─ 'INPATIENT'    pattern=MORBIDITY  risk=1  is_diagnosis=False  rate -> INPATIENT_STD
-│   ├─ 'CANCER'       pattern=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> CANCER_STD
-│   └─ 'ADB'          pattern=DEATH      risk=0  is_diagnosis=False  rate -> ADB_STD
+│   ├─ 'INPATIENT'    method=MORBIDITY  risk=1  is_diagnosis=False  rate -> INPATIENT_STD
+│   ├─ 'CANCER'       method=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> CANCER_STD
+│   └─ 'ADB'          method=DEATH      risk=0  is_diagnosis=False  rate -> ADB_STD
 ├─ Rates (annual, evaluated for this MP)
 │   ├─ axes: sex=0, issue_age=35, issue_class=0, elapsed_at_issue=0m
 │   ├─         year      mort(an)     lapse(an)    waiver(an)  INPATIENT(an)    CANCER(an)
@@ -323,7 +323,7 @@ mp_one = ModelPoints(
     level_premium    = np.array([200_000.0]),                     # 월납 보험료 20 만
     term_months      = np.array([60]),                            # 보험기간 60 개월 (5 년)
     benefits         = {0: np.array([100_000_000.0])},            # 0 번 보장 (= DEATH) 의 보험금 1 억
-    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},       # 코드 → 패턴 매핑
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},       # 코드 → 산출방식 매핑
 )
 
 fcf.show_csm_step(0, mp_one, profitable, months=[1, 30, 60])
@@ -468,7 +468,7 @@ fcf.show_trace(int(idx), mp, basis)
 
 - 시나리오 / 민감도 분석 (작성 예정) — `show_trace_diff` 의 활용을
   단일 계약 검증 너머 포트폴리오 단위 민감도로 확장.
-- [정기보험 평가](../simple/term-life) 의 "함정 — 흔한 실수와 잡는 방법"
+- [정기보험](../simple/term-life) 의 "함정 — 흔한 실수와 잡는 방법"
   절 — 2 개월 손계산 패턴. 이 챕터의 도구로 그 검증을 다시 추적하면
   식이 어떻게 매핑되는지 명확.
 - 워크북 — 다 segment / 다 상품 (작성 예정) — `show_trace` 의 segment
