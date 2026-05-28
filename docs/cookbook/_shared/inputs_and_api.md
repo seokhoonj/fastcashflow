@@ -67,7 +67,7 @@ fastcashflow 사용자 API
 │   ├── fcf.save_sample_assumptions(path)           ── assumptions.xlsx
 │   └── fcf.save_sample_inforce_policies(path)      ── 결산 1-파일 (spec + state)
 │
-├── 파일 → 객체 (read)
+├── 파일 읽어 들이기
 │   ├── fcf.read_assumptions(path)                  ── basis dict 반환
 │   ├── fcf.read_model_points(path, asmp, ...)      ── 신계약 평가용
 │   └── fcf.read_inforce_policies(path, asmp, ...)  ── 결산 1-파일 reader
