@@ -21,31 +21,26 @@
 
 ```{list-table}
 :header-rows: 1
-:widths: 14 26 18 14 28
+:widths: 16 30 18 36
 
 * - 입력 개체
   - 파일
-  - 누가 만드나
   - 갱신 주기
   - 무엇
 * - **Assumptions**
   - `assumptions.xlsx`
-  - 회사 (보험계리)
   - 분기 / 연
   - 계리적 가정 (사망률 · 해지율 · 할인율 · 사업비 · 위험조정)
 * - **ModelPoints**
   - `policies.csv` 또는 `inforce_2026Q1.csv`
-  - 정책관리 시스템
   - 일 / 분기
   - 보유 계약 (영구 spec + 결산시 상태)
 * - **ModelPoints**
   - `coverages.csv`
-  - 정책관리 시스템
   - 일 / 분기
   - 각 계약에 붙은 담보 (특약) 목록과 가입금액
 * - **ModelPoints**
   - `benefit_patterns.csv`
-  - 회사 (보험계리)
   - 연 1 회 미만
   - 담보 카탈로그 — 담보 코드 → 청구 패턴
 ```

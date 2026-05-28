@@ -13,12 +13,12 @@
 
 **왜 네 파일로 나눠 있나** — 갱신 주기가 모두 다릅니다:
 
-| 파일 | 누가 만드나 | 갱신 주기 |
-|---|---|---|
-| `assumptions.xlsx` | 회사 (보험계리) | 분기 / 연 |
-| `policies.csv` / `inforce_*.csv` | 정책관리 시스템 | 일 / 분기 |
-| `coverages.csv` | 정책관리 시스템 | 일 / 분기 |
-| `benefit_patterns.csv` | 회사 (보험계리) | 연 1 회 미만 |
+| 파일 | 갱신 주기 |
+|---|---|
+| `assumptions.xlsx` | 분기 / 연 |
+| `policies.csv` / `inforce_*.csv` | 일 / 분기 |
+| `coverages.csv` | 일 / 분기 |
+| `benefit_patterns.csv` | 연 1 회 미만 |
 
 코드에서 reader 가 도는 순서가 그대로입니다 — `read_assumptions` 가
 먼저 (engine 가정), 그 다음 `read_model_points` 가 policies / coverages /
