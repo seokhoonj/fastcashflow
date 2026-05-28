@@ -253,7 +253,7 @@ fcf.save_sample_policies("policies.csv")                     # .csv / .xlsx / .p
 fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_calculation_methods("calculation_methods.csv")     # .csv / .xlsx / .parquet / .feather
 
-# (2) 읽어서 평가 — read_model_points 는 자기 세 파일만, 가정은 measure 에서
+# (2) 읽어서 평가
 basis = fcf.read_assumptions("assumptions.xlsx")    # {(product_code, channel_code): Assumptions}
 mp    = fcf.read_model_points(
     "policies.csv",                                 # 계약 spec 파일

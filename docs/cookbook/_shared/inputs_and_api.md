@@ -9,8 +9,7 @@
   만듭니다.
 - **`ModelPoints` 클래스** — `mp = fcf.read_model_points(...)` 가 세 입력
   파일 (`policies.csv` / `coverages.csv` / `calculation_methods.csv`) 을 읽어
-  한 개체로 합칩니다. *가정 (Assumptions) 없이* 자기 세 파일만으로 읽히고,
-  가정은 `measure` / `value` 호출에서만 만납니다 — 두 개체는 완전히 분리.
+  한 개체로 합칩니다.
 
 #### Assumptions 클래스 — 한 입력 파일에서 만드는 개체
 
@@ -73,7 +72,7 @@ fastcashflow 사용자 API
 │
 ├── 파일 읽어 들이기
 │   ├── fcf.read_assumptions(path)                  ── basis dict 반환
-│   ├── fcf.read_model_points(path, coverages=, ...) ── 신계약 평가용 (가정 불필요)
+│   ├── fcf.read_model_points(path, coverages=, ...) ── 신계약 평가용
 │   └── fcf.read_inforce_policies(path, asmp, ...)  ── 결산 1-파일 reader
 │
 ├── 평가
