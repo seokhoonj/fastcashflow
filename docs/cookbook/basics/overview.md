@@ -15,14 +15,14 @@
 
 | 파일 | 누가 만드나 | 갱신 주기 |
 |---|---|---|
+| `assumptions.xlsx` | 회사 (보험계리) | 분기 / 연 |
 | `policies.csv` / `inforce_*.csv` | 정책관리 시스템 | 일 / 분기 |
 | `coverages.csv` | 정책관리 시스템 | 일 / 분기 |
 | `benefit_patterns.csv` | 회사 (보험계리) | 연 1 회 미만 |
-| `assumptions.xlsx` | 회사 (보험계리) | 분기 / 연 |
 
-가장 자주 갱신되는 정책관리 데이터 (policies + coverages) 가 위로, 가장
-드물게 손대는 담보 패턴 매핑 (benefit_patterns) 과 분기별 가정
-(assumptions) 이 아래로.
+코드에서 reader 가 도는 순서가 그대로입니다 — `read_assumptions` 가
+먼저 (engine 가정), 그 다음 `read_model_points` 가 policies / coverages /
+benefit_patterns 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 
 ## 어느 챕터에서 어디까지 쓰나
 

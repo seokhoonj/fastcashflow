@@ -1,15 +1,29 @@
 ### 입력 파일과 입력 개체
 
-엔진은 두 클래스의 *개체* 만 받습니다 — `ModelPoints` 와 `Assumptions`.
+엔진은 두 클래스의 *개체* 만 받습니다 — `Assumptions` 와 `ModelPoints`.
 **`measure(mp, asmp)`** 호출의 두 인자가 바로 이 개체들. 사용자가 다루는
 *입력 파일들* 은 reader 함수를 거쳐 이 두 개체로 모입니다:
 
-- **`ModelPoints` 클래스** — `mp = fcf.read_model_points(...)` 가 세 입력
-  파일 (`policies.csv` / `coverages.csv` / `benefit_patterns.csv`) 을 읽어
-  한 개체로 합칩니다.
 - **`Assumptions` 클래스** — `basis = fcf.read_assumptions(...)` 가 한
   입력 파일 (`assumptions.xlsx`, multi-sheet 워크북) 을 읽어 가정 개체를
   만듭니다.
+- **`ModelPoints` 클래스** — `mp = fcf.read_model_points(...)` 가 세 입력
+  파일 (`policies.csv` / `coverages.csv` / `benefit_patterns.csv`) 을 읽어
+  한 개체로 합칩니다. 이때 첫 인자로 Assumptions 개체를 넘기므로
+  Assumptions 가 먼저 만들어져 있어야 합니다.
+
+#### Assumptions 클래스 — 한 입력 파일에서 만드는 개체
+
+```
+Assumptions (basis = fcf.read_assumptions(...))
+└── assumptions.xlsx          ── 계리적 가정 (multi-sheet workbook)
+    ├── segments              · (product_code, channel_code) → 어느 테이블 쓸지
+    ├── mortality_tables      · table_id × sex × age → 사망률
+    ├── lapse_tables          · table_id × duration → 해지율
+    ├── discount_tables       · table_id × year → 할인율
+    ├── expense_tables        · table_id → 사업비 행 (acquisition / maintenance / ...)
+    └── coverages             · 담보 코드 → 어느 위험률 테이블을 쓸지
+```
 
 #### ModelPoints 클래스 — 세 입력 파일에서 만드는 개체
 
@@ -46,28 +60,15 @@ ModelPoints (mp = fcf.read_model_points(...))
 `lock_in_rate` (가입 시점 lock-in 할인율). reader 도
 `mp, state = fcf.read_inforce_policies(...)` 로 바뀌어 두 개체를 돌려줍니다.
 
-#### Assumptions 클래스 — 한 입력 파일에서 만드는 개체
-
-```
-Assumptions (basis = fcf.read_assumptions(...))
-└── assumptions.xlsx          ── 계리적 가정 (multi-sheet workbook)
-    ├── segments              · (product_code, channel_code) → 어느 테이블 쓸지
-    ├── mortality_tables      · table_id × sex × age → 사망률
-    ├── lapse_tables          · table_id × duration → 해지율
-    ├── discount_tables       · table_id × year → 할인율
-    ├── expense_tables        · table_id → 사업비 행 (acquisition / maintenance / ...)
-    └── coverages             · 담보 코드 → 어느 위험률 테이블을 쓸지
-```
-
 ### 사용자 함수
 
 ```
 fastcashflow 사용자 API
 ├── 샘플 파일 폴더에 생성 (한 번만, 자기 파일이 있으면 생략)
+│   ├── fcf.save_sample_assumptions(path)           ── assumptions.xlsx
 │   ├── fcf.save_sample_policies(path)              ── policies.csv
 │   ├── fcf.save_sample_coverages(path)             ── coverages.csv
 │   ├── fcf.save_sample_benefit_patterns(path)      ── benefit_patterns.csv
-│   ├── fcf.save_sample_assumptions(path)           ── assumptions.xlsx
 │   └── fcf.save_sample_inforce_policies(path)      ── 결산 1-파일 (spec + state)
 │
 ├── 파일 읽어 들이기

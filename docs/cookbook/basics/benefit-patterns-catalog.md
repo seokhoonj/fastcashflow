@@ -67,9 +67,9 @@ DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은 ANNUITY. 엔진은 "주계약
 
 | 단위 | 파일 | 갱신 빈도 | 무엇 |
 |---|---|---|---|
+| 결산 basis | `assumptions.xlsx` | 분기 / 연 | 위험률 / 할인율 / 사업비 / 위험조정 |
 | Portfolio | `policies.csv` + `coverages.csv` | 일 / 월 | 어떤 계약이 어떤 담보를 얼마에 |
 | 담보 카탈로그 | `benefit_patterns.csv` | 연 1 회 미만 | 어떤 담보가 어떤 패턴인가 |
-| 결산 basis | `assumptions.xlsx` | 분기 / 연 | 위험률 / 할인율 / 사업비 / 위험조정 |
 
 세 파일이 각자 자기 책임만 가지면 한 갱신이 다른 파일에 닿지 않습니다.
 **담보 패턴 매핑은 새 담보가 추가될 때만 한 줄 더해주면 되고**, **위험률은
@@ -80,10 +80,10 @@ import fastcashflow as fcf
 
 # 패키지 샘플로 시연 -- 자기 데이터를 쓸 때는 이 네 줄을 빼고
 # 그 자리에 자기 파일이 있다고 보면 됩니다.
+fcf.save_sample_assumptions("assumptions.xlsx")             # .xlsx 만 (multi-sheet 워크북)
 fcf.save_sample_policies("policies.csv")                    # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                  # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_benefit_patterns("benefit_patterns.csv")    # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_assumptions("assumptions.xlsx")             # .xlsx 만 (multi-sheet 워크북)
 
 basis = fcf.read_assumptions("assumptions.xlsx")
 mp    = fcf.read_model_points(
