@@ -113,7 +113,7 @@
   - [보험료 납입면제 (waiver)](markov/waiver)
   - `STATE_MODELS["WAIVER"]` 입문. active → waiver 진입.
 * - 3.2
-  - 다종 진단 + 면책 / 감액 (작성 예정)
+  - [다종 진단 + 면책 / 감액](markov/diagnosis-rules)
   - 가입 90일 면책 / 가입 2년 감액. coverage rule 본격 활용.
 * - 3.3
   - paid-up 분리 (3-state) (작성 예정)
@@ -223,6 +223,7 @@ simple/death-diagnosis
 :caption: 3. Markov 상태
 
 markov/waiver
+markov/diagnosis-rules
 ```
 
 ```{toctree}
