@@ -212,7 +212,8 @@ active / waiver 2-state 만 다룹니다.
   출발점.
 - [1.3 사망률의 두 역할](../basics/mortality-roles) — decrement 와 보장 청구의
   분리. 납입면제도 같은 결 (active 감쇠 vs 전체 보장).
-- 다종 진단 + 면책 / 감액 (작성 예정) — coverage rule 과 상태의 결합.
+- [2.3 다종 진단 + 면책 / 감액](../simple/diagnosis-rules) — 담보 룰 축.
+  상태 (납입면제) 와 직교하며 한 계약에 공존.
 - paid-up 분리 (3-state) (작성 예정) — active / waiver / paidup 을 각각 별도
   state 로.
 - [검증 패턴](../workflow/validation) — `show_trace` 로 상태별 점유와 cash

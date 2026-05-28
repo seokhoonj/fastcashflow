@@ -34,10 +34,10 @@
     청구 메커니즘.
 * - 단순 상품
   - 상태 추적 없는 정액형
-  - 가장 빠른 fast_path. 정기보험 / 사망+진단 결합 같은 1-상태 상품.
+  - 가장 빠른 fast_path. 정기보험 / 사망+진단 / 면책·감액 같은 1-상태 상품.
 * - Markov 상태
   - active / waiver / paid-up 같은 추가 상태
-  - 보험료 납입면제, 다종 진단 + 면책 / 감액 같은 상태 의존.
+  - 보험료 납입면제, paid-up 분리 같은 상태 의존.
 * - Semi-Markov 상태
   - 상태 안에서의 경과 시간 의존
   - 재진단 / 회복 / 등급 진행 — 코호트 추적이 필요한 영역.
@@ -98,6 +98,9 @@
 * - 2.2
   - [사망 + 단순 진단 일시금](simple/death-diagnosis)
   - 진단 담보 추가. 면책 / 감액 없는 간단한 결합.
+* - 2.3
+  - [다종 진단 + 면책 / 감액](simple/diagnosis-rules)
+  - 가입 90일 면책 / 가입 2년 감액. coverage rule (담보 룰 축).
 ```
 
 ### 3. Markov 상태
@@ -113,9 +116,6 @@
   - [보험료 납입면제 (waiver)](markov/waiver)
   - `STATE_MODELS["WAIVER"]` 입문. active → waiver 진입.
 * - 3.2
-  - [다종 진단 + 면책 / 감액](markov/diagnosis-rules)
-  - 가입 90일 면책 / 가입 2년 감액. coverage rule 본격 활용.
-* - 3.3
   - paid-up 분리 (3-state) (작성 예정)
   - active / waiver / paidup 을 각각 별도 state 로.
 ```
@@ -216,6 +216,7 @@ basics/coverage-mechanics
 
 simple/term-life
 simple/death-diagnosis
+simple/diagnosis-rules
 ```
 
 ```{toctree}
@@ -223,7 +224,6 @@ simple/death-diagnosis
 :caption: 3. Markov 상태
 
 markov/waiver
-markov/diagnosis-rules
 ```
 
 ```{toctree}

@@ -226,9 +226,10 @@ mortality_annual = lambda s, a, d: death_fn(s,a,d) + cancer_fn(s,a,d)   # ✗
   공유 `in_force` 와 `DIAGNOSIS` 의 per-coverage `undiagnosed` 풀이
   엔진 안에서 어떻게 다르게 도는지.
 - [2.1 정기보험 평가](term-life) — 사망 단독, 본 챕터의 출발점.
-- 보험료 납입면제 (waiver) (작성 예정) — 상태 추적이 들어가는 첫 챕터.
-- 다종 진단 + 면책 / 감액 (작성 예정) — 90일 면책 / 감액기간 같은
-  보장 룰 추가.
+- [2.3 다종 진단 + 면책 / 감액](diagnosis-rules) — 90일 면책 / 감액기간
+  같은 보장 룰 추가.
+- [3.1 보험료 납입면제 (waiver)](../markov/waiver) — 상태 추적이 들어가는
+  첫 챕터.
 - [검증 패턴](../workflow/validation) — `show_trace` 로 두 담보의
   cash flow 를 한 줄씩 확인.
 ```
