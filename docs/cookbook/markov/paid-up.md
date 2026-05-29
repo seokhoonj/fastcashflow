@@ -51,16 +51,45 @@
 - **paidup** — 완납. 보험료를 안 내고 보장은 계속. 사망 *과* 납입후
   해지로 빠져나감 — 이 해지율이 active 와 다르다는 게 핵심.
 
-```{admonition} paidup 으로는 전이가 아니라 "자리 지정" 으로 들어간다
+완납을 엔진에서 다루는 길은 **측정 대상이 신계약이냐 보유계약이냐** 에 따라
+갈립니다. 이 구분이 paid-up 모델을 이해하는 핵심입니다.
+
+```{list-table}
+:header-rows: 1
+:widths: 22 42 36
+
+* - 측정 대상
+  - 납입후 해지율을 다루는 법
+  - paidup 상태
+* - **신계약** (가입 시점부터 측정)
+  - `lapse_annual` 을 가입경과 (policy duration) 의 단계함수로 — 납입기간
+    동안과 이후에 다른 값. 보험료 중단은 `premium_term_months` 가 처리.
+  - **불필요** (active 한 상태로 끝)
+* - **보유계약** (이미 완납된 납입후 코호트의 결산)
+  - `state = STATE_PAIDUP` 으로 **자리 지정** 해 잔여 기간만 평가
+  - **필요** — 이 챕터의 예제
+```
+
+```{admonition} 왜 신계약은 paidup 상태로 "전이" 하지 않나
 :class: important
 
-`STATE_MODELS["WAIVER_PAIDUP"]` 에는 **paidup 을 목적지로 삼는 전이가
-없습니다.** active -> paidup 은 납입기간 종료라는 *결정론적* 사건이지
-확률적 전이율이 아니기 때문입니다. 따라서 paidup 계약은 model point 를
-처음부터 `state = STATE_PAIDUP` 으로 **자리 지정** 해서 평가합니다 —
-"신계약이 시간이 지나 완납됨" 의 동적 전이가 아니라, **이미 완납된
-보유계약을 결산 시점에 평가** 하는 시나리오입니다. (보유계약 평가의 입력
-구조는 [튜토리얼 11장](../../tutorial/11-in-practice) 참조.)
+엔진의 상태 전이는 모두 **확률적 (rate-driven)** 입니다 — "몇 월이 되면
+무조건 active -> paidup" 같은 *시점 트리거 전이* (특정 시점에 확률이 아니라
+결정론적으로 일어나는 전이) 가 없습니다. 그래서 active 로 시작한 신계약을
+`term_months` 만큼 굴려도 **자동으로 paidup 으로 넘어가지 않고**, 끝까지
+active 상태에 남아 `lapse_annual` 을 계속 씁니다 (보험료만
+`premium_term_months` 로 멈춤). 따라서:
+
+- **신계약** 에서 납입후 해지율 하락을 반영하려면 `lapse_annual` 자체를
+  가입경과 의존 단계함수로 줍니다 (아래 **변형** 참조). paidup 상태가
+  필요 없습니다.
+- **paidup 상태 + 자리 지정** 은 *이미 완납된 보유계약* 을 결산일에 평가할
+  때의 도구입니다 — 지나간 납입기간을 다시 굴리지 않고 잔여 구간만 납입후
+  해지율로 봅니다. 이 챕터의 예제가 이 경우입니다. (보유계약 평가의 입력
+  구조는 [튜토리얼 11장](../../tutorial/11-in-practice) 참조.)
+
+두 경로는 **서로 다른 측정 모드** 라 바꿔 쓸 수 없습니다 — 신계약 CSM 을
+paidup 자리 지정으로 구하면 납입기간을 건너뛴 꼬리만 평가돼 틀립니다.
 ```
 
 ## 모델링 매핑 — 3-state
@@ -216,6 +245,83 @@ active BEL      = 2684.88
 ```
 
 ## 변형 — 해지율 축과 워크북 wiring
+
+### 신계약 — duration-step lapse 로 납입후 하락 표현
+
+본문 예제는 *이미 완납된 보유계약* 을 자리 지정으로 평가했습니다.
+**신계약을 가입 시점부터** 측정하면서 완납 시점의 해지율 하락을 반영하려면,
+paidup 상태가 아니라 `lapse_annual` 을 가입경과 (policy duration) 의
+단계함수로 줍니다 — 납입기간 동안 한 값, 납입후 다른 값. 보험료 중단은
+`premium_term_months` 가 처리하므로 active 한 상태로 한 번에 투영합니다.
+
+```python
+import numpy as np
+import fastcashflow as fcf
+
+# 계리적 가정 -- 해지율을 가입경과 (policy duration, 연 단위) 의 단계함수로
+death_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
+lapse_fn = lambda s, a, d: np.where(                              # 완납 시점에 해지율 하락
+    d < 1,
+    1 - (1 - 0.30) ** 12,   # 납입중 (가입 1년 이내) 월 30%
+    1 - (1 - 0.02) ** 12,   # 납입후 (1년 이후)      월 2%
+)
+
+asmp = fcf.Assumptions(
+    mortality_annual = death_fn,   # 보유계약 감쇠용 사망률 (월 1%)
+    lapse_annual     = lapse_fn,   # 해지율 (납입중 30% -> 납입후 2%)
+    discount_annual  = 0.0,        # 연 할인율 0
+    ra_confidence    = 0.75,       # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.10,       # 사망률 변동계수 10%
+    coverages        = (
+        fcf.CoverageRate("DEATH", death_fn),  # 사망 보장 1종
+    ),
+)
+
+mp = fcf.ModelPoints.single(
+    issue_age           = 40,            # 가입연령 40세
+    sex                 = 0,             # 성별 (0=남, 1=여)
+    benefits            = {0: 100_000},  # 사망보험금 100,000
+    level_premium       = 1_000,         # 월납 보험료 1,000
+    term_months         = 24,            # 보험기간 2년
+    premium_term_months = 12,            # 납입기간 1년 (이후 완납)
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
+)
+
+m   = fcf.measure(mp, asmp)
+ifc = m.cashflows.inforce[0]
+pcf = m.cashflows.premium_cf[0]
+print(f"premium month 11 / 12        = {pcf[11]:.4f} / {pcf[12]:.4f}")  # 보험료 중단
+print(f"inforce ratio m11/m10 (납입중) = {ifc[11] / ifc[10]:.4f}")        # 해지 30%
+print(f"inforce ratio m13/m12 (납입후) = {ifc[13] / ifc[12]:.4f}")        # 해지 2%
+```
+
+출력:
+
+```
+premium month 11 / 12        = 17.7038 / 0.0000
+inforce ratio m11/m10 (납입중) = 0.6930
+inforce ratio m13/m12 (납입후) = 0.9702
+```
+
+납입기간이 끝나는 12개월째에 보험료가 0 으로 멈추고 (`premium_term_months`),
+같은 시점에 해지율이 떨어집니다:
+
+- 납입중 (가입 1년 이내): 월 생존비 0.6930 = 사망 0.99 × 해지 0.70 (해지 30%)
+- 납입후 (1년 이후):      월 생존비 0.9702 = 사망 0.99 × 해지 0.98 (해지 2%)
+
+상태를 나누지 않고 `lapse_annual` 한 함수로 납입후 하락을 표현했습니다.
+신계약 측정에서는 이 길이 가장 단순합니다 — paidup 을 별도 상태로 두는 것은
+보유계약 결산처럼 *시작부터 완납 상태인* 계약을 평가할 때입니다.
+
+```{admonition} 단계는 연 경계에서만
+:class: note
+
+`lapse_annual` 의 `duration` 인자는 **연 단위 가입경과** 입니다 (엔진이
+해지율을 가입연도별 격자로 평가). 따라서 단계함수의 전환점도 연 경계에만
+놓입니다 — 납입기간이 12 / 24 / 36개월 처럼 정수 연이면 정확히 맞고, 18개월
+처럼 연 중간이면 그 해 평균으로 흡수됩니다. 월 단위 정밀도가 필요하면 별도
+확장이 필요합니다.
+```
 
 ### 완납 후 해지율의 현실적 수준
 
