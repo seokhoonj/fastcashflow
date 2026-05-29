@@ -140,8 +140,9 @@
   - 한국 시장 highlight. 1차/2차 진단 일시금, 재진단 면책기간. semi-Markov
     (상태 경과 의존) 의 첫 챕터.
 * - 4.2
-  - 장해소득보상 (DI) (작성 예정)
-  - 매월 장해소득 + duration-since-disabled 의존 회복률.
+  - [장해소득보상 (DI)](semi-markov/disability-income)
+  - 매월 장해소득 + duration-since-disabled 의존 회복률. 회복 re-entry 와
+    disabled life reserve (DLR).
 ```
 
 ### 5. 변액 (VFA)
@@ -270,6 +271,7 @@ markov/paid-up
 :caption: 4. Semi-Markov 상태
 
 semi-markov/reincidence
+semi-markov/disability-income
 ```
 
 ```{toctree}
