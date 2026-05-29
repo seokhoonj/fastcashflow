@@ -73,6 +73,9 @@ html_copy_source = False
 html_theme_options = {
     "show_prev_next": True,
     "navbar_align": "content",
+    "external_links": [
+        {"name": "데모", "url": "https://demo.fastcashflow.org"},
+    ],
     "icon_links": [
         {
             "name": "GitHub",

@@ -11,6 +11,12 @@
 보험계약마진(CSM) — 를 계약 건별로, IFRS 17의 세 가지 회계모형
 모두에 대해 측정합니다.
 
+```{button-link} https://demo.fastcashflow.org
+:color: primary
+:shadow:
+라이브 데모 열기
+```
+
 ::::{grid} 1 2 2 4
 :gutter: 3
 
