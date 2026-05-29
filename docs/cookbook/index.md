@@ -169,10 +169,10 @@
   - 챕터
   - 다루는 것
 * - 6.1
-  - 워크북 — 단일 segment (작성 예정)
+  - [워크북 — 단일 segment](io/workbook-single)
   - `assumptions.xlsx` 의 매 시트 / 매 컬럼 자세히. 사용자 진입점.
 * - 6.2
-  - 워크북 — 다 segment / 다 상품 (작성 예정)
+  - [워크북 — 다 segment / 다 상품](io/workbook-multi)
   - `value_segmented` + 상품 / 채널 별 다른 StateModel.
 ```
 
@@ -279,6 +279,14 @@ semi-markov/disability-income
 :caption: 5. 변액 (VFA)
 
 variable/gmdb-gmab
+```
+
+```{toctree}
+:hidden:
+:caption: 6. I/O (Excel 워크북)
+
+io/workbook-single
+io/workbook-multi
 ```
 
 ```{toctree}
