@@ -47,6 +47,23 @@ Variable fee approach
 .. autoclass:: fastcashflow.TVOGResult
    :members:
 
+Tracing and validation
+----------------------
+
+Per-contract tracers that unfold a single model point's measurement as an
+ASCII tree -- which segment, table and rate feed each step, the year-by-year
+rates and cash flows, and the anchor-month discount / BEL / CSM. Used for
+hand-calculation validation, learning and debugging. Each measurement
+approach has its own tracer.
+
+.. autofunction:: fastcashflow.show_trace
+
+.. autofunction:: fastcashflow.show_trace_diff
+
+.. autofunction:: fastcashflow.show_trace_vfa
+
+.. autofunction:: fastcashflow.show_trace_paa
+
 Reinsurance
 -----------
 
