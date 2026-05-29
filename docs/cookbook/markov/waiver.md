@@ -181,8 +181,8 @@ BEL        = 285.22
 ### paid-up 분리
 
 납입후 (paid-up) 상태를 active / waiver 와 별도로 추적하려면 3-state 모델이
-필요합니다 — 별도 챕터 (작성 예정). 본 챕터의 `STATE_MODELS["WAIVER"]` 는
-active / waiver 2-state 만 다룹니다.
+필요합니다 — [3.2 paid-up 분리](paid-up). 본 챕터의 `STATE_MODELS["WAIVER"]`
+는 active / waiver 2-state 만 다룹니다.
 
 ## 함정
 
@@ -214,8 +214,8 @@ active / waiver 2-state 만 다룹니다.
   분리. 납입면제도 같은 결 (active 감쇠 vs 전체 보장).
 - [2.3 다종 진단 + 면책 / 감액](../simple/diagnosis-rules) — 담보 룰 축.
   상태 (납입면제) 와 직교하며 한 계약에 공존.
-- paid-up 분리 (3-state) (작성 예정) — active / waiver / paidup 을 각각 별도
-  state 로.
+- [3.2 paid-up 분리 (3-state)](paid-up) — active / waiver / paidup 을 각각
+  별도 state 로. 납입후 해지율 점프.
 - [검증 패턴](../workflow/validation) — `show_trace` 로 상태별 점유와 cash
   flow 를 한 줄씩 확인.
 ```

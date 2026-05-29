@@ -1,0 +1,247 @@
+# 3.2 paid-up 분리 (3-state)
+
+```{admonition} 이 챕터에서 배우는 것
+:class: tip
+
+- 납입후 (paid-up) 를 active / waiver 와 **별도 상태** 로 두는 이유 —
+  유일한 실무 동기는 *납입후 해지율 점프*
+- 3-state 모델 `STATE_MODELS["WAIVER_PAIDUP"]` 의 wiring 과
+  `lapse_paidup_annual` 자리
+- paidup 상태는 **전이로 들어가지 않는다** — model point 를 paidup 으로
+  *자리 지정 (seating)* 하는, 즉 "이미 완납된 보유계약을 결산 시점에
+  평가" 하는 시나리오
+- 환급금이 없을 때 해지율이 높을수록 BEL 이 *작아지는* 메커니즘
+```
+
+[3.1 납입면제](waiver) 의 2-state 모델은 active / waiver 만 다뤘습니다.
+이 챕터는 **납입후 (paid-up)** 를 세 번째 상태로 추가합니다 — 보험료
+납입이 끝난 계약을 별도로 추적하는 자리입니다.
+
+## 상품 소개 — 납입후 상태
+
+한국 상품은 대개 **납입기간** (예: 20년납) 이 **보험기간** (예: 종신)
+보다 짧습니다. 납입기간이 끝나면 계약은 보험료를 더 내지 않으면서 보장은
+그대로 유지하는 **납입후 (paid-up)** 상태가 됩니다.
+
+납입후를 별도 상태로 나누는 **유일한 실무 이유는 해지율의 점프** 입니다.
+한국 시장에서 보험료 납입이 끝나면 해지율이 뚜렷이 변합니다 (납입 부담이
+사라진 가입자가 계약을 다시 들여다보는 시점). 납입중과 납입후에 같은
+해지율을 쓴다면 굳이 상태를 나눌 이유가 없습니다 — 나누는 의미는 두
+상태에 **서로 다른 해지율** 을 거는 데 있습니다.
+
+엔진 관점에서 한 계약은 세 상태 중 하나에 있습니다:
+
+- **active** — 정상 납입 중. 사망 / 해지 / *납입면제 진입* 에 노출.
+- **waiver** — 납입면제 상태 ([3.1](waiver) 참조).
+- **paidup** — 납입후. 보험료를 안 내고 보장은 계속. 사망 *과* 납입후
+  해지로 빠져나감 — 이 해지율이 active 와 다르다는 게 핵심.
+
+```{admonition} paidup 으로는 전이가 아니라 "자리 지정" 으로 들어간다
+:class: important
+
+`STATE_MODELS["WAIVER_PAIDUP"]` 에는 **paidup 을 목적지로 삼는 전이가
+없습니다.** active -> paidup 은 납입기간 종료라는 *결정론적* 사건이지
+확률적 전이율이 아니기 때문입니다. 따라서 paidup 계약은 model point 를
+처음부터 `state = STATE_PAIDUP` 으로 **자리 지정** 해서 평가합니다 —
+"신계약이 시간이 지나 완납됨" 의 동적 전이가 아니라, **이미 완납된
+보유계약을 결산 시점에 평가** 하는 시나리오입니다. (보유계약 평가의 입력
+구조는 [튜토리얼 11장](../../tutorial/11-in-practice) 참조.)
+```
+
+## 모델링 매핑 — 3-state
+
+```{list-table}
+:header-rows: 1
+:widths: 32 68
+
+* - 자리
+  - 무엇
+* - `Assumptions.state_model`
+  - `STATE_MODELS["WAIVER_PAIDUP"]` — active / waiver / paidup 3-state 모델
+* - `Assumptions.lapse_annual`
+  - active 상태의 해지율 (납입중)
+* - `Assumptions.lapse_paidup_annual`
+  - paidup 상태의 해지율 (납입후). 지정 안 하면 `lapse_annual` 로 fallback
+* - `Assumptions.waiver_incidence_annual`
+  - active -> waiver 연 전이율
+* - `ModelPoints.state`
+  - 각 계약의 시작 상태. 완납 보유계약은 `STATE_PAIDUP` 으로 자리 지정
+```
+
+핵심은 **해지율이 상태별로 갈린다** 는 점입니다. `lapse_annual` 은
+active 에만, `lapse_paidup_annual` 은 paidup 에만 적용됩니다. 사망률은
+세 상태 공통입니다.
+
+## 한 계약 — 손계산과 엔진
+
+납입후 해지율의 효과를 또렷이 보려고, **완납된 보장만 있는 계약** 을
+평가합니다 (보험료 = 0, 사망보험금만 남음). 여기서는 두 번 측정합니다 —
+한 번은 납입후 해지율 (월 10%) 로, 한 번은 같은 계약을 *납입중* 해지율
+(월 2%) 로 — 둘의 유일한 차이는 해지율이라 격차가 전부 해지율에서 옵니다.
+
+```{admonition} 예제 설정
+:class: note
+
+- 가입연령 40세, 보험기간 3개월, **완납된 보유계약** 으로 평가
+- 월 사망률 1%, 사망보험금 100,000, 보험료 0 (이미 완납)
+- 납입후 해지 월 10% vs 납입중 해지 월 2%
+- 월 할인율 0 (상태/해지 동학에 집중)
+```
+
+```python
+import numpy as np
+import fastcashflow as fcf
+from fastcashflow import STATE_MODELS, STATE_PAIDUP, STATE_ACTIVE
+
+# 계리적 가정 -- 모든 rate 는 (sex, issue_age, duration) 시그니처
+death_fn        = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
+lapse_fn        = lambda s, a, d: np.full(d.shape, 1 - (1 - 0.02) ** 12)  # 납입중 해지 월 2%
+lapse_paidup_fn = lambda s, a, d: np.full(d.shape, 1 - (1 - 0.10) ** 12)  # 납입후 해지 월 10%
+waiver_fn       = lambda s, a, d: np.full(a.shape, 0.0)                   # 납입면제 없음
+
+asmp = fcf.Assumptions(
+    mortality_annual        = death_fn,         # 보유계약 감쇠용 사망률 (월 1%)
+    lapse_annual            = lapse_fn,          # active 해지율 (납입중 월 2%)
+    lapse_paidup_annual     = lapse_paidup_fn,   # paidup 해지율 (납입후 월 10%)
+    waiver_incidence_annual = waiver_fn,         # active -> waiver 전이율 (없음)
+    discount_annual         = 0.0,               # 연 할인율 0 (검증 단순화)
+    ra_confidence           = 0.75,              # 위험조정 신뢰수준 75%
+    mortality_cv            = 0.10,              # 사망률 변동계수 10%
+    state_model             = STATE_MODELS["WAIVER_PAIDUP"],  # 3-state
+    coverages               = (
+        fcf.CoverageRate("DEATH", death_fn),     # 사망 보장 1종 (청구 rate = death_fn)
+    ),
+)
+
+# 같은 계약을 시작 상태만 바꿔 두 번 평가
+def measure_in(state):
+    mp = fcf.ModelPoints.single(
+        issue_age     = 40,            # 가입연령 40세
+        sex           = 0,             # 성별 (0=남, 1=여)
+        benefits      = {0: 100_000},  # 0번 보장 (= DEATH) 의 보험금 100,000
+        level_premium = 0,             # 보험료 0 (이미 완납)
+        term_months   = 3,             # 잔여 보험기간 3개월
+        state         = state,         # 시작 상태 (자리 지정)
+        calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
+    )
+    return fcf.measure(mp, asmp)
+
+m_paidup = measure_in(STATE_PAIDUP)  # 납입후 (해지 월 10%)
+m_active = measure_in(STATE_ACTIVE)  # 납입중 (해지 월 2%) -- 대조용
+
+print(f"paidup inforce  = {m_paidup.cashflows.inforce[0, :3]}")    # 보유계약 (해지 10%)
+print(f"paidup claim_cf = {m_paidup.cashflows.claim_cf[0, :3]}")   # 사망보험금
+print(f"paidup BEL      = {m_paidup.bel[0, 0]:.2f}")               # 최선추정부채
+print(f"active inforce  = {m_active.cashflows.inforce[0, :3]}")    # 보유계약 (해지 2%)
+print(f"active BEL      = {m_active.bel[0, 0]:.2f}")               # 대조용 BEL
+```
+
+출력:
+
+```
+paidup inforce  = [1.       0.891    0.793881]
+paidup claim_cf = [1000.    891.     793.881]
+paidup BEL      = 2684.88
+active inforce  = [1.         0.9702     0.94128804]
+active BEL      = 2911.49
+```
+
+손계산으로 두 상태의 보유계약을 따라갑니다. 두 경우 모두 매월 사망 (1%)
+*과* 해지로 빠지지만, 해지율이 다릅니다:
+
+| t | paidup inforce (사망1% × 해지10%) | paidup 사망보험금 | active inforce (사망1% × 해지2%) | active 사망보험금 |
+|---|---|---|---|---|
+| 0 | 1.000000 | 1,000.00 | 1.000000 | 1,000.00 |
+| 1 | 0.891000 |   891.00 | 0.970200 |   970.20 |
+| 2 | 0.793881 |   793.88 | 0.941288 |   941.29 |
+
+- `paidup inforce[t] = (0.99 × 0.90)^t` — 사망 0.99 와 납입후 해지 0.90
+- `active inforce[t] = (0.99 × 0.98)^t` — 사망 0.99 와 납입중 해지 0.98
+- 보험료가 0 이므로 BEL = PV(사망보험금):
+  - paidup BEL = 1,000 + 891 + 793.88 = **2,684.88**
+  - active BEL = 1,000 + 970.2 + 941.29 = **2,911.49**
+
+납입후 해지율 (10%) 이 납입중 (2%) 보다 높아 보유계약이 더 빨리 소멸하고,
+그만큼 미래 사망보험금이 줄어 **BEL 이 작아집니다** (2,684.88 < 2,911.49).
+
+```{admonition} 환급금이 없을 때만 "해지가 BEL 을 줄인다"
+:class: warning
+
+이 예제는 해지 시 지급액 (해약환급금) 이 없습니다. 그래서 해지는 순수하게
+부채를 *방출* 하기만 해 해지율이 높을수록 BEL 이 작아집니다. **환급금이
+있으면 방향이 달라질 수 있습니다** — 해지가 환급금 유출을 일으켜 BEL 을
+오히려 키울 수 있습니다. 해약환급금을 넣는 방법은
+[검증 패턴](../workflow/validation) 인접의 surrender value 레시피를 참조.
+```
+
+## 결과 읽기 — 해지율이 갈리는 자리
+
+3-state paid-up 모델의 한 줄 요약: **`lapse_paidup_annual` 이 paidup 점유에만
+작동해 납입후 runoff 속도를 바꾼다.**
+
+- 위 두 측정의 유일한 차이는 시작 상태입니다. 같은 사망률 · 같은 보험금
+  · 같은 보험료 (0) 인데도 BEL 이 226.61 만큼 다른 것은 **전적으로
+  해지율** (10% vs 2%) 때문입니다.
+- 납입후 해지율을 올릴수록 paidup 보유계약이 빨리 빠져 BEL 이 작아집니다
+  (환급금 없을 때).
+- `lapse_paidup_annual` 을 **생략** 하면 paidup 도 `lapse_annual` 을 써서
+  active 와 같은 runoff 가 됩니다 — 그러면 paidup 을 별도 상태로 둔 의미가
+  사라집니다.
+
+```{admonition} 상태 점유는 trajectory 에 직접 노출되지 않음
+:class: note
+
+[3.1](waiver) 과 마찬가지로 `Measurement.cashflows.inforce` 는 세 상태의
+합입니다. 위 예제는 보험료가 0 이고 시작 상태가 paidup 뿐이라 inforce 가
+곧 paidup 점유와 같지만, 일반적으로 상태별 점유가 필요하면
+[검증 패턴](../workflow/validation) 의 `show_trace` 로 확인합니다.
+```
+
+## 변형 — 해지율 축과 워크북 wiring
+
+### 납입후 해지율을 경과에 의존시키기
+
+`lapse_paidup_annual` 도 `(sex, issue_age, duration)` 시그니처라, 실무에서는
+평탄 상수 대신 납입후 경험 해지율표를 넣습니다. 한국 실무의 납입후 해지는
+완납 직후 점프 후 안정되는 경향이 있어 `duration` 의존이 자연스럽습니다.
+
+### 납입중 / 납입후를 segment 축으로 쪼개기
+
+상태 모델 대신 **segment 키 (product, channel, 납입상태)** 로 납입중 /
+납입후를 나누는 길도 있습니다 — 그러면 보유계약을 두 묶음으로 분리해
+각각 다른 해지율표로 평가합니다. 상태 모델은 한 계약 안에서 active <->
+waiver 의 *동적 전이* 까지 필요할 때, segment 분리는 납입후가 이미 확정된
+정적 묶음일 때 더 단순합니다.
+
+## 함정
+
+### 함정 1 — paidup 으로 전이가 일어나길 기대함
+
+`STATE_MODELS["WAIVER_PAIDUP"]` 에는 paidup 을 목적지로 삼는 전이가
+없습니다. active 계약을 `term_months` 만큼 굴려도 *자동으로* paidup 으로
+넘어가지 않습니다. paidup 계약은 반드시 `state = STATE_PAIDUP` 으로 시작
+상태를 자리 지정해야 합니다.
+
+### 함정 2 — `lapse_paidup_annual` 을 빠뜨림
+
+이 필드를 생략하면 paidup 이 `lapse_annual` 로 fallback 해 active 와 같은
+해지율을 씁니다. 동작은 정상이지만 paidup 을 별도 상태로 둔 효과가
+사라집니다 (cash flow 가 active 와 동일). 납입후 해지 점프를 반영하려면
+이 필드를 명시적으로 채워야 합니다.
+
+### 함정 3 — 완납 계약에 보험료를 그대로 둠
+
+납입후 계약은 보험료를 안 냅니다. `level_premium` 을 0 으로 두지 않으면
+이미 완납된 계약에서 보험료 수입이 잡혀 BEL 이 틀립니다. (paidup state
+자체도 `premium=False` 라 보험료가 0 으로 계산되지만, 입력에서도 0 으로
+두는 것이 의도를 드러냅니다.)
+
+## 인접 레시피
+
+- [3.1 보험료 납입면제 (waiver)](waiver) — 2-state 입문. 본 챕터의 직접
+  출발점.
+- [1.3 사망률의 두 역할](../basics/mortality-roles) — decrement (사망 +
+  해지) 와 보장 청구의 분리.
+- [2.1 정기보험](../simple/term-life) — 상태 전이 없는 정액형.
+- [검증 패턴](../workflow/validation) — `show_trace` 로 상태별 점유와
+  cash flow 를 한 줄씩 확인.

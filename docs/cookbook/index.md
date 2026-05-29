@@ -119,8 +119,8 @@
   - [보험료 납입면제 (waiver)](markov/waiver)
   - `STATE_MODELS["WAIVER"]` 입문. active → waiver 진입.
 * - 3.2
-  - paid-up 분리 (3-state) (작성 예정)
-  - active / waiver / paidup 을 각각 별도 state 로.
+  - [paid-up 분리 (3-state)](markov/paid-up)
+  - active / waiver / paidup 을 각각 별도 state 로. 납입후 해지율 점프.
 ```
 
 ### 4. Semi-Markov 상태
@@ -241,6 +241,7 @@ simple/diagnosis-rules
 :caption: 3. Markov 상태
 
 markov/waiver
+markov/paid-up
 ```
 
 ```{toctree}
