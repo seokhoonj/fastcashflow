@@ -136,8 +136,9 @@
   - 챕터
   - 다루는 것
 * - 4.1
-  - 재진단암 보험 (작성 예정)
-  - 한국 시장 highlight. 1차/2차 진단 일시금, 재진단 면책기간.
+  - [재진단암 보험](semi-markov/reincidence)
+  - 한국 시장 highlight. 1차/2차 진단 일시금, 재진단 면책기간. semi-Markov
+    (상태 경과 의존) 의 첫 챕터.
 * - 4.2
   - 장해소득보상 (DI) (작성 예정)
   - 매월 장해소득 + duration-since-disabled 의존 회복률.
@@ -262,6 +263,13 @@ simple/diagnosis-rules
 
 markov/waiver
 markov/paid-up
+```
+
+```{toctree}
+:hidden:
+:caption: 4. Semi-Markov 상태
+
+semi-markov/reincidence
 ```
 
 ```{toctree}
