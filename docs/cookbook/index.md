@@ -186,8 +186,9 @@
   - 챕터
   - 다루는 것
 * - 7.1
-  - 시나리오 / 민감도 분석 (작성 예정)
-  - rate 함수 교체로 mortality +10% 등의 효과 측정.
+  - [시나리오 / 민감도 분석](workflow/sensitivity)
+  - rate 함수 교체로 mortality +10% 등의 효과 측정. CSM 흡수 / onerous 전환,
+    show_trace_diff.
 * - 7.2
   - [검증 패턴](workflow/validation)
   - 한 계약의 BEL / CSM 계산 경로 추적. 손계산 매칭, shock 전파, residual 검증.
@@ -293,6 +294,7 @@ io/workbook-multi
 :hidden:
 :caption: 7. 분석 / 검증
 
+workflow/sensitivity
 workflow/validation
 ```
 
