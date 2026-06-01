@@ -8,7 +8,8 @@ one ``Basis`` per segment. See docs/basis-format.md.
 import fastcashflow as fcf
 import numpy as np
 
-from fastcashflow import ModelPoints, measure, measure
+from fastcashflow import ModelPoints
+from fastcashflow.gmm import measure
 
 
 def test_segments_resolve():

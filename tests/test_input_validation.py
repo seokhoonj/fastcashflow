@@ -641,7 +641,7 @@ def test_value_segmented_matches_nfc_and_nfd_codes():
     )
     # Basis keyed under the decomposed form -- the lookup must still match.
     basis = {(decomposed, "FC"): basis}
-    out = fcf.measure(mp, basis, full=False)
+    out = fcf.gmm.measure(mp, basis, full=False)
     assert out.bel.shape == (1,)
 
 
@@ -713,9 +713,9 @@ def test_empty_portfolio_value_raises_loudly():
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     with pytest.raises(ValueError, match="empty"):
-        fcf.measure(mp, basis, full=False)
+        fcf.gmm.measure(mp, basis, full=False)
     with pytest.raises(ValueError, match="empty"):
-        fcf.measure(mp, basis)
+        fcf.gmm.measure(mp, basis)
 
 
 def test_single_month_measure():
@@ -732,7 +732,7 @@ def test_single_month_measure():
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate(0.01)),),
     )
-    m = fcf.measure(mp, basis)
+    m = fcf.gmm.measure(mp, basis)
     assert m.bel_path.shape == (1, 2)            # (n_mp, term+1)
     assert np.isfinite(m.bel).all()
 
@@ -752,7 +752,7 @@ def test_mixed_term_months_tail_padded_consistently():
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate(0.01)),),
     )
-    m = fcf.measure(mp, basis)
+    m = fcf.gmm.measure(mp, basis)
     assert m.bel_path.shape == (2, 13)            # max term + 1
     # The 3-month MP's BEL at t=12 must be a finite, well-defined value
     # (zero or held-flat post-maturity), never NaN / inf.

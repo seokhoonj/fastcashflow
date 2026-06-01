@@ -11,7 +11,8 @@ pins the invariant that the two paths return the same BEL when a
 """
 import numpy as np
 
-from fastcashflow import Basis, ExpenseItem, ModelPoints, STATE_MODELS, measure, measure, CoverageRate
+from fastcashflow import Basis, ExpenseItem, ModelPoints, STATE_MODELS, CoverageRate
+from fastcashflow.gmm import measure
 
 
 def _flat_rate(value):

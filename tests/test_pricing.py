@@ -6,7 +6,8 @@ the target it was solved for.
 import numpy as np
 import pytest
 
-from fastcashflow import ExpenseItem, ModelPoints, solve_premium, measure
+from fastcashflow import ExpenseItem, ModelPoints, solve_premium
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

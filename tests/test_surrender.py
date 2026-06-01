@@ -6,7 +6,8 @@ verify the formula end-to-end against hand calculation.
 """
 import numpy as np
 
-from fastcashflow import Basis, ModelPoints, measure, CoverageRate
+from fastcashflow import Basis, ModelPoints, CoverageRate
+from fastcashflow.gmm import measure
 from conftest import PATTERNS
 
 def _flat_rate(value):

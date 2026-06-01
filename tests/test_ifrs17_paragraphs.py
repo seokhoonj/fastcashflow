@@ -23,7 +23,8 @@ Paragraph -> test name:
 """
 import numpy as np
 
-from fastcashflow import ModelPoints, measure
+from fastcashflow import ModelPoints
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

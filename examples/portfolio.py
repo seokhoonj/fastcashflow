@@ -19,7 +19,7 @@ def main() -> None:
 
     # measure() is the fast path -- BEL/RA/CSM/loss component per model point,
     # with no per-month trajectories materialised.
-    val = fcf.measure(book, basis, full=False)
+    val = fcf.gmm.measure(book, basis, full=False)
     print(f"measure() -- {book.n_mp} model points,  total CSM {val.csm.sum():,.0f}")
 
     # Write the per-model-point results to a file.

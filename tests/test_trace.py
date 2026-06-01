@@ -142,7 +142,7 @@ def test_show_trace_bel_and_ra_agree_with_measure():
     not a recalculation."""
     mp = _portfolio()
     asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
-    m = fcf.measure(mp.subset([0]), asmp)
+    m = fcf.gmm.measure(mp.subset([0]), asmp)
     buf = io.StringIO()
     fcf.gmm.trace(0, mp, asmp, file=buf)
     text = buf.getvalue()
@@ -240,8 +240,8 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
         for r in asmp.coverages
     )
     shocked = replace(asmp, mortality_annual=shocked_mort, coverages=new_coverages)
-    ma = fcf.measure(mp.subset([0]), asmp)
-    mb = fcf.measure(mp.subset([0]), shocked)
+    ma = fcf.gmm.measure(mp.subset([0]), asmp)
+    mb = fcf.gmm.measure(mp.subset([0]), shocked)
     assert mb.cashflows.claim_cf.sum() > ma.cashflows.claim_cf.sum()
     assert mb.bel_path[0, 0] > ma.bel_path[0, 0]
     # And the diff renders without raising.

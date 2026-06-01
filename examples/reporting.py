@@ -15,7 +15,7 @@ def main() -> None:
     basis = fcf.read_basis(DATA / "assumptions.xlsx")
     basis = basis[("TERM_LIFE_A", "FC")]
     book = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
-    m = fcf.measure(book, basis)
+    m = fcf.gmm.measure(book, basis)
 
     # The IFRS 17 report -- insurance revenue, service expense, service result.
     print(fcf.report(m))

@@ -9,7 +9,8 @@ from the multiple-decrement recursion.
 import numpy as np
 import pytest
 
-from fastcashflow import STATE_ACTIVE, STATE_PAIDUP, STATE_WAIVER, STATE_MODELS, Basis, ModelPoints, State, StateModel, Transition, measure, measure, CoverageRate
+from fastcashflow import STATE_ACTIVE, STATE_PAIDUP, STATE_WAIVER, STATE_MODELS, Basis, ModelPoints, State, StateModel, Transition, CoverageRate
+from fastcashflow.gmm import measure
 from fastcashflow.statemodel import compile_state_model
 
 from conftest import annual_from_monthly as _annual
@@ -338,5 +339,4 @@ def test_measure_and_value_agree_under_custom_model():
     )
     asmp = _asmp(waiver_rate=0.03, state_model=three)
     assert np.allclose(measure(mps, asmp).bel_path[:, 0], measure(mps, asmp, full=False).bel)
-
 

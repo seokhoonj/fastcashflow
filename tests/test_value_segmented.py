@@ -10,7 +10,8 @@ import fastcashflow as fcf
 import numpy as np
 import pytest
 
-from fastcashflow import Basis, ModelPoints, measure, measure, CoverageRate
+from fastcashflow import Basis, ModelPoints, CoverageRate
+from fastcashflow.gmm import measure
 
 
 def _flat_asmp(*, discount=0.05) -> Basis:

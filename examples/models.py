@@ -18,7 +18,7 @@ def main() -> None:
     book = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 
     # GMM -- the general measurement model.
-    gmm = fcf.measure(book, basis)
+    gmm = fcf.gmm.measure(book, basis)
     print(f"GMM  -- CSM                       {gmm.csm_path[:, 0].sum():>14,.0f}")
 
     # PAA -- the simplified model for short-coverage business.

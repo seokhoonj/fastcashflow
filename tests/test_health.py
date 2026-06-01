@@ -6,7 +6,8 @@ morbidity, priced by its own RA component (``morbidity_cv``).
 """
 import numpy as np
 
-from fastcashflow import Basis, CalculationMethod, ModelPoints, CoverageRate, measure, measure
+from fastcashflow import Basis, CalculationMethod, ModelPoints, CoverageRate
+from fastcashflow.gmm import measure
 from fastcashflow.numerics import _norm_ppf
 from conftest import annual_from_monthly as _annual
 

@@ -9,7 +9,8 @@ import pytest
 from numba import cuda
 
 from conftest import annual_from_monthly as _annual
-from fastcashflow import STATE_MODELS, Basis, CalculationMethod, ExpenseItem, ModelPoints, CoverageRate, measure, measure
+from fastcashflow import STATE_MODELS, Basis, CalculationMethod, ExpenseItem, ModelPoints, CoverageRate
+from fastcashflow.gmm import measure
 
 
 def test_value_matches_measure():

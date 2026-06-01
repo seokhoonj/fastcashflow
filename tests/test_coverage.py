@@ -7,7 +7,8 @@ amount, and an empty list equals a zero death benefit.
 """
 import numpy as np
 
-from fastcashflow import ExpenseItem, ModelPoints, measure, measure
+from fastcashflow import ExpenseItem, ModelPoints
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

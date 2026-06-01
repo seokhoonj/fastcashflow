@@ -6,7 +6,8 @@ before ``max(0, ...)``, contracts in different groups are not.
 import numpy as np
 import pytest
 
-from fastcashflow import ExpenseItem, ModelPoints, group, measure, roll_forward
+from fastcashflow import ExpenseItem, ModelPoints, group, roll_forward
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

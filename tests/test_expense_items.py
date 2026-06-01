@@ -173,8 +173,8 @@ def test_lae_pro_rata_row_lifts_expense():
             ExpenseItem("LAE", "lae_pro_rata", 0.02),
         ),
     )
-    m_base = fcf.measure(mp, base_rows)
-    m_lae = fcf.measure(mp, with_lae)
+    m_base = fcf.gmm.measure(mp, base_rows)
+    m_lae = fcf.gmm.measure(mp, with_lae)
     assert np.all(m_lae.cashflows.expense_cf >=
                   m_base.cashflows.expense_cf - 1e-9)
     # Strictly higher in months where the policy has any claim flow.
@@ -192,10 +192,10 @@ def test_empty_expense_items_is_zero_expense_basis():
     mp = _term_life_mp()
     populated = _basis_rows()
     empty = dataclasses.replace(populated, expense_items=())
-    m_empty = fcf.measure(mp, empty)
-    v_empty = fcf.measure(mp, empty, full=False)
+    m_empty = fcf.gmm.measure(mp, empty)
+    v_empty = fcf.gmm.measure(mp, empty, full=False)
     assert np.all(m_empty.cashflows.expense_cf == 0.0)
     assert np.isclose(m_empty.bel_path[0, 0], v_empty.bel[0])
     # populated basis has expense outflows, so it must have a higher BEL
-    populated_bel = fcf.measure(mp, populated, full=False).bel[0]
+    populated_bel = fcf.gmm.measure(mp, populated, full=False).bel[0]
     assert populated_bel > v_empty.bel[0]

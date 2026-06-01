@@ -10,7 +10,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from fastcashflow import ExpenseItem, ModelPoints, measure
+from fastcashflow import ExpenseItem, ModelPoints
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

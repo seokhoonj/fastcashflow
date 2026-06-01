@@ -9,7 +9,8 @@ by hand against a small two-year contract.
 """
 import numpy as np
 
-from fastcashflow import Basis, ExpenseItem, ModelPoints, measure, measure, CoverageRate
+from fastcashflow import Basis, ExpenseItem, ModelPoints, CoverageRate
+from fastcashflow.gmm import measure
 from fastcashflow.curves import discount_monthly_curve
 
 

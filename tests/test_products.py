@@ -7,7 +7,8 @@ its present value; survival benefits carry longevity risk, priced through the
 """
 import numpy as np
 
-from fastcashflow import ModelPoints, measure, measure
+from fastcashflow import ModelPoints
+from fastcashflow.gmm import measure
 from fastcashflow.numerics import _norm_ppf
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 

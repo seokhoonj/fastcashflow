@@ -13,7 +13,8 @@ Every figure is derived by hand on a flat, zero-discount basis.
 import numpy as np
 import pytest
 
-from fastcashflow import Basis, ModelPoints, measure, measure, CoverageRate
+from fastcashflow import Basis, ModelPoints, CoverageRate
+from fastcashflow.gmm import measure
 from fastcashflow.basis import annual_to_monthly
 
 

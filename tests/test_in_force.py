@@ -13,7 +13,8 @@ trajectory-slice property, and it pins the in-force semantics.
 import numpy as np
 import pytest
 
-from fastcashflow import Basis, ExpenseItem, ModelPoints, measure, measure_in_force, measure, value_in_force, CoverageRate
+from fastcashflow import Basis, ExpenseItem, ModelPoints, measure_in_force, value_in_force, CoverageRate
+from fastcashflow.gmm import measure
 
 
 def _flat_rate(value):

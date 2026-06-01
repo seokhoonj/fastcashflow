@@ -17,7 +17,7 @@ def main() -> None:
     book = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 
     # Measure the in-force book at the transition date.
-    m = fcf.measure(book, basis)
+    m = fcf.gmm.measure(book, basis)
 
     # The fair value of each contract. In practice it comes from a
     # fair-value exercise; here it is the fulfilment cash flows plus a margin.

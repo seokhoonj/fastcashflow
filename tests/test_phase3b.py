@@ -4,7 +4,8 @@ import numpy as np
 import polars as pl
 import pytest
 
-from fastcashflow import ExpenseItem, ModelPoints, read_model_points, sample_data_dir, measure, write_measurement
+from fastcashflow import ExpenseItem, ModelPoints, read_model_points, sample_data_dir, write_measurement
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

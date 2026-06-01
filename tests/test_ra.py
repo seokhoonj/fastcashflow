@@ -7,7 +7,8 @@ charges the cost-of-capital rate on it over the contract's run-off.
 import numpy as np
 import pytest
 
-from fastcashflow import ModelPoints, measure, measure
+from fastcashflow import ModelPoints
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

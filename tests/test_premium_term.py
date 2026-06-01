@@ -8,7 +8,8 @@ ordinary case. The hand case is a 3-month contract paying premium for 2.
 """
 import numpy as np
 
-from fastcashflow import ModelPoints, measure, read_model_points, measure
+from fastcashflow import ModelPoints, read_model_points
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

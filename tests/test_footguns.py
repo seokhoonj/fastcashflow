@@ -6,7 +6,8 @@ without an error -- each now blocked at engine entry.
 import numpy as np
 import pytest
 
-from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints, measure, measure, measure
+from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

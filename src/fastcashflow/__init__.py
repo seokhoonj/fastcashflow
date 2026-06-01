@@ -18,7 +18,7 @@ from fastcashflow.basis import (
 )
 from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import (
-    GMMMeasurement, clear_codegen_cache, measure, measure_in_force,
+    GMMMeasurement, clear_codegen_cache, measure_in_force,
     value_in_force,
 )
 from fastcashflow.grouping import group
@@ -81,7 +81,7 @@ from fastcashflow import gmm, paa, reinsurance, samples, vfa  # namespaces
 
 __version__ = "0.1.0"
 __all__ = [
-    "Basis", "ModelPoints", "measure", "measure_in_force",
+    "Basis", "ModelPoints", "measure_in_force",
     "value_in_force", "clear_codegen_cache",
     "report", "roll_forward", "reconcile", "group", "transition",
     "GMMMeasurement", "PAAMeasurement", "VFAMeasurement",

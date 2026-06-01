@@ -7,7 +7,8 @@ in plain Python as the correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import ModelPoints, measure, measure
+from fastcashflow import ModelPoints
+from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 

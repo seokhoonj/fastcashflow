@@ -10,7 +10,8 @@ import numpy as np
 import openpyxl
 import polars as pl
 
-from fastcashflow import read_model_points, measure, write_measurement
+from fastcashflow import read_model_points, write_measurement
+from fastcashflow.gmm import measure
 
 
 def _write_sheets(path, sheets):
