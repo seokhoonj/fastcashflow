@@ -98,14 +98,15 @@
 | 컬럼명 | 의미 | 단위 | 시트 |
 |---|---|---|---|
 | `rate` | 확률 / 발생률 / 환산률 | 무차원 (0~1) | mortality, incidence_rate, waiver, lapse, discount, inflation |
-| `amount` | 화폐 금액 | 원 (또는 portfolio 통화) | maintenance |
+| `amount` | 화폐 금액 | 원 (또는 portfolio 통화) | `coverages.csv` 가입금액 (워크북 사업비는 `expense_tables` 의 `value` 로 이동) |
 | `factor` | 곱셈자 (multiplier) | 무차원 (보통 ~1.0) | **현재 없음**; 향후 A/E layer 도입 시 (Task #8) |
 
 **근거**:
 - 의미가 다른 값에 같은 컬럼명을 쓰면 reader가 단위 처리를 잘못할
   소지. `rate` 가정 → 0~1 검증 / `amount` 가정 → 통화 처리.
 - 기존 `maintenance_tables.rate` (값이 60,000 같은 원 단위)는 명칭
-  오류. `amount`로 rename 확정.
+  오류였고, 사업비는 이후 `expense_tables` item-form (`expense_type` /
+  `basis` / `value`) 으로 대체됨. `amount` 는 `coverages.csv` 의 가입금액에 남음.
 
 ---
 
@@ -127,8 +128,8 @@
 
 ## 7. A/E factor 레이어 — 패턴 1 vs 2
 
-**결정**: 워크북에 A/E factor 시트를 **선택적 레이어로 추가** (Task #8,
-미구현). 기본은 없음 (factor 1.0). 사용자가 (a) 외부에서 위험률 × A/E를
+**결정**: 워크북에 A/E factor 시트 (`ae_factors`) 를 **선택적 레이어로 추가** (Task #8,
+구현 완료). 기본은 없음 (factor 1.0). 사용자가 (a) 외부에서 위험률 × A/E를
 미리 곱해 base rate에 넣거나 (b) base + ae_factors 시트 둘 다 채워서
 엔진 런타임 곱셈 — 둘 다 지원.
 
@@ -197,18 +198,18 @@ calendar_year)을 받는다. 워크북 입력층은 base table (필수) + A/E fa
 - 워크북 단일화, `segments` 시트명, snake_case 규칙, column semantics,
   best-estimate 정의, layered optional 설계 골격
 
-**보류 (Task로 등록, 별도 구현)**:
-- Task #7: base table axis-flex 리더 (schema-detecting)
-- Task #8: A/E factor 레이어
-- Task #9: age_shift 컬럼
-- Task #10: improvement 레이어
-- Task #1: discount / inflation / maintenance curve화
-- Task #5: curves.py / numerics.py 레이어 분리 (완료)
-- Task #2: ModelPoints product/channel + measure helper
+**구현 완료 (당초 별도 Task로 등록했던 것들)**:
+- Task #7: base table axis-flex 리더 (schema-detecting) — 완료 ([[basis-format]] §3.1)
+- Task #8: A/E factor 레이어 (`ae_factors` 시트) — 완료
+- Task #9: age_shift 컬럼 — 완료
+- Task #10: improvement 레이어 (`improvement_tables` 시트) — 완료
+- Task #1: discount / inflation 연도별 커브 — 완료 (maintenance 는 `expense_tables` 로 대체)
+- Task #5: curves.py / numerics.py 레이어 분리 — 완료
+- Task #2: ModelPoints product_code/channel_code + `measure(dict basis)` 라우팅 — 완료
 
 **검토 안 함 (yagni)**:
 - 워크북 두 파일 분리 (#1 결정)
 - "위험률" 그대로 입력 (#6 결정 — best-estimate이 표준)
 - 손해율 테이블 입력 (별도 토론, GMM은 발생률 × 금액 직접 계산)
-- VFA 파라미터 (`fund_fee`, `guaranteed_credit_rate`) Basis 잔류
+- VFA 파라미터 배치 (`fund_fee` 는 Basis, `minimum_crediting_rate` 는 ModelPoints)
   ([[vfa-param-relocation]] 메모 — 별도 refactor)
