@@ -79,8 +79,7 @@ fastcashflow 사용자 API
 │
 ├── 평가
 │   ├── fcf.gmm.measure(mp, basis)              ── 신계약, 시간 trajectory 전체
-│   ├── fcf.gmm.measure(mp, basis, full=False)  ── 신계약, 시점 0 의 4 숫자만 (빠름)
-│   ├── fcf.gmm.measure(mp, basis, full=False) ── basis 가 dict 면 (product_code, channel_code) 자동 라우팅
+│   ├── fcf.gmm.measure(mp, basis, full=False)  ── 시점 0 headline 4 숫자 (빠름); basis 가 dict 면 세그먼트 라우팅
 │   ├── fcf.measure_in_force(mp, basis, ...)    ── 결산, trajectory
 │   └── fcf.value_in_force(mp, basis, ...)      ── 결산, 시점 0
 │

@@ -180,8 +180,9 @@ CSM sum = 632,252
 - `basis[("TERM_LIFE_A", "FC")]` 가 그 segment 의 `Basis` 개체입니다.
   `ra_confidence` 0.75 / `state_model` = WAIVER 는 `defaults` 행에서,
   `lapse_table` = `LAPSE_FC` 는 segment 행에서 온 값입니다.
-- `discount_annual` 이 `[0.03]` 인 것은 v1 reader 가 `discount_tables` 곡선의
-  **첫 값** 만 평탄 스칼라로 쓰기 때문입니다 (전체 기간구조는 향후 작업).
+- `discount_annual` 이 길이 1 배열인 것은 견본 `discount_tables` 에 `year` 0
+  한 행만 있기 때문입니다 — 여러 해를 적으면 그 **전체 연도별 곡선** 이 그대로
+  들어옵니다 (한 행이면 그 값이 평탄 적용).
 
 ```{admonition} 단일 가정 적용 vs segment 별 라우팅
 :class: note

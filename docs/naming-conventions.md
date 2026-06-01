@@ -41,7 +41,7 @@
 전부 **소문자 snake_case**. 예: `product_code`, `channel_code`,
 `coverage_code`, `rate_table`, `mortality_table`, `expense_table`,
 `ra_confidence`, `mortality_cv`, `table_id`, `sex`, `age`, `duration`,
-`year`, `rate`, `amount`, `factor`, `expense_type`, `basis`, `value`.
+`year`, `rate`, `factor`, `expense_type`, `basis`, `value`.
 
 ## Column semantics (`rate` / `amount` / `factor`)
 
@@ -51,7 +51,6 @@
 | 컬럼명 | 의미 | 단위 | 값 범위 | 사용 시트 |
 |---|---|---|---|---|
 | `rate` | 확률 / 발생률 / 환산률 | 무차원 (decimal) | 0~1 (또는 작은 양수) | mortality, incidence_rate, waiver, lapse, discount, inflation |
-| `amount` | 화폐 금액 | 원 (또는 portfolio 통화) | 양의 실수 | maintenance |
 | `factor` | 곱셈자 (multiplier) | 무차원 | 보통 ~1.0 | **현재 없음** (장래 A/E factor 레이어 도입 시 예약) |
 
 리더가 `rate`는 확률 검증, `amount`는 통화 처리, `factor`는 곱셈자 처리를
