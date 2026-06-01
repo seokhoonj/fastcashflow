@@ -1033,10 +1033,10 @@ def show_trace_diff(
 
 
 # ---------------------------------------------------------------------------
-# show_bel_step -- term-by-term unrolling of the BEL backward recursion
+# show_trace_bel_step -- term-by-term unrolling of the BEL backward recursion
 # ---------------------------------------------------------------------------
 
-def show_bel_step(
+def show_trace_bel_step(
     mp_index: int,
     model_points: ModelPoints,
     basis: Basis | dict,
@@ -1190,10 +1190,10 @@ def show_bel_step(
 
 
 # ---------------------------------------------------------------------------
-# show_csm_step -- term-by-term unrolling of the CSM forward recursion
+# show_trace_csm_step -- term-by-term unrolling of the CSM forward recursion
 # ---------------------------------------------------------------------------
 
-def show_csm_step(
+def show_trace_csm_step(
     mp_index: int,
     model_points: ModelPoints,
     basis: Basis | dict,
@@ -1226,7 +1226,7 @@ def show_csm_step(
     mp_index
         0-based row index in ``model_points``.
     model_points, basis, file
-        Same shape as :func:`show_bel_step`.
+        Same shape as :func:`show_trace_bel_step`.
     months
         Months at which to unroll the step (each row shows the
         computation that produced ``csm[t]`` from ``csm[t-1]``).

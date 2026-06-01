@@ -11,7 +11,7 @@ from fastcashflow.basis import Basis
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.trace import (
     _resolve_basis,
-    show_bel_step, show_csm_step, show_trace, show_trace_diff, show_trace_paa,
+    show_trace_bel_step, show_trace_csm_step, show_trace, show_trace_diff, show_trace_paa,
     show_trace_vfa,
 )
 
@@ -270,14 +270,14 @@ def test_show_trace_diff_rejects_out_of_range_index():
 
 
 # ---------------------------------------------------------------------------
-# show_bel_step
+# show_trace_bel_step
 # ---------------------------------------------------------------------------
 
-def test_show_bel_step_renders_recursion_and_steps():
+def test_show_trace_bel_step_renders_recursion_and_steps():
     """The step view prints the recursion equation, the seed and at
     least the inception step."""
     buf = io.StringIO()
-    fcf.gmm.bel_step(0, _portfolio(), _basis(), file=buf)
+    fcf.gmm.trace_bel_step(0, _portfolio(), _basis(), file=buf)
     text = buf.getvalue()
     assert "BEL[t] = annuity[t] - premium[t]" in text
     assert "seed:" in text
@@ -286,12 +286,12 @@ def test_show_bel_step_renders_recursion_and_steps():
     assert "residual" in text
 
 
-def test_show_bel_step_residuals_are_machine_zero():
+def test_show_trace_bel_step_residuals_are_machine_zero():
     """The recomputed BEL[t] in every printed step must agree with the
     engine's BEL[t] to within float64 noise -- that is the contract the
     step view is supposed to surface."""
     buf = io.StringIO()
-    fcf.gmm.bel_step(0, _portfolio(), _basis(), file=buf)
+    fcf.gmm.trace_bel_step(0, _portfolio(), _basis(), file=buf)
     for line in buf.getvalue().splitlines():
         if "residual" not in line:
             continue
@@ -300,10 +300,10 @@ def test_show_bel_step_residuals_are_machine_zero():
         assert abs(float(token)) < 1e-6, line
 
 
-def test_show_bel_step_accepts_custom_months():
+def test_show_trace_bel_step_accepts_custom_months():
     """Passing ``months=`` overrides the default anchor set."""
     buf = io.StringIO()
-    fcf.gmm.bel_step(0, _portfolio(), _basis(),
+    fcf.gmm.trace_bel_step(0, _portfolio(), _basis(),
                   months=[0, 24, 36], file=buf)
     text = buf.getvalue()
     assert "t=   0" in text
@@ -312,19 +312,19 @@ def test_show_bel_step_accepts_custom_months():
     assert "t=  12" not in text                 # not requested
 
 
-def test_show_bel_step_rejects_out_of_range_index():
+def test_show_trace_bel_step_rejects_out_of_range_index():
     mp = _portfolio()
     with pytest.raises(IndexError, match="mp_index"):
-        fcf.gmm.bel_step(mp.n_mp, mp, _basis(), file=io.StringIO())
+        fcf.gmm.trace_bel_step(mp.n_mp, mp, _basis(), file=io.StringIO())
 
 
-def test_show_bel_step_seed_month_prints_only_the_seed():
+def test_show_trace_bel_step_seed_month_prints_only_the_seed():
     """At ``t = term`` the recursion has no below, so the step row
     states only the seed value, not a full equation expansion."""
     mp = _portfolio()
     term = int(mp.term_months[0])
     buf = io.StringIO()
-    fcf.gmm.bel_step(0, mp, _basis(), months=[term], file=buf)
+    fcf.gmm.trace_bel_step(0, mp, _basis(), months=[term], file=buf)
     text = buf.getvalue()
     assert "seed -- no recursion below" in text
     # The component lines that only show up in a recursion expansion
@@ -335,7 +335,7 @@ def test_show_bel_step_seed_month_prints_only_the_seed():
 
 
 # ---------------------------------------------------------------------------
-# show_csm_step
+# show_trace_csm_step
 # ---------------------------------------------------------------------------
 
 def _profitable_basis_and_mp():
@@ -358,10 +358,10 @@ def _profitable_basis_and_mp():
     return asmp, mp
 
 
-def test_show_csm_step_renders_seed_and_steps():
+def test_show_trace_csm_step_renders_seed_and_steps():
     """Recursion equations, seed values and at least one step row print."""
     buf = io.StringIO()
-    fcf.gmm.csm_step(0, _portfolio(), _basis(), file=buf)
+    fcf.gmm.trace_csm_step(0, _portfolio(), _basis(), file=buf)
     text = buf.getvalue()
     assert "csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]" in text
     assert "Seed (t = 0)" in text
@@ -369,20 +369,20 @@ def test_show_csm_step_renders_seed_and_steps():
     assert "End CSM" in text
 
 
-def test_show_csm_step_onerous_notes_zero_throughout():
+def test_show_trace_csm_step_onerous_notes_zero_throughout():
     """An onerous contract surfaces the explicit \"csm = 0 throughout\"
     note in the seed block."""
     buf = io.StringIO()
-    fcf.gmm.csm_step(0, _portfolio(), _basis(), file=buf)
+    fcf.gmm.trace_csm_step(0, _portfolio(), _basis(), file=buf)
     assert "onerous contract -- csm = 0 throughout" in buf.getvalue()
 
 
-def test_show_csm_step_profitable_residuals_are_zero():
+def test_show_trace_csm_step_profitable_residuals_are_zero():
     """On a profitable contract every printed recursion step holds the
     ``csm[t-1] + acc - rel == csm[t]`` identity to float64 noise."""
     asmp, mp = _profitable_basis_and_mp()
     buf = io.StringIO()
-    fcf.gmm.csm_step(0, mp, asmp, months=[1, 12, 30, 60], file=buf)
+    fcf.gmm.trace_csm_step(0, mp, asmp, months=[1, 12, 30, 60], file=buf)
     for line in buf.getvalue().splitlines():
         if "residual" not in line:
             continue
@@ -390,12 +390,12 @@ def test_show_csm_step_profitable_residuals_are_zero():
         assert abs(float(token)) < 1e-6, line
 
 
-def test_show_csm_step_terminal_release_drains_the_csm():
+def test_show_trace_csm_step_terminal_release_drains_the_csm():
     """At ``t = term`` the release fraction equals 1 and the CSM drops
     to (essentially) zero -- the boundary condition the kernel enforces."""
     asmp, mp = _profitable_basis_and_mp()
     buf = io.StringIO()
-    fcf.gmm.csm_step(0, mp, asmp, months=[60], file=buf)
+    fcf.gmm.trace_csm_step(0, mp, asmp, months=[60], file=buf)
     text = buf.getvalue()
     # The terminal release fraction prints exactly as "= 1.000000".
     assert "= 1.000000" in text
@@ -403,10 +403,10 @@ def test_show_csm_step_terminal_release_drains_the_csm():
     assert "csm[60] =            0.00" in text
 
 
-def test_show_csm_step_rejects_out_of_range_index():
+def test_show_trace_csm_step_rejects_out_of_range_index():
     mp = _portfolio()
     with pytest.raises(IndexError, match="mp_index"):
-        fcf.gmm.csm_step(mp.n_mp, mp, _basis(), file=io.StringIO())
+        fcf.gmm.trace_csm_step(mp.n_mp, mp, _basis(), file=io.StringIO())
 
 
 # ---------------------------------------------------------------------------

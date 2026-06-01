@@ -10,10 +10,10 @@ from fastcashflow.engine import measure
 from fastcashflow.io import measure_stream
 from fastcashflow.stochastic import value_stochastic as stochastic
 from fastcashflow.trace import (
-    show_bel_step as bel_step,
-    show_csm_step as csm_step,
+    show_trace_bel_step as trace_bel_step,
+    show_trace_csm_step as trace_csm_step,
     show_trace as trace,
     show_trace_diff as trace_diff,
 )
 
-__all__ = ["measure", "measure_stream", "stochastic", "trace", "trace_diff", "bel_step", "csm_step"]
+__all__ = ["measure", "measure_stream", "stochastic", "trace", "trace_diff", "trace_bel_step", "trace_csm_step"]
