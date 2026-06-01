@@ -73,7 +73,7 @@
 * - 1.1
   - [한눈에 보기](basics/overview)
   - 네 갈래의 입력 파일 (policies / coverages / calculation_methods /
-    assumptions) 과 fastcashflow 사용자 API 의 트리 구조. 후속 챕터를
+    basis) 과 fastcashflow 사용자 API 의 트리 구조. 후속 챕터를
     어디서 어떻게 호출하는지 미리 그림.
 * - 1.2
   - [담보와 산출방식 매칭](basics/calculation-methods)

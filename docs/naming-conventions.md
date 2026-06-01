@@ -73,7 +73,7 @@
 
 | 항목 | 규칙 | 예 |
 |---|---|---|
-| 모듈 | snake_case | `assumptions.py`, `projection.py`, `engine.py` |
+| 모듈 | snake_case | `basis.py`, `projection.py`, `engine.py` |
 | 클래스 | PascalCase | `Basis`, `ModelPoints`, `Cashflows`, `Measurement` |
 | 함수 / 변수 | snake_case | `read_basis`, `discount_monthly_curve`, `n_time` |
 | 모듈 private | leading underscore | `_project_kernel`, `_norm_ppf`, `_axis_tables` |

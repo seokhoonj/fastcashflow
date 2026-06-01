@@ -28,7 +28,7 @@ def main() -> None:
         fcf.write_measurement(val, out)
         print(f"  per-model-point results written to {out.name}")
 
-    # For portfolios past what memory holds, value_file streams a parquet
+    # For portfolios past what memory holds, gmm.measure_stream streams a parquet
     # file chunk by chunk straight to a result dataset.
 
 

@@ -17,7 +17,7 @@ def main() -> None:
     basis = fcf.read_basis(DATA / "basis.xlsx")
     # The sample workbook now carries several (product, channel) segments;
     # pick TERM_LIFE / FC for this single-segment quickstart. A real run
-    # over a multi-segment portfolio would use fcf.value_segmented.
+    # over a multi-segment portfolio would pass a dict basis to fcf.gmm.measure.
     basis = basis[("TERM_LIFE_A", "FC")]
     model_points = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 

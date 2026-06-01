@@ -1,4 +1,4 @@
-"""measure()/measure() parity tests -- the regression net for the (B) refactor.
+"""measure(full=True)/measure(full=False) parity tests -- the regression net for the (B) refactor.
 
 Three gaps the 2nd review surfaced:
 

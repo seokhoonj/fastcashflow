@@ -176,7 +176,7 @@ calendar_year)을 받는다. 워크북 입력층은 base table (필수) + A/E fa
 **결정**: 샘플 워크북의 table_id는 generic placeholder.
 - `MORTALITY_STD` (기존 `KMT_STD`)
 - `DISCOUNT_STD` (기존 `RFR_2025`)
-- `WAIVER_STD`, `MAINTENANCE_STD`, `INFLATION_STD`, `LAPSE_GA`, `LAPSE_FC`,
+- `WAIVER_STD`, `INFLATION_STD`, `LAPSE_GA`, `LAPSE_FC`,
   `INPATIENT_STD`, `CANCER_STD`, `ADB_STD` 등은 이미 generic
 
 **근거**:

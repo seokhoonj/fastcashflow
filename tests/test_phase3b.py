@@ -267,7 +267,7 @@ def test_to_wide_round_trips(tmp_path):
 
 
 def test_value_file_streams_long_form(tmp_path):
-    """value_file streams a long-form policies + coverages pair in chunks."""
+    """gmm.measure_stream streams a long-form policies + coverages pair in chunks."""
     
     asmp = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()

@@ -1,7 +1,7 @@
-"""Fast path surrender_cf -- measure() must match measure() BEL.
+"""Fast path surrender_cf -- measure(full=False) must match measure(full=True) BEL.
 
-``measure()`` has carried surrender value (해약환급금) since the surrender
-mechanism landed; ``measure()`` (the fused fast path) ignored it. This file
+``measure(full=True)`` has carried surrender value (해약환급금) since the surrender
+mechanism landed; the fused fast path ``measure(full=False)`` must match. This file
 pins the invariant that the two paths return the same BEL when a
 ``surrender_value_curve`` is set, across all CPU kernels:
 
