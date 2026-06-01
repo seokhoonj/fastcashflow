@@ -14,10 +14,8 @@ hand-validated tests.
 
 ## Installation
 
-Not yet on PyPI -- install directly from GitHub:
-
 ```bash
-pip install git+https://github.com/seokhoonj/fastcashflow.git
+pip install fastcashflow
 ```
 
 fastcashflow requires Python 3.10 or newer. Its core dependencies -- numpy,
@@ -204,7 +202,7 @@ practitioner can value their own book by editing those files alone.
 
 The full documentation -- a guided tutorial that builds up the IFRS 17
 measurement step by step, and the API reference -- is at
-<https://fastcashflow.readthedocs.io>.
+<https://docs.fastcashflow.org>.
 
 ## Performance
 
