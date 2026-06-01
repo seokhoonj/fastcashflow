@@ -1,8 +1,11 @@
+---
+orphan: true
+---
+
 # Naming conventions
 
 `fastcashflow`의 입력 워크북 (`basis.xlsx`)과 그에 매핑되는 코드의
-명명 규칙. 보험계리 용어와 충돌이 일어나지 않도록 굳혀 둔 약속. 각 결정의
-**근거**는 `docs/design-decisions.md` 참조.
+명명 규칙. 보험계리 용어와 충돌이 일어나지 않도록 굳혀 둔 약속.
 
 ## File & sheet
 

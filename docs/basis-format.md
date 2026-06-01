@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # 산출기초 (basis) 입력 포맷
 
 fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포맷입니다.
@@ -5,8 +9,7 @@ fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포
 (`basis.xlsx`) 을 `read_basis` 가 읽어 **산출기초** (`Basis` — 개별
 가정들의 묶음) 개체로 조립합니다.
 
-명명 규칙 전반은 `docs/naming-conventions.md`, 각 결정의 근거는
-`docs/design-decisions.md` 참조.
+명명 규칙 전반은 `docs/naming-conventions.md` 참조.
 
 ---
 
@@ -497,4 +500,4 @@ flat-rate 시나리오로 해석되어 `(n_scenarios,)` 로 반환.
 | Mortality improvement | 새 `improvement_tables` 시트 — 연도별 개선 곡선 | Task #10 완료 |
 
 원칙은 **엔진 = 최대 차원, 입력 = 단순~복잡까지 선택**. 안 채우면 no-op
-(곱셈자 1.0, shift 0). 자세한 설계 근거는 `docs/design-decisions.md` §8 참조.
+(곱셈자 1.0, shift 0).
