@@ -102,26 +102,36 @@ mp[0]  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m, premium_term=240m, cou
 │   ├─ lapse_annual         -> LAPSE_FC
 │   ├─ waiver_incidence     -> WAIVER_STD
 │   ├─ discount_annual      = ndarray len=1 [0.03, ..., 0.03]
-│   ├─ alpha_pct / flat     = 0 / 80000
-│   ├─ gamma_flat           = 60000
+│   ├─ expense_inflation    = ndarray len=1 [0.02, ..., 0.02]
+│   ├─ expense_items        = tuple  (len=2)
+│   │   ├─ ExpenseItem('acquisition', basis='alpha_fixed', value=80000)
+│   │   └─ ExpenseItem('maintenance', basis='gamma_fixed', value=60000)
 │   ├─ ra: method='confidence_level', conf=0.75
 │   └─ cv: mort=0.1 morb=0.12 long=0 disab=0
-├─ Coverages (rate-driven, n=3)
-│   ├─ 'INPATIENT'    method=MORBIDITY  risk=1  is_diagnosis=False  rate -> INPATIENT_STD
-│   ├─ 'CANCER'       method=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> CANCER_STD
-│   └─ 'ADB'          method=DEATH      risk=0  is_diagnosis=False  rate -> ADB_STD
+├─ Coverages (rate-driven, n=5)
+│   ├─ 'DEATH'           method=DEATH      risk=0  is_diagnosis=False  rate -> MORTALITY_STD
+│   ├─ 'INPATIENT'       method=MORBIDITY  risk=1  is_diagnosis=False  rate -> INPATIENT_STD
+│   ├─ 'CANCER'          method=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> CANCER_STD
+│   ├─ 'ADB'             method=DEATH      risk=0  is_diagnosis=False  rate -> ADB_STD
+│   └─ 'DISEASE_DEATH'   method=DEATH      risk=0  is_diagnosis=False  rate -> DISEASE_DEATH_STD
 ├─ Rates (annual, evaluated for this MP)
 │   ├─ axes: sex=0, issue_age=35, issue_class=0, elapsed_at_issue=0m
-│   ├─         year      mort(an)     lapse(an)    waiver(an)  INPATIENT(an)    CANCER(an)
-│   ├─            0      0.000805      0.100000      0.002000      0.030000      0.001469
-│   ├─            1      0.000886      0.096000      0.002000      0.030000      0.001587
+│   ├─         year      mort(an)     lapse(an)    waiver(an)     DEATH(an)  INPATIENT(an)    CANCER(an)       ADB(an)  DISEASE_DEATH(an)
+│   ├─            0      0.000805      0.100000      0.002000      0.000805      0.030000      0.001469      0.000350      0.000345
+│   ├─            1      0.000886      0.096000      0.002000      0.000886      0.030000      0.001587      0.000350      0.000354
 │   ...
-│   └─           19      0.004925      0.024000      0.002000      0.030000      0.006341
+│   └─           19      0.004925      0.024000      0.002000      0.004925      0.030000      0.006341      0.000350      0.000516
 ├─ Cash flows (annual sum over 240m horizon)
 │   ├─         year       premium         claim     morbidity       expense ...
 │   ├─            0       719,782        61,395             0       137,691 ...
 │   ├─            1       647,253        60,901             0        53,033 ...
 │   ...
+├─ Undiagnosed share (key months, per coverage)
+│   └─ 'CANCER':
+│       ├─ t=   0m: undiagnosed=1.000000
+│       ├─ t=  12m: undiagnosed=0.998531
+│       ...
+│       └─ t= 240m: undiagnosed=0.934845
 ├─ Discount factors (key months)
 │   ├─ t=   0m: ds=1.000000
 │   ├─ t=  12m: ds=0.970874
@@ -146,7 +156,7 @@ mp[0]  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m, premium_term=240m, cou
     └─ loss_component   =      797,279.41
 ```
 
-여덟 섹션이 한 화면에 다 들어옵니다. 검증 관점에서 가장 자주 보는 것:
+아홉 섹션이 한 화면에 다 들어옵니다. 검증 관점에서 가장 자주 보는 것:
 
 - **Basis / Coverages** — "엔진이 내가 의도한 테이블을 잡았나?"
   `MORTALITY_STD` / `LAPSE_FC` 가 매칭. 만약 워크북에 `LAPSE_GA` 만 있는
@@ -296,7 +306,7 @@ fcf.gmm.trace_csm_step(0, mp, basis, months=[1, 60, 120, 240])
 
 ```python
 import numpy as np
-from fastcashflow.assumptions import Basis
+from fastcashflow.basis import Basis
 from fastcashflow.modelpoints import ModelPoints
 
 # 사망률 함수 -- 연 0.05% 의 평탄 사망률 (보험금 대비 매우 낮은 율)
@@ -369,7 +379,15 @@ def shock(rate_fn, factor):
     wrapped._fcf_modifiers = getattr(rate_fn, '_fcf_modifiers', ()) + (f'x{factor}',)
     return wrapped
 
-shocked = replace(baseline, mortality_annual=shock(baseline.mortality_annual, 1.10))
+# 사망률 테이블 +10% -- 같은 MORTALITY_STD 가 in-force 감쇠(mortality_annual)
+# 와 사망보장 claim(DEATH 담보 rate) 양쪽을 굴리므로 두 자리를 함께 shock
+new_coverages = tuple(
+    replace(c, rate=shock(c.rate, 1.10)) if c.code == "DEATH" else c
+    for c in baseline.coverages
+)
+shocked = replace(baseline,
+                  mortality_annual = shock(baseline.mortality_annual, 1.10),
+                  coverages        = new_coverages)
 
 fcf.gmm.trace_diff(0, mp, baseline, shocked,
                     label_a='baseline', label_b='mort+10%')
@@ -389,8 +407,9 @@ fcf.gmm.trace_diff(0, mp, baseline, shocked,
 BEL 이 +14.22% 움직였습니다. 이 14% 가 어디서 왔는지 위쪽 섹션이
 설명해 줍니다:
 
-- **Rate deltas** — 매년 mortality 만 정확히 +10.00%. 다른 rate (lapse,
-  waiver, coverage) 는 변화 없음 (출력에서 자동 숨김).
+- **Rate deltas** — 매년 mortality(annual) 와 DEATH 담보 rate 가 (둘 다
+  같은 `MORTALITY_STD`) 정확히 +10.00%. lapse / waiver / 나머지 담보는
+  변화 없음 (출력에서 자동 숨김).
 - **Cash flow deltas** — claim 이 매년 +10% 근처. 동시에 premium 이
   소폭 감소 (-0.05% 정도) — 사망률이 올라가니 in-force 가 빨리 줄어
   미래 premium 이 적어지는 자연스러운 전파.
@@ -432,7 +451,7 @@ BEL 이 +14.22% 움직였습니다. 이 14% 가 어디서 왔는지 위쪽 섹�
 사망률 1%, 그 외 전부 0.
 
 `gmm.trace` 의 Basis 블록은 검증에 필수: 자신이 단순화한 항목이
-실제로 0 인지 (예: `gamma_flat = 0`) 확인합니다.
+실제로 0 인지 (예: `expense_items` 가 비어 있는지) 확인합니다.
 
 ### 함정 3 — shock 이 의도와 다르게 전파됨
 
