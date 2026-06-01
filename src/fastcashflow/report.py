@@ -28,8 +28,8 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import GMMMeasurement
-from fastcashflow.paa import PAAMeasurement
-from fastcashflow.vfa import VFAMeasurement
+from fastcashflow._paa import PAAMeasurement
+from fastcashflow._vfa import VFAMeasurement
 
 
 def _to_years(monthly: FloatArray) -> FloatArray:

@@ -28,8 +28,8 @@ from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import measure
 from fastcashflow.modelpoints import ModelPoints
-from fastcashflow.paa import measure_paa
-from fastcashflow.vfa import measure_vfa
+from fastcashflow._paa import measure_paa
+from fastcashflow._vfa import measure_vfa
 
 
 def _emit_tree(items: list[object], out: list[str], prefix: str) -> None:

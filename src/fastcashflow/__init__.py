@@ -62,7 +62,7 @@ from fastcashflow.movement import (
     reconcile,
     roll_forward,
 )
-from fastcashflow.paa import PAAMeasurement, measure_paa
+from fastcashflow._paa import PAAMeasurement, measure_paa
 from fastcashflow.plots import (
     plot_analysis_of_change,
     plot_cashflows,
@@ -72,7 +72,7 @@ from fastcashflow.plots import (
     plot_stochastic,
 )
 from fastcashflow.pricing import solve_premium
-from fastcashflow.reinsurance import ReinsuranceMeasurement, measure_reinsurance
+from fastcashflow._reinsurance import ReinsuranceMeasurement, measure_reinsurance
 from fastcashflow.report import Report, report
 from fastcashflow.statemodel import (
     STATE_MODELS,
@@ -87,7 +87,8 @@ from fastcashflow.trace import (
 )
 from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult, measure_tvog
-from fastcashflow.vfa import VFAMeasurement, measure_vfa
+from fastcashflow._vfa import VFAMeasurement, measure_vfa
+from fastcashflow import gmm, paa, reinsurance, vfa  # model namespaces
 
 __version__ = "0.1.0"
 __all__ = [

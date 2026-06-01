@@ -35,8 +35,8 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import GMMMeasurement
 from fastcashflow.numerics import _csm_kernel
-from fastcashflow.paa import PAAMeasurement
-from fastcashflow.vfa import VFAMeasurement
+from fastcashflow._paa import PAAMeasurement
+from fastcashflow._vfa import VFAMeasurement
 
 
 @dataclass(frozen=True, slots=True)
