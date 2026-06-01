@@ -93,7 +93,7 @@ def test_scalar_ae_factor_per_coverage(tmp_path):
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # base 0.02 * factor 1.5 = 0.03
     assert np.isclose(asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.03)
-    # mortality unchanged (no row for dth_main)
+    # mortality unchanged (no A/E row touches the mortality decrement)
     assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
 
 
