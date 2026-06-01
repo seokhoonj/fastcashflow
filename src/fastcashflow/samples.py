@@ -12,6 +12,8 @@ Two uses, deliberately distinct:
 The data is synthetic (calibrated demo figures), never sourced from real
 portfolios.
 """
+import shutil
+from importlib import resources
 from pathlib import Path
 
 from fastcashflow import io as _io
@@ -66,10 +68,12 @@ def export(dest_dir, kind: str = "gmm") -> Path:
         _io.save_sample_inforce_state(dest / "inforce_state.csv")
         return dest
     if kind == "vfa":
-        raise NotImplementedError(
-            "samples.export(kind='vfa') is not available yet; the VFA sample "
-            "is currently in-code (use fcf.samples.basis/model_points(kind='vfa'))"
-        )
+        base = resources.files("fastcashflow") / "sample_data"
+        for packaged, out in (("sample_vfa_basis.xlsx", "basis.xlsx"),
+                              ("sample_vfa_policies.csv", "policies.csv")):
+            with resources.as_file(base / packaged) as src:
+                shutil.copyfile(src, dest / out)
+        return dest
     raise ValueError(f"kind must be 'gmm' or 'vfa', got {kind!r}")
 
 

@@ -61,6 +61,8 @@ _NAMED_WIDE = frozenset((
     "premium_term_months", "premium_frequency_months",
     "annuity_frequency_months", "maturity_benefit",
     "annuity_payment", "disability_income", "disability_benefit",
+    "account_value", "minimum_crediting_rate",
+    "minimum_death_benefit", "minimum_accumulation_benefit",
 ))
 
 
@@ -911,7 +913,8 @@ def _wide_model_points(df: pl.DataFrame,
                 "premium_frequency_months", "annuity_frequency_months",
                 "maturity_benefit", "annuity_payment",
                 "disability_income", "disability_benefit", "account_value",
-                "minimum_crediting_rate"):
+                "minimum_crediting_rate", "minimum_death_benefit",
+                "minimum_accumulation_benefit"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     # Segment metadata -- optional string columns; route to value_segmented.
@@ -1403,8 +1406,9 @@ def load_sample_vfa_basis() -> Basis:
     :func:`load_sample_vfa_model_points`; ``measure_vfa`` takes a single
     :class:`Basis`.
     """
-    seg = load_sample_basis()[("TERM_LIFE_A", "FC")]
-    return replace(seg, coverages=(), investment_return=0.05, fund_fee=0.015)
+    source = resources.files("fastcashflow") / "sample_data" / "sample_vfa_basis.xlsx"
+    with resources.as_file(source) as path:
+        return read_basis(path)[("VAR_ANNUITY_A", "BANCA")]
 
 
 def load_sample_vfa_model_points() -> ModelPoints:
@@ -1419,17 +1423,9 @@ def load_sample_vfa_model_points() -> ModelPoints:
     :func:`load_sample_vfa_basis`; generate underlying-return scenarios
     to value the time value of the guarantees (see ``examples/vfa.py``).
     """
-    return ModelPoints(
-        issue_age=np.array([45, 50, 40]),
-        level_premium=np.zeros(3),
-        term_months=np.array([120, 120, 180]),
-        account_value=np.array([1.0e8, 2.0e8, 5.0e7]),
-        minimum_crediting_rate=np.array([0.02, 0.02, 0.02]),
-        minimum_death_benefit=np.array([1.1e8, 0.0, 5.5e7]),
-        minimum_accumulation_benefit=np.array([1.0e8, 2.1e8, 0.0]),
-        product_code=np.array(["VAR_ANNUITY_A"] * 3),
-        channel_code=np.array(["BANCA"] * 3),
-    )
+    source = resources.files("fastcashflow") / "sample_data" / "sample_vfa_policies.csv"
+    with resources.as_file(source) as path:
+        return read_model_points(path)
 
 
 def _drop_sample_table(filename: str, dest: Path | str) -> Path:
