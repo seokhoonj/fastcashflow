@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastcashflow"
-version = "0.1.0"
+version = "0.1.0.dev1"
 description = "Fast IFRS 17 GMM cash flow projection engine (BEL, RA, CSM)"
 readme = "README.md"
 license = "MPL-2.0"

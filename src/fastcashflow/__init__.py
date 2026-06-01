@@ -79,7 +79,7 @@ from fastcashflow.tvog import TVOGResult
 from fastcashflow._vfa import VFAMeasurement
 from fastcashflow import gmm, paa, reinsurance, samples, vfa  # namespaces
 
-__version__ = "0.1.0"
+__version__ = "0.1.0.dev1"
 __all__ = [
     "Basis", "ModelPoints", "measure_in_force",
     "value_in_force", "clear_codegen_cache",
