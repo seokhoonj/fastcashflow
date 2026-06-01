@@ -217,17 +217,17 @@ def test_sample_data_dir_exposes_bundled_files():
 def test_describe_basis_renders_both_shapes(capsys):
     """describe_basis prints a tree for an Basis and for a dict."""
     from fastcashflow import describe_basis
-    basis_by_segment = fcf.samples.basis()
-    basis = next(iter(basis_by_segment.values()))
+    basis = fcf.samples.basis()
+    segment_basis = next(iter(basis.values()))
 
-    describe_basis(basis)
+    describe_basis(segment_basis)
     out_one = capsys.readouterr().out
     assert out_one.startswith("Basis")
     assert "상태 전이율" in out_one
     assert "state_model" in out_one
     assert "coverages" in out_one
 
-    describe_basis(basis_by_segment)
+    describe_basis(basis)
     out_dict = capsys.readouterr().out
     assert "(7 segments)" in out_dict
     # every segment unfolded -- both ('TERM_LIFE_A', 'GA') and ('TERM_LIFE_A', 'FC') appear

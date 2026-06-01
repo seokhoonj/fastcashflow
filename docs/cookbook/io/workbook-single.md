@@ -143,14 +143,14 @@ with tempfile.TemporaryDirectory() as tmp:
     cm_path   = fcf.save_sample_calculation_methods(tmp / "calculation_methods.csv")  # 산출방식
 
     # 2) 워크북을 읽으면 (product_code, channel_code) -> Basis 사전
-    basis_by_segment = fcf.read_basis(asmp_path)
-    print("segments =", sorted(basis_by_segment))
+    basis = fcf.read_basis(asmp_path)
+    print("segments =", sorted(basis))
 
     # 3) 한 segment 의 가정 개체를 꺼내 본다
-    basis = basis_by_segment[("TERM_LIFE_A", "FC")]
-    print("ra_confidence   =", basis.ra_confidence)
-    print("mortality_cv    =", basis.mortality_cv)
-    print("discount_annual =", basis.discount_annual)
+    segment_basis = basis[("TERM_LIFE_A", "FC")]
+    print("ra_confidence   =", segment_basis.ra_confidence)
+    print("mortality_cv    =", segment_basis.mortality_cv)
+    print("discount_annual =", segment_basis.discount_annual)
 
     # 4) 모델포인트 = 세 파일을 한 개체로
     mp = fcf.read_model_points(pol_path, coverages=cov_path,
@@ -158,7 +158,7 @@ with tempfile.TemporaryDirectory() as tmp:
     print("n model points  =", mp.issue_age.shape[0])
 
     # 5) 평가 -- 각 계약을 자기 (product_code, channel_code) 가정으로 라우팅 (6.2 에서 자세히)
-    val = fcf.gmm.measure(mp, basis_by_segment, full=False)
+    val = fcf.gmm.measure(mp, basis, full=False)
     print("BEL sum =", f"{val.bel.sum():,.0f}")
     print("CSM sum =", f"{val.csm.sum():,.0f}")
 ```
