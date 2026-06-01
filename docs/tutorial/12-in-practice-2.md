@@ -13,7 +13,7 @@
 분석하기, 리포트로 정리하기 — 를 다룹니다.
 
 세 절 모두 같은 측정 결과를 씁니다. 8장에서 쓴 내장 샘플 — 패키지에
-저장돼 있는 계약 8건과 그에 맞는 가정 — 을 `fcf.samples.*`로 그대로
+저장돼 있는 계약 11건과 그에 맞는 가정 — 을 `fcf.samples.*`로 그대로
 불러와 한 번 측정해 둡니다. 따로 파일을 준비할 필요가 없습니다.
 
 ```python
@@ -21,7 +21,7 @@ import fastcashflow as fcf
 
 model_points = fcf.samples.model_points()              # 패키지 샘플 포트폴리오
 basis        = fcf.samples.basis()               # {(product, channel): Basis}
-assumptions  = basis[("TERM_LIFE_A", "GA")]                # 한 세그먼트 선택
+assumptions  = basis[("TERM_LIFE_A", "FC")]                # 한 세그먼트 선택 (이익 나는 채널)
 m            = fcf.gmm.measure(model_points, assumptions)
 ```
 
@@ -87,11 +87,11 @@ print(recon[0])                                     # 첫 보고기간
 ```
 Reconciliation -- months 1-12
                                BEL                RA               CSM
-Opening                -17,618,497         1,269,709        16,348,789
+Opening                 20,955,426         1,854,622         1,488,802
 Future service                   0                 0                 0
-Finance                   -539,428            36,563           463,678
-Release                  1,526,019          -108,963        -1,919,700
-Closing                -16,631,907         1,197,309        14,892,767
+Finance                    680,026            54,061            41,731
+Release                  4,534,009          -113,133          -211,484
+Closing                 26,169,461         1,795,550         1,319,048
 ```
 
 `recon`은 보고기간 수만큼의 변동분석입니다. 표는 BEL·RA·CSM을 열로,
@@ -143,14 +143,14 @@ print(rep)
 실행하면 연 단위로 묶은 손익 리포트가 표로 나옵니다.
 
 ```
-IFRS 17 report -- annual portfolio totals (first 5 of 20 years)
+IFRS 17 report -- annual portfolio totals (first 5 of 70 years)
                         Year 1      Year 2      Year 3      Year 4      Year 5
-Insurance revenue    6,208,072   3,481,125   3,227,525   3,034,716   2,893,120
-Service expense      4,179,678   1,652,084   1,555,724   1,486,056   1,439,495
-Service result       2,028,394   1,829,042   1,671,801   1,548,660   1,453,625
-Finance expense        -39,187       4,970      45,833      79,226     106,415
-CSM accretion          463,678     422,734     385,750     351,747     319,924
-CSM release          1,919,700   1,727,699   1,575,954   1,456,707   1,364,169
+Insurance revenue    3,411,345   2,423,241   2,332,821   2,258,477   2,198,549
+Service expense      3,087,006   2,117,242   2,042,607   1,981,782   1,933,371
+Service result         324,339     305,999     290,214     276,695     265,179
+Finance expense        775,818     935,062   1,066,822   1,168,193   1,237,258
+CSM accretion           41,731      36,855      32,269      27,927      23,790
+CSM release            211,484     196,034     182,518     170,679     160,301
 ```
 
 `print`은 `Report`를 모델포인트 전체로 합산하고 연 단위로 묶어, 앞 다섯

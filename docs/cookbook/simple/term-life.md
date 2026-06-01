@@ -290,16 +290,16 @@ print(f"Loss: {fast.loss_component.sum():>15,.0f}")
 
 ```
 <full=True — 시점 0 합계>
-BEL :      34,150,887
-RA  :         850,840
+BEL :      33,470,642
+RA  :         847,965
 CSM :               0
-Loss:      35,001,727
+Loss:      34,318,606
 
 <full=False — 시점 0>
-BEL :      34,150,887
-RA  :         850,840
+BEL :      33,470,642
+RA  :         847,965
 CSM :               0
-Loss:      35,001,727
+Loss:      34,318,606
 ```
 
 `full=True` 와 `full=False` 의 시점 0 결과가 정확히 일치 — parity 가 항상
@@ -352,19 +352,19 @@ basis = fcf.samples.basis()
 
 for key in basis:
     val = fcf.gmm.measure(mp, basis[key], full=False)
-    print(f"{key}: BEL={val.bel.sum():>14,.0f}  RA={val.ra.sum():>9,.0f}  CSM={val.csm.sum():>14,.0f}")
+    print(f"{str(key):22}: BEL={val.bel.sum():>14,.0f}  RA={val.ra.sum():>9,.0f}  CSM={val.csm.sum():>14,.0f}")
 ```
 
 출력:
 
 ```
-('TERM_LIFE_A', 'FC')  : BEL=    21,672,438  RA=1,870,302  CSM=     1,488,802
-('TERM_LIFE_A', 'GA')  : BEL=    34,150,887  RA=  850,840  CSM=             0
-('HEALTH_A', 'FC')     : BEL=    21,892,167  RA=1,870,302  CSM=     1,408,900
-('HEALTH_A', 'GA')     : BEL=    34,480,481  RA=  850,840  CSM=             0
-('HEALTH_A', 'TM')     : BEL=    32,942,377  RA=  850,840  CSM=             0
-('WHOLE_LIFE_A', 'FC') : BEL=    22,990,813  RA=1,870,302  CSM=     1,052,598
-('WHOLE_LIFE_A', 'GA') : BEL=    36,348,179  RA=  850,840  CSM=             0
+('TERM_LIFE_A', 'FC') : BEL=    20,955,426  RA=1,854,622  CSM=     1,488,802
+('TERM_LIFE_A', 'GA') : BEL=    33,470,642  RA=  847,965  CSM=             0
+('HEALTH_A', 'FC')    : BEL=    21,175,155  RA=1,854,622  CSM=     1,408,900
+('HEALTH_A', 'GA')    : BEL=    33,800,235  RA=  847,965  CSM=             0
+('HEALTH_A', 'TM')    : BEL=    32,262,131  RA=  847,965  CSM=             0
+('WHOLE_LIFE_A', 'FC'): BEL=    22,273,802  RA=1,854,622  CSM=     1,052,598
+('WHOLE_LIFE_A', 'GA'): BEL=    35,667,934  RA=  847,965  CSM=             0
 ```
 
 같은 보유계약, 같은 사망률 · 할인율이지만 채널의 해지율 · 신사업비
