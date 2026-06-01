@@ -28,18 +28,33 @@ No files to prepare — measure the bundled sample portfolio:
 ```python
 import fastcashflow as fcf
 
-basis      = fcf.load_sample_assumptions()       # {(product, channel): Assumptions}
-assumptions = basis[("TERM_LIFE_A", "FC")]
-m          = fcf.measure(fcf.load_sample_model_points(), assumptions)
-print(m.bel[:, 0], m.ra[:, 0], m.csm[:, 0])    # BEL / RA / CSM at issue
+# load the bundled sample inputs
+basis       = fcf.load_sample_assumptions()   # {(product, channel): Assumptions}
+assumptions = basis[("TERM_LIFE_A", "FC")]    # pick one segment
+mp          = fcf.load_sample_model_points()
+
+# measure the contract liability -- portfolio totals at issue
+m = fcf.measure(mp, assumptions)
+print(f"model points : {m.bel.shape[0]:>15,}")
+print(f"BEL          : {m.bel[:, 0].sum():>15,.0f}")
+print(f"RA           : {m.ra[:, 0].sum():>15,.0f}")
+print(f"CSM          : {m.csm[:, 0].sum():>15,.0f}")
 ```
 
-For a single hand-built contract:
+```text
+model points :              11
+BEL          :      20,955,426
+RA           :       1,854,622
+CSM          :       1,488,802
+```
+
+Or build a single contract by hand:
 
 ```python
 import numpy as np
 import fastcashflow as fcf
 
+# flat actuarial basis -- 0.1% annual mortality, 1% lapse, 3% discount
 mort = lambda sex, age, dur: np.full(age.shape, 0.001)
 asmp = fcf.Assumptions(
     mortality_annual = mort,
@@ -49,21 +64,43 @@ asmp = fcf.Assumptions(
     mortality_cv     = 0.10,
     coverages        = (fcf.CoverageRate("DEATH", mort),),
 )
+
+# one policy -- age 40, 100M death benefit, 70k monthly premium, 10-year term
 mp = fcf.ModelPoints.single(
-    issue_age=40, benefits={0: 100_000_000},
-    level_premium=70_000, term_months=120,
-    calculation_methods={"DEATH": fcf.CalculationMethod.DEATH},
+    issue_age           = 40,
+    benefits            = {0: 100_000_000},
+    level_premium       = 70_000,
+    term_months         = 120,
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
+
 r = fcf.measure(mp, asmp)
-print(r.bel[0, 0], r.ra[0, 0], r.csm[0, 0])
+print(f"BEL : {r.bel[0, 0]:>12,.0f}")
+print(f"RA  : {r.ra[0, 0]:>12,.0f}")
+print(f"CSM : {r.csm[0, 0]:>12,.0f}")
+```
+
+```text
+BEL :   -6,092,691
+RA  :       55,484
+CSM :    6,037,206
 ```
 
 For portfolio-scale valuation, `value()` runs a numba parallel kernel and
-returns only the headline numbers per model point:
+returns the same headline numbers, far faster:
 
 ```python
-val = fcf.value(model_points, assumptions)
-print(val.bel, val.ra, val.csm)
+# same sample portfolio, fast scalar kernel -- headline numbers only
+val = fcf.value(fcf.load_sample_model_points(), assumptions)
+print(f"BEL : {val.bel.sum():>15,.0f}")
+print(f"RA  : {val.ra.sum():>15,.0f}")
+print(f"CSM : {val.csm.sum():>15,.0f}")
+```
+
+```text
+BEL :      20,955,426
+RA  :       1,854,622
+CSM :       1,488,802
 ```
 
 ## Features
