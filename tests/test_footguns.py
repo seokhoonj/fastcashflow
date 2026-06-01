@@ -16,10 +16,10 @@ def _flat(annual_q):
 
 
 # ---------------------------------------------------------------------------
-# value_segmented: '|' in product_code / channel_code is the key separator
+# segmented_measure: '|' in product_code / channel_code is the key separator
 # ---------------------------------------------------------------------------
 
-def test_value_segmented_rejects_pipe_in_product_code():
+def test_segmented_measure_rejects_pipe_in_product_code():
     mp = ModelPoints(
         issue_age=np.array([40.0]),
         level_premium=np.array([12_000.0]),
@@ -35,7 +35,7 @@ def test_value_segmented_rejects_pipe_in_product_code():
         measure(mp, basis, full=False)
 
 
-def test_value_segmented_rejects_pipe_in_channel_code():
+def test_segmented_measure_rejects_pipe_in_channel_code():
     mp = ModelPoints(
         issue_age=np.array([40.0]),
         level_premium=np.array([12_000.0]),

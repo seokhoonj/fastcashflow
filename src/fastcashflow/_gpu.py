@@ -4,9 +4,9 @@ Imported lazily by ``engine.value(backend="gpu")``; never loaded for CPU-only
 use, so a machine without CUDA can still import and use the rest of the
 package.
 
-The kernel mirrors the CPU codegen value kernel
-(``engine._get_value_kernel_codegen``) exactly; the
-cross-check test ``test_value_gpu_matches_cpu`` guards against divergence.
+The kernel mirrors the CPU codegen fast kernel
+(``engine._get_fast_kernel_codegen``) exactly; the
+cross-check test ``test_fast_gpu_matches_cpu`` guards against divergence.
 """
 from __future__ import annotations
 
@@ -175,7 +175,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     loss_component[mp] = max(0.0, fcf)
 
 
-def value_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
+def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               premium_state, benefit_state, start_state, issue_index, sex,
               term_months, count, level_premium, single_premium,
               premium_term_months, premium_frequency_months, annuity_frequency_months,

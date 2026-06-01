@@ -4,7 +4,7 @@ Phase (b) generalises the in-force projection from a single survival track to
 an N-state Markov occupancy model. In-force is an occupancy vector ``occ`` over
 a small set of transient states; each month a transition matrix advances it,
 ``occ[t+1] = occ[t] @ P[t]``. The kernels -- ``projection._project_kernel``,
-the engine's codegen value kernel and the CUDA kernel -- run that recursion on a flat
+the engine's codegen fast kernel and the CUDA kernel -- run that recursion on a flat
 edge list and are state-machine-agnostic: they carry no hardcoded state set.
 
 This module is the product-facing layer. A :class:`StateModel` declares the

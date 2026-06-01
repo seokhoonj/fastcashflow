@@ -5,7 +5,7 @@ valuation runs the projection under many economic scenarios and reports the
 *distribution* of the liability -- which feeds the percentile-based risk and
 capital measures a single deterministic run cannot give.
 
-``value_stochastic`` takes the scenarios as input -- fastcashflow is the
+``measure_stochastic`` takes the scenarios as input -- fastcashflow is the
 engine, not an economic scenario generator -- and values each one. Running N
 scenarios over millions of seriatim policies is precisely what the engine's
 speed exists for: a slow engine cannot do seriatim stochastic at scale at all.
@@ -132,7 +132,7 @@ def _stochastic_inception_kernel(
     return bel_out, ra_out, csm_out, loss_out
 
 
-def value_stochastic(
+def measure_stochastic(
     model_points: ModelPoints, basis: Basis, scenarios: FloatArray
 ) -> StochasticResult:
     """Value a portfolio under each economic scenario -- the liability distribution.

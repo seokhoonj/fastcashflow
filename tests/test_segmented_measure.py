@@ -1,4 +1,4 @@
-"""ModelPoints.subset + value_segmented -- per-segment portfolio valuation.
+"""ModelPoints.subset + segmented_measure -- per-segment portfolio valuation.
 
 `ModelPoints` may carry per-row `product` / `channel` strings naming each
 contract's segment. `measure(mp, basis, full=False)` splits the portfolio by
@@ -81,7 +81,7 @@ def test_subset_slices_product_and_channel_when_set():
 def test_subset_preserves_issue_class_and_elapsed_months():
     """The newer per-row fields (issue_class for the UW class axis, and
     elapsed_months for the in-force valuation date) must round-trip
-    through subset(); otherwise value_segmented silently resets them to
+    through subset(); otherwise segmented_measure silently resets them to
     zero on the segmented portfolio."""
     mp = ModelPoints(
         issue_age=np.array([30, 40, 50]),
@@ -108,10 +108,10 @@ def test_subset_leaves_product_none_when_unset():
 
 
 # ---------------------------------------------------------------------------
-# value_segmented
+# segmented_measure
 # ---------------------------------------------------------------------------
 
-def test_value_segmented_routes_each_mp_to_its_segment():
+def test_segmented_measure_routes_each_mp_to_its_segment():
     """Each mp's BEL should equal the measure() result on its own segment."""
     asmp_high = _flat_asmp(discount=0.03)               # lower discount -> larger BEL
     asmp_low = _flat_asmp(discount=0.10)                # higher discount -> smaller BEL
@@ -139,7 +139,7 @@ def test_value_segmented_routes_each_mp_to_its_segment():
     assert not np.isclose(val.bel[0], val.bel[1])
 
 
-def test_value_segmented_falls_back_to_single_segment_when_no_product():
+def test_segmented_measure_falls_back_to_single_segment_when_no_product():
     """A single-segment basis works even when product/channel aren't set."""
     asmp = _flat_asmp()
     basis = {("TERM_A", ""): asmp}
@@ -154,7 +154,7 @@ def test_value_segmented_falls_back_to_single_segment_when_no_product():
     assert np.allclose(val.bel, expected.bel)
 
 
-def test_value_segmented_rejects_multi_segment_basis_without_keys():
+def test_segmented_measure_rejects_multi_segment_basis_without_keys():
     """Multi-segment basis + no product/channel on MPs -> raise."""
     basis = {("TERM_A", "GA"): _flat_asmp(), ("TERM_A", "FC"): _flat_asmp(discount=0.10)}
     mp = ModelPoints(
@@ -167,7 +167,7 @@ def test_value_segmented_rejects_multi_segment_basis_without_keys():
         measure(mp, basis, full=False)
 
 
-def test_value_segmented_rejects_unknown_segment():
+def test_segmented_measure_rejects_unknown_segment():
     """A model point pointing at a segment not in basis -> raise."""
     basis = {("TERM_A", "GA"): _flat_asmp()}
     mp = ModelPoints(
@@ -182,9 +182,9 @@ def test_value_segmented_rejects_unknown_segment():
         measure(mp, basis, full=False)
 
 
-def test_value_segmented_with_sample_basis():
+def test_segmented_measure_with_sample_basis():
     """End-to-end smoke -- the bundled sample basis has two segments and
-    ``value_segmented`` routes per-mp valuations through it."""
+    ``segmented_measure`` routes per-mp valuations through it."""
     
     basis = fcf.samples.basis()                    # multi-segment sample
     mp = ModelPoints(

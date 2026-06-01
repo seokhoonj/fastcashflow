@@ -71,7 +71,7 @@ def test_value_onerous():
 
 @pytest.mark.skipif(not cuda.is_available(), reason="no CUDA device available")
 @pytest.mark.filterwarnings("ignore::numba.core.errors.NumbaPerformanceWarning")
-def test_value_gpu_matches_cpu():
+def test_fast_gpu_matches_cpu():
     """The GPU backend reproduces the CPU backend exactly."""
     def mortality_annual(sex, issue_age, duration):
         attained = issue_age + duration
@@ -111,7 +111,7 @@ def test_value_gpu_matches_cpu():
 
 @pytest.mark.skipif(not cuda.is_available(), reason="no CUDA device available")
 @pytest.mark.filterwarnings("ignore::numba.core.errors.NumbaPerformanceWarning")
-def test_value_gpu_matches_cpu_with_transition():
+def test_fast_gpu_matches_cpu_with_transition():
     """GPU and CPU agree under a waiver transition with a diagnosis coverage --
     the GPU two-track in-force and diagnosis pool reproduce the CPU kernel."""
     def flat(rate):

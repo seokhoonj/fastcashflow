@@ -17,7 +17,7 @@ Model points come in two shapes, both producing the same ``ModelPoints``:
 ``ModelPoints.to_long`` convert between them.
 
 The core engine stays identifier-free: the kernel never needs a policy id, so
-none is carried through ``ModelPoints`` or ``Valuation``. Identifiers are a
+none is carried through ``ModelPoints`` or ``GMMMeasurement``. Identifiers are a
 file-boundary concern -- pass them to :func:`write_measurement` (or via
 ``measure_stream``'s ``id_column``) to join results back to policies.
 """
@@ -46,7 +46,7 @@ from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 # ``engine`` is the largest module in the package (codegen + the numba CPU
 # kernels) and importing it at module load pulls all of that into any
 # downstream that needs the I/O layer. The two engine names used here --
-# ``Valuation`` for write_measurement's type hint and ``value`` for the
+# ``GMMMeasurement`` for write_measurement's type hint and ``measure`` for the
 # ``measure_stream`` stream -- are imported under TYPE_CHECKING (for the hint)
 # and lazily inside ``measure_stream`` (for the call), so a script that only
 # reads model points or writes a results frame never imports engine.py.
@@ -917,7 +917,7 @@ def _wide_model_points(df: pl.DataFrame,
                 "minimum_accumulation_benefit"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
-    # Segment metadata -- optional string columns; route to value_segmented.
+    # Segment metadata -- optional string columns; route the segmented measure.
     for opt in ("product_code", "channel_code"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
@@ -1637,7 +1637,7 @@ def read_scenarios(path: Path | str) -> FloatArray:
 
     Returns a numpy ``float64`` array of shape ``(n_scenarios, n_time)``,
     or ``(n_scenarios,)`` when the file has a single column (flat-rate
-    scenarios). The result is what :func:`value_stochastic` and
+    scenarios). The result is what :func:`measure_stochastic` and
     :func:`measure_tvog` accept as their ``scenarios`` / ``return_scenarios``
     input.
 
@@ -1654,7 +1654,7 @@ def read_scenarios(path: Path | str) -> FloatArray:
 
 
 # ---------------------------------------------------------------------------
-# Valuation results
+# Measurement results
 # ---------------------------------------------------------------------------
 
 def write_measurement(

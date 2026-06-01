@@ -2,7 +2,7 @@
 
 ``read_scenarios(path)`` accepts a 2-D table (one row per scenario, one
 column per projection month) in parquet / csv / xlsx / feather and
-returns the numpy array shape :func:`value_stochastic` and
+returns the numpy array shape :func:`measure_stochastic` and
 :func:`measure_tvog` consume. A single-column file collapses to a 1-D
 ``(n_scenarios,)`` array of flat-rate scenarios.
 """
@@ -64,8 +64,8 @@ def test_read_scenarios_single_column_collapses_to_1d(tmp_path):
     assert np.allclose(out, flat)
 
 
-def test_read_scenarios_feeds_value_stochastic(tmp_path):
-    """End-to-end: file -> read_scenarios -> value_stochastic."""
+def test_read_scenarios_feeds_measure_stochastic(tmp_path):
+    """End-to-end: file -> read_scenarios -> measure_stochastic."""
     n_scenarios, n_time = 4, 24
     raw = np.array([[0.02] * n_time, [0.03] * n_time,
                     [0.04] * n_time, [0.05] * n_time])

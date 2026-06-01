@@ -136,7 +136,7 @@ class ModelPoints:
     # all shift by ``elapsed_months[mp]``.
     elapsed_months: IntArray | None = None
     # Segment metadata -- the (product_code, channel_code) keys that map a
-    # model point to its assumption set when ``value_segmented`` splits a
+    # model point to its assumption set when ``measure`` splits a
     # portfolio. Object arrays of string labels (or None for a
     # single-segment book). The ``_code`` suffix matches the rest of the
     # codebase (coverage_code, table_id ...) -- short, machine-friendly
@@ -380,8 +380,8 @@ class ModelPoints:
         rebuilt: each selected row's coverage slice
         ``coverage_index[coverage_offset[i]:coverage_offset[i+1]]`` is concatenated, and
         ``coverage_offset`` is reset to the new running cumulative sum. Used by
-        :func:`fastcashflow.engine.value_segmented` to split a portfolio
-        by (product, channel) before per-segment valuation.
+        :func:`fastcashflow.gmm.measure` to split a portfolio
+        by (product, channel) before per-segment measurement.
         """
         idx = np.asarray(indices, dtype=np.int64)
 

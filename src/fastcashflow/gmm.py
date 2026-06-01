@@ -8,7 +8,7 @@ liability distribution; ``measure_stream`` is the out-of-core variant;
 """
 from fastcashflow.engine import measure
 from fastcashflow.io import measure_stream
-from fastcashflow.stochastic import value_stochastic as stochastic
+from fastcashflow.stochastic import measure_stochastic as stochastic
 from fastcashflow.trace import (
     show_trace_bel_step as trace_bel_step,
     show_trace_csm_step as trace_csm_step,

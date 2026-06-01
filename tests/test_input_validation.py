@@ -615,7 +615,7 @@ def test_issue_age_integer_does_not_warn(recwarn):
     assert not fractional
 
 
-def test_value_segmented_matches_nfc_and_nfd_codes():
+def test_segmented_measure_matches_nfc_and_nfd_codes():
     """Composed (NFC) vs decomposed (NFD) Unicode codes match the same segment.
 
     A product_code on the model_points side composed (e.g. ``café`` =

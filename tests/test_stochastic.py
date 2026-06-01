@@ -1,6 +1,6 @@
 """Stochastic-valuation validation -- the liability distribution over scenarios.
 
-Each scenario is a discount rate; ``value_stochastic`` values the portfolio
+Each scenario is a discount rate; ``measure_stochastic`` values the portfolio
 under every scenario with the fused kernel and records the portfolio totals,
 so the distribution -- mean, percentiles -- can be read off.
 """
