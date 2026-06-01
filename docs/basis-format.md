@@ -41,9 +41,11 @@ fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포
 reader 호출:
 
 ```python
-basis = read_basis("basis.xlsx")
-# basis: dict[(product_code, channel_code), Basis]
-basis = basis[("TERM_LIFE_A", "GA")]
+import fastcashflow as fcf
+
+fcf.save_sample_basis("basis.xlsx")   # 견본 (본인 파일 있으면 생략)
+basis = fcf.read_basis("basis.xlsx")  # dict[(product_code, channel_code), Basis]
+basis = basis[("TERM_LIFE_A", "GA")]  # 한 세그먼트
 ```
 
 ### 1.1 `_meta` 시트와 `schema_version`
@@ -471,13 +473,20 @@ reader (`read_basis(path)`) 가 워크북을 읽어 세그먼트별 `Basis`를
 
 ```python
 import fastcashflow as fcf
+import numpy as np
+import polars as pl
 
+mp    = fcf.samples.model_points()
+basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+
+# 견본 시나리오 파일 (보통은 회사가 만든 파일; 본인 파일 있으면 이 블록 생략)
 # wide-format 2-D table: 한 행 = 한 scenario, 한 열 = 한 projection month
-scenarios = fcf.read_scenarios("discount_scenarios.parquet")
-# shape (n_scenarios, n_time) 의 numpy array
+n_time = int(mp.term_months.max())
+rng = np.random.default_rng(0)
+pl.DataFrame(0.03 + rng.normal(0, 0.01, (256, n_time))).write_parquet("discount_scenarios.parquet")
 
-# gmm.stochastic / vfa.tvog 에 직접 전달
-result = fcf.gmm.stochastic(model_points, basis, scenarios)
+scenarios = fcf.read_scenarios("discount_scenarios.parquet")  # shape (n_scenarios, n_time)
+result = fcf.gmm.stochastic(mp, basis, scenarios)             # gmm.stochastic / vfa.tvog 에 직접 전달
 ```
 
 지원 형식: `.parquet`, `.csv`, `.xlsx`, `.feather`. 한 열짜리 파일은
