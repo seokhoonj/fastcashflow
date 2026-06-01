@@ -68,7 +68,7 @@ print(val.bel, val.ra, val.csm)
 
 ## Features
 
-- **Three IFRS 17 models** — GMM (BEL / RA / CSM), PAA and VFA (variable-fee /
+- **IFRS 17 models** — GMM (BEL / RA / CSM), PAA and VFA (variable-fee /
   account-value contracts with GMDB / GMAB guarantees).
 - **Projection** — deterministic monthly cash flows; select-and-ultimate
   mortality, duration-based lapse, mid-month discounting, α / β / γ expenses,
@@ -82,7 +82,7 @@ print(val.bel, val.ra, val.csm)
 
 ## Performance
 
-Measured on an 8-core desktop (Ryzen 7 3700X), 120-month term projection:
+Measured on an 8-core desktop (Ryzen 7 3700X), 120-month projection:
 
 | Model points | `value()` |
 |---|---|
