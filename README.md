@@ -86,11 +86,12 @@ Measured on an 8-core desktop (Ryzen 7 3700X), 120-month term projection:
 
 | Model points | `value()` |
 |---|---|
-| 1,000,000 | 0.05 s |
-| 5,000,000 | 0.30 s |
+| 1,000,000 | 0.07 s |
+| 5,000,000 | 0.41 s |
 
 `value()` carries in-force as a scalar and materialises no intermediate arrays.
-A 10M-row parquet round-trip — read, value, write — takes about one second.
+A 10M-row parquet round-trip — read, value, write — takes about 2.5 seconds,
+of which `value()` itself is under one second.
 Run `examples/benchmark.py` to reproduce on your machine.
 
 ## Documentation
