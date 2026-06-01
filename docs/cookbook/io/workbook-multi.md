@@ -22,7 +22,7 @@ portfolio 는 여러 상품·채널이 섞여 있고, 각 계약은 자기 segme
 가 dict 일 때 각 모델포인트의 `(product_code, channel_code)` 를 보고 사전
 에서 맞는 `Basis` 를 골라 적용합니다 (dict 라우팅은 headline 전용이라
 `full=False`). `basis` 는 [6.1](workbook-single) 의 `read_basis` 가 돌려준
-바로 그 `(product, channel) -> Basis` 사전입니다.
+바로 그 `(product_code, channel_code) -> Basis` 사전입니다.
 
 ```python
 import numpy as np
@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory() as tmp:
     mp = fcf.read_model_points(pol_path, coverages=cov_path,
                                calculation_methods=cm_path)
 
-    # 각 계약을 자기 (product, channel) 가정으로 라우팅
+    # 각 계약을 자기 (product_code, channel_code) 가정으로 라우팅
     val = fcf.gmm.measure(mp, basis, full=False)
     print("BEL  sum =", f"{val.bel.sum():,.0f}")
     print("RA   sum =", f"{val.ra.sum():,.0f}")
@@ -171,14 +171,14 @@ dict basis 라우팅은 모델포인트에 두 코드가 모두 채워져 있어
 ### 함정 2 — basis 에 없는 segment
 
 모델포인트에 `(WHOLE_LIFE_B, TM)` 이 있는데 워크북에 그 segment 행이 없으면
-조회가 실패합니다. portfolio 의 모든 `(product, channel)` 조합이 `segments`
+조회가 실패합니다. portfolio 의 모든 `(product_code, channel_code)` 조합이 `segments`
 시트에 행으로 존재해야 합니다.
 
 ### 함정 3 — 채널 빈 문자열 vs 누락
 
 단일 채널 상품은 `channel_code` 를 **빈 문자열** `""` 로 두고 `segments` 도
 같은 빈 문자열 행을 둡니다 (`None` / 누락이 아니라). 키는 항상
-`(product, channel)` 2-튜플이고 빈 문자열도 유효한 채널 값입니다.
+`(product_code, channel_code)` 2-튜플이고 빈 문자열도 유효한 채널 값입니다.
 
 ## 인접 레시피
 

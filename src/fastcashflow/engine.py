@@ -199,7 +199,7 @@ def measure(
     choice for large-scale valuation.
 
     ``basis`` may be a single :class:`Basis` (uniform portfolio) or a
-    ``{(product, channel): Basis}`` dict; with a dict each segment is routed
+    ``{(product_code, channel_code): Basis}`` dict; with a dict each segment is routed
     to its own basis. ``backend`` (``"cpu"``/``"gpu"``) and ``discount_curve``
     apply to the fast path only.
     """
@@ -1996,10 +1996,10 @@ def _measure_segmented(
 ) -> GMMMeasurement:
     """Value a multi-segment portfolio: split, value each, concatenate.
 
-    ``basis`` is the ``{(product, channel): Basis}`` dictionary
+    ``basis`` is the ``{(product_code, channel_code): Basis}`` dictionary
     returned by :func:`fastcashflow.read_basis`. ``model_points``
-    must carry ``product`` and ``channel`` columns identifying each row's
-    segment; for each unique (product, channel) the helper masks the
+    must carry ``product_code`` and ``channel_code`` columns identifying each row's
+    segment; for each unique (product_code, channel_code) the helper masks the
     matching rows, builds a sub-:class:`~fastcashflow.ModelPoints` via
     :meth:`~fastcashflow.ModelPoints.subset`, calls :func:`value` with the
     segment's ``Basis``, and writes the per-row results back to a
@@ -2029,11 +2029,11 @@ def _measure_segmented(
     # string -- a Korean / European character composed in one file and
     # decomposed in the other compares unequal. NFC-normalise both sides
     # so the segment lookup is text-identity, not byte-identity.
-    product = np.array(
+    product_code = np.array(
         [unicodedata.normalize("NFC", str(v)) for v in model_points.product_code],
         dtype=object,
     )
-    channel = np.array(
+    channel_code = np.array(
         [unicodedata.normalize("NFC", str(v)) for v in model_points.channel_code],
         dtype=object,
     )
@@ -2047,12 +2047,12 @@ def _measure_segmented(
     # Segment keys are joined with '|' for factorisation; reject codes that
     # contain that separator to keep the round-trip lossless. The leak is
     # easy to introduce via a careless ETL column rename.
-    for arr, name in ((product, "product_code"), (channel, "channel_code")):
+    for arr, name in ((product_code, "product_code"), (channel_code, "channel_code")):
         bad = sorted({str(v) for v in arr if "|" in str(v)})
         if bad:
             raise ValueError(
                 f"{name} value(s) {bad} contain the '|' character, which "
-                "the segmented measure uses as the (product, channel) key "
+                "the segmented measure uses as the (product_code, channel_code) key "
                 "separator. Pick a different separator in your ETL or "
                 "rename the offending code."
             )
@@ -2062,14 +2062,14 @@ def _measure_segmented(
     csm = np.empty(n_mp)
     loss_component = np.empty(n_mp)
 
-    # Factorise the (product, channel) key once: combine into a single
+    # Factorise the (product_code, channel_code) key once: combine into a single
     # array of pair-strings and run np.unique with return_inverse=True.
     # Mask construction per segment becomes an integer comparison rather
     # than a Python generator over n_mp policies -- the earlier
     # `np.fromiter(((str(p),str(c)) == key for ...), ...)` was the
     # dominant cost at large n_mp.
     keys_arr = np.array(
-        [f"{p}|{c}" for p, c in zip(product, channel)], dtype=object,
+        [f"{p}|{c}" for p, c in zip(product_code, channel_code)], dtype=object,
     )
     # Preserve first-seen order so debugging output reads top-to-bottom of
     # the input -- np.unique returns sorted, so re-index by first occurrence.

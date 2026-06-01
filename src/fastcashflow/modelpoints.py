@@ -376,12 +376,12 @@ class ModelPoints:
         """Return a new ``ModelPoints`` carrying the rows at ``indices``.
 
         Per-row fields (issue_age, level_premium, ...) and the segment
-        metadata (product, channel) are sliced. The coverage CSR is
+        metadata (product_code, channel_code) are sliced. The coverage CSR is
         rebuilt: each selected row's coverage slice
         ``coverage_index[coverage_offset[i]:coverage_offset[i+1]]`` is concatenated, and
         ``coverage_offset`` is reset to the new running cumulative sum. Used by
         :func:`fastcashflow.gmm.measure` to split a portfolio
-        by (product, channel) before per-segment measurement.
+        by (product_code, channel_code) before per-segment measurement.
         """
         idx = np.asarray(indices, dtype=np.int64)
 

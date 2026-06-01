@@ -39,7 +39,7 @@ reader 호출:
 
 ```python
 basis = read_basis("basis.xlsx")
-# basis: dict[(product, channel), Basis]
+# basis: dict[(product_code, channel_code), Basis]
 basis = basis[("TERM_LIFE_A", "GA")]
 ```
 
@@ -442,7 +442,7 @@ reader (`read_basis(path)`) 가 워크북을 읽어 세그먼트별 `Basis`를
    `defaults`로 채움.
 3. 표 참조 컬럼의 `table_id`를 실제 표로 해소.
 4. `coverages` 시트에서 그 상품의 특약 목록을 붙임.
-5. → `{(product, channel): Basis}` 반환. 엔진이 세그먼트별로 평가.
+5. → `{(product_code, channel_code): Basis}` 반환. 엔진이 세그먼트별로 평가.
 
 ---
 

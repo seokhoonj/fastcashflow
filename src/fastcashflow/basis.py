@@ -606,13 +606,13 @@ def describe_basis(obj, *, file=None) -> None:
     Pass a single :class:`Basis` to see one segment, or pass the dict
     returned by :func:`fastcashflow.io.read_basis` /
     :func:`fastcashflow.io.load_sample_basis` to also see the
-    ``(product, channel)`` keys.
+    ``(product_code, channel_code)`` keys.
     """
     import sys
     out_lines: list[str] = []
     if isinstance(obj, dict):
         out_lines.append(
-            f"dict[(product, channel), Basis]  ({len(obj)} segments)"
+            f"dict[(product_code, channel_code), Basis]  ({len(obj)} segments)"
         )
         keys = list(obj.keys())
         for i, key in enumerate(keys):

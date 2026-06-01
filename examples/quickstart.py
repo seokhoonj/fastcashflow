@@ -15,7 +15,7 @@ DATA = Path(__file__).resolve().parent / "data"
 
 def main() -> None:
     basis = fcf.read_basis(DATA / "basis.xlsx")
-    # The sample workbook now carries several (product, channel) segments;
+    # The sample workbook now carries several (product_code, channel_code) segments;
     # pick TERM_LIFE / FC for this single-segment quickstart. A real run
     # over a multi-segment portfolio would pass a dict basis to fcf.gmm.measure.
     basis = basis[("TERM_LIFE_A", "FC")]

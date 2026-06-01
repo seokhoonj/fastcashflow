@@ -105,7 +105,7 @@ def show_trace(
         :func:`fastcashflow.io.read_basis` /
         :func:`fastcashflow.io.load_sample_basis`. With the dict
         form the function looks up the segment via the model point's
-        ``(product, channel)``.
+        ``(product_code, channel_code)``.
     file
         Where to write. ``None`` writes to ``sys.stdout``.
 
@@ -124,7 +124,7 @@ def show_trace(
         )
     i = mp_index
 
-    # Multi-segment dict basis: route to the right segment by (product, channel).
+    # Multi-segment dict basis: route to the right segment by (product_code, channel_code).
     if isinstance(basis, dict):
         if model_points.product_code is None or model_points.channel_code is None:
             raise ValueError(
@@ -780,7 +780,7 @@ def show_trace_diff(
         Two basis to compare. Either a :class:`Basis` or the
         dict from :func:`fastcashflow.io.read_basis`. With dicts,
         each is routed independently by the model point's
-        ``(product, channel)`` -- comparing two segments is also fine.
+        ``(product_code, channel_code)`` -- comparing two segments is also fine.
     label_a, label_b
         Short labels for the two columns in the printed diff (e.g.
         ``"baseline"`` vs ``"mortality+10%"``). Default ``"before"`` /
@@ -1072,7 +1072,7 @@ def show_trace_bel_step(
     basis
         A :class:`Basis` or the dict from
         :func:`fastcashflow.io.read_basis` (routed by the row's
-        ``(product, channel)`` like :func:`show_trace`).
+        ``(product_code, channel_code)`` like :func:`show_trace`).
     months
         Anchor months at which to unroll the recursion. ``None`` uses
         ``{0, 12, term//2, term-1, term}`` -- inception, end of year 1,

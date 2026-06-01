@@ -25,14 +25,14 @@
 
 ## 2. 시트명 `segments` (이전엔 `basis`)
 
-**결정**: (product, channel) 매핑 시트의 이름은 `segments`. `basis`는
+**결정**: (product_code, channel_code) 매핑 시트의 이름은 `segments`. `basis`는
 쓰지 않음.
 
 **근거**:
 - 보험계리에서 "basis" (산출기초) 는 mortality·lapse·expense·discount
   까지 묶은 **valuation 입력 전체**를 가리키는 용어. 한 시트의 이름으로
   들어올리면 의미 충돌.
-- 그 시트의 실제 역할은 "(product, channel) → 어느 table을 쓸지 + 스칼라
+- 그 시트의 실제 역할은 "(product_code, channel_code) → 어느 table을 쓸지 + 스칼라
   파라미터 배정" 즉 **매핑 / configuration**. 기초율 아님.
 - 후보들:
   - `mapping_tables`: `_tables` 접미사가 "여러 named table의 registry"

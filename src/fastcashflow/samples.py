@@ -21,7 +21,7 @@ from fastcashflow import io as _io
 
 def basis(kind: str = "gmm"):
     """Bundled sample basis. ``kind="gmm"`` (default) returns the per-segment
-    ``{(product, channel): Basis}`` dict; ``kind="vfa"`` returns the single
+    ``{(product_code, channel_code): Basis}`` dict; ``kind="vfa"`` returns the single
     variable-contract :class:`~fastcashflow.Basis`."""
     if kind == "vfa":
         return _io.load_sample_vfa_basis()

@@ -115,7 +115,7 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 # A single workbook (``basis.xlsx``) carries every assumption the engine
 # needs. Nine sheets:
 #
-#   * ``segments``       -- (product, channel) -> which tables + scalar params
+#   * ``segments``       -- (product_code, channel_code) -> which tables + scalar params
 #                           (a ``defaults`` row that blank cells inherit).
 #   * ``coverages``      -- (product) -> coverage_code, type, optional rate_table.
 #   * ``mortality_tables``, ``incidence_rate_tables``, ``waiver_tables``,
@@ -127,7 +127,7 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 #
 # v1 limitation (refined in a later round): the discount, inflation and
 # maintenance tables are read but used flat (their first entry). The reader
-# returns ``{(product, channel): Basis}`` -- splitting model points by
+# returns ``{(product_code, channel_code): Basis}`` -- splitting model points by
 # segment and valuing each is left to the caller.
 
 
@@ -554,12 +554,12 @@ def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
 
     ``path`` is a single ``basis.xlsx`` workbook holding both the rate
     tables and the segment mapping (see the module header for the sheet
-    layout). The ``segments`` sheet maps each (product, channel) to which
+    layout). The ``segments`` sheet maps each (product_code, channel_code) to which
     tables it uses plus scalar parameters, with a ``defaults`` row whose
     values blank cells inherit; the ``coverages`` sheet attaches
     rate-driven coverages to products.
 
-    Returns ``{(product, channel): Basis}`` -- one basis per segment.
+    Returns ``{(product_code, channel_code): Basis}`` -- one basis per segment.
 
     v1: the discount and inflation tables are read but used flat (their
     first entry); the per-segment dict is returned for the caller to value
@@ -1458,7 +1458,7 @@ def save_sample_basis(path: Path | str) -> Path:
     Use this to bootstrap a workbook a reader can open in Excel, inspect,
     and then re-read with :func:`read_basis` -- the same call shape
     a real user types against their own file. The bundled sample carries
-    seven (product, channel) segments across three products
+    seven (product_code, channel_code) segments across three products
     (``TERM_LIFE_A``, ``HEALTH_A``, ``WHOLE_LIFE_A``).
 
     Supported extension: ``.xlsx`` (the workbook carries multiple sheets,
