@@ -5,6 +5,10 @@ Measurement of a reinsurance contract held (出再) over a direct portfolio.
 the reinsurance asset/liability (BEL/RA/CSM), measured with general-model
 mechanics.
 """
-from fastcashflow._reinsurance import ReinsuranceMeasurement, measure_reinsurance as measure
+from fastcashflow._reinsurance import (
+    QuotaShare,
+    ReinsuranceMeasurement,
+    measure_reinsurance as measure,
+)
 
-__all__ = ["measure", "ReinsuranceMeasurement"]
+__all__ = ["measure", "QuotaShare", "ReinsuranceMeasurement"]

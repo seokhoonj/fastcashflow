@@ -23,6 +23,7 @@ later.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 
@@ -59,30 +60,58 @@ class ReinsuranceMeasurement:
     cashflows: "Cashflows | None" = None
 
 
-def measure_reinsurance(
-    model_points: ModelPoints, basis: Basis, cession_rate: float
-) -> ReinsuranceMeasurement:
-    """Measure a quota-share reinsurance contract held over a direct portfolio.
+class Treaty(Protocol):
+    """How a reinsurance treaty cedes the direct cash flows.
 
-    ``cession_rate`` (in ``[0, 1]``) is the fraction of claims ceded; the
-    cedant pays the same fraction of its premiums as reinsurance premium and
-    recovers that fraction of its claims.
-
-    The BEL is the present value of reinsurance premiums less recoveries; the
-    RA is the margin on the ceded claims (the risk transferred). The CSM is
-    ``-(BEL - RA)`` -- the net cost or gain of the cover -- and may be
-    negative; it is accreted and released by coverage units like a direct
-    contract's CSM, but with no loss component (paragraph 65).
+    ``cede`` receives the direct portfolio's projected :class:`Cashflows` and
+    returns ``(ceded_mortality_cf, ceded_morbidity_cf, reins_premium_cf)`` --
+    each ``(n_mp, n_time)``. The two ceded-claim streams are kept split by
+    risk so the risk adjustment can weight them by the right cv; their sum is
+    the recovery. A new treaty type (excess-of-loss, surplus, ...) implements
+    this one method.
     """
-    if not 0.0 <= cession_rate <= 1.0:
-        raise ValueError(f"cession_rate must be in [0, 1], got {cession_rate}")
 
+    def cede(self, proj: Cashflows) -> tuple[FloatArray, FloatArray, FloatArray]:
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class QuotaShare:
+    """Proportional reinsurance -- cede a fixed fraction of claims and premiums.
+
+    ``cession`` (in ``[0, 1]``) is the ceded fraction: the cedant recovers
+    that fraction of its claims and pays the same fraction of its premiums as
+    reinsurance premium.
+    """
+
+    cession: float
+
+    def cede(self, proj: Cashflows) -> tuple[FloatArray, FloatArray, FloatArray]:
+        if not 0.0 <= self.cession <= 1.0:
+            raise ValueError(f"cession must be in [0, 1], got {self.cession}")
+        return (self.cession * proj.claim_cf,
+                self.cession * proj.morbidity_cf,
+                self.cession * proj.premium_cf)
+
+
+def measure_reinsurance(
+    model_points: ModelPoints, basis: Basis, treaty: Treaty
+) -> ReinsuranceMeasurement:
+    """Measure a reinsurance contract held over a direct portfolio.
+
+    ``treaty`` describes how the cover cedes the direct cash flows -- e.g.
+    :class:`QuotaShare(cession=0.5)`. The BEL is the present value of
+    reinsurance premiums less recoveries; the RA is the margin on the ceded
+    claims (the risk transferred). The CSM is ``-(BEL - RA)`` -- the net cost
+    or gain of the cover -- and may be negative; it is accreted and released
+    by coverage units like a direct contract's CSM, but with no loss
+    component (paragraph 65).
+    """
     proj = project_cashflows(model_points, basis)
     discount_start, discount_mid = discount_factors(basis, proj.n_time)
 
-    # The cedant cedes a fraction of claims (recovered) and of premiums (paid).
-    recovery = cession_rate * (proj.claim_cf + proj.morbidity_cf)
-    reins_premium = cession_rate * proj.premium_cf
+    ceded_mortality, ceded_morbidity, reins_premium = treaty.cede(proj)
+    recovery = ceded_mortality + ceded_morbidity
 
     pv_recovery = (recovery * discount_mid).sum(axis=1)
     pv_reins_premium = (reins_premium * discount_start[:-1]).sum(axis=1)
@@ -90,8 +119,8 @@ def measure_reinsurance(
 
     # RA -- the risk transferred, i.e. the margin on the ceded claims.
     z = _norm_ppf(basis.ra_confidence)
-    pv_ceded_mortality = (cession_rate * proj.claim_cf * discount_mid).sum(axis=1)
-    pv_ceded_morbidity = (cession_rate * proj.morbidity_cf * discount_mid).sum(axis=1)
+    pv_ceded_mortality = (ceded_mortality * discount_mid).sum(axis=1)
+    pv_ceded_morbidity = (ceded_morbidity * discount_mid).sum(axis=1)
     ra = z * (basis.mortality_cv * pv_ceded_mortality
               + basis.morbidity_cv * pv_ceded_morbidity)
 

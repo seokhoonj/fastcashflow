@@ -67,9 +67,12 @@ approach has its own tracer.
 Reinsurance
 -----------
 
-.. autofunction:: fastcashflow.measure_reinsurance
+.. autofunction:: fastcashflow.reinsurance.measure
 
-.. autoclass:: fastcashflow.ReinsuranceMeasurement
+.. autoclass:: fastcashflow.reinsurance.QuotaShare
+   :members:
+
+.. autoclass:: fastcashflow.reinsurance.ReinsuranceMeasurement
    :members:
 
 Pricing
