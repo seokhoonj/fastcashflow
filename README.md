@@ -1,5 +1,9 @@
 # fastcashflow
 
+[![PyPI](https://img.shields.io/pypi/v/fastcashflow)](https://pypi.org/project/fastcashflow/)
+[![Python](https://img.shields.io/pypi/pyversions/fastcashflow)](https://pypi.org/project/fastcashflow/)
+[![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://github.com/seokhoonj/fastcashflow/blob/main/LICENSE)
+
 An open-source IFRS 17 measurement engine in Python.
 
 Takes model points and actuarial assumptions, projects monthly cash flows, and
@@ -46,9 +50,9 @@ reporting that surrounds it.
   mortality, duration-based lapse, mid-month discounting of claims and
   expenses, and α / β / γ expenses (acquisition at issue, collection
   during the premium-paying period, maintenance per policy per month).
-- **Surrender value** -- per-month surrender-value curve (해약환급금);
-  on lapse the insurer pays out a fraction of the cumulative premium,
-  routed into the BEL as an outflow.
+- **Surrender value** -- per-month surrender-value curve; on lapse the
+  insurer pays out a fraction of the cumulative premium, routed into the
+  BEL as an outflow.
 - **In-force valuation** -- `value_in_force(mp, basis)` measures
   contracts mid-life: each model point carries its own `elapsed_months`
   (= valuation date - inception), and the engine returns the BEL / RA /
@@ -103,8 +107,6 @@ reporting that surrounds it.
 against hand calculations. The wider surface (PAA, VFA, reinsurance,
 reporting, roll-forward, stochastic) is implemented and tested, but the
 package is pre-1.0 and its API may still change.
-
-*Planned:* a non-financial-risk adjustment on the guarantee time value.
 
 ## Quick start
 
@@ -203,6 +205,8 @@ practitioner can value their own book by editing those files alone.
 The full documentation -- a guided tutorial that builds up the IFRS 17
 measurement step by step, and the API reference -- is at
 <https://docs.fastcashflow.org>.
+
+A live interactive demo is at <https://demo.fastcashflow.org>.
 
 ## Performance
 
