@@ -147,10 +147,10 @@ with tempfile.TemporaryDirectory() as tmp:
     print("segments =", sorted(basis))
 
     # 3) 한 segment 의 가정 개체를 꺼내 본다
-    segment_basis = basis[("TERM_LIFE_A", "FC")]
-    print("ra_confidence   =", segment_basis.ra_confidence)
-    print("mortality_cv    =", segment_basis.mortality_cv)
-    print("discount_annual =", segment_basis.discount_annual)
+    asmp = basis[("TERM_LIFE_A", "FC")]
+    print("ra_confidence   =", asmp.ra_confidence)
+    print("mortality_cv    =", asmp.mortality_cv)
+    print("discount_annual =", asmp.discount_annual)
 
     # 4) 모델포인트 = 세 파일을 한 개체로
     mp = fcf.read_model_points(pol_path, coverages=cov_path,

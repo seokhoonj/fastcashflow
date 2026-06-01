@@ -218,9 +218,9 @@ def test_describe_basis_renders_both_shapes(capsys):
     """describe_basis prints a tree for an Basis and for a dict."""
     from fastcashflow import describe_basis
     basis = fcf.samples.basis()
-    segment_basis = next(iter(basis.values()))
+    asmp = next(iter(basis.values()))
 
-    describe_basis(segment_basis)
+    describe_basis(asmp)
     out_one = capsys.readouterr().out
     assert out_one.startswith("Basis")
     assert "상태 전이율" in out_one
