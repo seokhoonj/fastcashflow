@@ -71,16 +71,6 @@ orphan: true
 | `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAIDUP` | enum-like, 정책 status |
 | `defaults` (특수 product 값) | 소문자 단어 | `defaults` | segments 시트의 fallback 행 marker (값 아닌 keyword) |
 
-## Python code
-
-| 항목 | 규칙 | 예 |
-|---|---|---|
-| 모듈 | snake_case | `basis.py`, `projection.py`, `engine.py` |
-| 클래스 | PascalCase | `Basis`, `ModelPoints`, `Cashflows`, `Measurement` |
-| 함수 / 변수 | snake_case | `read_basis`, `discount_monthly_curve`, `n_time` |
-| 모듈 private | leading underscore | `_project_kernel`, `_norm_ppf`, `_axis_tables` |
-| 상수 | UPPER_SNAKE_CASE | `RISK_MORTALITY`, `RISK_MORBIDITY`, `STATE_ACTIVE`, `STATE_MODELS` (registry dict) |
-
 ## 데이터 ID와 Python 코드 enum 의 일관성
 
 워크북 값 (예: `coverage_code = "DEATH"`, `calculation_method = "MORBIDITY"`) 이
