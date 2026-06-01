@@ -83,7 +83,7 @@ from fastcashflow.stochastic import StochasticResult
 from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult
 from fastcashflow._vfa import VFAMeasurement
-from fastcashflow import gmm, paa, reinsurance, vfa  # model namespaces
+from fastcashflow import gmm, paa, reinsurance, samples, vfa  # namespaces
 
 __version__ = "0.1.0"
 __all__ = [
