@@ -475,7 +475,24 @@ trajectory 를 바꾸고, 그 in-force 가 lapse_flow / expense / surrender
 로 찾고 싶다면 폴리어스 / 판다스로 인덱스를 미리 뽑아 둡니다:
 
 ```python
+import fastcashflow as fcf
 import polars as pl
+
+# 샘플 파일 저장 (본인 파일 있으면 생략)
+fcf.save_sample_basis("basis.xlsx")                             # 산출기초(가정)
+fcf.save_sample_policies("policies.csv")                        # 계약 스펙
+fcf.save_sample_coverages("coverages.csv")                      # 담보 가입금액
+fcf.save_sample_calculation_methods("calculation_methods.csv")  # 담보별 산출방식
+
+# 만들어진 샘플 파일 읽어 들이기
+basis = fcf.read_basis("basis.xlsx")                  # 산출기초
+mp = fcf.read_model_points(
+    "policies.csv",                                   # 계약 스펙
+    coverages           = "coverages.csv",            # 담보 가입금액
+    calculation_methods = "calculation_methods.csv",  # 담보별 산출방식
+)
+
+# mp_id (문자열) -> 0-based 정수 인덱스
 pol = pl.read_csv("policies.csv")
 idx = pol.with_row_index("idx").filter(pl.col("mp_id") == "P002")["idx"][0]
 fcf.gmm.trace(int(idx), mp, basis)
