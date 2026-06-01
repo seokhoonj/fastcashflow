@@ -16,13 +16,9 @@ Inputs
 Measurement (GMM)
 -----------------
 
-.. autofunction:: fastcashflow.measure
+.. autofunction:: fastcashflow.gmm.measure
 
 .. autofunction:: fastcashflow.measure_in_force
-
-.. autofunction:: fastcashflow.gmm.stochastic
-
-.. autofunction:: fastcashflow.gmm.measure_stream
 
 .. autoclass:: fastcashflow.GMMMeasurement
    :members:

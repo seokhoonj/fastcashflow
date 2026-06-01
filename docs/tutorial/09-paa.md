@@ -189,7 +189,7 @@ model_points = fcf.ModelPoints.single(
 
 # 측정 -- PAA 경로
 m = fcf.paa.measure(model_points, basis)
-print(m.lrc[0])              # 잔여보장부채 궤적 (월말 LRC, 길이 = 보험기간+1)
+print(m.lrc_path[0])         # 잔여보장부채 궤적 (월말 LRC, 길이 = 보험기간+1)
 print(m.revenue[0])          # 월별 보험수익
 print(m.loss_component[0])   # 손실요소 (0 = 손실부담계약 아님)
 ```
@@ -205,7 +205,7 @@ print(m.loss_component[0])   # 손실요소 (0 = 손실부담계약 아님)
 0.0
 ```
 
-`m.lrc[0]`은 9.4절 표의 월말 LRC 그대로입니다 — 0, 900000, 600000,
+`m.lrc_path[0]`은 9.4절 표의 월말 LRC 그대로입니다 — 0, 900000, 600000,
 300000, 0. `m.revenue[0]`은 매달 인식한 보험수익 300,000이고요. 손으로
 구한 표를 엔진이 그대로 확인해 줍니다.
 
