@@ -20,7 +20,7 @@ def main() -> None:
 
     # Value the book under a range of discount-rate scenarios.
     rates = np.array([0.02, 0.03, 0.04, 0.05])
-    dist = fcf.value_stochastic(book, basis, rates)
+    dist = fcf.gmm.stochastic(book, basis, rates)
 
     print("stochastic valuation -- BEL across discount-rate scenarios")
     for rate, bel in zip(rates, dist.bel):

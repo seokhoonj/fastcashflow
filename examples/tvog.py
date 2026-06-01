@@ -28,7 +28,7 @@ def main() -> None:
     n_time = int(account.term_months.max())
     scenarios = monthly_return + rng.normal(0.0, 0.012, size=(2_000, n_time))
 
-    res = fcf.measure_tvog(account, basis, scenarios)
+    res = fcf.vfa.tvog(account, basis, scenarios)
     print("TVOG -- the minimum-rate guarantee from assumptions.xlsx")
     print(f"  intrinsic value  {res.intrinsic_value:>16,.0f}")
     print(f"  time value       {res.time_value:>16,.0f}")

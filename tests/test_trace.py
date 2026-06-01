@@ -42,7 +42,7 @@ def _portfolio():
 def test_show_trace_renders_all_sections():
     """The eight headline tree sections all appear in the output."""
     buf = io.StringIO()
-    show_trace(0, _portfolio(), _basis(), file=buf)
+    fcf.gmm.trace(0, _portfolio(), _basis(), file=buf)
     text = buf.getvalue()
     for section in (
         "Basis (segment-level)",
@@ -62,7 +62,7 @@ def test_show_trace_emits_diagnosis_pool_only_when_present():
     DIAGNOSIS-pattern coverage and is omitted otherwise."""
     # DIAGNOSIS coverage: sample has CANCER on every MP.
     buf = io.StringIO()
-    show_trace(0, _portfolio(), _basis(), file=buf)
+    fcf.gmm.trace(0, _portfolio(), _basis(), file=buf)
     text_with = buf.getvalue()
     assert "Undiagnosed share" in text_with
     assert "'CANCER':" in text_with
@@ -81,7 +81,7 @@ def test_show_trace_emits_diagnosis_pool_only_when_present():
         coverages=(fcf.CoverageRate("DEATH", death_fn),),
     )
     buf = io.StringIO()
-    show_trace(0, mp_death, asmp_death, file=buf)
+    fcf.gmm.trace(0, mp_death, asmp_death, file=buf)
     assert "Undiagnosed share" not in buf.getvalue()
 
 
@@ -103,7 +103,7 @@ def test_show_trace_undiagnosed_matches_hand_calc():
         calculation_methods={"CANCER": fcf.CalculationMethod.DIAGNOSIS},
     )
     buf = io.StringIO()
-    show_trace(0, mp, asmp, file=buf)
+    fcf.gmm.trace(0, mp, asmp, file=buf)
     text = buf.getvalue()
 
     # Expected: undiagnosed(t) = (1 - 0.01)**t -- closed-form
@@ -120,7 +120,7 @@ def test_show_trace_routes_dict_basis_by_segment():
     mp = _portfolio()
     basis = _basis()
     buf = io.StringIO()
-    show_trace(0, mp, basis, file=buf)
+    fcf.gmm.trace(0, mp, basis, file=buf)
     text = buf.getvalue()
     seg = f"({mp.product_code[0]}/{mp.channel_code[0]}"
     assert seg in text
@@ -132,7 +132,7 @@ def test_show_trace_accepts_single_assumptions():
     mp = _portfolio()
     asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     buf = io.StringIO()
-    show_trace(0, mp, asmp, file=buf)
+    fcf.gmm.trace(0, mp, asmp, file=buf)
     assert "Basis (segment-level)" in buf.getvalue()
 
 
@@ -144,7 +144,7 @@ def test_show_trace_bel_and_ra_agree_with_measure():
     asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     m = fcf.measure(mp.subset([0]), asmp)
     buf = io.StringIO()
-    show_trace(0, mp, asmp, file=buf)
+    fcf.gmm.trace(0, mp, asmp, file=buf)
     text = buf.getvalue()
     assert f"{m.bel_path[0, 0]:,.2f}" in text
     assert f"{m.ra_path[0, 0]:,.2f}" in text
@@ -153,7 +153,7 @@ def test_show_trace_bel_and_ra_agree_with_measure():
 def test_show_trace_rejects_out_of_range_index():
     mp = _portfolio()
     with pytest.raises(IndexError, match="mp_index"):
-        show_trace(mp.n_mp, mp, _basis(), file=io.StringIO())
+        fcf.gmm.trace(mp.n_mp, mp, _basis(), file=io.StringIO())
 
 
 def test_show_trace_dict_basis_requires_segment_columns():
@@ -166,7 +166,7 @@ def test_show_trace_dict_basis_requires_segment_columns():
         benefits={0: np.array([100_000_000.0])},
     )
     with pytest.raises(ValueError, match="product / channel"):
-        show_trace(0, bare, _basis(), file=io.StringIO())
+        fcf.gmm.trace(0, bare, _basis(), file=io.StringIO())
 
 
 def test_show_trace_dict_basis_unknown_segment_raises():
@@ -175,7 +175,7 @@ def test_show_trace_dict_basis_unknown_segment_raises():
     partial = {k: v for k, v in _basis().items() if k[0] != mp.product_code[0]}
     if partial:                           # only meaningful when dict is shrinkable
         with pytest.raises(KeyError, match="no basis for segment"):
-            show_trace(0, mp, partial, file=io.StringIO())
+            fcf.gmm.trace(0, mp, partial, file=io.StringIO())
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +190,7 @@ def test_show_trace_diff_renders_all_sections():
         asmp.mortality_annual, 1.10,
     ))
     buf = io.StringIO()
-    show_trace_diff(0, mp, asmp, shocked,
+    fcf.gmm.trace_diff(0, mp, asmp, shocked,
                     label_a="baseline", label_b="mort+10%", file=buf)
     text = buf.getvalue()
     for section in (
@@ -214,7 +214,7 @@ def test_show_trace_diff_identical_basis_reports_no_changes():
     mp = _portfolio()
     asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     buf = io.StringIO()
-    show_trace_diff(0, mp, asmp, asmp, file=buf)
+    fcf.gmm.trace_diff(0, mp, asmp, asmp, file=buf)
     text = buf.getvalue()
     assert "(no changes in tracked fields)" in text
     assert "(no rate changes at sampled years)" in text
@@ -246,7 +246,7 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
     assert mb.bel_path[0, 0] > ma.bel_path[0, 0]
     # And the diff renders without raising.
     buf = io.StringIO()
-    show_trace_diff(0, mp, asmp, shocked, file=buf)
+    fcf.gmm.trace_diff(0, mp, asmp, shocked, file=buf)
     assert "mortality(annual)" in buf.getvalue()
     assert "+10.00%" in buf.getvalue()
 
@@ -258,14 +258,14 @@ def test_show_trace_diff_routes_dict_bases_independently():
     mp = _portfolio()
     basis = _basis()
     buf = io.StringIO()
-    show_trace_diff(0, mp, basis, basis, file=buf)
+    fcf.gmm.trace_diff(0, mp, basis, basis, file=buf)
     assert "(no changes in tracked fields)" in buf.getvalue()
 
 
 def test_show_trace_diff_rejects_out_of_range_index():
     mp = _portfolio()
     with pytest.raises(IndexError, match="mp_index"):
-        show_trace_diff(mp.n_mp, mp, _basis(), _basis(),
+        fcf.gmm.trace_diff(mp.n_mp, mp, _basis(), _basis(),
                         file=io.StringIO())
 
 
@@ -433,13 +433,13 @@ def test_show_trace_vfa_renders_and_matches_measure_vfa():
     """The VFA tracer renders its sections and shows the engine's CSM."""
     mp, basis = _vfa_setup()
     buf = io.StringIO()
-    show_trace_vfa(0, mp, basis, file=buf)
+    fcf.vfa.trace(0, mp, basis, file=buf)
     text = buf.getvalue()
     for section in ("VFA inputs", "Account value & in-force",
                     "Guarantee floors", "BEL / CSM trajectory",
                     "CSM roll-forward", "Final"):
         assert section in text, f"missing section: {section}"
-    m = fcf.measure_vfa(mp, basis)
+    m = fcf.vfa.measure(mp, basis)
     assert f"{m.csm_path[0, 0]:,.2f}" in text          # trace shows the engine CSM
     assert f"{m.variable_fee[0]:,.2f}" in text     # and the variable fee
 
@@ -450,9 +450,9 @@ def test_show_trace_vfa_scenarios_show_tvog():
     rng = np.random.default_rng(7)
     scen = (1.06 ** (1 / 12) - 1) + 0.005 * rng.standard_normal((500, 120))
     buf = io.StringIO()
-    show_trace_vfa(0, mp, basis, return_scenarios=scen, file=buf)
+    fcf.vfa.trace(0, mp, basis, return_scenarios=scen, file=buf)
     text = buf.getvalue()
-    m = fcf.measure_vfa(mp, basis, return_scenarios=scen)
+    m = fcf.vfa.measure(mp, basis, return_scenarios=scen)
     assert m.time_value[0] != 0.0
     assert f"{m.time_value[0]:,.2f}" in text       # TVOG shown matches the engine
 
@@ -460,7 +460,7 @@ def test_show_trace_vfa_scenarios_show_tvog():
 def test_show_trace_vfa_rejects_out_of_range_index():
     mp, basis = _vfa_setup()
     with pytest.raises(IndexError, match="mp_index"):
-        show_trace_vfa(mp.n_mp, mp, basis, file=io.StringIO())
+        fcf.vfa.trace(mp.n_mp, mp, basis, file=io.StringIO())
 
 
 # ---------------------------------------------------------------------------
@@ -471,14 +471,14 @@ def test_show_trace_paa_renders_and_matches_measure_paa():
     """The PAA tracer renders its sections and shows the engine's numbers."""
     mp, basis = _portfolio(), _basis()
     buf = io.StringIO()
-    show_trace_paa(0, mp, basis, file=buf)
+    fcf.paa.trace(0, mp, basis, file=buf)
     text = buf.getvalue()
     for section in ("PAA inputs", "LRC roll-forward",
                     "Insurance service result", "LIC", "Final"):
         assert section in text, f"missing section: {section}"
     sub = mp.subset([0])
     b = _resolve_basis(basis, mp, 0)
-    m = fcf.measure_paa(sub, b)
+    m = fcf.paa.measure(sub, b)
     assert f"{m.loss_component[0]:,.2f}" in text         # onerous loss shown
     assert f"{float(m.revenue[0].sum()):,.2f}" in text    # total revenue
 
@@ -486,4 +486,4 @@ def test_show_trace_paa_renders_and_matches_measure_paa():
 def test_show_trace_paa_rejects_out_of_range_index():
     mp, basis = _portfolio(), _basis()
     with pytest.raises(IndexError, match="mp_index"):
-        show_trace_paa(mp.n_mp, mp, basis, file=io.StringIO())
+        fcf.paa.trace(mp.n_mp, mp, basis, file=io.StringIO())

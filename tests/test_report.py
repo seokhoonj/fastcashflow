@@ -5,6 +5,7 @@ build-up (revenue and service expense) and the CSM analysis of change. The
 checks here are identities -- the CSM waterfall reconciles, and the service
 result equals revenue less expense -- plus that the whole CSM releases.
 """
+import fastcashflow as fcf
 import numpy as np
 import pytest
 
@@ -14,8 +15,8 @@ from fastcashflow import (
     ExpenseItem,
     ModelPoints,
     measure,
-    measure_paa,
-    measure_vfa,
+    
+    
     report,
     CoverageRate,
 )
@@ -102,7 +103,7 @@ def test_report_str_renders_the_annual_table():
 
 def test_report_handles_paa():
     """report() accepts a PAA measurement -- which has no CSM."""
-    m = measure_paa(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}), _assumptions())
+    m = fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}), _assumptions())
     res = report(m)
     assert np.allclose(res.insurance_revenue, m.revenue)
     assert np.allclose(res.insurance_service_result, m.service_result)
@@ -112,7 +113,7 @@ def test_report_handles_paa():
 
 def test_report_handles_vfa():
     """report() accepts a VFA measurement -- the result is the CSM release."""
-    m = measure_vfa(
+    m = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, 60, account_value=1e8), _assumptions()
     )
     res = report(m)

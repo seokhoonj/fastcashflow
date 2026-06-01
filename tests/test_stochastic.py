@@ -4,12 +4,13 @@ Each scenario is a discount rate; ``value_stochastic`` values the portfolio
 under every scenario with the fused kernel and records the portfolio totals,
 so the distribution -- mean, percentiles -- can be read off.
 """
+import fastcashflow as fcf
 from dataclasses import replace
 
 import numpy as np
 import pytest
 
-from fastcashflow import ExpenseItem, ModelPoints, measure, value_stochastic
+from fastcashflow import ExpenseItem, ModelPoints, measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -43,7 +44,7 @@ def test_stochastic_matches_value_per_scenario():
     """Each scenario's total equals measure() run at that discount rate."""
     mps, asmp = _portfolio(), _assumptions()
     rates = np.array([0.02, 0.03, 0.05])
-    res = value_stochastic(mps, asmp, rates)
+    res = fcf.gmm.stochastic(mps, asmp, rates)
     for s, rate in enumerate(rates):
         v = measure(mps, replace(asmp, discount_annual=float(rate)), full=False)
         assert np.isclose(res.bel[s], v.bel.sum())
@@ -54,7 +55,7 @@ def test_stochastic_matches_value_per_scenario():
 
 def test_stochastic_produces_a_distribution():
     """Different discount scenarios give a genuine spread of liabilities."""
-    res = value_stochastic(_portfolio(), _assumptions(),
+    res = fcf.gmm.stochastic(_portfolio(), _assumptions(),
                            np.linspace(0.01, 0.06, 40))
     assert res.bel.std() > 0.0
     assert res.csm.std() > 0.0
@@ -62,7 +63,7 @@ def test_stochastic_produces_a_distribution():
 
 def test_stochastic_summary_statistics():
     """mean() and percentile() read the distribution off the scenario totals."""
-    res = value_stochastic(_portfolio(), _assumptions(),
+    res = fcf.gmm.stochastic(_portfolio(), _assumptions(),
                            np.linspace(0.01, 0.06, 40))
     assert np.isclose(res.mean()["bel"], res.bel.mean())
     assert np.isclose(res.percentile(75)["csm"], np.percentile(res.csm, 75))
@@ -71,7 +72,7 @@ def test_stochastic_summary_statistics():
 def test_stochastic_single_scenario():
     """One scenario reproduces a plain measure() at that rate."""
     mps, asmp = _portfolio(), _assumptions()
-    res = value_stochastic(mps, asmp, np.array([0.04]))
+    res = fcf.gmm.stochastic(mps, asmp, np.array([0.04]))
     v = measure(mps, replace(asmp, discount_annual=0.04), full=False)
     assert res.bel.shape == (1,)
     assert np.isclose(res.bel[0], v.bel.sum())
@@ -93,7 +94,7 @@ def test_stochastic_accepts_rate_curves():
     n_time = int(mps.term_months.max())
     rng = np.random.default_rng(8)
     curves = 0.03 + rng.normal(0.0, 0.005, size=(20, n_time))
-    res = value_stochastic(mps, asmp, curves)
+    res = fcf.gmm.stochastic(mps, asmp, curves)
     assert res.bel.shape == (20,)
     assert res.bel.std() > 0.0
 
@@ -104,8 +105,8 @@ def test_stochastic_rising_curve_differs_from_flat():
     n_time = int(mps.term_months.max())
     rising = np.linspace(0.01, 0.06, n_time).reshape(1, n_time)
     flat = np.array([float(rising.mean())])
-    res_curve = value_stochastic(mps, asmp, rising)
-    res_flat = value_stochastic(mps, asmp, flat)
+    res_curve = fcf.gmm.stochastic(mps, asmp, rising)
+    res_flat = fcf.gmm.stochastic(mps, asmp, flat)
     assert not np.isclose(res_curve.bel[0], res_flat.bel[0])
 
 
@@ -113,7 +114,7 @@ def test_stochastic_curve_rejects_wrong_width():
     """A 2-D scenarios array must be as wide as the projection horizon."""
     mps, asmp = _portfolio(), _assumptions()
     with pytest.raises(ValueError, match="columns"):
-        value_stochastic(mps, asmp, np.full((5, 7), 0.03))
+        fcf.gmm.stochastic(mps, asmp, np.full((5, 7), 0.03))
 
 
 def test_stochastic_settlement_pattern_fallback_matches_value():
@@ -122,7 +123,7 @@ def test_stochastic_settlement_pattern_fallback_matches_value():
     mps = _portfolio()
     asmp = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
     rates = np.array([0.02, 0.03, 0.05])
-    res = value_stochastic(mps, asmp, rates)
+    res = fcf.gmm.stochastic(mps, asmp, rates)
     for s, rate in enumerate(rates):
         v = measure(mps, replace(asmp, discount_annual=float(rate)), full=False)
         assert np.isclose(res.bel[s], v.bel.sum())

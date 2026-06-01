@@ -6,11 +6,12 @@ returns the numpy array shape :func:`value_stochastic` and
 :func:`measure_tvog` consume. A single-column file collapses to a 1-D
 ``(n_scenarios,)`` array of flat-rate scenarios.
 """
+import fastcashflow as fcf
 import numpy as np
 import polars as pl
 import pytest
 
-from fastcashflow import read_scenarios, value_stochastic, CoverageRate
+from fastcashflow import read_scenarios, CoverageRate
 from fastcashflow.basis import Basis
 from fastcashflow.modelpoints import ModelPoints
 
@@ -77,7 +78,7 @@ def test_read_scenarios_feeds_value_stochastic(tmp_path):
                             level_premium=10.0, term_months=24, count=1)
 
     scenarios = read_scenarios(p)
-    result = value_stochastic(mp, asmp, scenarios)
+    result = fcf.gmm.stochastic(mp, asmp, scenarios)
     assert result.bel.shape == (n_scenarios,)
     # The four scenarios must give four distinct BEL values (the discount
     # curve actually drives the kernel, not silently ignored).

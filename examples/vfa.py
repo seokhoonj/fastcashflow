@@ -19,7 +19,7 @@ def main() -> None:
     basis = fcf.load_sample_vfa_basis()
 
     # Deterministic VFA measurement -- the headline liability and CSM.
-    m = fcf.measure_vfa(mp, basis)
+    m = fcf.vfa.measure(mp, basis)
     print("VFA measurement -- variable annuities with GMDB / GMAB")
     print(f"  account value   {mp.account_value.sum():>16,.0f}")
     print(f"  BEL             {m.bel_path[:, 0].sum():>16,.0f}")
@@ -32,7 +32,7 @@ def main() -> None:
     monthly_return = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
     n_time = int(mp.term_months.max())
     scenarios = monthly_return + rng.normal(0.0, 0.012, size=(2_000, n_time))
-    tvog = fcf.measure_tvog(mp, basis, scenarios)
+    tvog = fcf.vfa.tvog(mp, basis, scenarios)
     print("\nTVOG -- time value of the minimum-rate / GMDB / GMAB guarantees")
     print(f"  intrinsic value {tvog.intrinsic_value:>16,.0f}")
     print(f"  time value      {tvog.time_value:>16,.0f}")
@@ -43,7 +43,7 @@ def main() -> None:
     term0 = int(mp.term_months[0])
     scen0 = monthly_return + rng.normal(0.0, 0.012, size=(2_000, term0))
     print()
-    fcf.show_trace_vfa(0, mp, basis, return_scenarios=scen0)
+    fcf.vfa.trace(0, mp, basis, return_scenarios=scen0)
 
 
 if __name__ == "__main__":

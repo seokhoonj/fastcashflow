@@ -56,19 +56,19 @@ def test_plot_analysis_of_change_rejects_bad_component(book):
 
 def test_plot_stochastic_returns_axes(book):
     mps, asmp, _ = book
-    dist = fcf.value_stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
+    dist = fcf.gmm.stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
     assert isinstance(fcf.plot_stochastic(dist), Axes)
 
 
 def test_plot_stochastic_without_kde(book):
     mps, asmp, _ = book
-    dist = fcf.value_stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
+    dist = fcf.gmm.stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
     assert isinstance(fcf.plot_stochastic(dist, kde=False), Axes)
 
 
 def test_plot_stochastic_rejects_bad_line(book):
     mps, asmp, _ = book
-    dist = fcf.value_stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
+    dist = fcf.gmm.stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
     with pytest.raises(ValueError):
         fcf.plot_stochastic(dist, line="xxx")
 

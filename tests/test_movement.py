@@ -4,6 +4,7 @@
 Each period must reconcile (opening + movements = closing) and consecutive
 periods must chain.
 """
+import fastcashflow as fcf
 from dataclasses import replace
 
 import numpy as np
@@ -14,8 +15,8 @@ from fastcashflow import (
     ExpenseItem,
     ModelPoints,
     measure,
-    measure_paa,
-    measure_vfa,
+    
+    
     reconcile,
     roll_forward,
     measure,
@@ -364,14 +365,14 @@ def test_reconcile_renders_a_table():
 
 def test_roll_forward_paa_reconciles_the_lrc():
     """The PAA movement reconciles: opening + premiums - revenue = closing."""
-    m = measure_paa(_portfolio(), _assumptions())
+    m = fcf.paa.measure(_portfolio(), _assumptions())
     for p in roll_forward(m, 12):
         assert np.allclose(p.lrc_opening + p.premiums - p.revenue, p.lrc_closing)
 
 
 def test_roll_forward_paa_chains_from_zero():
     """The PAA LRC opens at zero and each period chains to the next."""
-    periods = roll_forward(measure_paa(_portfolio(), _assumptions()), 12)
+    periods = roll_forward(fcf.paa.measure(_portfolio(), _assumptions()), 12)
     assert np.allclose(periods[0].lrc_opening, 0.0)
     for prev, nxt in zip(periods, periods[1:]):
         assert prev.month_end == nxt.month_start
@@ -380,7 +381,7 @@ def test_roll_forward_paa_chains_from_zero():
 
 def test_roll_forward_paa_rejects_gmm_options():
     """The revision and experience options do not apply to a PAA measurement."""
-    paa = measure_paa(_portfolio(), _assumptions())
+    paa = fcf.paa.measure(_portfolio(), _assumptions())
     gmm = measure(_portfolio(), _assumptions())
     with pytest.raises(ValueError, match="GMM"):
         roll_forward(paa, 12, revised=gmm, revised_at=24)
@@ -389,7 +390,7 @@ def test_roll_forward_paa_rejects_gmm_options():
 def test_roll_forward_paa_reconciles_all_three_components():
     """LRC, loss component and LIC each reconcile, with a settlement pattern."""
     asmp = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
-    for p in roll_forward(measure_paa(_portfolio(), asmp), 12):
+    for p in roll_forward(fcf.paa.measure(_portfolio(), asmp), 12):
         assert np.allclose(p.lrc_opening + p.premiums - p.revenue, p.lrc_closing)
         assert np.allclose(p.lc_opening - p.lc_release, p.lc_closing)
         assert np.allclose(
@@ -398,11 +399,11 @@ def test_roll_forward_paa_reconciles_all_three_components():
 
 def test_paa_lic_builds_with_a_settlement_pattern():
     """A settlement pattern makes the LIC non-zero; immediate settlement zeroes it."""
-    lagged = measure_paa(
+    lagged = fcf.paa.measure(
         _portfolio(),
         replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2])),
     )
-    immediate = measure_paa(_portfolio(), _assumptions())
+    immediate = fcf.paa.measure(_portfolio(), _assumptions())
     assert np.any(lagged.lic > 0.0)
     assert np.allclose(immediate.lic, 0.0)
 
@@ -419,9 +420,9 @@ def test_gmm_lic_builds_with_a_settlement_pattern():
 def test_vfa_lic_builds_with_a_settlement_pattern():
     """A settlement pattern gives the VFA measurement a non-zero LIC."""
     pattern = np.array([0.6, 0.4])
-    lagged = measure_vfa(_vfa_contract(),
+    lagged = fcf.vfa.measure(_vfa_contract(),
                          replace(_vfa_assumptions(), settlement_pattern=pattern))
-    immediate = measure_vfa(_vfa_contract(), _vfa_assumptions())
+    immediate = fcf.vfa.measure(_vfa_contract(), _vfa_assumptions())
     assert np.any(lagged.lic > 0.0)
     assert np.allclose(immediate.lic, 0.0)
 
@@ -449,7 +450,7 @@ def test_settlement_lag_value_matches_measure():
 def test_reconcile_paa():
     """The PAA reconciliation aggregates the three components and renders."""
     asmp = replace(_assumptions(), settlement_pattern=np.array([0.6, 0.4]))
-    recons = reconcile(roll_forward(measure_paa(_portfolio(), asmp), 12))
+    recons = reconcile(roll_forward(fcf.paa.measure(_portfolio(), asmp), 12))
     assert len(recons) == 10
     for r in recons:
         assert np.isclose(r.lrc_opening + r.premiums + r.revenue, r.lrc_closing)
@@ -477,7 +478,7 @@ def _vfa_contract() -> ModelPoints:
 
 def test_roll_forward_vfa_reconciles():
     """The VFA movement reconciles BEL, RA and CSM, opening to closing."""
-    m = measure_vfa(_vfa_contract(), _vfa_assumptions())
+    m = fcf.vfa.measure(_vfa_contract(), _vfa_assumptions())
     for p in roll_forward(m, 12):
         assert np.allclose(
             p.bel_opening + p.bel_interest - p.bel_release, p.bel_closing)
@@ -489,7 +490,7 @@ def test_roll_forward_vfa_reconciles():
 
 def test_roll_forward_vfa_chains_and_runs_off():
     """The VFA balances build at inception and run off to zero, periods chaining."""
-    periods = roll_forward(measure_vfa(_vfa_contract(), _vfa_assumptions()), 12)
+    periods = roll_forward(fcf.vfa.measure(_vfa_contract(), _vfa_assumptions()), 12)
     assert periods[0].csm_opening[0] > 0.0
     assert np.allclose(periods[-1].csm_closing, 0.0, atol=1.0)
     assert np.allclose(periods[-1].bel_closing, 0.0, atol=1.0)
@@ -501,7 +502,7 @@ def test_roll_forward_vfa_chains_and_runs_off():
 
 def test_roll_forward_vfa_rejects_gmm_options():
     """The revision and experience options do not apply to a VFA measurement."""
-    m = measure_vfa(_vfa_contract(), _vfa_assumptions())
+    m = fcf.vfa.measure(_vfa_contract(), _vfa_assumptions())
     with pytest.raises(ValueError, match="GMM"):
         roll_forward(m, 12, revised=measure(_portfolio(), _assumptions()),
                      revised_at=24)
@@ -509,7 +510,7 @@ def test_roll_forward_vfa_rejects_gmm_options():
 
 def test_reconcile_vfa():
     """The VFA reconciliation aggregates, reconciles and renders."""
-    recons = reconcile(roll_forward(measure_vfa(_vfa_contract(),
+    recons = reconcile(roll_forward(fcf.vfa.measure(_vfa_contract(),
                                                 _vfa_assumptions()), 12))
     assert len(recons) == 10
     for r in recons:

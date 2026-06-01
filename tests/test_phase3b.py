@@ -1,4 +1,5 @@
 """Phase 3b validation -- polars file I/O for model points and results."""
+import fastcashflow as fcf
 import numpy as np
 import polars as pl
 import pytest
@@ -11,7 +12,7 @@ from fastcashflow import (
     read_model_points,
     sample_data_dir,
     measure,
-    value_file,
+    
     write_valuation,
 )
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
@@ -176,7 +177,7 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
     _frame(mps).with_columns(pl.Series("id", np.arange(n))).write_parquet(in_path)
 
     out_dir = tmp_path / "results"
-    processed = value_file(in_path, out_dir, asmp, chunk_size=300, id_column="id",
+    processed = fcf.gmm.measure_stream(in_path, out_dir, asmp, chunk_size=300, id_column="id",
                            calculation_methods=PATTERNS)
     assert processed == n
     assert len(sorted(out_dir.glob("part-*.parquet"))) == 4  # 300+300+300+100
@@ -197,9 +198,9 @@ def test_value_file_rejects_existing_output(tmp_path):
     _frame(mps).write_parquet(in_path)
     out_dir = tmp_path / "results"
 
-    value_file(in_path, out_dir, _assumptions())
+    fcf.gmm.measure_stream(in_path, out_dir, _assumptions())
     with pytest.raises(ValueError, match="already contains part"):
-        value_file(in_path, out_dir, _assumptions())
+        fcf.gmm.measure_stream(in_path, out_dir, _assumptions())
 
 
 def test_load_sample_data_runs():
@@ -285,7 +286,7 @@ def test_value_file_streams_long_form(tmp_path):
     coverages.write_parquet(tmp_path / "cov.parquet")
 
     out_dir = tmp_path / "results"
-    processed = value_file(
+    processed = fcf.gmm.measure_stream(
         tmp_path / "pol.parquet", out_dir, asmp,
         coverages=tmp_path / "cov.parquet",
         calculation_methods=patterns, chunk_size=3,

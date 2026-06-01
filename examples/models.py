@@ -22,12 +22,12 @@ def main() -> None:
     print(f"GMM  -- CSM                       {gmm.csm_path[:, 0].sum():>14,.0f}")
 
     # PAA -- the simplified model for short-coverage business.
-    paa = fcf.measure_paa(book, basis)
+    paa = fcf.paa.measure(book, basis)
     print(f"PAA  -- insurance service result  {paa.service_result.sum():>14,.0f}")
 
     # VFA -- account-value (direct-participation) contracts.
     account = fcf.read_model_points(DATA / "account_values.xlsx", calculation_methods=DATA / "calculation_methods.csv")
-    vfa = fcf.measure_vfa(account, basis)
+    vfa = fcf.vfa.measure(account, basis)
     print(f"VFA  -- CSM (the variable fee)    {vfa.csm_path[:, 0].sum():>14,.0f}")
 
 

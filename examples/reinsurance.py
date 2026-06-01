@@ -17,7 +17,7 @@ def main() -> None:
     book = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 
     # A 30% quota-share cession of the direct book.
-    reins = fcf.measure_reinsurance(book, basis, cession_rate=0.30)
+    reins = fcf.reinsurance.measure(book, basis, cession_rate=0.30)
 
     print("reinsurance held -- 30% quota share")
     print(f"  BEL (PV premiums - recoveries)  {reins.bel.sum():>16,.0f}")
