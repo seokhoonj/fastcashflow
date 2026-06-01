@@ -18,8 +18,8 @@ Model points come in two shapes, both producing the same ``ModelPoints``:
 
 The core engine stays identifier-free: the kernel never needs a policy id, so
 none is carried through ``ModelPoints`` or ``Valuation``. Identifiers are a
-file-boundary concern -- pass them to :func:`write_valuation` (or via
-``value_file``'s ``id_column``) to join results back to policies.
+file-boundary concern -- pass them to :func:`write_measurement` (or via
+``measure_stream``'s ``id_column``) to join results back to policies.
 """
 from __future__ import annotations
 
@@ -46,9 +46,9 @@ from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 # ``engine`` is the largest module in the package (codegen + the numba CPU
 # kernels) and importing it at module load pulls all of that into any
 # downstream that needs the I/O layer. The two engine names used here --
-# ``Valuation`` for write_valuation's type hint and ``value`` for the
-# ``value_file`` stream -- are imported under TYPE_CHECKING (for the hint)
-# and lazily inside ``value_file`` (for the call), so a script that only
+# ``Valuation`` for write_measurement's type hint and ``value`` for the
+# ``measure_stream`` stream -- are imported under TYPE_CHECKING (for the hint)
+# and lazily inside ``measure_stream`` (for the call), so a script that only
 # reads model points or writes a results frame never imports engine.py.
 if TYPE_CHECKING:  # pragma: no cover -- import only for type hints
     from fastcashflow.engine import GMMMeasurement
@@ -1661,8 +1661,8 @@ def read_scenarios(path: Path | str) -> FloatArray:
 # Valuation results
 # ---------------------------------------------------------------------------
 
-def write_valuation(
-    valuation: "GMMMeasurement",
+def write_measurement(
+    measurement: "GMMMeasurement",
     path: Path | str,
     *,
     ids: np.ndarray | None = None,
@@ -1676,14 +1676,14 @@ def write_valuation(
     columns: dict[str, np.ndarray] = {}
     if ids is not None:
         columns["id"] = np.asarray(ids)
-    columns["bel"] = valuation.bel
-    columns["ra"] = valuation.ra
-    columns["csm"] = valuation.csm
-    columns["loss_component"] = valuation.loss_component
+    columns["bel"] = measurement.bel
+    columns["ra"] = measurement.ra
+    columns["csm"] = measurement.csm
+    columns["loss_component"] = measurement.loss_component
     _write_frame(pl.DataFrame(columns), path)
 
 
-def value_file(
+def measure_stream(
     input_path: Path | str,
     output_dir: Path | str,
     basis: Basis,
@@ -1713,7 +1713,7 @@ def value_file(
 
     Returns the total number of model points processed.
     """
-    # Lazy import -- only ``value_file`` actually drives a valuation, so we
+    # Lazy import -- only ``measure_stream`` actually drives a valuation, so we
     # keep the engine import off the I/O hot path. A script that only reads
     # model points or writes results never pays the engine import cost.
     from fastcashflow.engine import measure
@@ -1722,7 +1722,7 @@ def value_file(
     output_dir = Path(output_dir)
     if input_path.suffix != ".parquet":
         raise ValueError(
-            f"value_file streams parquet input only; got {str(input_path)!r}"
+            f"measure_stream streams parquet input only; got {str(input_path)!r}"
         )
     output_dir.mkdir(parents=True, exist_ok=True)
     if any(output_dir.glob("part-*.parquet")):
@@ -1749,7 +1749,7 @@ def value_file(
                 pol.lazy().select("mp_id"), on="mp_id", how="semi"
             ).collect()
             model_points = _long_model_points(pol, cov, methods_dict)
-            write_valuation(
+            write_measurement(
                 measure(model_points, basis, full=False, backend=backend),
                 output_dir / f"part-{part:05d}.parquet",
                 ids=ids.to_numpy(),
@@ -1776,7 +1776,7 @@ def value_file(
             methods_dict,
         )
         ids = chunk[id_column].to_numpy() if id_column is not None else None
-        write_valuation(
+        write_measurement(
             measure(model_points, basis, full=False, backend=backend),
             output_dir / f"part-{part:05d}.parquet",
             ids=ids,

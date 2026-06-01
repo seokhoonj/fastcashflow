@@ -14,7 +14,7 @@ from fastcashflow import (
     load_sample_model_points,
     read_model_points,
     measure,
-    write_valuation,
+    write_measurement,
 )
 
 
@@ -74,11 +74,11 @@ def test_read_feather(tmp_path):
 
 
 def test_write_valuation_feather(tmp_path):
-    """write_valuation writes a .feather result file."""
+    """write_measurement writes a .feather result file."""
     asmp = next(iter(load_sample_basis().values()))
     mps = load_sample_model_points()
     path = tmp_path / "results.feather"
-    write_valuation(measure(mps, asmp, full=False), path)
+    write_measurement(measure(mps, asmp, full=False), path)
     assert path.exists()
 
 

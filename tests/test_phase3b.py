@@ -12,8 +12,8 @@ from fastcashflow import (
     read_model_points,
     sample_data_dir,
     measure,
-    
-    write_valuation,
+
+    write_measurement,
 )
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
@@ -104,13 +104,13 @@ def test_read_model_points_reads_count(tmp_path):
 
 @pytest.mark.parametrize("suffix", [".parquet", ".csv"])
 def test_write_valuation_round_trip(tmp_path, suffix):
-    """write_valuation persists the four valuation columns with an id column."""
+    """write_measurement persists the four valuation columns with an id column."""
     mps = _portfolio()
     val = measure(mps, _assumptions(), full=False)
     ids = np.arange(mps.n_mp)
 
     path = tmp_path / f"out{suffix}"
-    write_valuation(val, path, ids=ids)
+    write_measurement(val, path, ids=ids)
     df = pl.read_parquet(path) if suffix == ".parquet" else pl.read_csv(path)
 
     assert df.columns == ["id", "bel", "ra", "csm", "loss_component"]
@@ -125,7 +125,7 @@ def test_write_valuation_without_ids(tmp_path):
     """ids are optional -- omitting them writes just the four result columns."""
     val = measure(_portfolio(50), _assumptions(), full=False)
     path = tmp_path / "out.parquet"
-    write_valuation(val, path)
+    write_measurement(val, path)
     assert pl.read_parquet(path).columns == ["bel", "ra", "csm", "loss_component"]
 
 

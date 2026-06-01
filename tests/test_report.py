@@ -15,8 +15,8 @@ from fastcashflow import (
     ExpenseItem,
     ModelPoints,
     measure,
-    
-    
+
+
     report,
     CoverageRate,
 )

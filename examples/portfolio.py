@@ -25,7 +25,7 @@ def main() -> None:
     # Write the per-model-point results to a file.
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "results.csv"
-        fcf.write_valuation(val, out)
+        fcf.write_measurement(val, out)
         print(f"  per-model-point results written to {out.name}")
 
     # For portfolios past what memory holds, value_file streams a parquet

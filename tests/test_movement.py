@@ -15,8 +15,8 @@ from fastcashflow import (
     ExpenseItem,
     ModelPoints,
     measure,
-    
-    
+
+
     reconcile,
     roll_forward,
     measure,

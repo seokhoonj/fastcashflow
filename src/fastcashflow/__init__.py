@@ -41,7 +41,7 @@ from fastcashflow.io import (
     save_sample_inforce_policies,
     save_sample_inforce_state,
     save_sample_policies,
-    write_valuation,
+    write_measurement,
 )
 from fastcashflow.modelpoints import (
     STATE_ACTIVE,
@@ -80,7 +80,6 @@ from fastcashflow.statemodel import (
     Transition,
 )
 from fastcashflow.stochastic import StochasticResult
-from fastcashflow.trace import show_bel_step, show_csm_step
 from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult
 from fastcashflow._vfa import VFAMeasurement
@@ -98,7 +97,7 @@ __all__ = [
     "read_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",
     "apply_inforce_state", "InforceState",
-    "write_valuation",
+    "write_measurement",
     "load_sample_model_points", "load_sample_basis",
     "load_sample_calculation_methods", "load_sample_inforce_state",
     "load_sample_vfa_model_points", "load_sample_vfa_basis",
@@ -107,7 +106,6 @@ __all__ = [
     "save_sample_inforce_state", "save_sample_inforce_policies",
     "sample_data_dir",
     "describe_basis",
-    "show_bel_step", "show_csm_step",
     "solve_premium",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
