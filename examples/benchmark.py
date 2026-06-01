@@ -11,7 +11,8 @@ import time
 import numpy as np
 from numba import cuda
 
-from fastcashflow import Basis, CalculationMethod, CoverageRate, ExpenseItem, ModelPoints, value
+from fastcashflow import Basis, CalculationMethod, CoverageRate, ExpenseItem, ModelPoints
+from fastcashflow.gmm import measure
 
 
 def _annual(m):
