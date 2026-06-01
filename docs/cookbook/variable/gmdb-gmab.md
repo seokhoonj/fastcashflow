@@ -7,7 +7,7 @@
   계좌가치가 굴러가고 보험사는 수수료 를 번다
 - `account_value` + 최저보증 (`guaranteed_death_benefit` /
   `guaranteed_accumulation_benefit`) 을 모델 포인트에 거는 자리
-- `measure_vfa` 의 결정론 측정 — 보증의 intrinsic value 가 BEL 에 들어가는 모습
+- `vfa.measure` 의 결정론 측정 — 보증의 intrinsic value 가 BEL 에 들어가는 모습
 - `return_scenarios` 를 넣으면 드러나는 보증의 시간가치 (TVOG) — 단일
   결정론 run 에는 보이지 않는 비용
 ```
@@ -16,7 +16,7 @@
 변액보험은 다릅니다 — 계약자의 계좌가치가 펀드 수익률로 굴러가고, 사망 /
 해지 / 만기에 그 계좌가치를 (또는 최저보증을) 지급합니다. 보험사의 이익은
 계좌에서 떼는 수수료 입니다. IFRS 17 은 이런 직접참가 계약을 **VFA
-(Variable Fee Approach, 변동수수료접근법)** 로 측정합니다 — `measure_vfa`.
+(Variable Fee Approach, 변동수수료접근법)** 로 측정합니다 — `vfa.measure`.
 
 ## 상품 소개 — 변액보험과 최저보증
 
@@ -42,8 +42,8 @@
 
 * - 자리
   - 무엇
-* - `measure_vfa(mp, basis)`
-  - VFA 측정 (보장형의 `measure` / `value` 가 아님)
+* - `vfa.measure(mp, basis)`
+  - VFA 측정 (보장형의 `measure` (GMM) 가 아님)
 * - `ModelPoints.account_value`
   - 가입 시 계좌가치
 * - `ModelPoints.guaranteed_death_benefit`
@@ -52,11 +52,11 @@
   - GMAB 보증액. 기본 0 = 보증 없음
 * - `ModelPoints.guaranteed_credit_rate`
   - 최저 적립이율 — 계좌 크레딧 floor (`max(수익률, 보증이율)`)
-* - `Assumptions.investment_return`
+* - `Basis.investment_return`
   - 기초자산(펀드) 수익률 — VFA 의 할인·적립 basis
-* - `Assumptions.fund_fee`
+* - `Basis.fund_fee`
   - 보험사가 떼는 변동수수료 (= 이익원)
-* - `Assumptions.expense_cv`
+* - `Basis.expense_cv`
   - 위험조정 (변액의 비금융위험 = 사업비위험) 의 변동계수
 ```
 
@@ -83,7 +83,7 @@ import fastcashflow as fcf
 # 계리적 가정
 death_fn = lambda s, a, d: np.full(np.shape(d), 0.005)   # 연 0.5% 사망률
 lapse_fn = lambda s, a, d: np.full(np.shape(d), 0.04)    # 연 4% 해지율
-basis = fcf.Assumptions(
+basis = fcf.Basis(
     mortality_annual  = death_fn,   # 보유계약 감쇠용 사망률
     lapse_annual      = lapse_fn,   # 해지율
     discount_annual   = 0.03,       # 연 할인율 (비보증 현금흐름)
@@ -104,10 +104,10 @@ mp = fcf.ModelPoints.single(
     guaranteed_accumulation_benefit = 1.05e8,   # GMAB 최저적립보증 (105%)
 )
 
-det = fcf.measure_vfa(mp, basis)                # 결정론 측정 (intrinsic 만)
-print(f"BEL  = {det.bel[0, 0]:>14,.0f}")        # 계좌가치 차감 순부채
+det = fcf.vfa.measure(mp, basis)                # 결정론 측정 (intrinsic 만)
+print(f"BEL  = {det.bel[0]:>14,.0f}")        # 계좌가치 차감 순부채
 print(f"fee  = {det.variable_fee[0]:>14,.0f}")  # 수수료 현재가치 (이익원)
-print(f"CSM  = {det.csm[0, 0]:>14,.0f}")        # 미실현 수수료 - 보증 intrinsic
+print(f"CSM  = {det.csm[0]:>14,.0f}")        # 미실현 수수료 - 보증 intrinsic
 print(f"TVOG = {det.time_value[0]:>14,.0f}")    # 시간가치 (시나리오 없으면 0)
 
 # 펀드 수익률 시나리오 (외부 ESG 산출: 1,000 경로 x 120 개월)
@@ -115,9 +115,9 @@ rng  = np.random.default_rng(7)
 r_m  = (1 + 0.06) ** (1 / 12) - 1                       # 중앙 월수익률
 scen = r_m + 0.005 * rng.standard_normal((1000, 120))  # (n_scenarios, n_time)
 
-sto = fcf.measure_vfa(mp, basis, return_scenarios=scen)  # intrinsic + 시간가치
+sto = fcf.vfa.measure(mp, basis, return_scenarios=scen)  # intrinsic + 시간가치
 print(f"\nTVOG = {sto.time_value[0]:>14,.0f}")  # 보증의 시간가치 (변동성 비용)
-print(f"CSM  = {sto.csm[0, 0]:>14,.0f}")        # TVOG 흡수 후 마진
+print(f"CSM  = {sto.csm[0]:>14,.0f}")        # TVOG 흡수 후 마진
 ```
 
 출력:
@@ -196,9 +196,9 @@ stochastic 을 거는 건 미래 확장입니다. **GMDB / GMAB 보증액 자체
 
 ## 함정
 
-### 함정 1 — `measure` 가 아니라 `measure_vfa`
+### 함정 1 — `measure` 가 아니라 `vfa.measure`
 
-변액은 보장형의 `measure` / `value` (GMM) 가 아니라 `measure_vfa` (VFA) 로
+변액은 보장형의 `measure` (GMM) 가 아니라 `vfa.measure` (VFA) 로
 측정합니다. GMM 으로 돌리면 계좌가치 mechanic 이 없어 결과가 틀립니다.
 
 ### 함정 2 — 결정론만 보고 "보증이 싸다" 판단
@@ -217,7 +217,7 @@ stochastic 을 거는 건 미래 확장입니다. **GMDB / GMAB 보증액 자체
 
 - [2.1 정기보험](../simple/term-life) — 보장형 (GMM) 측정의 출발점. 변액은
   같은 in-force 감쇠 위에 계좌가치·수수료·보증을 얹은 다른 측정 모델.
-- `show_trace_vfa(mp_index, mp, basis)` — 이 계약의 계좌가치 궤적, GMDB / GMAB
-  floor 가 무는 자리, BEL / CSM 계산 경로를 트리로 확인 (GMM 의 `show_trace` 에
+- `vfa.trace(mp_index, mp, basis)` — 이 계약의 계좌가치 궤적, GMDB / GMAB
+  floor 가 무는 자리, BEL / CSM 계산 경로를 트리로 확인 (GMM 의 `gmm.trace` 에
   대응하는 VFA 버전; `return_scenarios` 를 주면 TVOG 까지). 보장형 계약의
-  `show_trace` 는 [검증 패턴](../workflow/validation) 챕터.
+  `gmm.trace` 는 [검증 패턴](../workflow/validation) 챕터.

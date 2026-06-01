@@ -33,7 +33,7 @@
 담보는 모든 계약의 담보를 한 줄로 이어 붙인 CSR(Compressed Sparse
 Row) 구조로 담아 이를 보장합니다.
 
-**융합.** 빠른 경로 `value()`는 한 번의 융합된(여러 단계를 한 루프로
+**융합.** 빠른 경로 `measure(full=False)`는 한 번의 융합된(여러 단계를 한 루프로
 합치는) 패스로 돕니다. 보유계약을 숫자 하나로 들고 시간 루프를 돌 뿐,
 월별 중간 배열을 메모리에 만들지 않습니다.
 
@@ -64,7 +64,7 @@ numba 가 컴파일하게 합니다. 생성된 코드에는 그 상품의 상태
 ## 13.3 벤치마크
 
 사용자의 환경에서 속도를 측정할 수 있습니다. `examples/benchmark.py`는
-합성 포트폴리오를 만들어 `value()`의 시간을 잽니다. 직접 돌려 보려면
+합성 포트폴리오를 만들어 `measure(full=False)`의 시간을 잽니다. 직접 돌려 보려면
 터미널에서:
 
 ```
@@ -95,8 +95,8 @@ python examples/benchmark.py
 
 ### GPU의 활용
 
-fastcashflow에는 CUDA 백엔드도 있습니다 — `value(model_points, assumptions,
-backend="gpu")`. 그런데 위 환경(NVIDIA RTX 2070 SUPER)에서 GPU는
+fastcashflow에는 CUDA 백엔드도 있습니다 — `gmm.measure(model_points,
+assumptions, full=False, backend="gpu")`. 그런데 위 환경(NVIDIA RTX 2070 SUPER)에서 GPU는
 CPU보다 그다지 빠르지 않았습니다 — 500만 계약에서도 1.1배 남짓.
 이유는 둘입니다.
 

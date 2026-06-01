@@ -7,7 +7,7 @@ Inputs
 .. autoclass:: fastcashflow.ModelPoints
    :members:
 
-.. autoclass:: fastcashflow.Assumptions
+.. autoclass:: fastcashflow.Basis
    :members:
 
 .. autoclass:: fastcashflow.CoverageRate
@@ -18,18 +18,19 @@ Measurement (GMM)
 
 .. autofunction:: fastcashflow.measure
 
-.. autofunction:: fastcashflow.value
+.. autofunction:: fastcashflow.measure_in_force
 
-.. autoclass:: fastcashflow.Measurement
-   :members:
+.. autofunction:: fastcashflow.gmm.stochastic
 
-.. autoclass:: fastcashflow.Valuation
+.. autofunction:: fastcashflow.gmm.measure_stream
+
+.. autoclass:: fastcashflow.GMMMeasurement
    :members:
 
 Premium allocation approach
 ---------------------------
 
-.. autofunction:: fastcashflow.measure_paa
+.. autofunction:: fastcashflow.paa.measure
 
 .. autoclass:: fastcashflow.PAAMeasurement
    :members:
@@ -37,12 +38,12 @@ Premium allocation approach
 Variable fee approach
 ---------------------
 
-.. autofunction:: fastcashflow.measure_vfa
+.. autofunction:: fastcashflow.vfa.measure
 
 .. autoclass:: fastcashflow.VFAMeasurement
    :members:
 
-.. autofunction:: fastcashflow.measure_tvog
+.. autofunction:: fastcashflow.vfa.tvog
 
 .. autoclass:: fastcashflow.TVOGResult
    :members:
@@ -56,13 +57,13 @@ rates and cash flows, and the anchor-month discount / BEL / CSM. Used for
 hand-calculation validation, learning and debugging. Each measurement
 approach has its own tracer.
 
-.. autofunction:: fastcashflow.show_trace
+.. autofunction:: fastcashflow.gmm.trace
 
-.. autofunction:: fastcashflow.show_trace_diff
+.. autofunction:: fastcashflow.gmm.trace_diff
 
-.. autofunction:: fastcashflow.show_trace_vfa
+.. autofunction:: fastcashflow.vfa.trace
 
-.. autofunction:: fastcashflow.show_trace_paa
+.. autofunction:: fastcashflow.paa.trace
 
 Reinsurance
 -----------
@@ -123,7 +124,7 @@ Aggregation and transition
 Stochastic valuation
 --------------------
 
-.. autofunction:: fastcashflow.value_stochastic
+.. autofunction:: fastcashflow.gmm.stochastic
 
 .. autoclass:: fastcashflow.StochasticResult
    :members:
@@ -133,15 +134,15 @@ Input and output
 
 .. autofunction:: fastcashflow.read_model_points
 
-.. autofunction:: fastcashflow.read_assumptions
+.. autofunction:: fastcashflow.read_basis
 
-.. autofunction:: fastcashflow.load_sample_model_points
+.. autofunction:: fastcashflow.samples.model_points
 
-.. autofunction:: fastcashflow.load_sample_assumptions
+.. autofunction:: fastcashflow.samples.basis
 
-.. autofunction:: fastcashflow.write_valuation
+.. autofunction:: fastcashflow.write_measurement
 
-.. autofunction:: fastcashflow.value_file
+.. autofunction:: fastcashflow.gmm.measure_stream
 
 Visualisation
 -------------

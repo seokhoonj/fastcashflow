@@ -7,7 +7,7 @@
 - 코드를 어디에 쓰고 어떻게 실행하는가
 - 모델포인트와 계리적 가정을 코드로 만들기
 - measure()로 측정하고 BEL·RA·CSM 읽기
-- value()와 샘플 데이터로 대규모 평가하기
+- measure(full=False)와 샘플 데이터로 대규모 평가하기
 ```
 
 1장부터 7장까지, 보험계약부채를 측정한다는 것이 무엇인지 — 추정,
@@ -70,7 +70,7 @@ import fastcashflow as fcf
 배열을 다루는 라이브러리이고, `as np`는 앞으로 짧게 `np`라 부르겠다는
 뜻입니다. fastcashflow는 `fcf`로 부릅니다.
 
-계리적 가정은 `Assumptions`로 만듭니다. 5~7장 예제의 가정을 그대로
+계리적 가정은 `Basis`로 만듭니다. 5~7장 예제의 가정을 그대로
 옮깁니다.
 
 ```python
@@ -83,7 +83,7 @@ death_fn = lambda sex, issue_age, duration: np.full(
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 계리적 가정
-assumptions = fcf.Assumptions(
+assumptions = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
@@ -103,7 +103,7 @@ assumptions = fcf.Assumptions(
 (연 11.36%)이고, 엔진이 내부에서 다시 constant-force 방식으로 월
 사망률 1%로 환산해 씁니다.
 
-같은 `death_fn`을 `Assumptions`의 **두 자리에 함께** 넘긴 것이 눈에 띌
+같은 `death_fn`을 `Basis`의 **두 자리에 함께** 넘긴 것이 눈에 띌
 겁니다. 그 둘은 다른 양입니다.
 
 - `mortality_annual` — **보유계약 감소율**. 사람이 죽으면 더 이상 보장이
@@ -158,7 +158,7 @@ model_points = fcf.ModelPoints.single(
 입력이 준비됐으면 측정은 한 줄입니다.
 
 ```python
-m = fcf.measure(model_points, assumptions)
+m = fcf.gmm.measure(model_points, assumptions)
 ```
 
 `measure()`에 모델포인트와 가정을 넘기면, 1.2절의 4단계 — 추정, 할인,
@@ -167,9 +167,9 @@ m = fcf.measure(model_points, assumptions)
 꺼냅니다.
 
 ```python
-print(m.bel[0, 0])           # BEL
-print(m.ra[0, 0])            # RA
-print(m.csm[0, 0])           # CSM
+print(m.bel[0])           # BEL
+print(m.ra[0])            # RA
+print(m.csm[0])           # CSM
 print(m.loss_component[0])   # 손실요소
 ```
 
@@ -208,7 +208,7 @@ death_fn = lambda sex, issue_age, duration: np.full(
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 계리적 가정
-assumptions = fcf.Assumptions(
+assumptions = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
@@ -229,8 +229,8 @@ model_points = fcf.ModelPoints.single(
 )
 
 # 측정
-m = fcf.measure(model_points, assumptions)
-print(m.bel[0, 0], m.ra[0, 0], m.csm[0, 0], m.loss_component[0])    # BEL, RA, CSM, 손실요소
+m = fcf.gmm.measure(model_points, assumptions)
+print(m.bel[0], m.ra[0], m.csm[0], m.loss_component[0])    # BEL, RA, CSM, 손실요소
 ```
 
 일곱 장에 걸쳐 손으로 따라온 측정을, 엔진은 이 스무 줄 남짓으로
@@ -239,7 +239,7 @@ print(m.bel[0, 0], m.ra[0, 0], m.csm[0, 0], m.loss_component[0])    # BEL, RA, C
 ## 8.4 대규모 평가
 
 계약 한 건이 아니라 여러 건이라면 어떨까요? `measure()`는 시점별
-궤적까지 다 담아 무겁습니다. 대규모에는 **`value()`**를 씁니다 —
+궤적까지 다 담아 무겁습니다. 대규모에는 **`measure(full=False)`**를 씁니다 —
 모델포인트마다 BEL·RA·CSM·손실요소 네 숫자만 돌려주는 빠른 경로입니다.
 
 직접 해 보려면 입력이 필요한데, 8.2절처럼 코드로 짓는 대신
@@ -247,25 +247,25 @@ fastcashflow에 들어 있는 **샘플 데이터**를 쓰면 됩니다.
 
 ```python
 # 샘플 portfolio 로드 (정기보험 / 건강보험 / 종신보험 11 건)
-model_points = fcf.load_sample_model_points()              # ModelPoints 개체
-basis        = fcf.load_sample_assumptions()               # {(product_code, channel_code): Assumptions}
+model_points = fcf.samples.model_points()              # ModelPoints 개체
+basis        = fcf.samples.basis()               # {(product_code, channel_code): Basis}
 
 # 세그먼트별 자동 라우팅으로 측정 -- 각 계약을 자기 (상품, 채널) 가정에 맞춤
-val = fcf.value_segmented(model_points, basis)
+val = fcf.gmm.measure(model_points, basis, full=False)
 
 print(val.bel)      # 모델포인트별 BEL 배열 (길이 11)
 print(val.csm)      # 모델포인트별 CSM 배열 (길이 11)
 ```
 
-`load_sample_model_points()`는 패키지에 든 작은 포트폴리오(계약 11건,
-정기보험·건강보험·종신보험)를, `load_sample_assumptions()`는 그에 맞는
-가정을 `{(product_code, channel_code): Assumptions}` 딕셔너리로
-돌려줍니다. `value_segmented()`는 각 계약을 자기 (상품, 채널) 세그먼트의
+`samples.model_points()`는 패키지에 든 작은 포트폴리오(계약 11건,
+정기보험·건강보험·종신보험)를, `samples.basis()`는 그에 맞는
+가정을 `{(product_code, channel_code): Basis}` 딕셔너리로
+돌려줍니다. `measure()`는 각 계약을 자기 (상품, 채널) 세그먼트의
 가정에 맞춰 자동 라우팅해 한 번에 평가합니다. 계약마다 주계약에 더해
 진단·입원·재해사망·연금·생존 같은 특약이 붙어 있죠. 결과는 모델포인트
 순서대로 늘어선 배열이라, 11건이면 길이 11입니다.
 
-세그먼트가 하나뿐인 동질 포트폴리오라면 `value()`로 단일 가정을 그대로
+세그먼트가 하나뿐인 동질 포트폴리오라면 `measure(mp, asmp, full=False)`로 단일 가정을 그대로
 넘기면 됩니다. 샘플은 세 상품 × 여러 채널이 섞여 있어 라우팅이 필요합니다.
 
 샘플은 보험료가 보장에 견주어 빠듯하게 매겨진 계약이 대부분이라, 11건

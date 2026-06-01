@@ -15,7 +15,7 @@
   프로젝트 규모에서 모두 약함.
 - 현실: 한 portfolio = 한 valuation 입력 묶음 → 한 파일에 같이 두는 게
   자연.
-- 사용자 인터페이스 단순: `read_assumptions(path)` 단일 경로.
+- 사용자 인터페이스 단순: `read_basis(path)` 단일 경로.
 
 **대안**:
 - 외부 table 라이브러리 (대형 valuation 플랫폼들이 갖는 inventory 패턴)
@@ -47,8 +47,8 @@
 
 ## 3. 파일명 `assumptions.xlsx` (이전엔 `basis.xlsx` 후보)
 
-**결정**: 워크북 파일명은 `assumptions.xlsx`. Python 클래스 `Assumptions`,
-모듈 `assumptions.py`, 함수 `read_assumptions()`와 이름 일치.
+**결정**: 워크북 파일명은 `assumptions.xlsx`. Python 클래스 `Basis`,
+모듈 `assumptions.py`, 함수 `read_basis()`와 이름 일치.
 
 **근거**:
 - 산출기초율 (좁은 의미 "basis") 은 시트 단위 → 파일 이름으로 들어올리면
@@ -196,11 +196,11 @@ calendar_year)을 받는다. 워크북 입력층은 base table (필수) + A/E fa
 - Task #10: improvement 레이어
 - Task #1: discount / inflation / maintenance curve화
 - Task #5: curves.py / numerics.py 레이어 분리 (완료)
-- Task #2: ModelPoints product/channel + value_segmented helper
+- Task #2: ModelPoints product/channel + measure helper
 
 **검토 안 함 (yagni)**:
 - 워크북 두 파일 분리 (#1 결정)
 - "위험률" 그대로 입력 (#6 결정 — best-estimate이 표준)
 - 손해율 테이블 입력 (별도 토론, GMM은 발생률 × 금액 직접 계산)
-- VFA 파라미터 (`fund_fee`, `guaranteed_credit_rate`) Assumptions 잔류
+- VFA 파라미터 (`fund_fee`, `guaranteed_credit_rate`) Basis 잔류
   ([[vfa-param-relocation]] 메모 — 별도 refactor)

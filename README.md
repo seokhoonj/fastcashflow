@@ -23,32 +23,34 @@ automatically.
 
 ## Quick start
 
-No files to prepare — measure the bundled sample portfolio:
+No files to prepare — measure the whole bundled sample portfolio. The sample
+mixes segments (term life, whole life, health; several channels), so a dict
+basis lets `measure` route each policy to its own segment's assumptions:
 
 ```python
 import fastcashflow as fcf
 
 # load the bundled sample inputs
-basis       = fcf.load_sample_assumptions()   # {(product, channel): Assumptions}
-assumptions = basis[("TERM_LIFE_A", "FC")]    # pick one segment
-mp          = fcf.load_sample_model_points()
+basis = fcf.samples.basis()   # basis = {(product, channel): Basis}
+mp    = fcf.samples.model_points()
 
-# measure the contract liability -- portfolio totals at issue
-m = fcf.measure(mp, assumptions)
-print(f"model points : {m.bel.shape[0]:>15,}")
-print(f"BEL          : {m.bel[:, 0].sum():>15,.0f}")
-print(f"RA           : {m.ra[:, 0].sum():>15,.0f}")
-print(f"CSM          : {m.csm[:, 0].sum():>15,.0f}")
+# measure the whole portfolio -- each policy uses its segment's assumptions
+# (a dict basis is headline-only: pass full=False)
+val = fcf.gmm.measure(mp, basis, full=False)
+print(f"model points : {val.bel.shape[0]:>15,}")
+print(f"BEL          : {val.bel.sum():>15,.0f}")
+print(f"RA           : {val.ra.sum():>15,.0f}")
+print(f"CSM          : {val.csm.sum():>15,.0f}")
 ```
 
 ```text
 model points :              11
-BEL          :      20,955,426
-RA           :       1,854,622
-CSM          :       1,488,802
+BEL          :      27,818,583
+RA           :       1,387,416
+CSM          :         632,252
 ```
 
-Or build a single contract by hand:
+Or build a single contract by hand and measure it in full detail:
 
 ```python
 import numpy as np
@@ -61,7 +63,7 @@ mortality_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.01)
 
 # actuarial assumptions
-asmp = fcf.Assumptions(
+asmp = fcf.Basis(
     mortality_annual = mortality_fn,   # in-force decrement (mortality_fn above)
     lapse_annual     = lapse_fn,       # lapse rate (lapse_fn above)
     discount_annual  = 0.03,           # annual discount rate
@@ -81,10 +83,10 @@ mp = fcf.ModelPoints.single(
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},  # coverage code -> method
 )
 
-r = fcf.measure(mp, asmp)
-print(f"BEL : {r.bel[0, 0]:>12,.0f}")
-print(f"RA  : {r.ra[0, 0]:>12,.0f}")
-print(f"CSM : {r.csm[0, 0]:>12,.0f}")
+r = fcf.gmm.measure(mp, asmp)
+print(f"BEL : {r.bel[0]:>12,.0f}")
+print(f"RA  : {r.ra[0]:>12,.0f}")
+print(f"CSM : {r.csm[0]:>12,.0f}")
 ```
 
 ```text
@@ -93,22 +95,9 @@ RA  :       55,484
 CSM :    6,037,206
 ```
 
-For portfolio-scale valuation, `value()` runs a numba parallel kernel and
-returns the same headline numbers, far faster:
-
-```python
-# same sample portfolio, fast scalar kernel -- headline numbers only
-val = fcf.value(fcf.load_sample_model_points(), assumptions)
-print(f"BEL : {val.bel.sum():>15,.0f}")
-print(f"RA  : {val.ra.sum():>15,.0f}")
-print(f"CSM : {val.csm.sum():>15,.0f}")
-```
-
-```text
-BEL :      20,955,426
-RA  :       1,854,622
-CSM :       1,488,802
-```
+`measure(mp, basis)` returns the full per-month detail; `measure(mp, basis,
+full=False)` returns only the headline BEL / RA / CSM per policy, on a numba
+parallel kernel that is far faster at portfolio scale.
 
 ## Features
 
@@ -120,7 +109,7 @@ CSM :       1,488,802
 - **Reporting** — roll-forward, reconciliation tables, insurance service result,
   loss component, aggregation to IFRS 17 unit of account.
 - **I/O** — Excel workbook assumptions, polars parquet / CSV model points,
-  `value_file` for portfolios larger than RAM.
+  `gmm.measure_stream` for portfolios larger than RAM.
 - **More** — reinsurance, stochastic valuation, premium pricing, TVOG, first-adoption
   transition, GPU backend (`backend="gpu"`).
 
@@ -128,14 +117,14 @@ CSM :       1,488,802
 
 Measured on an 8-core desktop (Ryzen 7 3700X), 120-month projection:
 
-| Model points | `value()` |
+| Model points | `measure(full=False)` |
 |---|---|
 | 1,000,000 | 0.07 s |
 | 5,000,000 | 0.41 s |
 
-`value()` carries in-force as a scalar and materialises no intermediate arrays.
-A 10M-row parquet round-trip — read, value, write — takes about 2.5 seconds,
-of which `value()` itself is under one second.
+`measure(full=False)` carries in-force as a scalar and materialises no
+intermediate arrays. A 10M-row parquet round-trip — read, measure, write —
+takes about 2.5 seconds, of which the measurement itself is under one second.
 Run `examples/benchmark.py` to reproduce on your machine.
 
 ## Documentation

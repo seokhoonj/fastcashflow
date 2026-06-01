@@ -156,7 +156,7 @@
   - 다루는 것
 * - 5.1
   - [변액보험 최저보증 (GMDB / GMAB)](variable/gmdb-gmab)
-  - 계좌가치 + 최저보증. `measure_vfa`, intrinsic vs 시간가치 (TVOG).
+  - 계좌가치 + 최저보증. `vfa.measure`, intrinsic vs 시간가치 (TVOG).
 ```
 
 ### 6. I/O (Excel 워크북)
@@ -173,7 +173,7 @@
   - `assumptions.xlsx` 의 매 시트 / 매 컬럼 자세히. 사용자 진입점.
 * - 6.2
   - [워크북 — 다 segment / 다 상품](io/workbook-multi)
-  - `value_segmented` + 상품 / 채널 별 다른 StateModel.
+  - `measure` + 상품 / 채널 별 다른 StateModel.
 ```
 
 ### 7. 분석 / 검증
@@ -188,7 +188,7 @@
 * - 7.1
   - [시나리오 / 민감도 분석](workflow/sensitivity)
   - rate 함수 교체로 mortality +10% 등의 효과 측정. CSM 흡수 / onerous 전환,
-    show_trace_diff.
+    gmm.trace_diff.
 * - 7.2
   - [검증 패턴](workflow/validation)
   - 한 계약의 BEL / CSM 계산 경로 추적. 손계산 매칭, shock 전파, residual 검증.

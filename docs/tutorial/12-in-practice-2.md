@@ -13,16 +13,16 @@
 분석하기, 리포트로 정리하기 — 를 다룹니다.
 
 세 절 모두 같은 측정 결과를 씁니다. 8장에서 쓴 내장 샘플 — 패키지에
-저장돼 있는 계약 8건과 그에 맞는 가정 — 을 `load_sample_*`로 그대로
+저장돼 있는 계약 8건과 그에 맞는 가정 — 을 `fcf.samples.*`로 그대로
 불러와 한 번 측정해 둡니다. 따로 파일을 준비할 필요가 없습니다.
 
 ```python
 import fastcashflow as fcf
 
-model_points = fcf.load_sample_model_points()              # 패키지 샘플 포트폴리오
-basis        = fcf.load_sample_assumptions()               # {(product, channel): Assumptions}
+model_points = fcf.samples.model_points()              # 패키지 샘플 포트폴리오
+basis        = fcf.samples.basis()               # {(product, channel): Basis}
 assumptions  = basis[("TERM_LIFE_A", "GA")]                # 한 세그먼트 선택
-m            = fcf.measure(model_points, assumptions)
+m            = fcf.gmm.measure(model_points, assumptions)
 ```
 
 ## 12.1 결과를 그래프로

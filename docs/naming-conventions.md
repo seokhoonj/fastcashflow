@@ -74,8 +74,8 @@
 | 항목 | 규칙 | 예 |
 |---|---|---|
 | 모듈 | snake_case | `assumptions.py`, `projection.py`, `engine.py` |
-| 클래스 | PascalCase | `Assumptions`, `ModelPoints`, `Cashflows`, `Measurement` |
-| 함수 / 변수 | snake_case | `read_assumptions`, `discount_monthly_curve`, `n_time` |
+| 클래스 | PascalCase | `Basis`, `ModelPoints`, `Cashflows`, `Measurement` |
+| 함수 / 변수 | snake_case | `read_basis`, `discount_monthly_curve`, `n_time` |
 | 모듈 private | leading underscore | `_project_kernel`, `_norm_ppf`, `_axis_tables` |
 | 상수 | UPPER_SNAKE_CASE | `RISK_MORTALITY`, `RISK_MORBIDITY`, `STATE_ACTIVE`, `STATE_MODELS` (registry dict) |
 

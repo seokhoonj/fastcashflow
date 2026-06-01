@@ -38,7 +38,7 @@
 ```{include} ../_shared/inputs_and_api.md
 ```
 
-본 챕터는 위 그림 중 **save_sample_\* → read_\* → measure / value →
+본 챕터는 위 그림 중 **save_sample_\* → read_\* → measure →
 print** 정도만 씁니다. 변동분해 / 시각화는 후속 챕터의 자리.
 
 ## 한 계약 — 손계산과 엔진 한 번에
@@ -92,7 +92,7 @@ mp = fcf.ModelPoints.single(
 )
 
 # 계리적 가정
-asmp = fcf.Assumptions(
+asmp = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
@@ -103,10 +103,10 @@ asmp = fcf.Assumptions(
     ),
 )
 
-m = fcf.measure(mp, asmp)
-print(f"BEL  = {m.bel[0, 0]:.2f}")          # 최선추정부채
-print(f"RA   = {m.ra[0, 0]:.2f}")           # 위험조정
-print(f"CSM  = {m.csm[0, 0]:.2f}")          # 보험계약마진
+m = fcf.gmm.measure(mp, asmp)
+print(f"BEL  = {m.bel[0]:.2f}")          # 최선추정부채
+print(f"RA   = {m.ra[0]:.2f}")           # 위험조정
+print(f"CSM  = {m.csm[0]:.2f}")          # 보험계약마진
 print(f"Loss = {m.loss_component[0]:.2f}")  # 손실요소
 ```
 
@@ -133,10 +133,10 @@ Loss = 55.14
 한 변수에 lift 후 두 자리에 통과시키는 게 안전한 패턴.
 ```
 
-```{admonition} show_trace 로 한 줄씩 풀어 보기
+```{admonition} gmm.trace 로 한 줄씩 풀어 보기
 :class: tip
 
-`fcf.show_trace(0, mp, asmp)` 한 줄이면 매월 cash flow, BEL 의 후방
+`fcf.gmm.trace(0, mp, asmp)` 한 줄이면 매월 cash flow, BEL 의 후방
 재귀, CSM 의 전방 진행이 ASCII 트리로 풀려 나옵니다. 손계산과 엔진이
 어긋날 때 어느 단계에서 갈렸는지 한눈에 확인. 자세한 사용은
 [검증 패턴](../workflow/validation).
@@ -191,15 +191,19 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 위 예제는 onerous 계약이므로 `CSM = 0`, `Loss = 55.14`
 (= BEL + RA = 39.11 + 16.03).
 
-### measure() 와 value() 의 차이
+### full=True 와 full=False 의 차이
+
+측정은 함수 하나 — `measure()` — 이고, `full` 인자로 상세도만 고릅니다.
+`full=True` (기본) 는 시간 trajectory 전체를, `full=False` 는 시점 0 의
+headline 네 숫자만 돌려줍니다.
 
 ```{list-table}
 :header-rows: 1
 :widths: 12 44 44
 
 * -
-  - `measure()`
-  - `value()`
+  - `measure(...)` (`full=True`, 기본)
+  - `measure(..., full=False)`
 * - 출력
   - 시간 trajectory 전체 — BEL/RA/CSM/Loss 의 매월 값 + 현금흐름 6 갈래
   - 시점 0 의 BEL/RA/CSM/Loss 만
@@ -215,9 +219,10 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 ```
 
 **규칙**: 시간 trajectory 가 필요하면 (검증 / 변동분해 / 시각화 / 보고)
-`measure()`, 시점 0 의 결과 4 개만 필요하면 (대량 portfolio 평가,
-민감도) `value()`. 두 결과는 시점 0 에서 **수치적으로 동일** (parity test
-가 자동 검증).
+`full=True` (기본), 시점 0 의 결과 4 개만 필요하면 (대량 portfolio 평가,
+민감도) `full=False`. 두 경로는 서로 다른 커널 (`full=True` = rollforward,
+`full=False` = fused) 을 쓰지만 시점 0 결과는 **수치적으로 동일** (parity
+test 가 자동 검증).
 
 ## 포트폴리오 평가 — 파일에서 읽기
 
@@ -249,13 +254,13 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 현재 폴더에 생성 (한 번만 -- 이미 자기 파일이 있으면 생략)
-fcf.save_sample_assumptions("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_basis("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
 fcf.save_sample_policies("policies.csv")                     # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_calculation_methods("calculation_methods.csv")     # .csv / .xlsx / .parquet / .feather
 
 # (2) 읽어서 평가
-basis = fcf.read_assumptions("assumptions.xlsx")    # {(product_code, channel_code): Assumptions}
+basis = fcf.read_basis("assumptions.xlsx")    # {(product_code, channel_code): Basis}
 mp    = fcf.read_model_points(
     "policies.csv",                                 # 계약 spec 파일
     coverages="coverages.csv",                      # 담보 가입금액 파일
@@ -263,18 +268,18 @@ mp    = fcf.read_model_points(
 )
 
 # 한 segment 의 가정을 전체 portfolio 에 적용 — 상세 trajectory
-detail = fcf.measure(mp, basis[("TERM_LIFE_A", "GA")])
+detail = fcf.gmm.measure(mp, basis[("TERM_LIFE_A", "GA")])
 
 # 같은 평가의 빠른 경로 — 시점 0 의 네 숫자만
-fast = fcf.value(mp, basis[("TERM_LIFE_A", "GA")])
+fast = fcf.gmm.measure(mp, basis[("TERM_LIFE_A", "GA")], full=False)
 
-print(f"<measure() — 시점 0 합계>")
-print(f"BEL : {detail.bel[:, 0].sum():>15,.0f}")
-print(f"RA  : {detail.ra[:, 0].sum():>15,.0f}")
-print(f"CSM : {detail.csm[:, 0].sum():>15,.0f}")
+print(f"<full=True — 시점 0 합계>")
+print(f"BEL : {detail.bel.sum():>15,.0f}")
+print(f"RA  : {detail.ra.sum():>15,.0f}")
+print(f"CSM : {detail.csm.sum():>15,.0f}")
 print(f"Loss: {detail.loss_component.sum():>15,.0f}")
 print()
-print(f"<value() — 시점 0>")
+print(f"<full=False — 시점 0>")
 print(f"BEL : {fast.bel.sum():>15,.0f}")
 print(f"RA  : {fast.ra.sum():>15,.0f}")
 print(f"CSM : {fast.csm.sum():>15,.0f}")
@@ -284,20 +289,20 @@ print(f"Loss: {fast.loss_component.sum():>15,.0f}")
 출력 (샘플 그대로):
 
 ```
-<measure() — 시점 0 합계>
+<full=True — 시점 0 합계>
 BEL :      34,150,887
 RA  :         850,840
 CSM :               0
 Loss:      35,001,727
 
-<value() — 시점 0>
+<full=False — 시점 0>
 BEL :      34,150,887
 RA  :         850,840
 CSM :               0
 Loss:      35,001,727
 ```
 
-`measure()` 와 `value()` 의 시점 0 결과가 정확히 일치 — parity 가 항상
+`full=True` 와 `full=False` 의 시점 0 결과가 정확히 일치 — parity 가 항상
 보장됩니다.
 
 ```{admonition} 데모용 라우팅의 한계
@@ -306,7 +311,7 @@ Loss:      35,001,727
 위 코드는 한 segment 의 가정 (`("TERM_LIFE_A", "GA")`) 을 11건 전체에
 적용합니다 — portfolio 안에 다른 (상품, 채널) 의 계약이 섞여 있어도
 같은 가정을 씁니다. 실무에서는 각 계약을 자기 segment 의 가정에
-라우팅하는 `value_segmented(mp, basis)` 를 씁니다 — 자세한 건 11장.
+라우팅하는 `measure(mp, basis)` 를 씁니다 — 자세한 건 11장.
 ```
 
 자기 데이터로 돌리려면 (1) 단계를 건너뛰고 (2) 단계의 파일명을 자기
@@ -342,11 +347,11 @@ long-form `coverages` 프레임은 담보별 보장 룰을 세 개의 optional
 다릅니다. segment 키만 바꿔서 비교:
 
 ```python
-mp    = fcf.load_sample_model_points()
-basis = fcf.load_sample_assumptions()
+mp    = fcf.samples.model_points()
+basis = fcf.samples.basis()
 
 for key in basis:
-    val = fcf.value(mp, basis[key])
+    val = fcf.gmm.measure(mp, basis[key], full=False)
     print(f"{key}: BEL={val.bel.sum():>14,.0f}  RA={val.ra.sum():>9,.0f}  CSM={val.csm.sum():>14,.0f}")
 ```
 
@@ -382,11 +387,11 @@ portfolio = fcf.ModelPoints(
     benefits         = {0: rng.integers(10, 100, n_contracts) * 1_000_000}, # 1 ~ 10억
     level_premium    = rng.integers(3, 15, n_contracts) * 10_000,           # 3 ~ 15만원
     term_months      = np.full(n_contracts, 120),                           # 모두 10년
-    calculation_methods = fcf.load_sample_calculation_methods(),
+    calculation_methods = fcf.samples.calculation_methods(),
 )
 
-asmp   = fcf.load_sample_assumptions()[("TERM_LIFE_A", "GA")]
-result = fcf.value(portfolio, asmp)
+asmp   = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+result = fcf.gmm.measure(portfolio, asmp, full=False)
 
 print(f"Total  : {result.bel.sum():>15,.0f}")                  # 합계
 print(f"Mean   : {result.bel.mean():>15,.0f}")                 # 평균
@@ -404,7 +409,7 @@ mp = fcf.ModelPoints.single(
     level_premium       = 140_000,             # 5년만 내므로 더 큰 금액
     term_months         = 120,                 # 보장 10년
     premium_term_months = 60,                  # 납입 5년
-    calculation_methods    = fcf.load_sample_calculation_methods(),
+    calculation_methods    = fcf.samples.calculation_methods(),
 )
 ```
 
@@ -419,7 +424,7 @@ mp = fcf.ModelPoints.single(
     level_premium            = 70_000,                # 매 분기 7만원
     term_months              = 120,                   # 보장 10년
     premium_frequency_months = 3,                     # 분기납
-    calculation_methods         = fcf.load_sample_calculation_methods(),
+    calculation_methods         = fcf.samples.calculation_methods(),
 )
 ```
 
@@ -439,7 +444,7 @@ mp = fcf.ModelPoints.single(
 ### 함정 1 — 존재하지 않는 segment 키
 
 ```python
-basis = fcf.load_sample_assumptions()
+basis = fcf.samples.basis()
 asmp  = basis[("TERM_LIFE_A", "TM")]   # KeyError: 샘플의 TERM_LIFE_A 는 GA / FC 만
 ```
 
@@ -484,7 +489,7 @@ fastcashflow 의 성별 인코딩은 **0 = 남, 1 = 여**. 워크북의 `policie
 `coverages` 의 DEATH 행) 에 똑같이 넘긴 이유 — 한 자리만 override 하면
 보유계약 감쇠와 사망보험금 청구가 silent 어긋나 손계산과 안 맞습니다.
 
-워크북 로더는 이걸 자동으로 처리해주지만, **직접 `Assumptions(...)` 를
+워크북 로더는 이걸 자동으로 처리해주지만, **직접 `Basis(...)` 를
 호출할 때는 항상 같은 callable 을 두 자리에 공유**하는 게 안전한 패턴.
 
 ## 인접 레시피
@@ -498,8 +503,8 @@ fastcashflow 의 성별 인코딩은 **0 = 남, 1 = 여**. 워크북의 `policie
   (CI = Critical Illness = 진단) 일시금 결합. 첫 번째 추가 담보 도입.
 - 보험료 납입면제 (waiver) (작성 예정) — `STATE_MODELS["WAIVER"]`
   입문. active → waiver 상태 추적.
-- [검증 패턴](../workflow/validation) — `show_trace` / `show_bel_step` /
-  `show_csm_step` 으로 본 챕터의 숫자가 어디서 왔는지 풀어 보기.
+- [검증 패턴](../workflow/validation) — `gmm.trace` / `gmm.trace_bel_step` /
+  `gmm.trace_csm_step` 으로 본 챕터의 숫자가 어디서 왔는지 풀어 보기.
 - [튜토리얼 11장 — 실무에서의 활용](../../tutorial/11-in-practice) —
   네 갈래 입력 파일의 구조와 결산 워크플로.
 

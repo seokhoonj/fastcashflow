@@ -17,14 +17,14 @@ pip install git+https://github.com/seokhoonj/fastcashflow.git
 ```python
 import fastcashflow as fcf
 
-basis        = fcf.load_sample_assumptions()       # {(product, channel): Assumptions}
+basis        = fcf.samples.basis()       # {(product, channel): Basis}
 assumptions  = basis[("TERM_LIFE_A", "GA")]             # 한 세그먼트 선택
-model_points = fcf.load_sample_model_points()
+model_points = fcf.samples.model_points()
 
-m = fcf.measure(model_points, assumptions)
-print(m.bel[:, 0])   # 최선추정부채
-print(m.ra[:, 0])    # 위험조정
-print(m.csm[:, 0])   # 보험계약마진
+m = fcf.gmm.measure(model_points, assumptions)
+print(m.bel)   # 최선추정부채
+print(m.ra)    # 위험조정
+print(m.csm)   # 보험계약마진
 ```
 
 `measure`는 각 계약을 월 단위로 추정해 IFRS 17 보험계약부채를 시점별로
@@ -39,7 +39,7 @@ fcf.plot_liability(m)
 :class: hero
 ```
 
-BEL·RA·CSM·손실요소 네 값만 빠르게 얻으려면 `measure` 대신 `value`를
+BEL·RA·CSM·손실요소 네 값만 빠르게 얻으려면 `measure(..., full=False)` 를
 씁니다. 시점별 궤적을 만들지 않는, 메모리를 거의 안 쓰는 빠른 경로입니다.
 
 ## 다음으로

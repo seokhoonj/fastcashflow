@@ -38,9 +38,9 @@
 
 * - 자리
   - 무엇
-* - `Assumptions.state_model`
+* - `Basis.state_model`
   - `STATE_MODELS["WAIVER"]` — active / waiver 2-state 모델
-* - `Assumptions.waiver_incidence_annual`
+* - `Basis.waiver_incidence_annual`
   - active → waiver 연 전이율 callable `(sex, issue_age, duration)`
 * - `ModelPoints.state`
   - 각 계약의 시작 상태. 신계약은 `STATE_ACTIVE` (납입 중)
@@ -81,7 +81,7 @@ lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
 waiver_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.10) ** 12)
 
 # 계리적 가정
-asmp = fcf.Assumptions(
+asmp = fcf.Basis(
     mortality_annual        = death_fn,   # 보유계약 감쇠용 사망률 (월 1%)
     lapse_annual            = lapse_fn,   # 해지율 (해지 없음)
     waiver_incidence_annual = waiver_fn,  # active → waiver 전이율 (월 10%)
@@ -105,11 +105,11 @@ mp = fcf.ModelPoints.single(
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
-m = fcf.measure(mp, asmp)
+m = fcf.gmm.measure(mp, asmp)
 print(f"inforce    = {m.cashflows.inforce[0, :3]}")     # 보유계약 (active + waiver)
 print(f"premium_cf = {m.cashflows.premium_cf[0, :3]}")  # 보험료 (active 만 납입)
 print(f"claim_cf   = {m.cashflows.claim_cf[0, :3]}")    # 사망보험금 (전체 inforce)
-print(f"BEL        = {m.bel[0, 0]:.2f}")                # 최선추정부채
+print(f"BEL        = {m.bel[0]:.2f}")                # 최선추정부채
 ```
 
 출력:
@@ -165,7 +165,7 @@ BEL        = 285.22
 `inforce` 는 두 상태의 합입니다. 위 손계산처럼 active 점유는
 `premium_cf / level_premium` 로 역산할 수 있습니다 (보험료가 active 에만
 곱해지므로). 상태별 점유가 필요한 정밀 검증은 [검증 패턴](../workflow/validation)
-의 `show_trace` 로.
+의 `gmm.trace` 로.
 ```
 
 ## 변형 — 발생률 축과 워크북 wiring
@@ -216,6 +216,6 @@ BEL        = 285.22
   상태 (납입면제) 와 직교하며 한 계약에 공존.
 - [3.2 paid-up 분리 (3-state)](paid-up) — active / waiver / paidup 을 각각
   별도 state 로. 납입후 해지율 점프.
-- [검증 패턴](../workflow/validation) — `show_trace` 로 상태별 점유와 cash
+- [검증 패턴](../workflow/validation) — `gmm.trace` 로 상태별 점유와 cash
   flow 를 한 줄씩 확인.
 ```

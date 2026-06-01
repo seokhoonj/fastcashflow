@@ -26,7 +26,7 @@
 * - 입력 개체
   - 파일
   - 무엇
-* - **Assumptions**
+* - **Basis**
   - `assumptions.xlsx`
   - 계리적 가정 (사망률 · 해지율 · 할인율 · 사업비 · 위험조정)
 * - **ModelPoints**
@@ -42,7 +42,7 @@
 
 이 절은 네 파일을 `assumptions` → `policies` → `coverages` →
 `calculation_methods` 순서로 봅니다. 코드에서 reader 가 도는 순서가
-그대로입니다 — `read_assumptions` 가 먼저, 그 다음 `read_model_points`
+그대로입니다 — `read_basis` 가 먼저, 그 다음 `read_model_points`
 가 세 파일을 ModelPoints 개체로 묶습니다.
 
 ### 가정 파일 — `assumptions.xlsx`
@@ -214,14 +214,14 @@ fastcashflow 는 그 한 파일을 그대로 받습니다. `read_inforce_policie
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 현재 폴더에 생성 (한 번만 — 이미 자기 파일이 있으면 생략)
-fcf.save_sample_assumptions("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_basis("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
 fcf.save_sample_inforce_policies("inforce_2026Q1.csv")       # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_calculation_methods("calculation_methods.csv")     # .csv / .xlsx / .parquet / .feather
 # .xlsx 는 시트당 ~ 1M row 한계 -- 대형 portfolio 는 .parquet / .feather 권장
 
 # (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 in-force 측정
-basis       = fcf.read_assumptions("assumptions.xlsx")       # {(product_code, channel_code): Assumptions}
+basis       = fcf.read_basis("assumptions.xlsx")       # {(product_code, channel_code): Basis}
 assumptions = basis[("TERM_LIFE_A", "GA")]                   # 한 세그먼트 선택
 
 model_points, state = fcf.read_inforce_policies(
@@ -234,7 +234,7 @@ val = fcf.value_in_force(
     prior_csm    = state.prior_csm,                          # 직전 분기 종가 CSM
     lock_in_rate = state.lock_in_rate,                       # 가입 시점의 할인율
 )
-fcf.write_valuation(val, "results_2026Q1.csv")               # 결과 파일
+fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
 ```
 
 각 함수의 역할:
@@ -243,19 +243,19 @@ fcf.write_valuation(val, "results_2026Q1.csv")               # 결과 파일
   텍스트 에디터로 열어 fastcashflow 의 입력 파일이 어떻게 생겼는지 직접
   들여다 볼 수 있습니다. 자기 데이터를 쓸 땐 이 줄을 빼고 그 자리에
   자기 파일이 있다고 보면 됩니다.
-- `read_assumptions` — 가정 엑셀을 읽어 `{(product_code, channel_code):
-  Assumptions}` 딕셔너리로 돌려줍니다. 한 워크북에 여러 세그먼트
+- `read_basis` — 가정 엑셀을 읽어 `{(product_code, channel_code):
+  Basis}` 딕셔너리로 돌려줍니다. 한 워크북에 여러 세그먼트
   (상품 × 채널) 를 함께 관리하기 위함입니다. 한 세그먼트만 쓰려면
   키로 골라냅니다.
 - `read_inforce_policies` — 결산 1-파일을 읽어 **`(ModelPoints, InforceState)`
   튜플** 을 돌려줍니다. ModelPoints 에는 `elapsed_months` / `count` 가
   이미 fold 되어 있고, InforceState 는 `prior_csm` / `lock_in_rate` 을
   carry — 다음 줄의 `value_in_force` 에 그대로 넘깁니다.
-- `value_in_force` — 결산 평가. 신계약 평가의 `value` 와 다른 점은:
+- `value_in_force` — 결산 평가. 신계약 평가의 `measure` 와 다른 점은:
   (a) 가입 시 lock-in 된 할인율을 명시적으로 받음, (b) 직전 분기의 CSM
   을 출발점으로 carry-forward, (c) `period_months` 로 이번 분기에만
   release 될 부분을 잘라냄.
-- `write_valuation` — BEL·RA·CSM·손실요소를 모델포인트마다 한 줄씩
+- `write_measurement` — BEL·RA·CSM·손실요소를 모델포인트마다 한 줄씩
   파일로 저장합니다.
 
 ```{admonition} 신계약 평가는 어떻게?
@@ -265,9 +265,9 @@ fcf.write_valuation(val, "results_2026Q1.csv")               # 결과 파일
 없으니* `inforce_state` 컬럼이 없는 보통의 policies 파일로:
 
 ​    `model_points = fcf.read_model_points("new_business.csv", coverages=..., calculation_methods=...)`
-​    `val = fcf.value(model_points, assumptions)`
+​    `val = fcf.gmm.measure(model_points, assumptions, full=False)`
 
-`read_model_points` 와 `value` 의 흐름. 8 장에서 이미 본 형태와 같습니다.
+`read_model_points` 와 `measure` 의 흐름. 8 장에서 이미 본 형태와 같습니다.
 신계약과 보유계약은 같은 엔진이지만 입력 파일 / 함수가 다른 두 *모드*.
 ```
 
@@ -280,7 +280,7 @@ state)`. 결과는 위 1-파일과 동일.
 ## 11.3 메모리를 넘는 규모
 
 포트폴리오가 너무 커서 메모리에 한꺼번에 올리기 어렵다면
-`value_file()`을 씁니다. wide 형식의 parquet 파일을 조각조각 나눠
+`gmm.measure_stream()`을 씁니다. wide 형식의 parquet 파일을 조각조각 나눠
 읽고, 평가하고, 결과를 쓰는 일을 한 조각씩 차례로 처리해, 메모리에는
 한 번에 한 조각만 올립니다.
 
@@ -290,7 +290,7 @@ state)`. 결과는 위 1-파일과 동일.
 model_points.to_wide(assumptions).write_parquet("portfolio.parquet")
 
 # 스트리밍 평가 -- 한 줄. 결과는 results/ 폴더에 분할 저장
-fcf.value_file(
+fcf.gmm.measure_stream(
     "portfolio.parquet", "results/", assumptions,
     calculation_methods="calculation_methods.csv",
 )

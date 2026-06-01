@@ -81,7 +81,7 @@ import fastcashflow as fcf
 
 # 패키지 샘플로 시연 -- 자기 데이터를 쓸 때는 이 네 줄을 빼고
 # 그 자리에 자기 파일이 있다고 보면 됩니다.
-fcf.save_sample_assumptions("assumptions.xlsx")             # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_basis("assumptions.xlsx")             # .xlsx 만 (multi-sheet 워크북)
 fcf.save_sample_policies("policies.csv")                    # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                  # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_calculation_methods("calculation_methods.csv")    # .csv / .xlsx / .parquet / .feather
@@ -152,7 +152,7 @@ MATURITY,만기환급,MATURITY
 
 * `coverage_code` — 사용자 시스템의 코드 (cross-file join key).
   `coverages.csv` 와 `assumptions.xlsx` 의 `coverages` 시트가 같은 값을 씁니다.
-* `coverage_name` — 사람용 라벨. 엔진은 무시; show_trace 표시에만 쓰입니다.
+* `coverage_name` — 사람용 라벨. 엔진은 무시; gmm.trace 표시에만 쓰입니다.
 * `calculation_method` — 위 다섯 enum 값 중 하나. 다른 값이면
   `ValueError` 가 어느 행에서 났는지 알려줍니다.
 
@@ -205,7 +205,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
   - `_long_model_points`
   - `assumptions.xlsx` 의 rate-driven 담보가 담보별 산출방식에 누락
 * - V4
-  - `measure()` / `value()` 진입
+  - `measure()` 진입
   - 담보별 산출방식에 있는 rate-driven 코드의 rate_table 이 basis 에 없음
 ```
 
@@ -228,7 +228,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 #               calculation_methods.csv
 ```
 
-`show_trace` 의 Coverages 섹션이 한 계약의 담보별 산출방식 매핑을 그대로
+`gmm.trace` 의 Coverages 섹션이 한 계약의 담보별 산출방식 매핑을 그대로
 보여줍니다:
 
 ```
@@ -246,7 +246,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 - [보장 청구 메커니즘](coverage-mechanics) — 각 CalculationMethod 이
   엔진 안에서 어떤 알고리즘으로 처리되는지 (이 챕터는 *담보별 산출방식 선택*,
   메커니즘 챕터는 *실행 알고리즘*).
-- [검증 패턴 — show_trace](../workflow/validation) — 담보별 산출방식 변경이
+- [검증 패턴 — gmm.trace](../workflow/validation) — 담보별 산출방식 변경이
   어느 계산 단계에 어떻게 들어가는지 추적.
 - [정기보험](../simple/term-life) — DEATH 만 사용하는 가장 단순한 사례.
 - 사망 + 진단 일시금 (작성 예정) — DIAGNOSIS 추가, depleting pool mechanic.

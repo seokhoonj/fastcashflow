@@ -130,7 +130,7 @@ class DynamicLapse:
     # -> 구간선형 / 계단형. 코드가 아닌 '데이터' 라 numba 가 룩업으로 처리
 ```
 
-`Assumptions.dynamic_lapse: DynamicLapse | None = None` 로 추가합니다. `None`
+`Basis.dynamic_lapse: DynamicLapse | None = None` 로 추가합니다. `None`
 이면 기존 정적 해지 그대로 — **back-compat (기존 입력이 손대지 않아도 동작)** 가
 설계 제약입니다.
 

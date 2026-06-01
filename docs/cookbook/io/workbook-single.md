@@ -3,7 +3,7 @@
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
 
-- 엔진은 `Assumptions` 와 `ModelPoints` 두 *개체* 만 받고, **입력 파일은
+- 엔진은 `Basis` 와 `ModelPoints` 두 *개체* 만 받고, **입력 파일은
   reader 함수가 그 두 개체로 모은다**
 - 네 입력 파일 — `policies` / `coverages` / `calculation_methods` /
   `assumptions.xlsx`
@@ -13,18 +13,18 @@
 - `save_sample_*` 로 견본을 만들고 `read_*` 로 읽어 평가까지 돌리는 라운드트립
 ```
 
-지금까지의 챕터는 가정을 Python 코드 (`fcf.Assumptions(...)`) 로 직접
+지금까지의 챕터는 가정을 Python 코드 (`fcf.Basis(...)`) 로 직접
 지었습니다. 실무에서는 가정이 **회사 워크북** 에 있고, 그 워크북을 엔진이 읽는
 형식으로 맞추는 것이 진입점입니다. 이 챕터는 그 워크북 — `assumptions.xlsx` —
 의 구조를 시트 단위로 풉니다.
 
 ## 엔진이 받는 것은 파일이 아니라 개체
 
-`measure(mp, asmp)` 의 두 인자는 **개체** (`ModelPoints`, `Assumptions`) 이지
+`measure(mp, asmp)` 의 두 인자는 **개체** (`ModelPoints`, `Basis`) 이지
 파일이 아닙니다. 파일은 reader 가 개체로 바꿔 줍니다:
 
-- **`Assumptions`** — `basis = fcf.read_assumptions("assumptions.xlsx")` 가 한
-  워크북을 읽어 **`(product_code, channel_code) -> Assumptions` 사전** 을
+- **`Basis`** — `basis = fcf.read_basis("assumptions.xlsx")` 가 한
+  워크북을 읽어 **`(product_code, channel_code) -> Basis` 사전** 을
   돌려줍니다 (segment 별 가정 한 벌씩).
 - **`ModelPoints`** — `mp = fcf.read_model_points("policies.csv",
   coverages=..., calculation_methods=...)` 가 세 파일을 한 개체로 합칩니다.
@@ -35,7 +35,7 @@
 ## assumptions.xlsx — 시트 구성
 
 워크북은 한 시트가 한 가지 역할을 맡는 multi-sheet 파일입니다. 견본
-(`save_sample_assumptions`) 의 시트는 다음과 같습니다:
+(`save_sample_basis`) 의 시트는 다음과 같습니다:
 
 ```{list-table}
 :header-rows: 1
@@ -137,13 +137,13 @@ with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
 
     # 1) 견본 네 파일을 폴더에 생성 (자기 파일이 있으면 이 블록은 생략)
-    asmp_path = fcf.save_sample_assumptions(tmp / "assumptions.xlsx")          # 워크북
+    asmp_path = fcf.save_sample_basis(tmp / "assumptions.xlsx")          # 워크북
     pol_path  = fcf.save_sample_policies(tmp / "policies.csv")                 # 계약
     cov_path  = fcf.save_sample_coverages(tmp / "coverages.csv")              # 담보
     cm_path   = fcf.save_sample_calculation_methods(tmp / "calculation_methods.csv")  # 산출방식
 
-    # 2) 워크북을 읽으면 (product, channel) -> Assumptions 사전
-    basis = fcf.read_assumptions(asmp_path)
+    # 2) 워크북을 읽으면 (product, channel) -> Basis 사전
+    basis = fcf.read_basis(asmp_path)
     print("segments =", sorted(basis))
 
     # 3) 한 segment 의 가정 개체를 꺼내 본다
@@ -158,7 +158,7 @@ with tempfile.TemporaryDirectory() as tmp:
     print("n model points  =", mp.issue_age.shape[0])
 
     # 5) 평가 -- 각 계약을 자기 (product, channel) 가정으로 라우팅 (6.2 에서 자세히)
-    val = fcf.value_segmented(mp, basis)
+    val = fcf.gmm.measure(mp, basis, full=False)
     print("BEL sum =", f"{val.bel.sum():,.0f}")
     print("CSM sum =", f"{val.csm.sum():,.0f}")
 ```
@@ -175,21 +175,23 @@ BEL sum = 27,818,583
 CSM sum = 632,252
 ```
 
-- `read_assumptions` 는 **사전** 을 돌려줍니다 — 견본은 7 개 segment. 단일
+- `read_basis` 는 **사전** 을 돌려줍니다 — 견본은 7 개 segment. 단일
   segment 워크북이면 행이 하나뿐이고 사전 키도 하나입니다.
-- `basis[("TERM_LIFE_A", "FC")]` 가 그 segment 의 `Assumptions` 개체입니다.
+- `basis[("TERM_LIFE_A", "FC")]` 가 그 segment 의 `Basis` 개체입니다.
   `ra_confidence` 0.75 / `state_model` = WAIVER 는 `defaults` 행에서,
   `lapse_table` = `LAPSE_FC` 는 segment 행에서 온 값입니다.
 - `discount_annual` 이 `[0.03]` 인 것은 v1 reader 가 `discount_tables` 곡선의
   **첫 값** 만 평탄 스칼라로 쓰기 때문입니다 (전체 기간구조는 향후 작업).
 
-```{admonition} 한 가정을 전체에 적용하려면 value(), segment 별로면 value_segmented()
+```{admonition} 단일 가정 적용 vs segment 별 라우팅
 :class: note
 
-`fcf.value(mp, asmp)` 는 **한 `Assumptions` 를 모든 모델포인트에** 적용합니다 —
-모델포인트가 동질한 한 segment 일 때 맞습니다. 견본처럼 여러 segment 가
-섞인 portfolio 는 `fcf.value_segmented(mp, basis)` 로 각 계약을 자기 segment
-가정으로 보냅니다 (라우팅 메커니즘은 [6.2](workbook-multi)).
+`fcf.gmm.measure(mp, asmp)` 에 **단일 `Basis`** 를 주면 그 한 가정을 모든
+모델포인트에 적용합니다 — 모델포인트가 동질한 한 segment 일 때 맞습니다.
+견본처럼 여러 segment 가 섞인 portfolio 는 **dict basis**
+(`{(product, channel): Basis}`) 를 주면 각 계약을 자기 segment 가정으로
+라우팅합니다: `fcf.gmm.measure(mp, basis, full=False)` (dict 라우팅은
+headline 전용이라 `full=False`). 라우팅 메커니즘은 [6.2](workbook-multi).
 ```
 
 ## 함정
@@ -218,7 +220,7 @@ CSM sum = 632,252
 - [1.1 한눈에 보기](../basics/overview) — 네 입력 파일과 사용자 API 의 전체 트리.
 - [1.2 담보와 산출방식 매칭](../basics/calculation-methods) —
   `calculation_methods.csv` 의 5 종 산출방식.
-- [6.2 워크북 — 다 segment / 다 상품](workbook-multi) — `value_segmented`
+- [6.2 워크북 — 다 segment / 다 상품](workbook-multi) — `measure`
   라우팅과 segment 별 다른 StateModel / lapse.
 - [튜토리얼 11장](../../tutorial/11-in-practice) — 결산 워크플로와 보유계약
   입력 (`read_inforce_policies`).

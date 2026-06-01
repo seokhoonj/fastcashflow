@@ -11,7 +11,7 @@
 자세한 결산 모드 워크플로는 [튜토리얼 11장](../../tutorial/11-in-practice)
 참조.
 
-코드에서 reader 가 도는 순서가 그대로입니다 — `read_assumptions` 가
+코드에서 reader 가 도는 순서가 그대로입니다 — `read_basis` 가
 먼저 (engine 가정), 그 다음 `read_model_points` 가 policies / coverages /
 calculation_methods 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 
@@ -21,8 +21,8 @@ calculation_methods 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 |---|---|
 | [담보와 산출방식 매칭](calculation-methods) | `calculation_methods.csv` 의 자리. 다섯 산출방식의 의미. |
 | [보장 청구 메커니즘](coverage-mechanics) | DEATH / MORBIDITY / DIAGNOSIS 의 kernel 알고리즘. |
-| [정기보험](../simple/term-life) | `save_sample_*` → `read_*` → `measure / value` → `print` |
-| [검증 패턴](../workflow/validation) | `show_trace` / `show_bel_step` / `show_csm_step` / `show_trace_diff` |
+| [정기보험](../simple/term-life) | `save_sample_*` → `read_*` → `measure` → `print` |
+| [검증 패턴](../workflow/validation) | `gmm.trace` / `gmm.trace_bel_step` / `gmm.trace_csm_step` / `gmm.trace_diff` |
 | [튜토리얼 11장](../../tutorial/11-in-practice) | 파일 입출력의 자세한 schema 와 결산 워크플로 |
 
 각 챕터는 이 그림의 일부만 다룹니다. 챕터를 읽다 모르는 함수 / 파일이
@@ -40,7 +40,7 @@ calculation_methods 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 ```python
 import fastcashflow as fcf
 
-fcf.save_sample_assumptions("assumptions.xlsx")                 # 가정 워크북 (multi-sheet)
+fcf.save_sample_basis("assumptions.xlsx")                 # 가정 워크북 (multi-sheet)
 fcf.save_sample_policies("policies.csv")                        # 계약 spec
 fcf.save_sample_coverages("coverages.csv")                      # 담보 가입금액
 fcf.save_sample_calculation_methods("calculation_methods.csv")  # 담보별 산출방식

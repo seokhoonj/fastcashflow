@@ -7,7 +7,7 @@
 - 잔여보장부채(LRC)를 미경과보험료처럼 다루는 법
 - 보험수익을 보장 제공에 따라 인식하는 두 가지 기준
 - 손계산 예제 — 단일보험료 계약의 LRC가 쌓였다 풀리는 과정
-- measure_paa로 PAA를 측정하기
+- paa.measure로 PAA를 측정하기
 ```
 
 1장부터 8장까지 따라온 것은 일반모형(GMM)이었습니다. 미래 현금흐름을
@@ -77,12 +77,12 @@ IFRS 17은 두 가지 기준을 둡니다(B126).
 
 **시간 경과**(B126(a))는 보험료를 보장기간에 걸쳐 **직선으로** 나눕니다.
 4개월 계약이면 매달 보험료의 1/4씩이죠. fastcashflow의 기본값이며,
-`measure_paa(model_points, assumptions)`처럼 그냥 부르면 이 기준을 씁니다.
+`paa.measure(model_points, assumptions)`처럼 그냥 부르면 이 기준을 씁니다.
 
 **발생 예상**(B126(b))은 보험금과 사업비가 **발생하리라 예상되는
 시기**에 맞춰 보험료를 나눕니다. 위험이 보장기간에 고르게 퍼져 있지
 않을 때 — 예컨대 사업비가 계약 초기에 몰리거나 보험금이 특정 시기에
-쏠릴 때 — 씁니다. `measure_paa(model_points, assumptions, revenue_basis="claims")`로
+쏠릴 때 — 씁니다. `paa.measure(model_points, assumptions, revenue_basis="claims")`로
 선택합니다.
 
 어느 기준이든 인식한 보험수익을 모두 더하면 총보험료와 같습니다.
@@ -150,9 +150,9 @@ LRC가 쌓였다 풀리는 과정을 작은 계약 하나로 따라가 봅니다
 가까이 머뭅니다. LRC가 또렷이 쌓였다 풀리는 모습은 이렇게 보험료를
 미리 받는 계약에서 잘 드러납니다.
 
-## 9.5 measure_paa로 측정하기
+## 9.5 paa.measure로 측정하기
 
-손으로 따라온 그 계약을 엔진으로 측정해 봅니다. PAA는 `measure_paa`로
+손으로 따라온 그 계약을 엔진으로 측정해 봅니다. PAA는 `paa.measure`로
 측정합니다.
 
 ```python
@@ -166,7 +166,7 @@ death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 계리적 가정
-assumptions = fcf.Assumptions(
+assumptions = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (연 0.1%)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 0.03,             # 연 할인율 3%
@@ -188,7 +188,7 @@ model_points = fcf.ModelPoints.single(
 )
 
 # 측정 -- PAA 경로
-m = fcf.measure_paa(model_points, assumptions)
+m = fcf.paa.measure(model_points, assumptions)
 print(m.lrc[0])              # 잔여보장부채 궤적 (월말 LRC, 길이 = 보험기간+1)
 print(m.revenue[0])          # 월별 보험수익
 print(m.loss_component[0])   # 손실요소 (0 = 손실부담계약 아님)
@@ -196,7 +196,7 @@ print(m.loss_component[0])   # 손실요소 (0 = 손실부담계약 아님)
 
 `single_premium`으로 단일보험료를, `term_months=4`로 4개월 보장을
 지정했습니다. 8장의 일반모형과 입력은 같은 모양 — 모델포인트와 가정
-둘 — 이고, 부르는 함수만 `measure`에서 `measure_paa`로 바뀝니다.
+둘 — 이고, 부르는 함수만 `measure`에서 `paa.measure`로 바뀝니다.
 실행하면 이렇게 나옵니다.
 
 ```
@@ -224,7 +224,7 @@ print(m.loss_component[0])   # 손실요소 (0 = 손실부담계약 아님)
 발생했지만 아직 지급하지 않은 보험금의 부채입니다(59항(b)).
 fastcashflow는 보험금이 발생한 달에 곧바로 지급된다고 보면 LIC를
 0으로 두고, 가정에 보험금 지급 패턴(`settlement_pattern`)이 있으면 그
-패턴으로 LIC를 굴립니다. `measure_paa`의 결과에서 `m.lic`로 얻습니다.
+패턴으로 LIC를 굴립니다. `paa.measure`의 결과에서 `m.lic`로 얻습니다.
 ```
 
 ## 9.6 다음 장

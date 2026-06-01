@@ -37,7 +37,7 @@
 
 * - 자리
   - 무엇이 바뀌나
-* - `Assumptions.coverages`
+* - `Basis.coverages`
   - `CoverageRate` 가 둘 — `("DEATH", death_fn)` 에 `("CANCER", cancer_fn)` 추가
 * - `ModelPoints.benefits`
   - `{0: 사망보험금, 1: 진단금}` — 정수 키가 `coverages` 의 순서 (0 = 첫째, 1 = 둘째)
@@ -76,7 +76,7 @@ cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.005) ** 12)
 lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
 
 # 계리적 가정
-asmp = fcf.Assumptions(
+asmp = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (death_fn 만)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
@@ -102,10 +102,10 @@ mp = fcf.ModelPoints.single(
     },
 )
 
-m = fcf.measure(mp, asmp)
-print(f"BEL  = {m.bel[0, 0]:.2f}")          # 최선추정부채
-print(f"RA   = {m.ra[0, 0]:.2f}")           # 위험조정
-print(f"CSM  = {m.csm[0, 0]:.2f}")          # 보험계약마진
+m = fcf.gmm.measure(mp, asmp)
+print(f"BEL  = {m.bel[0]:.2f}")          # 최선추정부채
+print(f"RA   = {m.ra[0]:.2f}")           # 위험조정
+print(f"CSM  = {m.csm[0]:.2f}")          # 보험계약마진
 print(f"Loss = {m.loss_component[0]:.2f}")  # 손실요소
 ```
 
@@ -160,10 +160,10 @@ t=1 의 암 진단 청구는 *미진단 풀* 0.9851 을 씁니다 — 단순히 
 `morbidity_cv` 를 빼면 (또는 0 으로 두면) RA 는 16.03 으로 돌아갑니다 —
 진단 담보가 RA 에 기여하려면 자기 변동계수가 필요합니다.
 
-```{admonition} show_trace 로 두 담보 확인
+```{admonition} gmm.trace 로 두 담보 확인
 :class: tip
 
-`fcf.show_trace(0, mp, asmp)` 의 Coverages 노드가 두 담보를 나란히
+`fcf.gmm.trace(0, mp, asmp)` 의 Coverages 노드가 두 담보를 나란히
 보여줍니다 — `'DEATH' method=DEATH`, `'CANCER' method=DIAGNOSIS  is_diagnosis=True`.
 `is_diagnosis=True` 인 CANCER 만 별도 `undiagnosed` 풀 노드가 붙습니다.
 ```
@@ -230,6 +230,6 @@ mortality_annual = lambda s, a, d: death_fn(s,a,d) + cancer_fn(s,a,d)   # ✗
   같은 보장 룰 추가.
 - [3.1 보험료 납입면제 (waiver)](../markov/waiver) — 상태 추적이 들어가는
   첫 챕터.
-- [검증 패턴](../workflow/validation) — `show_trace` 로 두 담보의
+- [검증 패턴](../workflow/validation) — `gmm.trace` 로 두 담보의
   cash flow 를 한 줄씩 확인.
 ```
