@@ -1,11 +1,13 @@
 ### 입력 파일과 입력 개체
 
-엔진은 두 클래스의 *개체* 만 받습니다 — `Basis` 와 `ModelPoints`.
-**`measure(mp, asmp)`** 호출의 두 인자가 바로 이 개체들. 사용자가 다루는
-*입력 파일들* 은 reader 함수를 거쳐 이 두 개체로 모입니다:
+엔진은 두 클래스의 *개체* 만 받습니다 — `Basis` (산출기초) 와
+`ModelPoints`. **`measure(mp, asmp)`** 호출의 두 인자가 바로 이 개체들.
+사용자가 다루는 *입력 파일들* 은 reader 함수를 거쳐 이 두 개체로 모입니다.
+`Basis` 는 개별 **가정** (사망률·해지율·할인율 …) 을 묶은 산출기초이고,
+`ModelPoints` 는 평가 대상 계약들입니다:
 
-- **`Basis` 클래스** — `basis = fcf.read_basis(...)` 가 한
-  입력 파일 (`basis.xlsx`, multi-sheet 워크북) 을 읽어 가정 개체를
+- **`Basis` 클래스 (산출기초)** — `basis = fcf.read_basis(...)` 가 한
+  입력 파일 (`basis.xlsx`, multi-sheet 워크북) 을 읽어 산출기초 개체를
   만듭니다.
 - **`ModelPoints` 클래스** — `mp = fcf.read_model_points(...)` 가 세 입력
   파일 (`policies.csv` / `coverages.csv` / `calculation_methods.csv`) 을 읽어

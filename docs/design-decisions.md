@@ -29,7 +29,7 @@
 쓰지 않음.
 
 **근거**:
-- 보험계리에서 "basis" (산출기초율) 는 mortality·lapse·expense·discount
+- 보험계리에서 "basis" (산출기초) 는 mortality·lapse·expense·discount
   까지 묶은 **valuation 입력 전체**를 가리키는 용어. 한 시트의 이름으로
   들어올리면 의미 충돌.
 - 그 시트의 실제 역할은 "(product, channel) → 어느 table을 쓸지 + 스칼라
@@ -52,7 +52,7 @@
 `sample_basis.xlsx` (VFA 샘플 `sample_vfa_basis.xlsx` 와 같은 패턴).
 
 **근거**:
-- #2 의 정의대로 "basis" (산출기초율) 는 mortality·lapse·expense·discount
+- #2 의 정의대로 "basis" (산출기초) 는 mortality·lapse·expense·discount
   를 묶은 **valuation 입력 전체** 를 가리키는 넓은 용어 — 워크북이 담는
   것이 정확히 그것. 파일 = 직렬화된 basis, `read_basis()` 가 그것을
   `Basis` 개체로 적재 (`config.yaml` → `Config` 패턴).
