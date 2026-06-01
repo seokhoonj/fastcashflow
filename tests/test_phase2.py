@@ -58,7 +58,7 @@ def test_mid_month_discounting():
 
 def test_csm_movement_identity():
     """The CSM roll-forward decomposes exactly into accretion and release."""
-    asmp = _flat_assumptions(
+    basis = _flat_assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         mortality_cv=0.05,
     )
@@ -71,7 +71,7 @@ def test_csm_movement_identity():
         term_months=rng.integers(60, 120, n),
         calculation_methods=PATTERNS,
     )
-    res = measure(mps, asmp)
+    res = measure(mps, basis)
 
     # csm[t+1] = csm[t] + accretion[t] - release[t], exactly
     opening = res.csm_path[:, :-1]
@@ -79,4 +79,4 @@ def test_csm_movement_identity():
     assert np.array_equal(closing, opening + res.csm_accretion - res.csm_release)
 
     # accretion is interest on the opening balance
-    assert np.array_equal(res.csm_accretion, opening * asmp.discount_monthly)
+    assert np.array_equal(res.csm_accretion, opening * basis.discount_monthly)

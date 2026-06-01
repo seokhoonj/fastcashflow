@@ -104,18 +104,18 @@ def test_disability_income_hand_calculation():
     mp = ModelPoints.single(issue_age=45, benefits={0: 0.0}, level_premium=0.0,
                             term_months=3, disability_income=income,
                             state=STATE_WAIVER)        # seated on 'disabled'
-    asmp = _asmp(disability_cv=0.20)
+    basis = _asmp(disability_cv=0.20)
 
     occ = [1.0, 0.99, 0.99 ** 2]                       # mortality only
     disability_cf = [o * income for o in occ]
     bel = sum(disability_cf)                  # zero discount, no premium
 
-    res = measure(mp, asmp)
+    res = measure(mp, basis)
     assert np.allclose(res.cashflows.disability_cf[0], disability_cf)
     assert np.isclose(res.bel_path[0, 0], bel)
-    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
+    assert np.isclose(measure(mp, basis, full=False).bel[0], bel)
     # RA: the disability-risk component, z * cv * PV(disability).
-    assert np.isclose(measure(mp, asmp, full=False).ra[0], Z_75 * 0.20 * bel)
+    assert np.isclose(measure(mp, basis, full=False).ra[0], Z_75 * 0.20 * bel)
 
 
 def test_disability_income_needs_a_benefit_state():
@@ -145,7 +145,7 @@ def test_disability_lump_sum_hand_calculation():
     lump = 10_000_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: 0.0}, level_premium=0.0,
                             term_months=2, disability_benefit=lump)
-    asmp = _asmp(q=0.01, lapse=0.0, inception=0.05)
+    basis = _asmp(q=0.01, lapse=0.0, inception=0.05)
 
     # active -> disabled transition prob = (survive death) * inception
     incep = 0.99 * 0.05
@@ -153,10 +153,10 @@ def test_disability_lump_sum_hand_calculation():
     disability_cf = [active[0] * incep * lump, active[1] * incep * lump]
     bel = sum(disability_cf)                   # zero discount, no premium
 
-    res = measure(mp, asmp)
+    res = measure(mp, basis)
     assert np.allclose(res.cashflows.disability_cf[0], disability_cf)
     assert np.isclose(res.bel_path[0, 0], bel)
-    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
+    assert np.isclose(measure(mp, basis, full=False).bel[0], bel)
 
 
 def test_lump_sum_off_when_unflagged():
@@ -186,8 +186,8 @@ def test_measure_value_agree_disability_portfolio():
         disability_benefit=rng.integers(0, 30, n) * 1_000_000.0,
         state=rng.integers(0, 2, n),           # active or disabled start
     )
-    asmp = _asmp(q=0.008, lapse=0.04, inception=0.02, disability_cv=0.25)
-    m, v = measure(mps, asmp), measure(mps, asmp, full=False)
+    basis = _asmp(q=0.008, lapse=0.04, inception=0.02, disability_cv=0.25)
+    m, v = measure(mps, basis), measure(mps, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
     assert np.allclose(m.ra_path[:, 0], v.ra)
 

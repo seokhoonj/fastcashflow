@@ -132,7 +132,7 @@ model = StateModel(states=(
     )),
 ), seating=(0, 1, 2))
 
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual      = death_fn,       # 보유계약 감쇠용 사망률 (월 1%)
     lapse_annual          = lapse_fn,       # 해지율 (없음)
     ci_incidence_annual   = incidence_fn,   # 1차 진단율 (월 5%)
@@ -155,7 +155,7 @@ mp = fcf.ModelPoints(
     calculation_methods= {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
-m = fcf.gmm.measure(mp, asmp)
+m = fcf.gmm.measure(mp, basis)
 print(f"inforce       = {m.cashflows.inforce[0]}")        # 보유계약 (사망으로만 감쇠)
 print(f"claim_cf      = {m.cashflows.claim_cf[0]}")       # 사망보험금
 print(f"disability_cf = {m.cashflows.disability_cf[0]}")  # 진단금 (1차 + 2차)
@@ -293,7 +293,7 @@ mp_seat = fcf.ModelPoints(
     calculation_methods= {"DEATH": fcf.CalculationMethod.DEATH},
 )
 # 재진단을 면책 없이 상수로 (검증용)
-asmp_no_excl = replace(asmp,
+asmp_no_excl = replace(basis,
     ci_reincidence_annual=lambda s, a, d, sd: np.full_like(sd, 1 - (1 - 0.20) ** 12,
                                                            dtype=float))
 print(f"seated BEL = {fcf.gmm.measure(mp_seat, asmp_no_excl, full=False).bel[0]:.2f}")   # -> 199000.00

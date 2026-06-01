@@ -36,12 +36,12 @@ def test_defaults_inherited():
     # Shared maintenance row in both segments' expense ledgers --
     # 60_000 per-policy; the 2% inflation is the global economic
     # assumption on the Basis object, not on the row itself.
-    for asmp in (ga, fc):
-        maint = [r for r in asmp.expense_items
+    for basis in (ga, fc):
+        maint = [r for r in basis.expense_items
                  if r.basis == "gamma_fixed"]
         assert len(maint) == 1
         assert maint[0].value == 60_000.0
-        assert asmp.expense_inflation == 0.02
+        assert basis.expense_inflation == 0.02
 
 
 def test_channel_segmented_lapse():
@@ -79,8 +79,8 @@ def test_every_segment_has_expense_items():
     """The sample workbook attaches an ``expense_table`` to every segment;
     the loader populates ``Basis.expense_items`` on each."""
     basis = fcf.samples.basis()
-    for asmp in basis.values():
-        assert asmp.expense_items                       # populated
+    for basis in basis.values():
+        assert basis.expense_items                       # populated
 
 
 def test_coverages_resolved():
@@ -94,8 +94,8 @@ def test_coverages_resolved():
     from fastcashflow import CalculationMethod
 
     basis = fcf.samples.basis()
-    asmp = basis[("TERM_LIFE_A", "GA")]
-    assert [r.code for r in asmp.coverages] == [
+    basis = basis[("TERM_LIFE_A", "GA")]
+    assert [r.code for r in basis.coverages] == [
         "DEATH", "INPATIENT", "CANCER", "ADB", "DISEASE_DEATH",
     ]
     assert fcf.samples.calculation_methods() == {
@@ -147,8 +147,8 @@ def test_state_model_column_resolves_to_registry_entry():
     """
     from fastcashflow import STATE_MODELS
     basis = fcf.samples.basis()
-    for asmp in basis.values():
-        assert asmp.state_model is STATE_MODELS["WAIVER"]
+    for basis in basis.values():
+        assert basis.state_model is STATE_MODELS["WAIVER"]
 
 
 def test_state_model_column_blank_keeps_none():
@@ -175,8 +175,8 @@ def test_state_model_column_blank_keeps_none():
             ws.cell(row=r, column=col).value = None
         wb.save(dst)
         basis = read_basis(dst)
-        for asmp in basis.values():
-            assert asmp.state_model is None
+        for basis in basis.values():
+            assert basis.state_model is None
 
 
 def test_state_model_unknown_key_raises():

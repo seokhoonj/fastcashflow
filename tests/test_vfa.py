@@ -32,10 +32,10 @@ def _assumptions(**overrides):
 
 def test_vfa_account_value_and_csm_hand_calc():
     """Account value grows at (1+r)(1-f); CSM is the entity's unearned fee."""
-    asmp = _assumptions()
+    basis = _assumptions()
     av0, term = 1e8, 60
     res = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, term, account_value=av0), asmp
+        ModelPoints.single(40, 0.0, term, account_value=av0), basis
     )
 
     r_m = 1.06 ** (1 / 12) - 1
@@ -64,14 +64,14 @@ def test_gmdb_floor_on_death_hand_calc():
     total death decrement times the per-death excess ``(gdb - av0)``.
     Surrender and maturity exits are unaffected (still pay the account value).
     """
-    asmp = _assumptions(investment_return=0.0, fund_fee=0.0)
+    basis = _assumptions(investment_return=0.0, fund_fee=0.0)
     av0, gdb, term = 1000.0, 1200.0, 60
     base = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, term, account_value=av0), asmp
+        ModelPoints.single(40, 0.0, term, account_value=av0), basis
     )
     floored = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_death_benefit=gdb), asmp
+                           minimum_death_benefit=gdb), basis
     )
     surv = (1 - Q) * (1 - LAPSE)
     deaths = surv ** np.arange(term) * Q             # monthly death decrement
@@ -81,7 +81,7 @@ def test_gmdb_floor_on_death_hand_calc():
     # A floor below the account value never bites -- max(AV, gdb) == AV.
     low = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_death_benefit=500.0), asmp
+                           minimum_death_benefit=500.0), basis
     )
     assert np.isclose(low.bel_path[0, 0], base.bel_path[0, 0])
 
@@ -94,14 +94,14 @@ def test_gmab_floor_at_maturity_hand_calc():
     in-force surviving to term times the per-survivor excess ``(gab - av0)``.
     Death and surrender exits are unaffected (still pay the account value).
     """
-    asmp = _assumptions(investment_return=0.0, fund_fee=0.0)
+    basis = _assumptions(investment_return=0.0, fund_fee=0.0)
     av0, gab, term = 1000.0, 1200.0, 60
     base = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, term, account_value=av0), asmp
+        ModelPoints.single(40, 0.0, term, account_value=av0), basis
     )
     floored = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_accumulation_benefit=gab), asmp
+                           minimum_accumulation_benefit=gab), basis
     )
     surv = (1 - Q) * (1 - LAPSE)
     maturity_survivors = surv ** term                # in-force reaching term
@@ -111,7 +111,7 @@ def test_gmab_floor_at_maturity_hand_calc():
     # A floor below the account value never bites -- max(AV, gab) == AV.
     low = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_accumulation_benefit=500.0), asmp
+                           minimum_accumulation_benefit=500.0), basis
     )
     assert np.isclose(low.bel_path[0, 0], base.bel_path[0, 0])
 
@@ -123,15 +123,15 @@ def test_floor_tvog_zero_under_flat_scenarios():
     cost, so the GMDB/GMAB floor time value is zero and the measurement
     matches the deterministic run.
     """
-    asmp = _assumptions(investment_return=0.04, fund_fee=0.01)
+    basis = _assumptions(investment_return=0.04, fund_fee=0.01)
     av0, term = 1000.0, 36
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
                             minimum_death_benefit=1100.0,
                             minimum_accumulation_benefit=1100.0)
-    deterministic = fcf.vfa.measure(mp, asmp)
+    deterministic = fcf.vfa.measure(mp, basis)
     r_m = 1.04 ** (1 / 12) - 1
     flat = np.full((8, term), r_m)
-    stochastic = fcf.vfa.measure(mp, asmp, return_scenarios=flat)
+    stochastic = fcf.vfa.measure(mp, basis, return_scenarios=flat)
     assert np.allclose(stochastic.time_value, 0.0, atol=1e-6)
     assert np.isclose(stochastic.bel_path[0, 0], deterministic.bel_path[0, 0])
 
@@ -149,12 +149,12 @@ def test_floor_tvog_matches_independent_reimplementation():
     from fastcashflow.projection import project_cashflows
     from fastcashflow.tvog import guarantee_floor_time_value
 
-    asmp = _assumptions(investment_return=0.04, fund_fee=0.0)
+    basis = _assumptions(investment_return=0.04, fund_fee=0.0)
     av0, gdb, gab, term = 1000.0, 1100.0, 1100.0, 24
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
                             minimum_death_benefit=gdb,
                             minimum_accumulation_benefit=gab)
-    proj = project_cashflows(mp, asmp)
+    proj = project_cashflows(mp, basis)
     deaths, ms = proj.deaths[0], float(proj.maturity_survivors[0])
 
     rng = np.random.default_rng(0)
@@ -242,13 +242,13 @@ def _return_paths(annual: float, vol: float, n: int, n_time: int, seed: int):
 
 def test_vfa_tvog_folds_into_bel_and_reduces_csm():
     """Return scenarios fold the guarantee's time value into the BEL."""
-    asmp = _assumptions(investment_return=0.05)
+    basis = _assumptions(investment_return=0.05)
     mp = ModelPoints.single(40, 0.0, 120,
                              account_value=1e8, minimum_crediting_rate=0.05)
     scenarios = _return_paths(0.05, vol=0.008, n=2000, n_time=120, seed=7)
 
-    plain = fcf.vfa.measure(mp, asmp)
-    stoch = fcf.vfa.measure(mp, asmp, scenarios)
+    plain = fcf.vfa.measure(mp, basis)
+    stoch = fcf.vfa.measure(mp, basis, scenarios)
     assert np.allclose(plain.time_value, 0.0)          # no scenarios -> no TVOG
     assert stoch.time_value[0] > 0.0
     # the TVOG raises the liability -- it is carried in time_value
@@ -259,13 +259,13 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
 
 def test_vfa_large_tvog_turns_the_contract_onerous():
     """A guarantee time value beyond the unearned fee makes the contract onerous."""
-    asmp = _assumptions(investment_return=0.05)
+    basis = _assumptions(investment_return=0.05)
     mp = ModelPoints.single(40, 0.0, 120,
                              account_value=1e8, minimum_crediting_rate=0.05)
     scenarios = _return_paths(0.05, vol=0.03, n=2000, n_time=120, seed=8)
 
-    plain = fcf.vfa.measure(mp, asmp)
-    stoch = fcf.vfa.measure(mp, asmp, scenarios)
+    plain = fcf.vfa.measure(mp, basis)
+    stoch = fcf.vfa.measure(mp, basis, scenarios)
     assert np.isclose(plain.loss_component[0], 0.0)
     assert stoch.loss_component[0] > 0.0
     assert np.isclose(stoch.csm_path[0, 0], 0.0)
@@ -273,20 +273,20 @@ def test_vfa_large_tvog_turns_the_contract_onerous():
 
 def test_vfa_tvog_matches_measure_tvog():
     """The TVOG folded into measure_vfa equals the stand-alone measure_tvog."""
-    asmp = _assumptions(investment_return=0.04)
+    basis = _assumptions(investment_return=0.04)
     mp = ModelPoints.single(40, 0.0, 120,
                              account_value=1e8, minimum_crediting_rate=0.045)
     scenarios = _return_paths(0.04, vol=0.012, n=1500, n_time=120, seed=9)
 
-    folded = fcf.vfa.measure(mp, asmp, scenarios).time_value.sum()
-    standalone = fcf.vfa.tvog(mp, asmp, scenarios).time_value
+    folded = fcf.vfa.measure(mp, basis, scenarios).time_value.sum()
+    standalone = fcf.vfa.tvog(mp, basis, scenarios).time_value
     assert np.isclose(folded, standalone)
 
 
 def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
     """Per-MP varying minimum_crediting_rate with stochastic return scenarios
     is not supported in v1 -- the time-value pass is portfolio-level."""
-    asmp = _assumptions(investment_return=0.04)
+    basis = _assumptions(investment_return=0.04)
     mp = ModelPoints(
         issue_age=np.array([40, 45]),
         level_premium=np.array([0.0, 0.0]),
@@ -295,7 +295,7 @@ def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
         minimum_crediting_rate=np.array([0.04, 0.05]),
     )
     with pytest.raises(NotImplementedError, match="per-MP varying"):
-        fcf.vfa.measure(mp, asmp, np.full((10, 120), 0.003))
+        fcf.vfa.measure(mp, basis, np.full((10, 120), 0.003))
 
 
 def test_vfa_ra_zero_without_expense_cv():
@@ -332,24 +332,24 @@ def test_load_sample_vfa_is_measurable():
     """The bundled VFA sample measures, and its uniform credit rate lets the
     stochastic time-value pass run."""
     mp = fcf.samples.model_points(kind="vfa")
-    asmp = fcf.samples.basis(kind="vfa")
-    m = fcf.vfa.measure(mp, asmp)
+    basis = fcf.samples.basis(kind="vfa")
+    m = fcf.vfa.measure(mp, basis)
     assert m.csm_path[:, 0].sum() > 0.0          # the variable fee is unearned profit
     assert np.allclose(m.loss_component, 0.0)
 
-    r_m = (1.0 + asmp.investment_return) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
     scen = r_m + np.random.default_rng(0).normal(
         0.0, 0.01, size=(64, int(mp.term_months.max())))
-    tvog = fcf.vfa.tvog(mp, asmp, scen)
+    tvog = fcf.vfa.tvog(mp, basis, scen)
     assert tvog.time_value != 0.0           # the guarantees carry a time value
 
 
 def test_vfa_report_releases_the_ra_into_revenue():
     """The report releases the VFA RA into insurance revenue."""
-    asmp = _assumptions(expense_items=(
+    basis = _assumptions(expense_items=(
         ExpenseItem("maintenance", "gamma_fixed", 120_000.0),
     ), expense_cv=0.25)
-    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8), asmp)
+    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8), basis)
     rep = report(m)
     ra_in_revenue = (rep.insurance_revenue - rep.insurance_service_expense
                      - m.csm_release)

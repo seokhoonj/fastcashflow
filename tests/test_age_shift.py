@@ -84,64 +84,64 @@ def test_no_age_shift(tmp_path):
     """Missing age_shift columns leave rates untouched."""
     p = tmp_path / "a.xlsx"
     _build_workbook(p)
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 11      # age 30, base = 0.011
-    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 11         # hosp at age 30
+    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 11      # age 30, base = 0.011
+    assert basis.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 11         # hosp at age 30
 
 
 def test_mortality_age_shift_positive(tmp_path):
     """A +5 shift treats every life as 5 years older in the mortality lookup."""
     p = tmp_path / "a.xlsx"
     _build_workbook(p, mortality_age_shift=5)
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # mortality at apparent age 30 + 5 = 35 (sex 0)
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 16          # 0.016
+    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 16          # 0.016
     # morbidity (hosp) unaffected -- mortality_age_shift does not touch coverage rates
-    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 11             # 0.11
+    assert basis.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 11             # 0.11
 
 
 def test_mortality_age_shift_negative(tmp_path):
     """A -3 shift treats every life as 3 years younger."""
     p = tmp_path / "a.xlsx"
     _build_workbook(p, mortality_age_shift=-3)
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([40]); d = np.array([0])
     # apparent age 40 - 3 = 37 -> rate 0.001 * 18 = 0.018
-    assert np.isclose(asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.001 * 18)
+    assert np.isclose(basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.001 * 18)
 
 
 def test_morbidity_age_shift_applies_to_all_coverages(tmp_path):
     """morbidity_age_shift shifts every rate-driven coverage, mortality untouched."""
     p = tmp_path / "a.xlsx"
     _build_workbook(p, morbidity_age_shift=2)
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # mortality unaffected
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 11
+    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 11
     # hosp shifted -- apparent age 32 -> 0.01 * 13 = 0.13
-    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 13
+    assert basis.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 13
 
 
 def test_shifts_compose_independently(tmp_path):
     """mortality and morbidity shifts apply independently to their own tables."""
     p = tmp_path / "a.xlsx"
     _build_workbook(p, mortality_age_shift=5, morbidity_age_shift=2)
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 16        # 30 + 5 = 35
-    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 13            # 30 + 2 = 32
+    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001 * 16        # 30 + 5 = 35
+    assert basis.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.01 * 13            # 30 + 2 = 32
 
 
 def test_with_age_shift_zero_is_identity(tmp_path):
     """shift = 0 returns the original callable object (no wrapping cost)."""
     p = tmp_path / "a.xlsx"
     _build_workbook(p, mortality_age_shift=0)
-    asmp = _segment(p)
+    basis = _segment(p)
     p2 = tmp_path / "b.xlsx"
     _build_workbook(p2)                                            # no column at all
     asmp2 = _segment(p2)
     # Both behave identically -- 0 shift is a no-op
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == asmp2.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0]
+    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == asmp2.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0]

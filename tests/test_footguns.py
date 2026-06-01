@@ -64,7 +64,7 @@ def test_engine_rejects_catalogue_mismatch():
         level_premium=12_000.0, term_months=60,
         calculation_methods={"DEATH": CalculationMethod.DEATH},  # catalogue: DEATH
     )
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=_flat(_annual(0.005)),
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
@@ -72,9 +72,9 @@ def test_engine_rejects_catalogue_mismatch():
         coverages=(CoverageRate("CANCER", _flat(_annual(0.005))),),  # mismatch
     )
     with pytest.raises(ValueError, match="catalogue"):
-        measure(mp, asmp)
+        measure(mp, basis)
     with pytest.raises(ValueError, match="catalogue"):
-        measure(mp, asmp, full=False)
+        measure(mp, basis, full=False)
 
 
 # ---------------------------------------------------------------------------
@@ -133,15 +133,15 @@ def test_engine_rejects_unregistered_coverage():
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
     )
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=rate, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", rate),),   # CANCER not registered
     )
     with pytest.raises(ValueError, match="no registered coverage"):
-        measure(mp, asmp)
+        measure(mp, basis)
     with pytest.raises(ValueError, match="no registered coverage"):
-        measure(mp, asmp, full=False)
+        measure(mp, basis, full=False)
 
 
 def test_engine_accepts_matching_coverage_codes():
@@ -158,7 +158,7 @@ def test_engine_accepts_matching_coverage_codes():
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
     )
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=rate_death,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
@@ -167,9 +167,9 @@ def test_engine_accepts_matching_coverage_codes():
                    CoverageRate("CANCER", rate_cancer)),
     )
     # No exception; both paths produce finite results.
-    r = measure(mp, asmp)
+    r = measure(mp, basis)
     assert np.all(np.isfinite(np.asarray(r.bel)))
-    v = measure(mp, asmp, full=False)
+    v = measure(mp, basis, full=False)
     assert np.all(np.isfinite(np.asarray(v.bel)))
 
 
@@ -179,7 +179,7 @@ def test_wide_reader_populates_coverage_codes(tmp_path):
     without any extra wiring on the user's side."""
     import polars as pl
     from fastcashflow import read_model_points
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=_flat(_annual(0.005)),
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,

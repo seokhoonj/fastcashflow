@@ -135,7 +135,7 @@ model = StateModel(states=(
     )),
 ), seating=(0, 1, 1))
 
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual           = death_fn,        # 보유계약 감쇠용 사망률 (월 1%)
     lapse_annual               = lapse_fn,        # 해지율 (없음)
     waiver_incidence_annual    = incidence_fn,    # 장해 발생률 (DLR 이라 0)
@@ -160,7 +160,7 @@ mp = fcf.ModelPoints(
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
-m = fcf.gmm.measure(mp, asmp)
+m = fcf.gmm.measure(mp, basis)
 print(f"inforce       = {m.cashflows.inforce[0]}")        # 보유계약 (active + disabled)
 print(f"disability_cf = {m.cashflows.disability_cf[0]}")  # 장해소득 (disabled 점유 × 월액)
 print(f"BEL           = {m.bel[0]:.2f}")               # 최선추정부채 (= DLR)
@@ -228,7 +228,7 @@ DI 모델의 한 줄 요약: **`disability_cf` 의 감소 속도가 꺾이는 �
 from dataclasses import replace
 from fastcashflow import STATE_ACTIVE
 
-asmp_alr = replace(asmp,
+asmp_alr = replace(basis,
     waiver_incidence_annual=lambda s, a, d: np.full(a.shape, 1 - (1 - 0.02) ** 12))
 mp_alr = fcf.ModelPoints(
     issue_age=np.array([45], dtype=np.int64), benefits={0: np.array([0.0])},
@@ -272,7 +272,7 @@ mp1 = fcf.ModelPoints(
     level_premium=np.array([0.0]), term_months=np.array([1], dtype=np.int64),
     disability_income=np.array([1_000_000.0]), state=np.array([1], dtype=np.int64),
     calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
-print(f"seated 1mo BEL = {fcf.gmm.measure(mp1, asmp, full=False).bel[0]:.2f}")   # -> 1000000.00
+print(f"seated 1mo BEL = {fcf.gmm.measure(mp1, basis, full=False).bel[0]:.2f}")   # -> 1000000.00
 ```
 
 ### 함정 1 — `disability_income` 과 `disability_benefit` 혼동

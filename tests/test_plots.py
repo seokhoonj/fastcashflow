@@ -15,9 +15,9 @@ import fastcashflow as fcf
 @pytest.fixture(scope="module")
 def book():
     """A small measured book: model points, basis, measurement."""
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     mps = fcf.samples.model_points()
-    return mps, asmp, fcf.gmm.measure(mps, asmp)
+    return mps, basis, fcf.gmm.measure(mps, basis)
 
 
 def test_plot_liability_returns_axes(book):
@@ -55,31 +55,31 @@ def test_plot_analysis_of_change_rejects_bad_component(book):
 
 
 def test_plot_stochastic_returns_axes(book):
-    mps, asmp, _ = book
-    dist = fcf.gmm.stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
+    mps, basis, _ = book
+    dist = fcf.gmm.stochastic(mps, basis, np.array([0.02, 0.03, 0.04]))
     assert isinstance(fcf.plot_stochastic(dist), Axes)
 
 
 def test_plot_stochastic_without_kde(book):
-    mps, asmp, _ = book
-    dist = fcf.gmm.stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
+    mps, basis, _ = book
+    dist = fcf.gmm.stochastic(mps, basis, np.array([0.02, 0.03, 0.04]))
     assert isinstance(fcf.plot_stochastic(dist, kde=False), Axes)
 
 
 def test_plot_stochastic_rejects_bad_line(book):
-    mps, asmp, _ = book
-    dist = fcf.gmm.stochastic(mps, asmp, np.array([0.02, 0.03, 0.04]))
+    mps, basis, _ = book
+    dist = fcf.gmm.stochastic(mps, basis, np.array([0.02, 0.03, 0.04]))
     with pytest.raises(ValueError):
         fcf.plot_stochastic(dist, line="xxx")
 
 
 def test_plot_risk_adjustment_returns_axes(book):
-    _, asmp, m = book
-    assert isinstance(fcf.plot_risk_adjustment(m, asmp), Axes)
+    _, basis, m = book
+    assert isinstance(fcf.plot_risk_adjustment(m, basis), Axes)
 
 
 def test_plot_risk_adjustment_rejects_cost_of_capital(book):
-    _, asmp, m = book
-    coc = replace(asmp, ra_method="cost_of_capital")
+    _, basis, m = book
+    coc = replace(basis, ra_method="cost_of_capital")
     with pytest.raises(ValueError):
         fcf.plot_risk_adjustment(m, coc)

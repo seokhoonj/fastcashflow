@@ -37,8 +37,8 @@ def test_surrender_cf_zero_when_curve_is_none():
         level_premium=50_000.0, term_months=12,
         calculation_methods=PATTERNS,
     )
-    asmp = _basis(lapse_rate=0.1, surrender_curve=None)
-    m = measure(mp, asmp)
+    basis = _basis(lapse_rate=0.1, surrender_curve=None)
+    m = measure(mp, basis)
     assert np.all(m.cashflows.surrender_cf == 0.0)
 
 
@@ -56,9 +56,9 @@ def test_surrender_cf_hand_calc_single_period():
     lapse_annual = 0.12
     # Flat 50% factor at every month
     curve = np.full(13, 0.5)
-    asmp = _basis(lapse_rate=lapse_annual, surrender_curve=curve)
+    basis = _basis(lapse_rate=lapse_annual, surrender_curve=curve)
 
-    m = measure(mp, asmp)
+    m = measure(mp, basis)
     # At t=0, premium_cf = 10000, cum_premium[0] = 10000
     # inforce[0] = 1.0, lapse_monthly = 1 - (1 - 0.12)**(1/12)
     lapse_monthly = 1.0 - (1.0 - lapse_annual) ** (1.0 / 12.0)
@@ -80,8 +80,8 @@ def test_surrender_cf_accumulates_with_cum_premium():
         level_premium=10_000.0, term_months=24,
         calculation_methods=PATTERNS,
     )
-    asmp = _basis(lapse_rate=0.05, surrender_curve=np.full(25, 0.8))
-    m = measure(mp, asmp)
+    basis = _basis(lapse_rate=0.05, surrender_curve=np.full(25, 0.8))
+    m = measure(mp, basis)
     cum_prem = np.cumsum(m.cashflows.premium_cf[0])
     expected_ratio = cum_prem[11] / cum_prem[0]
     actual_ratio = m.cashflows.surrender_cf[0, 11] / m.cashflows.surrender_cf[0, 0]

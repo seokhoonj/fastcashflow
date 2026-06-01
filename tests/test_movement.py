@@ -380,8 +380,8 @@ def test_roll_forward_paa_rejects_gmm_options():
 
 def test_roll_forward_paa_reconciles_all_three_components():
     """LRC, loss component and LIC each reconcile, with a settlement pattern."""
-    asmp = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
-    for p in roll_forward(fcf.paa.measure(_portfolio(), asmp), 12):
+    basis = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
+    for p in roll_forward(fcf.paa.measure(_portfolio(), basis), 12):
         assert np.allclose(p.lrc_opening + p.premiums - p.revenue, p.lrc_closing)
         assert np.allclose(p.lc_opening - p.lc_release, p.lc_closing)
         assert np.allclose(
@@ -429,10 +429,10 @@ def test_settlement_lag_lowers_the_bel():
 
 def test_settlement_lag_value_matches_measure():
     """measure() and measure() agree once the settlement lag is reflected."""
-    asmp = replace(_assumptions(), settlement_pattern=np.array([0.4, 0.6]))
+    basis = replace(_assumptions(), settlement_pattern=np.array([0.4, 0.6]))
     mps = _portfolio()
-    v = measure(mps, asmp, full=False)
-    m = measure(mps, asmp)
+    v = measure(mps, basis, full=False)
+    m = measure(mps, basis)
     assert np.allclose(v.bel, m.bel_path[:, 0])
     assert np.allclose(v.ra, m.ra_path[:, 0])
     assert np.allclose(v.csm, m.csm_path[:, 0])
@@ -440,8 +440,8 @@ def test_settlement_lag_value_matches_measure():
 
 def test_reconcile_paa():
     """The PAA reconciliation aggregates the three components and renders."""
-    asmp = replace(_assumptions(), settlement_pattern=np.array([0.6, 0.4]))
-    recons = reconcile(roll_forward(fcf.paa.measure(_portfolio(), asmp), 12))
+    basis = replace(_assumptions(), settlement_pattern=np.array([0.6, 0.4]))
+    recons = reconcile(roll_forward(fcf.paa.measure(_portfolio(), basis), 12))
     assert len(recons) == 10
     for r in recons:
         assert np.isclose(r.lrc_opening + r.premiums + r.revenue, r.lrc_closing)

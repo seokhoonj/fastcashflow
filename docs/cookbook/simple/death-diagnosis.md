@@ -76,7 +76,7 @@ cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.005) ** 12)
 lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
 
 # 계리적 가정
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (death_fn 만)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
@@ -102,7 +102,7 @@ mp = fcf.ModelPoints.single(
     },
 )
 
-m = fcf.gmm.measure(mp, asmp)
+m = fcf.gmm.measure(mp, basis)
 print(f"BEL  = {m.bel[0]:.2f}")          # 최선추정부채
 print(f"RA   = {m.ra[0]:.2f}")           # 위험조정
 print(f"CSM  = {m.csm[0]:.2f}")          # 보험계약마진
@@ -163,7 +163,7 @@ t=1 의 암 진단 청구는 *미진단 풀* 0.9851 을 씁니다 — 단순히 
 ```{admonition} gmm.trace 로 두 담보 확인
 :class: tip
 
-`fcf.gmm.trace(0, mp, asmp)` 의 Coverages 노드가 두 담보를 나란히
+`fcf.gmm.trace(0, mp, basis)` 의 Coverages 노드가 두 담보를 나란히
 보여줍니다 — `'DEATH' method=DEATH`, `'CANCER' method=DIAGNOSIS  is_diagnosis=True`.
 `is_diagnosis=True` 인 CANCER 만 별도 `undiagnosed` 풀 노드가 붙습니다.
 ```

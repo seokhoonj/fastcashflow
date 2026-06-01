@@ -31,21 +31,21 @@ def _assumptions(**overrides):
 
 def test_maturity_benefit_adds_its_present_value():
     """Adding a maturity benefit raises BEL by exactly its present value."""
-    asmp = _assumptions()
+    basis = _assumptions()
     death_benefit, maturity, premium, term = 1e8, 5e7, 50_000.0, 24
 
     term_life = measure(
-        ModelPoints.single(40, premium, term, benefits={0: death_benefit}, calculation_methods=PATTERNS), asmp
+        ModelPoints.single(40, premium, term, benefits={0: death_benefit}, calculation_methods=PATTERNS), basis
     )
     endowment = measure(
         ModelPoints.single(
             40, premium, term, benefits={0: death_benefit}, maturity_benefit=maturity,
             calculation_methods=PATTERNS,
         ),
-        asmp,
+        basis,
     )
 
-    i = asmp.discount_monthly
+    i = basis.discount_monthly
     survivors = ((1.0 - Q) * (1.0 - LAPSE)) ** term
     pv_maturity = survivors * maturity * (1.0 + i) ** (-term)
     assert np.isclose(endowment.bel_path[0, 0] - term_life.bel_path[0, 0], pv_maturity)
@@ -53,18 +53,18 @@ def test_maturity_benefit_adds_its_present_value():
 
 def test_pure_endowment():
     """A pure endowment (no death benefit) carries zero RA -- hand-checked BEL."""
-    asmp = _assumptions()
+    basis = _assumptions()
     maturity, premium, term = 5e7, 50_000.0, 24
     res = measure(
         ModelPoints.single(40, premium, term, maturity_benefit=maturity, calculation_methods=PATTERNS),
-        asmp,
+        basis,
     )
 
     # no death benefit -> no death claims -> zero Risk Adjustment
     assert np.allclose(res.ra, 0.0)
 
     # inception BEL = PV(maturity benefit) - PV(premiums), zero expenses
-    i = asmp.discount_monthly
+    i = basis.discount_monthly
     surv = (1.0 - Q) * (1.0 - LAPSE)
     t = np.arange(term)
     pv_premiums = float(np.sum(surv ** t * premium * (1.0 + i) ** (-t)))
@@ -84,9 +84,9 @@ def test_value_matches_measure_endowment():
         maturity_benefit=rng.integers(5, 40, n) * 1_000_000,
         calculation_methods=PATTERNS,
     )
-    asmp = _assumptions()
-    fast = measure(mps, asmp, full=False)
-    detailed = measure(mps, asmp)
+    basis = _assumptions()
+    fast = measure(mps, basis, full=False)
+    detailed = measure(mps, basis)
 
     assert np.allclose(fast.bel, detailed.bel_path[:, 0])
     assert np.allclose(fast.ra, detailed.ra_path[:, 0])
@@ -96,17 +96,17 @@ def test_value_matches_measure_endowment():
 
 def test_immediate_annuity_hand_calc():
     """A pure immediate annuity -- hand-checked inception BEL and RA."""
-    asmp = _assumptions(longevity_cv=0.08)
+    basis = _assumptions(longevity_cv=0.08)
     single, annuity, term = 1.2e8, 600_000.0, 24
     res = measure(
         ModelPoints.single(
             40, 0.0, term, annuity_payment=annuity, single_premium=single,
             calculation_methods=PATTERNS,
         ),
-        asmp,
+        basis,
     )
 
-    i = asmp.discount_monthly
+    i = basis.discount_monthly
     surv = (1.0 - Q) * (1.0 - LAPSE)
     full = 1.0 / (1.0 + i)
     t = np.arange(term)
@@ -115,8 +115,8 @@ def test_immediate_annuity_hand_calc():
     # BEL = PV(annuity outgo) - the single premium (paid at t=0, discount 1)
     assert np.isclose(res.bel_path[0, 0], pv_annuity - single)
     # longevity RA = z(confidence) * longevity_cv * PV(survival benefits)
-    z = _norm_ppf(asmp.ra_confidence)
-    assert np.isclose(res.ra_path[0, 0], z * asmp.longevity_cv * pv_annuity)
+    z = _norm_ppf(basis.ra_confidence)
+    assert np.isclose(res.ra_path[0, 0], z * basis.longevity_cv * pv_annuity)
 
 
 def test_value_matches_measure_annuity():
@@ -132,9 +132,9 @@ def test_value_matches_measure_annuity():
         single_premium=rng.integers(80, 200, n) * 1_000_000,
         calculation_methods=PATTERNS,
     )
-    asmp = _assumptions(longevity_cv=0.08)
-    fast = measure(mps, asmp, full=False)
-    detailed = measure(mps, asmp)
+    basis = _assumptions(longevity_cv=0.08)
+    fast = measure(mps, basis, full=False)
+    detailed = measure(mps, basis)
 
     assert np.allclose(fast.bel, detailed.bel_path[:, 0])
     assert np.allclose(fast.ra, detailed.ra_path[:, 0])

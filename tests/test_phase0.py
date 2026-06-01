@@ -120,7 +120,7 @@ def test_count_scales_linearly():
     """
     kw = dict(issue_age=40, benefits={0: 1_000_000.0}, level_premium=12_000.0,
               term_months=24, single_premium=5_000.0)
-    asmp = _assumptions(
+    basis = _assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         discount_annual=0.03,
         expense_items=(
@@ -130,8 +130,8 @@ def test_count_scales_linearly():
     )
     n = 1000.0
 
-    one = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), asmp)
-    many = measure(ModelPoints.single(**kw, count=n, calculation_methods=PATTERNS), asmp)
+    one = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), basis)
+    many = measure(ModelPoints.single(**kw, count=n, calculation_methods=PATTERNS), basis)
     assert many.csm_path[0, 0] > 0.0          # profitable contract -- the CSM scales
     for field in ("bel_path", "ra_path", "csm_path"):
         assert np.isclose(getattr(many, field)[0, 0],
@@ -139,8 +139,8 @@ def test_count_scales_linearly():
     assert np.isclose(many.cashflows.inforce[0, 0], n)
 
     # the fused fast path scales identically
-    v_one = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), asmp, full=False)
-    v_many = measure(ModelPoints.single(**kw, count=n, calculation_methods=PATTERNS), asmp, full=False)
+    v_one = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), basis, full=False)
+    v_many = measure(ModelPoints.single(**kw, count=n, calculation_methods=PATTERNS), basis, full=False)
     for field in ("bel", "ra", "csm"):
         assert np.isclose(getattr(v_many, field)[0],
                           n * getattr(v_one, field)[0])

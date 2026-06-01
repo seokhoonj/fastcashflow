@@ -40,7 +40,7 @@
   - 담보별 산출방식 — 담보 코드 → 산출방식
 ```
 
-이 절은 네 파일을 `assumptions` → `policies` → `coverages` →
+이 절은 네 파일을 `basis` → `policies` → `coverages` →
 `calculation_methods` 순서로 봅니다. 코드에서 reader 가 도는 순서가
 그대로입니다 — `read_basis` 가 먼저, 그 다음 `read_model_points`
 가 세 파일을 ModelPoints 개체로 묶습니다.
@@ -221,8 +221,8 @@ fcf.save_sample_calculation_methods("calculation_methods.csv")     # .csv / .xls
 # .xlsx 는 시트당 ~ 1M row 한계 -- 대형 portfolio 는 .parquet / .feather 권장
 
 # (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 in-force 측정
-basis       = fcf.read_basis("basis.xlsx")       # {(product_code, channel_code): Basis}
-assumptions = basis[("TERM_LIFE_A", "GA")]                   # 한 세그먼트 선택
+basis = fcf.read_basis("basis.xlsx")    # {(product_code, channel_code): Basis}
+basis = basis[("TERM_LIFE_A", "GA")]    # 한 세그먼트 선택
 
 model_points, state = fcf.read_inforce_policies(
     "inforce_2026Q1.csv",                                    # 결산 1-파일 (spec + state 결합)
@@ -230,7 +230,7 @@ model_points, state = fcf.read_inforce_policies(
     calculation_methods="calculation_methods.csv",           # 담보별 산출방식
 )
 val = fcf.value_in_force(
-    model_points, assumptions, period_months=3,              # 다음 분기 (3 개월) 까지의 평가
+    model_points, basis, period_months=3,              # 다음 분기 (3 개월) 까지의 평가
     prior_csm    = state.prior_csm,                          # 직전 분기 종가 CSM
     lock_in_rate = state.lock_in_rate,                       # 가입 시점의 할인율
 )
@@ -265,7 +265,7 @@ fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
 없으니* `inforce_state` 컬럼이 없는 보통의 policies 파일로:
 
 ​    `model_points = fcf.read_model_points("new_business.csv", coverages=..., calculation_methods=...)`
-​    `val = fcf.gmm.measure(model_points, assumptions, full=False)`
+​    `val = fcf.gmm.measure(model_points, basis, full=False)`
 
 `read_model_points` 와 `measure` 의 흐름. 8 장에서 이미 본 형태와 같습니다.
 신계약과 보유계약은 같은 엔진이지만 입력 파일 / 함수가 다른 두 *모드*.
@@ -287,11 +287,11 @@ state)`. 결과는 위 1-파일과 동일.
 ```python
 # 시연용 셋업 -- long-form 샘플을 wide parquet 로 한 번 변환
 # (자기 데이터를 쓸 때는 이미 wide parquet 형태로 갖고 있다고 가정)
-model_points.to_wide(assumptions).write_parquet("portfolio.parquet")
+model_points.to_wide(basis).write_parquet("portfolio.parquet")
 
 # 스트리밍 평가 -- 한 줄. 결과는 results/ 폴더에 분할 저장
 fcf.gmm.measure_stream(
-    "portfolio.parquet", "results/", assumptions,
+    "portfolio.parquet", "results/", basis,
     calculation_methods="calculation_methods.csv",
 )
 ```

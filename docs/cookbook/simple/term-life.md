@@ -92,7 +92,7 @@ mp = fcf.ModelPoints.single(
 )
 
 # 계리적 가정
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
@@ -103,7 +103,7 @@ asmp = fcf.Basis(
     ),
 )
 
-m = fcf.gmm.measure(mp, asmp)
+m = fcf.gmm.measure(mp, basis)
 print(f"BEL  = {m.bel[0]:.2f}")          # 최선추정부채
 print(f"RA   = {m.ra[0]:.2f}")           # 위험조정
 print(f"CSM  = {m.csm[0]:.2f}")          # 보험계약마진
@@ -136,7 +136,7 @@ Loss = 55.14
 ```{admonition} gmm.trace 로 한 줄씩 풀어 보기
 :class: tip
 
-`fcf.gmm.trace(0, mp, asmp)` 한 줄이면 매월 cash flow, BEL 의 후방
+`fcf.gmm.trace(0, mp, basis)` 한 줄이면 매월 cash flow, BEL 의 후방
 재귀, CSM 의 전방 진행이 ASCII 트리로 풀려 나옵니다. 손계산과 엔진이
 어긋날 때 어느 단계에서 갈렸는지 한눈에 확인. 자세한 사용은
 [검증 패턴](../workflow/validation).
@@ -390,8 +390,8 @@ portfolio = fcf.ModelPoints(
     calculation_methods = fcf.samples.calculation_methods(),
 )
 
-asmp   = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
-result = fcf.gmm.measure(portfolio, asmp, full=False)
+basis   = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+result = fcf.gmm.measure(portfolio, basis, full=False)
 
 print(f"Total  : {result.bel.sum():>15,.0f}")                  # 합계
 print(f"Mean   : {result.bel.mean():>15,.0f}")                 # 평균
@@ -445,7 +445,7 @@ mp = fcf.ModelPoints.single(
 
 ```python
 basis = fcf.samples.basis()
-asmp  = basis[("TERM_LIFE_A", "TM")]   # KeyError: 샘플의 TERM_LIFE_A 는 GA / FC 만
+basis  = basis[("TERM_LIFE_A", "TM")]   # KeyError: 샘플의 TERM_LIFE_A 는 GA / FC 만
 ```
 
 `basis.keys()` 로 어떤 segment 가 있는지 먼저 확인:

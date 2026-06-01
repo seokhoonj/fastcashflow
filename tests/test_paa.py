@@ -37,10 +37,10 @@ def test_paa_revenue_equals_total_premium():
 
 def test_paa_lrc_hand_calc():
     """Single-premium contract -- the LRC is the textbook pro-rata UPR."""
-    asmp = _assumptions()
+    basis = _assumptions()
     single, term = 1_000_000.0, 12
     res = fcf.paa.measure(
-        ModelPoints.single(40, 0.0, term, benefits={0: 1e8}, single_premium=single, calculation_methods=PATTERNS), asmp
+        ModelPoints.single(40, 0.0, term, benefits={0: 1e8}, single_premium=single, calculation_methods=PATTERNS), basis
     )
 
     # straight-line earning: the premium spread evenly over the coverage period
@@ -64,11 +64,11 @@ def test_paa_lrc_builds_and_releases():
 
 def test_paa_service_result_is_the_underwriting_profit():
     """Total service result = premiums - claims - expenses."""
-    asmp = _assumptions(expense_items=(
+    basis = _assumptions(expense_items=(
         ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
         ExpenseItem("maintenance",  "gamma_fixed",  12_000.0),
     ))
-    res = fcf.paa.measure(ModelPoints.single(45, 60_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS), asmp)
+    res = fcf.paa.measure(ModelPoints.single(45, 60_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS), basis)
     cf = res.cashflows
     profit = (cf.premium_cf.sum() - cf.claim_cf.sum()
               - cf.morbidity_cf.sum() - cf.expense_cf.sum())
@@ -89,12 +89,12 @@ def test_paa_onerous_contract_carries_a_loss():
 
 def test_paa_revenue_basis_claims():
     """B126(b): revenue allocated by the expected timing of incurred claims."""
-    asmp = _assumptions(expense_items=(
+    basis = _assumptions(expense_items=(
         ExpenseItem("acquisition", "alpha_fixed", 500_000.0),
     ))
     mps = ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS)
-    by_time = fcf.paa.measure(mps, asmp, revenue_basis="time")
-    by_claims = fcf.paa.measure(mps, asmp, revenue_basis="claims")
+    by_time = fcf.paa.measure(mps, basis, revenue_basis="time")
+    by_claims = fcf.paa.measure(mps, basis, revenue_basis="claims")
 
     total_premium = by_claims.cashflows.premium_cf.sum()
     assert np.isclose(by_claims.revenue.sum(), total_premium)   # still totals premium

@@ -201,7 +201,7 @@ death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0)
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 계리적 가정
-assumptions = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual  = death_fn,           # 사망률 함수 (사망 없음 가정)
     lapse_annual      = lapse_fn,           # 해지율 함수 (해지 없음 가정)
     discount_annual   = 0.03,               # 연 할인율 3%
@@ -219,7 +219,7 @@ model_points = fcf.ModelPoints.single(
     term_months   = 3,          # 보험기간 3개월
     account_value = 1_000_000,  # 초기 계좌가치 100만원
 )
-m = fcf.vfa.measure(model_points, assumptions)
+m = fcf.vfa.measure(model_points, basis)
 print(m.account_value_path[0])   # 계좌가치 궤적
 print(m.csm_path[0])             # CSM 궤적
 ```

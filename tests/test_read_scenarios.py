@@ -73,12 +73,12 @@ def test_read_scenarios_feeds_measure_stochastic(tmp_path):
     p = tmp_path / "scen.parquet"
     df.write_parquet(p)
 
-    asmp = _flat_asmp()
+    basis = _flat_asmp()
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000.0},
                             level_premium=10.0, term_months=24, count=1)
 
     scenarios = read_scenarios(p)
-    result = fcf.gmm.stochastic(mp, asmp, scenarios)
+    result = fcf.gmm.stochastic(mp, basis, scenarios)
     assert result.bel.shape == (n_scenarios,)
     # The four scenarios must give four distinct BEL values (the discount
     # curve actually drives the kernel, not silently ignored).

@@ -70,10 +70,10 @@ def test_one_month_only_death_claim():
     No other PV components fire (no premium, no annuity, no reincidence,
     no maturity), so bel = pc = 10_000.
     """
-    asmp = _flat_assumptions(
+    basis = _flat_assumptions(
         ci_reincidence_fn=lambda s, a, p, sd: np.zeros_like(sd, dtype=float),
     )
-    v = fcf.gmm.measure(_single_contract(1), asmp, full=False)
+    v = fcf.gmm.measure(_single_contract(1), basis, full=False)
     assert np.isclose(v.bel[0], 10_000.0), v.bel[0]
 
 
@@ -83,11 +83,11 @@ def test_one_month_with_reincidence_in_exclusion():
     Even with a nonzero reincidence rate the first-month BEL must equal
     the pure-death-claim value of the prior test.
     """
-    asmp = _flat_assumptions(
+    basis = _flat_assumptions(
         ci_reincidence_fn=lambda s, a, p, sd: np.full_like(sd, _annual(0.02),
                                                            dtype=float),
     )
-    v = fcf.gmm.measure(_single_contract(1), asmp, full=False)
+    v = fcf.gmm.measure(_single_contract(1), basis, full=False)
     assert np.isclose(v.bel[0], 10_000.0), v.bel[0]
 
 
@@ -111,10 +111,10 @@ def test_two_month_first_diagnosis_no_reincidence():
 
     Total bel = 10_000 + 9_990 = 19_990.
     """
-    asmp = _flat_assumptions(
+    basis = _flat_assumptions(
         ci_reincidence_fn=lambda s, a, p, sd: np.zeros_like(sd, dtype=float),
     )
-    v = fcf.gmm.measure(_single_contract(2), asmp, full=False)
+    v = fcf.gmm.measure(_single_contract(2), basis, full=False)
     assert np.isclose(v.bel[0], 19_990.0), v.bel[0]
 
 
@@ -137,7 +137,7 @@ def test_one_month_reincidence_active_via_seating():
     def ci_rein(s, a, p, sd):
         return np.full_like(sd, _annual(0.02), dtype=float)
 
-    asmp = _flat_assumptions(ci_reincidence_fn=ci_rein)
+    basis = _flat_assumptions(ci_reincidence_fn=ci_rein)
     mp = fcf.ModelPoints(
         issue_age=np.array([40], dtype=np.int64),
         benefits={0: np.array([10_000_000.0])},
@@ -147,7 +147,7 @@ def test_one_month_reincidence_active_via_seating():
         state=np.array([1], dtype=np.int64),    # seat on post_first,
         calculation_methods=PATTERNS,
     )
-    v = fcf.gmm.measure(mp, asmp, full=False)
+    v = fcf.gmm.measure(mp, basis, full=False)
     assert np.isclose(v.bel[0], 109_900.0), v.bel[0]
 
 
@@ -213,10 +213,10 @@ def test_measure_value_agree_single_contract():
     """One contract, 36-month term, mid-exclusion -- measure().bel_path[:,0] must
     equal measure().bel within floating-point tolerance.
     """
-    asmp = _reincidence_assumptions(duration_max=12, exclusion_months=6,
+    basis = _reincidence_assumptions(duration_max=12, exclusion_months=6,
                                      reincidence_monthly=0.01)
     mp = _single_contract(36)
-    m, v = fcf.gmm.measure(mp, asmp), fcf.gmm.measure(mp, asmp, full=False)
+    m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
@@ -235,9 +235,9 @@ def test_measure_value_agree_mixed_portfolio():
         state=rng.integers(0, 3, n).astype(np.int64),
         calculation_methods=PATTERNS,
     )
-    asmp = _reincidence_assumptions(duration_max=24, exclusion_months=12,
+    basis = _reincidence_assumptions(duration_max=24, exclusion_months=12,
                                      reincidence_monthly=0.008)
-    m, v = fcf.gmm.measure(mp, asmp), fcf.gmm.measure(mp, asmp, full=False)
+    m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
@@ -256,9 +256,9 @@ def test_measure_value_agree_long_cohort():
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
         calculation_methods=PATTERNS,
     )
-    asmp = _reincidence_assumptions(duration_max=60, exclusion_months=24,
+    basis = _reincidence_assumptions(duration_max=60, exclusion_months=24,
                                      reincidence_monthly=0.012)
-    m, v = fcf.gmm.measure(mp, asmp), fcf.gmm.measure(mp, asmp, full=False)
+    m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
@@ -355,7 +355,7 @@ def test_semi_markov_with_waiting_period_on_coverage():
     """Reincidence model + recurring coverage with a 3-month waiting period.
     measure() and measure() must agree.
     """
-    asmp = _reincidence_assumptions_with_extra_coverage(
+    basis = _reincidence_assumptions_with_extra_coverage(
         duration_max=12, exclusion_months=6,
         extra_is_diagnosis=False, extra_rate=0.0008,
     )
@@ -364,7 +364,7 @@ def test_semi_markov_with_waiting_period_on_coverage():
         extra_waiting=3, extra_reduction_end=0, extra_reduction_factor=1.0,
         extra_is_diagnosis=False,
     )
-    m, v = fcf.gmm.measure(mp, asmp), fcf.gmm.measure(mp, asmp, full=False)
+    m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
@@ -373,7 +373,7 @@ def test_semi_markov_with_diagnosis_coverage():
     coverage's claim runs off a depleting not-yet-diagnosed pool that must
     apply to the cohort-aware in-force trajectory.
     """
-    asmp = _reincidence_assumptions_with_extra_coverage(
+    basis = _reincidence_assumptions_with_extra_coverage(
         duration_max=12, exclusion_months=6,
         extra_is_diagnosis=True, extra_rate=0.0008,
     )
@@ -382,7 +382,7 @@ def test_semi_markov_with_diagnosis_coverage():
         extra_waiting=0, extra_reduction_end=0, extra_reduction_factor=1.0,
         extra_is_diagnosis=True,
     )
-    m, v = fcf.gmm.measure(mp, asmp), fcf.gmm.measure(mp, asmp, full=False)
+    m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
@@ -391,7 +391,7 @@ def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
     waiting + reduction on a diagnosis coverage. Each lives on its own axis
     and the engine has to combine them correctly.
     """
-    asmp = _reincidence_assumptions_with_extra_coverage(
+    basis = _reincidence_assumptions_with_extra_coverage(
         duration_max=12, exclusion_months=6,
         extra_is_diagnosis=True, extra_rate=0.001,
     )
@@ -400,7 +400,7 @@ def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
         extra_waiting=6, extra_reduction_end=24, extra_reduction_factor=0.5,
         extra_is_diagnosis=True,
     )
-    m, v = fcf.gmm.measure(mp, asmp), fcf.gmm.measure(mp, asmp, full=False)
+    m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
@@ -463,7 +463,7 @@ def test_di_recovery_hand_calc_one_month_seated_on_disabled():
     BEL = 1_000_000 (only disability income; no premium since seated on
     disabled which is premium=False, no maturity, no death claim).
     """
-    asmp = fcf.Basis(
+    basis = fcf.Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
         lapse_annual=lambda s, a, d: np.full(d.shape, 0.0),
         waiver_incidence_annual=lambda s, a, d: np.full(d.shape, 0.0),
@@ -485,7 +485,7 @@ def test_di_recovery_hand_calc_one_month_seated_on_disabled():
         state=np.array([1], dtype=np.int64),
         calculation_methods=PATTERNS,
     )
-    v = fcf.gmm.measure(mp, asmp, full=False)
+    v = fcf.gmm.measure(mp, basis, full=False)
     assert np.isclose(v.bel[0], 1_000_000.0), v.bel[0]
 
 
@@ -525,7 +525,7 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
         return np.where(sd < 3, _annual(0.20),
                         np.where(sd < 12, _annual(0.05),
                                  _annual(0.01)))
-    asmp = fcf.Basis(
+    basis = fcf.Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
         lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
         waiver_incidence_annual=lambda s, a, d: np.full(
@@ -555,7 +555,7 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
         state=rng.integers(0, 2, n).astype(np.int64),
         calculation_methods=PATTERNS,
     )
-    m, v = fcf.gmm.measure(mp, asmp), fcf.gmm.measure(mp, asmp, full=False)
+    m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
@@ -624,7 +624,7 @@ def test_semi_markov_with_rule_and_diagnosis_coverages_together():
 
     base = _reincidence_assumptions(duration_max=12, exclusion_months=6,
                                      reincidence_monthly=0.01)
-    asmp = fcf.Basis(
+    basis = fcf.Basis(
         mortality_annual=base.mortality_annual,
         lapse_annual=base.lapse_annual,
         ci_incidence_annual=base.ci_incidence_annual,
@@ -646,7 +646,7 @@ def test_semi_markov_with_rule_and_diagnosis_coverages_together():
         rule_waiting=3, rule_reduction_end=12,
         rule_reduction_factor=0.6,
     )
-    m, v = fcf.gmm.measure(mp, asmp), fcf.gmm.measure(mp, asmp, full=False)
+    m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
@@ -680,12 +680,12 @@ def test_workbook_elapsed_axis_drives_semi_markov_reincidence(tmp_path):
     reincidence_fn = _flex_rate_table(reload["rates"])["CAN_RE"]
     zero_fn = _flex_rate_table(reload["rates_zero"])["CAN_RE_Z"]
 
-    asmp = _flat_assumptions(ci_reincidence_fn=reincidence_fn)
+    basis = _flat_assumptions(ci_reincidence_fn=reincidence_fn)
     mp = _single_contract(term_months=24, death_benefit=10_000_000.0,
                           reincidence_benefit=5_000_000.0)
     # measure / value parity is the existing semi-Markov contract -- a
     # workbook-sourced reincidence rate keeps it.
-    m, v = fcf.gmm.measure(mp, asmp), fcf.gmm.measure(mp, asmp, full=False)
+    m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.isclose(m.bel_path[0, 0], v.bel[0])
     # Swap to a zero-rate sheet -- the BEL must move because the elapsed
     # axis really drives the reincidence claim outflow.

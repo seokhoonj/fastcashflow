@@ -85,15 +85,15 @@ def test_quarterly_premium_hand_calculation():
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
                             level_premium=premium, term_months=6,
                             premium_frequency_months=3)
-    asmp = _asmp(q_annual=1.0 - (1.0 - q_m) ** 12)   # monthly q_m at the engine
+    basis = _asmp(q_annual=1.0 - (1.0 - q_m) ** 12)   # monthly q_m at the engine
 
     inforce = [(1.0 - q_m) ** t for t in range(6)]
     pv_claims = sum(i * q_m * death_benefit for i in inforce)
     pv_prem = premium * (inforce[0] + inforce[3])    # premium at months 0, 3
     bel = pv_claims - pv_prem
 
-    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
-    assert np.isclose(measure(mp, asmp).bel_path[0, 0], bel)
+    assert np.isclose(measure(mp, basis, full=False).bel[0], bel)
+    assert np.isclose(measure(mp, basis).bel_path[0, 0], bel)
 
 
 def test_premium_frequency_respects_premium_term():
@@ -146,8 +146,8 @@ def test_measure_value_agree_under_frequency():
         premium_frequency_months=freqs[rng.integers(0, 4, n)],
         annuity_frequency_months=freqs[rng.integers(0, 4, n)],
     )
-    asmp = _asmp(q_annual=0.08, lapse_annual=0.05)
-    m, v = measure(mps, asmp), measure(mps, asmp, full=False)
+    basis = _asmp(q_annual=0.08, lapse_annual=0.05)
+    m, v = measure(mps, basis), measure(mps, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
     assert np.allclose(m.ra_path[:, 0], v.ra)
 
@@ -157,10 +157,10 @@ def test_default_frequency_is_monthly():
     and annuity, identical to passing 1 explicitly."""
     kw = dict(issue_age=45, benefits={0: 20_000_000.0}, level_premium=30_000.0,
               term_months=60, annuity_payment=100_000.0)
-    asmp = _asmp(q_annual=0.05)
-    default = measure(ModelPoints.single(**kw), asmp, full=False)
+    basis = _asmp(q_annual=0.05)
+    default = measure(ModelPoints.single(**kw), basis, full=False)
     explicit = measure(ModelPoints.single(**kw, premium_frequency_months=1,
-                                        annuity_frequency_months=1), asmp, full=False)
+                                        annuity_frequency_months=1), basis, full=False)
     assert np.isclose(default.bel[0], explicit.bel[0])
 
 

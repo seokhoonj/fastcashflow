@@ -134,7 +134,7 @@ def test_markov_can_reference_ci_incidence_annual():
         seating=(0, 1, 1),
     )
     q_a = _annual(0.001)
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, q_a),
         lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
         ci_incidence_annual=lambda s, a, d: np.full(d.shape, _annual(0.003)),
@@ -146,8 +146,8 @@ def test_markov_can_reference_ci_incidence_annual():
     )
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
                             level_premium=0.0, term_months=12)
-    val = measure(mp, asmp, full=False)
-    m = measure(mp, asmp)
+    val = measure(mp, basis, full=False)
+    m = measure(mp, basis)
     assert np.isclose(m.bel_path[0, 0], val.bel[0])
 
 
@@ -188,17 +188,17 @@ def test_single_state_no_lapse_hand_calculation():
     premium = 12_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
                             level_premium=premium, term_months=3)
-    asmp = _asmp(state_model=no_lapse)
+    basis = _asmp(state_model=no_lapse)
 
     inforce = [1.0, 0.99, 0.99 ** 2]
     pv_claims = sum(i * 0.01 * death_benefit for i in inforce)
     pv_premiums = sum(i * premium for i in inforce)
     bel = pv_claims - pv_premiums
 
-    val = measure(mp, asmp, full=False)
+    val = measure(mp, basis, full=False)
     assert np.isclose(val.bel[0], bel)
-    assert np.isclose(measure(mp, asmp).bel_path[0, 0], bel)
-    assert np.allclose(measure(mp, asmp).cashflows.inforce[0], inforce)
+    assert np.isclose(measure(mp, basis).bel_path[0, 0], bel)
+    assert np.allclose(measure(mp, basis).cashflows.inforce[0], inforce)
 
 
 def test_decrement_order_matters():
@@ -220,7 +220,7 @@ def test_decrement_order_matters():
     premium = 12_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
                             level_premium=premium, term_months=2)
-    asmp = _asmp(waiver_rate=0.05, lapse=0.02, state_model=lapse_first)
+    basis = _asmp(waiver_rate=0.05, lapse=0.02, state_model=lapse_first)
 
     # t=0: act=1, wav=0.
     #   act[1] = 1 * 0.99 * 0.98 * 0.95 = 0.92169  (death, lapse, then waiver)
@@ -232,8 +232,8 @@ def test_decrement_order_matters():
     pv_premiums = (1.0 + act1) * premium       # premium on the active track
     bel = pv_claims - pv_premiums
 
-    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
-    assert np.allclose(measure(mp, asmp).cashflows.inforce[0], inforce)
+    assert np.isclose(measure(mp, basis, full=False).bel[0], bel)
+    assert np.allclose(measure(mp, basis).cashflows.inforce[0], inforce)
     # The default waiver-before-lapse order gives a distinct figure.
     default = measure(mp, _asmp(waiver_rate=0.05, lapse=0.02), full=False).bel[0]
     assert not np.isclose(default, bel)
@@ -281,7 +281,7 @@ def test_paidup_state_uses_its_own_lapse():
     lapse above the active lapse its in-force falls faster than the active
     track -- the Korean post-payment (납입후) lapse jump."""
     q = _annual(0.01)
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=lambda s, a, d: np.full(a.shape, q),
         lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.02)),
         lapse_paidup_annual=lambda s, a, d: np.full(d.shape, _annual(0.10)),
@@ -292,11 +292,11 @@ def test_paidup_state_uses_its_own_lapse():
     )
     kw = dict(issue_age=40, benefits={0: 100_000.0}, level_premium=0.0,
               term_months=3)
-    paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), asmp)
+    paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), basis)
     step = 0.99 * 0.90        # (1 - mortality)(1 - paid-up lapse)
     assert np.allclose(paid.cashflows.inforce[0, :3], [1.0, step, step ** 2])
     # falls faster than the active 2%-lapse track
-    act = measure(ModelPoints.single(**kw, state=STATE_ACTIVE), asmp)
+    act = measure(ModelPoints.single(**kw, state=STATE_ACTIVE), basis)
     assert paid.cashflows.inforce[0, 1] < act.cashflows.inforce[0, 1]
 
 
@@ -304,11 +304,11 @@ def test_paidup_lapse_falls_back_to_lapse_annual():
     """With lapse_paidup_annual unset, the paid-up state's lapse_paidup rate
     falls back to lapse_annual -- the WAIVER_PAIDUP model still runs, the
     paid-up state just lapses at the ordinary rate."""
-    asmp = _asmp(q=0.01, lapse=0.05,
+    basis = _asmp(q=0.01, lapse=0.05,
                  state_model=STATE_MODELS["WAIVER_PAIDUP"])
     kw = dict(issue_age=40, benefits={0: 100_000.0}, level_premium=0.0,
               term_months=3)
-    paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), asmp)
+    paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), basis)
     step = 0.99 * 0.95        # falls back to the 5% active lapse
     assert np.allclose(paid.cashflows.inforce[0, :3], [1.0, step, step ** 2])
 
@@ -337,6 +337,6 @@ def test_measure_and_value_agree_under_custom_model():
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),
     )
-    asmp = _asmp(waiver_rate=0.03, state_model=three)
-    assert np.allclose(measure(mps, asmp).bel_path[:, 0], measure(mps, asmp, full=False).bel)
+    basis = _asmp(waiver_rate=0.03, state_model=three)
+    assert np.allclose(measure(mps, basis).bel_path[:, 0], measure(mps, basis, full=False).bel)
 

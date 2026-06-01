@@ -32,7 +32,7 @@ flow, 만기금 cash flow, 그리고 *모든 보장의 청구* cash flow 가 같
 `in_force` 에 묶여 함께 줄어듭니다.
 
 ```python
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = lambda s, a, d: ...,  # all-cause 감쇠
     ...
 )
@@ -64,7 +64,7 @@ claim_DEATH[t] = in_force[t] × DEATH.rate × DEATH.benefit
 일종이지만, **다른 입력 슬롯**:
 
 ```python
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = ...,                                   # 1.3.1 의 감쇠
     coverages        = (fcf.CoverageRate("DEATH", rate_fn),)  # 사망 보장 청구율
 )
@@ -90,7 +90,7 @@ callable 을 넘깁니다:
 ```python
 death_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
 
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = death_fn,                              # 보유계약 감쇠 (all-cause)
     coverages        = (fcf.CoverageRate("DEATH", death_fn),) # 일반사망 청구율
 )

@@ -139,11 +139,11 @@ def test_read_ignores_extra_columns_and_flags_missing(tmp_path):
 def test_file_workflow_matches_in_memory(tmp_path):
     """A file round-trip produces the same valuation as the in-memory path."""
     mps = _portfolio()
-    asmp = _assumptions()
+    basis = _assumptions()
     _frame(mps).write_parquet(tmp_path / "mps.parquet")
 
-    from_file = measure(read_model_points(tmp_path / "mps.parquet", calculation_methods=PATTERNS), asmp, full=False)
-    in_memory = measure(mps, asmp, full=False)
+    from_file = measure(read_model_points(tmp_path / "mps.parquet", calculation_methods=PATTERNS), basis, full=False)
+    in_memory = measure(mps, basis, full=False)
 
     assert np.allclose(from_file.bel, in_memory.bel)
     assert np.allclose(from_file.ra, in_memory.ra)
@@ -162,19 +162,19 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
         term_months=rng.integers(60, 180, n),
         calculation_methods=PATTERNS,
     )
-    asmp = _assumptions()
+    basis = _assumptions()
 
     in_path = tmp_path / "mps.parquet"
     _frame(mps).with_columns(pl.Series("id", np.arange(n))).write_parquet(in_path)
 
     out_dir = tmp_path / "results"
-    processed = fcf.gmm.measure_stream(in_path, out_dir, asmp, chunk_size=300, id_column="id",
+    processed = fcf.gmm.measure_stream(in_path, out_dir, basis, chunk_size=300, id_column="id",
                            calculation_methods=PATTERNS)
     assert processed == n
     assert len(sorted(out_dir.glob("part-*.parquet"))) == 4  # 300+300+300+100
 
     results = pl.read_parquet(str(out_dir / "part-*.parquet")).sort("id")
-    in_memory = measure(mps, asmp, full=False)
+    in_memory = measure(mps, basis, full=False)
     assert np.array_equal(results["id"].to_numpy(), np.arange(n))
     assert np.array_equal(results["bel"].to_numpy(), in_memory.bel)
     assert np.array_equal(results["ra"].to_numpy(), in_memory.ra)
@@ -197,9 +197,9 @@ def test_value_file_rejects_existing_output(tmp_path):
 def test_load_sample_data_runs():
     """The bundled sample data loads and values without error."""
     mps = fcf.samples.model_points()
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     assert mps.n_mp > 0
-    val = measure(mps, asmp, full=False)
+    val = measure(mps, basis, full=False)
     assert val.bel.shape == (mps.n_mp,)
     assert val.csm.shape == (mps.n_mp,)
 
@@ -217,17 +217,17 @@ def test_sample_data_dir_exposes_bundled_files():
 def test_describe_basis_renders_both_shapes(capsys):
     """describe_basis prints a tree for an Basis and for a dict."""
     from fastcashflow import describe_basis
-    basis = fcf.samples.basis()
-    asmp = next(iter(basis.values()))
+    basis_by_segment = fcf.samples.basis()
+    basis = next(iter(basis_by_segment.values()))
 
-    describe_basis(asmp)
+    describe_basis(basis)
     out_one = capsys.readouterr().out
     assert out_one.startswith("Basis")
     assert "상태 전이율" in out_one
     assert "state_model" in out_one
     assert "coverages" in out_one
 
-    describe_basis(basis)
+    describe_basis(basis_by_segment)
     out_dict = capsys.readouterr().out
     assert "(7 segments)" in out_dict
     # every segment unfolded -- both ('TERM_LIFE_A', 'GA') and ('TERM_LIFE_A', 'FC') appear
@@ -238,16 +238,16 @@ def test_describe_basis_renders_both_shapes(capsys):
 def test_to_long_round_trips(tmp_path):
     """ModelPoints.to_long written out and re-read reproduces the valuation."""
     
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(asmp)
+    policies, coverages = mps.to_long(basis)
     policies.write_csv(tmp_path / "pol.csv")
     coverages.write_csv(tmp_path / "cov.csv")
     back = read_model_points(tmp_path / "pol.csv",
                              coverages=tmp_path / "cov.csv",
                              calculation_methods=patterns)
-    a, b = measure(mps, asmp, full=False), measure(back, asmp, full=False)
+    a, b = measure(mps, basis, full=False), measure(back, basis, full=False)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.csm, b.csm)
 
@@ -255,13 +255,13 @@ def test_to_long_round_trips(tmp_path):
 def test_to_wide_round_trips(tmp_path):
     """ModelPoints.to_wide written out and re-read reproduces the valuation."""
     
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")
+    mps.to_wide(basis).write_csv(tmp_path / "wide.csv")
     back = read_model_points(tmp_path / "wide.csv",
                              calculation_methods=patterns)
-    a, b = measure(mps, asmp, full=False), measure(back, asmp, full=False)
+    a, b = measure(mps, basis, full=False), measure(back, basis, full=False)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.csm, b.csm)
 
@@ -269,22 +269,22 @@ def test_to_wide_round_trips(tmp_path):
 def test_value_file_streams_long_form(tmp_path):
     """gmm.measure_stream streams a long-form policies + coverages pair in chunks."""
     
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(asmp)
+    policies, coverages = mps.to_long(basis)
     policies.write_parquet(tmp_path / "pol.parquet")
     coverages.write_parquet(tmp_path / "cov.parquet")
 
     out_dir = tmp_path / "results"
     processed = fcf.gmm.measure_stream(
-        tmp_path / "pol.parquet", out_dir, asmp,
+        tmp_path / "pol.parquet", out_dir, basis,
         coverages=tmp_path / "cov.parquet",
         calculation_methods=patterns, chunk_size=3,
     )
     assert processed == mps.n_mp
 
     results = pl.read_parquet(str(out_dir / "part-*.parquet")).sort("id")
-    in_memory = measure(mps, asmp, full=False)
+    in_memory = measure(mps, basis, full=False)
     assert np.allclose(results["bel"].to_numpy(), in_memory.bel)
     assert np.allclose(results["csm"].to_numpy(), in_memory.csm)

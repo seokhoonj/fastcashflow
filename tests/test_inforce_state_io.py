@@ -100,11 +100,11 @@ def test_sample_inforce_end_to_end():
     mp_settled = fcf.apply_inforce_state(mp, state)
 
     basis = fcf.samples.basis()
-    asmp = basis[("TERM_LIFE_A", "FC")]
+    basis = basis[("TERM_LIFE_A", "FC")]
 
-    mif_hyp = fcf.measure_in_force(mp_settled, asmp)
+    mif_hyp = fcf.measure_in_force(mp_settled, basis)
     mif_set = fcf.measure_in_force(
-        mp_settled, asmp,
+        mp_settled, basis,
         prior_csm=state.prior_csm,
         lock_in_rate=state.lock_in_rate,
         period_months=12,

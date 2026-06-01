@@ -20,7 +20,7 @@ def test_value_matches_measure():
         annual_q = 0.0008 * (1.0 + 0.05 * (attained - 30.0))
         return annual_q
 
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=mortality_annual,
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
@@ -41,8 +41,8 @@ def test_value_matches_measure():
         term_months=np.array([120, 120, 120, 120, 120]),
     )
 
-    fast = measure(mps, asmp, full=False)
-    detailed = measure(mps, asmp)
+    fast = measure(mps, basis, full=False)
+    detailed = measure(mps, basis)
 
     assert np.allclose(fast.bel, detailed.bel_path[:, 0])
     assert np.allclose(fast.ra, detailed.ra_path[:, 0])
@@ -52,7 +52,7 @@ def test_value_matches_measure():
 
 def test_value_onerous():
     """The fast path also flags onerous contracts -- CSM floored at 0."""
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
         discount_annual=0.0,
@@ -64,7 +64,7 @@ def test_value_onerous():
         issue_age=40, benefits={0: 1_000_000.0},
         level_premium=100.0, term_months=12,
     )
-    v = measure(mps, asmp, full=False)
+    v = measure(mps, basis, full=False)
     assert v.csm[0] == 0.0
     assert v.loss_component[0] > 0.0
 
@@ -78,7 +78,7 @@ def test_fast_gpu_matches_cpu():
         annual_q = 0.0008 * (1.0 + 0.05 * (attained - 30.0))
         return annual_q
 
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=mortality_annual,
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
@@ -100,8 +100,8 @@ def test_fast_gpu_matches_cpu():
         term_months=np.full(n, 120),
     )
 
-    cpu = measure(mps, asmp, backend="cpu", full=False)
-    gpu = measure(mps, asmp, backend="gpu", full=False)
+    cpu = measure(mps, basis, backend="cpu", full=False)
+    gpu = measure(mps, basis, backend="gpu", full=False)
 
     assert np.allclose(gpu.bel, cpu.bel)
     assert np.allclose(gpu.ra, cpu.ra)
@@ -117,7 +117,7 @@ def test_fast_gpu_matches_cpu_with_transition():
     def flat(rate):
         return lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(rate))
 
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=flat(0.001),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         waiver_incidence_annual=flat(0.02),
@@ -146,8 +146,8 @@ def test_fast_gpu_matches_cpu_with_transition():
         state=rng.integers(0, 3, n),
         calculation_methods={"DEATH": CalculationMethod.DEATH, "dx": CalculationMethod.DIAGNOSIS},
     )
-    cpu = measure(mps, asmp, backend="cpu", full=False)
-    gpu = measure(mps, asmp, backend="gpu", full=False)
+    cpu = measure(mps, basis, backend="cpu", full=False)
+    gpu = measure(mps, basis, backend="gpu", full=False)
 
     assert np.allclose(gpu.bel, cpu.bel)
     assert np.allclose(gpu.ra, cpu.ra)

@@ -69,7 +69,7 @@ death_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
 # 해지율 함수 -- 해지 없음
 lapse_fn = lambda s, a, d: np.full(d.shape, 0.0)
 
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = death_fn,                                # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,                                # 해지율 (해지 없음)
     discount_annual  = 0.0,                                     # 연 할인율 0 (검증 단순화)
@@ -87,7 +87,7 @@ mp = fcf.ModelPoints.single(
         "DEATH": fcf.CalculationMethod.DEATH,   # 코드 → 산출방식 매핑
     },
 )
-r = fcf.gmm.measure(mp, asmp)
+r = fcf.gmm.measure(mp, basis)
 
 print(f"in_force      : {r.cashflows.inforce[0, :3]}")        # 보유계약 trajectory
 print(f"claim_cf      : {r.cashflows.claim_cf[0, :3]}")       # 사망보험금 cash flow
@@ -134,7 +134,7 @@ no_decr = lambda s, a, d: np.full(a.shape, 0.0)
 
 
 # 계리적 가정
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = no_decr,             # 보유계약 감쇠율 0 (감쇠 안 함)
     lapse_annual     = no_decr,             # 해지율 0 (해지 없음)
     discount_annual  = 0.0,                 # 연 할인율 0 (검증 단순화)
@@ -153,7 +153,7 @@ mp = fcf.ModelPoints.single(
         "INPATIENT": fcf.CalculationMethod.MORBIDITY,   # 코드 → 산출방식 매핑
     },
 )
-r = fcf.gmm.measure(mp, asmp)
+r = fcf.gmm.measure(mp, basis)
 
 print(f"in_force      : {r.cashflows.inforce[0, :3]}")
 print(f"morbidity_cf  : {r.cashflows.morbidity_cf[0, :3]}")  # 입원 cash flow
@@ -203,7 +203,7 @@ cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
 # 감쇠 없음
 no_decr = lambda s, a, d: np.full(a.shape, 0.0)
 
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = no_decr,                                       # 보유계약 감쇠율 0 (감쇠 안 함)
     lapse_annual     = no_decr,                                       # 해지율 0 (해지 없음)
     discount_annual  = 0.0,                                           # 연 할인율 0 (검증 단순화)
@@ -221,7 +221,7 @@ mp = fcf.ModelPoints.single(
         "CANCER": fcf.CalculationMethod.DIAGNOSIS,   # 코드 → 산출방식 매핑
     },
 )
-r = fcf.gmm.measure(mp, asmp)
+r = fcf.gmm.measure(mp, basis)
 
 print(f"in_force      : {r.cashflows.inforce[0, :3]}")
 print(f"morbidity_cf  : {r.cashflows.morbidity_cf[0, :3]}")           # 진단 cash flow
@@ -318,7 +318,7 @@ DEATH-only / MORBIDITY-only 의 mp 에서는 이 노드 자체가 출력되지 �
 위 DEATH 예제는 *같은 `death_fn` 을 두 자리에 넣었습니다*:
 
 ```python
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = death_fn,                              # 자리 1
     coverages        = (fcf.CoverageRate("DEATH", death_fn),) # 자리 2
 )

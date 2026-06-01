@@ -30,14 +30,14 @@ def _assumptions():
 
 def test_reinsurance_hand_calc():
     """Single quota-share treaty -- hand-checked BEL, RA and CSM."""
-    asmp = _assumptions()
+    basis = _assumptions()
     death_benefit, premium, term, cession = 1e8, 80_000.0, 60, 0.4
     res = fcf.reinsurance.measure(
         ModelPoints.single(40, premium, term, benefits={0: death_benefit}, calculation_methods=PATTERNS),
-        asmp, fcf.reinsurance.QuotaShare(cession=cession)
+        basis, fcf.reinsurance.QuotaShare(cession=cession)
     )
 
-    i = asmp.discount_monthly
+    i = basis.discount_monthly
     surv = (1.0 - Q) * (1.0 - LAPSE)
     half = (1.0 + i) ** (-0.5)
     full = 1.0 / (1.0 + i)
@@ -46,7 +46,7 @@ def test_reinsurance_hand_calc():
     pv_recovery = cession * Q * death_benefit * half * geom
     pv_reins_premium = cession * premium * geom
     bel = pv_reins_premium - pv_recovery
-    ra = _norm_ppf(asmp.ra_confidence) * MORTALITY_CV * pv_recovery
+    ra = _norm_ppf(basis.ra_confidence) * MORTALITY_CV * pv_recovery
 
     assert np.isclose(res.bel[0], bel)
     assert np.isclose(res.ra[0], ra)

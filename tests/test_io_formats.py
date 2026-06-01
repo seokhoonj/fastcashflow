@@ -29,62 +29,62 @@ def _write_sheets(path, sheets):
 def test_read_wide_xlsx(tmp_path):
     """A wide .xlsx reads to the same valuation as the in-memory book."""
     
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     path = tmp_path / "wide.xlsx"
-    _write_sheets(path, [("model_points", mps.to_wide(asmp))])
+    _write_sheets(path, [("model_points", mps.to_wide(basis))])
 
     back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
-    assert np.allclose(measure(back, asmp, full=False).bel, measure(mps, asmp, full=False).bel)
+    assert np.allclose(measure(back, basis, full=False).bel, measure(mps, basis, full=False).bel)
 
 
 def test_read_long_xlsx(tmp_path):
     """A long-form .xlsx -- policies and coverages sheets in one workbook."""
     
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(asmp)
+    policies, coverages = mps.to_long(basis)
     path = tmp_path / "long.xlsx"
     _write_sheets(path, [("policies", policies), ("coverages", coverages)])
 
     back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
-    assert np.allclose(measure(back, asmp, full=False).bel, measure(mps, asmp, full=False).bel)
+    assert np.allclose(measure(back, basis, full=False).bel, measure(mps, basis, full=False).bel)
 
 
 def test_read_feather(tmp_path):
     """A .feather (Arrow IPC) model-point file round-trips."""
     
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     path = tmp_path / "wide.feather"
-    mps.to_wide(asmp).write_ipc(path)
+    mps.to_wide(basis).write_ipc(path)
 
     back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
-    assert np.allclose(measure(back, asmp, full=False).bel, measure(mps, asmp, full=False).bel)
+    assert np.allclose(measure(back, basis, full=False).bel, measure(mps, basis, full=False).bel)
 
 
 def test_write_valuation_feather(tmp_path):
     """write_measurement writes a .feather result file."""
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     mps = fcf.samples.model_points()
     path = tmp_path / "results.feather"
-    write_measurement(measure(mps, asmp, full=False), path)
+    write_measurement(measure(mps, basis, full=False), path)
     assert path.exists()
 
 
 def test_long_form_reads_benefit_rules(tmp_path):
     """The long-form coverages frame reads the waiting / reduction columns."""
     
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(asmp)
+    policies, coverages = mps.to_long(basis)
     coverages = coverages.with_columns(
         pl.lit(6).alias("waiting"),
         pl.lit(24).alias("reduction_end"),
@@ -112,9 +112,9 @@ def test_wide_policies_elapsed_months_emits_warning(tmp_path):
     a UserWarning -- the reader silently drops it and inforce_state is
     the source of truth."""
     import warnings
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     mps = fcf.samples.model_points()
-    wide = mps.to_wide(asmp).with_columns(pl.lit(12).alias("elapsed_months"))
+    wide = mps.to_wide(basis).with_columns(pl.lit(12).alias("elapsed_months"))
     path = tmp_path / "wide_with_em.xlsx"
     _write_sheets(path, [("model_points", wide)])
 
@@ -133,10 +133,10 @@ def test_long_policies_elapsed_months_emits_warning(tmp_path):
     """Same guard fires on the long-form (policies + coverages) path."""
     import warnings
     
-    asmp = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(asmp)
+    policies, coverages = mps.to_long(basis)
     policies = policies.with_columns(pl.lit(12).alias("elapsed_months"))
     pol_path = tmp_path / "policies.csv"
     cov_path = tmp_path / "coverages.csv"

@@ -141,8 +141,8 @@ def test_segmented_measure_routes_each_mp_to_its_segment():
 
 def test_segmented_measure_falls_back_to_single_segment_when_no_product():
     """A single-segment basis works even when product/channel aren't set."""
-    asmp = _flat_asmp()
-    basis = {("TERM_A", ""): asmp}
+    basis = _flat_asmp()
+    basis = {("TERM_A", ""): basis}
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
         level_premium=np.zeros(2),
@@ -150,7 +150,7 @@ def test_segmented_measure_falls_back_to_single_segment_when_no_product():
         benefits={0: np.array([10_000.0, 20_000.0])},
     )
     val = measure(mp, basis, full=False)
-    expected = measure(mp, asmp, full=False)
+    expected = measure(mp, basis, full=False)
     assert np.allclose(val.bel, expected.bel)
 
 

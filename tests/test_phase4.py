@@ -30,15 +30,15 @@ def _assumptions(**overrides):
 
 def test_bel_rollforward():
     """The BEL trajectory matches an independent backward recursion."""
-    asmp = _assumptions()
+    basis = _assumptions()
     one = ModelPoints.single(
         issue_age=45, benefits={0: 80_000_000},
         level_premium=150_000, term_months=36,
         calculation_methods=PATTERNS,
     )
-    res = measure(one, asmp)
+    res = measure(one, basis)
 
-    i = asmp.discount_monthly
+    i = basis.discount_monthly
     half = (1.0 + i) ** -0.5
     full = 1.0 / (1.0 + i)
     cf = res.cashflows
@@ -55,12 +55,12 @@ def test_bel_rollforward():
     assert res.bel_path[0, -1] == 0.0
 
     # column 0 of the detailed trajectory equals the fast headline BEL
-    assert np.isclose(res.bel_path[0, 0], measure(one, asmp, full=False).bel[0])
+    assert np.isclose(res.bel_path[0, 0], measure(one, basis, full=False).bel[0])
 
 
 def test_liability_runs_off():
     """BEL + RA + CSM fully runs off to zero by the end of the term."""
-    asmp = _assumptions()
+    basis = _assumptions()
     rng = np.random.default_rng(4)
     n = 150
     mps = ModelPoints(
@@ -70,7 +70,7 @@ def test_liability_runs_off():
         term_months=rng.integers(48, 120, n),
         calculation_methods=PATTERNS,
     )
-    res = measure(mps, asmp)
+    res = measure(mps, basis)
 
     liability = res.bel_path + res.ra_path + res.csm_path
     assert np.allclose(liability[:, -1], 0.0)

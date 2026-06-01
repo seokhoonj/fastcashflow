@@ -85,7 +85,7 @@ cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.10) ** 12)
 no_decr   = lambda s, a, d: np.full(a.shape, 0.0)
 
 # 계리적 가정
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = no_decr,    # 보유계약 감쇠율 0 (진단 풀에 집중)
     lapse_annual     = no_decr,    # 해지율 0
     discount_annual  = 0.0,        # 연 할인율 0 (검증 단순화)
@@ -120,7 +120,7 @@ mp = fcf.read_model_points(
     calculation_methods={"CANCER": fcf.CalculationMethod.DIAGNOSIS},
 )
 
-m = fcf.gmm.measure(mp, asmp)
+m = fcf.gmm.measure(mp, basis)
 print(f"morbidity_cf = {m.cashflows.morbidity_cf[0, :4]}")  # 진단 cash flow
 print(f"BEL          = {m.bel[0]:.2f}")                  # 최선추정부채
 ```
@@ -170,7 +170,7 @@ t=3 의 cash flow 7,290 은 룰이 있든 없든 같습니다 — 미진단 풀�
 ```python
 cerebral_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.05) ** 12)
 
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = no_decr,
     lapse_annual     = no_decr,
     discount_annual  = 0.0,
@@ -198,7 +198,7 @@ mp = fcf.read_model_points(
     calculation_methods={"CANCER":   fcf.CalculationMethod.DIAGNOSIS,
                          "CEREBRAL": fcf.CalculationMethod.DIAGNOSIS},
 )
-m = fcf.gmm.measure(mp, asmp)
+m = fcf.gmm.measure(mp, basis)
 print(f"morbidity_cf = {m.cashflows.morbidity_cf[0, :4]}")
 ```
 

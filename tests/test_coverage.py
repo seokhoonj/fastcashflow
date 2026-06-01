@@ -34,7 +34,7 @@ def _assumptions():
 
 def test_multiple_death_coverages_sum_to_one():
     """Two death coverages of A and B value as one coverage of A + B."""
-    asmp = _assumptions()
+    basis = _assumptions()
     a, b, term = 6e7, 4e7, 36
 
     split = ModelPoints(
@@ -50,12 +50,12 @@ def test_multiple_death_coverages_sum_to_one():
         40, 80_000.0, term, benefits={0: a + b}, calculation_methods=PATTERNS,
     )
 
-    m_split, m_comb = measure(split, asmp), measure(combined, asmp)
+    m_split, m_comb = measure(split, basis), measure(combined, basis)
     assert np.allclose(m_split.bel, m_comb.bel)
     assert np.allclose(m_split.ra, m_comb.ra)
     assert np.allclose(m_split.csm, m_comb.csm)
 
-    v_split, v_comb = measure(split, asmp, full=False), measure(combined, asmp, full=False)
+    v_split, v_comb = measure(split, basis, full=False), measure(combined, basis, full=False)
     assert np.allclose(v_split.bel, v_comb.bel)
     assert np.allclose(v_split.ra, v_comb.ra)
     assert np.allclose(v_split.csm, v_comb.csm)
@@ -63,7 +63,7 @@ def test_multiple_death_coverages_sum_to_one():
 
 def test_no_coverages_matches_zero_death_benefit():
     """An empty coverage list equals a death benefit of zero."""
-    asmp = _assumptions()
+    basis = _assumptions()
     explicit_zero = ModelPoints.single(
         45, 50_000.0, 60, benefits={0: 0.0}, calculation_methods=PATTERNS,
     )
@@ -73,7 +73,7 @@ def test_no_coverages_matches_zero_death_benefit():
         term_months=np.array([60]),
         calculation_methods=PATTERNS,
     )
-    a, b = measure(explicit_zero, asmp, full=False), measure(no_coverages, asmp, full=False)
+    a, b = measure(explicit_zero, basis, full=False), measure(no_coverages, basis, full=False)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.ra, b.ra)
     # no death coverage -> no claims -> zero Risk Adjustment

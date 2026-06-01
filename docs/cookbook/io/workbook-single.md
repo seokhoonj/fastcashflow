@@ -20,7 +20,7 @@
 
 ## 엔진이 받는 것은 파일이 아니라 개체
 
-`measure(mp, asmp)` 의 두 인자는 **개체** (`ModelPoints`, `Basis`) 이지
+`measure(mp, basis)` 의 두 인자는 **개체** (`ModelPoints`, `Basis`) 이지
 파일이 아닙니다. 파일은 reader 가 개체로 바꿔 줍니다:
 
 - **`Basis`** — `basis = fcf.read_basis("basis.xlsx")` 가 한
@@ -147,10 +147,10 @@ with tempfile.TemporaryDirectory() as tmp:
     print("segments =", sorted(basis))
 
     # 3) 한 segment 의 가정 개체를 꺼내 본다
-    asmp = basis[("TERM_LIFE_A", "FC")]
-    print("ra_confidence   =", asmp.ra_confidence)
-    print("mortality_cv    =", asmp.mortality_cv)
-    print("discount_annual =", asmp.discount_annual)
+    basis = basis[("TERM_LIFE_A", "FC")]
+    print("ra_confidence   =", basis.ra_confidence)
+    print("mortality_cv    =", basis.mortality_cv)
+    print("discount_annual =", basis.discount_annual)
 
     # 4) 모델포인트 = 세 파일을 한 개체로
     mp = fcf.read_model_points(pol_path, coverages=cov_path,
@@ -186,7 +186,7 @@ CSM sum = 632,252
 ```{admonition} 단일 가정 적용 vs segment 별 라우팅
 :class: note
 
-`fcf.gmm.measure(mp, asmp)` 에 **단일 `Basis`** 를 주면 그 한 가정을 모든
+`fcf.gmm.measure(mp, basis)` 에 **단일 `Basis`** 를 주면 그 한 가정을 모든
 모델포인트에 적용합니다 — 모델포인트가 동질한 한 segment 일 때 맞습니다.
 견본처럼 여러 segment 가 섞인 portfolio 는 **dict basis**
 (`{(product, channel): Basis}`) 를 주면 각 계약을 자기 segment 가정으로
@@ -196,9 +196,9 @@ headline 전용이라 `full=False`). 라우팅 메커니즘은 [6.2](workbook-mu
 
 ## 함정
 
-### 함정 1 — `assumptions` 는 반드시 `.xlsx`
+### 함정 1 — `basis` 는 반드시 `.xlsx`
 
-`assumptions` 는 multi-sheet 워크북이라 `.csv` 로 줄 수 없습니다. 반면
+`basis` 는 multi-sheet 워크북이라 `.csv` 로 줄 수 없습니다. 반면
 `policies` / `coverages` / `calculation_methods` 는 단일 표라 `.csv` /
 `.parquet` / `.feather` / `.xlsx` 어느 형식이든 됩니다 (reader 가 확장자로
 감지). 대형 portfolio 는 `.parquet` 가 빠릅니다.

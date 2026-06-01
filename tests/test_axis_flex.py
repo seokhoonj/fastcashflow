@@ -219,7 +219,7 @@ def test_legacy_three_arg_user_lambda_is_adapted():
     """User-supplied 3-arg rate lambdas are auto-wrapped to the 5-arg shape
     the engine now passes; the issue_class and elapsed arguments are
     discarded by the wrapper."""
-    asmp = Basis(
+    basis = Basis(
         # Pre-Phase-1A user lambda style -- 3 positional args.
         mortality_annual=lambda sex, age, dur: np.full(dur.shape, 0.001),
         lapse_annual=lambda sex, age, dur: np.full(dur.shape, 0.01),
@@ -231,8 +231,8 @@ def test_legacy_three_arg_user_lambda_is_adapted():
     # The adapter accepts the new 5-arg engine call without error.
     s = np.array([0]); a = np.array([40]); d = np.array([0])
     c = np.array([0]); e = np.array([0])
-    assert asmp.mortality_annual(s, a, d, c, e)[0] == 0.001
-    assert asmp.lapse_annual(s, a, d, c, e)[0] == 0.01
+    assert basis.mortality_annual(s, a, d, c, e)[0] == 0.001
+    assert basis.lapse_annual(s, a, d, c, e)[0] == 0.01
 
 
 def test_legacy_four_arg_duration_lambda_is_adapted():
@@ -240,7 +240,7 @@ def test_legacy_four_arg_duration_lambda_is_adapted():
     is auto-wrapped: the wrapper maps the original 4th argument to the
     new 5th ``elapsed`` slot, so the engine's 5-arg call routes the
     cohort dimension through correctly."""
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, 0.001),
         lapse_annual=lambda s, a, d: np.full(d.shape, 0.01),
         # 4-arg legacy DurationRateFn user lambda -- rate doubles per
@@ -258,8 +258,8 @@ def test_legacy_four_arg_duration_lambda_is_adapted():
     # cohort_index lands in the new 5th positional slot (``elapsed``).
     elapsed_cohort_zero = np.array([0, 0])
     elapsed_cohort_one = np.array([0, 1])
-    assert asmp.ci_reincidence_annual(s, a, d, c, elapsed_cohort_zero)[0] == 0.10
-    out = asmp.ci_reincidence_annual(s, a, d, c, elapsed_cohort_one)
+    assert basis.ci_reincidence_annual(s, a, d, c, elapsed_cohort_zero)[0] == 0.10
+    out = basis.ci_reincidence_annual(s, a, d, c, elapsed_cohort_one)
     assert out[0] == 0.10 and out[1] == 0.20
 
 

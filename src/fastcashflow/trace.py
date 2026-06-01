@@ -1091,9 +1091,9 @@ def show_trace_bel_step(
             f"mp_index {mp_index} out of range for n_mp={n_mp}"
         )
     i = mp_index
-    asmp = _resolve_basis(basis, model_points, i)
+    basis = _resolve_basis(basis, model_points, i)
     sub = model_points.subset([i])
-    m = measure(sub, asmp)
+    m = measure(sub, basis)
 
     term = int(sub.term_months[0])
     n_time = m.cashflows.n_time
@@ -1105,7 +1105,7 @@ def show_trace_bel_step(
     # recover ``i[t]`` from the same curve here so the printed identity
     # uses the engine's numbers, not a parallel computation that could
     # drift.
-    monthly_rate = discount_monthly_curve(asmp, n_time)
+    monthly_rate = discount_monthly_curve(basis, n_time)
 
     # Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
@@ -1244,9 +1244,9 @@ def show_trace_csm_step(
             f"mp_index {mp_index} out of range for n_mp={n_mp}"
         )
     i = mp_index
-    asmp = _resolve_basis(basis, model_points, i)
+    basis = _resolve_basis(basis, model_points, i)
     sub = model_points.subset([i])
-    m = measure(sub, asmp)
+    m = measure(sub, basis)
 
     term = int(sub.term_months[0])
     n_time = m.cashflows.n_time
@@ -1255,7 +1255,7 @@ def show_trace_csm_step(
     # Recursion produces csm[t] for t in 1..n_time. t = 0 is the seed.
     months = [int(t) for t in months if 1 <= int(t) <= n_time]
 
-    monthly_rate = discount_monthly_curve(asmp, n_time)
+    monthly_rate = discount_monthly_curve(basis, n_time)
     inforce = m.cashflows.inforce[0]              # (n_time,)
     bel0 = float(m.bel_path[0, 0])
     ra0 = float(m.ra_path[0, 0])

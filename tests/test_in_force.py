@@ -47,9 +47,9 @@ def test_value_in_force_zero_elapsed_matches_value():
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=120,
     )
-    asmp = _basis()
-    v_new = measure(mp, asmp, full=False)
-    v_inf = value_in_force(mp, asmp)
+    basis = _basis()
+    v_new = measure(mp, basis, full=False)
+    v_inf = value_in_force(mp, basis)
     assert np.isclose(v_inf.bel[0], v_new.bel[0])
     assert np.isclose(v_inf.ra[0], v_new.ra[0])
     assert np.isclose(v_inf.csm[0], v_new.csm[0])
@@ -64,8 +64,8 @@ def test_value_in_force_matches_trajectory_slice():
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=120,
     )
-    asmp = _basis()
-    m = measure(mp_new, asmp)
+    basis = _basis()
+    m = measure(mp_new, basis)
 
     mp_inforce = ModelPoints(
         issue_age=np.array([40]),
@@ -74,7 +74,7 @@ def test_value_in_force_matches_trajectory_slice():
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([elapsed]),
     )
-    v_inf = value_in_force(mp_inforce, asmp)
+    v_inf = value_in_force(mp_inforce, basis)
     # The in-force BEL is the trajectory slice at t = elapsed.
     assert np.isclose(v_inf.bel[0], m.bel_path[0, elapsed])
     assert np.isclose(v_inf.ra[0], m.ra_path[0, elapsed])
@@ -86,12 +86,12 @@ def test_value_in_force_settlement_matches_trajectory():
     equal to the current discount, rolling one period forward must
     reproduce the same trajectory's CSM at ``E``. This pins the §44
     accretion + coverage-unit release path."""
-    asmp = _basis()
+    basis = _basis()
     mp_new = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=240,
     )
-    m = measure(mp_new, asmp)
+    m = measure(mp_new, basis)
     elapsed, period = 36, 12
     prior_t = elapsed - period
     prior_csm = m.csm_path[:, prior_t]
@@ -104,9 +104,9 @@ def test_value_in_force_settlement_matches_trajectory():
         elapsed_months=np.array([elapsed]),
     )
     v = value_in_force(
-        mp_inforce, asmp,
+        mp_inforce, basis,
         prior_csm=prior_csm,
-        lock_in_rate=asmp.discount_annual,
+        lock_in_rate=basis.discount_annual,
         period_months=period,
     )
     assert np.isclose(v.bel[0], m.bel_path[0, elapsed])
@@ -117,34 +117,34 @@ def test_value_in_force_settlement_matches_trajectory():
 def test_value_in_force_period_months_rejected_in_hypothetical_mode():
     """period_months only applies in settlement mode; passing it without
     prior_csm / lock_in_rate is a no-op trap and now raises."""
-    asmp = _basis()
+    basis = _basis()
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=120,
     )
     with pytest.raises(ValueError, match="period_months applies only in"):
-        value_in_force(mp, asmp, period_months=12)
+        value_in_force(mp, basis, period_months=12)
 
 
 def test_value_in_force_settlement_paired_args():
     """``prior_csm`` and ``lock_in_rate`` must be supplied together; one
     without the other is a silent-wrong-result trap and raises."""
-    asmp = _basis()
+    basis = _basis()
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=240,
     )
     with pytest.raises(ValueError, match="both be given.*both omitted"):
-        value_in_force(mp, asmp, prior_csm=np.array([0.0]))
+        value_in_force(mp, basis, prior_csm=np.array([0.0]))
     with pytest.raises(ValueError, match="both be given.*both omitted"):
-        value_in_force(mp, asmp, lock_in_rate=0.03)
+        value_in_force(mp, basis, lock_in_rate=0.03)
 
 
 def test_value_in_force_settlement_elapsed_too_small():
     """``elapsed_months < period_months`` means the prior closing date
     precedes inception -- no CSM to carry forward, so the call errors out
     rather than silently using a zero or out-of-range slice."""
-    asmp = _basis()
+    basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
@@ -154,7 +154,7 @@ def test_value_in_force_settlement_elapsed_too_small():
     )
     with pytest.raises(ValueError, match="precedes inception"):
         value_in_force(
-            mp, asmp,
+            mp, basis,
             prior_csm=np.array([1.0]),
             lock_in_rate=0.03,
             period_months=12,
@@ -164,7 +164,7 @@ def test_value_in_force_settlement_elapsed_too_small():
 def test_measure_in_force_hypothetical_is_measure():
     """``measure_in_force`` without prior_csm returns the measure() result
     unchanged -- it is the trajectory-variant of the hypothetical mode."""
-    asmp = _basis()
+    basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
@@ -172,8 +172,8 @@ def test_measure_in_force_hypothetical_is_measure():
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
     )
-    m = measure(mp, asmp)
-    mif = measure_in_force(mp, asmp)
+    m = measure(mp, basis)
+    mif = measure_in_force(mp, basis)
     assert np.allclose(m.csm, mif.csm)
     assert np.allclose(m.csm_accretion, mif.csm_accretion)
     assert np.allclose(m.csm_release, mif.csm_release)
@@ -182,7 +182,7 @@ def test_measure_in_force_hypothetical_is_measure():
 def test_measure_in_force_settlement_matches_value_in_force():
     """Settlement-mode ``measure_in_force`` at the valuation date equals
     the value_in_force settlement-mode CSM scalar."""
-    asmp = _basis()
+    basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
@@ -190,13 +190,13 @@ def test_measure_in_force_settlement_matches_value_in_force():
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
     )
-    m_baseline = measure(mp, asmp)
+    m_baseline = measure(mp, basis)
     period = 12
     prior_csm = m_baseline.csm_path[:, 36 - period]
-    lock_in = asmp.discount_annual
-    v = value_in_force(mp, asmp, prior_csm=prior_csm,
+    lock_in = basis.discount_annual
+    v = value_in_force(mp, basis, prior_csm=prior_csm,
                        lock_in_rate=lock_in, period_months=period)
-    mif = measure_in_force(mp, asmp, prior_csm=prior_csm,
+    mif = measure_in_force(mp, basis, prior_csm=prior_csm,
                             lock_in_rate=lock_in, period_months=period)
     rows = np.arange(1)
     assert np.isclose(mif.csm_path[rows, 36][0], v.csm[0])
@@ -207,7 +207,7 @@ def test_measure_in_force_settlement_roundtrip_to_measure():
     """When prior_csm and lock_in_rate are seeded from the engine's own
     trajectory and discount, the carried-forward CSM trajectory from
     t=prior_t onwards matches the measure() trajectory bit for bit."""
-    asmp = _basis()
+    basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]),
         level_premium=np.array([50_000.0]),
@@ -215,13 +215,13 @@ def test_measure_in_force_settlement_roundtrip_to_measure():
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
     )
-    m = measure(mp, asmp)
+    m = measure(mp, basis)
     period = 12
     prior_t = 36 - period
     mif = measure_in_force(
-        mp, asmp,
+        mp, basis,
         prior_csm=m.csm_path[:, prior_t],
-        lock_in_rate=asmp.discount_annual,
+        lock_in_rate=basis.discount_annual,
         period_months=period,
     )
     assert np.allclose(m.csm_path[:, prior_t:], mif.csm_path[:, prior_t:])
@@ -233,7 +233,7 @@ def test_in_force_bel_smaller_term_left():
     """As ``elapsed_months`` grows (less of the term left), the absolute
     value of the in-force BEL shrinks -- there are fewer future cash flows
     to discount."""
-    asmp = _basis()
+    basis = _basis()
     def in_force_bel(e):
         mp = ModelPoints(
             issue_age=np.array([40]),
@@ -242,7 +242,7 @@ def test_in_force_bel_smaller_term_left():
             benefits={0: np.array([100_000_000.0])},
             elapsed_months=np.array([e]),
         )
-        return abs(value_in_force(mp, asmp).bel[0])
+        return abs(value_in_force(mp, basis).bel[0])
     # Strictly decreasing in elapsed -- the future shortens.
     bels = [in_force_bel(e) for e in (0, 60, 120, 180)]
     assert bels[0] > bels[1] > bels[2] > bels[3]

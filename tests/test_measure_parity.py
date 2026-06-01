@@ -104,7 +104,7 @@ def test_value_and_measure_agree_with_settlement_pattern():
     """``settlement_pattern`` discounts claim outflows to their payment
     dates. measure()'s fused path applies the factor inline; measure()'s
     detailed path multiplies the cash flow arrays. The two must agree."""
-    asmp = make_death_assumptions(
+    basis = make_death_assumptions(
         mortality_q     = 0.005,
         lapse_q         = 0.01,
         discount_annual = 0.03,
@@ -117,8 +117,8 @@ def test_value_and_measure_agree_with_settlement_pattern():
         level_premium=80_000.0, term_months=120,
         calculation_methods=PATTERNS,
     )
-    v = measure(mp, asmp, full=False)
-    m = measure(mp, asmp)
+    v = measure(mp, basis, full=False)
+    m = measure(mp, basis)
     assert np.isclose(v.bel[0], m.bel_path[0, 0])
     assert np.isclose(v.ra[0],  m.ra_path[0, 0])
     assert np.isclose(v.csm[0], m.csm_path[0, 0])
@@ -139,11 +139,11 @@ def test_value_rejects_nonzero_issue_class():
         benefits={0: np.array([1e8])},
         calculation_methods=PATTERNS,
     )
-    asmp = make_death_assumptions(mortality_q=0.005, lapse_q=0.01)
+    basis = make_death_assumptions(mortality_q=0.005, lapse_q=0.01)
     with pytest.raises(NotImplementedError, match="issue_class"):
-        measure(mp, asmp, full=False)
+        measure(mp, basis, full=False)
     # measure() handles it correctly (existing behaviour).
-    m = measure(mp, asmp)
+    m = measure(mp, basis)
     assert m.bel.shape[0] == 1
 
 
@@ -154,7 +154,7 @@ def test_value_accepts_default_issue_class():
         level_premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )
-    asmp = make_death_assumptions(mortality_q=0.005, lapse_q=0.01)
-    v = measure(mp, asmp, full=False)
-    m = measure(mp, asmp)
+    basis = make_death_assumptions(mortality_q=0.005, lapse_q=0.01)
+    v = measure(mp, basis, full=False)
+    m = measure(mp, basis)
     assert np.isclose(v.bel[0], m.bel_path[0, 0])

@@ -92,7 +92,7 @@ def test_show_trace_undiagnosed_matches_hand_calc():
     annual_q = 1 - (1 - 0.01) ** 12        # monthly q = 0.01
     cancer_fn = lambda s, a, d: np.full(a.shape, annual_q)
     no_decr = lambda s, a, d: np.full(a.shape, 0.0)
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=no_decr, lapse_annual=no_decr,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.0,
         coverages=(fcf.CoverageRate("CANCER", cancer_fn),),
@@ -103,7 +103,7 @@ def test_show_trace_undiagnosed_matches_hand_calc():
         calculation_methods={"CANCER": fcf.CalculationMethod.DIAGNOSIS},
     )
     buf = io.StringIO()
-    fcf.gmm.trace(0, mp, asmp, file=buf)
+    fcf.gmm.trace(0, mp, basis, file=buf)
     text = buf.getvalue()
 
     # Expected: undiagnosed(t) = (1 - 0.01)**t -- closed-form
@@ -130,9 +130,9 @@ def test_show_trace_accepts_single_assumptions():
     """A plain :class:`Basis` (not a dict) bypasses the segment
     lookup and is used directly."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     buf = io.StringIO()
-    fcf.gmm.trace(0, mp, asmp, file=buf)
+    fcf.gmm.trace(0, mp, basis, file=buf)
     assert "Basis (segment-level)" in buf.getvalue()
 
 
@@ -141,10 +141,10 @@ def test_show_trace_bel_and_ra_agree_with_measure():
     on the same portfolio for the same row -- the trace is just a view,
     not a recalculation."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
-    m = fcf.gmm.measure(mp.subset([0]), asmp)
+    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    m = fcf.gmm.measure(mp.subset([0]), basis)
     buf = io.StringIO()
-    fcf.gmm.trace(0, mp, asmp, file=buf)
+    fcf.gmm.trace(0, mp, basis, file=buf)
     text = buf.getvalue()
     assert f"{m.bel_path[0, 0]:,.2f}" in text
     assert f"{m.ra_path[0, 0]:,.2f}" in text
@@ -185,12 +185,12 @@ def test_show_trace_dict_basis_unknown_segment_raises():
 def test_show_trace_diff_renders_all_sections():
     """The diff prints the seven headline sections plus the labels line."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
-    shocked = replace(asmp, mortality_annual=_shock_mortality(
-        asmp.mortality_annual, 1.10,
+    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    shocked = replace(basis, mortality_annual=_shock_mortality(
+        basis.mortality_annual, 1.10,
     ))
     buf = io.StringIO()
-    fcf.gmm.trace_diff(0, mp, asmp, shocked,
+    fcf.gmm.trace_diff(0, mp, basis, shocked,
                     label_a="baseline", label_b="mort+10%", file=buf)
     text = buf.getvalue()
     for section in (
@@ -212,9 +212,9 @@ def test_show_trace_diff_identical_basis_reports_no_changes():
     changes -- only the all-zero anchor-month and Final lines remain,
     and the change-only sections explicitly say so."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     buf = io.StringIO()
-    fcf.gmm.trace_diff(0, mp, asmp, asmp, file=buf)
+    fcf.gmm.trace_diff(0, mp, basis, basis, file=buf)
     text = buf.getvalue()
     assert "(no changes in tracked fields)" in text
     assert "(no rate changes at sampled years)" in text
@@ -228,8 +228,8 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
     payment rate (the convention for the sample basis, where they share
     a mortality table)."""
     mp = _portfolio()
-    asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
-    shocked_mort = _shock_mortality(asmp.mortality_annual, 1.10)
+    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    shocked_mort = _shock_mortality(basis.mortality_annual, 1.10)
     # Shock the DEATH coverage too so the payment rate moves with the
     # decrement -- otherwise the higher decrement just lowers in-force
     # without raising claims.
@@ -237,16 +237,16 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
         fcf.CoverageRate(r.code, _shock_mortality(r.rate, 1.10))
         if r.code in ("DEATH_GENERAL", "DEATH")
         else r
-        for r in asmp.coverages
+        for r in basis.coverages
     )
-    shocked = replace(asmp, mortality_annual=shocked_mort, coverages=new_coverages)
-    ma = fcf.gmm.measure(mp.subset([0]), asmp)
+    shocked = replace(basis, mortality_annual=shocked_mort, coverages=new_coverages)
+    ma = fcf.gmm.measure(mp.subset([0]), basis)
     mb = fcf.gmm.measure(mp.subset([0]), shocked)
     assert mb.cashflows.claim_cf.sum() > ma.cashflows.claim_cf.sum()
     assert mb.bel_path[0, 0] > ma.bel_path[0, 0]
     # And the diff renders without raising.
     buf = io.StringIO()
-    fcf.gmm.trace_diff(0, mp, asmp, shocked, file=buf)
+    fcf.gmm.trace_diff(0, mp, basis, shocked, file=buf)
     assert "mortality(annual)" in buf.getvalue()
     assert "+10.00%" in buf.getvalue()
 
@@ -344,7 +344,7 @@ def _profitable_basis_and_mp():
         return np.full(d.shape, 0.0005)
     def lapse(s, ia, d, ic, em):
         return np.full(d.shape, 0.02)
-    asmp = Basis(
+    basis = Basis(
         mortality_annual=mort, lapse_annual=lapse,
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
         coverages=(fcf.CoverageRate("DEATH", mort),),
@@ -355,7 +355,7 @@ def _profitable_basis_and_mp():
         term_months=np.array([60]),
         benefits={0: np.array([100_000_000.0])},
     )
-    return asmp, mp
+    return basis, mp
 
 
 def test_show_trace_csm_step_renders_seed_and_steps():
@@ -380,9 +380,9 @@ def test_show_trace_csm_step_onerous_notes_zero_throughout():
 def test_show_trace_csm_step_profitable_residuals_are_zero():
     """On a profitable contract every printed recursion step holds the
     ``csm[t-1] + acc - rel == csm[t]`` identity to float64 noise."""
-    asmp, mp = _profitable_basis_and_mp()
+    basis, mp = _profitable_basis_and_mp()
     buf = io.StringIO()
-    fcf.gmm.trace_csm_step(0, mp, asmp, months=[1, 12, 30, 60], file=buf)
+    fcf.gmm.trace_csm_step(0, mp, basis, months=[1, 12, 30, 60], file=buf)
     for line in buf.getvalue().splitlines():
         if "residual" not in line:
             continue
@@ -393,9 +393,9 @@ def test_show_trace_csm_step_profitable_residuals_are_zero():
 def test_show_trace_csm_step_terminal_release_drains_the_csm():
     """At ``t = term`` the release fraction equals 1 and the CSM drops
     to (essentially) zero -- the boundary condition the kernel enforces."""
-    asmp, mp = _profitable_basis_and_mp()
+    basis, mp = _profitable_basis_and_mp()
     buf = io.StringIO()
-    fcf.gmm.trace_csm_step(0, mp, asmp, months=[60], file=buf)
+    fcf.gmm.trace_csm_step(0, mp, basis, months=[60], file=buf)
     text = buf.getvalue()
     # The terminal release fraction prints exactly as "= 1.000000".
     assert "= 1.000000" in text

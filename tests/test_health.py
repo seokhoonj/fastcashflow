@@ -53,14 +53,14 @@ def _assumptions(**overrides) -> Basis:
 
 def test_inpatient_benefit_adds_its_present_value():
     """An inpatient coverage adds its present value to BEL; RA via morbidity_cv."""
-    asmp = _assumptions(morbidity_cv=0.15)
+    basis = _assumptions(morbidity_cv=0.15)
     benefit, term = 30_000.0, 24
     res = measure(
         ModelPoints.single(40, 0.0, term, benefits={INPATIENT: benefit}, calculation_methods=PATTERNS),
-        asmp,
+        basis,
     )
 
-    i = asmp.discount_monthly
+    i = basis.discount_monthly
     surv = (1.0 - Q) * (1.0 - LAPSE)
     half = (1.0 + i) ** (-0.5)
     full = 1.0 / (1.0 + i)
@@ -69,17 +69,17 @@ def test_inpatient_benefit_adds_its_present_value():
     pv = MORB_RATE * benefit * half * float(np.sum((surv * full) ** t))
 
     assert np.isclose(res.bel_path[0, 0], pv)
-    z = _norm_ppf(asmp.ra_confidence)
-    assert np.isclose(res.ra_path[0, 0], z * asmp.morbidity_cv * pv)
+    z = _norm_ppf(basis.ra_confidence)
+    assert np.isclose(res.ra_path[0, 0], z * basis.morbidity_cv * pv)
 
 
 def test_health_claim_is_non_decrementing():
     """A health claim leaves the policy in force -- it does not decrement."""
-    asmp = _assumptions()
+    basis = _assumptions()
     term = 36
     plain = measure(
         ModelPoints.single(40, 50_000.0, term, benefits={0: 1e8}, calculation_methods=PATTERNS),
-        asmp,
+        basis,
     )
     with_health = measure(
         ModelPoints.single(
@@ -87,7 +87,7 @@ def test_health_claim_is_non_decrementing():
             benefits={0: 1e8, INPATIENT: 30_000.0, SURGERY: 2e6},
             calculation_methods=PATTERNS,
         ),
-        asmp,
+        basis,
     )
 
     # death claims and the in-force run-off are untouched by health coverages
@@ -123,9 +123,9 @@ def test_value_matches_measure_health():
             OUTPATIENT: rng.integers(0, 4, n) * 5_000},
         calculation_methods=PATTERNS,
     )
-    asmp = _assumptions(morbidity_cv=0.15)
-    fast = measure(mps, asmp, full=False)
-    detailed = measure(mps, asmp)
+    basis = _assumptions(morbidity_cv=0.15)
+    fast = measure(mps, basis, full=False)
+    detailed = measure(mps, basis)
 
     assert np.allclose(fast.bel, detailed.bel_path[:, 0])
     assert np.allclose(fast.ra, detailed.ra_path[:, 0])
@@ -135,14 +135,14 @@ def test_value_matches_measure_health():
 
 def test_diagnosis_benefit_hand_calc():
     """A diagnosis benefit -- hand-checked inception BEL and morbidity RA."""
-    asmp = _assumptions(morbidity_cv=0.12)
+    basis = _assumptions(morbidity_cv=0.12)
     benefit, term = 5e7, 24
     res = measure(
         ModelPoints.single(40, 0.0, term, benefits={DIAGNOSIS: benefit}, calculation_methods=PATTERNS),
-        asmp,
+        basis,
     )
 
-    i = asmp.discount_monthly
+    i = basis.discount_monthly
     d = MORB_RATE
     half = (1.0 + i) ** (-0.5)
     full = 1.0 / (1.0 + i)
@@ -152,22 +152,22 @@ def test_diagnosis_benefit_hand_calc():
     pv = d * benefit * half * float(np.sum((g * full) ** t))
 
     assert np.isclose(res.bel_path[0, 0], pv)
-    z = _norm_ppf(asmp.ra_confidence)
-    assert np.isclose(res.ra_path[0, 0], z * asmp.morbidity_cv * pv)
+    z = _norm_ppf(basis.ra_confidence)
+    assert np.isclose(res.ra_path[0, 0], z * basis.morbidity_cv * pv)
 
 
 def test_diagnosis_pool_depletes():
     """A diagnosis benefit pays once on a shrinking pool -- at the same rate
     it is worth less than a multiple-occurrence inpatient benefit."""
-    asmp = _assumptions()
+    basis = _assumptions()
     term, amount = 120, 1e7
     diagnosis = measure(
         ModelPoints.single(40, 0.0, term, benefits={DIAGNOSIS: amount}, calculation_methods=PATTERNS),
-        asmp,
+        basis,
     )
     inpatient = measure(
         ModelPoints.single(40, 0.0, term, benefits={INPATIENT: amount}, calculation_methods=PATTERNS),
-        asmp,
+        basis,
     )
     # inpatient claims on the full in-force each month; diagnosis on the
     # depleting not-yet-diagnosed pool -- so diagnosis is worth strictly less
@@ -186,9 +186,9 @@ def test_value_matches_measure_diagnosis():
             INPATIENT: rng.integers(0, 4, n) * 10_000},
         calculation_methods=PATTERNS,
     )
-    asmp = _assumptions(morbidity_cv=0.15)
-    fast = measure(mps, asmp, full=False)
-    detailed = measure(mps, asmp)
+    basis = _assumptions(morbidity_cv=0.15)
+    fast = measure(mps, basis, full=False)
+    detailed = measure(mps, basis)
 
     assert np.allclose(fast.bel, detailed.bel_path[:, 0])
     assert np.allclose(fast.ra, detailed.ra_path[:, 0])

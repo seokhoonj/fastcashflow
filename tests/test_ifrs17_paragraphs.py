@@ -168,19 +168,19 @@ def test_sec44_csm_accretion_at_locked_in_rate():
     The roll-forward decomposes as ``csm[t+1] = csm[t] + accretion[t] -
     release[t]``; accretion is opening CSM times the locked-in monthly rate.
     """
-    asmp = _flat_assumptions(discount_annual=0.06)
+    basis = _flat_assumptions(discount_annual=0.06)
     res = measure(
         ModelPoints.single(
             issue_age=35, benefits={0: 1_000_000.0},
             level_premium=15_000.0, term_months=36,
             calculation_methods=PATTERNS,
         ),
-        asmp,
+        basis,
     )
     opening = res.csm_path[:, :-1]
     closing = res.csm_path[:, 1:]
     assert np.array_equal(closing, opening + res.csm_accretion - res.csm_release)
-    assert np.array_equal(res.csm_accretion, opening * asmp.discount_monthly)
+    assert np.array_equal(res.csm_accretion, opening * basis.discount_monthly)
 
 
 def test_sec44_b119_csm_release_proportional_to_coverage_units():
@@ -193,7 +193,7 @@ def test_sec44_b119_csm_release_proportional_to_coverage_units():
     month exactly ``csm_0 / term``.
     """
     term = 3
-    asmp = _flat_assumptions(
+    basis = _flat_assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.zeros(issue_age.shape),
         lapse_annual=lambda sex, issue_age, duration: np.zeros(duration.shape),
     )
@@ -203,7 +203,7 @@ def test_sec44_b119_csm_release_proportional_to_coverage_units():
             level_premium=12_000.0, term_months=term,
             calculation_methods=PATTERNS,
         ),
-        asmp,
+        basis,
     )
     csm0 = res.csm_path[0, 0]
     assert csm0 > 0.0                             # profitable -- premium, no claims

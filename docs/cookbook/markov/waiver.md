@@ -81,7 +81,7 @@ lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
 waiver_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.10) ** 12)
 
 # 계리적 가정
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual        = death_fn,   # 보유계약 감쇠용 사망률 (월 1%)
     lapse_annual            = lapse_fn,   # 해지율 (해지 없음)
     waiver_incidence_annual = waiver_fn,  # active → waiver 전이율 (월 10%)
@@ -105,7 +105,7 @@ mp = fcf.ModelPoints.single(
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
-m = fcf.gmm.measure(mp, asmp)
+m = fcf.gmm.measure(mp, basis)
 print(f"inforce    = {m.cashflows.inforce[0, :3]}")     # 보유계약 (active + waiver)
 print(f"premium_cf = {m.cashflows.premium_cf[0, :3]}")  # 보험료 (active 만 납입)
 print(f"claim_cf   = {m.cashflows.claim_cf[0, :3]}")    # 사망보험금 (전체 inforce)

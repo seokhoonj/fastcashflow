@@ -101,10 +101,10 @@ def test_value_matches_run_phase1b():
         term_months=rng.integers(13, 36, n),
         calculation_methods=PATTERNS,
     )
-    asmp = _assumptions(mortality_cv=0.10, discount_annual=0.03)
+    basis = _assumptions(mortality_cv=0.10, discount_annual=0.03)
 
-    fast = measure(mps, asmp, full=False)
-    detailed = measure(mps, asmp)
+    fast = measure(mps, basis, full=False)
+    detailed = measure(mps, basis)
 
     assert np.allclose(fast.bel, detailed.bel_path[:, 0])
     assert np.allclose(fast.ra, detailed.ra_path[:, 0])

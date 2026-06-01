@@ -223,7 +223,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 # 그런데 calculation_methods.csv 에는 CA_DIAG 행 없음.
 # 결과:
 #   ValueError: rate-driven coverage code(s) ['CA_DIAG'] from the
-#               assumptions workbook are not registered in calculation_methods
+#               basis workbook are not registered in calculation_methods
 #               -- add each code (with its CalculationMethod) to
 #               calculation_methods.csv
 ```

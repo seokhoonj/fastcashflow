@@ -83,7 +83,7 @@ death_fn = lambda sex, issue_age, duration: np.full(
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 계리적 가정
-assumptions = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
@@ -158,7 +158,7 @@ model_points = fcf.ModelPoints.single(
 입력이 준비됐으면 측정은 한 줄입니다.
 
 ```python
-m = fcf.gmm.measure(model_points, assumptions)
+m = fcf.gmm.measure(model_points, basis)
 ```
 
 `measure()`에 모델포인트와 가정을 넘기면, 1.2절의 4단계 — 추정, 할인,
@@ -209,7 +209,7 @@ death_fn = lambda sex, issue_age, duration: np.full(
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 계리적 가정
-assumptions = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
@@ -230,7 +230,7 @@ model_points = fcf.ModelPoints.single(
 )
 
 # 측정
-m = fcf.gmm.measure(model_points, assumptions)
+m = fcf.gmm.measure(model_points, basis)
 print(m.bel[0], m.ra[0], m.csm[0], m.loss_component[0])    # BEL, RA, CSM, 손실요소
 ```
 
@@ -266,7 +266,7 @@ print(val.csm)      # 모델포인트별 CSM 배열 (길이 11)
 진단·입원·재해사망·연금·생존 같은 특약이 붙어 있죠. 결과는 모델포인트
 순서대로 늘어선 배열이라, 11건이면 길이 11입니다.
 
-세그먼트가 하나뿐인 동질 포트폴리오라면 `measure(mp, asmp, full=False)`로 단일 가정을 그대로
+세그먼트가 하나뿐인 동질 포트폴리오라면 `measure(mp, basis, full=False)`로 단일 가정을 그대로
 넘기면 됩니다. 샘플은 세 상품 × 여러 채널이 섞여 있어 라우팅이 필요합니다.
 
 샘플은 보험료가 보장에 견주어 빠듯하게 매겨진 계약이 대부분이라, 11건

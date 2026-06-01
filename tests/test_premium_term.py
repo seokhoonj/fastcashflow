@@ -36,8 +36,8 @@ def test_premium_term_hand_calculation():
         term_months=3, premium_term_months=2,
         calculation_methods=PATTERNS,
     )
-    asmp = _assumptions()
-    res = measure(mp, asmp)
+    basis = _assumptions()
+    res = measure(mp, basis)
 
     # in force [1.0, 0.99*0.98, (0.99*0.98)**2]; zero discount.
     s = 0.99 * 0.98
@@ -55,7 +55,7 @@ def test_premium_term_hand_calculation():
     bel = pv_claims - pv_premiums
     assert np.isclose(res.bel_path[0, 0], bel)
     # measure() reproduces the same headline number.
-    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
+    assert np.isclose(measure(mp, basis, full=False).bel[0], bel)
 
 
 def test_premium_term_defaults_to_full_term():
@@ -63,13 +63,13 @@ def test_premium_term_defaults_to_full_term():
     the same result as setting it equal to `term_months`."""
     kw = dict(issue_age=40, benefits={0: 1_000_000.0},
               level_premium=12_000.0, term_months=120)
-    asmp = _assumptions()
+    basis = _assumptions()
 
     default = ModelPoints.single(**kw, calculation_methods=PATTERNS)
     assert np.all(default.premium_term_months == 120)
 
     explicit = ModelPoints.single(**kw, premium_term_months=120, calculation_methods=PATTERNS)
-    assert np.isclose(measure(default, asmp, full=False).bel[0], measure(explicit, asmp, full=False).bel[0])
+    assert np.isclose(measure(default, basis, full=False).bel[0], measure(explicit, basis, full=False).bel[0])
 
 
 def test_shorter_premium_term_raises_the_liability():
@@ -77,17 +77,17 @@ def test_shorter_premium_term_raises_the_liability():
     liability is larger than the same contract paid for the full term."""
     kw = dict(issue_age=45, benefits={0: 50_000_000.0},
               level_premium=30_000.0, term_months=240)
-    asmp = _assumptions()
+    basis = _assumptions()
 
-    full_pay = measure(ModelPoints.single(**kw, premium_term_months=240, calculation_methods=PATTERNS), asmp, full=False)
-    short_pay = measure(ModelPoints.single(**kw, premium_term_months=120, calculation_methods=PATTERNS), asmp, full=False)
+    full_pay = measure(ModelPoints.single(**kw, premium_term_months=240, calculation_methods=PATTERNS), basis, full=False)
+    short_pay = measure(ModelPoints.single(**kw, premium_term_months=120, calculation_methods=PATTERNS), basis, full=False)
 
     assert short_pay.bel[0] > full_pay.bel[0]
 
 
 def test_premium_term_round_trips(tmp_path):
     """A wide file's `premium_term_months` column reads back unchanged."""
-    asmp = _assumptions()
+    basis = _assumptions()
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
         level_premium=np.array([12_000.0, 12_000.0]),
@@ -97,10 +97,10 @@ def test_premium_term_round_trips(tmp_path):
         calculation_methods=PATTERNS,
     )
     path = tmp_path / "model_points.csv"
-    mp.to_wide(asmp).write_csv(path)
+    mp.to_wide(basis).write_csv(path)
 
     back = read_model_points(path)
     assert list(back.premium_term_months) == [120, 60]
     # the 60-month-pay policy collects less premium -> larger liability.
-    val = measure(back, asmp, full=False)
+    val = measure(back, basis, full=False)
     assert val.bel[1] > val.bel[0]

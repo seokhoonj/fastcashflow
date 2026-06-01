@@ -40,7 +40,7 @@ reader 호출:
 ```python
 basis = read_basis("basis.xlsx")
 # basis: dict[(product, channel), Basis]
-asmp = basis[("TERM_LIFE_A", "GA")]
+basis = basis[("TERM_LIFE_A", "GA")]
 ```
 
 ### 1.1 `_meta` 시트와 `schema_version`
@@ -473,7 +473,7 @@ scenarios = fcf.read_scenarios("discount_scenarios.parquet")
 # shape (n_scenarios, n_time) 의 numpy array
 
 # gmm.stochastic / vfa.tvog 에 직접 전달
-result = fcf.gmm.stochastic(model_points, assumptions, scenarios)
+result = fcf.gmm.stochastic(model_points, basis, scenarios)
 ```
 
 지원 형식: `.parquet`, `.csv`, `.xlsx`, `.feather`. 한 열짜리 파일은

@@ -1,7 +1,7 @@
 ### 입력 파일과 입력 개체
 
 엔진은 두 클래스의 *개체* 만 받습니다 — `Basis` (산출기초) 와
-`ModelPoints`. **`measure(mp, asmp)`** 호출의 두 인자가 바로 이 개체들.
+`ModelPoints`. **`measure(mp, basis)`** 호출의 두 인자가 바로 이 개체들.
 사용자가 다루는 *입력 파일들* 은 reader 함수를 거쳐 이 두 개체로 모입니다.
 `Basis` 는 개별 **가정** (사망률·해지율·할인율 …) 을 묶은 산출기초이고,
 `ModelPoints` 는 평가 대상 계약들입니다:
@@ -32,7 +32,7 @@ Basis (basis = fcf.read_basis(...))
 ModelPoints (mp = fcf.read_model_points(...))
 ├── policies.csv              ── 보유 계약 (한 줄 = 한 계약, 가입 시점 영구 spec)
 │   ├── mp_id                 · 계약 식별자 (다른 파일과 join 키)
-│   ├── product_code          · 어느 segment 가정을 쓸지 (assumptions 의 segments 와 맞물림)
+│   ├── product_code          · 어느 segment 가정을 쓸지 (basis 의 segments 와 맞물림)
 │   ├── channel_code          · 채널
 │   ├── issue_age             · 가입연령
 │   ├── sex                   · 0 = 남, 1 = 여
@@ -78,15 +78,15 @@ fastcashflow 사용자 API
 │   └── fcf.read_inforce_policies(path, coverages=, ...) ── 결산 1-파일 reader
 │
 ├── 평가
-│   ├── fcf.gmm.measure(mp, asmp)              ── 신계약, 시간 trajectory 전체
-│   ├── fcf.gmm.measure(mp, asmp, full=False)  ── 신계약, 시점 0 의 4 숫자만 (빠름)
+│   ├── fcf.gmm.measure(mp, basis)              ── 신계약, 시간 trajectory 전체
+│   ├── fcf.gmm.measure(mp, basis, full=False)  ── 신계약, 시점 0 의 4 숫자만 (빠름)
 │   ├── fcf.gmm.measure(mp, basis, full=False) ── basis 가 dict 면 (product, channel) 자동 라우팅
-│   ├── fcf.measure_in_force(mp, asmp, ...)    ── 결산, trajectory
-│   └── fcf.value_in_force(mp, asmp, ...)      ── 결산, 시점 0
+│   ├── fcf.measure_in_force(mp, basis, ...)    ── 결산, trajectory
+│   └── fcf.value_in_force(mp, basis, ...)      ── 결산, 시점 0
 │
 ├── 결과 저장
 │   ├── fcf.write_measurement(val, path)              ── 결과 한 파일에 저장
-│   └── fcf.gmm.measure_stream(parquet, out_dir, asmp)      ── 메모리 초과 portfolio 스트리밍
+│   └── fcf.gmm.measure_stream(parquet, out_dir, basis)      ── 메모리 초과 portfolio 스트리밍
 │
 ├── 변동분해 (분기간 비교)
 │   ├── fcf.roll_forward(m, period_months=...)      ── 분기 사이 변동 분해

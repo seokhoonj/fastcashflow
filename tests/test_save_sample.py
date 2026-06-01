@@ -29,7 +29,7 @@ def test_save_sample_full_round_trip(tmp_path):
     fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
 
     basis = fcf.read_basis(tmp_path / "basis.xlsx")
-    asmp = next(iter(basis.values()))
+    basis = next(iter(basis.values()))
     mp_file = fcf.read_model_points(
         tmp_path / "policies.csv",
         coverages=tmp_path / "coverages.csv",
@@ -94,7 +94,7 @@ def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
     fcf.save_sample_inforce_policies(tmp_path / "inforce_policies.csv")
 
     basis = fcf.read_basis(tmp_path / "basis.xlsx")
-    asmp = basis[("TERM_LIFE_A", "GA")]
+    basis = basis[("TERM_LIFE_A", "GA")]
 
     # Two-file workflow
     mp_a = fcf.read_model_points(
@@ -118,10 +118,10 @@ def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
     assert np.allclose(state_a.prior_csm, state_b.prior_csm)
     assert state_a.lock_in_rate == state_b.lock_in_rate
 
-    val_a = fcf.value_in_force(mp_a, asmp, period_months=3,
+    val_a = fcf.value_in_force(mp_a, basis, period_months=3,
                                prior_csm=state_a.prior_csm,
                                lock_in_rate=state_a.lock_in_rate)
-    val_b = fcf.value_in_force(mp_b, asmp, period_months=3,
+    val_b = fcf.value_in_force(mp_b, basis, period_months=3,
                                prior_csm=state_b.prior_csm,
                                lock_in_rate=state_b.lock_in_rate)
     assert np.allclose(val_a.bel, val_b.bel)
@@ -139,7 +139,7 @@ def test_read_inforce_policies_rejects_missing_state_columns(tmp_path):
     fcf.save_sample_basis(tmp_path / "basis.xlsx")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
     fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
-    asmp = fcf.read_basis(tmp_path / "basis.xlsx")[("TERM_LIFE_A", "GA")]
+    basis = fcf.read_basis(tmp_path / "basis.xlsx")[("TERM_LIFE_A", "GA")]
 
     with pytest.raises(ValueError, match="missing required column"):
         fcf.read_inforce_policies(
@@ -159,7 +159,7 @@ def test_save_sample_inforce_policies_round_trip(tmp_path):
     fcf.save_sample_basis(tmp_path / "basis.xlsx")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
     fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
-    asmp = fcf.read_basis(tmp_path / "basis.xlsx")[("TERM_LIFE_A", "GA")]
+    basis = fcf.read_basis(tmp_path / "basis.xlsx")[("TERM_LIFE_A", "GA")]
     mp, state = fcf.read_inforce_policies(
         path,
         coverages=tmp_path / "coverages.csv",

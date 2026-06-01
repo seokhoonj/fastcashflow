@@ -17,11 +17,10 @@ pip install git+https://github.com/seokhoonj/fastcashflow.git
 ```python
 import fastcashflow as fcf
 
-basis        = fcf.samples.basis()       # {(product, channel): Basis}
-assumptions  = basis[("TERM_LIFE_A", "GA")]             # 한 세그먼트 선택
+basis        = fcf.samples.basis()[("TERM_LIFE_A", "GA")]   # 한 세그먼트의 산출기초
 model_points = fcf.samples.model_points()
 
-m = fcf.gmm.measure(model_points, assumptions)
+m = fcf.gmm.measure(model_points, basis)
 print(m.bel)   # 최선추정부채
 print(m.ra)    # 위험조정
 print(m.csm)   # 보험계약마진

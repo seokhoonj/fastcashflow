@@ -19,10 +19,9 @@
 ```python
 import fastcashflow as fcf
 
-model_points = fcf.samples.model_points()              # 패키지 샘플 포트폴리오
-basis        = fcf.samples.basis()               # {(product, channel): Basis}
-assumptions  = basis[("TERM_LIFE_A", "FC")]                # 한 세그먼트 선택 (이익 나는 채널)
-m            = fcf.gmm.measure(model_points, assumptions)
+model_points = fcf.samples.model_points()                   # 패키지 샘플 포트폴리오
+basis        = fcf.samples.basis()[("TERM_LIFE_A", "FC")]   # 이익 나는 한 세그먼트
+m            = fcf.gmm.measure(model_points, basis)
 ```
 
 ## 12.1 결과를 그래프로
@@ -35,7 +34,7 @@ m            = fcf.gmm.measure(model_points, assumptions)
 fcf.plot_liability(m)               # BEL·RA·CSM 궤적
 fcf.plot_cashflows(m)               # 현금흐름의 여섯 갈래
 fcf.plot_csm_runoff(m)              # CSM 런오프
-fcf.plot_risk_adjustment(m, assumptions)   # 위험조정
+fcf.plot_risk_adjustment(m, basis)   # 위험조정
 ```
 
 - `plot_liability` — 5·6·7장의 BEL·RA·CSM이 시간에 따라 어떻게

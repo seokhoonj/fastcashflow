@@ -76,10 +76,10 @@ def test_no_ae_factor_sheet(tmp_path):
     """Workbook with no ae_factors sheet leaves rates unchanged."""
     p = tmp_path / "a.xlsx"
     _build(p)
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
-    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.02
+    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
+    assert basis.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.02
 
 
 def test_scalar_ae_factor_per_coverage(tmp_path):
@@ -89,12 +89,12 @@ def test_scalar_ae_factor_per_coverage(tmp_path):
         ["product_code", "channel_code", "coverage_code", "factor"],
         ["TERM_A", "GA", "INPATIENT", 1.5],          # 손해율 150%
     ])
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # base 0.02 * factor 1.5 = 0.03
-    assert np.isclose(asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.03)
+    assert np.isclose(basis.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0], 0.03)
     # mortality unchanged (no A/E row touches the mortality decrement)
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
+    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
 
 
 def test_ae_factor_does_not_apply_to_mortality_decrement(tmp_path):
@@ -107,9 +107,9 @@ def test_ae_factor_does_not_apply_to_mortality_decrement(tmp_path):
         ["product_code", "channel_code", "coverage_code", "factor"],
         ["TERM_A", "GA", "INPATIENT", 1.5],
     ])
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert asmp.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
+    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.001
 
 
 def test_ae_factor_varies_by_age(tmp_path):
@@ -128,9 +128,9 @@ def test_ae_factor_varies_by_age(tmp_path):
         rows.append(["TERM_A", "GA", "INPATIENT", age, 1.0])
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=rows)
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0, 0, 0]); a = np.array([25, 40, 60]); d = np.array([0, 0, 0])
-    out = asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))
+    out = basis.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))
     assert np.allclose(out, [0.02 * 3.0, 0.02 * 1.5, 0.02 * 1.0])
 
 
@@ -141,10 +141,10 @@ def test_ae_factor_only_applies_to_matching_segment(tmp_path):
         ["product_code", "channel_code", "coverage_code", "factor"],
         ["TERM_A", "FC", "INPATIENT", 1.5],         # different channel
     ])
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # GA segment: no matching A/E -> base rate unchanged
-    assert asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.02
+    assert basis.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == 0.02
 
 
 def test_ae_factor_composes_with_age_shift(tmp_path):
@@ -190,10 +190,10 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
     ae.append(["TERM_A", "GA", "INPATIENT", 0.5])
     wb.save(p)
 
-    asmp = _segment(p)
+    basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])
     # apparent age 30 + 5 = 35 -> base rate 0.001 * 16 = 0.016; A/E 0.5 -> 0.008
     assert np.isclose(
-        asmp.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0],
+        basis.coverages[0].rate(s, a, d, np.zeros_like(d), np.zeros_like(d))[0],
         0.001 * 16 * 0.5,
     )

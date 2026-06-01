@@ -77,12 +77,12 @@ IFRS 17은 두 가지 기준을 둡니다(B126).
 
 **시간 경과**(B126(a))는 보험료를 보장기간에 걸쳐 **직선으로** 나눕니다.
 4개월 계약이면 매달 보험료의 1/4씩이죠. fastcashflow의 기본값이며,
-`paa.measure(model_points, assumptions)`처럼 그냥 부르면 이 기준을 씁니다.
+`paa.measure(model_points, basis)`처럼 그냥 부르면 이 기준을 씁니다.
 
 **발생 예상**(B126(b))은 보험금과 사업비가 **발생하리라 예상되는
 시기**에 맞춰 보험료를 나눕니다. 위험이 보장기간에 고르게 퍼져 있지
 않을 때 — 예컨대 사업비가 계약 초기에 몰리거나 보험금이 특정 시기에
-쏠릴 때 — 씁니다. `paa.measure(model_points, assumptions, revenue_basis="claims")`로
+쏠릴 때 — 씁니다. `paa.measure(model_points, basis, revenue_basis="claims")`로
 선택합니다.
 
 어느 기준이든 인식한 보험수익을 모두 더하면 총보험료와 같습니다.
@@ -166,7 +166,7 @@ death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 계리적 가정
-assumptions = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (연 0.1%)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 0.03,             # 연 할인율 3%
@@ -188,7 +188,7 @@ model_points = fcf.ModelPoints.single(
 )
 
 # 측정 -- PAA 경로
-m = fcf.paa.measure(model_points, assumptions)
+m = fcf.paa.measure(model_points, basis)
 print(m.lrc[0])              # 잔여보장부채 궤적 (월말 LRC, 길이 = 보험기간+1)
 print(m.revenue[0])          # 월별 보험수익
 print(m.loss_component[0])   # 손실요소 (0 = 손실부담계약 아님)

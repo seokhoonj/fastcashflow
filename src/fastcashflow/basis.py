@@ -634,19 +634,19 @@ def describe_basis(obj, *, file=None) -> None:
 
 
 def _describe_basis_lines(
-    asmp: "Basis", out: list[str], *, prefix: str,
+    basis: "Basis", out: list[str], *, prefix: str,
 ) -> None:
     sections: list[tuple[str, list[object]]] = []
     marks = ["1.", "2.", "3.", "4.", "5.", "6."]
 
     def field_lines(names: tuple[str, ...]) -> list[object]:
         width = max(len(n) for n in names)
-        return [f"{n:<{width}}  {_fmt_value(getattr(asmp, n))}" for n in names]
+        return [f"{n:<{width}}  {_fmt_value(getattr(basis, n))}" for n in names]
 
     for i, (title, names) in enumerate(_DESCRIBE_GROUPS[:3]):
         body = field_lines(names)
         if i == 1:
-            rows = asmp.expense_items
+            rows = basis.expense_items
             row_lines: list[object] = [
                 f"ExpenseItem({r.expense_type!r}, basis={r.basis!r}, "
                 f"value={r.value:g})"
@@ -655,7 +655,7 @@ def _describe_basis_lines(
             body.append((f"expense_items : tuple  (len={len(rows)})", row_lines))
         sections.append((f"{marks[i]} {title}", body))
 
-    coverages = asmp.coverages
+    coverages = basis.coverages
     coverage_lines: list[object] = []
     width = max((len(r.code) for r in coverages), default=0)
     for r in coverages:
@@ -667,7 +667,7 @@ def _describe_basis_lines(
         (f"coverages : tuple  (len={len(coverages)})", coverage_lines),
     ]))
 
-    sm = asmp.state_model
+    sm = basis.state_model
     if sm is None:
         sm_body: list[object] = ["None"]
     else:
