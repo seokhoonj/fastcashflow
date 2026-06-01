@@ -20,15 +20,8 @@ Not yet on PyPI -- install directly from GitHub:
 pip install git+https://github.com/seokhoonj/fastcashflow.git
 ```
 
-The plotting helpers (`plot_liability`, `plot_csm_runoff`, ...) additionally
-need matplotlib:
-
-```bash
-pip install "git+https://github.com/seokhoonj/fastcashflow.git#egg=fastcashflow[viz]"
-```
-
 fastcashflow requires Python 3.10 or newer. Its core dependencies -- numpy,
-numba and polars -- install automatically.
+numba, polars and matplotlib -- install automatically.
 
 ## Design
 

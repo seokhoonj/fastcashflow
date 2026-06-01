@@ -17,6 +17,9 @@
 라이브 데모 열기
 ```
 
+데모 사이트는 fastcashflow를 계산 엔진으로 사용하는 별도 웹 애플리케이션입니다.
+fastcashflow 자체는 Python 라이브러리입니다.
+
 ::::{grid} 1 2 2 4
 :gutter: 3
 

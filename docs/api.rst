@@ -143,8 +143,7 @@ Input and output
 Visualisation
 -------------
 
-The plotting helpers require the ``viz`` extra (``pip install
-fastcashflow[viz]``).
+The plotting helpers use matplotlib, which is included in the standard install.
 
 .. autofunction:: fastcashflow.plot_liability
 

@@ -548,7 +548,7 @@ class Reconciliation:
             ("Closing", self.bel_closing, self.ra_closing, self.csm_closing),
         )
         lines = [
-            f"Reconciliation -- months {self.month_start}-{self.month_end}",
+            f"Reconciliation -- months {self.month_start + 1}-{self.month_end}",
             f"{'':16}{'BEL':>18}{'RA':>18}{'CSM':>18}",
         ]
         for name, bel, ra, csm in rows:
@@ -607,7 +607,7 @@ class PAAReconciliation:
             )),
         )
         lines = [
-            f"PAA reconciliation -- months {self.month_start}-{self.month_end}"
+            f"PAA reconciliation -- months {self.month_start + 1}-{self.month_end}"
         ]
         for title, rows in blocks:
             lines.append(f"  {title}")
@@ -673,7 +673,7 @@ class VFAReconciliation:
             ("Closing", self.bel_closing, self.ra_closing, self.csm_closing),
         )
         lines = [
-            f"VFA reconciliation -- months {self.month_start}-{self.month_end}",
+            f"VFA reconciliation -- months {self.month_start + 1}-{self.month_end}",
             f"{'':16}{'BEL':>18}{'RA':>18}{'CSM':>18}",
         ]
         for name, bel, ra, csm in rows:

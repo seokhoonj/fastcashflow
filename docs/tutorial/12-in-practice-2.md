@@ -29,7 +29,7 @@ m            = fcf.measure(model_points, assumptions)
 
 `measure()`가 돌려준 `m`은 시점별 궤적을 모두 담고 있어, 숫자만으로는
 한눈에 들어오지 않습니다. 내장 차트가 그것을 그래프로 보여 줍니다.
-차트 기능은 8.1절의 `[viz]` 추가 설치에 들어 있는 matplotlib을 씁니다.
+내장 차트는 matplotlib을 씁니다 — fastcashflow 설치 시 함께 들어옵니다.
 
 ```python
 fcf.plot_liability(m)               # BEL·RA·CSM 궤적
@@ -85,7 +85,7 @@ print(recon[0])                                     # 첫 보고기간
 실행하면 첫 보고기간(1차년도)의 변동분석표가 나옵니다.
 
 ```
-Reconciliation -- months 0-12
+Reconciliation -- months 1-12
                                BEL                RA               CSM
 Opening                -17,618,497         1,269,709        16,348,789
 Future service                   0                 0                 0
@@ -123,9 +123,10 @@ fcf.plot_analysis_of_change(recon[0])
 다섯 행 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지 — 을 폭포꼴
 막대로 잇습니다.
 
-```{image} ../images/analysis-of-change.png
+```{figure} ../images/analysis-of-change.png
 :alt: 첫 보고기간 CSM의 변동분석 폭포 차트 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지
 :class: hero
+첫 보고기간(months 1–12) CSM — Opening·Finance·Release를 거쳐 Closing까지 이어지는 폭포 차트.
 ```
 
 ## 12.3 리포트

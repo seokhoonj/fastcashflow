@@ -5,12 +5,8 @@
 PyPI에는 아직 올라가 있지 않습니다. GitHub에서 직접 설치합니다:
 
 ```bash
-pip install "git+https://github.com/seokhoonj/fastcashflow.git#egg=fastcashflow[viz]"
+pip install git+https://github.com/seokhoonj/fastcashflow.git
 ```
-
-`[viz]`는 아래에서 쓰는 내장 차트에 필요한 matplotlib을 함께 설치합니다.
-차트가 필요 없으면 `[viz]`를 빼고 `pip install
-git+https://github.com/seokhoonj/fastcashflow.git` 로 설치합니다.
 
 ## 첫 평가
 

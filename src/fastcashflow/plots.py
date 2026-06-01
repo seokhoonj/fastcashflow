@@ -1,14 +1,9 @@
 """Visualisation -- charts of the IFRS 17 figures the engine produces.
 
 Turn a measurement, a reconciliation or a stochastic result into a chart.
-Plotting is an optional extra::
-
-    pip install fastcashflow[viz]
-
-matplotlib is imported lazily, so the core engine carries no plotting
-dependency. Every function draws onto a matplotlib Axes -- it creates one
-if none is given, and returns it -- so the charts compose into larger
-figures and stay easy to save or restyle.
+Every function draws onto a matplotlib Axes -- it creates one if none is
+given, and returns it -- so the charts compose into larger figures and stay
+easy to save or restyle.
 """
 from __future__ import annotations
 
@@ -56,8 +51,7 @@ def _plt():
         import matplotlib.pyplot as plt
     except ImportError as exc:                           # pragma: no cover
         raise ImportError(
-            "plotting requires matplotlib -- install it with "
-            "'pip install fastcashflow[viz]'"
+            "matplotlib is missing -- reinstall with 'pip install fastcashflow'"
         ) from exc
     return plt
 
@@ -323,15 +317,14 @@ def plot_analysis_of_change(reconciliation: Reconciliation, *,
                     textcoords="offset points", xytext=(0, 5), ha="center",
                     fontsize=8.5, fontweight="bold", color=_COLOR["ink"])
     ax.axhline(0.0, color=_COLOR["ink"], linewidth=0.8)
-    # Headroom so the bold value labels sitting above each bar are not
-    # clipped at the top spine.
-    ax.margins(y=0.14)
+    # Extra headroom: bold value labels above bars + space under the title.
+    ax.margins(y=0.20)
     ax.set_xticks(range(5))
     ax.set_xticklabels(["Opening", "Future\nservice", "Finance",
                         "Release", "Closing"])
     if title is None:
         title = (f"{component.upper()} analysis of change "
-                 f"-- months {r.month_start}-{r.month_end}")
+                 f"-- months {r.month_start + 1}–{r.month_end}")
     _finish(ax, title, ylabel=component.upper())
     return ax
 

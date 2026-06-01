@@ -36,13 +36,10 @@ python --version
 PyPI에 올라가 있지 않아 GitHub에서 직접 받습니다. 같은 창에 입력하세요.
 
 ```
-pip install "git+https://github.com/seokhoonj/fastcashflow.git#egg=fastcashflow[viz]"
+pip install git+https://github.com/seokhoonj/fastcashflow.git
 ```
 
-`[viz]`는 결과를 그리는 내장 차트에 필요한 matplotlib까지 함께
-설치합니다. 차트가 필요 없다면 `[viz]` 부분을 빼고
-`pip install git+https://github.com/seokhoonj/fastcashflow.git` 로 설치합니다.
-어느 쪽이든 numpy·numba·polars 같은 핵심 의존 패키지는 자동으로 들어옵니다.
+numpy·numba·polars·matplotlib 같은 핵심 의존 패키지는 자동으로 들어옵니다.
 
 ```{admonition} 가상환경
 :class: note
