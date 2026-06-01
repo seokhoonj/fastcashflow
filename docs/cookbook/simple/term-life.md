@@ -238,7 +238,7 @@ test 가 자동 검증).
   - 내용
 * - `calculation_methods.csv`
   - 담보별 산출방식 — 담보 코드 → 산출방식 (DEATH / MORBIDITY / ...)
-* - `assumptions.xlsx`
+* - `basis.xlsx`
   - 계리적 가정 — 사망률 · 해지율 · 할인율 · 사업비 · 위험조정
 * - `policies.csv`
   - 보유 계약 — 한 줄 = 한 계약 (가입연령 / 성별 / 보험기간 / 계약수)
@@ -254,13 +254,13 @@ test 가 자동 검증).
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 현재 폴더에 생성 (한 번만 -- 이미 자기 파일이 있으면 생략)
-fcf.save_sample_basis("assumptions.xlsx")              # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_basis("basis.xlsx")              # .xlsx 만 (multi-sheet 워크북)
 fcf.save_sample_policies("policies.csv")                     # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_calculation_methods("calculation_methods.csv")     # .csv / .xlsx / .parquet / .feather
 
 # (2) 읽어서 평가
-basis = fcf.read_basis("assumptions.xlsx")    # {(product_code, channel_code): Basis}
+basis = fcf.read_basis("basis.xlsx")    # {(product_code, channel_code): Basis}
 mp    = fcf.read_model_points(
     "policies.csv",                                 # 계약 spec 파일
     coverages="coverages.csv",                      # 담보 가입금액 파일

@@ -112,7 +112,7 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 # Actuarial basis -- the basis workbook
 # ---------------------------------------------------------------------------
 #
-# A single workbook (``assumptions.xlsx``) carries every assumption the engine
+# A single workbook (``basis.xlsx``) carries every assumption the engine
 # needs. Nine sheets:
 #
 #   * ``segments``       -- (product, channel) -> which tables + scalar params
@@ -552,7 +552,7 @@ def _check_schema_version(wb) -> None:
 def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
     """Read the basis workbook into a per-segment ``Basis`` dict.
 
-    ``path`` is a single ``assumptions.xlsx`` workbook holding both the rate
+    ``path`` is a single ``basis.xlsx`` workbook holding both the rate
     tables and the segment mapping (see the module header for the sheet
     layout). The ``segments`` sheet maps each (product, channel) to which
     tables it uses plus scalar parameters, with a ``defaults`` row whose
@@ -1190,7 +1190,7 @@ def read_model_points(
       as long-form too. ``calculation_methods`` is the company taxonomy file
       (CSV / parquet / feather / xlsx) -- the third side of the Plan-B
       split between *portfolio* (policies + coverages), *basis*
-      (assumptions.xlsx) and *catalogue* (calculation_methods.csv).
+      (basis.xlsx) and *catalogue* (calculation_methods.csv).
 
     The policies frame is the **inception-time static spec** -- issue_age,
     term, sex, and so on. The in-force closing state (elapsed_months,
@@ -1322,7 +1322,7 @@ def read_inforce_policies(
 def sample_data_dir() -> Path:
     """Return the on-disk path of the bundled sample data directory.
 
-    The directory contains ``sample_assumptions.xlsx``, ``sample_policies.csv``
+    The directory contains ``sample_basis.xlsx``, ``sample_policies.csv``
     and ``sample_coverages.csv`` -- the inputs behind
     :func:`load_sample_basis` and :func:`load_sample_model_points`.
     Use this to open the workbook in Excel and see what a complete
@@ -1340,7 +1340,7 @@ def load_sample_basis() -> dict[tuple[str, str], Basis]:
     (``("term_a", "GA")`` and ``("term_a", "FC")``); pick one to use it as
     a single ``Basis``.
     """
-    source = resources.files("fastcashflow") / "sample_data" / "sample_assumptions.xlsx"
+    source = resources.files("fastcashflow") / "sample_data" / "sample_basis.xlsx"
     with resources.as_file(source) as path:
         return read_basis(path)
 
@@ -1465,15 +1465,15 @@ def save_sample_basis(path: Path | str) -> Path:
     so single-table formats like CSV are not appropriate here).
 
     ``path`` may be a file (the workbook lands there) or a directory (the
-    workbook lands inside with its original ``sample_assumptions.xlsx``
+    workbook lands inside with its original ``sample_basis.xlsx``
     name). Returns the resolved destination path.
     """
     import shutil
     src = (resources.files("fastcashflow")
-           / "sample_data" / "sample_assumptions.xlsx")
+           / "sample_data" / "sample_basis.xlsx")
     dest_path = Path(path)
     if dest_path.is_dir():
-        dest_path = dest_path / "sample_assumptions.xlsx"
+        dest_path = dest_path / "sample_basis.xlsx"
     if dest_path.suffix.lower() != ".xlsx":
         raise ValueError(
             f"save_sample_basis: expected an .xlsx path, got "

@@ -32,7 +32,7 @@ import fastcashflow as fcf
 
 with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
-    asmp_path = fcf.save_sample_basis(tmp / "assumptions.xlsx")
+    asmp_path = fcf.save_sample_basis(tmp / "basis.xlsx")
     pol_path  = fcf.save_sample_policies(tmp / "policies.csv")
     cov_path  = fcf.save_sample_coverages(tmp / "coverages.csv")
     cm_path   = fcf.save_sample_calculation_methods(tmp / "calculation_methods.csv")

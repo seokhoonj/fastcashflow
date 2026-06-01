@@ -134,7 +134,7 @@ def test_read_state_rejects_unknown_integer():
 
 def test_wide_reader_rejects_collision_with_reserved_name(tmp_path):
     """A coverage_code 'maturity' would shadow the maturity_benefit scalar."""
-    asmp_book = tmp_path / "assumptions.xlsx"
+    asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="maturity")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
@@ -160,7 +160,7 @@ def test_wide_reader_rejects_collision_with_reserved_name(tmp_path):
 
 def test_long_form_rejects_duplicate_mp_id(tmp_path):
     """Duplicate mp_id would fan out the coverages join silently."""
-    asmp_book = tmp_path / "assumptions.xlsx"
+    asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
@@ -186,7 +186,7 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
 
 def test_long_form_rejects_premium_in_both_frames(tmp_path):
     """``premium`` in coverages and ``level_premium`` in policies = ambiguous."""
-    asmp_book = tmp_path / "assumptions.xlsx"
+    asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
@@ -213,7 +213,7 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
 
 def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
     """reduction_factor=0.5 without reduction_end is silently inert."""
-    asmp_book = tmp_path / "assumptions.xlsx"
+    asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
@@ -307,7 +307,7 @@ def test_truncate_list_returns_full_when_under_cap():
 
 def test_segments_legacy_product_column_hints(tmp_path):
     """A user with the old ``product`` header gets a rename hint."""
-    book = tmp_path / "assumptions.xlsx"
+    book = tmp_path / "basis.xlsx"
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
@@ -332,7 +332,7 @@ def test_segments_legacy_product_column_hints(tmp_path):
 def test_missing_required_sheet_friendly_error(tmp_path):
     """A workbook missing ``mortality_tables`` raises a sheet-named error,
     not a raw openpyxl KeyError."""
-    book = tmp_path / "assumptions.xlsx"
+    book = tmp_path / "basis.xlsx"
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     # Build a workbook with everything except mortality_tables.
@@ -408,7 +408,7 @@ def test_read_expense_tables_missing_column():
 
 def test_long_form_orphan_mp_id_names_offender(tmp_path):
     """``cov.mp_id='X'`` not in policies: the error names ``'X'``."""
-    asmp_book = tmp_path / "assumptions.xlsx"
+    asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
@@ -435,7 +435,7 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
 
 def test_long_form_orphan_coverage_code_names_offender(tmp_path):
     """``cov.coverage_code`` not in calculation_methods: the error names the code."""
-    asmp_book = tmp_path / "assumptions.xlsx"
+    asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
@@ -462,7 +462,7 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
 def test_long_form_no_premium_source_warns(tmp_path, recwarn):
     """Long-form with neither ``premium`` (cov) nor ``level_premium`` (pol)
     silently defaults to zero -- now warns."""
-    asmp_book = tmp_path / "assumptions.xlsx"
+    asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
@@ -492,7 +492,7 @@ def test_long_form_no_premium_source_warns(tmp_path, recwarn):
 
 def test_rate_table_not_found_caps_alternatives(tmp_path):
     """100 mortality tables + a typo: the error lists at most 10 plus a count."""
-    book = tmp_path / "assumptions.xlsx"
+    book = tmp_path / "basis.xlsx"
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 

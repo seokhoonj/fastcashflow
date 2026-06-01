@@ -209,7 +209,7 @@ def test_sample_data_dir_exposes_bundled_files():
     d = sample_data_dir()
     assert d.is_dir()
     names = {p.name for p in d.iterdir()}
-    assert {"sample_assumptions.xlsx",
+    assert {"sample_basis.xlsx",
             "sample_policies.csv",
             "sample_coverages.csv"}.issubset(names)
 

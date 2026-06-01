@@ -165,7 +165,7 @@ mortality table* (규제 의무) 로. 두 표가 다른 숫자라 두 슬롯도 
 ```{admonition} 워크북 로더는 자동 처리
 :class: note
 
-`fcf.read_basis("assumptions.xlsx")` 로 워크북에서 가정을 읽으면,
+`fcf.read_basis("basis.xlsx")` 로 워크북에서 가정을 읽으면,
 `segments` 시트의 `mortality_table` 컬럼이 두 슬롯 (`mortality_annual` /
 `coverages` 의 DEATH `rate_table`) 를 같은 `table_id` 로 자동 매핑.
 손계산 / 단위테스트로 직접 `Basis(...)` 를 채울 때만 주의.

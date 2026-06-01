@@ -5,7 +5,7 @@
 *입력 파일들* 은 reader 함수를 거쳐 이 두 개체로 모입니다:
 
 - **`Basis` 클래스** — `basis = fcf.read_basis(...)` 가 한
-  입력 파일 (`assumptions.xlsx`, multi-sheet 워크북) 을 읽어 가정 개체를
+  입력 파일 (`basis.xlsx`, multi-sheet 워크북) 을 읽어 가정 개체를
   만듭니다.
 - **`ModelPoints` 클래스** — `mp = fcf.read_model_points(...)` 가 세 입력
   파일 (`policies.csv` / `coverages.csv` / `calculation_methods.csv`) 을 읽어
@@ -15,7 +15,7 @@
 
 ```
 Basis (basis = fcf.read_basis(...))
-└── assumptions.xlsx          ── 계리적 가정 (multi-sheet workbook)
+└── basis.xlsx          ── 계리적 가정 (multi-sheet workbook)
     ├── segments              · (product_code, channel_code) → 어느 테이블 쓸지
     ├── mortality_tables      · table_id × sex × age → 사망률
     ├── lapse_tables          · table_id × duration → 해지율
@@ -64,7 +64,7 @@ ModelPoints (mp = fcf.read_model_points(...))
 ```
 fastcashflow 사용자 API
 ├── 샘플 파일 폴더에 생성 (한 번만, 자기 파일이 있으면 생략)
-│   ├── fcf.save_sample_basis(path)           ── assumptions.xlsx
+│   ├── fcf.save_sample_basis(path)           ── basis.xlsx
 │   ├── fcf.save_sample_policies(path)              ── policies.csv
 │   ├── fcf.save_sample_coverages(path)             ── coverages.csv
 │   ├── fcf.save_sample_calculation_methods(path)   ── calculation_methods.csv

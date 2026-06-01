@@ -170,7 +170,7 @@
   - 다루는 것
 * - 6.1
   - [워크북 — 단일 segment](io/workbook-single)
-  - `assumptions.xlsx` 의 매 시트 / 매 컬럼 자세히. 사용자 진입점.
+  - `basis.xlsx` 의 매 시트 / 매 컬럼 자세히. 사용자 진입점.
 * - 6.2
   - [워크북 — 다 segment / 다 상품](io/workbook-multi)
   - `measure` + 상품 / 채널 별 다른 StateModel.

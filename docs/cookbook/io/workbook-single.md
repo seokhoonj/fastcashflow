@@ -6,8 +6,8 @@
 - 엔진은 `Basis` 와 `ModelPoints` 두 *개체* 만 받고, **입력 파일은
   reader 함수가 그 두 개체로 모은다**
 - 네 입력 파일 — `policies` / `coverages` / `calculation_methods` /
-  `assumptions.xlsx`
-- **`assumptions.xlsx` 의 매 시트 / 매 컬럼** — 가정을 회사 워크북으로 주는 자리
+  `basis.xlsx`
+- **`basis.xlsx` 의 매 시트 / 매 컬럼** — 가정을 회사 워크북으로 주는 자리
 - `defaults` 행으로 공통값을 한 번만 적고 segment 가 덮어쓰는 패턴
 - rate 테이블의 **축 자동 감지** (sex / age / issue_age+duration / ...)
 - `save_sample_*` 로 견본을 만들고 `read_*` 로 읽어 평가까지 돌리는 라운드트립
@@ -15,7 +15,7 @@
 
 지금까지의 챕터는 가정을 Python 코드 (`fcf.Basis(...)`) 로 직접
 지었습니다. 실무에서는 가정이 **회사 워크북** 에 있고, 그 워크북을 엔진이 읽는
-형식으로 맞추는 것이 진입점입니다. 이 챕터는 그 워크북 — `assumptions.xlsx` —
+형식으로 맞추는 것이 진입점입니다. 이 챕터는 그 워크북 — `basis.xlsx` —
 의 구조를 시트 단위로 풉니다.
 
 ## 엔진이 받는 것은 파일이 아니라 개체
@@ -23,16 +23,16 @@
 `measure(mp, asmp)` 의 두 인자는 **개체** (`ModelPoints`, `Basis`) 이지
 파일이 아닙니다. 파일은 reader 가 개체로 바꿔 줍니다:
 
-- **`Basis`** — `basis = fcf.read_basis("assumptions.xlsx")` 가 한
+- **`Basis`** — `basis = fcf.read_basis("basis.xlsx")` 가 한
   워크북을 읽어 **`(product_code, channel_code) -> Basis` 사전** 을
   돌려줍니다 (segment 별 가정 한 벌씩).
 - **`ModelPoints`** — `mp = fcf.read_model_points("policies.csv",
   coverages=..., calculation_methods=...)` 가 세 파일을 한 개체로 합칩니다.
 
 네 입력 파일의 전체 트리와 사용자 함수 지도는 [1.1 한눈에 보기](../basics/overview)
-에 있습니다. 이 챕터는 그중 **`assumptions.xlsx`** 에 집중합니다.
+에 있습니다. 이 챕터는 그중 **`basis.xlsx`** 에 집중합니다.
 
-## assumptions.xlsx — 시트 구성
+## basis.xlsx — 시트 구성
 
 워크북은 한 시트가 한 가지 역할을 맡는 multi-sheet 파일입니다. 견본
 (`save_sample_basis`) 의 시트는 다음과 같습니다:
@@ -137,7 +137,7 @@ with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
 
     # 1) 견본 네 파일을 폴더에 생성 (자기 파일이 있으면 이 블록은 생략)
-    asmp_path = fcf.save_sample_basis(tmp / "assumptions.xlsx")          # 워크북
+    asmp_path = fcf.save_sample_basis(tmp / "basis.xlsx")          # 워크북
     pol_path  = fcf.save_sample_policies(tmp / "policies.csv")                 # 계약
     cov_path  = fcf.save_sample_coverages(tmp / "coverages.csv")              # 담보
     cm_path   = fcf.save_sample_calculation_methods(tmp / "calculation_methods.csv")  # 산출방식

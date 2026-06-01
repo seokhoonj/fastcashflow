@@ -14,7 +14,7 @@ DATA = Path(__file__).resolve().parent / "data"
 
 
 def main() -> None:
-    basis = fcf.read_basis(DATA / "assumptions.xlsx")
+    basis = fcf.read_basis(DATA / "basis.xlsx")
     basis = basis[("TERM_LIFE_A", "FC")]
     book = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 

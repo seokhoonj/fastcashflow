@@ -18,7 +18,7 @@ DATA = Path(__file__).resolve().parent / "data"
 
 
 def main() -> None:
-    basis = fcf.read_basis(DATA / "assumptions.xlsx")
+    basis = fcf.read_basis(DATA / "basis.xlsx")
     basis = basis[("TERM_LIFE_A", "FC")]
     account = fcf.read_model_points(DATA / "account_values.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 
@@ -29,7 +29,7 @@ def main() -> None:
     scenarios = monthly_return + rng.normal(0.0, 0.012, size=(2_000, n_time))
 
     res = fcf.vfa.tvog(account, basis, scenarios)
-    print("TVOG -- the minimum-rate guarantee from assumptions.xlsx")
+    print("TVOG -- the minimum-rate guarantee from basis.xlsx")
     print(f"  intrinsic value  {res.intrinsic_value:>16,.0f}")
     print(f"  time value       {res.time_value:>16,.0f}")
     print(f"  total value      {res.total_value:>16,.0f}")

@@ -1,6 +1,6 @@
 """Basis workbook reader.
 
-A single ``assumptions.xlsx`` carries the segment mapping plus the named rate
+A single ``basis.xlsx`` carries the segment mapping plus the named rate
 tables. The ``segments`` sheet has a ``defaults`` row whose values blank
 cells inherit, and one row per (product, channel) segment; the reader returns
 one ``Basis`` per segment. See docs/basis-format.md.
@@ -161,7 +161,7 @@ def test_state_model_column_blank_keeps_none():
     from fastcashflow import read_basis
     # Copy the sample workbook and clear the defaults row's state_model.
     sample = resources.files("fastcashflow").joinpath(
-        "sample_data/sample_assumptions.xlsx")
+        "sample_data/sample_basis.xlsx")
     with tempfile.TemporaryDirectory() as d:
         dst = f"{d}/blank_state.xlsx"
         shutil.copy(sample, dst)
@@ -186,7 +186,7 @@ def test_state_model_unknown_key_raises():
     import importlib.resources as resources
     from fastcashflow import read_basis
     sample = resources.files("fastcashflow").joinpath(
-        "sample_data/sample_assumptions.xlsx")
+        "sample_data/sample_basis.xlsx")
     with tempfile.TemporaryDirectory() as d:
         dst = f"{d}/bad_state.xlsx"
         shutil.copy(sample, dst)
@@ -211,7 +211,7 @@ def test_meta_sheet_carries_schema_version():
     matching a supported version is silently accepted."""
     import openpyxl, importlib.resources as resources
     sample = resources.files("fastcashflow").joinpath(
-        "sample_data/sample_assumptions.xlsx")
+        "sample_data/sample_basis.xlsx")
     wb = openpyxl.load_workbook(sample, read_only=True)
     assert "_meta" in wb.sheetnames
     rows = list(wb["_meta"].iter_rows(values_only=True))
@@ -224,7 +224,7 @@ def test_legacy_workbook_without_meta_sheet_is_v1():
     import openpyxl, tempfile, shutil, importlib.resources as resources
     from fastcashflow import read_basis
     sample = resources.files("fastcashflow").joinpath(
-        "sample_data/sample_assumptions.xlsx")
+        "sample_data/sample_basis.xlsx")
     with tempfile.TemporaryDirectory() as d:
         dst = f"{d}/legacy.xlsx"
         shutil.copy(sample, dst)
@@ -242,7 +242,7 @@ def test_unsupported_schema_version_raises():
     import importlib.resources as resources
     from fastcashflow import read_basis
     sample = resources.files("fastcashflow").joinpath(
-        "sample_data/sample_assumptions.xlsx")
+        "sample_data/sample_basis.xlsx")
     with tempfile.TemporaryDirectory() as d:
         dst = f"{d}/futuristic.xlsx"
         shutil.copy(sample, dst)

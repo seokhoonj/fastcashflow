@@ -3,11 +3,11 @@
 가정 워크북 구조와 명명 규칙에 대해 결정된 내용과 그 이유. 각 항목은
 나중에 다시 같은 토론을 반복하지 않도록 **근거**까지 기록합니다.
 
-## 1. 단일 워크북 (assumptions.xlsx)
+## 1. 단일 워크북 (basis.xlsx)
 
-**결정**: rate tables (7시트) + segments + coverages = 총 9시트를 한 워크북에
-담는다. 이전 v1 reader가 썼던 두 파일 분리 (`sample_tables.xlsx` +
-`sample_basis.xlsx`)는 폐기.
+**결정**: rate tables + segments + coverages 등 여러 시트를 한 워크북에
+담는다. 이전 v1 reader가 썼던 두 파일 분리 (rate-table 워크북 + 별도 매핑
+워크북) 는 폐기.
 
 **근거**:
 - 두 파일 분리를 정당화하는 시나리오 — (1) 한 tables를 여러 basis가 공유,
@@ -45,17 +45,25 @@
 
 ---
 
-## 3. 파일명 `assumptions.xlsx` (이전엔 `basis.xlsx` 후보)
+## 3. 파일명 `basis.xlsx` (이전엔 `assumptions.xlsx`)
 
-**결정**: 워크북 파일명은 `assumptions.xlsx`. Python 클래스 `Basis`,
-모듈 `assumptions.py`, 함수 `read_basis()`와 이름 일치.
+**결정**: 워크북 파일명은 `basis.xlsx`. Python 클래스 `Basis`, 모듈
+`basis.py`, 함수 `read_basis()` 와 한 단어로 통일. 번들 샘플은
+`sample_basis.xlsx` (VFA 샘플 `sample_vfa_basis.xlsx` 와 같은 패턴).
 
 **근거**:
-- 산출기초율 (좁은 의미 "basis") 은 시트 단위 → 파일 이름으로 들어올리면
-  자기참조 발생 (`basis.xlsx` 안에 `basis` 시트가 9개 중 1개로 들어가는
-  꼴, 오해 유발).
-- "assumptions" 는 더 넓은 단어로 9시트 전부를 자연스럽게 덮음.
-- 클래스/모듈/함수 이름과의 일관성이 우선.
+- #2 의 정의대로 "basis" (산출기초율) 는 mortality·lapse·expense·discount
+  를 묶은 **valuation 입력 전체** 를 가리키는 넓은 용어 — 워크북이 담는
+  것이 정확히 그것. 파일 = 직렬화된 basis, `read_basis()` 가 그것을
+  `Basis` 개체로 적재 (`config.yaml` → `Config` 패턴).
+- 한때 `basis.xlsx` 를 꺼린 이유였던 자기참조 ("basis.xlsx 안의 basis
+  시트") 는 더 이상 성립하지 않음 — 그 매핑 시트는 #2 에서 `segments` 로
+  명명됐고, 워크북에 `basis` 라는 시트는 없음.
+- 클래스 / 모듈 / 함수 / 파일이 한 단어 (`basis`) 로 일관.
+
+**이력**: 초기에는 자기참조 우려로 `assumptions.xlsx` 를 골랐으나, 매핑
+시트가 `segments` 로 확정되어 우려가 사라졌고 `Basis` / `read_basis` 와의
+단일 어휘 통일을 위해 2026-06 `basis.xlsx` 로 전환.
 
 ---
 

@@ -11,7 +11,7 @@ import fastcashflow as fcf
 def test_save_sample_basis_round_trips_via_read_basis(tmp_path):
     """The dropped workbook reads back through read_basis to the
     same dict of Basis the in-memory loader produces."""
-    path = fcf.save_sample_basis(tmp_path / "assumptions.xlsx")
+    path = fcf.save_sample_basis(tmp_path / "basis.xlsx")
     assert path.exists()
     assert path.suffix == ".xlsx"
 
@@ -23,12 +23,12 @@ def test_save_sample_basis_round_trips_via_read_basis(tmp_path):
 def test_save_sample_full_round_trip(tmp_path):
     """The four save_* helpers, together with the three read_* arguments,
     reproduce the same ModelPoints as load_sample_model_points."""
-    fcf.save_sample_basis(tmp_path / "assumptions.xlsx")
+    fcf.save_sample_basis(tmp_path / "basis.xlsx")
     fcf.save_sample_policies(tmp_path / "policies.csv")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
     fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
 
-    basis = fcf.read_basis(tmp_path / "assumptions.xlsx")
+    basis = fcf.read_basis(tmp_path / "basis.xlsx")
     asmp = next(iter(basis.values()))
     mp_file = fcf.read_model_points(
         tmp_path / "policies.csv",
@@ -43,7 +43,7 @@ def test_save_sample_full_round_trip(tmp_path):
 def test_save_sample_accepts_directory(tmp_path):
     """Passing a directory writes the file inside with its packaged name."""
     target = fcf.save_sample_basis(tmp_path)
-    assert target == tmp_path / "sample_assumptions.xlsx"
+    assert target == tmp_path / "sample_basis.xlsx"
     assert target.exists()
 
 
@@ -86,14 +86,14 @@ def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
     valuation."""
     import numpy as np
 
-    fcf.save_sample_basis(tmp_path / "assumptions.xlsx")
+    fcf.save_sample_basis(tmp_path / "basis.xlsx")
     fcf.save_sample_policies(tmp_path / "policies.csv")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
     fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
     fcf.save_sample_inforce_state(tmp_path / "inforce_state.csv")
     fcf.save_sample_inforce_policies(tmp_path / "inforce_policies.csv")
 
-    basis = fcf.read_basis(tmp_path / "assumptions.xlsx")
+    basis = fcf.read_basis(tmp_path / "basis.xlsx")
     asmp = basis[("TERM_LIFE_A", "GA")]
 
     # Two-file workflow
@@ -136,10 +136,10 @@ def test_read_inforce_policies_rejects_missing_state_columns(tmp_path):
     import polars as pl
 
     fcf.save_sample_policies(tmp_path / "broken.csv")  # spec only, no state
-    fcf.save_sample_basis(tmp_path / "assumptions.xlsx")
+    fcf.save_sample_basis(tmp_path / "basis.xlsx")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
     fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
-    asmp = fcf.read_basis(tmp_path / "assumptions.xlsx")[("TERM_LIFE_A", "GA")]
+    asmp = fcf.read_basis(tmp_path / "basis.xlsx")[("TERM_LIFE_A", "GA")]
 
     with pytest.raises(ValueError, match="missing required column"):
         fcf.read_inforce_policies(
@@ -156,10 +156,10 @@ def test_save_sample_inforce_policies_round_trip(tmp_path):
     path = fcf.save_sample_inforce_policies(tmp_path / "inforce.csv")
     assert path.exists()
 
-    fcf.save_sample_basis(tmp_path / "assumptions.xlsx")
+    fcf.save_sample_basis(tmp_path / "basis.xlsx")
     fcf.save_sample_coverages(tmp_path / "coverages.csv")
     fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.csv")
-    asmp = fcf.read_basis(tmp_path / "assumptions.xlsx")[("TERM_LIFE_A", "GA")]
+    asmp = fcf.read_basis(tmp_path / "basis.xlsx")[("TERM_LIFE_A", "GA")]
     mp, state = fcf.read_inforce_policies(
         path,
         coverages=tmp_path / "coverages.csv",
@@ -187,12 +187,12 @@ def test_save_sample_inforce_state_round_trips(tmp_path):
 def test_save_sample_converts_to_xlsx_single_sheet(tmp_path):
     """The three single-table sample files can land as .xlsx and round-trip
     through read_model_points just like their .csv source."""
-    fcf.save_sample_basis(tmp_path / "assumptions.xlsx")
+    fcf.save_sample_basis(tmp_path / "basis.xlsx")
     fcf.save_sample_policies(tmp_path / "policies.xlsx")
     fcf.save_sample_coverages(tmp_path / "coverages.xlsx")
     fcf.save_sample_calculation_methods(tmp_path / "calculation_methods.xlsx")
 
-    basis = fcf.read_basis(tmp_path / "assumptions.xlsx")
+    basis = fcf.read_basis(tmp_path / "basis.xlsx")
     mp = fcf.read_model_points(
         tmp_path / "policies.xlsx",
         coverages=tmp_path / "coverages.xlsx",

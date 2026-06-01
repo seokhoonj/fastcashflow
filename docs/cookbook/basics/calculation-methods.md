@@ -67,7 +67,7 @@ DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은 ANNUITY. 엔진은 "주계약
 
 | 단위 | 파일 | 무엇 |
 |---|---|---|
-| 결산 basis | `assumptions.xlsx` | 위험률 / 할인율 / 사업비 / 위험조정 |
+| 결산 basis | `basis.xlsx` | 위험률 / 할인율 / 사업비 / 위험조정 |
 | Portfolio | `policies.csv` + `coverages.csv` | 어떤 계약이 어떤 담보를 얼마에 |
 | 담보별 산출방식 | `calculation_methods.csv` | 어떤 담보가 어떤 산출방식인가 |
 
@@ -81,7 +81,7 @@ import fastcashflow as fcf
 
 # 패키지 샘플로 시연 -- 자기 데이터를 쓸 때는 이 네 줄을 빼고
 # 그 자리에 자기 파일이 있다고 보면 됩니다.
-fcf.save_sample_basis("assumptions.xlsx")             # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_basis("basis.xlsx")             # .xlsx 만 (multi-sheet 워크북)
 fcf.save_sample_policies("policies.csv")                    # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_coverages("coverages.csv")                  # .csv / .xlsx / .parquet / .feather
 fcf.save_sample_calculation_methods("calculation_methods.csv")    # .csv / .xlsx / .parquet / .feather
@@ -151,7 +151,7 @@ MATURITY,만기환급,MATURITY
 ```
 
 * `coverage_code` — 사용자 시스템의 코드 (cross-file join key).
-  `coverages.csv` 와 `assumptions.xlsx` 의 `coverages` 시트가 같은 값을 씁니다.
+  `coverages.csv` 와 `basis.xlsx` 의 `coverages` 시트가 같은 값을 씁니다.
 * `coverage_name` — 사람용 라벨. 엔진은 무시; gmm.trace 표시에만 쓰입니다.
 * `calculation_method` — 위 다섯 enum 값 중 하나. 다른 값이면
   `ValueError` 가 어느 행에서 났는지 알려줍니다.
@@ -181,7 +181,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
    영역. (별도 phase)
 
 담보별 산출방식은 **신담보가 추가될 때만** 한 줄을 더해줍니다. 분기 결산
-때 갱신되는 건 `assumptions.xlsx` 입니다 — 담보별 산출방식이 분리되어 있어
+때 갱신되는 건 `basis.xlsx` 입니다 — 담보별 산출방식이 분리되어 있어
 결산 워크플로가 이 파일을 건드리지 않습니다.
 
 ## 함정 / 검증 — 등록 누락 시 어디서 에러
@@ -203,7 +203,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
   - `coverage_code` 가 중복인 행
 * - V3
   - `_long_model_points`
-  - `assumptions.xlsx` 의 rate-driven 담보가 담보별 산출방식에 누락
+  - `basis.xlsx` 의 rate-driven 담보가 담보별 산출방식에 누락
 * - V4
   - `measure()` 진입
   - 담보별 산출방식에 있는 rate-driven 코드의 rate_table 이 basis 에 없음
@@ -218,7 +218,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 #               is not one of {DEATH, MORBIDITY, DIAGNOSIS, ANNUITY, MATURITY}
 
 # V3 예시 — 담보별 산출방식 누락
-# assumptions.xlsx coverages 시트:
+# basis.xlsx coverages 시트:
 #   CA_DIAG | CANCER_STD       ← rate_table 등록
 # 그런데 calculation_methods.csv 에는 CA_DIAG 행 없음.
 # 결과:

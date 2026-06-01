@@ -174,7 +174,7 @@ BEL        = 285.22
 
 `waiver_incidence_annual` 도 다른 rate 함수와 같은 `(sex, issue_age, duration)`
 시그니처라, 실무에서는 평탄 상수 대신 경험률표 룩업을 넣습니다. 워크북으로
-평가할 때는 `assumptions.xlsx` 의 `waiver_tables` 시트에 표를 채우고
+평가할 때는 `basis.xlsx` 의 `waiver_tables` 시트에 표를 채우고
 `segments` 시트의 `waiver_table` 컬럼이 그 `table_id` 를 가리키게 합니다
 (자세한 시트 구조는 [튜토리얼 11장](../../tutorial/11-in-practice)).
 
