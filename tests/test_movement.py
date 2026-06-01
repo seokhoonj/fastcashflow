@@ -10,17 +10,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from fastcashflow import (
-    CoverageRate,
-    ExpenseItem,
-    ModelPoints,
-    measure,
-
-
-    reconcile,
-    roll_forward,
-    measure,
-)
+from fastcashflow import CoverageRate, ExpenseItem, ModelPoints, measure, reconcile, roll_forward, measure
 from conftest import annual_from_monthly as _annual, make_death_assumptions
 
 

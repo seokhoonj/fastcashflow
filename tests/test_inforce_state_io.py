@@ -67,8 +67,8 @@ def test_apply_inforce_state_overrides_elapsed_and_count():
     """``apply_inforce_state`` substitutes ``elapsed_months`` and ``count``
     on a fresh ModelPoints from the policies file -- the join key is row
     position, the user having sorted both files by mp_id upstream."""
-    mp = fcf.load_sample_model_points()
-    state = fcf.load_sample_inforce_state()
+    mp = fcf.samples.model_points()
+    state = fcf.samples.inforce_state()
     mp_settled = fcf.apply_inforce_state(mp, state)
     assert np.array_equal(mp_settled.elapsed_months, state.elapsed_months)
     assert np.allclose(mp_settled.count, state.count)
@@ -79,7 +79,7 @@ def test_apply_inforce_state_overrides_elapsed_and_count():
 
 def test_apply_inforce_state_length_mismatch_errors():
     """A wrong-length state (the two files were not aligned) errors out."""
-    mp = fcf.load_sample_model_points()
+    mp = fcf.samples.model_points()
     bad = fcf.InforceState(
         mp_id=np.array(["A", "B"]),
         elapsed_months=np.array([0, 0], dtype=np.int64),
@@ -95,11 +95,11 @@ def test_sample_inforce_end_to_end():
     """Sample policies + sample inforce state + measure_in_force runs end
     to end; the settlement-mode CSM differs from the hypothetical one (or
     we have not actually exercised the carry-forward path)."""
-    mp = fcf.load_sample_model_points()
-    state = fcf.load_sample_inforce_state()
+    mp = fcf.samples.model_points()
+    state = fcf.samples.inforce_state()
     mp_settled = fcf.apply_inforce_state(mp, state)
 
-    basis = fcf.load_sample_basis()
+    basis = fcf.samples.basis()
     asmp = basis[("TERM_LIFE_A", "FC")]
 
     mif_hyp = fcf.measure_in_force(mp_settled, asmp)

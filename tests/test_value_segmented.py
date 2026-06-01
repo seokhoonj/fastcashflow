@@ -6,13 +6,11 @@ those keys, looks each segment's `Basis` up in the
 `{(product, channel): Basis}` dict, calls :func:`value` per segment,
 and writes the per-mp results back to a single ``(n_mp,)`` `GMMMeasurement`.
 """
+import fastcashflow as fcf
 import numpy as np
 import pytest
 
-from fastcashflow import (
-    Basis, ModelPoints, load_sample_basis, measure, measure,
-    CoverageRate,
-)
+from fastcashflow import Basis, ModelPoints, measure, measure, CoverageRate
 
 
 def _flat_asmp(*, discount=0.05) -> Basis:
@@ -186,8 +184,8 @@ def test_value_segmented_rejects_unknown_segment():
 def test_value_segmented_with_sample_basis():
     """End-to-end smoke -- the bundled sample basis has two segments and
     ``value_segmented`` routes per-mp valuations through it."""
-    from fastcashflow import load_sample_calculation_methods
-    basis = load_sample_basis()                    # multi-segment sample
+    
+    basis = fcf.samples.basis()                    # multi-segment sample
     mp = ModelPoints(
         issue_age=np.array([40, 50, 45]),
         level_premium=np.array([50_000.0, 60_000.0, 55_000.0]),
@@ -195,7 +193,7 @@ def test_value_segmented_with_sample_basis():
         benefits={0: np.array([100_000_000.0, 80_000_000.0, 90_000_000.0])},
         product_code=np.array(["TERM_LIFE_A", "TERM_LIFE_A", "TERM_LIFE_A"]),
         channel_code=np.array(["GA", "FC", "GA"]),
-        calculation_methods=load_sample_calculation_methods(),
+        calculation_methods=fcf.samples.calculation_methods(),
     )
     val = measure(mp, basis, full=False)
     assert val.bel.shape == (3,)

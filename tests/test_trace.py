@@ -32,11 +32,11 @@ def _shock_mortality(rate_fn, factor: float):
 
 
 def _basis():
-    return fcf.load_sample_basis()
+    return fcf.samples.basis()
 
 
 def _portfolio():
-    return fcf.load_sample_model_points()
+    return fcf.samples.model_points()
 
 
 def test_show_trace_renders_all_sections():

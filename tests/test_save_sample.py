@@ -16,7 +16,7 @@ def test_save_sample_basis_round_trips_via_read_basis(tmp_path):
     assert path.suffix == ".xlsx"
 
     basis_from_file = fcf.read_basis(path)
-    basis_in_memory = fcf.load_sample_basis()
+    basis_in_memory = fcf.samples.basis()
     assert sorted(basis_from_file) == sorted(basis_in_memory)
 
 
@@ -35,7 +35,7 @@ def test_save_sample_full_round_trip(tmp_path):
         coverages=tmp_path / "coverages.csv",
         calculation_methods=tmp_path / "calculation_methods.csv",
     )
-    mp_mem = fcf.load_sample_model_points()
+    mp_mem = fcf.samples.model_points()
     assert mp_file.n_mp == mp_mem.n_mp
     assert list(mp_file.product_code) == list(mp_mem.product_code)
 
@@ -178,7 +178,7 @@ def test_save_sample_inforce_state_round_trips(tmp_path):
     assert path.exists()
 
     state_file = fcf.read_inforce_state(path)
-    state_mem = fcf.load_sample_inforce_state()
+    state_mem = fcf.samples.inforce_state()
     assert np.array_equal(state_file.mp_id, state_mem.mp_id)
     assert np.allclose(state_file.count, state_mem.count)
     assert np.allclose(state_file.elapsed_months, state_mem.elapsed_months)
@@ -198,7 +198,7 @@ def test_save_sample_converts_to_xlsx_single_sheet(tmp_path):
         coverages=tmp_path / "coverages.xlsx",
         calculation_methods=tmp_path / "calculation_methods.xlsx",
     )
-    assert mp.n_mp == fcf.load_sample_model_points().n_mp
+    assert mp.n_mp == fcf.samples.model_points().n_mp
 
 
 def test_save_sample_rejects_unsupported_extension(tmp_path):

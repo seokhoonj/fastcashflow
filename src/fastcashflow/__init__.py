@@ -23,12 +23,6 @@ from fastcashflow.engine import (
 )
 from fastcashflow.grouping import group
 from fastcashflow.io import (
-    load_sample_basis,
-    load_sample_calculation_methods,
-    load_sample_inforce_state,
-    load_sample_model_points,
-    load_sample_vfa_basis,
-    load_sample_vfa_model_points,
     read_basis,
     read_inforce_policies,
     read_inforce_state,
@@ -98,9 +92,6 @@ __all__ = [
     "read_inforce_state", "read_inforce_policies",
     "apply_inforce_state", "InforceState",
     "write_measurement",
-    "load_sample_model_points", "load_sample_basis",
-    "load_sample_calculation_methods", "load_sample_inforce_state",
-    "load_sample_vfa_model_points", "load_sample_vfa_basis",
     "save_sample_basis", "save_sample_policies",
     "save_sample_coverages", "save_sample_calculation_methods",
     "save_sample_inforce_state", "save_sample_inforce_policies",

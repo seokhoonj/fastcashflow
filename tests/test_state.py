@@ -13,19 +13,7 @@ an independent check on the compiled kernels.
 """
 import numpy as np
 
-from fastcashflow import (
-    STATE_ACTIVE,
-    STATE_MODELS,
-    STATE_PAIDUP,
-    STATE_WAIVER,
-    Basis,
-    CalculationMethod,
-    ModelPoints,
-    CoverageRate,
-    measure,
-    read_model_points,
-    measure,
-)
+from fastcashflow import STATE_ACTIVE, STATE_MODELS, STATE_PAIDUP, STATE_WAIVER, Basis, CalculationMethod, ModelPoints, CoverageRate, measure, read_model_points, measure
 
 from conftest import annual_from_monthly as _annual
 

@@ -9,20 +9,7 @@ from the multiple-decrement recursion.
 import numpy as np
 import pytest
 
-from fastcashflow import (
-    STATE_ACTIVE,
-    STATE_PAIDUP,
-    STATE_WAIVER,
-    STATE_MODELS,
-    Basis,
-    ModelPoints,
-    State,
-    StateModel,
-    Transition,
-    measure,
-    measure,
-    CoverageRate,
-)
+from fastcashflow import STATE_ACTIVE, STATE_PAIDUP, STATE_WAIVER, STATE_MODELS, Basis, ModelPoints, State, StateModel, Transition, measure, measure, CoverageRate
 from fastcashflow.statemodel import compile_state_model
 
 from conftest import annual_from_monthly as _annual

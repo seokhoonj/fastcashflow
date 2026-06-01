@@ -10,16 +10,7 @@ import numpy as np
 import pytest
 
 from conftest import annual_from_monthly as _annual
-from fastcashflow import (
-    Basis,
-    ExpenseItem,
-    ModelPoints,
-    measure,
-
-
-    report,
-    CoverageRate,
-)
+from fastcashflow import Basis, ExpenseItem, ModelPoints, measure, report, CoverageRate
 
 
 def _assumptions() -> Basis:

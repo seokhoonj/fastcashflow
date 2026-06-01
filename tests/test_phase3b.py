@@ -4,17 +4,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from fastcashflow import (
-    ExpenseItem,
-    ModelPoints,
-    load_sample_basis,
-    load_sample_model_points,
-    read_model_points,
-    sample_data_dir,
-    measure,
-
-    write_measurement,
-)
+from fastcashflow import ExpenseItem, ModelPoints, read_model_points, sample_data_dir, measure, write_measurement
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -205,8 +195,8 @@ def test_value_file_rejects_existing_output(tmp_path):
 
 def test_load_sample_data_runs():
     """The bundled sample data loads and values without error."""
-    mps = load_sample_model_points()
-    asmp = next(iter(load_sample_basis().values()))
+    mps = fcf.samples.model_points()
+    asmp = next(iter(fcf.samples.basis().values()))
     assert mps.n_mp > 0
     val = measure(mps, asmp, full=False)
     assert val.bel.shape == (mps.n_mp,)
@@ -226,7 +216,7 @@ def test_sample_data_dir_exposes_bundled_files():
 def test_describe_basis_renders_both_shapes(capsys):
     """describe_basis prints a tree for an Basis and for a dict."""
     from fastcashflow import describe_basis
-    basis = load_sample_basis()
+    basis = fcf.samples.basis()
     asmp = next(iter(basis.values()))
 
     describe_basis(asmp)
@@ -246,10 +236,10 @@ def test_describe_basis_renders_both_shapes(capsys):
 
 def test_to_long_round_trips(tmp_path):
     """ModelPoints.to_long written out and re-read reproduces the valuation."""
-    from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_basis().values()))
-    patterns = load_sample_calculation_methods()
-    mps = load_sample_model_points()
+    
+    asmp = next(iter(fcf.samples.basis().values()))
+    patterns = fcf.samples.calculation_methods()
+    mps = fcf.samples.model_points()
     policies, coverages = mps.to_long(asmp)
     policies.write_csv(tmp_path / "pol.csv")
     coverages.write_csv(tmp_path / "cov.csv")
@@ -263,10 +253,10 @@ def test_to_long_round_trips(tmp_path):
 
 def test_to_wide_round_trips(tmp_path):
     """ModelPoints.to_wide written out and re-read reproduces the valuation."""
-    from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_basis().values()))
-    patterns = load_sample_calculation_methods()
-    mps = load_sample_model_points()
+    
+    asmp = next(iter(fcf.samples.basis().values()))
+    patterns = fcf.samples.calculation_methods()
+    mps = fcf.samples.model_points()
     mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")
     back = read_model_points(tmp_path / "wide.csv",
                              calculation_methods=patterns)
@@ -277,10 +267,10 @@ def test_to_wide_round_trips(tmp_path):
 
 def test_value_file_streams_long_form(tmp_path):
     """value_file streams a long-form policies + coverages pair in chunks."""
-    from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_basis().values()))
-    patterns = load_sample_calculation_methods()
-    mps = load_sample_model_points()
+    
+    asmp = next(iter(fcf.samples.basis().values()))
+    patterns = fcf.samples.calculation_methods()
+    mps = fcf.samples.model_points()
     policies, coverages = mps.to_long(asmp)
     policies.write_parquet(tmp_path / "pol.parquet")
     coverages.write_parquet(tmp_path / "cov.parquet")

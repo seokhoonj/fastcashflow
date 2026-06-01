@@ -5,16 +5,15 @@ tables. The ``segments`` sheet has a ``defaults`` row whose values blank
 cells inherit, and one row per (product, channel) segment; the reader returns
 one ``Basis`` per segment. See docs/basis-format.md.
 """
+import fastcashflow as fcf
 import numpy as np
 
-from fastcashflow import (
-    ModelPoints, load_sample_basis, measure, measure,
-)
+from fastcashflow import ModelPoints, measure, measure
 
 
 def test_segments_resolve():
     """The sample workbook resolves to several (product, channel) segments."""
-    basis = load_sample_basis()
+    basis = fcf.samples.basis()
     # The sample carries three products on FC/GA (HEALTH also adds TM).
     assert set(basis) >= {
         ("TERM_LIFE_A", "FC"), ("TERM_LIFE_A", "GA"),
@@ -25,7 +24,7 @@ def test_segments_resolve():
 
 def test_defaults_inherited():
     """Blank cells in a segment row inherit from the ``defaults`` row."""
-    basis = load_sample_basis()
+    basis = fcf.samples.basis()
     ga, fc = basis[("TERM_LIFE_A", "GA")], basis[("TERM_LIFE_A", "FC")]
     # ra_confidence / mortality_cv / morbidity_cv live only on the defaults row
     assert ga.ra_confidence == 0.75 and fc.ra_confidence == 0.75
@@ -47,7 +46,7 @@ def test_defaults_inherited():
 def test_channel_segmented_lapse():
     """GA and FC reference different lapse tables -- the per-segment table
     reference. GA persistency is worse than FC."""
-    basis = load_sample_basis()
+    basis = fcf.samples.basis()
     dur = np.arange(6)
     zero = np.zeros_like(dur)
     ga_lapse = basis[("TERM_LIFE_A", "GA")].lapse_annual(zero, zero, dur, zero, zero)
@@ -59,7 +58,7 @@ def test_per_segment_acquisition_amount():
     """Acquisition cost differs per segment row (GA vs FC commission) --
     each segment points to its own expense_table_id in the
     ``expense_tables`` sheet."""
-    basis = load_sample_basis()
+    basis = fcf.samples.basis()
     for (key, expected_acq) in (
         (("TERM_LIFE_A", "GA"), 150_000.0),
         (("TERM_LIFE_A", "FC"),  80_000.0),
@@ -78,7 +77,7 @@ def test_per_segment_acquisition_amount():
 def test_every_segment_has_expense_items():
     """The sample workbook attaches an ``expense_table`` to every segment;
     the loader populates ``Basis.expense_items`` on each."""
-    basis = load_sample_basis()
+    basis = fcf.samples.basis()
     for asmp in basis.values():
         assert asmp.expense_items                       # populated
 
@@ -91,14 +90,14 @@ def test_coverages_resolved():
     :class:`Basis`. The order matches the workbook's ``coverages``
     sheet rows; the engine treats every entry as an ordinary rate-driven
     coverage (no slot reserved)."""
-    from fastcashflow import load_sample_calculation_methods, CalculationMethod
+    from fastcashflow import CalculationMethod
 
-    basis = load_sample_basis()
+    basis = fcf.samples.basis()
     asmp = basis[("TERM_LIFE_A", "GA")]
     assert [r.code for r in asmp.coverages] == [
         "DEATH", "INPATIENT", "CANCER", "ADB", "DISEASE_DEATH",
     ]
-    assert load_sample_calculation_methods() == {
+    assert fcf.samples.calculation_methods() == {
         "DEATH":         CalculationMethod.DEATH,
         "INPATIENT":     CalculationMethod.MORBIDITY,
         "CANCER":        CalculationMethod.DIAGNOSIS,
@@ -113,11 +112,11 @@ def test_resolved_basis_values():
     """A resolved ``Basis`` runs through ``value`` and ``measure``; the
     GA and FC segments give different BEL because lapse differs (channel
     segmentation actually bites the valuation)."""
-    from fastcashflow import load_sample_calculation_methods
-    basis = load_sample_basis()
+    
+    basis = fcf.samples.basis()
     mp = ModelPoints.single(issue_age=40, benefits={0: 100_000_000.0},
                             level_premium=50_000.0, term_months=120,
-                            calculation_methods=load_sample_calculation_methods())
+                            calculation_methods=fcf.samples.calculation_methods())
     # Use a copy of the basis without surrender for the measure() / measure()
     # equivalence assertion -- the measure() fast path doesn't yet include
     # surrender cash flows (see surrender-value-gap memory); only measure()
@@ -146,7 +145,7 @@ def test_state_model_column_resolves_to_registry_entry():
     ``STATE_MODELS['WAIVER']``.
     """
     from fastcashflow import STATE_MODELS
-    basis = load_sample_basis()
+    basis = fcf.samples.basis()
     for asmp in basis.values():
         assert asmp.state_model is STATE_MODELS["WAIVER"]
 

@@ -6,13 +6,7 @@ floored at zero; any shortfall falls into the loss component.
 import numpy as np
 import pytest
 
-from fastcashflow import (
-    ExpenseItem,
-    ModelPoints,
-    measure,
-    roll_forward,
-    transition,
-)
+from fastcashflow import ExpenseItem, ModelPoints, measure, roll_forward, transition
 from conftest import annual_from_monthly as _annual, make_death_assumptions
 
 
