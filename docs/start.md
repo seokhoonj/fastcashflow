@@ -17,7 +17,7 @@ pip install git+https://github.com/seokhoonj/fastcashflow.git
 ```python
 import fastcashflow as fcf
 
-basis        = fcf.samples.basis()[("TERM_LIFE_A", "GA")]   # 한 세그먼트의 산출기초 (가정 묶음)
+basis        = fcf.samples.basis()[("TERM_LIFE_A", "GA")]   # 한 세그먼트의 산출기초 (가정)
 model_points = fcf.samples.model_points()
 
 m = fcf.gmm.measure(model_points, basis)

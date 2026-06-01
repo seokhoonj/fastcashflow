@@ -84,8 +84,13 @@ A/E 보정과 사망률 개선. 견본에는 없습니다.)
 
 ### `segments` 시트 — 어느 테이블을 쓸지
 
-한 행이 한 segment `(product_code, channel_code)` 입니다. 컬럼은 두 부류:
+한 행이 한 segment `(product_code, channel_code)` 입니다. 컬럼은 세 부류:
 
+- **식별 키** — `product_code` / `channel_code`. 이 쌍이 segment 를
+  식별하고 모델포인트를 라우팅하는 **계산용** 키입니다. 옆에 둘 수 있는
+  `product_name` / `channel_name` 은 **보고서용** 표시 라벨로, reader 가
+  읽되 매칭엔 쓰지 않습니다 (담보의 `coverage_code` / `coverage_name` 과
+  같은 code/name 관례 — code 는 계산, name 은 사람이 읽는 라벨).
 - **테이블 참조** — 값이 rate 시트의 `table_id` 를 가리킵니다:
   `mortality_table` / `lapse_table` / `discount_table` (필수),
   `waiver_table` / `inflation_table` / `surrender_value_table` /

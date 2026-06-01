@@ -72,22 +72,27 @@
 **결정**:
 | 컬럼 | 규칙 | 예 |
 |---|---|---|
-| `product` | SCREAMING_SNAKE_CASE | `TERM_A`, `WHOLE_LIFE_A` |
-| `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA` |
+| `product_code` | SCREAMING_SNAKE_CASE | `TERM_LIFE_A`, `WHOLE_LIFE_A` |
+| `channel_code` | ALL UPPERCASE 약어 | `GA`, `FC`, `BANCA` |
 | `table_id` | SCREAMING_SNAKE_CASE | `MORTALITY_STD`, `LAPSE_GA` |
 | `coverage_code` | SCREAMING_SNAKE_CASE | `DEATH`, `INPATIENT` |
 | `calculation_method` | SCREAMING_SNAKE_CASE | `DEATH`, `MORBIDITY` |
+| `*_name` 표시 라벨 | free-form (제약 없음) | `정기보험`, `암진단특약` |
 | 컬럼 헤더 | snake_case 소문자 | `alpha_flat`, `mortality_cv` |
 
 **근거**:
 - channel은 업계 관용 약어 (General Agency, Financial Consultant)
   대문자 표기 보존이 정보 손실 적음.
-- table_id 와 product 는 외부 식별자 (코드 상수에 가까운 named reference)
-  이라 SCREAMING_SNAKE_CASE 로 데이터 값과 시각적으로 구분됨.
-  product / channel / table_id 가 모두 대문자 family 로 통일되어
+- table_id 와 product_code 는 외부 식별자 (코드 상수에 가까운 named
+  reference) 이라 SCREAMING_SNAKE_CASE 로 데이터 값과 시각적으로 구분됨.
+  product_code / channel_code / table_id 가 모두 대문자 family 로 통일되어
   컬럼명(소문자) 과 값(대문자) 의 시각적 구분도 강해짐.
-- coverage_code 는 model points / 코드 enum 과 1:1 매핑되므로 snake_case
-  소문자.
+- coverage_code 는 model points / 코드 enum 과 1:1 매핑되므로 같은
+  SCREAMING_SNAKE_CASE (`DEATH`, `INPATIENT`).
+- `product_name` / `channel_name` / `coverage_name` 같은 `*_name` 컬럼은
+  code/name 짝의 **표시 라벨** — code 는 계산·매칭용, name 은 보고서용이라
+  reader 가 읽되 매칭엔 안 쓴다. 값은 자유 문자열 (한글 상품명 등) 이라
+  casing 규칙을 두지 않음. (DB 모델링 관용: `ST_CD` + `ST_DESC` 쌍.)
 
 ---
 

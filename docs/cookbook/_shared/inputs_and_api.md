@@ -1,6 +1,6 @@
 ### 입력 파일과 입력 개체
 
-엔진은 두 클래스의 *개체* 만 받습니다 — `Basis` (산출기초 = 가정 묶음) 와
+엔진은 두 클래스의 *개체* 만 받습니다 — `Basis` (산출기초 = 가정) 와
 `ModelPoints`. **`measure(mp, basis)`** 호출의 두 인자가 바로 이 개체들.
 사용자가 다루는 *입력 파일들* 은 reader 함수를 거쳐 이 두 개체로 모입니다.
 `Basis` 는 개별 **가정** (사망률·해지율·할인율 …) 을 묶은 산출기초이고,
@@ -17,8 +17,8 @@
 
 ```
 Basis (basis = fcf.read_basis(...))
-└── basis.xlsx          ── 계리적 가정 (multi-sheet workbook)
-    ├── segments              · (product_code, channel_code) → 어느 테이블 쓸지
+└── basis.xlsx          ── 산출기초 (multi-sheet workbook)
+    ├── segments              · (product_code, channel_code) → 어느 테이블 쓸지 (+ product_name / channel_name 보고서용 라벨)
     ├── mortality_tables      · table_id × sex × age → 사망률
     ├── lapse_tables          · table_id × duration → 해지율
     ├── discount_tables       · table_id × year → 할인율
