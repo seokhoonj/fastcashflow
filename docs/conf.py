@@ -51,12 +51,9 @@ myst_substitutions = {
 }
 
 # The site is Korean. The API reference is built as is -- its autodoc bodies
-# are English, which is fine for a reference. The English starter pages
-# (getting-started.md, concepts.md) are kept on disk but left unbuilt, for a
-# future separate English edition.
+# are English, which is fine for a reference.
 exclude_patterns = [
     "_build", "Thumbs.db", ".DS_Store",
-    "getting-started.md", "concepts.md",
     # Cookbook shared fragments -- pulled into other chapters via the MyST
     # {include} directive, not built as standalone pages.
     "cookbook/_shared/**",
