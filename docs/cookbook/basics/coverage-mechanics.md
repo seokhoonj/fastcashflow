@@ -267,7 +267,7 @@ DEATH 와 DIAGNOSIS 의 청구 시계열이 *글자 그대로 동일* 함에도 
 
 ```python
 import fastcashflow as fcf
-fcf.gmm.trace(0, mp_diagnosis_above, asmp_diagnosis_above)
+fcf.gmm.trace(0, mp, basis)   # 위 DIAGNOSIS (CANCER) 예제의 mp / basis
 ```
 
 trace 의 Coverages 노드에는 매 보장마다 `is_diagnosis` flag 가 표시됩니다:
