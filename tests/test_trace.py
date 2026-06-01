@@ -116,7 +116,7 @@ def test_show_trace_undiagnosed_matches_hand_calc():
 
 def test_show_trace_routes_dict_basis_by_segment():
     """Passing the read_basis dict picks the right segment from
-    the model point's (product, channel)."""
+    the model point's (product_code, channel_code)."""
     mp = _portfolio()
     basis = _basis()
     buf = io.StringIO()
@@ -170,7 +170,7 @@ def test_show_trace_dict_basis_requires_segment_columns():
 
 
 def test_show_trace_dict_basis_unknown_segment_raises():
-    """An unmapped (product, channel) is flagged with available keys."""
+    """An unmapped (product_code, channel_code) is flagged with available keys."""
     mp = _portfolio()
     partial = {k: v for k, v in _basis().items() if k[0] != mp.product_code[0]}
     if partial:                           # only meaningful when dict is shrinkable

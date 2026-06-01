@@ -69,7 +69,7 @@ def test_read_feather(tmp_path):
     assert np.allclose(measure(back, basis, full=False).bel, measure(mps, basis, full=False).bel)
 
 
-def test_write_valuation_feather(tmp_path):
+def test_write_measurement_feather(tmp_path):
     """write_measurement writes a .feather result file."""
     basis = next(iter(fcf.samples.basis().values()))
     mps = fcf.samples.model_points()

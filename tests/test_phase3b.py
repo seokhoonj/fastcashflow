@@ -94,7 +94,7 @@ def test_read_model_points_reads_count(tmp_path):
 
 
 @pytest.mark.parametrize("suffix", [".parquet", ".csv"])
-def test_write_valuation_round_trip(tmp_path, suffix):
+def test_write_measurement_round_trip(tmp_path, suffix):
     """write_measurement persists the four valuation columns with an id column."""
     mps = _portfolio()
     val = measure(mps, _assumptions(), full=False)
@@ -112,7 +112,7 @@ def test_write_valuation_round_trip(tmp_path, suffix):
     assert np.allclose(df["loss_component"].to_numpy(), val.loss_component)
 
 
-def test_write_valuation_without_ids(tmp_path):
+def test_write_measurement_without_ids(tmp_path):
     """ids are optional -- omitting them writes just the four result columns."""
     val = measure(_portfolio(50), _assumptions(), full=False)
     path = tmp_path / "out.parquet"
@@ -151,7 +151,7 @@ def test_file_workflow_matches_in_memory(tmp_path):
     assert np.allclose(from_file.loss_component, in_memory.loss_component)
 
 
-def test_value_file_streaming_matches_in_memory(tmp_path):
+def test_measure_stream_streaming_matches_in_memory(tmp_path):
     """Chunked file-to-file valuation equals the in-memory valuation exactly."""
     rng = np.random.default_rng(5)
     n = 1000
@@ -182,7 +182,7 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
     assert np.array_equal(results["loss_component"].to_numpy(), in_memory.loss_component)
 
 
-def test_value_file_rejects_existing_output(tmp_path):
+def test_measure_stream_rejects_existing_output(tmp_path):
     """A directory that already holds part files is rejected."""
     mps = _portfolio(100)
     in_path = tmp_path / "mps.parquet"
@@ -266,7 +266,7 @@ def test_to_wide_round_trips(tmp_path):
     assert np.allclose(a.csm, b.csm)
 
 
-def test_value_file_streams_long_form(tmp_path):
+def test_measure_stream_streams_long_form(tmp_path):
     """gmm.measure_stream streams a long-form policies + coverages pair in chunks."""
     
     basis = next(iter(fcf.samples.basis().values()))

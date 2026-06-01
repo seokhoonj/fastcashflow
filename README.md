@@ -63,7 +63,7 @@ mortality_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.01)
 
 # actuarial assumptions
-asmp = fcf.Basis(
+basis = fcf.Basis(
     mortality_annual = mortality_fn,   # in-force decrement (mortality_fn above)
     lapse_annual     = lapse_fn,       # lapse rate (lapse_fn above)
     discount_annual  = 0.03,           # annual discount rate
@@ -83,7 +83,7 @@ mp = fcf.ModelPoints.single(
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},  # coverage code -> method
 )
 
-r = fcf.gmm.measure(mp, asmp)
+r = fcf.gmm.measure(mp, basis)
 print(f"BEL : {r.bel[0]:>12,.0f}")
 print(f"RA  : {r.ra[0]:>12,.0f}")
 print(f"CSM : {r.csm[0]:>12,.0f}")

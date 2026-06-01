@@ -158,7 +158,7 @@ def measure_stochastic(
     # confidence-level RA with no claims settlement pattern (the rate at the
     # month of incurrence in the settlement factor would otherwise have to
     # vary per scenario). Other configurations fall back to the per-scenario
-    # value() loop, which handles them correctly if more slowly.
+    # measure(full=False) loop, which handles them correctly if more slowly.
     if (basis.ra_method == "confidence_level"
             and basis.settlement_pattern is None):
         proj = project_cashflows(model_points, basis)

@@ -3,7 +3,7 @@
 `ModelPoints` may carry per-row `product` / `channel` strings naming each
 contract's segment. `measure(mp, basis, full=False)` splits the portfolio by
 those keys, looks each segment's `Basis` up in the
-`{(product, channel): Basis}` dict, calls :func:`value` per segment,
+`{(product_code, channel_code): Basis}` dict, calls :func:`measure` per segment,
 and writes the per-mp results back to a single ``(n_mp,)`` `GMMMeasurement`.
 """
 import fastcashflow as fcf
