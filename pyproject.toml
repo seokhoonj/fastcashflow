@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fastcashflow"
-version = "0.0.1.dev1"
+version = "0.1.0"
 description = "Fast IFRS 17 GMM cash flow projection engine (BEL, RA, CSM)"
 readme = "README.md"
 license = "MPL-2.0"
@@ -16,6 +16,24 @@ keywords = [
     "actuarial", "cashflow projection", "insurance", "life", "health",
 ]
 dependencies = ["numpy>=1.24", "numba>=0.59", "polars>=1.0", "openpyxl>=3.1", "matplotlib>=3.7"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Homepage      = "https://fastcashflow.org"
+Documentation = "https://docs.fastcashflow.org"
+Repository    = "https://github.com/seokhoonj/fastcashflow"
+Issues        = "https://github.com/seokhoonj/fastcashflow/issues"
 
 [project.optional-dependencies]
 dev = ["pytest"]

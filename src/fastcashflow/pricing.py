@@ -67,6 +67,15 @@ def solve_premium(
     a = at_zero.bel + at_zero.ra
     b = a - (at_one.bel + at_one.ra)
 
+    zero_sens = np.abs(b) < 1e-12
+    if np.any(zero_sens):
+        raise ValueError(
+            "solve_premium: FCF is insensitive to the premium for "
+            f"{int(zero_sens.sum())} model point(s) -- cannot solve. "
+            "Check that level_premium enters the cash flows (non-zero "
+            "premium term and payment frequency)."
+        )
+
     if break_even:
         return a / b
     if margin is not None:

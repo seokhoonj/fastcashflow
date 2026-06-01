@@ -89,7 +89,7 @@ from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult, measure_tvog
 from fastcashflow.vfa import VFAMeasurement, measure_vfa
 
-__version__ = "0.0.1.dev1"
+__version__ = "0.1.0"
 __all__ = [
     "Assumptions", "ModelPoints", "measure", "measure_in_force",
     "value", "value_in_force", "value_segmented", "clear_codegen_cache",

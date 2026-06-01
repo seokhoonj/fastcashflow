@@ -124,7 +124,9 @@ def measure_paa(
         raise ValueError(
             f"revenue_basis must be 'time' or 'claims', got {revenue_basis!r}"
         )
-    revenue = premium_total[:, None] * weight / weight.sum(axis=1)[:, None]
+    w_sum = weight.sum(axis=1, keepdims=True)
+    w_sum = np.where(w_sum == 0.0, 1.0, w_sum)   # safe divide; weight=0 → revenue=0
+    revenue = premium_total[:, None] * weight / w_sum
 
     # LRC roll-forward -- premiums build it up, revenue releases it.
     net = proj.premium_cf - revenue
