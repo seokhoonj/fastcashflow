@@ -264,8 +264,8 @@ fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
 위는 *결산* (보유계약) 평가입니다. 새로 인수한 계약은 *결산 상태가
 없으니* `inforce_state` 컬럼이 없는 보통의 policies 파일로:
 
-​    `model_points = fcf.read_model_points("new_business.csv", coverages=..., calculation_methods=...)`
-​    `val = fcf.gmm.measure(model_points, basis, full=False)`
+    `model_points = fcf.read_model_points("new_business.csv", coverages=..., calculation_methods=...)`
+    `val = fcf.gmm.measure(model_points, basis, full=False)`
 
 `read_model_points` 와 `measure` 의 흐름. 8 장에서 이미 본 형태와 같습니다.
 신계약과 보유계약은 같은 엔진이지만 입력 파일 / 함수가 다른 두 *모드*.

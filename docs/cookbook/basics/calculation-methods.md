@@ -222,10 +222,8 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 #   CA_DIAG | CANCER_STD       ← rate_table 등록
 # 그런데 calculation_methods.csv 에는 CA_DIAG 행 없음.
 # 결과:
-#   ValueError: rate-driven coverage code(s) ['CA_DIAG'] from the
-#               basis workbook are not registered in calculation_methods
-#               -- add each code (with its CalculationMethod) to
-#               calculation_methods.csv
+#   ValueError: coverages frame references 1 coverage_code value(s)
+#               not in the calculation_methods taxonomy: ['CA_DIAG']
 ```
 
 `gmm.trace` 의 Coverages 섹션이 한 계약의 담보별 산출방식 매핑을 그대로
