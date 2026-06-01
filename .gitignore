@@ -97,6 +97,11 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
 # Claude Code agent state
 CLAUDE.md
 .claude/
