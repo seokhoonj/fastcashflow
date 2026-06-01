@@ -138,8 +138,8 @@ mp[0]  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m, premium_term=240m, cou
 │   ...
 │   └─ t= 240m: ds=0.553676
 ├─ BEL roll-forward (key months)
-│   ├─ BEL[t] = annuity[t] - premium[t] + (claim+morbidity+disability+expense+surrender)[t] * (1+i)^(-0.5) + BEL[t+1] * (1+i)^(-1)
-│   ├─ BEL[ 240] = maturity =    2,720,414.15 (seed -- a single payment at term)
+│   ├─ BEL[t] = annuity[t] - premium[t] + (claim+morbidity+disability+expense+surrender)[t] * (1+i)^(-1/2) + BEL[t+1] * (1+i)^(-1)
+│   ├─ BEL[ 240] =    2,720,414.15  (maturity seed -- a single payment at term)
 │   ├─ BEL[ 228] =    2,743,895.72
 │   ...
 │   └─ BEL[   0] =      724,174.53
@@ -202,7 +202,7 @@ age=35, year=0)` 셀을 찾아 일치하는지 확인할 수 있습니다.
 
 ```
 BEL[t] = annuity[t] - premium[t]
-       + (claim+morbidity+disability+expense+surrender)[t] * (1+i)^(-0.5)
+       + (claim+morbidity+disability+expense+surrender)[t] * (1+i)^(-1/2)
        + BEL[t+1] * (1+i)^(-1)
 ```
 
@@ -431,7 +431,7 @@ BEL 이 +14.22% 움직였습니다. 이 14% 가 어디서 왔는지 위쪽 섹�
 손계산과 엔진이 어긋나면 보통 다음 셋 중 하나입니다:
 
 1. **사용자의 손계산이 다른 식** — 예를 들어 IFRS 17 의 mid-month
-   할인 (`(1+i)^(-0.5)`) 대신 month-start 할인을 가정 ([§B71](https://www.ifrs.org)
+   할인 (`(1+i)^(-1/2)`) 대신 month-start 할인을 가정 ([§B71](https://www.ifrs.org)
    의 한 해석). 식이 다르면 결과도 다름. step 행의 `half = ...` /
    `full = ...` 자리에 자기 손계산의 할인을 대입해 보면 어느 쪽 정의를
    썼는지 분명해집니다.
