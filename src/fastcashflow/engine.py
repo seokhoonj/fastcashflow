@@ -539,13 +539,24 @@ def measure_in_force(
 
 
 def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
-                                 premium_state, benefit_state) -> str:
+                                 premium_state, benefit_state,
+                                 use_morbidity=True, use_annuity=True,
+                                 use_disability=True, use_lae=True,
+                                 use_surrender=True) -> str:
     """Generate the Python source of a fully-specialised value kernel.
 
     All structural parameters (n_states, edge topology, lump-sum flags,
     premium- and benefit-paying states) are baked into the source as
     literals. The returned text is intended for ``exec`` in a namespace
     that exposes ``np``, ``njit`` and ``prange``.
+
+    The ``use_*`` flags specialise the inner loop at source-generation time:
+    a cash-flow stream the portfolio does not use (morbidity, annuity,
+    disability income, LAE, surrender) has its per-cell lines omitted from
+    the generated source entirely -- no runtime branch, the absent term is
+    simply not there. Each flag widens the codegen cache key, so a book that
+    does use the stream gets its own kernel. Skipped terms are zero, so the
+    result is identical to the all-streams kernel.
     """
     n_edges = len(edge_from)
     edge_from = [int(x) for x in edge_from]
@@ -676,7 +687,8 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "last_year = year")
     line(12, f"ift = {sum_all}")
     line(12, f"prem_occ = {sum_prem}")
-    line(12, f"benefit_occ = {sum_ben}")
+    if use_disability:
+        line(12, f"benefit_occ = {sum_ben}")
     line(12, "ds = discount_start[t]")
     line(12, "dm = discount_mid[t]")
     line(12, "single = prem_occ * single_premium[mp] if t == 0 else 0.0")
@@ -688,26 +700,34 @@ def _codegen_value_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
     line(12, "pv_premium += (level + single) * ds")
-    line(12, "cum_premium += level + single")
+    if use_surrender:
+        line(12, "cum_premium += level + single")
     line(12, "pv_mortality += ift * claim_rate * dm")
-    line(12, "pv_morbidity += ift * morb_rate * dm")
-    line(12, "if ann_due == 0:")
-    line(16, "pv_annuity += ift * annuity * ds")
-    line(16, "ann_due = ann_freq - 1")
-    line(12, "else:")
-    line(16, "ann_due -= 1")
-    line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
-    # cum_premium aggregates inforce * premium; multiplying by lapse_rate
-    # alone gives the per-month surrender outflow (the count is already in
-    # cum_premium, so multiplying by ift here would scale by cnt^2).
-    line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
-    line(12, "                 * cum_premium * surrender_curve[t] * dm)")
+    if use_morbidity:
+        line(12, "pv_morbidity += ift * morb_rate * dm")
+    if use_annuity:
+        line(12, "if ann_due == 0:")
+        line(16, "pv_annuity += ift * annuity * ds")
+        line(16, "ann_due = ann_freq - 1")
+        line(12, "else:")
+        line(16, "ann_due -= 1")
+    if use_disability:
+        line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
+    if use_surrender:
+        # cum_premium aggregates inforce * premium; multiplying by lapse_rate
+        # alone gives the per-month surrender outflow (the count is already in
+        # cum_premium, so multiplying by ift here would scale by cnt^2).
+        line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
+        line(12, "                 * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_fixed[t]")
-    line(12, "lae = lae_pro_rata[t] * "
-            "ift * (claim_rate + morb_rate)")
-    line(12, "pv_expense += (alpha + beta + gamma + lae) * dm")
+    if use_lae:
+        line(12, "lae = lae_pro_rata[t] * "
+                "ift * (claim_rate + morb_rate)")
+        line(12, "pv_expense += (alpha + beta + gamma + lae) * dm")
+    else:
+        line(12, "pv_expense += (alpha + beta + gamma) * dm")
     emit_edge_step(12, scale="", include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -808,7 +828,10 @@ def _atomic_write_text(path: Path, content: str) -> None:
 
 
 def _get_value_kernel_codegen(n_states, edge_from, edge_to, edge_lump_sum,
-                              premium_state, benefit_state):
+                              premium_state, benefit_state,
+                              use_morbidity=True, use_annuity=True,
+                              use_disability=True, use_lae=True,
+                              use_surrender=True):
     """Return a codegen-specialised kernel for the given state machine.
 
     Two-level cache:
@@ -831,6 +854,8 @@ def _get_value_kernel_codegen(n_states, edge_from, edge_to, edge_lump_sum,
         tuple(bool(x) for x in edge_lump_sum),
         tuple(bool(x) for x in premium_state),
         tuple(bool(x) for x in benefit_state),
+        bool(use_morbidity), bool(use_annuity), bool(use_disability),
+        bool(use_lae), bool(use_surrender),
     )
     cached = _VALUE_KERNEL_CODEGEN_CACHE.get(key)
     if cached is not None:
@@ -839,6 +864,9 @@ def _get_value_kernel_codegen(n_states, edge_from, edge_to, edge_lump_sum,
     src = _codegen_value_kernel_source(
         n_states, edge_from, edge_to, edge_lump_sum,
         premium_state, benefit_state,
+        use_morbidity=use_morbidity, use_annuity=use_annuity,
+        use_disability=use_disability, use_lae=use_lae,
+        use_surrender=use_surrender,
     )
     digest = hashlib.sha256(src.encode("utf-8")).hexdigest()[:16]
     cache_path = _codegen_cache_dir() / f"value_kernel_{digest}.py"
@@ -930,6 +958,7 @@ def clear_codegen_cache(*, prune_older_than_days: float | None = None) -> int:
 def _codegen_value_kernel_source_semi_markov(
     n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
     premium_state, benefit_state,
+    use_annuity=True, use_lae=True, use_surrender=True,
 ) -> str:
     """Generate the Python source of a semi-Markov-aware value kernel.
 
@@ -1129,26 +1158,32 @@ def _codegen_value_kernel_source_semi_markov(
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
     line(12, "pv_premium += (level + single) * ds")
-    line(12, "cum_premium += level + single")
+    if use_surrender:
+        line(12, "cum_premium += level + single")
     line(12, "pv_mortality += ift * claim_rate * dm")
     line(12, "pv_morbidity += ift * morb_rate * dm")
-    line(12, "if ann_due == 0:")
-    line(16, "pv_annuity += ift * annuity * ds")
-    line(16, "ann_due = ann_freq - 1")
-    line(12, "else:")
-    line(16, "ann_due -= 1")
+    if use_annuity:
+        line(12, "if ann_due == 0:")
+        line(16, "pv_annuity += ift * annuity * ds")
+        line(16, "ann_due = ann_freq - 1")
+        line(12, "else:")
+        line(16, "ann_due -= 1")
     line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
-    # cum_premium aggregates inforce * premium; multiplying by lapse_rate
-    # alone gives the per-month surrender outflow (the count is already in
-    # cum_premium, so multiplying by ift here would scale by cnt^2).
-    line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
-    line(12, "                 * cum_premium * surrender_curve[t] * dm)")
+    if use_surrender:
+        # cum_premium aggregates inforce * premium; multiplying by lapse_rate
+        # alone gives the per-month surrender outflow (the count is already in
+        # cum_premium, so multiplying by ift here would scale by cnt^2).
+        line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
+        line(12, "                 * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_fixed[t]")
-    line(12, "lae = lae_pro_rata[t] * "
-            "ift * (claim_rate + morb_rate)")
-    line(12, "pv_expense += (alpha + beta + gamma + lae) * dm")
+    if use_lae:
+        line(12, "lae = lae_pro_rata[t] * "
+                "ift * (claim_rate + morb_rate)")
+        line(12, "pv_expense += (alpha + beta + gamma + lae) * dm")
+    else:
+        line(12, "pv_expense += (alpha + beta + gamma) * dm")
     emit_edge_step(12, include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -1231,6 +1266,7 @@ _VALUE_KERNEL_CODEGEN_SEMI_MARKOV_CACHE: dict = {}
 def _get_value_kernel_codegen_semi_markov(
     n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
     premium_state, benefit_state,
+    use_annuity=True, use_lae=True, use_surrender=True,
 ):
     """Return a semi-Markov codegen-specialised kernel for the given
     topology + per-state cohort counts.
@@ -1248,6 +1284,7 @@ def _get_value_kernel_codegen_semi_markov(
         tuple(bool(x) for x in edge_lump_sum),
         tuple(bool(x) for x in premium_state),
         tuple(bool(x) for x in benefit_state),
+        bool(use_annuity), bool(use_lae), bool(use_surrender),
     )
     cached = _VALUE_KERNEL_CODEGEN_SEMI_MARKOV_CACHE.get(key)
     if cached is not None:
@@ -1256,6 +1293,7 @@ def _get_value_kernel_codegen_semi_markov(
     src = _codegen_value_kernel_source_semi_markov(
         n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
         premium_state, benefit_state,
+        use_annuity=use_annuity, use_lae=use_lae, use_surrender=use_surrender,
     )
     digest = hashlib.sha256(src.encode("utf-8")).hexdigest()[:16]
     cache_path = _codegen_cache_dir() / f"value_kernel_sm_{digest}.py"
@@ -1755,17 +1793,20 @@ def _measure_fast(
         idx = np.minimum(np.arange(n_time), c.shape[0] - 1)
         surrender_curve_kernel = c[idx]
 
+    # Feature flags -- skip the per-cell work of any cash-flow stream the
+    # portfolio does not use. The scalar fast path branches on them; the
+    # codegen path bakes them into the generated source. Cheap O(n) scans
+    # once per call, off the hot loop. Shared by both paths below.
+    use_surrender = bool(np.any(surrender_curve_kernel != 0.0))
+    use_annuity = bool(np.any(model_points.annuity_payment != 0.0))
+    use_lae = bool(np.any(lae_pro_rata != 0.0))
+    use_morbidity = bool(np.any(coverage_risk != 0))
+    use_disability = bool(np.any(model_points.disability_income != 0.0))
+
     if fast_path:
         survival_monthly = np.ascontiguousarray(
             (1.0 - mortality_grid) * (1.0 - lapse_grid)
         )
-        # Feature flags -- skip the per-cell work of any cash-flow stream the
-        # portfolio does not use (the kernel guards on these). Cheap O(n)
-        # scans once per call, off the hot loop.
-        use_surrender = bool(np.any(surrender_curve_kernel != 0.0))
-        use_annuity = bool(np.any(model_points.annuity_payment != 0.0))
-        use_lae = bool(np.any(lae_pro_rata != 0.0))
-        use_morbidity = bool(np.any(coverage_risk != 0))
         bel, ra, csm, loss_component = _value_kernel_scalar(
             issue_index,
             model_points.sex,
@@ -1864,6 +1905,8 @@ def _measure_fast(
             kernel = _get_value_kernel_codegen_semi_markov(
                 n_states, state_duration_max, edge_from, edge_to,
                 edge_lump_sum, premium_state, benefit_state,
+                use_annuity=use_annuity, use_lae=use_lae,
+                use_surrender=use_surrender,
             )
             bel, ra, csm, loss_component = kernel(
                 edge_prob, start_state, issue_index,
@@ -1910,6 +1953,9 @@ def _measure_fast(
             kernel = _get_value_kernel_codegen(
                 n_states, edge_from, edge_to, edge_lump_sum,
                 premium_state, benefit_state,
+                use_morbidity=use_morbidity, use_annuity=use_annuity,
+                use_disability=use_disability, use_lae=use_lae,
+                use_surrender=use_surrender,
             )
             bel, ra, csm, loss_component = kernel(
                 *common_args, model_points.coverage_waiting,
