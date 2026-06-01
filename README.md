@@ -55,20 +55,20 @@ import numpy as np
 import fastcashflow as fcf
 
 # mortality -- flat 0.1% annual rate (same for every sex/age/duration)
-death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
+mortality_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
 
 # lapse -- flat 1% annual rate
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.01)
 
 # actuarial assumptions
 asmp = fcf.Assumptions(
-    mortality_annual = death_fn,   # in-force decrement (death_fn above)
-    lapse_annual     = lapse_fn,   # lapse rate (lapse_fn above)
-    discount_annual  = 0.03,       # annual discount rate
-    ra_confidence    = 0.75,       # risk-adjustment confidence level (75th pct)
-    mortality_cv     = 0.10,       # mortality coefficient of variation
+    mortality_annual = mortality_fn,   # in-force decrement (mortality_fn above)
+    lapse_annual     = lapse_fn,       # lapse rate (lapse_fn above)
+    discount_annual  = 0.03,           # annual discount rate
+    ra_confidence    = 0.75,           # risk-adjustment confidence level (75th pct)
+    mortality_cv     = 0.10,           # mortality coefficient of variation
     coverages        = (
-        fcf.CoverageRate("DEATH", death_fn),  # one death coverage (claim rate = death_fn)
+        fcf.CoverageRate("DEATH", mortality_fn),  # one death coverage (claim rate = mortality_fn)
     ),
 )
 
