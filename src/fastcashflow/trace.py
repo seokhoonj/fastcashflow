@@ -452,16 +452,20 @@ def show_trace_vfa(
     )
 
     # ---- VFA inputs
+    # Label column sized to the longest label so the value column stays
+    # aligned regardless of field-name length; rate scalars share the
+    # right-aligned value column with the amounts.
+    _w = 28  # len("minimum_accumulation_benefit")
     vfa_lines: list[object] = [
-        f"account_value                          = {av0:>15,.2f}",
-        f"minimum_crediting_rate                 = {gcr:g}",
-        f"minimum_death_benefit (GMDB)        = {gdb:>15,.2f}",
-        f"minimum_accumulation_benefit (GMAB) = {gab:>15,.2f}",
-        f"investment_return = {basis.investment_return:g}  (VFA 할인/적립 basis)",
-        f"fund_fee          = {basis.fund_fee:g}  (= 이익원)",
-        f"mortality_annual  -> {_fmt_callable(basis.mortality_annual)}",
-        f"lapse_annual      -> {_fmt_callable(basis.lapse_annual)}",
-        f"ra: method={basis.ra_method!r} conf={basis.ra_confidence:g} "
+        f"{'account_value':<{_w}} = {av0:>15,.2f}",
+        f"{'minimum_crediting_rate':<{_w}} = {gcr:>15g}",
+        f"{'minimum_death_benefit':<{_w}} = {gdb:>15,.2f}  (GMDB)",
+        f"{'minimum_accumulation_benefit':<{_w}} = {gab:>15,.2f}  (GMAB)",
+        f"{'investment_return':<{_w}} = {basis.investment_return:>15g}  (VFA 할인/적립 basis)",
+        f"{'fund_fee':<{_w}} = {basis.fund_fee:>15g}  (= 이익원)",
+        f"{'mortality_annual':<{_w}} -> {_fmt_callable(basis.mortality_annual)}",
+        f"{'lapse_annual':<{_w}} -> {_fmt_callable(basis.lapse_annual)}",
+        f"{'ra':<{_w}} -> method={basis.ra_method!r} conf={basis.ra_confidence:g} "
         f"expense_cv={basis.expense_cv:g}",
     ]
 
@@ -482,22 +486,28 @@ def show_trace_vfa(
         av_lines.append(f"t={t:>4d}m: AV={av[t]:>15,.2f}  inforce={inf_v:.6f}")
 
     # ---- Guarantee floors (where they bite)
+    # Build rows as (left, amount, excess, rate_label, rate); the left and
+    # rate-label columns are padded to a common width so the amount / excess /
+    # rate columns line up across the death rows and the maturity row.
+    ti = max(0, term - 1)
+    floor_rows = [
+        (f"t={t:>4d}m: death=max(AV,GDB)", max(av[t], gdb),
+         max(0.0, gdb - av[t]), "deaths", float(deaths[t]))
+        for t in picks if t < n_time
+    ]
+    floor_rows.append(
+        (f"maturity@t={ti}m: max(AV,GAB)", max(av[ti], gab),
+         max(0.0, gab - av[ti]), "survivors", float(survivors))
+    )
+    lw = max(len(r[0]) for r in floor_rows)
+    rw = max(len(r[3]) for r in floor_rows)
     floor_lines: list[object] = [
         "death[t] = max(AV[t], GDB);  maturity = max(AV[term-1], GAB)",
     ]
-    for t in picks:
-        if t >= n_time:
-            continue
-        excess = max(0.0, gdb - av[t])
-        floor_lines.append(
-            f"t={t:>4d}m: death=max(AV,GDB)={max(av[t], gdb):>15,.2f}  "
-            f"excess={excess:>12,.2f}  deaths={deaths[t]:.6f}"
-        )
-    ti = max(0, term - 1)
-    floor_lines.append(
-        f"maturity@t={ti}m: max(AV,GAB)={max(av[ti], gab):>15,.2f}  "
-        f"excess={max(0.0, gab - av[ti]):>12,.2f}  survivors={survivors:.6f}"
-    )
+    floor_lines += [
+        f"{left:<{lw}} ={amt:>15,.2f}  excess={ex:>12,.2f}  {rl:>{rw}}={rate:.6f}"
+        for left, amt, ex, rl, rate in floor_rows
+    ]
 
     # ---- BEL / CSM trajectory + roll-forward
     bel = m.bel_path[0]
