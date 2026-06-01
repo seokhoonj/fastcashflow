@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    Assumptions, CalculationMethod, CoverageRate, ModelPoints,
+    Basis, CalculationMethod, CoverageRate, ModelPoints,
     measure, value, value_segmented,
 )
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
@@ -58,7 +58,7 @@ def test_value_segmented_rejects_pipe_in_channel_code():
 # ---------------------------------------------------------------------------
 
 def test_engine_rejects_catalogue_mismatch():
-    """An Assumptions.coverages code that's absent from the model points'
+    """An Basis.coverages code that's absent from the model points'
     calculation_methods catalogue lands without a routing pattern and the
     engine falls back silently. Catch it loudly."""
     mp = ModelPoints.single(
@@ -66,7 +66,7 @@ def test_engine_rejects_catalogue_mismatch():
         level_premium=12_000.0, term_months=60,
         calculation_methods={"DEATH": CalculationMethod.DEATH},  # catalogue: DEATH
     )
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=_flat(_annual(0.005)),
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
@@ -85,11 +85,11 @@ def test_engine_rejects_catalogue_mismatch():
 
 def test_engine_reorders_coverages_by_code():
     """ModelPoints carry ``coverage_codes=(DEATH, CANCER)``; the engine
-    aligns ``Assumptions.coverages`` to that order by *code* at entry. So an
-    Assumptions registered in a different order (``(CANCER, DEATH)``) yields
+    aligns ``Basis.coverages`` to that order by *code* at entry. So an
+    Basis registered in a different order (``(CANCER, DEATH)``) yields
     the **same** result -- DEATH amounts always meet DEATH rates regardless
     of registration order. This is the decouple: reading the portfolio never
-    has to know the assumptions' internal coverage order."""
+    has to know the basis' internal coverage order."""
     rate_death = _flat(_annual(0.005))
     rate_cancer = _flat(_annual(0.003))
     mp = ModelPoints(
@@ -101,20 +101,20 @@ def test_engine_reorders_coverages_by_code():
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
     )
-    asmp_ordered = Assumptions(
+    asmp_ordered = Basis(
         mortality_annual=rate_death, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", rate_death),
                    CoverageRate("CANCER", rate_cancer)),
     )
-    asmp_swapped = Assumptions(
+    asmp_swapped = Basis(
         mortality_annual=rate_death, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("CANCER", rate_cancer),   # swapped order
                    CoverageRate("DEATH", rate_death)),
     )
     # Reorder by code makes the two equivalent -- same BEL whichever order
-    # the assumptions register the coverages in.
+    # the basis register the coverages in.
     assert np.allclose(np.asarray(measure(mp, asmp_ordered).bel),
                        np.asarray(measure(mp, asmp_swapped).bel))
     assert np.isclose(float(np.asarray(value(mp, asmp_ordered).bel).ravel()[0]),
@@ -122,7 +122,7 @@ def test_engine_reorders_coverages_by_code():
 
 
 def test_engine_rejects_unregistered_coverage():
-    """V4: a code the model points reference but the assumptions do not
+    """V4: a code the model points reference but the basis do not
     register has no rate_table. The engine raises at entry naming the
     missing code, rather than silently scoring it zero."""
     rate = _flat(_annual(0.005))
@@ -135,7 +135,7 @@ def test_engine_rejects_unregistered_coverage():
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
     )
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=rate, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", rate),),   # CANCER not registered
@@ -147,7 +147,7 @@ def test_engine_rejects_unregistered_coverage():
 
 
 def test_engine_accepts_matching_coverage_codes():
-    """Sanity check the order guard: when the assumptions ordering matches
+    """Sanity check the order guard: when the basis ordering matches
     the pinned tuple, both engine entry points run as before."""
     rate_death = _flat(_annual(0.005))
     rate_cancer = _flat(_annual(0.003))
@@ -160,7 +160,7 @@ def test_engine_accepts_matching_coverage_codes():
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
     )
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=rate_death,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
@@ -176,12 +176,12 @@ def test_engine_accepts_matching_coverage_codes():
 
 
 def test_wide_reader_populates_coverage_codes(tmp_path):
-    """The wide-form reader pins ``coverage_codes`` to the assumptions
-    ordering so a later reordered Assumptions is refused by the engine
+    """The wide-form reader pins ``coverage_codes`` to the basis
+    ordering so a later reordered Basis is refused by the engine
     without any extra wiring on the user's side."""
     import polars as pl
     from fastcashflow import read_model_points
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=_flat(_annual(0.005)),
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
@@ -200,12 +200,12 @@ def test_wide_reader_populates_coverage_codes(tmp_path):
 
 
 def test_engine_ignores_unreferenced_assumptions_coverage():
-    """An Assumptions that registers more coverages than the portfolio uses
+    """An Basis that registers more coverages than the portfolio uses
     is fine -- the engine builds rates only for the codes the model points
     reference (via coverage_codes), ignoring the extras. Code-based
     alignment means a registered-but-unused coverage cannot cause the
     position-drift the old length guard worried about. The result matches a
-    slim Assumptions carrying only the referenced coverage."""
+    slim Basis carrying only the referenced coverage."""
     rate = _flat(_annual(0.005))
     mp = ModelPoints(
         issue_age=np.array([40.0]),
@@ -216,13 +216,13 @@ def test_engine_ignores_unreferenced_assumptions_coverage():
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH",),
     )
-    asmp_extra = Assumptions(
+    asmp_extra = Basis(
         mortality_annual=rate, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", rate),
                    CoverageRate("CANCER", rate)),   # extra, unused
     )
-    asmp_slim = Assumptions(
+    asmp_slim = Basis(
         mortality_annual=rate, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", rate),),

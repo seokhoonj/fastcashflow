@@ -11,13 +11,13 @@ from pathlib import Path
 import numpy as np
 import openpyxl
 
-from fastcashflow import CoverageRate, RISK_MORTALITY, read_assumptions
-from fastcashflow.assumptions import Assumptions
+from fastcashflow import CoverageRate, RISK_MORTALITY, read_basis
+from fastcashflow.basis import Basis
 
 
 def _build_workbook(path: Path, *, mortality_age_shift=None,
                     morbidity_age_shift=None):
-    """Tiny self-contained assumptions workbook with one segment."""
+    """Tiny self-contained basis workbook with one segment."""
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
@@ -77,7 +77,7 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
 
 
 def _segment(path):
-    return next(iter(read_assumptions(path).values()))
+    return next(iter(read_basis(path).values()))
 
 
 def test_no_age_shift(tmp_path):

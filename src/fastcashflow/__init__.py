@@ -12,30 +12,30 @@ Conventional import alias::
 `fcf` also reads as Fulfilment Cash Flows (IFRS 17: BEL + RA) -- the very
 quantity this engine computes.
 """
-from fastcashflow.assumptions import (
-    Assumptions, CoverageRate, EXPENSE_BASES, ExpenseItem,
-    derive_expense_components, describe_assumptions,
+from fastcashflow.basis import (
+    Basis, CoverageRate, EXPENSE_BASES, ExpenseItem,
+    derive_expense_components, describe_basis,
 )
 from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import (
-    Measurement, Valuation, clear_codegen_cache, measure, measure_in_force,
+    GMMMeasurement, Valuation, clear_codegen_cache, measure, measure_in_force,
     value, value_in_force, value_segmented,
 )
 from fastcashflow.grouping import group
 from fastcashflow.io import (
-    load_sample_assumptions,
+    load_sample_basis,
     load_sample_calculation_methods,
     load_sample_inforce_state,
     load_sample_model_points,
-    load_sample_vfa_assumptions,
+    load_sample_vfa_basis,
     load_sample_vfa_model_points,
-    read_assumptions,
+    read_basis,
     read_inforce_policies,
     read_inforce_state,
     read_model_points,
     read_scenarios,
     sample_data_dir,
-    save_sample_assumptions,
+    save_sample_basis,
     save_sample_calculation_methods,
     save_sample_coverages,
     save_sample_inforce_policies,
@@ -91,27 +91,27 @@ from fastcashflow.vfa import VFAMeasurement, measure_vfa
 
 __version__ = "0.1.0"
 __all__ = [
-    "Assumptions", "ModelPoints", "measure", "measure_in_force",
+    "Basis", "ModelPoints", "measure", "measure_in_force",
     "value", "value_in_force", "value_segmented", "clear_codegen_cache",
     "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "measure_tvog",
     "report", "roll_forward", "reconcile", "group", "transition",
-    "Measurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
+    "GMMMeasurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
-    "read_model_points", "read_assumptions", "read_scenarios",
+    "read_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",
     "apply_inforce_state", "InforceState",
     "write_valuation", "value_file",
-    "load_sample_model_points", "load_sample_assumptions",
+    "load_sample_model_points", "load_sample_basis",
     "load_sample_calculation_methods", "load_sample_inforce_state",
-    "load_sample_vfa_model_points", "load_sample_vfa_assumptions",
-    "save_sample_assumptions", "save_sample_policies",
+    "load_sample_vfa_model_points", "load_sample_vfa_basis",
+    "save_sample_basis", "save_sample_policies",
     "save_sample_coverages", "save_sample_calculation_methods",
     "save_sample_inforce_state", "save_sample_inforce_policies",
     "sample_data_dir",
-    "describe_assumptions",
+    "describe_basis",
     "show_bel_step", "show_csm_step", "show_trace", "show_trace_diff",
     "show_trace_paa", "show_trace_vfa",
     "solve_premium",

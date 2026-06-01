@@ -18,7 +18,7 @@ from fastcashflow import (
     STATE_MODELS,
     STATE_PAIDUP,
     STATE_WAIVER,
-    Assumptions,
+    Basis,
     CalculationMethod,
     ModelPoints,
     CoverageRate,
@@ -40,7 +40,7 @@ PATTERNS = {
 }
 
 
-def _assumptions(waiver_rate: float = 0.0, **overrides) -> Assumptions:
+def _assumptions(waiver_rate: float = 0.0, **overrides) -> Basis:
     """Flat-rate, zero-discount, zero-expense basis -- every figure by hand.
 
     ``waiver_rate`` is a flat monthly waiver-inception rate; 0 leaves the
@@ -63,7 +63,7 @@ def _assumptions(waiver_rate: float = 0.0, **overrides) -> Assumptions:
         # Set state_model explicitly to silence the implicit-fallback warning.
         base["state_model"] = STATE_MODELS["WAIVER"]
     base.update(overrides)
-    return Assumptions(**base)
+    return Basis(**base)
 
 
 def _two_track_bel(death_benefit, premium, term, state, *,

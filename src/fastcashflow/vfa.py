@@ -34,7 +34,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 from fastcashflow.numerics import (
     _csm_kernel,
     _norm_ppf,
@@ -80,7 +80,7 @@ class VFAMeasurement:
 
 def measure_vfa(
     model_points: ModelPoints,
-    assumptions: Assumptions,
+    basis: Basis,
     return_scenarios: FloatArray | None = None,
 ) -> VFAMeasurement:
     """Measure a direct-participation portfolio under the Variable Fee Approach.
@@ -90,8 +90,8 @@ def measure_vfa(
     underlying-items return ``r`` floored at any guaranteed rate ``g``) less
     the variable fee ``f`` -- from ``AV[0]`` = the model point's
     ``account_value``. A surrender pays the account value; a death exit pays
-    ``max(account value, guaranteed_death_benefit)`` (GMDB) and the survivors
-    reaching term pay ``max(account value, guaranteed_accumulation_benefit)``
+    ``max(account value, minimum_death_benefit)`` (GMDB) and the survivors
+    reaching term pay ``max(account value, minimum_accumulation_benefit)``
     (GMAB), so the excess over the account value is each guarantee's intrinsic
     cost. When ``return_scenarios`` is given, each guarantee's *time value*
     (the extra cost from return volatility) is folded into the CSM too -- the
@@ -111,17 +111,17 @@ def measure_vfa(
     enters the inception fulfilment cash flows too, so the CSM absorbs it,
     and ``time_value`` records that amount per model point.
     """
-    proj = project_cashflows(model_points, assumptions)
+    proj = project_cashflows(model_points, basis)
     inforce = proj.inforce
     n_mp, n_time = inforce.shape
 
-    r_m = (1.0 + assumptions.investment_return) ** (1.0 / 12.0) - 1.0
-    f_m = (1.0 + assumptions.fund_fee) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
+    f_m = (1.0 + basis.fund_fee) ** (1.0 / 12.0) - 1.0
     # A minimum guarantee credits max(return, guarantee) to the account. The
     # guarantee is a per-policy contract term (locked at issue, cohort-aware),
     # carried on the model point -- zero means no effective guarantee when the
     # central return is non-negative.
-    g_m = (1.0 + model_points.guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    g_m = (1.0 + model_points.minimum_crediting_rate) ** (1.0 / 12.0) - 1.0
     credit_m = np.maximum(r_m, g_m)                            # (n_mp,)
     growth = (1.0 + credit_m) * (1.0 - f_m)                    # (n_mp,)
 
@@ -140,27 +140,27 @@ def measure_vfa(
     exits = inforce_pad[:, :-1] - inforce_pad[:, 1:]      # (n_mp, n_time)
     deaths = proj.deaths                                  # (n_mp, n_time)
     death_benefit = np.maximum(
-        av[:, :n_time], model_points.guaranteed_death_benefit[:, None]
+        av[:, :n_time], model_points.minimum_death_benefit[:, None]
     )
     benefit_cf = deaths * death_benefit + (exits - deaths) * av[:, :n_time]
     # GMAB: the survivors reaching each policy's term receive max(account
-    # value, guaranteed_accumulation_benefit). They sit in the (exits - deaths)
+    # value, minimum_accumulation_benefit). They sit in the (exits - deaths)
     # account-value payout at the maturity (term - 1) column; lift them by the
     # excess over the account value there. Default zero GAB adds nothing.
     rows = np.arange(n_mp)
     term_idx = model_points.term_months - 1
     av_at_maturity = av[rows, term_idx]
     maturity_excess = proj.maturity_survivors * np.maximum(
-        0.0, model_points.guaranteed_accumulation_benefit - av_at_maturity
+        0.0, model_points.minimum_accumulation_benefit - av_at_maturity
     )
     benefit_cf[rows, term_idx] += maturity_excess
     # Variable fee -- the entity's share, deducted from the grown account value.
     fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m)[:, None] * f_m
     # Liability for incurred claims -- exit benefits settled over the pattern.
-    if assumptions.settlement_pattern is None:
+    if basis.settlement_pattern is None:
         lic = np.zeros((n_mp, n_time + 1))
     else:
-        lic = _settlement_lic(benefit_cf, assumptions.settlement_pattern)
+        lic = _settlement_lic(benefit_cf, basis.settlement_pattern)
 
     # Discount at the underlying-items return -- the VFA basis. Benefits are
     # discounted start-of-month, consistent with the account value, so a
@@ -180,9 +180,9 @@ def measure_vfa(
     # A settlement pattern pays the exit benefit over later months -- so
     # discount it to those payment dates in the present value.
     benefit_for_pv = benefit_cf
-    if assumptions.settlement_pattern is not None:
+    if basis.settlement_pattern is not None:
         benefit_for_pv = benefit_cf * _settlement_factor(
-            assumptions.settlement_pattern, r_m
+            basis.settlement_pattern, r_m
         )
     pv_benefits = _pv_trajectory(benefit_for_pv, disc_start[:n_time])
     pv_expenses = _pv_trajectory(proj.expense_cf, disc_mid)
@@ -202,18 +202,18 @@ def measure_vfa(
         # tvog_weights is portfolio-level in v1, so it expects a uniform
         # guarantee across model points; per-MP varying guarantees with
         # stochastic returns are a future extension.
-        g_unique = np.unique(model_points.guaranteed_credit_rate)
+        g_unique = np.unique(model_points.minimum_crediting_rate)
         if g_unique.size > 1:
             raise NotImplementedError(
-                "return_scenarios with per-MP varying guaranteed_credit_rate "
+                "return_scenarios with per-MP varying minimum_crediting_rate "
                 "is not supported yet; the time-value pass uses a scalar "
                 "guarantee in v1"
             )
         time_value = model_points.account_value * (
             exits @ tvog_weights(
-                guaranteed_credit_rate=float(g_unique[0]),
-                fund_fee=assumptions.fund_fee,
-                investment_return=assumptions.investment_return,
+                minimum_crediting_rate=float(g_unique[0]),
+                fund_fee=basis.fund_fee,
+                investment_return=basis.investment_return,
                 return_scenarios=return_scenarios,
             )
         )
@@ -225,11 +225,11 @@ def measure_vfa(
             deaths=proj.deaths,
             maturity_survivors=proj.maturity_survivors,
             term_index=model_points.term_months - 1,
-            guaranteed_death_benefit=model_points.guaranteed_death_benefit,
-            guaranteed_accumulation_benefit=model_points.guaranteed_accumulation_benefit,
-            guaranteed_credit_rate=float(g_unique[0]),
-            fund_fee=assumptions.fund_fee,
-            investment_return=assumptions.investment_return,
+            minimum_death_benefit=model_points.minimum_death_benefit,
+            minimum_accumulation_benefit=model_points.minimum_accumulation_benefit,
+            minimum_crediting_rate=float(g_unique[0]),
+            fund_fee=basis.fund_fee,
+            investment_return=basis.investment_return,
             return_scenarios=return_scenarios,
         )
 
@@ -241,7 +241,7 @@ def measure_vfa(
     # RA -- a confidence-level margin for expense risk, the non-financial
     # risk an account-value contract carries (mortality risk on the amount
     # is near zero, every exit paying the account value).
-    ra = _norm_ppf(assumptions.ra_confidence) * assumptions.expense_cv * pv_expenses
+    ra = _norm_ppf(basis.ra_confidence) * basis.expense_cv * pv_expenses
     # The inception fulfilment cash flows -- with the guarantee time value --
     # drive the CSM and the loss component.
     fcf = bel[:, 0] + ra[:, 0] + time_value

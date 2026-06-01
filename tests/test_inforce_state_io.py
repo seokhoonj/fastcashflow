@@ -99,7 +99,7 @@ def test_sample_inforce_end_to_end():
     state = fcf.load_sample_inforce_state()
     mp_settled = fcf.apply_inforce_state(mp, state)
 
-    basis = fcf.load_sample_assumptions()
+    basis = fcf.load_sample_basis()
     asmp = basis[("TERM_LIFE_A", "FC")]
 
     mif_hyp = fcf.measure_in_force(mp_settled, asmp)

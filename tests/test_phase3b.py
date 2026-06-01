@@ -6,7 +6,7 @@ import pytest
 from fastcashflow import (
     ExpenseItem,
     ModelPoints,
-    load_sample_assumptions,
+    load_sample_basis,
     load_sample_model_points,
     read_model_points,
     sample_data_dir,
@@ -205,7 +205,7 @@ def test_value_file_rejects_existing_output(tmp_path):
 def test_load_sample_data_runs():
     """The bundled sample data loads and values without error."""
     mps = load_sample_model_points()
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     assert mps.n_mp > 0
     val = value(mps, asmp)
     assert val.bel.shape == (mps.n_mp,)
@@ -222,20 +222,20 @@ def test_sample_data_dir_exposes_bundled_files():
             "sample_coverages.csv"}.issubset(names)
 
 
-def test_describe_assumptions_renders_both_shapes(capsys):
-    """describe_assumptions prints a tree for an Assumptions and for a dict."""
-    from fastcashflow import describe_assumptions
-    basis = load_sample_assumptions()
+def test_describe_basis_renders_both_shapes(capsys):
+    """describe_basis prints a tree for an Basis and for a dict."""
+    from fastcashflow import describe_basis
+    basis = load_sample_basis()
     asmp = next(iter(basis.values()))
 
-    describe_assumptions(asmp)
+    describe_basis(asmp)
     out_one = capsys.readouterr().out
-    assert out_one.startswith("Assumptions")
+    assert out_one.startswith("Basis")
     assert "상태 전이율" in out_one
     assert "state_model" in out_one
     assert "coverages" in out_one
 
-    describe_assumptions(basis)
+    describe_basis(basis)
     out_dict = capsys.readouterr().out
     assert "(7 segments)" in out_dict
     # every segment unfolded -- both ('TERM_LIFE_A', 'GA') and ('TERM_LIFE_A', 'FC') appear
@@ -246,7 +246,7 @@ def test_describe_assumptions_renders_both_shapes(capsys):
 def test_to_long_round_trips(tmp_path):
     """ModelPoints.to_long written out and re-read reproduces the valuation."""
     from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
@@ -263,7 +263,7 @@ def test_to_long_round_trips(tmp_path):
 def test_to_wide_round_trips(tmp_path):
     """ModelPoints.to_wide written out and re-read reproduces the valuation."""
     from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")
@@ -277,7 +277,7 @@ def test_to_wide_round_trips(tmp_path):
 def test_value_file_streams_long_form(tmp_path):
     """value_file streams a long-form policies + coverages pair in chunks."""
     from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)

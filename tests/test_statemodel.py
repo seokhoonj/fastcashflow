@@ -14,7 +14,7 @@ from fastcashflow import (
     STATE_PAIDUP,
     STATE_WAIVER,
     STATE_MODELS,
-    Assumptions,
+    Basis,
     ModelPoints,
     State,
     StateModel,
@@ -28,7 +28,7 @@ from fastcashflow.statemodel import compile_state_model
 from conftest import annual_from_monthly as _annual
 
 
-def _asmp(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Assumptions:
+def _asmp(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Basis:
     """Flat-rate, zero-discount, zero-expense basis -- every figure by hand.
 
     ``q``, ``lapse`` and ``waiver_rate`` are the monthly rates the hand
@@ -42,7 +42,7 @@ def _asmp(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Assumptio
             return np.full(issue_age.shape, waiver_a)
     q_a = _annual(q)
     lapse_a = _annual(lapse)
-    return Assumptions(
+    return Basis(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, q_a),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, lapse_a),
         waiver_incidence_annual=waiver,
@@ -146,7 +146,7 @@ def test_markov_can_reference_ci_incidence_annual():
         seating=(0, 1, 1),
     )
     q_a = _annual(0.001)
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, q_a),
         lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
         ci_incidence_annual=lambda s, a, d: np.full(d.shape, _annual(0.003)),
@@ -288,12 +288,12 @@ def test_three_state_model_runs():
 
 def test_paidup_state_uses_its_own_lapse():
     """STATE_MODELS["WAIVER_PAIDUP"] keeps paid-up a distinct state so it can
-    carry its own lapse (Assumptions.lapse_paidup_annual). A paid-up-seated
+    carry its own lapse (Basis.lapse_paidup_annual). A paid-up-seated
     contract decrements by mortality + the paid-up lapse; with the paid-up
     lapse above the active lapse its in-force falls faster than the active
     track -- the Korean post-payment (납입후) lapse jump."""
     q = _annual(0.01)
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=lambda s, a, d: np.full(a.shape, q),
         lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.02)),
         lapse_paidup_annual=lambda s, a, d: np.full(d.shape, _annual(0.10)),

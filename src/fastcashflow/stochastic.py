@@ -29,7 +29,7 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 from fastcashflow.engine import value
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.numerics import _norm_ppf
@@ -133,7 +133,7 @@ def _stochastic_inception_kernel(
 
 
 def value_stochastic(
-    model_points: ModelPoints, assumptions: Assumptions, scenarios: FloatArray
+    model_points: ModelPoints, basis: Basis, scenarios: FloatArray
 ) -> StochasticResult:
     """Value a portfolio under each economic scenario -- the liability distribution.
 
@@ -159,9 +159,9 @@ def value_stochastic(
     # month of incurrence in the settlement factor would otherwise have to
     # vary per scenario). Other configurations fall back to the per-scenario
     # value() loop, which handles them correctly if more slowly.
-    if (assumptions.ra_method == "confidence_level"
-            and assumptions.settlement_pattern is None):
-        proj = project_cashflows(model_points, assumptions)
+    if (basis.ra_method == "confidence_level"
+            and basis.settlement_pattern is None):
+        proj = project_cashflows(model_points, basis)
         n_time = proj.claim_cf.shape[1]
         if scenarios.ndim == 2:
             if scenarios.shape[1] != n_time:
@@ -174,13 +174,13 @@ def value_stochastic(
             flat = (1.0 + scenarios) ** (1.0 / 12.0) - 1.0
             monthly_rate_all = np.repeat(flat[:, None], n_time, axis=1)
         monthly_rate_all = np.ascontiguousarray(monthly_rate_all)
-        z = _norm_ppf(assumptions.ra_confidence)
+        z = _norm_ppf(basis.ra_confidence)
         bel, ra, csm, loss_component = _stochastic_inception_kernel(
             proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
             proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
             np.asarray(model_points.term_months, dtype=np.int64), monthly_rate_all,
-            z * assumptions.mortality_cv, z * assumptions.morbidity_cv,
-            z * assumptions.disability_cv, z * assumptions.longevity_cv,
+            z * basis.mortality_cv, z * basis.morbidity_cv,
+            z * basis.disability_cv, z * basis.longevity_cv,
         )
         return StochasticResult(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
@@ -200,9 +200,9 @@ def value_stochastic(
     loss_component = np.empty(n)
     for s in range(n):
         if scenarios.ndim == 1:
-            v = value(model_points, replace(assumptions, discount_annual=float(scenarios[s])))
+            v = value(model_points, replace(basis, discount_annual=float(scenarios[s])))
         else:
-            v = value(model_points, assumptions, discount_curve=scenarios[s])
+            v = value(model_points, basis, discount_curve=scenarios[s])
         bel[s] = v.bel.sum()
         ra[s] = v.ra.sum()
         csm[s] = v.csm.sum()

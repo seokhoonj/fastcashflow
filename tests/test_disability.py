@@ -17,7 +17,7 @@ import pytest
 
 from fastcashflow import (
     STATE_WAIVER,
-    Assumptions,
+    Basis,
     ModelPoints,
     State,
     StateModel,
@@ -55,10 +55,10 @@ def _disability_model(*, lump_sum=True) -> StateModel:
 
 
 def _asmp(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
-          lump_sum=True) -> Assumptions:
+          lump_sum=True) -> Basis:
     """Flat-rate, zero-discount basis. ``q`` / ``lapse`` / ``inception`` are
     the monthly rates the hand calculations use."""
-    return Assumptions(
+    return Basis(
         mortality_annual=lambda s, a, d: np.full(a.shape, _annual(q)),
         lapse_annual=lambda sex, issue_age, d: np.full(d.shape, _annual(lapse)),
         waiver_incidence_annual=lambda s, a, d: np.full(a.shape, _annual(inception)),
@@ -133,7 +133,7 @@ def test_disability_income_needs_a_benefit_state():
     kw = dict(issue_age=45, benefits={0: 0.0}, level_premium=0.0,
               term_months=12, disability_income=500_000.0, state=STATE_WAIVER)
     # default model (no state_model) -- waiver state is not a benefit state
-    plain = Assumptions(
+    plain = Basis(
         mortality_annual=lambda s, a, d: np.full(a.shape, _annual(0.01)),
         lapse_annual=lambda sex, issue_age, d: np.full(d.shape, 0.0),
         discount_annual=0.0,

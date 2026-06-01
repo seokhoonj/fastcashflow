@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    Assumptions, CalculationMethod, CoverageRate, ModelPoints, measure, value,
+    Basis, CalculationMethod, CoverageRate, ModelPoints, measure, value,
 )
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
@@ -39,14 +39,14 @@ def test_value_uses_coverage_rate_not_mortality_annual():
     Two contracts that differ ONLY in the DEATH coverage rate (same
     in-force decrement) must produce different BELs."""
     mort = _flat(_annual(0.005))
-    asmp_low = Assumptions(
+    asmp_low = Basis(
         mortality_annual=mort,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.0,
         coverages=(CoverageRate("DEATH", _flat(_annual(0.005))),),  # death = mort
     )
-    asmp_high = Assumptions(
+    asmp_high = Basis(
         mortality_annual=mort,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
@@ -72,14 +72,14 @@ def test_value_uses_coverage_rate_not_mortality_annual():
 def test_measure_uses_coverage_rate_not_mortality_annual():
     """Same regression check on measure()."""
     mort = _flat(_annual(0.005))
-    asmp_low = Assumptions(
+    asmp_low = Basis(
         mortality_annual=mort,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.0,
         coverages=(CoverageRate("DEATH", _flat(_annual(0.005))),),
     )
-    asmp_high = Assumptions(
+    asmp_high = Basis(
         mortality_annual=mort,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,

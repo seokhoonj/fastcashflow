@@ -43,7 +43,7 @@ class ModelPoints:
     so the kernels loop them generically -- new benefit types add no fields:
 
     * ``coverage_index[k]``   -- the coverage code; an integer index into
-      :attr:`Assumptions.coverages` (entry ``i`` of that tuple lives at
+      :attr:`Basis.coverages` (entry ``i`` of that tuple lives at
       code ``i``). No code is reserved.
     * ``coverage_amount[k]`` -- the benefit amount of coverage ``k``.
     * ``coverage_offset``    -- ``(n_mp+1,)``; policy ``mp``'s coverages are the
@@ -57,7 +57,7 @@ class ModelPoints:
 
     The coverage list is built one of two ways. ``benefits`` is the general
     form: a ``{cov_idx: amount array}`` map keyed by coverage code (the index
-    into :attr:`Assumptions.coverages`). Or pass the CSR arrays
+    into :attr:`Basis.coverages`). Or pass the CSR arrays
     ``coverage_index`` / ``coverage_amount`` / ``coverage_offset`` directly --
     the preferred form for a portfolio with per-coverage benefit rules
     (waiting / reduction periods).
@@ -98,21 +98,21 @@ class ModelPoints:
     # crediting rate (annual) credited to the account value when the
     # underlying-items return falls short; cohort-dependent (a 4%-guarantee
     # 2010 block vs a 1%-guarantee 2024 block can coexist in one portfolio,
-    # which a single Assumptions value could not represent). Default 0.0 = no
+    # which a single Basis value could not represent). Default 0.0 = no
     # guarantee; ignored by non-VFA measurements.
-    guaranteed_credit_rate: FloatArray | None = None
+    minimum_crediting_rate: FloatArray | None = None
     # Guaranteed minimum death benefit (GMDB) -- the floor the death benefit
     # cannot fall below. On death the VFA pays max(account value, GDB); the
     # excess over the account value is the guarantee's intrinsic cost. Locked
     # at issue, per policy; cohort-dependent like the credit-rate guarantee.
     # Default 0.0 = no floor (max(AV, 0) = AV); ignored by non-VFA measurements.
-    guaranteed_death_benefit: FloatArray | None = None
+    minimum_death_benefit: FloatArray | None = None
     # Guaranteed minimum accumulation benefit (GMAB) -- the floor the maturity
     # benefit cannot fall below. Survivors reaching term receive max(account
     # value, GAB); the excess over the account value is the guarantee's
     # intrinsic cost. Locked at issue, per policy. Default 0.0 = no floor
     # (max(AV, 0) = AV); ignored by non-VFA measurements.
-    guaranteed_accumulation_benefit: FloatArray | None = None
+    minimum_accumulation_benefit: FloatArray | None = None
     coverage_index: IntArray | None = None             # CSR: coverage index
     coverage_amount: FloatArray | None = None         # CSR: coverage amount
     coverage_offset: IntArray | None = None           # CSR: per-policy slice bounds
@@ -159,13 +159,13 @@ class ModelPoints:
     calculation_methods: dict[str, "CalculationMethod"] | None = None
     # Rate-driven coverage codes in registration order, captured at
     # construction time. The integers in ``coverage_index`` are positional
-    # indices into this tuple (equivalently, into the ``Assumptions.coverages``
+    # indices into this tuple (equivalently, into the ``Basis.coverages``
     # the model points were built against). At engine entry the tuple is
-    # matched against the current ``Assumptions.coverages`` order; a swap or
+    # matched against the current ``Basis.coverages`` order; a swap or
     # an insertion would silently shift the meaning of every ``coverage_index``
     # value, so a mismatch is refused with a clear error. ``None`` skips the
     # strict check (a hand-written one-MP test that did not pin an
-    # assumptions order); the catalogue-consistency check on
+    # basis order); the catalogue-consistency check on
     # ``calculation_methods`` still applies.
     coverage_codes: tuple[str, ...] | None = None
 
@@ -200,8 +200,8 @@ class ModelPoints:
         # Premiums / survival benefits default to zero (absent).
         for name in ("maturity_benefit", "annuity_payment", "disability_income",
                      "disability_benefit", "single_premium", "account_value",
-                     "guaranteed_credit_rate", "guaranteed_death_benefit",
-                     "guaranteed_accumulation_benefit"):
+                     "minimum_crediting_rate", "minimum_death_benefit",
+                     "minimum_accumulation_benefit"):
             value = getattr(self, name)
             value = np.zeros(n_mp) if value is None else np.asarray(value, np.float64)
             object.__setattr__(self, name, value)
@@ -330,9 +330,9 @@ class ModelPoints:
         premium_frequency_months: int = 1,
         annuity_frequency_months: int = 1,
         account_value: float = 0.0,
-        guaranteed_credit_rate: float = 0.0,
-        guaranteed_death_benefit: float = 0.0,
-        guaranteed_accumulation_benefit: float = 0.0,
+        minimum_crediting_rate: float = 0.0,
+        minimum_death_benefit: float = 0.0,
+        minimum_accumulation_benefit: float = 0.0,
         count: float = 1.0,
         sex: int = 0,
         state: int = STATE_ACTIVE,
@@ -341,7 +341,7 @@ class ModelPoints:
         """Build a single-model-point set -- a convenience for hand checks.
 
         ``benefits`` is the per-coverage benefit-amount map keyed by
-        coverage code (the index into :attr:`Assumptions.coverages`); pass
+        coverage code (the index into :attr:`Basis.coverages`); pass
         ``{0: 1_000_000.0}`` to attach the benefit to the first registered
         coverage. None means no claim benefits.
         """
@@ -359,9 +359,9 @@ class ModelPoints:
             premium_frequency_months=np.array([premium_frequency_months]),
             annuity_frequency_months=np.array([annuity_frequency_months]),
             account_value=np.array([account_value]),
-            guaranteed_credit_rate=np.array([guaranteed_credit_rate]),
-            guaranteed_death_benefit=np.array([guaranteed_death_benefit]),
-            guaranteed_accumulation_benefit=np.array([guaranteed_accumulation_benefit]),
+            minimum_crediting_rate=np.array([minimum_crediting_rate]),
+            minimum_death_benefit=np.array([minimum_death_benefit]),
+            minimum_accumulation_benefit=np.array([minimum_accumulation_benefit]),
             count=np.array([count]),
             sex=np.array([sex]),
             state=np.array([state]),
@@ -391,8 +391,8 @@ class ModelPoints:
             "maturity_benefit", "annuity_payment", "disability_income",
             "disability_benefit", "single_premium", "premium_term_months",
             "premium_frequency_months", "annuity_frequency_months",
-            "account_value", "guaranteed_credit_rate", "guaranteed_death_benefit",
-            "guaranteed_accumulation_benefit",
+            "account_value", "minimum_crediting_rate", "minimum_death_benefit",
+            "minimum_accumulation_benefit",
             "count", "sex", "state", "issue_class", "elapsed_months",
         )
         kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}
@@ -419,16 +419,16 @@ class ModelPoints:
         # Taxonomy carries through unchanged -- subsetting drops rows, not
         # the company-level catalogue of coverage codes.
         kwargs["calculation_methods"] = self.calculation_methods
-        # The registered coverage-code order is a property of the assumptions
+        # The registered coverage-code order is a property of the basis
         # the model points were built against, not of the row subset.
         kwargs["coverage_codes"] = self.coverage_codes
 
         return ModelPoints(**kwargs)
 
-    def to_wide(self, assumptions):
+    def to_wide(self, basis):
         """Convert to a wide polars DataFrame -- one row per model point.
 
-        Each rate-driven coverage in ``assumptions`` becomes a
+        Each rate-driven coverage in ``basis`` becomes a
         ``<coverage_code>_benefit`` column; the survival benefits
         ``maturity_benefit`` and ``annuity_payment`` are scalar columns.
         The companion to ``read_model_points``'s wide form; lossless only
@@ -455,7 +455,7 @@ class ModelPoints:
             "disability_income": self.disability_income,
             "disability_benefit": self.disability_benefit,
         }
-        for i, coverage in enumerate(assumptions.coverages):
+        for i, coverage in enumerate(basis.coverages):
             mask = self.coverage_index == i
             cols[f"{coverage.code}_benefit"] = np.bincount(
                 mp_of_cov[mask], weights=self.coverage_amount[mask],
@@ -463,7 +463,7 @@ class ModelPoints:
             )
         return pl.DataFrame(cols)
 
-    def to_long(self, assumptions):
+    def to_long(self, basis):
         """Convert to a long-form ``(policies, coverages)`` polars pair.
 
         ``policies`` is one row per model point (contract attributes);
@@ -489,8 +489,8 @@ class ModelPoints:
             "state":                    np.array([STATE_LABELS[int(s)] for s in self.state]),
         })
         # CSR coverages -- the integer ``coverage_index`` indexes directly
-        # into ``assumptions.coverages``; no slot is reserved.
-        label = {i: coverage.code for i, coverage in enumerate(assumptions.coverages)}
+        # into ``basis.coverages``; no slot is reserved.
+        label = {i: coverage.code for i, coverage in enumerate(basis.coverages)}
         mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
         mp_id = [int(m) for m in mp_of_cov]
         coverage_code = [label[int(k)] for k in self.coverage_index]

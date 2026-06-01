@@ -11,7 +11,7 @@ from numba import cuda
 from conftest import annual_from_monthly as _annual
 from fastcashflow import (
     STATE_MODELS,
-    Assumptions,
+    Basis,
     CalculationMethod,
     ExpenseItem,
     ModelPoints,
@@ -28,7 +28,7 @@ def test_value_matches_measure():
         annual_q = 0.0008 * (1.0 + 0.05 * (attained - 30.0))
         return annual_q
 
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=mortality_annual,
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
@@ -60,7 +60,7 @@ def test_value_matches_measure():
 
 def test_value_onerous():
     """The fast path also flags onerous contracts -- CSM floored at 0."""
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, 0.0),
         discount_annual=0.0,
@@ -86,7 +86,7 @@ def test_value_gpu_matches_cpu():
         annual_q = 0.0008 * (1.0 + 0.05 * (attained - 30.0))
         return annual_q
 
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=mortality_annual,
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         discount_annual=0.03,
@@ -125,7 +125,7 @@ def test_value_gpu_matches_cpu_with_transition():
     def flat(rate):
         return lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(rate))
 
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=flat(0.001),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.012)),
         waiver_incidence_annual=flat(0.02),

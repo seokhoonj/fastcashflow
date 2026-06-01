@@ -26,7 +26,7 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions, annual_to_monthly
+from fastcashflow.basis import Basis, annual_to_monthly
 from fastcashflow.curves import (
     discount_factors,
     discount_factors_from_curve,
@@ -59,7 +59,7 @@ from fastcashflow.statemodel import (
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True, slots=True)
-class Measurement:
+class GMMMeasurement:
     """Detailed measurement -- BEL, RA and CSM rolled forward over time.
 
     ``bel``, ``ra`` and ``csm`` are ``(n_mp, n_time+1)`` trajectories; column
@@ -102,22 +102,22 @@ def _compute_csm(bel0, ra0, inforce, monthly_rate):
     return csm, accretion, release, loss_component
 
 
-def measure(model_points: ModelPoints, assumptions: Assumptions) -> Measurement:
+def measure(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
     """Detailed GMM measurement: BEL, RA and CSM rolled forward over time."""
-    proj = project_cashflows(model_points, assumptions)
+    proj = project_cashflows(model_points, basis)
     claim_cf, morbidity_cf = proj.claim_cf, proj.morbidity_cf
-    monthly_rate = discount_monthly_curve(assumptions, proj.n_time)
-    if assumptions.settlement_pattern is None:
+    monthly_rate = discount_monthly_curve(basis, proj.n_time)
+    if basis.settlement_pattern is None:
         lic = np.zeros((claim_cf.shape[0], proj.n_time + 1))
     else:
-        lic = _settlement_lic(claim_cf + morbidity_cf, assumptions.settlement_pattern)
+        lic = _settlement_lic(claim_cf + morbidity_cf, basis.settlement_pattern)
         # Claims are paid over the pattern, not at incurrence -- discount
         # them to their payment dates in the fulfilment cash flows. With a
         # discount curve we use the in-year scalar (Sec. 40 / B71 -- the
         # rate at the month of incurrence is the right reference); the
         # full-curve treatment would require a time-varying settlement
         # factor inside the kernel, deferred.
-        factor = _settlement_factor(assumptions.settlement_pattern, assumptions.discount_monthly)
+        factor = _settlement_factor(basis.settlement_pattern, basis.discount_monthly)
         claim_cf = claim_cf * factor
         morbidity_cf = morbidity_cf * factor
     discount_start, discount_mid = discount_factors_from_curve(monthly_rate)
@@ -127,27 +127,27 @@ def measure(model_points: ModelPoints, assumptions: Assumptions) -> Measurement:
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.term_months, monthly_rate,
     )
-    z = _norm_ppf(assumptions.ra_confidence)
-    cl_margin = z * (assumptions.mortality_cv * pv_claims
-                     + assumptions.morbidity_cv * pv_morbidity
-                     + assumptions.disability_cv * pv_disability
-                     + assumptions.longevity_cv * pv_survival)
-    if assumptions.ra_method == "confidence_level":
+    z = _norm_ppf(basis.ra_confidence)
+    cl_margin = z * (basis.mortality_cv * pv_claims
+                     + basis.morbidity_cv * pv_morbidity
+                     + basis.disability_cv * pv_disability
+                     + basis.longevity_cv * pv_survival)
+    if basis.ra_method == "confidence_level":
         ra = cl_margin
-    elif assumptions.ra_method == "cost_of_capital":
+    elif basis.ra_method == "cost_of_capital":
         ra = _cost_of_capital_ra(
-            cl_margin, monthly_rate, assumptions.cost_of_capital_rate
+            cl_margin, monthly_rate, basis.cost_of_capital_rate
         )
     else:
         raise ValueError(
             "ra_method must be 'confidence_level' or 'cost_of_capital', "
-            f"got {assumptions.ra_method!r}"
+            f"got {basis.ra_method!r}"
         )
     csm, csm_accretion, csm_release, loss_component = _compute_csm(
         bel[:, 0], ra[:, 0], proj.inforce, monthly_rate,
     )
 
-    return Measurement(
+    return GMMMeasurement(
         bel=bel,
         ra=ra,
         csm=csm,
@@ -177,7 +177,7 @@ class Valuation:
 
 def value_in_force(
     model_points: ModelPoints,
-    assumptions: Assumptions,
+    basis: Basis,
     *,
     prior_csm: FloatArray | None = None,
     lock_in_rate: float | None = None,
@@ -227,7 +227,7 @@ def value_in_force(
     settlement_mode = _validate_settlement_args(
         prior_csm, lock_in_rate, period_months,
     )
-    m = measure(model_points, assumptions)
+    m = measure(model_points, basis)
     n_mp = m.bel.shape[0]
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     # ``elapsed_months > term_months`` means the policy is already past
@@ -334,12 +334,12 @@ def _validate_settlement_args(
 
 def measure_in_force(
     model_points: ModelPoints,
-    assumptions: Assumptions,
+    basis: Basis,
     *,
     prior_csm: FloatArray | None = None,
     lock_in_rate: float | None = None,
     period_months: int | None = None,
-) -> Measurement:
+) -> GMMMeasurement:
     """In-force subsequent measurement -- full-trajectory variant of
     :func:`value_in_force`.
 
@@ -367,7 +367,7 @@ def measure_in_force(
     settlement_mode = _validate_settlement_args(
         prior_csm, lock_in_rate, period_months,
     )
-    m = measure(model_points, assumptions)
+    m = measure(model_points, basis)
     if not settlement_mode:
         return m
 
@@ -448,7 +448,7 @@ def measure_in_force(
     # a Sec. 44 hit when the only thing missing is the unlocking step.
     loss_new = np.zeros(n_mp, dtype=np.float64)
 
-    return Measurement(
+    return GMMMeasurement(
         bel=m.bel,
         ra=m.ra,
         csm=csm_new,
@@ -1392,7 +1392,7 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
 
 def value(
     model_points: ModelPoints,
-    assumptions: Assumptions,
+    basis: Basis,
     *,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
@@ -1414,13 +1414,13 @@ def value(
         projection month, a power-user override for the stochastic case
         where the rate must vary month by month. ``None`` (the default)
         uses the scalar or per-year curve on
-        ``assumptions.discount_annual``; when supplied, it overrides that
+        ``basis.discount_annual``; when supplied, it overrides that
         and bypasses the curves layer for the discount step.
     """
-    if assumptions.ra_method != "confidence_level":
+    if basis.ra_method != "confidence_level":
         raise ValueError(
             "value() computes the confidence-level RA only; use measure() "
-            f"for ra_method={assumptions.ra_method!r}"
+            f"for ra_method={basis.ra_method!r}"
         )
     # value() builds the rate grid at issue_class = 0 throughout; a portfolio
     # with non-zero classes would silently look up the wrong row of any
@@ -1463,14 +1463,14 @@ def value(
     issue_class_grid = np.zeros_like(duration_grid)
     elapsed_grid = np.zeros_like(duration_grid)
     # Rates are supplied annual; the engine converts each to a monthly rate
-    # on the constant-force basis (see assumptions.annual_to_monthly).
-    mortality_annual_grid = assumptions.mortality_annual(
+    # on the constant-force basis (see basis.annual_to_monthly).
+    mortality_annual_grid = basis.mortality_annual(
         sex_grid, issue_age_grid, duration_grid,
         issue_class_grid, elapsed_grid)
     mortality_grid = np.ascontiguousarray(annual_to_monthly(mortality_annual_grid))
     issue_index = (model_points.issue_age - min_age).astype(np.int64)
     lapse_grid = np.ascontiguousarray(annual_to_monthly(
-        assumptions.lapse_annual(
+        basis.lapse_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid)))
     # Fast path: when no waiver / paid-up mechanic is active and every model
@@ -1479,22 +1479,22 @@ def value(
     # pre-Phase(b) speed path; the N-state kernel is reserved for products
     # that genuinely need an occupancy vector.
     fast_path = (backend == "cpu"
-                 and assumptions.state_model is None
-                 and assumptions.waiver_incidence_annual is None
+                 and basis.state_model is None
+                 and basis.waiver_incidence_annual is None
                  and not np.any(model_points.state))
     if not fast_path:
-        if assumptions.waiver_incidence_annual is None:
+        if basis.waiver_incidence_annual is None:
             waiver_grid = np.zeros_like(mortality_grid)
         else:
             waiver_grid = np.ascontiguousarray(annual_to_monthly(
-                assumptions.waiver_incidence_annual(
+                basis.waiver_incidence_annual(
                     sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
         # In-force state machine -- see ``statemodel.resolve_state_model``
-        # for the fallback policy when ``assumptions.state_model`` is unset.
+        # for the fallback policy when ``basis.state_model`` is unset.
         # The transition rates land on the sex x age x duration grid the
         # kernel indexes.
-        state_model = resolve_state_model(assumptions)
+        state_model = resolve_state_model(basis)
         semi_markov = is_semi_markov(state_model)
         if semi_markov:
             # Phase (c) path -- a state declared ``duration_max > 0`` tracks
@@ -1505,20 +1505,20 @@ def value(
                               if s.duration_max > 0)
             rate_dict = {"mortality": mortality_grid,
                           "lapse": lapse_grid}
-            if assumptions.waiver_incidence_annual is not None:
+            if basis.waiver_incidence_annual is not None:
                 waiver_grid = np.ascontiguousarray(annual_to_monthly(
-                    assumptions.waiver_incidence_annual(
+                    basis.waiver_incidence_annual(
                         sex_grid, issue_age_grid, duration_grid,
                         issue_class_grid, elapsed_grid)))
                 rate_dict["waiver_incidence"] = waiver_grid
-            if assumptions.ci_incidence_annual is not None:
+            if basis.ci_incidence_annual is not None:
                 ci_inc_grid = np.ascontiguousarray(annual_to_monthly(
-                    assumptions.ci_incidence_annual(
+                    basis.ci_incidence_annual(
                         sex_grid, issue_age_grid, duration_grid,
                         issue_class_grid, elapsed_grid)))
                 rate_dict["ci_incidence"] = ci_inc_grid
-            if (assumptions.ci_reincidence_annual is not None
-                    or assumptions.disability_recovery_annual is not None):
+            if (basis.ci_reincidence_annual is not None
+                    or basis.disability_recovery_annual is not None):
                 # Build the (sex, age, year, cohort) grid by sweeping cohort
                 # months 0..max_cohort-1. Duration-dependent rate callables
                 # take the four-argument signature -- ``state_duration``
@@ -1537,15 +1537,15 @@ def value(
                 # sojourn grid; ``elapsed`` here is the cohort index
                 # (months since entering the source state).
                 ic4 = np.zeros_like(cg4)
-                if assumptions.ci_reincidence_annual is not None:
+                if basis.ci_reincidence_annual is not None:
                     rate_dict["ci_reincidence"] = np.ascontiguousarray(
                         annual_to_monthly(
-                            assumptions.ci_reincidence_annual(
+                            basis.ci_reincidence_annual(
                                 sg4, ag4, dg4, ic4, cg4)))
-                if assumptions.disability_recovery_annual is not None:
+                if basis.disability_recovery_annual is not None:
                     rate_dict["disability_recovery"] = np.ascontiguousarray(
                         annual_to_monthly(
-                            assumptions.disability_recovery_annual(
+                            basis.disability_recovery_annual(
                                 sg4, ag4, dg4, ic4, cg4)))
             compiled = compile_state_model_with_duration(
                 state_model, rate_dict,
@@ -1576,15 +1576,15 @@ def value(
             rate_dict = {"mortality": mortality_grid,
                          "waiver_incidence": waiver_grid,
                          "lapse": lapse_grid}
-            if assumptions.ci_incidence_annual is not None:
+            if basis.ci_incidence_annual is not None:
                 ci_inc_grid = np.ascontiguousarray(annual_to_monthly(
-                    assumptions.ci_incidence_annual(
+                    basis.ci_incidence_annual(
                         sex_grid, issue_age_grid, duration_grid,
                         issue_class_grid, elapsed_grid)))
                 rate_dict["ci_incidence"] = ci_inc_grid
             if model_references_rate(state_model, "lapse_paidup"):
-                paidup_fn = (assumptions.lapse_paidup_annual
-                             or assumptions.lapse_annual)
+                paidup_fn = (basis.lapse_paidup_annual
+                             or basis.lapse_annual)
                 rate_dict["lapse_paidup"] = np.ascontiguousarray(
                     annual_to_monthly(paidup_fn(
                         sex_grid, issue_age_grid, duration_grid,
@@ -1605,12 +1605,12 @@ def value(
                 np.transpose(compiled.edge_prob, (1, 2, 3, 0)))
             state_duration_max = None
         start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
-    # Align the assumptions' coverages to the order the model points were
-    # built against (the one place the assumptions enter the coverage
+    # Align the basis' coverages to the order the model points were
+    # built against (the one place the basis enter the coverage
     # indexing). Identity when the model points were built against this
-    # same Assumptions; a reorder when read built them catalogue-order.
+    # same Basis; a reorder when read built them catalogue-order.
     aligned_coverages = align_coverages(
-        assumptions.coverages, model_points.coverage_codes)
+        basis.coverages, model_points.coverage_codes)
     validate_csr_codes(
         model_points.coverage_index, len(aligned_coverages),
         coverages=aligned_coverages,
@@ -1622,7 +1622,7 @@ def value(
     # build_coverage_rates stacks the per-coverage annual rates; the whole
     # stack is converted to monthly. mortality_annual is a separate engine
     # input (the in-force decrement); a contract's death coverage, if any,
-    # lives in assumptions.coverages with its own rate_table -- usually the
+    # lives in basis.coverages with its own rate_table -- usually the
     # same mortality table referenced from that sheet, occasionally a
     # separately calibrated death-claim experience table.
     coverage_rates = np.ascontiguousarray(annual_to_monthly(build_coverage_rates(
@@ -1646,10 +1646,10 @@ def value(
     from fastcashflow.projection import _expense_kernel_args
     (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,
      gamma_fixed, lae_pro_rata) = _expense_kernel_args(
-        assumptions, n_time,
+        basis, n_time,
     )
     if discount_curve is None:
-        discount_start, discount_mid = discount_factors(assumptions, n_time)
+        discount_start, discount_mid = discount_factors(basis, n_time)
     else:
         discount_curve = np.asarray(discount_curve, dtype=np.float64)
         if discount_curve.shape != (n_time,):
@@ -1659,25 +1659,25 @@ def value(
             )
         monthly_curve = (1.0 + discount_curve) ** (1.0 / 12.0) - 1.0
         discount_start, discount_mid = discount_factors_from_curve(monthly_curve)
-    z = _norm_ppf(assumptions.ra_confidence)
-    mortality_factor = z * assumptions.mortality_cv
-    morbidity_factor = z * assumptions.morbidity_cv
-    longevity_factor = z * assumptions.longevity_cv
-    disability_factor = z * assumptions.disability_cv
+    z = _norm_ppf(basis.ra_confidence)
+    mortality_factor = z * basis.mortality_cv
+    morbidity_factor = z * basis.morbidity_cv
+    longevity_factor = z * basis.longevity_cv
+    disability_factor = z * basis.disability_cv
 
     # A claims settlement pattern discounts claims to their payment dates;
     # scaling the coverage amounts carries that into the fused kernel.
     coverage_amount = model_points.coverage_amount
-    if assumptions.settlement_pattern is not None:
+    if basis.settlement_pattern is not None:
         coverage_amount = coverage_amount * _settlement_factor(
-            assumptions.settlement_pattern, assumptions.discount_monthly
+            basis.settlement_pattern, basis.discount_monthly
         )
 
     # Surrender curve, padded to n_time and zero-filled when absent. Kept as
     # an always-present (n_time,) array so the kernels do not need a branch:
     # ``surrender_curve[t]`` is read once per month, and is zero whenever no
     # surrender mechanic applies.
-    surr_user = assumptions.surrender_value_curve
+    surr_user = basis.surrender_value_curve
     if surr_user is None:
         surrender_curve_kernel = np.zeros(n_time, dtype=np.float64)
     else:
@@ -1862,20 +1862,20 @@ def value(
 
 def value_segmented(
     model_points: ModelPoints,
-    basis: dict[tuple[str, str], Assumptions],
+    basis: dict[tuple[str, str], Basis],
     *,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
 ) -> Valuation:
     """Value a multi-segment portfolio: split, value each, concatenate.
 
-    ``basis`` is the ``{(product, channel): Assumptions}`` dictionary
-    returned by :func:`fastcashflow.read_assumptions`. ``model_points``
+    ``basis`` is the ``{(product, channel): Basis}`` dictionary
+    returned by :func:`fastcashflow.read_basis`. ``model_points``
     must carry ``product`` and ``channel`` columns identifying each row's
     segment; for each unique (product, channel) the helper masks the
     matching rows, builds a sub-:class:`~fastcashflow.ModelPoints` via
     :meth:`~fastcashflow.ModelPoints.subset`, calls :func:`value` with the
-    segment's ``Assumptions``, and writes the per-row results back to a
+    segment's ``Basis``, and writes the per-row results back to a
     single ``(n_mp,)`` :class:`Valuation`.
 
     ``backend`` and ``discount_curve`` flow through to :func:`value` --
@@ -1886,9 +1886,9 @@ def value_segmented(
     """
     if model_points.product_code is None or model_points.channel_code is None:
         if len(basis) == 1:
-            (assumptions,) = basis.values()
+            (basis,) = basis.values()
             return value(
-                model_points, assumptions,
+                model_points, basis,
                 backend=backend, discount_curve=discount_curve,
             )
         raise ValueError(

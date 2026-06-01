@@ -11,12 +11,12 @@ import polars as pl
 import pytest
 
 from fastcashflow import read_scenarios, value_stochastic, CoverageRate
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 from fastcashflow.modelpoints import ModelPoints
 
 
-def _flat_asmp() -> Assumptions:
-    return Assumptions(
+def _flat_asmp() -> Basis:
+    return Basis(
         mortality_annual=lambda s, ia, d: np.full(s.shape, 0.001),
         lapse_annual=lambda s, ia, d: np.full(s.shape, 0.02),
         discount_annual=0.03,

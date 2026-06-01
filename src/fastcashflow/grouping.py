@@ -27,7 +27,7 @@ from __future__ import annotations
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow.engine import Measurement
+from fastcashflow.engine import GMMMeasurement
 from fastcashflow.numerics import _csm_kernel
 from fastcashflow.projection import Cashflows
 
@@ -39,7 +39,7 @@ def _sum_by_group(arr: FloatArray, inverse: IntArray, n_groups: int) -> FloatArr
     return result
 
 
-def group(measurement: Measurement, group_ids: FloatArray) -> Measurement:
+def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
     """Aggregate a per-model-point GMM measurement to IFRS 17 groups.
 
     ``group_ids`` assigns each model point to a group -- the IFRS 17 unit of
@@ -89,7 +89,7 @@ def group(measurement: Measurement, group_ids: FloatArray) -> Measurement:
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
-    return Measurement(
+    return GMMMeasurement(
         bel=bel,
         ra=ra,
         csm=csm,

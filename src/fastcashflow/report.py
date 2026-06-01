@@ -27,7 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.engine import Measurement
+from fastcashflow.engine import GMMMeasurement
 from fastcashflow.paa import PAAMeasurement
 from fastcashflow.vfa import VFAMeasurement
 
@@ -106,12 +106,12 @@ class Report:
         return "\n".join(lines)
 
 
-def report(measurement: Measurement | PAAMeasurement | VFAMeasurement) -> Report:
+def report(measurement: GMMMeasurement | PAAMeasurement | VFAMeasurement) -> Report:
     """Assemble the IFRS 17 report from a GMM, PAA or VFA measurement.
 
     See the module docstring for the basis (IFRS 17 paragraphs B120-B124).
     """
-    if isinstance(measurement, Measurement):
+    if isinstance(measurement, GMMMeasurement):
         return _report_gmm(measurement)
     if isinstance(measurement, PAAMeasurement):
         return _report_paa(measurement)
@@ -123,7 +123,7 @@ def report(measurement: Measurement | PAAMeasurement | VFAMeasurement) -> Report
     )
 
 
-def _report_gmm(m: Measurement) -> Report:
+def _report_gmm(m: GMMMeasurement) -> Report:
     """GMM: revenue grosses up the RA release and the CSM release."""
     bel, ra, csm = m.bel, m.ra, m.csm
     cf = m.cashflows

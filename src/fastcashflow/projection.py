@@ -39,8 +39,8 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import (
-    Assumptions, annual_to_monthly, derive_expense_components,
+from fastcashflow.basis import (
+    Basis, annual_to_monthly, derive_expense_components,
 )
 from fastcashflow.coverage import (
     align_coverages, build_coverage_rates, coverage_arrays, validate_csr_codes,
@@ -87,12 +87,12 @@ class Cashflows:
 
 
 def _expense_kernel_args(
-    assumptions: Assumptions, n_time: int,
+    basis: Basis, n_time: int,
 ) -> tuple[float, float, float, FloatArray, FloatArray]:
     """Return the five expense primitives the kernels take.
 
-    Projects ``Assumptions.expense_items`` onto the kernel-side inputs,
-    threading ``Assumptions.expense_inflation`` through the recurring
+    Projects ``Basis.expense_items`` onto the kernel-side inputs,
+    threading ``Basis.expense_inflation`` through the recurring
     rows via :func:`fastcashflow.curves.inflation_index`:
 
     - ``alpha_pro_rata``, ``alpha_fixed``, ``beta_pro_rata`` -- scalars used at
@@ -107,7 +107,7 @@ def _expense_kernel_args(
     basis -- so the kernel can run unchanged.
     """
     return derive_expense_components(
-        assumptions.expense_items, n_time, inflation_index(assumptions, n_time),
+        basis.expense_items, n_time, inflation_index(basis, n_time),
     )
 
 
@@ -214,7 +214,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: alpha / beta / gamma maintenance plus LAE on the
             # month's claim + morbidity total. Dispatched from
-            # Assumptions.expense_items by basis (alpha_pro_rata /
+            # Basis.expense_items by basis (alpha_pro_rata /
             # alpha_fixed / beta_pro_rata / gamma_fixed / lae_pro_rata).
             ann_prem = level_premium[mp] * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
@@ -515,11 +515,11 @@ def _project_kernel_semi_markov(
             annuity_cf, disability_cf, maturity_cf, maturity_survivors)
 
 
-def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Cashflows:
+def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     """Project cash flows for every model point.
 
     The Pythonic wrapper: it extracts raw arrays from the inputs and
-    evaluates the assumptions. Mortality, lapse and the coverage rates are
+    evaluates the basis. Mortality, lapse and the coverage rates are
     evaluated on the per-policy-year grid, not the full ``(n_mp, n_time)``
     grid -- all change only once a year, so this is an identical result for
     a twelfth of the work.
@@ -547,29 +547,29 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     # the per-MP per-cohort elapsed values in).
     elapsed_grid = np.zeros_like(duration_grid)
     # Rates are supplied annual; the engine converts each to a monthly rate
-    # on the constant-force basis (see assumptions.annual_to_monthly).
-    mortality_annual = assumptions.mortality_annual(
+    # on the constant-force basis (see basis.annual_to_monthly).
+    mortality_annual = basis.mortality_annual(
         sex_grid, issue_age_grid, duration_grid,
         issue_class_grid, elapsed_grid)
     mortality = np.ascontiguousarray(annual_to_monthly(mortality_annual))
-    if assumptions.waiver_incidence_annual is None:
+    if basis.waiver_incidence_annual is None:
         waiver = np.zeros_like(mortality)
     else:
         waiver = np.ascontiguousarray(annual_to_monthly(
-            assumptions.waiver_incidence_annual(
+            basis.waiver_incidence_annual(
                 sex_grid, issue_age_grid, duration_grid,
                 issue_class_grid, elapsed_grid)))
     lapse = np.ascontiguousarray(annual_to_monthly(
-        assumptions.lapse_annual(
+        basis.lapse_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid)))
-    # Align the assumptions' coverages to the order the model points were
+    # Align the basis' coverages to the order the model points were
     # built against, so coverage_index integers index the right rate row.
     # Reading the portfolio never had to know this order -- it is resolved
-    # here, the one place the assumptions enter. (Identity when the model
-    # points were built against this same Assumptions.)
+    # here, the one place the basis enter. (Identity when the model
+    # points were built against this same Basis.)
     aligned_coverages = align_coverages(
-        assumptions.coverages, model_points.coverage_codes)
+        basis.coverages, model_points.coverage_codes)
     validate_csr_codes(
         model_points.coverage_index, len(aligned_coverages),
         coverages=aligned_coverages,
@@ -581,7 +581,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     # build_coverage_rates stacks the per-coverage annual rates; the whole
     # stack is converted to monthly. mortality_annual above is the separate
     # in-force decrement input; a death coverage's claim payout is driven
-    # by its own rate_table from assumptions.coverages.
+    # by its own rate_table from basis.coverages.
     coverage_rates = np.ascontiguousarray(annual_to_monthly(build_coverage_rates(
         [r.rate for r in aligned_coverages],
         sex_grid, issue_age_grid, duration_grid,
@@ -595,16 +595,16 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         len(aligned_coverages), len(model_points.issue_age), n_years
     ), f"coverage_rates shape {coverage_rates.shape} != (n_cov, n_mp, n_years)"
     # Expense primitives -- the five inputs the kernel consumes. Honours
-    # Assumptions.expense_items when set, otherwise the legacy alpha / beta
+    # Basis.expense_items when set, otherwise the legacy alpha / beta
     # / gamma / expense_inflation scalars (see _expense_kernel_args).
     (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,
      gamma_fixed, lae_pro_rata) = _expense_kernel_args(
-        assumptions, n_time,
+        basis, n_time,
     )
 
     # In-force state machine -- see ``statemodel.resolve_state_model`` for
-    # the fallback policy when ``assumptions.state_model`` is unset.
-    state_model = resolve_state_model(assumptions)
+    # the fallback policy when ``basis.state_model`` is unset.
+    state_model = resolve_state_model(basis)
     start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
 
     if is_semi_markov(state_model):
@@ -619,16 +619,16 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         max_cohort = max(s.duration_max for s in state_model.states
                           if s.duration_max > 0)
         rate_dict = {"mortality": mortality, "lapse": lapse}
-        if assumptions.waiver_incidence_annual is not None:
+        if basis.waiver_incidence_annual is not None:
             rate_dict["waiver_incidence"] = waiver
-        if assumptions.ci_incidence_annual is not None:
+        if basis.ci_incidence_annual is not None:
             ci_inc = np.ascontiguousarray(annual_to_monthly(
-                assumptions.ci_incidence_annual(
+                basis.ci_incidence_annual(
                     sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
             rate_dict["ci_incidence"] = ci_inc
-        if (assumptions.ci_reincidence_annual is not None
-                or assumptions.disability_recovery_annual is not None):
+        if (basis.ci_reincidence_annual is not None
+                or basis.disability_recovery_annual is not None):
             # Broadcast (n_mp, 1, 1) sex + (n_mp, 1, 1) age +
             # (1, n_year, 1) duration + (1, 1, max_cohort) cohort to
             # (n_mp, n_year, max_cohort). Sojourn-aware rate callables
@@ -640,15 +640,15 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
             dur_4d = np.arange(n_years).reshape(1, -1, 1)
             coh_4d = np.arange(max_cohort).reshape(1, 1, -1)
             ic_4d = np.zeros_like(coh_4d)
-            if assumptions.ci_reincidence_annual is not None:
+            if basis.ci_reincidence_annual is not None:
                 rate_dict["ci_reincidence"] = np.ascontiguousarray(
                     annual_to_monthly(
-                        assumptions.ci_reincidence_annual(
+                        basis.ci_reincidence_annual(
                             sex_4d, age_4d, dur_4d, ic_4d, coh_4d)))
-            if assumptions.disability_recovery_annual is not None:
+            if basis.disability_recovery_annual is not None:
                 rate_dict["disability_recovery"] = np.ascontiguousarray(
                     annual_to_monthly(
-                        assumptions.disability_recovery_annual(
+                        basis.disability_recovery_annual(
                             sex_4d, age_4d, dur_4d, ic_4d, coh_4d)))
         compiled = compile_state_model_with_duration(state_model, rate_dict)
         edge_from = compiled.edge_from
@@ -705,15 +705,15 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
         # ``disability_recovery``) remain semi-Markov-only.
         rate_dict = {"mortality": mortality, "waiver_incidence": waiver,
                      "lapse": lapse}
-        if assumptions.ci_incidence_annual is not None:
+        if basis.ci_incidence_annual is not None:
             ci_inc = np.ascontiguousarray(annual_to_monthly(
-                assumptions.ci_incidence_annual(
+                basis.ci_incidence_annual(
                     sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
             rate_dict["ci_incidence"] = ci_inc
         if model_references_rate(state_model, "lapse_paidup"):
-            paidup_fn = (assumptions.lapse_paidup_annual
-                         or assumptions.lapse_annual)
+            paidup_fn = (basis.lapse_paidup_annual
+                         or basis.lapse_annual)
             rate_dict["lapse_paidup"] = np.ascontiguousarray(annual_to_monthly(
                 paidup_fn(sex_grid, issue_age_grid, duration_grid,
                           issue_class_grid, elapsed_grid)))
@@ -773,7 +773,7 @@ def project_cashflows(model_points: ModelPoints, assumptions: Assumptions) -> Ca
     # initial level. ``surrender_value_curve = None`` falls back to zero,
     # the historical "lapse silently removes" behaviour.
     surrender_cf = np.zeros_like(expense_cf)
-    curve = assumptions.surrender_value_curve
+    curve = basis.surrender_value_curve
     if curve is not None:
         # Per-month lapse rate, broadcast from per-year ``lapse`` array.
         lapse_per_month = lapse[:, np.arange(n_time) // 12]

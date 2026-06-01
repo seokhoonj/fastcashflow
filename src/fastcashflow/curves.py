@@ -1,22 +1,22 @@
-"""Time-axis curves derived from an ``Assumptions`` set.
+"""Time-axis curves derived from an ``Basis`` set.
 
 The orchestration layer (engine, PAA, VFA) calls these helpers to turn the
 high-level assumption object into the concrete per-month / per-year arrays
 the numerical primitives consume. Keeping these in their own layer lets the
 numerical primitives stay domain-object-free (numpy arrays only) and the
-``Assumptions`` dataclass stay math-free (just inputs).
+``Basis`` dataclass stay math-free (just inputs).
 
 Three helpers exposed:
 
 * discount factors -- :func:`discount_factors`,
   :func:`discount_factors_from_curve`, :func:`discount_monthly_curve`.
-  Read ``Assumptions.discount_annual`` (scalar or per-year curve) and
+  Read ``Basis.discount_annual`` (scalar or per-year curve) and
   broadcast a per-year array to per-month length, holding the last
   value flat past the end.
 * expense inflation -- :func:`inflation_index`. Reads
-  ``Assumptions.expense_inflation`` (same scalar-or-curve shape) and
+  ``Basis.expense_inflation`` (same scalar-or-curve shape) and
   returns the cumulative ``(1+i)`` multiplier curve consumed by
-  :func:`fastcashflow.assumptions.derive_expense_components`.
+  :func:`fastcashflow.basis.derive_expense_components`.
 * (internal) :func:`_per_year_to_per_month` -- the shared broadcast helper.
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ from __future__ import annotations
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 
 
 def _per_year_to_per_month(
@@ -48,16 +48,16 @@ def _per_year_to_per_month(
     return arr[idx]
 
 
-def discount_monthly_curve(assumptions: Assumptions, n_time: int) -> FloatArray:
+def discount_monthly_curve(basis: Basis, n_time: int) -> FloatArray:
     """Per-month locked-in monthly discount rate, shape ``(n_time,)``.
 
     Locked-in basis (Sec. 36) is held either as a flat annual rate or a
-    per-year annual curve on ``assumptions.discount_annual``. Within a
+    per-year annual curve on ``basis.discount_annual``. Within a
     policy year a constant-force conversion turns the annual to monthly
     (twelve monthly applications reproduce the annual exactly).
     """
     annual = _per_year_to_per_month(
-        assumptions.discount_annual, n_time, "discount_annual",
+        basis.discount_annual, n_time, "discount_annual",
     )
     # ``(1+annual)**(1/12)`` is NaN when ``annual <= -1.0`` (a non-positive
     # base raised to a fractional power). Reject so a silently-NaN discount
@@ -71,10 +71,10 @@ def discount_monthly_curve(assumptions: Assumptions, n_time: int) -> FloatArray:
     return (1.0 + annual) ** (1.0 / 12.0) - 1.0
 
 
-def inflation_index(assumptions: Assumptions, n_time: int) -> FloatArray:
+def inflation_index(basis: Basis, n_time: int) -> FloatArray:
     """Per-month expense-inflation multiplier, shape ``(n_time,)``.
 
-    A flat ``Assumptions.expense_inflation = i`` reproduces the
+    A flat ``Basis.expense_inflation = i`` reproduces the
     closed-form ``(1+i)^(t/12)`` growth. A per-year curve compounds
     annual factors across completed policy years and applies the
     in-year fractional ramp on the current year. Held flat past the
@@ -83,7 +83,7 @@ def inflation_index(assumptions: Assumptions, n_time: int) -> FloatArray:
     this curve.
     """
     annual = _per_year_to_per_month(
-        assumptions.expense_inflation, n_time, "expense_inflation",
+        basis.expense_inflation, n_time, "expense_inflation",
     )
     months = np.arange(n_time)
     in_year_ramp = (1.0 + annual) ** ((months % 12) / 12.0)
@@ -97,7 +97,7 @@ def inflation_index(assumptions: Assumptions, n_time: int) -> FloatArray:
     return compounded[months // 12] * in_year_ramp
 
 
-def discount_factors(assumptions: Assumptions, n_time: int) -> tuple[FloatArray, FloatArray]:
+def discount_factors(basis: Basis, n_time: int) -> tuple[FloatArray, FloatArray]:
     """Discount factors back to time 0, by cash-flow timing.
 
     Returns ``(discount_start, discount_mid)``:
@@ -108,10 +108,10 @@ def discount_factors(assumptions: Assumptions, n_time: int) -> tuple[FloatArray,
       (claims and expenses, which arise during the month).
 
     The discount basis is the locked-in rate or rate curve carried on
-    ``assumptions`` (Sec. 36); a flat scalar gives the closed-form ``(1+i)^-t``
+    ``basis`` (Sec. 36); a flat scalar gives the closed-form ``(1+i)^-t``
     expression and a per-year curve gives the cumulative-product form.
     """
-    return discount_factors_from_curve(discount_monthly_curve(assumptions, n_time))
+    return discount_factors_from_curve(discount_monthly_curve(basis, n_time))
 
 
 def discount_factors_from_curve(

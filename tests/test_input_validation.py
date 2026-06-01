@@ -14,8 +14,8 @@ import polars as pl
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import Assumptions, CalculationMethod, CoverageRate, ModelPoints
-from fastcashflow.assumptions import annual_to_monthly
+from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
+from fastcashflow.basis import annual_to_monthly
 from fastcashflow.io import (
     _axis_tables, _flex_rate_table, _read_expense_tables, _read_state,
     _truncate_list,
@@ -55,7 +55,7 @@ def test_modelpoints_rejects_negative_count():
 
 
 # ---------------------------------------------------------------------------
-# Assumptions scalar guards
+# Basis scalar guards
 # ---------------------------------------------------------------------------
 
 def _flat_rate(annual=0.01):
@@ -65,7 +65,7 @@ def _flat_rate(annual=0.01):
 def test_assumptions_rejects_ra_confidence_at_boundary():
     for bad in (-0.1, 0.0, 1.0, 1.5):
         with pytest.raises(ValueError, match="ra_confidence"):
-            Assumptions(
+            Basis(
                 mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
                 discount_annual=0.0, ra_confidence=bad,
                 mortality_cv=0.10,
@@ -75,7 +75,7 @@ def test_assumptions_rejects_ra_confidence_at_boundary():
 
 def test_assumptions_rejects_negative_cv():
     with pytest.raises(ValueError, match="mortality_cv"):
-        Assumptions(
+        Basis(
             mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
             discount_annual=0.0, ra_confidence=0.75,
             mortality_cv=-0.1,
@@ -85,7 +85,7 @@ def test_assumptions_rejects_negative_cv():
 
 def test_assumptions_rejects_settlement_pattern_not_summing_to_one():
     with pytest.raises(ValueError, match="settlement_pattern"):
-        Assumptions(
+        Basis(
             mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
             discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
             settlement_pattern=np.array([0.3, 0.3, 0.3]),
@@ -146,7 +146,7 @@ def test_wide_reader_rejects_collision_with_reserved_name(tmp_path):
         "coverage_code": ["maturity"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_assumptions(asmp_book)
+    basis = fcf.read_basis(asmp_book)
     with pytest.raises(ValueError, match="reserved wide-form"):
         fcf.read_model_points(
             pol_csv,
@@ -176,7 +176,7 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
         "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_assumptions(asmp_book)
+    basis = fcf.read_basis(asmp_book)
     with pytest.raises(ValueError, match="duplicate mp_id"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -203,7 +203,7 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
         "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_assumptions(asmp_book)
+    basis = fcf.read_basis(asmp_book)
     with pytest.raises(ValueError, match="premium is specified twice"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -230,7 +230,7 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
         "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_assumptions(asmp_book)
+    basis = fcf.read_basis(asmp_book)
     with pytest.raises(ValueError, match="reduction_factor"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -239,7 +239,7 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Minimal assumptions workbook helper
+# Minimal basis workbook helper
 # ---------------------------------------------------------------------------
 
 def _write_minimal_assumptions(path: Path, coverage_code: str) -> None:
@@ -326,7 +326,7 @@ def test_segments_legacy_product_column_hints(tmp_path):
     ])
     wb.save(book)
     with pytest.raises(ValueError, match="did you mean 'product_code'"):
-        fcf.read_assumptions(book)
+        fcf.read_basis(book)
 
 
 def test_missing_required_sheet_friendly_error(tmp_path):
@@ -349,7 +349,7 @@ def test_missing_required_sheet_friendly_error(tmp_path):
             ws.append(list(r))
     wb.save(book)
     with pytest.raises(ValueError, match="missing required sheet 'mortality_tables'"):
-        fcf.read_assumptions(book)
+        fcf.read_basis(book)
 
 
 def test_flex_rate_table_missing_rate_column():
@@ -425,7 +425,7 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
         "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_assumptions(asmp_book)
+    basis = fcf.read_basis(asmp_book)
     with pytest.raises(ValueError, match="ORPHAN_X"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -451,7 +451,7 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
         "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_assumptions(asmp_book)
+    basis = fcf.read_basis(asmp_book)
     with pytest.raises(ValueError, match="GHOST_CODE"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -479,7 +479,7 @@ def test_long_form_no_premium_source_warns(tmp_path, recwarn):
         "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_assumptions(asmp_book)
+    basis = fcf.read_basis(asmp_book)
     fcf.read_model_points(
         pol_csv, coverages=cov_csv,
         calculation_methods=bp_csv,
@@ -518,7 +518,7 @@ def test_rate_table_not_found_caps_alternatives(tmp_path):
     ])
     wb.save(book)
     with pytest.raises(ValueError, match="and 10 more"):
-        fcf.read_assumptions(book)
+        fcf.read_basis(book)
 
 
 # ---------------------------------------------------------------------------
@@ -540,14 +540,14 @@ def test_annual_to_monthly_accepts_boundary_one():
 def test_discount_curve_rejects_rate_at_negative_one():
     """A discount annual <= -1.0 produces NaN; reject up front."""
     from fastcashflow.curves import discount_monthly_curve
-    assumptions = Assumptions(
+    basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
         discount_annual=-1.0,
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     with pytest.raises(ValueError, match="discount_annual must be > -1.0"):
-        discount_monthly_curve(assumptions, n_time=12)
+        discount_monthly_curve(basis, n_time=12)
 
 
 def test_value_in_force_rejects_elapsed_past_term():
@@ -558,14 +558,14 @@ def test_value_in_force_rejects_elapsed_past_term():
         term_months=np.array([12]),
         elapsed_months=np.array([15]),         # past maturity
     )
-    assumptions = Assumptions(
+    basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
         discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     with pytest.raises(ValueError, match="run past its original maturity"):
-        fcf.value_in_force(mp, assumptions)
+        fcf.value_in_force(mp, basis)
 
 
 def test_measure_in_force_rejects_elapsed_past_term():
@@ -576,7 +576,7 @@ def test_measure_in_force_rejects_elapsed_past_term():
         term_months=np.array([12]),
         elapsed_months=np.array([15]),
     )
-    assumptions = Assumptions(
+    basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
         discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.10,
@@ -584,7 +584,7 @@ def test_measure_in_force_rejects_elapsed_past_term():
     )
     with pytest.raises(ValueError, match="run past its original maturity"):
         fcf.measure_in_force(
-            mp, assumptions, prior_csm=np.array([0.0]),
+            mp, basis, prior_csm=np.array([0.0]),
             lock_in_rate=0.03, period_months=12,
         )
 
@@ -633,14 +633,14 @@ def test_value_segmented_matches_nfc_and_nfd_codes():
         product_code=np.array([composed], dtype=object),
         channel_code=np.array(["FC"], dtype=object),
     )
-    assumptions = Assumptions(
+    basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
         discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     # Basis keyed under the decomposed form -- the lookup must still match.
-    basis = {(decomposed, "FC"): assumptions}
+    basis = {(decomposed, "FC"): basis}
     out = fcf.value_segmented(mp, basis)
     assert out.bel.shape == (1,)
 
@@ -706,16 +706,16 @@ def test_empty_portfolio_value_raises_loudly():
         level_premium=np.array([], dtype=np.float64),
         term_months=np.array([], dtype=np.int64),
     )
-    assumptions = Assumptions(
+    basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
         discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     with pytest.raises(ValueError, match="empty"):
-        fcf.value(mp, assumptions)
+        fcf.value(mp, basis)
     with pytest.raises(ValueError, match="empty"):
-        fcf.measure(mp, assumptions)
+        fcf.measure(mp, basis)
 
 
 def test_single_month_measure():
@@ -726,13 +726,13 @@ def test_single_month_measure():
         level_premium=np.array([0.0]),
         term_months=np.array([1]),
     )
-    assumptions = Assumptions(
+    basis = Basis(
         mortality_annual=_flat_rate(0.01), lapse_annual=_flat_rate(0.0),
         discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate(0.01)),),
     )
-    m = fcf.measure(mp, assumptions)
+    m = fcf.measure(mp, basis)
     assert m.bel.shape == (1, 2)            # (n_mp, term+1)
     assert np.isfinite(m.bel).all()
 
@@ -746,13 +746,13 @@ def test_mixed_term_months_tail_padded_consistently():
         level_premium=np.array([0.0, 0.0]),
         term_months=np.array([3, 12]),       # mixed
     )
-    assumptions = Assumptions(
+    basis = Basis(
         mortality_annual=_flat_rate(0.01), lapse_annual=_flat_rate(0.0),
         discount_annual=0.0,
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate(0.01)),),
     )
-    m = fcf.measure(mp, assumptions)
+    m = fcf.measure(mp, basis)
     assert m.bel.shape == (2, 13)            # max term + 1
     # The 3-month MP's BEL at t=12 must be a finite, well-defined value
     # (zero or held-flat post-maturity), never NaN / inf.

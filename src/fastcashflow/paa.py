@@ -36,7 +36,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import _norm_ppf, _rollforward_kernel, _settlement_lic
 from fastcashflow.modelpoints import ModelPoints
@@ -71,7 +71,7 @@ class PAAMeasurement:
 
 def measure_paa(
     model_points: ModelPoints,
-    assumptions: Assumptions,
+    basis: Basis,
     *,
     revenue_basis: str = "time",
 ) -> PAAMeasurement:
@@ -96,7 +96,7 @@ def measure_paa(
     inception fulfilment cash flows are a net outflow carries that outflow
     as a loss component.
     """
-    proj = project_cashflows(model_points, assumptions)
+    proj = project_cashflows(model_points, basis)
 
     premium_total = proj.premium_cf.sum(axis=1)          # (n_mp,)
     service_expense = proj.claim_cf + proj.morbidity_cf + proj.expense_cf
@@ -105,10 +105,10 @@ def measure_paa(
     # paid (spread over the settlement pattern) run it off. Held
     # undiscounted, consistent with the LRC.
     incurred = proj.claim_cf + proj.morbidity_cf
-    if assumptions.settlement_pattern is None:
+    if basis.settlement_pattern is None:
         lic = np.zeros((incurred.shape[0], incurred.shape[1] + 1))
     else:
-        lic = _settlement_lic(incurred, assumptions.settlement_pattern)
+        lic = _settlement_lic(incurred, basis.settlement_pattern)
 
     # Insurance revenue -- total premium allocated across the periods of
     # service (Sec. B126), so total revenue equals total premium.
@@ -139,13 +139,13 @@ def measure_paa(
         proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.term_months,
-        discount_monthly_curve(assumptions, proj.n_time),
+        discount_monthly_curve(basis, proj.n_time),
     )
-    z = _norm_ppf(assumptions.ra_confidence)
-    ra0 = z * (assumptions.mortality_cv * pv_claims[:, 0]
-               + assumptions.morbidity_cv * pv_morbidity[:, 0]
-               + assumptions.disability_cv * pv_disability[:, 0]
-               + assumptions.longevity_cv * pv_survival[:, 0])
+    z = _norm_ppf(basis.ra_confidence)
+    ra0 = z * (basis.mortality_cv * pv_claims[:, 0]
+               + basis.morbidity_cv * pv_morbidity[:, 0]
+               + basis.disability_cv * pv_disability[:, 0]
+               + basis.longevity_cv * pv_survival[:, 0])
     loss_component = np.maximum(0.0, bel[:, 0] + ra0)
 
     return PAAMeasurement(

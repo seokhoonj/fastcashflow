@@ -3,12 +3,12 @@
 A policy's benefits are a variable-length list of *coverages* rather than a
 fixed set of fields. Each coverage carries a numeric *code* -- a factorised
 coverage identifier that directly indexes the rate-driven coverages the
-assumptions register (see :class:`fastcashflow.assumptions.CoverageRate`),
+basis register (see :class:`fastcashflow.basis.CoverageRate`),
 in registration order. No code is reserved: a contract's death coverage,
 if any, is just one entry in the user's coverage catalogue, distinguished
 by its :class:`CalculationMethod` (``DEATH``).
 
-The base mortality (``Assumptions.mortality_annual``) is a separate engine
+The base mortality (``Basis.mortality_annual``) is a separate engine
 input: it drives the in-force decrement only. A death coverage's claim
 payout is driven by its own ``rate_table`` -- usually the same mortality
 table referenced from the coverages sheet, occasionally a separately
@@ -96,7 +96,7 @@ def method_attrs(method: CalculationMethod) -> tuple[bool, int]:
     diagnosis pool vs a recurring claim, and the RA risk class. They are a
     closed-form function of the method, so the engine derives them at
     call time rather than carrying them as separate fields on
-    :class:`~fastcashflow.assumptions.CoverageRate`.
+    :class:`~fastcashflow.basis.CoverageRate`.
     """
     is_diagnosis = (method == CalculationMethod.DIAGNOSIS)
     risk = (RISK_MORTALITY if method == CalculationMethod.DEATH
@@ -110,11 +110,11 @@ def build_coverage_rates(rate_fns, sex_grid, issue_age_grid,
 
     A kernel reads a coverage's rate as ``coverage_rates[code, age_or_mp, year]``,
     so the codes share one grid whose first axis is the code. ``rate_fns`` is
-    an ordered list of callables, one per coverage in the assumptions'
-    registration order; each has the unified ``Assumptions.mortality_annual``
+    an ordered list of callables, one per coverage in the basis'
+    registration order; each has the unified ``Basis.mortality_annual``
     signature ``(sex, issue_age, duration, issue_class, elapsed)``. The
     annual rates are returned as supplied -- the caller converts the whole
-    stack to monthly (see ``assumptions.annual_to_monthly``).
+    stack to monthly (see ``basis.annual_to_monthly``).
 
     When ``rate_fns`` is empty the result is an array of shape
     ``(0,) + sex_grid.shape`` -- a zero-claim portfolio; kernel loops over
@@ -141,7 +141,7 @@ def coverage_arrays(coverages, calculation_methods=None):
     """Per-code kernel flag arrays for the coverage list.
 
     ``coverages`` is the ordered rate-driven coverages, in the same order as
-    :attr:`Assumptions.coverages`; ``calculation_methods`` is the portfolio-level
+    :attr:`Basis.coverages`; ``calculation_methods`` is the portfolio-level
     taxonomy (``{coverage_code: CalculationMethod}``). Each coverage's method
     looked up by code gives the two flags via :func:`method_attrs`.
 
@@ -194,23 +194,23 @@ def coverage_arrays(coverages, calculation_methods=None):
 
 
 def align_coverages(coverages, coverage_codes):
-    """Reorder ``Assumptions.coverages`` to the model points' coverage order.
+    """Reorder ``Basis.coverages`` to the model points' coverage order.
 
     The model points' ``coverage_index`` integers were built against
     ``coverage_codes`` order (the calculation_methods catalogue, or whatever
     order the model points were constructed in). The kernel reads
     ``coverage_rates[coverage_index[k], ...]``, so the rate stack must be
-    built in that same order. This looks each code up in the assumptions'
+    built in that same order. This looks each code up in the basis'
     coverage registry and returns the coverages reordered to match -- so
-    *reading the portfolio never has to know the assumptions' internal
-    coverage order*. The assumptions enter only here, at the engine call.
+    *reading the portfolio never has to know the basis' internal
+    coverage order*. The basis enter only here, at the engine call.
 
     ``coverage_codes`` of ``None`` (model points built with no pinned order,
     e.g. ``ModelPoints.single`` / direct construction whose ``coverage_index``
-    already follows ``Assumptions.coverages``) returns ``coverages`` unchanged.
+    already follows ``Basis.coverages``) returns ``coverages`` unchanged.
 
     Raises :class:`ValueError` if a code the model points reference has no
-    registered coverage in the assumptions -- the V4 check: every rate-driven
+    registered coverage in the basis -- the V4 check: every rate-driven
     coverage the portfolio carries needs a ``rate_table`` in the workbook.
     """
     if not coverage_codes:
@@ -220,8 +220,8 @@ def align_coverages(coverages, coverage_codes):
     if missing:
         raise ValueError(
             f"coverage code(s) {missing} are referenced by the model points "
-            "but have no registered coverage in Assumptions.coverages -- add "
-            "each code (with its rate_table) to the assumptions workbook's "
+            "but have no registered coverage in Basis.coverages -- add "
+            "each code (with its rate_table) to the basis workbook's "
             "coverages sheet so the engine has a rate to apply."
         )
     return tuple(by_code[c] for c in coverage_codes)
@@ -233,7 +233,7 @@ def validate_csr_codes(coverage_index, n_coverages, *,
     """Check that every ``coverage_index`` value indexes into the coverage list.
 
     The CSR's ``coverage_index`` is an integer index into
-    :attr:`Assumptions.coverages`; the kernel reads
+    :attr:`Basis.coverages`; the kernel reads
     ``coverage_rates[coverage_index[k], ...]`` directly. An out-of-range index
     would read past the rate-grid into adjacent contiguous memory, producing
     a silently wrong BEL rather than an :class:`IndexError`. This validator
@@ -242,14 +242,14 @@ def validate_csr_codes(coverage_index, n_coverages, *,
 
     When ``coverages`` and ``calculation_methods`` are both provided, also
     verifies catalogue consistency: every code registered on
-    ``Assumptions.coverages`` must appear in the model points'
+    ``Basis.coverages`` must appear in the model points'
     ``calculation_methods`` dict. A drift between the two (typically a swap
     of one without the other) lands a coverage with no routing method
     and the engine falls back to MORBIDITY -- silently wrong.
 
     When ``expected_coverage_codes`` is provided (the rate-driven code tuple
     the model points were built against), also verifies positional order:
-    the ``Assumptions.coverages`` order must match exactly. A reorder
+    the ``Basis.coverages`` order must match exactly. A reorder
     leaves every code present and the catalogue check passes, but the
     ``coverage_index`` integers now point at the wrong rows of the rate
     stack -- DEATH amounts paid out at cancer rates and so on.
@@ -264,10 +264,10 @@ def validate_csr_codes(coverage_index, n_coverages, *,
         bad = sorted({int(k) for k in coverage_index
                       if k < 0 or k >= n_coverages})
         raise ValueError(
-            f"coverage_index value(s) {bad} are out of range: assumptions.coverages "
+            f"coverage_index value(s) {bad} are out of range: basis.coverages "
             f"has {n_coverages} entr{'y' if n_coverages == 1 else 'ies'} "
             f"(valid coverage_index range: 0..{max(n_coverages - 1, 0)}). Either "
-            "register the missing coverage on Assumptions.coverages or "
+            "register the missing coverage on Basis.coverages or "
             "rebuild ModelPoints.benefits with a coverage_index that maps to a "
             "registered coverage."
         )
@@ -278,7 +278,7 @@ def validate_csr_codes(coverage_index, n_coverages, *,
         if missing:
             raise ValueError(
                 f"coverage code(s) {missing} are registered on "
-                "Assumptions.coverages but absent from the model points' "
+                "Basis.coverages but absent from the model points' "
                 "calculation_methods catalogue. The two must agree on every "
                 "rate-driven code -- one was swapped without rebuilding "
                 "the other."
@@ -288,11 +288,11 @@ def validate_csr_codes(coverage_index, n_coverages, *,
         expected = tuple(expected_coverage_codes)
         if current != expected:
             raise ValueError(
-                "Assumptions.coverages order does not match the order the "
+                "Basis.coverages order does not match the order the "
                 "model points were built against: coverage_index integers "
                 "would silently mean different coverages. "
-                f"Assumptions.coverages = {list(current)}, "
+                f"Basis.coverages = {list(current)}, "
                 f"ModelPoints.coverage_codes = {list(expected)}. "
-                "Rebuild the model points against the current Assumptions, "
+                "Rebuild the model points against the current Basis, "
                 "or restore the original coverage ordering."
             )

@@ -1,20 +1,20 @@
-"""Assumptions workbook reader.
+"""Basis workbook reader.
 
 A single ``assumptions.xlsx`` carries the segment mapping plus the named rate
 tables. The ``segments`` sheet has a ``defaults`` row whose values blank
 cells inherit, and one row per (product, channel) segment; the reader returns
-one ``Assumptions`` per segment. See docs/assumptions-format.md.
+one ``Basis`` per segment. See docs/basis-format.md.
 """
 import numpy as np
 
 from fastcashflow import (
-    ModelPoints, load_sample_assumptions, measure, value,
+    ModelPoints, load_sample_basis, measure, value,
 )
 
 
 def test_segments_resolve():
     """The sample workbook resolves to several (product, channel) segments."""
-    basis = load_sample_assumptions()
+    basis = load_sample_basis()
     # The sample carries three products on FC/GA (HEALTH also adds TM).
     assert set(basis) >= {
         ("TERM_LIFE_A", "FC"), ("TERM_LIFE_A", "GA"),
@@ -25,7 +25,7 @@ def test_segments_resolve():
 
 def test_defaults_inherited():
     """Blank cells in a segment row inherit from the ``defaults`` row."""
-    basis = load_sample_assumptions()
+    basis = load_sample_basis()
     ga, fc = basis[("TERM_LIFE_A", "GA")], basis[("TERM_LIFE_A", "FC")]
     # ra_confidence / mortality_cv / morbidity_cv live only on the defaults row
     assert ga.ra_confidence == 0.75 and fc.ra_confidence == 0.75
@@ -35,7 +35,7 @@ def test_defaults_inherited():
     assert ga.discount_annual == 0.03 and fc.discount_annual == 0.03
     # Shared maintenance row in both segments' expense ledgers --
     # 60_000 per-policy; the 2% inflation is the global economic
-    # assumption on the Assumptions object, not on the row itself.
+    # assumption on the Basis object, not on the row itself.
     for asmp in (ga, fc):
         maint = [r for r in asmp.expense_items
                  if r.basis == "gamma_fixed"]
@@ -47,7 +47,7 @@ def test_defaults_inherited():
 def test_channel_segmented_lapse():
     """GA and FC reference different lapse tables -- the per-segment table
     reference. GA persistency is worse than FC."""
-    basis = load_sample_assumptions()
+    basis = load_sample_basis()
     dur = np.arange(6)
     zero = np.zeros_like(dur)
     ga_lapse = basis[("TERM_LIFE_A", "GA")].lapse_annual(zero, zero, dur, zero, zero)
@@ -59,7 +59,7 @@ def test_per_segment_acquisition_amount():
     """Acquisition cost differs per segment row (GA vs FC commission) --
     each segment points to its own expense_table_id in the
     ``expense_tables`` sheet."""
-    basis = load_sample_assumptions()
+    basis = load_sample_basis()
     for (key, expected_acq) in (
         (("TERM_LIFE_A", "GA"), 150_000.0),
         (("TERM_LIFE_A", "FC"),  80_000.0),
@@ -77,8 +77,8 @@ def test_per_segment_acquisition_amount():
 
 def test_every_segment_has_expense_items():
     """The sample workbook attaches an ``expense_table`` to every segment;
-    the loader populates ``Assumptions.expense_items`` on each."""
-    basis = load_sample_assumptions()
+    the loader populates ``Basis.expense_items`` on each."""
+    basis = load_sample_basis()
     for asmp in basis.values():
         assert asmp.expense_items                       # populated
 
@@ -88,12 +88,12 @@ def test_coverages_resolved():
     ``mortality_tables`` for the general death coverage); the pattern
     taxonomy now lives in ``calculation_methods.csv`` (read by
     :func:`load_sample_calculation_methods`), no longer on the
-    :class:`Assumptions`. The order matches the workbook's ``coverages``
+    :class:`Basis`. The order matches the workbook's ``coverages``
     sheet rows; the engine treats every entry as an ordinary rate-driven
     coverage (no slot reserved)."""
     from fastcashflow import load_sample_calculation_methods, CalculationMethod
 
-    basis = load_sample_assumptions()
+    basis = load_sample_basis()
     asmp = basis[("TERM_LIFE_A", "GA")]
     assert [r.code for r in asmp.coverages] == [
         "DEATH", "INPATIENT", "CANCER", "ADB", "DISEASE_DEATH",
@@ -110,11 +110,11 @@ def test_coverages_resolved():
 
 
 def test_resolved_basis_values():
-    """A resolved ``Assumptions`` runs through ``value`` and ``measure``; the
+    """A resolved ``Basis`` runs through ``value`` and ``measure``; the
     GA and FC segments give different BEL because lapse differs (channel
     segmentation actually bites the valuation)."""
     from fastcashflow import load_sample_calculation_methods
-    basis = load_sample_assumptions()
+    basis = load_sample_basis()
     mp = ModelPoints.single(issue_age=40, benefits={0: 100_000_000.0},
                             level_premium=50_000.0, term_months=120,
                             calculation_methods=load_sample_calculation_methods())
@@ -146,19 +146,19 @@ def test_state_model_column_resolves_to_registry_entry():
     ``STATE_MODELS['WAIVER']``.
     """
     from fastcashflow import STATE_MODELS
-    basis = load_sample_assumptions()
+    basis = load_sample_basis()
     for asmp in basis.values():
         assert asmp.state_model is STATE_MODELS["WAIVER"]
 
 
 def test_state_model_column_blank_keeps_none():
     """A segment row with a blank ``state_model`` cell falls back to the
-    defaults row; an empty defaults cell leaves ``Assumptions.state_model``
+    defaults row; an empty defaults cell leaves ``Basis.state_model``
     as ``None`` (matching the engine's pre-registry behaviour).
     """
     import openpyxl, tempfile, shutil
     import importlib.resources as resources
-    from fastcashflow import read_assumptions
+    from fastcashflow import read_basis
     # Copy the sample workbook and clear the defaults row's state_model.
     sample = resources.files("fastcashflow").joinpath(
         "sample_data/sample_assumptions.xlsx")
@@ -174,7 +174,7 @@ def test_state_model_column_blank_keeps_none():
         for r in range(2, ws.max_row + 1):
             ws.cell(row=r, column=col).value = None
         wb.save(dst)
-        basis = read_assumptions(dst)
+        basis = read_basis(dst)
         for asmp in basis.values():
             assert asmp.state_model is None
 
@@ -184,7 +184,7 @@ def test_state_model_unknown_key_raises():
     hint listing the registry contents."""
     import openpyxl, tempfile, shutil, pytest
     import importlib.resources as resources
-    from fastcashflow import read_assumptions
+    from fastcashflow import read_basis
     sample = resources.files("fastcashflow").joinpath(
         "sample_data/sample_assumptions.xlsx")
     with tempfile.TemporaryDirectory() as d:
@@ -198,7 +198,7 @@ def test_state_model_unknown_key_raises():
                 break
         wb.save(dst)
         with pytest.raises(ValueError, match="NOT_A_MODEL"):
-            read_assumptions(dst)
+            read_basis(dst)
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ def test_meta_sheet_carries_schema_version():
 def test_legacy_workbook_without_meta_sheet_is_v1():
     """A workbook predating the _meta sheet still reads -- legacy = v1."""
     import openpyxl, tempfile, shutil, importlib.resources as resources
-    from fastcashflow import read_assumptions
+    from fastcashflow import read_basis
     sample = resources.files("fastcashflow").joinpath(
         "sample_data/sample_assumptions.xlsx")
     with tempfile.TemporaryDirectory() as d:
@@ -231,7 +231,7 @@ def test_legacy_workbook_without_meta_sheet_is_v1():
         wb = openpyxl.load_workbook(dst)
         del wb["_meta"]
         wb.save(dst)
-        basis = read_assumptions(dst)
+        basis = read_basis(dst)
         assert basis                                  # reads fine
 
 
@@ -240,7 +240,7 @@ def test_unsupported_schema_version_raises():
     than silently mis-interpreted."""
     import openpyxl, tempfile, shutil, pytest
     import importlib.resources as resources
-    from fastcashflow import read_assumptions
+    from fastcashflow import read_basis
     sample = resources.files("fastcashflow").joinpath(
         "sample_data/sample_assumptions.xlsx")
     with tempfile.TemporaryDirectory() as d:
@@ -250,4 +250,4 @@ def test_unsupported_schema_version_raises():
         wb["_meta"].cell(row=2, column=2).value = "v99"
         wb.save(dst)
         with pytest.raises(ValueError, match="schema_version"):
-            read_assumptions(dst)
+            read_basis(dst)

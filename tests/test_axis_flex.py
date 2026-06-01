@@ -13,7 +13,7 @@ import numpy as np
 import openpyxl
 import pytest
 
-from fastcashflow import Assumptions, CoverageRate
+from fastcashflow import Basis, CoverageRate
 from fastcashflow.io import _flex_rate_table
 from conftest import PATTERNS
 
@@ -219,7 +219,7 @@ def test_legacy_three_arg_user_lambda_is_adapted():
     """User-supplied 3-arg rate lambdas are auto-wrapped to the 5-arg shape
     the engine now passes; the issue_class and elapsed arguments are
     discarded by the wrapper."""
-    asmp = Assumptions(
+    asmp = Basis(
         # Pre-Phase-1A user lambda style -- 3 positional args.
         mortality_annual=lambda sex, age, dur: np.full(dur.shape, 0.001),
         lapse_annual=lambda sex, age, dur: np.full(dur.shape, 0.01),
@@ -240,7 +240,7 @@ def test_legacy_four_arg_duration_lambda_is_adapted():
     is auto-wrapped: the wrapper maps the original 4th argument to the
     new 5th ``elapsed`` slot, so the engine's 5-arg call routes the
     cohort dimension through correctly."""
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, 0.001),
         lapse_annual=lambda s, a, d: np.full(d.shape, 0.01),
         # 4-arg legacy DurationRateFn user lambda -- rate doubles per

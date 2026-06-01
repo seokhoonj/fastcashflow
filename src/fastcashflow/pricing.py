@@ -12,7 +12,7 @@ from dataclasses import replace
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 from fastcashflow.engine import value
 from fastcashflow.modelpoints import ModelPoints
 
@@ -31,7 +31,7 @@ def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:
 
 def solve_premium(
     model_points: ModelPoints,
-    assumptions: Assumptions,
+    basis: Basis,
     *,
     break_even: bool = False,
     margin: float | None = None,
@@ -62,8 +62,8 @@ def solve_premium(
 
     # FCF is linear in the premium -- FCF = A - premium * B -- so two
     # valuations (premium 0 and 1) pin the line down exactly.
-    at_zero = value(_with_premium(model_points, 0.0), assumptions)
-    at_one = value(_with_premium(model_points, 1.0), assumptions)
+    at_zero = value(_with_premium(model_points, 0.0), basis)
+    at_one = value(_with_premium(model_points, 1.0), basis)
     a = at_zero.bel + at_zero.ra
     b = a - (at_one.bel + at_one.ra)
 

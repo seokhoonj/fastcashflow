@@ -1,6 +1,6 @@
 """Phase 1b validation -- select-and-ultimate mortality and duration-based lapse.
 
-Both assumptions step at the first policy-year boundary, so a 24-month case
+Both basis step at the first policy-year boundary, so a 24-month case
 exercises the select period, the ultimate period and the duration switch in
 both mortality and lapse. The in-force recursion is recomputed independently
 in plain Python as the correctness anchor.
@@ -90,7 +90,7 @@ def test_select_ultimate_and_duration_lapse():
 
 
 def test_value_matches_run_phase1b():
-    """The fast path reproduces measure() under duration-varying assumptions."""
+    """The fast path reproduces measure() under duration-varying basis."""
     rng = np.random.default_rng(11)
     n = 500
     mps = ModelPoints(

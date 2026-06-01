@@ -56,7 +56,7 @@ def test_beta_pro_rata_row_lands_in_beta_pro_rata_primitive():
 def test_gamma_fixed_grows_with_inflation():
     """A ``gamma_fixed`` row's monthly amount is ``value/12 * inflation_index[t]``.
 
-    Inflation is the macro-economic assumption on ``Assumptions``, not a
+    Inflation is the macro-economic assumption on ``Basis``, not a
     row attribute; the helper takes the curve as a parameter. At ``t=0``
     the multiplier is 1; at ``t=12`` it equals ``1 + inflation``.
     """
@@ -145,7 +145,7 @@ def _basis_rows():
     def lapse(s, ia, d, ic, em):
         return np.full(d.shape, 0.05)
 
-    return fcf.Assumptions(
+    return fcf.Basis(
         mortality_annual=mort, lapse_annual=lapse,
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
         expense_inflation=0.03,

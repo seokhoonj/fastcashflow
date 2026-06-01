@@ -1,6 +1,6 @@
 """Shared numerical primitives -- numpy arrays in, numpy arrays out.
 
-These functions know nothing about ``Assumptions`` / ``Cashflows`` / any
+These functions know nothing about ``Basis`` / ``Cashflows`` / any
 other domain dataclass. The orchestration layer (engine, PAA, VFA, movement)
 unpacks domain objects to raw arrays + scalars and calls in here. The split
 keeps these primitives numba-friendly and unit-testable on bare numpy.

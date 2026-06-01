@@ -16,8 +16,8 @@ from fastcashflow.numerics import _norm_ppf
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
 
-    from fastcashflow.assumptions import Assumptions
-    from fastcashflow.engine import Measurement
+    from fastcashflow.basis import Basis
+    from fastcashflow.engine import GMMMeasurement
     from fastcashflow.movement import Reconciliation
     from fastcashflow.stochastic import StochasticResult
 
@@ -147,7 +147,7 @@ def _legend(ax) -> None:
     ax.legend(frameon=False, fontsize=9, labelcolor=_COLOR["ink"])
 
 
-def plot_liability(measurement: Measurement, *, ax: Axes | None = None,
+def plot_liability(measurement: GMMMeasurement, *, ax: Axes | None = None,
                    title: str = "Liability components over time") -> Axes:
     """Plot the BEL, RA and CSM trajectories over the contract's life.
 
@@ -168,7 +168,7 @@ def plot_liability(measurement: Measurement, *, ax: Axes | None = None,
     return ax
 
 
-def plot_cashflows(measurement: Measurement, *, period_months: int = 12,
+def plot_cashflows(measurement: GMMMeasurement, *, period_months: int = 12,
                    ax: Axes | None = None,
                    title: str = "Projected cash flows") -> Axes:
     """Plot projected premium income against claim and expense outgo.
@@ -207,7 +207,7 @@ def plot_cashflows(measurement: Measurement, *, period_months: int = 12,
     return ax
 
 
-def plot_csm_runoff(measurement: Measurement, *, ax: Axes | None = None,
+def plot_csm_runoff(measurement: GMMMeasurement, *, ax: Axes | None = None,
                     title: str = "CSM run-off") -> Axes:
     """Plot the contractual service margin running off to zero.
 
@@ -225,7 +225,7 @@ def plot_csm_runoff(measurement: Measurement, *, ax: Axes | None = None,
     return ax
 
 
-def plot_risk_adjustment(measurement: Measurement, assumptions: Assumptions,
+def plot_risk_adjustment(measurement: GMMMeasurement, basis: Basis,
                          *, bands: tuple[float, ...] = (0.75, 0.85),
                          ax: Axes | None = None,
                          title: str = "The risk adjustment as a confidence level",
@@ -239,16 +239,16 @@ def plot_risk_adjustment(measurement: Measurement, assumptions: Assumptions,
     the margin up to each confidence level in ``bands``. It applies to the
     confidence-level method only.
     """
-    if assumptions.ra_method != "confidence_level":
+    if basis.ra_method != "confidence_level":
         raise ValueError(
             "plot_risk_adjustment shows the confidence-level risk "
-            "adjustment; these assumptions use the cost-of-capital method"
+            "adjustment; these basis use the cost-of-capital method"
         )
     mu = float(measurement.bel[:, 0].sum())
     ra = float(measurement.ra[:, 0].sum())
     if ra <= 0.0:
         raise ValueError("the risk adjustment is zero -- nothing to plot")
-    sigma = ra / _norm_ppf(assumptions.ra_confidence)
+    sigma = ra / _norm_ppf(basis.ra_confidence)
 
     ax = _axes(ax)
     x = np.linspace(mu - 3.6 * sigma, mu + 3.6 * sigma, 400)

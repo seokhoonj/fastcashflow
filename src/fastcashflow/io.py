@@ -1,7 +1,7 @@
 """File I/O for model points, the actuarial basis and valuation results.
 
 Model points and results go through polars; the actuarial basis -- read by
-:func:`read_assumptions` -- comes from an Excel workbook via openpyxl.
+:func:`read_basis` -- comes from an Excel workbook via openpyxl.
 
 Model points come in two shapes, both producing the same ``ModelPoints``:
 
@@ -34,8 +34,8 @@ import openpyxl
 import polars as pl
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import (
-    Assumptions, CoverageRate, ExpenseItem,
+from fastcashflow.basis import (
+    Basis, CoverageRate, ExpenseItem,
 )
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
@@ -107,7 +107,7 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Actuarial basis -- the assumptions workbook
+# Actuarial basis -- the basis workbook
 # ---------------------------------------------------------------------------
 #
 # A single workbook (``assumptions.xlsx``) carries every assumption the engine
@@ -120,12 +120,12 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 #     ``lapse_tables``, ``discount_tables``, ``inflation_tables`` -- the
 #     named rate tables the segments reference.
 #
-# See docs/assumptions-format.md for the column-level schema and
+# See docs/basis-format.md for the column-level schema and
 # docs/naming-conventions.md for the value-case rules.
 #
 # v1 limitation (refined in a later round): the discount, inflation and
 # maintenance tables are read but used flat (their first entry). The reader
-# returns ``{(product, channel): Assumptions}`` -- splitting model points by
+# returns ``{(product, channel): Basis}`` -- splitting model points by
 # segment and valuing each is left to the caller.
 
 
@@ -152,7 +152,7 @@ def _require_sheet(wb, sheet_name):
     """
     if sheet_name not in wb.sheetnames:
         raise ValueError(
-            f"assumptions workbook is missing required sheet "
+            f"basis workbook is missing required sheet "
             f"{sheet_name!r}; known sheets: {sorted(wb.sheetnames)}"
         )
     return wb[sheet_name]
@@ -515,7 +515,7 @@ def _axis_tables(ws, axis, *, value_col="rate"):
             for tid, by_k in by_id.items()}
 
 
-#: Assumptions schema versions this reader knows how to consume. A
+#: Basis schema versions this reader knows how to consume. A
 #: workbook with no ``_meta`` sheet (or no ``schema_version`` key) is
 #: treated as ``v1`` so older sample files keep working. Add the new
 #: version here when a breaking schema change ships.
@@ -541,14 +541,14 @@ def _check_schema_version(wb) -> None:
     version = str(meta.get("schema_version", "v1")).strip()
     if version not in _SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(
-            f"unsupported assumptions schema_version {version!r}; this "
+            f"unsupported basis schema_version {version!r}; this "
             f"build understands {sorted(_SUPPORTED_SCHEMA_VERSIONS)}. "
             "Upgrade fastcashflow or downgrade the workbook."
         )
 
 
-def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
-    """Read the assumptions workbook into a per-segment ``Assumptions`` dict.
+def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
+    """Read the basis workbook into a per-segment ``Basis`` dict.
 
     ``path`` is a single ``assumptions.xlsx`` workbook holding both the rate
     tables and the segment mapping (see the module header for the sheet
@@ -557,7 +557,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     values blank cells inherit; the ``coverages`` sheet attaches
     rate-driven coverages to products.
 
-    Returns ``{(product, channel): Assumptions}`` -- one basis per segment.
+    Returns ``{(product, channel): Basis}`` -- one basis per segment.
 
     v1: the discount and inflation tables are read but used flat (their
     first entry); the per-segment dict is returned for the caller to value
@@ -627,7 +627,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
     # ``rate_table`` -- the rate-driven entries. The pattern taxonomy
     # (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) moves to a
     # separate ``calculation_methods.csv`` file consumed by
-    # :func:`read_model_points`, so the assumptions workbook is purely the
+    # :func:`read_model_points`, so the basis workbook is purely the
     # actuarial basis and the company catalogue lives elsewhere. Survival
     # entries (ANNUITY, MATURITY) never carry a ``rate_table`` and so do
     # not appear here. A death coverage's ``rate_table`` cell may point to
@@ -642,7 +642,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             if rt in (None, ""):
                 raise ValueError(
                     f"coverages row {code!r} has no rate_table; the "
-                    "assumptions workbook only lists rate-driven coverages "
+                    "basis workbook only lists rate-driven coverages "
                     "(survival entries belong in calculation_methods.csv, "
                     "not here)"
                 )
@@ -763,7 +763,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
             kwargs["ra_method"] = str(method).strip()
         # Optional state_model column -- non-programmer actuary picks a
         # bundled topology by its registry key (e.g. "WAIVER"). Blank cell
-        # leaves Assumptions.state_model = None; an unknown key is an
+        # leaves Basis.state_model = None; an unknown key is an
         # error with a hint listing the registered keys.
         state_model_key = cell("state_model")
         if state_model_key is not None:
@@ -775,7 +775,7 @@ def read_assumptions(path: Path | str) -> dict[tuple[str, str], Assumptions]:
                     f"{where}: state_model={key!r} is not in STATE_MODELS "
                     f"(known: {sorted(STATE_MODELS)})"
                 ) from None
-        result[(product_code, channel_code)] = Assumptions(**kwargs)
+        result[(product_code, channel_code)] = Basis(**kwargs)
     return result
 
 
@@ -889,9 +889,9 @@ def _wide_model_points(df: pl.DataFrame,
                        calculation_methods=None) -> ModelPoints:
     """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
     coverage a ``<coverage_code>_benefit`` column. Reads without any
-    assumptions: the coverage codes come from the column names, ordered by
+    basis: the coverage codes come from the column names, ordered by
     the ``calculation_methods`` catalogue when given (else column order).
-    The engine aligns ``Assumptions.coverages`` to that order at measure
+    The engine aligns ``Basis.coverages`` to that order at measure
     time."""
     for need in ("issue_age", "term_months"):
         if need not in df.columns:
@@ -911,7 +911,7 @@ def _wide_model_points(df: pl.DataFrame,
                 "premium_frequency_months", "annuity_frequency_months",
                 "maturity_benefit", "annuity_payment",
                 "disability_income", "disability_benefit", "account_value",
-                "guaranteed_credit_rate"):
+                "minimum_crediting_rate"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     # Segment metadata -- optional string columns; route to value_segmented.
@@ -1038,9 +1038,9 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         )
     ctypes = {k: CalculationMethod(v) for k, v in calculation_methods.items()}
     # Rate-driven coverage order comes from the *catalogue* (calculation_methods),
-    # not the assumptions -- so reading the portfolio needs no assumptions.
+    # not the basis -- so reading the portfolio needs no basis.
     # coverage_index integers index this order; the engine aligns
-    # Assumptions.coverages to it at measure time (coverage.align_coverages).
+    # Basis.coverages to it at measure time (coverage.align_coverages).
     # Only the rate-driven codes that actually appear in this portfolio are
     # kept, in catalogue order.
     present_codes = set(cov["coverage_code"].to_list())
@@ -1125,7 +1125,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     # not part of the CSR. Every rate-driven present code is in
     # ``rate_driven_codes`` by construction, so ``cov_idx >= 0`` here; a code
     # absent from the catalogue was already rejected (the ``_type`` null
-    # check above). Whether the assumptions register a rate for each code is
+    # check above). Whether the basis register a rate for each code is
     # checked at measure time (coverage.align_coverages, the V4 guard).
     is_cov = np.isin(ctype, RATE_DRIVEN_METHODS)
     order = np.argsort(mp[is_cov], kind="stable")
@@ -1148,7 +1148,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     ))
     fields["calculation_methods"] = ctypes
     # The catalogue order the coverage_index integers were built against.
-    # The engine aligns Assumptions.coverages to this at measure time.
+    # The engine aligns Basis.coverages to this at measure time.
     fields["coverage_codes"] = tuple(rate_driven_codes)
     return ModelPoints(**fields)
 
@@ -1160,7 +1160,7 @@ def read_model_points(
 ) -> ModelPoints:
     """Read model points from a parquet, CSV, Excel or feather file.
 
-    Reads the portfolio **without any assumptions** -- the model points and
+    Reads the portfolio **without any basis** -- the model points and
     the actuarial basis are separate inputs. The basis enters only at the
     engine call (``measure`` / ``value``), which aligns its coverages to the
     portfolio's coverage order.
@@ -1246,7 +1246,7 @@ def read_inforce_policies(
             calculation_methods="calculation_methods.csv",
         )
         val = fcf.value_in_force(
-            mp, assumptions, period_months=3,
+            mp, basis, period_months=3,
             prior_csm=state.prior_csm,
             lock_in_rate=state.lock_in_rate,
         )
@@ -1321,31 +1321,31 @@ def sample_data_dir() -> Path:
 
     The directory contains ``sample_assumptions.xlsx``, ``sample_policies.csv``
     and ``sample_coverages.csv`` -- the inputs behind
-    :func:`load_sample_assumptions` and :func:`load_sample_model_points`.
+    :func:`load_sample_basis` and :func:`load_sample_model_points`.
     Use this to open the workbook in Excel and see what a complete
     fastcashflow input looks like before preparing your own.
     """
     return Path(str(resources.files("fastcashflow") / "sample_data"))
 
 
-def load_sample_assumptions() -> dict[tuple[str, str], Assumptions]:
-    """Read fastcashflow's bundled sample assumptions workbook.
+def load_sample_basis() -> dict[tuple[str, str], Basis]:
+    """Read fastcashflow's bundled sample basis workbook.
 
     A filled-in workbook packaged with the library, the companion to
-    :func:`load_sample_model_points`. See :func:`read_assumptions` for the
+    :func:`load_sample_model_points`. See :func:`read_basis` for the
     workbook format. The bundled sample has two segments
     (``("term_a", "GA")`` and ``("term_a", "FC")``); pick one to use it as
-    a single ``Assumptions``.
+    a single ``Basis``.
     """
     source = resources.files("fastcashflow") / "sample_data" / "sample_assumptions.xlsx"
     with resources.as_file(source) as path:
-        return read_assumptions(path)
+        return read_basis(path)
 
 
 def load_sample_calculation_methods() -> dict[str, CalculationMethod]:
     """Read fastcashflow's bundled sample benefit-pattern taxonomy.
 
-    The companion to :func:`load_sample_assumptions` and
+    The companion to :func:`load_sample_basis` and
     :func:`load_sample_model_points` -- the company-level catalogue that
     maps each ``coverage_code`` to its :class:`CalculationMethod`. The same
     file format every portfolio uses (see :func:`read_model_points`
@@ -1366,7 +1366,7 @@ def load_sample_model_points() -> ModelPoints:
     the benefit-pattern taxonomy -- packaged with the library, so the
     engine can be tried without preparing an input file. See
     :func:`read_model_points` for the file format. The coverage order
-    comes from the ``calculation_methods`` catalogue; no assumptions are
+    comes from the ``calculation_methods`` catalogue; no basis are
     needed to read the portfolio.
     """
     patterns = load_sample_calculation_methods()
@@ -1392,8 +1392,8 @@ def load_sample_inforce_state() -> "InforceState":
         return read_inforce_state(path)
 
 
-def load_sample_vfa_assumptions() -> Assumptions:
-    """Bundled VFA (variable, account-value) assumptions -- a single basis.
+def load_sample_vfa_basis() -> Basis:
+    """Bundled VFA (variable, account-value) basis -- a single basis.
 
     Built from the sample ``TERM_LIFE_A`` / ``FC`` basis (same mortality,
     lapse and discount) with the protection coverages dropped and the two
@@ -1401,9 +1401,9 @@ def load_sample_vfa_assumptions() -> Assumptions:
     return the account value grows at) and ``fund_fee`` (the variable fee the
     entity keeps, which is the source of the CSM). Pair with
     :func:`load_sample_vfa_model_points`; ``measure_vfa`` takes a single
-    :class:`Assumptions`.
+    :class:`Basis`.
     """
-    seg = load_sample_assumptions()[("TERM_LIFE_A", "FC")]
+    seg = load_sample_basis()[("TERM_LIFE_A", "FC")]
     return replace(seg, coverages=(), investment_return=0.05, fund_fee=0.015)
 
 
@@ -1412,11 +1412,11 @@ def load_sample_vfa_model_points() -> ModelPoints:
     maturity guarantees.
 
     Three single-premium account-value contracts that share a 2% minimum
-    credited rate (``guaranteed_credit_rate``, uniform across the rows so the
+    credited rate (``minimum_crediting_rate``, uniform across the rows so the
     stochastic time-value pass applies) and differ in their floors: one
     carries both a death (GMDB) and a maturity (GMAB) guarantee, one a
     maturity floor, one a death floor. Pair with
-    :func:`load_sample_vfa_assumptions`; generate underlying-return scenarios
+    :func:`load_sample_vfa_basis`; generate underlying-return scenarios
     to value the time value of the guarantees (see ``examples/vfa.py``).
     """
     return ModelPoints(
@@ -1424,9 +1424,9 @@ def load_sample_vfa_model_points() -> ModelPoints:
         level_premium=np.zeros(3),
         term_months=np.array([120, 120, 180]),
         account_value=np.array([1.0e8, 2.0e8, 5.0e7]),
-        guaranteed_credit_rate=np.array([0.02, 0.02, 0.02]),
-        guaranteed_death_benefit=np.array([1.1e8, 0.0, 5.5e7]),
-        guaranteed_accumulation_benefit=np.array([1.0e8, 2.1e8, 0.0]),
+        minimum_crediting_rate=np.array([0.02, 0.02, 0.02]),
+        minimum_death_benefit=np.array([1.1e8, 0.0, 5.5e7]),
+        minimum_accumulation_benefit=np.array([1.0e8, 2.1e8, 0.0]),
         product_code=np.array(["VAR_ANNUITY_A"] * 3),
         channel_code=np.array(["BANCA"] * 3),
     )
@@ -1456,11 +1456,11 @@ def _drop_sample_table(filename: str, dest: Path | str) -> Path:
     return dest_path
 
 
-def save_sample_assumptions(path: Path | str) -> Path:
-    """Drop the packaged sample assumptions workbook on disk at ``path``.
+def save_sample_basis(path: Path | str) -> Path:
+    """Drop the packaged sample basis workbook on disk at ``path``.
 
     Use this to bootstrap a workbook a reader can open in Excel, inspect,
-    and then re-read with :func:`read_assumptions` -- the same call shape
+    and then re-read with :func:`read_basis` -- the same call shape
     a real user types against their own file. The bundled sample carries
     seven (product, channel) segments across three products
     (``TERM_LIFE_A``, ``HEALTH_A``, ``WHOLE_LIFE_A``).
@@ -1480,8 +1480,8 @@ def save_sample_assumptions(path: Path | str) -> Path:
         dest_path = dest_path / "sample_assumptions.xlsx"
     if dest_path.suffix.lower() != ".xlsx":
         raise ValueError(
-            f"save_sample_assumptions: expected an .xlsx path, got "
-            f"{str(path)!r}. The assumptions workbook carries multiple "
+            f"save_sample_basis: expected an .xlsx path, got "
+            f"{str(path)!r}. The basis workbook carries multiple "
             "sheets (mortality_tables, lapse_tables, segments, ...) and "
             "single-table formats (csv / parquet / feather) cannot "
             "represent it. Use .xlsx."
@@ -1686,7 +1686,7 @@ def write_valuation(
 def value_file(
     input_path: Path | str,
     output_dir: Path | str,
-    assumptions: Assumptions,
+    basis: Basis,
     *,
     coverages: Path | str | None = None,
     calculation_methods: Path | str | dict[str, CalculationMethod] | None = None,
@@ -1750,7 +1750,7 @@ def value_file(
             ).collect()
             model_points = _long_model_points(pol, cov, methods_dict)
             write_valuation(
-                value(model_points, assumptions, backend=backend),
+                value(model_points, basis, backend=backend),
                 output_dir / f"part-{part:05d}.parquet",
                 ids=ids.to_numpy(),
             )
@@ -1777,7 +1777,7 @@ def value_file(
         )
         ids = chunk[id_column].to_numpy() if id_column is not None else None
         write_valuation(
-            value(model_points, assumptions, backend=backend),
+            value(model_points, basis, backend=backend),
             output_dir / f"part-{part:05d}.parquet",
             ids=ids,
         )

@@ -10,7 +10,7 @@ import openpyxl
 import polars as pl
 
 from fastcashflow import (
-    load_sample_assumptions,
+    load_sample_basis,
     load_sample_model_points,
     read_model_points,
     value,
@@ -33,7 +33,7 @@ def _write_sheets(path, sheets):
 def test_read_wide_xlsx(tmp_path):
     """A wide .xlsx reads to the same valuation as the in-memory book."""
     from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     path = tmp_path / "wide.xlsx"
@@ -47,7 +47,7 @@ def test_read_wide_xlsx(tmp_path):
 def test_read_long_xlsx(tmp_path):
     """A long-form .xlsx -- policies and coverages sheets in one workbook."""
     from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
@@ -62,7 +62,7 @@ def test_read_long_xlsx(tmp_path):
 def test_read_feather(tmp_path):
     """A .feather (Arrow IPC) model-point file round-trips."""
     from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     path = tmp_path / "wide.feather"
@@ -75,7 +75,7 @@ def test_read_feather(tmp_path):
 
 def test_write_valuation_feather(tmp_path):
     """write_valuation writes a .feather result file."""
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     mps = load_sample_model_points()
     path = tmp_path / "results.feather"
     write_valuation(value(mps, asmp), path)
@@ -85,7 +85,7 @@ def test_write_valuation_feather(tmp_path):
 def test_long_form_reads_benefit_rules(tmp_path):
     """The long-form coverages frame reads the waiting / reduction columns."""
     from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)
@@ -116,7 +116,7 @@ def test_wide_policies_elapsed_months_emits_warning(tmp_path):
     a UserWarning -- the reader silently drops it and inforce_state is
     the source of truth."""
     import warnings
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     mps = load_sample_model_points()
     wide = mps.to_wide(asmp).with_columns(pl.lit(12).alias("elapsed_months"))
     path = tmp_path / "wide_with_em.xlsx"
@@ -137,7 +137,7 @@ def test_long_policies_elapsed_months_emits_warning(tmp_path):
     """Same guard fires on the long-form (policies + coverages) path."""
     import warnings
     from fastcashflow import load_sample_calculation_methods
-    asmp = next(iter(load_sample_assumptions().values()))
+    asmp = next(iter(load_sample_basis().values()))
     patterns = load_sample_calculation_methods()
     mps = load_sample_model_points()
     policies, coverages = mps.to_long(asmp)

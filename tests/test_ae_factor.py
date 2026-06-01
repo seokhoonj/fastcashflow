@@ -15,11 +15,11 @@ from pathlib import Path
 import numpy as np
 import openpyxl
 
-from fastcashflow import read_assumptions
+from fastcashflow import read_basis
 
 
 def _build(path: Path, *, ae_rows=None):
-    """A small assumptions workbook with one segment + an optional ae_factors sheet."""
+    """A small basis workbook with one segment + an optional ae_factors sheet."""
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
@@ -69,7 +69,7 @@ def _build(path: Path, *, ae_rows=None):
 
 
 def _segment(path):
-    return read_assumptions(path)[("TERM_A", "GA")]
+    return read_basis(path)[("TERM_A", "GA")]
 
 
 def test_no_ae_factor_sheet(tmp_path):

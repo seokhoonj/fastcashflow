@@ -27,7 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 from fastcashflow.curves import discount_factors, discount_monthly_curve
 from fastcashflow.numerics import _csm_kernel, _norm_ppf
 from fastcashflow.modelpoints import ModelPoints
@@ -36,7 +36,7 @@ from fastcashflow.projection import Cashflows, project_cashflows
 
 @dataclass(frozen=True, slots=True)
 class ReinsuranceMeasurement:
-    """Measurement of a reinsurance contract held.
+    """GMMMeasurement of a reinsurance contract held.
 
     ``bel`` and ``ra`` are ``(n_mp,)`` inception figures -- ``bel`` is the
     present value of reinsurance premiums less recoveries (a net cost when
@@ -57,7 +57,7 @@ class ReinsuranceMeasurement:
 
 
 def measure_reinsurance(
-    model_points: ModelPoints, assumptions: Assumptions, cession_rate: float
+    model_points: ModelPoints, basis: Basis, cession_rate: float
 ) -> ReinsuranceMeasurement:
     """Measure a quota-share reinsurance contract held over a direct portfolio.
 
@@ -74,8 +74,8 @@ def measure_reinsurance(
     if not 0.0 <= cession_rate <= 1.0:
         raise ValueError(f"cession_rate must be in [0, 1], got {cession_rate}")
 
-    proj = project_cashflows(model_points, assumptions)
-    discount_start, discount_mid = discount_factors(assumptions, proj.n_time)
+    proj = project_cashflows(model_points, basis)
+    discount_start, discount_mid = discount_factors(basis, proj.n_time)
 
     # The cedant cedes a fraction of claims (recovered) and of premiums (paid).
     recovery = cession_rate * (proj.claim_cf + proj.morbidity_cf)
@@ -86,18 +86,18 @@ def measure_reinsurance(
     bel = pv_reins_premium - pv_recovery
 
     # RA -- the risk transferred, i.e. the margin on the ceded claims.
-    z = _norm_ppf(assumptions.ra_confidence)
+    z = _norm_ppf(basis.ra_confidence)
     pv_ceded_mortality = (cession_rate * proj.claim_cf * discount_mid).sum(axis=1)
     pv_ceded_morbidity = (cession_rate * proj.morbidity_cf * discount_mid).sum(axis=1)
-    ra = z * (assumptions.mortality_cv * pv_ceded_mortality
-              + assumptions.morbidity_cv * pv_ceded_morbidity)
+    ra = z * (basis.mortality_cv * pv_ceded_mortality
+              + basis.morbidity_cv * pv_ceded_morbidity)
 
     # CSM -- the net cost or gain of the cover. No loss component: a net cost
     # is a negative CSM, deferred and amortised over the coverage.
     csm0 = -(bel - ra)
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, proj.inforce,
-        discount_monthly_curve(assumptions, proj.n_time),
+        discount_monthly_curve(basis, proj.n_time),
     )
 
     return ReinsuranceMeasurement(

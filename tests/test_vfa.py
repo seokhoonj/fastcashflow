@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    ExpenseItem, ModelPoints, load_sample_vfa_assumptions,
+    ExpenseItem, ModelPoints, load_sample_vfa_basis,
     load_sample_vfa_model_points, measure_tvog, measure_vfa, report,
 )
 from conftest import annual_from_monthly as _annual, make_death_assumptions
@@ -73,7 +73,7 @@ def test_gmdb_floor_on_death_hand_calc():
     )
     floored = measure_vfa(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           guaranteed_death_benefit=gdb), asmp
+                           minimum_death_benefit=gdb), asmp
     )
     surv = (1 - Q) * (1 - LAPSE)
     deaths = surv ** np.arange(term) * Q             # monthly death decrement
@@ -83,7 +83,7 @@ def test_gmdb_floor_on_death_hand_calc():
     # A floor below the account value never bites -- max(AV, gdb) == AV.
     low = measure_vfa(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           guaranteed_death_benefit=500.0), asmp
+                           minimum_death_benefit=500.0), asmp
     )
     assert np.isclose(low.bel[0, 0], base.bel[0, 0])
 
@@ -103,7 +103,7 @@ def test_gmab_floor_at_maturity_hand_calc():
     )
     floored = measure_vfa(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           guaranteed_accumulation_benefit=gab), asmp
+                           minimum_accumulation_benefit=gab), asmp
     )
     surv = (1 - Q) * (1 - LAPSE)
     maturity_survivors = surv ** term                # in-force reaching term
@@ -113,7 +113,7 @@ def test_gmab_floor_at_maturity_hand_calc():
     # A floor below the account value never bites -- max(AV, gab) == AV.
     low = measure_vfa(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           guaranteed_accumulation_benefit=500.0), asmp
+                           minimum_accumulation_benefit=500.0), asmp
     )
     assert np.isclose(low.bel[0, 0], base.bel[0, 0])
 
@@ -128,8 +128,8 @@ def test_floor_tvog_zero_under_flat_scenarios():
     asmp = _assumptions(investment_return=0.04, fund_fee=0.01)
     av0, term = 1000.0, 36
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
-                            guaranteed_death_benefit=1100.0,
-                            guaranteed_accumulation_benefit=1100.0)
+                            minimum_death_benefit=1100.0,
+                            minimum_accumulation_benefit=1100.0)
     deterministic = measure_vfa(mp, asmp)
     r_m = 1.04 ** (1 / 12) - 1
     flat = np.full((8, term), r_m)
@@ -154,8 +154,8 @@ def test_floor_tvog_matches_independent_reimplementation():
     asmp = _assumptions(investment_return=0.04, fund_fee=0.0)
     av0, gdb, gab, term = 1000.0, 1100.0, 1100.0, 24
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
-                            guaranteed_death_benefit=gdb,
-                            guaranteed_accumulation_benefit=gab)
+                            minimum_death_benefit=gdb,
+                            minimum_accumulation_benefit=gab)
     proj = project_cashflows(mp, asmp)
     deaths, ms = proj.deaths[0], float(proj.maturity_survivors[0])
 
@@ -167,9 +167,9 @@ def test_floor_tvog_matches_independent_reimplementation():
         account_value=mp.account_value, deaths=proj.deaths,
         maturity_survivors=proj.maturity_survivors,
         term_index=mp.term_months - 1,
-        guaranteed_death_benefit=mp.guaranteed_death_benefit,
-        guaranteed_accumulation_benefit=mp.guaranteed_accumulation_benefit,
-        guaranteed_credit_rate=0.0, fund_fee=0.0, investment_return=0.04,
+        minimum_death_benefit=mp.minimum_death_benefit,
+        minimum_accumulation_benefit=mp.minimum_accumulation_benefit,
+        minimum_crediting_rate=0.0, fund_fee=0.0, investment_return=0.04,
         return_scenarios=scen,
     )
 
@@ -246,7 +246,7 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
     """Return scenarios fold the guarantee's time value into the BEL."""
     asmp = _assumptions(investment_return=0.05)
     mp = ModelPoints.single(40, 0.0, 120,
-                             account_value=1e8, guaranteed_credit_rate=0.05)
+                             account_value=1e8, minimum_crediting_rate=0.05)
     scenarios = _return_paths(0.05, vol=0.008, n=2000, n_time=120, seed=7)
 
     plain = measure_vfa(mp, asmp)
@@ -263,7 +263,7 @@ def test_vfa_large_tvog_turns_the_contract_onerous():
     """A guarantee time value beyond the unearned fee makes the contract onerous."""
     asmp = _assumptions(investment_return=0.05)
     mp = ModelPoints.single(40, 0.0, 120,
-                             account_value=1e8, guaranteed_credit_rate=0.05)
+                             account_value=1e8, minimum_crediting_rate=0.05)
     scenarios = _return_paths(0.05, vol=0.03, n=2000, n_time=120, seed=8)
 
     plain = measure_vfa(mp, asmp)
@@ -277,7 +277,7 @@ def test_vfa_tvog_matches_measure_tvog():
     """The TVOG folded into measure_vfa equals the stand-alone measure_tvog."""
     asmp = _assumptions(investment_return=0.04)
     mp = ModelPoints.single(40, 0.0, 120,
-                             account_value=1e8, guaranteed_credit_rate=0.045)
+                             account_value=1e8, minimum_crediting_rate=0.045)
     scenarios = _return_paths(0.04, vol=0.012, n=1500, n_time=120, seed=9)
 
     folded = measure_vfa(mp, asmp, scenarios).time_value.sum()
@@ -286,7 +286,7 @@ def test_vfa_tvog_matches_measure_tvog():
 
 
 def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
-    """Per-MP varying guaranteed_credit_rate with stochastic return scenarios
+    """Per-MP varying minimum_crediting_rate with stochastic return scenarios
     is not supported in v1 -- the time-value pass is portfolio-level."""
     asmp = _assumptions(investment_return=0.04)
     mp = ModelPoints(
@@ -294,7 +294,7 @@ def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
         level_premium=np.array([0.0, 0.0]),
         term_months=np.array([120, 120]),
         account_value=np.array([1e8, 1e8]),
-        guaranteed_credit_rate=np.array([0.04, 0.05]),
+        minimum_crediting_rate=np.array([0.04, 0.05]),
     )
     with pytest.raises(NotImplementedError, match="per-MP varying"):
         measure_vfa(mp, asmp, np.full((10, 120), 0.003))
@@ -334,7 +334,7 @@ def test_load_sample_vfa_is_measurable():
     """The bundled VFA sample measures, and its uniform credit rate lets the
     stochastic time-value pass run."""
     mp = load_sample_vfa_model_points()
-    asmp = load_sample_vfa_assumptions()
+    asmp = load_sample_vfa_basis()
     m = measure_vfa(mp, asmp)
     assert m.csm[:, 0].sum() > 0.0          # the variable fee is unearned profit
     assert np.allclose(m.loss_component, 0.0)

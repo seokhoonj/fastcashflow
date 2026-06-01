@@ -5,7 +5,7 @@ liability to the closing one and decomposes the change into its drivers --
 the analysis of change (AoC). This is the step from a measurement
 calculator towards a reporting engine.
 
-``roll_forward`` slices a GMM :class:`~fastcashflow.Measurement` into
+``roll_forward`` slices a GMM :class:`~fastcashflow.GMMMeasurement` into
 reporting periods, reconciling each period's opening and closing BEL, RA
 and CSM. It models all three drivers of the movement:
 
@@ -33,7 +33,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.engine import Measurement
+from fastcashflow.engine import GMMMeasurement
 from fastcashflow.numerics import _csm_kernel
 from fastcashflow.paa import PAAMeasurement
 from fastcashflow.vfa import VFAMeasurement
@@ -150,10 +150,10 @@ class VFAPeriodMovement:
 
 
 def roll_forward(
-    measurement: Measurement | PAAMeasurement | VFAMeasurement,
+    measurement: GMMMeasurement | PAAMeasurement | VFAMeasurement,
     period_months: int = 12,
     *,
-    revised: Measurement | None = None,
+    revised: GMMMeasurement | None = None,
     revised_at: int | None = None,
     actual_inforce: FloatArray | None = None,
     experience_at: int | None = None,
@@ -166,7 +166,7 @@ def roll_forward(
     number of periods gives a shorter final period.
 
     An assumption revision is recognised by passing ``revised`` -- a second
-    measurement of the same book under updated assumptions -- and
+    measurement of the same book under updated basis -- and
     ``revised_at``, the month it takes effect. In-force experience is
     recognised by passing ``actual_inforce`` -- the ``(n_mp,)`` in-force
     actually remaining at the period end -- and ``experience_at``, that
@@ -250,7 +250,7 @@ def roll_forward(
         expected = measurement.cashflows.inforce[:, experience_at]
         safe = np.where(expected > 1e-12, expected, 1.0)
         # In-force experience scales the remaining contract: the future
-        # projection uses the same assumptions, so the closing FCF scales
+        # projection uses the same basis, so the closing FCF scales
         # linearly with the in-force actually remaining.
         ratio = np.where(expected > 1e-12, actual_inforce / safe, 1.0)
         post_bel = measurement.bel * ratio[:, None]
@@ -328,7 +328,7 @@ def roll_forward(
 
 
 def _roll_forward_experience_chain(
-    measurement: Measurement, period_months: int, actual_inforce: FloatArray
+    measurement: GMMMeasurement, period_months: int, actual_inforce: FloatArray
 ) -> list[PeriodMovement]:
     """Roll a GMM measurement through in-force experience at every period.
 

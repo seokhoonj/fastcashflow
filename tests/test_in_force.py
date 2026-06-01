@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    Assumptions, ExpenseItem, ModelPoints, measure, measure_in_force, value,
+    Basis, ExpenseItem, ModelPoints, measure, measure_in_force, value,
     value_in_force,
     CoverageRate,
 )
@@ -27,7 +27,7 @@ def _flat_rate(value):
 
 
 def _basis():
-    return Assumptions(
+    return Basis(
         mortality_annual=_flat_rate(0.005),
         lapse_annual=_flat_rate(0.05),
         discount_annual=0.03,
@@ -45,7 +45,7 @@ def _basis():
 
 def test_value_in_force_zero_elapsed_matches_value():
     """When every ``elapsed_months`` is 0 the in-force valuation collapses
-    to the new-business :func:`value` (= ``Measurement.bel[:, 0]``)."""
+    to the new-business :func:`value` (= ``GMMMeasurement.bel[:, 0]``)."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=120,
@@ -60,7 +60,7 @@ def test_value_in_force_zero_elapsed_matches_value():
 
 def test_value_in_force_matches_trajectory_slice():
     """An in-force MP with ``elapsed_months = E`` returns the trajectory
-    slice ``Measurement.bel[mp, E]`` -- the PV of future cash flows from
+    slice ``GMMMeasurement.bel[mp, E]`` -- the PV of future cash flows from
     the valuation date forward."""
     elapsed = 36
     mp_new = ModelPoints.single(

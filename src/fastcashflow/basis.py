@@ -10,7 +10,7 @@ from fastcashflow._typing import DurationRateFn, FloatArray, RateFn
 from fastcashflow.statemodel import StateModel
 
 
-# RateFn fields on Assumptions that follow the standard
+# RateFn fields on Basis that follow the standard
 # ``(sex, issue_age, duration, issue_class, elapsed)`` 5-arg signature
 # when a user lambda is written with 4 positional args, the 4th is
 # interpreted as ``issue_class`` (the post-Phase-1A shape).
@@ -22,7 +22,7 @@ _RATE_FN_FIELDS: tuple[str, ...] = (
     "ci_incidence_annual",
 )
 
-# DurationRateFn-shape fields on Assumptions -- semi-Markov rates whose
+# DurationRateFn-shape fields on Basis -- semi-Markov rates whose
 # legacy 4-arg user lambdas wrote the 4th argument as the cohort index
 # (state-duration since entering the source state). After the 5-arg
 # unification these map to the new ``elapsed`` axis (the 5th positional
@@ -85,7 +85,7 @@ def _adapt_rate_arity(fn, *, is_duration: bool = False):
             return fn(sex, issue_age, duration)
     else:
         return fn   # unusual arity -- leave alone, let the engine error
-    # Preserve the source-table metadata so describe_assumptions still
+    # Preserve the source-table metadata so describe_basis still
     # surfaces the table_id when the wrapped fn came from io.py.
     for attr in ("_fcf_table_id", "_fcf_sheet", "_fcf_modifiers"):
         if hasattr(fn, attr):
@@ -132,8 +132,8 @@ class ExpenseItem:
 
     Each row is dispatched by ``basis`` and contributes its ``value``
     into the kernel-side expense primitives. Inflation is *not* a row
-    attribute -- it lives on :class:`Assumptions` (``expense_inflation``,
-    matching the way ``discount_annual`` lives on :class:`Assumptions`),
+    attribute -- it lives on :class:`Basis` (``expense_inflation``,
+    matching the way ``discount_annual`` lives on :class:`Basis`),
     so a company's economic basis is named in one place and every
     inflation-bearing row picks it up automatically.
 
@@ -143,7 +143,7 @@ class ExpenseItem:
         Free-form label for reporting / audit (e.g. ``"acquisition"``,
         ``"maintenance"``, ``"collection"``, ``"LAE"``,
         ``"overhead"``). Engine ignores it; ``show_trace`` and
-        ``describe_assumptions`` echo it.
+        ``describe_basis`` echo it.
     basis
         Dispatch key -- one of :data:`EXPENSE_BASES`. The five values
         follow the Korean actuarial alpha / beta / gamma convention
@@ -268,7 +268,7 @@ class CoverageRate:
 
 
 @dataclass(frozen=True, slots=True)
-class Assumptions:
+class Basis:
     """Deterministic assumption set -- no assumption changes over time.
 
     Parameters
@@ -596,45 +596,45 @@ def _emit_tree(lines: list[object], out: list[str], prefix: str) -> None:
             out.append(f"{prefix}{head}{item}")
 
 
-def describe_assumptions(obj, *, file=None) -> None:
-    """Print the tree structure of an Assumptions (or read_assumptions dict).
+def describe_basis(obj, *, file=None) -> None:
+    """Print the tree structure of an Basis (or read_basis dict).
 
     Groups the fields by role -- rates, economic / expense, risk adjustment,
     coverages / coverage types, state machine, other -- so a reader can see
     what is inside the object without scanning every dataclass field.
 
-    Pass a single :class:`Assumptions` to see one segment, or pass the dict
-    returned by :func:`fastcashflow.io.read_assumptions` /
-    :func:`fastcashflow.io.load_sample_assumptions` to also see the
+    Pass a single :class:`Basis` to see one segment, or pass the dict
+    returned by :func:`fastcashflow.io.read_basis` /
+    :func:`fastcashflow.io.load_sample_basis` to also see the
     ``(product, channel)`` keys.
     """
     import sys
     out_lines: list[str] = []
     if isinstance(obj, dict):
         out_lines.append(
-            f"dict[(product, channel), Assumptions]  ({len(obj)} segments)"
+            f"dict[(product, channel), Basis]  ({len(obj)} segments)"
         )
         keys = list(obj.keys())
         for i, key in enumerate(keys):
             last = (i == len(keys) - 1)
             head = "└─ " if last else "├─ "
             child = "    " if last else "│   "
-            out_lines.append(f"{head}{key!r}  ->  Assumptions")
-            _describe_assumptions_lines(obj[key], out_lines, prefix=child)
-    elif isinstance(obj, Assumptions):
-        out_lines.append("Assumptions")
-        _describe_assumptions_lines(obj, out_lines, prefix="")
+            out_lines.append(f"{head}{key!r}  ->  Basis")
+            _describe_basis_lines(obj[key], out_lines, prefix=child)
+    elif isinstance(obj, Basis):
+        out_lines.append("Basis")
+        _describe_basis_lines(obj, out_lines, prefix="")
     else:
         raise TypeError(
-            f"describe_assumptions expects Assumptions or dict, got "
+            f"describe_basis expects Basis or dict, got "
             f"{type(obj).__name__}"
         )
     text = "\n".join(out_lines) + "\n"
     (file or sys.stdout).write(text)
 
 
-def _describe_assumptions_lines(
-    asmp: "Assumptions", out: list[str], *, prefix: str,
+def _describe_basis_lines(
+    asmp: "Basis", out: list[str], *, prefix: str,
 ) -> None:
     sections: list[tuple[str, list[object]]] = []
     marks = ["1.", "2.", "3.", "4.", "5.", "6."]

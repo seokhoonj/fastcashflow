@@ -1,6 +1,6 @@
-"""Curve-shaped discount assumptions.
+"""Curve-shaped discount basis.
 
-``Assumptions.discount_annual`` accepts either a flat scalar (historical
+``Basis.discount_annual`` accepts either a flat scalar (historical
 behaviour) or a per-year 1-D array (``(n_years,)``) for a time-varying
 basis locked in at initial recognition. The engine expands either form
 to a per-month curve via :mod:`fastcashflow.curves`. The flat scalar
@@ -9,12 +9,12 @@ by hand against a small two-year contract.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ExpenseItem, ModelPoints, measure, value, CoverageRate
+from fastcashflow import Basis, ExpenseItem, ModelPoints, measure, value, CoverageRate
 from fastcashflow.curves import discount_monthly_curve
 
 
-def _flat_asmp(**overrides) -> Assumptions:
-    """Minimal flat-basis assumptions; everything else off."""
+def _flat_asmp(**overrides) -> Basis:
+    """Minimal flat-basis basis; everything else off."""
     base = dict(
         mortality_annual=lambda s, ia, d: np.zeros_like(s, dtype=np.float64),
         lapse_annual=lambda s, ia, d: np.zeros_like(s, dtype=np.float64),
@@ -28,7 +28,7 @@ def _flat_asmp(**overrides) -> Assumptions:
         coverages=(CoverageRate("DEATH", lambda s, ia, d: np.zeros_like(s, dtype=np.float64)),),
     )
     base.update(overrides)
-    return Assumptions(**base)
+    return Basis(**base)
 
 
 # ---------------------------------------------------------------------------

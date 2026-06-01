@@ -16,7 +16,7 @@ FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
 
 # The unified rate callable shape -- every annual rate function in
-# Assumptions (mortality, lapse, waiver_incidence, ci_incidence, and the
+# Basis (mortality, lapse, waiver_incidence, ci_incidence, and the
 # duration-dependent ci_reincidence / disability_recovery) takes the same
 # five positional grids:
 #
@@ -27,7 +27,7 @@ IntArray = NDArray[np.int64]
 # axis (state-duration since entering the source state). A table without
 # a given axis broadcasts over it; the engine passes zeros for axes a
 # particular call does not exercise. Legacy 3-arg or 4-arg user callables
-# are auto-wrapped to this five-arg shape in ``Assumptions.__post_init__``
+# are auto-wrapped to this five-arg shape in ``Basis.__post_init__``
 # -- existing user lambdas continue to work without rewriting.
 RateFn = Callable[
     [IntArray, FloatArray, IntArray, IntArray, IntArray], FloatArray

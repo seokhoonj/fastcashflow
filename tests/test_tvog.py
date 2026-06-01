@@ -27,7 +27,7 @@ def _assumptions(**overrides):
 
 def _contract(term: int = 120, g: float = 0.0) -> ModelPoints:
     return ModelPoints.single(
-        40, 0.0, term, account_value=1e8, guaranteed_credit_rate=g,
+        40, 0.0, term, account_value=1e8, minimum_crediting_rate=g,
         calculation_methods=PATTERNS,
     )
 
@@ -84,7 +84,7 @@ def test_tvog_deep_out_of_the_money_is_nearly_zero():
 def test_tvog_requires_a_guarantee():
     """measure_tvog needs a non-zero guarantee on the model points."""
     asmp = _assumptions(investment_return=0.04)
-    with pytest.raises(ValueError, match="guaranteed_credit_rate"):
+    with pytest.raises(ValueError, match="minimum_crediting_rate"):
         measure_tvog(_contract(120, g=0.0), asmp, np.full((10, 120), 0.003))
 
 

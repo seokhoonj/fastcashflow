@@ -11,7 +11,7 @@ the same.
 import numpy as np
 
 from fastcashflow import (
-    Assumptions,
+    Basis,
     CalculationMethod,
     ModelPoints,
     CoverageRate,
@@ -38,7 +38,7 @@ def _mortality(sex, issue_age, duration):
     return np.full(issue_age.shape, _annual(Q))
 
 
-def _assumptions(**overrides) -> Assumptions:
+def _assumptions(**overrides) -> Basis:
     flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(MORB_RATE))
     base = dict(
         mortality_annual=_mortality,
@@ -52,7 +52,7 @@ def _assumptions(**overrides) -> Assumptions:
         ),
     )
     base.update(overrides)
-    return Assumptions(**base)
+    return Basis(**base)
 
 
 def _one_coverage(cov_idx, benefit, term, *, waiting=0,

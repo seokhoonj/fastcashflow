@@ -22,11 +22,11 @@ from dataclasses import replace
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.engine import Measurement
+from fastcashflow.engine import GMMMeasurement
 from fastcashflow.numerics import _csm_kernel
 
 
-def transition(measurement: Measurement, fair_value: FloatArray) -> Measurement:
+def transition(measurement: GMMMeasurement, fair_value: FloatArray) -> GMMMeasurement:
     """Re-set the CSM on the IFRS 17 fair value transition basis.
 
     ``measurement`` is a measurement of the in-force book at the transition

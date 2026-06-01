@@ -13,21 +13,21 @@ DATA = Path(__file__).resolve().parent / "data"
 
 
 def main() -> None:
-    basis = fcf.read_assumptions(DATA / "assumptions.xlsx")
-    assumptions = basis[("TERM_LIFE_A", "FC")]
+    basis = fcf.read_basis(DATA / "assumptions.xlsx")
+    basis = basis[("TERM_LIFE_A", "FC")]
     book = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 
     # GMM -- the general measurement model.
-    gmm = fcf.measure(book, assumptions)
+    gmm = fcf.measure(book, basis)
     print(f"GMM  -- CSM                       {gmm.csm[:, 0].sum():>14,.0f}")
 
     # PAA -- the simplified model for short-coverage business.
-    paa = fcf.measure_paa(book, assumptions)
+    paa = fcf.measure_paa(book, basis)
     print(f"PAA  -- insurance service result  {paa.service_result.sum():>14,.0f}")
 
     # VFA -- account-value (direct-participation) contracts.
     account = fcf.read_model_points(DATA / "account_values.xlsx", calculation_methods=DATA / "calculation_methods.csv")
-    vfa = fcf.measure_vfa(account, assumptions)
+    vfa = fcf.measure_vfa(account, basis)
     print(f"VFA  -- CSM (the variable fee)    {vfa.csm[:, 0].sum():>14,.0f}")
 
 

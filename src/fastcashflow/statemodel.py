@@ -230,7 +230,7 @@ WAIVER_MODEL = StateModel(
 # Unlike WAIVER_MODEL (which seats paid-up onto the waiver state, giving the
 # two identical cash flows), this model keeps paid-up distinct so it can carry
 # its own lapse: the paid-up state references the ``lapse_paidup`` rate
-# (Assumptions.lapse_paidup_annual, falling back to lapse_annual). The Korean
+# (Basis.lapse_paidup_annual, falling back to lapse_annual). The Korean
 # post-payment (납입후) lapse jump is the motivating case -- a contract that
 # has finished paying premium typically surrenders at a different rate than a
 # premium-paying active. Paid-up still has no premium and is exposed to
@@ -302,15 +302,15 @@ def is_semi_markov(model: StateModel) -> bool:
     return any(s.duration_max > 0 for s in model.states)
 
 
-def resolve_state_model(assumptions) -> "StateModel":
-    """Return the StateModel driving the projection for these assumptions.
+def resolve_state_model(basis) -> "StateModel":
+    """Return the StateModel driving the projection for these basis.
 
-    Uses the caller-supplied ``assumptions.state_model`` when set, and falls
+    Uses the caller-supplied ``basis.state_model`` when set, and falls
     back to the bundled :data:`WAIVER_MODEL` -- the most common Korean
     protection topology, active / waiver / paid-up. Centralising the
     fallback keeps the engine and the projection layer from drifting.
     """
-    return assumptions.state_model or WAIVER_MODEL
+    return basis.state_model or WAIVER_MODEL
 
 
 def compile_state_model(

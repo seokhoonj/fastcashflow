@@ -6,7 +6,7 @@ verify the formula end-to-end against hand calculation.
 """
 import numpy as np
 
-from fastcashflow import Assumptions, ModelPoints, measure, CoverageRate
+from fastcashflow import Basis, ModelPoints, measure, CoverageRate
 from conftest import PATTERNS
 
 def _flat_rate(value):
@@ -17,7 +17,7 @@ def _flat_rate(value):
 
 
 def _basis(lapse_rate, surrender_curve):
-    return Assumptions(
+    return Basis(
         mortality_annual=_flat_rate(0.0),
         lapse_annual=_flat_rate(lapse_rate),
         discount_annual=0.0,

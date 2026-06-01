@@ -12,7 +12,7 @@ import numpy as np
 from numba import cuda
 
 from fastcashflow import (
-    Assumptions, CalculationMethod, CoverageRate, ExpenseItem, ModelPoints, value,
+    Basis, CalculationMethod, CoverageRate, ExpenseItem, ModelPoints, value,
 )
 
 
@@ -37,15 +37,15 @@ def make_portfolio(n_mp: int, seed: int = 42) -> ModelPoints:
     )
 
 
-def _time(model_points: ModelPoints, assumptions: Assumptions, backend: str) -> float:
-    value(model_points, assumptions, backend=backend)        # warm-up (triggers compilation)
+def _time(model_points: ModelPoints, basis: Basis, backend: str) -> float:
+    value(model_points, basis, backend=backend)        # warm-up (triggers compilation)
     start = time.perf_counter()
-    value(model_points, assumptions, backend=backend)
+    value(model_points, basis, backend=backend)
     return time.perf_counter() - start
 
 
 def main() -> None:
-    assumptions = Assumptions(
+    basis = Basis(
         mortality_annual=mortality_annual,
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
@@ -64,10 +64,10 @@ def main() -> None:
 
     for n_mp in (10_000, 100_000, 1_000_000, 5_000_000):
         model_points = make_portfolio(n_mp)
-        cpu_t = _time(model_points, assumptions, "cpu")
+        cpu_t = _time(model_points, basis, "cpu")
         line = f"  {n_mp:>10,} MP  ({n_mp * 120:>14,} cells) : CPU {cpu_t:8.3f} s"
         if gpu:
-            gpu_t = _time(model_points, assumptions, "gpu")
+            gpu_t = _time(model_points, basis, "gpu")
             line += f"  |  GPU {gpu_t:8.3f} s  ({cpu_t / gpu_t:5.1f}x)"
         print(line)
 

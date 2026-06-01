@@ -10,7 +10,7 @@ import pytest
 
 from conftest import annual_from_monthly as _annual
 from fastcashflow import (
-    Assumptions,
+    Basis,
     ExpenseItem,
     ModelPoints,
     measure,
@@ -21,8 +21,8 @@ from fastcashflow import (
 )
 
 
-def _assumptions() -> Assumptions:
-    return Assumptions(
+def _assumptions() -> Basis:
+    return Basis(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
@@ -141,7 +141,7 @@ def test_report_rejects_unknown_measurement():
 def test_report_finance_expense_is_curve_aware():
     """With a per-year discount curve, finance_expense uses the per-month
     forward rate at every month -- not just the first month's rate."""
-    a = Assumptions(
+    a = Basis(
         mortality_annual=lambda sex, ia, dur: np.full(ia.shape, _annual(0.001)),
         lapse_annual=lambda sex, ia, dur: np.full(dur.shape, _annual(0.01)),
         discount_annual=np.array([0.01, 0.05, 0.05, 0.05, 0.05,

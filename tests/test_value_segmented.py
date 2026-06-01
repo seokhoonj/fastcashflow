@@ -2,21 +2,21 @@
 
 `ModelPoints` may carry per-row `product` / `channel` strings naming each
 contract's segment. `value_segmented(mp, basis)` splits the portfolio by
-those keys, looks each segment's `Assumptions` up in the
-`{(product, channel): Assumptions}` dict, calls :func:`value` per segment,
+those keys, looks each segment's `Basis` up in the
+`{(product, channel): Basis}` dict, calls :func:`value` per segment,
 and writes the per-mp results back to a single ``(n_mp,)`` `Valuation`.
 """
 import numpy as np
 import pytest
 
 from fastcashflow import (
-    Assumptions, ModelPoints, load_sample_assumptions, value, value_segmented,
+    Basis, ModelPoints, load_sample_basis, value, value_segmented,
     CoverageRate,
 )
 
 
-def _flat_asmp(*, discount=0.05) -> Assumptions:
-    return Assumptions(
+def _flat_asmp(*, discount=0.05) -> Basis:
+    return Basis(
         mortality_annual=lambda s, ia, d: np.full(s.shape, 0.001),
         lapse_annual=lambda s, ia, d: np.full(s.shape, 0.05),
         discount_annual=discount,
@@ -187,7 +187,7 @@ def test_value_segmented_with_sample_basis():
     """End-to-end smoke -- the bundled sample basis has two segments and
     ``value_segmented`` routes per-mp valuations through it."""
     from fastcashflow import load_sample_calculation_methods
-    basis = load_sample_assumptions()                    # multi-segment sample
+    basis = load_sample_basis()                    # multi-segment sample
     mp = ModelPoints(
         issue_age=np.array([40, 50, 45]),
         level_premium=np.array([50_000.0, 60_000.0, 55_000.0]),

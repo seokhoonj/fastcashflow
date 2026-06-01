@@ -4,7 +4,7 @@ Two mechanics introduced together:
 
 * Rates are supplied annual; the engine converts each to a monthly rate on
   the constant-force basis -- twelve monthly applications reproduce the
-  annual rate exactly. ``assumptions.annual_to_monthly`` does the conversion.
+  annual rate exactly. ``basis.annual_to_monthly`` does the conversion.
 * A level premium is collected every ``premium_frequency_months`` and a
   survival annuity paid every ``annuity_frequency_months``.
 
@@ -13,11 +13,11 @@ Every figure is derived by hand on a flat, zero-discount basis.
 import numpy as np
 import pytest
 
-from fastcashflow import Assumptions, ModelPoints, measure, value, CoverageRate
-from fastcashflow.assumptions import annual_to_monthly
+from fastcashflow import Basis, ModelPoints, measure, value, CoverageRate
+from fastcashflow.basis import annual_to_monthly
 
 
-def _asmp(*, q_annual=0.0, lapse_annual=0.0, **overrides) -> Assumptions:
+def _asmp(*, q_annual=0.0, lapse_annual=0.0, **overrides) -> Basis:
     """Flat-rate, zero-discount, zero-expense basis."""
     base = dict(
         mortality_annual=lambda s, a, d: np.full(a.shape, q_annual),
@@ -28,7 +28,7 @@ def _asmp(*, q_annual=0.0, lapse_annual=0.0, **overrides) -> Assumptions:
         coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(a.shape, q_annual)),),
     )
     base.update(overrides)
-    return Assumptions(**base)
+    return Basis(**base)
 
 
 # ---------------------------------------------------------------------------

@@ -16,10 +16,10 @@ import fastcashflow as fcf
 
 def main() -> None:
     mp = fcf.load_sample_vfa_model_points()
-    assumptions = fcf.load_sample_vfa_assumptions()
+    basis = fcf.load_sample_vfa_basis()
 
     # Deterministic VFA measurement -- the headline liability and CSM.
-    m = fcf.measure_vfa(mp, assumptions)
+    m = fcf.measure_vfa(mp, basis)
     print("VFA measurement -- variable annuities with GMDB / GMAB")
     print(f"  account value   {mp.account_value.sum():>16,.0f}")
     print(f"  BEL             {m.bel[:, 0].sum():>16,.0f}")
@@ -29,10 +29,10 @@ def main() -> None:
 
     # Time value of the guarantees -- the put cost over return scenarios.
     rng = np.random.default_rng(7)
-    monthly_return = (1.0 + assumptions.investment_return) ** (1.0 / 12.0) - 1.0
+    monthly_return = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
     n_time = int(mp.term_months.max())
     scenarios = monthly_return + rng.normal(0.0, 0.012, size=(2_000, n_time))
-    tvog = fcf.measure_tvog(mp, assumptions, scenarios)
+    tvog = fcf.measure_tvog(mp, basis, scenarios)
     print("\nTVOG -- time value of the minimum-rate / GMDB / GMAB guarantees")
     print(f"  intrinsic value {tvog.intrinsic_value:>16,.0f}")
     print(f"  time value      {tvog.time_value:>16,.0f}")
@@ -43,7 +43,7 @@ def main() -> None:
     term0 = int(mp.term_months[0])
     scen0 = monthly_return + rng.normal(0.0, 0.012, size=(2_000, term0))
     print()
-    fcf.show_trace_vfa(0, mp, assumptions, return_scenarios=scen0)
+    fcf.show_trace_vfa(0, mp, basis, return_scenarios=scen0)
 
 
 if __name__ == "__main__":

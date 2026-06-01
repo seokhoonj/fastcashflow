@@ -31,8 +31,8 @@ def _cancer_reincidence_model(duration_max: int) -> StateModel:
     ), seating=(0, 1, 2))
 
 
-def _flat_assumptions(*, ci_reincidence_fn) -> fcf.Assumptions:
-    return fcf.Assumptions(
+def _flat_assumptions(*, ci_reincidence_fn) -> fcf.Basis:
+    return fcf.Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
         lapse_annual=lambda s, a, d: np.full(d.shape, 0.0),
         ci_incidence_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
@@ -191,7 +191,7 @@ def _reincidence_assumptions(*, duration_max, exclusion_months,
                               reincidence_monthly):
     def ci_rein(s, a, p, sd):
         return np.where(sd < exclusion_months, 0.0, _annual(reincidence_monthly))
-    return fcf.Assumptions(
+    return fcf.Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
         lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
         ci_incidence_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
@@ -281,7 +281,7 @@ def _reincidence_assumptions_with_extra_coverage(duration_max, exclusion_months,
     (claims run off a depleting not-yet-diagnosed pool) and a recurring
     health coverage (claim_rate accumulates each month).
     """
-    from fastcashflow.assumptions import CoverageRate
+    from fastcashflow.basis import CoverageRate
 
     def extra_fn(sex, age, dur):
         return np.full(dur.shape, _annual(extra_rate))
@@ -289,7 +289,7 @@ def _reincidence_assumptions_with_extra_coverage(duration_max, exclusion_months,
     base = _reincidence_assumptions(duration_max=duration_max,
                                      exclusion_months=exclusion_months,
                                      reincidence_monthly=0.01)
-    return fcf.Assumptions(
+    return fcf.Basis(
         mortality_annual=base.mortality_annual,
         lapse_annual=base.lapse_annual,
         ci_incidence_annual=base.ci_incidence_annual,
@@ -313,7 +313,7 @@ def _portfolio_with_rule_coverage(n, seed, extra_waiting, extra_reduction_end,
     """A small portfolio with one death coverage (rule-free) and one extra
     coverage (carrying the per-coverage rule). The DEATH coverage is at
     cov_idx 0, the extra coverage at cov_idx 1 -- their integer codes are
-    positions in ``assumptions.coverages`` in registration order.
+    positions in ``basis.coverages`` in registration order.
     """
     rng = np.random.default_rng(seed)
     # Build coverage_index / coverage_amount: two coverages per mp (DEATH then EXTRA).
@@ -435,7 +435,7 @@ def _di_model(duration_max: int) -> StateModel:
 def _di_assumptions(*, duration_max, recovery_monthly):
     def recovery(s, a, p, sd):
         return np.full(sd.shape, _annual(recovery_monthly), dtype=float)
-    return fcf.Assumptions(
+    return fcf.Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
         lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
         waiver_incidence_annual=lambda s, a, d: np.full(
@@ -463,7 +463,7 @@ def test_di_recovery_hand_calc_one_month_seated_on_disabled():
     BEL = 1_000_000 (only disability income; no premium since seated on
     disabled which is premium=False, no maturity, no death claim).
     """
-    asmp = fcf.Assumptions(
+    asmp = fcf.Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
         lapse_annual=lambda s, a, d: np.full(d.shape, 0.0),
         waiver_incidence_annual=lambda s, a, d: np.full(d.shape, 0.0),
@@ -525,7 +525,7 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
         return np.where(sd < 3, _annual(0.20),
                         np.where(sd < 12, _annual(0.05),
                                  _annual(0.01)))
-    asmp = fcf.Assumptions(
+    asmp = fcf.Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
         lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.005)),
         waiver_incidence_annual=lambda s, a, d: np.full(
@@ -614,7 +614,7 @@ def test_semi_markov_with_rule_and_diagnosis_coverages_together():
     is mis-saved or mis-read by either pass, BEL will diverge between
     measure() and value().
     """
-    from fastcashflow.assumptions import CoverageRate
+    from fastcashflow.basis import CoverageRate
 
     def recur_rate(sex, age, dur):
         return np.full(dur.shape, _annual(0.0006))
@@ -624,7 +624,7 @@ def test_semi_markov_with_rule_and_diagnosis_coverages_together():
 
     base = _reincidence_assumptions(duration_max=12, exclusion_months=6,
                                      reincidence_monthly=0.01)
-    asmp = fcf.Assumptions(
+    asmp = fcf.Basis(
         mortality_annual=base.mortality_annual,
         lapse_annual=base.lapse_annual,
         ci_incidence_annual=base.ci_incidence_annual,

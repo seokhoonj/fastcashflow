@@ -22,7 +22,7 @@ from typing import IO
 
 import numpy as np
 
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 from fastcashflow.coverage import CalculationMethod, method_attrs
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._typing import FloatArray
@@ -86,7 +86,7 @@ def _key_months(term: int, n_time: int) -> list[int]:
 def show_trace(
     mp_index: int,
     model_points: ModelPoints,
-    assumptions: Assumptions | dict,
+    basis: Basis | dict,
     *,
     file: IO | None = None,
 ) -> None:
@@ -100,10 +100,10 @@ def show_trace(
         Portfolio :class:`ModelPoints`. The function slices to a single
         row before running :func:`measure`, so a 1M-row portfolio does
         not pay for the trace of one contract.
-    assumptions
-        A single :class:`Assumptions`, or the dict returned by
-        :func:`fastcashflow.io.read_assumptions` /
-        :func:`fastcashflow.io.load_sample_assumptions`. With the dict
+    basis
+        A single :class:`Basis`, or the dict returned by
+        :func:`fastcashflow.io.read_basis` /
+        :func:`fastcashflow.io.load_sample_basis`. With the dict
         form the function looks up the segment via the model point's
         ``(product, channel)``.
     file
@@ -125,25 +125,25 @@ def show_trace(
     i = mp_index
 
     # Multi-segment dict basis: route to the right segment by (product, channel).
-    if isinstance(assumptions, dict):
+    if isinstance(basis, dict):
         if model_points.product_code is None or model_points.channel_code is None:
             raise ValueError(
                 "model_points has no product / channel columns -- a dict "
-                "basis cannot be routed; pass a single Assumptions instead"
+                "basis cannot be routed; pass a single Basis instead"
             )
         key = (str(model_points.product_code[i]), str(model_points.channel_code[i]))
         try:
-            assumptions = assumptions[key]
+            basis = basis[key]
         except KeyError:
             raise KeyError(
-                f"no assumptions for segment {key}; "
-                f"available: {list(assumptions)}"
+                f"no basis for segment {key}; "
+                f"available: {list(basis)}"
             ) from None
 
     # Single-row slice + measure. Subsetting first keeps the trace cost
     # proportional to one MP, not the whole portfolio.
     sub = model_points.subset([i])
-    m = measure(sub, assumptions)
+    m = measure(sub, basis)
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
@@ -162,19 +162,19 @@ def show_trace(
         f"term={term}m, premium_term={prem_term}m, count={count:g})"
     )
 
-    # ---- Assumptions (segment-level)
+    # ---- Basis (segment-level)
     asmp_lines: list[object] = []
     asmp_lines.append(
-        f"mortality_annual     -> {_fmt_callable(assumptions.mortality_annual)}"
+        f"mortality_annual     -> {_fmt_callable(basis.mortality_annual)}"
     )
     asmp_lines.append(
-        f"lapse_annual         -> {_fmt_callable(assumptions.lapse_annual)}"
+        f"lapse_annual         -> {_fmt_callable(basis.lapse_annual)}"
     )
-    if assumptions.waiver_incidence_annual is not None:
+    if basis.waiver_incidence_annual is not None:
         asmp_lines.append(
-            f"waiver_incidence     -> {_fmt_callable(assumptions.waiver_incidence_annual)}"
+            f"waiver_incidence     -> {_fmt_callable(basis.waiver_incidence_annual)}"
         )
-    d = assumptions.discount_annual
+    d = basis.discount_annual
     if np.ndim(d) == 0:
         asmp_lines.append(f"discount_annual      = {float(d):g} (flat)")
     else:
@@ -183,7 +183,7 @@ def show_trace(
             f"discount_annual      = ndarray len={arr.size} "
             f"[{arr.flat[0]:g}, ..., {arr.flat[-1]:g}]"
         )
-    infl = assumptions.expense_inflation
+    infl = basis.expense_inflation
     if np.ndim(infl) == 0:
         asmp_lines.append(f"expense_inflation    = {float(infl):g} (flat)")
     else:
@@ -192,7 +192,7 @@ def show_trace(
             f"expense_inflation    = ndarray len={arr.size} "
             f"[{arr.flat[0]:g}, ..., {arr.flat[-1]:g}]"
         )
-    rows = assumptions.expense_items
+    rows = basis.expense_items
     if not rows:
         asmp_lines.append("expense_items        = ()  (no expense)")
     else:
@@ -205,17 +205,17 @@ def show_trace(
             (f"expense_items        = tuple  (len={len(rows)})", row_lines)
         )
     asmp_lines.append(
-        f"ra: method={assumptions.ra_method!r}, conf={assumptions.ra_confidence:g}"
+        f"ra: method={basis.ra_method!r}, conf={basis.ra_confidence:g}"
     )
     asmp_lines.append(
-        f"cv: mort={assumptions.mortality_cv:g} morb={assumptions.morbidity_cv:g} "
-        f"long={assumptions.longevity_cv:g} disab={assumptions.disability_cv:g}"
+        f"cv: mort={basis.mortality_cv:g} morb={basis.morbidity_cv:g} "
+        f"long={basis.longevity_cv:g} disab={basis.disability_cv:g}"
     )
 
     # ---- Coverages (rate-driven)
     cov_lines: list[object] = []
     methods = model_points.calculation_methods or {}
-    for r in assumptions.coverages:
+    for r in basis.coverages:
         method = methods.get(r.code, CalculationMethod.MORBIDITY)
         is_diag, risk = method_attrs(method)
         # Pad each field to the longest possible value so columns line up:
@@ -243,8 +243,8 @@ def show_trace(
         f"axes: sex={sex_v}, issue_age={age:g}, issue_class={issue_class_v}, "
         f"elapsed_at_issue={elapsed_v}m"
     )
-    has_waiver = assumptions.waiver_incidence_annual is not None
-    cov_headers = [f"{r.code}(an)" for r in assumptions.coverages]
+    has_waiver = basis.waiver_incidence_annual is not None
+    cov_headers = [f"{r.code}(an)" for r in basis.coverages]
     head_row = ["year", "mort(an)", "lapse(an)"]
     if has_waiver:
         head_row.append("waiver(an)")
@@ -253,16 +253,16 @@ def show_trace(
     for y in year_picks:
         row = [f"{y:>12d}"]
         row.append(
-            f"{_eval_rate(assumptions.mortality_annual, sex_v, age, y, issue_class_v, elapsed_v):>12.6f}"
+            f"{_eval_rate(basis.mortality_annual, sex_v, age, y, issue_class_v, elapsed_v):>12.6f}"
         )
         row.append(
-            f"{_eval_rate(assumptions.lapse_annual, sex_v, age, y, issue_class_v, elapsed_v):>12.6f}"
+            f"{_eval_rate(basis.lapse_annual, sex_v, age, y, issue_class_v, elapsed_v):>12.6f}"
         )
         if has_waiver:
             row.append(
-                f"{_eval_rate(assumptions.waiver_incidence_annual, sex_v, age, y, issue_class_v, elapsed_v):>12.6f}"
+                f"{_eval_rate(basis.waiver_incidence_annual, sex_v, age, y, issue_class_v, elapsed_v):>12.6f}"
             )
-        for r in assumptions.coverages:
+        for r in basis.coverages:
             row.append(
                 f"{_eval_rate(r.rate, sex_v, age, y, issue_class_v, elapsed_v):>12.6f}"
             )
@@ -306,7 +306,7 @@ def show_trace(
     # trajectory it composes with.
     picks = _key_months(term, discount_start.shape[0] - 1)
     diag_pool_lines: list[object] = []
-    for r in assumptions.coverages:
+    for r in basis.coverages:
         method = methods.get(r.code, CalculationMethod.MORBIDITY)
         is_diag, _ = method_attrs(method)
         if not is_diag:
@@ -382,8 +382,8 @@ def show_trace(
     # Assemble the tree
     out.append(header)
     tree_items: list[object] = [
-        ("Assumptions (segment-level)", asmp_lines),
-        (f"Coverages (rate-driven, n={len(assumptions.coverages)})",
+        ("Basis (segment-level)", asmp_lines),
+        (f"Coverages (rate-driven, n={len(basis.coverages)})",
          cov_lines),
         ("Rates (annual, evaluated for this MP)", rate_lines),
         (f"Cash flows (annual sum over {cf.n_time}m horizon)", cf_lines),
@@ -406,7 +406,7 @@ def show_trace(
 def show_trace_vfa(
     mp_index: int,
     model_points: ModelPoints,
-    assumptions: Assumptions | dict,
+    basis: Basis | dict,
     *,
     return_scenarios: FloatArray | None = None,
     file: IO | None = None,
@@ -428,9 +428,9 @@ def show_trace_vfa(
     if not 0 <= mp_index < n_mp:
         raise IndexError(f"mp_index {mp_index} out of range for n_mp={n_mp}")
     i = mp_index
-    assumptions = _resolve_basis(assumptions, model_points, i)
+    basis = _resolve_basis(basis, model_points, i)
     sub = model_points.subset([i])
-    m = measure_vfa(sub, assumptions, return_scenarios=return_scenarios)
+    m = measure_vfa(sub, basis, return_scenarios=return_scenarios)
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
@@ -443,9 +443,9 @@ def show_trace_vfa(
     channel = (str(model_points.channel_code[i])
                if model_points.channel_code is not None else "-")
     av0 = float(sub.account_value[0])
-    gcr = float(sub.guaranteed_credit_rate[0])
-    gdb = float(sub.guaranteed_death_benefit[0])
-    gab = float(sub.guaranteed_accumulation_benefit[0])
+    gcr = float(sub.minimum_crediting_rate[0])
+    gdb = float(sub.minimum_death_benefit[0])
+    gab = float(sub.minimum_accumulation_benefit[0])
     header = (
         f"mp[{i}]  VFA  ({product}/{channel}, sex={sex_label}, "
         f"issue_age={age:g}, term={term}m, count={count:g})"
@@ -454,15 +454,15 @@ def show_trace_vfa(
     # ---- VFA inputs
     vfa_lines: list[object] = [
         f"account_value                          = {av0:>15,.2f}",
-        f"guaranteed_credit_rate                 = {gcr:g}",
-        f"guaranteed_death_benefit (GMDB)        = {gdb:>15,.2f}",
-        f"guaranteed_accumulation_benefit (GMAB) = {gab:>15,.2f}",
-        f"investment_return = {assumptions.investment_return:g}  (VFA 할인/적립 basis)",
-        f"fund_fee          = {assumptions.fund_fee:g}  (= 이익원)",
-        f"mortality_annual  -> {_fmt_callable(assumptions.mortality_annual)}",
-        f"lapse_annual      -> {_fmt_callable(assumptions.lapse_annual)}",
-        f"ra: method={assumptions.ra_method!r} conf={assumptions.ra_confidence:g} "
-        f"expense_cv={assumptions.expense_cv:g}",
+        f"minimum_crediting_rate                 = {gcr:g}",
+        f"minimum_death_benefit (GMDB)        = {gdb:>15,.2f}",
+        f"minimum_accumulation_benefit (GMAB) = {gab:>15,.2f}",
+        f"investment_return = {basis.investment_return:g}  (VFA 할인/적립 basis)",
+        f"fund_fee          = {basis.fund_fee:g}  (= 이익원)",
+        f"mortality_annual  -> {_fmt_callable(basis.mortality_annual)}",
+        f"lapse_annual      -> {_fmt_callable(basis.lapse_annual)}",
+        f"ra: method={basis.ra_method!r} conf={basis.ra_confidence:g} "
+        f"expense_cv={basis.expense_cv:g}",
     ]
 
     # ---- Trajectories (from the VFA measurement)
@@ -560,7 +560,7 @@ def show_trace_vfa(
 def show_trace_paa(
     mp_index: int,
     model_points: ModelPoints,
-    assumptions: Assumptions | dict,
+    basis: Basis | dict,
     *,
     revenue_basis: str = "time",
     file: IO | None = None,
@@ -582,9 +582,9 @@ def show_trace_paa(
     if not 0 <= mp_index < n_mp:
         raise IndexError(f"mp_index {mp_index} out of range for n_mp={n_mp}")
     i = mp_index
-    assumptions = _resolve_basis(assumptions, model_points, i)
+    basis = _resolve_basis(basis, model_points, i)
     sub = model_points.subset([i])
-    m = measure_paa(sub, assumptions, revenue_basis=revenue_basis)
+    m = measure_paa(sub, basis, revenue_basis=revenue_basis)
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
@@ -612,7 +612,7 @@ def show_trace_paa(
     lic = m.lic[0]
     lc = float(m.loss_component[0])
 
-    sp = assumptions.settlement_pattern
+    sp = basis.settlement_pattern
     sp_desc = ("None (지급 lag 없음 -> LIC=0)" if sp is None
                else f"len={np.asarray(sp).size}")
     basis_desc = ("B126(a) 시간기준" if revenue_basis == "time"
@@ -623,9 +623,9 @@ def show_trace_paa(
         f"premium_total      = {float(premium.sum()):>15,.2f}",
         f"revenue_basis      = {revenue_basis!r}  ({basis_desc})",
         f"settlement_pattern = {sp_desc}  (발생 claim 의 지급 분산 = LIC)",
-        f"mortality_annual   -> {_fmt_callable(assumptions.mortality_annual)}",
-        f"lapse_annual       -> {_fmt_callable(assumptions.lapse_annual)}",
-        f"ra: method={assumptions.ra_method!r} conf={assumptions.ra_confidence:g} "
+        f"mortality_annual   -> {_fmt_callable(basis.mortality_annual)}",
+        f"lapse_annual       -> {_fmt_callable(basis.lapse_annual)}",
+        f"ra: method={basis.ra_method!r} conf={basis.ra_confidence:g} "
         f"(onerous test 용)",
     ]
 
@@ -686,26 +686,26 @@ def show_trace_paa(
 # ---------------------------------------------------------------------------
 
 def _resolve_basis(
-    assumptions: Assumptions | dict, model_points: ModelPoints, i: int,
-) -> Assumptions:
-    """Return the :class:`Assumptions` to use for row ``i``.
+    basis: Basis | dict, model_points: ModelPoints, i: int,
+) -> Basis:
+    """Return the :class:`Basis` to use for row ``i``.
 
     Mirrors the dict-routing behaviour of :func:`show_trace`. Factored
     out so the diff variant can resolve two bases the same way.
     """
-    if not isinstance(assumptions, dict):
-        return assumptions
+    if not isinstance(basis, dict):
+        return basis
     if model_points.product_code is None or model_points.channel_code is None:
         raise ValueError(
             "model_points has no product / channel columns -- a dict "
-            "basis cannot be routed; pass a single Assumptions instead"
+            "basis cannot be routed; pass a single Basis instead"
         )
     key = (str(model_points.product_code[i]), str(model_points.channel_code[i]))
     try:
-        return assumptions[key]
+        return basis[key]
     except KeyError:
         raise KeyError(
-            f"no assumptions for segment {key}; available: {list(assumptions)}"
+            f"no basis for segment {key}; available: {list(basis)}"
         ) from None
 
 
@@ -759,15 +759,15 @@ def _diff_callable(name: str, fa, fb) -> str | None:
 def show_trace_diff(
     mp_index: int,
     model_points: ModelPoints,
-    basis_a: Assumptions | dict,
-    basis_b: Assumptions | dict,
+    basis_a: Basis | dict,
+    basis_b: Basis | dict,
     *,
     label_a: str = "before",
     label_b: str = "after",
     file: IO | None = None,
 ) -> None:
     """Print a tree of how the BEL / RA / CSM of one model point moves
-    when assumptions change.
+    when basis change.
 
     Parameters
     ----------
@@ -777,8 +777,8 @@ def show_trace_diff(
         Portfolio :class:`ModelPoints`. Subset to the single row before
         each :func:`measure` so the diff cost stays proportional to one MP.
     basis_a, basis_b
-        Two assumptions to compare. Either a :class:`Assumptions` or the
-        dict from :func:`fastcashflow.io.read_assumptions`. With dicts,
+        Two basis to compare. Either a :class:`Basis` or the
+        dict from :func:`fastcashflow.io.read_basis`. With dicts,
         each is routed independently by the model point's
         ``(product, channel)`` -- comparing two segments is also fine.
     label_a, label_b
@@ -1039,7 +1039,7 @@ def show_trace_diff(
 def show_bel_step(
     mp_index: int,
     model_points: ModelPoints,
-    assumptions: Assumptions | dict,
+    basis: Basis | dict,
     *,
     months: list[int] | None = None,
     file: IO | None = None,
@@ -1069,9 +1069,9 @@ def show_bel_step(
     model_points
         Portfolio :class:`ModelPoints`. Subset to the single row before
         running :func:`measure`.
-    assumptions
-        A :class:`Assumptions` or the dict from
-        :func:`fastcashflow.io.read_assumptions` (routed by the row's
+    basis
+        A :class:`Basis` or the dict from
+        :func:`fastcashflow.io.read_basis` (routed by the row's
         ``(product, channel)`` like :func:`show_trace`).
     months
         Anchor months at which to unroll the recursion. ``None`` uses
@@ -1091,7 +1091,7 @@ def show_bel_step(
             f"mp_index {mp_index} out of range for n_mp={n_mp}"
         )
     i = mp_index
-    asmp = _resolve_basis(assumptions, model_points, i)
+    asmp = _resolve_basis(basis, model_points, i)
     sub = model_points.subset([i])
     m = measure(sub, asmp)
 
@@ -1196,7 +1196,7 @@ def show_bel_step(
 def show_csm_step(
     mp_index: int,
     model_points: ModelPoints,
-    assumptions: Assumptions | dict,
+    basis: Basis | dict,
     *,
     months: list[int] | None = None,
     file: IO | None = None,
@@ -1225,7 +1225,7 @@ def show_csm_step(
     ----------
     mp_index
         0-based row index in ``model_points``.
-    model_points, assumptions, file
+    model_points, basis, file
         Same shape as :func:`show_bel_step`.
     months
         Months at which to unroll the step (each row shows the
@@ -1244,7 +1244,7 @@ def show_csm_step(
             f"mp_index {mp_index} out of range for n_mp={n_mp}"
         )
     i = mp_index
-    asmp = _resolve_basis(assumptions, model_points, i)
+    asmp = _resolve_basis(basis, model_points, i)
     sub = model_points.subset([i])
     m = measure(sub, asmp)
 

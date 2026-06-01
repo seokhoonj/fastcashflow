@@ -29,7 +29,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import project_cashflows
 
@@ -107,7 +107,7 @@ def _pv_account_benefits(
 
 def tvog_weights(
     *,
-    guaranteed_credit_rate: float,
+    minimum_crediting_rate: float,
     fund_fee: float,
     investment_return: float,
     return_scenarios: FloatArray,
@@ -127,7 +127,7 @@ def tvog_weights(
     return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
     n_time = return_scenarios.shape[1]
     f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
-    g_m = (1.0 + guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    g_m = (1.0 + minimum_crediting_rate) ** (1.0 / 12.0) - 1.0
     r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
     stochastic = _discounted_growth(
         np.maximum(return_scenarios, g_m), return_scenarios, f_m
@@ -143,9 +143,9 @@ def guarantee_floor_time_value(
     deaths: FloatArray,
     maturity_survivors: FloatArray,
     term_index: FloatArray,
-    guaranteed_death_benefit: FloatArray,
-    guaranteed_accumulation_benefit: FloatArray,
-    guaranteed_credit_rate: float,
+    minimum_death_benefit: FloatArray,
+    minimum_accumulation_benefit: FloatArray,
+    minimum_crediting_rate: float,
     fund_fee: float,
     investment_return: float,
     return_scenarios: FloatArray,
@@ -164,13 +164,13 @@ def guarantee_floor_time_value(
     time value, since volatility there mostly lets scenarios escape the floor.
 
     The account value path uses the credited rate ``max(return, guarantee)``;
-    ``guaranteed_credit_rate`` is the (scalar, v1) crediting guarantee. The
+    ``minimum_crediting_rate`` is the (scalar, v1) crediting guarantee. The
     GDB / GAB floors themselves may vary by model point.
     """
     return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
     n_time = return_scenarios.shape[1]
     f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
-    g_m = (1.0 + guaranteed_credit_rate) ** (1.0 / 12.0) - 1.0
+    g_m = (1.0 + minimum_crediting_rate) ** (1.0 / 12.0) - 1.0
     r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
 
     # Account-value multiplier and discount under each scenario, and under the
@@ -190,17 +190,17 @@ def guarantee_floor_time_value(
         # GMDB: floor excess on the death exits each month; GMAB: on the
         # maturity survivors at the term column. Cost per scenario, then the
         # mean less the central (intrinsic) cost.
-        gdb_excess_s = np.maximum(0.0, guaranteed_death_benefit[mp] - av0 * av_s)
+        gdb_excess_s = np.maximum(0.0, minimum_death_benefit[mp] - av0 * av_s)
         cost_s = (deaths[mp] * gdb_excess_s * disc_s).sum(axis=1)
         gab_excess_s = np.maximum(
-            0.0, guaranteed_accumulation_benefit[mp] - av0 * av_s[:, ti]
+            0.0, minimum_accumulation_benefit[mp] - av0 * av_s[:, ti]
         )
         cost_s = cost_s + maturity_survivors[mp] * gab_excess_s * disc_s[:, ti]
 
-        gdb_excess_c = np.maximum(0.0, guaranteed_death_benefit[mp] - av0 * av_c)
+        gdb_excess_c = np.maximum(0.0, minimum_death_benefit[mp] - av0 * av_c)
         cost_c = float((deaths[mp] * gdb_excess_c * disc_c).sum())
         gab_excess_c = max(
-            0.0, guaranteed_accumulation_benefit[mp] - av0 * av_c[ti]
+            0.0, minimum_accumulation_benefit[mp] - av0 * av_c[ti]
         )
         cost_c += maturity_survivors[mp] * gab_excess_c * disc_c[ti]
 
@@ -209,14 +209,14 @@ def guarantee_floor_time_value(
 
 
 def measure_tvog(
-    model_points: ModelPoints, assumptions: Assumptions, return_scenarios: FloatArray
+    model_points: ModelPoints, basis: Basis, return_scenarios: FloatArray
 ) -> TVOGResult:
     """Measure the time value of a VFA contract's minimum guarantee.
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns -- one path per scenario, ``n_time`` being the
     projection horizon. The model points must carry a non-zero
-    ``guaranteed_credit_rate`` (otherwise there is no guarantee to value); in
+    ``minimum_crediting_rate`` (otherwise there is no guarantee to value); in
     v1 the rate is taken as a portfolio-wide scalar (per-MP varying rates
     with stochastic returns are a future extension), so the column is
     required to be uniform across rows.
@@ -226,17 +226,17 @@ def measure_tvog(
     total value; the cost in the central scenario (``investment_return``) is
     the intrinsic value; the difference is the time value (TVOG).
     """
-    g_unique = np.unique(np.asarray(model_points.guaranteed_credit_rate,
+    g_unique = np.unique(np.asarray(model_points.minimum_crediting_rate,
                                      dtype=np.float64))
     if g_unique.size > 1:
         raise NotImplementedError(
-            "measure_tvog requires a uniform guaranteed_credit_rate across "
+            "measure_tvog requires a uniform minimum_crediting_rate across "
             "model points in v1; per-MP varying rates with stochastic "
             "returns are a future extension"
         )
     if g_unique.size == 0 or float(g_unique[0]) == 0.0:
         raise ValueError(
-            "measure_tvog requires a non-zero guaranteed_credit_rate on the "
+            "measure_tvog requires a non-zero minimum_crediting_rate on the "
             "model points -- there is no guarantee to value otherwise"
         )
     g_annual = float(g_unique[0])
@@ -245,7 +245,7 @@ def measure_tvog(
     if return_scenarios.ndim != 2:
         raise ValueError("return_scenarios must be 2-D (n_scenarios, n_time)")
 
-    proj = project_cashflows(model_points, assumptions)
+    proj = project_cashflows(model_points, basis)
     inforce = proj.inforce
     n_mp, n_time = inforce.shape
     if return_scenarios.shape[1] != n_time:
@@ -260,7 +260,7 @@ def measure_tvog(
     exits = inforce_pad[:, :-1] - inforce_pad[:, 1:]
     exit_value = (model_points.account_value[:, None] * exits).sum(axis=0)   # (n_time,)
 
-    f_m = (1.0 + assumptions.fund_fee) ** (1.0 / 12.0) - 1.0
+    f_m = (1.0 + basis.fund_fee) ** (1.0 / 12.0) - 1.0
     g_m = (1.0 + g_annual) ** (1.0 / 12.0) - 1.0
 
     # Without a guarantee the return cancels between growth and discount, so
@@ -273,7 +273,7 @@ def measure_tvog(
     guarantee_cost = pv_stochastic - no_guarantee
 
     # Deterministic central scenario -- a flat return path.
-    r_m = (1.0 + assumptions.investment_return) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
     central = np.full((1, n_time), r_m)
     pv_central = _pv_account_benefits(
         exit_value, np.maximum(central, g_m), central, f_m

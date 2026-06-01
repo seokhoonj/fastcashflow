@@ -2,7 +2,7 @@
 
 Most engine tests value a tiny term-life contract whose only claim is a flat
 death benefit, so the same scaffold (the patterns dict, the monthly->annual
-conversion, the Assumptions builder that wires mortality_annual into both the
+conversion, the Basis builder that wires mortality_annual into both the
 in-force decrement and the DEATH coverage's rate) was duplicated across ~20
 files. It is hoisted here. Tests that need multiple coverages or custom
 patterns still keep a local builder.
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from fastcashflow import Assumptions, CalculationMethod, CoverageRate
+from fastcashflow import Basis, CalculationMethod, CoverageRate
 
 
 PATTERNS = {"DEATH": CalculationMethod.DEATH}
@@ -53,15 +53,15 @@ def make_death_assumptions(
     expense_inflation: float = 0.0,
     coverages=None,
     **other,
-) -> Assumptions:
-    """Build an Assumptions for a single-DEATH-coverage hand-calc test.
+) -> Basis:
+    """Build an Basis for a single-DEATH-coverage hand-calc test.
 
     Pass either ``mortality_q`` / ``lapse_q`` (flat monthly rates) or
     ``mortality_annual`` / ``lapse_annual`` (full callables). The DEATH
     coverage's rate is wired from the same callable as ``mortality_annual``;
     pass ``coverages=...`` to override that auto-wire (multi-coverage cases).
     Any extra keyword (waiver_incidence_annual, state_model, fund_fee,
-    investment_return, ...) is forwarded to Assumptions.
+    investment_return, ...) is forwarded to Basis.
     """
     if mortality_annual is None:
         if mortality_q is None:
@@ -71,7 +71,7 @@ def make_death_assumptions(
         lapse_annual = _flat_dur_rate(0.0 if lapse_q is None else lapse_q)
     if coverages is None:
         coverages = (CoverageRate("DEATH", mortality_annual),)
-    return Assumptions(
+    return Basis(
         mortality_annual    = mortality_annual,
         lapse_annual        = lapse_annual,
         discount_annual     = discount_annual,

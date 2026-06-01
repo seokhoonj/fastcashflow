@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.assumptions import Assumptions
+from fastcashflow.basis import Basis
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.trace import (
     _resolve_basis,
@@ -32,7 +32,7 @@ def _shock_mortality(rate_fn, factor: float):
 
 
 def _basis():
-    return fcf.load_sample_assumptions()
+    return fcf.load_sample_basis()
 
 
 def _portfolio():
@@ -45,7 +45,7 @@ def test_show_trace_renders_all_sections():
     show_trace(0, _portfolio(), _basis(), file=buf)
     text = buf.getvalue()
     for section in (
-        "Assumptions (segment-level)",
+        "Basis (segment-level)",
         "Coverages",
         "Rates (annual",
         "Cash flows",
@@ -74,7 +74,7 @@ def test_show_trace_emits_diagnosis_pool_only_when_present():
         level_premium=100, term_months=12,
         calculation_methods={"DEATH": fcf.CalculationMethod.DEATH},
     )
-    asmp_death = Assumptions(
+    asmp_death = Basis(
         mortality_annual=death_fn,
         lapse_annual=lambda s, a, d: np.full(d.shape, 0.0),
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.0,
@@ -92,7 +92,7 @@ def test_show_trace_undiagnosed_matches_hand_calc():
     annual_q = 1 - (1 - 0.01) ** 12        # monthly q = 0.01
     cancer_fn = lambda s, a, d: np.full(a.shape, annual_q)
     no_decr = lambda s, a, d: np.full(a.shape, 0.0)
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=no_decr, lapse_annual=no_decr,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.0,
         coverages=(fcf.CoverageRate("CANCER", cancer_fn),),
@@ -115,7 +115,7 @@ def test_show_trace_undiagnosed_matches_hand_calc():
 
 
 def test_show_trace_routes_dict_basis_by_segment():
-    """Passing the read_assumptions dict picks the right segment from
+    """Passing the read_basis dict picks the right segment from
     the model point's (product, channel)."""
     mp = _portfolio()
     basis = _basis()
@@ -127,13 +127,13 @@ def test_show_trace_routes_dict_basis_by_segment():
 
 
 def test_show_trace_accepts_single_assumptions():
-    """A plain :class:`Assumptions` (not a dict) bypasses the segment
+    """A plain :class:`Basis` (not a dict) bypasses the segment
     lookup and is used directly."""
     mp = _portfolio()
     asmp = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
     buf = io.StringIO()
     show_trace(0, mp, asmp, file=buf)
-    assert "Assumptions (segment-level)" in buf.getvalue()
+    assert "Basis (segment-level)" in buf.getvalue()
 
 
 def test_show_trace_bel_and_ra_agree_with_measure():
@@ -174,7 +174,7 @@ def test_show_trace_dict_basis_unknown_segment_raises():
     mp = _portfolio()
     partial = {k: v for k, v in _basis().items() if k[0] != mp.product_code[0]}
     if partial:                           # only meaningful when dict is shrinkable
-        with pytest.raises(KeyError, match="no assumptions for segment"):
+        with pytest.raises(KeyError, match="no basis for segment"):
             show_trace(0, mp, partial, file=io.StringIO())
 
 
@@ -254,7 +254,7 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
 def test_show_trace_diff_routes_dict_bases_independently():
     """Each basis (dict) is routed by the model point's segment, so
     comparing two segment-keyed dicts that map the row to the same
-    Assumptions yields a no-change diff."""
+    Basis yields a no-change diff."""
     mp = _portfolio()
     basis = _basis()
     buf = io.StringIO()
@@ -344,7 +344,7 @@ def _profitable_basis_and_mp():
         return np.full(d.shape, 0.0005)
     def lapse(s, ia, d, ic, em):
         return np.full(d.shape, 0.02)
-    asmp = Assumptions(
+    asmp = Basis(
         mortality_annual=mort, lapse_annual=lapse,
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
         coverages=(fcf.CoverageRate("DEATH", mort),),
@@ -416,15 +416,15 @@ def test_show_csm_step_rejects_out_of_range_index():
 def _vfa_setup():
     death_fn = lambda s, a, d: np.full(np.shape(d), 0.005)
     lapse_fn = lambda s, a, d: np.full(np.shape(d), 0.04)
-    basis = Assumptions(
+    basis = Basis(
         mortality_annual=death_fn, lapse_annual=lapse_fn,
         discount_annual=0.03, ra_confidence=0.95, mortality_cv=0.10,
         expense_cv=0.10, investment_return=0.06, fund_fee=0.025,
     )
     mp = ModelPoints.single(
         40, 0.0, 120, account_value=1.0e8,
-        guaranteed_death_benefit=1.02e8,
-        guaranteed_accumulation_benefit=1.05e8,
+        minimum_death_benefit=1.02e8,
+        minimum_accumulation_benefit=1.05e8,
     )
     return mp, basis
 
