@@ -54,15 +54,22 @@ Or build a single contract by hand:
 import numpy as np
 import fastcashflow as fcf
 
-# flat actuarial basis -- 0.1% annual mortality, 1% lapse, 3% discount
-mort = lambda sex, age, dur: np.full(age.shape, 0.001)
+# mortality -- flat 0.1% annual rate (same for every sex/age/duration)
+death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
+
+# lapse -- flat 1% annual rate
+lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.01)
+
+# actuarial assumptions
 asmp = fcf.Assumptions(
-    mortality_annual = mort,
-    lapse_annual     = lambda sex, age, dur: np.full(dur.shape, 0.01),
-    discount_annual  = 0.03,
-    ra_confidence    = 0.75,
-    mortality_cv     = 0.10,
-    coverages        = (fcf.CoverageRate("DEATH", mort),),
+    mortality_annual = death_fn,   # in-force decrement (death_fn above)
+    lapse_annual     = lapse_fn,   # lapse rate (lapse_fn above)
+    discount_annual  = 0.03,       # annual discount rate
+    ra_confidence    = 0.75,       # risk-adjustment confidence level (75th pct)
+    mortality_cv     = 0.10,       # mortality coefficient of variation
+    coverages        = (
+        fcf.CoverageRate("DEATH", death_fn),  # one death coverage (claim rate = death_fn)
+    ),
 )
 
 # one policy -- age 40, 100M death benefit, 70k monthly premium, 10-year term
@@ -71,7 +78,7 @@ mp = fcf.ModelPoints.single(
     benefits            = {0: 100_000_000},
     level_premium       = 70_000,
     term_months         = 120,
-    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},  # coverage code -> method
 )
 
 r = fcf.measure(mp, asmp)
