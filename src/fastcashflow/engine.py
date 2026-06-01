@@ -1284,7 +1284,8 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          discount_start, discount_mid,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
-                         survival_monthly, lapse_monthly, surrender_curve):
+                         survival_monthly, lapse_monthly, surrender_curve,
+                         use_morbidity, use_annuity, use_lae, use_surrender):
     """Scalar-inforce fast path of the general codegen value kernel
     (:func:`_codegen_value_kernel_source`).
 
@@ -1365,26 +1366,38 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                 prem_due -= 1
             prem_left -= 1
             pv_premium += (level + single) * ds
-            cum_premium += level + single
             pv_mortality += inforce * claim_rate * dm
-            pv_morbidity += inforce * morb_rate * dm
-            if ann_due == 0:
-                pv_annuity += inforce * annuity * ds
-                ann_due = ann_freq - 1
-            else:
-                ann_due -= 1
+            # Streams the portfolio does not use are skipped wholesale: the
+            # guards are loop-invariant per call, so the branch predicts
+            # perfectly and the per-cell array gathers / multiplies of an
+            # absent stream are not paid. A death-only book pays for none of
+            # surrender, annuity, morbidity or LAE.
+            if use_morbidity:
+                pv_morbidity += inforce * morb_rate * dm
+            if use_annuity:
+                if ann_due == 0:
+                    pv_annuity += inforce * annuity * ds
+                    ann_due = ann_freq - 1
+                else:
+                    ann_due -= 1
             ann_prem = premium * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
             beta = (inforce * beta_pro_rata * ann_prem / 12.0
                     if t < premium_term else 0.0)
             gamma = inforce * gamma_fixed[t]
-            lae = lae_pro_rata[t] * inforce * (claim_rate + morb_rate)
-            pv_expense += (alpha + beta + gamma + lae) * dm
-            # cum_premium already aggregates inforce * premium; multiplying
-            # by lapse_rate alone gives the per-month surrender outflow.
-            pv_surrender += (lapse_monthly[sx, age_idx, year]
-                             * cum_premium * surrender_curve[t] * dm)
+            if use_lae:
+                lae = lae_pro_rata[t] * inforce * (claim_rate + morb_rate)
+                pv_expense += (alpha + beta + gamma + lae) * dm
+            else:
+                pv_expense += (alpha + beta + gamma) * dm
+            if use_surrender:
+                # cum_premium aggregates inforce * premium and is the surrender
+                # basis; multiplying by lapse_rate alone gives the per-month
+                # surrender outflow (the count is already in cum_premium).
+                cum_premium += level + single
+                pv_surrender += (lapse_monthly[sx, age_idx, year]
+                                 * cum_premium * surrender_curve[t] * dm)
             inforce *= survival_monthly[sx, age_idx, year]
         pm = inforce * maturity_benefit[mp] * discount_start[term]
         # Non-diagnosis coverages with a waiting or reduced-benefit rule:
@@ -1746,6 +1759,13 @@ def _measure_fast(
         survival_monthly = np.ascontiguousarray(
             (1.0 - mortality_grid) * (1.0 - lapse_grid)
         )
+        # Feature flags -- skip the per-cell work of any cash-flow stream the
+        # portfolio does not use (the kernel guards on these). Cheap O(n)
+        # scans once per call, off the hot loop.
+        use_surrender = bool(np.any(surrender_curve_kernel != 0.0))
+        use_annuity = bool(np.any(model_points.annuity_payment != 0.0))
+        use_lae = bool(np.any(lae_pro_rata != 0.0))
+        use_morbidity = bool(np.any(coverage_risk != 0))
         bel, ra, csm, loss_component = _value_kernel_scalar(
             issue_index,
             model_points.sex,
@@ -1780,6 +1800,10 @@ def _measure_fast(
             survival_monthly,
             lapse_grid,
             surrender_curve_kernel,
+            use_morbidity,
+            use_annuity,
+            use_lae,
+            use_surrender,
         )
         return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
