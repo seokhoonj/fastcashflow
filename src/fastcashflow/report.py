@@ -23,6 +23,7 @@ full incurred-claims movement are left for later.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import singledispatch
 
 import numpy as np
 
@@ -106,21 +107,33 @@ class Report:
         return "\n".join(lines)
 
 
-def report(measurement: GMMMeasurement | PAAMeasurement | VFAMeasurement) -> Report:
+@singledispatch
+def report(measurement) -> Report:
     """Assemble the IFRS 17 report from a GMM, PAA or VFA measurement.
 
     See the module docstring for the basis (IFRS 17 paragraphs B120-B124).
+    Dispatches on the measurement type; a new model registers its own report
+    with ``@report.register``.
     """
-    if isinstance(measurement, GMMMeasurement):
-        return _report_gmm(measurement)
-    if isinstance(measurement, PAAMeasurement):
-        return _report_paa(measurement)
-    if isinstance(measurement, VFAMeasurement):
-        return _report_vfa(measurement)
     raise TypeError(
         "report() expects a GMM, PAA or VFA measurement, got "
         f"{type(measurement).__name__}"
     )
+
+
+@report.register
+def _(measurement: GMMMeasurement) -> Report:
+    return _report_gmm(measurement)
+
+
+@report.register
+def _(measurement: PAAMeasurement) -> Report:
+    return _report_paa(measurement)
+
+
+@report.register
+def _(measurement: VFAMeasurement) -> Report:
+    return _report_vfa(measurement)
 
 
 def _report_gmm(m: GMMMeasurement) -> Report:

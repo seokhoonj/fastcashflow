@@ -29,6 +29,7 @@ of its BEL, RA and CSM.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import singledispatch
 
 import numpy as np
 
@@ -149,53 +150,79 @@ class VFAPeriodMovement:
     csm_closing: FloatArray
 
 
+@singledispatch
 def roll_forward(
-    measurement: GMMMeasurement | PAAMeasurement | VFAMeasurement,
+    measurement,
+    period_months: int = 12,
+    *,
+    revised=None,
+    revised_at=None,
+    actual_inforce=None,
+    experience_at=None,
+):
+    """Slice a measurement into reporting-period movements.
+
+    Returns one movement per reporting period of ``period_months`` months,
+    reconciling the opening and closing figures; consecutive periods chain
+    and a partial final period is allowed. Dispatches on the measurement
+    type -- a new model registers with ``@roll_forward.register``.
+
+    For a GMM measurement, an assumption revision is recognised by passing
+    ``revised`` (a second measurement of the same book under updated basis)
+    and ``revised_at`` (the month it takes effect); in-force experience by
+    ``actual_inforce`` (the ``(n_mp,)`` in-force remaining at the period end,
+    or a 2-D ``(n_periods, n_mp)`` array to roll experience through every
+    period) and ``experience_at``. Either change adjusts the CSM by the
+    resulting change in fulfilment cash flows (floored at zero, any excess
+    falling into the loss component); v1 recognises one or the other, not
+    both in a single call. A PAA or VFA measurement is also accepted -- the
+    movement is then the roll of the LRC or of the CSM, to which the
+    revision and experience options do not apply.
+    """
+    raise TypeError(
+        f"roll_forward does not handle {type(measurement).__name__}"
+    )
+
+
+def _reject_gmm_only_opts(revised, revised_at, actual_inforce, experience_at):
+    if any(opt is not None for opt in
+           (revised, revised_at, actual_inforce, experience_at)):
+        raise ValueError(
+            "the revision and experience options apply to a GMM "
+            "measurement only"
+        )
+
+
+@roll_forward.register
+def _(measurement: PAAMeasurement, period_months: int = 12, *,
+      revised=None, revised_at=None, actual_inforce=None, experience_at=None):
+    if period_months < 1:
+        raise ValueError(f"period_months must be >= 1, got {period_months}")
+    _reject_gmm_only_opts(revised, revised_at, actual_inforce, experience_at)
+    return _roll_forward_paa(measurement, period_months)
+
+
+@roll_forward.register
+def _(measurement: VFAMeasurement, period_months: int = 12, *,
+      revised=None, revised_at=None, actual_inforce=None, experience_at=None):
+    if period_months < 1:
+        raise ValueError(f"period_months must be >= 1, got {period_months}")
+    _reject_gmm_only_opts(revised, revised_at, actual_inforce, experience_at)
+    return _roll_forward_vfa(measurement, period_months)
+
+
+@roll_forward.register
+def _(
+    measurement: GMMMeasurement,
     period_months: int = 12,
     *,
     revised: GMMMeasurement | None = None,
     revised_at: int | None = None,
     actual_inforce: FloatArray | None = None,
     experience_at: int | None = None,
-) -> list[PeriodMovement] | list[PAAPeriodMovement] | list[VFAPeriodMovement]:
-    """Slice a GMM measurement into reporting-period movements.
-
-    Returns one :class:`PeriodMovement` per reporting period of
-    ``period_months`` months, reconciling the opening and closing BEL, RA
-    and CSM. Consecutive periods chain, and a horizon that is not a whole
-    number of periods gives a shorter final period.
-
-    An assumption revision is recognised by passing ``revised`` -- a second
-    measurement of the same book under updated basis -- and
-    ``revised_at``, the month it takes effect. In-force experience is
-    recognised by passing ``actual_inforce`` -- the ``(n_mp,)`` in-force
-    actually remaining at the period end -- and ``experience_at``, that
-    month. Passing ``actual_inforce`` as a 2-D ``(n_periods, n_mp)`` array
-    instead rolls experience through every reporting period, row ``j`` being
-    the in-force at month ``(j+1) * period_months``.
-    The revision month and the single experience month must be positive
-    multiples of ``period_months``. Either change adjusts the CSM by the
-    resulting change in fulfilment cash flows (floored at zero, any excess
-    falling into the loss component); v1 recognises one or the other, not
-    both in a single call.
-
-    A PAA or VFA measurement is also accepted -- the movement is then the
-    roll of the liability for remaining coverage or of the contractual
-    service margin, to which the revision and experience options do not
-    apply.
-    """
+) -> list[PeriodMovement]:
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
-    if isinstance(measurement, (PAAMeasurement, VFAMeasurement)):
-        if any(opt is not None for opt in
-               (revised, revised_at, actual_inforce, experience_at)):
-            raise ValueError(
-                "the revision and experience options apply to a GMM "
-                "measurement only"
-            )
-        if isinstance(measurement, PAAMeasurement):
-            return _roll_forward_paa(measurement, period_months)
-        return _roll_forward_vfa(measurement, period_months)
     n_time = measurement.bel_path.shape[1] - 1
     n_mp = measurement.bel_path.shape[0]
     if actual_inforce is not None:
