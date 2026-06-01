@@ -21,7 +21,7 @@ import fastcashflow as fcf
 
 model_points = fcf.load_sample_model_points()              # 패키지 샘플 포트폴리오
 basis        = fcf.load_sample_assumptions()               # {(product, channel): Assumptions}
-assumptions  = basis[("TERM_LIFE_A", "GA")]                     # 한 세그먼트 선택
+assumptions  = basis[("TERM_LIFE_A", "GA")]                # 한 세그먼트 선택
 m            = fcf.measure(model_points, assumptions)
 ```
 
@@ -120,13 +120,13 @@ fcf.plot_analysis_of_change(recon[0])
 ```
 
 기본값은 CSM 성분이며(`component`로 BEL·RA도 선택할 수 있습니다), 표의
-다섯 행 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지 — 을 폭포꼴
-막대로 잇습니다.
+다섯 행 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지 — 을 waterfall
+차트로 잇습니다.
 
 ```{figure} ../images/analysis-of-change.png
-:alt: 첫 보고기간 CSM의 변동분석 폭포 차트 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지
+:alt: 첫 보고기간 CSM 변동분석 waterfall 차트 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지
 :class: hero
-첫 보고기간(months 1–12) CSM — Opening·Finance·Release를 거쳐 Closing까지 이어지는 폭포 차트.
+첫 보고기간(months 1–12) CSM — Opening·Finance·Release를 거쳐 Closing까지 이어지는 waterfall 차트.
 ```
 
 ## 12.3 리포트

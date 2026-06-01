@@ -420,7 +420,7 @@ waiver 의 *동적 전이* 까지 필요할 때, segment 분리는 납입후가 
 
 - [3.1 보험료 납입면제 (waiver)](waiver) — 2-state 입문. 본 챕터의 직접
   출발점.
-- [1.3 사망률의 두 역할](../basics/mortality-roles) — decrement (사망 +
+- [1.3 사망률의 두 가지 역할](../basics/mortality-roles) — decrement (사망 +
   해지) 와 보장 청구의 분리.
 - [2.1 정기보험](../simple/term-life) — 상태 전이 없는 정액형.
 - [검증 패턴](../workflow/validation) — `show_trace` 로 상태별 점유와

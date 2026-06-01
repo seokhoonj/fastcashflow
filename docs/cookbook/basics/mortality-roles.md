@@ -1,4 +1,4 @@
-# 1.3 사망률의 두 역할
+# 1.3 사망률의 두 가지 역할
 
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
@@ -65,8 +65,8 @@ claim_DEATH[t] = in_force[t] × DEATH.rate × DEATH.benefit
 
 ```python
 asmp = fcf.Assumptions(
-    mortality_annual = ...,                                    # 1.3.1 의 감쇠
-    coverages        = (fcf.CoverageRate("DEATH", rate_fn),)  # ★ 사망 보장 청구율
+    mortality_annual = ...,                                   # 1.3.1 의 감쇠
+    coverages        = (fcf.CoverageRate("DEATH", rate_fn),)  # 사망 보장 청구율
 )
 ```
 

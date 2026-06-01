@@ -132,14 +132,17 @@ inpatient_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
 # 감쇠 없음 -- 사망 / 해지 모두 0
 no_decr = lambda s, a, d: np.full(a.shape, 0.0)
 
+
+# 계리적 가정
 asmp = fcf.Assumptions(
-    mortality_annual = no_decr,                                            # 보유계약 감쇠율 0 (감쇠 안 함)
-    lapse_annual     = no_decr,                                            # 해지율 0 (해지 없음)
-    discount_annual  = 0.0,                                                # 연 할인율 0 (검증 단순화)
-    ra_confidence    = 0.75,                                               # 위험조정 신뢰수준 75%
-    mortality_cv     = 0.0,                                                # 사망률 변동계수 0 (RA = 0 강제)
-    coverages        = (fcf.CoverageRate("INPATIENT", inpatient_fn),),     # 입원 보장 1 종 (청구 rate = inpatient_fn)
+    mortality_annual = no_decr,             # 보유계약 감쇠율 0 (감쇠 안 함)
+    lapse_annual     = no_decr,             # 해지율 0 (해지 없음)
+    discount_annual  = 0.0,                 # 연 할인율 0 (검증 단순화)
+    ra_confidence    = 0.75,                # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.0,                 # 사망률 변동계수 0 (RA = 0 강제)
+    coverages        = (fcf.CoverageRate("INPATIENT", inpatient_fn),),
 )
+# 모델 포인트 (계약 하나)
 mp = fcf.ModelPoints.single(
     issue_age     = 40,           # 가입연령 40세
     sex           = 0,            # 성별 (0=남, 1=여)
@@ -153,7 +156,7 @@ mp = fcf.ModelPoints.single(
 r = fcf.measure(mp, asmp)
 
 print(f"in_force      : {r.cashflows.inforce[0, :3]}")
-print(f"morbidity_cf  : {r.cashflows.morbidity_cf[0, :3]}")                # 입원 cash flow
+print(f"morbidity_cf  : {r.cashflows.morbidity_cf[0, :3]}")  # 입원 cash flow
 print(f"BEL[0]        : {float(r.bel[0, 0]):.2f}")
 print(f"cumulative 3m : {float(r.cashflows.morbidity_cf[0, :3].sum()):.2f}")
 ```
