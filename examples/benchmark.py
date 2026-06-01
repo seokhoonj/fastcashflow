@@ -38,9 +38,9 @@ def make_portfolio(n_mp: int, seed: int = 42) -> ModelPoints:
 
 
 def _time(model_points: ModelPoints, basis: Basis, backend: str) -> float:
-    value(model_points, basis, backend=backend)        # warm-up (triggers compilation)
+    measure(model_points, basis, backend=backend, full=False)        # warm-up (triggers compilation)
     start = time.perf_counter()
-    value(model_points, basis, backend=backend)
+    measure(model_points, basis, backend=backend, full=False)
     return time.perf_counter() - start
 
 
@@ -59,7 +59,7 @@ def main() -> None:
         coverages=(CoverageRate("DEATH", mortality_annual),),
     )
     gpu = cuda.is_available()
-    print("fastcashflow benchmark -- value(), term = 120 months"
+    print("fastcashflow benchmark -- measure(), term = 120 months"
           + ("  (CPU + GPU)" if gpu else "  (CPU only)"))
 
     for n_mp in (10_000, 100_000, 1_000_000, 5_000_000):

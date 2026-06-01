@@ -1,4 +1,4 @@
-"""Portfolio at scale -- the fast value() path and writing results out.
+"""Portfolio at scale -- the fast measure() path and writing results out.
 
 Inputs are in examples/data/ (Excel files).
 
@@ -17,10 +17,10 @@ def main() -> None:
     basis = basis[("TERM_LIFE_A", "FC")]
     book = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
 
-    # value() is the fast path -- BEL/RA/CSM/loss component per model point,
+    # measure() is the fast path -- BEL/RA/CSM/loss component per model point,
     # with no per-month trajectories materialised.
-    val = fcf.value(book, basis)
-    print(f"value() -- {book.n_mp} model points,  total CSM {val.csm.sum():,.0f}")
+    val = fcf.measure(book, basis, full=False)
+    print(f"measure() -- {book.n_mp} model points,  total CSM {val.csm.sum():,.0f}")
 
     # Write the per-model-point results to a file.
     with tempfile.TemporaryDirectory() as tmp:

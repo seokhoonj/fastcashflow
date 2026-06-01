@@ -8,7 +8,7 @@ one ``Basis`` per segment. See docs/basis-format.md.
 import numpy as np
 
 from fastcashflow import (
-    ModelPoints, load_sample_basis, measure, value,
+    ModelPoints, load_sample_basis, measure, measure,
 )
 
 
@@ -118,8 +118,8 @@ def test_resolved_basis_values():
     mp = ModelPoints.single(issue_age=40, benefits={0: 100_000_000.0},
                             level_premium=50_000.0, term_months=120,
                             calculation_methods=load_sample_calculation_methods())
-    # Use a copy of the basis without surrender for the value() / measure()
-    # equivalence assertion -- the value() fast path doesn't yet include
+    # Use a copy of the basis without surrender for the measure() / measure()
+    # equivalence assertion -- the measure() fast path doesn't yet include
     # surrender cash flows (see surrender-value-gap memory); only measure()
     # does. With surrender disabled the two paths agree to machine precision.
     import dataclasses
@@ -127,12 +127,12 @@ def test_resolved_basis_values():
         basis[("TERM_LIFE_A", "GA")], surrender_value_curve=None)
     asmp_fc_no_surr = dataclasses.replace(
         basis[("TERM_LIFE_A", "FC")], surrender_value_curve=None)
-    ga = value(mp, asmp_ga_no_surr).bel[0]
-    fc = value(mp, asmp_fc_no_surr).bel[0]
+    ga = measure(mp, asmp_ga_no_surr, full=False).bel[0]
+    fc = measure(mp, asmp_fc_no_surr, full=False).bel[0]
     assert np.isfinite(ga) and np.isfinite(fc)
     assert not np.isclose(ga, fc)
     # fused and detailed paths agree (when surrender is disabled).
-    assert np.isclose(measure(mp, asmp_ga_no_surr).bel[0, 0], ga)
+    assert np.isclose(measure(mp, asmp_ga_no_surr).bel_path[0, 0], ga)
 
 
 # ---------------------------------------------------------------------------

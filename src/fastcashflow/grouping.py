@@ -53,7 +53,7 @@ def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
     :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.report`.
     """
     group_ids = np.asarray(group_ids)
-    n_mp = measurement.bel.shape[0]
+    n_mp = measurement.bel_path.shape[0]
     if group_ids.shape != (n_mp,):
         raise ValueError(
             f"group_ids must have one entry per model point ({n_mp})"
@@ -62,8 +62,8 @@ def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
     inverse = inverse.reshape(-1)
     n_groups = labels.shape[0]
 
-    bel = _sum_by_group(measurement.bel, inverse, n_groups)
-    ra = _sum_by_group(measurement.ra, inverse, n_groups)
+    bel = _sum_by_group(measurement.bel_path, inverse, n_groups)
+    ra = _sum_by_group(measurement.ra_path, inverse, n_groups)
     cf = measurement.cashflows
     grouped_cf = Cashflows(
         inforce=_sum_by_group(cf.inforce, inverse, n_groups),
@@ -90,12 +90,15 @@ def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
     return GMMMeasurement(
-        bel=bel,
-        ra=ra,
-        csm=csm,
+        bel=bel[:, 0],
+        ra=ra[:, 0],
+        csm=csm[:, 0],
+        loss_component=loss_component,
+        bel_path=bel,
+        ra_path=ra,
+        csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        loss_component=loss_component,
         lic=_sum_by_group(measurement.lic, inverse, n_groups),
         cashflows=grouped_cf,
         discount_start=measurement.discount_start,

@@ -60,26 +60,39 @@ from fastcashflow.statemodel import (
 
 @dataclass(frozen=True, slots=True)
 class GMMMeasurement:
-    """Detailed measurement -- BEL, RA and CSM rolled forward over time.
+    """IFRS 17 GMM measurement: BEL, RA and CSM.
 
-    ``bel``, ``ra`` and ``csm`` are ``(n_mp, n_time+1)`` trajectories; column
-    0 is the inception measurement. The CSM roll-forward decomposes as
-    ``csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
+    The headline fields (``bel``, ``ra``, ``csm``, ``loss_component``) are
+    ``(n_mp,)`` inception values and are **always** present.
+
+    The trajectory fields are the roll-forward over time and are populated
+    only by ``measure(..., full=True)``; on the headline-only fast path
+    (``full=False``) they are ``None``. ``bel_path`` / ``ra_path`` /
+    ``csm_path`` are the ``(n_mp, n_time+1)`` trajectories whose column 0 is
+    the inception value (so ``bel == bel_path[:, 0]`` when full). The CSM
+    roll-forward decomposes as
+    ``csm_path[:, t+1] = csm_path[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
     ``lic`` is the liability for incurred claims -- zero unless a claims
     settlement pattern is set, which also discounts claims to their payment
     dates in the BEL.
     """
 
-    bel: FloatArray              # (n_mp, n_time+1) -- BEL trajectory
-    ra: FloatArray               # (n_mp, n_time+1) -- RA trajectory
-    csm: FloatArray              # (n_mp, n_time+1) -- CSM trajectory
-    csm_accretion: FloatArray    # (n_mp, n_time)   -- CSM interest accreted each month
-    csm_release: FloatArray      # (n_mp, n_time)   -- CSM released each month
-    loss_component: FloatArray   # (n_mp,)          -- loss component at inception
-    lic: FloatArray              # (n_mp, n_time+1) -- liability for incurred claims
-    cashflows: Cashflows
-    discount_start: FloatArray   # (n_time+1,) -- start-of-month discount factors, incl. t=term
-    discount_mid: FloatArray     # (n_time,)   -- mid-month discount factors
+    # Headline -- always present, shape (n_mp,)
+    bel: FloatArray              # inception Best Estimate of Liability
+    ra: FloatArray               # inception Risk Adjustment
+    csm: FloatArray              # inception Contractual Service Margin
+    loss_component: FloatArray   # loss component at inception (onerous contracts)
+
+    # Trajectory -- full=True only (None on the headline-only fast path)
+    bel_path: FloatArray | None = None        # (n_mp, n_time+1) -- BEL trajectory
+    ra_path: FloatArray | None = None         # (n_mp, n_time+1) -- RA trajectory
+    csm_path: FloatArray | None = None        # (n_mp, n_time+1) -- CSM trajectory
+    csm_accretion: FloatArray | None = None   # (n_mp, n_time)   -- CSM interest accreted
+    csm_release: FloatArray | None = None     # (n_mp, n_time)   -- CSM released each month
+    lic: FloatArray | None = None             # (n_mp, n_time+1) -- liability for incurred claims
+    cashflows: "Cashflows | None" = None
+    discount_start: FloatArray | None = None  # (n_time+1,) -- start-of-month discount factors
+    discount_mid: FloatArray | None = None    # (n_time,)   -- mid-month discount factors
 
 
 def _compute_csm(bel0, ra0, inforce, monthly_rate):
@@ -102,8 +115,13 @@ def _compute_csm(bel0, ra0, inforce, monthly_rate):
     return csm, accretion, release, loss_component
 
 
-def measure(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
-    """Detailed GMM measurement: BEL, RA and CSM rolled forward over time."""
+def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
+    """Full GMM measurement: BEL, RA and CSM rolled forward over time.
+
+    Returns a :class:`GMMMeasurement` carrying both the ``(n_mp,)`` inception
+    headline (column 0 of each trajectory) and the ``(n_mp, n_time+1)``
+    ``*_path`` trajectories. Reached by ``measure(..., full=True)``.
+    """
     proj = project_cashflows(model_points, basis)
     claim_cf, morbidity_cf = proj.claim_cf, proj.morbidity_cf
     monthly_rate = discount_monthly_curve(basis, proj.n_time)
@@ -148,12 +166,15 @@ def measure(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
     )
 
     return GMMMeasurement(
-        bel=bel,
-        ra=ra,
-        csm=csm,
+        bel=bel[:, 0],
+        ra=ra[:, 0],
+        csm=csm[:, 0],
+        loss_component=loss_component,
+        bel_path=bel,
+        ra_path=ra,
+        csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        loss_component=loss_component,
         lic=lic,
         cashflows=proj,
         discount_start=discount_start,
@@ -161,19 +182,52 @@ def measure(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
     )
 
 
+def measure(
+    model_points: ModelPoints,
+    basis: "Basis | dict[tuple[str, str], Basis]",
+    *,
+    full: bool = True,
+    backend: str = "cpu",
+    discount_curve: FloatArray | None = None,
+) -> GMMMeasurement:
+    """GMM measurement -- the single entry point.
+
+    ``full=True`` (default) returns the complete roll-forward: the
+    ``(n_mp,)`` inception headline *and* the ``(n_mp, n_time+1)`` ``*_path``
+    trajectories. ``full=False`` is the fused, memory-minimal fast path --
+    it fills only the headline (``*_path`` are ``None``) and is the right
+    choice for large-scale valuation.
+
+    ``basis`` may be a single :class:`Basis` (uniform portfolio) or a
+    ``{(product, channel): Basis}`` dict; with a dict each segment is routed
+    to its own basis. ``backend`` (``"cpu"``/``"gpu"``) and ``discount_curve``
+    apply to the fast path only.
+    """
+    if isinstance(basis, dict):
+        if full:
+            raise NotImplementedError(
+                "measure(full=True) with a per-segment basis dict is not "
+                "supported yet; use full=False for segmented portfolios"
+            )
+        return _measure_segmented(
+            model_points, basis, backend=backend, discount_curve=discount_curve,
+        )
+    if full:
+        if backend != "cpu" or discount_curve is not None:
+            raise ValueError(
+                "backend / discount_curve apply to the fast path "
+                "(full=False) only; measure(full=True) runs the trajectory "
+                "kernel on basis.discount_annual"
+            )
+        return _measure_full(model_points, basis)
+    return _measure_fast(
+        model_points, basis, backend=backend, discount_curve=discount_curve,
+    )
+
+
 # ---------------------------------------------------------------------------
-# Fast path -- fused, memory-minimal valuation
+# In-force subsequent measurement
 # ---------------------------------------------------------------------------
-
-@dataclass(frozen=True, slots=True)
-class Valuation:
-    """Headline IFRS 17 GMM valuation. Each array has shape ``(n_mp,)``."""
-
-    bel: FloatArray             # Best Estimate of Liability
-    ra: FloatArray              # Risk Adjustment
-    csm: FloatArray             # CSM at initial recognition
-    loss_component: FloatArray  # loss component at inception (onerous contracts)
-
 
 def value_in_force(
     model_points: ModelPoints,
@@ -182,7 +236,7 @@ def value_in_force(
     prior_csm: FloatArray | None = None,
     lock_in_rate: float | None = None,
     period_months: int | None = None,
-) -> Valuation:
+) -> GMMMeasurement:
     """In-force subsequent measurement (IFRS 17 Sec. 40-52).
 
     Each model point is valued at its valuation date -- the moment that is
@@ -227,7 +281,7 @@ def value_in_force(
     settlement_mode = _validate_settlement_args(
         prior_csm, lock_in_rate, period_months,
     )
-    m = measure(model_points, basis)
+    m = _measure_full(model_points, basis)
     n_mp = m.bel.shape[0]
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     # ``elapsed_months > term_months`` means the policy is already past
@@ -246,12 +300,12 @@ def value_in_force(
             "within the contract horizon."
         )
     rows = np.arange(n_mp)
-    bel = m.bel[rows, em]
-    ra = m.ra[rows, em]
+    bel = m.bel_path[rows, em]
+    ra = m.ra_path[rows, em]
     if not settlement_mode:
         # Hypothetical: take the engine-computed CSM trajectory at t=elapsed.
-        csm = m.csm[rows, em]
-        return Valuation(
+        csm = m.csm_path[rows, em]
+        return GMMMeasurement(
             bel=bel, ra=ra, csm=csm, loss_component=m.loss_component,
         )
 
@@ -298,7 +352,7 @@ def value_in_force(
     # Returning max(0, bel + ra - csm) would conflate "carried CSM is short"
     # with "true onerous recognition" and mis-signal a Sec. 44 hit.
     loss = np.zeros(n_mp, dtype=np.float64)
-    return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss)
+    return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss)
 
 
 def _validate_settlement_args(
@@ -367,7 +421,7 @@ def measure_in_force(
     settlement_mode = _validate_settlement_args(
         prior_csm, lock_in_rate, period_months,
     )
-    m = measure(model_points, basis)
+    m = _measure_full(model_points, basis)
     if not settlement_mode:
         return m
 
@@ -399,7 +453,7 @@ def measure_in_force(
         )
 
     lock_in_monthly = (1.0 + float(lock_in_rate)) ** (1.0 / 12.0) - 1.0
-    csm_new = m.csm.copy()
+    csm_new = m.csm_path.copy()
     csm_accretion_new = m.csm_accretion.copy()
     csm_release_new = m.csm_release.copy()
 
@@ -451,10 +505,13 @@ def measure_in_force(
     return GMMMeasurement(
         bel=m.bel,
         ra=m.ra,
-        csm=csm_new,
+        csm=csm_new[:, 0],
+        loss_component=loss_new,
+        bel_path=m.bel_path,
+        ra_path=m.ra_path,
+        csm_path=csm_new,
         csm_accretion=csm_accretion_new,
         csm_release=csm_release_new,
-        loss_component=loss_new,
         lic=m.lic,
         cashflows=m.cashflows,
         discount_start=m.discount_start,
@@ -466,7 +523,7 @@ def measure_in_force(
 # Codegen specialisation -- the multi-state value kernel
 # ---------------------------------------------------------------------------
 #
-# The multi-state CPU value() kernel is generated per StateModel: the state
+# The multi-state CPU fast-path (full=False) kernel is generated per StateModel: the state
 # count, the full edge topology, the lump-sum flags, and which states pay
 # premium or a benefit all become part of the generated Python source so
 # numba's compiled inner loop has no array indirections left, only scalar
@@ -1390,13 +1447,13 @@ def _value_kernel_scalar(issue_index, sex, term_months, count, level_premium,
     return bel, ra, csm, loss_component
 
 
-def value(
+def _measure_fast(
     model_points: ModelPoints,
     basis: Basis,
     *,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
-) -> Valuation:
+) -> GMMMeasurement:
     """Fast GMM valuation: BEL, RA and CSM per model point.
 
     One fused kernel; no per-month arrays are materialised. This is the
@@ -1419,23 +1476,23 @@ def value(
     """
     if basis.ra_method != "confidence_level":
         raise ValueError(
-            "value() computes the confidence-level RA only; use measure() "
-            f"for ra_method={basis.ra_method!r}"
+            "measure(full=False) computes the confidence-level RA only; use "
+            f"full=True for ra_method={basis.ra_method!r}"
         )
-    # value() builds the rate grid at issue_class = 0 throughout; a portfolio
+    # the fast path builds the rate grid at issue_class = 0 throughout; a portfolio
     # with non-zero classes would silently look up the wrong row of any
     # issue_class-bearing rate table. measure() handles it correctly.
     if np.any(model_points.issue_class != 0):
         raise NotImplementedError(
-            "value() currently evaluates rates on a single-issue-class grid "
+            "measure(full=False) currently evaluates rates on a single-issue-class grid "
             "(class=0). The portfolio carries non-zero issue_class values, "
-            "which would land at class 0 in value() and produce a silently "
-            "wrong BEL. Use measure() until value() grows per-class grid "
+            "which would land at class 0 in the fast path and produce a silently "
+            "wrong BEL. Use full=True until the fast path grows per-class grid "
             "support."
         )
     if model_points.term_months.shape[0] == 0:
         raise ValueError(
-            "model_points is empty (n_mp=0); value() cannot project a "
+            "model_points is empty (n_mp=0); measure(full=False) cannot project a "
             "zero-policy portfolio. Filter empty segments upstream."
         )
     n_time = int(model_points.term_months.max())
@@ -1642,7 +1699,7 @@ def value(
     # consumes (alpha / beta / gamma scalars plus two per-month curves).
     # See projection._expense_kernel_args -- this engine path uses the
     # same helper so the item-form vs legacy dispatch is consistent across
-    # value() and measure().
+    # the fast path (full=False) and the full path (full=True).
     from fastcashflow.projection import _expense_kernel_args
     (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,
      gamma_fixed, lae_pro_rata) = _expense_kernel_args(
@@ -1724,7 +1781,7 @@ def value(
             lapse_grid,
             surrender_curve_kernel,
         )
-        return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
+        return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
     # The CPU kernel takes (n_states, n_edges) via Python closure -- they are
     # not in the args tuple. The GPU kernel still takes n_states explicitly
@@ -1779,7 +1836,7 @@ def value(
             # Coverage-rule and diagnosis-coverage passes are emitted
             # alongside the main pass so contracts mixing semi-Markov
             # cohort tracking with rule-bearing or diagnosis coverages work
-            # in a single value() call.
+            # in a single measure(full=False) call.
             kernel = _get_value_kernel_codegen_semi_markov(
                 n_states, state_duration_max, edge_from, edge_to,
                 edge_lump_sum, premium_state, benefit_state,
@@ -1840,12 +1897,12 @@ def value(
     elif backend == "gpu":
         if state_duration_max is not None:
             raise NotImplementedError(
-                "value(backend='gpu') does not support semi-Markov "
+                "measure(full=False, backend='gpu') does not support semi-Markov "
                 "StateModels yet; use backend='cpu'"
             )
         if np.any(model_points.coverage_waiting) or np.any(model_points.coverage_reduction_end):
             raise ValueError(
-                "value(backend='gpu') does not support coverage waiting / "
+                "measure(full=False, backend='gpu') does not support coverage waiting / "
                 "reduction periods yet; use backend='cpu'"
             )
         from fastcashflow._gpu import value_gpu
@@ -1857,16 +1914,16 @@ def value(
     else:
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
 
-    return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
+    return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
 
-def value_segmented(
+def _measure_segmented(
     model_points: ModelPoints,
     basis: dict[tuple[str, str], Basis],
     *,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
-) -> Valuation:
+) -> GMMMeasurement:
     """Value a multi-segment portfolio: split, value each, concatenate.
 
     ``basis`` is the ``{(product, channel): Basis}`` dictionary
@@ -1876,7 +1933,7 @@ def value_segmented(
     matching rows, builds a sub-:class:`~fastcashflow.ModelPoints` via
     :meth:`~fastcashflow.ModelPoints.subset`, calls :func:`value` with the
     segment's ``Basis``, and writes the per-row results back to a
-    single ``(n_mp,)`` :class:`Valuation`.
+    single ``(n_mp,)`` :class:`GMMMeasurement`.
 
     ``backend`` and ``discount_curve`` flow through to :func:`value` --
     declared explicitly so a typo (e.g. ``backed="gpu"``) is rejected
@@ -1887,7 +1944,7 @@ def value_segmented(
     if model_points.product_code is None or model_points.channel_code is None:
         if len(basis) == 1:
             (basis,) = basis.values()
-            return value(
+            return _measure_fast(
                 model_points, basis,
                 backend=backend, discount_curve=discount_curve,
             )
@@ -1968,7 +2025,7 @@ def value_segmented(
             )
         idx = np.nonzero(inverse == ord_idx)[0]
         sub = model_points.subset(idx)
-        val = value(
+        val = _measure_fast(
             sub, basis[key],
             backend=backend, discount_curve=discount_curve,
         )
@@ -1977,4 +2034,4 @@ def value_segmented(
         csm[idx] = val.csm
         loss_component[idx] = val.loss_component
 
-    return Valuation(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
+    return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)

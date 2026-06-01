@@ -10,7 +10,7 @@ from fastcashflow import (
     load_sample_model_points,
     read_model_points,
     sample_data_dir,
-    value,
+    measure,
     value_file,
     write_valuation,
 )
@@ -105,7 +105,7 @@ def test_read_model_points_reads_count(tmp_path):
 def test_write_valuation_round_trip(tmp_path, suffix):
     """write_valuation persists the four valuation columns with an id column."""
     mps = _portfolio()
-    val = value(mps, _assumptions())
+    val = measure(mps, _assumptions(), full=False)
     ids = np.arange(mps.n_mp)
 
     path = tmp_path / f"out{suffix}"
@@ -122,7 +122,7 @@ def test_write_valuation_round_trip(tmp_path, suffix):
 
 def test_write_valuation_without_ids(tmp_path):
     """ids are optional -- omitting them writes just the four result columns."""
-    val = value(_portfolio(50), _assumptions())
+    val = measure(_portfolio(50), _assumptions(), full=False)
     path = tmp_path / "out.parquet"
     write_valuation(val, path)
     assert pl.read_parquet(path).columns == ["bel", "ra", "csm", "loss_component"]
@@ -150,8 +150,8 @@ def test_file_workflow_matches_in_memory(tmp_path):
     asmp = _assumptions()
     _frame(mps).write_parquet(tmp_path / "mps.parquet")
 
-    from_file = value(read_model_points(tmp_path / "mps.parquet", calculation_methods=PATTERNS), asmp)
-    in_memory = value(mps, asmp)
+    from_file = measure(read_model_points(tmp_path / "mps.parquet", calculation_methods=PATTERNS), asmp, full=False)
+    in_memory = measure(mps, asmp, full=False)
 
     assert np.allclose(from_file.bel, in_memory.bel)
     assert np.allclose(from_file.ra, in_memory.ra)
@@ -182,7 +182,7 @@ def test_value_file_streaming_matches_in_memory(tmp_path):
     assert len(sorted(out_dir.glob("part-*.parquet"))) == 4  # 300+300+300+100
 
     results = pl.read_parquet(str(out_dir / "part-*.parquet")).sort("id")
-    in_memory = value(mps, asmp)
+    in_memory = measure(mps, asmp, full=False)
     assert np.array_equal(results["id"].to_numpy(), np.arange(n))
     assert np.array_equal(results["bel"].to_numpy(), in_memory.bel)
     assert np.array_equal(results["ra"].to_numpy(), in_memory.ra)
@@ -207,7 +207,7 @@ def test_load_sample_data_runs():
     mps = load_sample_model_points()
     asmp = next(iter(load_sample_basis().values()))
     assert mps.n_mp > 0
-    val = value(mps, asmp)
+    val = measure(mps, asmp, full=False)
     assert val.bel.shape == (mps.n_mp,)
     assert val.csm.shape == (mps.n_mp,)
 
@@ -255,7 +255,7 @@ def test_to_long_round_trips(tmp_path):
     back = read_model_points(tmp_path / "pol.csv",
                              coverages=tmp_path / "cov.csv",
                              calculation_methods=patterns)
-    a, b = value(mps, asmp), value(back, asmp)
+    a, b = measure(mps, asmp, full=False), measure(back, asmp, full=False)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.csm, b.csm)
 
@@ -269,7 +269,7 @@ def test_to_wide_round_trips(tmp_path):
     mps.to_wide(asmp).write_csv(tmp_path / "wide.csv")
     back = read_model_points(tmp_path / "wide.csv",
                              calculation_methods=patterns)
-    a, b = value(mps, asmp), value(back, asmp)
+    a, b = measure(mps, asmp, full=False), measure(back, asmp, full=False)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.csm, b.csm)
 
@@ -293,6 +293,6 @@ def test_value_file_streams_long_form(tmp_path):
     assert processed == mps.n_mp
 
     results = pl.read_parquet(str(out_dir / "part-*.parquet")).sort("id")
-    in_memory = value(mps, asmp)
+    in_memory = measure(mps, asmp, full=False)
     assert np.allclose(results["bel"].to_numpy(), in_memory.bel)
     assert np.allclose(results["csm"].to_numpy(), in_memory.csm)

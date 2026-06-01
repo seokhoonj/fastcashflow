@@ -1,7 +1,7 @@
-"""Fast path surrender_cf -- value() must match measure() BEL.
+"""Fast path surrender_cf -- measure() must match measure() BEL.
 
 ``measure()`` has carried surrender value (해약환급금) since the surrender
-mechanism landed; ``value()`` (the fused fast path) ignored it. This file
+mechanism landed; ``measure()`` (the fused fast path) ignored it. This file
 pins the invariant that the two paths return the same BEL when a
 ``surrender_value_curve`` is set, across all CPU kernels:
 
@@ -12,7 +12,7 @@ pins the invariant that the two paths return the same BEL when a
 import numpy as np
 
 from fastcashflow import (
-    Basis, ExpenseItem, ModelPoints, STATE_MODELS, measure, value,
+    Basis, ExpenseItem, ModelPoints, STATE_MODELS, measure, measure,
     CoverageRate,
 )
 
@@ -50,7 +50,7 @@ def _mp():
 
 
 def test_value_scalar_matches_measure_with_surrender():
-    """Scalar fast path -- no StateModel, no waiver. value() must agree
+    """Scalar fast path -- no StateModel, no waiver. measure() must agree
     with measure() to floating-point tolerance once surrender is on."""
     n_time = 240
     # A non-trivial monotone surrender curve: 0 in years 1-2 (typical
@@ -58,9 +58,9 @@ def test_value_scalar_matches_measure_with_surrender():
     curve = np.clip((np.arange(n_time) - 24) / (n_time - 24.0), 0.0, 1.0)
     asmp = _basis(surrender_value_curve=curve)
     mp = _mp()
-    v = value(mp, asmp)
+    v = measure(mp, asmp, full=False)
     m = measure(mp, asmp)
-    assert np.isclose(v.bel[0], m.bel[0, 0])
+    assert np.isclose(v.bel[0], m.bel_path[0, 0])
 
 
 def test_value_scalar_zero_curve_matches_no_surrender():
@@ -70,7 +70,7 @@ def test_value_scalar_zero_curve_matches_no_surrender():
     asmp_off = _basis()
     asmp_on = _basis(surrender_value_curve=np.zeros(n_time))
     mp = _mp()
-    assert np.isclose(value(mp, asmp_off).bel[0], value(mp, asmp_on).bel[0])
+    assert np.isclose(measure(mp, asmp_off, full=False).bel[0], measure(mp, asmp_on, full=False).bel[0])
 
 
 def test_value_surrender_increases_bel():
@@ -80,7 +80,7 @@ def test_value_surrender_increases_bel():
     asmp_off = _basis()
     asmp_on = _basis(surrender_value_curve=np.full(n_time, 0.5))
     mp = _mp()
-    assert value(mp, asmp_on).bel[0] > value(mp, asmp_off).bel[0]
+    assert measure(mp, asmp_on, full=False).bel[0] > measure(mp, asmp_off, full=False).bel[0]
 
 
 def test_surrender_scales_linearly_in_count():
@@ -106,7 +106,7 @@ def test_surrender_scales_linearly_in_count():
 
 
 def test_value_state_model_matches_measure_with_surrender():
-    """Markov codegen path (WAIVER_MODEL) -- value() must agree with
+    """Markov codegen path (WAIVER_MODEL) -- measure() must agree with
     measure() once surrender is on."""
     n_time = 240
     curve = np.clip((np.arange(n_time) - 24) / (n_time - 24.0), 0.0, 1.0)
@@ -116,6 +116,6 @@ def test_value_state_model_matches_measure_with_surrender():
         waiver_incidence_annual=_flat_rate(0.001),
     )
     mp = _mp()
-    v = value(mp, asmp)
+    v = measure(mp, asmp, full=False)
     m = measure(mp, asmp)
-    assert np.isclose(v.bel[0], m.bel[0, 0])
+    assert np.isclose(v.bel[0], m.bel_path[0, 0])

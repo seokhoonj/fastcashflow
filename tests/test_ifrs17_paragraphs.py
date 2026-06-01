@@ -67,7 +67,7 @@ def test_sec32_bel_is_pv_of_future_cashflows():
     deaths = inforce * q
     pv_claims = float(np.sum(deaths * death_benefit))
     pv_premiums = float(np.sum(inforce * premium))
-    assert np.isclose(res.bel[0, 0], pv_claims - pv_premiums)
+    assert np.isclose(res.bel_path[0, 0], pv_claims - pv_premiums)
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +113,8 @@ def test_sec37_ra_addition_to_bel():
         ),
         _flat_assumptions(mortality_cv=0.10),
     )
-    fcf = res.bel[0, 0] + res.ra[0, 0]
-    assert np.isclose(res.csm[0, 0] - res.loss_component[0], -fcf)
+    fcf = res.bel_path[0, 0] + res.ra_path[0, 0]
+    assert np.isclose(res.csm_path[0, 0] - res.loss_component[0], -fcf)
 
 
 # ---------------------------------------------------------------------------
@@ -131,9 +131,9 @@ def test_sec38_initial_csm_profitable():
         ),
         _flat_assumptions(),
     )
-    fcf = res.bel[0, 0] + res.ra[0, 0]
+    fcf = res.bel_path[0, 0] + res.ra_path[0, 0]
     assert fcf < 0.0                              # profitable -> negative FCF
-    assert np.isclose(res.csm[0, 0], -fcf)
+    assert np.isclose(res.csm_path[0, 0], -fcf)
     assert res.loss_component[0] == 0.0
 
 
@@ -151,9 +151,9 @@ def test_sec38_loss_component_onerous():
                 np.full(issue_age.shape, _annual(0.05)),
         ),
     )
-    fcf = res.bel[0, 0] + res.ra[0, 0]
+    fcf = res.bel_path[0, 0] + res.ra_path[0, 0]
     assert fcf > 0.0                              # onerous -> positive FCF
-    assert res.csm[0, 0] == 0.0
+    assert res.csm_path[0, 0] == 0.0
     assert np.isclose(res.loss_component[0], fcf)
 
 
@@ -176,8 +176,8 @@ def test_sec44_csm_accretion_at_locked_in_rate():
         ),
         asmp,
     )
-    opening = res.csm[:, :-1]
-    closing = res.csm[:, 1:]
+    opening = res.csm_path[:, :-1]
+    closing = res.csm_path[:, 1:]
     assert np.array_equal(closing, opening + res.csm_accretion - res.csm_release)
     assert np.array_equal(res.csm_accretion, opening * asmp.discount_monthly)
 
@@ -204,11 +204,11 @@ def test_sec44_b119_csm_release_proportional_to_coverage_units():
         ),
         asmp,
     )
-    csm0 = res.csm[0, 0]
+    csm0 = res.csm_path[0, 0]
     assert csm0 > 0.0                             # profitable -- premium, no claims
     expected_release = csm0 / term
     assert np.allclose(res.csm_release[0], expected_release)
-    assert np.isclose(res.csm[0, -1], 0.0)
+    assert np.isclose(res.csm_path[0, -1], 0.0)
 
 
 # ---------------------------------------------------------------------------

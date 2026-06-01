@@ -9,7 +9,7 @@ by hand against a small two-year contract.
 """
 import numpy as np
 
-from fastcashflow import Basis, ExpenseItem, ModelPoints, measure, value, CoverageRate
+from fastcashflow import Basis, ExpenseItem, ModelPoints, measure, measure, CoverageRate
 from fastcashflow.curves import discount_monthly_curve
 
 
@@ -95,11 +95,11 @@ def test_bel_with_curve_discount_matches_hand_calc():
     discount_mid = discount_start[:-1] / np.sqrt(1.0 + rates)
     expected_bel = (1_000.0 * discount_mid).sum()
 
-    assert np.isclose(m.bel[0, 0], expected_bel)
+    assert np.isclose(m.bel_path[0, 0], expected_bel)
 
 
 def test_bel_value_matches_measure_with_curve_discount():
-    """`value()` and `measure()` agree on BEL for a non-flat discount curve too."""
+    """`measure()` and `measure()` agree on BEL for a non-flat discount curve too."""
     asmp = _flat_asmp(
         expense_inflation=0.02,
         expense_items=(
@@ -109,8 +109,8 @@ def test_bel_value_matches_measure_with_curve_discount():
     )
     mp = ModelPoints.single(issue_age=40, benefits={0: 100_000.0},
                             level_premium=1_000.0, term_months=36, count=1)
-    m = measure(mp, asmp).bel[0, 0]
-    v = value(mp, asmp).bel[0]
+    m = measure(mp, asmp).bel_path[0, 0]
+    v = measure(mp, asmp, full=False).bel[0]
     assert np.isclose(m, v)
 
 
@@ -128,9 +128,9 @@ def test_csm_accretes_at_curve_rate():
     mp = ModelPoints.single(issue_age=40, benefits={0: 0.0},
                             level_premium=5_000.0, term_months=24, count=1)
     m = measure(mp, asmp)
-    csm_open = m.csm[0, 0]
-    csm_close_year0 = m.csm[0, 12]
-    csm_close_year1 = m.csm[0, 24]
+    csm_open = m.csm_path[0, 0]
+    csm_close_year0 = m.csm_path[0, 12]
+    csm_close_year1 = m.csm_path[0, 24]
 
     # The year-1 monthly rate is higher than year-0; so the accretion in
     # year 1 should outpace what a flat 3% would give.

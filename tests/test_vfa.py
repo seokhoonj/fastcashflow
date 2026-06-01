@@ -43,7 +43,7 @@ def test_vfa_account_value_and_csm_hand_calc():
     r_m = 1.06 ** (1 / 12) - 1
     f_m = 1.015 ** (1 / 12) - 1
     growth = (1 + r_m) * (1 - f_m)
-    assert np.allclose(res.account_value[0], av0 * growth ** np.arange(term + 1))
+    assert np.allclose(res.account_value_path[0], av0 * growth ** np.arange(term + 1))
 
     # every exit pays the account value; benefits discount at r, which with
     # the account-value growth collapses to (1 - f)^t
@@ -54,8 +54,8 @@ def test_vfa_account_value_and_csm_hand_calc():
     exits[-1] = inforce[-1]
     pv_benefits = av0 * np.sum(exits * (1 - f_m) ** np.arange(term))
     bel = pv_benefits - av0
-    assert np.isclose(res.bel[0, 0], bel)
-    assert np.isclose(res.csm[0, 0], max(0.0, -bel))
+    assert np.isclose(res.bel_path[0, 0], bel)
+    assert np.isclose(res.csm_path[0, 0], max(0.0, -bel))
 
 
 def test_gmdb_floor_on_death_hand_calc():
@@ -78,14 +78,14 @@ def test_gmdb_floor_on_death_hand_calc():
     surv = (1 - Q) * (1 - LAPSE)
     deaths = surv ** np.arange(term) * Q             # monthly death decrement
     expected_delta = deaths.sum() * (gdb - av0)
-    assert np.isclose(floored.bel[0, 0] - base.bel[0, 0], expected_delta)
+    assert np.isclose(floored.bel_path[0, 0] - base.bel_path[0, 0], expected_delta)
 
     # A floor below the account value never bites -- max(AV, gdb) == AV.
     low = measure_vfa(
         ModelPoints.single(40, 0.0, term, account_value=av0,
                            minimum_death_benefit=500.0), asmp
     )
-    assert np.isclose(low.bel[0, 0], base.bel[0, 0])
+    assert np.isclose(low.bel_path[0, 0], base.bel_path[0, 0])
 
 
 def test_gmab_floor_at_maturity_hand_calc():
@@ -108,14 +108,14 @@ def test_gmab_floor_at_maturity_hand_calc():
     surv = (1 - Q) * (1 - LAPSE)
     maturity_survivors = surv ** term                # in-force reaching term
     expected_delta = maturity_survivors * (gab - av0)
-    assert np.isclose(floored.bel[0, 0] - base.bel[0, 0], expected_delta)
+    assert np.isclose(floored.bel_path[0, 0] - base.bel_path[0, 0], expected_delta)
 
     # A floor below the account value never bites -- max(AV, gab) == AV.
     low = measure_vfa(
         ModelPoints.single(40, 0.0, term, account_value=av0,
                            minimum_accumulation_benefit=500.0), asmp
     )
-    assert np.isclose(low.bel[0, 0], base.bel[0, 0])
+    assert np.isclose(low.bel_path[0, 0], base.bel_path[0, 0])
 
 
 def test_floor_tvog_zero_under_flat_scenarios():
@@ -135,7 +135,7 @@ def test_floor_tvog_zero_under_flat_scenarios():
     flat = np.full((8, term), r_m)
     stochastic = measure_vfa(mp, asmp, return_scenarios=flat)
     assert np.allclose(stochastic.time_value, 0.0, atol=1e-6)
-    assert np.isclose(stochastic.bel[0, 0], deterministic.bel[0, 0])
+    assert np.isclose(stochastic.bel_path[0, 0], deterministic.bel_path[0, 0])
 
 
 def test_floor_tvog_matches_independent_reimplementation():
@@ -196,7 +196,7 @@ def test_vfa_zero_fee_gives_no_profit():
         ModelPoints.single(40, 0.0, 60, account_value=1e8),
         _assumptions(fund_fee=0.0),
     )
-    assert np.isclose(res.csm[0, 0], 0.0, atol=1.0)   # ~0 vs a 1e8 contract
+    assert np.isclose(res.csm_path[0, 0], 0.0, atol=1.0)   # ~0 vs a 1e8 contract
     assert np.isclose(res.variable_fee[0], 0.0)
 
 
@@ -205,10 +205,10 @@ def test_vfa_csm_releases_over_the_term():
     res = measure_vfa(
         ModelPoints.single(40, 0.0, 120, account_value=1e8), _assumptions()
     )
-    assert res.csm[0, 0] > 0.0
-    assert np.isclose(res.csm[0, -1], 0.0)
-    step = res.csm[0, :-1] + res.csm_accretion[0] - res.csm_release[0]
-    assert np.allclose(step, res.csm[0, 1:])
+    assert res.csm_path[0, 0] > 0.0
+    assert np.isclose(res.csm_path[0, -1], 0.0)
+    step = res.csm_path[0, :-1] + res.csm_accretion[0] - res.csm_release[0]
+    assert np.allclose(step, res.csm_path[0, 1:])
 
 
 def test_vfa_variable_fee_scales_with_the_fee():
@@ -218,7 +218,7 @@ def test_vfa_variable_fee_scales_with_the_fee():
     large = measure_vfa(ModelPoints.single(40, 0.0, 60, account_value=1e8),
                         _assumptions(fund_fee=0.03))
     assert large.variable_fee[0] > small.variable_fee[0] > 0.0
-    assert large.csm[0, 0] > small.csm[0, 0] > 0.0
+    assert large.csm_path[0, 0] > small.csm_path[0, 0] > 0.0
 
 
 def test_vfa_onerous_when_expenses_exceed_the_fee():
@@ -254,9 +254,9 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
     assert np.allclose(plain.time_value, 0.0)          # no scenarios -> no TVOG
     assert stoch.time_value[0] > 0.0
     # the TVOG raises the liability -- it is carried in time_value
-    assert (stoch.bel[0, 0] + stoch.time_value[0]
-            > plain.bel[0, 0] + plain.time_value[0])
-    assert stoch.csm[0, 0] < plain.csm[0, 0]           # the CSM absorbs it
+    assert (stoch.bel_path[0, 0] + stoch.time_value[0]
+            > plain.bel_path[0, 0] + plain.time_value[0])
+    assert stoch.csm_path[0, 0] < plain.csm_path[0, 0]           # the CSM absorbs it
 
 
 def test_vfa_large_tvog_turns_the_contract_onerous():
@@ -270,7 +270,7 @@ def test_vfa_large_tvog_turns_the_contract_onerous():
     stoch = measure_vfa(mp, asmp, scenarios)
     assert np.isclose(plain.loss_component[0], 0.0)
     assert stoch.loss_component[0] > 0.0
-    assert np.isclose(stoch.csm[0, 0], 0.0)
+    assert np.isclose(stoch.csm_path[0, 0], 0.0)
 
 
 def test_vfa_tvog_matches_measure_tvog():
@@ -317,8 +317,8 @@ def test_vfa_ra_scales_with_expense_cv():
     _g120k = (ExpenseItem("maintenance", "gamma_fixed", 120_000.0),)
     r1 = measure_vfa(mp, _assumptions(expense_items=_g120k, expense_cv=0.10))
     r2 = measure_vfa(mp, _assumptions(expense_items=_g120k, expense_cv=0.20))
-    assert r1.ra[0, 0] > 0.0
-    assert np.isclose(r2.ra[0, 0], 2.0 * r1.ra[0, 0])
+    assert r1.ra_path[0, 0] > 0.0
+    assert np.isclose(r2.ra_path[0, 0], 2.0 * r1.ra_path[0, 0])
 
 
 def test_vfa_ra_reduces_the_csm():
@@ -327,7 +327,7 @@ def test_vfa_ra_reduces_the_csm():
     _g120k = (ExpenseItem("maintenance", "gamma_fixed", 120_000.0),)
     no_ra = measure_vfa(mp, _assumptions(expense_items=_g120k, expense_cv=0.0))
     with_ra = measure_vfa(mp, _assumptions(expense_items=_g120k, expense_cv=0.30))
-    assert with_ra.csm[0, 0] < no_ra.csm[0, 0]
+    assert with_ra.csm_path[0, 0] < no_ra.csm_path[0, 0]
 
 
 def test_load_sample_vfa_is_measurable():
@@ -336,7 +336,7 @@ def test_load_sample_vfa_is_measurable():
     mp = load_sample_vfa_model_points()
     asmp = load_sample_vfa_basis()
     m = measure_vfa(mp, asmp)
-    assert m.csm[:, 0].sum() > 0.0          # the variable fee is unearned profit
+    assert m.csm_path[:, 0].sum() > 0.0          # the variable fee is unearned profit
     assert np.allclose(m.loss_component, 0.0)
 
     r_m = (1.0 + asmp.investment_return) ** (1.0 / 12.0) - 1.0
@@ -355,4 +355,4 @@ def test_vfa_report_releases_the_ra_into_revenue():
     rep = report(m)
     ra_in_revenue = (rep.insurance_revenue - rep.insurance_service_expense
                      - m.csm_release)
-    assert np.isclose(ra_in_revenue[0].sum(), m.ra[0, 0])
+    assert np.isclose(ra_in_revenue[0].sum(), m.ra_path[0, 0])

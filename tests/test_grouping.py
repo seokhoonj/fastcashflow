@@ -52,7 +52,7 @@ def test_group_count_and_sums():
     m = measure(_portfolio(), _assumptions())
     g = group(m, np.arange(len(m.bel)) % 3)
     assert g.bel.shape[0] == 3
-    assert np.isclose(g.bel[:, 0].sum(), m.bel[:, 0].sum())   # BEL is additive
+    assert np.isclose(g.bel_path[:, 0].sum(), m.bel_path[:, 0].sum())   # BEL is additive
 
 
 def test_group_nets_within_a_group_not_across():
@@ -68,8 +68,8 @@ def test_group_csm_reconciles():
     """The grouped CSM trajectory reconciles."""
     m = measure(_portfolio(), _assumptions())
     g = group(m, np.arange(len(m.bel)) % 4)
-    step = g.csm[:, :-1] + g.csm_accretion - g.csm_release
-    assert np.allclose(step, g.csm[:, 1:])
+    step = g.csm_path[:, :-1] + g.csm_accretion - g.csm_release
+    assert np.allclose(step, g.csm_path[:, 1:])
 
 
 def test_group_composes_with_roll_forward():

@@ -48,7 +48,7 @@ def test_reinsurance_hand_calc():
 
     assert np.isclose(res.bel[0], bel)
     assert np.isclose(res.ra[0], ra)
-    assert np.isclose(res.csm[0, 0], -(bel - ra))
+    assert np.isclose(res.csm_path[0, 0], -(bel - ra))
 
 
 def test_reinsurance_csm_can_be_negative():
@@ -57,7 +57,7 @@ def test_reinsurance_csm_can_be_negative():
         ModelPoints.single(40, 300_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS), _assumptions(), 0.5
     )
     assert res.bel[0] > 0.0           # reinsurance premiums ceded exceed recoveries
-    assert res.csm[0, 0] < 0.0        # the net cost is carried as a negative CSM
+    assert res.csm_path[0, 0] < 0.0        # the net cost is carried as a negative CSM
 
 
 def test_reinsurance_csm_analysis_of_change_reconciles():
@@ -66,7 +66,7 @@ def test_reinsurance_csm_analysis_of_change_reconciles():
         ModelPoints.single(40, 80_000.0, 120, benefits={0: 1e8}, calculation_methods=PATTERNS), _assumptions(), 0.3
     )
     assert np.allclose(
-        res.csm[:, :-1] + res.csm_accretion - res.csm_release, res.csm[:, 1:]
+        res.csm_path[:, :-1] + res.csm_accretion - res.csm_release, res.csm_path[:, 1:]
     )
 
 

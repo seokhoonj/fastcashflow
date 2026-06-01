@@ -22,9 +22,9 @@ def main() -> None:
     m = fcf.measure_vfa(mp, basis)
     print("VFA measurement -- variable annuities with GMDB / GMAB")
     print(f"  account value   {mp.account_value.sum():>16,.0f}")
-    print(f"  BEL             {m.bel[:, 0].sum():>16,.0f}")
-    print(f"  RA              {m.ra[:, 0].sum():>16,.0f}")
-    print(f"  CSM             {m.csm[:, 0].sum():>16,.0f}")
+    print(f"  BEL             {m.bel_path[:, 0].sum():>16,.0f}")
+    print(f"  RA              {m.ra_path[:, 0].sum():>16,.0f}")
+    print(f"  CSM             {m.csm_path[:, 0].sum():>16,.0f}")
     print(f"  loss component  {m.loss_component.sum():>16,.0f}")
 
     # Time value of the guarantees -- the put cost over return scenarios.

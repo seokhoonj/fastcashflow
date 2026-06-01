@@ -196,8 +196,8 @@ def roll_forward(
         if isinstance(measurement, PAAMeasurement):
             return _roll_forward_paa(measurement, period_months)
         return _roll_forward_vfa(measurement, period_months)
-    n_time = measurement.bel.shape[1] - 1
-    n_mp = measurement.bel.shape[0]
+    n_time = measurement.bel_path.shape[1] - 1
+    n_mp = measurement.bel_path.shape[0]
     if actual_inforce is not None:
         actual_inforce = np.asarray(actual_inforce, dtype=np.float64)
         if actual_inforce.ndim == 2:
@@ -228,7 +228,7 @@ def roll_forward(
     monthly_rate = discount_start[:-1] / discount_start[1:] - 1.0   # (n_time,)
     zero = np.zeros(n_mp)
 
-    bel, ra, csm = measurement.bel, measurement.ra, measurement.csm
+    bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
     csm_accretion = measurement.csm_accretion
     csm_release = measurement.csm_release
     change_at: int | None = None
@@ -237,10 +237,10 @@ def roll_forward(
     loss = zero
 
     if revised is not None:
-        if revised.bel.shape != measurement.bel.shape:
+        if revised.bel_path.shape != measurement.bel_path.shape:
             raise ValueError("revised must measure the same book as measurement")
         change_at, change_kind = revised_at, "assumption"
-        post_bel, post_ra = revised.bel, revised.ra
+        post_bel, post_ra = revised.bel_path, revised.ra_path
         post_inforce = revised.cashflows.inforce
     elif actual_inforce is not None:
         actual_inforce = np.asarray(actual_inforce, dtype=np.float64)
@@ -253,8 +253,8 @@ def roll_forward(
         # projection uses the same basis, so the closing FCF scales
         # linearly with the in-force actually remaining.
         ratio = np.where(expected > 1e-12, actual_inforce / safe, 1.0)
-        post_bel = measurement.bel * ratio[:, None]
-        post_ra = measurement.ra * ratio[:, None]
+        post_bel = measurement.bel_path * ratio[:, None]
+        post_ra = measurement.ra_path * ratio[:, None]
         post_inforce = measurement.cashflows.inforce
 
     if change_at is not None:
@@ -265,19 +265,19 @@ def roll_forward(
                 f"period_months below the horizon ({n_time}), got {k}"
             )
         delta_fcf = ((post_bel[:, k] + post_ra[:, k])
-                     - (measurement.bel[:, k] + measurement.ra[:, k]))
-        csm_before = measurement.csm[:, k]
+                     - (measurement.bel_path[:, k] + measurement.ra_path[:, k]))
+        csm_before = measurement.csm_path[:, k]
         csm_after = np.maximum(0.0, csm_before - delta_fcf)
         loss = np.maximum(0.0, delta_fcf - csm_before)
         re_csm, re_acc, re_rel = _csm_kernel(
             csm_after, np.ascontiguousarray(post_inforce[:, k:]),
             monthly_rate[k:],
         )
-        bel = np.concatenate([measurement.bel[:, :k + 1], post_bel[:, k + 1:]],
+        bel = np.concatenate([measurement.bel_path[:, :k + 1], post_bel[:, k + 1:]],
                              axis=1)
-        ra = np.concatenate([measurement.ra[:, :k + 1], post_ra[:, k + 1:]],
+        ra = np.concatenate([measurement.ra_path[:, :k + 1], post_ra[:, k + 1:]],
                             axis=1)
-        csm = np.concatenate([measurement.csm[:, :k + 1], re_csm[:, 1:]], axis=1)
+        csm = np.concatenate([measurement.csm_path[:, :k + 1], re_csm[:, 1:]], axis=1)
         csm_accretion = np.concatenate(
             [measurement.csm_accretion[:, :k], re_acc], axis=1)
         csm_release = np.concatenate(
@@ -338,8 +338,8 @@ def _roll_forward_experience_chain(
     segment by segment, each segment releasing over the in-force expected at
     its start, with the experience jump applied at each boundary.
     """
-    base_bel = measurement.bel
-    base_ra = measurement.ra
+    base_bel = measurement.bel_path
+    base_ra = measurement.ra_path
     base_inforce = measurement.cashflows.inforce
     n_mp, n_time = base_inforce.shape
     n_known = actual_inforce.shape[0]
@@ -371,8 +371,8 @@ def _roll_forward_experience_chain(
     csm = np.empty((n_mp, n_time + 1))
     csm_accretion = np.empty((n_mp, n_time))
     csm_release = np.empty((n_mp, n_time))
-    csm[:, 0] = measurement.csm[:, 0]
-    cur = measurement.csm[:, 0]
+    csm[:, 0] = measurement.csm_path[:, 0]
+    cur = measurement.csm_path[:, 0]
     exp_lines: dict[int, tuple] = {}
     s = 0
     for j, e in enumerate(boundaries + [n_time]):
@@ -438,7 +438,7 @@ def _roll_forward_paa(
     measurement: PAAMeasurement, period_months: int
 ) -> list[PAAPeriodMovement]:
     """Slice a PAA measurement into LRC, loss-component and LIC movements."""
-    lrc = measurement.lrc
+    lrc = measurement.lrc_path
     lic = measurement.lic
     premium_cf = measurement.cashflows.premium_cf
     revenue = measurement.revenue
@@ -476,7 +476,7 @@ def _roll_forward_vfa(
     measurement: VFAMeasurement, period_months: int
 ) -> list[VFAPeriodMovement]:
     """Slice a VFA measurement into BEL, RA and CSM movements."""
-    bel, ra, csm = measurement.bel, measurement.ra, measurement.csm
+    bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
     csm_accretion = measurement.csm_accretion
     csm_release = measurement.csm_release
     n_time = csm.shape[1] - 1

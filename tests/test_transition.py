@@ -44,36 +44,36 @@ def _portfolio(n: int = 50) -> ModelPoints:
 def test_transition_csm_is_fair_value_less_fcf():
     """The transition CSM is the fair value less the fulfilment cash flows."""
     m = measure(_portfolio(), _assumptions())
-    fcf0 = m.bel[:, 0] + m.ra[:, 0]
+    fcf0 = m.bel_path[:, 0] + m.ra_path[:, 0]
     t = transition(m, fcf0 + 1_000_000.0)
-    assert np.allclose(t.csm[:, 0], 1_000_000.0)
+    assert np.allclose(t.csm_path[:, 0], 1_000_000.0)
     assert np.allclose(t.loss_component, 0.0)
 
 
 def test_transition_below_fair_value_is_onerous():
     """A fair value below the fulfilment cash flows gives a loss component."""
     m = measure(_portfolio(), _assumptions())
-    fcf0 = m.bel[:, 0] + m.ra[:, 0]
+    fcf0 = m.bel_path[:, 0] + m.ra_path[:, 0]
     t = transition(m, fcf0 - 500_000.0)
-    assert np.allclose(t.csm[:, 0], 0.0)
+    assert np.allclose(t.csm_path[:, 0], 0.0)
     assert np.allclose(t.loss_component, 500_000.0)
 
 
 def test_transition_csm_reconciles():
     """The transition CSM trajectory reconciles."""
     m = measure(_portfolio(), _assumptions())
-    t = transition(m, m.bel[:, 0] + m.ra[:, 0] + 500_000.0)
+    t = transition(m, m.bel_path[:, 0] + m.ra_path[:, 0] + 500_000.0)
     assert np.allclose(
-        t.csm[:, :-1] + t.csm_accretion - t.csm_release, t.csm[:, 1:]
+        t.csm_path[:, :-1] + t.csm_accretion - t.csm_release, t.csm_path[:, 1:]
     )
 
 
 def test_transition_composes_with_roll_forward():
     """A transitioned measurement flows into the period-close roll-forward."""
     m = measure(_portfolio(), _assumptions())
-    t = transition(m, m.bel[:, 0] + m.ra[:, 0] + 1_000_000.0)
+    t = transition(m, m.bel_path[:, 0] + m.ra_path[:, 0] + 1_000_000.0)
     periods = roll_forward(t, 12)
-    assert np.allclose(periods[0].csm_opening, t.csm[:, 0])
+    assert np.allclose(periods[0].csm_opening, t.csm_path[:, 0])
 
 
 def test_transition_rejects_wrong_length():

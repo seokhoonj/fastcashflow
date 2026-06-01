@@ -36,24 +36,27 @@ from fastcashflow.projection import Cashflows, project_cashflows
 
 @dataclass(frozen=True, slots=True)
 class ReinsuranceMeasurement:
-    """GMMMeasurement of a reinsurance contract held.
+    """Measurement of a reinsurance contract held.
 
-    ``bel`` and ``ra`` are ``(n_mp,)`` inception figures -- ``bel`` is the
-    present value of reinsurance premiums less recoveries (a net cost when
-    positive), ``ra`` is the risk transferred. ``csm`` is the
-    ``(n_mp, n_time+1)`` trajectory of the net cost or gain of the cover,
-    which may be negative; it reconciles as
-    ``csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
+    Headline ``bel``, ``ra`` and ``csm`` are ``(n_mp,)`` inception figures --
+    ``bel`` is the present value of reinsurance premiums less recoveries (a
+    net cost when positive), ``ra`` is the risk transferred, ``csm`` is the
+    inception net cost or gain (may be negative). The trajectory fields are
+    populated only on the full path; ``csm_path`` reconciles as
+    ``csm_path[:, t+1] = csm_path[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
     """
 
-    bel: FloatArray            # (n_mp,) -- PV(reins. premiums) - PV(recoveries)
-    ra: FloatArray             # (n_mp,) -- risk transferred to the reinsurer
-    csm: FloatArray            # (n_mp, n_time+1) -- net cost/gain trajectory
-    csm_accretion: FloatArray  # (n_mp, n_time)
-    csm_release: FloatArray    # (n_mp, n_time)
-    recovery: FloatArray       # (n_mp, n_time) -- recoveries received
-    reins_premium: FloatArray  # (n_mp, n_time) -- reinsurance premiums paid
-    cashflows: Cashflows
+    # headline -- always present, shape (n_mp,)
+    bel: FloatArray            # PV(reins. premiums) - PV(recoveries)
+    ra: FloatArray             # risk transferred to the reinsurer
+    csm: FloatArray            # inception net cost/gain
+    # trajectory -- full only (None on the headline-only path)
+    csm_path: FloatArray | None = None         # (n_mp, n_time+1) -- net cost/gain trajectory
+    csm_accretion: FloatArray | None = None    # (n_mp, n_time)
+    csm_release: FloatArray | None = None      # (n_mp, n_time)
+    recovery: FloatArray | None = None         # (n_mp, n_time) -- recoveries received
+    reins_premium: FloatArray | None = None    # (n_mp, n_time) -- reinsurance premiums paid
+    cashflows: "Cashflows | None" = None
 
 
 def measure_reinsurance(
@@ -103,7 +106,8 @@ def measure_reinsurance(
     return ReinsuranceMeasurement(
         bel=bel,
         ra=ra,
-        csm=csm,
+        csm=csm[:, 0],
+        csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
         recovery=recovery,

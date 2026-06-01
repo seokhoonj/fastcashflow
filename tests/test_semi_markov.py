@@ -1,7 +1,7 @@
 """Hand-calculation validation of the Phase (c) semi-Markov path.
 
 Tests are intentionally tiny -- one contract, a couple of months, simple
-rates -- so each BEL can be derived by hand and matched to ``value()``.
+rates -- so each BEL can be derived by hand and matched to ``measure()``.
 """
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ def test_one_month_only_death_claim():
     asmp = _flat_assumptions(
         ci_reincidence_fn=lambda s, a, p, sd: np.zeros_like(sd, dtype=float),
     )
-    v = fcf.value(_single_contract(1), asmp)
+    v = fcf.measure(_single_contract(1), asmp, full=False)
     assert np.isclose(v.bel[0], 10_000.0), v.bel[0]
 
 
@@ -87,7 +87,7 @@ def test_one_month_with_reincidence_in_exclusion():
         ci_reincidence_fn=lambda s, a, p, sd: np.full_like(sd, _annual(0.02),
                                                            dtype=float),
     )
-    v = fcf.value(_single_contract(1), asmp)
+    v = fcf.measure(_single_contract(1), asmp, full=False)
     assert np.isclose(v.bel[0], 10_000.0), v.bel[0]
 
 
@@ -114,7 +114,7 @@ def test_two_month_first_diagnosis_no_reincidence():
     asmp = _flat_assumptions(
         ci_reincidence_fn=lambda s, a, p, sd: np.zeros_like(sd, dtype=float),
     )
-    v = fcf.value(_single_contract(2), asmp)
+    v = fcf.measure(_single_contract(2), asmp, full=False)
     assert np.isclose(v.bel[0], 19_990.0), v.bel[0]
 
 
@@ -147,7 +147,7 @@ def test_one_month_reincidence_active_via_seating():
         state=np.array([1], dtype=np.int64),    # seat on post_first,
         calculation_methods=PATTERNS,
     )
-    v = fcf.value(mp, asmp)
+    v = fcf.measure(mp, asmp, full=False)
     assert np.isclose(v.bel[0], 109_900.0), v.bel[0]
 
 
@@ -171,17 +171,17 @@ def test_reincidence_rate_zero_in_exclusion_window():
         state=np.array([1], dtype=np.int64),
         calculation_methods=PATTERNS,
     )
-    v_excl = fcf.value(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_with_excl))
-    v_zero = fcf.value(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_all_zero))
+    v_excl = fcf.measure(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_with_excl), full=False)
+    v_zero = fcf.measure(mp, _flat_assumptions(ci_reincidence_fn=ci_rein_all_zero), full=False)
     assert np.isclose(v_excl.bel[0], v_zero.bel[0])
 
 
 # ---------------------------------------------------------------------------
-# measure() <-> value() parity (Phase (c) -- semi-Markov detailed projection)
+# measure() <-> measure() parity (Phase (c) -- semi-Markov detailed projection)
 # ---------------------------------------------------------------------------
 #
 # project_cashflows() drives measure() and used to be Markov-only. Phase (c)
-# adds a cohort-aware detailed kernel that mirrors value()'s semi-Markov
+# adds a cohort-aware detailed kernel that mirrors measure()'s semi-Markov
 # path. These tests confirm the two paths still produce identical headline
 # numbers on the cancer-reincidence model, across single contracts and a
 # mixed portfolio.
@@ -210,14 +210,14 @@ def _reincidence_assumptions(*, duration_max, exclusion_months,
 
 
 def test_measure_value_agree_single_contract():
-    """One contract, 36-month term, mid-exclusion -- measure().bel[:,0] must
-    equal value().bel within floating-point tolerance.
+    """One contract, 36-month term, mid-exclusion -- measure().bel_path[:,0] must
+    equal measure().bel within floating-point tolerance.
     """
     asmp = _reincidence_assumptions(duration_max=12, exclusion_months=6,
                                      reincidence_monthly=0.01)
     mp = _single_contract(36)
-    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
+    m, v = fcf.measure(mp, asmp), fcf.measure(mp, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
 def test_measure_value_agree_mixed_portfolio():
@@ -237,8 +237,8 @@ def test_measure_value_agree_mixed_portfolio():
     )
     asmp = _reincidence_assumptions(duration_max=24, exclusion_months=12,
                                      reincidence_monthly=0.008)
-    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
+    m, v = fcf.measure(mp, asmp), fcf.measure(mp, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
 def test_measure_value_agree_long_cohort():
@@ -258,8 +258,8 @@ def test_measure_value_agree_long_cohort():
     )
     asmp = _reincidence_assumptions(duration_max=60, exclusion_months=24,
                                      reincidence_monthly=0.012)
-    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
+    m, v = fcf.measure(mp, asmp), fcf.measure(mp, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
 
@@ -353,7 +353,7 @@ def _portfolio_with_rule_coverage(n, seed, extra_waiting, extra_reduction_end,
 
 def test_semi_markov_with_waiting_period_on_coverage():
     """Reincidence model + recurring coverage with a 3-month waiting period.
-    measure() and value() must agree.
+    measure() and measure() must agree.
     """
     asmp = _reincidence_assumptions_with_extra_coverage(
         duration_max=12, exclusion_months=6,
@@ -364,8 +364,8 @@ def test_semi_markov_with_waiting_period_on_coverage():
         extra_waiting=3, extra_reduction_end=0, extra_reduction_factor=1.0,
         extra_is_diagnosis=False,
     )
-    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
+    m, v = fcf.measure(mp, asmp), fcf.measure(mp, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
 def test_semi_markov_with_diagnosis_coverage():
@@ -382,8 +382,8 @@ def test_semi_markov_with_diagnosis_coverage():
         extra_waiting=0, extra_reduction_end=0, extra_reduction_factor=1.0,
         extra_is_diagnosis=True,
     )
-    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
+    m, v = fcf.measure(mp, asmp), fcf.measure(mp, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
 def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
@@ -400,8 +400,8 @@ def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
         extra_waiting=6, extra_reduction_end=24, extra_reduction_factor=0.5,
         extra_is_diagnosis=True,
     )
-    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
+    m, v = fcf.measure(mp, asmp), fcf.measure(mp, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +485,7 @@ def test_di_recovery_hand_calc_one_month_seated_on_disabled():
         state=np.array([1], dtype=np.int64),
         calculation_methods=PATTERNS,
     )
-    v = fcf.value(mp, asmp)
+    v = fcf.measure(mp, asmp, full=False)
     assert np.isclose(v.bel[0], 1_000_000.0), v.bel[0]
 
 
@@ -517,7 +517,7 @@ def test_di_recovery_higher_rate_drains_disabled_occupancy_faster():
 
 def test_di_recovery_measure_value_agree_mixed_portfolio():
     """50-contract DI portfolio with a duration-tapered recovery rate.
-    measure() and value() must agree.
+    measure() and measure() must agree.
     """
     def recovery(s, a, p, sd):
         # DI valuation-table shape: high recovery in early months, dropping
@@ -555,8 +555,8 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
         state=rng.integers(0, 2, n).astype(np.int64),
         calculation_methods=PATTERNS,
     )
-    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
+    m, v = fcf.measure(mp, asmp), fcf.measure(mp, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
 def _portfolio_with_rule_and_diagnosis_coverages(n, seed, rule_waiting,
@@ -612,7 +612,7 @@ def test_semi_markov_with_rule_and_diagnosis_coverages_together():
     caching: a single portfolio where both the coverage-rule pass and
     the diagnosis pass fire on every contract. If the cached trajectory
     is mis-saved or mis-read by either pass, BEL will diverge between
-    measure() and value().
+    measure() and measure().
     """
     from fastcashflow.basis import CoverageRate
 
@@ -646,8 +646,8 @@ def test_semi_markov_with_rule_and_diagnosis_coverages_together():
         rule_waiting=3, rule_reduction_end=12,
         rule_reduction_factor=0.6,
     )
-    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
+    m, v = fcf.measure(mp, asmp), fcf.measure(mp, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
 
 
 def test_workbook_elapsed_axis_drives_semi_markov_reincidence(tmp_path):
@@ -685,10 +685,10 @@ def test_workbook_elapsed_axis_drives_semi_markov_reincidence(tmp_path):
                           reincidence_benefit=5_000_000.0)
     # measure / value parity is the existing semi-Markov contract -- a
     # workbook-sourced reincidence rate keeps it.
-    m, v = fcf.measure(mp, asmp), fcf.value(mp, asmp)
-    assert np.isclose(m.bel[0, 0], v.bel[0])
+    m, v = fcf.measure(mp, asmp), fcf.measure(mp, asmp, full=False)
+    assert np.isclose(m.bel_path[0, 0], v.bel[0])
     # Swap to a zero-rate sheet -- the BEL must move because the elapsed
     # axis really drives the reincidence claim outflow.
     asmp_zero = _flat_assumptions(ci_reincidence_fn=zero_fn)
-    v_zero = fcf.value(mp, asmp_zero)
+    v_zero = fcf.measure(mp, asmp_zero, full=False)
     assert not np.isclose(v.bel[0], v_zero.bel[0])

@@ -146,8 +146,8 @@ def test_show_trace_bel_and_ra_agree_with_measure():
     buf = io.StringIO()
     show_trace(0, mp, asmp, file=buf)
     text = buf.getvalue()
-    assert f"{m.bel[0, 0]:,.2f}" in text
-    assert f"{m.ra[0, 0]:,.2f}" in text
+    assert f"{m.bel_path[0, 0]:,.2f}" in text
+    assert f"{m.ra_path[0, 0]:,.2f}" in text
 
 
 def test_show_trace_rejects_out_of_range_index():
@@ -243,7 +243,7 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
     ma = fcf.measure(mp.subset([0]), asmp)
     mb = fcf.measure(mp.subset([0]), shocked)
     assert mb.cashflows.claim_cf.sum() > ma.cashflows.claim_cf.sum()
-    assert mb.bel[0, 0] > ma.bel[0, 0]
+    assert mb.bel_path[0, 0] > ma.bel_path[0, 0]
     # And the diff renders without raising.
     buf = io.StringIO()
     show_trace_diff(0, mp, asmp, shocked, file=buf)
@@ -440,7 +440,7 @@ def test_show_trace_vfa_renders_and_matches_measure_vfa():
                     "CSM roll-forward", "Final"):
         assert section in text, f"missing section: {section}"
     m = fcf.measure_vfa(mp, basis)
-    assert f"{m.csm[0, 0]:,.2f}" in text          # trace shows the engine CSM
+    assert f"{m.csm_path[0, 0]:,.2f}" in text          # trace shows the engine CSM
     assert f"{m.variable_fee[0]:,.2f}" in text     # and the variable fee
 
 

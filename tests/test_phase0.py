@@ -6,7 +6,7 @@ This is the engine's correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import ExpenseItem, ModelPoints, measure, value
+from fastcashflow import ExpenseItem, ModelPoints, measure, measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -55,24 +55,24 @@ def test_hand_calculation():
 
     # BEL = PV(claims) + PV(expenses) - PV(premiums); expenses = 0 here
     bel = pv_claims - pv_premiums
-    assert np.isclose(res.bel[0, 0], bel)
-    assert np.isclose(res.bel[0, 0], -3940.4)
+    assert np.isclose(res.bel_path[0, 0], bel)
+    assert np.isclose(res.bel_path[0, 0], -3940.4)
 
     # RA = z(0.75) * mortality_cv * PV(claims)
     ra = Z_75 * 0.10 * pv_claims
-    assert np.isclose(res.ra[0, 0], ra)
+    assert np.isclose(res.ra_path[0, 0], ra)
 
     # FCF = BEL + RA ; CSM_0 = max(0, -FCF)
     fcf = bel + ra
-    assert np.isclose(res.csm[0, 0], max(0.0, -fcf))
+    assert np.isclose(res.csm_path[0, 0], max(0.0, -fcf))
     assert np.isclose(res.loss_component[0], max(0.0, fcf))
 
     # CSM roll-forward (zero discount, coverage units = in force):
     #   t=1: release = CSM_0 * cu[0] / (cu[0] + cu[1]) ; CSM[1] = CSM_0 - release
-    release0 = res.csm[0, 0] * inforce[0] / (inforce[0] + inforce[1])
-    assert np.isclose(res.csm[0, 1], res.csm[0, 0] - release0)
+    release0 = res.csm_path[0, 0] * inforce[0] / (inforce[0] + inforce[1])
+    assert np.isclose(res.csm_path[0, 1], res.csm_path[0, 0] - release0)
     #   t=2: the remaining CSM is fully released
-    assert np.isclose(res.csm[0, 2], 0.0)
+    assert np.isclose(res.csm_path[0, 2], 0.0)
 
 
 def test_onerous_contract():
@@ -87,7 +87,7 @@ def test_onerous_contract():
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05))
         ),
     )
-    assert res.csm[0, 0] == 0.0
+    assert res.csm_path[0, 0] == 0.0
     assert res.loss_component[0] > 0.0
 
 
@@ -105,12 +105,12 @@ def test_csm_fully_releases():
             discount_annual=0.03,
         ),
     )
-    assert res.csm[0, 0] > 0.0
-    assert np.isclose(res.csm[0, -1], 0.0, atol=1e-6)
+    assert res.csm_path[0, 0] > 0.0
+    assert np.isclose(res.csm_path[0, -1], 0.0, atol=1e-6)
 
 
 def test_count_scales_linearly():
-    """count=N scales the whole valuation by N -- in both measure() and value().
+    """count=N scales the whole valuation by N -- in both measure() and measure().
 
     The projection is linear in the policy: a model point standing for N
     policies gives exactly N times the BEL, RA and CSM of one policy. The
@@ -131,15 +131,15 @@ def test_count_scales_linearly():
 
     one = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), asmp)
     many = measure(ModelPoints.single(**kw, count=n, calculation_methods=PATTERNS), asmp)
-    assert many.csm[0, 0] > 0.0          # profitable contract -- the CSM scales
-    for field in ("bel", "ra", "csm"):
+    assert many.csm_path[0, 0] > 0.0          # profitable contract -- the CSM scales
+    for field in ("bel_path", "ra_path", "csm_path"):
         assert np.isclose(getattr(many, field)[0, 0],
                           n * getattr(one, field)[0, 0])
     assert np.isclose(many.cashflows.inforce[0, 0], n)
 
     # the fused fast path scales identically
-    v_one = value(ModelPoints.single(**kw, calculation_methods=PATTERNS), asmp)
-    v_many = value(ModelPoints.single(**kw, count=n, calculation_methods=PATTERNS), asmp)
+    v_one = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), asmp, full=False)
+    v_many = measure(ModelPoints.single(**kw, count=n, calculation_methods=PATTERNS), asmp, full=False)
     for field in ("bel", "ra", "csm"):
         assert np.isclose(getattr(v_many, field)[0],
                           n * getattr(v_one, field)[0])

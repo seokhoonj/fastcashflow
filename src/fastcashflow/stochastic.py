@@ -30,7 +30,7 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
-from fastcashflow.engine import value
+from fastcashflow.engine import measure
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow.projection import project_cashflows
@@ -200,9 +200,9 @@ def value_stochastic(
     loss_component = np.empty(n)
     for s in range(n):
         if scenarios.ndim == 1:
-            v = value(model_points, replace(basis, discount_annual=float(scenarios[s])))
+            v = measure(model_points, replace(basis, discount_annual=float(scenarios[s])), full=False)
         else:
-            v = value(model_points, basis, discount_curve=scenarios[s])
+            v = measure(model_points, basis, full=False, discount_curve=scenarios[s])
         bel[s] = v.bel.sum()
         ra[s] = v.ra.sum()
         csm[s] = v.csm.sum()

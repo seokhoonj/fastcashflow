@@ -1,16 +1,16 @@
 """ModelPoints.subset + value_segmented -- per-segment portfolio valuation.
 
 `ModelPoints` may carry per-row `product` / `channel` strings naming each
-contract's segment. `value_segmented(mp, basis)` splits the portfolio by
+contract's segment. `measure(mp, basis, full=False)` splits the portfolio by
 those keys, looks each segment's `Basis` up in the
 `{(product, channel): Basis}` dict, calls :func:`value` per segment,
-and writes the per-mp results back to a single ``(n_mp,)`` `Valuation`.
+and writes the per-mp results back to a single ``(n_mp,)`` `GMMMeasurement`.
 """
 import numpy as np
 import pytest
 
 from fastcashflow import (
-    Basis, ModelPoints, load_sample_basis, value, value_segmented,
+    Basis, ModelPoints, load_sample_basis, measure, measure,
     CoverageRate,
 )
 
@@ -113,7 +113,7 @@ def test_subset_leaves_product_none_when_unset():
 # ---------------------------------------------------------------------------
 
 def test_value_segmented_routes_each_mp_to_its_segment():
-    """Each mp's BEL should equal the value() result on its own segment."""
+    """Each mp's BEL should equal the measure() result on its own segment."""
     asmp_high = _flat_asmp(discount=0.03)               # lower discount -> larger BEL
     asmp_low = _flat_asmp(discount=0.10)                # higher discount -> smaller BEL
     basis = {("TERM_A", "GA"): asmp_high, ("TERM_A", "FC"): asmp_low}
@@ -126,15 +126,15 @@ def test_value_segmented_routes_each_mp_to_its_segment():
         product_code=np.array(["TERM_A", "TERM_A", "TERM_A"]),
         channel_code=np.array(["GA", "FC", "GA"]),
     )
-    val = value_segmented(mp, basis)
+    val = measure(mp, basis, full=False)
 
-    # The two GA mps should match value() on a single-GA portfolio.
+    # The two GA mps should match measure() on a single-GA portfolio.
     ga_only = mp.subset([0, 2])
-    expected_ga = value(ga_only, asmp_high)
+    expected_ga = measure(ga_only, asmp_high, full=False)
     assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
     # The FC mp matches the FC valuation.
     fc_only = mp.subset([1])
-    expected_fc = value(fc_only, asmp_low)
+    expected_fc = measure(fc_only, asmp_low, full=False)
     assert np.allclose(val.bel[1], expected_fc.bel[0])
     # GA and FC give different per-mp BEL (different discount).
     assert not np.isclose(val.bel[0], val.bel[1])
@@ -150,8 +150,8 @@ def test_value_segmented_falls_back_to_single_segment_when_no_product():
         term_months=np.array([60, 60]),
         benefits={0: np.array([10_000.0, 20_000.0])},
     )
-    val = value_segmented(mp, basis)
-    expected = value(mp, asmp)
+    val = measure(mp, basis, full=False)
+    expected = measure(mp, asmp, full=False)
     assert np.allclose(val.bel, expected.bel)
 
 
@@ -165,7 +165,7 @@ def test_value_segmented_rejects_multi_segment_basis_without_keys():
         benefits={0: np.array([10_000.0])},
     )
     with pytest.raises(ValueError, match="product_code"):
-        value_segmented(mp, basis)
+        measure(mp, basis, full=False)
 
 
 def test_value_segmented_rejects_unknown_segment():
@@ -180,7 +180,7 @@ def test_value_segmented_rejects_unknown_segment():
         channel_code=np.array(["GA", "GA"]),
     )
     with pytest.raises(ValueError, match="not in the basis"):
-        value_segmented(mp, basis)
+        measure(mp, basis, full=False)
 
 
 def test_value_segmented_with_sample_basis():
@@ -197,11 +197,11 @@ def test_value_segmented_with_sample_basis():
         channel_code=np.array(["GA", "FC", "GA"]),
         calculation_methods=load_sample_calculation_methods(),
     )
-    val = value_segmented(mp, basis)
+    val = measure(mp, basis, full=False)
     assert val.bel.shape == (3,)
     # GA segment has worse persistency than FC (different LAPSE table) ->
     # the two GA mps should not match the FC mp's pattern.
-    expected_ga = value(mp.subset([0, 2]), basis[("TERM_LIFE_A", "GA")])
-    expected_fc = value(mp.subset([1]), basis[("TERM_LIFE_A", "FC")])
+    expected_ga = measure(mp.subset([0, 2]), basis[("TERM_LIFE_A", "GA")], full=False)
+    expected_fc = measure(mp.subset([1]), basis[("TERM_LIFE_A", "FC")], full=False)
     assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
     assert np.allclose(val.bel[1], expected_fc.bel[0])

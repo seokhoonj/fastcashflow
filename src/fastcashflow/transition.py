@@ -41,11 +41,11 @@ def transition(measurement: GMMMeasurement, fair_value: FloatArray) -> GMMMeasur
     :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.report`.
     """
     fair_value = np.asarray(fair_value, dtype=np.float64)
-    n_mp = measurement.bel.shape[0]
+    n_mp = measurement.bel_path.shape[0]
     if fair_value.shape != (n_mp,):
         raise ValueError(f"fair_value must have one entry per row ({n_mp})")
 
-    fcf0 = measurement.bel[:, 0] + measurement.ra[:, 0]
+    fcf0 = measurement.bel_path[:, 0] + measurement.ra_path[:, 0]
     csm0 = np.maximum(0.0, fair_value - fcf0)
     loss_component = np.maximum(0.0, fcf0 - fair_value)
     # Per-month rate curve implied by the measurement's discount factors --
@@ -58,7 +58,8 @@ def transition(measurement: GMMMeasurement, fair_value: FloatArray) -> GMMMeasur
     )
     return replace(
         measurement,
-        csm=csm,
+        csm=csm[:, 0],
+        csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
         loss_component=loss_component,

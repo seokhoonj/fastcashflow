@@ -12,7 +12,7 @@ from fastcashflow import (
     ModelPoints,
     CoverageRate,
     measure,
-    value,
+    measure,
 )
 from fastcashflow.numerics import _norm_ppf
 from conftest import annual_from_monthly as _annual
@@ -74,9 +74,9 @@ def test_inpatient_benefit_adds_its_present_value():
     # health claims are mid-month: PV = rate * benefit * sum(inforce * (1+i)^-(t+.5))
     pv = MORB_RATE * benefit * half * float(np.sum((surv * full) ** t))
 
-    assert np.isclose(res.bel[0, 0], pv)
+    assert np.isclose(res.bel_path[0, 0], pv)
     z = _norm_ppf(asmp.ra_confidence)
-    assert np.isclose(res.ra[0, 0], z * asmp.morbidity_cv * pv)
+    assert np.isclose(res.ra_path[0, 0], z * asmp.morbidity_cv * pv)
 
 
 def test_health_claim_is_non_decrementing():
@@ -101,7 +101,7 @@ def test_health_claim_is_non_decrementing():
     assert np.allclose(plain.cashflows.inforce, with_health.cashflows.inforce)
     # health only adds its own outflow, which raises the BEL
     assert with_health.cashflows.morbidity_cf.sum() > 0.0
-    assert with_health.bel[0, 0] > plain.bel[0, 0]
+    assert with_health.bel_path[0, 0] > plain.bel_path[0, 0]
 
 
 def test_morbidity_ra_responds_to_its_cv():
@@ -112,12 +112,12 @@ def test_morbidity_ra_responds_to_its_cv():
     half_cv = measure(health, _assumptions(morbidity_cv=0.10))
 
     assert np.allclose(no_cv.ra, 0.0)
-    assert full_cv.ra[0, 0] > 0.0
-    assert np.isclose(half_cv.ra[0, 0], 0.5 * full_cv.ra[0, 0])
+    assert full_cv.ra_path[0, 0] > 0.0
+    assert np.isclose(half_cv.ra_path[0, 0], 0.5 * full_cv.ra_path[0, 0])
 
 
 def test_value_matches_measure_health():
-    """value() and measure() agree on contracts with health coverages."""
+    """measure() and measure() agree on contracts with health coverages."""
     rng = np.random.default_rng(11)
     n = 300
     mps = ModelPoints(
@@ -130,12 +130,12 @@ def test_value_matches_measure_health():
         calculation_methods=PATTERNS,
     )
     asmp = _assumptions(morbidity_cv=0.15)
-    fast = value(mps, asmp)
+    fast = measure(mps, asmp, full=False)
     detailed = measure(mps, asmp)
 
-    assert np.allclose(fast.bel, detailed.bel[:, 0])
-    assert np.allclose(fast.ra, detailed.ra[:, 0])
-    assert np.allclose(fast.csm, detailed.csm[:, 0])
+    assert np.allclose(fast.bel, detailed.bel_path[:, 0])
+    assert np.allclose(fast.ra, detailed.ra_path[:, 0])
+    assert np.allclose(fast.csm, detailed.csm_path[:, 0])
     assert np.allclose(fast.loss_component, detailed.loss_component)
 
 
@@ -157,9 +157,9 @@ def test_diagnosis_benefit_hand_calc():
     # claim each month is the not-yet-diagnosed pool g^t times the rate
     pv = d * benefit * half * float(np.sum((g * full) ** t))
 
-    assert np.isclose(res.bel[0, 0], pv)
+    assert np.isclose(res.bel_path[0, 0], pv)
     z = _norm_ppf(asmp.ra_confidence)
-    assert np.isclose(res.ra[0, 0], z * asmp.morbidity_cv * pv)
+    assert np.isclose(res.ra_path[0, 0], z * asmp.morbidity_cv * pv)
 
 
 def test_diagnosis_pool_depletes():
@@ -177,11 +177,11 @@ def test_diagnosis_pool_depletes():
     )
     # inpatient claims on the full in-force each month; diagnosis on the
     # depleting not-yet-diagnosed pool -- so diagnosis is worth strictly less
-    assert 0.0 < diagnosis.bel[0, 0] < inpatient.bel[0, 0]
+    assert 0.0 < diagnosis.bel_path[0, 0] < inpatient.bel_path[0, 0]
 
 
 def test_value_matches_measure_diagnosis():
-    """value() and measure() agree on contracts with diagnosis coverages."""
+    """measure() and measure() agree on contracts with diagnosis coverages."""
     rng = np.random.default_rng(19)
     n = 250
     mps = ModelPoints(
@@ -193,10 +193,10 @@ def test_value_matches_measure_diagnosis():
         calculation_methods=PATTERNS,
     )
     asmp = _assumptions(morbidity_cv=0.15)
-    fast = value(mps, asmp)
+    fast = measure(mps, asmp, full=False)
     detailed = measure(mps, asmp)
 
-    assert np.allclose(fast.bel, detailed.bel[:, 0])
-    assert np.allclose(fast.ra, detailed.ra[:, 0])
-    assert np.allclose(fast.csm, detailed.csm[:, 0])
+    assert np.allclose(fast.bel, detailed.bel_path[:, 0])
+    assert np.allclose(fast.ra, detailed.ra_path[:, 0])
+    assert np.allclose(fast.csm, detailed.csm_path[:, 0])
     assert np.allclose(fast.loss_component, detailed.loss_component)

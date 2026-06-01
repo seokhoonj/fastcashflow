@@ -7,7 +7,7 @@ amount, and an empty list equals a zero death benefit.
 """
 import numpy as np
 
-from fastcashflow import ExpenseItem, ModelPoints, measure, value
+from fastcashflow import ExpenseItem, ModelPoints, measure, measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -54,7 +54,7 @@ def test_multiple_death_coverages_sum_to_one():
     assert np.allclose(m_split.ra, m_comb.ra)
     assert np.allclose(m_split.csm, m_comb.csm)
 
-    v_split, v_comb = value(split, asmp), value(combined, asmp)
+    v_split, v_comb = measure(split, asmp, full=False), measure(combined, asmp, full=False)
     assert np.allclose(v_split.bel, v_comb.bel)
     assert np.allclose(v_split.ra, v_comb.ra)
     assert np.allclose(v_split.csm, v_comb.csm)
@@ -72,7 +72,7 @@ def test_no_coverages_matches_zero_death_benefit():
         term_months=np.array([60]),
         calculation_methods=PATTERNS,
     )
-    a, b = value(explicit_zero, asmp), value(no_coverages, asmp)
+    a, b = measure(explicit_zero, asmp, full=False), measure(no_coverages, asmp, full=False)
     assert np.allclose(a.bel, b.bel)
     assert np.allclose(a.ra, b.ra)
     # no death coverage -> no claims -> zero Risk Adjustment

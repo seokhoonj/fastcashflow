@@ -23,9 +23,9 @@ def main() -> None:
 
     m = fcf.measure(model_points, basis)
     print(f"measured {model_points.n_mp} model points -- portfolio totals at issue")
-    print(f"  BEL  {m.bel[:, 0].sum():>16,.0f}")
-    print(f"  RA   {m.ra[:, 0].sum():>16,.0f}")
-    print(f"  CSM  {m.csm[:, 0].sum():>16,.0f}")
+    print(f"  BEL  {m.bel_path[:, 0].sum():>16,.0f}")
+    print(f"  RA   {m.ra_path[:, 0].sum():>16,.0f}")
+    print(f"  CSM  {m.csm_path[:, 0].sum():>16,.0f}")
 
 
 if __name__ == "__main__":

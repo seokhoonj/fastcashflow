@@ -13,7 +13,7 @@ from fastcashflow import (
     load_sample_basis,
     load_sample_model_points,
     read_model_points,
-    value,
+    measure,
     write_valuation,
 )
 
@@ -41,7 +41,7 @@ def test_read_wide_xlsx(tmp_path):
 
     back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
-    assert np.allclose(value(back, asmp).bel, value(mps, asmp).bel)
+    assert np.allclose(measure(back, asmp, full=False).bel, measure(mps, asmp, full=False).bel)
 
 
 def test_read_long_xlsx(tmp_path):
@@ -56,7 +56,7 @@ def test_read_long_xlsx(tmp_path):
 
     back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
-    assert np.allclose(value(back, asmp).bel, value(mps, asmp).bel)
+    assert np.allclose(measure(back, asmp, full=False).bel, measure(mps, asmp, full=False).bel)
 
 
 def test_read_feather(tmp_path):
@@ -70,7 +70,7 @@ def test_read_feather(tmp_path):
 
     back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
-    assert np.allclose(value(back, asmp).bel, value(mps, asmp).bel)
+    assert np.allclose(measure(back, asmp, full=False).bel, measure(mps, asmp, full=False).bel)
 
 
 def test_write_valuation_feather(tmp_path):
@@ -78,7 +78,7 @@ def test_write_valuation_feather(tmp_path):
     asmp = next(iter(load_sample_basis().values()))
     mps = load_sample_model_points()
     path = tmp_path / "results.feather"
-    write_valuation(value(mps, asmp), path)
+    write_valuation(measure(mps, asmp, full=False), path)
     assert path.exists()
 
 

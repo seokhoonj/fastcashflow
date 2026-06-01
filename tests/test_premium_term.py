@@ -8,7 +8,7 @@ ordinary case. The hand case is a 3-month contract paying premium for 2.
 """
 import numpy as np
 
-from fastcashflow import ModelPoints, measure, read_model_points, value
+from fastcashflow import ModelPoints, measure, read_model_points, measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -52,9 +52,9 @@ def test_premium_term_hand_calculation():
     pv_premiums = sum(premium_cf)
 
     bel = pv_claims - pv_premiums
-    assert np.isclose(res.bel[0, 0], bel)
-    # value() reproduces the same headline number.
-    assert np.isclose(value(mp, asmp).bel[0], bel)
+    assert np.isclose(res.bel_path[0, 0], bel)
+    # measure() reproduces the same headline number.
+    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
 
 
 def test_premium_term_defaults_to_full_term():
@@ -68,7 +68,7 @@ def test_premium_term_defaults_to_full_term():
     assert np.all(default.premium_term_months == 120)
 
     explicit = ModelPoints.single(**kw, premium_term_months=120, calculation_methods=PATTERNS)
-    assert np.isclose(value(default, asmp).bel[0], value(explicit, asmp).bel[0])
+    assert np.isclose(measure(default, asmp, full=False).bel[0], measure(explicit, asmp, full=False).bel[0])
 
 
 def test_shorter_premium_term_raises_the_liability():
@@ -78,8 +78,8 @@ def test_shorter_premium_term_raises_the_liability():
               level_premium=30_000.0, term_months=240)
     asmp = _assumptions()
 
-    full_pay = value(ModelPoints.single(**kw, premium_term_months=240, calculation_methods=PATTERNS), asmp)
-    short_pay = value(ModelPoints.single(**kw, premium_term_months=120, calculation_methods=PATTERNS), asmp)
+    full_pay = measure(ModelPoints.single(**kw, premium_term_months=240, calculation_methods=PATTERNS), asmp, full=False)
+    short_pay = measure(ModelPoints.single(**kw, premium_term_months=120, calculation_methods=PATTERNS), asmp, full=False)
 
     assert short_pay.bel[0] > full_pay.bel[0]
 
@@ -101,5 +101,5 @@ def test_premium_term_round_trips(tmp_path):
     back = read_model_points(path)
     assert list(back.premium_term_months) == [120, 60]
     # the 60-month-pay policy collects less premium -> larger liability.
-    val = value(back, asmp)
+    val = measure(back, asmp, full=False)
     assert val.bel[1] > val.bel[0]

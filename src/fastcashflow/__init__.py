@@ -18,8 +18,8 @@ from fastcashflow.basis import (
 )
 from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import (
-    GMMMeasurement, Valuation, clear_codegen_cache, measure, measure_in_force,
-    value, value_in_force, value_segmented,
+    GMMMeasurement, clear_codegen_cache, measure, measure_in_force,
+    value_in_force,
 )
 from fastcashflow.grouping import group
 from fastcashflow.io import (
@@ -92,11 +92,11 @@ from fastcashflow.vfa import VFAMeasurement, measure_vfa
 __version__ = "0.1.0"
 __all__ = [
     "Basis", "ModelPoints", "measure", "measure_in_force",
-    "value", "value_in_force", "value_segmented", "clear_codegen_cache",
+    "value_in_force", "clear_codegen_cache",
     "value_stochastic",
     "measure_paa", "measure_vfa", "measure_reinsurance", "measure_tvog",
     "report", "roll_forward", "reconcile", "group", "transition",
-    "GMMMeasurement", "Valuation", "PAAMeasurement", "VFAMeasurement",
+    "GMMMeasurement", "PAAMeasurement", "VFAMeasurement",
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",

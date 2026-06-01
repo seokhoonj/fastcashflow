@@ -51,7 +51,7 @@ from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 # and lazily inside ``value_file`` (for the call), so a script that only
 # reads model points or writes a results frame never imports engine.py.
 if TYPE_CHECKING:  # pragma: no cover -- import only for type hints
-    from fastcashflow.engine import Valuation
+    from fastcashflow.engine import GMMMeasurement
 
 # Wide model-point columns with a fixed meaning. Any other ``*_benefit``
 # column names a coverage by its coverage code.
@@ -1662,12 +1662,12 @@ def read_scenarios(path: Path | str) -> FloatArray:
 # ---------------------------------------------------------------------------
 
 def write_valuation(
-    valuation: "Valuation",
+    valuation: "GMMMeasurement",
     path: Path | str,
     *,
     ids: np.ndarray | None = None,
 ) -> None:
-    """Write a ``Valuation`` to a parquet or CSV file.
+    """Write a ``GMMMeasurement`` to a parquet or CSV file.
 
     One row per model point, in model-point order, with columns ``bel``,
     ``ra``, ``csm`` and ``loss_component``. If ``ids`` is given it is written
@@ -1716,7 +1716,7 @@ def value_file(
     # Lazy import -- only ``value_file`` actually drives a valuation, so we
     # keep the engine import off the I/O hot path. A script that only reads
     # model points or writes results never pays the engine import cost.
-    from fastcashflow.engine import value
+    from fastcashflow.engine import measure
 
     input_path = Path(input_path)
     output_dir = Path(output_dir)
@@ -1750,7 +1750,7 @@ def value_file(
             ).collect()
             model_points = _long_model_points(pol, cov, methods_dict)
             write_valuation(
-                value(model_points, basis, backend=backend),
+                measure(model_points, basis, full=False, backend=backend),
                 output_dir / f"part-{part:05d}.parquet",
                 ids=ids.to_numpy(),
             )
@@ -1777,7 +1777,7 @@ def value_file(
         )
         ids = chunk[id_column].to_numpy() if id_column is not None else None
         write_valuation(
-            value(model_points, basis, backend=backend),
+            measure(model_points, basis, full=False, backend=backend),
             output_dir / f"part-{part:05d}.parquet",
             ids=ids,
         )

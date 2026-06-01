@@ -22,7 +22,7 @@ def main() -> None:
     print("reinsurance held -- 30% quota share")
     print(f"  BEL (PV premiums - recoveries)  {reins.bel.sum():>16,.0f}")
     print(f"  RA  (risk transferred)          {reins.ra.sum():>16,.0f}")
-    print(f"  CSM (net cost/gain of cover)    {reins.csm[:, 0].sum():>16,.0f}")
+    print(f"  CSM (net cost/gain of cover)    {reins.csm_path[:, 0].sum():>16,.0f}")
 
 
 if __name__ == "__main__":

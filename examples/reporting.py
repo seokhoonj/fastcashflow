@@ -30,7 +30,7 @@ def main() -> None:
     group_ids = (book.issue_age >= 45).astype(int)
     grouped = fcf.group(m, group_ids)
     for g, label in enumerate(("under 45", "45 and over")):
-        print(f"group '{label}'  CSM {grouped.csm[g, 0]:>14,.0f}")
+        print(f"group '{label}'  CSM {grouped.csm_path[g, 0]:>14,.0f}")
 
 
 if __name__ == "__main__":

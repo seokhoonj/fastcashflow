@@ -17,7 +17,7 @@ from fastcashflow import (
     ModelPoints,
     CoverageRate,
     measure,
-    value,
+    measure,
 )
 
 
@@ -49,12 +49,12 @@ def test_value_matches_measure():
         term_months=np.array([120, 120, 120, 120, 120]),
     )
 
-    fast = value(mps, asmp)
+    fast = measure(mps, asmp, full=False)
     detailed = measure(mps, asmp)
 
-    assert np.allclose(fast.bel, detailed.bel[:, 0])
-    assert np.allclose(fast.ra, detailed.ra[:, 0])
-    assert np.allclose(fast.csm, detailed.csm[:, 0])
+    assert np.allclose(fast.bel, detailed.bel_path[:, 0])
+    assert np.allclose(fast.ra, detailed.ra_path[:, 0])
+    assert np.allclose(fast.csm, detailed.csm_path[:, 0])
     assert np.allclose(fast.loss_component, detailed.loss_component)
 
 
@@ -72,7 +72,7 @@ def test_value_onerous():
         issue_age=40, benefits={0: 1_000_000.0},
         level_premium=100.0, term_months=12,
     )
-    v = value(mps, asmp)
+    v = measure(mps, asmp, full=False)
     assert v.csm[0] == 0.0
     assert v.loss_component[0] > 0.0
 
@@ -108,8 +108,8 @@ def test_value_gpu_matches_cpu():
         term_months=np.full(n, 120),
     )
 
-    cpu = value(mps, asmp, backend="cpu")
-    gpu = value(mps, asmp, backend="gpu")
+    cpu = measure(mps, asmp, backend="cpu", full=False)
+    gpu = measure(mps, asmp, backend="gpu", full=False)
 
     assert np.allclose(gpu.bel, cpu.bel)
     assert np.allclose(gpu.ra, cpu.ra)
@@ -154,8 +154,8 @@ def test_value_gpu_matches_cpu_with_transition():
         state=rng.integers(0, 3, n),
         calculation_methods={"DEATH": CalculationMethod.DEATH, "dx": CalculationMethod.DIAGNOSIS},
     )
-    cpu = value(mps, asmp, backend="cpu")
-    gpu = value(mps, asmp, backend="gpu")
+    cpu = measure(mps, asmp, backend="cpu", full=False)
+    gpu = measure(mps, asmp, backend="gpu", full=False)
 
     assert np.allclose(gpu.bel, cpu.bel)
     assert np.allclose(gpu.ra, cpu.ra)

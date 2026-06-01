@@ -18,7 +18,7 @@ from fastcashflow import (
     measure_vfa,
     reconcile,
     roll_forward,
-    value,
+    measure,
 )
 from conftest import annual_from_monthly as _annual, make_death_assumptions
 
@@ -88,8 +88,8 @@ def test_roll_forward_opening_is_inception():
     m = measure(_portfolio(), _assumptions())
     first = roll_forward(m, 12)[0]
     assert first.month_start == 0
-    assert np.allclose(first.csm_opening, m.csm[:, 0])
-    assert np.allclose(first.bel_opening, m.bel[:, 0])
+    assert np.allclose(first.csm_opening, m.csm_path[:, 0])
+    assert np.allclose(first.bel_opening, m.bel_path[:, 0])
 
 
 def test_roll_forward_runs_off_to_zero():
@@ -258,8 +258,8 @@ def test_roll_forward_experience_scales_the_fcf():
     actual = 0.5 * m.cashflows.inforce[:, k]          # half the book remains
     periods = roll_forward(m, 12, actual_inforce=actual, experience_at=k)
     exp = next(p for p in periods if p.month_start == k)
-    assert np.allclose(exp.bel_experience, m.bel[:, k] * -0.5)
-    assert np.allclose(exp.ra_experience, m.ra[:, k] * -0.5)
+    assert np.allclose(exp.bel_experience, m.bel_path[:, k] * -0.5)
+    assert np.allclose(exp.ra_experience, m.ra_path[:, k] * -0.5)
 
 
 def test_roll_forward_experience_reconciles():
@@ -431,19 +431,19 @@ def test_settlement_lag_lowers_the_bel():
     immediate = measure(_portfolio(), _assumptions())
     lagged = measure(_portfolio(), replace(
         _assumptions(), settlement_pattern=np.array([0.2, 0.3, 0.5])))
-    assert np.all(lagged.bel[:, 0] <= immediate.bel[:, 0])
-    assert lagged.bel[:, 0].sum() < immediate.bel[:, 0].sum()
+    assert np.all(lagged.bel_path[:, 0] <= immediate.bel_path[:, 0])
+    assert lagged.bel_path[:, 0].sum() < immediate.bel_path[:, 0].sum()
 
 
 def test_settlement_lag_value_matches_measure():
-    """value() and measure() agree once the settlement lag is reflected."""
+    """measure() and measure() agree once the settlement lag is reflected."""
     asmp = replace(_assumptions(), settlement_pattern=np.array([0.4, 0.6]))
     mps = _portfolio()
-    v = value(mps, asmp)
+    v = measure(mps, asmp, full=False)
     m = measure(mps, asmp)
-    assert np.allclose(v.bel, m.bel[:, 0])
-    assert np.allclose(v.ra, m.ra[:, 0])
-    assert np.allclose(v.csm, m.csm[:, 0])
+    assert np.allclose(v.bel, m.bel_path[:, 0])
+    assert np.allclose(v.ra, m.ra_path[:, 0])
+    assert np.allclose(v.csm, m.csm_path[:, 0])
 
 
 def test_reconcile_paa():

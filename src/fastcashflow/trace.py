@@ -270,9 +270,9 @@ def show_trace(
 
     # ---- Cash flows (annual sums of the monthly trajectory)
     cf = m.cashflows
-    bel = m.bel[0]
-    ra = m.ra[0]
-    csm = m.csm[0]
+    bel = m.bel_path[0]
+    ra = m.ra_path[0]
+    csm = m.csm_path[0]
     csm_acc = m.csm_accretion[0]
     csm_rel = m.csm_release[0]
     lc = m.loss_component[0]
@@ -466,7 +466,7 @@ def show_trace_vfa(
     ]
 
     # ---- Trajectories (from the VFA measurement)
-    av = m.account_value[0]
+    av = m.account_value_path[0]
     cf = m.cashflows
     inforce = cf.inforce[0]
     deaths = cf.deaths[0]
@@ -500,9 +500,9 @@ def show_trace_vfa(
     )
 
     # ---- BEL / CSM trajectory + roll-forward
-    bel = m.bel[0]
-    ra = m.ra[0]
-    csm = m.csm[0]
+    bel = m.bel_path[0]
+    ra = m.ra_path[0]
+    csm = m.csm_path[0]
     csm_acc = m.csm_accretion[0]
     csm_rel = m.csm_release[0]
     belcsm_lines: list[object] = [
@@ -605,7 +605,7 @@ def show_trace_paa(
     premium = cf.premium_cf[0]
     n_time = cf.n_time
     picks = _key_months(term, n_time)
-    lrc = m.lrc[0]
+    lrc = m.lrc_path[0]
     revenue = m.revenue[0]
     svc_exp = m.service_expense[0]
     svc_result = m.service_result[0]
@@ -991,8 +991,8 @@ def show_trace_diff(
     ]
 
     # ---- BEL / CSM deltas at anchor months
-    bel_a, bel_b = ma.bel[0], mb.bel[0]
-    csm_a, csm_b = ma.csm[0], mb.csm[0]
+    bel_a, bel_b = ma.bel_path[0], mb.bel_path[0]
+    csm_a, csm_b = ma.csm_path[0], mb.csm_path[0]
     bel_lines: list[object] = [
         f"BEL[{t:>4d}]   {_money_delta(float(bel_a[t]), float(bel_b[t]))}"
         for t in picks
@@ -1003,7 +1003,7 @@ def show_trace_diff(
     ]
 
     # ---- Final headline
-    ra_a, ra_b = float(ma.ra[0, 0]), float(mb.ra[0, 0])
+    ra_a, ra_b = float(ma.ra_path[0, 0]), float(mb.ra_path[0, 0])
     bel_a0, bel_b0 = float(bel_a[0]), float(bel_b[0])
     fcf_a, fcf_b = bel_a0 + ra_a, bel_b0 + ra_b
     csm_a0, csm_b0 = float(csm_a[0]), float(csm_b[0])
@@ -1130,7 +1130,7 @@ def show_bel_step(
     ]
 
     step_blocks: list[object] = []
-    bel_engine = m.bel[0]
+    bel_engine = m.bel_path[0]
     cf = m.cashflows
     for t in months:
         if t == term:
@@ -1257,10 +1257,10 @@ def show_csm_step(
 
     monthly_rate = discount_monthly_curve(asmp, n_time)
     inforce = m.cashflows.inforce[0]              # (n_time,)
-    bel0 = float(m.bel[0, 0])
-    ra0 = float(m.ra[0, 0])
+    bel0 = float(m.bel_path[0, 0])
+    ra0 = float(m.ra_path[0, 0])
     fcf0 = bel0 + ra0
-    csm = m.csm[0]
+    csm = m.csm_path[0]
     csm_acc = m.csm_accretion[0]
     csm_rel = m.csm_release[0]
 

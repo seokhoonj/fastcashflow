@@ -159,7 +159,7 @@ def test_report_finance_expense_is_curve_aware():
     r = report(m)
     ds = m.discount_start
     rate = ds[:-1] / ds[1:] - 1.0
-    expected = rate * (m.bel[0, :-1] + m.ra[0, :-1]) + m.csm_accretion[0]
+    expected = rate * (m.bel_path[0, :-1] + m.ra_path[0, :-1]) + m.csm_accretion[0]
     assert np.allclose(r.insurance_finance_expense[0], expected)
     # And the rate genuinely varies across the curve break -- without the
     # fix, finance_expense would be off by the year-0 vs year-1 spread.

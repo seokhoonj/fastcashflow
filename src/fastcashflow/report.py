@@ -125,7 +125,7 @@ def report(measurement: GMMMeasurement | PAAMeasurement | VFAMeasurement) -> Rep
 
 def _report_gmm(m: GMMMeasurement) -> Report:
     """GMM: revenue grosses up the RA release and the CSM release."""
-    bel, ra, csm = m.bel, m.ra, m.csm
+    bel, ra, csm = m.bel_path, m.ra_path, m.csm_path
     cf = m.cashflows
     # Per-month forward rate from the discount-factor curve, so that a
     # non-flat curve accretes the FCF and discounts the RA release at the
@@ -171,13 +171,13 @@ def _report_paa(m: PAAMeasurement) -> Report:
 
 def _report_vfa(m: VFAMeasurement) -> Report:
     """VFA: profit emerges as the CSM releases; the RA covers expense risk."""
-    csm = m.csm
+    csm = m.csm_path
     service_expense = m.cashflows.expense_cf       # account value is investment comp.
     csm_release = m.csm_release
     # Release the expense-risk RA over the coverage period, in proportion to
     # the coverage units (in-force).
     inforce = m.cashflows.inforce
-    ra0 = m.ra[:, 0]                                # inception RA
+    ra0 = m.ra_path[:, 0]                                # inception RA
     ra_release = ra0[:, None] * inforce / inforce.sum(axis=1, keepdims=True)
     return Report(
         insurance_revenue=service_expense + ra_release + csm_release,

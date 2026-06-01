@@ -56,12 +56,15 @@ class PAAMeasurement:
     up as they are incurred and run it off as they are paid.
     """
 
-    lrc: FloatArray              # (n_mp, n_time+1) -- liability for remaining coverage
-    revenue: FloatArray          # (n_mp, n_time)   -- insurance revenue earned
-    service_expense: FloatArray  # (n_mp, n_time)   -- claims + expenses incurred
-    loss_component: FloatArray   # (n_mp,)          -- onerous-contract loss at inception
-    lic: FloatArray              # (n_mp, n_time+1) -- liability for incurred claims
-    cashflows: Cashflows
+    # headline -- always present, shape (n_mp,)
+    lrc: FloatArray              # inception Liability for Remaining Coverage
+    loss_component: FloatArray   # onerous-contract loss at inception
+    # trajectory -- full only (None on the headline-only path)
+    lrc_path: FloatArray | None = None         # (n_mp, n_time+1) -- LRC trajectory
+    revenue: FloatArray | None = None          # (n_mp, n_time)   -- insurance revenue earned
+    service_expense: FloatArray | None = None  # (n_mp, n_time)   -- claims + expenses incurred
+    lic: FloatArray | None = None              # (n_mp, n_time+1) -- liability for incurred claims
+    cashflows: "Cashflows | None" = None
 
     @property
     def service_result(self) -> FloatArray:
@@ -149,10 +152,11 @@ def measure_paa(
     loss_component = np.maximum(0.0, bel[:, 0] + ra0)
 
     return PAAMeasurement(
-        lrc=lrc,
+        lrc=lrc[:, 0],
+        loss_component=loss_component,
+        lrc_path=lrc,
         revenue=revenue,
         service_expense=service_expense,
-        loss_component=loss_component,
         lic=lic,
         cashflows=proj,
     )

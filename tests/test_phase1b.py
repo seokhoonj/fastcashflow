@@ -7,7 +7,7 @@ in plain Python as the correctness anchor.
 """
 import numpy as np
 
-from fastcashflow import ModelPoints, measure, value
+from fastcashflow import ModelPoints, measure, measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -86,7 +86,7 @@ def test_select_ultimate_and_duration_lapse():
     # BEL = PV(claims) - PV(premiums); zero discount, zero expenses
     pv_claims = death_benefit * deaths.sum()
     pv_premiums = premium * inforce.sum()
-    assert np.isclose(res.bel[0, 0], pv_claims - pv_premiums)
+    assert np.isclose(res.bel_path[0, 0], pv_claims - pv_premiums)
 
 
 def test_value_matches_run_phase1b():
@@ -102,10 +102,10 @@ def test_value_matches_run_phase1b():
     )
     asmp = _assumptions(mortality_cv=0.10, discount_annual=0.03)
 
-    fast = value(mps, asmp)
+    fast = measure(mps, asmp, full=False)
     detailed = measure(mps, asmp)
 
-    assert np.allclose(fast.bel, detailed.bel[:, 0])
-    assert np.allclose(fast.ra, detailed.ra[:, 0])
-    assert np.allclose(fast.csm, detailed.csm[:, 0])
+    assert np.allclose(fast.bel, detailed.bel_path[:, 0])
+    assert np.allclose(fast.ra, detailed.ra_path[:, 0])
+    assert np.allclose(fast.csm, detailed.csm_path[:, 0])
     assert np.allclose(fast.loss_component, detailed.loss_component)

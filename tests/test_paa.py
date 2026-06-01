@@ -48,17 +48,17 @@ def test_paa_lrc_hand_calc():
     lrc = np.empty(term + 1)
     lrc[0] = 0.0
     lrc[1:] = single * (term - np.arange(1, term + 1)) / term
-    assert np.allclose(res.lrc[0], lrc)
-    assert np.isclose(res.lrc[0, -1], 0.0)     # fully earned by the term end
+    assert np.allclose(res.lrc_path[0], lrc)
+    assert np.isclose(res.lrc_path[0, -1], 0.0)     # fully earned by the term end
 
 
 def test_paa_lrc_builds_and_releases():
     """The LRC builds from zero and releases back to zero over the term."""
     res = measure_paa(ModelPoints.single(35, 40_000.0, 24, benefits={0: 5e7}, calculation_methods=PATTERNS), _assumptions())
-    assert np.isclose(res.lrc[0, 0], 0.0)        # builds from zero
-    assert np.isclose(res.lrc[0, -1], 0.0)       # releases back to zero
-    assert np.all(res.lrc[0] >= -1e-6)           # a liability, never negative
-    assert res.lrc[0].max() > 0.0                # genuinely non-trivial between
+    assert np.isclose(res.lrc_path[0, 0], 0.0)        # builds from zero
+    assert np.isclose(res.lrc_path[0, -1], 0.0)       # releases back to zero
+    assert np.all(res.lrc_path[0] >= -1e-6)           # a liability, never negative
+    assert res.lrc_path[0].max() > 0.0                # genuinely non-trivial between
 
 
 def test_paa_service_result_is_the_underwriting_profit():

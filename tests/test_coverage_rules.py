@@ -16,7 +16,7 @@ from fastcashflow import (
     ModelPoints,
     CoverageRate,
     measure,
-    value,
+    measure,
 )
 from fastcashflow.numerics import _norm_ppf
 from conftest import annual_from_monthly as _annual
@@ -90,9 +90,9 @@ def test_waiting_period_hand_calc():
     t = np.arange(wait, term)                   # months t < wait pay nothing
     pv = d * benefit * half * float(np.sum((g * full) ** t))
 
-    assert np.isclose(res.bel[0, 0], pv)
+    assert np.isclose(res.bel_path[0, 0], pv)
     z = _norm_ppf(asmp.ra_confidence)
-    assert np.isclose(res.ra[0, 0], z * asmp.morbidity_cv * pv)
+    assert np.isclose(res.ra_path[0, 0], z * asmp.morbidity_cv * pv)
 
 
 def test_waiting_suppresses_payment_not_the_pool():
@@ -108,7 +108,7 @@ def test_waiting_suppresses_payment_not_the_pool():
     assert np.allclose(mcf_waited[:wait], 0.0)
     assert np.allclose(mcf_waited[wait:], mcf_plain[wait:])
     # the suppressed months make the contract cheaper
-    assert waited.bel[0, 0] < plain.bel[0, 0]
+    assert waited.bel_path[0, 0] < plain.bel_path[0, 0]
 
 
 def test_reduction_period_hand_calc():
@@ -132,9 +132,9 @@ def test_reduction_period_hand_calc():
         rf * float(np.sum(gf ** t_red)) + float(np.sum(gf ** t_full))
     )
 
-    assert np.isclose(res.bel[0, 0], pv)
+    assert np.isclose(res.bel_path[0, 0], pv)
     z = _norm_ppf(asmp.ra_confidence)
-    assert np.isclose(res.ra[0, 0], z * asmp.morbidity_cv * pv)
+    assert np.isclose(res.ra_path[0, 0], z * asmp.morbidity_cv * pv)
 
 
 def test_reduction_on_death_benefit():
@@ -173,13 +173,13 @@ def test_default_rule_is_inert():
         coverage_offset=np.array([0, 1]),
         calculation_methods=PATTERNS,
     )
-    a, b = value(explicit, asmp), value(omitted, asmp)
+    a, b = measure(explicit, asmp, full=False), measure(omitted, asmp, full=False)
     assert np.isclose(a.bel[0], b.bel[0])
     assert np.isclose(a.ra[0], b.ra[0])
 
 
 def test_value_matches_measure_with_rules():
-    """value() and measure() agree on a portfolio carrying waiting and
+    """measure() and measure() agree on a portfolio carrying waiting and
     reduced-benefit rules across death and diagnosis coverages."""
     rng = np.random.default_rng(23)
     n = 200
@@ -204,10 +204,10 @@ def test_value_matches_measure_with_rules():
         calculation_methods=PATTERNS,
     )
     asmp = _assumptions(morbidity_cv=0.15)
-    fast = value(mps, asmp)
+    fast = measure(mps, asmp, full=False)
     detailed = measure(mps, asmp)
 
-    assert np.allclose(fast.bel, detailed.bel[:, 0])
-    assert np.allclose(fast.ra, detailed.ra[:, 0])
-    assert np.allclose(fast.csm, detailed.csm[:, 0])
+    assert np.allclose(fast.bel, detailed.bel_path[:, 0])
+    assert np.allclose(fast.ra, detailed.ra_path[:, 0])
+    assert np.allclose(fast.csm, detailed.csm_path[:, 0])
     assert np.allclose(fast.loss_component, detailed.loss_component)

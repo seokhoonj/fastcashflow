@@ -9,7 +9,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from fastcashflow import ExpenseItem, ModelPoints, value, value_stochastic
+from fastcashflow import ExpenseItem, ModelPoints, measure, value_stochastic
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -40,12 +40,12 @@ def _portfolio(n: int = 200) -> ModelPoints:
 
 
 def test_stochastic_matches_value_per_scenario():
-    """Each scenario's total equals value() run at that discount rate."""
+    """Each scenario's total equals measure() run at that discount rate."""
     mps, asmp = _portfolio(), _assumptions()
     rates = np.array([0.02, 0.03, 0.05])
     res = value_stochastic(mps, asmp, rates)
     for s, rate in enumerate(rates):
-        v = value(mps, replace(asmp, discount_annual=float(rate)))
+        v = measure(mps, replace(asmp, discount_annual=float(rate)), full=False)
         assert np.isclose(res.bel[s], v.bel.sum())
         assert np.isclose(res.ra[s], v.ra.sum())
         assert np.isclose(res.csm[s], v.csm.sum())
@@ -69,20 +69,20 @@ def test_stochastic_summary_statistics():
 
 
 def test_stochastic_single_scenario():
-    """One scenario reproduces a plain value() at that rate."""
+    """One scenario reproduces a plain measure() at that rate."""
     mps, asmp = _portfolio(), _assumptions()
     res = value_stochastic(mps, asmp, np.array([0.04]))
-    v = value(mps, replace(asmp, discount_annual=0.04))
+    v = measure(mps, replace(asmp, discount_annual=0.04), full=False)
     assert res.bel.shape == (1,)
     assert np.isclose(res.bel[0], v.bel.sum())
 
 
 def test_value_constant_curve_matches_the_flat_rate():
-    """value() with a constant discount curve reproduces the flat-rate run."""
+    """measure() with a constant discount curve reproduces the flat-rate run."""
     mps, asmp = _portfolio(), _assumptions()
     n_time = int(mps.term_months.max())
-    flat = value(mps, replace(asmp, discount_annual=0.04))
-    curve = value(mps, asmp, discount_curve=np.full(n_time, 0.04))
+    flat = measure(mps, replace(asmp, discount_annual=0.04), full=False)
+    curve = measure(mps, asmp, discount_curve=np.full(n_time, 0.04), full=False)
     assert np.allclose(flat.bel, curve.bel, rtol=1e-9)
     assert np.allclose(flat.csm, curve.csm, rtol=1e-9)
 
@@ -118,12 +118,12 @@ def test_stochastic_curve_rejects_wrong_width():
 
 def test_stochastic_settlement_pattern_fallback_matches_value():
     """A claims settlement pattern routes to the per-scenario fallback, which
-    must still equal value() at each discount rate."""
+    must still equal measure() at each discount rate."""
     mps = _portfolio()
     asmp = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
     rates = np.array([0.02, 0.03, 0.05])
     res = value_stochastic(mps, asmp, rates)
     for s, rate in enumerate(rates):
-        v = value(mps, replace(asmp, discount_annual=float(rate)))
+        v = measure(mps, replace(asmp, discount_annual=float(rate)), full=False)
         assert np.isclose(res.bel[s], v.bel.sum())
         assert np.isclose(res.csm[s], v.csm.sum())

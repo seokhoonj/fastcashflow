@@ -20,7 +20,7 @@ from fastcashflow import (
     StateModel,
     Transition,
     measure,
-    value,
+    measure,
     CoverageRate,
 )
 from fastcashflow.statemodel import compile_state_model
@@ -127,7 +127,7 @@ def test_state_models_registry_is_read_only():
 
 def test_markov_can_reference_ci_incidence_annual():
     """A custom Markov topology that wires a transition to ci_incidence
-    works through both value() and measure(). The Markov rate dict now
+    works through both measure() and measure(). The Markov rate dict now
     threads ci_incidence_annual when the assumption is set -- before, the
     same topology would fail at compile_state_model with a "rate not
     supplied" ValueError, surprising anyone porting a Markov dx model
@@ -158,9 +158,9 @@ def test_markov_can_reference_ci_incidence_annual():
     )
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
                             level_premium=0.0, term_months=12)
-    val = value(mp, asmp)
+    val = measure(mp, asmp, full=False)
     m = measure(mp, asmp)
-    assert np.isclose(m.bel[0, 0], val.bel[0])
+    assert np.isclose(m.bel_path[0, 0], val.bel[0])
 
 
 # ---------------------------------------------------------------------------
@@ -185,8 +185,8 @@ def test_explicit_waiver_model_matches_default():
               level_premium=30_000.0, term_months=120)
     for state in (STATE_ACTIVE, STATE_WAIVER, STATE_PAIDUP):
         mp = ModelPoints.single(**kw, state=state)
-        default = value(mp, _asmp(waiver_rate=0.03))
-        custom = value(mp, _asmp(waiver_rate=0.03, state_model=rebuilt))
+        default = measure(mp, _asmp(waiver_rate=0.03), full=False)
+        custom = measure(mp, _asmp(waiver_rate=0.03, state_model=rebuilt), full=False)
         assert np.isclose(default.bel[0], custom.bel[0])
 
 
@@ -207,9 +207,9 @@ def test_single_state_no_lapse_hand_calculation():
     pv_premiums = sum(i * premium for i in inforce)
     bel = pv_claims - pv_premiums
 
-    val = value(mp, asmp)
+    val = measure(mp, asmp, full=False)
     assert np.isclose(val.bel[0], bel)
-    assert np.isclose(measure(mp, asmp).bel[0, 0], bel)
+    assert np.isclose(measure(mp, asmp).bel_path[0, 0], bel)
     assert np.allclose(measure(mp, asmp).cashflows.inforce[0], inforce)
 
 
@@ -244,10 +244,10 @@ def test_decrement_order_matters():
     pv_premiums = (1.0 + act1) * premium       # premium on the active track
     bel = pv_claims - pv_premiums
 
-    assert np.isclose(value(mp, asmp).bel[0], bel)
+    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
     assert np.allclose(measure(mp, asmp).cashflows.inforce[0], inforce)
     # The default waiver-before-lapse order gives a distinct figure.
-    default = value(mp, _asmp(waiver_rate=0.05, lapse=0.02)).bel[0]
+    default = measure(mp, _asmp(waiver_rate=0.05, lapse=0.02), full=False).bel[0]
     assert not np.isclose(default, bel)
 
 
@@ -275,15 +275,15 @@ def test_three_state_model_runs():
     # A paid-up contract: identical to the default, which seats paid-up on
     # the waiver state -- both are mortality-only, premium-free.
     paidup = ModelPoints.single(**kw, state=STATE_PAIDUP)
-    base = value(paidup, _asmp(waiver_rate=0.03))
-    custom = value(paidup, _asmp(waiver_rate=0.03, state_model=three))
+    base = measure(paidup, _asmp(waiver_rate=0.03), full=False)
+    custom = measure(paidup, _asmp(waiver_rate=0.03, state_model=three), full=False)
     for field in ("bel", "ra", "csm", "loss_component"):
         assert np.isclose(getattr(base, field)[0], getattr(custom, field)[0])
 
     # An active contract is unaffected by the unreachable paid-up state.
     active = ModelPoints.single(**kw, state=STATE_ACTIVE)
-    assert np.isclose(value(active, _asmp(waiver_rate=0.03)).bel[0],
-                      value(active, _asmp(waiver_rate=0.03, state_model=three)).bel[0])
+    assert np.isclose(measure(active, _asmp(waiver_rate=0.03), full=False).bel[0],
+                      measure(active, _asmp(waiver_rate=0.03, state_model=three), full=False).bel[0])
 
 
 def test_paidup_state_uses_its_own_lapse():
@@ -350,6 +350,6 @@ def test_measure_and_value_agree_under_custom_model():
         state=rng.integers(0, 3, n),
     )
     asmp = _asmp(waiver_rate=0.03, state_model=three)
-    assert np.allclose(measure(mps, asmp).bel[:, 0], value(mps, asmp).bel)
+    assert np.allclose(measure(mps, asmp).bel_path[:, 0], measure(mps, asmp, full=False).bel)
 
 

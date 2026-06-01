@@ -641,7 +641,7 @@ def test_value_segmented_matches_nfc_and_nfd_codes():
     )
     # Basis keyed under the decomposed form -- the lookup must still match.
     basis = {(decomposed, "FC"): basis}
-    out = fcf.value_segmented(mp, basis)
+    out = fcf.measure(mp, basis, full=False)
     assert out.bel.shape == (1,)
 
 
@@ -693,7 +693,7 @@ def test_norm_ppf_rejects_p_outside_open_interval():
 def test_empty_portfolio_value_raises_loudly():
     """A zero-policy ModelPoints does not silently return garbage.
 
-    ``value()`` and ``measure()`` reject n_mp=0 up front with an explicit
+    ``measure()`` and ``measure()`` reject n_mp=0 up front with an explicit
     ValueError naming the empty portfolio (rather than letting an opaque
     ``term_months.max()`` zero-size reduction surface). This locks in the
     loud-fail behaviour so a future change that returns empty-but-meaningful
@@ -713,7 +713,7 @@ def test_empty_portfolio_value_raises_loudly():
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     with pytest.raises(ValueError, match="empty"):
-        fcf.value(mp, basis)
+        fcf.measure(mp, basis, full=False)
     with pytest.raises(ValueError, match="empty"):
         fcf.measure(mp, basis)
 
@@ -733,7 +733,7 @@ def test_single_month_measure():
         coverages=(CoverageRate("DEATH", _flat_rate(0.01)),),
     )
     m = fcf.measure(mp, basis)
-    assert m.bel.shape == (1, 2)            # (n_mp, term+1)
+    assert m.bel_path.shape == (1, 2)            # (n_mp, term+1)
     assert np.isfinite(m.bel).all()
 
 
@@ -753,10 +753,10 @@ def test_mixed_term_months_tail_padded_consistently():
         coverages=(CoverageRate("DEATH", _flat_rate(0.01)),),
     )
     m = fcf.measure(mp, basis)
-    assert m.bel.shape == (2, 13)            # max term + 1
+    assert m.bel_path.shape == (2, 13)            # max term + 1
     # The 3-month MP's BEL at t=12 must be a finite, well-defined value
     # (zero or held-flat post-maturity), never NaN / inf.
-    assert np.isfinite(m.bel[0, 12])
+    assert np.isfinite(m.bel_path[0, 12])
 
 
 # ---------------------------------------------------------------------------

@@ -47,12 +47,12 @@ def test_mid_month_discounting():
 
     pv_claims = float(np.sum(deaths * death_benefit * d_mid))
     pv_premiums = float(np.sum(inforce * premium * d_start))
-    assert np.isclose(res.bel[0, 0], pv_claims - pv_premiums)
+    assert np.isclose(res.bel_path[0, 0], pv_claims - pv_premiums)
 
     # the timing genuinely differs from the old all-start-of-month basis
     bel_all_start = float(np.sum(deaths * death_benefit * d_start)
                           - np.sum(inforce * premium * d_start))
-    assert not np.isclose(res.bel[0, 0], bel_all_start)
+    assert not np.isclose(res.bel_path[0, 0], bel_all_start)
 
 
 def test_csm_movement_identity():
@@ -73,8 +73,8 @@ def test_csm_movement_identity():
     res = measure(mps, asmp)
 
     # csm[t+1] = csm[t] + accretion[t] - release[t], exactly
-    opening = res.csm[:, :-1]
-    closing = res.csm[:, 1:]
+    opening = res.csm_path[:, :-1]
+    closing = res.csm_path[:, 1:]
     assert np.array_equal(closing, opening + res.csm_accretion - res.csm_release)
 
     # accretion is interest on the opening balance

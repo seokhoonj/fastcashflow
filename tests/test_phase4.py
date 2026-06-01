@@ -6,7 +6,7 @@ the total liability must run off to zero by the end of the term.
 """
 import numpy as np
 
-from fastcashflow import ExpenseItem, ModelPoints, measure, value
+from fastcashflow import ExpenseItem, ModelPoints, measure, measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -50,11 +50,11 @@ def test_bel_rollforward():
             - cf.premium_cf[0, t]
             + bel[t + 1] * full
         )
-    assert np.allclose(res.bel[0], bel)
-    assert res.bel[0, -1] == 0.0
+    assert np.allclose(res.bel_path[0], bel)
+    assert res.bel_path[0, -1] == 0.0
 
     # column 0 of the detailed trajectory equals the fast headline BEL
-    assert np.isclose(res.bel[0, 0], value(one, asmp).bel[0])
+    assert np.isclose(res.bel_path[0, 0], measure(one, asmp, full=False).bel[0])
 
 
 def test_liability_runs_off():
@@ -71,5 +71,5 @@ def test_liability_runs_off():
     )
     res = measure(mps, asmp)
 
-    liability = res.bel + res.ra + res.csm
+    liability = res.bel_path + res.ra_path + res.csm_path
     assert np.allclose(liability[:, -1], 0.0)

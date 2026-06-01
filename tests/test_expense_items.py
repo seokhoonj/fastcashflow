@@ -125,7 +125,7 @@ def test_helper_exported_at_package_level():
 # ---------------------------------------------------------------------------
 
 def _term_life_mp():
-    """A single-policy fixture exercising the value() and measure() paths."""
+    """A single-policy fixture exercising the measure() and measure() paths."""
     return fcf.ModelPoints.single(
         issue_age=40,
         benefits={0: 100_000_000.0},
@@ -193,9 +193,9 @@ def test_empty_expense_items_is_zero_expense_basis():
     populated = _basis_rows()
     empty = dataclasses.replace(populated, expense_items=())
     m_empty = fcf.measure(mp, empty)
-    v_empty = fcf.value(mp, empty)
+    v_empty = fcf.measure(mp, empty, full=False)
     assert np.all(m_empty.cashflows.expense_cf == 0.0)
-    assert np.isclose(m_empty.bel[0, 0], v_empty.bel[0])
+    assert np.isclose(m_empty.bel_path[0, 0], v_empty.bel[0])
     # populated basis has expense outflows, so it must have a higher BEL
-    populated_bel = fcf.value(mp, populated).bel[0]
+    populated_bel = fcf.measure(mp, populated, full=False).bel[0]
     assert populated_bel > v_empty.bel[0]

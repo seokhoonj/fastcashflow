@@ -13,7 +13,7 @@ Every figure is derived by hand on a flat, zero-discount basis.
 import numpy as np
 import pytest
 
-from fastcashflow import Basis, ModelPoints, measure, value, CoverageRate
+from fastcashflow import Basis, ModelPoints, measure, measure, CoverageRate
 from fastcashflow.basis import annual_to_monthly
 
 
@@ -91,8 +91,8 @@ def test_quarterly_premium_hand_calculation():
     pv_prem = premium * (inforce[0] + inforce[3])    # premium at months 0, 3
     bel = pv_claims - pv_prem
 
-    assert np.isclose(value(mp, asmp).bel[0], bel)
-    assert np.isclose(measure(mp, asmp).bel[0, 0], bel)
+    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
+    assert np.isclose(measure(mp, asmp).bel_path[0, 0], bel)
 
 
 def test_premium_frequency_respects_premium_term():
@@ -123,7 +123,7 @@ def test_annuity_frequency_payout_months():
     assert np.isclose(acf[0], annuity)
     assert np.isclose(acf[12], annuity)
     assert np.count_nonzero(acf) == 2
-    assert np.isclose(value(mp, _asmp()).bel[0], 2 * annuity)
+    assert np.isclose(measure(mp, _asmp(), full=False).bel[0], 2 * annuity)
 
 
 # ---------------------------------------------------------------------------
@@ -146,9 +146,9 @@ def test_measure_value_agree_under_frequency():
         annuity_frequency_months=freqs[rng.integers(0, 4, n)],
     )
     asmp = _asmp(q_annual=0.08, lapse_annual=0.05)
-    m, v = measure(mps, asmp), value(mps, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
-    assert np.allclose(m.ra[:, 0], v.ra)
+    m, v = measure(mps, asmp), measure(mps, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
+    assert np.allclose(m.ra_path[:, 0], v.ra)
 
 
 def test_default_frequency_is_monthly():
@@ -157,9 +157,9 @@ def test_default_frequency_is_monthly():
     kw = dict(issue_age=45, benefits={0: 20_000_000.0}, level_premium=30_000.0,
               term_months=60, annuity_payment=100_000.0)
     asmp = _asmp(q_annual=0.05)
-    default = value(ModelPoints.single(**kw), asmp)
-    explicit = value(ModelPoints.single(**kw, premium_frequency_months=1,
-                                        annuity_frequency_months=1), asmp)
+    default = measure(ModelPoints.single(**kw), asmp, full=False)
+    explicit = measure(ModelPoints.single(**kw, premium_frequency_months=1,
+                                        annuity_frequency_months=1), asmp, full=False)
     assert np.isclose(default.bel[0], explicit.bel[0])
 
 

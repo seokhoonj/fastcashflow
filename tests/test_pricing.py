@@ -1,12 +1,12 @@
 """Pricing validation -- solve_premium against its profitability targets.
 
-Each solved premium is fed back through value() and checked to reproduce
+Each solved premium is fed back through measure() and checked to reproduce
 the target it was solved for.
 """
 import numpy as np
 import pytest
 
-from fastcashflow import ExpenseItem, ModelPoints, solve_premium, value
+from fastcashflow import ExpenseItem, ModelPoints, solve_premium, measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
 
@@ -53,7 +53,7 @@ def test_break_even_premium():
     mps, asmp = _portfolio(), _assumptions()
     premium = solve_premium(mps, asmp, break_even=True)
 
-    v = value(_priced(mps, premium), asmp)
+    v = measure(_priced(mps, premium), asmp, full=False)
     assert np.allclose(v.csm, 0.0, atol=1.0)
     assert np.allclose(v.loss_component, 0.0, atol=1.0)
 
@@ -64,7 +64,7 @@ def test_target_csm_premium():
     target = 500_000.0
     premium = solve_premium(mps, asmp, csm=target)
 
-    v = value(_priced(mps, premium), asmp)
+    v = measure(_priced(mps, premium), asmp, full=False)
     assert np.allclose(v.csm, target)
 
 
@@ -73,11 +73,11 @@ def test_target_margin_premium():
     mps, asmp = _portfolio(), _assumptions()
     m = 0.15
     premium = solve_premium(mps, asmp, margin=m)
-    v = value(_priced(mps, premium), asmp)
+    v = measure(_priced(mps, premium), asmp, full=False)
 
     # PV(premiums) = premium * B, with B from the linear FCF relation
-    at_zero = value(_priced(mps, np.zeros(mps.n_mp)), asmp)
-    at_one = value(_priced(mps, np.ones(mps.n_mp)), asmp)
+    at_zero = measure(_priced(mps, np.zeros(mps.n_mp)), asmp, full=False)
+    at_one = measure(_priced(mps, np.ones(mps.n_mp)), asmp, full=False)
     b = (at_zero.bel + at_zero.ra) - (at_one.bel + at_one.ra)
     pv_premiums = premium * b
     assert np.allclose(v.csm / pv_premiums, m)

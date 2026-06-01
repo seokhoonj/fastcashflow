@@ -154,9 +154,9 @@ def plot_liability(measurement: GMMMeasurement, *, ax: Axes | None = None,
     Each line is the portfolio total of that component at each month.
     """
     ax = _axes(ax)
-    bel = measurement.bel.sum(axis=0)
-    ra = measurement.ra.sum(axis=0)
-    csm = measurement.csm.sum(axis=0)
+    bel = measurement.bel_path.sum(axis=0)
+    ra = measurement.ra_path.sum(axis=0)
+    csm = measurement.csm_path.sum(axis=0)
     months = np.arange(bel.shape[0])
     ax.axhline(0.0, color=_COLOR["ink"], linewidth=0.8)
     ax.plot(months, bel, color=_COLOR["bel"], linewidth=2.2, label="BEL")
@@ -215,7 +215,7 @@ def plot_csm_runoff(measurement: GMMMeasurement, *, ax: Axes | None = None,
     profit emerging into the income statement as service is provided.
     """
     ax = _axes(ax)
-    csm = measurement.csm.sum(axis=0)
+    csm = measurement.csm_path.sum(axis=0)
     months = np.arange(csm.shape[0])
     ax.fill_between(months, csm, color=_COLOR["csm"], alpha=0.22)
     ax.plot(months, csm, color=_COLOR["csm"], linewidth=2.6)
@@ -244,8 +244,8 @@ def plot_risk_adjustment(measurement: GMMMeasurement, basis: Basis,
             "plot_risk_adjustment shows the confidence-level risk "
             "adjustment; these basis use the cost-of-capital method"
         )
-    mu = float(measurement.bel[:, 0].sum())
-    ra = float(measurement.ra[:, 0].sum())
+    mu = float(measurement.bel_path[:, 0].sum())
+    ra = float(measurement.ra_path[:, 0].sum())
     if ra <= 0.0:
         raise ValueError("the risk adjustment is zero -- nothing to plot")
     sigma = ra / _norm_ppf(basis.ra_confidence)

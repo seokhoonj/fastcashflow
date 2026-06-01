@@ -64,18 +64,23 @@ class VFAMeasurement:
     the CSM but is reported separately from ``bel``.
     """
 
-    account_value: FloatArray    # (n_mp, n_time+1) -- account-value trajectory
-    bel: FloatArray              # (n_mp, n_time+1) -- BEL trajectory
-    ra: FloatArray               # (n_mp, n_time+1) -- RA trajectory (expense risk)
-    csm: FloatArray              # (n_mp, n_time+1) -- CSM trajectory
-    csm_accretion: FloatArray    # (n_mp, n_time)   -- CSM accreted each month
-    csm_release: FloatArray      # (n_mp, n_time)   -- CSM released each month
-    variable_fee: FloatArray     # (n_mp,)          -- PV of the entity's fee
-    loss_component: FloatArray   # (n_mp,)          -- onerous loss at inception
-    time_value: FloatArray       # (n_mp,)          -- guarantee TVOG at inception
-    lic: FloatArray              # (n_mp, n_time+1) -- liability for incurred claims
-    discount_start: FloatArray   # (n_time+1,)      -- start-of-month discount factors
-    cashflows: Cashflows
+    # headline -- always present, shape (n_mp,)
+    bel: FloatArray              # inception BEL (net of account value)
+    ra: FloatArray               # inception RA (expense risk)
+    csm: FloatArray              # inception CSM
+    variable_fee: FloatArray     # PV of the entity's fee
+    time_value: FloatArray       # guarantee TVOG at inception
+    loss_component: FloatArray   # onerous loss at inception
+    # trajectory -- full only (None on the headline-only path)
+    bel_path: FloatArray | None = None            # (n_mp, n_time+1) -- BEL trajectory
+    ra_path: FloatArray | None = None             # (n_mp, n_time+1) -- RA trajectory
+    csm_path: FloatArray | None = None            # (n_mp, n_time+1) -- CSM trajectory
+    account_value_path: FloatArray | None = None  # (n_mp, n_time+1) -- account-value trajectory
+    csm_accretion: FloatArray | None = None       # (n_mp, n_time)
+    csm_release: FloatArray | None = None          # (n_mp, n_time)
+    lic: FloatArray | None = None                 # (n_mp, n_time+1)
+    discount_start: FloatArray | None = None      # (n_time+1,)
+    cashflows: "Cashflows | None" = None
 
 
 def measure_vfa(
@@ -255,15 +260,18 @@ def measure_vfa(
     )
 
     return VFAMeasurement(
-        account_value=av,
-        bel=bel,
-        ra=ra,
-        csm=csm,
+        bel=bel[:, 0],
+        ra=ra[:, 0],
+        csm=csm[:, 0],
+        variable_fee=variable_fee,
+        time_value=time_value,
+        loss_component=loss_component,
+        bel_path=bel,
+        ra_path=ra,
+        csm_path=csm,
+        account_value_path=av,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        variable_fee=variable_fee,
-        loss_component=loss_component,
-        time_value=time_value,
         lic=lic,
         discount_start=disc_start,
         cashflows=proj,

@@ -8,7 +8,7 @@ import pytest
 
 from fastcashflow import (
     Basis, CalculationMethod, CoverageRate, ModelPoints,
-    measure, value, value_segmented,
+    measure, measure, measure,
 )
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
 
@@ -34,7 +34,7 @@ def test_value_segmented_rejects_pipe_in_product_code():
     basis = {("TERM|2020", "FC"): make_death_assumptions(
         mortality_q=0.005, lapse_q=0.01)}
     with pytest.raises(ValueError, match="product_code.*'\\|'"):
-        value_segmented(mp, basis)
+        measure(mp, basis, full=False)
 
 
 def test_value_segmented_rejects_pipe_in_channel_code():
@@ -50,7 +50,7 @@ def test_value_segmented_rejects_pipe_in_channel_code():
     basis = {("TERM_LIFE_A", "FC|GA"): make_death_assumptions(
         mortality_q=0.005, lapse_q=0.01)}
     with pytest.raises(ValueError, match="channel_code.*'\\|'"):
-        value_segmented(mp, basis)
+        measure(mp, basis, full=False)
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ def test_engine_rejects_catalogue_mismatch():
     with pytest.raises(ValueError, match="catalogue"):
         measure(mp, asmp)
     with pytest.raises(ValueError, match="catalogue"):
-        value(mp, asmp)
+        measure(mp, asmp, full=False)
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +117,8 @@ def test_engine_reorders_coverages_by_code():
     # the basis register the coverages in.
     assert np.allclose(np.asarray(measure(mp, asmp_ordered).bel),
                        np.asarray(measure(mp, asmp_swapped).bel))
-    assert np.isclose(float(np.asarray(value(mp, asmp_ordered).bel).ravel()[0]),
-                      float(np.asarray(value(mp, asmp_swapped).bel).ravel()[0]))
+    assert np.isclose(float(np.asarray(measure(mp, asmp_ordered, full=False).bel).ravel()[0]),
+                      float(np.asarray(measure(mp, asmp_swapped, full=False).bel).ravel()[0]))
 
 
 def test_engine_rejects_unregistered_coverage():
@@ -143,7 +143,7 @@ def test_engine_rejects_unregistered_coverage():
     with pytest.raises(ValueError, match="no registered coverage"):
         measure(mp, asmp)
     with pytest.raises(ValueError, match="no registered coverage"):
-        value(mp, asmp)
+        measure(mp, asmp, full=False)
 
 
 def test_engine_accepts_matching_coverage_codes():
@@ -171,7 +171,7 @@ def test_engine_accepts_matching_coverage_codes():
     # No exception; both paths produce finite results.
     r = measure(mp, asmp)
     assert np.all(np.isfinite(np.asarray(r.bel)))
-    v = value(mp, asmp)
+    v = measure(mp, asmp, full=False)
     assert np.all(np.isfinite(np.asarray(v.bel)))
 
 

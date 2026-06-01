@@ -19,7 +19,7 @@ def main() -> None:
 
     # GMM -- the general measurement model.
     gmm = fcf.measure(book, basis)
-    print(f"GMM  -- CSM                       {gmm.csm[:, 0].sum():>14,.0f}")
+    print(f"GMM  -- CSM                       {gmm.csm_path[:, 0].sum():>14,.0f}")
 
     # PAA -- the simplified model for short-coverage business.
     paa = fcf.measure_paa(book, basis)
@@ -28,7 +28,7 @@ def main() -> None:
     # VFA -- account-value (direct-participation) contracts.
     account = fcf.read_model_points(DATA / "account_values.xlsx", calculation_methods=DATA / "calculation_methods.csv")
     vfa = fcf.measure_vfa(account, basis)
-    print(f"VFA  -- CSM (the variable fee)    {vfa.csm[:, 0].sum():>14,.0f}")
+    print(f"VFA  -- CSM (the variable fee)    {vfa.csm_path[:, 0].sum():>14,.0f}")
 
 
 if __name__ == "__main__":

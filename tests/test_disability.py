@@ -23,7 +23,7 @@ from fastcashflow import (
     StateModel,
     Transition,
     measure,
-    value,
+    measure,
     CoverageRate,
 )
 from fastcashflow.statemodel import compile_state_model
@@ -121,10 +121,10 @@ def test_disability_income_hand_calculation():
 
     res = measure(mp, asmp)
     assert np.allclose(res.cashflows.disability_cf[0], disability_cf)
-    assert np.isclose(res.bel[0, 0], bel)
-    assert np.isclose(value(mp, asmp).bel[0], bel)
+    assert np.isclose(res.bel_path[0, 0], bel)
+    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
     # RA: the disability-risk component, z * cv * PV(disability).
-    assert np.isclose(value(mp, asmp).ra[0], Z_75 * 0.20 * bel)
+    assert np.isclose(measure(mp, asmp, full=False).ra[0], Z_75 * 0.20 * bel)
 
 
 def test_disability_income_needs_a_benefit_state():
@@ -164,8 +164,8 @@ def test_disability_lump_sum_hand_calculation():
 
     res = measure(mp, asmp)
     assert np.allclose(res.cashflows.disability_cf[0], disability_cf)
-    assert np.isclose(res.bel[0, 0], bel)
-    assert np.isclose(value(mp, asmp).bel[0], bel)
+    assert np.isclose(res.bel_path[0, 0], bel)
+    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
 
 
 def test_lump_sum_off_when_unflagged():
@@ -196,9 +196,9 @@ def test_measure_value_agree_disability_portfolio():
         state=rng.integers(0, 2, n),           # active or disabled start
     )
     asmp = _asmp(q=0.008, lapse=0.04, inception=0.02, disability_cv=0.25)
-    m, v = measure(mps, asmp), value(mps, asmp)
-    assert np.allclose(m.bel[:, 0], v.bel)
-    assert np.allclose(m.ra[:, 0], v.ra)
+    m, v = measure(mps, asmp), measure(mps, asmp, full=False)
+    assert np.allclose(m.bel_path[:, 0], v.bel)
+    assert np.allclose(m.ra_path[:, 0], v.ra)
 
 
 def test_disability_cv_drives_the_risk_adjustment():
@@ -207,5 +207,5 @@ def test_disability_cv_drives_the_risk_adjustment():
     mp = ModelPoints.single(issue_age=45, benefits={0: 0.0}, level_premium=0.0,
                             term_months=12, disability_income=300_000.0,
                             state=STATE_WAIVER)
-    assert value(mp, _asmp(disability_cv=0.0)).ra[0] == 0.0
-    assert value(mp, _asmp(disability_cv=0.30)).ra[0] > 0.0
+    assert measure(mp, _asmp(disability_cv=0.0), full=False).ra[0] == 0.0
+    assert measure(mp, _asmp(disability_cv=0.30), full=False).ra[0] > 0.0

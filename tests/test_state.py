@@ -24,7 +24,7 @@ from fastcashflow import (
     CoverageRate,
     measure,
     read_model_points,
-    value,
+    measure,
 )
 
 from conftest import annual_from_monthly as _annual
@@ -98,8 +98,8 @@ def test_state_default_is_active():
     default = ModelPoints.single(**kw, calculation_methods=PATTERNS)
     assert np.all(default.state == STATE_ACTIVE)
     assert np.isclose(
-        value(default, asmp).bel[0],
-        value(ModelPoints.single(**kw, state=STATE_ACTIVE, calculation_methods=PATTERNS), asmp).bel[0],
+        measure(default, asmp, full=False).bel[0],
+        measure(ModelPoints.single(**kw, state=STATE_ACTIVE, calculation_methods=PATTERNS), asmp, full=False).bel[0],
     )
 
 
@@ -124,7 +124,7 @@ def test_waiver_hand_calculation():
                             calculation_methods=PATTERNS,
                             )
     asmp = _assumptions()
-    val = value(mp, asmp)
+    val = measure(mp, asmp, full=False)
 
     # waiver in force [1.0, 0.99]; claims at 1e6, no premium, zero discount.
     inforce = [1.0, 0.99]
@@ -155,8 +155,8 @@ def test_paidup_matches_waiver():
     kw = dict(issue_age=42, benefits={0: 80_000_000.0},
               level_premium=40_000.0, term_months=180)
     asmp = _assumptions()
-    waiver = value(ModelPoints.single(**kw, state=STATE_WAIVER, calculation_methods=PATTERNS), asmp)
-    paidup = value(ModelPoints.single(**kw, state=STATE_PAIDUP, calculation_methods=PATTERNS), asmp)
+    waiver = measure(ModelPoints.single(**kw, state=STATE_WAIVER, calculation_methods=PATTERNS), asmp, full=False)
+    paidup = measure(ModelPoints.single(**kw, state=STATE_PAIDUP, calculation_methods=PATTERNS), asmp, full=False)
     for field in ("bel", "ra", "csm", "loss_component"):
         assert np.isclose(getattr(paidup, field)[0], getattr(waiver, field)[0])
 
@@ -166,8 +166,8 @@ def test_zero_waiver_rate_is_no_transition():
     the result is the ordinary single-track projection."""
     kw = dict(issue_age=45, benefits={0: 50_000_000.0},
               level_premium=30_000.0, term_months=120)
-    plain = value(ModelPoints.single(**kw, calculation_methods=PATTERNS), _assumptions())
-    with_zero = value(ModelPoints.single(**kw, calculation_methods=PATTERNS), _assumptions(waiver_rate=0.0))
+    plain = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), _assumptions(), full=False)
+    with_zero = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), _assumptions(waiver_rate=0.0), full=False)
     assert np.isclose(plain.bel[0], with_zero.bel[0])
 
 
@@ -194,12 +194,12 @@ def test_dynamic_transition_hand_calculation():
 
     res = measure(mp, asmp)
     assert np.allclose(res.cashflows.inforce[0], inforce)
-    assert np.isclose(res.bel[0, 0], bel)
-    assert np.isclose(value(mp, asmp).bel[0], bel)
+    assert np.isclose(res.bel_path[0, 0], bel)
+    assert np.isclose(measure(mp, asmp, full=False).bel[0], bel)
 
 
 def test_dynamic_transition_matches_reference():
-    """value() reproduces the plain-Python two-track recursion across a
+    """measure() reproduces the plain-Python two-track recursion across a
     range of waiver-inception rates and starting states."""
     death_benefit = 1_000_000.0
     premium = 20_000.0
@@ -214,7 +214,7 @@ def test_dynamic_transition_matches_reference():
             )
             ref_bel, ref_inforce = _two_track_bel(
                 death_benefit, premium, term, state, w=w)
-            assert np.isclose(value(mp, asmp).bel[0], ref_bel)
+            assert np.isclose(measure(mp, asmp, full=False).bel[0], ref_bel)
             assert np.allclose(measure(mp, asmp).cashflows.inforce[0],
                                ref_inforce)
 
@@ -226,7 +226,7 @@ def test_measure_and_value_agree_under_transition():
                             calculation_methods=PATTERNS,
                             )
     asmp = _assumptions(waiver_rate=0.03)
-    assert np.isclose(measure(mp, asmp).bel[0, 0], value(mp, asmp).bel[0])
+    assert np.isclose(measure(mp, asmp).bel_path[0, 0], measure(mp, asmp, full=False).bel[0])
 
 
 def test_state_column_round_trips(tmp_path):
@@ -246,7 +246,7 @@ def test_state_column_round_trips(tmp_path):
 
     back = read_model_points(path)
     assert list(back.state) == [STATE_ACTIVE, STATE_WAIVER]
-    val = value(back, asmp)
+    val = measure(back, asmp, full=False)
     assert val.bel[1] > val.bel[0]
 
 
@@ -272,7 +272,7 @@ def _flat(rate):
 
 def test_diagnosis_transition_measure_value_agree():
     """A diagnosis coverage attached to a death contract under a waiver
-    transition -- the fused value() and the detailed measure() agree,
+    transition -- the fused measure() and the detailed measure() agree,
     cross-checking the two-track diagnosis pool against the projection
     kernel over mixed input states."""
     mort_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.01))
@@ -296,11 +296,11 @@ def test_diagnosis_transition_measure_value_agree():
         state=rng.integers(0, 3, n),
         calculation_methods={"DEATH": CalculationMethod.DEATH, "dx": CalculationMethod.DIAGNOSIS},
     )
-    assert np.allclose(measure(mps, asmp).bel[:, 0], value(mps, asmp).bel)
+    assert np.allclose(measure(mps, asmp).bel_path[:, 0], measure(mps, asmp, full=False).bel)
 
 
 def test_waiting_rule_transition_measure_value_agree():
-    """A coverage with a waiting period under a waiver transition -- value()
+    """A coverage with a waiting period under a waiver transition -- measure()
     and measure() agree, cross-checking the two-track rule pass."""
     asmp = _assumptions(
         waiver_rate=0.04,
@@ -317,4 +317,4 @@ def test_waiting_rule_transition_measure_value_agree():
         state=np.array([STATE_ACTIVE, STATE_WAIVER]),
         calculation_methods={"hosp": CalculationMethod.MORBIDITY},
     )
-    assert np.allclose(measure(mps, asmp).bel[:, 0], value(mps, asmp).bel)
+    assert np.allclose(measure(mps, asmp).bel_path[:, 0], measure(mps, asmp, full=False).bel)

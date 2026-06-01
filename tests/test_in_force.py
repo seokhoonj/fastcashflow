@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import (
-    Basis, ExpenseItem, ModelPoints, measure, measure_in_force, value,
+    Basis, ExpenseItem, ModelPoints, measure, measure_in_force, measure,
     value_in_force,
     CoverageRate,
 )
@@ -45,13 +45,13 @@ def _basis():
 
 def test_value_in_force_zero_elapsed_matches_value():
     """When every ``elapsed_months`` is 0 the in-force valuation collapses
-    to the new-business :func:`value` (= ``GMMMeasurement.bel[:, 0]``)."""
+    to the new-business :func:`value` (= ``GMMMeasurement.bel_path[:, 0]``)."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         level_premium=50_000.0, term_months=120,
     )
     asmp = _basis()
-    v_new = value(mp, asmp)
+    v_new = measure(mp, asmp, full=False)
     v_inf = value_in_force(mp, asmp)
     assert np.isclose(v_inf.bel[0], v_new.bel[0])
     assert np.isclose(v_inf.ra[0], v_new.ra[0])
@@ -60,7 +60,7 @@ def test_value_in_force_zero_elapsed_matches_value():
 
 def test_value_in_force_matches_trajectory_slice():
     """An in-force MP with ``elapsed_months = E`` returns the trajectory
-    slice ``GMMMeasurement.bel[mp, E]`` -- the PV of future cash flows from
+    slice ``GMMMeasurement.bel_path[mp, E]`` -- the PV of future cash flows from
     the valuation date forward."""
     elapsed = 36
     mp_new = ModelPoints.single(
@@ -79,8 +79,8 @@ def test_value_in_force_matches_trajectory_slice():
     )
     v_inf = value_in_force(mp_inforce, asmp)
     # The in-force BEL is the trajectory slice at t = elapsed.
-    assert np.isclose(v_inf.bel[0], m.bel[0, elapsed])
-    assert np.isclose(v_inf.ra[0], m.ra[0, elapsed])
+    assert np.isclose(v_inf.bel[0], m.bel_path[0, elapsed])
+    assert np.isclose(v_inf.ra[0], m.ra_path[0, elapsed])
 
 
 def test_value_in_force_settlement_matches_trajectory():
@@ -97,7 +97,7 @@ def test_value_in_force_settlement_matches_trajectory():
     m = measure(mp_new, asmp)
     elapsed, period = 36, 12
     prior_t = elapsed - period
-    prior_csm = m.csm[:, prior_t]
+    prior_csm = m.csm_path[:, prior_t]
 
     mp_inforce = ModelPoints(
         issue_age=np.array([40]),
@@ -112,9 +112,9 @@ def test_value_in_force_settlement_matches_trajectory():
         lock_in_rate=asmp.discount_annual,
         period_months=period,
     )
-    assert np.isclose(v.bel[0], m.bel[0, elapsed])
-    assert np.isclose(v.ra[0], m.ra[0, elapsed])
-    assert np.isclose(v.csm[0], m.csm[0, elapsed])
+    assert np.isclose(v.bel[0], m.bel_path[0, elapsed])
+    assert np.isclose(v.ra[0], m.ra_path[0, elapsed])
+    assert np.isclose(v.csm[0], m.csm_path[0, elapsed])
 
 
 def test_value_in_force_period_months_rejected_in_hypothetical_mode():
@@ -195,14 +195,14 @@ def test_measure_in_force_settlement_matches_value_in_force():
     )
     m_baseline = measure(mp, asmp)
     period = 12
-    prior_csm = m_baseline.csm[:, 36 - period]
+    prior_csm = m_baseline.csm_path[:, 36 - period]
     lock_in = asmp.discount_annual
     v = value_in_force(mp, asmp, prior_csm=prior_csm,
                        lock_in_rate=lock_in, period_months=period)
     mif = measure_in_force(mp, asmp, prior_csm=prior_csm,
                             lock_in_rate=lock_in, period_months=period)
     rows = np.arange(1)
-    assert np.isclose(mif.csm[rows, 36][0], v.csm[0])
+    assert np.isclose(mif.csm_path[rows, 36][0], v.csm[0])
     assert np.isclose(mif.loss_component[0], v.loss_component[0])
 
 
@@ -223,11 +223,11 @@ def test_measure_in_force_settlement_roundtrip_to_measure():
     prior_t = 36 - period
     mif = measure_in_force(
         mp, asmp,
-        prior_csm=m.csm[:, prior_t],
+        prior_csm=m.csm_path[:, prior_t],
         lock_in_rate=asmp.discount_annual,
         period_months=period,
     )
-    assert np.allclose(m.csm[:, prior_t:], mif.csm[:, prior_t:])
+    assert np.allclose(m.csm_path[:, prior_t:], mif.csm_path[:, prior_t:])
     assert np.allclose(m.csm_accretion[:, prior_t:], mif.csm_accretion[:, prior_t:])
     assert np.allclose(m.csm_release[:, prior_t:], mif.csm_release[:, prior_t:])
 
