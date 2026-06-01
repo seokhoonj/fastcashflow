@@ -159,9 +159,9 @@ m = fcf.gmm.measure(mp, basis)
 print(f"inforce       = {m.cashflows.inforce[0]}")        # 보유계약 (사망으로만 감쇠)
 print(f"claim_cf      = {m.cashflows.claim_cf[0]}")       # 사망보험금
 print(f"disability_cf = {m.cashflows.disability_cf[0]}")  # 진단금 (1차 + 2차)
-print(f"BEL           = {m.bel[0]:.2f}")               # 최선추정부채
-print(f"RA            = {m.ra[0]:.2f}")                # 위험조정
-print(f"CSM           = {m.csm[0]:.2f}")               # 계약서비스마진
+print(f"BEL           = {m.bel[0]:.2f}")                  # 최선추정부채
+print(f"RA            = {m.ra[0]:.2f}")                   # 위험조정
+print(f"CSM           = {m.csm[0]:.2f}")                  # 계약서비스마진
 ```
 
 출력:

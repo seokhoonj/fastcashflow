@@ -167,10 +167,10 @@ m = fcf.gmm.measure(model_points, basis)
 꺼냅니다.
 
 ```python
-print(m.bel[0])           # BEL
-print(m.ra[0])            # RA
-print(m.csm[0])           # CSM
-print(m.loss_component[0])   # 손실요소
+print(m.bel[0])             # BEL
+print(m.ra[0])              # RA
+print(m.csm[0])             # CSM
+print(m.loss_component[0])  # 손실요소
 ```
 
 `print()`는 값을 화면에 보여 주는 명령입니다. 실행하면 이렇게
@@ -248,8 +248,8 @@ fastcashflow에 들어 있는 **샘플 데이터**를 쓰면 됩니다.
 
 ```python
 # 샘플 portfolio 로드 (정기보험 / 건강보험 / 종신보험 11 건)
-model_points = fcf.samples.model_points()              # ModelPoints 개체
-basis        = fcf.samples.basis()               # {(product_code, channel_code): Basis}
+model_points = fcf.samples.model_points()  # ModelPoints 개체
+basis        = fcf.samples.basis()         # {(product_code, channel_code): Basis}
 
 # 세그먼트별 자동 라우팅으로 측정 -- 각 계약을 자기 (상품, 채널) 가정에 맞춤
 val = fcf.gmm.measure(model_points, basis, full=False)

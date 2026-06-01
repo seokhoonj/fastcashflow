@@ -142,9 +142,9 @@ with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
 
     # 1) 견본 네 파일을 폴더에 생성 (자기 파일이 있으면 이 블록은 생략)
-    asmp_path = fcf.save_sample_basis(tmp / "basis.xlsx")          # 워크북
-    pol_path  = fcf.save_sample_policies(tmp / "policies.csv")                 # 계약
-    cov_path  = fcf.save_sample_coverages(tmp / "coverages.csv")              # 담보
+    asmp_path = fcf.save_sample_basis(tmp / "basis.xlsx")                             # 워크북
+    pol_path  = fcf.save_sample_policies(tmp / "policies.csv")                        # 계약
+    cov_path  = fcf.save_sample_coverages(tmp / "coverages.csv")                      # 담보
     cm_path   = fcf.save_sample_calculation_methods(tmp / "calculation_methods.csv")  # 산출방식
 
     # 2) 워크북을 읽으면 (product_code, channel_code) -> Basis 사전

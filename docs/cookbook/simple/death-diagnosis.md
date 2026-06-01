@@ -103,9 +103,9 @@ mp = fcf.ModelPoints.single(
 )
 
 m = fcf.gmm.measure(mp, basis)
-print(f"BEL  = {m.bel[0]:.2f}")          # 최선추정부채
-print(f"RA   = {m.ra[0]:.2f}")           # 위험조정
-print(f"CSM  = {m.csm[0]:.2f}")          # 보험계약마진
+print(f"BEL  = {m.bel[0]:.2f}")             # 최선추정부채
+print(f"RA   = {m.ra[0]:.2f}")              # 위험조정
+print(f"CSM  = {m.csm[0]:.2f}")             # 보험계약마진
 print(f"Loss = {m.loss_component[0]:.2f}")  # 손실요소
 ```
 

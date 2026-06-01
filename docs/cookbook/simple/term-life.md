@@ -104,9 +104,9 @@ basis = fcf.Basis(
 )
 
 m = fcf.gmm.measure(mp, basis)
-print(f"BEL  = {m.bel[0]:.2f}")          # 최선추정부채
-print(f"RA   = {m.ra[0]:.2f}")           # 위험조정
-print(f"CSM  = {m.csm[0]:.2f}")          # 보험계약마진
+print(f"BEL  = {m.bel[0]:.2f}")             # 최선추정부채
+print(f"RA   = {m.ra[0]:.2f}")              # 위험조정
+print(f"CSM  = {m.csm[0]:.2f}")             # 보험계약마진
 print(f"Loss = {m.loss_component[0]:.2f}")  # 손실요소
 ```
 
@@ -254,10 +254,10 @@ test 가 자동 검증).
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 현재 폴더에 생성 (한 번만 -- 이미 자기 파일이 있으면 생략)
-fcf.save_sample_basis("basis.xlsx")              # .xlsx 만 (multi-sheet 워크북)
-fcf.save_sample_policies("policies.csv")                     # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_calculation_methods("calculation_methods.csv")     # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_basis("basis.xlsx")                             # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_policies("policies.csv")                        # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_coverages("coverages.csv")                      # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_calculation_methods("calculation_methods.csv")  # .csv / .xlsx / .parquet / .feather
 
 # (2) 읽어서 평가
 basis = fcf.read_basis("basis.xlsx")    # {(product_code, channel_code): Basis}

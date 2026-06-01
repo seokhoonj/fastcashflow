@@ -40,7 +40,7 @@ calculation_methods 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 ```python
 import fastcashflow as fcf
 
-fcf.save_sample_basis("basis.xlsx")                 # 가정 워크북 (multi-sheet)
+fcf.save_sample_basis("basis.xlsx")                             # 가정 워크북 (multi-sheet)
 fcf.save_sample_policies("policies.csv")                        # 계약 spec
 fcf.save_sample_coverages("coverages.csv")                      # 담보 가입금액
 fcf.save_sample_calculation_methods("calculation_methods.csv")  # 담보별 산출방식

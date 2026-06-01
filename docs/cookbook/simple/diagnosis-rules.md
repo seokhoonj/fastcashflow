@@ -122,7 +122,7 @@ mp = fcf.read_model_points(
 
 m = fcf.gmm.measure(mp, basis)
 print(f"morbidity_cf = {m.cashflows.morbidity_cf[0, :4]}")  # 진단 cash flow
-print(f"BEL          = {m.bel[0]:.2f}")                  # 최선추정부채
+print(f"BEL          = {m.bel[0]:.2f}")                     # 최선추정부채
 ```
 
 출력:

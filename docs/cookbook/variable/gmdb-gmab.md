@@ -105,19 +105,19 @@ mp = fcf.ModelPoints.single(
 )
 
 det = fcf.vfa.measure(mp, basis)                # 결정론 측정 (intrinsic 만)
-print(f"BEL  = {det.bel[0]:>14,.0f}")        # 계좌가치 차감 순부채
+print(f"BEL  = {det.bel[0]:>14,.0f}")           # 계좌가치 차감 순부채
 print(f"fee  = {det.variable_fee[0]:>14,.0f}")  # 수수료 현재가치 (이익원)
-print(f"CSM  = {det.csm[0]:>14,.0f}")        # 미실현 수수료 - 보증 intrinsic
+print(f"CSM  = {det.csm[0]:>14,.0f}")           # 미실현 수수료 - 보증 intrinsic
 print(f"TVOG = {det.time_value[0]:>14,.0f}")    # 시간가치 (시나리오 없으면 0)
 
 # 펀드 수익률 시나리오 (외부 ESG 산출: 1,000 경로 x 120 개월)
 rng  = np.random.default_rng(7)
-r_m  = (1 + 0.06) ** (1 / 12) - 1                       # 중앙 월수익률
+r_m  = (1 + 0.06) ** (1 / 12) - 1                      # 중앙 월수익률
 scen = r_m + 0.005 * rng.standard_normal((1000, 120))  # (n_scenarios, n_time)
 
 sto = fcf.vfa.measure(mp, basis, return_scenarios=scen)  # intrinsic + 시간가치
-print(f"\nTVOG = {sto.time_value[0]:>14,.0f}")  # 보증의 시간가치 (변동성 비용)
-print(f"CSM  = {sto.csm[0]:>14,.0f}")        # TVOG 흡수 후 마진
+print(f"\nTVOG = {sto.time_value[0]:>14,.0f}")           # 보증의 시간가치 (변동성 비용)
+print(f"CSM  = {sto.csm[0]:>14,.0f}")                    # TVOG 흡수 후 마진
 ```
 
 출력:

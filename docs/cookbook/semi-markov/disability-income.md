@@ -163,9 +163,9 @@ mp = fcf.ModelPoints(
 m = fcf.gmm.measure(mp, basis)
 print(f"inforce       = {m.cashflows.inforce[0]}")        # 보유계약 (active + disabled)
 print(f"disability_cf = {m.cashflows.disability_cf[0]}")  # 장해소득 (disabled 점유 × 월액)
-print(f"BEL           = {m.bel[0]:.2f}")               # 최선추정부채 (= DLR)
-print(f"RA            = {m.ra[0]:.2f}")                # 위험조정
-print(f"CSM           = {m.csm[0]:.2f}")               # 계약서비스마진
+print(f"BEL           = {m.bel[0]:.2f}")                  # 최선추정부채 (= DLR)
+print(f"RA            = {m.ra[0]:.2f}")                   # 위험조정
+print(f"CSM           = {m.csm[0]:.2f}")                  # 계약서비스마진
 ```
 
 출력:

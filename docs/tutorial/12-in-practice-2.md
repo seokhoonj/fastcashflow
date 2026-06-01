@@ -34,7 +34,7 @@ m            = fcf.gmm.measure(model_points, basis)
 fcf.plot_liability(m)               # BEL·RA·CSM 궤적
 fcf.plot_cashflows(m)               # 현금흐름의 여섯 갈래
 fcf.plot_csm_runoff(m)              # CSM 런오프
-fcf.plot_risk_adjustment(m, basis)   # 위험조정
+fcf.plot_risk_adjustment(m, basis)  # 위험조정
 ```
 
 - `plot_liability` — 5·6·7장의 BEL·RA·CSM이 시간에 따라 어떻게

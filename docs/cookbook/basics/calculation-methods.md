@@ -81,10 +81,10 @@ import fastcashflow as fcf
 
 # 패키지 샘플로 시연 -- 자기 데이터를 쓸 때는 이 네 줄을 빼고
 # 그 자리에 자기 파일이 있다고 보면 됩니다.
-fcf.save_sample_basis("basis.xlsx")             # .xlsx 만 (multi-sheet 워크북)
-fcf.save_sample_policies("policies.csv")                    # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_coverages("coverages.csv")                  # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_calculation_methods("calculation_methods.csv")    # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_basis("basis.xlsx")                             # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_policies("policies.csv")                        # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_coverages("coverages.csv")                      # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_calculation_methods("calculation_methods.csv")  # .csv / .xlsx / .parquet / .feather
 
 mp = fcf.read_model_points(
     "policies.csv",                                 # 계약 spec 파일

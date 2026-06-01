@@ -82,12 +82,12 @@ waiver_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.10) ** 12)
 
 # 계리적 가정
 basis = fcf.Basis(
-    mortality_annual        = death_fn,   # 보유계약 감쇠용 사망률 (월 1%)
-    lapse_annual            = lapse_fn,   # 해지율 (해지 없음)
-    waiver_incidence_annual = waiver_fn,  # active → waiver 전이율 (월 10%)
-    discount_annual         = 0.0,        # 연 할인율 0 (검증 단순화)
-    ra_confidence           = 0.75,       # 위험조정 신뢰수준 75%
-    mortality_cv            = 0.10,       # 사망률 변동계수 10%
+    mortality_annual        = death_fn,                # 보유계약 감쇠용 사망률 (월 1%)
+    lapse_annual            = lapse_fn,                # 해지율 (해지 없음)
+    waiver_incidence_annual = waiver_fn,               # active → waiver 전이율 (월 10%)
+    discount_annual         = 0.0,                     # 연 할인율 0 (검증 단순화)
+    ra_confidence           = 0.75,                    # 위험조정 신뢰수준 75%
+    mortality_cv            = 0.10,                    # 사망률 변동계수 10%
     state_model             = STATE_MODELS["WAIVER"],  # 2-state: active / waiver
     coverages               = (
         fcf.CoverageRate("DEATH", death_fn),  # 사망 보장 1종 (청구 rate = death_fn)
@@ -109,7 +109,7 @@ m = fcf.gmm.measure(mp, basis)
 print(f"inforce    = {m.cashflows.inforce[0, :3]}")     # 보유계약 (active + waiver)
 print(f"premium_cf = {m.cashflows.premium_cf[0, :3]}")  # 보험료 (active 만 납입)
 print(f"claim_cf   = {m.cashflows.claim_cf[0, :3]}")    # 사망보험금 (전체 inforce)
-print(f"BEL        = {m.bel[0]:.2f}")                # 최선추정부채
+print(f"BEL        = {m.bel[0]:.2f}")                   # 최선추정부채
 ```
 
 출력:

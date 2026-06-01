@@ -89,9 +89,9 @@ mp = fcf.ModelPoints.single(
 )
 r = fcf.gmm.measure(mp, basis)
 
-print(f"in_force      : {r.cashflows.inforce[0, :3]}")        # 보유계약 trajectory
-print(f"claim_cf      : {r.cashflows.claim_cf[0, :3]}")       # 사망보험금 cash flow
-print(f"BEL[0]        : {float(r.bel[0]):.2f}")            # 최선추정부채
+print(f"in_force      : {r.cashflows.inforce[0, :3]}")   # 보유계약 trajectory
+print(f"claim_cf      : {r.cashflows.claim_cf[0, :3]}")  # 사망보험금 cash flow
+print(f"BEL[0]        : {float(r.bel[0]):.2f}")          # 최선추정부채
 print(f"cumulative 3m : {float(r.cashflows.claim_cf[0, :3].sum()):.2f}")
 ```
 

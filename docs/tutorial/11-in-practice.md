@@ -214,10 +214,10 @@ fastcashflow 는 그 한 파일을 그대로 받습니다. `read_inforce_policie
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 현재 폴더에 생성 (한 번만 — 이미 자기 파일이 있으면 생략)
-fcf.save_sample_basis("basis.xlsx")              # .xlsx 만 (multi-sheet 워크북)
-fcf.save_sample_inforce_policies("inforce_2026Q1.csv")       # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_coverages("coverages.csv")                   # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_calculation_methods("calculation_methods.csv")     # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_basis("basis.xlsx")                             # .xlsx 만 (multi-sheet 워크북)
+fcf.save_sample_inforce_policies("inforce_2026Q1.csv")          # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_coverages("coverages.csv")                      # .csv / .xlsx / .parquet / .feather
+fcf.save_sample_calculation_methods("calculation_methods.csv")  # .csv / .xlsx / .parquet / .feather
 # .xlsx 는 시트당 ~ 1M row 한계 -- 대형 portfolio 는 .parquet / .feather 권장
 
 # (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 in-force 측정
@@ -230,9 +230,9 @@ model_points, state = fcf.read_inforce_policies(
     calculation_methods="calculation_methods.csv",           # 담보별 산출방식
 )
 val = fcf.value_in_force(
-    model_points, basis, period_months=3,              # 다음 분기 (3 개월) 까지의 평가
-    prior_csm    = state.prior_csm,                          # 직전 분기 종가 CSM
-    lock_in_rate = state.lock_in_rate,                       # 가입 시점의 할인율
+    model_points, basis, period_months=3,  # 다음 분기 (3 개월) 까지의 평가
+    prior_csm    = state.prior_csm,        # 직전 분기 종가 CSM
+    lock_in_rate = state.lock_in_rate,     # 가입 시점의 할인율
 )
 fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
 ```
