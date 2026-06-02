@@ -31,7 +31,11 @@ def _save(ax, name: str) -> None:
 
 def main() -> None:
     model_points = fcf.samples.model_points()
-    basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]  # profitable: live CSM to plot
+    # The sample is a multi-segment book; measure each (product_code,
+    # channel_code) on its own basis (full=True + per-segment dict) so every
+    # contract is valued under the right assumptions -- not one segment's basis
+    # applied to all.
+    basis = fcf.samples.basis()
     m = fcf.gmm.measure(model_points, basis)
 
     # 10.1 -- BEL/RA/CSM trajectories over the contract's life
