@@ -100,9 +100,9 @@ def inflation_index(basis: Basis, n_time: int) -> FloatArray:
 def discount_factors(basis: Basis, n_time: int) -> tuple[FloatArray, FloatArray]:
     """Discount factors back to time 0, by cash-flow timing.
 
-    Returns ``(discount_start, discount_mid)``:
+    Returns ``(discount_bom, discount_mid)``:
 
-    * ``discount_start[t]`` -- shape ``(n_time+1,)`` -- start-of-month flows
+    * ``discount_bom[t]`` -- shape ``(n_time+1,)`` -- start-of-month flows
       (premiums) and the maturity benefit at time = term.
     * ``discount_mid[t]`` -- shape ``(n_time,)`` -- mid-month flows
       (claims and expenses, which arise during the month).
@@ -121,12 +121,12 @@ def discount_factors_from_curve(
 
     ``monthly_rates`` is a ``(n_time,)`` array of monthly forward rates --
     the rate applied across each projection month. Returns the same
-    ``(discount_start, discount_mid)`` pair as :func:`discount_factors`; a
+    ``(discount_bom, discount_mid)`` pair as :func:`discount_factors`; a
     constant curve reproduces it bar floating-point rounding.
     """
     monthly_rates = np.asarray(monthly_rates, dtype=np.float64)
-    discount_start = np.empty(monthly_rates.shape[0] + 1)
-    discount_start[0] = 1.0
-    np.cumprod(1.0 / (1.0 + monthly_rates), out=discount_start[1:])
-    discount_mid = discount_start[:-1] / np.sqrt(1.0 + monthly_rates)
-    return discount_start, discount_mid
+    discount_bom = np.empty(monthly_rates.shape[0] + 1)
+    discount_bom[0] = 1.0
+    np.cumprod(1.0 / (1.0 + monthly_rates), out=discount_bom[1:])
+    discount_mid = discount_bom[:-1] / np.sqrt(1.0 + monthly_rates)
+    return discount_bom, discount_mid

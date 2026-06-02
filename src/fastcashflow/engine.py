@@ -92,8 +92,12 @@ class GMMMeasurement:
     csm_release: FloatArray | None = None     # (n_mp, n_time)   -- CSM released each month
     lic: FloatArray | None = None             # (n_mp, n_time+1) -- liability for incurred claims
     cashflows: "Cashflows | None" = None
-    discount_start: FloatArray | None = None  # (n_time+1,) -- start-of-month discount factors
-    discount_mid: FloatArray | None = None    # (n_time,)   -- mid-month discount factors
+    # bom = beginning of month, mom = mid of month: discount factors for a flow
+    # at the start vs the middle of each month. Shape (n_time+1,) / (n_time,)
+    # for a single basis; (n_mp, n_time+1) / (n_mp, n_time) when measured under
+    # a per-segment basis dict, where each row discounts on its own curve.
+    discount_bom: FloatArray | None = None  # beginning-of-month discount factors
+    discount_mid: FloatArray | None = None  # mid-of-month discount factors
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
@@ -158,7 +162,7 @@ def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
         factor = _settlement_factor(basis.settlement_pattern, basis.discount_monthly)
         claim_cf = claim_cf * factor
         morbidity_cf = morbidity_cf * factor
-    discount_start, discount_mid = discount_factors_from_curve(monthly_rate)
+    discount_bom, discount_mid = discount_factors_from_curve(monthly_rate)
 
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
         claim_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
@@ -197,7 +201,7 @@ def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
         csm_release=csm_release,
         lic=lic,
         cashflows=proj,
-        discount_start=discount_start,
+        discount_bom=discount_bom,
         discount_mid=discount_mid,
     )
 
@@ -225,10 +229,13 @@ def measure(
     """
     if isinstance(basis, dict):
         if full:
-            raise NotImplementedError(
-                "measure(full=True) with a per-segment basis dict is not "
-                "supported yet; use full=False for segmented portfolios"
-            )
+            if backend != "cpu" or discount_curve is not None:
+                raise ValueError(
+                    "backend / discount_curve apply to the fast path "
+                    "(full=False) only; measure(full=True) runs the trajectory "
+                    "kernel on each segment's basis.discount_annual"
+                )
+            return _measure_segmented_full(model_points, basis)
         return _measure_segmented(
             model_points, basis, backend=backend, discount_curve=discount_curve,
         )
@@ -538,7 +545,7 @@ def measure_in_force(
         csm_release=csm_release_new,
         lic=m.lic,
         cashflows=m.cashflows,
-        discount_start=m.discount_start,
+        discount_bom=m.discount_bom,
         discount_mid=m.discount_mid,
     )
 
@@ -693,7 +700,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           disability_income, disability_benefit,")
     line(0, "           alpha_pro_rata, alpha_fixed, beta_pro_rata,")
     line(0, "           gamma_fixed, lae_pro_rata,")
-    line(0, "           discount_start, discount_mid, mortality_factor,")
+    line(0, "           discount_bom, discount_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
@@ -757,7 +764,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, f"prem_occ = {sum_prem}")
     if use_disability:
         line(12, f"benefit_occ = {sum_ben}")
-    line(12, "ds = discount_start[t]")
+    line(12, "ds = discount_bom[t]")
     line(12, "dm = discount_mid[t]")
     line(12, "single = prem_occ * single_premium[mp] if t == 0 else 0.0")
     line(12, "if prem_due == 0 and prem_left > 0:")
@@ -799,7 +806,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     emit_edge_step(12, scale="", include_lump=True)
 
     line(8, f"total = {sum_all}")
-    line(8, "pm = total * maturity_benefit[mp] * discount_start[term]")
+    line(8, "pm = total * maturity_benefit[mp] * discount_bom[term]")
 
     # Coverage-rule pass
     line(8, "for k in range(c_start, c_end):")
@@ -1144,7 +1151,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(0, "           disability_income, disability_benefit,")
     line(0, "           alpha_pro_rata, alpha_fixed, beta_pro_rata,")
     line(0, "           gamma_fixed, lae_pro_rata,")
-    line(0, "           discount_start, discount_mid, mortality_factor,")
+    line(0, "           discount_bom, discount_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
@@ -1215,7 +1222,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, "inforce_traj[t] = ift")
     line(12, f"prem_occ = {sum_prem}")
     line(12, f"benefit_occ = {sum_ben}")
-    line(12, "ds = discount_start[t]")
+    line(12, "ds = discount_bom[t]")
     line(12, "dm = discount_mid[t]")
     line(12, "single = prem_occ * single_premium[mp] if t == 0 else 0.0")
     line(12, "if prem_due == 0 and prem_left > 0:")
@@ -1255,7 +1262,7 @@ def _codegen_fast_kernel_source_semi_markov(
     emit_edge_step(12, include_lump=True)
 
     line(8, f"total = {sum_all}")
-    line(8, "pm = total * maturity_benefit[mp] * discount_start[term]")
+    line(8, "pm = total * maturity_benefit[mp] * discount_bom[term]")
 
     # --- Coverage-rule pass --------------------------------------------
     # Rule-bearing non-diagnosis coverages: reuse the per-month total
@@ -1387,7 +1394,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                          maturity_benefit, annuity_payment,
                          alpha_pro_rata, alpha_fixed, beta_pro_rata,
                          gamma_fixed, lae_pro_rata,
-                         discount_start, discount_mid,
+                         discount_bom, discount_mid,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
                          survival_monthly, lapse_monthly, surrender_curve,
@@ -1461,7 +1468,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                     else:
                         morb_rate += rate
                 last_year = year
-            ds = discount_start[t]
+            ds = discount_bom[t]
             dm = discount_mid[t]
             single = inforce * single_premium[mp] if t == 0 else 0.0
             if prem_due == 0 and prem_left > 0:
@@ -1505,7 +1512,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                 pv_surrender += (lapse_monthly[sx, age_idx, year]
                                  * cum_premium * surrender_curve[t] * dm)
             inforce *= survival_monthly[sx, age_idx, year]
-        pm = inforce * maturity_benefit[mp] * discount_start[term]
+        pm = inforce * maturity_benefit[mp] * discount_bom[term]
         # Non-diagnosis coverages with a waiting or reduced-benefit rule:
         # rerun the survival on the same scalar track so the benefit
         # multiplier (which can change mid-year) applies cleanly.
@@ -1825,7 +1832,7 @@ def _measure_fast(
         basis, n_time,
     )
     if discount_curve is None:
-        discount_start, discount_mid = discount_factors(basis, n_time)
+        discount_bom, discount_mid = discount_factors(basis, n_time)
     else:
         discount_curve = np.asarray(discount_curve, dtype=np.float64)
         if discount_curve.shape != (n_time,):
@@ -1834,7 +1841,7 @@ def _measure_fast(
                 f"rate per projection month -- got {discount_curve.shape}"
             )
         monthly_curve = (1.0 + discount_curve) ** (1.0 / 12.0) - 1.0
-        discount_start, discount_mid = discount_factors_from_curve(monthly_curve)
+        discount_bom, discount_mid = discount_factors_from_curve(monthly_curve)
     z = _norm_ppf(basis.ra_confidence)
     mortality_factor = z * basis.mortality_cv
     morbidity_factor = z * basis.morbidity_cv
@@ -1898,7 +1905,7 @@ def _measure_fast(
             expense_beta_pro_rata,
             gamma_fixed,
             lae_pro_rata,
-            discount_start,
+            discount_bom,
             discount_mid,
             mortality_factor,
             morbidity_factor,
@@ -1952,7 +1959,7 @@ def _measure_fast(
         expense_beta_pro_rata,
         gamma_fixed,
         lae_pro_rata,
-        discount_start,
+        discount_bom,
         discount_mid,
         mortality_factor,
         morbidity_factor,
@@ -2001,7 +2008,7 @@ def _measure_fast(
                 expense_beta_pro_rata,
                 gamma_fixed,
                 lae_pro_rata,
-                discount_start,
+                discount_bom,
                 discount_mid,
                 mortality_factor,
                 morbidity_factor,
@@ -2173,3 +2180,156 @@ def _measure_segmented(
         loss_component[idx] = val.loss_component
 
     return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
+
+
+def _segment_plan(
+    model_points: ModelPoints, basis: dict[tuple[str, str], Basis],
+) -> tuple[dict[tuple[str, str], Basis], list[tuple[tuple[str, str], np.ndarray]]]:
+    """Resolve a multi-segment portfolio to per-segment row indices.
+
+    Returns ``(basis_norm, segments)`` where ``basis_norm`` is ``basis`` re-keyed
+    under NFC-normalised codes and ``segments`` is a list of ``(key, idx)`` in
+    first-seen order -- one per (product_code, channel_code) present in
+    ``model_points``. Raises if the codes are unset, if a code contains the
+    ``'|'`` key separator, or if a segment is missing from the basis. The
+    routing logic for the full-trajectory segmented measure lives here.
+    """
+    if model_points.product_code is None or model_points.channel_code is None:
+        raise ValueError(
+            "model_points has no 'product_code'/'channel_code' set; a "
+            "multi-segment basis needs them to route each row"
+        )
+    # NFC-normalise both sides so the lookup is text-identity, not byte-identity
+    # (a Korean / European character composed in one file and decomposed in the
+    # other compares unequal).
+    product_code = np.array(
+        [unicodedata.normalize("NFC", str(v)) for v in model_points.product_code],
+        dtype=object,
+    )
+    channel_code = np.array(
+        [unicodedata.normalize("NFC", str(v)) for v in model_points.channel_code],
+        dtype=object,
+    )
+    basis_norm = {
+        (unicodedata.normalize("NFC", str(p)),
+         unicodedata.normalize("NFC", str(c))): a
+        for (p, c), a in basis.items()
+    }
+    for arr, name in ((product_code, "product_code"), (channel_code, "channel_code")):
+        bad = sorted({str(v) for v in arr if "|" in str(v)})
+        if bad:
+            raise ValueError(
+                f"{name} value(s) {bad} contain the '|' character, which the "
+                "segmented measure uses as the (product_code, channel_code) key "
+                "separator. Pick a different separator in your ETL or rename "
+                "the offending code."
+            )
+    keys_arr = np.array(
+        [f"{p}|{c}" for p, c in zip(product_code, channel_code)], dtype=object,
+    )
+    unique_keys, first_seen, inverse = np.unique(
+        keys_arr, return_index=True, return_inverse=True,
+    )
+    order = np.argsort(first_seen)
+    segments: list[tuple[tuple[str, str], np.ndarray]] = []
+    for ord_idx in order:
+        s = str(unique_keys[ord_idx])
+        p_str, c_str = s.split("|", 1)
+        key = (p_str, c_str)
+        if key not in basis_norm:
+            raise ValueError(
+                f"segment {key!r} appears in model_points but is not in the "
+                f"basis (known segments: {sorted(basis_norm)})"
+            )
+        idx = np.nonzero(inverse == ord_idx)[0]
+        segments.append((key, idx))
+    return basis_norm, segments
+
+
+def _measure_segmented_full(
+    model_points: ModelPoints, basis: dict[tuple[str, str], Basis],
+) -> GMMMeasurement:
+    """Full multi-segment GMM measurement -- per-segment trajectories stitched.
+
+    Each (product_code, channel_code) segment is measured under its own
+    ``Basis`` via :func:`_measure_full`; the per-segment ``(n_seg, *)``
+    trajectories are scattered back into one ``(n_mp, n_time+1)`` result, where
+    ``n_time`` is the portfolio's longest horizon. A segment whose contracts
+    mature earlier is zero-padded on the right -- a contract carries no BEL /
+    RA / CSM past its term. ``discount_bom`` / ``discount_mid`` are per-MP
+    ``(n_mp, ...)`` here, not the single ``(n_time+1,)`` curve of the
+    single-basis path: segments discount on different curves, so the rate is a
+    property of the row. The padded tail of ``discount_bom`` repeats each
+    row's last factor (a flat curve -> zero forward rate) so a rate read off it
+    is finite, not a 0/0.
+    """
+    if model_points.product_code is None or model_points.channel_code is None:
+        if len(basis) == 1:
+            (basis,) = basis.values()
+            return _measure_full(model_points, basis)
+        raise ValueError(
+            "model_points has no 'product_code'/'channel_code' set but the "
+            f"basis has {len(basis)} segments; either set the columns or "
+            "pass a single-segment basis"
+        )
+    basis_norm, segments = _segment_plan(model_points, basis)
+    n_mp = model_points.n_mp
+
+    sub_results = [(idx, _measure_full(model_points.subset(idx), basis_norm[key]))
+                   for key, idx in segments]
+    n_time = max(m.bel_path.shape[1] - 1 for _, m in sub_results)
+
+    bel = np.empty(n_mp)
+    ra = np.empty(n_mp)
+    csm = np.empty(n_mp)
+    loss_component = np.empty(n_mp)
+    bel_path = np.zeros((n_mp, n_time + 1))
+    ra_path = np.zeros((n_mp, n_time + 1))
+    csm_path = np.zeros((n_mp, n_time + 1))
+    lic = np.zeros((n_mp, n_time + 1))
+    csm_accretion = np.zeros((n_mp, n_time))
+    csm_release = np.zeros((n_mp, n_time))
+    discount_bom = np.ones((n_mp, n_time + 1))
+    discount_mid = np.ones((n_mp, n_time))
+
+    cf_2d = ("inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
+             "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
+    cf_arrays = {name: np.zeros((n_mp, n_time)) for name in cf_2d}
+    maturity_cf = np.zeros(n_mp)
+    maturity_survivors = np.zeros(n_mp)
+
+    for idx, m in sub_results:
+        t = m.bel_path.shape[1] - 1
+        bel[idx] = m.bel
+        ra[idx] = m.ra
+        csm[idx] = m.csm
+        loss_component[idx] = m.loss_component
+        bel_path[idx, :t + 1] = m.bel_path
+        ra_path[idx, :t + 1] = m.ra_path
+        csm_path[idx, :t + 1] = m.csm_path
+        lic[idx, :t + 1] = m.lic
+        csm_accretion[idx, :t] = m.csm_accretion
+        csm_release[idx, :t] = m.csm_release
+        # Per-MP discount: lay the segment's curve, then flat-fill the tail so
+        # the padded months read a zero forward rate, not a 0/0.
+        discount_bom[idx, :t + 1] = m.discount_bom
+        discount_bom[idx, t + 1:] = m.discount_bom[-1]
+        discount_mid[idx, :t] = m.discount_mid
+        if t < n_time:
+            discount_mid[idx, t:] = m.discount_mid[-1] if t > 0 else 1.0
+        cf = m.cashflows
+        for name in cf_2d:
+            arr = getattr(cf, name)
+            cf_arrays[name][idx, :arr.shape[1]] = arr
+        maturity_cf[idx] = cf.maturity_cf
+        maturity_survivors[idx] = cf.maturity_survivors
+
+    cashflows = type(sub_results[0][1].cashflows)(
+        maturity_cf=maturity_cf, maturity_survivors=maturity_survivors, **cf_arrays,
+    )
+    return GMMMeasurement(
+        bel=bel, ra=ra, csm=csm, loss_component=loss_component,
+        bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
+        csm_accretion=csm_accretion, csm_release=csm_release, lic=lic,
+        cashflows=cashflows, discount_bom=discount_bom, discount_mid=discount_mid,
+    )

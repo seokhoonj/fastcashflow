@@ -251,9 +251,18 @@ def _(
             "not both in a single call"
         )
 
-    discount_start = measurement.discount_start
-    monthly_rate = discount_start[:-1] / discount_start[1:] - 1.0   # (n_time,)
+    discount_bom = measurement.discount_bom
+    # discount_bom is (n_time+1,) for a single basis, or (n_mp, n_time+1) for
+    # a segmented (multi-basis) measurement; the last axis is time either way,
+    # so the rate is (n_time,) or (n_mp, n_time) accordingly.
+    monthly_rate = discount_bom[..., :-1] / discount_bom[..., 1:] - 1.0
     zero = np.zeros(n_mp)
+    if (revised is not None or actual_inforce is not None) and monthly_rate.ndim == 2:
+        raise NotImplementedError(
+            "assumption-revision / in-force-experience roll-forward is not yet "
+            "supported for a segmented (multi-basis) measurement; roll each "
+            "segment forward on its own basis and aggregate the movements"
+        )
 
     bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
     csm_accretion = measurement.csm_accretion
@@ -326,8 +335,8 @@ def _(
                 bel_ex, ra_ex, csm_ex = d_bel, d_ra, d_csm
             loss_line = loss
             bel_traj, ra_traj = post_bel, post_ra
-        bel_interest = (bel_traj[:, a:b] * monthly_rate[a:b]).sum(axis=1)
-        ra_interest = (ra_traj[:, a:b] * monthly_rate[a:b]).sum(axis=1)
+        bel_interest = (bel_traj[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
+        ra_interest = (ra_traj[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
         movements.append(PeriodMovement(
             month_start=a,
             month_end=b,
@@ -365,6 +374,12 @@ def _roll_forward_experience_chain(
     segment by segment, each segment releasing over the in-force expected at
     its start, with the experience jump applied at each boundary.
     """
+    if measurement.discount_bom.ndim == 2:
+        raise NotImplementedError(
+            "in-force-experience roll-forward is not yet supported for a "
+            "segmented (multi-basis) measurement; roll each segment forward on "
+            "its own basis and aggregate the movements"
+        )
     base_bel = measurement.bel_path
     base_ra = measurement.ra_path
     base_inforce = measurement.cashflows.inforce
@@ -376,8 +391,8 @@ def _roll_forward_experience_chain(
             f"actual_inforce has {n_known} rows; the last boundary "
             f"({boundaries[-1]}) reaches the projection horizon ({n_time})"
         )
-    discount_start = measurement.discount_start
-    monthly_rate = discount_start[:-1] / discount_start[1:] - 1.0
+    discount_bom = measurement.discount_bom
+    monthly_rate = discount_bom[:-1] / discount_bom[1:] - 1.0
 
     # Cumulative in-force ratio at each boundary, laid out as a per-month
     # step factor -- 1 up to the first boundary, then each ratio onward.
@@ -507,8 +522,8 @@ def _roll_forward_vfa(
     csm_accretion = measurement.csm_accretion
     csm_release = measurement.csm_release
     n_time = csm.shape[1] - 1
-    discount_start = measurement.discount_start
-    monthly_rate = discount_start[:-1] / discount_start[1:] - 1.0
+    discount_bom = measurement.discount_bom
+    monthly_rate = discount_bom[:-1] / discount_bom[1:] - 1.0
     movements: list[VFAPeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)

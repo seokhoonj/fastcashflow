@@ -92,8 +92,8 @@ def test_bel_with_curve_discount_matches_hand_calc():
     m1 = (1.05) ** (1.0 / 12.0) - 1.0
     months = np.arange(24)
     rates = np.where(months < 12, m0, m1)
-    discount_start = np.concatenate(([1.0], np.cumprod(1.0 / (1.0 + rates))))
-    discount_mid = discount_start[:-1] / np.sqrt(1.0 + rates)
+    discount_bom = np.concatenate(([1.0], np.cumprod(1.0 / (1.0 + rates))))
+    discount_mid = discount_bom[:-1] / np.sqrt(1.0 + rates)
     expected_bel = (1_000.0 * discount_mid).sum()
 
     assert np.isclose(m.bel_path[0, 0], expected_bel)

@@ -28,7 +28,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        disability_income, disability_benefit,
                        alpha_pro_rata, alpha_fixed, beta_pro_rata,
                        gamma_fixed, lae_pro_rata,
-                       discount_start, discount_mid,
+                       discount_bom, discount_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
                        disability_factor, lapse_monthly, surrender_curve,
                        bel, ra, csm, loss_component):
@@ -97,7 +97,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 prem_occ += occ[s]
             if benefit_state[s]:
                 benefit_occ += occ[s]
-        ds = discount_start[t]
+        ds = discount_bom[t]
         dm = discount_mid[t]
         single = prem_occ * single_premium[mp] if t == 0 else 0.0
         level = (prem_occ * premium
@@ -133,7 +133,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     total = 0.0
     for s in range(n_states):
         total += occ[s]
-    pm = total * maturity_benefit[mp] * discount_start[term]
+    pm = total * maturity_benefit[mp] * discount_bom[term]
     # Diagnosis coverages: claims run off a depleting "not yet diagnosed"
     # occupancy, carried over the transient states.
     for k in range(c_start, c_end):
@@ -184,7 +184,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               disability_income, disability_benefit,
               alpha_pro_rata, alpha_fixed, beta_pro_rata,
               gamma_fixed, lae_pro_rata,
-              discount_start, discount_mid,
+              discount_bom, discount_mid,
               mortality_factor, morbidity_factor, longevity_factor,
               disability_factor, lapse_monthly, surrender_curve):
     """Run the fused valuation kernel on the GPU.
@@ -231,7 +231,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_disability_benefit = cuda.to_device(disability_benefit)
     d_gamma_fixed = cuda.to_device(gamma_fixed)
     d_lae_pro_rata = cuda.to_device(lae_pro_rata)
-    d_discount_start = cuda.to_device(discount_start)
+    d_discount_start = cuda.to_device(discount_bom)
     d_discount_mid = cuda.to_device(discount_mid)
     d_lapse_monthly = cuda.to_device(lapse_monthly)
     d_surrender_curve = cuda.to_device(surrender_curve)

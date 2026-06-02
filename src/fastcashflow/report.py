@@ -138,12 +138,17 @@ def _(measurement: VFAMeasurement) -> Report:
 
 def _report_gmm(m: GMMMeasurement) -> Report:
     """GMM: revenue grosses up the RA release and the CSM release."""
+    if m.discount_bom.ndim == 2:
+        raise NotImplementedError(
+            "report() is not yet supported for a segmented (multi-basis) "
+            "measurement; report each segment"
+        )
     bel, ra, csm = m.bel_path, m.ra_path, m.csm_path
     cf = m.cashflows
     # Per-month forward rate from the discount-factor curve, so that a
     # non-flat curve accretes the FCF and discounts the RA release at the
     # right rate in every month -- the same pattern movement.py uses.
-    ds = m.discount_start
+    ds = m.discount_bom
     monthly_rate = ds[:-1] / ds[1:] - 1.0          # (n_time,)
     full = 1.0 / (1.0 + monthly_rate)              # (n_time,)
 

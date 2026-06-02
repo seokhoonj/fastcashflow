@@ -117,13 +117,13 @@ def measure_reinsurance(
     component (paragraph 65).
     """
     proj = project_cashflows(model_points, basis)
-    discount_start, discount_mid = discount_factors(basis, proj.n_time)
+    discount_bom, discount_mid = discount_factors(basis, proj.n_time)
 
     ceded_mortality, ceded_morbidity, reinsurance_premium = treaty.cede(proj)
     recovery = ceded_mortality + ceded_morbidity
 
     pv_recovery = (recovery * discount_mid).sum(axis=1)
-    pv_reinsurance_premium = (reinsurance_premium * discount_start[:-1]).sum(axis=1)
+    pv_reinsurance_premium = (reinsurance_premium * discount_bom[:-1]).sum(axis=1)
     bel = pv_reinsurance_premium - pv_recovery
 
     # RA -- the risk transferred, i.e. the margin on the ceded claims.

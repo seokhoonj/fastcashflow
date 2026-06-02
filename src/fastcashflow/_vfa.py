@@ -80,7 +80,7 @@ class VFAMeasurement:
     csm_accretion: FloatArray | None = None       # (n_mp, n_time)
     csm_release: FloatArray | None = None          # (n_mp, n_time)
     lic: FloatArray | None = None                 # (n_mp, n_time+1)
-    discount_start: FloatArray | None = None      # (n_time+1,)
+    discount_bom: FloatArray | None = None      # (n_time+1,)
     cashflows: "Cashflows | None" = None
 
     def _columns(self):
@@ -296,6 +296,6 @@ def measure_vfa(
         csm_accretion=csm_accretion,
         csm_release=csm_release,
         lic=lic,
-        discount_start=disc_start,
+        discount_bom=disc_start,
         cashflows=proj,
     )
