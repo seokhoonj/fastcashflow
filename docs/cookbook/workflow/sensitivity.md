@@ -55,7 +55,7 @@ CSM / loss 가 어떻게 움직이는지 봅니다.
 import numpy as np
 import fastcashflow as fcf
 
-# 산출기초 -- 사망률을 명시 변수로 lift
+# rate 함수 -- 사망률을 명시 변수로 lift
 death_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
 lapse_fn = lambda s, a, d: np.full(d.shape, 0.0)                   # 해지 없음
 
@@ -74,6 +74,7 @@ def basis_with_mortality(mort_fn):                 # 한 사망률로 가정 한
         ),
     )
 
+# 모델 포인트
 mp = fcf.ModelPoints.single(
     issue_age     = 40,            # 가입연령 40세
     sex           = 0,             # 성별 (0=남, 1=여)
