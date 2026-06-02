@@ -329,3 +329,20 @@ def test_measure_stream_streams_frames(tmp_path):
     in_memory = measure(mps, basis, full=False)
     assert np.allclose(results["bel"].to_numpy(), in_memory.bel)
     assert np.allclose(results["csm"].to_numpy(), in_memory.csm)
+
+
+def test_model_points_repr_and_str_are_compact():
+    """ModelPoints repr / str summarise the portfolio, not dump every array."""
+    mp = fcf.samples.model_points()
+    r = repr(mp)
+    assert r.startswith("ModelPoints(") and "model point" in r
+    assert "array(" not in r and len(r) < 200          # not the raw dataclass dump
+    s = str(mp)
+    for field in ("products", "coverages", "count"):
+        assert field in s
+    assert "array(" not in s
+
+    # A VFA book carries no coverages -> 'account-value' noted, no coverages line.
+    v = fcf.samples.model_points("vfa")
+    assert "account-value" in repr(v)
+    assert "account" in str(v) and "coverages" not in str(v)

@@ -365,6 +365,14 @@ class ModelPoints:
         """Number of model points."""
         return int(self.issue_age.shape[0])
 
+    def __repr__(self) -> str:
+        from fastcashflow._display import model_points_repr
+        return model_points_repr(self)
+
+    def __str__(self) -> str:
+        from fastcashflow._display import model_points_str
+        return model_points_str(self)
+
     @classmethod
     def single(
         cls,

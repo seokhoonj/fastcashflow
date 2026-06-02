@@ -1,16 +1,16 @@
-"""Shared human-readable formatting for measurement results.
+"""Shared human-readable formatting for the input and result objects.
 
-The measurement dataclasses (``GMMMeasurement`` / ``PAAMeasurement`` /
-``VFAMeasurement``) hold ``(n_mp,)`` headline arrays plus optional
-``(n_mp, n_time)`` trajectories. The default dataclass ``repr`` dumps every
-array -- hundreds of thousands of characters for a real portfolio. These
-helpers give a compact one-line ``repr`` (portfolio totals) and a readable
-multi-line ``str`` (per-model-point rows, capped, then the total), so
-``m`` in a REPL and ``print(m)`` are both useful.
+``ModelPoints`` and the measurement dataclasses (``GMMMeasurement`` /
+``PAAMeasurement`` / ``VFAMeasurement``) hold per-model-point arrays. The
+default dataclass ``repr`` dumps every array -- hundreds of thousands of
+characters for a real portfolio. These helpers give a compact one-line
+``repr`` and a readable multi-line ``str`` instead, so the object in a REPL
+and ``print(...)`` are both useful.
 
-Each measurement class delegates ``__repr__`` / ``__str__`` here, passing its
-own ``(label, array)`` columns -- the labels differ per model (GMM:
-BEL/RA/CSM/loss; PAA: LRC/loss; VFA adds fee/TVOG).
+Measurement classes delegate ``__repr__`` / ``__str__`` here, passing their
+own ``(label, array)`` columns (GMM: BEL/RA/CSM/loss; PAA: LRC/loss; VFA adds
+fee/TVOG). ``ModelPoints`` delegates to the ``model_points_*`` helpers, which
+summarise the portfolio (counts, distributions, ranges) rather than the rows.
 """
 from __future__ import annotations
 
@@ -18,6 +18,50 @@ import numpy as np
 
 _COL_W = 14
 _MAX_ROWS = 10
+
+
+def model_points_repr(mp) -> str:
+    """Compact one-line repr for ModelPoints -- counts, not the arrays."""
+    n = mp.n_mp
+    parts = [f"{n} model point" + ("s" if n != 1 else "")]
+    if mp.product_code is not None:
+        n_prod = len(set(mp.product_code))
+        parts.append(f"{n_prod} product" + ("s" if n_prod != 1 else ""))
+    if mp.coverage_codes:
+        n_cov = len(mp.coverage_codes)
+        parts.append(f"{n_cov} coverage code" + ("s" if n_cov != 1 else ""))
+    elif np.any(np.asarray(mp.account_value)):
+        parts.append("account-value")
+    return f"ModelPoints({', '.join(parts)})"
+
+
+def model_points_str(mp) -> str:
+    """Multi-line summary -- distributions and ranges, not the row arrays."""
+    n = mp.n_mp
+    lines = [f"ModelPoints -- {n} model point" + ("s" if n != 1 else "")]
+
+    def _dist(arr):
+        vals, counts = np.unique(np.asarray(arr), return_counts=True)
+        return ", ".join(f"{v} ({c})" for v, c in zip(vals, counts))
+
+    def _row(label, value):
+        lines.append(f"  {label:<9}: {value}")
+
+    if mp.product_code is not None:
+        _row("products", _dist(mp.product_code))
+    if mp.channel_code is not None:
+        _row("channels", _dist(mp.channel_code))
+    if mp.coverage_codes:
+        _row("coverages", ", ".join(mp.coverage_codes))
+    age = np.asarray(mp.issue_age)
+    _row("issue_age", f"{age.min():.0f}..{age.max():.0f}")
+    term = np.asarray(mp.term_months)
+    _row("term", f"{int(term.min())}..{int(term.max())} months")
+    av = np.asarray(mp.account_value)
+    if np.any(av):
+        _row("account", f"{av[av > 0].min():,.0f}..{av.max():,.0f}")
+    _row("count", f"{np.asarray(mp.count).sum():,.0f}")
+    return "\n".join(lines)
 
 
 def measurement_repr(cls_name: str, columns) -> str:
