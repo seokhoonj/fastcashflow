@@ -158,20 +158,20 @@ for key, segment_basis in basis.items():
     csm_prior += float(np.sum(state.subset(idx).prior_csm))
 
 print("=== 2026 Q1 결산 (보유계약 평가) ===")
-print(f"BEL   = {bel:>16,.0f}   (최선추정부채)")
-print(f"RA    = {ra:>16,.0f}   (위험조정)")
-print(f"CSM   = {csm:>16,.0f}   (보험계약마진, 기말)")
-print(f"CSM_0 = {csm_prior:>16,.0f}   (직전 분기 CSM)")
+print(f"BEL         = {bel:>16,.0f}   (최선추정부채)")
+print(f"RA          = {ra:>16,.0f}   (위험조정)")
+print(f"Opening CSM = {csm_prior:>16,.0f}   (기초 = 직전 분기 종가)")
+print(f"Closing CSM = {csm:>16,.0f}   (기말, carry-forward 결과)")
 ```
 
 출력:
 
 ```
 === 2026 Q1 결산 (보유계약 평가) ===
-BEL   =       36,921,929   (최선추정부채)
-RA    =        1,067,425   (위험조정)
-CSM   =          547,140   (보험계약마진, 기말)
-CSM_0 =          562,000   (직전 분기 CSM)
+BEL         =       36,921,929   (최선추정부채)
+RA          =        1,067,425   (위험조정)
+Opening CSM =          562,000   (기초 = 직전 분기 종가)
+Closing CSM =          547,140   (기말, carry-forward 결과)
 ```
 
 ```{admonition} state.subset 을 꼭 써야 하나
