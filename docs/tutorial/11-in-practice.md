@@ -45,6 +45,28 @@
 그대로입니다 — `read_basis` 가 먼저, 그 다음 `read_model_points`
 가 세 파일을 ModelPoints 개체로 묶습니다.
 
+```{admonition} 데이터가 파일이 아니라 DB 에 있다면
+:class: note
+
+fastcashflow 는 **파일 (CSV / Excel / parquet) 을 읽지, DB 에 직접
+붙지 않습니다** — DB 드라이버 의존을 두지 않아 패키지를 가볍게 유지하려는
+의도입니다. 데이터가 정책관리 시스템 / 데이터웨어하우스에 있으면 사내
+ETL 이 그 사이를 잇습니다. 두 가지 패턴:
+
+- **DB → 파일 → `read_*`** (보통의 경로) — `polars.read_database`
+  (또는 pandas / SQLAlchemy) 로 쿼리한 결과를 위 네 파일과 같은 스키마의
+  `parquet` (대량) 또는 `csv` 로 떨군 뒤 `read_basis` /
+  `read_model_points` 로 읽습니다.
+- **DB → 개체 직접** (고급) — 엔진이 실제로 받는 건 파일이 아니라
+  `Basis` / `ModelPoints` **개체**입니다. 쿼리 결과 컬럼으로
+  `ModelPoints(issue_age=..., level_premium=..., ...)` 를 직접 조립해
+  reader 를 건너뛸 수도 있습니다 (담보가 여럿이면 long-form 을 parquet
+  으로 떨궈 `read_*` 가 CSR 로 묶게 하는 편이 간단).
+
+즉 fastcashflow 는 데이터 파이프라인의 **끝 (측정 엔진)** 에 있고,
+DB 연결·추출은 사내 ETL 의 몫입니다.
+```
+
 ### 가정 파일 — `basis.xlsx`
 
 엑셀 워크북 한 권. 사망률 / 해지율 / 할인율 / 사업비 / 위험조정 같은

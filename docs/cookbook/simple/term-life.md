@@ -442,7 +442,9 @@ mp = fcf.ModelPoints.single(
 
 ```python
 basis = fcf.samples.basis()
-basis  = basis[("TERM_LIFE_A", "TM")]   # KeyError: 샘플의 TERM_LIFE_A 는 GA / FC 만
+
+# ✗ 없는 segment 키는 KeyError 입니다 (실행하지 마세요):
+#     basis[("TERM_LIFE_A", "TM")]   # 샘플의 TERM_LIFE_A 는 GA / FC 만
 ```
 
 `basis.keys()` 로 어떤 segment 가 있는지 먼저 확인:

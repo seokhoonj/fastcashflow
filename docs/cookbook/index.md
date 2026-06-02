@@ -54,7 +54,7 @@
   - 보유계약 평가 + 변동분해
   - 분기말 결산 측정과 직전 분기 대비 변동을 가정변경 / 경험 / 이자 /
     상각으로 귀속.
-* - 확장 로드맵
+* - 확장 로드맵 (미구현)
   - 미구현 엔진 기능의 설계 노트
   - 아직 코드에 없는 기능의 설계 스케치. 실행 레시피가 아니라 로드맵.
 ```
@@ -217,7 +217,7 @@
     `roll_forward` / `reconcile`, 가정변경 (`revised`) / 경험 (`actual_inforce`).
 ```
 
-### 9. 확장 로드맵
+### 9. 확장 로드맵 (미구현)
 
 ```{list-table}
 :header-rows: 1
@@ -331,7 +331,7 @@ workflow/movement
 
 ```{toctree}
 :hidden:
-:caption: 9. 확장 로드맵
+:caption: 9. 확장 로드맵 (미구현)
 
 design/dynamic-lapse
 ```

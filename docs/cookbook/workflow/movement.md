@@ -213,6 +213,10 @@ Closing            2,999,190     263,051     485,124
 조정합니다 (v1 은 한 호출에서 가정변경 *또는* 경험조정 하나만).
 
 ```python
+# 기간 말 실제 잔존 -- 실무에선 정책관리 시스템의 실제 in-force.
+# 여기서는 모델포인트당 97% 가 남았다고 가정 (예시 값).
+actual = np.full(m.bel_path.shape[0], 0.97)
+
 movements = fcf.roll_forward(
     m, period_months=12,
     actual_inforce=actual,   # 기간 말 실제 잔존 (n_mp,)

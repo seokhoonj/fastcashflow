@@ -192,6 +192,10 @@ mp = fcf.ModelPoints.single(
 늘립니다 (모두 `DIAGNOSIS`). 발생률 함수는 담보마다 별도:
 
 ```python
+# 뇌혈관 / 심혈관 발생률 -- 담보마다 별도 함수 (예: 연 0.3% / 0.4%)
+cerebral_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.003) ** 12)
+cardiac_fn  = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.004) ** 12)
+
 coverages = (
     fcf.CoverageRate("DEATH",  death_fn),                     # 0 — 사망
     fcf.CoverageRate("CANCER", cancer_fn),                    # 1 — 암 진단

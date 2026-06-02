@@ -4,8 +4,8 @@
 [![Python](https://img.shields.io/pypi/pyversions/fastcashflow)](https://pypi.org/project/fastcashflow/)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://github.com/seokhoonj/fastcashflow/blob/main/LICENSE)
 
-An open-source IFRS 17 measurement engine in Python. Takes model points and
-actuarial assumptions, projects monthly cash flows, and measures the insurance
+An open-source IFRS 17 measurement engine in Python. Takes model points and a
+valuation basis, projects monthly cash flows, and measures the insurance
 contract liability — BEL, RA and CSM — under the GMM, PAA and VFA models.
 
 The goal: an engine that matches enterprise platforms on speed and correctness,
@@ -62,7 +62,7 @@ mortality_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.001)
 # lapse -- flat 1% annual rate
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.01)
 
-# actuarial assumptions
+# the valuation basis (mortality / lapse / discount / risk adjustment)
 basis = fcf.Basis(
     mortality_annual = mortality_fn,   # in-force decrement (mortality_fn above)
     lapse_annual     = lapse_fn,       # lapse rate (lapse_fn above)
@@ -83,16 +83,15 @@ mp = fcf.ModelPoints.single(
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},  # coverage code -> method
 )
 
-r = fcf.gmm.measure(mp, basis)
-print(f"BEL : {r.bel[0]:>12,.0f}")
-print(f"RA  : {r.ra[0]:>12,.0f}")
-print(f"CSM : {r.csm[0]:>12,.0f}")
+m = fcf.gmm.measure(mp, basis)
+print(m)
 ```
 
 ```text
-BEL :   -6,092,691
-RA  :       55,484
-CSM :    6,037,206
+GMMMeasurement -- 1 model point
+                   BEL            RA           CSM          loss
+    mp 0    -6,092,691        55,484     6,037,206             0
+   Total    -6,092,691        55,484     6,037,206             0
 ```
 
 `measure(mp, basis)` returns the full per-month detail; `measure(mp, basis,
@@ -108,7 +107,7 @@ parallel kernel that is far faster at portfolio scale.
   surrender value, contract states (active / waiver / paid-up).
 - **Reporting** — roll-forward, reconciliation tables, insurance service result,
   loss component, aggregation to IFRS 17 unit of account.
-- **I/O** — Excel workbook assumptions, polars parquet / CSV model points,
+- **I/O** — Excel workbook basis, polars parquet / CSV model points,
   `gmm.measure_stream` for portfolios larger than RAM.
 - **More** — reinsurance, stochastic valuation, premium pricing, TVOG, first-adoption
   transition, GPU backend (`backend="gpu"`).
