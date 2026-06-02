@@ -44,6 +44,9 @@
 * - 변액 (VFA)
   - 계좌가치 + 최저보증
   - 변액보험을 VFA로 측정. GMDB / GMAB의 intrinsic 과 시간가치 (TVOG).
+* - 재보험 (출재)
+  - 보유 재보험계약 측정
+  - 비례 재보험 (quota share) 을 일반모형으로. 전가위험과 순원가 / 이익 (CSM).
 * - I/O (Excel 워크북)
   - 데이터 입출력
   - 회사 워크북을 fastcashflow 가 읽는 형식으로 맞추는 자리.
@@ -89,7 +92,7 @@
     청구) 의 의도적 분리. 두 슬롯에 같은 callable 을 넘기는 입력 연결 패턴.
 * - 1.4
   - [보장 청구 메커니즘](basics/coverage-mechanics)
-  - DEATH 의 공유 `in_force` vs DIAGNOSIS 의 `undiagnosed` 풀.
+  - DEATH 의 공유 `inforce` vs DIAGNOSIS 의 `undiagnosed` 풀.
     같은 식이 두 자리에 작동하는 이유.
 ```
 
@@ -141,7 +144,7 @@
   - 다루는 것
 * - 4.1
   - [재진단암 보험](semi-markov/reincidence)
-  - 한국 시장 highlight. 1차/2차 진단 일시금, 재진단 면책기간. semi-Markov
+  - 한국 시장 highlight. 1차/2차 진단 일시금, 재진단 면책기간. Semi-Markov
     (상태 경과 의존) 의 첫 챕터.
 * - 4.2
   - [장해소득보상 (DI)](semi-markov/disability-income)
@@ -163,7 +166,7 @@
   - 계좌가치 + 최저보증. `vfa.measure`, intrinsic vs 시간가치 (TVOG).
 ```
 
-### 6. I/O (Excel 워크북)
+### 6. 재보험
 
 ```{list-table}
 :header-rows: 1
@@ -173,14 +176,11 @@
   - 챕터
   - 다루는 것
 * - 6.1
-  - [워크북 — 단일 segment](io/workbook-single)
-  - `basis.xlsx` 의 매 시트 / 매 컬럼 자세히. 사용자 진입점.
-* - 6.2
-  - [워크북 — 다 segment / 다 상품](io/workbook-multi)
-  - `measure` + 상품 / 채널 별 다른 StateModel.
+  - [비례 재보험 (quota share)](reinsurance/proportional)
+  - 보유 quota-share 재보험계약 측정. 전가위험 (RA) 과 순원가 / 이익 (CSM).
 ```
 
-### 7. 분석 / 검증
+### 7. I/O (Excel 워크북)
 
 ```{list-table}
 :header-rows: 1
@@ -190,15 +190,14 @@
   - 챕터
   - 다루는 것
 * - 7.1
-  - [시나리오 / 민감도 분석](workflow/sensitivity)
-  - rate 함수 교체로 mortality +10% 등의 효과 측정. CSM 흡수 / onerous 전환,
-    gmm.trace_diff.
+  - [워크북 — 단일 segment](io/workbook-single)
+  - `basis.xlsx` 의 매 시트 / 매 컬럼 자세히. 사용자 진입점.
 * - 7.2
-  - [검증 패턴](workflow/validation)
-  - 한 계약의 BEL / CSM 계산 경로 추적. 손계산 매칭, shock 전파, residual 검증.
+  - [워크북 — 다중 segment / 다종 상품](io/workbook-multi)
+  - `measure` + 상품 / 채널 별 다른 StateModel.
 ```
 
-### 8. 결산 워크플로
+### 8. 분석 / 검증
 
 ```{list-table}
 :header-rows: 1
@@ -208,16 +207,15 @@
   - 챕터
   - 다루는 것
 * - 8.1
-  - [결산 / 보유계약 평가](workflow/settlement)
-  - 분기말 마감파일 한 장으로 보유계약 평가. `gmm.measure_inforce`, 직전
-    분기 CSM carry-forward, lock-in 율, 세그먼트별 `state.subset`.
+  - [시나리오 / 민감도 분석](workflow/sensitivity)
+  - rate 함수 교체로 mortality +10% 등의 효과 측정. CSM 흡수 / onerous 전환,
+    gmm.trace_diff.
 * - 8.2
-  - [변동분해](workflow/movement)
-  - 두 시점 사이 BEL / CSM 움직임을 미래서비스 / 이자 / 상각으로 귀속.
-    `roll_forward` / `reconcile`, 가정변경 (`revised`) / 경험 (`actual_inforce`).
+  - [검증 패턴](workflow/validation)
+  - 한 계약의 BEL / CSM 계산 경로 추적. 손계산 매칭, shock 전파, residual 검증.
 ```
 
-### 9. 확장 로드맵 (미구현)
+### 9. 결산 워크플로
 
 ```{list-table}
 :header-rows: 1
@@ -227,6 +225,25 @@
   - 챕터
   - 다루는 것
 * - 9.1
+  - [결산 / 보유계약 평가](workflow/settlement)
+  - 분기말 마감파일 한 장으로 보유계약 평가. `gmm.measure_inforce`, 직전
+    분기 CSM carry-forward, lock-in 율, 세그먼트별 `state.subset`.
+* - 9.2
+  - [변동분해](workflow/movement)
+  - 두 시점 사이 BEL / CSM 움직임을 미래서비스 / 이자 / 상각으로 귀속.
+    `roll_forward` / `reconcile`, 가정변경 (`revised`) / 경험 (`actual_inforce`).
+```
+
+### 10. 확장 로드맵 (미구현)
+
+```{list-table}
+:header-rows: 1
+:widths: 8 28 64
+
+* - 번호
+  - 챕터
+  - 다루는 것
+* - 10.1
   - [⚠ 동적해지율 엔진설계](design/dynamic-lapse)
   - 시나리오 / moneyness 에 반응하는 해지율. **⚠ 미구현** — 정적 격자에서 루프
     내 평가로 옮기는 설계 스케치. 실행 불가.
@@ -307,7 +324,14 @@ variable/gmdb-gmab
 
 ```{toctree}
 :hidden:
-:caption: 6. I/O (Excel 워크북)
+:caption: 6. 재보험
+
+reinsurance/proportional
+```
+
+```{toctree}
+:hidden:
+:caption: 7. I/O (Excel 워크북)
 
 io/workbook-single
 io/workbook-multi
@@ -315,7 +339,7 @@ io/workbook-multi
 
 ```{toctree}
 :hidden:
-:caption: 7. 분석 / 검증
+:caption: 8. 분석 / 검증
 
 workflow/sensitivity
 workflow/validation
@@ -323,7 +347,7 @@ workflow/validation
 
 ```{toctree}
 :hidden:
-:caption: 8. 결산 워크플로
+:caption: 9. 결산 워크플로
 
 workflow/settlement
 workflow/movement
@@ -331,7 +355,7 @@ workflow/movement
 
 ```{toctree}
 :hidden:
-:caption: 9. 확장 로드맵 (미구현)
+:caption: 10. 확장 로드맵 (미구현)
 
 design/dynamic-lapse
 ```

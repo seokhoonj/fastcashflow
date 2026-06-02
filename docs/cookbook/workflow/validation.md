@@ -1,4 +1,4 @@
-# 7.2 검증 패턴
+# 8.2 검증 패턴
 
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
@@ -499,12 +499,12 @@ fcf.gmm.trace(int(idx), mp, basis)
 
 이 챕터를 읽고 자연스럽게 갈 다음 자리들:
 
-- [7.1 시나리오 / 민감도 분석](sensitivity) — `gmm.trace_diff` 의 활용을
+- [8.1 시나리오 / 민감도 분석](sensitivity) — `gmm.trace_diff` 의 활용을
   단일 계약 검증 너머 포트폴리오 단위 민감도로 확장.
 - [정기보험](../simple/term-life) 의 "함정 — 흔한 실수와 잡는 방법"
   절 — 2 개월 손계산 패턴. 이 챕터의 도구로 그 검증을 다시 추적하면
   식이 어떻게 매핑되는지 명확.
-- [6.2 워크북 — 다 segment / 다 상품](../io/workbook-multi) — `gmm.trace` 의 segment
+- [7.2 워크북 — 다중 segment / 다종 상품](../io/workbook-multi) — `gmm.trace` 의 segment
   라우팅이 맞는지 확인하는 자리.
 
 기본 튜토리얼의 5장 (BEL 계산) / 7장 (CSM 계산) 이 `gmm.trace_bel_step` /

@@ -1,4 +1,4 @@
-# 6.1 워크북 — 단일 segment
+# 7.1 워크북 — 단일 segment
 
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
@@ -119,7 +119,7 @@ reader 가 자동 감지** 합니다:
 
 - `sex` (0=남, 1=여)
 - `age` (도달연령) — 또는 `issue_age` + `duration` (select-and-ultimate)
-- `issue_class` (인수등급), `elapsed` (semi-Markov 경과) — 선택
+- `issue_class` (인수등급), `elapsed` (Semi-Markov 경과) — 선택
 
 한 `table_id` 는 가진 축 위에서 **빈틈 없는 grid** 를 이뤄야 합니다 (reader 가
 검사). 없는 축은 그 값으로 평탄하게 broadcast 됩니다. `discount_tables` /
@@ -194,7 +194,7 @@ CSM sum = 632,252
 견본처럼 여러 segment 가 섞인 portfolio 는 **dict basis**
 (`{(product_code, channel_code): Basis}`) 를 주면 각 계약을 자기 segment 가정으로
 라우팅합니다: `fcf.gmm.measure(mp, basis, full=False)` (dict 라우팅은
-headline 전용이라 `full=False`). 라우팅 메커니즘은 [6.2](workbook-multi).
+headline 전용이라 `full=False`). 라우팅 메커니즘은 [7.2](workbook-multi).
 ```
 
 ## 함정
@@ -223,7 +223,7 @@ headline 전용이라 `full=False`). 라우팅 메커니즘은 [6.2](workbook-mu
 - [1.1 한눈에 보기](../basics/overview) — 네 입력 파일과 사용자 API 의 전체 트리.
 - [1.2 담보와 산출방식 매칭](../basics/calculation-methods) —
   `calculation_methods.csv` 의 5 종 산출방식.
-- [6.2 워크북 — 다 segment / 다 상품](workbook-multi) — `measure`
+- [7.2 워크북 — 다중 segment / 다종 상품](workbook-multi) — `measure`
   라우팅과 segment 별 다른 StateModel / lapse.
 - [튜토리얼 11장](../../tutorial/11-in-practice) — 결산 워크플로와 보유계약
   입력 (`read_inforce_policies`).
