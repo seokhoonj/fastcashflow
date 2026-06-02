@@ -86,6 +86,15 @@ class QuotaShare:
 
     cession: float
 
+    def __post_init__(self) -> None:
+        # Validate at construction, not deep in cede(): a non-numeric, NaN or
+        # out-of-range cession otherwise surfaces late or as a cryptic error.
+        c = float(self.cession)  # ValueError for a non-numeric cession
+        if not np.isfinite(c):
+            raise ValueError(f"cession must be finite, got {self.cession!r}")
+        if not 0.0 <= c <= 1.0:
+            raise ValueError(f"cession must be in [0, 1], got {self.cession!r}")
+
     def cede(self, proj: Cashflows) -> tuple[FloatArray, FloatArray, FloatArray]:
         if not 0.0 <= self.cession <= 1.0:
             raise ValueError(f"cession must be in [0, 1], got {self.cession}")

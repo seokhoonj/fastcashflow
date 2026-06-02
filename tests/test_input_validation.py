@@ -836,3 +836,27 @@ def test_construction_rejects_garbage_inputs():
     with pytest.raises(ValueError, match=r"benefits\[0\] must be >= 0"):
         fcf.ModelPoints(issue_age=np.array([40.0]), level_premium=np.array([100.0]),
                         term_months=np.array([12]), benefits={0: np.array([-1e6])})
+
+
+def test_guards_full_false_cession_scenarios():
+    """More sweep guards: group / transition need a full=True measurement;
+    QuotaShare validates its cession; stochastic rejects empty / non-finite
+    scenarios (all previously crashed cryptically or returned silent NaN)."""
+    mp = fcf.samples.model_points()
+    basis = fcf.samples.basis()
+    head = fcf.gmm.measure(mp, basis, full=False)  # headline only -- no trajectory
+    with pytest.raises(ValueError, match="full=True"):
+        fcf.group(head, np.zeros(mp.n_mp))
+    with pytest.raises(ValueError, match="full=True"):
+        fcf.transition(head, np.zeros(mp.n_mp))
+
+    with pytest.raises(ValueError, match="cession must be in"):
+        fcf.reinsurance.QuotaShare(1.5)
+    with pytest.raises(ValueError, match="cession must be finite"):
+        fcf.reinsurance.QuotaShare(float("nan"))
+
+    b1 = basis[("TERM_LIFE_A", "GA")]
+    with pytest.raises(ValueError, match="scenarios must be finite"):
+        fcf.gmm.stochastic(mp, b1, np.array([0.03, np.nan]))
+    with pytest.raises(ValueError, match="scenarios is empty"):
+        fcf.gmm.stochastic(mp, b1, np.array([]))

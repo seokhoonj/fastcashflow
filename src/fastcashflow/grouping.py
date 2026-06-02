@@ -52,6 +52,11 @@ def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
     group id -- usable in turn by :func:`~fastcashflow.roll_forward`,
     :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.report`.
     """
+    if measurement.bel_path is None:
+        raise ValueError(
+            "group() requires a full=True measurement; the trajectory fields "
+            "are None on the full=False fast path. Call measure(..., full=True)."
+        )
     group_ids = np.asarray(group_ids)
     n_mp = measurement.bel_path.shape[0]
     if group_ids.shape != (n_mp,):

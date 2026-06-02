@@ -40,6 +40,11 @@ def transition(measurement: GMMMeasurement, fair_value: FloatArray) -> GMMMeasur
     and RA are unchanged. It flows on into :func:`~fastcashflow.roll_forward`,
     :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.report`.
     """
+    if measurement.bel_path is None:
+        raise ValueError(
+            "transition() requires a full=True measurement; the trajectory "
+            "fields are None on the full=False fast path. Call measure(..., full=True)."
+        )
     fair_value = np.asarray(fair_value, dtype=np.float64)
     n_mp = measurement.bel_path.shape[0]
     if fair_value.shape != (n_mp,):

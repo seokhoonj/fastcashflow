@@ -153,6 +153,13 @@ def measure_stochastic(
     scenarios = np.asarray(scenarios, dtype=np.float64)
     if scenarios.ndim not in (1, 2):
         raise ValueError("scenarios must be 1-D (flat rates) or 2-D (rate curves)")
+    if scenarios.size == 0:
+        raise ValueError("scenarios is empty; need at least one scenario")
+    if not np.all(np.isfinite(scenarios)):
+        raise ValueError(
+            "scenarios must be finite (a NaN / inf rate yields a "
+            "silently-NaN distribution)"
+        )
 
     # The scenario-axis kernel re-discounts shared cash flows -- it covers the
     # confidence-level RA with no claims settlement pattern (the rate at the
