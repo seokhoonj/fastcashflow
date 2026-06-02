@@ -4,24 +4,24 @@
 :class: tip
 
 - 엔진 전반을 관통하는 `mortality_annual` (보유계약 감쇠) 의 역할
-- 사망 보장의 청구는 *별도의 슬롯* 으로 계산된다는 사실과 그 이유
-- 단순 정기보험에서 두 율이 같은 숫자가 되는 사정과, 일반 / 질병 / 재해
-  사망처럼 cause-specific 보장에서 명시적으로 달라지는 이유
+- 사망 보장 청구가 *별도의 슬롯* 으로 계산되는 이유
+- 단순 정기보험 (일반사망) 에서 두 율이 같고, 질병 / 재해 같은
+  cause-specific 사망 보장에서 명시적으로 달라지는 이유
 - 손계산 / cookbook 예제가 두 슬롯에 같은 callable 을 공유하는 안전한
   입력 연결 패턴
 ```
 
-이 챕터를 읽고 나면 다음 챕터 (1.4 보장 청구 메커니즘) 의 `in_force ×
+이 챕터를 읽고 나면 다음 챕터 (1.4 보장 청구 메커니즘) 의 `inforce ×
 rate × benefit` 식에서 각 슬롯의 rate 가 무엇을 의미하는지 명확해집니다.
 
 ## 1.3.1 사망률 = 엔진의 보편 감쇠
 
 엔진의 모든 cash flow 는 한 가지 양에 비례합니다 — 그 시점의 **보유계약
-수 `in_force`**. 그리고 `in_force` 를 매월 줄이는 단 하나의 사망 관련
+수 `inforce`**. 그리고 `inforce` 를 매월 줄이는 단 하나의 사망 관련
 입력이 `mortality_annual` 입니다.
 
 ```
-in_force[t+1] = in_force[t] × (1 - mortality_annual_monthly) × (1 - lapse_monthly)
+inforce[t+1] = inforce[t] × (1 - mortality_annual_monthly) × (1 - lapse_monthly)
 ```
 
 contract 당 한 값. 어느 원인으로든 사람이 in-force 에서 빠지는 *전체*
@@ -29,7 +29,7 @@ contract 당 한 값. 어느 원인으로든 사람이 in-force 에서 빠지는
 사라지고 청구도 더 이상 못 받습니다. 그래서 `mortality_annual` 은 엔진
 어디서도 비켜갈 수 없는 보편적 감쇠 — 보험료 cash flow, 사업비 cash
 flow, 만기금 cash flow, 그리고 *모든 보장의 청구* cash flow 가 같은
-`in_force` 에 묶여 함께 줄어듭니다.
+`inforce` 에 묶여 함께 줄어듭니다.
 
 ```text
 basis = fcf.Basis(
@@ -51,13 +51,13 @@ all-cause 사망률 테이블 한 장.
 청구 금액** 을 계산하는 자리는 따로 있습니다.
 
 생각해보면 그래야 합니다. 사람이 죽는 사건은 `mortality_annual` 로 이미
-`in_force` 에서 빠지는 효과를 냈습니다. 그 사람에게 *얼마의 사망보험금이
+`inforce` 에서 빠지는 효과를 냈습니다. 그 사람에게 *얼마의 사망보험금이
 지급되느냐* 는 별개의 질문 — 보장의 약관, 면책 / 감액, 보험금액 등의
 함수. 그래서 엔진은 사망 보장의 청구를 *그 보장의 약관에 묶인 별도 rate*
 로 계산합니다.
 
 ```
-claim_DEATH[t] = in_force[t] × DEATH.rate × DEATH.benefit
+claim_DEATH[t] = inforce[t] × DEATH.rate × DEATH.benefit
 ```
 
 이 `DEATH.rate` 는 1.3.1 의 `mortality_annual` 과 같은 mortality 의
@@ -91,7 +91,10 @@ callable 을 넘깁니다:
 import numpy as np
 import fastcashflow as fcf
 
+# 사망률 함수 -- 월 사망률 1% 의 연 환산 (모든 sex/age/duration 에 동일)
 death_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
+
+# 해지율 함수 -- 해지 없음
 lapse_fn = lambda s, a, d: np.full(d.shape, 0.0)
 
 basis = fcf.Basis(
@@ -119,6 +122,7 @@ cause-specific* 의 구분.
 
 ```
 mortality_annual = rate_all_cause                # 보유계약 감쇠 (all-cause)
+
 coverages = (
     fcf.CoverageRate("ADB", rate_accident),      # 재해사망만 (예: 연 0.3%)
 )
@@ -134,6 +138,7 @@ coverages = (
 
 ```
 mortality_annual = rate_all_cause                         # all-cause (예: 연 1.2%)
+
 coverages = (
     fcf.CoverageRate("DEATH",         rate_all_cause),    # 일반사망 (1.2%)
     fcf.CoverageRate("DISEASE_DEATH", rate_disease),      # 질병사망 (0.9%)
@@ -141,7 +146,7 @@ coverages = (
 )
 ```
 
-사람은 한 번만 죽으므로 `in_force` 는 all-cause 율로 한 번 감쇠. 그 한
+사람은 한 번만 죽으므로 `inforce` 는 all-cause 율로 한 번 감쇠. 그 한
 번의 사망 사건이 *여러 보장* 의 청구를 동시 트리거 (재해로 죽으면 일반
 사망금 + 재해사망금 둘 다 지급). 두 cause-specific 의 합 (0.9 + 0.3 =
 1.2) 이 all-cause 와 일치 — 같은 사망 사건의 원인별 분해라서.
@@ -164,8 +169,8 @@ mortality table* (규제 의무) 로. 두 표가 다른 숫자라 두 슬롯도 
 
 | 잘못된 연결 | 결과 |
 |---|---|
-| `mortality_annual = 0`, DEATH rate = 1% | 보유계약 안 줄고 매월 사망보험금 청구. 무한 사망. BEL 과대평가. |
-| `mortality_annual = 1%`, DEATH rate = 0 | 보유계약은 줄고 사망보험금 없음. BEL 과소평가. |
+| `mortality_annual` = 0%, `DEATH` rate = 1% | 보유계약 안 줄고 매월 사망보험금 청구. 무한 사망. BEL 과대평가. |
+| `mortality_annual` = 1%, `DEATH` rate = 0% | 보유계약은 줄고 사망보험금 없음. BEL 과소평가. |
 
 두 패턴 모두 에러 없이 통과 — silent footgun. 한 변수 공유 패턴 (`death_fn`
 을 두 슬롯에) 이 구조적 방어.
@@ -182,7 +187,7 @@ mortality table* (규제 의무) 로. 두 표가 다른 숫자라 두 슬롯도 
 ## 1.3.6 다음 챕터로
 
 이 분리를 이해하고 [1.4 보장 청구 메커니즘](coverage-mechanics) 으로
-가면, `in_force × rate × benefit` 식의 `in_force` 는 `mortality_annual`
+가면, `inforce × rate × benefit` 식의 `inforce` 는 `mortality_annual`
 이 감쇠시키는 공유 풀, 각 보장의 `rate` 는 그 보장의 청구 빈도임이
 자연스럽게 읽힙니다. DIAGNOSIS 가 별도 `undiagnosed` 풀을 갖는 이유도
 같은 결.

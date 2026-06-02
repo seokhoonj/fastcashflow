@@ -139,7 +139,7 @@ Loss = 268.64
 t=1 의 암 진단 청구는 *미진단 풀* 0.9851 을 씁니다 — 단순히 진단율로만
 줄어든 0.995 가 아닙니다. 풀은 **(아직 살아있고) ∧ (아직 진단 안 받은)**
 사람이라, 보유계약 감쇠 (0.99) 와 자기 진단 감쇠 (0.995) 를 *둘 다*
-받습니다: `0.99 × 0.995 = 0.98505`. 사망 보장의 `in_force` 와 진단 보장의
+받습니다: `0.99 × 0.995 = 0.98505`. 사망 보장의 `inforce` 와 진단 보장의
 `undiagnosed` 풀이 어떻게 다른지는 [보장 청구 메커니즘](../basics/coverage-mechanics).
 ```
 
@@ -227,7 +227,7 @@ mortality_annual = lambda s, a, d: death_fn(s,a,d) + cancer_fn(s,a,d)   # ✗
 ## 인접 레시피
 
 - [1.4 보장 청구 메커니즘](../basics/coverage-mechanics) — `DEATH` 의
-  공유 `in_force` 와 `DIAGNOSIS` 의 per-coverage `undiagnosed` 풀이
+  공유 `inforce` 와 `DIAGNOSIS` 의 per-coverage `undiagnosed` 풀이
   엔진 안에서 어떻게 다르게 도는지.
 - [2.1 정기보험](term-life) — 사망 단독, 본 챕터의 출발점.
 - [2.3 다종 진단 + 면책 / 감액](diagnosis-rules) — 90일 면책 / 감액기간

@@ -116,7 +116,7 @@ mp = fcf.read_model_points(
   - 1 회 지급, depleting pool. 유사암 등 합성 위험률은 사용자 ETL 에서 미리 합성
 * - 암 진단 생활비 (N 개월 정액)
   - (현 v1 미지원)
-  - 진단 + sojourn-bounded — semi-Markov 영역. 별도 phase
+  - 진단 + sojourn-bounded — Semi-Markov 영역. 별도 phase
 * - 연금 (즉시) / 종신연금
   - ANNUITY
   - rate 없음. 생존자에게 지급
@@ -174,7 +174,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 3. 암 / 뇌 / 심 진단비 — DIAGNOSIS.
 4. 연금 / 만기환급 — ANNUITY / MATURITY (이 두 종류는 rate 없음 ⇒
    `coverages` 시트에 rate_table 등록 X).
-5. 생활비 / 재진단 / DI 같은 sojourn-bounded 산출방식은 v1 미지원 — semi-Markov
+5. 생활비 / 재진단 / DI 같은 sojourn-bounded 산출방식은 v1 미지원 — Semi-Markov
    영역. (별도 phase)
 
 담보별 산출방식은 **신담보가 추가될 때만** 한 줄을 더해줍니다. 분기 결산

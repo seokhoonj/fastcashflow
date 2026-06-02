@@ -17,7 +17,7 @@
 
 ```
 Basis (basis = fcf.read_basis(...))
-└── basis.xlsx          ── 산출기초 (multi-sheet workbook)
+└── basis.xlsx                ── 산출기초 (multi-sheet workbook)
     ├── segments              · (product_code, channel_code) → 어느 테이블 쓸지 (+ product_name / channel_name 보고서용 라벨)
     ├── mortality_tables      · table_id × sex × age → 사망률
     ├── lapse_tables          · table_id × duration → 해지율
@@ -41,7 +41,7 @@ ModelPoints (mp = fcf.read_model_points(...))
 │   └── count                 · 이 줄이 대표하는 계약 수 (없으면 1)
 │
 ├── coverages.csv             ── 담보 가입금액 (long-form, 한 줄 = 한 (계약, 담보))
-│   ├── mp_id                 · 어느 계약의 담보인지
+│   ├── mp_id                 · 담보가 붙는 계약의 식별자 (policies.csv 의 mp_id 와 join)
 │   ├── coverage_code         · 담보 코드 (calculation_methods 의 코드와 맞물림)
 │   ├── amount                · 가입금액 (보험금)
 │   ├── premium               · 월 보험료 (선택)
@@ -66,31 +66,31 @@ ModelPoints (mp = fcf.read_model_points(...))
 ```
 fastcashflow 사용자 API
 ├── 샘플 파일 폴더에 생성 (한 번만, 자기 파일이 있으면 생략)
-│   ├── fcf.samples.export(dir, template="gmm")    ── basis.xlsx + policies/coverages/calculation_methods (+inforce)
-│   ├── fcf.samples.export(dir, template="vfa")    ── 변액(VFA) 세트 (basis.xlsx + policies)
-│   └── fcf.samples.templates()                    ── 사용 가능한 template 목록
+│   ├── fcf.samples.export(dir, template="gmm")           ── basis.xlsx + policies/coverages/calculation_methods (+inforce)
+│   ├── fcf.samples.export(dir, template="vfa")           ── 변액(VFA) 세트 (basis.xlsx + policies)
+│   └── fcf.samples.templates()                           ── 사용 가능한 template 목록
 │
 ├── 파일 읽어 들이기
-│   ├── fcf.read_basis(path)                  ── basis dict 반환
-│   ├── fcf.read_model_points(path, coverages=, ...) ── 신계약 평가용
-│   └── fcf.read_inforce_policies(path, coverages=, ...) ── 결산 1-파일 reader
+│   ├── fcf.read_basis(path)                              ── basis dict 반환
+│   ├── fcf.read_model_points(path, coverages=, ...)      ── 신계약 평가용
+│   └── fcf.read_inforce_policies(path, coverages=, ...)  ── 결산 1-파일 reader
 │
 ├── 평가
-│   ├── fcf.gmm.measure(mp, basis)              ── 신계약, 시간 trajectory 전체
-│   ├── fcf.gmm.measure(mp, basis, full=False)  ── 시점 0 headline 4 숫자 (빠름); basis 가 dict 면 세그먼트 라우팅
+│   ├── fcf.gmm.measure(mp, basis)                        ── 신계약, 시간 trajectory 전체
+│   ├── fcf.gmm.measure(mp, basis, full=False)            ── 시점 0 headline 4 숫자 (빠름); basis 가 dict 면 세그먼트 라우팅
 │   └── fcf.gmm.measure_inforce(mp, basis, state, full=)  ── 결산(보유계약) 측정; full=False 면 headline 만
 │
 ├── 결과 저장
-│   ├── fcf.write_measurement(val, path)              ── 결과 한 파일에 저장
-│   └── fcf.gmm.measure_stream(parquet, out_dir, basis)      ── 메모리 초과 portfolio 스트리밍
+│   ├── fcf.write_measurement(val, path)                  ── 결과 한 파일에 저장
+│   └── fcf.gmm.measure_stream(parquet, out_dir, basis)   ── 메모리 초과 portfolio 스트리밍
 │
 ├── 변동분해 (분기간 비교)
-│   ├── fcf.roll_forward(m, period_months=...)      ── 분기 사이 변동 분해
-│   └── fcf.reconcile(movements)                    ── 분해 결과를 항별로 합산
+│   ├── fcf.roll_forward(m, period_months=...)            ── 분기 사이 변동 분해
+│   └── fcf.reconcile(movements)                          ── 분해 결과를 항별로 합산
 │
 └── 검증 / 시각화
-    ├── fcf.gmm.trace(mp_id, mp, basis)            ── 한 계약의 BEL 계산 ASCII 트리
-    ├── fcf.gmm.trace_bel_step(mp_id, mp, basis, ...)    ── 월별 BEL 식 전개
-    ├── fcf.gmm.trace_csm_step(mp_id, mp, basis, ...)    ── 월별 CSM 식 전개
+    ├── fcf.gmm.trace(mp_id, mp, basis)                   ── 한 계약의 BEL 계산 ASCII 트리
+    ├── fcf.gmm.trace_bel_step(mp_id, mp, basis, ...)     ── 월별 BEL 식 전개
+    ├── fcf.gmm.trace_csm_step(mp_id, mp, basis, ...)     ── 월별 CSM 식 전개
     └── fcf.plot_liability(m) / plot_cashflows(m) / plot_csm_runoff(m) ...
 ```

@@ -7,7 +7,7 @@
   어떻게 *서로 다른 알고리즘으로* 처리되는지
 - "DEATH 는 한 번만 / MORBIDITY 는 여러 번 / DIAGNOSIS 는 한 번만"
   이라는 의미가 엔진 코드 어디에 표현되어 있는가
-- 같은 `in_force × rate × benefit` 식이 DEATH 와 MORBIDITY 둘 다에
+- 같은 `inforce × rate × benefit` 식이 DEATH 와 MORBIDITY 둘 다에
   적용되면서 결과는 정반대인 이유
 - `is_diagnosis` flag 의 진짜 의미 — "한 번만 지급되는가" 가 아니라
   "이 보장이 자기만의 풀을 갖고 있는가"
@@ -35,12 +35,12 @@
 * - 알고리즘
   - 산출방식
   - 청구 식
-* - (A) `in_force × rate`
+* - (A) `inforce × rate`
   - DEATH, MORBIDITY
-  - 매월 `in_force[t] × rate[t] × benefit` 누적. 끝.
-* - (B) `in_force × undiagnosed × rate`
+  - 매월 `inforce[t] × rate[t] × benefit` 누적. 끝.
+* - (B) `inforce × undiagnosed × rate`
   - DIAGNOSIS
-  - 매월 `in_force[t] × undiagnosed[t] × rate[t] × benefit` 누적.
+  - 매월 `inforce[t] × undiagnosed[t] × rate[t] × benefit` 누적.
     `undiagnosed` 는 보장마다 자기 풀, 매월 `(1 - rate)` 로 감쇠.
 ```
 
@@ -49,15 +49,15 @@ True → 식 (B).
 
 "한 번 / 여러 번" 의 구분은 **이 식 안에 있지 않습니다**. 같은 식 (A) 가
 DEATH 와 MORBIDITY 양쪽에 적용되는데도 한 자리는 "한 번만 청구되는 듯"
-다른 자리는 "여러 번 청구되는 듯" 보이는 이유는, **`in_force` 자체가
+다른 자리는 "여러 번 청구되는 듯" 보이는 이유는, **`inforce` 자체가
 무엇으로 감쇠하는가** 가 사용자 calibration 의 결과로 다르기 때문입니다.
 
 아래 세 절이 같은 toy 데이터로 그 차이를 한 번에 보여줍니다.
 
-## DEATH — 공유 `in_force` 풀이 자체 감쇠
+## DEATH — 공유 `inforce` 풀이 자체 감쇠
 
-월 사망률 1% 의 단일 사망보장. 엔진의 `mortality_annual` 이 `in_force` 를
-같은 1% 로 감쇠시키니, **사망 사건이 곧 `in_force` 의 감소**.
+월 사망률 1% 의 단일 사망보장. 엔진의 `mortality_annual` 이 `inforce` 를
+같은 1% 로 감쇠시키니, **사망 사건이 곧 `inforce` 의 감소**.
 
 ```python
 import numpy as np
@@ -89,7 +89,7 @@ mp = fcf.ModelPoints.single(
 )
 r = fcf.gmm.measure(mp, basis)
 
-print(f"in_force      : {r.cashflows.inforce[0, :3]}")   # 보유계약 trajectory
+print(f"inforce       : {r.cashflows.inforce[0, :3]}")   # 보유계약 trajectory
 print(f"claim_cf      : {r.cashflows.claim_cf[0, :3]}")  # 사망보험금 cash flow
 print(f"BEL[0]        : {float(r.bel[0]):.2f}")          # 최선추정부채
 print(f"cumulative 3m : {float(r.cashflows.claim_cf[0, :3].sum()):.2f}")
@@ -98,7 +98,7 @@ print(f"cumulative 3m : {float(r.cashflows.claim_cf[0, :3].sum()):.2f}")
 출력:
 
 ```
-in_force      : [1.     0.99   0.9801]
+inforce       : [1.     0.99   0.9801]
 claim_cf      : [120.    118.8   117.612]
 BEL[0]        : 356.41
 cumulative 3m : 356.41
@@ -106,20 +106,20 @@ cumulative 3m : 356.41
 
 손계산:
 
-| t | `in_force` | rate × benefit | claim |
+| t | `inforce` | rate × benefit | claim |
 |---|---|---|---|
 | 0 | 1.0000 | 0.01 × 12,000 | 120.00 |
 | 1 | 0.9900 | 0.01 × 12,000 | 118.80 |
 | 2 | 0.9801 | 0.01 × 12,000 | 117.61 |
 
-**핵심**: 청구가 매월 발생하는데도 누적이 ~356 으로 수렴 — `in_force` 가
+**핵심**: 청구가 매월 발생하는데도 누적이 ~356 으로 수렴 — `inforce` 가
 줄어드니까 (한 사람당 한 번 죽음). "한 번만" 은 청구 식의 특성이 아니라
-**같은 율로 `in_force` 가 감쇠한다** 는 calibration 의 결과.
+**같은 율로 `inforce` 가 감쇠한다** 는 calibration 의 결과.
 
 ## MORBIDITY — 풀 없음, 반복 발생
 
 같은 율을 입원 보장 (MORBIDITY) 에 두면. 단, `mortality_annual = 0` 으로
-두어 사망 / 해지에 의한 `in_force` 감쇠도 없게 — 입원 자체가 `in_force` 를
+두어 사망 / 해지에 의한 `inforce` 감쇠도 없게 — 입원 자체가 `inforce` 를
 줄이지 않으니, **풀 자체가 어떤 식으로도 감쇠 안 함**.
 
 ```python
@@ -155,7 +155,7 @@ mp = fcf.ModelPoints.single(
 )
 r = fcf.gmm.measure(mp, basis)
 
-print(f"in_force      : {r.cashflows.inforce[0, :3]}")
+print(f"inforce       : {r.cashflows.inforce[0, :3]}")
 print(f"morbidity_cf  : {r.cashflows.morbidity_cf[0, :3]}")  # 입원 cash flow
 print(f"BEL[0]        : {float(r.bel[0]):.2f}")
 print(f"cumulative 3m : {float(r.cashflows.morbidity_cf[0, :3].sum()):.2f}")
@@ -164,7 +164,7 @@ print(f"cumulative 3m : {float(r.cashflows.morbidity_cf[0, :3].sum()):.2f}")
 출력:
 
 ```
-in_force      : [1. 1. 1.]
+inforce       : [1. 1. 1.]
 morbidity_cf  : [120. 120. 120.]
 BEL[0]        : 360.00
 cumulative 3m : 360.00
@@ -172,15 +172,15 @@ cumulative 3m : 360.00
 
 손계산:
 
-| t | `in_force` | rate × benefit | claim |
+| t | `inforce` | rate × benefit | claim |
 |---|---|---|---|
 | 0 | 1.0000 | 0.01 × 12,000 | 120.00 |
 | 1 | 1.0000 | 0.01 × 12,000 | 120.00 |
 | 2 | 1.0000 | 0.01 × 12,000 | 120.00 |
 
-**핵심**: 같은 식 `in_force × rate × benefit` 인데, **`in_force` 가 안
+**핵심**: 같은 식 `inforce × rate × benefit` 인데, **`inforce` 가 안
 줄어드니까 매월 120 이 새로 발생**. "여러 번" 도 식의 특성이 아니라
-*`in_force` 가 그 rate 로 감쇠하지 않는다* 의 결과.
+*`inforce` 가 그 rate 로 감쇠하지 않는다* 의 결과.
 
 DEATH 예제와 MORBIDITY 예제의 차이는 단 하나 — `mortality_annual` 이
 청구 rate 와 *같은 값을 쓰는가 0 을 쓰는가*. 그 한 줄 차이가 청구 시계열의
@@ -188,7 +188,7 @@ DEATH 예제와 MORBIDITY 예제의 차이는 단 하나 — `mortality_annual` 
 
 ## DIAGNOSIS — per-coverage `undiagnosed` 풀
 
-진단 보장은 `in_force` 가 안 줄어드는데도 "한 번만" 지급해야 합니다 — 한
+진단 보장은 `inforce` 가 안 줄어드는데도 "한 번만" 지급해야 합니다 — 한
 번 진단 받은 사람이 다음 달에 또 같은 진단을 받지 않으니까. 식 (A) 는 이걸
 못 표현하니, 엔진은 *별도 알고리즘 (B)* 를 씁니다 — 보장마다 자기만의
 `undiagnosed` 풀.
@@ -223,7 +223,7 @@ mp = fcf.ModelPoints.single(
 )
 r = fcf.gmm.measure(mp, basis)
 
-print(f"in_force      : {r.cashflows.inforce[0, :3]}")
+print(f"inforce       : {r.cashflows.inforce[0, :3]}")
 print(f"morbidity_cf  : {r.cashflows.morbidity_cf[0, :3]}")           # 진단 cash flow
 print(f"BEL[0]        : {float(r.bel[0]):.2f}")
 print(f"cumulative 3m : {float(r.cashflows.morbidity_cf[0, :3].sum()):.2f}")
@@ -232,7 +232,7 @@ print(f"cumulative 3m : {float(r.cashflows.morbidity_cf[0, :3].sum()):.2f}")
 출력:
 
 ```
-in_force      : [1. 1. 1.]
+inforce       : [1. 1. 1.]
 morbidity_cf  : [120.    118.8   117.612]
 BEL[0]        : 356.41
 cumulative 3m : 356.41
@@ -240,26 +240,26 @@ cumulative 3m : 356.41
 
 손계산:
 
-| t | `in_force` | `undiagnosed` | rate × benefit | claim |
+| t | `inforce` | `undiagnosed` | rate × benefit | claim |
 |---|---|---|---|---|
 | 0 | 1.0000 | 1.0000 | 0.01 × 12,000 | 120.00 |
 | 1 | 1.0000 | 0.9900 | 0.01 × 12,000 | 118.80 |
 | 2 | 1.0000 | 0.9801 | 0.01 × 12,000 | 117.61 |
 
-**핵심**: `in_force` 는 안 줄어드는데 **`undiagnosed` 가 별도 풀로 매월
+**핵심**: `inforce` 는 안 줄어드는데 **`undiagnosed` 가 별도 풀로 매월
 1% 씩 감쇠**. 청구 시계열이 DEATH 와 정확히 같음 — 누적 ~356 으로 수렴.
 하지만 메커니즘은 다름.
 
 ## 세 모드 나란히
 
-| 산출방식 | `in_force` | 별도 풀 | 청구 시계열 | 누적 |
+| 산출방식 | `inforce` | 별도 풀 | 청구 시계열 | 누적 |
 |---|---|---|---|---|
 | DEATH | `1 → 0.99 → 0.9801` (감쇠 ✓) | 없음 | `120, 118.8, 117.61` | 356.41 |
 | MORBIDITY | `1, 1, 1` (감쇠 ✗) | 없음 | `120, 120, 120` | 360.00 |
 | DIAGNOSIS | `1, 1, 1` (감쇠 ✗) | `undiagnosed: 1 → 0.99 → 0.9801` | `120, 118.8, 117.61` | 356.41 |
 
 DEATH 와 DIAGNOSIS 의 청구 시계열이 *글자 그대로 동일* 함에도 메커니즘은
-다르고 — DEATH 의 "한 번" 은 `in_force` 가, DIAGNOSIS 의 "한 번" 은
+다르고 — DEATH 의 "한 번" 은 `inforce` 가, DIAGNOSIS 의 "한 번" 은
 `undiagnosed` 풀이 각각 표현. MORBIDITY 는 어느 풀도 감쇠 안 하니 "여러
 번" 이 자동.
 
@@ -284,8 +284,8 @@ trace 의 Coverages 노드에는 매 보장마다 `is_diagnosis` flag 가 표시
 
 | 보장 종류 | `is_diagnosis` | 풀 자리 |
 |---|---|---|
-| DEATH | False | 공유 `in_force` (전 contract 가 같은 풀) |
-| MORBIDITY | False | 공유 `in_force` (실제로 감쇠는 안 함) |
+| DEATH | False | 공유 `inforce` (전 contract 가 같은 풀) |
+| MORBIDITY | False | 공유 `inforce` (실제로 감쇠는 안 함) |
 | DIAGNOSIS | True | per-coverage `undiagnosed` 풀 |
 
 DEATH 와 MORBIDITY 가 둘 다 `is_diagnosis=False` 인 건 *kernel 분기로 보면*
@@ -328,7 +328,7 @@ basis = fcf.Basis(
 
 | 자리 | 역할 |
 |---|---|
-| `mortality_annual` | `in_force` 감쇠 (사망으로 인한 보유계약 감소) |
+| `mortality_annual` | `inforce` 감쇠 (사망으로 인한 보유계약 감소) |
 | `coverages[DEATH].rate` | 사망 보장의 *청구* rate |
 
 손계산은 보통 두 양이 같다고 가정하고 결과 숫자 (356.41 등) 를 도출. 한
@@ -343,7 +343,7 @@ asmp_buggy = fcf.Basis(
 )
 ```
 
-→ DEATH 보장이 MORBIDITY 처럼 작동 (in_force 안 줄어드는데 청구는 매월
+→ DEATH 보장이 MORBIDITY 처럼 작동 (in-force 안 줄어드는데 청구는 매월
 1% 발생). 같은 사람이 매월 죽고 또 죽음. 누적 360 (위 MORBIDITY 결과와
 같음) — *손계산의 356 과 어긋남*.
 
