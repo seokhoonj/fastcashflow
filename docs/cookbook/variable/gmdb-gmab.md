@@ -4,18 +4,18 @@
 :class: tip
 
 - 변액보험이 보장형 (GMM) 과 다른 측정 모델 (VFA) 로 평가되는 이유 —
-  계좌가치가 굴러가고 보험사는 수수료 를 번다
+  계좌가치가 굴러가고 보험사는 수수료를 번다
 - `account_value` + 최저보증 (`minimum_death_benefit` /
   `minimum_accumulation_benefit`) 을 모델 포인트에 거는 자리
 - `vfa.measure` 의 결정론 측정 — 보증의 intrinsic value 가 BEL에 들어가는 모습
-- `return_scenarios` 를 넣으면 드러나는 보증의 시간가치 (TVOG) — 단일
+- `return_scenarios` 를 넣으면 드러나는 보증의 시간가치 (TVOG = Time Value of Options and Guarantees) — 단일
   결정론 run 에는 보이지 않는 비용
 ```
 
 지금까지의 보장형 (GMM) 상품은 위험률 × 보험금으로 청구를 계산했습니다.
 변액보험은 다릅니다 — 계약자의 계좌가치가 펀드 수익률로 굴러가고, 사망 /
 해지 / 만기에 그 계좌가치를 (또는 최저보증을) 지급합니다. 보험사의 이익은
-계좌에서 떼는 수수료 입니다. IFRS 17 은 이런 직접참가 계약을 **VFA
+계좌에서 떼는 수수료입니다. IFRS 17 은 이런 직접참가 계약을 **VFA
 (Variable Fee Approach, 변동수수료접근법)** 로 측정합니다 — `vfa.measure`.
 
 ## 상품 소개 — 변액보험과 최저보증
@@ -156,7 +156,7 @@ CSM  =     14,176,164
 :class: warning
 
 VFA는 위험중립 measure 가 아니라 기초자산 수익률 로 할인합니다. 그래서
-floor 의 시간가치는 부호가 고정이 아닙니다 — 깊은 in-the-money 보증은
+floor 의 시간가치는 부호가 고정이 아닙니다 — 깊은 in-the-money (보증액이 계좌가치보다 한참 높은) 보증은
 변동성이 오히려 일부 시나리오를 floor 위로 끌어올려 비용을 낮춰 시간가치가
 음수일 수도 있습니다. 위험중립 풋옵션의 "시간가치 >= 0" 직관이 여기선 그대로
 통하지 않습니다.
