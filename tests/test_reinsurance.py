@@ -44,8 +44,8 @@ def test_reinsurance_hand_calc():
     geom = float(np.sum((surv * full) ** np.arange(term)))
 
     pv_recovery = cession * Q * death_benefit * half * geom
-    pv_reins_premium = cession * premium * geom
-    bel = pv_reins_premium - pv_recovery
+    pv_reinsurance_premium = cession * premium * geom
+    bel = pv_reinsurance_premium - pv_recovery
     ra = _norm_ppf(basis.ra_confidence) * MORTALITY_CV * pv_recovery
 
     assert np.isclose(res.bel[0], bel)

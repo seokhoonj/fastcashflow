@@ -48,7 +48,7 @@ class ReinsuranceMeasurement:
     """
 
     # headline -- always present, shape (n_mp,)
-    bel: FloatArray            # PV(reins. premiums) - PV(recoveries)
+    bel: FloatArray            # PV(reinsurance premiums) - PV(recoveries)
     ra: FloatArray             # risk transferred to the reinsurer
     csm: FloatArray            # inception net cost/gain
     # trajectory -- full only (None on the headline-only path)
@@ -56,7 +56,7 @@ class ReinsuranceMeasurement:
     csm_accretion: FloatArray | None = None    # (n_mp, n_time)
     csm_release: FloatArray | None = None      # (n_mp, n_time)
     recovery: FloatArray | None = None         # (n_mp, n_time) -- recoveries received
-    reins_premium: FloatArray | None = None    # (n_mp, n_time) -- reinsurance premiums paid
+    reinsurance_premium: FloatArray | None = None    # (n_mp, n_time) -- reinsurance premiums paid
     cashflows: "Cashflows | None" = None
 
 
@@ -64,7 +64,7 @@ class Treaty(Protocol):
     """How a reinsurance treaty cedes the direct cash flows.
 
     ``cede`` receives the direct portfolio's projected :class:`Cashflows` and
-    returns ``(ceded_mortality_cf, ceded_morbidity_cf, reins_premium_cf)`` --
+    returns ``(ceded_mortality_cf, ceded_morbidity_cf, reinsurance_premium_cf)`` --
     each ``(n_mp, n_time)``. The two ceded-claim streams are kept split by
     risk so the risk adjustment can weight them by the right cv; their sum is
     the recovery. A new treaty type (excess-of-loss, surplus, ...) implements
@@ -119,12 +119,12 @@ def measure_reinsurance(
     proj = project_cashflows(model_points, basis)
     discount_start, discount_mid = discount_factors(basis, proj.n_time)
 
-    ceded_mortality, ceded_morbidity, reins_premium = treaty.cede(proj)
+    ceded_mortality, ceded_morbidity, reinsurance_premium = treaty.cede(proj)
     recovery = ceded_mortality + ceded_morbidity
 
     pv_recovery = (recovery * discount_mid).sum(axis=1)
-    pv_reins_premium = (reins_premium * discount_start[:-1]).sum(axis=1)
-    bel = pv_reins_premium - pv_recovery
+    pv_reinsurance_premium = (reinsurance_premium * discount_start[:-1]).sum(axis=1)
+    bel = pv_reinsurance_premium - pv_recovery
 
     # RA -- the risk transferred, i.e. the margin on the ceded claims.
     z = _norm_ppf(basis.ra_confidence)
@@ -149,6 +149,6 @@ def measure_reinsurance(
         csm_accretion=csm_accretion,
         csm_release=csm_release,
         recovery=recovery,
-        reins_premium=reins_premium,
+        reinsurance_premium=reinsurance_premium,
         cashflows=proj,
     )
