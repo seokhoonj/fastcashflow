@@ -83,6 +83,19 @@ def _key_months(term: int, n_time: int) -> list[int]:
     return [t for t in raw if 0 <= t <= n_time]
 
 
+def _colw(values: object, spec: str = ",.2f", min_width: int = 0) -> int:
+    """Column width = max(``min_width``, widest formatted value).
+
+    Expand-only: a normal-magnitude column keeps its usual ``min_width``
+    (so existing output is unchanged), but once a value needs more digits
+    (e.g. an excess of 10,000,000 is 13 chars and would overflow a width-12
+    field, pushing every later column out of alignment) the field widens to
+    fit. Sizing up to the data -- never down -- keeps small cases stable.
+    """
+    vals = list(values)
+    return max(min_width, max((len(format(float(v), spec)) for v in vals), default=1))
+
+
 def show_trace(
     mp_index: int,
     model_points: ModelPoints,
@@ -279,20 +292,26 @@ def show_trace(
     discount_start = m.discount_start
 
     cf_lines: list[object] = []
-    cf_headers = ["year", "premium", "claim", "morbidity", "expense",
-                  "annuity", "surrender", "disability"]
-    cf_lines.append("  ".join(f"{h:>12}" for h in cf_headers))
+    cf_names = ["premium_cf", "claim_cf", "morbidity_cf", "expense_cf",
+                "annuity_cf", "surrender_cf", "disability_cf"]
+    cf_heads = ["premium", "claim", "morbidity", "expense",
+                "annuity", "surrender", "disability"]
+    cf_rows: list[object] = []  # (year, [column sums])
     for y in range(n_years):
         a0 = y * 12
         a1 = min(a0 + 12, cf.n_time)
         if a1 <= a0:
             break
-        row = [f"{y:>12d}"]
-        for name in ("premium_cf", "claim_cf", "morbidity_cf", "expense_cf",
-                     "annuity_cf", "surrender_cf", "disability_cf"):
-            arr = getattr(cf, name)[0]
-            row.append(f"{arr[a0:a1].sum():>12,.0f}")
-        cf_lines.append("  ".join(row))
+        cf_rows.append((y, [getattr(cf, nm)[0][a0:a1].sum() for nm in cf_names]))
+    # Per-column width = max(header, 12, widest value) -- expand only, so a
+    # large-portfolio sum that needs >12 digits does not break the columns.
+    cw = [max(len(h), _colw((vals[j] for _, vals in cf_rows), ",.0f", 12))
+          for j, h in enumerate(cf_heads)]
+    cf_lines.append("  ".join(
+        [f"{'year':>12}"] + [f"{h:>{w}}" for h, w in zip(cf_heads, cw)]))
+    for y, vals in cf_rows:
+        cf_lines.append("  ".join(
+            [f"{y:>12d}"] + [f"{v:>{w},.0f}" for v, w in zip(vals, cw)]))
     if float(cf.maturity_cf[0]) != 0.0:
         cf_lines.append(
             f"maturity benefit at t={term}m: {float(cf.maturity_cf[0]):,.0f}"
@@ -358,16 +377,19 @@ def show_trace(
         f"loss_comp = max(0,  FCF[0]) = {lc:,.2f}",
         "csm[t+1] = csm[t] + accretion[t] - release[t]",
     ]
+    _gcw = _colw((csm[t] for t in picks if t < csm.shape[0]), ",.2f", 14)
+    _gaw = _colw([csm_acc[t] for t in picks if t < csm_acc.shape[0]] or [0.0], ",.2f", 10)
+    _grw = _colw([csm_rel[t] for t in picks if t < csm_rel.shape[0]] or [0.0], ",.2f", 10)
     for t in picks:
         if t >= csm_acc.shape[0]:
             csm_lines.append(
-                f"t={t:>4d}m: csm={csm[t]:>14,.2f}  "
+                f"t={t:>4d}m: csm={csm[t]:>{_gcw},.2f}  "
                 f"(past last accretion month)"
             )
         else:
             csm_lines.append(
-                f"t={t:>4d}m: csm={csm[t]:>14,.2f}  "
-                f"acc={csm_acc[t]:>10,.2f}  rel={csm_rel[t]:>10,.2f}"
+                f"t={t:>4d}m: csm={csm[t]:>{_gcw},.2f}  "
+                f"acc={csm_acc[t]:>{_gaw},.2f}  rel={csm_rel[t]:>{_grw},.2f}"
             )
 
     # ---- Final headline
@@ -456,13 +478,15 @@ def show_trace_vfa(
     # aligned regardless of field-name length; rate scalars share the
     # right-aligned value column with the amounts.
     _w = 28  # len("minimum_accumulation_benefit")
+    _vw = max(_colw([av0, gdb, gab], ",.2f", 15),
+              _colw([gcr, basis.investment_return, basis.fund_fee], "g", 15))
     vfa_lines: list[object] = [
-        f"{'account_value':<{_w}} = {av0:>15,.2f}",
-        f"{'minimum_crediting_rate':<{_w}} = {gcr:>15g}",
-        f"{'minimum_death_benefit':<{_w}} = {gdb:>15,.2f}  (GMDB)",
-        f"{'minimum_accumulation_benefit':<{_w}} = {gab:>15,.2f}  (GMAB)",
-        f"{'investment_return':<{_w}} = {basis.investment_return:>15g}  (VFA 할인/적립 basis)",
-        f"{'fund_fee':<{_w}} = {basis.fund_fee:>15g}  (= 이익원)",
+        f"{'account_value':<{_w}} = {av0:>{_vw},.2f}",
+        f"{'minimum_crediting_rate':<{_w}} = {gcr:>{_vw}g}",
+        f"{'minimum_death_benefit':<{_w}} = {gdb:>{_vw},.2f}  (GMDB)",
+        f"{'minimum_accumulation_benefit':<{_w}} = {gab:>{_vw},.2f}  (GMAB)",
+        f"{'investment_return':<{_w}} = {basis.investment_return:>{_vw}g}  (VFA 할인/적립 basis)",
+        f"{'fund_fee':<{_w}} = {basis.fund_fee:>{_vw}g}  (= 이익원)",
         f"{'mortality_annual':<{_w}} -> {_fmt_callable(basis.mortality_annual)}",
         f"{'lapse_annual':<{_w}} -> {_fmt_callable(basis.lapse_annual)}",
         f"{'ra':<{_w}} -> method={basis.ra_method!r} conf={basis.ra_confidence:g} "
@@ -478,12 +502,13 @@ def show_trace_vfa(
     n_time = cf.n_time
     picks = _key_months(term, n_time)
 
+    _avw = _colw((av[t] for t in picks if t < av.shape[0]), ",.2f", 15)
     av_lines: list[object] = []
     for t in picks:
         if t >= av.shape[0]:
             continue
         inf_v = inforce[t] if t < n_time else 0.0
-        av_lines.append(f"t={t:>4d}m: AV={av[t]:>15,.2f}  inforce={inf_v:.6f}")
+        av_lines.append(f"t={t:>4d}m: AV={av[t]:>{_avw},.2f}  inforce={inf_v:.6f}")
 
     # ---- Guarantee floors (where they bite)
     # Build rows as (left, amount, excess, rate_label, rate); the left and
@@ -501,11 +526,13 @@ def show_trace_vfa(
     )
     lw = max(len(r[0]) for r in floor_rows)
     rw = max(len(r[3]) for r in floor_rows)
+    aw = _colw((r[1] for r in floor_rows), ",.2f", 15)  # amount: expand from 15
+    ew = _colw((r[2] for r in floor_rows), ",.2f", 12)  # excess: expand from 12
     floor_lines: list[object] = [
         "death[t] = max(AV[t], GDB);  maturity = max(AV[term-1], GAB)",
     ]
     floor_lines += [
-        f"{left:<{lw}} ={amt:>15,.2f}  excess={ex:>12,.2f}  {rl:>{rw}}={rate:.6f}"
+        f"{left:<{lw}} ={amt:>{aw},.2f}  excess={ex:>{ew},.2f}  {rl:>{rw}}={rate:.6f}"
         for left, amt, ex, rl, rate in floor_rows
     ]
 
@@ -515,18 +542,24 @@ def show_trace_vfa(
     csm = m.csm_path[0]
     csm_acc = m.csm_accretion[0]
     csm_rel = m.csm_release[0]
+    _pbc = [t for t in picks if t < bel.shape[0]]
+    _bw = _colw((bel[t] for t in _pbc), ",.2f", 15)
+    _cw = _colw((csm[t] for t in _pbc), ",.2f", 15)
     belcsm_lines: list[object] = [
-        f"t={t:>4d}m: BEL={bel[t]:>15,.2f}  CSM={csm[t]:>15,.2f}"
-        for t in picks if t < bel.shape[0]
+        f"t={t:>4d}m: BEL={bel[t]:>{_bw},.2f}  CSM={csm[t]:>{_cw},.2f}"
+        for t in _pbc
     ]
+    _csw = _colw((csm[t] for t in picks if t < csm.shape[0]), ",.2f", 14)
+    _acw = _colw([csm_acc[t] for t in picks if t < csm_acc.shape[0]] or [0.0], ",.2f", 10)
+    _rew = _colw([csm_rel[t] for t in picks if t < csm_rel.shape[0]] or [0.0], ",.2f", 10)
     csm_lines: list[object] = ["csm[t+1] = csm[t] + accretion[t] - release[t]"]
     for t in picks:
         if t >= csm_acc.shape[0]:
-            csm_lines.append(f"t={t:>4d}m: csm={csm[t]:>14,.2f}  (past last accretion)")
+            csm_lines.append(f"t={t:>4d}m: csm={csm[t]:>{_csw},.2f}  (past last accretion)")
         else:
             csm_lines.append(
-                f"t={t:>4d}m: csm={csm[t]:>14,.2f}  "
-                f"acc={csm_acc[t]:>10,.2f}  rel={csm_rel[t]:>10,.2f}"
+                f"t={t:>4d}m: csm={csm[t]:>{_csw},.2f}  "
+                f"acc={csm_acc[t]:>{_acw},.2f}  rel={csm_rel[t]:>{_rew},.2f}"
             )
 
     # ---- Final headline
@@ -544,14 +577,15 @@ def show_trace_vfa(
         fcf_label, tv_note = "FCF = BEL+RA+TVOG", "(보증 시간가치)"
     outcome = ("-> onerous (TVOG 가 미실현 수수료 초과)" if lc > 0.0
                else "-> 수익성 (CSM 이 흡수)")
+    _fw = _colw([fee, float(bel[0]), float(ra[0]), tv, fcf0, float(csm[0]), lc], ",.2f", 15)
     final_lines: list[object] = [
-        f"variable_fee     = {fee:>15,.2f}  (수수료 PV = 이익원)",
-        f"BEL              = {bel[0]:>15,.2f}",
-        f"RA               = {ra[0]:>15,.2f}",
-        f"TVOG (time_value)= {tv:>15,.2f}  {tv_note}",
-        f"{fcf_label}= {fcf0:>15,.2f}",
-        f"CSM = max(0,-FCF)= {csm[0]:>15,.2f}",
-        f"loss_component   = {lc:>15,.2f}  {outcome}",
+        f"variable_fee     = {fee:>{_fw},.2f}  (수수료 PV = 이익원)",
+        f"BEL              = {bel[0]:>{_fw},.2f}",
+        f"RA               = {ra[0]:>{_fw},.2f}",
+        f"TVOG (time_value)= {tv:>{_fw},.2f}  {tv_note}",
+        f"{fcf_label}= {fcf0:>{_fw},.2f}",
+        f"CSM = max(0,-FCF)= {csm[0]:>{_fw},.2f}",
+        f"loss_component   = {lc:>{_fw},.2f}  {outcome}",
     ]
 
     out.append(header)
@@ -643,24 +677,29 @@ def show_trace_paa(
     lrc_lines: list[object] = [
         "LRC[t+1] = LRC[t] + premium[t] - revenue[t]   (LRC[0] = 0)",
     ]
+    _pw = _colw((premium[t] for t in picks if t < n_time), ",.2f", 13)
+    _rw = _colw((revenue[t] for t in picks if t < n_time), ",.2f", 13)
+    _lw = _colw((lrc[t] for t in picks if t < n_time), ",.2f", 15)
     for t in picks:
         if t >= n_time:
             continue
         lrc_lines.append(
-            f"t={t:>4d}m: prem={premium[t]:>13,.2f}  rev={revenue[t]:>13,.2f}  "
-            f"LRC[t]={lrc[t]:>15,.2f}"
+            f"t={t:>4d}m: prem={premium[t]:>{_pw},.2f}  rev={revenue[t]:>{_rw},.2f}  "
+            f"LRC[t]={lrc[t]:>{_lw},.2f}"
         )
 
     # ---- Insurance service result
     result_lines: list[object] = [
         "service_result[t] = revenue[t] - service_expense[t]",
     ]
+    _sw = _colw((svc_exp[t] for t in picks if t < n_time), ",.2f", 13)
+    _rsw = _colw((svc_result[t] for t in picks if t < n_time), ",.2f", 13)
     for t in picks:
         if t >= n_time:
             continue
         result_lines.append(
-            f"t={t:>4d}m: rev={revenue[t]:>13,.2f}  svc_exp={svc_exp[t]:>13,.2f}  "
-            f"result={svc_result[t]:>13,.2f}"
+            f"t={t:>4d}m: rev={revenue[t]:>{_rw},.2f}  svc_exp={svc_exp[t]:>{_sw},.2f}  "
+            f"result={svc_result[t]:>{_rsw},.2f}"
         )
 
     # ---- LIC
