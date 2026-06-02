@@ -628,6 +628,26 @@ class InforceState:
         if not np.isfinite(self.lock_in_rate):
             raise ValueError("InforceState.lock_in_rate must be finite")
 
+    def subset(self, indices) -> "InforceState":
+        """Return a new ``InforceState`` carrying the rows at ``indices``.
+
+        The per-MP fields (``mp_id``, ``elapsed_months``, ``count``,
+        ``prior_csm``) are sliced together and the scalar ``lock_in_rate``
+        is carried, so the result stays internally consistent. Use it
+        alongside :meth:`ModelPoints.subset` to split a period-close state
+        by segment before a per-segment
+        :func:`fastcashflow.gmm.measure_inforce` (slicing only ``prior_csm``
+        would leave the state ragged).
+        """
+        idx = np.asarray(indices, dtype=np.int64)
+        return InforceState(
+            mp_id=np.asarray(self.mp_id)[idx],
+            elapsed_months=self.elapsed_months[idx],
+            count=self.count[idx],
+            prior_csm=self.prior_csm[idx],
+            lock_in_rate=self.lock_in_rate,
+        )
+
 
 def apply_inforce_state(
     model_points: "ModelPoints", state: InforceState,

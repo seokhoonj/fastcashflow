@@ -286,3 +286,29 @@ def test_gmm_measure_inforce_headline_csm_is_as_of_and_tracks_prior():
     # full=False headline == full=True headline == csm_path at the as-of month.
     assert np.allclose(head5k.csm, full5k.csm)
     assert np.allclose(full5k.csm, full5k.csm_path[rows, em])
+
+
+def test_inforce_state_subset_is_consistent_and_drives_segment_measure():
+    """InforceState.subset slices every per-MP field together (not a ragged
+    prior_csm-only replace), so per-segment measure_inforce -- the demo /
+    cookbook close pattern -- sees a self-consistent state."""
+    import fastcashflow as fcf
+    portfolio = fcf.samples.model_points()
+    state = fcf.samples.inforce_state()
+    basis = fcf.samples.basis()
+    mp = fcf.apply_inforce_state(portfolio, state)
+
+    key = ("HEALTH_A", "FC")
+    idx = np.where((np.asarray(mp.product_code) == key[0]) &
+                   (np.asarray(mp.channel_code) == key[1]))[0]
+    sub_state = state.subset(idx)
+    assert sub_state.prior_csm.shape[0] == len(idx)
+    assert sub_state.elapsed_months.shape[0] == len(idx)
+    assert sub_state.count.shape[0] == len(idx)
+    assert np.asarray(sub_state.mp_id).shape[0] == len(idx)
+    assert sub_state.lock_in_rate == state.lock_in_rate
+    assert np.allclose(sub_state.prior_csm, np.asarray(state.prior_csm)[idx])
+
+    val = fcf.gmm.measure_inforce(mp.subset(idx), basis[key], sub_state,
+                                  period_months=3)
+    assert np.all(np.isfinite(val.bel)) and np.all(np.isfinite(val.csm))
