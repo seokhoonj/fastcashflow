@@ -68,12 +68,12 @@ idx = np.where((np.asarray(portfolio.product_code) == key[0]) &
                (np.asarray(portfolio.channel_code) == key[1]))[0]
 m = fcf.gmm.measure(portfolio.subset(idx), basis[key])
 
-# 보고기간으로 자르고 -> 변동분석표로 집계
+# 보고기간으로 자르고 → 변동분석표로 집계
 movements = fcf.roll_forward(m, period_months=12)    # 12 개월 기간
 recon     = fcf.reconcile(movements)                 # 기간 수만큼의 변동분석표
 
 r = recon[0]                                         # 첫 보고기간
-print(f"변동분해 -- HEALTH_A / FC, months {r.month_start}-{r.month_end}")
+print(f"변동분해 -- HEALTH_A / FC, months {r.month_start + 1}-{r.month_end}")
 print(f"{'':<16}{'BEL':>12}{'RA':>12}{'CSM':>12}")
 for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
                  ("finance", "Finance"), ("release", "Release"),
@@ -87,7 +87,7 @@ for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
 출력:
 
 ```
-변동분해 -- HEALTH_A / FC, months 0-12
+변동분해 -- HEALTH_A / FC, months 1-12
                          BEL          RA         CSM
 Opening              939,473     304,669     632,252
 Future service             0           0           0
@@ -159,7 +159,7 @@ movements = fcf.roll_forward(
 recon = fcf.reconcile(movements)
 
 r = recon[1]                 # 변경이 발효된 기간 (months 12-24)
-print(f"변동분해 -- HEALTH_A / FC, months {r.month_start}-{r.month_end}"
+print(f"변동분해 -- HEALTH_A / FC, months {r.month_start + 1}-{r.month_end}"
       f"  (mortality +10% at month 12)")
 print(f"{'':<16}{'BEL':>12}{'RA':>12}{'CSM':>12}")
 for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
@@ -174,7 +174,7 @@ for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
 출력:
 
 ```
-변동분해 -- HEALTH_A / FC, months 12-24  (mortality +10% at month 12)
+변동분해 -- HEALTH_A / FC, months 13-24  (mortality +10% at month 12)
                          BEL          RA         CSM
 Opening            1,980,231     283,958     554,737
 Future service        -2,693        -595       3,287
@@ -201,7 +201,7 @@ Closing            2,999,190     263,051     485,124
 가정변경은 보고기간 **경계** 에서 인식됩니다. `period_months=12` 이면
 `revised_at` 은 12, 24, ... 만 됩니다 (6 은 거부). 변경 효과는 그 달부터
 *시작하는* 기간에 잡히므로, `revised_at=12` 의 효과는 `recon[0]`
-(months 0-12) 이 아니라 `recon[1]` (months 12-24) 에 나타납니다.
+(months 1-12) 이 아니라 `recon[1]` (months 13-24) 에 나타납니다.
 ```
 
 ## 변형 — 경험조정

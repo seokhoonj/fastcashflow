@@ -114,7 +114,9 @@ parallel kernel that is far faster at portfolio scale.
 
 ## Performance
 
-Measured on an 8-core desktop (Ryzen 7 3700X), 120-month projection:
+Measured on an 8-core desktop (Ryzen 7 3700X), 120-month projection, a
+single-coverage term-life portfolio (`examples/benchmark.py`); multi-coverage
+portfolios scale roughly linearly in the coverage count:
 
 | Model points | `measure(full=False)` |
 |---|---|
