@@ -172,7 +172,7 @@ mortality table* (규제 의무) 로. 두 표가 다른 숫자라 두 슬롯도 
 | `mortality_annual` = 0%, `DEATH` rate = 1% | 보유계약 안 줄고 매월 사망보험금 청구. 무한 사망. BEL 과대평가. |
 | `mortality_annual` = 1%, `DEATH` rate = 0% | 보유계약은 줄고 사망보험금 없음. BEL 과소평가. |
 
-두 패턴 모두 에러 없이 통과 — silent footgun. 한 변수 공유 패턴 (`death_fn`
+두 패턴 모두 에러 없이 통과 — 조용히 어긋나는 함정. 한 변수 공유 패턴 (`death_fn`
 을 두 슬롯에) 이 구조적 방어.
 
 ```{admonition} 워크북 로더는 자동 처리
