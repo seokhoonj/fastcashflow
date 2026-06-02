@@ -121,6 +121,31 @@ def test_write_measurement_without_ids(tmp_path):
     assert pl.read_parquet(path).columns == ["bel", "ra", "csm", "loss_component"]
 
 
+def test_write_measurement_dispatches_per_model(tmp_path):
+    """write_measurement is singledispatch: PAA writes lrc, VFA adds
+    variable_fee / time_value, and an unsupported type errors loudly."""
+    import fastcashflow as fcf
+    import numpy as np
+    mp = fcf.samples.model_points()
+    b = fcf.samples.basis()[("HEALTH_A", "FC")]
+    idx = np.where((np.asarray(mp.product_code) == "HEALTH_A") &
+                   (np.asarray(mp.channel_code) == "FC"))[0]
+    sub = mp.subset(idx)
+
+    fcf.write_measurement(fcf.paa.measure(sub, b), tmp_path / "paa.parquet")
+    assert pl.read_parquet(tmp_path / "paa.parquet").columns == [
+        "lrc", "loss_component"]
+
+    vmp = fcf.samples.model_points(kind="vfa")
+    vb = fcf.samples.basis(kind="vfa")
+    fcf.write_measurement(fcf.vfa.measure(vmp, vb), tmp_path / "vfa.parquet")
+    assert pl.read_parquet(tmp_path / "vfa.parquet").columns == [
+        "bel", "ra", "csm", "variable_fee", "time_value", "loss_component"]
+
+    with pytest.raises(TypeError, match="does not handle"):
+        fcf.write_measurement("not a measurement", tmp_path / "x.csv")
+
+
 def test_read_ignores_extra_columns_and_flags_missing(tmp_path):
     """Extra columns are ignored; a missing required column is an error."""
     mps = _portfolio(50)

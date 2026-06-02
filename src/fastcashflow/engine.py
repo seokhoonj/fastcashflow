@@ -43,6 +43,7 @@ from fastcashflow.numerics import (
 from fastcashflow.coverage import (
     align_coverages, build_coverage_rates, coverage_arrays, validate_csr_codes,
 )
+from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.statemodel import (
@@ -105,6 +106,13 @@ class GMMMeasurement:
     def __str__(self) -> str:
         from fastcashflow._display import measurement_str
         return measurement_str("GMMMeasurement", self._columns())
+
+
+@write_measurement.register
+def _(measurement: GMMMeasurement, path, *, ids=None):
+    _write_measurement_columns(
+        {"bel": measurement.bel, "ra": measurement.ra, "csm": measurement.csm,
+         "loss_component": measurement.loss_component}, path, ids)
 
 
 def _compute_csm(bel0, ra0, inforce, monthly_rate):

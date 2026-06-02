@@ -28,6 +28,7 @@ from __future__ import annotations
 import importlib.resources as resources
 import warnings
 from dataclasses import replace
+from functools import singledispatch
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -1668,26 +1669,39 @@ def read_scenarios(path: Path | str) -> FloatArray:
 # Measurement results
 # ---------------------------------------------------------------------------
 
+@singledispatch
 def write_measurement(
-    measurement: "GMMMeasurement",
+    measurement,
     path: Path | str,
     *,
     ids: np.ndarray | None = None,
 ) -> None:
-    """Write a ``GMMMeasurement`` to a parquet or CSV file.
+    """Write a measurement's per-model-point headline results to parquet / CSV.
 
-    One row per model point, in model-point order, with columns ``bel``,
-    ``ra``, ``csm`` and ``loss_component``. If ``ids`` is given it is written
-    as a leading ``id`` column so the results can be joined back to policies.
+    One row per model point, in model-point order. Pass ``ids`` for a leading
+    ``id`` column so the results join back to policies. Dispatches on the
+    measurement type -- GMM writes ``bel`` / ``ra`` / ``csm`` /
+    ``loss_component``, PAA writes ``lrc`` / ``loss_component``, VFA adds
+    ``variable_fee`` / ``time_value``. A new model registers its columns with
+    ``@write_measurement.register`` in the module that defines its measurement
+    type (so io.py stays free of the engine import).
     """
-    columns: dict[str, np.ndarray] = {}
+    raise TypeError(
+        f"write_measurement does not handle {type(measurement).__name__}; "
+        "pass a GMM / PAA / VFA measurement"
+    )
+
+
+def _write_measurement_columns(
+    columns: dict[str, np.ndarray], path: Path | str, ids: np.ndarray | None
+) -> None:
+    """Shared writer for the registered ``write_measurement`` implementations:
+    an optional leading ``id`` column, then the model's headline columns."""
+    out: dict[str, np.ndarray] = {}
     if ids is not None:
-        columns["id"] = np.asarray(ids)
-    columns["bel"] = measurement.bel
-    columns["ra"] = measurement.ra
-    columns["csm"] = measurement.csm
-    columns["loss_component"] = measurement.loss_component
-    _write_frame(pl.DataFrame(columns), path)
+        out["id"] = np.asarray(ids)
+    out.update(columns)
+    _write_frame(pl.DataFrame(out), path)
 
 
 def measure_stream(

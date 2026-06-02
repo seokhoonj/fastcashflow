@@ -37,6 +37,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
+from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import _norm_ppf, _rollforward_kernel, _settlement_lic
 from fastcashflow.modelpoints import ModelPoints
@@ -81,6 +82,13 @@ class PAAMeasurement:
     def __str__(self) -> str:
         from fastcashflow._display import measurement_str
         return measurement_str("PAAMeasurement", self._columns())
+
+
+@write_measurement.register
+def _(measurement: PAAMeasurement, path, *, ids=None):
+    _write_measurement_columns(
+        {"lrc": measurement.lrc, "loss_component": measurement.loss_component},
+        path, ids)
 
 
 def measure_paa(

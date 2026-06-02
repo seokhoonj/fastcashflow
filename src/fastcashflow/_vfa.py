@@ -35,6 +35,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
+from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import (
     _csm_kernel,
     _norm_ppf,
@@ -94,6 +95,15 @@ class VFAMeasurement:
     def __str__(self) -> str:
         from fastcashflow._display import measurement_str
         return measurement_str("VFAMeasurement", self._columns())
+
+
+@write_measurement.register
+def _(measurement: VFAMeasurement, path, *, ids=None):
+    _write_measurement_columns(
+        {"bel": measurement.bel, "ra": measurement.ra, "csm": measurement.csm,
+         "variable_fee": measurement.variable_fee,
+         "time_value": measurement.time_value,
+         "loss_component": measurement.loss_component}, path, ids)
 
 
 def measure_vfa(
