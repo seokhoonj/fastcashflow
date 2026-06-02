@@ -6,8 +6,8 @@
 - 가정을 **shock** 하는 것 = rate 함수를 교체하는 것. 사망률 +10% 등을 명시
   변수에 lift 한 뒤 배수를 건 새 함수로 바꿔 끼운다
 - shock 이 IFRS17 숫자 (BEL / RA / CSM / loss component) 에 미치는 영향을 측정
-- **불리한 shock 은 CSM 을 먼저 갉아먹고**, 충분히 크면 계약이 onerous 로
-  뒤집혀 **loss component** 가 나타난다 (CSM 은 음수가 못 됨)
+- **불리한 shock 은 CSM을 먼저 갉아먹고**, 충분히 크면 계약이 onerous 로
+  뒤집혀 **loss component** 가 나타난다 (CSM은 음수가 못 됨)
 - `gmm.trace_diff` 로 한 계약의 shock 전파 (rate -> cash flow -> BEL -> CSM)
   를 ASCII 트리로
 - shock 함수는 **3-인자** 로 — 4-인자 default 패턴은 엔진이 잘못 호출 (함정)
@@ -102,32 +102,32 @@ factor       BEL      RA      CSM     loss
   1.50      6962    2103        0     9065
 ```
 
-## 결과 읽기 — CSM 이 shock 을 먼저 흡수한다
+## 결과 읽기 — CSM이 shock 을 먼저 흡수한다
 
-baseline (factor 1.00) 은 BEL 이 **음수** (-4,286) 입니다 — 보험료가 사망보험금
-+ RA 보다 커서 이익이 나는 계약이고, 그 이익이 CSM 2,841 로 잡힙니다
+baseline (factor 1.00) 은 BEL이 **음수** (-4,286) 입니다 — 보험료가 사망보험금
++ RA보다 커서 이익이 나는 계약이고, 그 이익이 CSM 2,841 로 잡힙니다
 (`CSM_0 = max(0, -(BEL + RA))`, IFRS 17 Sec.38).
 
-사망률을 올리면 사망보험금이 늘어 BEL 이 커지고 (덜 음수가 되고), 그만큼
-`FCF = BEL + RA` 가 올라가 **CSM 이 줄어듭니다**:
+사망률을 올리면 사망보험금이 늘어 BEL이 커지고 (덜 음수가 되고), 그만큼
+`FCF = BEL + RA` 가 올라가 **CSM이 줄어듭니다**:
 
-- **factor 1.10**: CSM 2,841 -> 402. 불리한 가정이 **CSM 을 갉아먹지만** 아직
+- **factor 1.10**: CSM 2,841 -> 402. 불리한 가정이 **CSM을 갉아먹지만** 아직
   이익 범위라 손익(P&L) 에는 안 닿습니다.
-- **factor 1.25**: CSM 이 0 으로 **소진** 되고, FCF 가 양수로 넘어가
+- **factor 1.25**: CSM이 0 으로 **소진** 되고, FCF가 양수로 넘어가
   **loss component 3,201** 이 나타납니다 — 계약이 onerous (손실부담) 로
-  뒤집혀 그 손실이 즉시 인식됩니다 (Sec.47-49). CSM 은 음수가 못 되므로
+  뒤집혀 그 손실이 즉시 인식됩니다 (Sec.47-49). CSM은 음수가 못 되므로
   (floor 0), 초과분이 loss 로 빠집니다.
 - **factor 1.50**: loss 가 9,065 로 더 커집니다.
 
-이것이 민감도 분석의 핵심 그림입니다 — **불리한 변화는 먼저 CSM 이라는
-완충재를 소진하고, 그 완충재가 바닥나는 순간부터 손익에 직접 친다.** CSM 이
+이것이 민감도 분석의 핵심 그림입니다 — **불리한 변화는 먼저 CSM이라는
+완충재를 소진하고, 그 완충재가 바닥나는 순간부터 손익에 직접 친다.** CSM이
 얼마나 남았는지가 곧 그 계약이 shock 을 얼마나 더 견딜 수 있는지입니다.
 
 ## 한 계약 들여다보기 — gmm.trace_diff
 
 sweep 은 *얼마나* 변하는지를 보여주지만, *어디서* 그 변화가 생기는지는
 `gmm.trace_diff` 가 두 basis 를 나란히 놓아 보여줍니다 — rate 부터 cash
-flow, BEL, CSM 까지 한 줄씩.
+flow, BEL, CSM까지 한 줄씩.
 
 ```python
 base    = basis_with_mortality(death_fn)
@@ -183,10 +183,10 @@ labels: 'baseline'  ->  'mort+10%'
 - **Rate deltas** — 사망률이 양쪽 (mortality / DEATH) 에서 +10.00%.
 - **Cash flow deltas** — 사망보험금 (claim) 이 +10%, 보험료는 사망 감쇠가
   빨라져 약간 (-0.58%) 줄어듦.
-- **BEL deltas** — 청구 증가가 BEL 을 +53.74% 밀어 올림 (덜 음수로).
-- **CSM deltas** — 그 BEL 증가가 CSM 을 -85.83% 깎음.
+- **BEL deltas** — 청구 증가가 BEL을 +53.74% 밀어 올림 (덜 음수로).
+- **CSM deltas** — 그 BEL 증가가 CSM을 -85.83% 깎음.
 - **Final** — `FCF = BEL + RA`, `CSM = max(0, -FCF)` 의 IFRS17 항등식이
-  그대로 드러나, 왜 CSM 이 그만큼 줄었는지를 한 줄로 설명합니다.
+  그대로 드러나, 왜 CSM이 그만큼 줄었는지를 한 줄로 설명합니다.
 
 `gmm.trace_diff` 는 동일한 항목은 숨기고 *바뀐* 것만 보여주므로, shock 이
 어디서 시작해 어디로 흐르는지 추적하는 데 씁니다.
@@ -223,7 +223,7 @@ labels: 'baseline'  ->  'mort+10%'
 ### 함정 1 — shock 을 한 자리만 적용
 
 사망률은 `mortality_annual` (감쇠) 과 DEATH 보장 (청구) 두 자리에 들어갑니다.
-한쪽만 shock 하면 사망 감쇠와 사망보험금이 어긋나 BEL 이 틀립니다. base 를
+한쪽만 shock 하면 사망 감쇠와 사망보험금이 어긋나 BEL이 틀립니다. base 를
 명시 변수에 lift 해 **한 shock 을 두 자리에 함께** 먹이세요.
 
 ### 함정 2 — shock 함수의 인자 수
@@ -232,15 +232,15 @@ labels: 'baseline'  ->  'mort+10%'
 두세요. default 인자 (`f=factor`) 로 넣으면 엔진의 5-인자 호출에서 네 번째
 자리가 그것을 덮어씁니다.
 
-### 함정 3 — CSM 은 음수가 안 됨
+### 함정 3 — CSM은 음수가 안 됨
 
-shock 으로 FCF 가 양수가 되면 CSM 은 0 에서 멈추고 초과분이 loss component
-로 갑니다. "CSM 이 -3,000 이 됐다" 는 결과는 없습니다 — CSM 0 + loss 3,000
-입니다. 민감도 표에서 CSM 과 loss 를 **함께** 봐야 하는 이유입니다.
+shock 으로 FCF가 양수가 되면 CSM은 0 에서 멈추고 초과분이 loss component
+로 갑니다. "CSM이 -3,000 이 됐다" 는 결과는 없습니다 — CSM 0 + loss 3,000
+입니다. 민감도 표에서 CSM과 loss 를 **함께** 봐야 하는 이유입니다.
 
 ### 함정 4 — portfolio 합산은 netting 이 아님
 
-계약별 CSM 과 loss 는 상계되지 않습니다 — 한 계약의 CSM 여력이 다른 계약의
+계약별 CSM과 loss 는 상계되지 않습니다 — 한 계약의 CSM 여력이 다른 계약의
 loss 를 덮지 못합니다 (각 계약/그룹이 따로 floor). portfolio 민감도는
 계약별 CSM 감소와 loss 증가를 **각각** 합산해 봐야 합니다.
 

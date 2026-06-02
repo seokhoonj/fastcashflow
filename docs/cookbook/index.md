@@ -43,7 +43,7 @@
   - 재진단 / 회복 / 등급 진행 — 코호트 추적이 필요한 영역.
 * - 변액 (VFA)
   - 계좌가치 + 최저보증
-  - 변액보험을 VFA 로 측정. GMDB / GMAB 의 intrinsic 과 시간가치 (TVOG).
+  - 변액보험을 VFA로 측정. GMDB / GMAB의 intrinsic 과 시간가치 (TVOG).
 * - I/O (Excel 워크북)
   - 데이터 입출력
   - 회사 워크북을 fastcashflow 가 읽는 형식으로 맞추는 자리.
@@ -104,7 +104,7 @@
   - 다루는 것
 * - 2.1
   - [정기보험](simple/term-life)
-  - 사망 단독 정기보험. fast_path. BEL / RA / CSM 의 의미와 부호.
+  - 사망 단독 정기보험. fast_path. BEL / RA / CSM의 의미와 부호.
 * - 2.2
   - [사망 + 단순 진단 일시금](simple/death-diagnosis)
   - 진단 담보 추가. 면책 / 감액 없는 간단한 결합.

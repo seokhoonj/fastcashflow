@@ -61,7 +61,7 @@ ETL 이 그 사이를 잇습니다. 두 가지 패턴:
   `Basis` / `ModelPoints` **개체**입니다. 쿼리 결과 컬럼으로
   `ModelPoints(issue_age=..., level_premium=..., ...)` 를 직접 조립해
   reader 를 건너뛸 수도 있습니다 (담보가 여럿이면 long-form 을 parquet
-  으로 떨궈 `read_*` 가 CSR 로 묶게 하는 편이 간단).
+  으로 떨궈 `read_*` 가 CSR로 묶게 하는 편이 간단).
 
 즉 fastcashflow 는 데이터 파이프라인의 **끝 (측정 엔진)** 에 있고,
 DB 연결·추출은 사내 ETL 의 몫입니다.
@@ -285,7 +285,7 @@ fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
 - `gmm.measure_inforce` — 결산 평가. 신계약 `gmm.measure` 와 다른 점은:
   (a) 가입 시 lock-in 된 할인율(`state.lock_in_rate`)을 받음, (b) 직전 분기의
   CSM(`state.prior_csm`)을 출발점으로 carry-forward, (c) `period_months` 로
-  이번 분기에만 release 될 부분을 잘라냄. 헤드라인 BEL·RA·CSM 은 결산일
+  이번 분기에만 release 될 부분을 잘라냄. 헤드라인 BEL·RA·CSM은 결산일
   (`elapsed_months`) 시점 값이고, `full=False` 면 헤드라인만 빠르게 냅니다.
 - `write_measurement` — BEL·RA·CSM·손실요소를 모델포인트마다 한 줄씩
   파일로 저장합니다.

@@ -45,7 +45,7 @@ with tempfile.TemporaryDirectory() as tmp:
     print("CSM  sum =", f"{val.csm.sum():,.0f}")
     print("loss sum =", f"{val.loss_component.sum():,.0f}")
 
-    # segment 별로 BEL 을 갈라 보면 라우팅이 동작한 게 보인다
+    # segment 별로 BEL을 갈라 보면 라우팅이 동작한 게 보인다
     prod = np.array(mp.product_code)
     chan = np.array(mp.channel_code)
     for key in sorted(basis):
@@ -71,7 +71,7 @@ loss sum = 29,838,251
 ```
 
 11 개 계약이 7 개 segment 로 갈라져, 각 묶음이 자기 segment 의 사망률 ·
-해지율 · 사업비로 평가됐습니다. segment 별 BEL 합은 전체 BEL 과 일치합니다.
+해지율 · 사업비로 평가됐습니다. segment 별 BEL 합은 전체 BEL과 일치합니다.
 
 ## segment 마다 다르게 — 테이블 참조
 

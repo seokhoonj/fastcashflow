@@ -197,7 +197,7 @@ cum_premium[mp, t]  = cumsum(premium_cf[mp, :t+1])
 surrender_cf[mp, t] = lapse_flow x cum_premium x factor[duration_month]
 ```
 
-BEL 에 future outflow 로 포함. 환급률이 substantial 한 한국 상품 (단기납
+BEL에 future outflow 로 포함. 환급률이 substantial 한 한국 상품 (단기납
 종신, 경영인 정기, 저해지환급금형 등) 의 BEL 정확도 ↑.
 
 **제약 (v1)**:
