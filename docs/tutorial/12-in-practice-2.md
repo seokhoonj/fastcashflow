@@ -120,7 +120,7 @@ fcf.plot_analysis_of_change(recon[0])
 
 기본값은 CSM 성분이며(`component`로 BEL·RA도 선택할 수 있습니다), 표의
 다섯 행 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지 — 을 waterfall
-(폭포형 누적) 차트로 잇습니다.
+차트로 잇습니다.
 
 ```{figure} ../images/analysis-of-change.png
 :alt: 첫 보고기간 CSM 변동분석 waterfall 차트 — 기초잔액에서 이자·상각을 거쳐 기말잔액까지
