@@ -227,4 +227,3 @@ headline 전용이라 `full=False`). 라우팅 메커니즘은 [7.2](workbook-mu
   라우팅과 segment 별 다른 StateModel / lapse.
 - [튜토리얼 11장](../../tutorial/11-in-practice) — 결산 워크플로와 보유계약
   입력 (`read_inforce_policies`).
-```

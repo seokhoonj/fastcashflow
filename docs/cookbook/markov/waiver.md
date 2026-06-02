@@ -218,4 +218,3 @@ BEL        = 285.22
   별도 state 로. 납입후 해지율 점프.
 - [검증 패턴](../workflow/validation) — `gmm.trace` 로 상태별 점유와 cash
   flow 를 한 줄씩 확인.
-```

@@ -306,4 +306,3 @@ decrement 로 잘못 두면 보유계약이 과소평가됩니다.
   의 출발점. DI 의 active → disabled 가 같은 슬롯을 공유.
 - [검증 패턴](../workflow/validation) — `gmm.trace` 로 상태별 · 코호트별
   점유와 소득 지급을 한 줄씩 확인.
-```

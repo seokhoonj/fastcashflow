@@ -236,4 +236,3 @@ mortality_annual = lambda s, a, d: death_fn(s,a,d) + cancer_fn(s,a,d)   # ✗
   첫 챕터.
 - [검증 패턴](../workflow/validation) — `gmm.trace` 로 두 담보의
   cash flow 를 한 줄씩 확인.
-```
