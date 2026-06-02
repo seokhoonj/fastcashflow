@@ -5,7 +5,7 @@
 
 - fastcashflow 설치하기
 - 코드를 어디에 쓰고 어떻게 실행하는가
-- 모델포인트와 계리적 가정을 코드로 만들기
+- 모델포인트와 산출기초를 코드로 만들기
 - measure()로 측정하고 BEL·RA·CSM 읽기
 - measure(full=False)와 샘플 데이터로 대규모 평가하기
 ```
@@ -57,7 +57,7 @@ environment)을 따로 두는 것이 좋습니다. 패키지들이 서로 충돌
 
 ## 8.2 입력 만들기
 
-엔진의 입력은 둘뿐입니다(1.6절) — **계리적 가정**과 **모델포인트**.
+엔진의 입력은 둘뿐입니다(1.6절) — **산출기초**와 **모델포인트**.
 
 먼저 두 줄로 필요한 도구를 불러옵니다.
 
@@ -70,7 +70,7 @@ import fastcashflow as fcf
 배열을 다루는 라이브러리이고, `as np`는 앞으로 짧게 `np`라 부르겠다는
 뜻입니다. fastcashflow는 `fcf`로 부릅니다.
 
-계리적 가정은 `Basis`로 만듭니다. 5~7장 예제의 가정을 그대로
+산출기초는 `Basis`로 만듭니다. 5~7장 예제의 가정을 그대로
 옮깁니다.
 
 ```python
@@ -82,7 +82,7 @@ death_fn = lambda sex, issue_age, duration: np.full(
 # 해지율 함수 -- 해지 없음
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
-# 계리적 가정
+# 산출기초
 basis = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
@@ -208,7 +208,7 @@ death_fn = lambda sex, issue_age, duration: np.full(
 # 해지율 함수 -- 해지 없음
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
-# 계리적 가정
+# 산출기초
 basis = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)

@@ -138,7 +138,7 @@ import numpy as np
 import fastcashflow as fcf
 from fastcashflow import STATE_MODELS, STATE_PAIDUP, STATE_ACTIVE
 
-# 계리적 가정 -- 모든 rate 는 (sex, issue_age, duration) 시그니처
+# 산출기초 -- 모든 rate 는 (sex, issue_age, duration) 시그니처
 death_fn        = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
 lapse_fn        = lambda s, a, d: np.full(d.shape, 1 - (1 - 0.10) ** 12)  # 납입중 해지 월 10%
 lapse_paidup_fn = lambda s, a, d: np.full(d.shape, 1 - (1 - 0.02) ** 12)  # 납입후 해지 월 2%
@@ -258,7 +258,7 @@ paidup 상태가 아니라 `lapse_annual` 을 가입경과 (policy duration) 의
 import numpy as np
 import fastcashflow as fcf
 
-# 계리적 가정 -- 해지율을 가입경과 (policy duration, 연 단위) 의 단계함수로
+# 산출기초 -- 해지율을 가입경과 (policy duration, 연 단위) 의 단계함수로
 death_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
 lapse_fn = lambda s, a, d: np.where(                               # 완납 시점에 해지율 하락
     d < 1,

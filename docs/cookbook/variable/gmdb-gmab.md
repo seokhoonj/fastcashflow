@@ -80,7 +80,7 @@
 import numpy as np
 import fastcashflow as fcf
 
-# 계리적 가정
+# 산출기초
 death_fn = lambda s, a, d: np.full(np.shape(d), 0.005)   # 연 0.5% 사망률
 lapse_fn = lambda s, a, d: np.full(np.shape(d), 0.04)    # 연 4% 해지율
 basis = fcf.Basis(

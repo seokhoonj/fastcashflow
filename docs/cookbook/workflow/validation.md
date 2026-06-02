@@ -317,7 +317,7 @@ def death_fn(s, ia, d, ic, em):
 def lapse_fn(s, ia, d, ic, em):
     return np.full(d.shape, 0.02)
 
-# 계리적 가정 -- 이익이 나는 (CSM > 0) 시나리오
+# 산출기초 -- 이익이 나는 (CSM > 0) 시나리오
 profitable = Basis(
     mortality_annual = death_fn,                                  # 보유계약 감쇠용 사망률 (연 0.05%)
     lapse_annual     = lapse_fn,                                  # 해지율 (연 2%)

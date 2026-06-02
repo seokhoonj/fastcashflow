@@ -91,7 +91,7 @@ mp = fcf.ModelPoints.single(
     term_months   = 2,            # 보험기간 2개월
 )
 
-# 계리적 가정
+# 산출기초
 basis = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
@@ -239,7 +239,7 @@ test 가 자동 검증).
 * - `calculation_methods.csv`
   - 담보별 산출방식 — 담보 코드 → 산출방식 (DEATH / MORBIDITY / ...)
 * - `basis.xlsx`
-  - 계리적 가정 — 사망률 · 해지율 · 할인율 · 사업비 · 위험조정
+  - 산출기초 — 사망률 · 해지율 · 할인율 · 사업비 · 위험조정
 * - `policies.csv`
   - 보유 계약 — 한 줄 = 한 계약 (가입연령 / 성별 / 보험기간 / 계약수)
 * - `coverages.csv`

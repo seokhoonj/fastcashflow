@@ -80,7 +80,7 @@ lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
 # 납입면제 발생률 함수 -- 월 10% 의 연 환산 (active → waiver 전이율)
 waiver_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.10) ** 12)
 
-# 계리적 가정
+# 산출기초
 basis = fcf.Basis(
     mortality_annual        = death_fn,                # 보유계약 감쇠용 사망률 (월 1%)
     lapse_annual            = lapse_fn,                # 해지율 (해지 없음)

@@ -200,7 +200,7 @@ death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0)
 # 해지율 함수 -- 해지 없음
 lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
-# 계리적 가정
+# 산출기초
 basis = fcf.Basis(
     mortality_annual  = death_fn,           # 사망률 함수 (사망 없음 가정)
     lapse_annual      = lapse_fn,           # 해지율 함수 (해지 없음 가정)

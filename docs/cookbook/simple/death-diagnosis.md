@@ -75,7 +75,7 @@ cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.005) ** 12)
 # 해지율 함수 -- 해지 없음
 lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
 
-# 계리적 가정
+# 산출기초
 basis = fcf.Basis(
     mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (death_fn 만)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)

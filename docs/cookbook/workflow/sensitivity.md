@@ -55,7 +55,7 @@ CSM / loss 가 어떻게 움직이는지 봅니다.
 import numpy as np
 import fastcashflow as fcf
 
-# 계리적 가정 -- 사망률을 명시 변수로 lift
+# 산출기초 -- 사망률을 명시 변수로 lift
 death_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
 lapse_fn = lambda s, a, d: np.full(d.shape, 0.0)                   # 해지 없음
 

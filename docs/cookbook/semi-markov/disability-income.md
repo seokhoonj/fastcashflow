@@ -113,7 +113,7 @@ import numpy as np
 import fastcashflow as fcf
 from fastcashflow import State, Transition, StateModel
 
-# 계리적 가정 -- 평탄 rate (실무는 경험률표 룩업)
+# 산출기초 -- 평탄 rate (실무는 경험률표 룩업)
 death_fn     = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
 lapse_fn     = lambda s, a, d: np.full(d.shape, 0.0)                   # 해지 없음
 incidence_fn = lambda s, a, d: np.full(a.shape, 0.0)                   # 신규 장해 없음 (DLR)

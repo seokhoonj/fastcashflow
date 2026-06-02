@@ -84,7 +84,7 @@ import fastcashflow as fcf
 cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.10) ** 12)
 no_decr   = lambda s, a, d: np.full(a.shape, 0.0)
 
-# 계리적 가정
+# 산출기초
 basis = fcf.Basis(
     mortality_annual = no_decr,    # 보유계약 감쇠율 0 (진단 풀에 집중)
     lapse_annual     = no_decr,    # 해지율 0
