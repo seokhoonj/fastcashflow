@@ -12,6 +12,7 @@ import polars as pl
 
 from fastcashflow import read_model_points, write_measurement
 from fastcashflow.gmm import measure
+from conftest import mp_to_wide, mp_to_long
 
 
 def _write_sheets(path, sheets):
@@ -33,7 +34,7 @@ def test_read_wide_xlsx(tmp_path):
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     path = tmp_path / "wide.xlsx"
-    _write_sheets(path, [("model_points", mps.to_wide(basis))])
+    _write_sheets(path, [("model_points", mp_to_wide(mps, basis))])
 
     back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
@@ -46,7 +47,7 @@ def test_read_long_xlsx(tmp_path):
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(basis)
+    policies, coverages = mp_to_long(mps, basis)
     path = tmp_path / "long.xlsx"
     _write_sheets(path, [("policies", policies), ("coverages", coverages)])
 
@@ -62,7 +63,7 @@ def test_read_feather(tmp_path):
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     path = tmp_path / "wide.feather"
-    mps.to_wide(basis).write_ipc(path)
+    mp_to_wide(mps, basis).write_ipc(path)
 
     back = read_model_points(path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
@@ -84,7 +85,7 @@ def test_long_form_reads_benefit_rules(tmp_path):
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(basis)
+    policies, coverages = mp_to_long(mps, basis)
     coverages = coverages.with_columns(
         pl.lit(6).alias("waiting"),
         pl.lit(24).alias("reduction_end"),
@@ -114,7 +115,7 @@ def test_wide_policies_elapsed_months_emits_warning(tmp_path):
     import warnings
     basis = next(iter(fcf.samples.basis().values()))
     mps = fcf.samples.model_points()
-    wide = mps.to_wide(basis).with_columns(pl.lit(12).alias("elapsed_months"))
+    wide = mp_to_wide(mps, basis).with_columns(pl.lit(12).alias("elapsed_months"))
     path = tmp_path / "wide_with_em.xlsx"
     _write_sheets(path, [("model_points", wide)])
 
@@ -136,7 +137,7 @@ def test_long_policies_elapsed_months_emits_warning(tmp_path):
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(basis)
+    policies, coverages = mp_to_long(mps, basis)
     policies = policies.with_columns(pl.lit(12).alias("elapsed_months"))
     pol_path = tmp_path / "policies.csv"
     cov_path = tmp_path / "coverages.csv"

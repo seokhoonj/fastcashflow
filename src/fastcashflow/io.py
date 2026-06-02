@@ -13,8 +13,10 @@ Model points come in two shapes, both producing the same ``ModelPoints``:
   frame, one row per policy x coverage carrying ``amount`` and ``premium``.
   The form for a heterogeneous, multi-product portfolio.
 
-:func:`read_model_points` reads either; ``ModelPoints.to_wide`` /
-``ModelPoints.to_long`` convert between them.
+:func:`read_model_points` reads either. The engine ships no ModelPoints ->
+file exporter: both forms are lossy projections (they cannot carry per-coverage
+waiting / reduction rules, ``issue_class``, ``elapsed_months`` or the VFA
+account fields), so they are accepted only as external input, never produced.
 
 The core engine stays identifier-free: the kernel never needs a policy id, so
 none is carried through ``ModelPoints`` or ``GMMMeasurement``. Identifiers are a

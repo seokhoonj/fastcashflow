@@ -10,7 +10,8 @@ import numpy as np
 
 from fastcashflow import ModelPoints, read_model_points
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import (PATTERNS, annual_from_monthly as _annual,
+                      make_death_assumptions, mp_to_wide)
 
 
 def _assumptions(**overrides):
@@ -97,7 +98,7 @@ def test_premium_term_round_trips(tmp_path):
         calculation_methods=PATTERNS,
     )
     path = tmp_path / "model_points.csv"
-    mp.to_wide(basis).write_csv(path)
+    mp_to_wide(mp, basis).write_csv(path)
 
     back = read_model_points(path)
     assert list(back.premium_term_months) == [120, 60]

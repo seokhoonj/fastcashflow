@@ -6,7 +6,8 @@ import pytest
 
 from fastcashflow import ExpenseItem, ModelPoints, read_model_points, sample_data_dir, write_measurement
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import (PATTERNS, annual_from_monthly as _annual,
+                      make_death_assumptions, mp_to_wide, mp_to_long)
 
 
 def _portfolio(n: int = 400) -> ModelPoints:
@@ -235,13 +236,14 @@ def test_describe_basis_renders_both_shapes(capsys):
     assert "('TERM_LIFE_A', 'FC')" in out_dict
 
 
-def test_to_long_round_trips(tmp_path):
-    """ModelPoints.to_long written out and re-read reproduces the valuation."""
-    
+def test_long_form_round_trips(tmp_path):
+    """A long-form policies + coverages pair written out and re-read through
+    read_model_points reproduces the valuation."""
+
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(basis)
+    policies, coverages = mp_to_long(mps, basis)
     policies.write_csv(tmp_path / "pol.csv")
     coverages.write_csv(tmp_path / "cov.csv")
     back = read_model_points(tmp_path / "pol.csv",
@@ -252,13 +254,14 @@ def test_to_long_round_trips(tmp_path):
     assert np.allclose(a.csm, b.csm)
 
 
-def test_to_wide_round_trips(tmp_path):
-    """ModelPoints.to_wide written out and re-read reproduces the valuation."""
-    
+def test_wide_form_round_trips(tmp_path):
+    """A wide one-row-per-policy frame written out and re-read through
+    read_model_points reproduces the valuation."""
+
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    mps.to_wide(basis).write_csv(tmp_path / "wide.csv")
+    mp_to_wide(mps, basis).write_csv(tmp_path / "wide.csv")
     back = read_model_points(tmp_path / "wide.csv",
                              calculation_methods=patterns)
     a, b = measure(mps, basis, full=False), measure(back, basis, full=False)
@@ -272,7 +275,7 @@ def test_measure_stream_streams_long_form(tmp_path):
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mps.to_long(basis)
+    policies, coverages = mp_to_long(mps, basis)
     policies.write_parquet(tmp_path / "pol.parquet")
     coverages.write_parquet(tmp_path / "cov.parquet")
 

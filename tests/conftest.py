@@ -16,8 +16,10 @@ and wires it into both, so the override path is the safe one by construction.
 from __future__ import annotations
 
 import numpy as np
+import polars as pl
 
 from fastcashflow import Basis, CalculationMethod, CoverageRate
+from fastcashflow.modelpoints import STATE_LABELS
 
 
 PATTERNS = {"DEATH": CalculationMethod.DEATH}
@@ -82,3 +84,86 @@ def make_death_assumptions(
         coverages           = coverages,
         **other,
     )
+
+
+# ---------------------------------------------------------------------------
+# Wide / long frame renderers -- TEST-ONLY scaffold to exercise the readers.
+#
+# The engine ships no ModelPoints -> file exporter: a wide or long frame is a
+# lossy projection (it cannot carry coverage waiting / reduction rules,
+# issue_class, elapsed_months, or the VFA account fields), and a silently-lossy
+# public export is a footgun. Only the readers (read_model_points wide / long)
+# accept these as external input. These helpers render a *simple* test
+# portfolio into those frames so the reader / file-format tests have input;
+# they are valid only because the test portfolios carry none of the dropped
+# fields.
+# ---------------------------------------------------------------------------
+
+def mp_to_wide(mp, basis):
+    """Render a simple ModelPoints as a wide one-row-per-policy frame."""
+    mp_of_cov = np.repeat(np.arange(mp.n_mp), np.diff(mp.coverage_offset))
+    cols = {
+        "mp_id": np.arange(mp.n_mp),
+        "issue_age": mp.issue_age,
+        "sex": mp.sex,
+        "term_months": mp.term_months,
+        "count": mp.count,
+        "state": np.array([STATE_LABELS[int(s)] for s in mp.state]),
+        "level_premium": mp.level_premium,
+        "single_premium": mp.single_premium,
+        "premium_term_months": mp.premium_term_months,
+        "premium_frequency_months": mp.premium_frequency_months,
+        "annuity_frequency_months": mp.annuity_frequency_months,
+        "maturity_benefit": mp.maturity_benefit,
+        "annuity_payment": mp.annuity_payment,
+        "disability_income": mp.disability_income,
+        "disability_benefit": mp.disability_benefit,
+    }
+    for i, coverage in enumerate(basis.coverages):
+        mask = mp.coverage_index == i
+        cols[f"{coverage.code}_benefit"] = np.bincount(
+            mp_of_cov[mask], weights=mp.coverage_amount[mask], minlength=mp.n_mp)
+    return pl.DataFrame(cols)
+
+
+def _coverage_label(mp, ctype, default):
+    registry = mp.calculation_methods or {}
+    for code, t in registry.items():
+        if t == ctype:
+            return code
+    return default
+
+
+def mp_to_long(mp, basis):
+    """Render a ModelPoints as a (policies, coverages) long-form pair."""
+    policies = pl.DataFrame({
+        "mp_id":                    np.arange(mp.n_mp),
+        "issue_age":                mp.issue_age,
+        "sex":                      mp.sex,
+        "term_months":              mp.term_months,
+        "level_premium":            mp.level_premium,
+        "single_premium":           mp.single_premium,
+        "premium_term_months":      mp.premium_term_months,
+        "premium_frequency_months": mp.premium_frequency_months,
+        "annuity_frequency_months": mp.annuity_frequency_months,
+        "disability_income":        mp.disability_income,
+        "disability_benefit":       mp.disability_benefit,
+        "count":                    mp.count,
+        "state":                    np.array([STATE_LABELS[int(s)] for s in mp.state]),
+    })
+    label = {i: coverage.code for i, coverage in enumerate(basis.coverages)}
+    mp_of_cov = np.repeat(np.arange(mp.n_mp), np.diff(mp.coverage_offset))
+    mp_id = [int(m) for m in mp_of_cov]
+    coverage_code = [label[int(k)] for k in mp.coverage_index]
+    amount = [float(a) for a in mp.coverage_amount]
+    for ctype, scalar in ((CalculationMethod.ANNUITY, mp.annuity_payment),
+                          (CalculationMethod.MATURITY, mp.maturity_benefit)):
+        code = _coverage_label(mp, ctype, str(ctype))
+        for i in np.nonzero(scalar)[0]:
+            mp_id.append(int(i))
+            coverage_code.append(code)
+            amount.append(float(scalar[i]))
+    coverages = pl.DataFrame({
+        "mp_id": mp_id, "coverage_code": coverage_code, "amount": amount,
+    })
+    return policies, coverages

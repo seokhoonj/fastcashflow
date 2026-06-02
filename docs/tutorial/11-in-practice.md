@@ -280,18 +280,21 @@ state)`. 결과는 위 1-파일과 동일.
 ## 11.3 메모리를 넘는 규모
 
 포트폴리오가 너무 커서 메모리에 한꺼번에 올리기 어렵다면
-`gmm.measure_stream()`을 씁니다. wide 형식의 parquet 파일을 조각조각 나눠
-읽고, 평가하고, 결과를 쓰는 일을 한 조각씩 차례로 처리해, 메모리에는
-한 번에 한 조각만 올립니다.
+`gmm.measure_stream()`을 씁니다. 입력 parquet 을 조각조각 나눠 읽고,
+평가하고, 결과를 쓰는 일을 한 조각씩 차례로 처리해, 메모리에는 한 번에
+한 조각만 올립니다. 입력은 평소와 같은 **long-form (policies + coverages)**
+이고, 청크마다 `mp_id` 로 담보를 끌어옵니다.
 
 ```python
-# 시연용 셋업 -- long-form 샘플을 wide parquet 로 한 번 변환
-# (자기 데이터를 쓸 때는 이미 wide parquet 형태로 갖고 있다고 가정)
-model_points.to_wide(basis).write_parquet("portfolio.parquet")
+# 시연용 셋업 -- 샘플 입력을 parquet 로 저장
+# (자기 데이터를 쓸 때는 이미 parquet 형태로 갖고 있다고 가정)
+fcf.save_sample_policies("policies.parquet")        # 영구 spec
+fcf.save_sample_coverages("coverages.parquet")      # 담보 (long-form)
 
 # 스트리밍 평가 -- 한 줄. 결과는 results/ 폴더에 분할 저장
 fcf.gmm.measure_stream(
-    "portfolio.parquet", "results/", basis,
+    "policies.parquet", "results/", basis,              # 청크 단위로 읽어 평가
+    coverages="coverages.parquet",                      # 담보는 청크마다 mp_id 로 join
     calculation_methods="calculation_methods.csv",
 )
 ```

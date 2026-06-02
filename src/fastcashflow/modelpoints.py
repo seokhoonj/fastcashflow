@@ -476,89 +476,6 @@ class ModelPoints:
 
         return ModelPoints(**kwargs)
 
-    def to_wide(self, basis):
-        """Convert to a wide polars DataFrame -- one row per model point.
-
-        Each rate-driven coverage in ``basis`` becomes a
-        ``<coverage_code>_benefit`` column; the survival benefits
-        ``maturity_benefit`` and ``annuity_payment`` are scalar columns.
-        The companion to ``read_model_points``'s wide form; lossless only
-        for a simple portfolio -- a wide table cannot carry per-coverage
-        waiting / reduction rules.
-        """
-        import polars as pl
-
-        mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
-        cols: dict[str, np.ndarray] = {
-            "mp_id": np.arange(self.n_mp),
-            "issue_age": self.issue_age,
-            "sex": self.sex,
-            "term_months": self.term_months,
-            "count": self.count,
-            "state": np.array([STATE_LABELS[int(s)] for s in self.state]),
-            "level_premium": self.level_premium,
-            "single_premium": self.single_premium,
-            "premium_term_months": self.premium_term_months,
-            "premium_frequency_months": self.premium_frequency_months,
-            "annuity_frequency_months": self.annuity_frequency_months,
-            "maturity_benefit": self.maturity_benefit,
-            "annuity_payment": self.annuity_payment,
-            "disability_income": self.disability_income,
-            "disability_benefit": self.disability_benefit,
-        }
-        for i, coverage in enumerate(basis.coverages):
-            mask = self.coverage_index == i
-            cols[f"{coverage.code}_benefit"] = np.bincount(
-                mp_of_cov[mask], weights=self.coverage_amount[mask],
-                minlength=self.n_mp,
-            )
-        return pl.DataFrame(cols)
-
-    def to_long(self, basis):
-        """Convert to a long-form ``(policies, coverages)`` polars pair.
-
-        ``policies`` is one row per model point (contract attributes);
-        ``coverages`` is one row per model point x coverage, carrying
-        ``coverage_code`` and ``amount``. The companion to
-        ``read_model_points``'s long-form input.
-        """
-        import polars as pl
-
-        policies = pl.DataFrame({
-            "mp_id":                    np.arange(self.n_mp),
-            "issue_age":                self.issue_age,
-            "sex":                      self.sex,
-            "term_months":              self.term_months,
-            "level_premium":            self.level_premium,
-            "single_premium":           self.single_premium,
-            "premium_term_months":      self.premium_term_months,
-            "premium_frequency_months": self.premium_frequency_months,
-            "annuity_frequency_months": self.annuity_frequency_months,
-            "disability_income":        self.disability_income,
-            "disability_benefit":       self.disability_benefit,
-            "count":                    self.count,
-            "state":                    np.array([STATE_LABELS[int(s)] for s in self.state]),
-        })
-        # CSR coverages -- the integer ``coverage_index`` indexes directly
-        # into ``basis.coverages``; no slot is reserved.
-        label = {i: coverage.code for i, coverage in enumerate(basis.coverages)}
-        mp_of_cov = np.repeat(np.arange(self.n_mp), np.diff(self.coverage_offset))
-        mp_id = [int(m) for m in mp_of_cov]
-        coverage_code = [label[int(k)] for k in self.coverage_index]
-        amount = [float(a) for a in self.coverage_amount]
-        # Survival benefits are scalar fields -- emit them as coverage rows.
-        for ctype, scalar in ((CalculationMethod.ANNUITY, self.annuity_payment),
-                              (CalculationMethod.MATURITY, self.maturity_benefit)):
-            code = _coverage_label(self, ctype, str(ctype))
-            for mp in np.nonzero(scalar)[0]:
-                mp_id.append(int(mp))
-                coverage_code.append(code)
-                amount.append(float(scalar[mp]))
-        coverages = pl.DataFrame({
-            "mp_id": mp_id, "coverage_code": coverage_code, "amount": amount,
-        })
-        return policies, coverages
-
 
 @dataclass(frozen=True, slots=True)
 class InforceState:
@@ -676,16 +593,6 @@ def apply_inforce_state(
         elapsed_months=np.asarray(state.elapsed_months, dtype=np.int64),
         count=np.asarray(state.count, dtype=np.float64),
     )
-
-
-def _coverage_label(model_points, ctype, default):
-    """The first coverage code of pattern ``ctype`` in the model points'
-    portfolio taxonomy, or ``default`` if none is registered."""
-    registry = model_points.calculation_methods or {}
-    for code, t in registry.items():
-        if t == ctype:
-            return code
-    return default
 
 
 def _build_csr(

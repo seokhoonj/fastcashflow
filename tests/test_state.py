@@ -16,7 +16,7 @@ import numpy as np
 from fastcashflow import STATE_ACTIVE, STATE_MODELS, STATE_PAIDUP, STATE_WAIVER, Basis, CalculationMethod, ModelPoints, CoverageRate, read_model_points
 from fastcashflow.gmm import measure
 
-from conftest import annual_from_monthly as _annual
+from conftest import annual_from_monthly as _annual, mp_to_wide
 
 # Standard-normal 75th percentile -- used so the RA check does not depend on
 # the engine's own quantile code.
@@ -231,7 +231,7 @@ def test_state_column_round_trips(tmp_path):
         calculation_methods=PATTERNS,
     )
     path = tmp_path / "model_points.csv"
-    mp.to_wide(basis).write_csv(path)
+    mp_to_wide(mp, basis).write_csv(path)
 
     back = read_model_points(path)
     assert list(back.state) == [STATE_ACTIVE, STATE_WAIVER]
