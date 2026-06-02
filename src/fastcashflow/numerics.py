@@ -287,3 +287,54 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
             csm[mp, t] = accreted - rel
 
     return csm, accretion, release
+
+
+@njit(parallel=True, cache=True)
+def _csm_kernel_permp(csm0, coverage_units, monthly_rate):
+    """CSM roll-forward with a **per-model-point** rate -- ``monthly_rate`` is
+    ``(n_mp, n_time)`` rather than the shared ``(n_time,)`` of
+    :func:`_csm_kernel`. Used when a portfolio's model points discount on
+    different curves (a segmented measurement, where each row carries its own
+    segment's rate). Identical roll-forward, only the rate is indexed by row.
+    """
+    n_mp, n_time = coverage_units.shape
+    csm = np.zeros((n_mp, n_time + 1))
+    accretion = np.zeros((n_mp, n_time))
+    release = np.zeros((n_mp, n_time))
+
+    for mp in prange(n_mp):
+        csm[mp, 0] = csm0[mp]
+
+        cu_tail = np.empty(n_time)
+        running = 0.0
+        for s in range(n_time - 1, -1, -1):
+            running += coverage_units[mp, s]
+            cu_tail[s] = running
+        eps = 1e-12 * cu_tail[0] if cu_tail[0] > 0.0 else 1e-12
+
+        for t in range(1, n_time + 1):
+            interest = csm[mp, t - 1] * monthly_rate[mp, t - 1]
+            accreted = csm[mp, t - 1] + interest
+            cu_remaining = cu_tail[t - 1]
+            if cu_remaining > eps:
+                rel = accreted * coverage_units[mp, t - 1] / cu_remaining
+            else:
+                rel = 0.0
+            accretion[mp, t - 1] = interest
+            release[mp, t - 1] = rel
+            csm[mp, t] = accreted - rel
+
+    return csm, accretion, release
+
+
+def _csm_roll(csm0, coverage_units, monthly_rate):
+    """Roll the CSM with a shared ``(n_time,)`` or per-MP ``(n_mp, n_time)`` rate.
+
+    A single-basis portfolio shares one discount curve (1-D rate); a segmented
+    (per-basis-dict) one discounts each row on its own curve (2-D rate). Picks
+    the matching kernel so callers do not branch.
+    """
+    if np.asarray(monthly_rate).ndim == 2:
+        return _csm_kernel_permp(csm0, coverage_units,
+                                 np.ascontiguousarray(monthly_rate))
+    return _csm_kernel(csm0, coverage_units, monthly_rate)

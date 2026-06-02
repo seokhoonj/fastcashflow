@@ -28,7 +28,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.engine import GMMMeasurement
-from fastcashflow.numerics import _csm_kernel
+from fastcashflow.numerics import _csm_roll
 from fastcashflow.projection import Cashflows
 
 
@@ -56,11 +56,6 @@ def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
         raise ValueError(
             "group() requires a full=True measurement; the trajectory fields "
             "are None on the full=False fast path. Call measure(..., full=True)."
-        )
-    if measurement.discount_bom.ndim == 2:
-        raise NotImplementedError(
-            "group() is not yet supported for a segmented (multi-basis) "
-            "measurement; aggregate per segment, or group each segment"
         )
     group_ids = np.asarray(group_ids)
     n_mp = measurement.bel_path.shape[0]
@@ -94,9 +89,28 @@ def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
     fcf0 = bel[:, 0] + ra[:, 0]
     csm0 = np.maximum(0.0, -fcf0)
     loss_component = np.maximum(0.0, fcf0)
-    monthly_rate = (measurement.discount_bom[:-1]
-                    / measurement.discount_bom[1:]) - 1.0
-    csm, csm_accretion, csm_release = _csm_kernel(
+    bom = measurement.discount_bom
+    if bom.ndim == 2:
+        # Segmented: each group must sit in one portfolio (basis), so its model
+        # points share a discount curve. Take each group's curve (verifying it
+        # is uniform) and re-derive the group CSM at that rate.
+        out_bom = np.empty((n_groups, bom.shape[1]))
+        out_mid = np.empty((n_groups, measurement.discount_mid.shape[1]))
+        for g in range(n_groups):
+            rows = np.nonzero(inverse == g)[0]
+            if not np.allclose(bom[rows], bom[rows[0]]):
+                raise ValueError(
+                    f"group {labels[g]!r} mixes model points with different "
+                    "discount curves -- a group must sit in one portfolio "
+                    "(basis). Split it by basis before grouping."
+                )
+            out_bom[g] = bom[rows[0]]
+            out_mid[g] = measurement.discount_mid[rows[0]]
+        monthly_rate = out_bom[:, :-1] / out_bom[:, 1:] - 1.0
+    else:
+        out_bom, out_mid = bom, measurement.discount_mid
+        monthly_rate = bom[:-1] / bom[1:] - 1.0
+    csm, csm_accretion, csm_release = _csm_roll(
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
     return GMMMeasurement(
@@ -111,6 +125,6 @@ def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
         csm_release=csm_release,
         lic=_sum_by_group(measurement.lic, inverse, n_groups),
         cashflows=grouped_cf,
-        discount_bom=measurement.discount_bom,
-        discount_mid=measurement.discount_mid,
+        discount_bom=out_bom,
+        discount_mid=out_mid,
     )

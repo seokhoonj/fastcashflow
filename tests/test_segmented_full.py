@@ -87,22 +87,48 @@ def test_single_segment_basis_stays_1d():
     assert m.discount_mid.ndim == 1
 
 
-def test_segmented_full_unsupported_ops_refuse():
-    """Operations that don't yet handle the per-MP (2-D) result raise clearly."""
+def test_segmented_full_ops_match_per_segment():
+    """transition / report / group / revised roll-forward on a segmented (2-D
+    discount) result match doing each on the single-basis segment alone."""
     mp = fcf.samples.model_points()
     basis = fcf.samples.basis()
     m = fcf.gmm.measure(mp, basis)
-    n_mp = mp.n_mp
+    fv = (m.bel_path[:, 0] + m.ra_path[:, 0]) * 0.5 + 100_000.0
 
-    with pytest.raises(NotImplementedError):
-        fcf.transition(m, np.zeros(n_mp))
-    with pytest.raises(NotImplementedError):
-        fcf.group(m, np.zeros(n_mp))
-    with pytest.raises(NotImplementedError):
-        fcf.report(m)
-    # an assumption-revision roll-forward is not supported on a segmented result
-    with pytest.raises(NotImplementedError):
-        fcf.roll_forward(m, period_months=12, revised=m, revised_at=12)
-    # a clean roll-forward, by contrast, works
-    rf = fcf.roll_forward(m, period_months=12)
+    ct = fcf.transition(m, fv)
+    cr = fcf.report(m)
+    seg_id = np.empty(mp.n_mp, dtype=int)
+    segs = list(_segments(mp, basis))
+    for g, (key, idx) in enumerate(segs):
+        seg_id[idx] = g
+    gm = fcf.group(m, seg_id)
+
+    for g, (key, idx) in enumerate(segs):
+        sm = fcf.gmm.measure(mp.subset(idx), basis[key])
+        t = sm.bel_path.shape[1] - 1
+        # transition: per-MP CSM matches the segment measured alone
+        st = fcf.transition(sm, fv[idx])
+        np.testing.assert_allclose(ct.csm[idx], st.csm, rtol=0, atol=1e-6)
+        np.testing.assert_allclose(ct.csm_path[idx, :t + 1], st.csm_path, rtol=0, atol=1e-6)
+        # report: per-MP rows match
+        sr = fcf.report(sm)
+        np.testing.assert_allclose(cr.csm_accretion[idx, :t], sr.csm_accretion[:, :t],
+                                   rtol=0, atol=1e-6)
+        # group: group g (= this segment) matches the segment aggregated alone
+        sg = fcf.group(sm, np.zeros(len(idx), dtype=int))
+        assert np.isclose(gm.csm[g], sg.csm[0]) and np.isclose(gm.bel[g], sg.bel[0])
+
+    # a revised (assumption-change) roll-forward now runs on the segmented result
+    rf = fcf.reconcile(fcf.roll_forward(m, period_months=12, revised=m, revised_at=12))
     assert len(rf) > 0
+
+
+def test_segmented_full_group_rejects_mixed_curves():
+    """group() refuses a group whose contracts span different discount curves --
+    a group must sit in one portfolio (basis)."""
+    mp = fcf.samples.model_points()
+    basis = fcf.samples.basis()
+    m = fcf.gmm.measure(mp, basis)
+    # one group spanning every model point mixes the segments' curves
+    with pytest.raises(ValueError, match="different discount curves"):
+        fcf.group(m, np.zeros(mp.n_mp, dtype=int))

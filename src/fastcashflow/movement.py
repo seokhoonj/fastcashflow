@@ -35,7 +35,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import GMMMeasurement
-from fastcashflow.numerics import _csm_kernel
+from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import PAAMeasurement
 from fastcashflow._vfa import VFAMeasurement
 
@@ -257,12 +257,6 @@ def _(
     # so the rate is (n_time,) or (n_mp, n_time) accordingly.
     monthly_rate = discount_bom[..., :-1] / discount_bom[..., 1:] - 1.0
     zero = np.zeros(n_mp)
-    if (revised is not None or actual_inforce is not None) and monthly_rate.ndim == 2:
-        raise NotImplementedError(
-            "assumption-revision / in-force-experience roll-forward is not yet "
-            "supported for a segmented (multi-basis) measurement; roll each "
-            "segment forward on its own basis and aggregate the movements"
-        )
 
     bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
     csm_accretion = measurement.csm_accretion
@@ -305,9 +299,9 @@ def _(
         csm_before = measurement.csm_path[:, k]
         csm_after = np.maximum(0.0, csm_before - delta_fcf)
         loss = np.maximum(0.0, delta_fcf - csm_before)
-        re_csm, re_acc, re_rel = _csm_kernel(
+        re_csm, re_acc, re_rel = _csm_roll(
             csm_after, np.ascontiguousarray(post_inforce[:, k:]),
-            monthly_rate[k:],
+            monthly_rate[..., k:],
         )
         bel = np.concatenate([measurement.bel_path[:, :k + 1], post_bel[:, k + 1:]],
                              axis=1)
@@ -374,12 +368,6 @@ def _roll_forward_experience_chain(
     segment by segment, each segment releasing over the in-force expected at
     its start, with the experience jump applied at each boundary.
     """
-    if measurement.discount_bom.ndim == 2:
-        raise NotImplementedError(
-            "in-force-experience roll-forward is not yet supported for a "
-            "segmented (multi-basis) measurement; roll each segment forward on "
-            "its own basis and aggregate the movements"
-        )
     base_bel = measurement.bel_path
     base_ra = measurement.ra_path
     base_inforce = measurement.cashflows.inforce
@@ -392,7 +380,7 @@ def _roll_forward_experience_chain(
             f"({boundaries[-1]}) reaches the projection horizon ({n_time})"
         )
     discount_bom = measurement.discount_bom
-    monthly_rate = discount_bom[:-1] / discount_bom[1:] - 1.0
+    monthly_rate = discount_bom[..., :-1] / discount_bom[..., 1:] - 1.0
 
     # Cumulative in-force ratio at each boundary, laid out as a per-month
     # step factor -- 1 up to the first boundary, then each ratio onward.
@@ -418,10 +406,10 @@ def _roll_forward_experience_chain(
     exp_lines: dict[int, tuple] = {}
     s = 0
     for j, e in enumerate(boundaries + [n_time]):
-        seg_csm, seg_acc, seg_rel = _csm_kernel(
+        seg_csm, seg_acc, seg_rel = _csm_roll(
             np.ascontiguousarray(cur),
             np.ascontiguousarray(base_inforce[:, s:]),
-            monthly_rate[s:],
+            monthly_rate[..., s:],
         )
         width = e - s
         csm[:, s + 1:e + 1] = seg_csm[:, 1:width + 1]

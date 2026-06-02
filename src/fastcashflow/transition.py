@@ -23,7 +23,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import GMMMeasurement
-from fastcashflow.numerics import _csm_kernel
+from fastcashflow.numerics import _csm_roll
 
 
 def transition(measurement: GMMMeasurement, fair_value: FloatArray) -> GMMMeasurement:
@@ -50,20 +50,16 @@ def transition(measurement: GMMMeasurement, fair_value: FloatArray) -> GMMMeasur
     if fair_value.shape != (n_mp,):
         raise ValueError(f"fair_value must have one entry per row ({n_mp})")
 
-    if measurement.discount_bom.ndim == 2:
-        raise NotImplementedError(
-            "transition() is not yet supported for a segmented (multi-basis) "
-            "measurement; apply it per segment"
-        )
     fcf0 = measurement.bel_path[:, 0] + measurement.ra_path[:, 0]
     csm0 = np.maximum(0.0, fair_value - fcf0)
     loss_component = np.maximum(0.0, fcf0 - fair_value)
     # Per-month rate curve implied by the measurement's discount factors --
-    # ratio of consecutive start-of-month factors. Carries the locked-in
-    # curve even if it is non-flat.
-    monthly_rate = (measurement.discount_bom[:-1]
-                    / measurement.discount_bom[1:]) - 1.0
-    csm, csm_accretion, csm_release = _csm_kernel(
+    # ratio of consecutive start-of-month factors. Carries the locked-in curve
+    # even if it is non-flat. The last axis is time, so this is (n_time,) for a
+    # single basis or (n_mp, n_time) for a segmented (per-row-curve) measurement.
+    monthly_rate = (measurement.discount_bom[..., :-1]
+                    / measurement.discount_bom[..., 1:]) - 1.0
+    csm, csm_accretion, csm_release = _csm_roll(
         csm0, np.ascontiguousarray(measurement.cashflows.inforce), monthly_rate
     )
     return replace(
