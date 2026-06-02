@@ -76,9 +76,9 @@ python examples/benchmark.py
 | 항목 | 사양 |
 |---|---|
 | OS | Ubuntu 24.04 |
-| CPU | AMD Ryzen 3700X (19.07, 8코어 16쓰레드) |
+| CPU | AMD Ryzen 7 3700X (2019.07 출시, 8코어 16쓰레드) |
 | RAM | 128GB |
-| GPU (선택) | NVIDIA RTX 2070 SUPER (19.07) |
+| GPU (선택) | NVIDIA RTX 2070 SUPER (2019.07 출시) |
 
 보험기간 120개월, 사망 단독 계약 기준:
 
