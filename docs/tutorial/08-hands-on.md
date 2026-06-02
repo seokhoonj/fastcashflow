@@ -158,7 +158,7 @@ model_points = fcf.ModelPoints.single(
 입력이 준비됐으면 측정은 한 줄입니다.
 
 ```python
-m = fcf.gmm.measure(model_points, basis)
+m = fcf.gmm.measure(model_points, basis)   # 일반모형(GMM) 으로 측정
 ```
 
 `measure()`에 모델포인트와 가정을 넘기면, 1.2절의 4단계 — 추정, 할인,
