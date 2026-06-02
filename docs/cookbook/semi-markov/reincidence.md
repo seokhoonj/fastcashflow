@@ -112,6 +112,7 @@ from fastcashflow import State, Transition, StateModel
 death_fn     = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
 lapse_fn     = lambda s, a, d: np.full(d.shape, 0.0)                   # 해지 없음
 incidence_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.05) ** 12)  # 1차 진단 월 5%
+
 # 재진단 -- 네 번째 인자 sd = post_first 진입 후 경과개월. 면책 2개월 후 월 20%
 reincid_fn   = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
 

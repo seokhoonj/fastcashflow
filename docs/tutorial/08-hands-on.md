@@ -231,11 +231,21 @@ model_points = fcf.ModelPoints.single(
 
 # 측정
 m = fcf.gmm.measure(model_points, basis)
-print(m)    # 모델포인트별 BEL·RA·CSM·손실요소 + 합계 표
+print(m.bel[0])             # BEL
+print(m.ra[0])              # RA
+print(m.csm[0])             # CSM
+print(m.loss_component[0])  # 손실요소
 ```
 
-개별 값은 `m.bel[0]`, `m.ra[0]` 처럼 모델포인트 축으로 꺼냅니다 (`m.bel` 은
-모델포인트마다 한 값을 가진 배열, `m.bel.sum()` 이 포트폴리오 합계).
+```
+39.1082
+16.0269
+0.0
+55.1351
+```
+
+계약이 여럿이면 `print(m)` 한 줄이 모델포인트별 BEL·RA·CSM·손실요소와
+합계를 표로 보여 줍니다 (`m.bel.sum()` 으로 합계만).
 
 일곱 장에 걸쳐 손으로 따라온 측정을, 엔진은 이 스무 줄 남짓으로
 똑같이 해냅니다.

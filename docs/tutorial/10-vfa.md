@@ -194,7 +194,7 @@ CSM을 손익으로 풀어 냅니다.
 import numpy as np
 import fastcashflow as fcf
 
-# 사망률 함수 -- 사망 없음 (VFA 의 사망보장 외 흐름 집중)
+# 사망률 함수 -- 사망 없음 (VFA의 사망보장 외 흐름 집중)
 death_fn = lambda sex, issue_age, duration: np.full(issue_age.shape, 0.0)
 
 # 해지율 함수 -- 해지 없음

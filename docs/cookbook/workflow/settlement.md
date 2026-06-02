@@ -158,20 +158,20 @@ for key, segment_basis in basis.items():
     csm_prior += float(np.sum(state.subset(idx).prior_csm))
 
 print("=== 2026 Q1 결산 (보유계약 평가) ===")
-print(f"BEL (최선추정부채)        = {bel:>16,.0f}")
-print(f"RA  (위험조정)            = {ra:>16,.0f}")
-print(f"CSM (보험계약마진, 기말)  = {csm:>16,.0f}")
-print(f"  직전 분기 CSM (기초)    = {csm_prior:>16,.0f}")
+print(f"BEL   = {bel:>16,.0f}   (최선추정부채)")
+print(f"RA    = {ra:>16,.0f}   (위험조정)")
+print(f"CSM   = {csm:>16,.0f}   (보험계약마진, 기말)")
+print(f"CSM_0 = {csm_prior:>16,.0f}   (직전 분기 CSM)")
 ```
 
 출력:
 
 ```
 === 2026 Q1 결산 (보유계약 평가) ===
-BEL (최선추정부채)        =       36,921,929
-RA  (위험조정)            =        1,067,425
-CSM (보험계약마진, 기말)  =          547,140
-  직전 분기 CSM (기초)    =          562,000
+BEL   =       36,921,929   (최선추정부채)
+RA    =        1,067,425   (위험조정)
+CSM   =          547,140   (보험계약마진, 기말)
+CSM_0 =          562,000   (직전 분기 CSM)
 ```
 
 ```{admonition} state.subset 을 꼭 써야 하나
@@ -209,8 +209,8 @@ ETL 환경에 따라 영구 spec (`policies.csv`) 과 분기별 갱신
 model_points = fcf.read_model_points(
     "policies.csv", coverages="coverages.csv",
     calculation_methods="calculation_methods.csv")
-state = fcf.read_inforce_state("inforce_state.csv")    # 결산 상태만 따로
-mp = fcf.apply_inforce_state(model_points, state)       # mp_id 로 정렬되어 있다고 가정
+state = fcf.read_inforce_state("inforce_state.csv")  # 결산 상태만 따로
+mp = fcf.apply_inforce_state(model_points, state)    # mp_id 로 정렬되어 있다고 가정
 ```
 
 대형 portfolio 에서는 마감파일을 `.parquet` / `.feather` 로 두는 편이
