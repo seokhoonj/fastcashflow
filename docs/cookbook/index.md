@@ -50,6 +50,10 @@
 * - 분석 / 검증
   - 시나리오 / 손계산 검증
   - 가정을 흔들어 보고, 결과의 한 항씩 풀어 보는 워크플로 도구.
+* - 결산 워크플로
+  - 보유계약 평가 + 변동분해
+  - 분기말 결산 측정과 직전 분기 대비 변동을 가정변경 / 경험 / 이자 /
+    상각으로 귀속.
 * - 확장 로드맵
   - 미구현 엔진 기능의 설계 노트
   - 아직 코드에 없는 기능의 설계 스케치. 실행 레시피가 아니라 로드맵.
@@ -194,7 +198,7 @@
   - 한 계약의 BEL / CSM 계산 경로 추적. 손계산 매칭, shock 전파, residual 검증.
 ```
 
-### 8. 확장 로드맵
+### 8. 결산 워크플로
 
 ```{list-table}
 :header-rows: 1
@@ -204,6 +208,25 @@
   - 챕터
   - 다루는 것
 * - 8.1
+  - [결산 / 보유계약 평가](workflow/settlement)
+  - 분기말 마감파일 한 장으로 보유계약 평가. `gmm.measure_inforce`, 직전
+    분기 CSM carry-forward, lock-in 율, 세그먼트별 `state.subset`.
+* - 8.2
+  - [변동분해](workflow/movement)
+  - 두 시점 사이 BEL / CSM 움직임을 미래서비스 / 이자 / 상각으로 귀속.
+    `roll_forward` / `reconcile`, 가정변경 (`revised`) / 경험 (`actual_inforce`).
+```
+
+### 9. 확장 로드맵
+
+```{list-table}
+:header-rows: 1
+:widths: 8 28 64
+
+* - 번호
+  - 챕터
+  - 다루는 것
+* - 9.1
   - [⚠ 동적해지율 엔진설계](design/dynamic-lapse)
   - 시나리오 / moneyness 에 반응하는 해지율. **⚠ 미구현** — 정적 격자에서 루프
     내 평가로 옮기는 설계 스케치. 실행 불가.
@@ -300,7 +323,15 @@ workflow/validation
 
 ```{toctree}
 :hidden:
-:caption: 8. 확장 로드맵
+:caption: 8. 결산 워크플로
+
+workflow/settlement
+workflow/movement
+```
+
+```{toctree}
+:hidden:
+:caption: 9. 확장 로드맵
 
 design/dynamic-lapse
 ```
