@@ -64,7 +64,7 @@ backward / forward recursion 을 거쳐 BEL / RA / CSM 하나의 숫자로
     하는지 확인
 * - `gmm.trace_diff`
   - 두 가정 (basis) 비교 — 바뀐 테이블 / 연도별 rate 변화 / cash flow 의
-    propagation / BEL / RA / CSM의 절대·% 변화
+    전파 / BEL / RA / CSM의 절대·% 변화
   - 시나리오 / 민감도. mortality +10% 가 BEL에 14.2%, RA에 9.8% 라면
     각각 어디서 왔는지
 ```
@@ -461,9 +461,9 @@ trajectory 를 바꾸고, 그 in-force 가 lapse_flow / expense / surrender
 의 베이스를 바꾸는 자연스러운 전파입니다. 변화 폭이 mortality 의 변화
 폭과 격이 다르면 (mortality +10% 인데 expense +50%) 그때 의심.
 
-### 함정 4 — `show_*` 가 무거울 거라 생각해 안 씀
+### 함정 4 — `gmm.trace*` 가 무거울 거라 생각해 안 씀
 
-세 도구 모두 **단일 행 subset 후 measure()** 만 호출합니다. 1M 계약
+이 도구들 모두 **단일 행 subset 후 measure()** 만 호출합니다. 1M 계약
 포트폴리오에서 `gmm.trace(0, mp, basis)` 를 호출해도 단일 계약 측정
 비용만 발생합니다. 검토 회의 중에 화면 공유로 즉석 호출해도 부담 없는
 수준입니다.
