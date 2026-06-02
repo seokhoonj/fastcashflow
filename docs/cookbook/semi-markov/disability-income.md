@@ -279,7 +279,7 @@ print(f"seated 1mo BEL = {fcf.gmm.measure(mp1, basis, full=False).bel[0]:.2f}") 
 
 ### 함정 1 — `disability_income` 과 `disability_benefit` 혼동
 
-- **`disability_income`** — benefit 상태 점유에 *매월* 곱하는 정기 소득. DI 가
+- **`disability_income`** — benefit 상태 점유에 매월 곱하는 정기 소득. DI 가
   쓰는 자리.
 - **`disability_benefit`** — `lump_sum` 전이가 한 번 지급하는 일시금. 4.1
   재진단금이 쓰는 자리.
@@ -300,8 +300,8 @@ decrement 로 잘못 두면 보유계약이 과소평가됩니다.
 
 ## 인접 레시피
 
-- [4.1 재진단암 보험](reincidence) — 같은 Semi-Markov 인프라, 단 *전진*
-  (재진단 lump) 이고 본 챕터는 *회복 re-entry* (매월 소득).
+- [4.1 재진단암 보험](reincidence) — 같은 Semi-Markov 인프라, 단 전진
+  (재진단 lump) 이고 본 챕터는 회복 re-entry (매월 소득).
 - [3.1 보험료 납입면제](../markov/waiver) — 장해 발생률 (`waiver_incidence`)
   의 출발점. DI 의 active → disabled 가 같은 슬롯을 공유.
 - [검증 패턴](../workflow/validation) — `gmm.trace` 로 상태별 · 코호트별

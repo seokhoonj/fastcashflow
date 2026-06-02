@@ -1,8 +1,8 @@
 ### 입력 파일과 입력 개체
 
-엔진은 두 클래스의 *개체* 만 받습니다 — `Basis` (산출기초 = 가정) 와
+엔진은 두 클래스의 개체 만 받습니다 — `Basis` (산출기초 = 가정) 와
 `ModelPoints`. **`measure(mp, basis)`** 호출의 두 인자가 바로 이 개체들.
-사용자가 다루는 *입력 파일들* 은 reader 함수를 거쳐 이 두 개체로 모입니다.
+사용자가 다루는 입력 파일들 은 reader 함수를 거쳐 이 두 개체로 모입니다.
 `Basis` 는 개별 **가정** (사망률·해지율·할인율 …) 을 묶은 산출기초이고,
 `ModelPoints` 는 평가 대상 계약들입니다:
 
@@ -55,7 +55,7 @@ ModelPoints (mp = fcf.read_model_points(...))
     └── calculation_method       · DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY
 ```
 
-결산 모드 (보유계약 평가) 에서는 `policies.csv` 가 *분기말 상태 컬럼*
+결산 모드 (보유계약 평가) 에서는 `policies.csv` 가 분기말 상태 컬럼
 네 개를 더 갖는 `inforce_2026Q1.csv` 같은 한 파일로 들어옵니다 —
 `elapsed_months` / `count` (잔존) / `prior_csm` (직전 분기 CSM) /
 `lock_in_rate` (가입 시점의 할인율). reader 도

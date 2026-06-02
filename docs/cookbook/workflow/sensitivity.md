@@ -31,7 +31,7 @@ def shock_mortality(factor):                       # 사망률에 배수를 건 
     return lambda s, a, d: np.minimum(death_fn(s, a, d) * factor, 1.0)
 ```
 
-`death_fn` 은 `mortality_annual` (보유계약 감쇠) *과* DEATH 보장의 청구 rate
+`death_fn` 은 `mortality_annual` (보유계약 감쇠) 과 DEATH 보장의 청구 rate
 **양쪽** 에 들어갑니다. 둘 다 같은 사망률이므로, shock 도 한 번 만들어 두
 자리에 함께 먹입니다 — 한쪽만 흔들면 사망 감쇠와 사망보험금이 어긋납니다.
 
@@ -126,7 +126,7 @@ baseline (factor 1.00) 은 BEL이 **음수** (-4,286) 입니다 — 보험료가
 
 ## 한 계약 들여다보기 — gmm.trace_diff
 
-sweep 은 *얼마나* 변하는지를 보여주지만, *어디서* 그 변화가 생기는지는
+sweep 은 얼마나 변하는지를 보여주지만, 어디서 그 변화가 생기는지는
 `gmm.trace_diff` 가 두 basis 를 나란히 놓아 보여줍니다 — rate 부터 cash
 flow, BEL, CSM까지 한 줄씩.
 
@@ -189,7 +189,7 @@ labels: 'baseline'  ->  'mort+10%'
 - **Final** — `FCF = BEL + RA`, `CSM = max(0, -FCF)` 의 IFRS17 항등식이
   그대로 드러나, 왜 CSM이 그만큼 줄었는지를 한 줄로 설명합니다.
 
-`gmm.trace_diff` 는 동일한 항목은 숨기고 *바뀐* 것만 보여주므로, shock 이
+`gmm.trace_diff` 는 동일한 항목은 숨기고 바뀐 것만 보여주므로, shock 이
 어디서 시작해 어디로 흐르는지 추적하는 데 씁니다.
 
 ## 변형
@@ -202,7 +202,7 @@ labels: 'baseline'  ->  'mort+10%'
 
 ### 여러 가정 동시 (시나리오)
 
-여러 가정을 한꺼번에 바꾸면 *시나리오* 가 됩니다 (예: 사망률 +10% **와**
+여러 가정을 한꺼번에 바꾸면 시나리오 가 됩니다 (예: 사망률 +10% **와**
 해지 -20% 동시). `Basis` 를 그 조합으로 한 벌 만들어 평가하면 됩니다 —
 단일 가정 민감도와 달리 cross effect (상호작용) 까지 반영됩니다.
 
@@ -214,7 +214,7 @@ labels: 'baseline'  ->  'mort+10%'
 
 ### 민감도 vs 변동분해
 
-이 챕터는 *가상의* shock 영향 (what-if) 입니다. 분기 사이에 *실제로* 가정 ·
+이 챕터는 가상의 shock 영향 (what-if) 입니다. 분기 사이에 실제로 가정 ·
 실적이 변해 숫자가 움직인 것을 항목별로 가르는 것은 **변동분해**
 (`roll_forward` / `reconcile`) 로, 결산 워크플로의 일부입니다 —
 [튜토리얼 11장](../../tutorial/11-in-practice) 참조.
