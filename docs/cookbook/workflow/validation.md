@@ -479,10 +479,7 @@ import fastcashflow as fcf
 import polars as pl
 
 # 샘플 파일 저장 (본인 파일 있으면 생략)
-fcf.save_sample_basis("basis.xlsx")                             # 산출기초(가정)
-fcf.save_sample_policies("policies.csv")                        # 계약 스펙
-fcf.save_sample_coverages("coverages.csv")                      # 담보 가입금액
-fcf.save_sample_calculation_methods("calculation_methods.csv")  # 담보별 산출방식
+fcf.samples.export(".", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
 # 만들어진 샘플 파일 읽어 들이기
 basis = fcf.read_basis("basis.xlsx")                  # 산출기초

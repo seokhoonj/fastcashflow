@@ -10,7 +10,7 @@
 - **`basis.xlsx` 의 매 시트 / 매 컬럼** — 가정을 회사 워크북으로 주는 자리
 - `defaults` 행으로 공통값을 한 번만 적고 segment 가 덮어쓰는 패턴
 - rate 테이블의 **축 자동 감지** (sex / age / issue_age+duration / ...)
-- `save_sample_*` 로 견본을 만들고 `read_*` 로 읽어 평가까지 돌리는 라운드트립
+- `samples.export` 로 견본을 만들고 `read_*` 로 읽어 평가까지 돌리는 라운드트립
 ```
 
 지금까지의 챕터는 가정을 Python 코드 (`fcf.Basis(...)`) 로 직접
@@ -35,7 +35,7 @@
 ## basis.xlsx — 시트 구성
 
 워크북은 한 시트가 한 가지 역할을 맡는 multi-sheet 파일입니다. 견본
-(`save_sample_basis`) 의 시트는 다음과 같습니다:
+(`samples.export` 가 떨구는 `basis.xlsx`) 의 시트는 다음과 같습니다:
 
 ```{list-table}
 :header-rows: 1
@@ -129,7 +129,7 @@ reader 가 자동 감지** 합니다:
 
 ## 작동 예제 — 견본을 만들고 읽어 평가
 
-자기 워크북이 아직 없으면 `save_sample_*` 로 견본 네 파일을 만들어 형식을
+자기 워크북이 아직 없으면 `samples.export` 로 견본 파일을 만들어 형식을
 눈으로 확인할 수 있습니다. 아래는 견본을 임시 폴더에 떨어뜨리고, 읽어
 들이고, 한 segment 의 가정 개체를 들여다본 뒤 평가까지 가는 전체 흐름입니다.
 
@@ -142,13 +142,10 @@ with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
 
     # 1) 견본 네 파일을 폴더에 생성 (자기 파일이 있으면 이 블록은 생략)
-    asmp_path = fcf.save_sample_basis(tmp / "basis.xlsx")                             # 워크북
-    pol_path  = fcf.save_sample_policies(tmp / "policies.csv")                        # 계약
-    cov_path  = fcf.save_sample_coverages(tmp / "coverages.csv")                      # 담보
-    cm_path   = fcf.save_sample_calculation_methods(tmp / "calculation_methods.csv")  # 산출방식
+    fcf.samples.export(tmp, template="gmm")   # basis.xlsx + policies/coverages/calculation_methods
 
     # 2) 워크북을 읽으면 (product_code, channel_code) -> Basis 사전
-    basis = fcf.read_basis(asmp_path)
+    basis = fcf.read_basis(tmp / "basis.xlsx")
     print("segments =", sorted(basis))
 
     # 3) 한 segment 의 가정 개체를 꺼내 본다
@@ -158,8 +155,8 @@ with tempfile.TemporaryDirectory() as tmp:
     print("discount_annual =", asmp.discount_annual)
 
     # 4) 모델포인트 = 세 파일을 한 개체로
-    mp = fcf.read_model_points(pol_path, coverages=cov_path,
-                               calculation_methods=cm_path)
+    mp = fcf.read_model_points(tmp / "policies.csv", coverages=tmp / "coverages.csv",
+                               calculation_methods=tmp / "calculation_methods.csv")
     print("n model points  =", mp.issue_age.shape[0])
 
     # 5) 평가 -- 각 계약을 자기 (product_code, channel_code) 가정으로 라우팅 (6.2 에서 자세히)

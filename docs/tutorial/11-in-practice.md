@@ -224,19 +224,18 @@ fastcashflow 는 그 한 파일을 그대로 받습니다. `read_inforce_policie
 ```python
 import fastcashflow as fcf
 
-# (1) 샘플 파일을 현재 폴더에 생성 (한 번만 — 이미 자기 파일이 있으면 생략)
-fcf.save_sample_basis("basis.xlsx")                             # .xlsx 만 (multi-sheet 워크북)
-fcf.save_sample_inforce_policies("inforce_2026Q1.csv")          # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_coverages("coverages.csv")                      # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_calculation_methods("calculation_methods.csv")  # .csv / .xlsx / .parquet / .feather
-# .xlsx 는 시트당 ~ 1M row 한계 -- 대형 portfolio 는 .parquet / .feather 권장
+# (1) 샘플 파일을 현재 폴더에 생성 (한 번만 — 이미 자기 파일이 있으면 생략).
+# basis.xlsx + policies / coverages / calculation_methods / inforce_state /
+# inforce_policies(결합 마감파일) 를 한 번에. 대형 portfolio 는 format="parquet"
+# (시트당 ~1M row 인 .xlsx 한계 회피).
+fcf.samples.export(".", template="gmm")
 
 # (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 in-force 측정
 basis = fcf.read_basis("basis.xlsx")    # {(product_code, channel_code): Basis}
 basis = basis[("TERM_LIFE_A", "GA")]    # 한 세그먼트 선택
 
 model_points, state = fcf.read_inforce_policies(
-    "inforce_2026Q1.csv",                                    # 결산 1-파일 (spec + state 결합)
+    "inforce_policies.csv",                                  # 결산 1-파일 (spec + state 결합)
     coverages="coverages.csv",                               # 담보 파일 (long-form)
     calculation_methods="calculation_methods.csv",           # 담보별 산출방식
 )
@@ -249,7 +248,7 @@ fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
 
 각 함수의 역할:
 
-- `save_sample_*` — 패키지 내장 샘플 파일을 디스크에 복사합니다. Excel /
+- `samples.export` — 패키지 내장 샘플 파일 한 세트를 디스크에 떨굽니다. Excel /
   텍스트 에디터로 열어 fastcashflow 의 입력 파일이 어떻게 생겼는지 직접
   들여다 볼 수 있습니다. 자기 데이터를 쓸 땐 이 줄을 빼고 그 자리에
   자기 파일이 있다고 보면 됩니다.
@@ -297,10 +296,9 @@ state)`. 결과는 위 1-파일과 동일.
 이고, 청크마다 `mp_id` 로 담보를 끌어옵니다.
 
 ```python
-# 시연용 셋업 -- 샘플 입력을 parquet 로 저장
+# 시연용 셋업 -- 샘플 입력을 parquet 로 저장 (format="parquet")
 # (자기 데이터를 쓸 때는 이미 parquet 형태로 갖고 있다고 가정)
-fcf.save_sample_policies("policies.parquet")        # 영구 spec
-fcf.save_sample_coverages("coverages.parquet")      # 담보 (long-form)
+fcf.samples.export(".", template="gmm", format="parquet")   # policies.parquet, coverages.parquet ...
 
 # 스트리밍 평가 -- 한 줄. 결과는 results/ 폴더에 분할 저장
 fcf.gmm.measure_stream(

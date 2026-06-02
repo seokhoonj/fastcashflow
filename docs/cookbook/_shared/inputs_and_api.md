@@ -66,11 +66,9 @@ ModelPoints (mp = fcf.read_model_points(...))
 ```
 fastcashflow 사용자 API
 ├── 샘플 파일 폴더에 생성 (한 번만, 자기 파일이 있으면 생략)
-│   ├── fcf.save_sample_basis(path)           ── basis.xlsx
-│   ├── fcf.save_sample_policies(path)              ── policies.csv
-│   ├── fcf.save_sample_coverages(path)             ── coverages.csv
-│   ├── fcf.save_sample_calculation_methods(path)   ── calculation_methods.csv
-│   └── fcf.save_sample_inforce_policies(path)      ── 결산 1-파일 (spec + state)
+│   ├── fcf.samples.export(dir, template="gmm")    ── basis.xlsx + policies/coverages/calculation_methods (+inforce)
+│   ├── fcf.samples.export(dir, template="vfa")    ── 변액(VFA) 세트 (basis.xlsx + policies)
+│   └── fcf.samples.templates()                    ── 사용 가능한 template 목록
 │
 ├── 파일 읽어 들이기
 │   ├── fcf.read_basis(path)                  ── basis dict 반환

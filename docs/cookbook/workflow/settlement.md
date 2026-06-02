@@ -79,24 +79,23 @@ state, *, period_months=None, full=True)` 입니다. `period_months` 는 이번
 
 ## 최소 작동 예제 — 마감파일 한 장
 
-샘플 마감파일로 한 분기 결산을 돌립니다. `save_sample_inforce_policies`
-가 spec + 결산 상태가 결합된 1-파일을 만듭니다.
+샘플 파일로 한 분기 결산을 돌립니다. `samples.export` 가 spec + 결산 상태가
+결합된 1-파일 `inforce_policies.csv` 를 세트에 함께 떨굽니다.
 
 ```python
 import fastcashflow as fcf
 import numpy as np
 
-# 입력 파일 생성 (한 번만 -- 자기 파일이 있으면 생략)
-fcf.save_sample_basis("basis.xlsx")                             # 산출기초 (가정) 워크북
-fcf.save_sample_inforce_policies("inforce_2026Q1.csv")          # 마감파일 (spec + 결산 상태)
-fcf.save_sample_coverages("coverages.csv")                      # 담보 가입금액 (long-form)
-fcf.save_sample_calculation_methods("calculation_methods.csv")  # 담보별 산출방식
+# 입력 파일 생성 (한 번만 -- 자기 파일이 있으면 생략).
+# basis.xlsx + policies / coverages / calculation_methods / inforce_state /
+# inforce_policies(결합 마감파일) 를 현재 폴더에 떨굼.
+fcf.samples.export(".", template="gmm")
 
 # 산출기초 + 마감파일 읽기
 basis = fcf.read_basis("basis.xlsx")                            # {(product_code, channel_code): Basis}
 
 model_points, state = fcf.read_inforce_policies(
-    "inforce_2026Q1.csv",                                       # 마감 1-파일 (spec + state)
+    "inforce_policies.csv",                                     # 마감 1-파일 (spec + state)
     coverages="coverages.csv",                                  # 담보 파일
     calculation_methods="calculation_methods.csv",              # 담보별 산출방식
 )

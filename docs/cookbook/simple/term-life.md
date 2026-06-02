@@ -38,7 +38,7 @@
 ```{include} ../_shared/inputs_and_api.md
 ```
 
-본 챕터는 위 그림 중 **save_sample_\* → read_\* → measure →
+본 챕터는 위 그림 중 **samples.export → read_\* → measure →
 print** 정도만 씁니다. 변동분해 / 시각화는 후속 챕터의 자리.
 
 ## 한 계약 — 손계산과 엔진 한 번에
@@ -254,10 +254,7 @@ test 가 자동 검증).
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 현재 폴더에 생성 (한 번만 -- 이미 자기 파일이 있으면 생략)
-fcf.save_sample_basis("basis.xlsx")                             # .xlsx 만 (multi-sheet 워크북)
-fcf.save_sample_policies("policies.csv")                        # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_coverages("coverages.csv")                      # .csv / .xlsx / .parquet / .feather
-fcf.save_sample_calculation_methods("calculation_methods.csv")  # .csv / .xlsx / .parquet / .feather
+fcf.samples.export(".", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
 # (2) 읽어서 평가
 basis = fcf.read_basis("basis.xlsx")    # {(product_code, channel_code): Basis}

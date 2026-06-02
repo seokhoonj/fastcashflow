@@ -136,6 +136,14 @@ Input and output
 
 .. autofunction:: fastcashflow.samples.basis
 
+.. autofunction:: fastcashflow.samples.inforce_state
+
+.. autofunction:: fastcashflow.samples.calculation_methods
+
+.. autofunction:: fastcashflow.samples.export
+
+.. autofunction:: fastcashflow.samples.templates
+
 .. autofunction:: fastcashflow.write_measurement
 
 .. autofunction:: fastcashflow.gmm.measure_stream
