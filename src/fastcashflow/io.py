@@ -1248,11 +1248,7 @@ def read_inforce_policies(
             coverages="coverages.csv",
             calculation_methods="calculation_methods.csv",
         )
-        val = fcf.value_in_force(
-            mp, basis, period_months=3,
-            prior_csm=state.prior_csm,
-            lock_in_rate=state.lock_in_rate,
-        )
+        val = fcf.gmm.measure_inforce(mp, basis, state, period_months=3)
 
     For the two-file equivalent (separate ``policies.csv`` +
     ``inforce_state.csv``), see :func:`read_model_points` +
@@ -1386,9 +1382,9 @@ def load_sample_inforce_state() -> "InforceState":
 
     Aligned row-for-row with :func:`load_sample_model_points`. Pair with
     :func:`apply_inforce_state` to fold ``elapsed_months`` and ``count``
-    into the sample model points, then call :func:`measure_in_force` or
-    :func:`value_in_force` with ``prior_csm`` and ``lock_in_rate`` taken
-    from the returned :class:`InforceState`.
+    into the sample model points, then call
+    :func:`fastcashflow.gmm.measure_inforce` with the returned
+    :class:`InforceState`.
     """
     base = resources.files("fastcashflow") / "sample_data"
     with resources.as_file(base / "sample_inforce_state.csv") as path:
@@ -1541,7 +1537,7 @@ def save_sample_inforce_state(path: Path | str) -> Path:
     (``elapsed_months``, ``count``, ``prior_csm``, ``lock_in_rate``).
     Pair the dropped file with :func:`read_inforce_state` and feed the
     result through :func:`apply_inforce_state` before
-    :func:`measure_in_force` / :func:`value_in_force` -- the
+    :func:`fastcashflow.gmm.measure_inforce` -- the
     subsequent-measurement workflow at each period close.
 
     Supported extensions: ``.csv``, ``.xlsx``, ``.parquet``, ``.feather``
@@ -1596,8 +1592,8 @@ def read_inforce_state(path: Path | str) -> "InforceState":
 
     Pair with :func:`apply_inforce_state` to join the state onto a
     :class:`ModelPoints` built from the static policies file, then pass
-    the result to :func:`value_in_force` or :func:`measure_in_force` with
-    ``prior_csm`` and ``lock_in_rate`` taken from the returned
+    the result to :func:`fastcashflow.gmm.measure_inforce` with the
+    returned
     :class:`InforceState`.
 
     ``lock_in_rate`` is required to be uniform across rows in v1 -- the

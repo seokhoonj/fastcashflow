@@ -502,10 +502,14 @@ def measure_in_force(
     # a Sec. 44 hit when the only thing missing is the unlocking step.
     loss_new = np.zeros(n_mp, dtype=np.float64)
 
+    # Headline bel/ra/csm are the as-of valuation-date values (month
+    # elapsed_months per MP), matching value_in_force -- NOT column 0
+    # (inception), which would ignore prior_csm entirely. The trajectory
+    # fields keep the full inception-to-horizon paths.
     return GMMMeasurement(
-        bel=m.bel,
-        ra=m.ra,
-        csm=csm_new[:, 0],
+        bel=m.bel_path[rows_arr, em],
+        ra=m.ra_path[rows_arr, em],
+        csm=csm_new[rows_arr, em],
         loss_component=loss_new,
         bel_path=m.bel_path,
         ra_path=m.ra_path,
@@ -516,6 +520,50 @@ def measure_in_force(
         cashflows=m.cashflows,
         discount_start=m.discount_start,
         discount_mid=m.discount_mid,
+    )
+
+
+def measure_inforce(
+    model_points: ModelPoints,
+    basis: Basis,
+    state: "InforceState",
+    *,
+    period_months: int | None = None,
+    full: bool = True,
+) -> GMMMeasurement:
+    """In-force subsequent measurement (IFRS 17 Sec. 44) at the valuation date.
+
+    The single entry point for settlement / period-close valuation of an
+    in-force book. Each model point is valued at its ``elapsed_months``
+    duration, and the prior period's closing CSM (``state.prior_csm``) is
+    carried forward -- accreted at ``state.lock_in_rate`` and released over
+    coverage units across ``period_months`` (default 12). The headline
+    ``bel`` / ``ra`` / ``csm`` are the as-of valuation-date numbers.
+
+    ``state`` is the :class:`InforceState` returned by
+    :func:`read_inforce_policies` (it carries ``prior_csm`` and
+    ``lock_in_rate``); ``model_points`` carries each contract's
+    ``elapsed_months``. ``full=True`` (default) returns the BEL / RA / CSM
+    trajectories and cash flows for movement analysis; ``full=False``
+    returns just the headline numbers (faster).
+
+    Sec. 44 onerous unlocking and experience adjustments are not yet folded
+    in here (``loss_component`` is zero in this mode); use
+    :func:`roll_forward` with prior and current measurements for the full
+    movement.
+    """
+    if full:
+        return measure_in_force(
+            model_points, basis,
+            prior_csm=state.prior_csm,
+            lock_in_rate=state.lock_in_rate,
+            period_months=period_months,
+        )
+    return value_in_force(
+        model_points, basis,
+        prior_csm=state.prior_csm,
+        lock_in_rate=state.lock_in_rate,
+        period_months=period_months,
     )
 
 

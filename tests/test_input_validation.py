@@ -14,6 +14,7 @@ import polars as pl
 import pytest
 
 import fastcashflow as fcf
+from fastcashflow.engine import measure_in_force, value_in_force
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.basis import annual_to_monthly
 from fastcashflow.io import (
@@ -565,7 +566,7 @@ def test_value_in_force_rejects_elapsed_past_term():
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     with pytest.raises(ValueError, match="run past its original maturity"):
-        fcf.value_in_force(mp, basis)
+        value_in_force(mp, basis)
 
 
 def test_measure_in_force_rejects_elapsed_past_term():
@@ -583,7 +584,7 @@ def test_measure_in_force_rejects_elapsed_past_term():
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     with pytest.raises(ValueError, match="run past its original maturity"):
-        fcf.measure_in_force(
+        measure_in_force(
             mp, basis, prior_csm=np.array([0.0]),
             lock_in_rate=0.03, period_months=12,
         )

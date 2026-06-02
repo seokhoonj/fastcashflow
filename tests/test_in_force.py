@@ -13,7 +13,10 @@ trajectory-slice property, and it pins the in-force semantics.
 import numpy as np
 import pytest
 
-from fastcashflow import Basis, ExpenseItem, ModelPoints, measure_in_force, value_in_force, CoverageRate
+from fastcashflow import Basis, ExpenseItem, ModelPoints, CoverageRate
+# value_in_force / measure_in_force are the engine-internal workhorses behind
+# the public fcf.gmm.measure_inforce; tested directly here.
+from fastcashflow.engine import measure_in_force, value_in_force
 from fastcashflow.gmm import measure
 
 
@@ -246,3 +249,40 @@ def test_in_force_bel_smaller_term_left():
     # Strictly decreasing in elapsed -- the future shortens.
     bels = [in_force_bel(e) for e in (0, 60, 120, 180)]
     assert bels[0] > bels[1] > bels[2] > bels[3]
+
+
+def test_gmm_measure_inforce_headline_csm_is_as_of_and_tracks_prior():
+    """Public fcf.gmm.measure_inforce headline .csm must be the as-of
+    valuation-date CSM -- sensitive to state.prior_csm, equal to
+    csm_path[:, elapsed_months], and identical for full=False / full=True.
+
+    Regression for the bug where the full=True headline echoed the inception
+    column (csm_new[:, 0]), ignoring prior_csm and contradicting full=False.
+    """
+    import fastcashflow as fcf
+    from dataclasses import replace
+
+    mp = fcf.apply_inforce_state(
+        fcf.samples.model_points(), fcf.samples.inforce_state()
+    )
+    basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+    rows = np.arange(mp.n_mp)
+    em = np.asarray(mp.elapsed_months, dtype=np.int64)
+
+    def run(prior, full):
+        state = replace(
+            fcf.samples.inforce_state(),
+            prior_csm=np.full(mp.n_mp, float(prior)),
+            lock_in_rate=0.03,
+        )
+        return fcf.gmm.measure_inforce(mp, basis, state, period_months=12, full=full)
+
+    head0 = run(0.0, full=False)
+    head5k = run(5_000.0, full=False)
+    # Headline CSM responds to prior_csm (the bug echoed inception, ignoring it).
+    assert not np.allclose(head0.csm, head5k.csm)
+
+    full5k = run(5_000.0, full=True)
+    # full=False headline == full=True headline == csm_path at the as-of month.
+    assert np.allclose(head5k.csm, full5k.csm)
+    assert np.allclose(full5k.csm, full5k.csm_path[rows, em])

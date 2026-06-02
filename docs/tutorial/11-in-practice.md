@@ -229,10 +229,9 @@ model_points, state = fcf.read_inforce_policies(
     coverages="coverages.csv",                               # 담보 파일 (long-form)
     calculation_methods="calculation_methods.csv",           # 담보별 산출방식
 )
-val = fcf.value_in_force(
-    model_points, basis, period_months=3,  # 다음 분기 (3 개월) 까지의 평가
-    prior_csm    = state.prior_csm,        # 직전 분기 종가 CSM
-    lock_in_rate = state.lock_in_rate,     # 가입 시점의 할인율
+val = fcf.gmm.measure_inforce(   # 결산(보유계약) 측정 -- 일반모형(GMM)
+    model_points, basis, state,  # state 가 prior_csm / lock_in_rate 을 품음
+    period_months=3,             # 다음 분기 (3 개월) 까지의 평가
 )
 fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
 ```
@@ -250,11 +249,12 @@ fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
 - `read_inforce_policies` — 결산 1-파일을 읽어 **`(ModelPoints, InforceState)`
   튜플** 을 돌려줍니다. ModelPoints 에는 `elapsed_months` / `count` 가
   이미 fold 되어 있고, InforceState 는 `prior_csm` / `lock_in_rate` 을
-  carry — 다음 줄의 `value_in_force` 에 그대로 넘깁니다.
-- `value_in_force` — 결산 평가. 신계약 평가의 `measure` 와 다른 점은:
-  (a) 가입 시 lock-in 된 할인율을 명시적으로 받음, (b) 직전 분기의 CSM
-  을 출발점으로 carry-forward, (c) `period_months` 로 이번 분기에만
-  release 될 부분을 잘라냄.
+  carry — 다음 줄의 `gmm.measure_inforce` 에 `state` 로 그대로 넘깁니다.
+- `gmm.measure_inforce` — 결산 평가. 신계약 `gmm.measure` 와 다른 점은:
+  (a) 가입 시 lock-in 된 할인율(`state.lock_in_rate`)을 받음, (b) 직전 분기의
+  CSM(`state.prior_csm`)을 출발점으로 carry-forward, (c) `period_months` 로
+  이번 분기에만 release 될 부분을 잘라냄. 헤드라인 BEL·RA·CSM 은 결산일
+  (`elapsed_months`) 시점 값이고, `full=False` 면 헤드라인만 빠르게 냅니다.
 - `write_measurement` — BEL·RA·CSM·손실요소를 모델포인트마다 한 줄씩
   파일로 저장합니다.
 

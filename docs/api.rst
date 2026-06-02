@@ -18,7 +18,7 @@ Measurement (GMM)
 
 .. autofunction:: fastcashflow.gmm.measure
 
-.. autofunction:: fastcashflow.measure_in_force
+.. autofunction:: fastcashflow.gmm.measure_inforce
 
 .. autoclass:: fastcashflow.GMMMeasurement
    :members:

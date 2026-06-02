@@ -6,6 +6,7 @@ helpers cover the four file types the cookbook / tutorials show
 from pathlib import Path
 
 import fastcashflow as fcf
+from fastcashflow.engine import measure_in_force, value_in_force
 
 
 def test_save_sample_basis_round_trips_via_read_basis(tmp_path):
@@ -118,10 +119,10 @@ def test_read_inforce_policies_matches_two_file_workflow(tmp_path):
     assert np.allclose(state_a.prior_csm, state_b.prior_csm)
     assert state_a.lock_in_rate == state_b.lock_in_rate
 
-    val_a = fcf.value_in_force(mp_a, basis, period_months=3,
+    val_a = value_in_force(mp_a, basis, period_months=3,
                                prior_csm=state_a.prior_csm,
                                lock_in_rate=state_a.lock_in_rate)
-    val_b = fcf.value_in_force(mp_b, basis, period_months=3,
+    val_b = value_in_force(mp_b, basis, period_months=3,
                                prior_csm=state_b.prior_csm,
                                lock_in_rate=state_b.lock_in_rate)
     assert np.allclose(val_a.bel, val_b.bel)

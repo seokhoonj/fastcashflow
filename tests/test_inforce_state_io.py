@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
+from fastcashflow.engine import measure_in_force, value_in_force
 
 
 def _write_state(path: Path, rows: list[tuple]) -> None:
@@ -102,8 +103,8 @@ def test_sample_inforce_end_to_end():
     basis = fcf.samples.basis()
     basis = basis[("TERM_LIFE_A", "FC")]
 
-    mif_hyp = fcf.measure_in_force(mp_settled, basis)
-    mif_set = fcf.measure_in_force(
+    mif_hyp = measure_in_force(mp_settled, basis)
+    mif_set = measure_in_force(
         mp_settled, basis,
         prior_csm=state.prior_csm,
         lock_in_rate=state.lock_in_rate,
