@@ -136,8 +136,8 @@ def test_write_measurement_dispatches_per_model(tmp_path):
     assert pl.read_parquet(tmp_path / "paa.parquet").columns == [
         "lrc", "loss_component"]
 
-    vmp = fcf.samples.model_points(kind="vfa")
-    vb = fcf.samples.basis(kind="vfa")
+    vmp = fcf.samples.model_points(template="vfa")
+    vb = fcf.samples.basis(template="vfa")
     fcf.write_measurement(fcf.vfa.measure(vmp, vb), tmp_path / "vfa.parquet")
     assert pl.read_parquet(tmp_path / "vfa.parquet").columns == [
         "bel", "ra", "csm", "variable_fee", "time_value", "loss_component"]

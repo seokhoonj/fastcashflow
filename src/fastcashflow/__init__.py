@@ -26,12 +26,6 @@ from fastcashflow.io import (
     read_model_points,
     read_scenarios,
     sample_data_dir,
-    save_sample_basis,
-    save_sample_calculation_methods,
-    save_sample_coverages,
-    save_sample_inforce_policies,
-    save_sample_inforce_state,
-    save_sample_policies,
     write_measurement,
 )
 from fastcashflow.modelpoints import (
@@ -88,9 +82,6 @@ __all__ = [
     "read_inforce_state", "read_inforce_policies",
     "apply_inforce_state", "InforceState",
     "write_measurement",
-    "save_sample_basis", "save_sample_policies",
-    "save_sample_coverages", "save_sample_calculation_methods",
-    "save_sample_inforce_state", "save_sample_inforce_policies",
     "sample_data_dir",
     "describe_basis",
     "solve_premium",

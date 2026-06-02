@@ -15,8 +15,8 @@ import fastcashflow as fcf
 
 
 def main() -> None:
-    mp = fcf.samples.model_points(kind="vfa")
-    basis = fcf.samples.basis(kind="vfa")
+    mp = fcf.samples.model_points(template="vfa")
+    basis = fcf.samples.basis(template="vfa")
 
     # Deterministic VFA measurement -- the headline liability and CSM.
     m = fcf.vfa.measure(mp, basis)

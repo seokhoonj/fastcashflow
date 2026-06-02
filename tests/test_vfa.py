@@ -331,8 +331,8 @@ def test_vfa_ra_reduces_the_csm():
 def test_load_sample_vfa_is_measurable():
     """The bundled VFA sample measures, and its uniform credit rate lets the
     stochastic time-value pass run."""
-    mp = fcf.samples.model_points(kind="vfa")
-    basis = fcf.samples.basis(kind="vfa")
+    mp = fcf.samples.model_points(template="vfa")
+    basis = fcf.samples.basis(template="vfa")
     m = fcf.vfa.measure(mp, basis)
     assert m.csm_path[:, 0].sum() > 0.0          # the variable fee is unearned profit
     assert np.allclose(m.loss_component, 0.0)

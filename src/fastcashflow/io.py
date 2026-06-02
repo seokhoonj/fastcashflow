@@ -1464,7 +1464,7 @@ def _drop_sample_table(filename: str, dest: Path | str) -> Path:
     return dest_path
 
 
-def save_sample_basis(path: Path | str) -> Path:
+def _save_sample_basis(path: Path | str) -> Path:
     """Drop the packaged sample basis workbook on disk at ``path``.
 
     Use this to bootstrap a workbook a reader can open in Excel, inspect,
@@ -1488,7 +1488,7 @@ def save_sample_basis(path: Path | str) -> Path:
         dest_path = dest_path / "sample_basis.xlsx"
     if dest_path.suffix.lower() != ".xlsx":
         raise ValueError(
-            f"save_sample_basis: expected an .xlsx path, got "
+            f"_save_sample_basis: expected an .xlsx path, got "
             f"{str(path)!r}. The basis workbook carries multiple "
             "sheets (mortality_tables, lapse_tables, segments, ...) and "
             "single-table formats (csv / parquet / feather) cannot "
@@ -1499,11 +1499,11 @@ def save_sample_basis(path: Path | str) -> Path:
     return dest_path
 
 
-def save_sample_policies(path: Path | str) -> Path:
+def _save_sample_policies(path: Path | str) -> Path:
     """Drop the packaged sample policies file on disk at ``path``.
 
-    The companion to :func:`save_sample_coverages` and
-    :func:`save_sample_calculation_methods`. Use the three together with
+    The companion to :func:`_save_sample_coverages` and
+    :func:`_save_sample_calculation_methods`. Use the three together with
     :func:`read_model_points` for a copy-paste workflow that mirrors how
     you would read your own files.
 
@@ -1516,11 +1516,11 @@ def save_sample_policies(path: Path | str) -> Path:
     return _drop_sample_table("sample_policies.csv", path)
 
 
-def save_sample_coverages(path: Path | str) -> Path:
+def _save_sample_coverages(path: Path | str) -> Path:
     """Drop the packaged sample coverages file on disk at ``path``.
 
     Long-form coverage entries -- one row per (model point, coverage_code)
-    -- the companion to :func:`save_sample_policies`. A long-form
+    -- the companion to :func:`_save_sample_policies`. A long-form
     portfolio has roughly ``n_mp x avg_coverages_per_mp`` rows here, so
     this is the file most likely to exceed the 1,048,576 row cap of
     ``.xlsx``.
@@ -1531,7 +1531,7 @@ def save_sample_coverages(path: Path | str) -> Path:
     return _drop_sample_table("sample_coverages.csv", path)
 
 
-def save_sample_calculation_methods(path: Path | str) -> Path:
+def _save_sample_calculation_methods(path: Path | str) -> Path:
     """Drop the packaged sample benefit-pattern catalogue on disk at ``path``.
 
     The company catalogue file -- one row per ``coverage_code`` mapping
@@ -1544,11 +1544,11 @@ def save_sample_calculation_methods(path: Path | str) -> Path:
     return _drop_sample_table("sample_calculation_methods.csv", path)
 
 
-def save_sample_inforce_state(path: Path | str) -> Path:
+def _save_sample_inforce_state(path: Path | str) -> Path:
     """Drop the packaged sample in-force state file on disk at ``path``.
 
     The dynamic state-at-valuation companion to the static
-    :func:`save_sample_policies` file: one row per ``mp_id`` carrying
+    :func:`_save_sample_policies` file: one row per ``mp_id`` carrying
     the closing state from the prior reporting period
     (``elapsed_months``, ``count``, ``prior_csm``, ``lock_in_rate``).
     Pair the dropped file with :func:`read_inforce_state` and feed the
@@ -1563,7 +1563,7 @@ def save_sample_inforce_state(path: Path | str) -> Path:
     return _drop_sample_table("sample_inforce_state.csv", path)
 
 
-def save_sample_inforce_policies(path: Path | str) -> Path:
+def _save_sample_inforce_policies(path: Path | str) -> Path:
     """Drop a combined policies + in-force state sample file on disk at ``path``.
 
     The companion to :func:`read_inforce_policies`. Each row carries
