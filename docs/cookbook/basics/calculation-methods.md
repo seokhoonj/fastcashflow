@@ -79,7 +79,7 @@ DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은 ANNUITY. 엔진은 "주계약
 ```python
 import fastcashflow as fcf
 
-# 패키지 샘플로 시연 -- 자기 데이터를 쓸 때는 이 네 줄을 빼고
+# 패키지 샘플로 시연 -- 자기 데이터를 쓸 때는 이 줄을 빼고
 # 그 자리에 자기 파일이 있다고 보면 됩니다.
 fcf.samples.export(".", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
@@ -149,13 +149,13 @@ MATURITY,만기환급,MATURITY
 
 * `coverage_code` — 사용자 시스템의 코드 (cross-file join key).
   `coverages.csv` 와 `basis.xlsx` 의 `coverages` 시트가 같은 값을 씁니다.
-* `coverage_name` — 사람용 라벨. 엔진은 무시; gmm.trace 표시에만 쓰입니다.
+* `coverage_name` — 사람용 라벨. 엔진은 무시; `gmm.trace` 표시에만 쓰입니다.
 * `calculation_method` — 위 다섯 enum 값 중 하나. 다른 값이면
   `ValueError` 가 어느 행에서 났는지 알려줍니다.
 
 ```{note}
 엔진에는 reserved 코드가 없습니다. 사망 보장은 다른 담보와 똑같이
-`coverages.xlsx` 의 rate-driven 자리에 등록하고, `rate_table` 에
+`basis.xlsx` 의 `coverages` 시트 (rate-driven 자리) 에 등록하고, `rate_table` 에
 mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 합니다 — 일반사망 / 질병사망 / 재해사망 모두 같은
 방식입니다. 엔진의 `mortality_annual` 입력은 **계약 종료 (decrement)**
@@ -172,9 +172,9 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 1. 사망 보장 — DEATH 로 등록. rate_table 별로 다른 coverage_code.
 2. 입원 / 수술 / 통원 — MORBIDITY.
 3. 암 / 뇌 / 심 진단비 — DIAGNOSIS.
-4. 연금 / 만기환급 — ANNUITY / MATURITY (이 두 종류는 rate 없음 ⇒
+4. 연금 / 만기환급 — ANNUITY / MATURITY (이 두 종류는 rate 없음 →
    `coverages` 시트에 rate_table 등록 X).
-5. 생활비 / 재진단 / DI 같은 sojourn-bounded 산출방식은 v1 미지원 — Semi-Markov
+5. 생활비 / 재진단 / DI (장해소득) 같은 sojourn-bounded 산출방식은 v1 미지원 — Semi-Markov
    영역. (별도 phase)
 
 담보별 산출방식은 **신담보가 추가될 때만** 한 줄을 더해줍니다. 분기 결산
