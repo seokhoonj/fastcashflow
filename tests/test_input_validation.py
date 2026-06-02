@@ -804,3 +804,35 @@ def test_statemodel_rejects_seating_index_out_of_range():
     from fastcashflow import State, StateModel
     with pytest.raises(ValueError, match="seating index out of range"):
         StateModel(states=(State(name="active"),), seating=(5,))
+
+
+def test_construction_rejects_garbage_inputs():
+    """Guards added after the adversarial API sweep: garbage that used to
+    flow through to a silently-NaN / nonsense result is now rejected at
+    construction / rate conversion with a clear error."""
+    from dataclasses import replace
+
+    # annual_to_monthly: a decrement rate must be a finite probability in
+    # [0, 1] -- negative or NaN rates previously round-tripped / propagated.
+    with pytest.raises(ValueError, match="must be >= 0"):
+        annual_to_monthly(np.array([-0.5]))
+    with pytest.raises(ValueError, match="finite"):
+        annual_to_monthly(np.array([np.nan]))
+
+    # Basis: a NaN discount used to give a silently-NaN liability.
+    basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+    with pytest.raises(ValueError, match="discount_annual must be finite"):
+        replace(basis, discount_annual=float("nan"))
+
+    # ModelPoints: sex domain, per-MP length mismatch, NaN premium, negative benefit.
+    with pytest.raises(ValueError, match="sex must be 0"):
+        fcf.ModelPoints.single(issue_age=40, level_premium=100, term_months=12, sex=2)
+    with pytest.raises(ValueError, match="length"):
+        fcf.ModelPoints(issue_age=np.array([40.0]), level_premium=np.array([100.0]),
+                        term_months=np.array([12]), sex=np.array([0, 1]))
+    with pytest.raises(ValueError, match="level_premium must be finite"):
+        fcf.ModelPoints(issue_age=np.array([40.0]),
+                        level_premium=np.array([np.nan]), term_months=np.array([12]))
+    with pytest.raises(ValueError, match=r"benefits\[0\] must be >= 0"):
+        fcf.ModelPoints(issue_age=np.array([40.0]), level_premium=np.array([100.0]),
+                        term_months=np.array([12]), benefits={0: np.array([-1e6])})

@@ -178,6 +178,23 @@ class ModelPoints:
         ):
             object.__setattr__(self, name, np.asarray(getattr(self, name), dtype=dtype))
         n_mp = self.issue_age.shape[0]
+        # Per-model-point arrays must all match issue_age's length (which
+        # defines n_mp); a mismatch otherwise reads n_mp from one field and
+        # silently ignores the rest. The rate / cash-flow inputs must also be
+        # finite -- a NaN age or premium yields a NaN BEL with no error.
+        for _nm in ("level_premium", "term_months"):
+            _a = getattr(self, _nm)
+            if _a.shape != (n_mp,):
+                raise ValueError(
+                    f"{_nm} has length {_a.size} but n_mp is {n_mp} (from "
+                    f"issue_age); per-model-point arrays must match"
+                )
+        if not np.all(np.isfinite(self.issue_age)):
+            raise ValueError("issue_age must be finite")
+        if not np.all(np.isfinite(self.level_premium)):
+            raise ValueError(
+                "level_premium must be finite (a NaN premium yields a NaN BEL)"
+            )
         # Reject obviously-wrong scalar contract fields at construction time,
         # not at the bottom of a kernel where the error becomes a NaN BEL.
         if np.any(self.issue_age < 0):
@@ -204,6 +221,8 @@ class ModelPoints:
                      "minimum_accumulation_benefit"):
             value = getattr(self, name)
             value = np.zeros(n_mp) if value is None else np.asarray(value, np.float64)
+            if not np.all(np.isfinite(value)):
+                raise ValueError(f"{name} must be finite")
             object.__setattr__(self, name, value)
         # count defaults to one policy per model point (seriatim).
         cnt = self.count
@@ -214,6 +233,10 @@ class ModelPoints:
         # sex defaults to 0 (male) for every model point.
         sex = self.sex
         sex = np.zeros(n_mp, np.int64) if sex is None else np.asarray(sex, np.int64)
+        if sex.shape != (n_mp,):
+            raise ValueError(f"sex has length {sex.size} but n_mp is {n_mp}")
+        if np.any((sex != 0) & (sex != 1)):
+            raise ValueError("sex must be 0 (male) or 1 (female)")
         object.__setattr__(self, "sex", sex)
         # state defaults to ACTIVE -- an ordinary premium-paying contract.
         state = self.state
@@ -262,7 +285,19 @@ class ModelPoints:
             items = []   # (cov_idx, per-mp amount array), in coverage-list order
             if self.benefits is not None:
                 for cov_idx, amount in self.benefits.items():
-                    items.append((int(cov_idx), np.asarray(amount, np.float64)))
+                    amt = np.asarray(amount, np.float64)
+                    if amt.shape != (n_mp,):
+                        raise ValueError(
+                            f"benefits[{cov_idx}] has length {amt.size} but "
+                            f"n_mp is {n_mp}"
+                        )
+                    if not np.all(np.isfinite(amt)):
+                        raise ValueError(f"benefits[{cov_idx}] must be finite")
+                    if np.any(amt < 0):
+                        raise ValueError(
+                            f"benefits[{cov_idx}] must be >= 0 (a benefit amount)"
+                        )
+                    items.append((int(cov_idx), amt))
             coverage_index, coverage_amount, coverage_offset = _build_csr(items, n_mp)
         object.__setattr__(self, "coverage_index", coverage_index)
         object.__setattr__(self, "coverage_amount", coverage_amount)

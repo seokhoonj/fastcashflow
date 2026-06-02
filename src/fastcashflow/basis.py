@@ -109,6 +109,23 @@ def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
     precision to the ``1 - tiny`` catastrophic cancellation in float64.
     """
     annual = np.asarray(annual_rate, dtype=np.float64)
+    # A decrement / incidence rate is a probability in [0, 1]. Non-finite or
+    # negative inputs otherwise pass through silently: a NaN propagates to a
+    # NaN BEL, and a negative rate round-trips (1 - (1 - q)**12 == q) into a
+    # negative "probability" that yields a plausible-looking but meaningless
+    # liability. Reject up front. (Discount rates, which may be negative, use
+    # discount_monthly_curve, not this function.)
+    if not np.all(np.isfinite(annual)):
+        raise ValueError(
+            "annual_to_monthly: annual rate must be finite (a decrement "
+            "probability in [0, 1]); got a NaN / inf value"
+        )
+    if np.any(annual < 0.0):
+        bad = float(np.min(annual))
+        raise ValueError(
+            f"annual_to_monthly: annual rate must be >= 0.0 (decrement "
+            f"probability), got min {bad!r}"
+        )
     # A probability above 1.0 makes log1p(-annual) take log of a non-positive
     # number, returning NaN that propagates silently through the engine.
     # Reject up front so the operator sees the bad input, not a NaN BEL.
@@ -476,6 +493,16 @@ class Basis:
             if abs(sp_sum - 1.0) > 1e-9:
                 raise ValueError(
                     f"settlement_pattern must sum to 1.0, got {sp_sum!r}"
+                )
+        # discount_annual / expense_inflation may be negative (negative rates
+        # are valid) but must be finite -- a NaN / inf otherwise propagates
+        # to a silently-NaN BEL with no error.
+        for name in ("discount_annual", "expense_inflation"):
+            v = np.asarray(getattr(self, name), dtype=np.float64)
+            if not np.all(np.isfinite(v)):
+                raise ValueError(
+                    f"{name} must be finite (a NaN / inf propagates to a "
+                    f"silently-NaN liability), got {getattr(self, name)!r}"
                 )
         # Wrap legacy 3-arg / 4-arg rate callables to the unified 5-arg
         # ``(sex, issue_age, duration, issue_class, elapsed)`` shape the
