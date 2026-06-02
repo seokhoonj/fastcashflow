@@ -489,7 +489,7 @@ mp = fcf.read_model_points(
     calculation_methods = "calculation_methods.csv",  # 담보별 산출방식
 )
 
-# mp_id (문자열) -> 0-based 정수 인덱스
+# mp_id (문자열) → 0-based 정수 인덱스
 pol = pl.read_csv("policies.csv")
 idx = pol.with_row_index("idx").filter(pl.col("mp_id") == "P002")["idx"][0]
 fcf.gmm.trace(int(idx), mp, basis)

@@ -24,7 +24,7 @@
 파일이 아닙니다. 파일은 reader 가 개체로 바꿔 줍니다:
 
 - **`Basis`** — `basis = fcf.read_basis("basis.xlsx")` 가 한
-  워크북을 읽어 **`(product_code, channel_code) -> Basis` 사전** 을
+  워크북을 읽어 **`(product_code, channel_code) → Basis` 사전** 을
   돌려줍니다 (segment 별 가정 한 벌씩).
 - **`ModelPoints`** — `mp = fcf.read_model_points("policies.csv",
   coverages=..., calculation_methods=...)` 가 세 파일을 한 개체로 합칩니다.
@@ -52,7 +52,7 @@
   - `(product_code, channel_code)` 마다 **어느 테이블을 쓸지** 와 스칼라 가정
 * - `coverages`
   - 필수
-  - 담보 코드 -> 어느 위험률 테이블 (`rate_table`) 을 쓸지
+  - 담보 코드 → 어느 위험률 테이블 (`rate_table`) 을 쓸지
 * - `mortality_tables`
   - 필수
   - 사망률. `table_id` 별 grid
@@ -61,7 +61,7 @@
   - 진단 / 입원 등 rate 기반 담보의 발생률
 * - `waiver_tables`
   - 선택
-  - 납입면제 / 장해 발생률 (active -> waiver 전이)
+  - 납입면제 / 장해 발생률 (active → waiver 전이)
 * - `lapse_tables`
   - 필수
   - 해지율
@@ -144,7 +144,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # 1) 견본 네 파일을 폴더에 생성 (자기 파일이 있으면 이 블록은 생략)
     fcf.samples.export(tmp, template="gmm")   # basis.xlsx + policies/coverages/calculation_methods
 
-    # 2) 워크북을 읽으면 (product_code, channel_code) -> Basis 사전
+    # 2) 워크북을 읽으면 (product_code, channel_code) → Basis 사전
     basis = fcf.read_basis(tmp / "basis.xlsx")
     print("segments =", sorted(basis))
 

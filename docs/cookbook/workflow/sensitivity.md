@@ -8,7 +8,7 @@
 - shock 이 IFRS17 숫자 (BEL / RA / CSM / loss component) 에 미치는 영향을 측정
 - **불리한 shock 은 CSM을 먼저 갉아먹고**, 충분히 크면 계약이 onerous 로
   뒤집혀 **loss component** 가 나타난다 (CSM은 음수가 못 됨)
-- `gmm.trace_diff` 로 한 계약의 shock 전파 (rate -> cash flow -> BEL -> CSM)
+- `gmm.trace_diff` 로 한 계약의 shock 전파 (rate → cash flow → BEL → CSM)
   를 ASCII 트리로
 - shock 함수는 **3-인자** 로 — 4-인자 default 패턴은 엔진이 잘못 호출 (함정)
 ```
@@ -111,7 +111,7 @@ baseline (factor 1.00) 은 BEL이 **음수** (-4,286) 입니다 — 보험료가
 사망률을 올리면 사망보험금이 늘어 BEL이 커지고 (덜 음수가 되고), 그만큼
 `FCF = BEL + RA` 가 올라가 **CSM이 줄어듭니다**:
 
-- **factor 1.10**: CSM 2,841 -> 402. 불리한 가정이 **CSM을 갉아먹지만** 아직
+- **factor 1.10**: CSM 2,841 → 402. 불리한 가정이 **CSM을 갉아먹지만** 아직
   이익 범위라 손익(P&L) 에는 안 닿습니다.
 - **factor 1.25**: CSM이 0 으로 **소진** 되고, FCF가 양수로 넘어가
   **loss component 3,201** 이 나타납니다 — 계약이 onerous (손실부담) 로

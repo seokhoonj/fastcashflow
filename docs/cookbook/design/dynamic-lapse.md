@@ -127,7 +127,7 @@ class DynamicLapse:
     driver: str                      # {"account_value_moneyness", "rate_spread"}
     breakpoints: FloatArray          # moneyness 구간 경계 (오름차순)
     multipliers: FloatArray          # 각 구간의 base lapse 배수
-    # -> 구간선형 / 계단형. 코드가 아닌 '데이터' 라 numba 가 룩업으로 처리
+    # → 구간선형 / 계단형. 코드가 아닌 '데이터' 라 numba 가 룩업으로 처리
 ```
 
 `Basis.dynamic_lapse: DynamicLapse | None = None` 로 추가합니다. `None`
@@ -143,7 +143,7 @@ moneyness  = f(av[t], 보증가치)            # 또는 rate_spread = market[t] 
 mult       = lookup(moneyness, breakpoints, multipliers)   # 배수표 룩업
 eff_lapse  = base_lapse[year] * mult
 eff_lapse  = clamp(eff_lapse, 0.0, 1.0)    # [0, 1] 범위로 자름
-# -> 정적 격자값 대신 eff_lapse 를 그 달의 해지 decrement 로 투입
+# → 정적 격자값 대신 eff_lapse 를 그 달의 해지 decrement 로 투입
 ```
 
 GMM 경로보다 VFA가 먼저인 이유는, AV 궤적과 시나리오 **plumbing (데이터를

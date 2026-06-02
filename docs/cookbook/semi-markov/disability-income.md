@@ -117,11 +117,11 @@ from fastcashflow import State, Transition, StateModel
 death_fn     = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
 lapse_fn     = lambda s, a, d: np.full(d.shape, 0.0)                   # 해지 없음
 incidence_fn = lambda s, a, d: np.full(a.shape, 0.0)                   # 신규 장해 없음 (DLR)
-# 회복률 -- 네 번째 인자 sd = 장해 경과개월. 급성기 30% -> 만성기 5%
+# 회복률 -- 네 번째 인자 sd = 장해 경과개월. 급성기 30% → 만성기 5%
 recovery_fn  = lambda s, a, d, sd: np.where(sd < 2, 1 - (1 - 0.30) ** 12,
                                                     1 - (1 - 0.05) ** 12)
 
-# 상태 모델 -- active <-> disabled (회복 re-entry)
+# 상태 모델 -- active ↔ disabled (회복 re-entry)
 model = StateModel(states=(
     State("active", premium=True, transitions=(
         Transition("mortality"),                              # in-force 감쇠
@@ -140,7 +140,7 @@ basis = fcf.Basis(
     mortality_annual           = death_fn,        # 보유계약 감쇠용 사망률 (월 1%)
     lapse_annual               = lapse_fn,        # 해지율 (없음)
     waiver_incidence_annual    = incidence_fn,    # 장해 발생률 (DLR 이라 0)
-    disability_recovery_annual = recovery_fn,     # 회복률 (급성 30% -> 만성 5%)
+    disability_recovery_annual = recovery_fn,     # 회복률 (급성 30% → 만성 5%)
     discount_annual            = 0.0,             # 연 할인율 0 (검증 단순화)
     ra_confidence              = 0.75,            # 위험조정 신뢰수준 75%
     mortality_cv               = 0.10,            # 사망률 변동계수 10%

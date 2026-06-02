@@ -22,7 +22,7 @@ portfolio 는 여러 상품·채널이 섞여 있고, 각 계약은 자기 segme
 가 dict 일 때 각 모델포인트의 `(product_code, channel_code)` 를 보고 사전
 에서 맞는 `Basis` 를 골라 적용합니다 (dict 라우팅은 headline 전용이라
 `full=False`). `basis` 는 [7.1](workbook-single) 의 `read_basis` 가 돌려준
-바로 그 `(product_code, channel_code) -> Basis` 사전입니다.
+바로 그 `(product_code, channel_code) → Basis` 사전입니다.
 
 ```python
 import numpy as np
