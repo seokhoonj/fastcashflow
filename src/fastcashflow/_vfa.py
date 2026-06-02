@@ -82,6 +82,19 @@ class VFAMeasurement:
     discount_start: FloatArray | None = None      # (n_time+1,)
     cashflows: "Cashflows | None" = None
 
+    def _columns(self):
+        return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
+                ("fee", self.variable_fee), ("TVOG", self.time_value),
+                ("loss", self.loss_component)]
+
+    def __repr__(self) -> str:
+        from fastcashflow._display import measurement_repr
+        return measurement_repr("VFAMeasurement", self._columns())
+
+    def __str__(self) -> str:
+        from fastcashflow._display import measurement_str
+        return measurement_str("VFAMeasurement", self._columns())
+
 
 def measure_vfa(
     model_points: ModelPoints,

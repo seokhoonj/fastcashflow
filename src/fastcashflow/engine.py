@@ -94,6 +94,18 @@ class GMMMeasurement:
     discount_start: FloatArray | None = None  # (n_time+1,) -- start-of-month discount factors
     discount_mid: FloatArray | None = None    # (n_time,)   -- mid-month discount factors
 
+    def _columns(self):
+        return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
+                ("loss", self.loss_component)]
+
+    def __repr__(self) -> str:
+        from fastcashflow._display import measurement_repr
+        return measurement_repr("GMMMeasurement", self._columns())
+
+    def __str__(self) -> str:
+        from fastcashflow._display import measurement_str
+        return measurement_str("GMMMeasurement", self._columns())
+
 
 def _compute_csm(bel0, ra0, inforce, monthly_rate):
     """CSM at initial recognition (Sec. 38) and deterministic roll-forward (Sec. 44).

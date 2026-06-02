@@ -71,6 +71,17 @@ class PAAMeasurement:
         """Insurance service result -- revenue less service expense."""
         return self.revenue - self.service_expense
 
+    def _columns(self):
+        return [("LRC", self.lrc), ("loss", self.loss_component)]
+
+    def __repr__(self) -> str:
+        from fastcashflow._display import measurement_repr
+        return measurement_repr("PAAMeasurement", self._columns())
+
+    def __str__(self) -> str:
+        from fastcashflow._display import measurement_str
+        return measurement_str("PAAMeasurement", self._columns())
+
 
 def measure_paa(
     model_points: ModelPoints,
