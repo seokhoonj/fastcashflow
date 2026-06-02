@@ -32,13 +32,13 @@ def model_points_repr(mp) -> str:
         parts.append(f"{n_cov} coverage code" + ("s" if n_cov != 1 else ""))
     elif np.any(np.asarray(mp.account_value)):
         parts.append("account-value")
-    return f"ModelPoints({', '.join(parts)})"
+    return f"<ModelPoints: {', '.join(parts)}>"
 
 
 def model_points_str(mp) -> str:
     """Multi-line summary -- distributions and ranges, not the row arrays."""
     n = mp.n_mp
-    lines = [f"ModelPoints -- {n} model point" + ("s" if n != 1 else "")]
+    lines = [f"<ModelPoints -- {n} model point" + ("s" if n != 1 else "") + ">"]
 
     def _dist(arr):
         vals, counts = np.unique(np.asarray(arr), return_counts=True)
@@ -65,11 +65,11 @@ def model_points_str(mp) -> str:
 
 
 def measurement_repr(cls_name: str, columns) -> str:
-    """Compact one-line repr -- ``Name(n_mp=N, BEL=..., RA=..., ...)`` totals."""
+    """Compact one-line repr -- ``<Name: n_mp=N, BEL=..., RA=..., ...>`` totals."""
     cols = [(name, np.asarray(vals)) for name, vals in columns]
     n_mp = cols[0][1].shape[0] if cols else 0
     body = ", ".join(f"{name}={a.sum():,.0f}" for name, a in cols)
-    return f"{cls_name}(n_mp={n_mp}, {body})"
+    return f"<{cls_name}: n_mp={n_mp}, {body}>"
 
 
 def measurement_str(cls_name: str, columns, max_rows: int = _MAX_ROWS) -> str:
@@ -78,7 +78,7 @@ def measurement_str(cls_name: str, columns, max_rows: int = _MAX_ROWS) -> str:
     names = [name for name, _ in cols]
     arrs = [a for _, a in cols]
     n_mp = arrs[0].shape[0] if arrs else 0
-    title = f"{cls_name} -- {n_mp} model point" + ("s" if n_mp != 1 else "")
+    title = f"<{cls_name} -- {n_mp} model point" + ("s" if n_mp != 1 else "") + ">"
     header = f"{'':>8}" + "".join(f"{name:>{_COL_W}}" for name in names)
     lines = [title, header]
     shown = min(n_mp, max_rows)

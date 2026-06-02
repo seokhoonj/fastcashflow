@@ -335,7 +335,7 @@ def test_model_points_repr_and_str_are_compact():
     """ModelPoints repr / str summarise the portfolio, not dump every array."""
     mp = fcf.samples.model_points()
     r = repr(mp)
-    assert r.startswith("ModelPoints(") and "model point" in r
+    assert r.startswith("<ModelPoints") and "model point" in r
     assert "array(" not in r and len(r) < 200          # not the raw dataclass dump
     s = str(mp)
     for field in ("products", "coverages", "count"):
