@@ -122,11 +122,11 @@ def _axes(ax, figsize: tuple[float, float] = (9.0, 5.5)):
     return ax
 
 
-def _finish(ax, title, *, xlabel=None, ylabel=None, money_axis="y"):
+def _finish(ax, title, *, xlabel=None, ylabel=None, money_axis="y", title_pad=12):
     """Apply the fastcashflow house style to ``ax``."""
     ink = _COLOR["ink"]
     ax.set_title(title, fontsize=13, fontweight="bold", color=ink,
-                 loc="left", pad=12)
+                 loc="left", pad=title_pad)
     if xlabel:
         ax.set_xlabel(xlabel, fontsize=10, color=ink)
     if ylabel:
@@ -325,7 +325,9 @@ def plot_analysis_of_change(reconciliation: Reconciliation, *,
     if title is None:
         title = (f"{component.upper()} analysis of change "
                  f"-- months {r.month_start + 1}–{r.month_end}")
-    _finish(ax, title, ylabel=component.upper())
+    # Waterfalls carry bold value labels above the bars, so the title needs
+    # more clearance than the line charts (default pad=12).
+    _finish(ax, title, ylabel=component.upper(), title_pad=24)
     return ax
 
 
