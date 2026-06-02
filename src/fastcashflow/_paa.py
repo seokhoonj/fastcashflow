@@ -44,7 +44,7 @@ from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class PAAMeasurement:
     """PAA measurement -- the Liability for Remaining Coverage and the
     underwriting result released from it.

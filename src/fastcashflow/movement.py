@@ -40,7 +40,7 @@ from fastcashflow._paa import PAAMeasurement
 from fastcashflow._vfa import VFAMeasurement
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class PeriodMovement:
     """One reporting period's analysis of change.
 
@@ -85,7 +85,7 @@ class PeriodMovement:
     loss_component_recognised: FloatArray
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class PAAPeriodMovement:
     """One reporting period's movement of the PAA insurance contract liability.
 
@@ -117,7 +117,7 @@ class PAAPeriodMovement:
     lic_closing: FloatArray
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class VFAPeriodMovement:
     """One reporting period's movement of the VFA insurance contract liability.
 

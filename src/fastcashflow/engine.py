@@ -59,7 +59,7 @@ from fastcashflow.statemodel import (
 # Detailed path
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class GMMMeasurement:
     """IFRS 17 GMM measurement: BEL, RA and CSM.
 

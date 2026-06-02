@@ -34,7 +34,7 @@ from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import project_cashflows
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class TVOGResult:
     """The cost of a minimum guarantee, split into intrinsic and time value.
 

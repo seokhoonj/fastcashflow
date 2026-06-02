@@ -146,6 +146,22 @@ def test_write_measurement_dispatches_per_model(tmp_path):
         fcf.write_measurement("not a measurement", tmp_path / "x.csv")
 
 
+def test_measurement_equality_is_identity():
+    """Measurement results carry numpy arrays, for which the default dataclass
+    == / hash raise (ambiguous truth value / unhashable). They are eq=False, so
+    equality and hashing fall back to identity -- no raise, usable in a set."""
+    import fastcashflow as fcf
+    import numpy as np
+    mp = fcf.samples.model_points()
+    b = fcf.samples.basis()[("HEALTH_A", "FC")]
+    idx = np.where((np.asarray(mp.product_code) == "HEALTH_A") &
+                   (np.asarray(mp.channel_code) == "FC"))[0]
+    m = fcf.gmm.measure(mp.subset(idx), b)
+    m2 = fcf.gmm.measure(mp.subset(idx), b)
+    assert m == m and m != m2          # identity, not array compare (no ValueError)
+    assert len({m, m2}) == 2           # hashable by identity
+
+
 def test_read_ignores_extra_columns_and_flags_missing(tmp_path):
     """Extra columns are ignored; a missing required column is an error."""
     mps = _portfolio(50)

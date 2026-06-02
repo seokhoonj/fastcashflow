@@ -36,7 +36,7 @@ from fastcashflow.numerics import _norm_ppf
 from fastcashflow.projection import project_cashflows
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class StochasticResult:
     """Per-scenario portfolio totals from a stochastic valuation.
 

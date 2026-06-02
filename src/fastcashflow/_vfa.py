@@ -47,7 +47,7 @@ from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.tvog import guarantee_floor_time_value, tvog_weights
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class VFAMeasurement:
     """VFA measurement of a direct-participation (account-value) portfolio.
 
