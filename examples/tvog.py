@@ -1,9 +1,11 @@
 """Time value of a guarantee (TVOG) -- a VFA minimum-rate guarantee.
 
-The VFA book is the bundled account-value sample. The guaranteed rate is a
-per-policy contract term -- the ``minimum_crediting_rate`` field -- locked at
-issue and varying by issue cohort. The return scenarios are generated here --
-a 2,000 x term grid is not something to keep in a spreadsheet.
+The VFA book is account_values.csv -- account-value contracts carry no
+coverage-code coverages, so a single policies file read by
+read_vfa_model_points. The guaranteed rate is a per-policy contract term --
+the ``minimum_crediting_rate`` field -- locked at issue and varying by issue
+cohort. The return scenarios are generated here -- a 2,000 x term grid is not
+something to keep in a spreadsheet.
 
     python examples/tvog.py
 """
@@ -19,7 +21,8 @@ DATA = Path(__file__).resolve().parent / "data"
 def main() -> None:
     basis = fcf.read_basis(DATA / "basis.xlsx")
     basis = basis[("TERM_LIFE_A", "FC")]
-    account = fcf.samples.model_points("vfa")
+    account = fcf.read_vfa_model_points(DATA / "account_values.csv",
+                                        calculation_methods=DATA / "calculation_methods.csv")
 
     # 2,000 monthly underlying-items return paths around the central return.
     rng = np.random.default_rng(7)

@@ -130,6 +130,8 @@ Input and output
 
 .. autofunction:: fastcashflow.read_model_points
 
+.. autofunction:: fastcashflow.read_vfa_model_points
+
 .. autofunction:: fastcashflow.read_basis
 
 .. autofunction:: fastcashflow.samples.model_points

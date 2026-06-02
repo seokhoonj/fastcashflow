@@ -8,6 +8,7 @@ import fastcashflow as fcf
 import numpy as np
 import openpyxl
 import polars as pl
+import pytest
 
 from fastcashflow import read_model_points, write_measurement
 from fastcashflow.gmm import measure
@@ -117,3 +118,40 @@ def test_policies_elapsed_months_emits_warning(tmp_path):
     msgs = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
     assert any("elapsed_months" in m for m in msgs), msgs
     assert np.all(back.elapsed_months == 0)
+
+
+# ---------------------------------------------------------------------------
+# read_vfa_model_points -- account-value contracts read from a single policies
+# file (no coverages). The coverage-column guard keeps the wide footgun closed.
+# ---------------------------------------------------------------------------
+
+def test_read_vfa_model_points_round_trips(tmp_path):
+    """A VFA policies file (account value + guarantee floors, no coverages)
+    reads and measures the same as the bundled in-memory sample."""
+    vmp = fcf.samples.model_points("vfa")
+    vb = fcf.samples.basis("vfa")
+    pl.DataFrame({
+        "mp_id": [f"V{i + 1:03d}" for i in range(vmp.n_mp)],
+        "issue_age": np.asarray(vmp.issue_age),
+        "term_months": np.asarray(vmp.term_months),
+        "account_value": np.asarray(vmp.account_value),
+        "minimum_crediting_rate": np.asarray(vmp.minimum_crediting_rate),
+        "minimum_death_benefit": np.asarray(vmp.minimum_death_benefit),
+        "minimum_accumulation_benefit": np.asarray(vmp.minimum_accumulation_benefit),
+    }).write_csv(tmp_path / "vfa.csv")
+
+    back = fcf.read_vfa_model_points(tmp_path / "vfa.csv",
+                                     calculation_methods=fcf.samples.calculation_methods())
+    assert back.n_mp == vmp.n_mp
+    assert np.allclose(fcf.vfa.measure(back, vb).bel, fcf.vfa.measure(vmp, vb).bel)
+    assert np.allclose(fcf.vfa.measure(back, vb).csm, fcf.vfa.measure(vmp, vb).csm)
+
+
+def test_read_vfa_model_points_rejects_coverage_columns(tmp_path):
+    """A ``<code>_benefit`` column is a coverage encoded as a column -- VFA
+    carries no coverages, so it is rejected rather than silently dropped."""
+    pl.DataFrame({
+        "issue_age": [40], "term_months": [120], "CANCER_benefit": [1e7],
+    }).write_csv(tmp_path / "wide.csv")
+    with pytest.raises(ValueError, match="coverage benefit column"):
+        fcf.read_vfa_model_points(tmp_path / "wide.csv")

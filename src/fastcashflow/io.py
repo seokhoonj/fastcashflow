@@ -1136,6 +1136,69 @@ def read_model_points(
     )
 
 
+def read_vfa_model_points(
+    path: Path | str,
+    *,
+    calculation_methods: "Path | str | dict[str, CalculationMethod] | None" = None,
+) -> ModelPoints:
+    """Read the account-value base of variable (VFA) contracts from a policies file.
+
+    This reads the part measured under the VFA model: the account value and its
+    guarantee floors (GMDB / GMAB), all named policy columns (``account_value``,
+    ``minimum_death_benefit``, ``minimum_accumulation_benefit``,
+    ``minimum_crediting_rate``). That base carries no coverage-code coverages,
+    so it is a single policies frame. ``issue_age`` and ``term_months`` are
+    required; the named policy / account columns are read if present.
+
+    Protection riders attached to a variable product (death / cancer /
+    hospitalisation 특약) are separate coverages, read and measured on their own
+    -- a policies + coverages book through :func:`read_model_points` (GMM). So a
+    ``<coverage_code>_benefit`` column is rejected here: a coverage encoded as a
+    column is the lossy wide form, and coverages belong in their own frame which
+    can hold the per-coverage waiting / reduction rules a flat column cannot.
+    """
+    df = _read_frame(path)
+    named_benefit = {"maturity_benefit", "disability_benefit",
+                     "minimum_death_benefit", "minimum_accumulation_benefit"}
+    coverage_cols = sorted(c for c in df.columns
+                           if c.endswith("_benefit") and c not in named_benefit)
+    if coverage_cols:
+        raise ValueError(
+            f"read_vfa_model_points got coverage benefit column(s) "
+            f"{coverage_cols} -- account-value (VFA) contracts carry no "
+            "coverage-code coverages. For a product with coverages, use "
+            "read_model_points with a coverages frame."
+        )
+    for need in ("issue_age", "term_months"):
+        if need not in df.columns:
+            raise ValueError(
+                f"the VFA policies file is missing required column {need!r}"
+            )
+    _warn_if_elapsed_months(df.columns)
+    n_mp = df.height
+    fields: dict[str, object] = dict(
+        issue_age=df["issue_age"].to_numpy(),
+        term_months=df["term_months"].to_numpy(),
+        level_premium=(df["level_premium"].to_numpy()
+                       if "level_premium" in df.columns else np.zeros(n_mp)),
+    )
+    for opt in ("sex", "count", "single_premium", "premium_term_months",
+                "premium_frequency_months", "annuity_frequency_months",
+                "maturity_benefit", "annuity_payment", "disability_income",
+                "disability_benefit", "account_value", "minimum_crediting_rate",
+                "minimum_death_benefit", "minimum_accumulation_benefit",
+                "product_code", "channel_code"):
+        if opt in df.columns:
+            fields[opt] = df[opt].to_numpy()
+    if "state" in df.columns:
+        fields["state"] = _read_state(df["state"])
+    if isinstance(calculation_methods, (str, Path)):
+        fields["calculation_methods"] = _parse_calculation_methods(calculation_methods)
+    elif calculation_methods is not None:
+        fields["calculation_methods"] = calculation_methods
+    return ModelPoints(**fields)
+
+
 def read_inforce_policies(
     path: Path | str,
     coverages: Path | str | None = None,
@@ -1339,24 +1402,11 @@ def load_sample_vfa_model_points() -> ModelPoints:
     """
     source = resources.files("fastcashflow") / "sample_data" / "sample_vfa_policies.csv"
     with resources.as_file(source) as path:
-        df = _read_frame(path)
-    # Variable-annuity contracts carry no coverage-code coverages -- their
-    # benefits are the account value and its guarantee floors (named fields),
-    # so the ModelPoints is built straight from the policy columns.
-    fields: dict[str, object] = dict(
-        issue_age=df["issue_age"].to_numpy(),
-        term_months=df["term_months"].to_numpy(),
-        level_premium=df["level_premium"].to_numpy(),
-    )
-    for opt in ("sex", "count", "single_premium", "account_value",
-                "minimum_crediting_rate", "minimum_death_benefit",
-                "minimum_accumulation_benefit", "product_code", "channel_code"):
-        if opt in df.columns:
-            fields[opt] = df[opt].to_numpy()
-    # Carry the coverage taxonomy so a basis's coverages align at measure time,
-    # even though these account-value contracts hold no coverage-code coverages.
-    fields["calculation_methods"] = load_sample_calculation_methods()
-    return ModelPoints(**fields)
+        # Carry the coverage taxonomy so a basis's coverages align at measure
+        # time, even though these account-value contracts hold no coverages.
+        return read_vfa_model_points(
+            path, calculation_methods=load_sample_calculation_methods(),
+        )
 
 
 def _drop_sample_table(filename: str, dest: Path | str) -> Path:

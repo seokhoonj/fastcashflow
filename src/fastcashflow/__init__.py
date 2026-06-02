@@ -25,6 +25,7 @@ from fastcashflow.io import (
     read_inforce_state,
     read_model_points,
     read_scenarios,
+    read_vfa_model_points,
     sample_data_dir,
     write_measurement,
 )
@@ -78,7 +79,7 @@ __all__ = [
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
-    "read_model_points", "read_basis", "read_scenarios",
+    "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",
     "apply_inforce_state", "InforceState",
     "write_measurement",
