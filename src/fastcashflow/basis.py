@@ -184,6 +184,20 @@ class ExpenseItem:
     basis: str
     value: float
 
+    def __post_init__(self) -> None:
+        # Validate at construction, not deep in derive_expense_components at
+        # measure time: a typo'd basis ("alpha" for "alpha_fixed") otherwise
+        # surfaces late, and a non-finite value silently NaNs the expense leg.
+        if self.basis not in EXPENSE_BASES:
+            raise ValueError(
+                f"unknown expense basis {self.basis!r}; expected one of "
+                f"{EXPENSE_BASES}"
+            )
+        if not np.isfinite(float(self.value)):
+            raise ValueError(
+                f"ExpenseItem value must be finite, got {self.value!r}"
+            )
+
 
 #: All ``ExpenseItem.basis`` values the engine knows how to dispatch.
 #: Follows the Korean actuarial alpha / beta / gamma convention:

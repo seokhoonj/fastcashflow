@@ -860,3 +860,84 @@ def test_guards_full_false_cession_scenarios():
         fcf.gmm.stochastic(mp, b1, np.array([0.03, np.nan]))
     with pytest.raises(ValueError, match="scenarios is empty"):
         fcf.gmm.stochastic(mp, b1, np.array([]))
+
+
+def test_guards_negative_amounts_and_premium():
+    """Benefit / premium / account amounts are non-negative; a rate field is
+    not (a guaranteed minimum crediting rate may legitimately be negative).
+    A negative level premium is a sign error -- accounting adjustments are
+    actual experience and belong in movement analysis, not the projection."""
+    base = dict(issue_age=np.array([40.0]), level_premium=np.array([100.0]),
+                term_months=np.array([120]))
+    with pytest.raises(ValueError, match="level_premium must be >= 0"):
+        fcf.ModelPoints(**{**base, "level_premium": np.array([-1.0])})
+    with pytest.raises(ValueError, match=r"account_value must be >= 0"):
+        fcf.ModelPoints(**base, account_value=np.array([-5.0]))
+    with pytest.raises(ValueError, match=r"maturity_benefit must be >= 0"):
+        fcf.ModelPoints(**base, maturity_benefit=np.array([-5.0]))
+    # a rate, not an amount -- negative is allowed
+    fcf.ModelPoints(**base, minimum_crediting_rate=np.array([-0.01]))
+
+
+def test_guards_inforce_state():
+    """InforceState rejects a backward elapsed month, negative count, a
+    non-finite carried CSM / lock-in rate, and ragged per-MP arrays."""
+    def mk(**kw):
+        d = dict(mp_id=np.array([1, 2]), elapsed_months=np.array([12, 24]),
+                 count=np.array([1.0, 1.0]), prior_csm=np.array([10.0, 20.0]),
+                 lock_in_rate=0.03)
+        return fcf.InforceState(**{**d, **kw})
+    with pytest.raises(ValueError, match="elapsed_months must be >= 0"):
+        mk(elapsed_months=np.array([-1, 24]))
+    with pytest.raises(ValueError, match="count must be >= 0"):
+        mk(count=np.array([-1.0, 1.0]))
+    with pytest.raises(ValueError, match="prior_csm must be finite"):
+        mk(prior_csm=np.array([np.nan, 20.0]))
+    with pytest.raises(ValueError, match="lock_in_rate must be finite"):
+        mk(lock_in_rate=float("nan"))
+    with pytest.raises(ValueError, match="must match"):
+        mk(count=np.array([1.0, 1.0, 1.0]))
+
+
+def test_guards_expense_item_and_trace_month():
+    """ExpenseItem validates its basis / value at construction; the BEL / CSM
+    step tracers reject a non-integer anchor month instead of truncating it."""
+    from fastcashflow.basis import ExpenseItem
+    with pytest.raises(ValueError, match="unknown expense basis"):
+        ExpenseItem("acquisition", "alpha", 0.1)
+    with pytest.raises(ValueError, match="value must be finite"):
+        ExpenseItem("acquisition", "alpha_fixed", float("nan"))
+    ExpenseItem("acquisition", "alpha_fixed", 100.0)  # valid
+
+    mp = fcf.samples.model_points()
+    basis = fcf.samples.basis()
+    with pytest.raises(ValueError, match="whole-month integers"):
+        fcf.gmm.trace_bel_step(0, mp, basis, months=[12.5])
+    with pytest.raises(ValueError, match="whole-month integers"):
+        fcf.gmm.trace_csm_step(0, mp, basis, months=[12.5])
+
+
+def test_guards_empty_portfolio(tmp_path):
+    """An empty policies or coverages file is rejected with a clear message
+    rather than a cryptic join / kernel error."""
+    cm = tmp_path / "cm.csv"
+    cm.write_text("coverage_code,calculation_method\nDEATH,DEATH\n")
+    cov_empty = tmp_path / "cov0.csv"
+    cov_empty.write_text("mp_id,coverage_code,amount\n")  # header only
+    cov_ok = tmp_path / "cov.csv"
+    cov_ok.write_text("mp_id,coverage_code,amount\n1,DEATH,1000000\n")
+    # empty policies -- give a non-empty coverages file so the policies guard
+    # is the one that fires (the empty-coverages guard runs first otherwise).
+    pol_empty = tmp_path / "pol0.csv"
+    pol_empty.write_text(
+        "mp_id,product_code,channel_code,issue_age,sex,term_months,level_premium\n")
+    with pytest.raises(ValueError, match="policies frame is empty"):
+        fcf.read_model_points(str(pol_empty), coverages=str(cov_ok),
+                              calculation_methods=str(cm))
+    pol = tmp_path / "pol.csv"
+    pol.write_text(
+        "mp_id,product_code,channel_code,issue_age,sex,term_months,level_premium\n"
+        "1,TERM_LIFE_A,GA,40,0,120,100.0\n")
+    with pytest.raises(ValueError, match="coverages frame is empty"):
+        fcf.read_model_points(str(pol), coverages=str(cov_empty),
+                              calculation_methods=str(cm))

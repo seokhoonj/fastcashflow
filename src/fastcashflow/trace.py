@@ -1148,6 +1148,10 @@ def show_trace_bel_step(
     n_time = m.cashflows.n_time
     if months is None:
         months = sorted({0, 12, term // 2, term - 1, term})
+    # A whole-month anchor only -- int(t) would silently truncate 12.5 to 12.
+    bad = [t for t in months if float(t) != int(t)]
+    if bad:
+        raise ValueError(f"months must be whole-month integers; got {bad}")
     months = [int(t) for t in months if 0 <= int(t) <= term]
 
     # Monthly discount rate curve -- the kernel reads this directly. We
@@ -1302,6 +1306,9 @@ def show_trace_csm_step(
     if months is None:
         months = sorted({1, 12, term // 2, term})
     # Recursion produces csm[t] for t in 1..n_time. t = 0 is the seed.
+    bad = [t for t in months if float(t) != int(t)]
+    if bad:
+        raise ValueError(f"months must be whole-month integers; got {bad}")
     months = [int(t) for t in months if 1 <= int(t) <= n_time]
 
     monthly_rate = discount_monthly_curve(basis, n_time)

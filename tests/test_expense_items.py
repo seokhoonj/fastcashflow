@@ -98,10 +98,10 @@ def test_multiple_rows_sum_into_each_primitive():
 
 
 def test_unknown_basis_raises():
-    """An unrecognised basis is flagged loudly with the supported list."""
-    rows = (ExpenseItem("???", "yearly_payroll", 1000.0),)
+    """An unrecognised basis is flagged loudly at construction, with the
+    supported list -- not deferred to derive_expense_components at measure."""
     with pytest.raises(ValueError, match="unknown expense basis"):
-        derive_expense_components(rows, 12)
+        ExpenseItem("???", "yearly_payroll", 1000.0)
 
 
 def test_expense_bases_constant_is_complete():

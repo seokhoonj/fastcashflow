@@ -195,6 +195,17 @@ class ModelPoints:
             raise ValueError(
                 "level_premium must be finite (a NaN premium yields a NaN BEL)"
             )
+        # level_premium is a forward projection assumption (the contractual
+        # premium each occurrence), not an accounting ledger entry. Accounting
+        # adjustments (refunds, retrospective true-ups) are actual experience
+        # and belong in roll_forward / reconcile, not the projection input, so
+        # a negative here is a sign / data error.
+        if np.any(self.level_premium < 0):
+            raise ValueError(
+                "level_premium must be >= 0 (a negative premium is a sign error; "
+                "accounting adjustments belong in movement analysis, not the "
+                "projection assumption)"
+            )
         # Reject obviously-wrong scalar contract fields at construction time,
         # not at the bottom of a kernel where the error becomes a NaN BEL.
         if np.any(self.issue_age < 0):
@@ -223,6 +234,11 @@ class ModelPoints:
             value = np.zeros(n_mp) if value is None else np.asarray(value, np.float64)
             if not np.all(np.isfinite(value)):
                 raise ValueError(f"{name} must be finite")
+            # Benefit / premium / account amounts are non-negative; a negative
+            # one is a sign or data error that flows silently into the BEL.
+            # minimum_crediting_rate is a rate, not an amount -- skip it.
+            if name != "minimum_crediting_rate" and np.any(value < 0):
+                raise ValueError(f"{name} must be >= 0 (got a negative amount)")
             object.__setattr__(self, name, value)
         # count defaults to one policy per model point (seriatim).
         cnt = self.count
@@ -591,6 +607,26 @@ class InforceState:
             self, "prior_csm", np.asarray(self.prior_csm, dtype=np.float64),
         )
         object.__setattr__(self, "lock_in_rate", float(self.lock_in_rate))
+        # Validate: a negative elapsed month indexes backwards into the
+        # trajectory (silently wrong); a NaN prior CSM / lock-in rate makes the
+        # carried-forward CSM NaN with no error; a ragged array reads n from
+        # one field and ignores the rest.
+        n = self.elapsed_months.shape[0]
+        for nm in ("mp_id", "count", "prior_csm"):
+            a = np.asarray(getattr(self, nm))
+            if a.shape[0] != n:
+                raise ValueError(
+                    f"InforceState.{nm} has length {a.shape[0]} but "
+                    f"elapsed_months has {n}; per-MP arrays must match"
+                )
+        if np.any(self.elapsed_months < 0):
+            raise ValueError("InforceState.elapsed_months must be >= 0")
+        if np.any(self.count < 0):
+            raise ValueError("InforceState.count must be >= 0")
+        if not np.all(np.isfinite(self.prior_csm)):
+            raise ValueError("InforceState.prior_csm must be finite")
+        if not np.isfinite(self.lock_in_rate):
+            raise ValueError("InforceState.lock_in_rate must be finite")
 
 
 def apply_inforce_state(

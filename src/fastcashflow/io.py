@@ -1005,8 +1005,21 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
             raise ValueError(
                 f"the coverages frame is missing required column {need!r}"
             )
+    # An empty coverages frame otherwise fails cryptically at the policies
+    # join (the all-null mp_id column infers a string dtype that does not
+    # match the integer policies key). Every model point needs at least one
+    # coverage row -- the benefit amounts and per-coverage premium live there.
+    if cov.height == 0:
+        raise ValueError(
+            "the coverages frame is empty (0 rows); every model point needs "
+            "at least one coverage row"
+        )
     _warn_if_elapsed_months(pol.columns)
     n_mp = pol.height
+    if n_mp == 0:
+        raise ValueError(
+            "the policies frame is empty (0 rows); there is nothing to measure"
+        )
     # mp_id uniqueness -- a duplicate id would fan out the coverages join
     # (one-to-many) and silently inflate per-policy benefits.
     if pol["mp_id"].n_unique() != n_mp:
