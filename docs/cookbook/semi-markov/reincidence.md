@@ -9,7 +9,7 @@
 - 등록된 모델이 없어 `State` / `Transition` / `StateModel` 로 **상태 모델을
   직접 조립** — 쿡북에서 처음
 - `State.duration_max` (코호트 추적) 와 `Transition.duration_dependent`
-  (경과 의존 전이) 의 wiring
+  (경과 의존 전이) 의 연결
 - **재진단 면책기간** 을 `ci_reincidence_annual` 의 네 번째 인자 (state
   duration) 로 표현하는 자리
 - 1차 / 2차 진단금이 `lump_sum` 전이로 들어가는 자리와, `disability_benefit`
