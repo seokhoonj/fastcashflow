@@ -173,30 +173,6 @@ def test_engine_accepts_matching_coverage_codes():
     assert np.all(np.isfinite(np.asarray(v.bel)))
 
 
-def test_wide_reader_populates_coverage_codes(tmp_path):
-    """The wide-form reader pins ``coverage_codes`` to the basis
-    ordering so a later reordered Basis is refused by the engine
-    without any extra wiring on the user's side."""
-    import polars as pl
-    from fastcashflow import read_model_points
-    basis = Basis(
-        mortality_annual=_flat(_annual(0.005)),
-        lapse_annual=_flat(_annual(0.01)),
-        discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
-        coverages=(CoverageRate("DEATH", _flat(_annual(0.005))),
-                   CoverageRate("CANCER", _flat(_annual(0.003)))),
-    )
-    path = tmp_path / "mp.csv"
-    pl.DataFrame({
-        "issue_age": [40.0], "term_months": [60], "level_premium": [12_000.0],
-        "DEATH_benefit": [1e8], "CANCER_benefit": [1e7],
-    }).write_csv(path)
-    mp = read_model_points(path, calculation_methods={
-        "DEATH": CalculationMethod.DEATH, "CANCER": CalculationMethod.DIAGNOSIS,
-    })
-    assert mp.coverage_codes == ("DEATH", "CANCER")
-
-
 def test_engine_ignores_unreferenced_assumptions_coverage():
     """An Basis that registers more coverages than the portfolio uses
     is fine -- the engine builds rates only for the codes the model points

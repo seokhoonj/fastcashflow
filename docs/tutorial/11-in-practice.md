@@ -60,7 +60,7 @@ ETL 이 그 사이를 잇습니다. 두 가지 패턴:
 - **DB → 개체 직접** (고급) — 엔진이 실제로 받는 건 파일이 아니라
   `Basis` / `ModelPoints` **개체**입니다. 쿼리 결과 컬럼으로
   `ModelPoints(issue_age=..., level_premium=..., ...)` 를 직접 조립해
-  reader 를 건너뛸 수도 있습니다 (담보가 여럿이면 long-form 을 parquet
+  reader 를 건너뛸 수도 있습니다 (담보가 여럿이면 policies + coverages 를 parquet
   으로 떨궈 `read_*` 가 CSR로 묶게 하는 편이 간단).
 
 즉 fastcashflow 는 데이터 파이프라인의 **끝 (측정 엔진)** 에 있고,
@@ -169,7 +169,7 @@ DB 연결·추출은 사내 ETL 의 몫입니다.
 둡니다.
 
 P001 은 두 줄 (주계약 사망 + 만기환급), P002 는 세 줄. 계약마다 담보
-수가 다르니 행 수도 다릅니다 — **long-form** 입니다. 작은 동질
+수가 다르니 행 수도 다릅니다 — **한 줄 = 한 (계약, 담보)** 입니다. 작은 동질
 포트폴리오는 한 행에 담보를 모두 펼친 *wide-form* 도 가능합니다 (한
 행 한 계약, `<code>_benefit` 컬럼들).
 
@@ -258,7 +258,7 @@ basis = basis[("TERM_LIFE_A", "GA")]    # 한 세그먼트 선택
 
 model_points, state = fcf.read_inforce_policies(
     "inforce_policies.csv",                                  # 결산 1-파일 (spec + state 결합)
-    coverages="coverages.csv",                               # 담보 파일 (long-form)
+    coverages="coverages.csv",                               # 담보 파일
     calculation_methods="calculation_methods.csv",           # 담보별 산출방식
 )
 val = fcf.gmm.measure_inforce(   # 결산(보유계약) 측정 -- 일반모형(GMM)
@@ -316,7 +316,7 @@ state)`. 결과는 위 1-파일과 동일.
 포트폴리오가 너무 커서 메모리에 한꺼번에 올리기 어렵다면
 `gmm.measure_stream()`을 씁니다. 입력 parquet 을 조각조각 나눠 읽고,
 평가하고, 결과를 쓰는 일을 한 조각씩 차례로 처리해, 메모리에는 한 번에
-한 조각만 올립니다. 입력은 평소와 같은 **long-form (policies + coverages)**
+한 조각만 올립니다. 입력은 평소와 같은 **policies + coverages 두 프레임**
 이고, 청크마다 `mp_id` 로 담보를 끌어옵니다.
 
 ```python

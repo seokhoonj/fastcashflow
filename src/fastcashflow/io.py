@@ -9,7 +9,7 @@ Model points come in two shapes, both producing the same ``ModelPoints``:
   ``<coverage_code>_benefit`` per rate-driven coverage, plus the survival
   benefits ``maturity_benefit`` and ``annuity_payment``. The convenient
   form for a single, homogeneous product.
-* **long-form** -- a policies frame (contract attributes) plus a coverages
+* a policies frame (contract attributes) plus a coverages
   frame, one row per policy x coverage carrying ``amount`` and ``premium``.
   The form for a heterogeneous, multi-product portfolio.
 
@@ -55,18 +55,6 @@ from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
 # reads model points or writes a results frame never imports engine.py.
 if TYPE_CHECKING:  # pragma: no cover -- import only for type hints
     from fastcashflow.engine import GMMMeasurement
-
-# Wide model-point columns with a fixed meaning. Any other ``*_benefit``
-# column names a coverage by its coverage code.
-_NAMED_WIDE = frozenset((
-    "mp_id", "product_code", "channel_code", "issue_age", "term_months",
-    "sex", "count", "state", "level_premium", "single_premium",
-    "premium_term_months", "premium_frequency_months",
-    "annuity_frequency_months", "maturity_benefit",
-    "annuity_payment", "disability_income", "disability_benefit",
-    "account_value", "minimum_crediting_rate",
-    "minimum_death_benefit", "minimum_accumulation_benefit",
-))
 
 
 def _read_frame(path) -> pl.DataFrame:
@@ -785,7 +773,7 @@ def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
 
 
 # ---------------------------------------------------------------------------
-# Model points -- wide and long-form
+# Model points -- built from policies + coverages frames
 # ---------------------------------------------------------------------------
 
 def _read_state(col: pl.Series) -> np.ndarray:
@@ -890,102 +878,9 @@ def _parse_calculation_methods(path: Path | str) -> dict[str, CalculationMethod]
     return result
 
 
-def _wide_model_points(df: pl.DataFrame,
+def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
                        calculation_methods=None) -> ModelPoints:
-    """Build a ``ModelPoints`` from a wide frame -- one row per policy, each
-    coverage a ``<coverage_code>_benefit`` column. Reads without any
-    basis: the coverage codes come from the column names, ordered by
-    the ``calculation_methods`` catalogue when given (else column order).
-    The engine aligns ``Basis.coverages`` to that order at measure
-    time."""
-    for need in ("issue_age", "term_months"):
-        if need not in df.columns:
-            raise ValueError(
-                f"the model-point file is missing required column {need!r}"
-            )
-    _warn_if_elapsed_months(df.columns)
-    n_mp = df.height
-    fields: dict[str, object] = dict(
-        issue_age=df["issue_age"].to_numpy(),
-        term_months=df["term_months"].to_numpy(),
-        level_premium=(df["level_premium"].to_numpy()
-                       if "level_premium" in df.columns
-                       else np.zeros(n_mp)),
-    )
-    for opt in ("sex", "count", "single_premium", "premium_term_months",
-                "premium_frequency_months", "annuity_frequency_months",
-                "maturity_benefit", "annuity_payment",
-                "disability_income", "disability_benefit", "account_value",
-                "minimum_crediting_rate", "minimum_death_benefit",
-                "minimum_accumulation_benefit"):
-        if opt in df.columns:
-            fields[opt] = df[opt].to_numpy()
-    # Segment metadata -- optional string columns; route the segmented measure.
-    for opt in ("product_code", "channel_code"):
-        if opt in df.columns:
-            fields[opt] = df[opt].to_numpy()
-    if "state" in df.columns:
-        fields["state"] = _read_state(df["state"])
-
-    # Candidate coverage codes come from the ``<code>_benefit`` columns.
-    present_cols: dict[str, np.ndarray] = {}
-    for col in df.columns:
-        if not col.endswith("_benefit") or col in _NAMED_WIDE:
-            continue
-        present_cols[col[: -len("_benefit")]] = df[col].to_numpy()
-    # Coverage order: the catalogue's rate-driven order when a catalogue is
-    # given (and every benefit column must be a rate-driven catalogue code),
-    # else the column order -- in which case the pattern is auto-inferred
-    # from the code name at measure time (coverage.coverage_arrays).
-    if calculation_methods is not None:
-        wide_ctypes = {k: CalculationMethod(v)
-                       for k, v in calculation_methods.items()}
-        rate_driven = [c for c, m in wide_ctypes.items()
-                       if m in RATE_DRIVEN_METHODS]
-        candidate_codes = set(rate_driven)
-    else:
-        rate_driven = None
-        candidate_codes = set(present_cols)
-    # Guard the reserved-name collision: a coverage_code whose
-    # ``<code>_benefit`` column name shadows a fixed-meaning column
-    # (maturity_benefit, disability_benefit, ...) would be silently routed
-    # to the scalar field rather than into the CSR. Catch at read time --
-    # against the catalogue codes when given (a registered code whose
-    # benefit column would be eaten by the reserved scalar).
-    reserved_codes = {n[: -len("_benefit")] for n in _NAMED_WIDE
-                      if n.endswith("_benefit")}
-    bad = sorted(candidate_codes & reserved_codes)
-    if bad:
-        raise ValueError(
-            f"coverage code(s) {bad} collide with reserved wide-form "
-            f"column name(s) {[c + '_benefit' for c in bad]} -- rename "
-            "the coverage_code"
-        )
-    if rate_driven is not None:
-        unknown = sorted(c for c in present_cols if c not in candidate_codes)
-        if unknown:
-            raise ValueError(
-                f"wide column(s) {[c + '_benefit' for c in unknown]} name "
-                f"coverage(s) {unknown} that are not rate-driven in the "
-                "calculation_methods catalogue"
-            )
-        ordered = [c for c in rate_driven if c in present_cols]
-    else:
-        ordered = list(present_cols)
-    code_to_cov_idx = {c: i for i, c in enumerate(ordered)}
-    benefits = {code_to_cov_idx[c]: present_cols[c] for c in ordered}
-    if benefits:
-        fields["benefits"] = benefits
-    if calculation_methods is not None:
-        fields["calculation_methods"] = calculation_methods
-    if ordered:
-        fields["coverage_codes"] = tuple(ordered)
-    return ModelPoints(**fields)
-
-
-def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
-                       calculation_methods=None) -> ModelPoints:
-    """Build a ``ModelPoints`` from a long-form policies + coverages pair.
+    """Build a ``ModelPoints`` from a policies + coverages pair.
 
     The rate-driven coverage order is taken from the ``calculation_methods``
     catalogue, so the portfolio is read without the actuarial basis. The
@@ -993,7 +888,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
     """
     if calculation_methods is None:
         raise ValueError(
-            "long-form model points need the calculation_methods taxonomy -- "
+            "model points need the calculation_methods taxonomy -- "
             "the per-code pattern routes survival rows (ANNUITY / MATURITY) "
             "to scalar fields and rate-driven rows to the coverage CSR. "
             "Pass a calculation_methods.csv path to read_model_points."
@@ -1130,7 +1025,7 @@ def _long_model_points(pol: pl.DataFrame, cov: pl.DataFrame,
         # paid-up portfolio is one valid case; a forgotten column is the
         # other. Warn so the latter doesn't slip through.
         warnings.warn(
-            "long-form model points have no premium source -- neither "
+            "model points have no premium source -- neither "
             "'premium' on the coverages frame nor 'level_premium' on the "
             "policies frame was found. level_premium defaults to zero; "
             "if this portfolio is not fully paid-up, add the column.",
@@ -1184,29 +1079,26 @@ def read_model_points(
     engine call (``measure`` / ``value``), which aligns its coverages to the
     portfolio's coverage order.
 
-    Two forms:
+    The portfolio is two frames -- a policies frame plus a coverages frame:
 
-    * **wide** -- ``read_model_points(path)``. One row per policy.
-      ``issue_age`` and ``term_months`` are required; ``sex``, ``count``,
-      ``state``, ``level_premium``, ``single_premium``,
-      ``premium_term_months``, ``premium_frequency_months``,
-      ``annuity_frequency_months``, ``maturity_benefit`` and
-      ``annuity_payment`` are read if present. Each
-      ``<coverage_code>_benefit`` column adds that coverage; the coverage
-      order is the ``calculation_methods`` catalogue order when given, else
-      the column order (pattern then auto-inferred from the code name).
-    * **long-form** -- ``read_model_points(policies,
-      coverages=coverages_path, calculation_methods=calculation_methods_path)``.
-      A policies frame (``mp_id``, ``issue_age``, ``term_months``,
-      optional ``sex`` / ``count`` / ``state`` / ``premium_term_months``)
-      and a coverages frame (``mp_id``, ``coverage_code``, ``amount``, and
-      optional ``premium`` / ``waiting`` / ``reduction_end`` /
-      ``reduction_factor``), one coverage row per policy x coverage.
-      A single ``.xlsx`` with ``policies`` and ``coverages`` sheets is read
-      as long-form too. ``calculation_methods`` is the company taxonomy file
-      (CSV / parquet / feather / xlsx) -- the third side of the Plan-B
-      split between *portfolio* (policies + coverages), *basis*
-      (basis.xlsx) and *catalogue* (calculation_methods.csv).
+    * a policies frame (``mp_id``, ``issue_age``, ``term_months``, optional
+      ``sex`` / ``count`` / ``state`` / ``level_premium`` / ``single_premium``
+      / ``premium_term_months`` / ``premium_frequency_months`` /
+      ``annuity_frequency_months``), one row per policy;
+    * a coverages frame (``mp_id``, ``coverage_code``, ``amount``, optional
+      ``premium`` / ``waiting`` / ``reduction_end`` / ``reduction_factor``),
+      one row per policy x coverage -- so per-coverage rules (waiting and
+      reduction periods) ride along, which a flat one-row-per-policy file
+      cannot carry.
+
+    Pass them as ``read_model_points(policies, coverages=coverages_path,
+    calculation_methods=...)``, or as a single ``.xlsx`` carrying ``policies``
+    and ``coverages`` sheets. The normalised two-frame shape mirrors a policy
+    table joined to a coverage table -- the form data arrives in from a policy
+    system. ``calculation_methods`` is the company taxonomy file (CSV / parquet
+    / feather / xlsx) -- the third side of the split between *portfolio*
+    (policies + coverages), *basis* (basis.xlsx) and *catalogue*
+    (calculation_methods.csv).
 
     The policies frame is the **inception-time static spec** -- issue_age,
     term, sex, and so on. The in-force closing state (elapsed_months,
@@ -1225,17 +1117,23 @@ def read_model_points(
         sheets = wb.sheetnames
         wb.close()
         if "policies" in sheets and "coverages" in sheets:
-            return _long_model_points(
+            return _model_points_from_frames(
                 pl.read_excel(p, sheet_name="policies", engine="openpyxl"),
                 pl.read_excel(p, sheet_name="coverages", engine="openpyxl"),
                 methods_dict,
             )
     pol = _read_frame(path)
-    if coverages is not None:
-        return _long_model_points(
-            pol, _read_frame(coverages), methods_dict,
+    if coverages is None:
+        raise ValueError(
+            f"{p!r} was read without a coverages frame. read_model_points is "
+            "needs a coverages frame: pass coverages=<path> (an mp_id / coverage_code / "
+            "amount frame), or a single .xlsx carrying 'policies' and "
+            "'coverages' sheets. A flat one-row-per-policy (wide) file cannot "
+            "carry per-coverage waiting / reduction rules and is not accepted."
         )
-    return _wide_model_points(pol, methods_dict)
+    return _model_points_from_frames(
+        pol, _read_frame(coverages), methods_dict,
+    )
 
 
 def read_inforce_policies(
@@ -1321,12 +1219,16 @@ def read_inforce_policies(
         methods_dict = _parse_calculation_methods(calculation_methods)
     else:
         methods_dict = calculation_methods
-    if coverages is not None:
-        mp = _long_model_points(
-            spec_df, _read_frame(coverages), methods_dict,
+    if coverages is None:
+        raise ValueError(
+            "read_inforce_policies needs a coverages frame: pass coverages=<path> "
+            "(an mp_id / coverage_code / amount frame). A flat one-row-per-policy "
+            "(wide) file cannot carry per-coverage waiting / reduction rules and "
+            "is not accepted."
         )
-    else:
-        mp = _wide_model_points(spec_df, methods_dict)
+    mp = _model_points_from_frames(
+        spec_df, _read_frame(coverages), methods_dict,
+    )
     mp = apply_inforce_state(mp, state)
     return mp, state
 
@@ -1364,7 +1266,7 @@ def load_sample_calculation_methods() -> dict[str, CalculationMethod]:
     :func:`load_sample_model_points` -- the company-level catalogue that
     maps each ``coverage_code`` to its :class:`CalculationMethod`. The same
     file format every portfolio uses (see :func:`read_model_points`
-    long-form, ``calculation_methods`` argument).
+    ``calculation_methods`` argument).
     """
     source = (
         resources.files("fastcashflow") / "sample_data"
@@ -1377,7 +1279,7 @@ def load_sample_calculation_methods() -> dict[str, CalculationMethod]:
 def load_sample_model_points() -> ModelPoints:
     """Read fastcashflow's bundled sample portfolio.
 
-    A small long-form portfolio -- a policies file, a coverages file and
+    A small portfolio -- a policies file, a coverages file and
     the benefit-pattern taxonomy -- packaged with the library, so the
     engine can be tried without preparing an input file. See
     :func:`read_model_points` for the file format. The coverage order
@@ -1437,7 +1339,24 @@ def load_sample_vfa_model_points() -> ModelPoints:
     """
     source = resources.files("fastcashflow") / "sample_data" / "sample_vfa_policies.csv"
     with resources.as_file(source) as path:
-        return read_model_points(path)
+        df = _read_frame(path)
+    # Variable-annuity contracts carry no coverage-code coverages -- their
+    # benefits are the account value and its guarantee floors (named fields),
+    # so the ModelPoints is built straight from the policy columns.
+    fields: dict[str, object] = dict(
+        issue_age=df["issue_age"].to_numpy(),
+        term_months=df["term_months"].to_numpy(),
+        level_premium=df["level_premium"].to_numpy(),
+    )
+    for opt in ("sex", "count", "single_premium", "account_value",
+                "minimum_crediting_rate", "minimum_death_benefit",
+                "minimum_accumulation_benefit", "product_code", "channel_code"):
+        if opt in df.columns:
+            fields[opt] = df[opt].to_numpy()
+    # Carry the coverage taxonomy so a basis's coverages align at measure time,
+    # even though these account-value contracts hold no coverage-code coverages.
+    fields["calculation_methods"] = load_sample_calculation_methods()
+    return ModelPoints(**fields)
 
 
 def _drop_sample_table(filename: str, dest: Path | str) -> Path:
@@ -1519,8 +1438,8 @@ def _save_sample_policies(path: Path | str) -> Path:
 def _save_sample_coverages(path: Path | str) -> Path:
     """Drop the packaged sample coverages file on disk at ``path``.
 
-    Long-form coverage entries -- one row per (model point, coverage_code)
-    -- the companion to :func:`_save_sample_policies`. A long-form
+    Coverage entries -- one row per (model point, coverage_code)
+    -- the companion to :func:`_save_sample_policies`. A
     portfolio has roughly ``n_mp x avg_coverages_per_mp`` rows here, so
     this is the file most likely to exceed the 1,048,576 row cap of
     ``.xlsx``.
@@ -1727,7 +1646,7 @@ def measure_stream(
 
     * **wide** -- ``input_path`` is a wide parquet file; ``coverages`` is
       ``None``. Each chunk of rows is a self-contained set of model points.
-    * **long-form** -- ``input_path`` is the policies parquet and
+    * ``input_path`` is the policies parquet and
       ``coverages`` the coverages parquet. Each chunk of policies pulls its
       coverage rows by ``mp_id``, so sorting the coverages file by
       ``mp_id`` lets the parquet reader prune row groups.
@@ -1761,7 +1680,7 @@ def measure_stream(
     processed = 0
 
     if coverages is not None:
-        # long-form: chunk the policies, pull each chunk's coverage rows.
+        # chunk the policies, pull each chunk's coverage rows.
         cov_scan = pl.scan_parquet(Path(coverages))
         for part, offset in enumerate(range(0, n_total, chunk_size)):
             pol = scan.slice(offset, chunk_size).collect()
@@ -1769,7 +1688,7 @@ def measure_stream(
             cov = cov_scan.join(
                 pol.lazy().select("mp_id"), on="mp_id", how="semi"
             ).collect()
-            model_points = _long_model_points(pol, cov, methods_dict)
+            model_points = _model_points_from_frames(pol, cov, methods_dict)
             write_measurement(
                 measure(model_points, basis, full=False, backend=backend),
                 output_dir / f"part-{part:05d}.parquet",
@@ -1778,30 +1697,9 @@ def measure_stream(
             processed += model_points.n_mp
         return processed
 
-    # wide: each chunk of rows is a self-contained set of model points.
-    available = scan.collect_schema().names()
-    for need in ("issue_age", "term_months"):
-        if need not in available:
-            raise ValueError(
-                f"{str(input_path)!r} is missing required column {need!r}"
-            )
-    if id_column is not None and id_column not in available:
-        raise ValueError(f"{str(input_path)!r} has no id column {id_column!r}")
-    columns = [c for c in available
-               if c in _NAMED_WIDE or c.endswith("_benefit") or c == id_column]
-    projected = scan.select(columns)
-    for part, offset in enumerate(range(0, n_total, chunk_size)):
-        chunk = projected.slice(offset, chunk_size).collect()
-        model_points = _wide_model_points(
-            chunk.drop(id_column) if id_column is not None else chunk,
-            methods_dict,
-        )
-        ids = chunk[id_column].to_numpy() if id_column is not None else None
-        write_measurement(
-            measure(model_points, basis, full=False, backend=backend),
-            output_dir / f"part-{part:05d}.parquet",
-            ids=ids,
-        )
-        processed += model_points.n_mp
-
-    return processed
+    raise ValueError(
+        "measure_stream needs a coverages frame: pass coverages=<parquet path> "
+        "(an mp_id / coverage_code / amount frame). A flat one-row-per-policy "
+        "(wide) file cannot carry per-coverage waiting / reduction rules and is "
+        "not accepted."
+    )

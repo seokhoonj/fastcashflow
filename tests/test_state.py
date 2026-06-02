@@ -16,7 +16,7 @@ import numpy as np
 from fastcashflow import STATE_ACTIVE, STATE_MODELS, STATE_PAIDUP, STATE_WAIVER, Basis, CalculationMethod, ModelPoints, CoverageRate, read_model_points
 from fastcashflow.gmm import measure
 
-from conftest import annual_from_monthly as _annual, mp_to_wide
+from conftest import annual_from_monthly as _annual, mp_to_frames
 
 # Standard-normal 75th percentile -- used so the RA check does not depend on
 # the engine's own quantile code.
@@ -219,7 +219,7 @@ def test_measure_and_value_agree_under_transition():
 
 
 def test_state_column_round_trips(tmp_path):
-    """A wide file's `state` column reads back, and the waiver row -- no
+    """The `state` column reads back, and the waiver row -- no
     premium and no lapse -- carries the larger liability."""
     basis = _assumptions()
     mp = ModelPoints(
@@ -230,10 +230,13 @@ def test_state_column_round_trips(tmp_path):
         state=np.array([STATE_ACTIVE, STATE_WAIVER]),
         calculation_methods=PATTERNS,
     )
-    path = tmp_path / "model_points.csv"
-    mp_to_wide(mp, basis).write_csv(path)
+    pol, cov = mp_to_frames(mp, basis)
+    pol.write_csv(tmp_path / "policies.csv")
+    cov.write_csv(tmp_path / "coverages.csv")
 
-    back = read_model_points(path)
+    back = read_model_points(tmp_path / "policies.csv",
+                             coverages=tmp_path / "coverages.csv",
+                             calculation_methods=PATTERNS)
     assert list(back.state) == [STATE_ACTIVE, STATE_WAIVER]
     val = measure(back, basis, full=False)
     assert val.bel[1] > val.bel[0]
@@ -242,15 +245,20 @@ def test_state_column_round_trips(tmp_path):
 def test_paidup_state_spelling_is_normalised(tmp_path):
     """The `state` column accepts paid-up spellings -- case, spaces, hyphens
     and underscores are ignored."""
-    path = tmp_path / "model_points.csv"
-    path.write_text(
-        "issue_age,term_months,level_premium,DEATH_benefit,state\n"
-        "40,24,12000,1000000,Paid-up\n"
-        "40,24,12000,1000000,paid_up\n"
-        "40,24,12000,1000000,paid up\n"
-        "40,24,12000,1000000,PAIDUP\n"
+    pol_path = tmp_path / "policies.csv"
+    cov_path = tmp_path / "coverages.csv"
+    pol_path.write_text(
+        "mp_id,issue_age,term_months,level_premium,state\n"
+        "0,40,24,12000,Paid-up\n"
+        "1,40,24,12000,paid_up\n"
+        "2,40,24,12000,paid up\n"
+        "3,40,24,12000,PAIDUP\n"
     )
-    back = read_model_points(path, calculation_methods=PATTERNS)
+    cov_path.write_text(
+        "mp_id,coverage_code,amount\n"
+        "0,DEATH,1000000\n1,DEATH,1000000\n2,DEATH,1000000\n3,DEATH,1000000\n"
+    )
+    back = read_model_points(pol_path, coverages=cov_path, calculation_methods=PATTERNS)
     assert list(back.state) == [STATE_PAIDUP] * 4
 
 

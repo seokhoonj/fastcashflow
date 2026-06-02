@@ -7,7 +7,7 @@ import pytest
 from fastcashflow import ExpenseItem, ModelPoints, read_model_points, sample_data_dir, write_measurement
 from fastcashflow.gmm import measure
 from conftest import (PATTERNS, annual_from_monthly as _annual,
-                      make_death_assumptions, mp_to_wide, mp_to_long)
+                      make_death_assumptions, mp_to_frames)
 
 
 def _portfolio(n: int = 400) -> ModelPoints:
@@ -47,28 +47,42 @@ def _assumptions():
     )
 
 
-def _frame(mps: ModelPoints) -> pl.DataFrame:
-    # Wide form -- one row per policy, one column per coverage. The DEATH
-    # coverage in these tests sits at coverage_code "DEATH" (the first and
-    # only registered coverage in ``_assumptions()``); its wide column is
-    # ``DEATH_benefit`` per the reader convention.
-    return pl.DataFrame({
+def _write_model_points(mps: ModelPoints, tmp_path, suffix: str = ".parquet", **policy_extra):
+    """Write ``mps`` as a policies + coverages pair; return the two paths.
+
+    The portfolio carries a single DEATH coverage (the only code registered in
+    these tests). ``policy_extra`` adds optional policy columns (e.g. count).
+    """
+    n = mps.n_mp
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    policies = pl.DataFrame({
+        "mp_id": np.arange(n),
         "issue_age": mps.issue_age,
-        "DEATH_benefit": _death_benefits(mps),
         "level_premium": mps.level_premium,
         "term_months": mps.term_months,
+        **policy_extra,
     })
+    coverages = pl.DataFrame({
+        "mp_id": np.arange(n),
+        "coverage_code": ["DEATH"] * n,
+        "amount": _death_benefits(mps),
+    })
+    pp = tmp_path / f"policies{suffix}"
+    cp = tmp_path / f"coverages{suffix}"
+    if suffix == ".parquet":
+        policies.write_parquet(pp); coverages.write_parquet(cp)
+    else:
+        policies.write_csv(pp); coverages.write_csv(cp)
+    return pp, cp
 
 
 @pytest.mark.parametrize("suffix", [".parquet", ".csv"])
 def test_model_points_round_trip(tmp_path, suffix):
     """read_model_points reconstructs a ModelPoints written to disk."""
     mps = _portfolio()
-    path = tmp_path / f"mps{suffix}"
-    df = _frame(mps)
-    df.write_parquet(path) if suffix == ".parquet" else df.write_csv(path)
+    pp, cp = _write_model_points(mps, tmp_path, suffix)
 
-    loaded = read_model_points(path, calculation_methods=PATTERNS)
+    loaded = read_model_points(pp, coverages=cp, calculation_methods=PATTERNS)
     assert loaded.n_mp == mps.n_mp
     assert np.allclose(loaded.issue_age, mps.issue_age)
     assert np.allclose(_death_benefits(loaded), _death_benefits(mps))
@@ -80,16 +94,14 @@ def test_read_model_points_reads_count(tmp_path):
     """read_model_points reads an optional count column, else defaults to one."""
     mps = _portfolio(50)
     counts = np.arange(1, mps.n_mp + 1, dtype=float)
-    _frame(mps).with_columns(pl.Series("count", counts)).write_parquet(
-        tmp_path / "with_count.parquet"
-    )
+    pp, cp = _write_model_points(mps, tmp_path / "with", ".parquet", count=counts)
     assert np.allclose(
-        read_model_points(tmp_path / "with_count.parquet", calculation_methods=PATTERNS).count, counts
+        read_model_points(pp, coverages=cp, calculation_methods=PATTERNS).count, counts
     )
 
-    _frame(mps).write_parquet(tmp_path / "no_count.parquet")
+    pp2, cp2 = _write_model_points(mps, tmp_path / "no", ".parquet")
     assert np.allclose(
-        read_model_points(tmp_path / "no_count.parquet", calculation_methods=PATTERNS).count,
+        read_model_points(pp2, coverages=cp2, calculation_methods=PATTERNS).count,
         np.ones(mps.n_mp),
     )
 
@@ -165,26 +177,28 @@ def test_measurement_equality_is_identity():
 def test_read_ignores_extra_columns_and_flags_missing(tmp_path):
     """Extra columns are ignored; a missing required column is an error."""
     mps = _portfolio(50)
-    full = _frame(mps).with_columns(
-        pl.Series("mp_id", np.arange(mps.n_mp))
-    )
-    full.write_parquet(tmp_path / "full.parquet")
+    pp, cp = _write_model_points(mps, tmp_path, ".parquet")
+    # extra columns on the policies frame are ignored
+    pl.read_parquet(pp).with_columns(pl.lit(1).alias("junk")).write_parquet(pp)
     assert read_model_points(
-        tmp_path / "full.parquet"
+        pp, coverages=cp, calculation_methods=PATTERNS
     ).n_mp == mps.n_mp
 
-    pl.DataFrame({"issue_age": mps.issue_age}).write_parquet(tmp_path / "partial.parquet")
+    # a coverages frame missing a required column is an error
+    pl.DataFrame({"mp_id": [0], "coverage_code": ["DEATH"]}).write_parquet(
+        tmp_path / "bad_cov.parquet")
     with pytest.raises(ValueError, match="missing required column"):
-        read_model_points(tmp_path / "partial.parquet")
+        read_model_points(pp, coverages=tmp_path / "bad_cov.parquet",
+                           calculation_methods=PATTERNS)
 
 
 def test_file_workflow_matches_in_memory(tmp_path):
     """A file round-trip produces the same valuation as the in-memory path."""
     mps = _portfolio()
     basis = _assumptions()
-    _frame(mps).write_parquet(tmp_path / "mps.parquet")
+    pp, cp = _write_model_points(mps, tmp_path, ".parquet")
 
-    from_file = measure(read_model_points(tmp_path / "mps.parquet", calculation_methods=PATTERNS), basis, full=False)
+    from_file = measure(read_model_points(pp, coverages=cp, calculation_methods=PATTERNS), basis, full=False)
     in_memory = measure(mps, basis, full=False)
 
     assert np.allclose(from_file.bel, in_memory.bel)
@@ -206,11 +220,10 @@ def test_measure_stream_streaming_matches_in_memory(tmp_path):
     )
     basis = _assumptions()
 
-    in_path = tmp_path / "mps.parquet"
-    _frame(mps).with_columns(pl.Series("id", np.arange(n))).write_parquet(in_path)
+    pp, cp = _write_model_points(mps, tmp_path, ".parquet")
 
     out_dir = tmp_path / "results"
-    processed = fcf.gmm.measure_stream(in_path, out_dir, basis, chunk_size=300, id_column="id",
+    processed = fcf.gmm.measure_stream(pp, out_dir, basis, coverages=cp, chunk_size=300,
                            calculation_methods=PATTERNS)
     assert processed == n
     assert len(sorted(out_dir.glob("part-*.parquet"))) == 4  # 300+300+300+100
@@ -227,13 +240,12 @@ def test_measure_stream_streaming_matches_in_memory(tmp_path):
 def test_measure_stream_rejects_existing_output(tmp_path):
     """A directory that already holds part files is rejected."""
     mps = _portfolio(100)
-    in_path = tmp_path / "mps.parquet"
-    _frame(mps).write_parquet(in_path)
+    pp, cp = _write_model_points(mps, tmp_path, ".parquet")
     out_dir = tmp_path / "results"
 
-    fcf.gmm.measure_stream(in_path, out_dir, _assumptions())
+    fcf.gmm.measure_stream(pp, out_dir, _assumptions(), coverages=cp, calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="already contains part"):
-        fcf.gmm.measure_stream(in_path, out_dir, _assumptions())
+        fcf.gmm.measure_stream(pp, out_dir, _assumptions(), coverages=cp, calculation_methods=PATTERNS)
 
 
 def test_load_sample_data_runs():
@@ -278,13 +290,13 @@ def test_describe_basis_renders_both_shapes(capsys):
 
 
 def test_long_form_round_trips(tmp_path):
-    """A long-form policies + coverages pair written out and re-read through
+    """A policies + coverages pair written out and re-read through
     read_model_points reproduces the valuation."""
 
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mp_to_long(mps, basis)
+    policies, coverages = mp_to_frames(mps, basis)
     policies.write_csv(tmp_path / "pol.csv")
     coverages.write_csv(tmp_path / "cov.csv")
     back = read_model_points(tmp_path / "pol.csv",
@@ -295,28 +307,13 @@ def test_long_form_round_trips(tmp_path):
     assert np.allclose(a.csm, b.csm)
 
 
-def test_wide_form_round_trips(tmp_path):
-    """A wide one-row-per-policy frame written out and re-read through
-    read_model_points reproduces the valuation."""
-
-    basis = next(iter(fcf.samples.basis().values()))
-    patterns = fcf.samples.calculation_methods()
-    mps = fcf.samples.model_points()
-    mp_to_wide(mps, basis).write_csv(tmp_path / "wide.csv")
-    back = read_model_points(tmp_path / "wide.csv",
-                             calculation_methods=patterns)
-    a, b = measure(mps, basis, full=False), measure(back, basis, full=False)
-    assert np.allclose(a.bel, b.bel)
-    assert np.allclose(a.csm, b.csm)
-
-
-def test_measure_stream_streams_long_form(tmp_path):
-    """gmm.measure_stream streams a long-form policies + coverages pair in chunks."""
+def test_measure_stream_streams_frames(tmp_path):
+    """gmm.measure_stream streams a policies + coverages pair in chunks."""
     
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mp_to_long(mps, basis)
+    policies, coverages = mp_to_frames(mps, basis)
     policies.write_parquet(tmp_path / "pol.parquet")
     coverages.write_parquet(tmp_path / "cov.parquet")
 

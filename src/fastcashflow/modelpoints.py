@@ -150,7 +150,7 @@ class ModelPoints:
     # registered here with its kernel-routing method (DEATH / MORBIDITY /
     # DIAGNOSIS / ANNUITY / MATURITY). The engine derives
     # ``(is_diagnosis, risk)`` from the method via
-    # :func:`fastcashflow.coverage.method_attrs`; the I/O long-form reader
+    # :func:`fastcashflow.coverage.method_attrs`; the I/O reader
     # routes coverage rows by it (annuity / maturity into scalar fields,
     # rate-driven into the CSR). ``None`` lets the engine fall back to its
     # default (every rate-driven coverage treated as a non-diagnosis

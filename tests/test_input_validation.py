@@ -130,33 +130,7 @@ def test_read_state_rejects_unknown_integer():
 
 
 # ---------------------------------------------------------------------------
-# io.py wide reader collision with reserved column names
-# ---------------------------------------------------------------------------
-
-def test_wide_reader_rejects_collision_with_reserved_name(tmp_path):
-    """A coverage_code 'maturity' would shadow the maturity_benefit scalar."""
-    asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage_code="maturity")
-    pol_csv = tmp_path / "policies.csv"
-    pl.DataFrame({
-        "issue_age": [40], "term_months": [12], "level_premium": [0.0],
-        "maturity_benefit": [1_000_000.0],
-    }).write_csv(pol_csv)
-    bp_csv = tmp_path / "calculation_methods.csv"
-    pl.DataFrame({
-        "coverage_code": ["maturity"], "calculation_method": ["DEATH"],
-    }).write_csv(bp_csv)
-
-    basis = fcf.read_basis(asmp_book)
-    with pytest.raises(ValueError, match="reserved wide-form"):
-        fcf.read_model_points(
-            pol_csv,
-            calculation_methods=bp_csv,
-        )
-
-
-# ---------------------------------------------------------------------------
-# io.py long-form mp_id uniqueness / premium double-source / reduction pair
+# io.py mp_id uniqueness / premium double-source / reduction pair
 # ---------------------------------------------------------------------------
 
 def test_long_form_rejects_duplicate_mp_id(tmp_path):
@@ -461,7 +435,7 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
 
 
 def test_long_form_no_premium_source_warns(tmp_path, recwarn):
-    """Long-form with neither ``premium`` (cov) nor ``level_premium`` (pol)
+    """With neither ``premium`` (cov) nor ``level_premium`` (pol)
     silently defaults to zero -- now warns."""
     asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")

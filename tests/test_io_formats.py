@@ -1,9 +1,8 @@
 """Model-point I/O formats -- read_model_points reads xlsx and feather,
-and the long-form reader picks up the optional benefit-rule columns.
+and picks up the optional per-coverage benefit-rule columns.
 
-xlsx: a single-sheet wide workbook and a two-sheet (policies + coverages)
-long-form workbook. feather: the Arrow IPC format. All round-trip to the
-same valuation as the bundled in-memory sample.
+xlsx: a two-sheet (policies + coverages) workbook. feather: the Arrow IPC
+format. Both round-trip to the same valuation as the bundled in-memory sample.
 """
 import fastcashflow as fcf
 import numpy as np
@@ -12,7 +11,7 @@ import polars as pl
 
 from fastcashflow import read_model_points, write_measurement
 from fastcashflow.gmm import measure
-from conftest import mp_to_wide, mp_to_long
+from conftest import mp_to_frames
 
 
 def _write_sheets(path, sheets):
@@ -27,28 +26,14 @@ def _write_sheets(path, sheets):
     wb.save(path)
 
 
-def test_read_wide_xlsx(tmp_path):
-    """A wide .xlsx reads to the same valuation as the in-memory book."""
+def test_read_xlsx(tmp_path):
+    """A two-sheet .xlsx -- policies and coverages sheets in one workbook."""
     
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    path = tmp_path / "wide.xlsx"
-    _write_sheets(path, [("model_points", mp_to_wide(mps, basis))])
-
-    back = read_model_points(path, calculation_methods=patterns)
-    assert back.n_mp == mps.n_mp
-    assert np.allclose(measure(back, basis, full=False).bel, measure(mps, basis, full=False).bel)
-
-
-def test_read_long_xlsx(tmp_path):
-    """A long-form .xlsx -- policies and coverages sheets in one workbook."""
-    
-    basis = next(iter(fcf.samples.basis().values()))
-    patterns = fcf.samples.calculation_methods()
-    mps = fcf.samples.model_points()
-    policies, coverages = mp_to_long(mps, basis)
-    path = tmp_path / "long.xlsx"
+    policies, coverages = mp_to_frames(mps, basis)
+    path = tmp_path / "book.xlsx"
     _write_sheets(path, [("policies", policies), ("coverages", coverages)])
 
     back = read_model_points(path, calculation_methods=patterns)
@@ -62,10 +47,13 @@ def test_read_feather(tmp_path):
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    path = tmp_path / "wide.feather"
-    mp_to_wide(mps, basis).write_ipc(path)
+    policies, coverages = mp_to_frames(mps, basis)
+    pol_path = tmp_path / "policies.feather"
+    cov_path = tmp_path / "coverages.feather"
+    policies.write_ipc(pol_path)
+    coverages.write_ipc(cov_path)
 
-    back = read_model_points(path, calculation_methods=patterns)
+    back = read_model_points(pol_path, coverages=cov_path, calculation_methods=patterns)
     assert back.n_mp == mps.n_mp
     assert np.allclose(measure(back, basis, full=False).bel, measure(mps, basis, full=False).bel)
 
@@ -79,13 +67,13 @@ def test_write_measurement_feather(tmp_path):
     assert path.exists()
 
 
-def test_long_form_reads_benefit_rules(tmp_path):
-    """The long-form coverages frame reads the waiting / reduction columns."""
+def test_reads_coverage_benefit_rules(tmp_path):
+    """The coverages frame reads the waiting / reduction columns."""
     
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mp_to_long(mps, basis)
+    policies, coverages = mp_to_frames(mps, basis)
     coverages = coverages.with_columns(
         pl.lit(6).alias("waiting"),
         pl.lit(24).alias("reduction_end"),
@@ -108,36 +96,14 @@ def test_long_form_reads_benefit_rules(tmp_path):
 # silently ignores the column. The warning surfaces a common misuse.
 # ---------------------------------------------------------------------------
 
-def test_wide_policies_elapsed_months_emits_warning(tmp_path):
-    """A wide policies frame with an ``elapsed_months`` column triggers
-    a UserWarning -- the reader silently drops it and inforce_state is
-    the source of truth."""
-    import warnings
-    basis = next(iter(fcf.samples.basis().values()))
-    mps = fcf.samples.model_points()
-    wide = mp_to_wide(mps, basis).with_columns(pl.lit(12).alias("elapsed_months"))
-    path = tmp_path / "wide_with_em.xlsx"
-    _write_sheets(path, [("model_points", wide)])
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        back = read_model_points(path)
-    msgs = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
-    assert any("elapsed_months" in m for m in msgs), msgs
-    # And the column was indeed ignored -- the ModelPoints default of zero
-    # stands (every contract is treated as just-issued, per show_trace's
-    # source-of-truth note).
-    assert np.all(back.elapsed_months == 0)
-
-
-def test_long_policies_elapsed_months_emits_warning(tmp_path):
-    """Same guard fires on the long-form (policies + coverages) path."""
+def test_policies_elapsed_months_emits_warning(tmp_path):
+    """Same guard fires on the (policies + coverages) path."""
     import warnings
     
     basis = next(iter(fcf.samples.basis().values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
-    policies, coverages = mp_to_long(mps, basis)
+    policies, coverages = mp_to_frames(mps, basis)
     policies = policies.with_columns(pl.lit(12).alias("elapsed_months"))
     pol_path = tmp_path / "policies.csv"
     cov_path = tmp_path / "coverages.csv"

@@ -11,7 +11,7 @@ import numpy as np
 from fastcashflow import ModelPoints, read_model_points
 from fastcashflow.gmm import measure
 from conftest import (PATTERNS, annual_from_monthly as _annual,
-                      make_death_assumptions, mp_to_wide)
+                      make_death_assumptions, mp_to_frames)
 
 
 def _assumptions(**overrides):
@@ -87,7 +87,7 @@ def test_shorter_premium_term_raises_the_liability():
 
 
 def test_premium_term_round_trips(tmp_path):
-    """A wide file's `premium_term_months` column reads back unchanged."""
+    """The `premium_term_months` column reads back unchanged."""
     basis = _assumptions()
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
@@ -97,10 +97,13 @@ def test_premium_term_round_trips(tmp_path):
         premium_term_months=np.array([120, 60]),
         calculation_methods=PATTERNS,
     )
-    path = tmp_path / "model_points.csv"
-    mp_to_wide(mp, basis).write_csv(path)
+    pol, cov = mp_to_frames(mp, basis)
+    pol.write_csv(tmp_path / "policies.csv")
+    cov.write_csv(tmp_path / "coverages.csv")
 
-    back = read_model_points(path)
+    back = read_model_points(tmp_path / "policies.csv",
+                             coverages=tmp_path / "coverages.csv",
+                             calculation_methods=PATTERNS)
     assert list(back.premium_term_months) == [120, 60]
     # the 60-month-pay policy collects less premium -> larger liability.
     val = measure(back, basis, full=False)

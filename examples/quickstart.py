@@ -1,8 +1,8 @@
 """Quickstart -- read the inputs and measure.
 
-The inputs live in examples/data/. Open basis.xlsx and
-model_points_wide.xlsx in Excel, replace them with your own figures, and
-run this again -- there is no Python to edit.
+The inputs live in examples/data/. Open basis.xlsx, policies.csv and
+coverages.csv, replace them with your own figures, and run this again --
+there is no Python to edit.
 
     python examples/quickstart.py
 """
@@ -19,7 +19,7 @@ def main() -> None:
     # pick TERM_LIFE / FC for this single-segment quickstart. A real run
     # over a multi-segment portfolio would pass a dict basis to fcf.gmm.measure.
     basis = basis[("TERM_LIFE_A", "FC")]
-    model_points = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
+    model_points = fcf.read_model_points(DATA / "policies.csv", coverages=DATA / "coverages.csv", calculation_methods=DATA / "calculation_methods.csv")
 
     m = fcf.gmm.measure(model_points, basis)
     print(f"measured {model_points.n_mp} model points -- portfolio totals at issue")

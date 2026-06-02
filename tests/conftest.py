@@ -87,44 +87,17 @@ def make_death_assumptions(
 
 
 # ---------------------------------------------------------------------------
-# Wide / long frame renderers -- TEST-ONLY scaffold to exercise the readers.
+# Frame renderers -- TEST-ONLY scaffold to exercise read_model_points.
 #
-# The engine ships no ModelPoints -> file exporter: a wide or long frame is a
+# The engine ships no ModelPoints -> file exporter: an in-memory frame is a
 # lossy projection (it cannot carry coverage waiting / reduction rules,
 # issue_class, elapsed_months, or the VFA account fields), and a silently-lossy
-# public export is a footgun. Only the readers (read_model_points wide / long)
+# public export is a footgun. Only the reader (read_model_points)
 # accept these as external input. These helpers render a *simple* test
 # portfolio into those frames so the reader / file-format tests have input;
 # they are valid only because the test portfolios carry none of the dropped
 # fields.
 # ---------------------------------------------------------------------------
-
-def mp_to_wide(mp, basis):
-    """Render a simple ModelPoints as a wide one-row-per-policy frame."""
-    mp_of_cov = np.repeat(np.arange(mp.n_mp), np.diff(mp.coverage_offset))
-    cols = {
-        "mp_id": np.arange(mp.n_mp),
-        "issue_age": mp.issue_age,
-        "sex": mp.sex,
-        "term_months": mp.term_months,
-        "count": mp.count,
-        "state": np.array([STATE_LABELS[int(s)] for s in mp.state]),
-        "level_premium": mp.level_premium,
-        "single_premium": mp.single_premium,
-        "premium_term_months": mp.premium_term_months,
-        "premium_frequency_months": mp.premium_frequency_months,
-        "annuity_frequency_months": mp.annuity_frequency_months,
-        "maturity_benefit": mp.maturity_benefit,
-        "annuity_payment": mp.annuity_payment,
-        "disability_income": mp.disability_income,
-        "disability_benefit": mp.disability_benefit,
-    }
-    for i, coverage in enumerate(basis.coverages):
-        mask = mp.coverage_index == i
-        cols[f"{coverage.code}_benefit"] = np.bincount(
-            mp_of_cov[mask], weights=mp.coverage_amount[mask], minlength=mp.n_mp)
-    return pl.DataFrame(cols)
-
 
 def _coverage_label(mp, ctype, default):
     registry = mp.calculation_methods or {}
@@ -134,8 +107,8 @@ def _coverage_label(mp, ctype, default):
     return default
 
 
-def mp_to_long(mp, basis):
-    """Render a ModelPoints as a (policies, coverages) long-form pair."""
+def mp_to_frames(mp, basis):
+    """Render a ModelPoints as a (policies, coverages) frame pair."""
     policies = pl.DataFrame({
         "mp_id":                    np.arange(mp.n_mp),
         "issue_age":                mp.issue_age,

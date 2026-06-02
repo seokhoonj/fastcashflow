@@ -40,7 +40,7 @@ ModelPoints (mp = fcf.read_model_points(...))
 │   ├── premium_term_months   · 보험료 납입기간 (개월)
 │   └── count                 · 이 줄이 대표하는 계약 수 (없으면 1)
 │
-├── coverages.csv             ── 담보 가입금액 (long-form, 한 줄 = 한 (계약, 담보))
+├── coverages.csv             ── 담보 가입금액 (한 줄 = 한 (계약, 담보))
 │   ├── mp_id                 · 담보가 붙는 계약의 식별자 (policies.csv 의 mp_id 와 join)
 │   ├── coverage_code         · 담보 코드 (calculation_methods 의 코드와 맞물림)
 │   ├── amount                · 가입금액 (보험금)

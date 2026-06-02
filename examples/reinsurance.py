@@ -14,7 +14,7 @@ DATA = Path(__file__).resolve().parent / "data"
 def main() -> None:
     basis = fcf.read_basis(DATA / "basis.xlsx")
     basis = basis[("TERM_LIFE_A", "FC")]
-    book = fcf.read_model_points(DATA / "model_points_wide.xlsx", calculation_methods=DATA / "calculation_methods.csv")
+    book = fcf.read_model_points(DATA / "policies.csv", coverages=DATA / "coverages.csv", calculation_methods=DATA / "calculation_methods.csv")
 
     # A 30% quota-share cession of the direct book.
     reins = fcf.reinsurance.measure(book, basis, fcf.reinsurance.QuotaShare(cession=0.30))
