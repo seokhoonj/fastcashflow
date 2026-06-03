@@ -60,12 +60,18 @@ class PAAMeasurement:
     # headline -- always present, shape (n_mp,)
     lrc: FloatArray              # inception Liability for Remaining Coverage
     loss_component: FloatArray   # onerous-contract loss at inception
+    # inception fulfilment cash flows for remaining coverage (BEL + RA, signed:
+    # negative for a profitable contract). The onerous-test input --
+    # loss_component = max(0, fcf) -- kept so grouping can net it on the group
+    # aggregate. The PAA liability itself is the LRC, not this.
+    fcf: FloatArray | None = None
     # trajectory -- full only (None on the headline-only path)
     lrc_path: FloatArray | None = None         # (n_mp, n_time+1) -- LRC trajectory
     revenue: FloatArray | None = None          # (n_mp, n_time)   -- insurance revenue earned
     service_expense: FloatArray | None = None  # (n_mp, n_time)   -- claims + expenses incurred
     lic: FloatArray | None = None              # (n_mp, n_time+1) -- liability for incurred claims
     cashflows: "Cashflows | None" = None
+    model_points: "ModelPoints | None" = None  # stamped by measure_paa, for group axes
 
     @property
     def service_result(self) -> FloatArray:
@@ -168,14 +174,17 @@ def measure_paa(
                + basis.morbidity_cv * pv_morbidity[:, 0]
                + basis.disability_cv * pv_disability[:, 0]
                + basis.longevity_cv * pv_survival[:, 0])
-    loss_component = np.maximum(0.0, bel[:, 0] + ra0)
+    fcf = bel[:, 0] + ra0
+    loss_component = np.maximum(0.0, fcf)
 
     return PAAMeasurement(
         lrc=lrc[:, 0],
         loss_component=loss_component,
+        fcf=fcf,
         lrc_path=lrc,
         revenue=revenue,
         service_expense=service_expense,
         lic=lic,
         cashflows=proj,
+        model_points=model_points,
     )

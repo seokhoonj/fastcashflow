@@ -29,6 +29,7 @@ from functools import singledispatch
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow._paa import PAAMeasurement
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow._vfa import VFAMeasurement
 from fastcashflow.engine import GMMMeasurement
@@ -147,15 +148,15 @@ def group(measurement, by):
     profitability and validation views are other choices of ``by``.
 
     Dispatches on the measurement type (``GMMMeasurement``, ``VFAMeasurement``,
-    ``ReinsuranceMeasurement``).
+    ``ReinsuranceMeasurement``, ``PAAMeasurement``).
     Returns a measurement of the same type whose rows are the groups, in
     ascending label order -- usable in turn by
     :func:`~fastcashflow.roll_forward`, :func:`~fastcashflow.reconcile` and
     :func:`~fastcashflow.report`.
     """
     raise TypeError(
-        f"group is not implemented for {type(measurement).__name__}; "
-        "supported: GMMMeasurement, VFAMeasurement, ReinsuranceMeasurement."
+        f"group is not implemented for {type(measurement).__name__}; supported: "
+        "GMMMeasurement, VFAMeasurement, ReinsuranceMeasurement, PAAMeasurement."
     )
 
 
@@ -385,6 +386,59 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
     )
 
 
+@group.register
+def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
+    if measurement.lrc_path is None or measurement.fcf is None:
+        raise ValueError(
+            "group() requires a full PAA measurement; the trajectory fields are "
+            "None. Re-run paa.measure()."
+        )
+    group_ids = _resolve_group_ids(measurement, by)
+    n_mp = measurement.lrc_path.shape[0]
+    if group_ids.shape != (n_mp,):
+        raise ValueError(f"group ids must have one entry per model point ({n_mp})")
+    labels, inverse = np.unique(group_ids, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    n_groups = labels.shape[0]
+
+    lrc_path = _sum_by_group(measurement.lrc_path, inverse, n_groups)
+    revenue = _sum_by_group(measurement.revenue, inverse, n_groups)
+    service_expense = _sum_by_group(measurement.service_expense, inverse, n_groups)
+    lic = _sum_by_group(measurement.lic, inverse, n_groups)
+    cf = measurement.cashflows
+    grouped_cf = Cashflows(
+        inforce=_sum_by_group(cf.inforce, inverse, n_groups),
+        deaths=_sum_by_group(cf.deaths, inverse, n_groups),
+        premium_cf=_sum_by_group(cf.premium_cf, inverse, n_groups),
+        claim_cf=_sum_by_group(cf.claim_cf, inverse, n_groups),
+        morbidity_cf=_sum_by_group(cf.morbidity_cf, inverse, n_groups),
+        expense_cf=_sum_by_group(cf.expense_cf, inverse, n_groups),
+        annuity_cf=_sum_by_group(cf.annuity_cf, inverse, n_groups),
+        disability_cf=_sum_by_group(cf.disability_cf, inverse, n_groups),
+        maturity_cf=_sum_by_group(cf.maturity_cf, inverse, n_groups),
+        maturity_survivors=_sum_by_group(cf.maturity_survivors, inverse, n_groups),
+        surrender_cf=_sum_by_group(cf.surrender_cf, inverse, n_groups),
+    )
+    # The LRC, revenue, service expense and LIC are all undiscounted and
+    # additive -- there is no CSM (paragraphs 53-59). The only non-linear part
+    # is the onerous loss (paragraph 57): re-derive it on the group's aggregate
+    # fulfilment cash flows, so a profitable contract nets a marginally onerous
+    # one within the group.
+    fcf = _sum_by_group(measurement.fcf, inverse, n_groups)
+    loss_component = np.maximum(0.0, fcf)
+    return PAAMeasurement(
+        lrc=lrc_path[:, 0],
+        loss_component=loss_component,
+        fcf=fcf,
+        lrc_path=lrc_path,
+        revenue=revenue,
+        service_expense=service_expense,
+        lic=lic,
+        cashflows=grouped_cf,
+        model_points=None,
+    )
+
+
 @singledispatch
 def group_of_contracts(measurement, *, portfolio: str = "product_code",
                        cohort: str = "issue_year",
@@ -399,10 +453,12 @@ def group_of_contracts(measurement, *, portfolio: str = "product_code",
     Dispatches on the measurement type; the profitability axis differs by type
     (a new measurement registers with ``@group_of_contracts.register``):
 
-    * ``GMMMeasurement`` / ``VFAMeasurement`` -- insurance contracts issued and
-      direct-participating contracts; profitability is the onerous / remaining
-      split (paragraph 16). The CSM re-derivation differs (VFA accretes at the
-      underlying-items return), handled by :func:`group`'s own dispatch.
+    * ``GMMMeasurement`` / ``VFAMeasurement`` / ``PAAMeasurement`` -- insurance
+      contracts issued, direct-participating, and short-coverage (PAA)
+      contracts; profitability is the onerous / remaining split (paragraph 16,
+      and 57 for the PAA). The per-type re-derivation differs (VFA accretes the
+      CSM at the underlying-items return; the PAA has no CSM, only the LRC and
+      the onerous loss), handled by :func:`group`'s own dispatch.
     * ``ReinsuranceMeasurement`` -- reinsurance contracts held; profitability is
       the net-gain split (paragraph 61, ``csm > 0``), and there is no loss
       component or floor (paragraph 65), so the grouped CSM is the sum of the
@@ -430,7 +486,7 @@ def group_of_contracts(measurement, *, portfolio: str = "product_code",
     raise TypeError(
         "group_of_contracts is not implemented for "
         f"{type(measurement).__name__}; supported: GMMMeasurement, "
-        "VFAMeasurement, ReinsuranceMeasurement."
+        "VFAMeasurement, ReinsuranceMeasurement, PAAMeasurement."
     )
 
 
@@ -451,7 +507,7 @@ def _portfolio_cohort(measurement, portfolio, cohort):
         try:
             cohort_arr = mp.axis("issue_year")
         except KeyError:
-            cohort_arr = np.zeros(measurement.bel.shape[0], dtype=np.int64)
+            cohort_arr = np.zeros(mp.n_mp, dtype=np.int64)
     else:
         cohort_arr = mp.axis(cohort)
     return mp, portfolio_arr, cohort_arr
@@ -473,12 +529,13 @@ def _resolve_profitability(mp, profitability, default):
 
 def _group_of_contracts_onerous(measurement, *, portfolio="product_code",
                                 cohort="issue_year", profitability=None):
-    """Shared GMM / VFA preset -- profitability is the paragraph-16 onerous split.
+    """Shared GMM / VFA / PAA preset -- profitability is the onerous split.
 
-    Insurance contracts issued (GMM) and direct-participating contracts (VFA)
-    use the same onerous / remaining classification, derived from the
-    measurement's ``loss_component``; only ``group``'s per-type CSM
-    re-derivation differs.
+    Insurance contracts issued (GMM), direct-participating contracts (VFA) and
+    short-coverage contracts (PAA) use the same onerous / remaining
+    classification, derived from the measurement's ``loss_component``
+    (paragraph 16, and 57 for the PAA); only ``group``'s per-type re-derivation
+    differs.
     """
     mp, portfolio_arr, cohort_arr = _portfolio_cohort(measurement, portfolio, cohort)
     default = np.where(measurement.loss_component > 0.0, "onerous", "remaining")
@@ -488,6 +545,7 @@ def _group_of_contracts_onerous(measurement, *, portfolio="product_code",
 
 group_of_contracts.register(GMMMeasurement, _group_of_contracts_onerous)
 group_of_contracts.register(VFAMeasurement, _group_of_contracts_onerous)
+group_of_contracts.register(PAAMeasurement, _group_of_contracts_onerous)
 
 
 @group_of_contracts.register
