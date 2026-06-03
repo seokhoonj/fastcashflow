@@ -592,7 +592,7 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
     rate-driven coverages to products.
 
     Returns a :class:`SegmentedBasis` (a ``dict`` subclass) keyed by the segment
-    axes -- ``(product_code, channel_code)`` by default, or whatever leading
+    axes -- ``(product_code, channel_code)`` by default, or whatever
     non-assumption columns the segments sheet declares (one axis, or three);
     ``.segment_axes`` records the axis names so :func:`~fastcashflow.gmm.measure`
     routes without a ``segment_by`` argument.
@@ -642,19 +642,15 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
     defaults: dict = {}
     segments: list = []
     seg_rows = list(_sheet_dicts(_require_sheet(wb, "segments")))
-    # Routing axes = the leading segments-sheet columns, up to the first
-    # assumption slot; display labels (``*_name``, report-only) are skipped.
-    # Stopping at the first assumption keeps a trailing or stale
-    # assumption-adjacent column from being mistaken for an axis. The key tuple
-    # reads product_code, channel_code, ... in column order; the default
-    # (no extra columns) is (product_code, channel_code).
-    axis_cols = []
-    for c in (seg_rows[0].keys() if seg_rows else ()):
-        if c in _SEGMENT_ASSUMPTION_COLS:
-            break
-        if not str(c).endswith("_name"):
-            axis_cols.append(c)
-    axis_cols = tuple(axis_cols)
+    # Routing axes = every segments-sheet column that is not an assumption slot
+    # and not a display label (``*_name``, report-only) -- order-independent, so
+    # an axis column can sit anywhere among the assumption columns. The key tuple
+    # reads them in column order; the default (no extra columns) is
+    # (product_code, channel_code).
+    axis_cols = tuple(
+        c for c in (seg_rows[0].keys() if seg_rows else ())
+        if c not in _SEGMENT_ASSUMPTION_COLS and not str(c).endswith("_name")
+    )
     # An A/E axis that is not a segments-sheet column can never match a segment,
     # so the A/E would be silently discarded -- reject it up front.
     if ae_axes and seg_rows:

@@ -607,18 +607,22 @@ def measure_inforce(
     movement.
     """
     if full:
-        return measure_in_force(
+        result = measure_in_force(
             model_points, basis,
             prior_csm=state.prior_csm,
             lock_in_rate=state.lock_in_rate,
             period_months=period_months,
         )
-    return value_in_force(
-        model_points, basis,
-        prior_csm=state.prior_csm,
-        lock_in_rate=state.lock_in_rate,
-        period_months=period_months,
-    )
+    else:
+        result = value_in_force(
+            model_points, basis,
+            prior_csm=state.prior_csm,
+            lock_in_rate=state.lock_in_rate,
+            period_months=period_months,
+        )
+    # Stamp the source model points, as new-business measure() does, so
+    # group(result, by=[...]) resolves axis names without re-passing them.
+    return replace(result, model_points=model_points)
 
 
 # ---------------------------------------------------------------------------

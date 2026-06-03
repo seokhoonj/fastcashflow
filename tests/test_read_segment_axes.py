@@ -58,6 +58,24 @@ def test_measure_routes_by_file_declared_axes(tmp_path):
     assert m.bel.shape[0] == mp.n_mp
 
 
+def test_read_basis_detects_axis_after_assumption_column(tmp_path):
+    """Axis detection is order-independent -- an axis among the assumption
+    columns is still picked up (not only the leading columns)."""
+    path = _export(tmp_path)
+    wb = openpyxl.load_workbook(path)
+    ws = wb["segments"]
+    header = [c.value for c in ws[1]]
+    after = header.index("mortality_table") + 1      # insert AFTER an assumption column
+    ws.insert_cols(after + 1)
+    ws.cell(row=1, column=after + 1, value="risk_class")
+    for r in range(2, ws.max_row + 1):
+        ws.cell(row=r, column=after + 1, value="A")
+    wb.save(path)
+    basis = read_basis(path)
+    assert "risk_class" in basis.segment_axes         # detected despite position
+    assert all(k[-1] == "A" for k in basis)
+
+
 def test_read_basis_rejects_ae_axis_not_in_segments(tmp_path):
     """An A/E keyed on an axis absent from segments would silently never match."""
     path = _export(tmp_path)
