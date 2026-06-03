@@ -34,9 +34,32 @@ from fastcashflow.projection import Cashflows
 
 
 def _sum_by_group(arr: FloatArray, inverse: IntArray, n_groups: int) -> FloatArray:
-    """Sum the rows of ``arr`` within each group."""
+    """Sum the rows of ``arr`` within each group.
+
+    Two vectorised paths instead of the slow unbuffered ``np.add.at`` scatter
+    that dominated ``group()`` (~14s for 200k model points):
+
+    * **few groups** -- a one-hot ``(n_groups, n) @ arr`` matrix multiply, a
+      single BLAS call with no per-element scatter (~10x faster). Skipped when
+      the one-hot would be large (``n_groups x n`` elements).
+    * **many groups** -- sort once and reduce contiguous runs
+      (``np.add.reduceat``), so the one-hot is never materialised.
+
+    Empty groups stay zero. Sums run in group / sorted order rather than input
+    order, so the result matches the scatter-add to floating-point round-off.
+    """
+    n = arr.shape[0]
+    if n == 0:
+        return np.zeros((n_groups, *arr.shape[1:]), dtype=np.float64)
+    if n_groups * n <= 20_000_000:
+        onehot = (np.arange(n_groups)[:, None] == inverse[None, :]).astype(np.float64)
+        return onehot @ arr
     result = np.zeros((n_groups, *arr.shape[1:]), dtype=np.float64)
-    np.add.at(result, inverse, arr)
+    counts = np.bincount(inverse, minlength=n_groups)
+    nonempty = np.nonzero(counts)[0]
+    order = np.argsort(inverse, kind="stable")
+    starts = np.concatenate(([0], np.cumsum(counts)[:-1]))
+    result[nonempty] = np.add.reduceat(arr[order], starts[nonempty], axis=0)
     return result
 
 
