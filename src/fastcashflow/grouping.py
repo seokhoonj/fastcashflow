@@ -98,19 +98,29 @@ def _join_keys(cols, names=None) -> np.ndarray:
 
     The separator must round-trip, so a value carrying ``'|'`` would collide two
     distinct axis tuples onto one label and silently merge groups -- the same
-    guard the segmented routing applies. ``str`` keeps non-string axes (e.g. an
-    integer ``issue_year``); ``zip(*cols)`` is the fast per-row path.
+    guard the segmented routing applies. Each axis is converted to a string
+    column once (``astype(str)``) and joined vectorised with ``np.char.add``; the
+    ``'|'`` guard runs only on string-like axes, since a numeric axis (e.g. an
+    integer ``issue_year``) can never carry the separator.
     """
+    str_cols = []
     for i, col in enumerate(cols):
-        bad = sorted({str(v) for v in col if "|" in str(v)})
-        if bad:
-            where = f" in axis {names[i]!r}" if names else ""
-            raise ValueError(
-                f"group key value(s) {bad}{where} contain the '|' character, "
-                "which grouping uses as the key separator -- rename the value "
-                "or change the separator upstream."
-            )
-    return np.array(["|".join(map(str, row)) for row in zip(*cols)], dtype=object)
+        col = np.asarray(col)
+        s = col.astype(str)
+        if col.dtype.kind in "OUS":      # object / unicode / bytes -- can carry '|'
+            bad = sorted(set(s[np.char.find(s, "|") >= 0].tolist()))
+            if bad:
+                where = f" in axis {names[i]!r}" if names else ""
+                raise ValueError(
+                    f"group key value(s) {bad}{where} contain the '|' character, "
+                    "which grouping uses as the key separator -- rename the value "
+                    "or change the separator upstream."
+                )
+        str_cols.append(s)
+    out = str_cols[0]
+    for s in str_cols[1:]:
+        out = np.char.add(np.char.add(out, "|"), s)
+    return out.astype(object)
 
 
 def _resolve_group_ids(measurement: GMMMeasurement, by) -> np.ndarray:
@@ -253,8 +263,12 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
                         np.arange(inforce.shape[1])[None, :], -1).max(axis=1)
         out_bom = np.empty((r.n_groups, bom.shape[1]))
         out_mid = np.empty((r.n_groups, measurement.discount_mid.shape[1]))
+        # group -> its row indices, from a single sort rather than a full
+        # ``inverse == g`` scan per group (which would be O(n_groups x n_mp)).
+        group_rows = np.split(np.argsort(r.inverse, kind="stable"),
+                              np.cumsum(r.sizes)[:-1])
         for g in range(r.n_groups):
-            rows = np.nonzero(r.inverse == g)[0]
+            rows = group_rows[g]
             rep = rows[np.argmax(live[rows])]
             livemask = cols[None, :] < (live[rows] + 2)[:, None]
             if not np.allclose(np.where(livemask, bom[rows] - bom[rep], 0.0), 0.0):
