@@ -29,6 +29,7 @@ from functools import singledispatch
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow._vfa import VFAMeasurement
 from fastcashflow.engine import GMMMeasurement
 from fastcashflow.numerics import _csm_kernel, _csm_roll
@@ -145,7 +146,8 @@ def group(measurement, by):
     :func:`group_of_contracts` is the preset for it; management-accounting,
     profitability and validation views are other choices of ``by``.
 
-    Dispatches on the measurement type (``GMMMeasurement``, ``VFAMeasurement``).
+    Dispatches on the measurement type (``GMMMeasurement``, ``VFAMeasurement``,
+    ``ReinsuranceMeasurement``).
     Returns a measurement of the same type whose rows are the groups, in
     ascending label order -- usable in turn by
     :func:`~fastcashflow.roll_forward`, :func:`~fastcashflow.reconcile` and
@@ -153,7 +155,7 @@ def group(measurement, by):
     """
     raise TypeError(
         f"group is not implemented for {type(measurement).__name__}; "
-        "supported: GMMMeasurement, VFAMeasurement."
+        "supported: GMMMeasurement, VFAMeasurement, ReinsuranceMeasurement."
     )
 
 
@@ -322,6 +324,67 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
     )
 
 
+@group.register
+def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
+    if measurement.cashflows is None or measurement.discount_bom is None:
+        raise ValueError(
+            "group() requires a full reinsurance measurement (cash flows and "
+            "discount curve). Re-run reinsurance.measure()."
+        )
+    group_ids = _resolve_group_ids(measurement, by)
+    n_mp = measurement.bel.shape[0]
+    if group_ids.shape != (n_mp,):
+        raise ValueError(f"group ids must have one entry per model point ({n_mp})")
+    labels, inverse = np.unique(group_ids, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    n_groups = labels.shape[0]
+
+    bel = _sum_by_group(measurement.bel, inverse, n_groups)
+    ra = _sum_by_group(measurement.ra, inverse, n_groups)
+    recovery = _sum_by_group(measurement.recovery, inverse, n_groups)
+    reinsurance_premium = _sum_by_group(
+        measurement.reinsurance_premium, inverse, n_groups
+    )
+    cf = measurement.cashflows
+    grouped_cf = Cashflows(
+        inforce=_sum_by_group(cf.inforce, inverse, n_groups),
+        deaths=_sum_by_group(cf.deaths, inverse, n_groups),
+        premium_cf=_sum_by_group(cf.premium_cf, inverse, n_groups),
+        claim_cf=_sum_by_group(cf.claim_cf, inverse, n_groups),
+        morbidity_cf=_sum_by_group(cf.morbidity_cf, inverse, n_groups),
+        expense_cf=_sum_by_group(cf.expense_cf, inverse, n_groups),
+        annuity_cf=_sum_by_group(cf.annuity_cf, inverse, n_groups),
+        disability_cf=_sum_by_group(cf.disability_cf, inverse, n_groups),
+        maturity_cf=_sum_by_group(cf.maturity_cf, inverse, n_groups),
+        maturity_survivors=_sum_by_group(cf.maturity_survivors, inverse, n_groups),
+        surrender_cf=_sum_by_group(cf.surrender_cf, inverse, n_groups),
+    )
+    # Reinsurance held has no loss component and no floor (paragraph 65): the
+    # CSM is the net cost or gain, csm0 = -(BEL - RA). That is linear, so the
+    # grouped CSM equals the sum of the per-contract CSMs; only the accretion /
+    # release trajectory changes, re-derived at the single discount curve and
+    # released by the grouped coverage units.
+    csm0 = -(bel - ra)
+    bom = measurement.discount_bom
+    monthly_rate = bom[:-1] / bom[1:] - 1.0
+    csm, csm_accretion, csm_release = _csm_kernel(
+        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
+    )
+    return ReinsuranceMeasurement(
+        bel=bel,
+        ra=ra,
+        csm=csm[:, 0],
+        csm_path=csm,
+        csm_accretion=csm_accretion,
+        csm_release=csm_release,
+        recovery=recovery,
+        reinsurance_premium=reinsurance_premium,
+        cashflows=grouped_cf,
+        discount_bom=bom,
+        model_points=None,
+    )
+
+
 @singledispatch
 def group_of_contracts(measurement, *, portfolio: str = "product_code",
                        cohort: str = "issue_year",
@@ -340,8 +403,10 @@ def group_of_contracts(measurement, *, portfolio: str = "product_code",
       direct-participating contracts; profitability is the onerous / remaining
       split (paragraph 16). The CSM re-derivation differs (VFA accretes at the
       underlying-items return), handled by :func:`group`'s own dispatch.
-    * reinsurance contracts held would replace the onerous split with a net-gain
-      split (paragraph 61) -- a separate, not-yet-registered case.
+    * ``ReinsuranceMeasurement`` -- reinsurance contracts held; profitability is
+      the net-gain split (paragraph 61, ``csm > 0``), and there is no loss
+      component or floor (paragraph 65), so the grouped CSM is the sum of the
+      contract CSMs.
 
     Arguments (keyword-only):
 
@@ -365,21 +430,12 @@ def group_of_contracts(measurement, *, portfolio: str = "product_code",
     raise TypeError(
         "group_of_contracts is not implemented for "
         f"{type(measurement).__name__}; supported: GMMMeasurement, "
-        "VFAMeasurement. (Reinsurance contracts held -- paragraph 61's net-gain "
-        "grouping -- is a separate, not-yet-registered case.)"
+        "VFAMeasurement, ReinsuranceMeasurement."
     )
 
 
-def _group_of_contracts_onerous(measurement, *, portfolio="product_code",
-                                cohort="issue_year", profitability=None):
-    """Shared GMM / VFA preset -- both split profitability by the onerous test.
-
-    Insurance contracts issued (GMM) and direct-participating contracts (VFA)
-    use the same paragraph-16 onerous / remaining classification, derived from
-    the measurement's ``loss_component``; only ``group``'s per-type CSM
-    re-derivation differs. Reinsurance held replaces this with paragraph 61's
-    net-gain split and registers separately.
-    """
+def _portfolio_cohort(measurement, portfolio, cohort):
+    """Resolve the portfolio and annual-cohort label arrays (shared by all presets)."""
     mp = measurement.model_points
     if mp is None:
         raise ValueError(
@@ -398,19 +454,49 @@ def _group_of_contracts_onerous(measurement, *, portfolio="product_code",
             cohort_arr = np.zeros(measurement.bel.shape[0], dtype=np.int64)
     else:
         cohort_arr = mp.axis(cohort)
-    # profitability is an output, not a known input: derive the onerous /
-    # remaining split (paragraph 16) when not given. A string names a stored
-    # (locked, paragraph 24) classification; an array is a custom split.
+    return mp, portfolio_arr, cohort_arr
+
+
+def _resolve_profitability(mp, profitability, default):
+    """profitability override: a column name, a custom array, or ``None`` -> default.
+
+    ``default`` is the engine-derived split (an output, not a known input). A
+    string names a stored (locked, paragraph 24) classification; an array is a
+    custom split (e.g. the paragraph-16 three-way split).
+    """
     if profitability is None:
-        profitability_arr = np.where(
-            measurement.loss_component > 0.0, "onerous", "remaining"
-        )
-    elif isinstance(profitability, str):
-        profitability_arr = mp.axis(profitability)
-    else:
-        profitability_arr = np.asarray(profitability)
-    return group(measurement, [portfolio_arr, cohort_arr, profitability_arr])
+        return default
+    if isinstance(profitability, str):
+        return mp.axis(profitability)
+    return np.asarray(profitability)
+
+
+def _group_of_contracts_onerous(measurement, *, portfolio="product_code",
+                                cohort="issue_year", profitability=None):
+    """Shared GMM / VFA preset -- profitability is the paragraph-16 onerous split.
+
+    Insurance contracts issued (GMM) and direct-participating contracts (VFA)
+    use the same onerous / remaining classification, derived from the
+    measurement's ``loss_component``; only ``group``'s per-type CSM
+    re-derivation differs.
+    """
+    mp, portfolio_arr, cohort_arr = _portfolio_cohort(measurement, portfolio, cohort)
+    default = np.where(measurement.loss_component > 0.0, "onerous", "remaining")
+    prof = _resolve_profitability(mp, profitability, default)
+    return group(measurement, [portfolio_arr, cohort_arr, prof])
 
 
 group_of_contracts.register(GMMMeasurement, _group_of_contracts_onerous)
 group_of_contracts.register(VFAMeasurement, _group_of_contracts_onerous)
+
+
+@group_of_contracts.register
+def _(measurement: ReinsuranceMeasurement, *, portfolio: str = "product_code",
+      cohort: str = "issue_year", profitability=None) -> ReinsuranceMeasurement:
+    # Reinsurance held replaces the onerous test with a net gain at initial
+    # recognition (paragraph 61). The CSM is the net cost (negative) or net gain
+    # (positive), so csm > 0 is the net-gain group.
+    mp, portfolio_arr, cohort_arr = _portfolio_cohort(measurement, portfolio, cohort)
+    default = np.where(measurement.csm > 0.0, "net_gain", "no_net_gain")
+    prof = _resolve_profitability(mp, profitability, default)
+    return group(measurement, [portfolio_arr, cohort_arr, prof])

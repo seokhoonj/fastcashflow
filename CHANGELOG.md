@@ -22,10 +22,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   engine-derived onerous / remaining split (it is an output, not a known
   input) and accepts an array or a column-name override. Both `group` and
   `group_of_contracts` dispatch on the measurement type via `singledispatch`
-  and support `GMMMeasurement` and `VFAMeasurement` (the VFA CSM re-derivation
-  accretes at the underlying-items return, paragraph 45; `VFAMeasurement` now
-  carries the model points so axis names resolve). Reinsurance held
-  (paragraph 61 net-gain split) is not yet registered.
+  and support `GMMMeasurement`, `VFAMeasurement` and `ReinsuranceMeasurement`.
+  The VFA CSM re-derivation accretes at the underlying-items return
+  (paragraph 45); reinsurance held has no loss component or floor
+  (paragraph 65), so its grouped CSM is the sum of the contract CSMs and
+  `group_of_contracts` splits its profitability by the net gain at initial
+  recognition (paragraph 61) rather than the onerous test. `VFAMeasurement` and
+  `ReinsuranceMeasurement` now carry the model points (and reinsurance the
+  discount curve) so axis names resolve and the grouped CSM re-derives.
 - **Phase (c) semi-Markov in-force projection.** Tracks per-cohort
   occupancy in any state declared with `duration_max > 0`, so
   transition rates can depend on sojourn time. Powers the two flagship

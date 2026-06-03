@@ -58,6 +58,8 @@ class ReinsuranceMeasurement:
     recovery: FloatArray | None = None         # (n_mp, n_time) -- recoveries received
     reinsurance_premium: FloatArray | None = None    # (n_mp, n_time) -- reinsurance premiums paid
     cashflows: "Cashflows | None" = None
+    discount_bom: FloatArray | None = None     # (n_time+1,) -- for grouped CSM re-derivation
+    model_points: "ModelPoints | None" = None  # stamped by measure_reinsurance, for group axes
 
 
 class Treaty(Protocol):
@@ -151,4 +153,6 @@ def measure_reinsurance(
         recovery=recovery,
         reinsurance_premium=reinsurance_premium,
         cashflows=proj,
+        discount_bom=discount_bom,
+        model_points=model_points,
     )
