@@ -1076,7 +1076,7 @@ def read_model_points(
 
     Reads the portfolio **without any basis** -- the model points and
     the actuarial basis are separate inputs. The basis enters only at the
-    engine call (``measure`` / ``value``), which aligns its coverages to the
+    engine call (``measure``), which aligns its coverages to the
     portfolio's coverage order.
 
     The portfolio is two frames -- a policies frame plus a coverages frame:
@@ -1125,7 +1125,7 @@ def read_model_points(
     pol = _read_frame(path)
     if coverages is None:
         raise ValueError(
-            f"{p!r} was read without a coverages frame. read_model_points is "
+            f"{p!r} was read without a coverages frame. read_model_points "
             "needs a coverages frame: pass coverages=<path> (an mp_id / coverage_code / "
             "amount frame), or a single .xlsx carrying 'policies' and "
             "'coverages' sheets. A flat one-row-per-policy (wide) file cannot "
