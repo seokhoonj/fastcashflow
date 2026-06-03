@@ -33,6 +33,12 @@ from fastcashflow.numerics import _csm_roll
 from fastcashflow.projection import Cashflows
 
 
+# In-force floor for the segmented discount-curve check: a month counts as live
+# only above this, so a numerical residual past maturity is not read as a live
+# month. Legitimate in-force is orders of magnitude larger.
+_INFORCE_EPS = 1e-12
+
+
 def _sum_by_group(arr: FloatArray, inverse: IntArray, n_groups: int) -> FloatArray:
     """Sum the rows of ``arr`` within each group.
 
@@ -171,9 +177,13 @@ def group(measurement: GMMMeasurement, by, *,
         # CSM), and represent the group by its longest-horizon curve so the
         # discounting is correct for every contract's whole term.
         cols = np.arange(bom.shape[1])
-        live = np.where(measurement.cashflows.inforce > 0,
-                        np.arange(measurement.cashflows.inforce.shape[1])[None, :],
-                        -1).max(axis=1)
+        inforce = measurement.cashflows.inforce
+        # Live = still in force. A small floor (not exact > 0) so a numerical
+        # residual past maturity is not read as a live month, which would extend
+        # the compared horizon into the padded tail and falsely reject the group.
+        # Legitimate in-force is orders of magnitude above this floor.
+        live = np.where(inforce > _INFORCE_EPS,
+                        np.arange(inforce.shape[1])[None, :], -1).max(axis=1)
         out_bom = np.empty((n_groups, bom.shape[1]))
         out_mid = np.empty((n_groups, measurement.discount_mid.shape[1]))
         for g in range(n_groups):
