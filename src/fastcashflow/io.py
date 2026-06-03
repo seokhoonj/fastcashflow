@@ -878,6 +878,22 @@ def _parse_calculation_methods(path: Path | str) -> dict[str, CalculationMethod]
     return result
 
 
+# Policies-frame columns the engine recognises as fields (or the mp_id join
+# key). Every *other* column on the policies frame is a grouping attribute --
+# portfolio_id, profitability_group, risk_class, region, campaign_id, ... --
+# read into ModelPoints.attributes for group()/group_into_gic.
+_POLICY_RESERVED_COLS = frozenset({
+    "mp_id",
+    "issue_age", "term_months", "level_premium",
+    "sex", "count", "state", "issue_class", "elapsed_months", "issue_date",
+    "single_premium", "premium_term_months", "premium_frequency_months",
+    "annuity_frequency_months", "disability_income", "disability_benefit",
+    "account_value", "minimum_crediting_rate", "minimum_death_benefit",
+    "minimum_accumulation_benefit",
+    "product_code", "channel_code",
+})
+
+
 def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
                        calculation_methods=None) -> ModelPoints:
     """Build a ``ModelPoints`` from a policies + coverages pair.
@@ -999,14 +1015,24 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     )
     for opt in ("sex", "count", "single_premium", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",
-                "disability_income", "disability_benefit"):
+                "disability_income", "disability_benefit", "issue_class"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
     for opt in ("product_code", "channel_code"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
+    if "issue_date" in pol.columns:
+        fields["issue_date"] = pol["issue_date"].to_numpy()
     if "state" in pol.columns:
         fields["state"] = _read_state(pol["state"])
+    # Any policies column that is not a recognised engine field is a grouping
+    # attribute (portfolio_id, profitability_group, risk_class, region, ...) --
+    # one value per policy = one per model point. Available to group() /
+    # group_into_gic via ModelPoints.axis.
+    attributes = {c: pol[c].to_numpy()
+                  for c in pol.columns if c not in _POLICY_RESERVED_COLS}
+    if attributes:
+        fields["attributes"] = attributes
 
     def _by_policy(mask) -> np.ndarray:
         return np.bincount(mp[mask], weights=amount[mask], minlength=n_mp)
@@ -1082,9 +1108,14 @@ def read_model_points(
     The portfolio is two frames -- a policies frame plus a coverages frame:
 
     * a policies frame (``mp_id``, ``issue_age``, ``term_months``, optional
-      ``sex`` / ``count`` / ``state`` / ``level_premium`` / ``single_premium``
-      / ``premium_term_months`` / ``premium_frequency_months`` /
-      ``annuity_frequency_months``), one row per policy;
+      ``sex`` / ``count`` / ``state`` / ``issue_class`` / ``issue_date`` /
+      ``level_premium`` / ``single_premium`` / ``premium_term_months`` /
+      ``premium_frequency_months`` / ``annuity_frequency_months`` /
+      ``product_code`` / ``channel_code``), one row per policy. Any *other*
+      column is read as a grouping attribute (``portfolio_id``,
+      ``profitability_group``, ``risk_class``, ``region``, ...) into
+      :attr:`ModelPoints.attributes`, for :func:`~fastcashflow.group` /
+      :func:`~fastcashflow.group_into_gic`;
     * a coverages frame (``mp_id``, ``coverage_code``, ``amount``, optional
       ``premium`` / ``waiting`` / ``reduction_end`` / ``reduction_factor``),
       one row per policy x coverage -- so per-coverage rules (waiting and
