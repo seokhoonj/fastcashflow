@@ -20,8 +20,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `portfolio` (default `product_code`) and `cohort` (default `issue_year`,
   derived from `issue_date`) name columns; `profitability` defaults to the
   engine-derived onerous / remaining split (it is an output, not a known
-  input) and accepts an array or a column-name override. Dispatches on the
-  measurement type via `singledispatch`.
+  input) and accepts an array or a column-name override. Both `group` and
+  `group_of_contracts` dispatch on the measurement type via `singledispatch`
+  and support `GMMMeasurement` and `VFAMeasurement` (the VFA CSM re-derivation
+  accretes at the underlying-items return, paragraph 45; `VFAMeasurement` now
+  carries the model points so axis names resolve). Reinsurance held
+  (paragraph 61 net-gain split) is not yet registered.
 - **Phase (c) semi-Markov in-force projection.** Tracks per-cohort
   occupancy in any state declared with `duration_max > 0`, so
   transition rates can depend on sojourn time. Powers the two flagship

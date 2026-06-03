@@ -82,6 +82,7 @@ class VFAMeasurement:
     lic: FloatArray | None = None                 # (n_mp, n_time+1)
     discount_bom: FloatArray | None = None      # (n_time+1,)
     cashflows: "Cashflows | None" = None
+    model_points: "ModelPoints | None" = None     # stamped by measure_vfa, for group axes
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
@@ -298,4 +299,5 @@ def measure_vfa(
         lic=lic,
         discount_bom=disc_start,
         cashflows=proj,
+        model_points=model_points,
     )
