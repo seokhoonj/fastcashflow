@@ -34,7 +34,7 @@ def test_surrender_cf_zero_when_curve_is_none():
     lapse silently removes the contract, no surrender cash flow."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=50_000.0, term_months=12,
+        premium=50_000.0, term_months=12,
         calculation_methods=PATTERNS,
     )
     basis = _basis(lapse_rate=0.1, surrender_curve=None)
@@ -48,7 +48,7 @@ def test_surrender_cf_hand_calc_single_period():
     ``lapse_flow * cum_premium * factor[0]``."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=10_000.0, term_months=12,
+        premium=10_000.0, term_months=12,
         calculation_methods=PATTERNS,
     )
     # 12% annual lapse -> ~1.06% monthly under constant-force conversion
@@ -77,7 +77,7 @@ def test_surrender_cf_accumulates_with_cum_premium():
     aggregates inforce * premium each month)."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=10_000.0, term_months=24,
+        premium=10_000.0, term_months=24,
         calculation_methods=PATTERNS,
     )
     basis = _basis(lapse_rate=0.05, surrender_curve=np.full(25, 0.8))
@@ -92,7 +92,7 @@ def test_surrender_cf_widens_bel():
     """Enabling surrender increases BEL (more outflow on lapse)."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=10_000.0, term_months=24,
+        premium=10_000.0, term_months=24,
         calculation_methods=PATTERNS,
     )
     asmp_no_surr = _basis(lapse_rate=0.05, surrender_curve=None)

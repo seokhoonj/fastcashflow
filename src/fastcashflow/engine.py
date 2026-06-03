@@ -726,7 +726,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "def kernel(edge_from, edge_to, edge_prob, edge_lump_sum,")
     line(0, "           premium_state, benefit_state, start_state, "
             "issue_index, sex,")
-    line(0, "           term_months, count, level_premium, single_premium,")
+    line(0, "           term_months, count, premium, single_premium,")
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
@@ -756,12 +756,12 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(8, "age_idx = issue_index[mp]")
     line(8, "sx = sex[mp]")
     line(8, "cnt = count[mp]")
-    line(8, "premium = level_premium[mp]")
+    line(8, "prem = premium[mp]")
     line(8, "annuity = annuity_payment[mp]")
     line(8, "c_start = coverage_offset[mp]")
     line(8, "c_end = coverage_offset[mp + 1]")
     line(8, "ss = start_state[mp]")
-    line(8, "ann_prem = premium * 12.0 / prem_freq")
+    line(8, "ann_prem = prem * 12.0 / prem_freq")
     emit_init(8)
     line(8, "pv_mortality = 0.0")
     line(8, "pv_morbidity = 0.0")
@@ -804,7 +804,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, "dm = discount_mid[t]")
     line(12, "single = prem_occ * single_premium[mp] if t == 0 else 0.0")
     line(12, "if prem_due == 0 and prem_left > 0:")
-    line(16, "level = prem_occ * premium")
+    line(16, "level = prem_occ * prem")
     line(16, "prem_due = prem_freq - 1")
     line(12, "else:")
     line(16, "level = 0.0")
@@ -1177,7 +1177,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(0, "")
     line(0, "@njit(parallel=True, cache=True)")
     line(0, "def kernel(edge_prob, start_state, issue_index, sex,")
-    line(0, "           term_months, count, level_premium, single_premium,")
+    line(0, "           term_months, count, premium, single_premium,")
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
@@ -1207,12 +1207,12 @@ def _codegen_fast_kernel_source_semi_markov(
     line(8, "age_idx = issue_index[mp]")
     line(8, "sx = sex[mp]")
     line(8, "cnt = count[mp]")
-    line(8, "premium = level_premium[mp]")
+    line(8, "prem = premium[mp]")
     line(8, "annuity = annuity_payment[mp]")
     line(8, "c_start = coverage_offset[mp]")
     line(8, "c_end = coverage_offset[mp + 1]")
     line(8, "ss = start_state[mp]")
-    line(8, "ann_prem = premium * 12.0 / prem_freq")
+    line(8, "ann_prem = prem * 12.0 / prem_freq")
     emit_init(8)
     line(8, "pv_mortality = 0.0")
     line(8, "pv_morbidity = 0.0")
@@ -1262,7 +1262,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, "dm = discount_mid[t]")
     line(12, "single = prem_occ * single_premium[mp] if t == 0 else 0.0")
     line(12, "if prem_due == 0 and prem_left > 0:")
-    line(16, "level = prem_occ * premium")
+    line(16, "level = prem_occ * prem")
     line(16, "prem_due = prem_freq - 1")
     line(12, "else:")
     line(16, "level = 0.0")
@@ -1423,7 +1423,7 @@ def _get_fast_kernel_codegen_semi_markov(
 
 
 @njit(parallel=True, cache=True)
-def _fast_kernel_scalar(issue_index, sex, term_months, count, level_premium,
+def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
                          single_premium, premium_term_months, premium_frequency_months,
                          annuity_frequency_months, coverage_index, coverage_amount, coverage_offset,
                          coverage_rates, coverage_risk, coverage_is_diagnosis,
@@ -1462,7 +1462,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, level_premium,
         age_idx = issue_index[mp]
         sx = sex[mp]
         cnt = count[mp]
-        premium = level_premium[mp]
+        prem = premium[mp]
         annuity = annuity_payment[mp]
         c_start = coverage_offset[mp]
         c_end = coverage_offset[mp + 1]
@@ -1508,7 +1508,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, level_premium,
             dm = discount_mid[t]
             single = inforce * single_premium[mp] if t == 0 else 0.0
             if prem_due == 0 and prem_left > 0:
-                level = inforce * premium
+                level = inforce * prem
                 prem_due = prem_freq - 1
             else:
                 level = 0.0
@@ -1529,7 +1529,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, level_premium,
                     ann_due = ann_freq - 1
                 else:
                     ann_due -= 1
-            ann_prem = premium * 12.0 / prem_freq
+            ann_prem = prem * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
             beta = (inforce * beta_pro_rata * ann_prem / 12.0
@@ -1923,7 +1923,7 @@ def _measure_fast(
             model_points.sex,
             model_points.term_months,
             model_points.count,
-            model_points.level_premium,
+            model_points.premium,
             model_points.single_premium,
             model_points.premium_term_months,
             model_points.premium_frequency_months,
@@ -1975,7 +1975,7 @@ def _measure_fast(
         model_points.sex,
         model_points.term_months,
         model_points.count,
-        model_points.level_premium,
+        model_points.premium,
         model_points.single_premium,
         model_points.premium_term_months,
         model_points.premium_frequency_months,
@@ -2024,7 +2024,7 @@ def _measure_fast(
                 model_points.sex,
                 model_points.term_months,
                 model_points.count,
-                model_points.level_premium,
+                model_points.premium,
                 model_points.single_premium,
                 model_points.premium_term_months,
                 model_points.premium_frequency_months,

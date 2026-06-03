@@ -116,7 +116,7 @@ def test_resolved_basis_values():
     
     basis = fcf.samples.basis()
     mp = ModelPoints.single(issue_age=40, benefits={0: 100_000_000.0},
-                            level_premium=50_000.0, term_months=120,
+                            premium=50_000.0, term_months=120,
                             calculation_methods=fcf.samples.calculation_methods())
     # Use a copy of the basis without surrender for the measure() / measure()
     # equivalence assertion -- the measure() fast path doesn't yet include

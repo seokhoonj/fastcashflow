@@ -37,7 +37,7 @@ def _portfolio(n: int = 300) -> ModelPoints:
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         benefits={0: rng.integers(20, 90, n) * 1_000_000},
-        level_premium=rng.integers(5, 18, n) * 10_000,
+        premium=rng.integers(5, 18, n) * 10_000,
         term_months=rng.integers(60, 180, n),
     )
 

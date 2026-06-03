@@ -87,7 +87,7 @@ mp = fcf.ModelPoints.single(
     issue_age     = 40,           # 가입연령 40세
     sex           = 0,            # 성별 (0=남, 1=여)
     benefits      = {0: 12_000},  # 0번 보장 (= DEATH) 의 보험금 12,000
-    level_premium = 100,          # 월납 보험료 100
+    premium = 100,          # 월납 보험료 100
     term_months   = 2,            # 보험기간 2개월
 )
 
@@ -383,7 +383,7 @@ portfolio = fcf.ModelPoints(
     issue_age        = rng.integers(25, 60, n_contracts),                   # 25 ~ 60세
     sex              = rng.integers(0, 2, n_contracts),                     # 0 또는 1
     benefits         = {0: rng.integers(10, 100, n_contracts) * 1_000_000}, # 1 ~ 10억
-    level_premium    = rng.integers(3, 15, n_contracts) * 10_000,           # 3 ~ 15만원
+    premium    = rng.integers(3, 15, n_contracts) * 10_000,           # 3 ~ 15만원
     term_months      = np.full(n_contracts, 120),                           # 모두 10년
     calculation_methods = fcf.samples.calculation_methods(),
 )
@@ -404,7 +404,7 @@ print(f"Onerous: {(result.loss_component > 0).sum():>15,d}")   # 손실 계약 �
 mp = fcf.ModelPoints.single(
     issue_age           = 40,                  # 가입연령
     benefits            = {0: 100_000_000},    # 사망보험금 1억
-    level_premium       = 140_000,             # 5년만 내므로 더 큰 금액
+    premium       = 140_000,             # 5년만 내므로 더 큰 금액
     term_months         = 120,                 # 보장 10년
     premium_term_months = 60,                  # 납입 5년
     calculation_methods    = fcf.samples.calculation_methods(),
@@ -419,7 +419,7 @@ mp = fcf.ModelPoints.single(
 mp = fcf.ModelPoints.single(
     issue_age                = 40,                    # 가입연령
     benefits                 = {0: 100_000_000},      # 사망보험금 1억
-    level_premium            = 70_000,                # 매 분기 7만원
+    premium            = 70_000,                # 매 분기 7만원
     term_months              = 120,                   # 보장 10년
     premium_frequency_months = 3,                     # 분기납
     calculation_methods         = fcf.samples.calculation_methods(),

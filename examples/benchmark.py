@@ -33,7 +33,7 @@ def make_portfolio(n_mp: int, seed: int = 42) -> ModelPoints:
     return ModelPoints(
         issue_age=rng.integers(25, 60, n_mp),
         benefits={0: rng.integers(10, 100, n_mp) * 1_000_000},
-        level_premium=rng.integers(3, 15, n_mp) * 10_000,
+        premium=rng.integers(3, 15, n_mp) * 10_000,
         term_months=np.full(n_mp, 120),
         calculation_methods={"DEATH": CalculationMethod.DEATH},
     )

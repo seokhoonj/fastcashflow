@@ -37,7 +37,7 @@ def _two_vfa(**extra) -> ModelPoints:
     n = 2
     return ModelPoints(
         issue_age=np.array([40, 40]),
-        level_premium=np.array([0.0, 0.0]),
+        premium=np.array([0.0, 0.0]),
         term_months=np.array([60, 60]),
         account_value=np.array([1e8, 1e6]),
         minimum_crediting_rate=np.zeros(n),

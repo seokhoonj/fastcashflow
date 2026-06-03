@@ -25,7 +25,7 @@ def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:
     contract bar the premium itself.
     """
     return replace(
-        model_points, level_premium=np.full(model_points.n_mp, premium)
+        model_points, premium=np.full(model_points.n_mp, premium)
     )
 
 
@@ -47,7 +47,7 @@ def solve_premium(
     * ``csm``        -- an absolute target CSM (profit) per model point.
 
     Every product field of ``model_points`` is used as given -- only
-    ``level_premium`` is ignored, since it is the unknown being solved for.
+    ``premium`` is ignored, since it is the unknown being solved for.
     (A fixed ``single_premium``, if any, stays as given: the level premium
     is solved on top of it.)
     Returns the solved premium per model point, shape ``(n_mp,)``.
@@ -72,7 +72,7 @@ def solve_premium(
         raise ValueError(
             "solve_premium: FCF is insensitive to the premium for "
             f"{int(zero_sens.sum())} model point(s) -- cannot solve. "
-            "Check that level_premium enters the cash flows (non-zero "
+            "Check that premium enters the cash flows (non-zero "
             "premium term and payment frequency)."
         )
 

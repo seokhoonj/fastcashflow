@@ -31,7 +31,7 @@ def test_modelpoints_rejects_negative_issue_age():
     with pytest.raises(ValueError, match="issue_age"):
         ModelPoints(
             issue_age=np.array([-5.0]),
-            level_premium=np.array([0.0]),
+            premium=np.array([0.0]),
             term_months=np.array([12]),
         )
 
@@ -40,7 +40,7 @@ def test_modelpoints_rejects_zero_term_months():
     with pytest.raises(ValueError, match="term_months"):
         ModelPoints(
             issue_age=np.array([40.0]),
-            level_premium=np.array([0.0]),
+            premium=np.array([0.0]),
             term_months=np.array([0]),
         )
 
@@ -49,7 +49,7 @@ def test_modelpoints_rejects_negative_count():
     with pytest.raises(ValueError, match="count"):
         ModelPoints(
             issue_age=np.array([40.0]),
-            level_premium=np.array([0.0]),
+            premium=np.array([0.0]),
             term_months=np.array([12]),
             count=np.array([-100.0]),
         )
@@ -140,7 +140,7 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A", "A"],          # the duplicate-id case
-        "issue_age": [40, 40], "term_months": [12, 12], "level_premium": [0.0, 0.0],
+        "issue_age": [40, 40], "term_months": [12, 12], "premium": [0.0, 0.0],
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
@@ -160,13 +160,13 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
 
 
 def test_long_form_rejects_premium_in_both_frames(tmp_path):
-    """``premium`` in coverages and ``level_premium`` in policies = ambiguous."""
+    """``premium`` in coverages and ``premium`` in policies = ambiguous."""
     asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
-        "level_premium": [12_000.0],    # source 1
+        "premium": [12_000.0],    # source 1
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
@@ -193,7 +193,7 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
-        "level_premium": [12_000.0],
+        "premium": [12_000.0],
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
@@ -388,7 +388,7 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
-        "level_premium": [0.0],
+        "premium": [0.0],
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
@@ -415,7 +415,7 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
-        "level_premium": [0.0],
+        "premium": [0.0],
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
@@ -435,14 +435,14 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
 
 
 def test_long_form_no_premium_source_warns(tmp_path, recwarn):
-    """With neither ``premium`` (cov) nor ``level_premium`` (pol)
+    """With neither ``premium`` (cov) nor ``premium`` (pol)
     silently defaults to zero -- now warns."""
     asmp_book = tmp_path / "basis.xlsx"
     _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
-        # no level_premium
+        # no premium
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
@@ -529,7 +529,7 @@ def test_value_in_force_rejects_elapsed_past_term():
     """elapsed_months > term_months silently read past the trajectory -- reject."""
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([0.0]),
+        premium=np.array([0.0]),
         term_months=np.array([12]),
         elapsed_months=np.array([15]),         # past maturity
     )
@@ -547,7 +547,7 @@ def test_measure_in_force_rejects_elapsed_past_term():
     """Same elapsed > term guard on the trajectory-returning entry."""
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([0.0]),
+        premium=np.array([0.0]),
         term_months=np.array([12]),
         elapsed_months=np.array([15]),
     )
@@ -568,7 +568,7 @@ def test_issue_age_fractional_warns(recwarn):
     """A fractional issue_age would silently truncate at rate lookup -- warn."""
     ModelPoints(
         issue_age=np.array([40.7, 50.0]),       # 40.7 truncates to 40
-        level_premium=np.array([0.0, 0.0]),
+        premium=np.array([0.0, 0.0]),
         term_months=np.array([12, 12]),
     )
     matched = [w for w in recwarn.list
@@ -581,7 +581,7 @@ def test_issue_age_integer_does_not_warn(recwarn):
     """Whole-year issue_age (the typical case) does not warn."""
     ModelPoints(
         issue_age=np.array([40.0, 50.0]),
-        level_premium=np.array([0.0, 0.0]),
+        premium=np.array([0.0, 0.0]),
         term_months=np.array([12, 12]),
     )
     fractional = [w for w in recwarn.list
@@ -603,7 +603,7 @@ def test_segmented_measure_matches_nfc_and_nfd_codes():
     assert composed != decomposed
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([0.0]),
+        premium=np.array([0.0]),
         term_months=np.array([12]),
         product_code=np.array([composed], dtype=object),
         channel_code=np.array(["FC"], dtype=object),
@@ -678,7 +678,7 @@ def test_empty_portfolio_value_raises_loudly():
     """
     mp = ModelPoints(
         issue_age=np.array([], dtype=np.float64),
-        level_premium=np.array([], dtype=np.float64),
+        premium=np.array([], dtype=np.float64),
         term_months=np.array([], dtype=np.int64),
     )
     basis = Basis(
@@ -698,7 +698,7 @@ def test_single_month_measure():
     off-by-one errors at the trajectory ends."""
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([0.0]),
+        premium=np.array([0.0]),
         term_months=np.array([1]),
     )
     basis = Basis(
@@ -718,7 +718,7 @@ def test_mixed_term_months_tail_padded_consistently():
     flat (not garbage)."""
     mp = ModelPoints(
         issue_age=np.array([40.0, 40.0]),
-        level_premium=np.array([0.0, 0.0]),
+        premium=np.array([0.0, 0.0]),
         term_months=np.array([3, 12]),       # mixed
     )
     basis = Basis(
@@ -800,15 +800,15 @@ def test_construction_rejects_garbage_inputs():
 
     # ModelPoints: sex domain, per-MP length mismatch, NaN premium, negative benefit.
     with pytest.raises(ValueError, match="sex must be 0"):
-        fcf.ModelPoints.single(issue_age=40, level_premium=100, term_months=12, sex=2)
+        fcf.ModelPoints.single(issue_age=40, premium=100, term_months=12, sex=2)
     with pytest.raises(ValueError, match="length"):
-        fcf.ModelPoints(issue_age=np.array([40.0]), level_premium=np.array([100.0]),
+        fcf.ModelPoints(issue_age=np.array([40.0]), premium=np.array([100.0]),
                         term_months=np.array([12]), sex=np.array([0, 1]))
-    with pytest.raises(ValueError, match="level_premium must be finite"):
+    with pytest.raises(ValueError, match="premium must be finite"):
         fcf.ModelPoints(issue_age=np.array([40.0]),
-                        level_premium=np.array([np.nan]), term_months=np.array([12]))
+                        premium=np.array([np.nan]), term_months=np.array([12]))
     with pytest.raises(ValueError, match=r"benefits\[0\] must be >= 0"):
-        fcf.ModelPoints(issue_age=np.array([40.0]), level_premium=np.array([100.0]),
+        fcf.ModelPoints(issue_age=np.array([40.0]), premium=np.array([100.0]),
                         term_months=np.array([12]), benefits={0: np.array([-1e6])})
 
 
@@ -841,10 +841,10 @@ def test_guards_negative_amounts_and_premium():
     not (a guaranteed minimum crediting rate may legitimately be negative).
     A negative level premium is a sign error -- accounting adjustments are
     actual experience and belong in movement analysis, not the projection."""
-    base = dict(issue_age=np.array([40.0]), level_premium=np.array([100.0]),
+    base = dict(issue_age=np.array([40.0]), premium=np.array([100.0]),
                 term_months=np.array([120]))
-    with pytest.raises(ValueError, match="level_premium must be >= 0"):
-        fcf.ModelPoints(**{**base, "level_premium": np.array([-1.0])})
+    with pytest.raises(ValueError, match="premium must be >= 0"):
+        fcf.ModelPoints(**{**base, "premium": np.array([-1.0])})
     with pytest.raises(ValueError, match=r"account_value must be >= 0"):
         fcf.ModelPoints(**base, account_value=np.array([-5.0]))
     with pytest.raises(ValueError, match=r"maturity_benefit must be >= 0"):
@@ -904,13 +904,13 @@ def test_guards_empty_portfolio(tmp_path):
     # is the one that fires (the empty-coverages guard runs first otherwise).
     pol_empty = tmp_path / "pol0.csv"
     pol_empty.write_text(
-        "mp_id,product_code,channel_code,issue_age,sex,term_months,level_premium\n")
+        "mp_id,product_code,channel_code,issue_age,sex,term_months,premium\n")
     with pytest.raises(ValueError, match="policies frame is empty"):
         fcf.read_model_points(str(pol_empty), coverages=str(cov_ok),
                               calculation_methods=str(cm))
     pol = tmp_path / "pol.csv"
     pol.write_text(
-        "mp_id,product_code,channel_code,issue_age,sex,term_months,level_premium\n"
+        "mp_id,product_code,channel_code,issue_age,sex,term_months,premium\n"
         "1,TERM_LIFE_A,GA,40,0,120,100.0\n")
     with pytest.raises(ValueError, match="coverages frame is empty"):
         fcf.read_model_points(str(pol), coverages=str(cov_empty),

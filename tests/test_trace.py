@@ -71,7 +71,7 @@ def test_show_trace_emits_diagnosis_pool_only_when_present():
     death_fn = lambda s, a, d: np.full(a.shape, 0.001)
     mp_death = fcf.ModelPoints.single(
         issue_age=40, benefits={0: 1_000_000},
-        level_premium=100, term_months=12,
+        premium=100, term_months=12,
         calculation_methods={"DEATH": fcf.CalculationMethod.DEATH},
     )
     asmp_death = Basis(
@@ -99,7 +99,7 @@ def test_show_trace_undiagnosed_matches_hand_calc():
     )
     mp = fcf.ModelPoints.single(
         issue_age=40, benefits={0: 1_000_000},
-        level_premium=0, term_months=60,
+        premium=0, term_months=60,
         calculation_methods={"CANCER": fcf.CalculationMethod.DIAGNOSIS},
     )
     buf = io.StringIO()
@@ -161,7 +161,7 @@ def test_show_trace_dict_basis_requires_segment_columns():
     channel columns."""
     bare = ModelPoints(
         issue_age=np.array([35.0]),
-        level_premium=np.array([50_000.0]),
+        premium=np.array([50_000.0]),
         term_months=np.array([120]),
         benefits={0: np.array([100_000_000.0])},
     )
@@ -351,7 +351,7 @@ def _profitable_basis_and_mp():
     )
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([200_000.0]),
+        premium=np.array([200_000.0]),
         term_months=np.array([60]),
         benefits={0: np.array([100_000_000.0])},
     )

@@ -956,7 +956,7 @@ def _parse_calculation_methods(path: Path | str) -> dict[str, CalculationMethod]
 # read into ModelPoints.attributes for group()/group_of_contracts.
 _POLICY_RESERVED_COLS = frozenset({
     "mp_id",
-    "issue_age", "term_months", "level_premium",
+    "issue_age", "term_months", "premium",
     "sex", "count", "state", "issue_class", "elapsed_months", "issue_date",
     "single_premium", "premium_term_months", "premium_frequency_months",
     "annuity_frequency_months", "disability_income", "disability_benefit",
@@ -1016,13 +1016,13 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
             f"{' (...)' if len(dups) > 10 else ''} -- mp_id must be unique"
         )
     # Premium double-source -- if both the coverages frame's ``premium``
-    # column and the policies frame's ``level_premium`` are present, the
+    # column and the policies frame's ``premium`` are present, the
     # cov-side branch silently wins below. Reject up front so the operator
     # picks one source.
-    if "premium" in cov.columns and "level_premium" in pol.columns:
+    if "premium" in cov.columns and "premium" in pol.columns:
         raise ValueError(
             "premium is specified twice -- 'premium' in the coverages "
-            "frame and 'level_premium' in the policies frame. Pick one: "
+            "frame and 'premium' in the policies frame. Pick one: "
             "the coverages-side column sums per coverage to the policy, "
             "the policies-side column is a flat per-policy amount."
         )
@@ -1116,22 +1116,22 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     # Premium -- the coverages frame carries it per coverage; sum to the policy.
     if "premium" in cov.columns:
         prem = cov["premium"].fill_null(0.0).to_numpy().astype(np.float64)
-        fields["level_premium"] = np.bincount(mp, weights=prem, minlength=n_mp)
-    elif "level_premium" in pol.columns:
-        fields["level_premium"] = pol["level_premium"].to_numpy()
+        fields["premium"] = np.bincount(mp, weights=prem, minlength=n_mp)
+    elif "premium" in pol.columns:
+        fields["premium"] = pol["premium"].to_numpy()
     else:
         # Neither source provided -- premium is silently zero. A genuine
         # paid-up portfolio is one valid case; a forgotten column is the
         # other. Warn so the latter doesn't slip through.
         warnings.warn(
             "model points have no premium source -- neither "
-            "'premium' on the coverages frame nor 'level_premium' on the "
-            "policies frame was found. level_premium defaults to zero; "
+            "'premium' on the coverages frame nor 'premium' on the "
+            "policies frame was found. premium defaults to zero; "
             "if this portfolio is not fully paid-up, add the column.",
             UserWarning,
             stacklevel=3,
         )
-        fields["level_premium"] = np.zeros(n_mp)
+        fields["premium"] = np.zeros(n_mp)
 
     # Coverage list: the rate-driven coverages (codes 0..n-1 indexing
     # ``coverage_codes`` below). annuity / maturity are survival scalars and
@@ -1182,7 +1182,7 @@ def read_model_points(
 
     * a policies frame (``mp_id``, ``issue_age``, ``term_months``, optional
       ``sex`` / ``count`` / ``state`` / ``issue_class`` / ``issue_date`` /
-      ``level_premium`` / ``single_premium`` / ``premium_term_months`` /
+      ``premium`` / ``single_premium`` / ``premium_term_months`` /
       ``premium_frequency_months`` / ``annuity_frequency_months`` /
       ``product_code`` / ``channel_code``), one row per policy. Any *other*
       column is read as a grouping attribute (``portfolio_id``,
@@ -1283,8 +1283,8 @@ def read_vfa_model_points(
     fields: dict[str, object] = dict(
         issue_age=df["issue_age"].to_numpy(),
         term_months=df["term_months"].to_numpy(),
-        level_premium=(df["level_premium"].to_numpy()
-                       if "level_premium" in df.columns else np.zeros(n_mp)),
+        premium=(df["premium"].to_numpy()
+                       if "premium" in df.columns else np.zeros(n_mp)),
     )
     for opt in ("sex", "count", "single_premium", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",

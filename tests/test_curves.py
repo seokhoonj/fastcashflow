@@ -83,7 +83,7 @@ def test_bel_with_curve_discount_matches_hand_calc():
         discount_annual=np.array([0.03, 0.05]),    # 3% year 0, 5% year 1
     )
     mp = ModelPoints.single(issue_age=40, benefits={0: 0.0},
-                            level_premium=0.0, term_months=24, count=1)
+                            premium=0.0, term_months=24, count=1)
     m = measure(mp, basis)
 
     # Hand calc: expense 1,000 per month, discount mid-month at the
@@ -109,7 +109,7 @@ def test_bel_value_matches_measure_with_curve_discount():
         discount_annual=np.array([0.03, 0.05, 0.06]),
     )
     mp = ModelPoints.single(issue_age=40, benefits={0: 100_000.0},
-                            level_premium=1_000.0, term_months=36, count=1)
+                            premium=1_000.0, term_months=36, count=1)
     m = measure(mp, basis).bel_path[0, 0]
     v = measure(mp, basis, full=False).bel[0]
     assert np.isclose(m, v)
@@ -127,7 +127,7 @@ def test_csm_accretes_at_curve_rate():
         discount_annual=np.array([0.03, 0.10]),   # step UP at year 1
     )
     mp = ModelPoints.single(issue_age=40, benefits={0: 0.0},
-                            level_premium=5_000.0, term_months=24, count=1)
+                            premium=5_000.0, term_months=24, count=1)
     m = measure(mp, basis)
     csm_open = m.csm_path[0, 0]
     csm_close_year0 = m.csm_path[0, 12]

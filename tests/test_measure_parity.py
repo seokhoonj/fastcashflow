@@ -54,7 +54,7 @@ def test_value_uses_coverage_rate_not_mortality_annual():
     )
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1_000_000.0},
-        level_premium=12_000.0, term_months=60,
+        premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )
     v_low  = measure(mp, asmp_low, full=False)
@@ -87,7 +87,7 @@ def test_measure_uses_coverage_rate_not_mortality_annual():
     )
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1_000_000.0},
-        level_premium=12_000.0, term_months=60,
+        premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )
     m_low  = measure(mp, asmp_low)
@@ -114,7 +114,7 @@ def test_value_and_measure_agree_with_settlement_pattern():
     )
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1e8},
-        level_premium=80_000.0, term_months=120,
+        premium=80_000.0, term_months=120,
         calculation_methods=PATTERNS,
     )
     v = measure(mp, basis, full=False)
@@ -133,7 +133,7 @@ def test_value_rejects_nonzero_issue_class():
     class is supported."""
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([12_000.0]),
+        premium=np.array([12_000.0]),
         term_months=np.array([60]),
         issue_class=np.array([1]),               # non-default class
         benefits={0: np.array([1e8])},
@@ -151,7 +151,7 @@ def test_value_accepts_default_issue_class():
     """The default (zero everywhere) issue_class must not trigger the guard."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1e8},
-        level_premium=12_000.0, term_months=60,
+        premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )
     basis = make_death_assumptions(mortality_q=0.005, lapse_q=0.01)

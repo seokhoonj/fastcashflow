@@ -22,7 +22,7 @@ def _b(lapse_q):
 def _mp():
     return ModelPoints(
         issue_age=np.full(4, 40), benefits={0: np.full(4, 1e8)},
-        level_premium=np.full(4, 200_000.0), term_months=np.full(4, 120),
+        premium=np.full(4, 200_000.0), term_months=np.full(4, 120),
         calculation_methods=PATTERNS,
         product_code=np.array(["TL", "TL", "TL", "TL"]),
         channel_code=np.array(["GA", "GA", "TM", "TM"]),
@@ -65,7 +65,7 @@ def test_segment_by_full_matches_fast():
 def test_segment_by_single_basis_fallback_when_axis_unset():
     """A one-entry basis applies to everything when the axes are not set."""
     mp = ModelPoints(issue_age=np.full(2, 40), benefits={0: np.full(2, 1e8)},
-                     level_premium=np.full(2, 200_000.0), term_months=np.full(2, 120),
+                     premium=np.full(2, 200_000.0), term_months=np.full(2, 120),
                      calculation_methods=PATTERNS)        # no product_code / channel
     assert measure(mp, {("only",): _b(0.05)}).bel.shape[0] == 2
 

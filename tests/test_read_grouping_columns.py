@@ -21,7 +21,7 @@ def _read(tmp_path, n=2):
         "mp_id":         np.arange(n),
         "issue_age":     np.full(n, 40),
         "term_months":   np.full(n, 120),
-        "level_premium": np.full(n, 200_000.0),
+        "premium": np.full(n, 200_000.0),
         "product_code":  ["TL"] * n,
         "channel_code":  ["GA"] * n,
         "issue_class":   np.zeros(n, dtype=int),

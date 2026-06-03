@@ -104,7 +104,7 @@ pl.DataFrame({
     "mp_id":         ["P001"],   # 계약 식별자
     "issue_age":     [40],       # 가입연령 40세
     "term_months":   [4],        # 보험기간 4개월
-    "level_premium": [0],        # 월납 보험료 0 (진단 풀에 집중)
+    "premium": [0],        # 월납 보험료 0 (진단 풀에 집중)
 }).write_csv("samples/policies.csv")
 
 pl.DataFrame({

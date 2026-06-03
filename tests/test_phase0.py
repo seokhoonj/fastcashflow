@@ -37,7 +37,7 @@ def test_hand_calculation():
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={0: death_benefit},
-            level_premium=premium, term_months=term,
+            premium=premium, term_months=term,
             calculation_methods=PATTERNS,
         ),
         _assumptions(),
@@ -81,7 +81,7 @@ def test_onerous_contract():
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
-            level_premium=100.0, term_months=12,
+            premium=100.0, term_months=12,
             calculation_methods=PATTERNS,
         ),
         _assumptions(
@@ -97,7 +97,7 @@ def test_csm_fully_releases():
     res = measure(
         ModelPoints.single(
             issue_age=35, benefits={0: 50_000_000.0},
-            level_premium=80_000.0, term_months=60,
+            premium=80_000.0, term_months=60,
             calculation_methods=PATTERNS,
         ),
         _assumptions(
@@ -118,7 +118,7 @@ def test_count_scales_linearly():
     non-zero acquisition, maintenance and single premium exercise the flat
     cash flow terms that do not ride the in-force amount.
     """
-    kw = dict(issue_age=40, benefits={0: 1_000_000.0}, level_premium=12_000.0,
+    kw = dict(issue_age=40, benefits={0: 1_000_000.0}, premium=12_000.0,
               term_months=24, single_premium=5_000.0)
     basis = _assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),

@@ -59,7 +59,7 @@ def test_sec32_bel_is_pv_of_future_cashflows():
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={0: death_benefit},
-            level_premium=premium, term_months=term,
+            premium=premium, term_months=term,
             calculation_methods=PATTERNS,
         ),
         _flat_assumptions(),
@@ -85,7 +85,7 @@ def test_sec34_b65_contract_boundary():
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
-            level_premium=12_000.0, term_months=term,
+            premium=12_000.0, term_months=term,
             calculation_methods=PATTERNS,
         ),
         _flat_assumptions(),
@@ -109,7 +109,7 @@ def test_sec37_ra_addition_to_bel():
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
-            level_premium=12_000.0, term_months=24,
+            premium=12_000.0, term_months=24,
             calculation_methods=PATTERNS,
         ),
         _flat_assumptions(mortality_cv=0.10),
@@ -127,7 +127,7 @@ def test_sec38_initial_csm_profitable():
     res = measure(
         ModelPoints.single(
             issue_age=35, benefits={0: 1_000_000.0},
-            level_premium=15_000.0, term_months=36,
+            premium=15_000.0, term_months=36,
             calculation_methods=PATTERNS,
         ),
         _flat_assumptions(),
@@ -143,7 +143,7 @@ def test_sec38_loss_component_onerous():
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
-            level_premium=100.0,                  # premium far too low
+            premium=100.0,                  # premium far too low
             term_months=12,
             calculation_methods=PATTERNS,
         ),
@@ -172,7 +172,7 @@ def test_sec44_csm_accretion_at_locked_in_rate():
     res = measure(
         ModelPoints.single(
             issue_age=35, benefits={0: 1_000_000.0},
-            level_premium=15_000.0, term_months=36,
+            premium=15_000.0, term_months=36,
             calculation_methods=PATTERNS,
         ),
         basis,
@@ -200,7 +200,7 @@ def test_sec44_b119_csm_release_proportional_to_coverage_units():
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={0: 1_000_000.0},
-            level_premium=12_000.0, term_months=term,
+            premium=12_000.0, term_months=term,
             calculation_methods=PATTERNS,
         ),
         basis,
@@ -228,7 +228,7 @@ def test_b96_higher_discount_reduces_pv_of_claims():
     """
     kwargs = dict(
         issue_age=40, benefits={0: 1_000_000.0},
-        level_premium=12_000.0, term_months=60,
+        premium=12_000.0, term_months=60,
     )
     res_lo = measure(ModelPoints.single(**kwargs, calculation_methods=PATTERNS), _flat_assumptions(discount_annual=0.0))
     res_hi = measure(ModelPoints.single(**kwargs, calculation_methods=PATTERNS), _flat_assumptions(discount_annual=0.10))

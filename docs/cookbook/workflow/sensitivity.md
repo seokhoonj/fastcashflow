@@ -79,7 +79,7 @@ mp = fcf.ModelPoints.single(
     issue_age     = 40,            # 가입연령 40세
     sex           = 0,             # 성별 (0=남, 1=여)
     benefits      = {0: 100_000},  # 사망보험금 100,000
-    level_premium = 1_200,         # 월납 보험료 1,200 (claims 보다 커 흑자)
+    premium = 1_200,         # 월납 보험료 1,200 (claims 보다 커 흑자)
     term_months   = 24,            # 보험기간 2년
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )

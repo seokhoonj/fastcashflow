@@ -155,7 +155,7 @@ basis = fcf.Basis(
 mp = fcf.ModelPoints(
     issue_age         = np.array([45], dtype=np.int64),     # 가입연령 45세
     benefits          = {0: np.array([0.0])},               # 사망보험금 0
-    level_premium     = np.array([0.0]),                    # 보험료 0
+    premium     = np.array([0.0]),                    # 보험료 0
     term_months       = np.array([6], dtype=np.int64),      # 잔여 6개월
     disability_income = np.array([1_000_000.0]),            # 월 장해소득 1,000,000
     state             = np.array([1], dtype=np.int64),      # disabled 코호트 0 에 자리 지정
@@ -234,7 +234,7 @@ asmp_alr = replace(basis,
     waiver_incidence_annual=lambda s, a, d: np.full(a.shape, 1 - (1 - 0.02) ** 12))
 mp_alr = fcf.ModelPoints(
     issue_age=np.array([45], dtype=np.int64), benefits={0: np.array([0.0])},
-    level_premium=np.array([0.0]), term_months=np.array([6], dtype=np.int64),
+    premium=np.array([0.0]), term_months=np.array([6], dtype=np.int64),
     disability_income=np.array([1_000_000.0]), state=np.array([STATE_ACTIVE], dtype=np.int64),
     calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
 ```
@@ -271,7 +271,7 @@ disabled 에 자리 지정하고 (`state=1`) 한 달만 굴리면, 그 달의 �
 ```python
 mp1 = fcf.ModelPoints(
     issue_age=np.array([45], dtype=np.int64), benefits={0: np.array([0.0])},
-    level_premium=np.array([0.0]), term_months=np.array([1], dtype=np.int64),
+    premium=np.array([0.0]), term_months=np.array([1], dtype=np.int64),
     disability_income=np.array([1_000_000.0]), state=np.array([1], dtype=np.int64),
     calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
 print(f"seated 1mo BEL = {fcf.gmm.measure(mp1, basis, full=False).bel[0]:.2f}")   # -> 1000000.00

@@ -129,7 +129,7 @@ def _term_life_mp():
     return fcf.ModelPoints.single(
         issue_age=40,
         benefits={0: 100_000_000.0},
-        level_premium=50_000.0,
+        premium=50_000.0,
         term_months=120,
         calculation_methods=PATTERNS,
     )

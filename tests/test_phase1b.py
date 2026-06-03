@@ -49,7 +49,7 @@ def test_select_ultimate_and_duration_lapse():
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={0: death_benefit},
-            level_premium=premium, term_months=term,
+            premium=premium, term_months=term,
             calculation_methods=PATTERNS,
         ),
         _assumptions(),
@@ -97,7 +97,7 @@ def test_value_matches_run_phase1b():
     mps = ModelPoints(
         issue_age=rng.integers(25, 55, n),
         benefits={0: rng.integers(10, 100, n) * 1_000_000},
-        level_premium=rng.integers(3, 15, n) * 10_000,
+        premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(13, 36, n),
         calculation_methods=PATTERNS,
     )

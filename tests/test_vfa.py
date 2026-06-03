@@ -289,7 +289,7 @@ def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
     basis = _assumptions(investment_return=0.04)
     mp = ModelPoints(
         issue_age=np.array([40, 45]),
-        level_premium=np.array([0.0, 0.0]),
+        premium=np.array([0.0, 0.0]),
         term_months=np.array([120, 120]),
         account_value=np.array([1e8, 1e8]),
         minimum_crediting_rate=np.array([0.04, 0.05]),

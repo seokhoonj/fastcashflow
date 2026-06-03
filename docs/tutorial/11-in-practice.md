@@ -59,7 +59,7 @@ ETL 이 그 사이를 잇습니다. 두 가지 패턴:
   `read_model_points` 로 읽습니다.
 - **DB → 개체 직접** (고급) — 엔진이 실제로 받는 건 파일이 아니라
   `Basis` / `ModelPoints` **개체**입니다. 쿼리 결과 컬럼으로
-  `ModelPoints(issue_age=..., level_premium=..., ...)` 를 직접 조립해
+  `ModelPoints(issue_age=..., premium=..., ...)` 를 직접 조립해
   reader 를 건너뛸 수도 있습니다 (담보가 여럿이면 policies + coverages 를 parquet
   으로 떨궈 `read_*` 가 CSR로 묶게 하는 편이 간단).
 

@@ -116,7 +116,7 @@ def test_value_matches_measure_health():
     n = 300
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        level_premium=rng.integers(5, 20, n) * 10_000,
+        premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         benefits={0: rng.integers(10, 80, n) * 1_000_000, INPATIENT: rng.integers(0, 5, n) * 10_000,
             SURGERY: rng.integers(0, 3, n) * 1_000_000,
@@ -180,7 +180,7 @@ def test_value_matches_measure_diagnosis():
     n = 250
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        level_premium=rng.integers(5, 20, n) * 10_000,
+        premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         benefits={0: rng.integers(10, 80, n) * 1_000_000, DIAGNOSIS: rng.integers(0, 6, n) * 10_000_000,
             INPATIENT: rng.integers(0, 4, n) * 10_000},

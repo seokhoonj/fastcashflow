@@ -33,14 +33,14 @@ def test_subset_keeps_selected_rows():
     """Subsetting by indices preserves per-row scalar fields."""
     mp = ModelPoints(
         issue_age=np.array([30, 40, 50, 60]),
-        level_premium=np.array([100.0, 200.0, 300.0, 400.0]),
+        premium=np.array([100.0, 200.0, 300.0, 400.0]),
         term_months=np.array([120, 120, 120, 120]),
         benefits={0: np.array([1_000.0, 2_000.0, 3_000.0, 4_000.0])},
     )
     sub = mp.subset([0, 2])
     assert sub.n_mp == 2
     assert sub.issue_age.tolist() == [30, 50]
-    assert sub.level_premium.tolist() == [100.0, 300.0]
+    assert sub.premium.tolist() == [100.0, 300.0]
     # Per-coverage amounts survive the subset (the CSR is rebuilt for the
     # selected rows). The death coverage's per-mp amount is at coverage_index=0.
     assert sub.coverage_amount.tolist() == [1_000.0, 3_000.0]
@@ -51,7 +51,7 @@ def test_subset_rebuilds_csr_coverages():
     # mp 0 -> 1 coverage; mp 1 -> 2 coverages; mp 2 -> 1 coverage
     mp = ModelPoints(
         issue_age=np.array([30, 40, 50]),
-        level_premium=np.zeros(3),
+        premium=np.zeros(3),
         term_months=np.array([120, 120, 120]),
         benefits={0: np.array([1_000.0, 2_000.0, 3_000.0]), 2: np.array([0.0, 500.0, 0.0])},      # second coverage on mp 1
     )
@@ -67,7 +67,7 @@ def test_subset_slices_product_and_channel_when_set():
     """Segment metadata is sliced alongside per-row fields."""
     mp = ModelPoints(
         issue_age=np.array([30, 40, 50]),
-        level_premium=np.zeros(3),
+        premium=np.zeros(3),
         term_months=np.array([120, 120, 120]),
         benefits={0: np.array([1_000.0, 2_000.0, 3_000.0])},
         product_code=np.array(["TERM_A", "TERM_A", "term_b"]),
@@ -85,7 +85,7 @@ def test_subset_preserves_issue_class_and_elapsed_months():
     zero on the segmented portfolio."""
     mp = ModelPoints(
         issue_age=np.array([30, 40, 50]),
-        level_premium=np.zeros(3),
+        premium=np.zeros(3),
         term_months=np.array([120, 120, 120]),
         benefits={0: np.array([1_000.0, 2_000.0, 3_000.0])},
         issue_class=np.array([0, 1, 2], dtype=np.int64),
@@ -99,7 +99,7 @@ def test_subset_preserves_issue_class_and_elapsed_months():
 def test_subset_leaves_product_none_when_unset():
     mp = ModelPoints(
         issue_age=np.array([30, 40]),
-        level_premium=np.zeros(2),
+        premium=np.zeros(2),
         term_months=np.array([120, 120]),
         benefits={0: np.array([1_000.0, 2_000.0])},
     )
@@ -119,7 +119,7 @@ def test_segmented_measure_routes_each_mp_to_its_segment():
 
     mp = ModelPoints(
         issue_age=np.array([40, 40, 40]),
-        level_premium=np.zeros(3),
+        premium=np.zeros(3),
         term_months=np.array([60, 60, 60]),
         benefits={0: np.array([10_000.0, 10_000.0, 10_000.0])},
         product_code=np.array(["TERM_A", "TERM_A", "TERM_A"]),
@@ -145,7 +145,7 @@ def test_segmented_measure_falls_back_to_single_segment_when_no_product():
     basis = {("TERM_A", ""): basis}
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
-        level_premium=np.zeros(2),
+        premium=np.zeros(2),
         term_months=np.array([60, 60]),
         benefits={0: np.array([10_000.0, 20_000.0])},
     )
@@ -159,7 +159,7 @@ def test_segmented_measure_rejects_multi_segment_basis_without_keys():
     basis = {("TERM_A", "GA"): _flat_asmp(), ("TERM_A", "FC"): _flat_asmp(discount=0.10)}
     mp = ModelPoints(
         issue_age=np.array([40]),
-        level_premium=np.zeros(1),
+        premium=np.zeros(1),
         term_months=np.array([60]),
         benefits={0: np.array([10_000.0])},
     )
@@ -172,7 +172,7 @@ def test_segmented_measure_rejects_unknown_segment():
     basis = {("TERM_A", "GA"): _flat_asmp()}
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
-        level_premium=np.zeros(2),
+        premium=np.zeros(2),
         term_months=np.array([60, 60]),
         benefits={0: np.array([10_000.0, 10_000.0])},
         product_code=np.array(["TERM_A", "term_b"]),
@@ -189,7 +189,7 @@ def test_segmented_measure_with_sample_basis():
     basis = fcf.samples.basis()                    # multi-segment sample
     mp = ModelPoints(
         issue_age=np.array([40, 50, 45]),
-        level_premium=np.array([50_000.0, 60_000.0, 55_000.0]),
+        premium=np.array([50_000.0, 60_000.0, 55_000.0]),
         term_months=np.array([120, 120, 120]),
         benefits={0: np.array([100_000_000.0, 80_000_000.0, 90_000_000.0])},
         product_code=np.array(["TERM_LIFE_A", "TERM_LIFE_A", "TERM_LIFE_A"]),

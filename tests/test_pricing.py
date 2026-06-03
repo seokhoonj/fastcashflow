@@ -31,7 +31,7 @@ def _portfolio(n: int = 300) -> ModelPoints:
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
         benefits={0: rng.integers(20, 100, n) * 1_000_000},
-        level_premium=np.zeros(n),          # ignored by solve_premium
+        premium=np.zeros(n),          # ignored by solve_premium
         term_months=rng.integers(60, 180, n),
         calculation_methods=PATTERNS,
     )
@@ -43,7 +43,7 @@ def _priced(mps: ModelPoints, premium) -> ModelPoints:
         coverage_index=mps.coverage_index,
         coverage_amount=mps.coverage_amount,
         coverage_offset=mps.coverage_offset,
-        level_premium=premium,
+        premium=premium,
         term_months=mps.term_months,
         calculation_methods=mps.calculation_methods,
     )

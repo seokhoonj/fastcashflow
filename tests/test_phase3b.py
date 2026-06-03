@@ -15,7 +15,7 @@ def _portfolio(n: int = 400) -> ModelPoints:
     return ModelPoints(
         issue_age=rng.integers(25, 60, n),
         benefits={0: rng.integers(10, 100, n) * 1_000_000},
-        level_premium=rng.integers(3, 15, n) * 10_000,
+        premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         calculation_methods=PATTERNS,
     )
@@ -58,7 +58,7 @@ def _write_model_points(mps: ModelPoints, tmp_path, suffix: str = ".parquet", **
     policies = pl.DataFrame({
         "mp_id": np.arange(n),
         "issue_age": mps.issue_age,
-        "level_premium": mps.level_premium,
+        "premium": mps.premium,
         "term_months": mps.term_months,
         **policy_extra,
     })
@@ -86,7 +86,7 @@ def test_model_points_round_trip(tmp_path, suffix):
     assert loaded.n_mp == mps.n_mp
     assert np.allclose(loaded.issue_age, mps.issue_age)
     assert np.allclose(_death_benefits(loaded), _death_benefits(mps))
-    assert np.allclose(loaded.level_premium, mps.level_premium)
+    assert np.allclose(loaded.premium, mps.premium)
     assert np.allclose(loaded.term_months, mps.term_months)
 
 
@@ -214,7 +214,7 @@ def test_measure_stream_streaming_matches_in_memory(tmp_path):
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
         benefits={0: rng.integers(10, 100, n) * 1_000_000},
-        level_premium=rng.integers(3, 15, n) * 10_000,
+        premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         calculation_methods=PATTERNS,
     )

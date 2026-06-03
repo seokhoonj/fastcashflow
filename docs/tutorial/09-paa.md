@@ -182,7 +182,7 @@ model_points = fcf.ModelPoints.single(
     issue_age      = 40,                # 가입연령 40세
     sex            = 0,                 # 성별 (0=남, 1=여)
     benefits       = {0: 100_000_000},  # 0번 보장 (= DEATH) 의 보험금 1억
-    level_premium  = 0,                 # 월납 보험료 0 (단일보험료라서)
+    premium  = 0,                 # 월납 보험료 0 (단일보험료라서)
     term_months    = 4,                 # 보험기간 4개월
     single_premium = 1_200_000,         # 가입 시 한 번 받는 단일보험료 120만
 )

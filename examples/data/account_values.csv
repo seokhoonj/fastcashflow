@@ -1,4 +1,4 @@
-mp_id,product_code,channel_code,issue_age,sex,term_months,level_premium,account_value,minimum_crediting_rate,minimum_death_benefit,minimum_accumulation_benefit,count
+mp_id,product_code,channel_code,issue_age,sex,term_months,premium,account_value,minimum_crediting_rate,minimum_death_benefit,minimum_accumulation_benefit,count
 V001,VAR_ANNUITY_A,BANCA,45,0,120,0,100000000.0,0.02,110000000.0,100000000.0,1
 V002,VAR_ANNUITY_A,BANCA,50,0,120,0,200000000.0,0.02,0.0,210000000.0,1
 V003,VAR_ANNUITY_A,BANCA,40,0,180,0,50000000.0,0.02,55000000.0,0.0,1

@@ -82,7 +82,7 @@ def _two_track_bel(death_benefit, premium, term, state, *,
 def test_state_default_is_active():
     """A model point with no `state` is an ordinary active contract."""
     kw = dict(issue_age=40, benefits={0: 1_000_000.0},
-              level_premium=12_000.0, term_months=12)
+              premium=12_000.0, term_months=12)
     basis = _assumptions()
     default = ModelPoints.single(**kw, calculation_methods=PATTERNS)
     assert np.all(default.state == STATE_ACTIVE)
@@ -95,7 +95,7 @@ def test_state_default_is_active():
 def test_waiver_track_does_not_lapse():
     """A waiver contract's in-force decays by mortality alone -- no lapse."""
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
-                            level_premium=12_000.0, term_months=3,
+                            premium=12_000.0, term_months=3,
                             state=STATE_WAIVER,
                             calculation_methods=PATTERNS,
                             )
@@ -108,7 +108,7 @@ def test_waiver_hand_calculation():
     """Input-waiver, 2-month term: coverage continues, no premium, no lapse."""
     death_benefit = 1_000_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
-                            level_premium=12_000.0, term_months=2,
+                            premium=12_000.0, term_months=2,
                             state=STATE_WAIVER,
                             calculation_methods=PATTERNS,
                             )
@@ -130,7 +130,7 @@ def test_waiver_hand_calculation():
 def test_waiver_collects_no_premium():
     """The waiver track pays no premium -- every premium cash flow is zero."""
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
-                            level_premium=12_000.0, term_months=24,
+                            premium=12_000.0, term_months=24,
                             state=STATE_WAIVER,
                             calculation_methods=PATTERNS,
                             )
@@ -142,7 +142,7 @@ def test_paidup_matches_waiver():
     """Paid-up and waiver differ in cause, not cash flows -- identical
     BEL, RA, CSM and loss component."""
     kw = dict(issue_age=42, benefits={0: 80_000_000.0},
-              level_premium=40_000.0, term_months=180)
+              premium=40_000.0, term_months=180)
     basis = _assumptions()
     waiver = measure(ModelPoints.single(**kw, state=STATE_WAIVER, calculation_methods=PATTERNS), basis, full=False)
     paidup = measure(ModelPoints.single(**kw, state=STATE_PAIDUP, calculation_methods=PATTERNS), basis, full=False)
@@ -154,7 +154,7 @@ def test_zero_waiver_rate_is_no_transition():
     """With no waiver-inception assumption the active track never leaks --
     the result is the ordinary single-track projection."""
     kw = dict(issue_age=45, benefits={0: 50_000_000.0},
-              level_premium=30_000.0, term_months=120)
+              premium=30_000.0, term_months=120)
     plain = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), _assumptions(), full=False)
     with_zero = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), _assumptions(waiver_rate=0.0), full=False)
     assert np.isclose(plain.bel[0], with_zero.bel[0])
@@ -167,7 +167,7 @@ def test_dynamic_transition_hand_calculation():
     premium = 12_000.0
     basis = _assumptions(waiver_rate=0.05)
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
-                            level_premium=premium, term_months=2,
+                            premium=premium, term_months=2,
                             calculation_methods=PATTERNS,
                             )
 
@@ -198,7 +198,7 @@ def test_dynamic_transition_matches_reference():
             basis = _assumptions(waiver_rate=w)
             mp = ModelPoints.single(
                 issue_age=40, benefits={0: death_benefit},
-                level_premium=premium, term_months=term, state=state,
+                premium=premium, term_months=term, state=state,
                 calculation_methods=PATTERNS,
             )
             ref_bel, ref_inforce = _two_track_bel(
@@ -211,7 +211,7 @@ def test_dynamic_transition_matches_reference():
 def test_measure_and_value_agree_under_transition():
     """The detailed and the fused path give the same BEL with a transition."""
     mp = ModelPoints.single(issue_age=50, benefits={0: 30_000_000.0},
-                            level_premium=25_000.0, term_months=240,
+                            premium=25_000.0, term_months=240,
                             calculation_methods=PATTERNS,
                             )
     basis = _assumptions(waiver_rate=0.03)
@@ -224,7 +224,7 @@ def test_state_column_round_trips(tmp_path):
     basis = _assumptions()
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
-        level_premium=np.array([12_000.0, 12_000.0]),
+        premium=np.array([12_000.0, 12_000.0]),
         term_months=np.array([24, 24]),
         benefits={0: np.array([1_000_000.0, 1_000_000.0])},
         state=np.array([STATE_ACTIVE, STATE_WAIVER]),
@@ -248,7 +248,7 @@ def test_paidup_state_spelling_is_normalised(tmp_path):
     pol_path = tmp_path / "policies.csv"
     cov_path = tmp_path / "coverages.csv"
     pol_path.write_text(
-        "mp_id,issue_age,term_months,level_premium,state\n"
+        "mp_id,issue_age,term_months,premium,state\n"
         "0,40,24,12000,Paid-up\n"
         "1,40,24,12000,paid_up\n"
         "2,40,24,12000,paid up\n"
@@ -288,7 +288,7 @@ def test_diagnosis_transition_measure_value_agree():
             0: rng.integers(10, 80, n) * 1_000_000.0,
             1: rng.integers(5, 30, n) * 1_000_000.0,
         },
-        level_premium=rng.integers(2, 10, n) * 10_000.0,
+        premium=rng.integers(2, 10, n) * 10_000.0,
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),
         calculation_methods={"DEATH": CalculationMethod.DEATH, "dx": CalculationMethod.DIAGNOSIS},
@@ -305,7 +305,7 @@ def test_waiting_rule_transition_measure_value_agree():
     )
     mps = ModelPoints(
         issue_age=np.array([40.0, 45.0]),
-        level_premium=np.array([30_000.0, 30_000.0]),
+        premium=np.array([30_000.0, 30_000.0]),
         term_months=np.array([120, 120]),
         coverage_index=np.array([0, 0]),
         coverage_amount=np.array([2_000_000.0, 2_000_000.0]),

@@ -164,7 +164,7 @@ mp[0]  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m, premium_term=240m, cou
 - **Rates** — 첫 행의 `axes` 가 `sex=0, issue_age=35` 같이 model point 의
   실제 축. 각 연도의 rate 값이 자기 손계산 테이블의 그 셀과 일치해야 함.
 - **Cash flows** — 연도별 premium / claim 합계. 첫 해 premium 이
-  `level_premium × 12 × in-force` 와 어림셈으로 일치하는지.
+  `premium × 12 × in-force` 와 어림셈으로 일치하는지.
 - **Final** — headline 4 개. 손실부담계약이면 `CSM = 0` 이고
   `loss_component = FCF > 0`.
 
@@ -272,7 +272,7 @@ term-1, term}` — 시작, 1년 끝, 중간, 마지막 step, seed.
 한눈에 잡힙니다. 잘 보면 좋은 항:
 
 - `i[t]` — 월 할인율. 연 할인율 3% 면 `(1.03)^(1/12) - 1 = 0.002466`
-- `premium[t]` — `level_premium × in-force` 와 어림셈으로 일치해야
+- `premium[t]` — `premium × in-force` 와 어림셈으로 일치해야
 - `claim[t]` — `coverage_amount × in-force × mortality_monthly` 정도
 
 `t = term` (시드) 행은 `maturity_benefit` 만 표시하고 recursion 식은
@@ -330,7 +330,7 @@ profitable = Basis(
 # 모델 포인트 -- 보험금 1 억, 월납 보험료 20 만, 5 년 만기 한 계약
 mp_one = ModelPoints(
     issue_age        = np.array([40.0]),                           # 가입연령 40 세
-    level_premium    = np.array([200_000.0]),                      # 월납 보험료 20 만
+    premium    = np.array([200_000.0]),                      # 월납 보험료 20 만
     term_months      = np.array([60]),                             # 보험기간 60 개월 (5 년)
     benefits         = {0: np.array([100_000_000.0])},             # 0 번 보장 (= DEATH) 의 보험금 1 억
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},  # 코드 → 산출방식 매핑

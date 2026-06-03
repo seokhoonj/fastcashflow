@@ -114,7 +114,7 @@ def mp_to_frames(mp, basis):
         "issue_age":                mp.issue_age,
         "sex":                      mp.sex,
         "term_months":              mp.term_months,
-        "level_premium":            mp.level_premium,
+        "premium":            mp.premium,
         "single_premium":           mp.single_premium,
         "premium_term_months":      mp.premium_term_months,
         "premium_frequency_months": mp.premium_frequency_months,

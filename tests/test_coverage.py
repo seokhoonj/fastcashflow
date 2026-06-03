@@ -39,7 +39,7 @@ def test_multiple_death_coverages_sum_to_one():
 
     split = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([80_000.0]),
+        premium=np.array([80_000.0]),
         term_months=np.array([term]),
         coverage_index=np.array([DEATH, DEATH]),
         coverage_amount=np.array([a, b]),
@@ -69,7 +69,7 @@ def test_no_coverages_matches_zero_death_benefit():
     )
     no_coverages = ModelPoints(
         issue_age=np.array([45.0]),
-        level_premium=np.array([50_000.0]),
+        premium=np.array([50_000.0]),
         term_months=np.array([60]),
         calculation_methods=PATTERNS,
     )

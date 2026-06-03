@@ -34,7 +34,7 @@ def _two_contracts(**extra) -> ModelPoints:
     return ModelPoints(
         issue_age=np.array([40, 40]),
         benefits={0: np.array([1e8, 1e8])},
-        level_premium=np.array([300_000.0, 60_000.0]),
+        premium=np.array([300_000.0, 60_000.0]),
         term_months=np.array([120, 120]),
         calculation_methods=PATTERNS,
         **extra,

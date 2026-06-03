@@ -71,7 +71,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   subsumed by the codegen path; git history preserves the earlier
   shape).
 - README + tutorial chapters 08/09/10 quickstart examples now reflect
-  the live API (`mortality_annual` / `lapse_annual` / `level_premium`).
+  the live API (`mortality_annual` / `lapse_annual` / `premium`).
   Older copies in the wild that used `mortality_monthly` /
   `lapse_monthly` / `monthly_premium` no longer work.
 

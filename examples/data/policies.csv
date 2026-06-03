@@ -1,4 +1,4 @@
-mp_id,product_code,channel_code,issue_age,sex,term_months,premium_term_months,level_premium,count
+mp_id,product_code,channel_code,issue_age,sex,term_months,premium_term_months,premium,count
 P001,TERM_LIFE_A,FC,35,0,240,240,63000.0,1
 P002,TERM_LIFE_A,FC,38,1,240,240,59000.0,1
 P003,TERM_LIFE_A,FC,42,0,120,120,47000.0,1

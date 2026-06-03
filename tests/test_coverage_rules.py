@@ -54,7 +54,7 @@ def _one_coverage(cov_idx, benefit, term, *, waiting=0,
     """A single-policy, single-coverage model point carrying a benefit rule."""
     return ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([0.0]),
+        premium=np.array([0.0]),
         term_months=np.array([term]),
         coverage_index=np.array([cov_idx]),
         coverage_amount=np.array([float(benefit)]),
@@ -160,7 +160,7 @@ def test_default_rule_is_inert():
                              waiting=0, reduction_end=0, reduction_factor=1.0)
     omitted = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([0.0]),
+        premium=np.array([0.0]),
         term_months=np.array([36]),
         coverage_index=np.array([DIAGNOSIS]),
         coverage_amount=np.array([4e7]),
@@ -187,7 +187,7 @@ def test_value_matches_measure_with_rules():
 
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(float),
-        level_premium=rng.integers(5, 20, n) * 10_000.0,
+        premium=rng.integers(5, 20, n) * 10_000.0,
         term_months=rng.integers(60, 180, n),
         coverage_index=coverage_index,
         coverage_amount=coverage_amount,

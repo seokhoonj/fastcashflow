@@ -52,7 +52,7 @@ def test_annual_mortality_reproduced_over_a_year():
     preserves the annual rate."""
     q_annual = 0.12
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
-                            level_premium=0.0, term_months=13)
+                            premium=0.0, term_months=13)
     res = measure(mp, _asmp(q_annual=q_annual))
     assert np.isclose(res.cashflows.inforce[0][12], 1.0 - q_annual)
 
@@ -65,7 +65,7 @@ def test_premium_frequency_payment_months():
     """A quarterly premium is collected at months 0, 3, 6, 9; the single
     premium is added at month 0 regardless of the frequency."""
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
-                            level_premium=10_000.0, term_months=12,
+                            premium=10_000.0, term_months=12,
                             single_premium=5_000.0,
                             premium_frequency_months=3)
     res = measure(mp, _asmp())            # no decrements -- in-force stays 1
@@ -83,7 +83,7 @@ def test_quarterly_premium_hand_calculation():
     q_m = 0.01
     death_benefit, premium = 1_000_000.0, 12_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
-                            level_premium=premium, term_months=6,
+                            premium=premium, term_months=6,
                             premium_frequency_months=3)
     basis = _asmp(q_annual=1.0 - (1.0 - q_m) ** 12)   # monthly q_m at the engine
 
@@ -100,7 +100,7 @@ def test_premium_frequency_respects_premium_term():
     """Frequency and premium term compose: a quarterly premium on an
     8-month premium term pays at months 0, 3, 6 only."""
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
-                            level_premium=10_000.0, term_months=24,
+                            premium=10_000.0, term_months=24,
                             premium_term_months=8,
                             premium_frequency_months=3)
     pcf = measure(mp, _asmp()).cashflows.premium_cf[0]
@@ -116,7 +116,7 @@ def test_annuity_frequency_payout_months():
     with zero discount the BEL is the two payments."""
     annuity = 2_000_000.0
     mp = ModelPoints.single(issue_age=60, benefits={0: 0.0},
-                            level_premium=0.0, term_months=24,
+                            premium=0.0, term_months=24,
                             annuity_payment=annuity,
                             annuity_frequency_months=12)
     res = measure(mp, _asmp())            # no decrements -- in-force stays 1
@@ -140,7 +140,7 @@ def test_measure_value_agree_under_frequency():
     mps = ModelPoints(
         issue_age=rng.integers(35, 55, n).astype(float),
         benefits={0: rng.integers(10, 60, n) * 1_000_000.0},
-        level_premium=rng.integers(2, 8, n) * 10_000.0,
+        premium=rng.integers(2, 8, n) * 10_000.0,
         term_months=np.full(n, 120),
         annuity_payment=rng.integers(0, 3, n) * 1_000_000.0,
         premium_frequency_months=freqs[rng.integers(0, 4, n)],
@@ -155,7 +155,7 @@ def test_measure_value_agree_under_frequency():
 def test_default_frequency_is_monthly():
     """An unset frequency means monthly -- the ordinary every-month premium
     and annuity, identical to passing 1 explicitly."""
-    kw = dict(issue_age=45, benefits={0: 20_000_000.0}, level_premium=30_000.0,
+    kw = dict(issue_age=45, benefits={0: 20_000_000.0}, premium=30_000.0,
               term_months=60, annuity_payment=100_000.0)
     basis = _asmp(q_annual=0.05)
     default = measure(ModelPoints.single(**kw), basis, full=False)
@@ -168,9 +168,9 @@ def test_frequency_must_be_positive():
     """A frequency below one month is rejected at build time."""
     with pytest.raises(ValueError, match="premium_frequency_months"):
         ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
-                           level_premium=1_000.0, term_months=12,
+                           premium=1_000.0, term_months=12,
                            premium_frequency_months=0)
     with pytest.raises(ValueError, match="annuity_frequency_months"):
         ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
-                           level_premium=1_000.0, term_months=12,
+                           premium=1_000.0, term_months=12,
                            annuity_frequency_months=0)

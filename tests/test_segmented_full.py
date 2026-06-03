@@ -128,7 +128,7 @@ def _two_seg_mp(terms):
     """Two model points in two channels of one product, given terms."""
     return fcf.ModelPoints(
         issue_age=np.array([40, 40]), benefits={0: np.array([1e8, 1e8])},
-        level_premium=np.array([200_000.0, 200_000.0]),
+        premium=np.array([200_000.0, 200_000.0]),
         term_months=np.array(terms), calculation_methods=PATTERNS,
         product_code=np.array(["A", "A"]), channel_code=np.array(["X", "Y"]),
     )

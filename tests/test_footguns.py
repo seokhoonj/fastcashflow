@@ -22,7 +22,7 @@ def _flat(annual_q):
 def test_segmented_measure_rejects_pipe_in_product_code():
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([12_000.0]),
+        premium=np.array([12_000.0]),
         term_months=np.array([60]),
         product_code=np.array(["TERM|2020"]),         # the trap
         channel_code=np.array(["FC"]),
@@ -38,7 +38,7 @@ def test_segmented_measure_rejects_pipe_in_product_code():
 def test_segmented_measure_rejects_pipe_in_channel_code():
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([12_000.0]),
+        premium=np.array([12_000.0]),
         term_months=np.array([60]),
         product_code=np.array(["TERM_LIFE_A"]),
         channel_code=np.array(["FC|GA"]),            # the trap
@@ -61,7 +61,7 @@ def test_engine_rejects_catalogue_mismatch():
     engine falls back silently. Catch it loudly."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 1e8},
-        level_premium=12_000.0, term_months=60,
+        premium=12_000.0, term_months=60,
         calculation_methods={"DEATH": CalculationMethod.DEATH},  # catalogue: DEATH
     )
     basis = Basis(
@@ -92,7 +92,7 @@ def test_engine_reorders_coverages_by_code():
     rate_cancer = _flat(_annual(0.003))
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([12_000.0]),
+        premium=np.array([12_000.0]),
         term_months=np.array([60]),
         benefits={0: np.array([1e8]), 1: np.array([1e7])},
         calculation_methods={"DEATH": CalculationMethod.DEATH,
@@ -126,7 +126,7 @@ def test_engine_rejects_unregistered_coverage():
     rate = _flat(_annual(0.005))
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([12_000.0]),
+        premium=np.array([12_000.0]),
         term_months=np.array([60]),
         benefits={0: np.array([1e8]), 1: np.array([1e7])},
         calculation_methods={"DEATH": CalculationMethod.DEATH,
@@ -151,7 +151,7 @@ def test_engine_accepts_matching_coverage_codes():
     rate_cancer = _flat(_annual(0.003))
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([12_000.0]),
+        premium=np.array([12_000.0]),
         term_months=np.array([60]),
         benefits={0: np.array([1e8]), 1: np.array([1e7])},
         calculation_methods={"DEATH": CalculationMethod.DEATH,
@@ -183,7 +183,7 @@ def test_engine_ignores_unreferenced_assumptions_coverage():
     rate = _flat(_annual(0.005))
     mp = ModelPoints(
         issue_age=np.array([40.0]),
-        level_premium=np.array([12_000.0]),
+        premium=np.array([12_000.0]),
         term_months=np.array([60]),
         benefits={0: np.array([1e8])},
         calculation_methods={"DEATH": CalculationMethod.DEATH,

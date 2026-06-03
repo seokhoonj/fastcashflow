@@ -43,7 +43,7 @@ def _basis(**overrides):
 def _mp():
     return ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=50_000.0, term_months=240,
+        premium=50_000.0, term_months=240,
     )
 
 
@@ -90,11 +90,11 @@ def test_surrender_scales_linearly_in_count():
     basis = _basis(surrender_value_curve=np.full(n_time, 0.5))
     mp_single = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=50_000.0, term_months=n_time, count=1.0,
+        premium=50_000.0, term_months=n_time, count=1.0,
     )
     mp_grouped = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=50_000.0, term_months=n_time, count=10.0,
+        premium=50_000.0, term_months=n_time, count=10.0,
     )
     m_single = measure(mp_single, basis)
     m_grouped = measure(mp_grouped, basis)

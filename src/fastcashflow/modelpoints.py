@@ -65,7 +65,7 @@ class ModelPoints:
     Premiums and survival benefits stay as plain fields -- they do not
     proliferate the way claim benefits do:
 
-    * ``level_premium``            -- premium charged each payment occurrence.
+    * ``premium``            -- premium charged each payment occurrence.
     * ``single_premium``           -- one-off premium at t = 0.
     * ``premium_term_months``      -- months the level premium is collected,
       defaulting to the full coverage term.
@@ -82,7 +82,7 @@ class ModelPoints:
     """
 
     issue_age: FloatArray          # attained age at issue, in years
-    level_premium: FloatArray      # premium charged each payment occurrence
+    premium: FloatArray      # premium charged each payment occurrence
     term_months: IntArray          # coverage term, in months
     benefits: dict[int, FloatArray] | None = None  # general {cov_idx: amount}
     maturity_benefit: FloatArray | None = None   # benefit on survival to term
@@ -182,7 +182,7 @@ class ModelPoints:
         # Normalise the required fields to numpy arrays of the right dtype.
         for name, dtype in (
             ("issue_age", np.float64),
-            ("level_premium", np.float64),
+            ("premium", np.float64),
             ("term_months", np.int64),
         ):
             object.__setattr__(self, name, np.asarray(getattr(self, name), dtype=dtype))
@@ -191,7 +191,7 @@ class ModelPoints:
         # defines n_mp); a mismatch otherwise reads n_mp from one field and
         # silently ignores the rest. The rate / cash-flow inputs must also be
         # finite -- a NaN age or premium yields a NaN BEL with no error.
-        for _nm in ("level_premium", "term_months"):
+        for _nm in ("premium", "term_months"):
             _a = getattr(self, _nm)
             if _a.shape != (n_mp,):
                 raise ValueError(
@@ -200,18 +200,18 @@ class ModelPoints:
                 )
         if not np.all(np.isfinite(self.issue_age)):
             raise ValueError("issue_age must be finite")
-        if not np.all(np.isfinite(self.level_premium)):
+        if not np.all(np.isfinite(self.premium)):
             raise ValueError(
-                "level_premium must be finite (a NaN premium yields a NaN BEL)"
+                "premium must be finite (a NaN premium yields a NaN BEL)"
             )
-        # level_premium is a forward projection assumption (the contractual
+        # premium is a forward projection assumption (the contractual
         # premium each occurrence), not an accounting ledger entry. Accounting
         # adjustments (refunds, retrospective true-ups) are actual experience
         # and belong in roll_forward / reconcile, not the projection input, so
         # a negative here is a sign / data error.
-        if np.any(self.level_premium < 0):
+        if np.any(self.premium < 0):
             raise ValueError(
-                "level_premium must be >= 0 (a negative premium is a sign error; "
+                "premium must be >= 0 (a negative premium is a sign error; "
                 "accounting adjustments belong in movement analysis, not the "
                 "projection assumption)"
             )
@@ -442,7 +442,7 @@ class ModelPoints:
     def single(
         cls,
         issue_age: float,
-        level_premium: float,
+        premium: float,
         term_months: int,
         benefits: dict[int, float] | None = None,
         maturity_benefit: float = 0.0,
@@ -471,7 +471,7 @@ class ModelPoints:
         """
         return cls(
             issue_age=np.array([issue_age]),
-            level_premium=np.array([level_premium]),
+            premium=np.array([premium]),
             term_months=np.array([term_months]),
             maturity_benefit=np.array([maturity_benefit]),
             annuity_payment=np.array([annuity_payment]),
@@ -499,7 +499,7 @@ class ModelPoints:
     def subset(self, indices) -> ModelPoints:
         """Return a new ``ModelPoints`` carrying the rows at ``indices``.
 
-        Per-row fields (issue_age, level_premium, ...) and the segment
+        Per-row fields (issue_age, premium, ...) and the segment
         metadata (product_code, channel_code) are sliced. The coverage CSR is
         rebuilt: each selected row's coverage slice
         ``coverage_index[coverage_offset[i]:coverage_offset[i+1]]`` is concatenated, and
@@ -511,7 +511,7 @@ class ModelPoints:
 
         # Per-row scalar fields.
         per_row = (
-            "issue_age", "level_premium", "term_months",
+            "issue_age", "premium", "term_months",
             "maturity_benefit", "annuity_payment", "disability_income",
             "disability_benefit", "single_premium", "premium_term_months",
             "premium_frequency_months", "annuity_frequency_months",

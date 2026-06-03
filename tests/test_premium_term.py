@@ -33,7 +33,7 @@ def test_premium_term_hand_calculation():
     death_benefit = 1_000_000.0
     premium = 12_000.0
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: death_benefit}, level_premium=premium,
+        issue_age=40, benefits={0: death_benefit}, premium=premium,
         term_months=3, premium_term_months=2,
         calculation_methods=PATTERNS,
     )
@@ -63,7 +63,7 @@ def test_premium_term_defaults_to_full_term():
     """With no `premium_term_months`, premium is collected the whole term --
     the same result as setting it equal to `term_months`."""
     kw = dict(issue_age=40, benefits={0: 1_000_000.0},
-              level_premium=12_000.0, term_months=120)
+              premium=12_000.0, term_months=120)
     basis = _assumptions()
 
     default = ModelPoints.single(**kw, calculation_methods=PATTERNS)
@@ -77,7 +77,7 @@ def test_shorter_premium_term_raises_the_liability():
     """Collecting premium for fewer months drops a premium inflow, so the
     liability is larger than the same contract paid for the full term."""
     kw = dict(issue_age=45, benefits={0: 50_000_000.0},
-              level_premium=30_000.0, term_months=240)
+              premium=30_000.0, term_months=240)
     basis = _assumptions()
 
     full_pay = measure(ModelPoints.single(**kw, premium_term_months=240, calculation_methods=PATTERNS), basis, full=False)
@@ -91,7 +91,7 @@ def test_premium_term_round_trips(tmp_path):
     basis = _assumptions()
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
-        level_premium=np.array([12_000.0, 12_000.0]),
+        premium=np.array([12_000.0, 12_000.0]),
         term_months=np.array([120, 120]),
         benefits={0: np.array([1_000_000.0, 1_000_000.0])},
         premium_term_months=np.array([120, 60]),

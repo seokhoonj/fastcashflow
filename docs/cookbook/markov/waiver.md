@@ -99,7 +99,7 @@ mp = fcf.ModelPoints.single(
     issue_age     = 40,            # 가입연령 40세
     sex           = 0,             # 성별 (0=남, 1=여)
     benefits      = {0: 100_000},  # 0번 보장 (= DEATH) 의 보험금 100,000
-    level_premium = 1_000,         # 월납 보험료 1,000
+    premium = 1_000,         # 월납 보험료 1,000
     term_months   = 3,             # 보험기간 3개월
     state         = STATE_ACTIVE,  # 시작 상태 (active = 납입 중)
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
@@ -163,7 +163,7 @@ BEL        = 285.22
 
 `Measurement` 는 active / waiver 의 분리 점유를 따로 내주지 않습니다 —
 `inforce` 는 두 상태의 합입니다. 위 손계산처럼 active 점유는
-`premium_cf / level_premium` 로 역산할 수 있습니다 (보험료가 active 에만
+`premium_cf / premium` 로 역산할 수 있습니다 (보험료가 active 에만
 곱해지므로). 상태별 점유가 필요한 정밀 검증은 [검증 패턴](../workflow/validation)
 의 `gmm.trace` 로.
 ```

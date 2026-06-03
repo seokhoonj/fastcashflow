@@ -97,7 +97,7 @@ basis = fcf.Basis(
 # 모델 포인트 (변액계약 하나: 계좌 1억, GMDB 1.02억, GMAB 1.05억)
 mp = fcf.ModelPoints.single(
     issue_age                    = 40,      # 가입연령
-    level_premium                = 0.0,     # 일시납 (계좌가치로 납입)
+    premium                = 0.0,     # 일시납 (계좌가치로 납입)
     term_months                  = 120,     # 보험기간 10년
     account_value                = 1.0e8,   # 가입 시 계좌가치
     minimum_death_benefit        = 1.02e8,  # GMDB 최저사망보증 (102%)

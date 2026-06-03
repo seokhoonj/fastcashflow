@@ -37,7 +37,7 @@ def test_value_matches_measure():
     mps = ModelPoints(
         issue_age=np.array([30, 45, 45, 55, 38]),
         benefits={0: np.array([1e8, 5e7, 8e7, 3e7, 6e7])},
-        level_premium=np.array([70_000, 90_000, 110_000, 130_000, 80_000]),
+        premium=np.array([70_000, 90_000, 110_000, 130_000, 80_000]),
         term_months=np.array([120, 120, 120, 120, 120]),
     )
 
@@ -62,7 +62,7 @@ def test_value_onerous():
     )
     mps = ModelPoints.single(
         issue_age=40, benefits={0: 1_000_000.0},
-        level_premium=100.0, term_months=12,
+        premium=100.0, term_months=12,
     )
     v = measure(mps, basis, full=False)
     assert v.csm[0] == 0.0
@@ -96,7 +96,7 @@ def test_fast_gpu_matches_cpu():
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
         benefits={0: rng.integers(10, 100, n) * 1_000_000},
-        level_premium=rng.integers(3, 15, n) * 10_000,
+        premium=rng.integers(3, 15, n) * 10_000,
         term_months=np.full(n, 120),
     )
 
@@ -141,7 +141,7 @@ def test_fast_gpu_matches_cpu_with_transition():
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n).astype(float),
         benefits={0: rng.integers(10, 100, n) * 1_000_000.0, 1: rng.integers(5, 30, n) * 1_000_000.0},
-        level_premium=rng.integers(3, 15, n) * 10_000.0,
+        premium=rng.integers(3, 15, n) * 10_000.0,
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),
         calculation_methods={"DEATH": CalculationMethod.DEATH, "dx": CalculationMethod.DIAGNOSIS},

@@ -48,7 +48,7 @@ def test_value_in_force_zero_elapsed_matches_value():
     to the new-business :func:`measure` (= ``GMMMeasurement.bel_path[:, 0]``)."""
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=50_000.0, term_months=120,
+        premium=50_000.0, term_months=120,
     )
     basis = _basis()
     v_new = measure(mp, basis, full=False)
@@ -65,14 +65,14 @@ def test_value_in_force_matches_trajectory_slice():
     elapsed = 36
     mp_new = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=50_000.0, term_months=120,
+        premium=50_000.0, term_months=120,
     )
     basis = _basis()
     m = measure(mp_new, basis)
 
     mp_inforce = ModelPoints(
         issue_age=np.array([40]),
-        level_premium=np.array([50_000.0]),
+        premium=np.array([50_000.0]),
         term_months=np.array([120]),
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([elapsed]),
@@ -92,7 +92,7 @@ def test_value_in_force_settlement_matches_trajectory():
     basis = _basis()
     mp_new = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=50_000.0, term_months=240,
+        premium=50_000.0, term_months=240,
     )
     m = measure(mp_new, basis)
     elapsed, period = 36, 12
@@ -101,7 +101,7 @@ def test_value_in_force_settlement_matches_trajectory():
 
     mp_inforce = ModelPoints(
         issue_age=np.array([40]),
-        level_premium=np.array([50_000.0]),
+        premium=np.array([50_000.0]),
         term_months=np.array([240]),
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([elapsed]),
@@ -123,7 +123,7 @@ def test_value_in_force_period_months_rejected_in_hypothetical_mode():
     basis = _basis()
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=50_000.0, term_months=120,
+        premium=50_000.0, term_months=120,
     )
     with pytest.raises(ValueError, match="period_months applies only in"):
         value_in_force(mp, basis, period_months=12)
@@ -135,7 +135,7 @@ def test_value_in_force_settlement_paired_args():
     basis = _basis()
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
-        level_premium=50_000.0, term_months=240,
+        premium=50_000.0, term_months=240,
     )
     with pytest.raises(ValueError, match="both be given.*both omitted"):
         value_in_force(mp, basis, prior_csm=np.array([0.0]))
@@ -150,7 +150,7 @@ def test_value_in_force_settlement_elapsed_too_small():
     basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]),
-        level_premium=np.array([50_000.0]),
+        premium=np.array([50_000.0]),
         term_months=np.array([240]),
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([6]),
@@ -170,7 +170,7 @@ def test_measure_in_force_hypothetical_is_measure():
     basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]),
-        level_premium=np.array([50_000.0]),
+        premium=np.array([50_000.0]),
         term_months=np.array([240]),
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
@@ -188,7 +188,7 @@ def test_measure_in_force_settlement_matches_value_in_force():
     basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]),
-        level_premium=np.array([50_000.0]),
+        premium=np.array([50_000.0]),
         term_months=np.array([240]),
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
@@ -213,7 +213,7 @@ def test_measure_in_force_settlement_roundtrip_to_measure():
     basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]),
-        level_premium=np.array([50_000.0]),
+        premium=np.array([50_000.0]),
         term_months=np.array([240]),
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
@@ -240,7 +240,7 @@ def test_in_force_bel_smaller_term_left():
     def in_force_bel(e):
         mp = ModelPoints(
             issue_age=np.array([40]),
-            level_premium=np.array([50_000.0]),
+            premium=np.array([50_000.0]),
             term_months=np.array([240]),
             benefits={0: np.array([100_000_000.0])},
             elapsed_months=np.array([e]),

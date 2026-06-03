@@ -114,7 +114,7 @@ def _expense_kernel_args(
 @njit(parallel=True, cache=True)
 def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
-                    term_months, count, level_premium, single_premium,
+                    term_months, count, premium, single_premium,
                     premium_term_months, premium_frequency_months, annuity_frequency_months,
                     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
                     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -204,7 +204,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
             q = mortality[mp, year]
             deaths[mp, t] = ift * q
             single = prem_occ * single_premium[mp] if t == 0 else 0.0
-            level = (prem_occ * level_premium[mp]
+            level = (prem_occ * premium[mp]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level + single
             claim_cf[mp, t] = ift * claim_rate
@@ -216,7 +216,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
             # month's claim + morbidity total. Dispatched from
             # Basis.expense_items by basis (alpha_pro_rata /
             # alpha_fixed / beta_pro_rata / gamma_fixed / lae_pro_rata).
-            ann_prem = level_premium[mp] * 12.0 / prem_freq
+            ann_prem = premium[mp] * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
             beta = (ift * beta_pro_rata * ann_prem / 12.0
@@ -307,7 +307,7 @@ def _project_kernel_semi_markov(
     mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset,
     premium_state, benefit_state, start_state,
-    term_months, count, level_premium, single_premium,
+    term_months, count, premium, single_premium,
     premium_term_months, premium_frequency_months, annuity_frequency_months,
     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -403,7 +403,7 @@ def _project_kernel_semi_markov(
             q = mortality[mp, year]
             deaths[mp, t] = ift * q
             single = prem_occ * single_premium[mp] if t == 0 else 0.0
-            level = (prem_occ * level_premium[mp]
+            level = (prem_occ * premium[mp]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level + single
             claim_cf[mp, t] = ift * claim_rate
@@ -412,7 +412,7 @@ def _project_kernel_semi_markov(
                                   if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: same dispatch as _project_kernel (see its comment).
-            ann_prem = level_premium[mp] * 12.0 / prem_freq
+            ann_prem = premium[mp] * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
             beta = (ift * beta_pro_rata * ann_prem / 12.0
@@ -672,7 +672,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             premium_state, benefit_state, start_state,
             model_points.term_months,
             model_points.count,
-            model_points.level_premium,
+            model_points.premium,
             model_points.single_premium,
             model_points.premium_term_months,
             model_points.premium_frequency_months,
@@ -738,7 +738,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             start_state,
             model_points.term_months,
             model_points.count,
-            model_points.level_premium,
+            model_points.premium,
             model_points.single_premium,
             model_points.premium_term_months,
             model_points.premium_frequency_months,

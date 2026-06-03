@@ -145,7 +145,7 @@ def test_markov_can_reference_ci_incidence_annual():
         coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, q_a)),),
     )
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
-                            level_premium=0.0, term_months=12)
+                            premium=0.0, term_months=12)
     val = measure(mp, basis, full=False)
     m = measure(mp, basis)
     assert np.isclose(m.bel_path[0, 0], val.bel[0])
@@ -170,7 +170,7 @@ def test_explicit_waiver_model_matches_default():
         seating=(0, 1, 1),
     )
     kw = dict(issue_age=45, benefits={0: 50_000_000.0},
-              level_premium=30_000.0, term_months=120)
+              premium=30_000.0, term_months=120)
     for state in (STATE_ACTIVE, STATE_WAIVER, STATE_PAIDUP):
         mp = ModelPoints.single(**kw, state=state)
         default = measure(mp, _asmp(waiver_rate=0.03), full=False)
@@ -187,7 +187,7 @@ def test_single_state_no_lapse_hand_calculation():
     death_benefit = 1_000_000.0
     premium = 12_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
-                            level_premium=premium, term_months=3)
+                            premium=premium, term_months=3)
     basis = _asmp(state_model=no_lapse)
 
     inforce = [1.0, 0.99, 0.99 ** 2]
@@ -219,7 +219,7 @@ def test_decrement_order_matters():
     death_benefit = 1_000_000.0
     premium = 12_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
-                            level_premium=premium, term_months=2)
+                            premium=premium, term_months=2)
     basis = _asmp(waiver_rate=0.05, lapse=0.02, state_model=lapse_first)
 
     # t=0: act=1, wav=0.
@@ -258,7 +258,7 @@ def test_three_state_model_runs():
     )
     assert three.n_states == 3
     kw = dict(issue_age=42, benefits={0: 80_000_000.0},
-              level_premium=40_000.0, term_months=180)
+              premium=40_000.0, term_months=180)
 
     # A paid-up contract: identical to the default, which seats paid-up on
     # the waiver state -- both are mortality-only, premium-free.
@@ -290,7 +290,7 @@ def test_paidup_state_uses_its_own_lapse():
                                 lambda s, a, d: np.full(a.shape, q)),),
         state_model=STATE_MODELS["WAIVER_PAIDUP"],
     )
-    kw = dict(issue_age=40, benefits={0: 100_000.0}, level_premium=0.0,
+    kw = dict(issue_age=40, benefits={0: 100_000.0}, premium=0.0,
               term_months=3)
     paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), basis)
     step = 0.99 * 0.90        # (1 - mortality)(1 - paid-up lapse)
@@ -306,7 +306,7 @@ def test_paidup_lapse_falls_back_to_lapse_annual():
     paid-up state just lapses at the ordinary rate."""
     basis = _asmp(q=0.01, lapse=0.05,
                  state_model=STATE_MODELS["WAIVER_PAIDUP"])
-    kw = dict(issue_age=40, benefits={0: 100_000.0}, level_premium=0.0,
+    kw = dict(issue_age=40, benefits={0: 100_000.0}, premium=0.0,
               term_months=3)
     paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), basis)
     step = 0.99 * 0.95        # falls back to the 5% active lapse
@@ -333,7 +333,7 @@ def test_measure_and_value_agree_under_custom_model():
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(float),
         benefits={0: rng.integers(10, 80, n) * 1_000_000.0},
-        level_premium=rng.integers(2, 10, n) * 10_000.0,
+        premium=rng.integers(2, 10, n) * 10_000.0,
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),
     )

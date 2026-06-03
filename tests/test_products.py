@@ -79,7 +79,7 @@ def test_value_matches_measure_endowment():
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
         benefits={0: rng.integers(10, 80, n) * 1_000_000},
-        level_premium=rng.integers(5, 20, n) * 10_000,
+        premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         maturity_benefit=rng.integers(5, 40, n) * 1_000_000,
         calculation_methods=PATTERNS,
@@ -126,7 +126,7 @@ def test_value_matches_measure_annuity():
     mps = ModelPoints(
         issue_age=rng.integers(55, 75, n),
         benefits={0: np.zeros(n)},
-        level_premium=np.zeros(n),
+        premium=np.zeros(n),
         term_months=rng.integers(120, 300, n),
         annuity_payment=rng.integers(30, 100, n) * 10_000,
         single_premium=rng.integers(80, 200, n) * 1_000_000,

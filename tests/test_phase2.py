@@ -33,7 +33,7 @@ def test_mid_month_discounting():
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={0: death_benefit},
-            level_premium=premium, term_months=term,
+            premium=premium, term_months=term,
             calculation_methods=PATTERNS,
         ),
         _flat_assumptions(),
@@ -67,7 +67,7 @@ def test_csm_movement_identity():
     mps = ModelPoints(
         issue_age=rng.integers(25, 55, n),
         benefits={0: rng.integers(10, 100, n) * 1_000_000},
-        level_premium=rng.integers(8, 20, n) * 10_000,
+        premium=rng.integers(8, 20, n) * 10_000,
         term_months=rng.integers(60, 120, n),
         calculation_methods=PATTERNS,
     )
