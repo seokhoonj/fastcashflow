@@ -953,7 +953,7 @@ def _parse_calculation_methods(path: Path | str) -> dict[str, CalculationMethod]
 # Policies-frame columns the engine recognises as fields (or the mp_id join
 # key). Every *other* column on the policies frame is a grouping attribute --
 # portfolio_id, profitability_group, risk_class, region, campaign_id, ... --
-# read into ModelPoints.attributes for group()/group_into_gic.
+# read into ModelPoints.attributes for group()/group_of_contracts.
 _POLICY_RESERVED_COLS = frozenset({
     "mp_id",
     "issue_age", "term_months", "level_premium",
@@ -1100,7 +1100,7 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     # Any policies column that is not a recognised engine field is a grouping
     # attribute (portfolio_id, profitability_group, risk_class, region, ...) --
     # one value per policy = one per model point. Available to group() /
-    # group_into_gic via ModelPoints.axis.
+    # group_of_contracts via ModelPoints.axis.
     attributes = {c: pol[c].to_numpy()
                   for c in pol.columns
                   if c not in _POLICY_RESERVED_COLS and not str(c).startswith("_")}
@@ -1188,7 +1188,7 @@ def read_model_points(
       column is read as a grouping attribute (``portfolio_id``,
       ``profitability_group``, ``risk_class``, ``region``, ...) into
       :attr:`ModelPoints.attributes`, for :func:`~fastcashflow.group` /
-      :func:`~fastcashflow.group_into_gic`;
+      :func:`~fastcashflow.group_of_contracts`;
     * a coverages frame (``mp_id``, ``coverage_code``, ``amount``, optional
       ``premium`` / ``waiting`` / ``reduction_end`` / ``reduction_factor``),
       one row per policy x coverage -- so per-coverage rules (waiting and

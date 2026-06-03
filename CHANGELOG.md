@@ -11,6 +11,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`group` aggregator and `group_of_contracts` preset.** `group(m, by=...)`
+  aggregates a `full=True` GMM measurement to any axis -- a single axis name, a
+  list of names and/or precomputed `(n_mp,)` label arrays, or a bare label
+  array -- re-deriving the CSM and loss component on the group aggregate so the
+  floor nets within a group, not across. `group_of_contracts(m)` is the IFRS 17
+  preset (portfolio x annual cohort x profitability, paragraphs 14/22/16):
+  `portfolio` (default `product_code`) and `cohort` (default `issue_year`,
+  derived from `issue_date`) name columns; `profitability` defaults to the
+  engine-derived onerous / remaining split (it is an output, not a known
+  input) and accepts an array or a column-name override. Dispatches on the
+  measurement type via `singledispatch`.
 - **Phase (c) semi-Markov in-force projection.** Tracks per-cohort
   occupancy in any state declared with `duration_max > 0`, so
   transition rates can depend on sojourn time. Powers the two flagship

@@ -18,7 +18,7 @@ from fastcashflow.basis import (
 )
 from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import GMMMeasurement, clear_codegen_cache
-from fastcashflow.grouping import group, assign_gic, group_into_gic
+from fastcashflow.grouping import group, group_of_contracts
 from fastcashflow.io import (
     read_basis,
     read_inforce_policies,
@@ -74,8 +74,8 @@ from fastcashflow import gmm, paa, reinsurance, samples, vfa  # namespaces
 __version__ = "0.1.0.dev1"
 __all__ = [
     "Basis", "ModelPoints", "clear_codegen_cache",
-    "report", "roll_forward", "reconcile", "group", "assign_gic",
-    "group_into_gic", "transition",
+    "report", "roll_forward", "reconcile", "group", "group_of_contracts",
+    "transition",
     "GMMMeasurement", "PAAMeasurement", "VFAMeasurement",
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",

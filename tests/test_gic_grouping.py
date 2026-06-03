@@ -1,15 +1,15 @@
-"""IFRS 17 level of aggregation -- general group(by=...) + group_into_gic preset.
+"""IFRS 17 level of aggregation -- general group(by=...) + group_of_contracts.
 
 ``group`` aggregates a measurement to any axis (resolved from the model points
-``measure`` stamps on the result, or passed explicitly); ``group_into_gic`` is
-the IFRS 17 preset. The architecture point is ``CSM(sum FCF)``, not
-``sum CSM(CF)`` -- the floor nets within a group, not across.
+``measure`` stamps on the result, or passed as an array); ``group_of_contracts``
+is the IFRS 17 preset (portfolio x annual cohort x profitability). The
+architecture point is ``CSM(sum FCF)``, not ``sum CSM(CF)`` -- the floor nets
+within a group, not across.
 """
 import numpy as np
 import pytest
 
-from fastcashflow import (ExpenseItem, ModelPoints, assign_gic, group,
-                          group_into_gic)
+from fastcashflow import ExpenseItem, ModelPoints, group, group_of_contracts
 from fastcashflow.gmm import measure
 from conftest import PATTERNS, make_death_assumptions
 
@@ -41,32 +41,6 @@ def _two_contracts(**extra) -> ModelPoints:
     )
 
 
-# -- assign_gic: the pure composite-key builder -----------------------------
-
-def test_assign_gic_composes_three_axes():
-    gic = assign_gic(
-        portfolio     = np.array(["healthA", "healthA", "healthA"]),
-        cohort        = np.array([2026, 2026, 2025]),
-        profitability = np.array(["remaining", "onerous", "remaining"]),
-    )
-    assert gic[0] == "healthA|2026|remaining"
-    assert gic[0] != gic[1]      # profitability differs (paragraph 16)
-    assert gic[0] != gic[2]      # cohort differs (paragraph 22)
-
-
-def test_assign_gic_is_label_agnostic_two_or_three_way():
-    pf, co = np.array(["A", "A"]), np.array([2026, 2026])
-    two = assign_gic(pf, co, np.array(["onerous", "remaining"]))
-    three = assign_gic(pf, co, np.array(["onerous", "no_significant_possibility"]))
-    assert two[0] != two[1] and three[0] != three[1]   # no engine vocabulary
-
-
-def test_assign_gic_length_mismatch_rejected():
-    with pytest.raises(ValueError, match="same length"):
-        assign_gic(portfolio=np.array(["A", "B"]), cohort=np.array([2026]),
-                   profitability=np.array(["x", "y"]))
-
-
 # -- group: the general aggregator ------------------------------------------
 
 def test_group_by_precomputed_array():
@@ -76,13 +50,31 @@ def test_group_by_precomputed_array():
     assert group(m, np.array([0, 1])).bel.shape[0] == 2
 
 
+def test_group_by_single_axis_name():
+    """A bare string is a single axis name."""
+    mp = _two_contracts(product_code=np.array(["TL", "TL"]),
+                        channel_code=np.array(["TM", "GA"]))
+    m = measure(mp, _assumptions())
+    assert group(m, "product_code").bel.shape[0] == 1   # one product
+    assert group(m, "channel").bel.shape[0] == 2        # two channels
+
+
 def test_group_by_axis_names_from_stamped_model_points():
     """group(m, by=[names]) resolves from the model points measure() stamped."""
     mp = _two_contracts(product_code=np.array(["TL", "TL"]),
                         channel_code=np.array(["TM", "GA"]))
     m = measure(mp, _assumptions())                 # stamps mp on m
     assert group(m, by=["product_code"]).bel.shape[0] == 1   # one product
-    assert group(m, by=["channel"]).bel.shape[0] == 2        # two channels
+    assert group(m, by=["product_code", "channel"]).bel.shape[0] == 2
+
+
+def test_group_by_mixed_name_and_array():
+    """A list may mix axis names and precomputed (n_mp,) label arrays."""
+    mp = _two_contracts(product_code=np.array(["TL", "TL"]))
+    m = measure(mp, _assumptions())
+    onerous = np.where(m.loss_component > 0.0, "onerous", "remaining")
+    g = group(m, by=["product_code", onerous])      # same product, split by onerous
+    assert g.bel.shape[0] == 2
 
 
 def test_group_by_arbitrary_attribute_axis():
@@ -108,62 +100,102 @@ def test_group_unknown_axis_rejected():
         group(m, by=["nonexistent"])
 
 
-# -- group_into_gic: the IFRS 17 preset -------------------------------------
+# -- group_of_contracts: the IFRS 17 preset ---------------------------------
 
-def test_group_into_gic_defaults_from_stamped_model_points():
-    """m only: cohort from issue_date, portfolio from product_code, prof derived."""
+def test_group_of_contracts_defaults_from_stamped_model_points():
+    """m only: cohort from issue_year, portfolio from product_code, prof derived."""
     mp = _two_contracts(
         product_code=np.array(["TL", "TL"]),
         issue_date=np.array(["2026-03-01", "2026-07-01"], dtype="datetime64[D]"),
     )
     m = measure(mp, _assumptions())
-    g = group_into_gic(m)                       # mp stamped -> no second arg
+    g = group_of_contracts(m)                   # mp stamped -> no second arg
     assert g.bel.shape[0] == 2                  # same 2026 cohort, onerous vs remaining
     assert g.loss_component.sum() > 0.0         # the onerous one stands alone
 
 
-def test_group_into_gic_portfolio_id_overrides_product():
+def test_group_of_contracts_single_cohort_without_issue_date():
+    """No issue_date: the default cohort falls back to a single annual cohort."""
+    mp = _two_contracts(product_code=np.array(["TL", "TL"]))   # no issue_date
+    m = measure(mp, _assumptions())
+    g = group_of_contracts(m)                   # one product, one cohort, prof derived
+    assert g.bel.shape[0] == 2                  # split only by onerous / remaining
+
+
+def test_group_of_contracts_portfolio_override():
+    """Pass another column to group on a different portfolio definition."""
     mp = _two_contracts(
         product_code=np.array(["TL", "TL"]),
-        attributes={"portfolio_id": np.array(["P1", "P2"]),
-                    "profitability_group": np.array(["remaining", "remaining"])},
+        attributes={"portfolio_id": np.array(["P1", "P2"])},
     )
     m = measure(mp, _assumptions())
-    # different portfolio_id -> two GICs even with the same product / cohort / prof
-    assert group_into_gic(m).bel.shape[0] == 2
+    # same product / cohort, but two portfolio_id values -> two groups
+    assert group_of_contracts(m, portfolio="portfolio_id").bel.shape[0] == 2
+    assert group_of_contracts(m).bel.shape[0] == 2          # product_code: still 2 (onerous split)
 
 
-def test_group_into_gic_splits_by_issue_year():
+def test_group_of_contracts_splits_by_issue_year():
     mp = _two_contracts(
         product_code=np.array(["TL", "TL"]),
         issue_date=np.array(["2025-12-01", "2026-01-01"], dtype="datetime64[D]"),
-        attributes={"profitability_group": np.array(["remaining", "remaining"])},
     )
     m = measure(mp, _assumptions())
-    assert group_into_gic(m).bel.shape[0] == 2   # 2025 vs 2026 cohort (paragraph 22)
+    # 2025 vs 2026 cohort (paragraph 22) -- two groups regardless of profitability
+    assert group_of_contracts(m).bel.shape[0] == 2
 
 
-def test_group_into_gic_pools_when_one_gic():
-    """CSM(sum CF): one GIC nets the onerous loss against the profitable one."""
-    pooled = measure(_two_contracts(
+def test_group_of_contracts_finer_cohort_from_data_column():
+    """A finer cohort (issue_quarter) carried in the data groups by that column."""
+    mp = _two_contracts(
         product_code=np.array(["TL", "TL"]),
-        attributes={"profitability_group": np.array(["remaining", "remaining"])},
-    ), _assumptions())
-    split = measure(_two_contracts(           # no profitability_group -> derive
-        product_code=np.array(["TL", "TL"]),
-    ), _assumptions())
-    together = group_into_gic(pooled)         # forced one GIC
-    apart = group_into_gic(split)             # derived onerous / remaining -> 2 GICs
+        attributes={"issue_quarter": np.array(["2026Q1", "2026Q2"])},
+    )
+    m = measure(mp, _assumptions())
+    assert group_of_contracts(m, cohort="issue_quarter").bel.shape[0] == 2
+
+
+def test_group_of_contracts_profitability_override_pools():
+    """A uniform profitability override pools the onerous loss against the gain."""
+    mp = _two_contracts(product_code=np.array(["TL", "TL"]))
+    m = measure(mp, _assumptions())
+    uniform = np.array(["remaining", "remaining"])
+    together = group_of_contracts(m, profitability=uniform)   # forced one group
+    apart = group_of_contracts(m)                             # derived -> 2 groups
     assert together.bel.shape[0] == 1
     assert apart.bel.shape[0] == 2
     assert together.loss_component.sum() < apart.loss_component.sum()
 
 
-def test_group_into_gic_needs_model_points():
+def test_group_of_contracts_profitability_from_column():
+    """A string profitability names a stored (locked) classification column."""
+    mp = _two_contracts(
+        product_code=np.array(["TL", "TL"]),
+        attributes={"locked_prof": np.array(["remaining", "remaining"])},
+    )
+    m = measure(mp, _assumptions())
+    assert group_of_contracts(m, profitability="locked_prof").bel.shape[0] == 1
+
+
+def test_group_of_contracts_needs_model_points():
     m = measure(_two_contracts(), _assumptions())
     object.__setattr__(m, "model_points", None)
     with pytest.raises(ValueError, match="needs the model points"):
-        group_into_gic(m)
+        group_of_contracts(m)
+
+
+def test_group_of_contracts_explicit_unknown_axis_raises():
+    """An explicit (non-default) axis name that is missing is a typo, not a fallback."""
+    m = measure(_two_contracts(product_code=np.array(["TL", "TL"])), _assumptions())
+    with pytest.raises(KeyError, match="unknown grouping axis"):
+        group_of_contracts(m, portfolio="typo_axis")
+
+
+def test_group_of_contracts_unsupported_type_raises():
+    """The base dispatch refuses a type with no registration (e.g. reinsurance)."""
+    class _Other:
+        pass
+    with pytest.raises(TypeError, match="not implemented"):
+        group_of_contracts(_Other())
 
 
 # -- review fixes (5-way code review) ---------------------------------------
@@ -174,22 +206,10 @@ def test_group_rejects_pipe_in_axis_value():
                         attributes={"x": np.array(["a|b", "a"])})
     m = measure(mp, _assumptions())
     with pytest.raises(ValueError, match="character"):
-        group(m, by=["x"])
-
-
-def test_assign_gic_rejects_pipe_in_axis_value():
-    with pytest.raises(ValueError, match="character"):
-        assign_gic(np.array(["p|q"]), np.array([2026]), np.array(["onerous"]))
+        group(m, by=["product_code", "x"])
 
 
 def test_axis_resolves_engine_native_field_issue_class():
     """issue_class (위험등급) is a grouping axis even though it is a reserved field."""
     m = measure(_two_contracts(issue_class=np.array([0, 1])), _assumptions())
     assert group(m, by=["issue_class"]).bel.shape[0] == 2      # two classes -> two groups
-
-
-def test_group_into_gic_explicit_unknown_axis_raises():
-    """An explicit (non-default) axis name that is missing is a typo, not a fallback."""
-    m = measure(_two_contracts(product_code=np.array(["TL", "TL"])), _assumptions())
-    with pytest.raises(KeyError, match="unknown grouping axis"):
-        group_into_gic(m, portfolio="typo_axis")

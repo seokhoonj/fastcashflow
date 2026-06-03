@@ -115,9 +115,7 @@ Aggregation and transition
 
 .. autofunction:: fastcashflow.group
 
-.. autofunction:: fastcashflow.group_into_gic
-
-.. autofunction:: fastcashflow.assign_gic
+.. autofunction:: fastcashflow.group_of_contracts
 
 .. autofunction:: fastcashflow.transition
 

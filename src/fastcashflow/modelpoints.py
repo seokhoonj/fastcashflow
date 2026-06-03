@@ -174,7 +174,7 @@ class ModelPoints:
     # ``issue_year``. ``attributes`` holds any number of named per-MP label
     # columns -- portfolio_id, profitability_group, risk_class, region,
     # campaign_id, ... -- so :func:`fastcashflow.group` can aggregate on any
-    # axis. ``group_into_gic`` is the IFRS 17 preset over the same machinery.
+    # axis. ``group_of_contracts`` is the IFRS 17 preset over the same machinery.
     issue_date: np.ndarray | None = None
     attributes: dict[str, np.ndarray] | None = None
 

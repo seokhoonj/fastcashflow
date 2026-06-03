@@ -5,7 +5,7 @@ works end to end.
 import numpy as np
 import polars as pl
 
-from fastcashflow import read_model_points, group, group_into_gic
+from fastcashflow import read_model_points, group, group_of_contracts
 from fastcashflow.gmm import measure
 from conftest import PATTERNS, make_death_assumptions
 
@@ -50,11 +50,11 @@ def test_reader_reads_issue_date_and_attributes(tmp_path):
         assert reserved not in mp.attributes
 
 
-def test_reader_issue_date_drives_group_into_gic_cohort(tmp_path):
+def test_reader_issue_date_drives_group_of_contracts_cohort(tmp_path):
     mp = _read(tmp_path)
     m = measure(mp, _basis())
-    g = group_into_gic(m)                # cohort from issue_date -> 2025 vs 2026
-    assert g.bel.shape[0] == 2           # two annual cohorts -> two GICs
+    g = group_of_contracts(m)            # cohort from issue_year -> 2025 vs 2026
+    assert g.bel.shape[0] == 2           # two annual cohorts -> two groups
 
 
 def test_reader_attribute_is_a_group_axis(tmp_path):
