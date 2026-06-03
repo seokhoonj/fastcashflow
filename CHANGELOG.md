@@ -35,7 +35,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   resolve and the grouped result re-derives. A grouped result exposes
   `group_labels` -- the composite label of each row -- so a caller can map a
   group back to its key (e.g. `"|"`-split a `group_of_contracts` label into
-  portfolio / cohort / profitability) without rebuilding the keys.
+  portfolio / cohort / profitability) without rebuilding the keys, and
+  `group_sizes` -- the number of model points in each group.
 - **Phase (c) semi-Markov in-force projection.** Tracks per-cohort
   occupancy in any state declared with `duration_max > 0`, so
   transition rates can depend on sojourn time. Powers the two flagship

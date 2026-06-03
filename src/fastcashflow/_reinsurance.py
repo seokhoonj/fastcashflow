@@ -61,6 +61,7 @@ class ReinsuranceMeasurement:
     discount_bom: FloatArray | None = None     # (n_time+1,) -- for grouped CSM re-derivation
     model_points: "ModelPoints | None" = None  # stamped by measure_reinsurance, for group axes
     group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
+    group_sizes: "np.ndarray | None" = None     # model points per group, aligned with labels
 
 
 class Treaty(Protocol):

@@ -230,5 +230,11 @@ def test_group_labels_exposed_and_splittable():
     parts = [str(lab).split("|") for lab in g.group_labels]
     assert all(len(p) == 3 for p in parts)
     assert {p[2] for p in parts} <= {"onerous", "remaining"}
+    # group_sizes counts the model points per group and sums to the total
+    assert g.group_sizes is not None
+    assert g.group_sizes.shape[0] == g.group_labels.shape[0]
+    assert g.group_sizes.sum() == m.bel.shape[0]
     # a single-axis group exposes the axis values as labels
-    assert list(group(m, "product_code").group_labels) == ["TL"]
+    gp = group(m, "product_code")
+    assert list(gp.group_labels) == ["TL"]
+    assert list(gp.group_sizes) == [2]                 # both model points are TL

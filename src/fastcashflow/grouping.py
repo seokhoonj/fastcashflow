@@ -155,7 +155,8 @@ def group(measurement, by):
     :func:`~fastcashflow.report`. Its ``group_labels`` attribute carries the
     composite label of each row, so a caller can map a group back to its key
     (e.g. ``"|"``-split a :func:`group_of_contracts` label into portfolio /
-    cohort / profitability) without rebuilding the keys.
+    cohort / profitability) without rebuilding the keys; ``group_sizes`` carries
+    the number of model points in each group.
     """
     raise TypeError(
         f"group is not implemented for {type(measurement).__name__}; supported: "
@@ -256,6 +257,7 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
         discount_bom=out_bom,
         discount_mid=out_mid,
         group_labels=labels,
+        group_sizes=np.bincount(inverse, minlength=n_groups),
     )
 
 
@@ -327,6 +329,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
         discount_bom=bom,
         model_points=None,
         group_labels=labels,
+        group_sizes=np.bincount(inverse, minlength=n_groups),
     )
 
 
@@ -389,6 +392,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
         discount_bom=bom,
         model_points=None,
         group_labels=labels,
+        group_sizes=np.bincount(inverse, minlength=n_groups),
     )
 
 
@@ -443,6 +447,7 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
         cashflows=grouped_cf,
         model_points=None,
         group_labels=labels,
+        group_sizes=np.bincount(inverse, minlength=n_groups),
     )
 
 

@@ -105,6 +105,8 @@ class GMMMeasurement:
     # The per-group composite label (one per row) on a result returned by
     # ``group`` / ``group_of_contracts``; None on a per-model-point measurement.
     group_labels: "np.ndarray | None" = None
+    # The number of model points in each group, aligned with ``group_labels``.
+    group_sizes: "np.ndarray | None" = None
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
