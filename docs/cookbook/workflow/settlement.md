@@ -88,16 +88,16 @@ import numpy as np
 
 # 입력 파일 생성 (한 번만 -- 자기 파일이 있으면 생략).
 # basis.xlsx + policies / coverages / calculation_methods / inforce_state /
-# inforce_policies(결합 마감파일) 를 현재 폴더에 떨굼.
-fcf.samples.export(".", template="gmm")
+# inforce_policies(결합 마감파일) 를 samples 폴더에 떨굼.
+fcf.samples.export("samples", template="gmm")
 
 # 산출기초 + 마감파일 읽기
-basis = fcf.read_basis("basis.xlsx")                            # {(product_code, channel_code): Basis}
+basis = fcf.read_basis("samples/basis.xlsx")                            # {(product_code, channel_code): Basis}
 
 model_points, state = fcf.read_inforce_policies(
-    "inforce_policies.csv",                                     # 마감 1-파일 (spec + state)
-    coverages="coverages.csv",                                  # 담보 파일
-    calculation_methods="calculation_methods.csv",              # 담보별 산출방식
+    "samples/inforce_policies.csv",                                     # 마감 1-파일 (spec + state)
+    coverages="samples/coverages.csv",                                  # 담보 파일
+    calculation_methods="samples/calculation_methods.csv",              # 담보별 산출방식
 )
 
 # 한 세그먼트만 골라 결산 측정
@@ -110,7 +110,7 @@ val = fcf.gmm.measure_inforce(
     state.subset(idx),                                          # 이 세그먼트의 결산 상태
     period_months=3,                                            # 이번 분기 (3 개월)
 )
-fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
+fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 파일
 ```
 
 `read_inforce_policies` 가 마감파일의 결산 상태 네 컬럼
@@ -207,9 +207,9 @@ ETL 환경에 따라 영구 spec (`policies.csv`) 과 분기별 갱신
 
 ```python
 model_points = fcf.read_model_points(
-    "policies.csv", coverages="coverages.csv",
-    calculation_methods="calculation_methods.csv")
-state = fcf.read_inforce_state("inforce_state.csv")  # 결산 상태만 따로
+    "samples/policies.csv", coverages="samples/coverages.csv",
+    calculation_methods="samples/calculation_methods.csv")
+state = fcf.read_inforce_state("samples/inforce_state.csv")  # 결산 상태만 따로
 mp = fcf.apply_inforce_state(model_points, state)    # mp_id 로 정렬되어 있다고 가정
 ```
 

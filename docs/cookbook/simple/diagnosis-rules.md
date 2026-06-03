@@ -78,6 +78,7 @@
 ```python
 import numpy as np
 import polars as pl
+from pathlib import Path
 import fastcashflow as fcf
 
 # 암 진단율 함수 -- 월 10% 의 연 환산 (평탄)
@@ -97,13 +98,14 @@ basis = fcf.Basis(
     ),
 )
 
-# 입력 파일 -- coverages 에 면책/감액 세 컬럼
+# 입력 파일 -- coverages 에 면책/감액 세 컬럼 (samples 폴더에)
+Path("samples").mkdir(exist_ok=True)
 pl.DataFrame({
     "mp_id":         ["P001"],   # 계약 식별자
     "issue_age":     [40],       # 가입연령 40세
     "term_months":   [4],        # 보험기간 4개월
     "level_premium": [0],        # 월납 보험료 0 (진단 풀에 집중)
-}).write_csv("policies.csv")
+}).write_csv("samples/policies.csv")
 
 pl.DataFrame({
     "mp_id":            ["P001"],     # 어느 계약의 담보인지
@@ -112,11 +114,11 @@ pl.DataFrame({
     "waiting":          [1],          # 면책 1개월
     "reduction_end":    [3],          # 감액 3개월까지
     "reduction_factor": [0.5],        # 감액기간 중 50% 지급
-}).write_csv("coverages.csv")
+}).write_csv("samples/coverages.csv")
 
 mp = fcf.read_model_points(
-    "policies.csv",                                  # 계약 spec 파일
-    coverages="coverages.csv",                       # 담보 + 면책/감액 룰
+    "samples/policies.csv",                                  # 계약 spec 파일
+    coverages="samples/coverages.csv",                       # 담보 + 면책/감액 룰
     calculation_methods={"CANCER": fcf.CalculationMethod.DIAGNOSIS},
 )
 
@@ -190,11 +192,11 @@ pl.DataFrame({
     "waiting":          [1,         0],     # 암만 면책 1개월
     "reduction_end":    [3,         0],     # 암만 감액 3개월까지
     "reduction_factor": [0.5,       1.0],   # 뇌혈관은 룰 없음 (1.0)
-}).write_csv("coverages.csv")
+}).write_csv("samples/coverages.csv")
 
 mp = fcf.read_model_points(
-    "policies.csv",
-    coverages="coverages.csv",
+    "samples/policies.csv",
+    coverages="samples/coverages.csv",
     calculation_methods={"CANCER":   fcf.CalculationMethod.DIAGNOSIS,
                          "CEREBRAL": fcf.CalculationMethod.DIAGNOSIS},
 )

@@ -253,15 +253,15 @@ test 가 자동 검증).
 ```python
 import fastcashflow as fcf
 
-# (1) 샘플 파일을 현재 폴더에 생성 (한 번만 -- 이미 자기 파일이 있으면 생략)
-fcf.samples.export(".", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
+# (1) 샘플 파일을 samples 폴더에 생성 (한 번만 -- 이미 자기 파일이 있으면 생략)
+fcf.samples.export("samples", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
 # (2) 읽어서 평가
-basis = fcf.read_basis("basis.xlsx")    # {(product_code, channel_code): Basis}
+basis = fcf.read_basis("samples/basis.xlsx")    # {(product_code, channel_code): Basis}
 mp    = fcf.read_model_points(
-    "policies.csv",                                 # 계약 spec 파일
-    coverages="coverages.csv",                      # 담보 가입금액 파일
-    calculation_methods="calculation_methods.csv",  # 담보별 산출방식 파일
+    "samples/policies.csv",                                 # 계약 spec 파일
+    coverages="samples/coverages.csv",                      # 담보 가입금액 파일
+    calculation_methods="samples/calculation_methods.csv",  # 담보별 산출방식 파일
 )
 
 # 한 segment 의 가정을 전체 portfolio 에 적용 — 상세 trajectory

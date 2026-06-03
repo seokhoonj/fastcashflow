@@ -81,12 +81,12 @@ import fastcashflow as fcf
 
 # 패키지 샘플로 시연 -- 자기 데이터를 쓸 때는 이 줄을 빼고
 # 그 자리에 자기 파일이 있다고 보면 됩니다.
-fcf.samples.export(".", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
+fcf.samples.export("samples", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
 mp = fcf.read_model_points(
-    "policies.csv",                                 # 계약 spec 파일
-    coverages="coverages.csv",                      # 담보 가입금액 파일
-    calculation_methods="calculation_methods.csv",  # ← 담보별 산출방식
+    "samples/policies.csv",                                 # 계약 spec 파일
+    coverages="samples/coverages.csv",                      # 담보 가입금액 파일
+    calculation_methods="samples/calculation_methods.csv",  # ← 담보별 산출방식
 )
 ```
 

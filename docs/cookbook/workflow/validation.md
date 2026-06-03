@@ -479,18 +479,18 @@ import fastcashflow as fcf
 import polars as pl
 
 # 샘플 파일 저장 (본인 파일 있으면 생략)
-fcf.samples.export(".", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
+fcf.samples.export("samples", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
 # 만들어진 샘플 파일 읽어 들이기
-basis = fcf.read_basis("basis.xlsx")                  # 산출기초
+basis = fcf.read_basis("samples/basis.xlsx")                  # 산출기초
 mp = fcf.read_model_points(
-    "policies.csv",                                   # 계약 스펙
-    coverages           = "coverages.csv",            # 담보 가입금액
-    calculation_methods = "calculation_methods.csv",  # 담보별 산출방식
+    "samples/policies.csv",                                   # 계약 스펙
+    coverages           = "samples/coverages.csv",            # 담보 가입금액
+    calculation_methods = "samples/calculation_methods.csv",  # 담보별 산출방식
 )
 
 # mp_id (문자열) → 0-based 정수 인덱스
-pol = pl.read_csv("policies.csv")
+pol = pl.read_csv("samples/policies.csv")
 idx = pol.with_row_index("idx").filter(pl.col("mp_id") == "P002")["idx"][0]
 fcf.gmm.trace(int(idx), mp, basis)
 ```

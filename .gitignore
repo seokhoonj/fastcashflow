@@ -111,3 +111,7 @@ dev/
 
 # Local-only Korean reference material (regulator guides)
 references/
+
+# Doc-example output (created at the repo root when running the docs locally)
+/samples/
+/liability.png

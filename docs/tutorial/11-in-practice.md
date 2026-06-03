@@ -246,26 +246,26 @@ fastcashflow 는 그 한 파일을 그대로 받습니다. `read_inforce_policie
 ```python
 import fastcashflow as fcf
 
-# (1) 샘플 파일을 현재 폴더에 생성 (한 번만 — 이미 자기 파일이 있으면 생략).
+# (1) 샘플 파일을 samples 폴더에 생성 (한 번만 — 이미 자기 파일이 있으면 생략).
 # basis.xlsx + policies / coverages / calculation_methods / inforce_state /
 # inforce_policies(결합 마감파일) 를 한 번에. 대형 portfolio 는 format="parquet"
 # (시트당 ~1M row 인 .xlsx 한계 회피).
-fcf.samples.export(".", template="gmm")
+fcf.samples.export("samples", template="gmm")
 
 # (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 in-force 측정
-basis = fcf.read_basis("basis.xlsx")    # {(product_code, channel_code): Basis}
+basis = fcf.read_basis("samples/basis.xlsx")    # {(product_code, channel_code): Basis}
 basis = basis[("TERM_LIFE_A", "GA")]    # 한 세그먼트 선택
 
 model_points, state = fcf.read_inforce_policies(
-    "inforce_policies.csv",                                  # 결산 1-파일 (spec + state 결합)
-    coverages="coverages.csv",                               # 담보 파일
-    calculation_methods="calculation_methods.csv",           # 담보별 산출방식
+    "samples/inforce_policies.csv",                                  # 결산 1-파일 (spec + state 결합)
+    coverages="samples/coverages.csv",                               # 담보 파일
+    calculation_methods="samples/calculation_methods.csv",           # 담보별 산출방식
 )
 val = fcf.gmm.measure_inforce(   # 결산(보유계약) 측정 -- 일반모형(GMM)
     model_points, basis, state,  # state 가 prior_csm / lock_in_rate 을 품음
     period_months=3,             # 다음 분기 (3 개월) 까지의 평가
 )
-fcf.write_measurement(val, "results_2026Q1.csv")               # 결과 파일
+fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 파일
 ```
 
 각 함수의 역할:
@@ -322,13 +322,13 @@ state)`. 결과는 위 1-파일과 동일.
 ```python
 # 시연용 셋업 -- 샘플 입력을 parquet 로 저장 (format="parquet")
 # (자기 데이터를 쓸 때는 이미 parquet 형태로 갖고 있다고 가정)
-fcf.samples.export(".", template="gmm", format="parquet")   # policies.parquet, coverages.parquet ...
+fcf.samples.export("samples", template="gmm", format="parquet")   # policies.parquet, coverages.parquet ...
 
 # 스트리밍 평가 -- 한 줄. 결과는 results/ 폴더에 분할 저장
 fcf.gmm.measure_stream(
-    "policies.parquet", "results/", basis,              # 청크 단위로 읽어 평가
-    coverages="coverages.parquet",                      # 담보는 청크마다 mp_id 로 join
-    calculation_methods="calculation_methods.csv",
+    "samples/policies.parquet", "samples/results/", basis,              # 청크 단위로 읽어 평가
+    coverages="samples/coverages.parquet",                      # 담보는 청크마다 mp_id 로 join
+    calculation_methods="samples/calculation_methods.csv",
 )
 ```
 
