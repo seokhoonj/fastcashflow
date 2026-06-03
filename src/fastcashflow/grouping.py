@@ -28,6 +28,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.engine import GMMMeasurement
+from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.numerics import _csm_roll
 from fastcashflow.projection import Cashflows
 
@@ -39,17 +40,48 @@ def _sum_by_group(arr: FloatArray, inverse: IntArray, n_groups: int) -> FloatArr
     return result
 
 
-def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
-    """Aggregate a per-model-point GMM measurement to IFRS 17 groups.
+def _resolve_group_ids(measurement: GMMMeasurement, by,
+                       model_points: ModelPoints | None) -> np.ndarray:
+    """Build the per-MP group label array from ``by`` -- axis names or an array."""
+    if isinstance(by, (list, tuple)) and all(isinstance(b, str) for b in by):
+        mp = model_points if model_points is not None else measurement.model_points
+        if mp is None:
+            raise ValueError(
+                "group(by=[axis names]) needs the model points to resolve the "
+                "names -- pass model_points=, or use a measurement returned by "
+                "measure() (which stamps them)."
+            )
+        cols = [np.asarray(mp.axis(name), dtype=object) for name in by]
+        n = cols[0].shape[0]
+        return np.array(
+            ["|".join(str(col[i]) for col in cols) for i in range(n)],
+            dtype=object,
+        )
+    return np.asarray(by)
 
-    ``group_ids`` assigns each model point to a group -- the IFRS 17 unit of
-    account (portfolio x annual cohort x profitability bucket). BEL and RA
-    are summed within each group; the CSM and the loss component are
+
+def group(measurement: GMMMeasurement, by, *,
+          model_points: "ModelPoints | None" = None) -> GMMMeasurement:
+    """Aggregate a per-model-point GMM measurement to any axis.
+
+    A general aggregation primitive -- not IFRS 17-specific. ``by`` is either:
+
+    * a list of **axis names** (e.g. ``["product_code", "channel"]``,
+      ``["product_code", "issue_year", "profitability_group"]``), resolved per
+      model point via :meth:`ModelPoints.axis` against ``model_points`` -- or
+      the model points :func:`~fastcashflow.gmm.measure` stamped on the
+      measurement, so no re-passing is needed; or
+    * a precomputed ``(n_mp,)`` array of group labels.
+
+    BEL and RA are summed within each group; the CSM and the loss component are
     re-derived on the group aggregate, so the ``max(0, ...)`` floor nets the
-    contracts within a group but not across groups.
+    contracts within a group but not across groups. The IFRS 17 unit of account
+    (portfolio x annual cohort x profitability) is one choice of axes --
+    :func:`group_into_gic` is the preset for it; management-accounting,
+    profitability and validation views are other choices of ``by``.
 
-    Returns a measurement whose rows are the groups, in ascending order of
-    group id -- usable in turn by :func:`~fastcashflow.roll_forward`,
+    Returns a measurement whose rows are the groups, in ascending label order --
+    usable in turn by :func:`~fastcashflow.roll_forward`,
     :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.report`.
     """
     if measurement.bel_path is None:
@@ -57,11 +89,11 @@ def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
             "group() requires a full=True measurement; the trajectory fields "
             "are None on the full=False fast path. Call measure(..., full=True)."
         )
-    group_ids = np.asarray(group_ids)
+    group_ids = _resolve_group_ids(measurement, by, model_points)
     n_mp = measurement.bel_path.shape[0]
     if group_ids.shape != (n_mp,):
         raise ValueError(
-            f"group_ids must have one entry per model point ({n_mp})"
+            f"group ids must have one entry per model point ({n_mp})"
         )
     labels, inverse = np.unique(group_ids, return_inverse=True)
     inverse = inverse.reshape(-1)
@@ -127,4 +159,106 @@ def group(measurement: GMMMeasurement, group_ids: FloatArray) -> GMMMeasurement:
         cashflows=grouped_cf,
         discount_bom=out_bom,
         discount_mid=out_mid,
+    )
+
+
+def assign_gic(portfolio: np.ndarray, cohort: np.ndarray,
+               profitability: np.ndarray) -> np.ndarray:
+    """Build IFRS 17 group-of-insurance-contracts (GIC) labels from three axes.
+
+    The IFRS 17 unit of account (paragraphs 14-24) is a portfolio (14) x annual
+    cohort (22) x profitability group (16). This combines the three
+    per-model-point label arrays into one ``(n_mp,)`` composite label,
+    ``"{portfolio}|{cohort}|{profitability}"``, ready for :func:`group`.
+
+    The three axes are the entity's to determine -- fastcashflow does not set
+    the IFRS 17 grouping policy, it only aggregates on the labels given:
+
+    * ``portfolio`` -- usually the product line (paragraph 14: contracts in the
+      same product line generally share a portfolio when managed together).
+    * ``cohort`` -- the year of issue (paragraph 22: contracts issued more than
+      a year apart cannot share a group).
+    * ``profitability`` -- the company's profitability classification. The
+      labels are free: a two-way ``"onerous"`` / ``"remaining"`` split is the
+      common starting point; the paragraph 16 three-way split (adding
+      ``"no_significant_possibility"``) is the same call with more labels. A
+      quick onerous split needs no extra input --
+      ``np.where(measurement.loss_component > 0, "onerous", "remaining")``,
+      since the per-model-point ``loss_component`` already flags the contracts
+      that are onerous standalone.
+    """
+    portfolio = np.asarray(portfolio, dtype=object)
+    cohort = np.asarray(cohort, dtype=object)
+    profitability = np.asarray(profitability, dtype=object)
+    if not (portfolio.ndim == cohort.ndim == profitability.ndim == 1
+            and portfolio.shape == cohort.shape == profitability.shape):
+        raise ValueError(
+            "portfolio, cohort and profitability must be 1-D arrays of the "
+            f"same length; got {portfolio.shape}, {cohort.shape}, "
+            f"{profitability.shape}"
+        )
+    return np.array(
+        [f"{p}|{c}|{q}" for p, c, q in zip(portfolio, cohort, profitability)],
+        dtype=object,
+    )
+
+
+def group_into_gic(measurement: GMMMeasurement,
+                   model_points: ModelPoints | None = None, *,
+                   portfolio: str = "portfolio_id", cohort: str = "issue_date",
+                   profitability: str = "profitability_group") -> GMMMeasurement:
+    """IFRS 17 grouping preset over :func:`group`.
+
+    Builds the IFRS 17 group of insurance contracts (GIC) -- portfolio x annual
+    cohort x profitability (paragraphs 14/22/16) -- from the model points'
+    source attributes and re-expresses the measurement at the group level, so
+    the CSM floor nets within a GIC but not across. The model points are taken
+    from ``model_points`` or, if omitted, the ones :func:`~fastcashflow.gmm.measure`
+    stamped on the measurement.
+
+    Each axis is a column name with an IFRS 17 default rule:
+
+    * ``portfolio`` -- the ``portfolio_id`` column if the model points carry it,
+      else ``product_code`` (paragraph 14: the product line is the usual
+      portfolio).
+    * ``cohort`` -- the issue year, derived from ``issue_date`` (paragraph 22);
+      a single cohort (all new business) when no ``issue_date`` is set.
+    * ``profitability`` -- the ``profitability_group`` column if present, else a
+      two-way onerous / remaining split from the measurement's own
+      ``loss_component`` (paragraph 47's net-outflow test, at the individual
+      contract level of paragraph 17). Labels are free, so a paragraph-16
+      three-way split is just a column with three values.
+
+    Requires a ``full=True`` measurement. Each GIC must sit in one portfolio
+    (one discount curve), which :func:`group` enforces.
+    """
+    mp = model_points if model_points is not None else measurement.model_points
+    if mp is None:
+        raise ValueError(
+            "group_into_gic needs the model points -- pass model_points=, or use "
+            "a measurement returned by measure() (which stamps them)."
+        )
+    n = measurement.bel.shape[0]
+    # portfolio: the named axis if the model points carry it, else product_code.
+    try:
+        portfolio_arr = mp.axis(portfolio)
+    except KeyError:
+        portfolio_arr = mp.axis("product_code")
+    # cohort: issue_year from issue_date if available, else a single cohort.
+    if cohort == "issue_date":
+        try:
+            cohort_arr = mp.axis("issue_year")
+        except KeyError:
+            cohort_arr = np.zeros(n, dtype=np.int64)
+    else:
+        cohort_arr = mp.axis(cohort)
+    # profitability: the named column if present, else derive from loss_component.
+    try:
+        profitability_arr = mp.axis(profitability)
+    except KeyError:
+        profitability_arr = np.where(
+            measurement.loss_component > 0.0, "onerous", "remaining"
+        )
+    return group(
+        measurement, assign_gic(portfolio_arr, cohort_arr, profitability_arr)
     )

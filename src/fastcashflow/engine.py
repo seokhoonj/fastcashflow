@@ -19,7 +19,7 @@ import importlib.util
 import os
 import sys
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -98,6 +98,10 @@ class GMMMeasurement:
     # a per-segment basis dict, where each row discounts on its own curve.
     discount_bom: FloatArray | None = None  # beginning-of-month discount factors
     discount_mid: FloatArray | None = None  # mid-of-month discount factors
+    # Source model points, stamped by ``measure`` so ``group(m, by=[...])`` can
+    # resolve axis names without re-passing them. A reference, not a copy; None
+    # on a grouped result (its rows are groups, not model points).
+    model_points: "ModelPoints | None" = None
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
@@ -235,21 +239,26 @@ def measure(
                     "(full=False) only; measure(full=True) runs the trajectory "
                     "kernel on each segment's basis.discount_annual"
                 )
-            return _measure_segmented_full(model_points, basis)
-        return _measure_segmented(
-            model_points, basis, backend=backend, discount_curve=discount_curve,
-        )
-    if full:
+            result = _measure_segmented_full(model_points, basis)
+        else:
+            result = _measure_segmented(
+                model_points, basis, backend=backend, discount_curve=discount_curve,
+            )
+    elif full:
         if backend != "cpu" or discount_curve is not None:
             raise ValueError(
                 "backend / discount_curve apply to the fast path "
                 "(full=False) only; measure(full=True) runs the trajectory "
                 "kernel on basis.discount_annual"
             )
-        return _measure_full(model_points, basis)
-    return _measure_fast(
-        model_points, basis, backend=backend, discount_curve=discount_curve,
-    )
+        result = _measure_full(model_points, basis)
+    else:
+        result = _measure_fast(
+            model_points, basis, backend=backend, discount_curve=discount_curve,
+        )
+    # Stamp the source model points so group(m, by=[...]) can resolve axis names
+    # without re-passing them (a reference, not a copy).
+    return replace(result, model_points=model_points)
 
 
 # ---------------------------------------------------------------------------

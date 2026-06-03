@@ -168,6 +168,15 @@ class ModelPoints:
     # basis order); the catalogue-consistency check on
     # ``calculation_methods`` still applies.
     coverage_codes: tuple[str, ...] | None = None
+    # Source grouping attributes -- carried for aggregation, never read by the
+    # projection kernel. ``issue_date`` is the policy inception date
+    # (date-like / numpy datetime64), the source for the annual-cohort axis
+    # ``issue_year``. ``attributes`` holds any number of named per-MP label
+    # columns -- portfolio_id, profitability_group, risk_class, region,
+    # campaign_id, ... -- so :func:`fastcashflow.group` can aggregate on any
+    # axis. ``group_into_gic`` is the IFRS 17 preset over the same machinery.
+    issue_date: np.ndarray | None = None
+    attributes: dict[str, np.ndarray] | None = None
 
     def __post_init__(self) -> None:
         # Normalise the required fields to numpy arrays of the right dtype.
@@ -345,6 +354,26 @@ class ModelPoints:
                         f"{name} must have shape ({n_mp},), got {value.shape}"
                     )
             object.__setattr__(self, name, value)
+        # Source grouping attributes -- per-row, sliced with the segment keys,
+        # untouched by the kernel. issue_date -> datetime64[D]; attributes
+        # values -> object label arrays, each of length n_mp.
+        if self.issue_date is not None:
+            issue_date = np.asarray(self.issue_date, dtype="datetime64[D]")
+            if issue_date.shape != (n_mp,):
+                raise ValueError(
+                    f"issue_date must have shape ({n_mp},), got {issue_date.shape}"
+                )
+            object.__setattr__(self, "issue_date", issue_date)
+        if self.attributes is not None:
+            attrs: dict[str, np.ndarray] = {}
+            for k, v in self.attributes.items():
+                v = np.asarray(v, dtype=object)
+                if v.shape != (n_mp,):
+                    raise ValueError(
+                        f"attributes[{k!r}] must have shape ({n_mp},), got {v.shape}"
+                    )
+                attrs[str(k)] = v
+            object.__setattr__(self, "attributes", attrs)
         # Benefit-pattern taxonomy -- normalise dict values to CalculationMethod
         # members so a CSV-derived ``{"CANCER": "DIAGNOSIS"}`` works the same
         # as a hand-built ``{"CANCER": CalculationMethod.DIAGNOSIS}``.
@@ -364,6 +393,36 @@ class ModelPoints:
     def n_mp(self) -> int:
         """Number of model points."""
         return int(self.issue_age.shape[0])
+
+    def axis(self, name: str) -> np.ndarray:
+        """Resolve a grouping axis to a ``(n_mp,)`` label array by name.
+
+        Used by :func:`fastcashflow.group` to aggregate on any axis. Resolution
+        order: the derived ``issue_year`` (calendar year of ``issue_date``); the
+        named source fields ``product_code`` / ``channel_code`` (alias
+        ``channel``) / ``issue_date``; then any key in ``attributes``
+        (portfolio_id, profitability_group, risk_class, ...). Raises
+        :class:`KeyError` listing the available axes when the name is unknown.
+        """
+        if name == "issue_year":
+            if self.issue_date is None:
+                raise KeyError("issue_year needs issue_date, which is not set")
+            return self.issue_date.astype("datetime64[Y]").astype(int) + 1970
+        if name == "channel":
+            name = "channel_code"
+        if name in ("product_code", "channel_code", "issue_date"):
+            value = getattr(self, name)
+            if value is None:
+                raise KeyError(f"axis {name!r} is not set on these model points")
+            return value
+        if self.attributes is not None and name in self.attributes:
+            return self.attributes[name]
+        available = ["issue_year", "product_code", "channel_code", "issue_date"]
+        if self.attributes:
+            available += list(self.attributes)
+        raise KeyError(
+            f"unknown grouping axis {name!r}; available: {sorted(set(available))}"
+        )
 
     def __repr__(self) -> str:
         from fastcashflow._display import model_points_repr
@@ -475,6 +534,11 @@ class ModelPoints:
         for name in ("product_code", "channel_code"):
             value = getattr(self, name)
             kwargs[name] = None if value is None else value[idx]
+        # Source grouping attributes -- slice if set.
+        kwargs["issue_date"] = (None if self.issue_date is None
+                                else self.issue_date[idx])
+        kwargs["attributes"] = (None if self.attributes is None
+                                else {k: v[idx] for k, v in self.attributes.items()})
         # Taxonomy carries through unchanged -- subsetting drops rows, not
         # the company-level catalogue of coverage codes.
         kwargs["calculation_methods"] = self.calculation_methods
