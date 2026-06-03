@@ -63,7 +63,7 @@ html_theme = "pydata_sphinx_theme"
 html_title = "fastcashflow"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
-html_js_files = ["ga-consent.js"]
+html_js_files = ["ga-consent.js", "ga-events.js"]
 html_show_sourcelink = False
 html_copy_source = False
 
