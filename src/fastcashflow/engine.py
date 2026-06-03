@@ -1,16 +1,16 @@
 """Engine entry points.
 
-Two paths:
+The GMM measurement is :func:`measure`, with two paths selected by ``full``:
 
-* ``measure`` -- detailed: full monthly cash flow and CSM trajectories. Use it
-  for inspection, validation and movement analysis.
-* ``value``   -- fast: a single fused, parallel kernel producing only the
-  headline valuation (BEL, RA, CSM, loss component) per model point. It
-  materialises no per-month arrays, so it is memory-minimal and the fastest
-  path for large-scale valuation.
+* ``measure(..., full=True)`` -- detailed: full monthly cash flow and CSM
+  trajectories. Use it for inspection, validation and movement analysis.
+* ``measure(..., full=False)`` -- fast: a single fused, parallel kernel producing
+  only the headline valuation (BEL, RA, CSM, loss component) per model point. It
+  materialises no per-month arrays, so it is memory-minimal and the fastest path
+  for large-scale valuation.
 
-Both paths share the same arithmetic, so ``value`` reproduces ``measure``'s
-headline numbers exactly (cross-checked in the tests).
+Both paths share the same arithmetic, so the fast path reproduces the full
+path's headline numbers exactly (cross-checked in the tests).
 """
 from __future__ import annotations
 
@@ -303,7 +303,7 @@ def value_in_force(
       Sec. 44 loss-component recognition.
 
     A ``ModelPoints`` with ``elapsed_months`` all zero and ``prior_csm``
-    not given reproduces the new-business :func:`value` result.
+    not given reproduces the new-business ``measure(..., full=False)`` result.
     """
     settlement_mode = _validate_settlement_args(
         prior_csm, lock_in_rate, period_months,
@@ -2076,11 +2076,11 @@ def _measure_segmented(
     must carry ``product_code`` and ``channel_code`` columns identifying each row's
     segment; for each unique (product_code, channel_code) the helper masks the
     matching rows, builds a sub-:class:`~fastcashflow.ModelPoints` via
-    :meth:`~fastcashflow.ModelPoints.subset`, calls :func:`value` with the
+    :meth:`~fastcashflow.ModelPoints.subset`, calls ``measure(..., full=False)`` with the
     segment's ``Basis``, and writes the per-row results back to a
     single ``(n_mp,)`` :class:`GMMMeasurement`.
 
-    ``backend`` and ``discount_curve`` flow through to :func:`value` --
+    ``backend`` and ``discount_curve`` flow through to ``measure(..., full=False)`` --
     declared explicitly so a typo (e.g. ``backed="gpu"``) is rejected
     here rather than reaching the kernel. A single-segment ``basis`` is
     accepted as a convenience when ``product_code`` / ``channel_code`` is

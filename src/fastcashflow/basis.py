@@ -372,8 +372,8 @@ class Basis:
     expense_cv :
         Coefficient of variation of expense cash flows -- the expense-risk
         component of the Risk Adjustment. **VFA-only in v1**: ``measure_vfa``
-        uses it directly, but the GMM ``cl_margin`` in ``measure`` /
-        ``value`` does not yet read this field (it sums the mortality /
+        uses it directly, but the GMM ``cl_margin`` in ``measure`` does
+        not yet read this field (it sums the mortality /
         morbidity / disability / longevity components only). Adding the
         expense term to the GMM RA -- and so closing the gap to the
         IFRS 17 non-financial-risk RA -- is future work; setting
@@ -386,7 +386,8 @@ class Basis:
         Which Risk Adjustment technique to use -- ``"confidence_level"``
         (the default; a percentile margin on the benefit present values) or
         ``"cost_of_capital"``. The cost-of-capital method is available
-        through ``measure``; ``value`` computes the confidence-level RA.
+        through ``measure(..., full=True)``; the fast path (``full=False``)
+        computes the confidence-level RA.
     cost_of_capital_rate :
         Annual cost-of-capital rate for the cost-of-capital RA -- the rate
         charged on the non-financial-risk capital held over the run-off.

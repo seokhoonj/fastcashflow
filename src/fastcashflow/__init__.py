@@ -1,9 +1,9 @@
 """fastcashflow -- open-source IFRS 17 GMM cash flow projection engine.
 
-Two entry points:
+The GMM entry point is :func:`fastcashflow.gmm.measure`, selected by ``full``:
 
-* :func:`value`   -- fast, fused valuation (BEL, RA, CSM per model point).
-* :func:`measure` -- detailed: full cash flow and CSM trajectories.
+* ``measure(..., full=False)`` -- fast, fused valuation (headline BEL, RA, CSM per model point).
+* ``measure(..., full=True)``  -- detailed: full cash flow and CSM trajectories.
 
 Conventional import alias::
 

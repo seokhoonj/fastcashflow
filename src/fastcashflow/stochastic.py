@@ -148,7 +148,7 @@ def measure_stochastic(
     the distribution -- mean, percentiles -- can be read from the result. The
     projection runs once and a single parallel kernel sweeps the scenario axis
     (see module docstring); the settlement-pattern and cost-of-capital paths
-    fall back to a per-scenario :func:`value` loop.
+    fall back to a per-scenario ``measure(..., full=False)`` loop.
     """
     scenarios = np.asarray(scenarios, dtype=np.float64)
     if scenarios.ndim not in (1, 2):
