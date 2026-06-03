@@ -115,11 +115,11 @@ def test_count_scales_linearly():
 
     The projection is linear in the policy: a model point standing for N
     policies gives exactly N times the BEL, RA and CSM of one policy. The
-    non-zero acquisition, maintenance and single premium exercise the flat
+    non-zero acquisition and maintenance expenses exercise the flat
     cash flow terms that do not ride the in-force amount.
     """
     kw = dict(issue_age=40, benefits={0: 1_000_000.0}, premium=12_000.0,
-              term_months=24, single_premium=5_000.0)
+              term_months=24)
     basis = _assumptions(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         discount_annual=0.03,

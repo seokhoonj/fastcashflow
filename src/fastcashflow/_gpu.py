@@ -21,7 +21,7 @@ MAX_STATES = 8
 @cuda.jit
 def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        premium_state, benefit_state, start_state, issue_index,
-                       sex, term_months, count, premium, single_premium,
+                       sex, term_months, count, premium,
                        premium_term_months, premium_frequency_months, annuity_frequency_months,
                        coverage_index, coverage_amount, coverage_offset, coverage_rates, coverage_risk,
                        coverage_is_diagnosis, maturity_benefit, annuity_payment,
@@ -99,11 +99,10 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 benefit_occ += occ[s]
         ds = discount_bom[t]
         dm = discount_mid[t]
-        single = prem_occ * single_premium[mp] if t == 0 else 0.0
         level = (prem_occ * prem
                  if (t < premium_term and t % prem_freq == 0) else 0.0)
-        pv_premium += (level + single) * ds
-        cum_premium += level + single
+        pv_premium += level * ds
+        cum_premium += level
         pv_mortality += ift * claim_rate * dm
         pv_morbidity += ift * morb_rate * dm
         if t % ann_freq == 0:
@@ -177,7 +176,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
 
 def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               premium_state, benefit_state, start_state, issue_index, sex,
-              term_months, count, premium, single_premium,
+              term_months, count, premium,
               premium_term_months, premium_frequency_months, annuity_frequency_months,
               coverage_index, coverage_amount, coverage_offset, coverage_rates, coverage_risk,
               coverage_is_diagnosis, maturity_benefit, annuity_payment,
@@ -215,7 +214,6 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_term = cuda.to_device(term_months)
     d_count = cuda.to_device(count)
     d_premium = cuda.to_device(premium)
-    d_single = cuda.to_device(single_premium)
     d_premium_term = cuda.to_device(premium_term_months)
     d_premium_freq = cuda.to_device(premium_frequency_months)
     d_annuity_freq = cuda.to_device(annuity_frequency_months)
@@ -245,7 +243,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     _value_cuda_kernel[blocks, threads](
         d_edge_from, d_edge_to, d_edge_prob, d_edge_lump, n_states,
         d_premium_state, d_benefit_state, d_start_state, d_issue, d_sex,
-        d_term, d_count, d_premium, d_single, d_premium_term, d_premium_freq,
+        d_term, d_count, d_premium, d_premium_term, d_premium_freq,
         d_annuity_freq, d_cov_cov_idx, d_cov_amount, d_cov_offset, d_coverage_rates,
         d_coverage_risk, d_coverage_is_diagnosis, d_maturity, d_annuity,
         d_disability_income, d_disability_benefit,

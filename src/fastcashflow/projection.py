@@ -114,7 +114,7 @@ def _expense_kernel_args(
 @njit(parallel=True, cache=True)
 def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
-                    term_months, count, premium, single_premium,
+                    term_months, count, premium,
                     premium_term_months, premium_frequency_months, annuity_frequency_months,
                     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
                     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -203,10 +203,9 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                 last_year = year
             q = mortality[mp, year]
             deaths[mp, t] = ift * q
-            single = prem_occ * single_premium[mp] if t == 0 else 0.0
             level = (prem_occ * premium[mp]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
-            premium_cf[mp, t] = level + single
+            premium_cf[mp, t] = level
             claim_cf[mp, t] = ift * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = (ift * annuity_payment[mp]
@@ -307,7 +306,7 @@ def _project_kernel_semi_markov(
     mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset,
     premium_state, benefit_state, start_state,
-    term_months, count, premium, single_premium,
+    term_months, count, premium,
     premium_term_months, premium_frequency_months, annuity_frequency_months,
     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -402,10 +401,9 @@ def _project_kernel_semi_markov(
             inforce[mp, t] = ift
             q = mortality[mp, year]
             deaths[mp, t] = ift * q
-            single = prem_occ * single_premium[mp] if t == 0 else 0.0
             level = (prem_occ * premium[mp]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
-            premium_cf[mp, t] = level + single
+            premium_cf[mp, t] = level
             claim_cf[mp, t] = ift * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = (ift * annuity_payment[mp]
@@ -673,7 +671,6 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             model_points.term_months,
             model_points.count,
             model_points.premium,
-            model_points.single_premium,
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,
@@ -739,7 +736,6 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             model_points.term_months,
             model_points.count,
             model_points.premium,
-            model_points.single_premium,
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,

@@ -958,7 +958,7 @@ _POLICY_RESERVED_COLS = frozenset({
     "mp_id",
     "issue_age", "term_months", "premium",
     "sex", "count", "state", "issue_class", "elapsed_months", "issue_date",
-    "single_premium", "premium_term_months", "premium_frequency_months",
+    "premium_term_months", "premium_frequency_months",
     "annuity_frequency_months", "disability_income", "disability_benefit",
     "account_value", "minimum_crediting_rate", "minimum_death_benefit",
     "minimum_accumulation_benefit",
@@ -1085,7 +1085,7 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
         issue_age=pol["issue_age"].to_numpy(),
         term_months=pol["term_months"].to_numpy(),
     )
-    for opt in ("sex", "count", "single_premium", "premium_term_months",
+    for opt in ("sex", "count", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",
                 "disability_income", "disability_benefit", "issue_class"):
         if opt in pol.columns:
@@ -1182,7 +1182,7 @@ def read_model_points(
 
     * a policies frame (``mp_id``, ``issue_age``, ``term_months``, optional
       ``sex`` / ``count`` / ``state`` / ``issue_class`` / ``issue_date`` /
-      ``premium`` / ``single_premium`` / ``premium_term_months`` /
+      ``premium`` / ``premium_term_months`` /
       ``premium_frequency_months`` / ``annuity_frequency_months`` /
       ``product_code`` / ``channel_code``), one row per policy. Any *other*
       column is read as a grouping attribute (``portfolio_id``,
@@ -1286,7 +1286,7 @@ def read_vfa_model_points(
         premium=(df["premium"].to_numpy()
                        if "premium" in df.columns else np.zeros(n_mp)),
     )
-    for opt in ("sex", "count", "single_premium", "premium_term_months",
+    for opt in ("sex", "count", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",
                 "maturity_benefit", "annuity_payment", "disability_income",
                 "disability_benefit", "account_value", "minimum_crediting_rate",

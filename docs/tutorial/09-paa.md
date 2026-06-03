@@ -179,12 +179,12 @@ basis = fcf.Basis(
 
 # 모델 포인트 -- 4개월 단기 보장, 단일보험료 120만 일시납
 model_points = fcf.ModelPoints.single(
-    issue_age      = 40,                # 가입연령 40세
-    sex            = 0,                 # 성별 (0=남, 1=여)
-    benefits       = {0: 100_000_000},  # 0번 보장 (= DEATH) 의 보험금 1억
-    premium  = 0,                 # 월납 보험료 0 (단일보험료라서)
-    term_months    = 4,                 # 보험기간 4개월
-    single_premium = 1_200_000,         # 가입 시 한 번 받는 단일보험료 120만
+    issue_age           = 40,                # 가입연령 40세
+    sex                 = 0,                 # 성별 (0=남, 1=여)
+    benefits            = {0: 100_000_000},  # 0번 보장 (= DEATH) 의 보험금 1억
+    premium             = 1_200_000,         # 일시납 보험료 120만
+    term_months         = 4,                 # 보험기간 4개월
+    premium_term_months = 1,                 # 납입기간 1개월 = 일시납 (한 번 납입)
 )
 
 # 측정 -- PAA 경로
@@ -194,7 +194,7 @@ print(m.revenue[0])          # 월별 보험수익
 print(m.loss_component[0])   # 손실요소 (0 = 손실부담계약 아님)
 ```
 
-`single_premium`으로 단일보험료를, `term_months=4`로 4개월 보장을
+`premium=1_200_000` + `premium_term_months=1`로 일시납 단일보험료를, `term_months=4`로 4개월 보장을
 지정했습니다. 8장의 일반모형과 입력은 같은 모양 — 모델포인트와 가정
 둘 — 이고, 부르는 함수만 `measure`에서 `paa.measure`로 바뀝니다.
 실행하면 이렇게 나옵니다.

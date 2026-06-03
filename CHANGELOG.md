@@ -75,6 +75,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Older copies in the wild that used `mortality_monthly` /
   `lapse_monthly` / `monthly_premium` no longer work.
 
+### Removed
+
+- **`single_premium` field.** A single premium is now expressed as
+  `premium` with `premium_term_months=1` (the premium is collected once,
+  at inception) -- a single, uniform premium model rather than a separate
+  level / single split. `ModelPoints.single_premium`, the `single_premium`
+  argument to `ModelPoints.single`, and the `single_premium` policies
+  column are gone. (The previous form additionally allowed a one-off
+  premium *on top of* a level premium; that combination is no longer
+  representable.)
+- `level_premium` was renamed to `premium` in the same release (its single
+  occurrence on `ModelPoints`, the reader columns, and every example).
+
 ### Deprecated
 
 These names still work but emit `DeprecationWarning`; they will be

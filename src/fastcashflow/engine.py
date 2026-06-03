@@ -726,7 +726,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "def kernel(edge_from, edge_to, edge_prob, edge_lump_sum,")
     line(0, "           premium_state, benefit_state, start_state, "
             "issue_index, sex,")
-    line(0, "           term_months, count, premium, single_premium,")
+    line(0, "           term_months, count, premium,")
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
@@ -802,7 +802,6 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
         line(12, f"benefit_occ = {sum_ben}")
     line(12, "ds = discount_bom[t]")
     line(12, "dm = discount_mid[t]")
-    line(12, "single = prem_occ * single_premium[mp] if t == 0 else 0.0")
     line(12, "if prem_due == 0 and prem_left > 0:")
     line(16, "level = prem_occ * prem")
     line(16, "prem_due = prem_freq - 1")
@@ -810,9 +809,9 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "level = 0.0")
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
-    line(12, "pv_premium += (level + single) * ds")
+    line(12, "pv_premium += level * ds")
     if use_surrender:
-        line(12, "cum_premium += level + single")
+        line(12, "cum_premium += level")
     line(12, "pv_mortality += ift * claim_rate * dm")
     if use_morbidity:
         line(12, "pv_morbidity += ift * morb_rate * dm")
@@ -1177,7 +1176,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(0, "")
     line(0, "@njit(parallel=True, cache=True)")
     line(0, "def kernel(edge_prob, start_state, issue_index, sex,")
-    line(0, "           term_months, count, premium, single_premium,")
+    line(0, "           term_months, count, premium,")
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
@@ -1260,7 +1259,6 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, f"benefit_occ = {sum_ben}")
     line(12, "ds = discount_bom[t]")
     line(12, "dm = discount_mid[t]")
-    line(12, "single = prem_occ * single_premium[mp] if t == 0 else 0.0")
     line(12, "if prem_due == 0 and prem_left > 0:")
     line(16, "level = prem_occ * prem")
     line(16, "prem_due = prem_freq - 1")
@@ -1268,9 +1266,9 @@ def _codegen_fast_kernel_source_semi_markov(
     line(16, "level = 0.0")
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
-    line(12, "pv_premium += (level + single) * ds")
+    line(12, "pv_premium += level * ds")
     if use_surrender:
-        line(12, "cum_premium += level + single")
+        line(12, "cum_premium += level")
     line(12, "pv_mortality += ift * claim_rate * dm")
     line(12, "pv_morbidity += ift * morb_rate * dm")
     if use_annuity:
@@ -1424,7 +1422,7 @@ def _get_fast_kernel_codegen_semi_markov(
 
 @njit(parallel=True, cache=True)
 def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
-                         single_premium, premium_term_months, premium_frequency_months,
+                         premium_term_months, premium_frequency_months,
                          annuity_frequency_months, coverage_index, coverage_amount, coverage_offset,
                          coverage_rates, coverage_risk, coverage_is_diagnosis,
                          maturity_benefit, annuity_payment,
@@ -1506,7 +1504,6 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
                 last_year = year
             ds = discount_bom[t]
             dm = discount_mid[t]
-            single = inforce * single_premium[mp] if t == 0 else 0.0
             if prem_due == 0 and prem_left > 0:
                 level = inforce * prem
                 prem_due = prem_freq - 1
@@ -1514,7 +1511,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
                 level = 0.0
                 prem_due -= 1
             prem_left -= 1
-            pv_premium += (level + single) * ds
+            pv_premium += level * ds
             pv_mortality += inforce * claim_rate * dm
             # Streams the portfolio does not use are skipped wholesale: the
             # guards are loop-invariant per call, so the branch predicts
@@ -1544,7 +1541,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
                 # cum_premium aggregates inforce * premium and is the surrender
                 # basis; multiplying by lapse_rate alone gives the per-month
                 # surrender outflow (the count is already in cum_premium).
-                cum_premium += level + single
+                cum_premium += level
                 pv_surrender += (lapse_monthly[sx, age_idx, year]
                                  * cum_premium * surrender_curve[t] * dm)
             inforce *= survival_monthly[sx, age_idx, year]
@@ -1924,7 +1921,6 @@ def _measure_fast(
             model_points.term_months,
             model_points.count,
             model_points.premium,
-            model_points.single_premium,
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,
@@ -1976,7 +1972,6 @@ def _measure_fast(
         model_points.term_months,
         model_points.count,
         model_points.premium,
-        model_points.single_premium,
         model_points.premium_term_months,
         model_points.premium_frequency_months,
         model_points.annuity_frequency_months,
@@ -2025,8 +2020,7 @@ def _measure_fast(
                 model_points.term_months,
                 model_points.count,
                 model_points.premium,
-                model_points.single_premium,
-                model_points.premium_term_months,
+                    model_points.premium_term_months,
                 model_points.premium_frequency_months,
                 model_points.annuity_frequency_months,
                 model_points.coverage_index,

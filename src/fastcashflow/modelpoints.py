@@ -66,7 +66,6 @@ class ModelPoints:
     proliferate the way claim benefits do:
 
     * ``premium``            -- premium charged each payment occurrence.
-    * ``single_premium``           -- one-off premium at t = 0.
     * ``premium_term_months``      -- months the level premium is collected,
       defaulting to the full coverage term.
     * ``premium_frequency_months`` -- months between level-premium payments
@@ -89,7 +88,6 @@ class ModelPoints:
     annuity_payment: FloatArray | None = None    # survival income, each month
     disability_income: FloatArray | None = None  # income while in a benefit state
     disability_benefit: FloatArray | None = None # lump sum on a flagged transition
-    single_premium: FloatArray | None = None     # one-off premium at t = 0
     premium_term_months: IntArray | None = None  # months premium is collected
     premium_frequency_months: IntArray | None = None  # months between premiums
     annuity_frequency_months: IntArray | None = None  # months between payouts
@@ -236,7 +234,7 @@ class ModelPoints:
             raise ValueError("term_months must be >= 1")
         # Premiums / survival benefits default to zero (absent).
         for name in ("maturity_benefit", "annuity_payment", "disability_income",
-                     "disability_benefit", "single_premium", "account_value",
+                     "disability_benefit", "account_value",
                      "minimum_crediting_rate", "minimum_death_benefit",
                      "minimum_accumulation_benefit"):
             value = getattr(self, name)
@@ -449,7 +447,6 @@ class ModelPoints:
         annuity_payment: float = 0.0,
         disability_income: float = 0.0,
         disability_benefit: float = 0.0,
-        single_premium: float = 0.0,
         premium_term_months: int | None = None,
         premium_frequency_months: int = 1,
         annuity_frequency_months: int = 1,
@@ -477,7 +474,6 @@ class ModelPoints:
             annuity_payment=np.array([annuity_payment]),
             disability_income=np.array([disability_income]),
             disability_benefit=np.array([disability_benefit]),
-            single_premium=np.array([single_premium]),
             premium_term_months=(None if premium_term_months is None
                                  else np.array([premium_term_months])),
             premium_frequency_months=np.array([premium_frequency_months]),
@@ -513,7 +509,7 @@ class ModelPoints:
         per_row = (
             "issue_age", "premium", "term_months",
             "maturity_benefit", "annuity_payment", "disability_income",
-            "disability_benefit", "single_premium", "premium_term_months",
+            "disability_benefit", "premium_term_months",
             "premium_frequency_months", "annuity_frequency_months",
             "account_value", "minimum_crediting_rate", "minimum_death_benefit",
             "minimum_accumulation_benefit",

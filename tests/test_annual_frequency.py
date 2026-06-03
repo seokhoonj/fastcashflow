@@ -62,15 +62,13 @@ def test_annual_mortality_reproduced_over_a_year():
 # ---------------------------------------------------------------------------
 
 def test_premium_frequency_payment_months():
-    """A quarterly premium is collected at months 0, 3, 6, 9; the single
-    premium is added at month 0 regardless of the frequency."""
+    """A quarterly premium is collected at months 0, 3, 6, 9 only."""
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
                             premium=10_000.0, term_months=12,
-                            single_premium=5_000.0,
                             premium_frequency_months=3)
     res = measure(mp, _asmp())            # no decrements -- in-force stays 1
     pcf = res.cashflows.premium_cf[0]
-    assert np.isclose(pcf[0], 10_000.0 + 5_000.0)
+    assert np.isclose(pcf[0], 10_000.0)
     for t in (3, 6, 9):
         assert np.isclose(pcf[t], 10_000.0)
     for t in (1, 2, 4, 5, 7, 8, 10, 11):

@@ -48,8 +48,6 @@ def solve_premium(
 
     Every product field of ``model_points`` is used as given -- only
     ``premium`` is ignored, since it is the unknown being solved for.
-    (A fixed ``single_premium``, if any, stays as given: the level premium
-    is solved on top of it.)
     Returns the solved premium per model point, shape ``(n_mp,)``.
     """
     chosen = (break_even, margin is not None, csm is not None)

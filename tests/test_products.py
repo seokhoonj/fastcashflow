@@ -100,7 +100,7 @@ def test_immediate_annuity_hand_calc():
     single, annuity, term = 1.2e8, 600_000.0, 24
     res = measure(
         ModelPoints.single(
-            40, 0.0, term, annuity_payment=annuity, single_premium=single,
+            40, single, term, annuity_payment=annuity, premium_term_months=1,
             calculation_methods=PATTERNS,
         ),
         basis,
@@ -126,10 +126,10 @@ def test_value_matches_measure_annuity():
     mps = ModelPoints(
         issue_age=rng.integers(55, 75, n),
         benefits={0: np.zeros(n)},
-        premium=np.zeros(n),
+        premium=rng.integers(80, 200, n) * 1_000_000.0,
         term_months=rng.integers(120, 300, n),
         annuity_payment=rng.integers(30, 100, n) * 10_000,
-        single_premium=rng.integers(80, 200, n) * 1_000_000,
+        premium_term_months=np.ones(n, dtype=np.int64),
         calculation_methods=PATTERNS,
     )
     basis = _assumptions(longevity_cv=0.08)
@@ -145,7 +145,7 @@ def test_value_matches_measure_annuity():
 def test_longevity_ra_responds_to_its_cv():
     """The longevity RA is zero without longevity_cv and linear in it."""
     annuity = ModelPoints.single(
-        60, 0.0, 180, annuity_payment=500_000.0, single_premium=8e7,
+        60, 8e7, 180, annuity_payment=500_000.0, premium_term_months=1,
         calculation_methods=PATTERNS,
     )
     no_cv = measure(annuity, _assumptions(longevity_cv=0.0))

@@ -40,7 +40,7 @@ def test_paa_lrc_hand_calc():
     basis = _assumptions()
     single, term = 1_000_000.0, 12
     res = fcf.paa.measure(
-        ModelPoints.single(40, 0.0, term, benefits={0: 1e8}, single_premium=single, calculation_methods=PATTERNS), basis
+        ModelPoints.single(40, single, term, benefits={0: 1e8}, premium_term_months=1, calculation_methods=PATTERNS), basis
     )
 
     # straight-line earning: the premium spread evenly over the coverage period
