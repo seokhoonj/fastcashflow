@@ -331,6 +331,53 @@ def test_measure_stream_streams_frames(tmp_path):
     assert np.allclose(results["csm"].to_numpy(), in_memory.csm)
 
 
+def test_measure_stream_routes_a_basis_dict(tmp_path):
+    """measure_stream routes each chunk's model points by a per-segment basis dict."""
+
+    basis_dict = fcf.samples.basis()                 # {(product, channel): Basis}
+    patterns   = fcf.samples.calculation_methods()
+    mps        = fcf.samples.model_points()
+    policies, coverages = mp_to_frames(mps, next(iter(basis_dict.values())))
+    # the dict path routes on the segment keys, so they must ride on the policies frame
+    policies = policies.with_columns(
+        pl.Series("product_code", mps.product_code),
+        pl.Series("channel_code", mps.channel_code),
+    )
+    policies.write_parquet(tmp_path / "pol.parquet")
+    coverages.write_parquet(tmp_path / "cov.parquet")
+
+    out_dir = tmp_path / "results"
+    processed = fcf.gmm.measure_stream(
+        tmp_path / "pol.parquet", out_dir, basis_dict,
+        coverages=tmp_path / "cov.parquet",
+        calculation_methods=patterns, chunk_size=3,
+    )
+    assert processed == mps.n_mp
+
+    results = pl.read_parquet(str(out_dir / "part-*.parquet")).sort("id")
+    in_memory = measure(mps, basis_dict, full=False)   # same per-segment routing
+    assert np.allclose(results["bel"].to_numpy(), in_memory.bel)
+    assert np.allclose(results["csm"].to_numpy(), in_memory.csm)
+
+
+def test_measure_stream_dict_needs_segment_keys(tmp_path):
+    """A basis dict with no product_code / channel_code on the policies is a clear error."""
+
+    basis_dict = fcf.samples.basis()
+    patterns   = fcf.samples.calculation_methods()
+    mps        = fcf.samples.model_points()
+    policies, coverages = mp_to_frames(mps, next(iter(basis_dict.values())))
+    policies.write_parquet(tmp_path / "pol.parquet")     # segment keys deliberately absent
+    coverages.write_parquet(tmp_path / "cov.parquet")
+
+    with pytest.raises(ValueError, match="product_code"):
+        fcf.gmm.measure_stream(
+            tmp_path / "pol.parquet", tmp_path / "results", basis_dict,
+            coverages=tmp_path / "cov.parquet",
+            calculation_methods=patterns, chunk_size=3,
+        )
+
+
 def test_model_points_repr_and_str_are_compact():
     """ModelPoints repr / str summarise the portfolio, not dump every array."""
     mp = fcf.samples.model_points()

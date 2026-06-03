@@ -1676,7 +1676,7 @@ def _write_measurement_columns(
 def measure_stream(
     input_path: Path | str,
     output_dir: Path | str,
-    basis: Basis,
+    basis: Basis | dict[tuple[str, str], Basis],
     *,
     coverages: Path | str | None = None,
     calculation_methods: Path | str | dict[str, CalculationMethod] | None = None,
@@ -1687,19 +1687,24 @@ def measure_stream(
     """Stream a valuation through a parquet file one chunk at a time.
 
     Reads the input in chunks of ``chunk_size`` model points, values each
-    chunk with :func:`value`, and writes the results as a parquet dataset --
-    one ``part-NNNNN.parquet`` file per chunk -- under ``output_dir``. Peak
-    memory is a single chunk, so this scales past what an in-memory run could
-    hold.
+    chunk with the fused fast path (``measure(..., full=False)``), and writes
+    the results as a parquet dataset -- one ``part-NNNNN.parquet`` file per
+    chunk -- under ``output_dir``. Peak memory is a single chunk, so this
+    scales past what an in-memory run could hold.
 
-    The input format mirrors :func:`read_model_points`:
+    The input is a policies + coverages pair, mirroring
+    :func:`read_model_points`: ``input_path`` is the policies parquet and
+    ``coverages`` the coverages parquet. Each chunk of policies pulls its
+    coverage rows by ``mp_id``, so sorting the coverages file by ``mp_id``
+    lets the parquet reader prune row groups. A flat one-row-per-policy
+    (wide) file is not accepted -- it cannot carry the per-coverage waiting
+    and reduction rules.
 
-    * **wide** -- ``input_path`` is a wide parquet file; ``coverages`` is
-      ``None``. Each chunk of rows is a self-contained set of model points.
-    * ``input_path`` is the policies parquet and
-      ``coverages`` the coverages parquet. Each chunk of policies pulls its
-      coverage rows by ``mp_id``, so sorting the coverages file by
-      ``mp_id`` lets the parquet reader prune row groups.
+    ``basis`` may be a single :class:`Basis` (uniform portfolio) or a
+    ``{(product_code, channel_code): Basis}`` dict, exactly as ``measure``.
+    With a dict each chunk routes its model points to their segment's basis,
+    so the policies parquet must carry ``product_code`` / ``channel_code``
+    columns.
 
     Returns the total number of model points processed.
     """
