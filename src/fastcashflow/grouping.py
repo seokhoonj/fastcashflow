@@ -43,34 +43,54 @@ from fastcashflow.projection import Cashflows
 _INFORCE_EPS = 1e-12
 
 
-def _sum_by_group(arr: FloatArray, inverse: IntArray, n_groups: int) -> FloatArray:
-    """Sum the rows of ``arr`` within each group.
+class _GroupReducer:
+    """Sum rows within each group -- the grouping structure built once, reused.
 
-    Two vectorised paths instead of the slow unbuffered ``np.add.at`` scatter
-    that dominated ``group()`` (~14s for 200k model points):
+    ``group()`` sums ~14 arrays (BEL, RA, every cash-flow stream, LIC, ...) over
+    the *same* grouping. Building the reduction structure once here and reusing
+    it for every :meth:`sum` avoids rebuilding the one-hot / re-sorting per array
+    (the dominant cost at portfolio scale). One of two vectorised paths, chosen
+    once from the size:
 
-    * **few groups** -- a one-hot ``(n_groups, n) @ arr`` matrix multiply, a
-      single BLAS call with no per-element scatter (~10x faster). Skipped when
-      the one-hot would be large (``n_groups x n`` elements).
+    * **few groups** -- a one-hot ``(n_groups, n) @ arr`` matrix multiply (a
+      single BLAS call, no per-element scatter). Skipped when the one-hot would
+      be large (``n_groups x n`` elements).
     * **many groups** -- sort once and reduce contiguous runs
       (``np.add.reduceat``), so the one-hot is never materialised.
 
     Empty groups stay zero. Sums run in group / sorted order rather than input
-    order, so the result matches the scatter-add to floating-point round-off.
+    order, so the result matches an unbuffered scatter-add to round-off.
     """
-    n = arr.shape[0]
-    if n == 0:
-        return np.zeros((n_groups, *arr.shape[1:]), dtype=np.float64)
-    if n_groups * n <= 20_000_000:
-        onehot = (np.arange(n_groups)[:, None] == inverse[None, :]).astype(np.float64)
-        return onehot @ arr
-    result = np.zeros((n_groups, *arr.shape[1:]), dtype=np.float64)
-    counts = np.bincount(inverse, minlength=n_groups)
-    nonempty = np.nonzero(counts)[0]
-    order = np.argsort(inverse, kind="stable")
-    starts = np.concatenate(([0], np.cumsum(counts)[:-1]))
-    result[nonempty] = np.add.reduceat(arr[order], starts[nonempty], axis=0)
-    return result
+
+    def __init__(self, inverse: IntArray, n_groups: int):
+        self.inverse = inverse
+        self.n_groups = n_groups
+        self.n = inverse.shape[0]
+        # The number of model points per group -- also the grouping counts the
+        # reduceat path needs, so compute the single bincount here.
+        self.sizes = np.bincount(inverse, minlength=n_groups)
+        if self.n and n_groups * self.n <= 20_000_000:
+            self._onehot = (
+                np.arange(n_groups)[:, None] == inverse[None, :]
+            ).astype(np.float64)
+            self._order = self._starts = self._nonempty = None
+        else:
+            self._onehot = None
+            self._nonempty = np.nonzero(self.sizes)[0]
+            self._order = np.argsort(inverse, kind="stable")
+            self._starts = np.concatenate(([0], np.cumsum(self.sizes)[:-1]))
+
+    def sum(self, arr: FloatArray) -> FloatArray:
+        """Sum the rows of ``arr`` within each group -- shape ``(n_groups, ...)``."""
+        if self.n == 0:
+            return np.zeros((self.n_groups, *arr.shape[1:]), dtype=np.float64)
+        if self._onehot is not None:
+            return self._onehot @ arr
+        result = np.zeros((self.n_groups, *arr.shape[1:]), dtype=np.float64)
+        result[self._nonempty] = np.add.reduceat(
+            arr[self._order], self._starts[self._nonempty], axis=0
+        )
+        return result
 
 
 def _join_keys(cols, names=None) -> np.ndarray:
@@ -123,6 +143,38 @@ def _resolve_group_ids(measurement: GMMMeasurement, by) -> np.ndarray:
     return np.asarray(by)
 
 
+def _group_plan(measurement, by, n_mp: int):
+    """Resolve ``by`` to per-MP labels, then build the shared reduction plan.
+
+    Returns ``(labels, reducer)`` where ``labels`` is the ascending-order
+    per-group composite label and ``reducer`` is the :class:`_GroupReducer`
+    every per-field sum in this ``group`` call reuses.
+    """
+    group_ids = _resolve_group_ids(measurement, by)
+    if group_ids.shape != (n_mp,):
+        raise ValueError(f"group ids must have one entry per model point ({n_mp})")
+    labels, inverse = np.unique(group_ids, return_inverse=True)
+    # numpy >= 2.0 can return a 2-D inverse for n-D input; flatten to (n_mp,).
+    return labels, _GroupReducer(inverse.reshape(-1), labels.shape[0])
+
+
+def _sum_cashflows(cf: Cashflows, reducer: _GroupReducer) -> Cashflows:
+    """Sum every cash-flow stream within each group (all streams are additive)."""
+    return Cashflows(
+        inforce=reducer.sum(cf.inforce),
+        deaths=reducer.sum(cf.deaths),
+        premium_cf=reducer.sum(cf.premium_cf),
+        claim_cf=reducer.sum(cf.claim_cf),
+        morbidity_cf=reducer.sum(cf.morbidity_cf),
+        expense_cf=reducer.sum(cf.expense_cf),
+        annuity_cf=reducer.sum(cf.annuity_cf),
+        disability_cf=reducer.sum(cf.disability_cf),
+        maturity_cf=reducer.sum(cf.maturity_cf),
+        maturity_survivors=reducer.sum(cf.maturity_survivors),
+        surrender_cf=reducer.sum(cf.surrender_cf),
+    )
+
+
 @singledispatch
 def group(measurement, by):
     """Aggregate a per-model-point measurement to any axis.
@@ -171,32 +223,10 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
             "group() requires a full=True measurement; the trajectory fields "
             "are None on the full=False fast path. Call measure(..., full=True)."
         )
-    group_ids = _resolve_group_ids(measurement, by)
-    n_mp = measurement.bel_path.shape[0]
-    if group_ids.shape != (n_mp,):
-        raise ValueError(
-            f"group ids must have one entry per model point ({n_mp})"
-        )
-    labels, inverse = np.unique(group_ids, return_inverse=True)
-    inverse = inverse.reshape(-1)
-    n_groups = labels.shape[0]
-
-    bel = _sum_by_group(measurement.bel_path, inverse, n_groups)
-    ra = _sum_by_group(measurement.ra_path, inverse, n_groups)
-    cf = measurement.cashflows
-    grouped_cf = Cashflows(
-        inforce=_sum_by_group(cf.inforce, inverse, n_groups),
-        deaths=_sum_by_group(cf.deaths, inverse, n_groups),
-        premium_cf=_sum_by_group(cf.premium_cf, inverse, n_groups),
-        claim_cf=_sum_by_group(cf.claim_cf, inverse, n_groups),
-        morbidity_cf=_sum_by_group(cf.morbidity_cf, inverse, n_groups),
-        expense_cf=_sum_by_group(cf.expense_cf, inverse, n_groups),
-        annuity_cf=_sum_by_group(cf.annuity_cf, inverse, n_groups),
-        disability_cf=_sum_by_group(cf.disability_cf, inverse, n_groups),
-        maturity_cf=_sum_by_group(cf.maturity_cf, inverse, n_groups),
-        maturity_survivors=_sum_by_group(cf.maturity_survivors, inverse, n_groups),
-        surrender_cf=_sum_by_group(cf.surrender_cf, inverse, n_groups),
-    )
+    labels, r = _group_plan(measurement, by, measurement.bel_path.shape[0])
+    bel = r.sum(measurement.bel_path)
+    ra = r.sum(measurement.ra_path)
+    grouped_cf = _sum_cashflows(measurement.cashflows, r)
 
     # The CSM and the loss component are re-derived on the group aggregate --
     # the max(0, ...) floor applies to the group, not the contract.
@@ -221,10 +251,10 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
         # Legitimate in-force is orders of magnitude above this floor.
         live = np.where(inforce > _INFORCE_EPS,
                         np.arange(inforce.shape[1])[None, :], -1).max(axis=1)
-        out_bom = np.empty((n_groups, bom.shape[1]))
-        out_mid = np.empty((n_groups, measurement.discount_mid.shape[1]))
-        for g in range(n_groups):
-            rows = np.nonzero(inverse == g)[0]
+        out_bom = np.empty((r.n_groups, bom.shape[1]))
+        out_mid = np.empty((r.n_groups, measurement.discount_mid.shape[1]))
+        for g in range(r.n_groups):
+            rows = np.nonzero(r.inverse == g)[0]
             rep = rows[np.argmax(live[rows])]
             livemask = cols[None, :] < (live[rows] + 2)[:, None]
             if not np.allclose(np.where(livemask, bom[rows] - bom[rep], 0.0), 0.0):
@@ -252,12 +282,12 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=_sum_by_group(measurement.lic, inverse, n_groups),
+        lic=r.sum(measurement.lic),
         cashflows=grouped_cf,
         discount_bom=out_bom,
         discount_mid=out_mid,
         group_labels=labels,
-        group_sizes=np.bincount(inverse, minlength=n_groups),
+        group_sizes=r.sizes,
     )
 
 
@@ -268,36 +298,16 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
             "group() requires a full measurement; the trajectory fields are "
             "None. Re-run vfa.measure()."
         )
-    group_ids = _resolve_group_ids(measurement, by)
-    n_mp = measurement.bel_path.shape[0]
-    if group_ids.shape != (n_mp,):
-        raise ValueError(f"group ids must have one entry per model point ({n_mp})")
-    labels, inverse = np.unique(group_ids, return_inverse=True)
-    inverse = inverse.reshape(-1)
-    n_groups = labels.shape[0]
-
-    bel = _sum_by_group(measurement.bel_path, inverse, n_groups)
-    ra = _sum_by_group(measurement.ra_path, inverse, n_groups)
-    cf = measurement.cashflows
-    grouped_cf = Cashflows(
-        inforce=_sum_by_group(cf.inforce, inverse, n_groups),
-        deaths=_sum_by_group(cf.deaths, inverse, n_groups),
-        premium_cf=_sum_by_group(cf.premium_cf, inverse, n_groups),
-        claim_cf=_sum_by_group(cf.claim_cf, inverse, n_groups),
-        morbidity_cf=_sum_by_group(cf.morbidity_cf, inverse, n_groups),
-        expense_cf=_sum_by_group(cf.expense_cf, inverse, n_groups),
-        annuity_cf=_sum_by_group(cf.annuity_cf, inverse, n_groups),
-        disability_cf=_sum_by_group(cf.disability_cf, inverse, n_groups),
-        maturity_cf=_sum_by_group(cf.maturity_cf, inverse, n_groups),
-        maturity_survivors=_sum_by_group(cf.maturity_survivors, inverse, n_groups),
-        surrender_cf=_sum_by_group(cf.surrender_cf, inverse, n_groups),
-    )
+    labels, r = _group_plan(measurement, by, measurement.bel_path.shape[0])
+    bel = r.sum(measurement.bel_path)
+    ra = r.sum(measurement.ra_path)
+    grouped_cf = _sum_cashflows(measurement.cashflows, r)
     # variable_fee (PV of the fee) and time_value (a cost) are per-MP amounts --
     # additive. account_value is a per-policy level, not a group quantity (the
     # group's fund would be sum(inforce x av), a different field), so it does not
     # carry to the grouped result.
-    time_value = _sum_by_group(measurement.time_value, inverse, n_groups)
-    variable_fee = _sum_by_group(measurement.variable_fee, inverse, n_groups)
+    time_value = r.sum(measurement.time_value)
+    variable_fee = r.sum(measurement.variable_fee)
 
     # The CSM and loss component are re-derived on the group aggregate. The VFA
     # inception fulfilment cash flows fold in the guarantee time value, and the
@@ -324,12 +334,12 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
         account_value_path=None,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=_sum_by_group(measurement.lic, inverse, n_groups),
+        lic=r.sum(measurement.lic),
         cashflows=grouped_cf,
         discount_bom=bom,
         model_points=None,
         group_labels=labels,
-        group_sizes=np.bincount(inverse, minlength=n_groups),
+        group_sizes=r.sizes,
     )
 
 
@@ -340,34 +350,12 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
             "group() requires a full reinsurance measurement (cash flows and "
             "discount curve). Re-run reinsurance.measure()."
         )
-    group_ids = _resolve_group_ids(measurement, by)
-    n_mp = measurement.bel.shape[0]
-    if group_ids.shape != (n_mp,):
-        raise ValueError(f"group ids must have one entry per model point ({n_mp})")
-    labels, inverse = np.unique(group_ids, return_inverse=True)
-    inverse = inverse.reshape(-1)
-    n_groups = labels.shape[0]
-
-    bel = _sum_by_group(measurement.bel, inverse, n_groups)
-    ra = _sum_by_group(measurement.ra, inverse, n_groups)
-    recovery = _sum_by_group(measurement.recovery, inverse, n_groups)
-    reinsurance_premium = _sum_by_group(
-        measurement.reinsurance_premium, inverse, n_groups
-    )
-    cf = measurement.cashflows
-    grouped_cf = Cashflows(
-        inforce=_sum_by_group(cf.inforce, inverse, n_groups),
-        deaths=_sum_by_group(cf.deaths, inverse, n_groups),
-        premium_cf=_sum_by_group(cf.premium_cf, inverse, n_groups),
-        claim_cf=_sum_by_group(cf.claim_cf, inverse, n_groups),
-        morbidity_cf=_sum_by_group(cf.morbidity_cf, inverse, n_groups),
-        expense_cf=_sum_by_group(cf.expense_cf, inverse, n_groups),
-        annuity_cf=_sum_by_group(cf.annuity_cf, inverse, n_groups),
-        disability_cf=_sum_by_group(cf.disability_cf, inverse, n_groups),
-        maturity_cf=_sum_by_group(cf.maturity_cf, inverse, n_groups),
-        maturity_survivors=_sum_by_group(cf.maturity_survivors, inverse, n_groups),
-        surrender_cf=_sum_by_group(cf.surrender_cf, inverse, n_groups),
-    )
+    labels, r = _group_plan(measurement, by, measurement.bel.shape[0])
+    bel = r.sum(measurement.bel)
+    ra = r.sum(measurement.ra)
+    recovery = r.sum(measurement.recovery)
+    reinsurance_premium = r.sum(measurement.reinsurance_premium)
+    grouped_cf = _sum_cashflows(measurement.cashflows, r)
     # Reinsurance held has no loss component and no floor (paragraph 65): the
     # CSM is the net cost or gain, csm0 = -(BEL - RA). That is linear, so the
     # grouped CSM equals the sum of the per-contract CSMs; only the accretion /
@@ -392,7 +380,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
         discount_bom=bom,
         model_points=None,
         group_labels=labels,
-        group_sizes=np.bincount(inverse, minlength=n_groups),
+        group_sizes=r.sizes,
     )
 
 
@@ -403,38 +391,18 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
             "group() requires a full PAA measurement; the trajectory fields are "
             "None. Re-run paa.measure()."
         )
-    group_ids = _resolve_group_ids(measurement, by)
-    n_mp = measurement.lrc_path.shape[0]
-    if group_ids.shape != (n_mp,):
-        raise ValueError(f"group ids must have one entry per model point ({n_mp})")
-    labels, inverse = np.unique(group_ids, return_inverse=True)
-    inverse = inverse.reshape(-1)
-    n_groups = labels.shape[0]
-
-    lrc_path = _sum_by_group(measurement.lrc_path, inverse, n_groups)
-    revenue = _sum_by_group(measurement.revenue, inverse, n_groups)
-    service_expense = _sum_by_group(measurement.service_expense, inverse, n_groups)
-    lic = _sum_by_group(measurement.lic, inverse, n_groups)
-    cf = measurement.cashflows
-    grouped_cf = Cashflows(
-        inforce=_sum_by_group(cf.inforce, inverse, n_groups),
-        deaths=_sum_by_group(cf.deaths, inverse, n_groups),
-        premium_cf=_sum_by_group(cf.premium_cf, inverse, n_groups),
-        claim_cf=_sum_by_group(cf.claim_cf, inverse, n_groups),
-        morbidity_cf=_sum_by_group(cf.morbidity_cf, inverse, n_groups),
-        expense_cf=_sum_by_group(cf.expense_cf, inverse, n_groups),
-        annuity_cf=_sum_by_group(cf.annuity_cf, inverse, n_groups),
-        disability_cf=_sum_by_group(cf.disability_cf, inverse, n_groups),
-        maturity_cf=_sum_by_group(cf.maturity_cf, inverse, n_groups),
-        maturity_survivors=_sum_by_group(cf.maturity_survivors, inverse, n_groups),
-        surrender_cf=_sum_by_group(cf.surrender_cf, inverse, n_groups),
-    )
+    labels, r = _group_plan(measurement, by, measurement.lrc_path.shape[0])
+    lrc_path = r.sum(measurement.lrc_path)
+    revenue = r.sum(measurement.revenue)
+    service_expense = r.sum(measurement.service_expense)
+    lic = r.sum(measurement.lic)
+    grouped_cf = _sum_cashflows(measurement.cashflows, r)
     # The LRC, revenue, service expense and LIC are all undiscounted and
     # additive -- there is no CSM (paragraphs 53-59). The only non-linear part
     # is the onerous loss (paragraph 57): re-derive it on the group's aggregate
     # fulfilment cash flows, so a profitable contract nets a marginally onerous
     # one within the group.
-    fcf = _sum_by_group(measurement.fcf, inverse, n_groups)
+    fcf = r.sum(measurement.fcf)
     loss_component = np.maximum(0.0, fcf)
     return PAAMeasurement(
         lrc=lrc_path[:, 0],
@@ -447,7 +415,7 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
         cashflows=grouped_cf,
         model_points=None,
         group_labels=labels,
-        group_sizes=np.bincount(inverse, minlength=n_groups),
+        group_sizes=r.sizes,
     )
 
 
