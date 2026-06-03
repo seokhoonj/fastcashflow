@@ -217,6 +217,7 @@ def measure(
     full: bool = True,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
+    segment_by=("product_code", "channel_code"),
 ) -> GMMMeasurement:
     """GMM measurement -- the single entry point.
 
@@ -228,7 +229,13 @@ def measure(
 
     ``basis`` may be a single :class:`Basis` (uniform portfolio) or a
     ``{(product_code, channel_code): Basis}`` dict; with a dict each segment is routed
-    to its own basis. ``backend`` (``"cpu"``/``"gpu"``) and ``discount_curve``
+    to its own basis. ``segment_by`` names the routing axes (resolved via
+    :meth:`ModelPoints.axis`, so any ``attributes`` column works) and the dict
+    keys are tuples of those axes in order -- it defaults to
+    ``("product_code", "channel_code")``, but e.g.
+    ``segment_by=("product_code", "channel_code", "risk_class")`` lets the basis
+    vary by risk class. Cost scales with the number of distinct segments, not the
+    number of axes. ``backend`` (``"cpu"``/``"gpu"``) and ``discount_curve``
     apply to the fast path only.
     """
     if isinstance(basis, dict):
@@ -239,10 +246,13 @@ def measure(
                     "(full=False) only; measure(full=True) runs the trajectory "
                     "kernel on each segment's basis.discount_annual"
                 )
-            result = _measure_segmented_full(model_points, basis)
+            result = _measure_segmented_full(
+                model_points, basis, segment_by=segment_by,
+            )
         else:
             result = _measure_segmented(
-                model_points, basis, backend=backend, discount_curve=discount_curve,
+                model_points, basis, backend=backend,
+                discount_curve=discount_curve, segment_by=segment_by,
             )
     elif full:
         if backend != "cpu" or discount_curve is not None:
@@ -2077,6 +2087,7 @@ def _measure_segmented(
     *,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
+    segment_by=("product_code", "channel_code"),
 ) -> GMMMeasurement:
     """Value a multi-segment portfolio: split, value each, concatenate.
 
@@ -2095,7 +2106,9 @@ def _measure_segmented(
     accepted as a convenience when ``product_code`` / ``channel_code`` is
     not set.
     """
-    if model_points.product_code is None or model_points.channel_code is None:
+    try:
+        cols = _resolve_segment_cols(model_points, segment_by)
+    except KeyError:
         if len(basis) == 1:
             (basis,) = basis.values()
             return _measure_fast(
@@ -2103,84 +2116,23 @@ def _measure_segmented(
                 backend=backend, discount_curve=discount_curve,
             )
         raise ValueError(
-            "model_points has no 'product_code'/'channel_code' set but the "
+            f"model_points has no {tuple(segment_by)} axis/axes set but the "
             f"basis has {len(basis)} segments; either set the columns or "
             "pass a single-segment basis"
         )
+    basis_norm, segments = _factorise_segments(
+        basis, cols, segment_by, model_points.n_mp,
+    )
 
-    # Codes flowing in from the two source files may carry different
-    # Unicode normalisation forms (NFC vs NFD) for the same visible
-    # string -- a Korean / European character composed in one file and
-    # decomposed in the other compares unequal. NFC-normalise both sides
-    # so the segment lookup is text-identity, not byte-identity.
-    product_code = np.array(
-        [unicodedata.normalize("NFC", str(v)) for v in model_points.product_code],
-        dtype=object,
-    )
-    channel_code = np.array(
-        [unicodedata.normalize("NFC", str(v)) for v in model_points.channel_code],
-        dtype=object,
-    )
-    basis = {
-        (unicodedata.normalize("NFC", str(p)),
-         unicodedata.normalize("NFC", str(c))): a
-        for (p, c), a in basis.items()
-    }
     n_mp = model_points.n_mp
-
-    # Segment keys are joined with '|' for factorisation; reject codes that
-    # contain that separator to keep the round-trip lossless. The leak is
-    # easy to introduce via a careless ETL column rename.
-    for arr, name in ((product_code, "product_code"), (channel_code, "channel_code")):
-        bad = sorted({str(v) for v in arr if "|" in str(v)})
-        if bad:
-            raise ValueError(
-                f"{name} value(s) {bad} contain the '|' character, which "
-                "the segmented measure uses as the (product_code, channel_code) key "
-                "separator. Pick a different separator in your ETL or "
-                "rename the offending code."
-            )
-
     bel = np.empty(n_mp)
     ra = np.empty(n_mp)
     csm = np.empty(n_mp)
     loss_component = np.empty(n_mp)
-
-    # Factorise the (product_code, channel_code) key once: combine into a single
-    # array of pair-strings and run np.unique with return_inverse=True.
-    # Mask construction per segment becomes an integer comparison rather
-    # than a Python generator over n_mp policies -- the earlier
-    # `np.fromiter(((str(p),str(c)) == key for ...), ...)` was the
-    # dominant cost at large n_mp.
-    keys_arr = np.array(
-        [f"{p}|{c}" for p, c in zip(product_code, channel_code)], dtype=object,
-    )
-    # Preserve first-seen order so debugging output reads top-to-bottom of
-    # the input -- np.unique returns sorted, so re-index by first occurrence.
-    # return_index gives each unique key's first-occurrence position in the
-    # single sort np.unique already runs; the earlier per-key argmax scan was
-    # O(n_unique x n_mp).
-    unique_keys, first_seen, inverse = np.unique(
-        keys_arr, return_index=True, return_inverse=True,
-    )
-    order = np.argsort(first_seen)
-    # Rebuild parsed keys in first-seen order.
-    ordered_pairs: list[tuple] = []
-    for u_idx in order:
-        s = str(unique_keys[u_idx])
-        p_str, c_str = s.split("|", 1)
-        ordered_pairs.append((p_str, c_str))
-
-    for ord_idx, key in zip(order, ordered_pairs):
-        if key not in basis:
-            raise ValueError(
-                f"segment {key!r} appears in model_points but is not in the "
-                f"basis (known segments: {sorted(basis)})"
-            )
-        idx = np.nonzero(inverse == ord_idx)[0]
+    for key, idx in segments:
         sub = model_points.subset(idx)
         val = _measure_fast(
-            sub, basis[key],
+            sub, basis_norm[key],
             backend=backend, discount_curve=discount_curve,
         )
         bel[idx] = val.bel
@@ -2191,60 +2143,63 @@ def _measure_segmented(
     return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
 
-def _segment_plan(
-    model_points: ModelPoints, basis: dict[tuple[str, str], Basis],
-) -> tuple[dict[tuple[str, str], Basis], list[tuple[tuple[str, str], np.ndarray]]]:
+def _resolve_segment_cols(model_points: ModelPoints, segment_by) -> list[np.ndarray]:
+    """Resolve and NFC-normalise the segment-key axes (``segment_by`` names).
+
+    Each axis is looked up via :meth:`ModelPoints.axis`, so a routing key can mix
+    the segment fields (product_code / channel) and any ``attributes`` column.
+    NFC-normalises so the lookup is text-identity, not byte-identity (a Korean /
+    European character composed in one file and decomposed in the other compares
+    unequal). Raises :class:`KeyError` if an axis is not set on the model points
+    -- the caller turns that into the single-basis convenience or a clear error.
+    """
+    cols = []
+    for name in segment_by:
+        col = model_points.axis(name)
+        cols.append(np.array(
+            [unicodedata.normalize("NFC", str(v)) for v in col], dtype=object,
+        ))
+    return cols
+
+
+def _factorise_segments(basis, cols, segment_by, n_mp):
     """Resolve a multi-segment portfolio to per-segment row indices.
 
-    Returns ``(basis_norm, segments)`` where ``basis_norm`` is ``basis`` re-keyed
-    under NFC-normalised codes and ``segments`` is a list of ``(key, idx)`` in
-    first-seen order -- one per (product_code, channel_code) present in
-    ``model_points``. Raises if the codes are unset, if a code contains the
-    ``'|'`` key separator, or if a segment is missing from the basis. The
-    routing logic for the full-trajectory segmented measure lives here.
+    ``cols`` are the NFC-normalised axis arrays (one per ``segment_by`` name);
+    ``basis`` is ``{key: Basis}`` keyed by a tuple of those axes in order (a bare
+    value is accepted for a one-axis key). Returns ``(basis_norm, segments)``
+    where ``basis_norm`` is ``basis`` re-keyed under NFC-normalised tuples and
+    ``segments`` is ``[(key, idx)]`` in first-seen order -- one per segment
+    present in the model points. Cost scales with the number of distinct
+    segments, not the number of axes: the ``'|'``-join + ``np.unique`` is a
+    single ``O(n_mp)`` factorisation regardless of how many axes the key spans.
     """
-    if model_points.product_code is None or model_points.channel_code is None:
-        raise ValueError(
-            "model_points has no 'product_code'/'channel_code' set; a "
-            "multi-segment basis needs them to route each row"
-        )
-    # NFC-normalise both sides so the lookup is text-identity, not byte-identity
-    # (a Korean / European character composed in one file and decomposed in the
-    # other compares unequal).
-    product_code = np.array(
-        [unicodedata.normalize("NFC", str(v)) for v in model_points.product_code],
-        dtype=object,
-    )
-    channel_code = np.array(
-        [unicodedata.normalize("NFC", str(v)) for v in model_points.channel_code],
-        dtype=object,
-    )
-    basis_norm = {
-        (unicodedata.normalize("NFC", str(p)),
-         unicodedata.normalize("NFC", str(c))): a
-        for (p, c), a in basis.items()
-    }
-    for arr, name in ((product_code, "product_code"), (channel_code, "channel_code")):
-        bad = sorted({str(v) for v in arr if "|" in str(v)})
+    basis_norm = {}
+    for k, a in basis.items():
+        parts = k if isinstance(k, tuple) else (k,)
+        basis_norm[tuple(unicodedata.normalize("NFC", str(p)) for p in parts)] = a
+    # Segment keys are joined with '|' for factorisation; reject codes that
+    # contain that separator to keep the round-trip lossless.
+    for col, name in zip(cols, segment_by):
+        bad = sorted({str(v) for v in col if "|" in str(v)})
         if bad:
             raise ValueError(
                 f"{name} value(s) {bad} contain the '|' character, which the "
-                "segmented measure uses as the (product_code, channel_code) key "
-                "separator. Pick a different separator in your ETL or rename "
-                "the offending code."
+                "segmented measure uses as the segment-key separator. Pick a "
+                "different separator in your ETL or rename the offending code."
             )
     keys_arr = np.array(
-        [f"{p}|{c}" for p, c in zip(product_code, channel_code)], dtype=object,
+        ["|".join(str(col[i]) for col in cols) for i in range(n_mp)], dtype=object,
     )
+    # Preserve first-seen order so debugging output reads top-to-bottom of the
+    # input (np.unique returns sorted; re-index by first occurrence).
     unique_keys, first_seen, inverse = np.unique(
         keys_arr, return_index=True, return_inverse=True,
     )
     order = np.argsort(first_seen)
-    segments: list[tuple[tuple[str, str], np.ndarray]] = []
+    segments: list[tuple[tuple, np.ndarray]] = []
     for ord_idx in order:
-        s = str(unique_keys[ord_idx])
-        p_str, c_str = s.split("|", 1)
-        key = (p_str, c_str)
+        key = tuple(str(unique_keys[ord_idx]).split("|"))
         if key not in basis_norm:
             raise ValueError(
                 f"segment {key!r} appears in model_points but is not in the "
@@ -2257,6 +2212,7 @@ def _segment_plan(
 
 def _measure_segmented_full(
     model_points: ModelPoints, basis: dict[tuple[str, str], Basis],
+    *, segment_by=("product_code", "channel_code"),
 ) -> GMMMeasurement:
     """Full multi-segment GMM measurement -- per-segment trajectories stitched.
 
@@ -2272,16 +2228,20 @@ def _measure_segmented_full(
     row's last factor (a flat curve -> zero forward rate) so a rate read off it
     is finite, not a 0/0.
     """
-    if model_points.product_code is None or model_points.channel_code is None:
+    try:
+        cols = _resolve_segment_cols(model_points, segment_by)
+    except KeyError:
         if len(basis) == 1:
             (basis,) = basis.values()
             return _measure_full(model_points, basis)
         raise ValueError(
-            "model_points has no 'product_code'/'channel_code' set but the "
+            f"model_points has no {tuple(segment_by)} axis/axes set but the "
             f"basis has {len(basis)} segments; either set the columns or "
             "pass a single-segment basis"
         )
-    basis_norm, segments = _segment_plan(model_points, basis)
+    basis_norm, segments = _factorise_segments(
+        basis, cols, segment_by, model_points.n_mp,
+    )
     n_mp = model_points.n_mp
 
     sub_results = [(idx, _measure_full(model_points.subset(idx), basis_norm[key]))
