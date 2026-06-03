@@ -376,42 +376,52 @@ def _read_ae_factors(ws):
     axes broadcast. ``channel`` empty matches the segment whose channel is
     blank (a single-segment workbook).
 
-    Returns ``{(product, channel, coverage_code): callable(sex, issue_age,
-    duration) -> factor}``. Missing sheet -> empty dict -> no A/E adjustment.
+    Returns ``(factors, seg_axes)`` where ``factors`` is
+    ``{(*seg_axis_values, coverage_code): callable(sex, issue_age, duration,
+    issue_class, elapsed) -> factor}`` and ``seg_axes`` are the segment-axis
+    columns the sheet declares -- any subset of the segments' axes, so an A/E
+    calibrated coarsely (just ``product_code``) broadcasts over the finer
+    routing axes. Missing / empty sheet -> ``({}, ())`` -> no A/E adjustment.
     """
     rows = list(_sheet_dicts(ws))
     if not rows:
-        return {}
-    header = set(rows[0].keys())
+        return {}, ()
+    header = list(rows[0].keys())
     _require_row_cols(
         rows[0], ("product_code", "coverage_code", "factor"), sheet=ws.title,
     )
-    axes = tuple(a for a in _RATE_AXES if a in header)
-    if "age" in axes and ("issue_age" in axes or "duration" in axes):
+    # Rate axes (the factor's shape, like a rate table); everything else that is
+    # not coverage_code / factor is a segment axis (which segment+coverage the
+    # factor applies to).
+    rate_axes = tuple(a for a in _RATE_AXES if a in header)
+    if "age" in rate_axes and ("issue_age" in rate_axes or "duration" in rate_axes):
         raise ValueError(
             f"sheet {ws.title!r} mixes 'age' (attained) with "
             "'issue_age' / 'duration' (select schema) -- pick one"
         )
+    seg_axes = tuple(c for c in header
+                     if c not in _RATE_AXES and c not in ("coverage_code", "factor")
+                     and not str(c).endswith("_name"))
 
     by_key: dict[tuple, list] = {}
     for r in rows:
-        product_code = str(r["product_code"]).strip()
-        ch = r.get("channel_code")
-        channel_code = str(ch).strip() if ch not in (None, "") else ""
+        seg_key = tuple(str(r.get(a, "") or "").strip() for a in seg_axes)
         coverage_code = str(r["coverage_code"]).strip()
-        key = (product_code, channel_code, coverage_code)
+        key = seg_key + (coverage_code,)
         try:
-            axes_key = tuple(int(r[a]) for a in axes)
+            axes_key = tuple(int(r[a]) for a in rate_axes)
         except KeyError as exc:
             raise ValueError(
                 f"sheet {ws.title!r} row for {key!r} is missing axis "
-                f"column {exc.args[0]!r} (header declares axes {axes!r})"
+                f"column {exc.args[0]!r} (header declares rate axes {rate_axes!r})"
             ) from None
         by_key.setdefault(key, []).append((axes_key, float(r["factor"])))
-    return {
-        key: _build_rate_callable(axes, entries, ws.title, "/".join(key))
+    factors = {
+        key: _build_rate_callable(rate_axes, entries, ws.title,
+                                  "/".join(map(str, key)))
         for key, entries in by_key.items()
     }
+    return factors, seg_axes
 
 
 def _propagate_table_id(wrapper, inner, modifier_tag):
@@ -540,6 +550,37 @@ def _check_schema_version(wb) -> None:
         )
 
 
+# Recognised assumption-slot columns on the segments sheet. Every *other*
+# column is a routing axis -- product_code, channel_code by convention, but a
+# workbook may use any axes (just channel for a pricing run, or
+# product x channel x risk_class). Detection mirrors the policies-frame
+# attributes rule.
+_SEGMENT_ASSUMPTION_COLS = frozenset({
+    "mortality_table", "mortality_improvement_table", "lapse_table",
+    "waiver_table", "surrender_value_table", "discount_table", "expense_table",
+    "inflation_table",
+    "mortality_age_shift", "morbidity_age_shift", "waiver_age_shift",
+    "ra_confidence", "mortality_cv", "morbidity_cv", "longevity_cv",
+    "disability_cv", "expense_cv", "cost_of_capital_rate", "investment_return",
+    "fund_fee", "ra_method", "state_model",
+})
+
+
+class SegmentedBasis(dict):
+    """A ``{segment-key: Basis}`` dict that remembers its segment axis names.
+
+    Returned by :func:`read_basis`. A plain ``dict`` everywhere it is used;
+    :func:`~fastcashflow.gmm.measure` reads ``segment_axes`` to route without the
+    caller re-passing ``segment_by``. ``segment_axes`` are the segments-sheet
+    columns that are not assumption slots -- ``("product_code", "channel_code")``
+    by default, but any axes the workbook declares.
+    """
+
+    def __init__(self, *args, segment_axes=("product_code", "channel_code"), **kw):
+        super().__init__(*args, **kw)
+        self.segment_axes = tuple(segment_axes)
+
+
 def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
     """Read the basis workbook into a per-segment ``Basis`` dict.
 
@@ -576,7 +617,10 @@ def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
     inflation_t = optional(
         "inflation_tables", lambda w: _axis_tables(w, "year"),
     )
-    ae_factors = optional("ae_factors", _read_ae_factors)
+    if "ae_factors" in wb.sheetnames:
+        ae_factors, ae_axes = _read_ae_factors(wb["ae_factors"])
+    else:
+        ae_factors, ae_axes = {}, ()
     improvement_t = optional(
         "improvement_tables",
         lambda w: _axis_tables(w, "year", value_col="factor"),
@@ -594,6 +638,19 @@ def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
     defaults: dict = {}
     segments: list = []
     seg_rows = list(_sheet_dicts(_require_sheet(wb, "segments")))
+    # Routing axes = the leading segments-sheet columns, up to the first
+    # assumption slot; display labels (``*_name``, report-only) are skipped.
+    # Stopping at the first assumption keeps a trailing or stale
+    # assumption-adjacent column from being mistaken for an axis. The key tuple
+    # reads product_code, channel_code, ... in column order; the default
+    # (no extra columns) is (product_code, channel_code).
+    axis_cols = []
+    for c in (seg_rows[0].keys() if seg_rows else ()):
+        if c in _SEGMENT_ASSUMPTION_COLS:
+            break
+        if not str(c).endswith("_name"):
+            axis_cols.append(c)
+    axis_cols = tuple(axis_cols)
     if seg_rows:
         header = set(seg_rows[0].keys())
         for new, legacy in (("product_code", "product"),
@@ -643,9 +700,10 @@ def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
 
     result = {}
     for seg in segments:
-        product_code = str(seg["product_code"]).strip()
+        product_code = str(seg.get("product_code", "") or "").strip()
         channel_code = str(seg.get("channel_code", "") or "").strip()
-        where = f"segments row ({product_code} / {channel_code})"
+        seg_key = tuple(str(seg.get(c, "") or "").strip() for c in axis_cols)
+        where = f"segments row {seg_key}"
 
         def cell(col):
             v = seg.get(col)
@@ -675,7 +733,9 @@ def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
         shift_wvr = int(scalar("waiver_age_shift") or 0)
 
         def ae(coverage_code):
-            return ae_factors.get((product_code, channel_code, coverage_code))
+            ae_key = tuple(str(seg.get(a, "") or "").strip()
+                           for a in ae_axes) + (coverage_code,)
+            return ae_factors.get(ae_key)
 
         coverage_list = []
         for code, rate_table in rate_driven_coverages:
@@ -768,8 +828,8 @@ def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
                     f"{where}: state_model={key!r} is not in STATE_MODELS "
                     f"(known: {sorted(STATE_MODELS)})"
                 ) from None
-        result[(product_code, channel_code)] = Basis(**kwargs)
-    return result
+        result[seg_key] = Basis(**kwargs)
+    return SegmentedBasis(result, segment_axes=axis_cols or ("product_code", "channel_code"))
 
 
 # ---------------------------------------------------------------------------

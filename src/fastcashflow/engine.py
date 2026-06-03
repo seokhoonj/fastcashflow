@@ -217,7 +217,7 @@ def measure(
     full: bool = True,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
-    segment_by=("product_code", "channel_code"),
+    segment_by=None,
 ) -> GMMMeasurement:
     """GMM measurement -- the single entry point.
 
@@ -231,14 +231,22 @@ def measure(
     ``{(product_code, channel_code): Basis}`` dict; with a dict each segment is routed
     to its own basis. ``segment_by`` names the routing axes (resolved via
     :meth:`ModelPoints.axis`, so any ``attributes`` column works) and the dict
-    keys are tuples of those axes in order -- it defaults to
-    ``("product_code", "channel_code")``, but e.g.
-    ``segment_by=("product_code", "channel_code", "risk_class")`` lets the basis
-    vary by risk class. Cost scales with the number of distinct segments, not the
+    keys are tuples of those axes in order. Left as ``None`` (the default) it is
+    taken from the basis: a :class:`~fastcashflow.io.SegmentedBasis` from
+    :func:`read_basis` carries the axes its workbook declared, and a plain dict
+    falls back to ``("product_code", "channel_code")``. So a workbook keyed by
+    ``(product_code, channel_code, risk_class)`` routes by all three with no
+    extra argument; passing ``segment_by`` explicitly overrides. Cost scales with the number of distinct segments, not the
     number of axes. ``backend`` (``"cpu"``/``"gpu"``) and ``discount_curve``
     apply to the fast path only.
     """
     if isinstance(basis, dict):
+        # A SegmentedBasis from read_basis remembers its axes; a plain dict
+        # defaults to (product_code, channel_code). An explicit segment_by wins.
+        if segment_by is None:
+            segment_by = getattr(
+                basis, "segment_axes", ("product_code", "channel_code"),
+            )
         if full:
             if backend != "cpu" or discount_curve is not None:
                 raise ValueError(
