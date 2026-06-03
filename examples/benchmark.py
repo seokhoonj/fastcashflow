@@ -19,7 +19,10 @@ def _annual(m):
     return 1.0 - (1.0 - m) ** 12
 
 
-def mortality_annual(sex: np.ndarray, issue_age: np.ndarray, duration: np.ndarray) -> np.ndarray:
+def mortality_annual(sex, issue_age, duration, issue_class, elapsed) -> np.ndarray:
+    # The engine calls every rate with the full (sex, issue_age, duration,
+    # issue_class, elapsed) signature; this table depends only on attained age,
+    # so it ignores issue_class / elapsed.
     attained = issue_age + duration
     annual_q = 0.0005 * (1.0 + 0.04 * (attained - 30.0))
     return annual_q
@@ -46,7 +49,7 @@ def _time(model_points: ModelPoints, basis: Basis, backend: str) -> float:
 def main() -> None:
     basis = Basis(
         mortality_annual=mortality_annual,
-        lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
+        lapse_annual=lambda sex, issue_age, duration, issue_class, elapsed: np.full(duration.shape, _annual(0.01)),
         discount_annual=0.03,
         expense_inflation=0.02,
         expense_items=(

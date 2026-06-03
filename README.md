@@ -1,7 +1,6 @@
 # fastcashflow
 
-[![PyPI](https://img.shields.io/pypi/v/fastcashflow)](https://pypi.org/project/fastcashflow/)
-[![Python](https://img.shields.io/pypi/pyversions/fastcashflow)](https://pypi.org/project/fastcashflow/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://github.com/seokhoonj/fastcashflow/blob/main/LICENSE)
 
 An open-source IFRS 17 measurement engine in Python. Takes model points and a
@@ -15,11 +14,11 @@ licence wall and no closed binaries.
 ## Installation
 
 ```bash
-pip install fastcashflow
+pip install git+https://github.com/seokhoonj/fastcashflow.git
 ```
 
 Requires Python 3.10 or newer. numpy, numba, polars and matplotlib install
-automatically.
+automatically. (Not yet on PyPI.)
 
 ## Quick start
 
