@@ -88,6 +88,7 @@ def test_reinsurance_group_of_contracts_net_gain_split():
     assert g.bel.shape[0] == n_classes
     assert n_classes == 2                               # the fixture has one gain, one cost
     assert np.isclose(g.csm.sum(), m.csm.sum())         # total CSM preserved (linear)
+    assert g.group_labels is not None and g.group_labels.shape[0] == g.bel.shape[0]
 
 
 def test_reinsurance_group_by_axis_name():

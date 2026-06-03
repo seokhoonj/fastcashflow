@@ -85,6 +85,7 @@ def test_paa_group_of_contracts_onerous_split():
     assert isinstance(g, PAAMeasurement)
     assert g.lrc.shape[0] == 2                           # one onerous, one remaining
     assert g.loss_component.sum() > 0.0
+    assert g.group_labels is not None and g.group_labels.shape[0] == 2
 
 
 def test_paa_group_by_axis_name():

@@ -32,7 +32,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and LIC sum, and only the onerous loss (paragraph 57) re-floors on the group
   aggregate. `VFAMeasurement`, `ReinsuranceMeasurement` and `PAAMeasurement` now
   carry the model points (and reinsurance the discount curve) so axis names
-  resolve and the grouped result re-derives.
+  resolve and the grouped result re-derives. A grouped result exposes
+  `group_labels` -- the composite label of each row -- so a caller can map a
+  group back to its key (e.g. `"|"`-split a `group_of_contracts` label into
+  portfolio / cohort / profitability) without rebuilding the keys.
 - **Phase (c) semi-Markov in-force projection.** Tracks per-cohort
   occupancy in any state declared with `duration_max > 0`, so
   transition rates can depend on sojourn time. Powers the two flagship

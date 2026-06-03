@@ -97,6 +97,7 @@ def test_vfa_group_of_contracts_preset():
     assert isinstance(g, VFAMeasurement)
     assert g.bel.shape[0] == 2                           # split only by onerous / remaining
     assert g.loss_component.sum() > 0.0
+    assert g.group_labels is not None and g.group_labels.shape[0] == 2
 
 
 def test_vfa_group_by_axis_name():

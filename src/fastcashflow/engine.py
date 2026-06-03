@@ -102,6 +102,9 @@ class GMMMeasurement:
     # resolve axis names without re-passing them. A reference, not a copy; None
     # on a grouped result (its rows are groups, not model points).
     model_points: "ModelPoints | None" = None
+    # The per-group composite label (one per row) on a result returned by
+    # ``group`` / ``group_of_contracts``; None on a per-model-point measurement.
+    group_labels: "np.ndarray | None" = None
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),

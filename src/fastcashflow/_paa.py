@@ -72,6 +72,7 @@ class PAAMeasurement:
     lic: FloatArray | None = None              # (n_mp, n_time+1) -- liability for incurred claims
     cashflows: "Cashflows | None" = None
     model_points: "ModelPoints | None" = None  # stamped by measure_paa, for group axes
+    group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
 
     @property
     def service_result(self) -> FloatArray:

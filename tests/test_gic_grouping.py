@@ -213,3 +213,22 @@ def test_axis_resolves_engine_native_field_issue_class():
     """issue_class (위험등급) is a grouping axis even though it is a reserved field."""
     m = measure(_two_contracts(issue_class=np.array([0, 1])), _assumptions())
     assert group(m, by=["issue_class"]).bel.shape[0] == 2      # two classes -> two groups
+
+
+def test_group_labels_exposed_and_splittable():
+    """The grouped result carries the per-group composite label, one per row."""
+    mp = _two_contracts(
+        product_code=np.array(["TL", "TL"]),
+        issue_date=np.array(["2026-03-01", "2026-07-01"], dtype="datetime64[D]"),
+    )
+    m = measure(mp, _assumptions())
+    assert m.group_labels is None                  # a per-MP measurement has none
+    g = group_of_contracts(m)
+    assert g.group_labels is not None
+    assert g.group_labels.shape[0] == g.bel.shape[0]
+    # each label splits back into portfolio | cohort | profitability
+    parts = [str(lab).split("|") for lab in g.group_labels]
+    assert all(len(p) == 3 for p in parts)
+    assert {p[2] for p in parts} <= {"onerous", "remaining"}
+    # a single-axis group exposes the axis values as labels
+    assert list(group(m, "product_code").group_labels) == ["TL"]

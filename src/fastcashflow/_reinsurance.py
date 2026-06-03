@@ -60,6 +60,7 @@ class ReinsuranceMeasurement:
     cashflows: "Cashflows | None" = None
     discount_bom: FloatArray | None = None     # (n_time+1,) -- for grouped CSM re-derivation
     model_points: "ModelPoints | None" = None  # stamped by measure_reinsurance, for group axes
+    group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
 
 
 class Treaty(Protocol):

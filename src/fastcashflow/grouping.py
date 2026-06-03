@@ -152,7 +152,10 @@ def group(measurement, by):
     Returns a measurement of the same type whose rows are the groups, in
     ascending label order -- usable in turn by
     :func:`~fastcashflow.roll_forward`, :func:`~fastcashflow.reconcile` and
-    :func:`~fastcashflow.report`.
+    :func:`~fastcashflow.report`. Its ``group_labels`` attribute carries the
+    composite label of each row, so a caller can map a group back to its key
+    (e.g. ``"|"``-split a :func:`group_of_contracts` label into portfolio /
+    cohort / profitability) without rebuilding the keys.
     """
     raise TypeError(
         f"group is not implemented for {type(measurement).__name__}; supported: "
@@ -252,6 +255,7 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
         cashflows=grouped_cf,
         discount_bom=out_bom,
         discount_mid=out_mid,
+        group_labels=labels,
     )
 
 
@@ -322,6 +326,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
         cashflows=grouped_cf,
         discount_bom=bom,
         model_points=None,
+        group_labels=labels,
     )
 
 
@@ -383,6 +388,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
         cashflows=grouped_cf,
         discount_bom=bom,
         model_points=None,
+        group_labels=labels,
     )
 
 
@@ -436,6 +442,7 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
         lic=lic,
         cashflows=grouped_cf,
         model_points=None,
+        group_labels=labels,
     )
 
 
