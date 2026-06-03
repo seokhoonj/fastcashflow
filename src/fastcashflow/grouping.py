@@ -200,7 +200,8 @@ def group(measurement, by):
     Names are resolved per model point via :meth:`ModelPoints.axis` against the
     model points the measure stamped on the result, so no re-passing is needed;
     a computed axis with no source column (e.g. an onerous flag from
-    ``loss_component``) is passed as an array instead.
+    ``loss_component``) is passed as an array instead -- an ``np.ndarray``, since
+    a Python *list* is read as a list of axes, not a single label vector.
 
     BEL and RA are summed within each group; the CSM and the loss component are
     re-derived on the group aggregate, so the ``max(0, ...)`` floor nets the
@@ -218,7 +219,9 @@ def group(measurement, by):
     composite label of each row, so a caller can map a group back to its key
     (e.g. ``"|"``-split a :func:`group_of_contracts` label into portfolio /
     cohort / profitability) without rebuilding the keys; ``group_sizes`` carries
-    the number of model points in each group.
+    the number of model points in each group (model-point rows, not the policy
+    count -- they differ when a model point's ``count`` stands for several
+    policies).
     """
     raise TypeError(
         f"group is not implemented for {type(measurement).__name__}; supported: "
@@ -283,6 +286,9 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
     else:
         out_bom, out_mid = bom, measurement.discount_mid
         monthly_rate = bom[:-1] / bom[1:] - 1.0
+    # _csm_roll dispatches on the rate's ndim: a segmented result carries a 2-D
+    # per-group discount curve, a single basis a 1-D one. (VFA and reinsurance
+    # are single-basis only, so they call the 1-D _csm_kernel directly.)
     csm, csm_accretion, csm_release = _csm_roll(
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
