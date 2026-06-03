@@ -162,21 +162,32 @@ def group(measurement: GMMMeasurement, by, *,
     loss_component = np.maximum(0.0, fcf0)
     bom = measurement.discount_bom
     if bom.ndim == 2:
-        # Segmented: each group must sit in one portfolio (basis), so its model
-        # points share a discount curve. Take each group's curve (verifying it
-        # is uniform) and re-derive the group CSM at that rate.
+        # Segmented: each model point discounts on its own curve, and a group
+        # must sit in one curve. But the curves are padded to the portfolio's
+        # longest horizon -- a flat tail past each contract's maturity -- so two
+        # contracts on the *same* curve with different terms have different
+        # tails. Compare each row only over its live horizon (where it is still
+        # in force; the padded tail discounts zero in-force and never reaches the
+        # CSM), and represent the group by its longest-horizon curve so the
+        # discounting is correct for every contract's whole term.
+        cols = np.arange(bom.shape[1])
+        live = np.where(measurement.cashflows.inforce > 0,
+                        np.arange(measurement.cashflows.inforce.shape[1])[None, :],
+                        -1).max(axis=1)
         out_bom = np.empty((n_groups, bom.shape[1]))
         out_mid = np.empty((n_groups, measurement.discount_mid.shape[1]))
         for g in range(n_groups):
             rows = np.nonzero(inverse == g)[0]
-            if not np.allclose(bom[rows], bom[rows[0]]):
+            rep = rows[np.argmax(live[rows])]
+            livemask = cols[None, :] < (live[rows] + 2)[:, None]
+            if not np.allclose(np.where(livemask, bom[rows] - bom[rep], 0.0), 0.0):
                 raise ValueError(
                     f"group {labels[g]!r} mixes model points with different "
                     "discount curves -- a group must sit in one portfolio "
                     "(basis). Split it by basis before grouping."
                 )
-            out_bom[g] = bom[rows[0]]
-            out_mid[g] = measurement.discount_mid[rows[0]]
+            out_bom[g] = bom[rep]
+            out_mid[g] = measurement.discount_mid[rep]
         monthly_rate = out_bom[:, :-1] / out_bom[:, 1:] - 1.0
     else:
         out_bom, out_mid = bom, measurement.discount_mid

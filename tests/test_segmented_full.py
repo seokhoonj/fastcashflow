@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
+from conftest import PATTERNS, make_death_assumptions
 
 
 def _segments(mp, basis):
@@ -123,12 +124,37 @@ def test_segmented_full_ops_match_per_segment():
     assert len(rf) > 0
 
 
+def _two_seg_mp(terms):
+    """Two model points in two channels of one product, given terms."""
+    return fcf.ModelPoints(
+        issue_age=np.array([40, 40]), benefits={0: np.array([1e8, 1e8])},
+        level_premium=np.array([200_000.0, 200_000.0]),
+        term_months=np.array(terms), calculation_methods=PATTERNS,
+        product_code=np.array(["A", "A"]), channel_code=np.array(["X", "Y"]),
+    )
+
+
+def _disc(rate):
+    return make_death_assumptions(mortality_q=0.002, lapse_q=0.01,
+                                  discount_annual=rate, ra_confidence=0.75,
+                                  mortality_cv=0.10)
+
+
 def test_segmented_full_group_rejects_mixed_curves():
-    """group() refuses a group whose contracts span different discount curves --
+    """group() refuses a group spanning genuinely different discount curves --
     a group must sit in one portfolio (basis)."""
-    mp = fcf.samples.model_points()
-    basis = fcf.samples.basis()
-    m = fcf.gmm.measure(mp, basis)
-    # one group spanning every model point mixes the segments' curves
+    m = fcf.gmm.measure(_two_seg_mp([120, 120]),
+                        {("A", "X"): _disc(0.03), ("A", "Y"): _disc(0.05)}, full=True)
     with pytest.raises(ValueError, match="different discount curves"):
-        fcf.group(m, np.zeros(mp.n_mp, dtype=int))
+        fcf.group(m, np.zeros(2, dtype=int))            # 3% and 5% in one group
+
+
+def test_segmented_full_group_allows_same_curve_different_terms():
+    """Same curve, different terms is fine: the padded tail past each contract's
+    maturity discounts zero in-force and never reaches the CSM, so it must not
+    be mistaken for a different discount curve."""
+    m = fcf.gmm.measure(_two_seg_mp([120, 240]),
+                        {("A", "X"): _disc(0.03), ("A", "Y"): _disc(0.03)}, full=True)
+    g = fcf.group(m, np.zeros(2, dtype=int))            # same 3%, terms 120 & 240
+    assert g.bel.shape[0] == 1
+    assert np.isclose(g.bel.sum(), m.bel.sum())         # BEL additive, totals match
