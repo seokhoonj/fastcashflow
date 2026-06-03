@@ -2197,7 +2197,7 @@ def _factorise_segments(basis, cols, segment_by, n_mp):
                 "different separator in your ETL or rename the offending code."
             )
     keys_arr = np.array(
-        ["|".join(str(col[i]) for col in cols) for i in range(n_mp)], dtype=object,
+        ["|".join(map(str, row)) for row in zip(*cols)], dtype=object,
     )
     # Preserve first-seen order so debugging output reads top-to-bottom of the
     # input (np.unique returns sorted; re-index by first occurrence).

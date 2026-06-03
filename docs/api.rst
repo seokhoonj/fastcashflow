@@ -115,6 +115,10 @@ Aggregation and transition
 
 .. autofunction:: fastcashflow.group
 
+.. autofunction:: fastcashflow.group_into_gic
+
+.. autofunction:: fastcashflow.assign_gic
+
 .. autofunction:: fastcashflow.transition
 
 Stochastic valuation

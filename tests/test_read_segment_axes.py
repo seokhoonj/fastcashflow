@@ -6,6 +6,7 @@ import dataclasses
 
 import numpy as np
 import openpyxl
+import pytest
 
 import fastcashflow as fcf
 from fastcashflow import read_basis
@@ -55,3 +56,15 @@ def test_measure_routes_by_file_declared_axes(tmp_path):
     mp = dataclasses.replace(mp, attributes={"risk_class": np.array(["A"] * mp.n_mp)})
     m = fcf.gmm.measure(mp, basis)              # segment_by auto = the 3 file axes
     assert m.bel.shape[0] == mp.n_mp
+
+
+def test_read_basis_rejects_ae_axis_not_in_segments(tmp_path):
+    """An A/E keyed on an axis absent from segments would silently never match."""
+    path = _export(tmp_path)
+    wb = openpyxl.load_workbook(path)
+    ws = wb.create_sheet("ae_factors")
+    ws.append(["product_code", "region", "coverage_code", "factor"])  # region not a segment axis
+    ws.append(["TERM_LIFE_A", "SEOUL", "DEATH", 1.1])
+    wb.save(path)
+    with pytest.raises(ValueError, match="not in the segments sheet"):
+        read_basis(path)

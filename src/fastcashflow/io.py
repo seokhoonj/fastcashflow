@@ -581,7 +581,7 @@ class SegmentedBasis(dict):
         self.segment_axes = tuple(segment_axes)
 
 
-def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
+def read_basis(path: Path | str) -> "SegmentedBasis":
     """Read the basis workbook into a per-segment ``Basis`` dict.
 
     ``path`` is a single ``basis.xlsx`` workbook holding both the rate
@@ -591,7 +591,11 @@ def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
     values blank cells inherit; the ``coverages`` sheet attaches
     rate-driven coverages to products.
 
-    Returns ``{(product_code, channel_code): Basis}`` -- one basis per segment.
+    Returns a :class:`SegmentedBasis` (a ``dict`` subclass) keyed by the segment
+    axes -- ``(product_code, channel_code)`` by default, or whatever leading
+    non-assumption columns the segments sheet declares (one axis, or three);
+    ``.segment_axes`` records the axis names so :func:`~fastcashflow.gmm.measure`
+    routes without a ``segment_by`` argument.
 
     v1: the discount and inflation tables are read but used flat (their
     first entry); the per-segment dict is returned for the caller to value
@@ -651,6 +655,18 @@ def read_basis(path: Path | str) -> dict[tuple[str, str], Basis]:
         if not str(c).endswith("_name"):
             axis_cols.append(c)
     axis_cols = tuple(axis_cols)
+    # An A/E axis that is not a segments-sheet column can never match a segment,
+    # so the A/E would be silently discarded -- reject it up front.
+    if ae_axes and seg_rows:
+        seg_header = list(seg_rows[0].keys())
+        unknown = [a for a in ae_axes if a not in seg_header]
+        if unknown:
+            raise ValueError(
+                f"ae_factors sheet keys on axis column(s) {unknown} that are "
+                "not in the segments sheet; the A/E would never match a segment "
+                "and be silently discarded. Use segments-sheet axis columns "
+                f"(have: {[c for c in seg_header if c in axis_cols]})."
+            )
     if seg_rows:
         header = set(seg_rows[0].keys())
         for new, legacy in (("product_code", "product"),
@@ -1090,7 +1106,8 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     # one value per policy = one per model point. Available to group() /
     # group_into_gic via ModelPoints.axis.
     attributes = {c: pol[c].to_numpy()
-                  for c in pol.columns if c not in _POLICY_RESERVED_COLS}
+                  for c in pol.columns
+                  if c not in _POLICY_RESERVED_COLS and not str(c).startswith("_")}
     if attributes:
         fields["attributes"] = attributes
 

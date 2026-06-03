@@ -164,3 +164,32 @@ def test_group_into_gic_needs_model_points():
     object.__setattr__(m, "model_points", None)
     with pytest.raises(ValueError, match="needs the model points"):
         group_into_gic(m)
+
+
+# -- review fixes (5-way code review) ---------------------------------------
+
+def test_group_rejects_pipe_in_axis_value():
+    """A '|' in an axis value is rejected -- it would collide distinct groups."""
+    mp = _two_contracts(product_code=np.array(["TL", "TL"]),
+                        attributes={"x": np.array(["a|b", "a"])})
+    m = measure(mp, _assumptions())
+    with pytest.raises(ValueError, match="character"):
+        group(m, by=["x"])
+
+
+def test_assign_gic_rejects_pipe_in_axis_value():
+    with pytest.raises(ValueError, match="character"):
+        assign_gic(np.array(["p|q"]), np.array([2026]), np.array(["onerous"]))
+
+
+def test_axis_resolves_engine_native_field_issue_class():
+    """issue_class (위험등급) is a grouping axis even though it is a reserved field."""
+    m = measure(_two_contracts(issue_class=np.array([0, 1])), _assumptions())
+    assert group(m, by=["issue_class"]).bel.shape[0] == 2      # two classes -> two groups
+
+
+def test_group_into_gic_explicit_unknown_axis_raises():
+    """An explicit (non-default) axis name that is missing is a typo, not a fallback."""
+    m = measure(_two_contracts(product_code=np.array(["TL", "TL"])), _assumptions())
+    with pytest.raises(KeyError, match="unknown grouping axis"):
+        group_into_gic(m, portfolio="typo_axis")

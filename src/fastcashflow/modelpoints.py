@@ -410,14 +410,20 @@ class ModelPoints:
             return self.issue_date.astype("datetime64[Y]").astype(int) + 1970
         if name == "channel":
             name = "channel_code"
-        if name in ("product_code", "channel_code", "issue_date"):
+        # Engine-native per-MP fields are axes too, and take precedence over a
+        # same-named attribute. ``issue_class`` (위험등급), sex, state and
+        # elapsed_months default to a filled array, so they always resolve;
+        # product_code / channel_code / issue_date may be None.
+        _fields = ("product_code", "channel_code", "issue_date",
+                   "issue_class", "sex", "state", "elapsed_months")
+        if name in _fields:
             value = getattr(self, name)
             if value is None:
                 raise KeyError(f"axis {name!r} is not set on these model points")
             return value
         if self.attributes is not None and name in self.attributes:
             return self.attributes[name]
-        available = ["issue_year", "product_code", "channel_code", "issue_date"]
+        available = ["issue_year", *_fields]
         if self.attributes:
             available += list(self.attributes)
         raise KeyError(

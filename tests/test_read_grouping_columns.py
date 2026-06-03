@@ -61,3 +61,10 @@ def test_reader_attribute_is_a_group_axis(tmp_path):
     mp = _read(tmp_path)
     m = measure(mp, _basis())
     assert group(m, by=["risk_class"]).bel.shape[0] == 2   # A vs B from the file
+
+
+def test_reader_does_not_leak_internal_columns(tmp_path):
+    """The internal `_mp` row index must not surface as a grouping attribute."""
+    mp = _read(tmp_path)
+    assert mp.attributes is not None
+    assert not any(str(k).startswith("_") for k in mp.attributes)   # no `_mp`

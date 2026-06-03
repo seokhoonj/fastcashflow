@@ -40,6 +40,26 @@ def _sum_by_group(arr: FloatArray, inverse: IntArray, n_groups: int) -> FloatArr
     return result
 
 
+def _join_keys(cols, names=None) -> np.ndarray:
+    """Composite ``'|'``-joined label per row, rejecting ``'|'`` in any value.
+
+    The separator must round-trip, so a value carrying ``'|'`` would collide two
+    distinct axis tuples onto one label and silently merge groups -- the same
+    guard the segmented routing applies. ``str`` keeps non-string axes (e.g. an
+    integer ``issue_year``); ``zip(*cols)`` is the fast per-row path.
+    """
+    for i, col in enumerate(cols):
+        bad = sorted({str(v) for v in col if "|" in str(v)})
+        if bad:
+            where = f" in axis {names[i]!r}" if names else ""
+            raise ValueError(
+                f"group key value(s) {bad}{where} contain the '|' character, "
+                "which grouping uses as the key separator -- rename the value "
+                "or change the separator upstream."
+            )
+    return np.array(["|".join(map(str, row)) for row in zip(*cols)], dtype=object)
+
+
 def _resolve_group_ids(measurement: GMMMeasurement, by,
                        model_points: ModelPoints | None) -> np.ndarray:
     """Build the per-MP group label array from ``by`` -- axis names or an array."""
@@ -52,11 +72,7 @@ def _resolve_group_ids(measurement: GMMMeasurement, by,
                 "measure() (which stamps them)."
             )
         cols = [np.asarray(mp.axis(name), dtype=object) for name in by]
-        n = cols[0].shape[0]
-        return np.array(
-            ["|".join(str(col[i]) for col in cols) for i in range(n)],
-            dtype=object,
-        )
+        return _join_keys(cols, by)
     return np.asarray(by)
 
 
@@ -197,10 +213,8 @@ def assign_gic(portfolio: np.ndarray, cohort: np.ndarray,
             f"same length; got {portfolio.shape}, {cohort.shape}, "
             f"{profitability.shape}"
         )
-    return np.array(
-        [f"{p}|{c}|{q}" for p, c, q in zip(portfolio, cohort, profitability)],
-        dtype=object,
-    )
+    return _join_keys((portfolio, cohort, profitability),
+                      ("portfolio", "cohort", "profitability"))
 
 
 def group_into_gic(measurement: GMMMeasurement,
@@ -239,11 +253,17 @@ def group_into_gic(measurement: GMMMeasurement,
             "a measurement returned by measure() (which stamps them)."
         )
     n = measurement.bel.shape[0]
-    # portfolio: the named axis if the model points carry it, else product_code.
-    try:
+    # The IFRS 17 default rules fire only when the axis is left at its default
+    # column name -- an explicit (non-default) name that is missing is a typo,
+    # so let its KeyError propagate rather than silently falling back.
+    # portfolio: portfolio_id if the model points carry it, else product_code.
+    if portfolio == "portfolio_id":
+        try:
+            portfolio_arr = mp.axis("portfolio_id")
+        except KeyError:
+            portfolio_arr = mp.axis("product_code")
+    else:
         portfolio_arr = mp.axis(portfolio)
-    except KeyError:
-        portfolio_arr = mp.axis("product_code")
     # cohort: issue_year from issue_date if available, else a single cohort.
     if cohort == "issue_date":
         try:
@@ -253,12 +273,15 @@ def group_into_gic(measurement: GMMMeasurement,
     else:
         cohort_arr = mp.axis(cohort)
     # profitability: the named column if present, else derive from loss_component.
-    try:
+    if profitability == "profitability_group":
+        try:
+            profitability_arr = mp.axis("profitability_group")
+        except KeyError:
+            profitability_arr = np.where(
+                measurement.loss_component > 0.0, "onerous", "remaining"
+            )
+    else:
         profitability_arr = mp.axis(profitability)
-    except KeyError:
-        profitability_arr = np.where(
-            measurement.loss_component > 0.0, "onerous", "remaining"
-        )
     return group(
         measurement, assign_gic(portfolio_arr, cohort_arr, profitability_arr)
     )
