@@ -490,6 +490,16 @@ def _with_age_shift(rate_fn, shift):
     return shifted
 
 
+def _surrender_value_col(ws) -> str:
+    """Detect the surrender table's value column. ``amount`` -- a surrender
+    amount by duration (per policy or per unit of the MP's
+    surrender_base_amount -> an amount mode); ``factor`` -- a factor on
+    cumulative premium (cum_premium_factor, the legacy default)."""
+    header = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
+    cols = {str(c) for c in header if c is not None}
+    return "amount" if "amount" in cols else "factor"
+
+
 def _axis_tables(ws, axis, *, value_col="rate"):
     """``{table_id: value array}`` from a sheet keyed by ``axis`` (0-based).
 
@@ -594,7 +604,8 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
     # premium paid. Optional; absent means lapse has no payout.
     surrender_t = optional(
         "surrender_value_tables",
-        lambda w: _axis_tables(w, "duration_month", value_col="factor"),
+        lambda w: _axis_tables(w, "duration_month",
+                               value_col=_surrender_value_col(w)),
     )
     # Expense ledger -- item form. Optional; per-segment ``expense_table``
     # in the segments sheet selects which table_id to attach.
@@ -787,6 +798,13 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
         method = cell("ra_method")
         if method is not None:
             kwargs["ra_method"] = str(method).strip()
+        # Optional surrender_value_basis column -- how surrender_value_curve is
+        # read: "cum_premium_factor" (default), "amount_per_policy", or
+        # "amount_per_unit" (the latter needs a surrender_base_amount column on
+        # the policies). Blank cell leaves the Basis default (cum_premium_factor).
+        surr_basis = cell("surrender_value_basis")
+        if surr_basis is not None:
+            kwargs["surrender_value_basis"] = str(surr_basis).strip()
         # Optional state_model column -- non-programmer actuary picks a
         # bundled topology by its registry key (e.g. "WAIVER"). Blank cell
         # leaves Basis.state_model = None; an unknown key is an
@@ -922,7 +940,7 @@ _POLICY_RESERVED_COLS = frozenset({
     "premium_term_months", "premium_frequency_months",
     "annuity_frequency_months", "disability_income", "disability_benefit",
     "account_value", "minimum_crediting_rate", "minimum_death_benefit",
-    "minimum_accumulation_benefit",
+    "minimum_accumulation_benefit", "surrender_base_amount",
     "product_code", "channel_code",
 })
 
@@ -1048,7 +1066,8 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     )
     for opt in ("sex", "count", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",
-                "disability_income", "disability_benefit", "issue_class"):
+                "disability_income", "disability_benefit", "issue_class",
+                "surrender_base_amount"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
     for opt in ("product_code", "channel_code"):
@@ -1256,6 +1275,7 @@ def read_vfa_model_points(
                 "maturity_benefit", "annuity_payment", "disability_income",
                 "disability_benefit", "account_value", "minimum_crediting_rate",
                 "minimum_death_benefit", "minimum_accumulation_benefit",
+                "surrender_base_amount",
                 "product_code", "channel_code", "mp_id"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
