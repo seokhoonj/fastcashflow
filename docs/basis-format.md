@@ -21,7 +21,7 @@ fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포
 | 시트 | 역할 |
 |---|---|
 | `segments` | (상품 × 채널) 세그먼트별 어느 표를 쓸지 + 스칼라 파라미터 + `expense_table` 참조 |
-| `coverages` | 상품별 특약 부착 (coverage_code, calculation_method, rate_table) |
+| `coverages` | 담보코드 → 위험률표 전역 레지스트리 (coverage_code, rate_table). calculation_method 는 별도 `calculation_methods` 파일 |
 | `mortality_tables` | 사망 발생률 가정 (named tables) |
 | `incidence_rate_tables` | 특약 발생률 가정 |
 | `waiver_tables` | 납입면제 발생률 가정 |
