@@ -442,11 +442,25 @@ class Basis:
     # shape contract as discount_annual; the engine expands either to a
     # per-month inflation_index via fastcashflow.curves.
     expense_inflation: float | FloatArray = 0.0
-    # Surrender value (해약환급금) curve -- per-month factor applied to the
-    # cumulative premium paid. Engine: surrender_cf[t] = lapse_flow[t] x
-    # cum_premium[t] x surrender_value_curve[t]. None = no surrender value
-    # (lapse silently removes the contract, the historical behaviour).
+    # Surrender value (해약환급금) curve -- per-month value applied at each
+    # policy-duration. Its meaning is set by ``surrender_value_basis``.
+    # None = no surrender value (lapse silently removes the contract, the
+    # historical behaviour).
     surrender_value_curve: FloatArray | None = None
+    # How ``surrender_value_curve`` is interpreted:
+    #   "cum_premium_factor" (default, back-compat) -- a factor on cumulative
+    #       premium: surrender_cf[t] = lapse_flow[t] x cum_premium[t] x
+    #       curve[t]. Sample-grade: cum_premium is path-dependent on
+    #       pre-valuation premiums, so the in-force figure is not exact.
+    #   "amount_per_policy" -- the curve is the contractual per-policy
+    #       surrender amount at policy-duration t (months since inception):
+    #       surrender_cf[t] = lapse_flow[t] x curve[t]. Linear in the
+    #       in-force, so the in-force count / inforce[elapsed] rescale is
+    #       exact (no premium reconstruction, no sample-grade warning).
+    #   "amount_per_unit" -- as amount_per_policy, additionally scaled by the
+    #       per-MP ``surrender_base_amount`` (explicit; no default base).
+    # S1 wires "amount_per_policy"; the projection branch / reader land next.
+    surrender_value_basis: str = "cum_premium_factor"
     waiver_incidence_annual: RateFn | None = None
     # Lapse rate for the paid-up state (납입후) -- used only by a state model
     # whose paid-up state references the ``lapse_paidup`` transition rate

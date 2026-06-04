@@ -655,14 +655,16 @@ def measure_inforce(
     movement.
     """
     if (basis.surrender_value_curve is not None
+            and basis.surrender_value_basis == "cum_premium_factor"
             and np.any(np.asarray(model_points.elapsed_months) > 0)):
         warnings.warn(
             "measure_inforce reconstructs the surrender value from the "
             "projected cumulative premium (lapse x cum_premium x factor), a "
             "sample-grade base that ignores premiums paid before the valuation "
             "date and reads no contractual surrender-value table. The BEL / RA "
-            "are otherwise re-based to the valuation date. Supply a "
-            "surrender-value table (or as-of base amount) for a production "
+            "are otherwise re-based to the valuation date. Supply an "
+            "amount-per-policy surrender-value curve "
+            "(surrender_value_basis='amount_per_policy') for a production "
             "settlement of a product whose lapse cash flow matters.",
             UserWarning,
             stacklevel=2,
@@ -1950,6 +1952,17 @@ def _measure_fast(
     # ``surrender_curve[t]`` is read once per month, and is zero whenever no
     # surrender mechanic applies.
     surr_user = basis.surrender_value_curve
+    if surr_user is not None and basis.surrender_value_basis != "cum_premium_factor":
+        # The fast scalar / codegen / GPU kernels still compute the
+        # ``cum_premium * curve`` form inline; the amount-based modes are
+        # wired in the full path only for now. Raise rather than silently
+        # apply the wrong formula -- measure(full=True) / measure_inforce
+        # handle amount modes correctly. Fast-path parity is the next step.
+        raise NotImplementedError(
+            f"surrender_value_basis={basis.surrender_value_basis!r} is not yet "
+            "supported on the fast path (measure(full=False)); use "
+            "measure(full=True), or surrender_value_basis='cum_premium_factor'."
+        )
     if surr_user is None:
         surrender_curve_kernel = np.zeros(n_time, dtype=np.float64)
     else:

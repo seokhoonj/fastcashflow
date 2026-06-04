@@ -773,12 +773,42 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     if curve is not None:
         # Per-month lapse rate, broadcast from per-year ``lapse`` array.
         lapse_per_month = lapse[:, np.arange(n_time) // 12]
-        cum_premium = np.cumsum(premium_cf, axis=1)
-        # Curve held flat past its end; clip lookup to its length.
+        # Curve held flat past its end; clip lookup to its length. ``t`` here
+        # is the absolute policy duration (the projection runs from
+        # inception), so the in-force slice at ``elapsed`` reads
+        # ``curve[elapsed + future_t]`` for free.
         c = np.asarray(curve, dtype=np.float64)
         idx = np.minimum(np.arange(n_time), c.shape[0] - 1)
-        factor = c[idx]
-        surrender_cf = lapse_per_month * cum_premium * factor
+        value = c[idx]
+        mode = basis.surrender_value_basis
+        if mode == "cum_premium_factor":
+            # Sample-grade: a factor on cumulative premium. ``cum_premium``
+            # aggregates inforce * premium each month, so
+            # ``lapse_rate * cum_premium`` already nets the count. Not linear
+            # in the as-of in-force (cum_premium is path-dependent on
+            # pre-valuation premiums), so the in-force rescale is inexact here.
+            cum_premium = np.cumsum(premium_cf, axis=1)
+            surrender_cf = lapse_per_month * cum_premium * value
+        elif mode == "amount_per_policy":
+            # Contractual per-policy amount at policy-duration t. The number
+            # lapsing in month t is ``inforce[t] * lapse_rate[t]``; each pays
+            # ``value[t]``. Linear in the in-force, so the in-force
+            # ``count / inforce[elapsed]`` rescale re-bases it exactly.
+            surrender_cf = lapse_per_month * inforce * value
+        elif mode == "amount_per_unit":
+            # Same as amount_per_policy, scaled by a per-MP base amount
+            # (sum insured / basic premium / ...). Needs a ModelPoints
+            # ``surrender_base_amount`` field -- wired in a later step.
+            raise NotImplementedError(
+                "surrender_value_basis='amount_per_unit' is not wired yet; "
+                "use 'amount_per_policy' or 'cum_premium_factor'."
+            )
+        else:
+            raise ValueError(
+                f"unknown surrender_value_basis {mode!r}; expected "
+                "'cum_premium_factor', 'amount_per_policy', or "
+                "'amount_per_unit'."
+            )
     return Cashflows(
         inforce=inforce,
         deaths=deaths,
