@@ -8,7 +8,7 @@
 - 네 입력 파일 — `policies` / `coverages` / `calculation_methods` /
   `basis.xlsx`
 - **`basis.xlsx` 의 매 시트 / 매 컬럼** — 가정을 회사 워크북으로 주는 자리
-- `defaults` 행으로 공통값을 한 번만 적고 segment 가 덮어쓰는 패턴
+- `_DEFAULTS` 행으로 공통값을 한 번만 적고 segment 가 덮어쓰는 패턴
 - rate 테이블의 **축 자동 감지** (sex / age / issue_age+duration / ...)
 - `samples.export` 로 견본을 만들고 `read_*` 로 읽어 평가까지 돌리는 라운드트립
 ```
@@ -97,11 +97,11 @@ A/E 보정과 사망률 개선. 견본에는 없습니다.)
   `cost_of_capital_rate` / `state_model` / `investment_return` /
   `fund_fee` 등 (선택), `mortality_age_shift` 등 연령 shift (선택).
 
-```{admonition} `defaults` 행 — 공통값을 한 번만
+```{admonition} `_DEFAULTS` 행 — 공통값을 한 번만
 :class: note
 
-`product_code` 가 `defaults` 인 첫 행은 **다른 행의 빈 칸을 채우는 기본값**
-입니다. 견본은 `defaults` 에 `MORTALITY_STD` / `DISCOUNT_STD` /
+`product_code` 가 `_DEFAULTS` 인 첫 행은 **다른 행의 빈 칸을 채우는 기본값**
+입니다. 견본은 `_DEFAULTS` 에 `MORTALITY_STD` / `DISCOUNT_STD` /
 `state_model=WAIVER` / `ra_confidence=0.75` 등을 두고, 각 segment 행은
 **다른 부분만** 덮어씁니다 — 예컨대 `lapse_table` 만 채널별로
 (`LAPSE_FC` / `LAPSE_GA`), `expense_table` 만 상품×채널별로
@@ -177,7 +177,7 @@ CSM sum = 632,252
 - `read_basis` 는 **사전** 을 돌려줍니다 — 견본은 7 개 segment. 단일
   segment 워크북이면 행이 하나뿐이고 사전 키도 하나입니다.
 - `basis[("TERM_LIFE_A", "FC")]` 가 그 segment 의 `Basis` 개체입니다.
-  `ra_confidence` 0.75 / `state_model` = WAIVER 는 `defaults` 행에서,
+  `ra_confidence` 0.75 / `state_model` = WAIVER 는 `_DEFAULTS` 행에서,
   `lapse_table` = `LAPSE_FC` 는 segment 행에서 온 값입니다.
 - `discount_annual` 이 길이 1 배열인 것은 견본 `discount_tables` 에 `year` 0
   한 행만 있기 때문입니다 — 여러 해를 적으면 그 **전체 연도별 곡선** 이 그대로
@@ -207,7 +207,7 @@ headline 전용이라 `full=False`). 라우팅 메커니즘은 [7.2](workbook-mu
 
 `segments.mortality_table` 의 값은 `mortality_tables` 시트의 `table_id` 와
 **정확히** 일치해야 합니다. 오타 / 대소문자 불일치면 그 테이블을 못 찾아
-에러가 납니다. `defaults` 가 채우는 칸도 마찬가지입니다.
+에러가 납니다. `_DEFAULTS` 가 채우는 칸도 마찬가지입니다.
 
 ### 함정 3 — rate 테이블에 grid 빈틈
 

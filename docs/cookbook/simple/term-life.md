@@ -458,7 +458,7 @@ print(sorted(basis.keys()))
 ```
 
 자기 워크북에서는 `segments` 시트의 `(product_code, channel_code)`
-조합이 그대로 키가 됩니다 (`defaults` 행은 제외).
+조합이 그대로 키가 됩니다 (`_DEFAULTS` 행은 제외).
 
 ### 함정 2 — sex 코딩 (0 / 1)
 

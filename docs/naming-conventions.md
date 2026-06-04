@@ -19,7 +19,7 @@ orphan: true
 
 | 시트 | 역할 |
 |---|---|
-| `segments` | `(product_code, channel_code)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`ra_confidence`, `*_cv`, optional `*_age_shift`, `expense_table` 등). `defaults` 행이 fallback |
+| `segments` | `(product_code, channel_code)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`ra_confidence`, `*_cv`, optional `*_age_shift`, `expense_table` 등). `_DEFAULTS` 행이 fallback |
 | `coverages` | rate-driven 담보 registry: `coverage_code → rate_table`. 모든 상품 공통 (product 별로 다른 calibration 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 code 분리). `coverage_name` / `calculation_method` 은 별도 `calculation_methods.csv` (담보별 산출방식) 에 |
 | `mortality_tables` | 사망 발생률 가정 (`table_id` × `sex` × `age` → `rate`) |
 | `incidence_rate_tables` | 특약 발생률 가정 (구조 동일) |
@@ -69,7 +69,7 @@ orphan: true
 | `coverage_code` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자. 사용자 카탈로그 — 엔진 reserved 코드 없음 |
 | `calculation_method` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | **engine 의 cash flow 산출방식 routing key**. 5 개 고정. 자세한 각 산출방식별 계산은 `basis-format.md` 의 coverages 시트 섹션 참조 |
 | `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAIDUP` | enum-like, 정책 status |
-| `defaults` (특수 product 값) | 소문자 단어 | `defaults` | segments 시트의 fallback 행 marker (값 아닌 keyword) |
+| `_DEFAULTS` (특수 product 값) | 대문자 + 밑줄 (예약 마커) | `_DEFAULTS` | segments 시트의 fallback 행 marker (값 아닌 keyword) |
 
 ## 데이터 ID와 Python 코드 enum 의 일관성
 

@@ -107,7 +107,7 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 # needs. Nine sheets:
 #
 #   * ``segments``       -- (product_code, channel_code) -> which tables + scalar params
-#                           (a ``defaults`` row that blank cells inherit).
+#                           (a ``_DEFAULTS`` row that blank cells inherit).
 #   * ``coverages``      -- (product) -> coverage_code, type, optional rate_table.
 #   * ``mortality_tables``, ``incidence_rate_tables``, ``waiver_tables``,
 #     ``lapse_tables``, ``discount_tables``, ``inflation_tables`` -- the
@@ -555,7 +555,7 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
     ``path`` is a single ``basis.xlsx`` workbook holding both the rate
     tables and the segment mapping (see the module header for the sheet
     layout). The ``segments`` sheet maps each (product_code, channel_code) to which
-    tables it uses plus scalar parameters, with a ``defaults`` row whose
+    tables it uses plus scalar parameters, with a ``_DEFAULTS`` row whose
     values blank cells inherit; the ``coverages`` sheet attaches
     rate-driven coverages to products.
 
@@ -635,7 +635,7 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
                     "see docs/naming-conventions.md)"
                 )
     for r in seg_rows:
-        if str(r.get("product_code", "") or "").strip().lower() == "defaults":
+        if str(r.get("product_code", "") or "").strip().lower() == "_defaults":
             defaults = r
         else:
             segments.append(r)

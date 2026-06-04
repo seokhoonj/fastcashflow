@@ -1,7 +1,7 @@
 """Basis workbook reader.
 
 A single ``basis.xlsx`` carries the segment mapping plus the named rate
-tables. The ``segments`` sheet has a ``defaults`` row whose values blank
+tables. The ``segments`` sheet has a ``_DEFAULTS`` row whose values blank
 cells inherit, and one row per (product_code, channel_code) segment; the reader returns
 one ``Basis`` per segment. See docs/basis-format.md.
 """
@@ -24,7 +24,7 @@ def test_segments_resolve():
 
 
 def test_defaults_inherited():
-    """Blank cells in a segment row inherit from the ``defaults`` row."""
+    """Blank cells in a segment row inherit from the ``_DEFAULTS`` row."""
     basis = fcf.samples.basis()
     ga, fc = basis[("TERM_LIFE_A", "GA")], basis[("TERM_LIFE_A", "FC")]
     # ra_confidence / mortality_cv / morbidity_cv live only on the defaults row
@@ -141,7 +141,7 @@ def test_resolved_basis_values():
 
 
 def test_state_model_column_resolves_to_registry_entry():
-    """The sample workbook's ``defaults`` row carries
+    """The sample workbook's ``_DEFAULTS`` row carries
     ``state_model = WAIVER`` -- both segments inherit and resolve to
     ``STATE_MODELS['WAIVER']``.
     """
