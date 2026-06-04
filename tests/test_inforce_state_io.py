@@ -150,12 +150,13 @@ def test_apply_inforce_state_rejects_mismatched_mp_id():
         fcf.apply_inforce_state(mp, wrong)
 
 
-def test_measure_inforce_warns_preview_on_elapsed():
-    """measure_inforce warns the in-force result is a preview (the projection
-    still starts at inception), so the double-decrement is not shipped
-    unknowingly. New business (elapsed == 0) does not warn."""
+def test_measure_inforce_warns_surrender_is_sample_grade():
+    """measure_inforce warns that the surrender value is sample-grade (no
+    surrender table / no pre-valuation premiums) when the basis carries a
+    surrender curve and there are in-force (elapsed > 0) contracts. The BEL / RA
+    are re-based to the valuation date, so they no longer trigger a warning."""
     state = fcf.samples.inforce_state()
     mp = fcf.apply_inforce_state(fcf.samples.model_points(), state)
     basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
-    with pytest.warns(UserWarning, match="preview"):
+    with pytest.warns(UserWarning, match="surrender"):
         fcf.gmm.measure_inforce(mp, basis, state, full=False)

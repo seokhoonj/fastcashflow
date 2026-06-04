@@ -94,13 +94,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **`measure_inforce` now warns that subsequent measurement is a preview.**
-  The in-force projection still runs from each contract's inception and is
-  sliced at the valuation date, so the BEL / RA understate the as-of figures
-  by the inception-to-valuation survival (the in-force count is decremented
-  from inception again). A `UserWarning` now fires whenever any
-  `elapsed_months > 0`, so the partial figure is not shipped unknowingly; a
-  valuation-date-start projection is the planned fix.
+- **In-force BEL / RA are re-based to the valuation date.** The in-force
+  projection runs from each contract's inception, so the sliced
+  `inforce[elapsed]` had decremented the as-of `count` again from inception and
+  the BEL / RA understated the as-of figures by the inception-to-valuation
+  survival. The sliced BEL / RA are now scaled by `count / inforce[elapsed]`,
+  which is exact for every cash flow linear in the in-force (premium, claim,
+  morbidity, expense, maturity, annuity); the CSM is scale-invariant and
+  unchanged. The one remaining approximation is the **surrender value** -- it
+  still uses the sample-grade `lapse x cum_premium x factor` base (no
+  contractual surrender table, no pre-valuation premiums); `measure_inforce`
+  now emits a `UserWarning` for that only when the basis carries a surrender
+  curve and any `elapsed_months > 0`.
 - `measure_inforce(..., full=False)` applied its `period_months` default
   inconsistently -- the `full=True` path defaulted a missing `period_months`
   to 12 but the `full=False` path raised on `None`. Both now default to 12.

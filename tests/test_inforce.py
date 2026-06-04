@@ -13,7 +13,7 @@ trajectory-slice property, and it pins the in-force semantics.
 import numpy as np
 import pytest
 
-from fastcashflow import Basis, ExpenseItem, ModelPoints, CoverageRate
+from fastcashflow import Basis, CalculationMethod, ExpenseItem, ModelPoints, CoverageRate
 # _measure_inforce_fast / _measure_inforce_full are the engine-internal workhorses behind
 # the public fcf.gmm.measure_inforce; tested directly here.
 from fastcashflow.engine import _measure_inforce_full, _measure_inforce_fast
@@ -43,6 +43,35 @@ def _basis():
     )
 
 
+def test_inforce_rescale_matches_fresh_valuation_date_start():
+    """Re-basing is exact: under flat rates with no inception-only flows, an
+    in-force contract valued at elapsed E equals a fresh contract started at
+    the valuation date (attained age, remaining term). The count / inforce[E]
+    rescale removes the inception double-decrement exactly (the original
+    motivation -- without it the in-force BEL understates by survival(0->E))."""
+    basis = Basis(
+        mortality_annual=_flat_rate(0.012), lapse_annual=_flat_rate(0.05),
+        discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", _flat_rate(0.012)),),
+    )
+    CM = {"DEATH": CalculationMethod.DEATH}
+    inforce = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([100.0]),
+        term_months=np.array([24]), benefits={0: np.array([1e6])},
+        count=np.array([1000.0]), elapsed_months=np.array([12]),
+        calculation_methods=CM,
+    )
+    bel_inforce = _measure_inforce_fast(inforce, basis).bel[0]
+    # fresh contract from the valuation date: attained age 41, remaining 12m
+    fresh = ModelPoints(
+        issue_age=np.array([41]), premium=np.array([100.0]),
+        term_months=np.array([12]), benefits={0: np.array([1e6])},
+        count=np.array([1000.0]), calculation_methods=CM,
+    )
+    bel_fresh = measure(fresh, basis).bel_path[0, 0]
+    assert np.isclose(bel_inforce, bel_fresh, rtol=1e-9)
+
+
 def test_inforce_fast_zero_elapsed_matches_value():
     """When every ``elapsed_months`` is 0 the in-force valuation collapses
     to the new-business :func:`measure` (= ``GMMMeasurement.bel_path[:, 0]``)."""
@@ -59,9 +88,10 @@ def test_inforce_fast_zero_elapsed_matches_value():
 
 
 def test_inforce_fast_matches_trajectory_slice():
-    """An in-force MP with ``elapsed_months = E`` returns the trajectory
-    slice ``GMMMeasurement.bel_path[mp, E]`` -- the PV of future cash flows from
-    the valuation date forward."""
+    """An in-force MP with ``elapsed_months = E`` returns the trajectory slice
+    ``bel_path[mp, E]`` re-based to the valuation date: the projection runs from
+    inception, so the slice is scaled by ``count / inforce[E]`` (here count = 1,
+    so ``1 / survival(0->E)``) to set the as-of in-force to the input count."""
     elapsed = 36
     mp_new = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
@@ -78,9 +108,11 @@ def test_inforce_fast_matches_trajectory_slice():
         elapsed_months=np.array([elapsed]),
     )
     v_inf = _measure_inforce_fast(mp_inforce, basis)
-    # The in-force BEL is the trajectory slice at t = elapsed.
-    assert np.isclose(v_inf.bel[0], m.bel_path[0, elapsed])
-    assert np.isclose(v_inf.ra[0], m.ra_path[0, elapsed])
+    # The in-force BEL is the trajectory slice at t = elapsed, re-based so the
+    # as-of in-force is the input count (here 1): x count / inforce[elapsed].
+    rescale = 1.0 / m.cashflows.inforce[0, elapsed]
+    assert np.isclose(v_inf.bel[0], m.bel_path[0, elapsed] * rescale)
+    assert np.isclose(v_inf.ra[0], m.ra_path[0, elapsed] * rescale)
 
 
 def test_inforce_fast_settlement_matches_trajectory():
@@ -112,9 +144,10 @@ def test_inforce_fast_settlement_matches_trajectory():
         lock_in_rate=basis.discount_annual,
         period_months=period,
     )
-    assert np.isclose(v.bel[0], m.bel_path[0, elapsed])
-    assert np.isclose(v.ra[0], m.ra_path[0, elapsed])
-    assert np.isclose(v.csm[0], m.csm_path[0, elapsed])
+    rescale = 1.0 / m.cashflows.inforce[0, elapsed]   # count = 1
+    assert np.isclose(v.bel[0], m.bel_path[0, elapsed] * rescale)
+    assert np.isclose(v.ra[0], m.ra_path[0, elapsed] * rescale)
+    assert np.isclose(v.csm[0], m.csm_path[0, elapsed])   # CSM is scale-invariant
 
 
 def test_inforce_fast_period_months_rejected_in_hypothetical_mode():
@@ -233,20 +266,24 @@ def test_inforce_full_settlement_roundtrip_to_measure():
 
 
 def test_inforce_bel_smaller_term_left():
-    """As ``elapsed_months`` grows (less of the term left), the absolute
-    value of the in-force BEL shrinks -- there are fewer future cash flows
-    to discount."""
+    """As ``elapsed_months`` grows (less of the term left), the as-of in-force
+    BEL of a claims-only contract shrinks -- fewer future claims to discount.
+
+    (A claims-only contract is used on purpose: the *net* BEL with premiums
+    need not be monotonic in elapsed -- that monotonicity in earlier versions
+    was an artifact of the inception-decremented projection, now corrected so
+    the as-of in-force equals the input count.)"""
     basis = _basis()
     def inforce_bel(e):
         mp = ModelPoints(
             issue_age=np.array([40]),
-            premium=np.array([50_000.0]),
+            premium=np.array([0.0]),               # claims-only
             term_months=np.array([240]),
             benefits={0: np.array([100_000_000.0])},
             elapsed_months=np.array([e]),
         )
         return abs(_measure_inforce_fast(mp, basis).bel[0])
-    # Strictly decreasing in elapsed -- the future shortens.
+    # Strictly decreasing in elapsed -- the remaining claims shorten.
     bels = [inforce_bel(e) for e in (0, 60, 120, 180)]
     assert bels[0] > bels[1] > bels[2] > bels[3]
 

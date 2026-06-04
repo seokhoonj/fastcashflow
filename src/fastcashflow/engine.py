@@ -289,6 +289,23 @@ def measure(
 # In-force subsequent measurement
 # ---------------------------------------------------------------------------
 
+def _inforce_rescale(m, model_points, em, rows) -> FloatArray:
+    """Per-MP factor that re-bases an inception-run projection to the valuation
+    date: ``count / inforce[em] = 1 / survival(0->em)``.
+
+    The in-force projection runs from inception, so ``inforce[em] = count x
+    survival(0->em)`` -- it decrements the as-of ``count`` again from inception.
+    Scaling the sliced ``bel`` / ``ra`` by this factor makes the as-of in-force
+    exactly the input ``count``; it is exact for every cash flow linear in the
+    in-force. Where ``inforce[em]`` is zero (a fully run-off cohort) the bel is
+    already zero, so the factor is 1 (a no-op).
+    """
+    inforce_em = m.cashflows.inforce[rows, em]
+    safe = np.where(inforce_em > 0.0, inforce_em, 1.0)
+    count = np.asarray(model_points.count, dtype=np.float64)
+    return np.where(inforce_em > 0.0, count / safe, 1.0)
+
+
 def _measure_inforce_fast(
     model_points: ModelPoints,
     basis: Basis,
@@ -360,8 +377,11 @@ def _measure_inforce_fast(
             "within the contract horizon."
         )
     rows = np.arange(n_mp)
-    bel = m.bel_path[rows, em]
-    ra = m.ra_path[rows, em]
+    # Re-base the inception-run projection to the valuation date (see
+    # _inforce_rescale): exact for cash flows linear in the in-force.
+    rescale = _inforce_rescale(m, model_points, em, rows)
+    bel = m.bel_path[rows, em] * rescale
+    ra = m.ra_path[rows, em] * rescale
     if not settlement_mode:
         # Hypothetical: take the engine-computed CSM trajectory at t=elapsed.
         csm = m.csm_path[rows, em]
@@ -566,9 +586,20 @@ def _measure_inforce_full(
     # elapsed_months per MP), matching _measure_inforce_fast -- NOT column 0
     # (inception), which would ignore prior_csm entirely. The trajectory
     # fields keep the full inception-to-horizon paths.
+    #
+    # Re-base the in-force count to the valuation date: the projection ran from
+    # inception, so inforce[em] = count x survival(0->em) -- it decremented the
+    # as-of count again from inception. Scale the sliced bel / ra by
+    # count / inforce[em] = 1 / survival(0->em) so the as-of inforce is exactly
+    # the input count. This is exact for every cash flow linear in the in-force
+    # (premium, claim, morbidity, expense, maturity, annuity); surrender uses a
+    # sample-grade cum-premium base and is approximate (see measure_inforce).
+    # CSM needs no rescale: its coverage-unit release is an inforce *fraction*,
+    # which the uniform scale leaves unchanged.
+    rescale = _inforce_rescale(m, model_points, em, rows_arr)
     return GMMMeasurement(
-        bel=m.bel_path[rows_arr, em],
-        ra=m.ra_path[rows_arr, em],
+        bel=m.bel_path[rows_arr, em] * rescale,
+        ra=m.ra_path[rows_arr, em] * rescale,
         csm=csm_new[rows_arr, em],
         loss_component=loss_new,
         bel_path=m.bel_path,
@@ -599,12 +630,17 @@ def measure_inforce(
     carried forward -- accreted at ``state.lock_in_rate`` and released over
     coverage units across ``period_months`` (default 12).
 
-    **Preview, not a production settlement figure.** The projection still runs
-    from each contract's inception and is sliced at the valuation date, so the
-    in-force count is decremented from inception again and the ``bel`` / ``ra``
-    understate the as-of numbers by the inception-to-valuation survival. A
-    valuation-date-start projection is the planned fix; until it lands a
-    runtime ``UserWarning`` fires whenever any ``elapsed_months > 0``.
+    The ``bel`` / ``ra`` are re-based to the valuation date: the projection runs
+    from inception, so the slice is scaled by ``count / inforce[elapsed]`` to
+    set the as-of in-force to the input count -- exact for every cash flow
+    linear in the in-force (premium, claim, morbidity, expense, maturity,
+    annuity). The one approximation left is the **surrender value**: it is
+    reconstructed from the projected cumulative premium (``lapse x cum_premium x
+    factor``), a sample-grade base that ignores premiums paid before the
+    valuation date and reads no contractual surrender-value table. For a product
+    whose lapse cash flow matters, a surrender-value table (or an as-of base
+    amount) is the planned input; until then a runtime ``UserWarning`` fires
+    when the basis carries a surrender curve and any ``elapsed_months > 0``.
 
     ``state`` is the :class:`InforceState` returned by
     :func:`read_inforce_policies` (it carries ``prior_csm`` and
@@ -618,14 +654,16 @@ def measure_inforce(
     :func:`roll_forward` with prior and current measurements for the full
     movement.
     """
-    if np.any(np.asarray(model_points.elapsed_months) > 0):
+    if (basis.surrender_value_curve is not None
+            and np.any(np.asarray(model_points.elapsed_months) > 0)):
         warnings.warn(
-            "measure_inforce projects each contract from inception and slices "
-            "at its valuation date, so the in-force count is decremented from "
-            "inception again and the BEL / RA understate the as-of figures by "
-            "the inception-to-valuation survival. Treat the result as a "
-            "preview, not a production settlement measurement, until the "
-            "valuation-date-start projection lands.",
+            "measure_inforce reconstructs the surrender value from the "
+            "projected cumulative premium (lapse x cum_premium x factor), a "
+            "sample-grade base that ignores premiums paid before the valuation "
+            "date and reads no contractual surrender-value table. The BEL / RA "
+            "are otherwise re-based to the valuation date. Supply a "
+            "surrender-value table (or as-of base amount) for a production "
+            "settlement of a product whose lapse cash flow matters.",
             UserWarning,
             stacklevel=2,
         )
