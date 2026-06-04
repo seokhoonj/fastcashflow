@@ -11,7 +11,8 @@ pins the invariant that the two paths return the same BEL when a
 """
 import numpy as np
 
-from fastcashflow import Basis, ExpenseItem, ModelPoints, STATE_MODELS, CoverageRate
+from fastcashflow import (Basis, CalculationMethod, ExpenseItem, ModelPoints,
+                          STATE_MODELS, CoverageRate)
 from fastcashflow.gmm import measure
 
 
@@ -152,6 +153,50 @@ def test_value_state_model_matches_measure_amount_per_policy():
         waiver_incidence_annual=_flat_rate(0.001),
     )
     mp = _mp()
+    v = measure(mp, basis, full=False)
+    m = measure(mp, basis)
+    assert np.isclose(v.bel[0], m.bel_path[0, 0])
+
+
+# --- amount_per_unit parity (the surrender amount additionally scales by the
+#     per-MP surrender_base_amount; the kernels multiply by a per-MP base
+#     array, 1.0 for the other modes) -----------------------------------------
+
+def _mp_with_base(n_time, base):
+    """One MP carrying a surrender_base_amount."""
+    return ModelPoints(
+        issue_age=np.array([40]), premium=np.array([50_000.0]),
+        term_months=np.array([n_time]), benefits={0: np.array([1e8])},
+        count=np.array([1.0]), surrender_base_amount=np.array([float(base)]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
+    )
+
+
+def test_value_scalar_matches_measure_amount_per_unit():
+    """Scalar fast path -- amount_per_unit must match the full projection."""
+    n_time = 240
+    # per-unit curve: surrender per unit of base, x base 100,000.
+    curve = np.clip((np.arange(n_time) - 24) / (n_time - 24.0), 0.0, 1.0)
+    basis = _basis(surrender_value_curve=curve,
+                   surrender_value_basis="amount_per_unit")
+    mp = _mp_with_base(n_time, 100_000.0)
+    v = measure(mp, basis, full=False)
+    m = measure(mp, basis)
+    assert np.isclose(v.bel[0], m.bel_path[0, 0])
+
+
+def test_value_state_model_matches_measure_amount_per_unit():
+    """Markov codegen path (WAIVER) -- amount_per_unit must match the full
+    projection. Pins that the per-MP base array reaches the codegen kernel."""
+    n_time = 240
+    curve = np.clip((np.arange(n_time) - 24) / (n_time - 24.0), 0.0, 1.0)
+    basis = _basis(
+        surrender_value_curve=curve,
+        surrender_value_basis="amount_per_unit",
+        state_model=STATE_MODELS["WAIVER"],
+        waiver_incidence_annual=_flat_rate(0.001),
+    )
+    mp = _mp_with_base(n_time, 100_000.0)
     v = measure(mp, basis, full=False)
     m = measure(mp, basis)
     assert np.isclose(v.bel[0], m.bel_path[0, 0])

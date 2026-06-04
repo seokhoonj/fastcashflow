@@ -180,23 +180,6 @@ def test_amount_per_unit_requires_base():
         measure(mp, _per_unit_basis(0.1, amount))
 
 
-def test_amount_per_unit_fast_path_raises_until_parity():
-    """The new-business fast path (measure(full=False)) for amount_per_unit
-    still raises until its kernel parity lands; the full path is correct."""
-    amount = np.full(13, 100.0)
-    mp = ModelPoints(
-        issue_age=np.array([40]),
-        premium=np.array([0.0]),
-        term_months=np.array([12]),
-        benefits={0: np.array([1e6])},
-        count=np.array([1.0]),
-        surrender_base_amount=np.array([1_000.0]),
-        calculation_methods={"DEATH": CalculationMethod.DEATH},
-    )
-    with pytest.raises(NotImplementedError, match="amount_per_unit"):
-        measure(mp, _per_unit_basis(0.1, amount), full=False)
-
-
 def test_inforce_amount_emits_no_surrender_warning():
     """With an amount-mode surrender curve the in-force figure is exact, so
     measure_inforce no longer emits the sample-grade surrender warning."""

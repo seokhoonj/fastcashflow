@@ -800,7 +800,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
             "coverage_reduction_factor,")
-    line(0, "           lapse_monthly, surrender_curve):")
+    line(0, "           lapse_monthly, surrender_curve, surrender_base):")
     line(4, "n_mp = issue_index.shape[0]")
     line(4, "bel = np.empty(n_mp)")
     line(4, "ra = np.empty(n_mp)")
@@ -884,11 +884,13 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
         line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
     if use_surrender:
         if surrender_is_amount:
-            # amount_per_policy: surrender_curve[t] is the per-policy
-            # contractual amount at duration t; ift * lapse_rate is the
-            # number lapsing. Linear in the in-force.
+            # amount_per_policy / amount_per_unit: surrender_curve[t] is the
+            # surrender amount at duration t (per policy, or per unit of
+            # surrender_base[mp]); ift * lapse_rate is the number lapsing.
+            # surrender_base is 1.0 for amount_per_policy.
             line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
-            line(12, "                 * ift * surrender_curve[t] * dm)")
+            line(12, "                 * ift * surrender_curve[t]")
+            line(12, "                 * surrender_base[mp] * dm)")
         else:
             # cum_premium_factor: cum_premium aggregates inforce * premium;
             # multiplying by lapse_rate alone gives the per-month surrender
@@ -1259,7 +1261,7 @@ def _codegen_fast_kernel_source_semi_markov(
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
             "coverage_reduction_factor,")
-    line(0, "           lapse_monthly, surrender_curve):")
+    line(0, "           lapse_monthly, surrender_curve, surrender_base):")
     line(4, "n_mp = issue_index.shape[0]")
     line(4, "bel = np.empty(n_mp)")
     line(4, "ra = np.empty(n_mp)")
@@ -1348,11 +1350,13 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
     if use_surrender:
         if surrender_is_amount:
-            # amount_per_policy: surrender_curve[t] is the per-policy
-            # contractual amount at duration t; ift * lapse_rate is the
-            # number lapsing. Linear in the in-force.
+            # amount_per_policy / amount_per_unit: surrender_curve[t] is the
+            # surrender amount at duration t (per policy, or per unit of
+            # surrender_base[mp]); ift * lapse_rate is the number lapsing.
+            # surrender_base is 1.0 for amount_per_policy.
             line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
-            line(12, "                 * ift * surrender_curve[t] * dm)")
+            line(12, "                 * ift * surrender_curve[t]")
+            line(12, "                 * surrender_base[mp] * dm)")
         else:
             # cum_premium_factor: cum_premium aggregates inforce * premium;
             # multiplying by lapse_rate alone gives the per-month surrender
@@ -1512,7 +1516,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
                          survival_monthly, lapse_monthly, surrender_curve,
                          use_morbidity, use_annuity, use_lae, use_surrender,
-                         surrender_is_amount):
+                         surrender_is_amount, surrender_base):
     """Scalar-inforce fast path of the general codegen fast kernel
     (:func:`_codegen_fast_kernel_source`).
 
@@ -1619,11 +1623,13 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
                 pv_expense += (alpha + beta + gamma) * dm
             if use_surrender:
                 if surrender_is_amount:
-                    # amount_per_policy: surrender_curve[t] is the per-policy
-                    # contractual amount at duration t; inforce * lapse_rate is
-                    # the number lapsing. Linear in the in-force.
+                    # amount_per_policy / amount_per_unit: surrender_curve[t] is
+                    # the surrender amount at duration t (per policy, or per
+                    # unit of surrender_base[mp]); inforce * lapse_rate is the
+                    # number lapsing. surrender_base is 1.0 for amount_per_policy.
                     pv_surrender += (lapse_monthly[sx, age_idx, year]
-                                     * inforce * surrender_curve[t] * dm)
+                                     * inforce * surrender_curve[t]
+                                     * surrender_base[mp] * dm)
                 else:
                     # cum_premium_factor: cum_premium aggregates inforce *
                     # premium and is the surrender basis; multiplying by
@@ -1983,24 +1989,29 @@ def _measure_fast(
     # surrender mechanic applies.
     surr_user = basis.surrender_value_curve
     surr_mode = basis.surrender_value_basis
-    if surr_user is not None and surr_mode == "amount_per_unit":
-        # amount_per_unit needs a per-MP base amount (sum insured / basic
-        # premium / ...) that is not wired into the fast kernels yet.
-        raise NotImplementedError(
-            "surrender_value_basis='amount_per_unit' is not wired yet; "
-            "use 'amount_per_policy' or 'cum_premium_factor'."
-        )
     if surr_user is not None and surr_mode not in (
-            "cum_premium_factor", "amount_per_policy"):
+            "cum_premium_factor", "amount_per_policy", "amount_per_unit"):
         raise ValueError(
             f"unknown surrender_value_basis {surr_mode!r}; expected "
             "'cum_premium_factor', 'amount_per_policy', or 'amount_per_unit'."
         )
-    # amount_per_policy: the curve is the per-policy surrender amount applied
-    # to the in-force scalar; cum_premium_factor: a factor on cumulative
-    # premium. The kernels branch on this flag (the curve itself is always an
-    # (n_time,) array, padded / zero-filled below).
-    surrender_is_amount = surr_mode == "amount_per_policy"
+    # amount_per_policy / amount_per_unit: the curve is a surrender amount
+    # applied to the in-force scalar (and, for amount_per_unit, to a per-MP
+    # base). cum_premium_factor: a factor on cumulative premium. The kernels
+    # branch on surrender_is_amount and multiply by surrender_base, which is
+    # 1.0 for amount_per_policy / cum_premium_factor.
+    surrender_is_amount = surr_mode in ("amount_per_policy", "amount_per_unit")
+    if surr_user is not None and surr_mode == "amount_per_unit":
+        base = model_points.surrender_base_amount
+        if base is None:
+            raise ValueError(
+                "surrender_value_basis='amount_per_unit' requires "
+                "ModelPoints.surrender_base_amount (no default base is "
+                "inferred)."
+            )
+        surrender_base = np.asarray(base, dtype=np.float64)
+    else:
+        surrender_base = np.ones(model_points.n_mp, dtype=np.float64)
     if surr_user is None:
         surrender_curve_kernel = np.zeros(n_time, dtype=np.float64)
     else:
@@ -2060,6 +2071,7 @@ def _measure_fast(
             use_lae,
             use_surrender,
             surrender_is_amount,
+            surrender_base,
         )
         return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
@@ -2158,6 +2170,7 @@ def _measure_fast(
                 model_points.coverage_reduction_factor,
                 lapse_grid,
                 surrender_curve_kernel,
+                surrender_base,
             )
         else:
             # Markov path -- every multi-state model with no duration
@@ -2178,6 +2191,7 @@ def _measure_fast(
                 model_points.coverage_reduction_factor,
                 lapse_grid,
                 surrender_curve_kernel,
+                surrender_base,
             )
     elif backend == "gpu":
         if state_duration_max is not None:
@@ -2195,6 +2209,7 @@ def _measure_fast(
             common_args[0], common_args[1], common_args[2], common_args[3],
             n_states, *common_args[4:],
             lapse_grid, surrender_curve_kernel, surrender_is_amount,
+            surrender_base,
         )
     else:
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
