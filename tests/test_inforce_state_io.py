@@ -66,8 +66,8 @@ def test_read_inforce_state_missing_column_errors(tmp_path: Path):
 
 def test_apply_inforce_state_overrides_elapsed_and_count():
     """``apply_inforce_state`` substitutes ``elapsed_months`` and ``count``
-    on a fresh ModelPoints from the policies file -- the join key is row
-    position, the user having sorted both files by mp_id upstream."""
+    on a fresh ModelPoints from the policies file, joined on mp_id (the
+    sample state and policies are in the same order, so it is a no-op here)."""
     mp = fcf.samples.model_points()
     state = fcf.samples.inforce_state()
     mp_settled = fcf.apply_inforce_state(mp, state)
@@ -113,3 +113,38 @@ def test_sample_inforce_end_to_end():
     # The carried-forward CSM trajectory differs from the hypothetical one
     # (different starting point at t = elapsed - 12).
     assert not np.allclose(mif_hyp.csm, mif_set.csm)
+
+
+def test_apply_inforce_state_joins_on_mp_id():
+    """A state in a different mp_id order is reordered to match the model
+    points -- the join is by mp_id, not by row position."""
+    mp = fcf.samples.model_points()
+    ids = mp.mp_id
+    n = mp.n_mp
+    rev = np.arange(n)[::-1]
+    shuffled = fcf.InforceState(
+        mp_id=ids[rev].copy(),
+        elapsed_months=(np.arange(n) + 1)[rev].astype(np.int64),
+        count=np.ones(n),
+        prior_csm=np.zeros(n),
+        lock_in_rate=0.03,
+    )
+    settled = fcf.apply_inforce_state(mp, shuffled)
+    # reordered back to model-point order: each mp_id keeps its own elapsed
+    assert np.array_equal(settled.elapsed_months, np.arange(n) + 1)
+
+
+def test_apply_inforce_state_rejects_mismatched_mp_id():
+    """A state covering different contracts (mp_id sets differ) is rejected
+    rather than silently mis-assigned."""
+    mp = fcf.samples.model_points()
+    n = mp.n_mp
+    wrong = fcf.InforceState(
+        mp_id=np.array([f"X{i}" for i in range(n)]),
+        elapsed_months=np.full(n, 12, dtype=np.int64),
+        count=np.ones(n),
+        prior_csm=np.zeros(n),
+        lock_in_rate=0.03,
+    )
+    with pytest.raises(ValueError, match="mp_id sets"):
+        fcf.apply_inforce_state(mp, wrong)

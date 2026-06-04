@@ -1067,6 +1067,10 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
                   if c not in _POLICY_RESERVED_COLS and not str(c).startswith("_")}
     if attributes:
         fields["attributes"] = attributes
+    # Carry mp_id (the contract identity) as a dedicated field so
+    # apply_inforce_state can join the period-close state on it instead of
+    # trusting row order. It is a label, never read by the kernel.
+    fields["mp_id"] = pol["mp_id"].to_numpy()
 
     def _by_policy(mask) -> np.ndarray:
         return np.bincount(mp[mask], weights=amount[mask], minlength=n_mp)
@@ -1252,7 +1256,7 @@ def read_vfa_model_points(
                 "maturity_benefit", "annuity_payment", "disability_income",
                 "disability_benefit", "account_value", "minimum_crediting_rate",
                 "minimum_death_benefit", "minimum_accumulation_benefit",
-                "product_code", "channel_code"):
+                "product_code", "channel_code", "mp_id"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     if "state" in df.columns:

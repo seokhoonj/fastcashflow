@@ -175,6 +175,11 @@ class ModelPoints:
     # axis. ``group_of_contracts`` is the IFRS 17 preset over the same machinery.
     issue_date: np.ndarray | None = None
     attributes: dict[str, np.ndarray] | None = None
+    # Contract identity -- the mp_id from the policies file, carried so
+    # ``apply_inforce_state`` can join the period-close state on it instead of
+    # trusting row order. A per-MP label, never read by the projection kernel;
+    # ``None`` for a hand-built set.
+    mp_id: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         # Normalise the required fields to numpy arrays of the right dtype.
@@ -341,9 +346,9 @@ class ModelPoints:
         object.__setattr__(self, "coverage_waiting", coverage_waiting)
         object.__setattr__(self, "coverage_reduction_end", coverage_reduction_end)
         object.__setattr__(self, "coverage_reduction_factor", coverage_reduction_factor)
-        # Segment metadata -- normalise to object arrays so they slice with
-        # the per-row fields. ``None`` stays None (a single-segment book).
-        for name in ("product_code", "channel_code"):
+        # Segment metadata + mp_id -- normalise to object arrays so they slice
+        # with the per-row fields. ``None`` stays None (a single-segment book).
+        for name in ("product_code", "channel_code", "mp_id"):
             value = getattr(self, name)
             if value is not None:
                 value = np.asarray(value, dtype=object)
@@ -532,8 +537,8 @@ class ModelPoints:
         kwargs["coverage_reduction_end"] = self.coverage_reduction_end[cov_idx]
         kwargs["coverage_reduction_factor"] = self.coverage_reduction_factor[cov_idx]
 
-        # Segment metadata -- slice if set; otherwise stay None.
-        for name in ("product_code", "channel_code"):
+        # Segment metadata + mp_id -- slice if set; otherwise stay None.
+        for name in ("product_code", "channel_code", "mp_id"):
             value = getattr(self, name)
             kwargs[name] = None if value is None else value[idx]
         # Source grouping attributes -- slice if set.
@@ -644,24 +649,40 @@ def apply_inforce_state(
     model_points: "ModelPoints", state: InforceState,
 ) -> "ModelPoints":
     """Return a ``ModelPoints`` with the state's ``elapsed_months`` and
-    ``count`` substituted in.
+    ``count`` substituted in, joined on ``mp_id``.
 
-    The two inputs must already be aligned: row ``i`` of the model points
-    is the contract whose state is row ``i`` of ``state``. The expected
-    workflow is to sort both files by ``mp_id`` upstream; this helper
-    enforces only the length check (mp_id alignment is the user's
-    responsibility because a generic mp_id-keyed join would force a
-    polars / numpy reorganisation of every per-MP array on the
-    ``ModelPoints``).
+    When the model points carry ``mp_id`` (``read_model_points`` keeps it in
+    :attr:`ModelPoints.attributes`) and so does the ``state``, the state is
+    matched to the model points **by mp_id** -- reordered when the two files
+    are in different orders, and rejected when their id sets differ -- so a
+    misaligned period-close file cannot silently assign one contract's state
+    to another. When the model points have no ``mp_id`` (a hand-built set),
+    the helper falls back to a positional length check; align the rows
+    yourself in that case.
     """
     from dataclasses import replace
     n_mp = int(model_points.issue_age.shape[0])
     if state.elapsed_months.shape[0] != n_mp:
         raise ValueError(
             f"state has {state.elapsed_months.shape[0]} rows; the "
-            f"model points have {n_mp}. Align the two files (sort both "
-            "by mp_id) before applying."
+            f"model points have {n_mp}. The state must cover exactly the "
+            "valued contracts."
         )
+    mp_ids = model_points.mp_id
+    if mp_ids is not None:
+        mp_ids = np.asarray(mp_ids).astype(str)
+        st_ids = np.asarray(state.mp_id).astype(str)
+        if set(mp_ids) != set(st_ids):
+            missing = sorted(set(mp_ids) - set(st_ids))[:5]
+            extra = sorted(set(st_ids) - set(mp_ids))[:5]
+            raise ValueError(
+                "apply_inforce_state: model points and state carry different "
+                f"mp_id sets (in model points only: {missing}; in state only: "
+                f"{extra}). The state must cover exactly the valued contracts."
+            )
+        if not np.array_equal(mp_ids, st_ids):       # different order -> join
+            pos = {mid: i for i, mid in enumerate(st_ids)}
+            state = state.subset(np.array([pos[mid] for mid in mp_ids]))
     return replace(
         model_points,
         elapsed_months=np.asarray(state.elapsed_months, dtype=np.int64),
