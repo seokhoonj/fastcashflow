@@ -20,7 +20,6 @@ fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포
 
 | 시트 | 역할 |
 |---|---|
-| `_meta` (optional) | 워크북 메타데이터 — 현재는 `schema_version` 한 행 (자세히는 §1.1) |
 | `segments` | (상품 × 채널) 세그먼트별 어느 표를 쓸지 + 스칼라 파라미터 + `expense_table` 참조 |
 | `coverages` | 상품별 특약 부착 (coverage_code, calculation_method, rate_table) |
 | `mortality_tables` | 사망 발생률 가정 (named tables) |
@@ -47,29 +46,6 @@ fcf.samples.export(".", template="gmm")   # 견본 한 세트 (본인 파일 있
 basis = fcf.read_basis("basis.xlsx")  # dict[(product_code, channel_code), Basis]
 basis = basis[("TERM_LIFE_A", "GA")]  # 한 세그먼트
 ```
-
-### 1.1 `_meta` 시트와 `schema_version`
-
-워크북의 호환성 (어느 fastcashflow 빌드 / 어느 입력 schema 인지) 을
-표시하는 선택 시트. 두 컬럼 `key` / `value` 의 단순 표:
-
-| key | value |
-|---|---|
-| `schema_version` | `v1` |
-
-reader 동작:
-
-- `_meta` 시트가 **없으면** schema_version = `v1` 으로 가정 (legacy
-  호환). 미래의 새 빌드도 v1 워크북을 계속 읽습니다.
-- `_meta` 시트가 **있고** `schema_version` 이 빌드가 지원하는 목록
-  (현재 `{"v1"}`) 에 없으면 reader 가 명시적으로 `ValueError` 를 던집니다
-  — 알 수 없는 schema 를 silent 로 잘못 해석하지 않도록.
-
-워크북에 다른 메타데이터 (생성일, 작성자, 회사 코드 등) 를 함께 적고
-싶으면 같은 시트의 다음 행에 자유롭게 추가합니다. reader 는
-`schema_version` 외의 키는 읽지 않으므로 무시됩니다.
-
-샘플 워크북은 `schema_version = v1` 로 출하됩니다.
 
 ---
 

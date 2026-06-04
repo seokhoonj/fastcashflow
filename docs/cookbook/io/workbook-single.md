@@ -44,9 +44,6 @@
 * - 시트
   - 필수
   - 역할
-* - `_meta`
-  - 선택
-  - 워크북 버전 (`schema_version`). 없으면 v1
 * - `segments`
   - 필수
   - `(product_code, channel_code)` 마다 **어느 테이블을 쓸지** 와 스칼라 가정

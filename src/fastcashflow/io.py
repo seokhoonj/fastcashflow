@@ -518,38 +518,6 @@ def _axis_tables(ws, axis, *, value_col="rate"):
             for tid, by_k in by_id.items()}
 
 
-#: Basis schema versions this reader knows how to consume. A
-#: workbook with no ``_meta`` sheet (or no ``schema_version`` key) is
-#: treated as ``v1`` so older sample files keep working. Add the new
-#: version here when a breaking schema change ships.
-_SUPPORTED_SCHEMA_VERSIONS = frozenset({"v1"})
-
-
-def _check_schema_version(wb) -> None:
-    """Read the optional ``_meta`` sheet's ``schema_version`` and reject
-    versions this build does not understand.
-
-    The sheet shape is two columns -- ``key`` / ``value`` -- so additional
-    metadata (workbook owner, generation date, etc.) can land in later
-    rows without breaking the reader.
-    """
-    if "_meta" not in wb.sheetnames:
-        return                                            # legacy = v1
-    ws = wb["_meta"]
-    rows = list(ws.iter_rows(values_only=True))
-    if not rows:
-        return
-    meta = {str(r[0]).strip(): r[1] for r in rows[1:]
-            if r and r[0] is not None}
-    version = str(meta.get("schema_version", "v1")).strip()
-    if version not in _SUPPORTED_SCHEMA_VERSIONS:
-        raise ValueError(
-            f"unsupported basis schema_version {version!r}; this "
-            f"build understands {sorted(_SUPPORTED_SCHEMA_VERSIONS)}. "
-            "Upgrade fastcashflow or downgrade the workbook."
-        )
-
-
 # Recognised assumption-slot columns on the segments sheet. Every *other*
 # column is a routing axis -- product_code, channel_code by convention, but a
 # workbook may use any axes (just channel for a pricing run, or
@@ -600,15 +568,8 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
     v1: the discount and inflation tables are read but used flat (their
     first entry); the per-segment dict is returned for the caller to value
     segment by segment.
-
-    A workbook may optionally carry a ``_meta`` sheet (``key | value``
-    layout) with a ``schema_version`` row. When absent the reader assumes
-    ``v1``. The version gates breaking schema changes -- a future ``v2``
-    that renames a column will be rejected by a ``v1``-only reader. The
-    sample workbook ships with ``schema_version = v1``.
     """
     wb = openpyxl.load_workbook(path, data_only=True)
-    _check_schema_version(wb)
 
     def optional(sheet, reader):
         return reader(wb[sheet]) if sheet in wb.sheetnames else {}
