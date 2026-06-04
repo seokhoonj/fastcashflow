@@ -148,3 +148,14 @@ def test_apply_inforce_state_rejects_mismatched_mp_id():
     )
     with pytest.raises(ValueError, match="mp_id sets"):
         fcf.apply_inforce_state(mp, wrong)
+
+
+def test_measure_inforce_warns_preview_on_elapsed():
+    """measure_inforce warns the in-force result is a preview (the projection
+    still starts at inception), so the double-decrement is not shipped
+    unknowingly. New business (elapsed == 0) does not warn."""
+    state = fcf.samples.inforce_state()
+    mp = fcf.apply_inforce_state(fcf.samples.model_points(), state)
+    basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
+    with pytest.warns(UserWarning, match="preview"):
+        fcf.gmm.measure_inforce(mp, basis, state, full=False)

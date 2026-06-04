@@ -92,6 +92,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `level_premium` was renamed to `premium` in the same release (its single
   occurrence on `ModelPoints`, the reader columns, and every example).
 
+### Fixed
+
+- **`measure_inforce` now warns that subsequent measurement is a preview.**
+  The in-force projection still runs from each contract's inception and is
+  sliced at the valuation date, so the BEL / RA understate the as-of figures
+  by the inception-to-valuation survival (the in-force count is decremented
+  from inception again). A `UserWarning` now fires whenever any
+  `elapsed_months > 0`, so the partial figure is not shipped unknowingly; a
+  valuation-date-start projection is the planned fix.
+- `measure_inforce(..., full=False)` applied its `period_months` default
+  inconsistently -- the `full=True` path defaulted a missing `period_months`
+  to 12 but the `full=False` path raised on `None`. Both now default to 12.
+
 ### Deprecated
 
 These names still work but emit `DeprecationWarning`; they will be

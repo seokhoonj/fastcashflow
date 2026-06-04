@@ -19,6 +19,7 @@ import importlib.util
 import os
 import sys
 import unicodedata
+import warnings
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -375,7 +376,7 @@ def _measure_inforce_fast(
         raise ValueError(
             f"prior_csm must have shape ({n_mp},), got {prior_csm.shape}"
         )
-    period_months = int(period_months)
+    period_months = int(period_months) if period_months is not None else 12
     prior_t = em - period_months
     if np.any(prior_t < 0):
         bad = int(np.argmin(prior_t))
@@ -596,8 +597,14 @@ def measure_inforce(
     in-force book. Each model point is valued at its ``elapsed_months``
     duration, and the prior period's closing CSM (``state.prior_csm``) is
     carried forward -- accreted at ``state.lock_in_rate`` and released over
-    coverage units across ``period_months`` (default 12). The headline
-    ``bel`` / ``ra`` / ``csm`` are the as-of valuation-date numbers.
+    coverage units across ``period_months`` (default 12).
+
+    **Preview, not a production settlement figure.** The projection still runs
+    from each contract's inception and is sliced at the valuation date, so the
+    in-force count is decremented from inception again and the ``bel`` / ``ra``
+    understate the as-of numbers by the inception-to-valuation survival. A
+    valuation-date-start projection is the planned fix; until it lands a
+    runtime ``UserWarning`` fires whenever any ``elapsed_months > 0``.
 
     ``state`` is the :class:`InforceState` returned by
     :func:`read_inforce_policies` (it carries ``prior_csm`` and
@@ -611,6 +618,17 @@ def measure_inforce(
     :func:`roll_forward` with prior and current measurements for the full
     movement.
     """
+    if np.any(np.asarray(model_points.elapsed_months) > 0):
+        warnings.warn(
+            "measure_inforce projects each contract from inception and slices "
+            "at its valuation date, so the in-force count is decremented from "
+            "inception again and the BEL / RA understate the as-of figures by "
+            "the inception-to-valuation survival. Treat the result as a "
+            "preview, not a production settlement measurement, until the "
+            "valuation-date-start projection lands.",
+            UserWarning,
+            stacklevel=2,
+        )
     if full:
         result = _measure_inforce_full(
             model_points, basis,
