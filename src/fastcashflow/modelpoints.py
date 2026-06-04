@@ -88,6 +88,12 @@ class ModelPoints:
     annuity_payment: FloatArray | None = None    # survival income, each month
     disability_income: FloatArray | None = None  # income while in a benefit state
     disability_benefit: FloatArray | None = None # lump sum on a flagged transition
+    # Per-policy base amount the surrender value scales against under
+    # surrender_value_basis="amount_per_unit" (e.g. sum insured / basic
+    # premium): surrender_cf = lapse_flow * surrender_value_curve[t] *
+    # surrender_base_amount. Explicit -- no default base is inferred, since
+    # the right base differs by product. None unless that mode is used.
+    surrender_base_amount: FloatArray | None = None
     premium_term_months: IntArray | None = None  # months premium is collected
     premium_frequency_months: IntArray | None = None  # months between premiums
     annuity_frequency_months: IntArray | None = None  # months between payouts
@@ -258,6 +264,20 @@ class ModelPoints:
         if np.any(cnt < 0):
             raise ValueError("count must be >= 0")
         object.__setattr__(self, "count", cnt)
+        # surrender_base_amount stays None unless provided (amount_per_unit
+        # needs it; no default base is inferred). When given it is a per-MP
+        # non-negative finite amount.
+        sba = self.surrender_base_amount
+        if sba is not None:
+            sba = np.asarray(sba, np.float64)
+            if sba.shape != (n_mp,):
+                raise ValueError(
+                    f"surrender_base_amount has length {sba.size} but n_mp "
+                    f"is {n_mp}")
+            if not np.all(np.isfinite(sba)) or np.any(sba < 0):
+                raise ValueError(
+                    "surrender_base_amount must be finite and >= 0")
+            object.__setattr__(self, "surrender_base_amount", sba)
         # sex defaults to 0 (male) for every model point.
         sex = self.sex
         sex = np.zeros(n_mp, np.int64) if sex is None else np.asarray(sex, np.int64)
@@ -537,8 +557,10 @@ class ModelPoints:
         kwargs["coverage_reduction_end"] = self.coverage_reduction_end[cov_idx]
         kwargs["coverage_reduction_factor"] = self.coverage_reduction_factor[cov_idx]
 
-        # Segment metadata + mp_id -- slice if set; otherwise stay None.
-        for name in ("product_code", "channel_code", "mp_id"):
+        # Segment metadata + mp_id + optional surrender base -- slice if set;
+        # otherwise stay None.
+        for name in ("product_code", "channel_code", "mp_id",
+                     "surrender_base_amount"):
             value = getattr(self, name)
             kwargs[name] = None if value is None else value[idx]
         # Source grouping attributes -- slice if set.

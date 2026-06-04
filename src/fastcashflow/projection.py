@@ -796,13 +796,17 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             # ``count / inforce[elapsed]`` rescale re-bases it exactly.
             surrender_cf = lapse_per_month * inforce * value
         elif mode == "amount_per_unit":
-            # Same as amount_per_policy, scaled by a per-MP base amount
-            # (sum insured / basic premium / ...). Needs a ModelPoints
-            # ``surrender_base_amount`` field -- wired in a later step.
-            raise NotImplementedError(
-                "surrender_value_basis='amount_per_unit' is not wired yet; "
-                "use 'amount_per_policy' or 'cum_premium_factor'."
-            )
+            # Same as amount_per_policy, scaled by the per-MP base amount
+            # (sum insured / basic premium / ...). Explicit -- no default base.
+            base = model_points.surrender_base_amount
+            if base is None:
+                raise ValueError(
+                    "surrender_value_basis='amount_per_unit' requires "
+                    "ModelPoints.surrender_base_amount (no default base is "
+                    "inferred)."
+                )
+            surrender_cf = (lapse_per_month * inforce * value
+                            * np.asarray(base, dtype=np.float64)[:, None])
         else:
             raise ValueError(
                 f"unknown surrender_value_basis {mode!r}; expected "

@@ -130,29 +130,71 @@ def test_inforce_amount_surrender_rescale_is_exact():
     assert np.isclose(bel_inforce, expected, rtol=1e-9)
 
 
-def test_amount_per_unit_raises_until_wired():
-    """amount_per_unit needs a per-MP base amount that is not wired yet; it
-    raises on both paths rather than silently dropping the base."""
-    amount = np.full(13, 5_000.0)
+def _per_unit_basis(lapse_rate, amount_curve, discount=0.0):
+    """A surrender-only basis in amount_per_unit mode."""
+    return Basis(
+        mortality_annual=_flat_rate(0.0),
+        lapse_annual=_flat_rate(lapse_rate),
+        discount_annual=discount,
+        ra_confidence=0.75,
+        mortality_cv=0.0,
+        surrender_value_curve=amount_curve,
+        surrender_value_basis="amount_per_unit",
+        coverages=(CoverageRate("DEATH", _flat_rate(0.0)),),
+    )
+
+
+def test_amount_per_unit_scales_by_base():
+    """amount_per_unit: surrender_cf[t] = inforce[t] * lapse_monthly *
+    amount[t] * surrender_base_amount[mp]. Two otherwise-identical MPs with
+    bases in a 1:2 ratio surrender in a 1:2 ratio; MP 0 is hand-checked."""
+    amount = np.full(13, 100.0)
+    mp = ModelPoints(
+        issue_age=np.array([40, 40]),
+        premium=np.array([0.0, 0.0]),
+        term_months=np.array([12, 12]),
+        benefits={0: np.array([1e6, 1e6])},
+        count=np.array([1.0, 1.0]),
+        surrender_base_amount=np.array([1_000.0, 2_000.0]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
+    )
+    m = measure(mp, _per_unit_basis(0.1, amount))
+    s = m.cashflows.surrender_cf
+    lapse_monthly = 1.0 - (1.0 - 0.1) ** (1.0 / 12.0)
+    inforce0 = m.cashflows.inforce[0]
+    assert np.allclose(s[0, :12],
+                       inforce0[:12] * lapse_monthly * amount[:12] * 1_000.0)
+    assert np.allclose(s[1], 2.0 * s[0])
+
+
+def test_amount_per_unit_requires_base():
+    """amount_per_unit without surrender_base_amount raises -- no default
+    base is inferred (it differs by product)."""
+    amount = np.full(13, 100.0)
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         premium=10_000.0, term_months=12,
         calculation_methods=PATTERNS,
     )
-    basis = Basis(
-        mortality_annual=_flat_rate(0.0),
-        lapse_annual=_flat_rate(0.1),
-        discount_annual=0.0,
-        ra_confidence=0.75,
-        mortality_cv=0.0,
-        surrender_value_curve=amount,
-        surrender_value_basis="amount_per_unit",
-        coverages=(CoverageRate("DEATH", _flat_rate(0.0)),),
+    with pytest.raises(ValueError, match="surrender_base_amount"):
+        measure(mp, _per_unit_basis(0.1, amount))
+
+
+def test_amount_per_unit_fast_path_raises_until_parity():
+    """The new-business fast path (measure(full=False)) for amount_per_unit
+    still raises until its kernel parity lands; the full path is correct."""
+    amount = np.full(13, 100.0)
+    mp = ModelPoints(
+        issue_age=np.array([40]),
+        premium=np.array([0.0]),
+        term_months=np.array([12]),
+        benefits={0: np.array([1e6])},
+        count=np.array([1.0]),
+        surrender_base_amount=np.array([1_000.0]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     with pytest.raises(NotImplementedError, match="amount_per_unit"):
-        measure(mp, basis, full=False)
-    with pytest.raises(NotImplementedError, match="amount_per_unit"):
-        measure(mp, basis, full=True)
+        measure(mp, _per_unit_basis(0.1, amount), full=False)
 
 
 def test_inforce_amount_emits_no_surrender_warning():
