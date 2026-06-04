@@ -32,7 +32,7 @@ import fastcashflow as fcf
 
 with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
-    fcf.samples.export(tmp, template="gmm")       # basis.xlsx + 데이터 파일들
+    fcf.samples.export(tmp, template="gmm", quiet=True)       # basis.xlsx + 데이터 파일들
 
     basis = fcf.read_basis(tmp / "basis.xlsx")    # 7 segment 가정 사전
     mp = fcf.read_model_points(tmp / "policies.csv", coverages=tmp / "coverages.csv",

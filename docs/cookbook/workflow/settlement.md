@@ -89,7 +89,7 @@ import numpy as np
 # 입력 파일 생성 (한 번만 -- 자기 파일이 있으면 생략).
 # basis.xlsx + policies / coverages / calculation_methods / inforce_state /
 # inforce_policies(결합 마감파일) 를 samples 폴더에 떨굼.
-fcf.samples.export("samples", template="gmm")
+fcf.samples.export("samples", template="gmm", quiet=True)
 
 # 산출기초 + 마감파일 읽기
 basis = fcf.read_basis("samples/basis.xlsx")                            # {(product_code, channel_code): Basis}

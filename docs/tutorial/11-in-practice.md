@@ -250,7 +250,7 @@ import fastcashflow as fcf
 # basis.xlsx + policies / coverages / calculation_methods / inforce_state /
 # inforce_policies(결합 마감파일) 를 한 번에. 대형 portfolio 는 format="parquet"
 # (시트당 ~1M row 인 .xlsx 한계 회피).
-fcf.samples.export("samples", template="gmm")
+fcf.samples.export("samples", template="gmm", quiet=True)
 
 # (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 in-force 측정
 basis = fcf.read_basis("samples/basis.xlsx")    # {(product_code, channel_code): Basis}
@@ -320,9 +320,9 @@ state)`. 결과는 위 1-파일과 동일.
 이고, 청크마다 `mp_id` 로 담보를 끌어옵니다.
 
 ```python
-# 시연용 셋업 -- 샘플 입력을 parquet 로 저장 (format="parquet")
+# 시연용 셋업 -- 샘플 입력을 parquet 로 저장 (format="parquet", quiet=True)
 # (자기 데이터를 쓸 때는 이미 parquet 형태로 갖고 있다고 가정)
-fcf.samples.export("samples", template="gmm", format="parquet")   # policies.parquet, coverages.parquet ...
+fcf.samples.export("samples", template="gmm", format="parquet", quiet=True)   # policies.parquet, coverages.parquet ...
 
 # 스트리밍 평가 -- 한 줄. 결과는 results/ 폴더에 분할 저장
 fcf.gmm.measure_stream(

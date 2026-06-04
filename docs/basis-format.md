@@ -42,7 +42,7 @@ reader 호출:
 ```python
 import fastcashflow as fcf
 
-fcf.samples.export(".", template="gmm")   # 견본 한 세트 (본인 파일 있으면 생략)
+fcf.samples.export(".", template="gmm", quiet=True)   # 견본 한 세트 (본인 파일 있으면 생략)
 basis = fcf.read_basis("basis.xlsx")  # dict[(product_code, channel_code), Basis]
 basis = basis[("TERM_LIFE_A", "GA")]  # 한 세그먼트
 ```

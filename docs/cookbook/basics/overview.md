@@ -40,7 +40,7 @@ calculation_methods 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 ```python
 import fastcashflow as fcf
 
-fcf.samples.export("samples", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
+fcf.samples.export("samples", template="gmm", quiet=True)   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 ```
 
 써진 파일을 Excel / 텍스트 편집기로 열어 컬럼 이름과 한두 행의 값만 훑어보면,

@@ -254,7 +254,7 @@ test 가 자동 검증).
 import fastcashflow as fcf
 
 # (1) 샘플 파일을 samples 폴더에 생성 (한 번만 -- 이미 자기 파일이 있으면 생략)
-fcf.samples.export("samples", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
+fcf.samples.export("samples", template="gmm", quiet=True)   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
 # (2) 읽어서 평가
 basis = fcf.read_basis("samples/basis.xlsx")    # {(product_code, channel_code): Basis}

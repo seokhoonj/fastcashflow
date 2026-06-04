@@ -479,7 +479,7 @@ import fastcashflow as fcf
 import polars as pl
 
 # 샘플 파일 저장 (본인 파일 있으면 생략)
-fcf.samples.export("samples", template="gmm")   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
+fcf.samples.export("samples", template="gmm", quiet=True)   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
 # 만들어진 샘플 파일 읽어 들이기
 basis = fcf.read_basis("samples/basis.xlsx")                  # 산출기초

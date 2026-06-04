@@ -62,7 +62,28 @@ def inforce_state():
     return _io.load_sample_inforce_state()
 
 
-def export(output_dir, template: str = "gmm", format: str = "csv") -> Path:
+def _export_tree(dest: Path, files: list[str]) -> str:
+    """An ASCII tree of the files :func:`export` wrote, expanding the
+    ``basis.xlsx`` workbook into its sheets -- a one-glance map of what landed
+    in the directory and which assumption sheets the basis carries."""
+    import openpyxl
+    lines = [f"{dest}/"]
+    for i, name in enumerate(files):
+        last_file = i == len(files) - 1
+        lines.append(f"{'└── ' if last_file else '├── '}{name}")
+        if name.endswith(".xlsx"):
+            wb = openpyxl.load_workbook(dest / name, read_only=True)
+            sheets = wb.sheetnames
+            wb.close()
+            pad = "    " if last_file else "│   "
+            for j, sheet in enumerate(sheets):
+                last_sheet = j == len(sheets) - 1
+                lines.append(f"{pad}{'└── ' if last_sheet else '├── '}{sheet}")
+    return "\n".join(lines)
+
+
+def export(output_dir, template: str = "gmm", format: str = "csv",
+           *, quiet: bool = False) -> Path:
     """Write a starter set of input template files to ``output_dir``.
 
     ``template="gmm"`` writes ``basis.xlsx`` plus ``policies`` / ``coverages``
@@ -78,6 +99,10 @@ def export(output_dir, template: str = "gmm", format: str = "csv") -> Path:
     applies only to the policies / coverages / state files. Use ``"parquet"``
     for a portfolio large enough to stream with
     :func:`~fastcashflow.gmm.measure_stream`.
+
+    Prints a tree of the files written -- expanding ``basis.xlsx`` into its
+    sheets -- so it is clear what landed where. Pass ``quiet=True`` to suppress
+    (e.g. in scripts). Returns the destination directory.
     """
     if template not in _TEMPLATES:
         raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -94,9 +119,17 @@ def export(output_dir, template: str = "gmm", format: str = "csv") -> Path:
         _io._save_sample_calculation_methods(dest / f"calculation_methods{ext}")
         _io._save_sample_inforce_state(dest / f"inforce_state{ext}")
         _io._save_sample_inforce_policies(dest / f"inforce_policies{ext}")
+        files = ["basis.xlsx", f"policies{ext}", f"coverages{ext}",
+                 f"calculation_methods{ext}", f"inforce_state{ext}",
+                 f"inforce_policies{ext}"]
     else:  # vfa
         _io._drop_sample_table("sample_vfa_basis.xlsx", dest / "basis.xlsx")
         _io._drop_sample_table("sample_vfa_policies.csv", dest / f"policies{ext}")
+        files = ["basis.xlsx", f"policies{ext}"]
+    if not quiet:
+        print(f"fastcashflow sample export -- template={template!r}, "
+              f"{len(files)} files")
+        print(_export_tree(dest, files))
     return dest
 
 

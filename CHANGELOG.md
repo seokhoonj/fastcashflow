@@ -11,6 +11,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`fcf.samples.export()` prints a tree of what it wrote** -- the files
+  dropped in the directory, with `basis.xlsx` expanded into its assumption
+  sheets, so it is clear at a glance what landed where. Pass `quiet=True` to
+  suppress (e.g. in scripts).
 - **`group` aggregator and `group_of_contracts` preset.** `group(m, by=...)`
   aggregates a `full=True` GMM measurement to any axis -- a single axis name, a
   list of names and/or precomputed `(n_mp,)` label arrays, or a bare label
