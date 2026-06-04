@@ -1,8 +1,0 @@
-coverage_code,coverage_name,calculation_method
-DEATH,general (all-cause) death,DEATH
-INPATIENT,hospitalization,MORBIDITY
-CANCER,cancer diagnosis,DIAGNOSIS
-ADB,accidental death,DEATH
-DISEASE_DEATH,disease death,DEATH
-ANNUITY,annuity,ANNUITY
-MATURITY,survival benefit,MATURITY

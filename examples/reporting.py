@@ -1,20 +1,15 @@
 """Reporting -- the IFRS 17 report, the analysis of change and aggregation.
 
-Inputs are in examples/data/ (Excel files).
+The inputs are the bundled sample portfolio (``fcf.samples``).
 
     python examples/reporting.py
 """
-from pathlib import Path
-
 import fastcashflow as fcf
-
-DATA = Path(__file__).resolve().parent / "data"
 
 
 def main() -> None:
-    basis = fcf.read_basis(DATA / "basis.xlsx")
-    basis = basis[("TERM_LIFE_A", "FC")]
-    book = fcf.read_model_points(DATA / "policies.csv", coverages=DATA / "coverages.csv", calculation_methods=DATA / "calculation_methods.csv")
+    basis = fcf.samples.basis()
+    book = fcf.samples.model_points()
     m = fcf.gmm.measure(book, basis)
 
     # The IFRS 17 report -- insurance revenue, service expense, service result.

@@ -1,20 +1,15 @@
 """Transition -- re-set the CSM on the fair value approach at first adoption.
 
-Inputs are in examples/data/ (Excel files).
+The inputs are the bundled sample portfolio (``fcf.samples``).
 
     python examples/transition.py
 """
-from pathlib import Path
-
 import fastcashflow as fcf
-
-DATA = Path(__file__).resolve().parent / "data"
 
 
 def main() -> None:
-    basis = fcf.read_basis(DATA / "basis.xlsx")
-    basis = basis[("TERM_LIFE_A", "FC")]
-    book = fcf.read_model_points(DATA / "policies.csv", coverages=DATA / "coverages.csv", calculation_methods=DATA / "calculation_methods.csv")
+    basis = fcf.samples.basis()
+    book = fcf.samples.model_points()
 
     # Measure the in-force book at the transition date.
     m = fcf.gmm.measure(book, basis)

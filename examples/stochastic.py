@@ -1,22 +1,20 @@
 """Stochastic valuation -- the liability across economic scenarios.
 
-Inputs are in examples/data/ (Excel files).
+The inputs are the bundled sample portfolio (``fcf.samples``). ``gmm.stochastic``
+takes a single :class:`Basis`, so this values one segment of the book.
 
     python examples/stochastic.py
 """
-from pathlib import Path
-
 import numpy as np
 
 import fastcashflow as fcf
 
-DATA = Path(__file__).resolve().parent / "data"
-
 
 def main() -> None:
-    basis = fcf.read_basis(DATA / "basis.xlsx")
-    basis = basis[("TERM_LIFE_A", "FC")]
-    book = fcf.read_model_points(DATA / "policies.csv", coverages=DATA / "coverages.csv", calculation_methods=DATA / "calculation_methods.csv")
+    basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
+    book = fcf.samples.model_points()
+    seg = np.where((book.product_code == "TERM_LIFE_A") & (book.channel_code == "FC"))[0]
+    book = book.subset(seg)
 
     # Value the book under a range of discount-rate scenarios.
     rates = np.array([0.02, 0.03, 0.04, 0.05])

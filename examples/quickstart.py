@@ -1,25 +1,18 @@
-"""Quickstart -- read the inputs and measure.
+"""Quickstart -- load the bundled sample and measure.
 
-The inputs live in examples/data/. Open basis.xlsx, policies.csv and
-coverages.csv, replace them with your own figures, and run this again --
-there is no Python to edit.
+The inputs are the bundled sample portfolio (``fcf.samples``). To work from
+your own figures, write the sample out with ``fcf.samples.export("my_dir")``,
+edit the files, and read them back with ``fcf.read_basis`` /
+``fcf.read_model_points`` -- there is no Python to edit.
 
     python examples/quickstart.py
 """
-from pathlib import Path
-
 import fastcashflow as fcf
-
-DATA = Path(__file__).resolve().parent / "data"
 
 
 def main() -> None:
-    basis = fcf.read_basis(DATA / "basis.xlsx")
-    # The sample workbook now carries several (product_code, channel_code) segments;
-    # pick TERM_LIFE / FC for this single-segment quickstart. A real run
-    # over a multi-segment portfolio would pass a dict basis to fcf.gmm.measure.
-    basis = basis[("TERM_LIFE_A", "FC")]
-    model_points = fcf.read_model_points(DATA / "policies.csv", coverages=DATA / "coverages.csv", calculation_methods=DATA / "calculation_methods.csv")
+    basis = fcf.samples.basis()                 # per-segment {(product, channel): Basis}
+    model_points = fcf.samples.model_points()   # the multi-segment protection book
 
     m = fcf.gmm.measure(model_points, basis)
     print(f"measured {model_points.n_mp} model points -- portfolio totals at issue")

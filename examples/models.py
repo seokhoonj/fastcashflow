@@ -1,22 +1,21 @@
 """The three IFRS 17 measurement models -- GMM, PAA and VFA.
 
-GMM and PAA read the protection book from examples/data/ (policies +
-coverages); VFA reads the account-value book (account_values.csv, no
-coverages) with read_vfa_model_points.
+GMM and PAA measure the protection book; VFA the account-value book. All come
+from the bundled sample (``fcf.samples``). GMM and PAA here take a single
+:class:`Basis`, so they value one segment of the protection book.
 
     python examples/models.py
 """
-from pathlib import Path
+import numpy as np
 
 import fastcashflow as fcf
 
-DATA = Path(__file__).resolve().parent / "data"
-
 
 def main() -> None:
-    basis = fcf.read_basis(DATA / "basis.xlsx")
-    basis = basis[("TERM_LIFE_A", "FC")]
-    book = fcf.read_model_points(DATA / "policies.csv", coverages=DATA / "coverages.csv", calculation_methods=DATA / "calculation_methods.csv")
+    basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
+    book = fcf.samples.model_points()
+    seg = np.where((book.product_code == "TERM_LIFE_A") & (book.channel_code == "FC"))[0]
+    book = book.subset(seg)
 
     # GMM -- the general measurement model.
     gmm = fcf.gmm.measure(book, basis)
@@ -26,11 +25,9 @@ def main() -> None:
     paa = fcf.paa.measure(book, basis)
     print(f"PAA  -- insurance service result  {paa.service_result.sum():>14,.0f}")
 
-    # VFA -- account-value (direct-participation) contracts. No coverage-code
-    # coverages, so a single policies file read by read_vfa_model_points.
-    account = fcf.read_vfa_model_points(DATA / "account_values.csv",
-                                        calculation_methods=DATA / "calculation_methods.csv")
-    vfa = fcf.vfa.measure(account, basis)
+    # VFA -- account-value (direct-participation) contracts: their own book and basis.
+    account = fcf.samples.model_points(template="vfa")
+    vfa = fcf.vfa.measure(account, fcf.samples.basis(template="vfa"))
     print(f"VFA  -- CSM (the variable fee)    {vfa.csm_path[:, 0].sum():>14,.0f}")
 
 

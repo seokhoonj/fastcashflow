@@ -1,20 +1,21 @@
 """Reinsurance -- a quota-share treaty held over a direct portfolio.
 
-Inputs are in examples/data/ (Excel files).
+The inputs are the bundled sample portfolio (``fcf.samples``).
+``reinsurance.measure`` takes a single :class:`Basis`, so this cedes one
+segment of the book.
 
     python examples/reinsurance.py
 """
-from pathlib import Path
+import numpy as np
 
 import fastcashflow as fcf
 
-DATA = Path(__file__).resolve().parent / "data"
-
 
 def main() -> None:
-    basis = fcf.read_basis(DATA / "basis.xlsx")
-    basis = basis[("TERM_LIFE_A", "FC")]
-    book = fcf.read_model_points(DATA / "policies.csv", coverages=DATA / "coverages.csv", calculation_methods=DATA / "calculation_methods.csv")
+    basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
+    book = fcf.samples.model_points()
+    seg = np.where((book.product_code == "TERM_LIFE_A") & (book.channel_code == "FC"))[0]
+    book = book.subset(seg)
 
     # A 30% quota-share cession of the direct book.
     reins = fcf.reinsurance.measure(book, basis, fcf.reinsurance.QuotaShare(cession=0.30))
