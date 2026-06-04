@@ -78,3 +78,13 @@ def test_export_rejects_unknown_template_and_format(tmp_path):
         fcf.samples.export(tmp_path, format="json")
     with pytest.raises(ValueError, match="template must be one of"):
         fcf.samples.basis(template="paa")
+
+
+def test_sample_supports_group_of_contracts_cohorts():
+    """The bundled sample carries issue_date, so group_of_contracts splits by
+    annual cohort (IFRS 17 Sec. 22) -- 2025 and 2026 here -- on top of the
+    portfolio (product) and the derived onerous / remaining profitability."""
+    m = measure(fcf.samples.model_points(), fcf.samples.basis())
+    g = fcf.group_of_contracts(m)
+    cohorts = {str(lab).split("|")[1] for lab in g.group_labels}
+    assert cohorts == {"2025", "2026"}
