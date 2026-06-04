@@ -1,6 +1,6 @@
 """In-force valuation (IFRS 17 subsequent measurement) -- MVP tests.
 
-``value_in_force(mp, basis)`` returns the BEL / RA / CSM at each
+``_measure_inforce_fast(mp, basis)`` returns the BEL / RA / CSM at each
 contract's valuation date, ``elapsed_months[mp]`` months after that
 contract's inception. The projection runs from inception and the
 trajectory is sliced at ``t = elapsed_months[mp]``.
@@ -14,9 +14,9 @@ import numpy as np
 import pytest
 
 from fastcashflow import Basis, ExpenseItem, ModelPoints, CoverageRate
-# value_in_force / measure_in_force are the engine-internal workhorses behind
+# _measure_inforce_fast / _measure_inforce_full are the engine-internal workhorses behind
 # the public fcf.gmm.measure_inforce; tested directly here.
-from fastcashflow.engine import measure_in_force, value_in_force
+from fastcashflow.engine import _measure_inforce_full, _measure_inforce_fast
 from fastcashflow.gmm import measure
 
 
@@ -43,7 +43,7 @@ def _basis():
     )
 
 
-def test_value_in_force_zero_elapsed_matches_value():
+def test_inforce_fast_zero_elapsed_matches_value():
     """When every ``elapsed_months`` is 0 the in-force valuation collapses
     to the new-business :func:`measure` (= ``GMMMeasurement.bel_path[:, 0]``)."""
     mp = ModelPoints.single(
@@ -52,13 +52,13 @@ def test_value_in_force_zero_elapsed_matches_value():
     )
     basis = _basis()
     v_new = measure(mp, basis, full=False)
-    v_inf = value_in_force(mp, basis)
+    v_inf = _measure_inforce_fast(mp, basis)
     assert np.isclose(v_inf.bel[0], v_new.bel[0])
     assert np.isclose(v_inf.ra[0], v_new.ra[0])
     assert np.isclose(v_inf.csm[0], v_new.csm[0])
 
 
-def test_value_in_force_matches_trajectory_slice():
+def test_inforce_fast_matches_trajectory_slice():
     """An in-force MP with ``elapsed_months = E`` returns the trajectory
     slice ``GMMMeasurement.bel_path[mp, E]`` -- the PV of future cash flows from
     the valuation date forward."""
@@ -77,13 +77,13 @@ def test_value_in_force_matches_trajectory_slice():
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([elapsed]),
     )
-    v_inf = value_in_force(mp_inforce, basis)
+    v_inf = _measure_inforce_fast(mp_inforce, basis)
     # The in-force BEL is the trajectory slice at t = elapsed.
     assert np.isclose(v_inf.bel[0], m.bel_path[0, elapsed])
     assert np.isclose(v_inf.ra[0], m.ra_path[0, elapsed])
 
 
-def test_value_in_force_settlement_matches_trajectory():
+def test_inforce_fast_settlement_matches_trajectory():
     """Settlement-mode carry-forward: with ``prior_csm`` taken from the
     measure() CSM trajectory at ``E - period_months`` and a ``lock_in_rate``
     equal to the current discount, rolling one period forward must
@@ -106,7 +106,7 @@ def test_value_in_force_settlement_matches_trajectory():
         benefits={0: np.array([100_000_000.0])},
         elapsed_months=np.array([elapsed]),
     )
-    v = value_in_force(
+    v = _measure_inforce_fast(
         mp_inforce, basis,
         prior_csm=prior_csm,
         lock_in_rate=basis.discount_annual,
@@ -117,7 +117,7 @@ def test_value_in_force_settlement_matches_trajectory():
     assert np.isclose(v.csm[0], m.csm_path[0, elapsed])
 
 
-def test_value_in_force_period_months_rejected_in_hypothetical_mode():
+def test_inforce_fast_period_months_rejected_in_hypothetical_mode():
     """period_months only applies in settlement mode; passing it without
     prior_csm / lock_in_rate is a no-op trap and now raises."""
     basis = _basis()
@@ -126,10 +126,10 @@ def test_value_in_force_period_months_rejected_in_hypothetical_mode():
         premium=50_000.0, term_months=120,
     )
     with pytest.raises(ValueError, match="period_months applies only in"):
-        value_in_force(mp, basis, period_months=12)
+        _measure_inforce_fast(mp, basis, period_months=12)
 
 
-def test_value_in_force_settlement_paired_args():
+def test_inforce_fast_settlement_paired_args():
     """``prior_csm`` and ``lock_in_rate`` must be supplied together; one
     without the other is a silent-wrong-result trap and raises."""
     basis = _basis()
@@ -138,12 +138,12 @@ def test_value_in_force_settlement_paired_args():
         premium=50_000.0, term_months=240,
     )
     with pytest.raises(ValueError, match="both be given.*both omitted"):
-        value_in_force(mp, basis, prior_csm=np.array([0.0]))
+        _measure_inforce_fast(mp, basis, prior_csm=np.array([0.0]))
     with pytest.raises(ValueError, match="both be given.*both omitted"):
-        value_in_force(mp, basis, lock_in_rate=0.03)
+        _measure_inforce_fast(mp, basis, lock_in_rate=0.03)
 
 
-def test_value_in_force_settlement_elapsed_too_small():
+def test_inforce_fast_settlement_elapsed_too_small():
     """``elapsed_months < period_months`` means the prior closing date
     precedes inception -- no CSM to carry forward, so the call errors out
     rather than silently using a zero or out-of-range slice."""
@@ -156,7 +156,7 @@ def test_value_in_force_settlement_elapsed_too_small():
         elapsed_months=np.array([6]),
     )
     with pytest.raises(ValueError, match="precedes inception"):
-        value_in_force(
+        _measure_inforce_fast(
             mp, basis,
             prior_csm=np.array([1.0]),
             lock_in_rate=0.03,
@@ -164,8 +164,8 @@ def test_value_in_force_settlement_elapsed_too_small():
         )
 
 
-def test_measure_in_force_hypothetical_is_measure():
-    """``measure_in_force`` without prior_csm returns the measure() result
+def test_inforce_full_hypothetical_is_measure():
+    """``_measure_inforce_full`` without prior_csm returns the measure() result
     unchanged -- it is the trajectory-variant of the hypothetical mode."""
     basis = _basis()
     mp = ModelPoints(
@@ -176,15 +176,15 @@ def test_measure_in_force_hypothetical_is_measure():
         elapsed_months=np.array([36]),
     )
     m = measure(mp, basis)
-    mif = measure_in_force(mp, basis)
+    mif = _measure_inforce_full(mp, basis)
     assert np.allclose(m.csm, mif.csm)
     assert np.allclose(m.csm_accretion, mif.csm_accretion)
     assert np.allclose(m.csm_release, mif.csm_release)
 
 
-def test_measure_in_force_settlement_matches_value_in_force():
-    """Settlement-mode ``measure_in_force`` at the valuation date equals
-    the value_in_force settlement-mode CSM scalar."""
+def test_inforce_full_settlement_matches__measure_inforce_fast():
+    """Settlement-mode ``_measure_inforce_full`` at the valuation date equals
+    the _measure_inforce_fast settlement-mode CSM scalar."""
     basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]),
@@ -197,16 +197,16 @@ def test_measure_in_force_settlement_matches_value_in_force():
     period = 12
     prior_csm = m_baseline.csm_path[:, 36 - period]
     lock_in = basis.discount_annual
-    v = value_in_force(mp, basis, prior_csm=prior_csm,
+    v = _measure_inforce_fast(mp, basis, prior_csm=prior_csm,
                        lock_in_rate=lock_in, period_months=period)
-    mif = measure_in_force(mp, basis, prior_csm=prior_csm,
+    mif = _measure_inforce_full(mp, basis, prior_csm=prior_csm,
                             lock_in_rate=lock_in, period_months=period)
     rows = np.arange(1)
     assert np.isclose(mif.csm_path[rows, 36][0], v.csm[0])
     assert np.isclose(mif.loss_component[0], v.loss_component[0])
 
 
-def test_measure_in_force_settlement_roundtrip_to_measure():
+def test_inforce_full_settlement_roundtrip_to_measure():
     """When prior_csm and lock_in_rate are seeded from the engine's own
     trajectory and discount, the carried-forward CSM trajectory from
     t=prior_t onwards matches the measure() trajectory bit for bit."""
@@ -221,7 +221,7 @@ def test_measure_in_force_settlement_roundtrip_to_measure():
     m = measure(mp, basis)
     period = 12
     prior_t = 36 - period
-    mif = measure_in_force(
+    mif = _measure_inforce_full(
         mp, basis,
         prior_csm=m.csm_path[:, prior_t],
         lock_in_rate=basis.discount_annual,
@@ -232,12 +232,12 @@ def test_measure_in_force_settlement_roundtrip_to_measure():
     assert np.allclose(m.csm_release[:, prior_t:], mif.csm_release[:, prior_t:])
 
 
-def test_in_force_bel_smaller_term_left():
+def test_inforce_bel_smaller_term_left():
     """As ``elapsed_months`` grows (less of the term left), the absolute
     value of the in-force BEL shrinks -- there are fewer future cash flows
     to discount."""
     basis = _basis()
-    def in_force_bel(e):
+    def inforce_bel(e):
         mp = ModelPoints(
             issue_age=np.array([40]),
             premium=np.array([50_000.0]),
@@ -245,9 +245,9 @@ def test_in_force_bel_smaller_term_left():
             benefits={0: np.array([100_000_000.0])},
             elapsed_months=np.array([e]),
         )
-        return abs(value_in_force(mp, basis).bel[0])
+        return abs(_measure_inforce_fast(mp, basis).bel[0])
     # Strictly decreasing in elapsed -- the future shortens.
-    bels = [in_force_bel(e) for e in (0, 60, 120, 180)]
+    bels = [inforce_bel(e) for e in (0, 60, 120, 180)]
     assert bels[0] > bels[1] > bels[2] > bels[3]
 
 

@@ -288,7 +288,7 @@ def measure(
 # In-force subsequent measurement
 # ---------------------------------------------------------------------------
 
-def value_in_force(
+def _measure_inforce_fast(
     model_points: ModelPoints,
     basis: Basis,
     *,
@@ -355,7 +355,7 @@ def value_in_force(
         raise ValueError(
             f"elapsed_months[{bad}]={int(em[bad])} > "
             f"term_months[{bad}]={int(term[bad])}; the policy has run past "
-            "its original maturity. value_in_force needs an as-of date "
+            "its original maturity. measure_inforce needs an as-of date "
             "within the contract horizon."
         )
     rows = np.arange(n_mp)
@@ -445,7 +445,7 @@ def _validate_settlement_args(
     return has_prior
 
 
-def measure_in_force(
+def _measure_inforce_full(
     model_points: ModelPoints,
     basis: Basis,
     *,
@@ -454,10 +454,10 @@ def measure_in_force(
     period_months: int | None = None,
 ) -> GMMMeasurement:
     """In-force subsequent measurement -- full-trajectory variant of
-    :func:`value_in_force`.
+    :func:`_measure_inforce_fast`.
 
     Calls :func:`measure` to build the BEL / RA / CSM trajectories from
-    inception. The two modes mirror :func:`value_in_force`:
+    inception. The two modes mirror :func:`_measure_inforce_fast`:
 
     * **Hypothetical** (``prior_csm=None``). Returns the measure() result
       unchanged -- the CSM trajectory is the one a freshly issued contract
@@ -470,12 +470,12 @@ def measure_in_force(
       and the cash flow detail are unchanged -- they are forward
       projections that do not depend on the prior period's CSM.
       ``loss_component`` is returned as zeros in this mode for the same
-      reason as :func:`value_in_force`: Sec. 44 onerous recognition is
+      reason as :func:`_measure_inforce_fast`: Sec. 44 onerous recognition is
       only meaningful with CSM unlocking, which v1 does not perform.
 
     Use this when the downstream needs a full trajectory (movement
     decomposition, period-close roll-forward) rather than just the
-    valuation-date headline numbers that :func:`value_in_force` returns.
+    valuation-date headline numbers that :func:`_measure_inforce_fast` returns.
     """
     settlement_mode = _validate_settlement_args(
         prior_csm, lock_in_rate, period_months,
@@ -555,14 +555,14 @@ def measure_in_force(
     csm_accretion_new[ii_step, jj_step] = acc[dst_mask_step]
     csm_release_new[ii_step, jj_step] = rel[dst_mask_step]
 
-    # See value_in_force(): Sec. 44 loss component is zeroed in settlement
+    # See _measure_inforce_fast(): Sec. 44 loss component is zeroed in settlement
     # mode v1. Unlocking and experience adjustments belong to
     # roll_forward() / Phase B v2; max(0, fcf - csm) here would mis-signal
     # a Sec. 44 hit when the only thing missing is the unlocking step.
     loss_new = np.zeros(n_mp, dtype=np.float64)
 
     # Headline bel/ra/csm are the as-of valuation-date values (month
-    # elapsed_months per MP), matching value_in_force -- NOT column 0
+    # elapsed_months per MP), matching _measure_inforce_fast -- NOT column 0
     # (inception), which would ignore prior_csm entirely. The trajectory
     # fields keep the full inception-to-horizon paths.
     return GMMMeasurement(
@@ -612,14 +612,14 @@ def measure_inforce(
     movement.
     """
     if full:
-        result = measure_in_force(
+        result = _measure_inforce_full(
             model_points, basis,
             prior_csm=state.prior_csm,
             lock_in_rate=state.lock_in_rate,
             period_months=period_months,
         )
     else:
-        result = value_in_force(
+        result = _measure_inforce_fast(
             model_points, basis,
             prior_csm=state.prior_csm,
             lock_in_rate=state.lock_in_rate,

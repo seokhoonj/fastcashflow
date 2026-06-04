@@ -14,7 +14,7 @@ import polars as pl
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.engine import measure_in_force, value_in_force
+from fastcashflow.engine import _measure_inforce_full, _measure_inforce_fast
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.basis import annual_to_monthly
 from fastcashflow.io import (
@@ -525,7 +525,7 @@ def test_discount_curve_rejects_rate_at_negative_one():
         discount_monthly_curve(basis, n_time=12)
 
 
-def test_value_in_force_rejects_elapsed_past_term():
+def test_inforce_fast_rejects_elapsed_past_term():
     """elapsed_months > term_months silently read past the trajectory -- reject."""
     mp = ModelPoints(
         issue_age=np.array([40.0]),
@@ -540,10 +540,10 @@ def test_value_in_force_rejects_elapsed_past_term():
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     with pytest.raises(ValueError, match="run past its original maturity"):
-        value_in_force(mp, basis)
+        _measure_inforce_fast(mp, basis)
 
 
-def test_measure_in_force_rejects_elapsed_past_term():
+def test_inforce_full_rejects_elapsed_past_term():
     """Same elapsed > term guard on the trajectory-returning entry."""
     mp = ModelPoints(
         issue_age=np.array([40.0]),
@@ -558,7 +558,7 @@ def test_measure_in_force_rejects_elapsed_past_term():
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     with pytest.raises(ValueError, match="run past its original maturity"):
-        measure_in_force(
+        _measure_inforce_full(
             mp, basis, prior_csm=np.array([0.0]),
             lock_in_rate=0.03, period_months=12,
         )

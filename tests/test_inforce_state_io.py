@@ -4,7 +4,7 @@ Pins the period-close input layer: the per-MP closing state from the prior
 reporting period flows in via :func:`read_inforce_state` and is folded into
 a fresh :class:`ModelPoints` by :func:`apply_inforce_state`. End-to-end:
 the resulting model points + ``prior_csm`` + ``lock_in_rate`` feed
-:func:`measure_in_force` to produce a settlement-mode measurement.
+:func:`_measure_inforce_full` to produce a settlement-mode measurement.
 """
 import csv
 from pathlib import Path
@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.engine import measure_in_force, value_in_force
+from fastcashflow.engine import _measure_inforce_full, _measure_inforce_fast
 
 
 def _write_state(path: Path, rows: list[tuple]) -> None:
@@ -93,7 +93,7 @@ def test_apply_inforce_state_length_mismatch_errors():
 
 
 def test_sample_inforce_end_to_end():
-    """Sample policies + sample inforce state + measure_in_force runs end
+    """Sample policies + sample inforce state + _measure_inforce_full runs end
     to end; the settlement-mode CSM differs from the hypothetical one (or
     we have not actually exercised the carry-forward path)."""
     mp = fcf.samples.model_points()
@@ -103,8 +103,8 @@ def test_sample_inforce_end_to_end():
     basis = fcf.samples.basis()
     basis = basis[("TERM_LIFE_A", "FC")]
 
-    mif_hyp = measure_in_force(mp_settled, basis)
-    mif_set = measure_in_force(
+    mif_hyp = _measure_inforce_full(mp_settled, basis)
+    mif_set = _measure_inforce_full(
         mp_settled, basis,
         prior_csm=state.prior_csm,
         lock_in_rate=state.lock_in_rate,
