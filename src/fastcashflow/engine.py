@@ -711,7 +711,8 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
                                  premium_state, benefit_state,
                                  use_morbidity=True, use_annuity=True,
                                  use_disability=True, use_lae=True,
-                                 use_surrender=True) -> str:
+                                 use_surrender=True,
+                                 surrender_is_amount=False) -> str:
     """Generate the Python source of a fully-specialised fast kernel.
 
     All structural parameters (n_states, edge topology, lump-sum flags,
@@ -868,7 +869,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
     line(12, "pv_premium += level * ds")
-    if use_surrender:
+    if use_surrender and not surrender_is_amount:
         line(12, "cum_premium += level")
     line(12, "pv_mortality += ift * claim_rate * dm")
     if use_morbidity:
@@ -882,11 +883,19 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     if use_disability:
         line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
     if use_surrender:
-        # cum_premium aggregates inforce * premium; multiplying by lapse_rate
-        # alone gives the per-month surrender outflow (the count is already in
-        # cum_premium, so multiplying by ift here would scale by cnt^2).
-        line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
-        line(12, "                 * cum_premium * surrender_curve[t] * dm)")
+        if surrender_is_amount:
+            # amount_per_policy: surrender_curve[t] is the per-policy
+            # contractual amount at duration t; ift * lapse_rate is the
+            # number lapsing. Linear in the in-force.
+            line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
+            line(12, "                 * ift * surrender_curve[t] * dm)")
+        else:
+            # cum_premium_factor: cum_premium aggregates inforce * premium;
+            # multiplying by lapse_rate alone gives the per-month surrender
+            # outflow (the count is already in cum_premium, so multiplying by
+            # ift would scale by cnt^2).
+            line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
+            line(12, "                 * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_fixed[t]")
@@ -999,7 +1008,7 @@ def _get_fast_kernel_codegen(n_states, edge_from, edge_to, edge_lump_sum,
                               premium_state, benefit_state,
                               use_morbidity=True, use_annuity=True,
                               use_disability=True, use_lae=True,
-                              use_surrender=True):
+                              use_surrender=True, surrender_is_amount=False):
     """Return a codegen-specialised kernel for the given state machine.
 
     Two-level cache:
@@ -1023,7 +1032,7 @@ def _get_fast_kernel_codegen(n_states, edge_from, edge_to, edge_lump_sum,
         tuple(bool(x) for x in premium_state),
         tuple(bool(x) for x in benefit_state),
         bool(use_morbidity), bool(use_annuity), bool(use_disability),
-        bool(use_lae), bool(use_surrender),
+        bool(use_lae), bool(use_surrender), bool(surrender_is_amount),
     )
     cached = _FAST_KERNEL_CODEGEN_CACHE.get(key)
     if cached is not None:
@@ -1034,7 +1043,7 @@ def _get_fast_kernel_codegen(n_states, edge_from, edge_to, edge_lump_sum,
         premium_state, benefit_state,
         use_morbidity=use_morbidity, use_annuity=use_annuity,
         use_disability=use_disability, use_lae=use_lae,
-        use_surrender=use_surrender,
+        use_surrender=use_surrender, surrender_is_amount=surrender_is_amount,
     )
     digest = hashlib.sha256(src.encode("utf-8")).hexdigest()[:16]
     cache_path = _codegen_cache_dir() / f"fast_kernel_{digest}.py"
@@ -1127,6 +1136,7 @@ def _codegen_fast_kernel_source_semi_markov(
     n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
     premium_state, benefit_state,
     use_annuity=True, use_lae=True, use_surrender=True,
+    surrender_is_amount=False,
 ) -> str:
     """Generate the Python source of a semi-Markov-aware fast kernel.
 
@@ -1325,7 +1335,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
     line(12, "pv_premium += level * ds")
-    if use_surrender:
+    if use_surrender and not surrender_is_amount:
         line(12, "cum_premium += level")
     line(12, "pv_mortality += ift * claim_rate * dm")
     line(12, "pv_morbidity += ift * morb_rate * dm")
@@ -1337,11 +1347,19 @@ def _codegen_fast_kernel_source_semi_markov(
         line(16, "ann_due -= 1")
     line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
     if use_surrender:
-        # cum_premium aggregates inforce * premium; multiplying by lapse_rate
-        # alone gives the per-month surrender outflow (the count is already in
-        # cum_premium, so multiplying by ift here would scale by cnt^2).
-        line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
-        line(12, "                 * cum_premium * surrender_curve[t] * dm)")
+        if surrender_is_amount:
+            # amount_per_policy: surrender_curve[t] is the per-policy
+            # contractual amount at duration t; ift * lapse_rate is the
+            # number lapsing. Linear in the in-force.
+            line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
+            line(12, "                 * ift * surrender_curve[t] * dm)")
+        else:
+            # cum_premium_factor: cum_premium aggregates inforce * premium;
+            # multiplying by lapse_rate alone gives the per-month surrender
+            # outflow (the count is already in cum_premium, so multiplying by
+            # ift would scale by cnt^2).
+            line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
+            line(12, "                 * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = ift * gamma_fixed[t]")
@@ -1434,6 +1452,7 @@ def _get_fast_kernel_codegen_semi_markov(
     n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
     premium_state, benefit_state,
     use_annuity=True, use_lae=True, use_surrender=True,
+    surrender_is_amount=False,
 ):
     """Return a semi-Markov codegen-specialised kernel for the given
     topology + per-state cohort counts.
@@ -1452,6 +1471,7 @@ def _get_fast_kernel_codegen_semi_markov(
         tuple(bool(x) for x in premium_state),
         tuple(bool(x) for x in benefit_state),
         bool(use_annuity), bool(use_lae), bool(use_surrender),
+        bool(surrender_is_amount),
     )
     cached = _FAST_KERNEL_CODEGEN_SEMI_MARKOV_CACHE.get(key)
     if cached is not None:
@@ -1461,6 +1481,7 @@ def _get_fast_kernel_codegen_semi_markov(
         n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
         premium_state, benefit_state,
         use_annuity=use_annuity, use_lae=use_lae, use_surrender=use_surrender,
+        surrender_is_amount=surrender_is_amount,
     )
     digest = hashlib.sha256(src.encode("utf-8")).hexdigest()[:16]
     cache_path = _codegen_cache_dir() / f"fast_kernel_sm_{digest}.py"
@@ -1490,7 +1511,8 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
                          survival_monthly, lapse_monthly, surrender_curve,
-                         use_morbidity, use_annuity, use_lae, use_surrender):
+                         use_morbidity, use_annuity, use_lae, use_surrender,
+                         surrender_is_amount):
     """Scalar-inforce fast path of the general codegen fast kernel
     (:func:`_codegen_fast_kernel_source`).
 
@@ -1596,12 +1618,20 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
             else:
                 pv_expense += (alpha + beta + gamma) * dm
             if use_surrender:
-                # cum_premium aggregates inforce * premium and is the surrender
-                # basis; multiplying by lapse_rate alone gives the per-month
-                # surrender outflow (the count is already in cum_premium).
-                cum_premium += level
-                pv_surrender += (lapse_monthly[sx, age_idx, year]
-                                 * cum_premium * surrender_curve[t] * dm)
+                if surrender_is_amount:
+                    # amount_per_policy: surrender_curve[t] is the per-policy
+                    # contractual amount at duration t; inforce * lapse_rate is
+                    # the number lapsing. Linear in the in-force.
+                    pv_surrender += (lapse_monthly[sx, age_idx, year]
+                                     * inforce * surrender_curve[t] * dm)
+                else:
+                    # cum_premium_factor: cum_premium aggregates inforce *
+                    # premium and is the surrender basis; multiplying by
+                    # lapse_rate alone gives the per-month surrender outflow
+                    # (the count is already in cum_premium).
+                    cum_premium += level
+                    pv_surrender += (lapse_monthly[sx, age_idx, year]
+                                     * cum_premium * surrender_curve[t] * dm)
             inforce *= survival_monthly[sx, age_idx, year]
         pm = inforce * maturity_benefit[mp] * discount_bom[term]
         # Non-diagnosis coverages with a waiting or reduced-benefit rule:
@@ -1952,17 +1982,25 @@ def _measure_fast(
     # ``surrender_curve[t]`` is read once per month, and is zero whenever no
     # surrender mechanic applies.
     surr_user = basis.surrender_value_curve
-    if surr_user is not None and basis.surrender_value_basis != "cum_premium_factor":
-        # The fast scalar / codegen / GPU kernels still compute the
-        # ``cum_premium * curve`` form inline; the amount-based modes are
-        # wired in the full path only for now. Raise rather than silently
-        # apply the wrong formula -- measure(full=True) / measure_inforce
-        # handle amount modes correctly. Fast-path parity is the next step.
+    surr_mode = basis.surrender_value_basis
+    if surr_user is not None and surr_mode == "amount_per_unit":
+        # amount_per_unit needs a per-MP base amount (sum insured / basic
+        # premium / ...) that is not wired into the fast kernels yet.
         raise NotImplementedError(
-            f"surrender_value_basis={basis.surrender_value_basis!r} is not yet "
-            "supported on the fast path (measure(full=False)); use "
-            "measure(full=True), or surrender_value_basis='cum_premium_factor'."
+            "surrender_value_basis='amount_per_unit' is not wired yet; "
+            "use 'amount_per_policy' or 'cum_premium_factor'."
         )
+    if surr_user is not None and surr_mode not in (
+            "cum_premium_factor", "amount_per_policy"):
+        raise ValueError(
+            f"unknown surrender_value_basis {surr_mode!r}; expected "
+            "'cum_premium_factor', 'amount_per_policy', or 'amount_per_unit'."
+        )
+    # amount_per_policy: the curve is the per-policy surrender amount applied
+    # to the in-force scalar; cum_premium_factor: a factor on cumulative
+    # premium. The kernels branch on this flag (the curve itself is always an
+    # (n_time,) array, padded / zero-filled below).
+    surrender_is_amount = surr_mode == "amount_per_policy"
     if surr_user is None:
         surrender_curve_kernel = np.zeros(n_time, dtype=np.float64)
     else:
@@ -2021,6 +2059,7 @@ def _measure_fast(
             use_annuity,
             use_lae,
             use_surrender,
+            surrender_is_amount,
         )
         return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
@@ -2082,6 +2121,7 @@ def _measure_fast(
                 edge_lump_sum, premium_state, benefit_state,
                 use_annuity=use_annuity, use_lae=use_lae,
                 use_surrender=use_surrender,
+                surrender_is_amount=surrender_is_amount,
             )
             bel, ra, csm, loss_component = kernel(
                 edge_prob, start_state, issue_index,
@@ -2130,6 +2170,7 @@ def _measure_fast(
                 use_morbidity=use_morbidity, use_annuity=use_annuity,
                 use_disability=use_disability, use_lae=use_lae,
                 use_surrender=use_surrender,
+                surrender_is_amount=surrender_is_amount,
             )
             bel, ra, csm, loss_component = kernel(
                 *common_args, model_points.coverage_waiting,
@@ -2153,7 +2194,7 @@ def _measure_fast(
         bel, ra, csm, loss_component = fast_gpu(
             common_args[0], common_args[1], common_args[2], common_args[3],
             n_states, *common_args[4:],
-            lapse_grid, surrender_curve_kernel,
+            lapse_grid, surrender_curve_kernel, surrender_is_amount,
         )
     else:
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")

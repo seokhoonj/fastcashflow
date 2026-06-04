@@ -31,6 +31,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        discount_bom, discount_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
                        disability_factor, lapse_monthly, surrender_curve,
+                       surrender_is_amount,
                        bel, ra, csm, loss_component):
     """One CUDA thread per model point; the per-month loop runs in the thread.
 
@@ -116,10 +117,16 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         gamma = ift * gamma_fixed[t]
         lae = lae_pro_rata[t] * ift * (claim_rate + morb_rate)
         pv_expense += (alpha + beta + gamma + lae) * dm
-        # cum_premium already aggregates inforce * premium; multiply by
-        # lapse_rate alone (no ift) -- otherwise cnt^2 over-attribution.
-        pv_surrender += (lapse_monthly[sx, age_idx, year]
-                         * cum_premium * surrender_curve[t] * dm)
+        if surrender_is_amount:
+            # amount_per_policy: surrender_curve[t] is the per-policy amount
+            # at duration t; ift * lapse_rate is the number lapsing.
+            pv_surrender += (lapse_monthly[sx, age_idx, year]
+                             * ift * surrender_curve[t] * dm)
+        else:
+            # cum_premium already aggregates inforce * premium; multiply by
+            # lapse_rate alone (no ift) -- otherwise cnt^2 over-attribution.
+            pv_surrender += (lapse_monthly[sx, age_idx, year]
+                             * cum_premium * surrender_curve[t] * dm)
         for s in range(n_states):
             occ_next[s] = 0.0
         for e in range(n_edges):
@@ -185,7 +192,8 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               gamma_fixed, lae_pro_rata,
               discount_bom, discount_mid,
               mortality_factor, morbidity_factor, longevity_factor,
-              disability_factor, lapse_monthly, surrender_curve):
+              disability_factor, lapse_monthly, surrender_curve,
+              surrender_is_amount=False):
     """Run the fused valuation kernel on the GPU.
 
     Returns the four ``(n_mp,)`` valuation arrays: BEL, RA, CSM and the
@@ -251,6 +259,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         d_gamma_fixed, d_lae_pro_rata, d_discount_start,
         d_discount_mid, mortality_factor, morbidity_factor, longevity_factor,
         disability_factor, d_lapse_monthly, d_surrender_curve,
+        surrender_is_amount,
         d_bel, d_ra, d_csm, d_loss,
     )
     cuda.synchronize()

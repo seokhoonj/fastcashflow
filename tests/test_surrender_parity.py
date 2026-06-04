@@ -117,3 +117,41 @@ def test_value_state_model_matches_measure_with_surrender():
     v = measure(mp, basis, full=False)
     m = measure(mp, basis)
     assert np.isclose(v.bel[0], m.bel_path[0, 0])
+
+
+# --- amount_per_policy parity (the surrender curve is the per-policy amount
+#     at each duration, applied to the in-force scalar rather than to
+#     cumulative premium) ---------------------------------------------------
+
+def _amount_curve(n_time):
+    """A monotone per-policy surrender amount: 0 in years 1-2, ramping to
+    1,000,000 by the end of the term."""
+    return np.clip((np.arange(n_time) - 24) / (n_time - 24.0), 0.0, 1.0) * 1e6
+
+
+def test_value_scalar_matches_measure_amount_per_policy():
+    """Scalar fast path -- amount_per_policy must match the full projection."""
+    n_time = 240
+    basis = _basis(surrender_value_curve=_amount_curve(n_time),
+                   surrender_value_basis="amount_per_policy")
+    mp = _mp()
+    v = measure(mp, basis, full=False)
+    m = measure(mp, basis)
+    assert np.isclose(v.bel[0], m.bel_path[0, 0])
+
+
+def test_value_state_model_matches_measure_amount_per_policy():
+    """Markov codegen path (WAIVER) -- amount_per_policy must match the full
+    projection. The codegen kernel branches on the baked surrender mode, so
+    this pins that the amount form is generated correctly."""
+    n_time = 240
+    basis = _basis(
+        surrender_value_curve=_amount_curve(n_time),
+        surrender_value_basis="amount_per_policy",
+        state_model=STATE_MODELS["WAIVER"],
+        waiver_incidence_annual=_flat_rate(0.001),
+    )
+    mp = _mp()
+    v = measure(mp, basis, full=False)
+    m = measure(mp, basis)
+    assert np.isclose(v.bel[0], m.bel_path[0, 0])

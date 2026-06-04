@@ -130,19 +130,29 @@ def test_inforce_amount_surrender_rescale_is_exact():
     assert np.isclose(bel_inforce, expected, rtol=1e-9)
 
 
-def test_amount_mode_fast_path_raises_until_parity():
-    """The amount modes are wired in the full path only for now; the
-    new-business fast path (measure(full=False)) raises rather than
-    silently applying the cum_premium formula. The in-force path always
-    runs the full projection, so it is unaffected."""
+def test_amount_per_unit_raises_until_wired():
+    """amount_per_unit needs a per-MP base amount that is not wired yet; it
+    raises on both paths rather than silently dropping the base."""
     amount = np.full(13, 5_000.0)
     mp = ModelPoints.single(
         issue_age=40, benefits={0: 100_000_000.0},
         premium=10_000.0, term_months=12,
         calculation_methods=PATTERNS,
     )
-    with pytest.raises(NotImplementedError, match="fast path"):
-        measure(mp, _amount_basis(0.1, amount), full=False)
+    basis = Basis(
+        mortality_annual=_flat_rate(0.0),
+        lapse_annual=_flat_rate(0.1),
+        discount_annual=0.0,
+        ra_confidence=0.75,
+        mortality_cv=0.0,
+        surrender_value_curve=amount,
+        surrender_value_basis="amount_per_unit",
+        coverages=(CoverageRate("DEATH", _flat_rate(0.0)),),
+    )
+    with pytest.raises(NotImplementedError, match="amount_per_unit"):
+        measure(mp, basis, full=False)
+    with pytest.raises(NotImplementedError, match="amount_per_unit"):
+        measure(mp, basis, full=True)
 
 
 def test_inforce_amount_emits_no_surrender_warning():
