@@ -114,7 +114,7 @@ mp = fcf.read_model_points(
 * - 암 / 뇌혈관 / 심혈관 진단비
   - DIAGNOSIS
   - 1 회 지급, depleting pool. 유사암 등 합성 위험률은 사용자 ETL 에서 미리 합성
-* - 암 진단 생활비 (N 개월 정액)
+* - 암진단 생활비 (N 개월 정액)
   - (현 v1 미지원)
   - 진단 후 머문 기간 동안 매월 지급 — Semi-Markov 영역. 별도 phase
 * - 연금 (즉시) / 종신연금
@@ -141,7 +141,7 @@ coverage_code,coverage_name,calculation_method
 DEATH,일반사망 (주계약),DEATH
 ADB,재해사망 특약,DEATH
 DISEASE_DEATH,질병사망 특약,DEATH
-CANCER,암 진단 특약,DIAGNOSIS
+CANCER,암진단 특약,DIAGNOSIS
 INPATIENT,입원 일당,MORBIDITY
 ANNUITY,종신 연금,ANNUITY
 MATURITY,만기환급,MATURITY

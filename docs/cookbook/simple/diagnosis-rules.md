@@ -63,7 +63,7 @@
 
 ## 한 계약 — 손계산과 엔진
 
-면책 / 감액의 효과를 또렷이 보려고 작은 toy 를 씁니다. 암 진단 담보 하나에
+면책 / 감액의 효과를 또렷이 보려고 작은 toy 를 씁니다. 암진단 담보 하나에
 면책 1개월 + 감액(0.5) 3개월까지를 겁니다.
 
 ```{admonition} 예제 설정
@@ -81,7 +81,7 @@ import polars as pl
 from pathlib import Path
 import fastcashflow as fcf
 
-# 암 진단율 함수 -- 월 10% 의 연 환산 (평탄)
+# 암진단율 함수 -- 월 10% 의 연 환산 (평탄)
 cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.10) ** 12)
 no_decr   = lambda s, a, d: np.full(a.shape, 0.0)
 
@@ -94,7 +94,7 @@ basis = fcf.Basis(
     mortality_cv     = 0.0,        # 사망률 변동계수 0
     morbidity_cv     = 0.0,        # 진단율 변동계수 0
     coverages        = (
-        fcf.CoverageRate("CANCER", cancer_fn),  # 암 진단 1종 (청구 rate = cancer_fn)
+        fcf.CoverageRate("CANCER", cancer_fn),  # 암진단 1종 (청구 rate = cancer_fn)
     ),
 )
 
@@ -180,7 +180,7 @@ basis = fcf.Basis(
     mortality_cv     = 0.0,
     morbidity_cv     = 0.0,
     coverages        = (
-        fcf.CoverageRate("CANCER",   cancer_fn),    # 암 진단
+        fcf.CoverageRate("CANCER",   cancer_fn),    # 암진단
         fcf.CoverageRate("CEREBRAL", cerebral_fn),  # 뇌혈관 진단
     ),
 )
@@ -211,7 +211,7 @@ morbidity_cf = [10000.    14000.    13075.    15863.75]
 ```
 
 `morbidity_cf` 는 두 담보의 **합** 입니다 — 암 (면책/감액) + 뇌혈관 (룰
-없음). 각 진단 담보는 자기만의 미진단 풀 을 가지므로 (암 진단을 받아도
+없음). 각 진단 담보는 자기만의 미진단 풀 을 가지므로 (암진단을 받아도
 뇌혈관 풀은 안 줄어듦), 룰도 풀도 담보마다 독립입니다.
 
 ## 함정

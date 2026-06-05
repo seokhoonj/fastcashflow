@@ -209,7 +209,7 @@ basis = fcf.Basis(
     discount_annual  = 0.0,                                           # 연 할인율 0 (검증 단순화)
     ra_confidence    = 0.75,                                          # 위험조정 신뢰수준 75%
     mortality_cv     = 0.0,                                           # 사망률 변동계수 0 (RA = 0 강제)
-    coverages        = (fcf.CoverageRate("CANCER", cancer_fn),),      # 암 진단 보장 1 종 (청구 rate = cancer_fn)
+    coverages        = (fcf.CoverageRate("CANCER", cancer_fn),),      # 암진단 보장 1 종 (청구 rate = cancer_fn)
 )
 mp = fcf.ModelPoints.single(
     issue_age     = 40,           # 가입연령 40세
