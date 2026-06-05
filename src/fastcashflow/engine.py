@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 from numba import njit, prange
 
-from fastcashflow._typing import FloatArray
+from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import (
     Basis, annual_to_monthly, _single_basis, SURRENDER_VALUE_BASES,
 )
@@ -111,7 +111,7 @@ class GMMMeasurement:
     # ``group`` / ``group_of_contracts``; None on a per-model-point measurement.
     group_labels: "np.ndarray | None" = None
     # The number of model points in each group, aligned with ``group_labels``.
-    group_sizes: "np.ndarray | None" = None
+    group_sizes: IntArray | None = None
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),

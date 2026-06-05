@@ -104,14 +104,15 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 # ---------------------------------------------------------------------------
 #
 # A single workbook (``basis.xlsx``) carries every assumption the engine
-# needs. Nine sheets:
+# needs. Ten sheets:
 #
 #   * ``segments``       -- (product, channel) -> which tables + scalar params
 #                           (a ``_DEFAULTS`` row that blank cells inherit).
 #   * ``coverages``      -- (product) -> coverage, type, optional rate_table.
 #   * ``mortality_tables``, ``incidence_rate_tables``, ``waiver_tables``,
-#     ``lapse_tables``, ``discount_tables``, ``inflation_tables`` -- the
-#     named rate tables the segments reference.
+#     ``lapse_tables``, ``discount_tables``, ``surrender_value_tables``,
+#     ``expense_tables``, ``inflation_tables`` -- the named rate tables the
+#     segments reference.
 #
 # See docs/basis-format.md for the column-level schema and
 # docs/naming-conventions.md for the value-case rules.

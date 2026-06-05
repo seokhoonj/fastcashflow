@@ -33,7 +33,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fastcashflow._typing import FloatArray
+from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import (
@@ -84,7 +84,7 @@ class VFAMeasurement:
     cashflows: "Cashflows | None" = None
     model_points: "ModelPoints | None" = None     # stamped by measure_vfa, for group axes
     group_labels: "np.ndarray | None" = None       # per-group label on a grouped result
-    group_sizes: "np.ndarray | None" = None         # model points per group, aligned with labels
+    group_sizes: IntArray | None = None         # model points per group, aligned with labels
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
