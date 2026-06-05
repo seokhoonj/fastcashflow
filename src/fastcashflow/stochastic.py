@@ -65,7 +65,7 @@ class StochasticResult:
 def _stochastic_inception_kernel(
     claim_cf, morbidity_cf, disability_cf, expense_cf,
     premium_cf, annuity_cf, maturity_cf, surrender_cf,
-    term_months, monthly_rate_all,
+    contract_boundary_months, monthly_rate_all,
     mort_factor, morb_factor, disab_factor, long_factor,
 ):
     """Per-scenario portfolio BEL / RA / CSM / loss from shared cash flows.
@@ -76,9 +76,13 @@ def _stochastic_inception_kernel(
     flows with that scenario's curve. The backward recursion reproduces
     :func:`fastcashflow.numerics._rollforward_kernel` at the inception column
     (``t = 0``): premiums and annuities fall at month start, claims / expenses
-    / surrender mid-month, the maturity benefit seeds ``t = term``. The RA is
-    the confidence-level margin; CSM and loss component are the per-MP
-    ``max(0, -FCF)`` / ``max(0, FCF)`` summed to the portfolio.
+    / surrender mid-month, the maturity benefit seeds ``t = boundary``. The
+    recursion stops at the IFRS 17 contract boundary -- ``project_cashflows``
+    truncates every cash-flow array to ``contract_boundary_months.max()``, so
+    each MP must loop only over its own ``[0, boundary)`` (looping to ``term``
+    reads past the array width). The RA is the confidence-level margin; CSM
+    and loss component are the per-MP ``max(0, -FCF)`` / ``max(0, FCF)`` summed
+    to the portfolio.
     """
     n_scen, n_time = monthly_rate_all.shape
     n_mp = claim_cf.shape[0]
@@ -93,13 +97,13 @@ def _stochastic_inception_kernel(
         csm_s = 0.0
         loss_s = 0.0
         for mp in range(n_mp):
-            term = term_months[mp]
-            bel_v = maturity_cf[mp]   # bel[term]
+            boundary = contract_boundary_months[mp]
+            bel_v = maturity_cf[mp]   # bel[boundary]
             pvc = 0.0                 # pv_claims (mortality risk)
             pvm = 0.0                 # pv_morbidity
             pvd = 0.0                 # pv_disability
-            pvs = maturity_cf[mp]     # pv_survival (longevity risk), seeded at term
-            for t in range(term - 1, -1, -1):
+            pvs = maturity_cf[mp]     # pv_survival (longevity risk), seeded at boundary
+            for t in range(boundary - 1, -1, -1):
                 mr = monthly_rate_all[s, t]
                 half = (1.0 + mr) ** (-0.5)
                 full = 1.0 / (1.0 + mr)
@@ -148,7 +152,9 @@ def measure_stochastic(
     the distribution -- mean, percentiles -- can be read from the result. The
     projection runs once and a single parallel kernel sweeps the scenario axis
     (see module docstring); the settlement-pattern and cost-of-capital paths
-    fall back to a per-scenario ``measure(..., full=False)`` loop.
+    fall back to a per-scenario ``measure`` loop (``full=False`` for the
+    confidence-level RA, ``full=True`` for cost-of-capital, which the fast
+    path does not compute). Cost-of-capital supports flat (1-D) scenarios only.
     """
     scenarios = np.asarray(scenarios, dtype=np.float64)
     if scenarios.ndim not in (1, 2):
@@ -185,20 +191,35 @@ def measure_stochastic(
         bel, ra, csm, loss_component = _stochastic_inception_kernel(
             proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
             proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
-            np.asarray(model_points.term_months, dtype=np.int64), monthly_rate_all,
+            np.asarray(model_points.contract_boundary_months, dtype=np.int64),
+            monthly_rate_all,
             z * basis.mortality_cv, z * basis.morbidity_cv,
             z * basis.disability_cv, z * basis.longevity_cv,
         )
         return StochasticResult(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
     # Fallback: settlement pattern or non-confidence-level RA. Value each
-    # scenario with the fused kernel one at a time.
+    # scenario one at a time. The confidence-level RA is available on the fast
+    # path (full=False); cost-of-capital RA is not, so those scenarios run on
+    # the trajectory path (full=True) and read the inception headline.
+    use_full = basis.ra_method != "confidence_level"
     if scenarios.ndim == 2:
-        n_time = int(model_points.term_months.max())
+        # The projection horizon is the contract boundary, not the term --
+        # the same width the discount curve / fast kernel use.
+        n_time = int(np.asarray(model_points.contract_boundary_months).max())
         if scenarios.shape[1] != n_time:
             raise ValueError(
                 f"a 2-D scenarios array must have {n_time} columns (the "
                 f"projection horizon), got {scenarios.shape[1]}"
+            )
+        if use_full:
+            # full=True reads the discount off basis.discount_annual, which is
+            # a per-year curve; a per-month scenario curve has no place to go.
+            raise NotImplementedError(
+                "measure_stochastic with ra_method='cost_of_capital' supports "
+                "flat (1-D) discount-rate scenarios only; a per-month discount "
+                "curve (2-D) is supported only under the confidence-level RA. "
+                "Use 1-D flat rates, or ra_method='confidence_level' for curves."
             )
     n = int(scenarios.shape[0])
     bel = np.empty(n)
@@ -207,7 +228,9 @@ def measure_stochastic(
     loss_component = np.empty(n)
     for s in range(n):
         if scenarios.ndim == 1:
-            v = measure(model_points, replace(basis, discount_annual=float(scenarios[s])), full=False)
+            v = measure(model_points,
+                        replace(basis, discount_annual=float(scenarios[s])),
+                        full=use_full)
         else:
             v = measure(model_points, basis, full=False, discount_curve=scenarios[s])
         bel[s] = v.bel.sum()

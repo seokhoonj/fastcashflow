@@ -129,3 +129,60 @@ def test_stochastic_settlement_pattern_fallback_matches_value():
         v = measure(mps, replace(basis, discount_annual=float(rate)), full=False)
         assert np.isclose(res.bel[s], v.bel.sum())
         assert np.isclose(res.csm[s], v.csm.sum())
+
+
+def _boundary_portfolio(n: int = 50) -> ModelPoints:
+    """A book whose contract boundary cuts well short of the term -- the case
+    that read past the cash-flow array width before the boundary fix."""
+    rng = np.random.default_rng(11)
+    term = rng.integers(120, 240, n)
+    return ModelPoints(
+        issue_age=rng.integers(30, 55, n),
+        benefits={0: rng.integers(20, 90, n) * 1_000_000},
+        premium=rng.integers(8, 20, n) * 10_000,
+        term_months=term,
+        contract_boundary_months=term // 3,        # cut at a third of the term
+        calculation_methods=PATTERNS,
+    )
+
+
+def test_stochastic_with_contract_boundary_matches_value_per_scenario():
+    """Regression (P0-1): the scenario kernel must loop to the contract
+    boundary, not the term. With boundary < term it previously read past the
+    truncated cash-flow arrays inside @njit and returned nan / garbage."""
+    mps, basis = _boundary_portfolio(), _assumptions()
+    rates = np.array([0.02, 0.03, 0.05])
+    res = fcf.gmm.stochastic(mps, basis, rates)
+    assert np.all(np.isfinite(res.bel))          # was nan / 1e271 before the fix
+    for s, rate in enumerate(rates):
+        v = measure(mps, replace(basis, discount_annual=float(rate)), full=False)
+        assert np.isclose(res.bel[s], v.bel.sum())
+        assert np.isclose(res.ra[s], v.ra.sum())
+        assert np.isclose(res.csm[s], v.csm.sum())
+
+
+def test_stochastic_cost_of_capital_matches_full_per_scenario():
+    """Regression (P1-3): cost-of-capital RA is not on the fast path, so the
+    fallback must value each flat scenario with measure(full=True) rather than
+    full=False (which rejects COC). Previously this raised ValueError."""
+    mps = _portfolio()
+    basis = replace(_assumptions(), ra_method="cost_of_capital",
+                    cost_of_capital_rate=0.06)
+    rates = np.array([0.02, 0.03, 0.05])
+    res = fcf.gmm.stochastic(mps, basis, rates)
+    for s, rate in enumerate(rates):
+        v = measure(mps, replace(basis, discount_annual=float(rate)), full=True)
+        assert np.isclose(res.bel[s], v.bel.sum())
+        assert np.isclose(res.ra[s], v.ra.sum())
+        assert np.isclose(res.csm[s], v.csm.sum())
+
+
+def test_stochastic_cost_of_capital_rejects_rate_curves():
+    """COC + a per-month discount curve (2-D) has no full-path home for the
+    curve -- raise a clear NotImplementedError, not a misleading ValueError."""
+    mps = _portfolio()
+    basis = replace(_assumptions(), ra_method="cost_of_capital",
+                    cost_of_capital_rate=0.06)
+    n_time = int(np.asarray(mps.contract_boundary_months).max())
+    with pytest.raises(NotImplementedError, match="cost_of_capital"):
+        fcf.gmm.stochastic(mps, basis, np.full((3, n_time), 0.03))
