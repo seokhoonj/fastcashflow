@@ -1930,6 +1930,18 @@ def _measure_fast(
             "model_points is empty (n_mp=0); measure(full=False) cannot project a "
             "zero-policy portfolio. Filter empty segments upstream."
         )
+    # Benefit escalation / step-up (체증형) is projected only on the full path
+    # in v1; the fused fast path does not yet apply the per-coverage benefit
+    # factor, so reject it here rather than silently dropping it (which would
+    # break full==fast). Use measure(full=True) for an escalating-benefit book.
+    if (model_points.coverage_step_month is not None
+            and (np.any(model_points.coverage_step_month)
+                 or np.any(model_points.coverage_escalation_annual))):
+        raise NotImplementedError(
+            "benefit escalation / step-up (coverage_escalation_annual / "
+            "coverage_step_month) is supported on measure(full=True) only; the "
+            "fused fast path does not yet apply it. Use measure(..., full=True)."
+        )
     # The projection horizon is the contract boundary (defaults to the term).
     n_time = int(model_points.contract_boundary_months.max())
     n_years = (n_time + 11) // 12

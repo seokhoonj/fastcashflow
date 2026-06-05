@@ -1250,7 +1250,11 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     # reduced-benefit period, each CSR-aligned with coverage_index.
     for col, field, default in (("waiting", "coverage_waiting", 0),
                                 ("reduction_end", "coverage_reduction_end", 0),
-                                ("reduction_factor", "coverage_reduction_factor", 1.0)):
+                                ("reduction_factor", "coverage_reduction_factor", 1.0),
+                                ("step_month", "coverage_step_month", 0),
+                                ("step_factor", "coverage_step_factor", 1.0),
+                                ("escalation_annual", "coverage_escalation_annual", 0.0),
+                                ("escalation_cap", "coverage_escalation_cap", 0.0)):
         if col in cov.columns:
             rule = cov[col].fill_null(default).to_numpy()
             fields[field] = rule[is_cov][order]

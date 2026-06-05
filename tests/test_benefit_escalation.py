@@ -72,3 +72,67 @@ def test_annuity_escalation_full_matches_fast():
     assert np.allclose(full.csm, fast.csm, rtol=1e-9)
     assert not np.isclose(full.bel[0],
                           fcf.gmm.measure(mp, _annuity_basis(), full=True).bel[0])
+
+
+# ---------------------------------------------------------------------------
+# BE2 -- per-coverage benefit step / escalation (체증형 보험금 / 간병비)
+# ---------------------------------------------------------------------------
+_ONE = lambda s, a, d: np.full(np.shape(a), 1.0)
+
+
+def _care_basis():
+    return Basis(mortality_annual=_NONE, lapse_annual=_NONE, discount_annual=0.0,
+                 ra_confidence=0.75, mortality_cv=0.10,
+                 coverages=(CoverageRate("CARE", _ONE),))
+
+
+def _care_mp(**kw):
+    base = dict(issue_age=np.array([50], dtype=np.int64), premium=np.array([0.0]),
+                term_months=np.array([360], dtype=np.int64),
+                coverage_index=np.array([0], np.int64),
+                coverage_amount=np.array([1.0]),
+                coverage_offset=np.array([0, 1], np.int64),
+                calculation_methods={"CARE": fcf.CalculationMethod.MORBIDITY})
+    base.update(kw)
+    return fcf.ModelPoints(**base)
+
+
+def test_benefit_annual_escalation_hand_calc():
+    """체증형 보험금: 10%/yr compounds the benefit -- claim ratios are 1.1, 1.21."""
+    mp = _care_mp(coverage_escalation_annual=np.array([0.10]))
+    cf = fcf.gmm.measure(mp, _care_basis(), full=True).cashflows.morbidity_cf[0]
+    assert cf[12] / cf[0] == pytest.approx(1.10, rel=1e-9)
+    assert cf[24] / cf[0] == pytest.approx(1.21, rel=1e-9)
+
+
+def test_benefit_escalation_cap():
+    """A cap holds the escalation at cap x base: 15%/yr capped at 3x reaches 3x
+    by year 8 (1.15**8 = 3.06 > 3) and stays there."""
+    mp = _care_mp(coverage_escalation_annual=np.array([0.15]),
+                  coverage_escalation_cap=np.array([3.0]))
+    cf = fcf.gmm.measure(mp, _care_basis(), full=True).cashflows.morbidity_cf[0]
+    assert cf[84] / cf[0] == pytest.approx(1.15 ** 7, rel=1e-9)     # year 7, uncapped
+    assert cf[96] / cf[0] == pytest.approx(3.0, rel=1e-9)           # year 8, capped
+    assert cf[240] / cf[0] == pytest.approx(3.0, rel=1e-9)          # year 20, still capped
+
+
+def test_benefit_single_step():
+    """체증형 간병비 '20년 후 2배': the benefit steps to 2x at month 240 and the
+    direction is correct (base early, step UP after -- not the reverse)."""
+    mp = _care_mp(coverage_step_month=np.array([240], np.int64),
+                  coverage_step_factor=np.array([2.0]))
+    cf = fcf.gmm.measure(mp, _care_basis(), full=True).cashflows.morbidity_cf[0]
+    assert cf[239] / cf[0] == pytest.approx(1.0, rel=1e-9)
+    assert cf[240] / cf[0] == pytest.approx(2.0, rel=1e-9)
+
+
+def test_escalation_default_is_inert_and_fast_rejects():
+    """No escalation is bit-identical to today (full==fast unchanged); an
+    escalating-benefit book is rejected on the fast path (full=True only in v1)."""
+    mp = _care_mp()
+    f = fcf.gmm.measure(mp, _care_basis(), full=True)
+    s = fcf.gmm.measure(mp, _care_basis(), full=False)
+    assert np.allclose(f.bel, s.bel) and np.allclose(f.csm, s.csm)
+    esc = _care_mp(coverage_escalation_annual=np.array([0.10]))
+    with pytest.raises(NotImplementedError, match="escalation"):
+        fcf.gmm.measure(esc, _care_basis(), full=False)

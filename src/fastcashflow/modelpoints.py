@@ -138,6 +138,10 @@ class ModelPoints:
     coverage_waiting: IntArray | None = None          # CSR: waiting period, months
     coverage_reduction_end: IntArray | None = None    # CSR: reduced-benefit end, months
     coverage_reduction_factor: FloatArray | None = None  # CSR: reduced-benefit factor
+    coverage_step_month: IntArray | None = None      # CSR: benefit step-up month (0 = none)
+    coverage_step_factor: FloatArray | None = None   # CSR: benefit factor from step_month on
+    coverage_escalation_annual: FloatArray | None = None  # CSR: annual benefit growth (0 = level)
+    coverage_escalation_cap: FloatArray | None = None     # CSR: max benefit multiple (0 = unbounded)
     count: FloatArray | None = None              # policies the row stands for
     sex: IntArray | None = None                  # 0 = male, 1 = female
     state: IntArray | None = None                # contract state (STATE_*)
@@ -407,9 +411,32 @@ class ModelPoints:
         coverage_reduction_factor = self.coverage_reduction_factor
         coverage_reduction_factor = (np.ones(n_cov) if coverage_reduction_factor is None
                                 else np.asarray(coverage_reduction_factor, np.float64))
+        # Benefit step-up (체증): the bidirectional partner of the reduction rule.
+        # coverage_step_month is the month the benefit steps to coverage_step_factor
+        # (an absolute level, 1.2 = benefit x1.2 from that month on); 0 = no step.
+        coverage_step_month = self.coverage_step_month
+        coverage_step_month = (np.zeros(n_cov, np.int64) if coverage_step_month is None
+                          else np.asarray(coverage_step_month, np.int64))
+        coverage_step_factor = self.coverage_step_factor
+        coverage_step_factor = (np.ones(n_cov) if coverage_step_factor is None
+                           else np.asarray(coverage_step_factor, np.float64))
+        # Annual benefit escalation (체증형 보험금 / 연금): the benefit grows
+        # (1 + escalation_annual) ** policy_year, capped at escalation_cap x base
+        # (0 = unbounded). 0 growth = level. Compounding %; a step is the
+        # separate coverage_step_*.
+        coverage_escalation_annual = self.coverage_escalation_annual
+        coverage_escalation_annual = (np.zeros(n_cov) if coverage_escalation_annual is None
+                                 else np.asarray(coverage_escalation_annual, np.float64))
+        coverage_escalation_cap = self.coverage_escalation_cap
+        coverage_escalation_cap = (np.zeros(n_cov) if coverage_escalation_cap is None
+                              else np.asarray(coverage_escalation_cap, np.float64))
         object.__setattr__(self, "coverage_waiting", coverage_waiting)
         object.__setattr__(self, "coverage_reduction_end", coverage_reduction_end)
         object.__setattr__(self, "coverage_reduction_factor", coverage_reduction_factor)
+        object.__setattr__(self, "coverage_step_month", coverage_step_month)
+        object.__setattr__(self, "coverage_step_factor", coverage_step_factor)
+        object.__setattr__(self, "coverage_escalation_annual", coverage_escalation_annual)
+        object.__setattr__(self, "coverage_escalation_cap", coverage_escalation_cap)
         # Segment metadata + mp_id -- normalise to object arrays so they slice
         # with the per-row fields. ``None`` stays None (a single-segment book).
         for name in ("product", "channel", "mp_id"):
@@ -635,6 +662,10 @@ class ModelPoints:
         kwargs["coverage_offset"] = np.concatenate(
             ([0], np.cumsum(ends - starts, dtype=np.int64))
         )
+        kwargs["coverage_step_month"] = self.coverage_step_month[cov_idx]
+        kwargs["coverage_step_factor"] = self.coverage_step_factor[cov_idx]
+        kwargs["coverage_escalation_annual"] = self.coverage_escalation_annual[cov_idx]
+        kwargs["coverage_escalation_cap"] = self.coverage_escalation_cap[cov_idx]
         kwargs["coverage_waiting"] = self.coverage_waiting[cov_idx]
         kwargs["coverage_reduction_end"] = self.coverage_reduction_end[cov_idx]
         kwargs["coverage_reduction_factor"] = self.coverage_reduction_factor[cov_idx]
