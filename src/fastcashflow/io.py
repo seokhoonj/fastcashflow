@@ -1900,6 +1900,7 @@ def measure_stream(
     chunk_size: int = 20_000_000,
     backend: str = "cpu",
     id_column: str | None = None,
+    validate_unique_mp_id: bool = True,
 ) -> int:
     """Stream a valuation through a parquet file one chunk at a time.
 
@@ -1926,6 +1927,12 @@ def measure_stream(
     ``id_column`` names the policies column written as the result ``id`` (so the
     output parquet joins back to a business key); it defaults to ``mp_id``. The
     coverages are always joined on ``mp_id`` regardless.
+
+    ``validate_unique_mp_id`` (default ``True``) scans the whole policies file
+    once up front and rejects a duplicate ``mp_id`` -- the same data error
+    :func:`read_model_points` raises, which a chunk-by-chunk read would
+    otherwise miss when the same id falls in different chunks. Set it ``False``
+    to skip the scan when the upstream extract already guarantees uniqueness.
 
     Returns the total number of model points processed.
     """
@@ -1964,6 +1971,24 @@ def measure_stream(
             f"measure_stream: id_column {id_col!r} is not a column of the "
             f"policies file {str(input_path)!r}"
         )
+
+    # mp_id is the contract identity and the coverages join key. A chunk-by-chunk
+    # read only sees one chunk's ids at a time, so a duplicate that straddles two
+    # chunks would pass silently (and write a duplicate result id). Scan the
+    # whole file once -- the same uniqueness read_model_points enforces in memory.
+    if validate_unique_mp_id:
+        dups = (
+            scan.select("mp_id").group_by("mp_id").len()
+            .filter(pl.col("len") > 1).head(5).collect()
+        )
+        if dups.height:
+            raise ValueError(
+                f"measure_stream: duplicate mp_id in {str(input_path)!r} (e.g. "
+                f"{dups['mp_id'].to_list()}); mp_id is the contract identity / "
+                "coverages join key and must be unique across the whole file. "
+                "Pass validate_unique_mp_id=False to skip this scan when the "
+                "upstream extract already guarantees uniqueness."
+            )
 
     if coverages is not None:
         # chunk the policies, pull each chunk's coverage rows.

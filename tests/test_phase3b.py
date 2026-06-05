@@ -266,6 +266,28 @@ def test_measure_stream_id_column(tmp_path):
                                calculation_methods=PATTERNS, id_column="nope")
 
 
+def test_measure_stream_rejects_global_duplicate_mp_id(tmp_path):
+    """A duplicate mp_id straddling two chunks (invisible to a per-chunk read)
+    is rejected up front -- the uniqueness read_model_points enforces in memory
+    -- unless validate_unique_mp_id=False opts out."""
+    pl.DataFrame({"mp_id": ["A", "B", "A"], "issue_age": [40, 50, 60],
+                  "term_months": [12, 12, 12], "premium": [0.0, 0.0, 0.0]}
+                 ).write_parquet(tmp_path / "p.parquet")
+    pl.DataFrame({"mp_id": ["A", "B", "A"], "coverage": ["DEATH"] * 3,
+                  "amount": [1e6] * 3}).write_parquet(tmp_path / "c.parquet")
+
+    with pytest.raises(ValueError, match="duplicate mp_id"):
+        fcf.gmm.measure_stream(tmp_path / "p.parquet", tmp_path / "o1",
+                               _assumptions(), coverages=tmp_path / "c.parquet",
+                               calculation_methods=PATTERNS, chunk_size=2)
+    # opt-out runs the duplicate through (the caller's explicit choice)
+    fcf.gmm.measure_stream(tmp_path / "p.parquet", tmp_path / "o2",
+                           _assumptions(), coverages=tmp_path / "c.parquet",
+                           calculation_methods=PATTERNS, chunk_size=2,
+                           validate_unique_mp_id=False)
+    assert sorted((tmp_path / "o2").glob("part-*.parquet"))
+
+
 def test_load_sample_data_runs():
     """The bundled sample data loads and values without error."""
     mps = fcf.samples.model_points()
