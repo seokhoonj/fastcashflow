@@ -9,7 +9,7 @@ from the multiple-decrement recursion.
 import numpy as np
 import pytest
 
-from fastcashflow import STATE_ACTIVE, STATE_PAIDUP, STATE_WAIVER, STATE_MODELS, Basis, ModelPoints, State, StateModel, Transition, CoverageRate
+from fastcashflow import STATE_ACTIVE, STATE_PAIDUP, STATE_WAIVER, STATE_MODELS, Basis, ModelPoints, State, StateModel, Transition, CoverageRate, CalculationMethod
 from fastcashflow.gmm import measure
 from fastcashflow.statemodel import compile_state_model
 
@@ -340,3 +340,39 @@ def test_measure_and_value_agree_under_custom_model():
     basis = _asmp(waiver_rate=0.03, state_model=three)
     assert np.allclose(measure(mps, basis).bel_path[:, 0], measure(mps, basis, full=False).bel)
 
+
+
+# ---------------------------------------------------------------------------
+# Death count respects the within-month competing-risk order (P2 fix). The
+# deaths reporter fires on the survivors of the transitions listed before
+# mortality -- exact, not occ x raw rate. VFA reads `deaths` into its benefit
+# split (deaths get the GMDB floor), so this is a latent BEL input there, not
+# only a display figure.
+# ---------------------------------------------------------------------------
+def test_deaths_respect_within_month_competing_risk_order():
+    from fastcashflow.projection import project_cashflows
+    from fastcashflow.basis import annual_to_monthly
+    death = lambda s, a, d: np.full(np.shape(a), 0.01)
+    lapse = lambda s, a, d: np.full(np.shape(d), 0.05)
+
+    def _project(model):
+        basis = Basis(mortality_annual=death, lapse_annual=lapse,
+                      discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
+                      state_model=model, coverages=(CoverageRate("DEATH", death),))
+        mp = ModelPoints(issue_age=np.array([40], dtype=np.int64),
+                         benefits={0: np.array([0.0])}, premium=np.array([0.0]),
+                         term_months=np.array([3], dtype=np.int64),
+                         calculation_methods={"DEATH": CalculationMethod.DEATH})
+        return project_cashflows(mp, basis)
+
+    mq, lq = annual_to_monthly(0.01), annual_to_monthly(0.05)
+    # mortality first (every bundled model) -> occ x raw rate
+    first = StateModel(states=(State("active", premium=True, transitions=(
+        Transition("mortality"), Transition("lapse"))),), seating=(0,))
+    # mortality after lapse -> occ x (1 - lapse) x rate (fires on lapse survivors)
+    second = StateModel(states=(State("active", premium=True, transitions=(
+        Transition("lapse"), Transition("mortality"))),), seating=(0,))
+
+    assert np.isclose(_project(first).deaths[0, 0], mq)                  # unchanged
+    assert np.isclose(_project(second).deaths[0, 0], (1.0 - lq) * mq)   # exact, lower
+    assert _project(second).deaths[0, 0] < mq                            # was raw mq before

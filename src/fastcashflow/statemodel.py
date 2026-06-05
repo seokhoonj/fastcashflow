@@ -79,6 +79,13 @@ class CompiledStateModel:
     benefit_state: np.ndarray
     state_duration_max: IntArray | None = None
     benefit_max_months: IntArray | None = None
+    # Per-state exact in-force death-exit probability -- ``survive x mortality``,
+    # where ``survive`` is the product of ``(1 - rate)`` over the transitions
+    # listed before mortality in the state. The deaths reporter multiplies it by
+    # the occupancy, so the death count respects the within-month competing-risk
+    # order (it equals the raw rate exactly when mortality is the first
+    # transition, which every bundled model declares). ``(n_states, *grid)``.
+    state_death_exit: FloatArray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,10 +402,12 @@ def compile_state_model(
     edge_to: list[int] = []
     edge_prob: list[FloatArray] = []
     edge_lump: list[bool] = []
+    death_exit_rows: list[FloatArray] = []
     for i, state in enumerate(model.states):
         # ``survive`` accumulates prod_{j}(1 - rate_j) across the transitions
         # applied so far; a leaving transition fires on those survivors.
         survive = np.ones(grid)
+        death_exit = np.zeros(grid)   # exact death exit for the deaths reporter
         for tr in state.transitions:
             # A state's mortality decrement is routed to its own rate name
             # (State.mortality_rate, default "mortality") so a post-diagnosis
@@ -413,6 +422,10 @@ def compile_state_model(
                     f"state {state.name!r} references rate {rname!r}, "
                     f"which was not supplied to compile_state_model"
                 ) from None
+            if tr.rate == "mortality":
+                # The death exit fires on whoever survived the earlier
+                # transitions this month -- ``survive`` here is that product.
+                death_exit = survive * rate
             if tr.to is not None:
                 edge_from.append(i)
                 edge_to.append(index[tr.to])
@@ -423,6 +436,7 @@ def compile_state_model(
         edge_to.append(i)
         edge_prob.append(survive)
         edge_lump.append(False)
+        death_exit_rows.append(death_exit)
 
     return CompiledStateModel(
         edge_from=np.array(edge_from, dtype=np.int64),
@@ -433,6 +447,7 @@ def compile_state_model(
         premium_state=np.array([s.premium for s in model.states], dtype=np.bool_),
         benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),
         state_duration_max=None,
+        state_death_exit=np.ascontiguousarray(np.stack(death_exit_rows)),
     )
 
 
@@ -535,6 +550,7 @@ def compile_state_model_with_duration(
     edge_to: list[int] = []
     edge_prob_blocks: list[FloatArray] = []   # one (max_D, *grid) per edge
     edge_lump: list[bool] = []
+    death_exit_rows: list[FloatArray] = []    # per-state exact death exit (cohort 0)
 
     for i, state in enumerate(model.states):
         # Validate this state's transitions reference rates we have. A
@@ -569,6 +585,7 @@ def compile_state_model_with_duration(
         ]
         res_per_tau: list[np.ndarray] = []
 
+        death_exit = np.zeros(grid)   # exact death exit (cohort 0) for the reporter
         for tau in range(D):
             survive = np.ones(grid)
             transient_idx = 0
@@ -576,12 +593,20 @@ def compile_state_model_with_duration(
                 rname = (state.mortality_rate
                          if tr.rate == "mortality" else tr.rate)
                 r = rate_at(rname, state, tau)
+                if tr.rate == "mortality" and tau == 0:
+                    # The deaths reporter sums occupancy over cohorts and reads a
+                    # single per-state rate, so the death exit is taken at cohort
+                    # 0; exact whenever the pre-mortality transitions are
+                    # cohort-independent (every bundled model) or mortality is
+                    # the state's first transition.
+                    death_exit = survive * r
                 if tr.to is not None:
                     prob = survive * r
                     per_edge_per_tau[transient_idx].append(prob)
                     transient_idx += 1
                 survive = survive * (1.0 - r)
             res_per_tau.append(survive)
+        death_exit_rows.append(death_exit)
 
         # Stack tau slices per transient edge to (D, *grid), pad to
         # max_D (extra cohorts hold zeros; codegen won't touch them).
@@ -632,4 +657,5 @@ def compile_state_model_with_duration(
         state_duration_max=state_duration_max,
         benefit_max_months=np.array(
             [s.benefit_max_months for s in model.states], dtype=np.int64),
+        state_death_exit=np.ascontiguousarray(np.stack(death_exit_rows)),
     )
