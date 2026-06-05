@@ -27,7 +27,7 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.basis import Basis, annual_to_monthly
+from fastcashflow.basis import Basis, annual_to_monthly, _single_basis
 from fastcashflow.curves import (
     discount_factors,
     discount_factors_from_curve,
@@ -656,6 +656,7 @@ def measure_inforce(
     :func:`roll_forward` with prior and current measurements for the full
     movement.
     """
+    basis = _single_basis(basis, entry="measure_inforce")
     if (basis.surrender_value_curve is not None
             and basis.surrender_value_basis == "cum_premium_factor"
             and np.any(np.asarray(model_points.elapsed_months) > 0)):

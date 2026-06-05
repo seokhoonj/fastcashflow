@@ -143,6 +143,29 @@ def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
         return -np.expm1(np.log1p(-annual) / 12.0)
 
 
+def _single_basis(basis, *, entry: str) -> "Basis":
+    """Resolve a possibly-segmented basis to a single :class:`Basis`.
+
+    ``read_basis`` always returns a ``SegmentedBasis`` (a ``dict`` subclass),
+    so even a single-segment workbook arrives as a one-entry dict. The entry
+    points that do not route segments (``measure_vfa`` / ``measure_paa`` /
+    ``measure_reinsurance`` / ``measure_inforce``) accept that and unwrap it;
+    a genuinely multi-segment dict is rejected with an actionable message
+    rather than crashing with a deep ``AttributeError`` in the kernel. A plain
+    :class:`Basis` passes through unchanged.
+    """
+    if not isinstance(basis, dict):
+        return basis
+    if len(basis) == 1:
+        return next(iter(basis.values()))
+    raise ValueError(
+        f"{entry} takes a single Basis but got a {len(basis)}-segment dict "
+        f"(segments {list(basis)}); it does not route segments. Measure each "
+        f"segment on its own basis, e.g. {entry}(model_points.subset(rows), "
+        f"basis[segment], ...)."
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ExpenseItem:
     """One typed entry in the expense ledger.

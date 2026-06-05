@@ -28,7 +28,7 @@ from typing import Protocol
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.basis import Basis
+from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.curves import discount_factors, discount_monthly_curve
 from fastcashflow.numerics import _csm_kernel, _norm_ppf
 from fastcashflow.modelpoints import ModelPoints
@@ -120,6 +120,7 @@ def measure_reinsurance(
     by coverage units like a direct contract's CSM, but with no loss
     component (paragraph 65).
     """
+    basis = _single_basis(basis, entry="measure_reinsurance")
     proj = project_cashflows(model_points, basis)
     discount_bom, discount_mid = discount_factors(basis, proj.n_time)
 

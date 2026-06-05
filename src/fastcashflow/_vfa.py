@@ -34,7 +34,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.basis import Basis
+from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import (
     _csm_kernel,
@@ -142,6 +142,7 @@ def measure_vfa(
     enters the inception fulfilment cash flows too, so the CSM absorbs it,
     and ``time_value`` records that amount per model point.
     """
+    basis = _single_basis(basis, entry="measure_vfa")
     proj = project_cashflows(model_points, basis)
     inforce = proj.inforce
     n_mp, n_time = inforce.shape

@@ -36,7 +36,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.basis import Basis
+from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import _norm_ppf, _rollforward_kernel, _settlement_lic
@@ -126,6 +126,7 @@ def measure_paa(
     inception fulfilment cash flows are a net outflow carries that outflow
     as a loss component.
     """
+    basis = _single_basis(basis, entry="measure_paa")
     proj = project_cashflows(model_points, basis)
 
     premium_total = proj.premium_cf.sum(axis=1)          # (n_mp,)
