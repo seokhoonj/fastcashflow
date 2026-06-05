@@ -168,7 +168,7 @@ def measure_paa(
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
         proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
-        model_points.term_months,
+        model_points.contract_boundary_months,
         discount_monthly_curve(basis, proj.n_time),
     )
     z = _norm_ppf(basis.ra_confidence)

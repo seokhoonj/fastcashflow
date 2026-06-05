@@ -94,6 +94,12 @@ class ModelPoints:
     # surrender_base_amount. Explicit -- no default base is inferred, since
     # the right base differs by product. None unless that mode is used.
     surrender_base_amount: FloatArray | None = None
+    # IFRS 17 contract boundary (Sec. 34): the month past which cash flows
+    # leave the current contract (e.g. a step-rated renewable's next renewal,
+    # where the insurer can reprice). The projection stops here; the maturity
+    # benefit is paid only when the boundary equals the coverage term. None
+    # defaults to ``term_months`` -- no boundary cut, the historical behaviour.
+    contract_boundary_months: IntArray | None = None
     premium_term_months: IntArray | None = None  # months premium is collected
     premium_frequency_months: IntArray | None = None  # months between premiums
     annuity_frequency_months: IntArray | None = None  # months between payouts
@@ -311,6 +317,20 @@ class ModelPoints:
         premium_term = (self.term_months.copy() if premium_term is None
                         else np.asarray(premium_term, np.int64))
         object.__setattr__(self, "premium_term_months", premium_term)
+        # contract_boundary_months defaults to the full coverage term -- no
+        # Sec. 34 boundary cut (the historical behaviour). When supplied it
+        # must be in [1, term]: the projection runs to the boundary and the
+        # maturity benefit is withheld when the boundary is short of the term.
+        boundary = self.contract_boundary_months
+        boundary = (self.term_months.copy() if boundary is None
+                    else np.asarray(boundary, np.int64))
+        if np.any(boundary < 1):
+            raise ValueError("contract_boundary_months must be >= 1")
+        if np.any(boundary > self.term_months):
+            raise ValueError(
+                "contract_boundary_months must not exceed term_months "
+                "(the boundary cannot extend past the coverage term)")
+        object.__setattr__(self, "contract_boundary_months", boundary)
         # Payment frequencies -- months between successive level-premium
         # payments and annuity payouts; default 1 (monthly), must be >= 1.
         for name in ("premium_frequency_months", "annuity_frequency_months"):
@@ -535,6 +555,7 @@ class ModelPoints:
             "issue_age", "premium", "term_months",
             "maturity_benefit", "annuity_payment", "disability_income",
             "disability_benefit", "premium_term_months",
+            "contract_boundary_months",
             "premium_frequency_months", "annuity_frequency_months",
             "account_value", "minimum_crediting_rate", "minimum_death_benefit",
             "minimum_accumulation_benefit",

@@ -114,7 +114,7 @@ def _expense_kernel_args(
 @njit(parallel=True, cache=True)
 def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
-                    term_months, count, premium,
+                    term_months, contract_boundary_months, count, premium,
                     premium_term_months, premium_frequency_months, annuity_frequency_months,
                     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
                     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -160,6 +160,7 @@ def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_su
     n_edges = edge_from.shape[0]
     for mp in prange(n_mp):
         term = term_months[mp]
+        boundary = contract_boundary_months[mp]  # Sec. 34 horizon (<= term)
         premium_term = premium_term_months[mp]   # months the premium is paid
         prem_freq = premium_frequency_months[mp]        # months between premiums
         ann_freq = annuity_frequency_months[mp]         # months between annuity payouts
@@ -174,7 +175,7 @@ def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_su
         last_year = -1
         claim_rate = 0.0      # aggregate mortality claim per unit in-force
         morb_rate = 0.0       # aggregate morbidity claim per unit in-force
-        for t in range(term):
+        for t in range(boundary):
             year = t // 12
             ift = 0.0         # total in-force
             prem_occ = 0.0    # in-force on the premium-paying states
@@ -262,7 +263,7 @@ def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_su
             benefit = coverage_amount[k]
             red_factor = coverage_reduction_factor[k]
             mortality_risk = coverage_risk[cov_idx] == 0
-            for t in range(wait, term):
+            for t in range(wait, boundary):
                 mult = red_factor if t < red_end else 1.0
                 amt = (inforce[mp, t] * coverage_rates[cov_idx, mp, t // 12]
                        * benefit * mult)
@@ -285,7 +286,7 @@ def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_su
             undiagnosed = 1.0   # fraction of the in-force still undiagnosed
             d_year = -1
             d_rate = 0.0
-            for t in range(term):
+            for t in range(boundary):
                 year = t // 12
                 if year != d_year:
                     d_rate = coverage_rates[cov_idx, mp, year]
@@ -307,7 +308,7 @@ def _project_kernel_semi_markov(
     state_mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset, benefit_max_months,
     premium_state, benefit_state, start_state,
-    term_months, count, premium,
+    term_months, contract_boundary_months, count, premium,
     premium_term_months, premium_frequency_months, annuity_frequency_months,
     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -350,6 +351,7 @@ def _project_kernel_semi_markov(
 
     for mp in prange(n_mp):
         term = term_months[mp]
+        boundary = contract_boundary_months[mp]  # Sec. 34 horizon (<= term)
         premium_term = premium_term_months[mp]
         prem_freq = premium_frequency_months[mp]
         ann_freq = annuity_frequency_months[mp]
@@ -366,7 +368,7 @@ def _project_kernel_semi_markov(
         last_year = -1
         claim_rate = 0.0
         morb_rate = 0.0
-        for t in range(term):
+        for t in range(boundary):
             year = t // 12
             if year != last_year:
                 claim_rate = 0.0
@@ -486,7 +488,7 @@ def _project_kernel_semi_markov(
             benefit = coverage_amount[k]
             red_factor = coverage_reduction_factor[k]
             mortality_risk = coverage_risk[cov_idx] == 0
-            for t in range(wait, term):
+            for t in range(wait, boundary):
                 mult = red_factor if t < red_end else 1.0
                 amt = (inforce[mp, t] * coverage_rates[cov_idx, mp, t // 12]
                        * benefit * mult)
@@ -509,7 +511,7 @@ def _project_kernel_semi_markov(
             undiagnosed = 1.0   # fraction of the in-force still undiagnosed
             d_year = -1
             d_rate = 0.0
-            for t in range(term):
+            for t in range(boundary):
                 year = t // 12
                 if year != d_year:
                     d_rate = coverage_rates[cov_idx, mp, year]
@@ -560,7 +562,11 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             "model_points is empty (n_mp=0); measure() cannot project a "
             "zero-policy portfolio. Filter empty segments upstream."
         )
-    n_time = int(model_points.term_months.max())     # months 0 .. n_time-1
+    # The projection horizon is the contract boundary (Sec. 34), which
+    # defaults to ``term_months`` -- so a book with no boundary cut sizes the
+    # arrays exactly as before. A shorter boundary trims both the loop and the
+    # array width.
+    n_time = int(model_points.contract_boundary_months.max())  # months 0 .. n_time-1
     n_years = (n_time + 11) // 12
     durations = np.arange(n_years)
 
@@ -710,6 +716,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             n_states, state_duration_max, state_offset, benefit_max_months,
             premium_state, benefit_state, start_state,
             model_points.term_months,
+            model_points.contract_boundary_months,
             model_points.count,
             model_points.premium,
             model_points.premium_term_months,
@@ -780,6 +787,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             benefit_state,
             start_state,
             model_points.term_months,
+            model_points.contract_boundary_months,
             model_points.count,
             model_points.premium,
             model_points.premium_term_months,

@@ -179,7 +179,7 @@ def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
         claim_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
-        model_points.term_months, monthly_rate,
+        model_points.contract_boundary_months, monthly_rate,
     )
     z = _norm_ppf(basis.ra_confidence)
     cl_margin = z * (basis.mortality_cv * pv_claims
@@ -1759,6 +1759,16 @@ def _measure_fast(
             "which would land at class 0 in the fast path and produce a silently "
             "wrong BEL. Use full=True until the fast path grows per-class grid "
             "support."
+        )
+    # The contract-boundary cut (Sec. 34) is implemented on the full path; the
+    # fast codegen kernels still project to term_months, so a boundary short of
+    # the term would silently include past-boundary cash flows. Reject it here
+    # until the fast path carries the boundary too.
+    if np.any(model_points.contract_boundary_months < model_points.term_months):
+        raise NotImplementedError(
+            "measure(full=False) does not yet apply the contract boundary "
+            "(contract_boundary_months < term_months). Use full=True for a "
+            "boundary-cut measurement."
         )
     if model_points.term_months.shape[0] == 0:
         raise ValueError(

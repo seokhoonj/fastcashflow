@@ -182,7 +182,7 @@ def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
 @njit(parallel=True, cache=True)
 def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
                         premium_cf, annuity_cf, maturity_cf, surrender_cf,
-                        term_months, monthly_rate):
+                        contract_boundary_months, monthly_rate):
     """Backward pass -- the BEL and the four RA present-value trajectories.
 
     ``BEL[t]`` is the present value, at month boundary ``t``, of the cash
@@ -218,10 +218,14 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
     full = 1.0 / (1.0 + monthly_rate)
 
     for mp in prange(n_mp):
-        term = term_months[mp]
-        bel[mp, term] = maturity_cf[mp]
-        pv_survival[mp, term] = maturity_cf[mp]
-        for t in range(term - 1, -1, -1):
+        # The backward pass runs from the Sec. 34 contract boundary (= term
+        # when there is no boundary cut). maturity_cf is already 0 when the
+        # boundary is short of the term (the projection withheld it), so
+        # seeding at the boundary is correct either way.
+        boundary = contract_boundary_months[mp]
+        bel[mp, boundary] = maturity_cf[mp]
+        pv_survival[mp, boundary] = maturity_cf[mp]
+        for t in range(boundary - 1, -1, -1):
             claim = claim_cf[mp, t]
             morbidity = morbidity_cf[mp, t]
             disability = disability_cf[mp, t]
