@@ -160,3 +160,34 @@ def test_measure_inforce_warns_surrender_is_sample_grade():
     basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
     with pytest.warns(UserWarning, match="surrender"):
         fcf.gmm.measure_inforce(mp, basis, state, full=False)
+
+
+def test_read_inforce_state_rejects_duplicate_mp_id(tmp_path: Path):
+    """mp_id is the join key the state is matched on; a duplicate makes the
+    join ambiguous, so the reader (via InforceState) rejects it."""
+    p = tmp_path / "dup.csv"
+    _write_state(p, [
+        ("A", 36, 0.9, 100_000.0, 0.03),
+        ("A", 24, 0.95, 50_000.0, 0.03),     # duplicate mp_id
+    ])
+    with pytest.raises(ValueError, match="mp_id must be unique"):
+        fcf.read_inforce_state(p)
+
+
+def test_inforce_state_rejects_duplicate_mp_id():
+    """The InforceState dataclass guards its own identity key."""
+    with pytest.raises(ValueError, match="mp_id must be unique"):
+        fcf.InforceState(
+            mp_id=np.array(["A", "A"]),
+            elapsed_months=np.array([6, 6], dtype=np.int64),
+            count=np.array([1.0, 1.0]), prior_csm=np.array([0.0, 0.0]),
+            lock_in_rate=0.0)
+
+
+def test_model_points_rejects_duplicate_mp_id():
+    """ModelPoints.mp_id is the contract identity; duplicates are rejected so
+    the in-force / grouping joins key on a unique id."""
+    with pytest.raises(ValueError, match="mp_id must be unique"):
+        fcf.ModelPoints(
+            mp_id=np.array(["A", "A"]), issue_age=np.array([40, 50]),
+            premium=np.array([0.0, 0.0]), term_months=np.array([12, 12]))

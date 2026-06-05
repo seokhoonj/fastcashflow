@@ -398,6 +398,18 @@ class ModelPoints:
                         f"{name} must have shape ({n_mp},), got {value.shape}"
                     )
             object.__setattr__(self, name, value)
+        # mp_id is the contract identity the in-force / settlement joins key on
+        # (apply_inforce_state, group_of_contracts). A duplicate makes that
+        # join ambiguous, so reject it when mp_id is supplied. (The file reader
+        # already rejects duplicate policy ids; this covers a hand-built set.)
+        if self.mp_id is not None:
+            uniq, counts = np.unique(self.mp_id, return_counts=True)
+            if uniq.shape[0] != self.mp_id.shape[0]:
+                dup = uniq[counts > 1][:5]
+                raise ValueError(
+                    f"ModelPoints.mp_id must be unique (it is the contract "
+                    f"identity / join key); duplicates: {dup.tolist()}"
+                )
         # Source grouping attributes -- per-row, sliced with the segment keys,
         # untouched by the kernel. issue_date -> datetime64[D]; attributes
         # values -> object label arrays, each of length n_mp.
@@ -665,6 +677,18 @@ class InforceState:
             raise ValueError("InforceState.prior_csm must be finite")
         if not np.isfinite(self.lock_in_rate):
             raise ValueError("InforceState.lock_in_rate must be finite")
+        # mp_id is the identity key the period-close state is joined on
+        # (align_inforce_state / apply_inforce_state). A duplicate id makes
+        # that join ambiguous -- the dict lookup keeps one row and silently
+        # drops the other -- so reject it here, at the state's own boundary.
+        ids = np.asarray(self.mp_id)
+        if np.unique(ids).shape[0] != ids.shape[0]:
+            uniq, counts = np.unique(ids, return_counts=True)
+            dup = uniq[counts > 1][:5]
+            raise ValueError(
+                f"InforceState.mp_id must be unique (it is the join key); "
+                f"duplicates: {dup.tolist()}"
+            )
 
     def subset(self, indices) -> "InforceState":
         """Return a new ``InforceState`` carrying the rows at ``indices``.
