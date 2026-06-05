@@ -64,7 +64,7 @@ def _write_model_points(mps: ModelPoints, tmp_path, suffix: str = ".parquet", **
     })
     coverages = pl.DataFrame({
         "mp_id": np.arange(n),
-        "coverage_code": ["DEATH"] * n,
+        "coverage": ["DEATH"] * n,
         "amount": _death_benefits(mps),
     })
     pp = tmp_path / f"policies{suffix}"
@@ -140,8 +140,8 @@ def test_write_measurement_dispatches_per_model(tmp_path):
     import numpy as np
     mp = fcf.samples.model_points()
     b = fcf.samples.basis()[("HEALTH_A", "FC")]
-    idx = np.where((np.asarray(mp.product_code) == "HEALTH_A") &
-                   (np.asarray(mp.channel_code) == "FC"))[0]
+    idx = np.where((np.asarray(mp.product) == "HEALTH_A") &
+                   (np.asarray(mp.channel) == "FC"))[0]
     sub = mp.subset(idx)
 
     fcf.write_measurement(fcf.paa.measure(sub, b), tmp_path / "paa.parquet")
@@ -166,8 +166,8 @@ def test_measurement_equality_is_identity():
     import numpy as np
     mp = fcf.samples.model_points()
     b = fcf.samples.basis()[("HEALTH_A", "FC")]
-    idx = np.where((np.asarray(mp.product_code) == "HEALTH_A") &
-                   (np.asarray(mp.channel_code) == "FC"))[0]
+    idx = np.where((np.asarray(mp.product) == "HEALTH_A") &
+                   (np.asarray(mp.channel) == "FC"))[0]
     m = fcf.gmm.measure(mp.subset(idx), b)
     m2 = fcf.gmm.measure(mp.subset(idx), b)
     assert m == m and m != m2          # identity, not array compare (no ValueError)
@@ -185,7 +185,7 @@ def test_read_ignores_extra_columns_and_flags_missing(tmp_path):
     ).n_mp == mps.n_mp
 
     # a coverages frame missing a required column is an error
-    pl.DataFrame({"mp_id": [0], "coverage_code": ["DEATH"]}).write_parquet(
+    pl.DataFrame({"mp_id": [0], "coverage": ["DEATH"]}).write_parquet(
         tmp_path / "bad_cov.parquet")
     with pytest.raises(ValueError, match="missing required column"):
         read_model_points(pp, coverages=tmp_path / "bad_cov.parquet",
@@ -340,8 +340,8 @@ def test_measure_stream_routes_a_basis_dict(tmp_path):
     policies, coverages = mp_to_frames(mps, next(iter(basis_dict.values())))
     # the dict path routes on the segment keys, so they must ride on the policies frame
     policies = policies.with_columns(
-        pl.Series("product_code", mps.product_code),
-        pl.Series("channel_code", mps.channel_code),
+        pl.Series("product", mps.product),
+        pl.Series("channel", mps.channel),
     )
     policies.write_parquet(tmp_path / "pol.parquet")
     coverages.write_parquet(tmp_path / "cov.parquet")
@@ -361,7 +361,7 @@ def test_measure_stream_routes_a_basis_dict(tmp_path):
 
 
 def test_measure_stream_dict_needs_segment_keys(tmp_path):
-    """A basis dict with no product_code / channel_code on the policies is a clear error."""
+    """A basis dict with no product / channel on the policies is a clear error."""
 
     basis_dict = fcf.samples.basis()
     patterns   = fcf.samples.calculation_methods()
@@ -370,7 +370,7 @@ def test_measure_stream_dict_needs_segment_keys(tmp_path):
     policies.write_parquet(tmp_path / "pol.parquet")     # segment keys deliberately absent
     coverages.write_parquet(tmp_path / "cov.parquet")
 
-    with pytest.raises(ValueError, match="product_code"):
+    with pytest.raises(ValueError, match="product"):
         fcf.gmm.measure_stream(
             tmp_path / "pol.parquet", tmp_path / "results", basis_dict,
             coverages=tmp_path / "cov.parquet",

@@ -6,7 +6,7 @@ Model points and results go through polars; the actuarial basis -- read by
 Model points come in two shapes, both producing the same ``ModelPoints``:
 
 * **wide** -- one row per policy, every benefit a column:
-  ``<coverage_code>_benefit`` per rate-driven coverage, plus the survival
+  ``<coverage>_benefit`` per rate-driven coverage, plus the survival
   benefits ``maturity_benefit`` and ``annuity_payment``. The convenient
   form for a single, homogeneous product.
 * a policies frame (contract attributes) plus a coverages
@@ -106,9 +106,9 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 # A single workbook (``basis.xlsx``) carries every assumption the engine
 # needs. Nine sheets:
 #
-#   * ``segments``       -- (product_code, channel_code) -> which tables + scalar params
+#   * ``segments``       -- (product, channel) -> which tables + scalar params
 #                           (a ``_DEFAULTS`` row that blank cells inherit).
-#   * ``coverages``      -- (product) -> coverage_code, type, optional rate_table.
+#   * ``coverages``      -- (product) -> coverage, type, optional rate_table.
 #   * ``mortality_tables``, ``incidence_rate_tables``, ``waiver_tables``,
 #     ``lapse_tables``, ``discount_tables``, ``inflation_tables`` -- the
 #     named rate tables the segments reference.
@@ -118,7 +118,7 @@ def _write_frame(df: pl.DataFrame, path) -> None:
 #
 # v1 limitation (refined in a later round): the discount, inflation and
 # maintenance tables are read but used flat (their first entry). The reader
-# returns ``{(product_code, channel_code): Basis}`` -- splitting model points by
+# returns ``{(product, channel): Basis}`` -- splitting model points by
 # segment and valuing each is left to the caller.
 
 
@@ -369,7 +369,7 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseItem, ...]]:
 def _read_ae_factors(ws):
     """Read the optional ``ae_factors`` sheet.
 
-    Each row is one (product, channel, coverage_code) -> factor (a runtime
+    Each row is one (product, channel, coverage) -> factor (a runtime
     multiplier on the base rate). Optional axis columns
     ``{sex, age, issue_age, duration}`` let the factor vary along those
     dimensions (same schema-detection rules as the base rate tables); missing
@@ -377,10 +377,10 @@ def _read_ae_factors(ws):
     blank (a single-segment workbook).
 
     Returns ``(factors, seg_axes)`` where ``factors`` is
-    ``{(*seg_axis_values, coverage_code): callable(sex, issue_age, duration,
+    ``{(*seg_axis_values, coverage): callable(sex, issue_age, duration,
     issue_class, elapsed) -> factor}`` and ``seg_axes`` are the segment-axis
     columns the sheet declares -- any subset of the segments' axes, so an A/E
-    calibrated coarsely (just ``product_code``) broadcasts over the finer
+    calibrated coarsely (just ``product``) broadcasts over the finer
     routing axes. Missing / empty sheet -> ``({}, ())`` -> no A/E adjustment.
     """
     rows = list(_sheet_dicts(ws))
@@ -388,10 +388,10 @@ def _read_ae_factors(ws):
         return {}, ()
     header = list(rows[0].keys())
     _require_row_cols(
-        rows[0], ("product_code", "coverage_code", "factor"), sheet=ws.title,
+        rows[0], ("product", "coverage", "factor"), sheet=ws.title,
     )
     # Rate axes (the factor's shape, like a rate table); everything else that is
-    # not coverage_code / factor is a segment axis (which segment+coverage the
+    # not coverage / factor is a segment axis (which segment+coverage the
     # factor applies to).
     rate_axes = tuple(a for a in _RATE_AXES if a in header)
     if "age" in rate_axes and ("issue_age" in rate_axes or "duration" in rate_axes):
@@ -400,14 +400,14 @@ def _read_ae_factors(ws):
             "'issue_age' / 'duration' (select schema) -- pick one"
         )
     seg_axes = tuple(c for c in header
-                     if c not in _RATE_AXES and c not in ("coverage_code", "factor")
+                     if c not in _RATE_AXES and c not in ("coverage", "factor")
                      and not str(c).endswith("_name"))
 
     by_key: dict[tuple, list] = {}
     for r in rows:
         seg_key = tuple(str(r.get(a, "") or "").strip() for a in seg_axes)
-        coverage_code = str(r["coverage_code"]).strip()
-        key = seg_key + (coverage_code,)
+        coverage = str(r["coverage"]).strip()
+        key = seg_key + (coverage,)
         try:
             axes_key = tuple(int(r[a]) for a in rate_axes)
         except KeyError as exc:
@@ -529,7 +529,7 @@ def _axis_tables(ws, axis, *, value_col="rate"):
 
 
 # Recognised assumption-slot columns on the segments sheet. Every *other*
-# column is a routing axis -- product_code, channel_code by convention, but a
+# column is a routing axis -- product, channel by convention, but a
 # workbook may use any axes (just channel for a pricing run, or
 # product x channel x risk_class). Detection mirrors the policies-frame
 # attributes rule.
@@ -550,11 +550,11 @@ class SegmentedBasis(dict):
     Returned by :func:`read_basis`. A plain ``dict`` everywhere it is used;
     :func:`~fastcashflow.gmm.measure` reads ``segment_axes`` to route without the
     caller re-passing ``segment_by``. ``segment_axes`` are the segments-sheet
-    columns that are not assumption slots -- ``("product_code", "channel_code")``
+    columns that are not assumption slots -- ``("product", "channel")``
     by default, but any axes the workbook declares.
     """
 
-    def __init__(self, *args, segment_axes=("product_code", "channel_code"), **kw):
+    def __init__(self, *args, segment_axes=("product", "channel"), **kw):
         super().__init__(*args, **kw)
         self.segment_axes = tuple(segment_axes)
 
@@ -564,13 +564,13 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
 
     ``path`` is a single ``basis.xlsx`` workbook holding both the rate
     tables and the segment mapping (see the module header for the sheet
-    layout). The ``segments`` sheet maps each (product_code, channel_code) to which
+    layout). The ``segments`` sheet maps each (product, channel) to which
     tables it uses plus scalar parameters, with a ``_DEFAULTS`` row whose
     values blank cells inherit; the ``coverages`` sheet attaches
     rate-driven coverages to products.
 
     Returns a :class:`SegmentedBasis` (a ``dict`` subclass) keyed by the segment
-    axes -- ``(product_code, channel_code)`` by default, or whatever
+    axes -- ``(product, channel)`` by default, or whatever
     non-assumption columns the segments sheet declares (one axis, or three);
     ``.segment_axes`` records the axis names so :func:`~fastcashflow.gmm.measure`
     routes without a ``segment_by`` argument.
@@ -618,7 +618,7 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
     # and not a display label (``*_name``, report-only) -- order-independent, so
     # an axis column can sit anywhere among the assumption columns. The key tuple
     # reads them in column order; the default (no extra columns) is
-    # (product_code, channel_code).
+    # (product, channel).
     axis_cols = tuple(
         c for c in (seg_rows[0].keys() if seg_rows else ())
         if c not in _SEGMENT_ASSUMPTION_COLS and not str(c).endswith("_name")
@@ -637,27 +637,27 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
             )
     if seg_rows:
         header = set(seg_rows[0].keys())
-        for new, legacy in (("product_code", "product"),
-                            ("channel_code", "channel")):
+        for new, legacy in (("product", "product_code"),
+                            ("channel", "channel_code")):
             if new not in header and legacy in header:
                 raise ValueError(
                     f"segments sheet has column {legacy!r} but not {new!r} "
-                    f"-- did you mean {new!r}? (the column was renamed; "
-                    "see docs/naming-conventions.md)"
+                    f"-- did you mean {new!r}? (the routing axes are now the "
+                    "bare keys 'product' / 'channel', no '_code' suffix)"
                 )
     for r in seg_rows:
-        if str(r.get("product_code", "") or "").strip().lower() == "_defaults":
+        if str(r.get("product", "") or "").strip().lower() == "_defaults":
             defaults = r
         else:
             segments.append(r)
-    # Coverages registry -- global, one row per coverage_code. The same code
+    # Coverages registry -- global, one row per coverage. The same code
     # plugs into any segment's contracts (a HEALTH policy and a TERM_LIFE
     # policy that both attach `CANCER` share the same incidence rate). When
     # a company genuinely needs product-specific calibrations of the same
     # disease, give them different coverage_codes (e.g. CANCER_HEALTH vs
     # CANCER_WHOLELIFE) -- the engine then treats them as separate coverages.
     #
-    # Plan B (3-file split): this sheet carries only ``coverage_code`` +
+    # Plan B (3-file split): this sheet carries only ``coverage`` +
     # ``rate_table`` -- the rate-driven entries. The pattern taxonomy
     # (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) moves to a
     # separate ``calculation_methods.csv`` file consumed by
@@ -672,7 +672,7 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
     if "coverages" in wb.sheetnames:
         for r in _sheet_dicts(wb["coverages"]):
             rt = r.get("rate_table")
-            code = str(r["coverage_code"]).strip()
+            code = str(r["coverage"]).strip()
             if rt in (None, ""):
                 raise ValueError(
                     f"coverages row {code!r} has no rate_table; the "
@@ -684,8 +684,8 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
 
     result = {}
     for seg in segments:
-        product_code = str(seg.get("product_code", "") or "").strip()
-        channel_code = str(seg.get("channel_code", "") or "").strip()
+        product = str(seg.get("product", "") or "").strip()
+        channel = str(seg.get("channel", "") or "").strip()
         seg_key = tuple(str(seg.get(c, "") or "").strip() for c in axis_cols)
         where = f"segments row {seg_key}"
 
@@ -716,9 +716,9 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
         shift_morb = int(scalar("morbidity_age_shift") or 0)
         shift_wvr = int(scalar("waiver_age_shift") or 0)
 
-        def ae(coverage_code):
+        def ae(coverage):
             ae_key = tuple(str(seg.get(a, "") or "").strip()
-                           for a in ae_axes) + (coverage_code,)
+                           for a in ae_axes) + (coverage,)
             return ae_factors.get(ae_key)
 
         coverage_list = []
@@ -736,7 +736,7 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
                 shift = shift_mort
             else:
                 raise ValueError(
-                    f"coverage {code!r} of product {product_code!r}: "
+                    f"coverage {code!r} of product {product!r}: "
                     f"rate_table {rate_table!r} is not registered. "
                     f"incidence_rate_tables has "
                     f"{_truncate_list(sorted(incidence_rate_t))}; "
@@ -820,7 +820,7 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
                     f"(known: {sorted(STATE_MODELS)})"
                 ) from None
         result[seg_key] = Basis(**kwargs)
-    return SegmentedBasis(result, segment_axes=axis_cols or ("product_code", "channel_code"))
+    return SegmentedBasis(result, segment_axes=axis_cols or ("product", "channel"))
 
 
 # ---------------------------------------------------------------------------
@@ -893,16 +893,22 @@ def _warn_if_elapsed_months(columns) -> None:
 def _parse_calculation_methods(path: Path | str) -> dict[str, CalculationMethod]:
     """Read a ``calculation_methods.csv`` taxonomy file into a dict.
 
-    The file has two required columns -- ``coverage_code`` and
-    ``calculation_method`` -- plus an optional human-friendly
-    ``coverage_name`` (read but not retained, since the engine routes by
-    code). Returns ``{coverage_code: CalculationMethod}``. Raises
+    The file has two required columns -- ``coverage`` and
+    ``calculation_method``. Any other column (e.g. a human-friendly label)
+    is ignored, since the engine routes by the bare ``coverage`` key.
+    Returns ``{coverage: CalculationMethod}``. Raises
     :class:`ValueError` for an unknown pattern (V1) and a duplicate code
     (V2); the messages name the offending row so the operator can fix
     the file without scrolling through it.
     """
     df = _read_frame(path)
-    for need in ("coverage_code", "calculation_method"):
+    if "coverage" not in df.columns and "coverage_code" in df.columns:
+        raise ValueError(
+            "the calculation_methods file has column 'coverage_code' but not "
+            "'coverage' -- the coverage key is now the bare 'coverage' "
+            "(no '_code' suffix)"
+        )
+    for need in ("coverage", "calculation_method"):
         if need not in df.columns:
             raise ValueError(
                 f"the calculation_methods file is missing required column "
@@ -911,7 +917,7 @@ def _parse_calculation_methods(path: Path | str) -> dict[str, CalculationMethod]
     result: dict[str, CalculationMethod] = {}
     valid = ", ".join(p.value for p in CalculationMethod)
     for row in df.iter_rows(named=True):
-        code = str(row["coverage_code"]).strip()
+        code = str(row["coverage"]).strip()
         raw = str(row["calculation_method"]).strip()
         try:
             pattern = CalculationMethod(raw)
@@ -922,7 +928,7 @@ def _parse_calculation_methods(path: Path | str) -> dict[str, CalculationMethod]
             ) from exc
         if code in result:
             raise ValueError(
-                f"calculation_methods row {code!r}: duplicate coverage_code "
+                f"calculation_methods row {code!r}: duplicate coverage "
                 "(every code may appear exactly once in the taxonomy)"
             )
         result[code] = pattern
@@ -941,7 +947,7 @@ _POLICY_RESERVED_COLS = frozenset({
     "annuity_frequency_months", "disability_income", "disability_benefit",
     "account_value", "minimum_crediting_rate", "minimum_death_benefit",
     "minimum_accumulation_benefit", "surrender_base_amount",
-    "product_code", "channel_code",
+    "product", "channel",
 })
 
 
@@ -965,7 +971,7 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
             raise ValueError(
                 f"the policies frame is missing required column {need!r}"
             )
-    for need in ("mp_id", "coverage_code", "amount"):
+    for need in ("mp_id", "coverage", "amount"):
         if need not in cov.columns:
             raise ValueError(
                 f"the coverages frame is missing required column {need!r}"
@@ -1024,7 +1030,7 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     # Basis.coverages to it at measure time (coverage.align_coverages).
     # Only the rate-driven codes that actually appear in this portfolio are
     # kept, in catalogue order.
-    present_codes = set(cov["coverage_code"].to_list())
+    present_codes = set(cov["coverage"].to_list())
     rate_driven_codes = [c for c, m in ctypes.items()
                          if m in RATE_DRIVEN_METHODS and c in present_codes]
     code_to_cov_idx = {c: i for i, c in enumerate(rate_driven_codes)}
@@ -1032,12 +1038,12 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     # Resolve every coverage row to its policy index and coverage type.
     pol = pol.with_row_index("_mp")
     cmap = pl.DataFrame({
-        "coverage_code": list(ctypes.keys()),
+        "coverage": list(ctypes.keys()),
         "_type": [str(v) for v in ctypes.values()],
         "_cov_idx": [code_to_cov_idx.get(c, -1) for c in ctypes],
     })
     cov = (cov.join(pol.select("mp_id", "_mp"), on="mp_id", how="left")
-              .join(cmap, on="coverage_code", how="left"))
+              .join(cmap, on="coverage", how="left"))
     if cov["_mp"].null_count():
         bad = sorted({v for v in cov.filter(pl.col("_mp").is_null())
                                     ["mp_id"].to_list() if v is not None})
@@ -1048,9 +1054,9 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
         )
     if cov["_type"].null_count():
         bad = sorted({v for v in cov.filter(pl.col("_type").is_null())
-                                    ["coverage_code"].to_list() if v is not None})
+                                    ["coverage"].to_list() if v is not None})
         raise ValueError(
-            f"coverages frame references {len(bad)} coverage_code "
+            f"coverages frame references {len(bad)} coverage "
             f"value(s) not in the calculation_methods taxonomy: "
             f"{_truncate_list(bad)}"
         )
@@ -1070,7 +1076,7 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
                 "surrender_base_amount"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
-    for opt in ("product_code", "channel_code"):
+    for opt in ("product", "channel"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
     if "issue_date" in pol.columns:
@@ -1168,12 +1174,12 @@ def read_model_points(
       ``sex`` / ``count`` / ``state`` / ``issue_class`` / ``issue_date`` /
       ``premium`` / ``premium_term_months`` /
       ``premium_frequency_months`` / ``annuity_frequency_months`` /
-      ``product_code`` / ``channel_code``), one row per policy. Any *other*
+      ``product`` / ``channel``), one row per policy. Any *other*
       column is read as a grouping attribute (``portfolio_id``,
       ``profitability_group``, ``risk_class``, ``region``, ...) into
       :attr:`ModelPoints.attributes`, for :func:`~fastcashflow.group` /
       :func:`~fastcashflow.group_of_contracts`;
-    * a coverages frame (``mp_id``, ``coverage_code``, ``amount``, optional
+    * a coverages frame (``mp_id``, ``coverage``, ``amount``, optional
       ``premium`` / ``waiting`` / ``reduction_end`` / ``reduction_factor``),
       one row per policy x coverage -- so per-coverage rules (waiting and
       reduction periods) ride along, which a flat one-row-per-policy file
@@ -1214,7 +1220,7 @@ def read_model_points(
     if coverages is None:
         raise ValueError(
             f"{p!r} was read without a coverages frame. read_model_points "
-            "needs a coverages frame: pass coverages=<path> (an mp_id / coverage_code / "
+            "needs a coverages frame: pass coverages=<path> (an mp_id / coverage / "
             "amount frame), or a single .xlsx carrying 'policies' and "
             "'coverages' sheets. A flat one-row-per-policy (wide) file cannot "
             "carry per-coverage waiting / reduction rules and is not accepted."
@@ -1241,7 +1247,7 @@ def read_vfa_model_points(
     Protection riders attached to a variable product (death / cancer /
     hospitalisation 특약) are separate coverages, read and measured on their own
     -- a policies + coverages book through :func:`read_model_points` (GMM). So a
-    ``<coverage_code>_benefit`` column is rejected here: a coverage encoded as a
+    ``<coverage>_benefit`` column is rejected here: a coverage encoded as a
     column is the lossy wide form, and coverages belong in their own frame which
     can hold the per-coverage waiting / reduction rules a flat column cannot.
     """
@@ -1276,7 +1282,7 @@ def read_vfa_model_points(
                 "disability_benefit", "account_value", "minimum_crediting_rate",
                 "minimum_death_benefit", "minimum_accumulation_benefit",
                 "surrender_base_amount",
-                "product_code", "channel_code", "mp_id"):
+                "product", "channel", "mp_id"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()
     if "state" in df.columns:
@@ -1374,7 +1380,7 @@ def read_inforce_policies(
     if coverages is None:
         raise ValueError(
             "read_inforce_policies needs a coverages frame: pass coverages=<path> "
-            "(an mp_id / coverage_code / amount frame). A flat one-row-per-policy "
+            "(an mp_id / coverage / amount frame). A flat one-row-per-policy "
             "(wide) file cannot carry per-coverage waiting / reduction rules and "
             "is not accepted."
         )
@@ -1416,7 +1422,7 @@ def load_sample_calculation_methods() -> dict[str, CalculationMethod]:
 
     The companion to :func:`load_sample_basis` and
     :func:`load_sample_model_points` -- the company-level catalogue that
-    maps each ``coverage_code`` to its :class:`CalculationMethod`. The same
+    maps each ``coverage`` to its :class:`CalculationMethod`. The same
     file format every portfolio uses (see :func:`read_model_points`
     ``calculation_methods`` argument).
     """
@@ -1528,7 +1534,7 @@ def _save_sample_basis(path: Path | str) -> Path:
     Use this to bootstrap a workbook a reader can open in Excel, inspect,
     and then re-read with :func:`read_basis` -- the same call shape
     a real user types against their own file. The bundled sample carries
-    seven (product_code, channel_code) segments across three products
+    seven (product, channel) segments across three products
     (``TERM_LIFE_A``, ``HEALTH_A``, ``WHOLE_LIFE_A``).
 
     Supported extension: ``.xlsx`` (the workbook carries multiple sheets,
@@ -1577,7 +1583,7 @@ def _save_sample_policies(path: Path | str) -> Path:
 def _save_sample_coverages(path: Path | str) -> Path:
     """Drop the packaged sample coverages file on disk at ``path``.
 
-    Coverage entries -- one row per (model point, coverage_code)
+    Coverage entries -- one row per (model point, coverage)
     -- the companion to :func:`_save_sample_policies`. A
     portfolio has roughly ``n_mp x avg_coverages_per_mp`` rows here, so
     this is the file most likely to exceed the 1,048,576 row cap of
@@ -1592,7 +1598,7 @@ def _save_sample_coverages(path: Path | str) -> Path:
 def _save_sample_calculation_methods(path: Path | str) -> Path:
     """Drop the packaged sample benefit-pattern catalogue on disk at ``path``.
 
-    The company catalogue file -- one row per ``coverage_code`` mapping
+    The company catalogue file -- one row per ``coverage`` mapping
     it to its :class:`CalculationMethod`. Tens-to-hundreds of rows in
     practice; ``.xlsx`` row cap never binds.
 
@@ -1626,7 +1632,7 @@ def _save_sample_inforce_policies(path: Path | str) -> Path:
 
     The companion to :func:`read_inforce_policies`. Each row carries
     the permanent spec (issue_age, sex, term_months, premium_term_months,
-    product_code, channel_code) and the closing state from the prior
+    product, channel) and the closing state from the prior
     period (elapsed_months, count, prior_csm, lock_in_rate). Built on
     the fly by joining the packaged ``sample_policies.csv`` and
     ``sample_inforce_state.csv`` on ``mp_id``; ``count`` is the state
@@ -1790,9 +1796,9 @@ def measure_stream(
     and reduction rules.
 
     ``basis`` may be a single :class:`Basis` (uniform portfolio) or a
-    ``{(product_code, channel_code): Basis}`` dict, exactly as ``measure``.
+    ``{(product, channel): Basis}`` dict, exactly as ``measure``.
     With a dict each chunk routes its model points to their segment's basis,
-    so the policies parquet must carry ``product_code`` / ``channel_code``
+    so the policies parquet must carry ``product`` / ``channel``
     columns.
 
     Returns the total number of model points processed.
@@ -1843,7 +1849,7 @@ def measure_stream(
 
     raise ValueError(
         "measure_stream needs a coverages frame: pass coverages=<parquet path> "
-        "(an mp_id / coverage_code / amount frame). A flat one-row-per-policy "
+        "(an mp_id / coverage / amount frame). A flat one-row-per-policy "
         "(wide) file cannot carry per-coverage waiting / reduction rules and is "
         "not accepted."
     )

@@ -21,7 +21,7 @@ def _build(path: Path, *, improvement_curve=None):
     wb.remove(wb.active)
 
     seg = wb.create_sheet("segments")
-    cols = ["product_code", "channel_code", "mortality_table", "lapse_table",
+    cols = ["product", "channel", "mortality_table", "lapse_table",
             "discount_table", "inflation_table",
             "ra_confidence", "mortality_cv",
             "morbidity_cv"]
@@ -34,7 +34,7 @@ def _build(path: Path, *, improvement_curve=None):
     seg.append(row)
 
     rd = wb.create_sheet("coverages")
-    rd.append(["coverage_code", "rate_table"])
+    rd.append(["coverage", "rate_table"])
     # No rate-driven coverages registered -- this segment has no claim
     # benefits; mortality_table only drives the in-force decrement.
 

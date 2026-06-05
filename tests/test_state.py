@@ -255,7 +255,7 @@ def test_paidup_state_spelling_is_normalised(tmp_path):
         "3,40,24,12000,PAIDUP\n"
     )
     cov_path.write_text(
-        "mp_id,coverage_code,amount\n"
+        "mp_id,coverage,amount\n"
         "0,DEATH,1000000\n1,DEATH,1000000\n2,DEATH,1000000\n3,DEATH,1000000\n"
     )
     back = read_model_points(pol_path, coverages=cov_path, calculation_methods=PATTERNS)

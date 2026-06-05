@@ -16,38 +16,38 @@ def _flat(annual_q):
 
 
 # ---------------------------------------------------------------------------
-# segmented_measure: '|' in product_code / channel_code is the key separator
+# segmented_measure: '|' in product / channel is the key separator
 # ---------------------------------------------------------------------------
 
-def test_segmented_measure_rejects_pipe_in_product_code():
+def test_segmented_measure_rejects_pipe_in_product():
     mp = ModelPoints(
         issue_age=np.array([40.0]),
         premium=np.array([12_000.0]),
         term_months=np.array([60]),
-        product_code=np.array(["TERM|2020"]),         # the trap
-        channel_code=np.array(["FC"]),
+        product=np.array(["TERM|2020"]),         # the trap
+        channel=np.array(["FC"]),
         benefits={0: np.array([1e8])},
         calculation_methods=PATTERNS,
     )
     basis = {("TERM|2020", "FC"): make_death_assumptions(
         mortality_q=0.005, lapse_q=0.01)}
-    with pytest.raises(ValueError, match="product_code.*'\\|'"):
+    with pytest.raises(ValueError, match="product.*'\\|'"):
         measure(mp, basis, full=False)
 
 
-def test_segmented_measure_rejects_pipe_in_channel_code():
+def test_segmented_measure_rejects_pipe_in_channel():
     mp = ModelPoints(
         issue_age=np.array([40.0]),
         premium=np.array([12_000.0]),
         term_months=np.array([60]),
-        product_code=np.array(["TERM_LIFE_A"]),
-        channel_code=np.array(["FC|GA"]),            # the trap
+        product=np.array(["TERM_LIFE_A"]),
+        channel=np.array(["FC|GA"]),            # the trap
         benefits={0: np.array([1e8])},
         calculation_methods=PATTERNS,
     )
     basis = {("TERM_LIFE_A", "FC|GA"): make_death_assumptions(
         mortality_q=0.005, lapse_q=0.01)}
-    with pytest.raises(ValueError, match="channel_code.*'\\|'"):
+    with pytest.raises(ValueError, match="channel.*'\\|'"):
         measure(mp, basis, full=False)
 
 

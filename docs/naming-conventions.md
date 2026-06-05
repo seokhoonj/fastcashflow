@@ -19,8 +19,8 @@ orphan: true
 
 | 시트 | 역할 |
 |---|---|
-| `segments` | `(product_code, channel_code)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`ra_confidence`, `*_cv`, optional `*_age_shift`, `expense_table` 등). `_DEFAULTS` 행이 fallback |
-| `coverages` | rate-driven 담보 registry: `coverage_code → rate_table`. 모든 상품 공통 (product 별로 다른 calibration 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 code 분리). `coverage_name` / `calculation_method` 은 별도 `calculation_methods.csv` (담보별 산출방식) 에 |
+| `segments` | `(product, channel)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`ra_confidence`, `*_cv`, optional `*_age_shift`, `expense_table` 등). `_DEFAULTS` 행이 fallback |
+| `coverages` | rate-driven 담보 registry: `coverage → rate_table`. 모든 상품 공통 (product 별로 다른 calibration 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 코드 분리). `calculation_method` 은 별도 `calculation_methods.csv` (담보별 산출방식) 에 |
 | `mortality_tables` | 사망 발생률 가정 (`table_id` × `sex` × `age` → `rate`) |
 | `incidence_rate_tables` | 특약 발생률 가정 (구조 동일) |
 | `waiver_tables` | 납입면제 발생률 가정 (구조 동일) |
@@ -29,20 +29,20 @@ orphan: true
 | `discount_tables` | 할인율 곡선 (`table_id` × `year` → `rate`; locked-in, Sec. 36) |
 | `inflation_tables` | 사업비 인플레이션 곡선 (`table_id` × `year` → `rate`) |
 | `surrender_value_tables` (optional) | 해약환급금 비율 곡선 (`table_id` × `duration_month` → `factor`) |
-| `ae_factors` (optional) | A/E factor — `(product_code × channel_code × coverage_code)` + 옵션 axes → `factor`. base rate에 런타임 곱셈 |
+| `ae_factors` (optional) | A/E factor — `(product × channel × coverage)` + 옵션 axes → `factor`. base rate에 런타임 곱셈 |
 | `improvement_tables` (optional) | mortality improvement 곡선 (`table_id` × `year` → `factor`). `segments`의 `mortality_improvement_table` 컬럼이 참조 |
 
 별도 파일:
 
 | 파일 | 역할 |
 |---|---|
-| `calculation_methods.csv` | 담보별 산출방식 (`coverage_code → calculation_method` 분류). 5종 fixed pattern (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY). `basis.xlsx` 와 분리 — 신담보 추가 시에만 손댐 |
+| `calculation_methods.csv` | 담보별 산출방식 (`coverage → calculation_method` 분류). 5종 fixed pattern (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY). `basis.xlsx` 와 분리 — 신담보 추가 시에만 손댐 |
 | `inforce_state.csv` (optional) | 결산 시점 보유계약 상태 (`mp_id`, `elapsed_months`, `count`, `prior_csm`, `lock_in_rate`) |
 
 ## Column headers
 
-전부 **소문자 snake_case**. 예: `product_code`, `channel_code`,
-`coverage_code`, `rate_table`, `mortality_table`, `expense_table`,
+전부 **소문자 snake_case**. 예: `product`, `channel`,
+`coverage`, `rate_table`, `mortality_table`, `expense_table`,
 `ra_confidence`, `mortality_cv`, `table_id`, `sex`, `age`, `duration`,
 `year`, `rate`, `factor`, `expense_type`, `basis`, `value`.
 
@@ -63,32 +63,39 @@ orphan: true
 
 | 컬럼 | 규칙 | 예 | 이유 |
 |---|---|---|---|
-| `product_code` | SCREAMING_SNAKE_CASE | `TERM_LIFE_A`, `WHOLE_LIFE_A`, `HEALTH_A` | enum-like 외부 식별자 |
-| `channel_code` | ALL UPPERCASE 약어 | `GA`, `FC`, `TM` | 업계 관용 약어 (General Agency, Financial Consultant, Telemarketing) |
+| `product` | SCREAMING_SNAKE_CASE | `TERM_LIFE_A`, `WHOLE_LIFE_A`, `HEALTH_A` | enum-like 외부 식별자 |
+| `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `TM` | 업계 관용 약어 (General Agency, Financial Consultant, Telemarketing) |
 | `table_id` | SCREAMING_SNAKE_CASE 풀네임 | `MORTALITY_STD`, `LAPSE_GA`, `DISCOUNT_STD`, `INPATIENT_STD`, `ADB_STD` | named reference. 줄임말 안 씀 (`MORT_STD` 같은 abbreviation 지양). 단 industry-universal abbr 인 `ADB` 같은 매우 짧은 것은 예외 |
-| `coverage_code` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자. 사용자 카탈로그 — 엔진 reserved 코드 없음 |
+| `coverage` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자. 사용자 카탈로그 — 엔진 reserved 코드 없음 |
 | `calculation_method` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | **engine 의 cash flow 산출방식 routing key**. 5 개 고정. 자세한 각 산출방식별 계산은 `basis-format.md` 의 coverages 시트 섹션 참조 |
 | `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAIDUP` | enum-like, 정책 status |
 | `_DEFAULTS` (특수 product 값) | 대문자 + 밑줄 (예약 마커) | `_DEFAULTS` | segments 시트의 fallback 행 marker (값 아닌 keyword) |
 
+라우팅 / 그룹 축 (`product`, `channel`, `coverage`) 은 **접미사 없는 bare 키**
+입니다. 엔진은 이 값을 **불투명 키 (opaque key=내용을 해석하지 않는 식별자)**
+로만 다루므로, 코드를 넣든 이름을 넣든 임의 분석그룹을 넣든 사용자 자유입니다
+(그래서 `_code` 접미사를 붙이지 않습니다). 사람이 읽기 좋은 `product_name`
+같은 라벨 컬럼을 자기 워크북에 둘 수는 있으나 표시용일 뿐 — 엔진은 무시합니다
+(샘플 데이터에는 넣지 않습니다).
+
 ## 데이터 ID와 Python 코드 enum 의 일관성
 
-워크북 값 (예: `coverage_code = "DEATH"`, `calculation_method = "MORBIDITY"`) 이
+워크북 값 (예: `coverage = "DEATH"`, `calculation_method = "MORBIDITY"`) 이
 Python 상수 / enum (예: `CalculationMethod.MORBIDITY == "MORBIDITY"`)
 과 **bit-exact** 일치합니다. 모두 SCREAMING_SNAKE_CASE 풀네임.
-`coverage_code` 는 사용자 카탈로그 — 엔진이 reserved 코드를 가지고
+`coverage` 는 사용자 카탈로그 — 엔진이 reserved 코드를 가지고
 있지 않으므로 회사가 자유롭게 짓습니다 (`DEATH` 은 샘플 관용).
 
 `enum-like 식별자 family`:
 
-- `product_code`, `channel_code`, `table_id`, `coverage_code`, `calculation_method`,
+- `product`, `channel`, `table_id`, `coverage`, `calculation_method`,
   `state`, `state_model` — 모두 외부 식별자 / 코드 상수 family. SCREAMING_SNAKE_CASE.
 - 줄임말 안 씀 (`MORT` 가 아닌 `MORTALITY`, `HOSP` 가 아닌 `INPATIENT` 등).
   단 industry-universal 한 매우 짧은 abbr 인 `ADB` 정도 예외.
 
 `벤더 데이터 / 컬럼명` (소문자 snake_case):
 
-- 컬럼 헤더 (`product_code`, `coverage_code`, `rate_table`, `premium`,
+- 컬럼 헤더 (`product`, `coverage`, `rate_table`, `premium`,
   `count`, `mp_id` 등) — 표/스키마 식별자, 행 안의 값들과 시각적 구분 위해
   소문자.
 

@@ -92,7 +92,7 @@ import numpy as np
 fcf.samples.export("samples", template="gmm", quiet=True)
 
 # 산출기초 + 마감파일 읽기
-basis = fcf.read_basis("samples/basis.xlsx")                            # {(product_code, channel_code): Basis}
+basis = fcf.read_basis("samples/basis.xlsx")                            # {(product, channel): Basis}
 
 model_points, state = fcf.read_inforce_policies(
     "samples/inforce_policies.csv",                                     # 마감 1-파일 (spec + state)
@@ -102,8 +102,8 @@ model_points, state = fcf.read_inforce_policies(
 
 # 한 세그먼트만 골라 결산 측정
 segment_basis = basis[("HEALTH_A", "FC")]                       # (상품, 채널) 키로 선택
-idx = np.where((np.asarray(model_points.product_code) == "HEALTH_A") &
-               (np.asarray(model_points.channel_code) == "FC"))[0]
+idx = np.where((np.asarray(model_points.product) == "HEALTH_A") &
+               (np.asarray(model_points.channel) == "FC"))[0]
 val = fcf.gmm.measure_inforce(
     model_points.subset(idx),                                   # 이 세그먼트의 보유계약
     segment_basis,                                              # 이 세그먼트의 산출기초
@@ -121,7 +121,7 @@ fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 
 
 ## 산출기초가 세그먼트별로 다를 때
 
-`read_basis` 는 `{(product_code, channel_code): Basis}` 딕셔너리를 돌려줍니다 —
+`read_basis` 는 `{(product, channel): Basis}` 딕셔너리를 돌려줍니다 —
 한 워크북에 여러 세그먼트 (상품 x 채널) 의 가정을 함께 담기 때문입니다.
 `measure_inforce` 는 한 번에 **단일 `Basis`** 만 받으므로, 포트폴리오 전체를
 결산할 때는 세그먼트별로 돕니다. `ModelPoints.subset` 으로 계약을, 짝이 되는
@@ -132,7 +132,7 @@ import fastcashflow as fcf
 import numpy as np
 
 # 산출기초 (가정) + 보유계약 + 결산 상태
-basis     = fcf.samples.basis()          # {(product_code, channel_code): Basis}
+basis     = fcf.samples.basis()          # {(product, channel): Basis}
 portfolio = fcf.samples.model_points()   # 보유계약 영구 spec
 state     = fcf.samples.inforce_state()  # 결산 상태 (경과월수 / 잔존 / 직전 CSM / lock-in)
 
@@ -142,8 +142,8 @@ mp = fcf.apply_inforce_state(portfolio, state)
 # 세그먼트별 결산 측정 -- 합계
 bel = ra = csm = csm_prior = 0.0
 for key, segment_basis in basis.items():
-    idx = np.where((np.asarray(mp.product_code) == key[0]) &
-                   (np.asarray(mp.channel_code) == key[1]))[0]
+    idx = np.where((np.asarray(mp.product) == key[0]) &
+                   (np.asarray(mp.channel) == key[1]))[0]
     if len(idx) == 0:
         continue
     val = fcf.gmm.measure_inforce(

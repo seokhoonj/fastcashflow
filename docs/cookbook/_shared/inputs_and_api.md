@@ -18,7 +18,7 @@
 ```
 Basis (basis = fcf.read_basis(...))
 └── basis.xlsx                ── 산출기초 (multi-sheet workbook)
-    ├── segments              · (product_code, channel_code) → 어느 테이블 쓸지 (+ product_name / channel_name 보고서용 라벨)
+    ├── segments              · (product, channel) → 어느 테이블 쓸지 (+ product_name / channel_name 보고서용 라벨)
     ├── mortality_tables      · table_id × sex × age → 사망률
     ├── lapse_tables          · table_id × duration → 해지율
     ├── discount_tables       · table_id × year → 할인율
@@ -32,8 +32,8 @@ Basis (basis = fcf.read_basis(...))
 ModelPoints (mp = fcf.read_model_points(...))
 ├── policies.csv              ── 보유 계약 (한 줄 = 한 계약, 가입 시점 영구 spec)
 │   ├── mp_id                 · 계약 식별자 (다른 파일과 join 키)
-│   ├── product_code          · 어느 segment 가정을 쓸지 (basis 의 segments 와 맞물림)
-│   ├── channel_code          · 채널
+│   ├── product          · 어느 segment 가정을 쓸지 (basis 의 segments 와 맞물림)
+│   ├── channel          · 채널
 │   ├── issue_age             · 가입연령
 │   ├── sex                   · 0 = 남, 1 = 여
 │   ├── term_months           · 보험기간 (개월)
@@ -42,7 +42,7 @@ ModelPoints (mp = fcf.read_model_points(...))
 │
 ├── coverages.csv             ── 담보 가입금액 (한 줄 = 한 (계약, 담보))
 │   ├── mp_id                 · 담보가 붙는 계약의 식별자 (policies.csv 의 mp_id 와 join)
-│   ├── coverage_code         · 담보 코드 (calculation_methods 의 코드와 맞물림)
+│   ├── coverage         · 담보 코드 (calculation_methods 의 코드와 맞물림)
 │   ├── amount                · 가입금액 (보험금)
 │   ├── premium               · 월 보험료 (선택)
 │   ├── waiting               · 면책기간 개월수 (선택)
@@ -50,7 +50,7 @@ ModelPoints (mp = fcf.read_model_points(...))
 │   └── reduction_factor      · 감액기간 중 지급률 (선택, 0..1)
 │
 └── calculation_methods.csv      ── 담보별 산출방식 (담보 코드 → 산출방식)
-    ├── coverage_code         · 담보 코드 (DEATH, CANCER, INPATIENT ...)
+    ├── coverage         · 담보 코드 (DEATH, CANCER, INPATIENT ...)
     ├── coverage_name         · 사람 친화 라벨 (선택)
     └── calculation_method       · DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY
 ```

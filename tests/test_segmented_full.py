@@ -1,7 +1,7 @@
 """Full-trajectory measurement of a multi-segment (per-basis-dict) portfolio.
 
-``measure(model_points, basis_dict, full=True)`` runs each (product_code,
-channel_code) segment under its own basis and stitches the per-segment
+``measure(model_points, basis_dict, full=True)`` runs each (product,
+channel) segment under its own basis and stitches the per-segment
 trajectories into one ``(n_mp, n_time+1)`` result. The correctness anchor is
 equivalence: a model point's stitched trajectory must equal the trajectory it
 gets when its segment is measured alone, zero-padded to the portfolio horizon.
@@ -17,8 +17,8 @@ from conftest import PATTERNS, make_death_assumptions
 
 
 def _segments(mp, basis):
-    pc = np.array(mp.product_code)
-    ch = np.array(mp.channel_code)
+    pc = np.array(mp.product)
+    ch = np.array(mp.channel)
     for key in basis:
         idx = np.nonzero((pc == key[0]) & (ch == key[1]))[0]
         if idx.size:
@@ -130,7 +130,7 @@ def _two_seg_mp(terms):
         issue_age=np.array([40, 40]), benefits={0: np.array([1e8, 1e8])},
         premium=np.array([200_000.0, 200_000.0]),
         term_months=np.array(terms), calculation_methods=PATTERNS,
-        product_code=np.array(["A", "A"]), channel_code=np.array(["X", "Y"]),
+        product=np.array(["A", "A"]), channel=np.array(["X", "Y"]),
     )
 
 

@@ -109,7 +109,7 @@ pl.DataFrame({
 
 pl.DataFrame({
     "mp_id":            ["P001"],     # 어느 계약의 담보인지
-    "coverage_code":    ["CANCER"],   # 담보 코드
+    "coverage":    ["CANCER"],   # 담보 코드
     "amount":           [100_000],    # 진단금 100,000
     "waiting":          [1],          # 면책 1개월
     "reduction_end":    [3],          # 감액 3개월까지
@@ -187,7 +187,7 @@ basis = fcf.Basis(
 
 pl.DataFrame({
     "mp_id":            ["P001",    "P001"],
-    "coverage_code":    ["CANCER",  "CEREBRAL"],
+    "coverage":    ["CANCER",  "CEREBRAL"],
     "amount":           [100_000,   200_000],
     "waiting":          [1,         0],     # 암만 면책 1개월
     "reduction_end":    [3,         0],     # 암만 감액 3개월까지

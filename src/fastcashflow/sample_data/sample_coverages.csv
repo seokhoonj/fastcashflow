@@ -1,4 +1,4 @@
-mp_id,coverage_code,amount,premium
+mp_id,coverage,amount,premium
 P001,DEATH,80000000,28216
 P001,MATURITY,10000000,11286
 P002,DEATH,50000000,30648

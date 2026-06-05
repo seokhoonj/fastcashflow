@@ -31,8 +31,8 @@ def _save(ax, name: str) -> None:
 
 def main() -> None:
     model_points = fcf.samples.model_points()
-    # The sample is a multi-segment book; measure each (product_code,
-    # channel_code) on its own basis (full=True + per-segment dict) so every
+    # The sample is a multi-segment book; measure each (product,
+    # channel) on its own basis (full=True + per-segment dict) so every
     # contract is valued under the right assumptions -- not one segment's basis
     # applied to all.
     basis = fcf.samples.basis()

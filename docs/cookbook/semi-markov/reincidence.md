@@ -363,7 +363,7 @@ coverages = (
 
 한 재진단암 특약이라도 가입연도 (vintage) 에 따라 다른 경험률이 적용되거나
 (예: `갑상선암 발생률 (2019)` vs `(2021)`), 유사암처럼 여러 발생률을 합성한
-(composite) 위험률을 쓸 수 있습니다. fastcashflow 는 `coverage_code → 단일
+(composite) 위험률을 쓸 수 있습니다. fastcashflow 는 `coverage → 단일
 rate` 만 받으므로, vintage 선택과 composite 합성은 **ETL 단계에서 미리** 해서
 이미 합쳐진 한 rate 를 넘깁니다.
 

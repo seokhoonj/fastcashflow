@@ -1,9 +1,9 @@
 """Optional A/E factor layer.
 
 A workbook may carry an ``ae_factors`` sheet with rows
-``(product, channel, coverage_code, factor)`` plus optional axis columns
+``(product, channel, coverage, factor)`` plus optional axis columns
 ``{sex, age, issue_age, duration}``. The reader looks up the (product,
-channel, coverage_code) factor and wraps the base rate so the engine
+channel, coverage) factor and wraps the base rate so the engine
 multiplies by the factor at lookup time. The layer applies to the
 rate-driven coverages on the ``coverages`` sheet; the in-force decrement
 ``mortality_annual`` is not coverage-keyed, so its calibration goes
@@ -24,7 +24,7 @@ def _build(path: Path, *, ae_rows=None):
     wb.remove(wb.active)
 
     seg = wb.create_sheet("segments")
-    seg.append(["product_code", "channel_code", "mortality_table", "lapse_table",
+    seg.append(["product", "channel", "mortality_table", "lapse_table",
                 "discount_table", "inflation_table",
                 "ra_confidence", "mortality_cv",
                 "morbidity_cv"])
@@ -32,7 +32,7 @@ def _build(path: Path, *, ae_rows=None):
                 0.75, 0.10, 0.10])
 
     rd = wb.create_sheet("coverages")
-    rd.append(["coverage_code", "rate_table"])
+    rd.append(["coverage", "rate_table"])
     rd.append(["INPATIENT", "HOSP"])
 
     mt = wb.create_sheet("mortality_tables")
@@ -83,10 +83,10 @@ def test_no_ae_factor_sheet(tmp_path):
 
 
 def test_scalar_ae_factor_per_coverage(tmp_path):
-    """A single (product, channel, coverage_code, factor) row scales the coverage rate."""
+    """A single (product, channel, coverage, factor) row scales the coverage rate."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
-        ["product_code", "channel_code", "coverage_code", "factor"],
+        ["product", "channel", "coverage", "factor"],
         ["TERM_A", "GA", "INPATIENT", 1.5],          # 손해율 150%
     ])
     basis = _segment(p)
@@ -99,12 +99,12 @@ def test_scalar_ae_factor_per_coverage(tmp_path):
 
 def test_ae_factor_does_not_apply_to_mortality_decrement(tmp_path):
     """``mortality_annual`` is decrement-only; the A/E layer is coverage-keyed,
-    so an A/E row whose ``coverage_code`` would match a registered death
+    so an A/E row whose ``coverage`` would match a registered death
     coverage does not adjust the in-force decrement rate (the death-claim
     payment rate is a separate ``coverages`` entry that does receive A/E)."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
-        ["product_code", "channel_code", "coverage_code", "factor"],
+        ["product", "channel", "coverage", "factor"],
         ["TERM_A", "GA", "INPATIENT", 1.5],
     ])
     basis = _segment(p)
@@ -119,7 +119,7 @@ def test_ae_factor_varies_by_age(tmp_path):
     every age, even when bands repeat. Three bands here: 25-29 = 3.0
     (heavy anti-selection), 30-49 = 1.5, 50-60 = 1.0 (ultimate).
     """
-    rows = [["product_code", "channel_code", "coverage_code", "age", "factor"]]
+    rows = [["product", "channel", "coverage", "age", "factor"]]
     for age in range(25, 30):
         rows.append(["TERM_A", "GA", "INPATIENT", age, 3.0])
     for age in range(30, 50):
@@ -138,7 +138,7 @@ def test_ae_factor_only_applies_to_matching_segment(tmp_path):
     """A factor for (TERM_A, FC, hosp) does NOT apply to (TERM_A, GA, hosp)."""
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
-        ["product_code", "channel_code", "coverage_code", "factor"],
+        ["product", "channel", "coverage", "factor"],
         ["TERM_A", "FC", "INPATIENT", 1.5],         # different channel
     ])
     basis = _segment(p)
@@ -158,14 +158,14 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     seg = wb.create_sheet("segments")
-    seg.append(["product_code", "channel_code", "mortality_table", "lapse_table",
+    seg.append(["product", "channel", "mortality_table", "lapse_table",
                 "discount_table", "inflation_table",
                 "ra_confidence", "mortality_cv",
                 "morbidity_cv", "morbidity_age_shift"])
     seg.append(["TERM_A", "GA", "MORT", "LAPSE", "DISC", "INFL",
                 0.75, 0.10, 0.10, 5])
     rd = wb.create_sheet("coverages")
-    rd.append(["coverage_code", "rate_table"])
+    rd.append(["coverage", "rate_table"])
     rd.append(["INPATIENT", "HOSP"])
     mt = wb.create_sheet("mortality_tables")
     mt.append(["table_id", "sex", "age", "rate"])
@@ -186,7 +186,7 @@ def test_ae_factor_composes_with_age_shift(tmp_path):
         s_ws.append(header)
         s_ws.append(row)
     ae = wb.create_sheet("ae_factors")
-    ae.append(["product_code", "channel_code", "coverage_code", "factor"])
+    ae.append(["product", "channel", "coverage", "factor"])
     ae.append(["TERM_A", "GA", "INPATIENT", 0.5])
     wb.save(p)
 

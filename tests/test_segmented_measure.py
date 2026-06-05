@@ -3,7 +3,7 @@
 `ModelPoints` may carry per-row `product` / `channel` strings naming each
 contract's segment. `measure(mp, basis, full=False)` splits the portfolio by
 those keys, looks each segment's `Basis` up in the
-`{(product_code, channel_code): Basis}` dict, calls :func:`measure` per segment,
+`{(product, channel): Basis}` dict, calls :func:`measure` per segment,
 and writes the per-mp results back to a single ``(n_mp,)`` `GMMMeasurement`.
 """
 import fastcashflow as fcf
@@ -70,12 +70,12 @@ def test_subset_slices_product_and_channel_when_set():
         premium=np.zeros(3),
         term_months=np.array([120, 120, 120]),
         benefits={0: np.array([1_000.0, 2_000.0, 3_000.0])},
-        product_code=np.array(["TERM_A", "TERM_A", "term_b"]),
-        channel_code=np.array(["GA", "FC", "GA"]),
+        product=np.array(["TERM_A", "TERM_A", "term_b"]),
+        channel=np.array(["GA", "FC", "GA"]),
     )
     sub = mp.subset([1, 2])
-    assert sub.product_code.tolist() == ["TERM_A", "term_b"]
-    assert sub.channel_code.tolist() == ["FC", "GA"]
+    assert sub.product.tolist() == ["TERM_A", "term_b"]
+    assert sub.channel.tolist() == ["FC", "GA"]
 
 
 def test_subset_preserves_issue_class_and_elapsed_months():
@@ -103,8 +103,8 @@ def test_subset_leaves_product_none_when_unset():
         term_months=np.array([120, 120]),
         benefits={0: np.array([1_000.0, 2_000.0])},
     )
-    assert mp.subset([0]).product_code is None
-    assert mp.subset([0]).channel_code is None
+    assert mp.subset([0]).product is None
+    assert mp.subset([0]).channel is None
 
 
 # ---------------------------------------------------------------------------
@@ -122,8 +122,8 @@ def test_segmented_measure_routes_each_mp_to_its_segment():
         premium=np.zeros(3),
         term_months=np.array([60, 60, 60]),
         benefits={0: np.array([10_000.0, 10_000.0, 10_000.0])},
-        product_code=np.array(["TERM_A", "TERM_A", "TERM_A"]),
-        channel_code=np.array(["GA", "FC", "GA"]),
+        product=np.array(["TERM_A", "TERM_A", "TERM_A"]),
+        channel=np.array(["GA", "FC", "GA"]),
     )
     val = measure(mp, basis, full=False)
 
@@ -163,7 +163,7 @@ def test_segmented_measure_rejects_multi_segment_basis_without_keys():
         term_months=np.array([60]),
         benefits={0: np.array([10_000.0])},
     )
-    with pytest.raises(ValueError, match="product_code"):
+    with pytest.raises(ValueError, match="product"):
         measure(mp, basis, full=False)
 
 
@@ -175,8 +175,8 @@ def test_segmented_measure_rejects_unknown_segment():
         premium=np.zeros(2),
         term_months=np.array([60, 60]),
         benefits={0: np.array([10_000.0, 10_000.0])},
-        product_code=np.array(["TERM_A", "term_b"]),
-        channel_code=np.array(["GA", "GA"]),
+        product=np.array(["TERM_A", "term_b"]),
+        channel=np.array(["GA", "GA"]),
     )
     with pytest.raises(ValueError, match="not in the basis"):
         measure(mp, basis, full=False)
@@ -192,8 +192,8 @@ def test_segmented_measure_with_sample_basis():
         premium=np.array([50_000.0, 60_000.0, 55_000.0]),
         term_months=np.array([120, 120, 120]),
         benefits={0: np.array([100_000_000.0, 80_000_000.0, 90_000_000.0])},
-        product_code=np.array(["TERM_LIFE_A", "TERM_LIFE_A", "TERM_LIFE_A"]),
-        channel_code=np.array(["GA", "FC", "GA"]),
+        product=np.array(["TERM_LIFE_A", "TERM_LIFE_A", "TERM_LIFE_A"]),
+        channel=np.array(["GA", "FC", "GA"]),
         calculation_methods=fcf.samples.calculation_methods(),
     )
     val = measure(mp, basis, full=False)

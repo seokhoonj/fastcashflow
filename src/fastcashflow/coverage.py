@@ -142,7 +142,7 @@ def coverage_arrays(coverages, calculation_methods=None):
 
     ``coverages`` is the ordered rate-driven coverages, in the same order as
     :attr:`Basis.coverages`; ``calculation_methods`` is the portfolio-level
-    taxonomy (``{coverage_code: CalculationMethod}``). Each coverage's method
+    taxonomy (``{coverage: CalculationMethod}``). Each coverage's method
     looked up by code gives the two flags via :func:`method_attrs`.
 
     Method resolution per coverage:

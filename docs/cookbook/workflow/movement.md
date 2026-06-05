@@ -64,8 +64,8 @@ portfolio = fcf.samples.model_points()
 
 # 한 세그먼트 측정 (full trajectory)
 key = ("HEALTH_A", "FC")
-idx = np.where((np.asarray(portfolio.product_code) == key[0]) &
-               (np.asarray(portfolio.channel_code) == key[1]))[0]
+idx = np.where((np.asarray(portfolio.product) == key[0]) &
+               (np.asarray(portfolio.channel) == key[1]))[0]
 m = fcf.gmm.measure(portfolio.subset(idx), basis[key])
 
 # 보고기간으로 자르고 → 변동분석표로 집계

@@ -129,7 +129,7 @@ mp = fcf.read_model_points(
 **모든 사망 종류는 DEATH 산출방식**입니다 — 한국 시장의 사망 보장 분화
 (일반사망 / 질병사망 / 재해사망) 는 **같은 mechanic** (사건 발생 시
 amount 지급). 차이는 *rate_table* 일 뿐. 담보별 산출방식에 각자 별도
-`coverage_code` 로 등록하되 산출방식은 모두 `DEATH`.
+`coverage` 로 등록하되 산출방식은 모두 `DEATH`.
 ```
 
 ## 담보별 산출방식 작성 — `calculation_methods.csv`
@@ -137,7 +137,7 @@ amount 지급). 차이는 *rate_table* 일 뿐. 담보별 산출방식에 각자
 세 컬럼:
 
 ```
-coverage_code,coverage_name,calculation_method
+coverage,coverage_name,calculation_method
 DEATH,일반사망 (주계약),DEATH
 ADB,재해사망 특약,DEATH
 DISEASE_DEATH,질병사망 특약,DEATH
@@ -147,7 +147,7 @@ ANNUITY,종신 연금,ANNUITY
 MATURITY,만기환급,MATURITY
 ```
 
-* `coverage_code` — 사용자 시스템의 코드 (cross-file join key).
+* `coverage` — 사용자 시스템의 코드 (cross-file join key).
   `coverages.csv` 와 `basis.xlsx` 의 `coverages` 시트가 같은 값을 씁니다.
 * `coverage_name` — 사람용 라벨. 엔진은 무시; `gmm.trace` 표시에만 쓰입니다.
 * `calculation_method` — 위 다섯 enum 값 중 하나. 다른 값이면
@@ -169,7 +169,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 
 회사가 사용하는 모든 담보를 한 번 정리:
 
-1. 사망 보장 — DEATH 로 등록. rate_table 별로 다른 coverage_code.
+1. 사망 보장 — DEATH 로 등록. rate_table 별로 다른 coverage.
 2. 입원 / 수술 / 통원 — MORBIDITY.
 3. 암 / 뇌 / 심 진단비 — DIAGNOSIS.
 4. 연금 / 만기환급 — ANNUITY / MATURITY (이 두 종류는 rate 없음 →
@@ -197,7 +197,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
   - `calculation_method` 값이 다섯 enum 중 하나가 아닌 행
 * - V2
   - 같음
-  - `coverage_code` 가 중복인 행
+  - `coverage` 가 중복인 행
 * - V3
   - `_long_model_points`
   - `basis.xlsx` 의 rate-driven 담보가 담보별 산출방식에 누락
@@ -219,7 +219,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 #   CA_DIAG | CANCER_STD       ← rate_table 등록
 # 그런데 calculation_methods.csv 에는 CA_DIAG 행 없음.
 # 결과:
-#   ValueError: coverages frame references 1 coverage_code value(s)
+#   ValueError: coverages frame references 1 coverage value(s)
 #               not in the calculation_methods taxonomy: ['CA_DIAG']
 ```
 

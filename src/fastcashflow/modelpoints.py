@@ -145,16 +145,17 @@ class ModelPoints:
     # premium-paying-window check and surrender's cumulative-premium basis
     # all shift by ``elapsed_months[mp]``.
     elapsed_months: IntArray | None = None
-    # Segment metadata -- the (product_code, channel_code) keys that map a
+    # Segment metadata -- the (product, channel) keys that map a
     # model point to its assumption set when ``measure`` splits a
     # portfolio. Object arrays of string labels (or None for a
-    # single-segment book). The ``_code`` suffix matches the rest of the
-    # codebase (coverage_code, table_id ...) -- short, machine-friendly
-    # join keys; an optional ``product_name`` / ``channel_name`` for
-    # human-friendly display is left to a future pass.
-    product_code: np.ndarray | None = None
-    channel_code: np.ndarray | None = None
-    # Portfolio-level taxonomy of coverage codes -- ``{coverage_code:
+    # single-segment book). These are opaque routing keys: the engine
+    # never interprets them, so a code, a name, or any custom analysis
+    # group is equally valid. A human-friendly ``product_name`` /
+    # ``channel_name`` column may sit alongside in the input files for
+    # readability, but it is display-only -- the engine ignores it.
+    product: np.ndarray | None = None
+    channel: np.ndarray | None = None
+    # Portfolio-level taxonomy of coverage codes -- ``{coverage:
     # CalculationMethod}``. The dict is the company catalogue (the
     # ``calculation_methods.csv`` file): every code a contract may attach is
     # registered here with its kernel-routing method (DEATH / MORBIDITY /
@@ -388,7 +389,7 @@ class ModelPoints:
         object.__setattr__(self, "coverage_reduction_factor", coverage_reduction_factor)
         # Segment metadata + mp_id -- normalise to object arrays so they slice
         # with the per-row fields. ``None`` stays None (a single-segment book).
-        for name in ("product_code", "channel_code", "mp_id"):
+        for name in ("product", "channel", "mp_id"):
             value = getattr(self, name)
             if value is not None:
                 value = np.asarray(value, dtype=object)
@@ -442,8 +443,8 @@ class ModelPoints:
 
         Used by :func:`fastcashflow.group` to aggregate on any axis. Resolution
         order: the derived ``issue_year`` (calendar year of ``issue_date``); the
-        named source fields ``product_code`` / ``channel_code`` (alias
-        ``channel``) / ``issue_date``; then any key in ``attributes``
+        named source fields ``product`` / ``channel`` / ``issue_date``; then
+        any key in ``attributes``
         (portfolio_id, profitability_group, risk_class, ...). Raises
         :class:`KeyError` listing the available axes when the name is unknown.
         """
@@ -451,13 +452,11 @@ class ModelPoints:
             if self.issue_date is None:
                 raise KeyError("issue_year needs issue_date, which is not set")
             return self.issue_date.astype("datetime64[Y]").astype(int) + 1970
-        if name == "channel":
-            name = "channel_code"
         # Engine-native per-MP fields are axes too, and take precedence over a
         # same-named attribute. ``issue_class`` (위험등급), sex, state and
         # elapsed_months default to a filled array, so they always resolve;
-        # product_code / channel_code / issue_date may be None.
-        _fields = ("product_code", "channel_code", "issue_date",
+        # product / channel / issue_date may be None.
+        _fields = ("product", "channel", "issue_date",
                    "issue_class", "sex", "state", "elapsed_months")
         if name in _fields:
             value = getattr(self, name)
@@ -541,12 +540,12 @@ class ModelPoints:
         """Return a new ``ModelPoints`` carrying the rows at ``indices``.
 
         Per-row fields (issue_age, premium, ...) and the segment
-        metadata (product_code, channel_code) are sliced. The coverage CSR is
+        metadata (product, channel) are sliced. The coverage CSR is
         rebuilt: each selected row's coverage slice
         ``coverage_index[coverage_offset[i]:coverage_offset[i+1]]`` is concatenated, and
         ``coverage_offset`` is reset to the new running cumulative sum. Used by
         :func:`fastcashflow.gmm.measure` to split a portfolio
-        by (product_code, channel_code) before per-segment measurement.
+        by (product, channel) before per-segment measurement.
         """
         idx = np.asarray(indices, dtype=np.int64)
 
@@ -580,7 +579,7 @@ class ModelPoints:
 
         # Segment metadata + mp_id + optional surrender base -- slice if set;
         # otherwise stay None.
-        for name in ("product_code", "channel_code", "mp_id",
+        for name in ("product", "channel", "mp_id",
                      "surrender_base_amount"):
             value = getattr(self, name)
             kwargs[name] = None if value is None else value[idx]

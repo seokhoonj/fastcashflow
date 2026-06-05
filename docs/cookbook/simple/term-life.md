@@ -257,7 +257,7 @@ import fastcashflow as fcf
 fcf.samples.export("samples", template="gmm", quiet=True)   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
 # (2) 읽어서 평가
-basis = fcf.read_basis("samples/basis.xlsx")    # {(product_code, channel_code): Basis}
+basis = fcf.read_basis("samples/basis.xlsx")    # {(product, channel): Basis}
 mp    = fcf.read_model_points(
     "samples/policies.csv",                                 # 계약 spec 파일
     coverages="samples/coverages.csv",                      # 담보 가입금액 파일
@@ -457,7 +457,7 @@ print(sorted(basis.keys()))
 #  ('WHOLE_LIFE_A', 'FC'), ('WHOLE_LIFE_A', 'GA')]
 ```
 
-자기 워크북에서는 `segments` 시트의 `(product_code, channel_code)`
+자기 워크북에서는 `segments` 시트의 `(product, channel)`
 조합이 그대로 키가 됩니다 (`_DEFAULTS` 행은 제외).
 
 ### 함정 2 — sex 코딩 (0 / 1)

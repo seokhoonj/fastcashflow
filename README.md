@@ -30,7 +30,7 @@ basis lets `measure` route each policy to its own segment's assumptions:
 import fastcashflow as fcf
 
 # load the bundled sample inputs
-basis = fcf.samples.basis()   # basis = {(product_code, channel_code): Basis}
+basis = fcf.samples.basis()   # basis = {(product, channel): Basis}
 mp    = fcf.samples.model_points()
 
 # measure the whole portfolio -- each policy uses its segment's assumptions

@@ -116,13 +116,13 @@ def test_show_trace_undiagnosed_matches_hand_calc():
 
 def test_show_trace_routes_dict_basis_by_segment():
     """Passing the read_basis dict picks the right segment from
-    the model point's (product_code, channel_code)."""
+    the model point's (product, channel)."""
     mp = _portfolio()
     basis = _basis()
     buf = io.StringIO()
     fcf.gmm.trace(0, mp, basis, file=buf)
     text = buf.getvalue()
-    seg = f"({mp.product_code[0]}/{mp.channel_code[0]}"
+    seg = f"({mp.product[0]}/{mp.channel[0]}"
     assert seg in text
 
 
@@ -130,7 +130,7 @@ def test_show_trace_accepts_single_assumptions():
     """A plain :class:`Basis` (not a dict) bypasses the segment
     lookup and is used directly."""
     mp = _portfolio()
-    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    basis = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
     buf = io.StringIO()
     fcf.gmm.trace(0, mp, basis, file=buf)
     assert "Basis (segment-level)" in buf.getvalue()
@@ -141,7 +141,7 @@ def test_show_trace_bel_and_ra_agree_with_measure():
     on the same portfolio for the same row -- the trace is just a view,
     not a recalculation."""
     mp = _portfolio()
-    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    basis = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
     m = fcf.gmm.measure(mp.subset([0]), basis)
     buf = io.StringIO()
     fcf.gmm.trace(0, mp, basis, file=buf)
@@ -170,9 +170,9 @@ def test_show_trace_dict_basis_requires_segment_columns():
 
 
 def test_show_trace_dict_basis_unknown_segment_raises():
-    """An unmapped (product_code, channel_code) is flagged with available keys."""
+    """An unmapped (product, channel) is flagged with available keys."""
     mp = _portfolio()
-    partial = {k: v for k, v in _basis().items() if k[0] != mp.product_code[0]}
+    partial = {k: v for k, v in _basis().items() if k[0] != mp.product[0]}
     if partial:                           # only meaningful when dict is shrinkable
         with pytest.raises(KeyError, match="no basis for segment"):
             fcf.gmm.trace(0, mp, partial, file=io.StringIO())
@@ -185,7 +185,7 @@ def test_show_trace_dict_basis_unknown_segment_raises():
 def test_show_trace_diff_renders_all_sections():
     """The diff prints the seven headline sections plus the labels line."""
     mp = _portfolio()
-    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    basis = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
     shocked = replace(basis, mortality_annual=_shock_mortality(
         basis.mortality_annual, 1.10,
     ))
@@ -212,7 +212,7 @@ def test_show_trace_diff_identical_basis_reports_no_changes():
     changes -- only the all-zero anchor-month and Final lines remain,
     and the change-only sections explicitly say so."""
     mp = _portfolio()
-    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    basis = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
     buf = io.StringIO()
     fcf.gmm.trace_diff(0, mp, basis, basis, file=buf)
     text = buf.getvalue()
@@ -228,7 +228,7 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
     payment rate (the convention for the sample basis, where they share
     a mortality table)."""
     mp = _portfolio()
-    basis = _basis()[(str(mp.product_code[0]), str(mp.channel_code[0]))]
+    basis = _basis()[(str(mp.product[0]), str(mp.channel[0]))]
     shocked_mort = _shock_mortality(basis.mortality_annual, 1.10)
     # Shock the DEATH coverage too so the payment rate moves with the
     # decrement -- otherwise the higher decrement just lowers in-force

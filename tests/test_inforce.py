@@ -336,8 +336,8 @@ def test_inforce_state_subset_is_consistent_and_drives_segment_measure():
     mp = fcf.apply_inforce_state(portfolio, state)
 
     key = ("HEALTH_A", "FC")
-    idx = np.where((np.asarray(mp.product_code) == key[0]) &
-                   (np.asarray(mp.channel_code) == key[1]))[0]
+    idx = np.where((np.asarray(mp.product) == key[0]) &
+                   (np.asarray(mp.channel) == key[1]))[0]
     sub_state = state.subset(idx)
     assert sub_state.prior_csm.shape[0] == len(idx)
     assert sub_state.elapsed_months.shape[0] == len(idx)

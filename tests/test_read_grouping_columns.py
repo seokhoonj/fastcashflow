@@ -22,15 +22,15 @@ def _read(tmp_path, n=2):
         "issue_age":     np.full(n, 40),
         "term_months":   np.full(n, 120),
         "premium": np.full(n, 200_000.0),
-        "product_code":  ["TL"] * n,
-        "channel_code":  ["GA"] * n,
+        "product":  ["TL"] * n,
+        "channel":  ["GA"] * n,
         "issue_class":   np.zeros(n, dtype=int),
         "issue_date":    ["2025-06-01", "2026-02-01"][:n],
         "risk_class":    ["A", "B"][:n],          # extra column -> attribute
     })
     coverages = pl.DataFrame({
         "mp_id":         np.arange(n),
-        "coverage_code": ["DEATH"] * n,
+        "coverage": ["DEATH"] * n,
         "amount":        np.full(n, 1e8),
     })
     pp, cp = tmp_path / "pol.csv", tmp_path / "cov.csv"
@@ -46,7 +46,7 @@ def test_reader_reads_issue_date_and_attributes(tmp_path):
     assert mp.attributes is not None
     assert mp.attributes["risk_class"].tolist() == ["A", "B"]
     # recognised fields do NOT leak into attributes
-    for reserved in ("issue_class", "issue_date", "product_code", "mp_id"):
+    for reserved in ("issue_class", "issue_date", "product", "mp_id"):
         assert reserved not in mp.attributes
 
 

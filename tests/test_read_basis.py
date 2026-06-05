@@ -2,7 +2,7 @@
 
 A single ``basis.xlsx`` carries the segment mapping plus the named rate
 tables. The ``segments`` sheet has a ``_DEFAULTS`` row whose values blank
-cells inherit, and one row per (product_code, channel_code) segment; the reader returns
+cells inherit, and one row per (product, channel) segment; the reader returns
 one ``Basis`` per segment. See docs/basis-format.md.
 """
 import fastcashflow as fcf
@@ -13,7 +13,7 @@ from fastcashflow.gmm import measure
 
 
 def test_segments_resolve():
-    """The sample workbook resolves to several (product_code, channel_code) segments."""
+    """The sample workbook resolves to several (product, channel) segments."""
     basis = fcf.samples.basis()
     # The sample carries three products on FC/GA (HEALTH also adds TM).
     assert set(basis) >= {

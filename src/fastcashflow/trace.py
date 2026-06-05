@@ -118,7 +118,7 @@ def show_trace(
         :func:`fastcashflow.io.read_basis` /
         :func:`fastcashflow.io.load_sample_basis`. With the dict
         form the function looks up the segment via the model point's
-        ``(product_code, channel_code)``.
+        ``(product, channel)``.
     file
         Where to write. ``None`` writes to ``sys.stdout``.
 
@@ -137,14 +137,14 @@ def show_trace(
         )
     i = mp_index
 
-    # Multi-segment dict basis: route to the right segment by (product_code, channel_code).
+    # Multi-segment dict basis: route to the right segment by (product, channel).
     if isinstance(basis, dict):
-        if model_points.product_code is None or model_points.channel_code is None:
+        if model_points.product is None or model_points.channel is None:
             raise ValueError(
                 "model_points has no product / channel columns -- a dict "
                 "basis cannot be routed; pass a single Basis instead"
             )
-        key = (str(model_points.product_code[i]), str(model_points.channel_code[i]))
+        key = (str(model_points.product[i]), str(model_points.channel[i]))
         try:
             basis = basis[key]
         except KeyError:
@@ -166,10 +166,10 @@ def show_trace(
     prem_term = (int(sub.premium_term_months[0])
                  if sub.premium_term_months is not None else term)
     count = float(sub.count[0]) if sub.count is not None else 1.0
-    product = (str(model_points.product_code[i])
-               if model_points.product_code is not None else "-")
-    channel = (str(model_points.channel_code[i])
-               if model_points.channel_code is not None else "-")
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
     header = (
         f"mp[{i}]  ({product}/{channel}, sex={sex_label}, issue_age={age:g}, "
         f"term={term}m, premium_term={prem_term}m, count={count:g})"
@@ -460,10 +460,10 @@ def show_trace_vfa(
     age = float(sub.issue_age[0])
     term = int(sub.term_months[0])
     count = float(sub.count[0]) if sub.count is not None else 1.0
-    product = (str(model_points.product_code[i])
-               if model_points.product_code is not None else "-")
-    channel = (str(model_points.channel_code[i])
-               if model_points.channel_code is not None else "-")
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
     av0 = float(sub.account_value[0])
     gcr = float(sub.minimum_crediting_rate[0])
     gdb = float(sub.minimum_death_benefit[0])
@@ -636,10 +636,10 @@ def show_trace_paa(
     age = float(sub.issue_age[0])
     term = int(sub.term_months[0])
     count = float(sub.count[0]) if sub.count is not None else 1.0
-    product = (str(model_points.product_code[i])
-               if model_points.product_code is not None else "-")
-    channel = (str(model_points.channel_code[i])
-               if model_points.channel_code is not None else "-")
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
     header = (
         f"mp[{i}]  PAA  ({product}/{channel}, sex={sex_label}, "
         f"issue_age={age:g}, term={term}m, count={count:g})"
@@ -744,12 +744,12 @@ def _resolve_basis(
     """
     if not isinstance(basis, dict):
         return basis
-    if model_points.product_code is None or model_points.channel_code is None:
+    if model_points.product is None or model_points.channel is None:
         raise ValueError(
             "model_points has no product / channel columns -- a dict "
             "basis cannot be routed; pass a single Basis instead"
         )
-    key = (str(model_points.product_code[i]), str(model_points.channel_code[i]))
+    key = (str(model_points.product[i]), str(model_points.channel[i]))
     try:
         return basis[key]
     except KeyError:
@@ -829,7 +829,7 @@ def show_trace_diff(
         Two basis to compare. Either a :class:`Basis` or the
         dict from :func:`fastcashflow.io.read_basis`. With dicts,
         each is routed independently by the model point's
-        ``(product_code, channel_code)`` -- comparing two segments is also fine.
+        ``(product, channel)`` -- comparing two segments is also fine.
     label_a, label_b
         Short labels for the two columns in the printed diff (e.g.
         ``"baseline"`` vs ``"mortality+10%"``). Default ``"before"`` /
@@ -878,10 +878,10 @@ def show_trace_diff(
     prem_term = (int(sub.premium_term_months[0])
                  if sub.premium_term_months is not None else term)
     count = float(sub.count[0]) if sub.count is not None else 1.0
-    product = (str(model_points.product_code[i])
-               if model_points.product_code is not None else "-")
-    channel = (str(model_points.channel_code[i])
-               if model_points.channel_code is not None else "-")
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
     header = (
         f"diff mp[{i}]  ({product}/{channel}, sex={sex_label}, "
         f"issue_age={age:g}, term={term}m, premium_term={prem_term}m, "
@@ -1121,7 +1121,7 @@ def show_trace_bel_step(
     basis
         A :class:`Basis` or the dict from
         :func:`fastcashflow.io.read_basis` (routed by the row's
-        ``(product_code, channel_code)`` like :func:`show_trace`).
+        ``(product, channel)`` like :func:`show_trace`).
     months
         Anchor months at which to unroll the recursion. ``None`` uses
         ``{0, 12, term//2, term-1, term}`` -- inception, end of year 1,
@@ -1164,10 +1164,10 @@ def show_trace_bel_step(
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
     sex_label = "남" if sex_v == 0 else "여"
     age = float(sub.issue_age[0])
-    product = (str(model_points.product_code[i])
-               if model_points.product_code is not None else "-")
-    channel = (str(model_points.channel_code[i])
-               if model_points.channel_code is not None else "-")
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
     header = (
         f"mp[{i}] BEL step-by-step  ({product}/{channel}, sex={sex_label}, "
         f"issue_age={age:g}, term={term}m)"
@@ -1332,10 +1332,10 @@ def show_trace_csm_step(
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
     sex_label = "남" if sex_v == 0 else "여"
     age = float(sub.issue_age[0])
-    product = (str(model_points.product_code[i])
-               if model_points.product_code is not None else "-")
-    channel = (str(model_points.channel_code[i])
-               if model_points.channel_code is not None else "-")
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
     header = (
         f"mp[{i}] CSM step-by-step  ({product}/{channel}, sex={sex_label}, "
         f"issue_age={age:g}, term={term}m)"

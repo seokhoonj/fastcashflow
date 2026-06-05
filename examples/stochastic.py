@@ -13,7 +13,7 @@ import fastcashflow as fcf
 def main() -> None:
     basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
     book = fcf.samples.model_points()
-    seg = np.where((book.product_code == "TERM_LIFE_A") & (book.channel_code == "FC"))[0]
+    seg = np.where((book.product == "TERM_LIFE_A") & (book.channel == "FC"))[0]
     book = book.subset(seg)
 
     # Value the book under a range of discount-rate scenarios.

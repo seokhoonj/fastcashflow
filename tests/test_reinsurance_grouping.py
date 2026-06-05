@@ -79,7 +79,7 @@ def test_reinsurance_group_csm_path_reconciles():
 
 def test_reinsurance_group_of_contracts_net_gain_split():
     """group_of_contracts splits by the net gain at initial recognition (paragraph 61)."""
-    mp = _two_reins(product_code=np.array(["RE", "RE"]))
+    mp = _two_reins(product=np.array(["RE", "RE"]))
     m = fcf.reinsurance.measure(mp, _basis(), fcf.reinsurance.QuotaShare(cession=0.4))
     g = group_of_contracts(m)
     assert isinstance(g, ReinsuranceMeasurement)
@@ -92,6 +92,6 @@ def test_reinsurance_group_of_contracts_net_gain_split():
 
 
 def test_reinsurance_group_by_axis_name():
-    mp = _two_reins(product_code=np.array(["RA", "RB"]))
+    mp = _two_reins(product=np.array(["RA", "RB"]))
     m = fcf.reinsurance.measure(mp, _basis(), fcf.reinsurance.QuotaShare(cession=0.4))
-    assert group(m, "product_code").bel.shape[0] == 2   # two products
+    assert group(m, "product").bel.shape[0] == 2   # two products

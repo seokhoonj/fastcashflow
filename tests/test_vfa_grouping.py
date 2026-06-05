@@ -91,7 +91,7 @@ def test_vfa_group_pooling_nets_the_loss():
 
 def test_vfa_group_of_contracts_preset():
     """group_of_contracts on a VFA measurement: product x cohort x onerous."""
-    mp = _two_vfa(product_code=np.array(["VA", "VA"]))
+    mp = _two_vfa(product=np.array(["VA", "VA"]))
     m = fcf.vfa.measure(mp, _vfa_basis())
     g = group_of_contracts(m)                            # one product, one cohort, prof derived
     assert isinstance(g, VFAMeasurement)
@@ -102,6 +102,6 @@ def test_vfa_group_of_contracts_preset():
 
 def test_vfa_group_by_axis_name():
     """A VFA measurement carries its model points, so axis names resolve."""
-    mp = _two_vfa(product_code=np.array(["VA", "VB"]))
+    mp = _two_vfa(product=np.array(["VA", "VB"]))
     m = fcf.vfa.measure(mp, _vfa_basis())
-    assert group(m, "product_code").bel.shape[0] == 2    # two products
+    assert group(m, "product").bel.shape[0] == 2    # two products

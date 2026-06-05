@@ -33,7 +33,7 @@ def templates() -> list[str]:
 
 def basis(template: str = "gmm"):
     """Bundled sample basis. ``template="gmm"`` (default) returns the per-segment
-    ``{(product_code, channel_code): Basis}`` dict; ``template="vfa"`` returns the
+    ``{(product, channel): Basis}`` dict; ``template="vfa"`` returns the
     single variable-contract :class:`~fastcashflow.Basis`."""
     if template == "vfa":
         return _io.load_sample_vfa_basis()

@@ -21,7 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   array -- re-deriving the CSM and loss component on the group aggregate so the
   floor nets within a group, not across. `group_of_contracts(m)` is the IFRS 17
   preset (portfolio x annual cohort x profitability, paragraphs 14/22/16):
-  `portfolio` (default `product_code`) and `cohort` (default `issue_year`,
+  `portfolio` (default `product`) and `cohort` (default `issue_year`,
   derived from `issue_date`) name columns; `profitability` defaults to the
   engine-derived onerous / remaining split (it is an output, not a known
   input) and accepts an array or a column-name override. Both `group` and
@@ -69,6 +69,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Routing / grouping axes are now the bare keys `product`, `channel`,
+  `coverage`** (was `product_code`, `channel_code`, `coverage_code`). The
+  engine treats them as opaque join keys -- whatever the input puts there
+  (a code, a name, a custom analysis group) is equally valid -- so the
+  `_code` suffix, which presumed "a code", is dropped. Affects the
+  `ModelPoints` fields, the `measure` segment-routing default, the
+  `policies` / `coverages` / `calculation_methods` columns and the
+  `basis.xlsx` `segments` / `coverages` sheets. `read_basis` and
+  `read_model_points` raise a rename hint when they find an old `_code`
+  column. The `ModelPoints.coverage_codes` tuple (the pinned rate-driven
+  order) keeps its name -- it is a distinct internal construct, not the
+  per-row routing key. Display-only `*_name` label columns are no longer
+  carried in the sample data; a workbook may still include them and the
+  engine ignores them.
 - Codegen value kernel is now the default dispatch for every multi-state
   model with `n_states >= 2`. The Markov-only closure factory and the
   hand-unrolled `n=2` / `n=3` kernels have been removed (their work is

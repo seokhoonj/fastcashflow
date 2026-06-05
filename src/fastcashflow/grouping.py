@@ -191,10 +191,10 @@ def group(measurement, by):
 
     A general aggregation primitive -- not IFRS 17-specific. ``by`` is one of:
 
-    * a single **axis name** (e.g. ``"product_code"``);
+    * a single **axis name** (e.g. ``"product"``);
     * a **list** of axis names and/or precomputed ``(n_mp,)`` label arrays
-      (e.g. ``["product_code", "issue_year"]``, or
-      ``["product_code", onerous_array]``), joined into one composite label;
+      (e.g. ``["product", "issue_year"]``, or
+      ``["product", onerous_array]``), joined into one composite label;
     * a single precomputed ``(n_mp,)`` **array** of group labels.
 
     Names are resolved per model point via :meth:`ModelPoints.axis` against the
@@ -440,7 +440,7 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
 
 
 @singledispatch
-def group_of_contracts(measurement, *, portfolio: str = "product_code",
+def group_of_contracts(measurement, *, portfolio: str = "product",
                        cohort: str = "issue_year",
                        profitability=None) -> GMMMeasurement:
     """Aggregate a measurement to the IFRS 17 group of insurance contracts.
@@ -467,7 +467,7 @@ def group_of_contracts(measurement, *, portfolio: str = "product_code",
     Arguments (keyword-only):
 
     * ``portfolio`` -- the column naming the portfolio axis (default
-      ``"product_code"``: paragraph 14's product line). Pass another column name
+      ``"product"``: paragraph 14's product line). Pass another column name
       to group on a different portfolio definition.
     * ``cohort`` -- the column naming the annual-cohort axis (default
       ``"issue_year"``, derived from ``issue_date``: paragraph 22). Pass another
@@ -527,7 +527,7 @@ def _resolve_profitability(mp, profitability, default):
     return np.asarray(profitability)
 
 
-def _group_of_contracts_onerous(measurement, *, portfolio="product_code",
+def _group_of_contracts_onerous(measurement, *, portfolio="product",
                                 cohort="issue_year", profitability=None):
     """Shared GMM / VFA / PAA preset -- profitability is the onerous split.
 
@@ -549,7 +549,7 @@ group_of_contracts.register(PAAMeasurement, _group_of_contracts_onerous)
 
 
 @group_of_contracts.register
-def _(measurement: ReinsuranceMeasurement, *, portfolio: str = "product_code",
+def _(measurement: ReinsuranceMeasurement, *, portfolio: str = "product",
       cohort: str = "issue_year", profitability=None) -> ReinsuranceMeasurement:
     # Reinsurance held replaces the onerous test with a net gain at initial
     # recognition (paragraph 61). The CSM is the net cost (negative) or net gain

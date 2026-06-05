@@ -24,7 +24,7 @@
 파일이 아닙니다. 파일은 reader 가 개체로 바꿔 줍니다:
 
 - **`Basis`** — `basis = fcf.read_basis("basis.xlsx")` 가 한
-  워크북을 읽어 **`(product_code, channel_code) → Basis` 사전** 을
+  워크북을 읽어 **`(product, channel) → Basis` 사전** 을
   돌려줍니다 (segment 별 가정 한 벌씩).
 - **`ModelPoints`** — `mp = fcf.read_model_points("policies.csv",
   coverages=..., calculation_methods=...)` 가 세 파일을 한 개체로 합칩니다.
@@ -46,7 +46,7 @@
   - 역할
 * - `segments`
   - 필수
-  - `(product_code, channel_code)` 마다 **어느 테이블을 쓸지** 와 스칼라 가정
+  - `(product, channel)` 마다 **어느 테이블을 쓸지** 와 스칼라 가정
 * - `coverages`
   - 필수
   - 담보 코드 → 어느 위험률 테이블 (`rate_table`) 을 쓸지
@@ -81,12 +81,12 @@ A/E 보정과 사망률 개선. 견본에는 없습니다.)
 
 ### `segments` 시트 — 어느 테이블을 쓸지
 
-한 행이 한 segment `(product_code, channel_code)` 입니다. 컬럼은 세 부류:
+한 행이 한 segment `(product, channel)` 입니다. 컬럼은 세 부류:
 
-- **식별 키** — `product_code` / `channel_code`. 이 쌍이 segment 를
+- **식별 키** — `product` / `channel`. 이 쌍이 segment 를
   식별하고 모델포인트를 라우팅하는 **계산용** 키입니다. 옆에 둘 수 있는
   `product_name` / `channel_name` 은 **보고서용** 표시 라벨로, reader 가
-  읽되 매칭엔 쓰지 않습니다 (담보의 `coverage_code` / `coverage_name` 과
+  읽되 매칭엔 쓰지 않습니다 (담보의 `coverage` / `coverage_name` 과
   같은 code/name 관례 — code 는 계산, name 은 사람이 읽는 라벨).
 - **테이블 참조** — 값이 rate 시트의 `table_id` 를 가리킵니다:
   `mortality_table` / `lapse_table` / `discount_table` (필수),
@@ -100,7 +100,7 @@ A/E 보정과 사망률 개선. 견본에는 없습니다.)
 ```{admonition} `_DEFAULTS` 행 — 공통값을 한 번만
 :class: note
 
-`product_code` 가 `_DEFAULTS` 인 첫 행은 **다른 행의 빈 칸을 채우는 기본값**
+`product` 가 `_DEFAULTS` 인 첫 행은 **다른 행의 빈 칸을 채우는 기본값**
 입니다. 견본은 `_DEFAULTS` 에 `MORTALITY_STD` / `DISCOUNT_STD` /
 `state_model=WAIVER` / `ra_confidence=0.75` 등을 두고, 각 segment 행은
 **다른 부분만** 덮어씁니다 — 예컨대 `lapse_table` 만 채널별로
@@ -141,7 +141,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # 1) 견본 네 파일을 폴더에 생성 (자기 파일이 있으면 이 블록은 생략)
     fcf.samples.export(tmp, template="gmm", quiet=True)   # basis.xlsx + policies/coverages/calculation_methods
 
-    # 2) 워크북을 읽으면 (product_code, channel_code) → Basis 사전
+    # 2) 워크북을 읽으면 (product, channel) → Basis 사전
     basis = fcf.read_basis(tmp / "basis.xlsx")
     print("segments =", sorted(basis))
 
@@ -157,7 +157,7 @@ with tempfile.TemporaryDirectory() as tmp:
                                calculation_methods=tmp / "calculation_methods.csv")
     print("n model points  =", mp.issue_age.shape[0])
 
-    # 5) 평가 -- 각 계약을 자기 (product_code, channel_code) 가정으로 라우팅 (6.2 에서 자세히)
+    # 5) 평가 -- 각 계약을 자기 (product, channel) 가정으로 라우팅 (6.2 에서 자세히)
     val = fcf.gmm.measure(mp, basis, full=False)
     print("BEL sum =", f"{val.bel.sum():,.0f}")
     print("CSM sum =", f"{val.csm.sum():,.0f}")
@@ -191,7 +191,7 @@ CSM sum = 5,965,102
 `fcf.gmm.measure(mp, basis)` 에 **단일 `Basis`** 를 주면 그 한 가정을 모든
 모델포인트에 적용합니다 — 모델포인트가 동질한 한 segment 일 때 맞습니다.
 견본처럼 여러 segment 가 섞인 portfolio 는 **dict basis**
-(`{(product_code, channel_code): Basis}`) 를 주면 각 계약을 자기 segment 가정으로
+(`{(product, channel): Basis}`) 를 주면 각 계약을 자기 segment 가정으로
 라우팅합니다: `fcf.gmm.measure(mp, basis, full=False)` (dict 라우팅은
 headline 전용이라 `full=False`). 라우팅 메커니즘은 [7.2](workbook-multi).
 ```

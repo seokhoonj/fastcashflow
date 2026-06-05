@@ -79,7 +79,7 @@ def test_paa_group_service_result_holds():
 
 
 def test_paa_group_of_contracts_onerous_split():
-    mp = _two_contracts(product_code=np.array(["MED", "MED"]))
+    mp = _two_contracts(product=np.array(["MED", "MED"]))
     m = measure_paa(mp, _basis())
     g = group_of_contracts(m)                            # product x cohort x onerous
     assert isinstance(g, PAAMeasurement)
@@ -89,6 +89,6 @@ def test_paa_group_of_contracts_onerous_split():
 
 
 def test_paa_group_by_axis_name():
-    mp = _two_contracts(product_code=np.array(["MA", "MB"]))
+    mp = _two_contracts(product=np.array(["MA", "MB"]))
     m = measure_paa(mp, _basis())
-    assert group(m, "product_code").lrc.shape[0] == 2
+    assert group(m, "product").lrc.shape[0] == 2

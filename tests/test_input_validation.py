@@ -136,7 +136,7 @@ def test_read_state_rejects_unknown_integer():
 def test_long_form_rejects_duplicate_mp_id(tmp_path):
     """Duplicate mp_id would fan out the coverages join silently."""
     asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
+    _write_minimal_assumptions(asmp_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A", "A"],          # the duplicate-id case
@@ -144,11 +144,11 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
-        "mp_id": ["A"], "coverage_code": ["DEATH"], "amount": [1e8],
+        "mp_id": ["A"], "coverage": ["DEATH"], "amount": [1e8],
     }).write_csv(cov_csv)
     bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
+        "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_basis(asmp_book)
@@ -162,7 +162,7 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
 def test_long_form_rejects_premium_in_both_frames(tmp_path):
     """``premium`` in coverages and ``premium`` in policies = ambiguous."""
     asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
+    _write_minimal_assumptions(asmp_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -170,12 +170,12 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
-        "mp_id": ["A"], "coverage_code": ["DEATH"], "amount": [1e8],
+        "mp_id": ["A"], "coverage": ["DEATH"], "amount": [1e8],
         "premium": [1.0],               # source 2 -- silently overrode
     }).write_csv(cov_csv)
     bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
+        "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_basis(asmp_book)
@@ -189,7 +189,7 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
 def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
     """reduction_factor=0.5 without reduction_end is silently inert."""
     asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
+    _write_minimal_assumptions(asmp_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -197,12 +197,12 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
-        "mp_id": ["A"], "coverage_code": ["DEATH"], "amount": [1e8],
+        "mp_id": ["A"], "coverage": ["DEATH"], "amount": [1e8],
         "reduction_factor": [0.5],      # no reduction_end -- never fires
     }).write_csv(cov_csv)
     bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
+        "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_basis(asmp_book)
@@ -217,7 +217,7 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
 # Minimal basis workbook helper
 # ---------------------------------------------------------------------------
 
-def _write_minimal_assumptions(path: Path, coverage_code: str) -> None:
+def _write_minimal_assumptions(path: Path, coverage: str) -> None:
     """A tiny one-segment workbook with one rate-driven coverage."""
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -240,11 +240,11 @@ def _write_minimal_assumptions(path: Path, coverage_code: str) -> None:
         ("DISC_FLAT", 0, 0.03),
     ])
     sheet("coverages", [
-        ("coverage_code", "rate_table"),
-        (coverage_code, "MORT_FLAT"),
+        ("coverage", "rate_table"),
+        (coverage, "MORT_FLAT"),
     ])
     sheet("segments", [
-        ("product_code", "channel_code", "mortality_table", "lapse_table",
+        ("product", "channel", "mortality_table", "lapse_table",
          "discount_table", "ra_confidence", "mortality_cv"),
         ("TERM_LIFE_A", "FC", "MORT_FLAT", "LAPSE_FLAT", "DISC_FLAT",
          0.75, 0.10),
@@ -281,7 +281,7 @@ def test_truncate_list_returns_full_when_under_cap():
 
 
 def test_segments_legacy_product_column_hints(tmp_path):
-    """A user with the old ``product`` header gets a rename hint."""
+    """A user with the old ``product_code`` header gets a rename hint."""
     book = tmp_path / "basis.xlsx"
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -295,12 +295,12 @@ def test_segments_legacy_product_column_hints(tmp_path):
     sheet("lapse_tables", [("table_id", "rate"), ("LAPSE", 0.01)])
     sheet("discount_tables", [("table_id", "year", "rate"), ("DISC", 0, 0.03)])
     sheet("segments", [
-        ("product", "channel", "mortality_table", "lapse_table",
+        ("product_code", "channel", "mortality_table", "lapse_table",
          "discount_table", "ra_confidence", "mortality_cv"),
         ("TERM_LIFE_A", "FC", "MORT", "LAPSE", "DISC", 0.75, 0.10),
     ])
     wb.save(book)
-    with pytest.raises(ValueError, match="did you mean 'product_code'"):
+    with pytest.raises(ValueError, match="did you mean 'product'"):
         fcf.read_basis(book)
 
 
@@ -315,7 +315,7 @@ def test_missing_required_sheet_friendly_error(tmp_path):
         ("lapse_tables", [("table_id", "rate"), ("LAPSE", 0.01)]),
         ("discount_tables", [("table_id", "year", "rate"), ("DISC", 0, 0.03)]),
         ("segments", [
-            ("product_code", "channel_code", "mortality_table", "lapse_table",
+            ("product", "channel", "mortality_table", "lapse_table",
              "discount_table", "ra_confidence", "mortality_cv"),
         ]),
     ):
@@ -384,7 +384,7 @@ def test_read_expense_tables_missing_column():
 def test_long_form_orphan_mp_id_names_offender(tmp_path):
     """``cov.mp_id='X'`` not in policies: the error names ``'X'``."""
     asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
+    _write_minimal_assumptions(asmp_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -393,11 +393,11 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
         "mp_id": ["ORPHAN_X"],            # not in policies
-        "coverage_code": ["DEATH"], "amount": [1e8],
+        "coverage": ["DEATH"], "amount": [1e8],
     }).write_csv(cov_csv)
     bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
+        "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_basis(asmp_book)
@@ -409,9 +409,9 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
 
 
 def test_long_form_orphan_coverage_code_names_offender(tmp_path):
-    """``cov.coverage_code`` not in calculation_methods: the error names the code."""
+    """``cov.coverage`` not in calculation_methods: the error names the code."""
     asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
+    _write_minimal_assumptions(asmp_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -419,11 +419,11 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
-        "mp_id": ["A"], "coverage_code": ["GHOST_CODE"], "amount": [1e8],
+        "mp_id": ["A"], "coverage": ["GHOST_CODE"], "amount": [1e8],
     }).write_csv(cov_csv)
     bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
+        "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_basis(asmp_book)
@@ -438,7 +438,7 @@ def test_long_form_no_premium_source_warns(tmp_path, recwarn):
     """With neither ``premium`` (cov) nor ``premium`` (pol)
     silently defaults to zero -- now warns."""
     asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage_code="DEATH")
+    _write_minimal_assumptions(asmp_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -446,12 +446,12 @@ def test_long_form_no_premium_source_warns(tmp_path, recwarn):
     }).write_csv(pol_csv)
     cov_csv = tmp_path / "coverages.csv"
     pl.DataFrame({
-        "mp_id": ["A"], "coverage_code": ["DEATH"], "amount": [1e8],
+        "mp_id": ["A"], "coverage": ["DEATH"], "amount": [1e8],
         # no premium
     }).write_csv(cov_csv)
     bp_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
-        "coverage_code": ["DEATH"], "calculation_method": ["DEATH"],
+        "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
     basis = fcf.read_basis(asmp_book)
@@ -483,11 +483,11 @@ def test_rate_table_not_found_caps_alternatives(tmp_path):
     sheet("lapse_tables", [("table_id", "rate"), ("LAPSE", 0.01)])
     sheet("discount_tables", [("table_id", "year", "rate"), ("DISC", 0, 0.03)])
     sheet("coverages", [
-        ("coverage_code", "rate_table"),
+        ("coverage", "rate_table"),
         ("DEATH", "NONEXISTENT"),         # typo -- triggers not-registered
     ])
     sheet("segments", [
-        ("product_code", "channel_code", "mortality_table", "lapse_table",
+        ("product", "channel", "mortality_table", "lapse_table",
          "discount_table", "ra_confidence", "mortality_cv"),
         ("TERM_LIFE_A", "FC", "MORT_000", "LAPSE", "DISC", 0.75, 0.10),
     ])
@@ -593,7 +593,7 @@ def test_issue_age_integer_does_not_warn(recwarn):
 def test_segmented_measure_matches_nfc_and_nfd_codes():
     """Composed (NFC) vs decomposed (NFD) Unicode codes match the same segment.
 
-    A product_code on the model_points side composed (e.g. ``café`` =
+    A product on the model_points side composed (e.g. ``café`` =
     'caf' + U+00E9) compared against a basis key decomposed (``café`` =
     'cafe' + U+0301) used to mismatch by byte identity. NFC-normalising
     both sides fixes the lookup.
@@ -605,8 +605,8 @@ def test_segmented_measure_matches_nfc_and_nfd_codes():
         issue_age=np.array([40.0]),
         premium=np.array([0.0]),
         term_months=np.array([12]),
-        product_code=np.array([composed], dtype=object),
-        channel_code=np.array(["FC"], dtype=object),
+        product=np.array([composed], dtype=object),
+        channel=np.array(["FC"], dtype=object),
     )
     basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
@@ -895,22 +895,22 @@ def test_guards_empty_portfolio(tmp_path):
     """An empty policies or coverages file is rejected with a clear message
     rather than a cryptic join / kernel error."""
     cm = tmp_path / "cm.csv"
-    cm.write_text("coverage_code,calculation_method\nDEATH,DEATH\n")
+    cm.write_text("coverage,calculation_method\nDEATH,DEATH\n")
     cov_empty = tmp_path / "cov0.csv"
-    cov_empty.write_text("mp_id,coverage_code,amount\n")  # header only
+    cov_empty.write_text("mp_id,coverage,amount\n")  # header only
     cov_ok = tmp_path / "cov.csv"
-    cov_ok.write_text("mp_id,coverage_code,amount\n1,DEATH,1000000\n")
+    cov_ok.write_text("mp_id,coverage,amount\n1,DEATH,1000000\n")
     # empty policies -- give a non-empty coverages file so the policies guard
     # is the one that fires (the empty-coverages guard runs first otherwise).
     pol_empty = tmp_path / "pol0.csv"
     pol_empty.write_text(
-        "mp_id,product_code,channel_code,issue_age,sex,term_months,premium\n")
+        "mp_id,product,channel,issue_age,sex,term_months,premium\n")
     with pytest.raises(ValueError, match="policies frame is empty"):
         fcf.read_model_points(str(pol_empty), coverages=str(cov_ok),
                               calculation_methods=str(cm))
     pol = tmp_path / "pol.csv"
     pol.write_text(
-        "mp_id,product_code,channel_code,issue_age,sex,term_months,premium\n"
+        "mp_id,product,channel,issue_age,sex,term_months,premium\n"
         "1,TERM_LIFE_A,GA,40,0,120,100.0\n")
     with pytest.raises(ValueError, match="coverages frame is empty"):
         fcf.read_model_points(str(pol), coverages=str(cov_empty),

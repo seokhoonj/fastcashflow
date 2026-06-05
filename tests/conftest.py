@@ -129,16 +129,16 @@ def mp_to_frames(mp, basis):
     label = {i: coverage.code for i, coverage in enumerate(basis.coverages)}
     mp_of_cov = np.repeat(np.arange(mp.n_mp), np.diff(mp.coverage_offset))
     mp_id = [int(m) for m in mp_of_cov]
-    coverage_code = [label[int(k)] for k in mp.coverage_index]
+    coverage = [label[int(k)] for k in mp.coverage_index]
     amount = [float(a) for a in mp.coverage_amount]
     for ctype, scalar in ((CalculationMethod.ANNUITY, mp.annuity_payment),
                           (CalculationMethod.MATURITY, mp.maturity_benefit)):
         code = _coverage_label(mp, ctype, str(ctype))
         for i in np.nonzero(scalar)[0]:
             mp_id.append(int(i))
-            coverage_code.append(code)
+            coverage.append(code)
             amount.append(float(scalar[i]))
     coverages = pl.DataFrame({
-        "mp_id": mp_id, "coverage_code": coverage_code, "amount": amount,
+        "mp_id": mp_id, "coverage": coverage, "amount": amount,
     })
     return policies, coverages

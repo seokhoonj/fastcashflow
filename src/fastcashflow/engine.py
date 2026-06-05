@@ -236,24 +236,24 @@ def measure(
     choice for large-scale valuation.
 
     ``basis`` may be a single :class:`Basis` (uniform portfolio) or a
-    ``{(product_code, channel_code): Basis}`` dict; with a dict each segment is routed
+    ``{(product, channel): Basis}`` dict; with a dict each segment is routed
     to its own basis. ``segment_by`` names the routing axes (resolved via
     :meth:`ModelPoints.axis`, so any ``attributes`` column works) and the dict
     keys are tuples of those axes in order. Left as ``None`` (the default) it is
     taken from the basis: a :class:`~fastcashflow.io.SegmentedBasis` from
     :func:`read_basis` carries the axes its workbook declared, and a plain dict
-    falls back to ``("product_code", "channel_code")``. So a workbook keyed by
-    ``(product_code, channel_code, risk_class)`` routes by all three with no
+    falls back to ``("product", "channel")``. So a workbook keyed by
+    ``(product, channel, risk_class)`` routes by all three with no
     extra argument; passing ``segment_by`` explicitly overrides. Cost scales with the number of distinct segments, not the
     number of axes. ``backend`` (``"cpu"``/``"gpu"``) and ``discount_curve``
     apply to the fast path only.
     """
     if isinstance(basis, dict):
         # A SegmentedBasis from read_basis remembers its axes; a plain dict
-        # defaults to (product_code, channel_code). An explicit segment_by wins.
+        # defaults to (product, channel). An explicit segment_by wins.
         if segment_by is None:
             segment_by = getattr(
-                basis, "segment_axes", ("product_code", "channel_code"),
+                basis, "segment_axes", ("product", "channel"),
             )
         if full:
             if backend != "cpu" or discount_curve is not None:
@@ -2259,14 +2259,14 @@ def _measure_segmented(
     *,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
-    segment_by=("product_code", "channel_code"),
+    segment_by=("product", "channel"),
 ) -> GMMMeasurement:
     """Value a multi-segment portfolio: split, value each, concatenate.
 
-    ``basis`` is the ``{(product_code, channel_code): Basis}`` dictionary
+    ``basis`` is the ``{(product, channel): Basis}`` dictionary
     returned by :func:`fastcashflow.read_basis`. ``model_points``
-    must carry ``product_code`` and ``channel_code`` columns identifying each row's
-    segment; for each unique (product_code, channel_code) the helper masks the
+    must carry ``product`` and ``channel`` columns identifying each row's
+    segment; for each unique (product, channel) the helper masks the
     matching rows, builds a sub-:class:`~fastcashflow.ModelPoints` via
     :meth:`~fastcashflow.ModelPoints.subset`, calls ``measure(..., full=False)`` with the
     segment's ``Basis``, and writes the per-row results back to a
@@ -2275,7 +2275,7 @@ def _measure_segmented(
     ``backend`` and ``discount_curve`` flow through to ``measure(..., full=False)`` --
     declared explicitly so a typo (e.g. ``backed="gpu"``) is rejected
     here rather than reaching the kernel. A single-segment ``basis`` is
-    accepted as a convenience when ``product_code`` / ``channel_code`` is
+    accepted as a convenience when ``product`` / ``channel`` is
     not set.
     """
     try:
@@ -2319,7 +2319,7 @@ def _resolve_segment_cols(model_points: ModelPoints, segment_by) -> list[np.ndar
     """Resolve and NFC-normalise the segment-key axes (``segment_by`` names).
 
     Each axis is looked up via :meth:`ModelPoints.axis`, so a routing key can mix
-    the segment fields (product_code / channel) and any ``attributes`` column.
+    the segment fields (product / channel) and any ``attributes`` column.
     NFC-normalises so the lookup is text-identity, not byte-identity (a Korean /
     European character composed in one file and decomposed in the other compares
     unequal). Raises :class:`KeyError` if an axis is not set on the model points
@@ -2384,11 +2384,11 @@ def _factorise_segments(basis, cols, segment_by, n_mp):
 
 def _measure_segmented_full(
     model_points: ModelPoints, basis: dict[tuple[str, str], Basis],
-    *, segment_by=("product_code", "channel_code"),
+    *, segment_by=("product", "channel"),
 ) -> GMMMeasurement:
     """Full multi-segment GMM measurement -- per-segment trajectories stitched.
 
-    Each (product_code, channel_code) segment is measured under its own
+    Each (product, channel) segment is measured under its own
     ``Basis`` via :func:`_measure_full`; the per-segment ``(n_seg, *)``
     trajectories are scattered back into one ``(n_mp, n_time+1)`` result, where
     ``n_time`` is the portfolio's longest horizon. A segment whose contracts

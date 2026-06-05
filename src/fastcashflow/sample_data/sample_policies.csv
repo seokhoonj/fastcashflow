@@ -1,4 +1,4 @@
-mp_id,product_code,channel_code,issue_date,issue_age,sex,term_months,premium_term_months,count
+mp_id,product,channel,issue_date,issue_age,sex,term_months,premium_term_months,count
 P001,TERM_LIFE_A,FC,2025-03-15,35,0,240,240,1
 P002,HEALTH_A,GA,2025-06-01,38,1,240,240,1
 P003,TERM_LIFE_A,GA,2025-09-10,42,0,120,120,1

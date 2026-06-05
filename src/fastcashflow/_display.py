@@ -24,8 +24,8 @@ def model_points_repr(mp) -> str:
     """Compact one-line repr for ModelPoints -- counts, not the arrays."""
     n = mp.n_mp
     parts = [f"{n} model point" + ("s" if n != 1 else "")]
-    if mp.product_code is not None:
-        n_prod = len(set(mp.product_code))
+    if mp.product is not None:
+        n_prod = len(set(mp.product))
         parts.append(f"{n_prod} product" + ("s" if n_prod != 1 else ""))
     if mp.coverage_codes:
         n_cov = len(mp.coverage_codes)
@@ -47,10 +47,10 @@ def model_points_str(mp) -> str:
     def _row(label, value):
         lines.append(f"  {label:<9}: {value}")
 
-    if mp.product_code is not None:
-        _row("products", _dist(mp.product_code))
-    if mp.channel_code is not None:
-        _row("channels", _dist(mp.channel_code))
+    if mp.product is not None:
+        _row("products", _dist(mp.product))
+    if mp.channel is not None:
+        _row("channels", _dist(mp.channel))
     if mp.coverage_codes:
         _row("coverages", ", ".join(mp.coverage_codes))
     age = np.asarray(mp.issue_age)
