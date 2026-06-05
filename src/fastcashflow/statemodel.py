@@ -65,6 +65,10 @@ class CompiledStateModel:
     state_duration_max
         ``None`` for Markov; ``(n_states,)`` int with the effective cohort
         count per state for semi-Markov.
+    benefit_max_months
+        ``None`` for Markov; ``(n_states,)`` int with the per-state monthly
+        benefit cap (``0`` = unbounded). Sojourn cohorts ``tau >= cap`` stop
+        being paid while the lives stay in force.
     """
     edge_from: IntArray
     edge_to: IntArray
@@ -74,6 +78,7 @@ class CompiledStateModel:
     premium_state: np.ndarray
     benefit_state: np.ndarray
     state_duration_max: IntArray | None = None
+    benefit_max_months: IntArray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +139,7 @@ class State:
     benefit: bool = False
     transitions: tuple[Transition, ...] = ()
     duration_max: int = 0
+    benefit_max_months: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "transitions", tuple(self.transitions))
@@ -143,6 +149,35 @@ class State:
                 f"state {self.name!r}: duration_max must be non-negative, "
                 f"got {self.duration_max}"
             )
+        # ``benefit_max_months`` caps how many months a benefit state pays --
+        # the monthly ``disability_income`` stops once a cohort's sojourn
+        # reaches the cap, while the lives stay in force (a guaranteed-payout
+        # LTC / dementia annuity: pay 36 months, then keep cover with no
+        # payment). ``0`` means unbounded (the historical behaviour).
+        cap = int(self.benefit_max_months)
+        object.__setattr__(self, "benefit_max_months", cap)
+        if cap < 0:
+            raise ValueError(
+                f"state {self.name!r}: benefit_max_months must be "
+                f"non-negative, got {cap}"
+            )
+        if cap > 0:
+            if not self.benefit:
+                raise ValueError(
+                    f"state {self.name!r}: benefit_max_months > 0 requires "
+                    f"benefit=True (a cap on a non-paying state has no effect)"
+                )
+            # Strict ``duration_max > cap``: the absorbing cohort (D-1) holds
+            # everyone with sojourn >= D-1, so if ``cap == duration_max`` the
+            # capped lives pile into a cohort still inside ``tau < cap`` and
+            # keep being paid forever. One guard cohort past the cap is needed.
+            if self.duration_max <= cap:
+                raise ValueError(
+                    f"state {self.name!r}: duration_max ({self.duration_max}) "
+                    f"must exceed benefit_max_months ({cap}); otherwise the "
+                    f"absorbing cohort re-accumulates capped lives and keeps "
+                    f"paying. Set duration_max > benefit_max_months."
+                )
 
 
 @dataclass(frozen=True, slots=True)
@@ -574,4 +609,6 @@ def compile_state_model_with_duration(
         premium_state=np.array([s.premium for s in model.states], dtype=np.bool_),
         benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),
         state_duration_max=state_duration_max,
+        benefit_max_months=np.array(
+            [s.benefit_max_months for s in model.states], dtype=np.int64),
     )

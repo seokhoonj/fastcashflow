@@ -304,7 +304,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
 @njit(parallel=True, cache=True)
 def _project_kernel_semi_markov(
     mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
-    n_states, state_duration_max, state_offset,
+    n_states, state_duration_max, state_offset, benefit_max_months,
     premium_state, benefit_state, start_state,
     term_months, count, premium,
     premium_term_months, premium_frequency_months, annuity_frequency_months,
@@ -396,7 +396,16 @@ def _project_kernel_semi_markov(
                 if premium_state[s]:
                     prem_occ += state_sum
                 if benefit_state[s]:
-                    benefit_occ += state_sum
+                    cap = benefit_max_months[s]
+                    if cap > 0:
+                        # Pay only the cohorts still within the cap; lives
+                        # past it stay in force but stop receiving income.
+                        ben_sum = 0.0
+                        for tau in range(cap):
+                            ben_sum += occ[s_off + tau]
+                        benefit_occ += ben_sum
+                    else:
+                        benefit_occ += state_sum
 
             inforce[mp, t] = ift
             q = mortality[mp, year]
@@ -657,6 +666,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         premium_state = compiled.premium_state
         benefit_state = compiled.benefit_state
         state_duration_max = compiled.state_duration_max
+        benefit_max_months = compiled.benefit_max_months
         # compile_state_model_with_duration returns ``edge_prob`` shape
         # ``(n_edges, n_mp, n_year, max_D)`` -- already in the layout the
         # detailed kernel reads (edge axis outer, cohort axis inner).
@@ -666,7 +676,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
          annuity_cf, disability_cf,
          maturity_cf, maturity_survivors) = _project_kernel_semi_markov(
             mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
-            n_states, state_duration_max, state_offset,
+            n_states, state_duration_max, state_offset, benefit_max_months,
             premium_state, benefit_state, start_state,
             model_points.term_months,
             model_points.count,

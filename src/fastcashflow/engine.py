@@ -1135,7 +1135,8 @@ def clear_codegen_cache(*, prune_older_than_days: float | None = None) -> int:
 
 
 def _codegen_fast_kernel_source_semi_markov(
-    n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
+    n_states, state_duration_max, benefit_max_months,
+    edge_from, edge_to, edge_lump_sum,
     premium_state, benefit_state,
     use_annuity=True, use_lae=True, use_surrender=True,
     surrender_is_amount=False,
@@ -1155,6 +1156,7 @@ def _codegen_fast_kernel_source_semi_markov(
     premium_state = [bool(x) for x in premium_state]
     benefit_state = [bool(x) for x in benefit_state]
     D = [int(x) for x in state_duration_max]
+    cap = [int(x) for x in benefit_max_months]
 
     def occ(s, tau):
         return f"occ_{s}_{tau}"
@@ -1169,9 +1171,15 @@ def _codegen_fast_kernel_source_semi_markov(
     sum_prem = " + ".join(occ(s, tau) for s in range(n_states)
                           if premium_state[s]
                           for tau in range(D[s])) or "0.0"
-    sum_ben = " + ".join(occ(s, tau) for s in range(n_states)
-                         if benefit_state[s]
-                         for tau in range(D[s])) or "0.0"
+    # ``benefit_max_months[s] > 0`` caps the paid cohorts: only sojourn
+    # ``tau < cap`` is paid (lives past the cap stay in force, see
+    # ``benefit_max_months`` on State). ``cap`` is a compile-time loop bound,
+    # so the hot kernel carries no extra branch. Validation guarantees
+    # ``cap < D``, so ``min`` is belt-and-suspenders.
+    sum_ben = " + ".join(
+        occ(s, tau) for s in range(n_states)
+        if benefit_state[s]
+        for tau in range(min(D[s], cap[s]) if cap[s] else D[s])) or "0.0"
 
     L: list[str] = []
 
@@ -1453,7 +1461,8 @@ _FAST_KERNEL_CODEGEN_SEMI_MARKOV_CACHE: dict = {}
 
 
 def _get_fast_kernel_codegen_semi_markov(
-    n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
+    n_states, state_duration_max, benefit_max_months,
+    edge_from, edge_to, edge_lump_sum,
     premium_state, benefit_state,
     use_annuity=True, use_lae=True, use_surrender=True,
     surrender_is_amount=False,
@@ -1469,6 +1478,11 @@ def _get_fast_kernel_codegen_semi_markov(
     key = (
         int(n_states),
         tuple(int(x) for x in state_duration_max),
+        # ``benefit_max_months`` changes which cohorts ``sum_ben`` pays, so
+        # two models that differ only by the cap MUST NOT share a kernel --
+        # omitting it here would serve a stale kernel and silently mis-state
+        # the disability cash flow / BEL.
+        tuple(int(x) for x in benefit_max_months),
         tuple(int(x) for x in edge_from),
         tuple(int(x) for x in edge_to),
         tuple(bool(x) for x in edge_lump_sum),
@@ -1482,7 +1496,8 @@ def _get_fast_kernel_codegen_semi_markov(
         return cached
 
     src = _codegen_fast_kernel_source_semi_markov(
-        n_states, state_duration_max, edge_from, edge_to, edge_lump_sum,
+        n_states, state_duration_max, benefit_max_months,
+        edge_from, edge_to, edge_lump_sum,
         premium_state, benefit_state,
         use_annuity=use_annuity, use_lae=use_lae, use_surrender=use_surrender,
         surrender_is_amount=surrender_is_amount,
@@ -1867,6 +1882,7 @@ def _measure_fast(
             premium_state = compiled.premium_state
             benefit_state = compiled.benefit_state
             state_duration_max = compiled.state_duration_max
+            benefit_max_months = compiled.benefit_max_months
             # compile_state_model_with_duration returns ``edge_prob`` shape
             # ``(n_edges, sex, age, year, max_D)``. Transpose to put the
             # (sex, age, year) lookup axes outermost and the edge / cohort
@@ -2129,7 +2145,8 @@ def _measure_fast(
             # cohort tracking with rule-bearing or diagnosis coverages work
             # in a single measure(full=False) call.
             kernel = _get_fast_kernel_codegen_semi_markov(
-                n_states, state_duration_max, edge_from, edge_to,
+                n_states, state_duration_max, benefit_max_months,
+                edge_from, edge_to,
                 edge_lump_sum, premium_state, benefit_state,
                 use_annuity=use_annuity, use_lae=use_lae,
                 use_surrender=use_surrender,
