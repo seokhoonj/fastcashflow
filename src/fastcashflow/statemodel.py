@@ -617,7 +617,11 @@ def compile_state_model_with_duration(
                         )
                     return arr[..., tau]
                 return arr
-        # Should be unreachable (caller is iterating this state's transitions).
+        # Reached when ``rate_name`` is supplied for this state but is not the
+        # rate of any of its transitions (e.g. a state's own mortality routed
+        # by name without a matching transition row); the un-indexed array is
+        # the correct static (non-cohort) fallback. NOT an invariant break --
+        # a review flagged this as "unreachable", but several models reach it.
         return arr
 
     edge_from: list[int] = []

@@ -858,7 +858,7 @@ def align_inforce_state(
             missing = sorted(set(mp_ids) - set(st_ids))[:5]
             extra = sorted(set(st_ids) - set(mp_ids))[:5]
             raise ValueError(
-                "apply_inforce_state: model points and state carry different "
+                "align_inforce_state: model points and state carry different "
                 f"mp_id sets (in model points only: {missing}; in state only: "
                 f"{extra}). The state must cover exactly the valued contracts."
             )

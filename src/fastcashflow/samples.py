@@ -191,4 +191,4 @@ def export(output_dir, template: str = "gmm", format: str = "csv",
 
 
 __all__ = ["templates", "basis", "model_points", "calculation_methods",
-           "inforce_state", "export"]
+           "inforce_state", "return_scenarios", "rate_scenarios", "export"]

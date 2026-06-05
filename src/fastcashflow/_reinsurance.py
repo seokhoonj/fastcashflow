@@ -35,7 +35,7 @@ from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class ReinsuranceMeasurement:
     """Measurement of a reinsurance contract held.
 
