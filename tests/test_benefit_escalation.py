@@ -9,7 +9,8 @@ Two orthogonal mechanisms:
   partner of the existing reduction rule.
 
 The factor must apply identically across every kernel path, so the key tests are
-full==fast parity (Markov and semi-Markov) and fast==gpu.
+full==fast parity (Markov and semi-Markov). (The GPU path shares the same dense
+factor grid but is not separately exercised here -- it needs a CUDA device.)
 """
 import numpy as np
 import pytest

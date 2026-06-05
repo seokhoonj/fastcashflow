@@ -739,22 +739,22 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     if basis.premium_factor_annual is None:
         premium_factor = np.ones((len(model_points.issue_age), n_years))
     else:
-        premium_factor = validate_factor(np.ascontiguousarray(
+        premium_factor = validate_factor(
             basis.premium_factor_annual(
                 sex_grid, issue_age_grid, duration_grid,
-                issue_class_grid, elapsed_grid)), "premium_factor_annual")
-    assert premium_factor.shape == (len(model_points.issue_age), n_years)
+                issue_class_grid, elapsed_grid),
+            "premium_factor_annual", (len(model_points.issue_age), n_years))
     # Annuity SHAPE -- the survival-benefit twin of premium_factor (escalating
     # annuity). Same multiplicative-scale rules: never annual_to_monthly, None
     # -> all-ones (level annuity), a structural no-op multiply.
     if basis.annuity_factor_annual is None:
         annuity_factor = np.ones((len(model_points.issue_age), n_years))
     else:
-        annuity_factor = validate_factor(np.ascontiguousarray(
+        annuity_factor = validate_factor(
             basis.annuity_factor_annual(
                 sex_grid, issue_age_grid, duration_grid,
-                issue_class_grid, elapsed_grid)), "annuity_factor_annual")
-    assert annuity_factor.shape == (len(model_points.issue_age), n_years)
+                issue_class_grid, elapsed_grid),
+            "annuity_factor_annual", (len(model_points.issue_age), n_years))
     # Expense primitives -- the five inputs the kernel consumes. Honours
     # Basis.expense_items when set, otherwise the legacy alpha / beta
     # / gamma / expense_inflation scalars (see _expense_kernel_args).

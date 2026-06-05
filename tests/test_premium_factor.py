@@ -4,8 +4,10 @@ A multiplicative factor on the level ``ModelPoints.premium`` by policy year, so
 a renewable / step-rated (갱신요율) or step-up (체증형) premium can be projected
 while ``premium[mp]`` stays the scalar SCALE ``solve_premium`` solves for. The
 factor must apply identically across every kernel path (the full Markov / full
-semi-Markov projection and the fused fast / codegen / GPU value paths), so the
-key tests are full==fast parity on both a Markov and a semi-Markov contract.
+semi-Markov projection and the fused fast / codegen value paths; the GPU path
+shares the same validated dense factor grid), so the key tests are full==fast
+parity on both a Markov and a semi-Markov contract. (The GPU path is wired but
+not separately exercised here -- it needs a CUDA device.)
 """
 import numpy as np
 import pytest
@@ -165,6 +167,20 @@ def test_premium_factor_rejects_negative_and_nan():
     holiday = lambda s, a, d, ic, el: np.where(d == 0, 1.0, 0.0)
     pcf = fcf.gmm.measure(mp, _basis(holiday), full=True).cashflows.premium_cf[0]
     assert pcf[0] > 0.0 and pcf[12] == pytest.approx(0.0)
+
+
+def test_premium_factor_rejects_wrong_shape():
+    """A factor callable that returns a scalar / wrong-shape array is a clean
+    ValueError (an input-contract failure), not an AssertionError -- which
+    would also vanish under ``python -O`` and let a mis-shaped factor through.
+    Checked on both the full and the fast path."""
+    mp = fcf.ModelPoints.single(issue_age=40, benefits={0: 1e6}, premium=1000.0,
+                                term_months=24, calculation_methods=CM)
+    scalar = lambda s, a, d, ic, el: 1.0
+    for full in (True, False):
+        with pytest.raises(ValueError,
+                           match="premium_factor_annual must return an array of shape"):
+            fcf.gmm.measure(mp, _basis(scalar), full=full)
 
 
 def test_annuity_factor_rejects_negative_and_nan():

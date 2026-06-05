@@ -145,19 +145,31 @@ def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
         return -np.expm1(np.log1p(-annual) / 12.0)
 
 
-def validate_factor(grid: FloatArray, name: str) -> FloatArray:
+def validate_factor(grid, name: str, expected_shape: tuple) -> FloatArray:
     """Guard a materialised premium / annuity factor grid.
 
     A factor (``premium_factor_annual`` / ``annuity_factor_annual``) is a free
     Basis callable -- it may legitimately exceed 1.0 for an escalating cash
     flow, so it deliberately never passes through ``annual_to_monthly`` and its
-    ``<= 1`` guard. That freedom also means it can return a non-finite or
-    negative value, which would silently flip a premium / annuity cash flow's
-    sign or poison the BEL with a NaN -- bypassing the ``premium >= 0``
-    invariant on ``ModelPoints``. A factor is a finite, non-negative multiple
-    (0 is a valid premium holiday / deferral), so reject anything else here,
-    where the callable's output is materialised, in every kernel path.
+    ``<= 1`` guard. That freedom also means the callable can return the wrong
+    shape (a scalar, a mis-broadcast array) or a non-finite / negative value,
+    any of which would silently mis-index the kernel, flip a premium / annuity
+    cash flow's sign, or poison the BEL with a NaN -- bypassing the
+    ``premium >= 0`` invariant on ``ModelPoints``. A factor is a finite,
+    non-negative multiple of the right shape (0 is a valid premium holiday /
+    deferral). Validate it here, where the callable's output is materialised,
+    in every kernel path -- as a ``ValueError`` (an input-contract failure),
+    not an ``assert`` (which a non-conforming callable should still hit under
+    ``python -O``, where asserts are stripped).
     """
+    grid = np.ascontiguousarray(np.asarray(grid, dtype=np.float64))
+    if grid.shape != expected_shape:
+        raise ValueError(
+            f"{name} must return an array of shape {expected_shape} (one value "
+            f"per grid cell x policy year); got {grid.shape}. Build it from the "
+            f"(sex, issue_age, duration, issue_class, elapsed) arrays it is "
+            f"called with, e.g. ``1.0 + 0.1 * duration``."
+        )
     if not np.all(np.isfinite(grid)):
         raise ValueError(
             f"{name} returned a non-finite value; the factor must be finite"
@@ -532,7 +544,6 @@ class Basis:
     #       exact (no premium reconstruction, no sample-grade warning).
     #   "amount_per_unit" -- as amount_per_policy, additionally scaled by the
     #       per-MP ``surrender_base_amount`` (explicit; no default base).
-    # S1 wires "amount_per_policy"; the projection branch / reader land next.
     surrender_value_basis: str = "cum_premium_factor"
     waiver_incidence_annual: RateFn | None = None
     # Lapse rate for the paid-up state (납입후) -- used only by a state model
