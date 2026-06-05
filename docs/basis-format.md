@@ -42,8 +42,8 @@ reader 호출:
 ```python
 import fastcashflow as fcf
 
-fcf.samples.export(".", template="gmm", quiet=True)   # 견본 한 세트 (본인 파일 있으면 생략)
-basis = fcf.read_basis("basis.xlsx")  # dict[(product_code, channel_code), Basis]
+fcf.samples.export("samples", template="gmm", quiet=True)   # 견본 한 세트 (본인 파일 있으면 생략)
+basis = fcf.read_basis("samples/basis.xlsx")  # dict[(product_code, channel_code), Basis]
 basis = basis[("TERM_LIFE_A", "GA")]  # 한 세그먼트
 ```
 
@@ -459,9 +459,9 @@ basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
 # wide-format 2-D table: 한 행 = 한 scenario, 한 열 = 한 projection month
 n_time = int(mp.term_months.max())
 rng = np.random.default_rng(0)
-pl.DataFrame(0.03 + rng.normal(0, 0.01, (256, n_time))).write_parquet("discount_scenarios.parquet")
+pl.DataFrame(0.03 + rng.normal(0, 0.01, (256, n_time))).write_parquet("samples/discount_scenarios.parquet")
 
-scenarios = fcf.read_scenarios("discount_scenarios.parquet")  # shape (n_scenarios, n_time)
+scenarios = fcf.read_scenarios("samples/discount_scenarios.parquet")  # shape (n_scenarios, n_time)
 result = fcf.gmm.stochastic(mp, basis, scenarios)             # gmm.stochastic / vfa.tvog 에 직접 전달
 ```
 
