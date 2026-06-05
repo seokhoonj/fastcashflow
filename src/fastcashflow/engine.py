@@ -27,7 +27,9 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.basis import Basis, annual_to_monthly, _single_basis
+from fastcashflow.basis import (
+    Basis, annual_to_monthly, _single_basis, SURRENDER_VALUE_BASES,
+)
 from fastcashflow.curves import (
     discount_factors,
     discount_factors_from_curve,
@@ -2039,11 +2041,10 @@ def _measure_fast(
     # surrender mechanic applies.
     surr_user = basis.surrender_value_curve
     surr_mode = basis.surrender_value_basis
-    if surr_user is not None and surr_mode not in (
-            "cum_premium_factor", "amount_per_policy", "amount_per_unit"):
+    if surr_user is not None and surr_mode not in SURRENDER_VALUE_BASES:
         raise ValueError(
-            f"unknown surrender_value_basis {surr_mode!r}; expected "
-            "'cum_premium_factor', 'amount_per_policy', or 'amount_per_unit'."
+            f"unknown surrender_value_basis {surr_mode!r}; expected one of "
+            f"{SURRENDER_VALUE_BASES}."
         )
     # amount_per_policy / amount_per_unit: the curve is a surrender amount
     # applied to the in-force scalar (and, for amount_per_unit, to a per-MP

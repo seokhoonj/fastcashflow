@@ -971,6 +971,22 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
             raise ValueError(
                 f"the policies frame is missing required column {need!r}"
             )
+    # A leftover *_code column from the pre-rename schema would otherwise be
+    # absorbed as a grouping attribute, leaving product / channel empty and
+    # silently mis-routing under a segmented basis. Fail with the same hint
+    # read_basis gives.
+    for new, legacy in (("product", "product_code"), ("channel", "channel_code")):
+        if new not in pol.columns and legacy in pol.columns:
+            raise ValueError(
+                f"the policies frame has column {legacy!r} but not {new!r} "
+                f"-- the routing axes are now the bare keys 'product' / "
+                f"'channel' (no '_code' suffix)"
+            )
+    if "coverage" not in cov.columns and "coverage_code" in cov.columns:
+        raise ValueError(
+            "the coverages frame has column 'coverage_code' but not 'coverage' "
+            "-- the coverage key is now the bare 'coverage' (no '_code' suffix)"
+        )
     for need in ("mp_id", "coverage", "amount"):
         if need not in cov.columns:
             raise ValueError(

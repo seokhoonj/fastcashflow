@@ -13,6 +13,22 @@ Inputs
 .. autoclass:: fastcashflow.CoverageRate
    :members:
 
+.. autoclass:: fastcashflow.CalculationMethod
+
+.. autoclass:: fastcashflow.ExpenseItem
+
+.. autofunction:: fastcashflow.derive_expense_components
+
+.. autodata:: fastcashflow.EXPENSE_BASES
+
+.. autodata:: fastcashflow.RA_METHODS
+
+.. autodata:: fastcashflow.SURRENDER_VALUE_BASES
+
+.. autodata:: fastcashflow.RISK_MORTALITY
+
+.. autodata:: fastcashflow.RISK_MORBIDITY
+
 Measurement (GMM)
 -----------------
 
@@ -119,6 +135,28 @@ Aggregation and transition
 
 .. autofunction:: fastcashflow.transition
 
+State models
+------------
+
+The in-force state machine driving multi-state products (waiver, paid-up,
+disability income, reincidence, long-term care). A :class:`StateModel` is a
+tuple of :class:`State` objects, each carrying its :class:`Transition` edges;
+``STATE_MODELS`` holds the bundled models.
+
+.. autoclass:: fastcashflow.StateModel
+
+.. autoclass:: fastcashflow.State
+
+.. autoclass:: fastcashflow.Transition
+
+.. autodata:: fastcashflow.STATE_MODELS
+
+.. autodata:: fastcashflow.STATE_ACTIVE
+
+.. autodata:: fastcashflow.STATE_WAIVER
+
+.. autodata:: fastcashflow.STATE_PAIDUP
+
 Stochastic valuation
 --------------------
 
@@ -136,6 +174,18 @@ Input and output
 
 .. autofunction:: fastcashflow.read_basis
 
+.. autofunction:: fastcashflow.read_inforce_policies
+
+.. autofunction:: fastcashflow.read_inforce_state
+
+.. autofunction:: fastcashflow.apply_inforce_state
+
+.. autoclass:: fastcashflow.InforceState
+
+.. autofunction:: fastcashflow.read_scenarios
+
+.. autofunction:: fastcashflow.describe_basis
+
 .. autofunction:: fastcashflow.samples.model_points
 
 .. autofunction:: fastcashflow.samples.basis
@@ -151,6 +201,10 @@ Input and output
 .. autofunction:: fastcashflow.write_measurement
 
 .. autofunction:: fastcashflow.gmm.measure_stream
+
+.. autofunction:: fastcashflow.sample_data_dir
+
+.. autofunction:: fastcashflow.clear_codegen_cache
 
 Visualisation
 -------------

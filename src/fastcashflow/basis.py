@@ -235,6 +235,18 @@ EXPENSE_BASES = (
     "lae_pro_rata",     # LAE, % of claim-type outflow, every month
 )
 
+# The valid value-sets for the string-typed Basis fields, named once so the
+# engine validates against one source instead of scattered string literals.
+RA_METHODS = (
+    "confidence_level",   # percentile margin on the risk-bearing PV (default)
+    "cost_of_capital",    # CoC rate x capital released over the run-off
+)
+SURRENDER_VALUE_BASES = (
+    "cum_premium_factor",  # factor x cumulative premium (sample-grade default)
+    "amount_per_policy",   # contractual surrender amount per policy at duration t
+    "amount_per_unit",     # per-policy amount x ModelPoints.surrender_base_amount
+)
+
 
 def derive_expense_components(
     expense_items: tuple["ExpenseItem", ...], n_time: int,

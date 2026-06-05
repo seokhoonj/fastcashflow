@@ -40,7 +40,7 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import (
-    Basis, annual_to_monthly, derive_expense_components,
+    Basis, annual_to_monthly, derive_expense_components, SURRENDER_VALUE_BASES,
 )
 from fastcashflow.coverage import (
     align_coverages, build_coverage_rates, coverage_arrays, validate_csr_codes,
@@ -901,9 +901,8 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
                             * np.asarray(base, dtype=np.float64)[:, None])
         else:
             raise ValueError(
-                f"unknown surrender_value_basis {mode!r}; expected "
-                "'cum_premium_factor', 'amount_per_policy', or "
-                "'amount_per_unit'."
+                f"unknown surrender_value_basis {mode!r}; expected one of "
+                f"{SURRENDER_VALUE_BASES}."
             )
     return Cashflows(
         inforce=inforce,

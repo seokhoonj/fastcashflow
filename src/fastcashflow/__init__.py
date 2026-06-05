@@ -13,8 +13,8 @@ Conventional import alias::
 quantity this engine computes.
 """
 from fastcashflow.basis import (
-    Basis, CoverageRate, EXPENSE_BASES, ExpenseItem,
-    derive_expense_components, describe_basis,
+    Basis, CoverageRate, EXPENSE_BASES, RA_METHODS, SURRENDER_VALUE_BASES,
+    ExpenseItem, derive_expense_components, describe_basis,
 )
 from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import GMMMeasurement, clear_codegen_cache
@@ -73,6 +73,9 @@ from fastcashflow import gmm, paa, reinsurance, samples, vfa  # namespaces
 
 __version__ = "0.1.0.dev1"
 __all__ = [
+    # measurement-model namespaces -- the headline entry points live here
+    # (e.g. ``fastcashflow.gmm.measure``, ``fastcashflow.samples.basis``).
+    "gmm", "paa", "vfa", "reinsurance", "samples",
     "Basis", "ModelPoints", "clear_codegen_cache",
     "report", "roll_forward", "reconcile", "group", "group_of_contracts",
     "transition",
@@ -90,6 +93,7 @@ __all__ = [
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
+    "RA_METHODS", "SURRENDER_VALUE_BASES",
     "derive_expense_components",
     "RISK_MORTALITY", "RISK_MORBIDITY",
     "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAIDUP",

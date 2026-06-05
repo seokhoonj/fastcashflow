@@ -59,9 +59,14 @@ def solve_premium(
         raise ValueError(f"margin must be in [0, 1), got {margin}")
 
     # FCF is linear in the premium -- FCF = A - premium * B -- so two
-    # valuations (premium 0 and 1) pin the line down exactly.
-    at_zero = measure(_with_premium(model_points, 0.0), basis, full=False)
-    at_one = measure(_with_premium(model_points, 1.0), basis, full=False)
+    # valuations (premium 0 and 1) pin the line down exactly. The fast path
+    # computes the confidence-level RA only; cost-of-capital RA needs the
+    # trajectory path (the inception headline is identical either way). A dict
+    # (segmented) basis takes the trajectory path if any segment uses it.
+    bases = basis.values() if isinstance(basis, dict) else (basis,)
+    use_full = any(b.ra_method != "confidence_level" for b in bases)
+    at_zero = measure(_with_premium(model_points, 0.0), basis, full=use_full)
+    at_one = measure(_with_premium(model_points, 1.0), basis, full=use_full)
     a = at_zero.bel + at_zero.ra
     b = a - (at_one.bel + at_one.ra)
 
