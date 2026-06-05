@@ -83,7 +83,7 @@ fastcashflow 사용자 API
 │
 ├── 결과 저장
 │   ├── fcf.write_measurement(val, path)                  ── 결과 한 파일에 저장
-│   └── fcf.gmm.measure_stream(parquet, out_dir, basis)   ── 메모리 초과 portfolio 스트리밍
+│   └── fcf.gmm.measure_stream(policies, out_dir, basis, coverages=...)  ── 메모리 초과 portfolio 스트리밍
 │
 ├── 변동분해 (분기간 비교)
 │   ├── fcf.roll_forward(m, period_months=...)            ── 분기 사이 변동 분해

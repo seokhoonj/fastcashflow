@@ -1964,9 +1964,18 @@ def measure_stream(
 
     # The result id is written from ``id_column`` (a business key the output
     # joins back on); coverages still join on ``mp_id``. Validate up front so a
-    # typo'd id_column is a clear error, not a per-chunk failure.
+    # typo'd id_column -- or a missing mp_id -- is a clear error, not a polars
+    # ColumnNotFoundError leaking from a per-chunk read.
+    schema_names = scan.collect_schema().names()
+    if "mp_id" not in schema_names:
+        raise ValueError(
+            f"measure_stream: the policies file {str(input_path)!r} has no "
+            "'mp_id' column; mp_id is the contract identity and the coverages "
+            "join key (it is required even when id_column names a different "
+            "result id)."
+        )
     id_col = id_column if id_column is not None else "mp_id"
-    if id_col not in scan.collect_schema().names():
+    if id_col not in schema_names:
         raise ValueError(
             f"measure_stream: id_column {id_col!r} is not a column of the "
             f"policies file {str(input_path)!r}"

@@ -433,3 +433,16 @@ def test_model_points_repr_and_str_are_compact():
     v = fcf.samples.model_points("vfa")
     assert "account-value" in repr(v)
     assert "account" in str(v) and "coverages" not in str(v)
+
+
+def test_measure_stream_requires_mp_id_column(tmp_path):
+    """A policies file with no mp_id is a clear ValueError, not a leaked polars
+    ColumnNotFoundError -- even when id_column names a different result id."""
+    pl.DataFrame({"policy_no": ["P1"], "issue_age": [40], "term_months": [12],
+                  "premium": [0.0]}).write_parquet(tmp_path / "p.parquet")
+    pl.DataFrame({"mp_id": ["P1"], "coverage": ["DEATH"], "amount": [1e6]}
+                 ).write_parquet(tmp_path / "c.parquet")
+    with pytest.raises(ValueError, match="no 'mp_id' column"):
+        fcf.gmm.measure_stream(tmp_path / "p.parquet", tmp_path / "o",
+                               _assumptions(), coverages=tmp_path / "c.parquet",
+                               calculation_methods=PATTERNS, id_column="policy_no")
