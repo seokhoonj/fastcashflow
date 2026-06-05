@@ -326,9 +326,15 @@ state)`. 결과는 위 1-파일과 동일.
 이고, 청크마다 `mp_id` 로 담보를 끌어옵니다.
 
 ```python
+import shutil
+
 # 시연용 셋업 -- 샘플 입력을 parquet 로 저장 (format="parquet", quiet=True)
 # (자기 데이터를 쓸 때는 이미 parquet 형태로 갖고 있다고 가정)
 fcf.samples.export("samples", template="gmm", format="parquet", quiet=True)   # policies.parquet, coverages.parquet ...
+
+# measure_stream 은 빈 출력 폴더를 요구합니다 (이전 분할 결과와 섞이지 않도록).
+# 이 셀을 다시 실행할 수 있게 결과 폴더를 먼저 비웁니다.
+shutil.rmtree("samples/results", ignore_errors=True)
 
 # 스트리밍 평가 -- 한 줄. 결과는 results/ 폴더에 분할 저장
 fcf.gmm.measure_stream(
