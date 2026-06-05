@@ -934,7 +934,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
-            "premium_factor, coverage_risk,")
+            "premium_factor, annuity_factor, coverage_risk,")
     line(0, "           coverage_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
@@ -1025,7 +1025,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
         line(12, "pv_morbidity += ift * morb_rate * dm")
     if use_annuity:
         line(12, "if ann_due == 0:")
-        line(16, "pv_annuity += ift * annuity * ds")
+        line(16, "pv_annuity += ift * annuity * annuity_factor[sx, age_idx, year] * ds")
         line(16, "ann_due = ann_freq - 1")
         line(12, "else:")
         line(16, "ann_due -= 1")
@@ -1416,7 +1416,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
-            "premium_factor, coverage_risk,")
+            "premium_factor, annuity_factor, coverage_risk,")
     line(0, "           coverage_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
@@ -1513,7 +1513,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, "pv_morbidity += ift * morb_rate * dm")
     if use_annuity:
         line(12, "if ann_due == 0:")
-        line(16, "pv_annuity += ift * annuity * ds")
+        line(16, "pv_annuity += ift * annuity * annuity_factor[sx, age_idx, year] * ds")
         line(16, "ann_due = ann_freq - 1")
         line(12, "else:")
         line(16, "ann_due -= 1")
@@ -1687,7 +1687,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                          count, premium,
                          premium_term_months, premium_frequency_months,
                          annuity_frequency_months, coverage_index, coverage_amount, coverage_offset,
-                         coverage_rates, premium_factor, coverage_risk, coverage_is_diagnosis,
+                         coverage_rates, premium_factor, annuity_factor, coverage_risk, coverage_is_diagnosis,
                          maturity_benefit, annuity_payment,
                          alpha_pro_rata, alpha_fixed, beta_pro_rata,
                          gamma_fixed, lae_pro_rata,
@@ -1787,7 +1787,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                 pv_morbidity += inforce * morb_rate * dm
             if use_annuity:
                 if ann_due == 0:
-                    pv_annuity += inforce * annuity * ds
+                    pv_annuity += inforce * annuity * annuity_factor[sx, age_idx, year] * ds
                     ann_due = ann_freq - 1
                 else:
                     ann_due -= 1
@@ -1976,6 +1976,15 @@ def _measure_fast(
         premium_factor_grid = np.ones_like(mortality_grid)
     else:
         premium_factor_grid = np.ascontiguousarray(basis.premium_factor_annual(
+            sex_grid, issue_age_grid, duration_grid,
+            issue_class_grid, elapsed_grid))
+    # Annuity SHAPE on the dense grid -- the survival-benefit twin of
+    # premium_factor_grid (escalating annuity). Same rules: never
+    # annual_to_monthly, None -> all-ones (level annuity), a no-op multiply.
+    if basis.annuity_factor_annual is None:
+        annuity_factor_grid = np.ones_like(mortality_grid)
+    else:
+        annuity_factor_grid = np.ascontiguousarray(basis.annuity_factor_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid))
     # Fast path: when no waiver / paid-up mechanic is active and every model
@@ -2251,6 +2260,7 @@ def _measure_fast(
             model_points.coverage_offset,
             coverage_rates,
             premium_factor_grid,
+            annuity_factor_grid,
             coverage_risk,
             coverage_is_diagnosis,
             model_points.maturity_benefit,
@@ -2306,6 +2316,7 @@ def _measure_fast(
         model_points.coverage_offset,
         coverage_rates,
         premium_factor_grid,
+        annuity_factor_grid,
         coverage_risk,
         coverage_is_diagnosis,
         model_points.maturity_benefit,
@@ -2358,6 +2369,7 @@ def _measure_fast(
                 model_points.coverage_offset,
                 coverage_rates,
                 premium_factor_grid,
+                annuity_factor_grid,
                 coverage_risk,
                 coverage_is_diagnosis,
                 model_points.maturity_benefit,

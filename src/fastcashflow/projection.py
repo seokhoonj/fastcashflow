@@ -114,7 +114,7 @@ def _expense_kernel_args(
 @njit(parallel=True, cache=True)
 def _project_kernel(state_death_exit, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
-                    term_months, contract_boundary_months, count, premium, premium_factor,
+                    term_months, contract_boundary_months, count, premium, premium_factor, annuity_factor,
                     premium_term_months, premium_frequency_months, annuity_frequency_months,
                     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
                     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -214,7 +214,7 @@ def _project_kernel(state_death_exit, state_lapse, edge_from, edge_to, edge_prob
             premium_cf[mp, t] = level
             claim_cf[mp, t] = ift * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
-            annuity_cf[mp, t] = (ift * annuity_payment[mp]
+            annuity_cf[mp, t] = (ift * annuity_payment[mp] * annuity_factor[mp, year]
                                  if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: alpha / beta / gamma maintenance plus LAE on the
@@ -312,7 +312,7 @@ def _project_kernel_semi_markov(
     state_death_exit, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset, benefit_max_months,
     premium_state, benefit_state, start_state,
-    term_months, contract_boundary_months, count, premium, premium_factor,
+    term_months, contract_boundary_months, count, premium, premium_factor, annuity_factor,
     premium_term_months, premium_frequency_months, annuity_frequency_months,
     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -427,7 +427,7 @@ def _project_kernel_semi_markov(
             premium_cf[mp, t] = level
             claim_cf[mp, t] = ift * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
-            annuity_cf[mp, t] = (ift * annuity_payment[mp]
+            annuity_cf[mp, t] = (ift * annuity_payment[mp] * annuity_factor[mp, year]
                                   if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: same dispatch as _project_kernel (see its comment).
@@ -678,6 +678,16 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid))
     assert premium_factor.shape == (len(model_points.issue_age), n_years)
+    # Annuity SHAPE -- the survival-benefit twin of premium_factor (escalating
+    # annuity). Same multiplicative-scale rules: never annual_to_monthly, None
+    # -> all-ones (level annuity), a structural no-op multiply.
+    if basis.annuity_factor_annual is None:
+        annuity_factor = np.ones((len(model_points.issue_age), n_years))
+    else:
+        annuity_factor = np.ascontiguousarray(basis.annuity_factor_annual(
+            sex_grid, issue_age_grid, duration_grid,
+            issue_class_grid, elapsed_grid))
+    assert annuity_factor.shape == (len(model_points.issue_age), n_years)
     # Expense primitives -- the five inputs the kernel consumes. Honours
     # Basis.expense_items when set, otherwise the legacy alpha / beta
     # / gamma / expense_inflation scalars (see _expense_kernel_args).
@@ -768,6 +778,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             model_points.count,
             model_points.premium,
             premium_factor,
+            annuity_factor,
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,
@@ -841,6 +852,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             model_points.count,
             model_points.premium,
             premium_factor,
+            annuity_factor,
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,

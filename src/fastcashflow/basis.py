@@ -21,6 +21,7 @@ _RATE_FN_FIELDS: tuple[str, ...] = (
     "waiver_incidence_annual",
     "ci_incidence_annual",
     "premium_factor_annual",
+    "annuity_factor_annual",
 )
 
 # DurationRateFn-shape fields on Basis -- semi-Markov rates whose
@@ -527,6 +528,12 @@ class Basis:
     # and it is never run through ``annual_to_monthly``. None -> level premium
     # (factor 1.0 everywhere), bit-identical to the no-shape behaviour.
     premium_factor_annual: RateFn | None = None
+    # Annuity SHAPE -- the survival-benefit twin of premium_factor_annual: a
+    # multiplicative factor on ``ModelPoints.annuity_payment`` by year, for an
+    # escalating annuity (체증형 연금, e.g. ``lambda s,a,d,ic,el: 1.05 ** d`` for
+    # 5%/yr). Same 5-arg RateFn shape; a multiplicative scale, never
+    # annual_to_monthly. None -> level annuity (factor 1.0), bit-identical.
+    annuity_factor_annual: RateFn | None = None
     # Semi-Markov (Phase (c)) prototype rates. ``ci_incidence_annual`` is the
     # first-cancer diagnosis rate (active -> post_first transition, Markov);
     # ``ci_reincidence_annual`` is the duration-dependent reincidence rate
