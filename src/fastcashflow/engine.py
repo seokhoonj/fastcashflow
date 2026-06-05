@@ -2364,7 +2364,9 @@ def _measure_segmented(
     not set.
     """
     try:
-        cols = _resolve_segment_cols(model_points, segment_by)
+        basis_norm, segments = _factorise_segments(
+            basis, model_points, segment_by, model_points.n_mp,
+        )
     except KeyError:
         if len(basis) == 1:
             (basis,) = basis.values()
@@ -2377,9 +2379,6 @@ def _measure_segmented(
             f"basis has {len(basis)} segments; either set the columns or "
             "pass a single-segment basis"
         )
-    basis_norm, segments = _factorise_segments(
-        basis, cols, segment_by, model_points.n_mp,
-    )
 
     n_mp = model_points.n_mp
     bel = np.empty(n_mp)
@@ -2400,69 +2399,66 @@ def _measure_segmented(
     return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
 
-def _resolve_segment_cols(model_points: ModelPoints, segment_by) -> list[np.ndarray]:
-    """Resolve and NFC-normalise the segment-key axes (``segment_by`` names).
-
-    Each axis is looked up via :meth:`ModelPoints.axis`, so a routing key can mix
-    the segment fields (product / channel) and any ``attributes`` column.
-    NFC-normalises so the lookup is text-identity, not byte-identity (a Korean /
-    European character composed in one file and decomposed in the other compares
-    unequal). Raises :class:`KeyError` if an axis is not set on the model points
-    -- the caller turns that into the single-basis convenience or a clear error.
-    """
-    cols = []
-    for name in segment_by:
-        col = model_points.axis(name)
-        cols.append(np.array(
-            [unicodedata.normalize("NFC", str(v)) for v in col], dtype=object,
-        ))
-    return cols
-
-
-def _factorise_segments(basis, cols, segment_by, n_mp):
+def _factorise_segments(basis, model_points: ModelPoints, segment_by, n_mp):
     """Resolve a multi-segment portfolio to per-segment row indices.
 
-    ``cols`` are the NFC-normalised axis arrays (one per ``segment_by`` name);
-    ``basis`` is ``{key: Basis}`` keyed by a tuple of those axes in order (a bare
-    value is accepted for a one-axis key). Returns ``(basis_norm, segments)``
-    where ``basis_norm`` is ``basis`` re-keyed under NFC-normalised tuples and
-    ``segments`` is ``[(key, idx)]`` in first-seen order -- one per segment
-    present in the model points. Cost scales with the number of distinct
-    segments, not the number of axes: the ``'|'``-join + ``np.unique`` is a
-    single ``O(n_mp)`` factorisation regardless of how many axes the key spans.
+    ``basis`` is ``{key: Basis}`` keyed by a tuple of the ``segment_by`` axes in
+    order (a bare value is accepted for a one-axis key). Each axis is looked up
+    via :meth:`ModelPoints.axis` (so a routing key can mix the segment fields and
+    any ``attributes`` column) and NFC-normalised, so the lookup is text-identity
+    not byte-identity (a Korean / European character composed in one file and
+    decomposed in the other would otherwise compare unequal). Raises
+    :class:`KeyError` if an axis is not set -- the caller turns that into the
+    single-basis convenience or a clear error.
+
+    Returns ``(basis_norm, segments)`` where ``basis_norm`` is ``basis`` re-keyed
+    under NFC-normalised tuples and ``segments`` is ``[(key, idx)]`` in first-seen
+    order. The factorisation hashes the per-row axis-value *tuple* directly (one
+    ``O(n_mp)`` pass), avoiding a per-row ``'|'``-join and the ``O(n_mp log
+    n_mp)`` object-string sort ``np.unique`` would do -- the hot path when a
+    large portfolio is split by segment.
     """
+    norm = unicodedata.normalize
     basis_norm = {}
     for k, a in basis.items():
         parts = k if isinstance(k, tuple) else (k,)
-        basis_norm[tuple(unicodedata.normalize("NFC", str(p)) for p in parts)] = a
-    # Segment keys are joined with '|' for factorisation; reject codes that
-    # contain that separator to keep the round-trip lossless.
-    for col, name in zip(cols, segment_by):
-        bad = sorted({str(v) for v in col if "|" in str(v)})
+        basis_norm[tuple(norm("NFC", str(p)) for p in parts)] = a
+    # Resolve + NFC-normalise each axis. ``axis`` raises KeyError for an unset
+    # axis (caught by the caller). Object arrays so the values stay python str.
+    axes = [
+        np.array([norm("NFC", str(v)) for v in model_points.axis(name)],
+                 dtype=object)
+        for name in segment_by
+    ]
+    # '|' stays reserved (group_of_contracts joins labels with it); reject it so
+    # a segment key still round-trips losslessly through the grouping layer.
+    for col, name in zip(axes, segment_by):
+        bad = sorted({v for v in col if "|" in v})
         if bad:
             raise ValueError(
                 f"{name} value(s) {bad} contain the '|' character, which the "
-                "segmented measure uses as the segment-key separator. Pick a "
-                "different separator in your ETL or rename the offending code."
+                "grouping layer uses as the label separator. Pick a different "
+                "separator in your ETL or rename the offending code."
             )
-    keys_arr = np.array(
-        ["|".join(map(str, row)) for row in zip(*cols)], dtype=object,
-    )
-    # Preserve first-seen order so debugging output reads top-to-bottom of the
-    # input (np.unique returns sorted; re-index by first occurrence).
-    unique_keys, first_seen, inverse = np.unique(
-        keys_arr, return_index=True, return_inverse=True,
-    )
-    order = np.argsort(first_seen)
+    # Hash-factorise the axis-value tuple per row, first-seen order.
+    seen: dict[tuple, int] = {}
+    inverse = np.empty(n_mp, dtype=np.int64)
+    key_list: list[tuple] = []
+    for i, key in enumerate(zip(*axes)):
+        code = seen.get(key)
+        if code is None:
+            code = len(key_list)
+            seen[key] = code
+            key_list.append(key)
+        inverse[i] = code
     segments: list[tuple[tuple, np.ndarray]] = []
-    for ord_idx in order:
-        key = tuple(str(unique_keys[ord_idx]).split("|"))
+    for code, key in enumerate(key_list):
         if key not in basis_norm:
             raise ValueError(
                 f"segment {key!r} appears in model_points but is not in the "
                 f"basis (known segments: {sorted(basis_norm)})"
             )
-        idx = np.nonzero(inverse == ord_idx)[0]
+        idx = np.nonzero(inverse == code)[0]
         segments.append((key, idx))
     return basis_norm, segments
 
@@ -2486,7 +2482,9 @@ def _measure_segmented_full(
     is finite, not a 0/0.
     """
     try:
-        cols = _resolve_segment_cols(model_points, segment_by)
+        basis_norm, segments = _factorise_segments(
+            basis, model_points, segment_by, model_points.n_mp,
+        )
     except KeyError:
         if len(basis) == 1:
             (basis,) = basis.values()
@@ -2496,9 +2494,6 @@ def _measure_segmented_full(
             f"basis has {len(basis)} segments; either set the columns or "
             "pass a single-segment basis"
         )
-    basis_norm, segments = _factorise_segments(
-        basis, cols, segment_by, model_points.n_mp,
-    )
     n_mp = model_points.n_mp
 
     sub_results = [(idx, _measure_full(model_points.subset(idx), basis_norm[key]))
