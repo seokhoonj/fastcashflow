@@ -4,7 +4,9 @@ The single surface for the packaged demo data. Two uses, deliberately distinct:
 
 * **load** -- get an assembled object to play with or feed straight to a
   measurement: :func:`basis`, :func:`model_points`, :func:`calculation_methods`,
-  :func:`inforce_state`.
+  :func:`inforce_state`, :func:`return_scenarios` (toy fund returns for the VFA
+  time-value-of-guarantees example) and :func:`rate_scenarios` (toy discount
+  rates for the stochastic GMM valuation).
 * **export** -- write a starter set of input *template files* to a directory
   (edit them, then read back with ``fcf.read_model_points`` / ``fcf.read_basis``).
   :func:`templates` lists the available template names.
@@ -15,10 +17,16 @@ is the variable (account-value) contract set. The data is synthetic
 """
 from pathlib import Path
 
+import numpy as np
+
 from fastcashflow import io as _io
 
 #: Available sample templates -- see :func:`templates`.
 _TEMPLATES = ("gmm", "vfa")
+
+#: Fixed seed for :func:`scenarios` -- a reproducible toy path set, not a
+#: calibration parameter.
+_SCENARIO_SEED = 20260605
 
 #: ``format=`` choices for :func:`export` -> the data-file extension. The
 #: basis is always a multi-sheet ``.xlsx`` workbook regardless of this.
@@ -60,6 +68,55 @@ def calculation_methods():
 def inforce_state():
     """Bundled sample in-force state (elapsed_months / count / prior_csm / ...)."""
     return _io.load_sample_inforce_state()
+
+
+def return_scenarios(template: str = "vfa", n_scenarios: int = 1000):
+    """Toy *fund-return* scenarios, shape ``(n_scenarios, n_time)``, for the
+    variable (VFA) time-value-of-guarantees example -- the ``return_scenarios``
+    input to :func:`~fastcashflow.vfa.measure`.
+
+    Generated in memory (no bundled file): deterministic, modest-volatility
+    monthly fund returns so the guarantee shows a believable time value (~3% of
+    account value on the sample). This is NOT a calibrated economic scenario
+    generator -- the engine *consumes* scenarios, it does not certify
+    valuation-grade ones. For a real valuation supply your own set via
+    :func:`~fastcashflow.read_scenarios`.
+
+    Each cell is a one-month *fund return* (not an interest-rate path -- that is
+    the separate ``scenarios`` input to :func:`~fastcashflow.gmm.stochastic`);
+    ``n_time`` matches the bundled VFA sample's term and the fixed seed keeps the
+    output stable.
+    """
+    if template != "vfa":
+        raise ValueError(
+            "return_scenarios are a variable-contract (VFA) input; template "
+            f"must be 'vfa', got {template!r}"
+        )
+    mp = model_points("vfa")
+    n_time = int(np.asarray(mp.term_months).max())
+    rng = np.random.default_rng(_SCENARIO_SEED)
+    central = (1.0 + 0.06) ** (1.0 / 12.0) - 1.0   # ~6% annual, monthly return
+    vol = 0.005                                    # modest monthly sd -- a toy
+    return central + vol * rng.standard_normal((n_scenarios, n_time))
+
+
+def rate_scenarios(n_scenarios: int = 1000):
+    """Toy *discount-rate* scenarios, shape ``(n_scenarios,)``, for the
+    stochastic GMM valuation -- the ``scenarios`` input to
+    :func:`~fastcashflow.gmm.stochastic`. The interest-rate counterpart to
+    :func:`return_scenarios` (which is fund returns).
+
+    Generated in memory: one flat annual discount rate per scenario, modest
+    dispersion around ~3%, deterministic (fixed seed). This is NOT a calibrated
+    economic scenario generator -- for a real valuation supply your own rate set
+    (Hull-White / Vasicek / regulator-prescribed) via
+    :func:`~fastcashflow.read_scenarios`. Flat (1-D) rates so the toy is
+    portfolio-agnostic; a real run can pass a 2-D ``(n_scenarios, n_time)`` curve
+    set instead.
+    """
+    rng = np.random.default_rng(_SCENARIO_SEED + 1)   # a stream distinct from returns
+    rates = 0.03 + 0.01 * rng.standard_normal(n_scenarios)
+    return np.maximum(rates, 1e-4)                     # keep the discount rate positive
 
 
 def _export_tree(dest: Path, files: list[str]) -> str:

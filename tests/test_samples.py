@@ -88,3 +88,39 @@ def test_sample_supports_group_of_contracts_cohorts():
     g = fcf.group_of_contracts(m)
     cohorts = {str(lab).split("|")[1] for lab in g.group_labels}
     assert cohorts == {"2025", "2026"}
+
+
+def test_sample_return_scenarios_drive_tvog():
+    """The toy fund-return scenarios feed vfa.measure and wake up the guarantee
+    time value: the deterministic measure has TVOG 0, with scenarios positive.
+    Deterministic across calls (fixed seed)."""
+    scen = fcf.samples.return_scenarios()
+    mp = fcf.samples.model_points("vfa")
+    assert scen.ndim == 2 and scen.shape[0] == 1000          # 1,000 toy paths
+    assert scen.shape[1] == int(np.asarray(mp.term_months).max())
+    assert np.allclose(scen, fcf.samples.return_scenarios())  # reproducible
+    basis = fcf.samples.basis("vfa")
+    det = fcf.vfa.measure(mp, basis)
+    sto = fcf.vfa.measure(mp, basis, return_scenarios=scen)
+    assert np.allclose(det.time_value, 0.0)
+    assert np.all(sto.time_value > 0.0)
+
+
+def test_sample_return_scenarios_reject_non_vfa():
+    """return_scenarios are a variable-contract input -- non-vfa is rejected."""
+    with pytest.raises(ValueError, match="VFA"):
+        fcf.samples.return_scenarios(template="gmm")
+
+
+def test_sample_rate_scenarios_drive_stochastic():
+    """The toy discount-rate scenarios feed gmm.stochastic and produce a BEL
+    distribution across rates (the rate counterpart to return_scenarios)."""
+    rates = fcf.samples.rate_scenarios()
+    assert rates.ndim == 1 and rates.shape[0] == 1000        # 1,000 flat rates
+    assert np.all(rates > 0.0)
+    assert np.allclose(rates, fcf.samples.rate_scenarios())   # reproducible
+    mp = fcf.samples.model_points()
+    basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+    res = fcf.gmm.stochastic(mp, basis, rates)
+    assert res.bel.shape[0] == 1000                          # one BEL per scenario
+    assert np.all(np.isfinite(res.bel))

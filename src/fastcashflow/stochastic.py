@@ -137,11 +137,11 @@ def _stochastic_inception_kernel(
 
 
 def measure_stochastic(
-    model_points: ModelPoints, basis: Basis, scenarios: FloatArray
+    model_points: ModelPoints, basis: Basis, rate_scenarios: FloatArray
 ) -> StochasticResult:
     """Value a portfolio under each economic scenario -- the liability distribution.
 
-    ``scenarios`` is either
+    ``rate_scenarios`` is either
 
     * a 1-D ``(n_scenarios,)`` array -- one flat annual discount rate per
       scenario; or
@@ -154,16 +154,16 @@ def measure_stochastic(
     (see module docstring); the settlement-pattern and cost-of-capital paths
     fall back to a per-scenario ``measure`` loop (``full=False`` for the
     confidence-level RA, ``full=True`` for cost-of-capital, which the fast
-    path does not compute). Cost-of-capital supports flat (1-D) scenarios only.
+    path does not compute). Cost-of-capital supports flat (1-D) rate_scenarios only.
     """
-    scenarios = np.asarray(scenarios, dtype=np.float64)
-    if scenarios.ndim not in (1, 2):
-        raise ValueError("scenarios must be 1-D (flat rates) or 2-D (rate curves)")
-    if scenarios.size == 0:
-        raise ValueError("scenarios is empty; need at least one scenario")
-    if not np.all(np.isfinite(scenarios)):
+    rate_scenarios = np.asarray(rate_scenarios, dtype=np.float64)
+    if rate_scenarios.ndim not in (1, 2):
+        raise ValueError("rate_scenarios must be 1-D (flat rates) or 2-D (rate curves)")
+    if rate_scenarios.size == 0:
+        raise ValueError("rate_scenarios is empty; need at least one scenario")
+    if not np.all(np.isfinite(rate_scenarios)):
         raise ValueError(
-            "scenarios must be finite (a NaN / inf rate yields a "
+            "rate_scenarios must be finite (a NaN / inf rate yields a "
             "silently-NaN distribution)"
         )
 
@@ -176,15 +176,15 @@ def measure_stochastic(
             and basis.settlement_pattern is None):
         proj = project_cashflows(model_points, basis)
         n_time = proj.claim_cf.shape[1]
-        if scenarios.ndim == 2:
-            if scenarios.shape[1] != n_time:
+        if rate_scenarios.ndim == 2:
+            if rate_scenarios.shape[1] != n_time:
                 raise ValueError(
-                    f"a 2-D scenarios array must have {n_time} columns (the "
-                    f"projection horizon), got {scenarios.shape[1]}"
+                    f"a 2-D rate_scenarios array must have {n_time} columns (the "
+                    f"projection horizon), got {rate_scenarios.shape[1]}"
                 )
-            monthly_rate_all = (1.0 + scenarios) ** (1.0 / 12.0) - 1.0
+            monthly_rate_all = (1.0 + rate_scenarios) ** (1.0 / 12.0) - 1.0
         else:
-            flat = (1.0 + scenarios) ** (1.0 / 12.0) - 1.0
+            flat = (1.0 + rate_scenarios) ** (1.0 / 12.0) - 1.0
             monthly_rate_all = np.repeat(flat[:, None], n_time, axis=1)
         monthly_rate_all = np.ascontiguousarray(monthly_rate_all)
         z = _norm_ppf(basis.ra_confidence)
@@ -200,39 +200,39 @@ def measure_stochastic(
 
     # Fallback: settlement pattern or non-confidence-level RA. Value each
     # scenario one at a time. The confidence-level RA is available on the fast
-    # path (full=False); cost-of-capital RA is not, so those scenarios run on
+    # path (full=False); cost-of-capital RA is not, so those rate_scenarios run on
     # the trajectory path (full=True) and read the inception headline.
     use_full = basis.ra_method != "confidence_level"
-    if scenarios.ndim == 2:
+    if rate_scenarios.ndim == 2:
         # The projection horizon is the contract boundary, not the term --
         # the same width the discount curve / fast kernel use.
         n_time = int(np.asarray(model_points.contract_boundary_months).max())
-        if scenarios.shape[1] != n_time:
+        if rate_scenarios.shape[1] != n_time:
             raise ValueError(
-                f"a 2-D scenarios array must have {n_time} columns (the "
-                f"projection horizon), got {scenarios.shape[1]}"
+                f"a 2-D rate_scenarios array must have {n_time} columns (the "
+                f"projection horizon), got {rate_scenarios.shape[1]}"
             )
         if use_full:
             # full=True reads the discount off basis.discount_annual, which is
             # a per-year curve; a per-month scenario curve has no place to go.
             raise NotImplementedError(
                 "measure_stochastic with ra_method='cost_of_capital' supports "
-                "flat (1-D) discount-rate scenarios only; a per-month discount "
+                "flat (1-D) discount-rate rate_scenarios only; a per-month discount "
                 "curve (2-D) is supported only under the confidence-level RA. "
                 "Use 1-D flat rates, or ra_method='confidence_level' for curves."
             )
-    n = int(scenarios.shape[0])
+    n = int(rate_scenarios.shape[0])
     bel = np.empty(n)
     ra = np.empty(n)
     csm = np.empty(n)
     loss_component = np.empty(n)
     for s in range(n):
-        if scenarios.ndim == 1:
+        if rate_scenarios.ndim == 1:
             v = measure(model_points,
-                        replace(basis, discount_annual=float(scenarios[s])),
+                        replace(basis, discount_annual=float(rate_scenarios[s])),
                         full=use_full)
         else:
-            v = measure(model_points, basis, full=False, discount_curve=scenarios[s])
+            v = measure(model_points, basis, full=False, discount_curve=rate_scenarios[s])
         bel[s] = v.bel.sum()
         ra[s] = v.ra.sum()
         csm[s] = v.csm.sum()
