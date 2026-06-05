@@ -112,7 +112,7 @@ def _expense_kernel_args(
 
 
 @njit(parallel=True, cache=True)
-def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
+def _project_kernel(state_mortality, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
                     term_months, contract_boundary_months, count, premium,
                     premium_term_months, premium_frequency_months, annuity_frequency_months,
@@ -154,6 +154,7 @@ def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_su
     expense_cf = np.zeros((n_mp, n_time))
     annuity_cf = np.zeros((n_mp, n_time))
     disability_cf = np.zeros((n_mp, n_time))
+    lapse_flow = np.zeros((n_mp, n_time))   # state-machine lapse exits, for surrender
     maturity_cf = np.zeros(n_mp)
     maturity_survivors = np.zeros(n_mp)
 
@@ -181,14 +182,17 @@ def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_su
             prem_occ = 0.0    # in-force on the premium-paying states
             benefit_occ = 0.0 # in-force on the benefit-paying states
             deaths_acc = 0.0  # state-conditional death count
+            lapse_acc = 0.0   # state-conditional lapse count (surrender)
             for s in range(n_states):
                 ift += occ[s]
                 deaths_acc += occ[s] * state_mortality[s, mp, year]
+                lapse_acc += occ[s] * state_lapse[s, mp, year]
                 if premium_state[s]:
                     prem_occ += occ[s]
                 if benefit_state[s]:
                     benefit_occ += occ[s]
             inforce[mp, t] = ift
+            lapse_flow[mp, t] = lapse_acc
             if year != last_year:
                 claim_rate = 0.0
                 morb_rate = 0.0
@@ -300,12 +304,12 @@ def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_su
                 undiagnosed *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-            annuity_cf, disability_cf, maturity_cf, maturity_survivors)
+            annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors)
 
 
 @njit(parallel=True, cache=True)
 def _project_kernel_semi_markov(
-    state_mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
+    state_mortality, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset, benefit_max_months,
     premium_state, benefit_state, start_state,
     term_months, contract_boundary_months, count, premium,
@@ -343,6 +347,7 @@ def _project_kernel_semi_markov(
     expense_cf = np.zeros((n_mp, n_time))
     annuity_cf = np.zeros((n_mp, n_time))
     disability_cf = np.zeros((n_mp, n_time))
+    lapse_flow = np.zeros((n_mp, n_time))   # state-machine lapse exits, for surrender
     maturity_cf = np.zeros(n_mp)
     maturity_survivors = np.zeros(n_mp)
 
@@ -390,6 +395,7 @@ def _project_kernel_semi_markov(
             prem_occ = 0.0
             benefit_occ = 0.0
             deaths_acc = 0.0  # state-conditional death count
+            lapse_acc = 0.0   # state-conditional lapse count (surrender)
             for s in range(n_states):
                 s_off = state_offset[s]
                 D = state_duration_max[s]
@@ -398,6 +404,7 @@ def _project_kernel_semi_markov(
                     state_sum += occ[s_off + tau]
                 ift += state_sum
                 deaths_acc += state_sum * state_mortality[s, mp, year]
+                lapse_acc += state_sum * state_lapse[s, mp, year]
                 if premium_state[s]:
                     prem_occ += state_sum
                 if benefit_state[s]:
@@ -413,6 +420,7 @@ def _project_kernel_semi_markov(
                         benefit_occ += state_sum
 
             inforce[mp, t] = ift
+            lapse_flow[mp, t] = lapse_acc
             deaths[mp, t] = deaths_acc
             level = (prem_occ * premium[mp]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
@@ -523,7 +531,7 @@ def _project_kernel_semi_markov(
                 undiagnosed *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-            annuity_cf, disability_cf, maturity_cf, maturity_survivors)
+            annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors)
 
 
 def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
@@ -546,6 +554,34 @@ def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
         rate_dict[rname] = np.ascontiguousarray(annual_to_monthly(
             mort_fn(sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
+
+
+# Transition rates that remove occupancy from the in-force set as a lapse (the
+# surrender trigger). A state may carry at most one; the surrender value is paid
+# on ``occupancy x this rate``, so a non-lapsing state (e.g. WAIVER) contributes
+# nothing and a paid-up state lapses at its own ``lapse_paidup`` rate.
+_LAPSE_RATES = ("lapse", "lapse_paidup")
+
+
+def _state_lapse_stack(state_model, rate_dict):
+    """Per-state monthly lapse rate, ``(n_states, n_mp, n_year)``.
+
+    Mirrors the per-state mortality stack: each state's surrender count is
+    ``occ[state] x state_lapse[state]``, so surrender follows the actual
+    state-machine lapse (WAIVER does not lapse; paid-up lapses at
+    ``lapse_paidup``) instead of a single global rate applied to the total
+    in-force. A state with no lapse transition contributes a zero row.
+    """
+    zero = np.zeros_like(rate_dict["lapse"])
+    rows = []
+    for s in state_model.states:
+        rname = None
+        for tr in s.transitions:
+            if tr.rate in _LAPSE_RATES:
+                rname = tr.rate
+                break
+        rows.append(rate_dict[rname] if rname is not None else zero)
+    return np.ascontiguousarray(np.stack(rows))
 
 
 def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
@@ -709,10 +745,11 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         # in-force death decrement so the death-count reporter splits by state.
         state_mortality = np.stack(
             [rate_dict[s.mortality_rate] for s in state_model.states])
+        state_lapse = _state_lapse_stack(state_model, rate_dict)
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-         annuity_cf, disability_cf,
+         annuity_cf, disability_cf, lapse_flow,
          maturity_cf, maturity_survivors) = _project_kernel_semi_markov(
-            state_mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
+            state_mortality, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
             n_states, state_duration_max, state_offset, benefit_max_months,
             premium_state, benefit_state, start_state,
             model_points.term_months,
@@ -775,9 +812,11 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         benefit_state = compiled.benefit_state
         state_mortality = np.stack(
             [rate_dict[s.mortality_rate] for s in state_model.states])
+        state_lapse = _state_lapse_stack(state_model, rate_dict)
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-         annuity_cf, disability_cf, maturity_cf, maturity_survivors) = _project_kernel(
+         annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors) = _project_kernel(
             state_mortality,
+            state_lapse,
             edge_from,
             edge_to,
             edge_prob,
@@ -813,20 +852,17 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             lae_pro_rata,
             n_time,
         )
-    # Surrender value (해약환급금) -- post-projection compute. The lapse
-    # ``premium_cf`` is the portfolio-aggregate inflow (= inforce[t] *
-    # premium); its cumulative sum is the aggregate cumulative premium
-    # received from the surviving in-force, so ``lapse_rate * cum_premium``
-    # is already the per-month surrender-value outflow (count cancels out).
-    # The earlier formulation multiplied by ``inforce`` again, which gave a
-    # cnt^2 over-attribution for count > 1 or for inforce decaying off the
-    # initial level. ``surrender_value_curve = None`` falls back to zero,
-    # the historical "lapse silently removes" behaviour.
+    # Surrender value (해약환급금) -- post-projection compute. ``lapse_flow``
+    # is the per-month state-machine lapse exit count (occupancy on each state
+    # times that state's own lapse rate), so the surrender follows the actual
+    # lapse: a non-lapsing WAIVER state pays no surrender, and a paid-up state
+    # lapses at ``lapse_paidup``, not the active rate. For a single active
+    # state ``lapse_flow == inforce x lapse``, the historical formula.
+    # ``surrender_value_curve = None`` falls back to zero, the historical
+    # "lapse silently removes" behaviour.
     surrender_cf = np.zeros_like(expense_cf)
     curve = basis.surrender_value_curve
     if curve is not None:
-        # Per-month lapse rate, broadcast from per-year ``lapse`` array.
-        lapse_per_month = lapse[:, np.arange(n_time) // 12]
         # Curve held flat past its end; clip lookup to its length. ``t`` here
         # is the absolute policy duration (the projection runs from
         # inception), so the in-force slice at ``elapsed`` reads
@@ -837,18 +873,20 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         mode = basis.surrender_value_basis
         if mode == "cum_premium_factor":
             # Sample-grade: a factor on cumulative premium. ``cum_premium``
-            # aggregates inforce * premium each month, so
-            # ``lapse_rate * cum_premium`` already nets the count. Not linear
-            # in the as-of in-force (cum_premium is path-dependent on
-            # pre-valuation premiums), so the in-force rescale is inexact here.
+            # aggregates inforce * premium each month; the effective lapse
+            # fraction is ``lapse_flow / inforce`` (the raw rate for a single
+            # state). Not linear in the as-of in-force (cum_premium is
+            # path-dependent on pre-valuation premiums), so the in-force
+            # rescale is inexact here.
             cum_premium = np.cumsum(premium_cf, axis=1)
-            surrender_cf = lapse_per_month * cum_premium * value
+            inforce_safe = np.where(inforce > 0.0, inforce, 1.0)
+            surrender_cf = (lapse_flow / inforce_safe) * cum_premium * value
         elif mode == "amount_per_policy":
             # Contractual per-policy amount at policy-duration t. The number
-            # lapsing in month t is ``inforce[t] * lapse_rate[t]``; each pays
-            # ``value[t]``. Linear in the in-force, so the in-force
-            # ``count / inforce[elapsed]`` rescale re-bases it exactly.
-            surrender_cf = lapse_per_month * inforce * value
+            # lapsing in month t is ``lapse_flow[t]``; each pays ``value[t]``.
+            # Linear in the in-force, so the in-force ``count / inforce[elapsed]``
+            # rescale re-bases it exactly.
+            surrender_cf = lapse_flow * value
         elif mode == "amount_per_unit":
             # Same as amount_per_policy, scaled by the per-MP base amount
             # (sum insured / basic premium / ...). Explicit -- no default base.
@@ -859,7 +897,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
                     "ModelPoints.surrender_base_amount (no default base is "
                     "inferred)."
                 )
-            surrender_cf = (lapse_per_month * inforce * value
+            surrender_cf = (lapse_flow * value
                             * np.asarray(base, dtype=np.float64)[:, None])
         else:
             raise ValueError(

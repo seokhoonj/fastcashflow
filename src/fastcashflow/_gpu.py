@@ -30,7 +30,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        gamma_fixed, lae_pro_rata,
                        discount_bom, discount_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
-                       disability_factor, lapse_monthly, surrender_curve,
+                       disability_factor, lapse_monthly, state_lapse, surrender_curve,
                        surrender_is_amount, surrender_base,
                        bel, ra, csm, loss_component):
     """One CUDA thread per model point; the per-month loop runs in the thread.
@@ -118,17 +118,20 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         gamma = ift * gamma_fixed[t]
         lae = lae_pro_rata[t] * ift * (claim_rate + morb_rate)
         pv_expense += (alpha + beta + gamma + lae) * dm
+        lapse_flow = 0.0
+        for s in range(n_states):
+            lapse_flow += occ[s] * state_lapse[s, sx, age_idx, year]
         if surrender_is_amount:
             # amount_per_policy / amount_per_unit: surrender_curve[t] is the
             # surrender amount at duration t (per policy, or per unit of
-            # surrender_base[mp]); ift * lapse_rate is the number lapsing.
-            pv_surrender += (lapse_monthly[sx, age_idx, year]
-                             * ift * surrender_curve[t]
+            # surrender_base[mp]); lapse_flow is the state-machine number lapsing.
+            pv_surrender += (lapse_flow * surrender_curve[t]
                              * surrender_base[mp] * dm)
         else:
-            # cum_premium already aggregates inforce * premium; multiply by
-            # lapse_rate alone (no ift) -- otherwise cnt^2 over-attribution.
-            pv_surrender += (lapse_monthly[sx, age_idx, year]
+            # cum_premium aggregates inforce * premium; the effective lapse
+            # fraction is lapse_flow / ift (the raw rate for a single state).
+            eff_lapse = lapse_flow / ift if ift > 0.0 else 0.0
+            pv_surrender += (eff_lapse
                              * cum_premium * surrender_curve[t] * dm)
         for s in range(n_states):
             occ_next[s] = 0.0
@@ -196,7 +199,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               gamma_fixed, lae_pro_rata,
               discount_bom, discount_mid,
               mortality_factor, morbidity_factor, longevity_factor,
-              disability_factor, lapse_monthly, surrender_curve,
+              disability_factor, lapse_monthly, state_lapse, surrender_curve,
               surrender_is_amount=False, surrender_base=None):
     """Run the fused valuation kernel on the GPU.
 
@@ -245,6 +248,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_discount_start = cuda.to_device(discount_bom)
     d_discount_mid = cuda.to_device(discount_mid)
     d_lapse_monthly = cuda.to_device(lapse_monthly)
+    d_state_lapse = cuda.to_device(state_lapse)
     d_surrender_curve = cuda.to_device(surrender_curve)
     if surrender_base is None:
         surrender_base = np.ones(n_mp, dtype=np.float64)
@@ -266,7 +270,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         alpha_pro_rata, alpha_fixed, beta_pro_rata,
         d_gamma_fixed, d_lae_pro_rata, d_discount_start,
         d_discount_mid, mortality_factor, morbidity_factor, longevity_factor,
-        disability_factor, d_lapse_monthly, d_surrender_curve,
+        disability_factor, d_lapse_monthly, d_state_lapse, d_surrender_curve,
         surrender_is_amount, d_surrender_base,
         d_bel, d_ra, d_csm, d_loss,
     )

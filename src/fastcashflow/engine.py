@@ -47,7 +47,7 @@ from fastcashflow.coverage import (
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import (
-    Cashflows, project_cashflows, _add_state_mortality_rates,
+    Cashflows, project_cashflows, _add_state_mortality_rates, _state_lapse_stack,
 )
 from fastcashflow.statemodel import (
     compile_state_model,
@@ -743,6 +743,12 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
                           if premium_state[i]) or "0.0"
     sum_ben = " + ".join(f"occ_{i}" for i in range(n_states)
                          if benefit_state[i]) or "0.0"
+    # State-machine lapse exits: occupancy on each state times that state's own
+    # lapse rate, so surrender follows the actual lapse (a non-lapsing state
+    # contributes nothing; a paid-up state lapses at its own rate). For a single
+    # active state this equals ``ift * lapse``, the historical formula.
+    sum_lapse = " + ".join(
+        f"occ_{i} * state_lapse[{i}, sx, age_idx, year]" for i in range(n_states))
 
     L: list[str] = []
 
@@ -803,7 +809,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
             "coverage_reduction_factor,")
-    line(0, "           lapse_monthly, surrender_curve, surrender_base):")
+    line(0, "           lapse_monthly, state_lapse, surrender_curve, surrender_base):")
     line(4, "n_mp = issue_index.shape[0]")
     line(4, "bel = np.empty(n_mp)")
     line(4, "ra = np.empty(n_mp)")
@@ -887,20 +893,21 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     if use_disability:
         line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
     if use_surrender:
+        line(12, f"lapse_flow = {sum_lapse}")
         if surrender_is_amount:
             # amount_per_policy / amount_per_unit: surrender_curve[t] is the
             # surrender amount at duration t (per policy, or per unit of
-            # surrender_base[mp]); ift * lapse_rate is the number lapsing.
+            # surrender_base[mp]); lapse_flow is the number lapsing.
             # surrender_base is 1.0 for amount_per_policy.
-            line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
-            line(12, "                 * ift * surrender_curve[t]")
+            line(12, "pv_surrender += (lapse_flow * surrender_curve[t]")
             line(12, "                 * surrender_base[mp] * dm)")
         else:
-            # cum_premium_factor: cum_premium aggregates inforce * premium;
-            # multiplying by lapse_rate alone gives the per-month surrender
-            # outflow (the count is already in cum_premium, so multiplying by
-            # ift would scale by cnt^2).
-            line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
+            # cum_premium_factor: cum_premium aggregates inforce * premium; the
+            # effective lapse fraction is lapse_flow / ift (the raw rate for a
+            # single state). ift carries the count, so dividing it out avoids a
+            # cnt^2 scaling.
+            line(12, "eff_lapse = lapse_flow / ift if ift > 0.0 else 0.0")
+            line(12, "pv_surrender += (eff_lapse")
             line(12, "                 * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
@@ -1185,6 +1192,13 @@ def _codegen_fast_kernel_source_semi_markov(
         occ(s, tau) for s in range(n_states)
         if benefit_state[s]
         for tau in range(min(D[s], cap[s]) if cap[s] else D[s])) or "0.0"
+    # State-machine lapse exits: each state's cohort-summed occupancy times its
+    # own lapse rate (cohort-independent), so surrender follows the actual
+    # lapse. Equals ``ift * lapse`` for a single lapsing state.
+    sum_lapse = " + ".join(
+        f"({' + '.join(occ(s, tau) for tau in range(D[s]))})"
+        f" * state_lapse[{s}, sx, age_idx, year]"
+        for s in range(n_states) if D[s] > 0) or "0.0"
 
     L: list[str] = []
 
@@ -1274,7 +1288,7 @@ def _codegen_fast_kernel_source_semi_markov(
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
             "coverage_reduction_factor,")
-    line(0, "           lapse_monthly, surrender_curve, surrender_base):")
+    line(0, "           lapse_monthly, state_lapse, surrender_curve, surrender_base):")
     line(4, "n_mp = issue_index.shape[0]")
     line(4, "bel = np.empty(n_mp)")
     line(4, "ra = np.empty(n_mp)")
@@ -1363,20 +1377,21 @@ def _codegen_fast_kernel_source_semi_markov(
         line(16, "ann_due -= 1")
     line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
     if use_surrender:
+        line(12, f"lapse_flow = {sum_lapse}")
         if surrender_is_amount:
             # amount_per_policy / amount_per_unit: surrender_curve[t] is the
             # surrender amount at duration t (per policy, or per unit of
-            # surrender_base[mp]); ift * lapse_rate is the number lapsing.
+            # surrender_base[mp]); lapse_flow is the number lapsing.
             # surrender_base is 1.0 for amount_per_policy.
-            line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
-            line(12, "                 * ift * surrender_curve[t]")
+            line(12, "pv_surrender += (lapse_flow * surrender_curve[t]")
             line(12, "                 * surrender_base[mp] * dm)")
         else:
-            # cum_premium_factor: cum_premium aggregates inforce * premium;
-            # multiplying by lapse_rate alone gives the per-month surrender
-            # outflow (the count is already in cum_premium, so multiplying by
-            # ift would scale by cnt^2).
-            line(12, "pv_surrender += (lapse_monthly[sx, age_idx, year]")
+            # cum_premium_factor: cum_premium aggregates inforce * premium; the
+            # effective lapse fraction is lapse_flow / ift (the raw rate for a
+            # single state). ift carries the count, so dividing it out avoids a
+            # cnt^2 scaling.
+            line(12, "eff_lapse = lapse_flow / ift if ift > 0.0 else 0.0")
+            line(12, "pv_surrender += (eff_lapse")
             line(12, "                 * cum_premium * surrender_curve[t] * dm)")
     line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
     line(12, "beta = ift * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
@@ -1889,6 +1904,7 @@ def _measure_fast(
             compiled = compile_state_model_with_duration(
                 state_model, rate_dict,
             )
+            state_lapse_grid = _state_lapse_stack(state_model, rate_dict)
             edge_from = compiled.edge_from
             edge_to = compiled.edge_to
             edge_lump_sum = compiled.edge_lump_sum
@@ -1933,6 +1949,7 @@ def _measure_fast(
                         sex_grid, issue_age_grid, duration_grid,
                         issue_class_grid, elapsed_grid)))
             compiled = compile_state_model(state_model, rate_dict)
+            state_lapse_grid = _state_lapse_stack(state_model, rate_dict)
             edge_from = compiled.edge_from
             edge_to = compiled.edge_to
             edge_lump_sum = compiled.edge_lump_sum
@@ -2206,6 +2223,7 @@ def _measure_fast(
                 model_points.coverage_reduction_end,
                 model_points.coverage_reduction_factor,
                 lapse_grid,
+                state_lapse_grid,
                 surrender_curve_kernel,
                 surrender_base,
             )
@@ -2227,6 +2245,7 @@ def _measure_fast(
                 model_points.coverage_reduction_end,
                 model_points.coverage_reduction_factor,
                 lapse_grid,
+                state_lapse_grid,
                 surrender_curve_kernel,
                 surrender_base,
             )
@@ -2245,7 +2264,7 @@ def _measure_fast(
         bel, ra, csm, loss_component = fast_gpu(
             common_args[0], common_args[1], common_args[2], common_args[3],
             n_states, *common_args[4:],
-            lapse_grid, surrender_curve_kernel, surrender_is_amount,
+            lapse_grid, state_lapse_grid, surrender_curve_kernel, surrender_is_amount,
             surrender_base,
         )
     else:
