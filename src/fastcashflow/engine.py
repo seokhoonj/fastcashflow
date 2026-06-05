@@ -233,9 +233,13 @@ def measure(
 
     ``full=True`` (default) returns the complete roll-forward: the
     ``(n_mp,)`` inception headline *and* the ``(n_mp, n_time+1)`` ``*_path``
-    trajectories. ``full=False`` is the fused, memory-minimal fast path --
-    it fills only the headline (``*_path`` are ``None``) and is the right
-    choice for large-scale valuation.
+    trajectories. Those trajectories make it **memory-bound** -- several dense
+    ``(n_mp, n_time+1)`` float64 arrays, on the order of ~100 KB per model point
+    for a long horizon, so a million-policy ``full=True`` run needs ~100 GB and
+    will OOM on a typical box. ``full=False`` is the fused, memory-minimal fast
+    path -- it fills only the headline (``*_path`` are ``None``) at a few hundred
+    bytes per model point, and is the right choice for large-scale valuation;
+    reserve ``full=True`` for movement analysis or per-segment / chunked runs.
 
     ``basis`` may be a single :class:`Basis` (uniform portfolio) or a
     ``{(product, channel): Basis}`` dict; with a dict each segment is routed
