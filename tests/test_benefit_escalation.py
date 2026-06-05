@@ -152,6 +152,36 @@ def test_coverage_rule_arrays_must_align_with_coverages():
         _care_mp(coverage_escalation_annual=np.array([0.1, 0.1, 0.1]))
 
 
+def test_semi_markov_escalation_only_coverage_is_not_dropped():
+    """Regression: a step-/escalation-only coverage on a SEMI-MARKOV contract
+    must still be paid. The semi-Markov rule-pass skip guard matched only
+    waiting / reduction, so a coverage carrying escalation (but no waiting /
+    reduction) was excluded from the main pass AND skipped by the rule pass --
+    dropped to zero. Reachable for an escalating care benefit on an LTC model."""
+    from fastcashflow import State, Transition, StateModel
+    _Z = lambda s, a, d: np.full(np.shape(a), 0.0)
+    sm = StateModel(states=(
+        State("active", premium=True, transitions=(
+            Transition("mortality"), Transition("lapse"))),
+        State("disabled", duration_max=12, transitions=(Transition("mortality"),)),
+    ), seating=(0, 1))
+    basis = Basis(mortality_annual=_Z, lapse_annual=_Z, discount_annual=0.0,
+                  ra_confidence=0.75, mortality_cv=0.10, state_model=sm,
+                  coverages=(CoverageRate("CARE", _ONE),))
+    mp = fcf.ModelPoints(
+        issue_age=np.array([50], dtype=np.int64), premium=np.array([0.0]),
+        term_months=np.array([36], dtype=np.int64),
+        coverage_index=np.array([0], np.int64), coverage_amount=np.array([1000.0]),
+        coverage_offset=np.array([0, 1], np.int64),
+        coverage_escalation_annual=np.array([0.10]),     # escalation, no waiting / reduction
+        state=np.array([1], dtype=np.int64),             # seated in the semi-Markov state
+        calculation_methods={"CARE": fcf.CalculationMethod.MORBIDITY})
+    cf = fcf.gmm.measure(mp, basis, full=True).cashflows.morbidity_cf[0]
+    assert cf[0] == pytest.approx(1000.0)                # not dropped to zero
+    assert cf[12] / cf[0] == pytest.approx(1.10, rel=1e-9)
+    assert cf[24] / cf[0] == pytest.approx(1.21, rel=1e-9)
+
+
 def test_coverage_rule_arrays_reject_negative_and_nan():
     with pytest.raises(ValueError, match="coverage_step_month must be >= 0"):
         _care_mp(coverage_step_month=np.array([-1], np.int64))

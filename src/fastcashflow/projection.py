@@ -550,7 +550,7 @@ def _project_kernel_semi_markov(
             step_factor = coverage_step_factor[k]
             esc = coverage_escalation_annual[k]
             cap = coverage_escalation_cap[k]
-            if wait == 0 and red_end == 0:
+            if wait == 0 and red_end == 0 and step_month == 0 and esc == 0.0:
                 continue          # rule-free -- already in the main pass
             benefit = coverage_amount[k]
             red_factor = coverage_reduction_factor[k]
