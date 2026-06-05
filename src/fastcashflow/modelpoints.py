@@ -200,7 +200,9 @@ class ModelPoints:
     # Contract identity -- the mp_id from the policies file, carried so
     # ``apply_inforce_state`` can join the period-close state on it instead of
     # trusting row order. A per-MP label, never read by the projection kernel;
-    # ``None`` for a hand-built set.
+    # ``None`` for a hand-built set. Compared as a string (the uniqueness check
+    # and the in-force join both str-key it, so ``1`` and ``"1"`` are the same
+    # id); use a consistently-typed id column to avoid surprise.
     mp_id: np.ndarray | None = None
 
     def __post_init__(self) -> None:
@@ -424,12 +426,21 @@ class ModelPoints:
         # join ambiguous, so reject it when mp_id is supplied. (The file reader
         # already rejects duplicate policy ids; this covers a hand-built set.)
         if self.mp_id is not None and not _TRUST_SLICE:
-            uniq, counts = np.unique(self.mp_id, return_counts=True)
-            if uniq.shape[0] != self.mp_id.shape[0]:
-                dup = uniq[counts > 1][:5]
+            # str-key the ids so the check matches apply_inforce_state's string
+            # join (1 and "1" are the same id) and so a mixed-type column raises
+            # a clear duplicate error, not a np.unique sort TypeError. A set is
+            # O(n) -- no sort -- and runs once per build (subset skips it via
+            # _TRUST_SLICE).
+            keys = [str(v) for v in self.mp_id.tolist()]
+            if len(set(keys)) != len(keys):
+                seen, dup = set(), []
+                for k in keys:
+                    if k in seen and k not in dup:
+                        dup.append(k)
+                    seen.add(k)
                 raise ValueError(
                     f"ModelPoints.mp_id must be unique (it is the contract "
-                    f"identity / join key); duplicates: {dup.tolist()}"
+                    f"identity / join key); duplicates: {dup[:5]}"
                 )
         # Source grouping attributes -- per-row, sliced with the segment keys,
         # untouched by the kernel. issue_date -> datetime64[D]; attributes
@@ -719,14 +730,19 @@ class InforceState:
         # mp_id is the identity key the period-close state is joined on
         # (align_inforce_state / apply_inforce_state). A duplicate id makes
         # that join ambiguous -- the dict lookup keeps one row and silently
-        # drops the other -- so reject it here, at the state's own boundary.
-        ids = np.asarray(self.mp_id)
-        if np.unique(ids).shape[0] != ids.shape[0]:
-            uniq, counts = np.unique(ids, return_counts=True)
-            dup = uniq[counts > 1][:5]
+        # drops the other -- so reject it here. str-key the ids (matching the
+        # string join) so a mixed-type column raises a clear duplicate error,
+        # not a np.unique sort TypeError.
+        keys = [str(v) for v in np.asarray(self.mp_id).tolist()]
+        if len(set(keys)) != len(keys):
+            seen, dup = set(), []
+            for k in keys:
+                if k in seen and k not in dup:
+                    dup.append(k)
+                seen.add(k)
             raise ValueError(
                 f"InforceState.mp_id must be unique (it is the join key); "
-                f"duplicates: {dup.tolist()}"
+                f"duplicates: {dup[:5]}"
             )
 
     def subset(self, indices) -> "InforceState":

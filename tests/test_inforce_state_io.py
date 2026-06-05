@@ -191,3 +191,19 @@ def test_model_points_rejects_duplicate_mp_id():
         fcf.ModelPoints(
             mp_id=np.array(["A", "A"]), issue_age=np.array([40, 50]),
             premium=np.array([0.0, 0.0]), term_months=np.array([12, 12]))
+
+
+def test_mixed_type_mp_id_raises_clear_value_error():
+    """A mixed-type mp_id (1 and "1") is str-keyed, so the uniqueness check sees
+    a duplicate and raises a clear ValueError -- not a np.unique sort TypeError
+    -- on both ModelPoints and InforceState."""
+    with pytest.raises(ValueError, match="mp_id must be unique"):
+        fcf.ModelPoints(mp_id=np.array([1, "1"], dtype=object),
+                        issue_age=np.array([40.0, 50.0]),
+                        premium=np.array([0.0, 0.0]),
+                        term_months=np.array([12, 12]))
+    with pytest.raises(ValueError, match="mp_id must be unique"):
+        fcf.InforceState(mp_id=np.array([1, "1"], dtype=object),
+                         elapsed_months=np.array([1, 2], dtype=np.int64),
+                         count=np.array([1.0, 1.0]),
+                         prior_csm=np.array([0.0, 0.0]), lock_in_rate=0.0)
