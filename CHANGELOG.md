@@ -11,6 +11,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Time-varying premium and annuity (`Basis.premium_factor_annual` /
+  `Basis.annuity_factor_annual`).** A per-policy-year multiplicative factor on
+  the level premium / annuity, so a renewable / step-rated or escalating
+  (체증형) premium or annuity can be projected while the scalar `premium` /
+  `annuity_payment` stays the SCALE `solve_premium` solves for. Applies across
+  every kernel path (full, fast, GPU). `None` is the level cash flow.
+- **Per-coverage escalating benefits (체증형 보험금 / 간병비).** New coverages
+  columns `step_month` / `step_factor` (a benefit step at a duration) and
+  `escalation_annual` / `escalation_cap` (annual compounding growth, capped) --
+  the bidirectional partner of the reduction rule. Full path; a new
+  escalating-benefits cookbook chapter walks through all three shapes.
+- **State-conditioned death benefit and true occupancy exit.**
+  `State.death_benefit_factor` scales the death-coverage benefit paid for lives
+  in a state (occupancy-weighted; default 1.0 is unchanged), and
+  `State.exit_after` removes a cohort from the in-force set at a sojourn
+  boundary (semi-Markov). Full path; the fast / VFA paths reject a non-default
+  value rather than mis-measure it.
+- **Insurance finance expense disaggregated by source (IFRS 17 B130-B136).**
+  `Report` now carries `bel_finance_expense` / `ra_finance_expense` /
+  `csm_finance_expense` alongside the aggregate `insurance_finance_expense`
+  (the structural basis for a later P&L / OCI allocation).
 - **`fcf.samples.export()` prints a tree of what it wrote** -- the files
   dropped in the directory, with `basis.xlsx` expanded into its assumption
   sheets, so it is clear at a glance what landed where. Pass `quiet=True` to
@@ -108,6 +129,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Premium / annuity / coverage rate callables are validated at the kernel
+  boundary.** A factor (`premium_factor_annual` / `annuity_factor_annual`) or a
+  coverage rate callable that returns the wrong shape, a non-finite value, or a
+  negative factor is now a clear `ValueError` (naming the offending coverage /
+  factor) at the point its output is materialised -- on every kernel path. The
+  shape check was previously an `assert`, which raised the wrong error type and
+  was stripped under `python -O`, letting a mis-shaped grid mis-index the
+  kernel; a negative premium / annuity factor could flip a cash-flow sign and
+  bypass the `premium >= 0` invariant. The new CSR coverage-rule arrays
+  (waiting / reduction / step / escalation) are likewise length- and
+  sign-checked at construction.
 - **In-force BEL / RA are re-based to the valuation date.** The in-force
   projection runs from each contract's inception, so the sliced
   `inforce[elapsed]` had decremented the as-of `count` again from inception and
