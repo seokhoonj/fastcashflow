@@ -149,7 +149,9 @@ MATURITY,만기환급,MATURITY
 
 * `coverage` — 사용자 시스템의 코드 (cross-file join key).
   `coverages.csv` 와 `basis.xlsx` 의 `coverages` 시트가 같은 값을 씁니다.
-* `coverage_name` — 사람용 라벨. 엔진은 무시; `gmm.trace` 표시에만 쓰입니다.
+* `coverage_name` (선택) — 사람용 라벨. 엔진은 라우팅에 `coverage` 코드만 쓰고
+  이 컬럼은 **완전히 무시**합니다 (`gmm.trace` 도 코드를 표시). 샘플 데이터에는
+  넣지 않으며, 자기 워크북에 보기용으로 둘 수는 있습니다.
 * `calculation_method` — 위 다섯 enum 값 중 하나. 다른 값이면
   `ValueError` 가 어느 행에서 났는지 알려줍니다.
 
@@ -199,8 +201,8 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
   - 같음
   - `coverage` 가 중복인 행
 * - V3
-  - `_long_model_points`
-  - `basis.xlsx` 의 rate-driven 담보가 담보별 산출방식에 누락
+  - `_model_points_from_frames`
+  - `coverages` 프레임의 담보 코드가 담보별 산출방식에 누락
 * - V4
   - `measure()` 진입
   - 담보별 산출방식에 있는 rate-driven 코드의 rate_table 이 basis 에 없음

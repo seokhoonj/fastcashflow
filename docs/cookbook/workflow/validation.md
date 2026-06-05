@@ -192,8 +192,8 @@ mp[0]  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m, premium_term=240m, cou
 아홉 섹션이 한 화면에 다 들어옵니다. 검증 관점에서 가장 자주 보는 것:
 
 - **Basis / Coverages** — "엔진이 내가 의도한 테이블을 잡았나?"
-  `MORTALITY_STD` / `LAPSE_FC` 가 매칭. 만약 워크북에 `LAPSE_GA` 만 있는
-  segment 인데 여기 `LAPSE_FC` 가 잡혔다면 segment 라우팅 오류.
+  `MORTALITY_STD` / `LAPSE_TERM_FC` 가 매칭. 만약 워크북에 `LAPSE_TERM_GA` 만 있는
+  segment 인데 여기 `LAPSE_TERM_FC` 가 잡혔다면 segment 라우팅 오류.
 - **Rates** — 첫 행의 `axes` 가 `sex=0, issue_age=35` 같이 model point 의
   실제 축. 각 연도의 rate 값이 자기 손계산 테이블의 그 셀과 일치해야 함.
 - **Cash flows** — 연도별 premium / claim 합계. 첫 해 premium 이

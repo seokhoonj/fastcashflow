@@ -138,6 +138,11 @@ def _(measurement: VFAMeasurement) -> Report:
 
 def _report_gmm(m: GMMMeasurement) -> Report:
     """GMM: revenue grosses up the RA release and the CSM release."""
+    if m.bel_path is None:
+        raise ValueError(
+            "report() requires a full=True measurement; the trajectory fields "
+            "are None on the full=False fast path. Call measure(..., full=True)."
+        )
     bel, ra, csm = m.bel_path, m.ra_path, m.csm_path
     cf = m.cashflows
     # Per-month forward rate from the discount-factor curve, so that a

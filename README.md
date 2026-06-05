@@ -34,7 +34,8 @@ basis = fcf.samples.basis()   # basis = {(product, channel): Basis}
 mp    = fcf.samples.model_points()
 
 # measure the whole portfolio -- each policy uses its segment's assumptions
-# (a dict basis is headline-only: pass full=False)
+# (full=False is the fast headline-only path; full=True also works on a dict
+#  basis and returns the full trajectories)
 val = fcf.gmm.measure(mp, basis, full=False)
 print(f"model points : {val.bel.shape[0]:>15,}")
 print(f"BEL          : {val.bel.sum():>15,.0f}")
@@ -44,9 +45,9 @@ print(f"CSM          : {val.csm.sum():>15,.0f}")
 
 ```text
 model points :              11
-BEL          :      -4,047,120
+BEL          :     -10,182,300
 RA           :       1,309,817
-CSM          :       4,221,786
+CSM          :      10,280,704
 ```
 
 Or build a single contract by hand and measure it in full detail:

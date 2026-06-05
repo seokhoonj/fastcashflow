@@ -171,8 +171,8 @@ ra_confidence   = 0.75
 mortality_cv    = 0.1
 discount_annual = [0.03103 0.03103 0.03999 0.03947] ... (len 101)
 n model points  = 11
-BEL sum = -7,274,919
-CSM sum = 5,965,102
+BEL sum = -10,182,300
+CSM sum = 10,280,704
 ```
 
 - `read_basis` 는 **사전** 을 돌려줍니다 — 견본은 7 개 segment. 단일
