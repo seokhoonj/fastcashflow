@@ -280,7 +280,7 @@ print("재발배수 sd6/24/48/72:", [float(np.select([np.array([x]) < 12, np.arr
 
 ```python
 pm_healthy = lambda s, a, d: np.full(np.shape(a), 0.005)   # 건강 사망 연 0.5%
-pm_post    = lambda s, a, d: np.full(np.shape(a), 0.05)    # 암진단 후 연 5% (10배)
+pm_post    = lambda s, a, d: np.full(np.shape(a), 0.02)    # 암진단 후 연 2% (건강의 4배)
 pm_lapse   = lambda s, a, d: np.full(np.shape(d), 0.05)
 
 pm_model = StateModel(states=(
@@ -309,16 +309,16 @@ pm_mp = fcf.ModelPoints(
 pm_m = fcf.gmm.measure(pm_mp, pm_basis)
 print("진단후 seated deaths[0] :", round(float(pm_m.cashflows.deaths[0][0]), 5))
 print("건강 / 진단후 월사망률   :", round(1 - (1 - 0.005) ** (1 / 12), 5),
-      "/", round(1 - (1 - 0.05) ** (1 / 12), 5))
+      "/", round(1 - (1 - 0.02) ** (1 / 12), 5))
 ```
 
 ```text
-진단후 seated deaths[0] : 0.00427
-건강 / 진단후 월사망률   : 0.00042 / 0.00427
+진단후 seated deaths[0] : 0.00168
+건강 / 진단후 월사망률   : 0.00042 / 0.00168
 ```
 
 `post_first` 에 자리 지정한 계약의 사망건수 (`deaths[0]`) 가 **암진단 후 사망률
-0.00427** 을 따릅니다 (건강 0.00042 가 아니라). `mortality_rate` 를 안 주면
+0.00168** 을 따릅니다 (건강 0.00042 가 아니라). `mortality_rate` 를 안 주면
 전역 `mortality_annual` 로 fallback 하므로, 암진단 후 상승 사망을 의도했다면
 `state_mortality_annual` 에 그 함수를 반드시 넣습니다.
 
