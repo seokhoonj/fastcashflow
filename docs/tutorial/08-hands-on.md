@@ -140,11 +140,11 @@ basis = fcf.Basis(
 ```python
 # 모델 포인트 -- 5~7장에서 손으로 따라온 그 한 계약
 model_points = fcf.ModelPoints.single(
-    issue_age     = 40,           # 가입연령 40세
-    sex           = 0,            # 성별 (0=남, 1=여)
-    benefits      = {0: 12_000},  # 0번 보장 (= DEATH) 의 보험금 12,000
-    premium = 100,          # 월납 보험료 100
-    term_months   = 2,            # 보험기간 2개월
+    issue_age   = 40,           # 가입연령 40세
+    sex         = 0,            # 성별 (0=남, 1=여)
+    benefits    = {0: 12_000},  # 0번 보장 (= DEATH) 의 보험금 12,000
+    premium     = 100,          # 월납 보험료 100
+    term_months = 2,            # 보험기간 2개월
 )
 ```
 
@@ -222,11 +222,11 @@ basis = fcf.Basis(
 
 # 모델 포인트 -- 5~7장에서 손으로 따라온 그 한 계약
 model_points = fcf.ModelPoints.single(
-    issue_age     = 40,           # 가입연령 40세
-    sex           = 0,            # 성별 (0=남, 1=여)
-    benefits      = {0: 12_000},  # 0번 보장 (= DEATH) 의 보험금 12,000
-    premium = 100,          # 월납 보험료 100
-    term_months   = 2,            # 보험기간 2개월
+    issue_age   = 40,           # 가입연령 40세
+    sex         = 0,            # 성별 (0=남, 1=여)
+    benefits    = {0: 12_000},  # 0번 보장 (= DEATH) 의 보험금 12,000
+    premium     = 100,          # 월납 보험료 100
+    term_months = 2,            # 보험기간 2개월
 )
 
 # 측정

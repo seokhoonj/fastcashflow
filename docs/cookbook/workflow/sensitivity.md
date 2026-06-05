@@ -76,11 +76,11 @@ def basis_with_mortality(mort_fn):                 # 한 사망률로 가정 한
 
 # 모델 포인트
 mp = fcf.ModelPoints.single(
-    issue_age     = 40,            # 가입연령 40세
-    sex           = 0,             # 성별 (0=남, 1=여)
-    benefits      = {0: 100_000},  # 사망보험금 100,000
-    premium = 1_200,         # 월납 보험료 1,200 (claims 보다 커 흑자)
-    term_months   = 24,            # 보험기간 2년
+    issue_age           = 40,            # 가입연령 40세
+    sex                 = 0,             # 성별 (0=남, 1=여)
+    benefits            = {0: 100_000},  # 사망보험금 100,000
+    premium             = 1_200,         # 월납 보험료 1,200 (claims 보다 커 흑자)
+    term_months         = 24,            # 보험기간 2년
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 

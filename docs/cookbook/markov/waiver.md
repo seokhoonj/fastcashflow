@@ -96,12 +96,12 @@ basis = fcf.Basis(
 
 # 모델 포인트 (계약 하나, active 로 시작)
 mp = fcf.ModelPoints.single(
-    issue_age     = 40,            # 가입연령 40세
-    sex           = 0,             # 성별 (0=남, 1=여)
-    benefits      = {0: 100_000},  # 0번 보장 (= DEATH) 의 보험금 100,000
-    premium = 1_000,         # 월납 보험료 1,000
-    term_months   = 3,             # 보험기간 3개월
-    state         = STATE_ACTIVE,  # 시작 상태 (active = 납입 중)
+    issue_age           = 40,            # 가입연령 40세
+    sex                 = 0,             # 성별 (0=남, 1=여)
+    benefits            = {0: 100_000},  # 0번 보장 (= DEATH) 의 보험금 100,000
+    premium             = 1_000,         # 월납 보험료 1,000
+    term_months         = 3,             # 보험기간 3개월
+    state               = STATE_ACTIVE,  # 시작 상태 (active = 납입 중)
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
