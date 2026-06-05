@@ -383,7 +383,7 @@ def test_roll_forward_paa_reconciles_all_three_components():
     basis = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
     for p in roll_forward(fcf.paa.measure(_portfolio(), basis), 12):
         assert np.allclose(p.lrc_opening + p.premiums - p.revenue, p.lrc_closing)
-        assert np.allclose(p.lc_opening - p.lc_release, p.lc_closing)
+        assert np.allclose(p.loss_component_opening - p.loss_component_release, p.loss_component_closing)
         assert np.allclose(
             p.lic_opening + p.claims_incurred - p.claims_paid, p.lic_closing)
 

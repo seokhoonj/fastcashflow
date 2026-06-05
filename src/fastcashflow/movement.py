@@ -92,9 +92,9 @@ class PAAPeriodMovement:
     The period covers months ``[month_start, month_end)``. Every array is
     ``(n_mp,)``; the three components each reconcile exactly::
 
-        lrc_opening + premiums        - revenue     == lrc_closing
-        lc_opening                    - lc_release  == lc_closing
-        lic_opening + claims_incurred - claims_paid == lic_closing
+        lrc_opening + premiums        - revenue                == lrc_closing
+        loss_component_opening        - loss_component_release == loss_component_closing
+        lic_opening + claims_incurred - claims_paid            == lic_closing
 
     The LRC (liability for remaining coverage) is built up by premiums and
     released by insurance revenue; the loss component runs off over the
@@ -108,9 +108,9 @@ class PAAPeriodMovement:
     premiums: FloatArray
     revenue: FloatArray
     lrc_closing: FloatArray
-    lc_opening: FloatArray
-    lc_release: FloatArray
-    lc_closing: FloatArray
+    loss_component_opening: FloatArray
+    loss_component_release: FloatArray
+    loss_component_closing: FloatArray
     lic_opening: FloatArray
     claims_incurred: FloatArray
     claims_paid: FloatArray
@@ -487,8 +487,8 @@ def _roll_forward_paa(
         b = min(a + period_months, n_time)
         period_incurred = incurred[:, a:b].sum(axis=1)
         # the loss component runs off in proportion to insurance revenue
-        lc_open = loss_component * revenue[:, a:].sum(axis=1) / safe_revenue
-        lc_close = loss_component * revenue[:, b:].sum(axis=1) / safe_revenue
+        loss_open = loss_component * revenue[:, a:].sum(axis=1) / safe_revenue
+        loss_close = loss_component * revenue[:, b:].sum(axis=1) / safe_revenue
         movements.append(PAAPeriodMovement(
             month_start=a,
             month_end=b,
@@ -496,9 +496,9 @@ def _roll_forward_paa(
             premiums=premium_cf[:, a:b].sum(axis=1),
             revenue=revenue[:, a:b].sum(axis=1),
             lrc_closing=lrc[:, b],
-            lc_opening=lc_open,
-            lc_release=lc_open - lc_close,
-            lc_closing=lc_close,
+            loss_component_opening=loss_open,
+            loss_component_release=loss_open - loss_close,
+            loss_component_closing=loss_close,
             lic_opening=lic[:, a],
             claims_incurred=period_incurred,
             claims_paid=period_incurred - (lic[:, b] - lic[:, a]),
@@ -613,9 +613,9 @@ class PAAReconciliation:
     premiums: float
     revenue: float
     lrc_closing: float
-    lc_opening: float
-    lc_release: float
-    lc_closing: float
+    loss_component_opening: float
+    loss_component_release: float
+    loss_component_closing: float
     lic_opening: float
     claims_incurred: float
     claims_paid: float
@@ -630,9 +630,9 @@ class PAAReconciliation:
                 ("Closing", self.lrc_closing),
             )),
             ("Loss component", (
-                ("Opening", self.lc_opening),
-                ("Released", self.lc_release),
-                ("Closing", self.lc_closing),
+                ("Opening", self.loss_component_opening),
+                ("Released", self.loss_component_release),
+                ("Closing", self.loss_component_closing),
             )),
             ("Liability for incurred claims", (
                 ("Opening", self.lic_opening),
@@ -663,9 +663,9 @@ def _reconcile_paa(
             premiums=float(m.premiums.sum()),
             revenue=float(-m.revenue.sum()),
             lrc_closing=float(m.lrc_closing.sum()),
-            lc_opening=float(m.lc_opening.sum()),
-            lc_release=float(-m.lc_release.sum()),
-            lc_closing=float(m.lc_closing.sum()),
+            loss_component_opening=float(m.loss_component_opening.sum()),
+            loss_component_release=float(-m.loss_component_release.sum()),
+            loss_component_closing=float(m.loss_component_closing.sum()),
             lic_opening=float(m.lic_opening.sum()),
             claims_incurred=float(m.claims_incurred.sum()),
             claims_paid=float(-m.claims_paid.sum()),
