@@ -34,9 +34,14 @@ Measurement (GMM)
 
 .. autofunction:: fastcashflow.gmm.measure
 
+.. autofunction:: fastcashflow.gmm.measure_aggregate
+
 .. autofunction:: fastcashflow.gmm.measure_inforce
 
 .. autoclass:: fastcashflow.GMMMeasurement
+   :members:
+
+.. autoclass:: fastcashflow.AggregateMeasurement
    :members:
 
 Premium allocation approach

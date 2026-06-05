@@ -126,6 +126,28 @@ class GMMMeasurement:
         return measurement_str("GMMMeasurement", self._columns())
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class AggregateMeasurement:
+    """Portfolio-aggregate GMM trajectories -- the scalable ``full=True`` view.
+
+    BEL / RA / CSM are additive across contracts, so a large book's liability
+    run-off is its per-model-point trajectories *summed over the model-point
+    axis*. This holds only that sum: the scalar inception totals plus the
+    ``(n_time+1,)`` aggregate ``bel_path`` / ``ra_path`` / ``csm_path`` (column 0
+    is inception, so ``bel == bel_path[0]``). It is what
+    :func:`~fastcashflow.gmm.measure_aggregate` returns, computed in bounded
+    memory so it works where a per-model-point ``measure(full=True)`` would OOM.
+    """
+
+    bel: float                   # portfolio inception BEL total
+    ra: float                    # portfolio inception RA total
+    csm: float                   # portfolio inception CSM total
+    loss_component: float        # portfolio inception loss-component total
+    bel_path: FloatArray         # (n_time+1,) -- aggregate BEL trajectory
+    ra_path: FloatArray          # (n_time+1,) -- aggregate RA trajectory
+    csm_path: FloatArray         # (n_time+1,) -- aggregate CSM trajectory
+
+
 @write_measurement.register
 def _(measurement: GMMMeasurement, path, *, ids=None):
     _write_measurement_columns(
@@ -291,6 +313,54 @@ def measure(
     # Stamp the source model points so group(m, by=[...]) can resolve axis names
     # without re-passing them (a reference, not a copy).
     return replace(result, model_points=model_points)
+
+
+def measure_aggregate(
+    model_points: ModelPoints,
+    basis: "Basis | dict[tuple[str, str], Basis]",
+    *,
+    chunk_size: int = 200_000,
+) -> AggregateMeasurement:
+    """Portfolio-aggregate ``full=True`` measurement in bounded memory.
+
+    ``measure(full=True)`` materialises dense ``(n_mp, n_time+1)`` trajectories
+    -- ~100 KB per model point -- so a million-policy book needs ~100 GB and
+    OOMs. But BEL / RA / CSM are additive across contracts, so the portfolio's
+    liability run-off is the per-model-point trajectories summed over the
+    model-point axis. This runs the full trajectory kernel over row-blocks of
+    ``chunk_size`` model points and accumulates only that ``(n_time+1,)`` sum,
+    so peak memory is ``O(chunk_size x n_time)`` regardless of ``n_mp``.
+
+    Returns an :class:`AggregateMeasurement` (scalar totals + aggregate
+    ``bel_path`` / ``ra_path`` / ``csm_path``). For the per-model-point detail
+    (movement, in-force slicing) use :func:`measure` on a book small enough to
+    hold every trajectory. ``basis`` may be a single :class:`Basis` or a
+    per-segment dict, routed per chunk exactly as :func:`measure` routes it.
+    """
+    n_mp = int(model_points.issue_age.shape[0])
+    # The global horizon: a chunk projects only to its own boundary.max(), so
+    # its (shorter) aggregate path is added to the leading slice of the global
+    # one -- correct because a contract's trajectory is zero past its boundary.
+    n_time = int(np.asarray(model_points.contract_boundary_months).max())
+    bel_path = np.zeros(n_time + 1)
+    ra_path = np.zeros(n_time + 1)
+    csm_path = np.zeros(n_time + 1)
+    bel = ra = csm = loss = 0.0
+    for start in range(0, n_mp, chunk_size):
+        idx = np.arange(start, min(start + chunk_size, n_mp))
+        m = measure(model_points.subset(idx), basis, full=True)
+        nt = m.bel_path.shape[1]
+        bel_path[:nt] += m.bel_path.sum(axis=0)
+        ra_path[:nt] += m.ra_path.sum(axis=0)
+        csm_path[:nt] += m.csm_path.sum(axis=0)
+        bel += float(m.bel.sum())
+        ra += float(m.ra.sum())
+        csm += float(m.csm.sum())
+        loss += float(m.loss_component.sum())
+    return AggregateMeasurement(
+        bel=bel, ra=ra, csm=csm, loss_component=loss,
+        bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
+    )
 
 
 # ---------------------------------------------------------------------------

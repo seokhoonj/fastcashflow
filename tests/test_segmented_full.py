@@ -158,3 +158,29 @@ def test_segmented_full_group_allows_same_curve_different_terms():
     g = fcf.group(m, np.zeros(2, dtype=int))            # same 3%, terms 120 & 240
     assert g.bel.shape[0] == 1
     assert np.isclose(g.bel.sum(), m.bel.sum())         # BEL additive, totals match
+
+
+def test_measure_aggregate_matches_full_summed_and_is_chunk_independent():
+    """measure_aggregate returns the per-model-point full=True trajectories
+    summed over the model-point axis, in bounded memory; the result must not
+    depend on chunk_size and must reproduce the full measure's headline totals."""
+    import fastcashflow as fcf
+    mp = fcf.samples.model_points()
+    basis = fcf.samples.basis()
+    full = fcf.gmm.measure(mp, basis, full=True)
+
+    n_time = int(np.asarray(mp.contract_boundary_months).max()) + 1
+    ref = np.zeros(n_time)
+    ref[:full.bel_path.shape[1]] = full.bel_path.sum(axis=0)
+
+    multi = fcf.gmm.measure_aggregate(mp, basis, chunk_size=3)   # several chunks
+    one = fcf.gmm.measure_aggregate(mp, basis, chunk_size=10_000)  # single chunk
+    assert np.allclose(multi.bel_path, ref)
+    assert np.allclose(multi.bel_path, one.bel_path)
+    assert np.allclose(multi.csm_path, one.csm_path)
+    # headline totals reproduce the full measure's per-MP sums
+    assert np.isclose(multi.bel, float(full.bel.sum()))
+    assert np.isclose(multi.csm, float(full.csm.sum()))
+    assert np.isclose(multi.loss_component, float(full.loss_component.sum()))
+    # column 0 of each path is the inception total
+    assert np.isclose(multi.bel, multi.bel_path[0])
