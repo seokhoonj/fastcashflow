@@ -258,8 +258,8 @@ with tempfile.TemporaryDirectory() as tmp:
 출력:
 
 ```
-direct  BEL=    33,470,642  RA=  847,965  CSM=             0
-reins   BEL=    10,318,158  RA=  423,982  CSM=    -9,894,175
+direct  BEL=   -22,295,026  RA=1,210,877  CSM=    23,520,103
+reins   BEL=    29,205,831  RA=  605,439  CSM=   -28,600,392
 ```
 
 여기서는 토이의 거울 관계가 **깨집니다** — 직접 BEL은 양수

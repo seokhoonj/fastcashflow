@@ -44,9 +44,9 @@ print(f"CSM          : {val.csm.sum():>15,.0f}")
 
 ```text
 model points :              11
-BEL          :      27,818,583
-RA           :       1,387,416
-CSM          :         632,252
+BEL          :      -4,047,120
+RA           :       1,309,817
+CSM          :       4,221,786
 ```
 
 Or build a single contract by hand and measure it in full detail:
@@ -87,7 +87,7 @@ print(m)
 ```
 
 ```text
-GMMMeasurement -- 1 model point
+<GMMMeasurement -- 1 model point>
                    BEL            RA           CSM          loss
     mp 0    -6,092,691        55,484     6,037,206             0
    Total    -6,092,691        55,484     6,037,206             0

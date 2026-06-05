@@ -369,11 +369,38 @@ def test_show_trace_csm_step_renders_seed_and_steps():
     assert "End CSM" in text
 
 
+def _onerous_basis_and_mp():
+    """A tiny single-cell onerous contract -- FCF > 0, CSM = 0 throughout.
+
+    Heavy mortality on a large death benefit with a token premium drives
+    PV(claims) well above PV(premiums), so the contract is onerous at
+    inception. Built explicitly so the test does not depend on any sample
+    contract's profitability.
+    """
+    def mort(s, ia, d, ic, em):
+        return np.full(d.shape, 0.01)
+    def lapse(s, ia, d, ic, em):
+        return np.full(d.shape, 0.02)
+    basis = Basis(
+        mortality_annual=mort, lapse_annual=lapse,
+        discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
+        coverages=(fcf.CoverageRate("DEATH", mort),),
+    )
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        premium=np.array([1_000.0]),          # far too low for the cover
+        term_months=np.array([60]),
+        benefits={0: np.array([100_000_000.0])},
+    )
+    return basis, mp
+
+
 def test_show_trace_csm_step_onerous_notes_zero_throughout():
     """An onerous contract surfaces the explicit \"csm = 0 throughout\"
     note in the seed block."""
+    basis, mp = _onerous_basis_and_mp()
     buf = io.StringIO()
-    fcf.gmm.trace_csm_step(0, _portfolio(), _basis(), file=buf)
+    fcf.gmm.trace_csm_step(0, mp, basis, file=buf)
     assert "onerous contract -- csm = 0 throughout" in buf.getvalue()
 
 

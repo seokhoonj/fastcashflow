@@ -89,11 +89,11 @@ for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
 ```
 변동분해 -- HEALTH_A / FC, months 1-12
                          BEL          RA         CSM
-Opening              939,473     304,669     632,252
+Opening           -1,285,473     271,401   1,014,072
 Future service             0           0           0
-Finance               39,450       8,729      17,648
-Release            1,001,308     -29,440     -95,162
-Closing            1,980,231     283,958     554,737
+Finance              -68,972       7,947      29,562
+Release             -465,579     -32,852    -132,644
+Closing           -1,820,024     246,497     910,990
 ```
 
 ## 결과 해석
@@ -117,7 +117,7 @@ Closing            1,980,231     283,958     554,737
     이자율로 부리됩니다.
 * - Release (당기 서비스 제공분)
   - 이번 기간 보장을 제공한 만큼 풀린 부분. CSM 상각, RA 해제, 당기 예상
-    현금흐름의 런오프. CSM의 -95,162 가 이번 기간 손익으로 인식된 마진.
+    현금흐름의 런오프. CSM의 -132,644 가 이번 기간 손익으로 인식된 마진.
 * - Closing (기말잔액)
   - 기간 종료 시점 잔액. Opening 에 위 변동을 더하면 정확히 Closing.
 ```
@@ -176,20 +176,20 @@ for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
 ```
 변동분해 -- HEALTH_A / FC, months 13-24  (mortality +10% at month 12)
                          BEL          RA         CSM
-Opening            1,980,231     283,958     554,737
-Future service        -2,693        -595       3,287
-Finance               72,840       8,105      15,515
-Release              948,812     -28,417     -88,416
-Closing            2,999,190     263,051     485,124
+Opening           -1,820,024     246,497     910,990
+Future service        -1,039        -379       1,418
+Finance              -42,278       7,201      26,570
+Release              980,534     -30,060    -120,853
+Closing             -882,808     223,259     818,125
 ```
 
 이제 Future service 행이 살아 있습니다. 읽는 법:
 
-- **BEL Future service = -2,693** — 사망률을 올리니 건강보험 BEL이
+- **BEL Future service = -1,039** — 사망률을 올리니 건강보험 BEL이
   줄었습니다. 사람이 더 많이 사망하면 그만큼 미래에 질병 / 입원
   보험금을 청구할 사람이 줄기 때문입니다 (건강 담보에서 사망은 보장
   사건이 아니라 in-force 를 끝내는 decrement).
-- **CSM Future service = +3,287** — BEL이 줄어든 만큼 (유리한 변경) 이
+- **CSM Future service = +1,418** — BEL이 줄어든 만큼 (유리한 변경) 이
   손익으로 가지 않고 **CSM을 늘립니다**. 이것이 IFRS 17 Sec. 44 의
   핵심 — 미래서비스에 관한 가정변경은 CSM으로 흡수되어, 남은 보장기간에
   걸쳐 천천히 인식됩니다. (반대로 불리한 변경이 CSM 잔액을 넘어서면,

@@ -149,7 +149,8 @@ with tempfile.TemporaryDirectory() as tmp:
     asmp = basis[("TERM_LIFE_A", "FC")]
     print("ra_confidence   =", asmp.ra_confidence)
     print("mortality_cv    =", asmp.mortality_cv)
-    print("discount_annual =", asmp.discount_annual)
+    print("discount_annual =", asmp.discount_annual[:4].round(5), "...",
+          f"(len {len(asmp.discount_annual)})")
 
     # 4) 모델포인트 = 세 파일을 한 개체로
     mp = fcf.read_model_points(tmp / "policies.csv", coverages=tmp / "coverages.csv",
@@ -168,20 +169,21 @@ with tempfile.TemporaryDirectory() as tmp:
 segments = [('HEALTH_A', 'FC'), ('HEALTH_A', 'GA'), ('HEALTH_A', 'TM'), ('TERM_LIFE_A', 'FC'), ('TERM_LIFE_A', 'GA'), ('WHOLE_LIFE_A', 'FC'), ('WHOLE_LIFE_A', 'GA')]
 ra_confidence   = 0.75
 mortality_cv    = 0.1
-discount_annual = [0.03]
+discount_annual = [0.03103 0.03103 0.03999 0.03947] ... (len 101)
 n model points  = 11
-BEL sum = 27,818,583
-CSM sum = 632,252
+BEL sum = -7,274,919
+CSM sum = 5,965,102
 ```
 
 - `read_basis` 는 **사전** 을 돌려줍니다 — 견본은 7 개 segment. 단일
   segment 워크북이면 행이 하나뿐이고 사전 키도 하나입니다.
 - `basis[("TERM_LIFE_A", "FC")]` 가 그 segment 의 `Basis` 개체입니다.
   `ra_confidence` 0.75 / `state_model` = WAIVER 는 `_DEFAULTS` 행에서,
-  `lapse_table` = `LAPSE_FC` 는 segment 행에서 온 값입니다.
-- `discount_annual` 이 길이 1 배열인 것은 견본 `discount_tables` 에 `year` 0
-  한 행만 있기 때문입니다 — 여러 해를 적으면 그 **전체 연도별 곡선** 이 그대로
-  들어옵니다 (한 행이면 그 값이 평탄 적용).
+  `lapse_table` = `LAPSE_TERM_FC` 는 segment 행에서 온 값입니다.
+- `discount_annual` 이 길이 101 배열인 것은 견본 `discount_tables` 가 국고채
+  현물금리에서 만든 **연도별 할인 곡선** (관찰 + 보간 + LTFR 수렴) 을 담고
+  있기 때문입니다 — `year` 별 한 행씩, 그 **전체 연도별 곡선** 이 그대로
+  들어옵니다 (한 행만 있으면 그 값이 평탄 적용).
 
 ```{admonition} 단일 가정 적용 vs segment 별 라우팅
 :class: note

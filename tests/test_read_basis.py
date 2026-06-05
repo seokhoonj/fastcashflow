@@ -31,16 +31,18 @@ def test_defaults_inherited():
     assert ga.ra_confidence == 0.75 and fc.ra_confidence == 0.75
     assert ga.mortality_cv == 0.10 and fc.mortality_cv == 0.10
     assert ga.morbidity_cv == 0.12 and fc.morbidity_cv == 0.12
-    # Shared economic curve -- inherited identically.
-    assert ga.discount_annual == 0.03 and fc.discount_annual == 0.03
+    # Shared economic curve -- inherited identically (a per-year forward
+    # curve derived from the 국고채 spot rates, not a flat scalar).
+    assert np.allclose(np.asarray(ga.discount_annual),
+                       np.asarray(fc.discount_annual))
     # Shared maintenance row in both segments' expense ledgers --
-    # 60_000 per-policy; the 2% inflation is the global economic
+    # 90_000 per-policy; the 2% inflation is the global economic
     # assumption on the Basis object, not on the row itself.
     for basis in (ga, fc):
         maint = [r for r in basis.expense_items
                  if r.basis == "gamma_fixed"]
         assert len(maint) == 1
-        assert maint[0].value == 60_000.0
+        assert maint[0].value == 90_000.0
         assert basis.expense_inflation == 0.02
 
 
@@ -61,13 +63,13 @@ def test_per_segment_acquisition_amount():
     ``expense_tables`` sheet."""
     basis = fcf.samples.basis()
     for (key, expected_acq) in (
-        (("TERM_LIFE_A", "GA"), 150_000.0),
-        (("TERM_LIFE_A", "FC"),  80_000.0),
-        (("HEALTH_A",    "FC"), 100_000.0),
-        (("HEALTH_A",    "GA"), 180_000.0),
-        (("HEALTH_A",    "TM"),  40_000.0),
-        (("WHOLE_LIFE_A","FC"), 200_000.0),
-        (("WHOLE_LIFE_A","GA"), 350_000.0),
+        (("TERM_LIFE_A", "GA"),   800_000.0),
+        (("TERM_LIFE_A", "FC"),   700_000.0),
+        (("HEALTH_A",    "FC"),   800_000.0),
+        (("HEALTH_A",    "GA"),   950_000.0),
+        (("HEALTH_A",    "TM"),   250_000.0),
+        (("WHOLE_LIFE_A","FC"), 1_600_000.0),
+        (("WHOLE_LIFE_A","GA"), 1_900_000.0),
     ):
         rows = basis[key].expense_items
         acq = [r for r in rows if r.basis == "alpha_fixed"]
