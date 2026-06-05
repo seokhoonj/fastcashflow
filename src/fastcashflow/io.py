@@ -540,7 +540,7 @@ _SEGMENT_ASSUMPTION_COLS = frozenset({
     "mortality_age_shift", "morbidity_age_shift", "waiver_age_shift",
     "ra_confidence", "mortality_cv", "morbidity_cv", "longevity_cv",
     "disability_cv", "expense_cv", "cost_of_capital_rate", "investment_return",
-    "fund_fee", "ra_method", "state_model",
+    "fund_fee", "ra_method", "state_model", "surrender_value_basis",
 })
 
 

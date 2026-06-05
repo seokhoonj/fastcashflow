@@ -123,6 +123,9 @@ def mp_to_frames(mp, basis):
         "count":                    mp.count,
         "state":                    np.array([STATE_LABELS[int(s)] for s in mp.state]),
     })
+    if mp.surrender_base_amount is not None:
+        policies = policies.with_columns(
+            pl.Series("surrender_base_amount", mp.surrender_base_amount))
     label = {i: coverage.code for i, coverage in enumerate(basis.coverages)}
     mp_of_cov = np.repeat(np.arange(mp.n_mp), np.diff(mp.coverage_offset))
     mp_id = [int(m) for m in mp_of_cov]
