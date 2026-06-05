@@ -503,7 +503,7 @@ flat-rate 시나리오로 해석되어 `(n_scenarios,)` 로 반환.
 ## 8. 입력 layer의 향후 확장 (Task #7~#10)
 
 현재 워크북은 **단순 입력 layer**입니다. 엔진은 더 풍부한 callable signature를
-갖고 있어 (sex, issue_age, duration, calendar_year), 사용자가 원할 때
+갖고 있어 `(sex, issue_age, duration, issue_class, elapsed)`, 사용자가 원할 때
 워크북에 다음 레이어를 선택적으로 추가할 수 있도록 확장 예정:
 
 | Layer | 시트 / 컬럼 | 상태 |

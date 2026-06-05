@@ -73,6 +73,10 @@ approach has its own tracer.
 
 .. autofunction:: fastcashflow.gmm.trace_diff
 
+.. autofunction:: fastcashflow.gmm.trace_bel_step
+
+.. autofunction:: fastcashflow.gmm.trace_csm_step
+
 .. autofunction:: fastcashflow.vfa.trace
 
 .. autofunction:: fastcashflow.paa.trace

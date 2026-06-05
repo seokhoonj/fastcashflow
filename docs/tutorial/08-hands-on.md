@@ -103,6 +103,18 @@ basis = fcf.Basis(
 (연 11.36%)이고, 엔진이 내부에서 다시 constant-force 방식으로 월
 사망률 1%로 환산해 씁니다.
 
+```{admonition} rate 함수의 진짜 인자는 다섯 개
+:class: warning
+
+엔진은 모든 rate 함수를 **5-인자** `(sex, issue_age, duration, issue_class,
+elapsed)` 로 부릅니다 (issue_class=직업/언더라이팅 등급, elapsed=상태 경과).
+위처럼 3-인자 `(sex, issue_age, duration)` 로 써도 자동으로 5-인자로 감싸여
+잘 돕니다. **함정**: 배수 같은 상수를 *네 번째 기본인자* 로 끼워 넣지 마세요 —
+`lambda s, a, d, f=0.9: ...` 는 4-인자 rate 로 읽혀 엔진이 `issue_class` 를
+`f` 자리에 밀어넣어 **조용히 덮어씁니다** (에러 없이 틀린 율). 상수는 클로저로
+잡으세요 (`def shock(f): return lambda s, a, d: base(s, a, d) * f`).
+```
+
 같은 `death_fn`을 `Basis`의 **두 자리에 함께** 넘긴 것이 눈에 띌
 겁니다. 그 둘은 다른 양입니다.
 

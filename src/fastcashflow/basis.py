@@ -340,20 +340,31 @@ class Basis:
     Parameters
     ----------
     mortality_annual :
-        Maps ``(sex, issue_age, duration_years)`` -- arrays of sex (0 male,
-        1 female), issue age (years) and completed policy years (0-based),
-        of the same shape -- to an array of annual mortality rates. The
-        engine converts each to a monthly rate (see
-        :func:`annual_to_monthly`). A select-and-ultimate basis is expressed
-        by letting the rate depend on duration within the select period and
-        on attained age (issue_age + duration) beyond it; the select-period
-        logic lives in this callable, not the engine.
+        Annual mortality-rate callable. Like every rate function on
+        :class:`Basis`, it takes the unified five positional grids
+        ``(sex, issue_age, duration, issue_class, elapsed)`` and returns an
+        array of annual rates of the same shape -- see :data:`RateFn` (in
+        ``fastcashflow._typing``) for the full contract: ``sex`` (0 male,
+        1 female), ``issue_age`` (years), ``duration`` (completed policy years,
+        0-based), ``issue_class`` (at-issue / underwriting class), ``elapsed``
+        (semi-Markov sojourn). A table without a given axis broadcasts over it.
+        The engine converts the annual rate to a monthly one (see
+        :func:`annual_to_monthly`). A select-and-ultimate basis lets the rate
+        depend on duration within the select period and on attained age
+        (issue_age + duration) beyond it; that logic lives in this callable,
+        not the engine.
+
+        A legacy three-arg ``(sex, issue_age, duration)`` callable still works
+        (it is auto-wrapped to the five-arg shape). WARNING: do not bake a
+        constant in as a *fourth* default parameter --
+        ``lambda s, a, d, f=factor: ...`` is read as a four-arg rate, and the
+        engine passes ``issue_class`` into ``f``, silently overriding it (wrong
+        rates, no error). Capture the constant in a closure instead.
     lapse_annual :
-        Same ``(sex, issue_age, duration)`` signature as
-        ``mortality_annual``. Typical lapse depends only on duration, but the
-        signature also lets the reader pick up a per-sex or per-issue_age
-        lapse table when the workbook carries those axes (the engine reads
-        the callable on the full sex / age / duration grid either way).
+        Same five-arg :data:`RateFn` shape as ``mortality_annual``. Typical
+        lapse depends only on duration, but the signature also lets a table
+        key on sex / issue_age / issue_class when the workbook carries those
+        axes (the engine reads the callable on the full grid either way).
     discount_annual :
         Annual locked-in discount rate (Sec. 36). Either a flat scalar or a
         per-year ``(n_years,)`` array; the engine expands either to a
