@@ -180,6 +180,8 @@ Input and output
 
 .. autofunction:: fastcashflow.apply_inforce_state
 
+.. autofunction:: fastcashflow.align_inforce_state
+
 .. autoclass:: fastcashflow.InforceState
 
 .. autofunction:: fastcashflow.read_scenarios

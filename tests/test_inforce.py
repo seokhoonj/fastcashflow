@@ -377,3 +377,43 @@ def test_measure_inforce_requires_reconciled_state():
     # paired with a real period-close state is likewise rejected
     with pytest.raises(ValueError, match="do not match"):
         fcf.gmm.measure_inforce(portfolio, basis, state, full=False)
+
+
+def test_measure_inforce_prior_csm_is_order_independent():
+    """A state whose mp_id order differs from the policies must give the same
+    per-contract CSM as the matched-order state -- prior_csm is re-aligned by
+    mp_id, not read positionally (else one contract carries another's CSM)."""
+    import fastcashflow as fcf
+    mort = lambda s, a, d: np.full(np.shape(a), 0.01)
+    zero = lambda s, a, d: np.zeros(np.shape(d))
+    basis = Basis(mortality_annual=mort, lapse_annual=zero, discount_annual=0.0,
+                  ra_confidence=0.75, mortality_cv=0.10,
+                  coverages=(CoverageRate("DEATH", mort),))
+    mp0 = ModelPoints(
+        mp_id=np.array(["A", "B"]),
+        issue_age=np.array([40, 40], dtype=np.int64),
+        benefits={0: np.array([100_000.0, 100_000.0])},
+        premium=np.array([100.0, 100.0]),
+        term_months=np.array([24, 24], dtype=np.int64),
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
+    # A: elapsed 12 / prior_csm 0 ; B: elapsed 6 / prior_csm 5000
+    shuffled = fcf.InforceState(                # rows in [B, A] order
+        mp_id=np.array(["B", "A"]),
+        elapsed_months=np.array([6, 12], dtype=np.int64),
+        count=np.array([1.0, 1.0]), prior_csm=np.array([5_000.0, 0.0]),
+        lock_in_rate=0.03)
+    matched = fcf.InforceState(                 # the same data in [A, B] order
+        mp_id=np.array(["A", "B"]),
+        elapsed_months=np.array([12, 6], dtype=np.int64),
+        count=np.array([1.0, 1.0]), prior_csm=np.array([0.0, 5_000.0]),
+        lock_in_rate=0.03)
+    v_shuf = fcf.gmm.measure_inforce(
+        fcf.apply_inforce_state(mp0, shuffled), basis, shuffled,
+        period_months=3, full=False)
+    v_match = fcf.gmm.measure_inforce(
+        fcf.apply_inforce_state(mp0, matched), basis, matched,
+        period_months=3, full=False)
+    assert np.allclose(v_shuf.csm, v_match.csm)
+    # and the CSM sits on B (the contract that carried prior_csm), not A
+    assert v_match.csm[0] == pytest.approx(0.0)
+    assert v_match.csm[1] > 0.0

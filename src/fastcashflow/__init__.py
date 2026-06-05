@@ -35,6 +35,7 @@ from fastcashflow.modelpoints import (
     STATE_WAIVER,
     InforceState,
     ModelPoints,
+    align_inforce_state,
     apply_inforce_state,
 )
 from fastcashflow.movement import (
@@ -85,7 +86,7 @@ __all__ = [
     "VFAPeriodMovement", "VFAReconciliation",
     "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",
-    "apply_inforce_state", "InforceState",
+    "apply_inforce_state", "align_inforce_state", "InforceState",
     "write_measurement",
     "sample_data_dir",
     "describe_basis",

@@ -687,22 +687,20 @@ class InforceState:
         )
 
 
-def apply_inforce_state(
+def align_inforce_state(
     model_points: "ModelPoints", state: InforceState,
-) -> "ModelPoints":
-    """Return a ``ModelPoints`` with the state's ``elapsed_months`` and
-    ``count`` substituted in, joined on ``mp_id``.
+) -> InforceState:
+    """Return ``state`` reordered so its rows line up with ``model_points``.
 
-    When the model points carry ``mp_id`` (``read_model_points`` keeps it in
-    :attr:`ModelPoints.attributes`) and so does the ``state``, the state is
-    matched to the model points **by mp_id** -- reordered when the two files
-    are in different orders, and rejected when their id sets differ -- so a
-    misaligned period-close file cannot silently assign one contract's state
-    to another. When the model points have no ``mp_id`` (a hand-built set),
-    the helper falls back to a positional length check; align the rows
-    yourself in that case.
+    Every per-MP field of the returned state (``elapsed_months``, ``count``,
+    ``prior_csm``, ``mp_id``) is row-for-row aligned with the model points.
+    When both carry ``mp_id`` the match is **by mp_id** -- reordered when the
+    two files are in different orders, and rejected when their id sets differ
+    -- so a misaligned period-close file cannot silently assign one contract's
+    state (including its prior CSM) to another. When the model points have no
+    ``mp_id`` (a hand-built set), the rows are taken positionally after a
+    length check; align them yourself in that case.
     """
-    from dataclasses import replace
     n_mp = int(model_points.issue_age.shape[0])
     if state.elapsed_months.shape[0] != n_mp:
         raise ValueError(
@@ -725,6 +723,23 @@ def apply_inforce_state(
         if not np.array_equal(mp_ids, st_ids):       # different order -> join
             pos = {mid: i for i, mid in enumerate(st_ids)}
             state = state.subset(np.array([pos[mid] for mid in mp_ids]))
+    return state
+
+
+def apply_inforce_state(
+    model_points: "ModelPoints", state: InforceState,
+) -> "ModelPoints":
+    """Return a ``ModelPoints`` with the state's ``elapsed_months`` and
+    ``count`` substituted in, joined on ``mp_id`` (see
+    :func:`align_inforce_state` for the join rules).
+
+    Note this substitutes only ``elapsed_months`` / ``count`` onto the model
+    points; the state's ``prior_csm`` rides on the (separately passed)
+    :class:`InforceState`. :func:`~fastcashflow.gmm.measure_inforce` re-aligns
+    that state by mp_id internally, so prior_csm cannot drift out of order.
+    """
+    from dataclasses import replace
+    state = align_inforce_state(model_points, state)
     return replace(
         model_points,
         elapsed_months=np.asarray(state.elapsed_months, dtype=np.int64),

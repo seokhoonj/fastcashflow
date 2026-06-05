@@ -127,6 +127,12 @@ fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 
 결산할 때는 세그먼트별로 돕니다. `ModelPoints.subset` 으로 계약을, 짝이 되는
 `InforceState.subset` 으로 결산 상태를 같은 인덱스로 잘라 넘깁니다.
 
+세그먼트로 자르기 전에 `align_inforce_state` 로 결산 상태를 보유계약 행 순서에
+**한 번 맞춰 둡니다**. 결산 상태 파일의 행 순서가 policies 와 다를 수 있는데,
+정렬해 두지 않으면 `state.subset(idx)` 가 다른 계약의 직전 CSM 을 끌어옵니다
+(`measure_inforce` 자체는 mp_id 로 내부 재정렬하지만, 위 합계의 Opening CSM 처럼
+`state` 를 직접 읽는 자리는 정렬된 상태가 필요합니다).
+
 ```python
 import fastcashflow as fcf
 import numpy as np
@@ -136,8 +142,9 @@ basis     = fcf.samples.basis()          # {(product, channel): Basis}
 portfolio = fcf.samples.model_points()   # 보유계약 영구 spec
 state     = fcf.samples.inforce_state()  # 결산 상태 (경과월수 / 잔존 / 직전 CSM / lock-in)
 
-# 결산 상태를 spec 에 fold
-mp = fcf.apply_inforce_state(portfolio, state)
+# 결산 상태를 spec 에 fold + 보유계약 행 순서에 정렬 (prior_csm 까지)
+mp    = fcf.apply_inforce_state(portfolio, state)
+state = fcf.align_inforce_state(portfolio, state)
 
 # 세그먼트별 결산 측정 -- 합계
 bel = ra = csm = csm_prior = 0.0

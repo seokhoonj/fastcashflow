@@ -627,26 +627,29 @@ def _measure_inforce_full(
     )
 
 
-def _require_reconciled_state(model_points: ModelPoints,
-                              state: "InforceState") -> None:
-    """Reject a ``model_points`` whose ``elapsed_months`` / ``count`` do not
-    match ``state`` -- they must be reconciled (``apply_inforce_state``, which
-    ``read_inforce_policies`` applies) before measurement, or measure_inforce
-    would read the duration / size off a stale model_points while carrying the
-    fresh state's CSM. Pure validation: a reconciled pair passes unchanged."""
-    from fastcashflow.modelpoints import apply_inforce_state
-    # ModelPoints backfills elapsed_months / count (to 0 / 1) at construction,
-    # so an un-reconciled new-business model_points has elapsed = 0 and trips the
-    # comparison below against a real period-close state. apply_inforce_state
-    # does the mp_id join (and rejects mismatched id sets); the reconciled
-    # elapsed / count must already equal what the caller passed.
-    reconciled = apply_inforce_state(model_points, state)
+def _reconcile_state(model_points: ModelPoints,
+                     state: "InforceState") -> "InforceState":
+    """Return ``state`` row-aligned to ``model_points`` (by mp_id), after
+    checking the model points were already reconciled with it.
+
+    Two jobs in one place. (1) The measurement reads each contract's as-of
+    duration / size from ``model_points``; a model_points whose elapsed_months
+    / count disagree with ``state`` was not reconciled (``apply_inforce_state``)
+    and is rejected, so a stale snapshot cannot borrow a fresh state's CSM.
+    (2) ``state.prior_csm`` is per-MP and must enter the measurement in
+    model-points order, not the state file's order -- the returned state is
+    reordered by mp_id so prior_csm lines up with the rows it belongs to.
+    A reconciled, same-order pair passes through unchanged."""
+    from fastcashflow.modelpoints import align_inforce_state
+    # align_inforce_state does the mp_id join (and rejects mismatched id sets)
+    # and reorders every per-MP field -- crucially prior_csm -- to mp order.
+    state = align_inforce_state(model_points, state)
     em_ok = np.array_equal(
-        np.asarray(reconciled.elapsed_months, dtype=np.int64),
+        np.asarray(state.elapsed_months, dtype=np.int64),
         np.asarray(model_points.elapsed_months, dtype=np.int64),
     )
     cnt_ok = model_points.count is not None and np.array_equal(
-        np.asarray(reconciled.count, dtype=np.float64),
+        np.asarray(state.count, dtype=np.float64),
         np.asarray(model_points.count, dtype=np.float64),
     )
     if not (em_ok and cnt_ok):
@@ -656,6 +659,7 @@ def _require_reconciled_state(model_points: ModelPoints,
             "model_points = apply_inforce_state(model_points, state) -- so the "
             "as-of duration and size come from the same period-close snapshot."
         )
+    return state
 
 
 def measure_inforce(
@@ -708,13 +712,13 @@ def measure_inforce(
     """
     basis = _single_basis(basis, entry="measure_inforce")
     # The measurement reads each contract's as-of duration / size from
-    # ``model_points.elapsed_months`` / ``count``; ``state`` only supplies
-    # prior_csm / lock_in_rate. Guard that the two were reconciled (the state's
-    # elapsed / count actually sit on the model points) so a stale model_points
-    # paired with a fresh state cannot silently value one contract at another's
-    # duration. apply_inforce_state is the reconciliation step, and is what
-    # read_inforce_policies already applies to the pair it returns.
-    _require_reconciled_state(model_points, state)
+    # ``model_points``; ``state`` supplies prior_csm / lock_in_rate. Reconcile
+    # the pair: reject a model_points whose elapsed / count disagree with the
+    # state (a stale snapshot must not borrow a fresh state's CSM), and -- the
+    # subtle part -- reorder the state to model-points order so per-MP
+    # ``prior_csm`` enters in the rows it belongs to even when the state file
+    # is in a different order than the policies.
+    state = _reconcile_state(model_points, state)
     if (basis.surrender_value_curve is not None
             and basis.surrender_value_basis == "cum_premium_factor"
             and np.any(np.asarray(model_points.elapsed_months) > 0)):
