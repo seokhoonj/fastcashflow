@@ -951,3 +951,19 @@ def test_reader_warns_on_near_reserved_column_typo(tmp_path):
     with pytest.warns(UserWarning, match=r"typo of the field 'count'"):
         fcf.read_model_points(tmp_path / "p.csv", coverages=tmp_path / "c.csv",
                               calculation_methods=tmp_path / "m.csv")
+
+
+def test_coverage_rate_callable_wrong_shape_is_value_error():
+    """A CoverageRate callable that returns a scalar / mis-broadcast array is a
+    clean ValueError naming the coverage -- not an AssertionError that vanishes
+    under ``python -O`` and lets a wrong-shaped rate mis-index the kernel. The
+    guard sits in build_coverage_rates, so it fires on both full and fast."""
+    z = lambda s, a, d: np.full(np.shape(a), 0.0)
+    basis = Basis(mortality_annual=z, lapse_annual=z, discount_annual=0.0,
+                  ra_confidence=0.75, mortality_cv=0.10,
+                  coverages=(CoverageRate("CANCER", lambda s, a, d: 0.01),))
+    mp = ModelPoints.single(40, 0.0, 24, benefits={0: 1000.0},
+                            calculation_methods={"CANCER": CalculationMethod.DIAGNOSIS})
+    for full in (True, False):
+        with pytest.raises(ValueError, match=r"coverage rate 'CANCER' must return an array"):
+            fcf.gmm.measure(mp, basis, full=full)

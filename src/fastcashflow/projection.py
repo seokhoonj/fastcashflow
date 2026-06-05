@@ -724,6 +724,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         [r.rate for r in aligned_coverages],
         sex_grid, issue_age_grid, duration_grid,
         issue_class_grid, elapsed_grid,
+        codes=[r.code for r in aligned_coverages],
     )))
     # Shape contract: _project_kernel / _project_kernel_semi_markov index
     # coverage_rates[coverage_index[k], mp, year]. Lock the shape here so a future

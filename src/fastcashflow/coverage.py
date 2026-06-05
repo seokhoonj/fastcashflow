@@ -105,7 +105,8 @@ def method_attrs(method: CalculationMethod) -> tuple[bool, int]:
 
 
 def build_coverage_rates(rate_fns, sex_grid, issue_age_grid,
-                         duration_grid, issue_class_grid, elapsed_grid):
+                         duration_grid, issue_class_grid, elapsed_grid,
+                         codes=None):
     """Stack the per-code rate grids into one ``(n_codes, ..., n_year)`` array.
 
     A kernel reads a coverage's rate as ``coverage_rates[code, age_or_mp, year]``,
@@ -128,12 +129,28 @@ def build_coverage_rates(rate_fns, sex_grid, issue_age_grid,
         # axis length.
         return np.zeros((0,) + sex_grid.shape, dtype=np.float64)
     slabs = []
-    for rate in rate_fns:
-        slabs.append(np.ascontiguousarray(
-            rate(sex_grid, issue_age_grid, duration_grid,
-                  issue_class_grid, elapsed_grid),
-            dtype=np.float64,
-        ))
+    for i, rate in enumerate(rate_fns):
+        slab = np.ascontiguousarray(
+            np.asarray(rate(sex_grid, issue_age_grid, duration_grid,
+                            issue_class_grid, elapsed_grid),
+                       dtype=np.float64))
+        # A coverage rate callable is user input. If it returns a scalar or a
+        # mis-broadcast array, np.stack would build a wrong-shaped grid that
+        # mis-indexes the kernel; under ``python -O`` the downstream shape
+        # assert is stripped. Reject it here as a ValueError (an input-contract
+        # failure), naming the coverage, mirroring validate_factor. (Values --
+        # finite, in [0, 1] -- are checked by the annual_to_monthly the caller
+        # wraps this in; this guards the shape.)
+        if slab.shape != sex_grid.shape:
+            who = repr(codes[i]) if codes is not None else f"at position {i}"
+            raise ValueError(
+                f"coverage rate {who} must return an array of shape "
+                f"{sex_grid.shape} (one rate per grid cell x policy year); got "
+                f"{slab.shape}. Build it from the (sex, issue_age, duration, "
+                f"issue_class, elapsed) arrays it is called with, e.g. "
+                f"``np.full(issue_age.shape, q)``."
+            )
+        slabs.append(slab)
     return np.ascontiguousarray(np.stack(slabs))
 
 

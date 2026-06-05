@@ -2184,6 +2184,7 @@ def _measure_fast(
     coverage_rates = np.ascontiguousarray(annual_to_monthly(build_coverage_rates(
         [r.rate for r in aligned_coverages], sex_grid,
         issue_age_grid, duration_grid, issue_class_grid, elapsed_grid,
+        codes=[r.code for r in aligned_coverages],
     )))
     # Shape contract: _fast_kernel_scalar indexes coverage_rates[cov_idx, sx, age_idx,
     # year] against the dense (sex, age, year) lookup grid. Lock the shape
