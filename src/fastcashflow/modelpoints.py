@@ -27,6 +27,15 @@ STATE_NAMES = {"ACTIVE": STATE_ACTIVE, "WAIVER": STATE_WAIVER,
                "PAIDUP": STATE_PAIDUP}
 STATE_LABELS = {code: name for name, code in STATE_NAMES.items()}
 
+# When True, ``ModelPoints.__post_init__`` skips the redundant re-validation
+# that ``subset`` would otherwise re-run for every segment of a large
+# portfolio. ``subset`` slices an already-validated parent, so the slice is
+# valid by construction (a subset of unique mp_id is unique, a slice of finite
+# amounts is finite); only ``subset`` sets this, synchronously, around the
+# construction call. Single-threaded at the Python level, so a module flag is
+# safe -- the kernel's parallelism is in the @njit layer, not here.
+_TRUST_SLICE = False
+
 
 @dataclass(frozen=True, slots=True)
 class ModelPoints:
@@ -414,7 +423,7 @@ class ModelPoints:
         # (apply_inforce_state, group_of_contracts). A duplicate makes that
         # join ambiguous, so reject it when mp_id is supplied. (The file reader
         # already rejects duplicate policy ids; this covers a hand-built set.)
-        if self.mp_id is not None:
+        if self.mp_id is not None and not _TRUST_SLICE:
             uniq, counts = np.unique(self.mp_id, return_counts=True)
             if uniq.shape[0] != self.mp_id.shape[0]:
                 dup = uniq[counts > 1][:5]
@@ -586,12 +595,22 @@ class ModelPoints:
         )
         kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}
 
-        # CSR coverage arrays -- concatenate each selected row's slice and
-        # rebuild coverage_offset as the new cumulative count.
+        # CSR coverage arrays -- gather each selected row's slice and rebuild
+        # coverage_offset as the new cumulative count. The gather index
+        # ``[start_i .. end_i)`` for every row is built vectorised (a repeat of
+        # each start plus a per-row ramp) rather than a Python ``np.arange`` per
+        # row, so it stays O(n_cov) with no per-model-point call overhead -- the
+        # hot path when ``measure`` subsets a large portfolio per segment.
         starts = self.coverage_offset[idx]
         ends = self.coverage_offset[idx + 1]
-        cov_idx = np.concatenate([np.arange(s, e) for s, e in zip(starts, ends)]) \
-            if idx.size > 0 else np.zeros(0, dtype=np.int64)
+        lengths = ends - starts
+        total = int(lengths.sum())
+        if total > 0:
+            block_start = np.repeat(np.cumsum(lengths) - lengths, lengths)
+            ramp = np.arange(total, dtype=np.int64) - block_start
+            cov_idx = np.repeat(starts, lengths) + ramp
+        else:
+            cov_idx = np.zeros(0, dtype=np.int64)
         kwargs["coverage_index"] = self.coverage_index[cov_idx]
         kwargs["coverage_amount"] = self.coverage_amount[cov_idx]
         kwargs["coverage_offset"] = np.concatenate(
@@ -619,7 +638,15 @@ class ModelPoints:
         # the model points were built against, not of the row subset.
         kwargs["coverage_codes"] = self.coverage_codes
 
-        return ModelPoints(**kwargs)
+        # The slice is valid by construction (the parent was validated), so skip
+        # the redundant re-validation -- this is the hot path when measure splits
+        # a large portfolio into per-segment subsets.
+        global _TRUST_SLICE
+        _TRUST_SLICE = True
+        try:
+            return ModelPoints(**kwargs)
+        finally:
+            _TRUST_SLICE = False
 
 
 @dataclass(frozen=True, slots=True)
