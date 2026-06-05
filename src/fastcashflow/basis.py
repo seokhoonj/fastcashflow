@@ -559,6 +559,17 @@ class Basis:
             v = getattr(self, name)
             if v < 0:
                 raise ValueError(f"{name} must be >= 0, got {v!r}")
+        # String-enum fields: catch a typo ("amount_policy", "margins") at
+        # construction rather than late in a projection / fast-path branch.
+        if self.ra_method not in RA_METHODS:
+            raise ValueError(
+                f"ra_method must be one of {RA_METHODS}, got {self.ra_method!r}"
+            )
+        if self.surrender_value_basis not in SURRENDER_VALUE_BASES:
+            raise ValueError(
+                f"surrender_value_basis must be one of {SURRENDER_VALUE_BASES}, "
+                f"got {self.surrender_value_basis!r}"
+            )
         sp = self.settlement_pattern
         if sp is not None:
             sp_sum = float(np.asarray(sp).sum())
