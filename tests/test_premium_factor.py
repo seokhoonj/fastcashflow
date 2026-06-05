@@ -4,13 +4,13 @@ A multiplicative factor on the level ``ModelPoints.premium`` by policy year, so
 a renewable / step-rated (갱신요율) or step-up (체증형) premium can be projected
 while ``premium[mp]`` stays the scalar SCALE ``solve_premium`` solves for. The
 factor must apply identically across every kernel path (the full Markov / full
-semi-Markov projection and the fused fast / codegen value paths; the GPU path
-shares the same validated dense factor grid), so the key tests are full==fast
-parity on both a Markov and a semi-Markov contract. (The GPU path is wired but
-not separately exercised here -- it needs a CUDA device.)
+semi-Markov projection and the fused fast / codegen / GPU value paths), so the
+key tests are full==fast parity on both a Markov and a semi-Markov contract,
+plus a fast==gpu parity test (skipped when no CUDA device is present).
 """
 import numpy as np
 import pytest
+from numba import cuda
 
 import fastcashflow as fcf
 from fastcashflow.basis import Basis, CoverageRate
@@ -181,6 +181,33 @@ def test_premium_factor_rejects_wrong_shape():
         with pytest.raises(ValueError,
                            match="premium_factor_annual must return an array of shape"):
             fcf.gmm.measure(mp, _basis(scalar), full=full)
+
+
+# ---------------------------------------------------------------------------
+# PF6 -- fast==gpu parity: the GPU kernel applies the premium factor identically
+# to the CPU fast path (the factor is threaded into the CUDA kernel via the same
+# validated dense grid). Skipped when no CUDA device is present.
+# ---------------------------------------------------------------------------
+@pytest.mark.skipif(not cuda.is_available(), reason="no CUDA device available")
+@pytest.mark.filterwarnings("ignore::numba.core.errors.NumbaPerformanceWarning")
+def test_premium_factor_fast_matches_gpu():
+    pf = lambda s, a, d, ic, el: 1.0 + 0.3 * d
+    rng = np.random.default_rng(7)
+    n = 3_000
+    mps = fcf.ModelPoints(
+        issue_age=rng.integers(25, 60, n),
+        benefits={0: rng.integers(10, 100, n) * 1_000_000},
+        premium=rng.integers(3, 15, n) * 10_000,
+        term_months=np.full(n, 120),
+    )
+    cpu = fcf.gmm.measure(mps, _basis(pf), backend="cpu", full=False)
+    gpu = fcf.gmm.measure(mps, _basis(pf), backend="gpu", full=False)
+    assert np.allclose(gpu.bel, cpu.bel)
+    assert np.allclose(gpu.ra, cpu.ra)
+    assert np.allclose(gpu.csm, cpu.csm)
+    # the factor genuinely bites: the BEL differs from the level baseline
+    base = fcf.gmm.measure(mps, _basis(), backend="cpu", full=False)
+    assert not np.allclose(cpu.bel, base.bel)
 
 
 def test_annuity_factor_rejects_negative_and_nan():
