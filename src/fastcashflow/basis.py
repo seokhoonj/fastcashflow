@@ -703,7 +703,7 @@ def _emit_tree(lines: list[object], out: list[str], prefix: str) -> None:
 
 
 def describe_basis(obj, *, file=None) -> None:
-    """Print the tree structure of an Basis (or read_basis dict).
+    """Print the tree structure of a Basis (or read_basis dict).
 
     Groups the fields by role -- rates, economic / expense, risk adjustment,
     coverages / coverage types, state machine, other -- so a reader can see

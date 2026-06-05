@@ -56,7 +56,7 @@ def make_death_basis(
     coverages=None,
     **other,
 ) -> Basis:
-    """Build an Basis for a single-DEATH-coverage hand-calc test.
+    """Build a Basis for a single-DEATH-coverage hand-calc test.
 
     Pass either ``mortality_q`` / ``lapse_q`` (flat monthly rates) or
     ``mortality_annual`` / ``lapse_annual`` (full callables). The DEATH

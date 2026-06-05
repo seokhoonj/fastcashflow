@@ -1434,7 +1434,7 @@ def load_sample_basis() -> dict[tuple[str, str], Basis]:
 
 
 def load_sample_calculation_methods() -> dict[str, CalculationMethod]:
-    """Read fastcashflow's bundled sample benefit-pattern taxonomy.
+    """Read fastcashflow's bundled sample calculation-method taxonomy.
 
     The companion to :func:`load_sample_basis` and
     :func:`load_sample_model_points` -- the company-level catalogue that
@@ -1454,7 +1454,7 @@ def load_sample_model_points() -> ModelPoints:
     """Read fastcashflow's bundled sample portfolio.
 
     A small portfolio -- a policies file, a coverages file and
-    the benefit-pattern taxonomy -- packaged with the library, so the
+    the calculation-method taxonomy -- packaged with the library, so the
     engine can be tried without preparing an input file. See
     :func:`read_model_points` for the file format. The coverage order
     comes from the ``calculation_methods`` catalogue; no basis are
@@ -1612,7 +1612,7 @@ def _save_sample_coverages(path: Path | str) -> Path:
 
 
 def _save_sample_calculation_methods(path: Path | str) -> Path:
-    """Drop the packaged sample benefit-pattern catalogue on disk at ``path``.
+    """Drop the packaged sample calculation-method catalogue on disk at ``path``.
 
     The company catalogue file -- one row per ``coverage`` mapping
     it to its :class:`CalculationMethod`. Tens-to-hundreds of rows in

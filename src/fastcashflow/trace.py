@@ -466,8 +466,8 @@ def show_trace_vfa(
                if model_points.channel is not None else "-")
     av0 = float(sub.account_value[0])
     gcr = float(sub.minimum_crediting_rate[0])
-    gdb = float(sub.minimum_death_benefit[0])
-    gab = float(sub.minimum_accumulation_benefit[0])
+    gmdb = float(sub.minimum_death_benefit[0])
+    gmab = float(sub.minimum_accumulation_benefit[0])
     header = (
         f"mp[{i}]  VFA  ({product}/{channel}, sex={sex_label}, "
         f"issue_age={age:g}, term={term}m, count={count:g})"
@@ -478,13 +478,13 @@ def show_trace_vfa(
     # aligned regardless of field-name length; rate scalars share the
     # right-aligned value column with the amounts.
     _w = 28  # len("minimum_accumulation_benefit")
-    _vw = max(_colw([av0, gdb, gab], ",.2f", 15),
+    _vw = max(_colw([av0, gmdb, gmab], ",.2f", 15),
               _colw([gcr, basis.investment_return, basis.fund_fee], "g", 15))
     vfa_lines: list[object] = [
         f"{'account_value':<{_w}} = {av0:>{_vw},.2f}",
         f"{'minimum_crediting_rate':<{_w}} = {gcr:>{_vw}g}",
-        f"{'minimum_death_benefit':<{_w}} = {gdb:>{_vw},.2f}  (GMDB)",
-        f"{'minimum_accumulation_benefit':<{_w}} = {gab:>{_vw},.2f}  (GMAB)",
+        f"{'minimum_death_benefit':<{_w}} = {gmdb:>{_vw},.2f}  (GMDB)",
+        f"{'minimum_accumulation_benefit':<{_w}} = {gmab:>{_vw},.2f}  (GMAB)",
         f"{'investment_return':<{_w}} = {basis.investment_return:>{_vw}g}  (VFA 할인/적립 basis)",
         f"{'fund_fee':<{_w}} = {basis.fund_fee:>{_vw}g}  (= 이익원)",
         f"{'mortality_annual':<{_w}} -> {_fmt_callable(basis.mortality_annual)}",
@@ -516,20 +516,20 @@ def show_trace_vfa(
     # rate columns line up across the death rows and the maturity row.
     ti = max(0, term - 1)
     floor_rows = [
-        (f"t={t:>4d}m: death=max(AV,GDB)", max(av[t], gdb),
-         max(0.0, gdb - av[t]), "deaths", float(deaths[t]))
+        (f"t={t:>4d}m: death=max(AV,GMDB)", max(av[t], gmdb),
+         max(0.0, gmdb - av[t]), "deaths", float(deaths[t]))
         for t in picks if t < n_time
     ]
     floor_rows.append(
-        (f"maturity@t={ti}m: max(AV,GAB)", max(av[ti], gab),
-         max(0.0, gab - av[ti]), "survivors", float(survivors))
+        (f"maturity@t={ti}m: max(AV,GMAB)", max(av[ti], gmab),
+         max(0.0, gmab - av[ti]), "survivors", float(survivors))
     )
     lw = max(len(r[0]) for r in floor_rows)
     rw = max(len(r[3]) for r in floor_rows)
     aw = _colw((r[1] for r in floor_rows), ",.2f", 15)  # amount: expand from 15
     ew = _colw((r[2] for r in floor_rows), ",.2f", 12)  # excess: expand from 12
     floor_lines: list[object] = [
-        "death[t] = max(AV[t], GDB);  maturity = max(AV[term-1], GAB)",
+        "death[t] = max(AV[t], GMDB);  maturity = max(AV[term-1], GMAB)",
     ]
     floor_lines += [
         f"{left:<{lw}} ={amt:>{aw},.2f}  excess={ex:>{ew},.2f}  {rl:>{rw}}={rate:.6f}"

@@ -61,24 +61,24 @@ def test_gmdb_floor_on_death_hand_calc():
 
     With zero return and zero fee the account value stays flat at ``av0`` and
     r=0 means no discounting, so the BEL increase from the guarantee is the
-    total death decrement times the per-death excess ``(gdb - av0)``.
+    total death decrement times the per-death excess ``(gmdb - av0)``.
     Surrender and maturity exits are unaffected (still pay the account value).
     """
     basis = _assumptions(investment_return=0.0, fund_fee=0.0)
-    av0, gdb, term = 1000.0, 1200.0, 60
+    av0, gmdb, term = 1000.0, 1200.0, 60
     base = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0), basis
     )
     floored = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_death_benefit=gdb), basis
+                           minimum_death_benefit=gmdb), basis
     )
     surv = (1 - Q) * (1 - LAPSE)
     deaths = surv ** np.arange(term) * Q             # monthly death decrement
-    expected_delta = deaths.sum() * (gdb - av0)
+    expected_delta = deaths.sum() * (gmdb - av0)
     assert np.isclose(floored.bel_path[0, 0] - base.bel_path[0, 0], expected_delta)
 
-    # A floor below the account value never bites -- max(AV, gdb) == AV.
+    # A floor below the account value never bites -- max(AV, gmdb) == AV.
     low = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
                            minimum_death_benefit=500.0), basis
@@ -91,24 +91,24 @@ def test_gmab_floor_at_maturity_hand_calc():
 
     With zero return and zero fee the account value stays flat at ``av0`` and
     r=0 means no discounting, so the BEL increase from the guarantee is the
-    in-force surviving to term times the per-survivor excess ``(gab - av0)``.
+    in-force surviving to term times the per-survivor excess ``(gmab - av0)``.
     Death and surrender exits are unaffected (still pay the account value).
     """
     basis = _assumptions(investment_return=0.0, fund_fee=0.0)
-    av0, gab, term = 1000.0, 1200.0, 60
+    av0, gmab, term = 1000.0, 1200.0, 60
     base = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0), basis
     )
     floored = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_accumulation_benefit=gab), basis
+                           minimum_accumulation_benefit=gmab), basis
     )
     surv = (1 - Q) * (1 - LAPSE)
     maturity_survivors = surv ** term                # in-force reaching term
-    expected_delta = maturity_survivors * (gab - av0)
+    expected_delta = maturity_survivors * (gmab - av0)
     assert np.isclose(floored.bel_path[0, 0] - base.bel_path[0, 0], expected_delta)
 
-    # A floor below the account value never bites -- max(AV, gab) == AV.
+    # A floor below the account value never bites -- max(AV, gmab) == AV.
     low = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
                            minimum_accumulation_benefit=500.0), basis
@@ -150,10 +150,10 @@ def test_floor_tvog_matches_independent_reimplementation():
     from fastcashflow.tvog import guarantee_floor_time_value
 
     basis = _assumptions(investment_return=0.04, fund_fee=0.0)
-    av0, gdb, gab, term = 1000.0, 1100.0, 1100.0, 24
+    av0, gmdb, gmab, term = 1000.0, 1100.0, 1100.0, 24
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
-                            minimum_death_benefit=gdb,
-                            minimum_accumulation_benefit=gab)
+                            minimum_death_benefit=gmdb,
+                            minimum_accumulation_benefit=gmab)
     proj = project_cashflows(mp, basis)
     deaths, ms = proj.deaths[0], float(proj.maturity_survivors[0])
 
@@ -178,8 +178,8 @@ def test_floor_tvog_matches_independent_reimplementation():
         d = np.empty(term); d[0] = 1.0
         d[1:] = np.cumprod(1.0 / (1 + returns))[:-1]
         av = av0 * a
-        c = (deaths * np.maximum(0.0, gdb - av) * d).sum()
-        c += ms * max(0.0, gab - av0 * a[term - 1]) * d[term - 1]
+        c = (deaths * np.maximum(0.0, gmdb - av) * d).sum()
+        c += ms * max(0.0, gmab - av0 * a[term - 1]) * d[term - 1]
         return c
 
     cost_s = np.array([put_cost(scen[s]) for s in range(scen.shape[0])])

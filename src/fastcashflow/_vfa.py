@@ -167,7 +167,7 @@ def measure_vfa(
     # that a death exit pays max(account value, guaranteed minimum death
     # benefit). ``deaths`` is the mortality portion of the decrement; the
     # remainder (lapse, maturity) takes the account value. With the default
-    # zero GDB this reduces exactly to ``exits * av`` (max(AV, 0) = AV).
+    # zero GMDB this reduces exactly to ``exits * av`` (max(AV, 0) = AV).
     inforce_pad = np.concatenate([inforce, np.zeros((n_mp, 1))], axis=1)
     exits = inforce_pad[:, :-1] - inforce_pad[:, 1:]      # (n_mp, n_time)
     deaths = proj.deaths                                  # (n_mp, n_time)
@@ -178,7 +178,7 @@ def measure_vfa(
     # GMAB: the survivors reaching each policy's term receive max(account
     # value, minimum_accumulation_benefit). They sit in the (exits - deaths)
     # account-value payout at the maturity (term - 1) column; lift them by the
-    # excess over the account value there. Default zero GAB adds nothing.
+    # excess over the account value there. Default zero GMAB adds nothing.
     rows = np.arange(n_mp)
     term_idx = model_points.term_months - 1
     av_at_maturity = av[rows, term_idx]

@@ -269,7 +269,7 @@ def test_sample_data_dir_exposes_bundled_files():
 
 
 def test_describe_basis_renders_both_shapes(capsys):
-    """describe_basis prints a tree for an Basis and for a dict."""
+    """describe_basis prints a tree for a Basis and for a dict."""
     from fastcashflow import describe_basis
     basis_dict = fcf.samples.basis()
     seg_basis = next(iter(basis_dict.values()))

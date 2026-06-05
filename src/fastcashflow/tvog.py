@@ -152,8 +152,8 @@ def guarantee_floor_time_value(
 ) -> FloatArray:
     """Per-model-point time value of the GMDB and GMAB account-value floors.
 
-    A death pays ``max(account value, GDB)`` and a maturity pays
-    ``max(account value, GAB)`` -- put options on the account value, struck at
+    A death pays ``max(account value, GMDB)`` and a maturity pays
+    ``max(account value, GMAB)`` -- put options on the account value, struck at
     the guarantee. The deterministic projection prices only their intrinsic
     value (the cost in the central scenario); the *time value* -- the extra
     cost convexity adds once returns vary -- is the mean cost over the return
@@ -165,7 +165,7 @@ def guarantee_floor_time_value(
 
     The account value path uses the credited rate ``max(return, guarantee)``;
     ``minimum_crediting_rate`` is the (scalar, v1) crediting guarantee. The
-    GDB / GAB floors themselves may vary by model point.
+    GMDB / GMAB floors themselves may vary by model point.
     """
     return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
     n_time = return_scenarios.shape[1]

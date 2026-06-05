@@ -112,14 +112,14 @@ class ModelPoints:
     # guarantee; ignored by non-VFA measurements.
     minimum_crediting_rate: FloatArray | None = None
     # Guaranteed minimum death benefit (GMDB) -- the floor the death benefit
-    # cannot fall below. On death the VFA pays max(account value, GDB); the
+    # cannot fall below. On death the VFA pays max(account value, GMDB); the
     # excess over the account value is the guarantee's intrinsic cost. Locked
     # at issue, per policy; cohort-dependent like the credit-rate guarantee.
     # Default 0.0 = no floor (max(AV, 0) = AV); ignored by non-VFA measurements.
     minimum_death_benefit: FloatArray | None = None
     # Guaranteed minimum accumulation benefit (GMAB) -- the floor the maturity
     # benefit cannot fall below. Survivors reaching term receive max(account
-    # value, GAB); the excess over the account value is the guarantee's
+    # value, GMAB); the excess over the account value is the guarantee's
     # intrinsic cost. Locked at issue, per policy. Default 0.0 = no floor
     # (max(AV, 0) = AV); ignored by non-VFA measurements.
     minimum_accumulation_benefit: FloatArray | None = None

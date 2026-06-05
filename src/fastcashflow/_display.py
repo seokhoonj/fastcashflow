@@ -88,7 +88,8 @@ def measurement_str(cls_name: str, columns, max_rows: int = _MAX_ROWS) -> str:
             + "".join(f"{a[i]:>{_COL_W},.0f}" for a in arrs)
         )
     if n_mp > shown:
-        lines.append(f"{'...':>8}  ({n_mp - shown} more model points)")
+        more = n_mp - shown
+        lines.append(f"{'...':>8}  ({more} more model point{'s' if more != 1 else ''})")
     lines.append(
         f"{'Total':>8}" + "".join(f"{a.sum():>{_COL_W},.0f}" for a in arrs)
     )
