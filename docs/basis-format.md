@@ -70,7 +70,8 @@ basis = basis[("TERM_LIFE_A", "GA")]  # 한 세그먼트
 | 컬럼명 | 의미 | 단위 | 사용 시트 |
 |---|---|---|---|
 | `rate` | 확률 / 발생률 / 환산률 | 무차원 (0~1) | mortality, incidence_rate, waiver, lapse, discount |
-| `factor` | 무차원 비율 / 환급률 | 무차원 | surrender_value, ae_factors, improvement |
+| `factor` | 무차원 비율 / 환급률 | 무차원 | surrender_value (cum_premium_factor), ae_factors, improvement |
+| `amount` | 통화 금액 | 통화 | surrender_value (amount_per_policy / amount_per_unit), expense |
 
 ---
 
@@ -165,25 +166,48 @@ in-force 만 제거 (해약환급금 = 0 가정, 무해약환급금형 protectio
 |---|---|
 | `table_id` | 표 식별자 (예: `SURRENDER_STD`) |
 | `duration_month` | 가입 후 경과 월 (0 부터, contiguous) |
-| `factor` | 해약 시 환급률 (= 해약환급금 / 누적 납입보험료) |
+| `factor` **또는** `amount` | 해약 시 값 — 둘 중 **한 컬럼만**. 의미는 아래 |
+
+해약환급금의 **값 컬럼은 두 가지** 중 하나이고, 어느 의미로 읽을지는 segments
+시트의 `surrender_value_basis` 컬럼이 정합니다 (생략 시 `cum_premium_factor`):
+
+| `surrender_value_basis` | 값 컬럼 | 엔진 해석 |
+|---|---|---|
+| `cum_premium_factor` (기본) | `factor` | 누적 납입보험료에 곱하는 환급률 |
+| `amount_per_policy` | `amount` | 계약당 해약환급금 (통화 금액) |
+| `amount_per_unit` | `amount` | 단위당 금액 × 정책의 `surrender_base_amount` (가입금액 / 기본보험료 등) |
+
+값 컬럼 종류와 `surrender_value_basis` 가 어긋나면 (`factor` 컬럼을 amount 로,
+또는 그 반대로) reader 가 거부합니다 — 한쪽을 다른 쪽으로 잘못 읽으면 조용히
+오측정되기 때문.
 
 엔진 계산 (post-projection):
 ```
-lapse_flow[mp, t]   = inforce[mp, t] x lapse_monthly[mp, year(t)]
+lapse_flow[mp, t]   = inforce[mp, t] x lapse_monthly[mp, year(t)]   # 해약 건수
+
+# cum_premium_factor  (factor 컬럼)
 cum_premium[mp, t]  = cumsum(premium_cf[mp, :t+1])
 surrender_cf[mp, t] = lapse_flow x cum_premium x factor[duration_month]
+
+# amount_per_policy   (amount 컬럼)
+surrender_cf[mp, t] = lapse_flow x amount[duration_month]
+
+# amount_per_unit     (amount 컬럼 + policies 의 surrender_base_amount)
+surrender_cf[mp, t] = lapse_flow x amount[duration_month] x surrender_base_amount[mp]
 ```
 
 BEL에 future outflow 로 포함. 환급률이 substantial 한 한국 상품 (단기납
-종신, 경영인 정기, 저해지환급금형 등) 의 BEL 정확도 ↑.
+종신, 경영인 정기, 저해지환급금형 등) 의 BEL 정확도 ↑. 계약 명세서의 해약환급금
+표를 그대로 쓰려면 `amount` 컬럼 (amount_per_policy), 가입금액 비례면
+`amount_per_unit`, 환급률만 있으면 `factor` (cum_premium_factor).
 
 **제약 (v1)**:
-- 기준금액 = **누적 납입보험료** 만 (사용자 framework 의 다른 옵션 — 가입금액 /
-  책임준비금 / 적립금 — 미지원. 환급률 calibration 시 cum premium 기준으로
-  환산 필요).
-- `lapse_flow` 계산이 approximation (in-force x monthly lapse rate). WAIVER /
-  Semi-Markov 등 추가 state transition 동시 발생 시 약간 부정확. 단순
-  protection 에서는 정확.
+- `cum_premium_factor` 의 기준금액 = **누적 납입보험료** 만 (책임준비금 / 적립금
+  기준은 amount 모드로 직접 금액을 주거나 cum premium 기준으로 환산). `amount`
+  모드는 평가일 시점 in-force 에 선형이라 보유계약 rescale 이 정확하지만,
+  `cum_premium_factor` 는 평가일 이전 납입에 path-dependent 라 rescale 이 근사.
+- `lapse_flow` 는 state-machine 의 실제 해약 exit (occupancy x state 별 해약률).
+  단일 active state 에서는 `inforce x lapse` 의 historical 식과 같음.
 
 ### 3.5 `discount_tables` · `inflation_tables`
 

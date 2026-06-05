@@ -601,8 +601,17 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
         "improvement_tables",
         lambda w: _axis_tables(w, "year", value_col="factor"),
     )
-    # Surrender value curves -- per-month factor applied to cumulative
-    # premium paid. Optional; absent means lapse has no payout.
+    # Surrender value curves -- per-duration value, read from whichever
+    # value column the sheet carries: ``amount`` (a currency amount, an
+    # amount_per_* basis) or ``factor`` (a ratio on cumulative premium, the
+    # cum_premium_factor basis). Optional; absent means lapse has no payout.
+    # ``surrender_col_kind`` records which column was read so each segment's
+    # ``surrender_value_basis`` can be checked against it (a factor read as
+    # an amount, or vice versa, would silently mis-measure).
+    surrender_col_kind = (
+        _surrender_value_col(wb["surrender_value_tables"])
+        if "surrender_value_tables" in wb.sheetnames else None
+    )
     surrender_t = optional(
         "surrender_value_tables",
         lambda w: _axis_tables(w, "duration_month",
@@ -806,6 +815,25 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
         surr_basis = cell("surrender_value_basis")
         if surr_basis is not None:
             kwargs["surrender_value_basis"] = str(surr_basis).strip()
+        # The surrender curve is read from one column kind (amount vs factor)
+        # for the whole sheet, but each segment names how to interpret it via
+        # surrender_value_basis. A mismatch -- an ``amount`` column used as a
+        # cum_premium factor, or a ``factor`` column used as an amount --
+        # silently mis-measures the surrender cash flow, so reject it here.
+        if surrender_curve is not None and surrender_col_kind is not None:
+            eff_basis = kwargs.get("surrender_value_basis", "cum_premium_factor")
+            basis_wants_amount = eff_basis in ("amount_per_policy",
+                                               "amount_per_unit")
+            col_is_amount = surrender_col_kind == "amount"
+            if basis_wants_amount != col_is_amount:
+                raise ValueError(
+                    f"{where}: surrender_value_basis={eff_basis!r} expects a "
+                    f"{'amount' if basis_wants_amount else 'factor'} column "
+                    f"but surrender_value_tables carries a "
+                    f"{surrender_col_kind!r} column. Use a 'factor' column "
+                    "for cum_premium_factor, or an 'amount' column for "
+                    "amount_per_policy / amount_per_unit."
+                )
         # Optional state_model column -- non-programmer actuary picks a
         # bundled topology by its registry key (e.g. "WAIVER"). Blank cell
         # leaves Basis.state_model = None; an unknown key is an

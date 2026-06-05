@@ -67,7 +67,8 @@
   - 할인율 (`table_id` × `year`)
 * - `surrender_value_tables`
   - 선택
-  - 해약환급금 곡선 (`duration_month` × `factor`)
+  - 해약환급금 곡선 (`duration_month` × `factor` 또는 `amount`; segments 의
+    `surrender_value_basis` 가 해석 결정)
 * - `expense_tables`
   - 선택
   - 사업비 항목 ledger (`expense_type` × `basis` × `value`)

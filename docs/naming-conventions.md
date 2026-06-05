@@ -28,7 +28,7 @@ orphan: true
 | `expense_tables` | 사업비 ledger (`table_id` × `expense_type` × `basis` × `value`). `basis` 가 alpha_fixed / alpha_pro_rata / beta_pro_rata / gamma_fixed / lae_pro_rata 등 kernel-side primitive 를 결정 |
 | `discount_tables` | 할인율 곡선 (`table_id` × `year` → `rate`; locked-in, Sec. 36) |
 | `inflation_tables` | 사업비 인플레이션 곡선 (`table_id` × `year` → `rate`) |
-| `surrender_value_tables` (optional) | 해약환급금 비율 곡선 (`table_id` × `duration_month` → `factor`) |
+| `surrender_value_tables` (optional) | 해약환급금 곡선 (`table_id` × `duration_month` → `factor` 환급률 또는 `amount` 금액; segments 의 `surrender_value_basis` 가 해석) |
 | `ae_factors` (optional) | A/E factor — `(product × channel × coverage)` + 옵션 axes → `factor`. base rate에 런타임 곱셈 |
 | `improvement_tables` (optional) | mortality improvement 곡선 (`table_id` × `year` → `factor`). `segments`의 `mortality_improvement_table` 컬럼이 참조 |
 

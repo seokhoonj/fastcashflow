@@ -120,10 +120,10 @@ def test_resolved_basis_values():
     mp = ModelPoints.single(issue_age=40, benefits={0: 100_000_000.0},
                             premium=50_000.0, term_months=120,
                             calculation_methods=fcf.samples.calculation_methods())
-    # Use a copy of the basis without surrender for the measure() / measure()
-    # equivalence assertion -- the measure() fast path doesn't yet include
-    # surrender cash flows (see surrender-value-gap memory); only measure()
-    # does. With surrender disabled the two paths agree to machine precision.
+    # Strip surrender for the fused / detailed equivalence assertion below so
+    # this test isolates the channel-segmentation effect on BEL. (The fast
+    # path does carry surrender now -- see test_surrender_parity.py; here we
+    # just want the two paths to agree on the no-surrender baseline.)
     import dataclasses
     basis_ga_no_surr = dataclasses.replace(
         basis[("TERM_LIFE_A", "GA")], surrender_value_curve=None)
@@ -200,4 +200,31 @@ def test_state_model_unknown_key_raises():
                 break
         wb.save(dst)
         with pytest.raises(ValueError, match="NOT_A_MODEL"):
+            read_basis(dst)
+
+
+def test_surrender_column_basis_mismatch_raises():
+    """A surrender_value_tables sheet whose value column (factor vs amount)
+    contradicts the segment's surrender_value_basis is rejected at read time
+    -- reading a factor as an amount (or vice versa) silently mis-measures.
+    The sample carries a ``factor`` column and no surrender_value_basis (so
+    every segment defaults to cum_premium_factor); renaming the column to
+    ``amount`` without changing the basis is the mismatch."""
+    import openpyxl, tempfile, shutil, pytest
+    import importlib.resources as resources
+    from fastcashflow import read_basis
+    sample = resources.files("fastcashflow").joinpath(
+        "sample_data/sample_basis.xlsx")
+    with tempfile.TemporaryDirectory() as d:
+        dst = f"{d}/bad_surrender.xlsx"
+        shutil.copy(sample, dst)
+        wb = openpyxl.load_workbook(dst)
+        ws = wb["surrender_value_tables"]
+        for c in range(1, ws.max_column + 1):
+            if ws.cell(row=1, column=c).value == "factor":
+                ws.cell(row=1, column=c).value = "amount"   # now amount column
+                break
+        wb.save(dst)
+        # amount column but cum_premium_factor basis (the default) -> mismatch
+        with pytest.raises(ValueError, match="surrender_value_basis"):
             read_basis(dst)
