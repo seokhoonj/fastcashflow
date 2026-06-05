@@ -267,16 +267,20 @@ print("재발배수 sd6/24/48/72:", [float(np.select([np.array([x]) < 12, np.arr
 - 면책 (1~2년) 은 `sd` 임계 하나로 — `sd < 12` (1년) / `sd < 24` (2년).
 ```
 
-### 암후사망 — 진단 후 상승 사망률
+### 암진단 후 사망률 (조건부 사망 가정)
 
-암 진단을 받은 사람은 그 뒤 사망률이 일반보다 훨씬 높습니다 (암후사망). 진단
-상태 (`post_first` / `post_second`) 가 **자기 사망률** 을 갖게 하려면
+암진단을 받은 사람은 그 뒤 (전원인) 사망률이 일반보다 훨씬 높습니다 — **암진단
+후 사망률**. 이건 **담보(지급 항목)가 아니라 가정** 입니다: 진단 후 상태에
+머무는 사람의 사망 decrement 로, **재진단금** 의 경쟁위험 (진단자가 빨리 죽으면
+재진단까지 생존자가 줄어 재진단금 부채 감소) 이자, 진단 후 월정액 같은 다른
+보장을 평가하는 사망률 가정입니다 (암을 死因으로 하는 **암사망 보험금** 과도
+별개). 진단 상태 (`post_first` / `post_second`) 가 **자기 사망률** 을 갖게 하려면
 `State.mortality_rate` 로 다른 이름을 라우팅하고, `Basis.state_mortality_annual`
 에 그 함수를 줍니다 — in-force 가 진단 후 더 빨리 소멸합니다:
 
 ```python
 pm_healthy = lambda s, a, d: np.full(np.shape(a), 0.005)   # 건강 사망 연 0.5%
-pm_post    = lambda s, a, d: np.full(np.shape(a), 0.05)    # 암 진단 후 연 5% (10배)
+pm_post    = lambda s, a, d: np.full(np.shape(a), 0.05)    # 암진단 후 연 5% (10배)
 pm_lapse   = lambda s, a, d: np.full(np.shape(d), 0.05)
 
 pm_model = StateModel(states=(
@@ -292,11 +296,11 @@ pm_model = StateModel(states=(
 pm_basis = fcf.Basis(
     mortality_annual=pm_healthy, lapse_annual=pm_lapse,
     ci_incidence_annual=ca_incidence, ci_reincidence_annual=ca_reincidence,
-    state_mortality_annual={"dth_aft_can": pm_post},       # 암후사망률
+    state_mortality_annual={"dth_aft_can": pm_post},       # 암진단 후 사망률 (가정)
     discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10, morbidity_cv=0.15,
     state_model=pm_model, coverages=(fcf.CoverageRate("CANCER1", ca_incidence),))
 
-# post_first 에 자리 지정 -> 사망건수가 암후사망률을 따른다
+# post_first 에 자리 지정 -> 사망건수가 암진단 후 사망률을 따른다
 pm_mp = fcf.ModelPoints(
     issue_age=np.array([50], dtype=np.int64), benefits={0: np.array([0.0])},
     premium=np.array([20_000.0]), term_months=np.array([13], dtype=np.int64),
@@ -304,18 +308,18 @@ pm_mp = fcf.ModelPoints(
     calculation_methods={"CANCER1": fcf.CalculationMethod.DIAGNOSIS})
 pm_m = fcf.gmm.measure(pm_mp, pm_basis)
 print("진단후 seated deaths[0] :", round(float(pm_m.cashflows.deaths[0][0]), 5))
-print("건강 / 암후 월사망률    :", round(1 - (1 - 0.005) ** (1 / 12), 5),
+print("건강 / 진단후 월사망률   :", round(1 - (1 - 0.005) ** (1 / 12), 5),
       "/", round(1 - (1 - 0.05) ** (1 / 12), 5))
 ```
 
 ```text
 진단후 seated deaths[0] : 0.00427
-건강 / 암후 월사망률    : 0.00042 / 0.00427
+건강 / 진단후 월사망률   : 0.00042 / 0.00427
 ```
 
-`post_first` 에 자리 지정한 계약의 사망건수 (`deaths[0]`) 가 **암후사망률
+`post_first` 에 자리 지정한 계약의 사망건수 (`deaths[0]`) 가 **암진단 후 사망률
 0.00427** 을 따릅니다 (건강 0.00042 가 아니라). `mortality_rate` 를 안 주면
-전역 `mortality_annual` 로 fallback 하므로, 진단 후 상승 사망을 의도했다면
+전역 `mortality_annual` 로 fallback 하므로, 암진단 후 상승 사망을 의도했다면
 `state_mortality_annual` 에 그 함수를 반드시 넣습니다.
 
 ### 추적기간 `duration_max`
