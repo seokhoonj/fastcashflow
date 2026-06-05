@@ -53,12 +53,24 @@ class Report:
     The CSM analysis of change reconciles as
     ``csm_opening + csm_accretion - csm_release = csm_closing`` (the CSM
     columns are zero for a PAA measurement, which has no CSM).
+
+    ``insurance_finance_expense`` is also disaggregated by source (IFRS 17
+    B130-B136) into ``bel_finance_expense`` (finance on the estimates of
+    future cash flows), ``ra_finance_expense`` (finance on the risk
+    adjustment) and ``csm_finance_expense`` (the CSM interest accreted at the
+    locked-in rate, B72). The three sum to ``insurance_finance_expense`` up to
+    floating-point rounding (the aggregate is kept as its own expression, so
+    the parts may differ from it by a rounding step rather than re-deriving
+    it). The split is the structural basis for a later P&L / OCI allocation.
     """
 
     insurance_revenue: FloatArray
     insurance_service_expense: FloatArray
     insurance_service_result: FloatArray
     insurance_finance_expense: FloatArray
+    bel_finance_expense: FloatArray   # B130-B136: finance on the FCF estimates
+    ra_finance_expense: FloatArray    # B130-B136: finance on the risk adjustment
+    csm_finance_expense: FloatArray   # B130-B136: CSM interest at the locked-in rate (B72)
     loss_component: FloatArray
     csm_opening: FloatArray
     csm_accretion: FloatArray
@@ -165,6 +177,12 @@ def _report_gmm(m: GMMMeasurement) -> Report:
         insurance_finance_expense=(
             monthly_rate * (bel[:, :-1] + ra[:, :-1]) + m.csm_accretion
         ),
+        # Disaggregated by source (B130-B136). Computed as separate values --
+        # NOT a refactor of the aggregate above -- so the aggregate expression
+        # stays byte-identical (a*b + a*c is not bit-identical to a*(b+c)).
+        bel_finance_expense=monthly_rate * bel[:, :-1],
+        ra_finance_expense=monthly_rate * ra[:, :-1],
+        csm_finance_expense=m.csm_accretion,
         loss_component=m.loss_component,
         csm_opening=csm[:, :-1],
         csm_accretion=m.csm_accretion,
@@ -181,6 +199,9 @@ def _report_paa(m: PAAMeasurement) -> Report:
         insurance_service_expense=m.service_expense,
         insurance_service_result=m.revenue - m.service_expense,
         insurance_finance_expense=zeros,          # LRC held undiscounted
+        bel_finance_expense=zeros,
+        ra_finance_expense=zeros,
+        csm_finance_expense=zeros,
         loss_component=m.loss_component,
         csm_opening=zeros,
         csm_accretion=zeros,
@@ -204,6 +225,12 @@ def _report_vfa(m: VFAMeasurement) -> Report:
         insurance_service_expense=service_expense,
         insurance_service_result=ra_release + csm_release,
         insurance_finance_expense=m.csm_accretion,
+        # VFA finance is the CSM accretion only -- the account value is the
+        # investment component, and the variable-fee (B132) disaggregation is
+        # out of scope. So the whole finance line sits on the CSM component.
+        bel_finance_expense=np.zeros_like(m.csm_accretion),
+        ra_finance_expense=np.zeros_like(m.csm_accretion),
+        csm_finance_expense=m.csm_accretion,
         loss_component=m.loss_component,
         csm_opening=csm[:, :-1],
         csm_accretion=m.csm_accretion,

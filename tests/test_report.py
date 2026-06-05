@@ -157,3 +157,66 @@ def test_report_finance_expense_is_curve_aware():
     # And the rate genuinely varies across the curve break -- without the
     # fix, finance_expense would be off by the year-0 vs year-1 spread.
     assert not np.isclose(rate[0], rate[12])
+
+
+# ---------------------------------------------------------------------------
+# Finance-expense disaggregation by source (IFRS 17 B130-B136): BEL / RA / CSM
+# ---------------------------------------------------------------------------
+def test_report_finance_expense_disaggregates_by_source():
+    """The single finance line splits into BEL / RA / CSM components, each its
+    own formula, and they sum back to the aggregate."""
+    a = Basis(
+        mortality_annual=lambda sex, ia, dur: np.full(ia.shape, _annual(0.001)),
+        lapse_annual=lambda sex, ia, dur: np.full(dur.shape, _annual(0.01)),
+        discount_annual=np.array([0.01, 0.05, 0.05, 0.05, 0.05,
+                                  0.05, 0.05, 0.05, 0.05, 0.05]),
+        ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH",
+                   lambda sex, ia, dur: np.full(ia.shape, _annual(0.001))),))
+    m = measure(ModelPoints.single(40, 150_000.0, 120, benefits={0: 1e8}), a)
+    r = report(m)
+    ds = m.discount_bom
+    rate = ds[:-1] / ds[1:] - 1.0
+    # each component is exactly its own source's interest unwind
+    assert np.allclose(r.bel_finance_expense[0], rate * m.bel_path[0, :-1])
+    assert np.allclose(r.ra_finance_expense[0],  rate * m.ra_path[0, :-1])
+    assert np.allclose(r.csm_finance_expense[0], m.csm_accretion[0])
+    # the CSM component is genuinely non-trivial here (a profitable contract)
+    assert np.any(r.csm_finance_expense[0] > 0.0)
+    # and they sum back to the aggregate (a rounding step, not byte-equal)
+    np.testing.assert_allclose(
+        r.bel_finance_expense + r.ra_finance_expense + r.csm_finance_expense,
+        r.insurance_finance_expense, atol=1e-9, rtol=0)
+
+
+def test_report_finance_disaggregation_identity_all_models():
+    """The sum identity holds for GMM, PAA and VFA. The VFA leg is the
+    load-bearing guard: VFA's finance line is the CSM accretion (not zero), so
+    its CSM component must carry the whole line."""
+    gmm = report(measure(_portfolio(), _assumptions()))
+    paa = report(fcf.paa.measure(
+        ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}), _assumptions()))
+    vfa = report(fcf.vfa.measure(
+        ModelPoints.single(40, 0.0, 60, account_value=1e8), _assumptions()))
+    for r in (gmm, paa, vfa):
+        np.testing.assert_allclose(
+            r.bel_finance_expense + r.ra_finance_expense + r.csm_finance_expense,
+            r.insurance_finance_expense, atol=1e-9, rtol=0)
+    # PAA: all three components are zero (LRC held undiscounted)
+    assert np.allclose(paa.bel_finance_expense, 0.0)
+    assert np.allclose(paa.csm_finance_expense, 0.0)
+    # VFA: the finance line sits wholly on the CSM component
+    assert np.allclose(vfa.csm_finance_expense, vfa.insurance_finance_expense)
+    assert np.allclose(vfa.bel_finance_expense, 0.0)
+
+
+def test_report_finance_disaggregation_segmented_broadcast():
+    """A segmented full measurement has a per-MP (2-D) discount curve; the
+    three-way identity holds at every (mp, t) cell."""
+    mp = fcf.samples.model_points()
+    basis = fcf.samples.basis()
+    r = report(fcf.gmm.measure(mp, basis))
+    assert r.insurance_finance_expense.ndim == 2
+    np.testing.assert_allclose(
+        r.bel_finance_expense + r.ra_finance_expense + r.csm_finance_expense,
+        r.insurance_finance_expense, atol=1e-9, rtol=0)
