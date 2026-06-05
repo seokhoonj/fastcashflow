@@ -144,3 +144,40 @@ def test_solve_premium_on_a_shape():
     inforce = priced.cashflows.inforce[0]
     assert pcf[0] == pytest.approx(s[0] * 1.0 * inforce[0], rel=1e-9)
     assert pcf[12] == pytest.approx(s[0] * 1.3 * inforce[12], rel=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# PF5 -- the factor output is validated: a negative / NaN factor is rejected
+# (it would silently flip the premium sign or poison the BEL, bypassing the
+# ModelPoints premium >= 0 invariant), on BOTH the full and the fast path
+# ---------------------------------------------------------------------------
+def test_premium_factor_rejects_negative_and_nan():
+    mp = fcf.ModelPoints.single(issue_age=40, benefits={0: 1e6}, premium=1000.0,
+                                term_months=24, calculation_methods=CM)
+    neg = lambda s, a, d, ic, el: np.full(np.shape(a), -1.0)
+    nan = lambda s, a, d, ic, el: np.full(np.shape(a), np.nan)
+    for fn, msg in ((neg, "negative"), (nan, "non-finite")):
+        with pytest.raises(ValueError, match=f"premium_factor_annual.*{msg}"):
+            fcf.gmm.measure(mp, _basis(fn), full=True)
+        with pytest.raises(ValueError, match=f"premium_factor_annual.*{msg}"):
+            fcf.gmm.measure(mp, _basis(fn), full=False)
+    # a zero factor is allowed (a premium holiday), not rejected
+    holiday = lambda s, a, d, ic, el: np.where(d == 0, 1.0, 0.0)
+    pcf = fcf.gmm.measure(mp, _basis(holiday), full=True).cashflows.premium_cf[0]
+    assert pcf[0] > 0.0 and pcf[12] == pytest.approx(0.0)
+
+
+def test_annuity_factor_rejects_negative_and_nan():
+    """The annuity factor twin is guarded the same way (a negative annuity
+    factor would flip a survival benefit into an inflow)."""
+    mp = fcf.ModelPoints.single(issue_age=60, benefits={0: 0.0}, premium=0.0,
+                                term_months=36, annuity_payment=100.0,
+                                annuity_frequency_months=12,
+                                calculation_methods={"ANN": fcf.CalculationMethod.ANNUITY})
+    def _abasis(af):
+        return Basis(mortality_annual=_NONE, lapse_annual=_NONE, discount_annual=0.0,
+                     ra_confidence=0.75, mortality_cv=0.10,
+                     coverages=(CoverageRate("ANN", _NONE),), annuity_factor_annual=af)
+    neg = lambda s, a, d, ic, el: np.full(np.shape(a), -1.0)
+    with pytest.raises(ValueError, match="annuity_factor_annual.*negative"):
+        fcf.gmm.measure(mp, _abasis(neg), full=True)

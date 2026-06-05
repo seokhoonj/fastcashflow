@@ -28,7 +28,8 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import (
-    Basis, annual_to_monthly, _single_basis, SURRENDER_VALUE_BASES,
+    Basis, annual_to_monthly, _single_basis, validate_factor,
+    SURRENDER_VALUE_BASES,
 )
 from fastcashflow.curves import (
     discount_factors,
@@ -2003,18 +2004,20 @@ def _measure_fast(
     if basis.premium_factor_annual is None:
         premium_factor_grid = np.ones_like(mortality_grid)
     else:
-        premium_factor_grid = np.ascontiguousarray(basis.premium_factor_annual(
-            sex_grid, issue_age_grid, duration_grid,
-            issue_class_grid, elapsed_grid))
+        premium_factor_grid = validate_factor(np.ascontiguousarray(
+            basis.premium_factor_annual(
+                sex_grid, issue_age_grid, duration_grid,
+                issue_class_grid, elapsed_grid)), "premium_factor_annual")
     # Annuity SHAPE on the dense grid -- the survival-benefit twin of
     # premium_factor_grid (escalating annuity). Same rules: never
     # annual_to_monthly, None -> all-ones (level annuity), a no-op multiply.
     if basis.annuity_factor_annual is None:
         annuity_factor_grid = np.ones_like(mortality_grid)
     else:
-        annuity_factor_grid = np.ascontiguousarray(basis.annuity_factor_annual(
-            sex_grid, issue_age_grid, duration_grid,
-            issue_class_grid, elapsed_grid))
+        annuity_factor_grid = validate_factor(np.ascontiguousarray(
+            basis.annuity_factor_annual(
+                sex_grid, issue_age_grid, duration_grid,
+                issue_class_grid, elapsed_grid)), "annuity_factor_annual")
     # Fast path: when no waiver / paid-up mechanic is active and every model
     # point is seated in the active state, the in-force is a single survival
     # track. The scalar kernel carries it as one number and runs the

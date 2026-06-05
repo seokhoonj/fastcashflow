@@ -136,3 +136,27 @@ def test_escalation_default_is_inert_and_fast_rejects():
     esc = _care_mp(coverage_escalation_annual=np.array([0.10]))
     with pytest.raises(NotImplementedError, match="escalation"):
         fcf.gmm.measure(esc, _care_basis(), full=False)
+
+
+# ---------------------------------------------------------------------------
+# BE3 -- the CSR rule arrays are validated at construction (one entry per
+# coverage, finite, non-negative). A wrong length silently drops / misreads a
+# coverage's rule; a negative month / factor silently mis-times or flips it.
+# ---------------------------------------------------------------------------
+def test_coverage_rule_arrays_must_align_with_coverages():
+    # _care_mp has one coverage; a 2-element rule array is a length mismatch
+    with pytest.raises(ValueError, match="coverage_step_factor must align"):
+        _care_mp(coverage_step_factor=np.array([2.0, 2.0]))
+    with pytest.raises(ValueError, match="coverage_escalation_annual must align"):
+        _care_mp(coverage_escalation_annual=np.array([0.1, 0.1, 0.1]))
+
+
+def test_coverage_rule_arrays_reject_negative_and_nan():
+    with pytest.raises(ValueError, match="coverage_step_month must be >= 0"):
+        _care_mp(coverage_step_month=np.array([-1], np.int64))
+    with pytest.raises(ValueError, match="coverage_step_factor must be >= 0"):
+        _care_mp(coverage_step_factor=np.array([-2.0]))
+    with pytest.raises(ValueError, match="coverage_escalation_annual must be finite"):
+        _care_mp(coverage_escalation_annual=np.array([np.nan]))
+    with pytest.raises(ValueError, match="coverage_escalation_cap must be >= 0"):
+        _care_mp(coverage_escalation_cap=np.array([-3.0]))

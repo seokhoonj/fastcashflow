@@ -145,6 +145,31 @@ def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
         return -np.expm1(np.log1p(-annual) / 12.0)
 
 
+def validate_factor(grid: FloatArray, name: str) -> FloatArray:
+    """Guard a materialised premium / annuity factor grid.
+
+    A factor (``premium_factor_annual`` / ``annuity_factor_annual``) is a free
+    Basis callable -- it may legitimately exceed 1.0 for an escalating cash
+    flow, so it deliberately never passes through ``annual_to_monthly`` and its
+    ``<= 1`` guard. That freedom also means it can return a non-finite or
+    negative value, which would silently flip a premium / annuity cash flow's
+    sign or poison the BEL with a NaN -- bypassing the ``premium >= 0``
+    invariant on ``ModelPoints``. A factor is a finite, non-negative multiple
+    (0 is a valid premium holiday / deferral), so reject anything else here,
+    where the callable's output is materialised, in every kernel path.
+    """
+    if not np.all(np.isfinite(grid)):
+        raise ValueError(
+            f"{name} returned a non-finite value; the factor must be finite"
+        )
+    if np.any(grid < 0.0):
+        raise ValueError(
+            f"{name} returned a negative value; the factor is a non-negative "
+            f"multiple on the cash flow (a premium / annuity cannot go negative)"
+        )
+    return grid
+
+
 def _single_basis(basis, *, entry: str) -> "Basis":
     """Resolve a possibly-segmented basis to a single :class:`Basis`.
 
@@ -840,9 +865,22 @@ def _describe_basis_lines(
                 target = "exit" if t.to is None else repr(t.to)
                 tag = " (lump_sum)" if t.lump_sum else ""
                 trs.append(f"{t.rate}  ->  {target}{tag}")
+            # Show the non-default state knobs only when set, so an ordinary
+            # state renders unchanged and a configured one (an elevated death
+            # benefit, a capped / exiting benefit state) is visible.
+            extras = []
+            if st.benefit_max_months:
+                extras.append(f"benefit_max_months={st.benefit_max_months}")
+            if st.mortality_rate != "mortality":
+                extras.append(f"mortality_rate={st.mortality_rate!r}")
+            if st.death_benefit_factor != 1.0:
+                extras.append(f"death_benefit_factor={st.death_benefit_factor}")
+            if st.exit_after:
+                extras.append(f"exit_after={st.exit_after}")
+            extra_str = (", " + ", ".join(extras)) if extras else ""
             state_items.append((
                 f"State({st.name!r}, premium={st.premium}, "
-                f"benefit={st.benefit}, duration_max={st.duration_max})",
+                f"benefit={st.benefit}, duration_max={st.duration_max}{extra_str})",
                 trs,
             ))
         sm_body = [(f"states : tuple  (len={len(sm.states)})", state_items)]

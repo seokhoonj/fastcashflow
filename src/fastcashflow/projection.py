@@ -40,7 +40,8 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import (
-    Basis, annual_to_monthly, derive_expense_components, SURRENDER_VALUE_BASES,
+    Basis, annual_to_monthly, derive_expense_components, validate_factor,
+    SURRENDER_VALUE_BASES,
 )
 from fastcashflow.coverage import (
     align_coverages, build_coverage_rates, coverage_arrays, validate_csr_codes,
@@ -738,9 +739,10 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     if basis.premium_factor_annual is None:
         premium_factor = np.ones((len(model_points.issue_age), n_years))
     else:
-        premium_factor = np.ascontiguousarray(basis.premium_factor_annual(
-            sex_grid, issue_age_grid, duration_grid,
-            issue_class_grid, elapsed_grid))
+        premium_factor = validate_factor(np.ascontiguousarray(
+            basis.premium_factor_annual(
+                sex_grid, issue_age_grid, duration_grid,
+                issue_class_grid, elapsed_grid)), "premium_factor_annual")
     assert premium_factor.shape == (len(model_points.issue_age), n_years)
     # Annuity SHAPE -- the survival-benefit twin of premium_factor (escalating
     # annuity). Same multiplicative-scale rules: never annual_to_monthly, None
@@ -748,9 +750,10 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     if basis.annuity_factor_annual is None:
         annuity_factor = np.ones((len(model_points.issue_age), n_years))
     else:
-        annuity_factor = np.ascontiguousarray(basis.annuity_factor_annual(
-            sex_grid, issue_age_grid, duration_grid,
-            issue_class_grid, elapsed_grid))
+        annuity_factor = validate_factor(np.ascontiguousarray(
+            basis.annuity_factor_annual(
+                sex_grid, issue_age_grid, duration_grid,
+                issue_class_grid, elapsed_grid)), "annuity_factor_annual")
     assert annuity_factor.shape == (len(model_points.issue_age), n_years)
     # Expense primitives -- the five inputs the kernel consumes. Honours
     # Basis.expense_items when set, otherwise the legacy alpha / beta

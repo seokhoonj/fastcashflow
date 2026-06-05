@@ -1295,10 +1295,13 @@ def read_model_points(
       :attr:`ModelPoints.attributes`, for :func:`~fastcashflow.group` /
       :func:`~fastcashflow.group_of_contracts`;
     * a coverages frame (``mp_id``, ``coverage``, ``amount``, optional
-      ``premium`` / ``waiting`` / ``reduction_end`` / ``reduction_factor``),
-      one row per policy x coverage -- so per-coverage rules (waiting and
-      reduction periods) ride along, which a flat one-row-per-policy file
-      cannot carry.
+      ``premium`` / ``waiting`` / ``reduction_end`` / ``reduction_factor`` and
+      the benefit step-up / escalation columns ``step_month`` / ``step_factor``
+      (a benefit step at a duration) / ``escalation_annual`` / ``escalation_cap``
+      (annual compounding growth, capped -- the 체증형 escalating-benefits
+      recipe in the cookbook)), one row per policy x coverage -- so per-coverage
+      rules (waiting, reduction and escalation) ride along, which a flat
+      one-row-per-policy file cannot carry.
 
     Pass them as ``read_model_points(policies, coverages=coverages_path,
     calculation_methods=...)``, or as a single ``.xlsx`` carrying ``policies``

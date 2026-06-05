@@ -430,6 +430,30 @@ class ModelPoints:
         coverage_escalation_cap = self.coverage_escalation_cap
         coverage_escalation_cap = (np.zeros(n_cov) if coverage_escalation_cap is None
                               else np.asarray(coverage_escalation_cap, np.float64))
+        # Each CSR-aligned rule array carries one entry per coverage. A wrong
+        # length would silently drop a coverage's rule (too short) or misread
+        # it (too long); a non-finite or negative month / factor would silently
+        # mis-time or flip a benefit. Months and multipliers are both >= 0
+        # (escalation is the growth axis; the reduction rule handles cuts).
+        for name, arr in (
+            ("coverage_waiting", coverage_waiting),
+            ("coverage_reduction_end", coverage_reduction_end),
+            ("coverage_reduction_factor", coverage_reduction_factor),
+            ("coverage_step_month", coverage_step_month),
+            ("coverage_step_factor", coverage_step_factor),
+            ("coverage_escalation_annual", coverage_escalation_annual),
+            ("coverage_escalation_cap", coverage_escalation_cap),
+        ):
+            if arr.shape != (n_cov,):
+                raise ValueError(
+                    f"{name} must align with the coverage list (one entry per "
+                    f"coverage): shape ({n_cov},), got {arr.shape}"
+                )
+            if not np.all(np.isfinite(arr)):
+                raise ValueError(f"{name} must be finite")
+            if np.any(arr < 0):
+                bad = int(np.argmax(arr < 0))
+                raise ValueError(f"{name} must be >= 0; {name}[{bad}] = {arr[bad]}")
         object.__setattr__(self, "coverage_waiting", coverage_waiting)
         object.__setattr__(self, "coverage_reduction_end", coverage_reduction_end)
         object.__setattr__(self, "coverage_reduction_factor", coverage_reduction_factor)
