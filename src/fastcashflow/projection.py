@@ -135,7 +135,8 @@ def _benefit_factor(t, year, red_factor, red_end, step_month, step_factor,
 
 
 @njit(parallel=True, cache=True)
-def _project_kernel(state_death_exit, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
+def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
+                    edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
                     term_months, contract_boundary_months, count, premium, premium_factor, annuity_factor,
                     premium_term_months, premium_frequency_months, annuity_frequency_months,
@@ -204,12 +205,14 @@ def _project_kernel(state_death_exit, state_lapse, edge_from, edge_to, edge_prob
         for t in range(boundary):
             year = t // 12
             ift = 0.0         # total in-force
+            dclaim_occ = 0.0  # death-benefit-weighted in-force (claim base)
             prem_occ = 0.0    # in-force on the premium-paying states
             benefit_occ = 0.0 # in-force on the benefit-paying states
             deaths_acc = 0.0  # state-conditional death count
             lapse_acc = 0.0   # state-conditional lapse count (surrender)
             for s in range(n_states):
                 ift += occ[s]
+                dclaim_occ += occ[s] * state_death_benefit_factor[s]
                 deaths_acc += occ[s] * state_death_exit[s, mp, year]
                 lapse_acc += occ[s] * state_lapse[s, mp, year]
                 if premium_state[s]:
@@ -239,7 +242,7 @@ def _project_kernel(state_death_exit, state_lapse, edge_from, edge_to, edge_prob
             level = (prem_occ * premium[mp] * premium_factor[mp, year]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
-            claim_cf[mp, t] = ift * claim_rate
+            claim_cf[mp, t] = dclaim_occ * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = (ift * annuity_payment[mp] * annuity_factor[mp, year]
                                  if t % ann_freq == 0 else 0.0)
@@ -346,7 +349,8 @@ def _project_kernel(state_death_exit, state_lapse, edge_from, edge_to, edge_prob
 
 @njit(parallel=True, cache=True)
 def _project_kernel_semi_markov(
-    state_death_exit, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
+    state_death_exit, state_lapse, state_death_benefit_factor, state_exit_after,
+    edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset, benefit_max_months,
     premium_state, benefit_state, start_state,
     term_months, contract_boundary_months, count, premium, premium_factor, annuity_factor,
@@ -433,6 +437,7 @@ def _project_kernel_semi_markov(
                 last_year = year
 
             ift = 0.0
+            dclaim_occ = 0.0  # death-benefit-weighted in-force (claim base)
             prem_occ = 0.0
             benefit_occ = 0.0
             deaths_acc = 0.0  # state-conditional death count
@@ -444,6 +449,7 @@ def _project_kernel_semi_markov(
                 for tau in range(D):
                     state_sum += occ[s_off + tau]
                 ift += state_sum
+                dclaim_occ += state_sum * state_death_benefit_factor[s]
                 deaths_acc += state_sum * state_death_exit[s, mp, year]
                 lapse_acc += state_sum * state_lapse[s, mp, year]
                 if premium_state[s]:
@@ -466,7 +472,7 @@ def _project_kernel_semi_markov(
             level = (prem_occ * premium[mp] * premium_factor[mp, year]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
-            claim_cf[mp, t] = ift * claim_rate
+            claim_cf[mp, t] = dclaim_occ * claim_rate
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = (ift * annuity_payment[mp] * annuity_factor[mp, year]
                                   if t % ann_freq == 0 else 0.0)
@@ -496,10 +502,17 @@ def _project_kernel_semi_markov(
                 src_off = state_offset[s_from]
                 is_residual = s_from == s_to
                 if is_residual:
+                    # ``exit_after`` drops the cohort once its sojourn reaches
+                    # the boundary: the advanced flow is simply not written to
+                    # occ_next, so it leaves the in-force set (= a ``to=None``
+                    # transition). ``0`` disables it (no drop). Lump-sum still
+                    # fires on the exiting flow on its way out.
+                    ex = state_exit_after[s_from]
                     for tau in range(D_from):
                         flow = occ[src_off + tau] * edge_prob[e, mp, year, tau]
                         next_tau = tau + 1 if tau + 1 < D_from else D_from - 1
-                        occ_next[src_off + next_tau] += flow
+                        if not (ex > 0 and next_tau >= ex):
+                            occ_next[src_off + next_tau] += flow
                         if edge_lump_sum[e]:
                             disability_cf[mp, t] += flow * disability_benefit[mp]
                 else:
@@ -752,6 +765,33 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     state_model = resolve_state_model(basis)
     start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
 
+    # A state-conditioned death benefit (death_benefit_factor) weights only the
+    # AGGREGATE death claim (the rule-free, non-diagnosis pass that pays off the
+    # death-weighted occupancy). The per-month coverage-rule pass and the
+    # diagnosis pass pay off plain in-force, so combining the factor with a
+    # rule-bearing or diagnosis DEATH-risk coverage would weight one death
+    # claim and not the other -- inconsistent. Reject that mix in v1.
+    if (model_points.coverage_index is not None
+            and model_points.coverage_index.shape[0] > 0
+            and any(s.death_benefit_factor != 1.0
+                    for s in state_model.states)):
+        cov_idx_k = model_points.coverage_index
+        death_k = coverage_risk[cov_idx_k] == 0
+        diag_k = coverage_is_diagnosis[cov_idx_k]
+        rule_k = ((model_points.coverage_waiting != 0)
+                  | (model_points.coverage_reduction_end != 0)
+                  | (model_points.coverage_step_month != 0)
+                  | (model_points.coverage_escalation_annual != 0.0))
+        if np.any(death_k & (diag_k | rule_k)):
+            raise ValueError(
+                "state-conditioned death benefit (State.death_benefit_factor) "
+                "is not supported together with a rule-bearing (waiting / "
+                "reduction / step / escalation) or diagnosis DEATH-risk "
+                "coverage in v1: the rule and diagnosis death passes pay off "
+                "plain in-force, so the per-state factor would weight one "
+                "death claim and not the other. Use a plain death coverage."
+            )
+
     if is_semi_markov(state_model):
         # Phase (c) detailed projection. Build the rate dict the cohort-
         # aware compile expects: static rates stay (n_mp, n_year); the
@@ -818,10 +858,14 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         # reporter respects the within-month competing-risk order.
         state_death_exit = compiled.state_death_exit
         state_lapse = _state_lapse_stack(state_model, rate_dict)
+        state_death_benefit_factor = compiled.state_death_benefit_factor
+        state_exit_after = compiled.state_exit_after
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
          annuity_cf, disability_cf, lapse_flow,
          maturity_cf, maturity_survivors) = _project_kernel_semi_markov(
-            state_death_exit, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
+            state_death_exit, state_lapse,
+            state_death_benefit_factor, state_exit_after,
+            edge_from, edge_to, edge_prob, edge_lump_sum,
             n_states, state_duration_max, state_offset, benefit_max_months,
             premium_state, benefit_state, start_state,
             model_points.term_months,
@@ -890,10 +934,12 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         benefit_state = compiled.benefit_state
         state_death_exit = compiled.state_death_exit
         state_lapse = _state_lapse_stack(state_model, rate_dict)
+        state_death_benefit_factor = compiled.state_death_benefit_factor
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
          annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors) = _project_kernel(
             state_death_exit,
             state_lapse,
+            state_death_benefit_factor,
             edge_from,
             edge_to,
             edge_prob,

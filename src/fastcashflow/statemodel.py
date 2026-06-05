@@ -86,6 +86,14 @@ class CompiledStateModel:
     # order (it equals the raw rate exactly when mortality is the first
     # transition, which every bundled model declares). ``(n_states, *grid)``.
     state_death_exit: FloatArray | None = None
+    # Per-state death-benefit multiplier (``State.death_benefit_factor``),
+    # ``(n_states,)`` float, all-ones default. Occupancy-weighted into the
+    # aggregate death claim: ``claim = (sum_s occ[s]*factor[s]) * claim_rate``.
+    state_death_benefit_factor: FloatArray | None = None
+    # Per-state sojourn exit (``State.exit_after``), ``(n_states,)`` int, zeros
+    # default. Semi-Markov only: a cohort reaching this sojourn leaves the
+    # in-force set (no occ_next write). ``None`` for Markov models.
+    state_exit_after: IntArray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +155,23 @@ class State:
 
     ``benefit_max_months`` caps how many months a ``benefit`` state pays
     (``0`` = unbounded); see the field comment in ``__post_init__``.
+
+    ``death_benefit_factor`` scales the death-coverage benefit paid for the
+    lives residing in this state (default ``1.0`` = no change). The aggregate
+    death claim is occupancy-weighted: ``claim = (sum_s occ[s]*factor[s]) *
+    claim_rate``. It multiplies the benefit AMOUNT, not the decrement, so the
+    death count is unchanged. A post-diagnosis state paying a richer death
+    benefit (e.g. 2x after a cancer diagnosis) sets ``death_benefit_factor=2.0``.
+    Supported on the full path only (``measure(full=True)``); the fast path and
+    the VFA path reject a non-default factor.
+
+    ``exit_after`` removes occupancy from the in-force set once a cohort's
+    sojourn in this state reaches ``exit_after`` months (default ``0`` =
+    never). Semi-Markov only -- it needs sojourn tracking, so the state must
+    set ``duration_max``. Distinct from ``benefit_max_months`` (which stops the
+    payment but keeps the lives in force): ``exit_after`` ends the cover. A
+    guaranteed-payout state that pays a fixed term and then lapses sets
+    ``benefit_max_months`` (pay window) and ``exit_after`` (cover end) together.
     """
 
     name: str
@@ -156,6 +181,8 @@ class State:
     duration_max: int = 0
     benefit_max_months: int = 0
     mortality_rate: str = "mortality"
+    death_benefit_factor: float = 1.0
+    exit_after: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "transitions", tuple(self.transitions))
@@ -193,6 +220,43 @@ class State:
                     f"must exceed benefit_max_months ({cap}); otherwise the "
                     f"absorbing cohort re-accumulates capped lives and keeps "
                     f"paying. Set duration_max > benefit_max_months."
+                )
+        # ``death_benefit_factor`` multiplies the death-coverage benefit amount
+        # for lives in this state. Non-negative; defaults 1.0 (no change).
+        factor = float(self.death_benefit_factor)
+        object.__setattr__(self, "death_benefit_factor", factor)
+        if factor < 0.0:
+            raise ValueError(
+                f"state {self.name!r}: death_benefit_factor must be "
+                f"non-negative, got {factor}"
+            )
+        # ``exit_after`` drops the cohort from the in-force set at the given
+        # sojourn. Semi-Markov only -- needs duration tracking; and strictly
+        # below the absorbing cohort, mirroring the benefit_max_months guard:
+        # at exit_after == duration_max the absorbing advance maxes next_tau at
+        # D-1 < exit_after, so the gate never fires (silent hold-forever).
+        exit_after = int(self.exit_after)
+        object.__setattr__(self, "exit_after", exit_after)
+        if exit_after < 0:
+            raise ValueError(
+                f"state {self.name!r}: exit_after must be non-negative, "
+                f"got {exit_after}"
+            )
+        if exit_after > 0:
+            if self.duration_max <= exit_after:
+                raise ValueError(
+                    f"state {self.name!r}: duration_max ({self.duration_max}) "
+                    f"must exceed exit_after ({exit_after}); otherwise the "
+                    f"absorbing cohort never reaches the exit boundary and the "
+                    f"cohort is held forever. Set duration_max > exit_after "
+                    f"(semi-Markov: exit_after needs duration tracking)."
+                )
+            if cap > 0 and exit_after < cap:
+                raise ValueError(
+                    f"state {self.name!r}: exit_after ({exit_after}) must be "
+                    f">= benefit_max_months ({cap}); pay the cap, then exit. "
+                    f"The valid stack is duration_max > exit_after >= "
+                    f"benefit_max_months."
                 )
 
 
@@ -391,6 +455,13 @@ def compile_state_model(
             "compile_state_model_with_duration for a model with "
             "duration-tracked states"
         )
+    for s in model.states:
+        if s.exit_after > 0:
+            raise ValueError(
+                f"state {s.name!r}: exit_after needs sojourn tracking and is "
+                f"semi-Markov only; set duration_max to switch the state to a "
+                f"semi-Markov model"
+            )
     arrays = {name: np.asarray(arr, dtype=np.float64)
               for name, arr in rates.items()}
     if not arrays:
@@ -448,6 +519,9 @@ def compile_state_model(
         benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),
         state_duration_max=None,
         state_death_exit=np.ascontiguousarray(np.stack(death_exit_rows)),
+        state_death_benefit_factor=np.array(
+            [s.death_benefit_factor for s in model.states], dtype=np.float64),
+        state_exit_after=None,
     )
 
 
@@ -658,4 +732,8 @@ def compile_state_model_with_duration(
         benefit_max_months=np.array(
             [s.benefit_max_months for s in model.states], dtype=np.int64),
         state_death_exit=np.ascontiguousarray(np.stack(death_exit_rows)),
+        state_death_benefit_factor=np.array(
+            [s.death_benefit_factor for s in model.states], dtype=np.float64),
+        state_exit_after=np.array(
+            [s.exit_after for s in model.states], dtype=np.int64),
     )

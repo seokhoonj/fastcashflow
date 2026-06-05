@@ -1942,6 +1942,22 @@ def _measure_fast(
             "coverage_step_month) is supported on measure(full=True) only; the "
             "fused fast path does not yet apply it. Use measure(..., full=True)."
         )
+    # State-conditioned death benefit (death_benefit_factor) and true
+    # occupancy exit (exit_after) are projected on the full path only in v1.
+    # Inspect the States directly (no compile) so a benefit_max_months-only
+    # model still runs fast; reject only when a new field is non-default.
+    _sm = resolve_state_model(basis)
+    if any(s.death_benefit_factor != 1.0 for s in _sm.states):
+        raise NotImplementedError(
+            "state-conditioned death benefit (State.death_benefit_factor) is "
+            "supported on measure(full=True) only; the fused fast path applies "
+            "the aggregate death claim on plain in-force. Use full=True."
+        )
+    if any(s.exit_after for s in _sm.states):
+        raise NotImplementedError(
+            "true occupancy exit (State.exit_after) is supported on "
+            "measure(full=True) only. Use measure(..., full=True)."
+        )
     # The projection horizon is the contract boundary (defaults to the term).
     n_time = int(model_points.contract_boundary_months.max())
     n_years = (n_time + 11) // 12

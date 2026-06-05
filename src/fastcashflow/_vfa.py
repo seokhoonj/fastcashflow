@@ -44,6 +44,7 @@ from fastcashflow.numerics import (
 )
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
+from fastcashflow.statemodel import resolve_state_model
 from fastcashflow.tvog import guarantee_floor_time_value, tvog_weights
 
 
@@ -143,6 +144,23 @@ def measure_vfa(
     and ``time_value`` records that amount per model point.
     """
     basis = _single_basis(basis, entry="measure_vfa")
+    # The VFA death money is ``deaths * death_benefit`` (below), computed from
+    # the occupancy decrement -- it never reads the GMM death-claim factor. A
+    # state-conditioned death benefit or occupancy exit would be silently
+    # ignored here, so reject it rather than mis-measure the guarantee.
+    _sm = resolve_state_model(basis)
+    if any(s.death_benefit_factor != 1.0 for s in _sm.states):
+        raise NotImplementedError(
+            "state-conditioned death benefit (State.death_benefit_factor) is "
+            "not supported on the VFA path; measure_vfa pays the GMDB/GMAB "
+            "floor on the occupancy decrement, which the GMM death-claim "
+            "factor does not reach."
+        )
+    if any(s.exit_after for s in _sm.states):
+        raise NotImplementedError(
+            "true occupancy exit (State.exit_after) is not supported on the "
+            "VFA path."
+        )
     proj = project_cashflows(model_points, basis)
     inforce = proj.inforce
     n_mp, n_time = inforce.shape
