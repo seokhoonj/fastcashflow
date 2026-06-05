@@ -179,7 +179,9 @@ in-force 만 제거 (해약환급금 = 0 가정, 무해약환급금형 protectio
 
 값 컬럼 종류와 `surrender_value_basis` 가 어긋나면 (`factor` 컬럼을 amount 로,
 또는 그 반대로) reader 가 거부합니다 — 한쪽을 다른 쪽으로 잘못 읽으면 조용히
-오측정되기 때문.
+오측정되기 때문. 값 컬럼은 **시트 단위로 하나** 입니다 (`factor` 또는 `amount`):
+한 워크북의 surrender 시트 안에 factor 표와 amount 표를 섞을 수 없으므로,
+모든 segment 의 `surrender_value_basis` 가 같은 컬럼 종류를 가리켜야 합니다.
 
 엔진 계산 (post-projection):
 ```

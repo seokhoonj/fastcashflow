@@ -349,3 +349,31 @@ def test_inforce_state_subset_is_consistent_and_drives_segment_measure():
     val = fcf.gmm.measure_inforce(mp.subset(idx), basis[key], sub_state,
                                   period_months=3)
     assert np.all(np.isfinite(val.bel)) and np.all(np.isfinite(val.csm))
+
+
+def test_measure_inforce_requires_reconciled_state():
+    """measure_inforce reads each contract's as-of duration / size off
+    model_points; a model_points not reconciled with the state (via
+    apply_inforce_state) is rejected, so a stale snapshot cannot borrow the
+    fresh state's prior_csm. A reconciled pair passes unchanged."""
+    import fastcashflow as fcf
+    from dataclasses import replace
+    portfolio = fcf.samples.model_points()
+    state = fcf.samples.inforce_state()
+    basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+
+    # reconciled pair (what read_inforce_policies returns) -> passes
+    mp = fcf.apply_inforce_state(portfolio, state)
+    assert np.all(np.isfinite(
+        fcf.gmm.measure_inforce(mp, basis, state, full=False).bel))
+
+    # a state whose elapsed disagrees with the reconciled model_points -> reject
+    stale = replace(state,
+                    elapsed_months=np.asarray(state.elapsed_months) + 1)
+    with pytest.raises(ValueError, match="do not match"):
+        fcf.gmm.measure_inforce(mp, basis, stale, full=False)
+
+    # an un-reconciled new-business model_points (elapsed backfilled to 0)
+    # paired with a real period-close state is likewise rejected
+    with pytest.raises(ValueError, match="do not match"):
+        fcf.gmm.measure_inforce(portfolio, basis, state, full=False)

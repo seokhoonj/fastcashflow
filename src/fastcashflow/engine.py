@@ -627,6 +627,37 @@ def _measure_inforce_full(
     )
 
 
+def _require_reconciled_state(model_points: ModelPoints,
+                              state: "InforceState") -> None:
+    """Reject a ``model_points`` whose ``elapsed_months`` / ``count`` do not
+    match ``state`` -- they must be reconciled (``apply_inforce_state``, which
+    ``read_inforce_policies`` applies) before measurement, or measure_inforce
+    would read the duration / size off a stale model_points while carrying the
+    fresh state's CSM. Pure validation: a reconciled pair passes unchanged."""
+    from fastcashflow.modelpoints import apply_inforce_state
+    # ModelPoints backfills elapsed_months / count (to 0 / 1) at construction,
+    # so an un-reconciled new-business model_points has elapsed = 0 and trips the
+    # comparison below against a real period-close state. apply_inforce_state
+    # does the mp_id join (and rejects mismatched id sets); the reconciled
+    # elapsed / count must already equal what the caller passed.
+    reconciled = apply_inforce_state(model_points, state)
+    em_ok = np.array_equal(
+        np.asarray(reconciled.elapsed_months, dtype=np.int64),
+        np.asarray(model_points.elapsed_months, dtype=np.int64),
+    )
+    cnt_ok = model_points.count is not None and np.array_equal(
+        np.asarray(reconciled.count, dtype=np.float64),
+        np.asarray(model_points.count, dtype=np.float64),
+    )
+    if not (em_ok and cnt_ok):
+        raise ValueError(
+            "measure_inforce: model_points elapsed_months / count do not match "
+            "the InforceState. Reconcile them first -- "
+            "model_points = apply_inforce_state(model_points, state) -- so the "
+            "as-of duration and size come from the same period-close snapshot."
+        )
+
+
 def measure_inforce(
     model_points: ModelPoints,
     basis: Basis,
@@ -647,20 +678,28 @@ def measure_inforce(
     from inception, so the slice is scaled by ``count / inforce[elapsed]`` to
     set the as-of in-force to the input count -- exact for every cash flow
     linear in the in-force (premium, claim, morbidity, expense, maturity,
-    annuity). The one approximation left is the **surrender value**: it is
-    reconstructed from the projected cumulative premium (``lapse x cum_premium x
-    factor``), a sample-grade base that ignores premiums paid before the
-    valuation date and reads no contractual surrender-value table. For a product
-    whose lapse cash flow matters, a surrender-value table (or an as-of base
-    amount) is the planned input; until then a runtime ``UserWarning`` fires
-    when the basis carries a surrender curve and any ``elapsed_months > 0``.
+    annuity, and the ``amount_per_policy`` / ``amount_per_unit`` surrender
+    value). The one approximation is the ``cum_premium_factor`` surrender mode:
+    it reconstructs the base from the *projected* cumulative premium (``lapse x
+    cum_premium x factor``), which ignores premiums paid before the valuation
+    date, so it is path-dependent and only sample-grade. A ``UserWarning``
+    fires only in that mode (basis carries a ``cum_premium_factor`` surrender
+    curve and any ``elapsed_months > 0``); the contractual ``amount_per_policy``
+    / ``amount_per_unit`` curves are linear in the in-force and re-base exactly,
+    so they are the production-grade surrender input and warn-free.
 
     ``state`` is the :class:`InforceState` returned by
-    :func:`read_inforce_policies` (it carries ``prior_csm`` and
-    ``lock_in_rate``); ``model_points`` carries each contract's
-    ``elapsed_months``. ``full=True`` (default) returns the BEL / RA / CSM
-    trajectories and cash flows for movement analysis; ``full=False``
-    returns just the headline numbers (faster).
+    :func:`read_inforce_policies` (it carries ``prior_csm`` / ``lock_in_rate``,
+    plus the ``elapsed_months`` / ``count`` reconciled onto ``model_points``).
+    ``model_points`` and ``state`` must be reconciled by
+    :func:`~fastcashflow.apply_inforce_state` first -- ``read_inforce_policies``
+    returns the pair already reconciled; the two-file path
+    (``read_model_points`` + ``read_inforce_state``) calls it explicitly. A
+    model_points whose ``elapsed_months`` / ``count`` disagree with ``state``
+    is rejected (a stale snapshot must not borrow a fresh state's CSM).
+    ``full=True`` (default) returns the BEL / RA / CSM trajectories and cash
+    flows for movement analysis; ``full=False`` returns just the headline
+    numbers (faster).
 
     Sec. 44 onerous unlocking and experience adjustments are not yet folded
     in here (``loss_component`` is zero in this mode); use
@@ -668,6 +707,14 @@ def measure_inforce(
     movement.
     """
     basis = _single_basis(basis, entry="measure_inforce")
+    # The measurement reads each contract's as-of duration / size from
+    # ``model_points.elapsed_months`` / ``count``; ``state`` only supplies
+    # prior_csm / lock_in_rate. Guard that the two were reconciled (the state's
+    # elapsed / count actually sit on the model points) so a stale model_points
+    # paired with a fresh state cannot silently value one contract at another's
+    # duration. apply_inforce_state is the reconciliation step, and is what
+    # read_inforce_policies already applies to the pair it returns.
+    _require_reconciled_state(model_points, state)
     if (basis.surrender_value_curve is not None
             and basis.surrender_value_basis == "cum_premium_factor"
             and np.any(np.asarray(model_points.elapsed_months) > 0)):

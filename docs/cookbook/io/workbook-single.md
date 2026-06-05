@@ -122,7 +122,8 @@ reader 가 자동 감지** 합니다:
 한 `table_id` 는 가진 축 위에서 **빈틈 없는 grid** 를 이뤄야 합니다 (reader 가
 검사). 없는 축은 그 값으로 평탄하게 broadcast 됩니다. `discount_tables` /
 `inflation_tables` 는 `table_id` × `year` × `rate`,
-`surrender_value_tables` 는 `table_id` × `duration_month` × `factor`,
+`surrender_value_tables` 는 `table_id` × `duration_month` × `factor` (또는
+`amount`; segments 의 `surrender_value_basis` 가 해석),
 `expense_tables` 는 `table_id` × `expense_type` × `basis` × `value` 입니다.
 
 ## 작동 예제 — 견본을 만들고 읽어 평가
