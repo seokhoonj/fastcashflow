@@ -948,6 +948,7 @@ _POLICY_RESERVED_COLS = frozenset({
     "annuity_frequency_months", "disability_income", "disability_benefit",
     "account_value", "minimum_crediting_rate", "minimum_death_benefit",
     "minimum_accumulation_benefit", "surrender_base_amount",
+    "contract_boundary_months",
     "product", "channel",
 })
 
@@ -1090,7 +1091,7 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     for opt in ("sex", "count", "premium_term_months",
                 "premium_frequency_months", "annuity_frequency_months",
                 "disability_income", "disability_benefit", "issue_class",
-                "surrender_base_amount"):
+                "surrender_base_amount", "contract_boundary_months"):
         if opt in pol.columns:
             fields[opt] = pol[opt].to_numpy()
     for opt in ("product", "channel"):
@@ -1191,7 +1192,8 @@ def read_model_points(
       ``sex`` / ``count`` / ``state`` / ``issue_class`` / ``issue_date`` /
       ``premium`` / ``premium_term_months`` /
       ``premium_frequency_months`` / ``annuity_frequency_months`` /
-      ``product`` / ``channel``), one row per policy. Any *other*
+      ``contract_boundary_months`` / ``product`` / ``channel``), one row
+      per policy. Any *other*
       column is read as a grouping attribute (``portfolio_id``,
       ``profitability_group``, ``risk_class``, ``region``, ...) into
       :attr:`ModelPoints.attributes`, for :func:`~fastcashflow.group` /
@@ -1298,7 +1300,7 @@ def read_vfa_model_points(
                 "maturity_benefit", "annuity_payment", "disability_income",
                 "disability_benefit", "account_value", "minimum_crediting_rate",
                 "minimum_death_benefit", "minimum_accumulation_benefit",
-                "surrender_base_amount",
+                "surrender_base_amount", "contract_boundary_months",
                 "product", "channel", "mp_id"):
         if opt in df.columns:
             fields[opt] = df[opt].to_numpy()

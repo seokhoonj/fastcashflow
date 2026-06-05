@@ -526,12 +526,13 @@ def test_discount_curve_rejects_rate_at_negative_one():
 
 
 def test_inforce_fast_rejects_elapsed_past_term():
-    """elapsed_months > term_months silently read past the trajectory -- reject."""
+    """elapsed_months past the trajectory horizon (contract boundary, which
+    defaults to term_months) is silently read past the trajectory -- reject."""
     mp = ModelPoints(
         issue_age=np.array([40.0]),
         premium=np.array([0.0]),
         term_months=np.array([12]),
-        elapsed_months=np.array([15]),         # past maturity
+        elapsed_months=np.array([15]),         # past the boundary (== term)
     )
     basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
@@ -539,12 +540,12 @@ def test_inforce_fast_rejects_elapsed_past_term():
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
-    with pytest.raises(ValueError, match="run past its original maturity"):
+    with pytest.raises(ValueError, match="past the contract boundary"):
         _measure_inforce_fast(mp, basis)
 
 
 def test_inforce_full_rejects_elapsed_past_term():
-    """Same elapsed > term guard on the trajectory-returning entry."""
+    """Same boundary guard on the trajectory-returning entry."""
     mp = ModelPoints(
         issue_age=np.array([40.0]),
         premium=np.array([0.0]),
@@ -557,7 +558,7 @@ def test_inforce_full_rejects_elapsed_past_term():
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
-    with pytest.raises(ValueError, match="run past its original maturity"):
+    with pytest.raises(ValueError, match="past the contract boundary"):
         _measure_inforce_full(
             mp, basis, prior_csm=np.array([0.0]),
             lock_in_rate=0.03, period_months=12,

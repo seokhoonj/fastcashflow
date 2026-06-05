@@ -86,3 +86,73 @@ def test_fast_path_matches_full_under_boundary_cut():
     # and a no-cut policy still agrees
     assert (fcf.gmm.measure(_mp(None), _basis(), full=False).bel[0]
             == pytest.approx(fcf.gmm.measure(_mp(None), _basis()).bel[0], rel=1e-9))
+
+
+# ---------------------------------------------------------------------------
+# CB4 -- the file reader wires contract_boundary_months through (not dropped
+# into ModelPoints.attributes), so a policies.csv column actually cuts the
+# projection. Same hand-checked case as CB1, read from disk.
+# ---------------------------------------------------------------------------
+def test_reader_applies_contract_boundary_months(tmp_path):
+    (tmp_path / "policies.csv").write_text(
+        "mp_id,issue_age,sex,term_months,premium,contract_boundary_months\n"
+        "1,40,0,24,100,12\n"
+    )
+    (tmp_path / "coverages.csv").write_text(
+        "mp_id,coverage,amount\n1,DEATH,100000\n"
+    )
+    (tmp_path / "methods.csv").write_text(
+        "coverage,calculation_method\nDEATH,DEATH\n"
+    )
+    mp = fcf.read_model_points(
+        tmp_path / "policies.csv",
+        coverages=tmp_path / "coverages.csv",
+        calculation_methods=tmp_path / "methods.csv",
+    )
+    # the column is the engine field, not a stray grouping attribute
+    assert mp.contract_boundary_months is not None
+    assert int(mp.contract_boundary_months[0]) == 12
+    assert not (mp.attributes or {}).get("contract_boundary_months") is not None
+    # and the cut actually bites: the read MP matches the direct-construction
+    # boundary=12 BEL, and differs from the no-cut boundary
+    read_bel = fcf.gmm.measure(mp, _basis()).bel[0]
+    assert read_bel == pytest.approx(fcf.gmm.measure(_mp(12), _basis()).bel[0],
+                                     rel=1e-12)
+    assert read_bel != pytest.approx(fcf.gmm.measure(_mp(None), _basis()).bel[0])
+
+
+# ---------------------------------------------------------------------------
+# CB5 -- an in-force as-of date past the boundary is a clear ValueError, not
+# the IndexError the bel_path slice would otherwise raise (the trajectory is
+# only contract_boundary_months wide, not term_months).
+# ---------------------------------------------------------------------------
+def _inforce_mp(term, boundary, elapsed):
+    return ModelPoints(
+        issue_age=np.array([40], dtype=np.int64),
+        benefits={0: np.array([100_000.0])},
+        premium=np.array([100.0]),
+        term_months=np.array([term], dtype=np.int64),
+        contract_boundary_months=np.array([boundary], dtype=np.int64),
+        elapsed_months=np.array([elapsed], dtype=np.int64),
+        count=np.array([1.0]),
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
+
+
+def test_inforce_past_boundary_raises_value_error():
+    from fastcashflow.engine import _measure_inforce_fast, _measure_inforce_full
+    # term 120, boundary 12, elapsed 24 -- inside the term but past the
+    # boundary, the case that used to IndexError off the 12-wide trajectory
+    mp = _inforce_mp(term=120, boundary=12, elapsed=24)
+    with pytest.raises(ValueError, match="contract_boundary_months"):
+        _measure_inforce_fast(mp, _basis())
+    # the full path (settlement / roll_forward) guards the same way
+    with pytest.raises(ValueError, match="contract_boundary_months"):
+        _measure_inforce_full(mp, _basis(), prior_csm=np.array([0.0]),
+                              lock_in_rate=0.0, period_months=12)
+
+
+def test_inforce_within_boundary_is_fine():
+    from fastcashflow.engine import _measure_inforce_fast
+    mp = _inforce_mp(term=120, boundary=12, elapsed=6)
+    v = _measure_inforce_fast(mp, _basis())
+    assert np.isfinite(v.bel[0])

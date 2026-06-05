@@ -365,20 +365,24 @@ def _measure_inforce_fast(
     m = _measure_full(model_points, basis)
     n_mp = m.bel.shape[0]
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    # ``elapsed_months > term_months`` means the policy is already past
-    # its original maturity; the trajectory has nothing meaningful at
-    # that column (the BEL trajectory only extends to t = term). Without
-    # this guard the indexing reads beyond the contract horizon and
-    # returns a silent zero / garbage valuation.
-    term = np.asarray(model_points.term_months, dtype=np.int64)
-    over = em > term
+    # ``elapsed_months > contract_boundary_months`` means the as-of date is
+    # past the projected horizon: the BEL / RA trajectory only extends to
+    # t = contract_boundary_months (Sec. 34; == term_months when no boundary
+    # cut). Reading ``bel_path[rows, em]`` beyond that column is either a
+    # silent stale zero (em within the padded width) or an IndexError (em
+    # past the widest boundary) -- guard against both with a clear error.
+    # boundary is backfilled to term in ModelPoints.__post_init__, so it is
+    # never None here and is <= term_months by construction.
+    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    over = em > boundary
     if np.any(over):
         bad = int(np.argmax(over))
         raise ValueError(
             f"elapsed_months[{bad}]={int(em[bad])} > "
-            f"term_months[{bad}]={int(term[bad])}; the policy has run past "
-            "its original maturity. measure_inforce needs an as-of date "
-            "within the contract horizon."
+            f"contract_boundary_months[{bad}]={int(boundary[bad])}; the "
+            "as-of date is past the contract boundary (Sec. 34 horizon; "
+            "equal to term_months when no boundary cut). measure_inforce "
+            "needs an as-of date within the contract boundary."
         )
     rows = np.arange(n_mp)
     # Re-base the inception-run projection to the valuation date (see
@@ -517,15 +521,20 @@ def _measure_inforce_full(
         )
     period_months = int(period_months) if period_months is not None else 12
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    term = np.asarray(model_points.term_months, dtype=np.int64)
-    over = em > term
+    # Guard on the contract boundary, not term: the projected trajectory only
+    # extends to t = contract_boundary_months (Sec. 34; == term when no cut),
+    # and indexing past it is a silent stale zero or an IndexError. boundary
+    # is backfilled to term in ModelPoints.__post_init__ (never None, <= term).
+    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    over = em > boundary
     if np.any(over):
         bad = int(np.argmax(over))
         raise ValueError(
             f"elapsed_months[{bad}]={int(em[bad])} > "
-            f"term_months[{bad}]={int(term[bad])}; the policy has run past "
-            "its original maturity. roll_forward needs an as-of date within "
-            "the contract horizon."
+            f"contract_boundary_months[{bad}]={int(boundary[bad])}; the as-of "
+            "date is past the contract boundary (Sec. 34 horizon; equal to "
+            "term_months when no boundary cut). roll_forward needs an as-of "
+            "date within the contract boundary."
         )
     prior_t = em - period_months
     if np.any(prior_t < 0):
