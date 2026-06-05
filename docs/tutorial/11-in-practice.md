@@ -107,7 +107,7 @@ DB 연결·추출은 사내 ETL 의 몫입니다.
 위 항목은 GMM 기준입니다. **변액 평가 (VFA, 10장)** 면 `segments` 시트에
 `investment_return` (기초자산 수익률) 과 `fund_fee` (펀드보수) 가 더
 붙습니다 — 산출기초는 계리적 가정뿐 아니라 이런 **경제적 가정**도
-포함합니다. 단, 최저보증 *금액* (`account_value` / `minimum_death_benefit`
+포함합니다. 단, 최저보증 **금액** (`account_value` / `minimum_death_benefit`
 …) 은 가정이 아니라 **계약 조건**이라 산출기초가 아니라 `policies` 에
 들어갑니다.
 ```
@@ -299,7 +299,7 @@ fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 
 ```{admonition} 신계약 평가는 어떻게?
 :class: note
 
-위는 *결산* (보유계약) 평가입니다. 새로 인수한 계약은 *결산 상태가
+위는 **결산** (보유계약) 평가입니다. 새로 인수한 계약은 *결산 상태가
 없으니* `inforce_state` 컬럼이 없는 보통의 policies 파일로:
 
 ```text
@@ -308,7 +308,7 @@ val          = fcf.gmm.measure(model_points, basis, full=False)
 ```
 
 `read_model_points` 와 `measure` 의 흐름. 8 장에서 이미 본 형태와 같습니다.
-신계약과 보유계약은 같은 엔진이지만 입력 파일 / 함수가 다른 두 *모드*.
+신계약과 보유계약은 같은 엔진이지만 입력 파일 / 함수가 다른 두 **모드**.
 ```
 
 자기 데이터가 두 파일 (영구 spec 의 `policies.csv` + 분기별 갱신의

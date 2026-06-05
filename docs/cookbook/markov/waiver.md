@@ -3,10 +3,10 @@
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
 
-- 보험료 납입면제가 *상태 전이* (active → waiver) 로 모델링되는 이유 —
+- 보험료 납입면제가 **상태 전이** (active → waiver) 로 모델링되는 이유 —
   cookbook 의 첫 상태(Markov) 챕터
 - `state_model` 과 `waiver_incidence_annual` 두 자리의 연결
-- waiver 상태에서 바뀌는 것 — *보험료는 멈추고 보장은 계속*
+- waiver 상태에서 바뀌는 것 — **보험료는 멈추고 보장은 계속**
 - 납입면제가 BEL을 어떻게 키우는지 (보험료 수입이 면제되니 부채 증가)
 ```
 

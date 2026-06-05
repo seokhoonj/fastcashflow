@@ -4,7 +4,7 @@
 :class: tip
 
 - **DEATH** / **MORBIDITY** / **DIAGNOSIS** 세 산출방식이 엔진 안에서
-  어떻게 *서로 다른 알고리즘으로* 처리되는지
+  어떻게 **서로 다른 알고리즘으로** 처리되는지
 - "DEATH 는 한 번만 / MORBIDITY 는 여러 번 / DIAGNOSIS 는 한 번만"
   이라는 의미가 엔진 코드 어디에 표현되어 있는가
 - 같은 `inforce × rate × benefit` 식이 DEATH 와 MORBIDITY 둘 다에

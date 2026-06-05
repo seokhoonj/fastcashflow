@@ -219,7 +219,7 @@ print(m.loss_component[0])   # 손실요소 (0 = 손실부담계약 아님)
 ```{admonition} 발생사고부채
 :class: note
 
-이 장이 다룬 LRC는 *아직 제공하지 않은* 보장의 부채입니다. 짝이 되는
+이 장이 다룬 LRC는 **아직 제공하지 않은** 보장의 부채입니다. 짝이 되는
 것이 **발생사고부채**(LIC, Liability for Incurred Claims) — 이미
 발생했지만 아직 지급하지 않은 보험금의 부채입니다(59항(b)).
 fastcashflow는 보험금이 발생한 달에 곧바로 지급된다고 보면 LIC를

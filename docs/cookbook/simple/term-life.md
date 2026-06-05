@@ -125,8 +125,8 @@ Loss = 55.14
 ```{admonition} 두 자리에 같은 사망률 함수를 넘기는 이유
 :class: note
 
-`mortality_annual` 은 *보유계약이 사망으로 감쇠* 하는 율, `coverages`
-의 `CoverageRate("DEATH", ...)` 는 *그 사망 사건에 사망보험금이 지급*
+`mortality_annual` 은 **보유계약이 사망으로 감쇠** 하는 율, `coverages`
+의 `CoverageRate("DEATH", ...)` 는 **그 사망 사건에 사망보험금이 지급**
 되는 율 — 엔진 안에서는 별개의 두 양입니다. 손계산은 둘이 같다는
 가정에서 답을 도출했으므로, 코드에서도 같은 `death_fn` 을 두 자리에
 공유합니다. 한 자리만 바꾸면 두 양이 silent 어긋나 BEL이 안 맞으니,

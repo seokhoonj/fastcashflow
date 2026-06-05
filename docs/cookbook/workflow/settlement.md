@@ -64,7 +64,7 @@ fastcashflow 는 그 한 파일을 그대로 받습니다.
   - 보유계약 마감파일 한 장을 읽어 **`(ModelPoints, InforceState)`** 튜플로
     돌려줌. spec 은 `ModelPoints`, 결산 상태 네 컬럼은 `InforceState` 로 분리.
 * - `apply_inforce_state`
-  - 영구 spec (`ModelPoints`) 과 결산 상태 (`InforceState`) 가 *두 파일* 로
+  - 영구 spec (`ModelPoints`) 과 결산 상태 (`InforceState`) 가 **두 파일** 로
     따로 들어올 때 둘을 합침. 마감파일 1-파일 path 에서는 불필요.
 * - `gmm.measure_inforce`
   - 결산 측정. `state` 에서 `prior_csm` / `lock_in_rate` 을 꺼내, 결산일

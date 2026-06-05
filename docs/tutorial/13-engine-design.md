@@ -97,7 +97,7 @@ python examples/benchmark.py
 
 fastcashflow에는 CUDA 백엔드도 있습니다 — `gmm.measure(model_points,
 basis, full=False, backend="gpu")`. 그런데 위 환경(NVIDIA RTX 2070 SUPER)에서 GPU는
-CPU보다 그다지 빠르지 않았습니다 — 500만 계약에서도 1.1배 남짓.
+CPU보다 **오히려 느렸습니다** — 1만~2천만 계약 어디서도 CPU의 0.7배 안팎.
 이유는 둘입니다.
 
 **고정비용.** CPU가 이미 워낙 빨라서, GPU로 일을 보내고(커널 실행,
