@@ -9,7 +9,7 @@ import numpy as np
 
 from fastcashflow import ExpenseItem, ModelPoints
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 Q = 0.002
@@ -18,7 +18,7 @@ DEATH = 0   # the death coverage's index in _assumptions().coverages
 
 
 def _assumptions():
-    return make_death_assumptions(
+    return make_death_basis(
         mortality_q       = Q,
         lapse_q           = LAPSE,
         discount_annual   = 0.03,

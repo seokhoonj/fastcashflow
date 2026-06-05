@@ -15,7 +15,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import CalculationMethod, ModelPoints
 from fastcashflow.io import SegmentedBasis
-from conftest import make_death_assumptions
+from conftest import make_death_basis
 
 
 def _death_portfolio():
@@ -26,7 +26,7 @@ def _death_portfolio():
         term_months         = np.array([120, 120], dtype=np.int64),
         calculation_methods = {"DEATH": CalculationMethod.DEATH},
     )
-    return mp, make_death_assumptions(mortality_q=0.005, lapse_q=0.01)
+    return mp, make_death_basis(mortality_q=0.005, lapse_q=0.01)
 
 
 def _wrap(basis):

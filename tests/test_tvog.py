@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import ModelPoints
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 def _assumptions(**overrides):
@@ -23,7 +23,7 @@ def _assumptions(**overrides):
         fund_fee        = 0.015,
     )
     kw.update(overrides)
-    return make_death_assumptions(**kw)
+    return make_death_basis(**kw)
 
 
 def _contract(term: int = 120, g: float = 0.0) -> ModelPoints:

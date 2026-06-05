@@ -11,7 +11,7 @@ import numpy as np
 from fastcashflow import ModelPoints, read_model_points
 from fastcashflow.gmm import measure
 from conftest import (PATTERNS, annual_from_monthly as _annual,
-                      make_death_assumptions, mp_to_frames)
+                      make_death_basis, mp_to_frames)
 
 
 def _assumptions(**overrides):
@@ -24,7 +24,7 @@ def _assumptions(**overrides):
         mortality_cv    = 0.10,
     )
     kw.update(overrides)
-    return make_death_assumptions(**kw)
+    return make_death_basis(**kw)
 
 
 def test_premium_term_hand_calculation():

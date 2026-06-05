@@ -8,7 +8,7 @@ import pytest
 
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 def _flat(annual_q):
@@ -29,7 +29,7 @@ def test_segmented_measure_rejects_pipe_in_product():
         benefits={0: np.array([1e8])},
         calculation_methods=PATTERNS,
     )
-    basis = {("TERM|2020", "FC"): make_death_assumptions(
+    basis = {("TERM|2020", "FC"): make_death_basis(
         mortality_q=0.005, lapse_q=0.01)}
     with pytest.raises(ValueError, match="product.*'\\|'"):
         measure(mp, basis, full=False)
@@ -45,7 +45,7 @@ def test_segmented_measure_rejects_pipe_in_channel():
         benefits={0: np.array([1e8])},
         calculation_methods=PATTERNS,
     )
-    basis = {("TERM_LIFE_A", "FC|GA"): make_death_assumptions(
+    basis = {("TERM_LIFE_A", "FC|GA"): make_death_basis(
         mortality_q=0.005, lapse_q=0.01)}
     with pytest.raises(ValueError, match="channel.*'\\|'"):
         measure(mp, basis, full=False)
@@ -99,13 +99,13 @@ def test_engine_reorders_coverages_by_code():
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
     )
-    asmp_ordered = Basis(
+    basis_ordered = Basis(
         mortality_annual=rate_death, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", rate_death),
                    CoverageRate("CANCER", rate_cancer)),
     )
-    asmp_swapped = Basis(
+    basis_swapped = Basis(
         mortality_annual=rate_death, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("CANCER", rate_cancer),   # swapped order
@@ -113,10 +113,10 @@ def test_engine_reorders_coverages_by_code():
     )
     # Reorder by code makes the two equivalent -- same BEL whichever order
     # the basis register the coverages in.
-    assert np.allclose(np.asarray(measure(mp, asmp_ordered).bel),
-                       np.asarray(measure(mp, asmp_swapped).bel))
-    assert np.isclose(float(np.asarray(measure(mp, asmp_ordered, full=False).bel).ravel()[0]),
-                      float(np.asarray(measure(mp, asmp_swapped, full=False).bel).ravel()[0]))
+    assert np.allclose(np.asarray(measure(mp, basis_ordered).bel),
+                       np.asarray(measure(mp, basis_swapped).bel))
+    assert np.isclose(float(np.asarray(measure(mp, basis_ordered, full=False).bel).ravel()[0]),
+                      float(np.asarray(measure(mp, basis_swapped, full=False).bel).ravel()[0]))
 
 
 def test_engine_rejects_unregistered_coverage():
@@ -190,16 +190,16 @@ def test_engine_ignores_unreferenced_assumptions_coverage():
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH",),
     )
-    asmp_extra = Basis(
+    basis_extra = Basis(
         mortality_annual=rate, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", rate),
                    CoverageRate("CANCER", rate)),   # extra, unused
     )
-    asmp_slim = Basis(
+    basis_slim = Basis(
         mortality_annual=rate, lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", rate),),
     )
-    assert np.allclose(np.asarray(measure(mp, asmp_extra).bel),
-                       np.asarray(measure(mp, asmp_slim).bel))
+    assert np.allclose(np.asarray(measure(mp, basis_extra).bel),
+                       np.asarray(measure(mp, basis_slim).bel))

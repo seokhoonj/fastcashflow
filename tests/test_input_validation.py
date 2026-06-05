@@ -135,8 +135,8 @@ def test_read_state_rejects_unknown_integer():
 
 def test_long_form_rejects_duplicate_mp_id(tmp_path):
     """Duplicate mp_id would fan out the coverages join silently."""
-    asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage="DEATH")
+    basis_book = tmp_path / "basis.xlsx"
+    _write_minimal_assumptions(basis_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A", "A"],          # the duplicate-id case
@@ -151,7 +151,7 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_basis(asmp_book)
+    basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="duplicate mp_id"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -161,8 +161,8 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
 
 def test_long_form_rejects_premium_in_both_frames(tmp_path):
     """``premium`` in coverages and ``premium`` in policies = ambiguous."""
-    asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage="DEATH")
+    basis_book = tmp_path / "basis.xlsx"
+    _write_minimal_assumptions(basis_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -178,7 +178,7 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_basis(asmp_book)
+    basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="premium is specified twice"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -188,8 +188,8 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
 
 def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
     """reduction_factor=0.5 without reduction_end is silently inert."""
-    asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage="DEATH")
+    basis_book = tmp_path / "basis.xlsx"
+    _write_minimal_assumptions(basis_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -205,7 +205,7 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_basis(asmp_book)
+    basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="reduction_factor"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -383,8 +383,8 @@ def test_read_expense_tables_missing_column():
 
 def test_long_form_orphan_mp_id_names_offender(tmp_path):
     """``cov.mp_id='X'`` not in policies: the error names ``'X'``."""
-    asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage="DEATH")
+    basis_book = tmp_path / "basis.xlsx"
+    _write_minimal_assumptions(basis_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -400,7 +400,7 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_basis(asmp_book)
+    basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="ORPHAN_X"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -410,8 +410,8 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
 
 def test_long_form_orphan_coverage_code_names_offender(tmp_path):
     """``cov.coverage`` not in calculation_methods: the error names the code."""
-    asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage="DEATH")
+    basis_book = tmp_path / "basis.xlsx"
+    _write_minimal_assumptions(basis_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -426,7 +426,7 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_basis(asmp_book)
+    basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="GHOST_CODE"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
@@ -437,8 +437,8 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
 def test_long_form_no_premium_source_warns(tmp_path, recwarn):
     """With neither ``premium`` (cov) nor ``premium`` (pol)
     silently defaults to zero -- now warns."""
-    asmp_book = tmp_path / "basis.xlsx"
-    _write_minimal_assumptions(asmp_book, coverage="DEATH")
+    basis_book = tmp_path / "basis.xlsx"
+    _write_minimal_assumptions(basis_book, coverage="DEATH")
     pol_csv = tmp_path / "policies.csv"
     pl.DataFrame({
         "mp_id": ["A"], "issue_age": [40], "term_months": [12],
@@ -454,7 +454,7 @@ def test_long_form_no_premium_source_warns(tmp_path, recwarn):
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
     }).write_csv(bp_csv)
 
-    basis = fcf.read_basis(asmp_book)
+    basis = fcf.read_basis(basis_book)
     fcf.read_model_points(
         pol_csv, coverages=cov_csv,
         calculation_methods=bp_csv,

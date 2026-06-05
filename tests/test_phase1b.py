@@ -9,7 +9,7 @@ import numpy as np
 
 from fastcashflow import ModelPoints
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 SELECT_Q = 0.005      # monthly mortality, policy year 0 (select)
@@ -37,7 +37,7 @@ def _assumptions(**overrides):
         mortality_cv     = 0.0,
     )
     kw.update(overrides)
-    return make_death_assumptions(**kw)
+    return make_death_basis(**kw)
 
 
 def test_select_ultimate_and_duration_lapse():

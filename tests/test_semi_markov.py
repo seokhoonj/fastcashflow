@@ -689,6 +689,6 @@ def test_workbook_elapsed_axis_drives_semi_markov_reincidence(tmp_path):
     assert np.isclose(m.bel_path[0, 0], v.bel[0])
     # Swap to a zero-rate sheet -- the BEL must move because the elapsed
     # axis really drives the reincidence claim outflow.
-    asmp_zero = _flat_assumptions(ci_reincidence_fn=zero_fn)
-    v_zero = fcf.gmm.measure(mp, asmp_zero, full=False)
+    basis_zero = _flat_assumptions(ci_reincidence_fn=zero_fn)
+    v_zero = fcf.gmm.measure(mp, basis_zero, full=False)
     assert not np.isclose(v.bel[0], v_zero.bel[0])

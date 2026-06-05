@@ -66,20 +66,20 @@ def test_value_scalar_zero_curve_matches_no_surrender():
     """``surrender_value_curve = 0`` everywhere collapses to the legacy
     no-surrender BEL."""
     n_time = 240
-    asmp_off = _basis()
-    asmp_on = _basis(surrender_value_curve=np.zeros(n_time))
+    basis_off = _basis()
+    basis_on = _basis(surrender_value_curve=np.zeros(n_time))
     mp = _mp()
-    assert np.isclose(measure(mp, asmp_off, full=False).bel[0], measure(mp, asmp_on, full=False).bel[0])
+    assert np.isclose(measure(mp, basis_off, full=False).bel[0], measure(mp, basis_on, full=False).bel[0])
 
 
 def test_value_surrender_increases_bel():
     """Adding a positive surrender curve adds an insurer outflow on lapse;
     BEL (claims - premiums + surrender) goes up."""
     n_time = 240
-    asmp_off = _basis()
-    asmp_on = _basis(surrender_value_curve=np.full(n_time, 0.5))
+    basis_off = _basis()
+    basis_on = _basis(surrender_value_curve=np.full(n_time, 0.5))
     mp = _mp()
-    assert measure(mp, asmp_on, full=False).bel[0] > measure(mp, asmp_off, full=False).bel[0]
+    assert measure(mp, basis_on, full=False).bel[0] > measure(mp, basis_off, full=False).bel[0]
 
 
 def test_surrender_scales_linearly_in_count():

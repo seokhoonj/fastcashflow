@@ -125,16 +125,16 @@ def test_resolved_basis_values():
     # surrender cash flows (see surrender-value-gap memory); only measure()
     # does. With surrender disabled the two paths agree to machine precision.
     import dataclasses
-    asmp_ga_no_surr = dataclasses.replace(
+    basis_ga_no_surr = dataclasses.replace(
         basis[("TERM_LIFE_A", "GA")], surrender_value_curve=None)
-    asmp_fc_no_surr = dataclasses.replace(
+    basis_fc_no_surr = dataclasses.replace(
         basis[("TERM_LIFE_A", "FC")], surrender_value_curve=None)
-    ga = measure(mp, asmp_ga_no_surr, full=False).bel[0]
-    fc = measure(mp, asmp_fc_no_surr, full=False).bel[0]
+    ga = measure(mp, basis_ga_no_surr, full=False).bel[0]
+    fc = measure(mp, basis_fc_no_surr, full=False).bel[0]
     assert np.isfinite(ga) and np.isfinite(fc)
     assert not np.isclose(ga, fc)
     # fused and detailed paths agree (when surrender is disabled).
-    assert np.isclose(measure(mp, asmp_ga_no_surr).bel_path[0, 0], ga)
+    assert np.isclose(measure(mp, basis_ga_no_surr).bel_path[0, 0], ga)
 
 
 # ---------------------------------------------------------------------------

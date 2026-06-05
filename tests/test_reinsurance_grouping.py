@@ -12,11 +12,11 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import ModelPoints, ReinsuranceMeasurement, group, group_of_contracts
-from conftest import PATTERNS, make_death_assumptions
+from conftest import PATTERNS, make_death_basis
 
 
 def _basis():
-    return make_death_assumptions(
+    return make_death_basis(
         mortality_q     = 0.002,
         lapse_q         = 0.005,
         discount_annual = 0.03,

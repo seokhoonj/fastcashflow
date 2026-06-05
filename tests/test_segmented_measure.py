@@ -113,9 +113,9 @@ def test_subset_leaves_product_none_when_unset():
 
 def test_segmented_measure_routes_each_mp_to_its_segment():
     """Each mp's BEL should equal the measure() result on its own segment."""
-    asmp_high = _flat_asmp(discount=0.03)               # lower discount -> larger BEL
-    asmp_low = _flat_asmp(discount=0.10)                # higher discount -> smaller BEL
-    basis = {("TERM_A", "GA"): asmp_high, ("TERM_A", "FC"): asmp_low}
+    basis_high = _flat_asmp(discount=0.03)               # lower discount -> larger BEL
+    basis_low = _flat_asmp(discount=0.10)                # higher discount -> smaller BEL
+    basis = {("TERM_A", "GA"): basis_high, ("TERM_A", "FC"): basis_low}
 
     mp = ModelPoints(
         issue_age=np.array([40, 40, 40]),
@@ -129,11 +129,11 @@ def test_segmented_measure_routes_each_mp_to_its_segment():
 
     # The two GA mps should match measure() on a single-GA portfolio.
     ga_only = mp.subset([0, 2])
-    expected_ga = measure(ga_only, asmp_high, full=False)
+    expected_ga = measure(ga_only, basis_high, full=False)
     assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
     # The FC mp matches the FC valuation.
     fc_only = mp.subset([1])
-    expected_fc = measure(fc_only, asmp_low, full=False)
+    expected_fc = measure(fc_only, basis_low, full=False)
     assert np.allclose(val.bel[1], expected_fc.bel[0])
     # GA and FC give different per-mp BEL (different discount).
     assert not np.isclose(val.bel[0], val.bel[1])

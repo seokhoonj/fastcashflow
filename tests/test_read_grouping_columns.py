@@ -7,11 +7,11 @@ import polars as pl
 
 from fastcashflow import read_model_points, group, group_of_contracts
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, make_death_assumptions
+from conftest import PATTERNS, make_death_basis
 
 
 def _basis():
-    return make_death_assumptions(mortality_q=0.002, lapse_q=0.01,
+    return make_death_basis(mortality_q=0.002, lapse_q=0.01,
                                   discount_annual=0.03, ra_confidence=0.75,
                                   mortality_cv=0.10)
 

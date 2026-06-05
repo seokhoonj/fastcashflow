@@ -42,7 +42,7 @@ def _flat_dur_rate(monthly_q: float):
     return lambda sex, issue_age, duration: np.full(duration.shape, annual)
 
 
-def make_death_assumptions(
+def make_death_basis(
     *,
     mortality_q: float | None = None,
     lapse_q: float | None = None,
@@ -67,7 +67,7 @@ def make_death_assumptions(
     """
     if mortality_annual is None:
         if mortality_q is None:
-            raise TypeError("make_death_assumptions: pass mortality_q or mortality_annual")
+            raise TypeError("make_death_basis: pass mortality_q or mortality_annual")
         mortality_annual = _flat_age_rate(mortality_q)
     if lapse_annual is None:
         lapse_annual = _flat_dur_rate(0.0 if lapse_q is None else lapse_q)

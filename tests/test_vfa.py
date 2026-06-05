@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import ExpenseItem, ModelPoints, report
-from conftest import annual_from_monthly as _annual, make_death_assumptions
+from conftest import annual_from_monthly as _annual, make_death_basis
 
 
 Q = 0.002          # flat monthly mortality
@@ -27,7 +27,7 @@ def _assumptions(**overrides):
         fund_fee          = 0.015,
     )
     kw.update(overrides)
-    return make_death_assumptions(**kw)
+    return make_death_basis(**kw)
 
 
 def test_vfa_account_value_and_csm_hand_calc():

@@ -95,11 +95,11 @@ def test_surrender_cf_widens_bel():
         premium=10_000.0, term_months=24,
         calculation_methods=PATTERNS,
     )
-    asmp_no_surr = _basis(lapse_rate=0.05, surrender_curve=None)
-    asmp_with_surr = _basis(
+    basis_no_surr = _basis(lapse_rate=0.05, surrender_curve=None)
+    basis_with_surr = _basis(
         lapse_rate=0.05, surrender_curve=np.full(25, 1.0))
-    bel_no = measure(mp, asmp_no_surr).bel_path[0, 0]
-    bel_with = measure(mp, asmp_with_surr).bel_path[0, 0]
+    bel_no = measure(mp, basis_no_surr).bel_path[0, 0]
+    bel_with = measure(mp, basis_with_surr).bel_path[0, 0]
     # BEL is the present value of future outflows minus premiums.
     # Adding a positive surrender outflow strictly increases BEL.
     assert bel_with > bel_no

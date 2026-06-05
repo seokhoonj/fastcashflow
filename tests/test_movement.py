@@ -12,11 +12,11 @@ import pytest
 
 from fastcashflow import CoverageRate, ExpenseItem, ModelPoints, reconcile, roll_forward
 from fastcashflow.gmm import measure
-from conftest import annual_from_monthly as _annual, make_death_assumptions
+from conftest import annual_from_monthly as _annual, make_death_basis
 
 
 def _assumptions():
-    return make_death_assumptions(
+    return make_death_basis(
         mortality_q       = 0.001,
         lapse_q           = 0.01,
         discount_annual   = 0.03,
@@ -452,7 +452,7 @@ def test_reconcile_paa():
 
 
 def _vfa_assumptions():
-    return make_death_assumptions(
+    return make_death_basis(
         mortality_q       = 0.002,
         lapse_q           = 0.004,
         discount_annual   = 0.03,

@@ -74,14 +74,14 @@ def test_show_trace_emits_diagnosis_pool_only_when_present():
         premium=100, term_months=12,
         calculation_methods={"DEATH": fcf.CalculationMethod.DEATH},
     )
-    asmp_death = Basis(
+    basis_death = Basis(
         mortality_annual=death_fn,
         lapse_annual=lambda s, a, d: np.full(d.shape, 0.0),
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.0,
         coverages=(fcf.CoverageRate("DEATH", death_fn),),
     )
     buf = io.StringIO()
-    fcf.gmm.trace(0, mp_death, asmp_death, file=buf)
+    fcf.gmm.trace(0, mp_death, basis_death, file=buf)
     assert "Undiagnosed share" not in buf.getvalue()
 
 

@@ -141,7 +141,7 @@ def test_with_age_shift_zero_is_identity(tmp_path):
     basis = _segment(p)
     p2 = tmp_path / "b.xlsx"
     _build_workbook(p2)                                            # no column at all
-    asmp2 = _segment(p2)
+    basis2 = _segment(p2)
     # Both behave identically -- 0 shift is a no-op
     s = np.array([0]); a = np.array([30]); d = np.array([0])
-    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == asmp2.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0]
+    assert basis.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0] == basis2.mortality_annual(s, a, d, np.zeros_like(d), np.zeros_like(d))[0]

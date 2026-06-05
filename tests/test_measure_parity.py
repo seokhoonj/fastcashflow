@@ -2,7 +2,7 @@
 
 Three gaps the 2nd review surfaced:
 
-1. ``make_death_assumptions`` wires the in-force decrement and the DEATH
+1. ``make_death_basis`` wires the in-force decrement and the DEATH
    coverage's payout from a single callable, so every existing test would
    stay green even if the engine silently reverted to the pre-(B) slot-0
    hardwire (using ``mortality_annual`` as the death claim rate). One
@@ -21,7 +21,7 @@ import pytest
 
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 def _flat(annual_q):
@@ -38,14 +38,14 @@ def test_value_uses_coverage_rate_not_mortality_annual():
     Two contracts that differ ONLY in the DEATH coverage rate (same
     in-force decrement) must produce different BELs."""
     mort = _flat(_annual(0.005))
-    asmp_low = Basis(
+    basis_low = Basis(
         mortality_annual=mort,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.0,
         coverages=(CoverageRate("DEATH", _flat(_annual(0.005))),),  # death = mort
     )
-    asmp_high = Basis(
+    basis_high = Basis(
         mortality_annual=mort,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
@@ -57,8 +57,8 @@ def test_value_uses_coverage_rate_not_mortality_annual():
         premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )
-    v_low  = measure(mp, asmp_low, full=False)
-    v_high = measure(mp, asmp_high, full=False)
+    v_low  = measure(mp, basis_low, full=False)
+    v_high = measure(mp, basis_high, full=False)
     # If slot 0 were hardwired to mortality_annual, both BELs would match
     # (the coverage's own rate would be ignored).
     assert not np.isclose(v_low.bel[0], v_high.bel[0], rtol=1e-6), (
@@ -71,14 +71,14 @@ def test_value_uses_coverage_rate_not_mortality_annual():
 def test_measure_uses_coverage_rate_not_mortality_annual():
     """Same regression check on measure()."""
     mort = _flat(_annual(0.005))
-    asmp_low = Basis(
+    basis_low = Basis(
         mortality_annual=mort,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.0,
         coverages=(CoverageRate("DEATH", _flat(_annual(0.005))),),
     )
-    asmp_high = Basis(
+    basis_high = Basis(
         mortality_annual=mort,
         lapse_annual=_flat(_annual(0.01)),
         discount_annual=0.03,
@@ -90,8 +90,8 @@ def test_measure_uses_coverage_rate_not_mortality_annual():
         premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )
-    m_low  = measure(mp, asmp_low)
-    m_high = measure(mp, asmp_high)
+    m_low  = measure(mp, basis_low)
+    m_high = measure(mp, basis_high)
     assert not np.isclose(m_low.bel_path[0, 0], m_high.bel_path[0, 0], rtol=1e-6)
     assert m_high.bel_path[0, 0] > m_low.bel_path[0, 0]
 
@@ -104,7 +104,7 @@ def test_value_and_measure_agree_with_settlement_pattern():
     """``settlement_pattern`` discounts claim outflows to their payment
     dates. measure()'s fused path applies the factor inline; measure()'s
     detailed path multiplies the cash flow arrays. The two must agree."""
-    basis = make_death_assumptions(
+    basis = make_death_basis(
         mortality_q     = 0.005,
         lapse_q         = 0.01,
         discount_annual = 0.03,
@@ -139,7 +139,7 @@ def test_value_rejects_nonzero_issue_class():
         benefits={0: np.array([1e8])},
         calculation_methods=PATTERNS,
     )
-    basis = make_death_assumptions(mortality_q=0.005, lapse_q=0.01)
+    basis = make_death_basis(mortality_q=0.005, lapse_q=0.01)
     with pytest.raises(NotImplementedError, match="issue_class"):
         measure(mp, basis, full=False)
     # measure() handles it correctly (existing behaviour).
@@ -154,7 +154,7 @@ def test_value_accepts_default_issue_class():
         premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )
-    basis = make_death_assumptions(mortality_q=0.005, lapse_q=0.01)
+    basis = make_death_basis(mortality_q=0.005, lapse_q=0.01)
     v = measure(mp, basis, full=False)
     m = measure(mp, basis)
     assert np.isclose(v.bel[0], m.bel_path[0, 0])

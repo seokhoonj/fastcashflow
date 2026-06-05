@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from conftest import PATTERNS, make_death_assumptions
+from conftest import PATTERNS, make_death_basis
 
 
 def _segments(mp, basis):
@@ -135,7 +135,7 @@ def _two_seg_mp(terms):
 
 
 def _disc(rate):
-    return make_death_assumptions(mortality_q=0.002, lapse_q=0.01,
+    return make_death_basis(mortality_q=0.002, lapse_q=0.01,
                                   discount_annual=rate, ra_confidence=0.75,
                                   mortality_cv=0.10)
 

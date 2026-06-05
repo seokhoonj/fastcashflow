@@ -7,7 +7,7 @@ import pytest
 from fastcashflow import ExpenseItem, ModelPoints, read_model_points, sample_data_dir, write_measurement
 from fastcashflow.gmm import measure
 from conftest import (PATTERNS, annual_from_monthly as _annual,
-                      make_death_assumptions, mp_to_frames)
+                      make_death_basis, mp_to_frames)
 
 
 def _portfolio(n: int = 400) -> ModelPoints:
@@ -33,7 +33,7 @@ def _death_benefits(mps: ModelPoints) -> np.ndarray:
 
 
 def _assumptions():
-    return make_death_assumptions(
+    return make_death_basis(
         mortality_q       = 0.001,
         lapse_q           = 0.01,
         discount_annual   = 0.03,
@@ -271,17 +271,17 @@ def test_sample_data_dir_exposes_bundled_files():
 def test_describe_basis_renders_both_shapes(capsys):
     """describe_basis prints a tree for an Basis and for a dict."""
     from fastcashflow import describe_basis
-    basis = fcf.samples.basis()
-    asmp = next(iter(basis.values()))
+    basis_dict = fcf.samples.basis()
+    seg_basis = next(iter(basis_dict.values()))
 
-    describe_basis(asmp)
+    describe_basis(seg_basis)
     out_one = capsys.readouterr().out
     assert out_one.startswith("Basis")
     assert "상태 전이율" in out_one
     assert "state_model" in out_one
     assert "coverages" in out_one
 
-    describe_basis(basis)
+    describe_basis(basis_dict)
     out_dict = capsys.readouterr().out
     assert "(7 segments)" in out_dict
     # every segment unfolded -- both ('TERM_LIFE_A', 'GA') and ('TERM_LIFE_A', 'FC') appear

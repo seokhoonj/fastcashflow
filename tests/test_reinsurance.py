@@ -10,7 +10,7 @@ import pytest
 
 from fastcashflow import ModelPoints
 from fastcashflow.numerics import _norm_ppf
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 Q = 0.002          # flat monthly mortality
@@ -19,7 +19,7 @@ MORTALITY_CV = 0.10
 
 
 def _assumptions():
-    return make_death_assumptions(
+    return make_death_basis(
         mortality_q     = Q,
         lapse_q         = LAPSE,
         discount_annual = 0.03,

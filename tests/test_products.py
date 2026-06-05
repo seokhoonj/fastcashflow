@@ -10,7 +10,7 @@ import numpy as np
 from fastcashflow import ModelPoints
 from fastcashflow.gmm import measure
 from fastcashflow.numerics import _norm_ppf
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 Q = 0.002          # flat monthly mortality
@@ -26,7 +26,7 @@ def _assumptions(**overrides):
         mortality_cv    = 0.10,
     )
     kw.update(overrides)
-    return make_death_assumptions(**kw)
+    return make_death_basis(**kw)
 
 
 def test_maturity_benefit_adds_its_present_value():

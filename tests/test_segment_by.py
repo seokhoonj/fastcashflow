@@ -10,11 +10,11 @@ import pytest
 
 from fastcashflow import ModelPoints
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, make_death_assumptions
+from conftest import PATTERNS, make_death_basis
 
 
 def _b(lapse_q):
-    return make_death_assumptions(mortality_q=0.002, lapse_q=lapse_q,
+    return make_death_basis(mortality_q=0.002, lapse_q=lapse_q,
                                   discount_annual=0.03, ra_confidence=0.75,
                                   mortality_cv=0.10)
 

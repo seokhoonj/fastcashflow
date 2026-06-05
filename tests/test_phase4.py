@@ -8,7 +8,7 @@ import numpy as np
 
 from fastcashflow import ExpenseItem, ModelPoints
 from fastcashflow.gmm import measure
-from conftest import PATTERNS, annual_from_monthly as _annual, make_death_assumptions
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 def _assumptions(**overrides):
@@ -25,7 +25,7 @@ def _assumptions(**overrides):
         mortality_cv      = 0.10,
     )
     kw.update(overrides)
-    return make_death_assumptions(**kw)
+    return make_death_basis(**kw)
 
 
 def test_bel_rollforward():

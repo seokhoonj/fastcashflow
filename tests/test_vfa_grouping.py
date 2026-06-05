@@ -12,7 +12,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import ExpenseItem, ModelPoints, VFAMeasurement, group, group_of_contracts
-from conftest import make_death_assumptions
+from conftest import make_death_basis
 
 
 def _vfa_basis(**overrides):
@@ -29,7 +29,7 @@ def _vfa_basis(**overrides):
         expense_items     = (ExpenseItem("acquisition", "alpha_fixed", 5_000_000.0),),
     )
     kw.update(overrides)
-    return make_death_assumptions(**kw)
+    return make_death_basis(**kw)
 
 
 def _two_vfa(**extra) -> ModelPoints:
