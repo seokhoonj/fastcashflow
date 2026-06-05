@@ -245,20 +245,25 @@ mp_alr = fcf.ModelPoints(
 회복률을 **장해 경과별** 로 잘게 나눕니다. 호주 보험계리사회 (IAAust) 의
 **IAD89-93** 장해표가 발생률의 대표 구조 (연령 상승, 성별 · 직업급 · 면책기간
 차등) 이고, 회복 (종료) 률은 장해 직후 높다가 만성화하면서 급락합니다 — 장기
-청구건의 연 종료율은 ~5-15% 수준입니다:
+청구건의 연 종료율은 ~5-15% 수준입니다. 발생률은 분석식이 아니라 **연령별
+long-form 표 + 룩업** (견본 위험률표와 같은 `(sex, age) -> rate` 구조), 회복률은
+**경과 밴드별 표** 입니다:
 
 ```python
 import numpy as np
 
-# 계리적 가정 -- 호주 IAD89-93 / IDI 경험표 구조로 calibrate 한 현실 율
-# 장해 발생률 (active -> disabled), 연 -- IAD89-93 연령 상승 (~90일 면책)
-#   per-mille ~1(30) 2.5(40) 6(50) 14(60); 여성은 젊은 연령서 더 높음
-def di_incidence(s, a, d):
-    base = np.exp((a - 30.0) * 0.094) * 0.0010
-    fem  = np.where(s == 1, 1.0 + np.maximum(0.0, 45 - a) * 0.012, 1.0)
-    return base * fem
+# 계리적 가정 -- 호주 IAD89-93 / IDI 경험표 구조로 calibrate
+# 장해 발생률 (active -> disabled), 연 -- 연령표 룩업 (long-form; 실무는 Excel)
+ages = np.array([   30,     40,     50,     60,     70])
+di_m = np.array([0.0010, 0.0026, 0.0066, 0.0168, 0.0430])   # 남
+di_f = np.array([0.0014, 0.0032, 0.0072, 0.0170, 0.0420])   # 여 (젊은 연령서 더 높음)
 
-# 회복률 (disabled -> active), 연 -- 장해 경과 sd(개월) 의존: 급성 높고 만성 급락
+def di_incidence(s, a, d):                          # 연령표 룩업 (VLOOKUP 식 보간)
+    a = np.asarray(a, dtype=float)
+    return np.where(np.asarray(s) == 1,
+                    np.interp(a, ages, di_f), np.interp(a, ages, di_m))
+
+# 회복률 (disabled -> active), 연 -- 장해 경과 sd(개월) 밴드별 표: 급성 높고 만성 급락
 #   (IDI 종료율: 13-24개월 ~15% / 25-60개월 ~12% / >60개월 ~10%, 회복분은 그 이하)
 def di_recovery(s, a, d, sd):
     return np.select([sd < 12, sd < 24, sd < 60], [0.45, 0.16, 0.09], default=0.05)
@@ -269,7 +274,7 @@ print("회복률 1/2/4/6년   :", [float(di_recovery(0, 0, 0, m)) for m in (6, 1
 ```
 
 ```text
-발생률 30/40/50/60 : [0.001, 0.00256, 0.00655, 0.01678]
+발생률 30/40/50/60 : [0.001, 0.0026, 0.0066, 0.0168]
 회복률 1/2/4/6년   : [0.45, 0.16, 0.09, 0.05]
 ```
 
