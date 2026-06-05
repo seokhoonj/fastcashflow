@@ -1442,9 +1442,14 @@ def read_inforce_policies(
     For the two-file equivalent (separate ``policies.csv`` +
     ``inforce_state.csv``), see :func:`read_model_points` +
     :func:`read_inforce_state` + :func:`apply_inforce_state`. Both
-    workflows produce the same ``ModelPoints`` / ``InforceState`` pair
-    and so the same valuation; pick the form that fits the company's
-    extract pipeline.
+    workflows produce valuation-ready inputs that give the same valuation:
+    ``measure_inforce`` re-aligns the state by mp_id internally, so the
+    answer does not depend on the state file's row order. The returned
+    ``InforceState`` is itself row-aligned to the model points here; in the
+    two-file path the state object keeps its file order (only the model points
+    are reordered by :func:`apply_inforce_state`), so call
+    :func:`align_inforce_state` before slicing or reading ``state.prior_csm``
+    directly. Pick the form that fits the company's extract pipeline.
 
     Required columns: ``mp_id``, ``elapsed_months``, ``count``,
     ``prior_csm``, ``lock_in_rate``, plus whatever the spec side of

@@ -590,6 +590,14 @@ class ModelPoints:
         ``coverage_offset`` is reset to the new running cumulative sum. Used by
         :func:`fastcashflow.gmm.measure` to split a portfolio
         by (product, channel) before per-segment measurement.
+
+        ``indices`` is expected to select **distinct** rows -- it is a row
+        selection, not a gather. As an optimisation the result skips the
+        re-validation the constructor runs (the parent was already validated),
+        so a repeated index (``subset([0, 0])``) would carry a duplicate mp_id
+        the constructor would otherwise reject. Every engine caller passes a
+        unique segment index, so this is safe on the hot path; pass distinct
+        indices when calling it directly.
         """
         idx = np.asarray(indices, dtype=np.int64)
 
