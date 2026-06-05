@@ -510,3 +510,28 @@ def test_reconcile_vfa():
         assert np.isclose(
             r.csm_opening + r.csm_finance + r.csm_release, r.csm_closing)
     assert "BEL" in str(recons[0]) and "CSM" in str(recons[0])
+
+
+def test_roll_forward_experience_chain_on_segmented_measurement():
+    """Regression (P0): the experience-chain interest accrual indexed
+    monthly_rate[a:b] / monthly_rate[a] -- correct for a single-basis 1-D rate,
+    but for a SEGMENTED measurement the rate is per-MP (n_mp, n_time) and that
+    sliced the model-point axis, crashing / mis-computing. With the time-axis
+    ellipsis it reconciles. Drives the chain path (2-D actual_inforce) on a
+    dict-basis (segmented) measurement."""
+    mp = fcf.samples.model_points()
+    basis = fcf.samples.basis()
+    m = measure(mp, basis)                                 # segmented -> 2-D discount_bom
+    assert m.discount_bom.ndim == 2
+    actuals = np.stack([m.cashflows.inforce[:, 12] * 0.97,
+                        m.cashflows.inforce[:, 24] * 0.93,
+                        m.cashflows.inforce[:, 36] * 0.88])
+    periods = roll_forward(m, 12, actual_inforce=actuals)
+    assert len(periods) > 3
+    for p in periods:
+        assert np.allclose(
+            p.bel_opening + p.bel_assumption_change + p.bel_experience
+            + p.bel_interest - p.bel_release, p.bel_closing)
+        assert np.allclose(
+            p.csm_opening + p.csm_assumption_change + p.csm_experience
+            + p.csm_accretion - p.csm_release, p.csm_closing)

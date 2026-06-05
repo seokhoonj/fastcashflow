@@ -439,10 +439,10 @@ def _roll_forward_experience_chain(
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
         bel_ex, ra_ex, csm_ex, loss = exp_lines.get(a, (zero, zero, zero, zero))
-        bel_interest = ((bel[:, a:b] * monthly_rate[a:b]).sum(axis=1)
-                        + bel_ex * monthly_rate[a])
-        ra_interest = ((ra[:, a:b] * monthly_rate[a:b]).sum(axis=1)
-                       + ra_ex * monthly_rate[a])
+        bel_interest = ((bel[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
+                        + bel_ex * monthly_rate[..., a])
+        ra_interest = ((ra[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
+                       + ra_ex * monthly_rate[..., a])
         movements.append(PeriodMovement(
             month_start=a,
             month_end=b,
