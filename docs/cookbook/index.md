@@ -150,6 +150,10 @@
   - [장해소득보상 (DI)](semi-markov/disability-income)
   - 매월 장해소득 + duration-since-disabled 의존 회복률. 회복 re-entry 와
     disabled life reserve (DLR).
+* - 4.3
+  - [간병 / 치매 (LTC)](semi-markov/long-term-care)
+  - 진단금 일시금 + 보증한도 월정액 (`benefit_max_months`) + 간병상태 상승
+    사망률 (`State.mortality_rate`). 상태지속 정액 보장의 sojourn 한도.
 ```
 
 ### 5. 변액 (VFA)
@@ -313,6 +317,7 @@ markov/paid-up
 
 semi-markov/reincidence
 semi-markov/disability-income
+semi-markov/long-term-care
 ```
 
 ```{toctree}
