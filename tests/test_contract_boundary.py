@@ -77,10 +77,12 @@ def test_boundary_must_be_positive():
 
 
 # ---------------------------------------------------------------------------
-# CB3 -- the fast path rejects a boundary cut (until it carries the boundary)
+# CB3 -- the fast path applies the same boundary cut as the full path
 # ---------------------------------------------------------------------------
-def test_fast_path_rejects_boundary_cut():
-    with pytest.raises(NotImplementedError, match="contract boundary"):
-        fcf.gmm.measure(_mp(12), _basis(), full=False)
-    # but the default (no cut) is fine on the fast path
-    fcf.gmm.measure(_mp(None), _basis(), full=False)
+def test_fast_path_matches_full_under_boundary_cut():
+    full = fcf.gmm.measure(_mp(12), _basis(), full=True)
+    fast = fcf.gmm.measure(_mp(12), _basis(), full=False)
+    assert fast.bel[0] == pytest.approx(full.bel[0], rel=1e-9)
+    # and a no-cut policy still agrees
+    assert (fcf.gmm.measure(_mp(None), _basis(), full=False).bel[0]
+            == pytest.approx(fcf.gmm.measure(_mp(None), _basis()).bel[0], rel=1e-9))

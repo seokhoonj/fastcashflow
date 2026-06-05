@@ -787,7 +787,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "def kernel(edge_from, edge_to, edge_prob, edge_lump_sum,")
     line(0, "           premium_state, benefit_state, start_state, "
             "issue_index, sex,")
-    line(0, "           term_months, count, premium,")
+    line(0, "           term_months, contract_boundary_months, count, premium,")
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
@@ -811,6 +811,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
 
     line(4, "for mp in prange(n_mp):")
     line(8, "term = term_months[mp]")
+    line(8, "boundary = contract_boundary_months[mp]")
     line(8, "premium_term = premium_term_months[mp]")
     line(8, "prem_freq = premium_frequency_months[mp]")
     line(8, "ann_freq = annuity_frequency_months[mp]")
@@ -840,7 +841,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(8, "prem_left = premium_term")
 
     # Main t loop
-    line(8, "for t in range(term):")
+    line(8, "for t in range(boundary):")
     line(12, "year = t // 12")
     line(12, "if year != last_year:")
     line(16, "claim_rate = 0.0")
@@ -912,7 +913,8 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     emit_edge_step(12, scale="", include_lump=True)
 
     line(8, f"total = {sum_all}")
-    line(8, "pm = total * maturity_benefit[mp] * discount_bom[term]")
+    line(8, "pm = (total * maturity_benefit[mp] * discount_bom[boundary]) "
+         "if boundary == term else 0.0")
 
     # Coverage-rule pass
     line(8, "for k in range(c_start, c_end):")
@@ -927,7 +929,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, "red_factor = coverage_reduction_factor[k]")
     line(12, "mortality_risk = coverage_risk[cov_idx] == 0")
     emit_init(12)
-    line(12, "for t in range(term):")
+    line(12, "for t in range(boundary):")
     line(16, "year = t // 12")
     line(16, "if t >= wait:")
     line(20, "mult = red_factor if t < red_end else 1.0")
@@ -952,7 +954,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     emit_init(12)
     line(12, "d_year = -1")
     line(12, "d_rate = 0.0")
-    line(12, "for t in range(term):")
+    line(12, "for t in range(boundary):")
     line(16, "year = t // 12")
     line(16, "if year != d_year:")
     line(20, "d_rate = coverage_rates[cov_idx, sx, age_idx, year]")
@@ -1256,7 +1258,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(0, "")
     line(0, "@njit(parallel=True, cache=True)")
     line(0, "def kernel(edge_prob, start_state, issue_index, sex,")
-    line(0, "           term_months, count, premium,")
+    line(0, "           term_months, contract_boundary_months, count, premium,")
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
@@ -1280,6 +1282,7 @@ def _codegen_fast_kernel_source_semi_markov(
 
     line(4, "for mp in prange(n_mp):")
     line(8, "term = term_months[mp]")
+    line(8, "boundary = contract_boundary_months[mp]")
     line(8, "premium_term = premium_term_months[mp]")
     line(8, "prem_freq = premium_frequency_months[mp]")
     line(8, "ann_freq = annuity_frequency_months[mp]")
@@ -1316,7 +1319,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(8, "inforce_traj = np.empty(term)")
 
     # --- Main t loop ---------------------------------------------------
-    line(8, "for t in range(term):")
+    line(8, "for t in range(boundary):")
     line(12, "year = t // 12")
     line(12, "if year != last_year:")
     line(16, "claim_rate = 0.0")
@@ -1386,7 +1389,8 @@ def _codegen_fast_kernel_source_semi_markov(
     emit_edge_step(12, include_lump=True)
 
     line(8, f"total = {sum_all}")
-    line(8, "pm = total * maturity_benefit[mp] * discount_bom[term]")
+    line(8, "pm = (total * maturity_benefit[mp] * discount_bom[boundary]) "
+         "if boundary == term else 0.0")
 
     # --- Coverage-rule pass --------------------------------------------
     # Rule-bearing non-diagnosis coverages: reuse the per-month total
@@ -1405,7 +1409,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, "benefit = coverage_amount[k]")
     line(12, "red_factor = coverage_reduction_factor[k]")
     line(12, "mortality_risk = coverage_risk[cov_idx] == 0")
-    line(12, "for t in range(wait, term):")
+    line(12, "for t in range(wait, boundary):")
     line(16, "year = t // 12")
     line(16, "mult = red_factor if t < red_end else 1.0")
     line(16, "contrib = (inforce_traj[t] * coverage_rates[cov_idx, sx, age_idx, year]")
@@ -1432,7 +1436,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, "undiagnosed = 1.0")
     line(12, "d_year = -1")
     line(12, "d_rate = 0.0")
-    line(12, "for t in range(term):")
+    line(12, "for t in range(boundary):")
     line(16, "year = t // 12")
     line(16, "if year != d_year:")
     line(20, "d_rate = coverage_rates[cov_idx, sx, age_idx, year]")
@@ -1521,7 +1525,8 @@ def _get_fast_kernel_codegen_semi_markov(
 
 
 @njit(parallel=True, cache=True)
-def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
+def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
+                         count, premium,
                          premium_term_months, premium_frequency_months,
                          annuity_frequency_months, coverage_index, coverage_amount, coverage_offset,
                          coverage_rates, coverage_risk, coverage_is_diagnosis,
@@ -1555,6 +1560,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
 
     for mp in prange(n_mp):
         term = term_months[mp]
+        boundary = contract_boundary_months[mp]
         premium_term = premium_term_months[mp]
         prem_freq = premium_frequency_months[mp]
         ann_freq = annuity_frequency_months[mp]
@@ -1586,7 +1592,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
         prem_due = 0
         ann_due = 0
         prem_left = premium_term
-        for t in range(term):
+        for t in range(boundary):
             year = t // 12
             if year != last_year:
                 claim_rate = 0.0
@@ -1656,7 +1662,8 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
                     pv_surrender += (lapse_monthly[sx, age_idx, year]
                                      * cum_premium * surrender_curve[t] * dm)
             inforce *= survival_monthly[sx, age_idx, year]
-        pm = inforce * maturity_benefit[mp] * discount_bom[term]
+        pm = (inforce * maturity_benefit[mp] * discount_bom[boundary]
+              if boundary == term else 0.0)
         # Non-diagnosis coverages with a waiting or reduced-benefit rule:
         # rerun the survival on the same scalar track so the benefit
         # multiplier (which can change mid-year) applies cleanly.
@@ -1672,7 +1679,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
             red_factor = coverage_reduction_factor[k]
             mortality_risk = coverage_risk[cov_idx] == 0
             inf = cnt
-            for t in range(term):
+            for t in range(boundary):
                 year = t // 12
                 if t >= wait:
                     mult = red_factor if t < red_end else 1.0
@@ -1696,7 +1703,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, count, premium,
             healthy = cnt
             d_year = -1
             d_rate = 0.0
-            for t in range(term):
+            for t in range(boundary):
                 year = t // 12
                 if year != d_year:
                     d_rate = coverage_rates[cov_idx, sx, age_idx, year]
@@ -1760,22 +1767,13 @@ def _measure_fast(
             "wrong BEL. Use full=True until the fast path grows per-class grid "
             "support."
         )
-    # The contract-boundary cut (Sec. 34) is implemented on the full path; the
-    # fast codegen kernels still project to term_months, so a boundary short of
-    # the term would silently include past-boundary cash flows. Reject it here
-    # until the fast path carries the boundary too.
-    if np.any(model_points.contract_boundary_months < model_points.term_months):
-        raise NotImplementedError(
-            "measure(full=False) does not yet apply the contract boundary "
-            "(contract_boundary_months < term_months). Use full=True for a "
-            "boundary-cut measurement."
-        )
     if model_points.term_months.shape[0] == 0:
         raise ValueError(
             "model_points is empty (n_mp=0); measure(full=False) cannot project a "
             "zero-policy portfolio. Filter empty segments upstream."
         )
-    n_time = int(model_points.term_months.max())
+    # The projection horizon is the contract boundary (defaults to the term).
+    n_time = int(model_points.contract_boundary_months.max())
     n_years = (n_time + 11) // 12
 
     # Mortality and lapse are evaluated on a dense sex x [min, max] issue-age
@@ -2071,6 +2069,7 @@ def _measure_fast(
             issue_index,
             model_points.sex,
             model_points.term_months,
+            model_points.contract_boundary_months,
             model_points.count,
             model_points.premium,
             model_points.premium_term_months,
@@ -2124,6 +2123,7 @@ def _measure_fast(
         issue_index,
         model_points.sex,
         model_points.term_months,
+        model_points.contract_boundary_months,
         model_points.count,
         model_points.premium,
         model_points.premium_term_months,
@@ -2174,6 +2174,7 @@ def _measure_fast(
                 edge_prob, start_state, issue_index,
                 model_points.sex,
                 model_points.term_months,
+                model_points.contract_boundary_months,
                 model_points.count,
                 model_points.premium,
                     model_points.premium_term_months,

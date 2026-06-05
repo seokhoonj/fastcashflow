@@ -21,7 +21,7 @@ MAX_STATES = 8
 @cuda.jit
 def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        premium_state, benefit_state, start_state, issue_index,
-                       sex, term_months, count, premium,
+                       sex, term_months, contract_boundary_months, count, premium,
                        premium_term_months, premium_frequency_months, annuity_frequency_months,
                        coverage_index, coverage_amount, coverage_offset, coverage_rates, coverage_risk,
                        coverage_is_diagnosis, maturity_benefit, annuity_payment,
@@ -47,6 +47,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
 
     n_edges = edge_from.shape[0]
     term = term_months[mp]
+    boundary = contract_boundary_months[mp]
     premium_term = premium_term_months[mp]
     prem_freq = premium_frequency_months[mp]
     ann_freq = annuity_frequency_months[mp]
@@ -74,7 +75,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     last_year = -1
     claim_rate = 0.0
     morb_rate = 0.0
-    for t in range(term):
+    for t in range(boundary):
         year = t // 12
         if year != last_year:
             claim_rate = 0.0
@@ -141,7 +142,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     total = 0.0
     for s in range(n_states):
         total += occ[s]
-    pm = total * maturity_benefit[mp] * discount_bom[term]
+    pm = (total * maturity_benefit[mp] * discount_bom[boundary]
+          if boundary == term else 0.0)
     # Diagnosis coverages: claims run off a depleting "not yet diagnosed"
     # occupancy, carried over the transient states.
     for k in range(c_start, c_end):
@@ -154,7 +156,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         occ[ss] = cnt
         d_year = -1
         d_rate = 0.0
-        for t in range(term):
+        for t in range(boundary):
             year = t // 12
             if year != d_year:
                 d_rate = coverage_rates[cov_idx, sx, age_idx, year]
@@ -185,7 +187,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
 
 def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               premium_state, benefit_state, start_state, issue_index, sex,
-              term_months, count, premium,
+              term_months, contract_boundary_months, count, premium,
               premium_term_months, premium_frequency_months, annuity_frequency_months,
               coverage_index, coverage_amount, coverage_offset, coverage_rates, coverage_risk,
               coverage_is_diagnosis, maturity_benefit, annuity_payment,
@@ -222,6 +224,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_issue = cuda.to_device(issue_index)
     d_sex = cuda.to_device(sex)
     d_term = cuda.to_device(term_months)
+    d_boundary = cuda.to_device(contract_boundary_months)
     d_count = cuda.to_device(count)
     d_premium = cuda.to_device(premium)
     d_premium_term = cuda.to_device(premium_term_months)
@@ -256,7 +259,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     _value_cuda_kernel[blocks, threads](
         d_edge_from, d_edge_to, d_edge_prob, d_edge_lump, n_states,
         d_premium_state, d_benefit_state, d_start_state, d_issue, d_sex,
-        d_term, d_count, d_premium, d_premium_term, d_premium_freq,
+        d_term, d_boundary, d_count, d_premium, d_premium_term, d_premium_freq,
         d_annuity_freq, d_cov_cov_idx, d_cov_amount, d_cov_offset, d_coverage_rates,
         d_coverage_risk, d_coverage_is_diagnosis, d_maturity, d_annuity,
         d_disability_income, d_disability_benefit,
