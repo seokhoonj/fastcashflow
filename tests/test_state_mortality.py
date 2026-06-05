@@ -112,3 +112,41 @@ def test_deaths_reporter_is_state_aware():
     glob_m = 1 - (1 - 0.10) ** (1 / 12)
     assert elevated.cashflows.deaths[0][0] == pytest.approx(post_m, abs=1e-9)
     assert control.cashflows.deaths[0][0] == pytest.approx(glob_m, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# AB1 -- GAP A (elevated mortality) and GAP B (benefit cap) compose
+# ---------------------------------------------------------------------------
+def test_state_mortality_and_benefit_cap_compose():
+    # disabled state: elevated mortality 0.20 AND a 3-month benefit cap.
+    model = StateModel(states=(
+        State("active", premium=True, transitions=(
+            Transition("mortality"), Transition("lapse"))),
+        State("disabled", benefit=True, duration_max=8, benefit_max_months=3,
+              mortality_rate="dth_dis", transitions=(Transition("mortality"),)),
+    ), seating=(0, 1))
+    basis = Basis(
+        mortality_annual=_FLAT(0.10), lapse_annual=_ZERO,
+        discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
+        state_mortality_annual={"dth_dis": _FLAT(0.20)},
+        state_model=model,
+        coverages=(fcf.CoverageRate("DEATH", _FLAT(0.10)),))
+    mp = ModelPoints(
+        issue_age=np.array([55], dtype=np.int64),
+        benefits={0: np.array([0.0])},
+        premium=np.array([0.0]),
+        term_months=np.array([24], dtype=np.int64),
+        disability_income=np.array([100.0]),
+        state=np.array([1], dtype=np.int64),
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
+    m = fcf.gmm.measure(mp, basis)
+    cf = m.cashflows.disability_cf[0]
+    surv = (1 - 0.20) ** (1 / 12)                      # monthly survival at 0.20
+    # benefit paid only the first 3 months, on the elevated-mortality decay
+    assert cf[0] == pytest.approx(100.0)
+    assert cf[1] == pytest.approx(100.0 * surv, abs=1e-6)
+    assert cf[2] == pytest.approx(100.0 * surv ** 2, abs=1e-6)
+    assert np.allclose(cf[3:], 0.0)                    # capped
+    # detailed and fused agree with both features on
+    assert (fcf.gmm.measure(mp, basis, full=False).bel[0]
+            == pytest.approx(m.bel[0], rel=1e-9))
