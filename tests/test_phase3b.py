@@ -248,6 +248,24 @@ def test_measure_stream_rejects_existing_output(tmp_path):
         fcf.gmm.measure_stream(pp, out_dir, _assumptions(), coverages=cp, calculation_methods=PATTERNS)
 
 
+def test_measure_stream_id_column(tmp_path):
+    """measure_stream writes the result id from id_column (a business key) when
+    given, not always mp_id; an unknown id_column is a clear error up front."""
+    n = 50
+    mps = _portfolio(n)
+    policy_no = np.array([f"PN{i:04d}" for i in range(n)], dtype=object)
+    pp, cp = _write_model_points(mps, tmp_path, ".parquet", policy_no=policy_no)
+
+    fcf.gmm.measure_stream(pp, tmp_path / "r1", _assumptions(), coverages=cp,
+                           calculation_methods=PATTERNS, id_column="policy_no")
+    ids = pl.read_parquet(str(tmp_path / "r1" / "part-*.parquet"))["id"].to_list()
+    assert set(ids) == set(policy_no.tolist())
+
+    with pytest.raises(ValueError, match=r"id_column 'nope' is not a column"):
+        fcf.gmm.measure_stream(pp, tmp_path / "r2", _assumptions(), coverages=cp,
+                               calculation_methods=PATTERNS, id_column="nope")
+
+
 def test_load_sample_data_runs():
     """The bundled sample data loads and values without error."""
     mps = fcf.samples.model_points()

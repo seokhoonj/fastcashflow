@@ -1918,6 +1918,10 @@ def measure_stream(
     so the policies parquet must carry ``product`` / ``channel``
     columns.
 
+    ``id_column`` names the policies column written as the result ``id`` (so the
+    output parquet joins back to a business key); it defaults to ``mp_id``. The
+    coverages are always joined on ``mp_id`` regardless.
+
     Returns the total number of model points processed.
     """
     # Lazy import -- only ``measure_stream`` actually drives a valuation, so we
@@ -1946,12 +1950,22 @@ def measure_stream(
     n_total = scan.select(pl.len()).collect().item()
     processed = 0
 
+    # The result id is written from ``id_column`` (a business key the output
+    # joins back on); coverages still join on ``mp_id``. Validate up front so a
+    # typo'd id_column is a clear error, not a per-chunk failure.
+    id_col = id_column if id_column is not None else "mp_id"
+    if id_col not in scan.collect_schema().names():
+        raise ValueError(
+            f"measure_stream: id_column {id_col!r} is not a column of the "
+            f"policies file {str(input_path)!r}"
+        )
+
     if coverages is not None:
         # chunk the policies, pull each chunk's coverage rows.
         cov_scan = pl.scan_parquet(Path(coverages))
         for part, offset in enumerate(range(0, n_total, chunk_size)):
             pol = scan.slice(offset, chunk_size).collect()
-            ids = pol["mp_id"]
+            ids = pol[id_col]
             cov = cov_scan.join(
                 pol.lazy().select("mp_id"), on="mp_id", how="semi"
             ).collect()
