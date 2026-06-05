@@ -114,7 +114,7 @@ def _expense_kernel_args(
 @njit(parallel=True, cache=True)
 def _project_kernel(state_death_exit, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
-                    term_months, contract_boundary_months, count, premium,
+                    term_months, contract_boundary_months, count, premium, premium_factor,
                     premium_term_months, premium_frequency_months, annuity_frequency_months,
                     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
                     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -209,7 +209,7 @@ def _project_kernel(state_death_exit, state_lapse, edge_from, edge_to, edge_prob
                         morb_rate += rate
                 last_year = year
             deaths[mp, t] = deaths_acc
-            level = (prem_occ * premium[mp]
+            level = (prem_occ * premium[mp] * premium_factor[mp, year]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
             claim_cf[mp, t] = ift * claim_rate
@@ -221,7 +221,7 @@ def _project_kernel(state_death_exit, state_lapse, edge_from, edge_to, edge_prob
             # month's claim + morbidity total. Dispatched from
             # Basis.expense_items by basis (alpha_pro_rata /
             # alpha_fixed / beta_pro_rata / gamma_fixed / lae_pro_rata).
-            ann_prem = premium[mp] * 12.0 / prem_freq
+            ann_prem = premium[mp] * premium_factor[mp, year] * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
             beta = (ift * beta_pro_rata * ann_prem / 12.0
@@ -312,7 +312,7 @@ def _project_kernel_semi_markov(
     state_death_exit, state_lapse, edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset, benefit_max_months,
     premium_state, benefit_state, start_state,
-    term_months, contract_boundary_months, count, premium,
+    term_months, contract_boundary_months, count, premium, premium_factor,
     premium_term_months, premium_frequency_months, annuity_frequency_months,
     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
     coverage_reduction_end, coverage_reduction_factor, coverage_rates,
@@ -422,7 +422,7 @@ def _project_kernel_semi_markov(
             inforce[mp, t] = ift
             lapse_flow[mp, t] = lapse_acc
             deaths[mp, t] = deaths_acc
-            level = (prem_occ * premium[mp]
+            level = (prem_occ * premium[mp] * premium_factor[mp, year]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
             claim_cf[mp, t] = ift * claim_rate
@@ -431,7 +431,7 @@ def _project_kernel_semi_markov(
                                   if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: same dispatch as _project_kernel (see its comment).
-            ann_prem = premium[mp] * 12.0 / prem_freq
+            ann_prem = premium[mp] * premium_factor[mp, year] * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
             beta = (ift * beta_pro_rata * ann_prem / 12.0
@@ -667,6 +667,17 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     assert coverage_rates.shape == (
         len(aligned_coverages), len(model_points.issue_age), n_years
     ), f"coverage_rates shape {coverage_rates.shape} != (n_cov, n_mp, n_years)"
+    # Premium SHAPE -- a multiplicative factor on the level premium, per
+    # (sex, issue_age, duration) year grid. NOT a rate: it is never converted
+    # to monthly (a step-up factor > 1.0 would fail annual_to_monthly's <= 1
+    # check). None -> all-ones (level premium), a structural no-op multiply.
+    if basis.premium_factor_annual is None:
+        premium_factor = np.ones((len(model_points.issue_age), n_years))
+    else:
+        premium_factor = np.ascontiguousarray(basis.premium_factor_annual(
+            sex_grid, issue_age_grid, duration_grid,
+            issue_class_grid, elapsed_grid))
+    assert premium_factor.shape == (len(model_points.issue_age), n_years)
     # Expense primitives -- the five inputs the kernel consumes. Honours
     # Basis.expense_items when set, otherwise the legacy alpha / beta
     # / gamma / expense_inflation scalars (see _expense_kernel_args).
@@ -756,6 +767,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             model_points.contract_boundary_months,
             model_points.count,
             model_points.premium,
+            premium_factor,
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,
@@ -828,6 +840,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             model_points.contract_boundary_months,
             model_points.count,
             model_points.premium,
+            premium_factor,
             model_points.premium_term_months,
             model_points.premium_frequency_months,
             model_points.annuity_frequency_months,

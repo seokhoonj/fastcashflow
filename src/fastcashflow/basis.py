@@ -20,6 +20,7 @@ _RATE_FN_FIELDS: tuple[str, ...] = (
     "lapse_paidup_annual",
     "waiver_incidence_annual",
     "ci_incidence_annual",
+    "premium_factor_annual",
 )
 
 # DurationRateFn-shape fields on Basis -- semi-Markov rates whose
@@ -515,6 +516,17 @@ class Basis:
     # premium-paying actives -- the Korean post-payment lapse jump. When
     # None the paid-up state falls back to ``lapse_annual``.
     lapse_paidup_annual: RateFn | None = None
+    # Premium SHAPE -- a multiplicative factor on the level ``ModelPoints.premium``
+    # by ``(sex, issue_age, duration, issue_class, elapsed)`` (the standard 5-arg
+    # RateFn). The charge each premium-paying month is
+    # ``premium[mp] * premium_factor_annual(.., year)``: a step-rated / renewable
+    # premium (갱신요율) is ``f(issue_age + duration)``, a step-up (체증형 보험료)
+    # is ``1 + step * duration``. ``premium[mp]`` stays the scalar SCALE
+    # ``solve_premium`` solves for, so FCF stays linear in it. NOTE this is a
+    # multiplicative scale, NOT a decrement -- values may exceed 1.0 (step-up)
+    # and it is never run through ``annual_to_monthly``. None -> level premium
+    # (factor 1.0 everywhere), bit-identical to the no-shape behaviour.
+    premium_factor_annual: RateFn | None = None
     # Semi-Markov (Phase (c)) prototype rates. ``ci_incidence_annual`` is the
     # first-cancer diagnosis rate (active -> post_first transition, Markov);
     # ``ci_reincidence_annual`` is the duration-dependent reincidence rate

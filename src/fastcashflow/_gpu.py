@@ -23,7 +23,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        premium_state, benefit_state, start_state, issue_index,
                        sex, term_months, contract_boundary_months, count, premium,
                        premium_term_months, premium_frequency_months, annuity_frequency_months,
-                       coverage_index, coverage_amount, coverage_offset, coverage_rates, coverage_risk,
+                       coverage_index, coverage_amount, coverage_offset, coverage_rates,
+                       premium_factor, coverage_risk,
                        coverage_is_diagnosis, maturity_benefit, annuity_payment,
                        disability_income, disability_benefit,
                        alpha_pro_rata, alpha_fixed, beta_pro_rata,
@@ -101,7 +102,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 benefit_occ += occ[s]
         ds = discount_bom[t]
         dm = discount_mid[t]
-        level = (prem_occ * prem
+        level = (prem_occ * prem * premium_factor[sx, age_idx, year]
                  if (t < premium_term and t % prem_freq == 0) else 0.0)
         pv_premium += level * ds
         cum_premium += level
@@ -110,7 +111,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         if t % ann_freq == 0:
             pv_annuity += ift * annuity * ds
         pv_disability += benefit_occ * disability_income[mp] * dm
-        ann_prem = premium[mp] * 12.0 / prem_freq
+        ann_prem = premium[mp] * premium_factor[sx, age_idx, year] * 12.0 / prem_freq
         alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                  if t == 0 else 0.0)
         beta = (ift * beta_pro_rata * ann_prem / 12.0
@@ -192,7 +193,8 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               premium_state, benefit_state, start_state, issue_index, sex,
               term_months, contract_boundary_months, count, premium,
               premium_term_months, premium_frequency_months, annuity_frequency_months,
-              coverage_index, coverage_amount, coverage_offset, coverage_rates, coverage_risk,
+              coverage_index, coverage_amount, coverage_offset, coverage_rates,
+              premium_factor, coverage_risk,
               coverage_is_diagnosis, maturity_benefit, annuity_payment,
               disability_income, disability_benefit,
               alpha_pro_rata, alpha_fixed, beta_pro_rata,
@@ -237,6 +239,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_cov_amount = cuda.to_device(coverage_amount)
     d_cov_offset = cuda.to_device(coverage_offset)
     d_coverage_rates = cuda.to_device(coverage_rates)
+    d_premium_factor = cuda.to_device(premium_factor)
     d_coverage_risk = cuda.to_device(coverage_risk)
     d_coverage_is_diagnosis = cuda.to_device(coverage_is_diagnosis)
     d_maturity = cuda.to_device(maturity_benefit)
@@ -265,6 +268,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         d_premium_state, d_benefit_state, d_start_state, d_issue, d_sex,
         d_term, d_boundary, d_count, d_premium, d_premium_term, d_premium_freq,
         d_annuity_freq, d_cov_cov_idx, d_cov_amount, d_cov_offset, d_coverage_rates,
+        d_premium_factor,
         d_coverage_risk, d_coverage_is_diagnosis, d_maturity, d_annuity,
         d_disability_income, d_disability_benefit,
         alpha_pro_rata, alpha_fixed, beta_pro_rata,

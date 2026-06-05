@@ -934,7 +934,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
-            "coverage_risk,")
+            "premium_factor, coverage_risk,")
     line(0, "           coverage_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
@@ -966,6 +966,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(8, "c_start = coverage_offset[mp]")
     line(8, "c_end = coverage_offset[mp + 1]")
     line(8, "ss = start_state[mp]")
+    line(8, "pf = 1.0")
     line(8, "ann_prem = prem * 12.0 / prem_freq")
     emit_init(8)
     line(8, "pv_mortality = 0.0")
@@ -1001,6 +1002,8 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(20, "else:")
     line(24, "morb_rate += rate")
     line(16, "last_year = year")
+    line(16, "pf = premium_factor[sx, age_idx, year]")
+    line(16, "ann_prem = prem * pf * 12.0 / prem_freq")
     line(12, f"ift = {sum_all}")
     line(12, f"prem_occ = {sum_prem}")
     if use_disability:
@@ -1008,7 +1011,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, "ds = discount_bom[t]")
     line(12, "dm = discount_mid[t]")
     line(12, "if prem_due == 0 and prem_left > 0:")
-    line(16, "level = prem_occ * prem")
+    line(16, "level = prem_occ * prem * pf")
     line(16, "prem_due = prem_freq - 1")
     line(12, "else:")
     line(16, "level = 0.0")
@@ -1413,7 +1416,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(0, "           premium_term_months, premium_frequency_months, "
             "annuity_frequency_months,")
     line(0, "           coverage_index, coverage_amount, coverage_offset, coverage_rates, "
-            "coverage_risk,")
+            "premium_factor, coverage_risk,")
     line(0, "           coverage_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
@@ -1445,6 +1448,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(8, "c_start = coverage_offset[mp]")
     line(8, "c_end = coverage_offset[mp + 1]")
     line(8, "ss = start_state[mp]")
+    line(8, "pf = 1.0")
     line(8, "ann_prem = prem * 12.0 / prem_freq")
     emit_init(8)
     line(8, "pv_mortality = 0.0")
@@ -1487,6 +1491,8 @@ def _codegen_fast_kernel_source_semi_markov(
     line(20, "else:")
     line(24, "morb_rate += rate")
     line(16, "last_year = year")
+    line(16, "pf = premium_factor[sx, age_idx, year]")
+    line(16, "ann_prem = prem * pf * 12.0 / prem_freq")
     line(12, f"ift = {sum_all}")
     line(12, "inforce_traj[t] = ift")
     line(12, f"prem_occ = {sum_prem}")
@@ -1494,7 +1500,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, "ds = discount_bom[t]")
     line(12, "dm = discount_mid[t]")
     line(12, "if prem_due == 0 and prem_left > 0:")
-    line(16, "level = prem_occ * prem")
+    line(16, "level = prem_occ * prem * pf")
     line(16, "prem_due = prem_freq - 1")
     line(12, "else:")
     line(16, "level = 0.0")
@@ -1681,7 +1687,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                          count, premium,
                          premium_term_months, premium_frequency_months,
                          annuity_frequency_months, coverage_index, coverage_amount, coverage_offset,
-                         coverage_rates, coverage_risk, coverage_is_diagnosis,
+                         coverage_rates, premium_factor, coverage_risk, coverage_is_diagnosis,
                          maturity_benefit, annuity_payment,
                          alpha_pro_rata, alpha_fixed, beta_pro_rata,
                          gamma_fixed, lae_pro_rata,
@@ -1764,7 +1770,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
             ds = discount_bom[t]
             dm = discount_mid[t]
             if prem_due == 0 and prem_left > 0:
-                level = inforce * prem
+                level = inforce * prem * premium_factor[sx, age_idx, year]
                 prem_due = prem_freq - 1
             else:
                 level = 0.0
@@ -1785,7 +1791,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                     ann_due = ann_freq - 1
                 else:
                     ann_due -= 1
-            ann_prem = prem * 12.0 / prem_freq
+            ann_prem = prem * premium_factor[sx, age_idx, year] * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
             beta = (inforce * beta_pro_rata * ann_prem / 12.0
@@ -1960,6 +1966,18 @@ def _measure_fast(
         basis.lapse_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid)))
+    # Premium SHAPE on the dense (sex, age, year) grid -- a multiplicative scale
+    # on the level premium, the value-side mirror of project_cashflows'
+    # premium_factor. NOT a rate: never annual_to_monthly (a step-up > 1.0 would
+    # fail its <= 1 check). None -> all-ones (level), a structural no-op. The
+    # grid is issue_class=0 / elapsed=0 (non-segmented fast path), so the factor
+    # is a pure (sex, age, year) function here.
+    if basis.premium_factor_annual is None:
+        premium_factor_grid = np.ones_like(mortality_grid)
+    else:
+        premium_factor_grid = np.ascontiguousarray(basis.premium_factor_annual(
+            sex_grid, issue_age_grid, duration_grid,
+            issue_class_grid, elapsed_grid))
     # Fast path: when no waiver / paid-up mechanic is active and every model
     # point is seated in the active state, the in-force is a single survival
     # track. The scalar kernel carries it as one number and runs the
@@ -2232,6 +2250,7 @@ def _measure_fast(
             coverage_amount,
             model_points.coverage_offset,
             coverage_rates,
+            premium_factor_grid,
             coverage_risk,
             coverage_is_diagnosis,
             model_points.maturity_benefit,
@@ -2286,6 +2305,7 @@ def _measure_fast(
         coverage_amount,
         model_points.coverage_offset,
         coverage_rates,
+        premium_factor_grid,
         coverage_risk,
         coverage_is_diagnosis,
         model_points.maturity_benefit,
@@ -2337,6 +2357,7 @@ def _measure_fast(
                 coverage_amount,
                 model_points.coverage_offset,
                 coverage_rates,
+                premium_factor_grid,
                 coverage_risk,
                 coverage_is_diagnosis,
                 model_points.maturity_benefit,
