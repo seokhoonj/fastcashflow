@@ -112,7 +112,7 @@ def _expense_kernel_args(
 
 
 @njit(parallel=True, cache=True)
-def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
+def _project_kernel(state_mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
                     term_months, count, premium,
                     premium_term_months, premium_frequency_months, annuity_frequency_months,
@@ -145,7 +145,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
     year boundary. The maturity benefit is paid to the in-force survivors at
     time = term.
     """
-    n_mp = mortality.shape[0]
+    n_mp = state_mortality.shape[1]
     inforce = np.zeros((n_mp, n_time))
     deaths = np.zeros((n_mp, n_time))
     premium_cf = np.zeros((n_mp, n_time))
@@ -175,17 +175,19 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
         claim_rate = 0.0      # aggregate mortality claim per unit in-force
         morb_rate = 0.0       # aggregate morbidity claim per unit in-force
         for t in range(term):
+            year = t // 12
             ift = 0.0         # total in-force
             prem_occ = 0.0    # in-force on the premium-paying states
             benefit_occ = 0.0 # in-force on the benefit-paying states
+            deaths_acc = 0.0  # state-conditional death count
             for s in range(n_states):
                 ift += occ[s]
+                deaths_acc += occ[s] * state_mortality[s, mp, year]
                 if premium_state[s]:
                     prem_occ += occ[s]
                 if benefit_state[s]:
                     benefit_occ += occ[s]
             inforce[mp, t] = ift
-            year = t // 12
             if year != last_year:
                 claim_rate = 0.0
                 morb_rate = 0.0
@@ -201,8 +203,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
                     else:
                         morb_rate += rate
                 last_year = year
-            q = mortality[mp, year]
-            deaths[mp, t] = ift * q
+            deaths[mp, t] = deaths_acc
             level = (prem_occ * premium[mp]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
@@ -303,7 +304,7 @@ def _project_kernel(mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
 
 @njit(parallel=True, cache=True)
 def _project_kernel_semi_markov(
-    mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
+    state_mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset, benefit_max_months,
     premium_state, benefit_state, start_state,
     term_months, count, premium,
@@ -332,7 +333,7 @@ def _project_kernel_semi_markov(
     semi-Markov prototype rejects model points carrying either, so the
     main pass alone is the full projection for the supported cases.
     """
-    n_mp = mortality.shape[0]
+    n_mp = state_mortality.shape[1]
     inforce = np.zeros((n_mp, n_time))
     deaths = np.zeros((n_mp, n_time))
     premium_cf = np.zeros((n_mp, n_time))
@@ -386,6 +387,7 @@ def _project_kernel_semi_markov(
             ift = 0.0
             prem_occ = 0.0
             benefit_occ = 0.0
+            deaths_acc = 0.0  # state-conditional death count
             for s in range(n_states):
                 s_off = state_offset[s]
                 D = state_duration_max[s]
@@ -393,6 +395,7 @@ def _project_kernel_semi_markov(
                 for tau in range(D):
                     state_sum += occ[s_off + tau]
                 ift += state_sum
+                deaths_acc += state_sum * state_mortality[s, mp, year]
                 if premium_state[s]:
                     prem_occ += state_sum
                 if benefit_state[s]:
@@ -408,8 +411,7 @@ def _project_kernel_semi_markov(
                         benefit_occ += state_sum
 
             inforce[mp, t] = ift
-            q = mortality[mp, year]
-            deaths[mp, t] = ift * q
+            deaths[mp, t] = deaths_acc
             level = (prem_occ * premium[mp]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
@@ -697,10 +699,14 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         # detailed kernel reads (edge axis outer, cohort axis inner).
         state_offset = np.zeros(n_states + 1, dtype=np.int64)
         state_offset[1:] = np.cumsum(state_duration_max)
+        # Per-state mortality stack (n_states, n_mp, n_year) -- each state's
+        # in-force death decrement so the death-count reporter splits by state.
+        state_mortality = np.stack(
+            [rate_dict[s.mortality_rate] for s in state_model.states])
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
          annuity_cf, disability_cf,
          maturity_cf, maturity_survivors) = _project_kernel_semi_markov(
-            mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
+            state_mortality, edge_from, edge_to, edge_prob, edge_lump_sum,
             n_states, state_duration_max, state_offset, benefit_max_months,
             premium_state, benefit_state, start_state,
             model_points.term_months,
@@ -760,9 +766,11 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         n_states = compiled.n_states
         premium_state = compiled.premium_state
         benefit_state = compiled.benefit_state
+        state_mortality = np.stack(
+            [rate_dict[s.mortality_rate] for s in state_model.states])
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
          annuity_cf, disability_cf, maturity_cf, maturity_survivors) = _project_kernel(
-            mortality,
+            state_mortality,
             edge_from,
             edge_to,
             edge_prob,

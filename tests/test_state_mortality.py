@@ -98,3 +98,17 @@ def test_state_mortality_detailed_matches_fused():
     fused = fcf.gmm.measure(mp, basis, full=False)
     assert fused.bel[0] == pytest.approx(detailed.bel[0], rel=1e-9)
     assert detailed.bel[0] > 0.0                       # a real death-claim BEL
+
+
+# ---------------------------------------------------------------------------
+# A4 -- the death-count reporter splits by state (no split-brain)
+# ---------------------------------------------------------------------------
+def test_deaths_reporter_is_state_aware():
+    elevated = fcf.gmm.measure(
+        _seated_post_mp(13), _basis("dth_post", {"dth_post": _FLAT(0.30)}))
+    control = fcf.gmm.measure(_seated_post_mp(13), _basis("mortality"))
+    # seated in post: month-0 deaths follow the post (0.30) rate, not global.
+    post_m = 1 - (1 - 0.30) ** (1 / 12)
+    glob_m = 1 - (1 - 0.10) ** (1 / 12)
+    assert elevated.cashflows.deaths[0][0] == pytest.approx(post_m, abs=1e-9)
+    assert control.cashflows.deaths[0][0] == pytest.approx(glob_m, abs=1e-9)
