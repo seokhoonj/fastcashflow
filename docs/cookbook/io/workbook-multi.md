@@ -62,13 +62,13 @@ BEL            sum = -10,182,300
 RA             sum = 1,309,817
 CSM            sum = 10,280,704
 loss component sum = 1,408,220
-  ('HEALTH_A', 'FC'): n=2 BEL=-1,285,473
-  ('HEALTH_A', 'GA'): n=2 BEL=-1,465,209
-  ('HEALTH_A', 'TM'): n=2 BEL=472,013
-  ('TERM_LIFE_A', 'FC'): n=2 BEL=680,111
-  ('TERM_LIFE_A', 'GA'): n=1 BEL=-243,286
-  ('WHOLE_LIFE_A', 'FC'): n=1 BEL=-1,300,595
-  ('WHOLE_LIFE_A', 'GA'): n=1 BEL=-904,680
+  ('HEALTH_A', 'FC'): n=2 BEL=-1,336,523
+  ('HEALTH_A', 'GA'): n=2 BEL=-1,505,011
+  ('HEALTH_A', 'TM'): n=2 BEL=426,305
+  ('TERM_LIFE_A', 'FC'): n=2 BEL=649,555
+  ('TERM_LIFE_A', 'GA'): n=1 BEL=-247,612
+  ('WHOLE_LIFE_A', 'FC'): n=1 BEL=-3,960,653
+  ('WHOLE_LIFE_A', 'GA'): n=1 BEL=-4,208,361
 ```
 
 11 개 계약이 7 개 segment 로 갈라져, 각 묶음이 자기 segment 의 사망률 ·
