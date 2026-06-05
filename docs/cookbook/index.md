@@ -306,6 +306,7 @@ simple/term-life
 simple/death-diagnosis
 simple/diagnosis-rules
 simple/renewable
+simple/escalating-benefits
 ```
 
 ```{toctree}
