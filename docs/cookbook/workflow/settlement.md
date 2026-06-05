@@ -213,11 +213,14 @@ ETL 환경에 따라 영구 spec (`policies.csv`) 과 분기별 갱신
 읽어 합칩니다 — 결과는 1-파일 path 와 동일합니다.
 
 ```python
+# 영구 spec (3 파일) 을 읽고, 분기 결산 상태를 따로 읽어 mp_id 로 합칩니다
 model_points = fcf.read_model_points(
-    "samples/policies.csv", coverages="samples/coverages.csv",
-    calculation_methods="samples/calculation_methods.csv")
-state = fcf.read_inforce_state("samples/inforce_state.csv")  # 결산 상태만 따로
-mp = fcf.apply_inforce_state(model_points, state)    # mp_id 로 join (순서 무관)
+    "samples/policies.csv",                                 # 계약 spec (영구)
+    coverages="samples/coverages.csv",                      # 담보
+    calculation_methods="samples/calculation_methods.csv",  # 산출방법 카탈로그
+)
+state        = fcf.read_inforce_state("samples/inforce_state.csv")  # 분기 결산 상태만 따로
+mp           = fcf.apply_inforce_state(model_points, state)         # mp_id 로 join (행 순서 무관)
 ```
 
 대형 portfolio 에서는 마감파일을 `.parquet` / `.feather` 로 두는 편이
