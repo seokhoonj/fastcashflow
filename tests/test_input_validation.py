@@ -808,7 +808,7 @@ def test_construction_rejects_garbage_inputs():
     with pytest.raises(ValueError, match="premium must be finite"):
         fcf.ModelPoints(issue_age=np.array([40.0]),
                         premium=np.array([np.nan]), term_months=np.array([12]))
-    with pytest.raises(ValueError, match=r"benefits\[0\] must be >= 0"):
+    with pytest.raises(ValueError, match="coverage amounts must be >= 0"):
         fcf.ModelPoints(issue_age=np.array([40.0]), premium=np.array([100.0]),
                         term_months=np.array([12]), benefits={0: np.array([-1e6])})
 
@@ -916,3 +916,38 @@ def test_guards_empty_portfolio(tmp_path):
     with pytest.raises(ValueError, match="coverages frame is empty"):
         fcf.read_model_points(str(pol), coverages=str(cov_empty),
                               calculation_methods=str(cm))
+
+
+def test_coverage_amount_csr_path_rejects_negative_and_nan():
+    """The CSR coverage_index / coverage_amount path -- the one read_model_points
+    fills directly -- must reject a negative or NaN coverage amount, not only the
+    benefits-map path: a negative flips the claim sign and a NaN silently NaNs
+    the BEL, both straight into the kernel."""
+    base = dict(issue_age=np.array([40.0]), premium=np.array([0.0]),
+                term_months=np.array([12]),
+                coverage_index=np.array([0], np.int64),
+                coverage_offset=np.array([0, 1], np.int64))
+    with pytest.raises(ValueError, match="coverage amounts must be >= 0"):
+        ModelPoints(coverage_amount=np.array([-1000.0]), **base)
+    with pytest.raises(ValueError, match="coverage amounts must be finite"):
+        ModelPoints(coverage_amount=np.array([np.nan]), **base)
+    # the benefits-map path is still guarded by the same unified check
+    with pytest.raises(ValueError, match="coverage amounts must be >= 0"):
+        ModelPoints(issue_age=np.array([40.0]), premium=np.array([0.0]),
+                    term_months=np.array([12]), benefits={0: np.array([-5.0])})
+
+
+def test_reader_warns_on_near_reserved_column_typo(tmp_path):
+    """A policies column one edit from a reserved field (``coun`` -> count) is a
+    silent footgun -- count would default to 1 (a 1000x understatement) -- so
+    the reader warns; a genuine attribute (``region``) does not warn."""
+    pl.DataFrame({"mp_id": ["A"], "issue_age": [40], "term_months": [12],
+                  "premium": [0.0], "coun": [1000.0], "region": ["KR"]}
+                 ).write_csv(tmp_path / "p.csv")
+    pl.DataFrame({"mp_id": ["A"], "coverage": ["DEATH"], "amount": [1e8]}
+                 ).write_csv(tmp_path / "c.csv")
+    pl.DataFrame({"coverage": ["DEATH"], "calculation_method": ["DEATH"]}
+                 ).write_csv(tmp_path / "m.csv")
+    with pytest.warns(UserWarning, match=r"typo of the field 'count'"):
+        fcf.read_model_points(tmp_path / "p.csv", coverages=tmp_path / "c.csv",
+                              calculation_methods=tmp_path / "m.csv")

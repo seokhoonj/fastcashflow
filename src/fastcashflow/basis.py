@@ -619,6 +619,21 @@ class Basis:
         )
         if any(nr is not r for nr, r in zip(new_coverages, self.coverages)):
             object.__setattr__(self, "coverages", new_coverages)
+        # Coverage code is the key the engine resolves a model point's coverage
+        # against (align_coverages -> {r.code: r}); a duplicate code silently
+        # keeps only the last rate (the vintage / 개정 copy-paste mistake).
+        codes = [r.code for r in self.coverages]
+        if len(set(codes)) != len(codes):
+            seen, dup = set(), []
+            for c in codes:
+                if c in seen and c not in dup:
+                    dup.append(c)
+                seen.add(c)
+            raise ValueError(
+                f"Basis.coverages has duplicate coverage code(s) {dup}; each "
+                "code must be unique (a duplicate would silently keep only the "
+                "last rate)."
+            )
 
     @property
     def discount_monthly(self) -> float:

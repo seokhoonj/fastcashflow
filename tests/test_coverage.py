@@ -78,3 +78,16 @@ def test_no_coverages_matches_zero_death_benefit():
     assert np.allclose(a.ra, b.ra)
     # no death coverage -> no claims -> zero Risk Adjustment
     assert np.isclose(b.ra[0], 0.0)
+
+
+def test_basis_rejects_duplicate_coverage_code():
+    """Coverage code is the key the engine resolves a model point's coverage
+    against; a duplicate would silently keep only the last rate, so Basis
+    rejects it at construction (covers the file path via read_basis too)."""
+    import pytest
+    from fastcashflow import Basis, CoverageRate
+    r = lambda s, a, d: np.full(np.shape(a), 0.01)
+    with pytest.raises(ValueError, match="duplicate coverage code"):
+        Basis(mortality_annual=r, lapse_annual=r, discount_annual=0.0,
+              ra_confidence=0.75, mortality_cv=0.10,
+              coverages=(CoverageRate("CANCER", r), CoverageRate("CANCER", r)))

@@ -360,14 +360,26 @@ class ModelPoints:
                             f"benefits[{cov_idx}] has length {amt.size} but "
                             f"n_mp is {n_mp}"
                         )
-                    if not np.all(np.isfinite(amt)):
-                        raise ValueError(f"benefits[{cov_idx}] must be finite")
-                    if np.any(amt < 0):
-                        raise ValueError(
-                            f"benefits[{cov_idx}] must be >= 0 (a benefit amount)"
-                        )
                     items.append((int(cov_idx), amt))
             coverage_index, coverage_amount, coverage_offset = _build_csr(items, n_mp)
+        # Validate the packed benefit amounts in one place, after both input
+        # forms (the benefits map and the CSR arrays the file reader fills)
+        # land here. The amount feeds straight into the kernel (claim = rate x
+        # amount), so a NaN / inf silently NaNs the BEL and a negative flips the
+        # claim's sign -- the file-reader path filled the CSR arrays directly
+        # and so used to skip this entirely.
+        if coverage_amount.size:
+            if not np.all(np.isfinite(coverage_amount)):
+                raise ValueError(
+                    "coverage amounts must be finite (a NaN / inf amount yields "
+                    "a silently-NaN BEL)"
+                )
+            if np.any(coverage_amount < 0):
+                bad = int(np.argmax(coverage_amount < 0))
+                raise ValueError(
+                    "coverage amounts must be >= 0 (a negative flips the claim "
+                    f"sign); coverage_amount[{bad}] = {coverage_amount[bad]}"
+                )
         object.__setattr__(self, "coverage_index", coverage_index)
         object.__setattr__(self, "coverage_amount", coverage_amount)
         object.__setattr__(self, "coverage_offset", coverage_offset)

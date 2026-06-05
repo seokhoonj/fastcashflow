@@ -980,6 +980,66 @@ _POLICY_RESERVED_COLS = frozenset({
     "product", "channel",
 })
 
+# The columns ``read_vfa_model_points`` recognises (its allow-list plus the
+# required fields). A column outside this set is ignored, so a typo is dropped.
+_VFA_POLICY_COLS = frozenset({
+    "mp_id", "issue_age", "term_months", "premium", "state",
+    "sex", "count", "premium_term_months", "premium_frequency_months",
+    "annuity_frequency_months", "maturity_benefit", "annuity_payment",
+    "disability_income", "disability_benefit", "account_value",
+    "minimum_crediting_rate", "minimum_death_benefit",
+    "minimum_accumulation_benefit", "surrender_base_amount",
+    "contract_boundary_months", "product", "channel",
+})
+
+
+def _within_edit_distance_1(a: str, b: str) -> bool:
+    """True if ``a`` and ``b`` differ by at most one insert / delete / substitute
+    (a Levenshtein distance <= 1) -- a cheap typo detector."""
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:                          # one substitution
+        return sum(x != y for x, y in zip(a, b)) == 1
+    if la > lb:                           # make ``a`` the shorter
+        a, b = b, a
+    i = j = 0
+    skipped = False
+    while i < len(a) and j < len(b):      # one insertion in the longer
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+        elif skipped:
+            return False
+        else:
+            skipped = True
+            j += 1
+    return True
+
+
+def _warn_near_reserved_columns(columns, reserved, *, context: str) -> None:
+    """Warn for a column that looks like a typo of a recognised engine field --
+    a case-only difference or one edit away. Such a column is silently dropped
+    (read as a grouping attribute, or ignored), so ``coun`` -> ``count`` would
+    take its default (1) with no error. A warning, not an error, so a genuine
+    attribute that happens to sit near a reserved name still reads."""
+    for col in columns:
+        c = str(col)
+        if c in reserved or c.startswith("_"):
+            continue
+        cl = c.lower()
+        for r in reserved:
+            if _within_edit_distance_1(cl, r.lower()):
+                warnings.warn(
+                    f"{context}: column {c!r} looks like a typo of the field "
+                    f"{r!r}; it is read as a grouping attribute, not as {r!r} "
+                    f"(so {r!r} takes its default). Rename it if you meant {r!r}.",
+                    UserWarning, stacklevel=3,
+                )
+                break
+
 
 def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
                        calculation_methods=None) -> ModelPoints:
@@ -1136,6 +1196,10 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
     attributes = {c: pol[c].to_numpy()
                   for c in pol.columns
                   if c not in _POLICY_RESERVED_COLS and not str(c).startswith("_")}
+    # A column one edit away from a reserved field is almost certainly a typo
+    # (``coun`` -> count, which would otherwise default to 1 = a 1000x error).
+    _warn_near_reserved_columns(attributes, _POLICY_RESERVED_COLS,
+                                context="read_model_points")
     if attributes:
         fields["attributes"] = attributes
     # Carry mp_id (the contract identity) as a dedicated field so
@@ -1334,6 +1398,12 @@ def read_vfa_model_points(
             fields[opt] = df[opt].to_numpy()
     if "state" in df.columns:
         fields["state"] = _read_state(df["state"])
+    # The VFA reader has no grouping-attribute catch-all -- an unrecognised
+    # column is dropped entirely, so a typo'd ``account_valu`` would leave
+    # account_value 0 and the guarantee floor becomes the whole payout. Warn
+    # on a near-match the same way the GMM reader does.
+    _warn_near_reserved_columns(df.columns, _VFA_POLICY_COLS,
+                                context="read_vfa_model_points")
     if isinstance(calculation_methods, (str, Path)):
         fields["calculation_methods"] = _parse_calculation_methods(calculation_methods)
     elif calculation_methods is not None:
