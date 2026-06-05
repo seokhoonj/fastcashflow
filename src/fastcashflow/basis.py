@@ -490,6 +490,14 @@ class Basis:
     # ``waiver_incidence_annual`` or a custom slot) to model a full DI
     # contract.
     disability_recovery_annual: DurationRateFn | None = None
+    # Per-state in-force mortality decrement, keyed by the rate name a state
+    # declares via ``State.mortality_rate`` (default ``"mortality"``). A
+    # post-diagnosis state (post-cancer death) carries an elevated death rate
+    # without re-declaring its transition: ``State(mortality_rate="dth_post")``
+    # plus ``state_mortality_annual={"dth_post": fn}``. A name absent from the
+    # dict (or a None dict) falls back to the global ``mortality_annual``, so
+    # declaring the state without a table preserves behaviour.
+    state_mortality_annual: dict[str, RateFn] | None = None
     longevity_cv: float = 0.0
     morbidity_cv: float = 0.0
     expense_cv: float = 0.0
@@ -548,6 +556,13 @@ class Basis:
             adapted = _adapt_rate_arity(getattr(self, field), is_duration=True)
             if adapted is not getattr(self, field):
                 object.__setattr__(self, field, adapted)
+        # Per-state mortality callables take the standard RateFn shape; adapt
+        # each dict value to the 5-arg signature like the named rate fields.
+        if self.state_mortality_annual is not None:
+            object.__setattr__(self, "state_mortality_annual", {
+                name: _adapt_rate_arity(fn)
+                for name, fn in self.state_mortality_annual.items()
+            })
         # Coverage rates take the RateFn shape; wrap each coverage's rate too.
         # ``coverages`` is a tuple of frozen CoverageRate dataclasses -- rebuild
         # the tuple with the adapted callables.

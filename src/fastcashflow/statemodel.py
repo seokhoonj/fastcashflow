@@ -132,6 +132,14 @@ class State:
     way to express recovery, reincidence, exclusion (면책) periods, and
     other duration-since-entry effects. The default ``0`` keeps the state
     Markov (a single cohort, identical to the pre-Phase-(c) behaviour).
+
+    ``mortality_rate`` routes this state's in-force death decrement to a
+    named rate (default ``"mortality"``, the global decrement). A
+    post-diagnosis state can carry an elevated death rate by naming a
+    different rate, supplied via ``Basis.state_mortality_annual``.
+
+    ``benefit_max_months`` caps how many months a ``benefit`` state pays
+    (``0`` = unbounded); see the field comment in ``__post_init__``.
     """
 
     name: str
@@ -140,6 +148,7 @@ class State:
     transitions: tuple[Transition, ...] = ()
     duration_max: int = 0
     benefit_max_months: int = 0
+    mortality_rate: str = "mortality"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "transitions", tuple(self.transitions))
@@ -391,11 +400,17 @@ def compile_state_model(
         # applied so far; a leaving transition fires on those survivors.
         survive = np.ones(grid)
         for tr in state.transitions:
+            # A state's mortality decrement is routed to its own rate name
+            # (State.mortality_rate, default "mortality") so a post-diagnosis
+            # state can carry an elevated mortality without re-declaring the
+            # transition. Any other rate name passes through unchanged.
+            rname = (state.mortality_rate
+                     if tr.rate == "mortality" else tr.rate)
             try:
-                rate = arrays[tr.rate]
+                rate = arrays[rname]
             except KeyError:
                 raise ValueError(
-                    f"state {state.name!r} references rate {tr.rate!r}, "
+                    f"state {state.name!r} references rate {rname!r}, "
                     f"which was not supplied to compile_state_model"
                 ) from None
             if tr.to is not None:
@@ -522,11 +537,15 @@ def compile_state_model_with_duration(
     edge_lump: list[bool] = []
 
     for i, state in enumerate(model.states):
-        # Validate this state's transitions reference rates we have.
+        # Validate this state's transitions reference rates we have. A
+        # "mortality" transition routes to the state's own mortality rate
+        # name (State.mortality_rate), so validate the effective name.
         for tr in state.transitions:
-            if tr.rate not in arrays:
+            rname = (state.mortality_rate
+                     if tr.rate == "mortality" else tr.rate)
+            if rname not in arrays:
                 raise ValueError(
-                    f"state {state.name!r} references rate {tr.rate!r}, "
+                    f"state {state.name!r} references rate {rname!r}, "
                     f"which was not supplied to "
                     f"compile_state_model_with_duration"
                 )
@@ -554,7 +573,9 @@ def compile_state_model_with_duration(
             survive = np.ones(grid)
             transient_idx = 0
             for tr in state.transitions:
-                r = rate_at(tr.rate, state, tau)
+                rname = (state.mortality_rate
+                         if tr.rate == "mortality" else tr.rate)
+                r = rate_at(rname, state, tau)
                 if tr.to is not None:
                     prob = survive * r
                     per_edge_per_tau[transient_idx].append(prob)

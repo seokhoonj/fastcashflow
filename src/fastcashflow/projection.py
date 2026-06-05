@@ -522,6 +522,28 @@ def _project_kernel_semi_markov(
             annuity_cf, disability_cf, maturity_cf, maturity_survivors)
 
 
+def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
+                               issue_age_grid, duration_grid,
+                               issue_class_grid, elapsed_grid):
+    """Add each state's distinct mortality decrement rate to ``rate_dict``.
+
+    A state may carry its own in-force mortality under ``State.mortality_rate``
+    (default ``"mortality"``) -- a post-diagnosis state with elevated death.
+    Each distinct non-default name is read from ``basis.state_mortality_annual``
+    (a name -> callable dict), falling back to the global ``mortality_annual``
+    when the name is absent, so declaring the state without a table preserves
+    behaviour.
+    """
+    table = basis.state_mortality_annual or {}
+    for rname in {s.mortality_rate for s in state_model.states}:
+        if rname == "mortality" or rname in rate_dict:
+            continue
+        mort_fn = table.get(rname) or basis.mortality_annual
+        rate_dict[rname] = np.ascontiguousarray(annual_to_monthly(
+            mort_fn(sex_grid, issue_age_grid, duration_grid,
+                    issue_class_grid, elapsed_grid)))
+
+
 def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     """Project cash flows for every model point.
 
@@ -626,6 +648,9 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         max_cohort = max(s.duration_max for s in state_model.states
                           if s.duration_max > 0)
         rate_dict = {"mortality": mortality, "lapse": lapse}
+        _add_state_mortality_rates(rate_dict, state_model, basis,
+                                   sex_grid, issue_age_grid, duration_grid,
+                                   issue_class_grid, elapsed_grid)
         if basis.waiver_incidence_annual is not None:
             rate_dict["waiver_incidence"] = waiver
         if basis.ci_incidence_annual is not None:
@@ -712,6 +737,9 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         # ``disability_recovery``) remain semi-Markov-only.
         rate_dict = {"mortality": mortality, "waiver_incidence": waiver,
                      "lapse": lapse}
+        _add_state_mortality_rates(rate_dict, state_model, basis,
+                                   sex_grid, issue_age_grid, duration_grid,
+                                   issue_class_grid, elapsed_grid)
         if basis.ci_incidence_annual is not None:
             ci_inc = np.ascontiguousarray(annual_to_monthly(
                 basis.ci_incidence_annual(

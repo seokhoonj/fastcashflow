@@ -46,7 +46,9 @@ from fastcashflow.coverage import (
 )
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.modelpoints import ModelPoints
-from fastcashflow.projection import Cashflows, project_cashflows
+from fastcashflow.projection import (
+    Cashflows, project_cashflows, _add_state_mortality_rates,
+)
 from fastcashflow.statemodel import (
     compile_state_model,
     compile_state_model_with_duration,
@@ -1830,6 +1832,9 @@ def _measure_fast(
                               if s.duration_max > 0)
             rate_dict = {"mortality": mortality_grid,
                           "lapse": lapse_grid}
+            _add_state_mortality_rates(rate_dict, state_model, basis,
+                                       sex_grid, issue_age_grid, duration_grid,
+                                       issue_class_grid, elapsed_grid)
             if basis.waiver_incidence_annual is not None:
                 waiver_grid = np.ascontiguousarray(annual_to_monthly(
                     basis.waiver_incidence_annual(
@@ -1902,6 +1907,9 @@ def _measure_fast(
             rate_dict = {"mortality": mortality_grid,
                          "waiver_incidence": waiver_grid,
                          "lapse": lapse_grid}
+            _add_state_mortality_rates(rate_dict, state_model, basis,
+                                       sex_grid, issue_age_grid, duration_grid,
+                                       issue_class_grid, elapsed_grid)
             if basis.ci_incidence_annual is not None:
                 ci_inc_grid = np.ascontiguousarray(annual_to_monthly(
                     basis.ci_incidence_annual(
