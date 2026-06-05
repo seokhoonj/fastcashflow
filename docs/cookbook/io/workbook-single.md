@@ -103,9 +103,9 @@ A/E 보정과 사망률 개선. 견본에는 없습니다.)
 `product` 가 `_DEFAULTS` 인 첫 행은 **다른 행의 빈 칸을 채우는 기본값**
 입니다. 견본은 `_DEFAULTS` 에 `MORTALITY_STD` / `DISCOUNT_STD` /
 `state_model=WAIVER` / `ra_confidence=0.75` 등을 두고, 각 segment 행은
-**다른 부분만** 덮어씁니다 — 예컨대 `lapse_table` 만 채널별로
-(`LAPSE_FC` / `LAPSE_GA`), `expense_table` 만 상품×채널별로
-(`EXP_TE_FC` 등). 같은 값을 모든 행에 반복하지 않아도 됩니다.
+**다른 부분만** 덮어씁니다 — 예컨대 `lapse_table` 과 `expense_table` 은
+상품×채널별로 (`LAPSE_TERM_FC` / `EXPENSE_TERM_FC` 등). 같은 값을 모든 행에
+반복하지 않아도 됩니다.
 ```
 
 ### rate 시트의 축 자동 감지

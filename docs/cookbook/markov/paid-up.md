@@ -375,7 +375,7 @@ inforce ratio m13/m12 (납입후) = 0.9702
   - 안정된 종국 수준 (보장성은 해외 통계 기준 0.8% 또는 그 이하로 수렴)
 ```
 
-엔진에서는 `lapse` (납입중) 와 `lapse_paidup_annual` (완납) 의 두 자리에,
+엔진에서는 `lapse_annual` (납입중) 와 `lapse_paidup_annual` (완납) 의 두 자리에,
 각각 `duration` 의존 표를 넣어 이 regime 을 근사합니다. 다만 완납 시점의
 월 단위 spike 는 연 단위 표가 그 해 평균으로 흡수하므로, 그 정밀도가
 필요하면 별도 확장이 필요합니다.

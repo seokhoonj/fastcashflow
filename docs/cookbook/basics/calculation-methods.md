@@ -134,7 +134,9 @@ amount 지급). 차이는 *rate_table* 일 뿐. 담보별 산출방식에 각자
 
 ## 담보별 산출방식 작성 — `calculation_methods.csv`
 
-세 컬럼:
+필수 두 컬럼 (`coverage`, `calculation_method`) — 아래 예시의 가운데
+`coverage_name` 은 사람용 라벨로 **선택**이며 엔진은 무시합니다 (샘플
+데이터에는 넣지 않습니다):
 
 ```
 coverage,coverage_name,calculation_method

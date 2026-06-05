@@ -54,7 +54,9 @@ orphan: true
 | 컬럼명 | 의미 | 단위 | 값 범위 | 사용 시트 |
 |---|---|---|---|---|
 | `rate` | 확률 / 발생률 / 환산률 | 무차원 (decimal) | 0~1 (또는 작은 양수) | mortality, incidence_rate, waiver, lapse, discount, inflation |
-| `factor` | 곱셈자 (multiplier) | 무차원 | 보통 ~1.0 | **현재 없음** (장래 A/E factor 레이어 도입 시 예약) |
+| `factor` | 곱셈자 (multiplier) | 무차원 | 보통 ~1.0 | surrender_value (factor 모드), ae_factors, improvement_tables |
+| `amount` | 통화 금액 | 통화 | 0 이상 | surrender_value (amount 모드) |
+| `value` | 통화 금액 (ledger) | 통화 | 0 이상 | expense_tables |
 
 리더가 `rate`는 확률 검증, `amount`는 통화 처리, `factor`는 곱셈자 처리를
 할 수 있도록 컬럼명이 의미를 운반합니다.
@@ -65,7 +67,7 @@ orphan: true
 |---|---|---|---|
 | `product` | SCREAMING_SNAKE_CASE | `TERM_LIFE_A`, `WHOLE_LIFE_A`, `HEALTH_A` | enum-like 외부 식별자 |
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `TM` | 업계 관용 약어 (General Agency, Financial Consultant, Telemarketing) |
-| `table_id` | SCREAMING_SNAKE_CASE 풀네임 | `MORTALITY_STD`, `LAPSE_GA`, `DISCOUNT_STD`, `INPATIENT_STD`, `ADB_STD` | named reference. 줄임말 안 씀 (`MORT_STD` 같은 abbreviation 지양). 단 industry-universal abbr 인 `ADB` 같은 매우 짧은 것은 예외 |
+| `table_id` | SCREAMING_SNAKE_CASE 풀네임 | `MORTALITY_STD`, `LAPSE_TERM_GA`, `DISCOUNT_STD`, `INPATIENT_STD`, `ADB_STD` | named reference. 줄임말 안 씀 (`MORT_STD` 같은 abbreviation 지양). 단 industry-universal abbr 인 `ADB` 같은 매우 짧은 것은 예외 |
 | `coverage` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자. 사용자 카탈로그 — 엔진 reserved 코드 없음 |
 | `calculation_method` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | **engine 의 cash flow 산출방식 routing key**. 5 개 고정. 자세한 각 산출방식별 계산은 `basis-format.md` 의 coverages 시트 섹션 참조 |
 | `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAIDUP` | enum-like, 정책 status |
@@ -101,7 +103,7 @@ Python 상수 / enum (예: `CalculationMethod.MORBIDITY == "MORBIDITY"`)
 
 ## Sample workbook의 식별자는 generic placeholder
 
-번들 sample의 `MORTALITY_STD`, `DISCOUNT_STD`, `LAPSE_GA`, `INPATIENT_STD` 같은
+번들 sample의 `MORTALITY_STD`, `DISCOUNT_STD`, `LAPSE_TERM_GA`, `INPATIENT_STD` 같은
 ID는 **generic placeholder** 입니다. 실제 한국 산업 표준 (예: 보험개발원 KIDI
 경험생명표 9회) 의 식별자가 아닙니다.
 

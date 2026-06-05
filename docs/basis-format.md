@@ -28,6 +28,7 @@ fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포
 | `lapse_tables` | 해지율 가정 |
 | `discount_tables` | 할인율 곡선 (locked-in, Sec. 36) |
 | `expense_tables` | item-form 사업비 ledger (basis dispatch — §3.3) |
+| `inflation_tables` | 사업비 인플레이션 곡선 (`table_id` × `year` → `rate`) |
 | `surrender_value_tables` (optional) | 해약환급금 곡선 |
 | `ae_factors` (optional) | A/E factor — base rate에 런타임 곱셈 (생략 시 1.0) |
 | `improvement_tables` (optional) | mortality improvement 곡선 (`table_id` × `year` → `factor`) |
@@ -113,7 +114,7 @@ basis = basis[("TERM_LIFE_A", "GA")]  # 한 세그먼트
 - `mortality_tables` — 주계약 사망 발생률 (in-force 감소도 함께 구동).
 - `waiver_tables` — 납입면제 개시율 (ACTIVE → 면제 상태 전이율).
 - `incidence_rate_tables` — 요율 기반 특약 (사망형·질병형·진단형) 발생률.
-- `lapse_tables` — 해지율. 보통 상품 × 채널별로 다릅니다 (`LAPSE_GA`, `LAPSE_FC` 처럼 채널 suffix).
+- `lapse_tables` — 해지율. 보통 상품 × 채널별로 다릅니다 (`LAPSE_TERM_GA`, `LAPSE_HEALTH_FC` 처럼 상품×채널).
 
 ### 3.3 사업비 — `expense_tables` 시트 (권장) 와 segments 스칼라 (legacy)
 
@@ -130,7 +131,7 @@ segments 의 `expense_table` 컬럼이 채워지면 row 형식이 우선이며,
 
 | 컬럼 | 의미 |
 |---|---|
-| `table_id` | 표 식별자 (예: `EXP_TE_FC`) |
+| `table_id` | 표 식별자 (예: `EXPENSE_TERM_FC`) |
 | `expense_type` | 자유 라벨 (`acquisition` / `maintenance` / `collection` / `LAE` / `overhead` 등). engine 은 무시; 리포트 / gmm.trace 가 echo. |
 | `basis` | 엔진 dispatch 키. 아래 5 종 중 하나 |
 | `value` | 값 (`*_pro_rata` 는 비율 0..1, `*_fixed` 는 계약당 정액) |
@@ -252,10 +253,10 @@ no-op.
 예시 (`sample_basis.xlsx` 발췌):
 
 ```
-product  channel  mortality_table  lapse_table  ...  expense_table  ra_confidence  mortality_cv
-defaults                    MORTALITY_STD                 ...                 0.75           0.10
-TERM_LIFE_A   GA                             LAPSE_GA     ...  EXP_TERM_GA
-TERM_LIFE_A   FC                             LAPSE_FC     ...  EXP_TERM_FC
+product      channel  mortality_table  lapse_table    ...  expense_table    ra_confidence  mortality_cv
+_DEFAULTS             MORTALITY_STD                   ...                   0.75           0.10
+TERM_LIFE_A  GA                        LAPSE_TERM_GA  ...  EXPENSE_TERM_GA
+TERM_LIFE_A  FC                        LAPSE_TERM_FC  ...  EXPENSE_TERM_FC
 ```
 
 - `TERM_LIFE_A / GA` — `mortality_table` 등 빈 칸은 `_DEFAULTS`에서 상속
@@ -435,7 +436,7 @@ reader (`read_basis(path)`) 가 워크북을 읽어 세그먼트별 `Basis`를
   담습니다.
 - 변액의 `fund_fee` / `investment_return` 은 계리 가정이 아니라 계약조건이라
   본래 상품 정의 쪽이 맞지만, 현재는 segments의 스칼라 컬럼에 들어갑니다 —
-  추후 [[vfa-param-relocation]] 작업으로 이전 예정. 한편 최저보증이율
+  추후 VFA 파라미터를 상품 정의 쪽으로 이전할 예정. 한편 최저보증이율
   (`minimum_crediting_rate`) 과 GMDB / GMAB 보증액은 이미 **모델포인트** 필드
   (`minimum_crediting_rate` / `minimum_death_benefit` / `minimum_accumulation_benefit`) 입니다.
 - 계약별 정보 (가입연령·보험금·보험료·계좌가치 등) 는 가정이 아니라

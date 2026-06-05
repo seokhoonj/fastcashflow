@@ -32,14 +32,16 @@ m            = fcf.gmm.measure(model_points, basis)
 
 ```python
 fcf.plot_liability(m)               # BEL·RA·CSM 궤적
-fcf.plot_cashflows(m)               # 현금흐름의 여섯 갈래
+fcf.plot_cashflows(m)               # 보험료 유입 vs 청구·사업비 유출 + 순액
 fcf.plot_csm_runoff(m)              # CSM 런오프
 fcf.plot_risk_adjustment(m, basis)  # 위험조정
 ```
 
 - `plot_liability` — 5·6·7장의 BEL·RA·CSM이 시간에 따라 어떻게
   변하는지.
-- `plot_cashflows` — 4장에서 본 현금흐름 여섯 갈래.
+- `plot_cashflows` — 보험료 유입을 위로, 청구·사업비 유출을 아래로 막대로
+  그리고 순현금흐름을 선으로 (4장의 여섯 갈래는 개념이고, 그래프는 유입/유출로
+  집계해 보여줍니다).
 - `plot_csm_runoff` — 7장의 CSM이 보장기간에 걸쳐 풀려 나가는 모습.
 - `plot_risk_adjustment` — 위험조정. 가정도 함께 넘깁니다.
 

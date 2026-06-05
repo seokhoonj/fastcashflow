@@ -98,7 +98,7 @@ print("발생률 50/60/70/80 (남) :",
 
 ```python
 # 사망 / 해지 / 간병 상태 사망률
-active_mort = lambda s, a, d: np.full(np.shape(a), 0.01)   # active 사망 (월 0.01/년 toy)
+active_mort = lambda s, a, d: np.full(np.shape(a), 0.01)   # active 사망 (연 1% toy)
 care_mort   = lambda s, a, d: np.full(np.shape(a), 0.20)   # 간병 상태 상승 사망률 (연 20%)
 lapse_fn    = lambda s, a, d: np.full(np.shape(d), 0.03)   # 해지 연 3%
 

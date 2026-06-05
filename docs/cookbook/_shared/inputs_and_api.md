@@ -18,7 +18,7 @@
 ```
 Basis (basis = fcf.read_basis(...))
 └── basis.xlsx                ── 산출기초 (multi-sheet workbook)
-    ├── segments              · (product, channel) → 어느 테이블 쓸지 (+ product_name / channel_name 보고서용 라벨)
+    ├── segments              · (product, channel) → 어느 테이블 쓸지 (product_name / channel_name 라벨 컬럼을 둘 수는 있으나 엔진은 무시)
     ├── mortality_tables      · table_id × sex × age → 사망률
     ├── lapse_tables          · table_id × duration → 해지율
     ├── discount_tables       · table_id × year → 할인율
@@ -38,6 +38,7 @@ ModelPoints (mp = fcf.read_model_points(...))
 │   ├── sex                   · 0 = 남, 1 = 여
 │   ├── term_months           · 보험기간 (개월)
 │   ├── premium_term_months   · 보험료 납입기간 (개월)
+│   ├── issue_date            · 가입일 (선택; 연도 cohort 그룹화에 사용)
 │   └── count                 · 이 줄이 대표하는 계약 수 (없으면 1)
 │
 ├── coverages.csv             ── 담보 가입금액 (한 줄 = 한 (계약, 담보))
@@ -89,8 +90,8 @@ fastcashflow 사용자 API
 │   └── fcf.reconcile(movements)                          ── 분해 결과를 항별로 합산
 │
 └── 검증 / 시각화
-    ├── fcf.gmm.trace(mp_id, mp, basis)                   ── 한 계약의 BEL 계산 ASCII 트리
-    ├── fcf.gmm.trace_bel_step(mp_id, mp, basis, ...)     ── 월별 BEL 식 전개
-    ├── fcf.gmm.trace_csm_step(mp_id, mp, basis, ...)     ── 월별 CSM 식 전개
+    ├── fcf.gmm.trace(mp_index, mp, basis)                   ── 한 계약의 BEL 계산 ASCII 트리
+    ├── fcf.gmm.trace_bel_step(mp_index, mp, basis, ...)     ── 월별 BEL 식 전개
+    ├── fcf.gmm.trace_csm_step(mp_index, mp, basis, ...)     ── 월별 CSM 식 전개
     └── fcf.plot_liability(m) / plot_cashflows(m) / plot_csm_runoff(m) ...
 ```

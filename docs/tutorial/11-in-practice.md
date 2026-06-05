@@ -80,8 +80,8 @@ DB 연결·추출은 사내 ETL 의 몫입니다.
 
 | product | channel | mortality_table | lapse_table | discount_table |
 |---|---|---|---|---|
-| TERM_LIFE_A | GA | MORTALITY_STD | LAPSE_GA | DISCOUNT_STD |
-| TERM_LIFE_A | FC | MORTALITY_STD | LAPSE_FC | DISCOUNT_STD |
+| TERM_LIFE_A | GA | MORTALITY_STD | LAPSE_TERM_GA | DISCOUNT_STD |
+| TERM_LIFE_A | FC | MORTALITY_STD | LAPSE_TERM_FC | DISCOUNT_STD |
 | HEALTH_A | TM | MORTALITY_STD | LAPSE_TM_HEALTH | DISCOUNT_STD |
 
 **`mortality_tables`** — 위에서 가리키는 사망률 테이블의 실제 값.
