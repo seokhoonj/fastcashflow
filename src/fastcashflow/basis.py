@@ -707,11 +707,17 @@ class Basis:
                 f"ra_confidence must be in the open interval (0, 1), "
                 f"got {self.ra_confidence!r}"
             )
+        # CV / rate scalars: a NaN slips past a bare ``v < 0`` (NaN < 0 is
+        # False) and silently NaNs the RA, so check finiteness explicitly.
         for name in ("mortality_cv", "morbidity_cv", "longevity_cv",
-                     "disability_cv", "expense_cv"):
+                     "disability_cv", "expense_cv", "cost_of_capital_rate",
+                     "fund_fee"):
             v = getattr(self, name)
-            if v < 0:
-                raise ValueError(f"{name} must be >= 0, got {v!r}")
+            if not np.isfinite(v) or v < 0:
+                raise ValueError(f"{name} must be finite and >= 0, got {v!r}")
+        if not np.isfinite(self.investment_return):
+            raise ValueError(
+                f"investment_return must be finite, got {self.investment_return!r}")
         # String-enum fields: catch a typo ("amount_policy", "margins") at
         # construction rather than late in a projection / fast-path branch.
         if self.ra_method not in RA_METHODS:
@@ -725,20 +731,38 @@ class Basis:
             )
         sp = self.settlement_pattern
         if sp is not None:
-            sp_sum = float(np.asarray(sp).sum())
+            sp_arr = np.asarray(sp, dtype=np.float64)
+            # A pattern that sums to 1 can still hold negative or non-finite
+            # weights (e.g. [1.2, -0.2]) that distort LIC / BEL; validate the
+            # components, not just the total.
+            if sp_arr.ndim != 1 or sp_arr.size == 0:
+                raise ValueError("settlement_pattern must be a non-empty 1-D array")
+            if not np.all(np.isfinite(sp_arr)):
+                raise ValueError("settlement_pattern must be finite")
+            if np.any(sp_arr < 0):
+                raise ValueError(
+                    "settlement_pattern weights must be >= 0 (a negative "
+                    "settlement weight distorts LIC / BEL)")
+            sp_sum = float(sp_arr.sum())
             if abs(sp_sum - 1.0) > 1e-9:
                 raise ValueError(
                     f"settlement_pattern must sum to 1.0, got {sp_sum!r}"
                 )
         # discount_annual / expense_inflation may be negative (negative rates
-        # are valid) but must be finite -- a NaN / inf otherwise propagates
-        # to a silently-NaN BEL with no error.
+        # are valid) but must be finite and > -1 -- a rate <= -100% has no
+        # monthly equivalent and produces NaN, and a NaN / inf otherwise
+        # propagates to a silently-NaN BEL with no error.
         for name in ("discount_annual", "expense_inflation"):
             v = np.asarray(getattr(self, name), dtype=np.float64)
             if not np.all(np.isfinite(v)):
                 raise ValueError(
                     f"{name} must be finite (a NaN / inf propagates to a "
                     f"silently-NaN liability), got {getattr(self, name)!r}"
+                )
+            if np.any(v <= -1.0):
+                raise ValueError(
+                    f"{name} must be > -1.0 (a rate <= -100% has no monthly "
+                    f"equivalent / produces NaN), got min {float(np.min(v))!r}"
                 )
         # Wrap legacy 3-arg / 4-arg rate callables to the unified 5-arg
         # ``(sex, issue_age, duration, issue_class, elapsed)`` shape the

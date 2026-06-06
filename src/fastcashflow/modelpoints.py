@@ -283,6 +283,10 @@ class ModelPoints:
         # count defaults to one policy per model point (seriatim).
         cnt = self.count
         cnt = np.ones(n_mp) if cnt is None else np.asarray(cnt, np.float64)
+        if cnt.shape != (n_mp,):
+            raise ValueError(f"count has length {cnt.size} but n_mp is {n_mp}")
+        if not np.all(np.isfinite(cnt)):
+            raise ValueError("count must be finite (a NaN count yields a NaN BEL)")
         if np.any(cnt < 0):
             raise ValueError("count must be >= 0")
         object.__setattr__(self, "count", cnt)
@@ -312,6 +316,12 @@ class ModelPoints:
         state = self.state
         state = (np.zeros(n_mp, np.int64) if state is None
                  else np.asarray(state, np.int64))
+        if state.shape != (n_mp,):
+            raise ValueError(f"state has length {state.size} but n_mp is {n_mp}")
+        if np.any(state < 0):
+            raise ValueError(
+                "state must be >= 0 (a state index; the valid upper bound is "
+                "the Basis state_model's state count, checked at measurement)")
         object.__setattr__(self, "state", state)
         # issue_class defaults to 0 for every model point -- the conventional
         # 'no class distinction' fallback. Rate tables without an issue_class
@@ -319,6 +329,10 @@ class ModelPoints:
         ic = self.issue_class
         ic = (np.zeros(n_mp, np.int64) if ic is None
               else np.asarray(ic, np.int64))
+        if ic.shape != (n_mp,):
+            raise ValueError(f"issue_class has length {ic.size} but n_mp is {n_mp}")
+        if np.any(ic < 0):
+            raise ValueError("issue_class must be >= 0")
         object.__setattr__(self, "issue_class", ic)
         # elapsed_months defaults to 0 -- every contract treated as just
         # issued (new-business mode). Non-zero values switch the model
@@ -326,12 +340,23 @@ class ModelPoints:
         em = self.elapsed_months
         em = (np.zeros(n_mp, np.int64) if em is None
               else np.asarray(em, np.int64))
+        if em.shape != (n_mp,):
+            raise ValueError(
+                f"elapsed_months has length {em.size} but n_mp is {n_mp}")
+        if np.any(em < 0):
+            raise ValueError("elapsed_months must be >= 0")
         object.__setattr__(self, "elapsed_months", em)
         # premium_term_months defaults to the full coverage term -- the level
         # premium is collected every in-force month, the ordinary case.
         premium_term = self.premium_term_months
         premium_term = (self.term_months.copy() if premium_term is None
                         else np.asarray(premium_term, np.int64))
+        if premium_term.shape != (n_mp,):
+            raise ValueError(
+                f"premium_term_months has length {premium_term.size} but "
+                f"n_mp is {n_mp}")
+        if np.any(premium_term < 0):
+            raise ValueError("premium_term_months must be >= 0")
         object.__setattr__(self, "premium_term_months", premium_term)
         # contract_boundary_months defaults to the full coverage term -- no
         # Sec. 34 boundary cut (the historical behaviour). When supplied it
@@ -353,6 +378,9 @@ class ModelPoints:
             freq = getattr(self, name)
             freq = (np.ones(n_mp, np.int64) if freq is None
                     else np.asarray(freq, np.int64))
+            if freq.shape != (n_mp,):
+                raise ValueError(
+                    f"{name} has length {freq.size} but n_mp is {n_mp}")
             if np.any(freq < 1):
                 raise ValueError(f"{name} must be >= 1")
             object.__setattr__(self, name, freq)

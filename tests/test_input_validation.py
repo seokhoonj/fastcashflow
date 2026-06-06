@@ -513,16 +513,14 @@ def test_annual_to_monthly_accepts_boundary_one():
 
 
 def test_discount_curve_rejects_rate_at_negative_one():
-    """A discount annual <= -1.0 produces NaN; reject up front."""
-    from fastcashflow.curves import discount_monthly_curve
-    basis = Basis(
-        mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
-        discount_annual=-1.0,
-        ra_confidence=0.75, mortality_cv=0.10,
-        coverages=(CoverageRate("DEATH", _flat_rate()),),
-    )
+    """A discount annual <= -1.0 produces NaN; reject at construction."""
     with pytest.raises(ValueError, match="discount_annual must be > -1.0"):
-        discount_monthly_curve(basis, n_time=12)
+        Basis(
+            mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
+            discount_annual=-1.0,
+            ra_confidence=0.75, mortality_cv=0.10,
+            coverages=(CoverageRate("DEATH", _flat_rate()),),
+        )
 
 
 def test_inforce_fast_rejects_elapsed_past_term():
@@ -1000,3 +998,108 @@ def test_benefits_accepts_coverage_code_keys():
     # mixed int + str keys are rejected
     with pytest.raises(ValueError, match="all coverage codes .* or all coverage indices"):
         ModelPoints.single(40, 100.0, 24, benefits={0: 1.0, "CANCER": 2.0}, calculation_methods=cm)
+
+
+# ---------------------------------------------------------------------------
+# ModelPoints array guards -- shape / finiteness / sign on per-MP fields
+# (Codex review 2026-06-07: count / state / issue_class / elapsed_months /
+# premium_term_months / frequency arrays lacked length + finiteness checks, so
+# a mis-shaped array was silently truncated and a NaN silently NaN'd the BEL.)
+# ---------------------------------------------------------------------------
+
+def _mp1(**kw):
+    """One model point (n_mp = 1); override one field to trip a guard."""
+    base = dict(issue_age=np.array([40.0]), premium=np.array([0.0]),
+                term_months=np.array([12]))
+    base.update(kw)
+    return ModelPoints(**base)
+
+
+def test_modelpoints_count_length_mismatch():
+    with pytest.raises(ValueError, match="count has length 2 but n_mp is 1"):
+        _mp1(count=np.array([1.0, 999.0]))
+
+
+def test_modelpoints_count_nan():
+    with pytest.raises(ValueError, match="count must be finite"):
+        _mp1(count=np.array([np.nan]))
+
+
+def test_modelpoints_state_length_mismatch():
+    with pytest.raises(ValueError, match="state has length 2 but n_mp is 1"):
+        _mp1(state=np.array([0, 1]))
+
+
+def test_modelpoints_state_negative():
+    with pytest.raises(ValueError, match="state must be >= 0"):
+        _mp1(state=np.array([-1]))
+
+
+def test_modelpoints_issue_class_negative():
+    with pytest.raises(ValueError, match="issue_class must be >= 0"):
+        _mp1(issue_class=np.array([-1]))
+
+
+def test_modelpoints_elapsed_months_negative():
+    with pytest.raises(ValueError, match="elapsed_months must be >= 0"):
+        _mp1(elapsed_months=np.array([-1]))
+
+
+def test_modelpoints_premium_term_length_mismatch():
+    with pytest.raises(ValueError, match="premium_term_months has length 2"):
+        _mp1(premium_term_months=np.array([12, 12]))
+
+
+def test_modelpoints_frequency_length_mismatch():
+    with pytest.raises(ValueError, match="premium_frequency_months has length 2"):
+        _mp1(premium_frequency_months=np.array([1, 1]))
+
+
+# ---------------------------------------------------------------------------
+# Basis scalar guards -- NaN / negative / out-of-range that NaN the RA or BEL
+# ---------------------------------------------------------------------------
+
+def _basis1(**kw):
+    base = dict(mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
+                discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
+                coverages=(CoverageRate("DEATH", _flat_rate()),))
+    base.update(kw)
+    return Basis(**base)
+
+
+def test_basis_mortality_cv_nan():
+    # NaN slips past a bare ``v < 0`` (NaN < 0 is False) and NaNs the RA.
+    with pytest.raises(ValueError, match="mortality_cv must be finite"):
+        _basis1(mortality_cv=np.nan)
+
+
+def test_basis_cost_of_capital_nan():
+    with pytest.raises(ValueError, match="cost_of_capital_rate must be finite"):
+        _basis1(cost_of_capital_rate=np.nan)
+
+
+def test_basis_settlement_pattern_negative_component():
+    # Sums to 1 but a negative weight distorts LIC / BEL.
+    with pytest.raises(ValueError, match="settlement_pattern weights must be >= 0"):
+        _basis1(settlement_pattern=np.array([1.2, -0.2]))
+
+
+def test_basis_expense_inflation_at_or_below_negative_one():
+    with pytest.raises(ValueError, match="expense_inflation must be > -1.0"):
+        _basis1(expense_inflation=-1.5)
+
+
+# ---------------------------------------------------------------------------
+# Workbook duplicate-key guard -- a duplicate (table_id, axis) used to be
+# silently overwritten (last row wins), like the named rate tables already
+# reject. (Codex review 2026-06-07.)
+# ---------------------------------------------------------------------------
+
+def test_axis_tables_rejects_duplicate_row():
+    ws = _make_sheet("discount_tables", [
+        ("table_id", "year", "rate"),
+        ("DISC", 0, 0.03),
+        ("DISC", 0, 0.05),     # duplicate (DISC, year 0)
+    ])
+    with pytest.raises(ValueError, match="duplicate year=0"):
+        _axis_tables(ws, "year")

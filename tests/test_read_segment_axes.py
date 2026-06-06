@@ -86,3 +86,18 @@ def test_read_basis_rejects_ae_axis_not_in_segments(tmp_path):
     wb.save(path)
     with pytest.raises(ValueError, match="not in the segments sheet"):
         read_basis(path)
+
+
+def test_read_basis_rejects_duplicate_segment(tmp_path):
+    """Two segments rows with the same (product, channel) key -- the later used
+    to silently overwrite the earlier (last wins); reject it (Codex 2026-06-07)."""
+    path = _export(tmp_path)
+    wb = openpyxl.load_workbook(path)
+    ws = wb["segments"]
+    rows = list(ws.iter_rows(min_row=2, values_only=True))
+    seg_row = next(r for r in rows
+                   if str(r[0]).strip().lower() != "_defaults")  # a real segment
+    ws.append(list(seg_row))              # duplicate it -> same (product, channel)
+    wb.save(path)
+    with pytest.raises(ValueError, match="duplicate segment"):
+        read_basis(path)

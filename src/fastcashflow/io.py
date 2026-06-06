@@ -556,12 +556,20 @@ def _axis_tables(ws, axis, *, value_col="rate"):
             first = False
         tid = str(r["table_id"]).strip()
         try:
-            by_id.setdefault(tid, {})[int(r[axis])] = float(r[value_col])
+            k, v = int(r[axis]), float(r[value_col])
         except KeyError as exc:
             raise ValueError(
                 f"sheet {ws.title!r} table {tid!r}: row is missing "
                 f"column {exc.args[0]!r} (row has columns {sorted(r)})"
             ) from None
+        bucket = by_id.setdefault(tid, {})
+        if k in bucket:
+            raise ValueError(
+                f"sheet {ws.title!r} table {tid!r}: duplicate {axis}={k} "
+                "(the later value silently overwrites the earlier); keep one "
+                f"row per (table_id, {axis})"
+            )
+        bucket[k] = v
     return {tid: np.asarray([by_k[k] for k in range(len(by_k))], np.float64)
             for tid, by_k in by_id.items()}
 
@@ -885,6 +893,12 @@ def read_basis(path: Path | str) -> "BasisRouter":
                     f"{where}: state_model={key!r} is not in STATE_MODELS "
                     f"(known: {sorted(STATE_MODELS)})"
                 ) from None
+        if seg_key in result:
+            raise ValueError(
+                f"{where}: duplicate segment {seg_key} -- two rows route to "
+                "the same Basis (the later silently overwrites the earlier). "
+                "Remove the duplicate segment row."
+            )
         result[seg_key] = Basis(**kwargs)
     return BasisRouter(result, segment_axes=axis_cols or ("product", "channel"))
 
