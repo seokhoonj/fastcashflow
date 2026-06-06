@@ -336,6 +336,43 @@ def _build_rate_callable(axes, entries, sheet_title, table_id):
     return rate
 
 
+def _rate_fn_from_records(records, *, value_col="rate", where="inline rate table"):
+    """Build one ``RateFn`` from row-dicts -- the in-memory (DataFrame) path.
+
+    Mirrors ``_flex_rate_table`` but for a single table given as a list of
+    ``{column: value}`` dicts (a polars / pandas DataFrame's rows), with no
+    ``table_id`` grouping. Axes are auto-detected from the columns present
+    (any subset of ``_RATE_AXES``); the rate is read from ``value_col``. Reuses
+    ``_build_rate_callable`` so the resulting callable is byte-identical to the
+    workbook path for the same numbers.
+    """
+    rows = list(records)
+    if not rows:
+        raise ValueError(f"{where}: no rows (an empty rate table)")
+    header = set(rows[0].keys())
+    if value_col not in header:
+        raise ValueError(
+            f"{where}: missing required column {value_col!r} (the rate); "
+            f"columns are {sorted(header)}"
+        )
+    axes = tuple(a for a in _RATE_AXES if a in header)
+    if "age" in axes and ("issue_age" in axes or "duration" in axes):
+        raise ValueError(
+            f"{where}: mixes 'age' (attained) with 'issue_age' / 'duration' "
+            "(select schema) -- pick one parameterisation"
+        )
+    entries: dict[tuple, float] = {}
+    for r in rows:
+        key = tuple(int(r[a]) for a in axes)
+        if key in entries:
+            raise ValueError(
+                f"{where}: duplicate row at {dict(zip(axes, key))} -- one "
+                "entry per axis combination"
+            )
+        entries[key] = float(r[value_col])
+    return _build_rate_callable(axes, list(entries.items()), where, "inline")
+
+
 def _read_expense_tables(ws) -> dict[str, tuple[ExpenseItem, ...]]:
     """Read the optional ``expense_tables`` sheet.
 

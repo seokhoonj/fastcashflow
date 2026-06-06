@@ -7,7 +7,7 @@ describes the unified callable shape every annual rate assumption uses.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -38,3 +38,21 @@ RateFn = Callable[
 # previously used a separate four-arg shape). Code that still imports the
 # name from earlier versions stays valid.
 DurationRateFn = RateFn
+
+# ``RateLike`` -- anything a Basis rate slot accepts. Normalised to a
+# ``RateFn`` at construction by ``basis._as_rate_fn`` (mirrors numpy's
+# ``ArrayLike`` -> ``asarray`` -> ``ndarray``):
+#
+#   * float / int          -- a flat rate, constant over every axis
+#   * Sequence[float]      -- an annual rate by policy year (``arr[duration]``);
+#                             must cover the term (len*12 >= term_months) or
+#                             the projection raises when it runs past the array
+#   * polars / pandas DataFrame -- a rate table; axes auto-detected from the
+#                             columns (sex / age / issue_age / duration), the
+#                             rate read from the ``rate`` column. Duck-typed
+#                             (``iter_rows`` / ``to_dict``), no hard pandas dep
+#   * RateFn               -- a callable, used as-is (the escape hatch)
+#
+# DataFrame inputs cannot be expressed in the static union (no hard import);
+# they are accepted at runtime via duck typing.
+RateLike = float | int | Sequence[float] | RateFn

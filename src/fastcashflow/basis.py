@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import inspect
+import numbers
 from dataclasses import dataclass
 
 import numpy as np
 
-from fastcashflow._typing import DurationRateFn, FloatArray, RateFn
+from fastcashflow._typing import DurationRateFn, FloatArray, RateFn, RateLike
 from fastcashflow.statemodel import StateModel
 
 
@@ -93,6 +94,82 @@ def _adapt_rate_arity(fn, *, is_duration: bool = False):
         if hasattr(fn, attr):
             setattr(wrapped, attr, getattr(fn, attr))
     return wrapped
+
+
+def _const_rate_fn(value: float) -> RateFn:
+    """A flat rate -- ``value`` over every (sex, age, duration, ...) grid."""
+    val = float(value)
+
+    def rate(sex, issue_age, duration, issue_class, elapsed):
+        shape = np.broadcast_shapes(
+            np.asarray(sex).shape, np.asarray(issue_age).shape,
+            np.asarray(duration).shape, np.asarray(issue_class).shape,
+            np.asarray(elapsed).shape,
+        )
+        return np.full(shape, val, dtype=np.float64)
+    return rate
+
+
+def _array_rate_fn(arr) -> RateFn:
+    """Annual rate by policy year -- ``arr[duration]`` (0-based completed year).
+
+    Raises when the projection reaches a duration past the array: the array
+    must cover the contract term (``len * 12 >= term_months``). The other axes
+    (sex / issue_age / ...) are ignored -- this is the "already resolved rate
+    path" form, for a single / homogeneous segment.
+    """
+    arr = np.ascontiguousarray(np.asarray(arr, dtype=np.float64))
+    n = int(arr.shape[0])
+
+    def rate(sex, issue_age, duration, issue_class, elapsed):
+        d = np.asarray(duration, dtype=np.int64)
+        if d.size and int(d.max()) >= n:
+            raise ValueError(
+                f"rate array has {n} entries (policy years 0..{n - 1}) but the "
+                f"projection reaches policy year {int(d.max())} -- the array "
+                "must cover the contract term (len * 12 >= term_months). "
+                "Lengthen the array, or pass a scalar / table / callable."
+            )
+        return arr[d]
+    return rate
+
+
+def _as_rate_fn(spec: RateLike):
+    """Normalise a ``RateLike`` rate spec into a ``RateFn`` callable.
+
+    Single entry point for the polymorphic rate input -- mirrors
+    ``np.asarray`` for ``ArrayLike``:
+
+    * ``None`` / callable        -> returned unchanged (callable arity is fixed
+                                    afterwards by ``_adapt_rate_arity``)
+    * ``int`` / ``float``        -> flat rate (``_const_rate_fn``)
+    * polars / pandas DataFrame  -> rate table, axes auto-detected from columns
+                                    (``io._rate_fn_from_records``); duck-typed
+                                    so neither is a hard dependency
+    * 1-D sequence               -> annual rate by policy year (``_array_rate_fn``)
+    """
+    if spec is None or callable(spec):
+        return spec
+    # scalar (python or numpy real; bool excluded -- True/False is not a rate)
+    if isinstance(spec, numbers.Real) and not isinstance(spec, bool):
+        return _const_rate_fn(float(spec))
+    # DataFrame: polars (iter_rows) or pandas (to_dict). Checked before the
+    # array branch -- a DataFrame is not a 1-D sequence.
+    if hasattr(spec, "iter_rows"):                       # polars.DataFrame
+        from fastcashflow.io import _rate_fn_from_records
+        return _rate_fn_from_records(list(spec.iter_rows(named=True)))
+    if hasattr(spec, "to_dict"):                         # pandas.DataFrame
+        from fastcashflow.io import _rate_fn_from_records
+        return _rate_fn_from_records(spec.to_dict("records"))
+    # 1-D array-like -> annual rate by policy year
+    arr = np.asarray(spec, dtype=np.float64)
+    if arr.ndim == 1:
+        return _array_rate_fn(arr)
+    raise TypeError(
+        "rate must be a float, 1-D sequence, polars/pandas DataFrame, or a "
+        f"RateFn callable; got {type(spec).__name__} (ndim={arr.ndim}). "
+        "For a multi-axis (sex x age) table, pass a DataFrame."
+    )
 
 
 def annual_to_monthly(annual_rate: FloatArray) -> FloatArray:
@@ -354,9 +431,11 @@ class CoverageRate:
         index this factorises to; the label is what the model-point file
         names a coverage by.
     rate :
-        Annual-rate callable, the same signature as ``mortality_annual``;
-        the engine converts it to a monthly rate (see
-        :func:`annual_to_monthly`).
+        A :data:`RateLike` -- a flat scalar, a per-policy-year array, a
+        polars / pandas rate table, or a :data:`RateFn` callable (the same
+        signature as ``mortality_annual``). Whatever the form, it is
+        normalised to a ``RateFn`` here; the engine converts the annual rate
+        to a monthly one (see :func:`annual_to_monthly`).
 
     Notes
     -----
@@ -369,7 +448,15 @@ class CoverageRate:
     """
 
     code: str
-    rate: RateFn
+    rate: RateLike
+
+    def __post_init__(self) -> None:
+        # Normalise a RateLike (scalar / array / DataFrame) into a RateFn so
+        # the engine always sees a callable. A callable is returned unchanged;
+        # its arity is fixed later in ``Basis.__post_init__``.
+        coerced = _as_rate_fn(self.rate)
+        if coerced is not self.rate:
+            object.__setattr__(self, "rate", coerced)
 
 
 @dataclass(frozen=True, slots=True)
@@ -660,19 +747,24 @@ class Basis:
         # issue_class / elapsed-discarding wrapper. RateFn vs DurationRateFn
         # fields differ in how a legacy 4-arg lambda is interpreted -- see
         # ``_adapt_rate_arity``.
+        # Each slot is first normalised from a RateLike (scalar / array /
+        # DataFrame) into a callable by ``_as_rate_fn``, then a legacy 3-/4-arg
+        # callable is wrapped to the 5-arg shape by ``_adapt_rate_arity``.
         for field in _RATE_FN_FIELDS:
-            adapted = _adapt_rate_arity(getattr(self, field))
-            if adapted is not getattr(self, field):
+            val = getattr(self, field)
+            adapted = _adapt_rate_arity(_as_rate_fn(val))
+            if adapted is not val:
                 object.__setattr__(self, field, adapted)
         for field in _DURATION_RATE_FN_FIELDS:
-            adapted = _adapt_rate_arity(getattr(self, field), is_duration=True)
-            if adapted is not getattr(self, field):
+            val = getattr(self, field)
+            adapted = _adapt_rate_arity(_as_rate_fn(val), is_duration=True)
+            if adapted is not val:
                 object.__setattr__(self, field, adapted)
         # Per-state mortality callables take the standard RateFn shape; adapt
         # each dict value to the 5-arg signature like the named rate fields.
         if self.state_mortality_annual is not None:
             object.__setattr__(self, "state_mortality_annual", {
-                name: _adapt_rate_arity(fn)
+                name: _adapt_rate_arity(_as_rate_fn(fn))
                 for name, fn in self.state_mortality_annual.items()
             })
         # Coverage rates take the RateFn shape; wrap each coverage's rate too.
