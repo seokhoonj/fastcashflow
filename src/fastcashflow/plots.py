@@ -184,8 +184,12 @@ def plot_cashflows(measurement: GMMMeasurement, *, period_months: int = 12,
     ax = _axes(ax)
     cf = measurement.cashflows
     premium = cf.premium_cf.sum(axis=0)
-    outgo = (cf.claim_cf + cf.morbidity_cf + cf.annuity_cf
-             + cf.expense_cf).sum(axis=0)
+    # Every monthly insurer outflow, so the "net" line is honest: claims,
+    # morbidity, annuity, expenses, disability income/lump and surrender value.
+    # (maturity_cf is a per-policy lump at each policy's term, not a monthly
+    # series, so it is not placed on this period-binned timeline.)
+    outgo = (cf.claim_cf + cf.morbidity_cf + cf.annuity_cf + cf.expense_cf
+             + cf.disability_cf + cf.surrender_cf).sum(axis=0)
     starts = np.arange(0, premium.shape[0], period_months)
     premium_b = np.add.reduceat(premium, starts)
     outgo_b = np.add.reduceat(outgo, starts)

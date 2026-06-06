@@ -182,8 +182,8 @@ CSM           = 0.00
 ```
 
 ```{note}
-4.1 과 마찬가지로 `disability_income` / `state` 는 `ModelPoints.single()` 의
-범위 밖이라 전체 생성자 `fcf.ModelPoints(...)` 로 넘깁니다.
+4.1 과 마찬가지로 전체 생성자 `fcf.ModelPoints(...)` 를 씁니다 — `single()` 도
+`disability_income` / `state` 를 받지만, 명시적 배열 스타일을 유지합니다.
 ```
 
 ## 결과 읽기 — 회복률의 경과 의존이 만드는 꺾임

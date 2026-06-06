@@ -179,9 +179,9 @@ CSM           = 0.00
 ```
 
 ```{note}
-`fcf.ModelPoints.single(...)` 대신 전체 생성자 `fcf.ModelPoints(...)` 를 씁니다 —
-`disability_benefit` / `state` 처럼 Semi-Markov 가 쓰는 입력은 `single()` 의
-범위 (1 계약 + N 담보) 밖이라 전체 생성자로 직접 넘깁니다.
+이 예제는 전체 생성자 `fcf.ModelPoints(...)` 를 씁니다 — `single()` 도
+`disability_benefit` / `state` 를 받지만, Semi-Markov 예제들과 같은 **명시적
+배열 스타일**을 유지하려고 전체 생성자로 넘깁니다.
 ```
 
 ## 결과 읽기 — 면책기간이 만드는 점프

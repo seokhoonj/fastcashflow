@@ -248,7 +248,7 @@ IFRS 17 의 backward recursion 입니다. **seed (=시작값)** 가
 
 ### CSM 블록의 onerous 판정
 
-`FCF[0] = BEL[0] + RA[0] = 460,509.71` 이 양수이므로 이 계약은 **손실
+`FCF[0] = BEL[0] + RA[0] = 450,719.68` 이 양수이므로 이 계약은 **손실
 부담계약 (onerous contract)** 입니다. IFRS 17 §47-48 에 따라
 `CSM = 0`, `loss_component = FCF`. 가입 시점에 즉시 손실 인식.
 
