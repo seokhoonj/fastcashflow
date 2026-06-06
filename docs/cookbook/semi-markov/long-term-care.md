@@ -1,7 +1,7 @@
 # 4.3 간병 / 치매 (LTC, Semi-Markov)
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - **간병 / 치매 (LTC)** 보장을 Semi-Markov 로 — 간병 상태에 진입하면 **진단금
   일시금** 한 번 + **월정액** 을 매월 받되, 지급은 **보증한도** 까지만

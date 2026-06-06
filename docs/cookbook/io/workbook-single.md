@@ -1,7 +1,7 @@
 # 7.1 워크북 — 단일 segment
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - 엔진은 `Basis` 와 `ModelPoints` 두 **개체** 만 받고, **입력 파일은
   reader 함수가 그 두 개체로 모은다**

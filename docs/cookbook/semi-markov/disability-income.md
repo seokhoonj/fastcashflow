@@ -1,7 +1,7 @@
 # 4.2 장해소득보상 (DI, Semi-Markov)
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - **장해소득보상 (DI = Disability Income)** 을 Semi-Markov 로 — disabled 상태에 머무는 동안 **매월**
   정액 소득을 지급하고, 회복하면 active 로 **되돌아가는 (re-entry)** 구조

@@ -1,7 +1,7 @@
 # 9.1 결산 / 보유계약 평가
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - **신계약 평가** 와 **결산(보유계약) 평가** 의 차이 — 같은 엔진, 다른 입력 / 함수
 - 분기말 "보유계약 마감파일" 한 장을 그대로 읽기 — `read_inforce_policies`

@@ -34,25 +34,6 @@ html[data-theme="dark"] .logo__cashflow { color: #e8ecef; }
 
 
 /* Documentation rhythm -------------------------------------------------- */
-.admonition.chapter-brief {
-    margin: 0.75rem 0 1.5rem;
-    padding: 0.6rem 0.85rem;
-    border: 1px solid var(--pst-color-border);
-    border-left: 3px solid var(--pst-color-secondary);
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--pst-color-secondary-bg) 35%, transparent);
-    box-shadow: none;
-}
-.admonition.chapter-brief > .admonition-title {
-    margin: 0 0 0.3rem; padding: 0; background: transparent;
-    color: var(--pst-color-text-base); font-size: 0.78rem; font-weight: 700;
-    letter-spacing: 0; text-transform: uppercase;
-}
-.admonition.chapter-brief > .admonition-title::before { display: none; }
-.admonition.chapter-brief ul {
-    margin: 0; padding-left: 1.1rem;
-    font-size: 0.88rem; line-height: 1.55;
-}
 .mermaid {
     width: fit-content; max-width: 100%; margin: 1.25rem auto 1.6rem;
     padding: 0.6rem 0.9rem; overflow-x: auto;

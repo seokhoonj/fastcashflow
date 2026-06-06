@@ -1,7 +1,7 @@
 # 9장. 보험료배분접근법(PAA)
 
 ```{admonition} 이 장에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - 보험료배분접근법(PAA)이 어떤 계약을 위한 간편법인가
 - 잔여보장부채(LRC)를 미경과보험료처럼 다루는 법

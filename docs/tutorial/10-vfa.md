@@ -1,7 +1,7 @@
 # 10장. 변동수수료접근법(VFA)
 
 ```{admonition} 이 장에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - 변동수수료접근법(VFA)이 어떤 계약을 위한 모형인가
 - 계좌가치가 적립률과 수수료로 굴러가는 방식

@@ -1,7 +1,7 @@
 # 9.2 변동분해
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - 한 측정 결과를 보고기간별 **변동분석표** 로 자르기 — `roll_forward` + `reconcile`
 - IFRS 17 Sec. 101 의 다섯 행 — Opening / Future service / Finance / Release / Closing

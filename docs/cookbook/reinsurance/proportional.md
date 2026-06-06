@@ -1,7 +1,7 @@
 # 6.1 비례 재보험 (quota share)
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - **비례 재보험 (quota share)** 보유계약 한 건을 fastcashflow 로 측정하는 법
 - 원수계약과 재보험을 동시에 풀어, 재보험 BEL이 직접 부채의 "거울" 이

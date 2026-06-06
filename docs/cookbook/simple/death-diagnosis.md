@@ -1,7 +1,7 @@
 # 2.2 사망 + 단순 진단 일시금
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - 정기보험 (2.1) 에 **진단 일시금 담보** 를 하나 더 얹는 가장 작은 확장
 - 담보가 둘이 될 때 바뀌는 세 자리 — `benefits` / `coverages` /

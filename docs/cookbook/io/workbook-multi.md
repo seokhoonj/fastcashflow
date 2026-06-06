@@ -1,7 +1,7 @@
 # 7.2 워크북 — 다중 segment / 다종 상품
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - 여러 `(product, channel)` 가 섞인 portfolio 를
   **`measure` 로 한 번에** 평가 — 각 계약을 자기 segment 가정으로 라우팅

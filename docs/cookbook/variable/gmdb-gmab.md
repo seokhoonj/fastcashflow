@@ -1,7 +1,7 @@
 # 5.1 변액보험 최저보증 (GMDB / GMAB)
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - 변액보험이 보장형 (GMM) 과 다른 측정 모델 (VFA) 로 평가되는 이유 —
   계좌가치가 굴러가고 보험사는 수수료를 번다

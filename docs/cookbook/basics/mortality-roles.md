@@ -1,7 +1,7 @@
 # 1.3 사망률의 두 가지 역할
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: chapter-brief
+:class: tip
 
 - 엔진 전반을 관통하는 `mortality_annual` (보유계약 감쇠) 의 역할
 - 사망 보장 청구가 **별도의 슬롯** 으로 계산되는 이유
