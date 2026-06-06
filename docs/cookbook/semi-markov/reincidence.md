@@ -79,6 +79,18 @@
   - `lump_sum` 전이가 지급하는 금액. **모든 lump_sum 전이가 공유** (아래 함정)
 ```
 
+세 상태와 전이를 그림으로:
+
+```{mermaid}
+stateDiagram-v2
+    [*] --> healthy
+    healthy --> post_first: ci_incidence (1차 진단금)
+    post_first --> post_second: ci_reincidence (2차 진단금, 경과 의존)
+    healthy --> [*]: mortality / lapse
+    post_first --> [*]: mortality
+    post_second --> [*]: mortality
+```
+
 면책기간은 별도 필드가 아니라 **`ci_reincidence_annual` 안에서 자연스럽게**
 표현됩니다 — 네 번째 인자 `state_duration` 가 면책개월 미만이면 0 을
 돌려줍니다:

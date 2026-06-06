@@ -46,6 +46,16 @@
   - 각 계약의 시작 상태. 신계약은 `STATE_ACTIVE` (납입 중)
 ```
 
+두 상태를 그림으로 (active 만 보험료를 내고, 사망보장은 둘 다 유지):
+
+```{mermaid}
+stateDiagram-v2
+    [*] --> active: 신계약 (납입중)
+    active --> waiver: waiver_incidence (납입면제)
+    active --> [*]: mortality / lapse
+    waiver --> [*]: mortality
+```
+
 핵심은 **두 상태에서 보험료와 보장이 다르게 작동** 한다는 점:
 
 - **보험료** 는 active 점유 에만 곱해집니다 — waiver 로 옮겨 간 계약은 더

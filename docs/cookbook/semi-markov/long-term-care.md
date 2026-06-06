@@ -62,6 +62,16 @@
 지급되는 off-by-one 이 생기므로, 생성자가 명시적으로 거부합니다.
 ```
 
+두 상태를 그림으로 (care 에 머무는 동안 월정액 지급, 한도까지; 상승 사망률):
+
+```{mermaid}
+stateDiagram-v2
+    [*] --> active
+    active --> care: waiver_incidence (진단금 lump)
+    active --> [*]: mortality / lapse
+    care --> [*]: mortality (상승률)
+```
+
 ## 율 — 간병 발생률 (long-form 표)
 
 간병 발생률은 고령에서 급증합니다 (장기요양 등급 인정률). 견본 위험률표와 같은

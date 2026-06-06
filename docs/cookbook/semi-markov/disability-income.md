@@ -94,6 +94,17 @@ recovery_fn = lambda s, a, d, sd: np.where(sd < 2, 1 - (1 - 0.30) ** 12,
                                                    1 - (1 - 0.05) ** 12)
 ```
 
+두 상태와 회복 re-entry 를 그림으로 (disabled 에 머무는 동안 매월 소득 지급):
+
+```{mermaid}
+stateDiagram-v2
+    [*] --> active
+    active --> disabled: waiver_incidence (장해 발생)
+    disabled --> active: disability_recovery (회복, 경과 의존)
+    active --> [*]: mortality / lapse
+    disabled --> [*]: mortality
+```
+
 ## 최소 작동 예제 — DLR (disabled 자리 지정)
 
 이미 장해 중인 청구건 하나의 준비금을 봅니다. 계약을 disabled 에 자리 지정하고
