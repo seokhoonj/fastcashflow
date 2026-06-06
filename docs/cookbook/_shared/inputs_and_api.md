@@ -67,31 +67,31 @@ ModelPoints (mp = fcf.read_model_points(...))
 ```
 fastcashflow 사용자 API
 ├── 샘플 파일 폴더에 생성 (한 번만, 자기 파일이 있으면 생략)
-│   ├── fcf.samples.export(dir, template="gmm")           ── basis.xlsx + policies/coverages/calculation_methods (+inforce)
-│   ├── fcf.samples.export(dir, template="vfa")           ── 변액(VFA) 세트 (basis.xlsx + policies)
-│   └── fcf.samples.templates()                           ── 사용 가능한 template 목록
+│   ├── fcf.samples.export(dir, template="gmm")                          ── basis.xlsx + policies/coverages/calculation_methods (+inforce)
+│   ├── fcf.samples.export(dir, template="vfa")                          ── 변액(VFA) 세트 (basis.xlsx + policies)
+│   └── fcf.samples.templates()                                          ── 사용 가능한 template 목록
 │
 ├── 파일 읽어 들이기
-│   ├── fcf.read_basis(path)                              ── BasisRouter 반환
-│   ├── fcf.read_model_points(path, coverages=, ...)      ── 신계약 평가용
-│   └── fcf.read_inforce_policies(path, coverages=, ...)  ── 결산 1-파일 reader
+│   ├── fcf.read_basis(path)                                             ── BasisRouter 반환
+│   ├── fcf.read_model_points(path, coverages=, ...)                     ── 신계약 평가용
+│   └── fcf.read_inforce_policies(path, coverages=, ...)                 ── 결산 1-파일 reader
 │
 ├── 평가
-│   ├── fcf.gmm.measure(mp, basis)                        ── 신계약, 시간 trajectory 전체
-│   ├── fcf.gmm.measure(mp, basis, full=False)            ── 시점 0 headline 4 숫자 (빠름); basis 가 dict 면 세그먼트 라우팅
-│   └── fcf.gmm.measure_inforce(mp, state, basis, full=)  ── 결산(보유계약) 측정; full=False 면 headline 만
+│   ├── fcf.gmm.measure(mp, basis)                                       ── 신계약, 시간 trajectory 전체
+│   ├── fcf.gmm.measure(mp, basis, full=False)                           ── 시점 0 headline 4 숫자 (빠름); basis 가 dict 면 세그먼트 라우팅
+│   └── fcf.gmm.measure_inforce(mp, state, basis, full=)                 ── 결산(보유계약) 측정; full=False 면 headline 만
 │
 ├── 결과 저장
-│   ├── fcf.write_measurement(val, path)                  ── 결과 한 파일에 저장
+│   ├── fcf.write_measurement(val, path)                                 ── 결과 한 파일에 저장
 │   └── fcf.gmm.measure_stream(policies, out_dir, basis, coverages=...)  ── 메모리 초과 portfolio 스트리밍
 │
 ├── 변동분해 (분기간 비교)
-│   ├── fcf.roll_forward(m, period_months=...)            ── 분기 사이 변동 분해
-│   └── fcf.reconcile(movements)                          ── 분해 결과를 항별로 합산
+│   ├── fcf.roll_forward(m, period_months=...)                           ── 분기 사이 변동 분해
+│   └── fcf.reconcile(movements)                                         ── 분해 결과를 항별로 합산
 │
 └── 검증 / 시각화
-    ├── fcf.gmm.trace(mp_index, mp, basis)                   ── 한 계약의 BEL 계산 ASCII 트리
-    ├── fcf.gmm.trace_bel_step(mp_index, mp, basis, ...)     ── 월별 BEL 식 전개
-    ├── fcf.gmm.trace_csm_step(mp_index, mp, basis, ...)     ── 월별 CSM 식 전개
+    ├── fcf.gmm.trace(mp_index, mp, basis)                               ── 한 계약의 BEL 계산 ASCII 트리
+    ├── fcf.gmm.trace_bel_step(mp_index, mp, basis, ...)                 ── 월별 BEL 식 전개
+    ├── fcf.gmm.trace_csm_step(mp_index, mp, basis, ...)                 ── 월별 CSM 식 전개
     └── fcf.plot_liability(m) / plot_cashflows(m) / plot_csm_runoff(m) ...
 ```
