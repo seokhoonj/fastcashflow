@@ -81,17 +81,17 @@ import numpy as np
 import fastcashflow as fcf
 
 # 산출기초
-death_fn = lambda s, a, d: np.full(np.shape(d), 0.005)   # 연 0.5% 사망률
-lapse_fn = lambda s, a, d: np.full(np.shape(d), 0.04)    # 연 4% 해지율
+death_rate = 0.005  # 연 0.5% 사망률
+lapse_rate = 0.04  # 연 4% 해지율
 basis = fcf.Basis(
-    mortality_annual  = death_fn,   # 보유계약 사망률
-    lapse_annual      = lapse_fn,   # 해지율
-    discount_annual   = 0.03,       # 연 할인율 (비보증 현금흐름)
-    ra_confidence     = 0.95,       # 위험조정 신뢰수준 95%
-    mortality_cv      = 0.10,       # 사망률 변동계수
-    expense_cv        = 0.10,       # 사업비 변동계수 (VFA의 RA = 사업비위험)
-    investment_return = 0.06,       # 기초자산(펀드) 연 수익률
-    fund_fee          = 0.025,      # 변동수수료 연 2.5% (= 보험사 이익원)
+    mortality_annual  = death_rate,  # 보유계약 사망률
+    lapse_annual      = lapse_rate,  # 해지율
+    discount_annual   = 0.03,        # 연 할인율 (비보증 현금흐름)
+    ra_confidence     = 0.95,        # 위험조정 신뢰수준 95%
+    mortality_cv      = 0.10,        # 사망률 변동계수
+    expense_cv        = 0.10,        # 사업비 변동계수 (VFA의 RA = 사업비위험)
+    investment_return = 0.06,        # 기초자산(펀드) 연 수익률
+    fund_fee          = 0.025,       # 변동수수료 연 2.5% (= 보험사 이익원)
 )
 
 # 모델 포인트 (변액계약 하나: 계좌 1억, GMDB 1.02억, GMAB 1.05억)

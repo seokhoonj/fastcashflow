@@ -83,39 +83,38 @@ flowchart LR
 ```
 
 ```python
-import numpy as np
 import fastcashflow as fcf
 from fastcashflow import STATE_MODELS, STATE_ACTIVE
 
 # 사망률 함수 -- 월 1% 의 연 환산 (평탄)
-death_fn  = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
+death_rate  = 1 - (1 - 0.01) ** 12
 # 해지율 함수 -- 해지 없음
-lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
+lapse_rate  = 0.0
 # 납입면제 발생률 함수 -- 월 10% 의 연 환산 (active → waiver 전이율)
-waiver_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.10) ** 12)
+waiver_rate = 1 - (1 - 0.10) ** 12
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual        = death_fn,                # 보유계약 사망률 (월 1%)
-    lapse_annual            = lapse_fn,                # 해지율 (해지 없음)
-    waiver_incidence_annual = waiver_fn,               # active → waiver 전이율 (월 10%)
+    mortality_annual        = death_rate,              # 보유계약 사망률 (월 1%)
+    lapse_annual            = lapse_rate,              # 해지율 (해지 없음)
+    waiver_incidence_annual = waiver_rate,             # active → waiver 전이율 (월 10%)
     discount_annual         = 0.0,                     # 연 할인율 0 (검증 단순화)
     ra_confidence           = 0.75,                    # 위험조정 신뢰수준 75%
     mortality_cv            = 0.10,                    # 사망률 변동계수 10%
     state_model             = STATE_MODELS["WAIVER"],  # 2-state: active / waiver
     coverages               = (
-        fcf.CoverageRate("DEATH", death_fn),  # 사망 보장 1종 (청구 rate = death_fn)
+        fcf.CoverageRate("DEATH", death_rate),  # 사망 보장 1종 (청구 rate = death_rate)
     ),
 )
 
 # 모델 포인트 (계약 하나, active 로 시작)
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,            # 가입연령 40세
-    sex                 = 0,             # 성별 (0=남, 1=여)
-    benefits            = {0: 100_000},  # 0번 보장 (= DEATH) 의 보험금 100,000
-    premium             = 1_000,         # 월납 보험료 1,000
-    term_months         = 3,             # 보험기간 3개월
-    state               = STATE_ACTIVE,  # 시작 상태 (active = 납입 중)
+    issue_age           = 40,                                      # 가입연령 40세
+    sex                 = 0,                                       # 성별 (0=남, 1=여)
+    benefits            = {0: 100_000},                            # 0번 보장 (= DEATH) 의 보험금 100,000
+    premium             = 1_000,                                   # 월납 보험료 1,000
+    term_months         = 3,                                       # 보험기간 3개월
+    state               = STATE_ACTIVE,                            # 시작 상태 (active = 납입 중)
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 

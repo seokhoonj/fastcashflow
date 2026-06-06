@@ -117,10 +117,10 @@ import numpy as np
 import fastcashflow as fcf
 
 # 사망률 함수 -- 월 사망률 1% 의 연 환산 (모든 sex/age/duration 에 동일)
-death_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
+death_rate = 1 - (1 - 0.01) ** 12
 
 # 해지율 함수 -- 해지 없음
-lapse_fn = lambda s, a, d: np.full(d.shape, 0.0)
+lapse_rate = 0.0
 
 # 원수 모델 포인트 (계약 하나)
 mp = fcf.ModelPoints.single(
@@ -133,13 +133,13 @@ mp = fcf.ModelPoints.single(
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual = death_fn,    # 보유계약 사망률 (위 death_fn)
-    lapse_annual     = lapse_fn,    # 해지율 (해지 없음)
+    mortality_annual = death_rate,  # 보유계약 사망률 (위 death_rate)
+    lapse_annual     = lapse_rate,  # 해지율 (해지 없음)
     discount_annual  = 0.0,         # 할인율 0 (거울 관계를 깨끗하게)
     ra_confidence    = 0.75,        # 위험조정 신뢰수준 75%
     mortality_cv     = 0.10,        # 사망률 변동계수 10%
     coverages        = (
-        fcf.CoverageRate("DEATH", death_fn),  # 사망 보장 1종 (청구 rate = death_fn)
+        fcf.CoverageRate("DEATH", death_rate),  # 사망 보장 1종 (청구 rate = death_rate)
     ),
 )
 
@@ -243,12 +243,12 @@ with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
     fcf.samples.export(tmp, template="gmm", quiet=True)        # basis.xlsx + 데이터 파일들
 
-    port_basis = fcf.read_basis(tmp / "basis.xlsx")  # segment 가정 사전
+    port_basis = fcf.read_basis(tmp / "basis.xlsx")                                         # segment 가정 사전
     port_mp = fcf.read_model_points(tmp / "policies.csv", coverages=tmp / "coverages.csv",
                                     calculation_methods=tmp / "calculation_methods.csv")
 
-    b      = port_basis[("TERM_LIFE_A", "GA")]       # 한 segment 의 가정
-    direct = fcf.gmm.measure(port_mp, b, full=False) # 원수 측정 (headline)
+    b      = port_basis[("TERM_LIFE_A", "GA")]                                              # 한 segment 의 가정
+    direct = fcf.gmm.measure(port_mp, b, full=False)                                        # 원수 측정 (headline)
     reins  = fcf.reinsurance.measure(port_mp, b, fcf.reinsurance.QuotaShare(cession=0.50))
 
     print(f"direct  BEL={direct.bel.sum():>14,.0f}  RA={direct.ra.sum():>9,.0f}  CSM={direct.csm.sum():>14,.0f}")
