@@ -22,7 +22,7 @@ from dataclasses import replace
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.engine import GMMMeasurement
+from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow.numerics import _csm_roll
 
 
@@ -40,11 +40,7 @@ def transition(measurement: GMMMeasurement, fair_value: FloatArray) -> GMMMeasur
     and RA are unchanged. It flows on into :func:`~fastcashflow.roll_forward`,
     :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.report`.
     """
-    if measurement.bel_path is None:
-        raise ValueError(
-            "transition() requires a full=True measurement; the trajectory "
-            "fields are None on the full=False fast path. Call measure(..., full=True)."
-        )
+    _require_full(measurement, "transition()")
     fair_value = np.asarray(fair_value, dtype=np.float64)
     n_mp = measurement.bel_path.shape[0]
     if fair_value.shape != (n_mp,):

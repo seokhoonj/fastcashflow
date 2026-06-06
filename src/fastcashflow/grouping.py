@@ -33,7 +33,7 @@ from fastcashflow.curves import forward_rates
 from fastcashflow._paa import PAAMeasurement
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow._vfa import VFAMeasurement
-from fastcashflow.engine import GMMMeasurement
+from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow.numerics import _csm_kernel, _csm_roll
 from fastcashflow.projection import Cashflows
 
@@ -232,11 +232,7 @@ def group(measurement, by):
 
 @group.register
 def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
-    if measurement.bel_path is None:
-        raise ValueError(
-            "group() requires a full=True measurement; the trajectory fields "
-            "are None on the full=False fast path. Call measure(..., full=True)."
-        )
+    _require_full(measurement, "group()")
     labels, reducer = _group_plan(measurement, by, measurement.bel_path.shape[0])
     bel = reducer.sum(measurement.bel_path)
     ra = reducer.sum(measurement.ra_path)

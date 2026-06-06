@@ -230,6 +230,18 @@ def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
     )
 
 
+def _require_full(measurement, entry: str) -> None:
+    """Raise if a headline-only (full=False) measurement reaches a path that
+    needs the ``*_path`` trajectories. Shared by report / roll_forward / group /
+    transition so they give one consistent message instead of four near-copies.
+    """
+    if measurement.bel_path is None:
+        raise ValueError(
+            f"{entry} requires a full=True measurement; the trajectory fields "
+            f"are None on the full=False fast path. Call measure(..., full=True)."
+        )
+
+
 def measure(
     model_points: ModelPoints,
     basis: "Basis | dict[tuple[str, str], Basis]",

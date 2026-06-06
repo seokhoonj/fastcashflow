@@ -29,7 +29,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
-from fastcashflow.engine import GMMMeasurement
+from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow._paa import PAAMeasurement
 from fastcashflow._vfa import VFAMeasurement
 
@@ -151,11 +151,7 @@ def _(measurement: VFAMeasurement) -> Report:
 
 def _report_gmm(m: GMMMeasurement) -> Report:
     """GMM: revenue grosses up the RA release and the CSM release."""
-    if m.bel_path is None:
-        raise ValueError(
-            "report() requires a full=True measurement; the trajectory fields "
-            "are None on the full=False fast path. Call measure(..., full=True)."
-        )
+    _require_full(m, "report()")
     bel, ra, csm = m.bel_path, m.ra_path, m.csm_path
     cf = m.cashflows
     # Per-month forward rate from the discount-factor curve, so that a

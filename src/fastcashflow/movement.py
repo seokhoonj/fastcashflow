@@ -35,7 +35,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
-from fastcashflow.engine import GMMMeasurement
+from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import PAAMeasurement
 from fastcashflow._vfa import VFAMeasurement
@@ -224,11 +224,7 @@ def _(
 ) -> list[PeriodMovement]:
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
-    if measurement.bel_path is None:
-        raise ValueError(
-            "roll_forward requires a full=True measurement; the trajectory "
-            "fields are None on the full=False fast path. Call measure(..., full=True)."
-        )
+    _require_full(measurement, "roll_forward")
     n_time = measurement.bel_path.shape[1] - 1
     n_mp = measurement.bel_path.shape[0]
     if actual_inforce is not None:
