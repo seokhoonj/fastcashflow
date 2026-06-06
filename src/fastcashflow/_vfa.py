@@ -148,15 +148,15 @@ def measure_vfa(
     # the occupancy decrement -- it never reads the GMM death-claim factor. A
     # state-conditioned death benefit or occupancy exit would be silently
     # ignored here, so reject it rather than mis-measure the guarantee.
-    _sm = resolve_state_model(basis)
-    if any(s.death_benefit_factor != 1.0 for s in _sm.states):
+    state_model = resolve_state_model(basis)
+    if any(s.death_benefit_factor != 1.0 for s in state_model.states):
         raise NotImplementedError(
             "state-conditioned death benefit (State.death_benefit_factor) is "
             "not supported on the VFA path; measure_vfa pays the GMDB/GMAB "
             "floor on the occupancy decrement, which the GMM death-claim "
             "factor does not reach."
         )
-    if any(s.exit_after for s in _sm.states):
+    if any(s.exit_after for s in state_model.states):
         raise NotImplementedError(
             "true occupancy exit (State.exit_after) is not supported on the "
             "VFA path."
