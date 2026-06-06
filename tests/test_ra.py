@@ -16,7 +16,7 @@ Q = 0.002          # flat monthly mortality
 LAPSE = 0.005      # flat monthly lapse
 
 
-def _assumptions(**overrides):
+def _basis(**overrides):
     kw = dict(
         mortality_q     = Q,
         lapse_q         = LAPSE,
@@ -33,8 +33,8 @@ def test_cost_of_capital_ra_hand_calc():
     value of the confidence-level margin held as capital."""
     mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
     coc_rate = 0.06
-    cl = measure(mp, _assumptions())
-    coc = measure(mp, _assumptions(ra_method="cost_of_capital",
+    cl = measure(mp, _basis())
+    coc = measure(mp, _basis(ra_method="cost_of_capital",
                                    cost_of_capital_rate=coc_rate))
 
     # the confidence-level run's RA trajectory is the capital held under CoC
@@ -47,9 +47,9 @@ def test_cost_of_capital_ra_hand_calc():
 def test_coc_ra_scales_with_the_rate():
     """The cost-of-capital RA is linear in the cost-of-capital rate."""
     mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
-    coc1 = measure(mp, _assumptions(ra_method="cost_of_capital",
+    coc1 = measure(mp, _basis(ra_method="cost_of_capital",
                                     cost_of_capital_rate=0.04))
-    coc2 = measure(mp, _assumptions(ra_method="cost_of_capital",
+    coc2 = measure(mp, _basis(ra_method="cost_of_capital",
                                     cost_of_capital_rate=0.08))
     assert np.isclose(coc2.ra_path[0, 0], 2.0 * coc1.ra_path[0, 0])
 
@@ -57,8 +57,8 @@ def test_coc_ra_scales_with_the_rate():
 def test_coc_ra_differs_from_confidence_level():
     """The two methods give genuinely different RAs of the same order."""
     mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
-    cl = measure(mp, _assumptions())
-    coc = measure(mp, _assumptions(ra_method="cost_of_capital"))
+    cl = measure(mp, _basis())
+    coc = measure(mp, _basis(ra_method="cost_of_capital"))
     assert not np.isclose(cl.ra_path[0, 0], coc.ra_path[0, 0])
     assert 0.1 < coc.ra_path[0, 0] / cl.ra_path[0, 0] < 5.0
 
@@ -67,11 +67,11 @@ def test_value_rejects_cost_of_capital():
     """measure() computes the confidence-level RA only."""
     mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="confidence-level"):
-        measure(mp, _assumptions(ra_method="cost_of_capital"), full=False)
+        measure(mp, _basis(ra_method="cost_of_capital"), full=False)
 
 
 def test_invalid_ra_method_is_rejected():
     """An unrecognised ra_method is an error."""
     mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="ra_method"):
-        measure(mp, _assumptions(ra_method="margins"))
+        measure(mp, _basis(ra_method="margins"))

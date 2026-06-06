@@ -14,7 +14,7 @@ from conftest import (PATTERNS, annual_from_monthly as _annual,
                       make_death_basis, mp_to_frames)
 
 
-def _assumptions(**overrides):
+def _basis(**overrides):
     """Flat-rate, zero-discount, zero-expense basis -- every figure by hand."""
     kw = dict(
         mortality_q     = 0.01,
@@ -37,7 +37,7 @@ def test_premium_term_hand_calculation():
         term_months=3, premium_term_months=2,
         calculation_methods=PATTERNS,
     )
-    basis = _assumptions()
+    basis = _basis()
     res = measure(mp, basis)
 
     # in force [1.0, 0.99*0.98, (0.99*0.98)**2]; zero discount.
@@ -64,7 +64,7 @@ def test_premium_term_defaults_to_full_term():
     the same result as setting it equal to `term_months`."""
     kw = dict(issue_age=40, benefits={0: 1_000_000.0},
               premium=12_000.0, term_months=120)
-    basis = _assumptions()
+    basis = _basis()
 
     default = ModelPoints.single(**kw, calculation_methods=PATTERNS)
     assert np.all(default.premium_term_months == 120)
@@ -78,7 +78,7 @@ def test_shorter_premium_term_raises_the_liability():
     liability is larger than the same contract paid for the full term."""
     kw = dict(issue_age=45, benefits={0: 50_000_000.0},
               premium=30_000.0, term_months=240)
-    basis = _assumptions()
+    basis = _basis()
 
     full_pay = measure(ModelPoints.single(**kw, premium_term_months=240, calculation_methods=PATTERNS), basis, full=False)
     short_pay = measure(ModelPoints.single(**kw, premium_term_months=120, calculation_methods=PATTERNS), basis, full=False)
@@ -88,7 +88,7 @@ def test_shorter_premium_term_raises_the_liability():
 
 def test_premium_term_round_trips(tmp_path):
     """The `premium_term_months` column reads back unchanged."""
-    basis = _assumptions()
+    basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
         premium=np.array([12_000.0, 12_000.0]),

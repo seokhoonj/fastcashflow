@@ -14,7 +14,7 @@ from fastcashflow.gmm import measure
 from fastcashflow.curves import discount_monthly_curve
 
 
-def _flat_asmp(**overrides) -> Basis:
+def _flat_basis(**overrides) -> Basis:
     """Minimal flat-basis basis; everything else off."""
     base = dict(
         mortality_annual=lambda s, ia, d: np.zeros_like(s, dtype=np.float64),
@@ -38,7 +38,7 @@ def _flat_asmp(**overrides) -> Basis:
 
 def test_scalar_discount_reproduces_flat_curve():
     """``discount_annual = 0.05`` gives a flat per-month curve of length n_time."""
-    basis = _flat_asmp(discount_annual=0.05)
+    basis = _flat_basis(discount_annual=0.05)
     curve = discount_monthly_curve(basis, 24)
     expected = (1.05) ** (1.0 / 12.0) - 1.0
     assert curve.shape == (24,)
@@ -48,7 +48,7 @@ def test_scalar_discount_reproduces_flat_curve():
 def test_per_year_discount_curve_steps_at_year_boundary():
     """A 2-year ``[0.03, 0.05]`` curve gives the year-0 monthly rate for months
     0..11 and the year-1 rate for months 12..23."""
-    basis = _flat_asmp(discount_annual=np.array([0.03, 0.05]))
+    basis = _flat_basis(discount_annual=np.array([0.03, 0.05]))
     curve = discount_monthly_curve(basis, 24)
     m0 = (1.03) ** (1.0 / 12.0) - 1.0
     m1 = (1.05) ** (1.0 / 12.0) - 1.0
@@ -58,7 +58,7 @@ def test_per_year_discount_curve_steps_at_year_boundary():
 
 def test_per_year_discount_holds_flat_past_curve_end():
     """A short curve is held flat at its last value past the end."""
-    basis = _flat_asmp(discount_annual=np.array([0.03, 0.05]))
+    basis = _flat_basis(discount_annual=np.array([0.03, 0.05]))
     curve = discount_monthly_curve(basis, 36)            # 3 years, 2-year curve
     m1 = (1.05) ** (1.0 / 12.0) - 1.0
     assert np.allclose(curve[24:], m1)                   # year 2 -> held at year-1 value
@@ -74,7 +74,7 @@ def test_bel_with_curve_discount_matches_hand_calc():
     months). Hand calc: 1,000 per month, discounted at the curve's stepped
     monthly rates.
     """
-    basis = _flat_asmp(
+    basis = _flat_basis(
         # zero everything except maintenance + discount
         expense_inflation=0.0,
         expense_items=(
@@ -101,7 +101,7 @@ def test_bel_with_curve_discount_matches_hand_calc():
 
 def test_bel_value_matches_measure_with_curve_discount():
     """`measure()` and `measure()` agree on BEL for a non-flat discount curve too."""
-    basis = _flat_asmp(
+    basis = _flat_basis(
         expense_inflation=0.02,
         expense_items=(
             ExpenseItem("maintenance", "gamma_fixed", 12_000.0),
@@ -119,7 +119,7 @@ def test_csm_accretes_at_curve_rate():
     """A 2-year curve discount accretes the CSM at the per-month curve rate,
     not at a single scalar. Two segments give different accretion factors."""
     # Profitable contract: premium covers expenses with margin -> positive CSM
-    basis = _flat_asmp(
+    basis = _flat_basis(
         expense_inflation=0.02,
         expense_items=(
             ExpenseItem("maintenance", "gamma_fixed", 12_000.0),

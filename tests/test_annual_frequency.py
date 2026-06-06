@@ -18,7 +18,7 @@ from fastcashflow.gmm import measure
 from fastcashflow.basis import annual_to_monthly
 
 
-def _asmp(*, q_annual=0.0, lapse_annual=0.0, **overrides) -> Basis:
+def _basis(*, q_annual=0.0, lapse_annual=0.0, **overrides) -> Basis:
     """Flat-rate, zero-discount, zero-expense basis."""
     base = dict(
         mortality_annual=lambda s, a, d: np.full(a.shape, q_annual),
@@ -53,7 +53,7 @@ def test_annual_mortality_reproduced_over_a_year():
     q_annual = 0.12
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
                             premium=0.0, term_months=13)
-    res = measure(mp, _asmp(q_annual=q_annual))
+    res = measure(mp, _basis(q_annual=q_annual))
     assert np.isclose(res.cashflows.inforce[0][12], 1.0 - q_annual)
 
 
@@ -66,7 +66,7 @@ def test_premium_frequency_payment_months():
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
                             premium=10_000.0, term_months=12,
                             premium_frequency_months=3)
-    res = measure(mp, _asmp())            # no decrements -- in-force stays 1
+    res = measure(mp, _basis())            # no decrements -- in-force stays 1
     pcf = res.cashflows.premium_cf[0]
     assert np.isclose(pcf[0], 10_000.0)
     for t in (3, 6, 9):
@@ -83,7 +83,7 @@ def test_quarterly_premium_hand_calculation():
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
                             premium=premium, term_months=6,
                             premium_frequency_months=3)
-    basis = _asmp(q_annual=1.0 - (1.0 - q_m) ** 12)   # monthly q_m at the engine
+    basis = _basis(q_annual=1.0 - (1.0 - q_m) ** 12)   # monthly q_m at the engine
 
     inforce = [(1.0 - q_m) ** t for t in range(6)]
     pv_claims = sum(i * q_m * death_benefit for i in inforce)
@@ -101,7 +101,7 @@ def test_premium_frequency_respects_premium_term():
                             premium=10_000.0, term_months=24,
                             premium_term_months=8,
                             premium_frequency_months=3)
-    pcf = measure(mp, _asmp()).cashflows.premium_cf[0]
+    pcf = measure(mp, _basis()).cashflows.premium_cf[0]
     assert list(np.flatnonzero(pcf)) == [0, 3, 6]
 
 
@@ -117,12 +117,12 @@ def test_annuity_frequency_payout_months():
                             premium=0.0, term_months=24,
                             annuity_payment=annuity,
                             annuity_frequency_months=12)
-    res = measure(mp, _asmp())            # no decrements -- in-force stays 1
+    res = measure(mp, _basis())            # no decrements -- in-force stays 1
     acf = res.cashflows.annuity_cf[0]
     assert np.isclose(acf[0], annuity)
     assert np.isclose(acf[12], annuity)
     assert np.count_nonzero(acf) == 2
-    assert np.isclose(measure(mp, _asmp(), full=False).bel[0], 2 * annuity)
+    assert np.isclose(measure(mp, _basis(), full=False).bel[0], 2 * annuity)
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +144,7 @@ def test_measure_value_agree_under_frequency():
         premium_frequency_months=freqs[rng.integers(0, 4, n)],
         annuity_frequency_months=freqs[rng.integers(0, 4, n)],
     )
-    basis = _asmp(q_annual=0.08, lapse_annual=0.05)
+    basis = _basis(q_annual=0.08, lapse_annual=0.05)
     m, v = measure(mps, basis), measure(mps, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
     assert np.allclose(m.ra_path[:, 0], v.ra)
@@ -155,7 +155,7 @@ def test_default_frequency_is_monthly():
     and annuity, identical to passing 1 explicitly."""
     kw = dict(issue_age=45, benefits={0: 20_000_000.0}, premium=30_000.0,
               term_months=60, annuity_payment=100_000.0)
-    basis = _asmp(q_annual=0.05)
+    basis = _basis(q_annual=0.05)
     default = measure(ModelPoints.single(**kw), basis, full=False)
     explicit = measure(ModelPoints.single(**kw, premium_frequency_months=1,
                                         annuity_frequency_months=1), basis, full=False)

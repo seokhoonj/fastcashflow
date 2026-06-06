@@ -18,7 +18,7 @@ LAPSE = 0.005      # flat monthly lapse
 MORTALITY_CV = 0.10
 
 
-def _assumptions():
+def _basis():
     return make_death_basis(
         mortality_q     = Q,
         lapse_q         = LAPSE,
@@ -30,7 +30,7 @@ def _assumptions():
 
 def test_reinsurance_hand_calc():
     """Single quota-share treaty -- hand-checked BEL, RA and CSM."""
-    basis = _assumptions()
+    basis = _basis()
     death_benefit, premium, term, cession = 1e8, 80_000.0, 60, 0.4
     res = fcf.reinsurance.measure(
         ModelPoints.single(40, premium, term, benefits={0: death_benefit}, calculation_methods=PATTERNS),
@@ -57,7 +57,7 @@ def test_reinsurance_csm_can_be_negative():
     """Ceding a profitable book has a net cost -- a negative CSM, no loss component."""
     res = fcf.reinsurance.measure(
         ModelPoints.single(40, 300_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS),
-        _assumptions(), fcf.reinsurance.QuotaShare(cession=0.5)
+        _basis(), fcf.reinsurance.QuotaShare(cession=0.5)
     )
     assert res.bel[0] > 0.0           # reinsurance premiums ceded exceed recoveries
     assert res.csm_path[0, 0] < 0.0        # the net cost is carried as a negative CSM
@@ -67,7 +67,7 @@ def test_reinsurance_csm_analysis_of_change_reconciles():
     """The reinsurance CSM waterfall reconciles opening to closing."""
     res = fcf.reinsurance.measure(
         ModelPoints.single(40, 80_000.0, 120, benefits={0: 1e8}, calculation_methods=PATTERNS),
-        _assumptions(), fcf.reinsurance.QuotaShare(cession=0.3)
+        _basis(), fcf.reinsurance.QuotaShare(cession=0.3)
     )
     assert np.allclose(
         res.csm_path[:, :-1] + res.csm_accretion - res.csm_release, res.csm_path[:, 1:]
@@ -78,7 +78,7 @@ def test_reinsurance_zero_cession_is_nothing():
     """A zero cession rate cedes nothing -- every figure is zero."""
     res = fcf.reinsurance.measure(
         ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS),
-        _assumptions(), fcf.reinsurance.QuotaShare(cession=0.0)
+        _basis(), fcf.reinsurance.QuotaShare(cession=0.0)
     )
     assert np.allclose(res.bel, 0.0)
     assert np.allclose(res.ra, 0.0)
@@ -91,5 +91,5 @@ def test_reinsurance_rejects_bad_cession_rate():
     with pytest.raises(ValueError, match="cession"):
         fcf.reinsurance.measure(
             ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS),
-            _assumptions(), fcf.reinsurance.QuotaShare(cession=1.5)
+            _basis(), fcf.reinsurance.QuotaShare(cession=1.5)
         )

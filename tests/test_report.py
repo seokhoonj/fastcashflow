@@ -14,7 +14,7 @@ from fastcashflow import Basis, ExpenseItem, ModelPoints, report, CoverageRate
 from fastcashflow.gmm import measure
 
 
-def _assumptions() -> Basis:
+def _basis() -> Basis:
     return Basis(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
@@ -44,7 +44,7 @@ def _portfolio(n: int = 300) -> ModelPoints:
 
 def test_report_csm_analysis_of_change_reconciles():
     """The CSM waterfall: opening + accretion - release = closing."""
-    res = report(measure(_portfolio(), _assumptions()))
+    res = report(measure(_portfolio(), _basis()))
     assert np.allclose(
         res.csm_opening + res.csm_accretion - res.csm_release, res.csm_closing
     )
@@ -52,7 +52,7 @@ def test_report_csm_analysis_of_change_reconciles():
 
 def test_report_service_result_is_revenue_less_expense():
     """Service result = revenue - service expense, and revenue grosses it up."""
-    res = report(measure(_portfolio(), _assumptions()))
+    res = report(measure(_portfolio(), _basis()))
     assert np.allclose(
         res.insurance_service_result,
         res.insurance_revenue - res.insurance_service_expense,
@@ -65,7 +65,7 @@ def test_report_service_result_is_revenue_less_expense():
 
 def test_report_csm_fully_releases_with_non_negative_profit():
     """A profitable contract releases its whole CSM, earning profit each month."""
-    res = report(measure(ModelPoints.single(40, 150_000.0, 120, benefits={0: 1e8}), _assumptions()))
+    res = report(measure(ModelPoints.single(40, 150_000.0, 120, benefits={0: 1e8}), _basis()))
     assert res.csm_opening[0, 0] > 0.0                  # there is a CSM
     assert np.isclose(res.csm_closing[0, -1], 0.0)      # all released by term end
     assert np.all(res.insurance_service_result[0] >= -1e-6)   # profit emerges >= 0
@@ -73,7 +73,7 @@ def test_report_csm_fully_releases_with_non_negative_profit():
 
 def test_report_annual_totals_match_the_monthly_sum():
     """annual() portfolio-and-year totals reconcile with the monthly figures."""
-    res = report(measure(_portfolio(), _assumptions()))
+    res = report(measure(_portfolio(), _basis()))
     ann = res.annual()
     assert np.isclose(
         ann["insurance_service_result"].sum(), res.insurance_service_result.sum()
@@ -84,7 +84,7 @@ def test_report_annual_totals_match_the_monthly_sum():
 
 def test_report_str_renders_the_annual_table():
     """str(report) shows the annual table -- title, labels, year-1 figure."""
-    res = report(measure(_portfolio(), _assumptions()))
+    res = report(measure(_portfolio(), _basis()))
     text = str(res)
     ann = res.annual()
     assert "IFRS 17 report" in text
@@ -95,7 +95,7 @@ def test_report_str_renders_the_annual_table():
 
 def test_report_handles_paa():
     """report() accepts a PAA measurement -- which has no CSM."""
-    m = fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}), _assumptions())
+    m = fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}), _basis())
     res = report(m)
     assert np.allclose(res.insurance_revenue, m.revenue)
     assert np.allclose(res.insurance_service_result, m.service_result)
@@ -106,7 +106,7 @@ def test_report_handles_paa():
 def test_report_handles_vfa():
     """report() accepts a VFA measurement -- the result is the CSM release."""
     m = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 60, account_value=1e8), _assumptions()
+        ModelPoints.single(40, 0.0, 60, account_value=1e8), _basis()
     )
     res = report(m)
     assert np.allclose(
@@ -118,9 +118,9 @@ def test_report_handles_vfa():
 def test_report_loss_component():
     """The loss component is zero when profitable, positive when onerous."""
     profitable = report(measure(
-        ModelPoints.single(40, 150_000.0, 120, benefits={0: 1e8}), _assumptions()))
+        ModelPoints.single(40, 150_000.0, 120, benefits={0: 1e8}), _basis()))
     onerous = report(measure(
-        ModelPoints.single(40, 1_000.0, 120, benefits={0: 1e8}), _assumptions()))
+        ModelPoints.single(40, 1_000.0, 120, benefits={0: 1e8}), _basis()))
     assert np.allclose(profitable.loss_component, 0.0)
     assert onerous.loss_component[0] > 0.0
 
@@ -193,11 +193,11 @@ def test_report_finance_disaggregation_identity_all_models():
     """The sum identity holds for GMM, PAA and VFA. The VFA leg is the
     load-bearing guard: VFA's finance line is the CSM accretion (not zero), so
     its CSM component must carry the whole line."""
-    gmm = report(measure(_portfolio(), _assumptions()))
+    gmm = report(measure(_portfolio(), _basis()))
     paa = report(fcf.paa.measure(
-        ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}), _assumptions()))
+        ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}), _basis()))
     vfa = report(fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 60, account_value=1e8), _assumptions()))
+        ModelPoints.single(40, 0.0, 60, account_value=1e8), _basis()))
     for r in (gmm, paa, vfa):
         np.testing.assert_allclose(
             r.bel_finance_expense + r.ra_finance_expense + r.csm_finance_expense,

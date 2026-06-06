@@ -7,7 +7,7 @@ from fastcashflow.numerics import _norm_ppf
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
-def _assumptions(**overrides):
+def _basis(**overrides):
     """Defaults: 1%/month mortality, 2%/month lapse, zero discount, RA off."""
     kw = dict(
         mortality_q     = 0.01,
@@ -37,7 +37,7 @@ def test_risk_adjustment():
             premium=12_000.0, term_months=2,
             calculation_methods=PATTERNS,
         ),
-        _assumptions(ra_confidence=0.75, mortality_cv=0.20),
+        _basis(ra_confidence=0.75, mortality_cv=0.20),
     )
     # zero discount; PV(claims) = 10000 + 9702 = 19702 (see test_phase0)
     pv_claims = 19702.0
@@ -53,7 +53,7 @@ def test_expenses():
             premium=12_000.0, term_months=2,
             calculation_methods=PATTERNS,
         ),
-        _assumptions(
+        _basis(
             expense_items=(
                 ExpenseItem("acquisition",  "alpha_fixed",    500.0),
                 ExpenseItem("maintenance",  "gamma_fixed", 120.0),  # 10 per month
@@ -81,7 +81,7 @@ def test_expense_inflation():
             premium=12_000.0, term_months=13,
             calculation_methods=PATTERNS,
         ),
-        _assumptions(
+        _basis(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.0)),
             lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.0)),
             expense_inflation=0.06,

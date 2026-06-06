@@ -15,7 +15,7 @@ from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
-def _assumptions():
+def _basis():
     return make_death_basis(
         mortality_q       = 0.001,
         lapse_q           = 0.01,
@@ -43,7 +43,7 @@ def _portfolio(n: int = 200) -> ModelPoints:
 
 def test_stochastic_matches_value_per_scenario():
     """Each scenario's total equals measure() run at that discount rate."""
-    mps, basis = _portfolio(), _assumptions()
+    mps, basis = _portfolio(), _basis()
     rates = np.array([0.02, 0.03, 0.05])
     res = fcf.gmm.stochastic(mps, basis, rates)
     for s, rate in enumerate(rates):
@@ -56,7 +56,7 @@ def test_stochastic_matches_value_per_scenario():
 
 def test_stochastic_produces_a_distribution():
     """Different discount scenarios give a genuine spread of liabilities."""
-    res = fcf.gmm.stochastic(_portfolio(), _assumptions(),
+    res = fcf.gmm.stochastic(_portfolio(), _basis(),
                            np.linspace(0.01, 0.06, 40))
     assert res.bel.std() > 0.0
     assert res.csm.std() > 0.0
@@ -64,7 +64,7 @@ def test_stochastic_produces_a_distribution():
 
 def test_stochastic_summary_statistics():
     """mean() and percentile() read the distribution off the scenario totals."""
-    res = fcf.gmm.stochastic(_portfolio(), _assumptions(),
+    res = fcf.gmm.stochastic(_portfolio(), _basis(),
                            np.linspace(0.01, 0.06, 40))
     assert np.isclose(res.mean()["bel"], res.bel.mean())
     assert np.isclose(res.percentile(75)["csm"], np.percentile(res.csm, 75))
@@ -72,7 +72,7 @@ def test_stochastic_summary_statistics():
 
 def test_stochastic_single_scenario():
     """One scenario reproduces a plain measure() at that rate."""
-    mps, basis = _portfolio(), _assumptions()
+    mps, basis = _portfolio(), _basis()
     res = fcf.gmm.stochastic(mps, basis, np.array([0.04]))
     v = measure(mps, replace(basis, discount_annual=0.04), full=False)
     assert res.bel.shape == (1,)
@@ -81,7 +81,7 @@ def test_stochastic_single_scenario():
 
 def test_value_constant_curve_matches_the_flat_rate():
     """measure() with a constant discount curve reproduces the flat-rate run."""
-    mps, basis = _portfolio(), _assumptions()
+    mps, basis = _portfolio(), _basis()
     n_time = int(mps.term_months.max())
     flat = measure(mps, replace(basis, discount_annual=0.04), full=False)
     curve = measure(mps, basis, discount_curve=np.full(n_time, 0.04), full=False)
@@ -91,7 +91,7 @@ def test_value_constant_curve_matches_the_flat_rate():
 
 def test_stochastic_accepts_rate_curves():
     """A 2-D scenarios array is read as one discount-rate curve per scenario."""
-    mps, basis = _portfolio(), _assumptions()
+    mps, basis = _portfolio(), _basis()
     n_time = int(mps.term_months.max())
     rng = np.random.default_rng(8)
     curves = 0.03 + rng.normal(0.0, 0.005, size=(20, n_time))
@@ -102,7 +102,7 @@ def test_stochastic_accepts_rate_curves():
 
 def test_stochastic_rising_curve_differs_from_flat():
     """A sloped curve gives a different liability than a flat rate."""
-    mps, basis = _portfolio(), _assumptions()
+    mps, basis = _portfolio(), _basis()
     n_time = int(mps.term_months.max())
     rising = np.linspace(0.01, 0.06, n_time).reshape(1, n_time)
     flat = np.array([float(rising.mean())])
@@ -113,7 +113,7 @@ def test_stochastic_rising_curve_differs_from_flat():
 
 def test_stochastic_curve_rejects_wrong_width():
     """A 2-D scenarios array must be as wide as the projection horizon."""
-    mps, basis = _portfolio(), _assumptions()
+    mps, basis = _portfolio(), _basis()
     with pytest.raises(ValueError, match="columns"):
         fcf.gmm.stochastic(mps, basis, np.full((5, 7), 0.03))
 
@@ -122,7 +122,7 @@ def test_stochastic_settlement_pattern_fallback_matches_value():
     """A claims settlement pattern routes to the per-scenario fallback, which
     must still equal measure() at each discount rate."""
     mps = _portfolio()
-    basis = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
+    basis = replace(_basis(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
     rates = np.array([0.02, 0.03, 0.05])
     res = fcf.gmm.stochastic(mps, basis, rates)
     for s, rate in enumerate(rates):
@@ -150,7 +150,7 @@ def test_stochastic_with_contract_boundary_matches_value_per_scenario():
     """Regression (P0-1): the scenario kernel must loop to the contract
     boundary, not the term. With boundary < term it previously read past the
     truncated cash-flow arrays inside @njit and returned nan / garbage."""
-    mps, basis = _boundary_portfolio(), _assumptions()
+    mps, basis = _boundary_portfolio(), _basis()
     rates = np.array([0.02, 0.03, 0.05])
     res = fcf.gmm.stochastic(mps, basis, rates)
     assert np.all(np.isfinite(res.bel))          # was nan / 1e271 before the fix
@@ -166,7 +166,7 @@ def test_stochastic_cost_of_capital_matches_full_per_scenario():
     fallback must value each flat scenario with measure(full=True) rather than
     full=False (which rejects COC). Previously this raised ValueError."""
     mps = _portfolio()
-    basis = replace(_assumptions(), ra_method="cost_of_capital",
+    basis = replace(_basis(), ra_method="cost_of_capital",
                     cost_of_capital_rate=0.06)
     rates = np.array([0.02, 0.03, 0.05])
     res = fcf.gmm.stochastic(mps, basis, rates)
@@ -181,7 +181,7 @@ def test_stochastic_cost_of_capital_rejects_rate_curves():
     """COC + a per-month discount curve (2-D) has no full-path home for the
     curve -- raise a clear NotImplementedError, not a misleading ValueError."""
     mps = _portfolio()
-    basis = replace(_assumptions(), ra_method="cost_of_capital",
+    basis = replace(_basis(), ra_method="cost_of_capital",
                     cost_of_capital_rate=0.06)
     n_time = int(np.asarray(mps.contract_boundary_months).max())
     with pytest.raises(NotImplementedError, match="cost_of_capital"):

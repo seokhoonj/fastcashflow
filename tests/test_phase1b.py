@@ -28,7 +28,7 @@ def _lapse(sex, issue_age, duration):
     return np.where(duration < 1, _annual(SELECT_LAPSE), _annual(ULT_LAPSE))
 
 
-def _assumptions(**overrides):
+def _basis(**overrides):
     kw = dict(
         mortality_annual = _mortality,
         lapse_annual     = _lapse,
@@ -52,7 +52,7 @@ def test_select_ultimate_and_duration_lapse():
             premium=premium, term_months=term,
             calculation_methods=PATTERNS,
         ),
-        _assumptions(),
+        _basis(),
     )
 
     # Independent recomputation of the in-force / death recursion.
@@ -101,7 +101,7 @@ def test_value_matches_run_phase1b():
         term_months=rng.integers(13, 36, n),
         calculation_methods=PATTERNS,
     )
-    basis = _assumptions(mortality_cv=0.10, discount_annual=0.03)
+    basis = _basis(mortality_cv=0.10, discount_annual=0.03)
 
     fast = measure(mps, basis, full=False)
     detailed = measure(mps, basis)

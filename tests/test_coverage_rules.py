@@ -18,7 +18,7 @@ from conftest import annual_from_monthly as _annual
 Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
 MORB_RATE = 0.03     # flat monthly diagnosis rate
-# Local coverage codes -- the order of CoverageRate entries in _assumptions().
+# Local coverage codes -- the order of CoverageRate entries in _basis().
 DEATH = 0            # the death coverage -> coverages[0]
 DIAGNOSIS = 1        # the diagnosis coverage -> coverages[1]
 
@@ -32,7 +32,7 @@ def _mortality(sex, issue_age, duration):
     return np.full(issue_age.shape, _annual(Q))
 
 
-def _assumptions(**overrides) -> Basis:
+def _basis(**overrides) -> Basis:
     flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(MORB_RATE))
     base = dict(
         mortality_annual=_mortality,
@@ -72,7 +72,7 @@ def test_waiting_period_hand_calc():
     The waiting months pay nothing; the not-yet-diagnosed pool depletes
     through them all the same, so months from ``wait`` on are unchanged.
     """
-    basis = _assumptions(morbidity_cv=0.12)
+    basis = _basis(morbidity_cv=0.12)
     benefit, term, wait = 5e7, 24, 3
     res = measure(_one_coverage(DIAGNOSIS, benefit, term, waiting=wait), basis)
 
@@ -92,7 +92,7 @@ def test_waiting_period_hand_calc():
 def test_waiting_suppresses_payment_not_the_pool():
     """Waiting zeroes the waiting-month claims and leaves the rest exactly as
     the no-waiting projection -- the not-yet-diagnosed pool is unchanged."""
-    basis = _assumptions()
+    basis = _basis()
     benefit, term, wait = 3e7, 36, 6
     plain = measure(_one_coverage(DIAGNOSIS, benefit, term), basis)
     waited = measure(_one_coverage(DIAGNOSIS, benefit, term, waiting=wait), basis)
@@ -108,7 +108,7 @@ def test_waiting_suppresses_payment_not_the_pool():
 def test_reduction_period_hand_calc():
     """A diagnosis benefit reduced to a fraction until a cut-off month --
     hand-checked BEL and RA."""
-    basis = _assumptions(morbidity_cv=0.12)
+    basis = _basis(morbidity_cv=0.12)
     benefit, term, red_end, rf = 5e7, 24, 12, 0.5
     res = measure(
         _one_coverage(DIAGNOSIS, benefit, term,
@@ -134,7 +134,7 @@ def test_reduction_period_hand_calc():
 def test_reduction_on_death_benefit():
     """A reduced-benefit period on a death coverage scales the death claim,
     not the mortality decrement."""
-    basis = _assumptions()
+    basis = _basis()
     benefit, term, red_end, rf = 1e8, 48, 24, 0.5
     plain = measure(_one_coverage(DEATH, benefit, term), basis)
     reduced = measure(
@@ -155,7 +155,7 @@ def test_reduction_on_death_benefit():
 
 def test_default_rule_is_inert():
     """Explicit off-rule fields equal omitting them entirely."""
-    basis = _assumptions(morbidity_cv=0.10)
+    basis = _basis(morbidity_cv=0.10)
     explicit = _one_coverage(DIAGNOSIS, 4e7, 36,
                              waiting=0, reduction_end=0, reduction_factor=1.0)
     omitted = ModelPoints(
@@ -197,7 +197,7 @@ def test_value_matches_measure_with_rules():
         coverage_reduction_factor=rng.choice([0.3, 0.5, 0.7], n_cov),
         calculation_methods=PATTERNS,
     )
-    basis = _assumptions(morbidity_cv=0.15)
+    basis = _basis(morbidity_cv=0.15)
     fast = measure(mps, basis, full=False)
     detailed = measure(mps, basis)
 

@@ -11,7 +11,7 @@ from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
-def _assumptions():
+def _basis():
     return make_death_basis(
         mortality_q       = 0.0008,
         lapse_q           = 0.01,
@@ -51,7 +51,7 @@ def _priced(mps: ModelPoints, premium) -> ModelPoints:
 
 def test_break_even_premium():
     """The break-even premium yields zero CSM and zero loss component."""
-    mps, basis = _portfolio(), _assumptions()
+    mps, basis = _portfolio(), _basis()
     premium = solve_premium(mps, basis, break_even=True)
 
     v = measure(_priced(mps, premium), basis, full=False)
@@ -61,7 +61,7 @@ def test_break_even_premium():
 
 def test_target_csm_premium():
     """Solving for an absolute CSM reproduces that CSM."""
-    mps, basis = _portfolio(), _assumptions()
+    mps, basis = _portfolio(), _basis()
     target = 500_000.0
     premium = solve_premium(mps, basis, csm=target)
 
@@ -71,7 +71,7 @@ def test_target_csm_premium():
 
 def test_target_margin_premium():
     """Solving for a profit margin yields CSM / PV(premiums) == margin."""
-    mps, basis = _portfolio(), _assumptions()
+    mps, basis = _portfolio(), _basis()
     m = 0.15
     premium = solve_premium(mps, basis, margin=m)
     v = measure(_priced(mps, premium), basis, full=False)
@@ -86,7 +86,7 @@ def test_target_margin_premium():
 
 def test_invalid_target():
     """Zero, multiple or out-of-range targets are rejected."""
-    mps, basis = _portfolio(50), _assumptions()
+    mps, basis = _portfolio(50), _basis()
     with pytest.raises(ValueError, match="exactly one target"):
         solve_premium(mps, basis)
     with pytest.raises(ValueError, match="exactly one target"):

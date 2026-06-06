@@ -14,10 +14,10 @@ from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 Q = 0.002
 LAPSE = 0.005
-DEATH = 0   # the death coverage's index in _assumptions().coverages
+DEATH = 0   # the death coverage's index in _basis().coverages
 
 
-def _assumptions():
+def _basis():
     return make_death_basis(
         mortality_q       = Q,
         lapse_q           = LAPSE,
@@ -34,7 +34,7 @@ def _assumptions():
 
 def test_multiple_death_coverages_sum_to_one():
     """Two death coverages of A and B value as one coverage of A + B."""
-    basis = _assumptions()
+    basis = _basis()
     a, b, term = 6e7, 4e7, 36
 
     split = ModelPoints(
@@ -63,7 +63,7 @@ def test_multiple_death_coverages_sum_to_one():
 
 def test_no_coverages_matches_zero_death_benefit():
     """An empty coverage list equals a death benefit of zero."""
-    basis = _assumptions()
+    basis = _basis()
     explicit_zero = ModelPoints.single(
         45, 50_000.0, 60, benefits={0: 0.0}, calculation_methods=PATTERNS,
     )

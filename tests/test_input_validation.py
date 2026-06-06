@@ -146,16 +146,16 @@ def test_long_form_rejects_duplicate_mp_id(tmp_path):
     pl.DataFrame({
         "mp_id": ["A"], "coverage": ["DEATH"], "amount": [1e8],
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "calculation_methods.csv"
+    method_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
-    }).write_csv(bp_csv)
+    }).write_csv(method_csv)
 
     basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="duplicate mp_id"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            calculation_methods=bp_csv,
+            calculation_methods=method_csv,
         )
 
 
@@ -173,16 +173,16 @@ def test_long_form_rejects_premium_in_both_frames(tmp_path):
         "mp_id": ["A"], "coverage": ["DEATH"], "amount": [1e8],
         "premium": [1.0],               # source 2 -- silently overrode
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "calculation_methods.csv"
+    method_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
-    }).write_csv(bp_csv)
+    }).write_csv(method_csv)
 
     basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="premium is specified twice"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            calculation_methods=bp_csv,
+            calculation_methods=method_csv,
         )
 
 
@@ -200,16 +200,16 @@ def test_long_form_rejects_reduction_factor_without_reduction_end(tmp_path):
         "mp_id": ["A"], "coverage": ["DEATH"], "amount": [1e8],
         "reduction_factor": [0.5],      # no reduction_end -- never fires
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "calculation_methods.csv"
+    method_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
-    }).write_csv(bp_csv)
+    }).write_csv(method_csv)
 
     basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="reduction_factor"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            calculation_methods=bp_csv,
+            calculation_methods=method_csv,
         )
 
 
@@ -395,16 +395,16 @@ def test_long_form_orphan_mp_id_names_offender(tmp_path):
         "mp_id": ["ORPHAN_X"],            # not in policies
         "coverage": ["DEATH"], "amount": [1e8],
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "calculation_methods.csv"
+    method_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
-    }).write_csv(bp_csv)
+    }).write_csv(method_csv)
 
     basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="ORPHAN_X"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            calculation_methods=bp_csv,
+            calculation_methods=method_csv,
         )
 
 
@@ -421,16 +421,16 @@ def test_long_form_orphan_coverage_code_names_offender(tmp_path):
     pl.DataFrame({
         "mp_id": ["A"], "coverage": ["GHOST_CODE"], "amount": [1e8],
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "calculation_methods.csv"
+    method_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
-    }).write_csv(bp_csv)
+    }).write_csv(method_csv)
 
     basis = fcf.read_basis(basis_book)
     with pytest.raises(ValueError, match="GHOST_CODE"):
         fcf.read_model_points(
             pol_csv, coverages=cov_csv,
-            calculation_methods=bp_csv,
+            calculation_methods=method_csv,
         )
 
 
@@ -449,15 +449,15 @@ def test_long_form_no_premium_source_warns(tmp_path, recwarn):
         "mp_id": ["A"], "coverage": ["DEATH"], "amount": [1e8],
         # no premium
     }).write_csv(cov_csv)
-    bp_csv = tmp_path / "calculation_methods.csv"
+    method_csv = tmp_path / "calculation_methods.csv"
     pl.DataFrame({
         "coverage": ["DEATH"], "calculation_method": ["DEATH"],
-    }).write_csv(bp_csv)
+    }).write_csv(method_csv)
 
     basis = fcf.read_basis(basis_book)
     fcf.read_model_points(
         pol_csv, coverages=cov_csv,
-        calculation_methods=bp_csv,
+        calculation_methods=method_csv,
     )
     matched = [w for w in recwarn.list
                if issubclass(w.category, UserWarning)

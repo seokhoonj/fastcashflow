@@ -16,7 +16,7 @@ from fastcashflow.basis import Basis
 from fastcashflow.modelpoints import ModelPoints
 
 
-def _flat_asmp() -> Basis:
+def _flat_basis() -> Basis:
     return Basis(
         mortality_annual=lambda s, ia, d: np.full(s.shape, 0.001),
         lapse_annual=lambda s, ia, d: np.full(s.shape, 0.02),
@@ -73,7 +73,7 @@ def test_read_scenarios_feeds_measure_stochastic(tmp_path):
     p = tmp_path / "scen.parquet"
     df.write_parquet(p)
 
-    basis = _flat_asmp()
+    basis = _flat_basis()
     mp = ModelPoints.single(issue_age=40, benefits={0: 1_000.0},
                             premium=10.0, term_months=24, count=1)
 

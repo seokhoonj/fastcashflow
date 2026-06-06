@@ -15,7 +15,7 @@ from fastcashflow.gmm import measure
 from conftest import annual_from_monthly as _annual, make_death_basis
 
 
-def _assumptions():
+def _basis():
     return make_death_basis(
         mortality_q       = 0.001,
         lapse_q           = 0.01,
@@ -42,13 +42,13 @@ def _portfolio(n: int = 50) -> ModelPoints:
 
 def test_roll_forward_period_count():
     """A 120-month horizon in yearly periods gives ten movements."""
-    periods = roll_forward(measure(_portfolio(), _assumptions()), period_months=12)
+    periods = roll_forward(measure(_portfolio(), _basis()), period_months=12)
     assert len(periods) == 10
 
 
 def test_roll_forward_csm_reconciles():
     """Each period: opening + accretion - release = closing CSM."""
-    for p in roll_forward(measure(_portfolio(), _assumptions()), 12):
+    for p in roll_forward(measure(_portfolio(), _basis()), 12):
         assert np.allclose(
             p.csm_opening + p.csm_accretion - p.csm_release, p.csm_closing
         )
@@ -56,7 +56,7 @@ def test_roll_forward_csm_reconciles():
 
 def test_roll_forward_bel_and_ra_reconcile():
     """Each period: opening + interest - release = closing, for BEL and RA."""
-    for p in roll_forward(measure(_portfolio(), _assumptions()), 12):
+    for p in roll_forward(measure(_portfolio(), _basis()), 12):
         assert np.allclose(
             p.bel_opening + p.bel_interest - p.bel_release, p.bel_closing
         )
@@ -67,7 +67,7 @@ def test_roll_forward_bel_and_ra_reconcile():
 
 def test_roll_forward_periods_chain():
     """Each period's closing balances are the next period's opening balances."""
-    periods = roll_forward(measure(_portfolio(), _assumptions()), 12)
+    periods = roll_forward(measure(_portfolio(), _basis()), 12)
     for prev, nxt in zip(periods, periods[1:]):
         assert prev.month_end == nxt.month_start
         assert np.allclose(prev.csm_closing, nxt.csm_opening)
@@ -77,7 +77,7 @@ def test_roll_forward_periods_chain():
 
 def test_roll_forward_opening_is_inception():
     """The first period opens at the inception measurement."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     first = roll_forward(m, 12)[0]
     assert first.month_start == 0
     assert np.allclose(first.csm_opening, m.csm_path[:, 0])
@@ -86,14 +86,14 @@ def test_roll_forward_opening_is_inception():
 
 def test_roll_forward_runs_off_to_zero():
     """The final period closes the contract -- CSM and BEL run off to zero."""
-    last = roll_forward(measure(_portfolio(), _assumptions()), 12)[-1]
+    last = roll_forward(measure(_portfolio(), _basis()), 12)[-1]
     assert np.allclose(last.csm_closing, 0.0, atol=1.0)
     assert np.allclose(last.bel_closing, 0.0, atol=1.0)
 
 
 def test_roll_forward_uneven_last_period():
     """A horizon not divisible by the period gives a short final period."""
-    periods = roll_forward(measure(_portfolio(), _assumptions()), period_months=7)
+    periods = roll_forward(measure(_portfolio(), _basis()), period_months=7)
     assert periods[-1].month_end == 120
     assert sum(p.month_end - p.month_start for p in periods) == 120
 
@@ -101,7 +101,7 @@ def test_roll_forward_uneven_last_period():
 def test_roll_forward_rejects_bad_period():
     """A non-positive period length is an error."""
     with pytest.raises(ValueError, match="period_months"):
-        roll_forward(measure(_portfolio(), _assumptions()), 0)
+        roll_forward(measure(_portfolio(), _basis()), 0)
 
 
 def _actuals(m, factors):
@@ -112,7 +112,7 @@ def _actuals(m, factors):
 
 def test_roll_forward_multi_experience_reconciles():
     """Experience at every period boundary -- each period reconciles exactly."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     actuals = _actuals(m, [0.97, 0.93, 0.88])
     for p in roll_forward(m, 12, actual_inforce=actuals):
         assert np.allclose(
@@ -125,7 +125,7 @@ def test_roll_forward_multi_experience_reconciles():
 
 def test_roll_forward_multi_experience_chains_and_isolates():
     """Periods chain, and an experience line sits in each boundary period."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     # distinct ratios per boundary, so each period has its own experience
     periods = roll_forward(m, 12, actual_inforce=_actuals(m, [0.95, 0.90, 0.85]))
     for prev, nxt in zip(periods, periods[1:]):
@@ -140,7 +140,7 @@ def test_roll_forward_multi_experience_chains_and_isolates():
 
 def test_roll_forward_multi_single_row_matches_single_experience():
     """A one-row 2-D actual_inforce equals the single-experience roll."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     actual_12 = m.cashflows.inforce[:, 12] * 0.9
     multi = roll_forward(m, 12, actual_inforce=actual_12.reshape(1, -1))
     single = roll_forward(m, 12, actual_inforce=actual_12, experience_at=12)
@@ -152,7 +152,7 @@ def test_roll_forward_multi_single_row_matches_single_experience():
 
 def test_roll_forward_multi_rejects_revision_or_experience_at():
     """A 2-D actual_inforce does not combine with revised or experience_at."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     actuals = _actuals(m, [0.95, 0.95])
     with pytest.raises(ValueError, match="do not apply"):
         roll_forward(m, 12, actual_inforce=actuals, revised=m, revised_at=24)
@@ -160,7 +160,7 @@ def test_roll_forward_multi_rejects_revision_or_experience_at():
 
 def test_roll_forward_multi_rejects_too_many_rows():
     """Experience rows past the projection horizon are an error."""
-    m = measure(_portfolio(), _assumptions())          # 120-month horizon
+    m = measure(_portfolio(), _basis())          # 120-month horizon
     actuals = np.ones((11, m.bel.shape[0]))            # boundary 132 > 120
     with pytest.raises(ValueError, match="horizon"):
         roll_forward(m, 12, actual_inforce=actuals)
@@ -170,7 +170,7 @@ def _revised(mps: ModelPoints):
     """A measurement of the same book under markedly higher mortality."""
     worse_mort = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.003))
     worse = replace(
-        _assumptions(),
+        _basis(),
         mortality_annual=worse_mort,
         coverages=(CoverageRate("DEATH", worse_mort),),
     )
@@ -180,7 +180,7 @@ def _revised(mps: ModelPoints):
 def test_roll_forward_assumption_change_reconciles():
     """With a revision, every period still reconciles exactly."""
     mps = _portfolio()
-    periods = roll_forward(measure(mps, _assumptions()), 12,
+    periods = roll_forward(measure(mps, _basis()), 12,
                            revised=_revised(mps), revised_at=24)
     for p in periods:
         assert np.allclose(
@@ -194,7 +194,7 @@ def test_roll_forward_assumption_change_reconciles():
 def test_roll_forward_assumption_change_only_in_revision_period():
     """The assumption-change line is non-zero only in the revision period."""
     mps = _portfolio()
-    periods = roll_forward(measure(mps, _assumptions()), 12,
+    periods = roll_forward(measure(mps, _basis()), 12,
                            revised=_revised(mps), revised_at=24)
     for p in periods:
         if p.month_start == 24:
@@ -207,7 +207,7 @@ def test_roll_forward_assumption_change_only_in_revision_period():
 def test_roll_forward_worse_assumptions_reduce_csm():
     """A revision that raises the liability adjusts the CSM downwards."""
     mps = _portfolio()
-    periods = roll_forward(measure(mps, _assumptions()), 12,
+    periods = roll_forward(measure(mps, _basis()), 12,
                            revised=_revised(mps), revised_at=24)
     rev = next(p for p in periods if p.month_start == 24)
     assert np.all(rev.bel_assumption_change > 0.0)        # higher claims
@@ -217,7 +217,7 @@ def test_roll_forward_worse_assumptions_reduce_csm():
 def test_roll_forward_pre_revision_periods_unaffected():
     """Periods before the revision match the no-revision roll, and chain."""
     mps = _portfolio()
-    m = measure(mps, _assumptions())
+    m = measure(mps, _basis())
     plain = roll_forward(m, 12)
     revised = roll_forward(m, 12, revised=_revised(mps), revised_at=24)
     for plain_p, rev_p in zip(plain[:2], revised[:2]):
@@ -230,7 +230,7 @@ def test_roll_forward_pre_revision_periods_unaffected():
 
 def test_roll_forward_rejects_lonely_revised():
     """revised and revised_at must be passed together."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     with pytest.raises(ValueError, match="together"):
         roll_forward(m, 12, revised=m)
 
@@ -238,14 +238,14 @@ def test_roll_forward_rejects_lonely_revised():
 def test_roll_forward_rejects_off_boundary_revision():
     """The change month must be a multiple of the period length."""
     mps = _portfolio()
-    m = measure(mps, _assumptions())
+    m = measure(mps, _basis())
     with pytest.raises(ValueError, match="change month"):
         roll_forward(m, 12, revised=_revised(mps), revised_at=20)
 
 
 def test_roll_forward_experience_scales_the_fcf():
     """In-force experience scales the closing FCF by the actual/expected ratio."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     k = 24
     actual = 0.5 * m.cashflows.inforce[:, k]          # half the book remains
     periods = roll_forward(m, 12, actual_inforce=actual, experience_at=k)
@@ -256,7 +256,7 @@ def test_roll_forward_experience_scales_the_fcf():
 
 def test_roll_forward_experience_reconciles():
     """With an experience adjustment, every period still reconciles exactly."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     actual = 0.8 * m.cashflows.inforce[:, 24]
     for p in roll_forward(m, 12, actual_inforce=actual, experience_at=24):
         assert np.allclose(
@@ -269,7 +269,7 @@ def test_roll_forward_experience_reconciles():
 
 def test_roll_forward_experience_isolated_to_its_period():
     """The experience line is non-zero only in the experience period."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     actual = 0.8 * m.cashflows.inforce[:, 24]
     for p in roll_forward(m, 12, actual_inforce=actual, experience_at=24):
         if p.month_start == 24:
@@ -281,7 +281,7 @@ def test_roll_forward_experience_isolated_to_its_period():
 
 def test_roll_forward_experience_pre_periods_unaffected():
     """Periods before the experience match the no-experience roll, and chain."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     actual = 0.8 * m.cashflows.inforce[:, 24]
     plain = roll_forward(m, 12)
     exp = roll_forward(m, 12, actual_inforce=actual, experience_at=24)
@@ -296,7 +296,7 @@ def test_roll_forward_experience_pre_periods_unaffected():
 def test_roll_forward_rejects_experience_and_revision_together():
     """v1 recognises a revision or experience, not both in one call."""
     mps = _portfolio()
-    m = measure(mps, _assumptions())
+    m = measure(mps, _basis())
     actual = 0.8 * m.cashflows.inforce[:, 24]
     with pytest.raises(ValueError, match="not both"):
         roll_forward(m, 12, revised=_revised(mps), revised_at=24,
@@ -305,14 +305,14 @@ def test_roll_forward_rejects_experience_and_revision_together():
 
 def test_roll_forward_rejects_lonely_actual_inforce():
     """actual_inforce and experience_at must be passed together."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     with pytest.raises(ValueError, match="actual_inforce"):
         roll_forward(m, 12, actual_inforce=m.cashflows.inforce[:, 24])
 
 
 def test_reconcile_period_count_and_aggregation():
     """reconcile gives one portfolio-total table per movement."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     movements = roll_forward(m, 12)
     recons = reconcile(movements)
     assert len(recons) == len(movements)
@@ -322,7 +322,7 @@ def test_reconcile_period_count_and_aggregation():
 
 def test_reconcile_reconciles():
     """opening + future service + finance + release == closing, per column."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     for r in reconcile(roll_forward(m, 12)):
         assert np.isclose(
             r.bel_opening + r.bel_future_service + r.bel_finance
@@ -338,7 +338,7 @@ def test_reconcile_reconciles():
 def test_reconcile_carries_the_assumption_change():
     """The future-service row carries an assumption revision, and reconciles."""
     mps = _portfolio()
-    m = measure(mps, _assumptions())
+    m = measure(mps, _basis())
     recons = reconcile(roll_forward(m, 12, revised=_revised(mps), revised_at=24))
     rev = next(r for r in recons if r.month_start == 24)
     assert not np.isclose(rev.csm_future_service, 0.0)
@@ -349,21 +349,21 @@ def test_reconcile_carries_the_assumption_change():
 
 def test_reconcile_renders_a_table():
     """str(Reconciliation) is a readable three-column table."""
-    m = measure(_portfolio(), _assumptions())
+    m = measure(_portfolio(), _basis())
     text = str(reconcile(roll_forward(m, 12))[0])
     assert "Opening" in text and "Closing" in text and "CSM" in text
 
 
 def test_roll_forward_paa_reconciles_the_lrc():
     """The PAA movement reconciles: opening + premiums - revenue = closing."""
-    m = fcf.paa.measure(_portfolio(), _assumptions())
+    m = fcf.paa.measure(_portfolio(), _basis())
     for p in roll_forward(m, 12):
         assert np.allclose(p.lrc_opening + p.premiums - p.revenue, p.lrc_closing)
 
 
 def test_roll_forward_paa_chains_from_zero():
     """The PAA LRC opens at zero and each period chains to the next."""
-    periods = roll_forward(fcf.paa.measure(_portfolio(), _assumptions()), 12)
+    periods = roll_forward(fcf.paa.measure(_portfolio(), _basis()), 12)
     assert np.allclose(periods[0].lrc_opening, 0.0)
     for prev, nxt in zip(periods, periods[1:]):
         assert prev.month_end == nxt.month_start
@@ -372,15 +372,15 @@ def test_roll_forward_paa_chains_from_zero():
 
 def test_roll_forward_paa_rejects_gmm_options():
     """The revision and experience options do not apply to a PAA measurement."""
-    paa = fcf.paa.measure(_portfolio(), _assumptions())
-    gmm = measure(_portfolio(), _assumptions())
+    paa = fcf.paa.measure(_portfolio(), _basis())
+    gmm = measure(_portfolio(), _basis())
     with pytest.raises(ValueError, match="GMM"):
         roll_forward(paa, 12, revised=gmm, revised_at=24)
 
 
 def test_roll_forward_paa_reconciles_all_three_components():
     """LRC, loss component and LIC each reconcile, with a settlement pattern."""
-    basis = replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
+    basis = replace(_basis(), settlement_pattern=np.array([0.5, 0.3, 0.2]))
     for p in roll_forward(fcf.paa.measure(_portfolio(), basis), 12):
         assert np.allclose(p.lrc_opening + p.premiums - p.revenue, p.lrc_closing)
         assert np.allclose(p.loss_component_opening - p.loss_component_release, p.loss_component_closing)
@@ -392,9 +392,9 @@ def test_paa_lic_builds_with_a_settlement_pattern():
     """A settlement pattern makes the LIC non-zero; immediate settlement zeroes it."""
     lagged = fcf.paa.measure(
         _portfolio(),
-        replace(_assumptions(), settlement_pattern=np.array([0.5, 0.3, 0.2])),
+        replace(_basis(), settlement_pattern=np.array([0.5, 0.3, 0.2])),
     )
-    immediate = fcf.paa.measure(_portfolio(), _assumptions())
+    immediate = fcf.paa.measure(_portfolio(), _basis())
     assert np.any(lagged.lic > 0.0)
     assert np.allclose(immediate.lic, 0.0)
 
@@ -402,8 +402,8 @@ def test_paa_lic_builds_with_a_settlement_pattern():
 def test_gmm_lic_builds_with_a_settlement_pattern():
     """A settlement pattern gives the GMM measurement a non-zero LIC."""
     pattern = np.array([0.5, 0.3, 0.2])
-    lagged = measure(_portfolio(), replace(_assumptions(), settlement_pattern=pattern))
-    immediate = measure(_portfolio(), _assumptions())
+    lagged = measure(_portfolio(), replace(_basis(), settlement_pattern=pattern))
+    immediate = measure(_portfolio(), _basis())
     assert np.any(lagged.lic > 0.0)
     assert np.allclose(immediate.lic, 0.0)
 
@@ -420,16 +420,16 @@ def test_vfa_lic_builds_with_a_settlement_pattern():
 
 def test_settlement_lag_lowers_the_bel():
     """A settlement lag discounts claims to their payment dates -- a lower BEL."""
-    immediate = measure(_portfolio(), _assumptions())
+    immediate = measure(_portfolio(), _basis())
     lagged = measure(_portfolio(), replace(
-        _assumptions(), settlement_pattern=np.array([0.2, 0.3, 0.5])))
+        _basis(), settlement_pattern=np.array([0.2, 0.3, 0.5])))
     assert np.all(lagged.bel_path[:, 0] <= immediate.bel_path[:, 0])
     assert lagged.bel_path[:, 0].sum() < immediate.bel_path[:, 0].sum()
 
 
 def test_settlement_lag_value_matches_measure():
     """measure() and measure() agree once the settlement lag is reflected."""
-    basis = replace(_assumptions(), settlement_pattern=np.array([0.4, 0.6]))
+    basis = replace(_basis(), settlement_pattern=np.array([0.4, 0.6]))
     mps = _portfolio()
     v = measure(mps, basis, full=False)
     m = measure(mps, basis)
@@ -440,7 +440,7 @@ def test_settlement_lag_value_matches_measure():
 
 def test_reconcile_paa():
     """The PAA reconciliation aggregates the three components and renders."""
-    basis = replace(_assumptions(), settlement_pattern=np.array([0.6, 0.4]))
+    basis = replace(_basis(), settlement_pattern=np.array([0.6, 0.4]))
     recons = reconcile(roll_forward(fcf.paa.measure(_portfolio(), basis), 12))
     assert len(recons) == 10
     for r in recons:
@@ -495,7 +495,7 @@ def test_roll_forward_vfa_rejects_gmm_options():
     """The revision and experience options do not apply to a VFA measurement."""
     m = fcf.vfa.measure(_vfa_contract(), _vfa_assumptions())
     with pytest.raises(ValueError, match="GMM"):
-        roll_forward(m, 12, revised=measure(_portfolio(), _assumptions()),
+        roll_forward(m, 12, revised=measure(_portfolio(), _basis()),
                      revised_at=24)
 
 

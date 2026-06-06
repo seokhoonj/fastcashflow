@@ -14,7 +14,7 @@ from fastcashflow import Basis, ModelPoints, CoverageRate
 from fastcashflow.gmm import measure
 
 
-def _flat_asmp(*, discount=0.05) -> Basis:
+def _flat_basis(*, discount=0.05) -> Basis:
     return Basis(
         mortality_annual=lambda s, ia, d: np.full(s.shape, 0.001),
         lapse_annual=lambda s, ia, d: np.full(s.shape, 0.05),
@@ -113,8 +113,8 @@ def test_subset_leaves_product_none_when_unset():
 
 def test_segmented_measure_routes_each_mp_to_its_segment():
     """Each mp's BEL should equal the measure() result on its own segment."""
-    basis_high = _flat_asmp(discount=0.03)               # lower discount -> larger BEL
-    basis_low = _flat_asmp(discount=0.10)                # higher discount -> smaller BEL
+    basis_high = _flat_basis(discount=0.03)               # lower discount -> larger BEL
+    basis_low = _flat_basis(discount=0.10)                # higher discount -> smaller BEL
     basis = {("TERM_A", "GA"): basis_high, ("TERM_A", "FC"): basis_low}
 
     mp = ModelPoints(
@@ -141,7 +141,7 @@ def test_segmented_measure_routes_each_mp_to_its_segment():
 
 def test_segmented_measure_falls_back_to_single_segment_when_no_product():
     """A single-segment basis works even when product/channel aren't set."""
-    basis = _flat_asmp()
+    basis = _flat_basis()
     basis = {("TERM_A", ""): basis}
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
@@ -156,7 +156,7 @@ def test_segmented_measure_falls_back_to_single_segment_when_no_product():
 
 def test_segmented_measure_rejects_multi_segment_basis_without_keys():
     """Multi-segment basis + no product/channel on MPs -> raise."""
-    basis = {("TERM_A", "GA"): _flat_asmp(), ("TERM_A", "FC"): _flat_asmp(discount=0.10)}
+    basis = {("TERM_A", "GA"): _flat_basis(), ("TERM_A", "FC"): _flat_basis(discount=0.10)}
     mp = ModelPoints(
         issue_age=np.array([40]),
         premium=np.zeros(1),
@@ -169,7 +169,7 @@ def test_segmented_measure_rejects_multi_segment_basis_without_keys():
 
 def test_segmented_measure_rejects_unknown_segment():
     """A model point pointing at a segment not in basis -> raise."""
-    basis = {("TERM_A", "GA"): _flat_asmp()}
+    basis = {("TERM_A", "GA"): _flat_basis()}
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
         premium=np.zeros(2),

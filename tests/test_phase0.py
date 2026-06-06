@@ -16,7 +16,7 @@ from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 Z_75 = 0.6744897501960817
 
 
-def _assumptions(**overrides):
+def _basis(**overrides):
     """Defaults for the phase-0 hand calc -- 1%/month mortality, 2%/month lapse."""
     kw = dict(
         mortality_q     = 0.01,
@@ -40,7 +40,7 @@ def test_hand_calculation():
             premium=premium, term_months=term,
             calculation_methods=PATTERNS,
         ),
-        _assumptions(),
+        _basis(),
     )
 
     # in force: inforce[0] = 1.0 ; inforce[1] = 1 * (1-0.01) * (1-0.02) = 0.9702
@@ -84,7 +84,7 @@ def test_onerous_contract():
             premium=100.0, term_months=12,
             calculation_methods=PATTERNS,
         ),
-        _assumptions(
+        _basis(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05))
         ),
     )
@@ -100,7 +100,7 @@ def test_csm_fully_releases():
             premium=80_000.0, term_months=60,
             calculation_methods=PATTERNS,
         ),
-        _assumptions(
+        _basis(
             mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
             lapse_annual=lambda sex, issue_age, duration: np.full(duration.shape, _annual(0.01)),
             discount_annual=0.03,
@@ -120,7 +120,7 @@ def test_count_scales_linearly():
     """
     kw = dict(issue_age=40, benefits={0: 1_000_000.0}, premium=12_000.0,
               term_months=24)
-    basis = _assumptions(
+    basis = _basis(
         mortality_annual=lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.001)),
         discount_annual=0.03,
         expense_items=(

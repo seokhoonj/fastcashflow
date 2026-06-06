@@ -17,7 +17,7 @@ Q = 0.002          # flat monthly mortality
 LAPSE = 0.005      # flat monthly lapse
 
 
-def _assumptions(**overrides):
+def _basis(**overrides):
     kw = dict(
         mortality_q     = Q,
         lapse_q         = LAPSE,
@@ -31,7 +31,7 @@ def _assumptions(**overrides):
 
 def test_maturity_benefit_adds_its_present_value():
     """Adding a maturity benefit raises BEL by exactly its present value."""
-    basis = _assumptions()
+    basis = _basis()
     death_benefit, maturity, premium, term = 1e8, 5e7, 50_000.0, 24
 
     term_life = measure(
@@ -53,7 +53,7 @@ def test_maturity_benefit_adds_its_present_value():
 
 def test_pure_endowment():
     """A pure endowment (no death benefit) carries zero RA -- hand-checked BEL."""
-    basis = _assumptions()
+    basis = _basis()
     maturity, premium, term = 5e7, 50_000.0, 24
     res = measure(
         ModelPoints.single(40, premium, term, maturity_benefit=maturity, calculation_methods=PATTERNS),
@@ -84,7 +84,7 @@ def test_value_matches_measure_endowment():
         maturity_benefit=rng.integers(5, 40, n) * 1_000_000,
         calculation_methods=PATTERNS,
     )
-    basis = _assumptions()
+    basis = _basis()
     fast = measure(mps, basis, full=False)
     detailed = measure(mps, basis)
 
@@ -96,7 +96,7 @@ def test_value_matches_measure_endowment():
 
 def test_immediate_annuity_hand_calc():
     """A pure immediate annuity -- hand-checked inception BEL and RA."""
-    basis = _assumptions(longevity_cv=0.08)
+    basis = _basis(longevity_cv=0.08)
     single, annuity, term = 1.2e8, 600_000.0, 24
     res = measure(
         ModelPoints.single(
@@ -132,7 +132,7 @@ def test_value_matches_measure_annuity():
         premium_term_months=np.ones(n, dtype=np.int64),
         calculation_methods=PATTERNS,
     )
-    basis = _assumptions(longevity_cv=0.08)
+    basis = _basis(longevity_cv=0.08)
     fast = measure(mps, basis, full=False)
     detailed = measure(mps, basis)
 
@@ -148,9 +148,9 @@ def test_longevity_ra_responds_to_its_cv():
         60, 8e7, 180, annuity_payment=500_000.0, premium_term_months=1,
         calculation_methods=PATTERNS,
     )
-    no_cv = measure(annuity, _assumptions(longevity_cv=0.0))
-    full_cv = measure(annuity, _assumptions(longevity_cv=0.10))
-    half_cv = measure(annuity, _assumptions(longevity_cv=0.05))
+    no_cv = measure(annuity, _basis(longevity_cv=0.0))
+    full_cv = measure(annuity, _basis(longevity_cv=0.10))
+    half_cv = measure(annuity, _basis(longevity_cv=0.05))
 
     assert np.allclose(no_cv.ra, 0.0)            # no longevity_cv -> no RA
     assert full_cv.ra_path[0, 0] > 0.0                # longevity risk is now priced

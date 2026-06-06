@@ -16,7 +16,7 @@ Q = 0.002          # flat monthly mortality
 LAPSE = 0.004      # flat monthly lapse
 
 
-def _assumptions(**overrides):
+def _basis(**overrides):
     kw = dict(
         mortality_q       = Q,
         lapse_q           = LAPSE,
@@ -32,7 +32,7 @@ def _assumptions(**overrides):
 
 def test_vfa_account_value_and_csm_hand_calc():
     """Account value grows at (1+r)(1-f); CSM is the entity's unearned fee."""
-    basis = _assumptions()
+    basis = _basis()
     av0, term = 1e8, 60
     res = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0), basis
@@ -64,7 +64,7 @@ def test_gmdb_floor_on_death_hand_calc():
     total death decrement times the per-death excess ``(gmdb - av0)``.
     Surrender and maturity exits are unaffected (still pay the account value).
     """
-    basis = _assumptions(investment_return=0.0, fund_fee=0.0)
+    basis = _basis(investment_return=0.0, fund_fee=0.0)
     av0, gmdb, term = 1000.0, 1200.0, 60
     base = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0), basis
@@ -94,7 +94,7 @@ def test_gmab_floor_at_maturity_hand_calc():
     in-force surviving to term times the per-survivor excess ``(gmab - av0)``.
     Death and surrender exits are unaffected (still pay the account value).
     """
-    basis = _assumptions(investment_return=0.0, fund_fee=0.0)
+    basis = _basis(investment_return=0.0, fund_fee=0.0)
     av0, gmab, term = 1000.0, 1200.0, 60
     base = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0), basis
@@ -123,7 +123,7 @@ def test_floor_tvog_zero_under_flat_scenarios():
     cost, so the GMDB/GMAB floor time value is zero and the measurement
     matches the deterministic run.
     """
-    basis = _assumptions(investment_return=0.04, fund_fee=0.01)
+    basis = _basis(investment_return=0.04, fund_fee=0.01)
     av0, term = 1000.0, 36
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
                             minimum_death_benefit=1100.0,
@@ -149,7 +149,7 @@ def test_floor_tvog_matches_independent_reimplementation():
     from fastcashflow.projection import project_cashflows
     from fastcashflow.tvog import guarantee_floor_time_value
 
-    basis = _assumptions(investment_return=0.04, fund_fee=0.0)
+    basis = _basis(investment_return=0.04, fund_fee=0.0)
     av0, gmdb, gmab, term = 1000.0, 1100.0, 1100.0, 24
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
                             minimum_death_benefit=gmdb,
@@ -192,7 +192,7 @@ def test_vfa_zero_fee_gives_no_profit():
     """With no variable fee the contract is a pure pass-through -- no CSM."""
     res = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, 60, account_value=1e8),
-        _assumptions(fund_fee=0.0),
+        _basis(fund_fee=0.0),
     )
     assert np.isclose(res.csm_path[0, 0], 0.0, atol=1.0)   # ~0 vs a 1e8 contract
     assert np.isclose(res.variable_fee[0], 0.0)
@@ -201,7 +201,7 @@ def test_vfa_zero_fee_gives_no_profit():
 def test_vfa_csm_releases_over_the_term():
     """The CSM builds at inception and releases to zero over the term."""
     res = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 120, account_value=1e8), _assumptions()
+        ModelPoints.single(40, 0.0, 120, account_value=1e8), _basis()
     )
     assert res.csm_path[0, 0] > 0.0
     assert np.isclose(res.csm_path[0, -1], 0.0)
@@ -212,9 +212,9 @@ def test_vfa_csm_releases_over_the_term():
 def test_vfa_variable_fee_scales_with_the_fee():
     """A larger fund fee leaves the entity a larger variable fee and CSM."""
     small = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8),
-                        _assumptions(fund_fee=0.01))
+                        _basis(fund_fee=0.01))
     large = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8),
-                        _assumptions(fund_fee=0.03))
+                        _basis(fund_fee=0.03))
     assert large.variable_fee[0] > small.variable_fee[0] > 0.0
     assert large.csm_path[0, 0] > small.csm_path[0, 0] > 0.0
 
@@ -222,11 +222,11 @@ def test_vfa_variable_fee_scales_with_the_fee():
 def test_vfa_onerous_when_expenses_exceed_the_fee():
     """Heavy acquisition expense makes the contract onerous."""
     profitable = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 60, account_value=1e8), _assumptions()
+        ModelPoints.single(40, 0.0, 60, account_value=1e8), _basis()
     )
     onerous = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, 60, account_value=1e8),
-        _assumptions(expense_items=(
+        _basis(expense_items=(
             ExpenseItem("acquisition", "alpha_fixed", 10_000_000.0),
         )),
     )
@@ -242,7 +242,7 @@ def _return_paths(annual: float, vol: float, n: int, n_time: int, seed: int):
 
 def test_vfa_tvog_folds_into_bel_and_reduces_csm():
     """Return scenarios fold the guarantee's time value into the BEL."""
-    basis = _assumptions(investment_return=0.05)
+    basis = _basis(investment_return=0.05)
     mp = ModelPoints.single(40, 0.0, 120,
                              account_value=1e8, minimum_crediting_rate=0.05)
     scenarios = _return_paths(0.05, vol=0.008, n=2000, n_time=120, seed=7)
@@ -259,7 +259,7 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
 
 def test_vfa_large_tvog_turns_the_contract_onerous():
     """A guarantee time value beyond the unearned fee makes the contract onerous."""
-    basis = _assumptions(investment_return=0.05)
+    basis = _basis(investment_return=0.05)
     mp = ModelPoints.single(40, 0.0, 120,
                              account_value=1e8, minimum_crediting_rate=0.05)
     scenarios = _return_paths(0.05, vol=0.03, n=2000, n_time=120, seed=8)
@@ -273,7 +273,7 @@ def test_vfa_large_tvog_turns_the_contract_onerous():
 
 def test_vfa_tvog_matches_measure_tvog():
     """The TVOG folded into measure_vfa equals the stand-alone measure_tvog."""
-    basis = _assumptions(investment_return=0.04)
+    basis = _basis(investment_return=0.04)
     mp = ModelPoints.single(40, 0.0, 120,
                              account_value=1e8, minimum_crediting_rate=0.045)
     scenarios = _return_paths(0.04, vol=0.012, n=1500, n_time=120, seed=9)
@@ -286,7 +286,7 @@ def test_vfa_tvog_matches_measure_tvog():
 def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
     """Per-MP varying minimum_crediting_rate with stochastic return scenarios
     is not supported in v1 -- the time-value pass is portfolio-level."""
-    basis = _assumptions(investment_return=0.04)
+    basis = _basis(investment_return=0.04)
     mp = ModelPoints(
         issue_age=np.array([40, 45]),
         premium=np.array([0.0, 0.0]),
@@ -302,7 +302,7 @@ def test_vfa_ra_zero_without_expense_cv():
     """With no expense_cv the VFA RA is zero -- the v1 default."""
     res = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, 60, account_value=1e8),
-        _assumptions(expense_items=(
+        _basis(expense_items=(
             ExpenseItem("maintenance", "gamma_fixed", 120_000.0),
         )),
     )
@@ -313,8 +313,8 @@ def test_vfa_ra_scales_with_expense_cv():
     """The VFA RA is a confidence-level margin linear in the expense CV."""
     mp = ModelPoints.single(40, 0.0, 60, account_value=1e8)
     _g120k = (ExpenseItem("maintenance", "gamma_fixed", 120_000.0),)
-    r1 = fcf.vfa.measure(mp, _assumptions(expense_items=_g120k, expense_cv=0.10))
-    r2 = fcf.vfa.measure(mp, _assumptions(expense_items=_g120k, expense_cv=0.20))
+    r1 = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.10))
+    r2 = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.20))
     assert r1.ra_path[0, 0] > 0.0
     assert np.isclose(r2.ra_path[0, 0], 2.0 * r1.ra_path[0, 0])
 
@@ -323,8 +323,8 @@ def test_vfa_ra_reduces_the_csm():
     """The RA is part of the fulfilment cash flows, so it reduces the CSM."""
     mp = ModelPoints.single(40, 0.0, 60, account_value=1e8)
     _g120k = (ExpenseItem("maintenance", "gamma_fixed", 120_000.0),)
-    no_ra = fcf.vfa.measure(mp, _assumptions(expense_items=_g120k, expense_cv=0.0))
-    with_ra = fcf.vfa.measure(mp, _assumptions(expense_items=_g120k, expense_cv=0.30))
+    no_ra = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.0))
+    with_ra = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.30))
     assert with_ra.csm_path[0, 0] < no_ra.csm_path[0, 0]
 
 
@@ -346,7 +346,7 @@ def test_load_sample_vfa_is_measurable():
 
 def test_vfa_report_releases_the_ra_into_revenue():
     """The report releases the VFA RA into insurance revenue."""
-    basis = _assumptions(expense_items=(
+    basis = _basis(expense_items=(
         ExpenseItem("maintenance", "gamma_fixed", 120_000.0),
     ), expense_cv=0.25)
     m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8), basis)

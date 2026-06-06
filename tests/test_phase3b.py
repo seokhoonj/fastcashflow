@@ -32,7 +32,7 @@ def _death_benefits(mps: ModelPoints) -> np.ndarray:
                        minlength=mps.n_mp)
 
 
-def _assumptions():
+def _basis():
     return make_death_basis(
         mortality_q       = 0.001,
         lapse_q           = 0.01,
@@ -110,7 +110,7 @@ def test_read_model_points_reads_count(tmp_path):
 def test_write_measurement_round_trip(tmp_path, suffix):
     """write_measurement persists the four valuation columns with an id column."""
     mps = _portfolio()
-    val = measure(mps, _assumptions(), full=False)
+    val = measure(mps, _basis(), full=False)
     ids = np.arange(mps.n_mp)
 
     path = tmp_path / f"out{suffix}"
@@ -127,7 +127,7 @@ def test_write_measurement_round_trip(tmp_path, suffix):
 
 def test_write_measurement_without_ids(tmp_path):
     """ids are optional -- omitting them writes just the four result columns."""
-    val = measure(_portfolio(50), _assumptions(), full=False)
+    val = measure(_portfolio(50), _basis(), full=False)
     path = tmp_path / "out.parquet"
     write_measurement(val, path)
     assert pl.read_parquet(path).columns == ["bel", "ra", "csm", "loss_component"]
@@ -195,7 +195,7 @@ def test_read_ignores_extra_columns_and_flags_missing(tmp_path):
 def test_file_workflow_matches_in_memory(tmp_path):
     """A file round-trip produces the same valuation as the in-memory path."""
     mps = _portfolio()
-    basis = _assumptions()
+    basis = _basis()
     pp, cp = _write_model_points(mps, tmp_path, ".parquet")
 
     from_file = measure(read_model_points(pp, coverages=cp, calculation_methods=PATTERNS), basis, full=False)
@@ -218,7 +218,7 @@ def test_measure_stream_streaming_matches_in_memory(tmp_path):
         term_months=rng.integers(60, 180, n),
         calculation_methods=PATTERNS,
     )
-    basis = _assumptions()
+    basis = _basis()
 
     pp, cp = _write_model_points(mps, tmp_path, ".parquet")
 
@@ -243,9 +243,9 @@ def test_measure_stream_rejects_existing_output(tmp_path):
     pp, cp = _write_model_points(mps, tmp_path, ".parquet")
     out_dir = tmp_path / "results"
 
-    fcf.gmm.measure_stream(pp, out_dir, _assumptions(), coverages=cp, calculation_methods=PATTERNS)
+    fcf.gmm.measure_stream(pp, out_dir, _basis(), coverages=cp, calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="already contains part"):
-        fcf.gmm.measure_stream(pp, out_dir, _assumptions(), coverages=cp, calculation_methods=PATTERNS)
+        fcf.gmm.measure_stream(pp, out_dir, _basis(), coverages=cp, calculation_methods=PATTERNS)
 
 
 def test_measure_stream_id_column(tmp_path):
@@ -256,13 +256,13 @@ def test_measure_stream_id_column(tmp_path):
     policy_no = np.array([f"PN{i:04d}" for i in range(n)], dtype=object)
     pp, cp = _write_model_points(mps, tmp_path, ".parquet", policy_no=policy_no)
 
-    fcf.gmm.measure_stream(pp, tmp_path / "r1", _assumptions(), coverages=cp,
+    fcf.gmm.measure_stream(pp, tmp_path / "r1", _basis(), coverages=cp,
                            calculation_methods=PATTERNS, id_column="policy_no")
     ids = pl.read_parquet(str(tmp_path / "r1" / "part-*.parquet"))["id"].to_list()
     assert set(ids) == set(policy_no.tolist())
 
     with pytest.raises(ValueError, match=r"id_column 'nope' is not a column"):
-        fcf.gmm.measure_stream(pp, tmp_path / "r2", _assumptions(), coverages=cp,
+        fcf.gmm.measure_stream(pp, tmp_path / "r2", _basis(), coverages=cp,
                                calculation_methods=PATTERNS, id_column="nope")
 
 
@@ -278,11 +278,11 @@ def test_measure_stream_rejects_global_duplicate_mp_id(tmp_path):
 
     with pytest.raises(ValueError, match="duplicate mp_id"):
         fcf.gmm.measure_stream(tmp_path / "p.parquet", tmp_path / "o1",
-                               _assumptions(), coverages=tmp_path / "c.parquet",
+                               _basis(), coverages=tmp_path / "c.parquet",
                                calculation_methods=PATTERNS, chunk_size=2)
     # opt-out runs the duplicate through (the caller's explicit choice)
     fcf.gmm.measure_stream(tmp_path / "p.parquet", tmp_path / "o2",
-                           _assumptions(), coverages=tmp_path / "c.parquet",
+                           _basis(), coverages=tmp_path / "c.parquet",
                            calculation_methods=PATTERNS, chunk_size=2,
                            validate_unique_mp_id=False)
     assert sorted((tmp_path / "o2").glob("part-*.parquet"))
@@ -444,5 +444,5 @@ def test_measure_stream_requires_mp_id_column(tmp_path):
                  ).write_parquet(tmp_path / "c.parquet")
     with pytest.raises(ValueError, match="no 'mp_id' column"):
         fcf.gmm.measure_stream(tmp_path / "p.parquet", tmp_path / "o",
-                               _assumptions(), coverages=tmp_path / "c.parquet",
+                               _basis(), coverages=tmp_path / "c.parquet",
                                calculation_methods=PATTERNS, id_column="policy_no")

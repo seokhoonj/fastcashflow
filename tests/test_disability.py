@@ -45,7 +45,7 @@ def _disability_model(*, lump_sum=True) -> StateModel:
     )
 
 
-def _asmp(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
+def _basis(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
           lump_sum=True) -> Basis:
     """Flat-rate, zero-discount basis. ``q`` / ``lapse`` / ``inception`` are
     the monthly rates the hand calculations use."""
@@ -104,7 +104,7 @@ def test_disability_income_hand_calculation():
     mp = ModelPoints.single(issue_age=45, benefits={0: 0.0}, premium=0.0,
                             term_months=3, disability_income=income,
                             state=STATE_WAIVER)        # seated on 'disabled'
-    basis = _asmp(disability_cv=0.20)
+    basis = _basis(disability_cv=0.20)
 
     occ = [1.0, 0.99, 0.99 ** 2]                       # mortality only
     disability_cf = [o * income for o in occ]
@@ -145,7 +145,7 @@ def test_disability_lump_sum_hand_calculation():
     lump = 10_000_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: 0.0}, premium=0.0,
                             term_months=2, disability_benefit=lump)
-    basis = _asmp(q=0.01, lapse=0.0, inception=0.05)
+    basis = _basis(q=0.01, lapse=0.0, inception=0.05)
 
     # active -> disabled transition prob = (survive death) * inception
     incep = 0.99 * 0.05
@@ -164,7 +164,7 @@ def test_lump_sum_off_when_unflagged():
     when disability_benefit is set."""
     mp = ModelPoints.single(issue_age=40, benefits={0: 0.0}, premium=0.0,
                             term_months=24, disability_benefit=5_000_000.0)
-    res = measure(mp, _asmp(lump_sum=False))
+    res = measure(mp, _basis(lump_sum=False))
     assert np.all(res.cashflows.disability_cf[0] == 0.0)
 
 
@@ -186,7 +186,7 @@ def test_measure_value_agree_disability_portfolio():
         disability_benefit=rng.integers(0, 30, n) * 1_000_000.0,
         state=rng.integers(0, 2, n),           # active or disabled start
     )
-    basis = _asmp(q=0.008, lapse=0.04, inception=0.02, disability_cv=0.25)
+    basis = _basis(q=0.008, lapse=0.04, inception=0.02, disability_cv=0.25)
     m, v = measure(mps, basis), measure(mps, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
     assert np.allclose(m.ra_path[:, 0], v.ra)
@@ -198,5 +198,5 @@ def test_disability_cv_drives_the_risk_adjustment():
     mp = ModelPoints.single(issue_age=45, benefits={0: 0.0}, premium=0.0,
                             term_months=12, disability_income=300_000.0,
                             state=STATE_WAIVER)
-    assert measure(mp, _asmp(disability_cv=0.0), full=False).ra[0] == 0.0
-    assert measure(mp, _asmp(disability_cv=0.30), full=False).ra[0] > 0.0
+    assert measure(mp, _basis(disability_cv=0.0), full=False).ra[0] == 0.0
+    assert measure(mp, _basis(disability_cv=0.30), full=False).ra[0] > 0.0

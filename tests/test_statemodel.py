@@ -16,7 +16,7 @@ from fastcashflow.statemodel import compile_state_model
 from conftest import annual_from_monthly as _annual
 
 
-def _asmp(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Basis:
+def _basis(*, waiver_rate=0.0, lapse=0.02, q=0.01, state_model=None) -> Basis:
     """Flat-rate, zero-discount, zero-expense basis -- every figure by hand.
 
     ``q``, ``lapse`` and ``waiver_rate`` are the monthly rates the hand
@@ -173,8 +173,8 @@ def test_explicit_waiver_model_matches_default():
               premium=30_000.0, term_months=120)
     for state in (STATE_ACTIVE, STATE_WAIVER, STATE_PAIDUP):
         mp = ModelPoints.single(**kw, state=state)
-        default = measure(mp, _asmp(waiver_rate=0.03), full=False)
-        custom = measure(mp, _asmp(waiver_rate=0.03, state_model=rebuilt), full=False)
+        default = measure(mp, _basis(waiver_rate=0.03), full=False)
+        custom = measure(mp, _basis(waiver_rate=0.03, state_model=rebuilt), full=False)
         assert np.isclose(default.bel[0], custom.bel[0])
 
 
@@ -188,7 +188,7 @@ def test_single_state_no_lapse_hand_calculation():
     premium = 12_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
                             premium=premium, term_months=3)
-    basis = _asmp(state_model=no_lapse)
+    basis = _basis(state_model=no_lapse)
 
     inforce = [1.0, 0.99, 0.99 ** 2]
     pv_claims = sum(i * 0.01 * death_benefit for i in inforce)
@@ -220,7 +220,7 @@ def test_decrement_order_matters():
     premium = 12_000.0
     mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
                             premium=premium, term_months=2)
-    basis = _asmp(waiver_rate=0.05, lapse=0.02, state_model=lapse_first)
+    basis = _basis(waiver_rate=0.05, lapse=0.02, state_model=lapse_first)
 
     # t=0: act=1, wav=0.
     #   act[1] = 1 * 0.99 * 0.98 * 0.95 = 0.92169  (death, lapse, then waiver)
@@ -235,7 +235,7 @@ def test_decrement_order_matters():
     assert np.isclose(measure(mp, basis, full=False).bel[0], bel)
     assert np.allclose(measure(mp, basis).cashflows.inforce[0], inforce)
     # The default waiver-before-lapse order gives a distinct figure.
-    default = measure(mp, _asmp(waiver_rate=0.05, lapse=0.02), full=False).bel[0]
+    default = measure(mp, _basis(waiver_rate=0.05, lapse=0.02), full=False).bel[0]
     assert not np.isclose(default, bel)
 
 
@@ -263,15 +263,15 @@ def test_three_state_model_runs():
     # A paid-up contract: identical to the default, which seats paid-up on
     # the waiver state -- both are mortality-only, premium-free.
     paidup = ModelPoints.single(**kw, state=STATE_PAIDUP)
-    base = measure(paidup, _asmp(waiver_rate=0.03), full=False)
-    custom = measure(paidup, _asmp(waiver_rate=0.03, state_model=three), full=False)
+    base = measure(paidup, _basis(waiver_rate=0.03), full=False)
+    custom = measure(paidup, _basis(waiver_rate=0.03, state_model=three), full=False)
     for field in ("bel", "ra", "csm", "loss_component"):
         assert np.isclose(getattr(base, field)[0], getattr(custom, field)[0])
 
     # An active contract is unaffected by the unreachable paid-up state.
     active = ModelPoints.single(**kw, state=STATE_ACTIVE)
-    assert np.isclose(measure(active, _asmp(waiver_rate=0.03), full=False).bel[0],
-                      measure(active, _asmp(waiver_rate=0.03, state_model=three), full=False).bel[0])
+    assert np.isclose(measure(active, _basis(waiver_rate=0.03), full=False).bel[0],
+                      measure(active, _basis(waiver_rate=0.03, state_model=three), full=False).bel[0])
 
 
 def test_paidup_state_uses_its_own_lapse():
@@ -304,7 +304,7 @@ def test_paidup_lapse_falls_back_to_lapse_annual():
     """With lapse_paidup_annual unset, the paid-up state's lapse_paidup rate
     falls back to lapse_annual -- the WAIVER_PAIDUP model still runs, the
     paid-up state just lapses at the ordinary rate."""
-    basis = _asmp(q=0.01, lapse=0.05,
+    basis = _basis(q=0.01, lapse=0.05,
                  state_model=STATE_MODELS["WAIVER_PAIDUP"])
     kw = dict(issue_age=40, benefits={0: 100_000.0}, premium=0.0,
               term_months=3)
@@ -337,7 +337,7 @@ def test_measure_and_value_agree_under_custom_model():
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),
     )
-    basis = _asmp(waiver_rate=0.03, state_model=three)
+    basis = _basis(waiver_rate=0.03, state_model=three)
     assert np.allclose(measure(mps, basis).bel_path[:, 0], measure(mps, basis, full=False).bel)
 
 

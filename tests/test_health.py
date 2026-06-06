@@ -23,7 +23,7 @@ Q = 0.002            # flat monthly mortality
 LAPSE = 0.005        # flat monthly lapse
 MORB_RATE = 0.03     # flat monthly morbidity rate (events per in-force month)
 
-# Coverage codes -- entry i of ``_assumptions().coverages`` lives at code i.
+# Coverage codes -- entry i of ``_basis().coverages`` lives at code i.
 DEATH, INPATIENT, SURGERY, OUTPATIENT, DIAGNOSIS = 0, 1, 2, 3, 4
 
 
@@ -31,7 +31,7 @@ def _mortality(sex, issue_age, duration):
     return np.full(issue_age.shape, _annual(Q))
 
 
-def _assumptions(**overrides) -> Basis:
+def _basis(**overrides) -> Basis:
     flat_morb = lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(MORB_RATE))
     base = dict(
         mortality_annual=_mortality,
@@ -53,7 +53,7 @@ def _assumptions(**overrides) -> Basis:
 
 def test_inpatient_benefit_adds_its_present_value():
     """An inpatient coverage adds its present value to BEL; RA via morbidity_cv."""
-    basis = _assumptions(morbidity_cv=0.15)
+    basis = _basis(morbidity_cv=0.15)
     benefit, term = 30_000.0, 24
     res = measure(
         ModelPoints.single(40, 0.0, term, benefits={INPATIENT: benefit}, calculation_methods=PATTERNS),
@@ -75,7 +75,7 @@ def test_inpatient_benefit_adds_its_present_value():
 
 def test_health_claim_is_non_decrementing():
     """A health claim leaves the policy in force -- it does not decrement."""
-    basis = _assumptions()
+    basis = _basis()
     term = 36
     plain = measure(
         ModelPoints.single(40, 50_000.0, term, benefits={0: 1e8}, calculation_methods=PATTERNS),
@@ -101,9 +101,9 @@ def test_health_claim_is_non_decrementing():
 def test_morbidity_ra_responds_to_its_cv():
     """The morbidity RA is zero without morbidity_cv and linear in it."""
     health = ModelPoints.single(40, 0.0, 60, benefits={INPATIENT: 30_000.0}, calculation_methods=PATTERNS)
-    no_cv = measure(health, _assumptions(morbidity_cv=0.0))
-    full_cv = measure(health, _assumptions(morbidity_cv=0.20))
-    half_cv = measure(health, _assumptions(morbidity_cv=0.10))
+    no_cv = measure(health, _basis(morbidity_cv=0.0))
+    full_cv = measure(health, _basis(morbidity_cv=0.20))
+    half_cv = measure(health, _basis(morbidity_cv=0.10))
 
     assert np.allclose(no_cv.ra, 0.0)
     assert full_cv.ra_path[0, 0] > 0.0
@@ -123,7 +123,7 @@ def test_value_matches_measure_health():
             OUTPATIENT: rng.integers(0, 4, n) * 5_000},
         calculation_methods=PATTERNS,
     )
-    basis = _assumptions(morbidity_cv=0.15)
+    basis = _basis(morbidity_cv=0.15)
     fast = measure(mps, basis, full=False)
     detailed = measure(mps, basis)
 
@@ -135,7 +135,7 @@ def test_value_matches_measure_health():
 
 def test_diagnosis_benefit_hand_calc():
     """A diagnosis benefit -- hand-checked inception BEL and morbidity RA."""
-    basis = _assumptions(morbidity_cv=0.12)
+    basis = _basis(morbidity_cv=0.12)
     benefit, term = 5e7, 24
     res = measure(
         ModelPoints.single(40, 0.0, term, benefits={DIAGNOSIS: benefit}, calculation_methods=PATTERNS),
@@ -159,7 +159,7 @@ def test_diagnosis_benefit_hand_calc():
 def test_diagnosis_pool_depletes():
     """A diagnosis benefit pays once on a shrinking pool -- at the same rate
     it is worth less than a multiple-occurrence inpatient benefit."""
-    basis = _assumptions()
+    basis = _basis()
     term, amount = 120, 1e7
     diagnosis = measure(
         ModelPoints.single(40, 0.0, term, benefits={DIAGNOSIS: amount}, calculation_methods=PATTERNS),
@@ -186,7 +186,7 @@ def test_value_matches_measure_diagnosis():
             INPATIENT: rng.integers(0, 4, n) * 10_000},
         calculation_methods=PATTERNS,
     )
-    basis = _assumptions(morbidity_cv=0.15)
+    basis = _basis(morbidity_cv=0.15)
     fast = measure(mps, basis, full=False)
     detailed = measure(mps, basis)
 

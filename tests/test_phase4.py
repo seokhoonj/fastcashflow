@@ -11,7 +11,7 @@ from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
-def _assumptions(**overrides):
+def _basis(**overrides):
     kw = dict(
         mortality_q       = 0.002,
         lapse_q           = 0.01,
@@ -30,7 +30,7 @@ def _assumptions(**overrides):
 
 def test_bel_rollforward():
     """The BEL trajectory matches an independent backward recursion."""
-    basis = _assumptions()
+    basis = _basis()
     one = ModelPoints.single(
         issue_age=45, benefits={0: 80_000_000},
         premium=150_000, term_months=36,
@@ -60,7 +60,7 @@ def test_bel_rollforward():
 
 def test_liability_runs_off():
     """BEL + RA + CSM fully runs off to zero by the end of the term."""
-    basis = _assumptions()
+    basis = _basis()
     rng = np.random.default_rng(4)
     n = 150
     mps = ModelPoints(
