@@ -60,6 +60,35 @@ flowchart TB
 - **담보의 두 측면** — *산출방법* (`CalculationMethod`) 은 계약 쪽,
   *율* (`CoverageRate`) 은 가정 쪽.
 
+## 율(rate) 입력 형태
+
+`Basis` 의 율 슬롯 (`mortality_annual` · `lapse_annual` · 담보 `rate` · 전이율
+등) 은 **네 가지 형태**를 다 받습니다 — 회사가 가진 데이터 그대로 넣으면 됩니다:
+
+| 형태 | 예 | 의미 |
+|---|---|---|
+| **스칼라** | `0.012` | 평탄 (전 성별·연령·기간 동일) |
+| **배열** | `[0.08, 0.05, 0.03]` | 연율 by 정책연차 (1·2·3년차). `길이 × 12 ≥ term_months` (부족하면 에러) |
+| **표** (polars / pandas) | `pl.DataFrame({"sex":…, "age":…, "rate":…})` | 컬럼에서 축 자동감지 (sex / age / issue_age / duration), 계약 키로 select |
+| **함수** (callable) | `lambda s, a, d: …` | 분석적 · 복잡한 경우의 탈출구 |
+
+대부분의 손계산 · 예제는 **스칼라**면 충분합니다. 한 값을 탈퇴·발생 두 슬롯에
+공유하려면 변수로 묶어 양쪽에 넘깁니다 (1.3 참조):
+
+```text
+death = 0.012
+fcf.Basis(
+    mortality_annual = death,                        # 탈퇴
+    coverages        = (fcf.CoverageRate("DEATH", death),),  # 발생 (같은 값 공유)
+    lapse_annual = ..., discount_annual = ..., ...
+)
+```
+
+성별 · 연령으로 갈리는 실무 위험률은 **표** (DataFrame) 또는 워크북의
+`incidence_rate_tables` / `mortality_tables` 로 — 이때 계약의 `sex` · `issue_age`
+가 그 표를 고르는 **선택자** 가 됩니다. 어떤 형태든 엔진 안에서는 하나의 율
+함수로 정규화됩니다.
+
 ## 입력 파일과 사용자 함수
 
 ```{include} ../_shared/inputs_and_api.md
