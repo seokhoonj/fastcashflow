@@ -5,38 +5,33 @@
 
 ## 측정 흐름 — 두 입력이 만나는 곳
 
-엔진은 두 개의 독립된 입력 — **계약** (`ModelPoints`) 과 **가정** (`Basis`) — 을
-각각 만들어 `measure(model_points, basis)` 한 곳에서 합칩니다. 아래가 전체
-토폴로지, 다음 절의 두 트리가 각 입력의 컬럼·함수 상세입니다.
+엔진은 두 peer 객체 — **계약** (`ModelPoints`, 계산 대상) 과 **가정** (`Basis`,
+계산 파라미터) — 을 각각 read 해 `measure(model_points, basis)` 에서 합칩니다.
+메인 경로는 양쪽 다 **read → 객체 → measure** 로 대칭입니다.
 
 ```{mermaid}
 flowchart TB
-    subgraph IN["입력 — 두 독립 스트림"]
+    subgraph IN["입력 — 두 peer 객체"]
         direction LR
-        subgraph CON["계약 · 무엇을 / 얼마나"]
+        subgraph C["계약 = 계산 대상"]
             direction TB
-            rmp["read_model_points<br/>read_inforce_policies<br/>read_vfa_model_points"]
-            cmp["ModelPoints.single<br/>samples.model_points"]
-            MP["ModelPoints<br/>benefits · premium · term<br/>issue_age · sex (선택자)<br/>calculation_methods"]
+            rmp["read_model_points<br/>(policies + coverages + calc)"]
+            MP["ModelPoints<br/>계약 = 행, 세그먼트 = 컬럼"]
             rmp --> MP
-            cmp --> MP
         end
-        subgraph ASM["가정 · 어떤 율로"]
+        subgraph A["가정 = 계산 파라미터"]
             direction TB
-            rb["read_basis<br/>→ SegmentedBasis (dict)"]
-            cb["Basis(...)<br/>samples.basis"]
-            BS["Basis<br/>mortality_annual · lapse_annual<br/>discount_annual · CoverageRate<br/>expense_items"]
+            rb["read_basis<br/>(basis.xlsx)"]
+            BS["SegmentedBasis<br/>(product, channel) → Basis 묶음"]
             rb --> BS
-            cb --> BS
         end
     end
-    M["measure(model_points, basis)<br/>basis 가 dict 면 세그먼트 자동 라우팅"]
-    MP --> M
+    MP --> M["measure(model_points, basis)<br/>세그먼트 키로 Basis 라우팅"]
     BS --> M
-    M --> GMM["gmm.measure<br/>GMMMeasurement"]
-    M --> PAA["paa.measure<br/>PAAMeasurement"]
-    M --> VFA["vfa.measure<br/>VFAMeasurement"]
-    M --> REI["reinsurance.measure<br/>ReinsuranceMeasurement"]
+    M --> GMM["gmm.measure → GMMMeasurement"]
+    M --> PAA["paa.measure → PAAMeasurement"]
+    M --> VFA["vfa.measure → VFAMeasurement"]
+    M --> REI["reinsurance.measure → ReinsuranceMeasurement"]
     GMM --> RES["측정결과 *Measurement<br/>bel · ra · csm · loss · cashflows"]
     PAA --> RES
     VFA --> RES
@@ -46,20 +41,24 @@ flowchart TB
     classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
     classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
     classDef margin fill:#eef6e8,stroke:#78a65a,color:#29421b
-    class rmp,cmp,rb,cb input
+    class rmp,rb input
     class MP,BS,RES stock
     class M,GMM,PAA,VFA,REI step
     class AN margin
 ```
 
-- **합류점은 `measure` 하나.** 계약과 가정은 끝까지 따로 — 별도 `read_*`,
-  별도 손-생성자로 만들어 측정 호출에서만 만납니다.
-- **`read_basis` 는 dict** (`SegmentedBasis`), **`read_model_points` 는 단일
-  개체.** 워크북은 여러 시트 + 세그먼트 라우팅이라 dict 로 풀립니다.
-- **`.single` 은 `ModelPoints` 에만.** `Basis` 는 "여럿 중 하나" 축이 없어
-  대응 생성자가 없고, 율을 숫자 / 표 / 콜러블로 바로 받는 식으로 단순화됩니다.
-- **담보의 두 측면이 두 스트림에 나뉩니다** — *산출방식* (`CalculationMethod`,
-  어떻게 계산되나) 은 계약 쪽, *율* (`CoverageRate`) 은 가정 쪽.
+- **두 peer 객체, 합류점은 `measure`.** `mp = read_model_points(...)` /
+  `basis = read_basis(...)` — 양쪽 다 read → 객체 → measure. 사용 모양은 대칭.
+- **역할은 다릅니다.** `ModelPoints` = 계산 대상(계약 데이터), `Basis` = 계산
+  파라미터. `read_basis` 는 **세그먼트별 Basis 묶음** (`SegmentedBasis`) 을
+  돌려주고, `measure` 가 각 계약의 `(product, channel)` 로 해당 Basis 를 골라
+  적용합니다. 단일 세그먼트면 `Basis` 하나를 그대로 넘겨도 전체에 균일 적용.
+- **손-생성(코드)은 곁가지.** `ModelPoints(...)` / `ModelPoints.single` (1계약),
+  `Basis(...)` (1세그먼트), `samples.*` — 검산 · 토이 · 민감도용. `.single` 은
+  생성자가 배열 모양이라 ModelPoints 전용 sugar 고, `Basis` 는 생성자가
+  스칼라 / 콜러블을 직접 받아 별도 sugar 가 없습니다.
+- **담보의 두 측면** — *산출방식* (`CalculationMethod`) 은 계약 쪽,
+  *율* (`CoverageRate`) 은 가정 쪽.
 
 ## 입력 파일과 사용자 함수
 
