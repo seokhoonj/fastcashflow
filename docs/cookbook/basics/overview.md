@@ -22,7 +22,7 @@ flowchart TB
         subgraph A["가정 = 계산 파라미터"]
             direction TB
             rb["read_basis<br/>(basis.xlsx)"]
-            BS["SegmentedBasis<br/>(product, channel) → Basis 묶음"]
+            BS["BasisRouter<br/>(product, channel) → Basis 묶음"]
             rb --> BS
         end
     end
@@ -50,7 +50,7 @@ flowchart TB
 - **두 peer 객체, 합류점은 `measure`.** `mp = read_model_points(...)` /
   `basis = read_basis(...)` — 양쪽 다 read → 객체 → measure. 사용 모양은 대칭.
 - **역할은 다릅니다.** `ModelPoints` = 계산 대상(계약 데이터), `Basis` = 계산
-  파라미터. `read_basis` 는 **세그먼트별 Basis 묶음** (`SegmentedBasis`) 을
+  파라미터. `read_basis` 는 **세그먼트별 Basis 묶음** (`BasisRouter`) 을
   돌려주고, `measure` 가 각 계약의 `(product, channel)` 로 해당 Basis 를 골라
   적용합니다. 단일 세그먼트면 `Basis` 하나를 그대로 넘겨도 전체에 균일 적용.
 - **손-생성(코드)은 곁가지.** `ModelPoints(...)` / `ModelPoints.single` (1계약),

@@ -185,7 +185,7 @@ def validate_factor(grid, name: str, expected_shape: tuple) -> FloatArray:
 def _single_basis(basis, *, entry: str) -> "Basis":
     """Resolve a possibly-segmented basis to a single :class:`Basis`.
 
-    ``read_basis`` always returns a ``SegmentedBasis`` (a ``dict`` subclass),
+    ``read_basis`` always returns a ``BasisRouter`` (a ``dict`` subclass),
     so even a single-segment workbook arrives as a one-entry dict. The entry
     points that do not route segments (``measure_vfa`` / ``measure_paa`` /
     ``measure_reinsurance`` / ``measure_inforce``) accept that and unwrap it;

@@ -545,7 +545,7 @@ _SEGMENT_ASSUMPTION_COLS = frozenset({
 })
 
 
-class SegmentedBasis(dict):
+class BasisRouter(dict):
     """A ``{segment-key: Basis}`` dict that remembers its segment axis names.
 
     Returned by :func:`read_basis`. A plain ``dict`` everywhere it is used;
@@ -560,7 +560,7 @@ class SegmentedBasis(dict):
         self.segment_axes = tuple(segment_axes)
 
 
-def read_basis(path: Path | str) -> "SegmentedBasis":
+def read_basis(path: Path | str) -> "BasisRouter":
     """Read the basis workbook into a per-segment ``Basis`` dict.
 
     ``path`` is a single ``basis.xlsx`` workbook holding both the rate
@@ -570,7 +570,7 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
     values blank cells inherit; the ``coverages`` sheet attaches
     rate-driven coverages to products.
 
-    Returns a :class:`SegmentedBasis` (a ``dict`` subclass) keyed by the segment
+    Returns a :class:`BasisRouter` (a ``dict`` subclass) keyed by the segment
     axes -- ``(product, channel)`` by default, or whatever
     non-assumption columns the segments sheet declares (one axis, or three);
     ``.segment_axes`` records the axis names so :func:`~fastcashflow.gmm.measure`
@@ -849,7 +849,7 @@ def read_basis(path: Path | str) -> "SegmentedBasis":
                     f"(known: {sorted(STATE_MODELS)})"
                 ) from None
         result[seg_key] = Basis(**kwargs)
-    return SegmentedBasis(result, segment_axes=axis_cols or ("product", "channel"))
+    return BasisRouter(result, segment_axes=axis_cols or ("product", "channel"))
 
 
 # ---------------------------------------------------------------------------

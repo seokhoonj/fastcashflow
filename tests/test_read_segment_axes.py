@@ -10,7 +10,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import read_basis
-from fastcashflow.io import SegmentedBasis
+from fastcashflow.io import BasisRouter
 
 
 def _export(tmp_path):
@@ -33,7 +33,7 @@ def _insert_risk_class(path, value_per_row="A"):
 
 def test_read_basis_returns_segmented_basis_default_axes(tmp_path):
     basis = read_basis(_export(tmp_path))
-    assert isinstance(basis, SegmentedBasis)
+    assert isinstance(basis, BasisRouter)
     assert basis.segment_axes == ("product", "channel")
     assert all(isinstance(k, tuple) and len(k) == 2 for k in basis)   # 2-tuple keys
     mp = fcf.samples.model_points()

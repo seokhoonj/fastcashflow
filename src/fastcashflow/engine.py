@@ -268,7 +268,7 @@ def measure(
     to its own basis. ``segment_by`` names the routing axes (resolved via
     :meth:`ModelPoints.axis`, so any ``attributes`` column works) and the dict
     keys are tuples of those axes in order. Left as ``None`` (the default) it is
-    taken from the basis: a :class:`~fastcashflow.io.SegmentedBasis` from
+    taken from the basis: a :class:`~fastcashflow.io.BasisRouter` from
     :func:`read_basis` carries the axes its workbook declared, and a plain dict
     falls back to ``("product", "channel")``. So a workbook keyed by
     ``(product, channel, risk_class)`` routes by all three with no
@@ -277,7 +277,7 @@ def measure(
     apply to the fast path only.
     """
     if isinstance(basis, dict):
-        # A SegmentedBasis from read_basis remembers its axes; a plain dict
+        # A BasisRouter from read_basis remembers its axes; a plain dict
         # defaults to (product, channel). An explicit segment_by wins.
         if segment_by is None:
             segment_by = getattr(

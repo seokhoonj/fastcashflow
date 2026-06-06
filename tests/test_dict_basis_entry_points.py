@@ -1,6 +1,6 @@
 """Non-GMM measure entry points accept the dict basis read_basis returns.
 
-Regression for P1-2: ``read_basis`` ALWAYS returns a ``SegmentedBasis`` (a
+Regression for P1-2: ``read_basis`` ALWAYS returns a ``BasisRouter`` (a
 dict subclass), so even a single-segment workbook arrives as a one-entry
 dict. ``gmm.measure`` and ``gmm.measure_inforce`` ROUTE a dict per segment;
 the other entry points (``measure_vfa`` / ``measure_paa`` /
@@ -14,7 +14,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import CalculationMethod, ModelPoints
-from fastcashflow.io import SegmentedBasis
+from fastcashflow.io import BasisRouter
 from conftest import make_death_basis
 
 
@@ -30,7 +30,7 @@ def _death_portfolio():
 
 
 def _wrap(basis):
-    return SegmentedBasis({("PROD_A", "FC"): basis})
+    return BasisRouter({("PROD_A", "FC"): basis})
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ def test_non_gmm_entry_points_reject_multi_segment_dict():
     """PAA / reinsurance / VFA take a single Basis only -- a multi-segment dict
     is rejected. (measure and measure_inforce DO route a dict per segment.)"""
     mp, basis = _death_portfolio()
-    multi = SegmentedBasis({("A", "FC"): basis, ("B", "FC"): basis})
+    multi = BasisRouter({("A", "FC"): basis, ("B", "FC"): basis})
     treaty = fcf.reinsurance.QuotaShare(cession=0.5)
     mpv = fcf.samples.model_points(template="vfa")
     with pytest.raises(ValueError, match="single Basis"):
