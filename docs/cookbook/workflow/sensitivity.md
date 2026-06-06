@@ -1,7 +1,7 @@
 # 8.1 시나리오 / 민감도 분석
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 가정을 **shock** 하는 것 = rate 함수를 교체하는 것. 사망률 +10% 등을 명시
   변수에 lift 한 뒤 배수를 건 새 함수로 바꿔 끼운다

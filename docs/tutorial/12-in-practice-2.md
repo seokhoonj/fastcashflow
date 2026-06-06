@@ -1,7 +1,7 @@
 # 12장. 실무에서의 활용 (2)
 
 ```{admonition} 이 장에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 측정 결과를 차트로 보기
 - 보고기간별 변동분석 (analysis of change)

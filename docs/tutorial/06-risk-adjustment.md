@@ -1,7 +1,7 @@
 # 6장. 위험조정(RA) 계산
 
 ```{admonition} 이 장에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 위험조정이 BEL에 무엇을 더하는가
 - 신뢰수준법: 불확실성을 백분위수로 값매기는 법

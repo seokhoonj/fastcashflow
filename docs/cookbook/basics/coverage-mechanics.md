@@ -1,7 +1,7 @@
 # 1.4 보장 청구 메커니즘
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - **DEATH** / **MORBIDITY** / **DIAGNOSIS** 세 산출방식이 엔진 안에서
   어떻게 **서로 다른 알고리즘으로** 처리되는지

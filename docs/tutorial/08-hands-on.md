@@ -1,7 +1,7 @@
 # 8장. 직접 실행하기
 
 ```{admonition} 이 장에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - fastcashflow 설치하기
 - 코드를 어디에 쓰고 어떻게 실행하는가

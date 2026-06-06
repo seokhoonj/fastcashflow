@@ -1,7 +1,7 @@
 # 4.1 재진단암 보험 (Semi-Markov)
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - **Semi-Markov** (상태 안에서의 **경과 시간** 에 의존하는 모델) 의 첫 사례 —
   앞의 Markov 챕터는 "어느 상태냐" 만 봤지만, 여기서는 "그 상태에 들어온 지

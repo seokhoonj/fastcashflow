@@ -68,6 +68,34 @@ html_js_files = ["ga-consent.js", "ga-events.js"]
 html_show_sourcelink = False
 html_copy_source = False
 
+# Keep diagrams compact and visually consistent across tutorial and cookbook
+# pages. Individual diagrams define semantic classes while this shared theme
+# handles typography and spacing.
+mermaid_init_config = {
+    "startOnLoad": False,
+    "securityLevel": "loose",
+    "flowchart": {
+        "curve": "basis",
+        "nodeSpacing": 24,
+        "rankSpacing": 34,
+        "padding": 8,
+        "htmlLabels": True,
+    },
+    "state": {"useMaxWidth": True},
+    "themeVariables": {
+        "fontSize": "14px",
+        "primaryColor": "#f4f7fa",
+        "primaryTextColor": "#24313a",
+        "primaryBorderColor": "#9aa9b5",
+        "lineColor": "#788a97",
+        "secondaryColor": "#e8f4f1",
+        "tertiaryColor": "#eef3f8",
+        "edgeLabelBackground": "#ffffff",
+        "clusterBkg": "#f8fafb",
+        "clusterBorder": "#d5dee5",
+    },
+}
+
 html_theme_options = {
     "show_prev_next": True,
     "navbar_align": "content",

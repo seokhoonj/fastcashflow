@@ -1,7 +1,7 @@
 # 2.1 정기보험
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - **정기보험** 한 계약을 fastcashflow 로 평가하는 가장 짧은 코드 — 20 줄로 끝
 - 손계산과 엔진 결과가 정확히 일치하는 것을 확인 (둘 다 `39.11`)

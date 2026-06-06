@@ -1,7 +1,7 @@
 # 3.2 paid-up 분리 (3-state)
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 완납 (paid-up) 를 active / waiver 와 **별도 상태** 로 두는 이유 —
   유일한 실무 동기는 **납입후 해지율이 납입중과 달라지는 것**

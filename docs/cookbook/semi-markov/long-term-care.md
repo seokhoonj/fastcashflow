@@ -1,7 +1,7 @@
 # 4.3 간병 / 치매 (LTC, Semi-Markov)
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - **간병 / 치매 (LTC)** 보장을 Semi-Markov 로 — 간병 상태에 진입하면 **진단금
   일시금** 한 번 + **월정액** 을 매월 받되, 지급은 **보증한도** 까지만
@@ -65,11 +65,20 @@
 두 상태를 그림으로 (care 에 머무는 동안 월정액 지급, 한도까지; 상승 사망률):
 
 ```{mermaid}
-stateDiagram-v2
-    [*] --> active
-    active --> care: waiver_incidence (진단금 lump)
-    active --> [*]: mortality / lapse
-    care --> [*]: mortality (상승률)
+flowchart LR
+    START((가입)) --> ACTIVE["active<br/>보험료 납입"]
+    ACTIVE -->|"간병 진입 · 진단금"| CARE["care<br/>월정액 · 지급한도"]
+    ACTIVE -->|"사망 · 해지"| EXIT((종료))
+    CARE -->|"상승 사망률"| EXIT
+
+    classDef start fill:#f4f7fa,stroke:#9aa9b5,color:#24313a
+    classDef active fill:#eef6e8,stroke:#78a65a,color:#29421b
+    classDef care fill:#e8f4f1,stroke:#4b9b8d,color:#193d37
+    classDef exit fill:#f9eeee,stroke:#b96d6d,color:#552626
+    class START start
+    class ACTIVE active
+    class CARE care
+    class EXIT exit
 ```
 
 ## 율 — 간병 발생률 (long-form 표)

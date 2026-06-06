@@ -1,7 +1,7 @@
 # 8.2 검증 패턴
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 한 계약의 BEL / RA / CSM이 **어떤 테이블, 어떤 rate, 어떤 cash flow**
   로 계산되는지 추적하기 — `gmm.trace`

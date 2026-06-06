@@ -1,7 +1,7 @@
 # 4장. 엔진의 현금흐름 추정
 
 ```{admonition} 이 장에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 엔진이 계산하는 두 개의 축: 모델포인트와 시간
 - 한 달 동안 현금흐름이 발생하는 순서
@@ -77,21 +77,20 @@
 
 ```{mermaid}
 flowchart LR
-    subgraph BOM["월초"]
-      direction TB
-      P["보험료 수입 (+)"]
-      AN["생존연금 지급 (-)"]
-    end
-    subgraph MID["월중"]
-      direction TB
-      D["사망 → 사망보험금 (-)"]
-      L["해지 (생존자 중)"]
-      H["건강 급부 (-)"]
-      M["유지비 (-)"]
-      D --> L --> H --> M
-    end
-    BOM --> MID
-    MID --> NEXT["다음 달 보유계약 (4.3절 재귀)"]
+    START["이번 달 보유계약"] --> P["월초<br/>보험료 · 연금"]
+    P --> D["월중<br/>사망 · 보험금"]
+    D --> L["생존자 해지"]
+    L --> H["건강급부 · 유지비"]
+    H --> NEXT["다음 달 보유계약"]
+
+    classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
+    classDef inflow fill:#eef6e8,stroke:#78a65a,color:#29421b
+    classDef outflow fill:#f9eeee,stroke:#b96d6d,color:#552626
+    classDef decrement fill:#f7f2e8,stroke:#b38a45,color:#493617
+    class START,NEXT stock
+    class P inflow
+    class D,H outflow
+    class L decrement
 ```
 
 이 순서에서 기억할 것이 하나 있습니다. **보험료는 월초에 들어오고,

@@ -1,7 +1,7 @@
 # 7장. 보험계약마진(CSM) 계산과 상각
 
 ```{admonition} 이 장에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 최초 인식: FCF에서 CSM과 손실요소가 갈리는 법
 - CSM에 매월 이자가 붙는 이유 (이자부리)

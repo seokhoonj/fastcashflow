@@ -1,7 +1,7 @@
 # 11장. 실무에서의 활용 (1)
 
 ```{admonition} 이 장에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 가정 파일과 모델포인트 파일의 구조
 - 파일을 읽어 평가하고 결과를 저장하기

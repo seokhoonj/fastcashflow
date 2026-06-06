@@ -1,7 +1,7 @@
 # 2.5 체증형 보험금 / 간병비 / 연금
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 보험금이 시간에 따라 **올라가는** 체증형 상품을 두 가지 축으로 거는 법:
   **계단식 (step)** 과 **매년 % (escalation)**

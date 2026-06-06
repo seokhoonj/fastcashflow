@@ -1,7 +1,7 @@
 # 3.1 보험료 납입면제 (waiver)
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 보험료 납입면제가 **상태 전이** (active → waiver) 로 모델링되는 이유 —
   cookbook 의 첫 상태(Markov) 챕터

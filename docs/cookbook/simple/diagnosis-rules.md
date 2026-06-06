@@ -1,7 +1,7 @@
 # 2.3 다종 진단 + 면책 / 감액
 
 ```{admonition} 이 챕터에서 배우는 것
-:class: tip
+:class: chapter-brief
 
 - 진단 담보의 **면책기간** (waiting) 과 **감액기간** (reduction) 을
   `coverages` 파일의 세 컬럼으로 거는 법
