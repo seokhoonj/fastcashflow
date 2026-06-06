@@ -967,3 +967,36 @@ def test_coverage_rate_callable_wrong_shape_is_value_error():
     for full in (True, False):
         with pytest.raises(ValueError, match=r"coverage rate 'CANCER' must return an array"):
             fcf.gmm.measure(mp, basis, full=full)
+
+
+def test_benefits_accepts_coverage_code_keys():
+    """benefits can be keyed by coverage CODE ('DEATH') -- self-documenting and
+    aligned by code -- as well as by integer index. The two agree; a code-keyed
+    map is order-independent (it pins coverage_codes, so the engine matches by
+    code regardless of the basis' registration order); mixed keys are rejected."""
+    _F = lambda v: (lambda s, a, d: np.full(np.shape(a), v))
+    cm = {"DEATH": CalculationMethod.DEATH, "CANCER": CalculationMethod.DIAGNOSIS}
+    # int and code keys give the same measurement
+    basis1 = Basis(mortality_annual=_F(0.01), lapse_annual=_F(0.0), discount_annual=0.03,
+                   ra_confidence=0.75, mortality_cv=0.10,
+                   coverages=(CoverageRate("DEATH", _F(0.01)),))
+    by_idx = fcf.gmm.measure(
+        ModelPoints.single(40, 100.0, 24, benefits={0: 12000.0}, calculation_methods=cm), basis1)
+    by_code = fcf.gmm.measure(
+        ModelPoints.single(40, 100.0, 24, benefits={"DEATH": 12000.0}, calculation_methods=cm), basis1)
+    assert np.allclose(by_idx.bel, by_code.bel)
+    # order-independent: basis registers CANCER first, DEATH second; code keys
+    # still route DEATH->DEATH rate and CANCER->CANCER rate.
+    basis2 = Basis(mortality_annual=_F(0.0), lapse_annual=_F(0.0), discount_annual=0.0,
+                   ra_confidence=0.75, mortality_cv=0.0, morbidity_cv=0.0,
+                   coverages=(CoverageRate("CANCER", _F(0.02)), CoverageRate("DEATH", _F(0.01))))
+    mp = ModelPoints.single(40, 0.0, 12, benefits={"DEATH": 1000.0, "CANCER": 5000.0},
+                            calculation_methods=cm)
+    assert mp.coverage_codes == ("DEATH", "CANCER")
+    m = fcf.gmm.measure(mp, basis2)
+    q = lambda a: 1 - (1 - a) ** (1 / 12)            # annual -> monthly
+    assert m.cashflows.claim_cf[0, 0] == pytest.approx(1000.0 * q(0.01))      # DEATH rate
+    assert m.cashflows.morbidity_cf[0, 0] == pytest.approx(5000.0 * q(0.02))  # CANCER rate
+    # mixed int + str keys are rejected
+    with pytest.raises(ValueError, match="all coverage codes .* or all coverage indices"):
+        ModelPoints.single(40, 100.0, 24, benefits={0: 1.0, "CANCER": 2.0}, calculation_methods=cm)

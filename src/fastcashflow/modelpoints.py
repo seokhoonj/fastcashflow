@@ -367,16 +367,33 @@ class ModelPoints:
             coverage_offset = np.asarray(self.coverage_offset, np.int64)
         else:
             items = []   # (cov_idx, per-mp amount array), in coverage-list order
+            benefit_codes = None   # set when benefits is keyed by coverage code
             if self.benefits is not None:
-                for cov_idx, amount in self.benefits.items():
+                keys = list(self.benefits)
+                is_str = [isinstance(k, str) for k in keys]
+                if any(is_str) and not all(is_str):
+                    raise ValueError(
+                        "benefits keys must be all coverage codes (str, e.g. "
+                        "'DEATH') or all coverage indices (int, e.g. 0), not a mix"
+                    )
+                if keys and all(is_str):
+                    # Code-keyed: the keys ARE the coverage codes, in this order.
+                    benefit_codes = tuple(keys)
+                for pos, (key, amount) in enumerate(self.benefits.items()):
                     amt = np.asarray(amount, np.float64)
                     if amt.shape != (n_mp,):
                         raise ValueError(
-                            f"benefits[{cov_idx}] has length {amt.size} but "
+                            f"benefits[{key!r}] has length {amt.size} but "
                             f"n_mp is {n_mp}"
                         )
-                    items.append((int(cov_idx), amt))
+                    items.append((pos if benefit_codes else int(key), amt))
             coverage_index, coverage_amount, coverage_offset = _build_csr(items, n_mp)
+            # A code-keyed benefits map pins the coverage codes, so the engine
+            # aligns by code (order-independent) rather than by position. (The
+            # int-keyed form leaves coverage_codes None: indices follow
+            # Basis.coverages order, the historical behaviour.)
+            if benefit_codes is not None and self.coverage_codes is None:
+                object.__setattr__(self, "coverage_codes", benefit_codes)
         # Validate the packed benefit amounts in one place, after both input
         # forms (the benefits map and the CSR arrays the file reader fills)
         # land here. The amount feeds straight into the kernel (claim = rate x
