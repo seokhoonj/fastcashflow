@@ -2,12 +2,12 @@
 
 Regression for P1-2: ``read_basis`` ALWAYS returns a ``SegmentedBasis`` (a
 dict subclass), so even a single-segment workbook arrives as a one-entry
-dict. ``gmm.measure`` routes a dict; the other entry points
-(``measure_vfa`` / ``measure_paa`` / ``measure_reinsurance`` /
-``measure_inforce``) used to crash on it with a deep ``AttributeError``. They
-now unwrap a single-segment dict and reject a genuinely multi-segment dict
-with an actionable ``ValueError`` -- so the documented file -> measure
-workflow works on the shipped single-segment sample.
+dict. ``gmm.measure`` and ``gmm.measure_inforce`` ROUTE a dict per segment;
+the other entry points (``measure_vfa`` / ``measure_paa`` /
+``measure_reinsurance``) used to crash on it with a deep ``AttributeError``.
+They now unwrap a single-segment dict and reject a genuinely multi-segment
+dict with an actionable ``ValueError`` -- so the documented file -> measure
+workflow works on the shipped sample.
 """
 import numpy as np
 import pytest
@@ -64,19 +64,44 @@ def test_vfa_unwraps_single_segment_dict():
 # (the unwrap path is shared via basis._single_basis, exercised above)
 # ---------------------------------------------------------------------------
 def test_non_gmm_entry_points_reject_multi_segment_dict():
+    """PAA / reinsurance / VFA take a single Basis only -- a multi-segment dict
+    is rejected. (measure and measure_inforce DO route a dict per segment.)"""
     mp, basis = _death_portfolio()
     multi = SegmentedBasis({("A", "FC"): basis, ("B", "FC"): basis})
     treaty = fcf.reinsurance.QuotaShare(cession=0.5)
     mpv = fcf.samples.model_points(template="vfa")
-    state = fcf.InforceState(
-        mp_id=np.array([0, 1]), elapsed_months=np.array([12, 24], dtype=np.int64),
-        count=np.array([1.0, 1.0]), prior_csm=np.array([0.0, 0.0]), lock_in_rate=0.03,
-    )
     with pytest.raises(ValueError, match="single Basis"):
         fcf.paa.measure(mp, multi)
     with pytest.raises(ValueError, match="single Basis"):
         fcf.reinsurance.measure(mp, multi, treaty)
     with pytest.raises(ValueError, match="single Basis"):
         fcf.vfa.measure(mpv, multi)
-    with pytest.raises(ValueError, match="single Basis"):
-        fcf.gmm.measure_inforce(mp, multi, state)
+
+
+def test_measure_inforce_routes_a_multi_segment_dict(tmp_path):
+    """measure_inforce settles a multi-segment portfolio in one call: each
+    (product, channel) routes to its own Basis, and the routed result equals
+    the per-segment single-basis settlement -- no manual subsetting needed."""
+    from fastcashflow.engine import _reconcile_state
+    fcf.samples.export(str(tmp_path), template="gmm", quiet=True)
+    basis = fcf.read_basis(str(tmp_path / "basis.xlsx"))     # dict, 7 segments
+    mp, state = fcf.read_inforce_policies(
+        str(tmp_path / "inforce_policies.csv"),
+        coverages=str(tmp_path / "coverages.csv"),
+        calculation_methods=str(tmp_path / "calculation_methods.csv"),
+    )
+    routed = fcf.gmm.measure_inforce(mp, basis, state, period_months=3)
+    assert routed.bel.shape[0] == mp.n_mp
+    st = _reconcile_state(mp, state)
+    prod, chan = np.asarray(mp.product), np.asarray(mp.channel)
+    seen = 0
+    for key in basis:
+        idx = np.nonzero((prod == key[0]) & (chan == key[1]))[0]
+        if idx.size == 0:
+            continue
+        ref = fcf.gmm.measure_inforce(mp.subset(idx), basis[key],
+                                      st.subset(idx), period_months=3)
+        assert np.allclose(routed.bel[idx], ref.bel)
+        assert np.allclose(routed.csm[idx], ref.csm)
+        seen += idx.size
+    assert seen == mp.n_mp                              # every contract routed

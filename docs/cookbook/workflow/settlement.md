@@ -100,14 +100,10 @@ model_points, state = fcf.read_inforce_policies(
     calculation_methods="samples/calculation_methods.csv",              # 담보별 산출방식
 )
 
-# 한 세그먼트만 골라 결산 측정
-segment_basis = basis[("HEALTH_A", "FC")]                       # (상품, 채널) 키로 선택
-idx = np.where((np.asarray(model_points.product) == "HEALTH_A") &
-               (np.asarray(model_points.channel) == "FC"))[0]
+# 전체 포트폴리오 결산 — dict basis 를 그대로 넘기면 각 (product, channel)
+# 을 자기 산출기초로 자동 라우팅합니다 (신계약 measure() 와 같은 방식).
 val = fcf.gmm.measure_inforce(
-    model_points.subset(idx),                                   # 이 세그먼트의 보유계약
-    segment_basis,                                              # 이 세그먼트의 산출기초
-    state.subset(idx),                                          # 이 세그먼트의 결산 상태
+    model_points, basis, state,                                 # basis = 전체 dict
     period_months=3,                                            # 이번 분기 (3 개월)
 )
 fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 파일
@@ -123,14 +119,18 @@ fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 
 
 `read_basis` 는 `{(product, channel): Basis}` 딕셔너리를 돌려줍니다 —
 한 워크북에 여러 세그먼트 (상품 x 채널) 의 가정을 함께 담기 때문입니다.
-`measure_inforce` 는 한 번에 **단일 `Basis`** 만 받으므로, 포트폴리오 전체를
-결산할 때는 세그먼트별로 돕니다. `ModelPoints.subset` 으로 계약을, 짝이 되는
-`InforceState.subset` 으로 결산 상태를 같은 인덱스로 잘라 넘깁니다.
+위처럼 그 **dict 를 `measure_inforce` 에 그대로 넘기면** 각 계약을 자기
+세그먼트의 산출기초로 자동 라우팅해 **전체 포트폴리오를 한 번에** 결산합니다
+(내부에서 세그먼트별로 잘라 측정한 뒤 다시 하나로 잇습니다 — 신계약
+`measure()` 의 dict 라우팅과 같은 방식).
 
-세그먼트로 자르기 전에 `align_inforce_state` 로 결산 상태를 보유계약 행 순서에
-**한 번 맞춰 둡니다**. 결산 상태 파일의 행 순서가 policies 와 다를 수 있는데,
-정렬해 두지 않으면 `state.subset(idx)` 가 다른 계약의 직전 CSM 을 끌어옵니다
-(`measure_inforce` 자체는 mp_id 로 내부 재정렬하지만, 위 합계의 Opening CSM 처럼
+세그먼트를 **직접 통제**하고 싶을 때만 (한 세그먼트만 보거나, 세그먼트별로
+다른 `period_months` 를 주거나) 손수 잘라 단일 `Basis` 로 넘깁니다.
+`ModelPoints.subset` 으로 계약을, 짝이 되는 `InforceState.subset` 으로 결산
+상태를 같은 인덱스로 잘라 넘기면 됩니다 — 단, 자르기 전에
+`align_inforce_state` 로 결산 상태를 보유계약 행 순서에 **한 번 맞춰** 둬야
+합니다 (정렬 안 하면 `state.subset(idx)` 가 다른 계약의 직전 CSM 을 끌어옵니다;
+`measure_inforce` 자체는 mp_id 로 내부 재정렬하지만, 합계의 Opening CSM 처럼
 `state` 를 직접 읽는 자리는 정렬된 상태가 필요합니다).
 
 ```python

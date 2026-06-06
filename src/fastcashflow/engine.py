@@ -726,7 +726,7 @@ def _reconcile_state(model_points: ModelPoints,
 
 def measure_inforce(
     model_points: ModelPoints,
-    basis: Basis,
+    basis: "Basis | dict[tuple[str, str], Basis]",
     state: "InforceState",
     *,
     period_months: int | None = None,
@@ -772,6 +772,15 @@ def measure_inforce(
     :func:`roll_forward` with prior and current measurements for the full
     movement.
     """
+    # A multi-segment ``{(product, channel): Basis}`` settles the whole
+    # in-force portfolio in one call: each segment is routed to its own basis
+    # (its assumptions), measured, and stitched back -- no manual per-segment
+    # subsetting. A single-segment dict / a bare Basis falls through.
+    if isinstance(basis, dict) and len(basis) > 1:
+        return _measure_inforce_segmented(
+            model_points, basis, state,
+            period_months=period_months, full=full,
+        )
     basis = _single_basis(basis, entry="measure_inforce")
     # The measurement reads each contract's as-of duration / size from
     # ``model_points``; ``state`` supplies prior_csm / lock_in_rate. Reconcile
@@ -812,6 +821,66 @@ def measure_inforce(
         )
     # Stamp the source model points, as new-business measure() does, so
     # group(result, by=[...]) resolves axis names without re-passing them.
+    return replace(result, model_points=model_points)
+
+
+def _measure_inforce_segmented(
+    model_points: ModelPoints,
+    basis: dict,
+    state: "InforceState",
+    *,
+    period_months: int | None = None,
+    full: bool = True,
+    segment_by=("product", "channel"),
+) -> GMMMeasurement:
+    """Settle a multi-segment in-force portfolio in one call.
+
+    Each ``(product, channel)`` segment is routed to its own ``Basis`` and
+    measured with :func:`measure_inforce`; the per-segment results are stitched
+    into one portfolio result. The state is aligned to the model-points order
+    once (the mp_id join), then sliced by the same rows as the model points, so
+    each segment's ``prior_csm`` / ``lock_in_rate`` / ``count`` travel with its
+    own contracts -- the in-force mirror of :func:`_measure_segmented_full`,
+    with the extra ``state`` subset. (The reorder-before-subset is the subtle
+    part: slicing the state in file order would hand a segment another
+    contract's prior CSM.)
+    """
+    state = _reconcile_state(model_points, state)
+    try:
+        basis_norm, segments = _factorise_segments(
+            basis, model_points, segment_by, model_points.n_mp,
+        )
+    except KeyError:
+        if len(basis) == 1:
+            (single,) = basis.values()
+            return measure_inforce(model_points, single, state,
+                                   period_months=period_months, full=full)
+        raise ValueError(
+            f"model_points has no {tuple(segment_by)} axis/axes set but the "
+            f"basis has {len(basis)} segments; either set the columns or "
+            "pass a single-segment basis"
+        )
+    n_mp = model_points.n_mp
+    sub_results = [
+        (idx, measure_inforce(model_points.subset(idx), basis_norm[key],
+                              state.subset(idx),
+                              period_months=period_months, full=full))
+        for key, idx in segments
+    ]
+    if full:
+        result = _stitch_full_measurements(n_mp, sub_results)
+    else:
+        bel = np.empty(n_mp)
+        ra = np.empty(n_mp)
+        csm = np.empty(n_mp)
+        loss_component = np.empty(n_mp)
+        for idx, m in sub_results:
+            bel[idx] = m.bel
+            ra[idx] = m.ra
+            csm[idx] = m.csm
+            loss_component[idx] = m.loss_component
+        result = GMMMeasurement(bel=bel, ra=ra, csm=csm,
+                                loss_component=loss_component)
     return replace(result, model_points=model_points)
 
 
@@ -2587,41 +2656,18 @@ def _factorise_segments(basis, model_points: ModelPoints, segment_by, n_mp):
     return basis_norm, segments
 
 
-def _measure_segmented_full(
-    model_points: ModelPoints, basis: dict[tuple[str, str], Basis],
-    *, segment_by=("product", "channel"),
-) -> GMMMeasurement:
-    """Full multi-segment GMM measurement -- per-segment trajectories stitched.
+def _stitch_full_measurements(n_mp, sub_results):
+    """Scatter per-segment full GMMMeasurements into one (n_mp, n_time+1) result.
 
-    Each (product, channel) segment is measured under its own
-    ``Basis`` via :func:`_measure_full`; the per-segment ``(n_seg, *)``
-    trajectories are scattered back into one ``(n_mp, n_time+1)`` result, where
-    ``n_time`` is the portfolio's longest horizon. A segment whose contracts
-    mature earlier is zero-padded on the right -- a contract carries no BEL /
-    RA / CSM past its term. ``discount_bom`` / ``discount_mid`` are per-MP
-    ``(n_mp, ...)`` here, not the single ``(n_time+1,)`` curve of the
-    single-basis path: segments discount on different curves, so the rate is a
-    property of the row. The padded tail of ``discount_bom`` repeats each
-    row's last factor (a flat curve -> zero forward rate) so a rate read off it
-    is finite, not a 0/0.
+    ``sub_results`` is ``[(idx, GMMMeasurement)]`` -- each segment's full
+    trajectories are laid into the portfolio arrays at its rows and zero-padded
+    on the right to the portfolio's longest horizon (a contract carries no BEL /
+    RA / CSM past its term). ``discount_bom`` / ``discount_mid`` become per-MP
+    2-D because segments discount on different curves; the padded tail repeats
+    each row's last factor so a forward rate read off it is finite, not a 0/0.
+    Shared by the new-business segmented measurement and the in-force segmented
+    settlement (their per-segment results carry the identical field set).
     """
-    try:
-        basis_norm, segments = _factorise_segments(
-            basis, model_points, segment_by, model_points.n_mp,
-        )
-    except KeyError:
-        if len(basis) == 1:
-            (basis,) = basis.values()
-            return _measure_full(model_points, basis)
-        raise ValueError(
-            f"model_points has no {tuple(segment_by)} axis/axes set but the "
-            f"basis has {len(basis)} segments; either set the columns or "
-            "pass a single-segment basis"
-        )
-    n_mp = model_points.n_mp
-
-    sub_results = [(idx, _measure_full(model_points.subset(idx), basis_norm[key]))
-                   for key, idx in segments]
     n_time = max(m.bel_path.shape[1] - 1 for _, m in sub_results)
 
     bel = np.empty(n_mp)
@@ -2678,3 +2724,41 @@ def _measure_segmented_full(
         csm_accretion=csm_accretion, csm_release=csm_release, lic=lic,
         cashflows=cashflows, discount_bom=discount_bom, discount_mid=discount_mid,
     )
+
+
+def _measure_segmented_full(
+    model_points: ModelPoints, basis: dict[tuple[str, str], Basis],
+    *, segment_by=("product", "channel"),
+) -> GMMMeasurement:
+    """Full multi-segment GMM measurement -- per-segment trajectories stitched.
+
+    Each (product, channel) segment is measured under its own
+    ``Basis`` via :func:`_measure_full`; the per-segment ``(n_seg, *)``
+    trajectories are scattered back into one ``(n_mp, n_time+1)`` result, where
+    ``n_time`` is the portfolio's longest horizon. A segment whose contracts
+    mature earlier is zero-padded on the right -- a contract carries no BEL /
+    RA / CSM past its term. ``discount_bom`` / ``discount_mid`` are per-MP
+    ``(n_mp, ...)`` here, not the single ``(n_time+1,)`` curve of the
+    single-basis path: segments discount on different curves, so the rate is a
+    property of the row. The padded tail of ``discount_bom`` repeats each
+    row's last factor (a flat curve -> zero forward rate) so a rate read off it
+    is finite, not a 0/0.
+    """
+    try:
+        basis_norm, segments = _factorise_segments(
+            basis, model_points, segment_by, model_points.n_mp,
+        )
+    except KeyError:
+        if len(basis) == 1:
+            (basis,) = basis.values()
+            return _measure_full(model_points, basis)
+        raise ValueError(
+            f"model_points has no {tuple(segment_by)} axis/axes set but the "
+            f"basis has {len(basis)} segments; either set the columns or "
+            "pass a single-segment basis"
+        )
+    n_mp = model_points.n_mp
+
+    sub_results = [(idx, _measure_full(model_points.subset(idx), basis_norm[key]))
+                   for key, idx in segments]
+    return _stitch_full_measurements(n_mp, sub_results)

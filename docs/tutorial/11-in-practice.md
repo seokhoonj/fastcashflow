@@ -267,19 +267,18 @@ import fastcashflow as fcf
 # (시트당 ~1M row 인 .xlsx 한계 회피).
 fcf.samples.export("samples", template="gmm", quiet=True)
 
-# (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 in-force 측정
-basis = fcf.read_basis("samples/basis.xlsx")    # {(product, channel): Basis}
-basis = basis[("TERM_LIFE_A", "GA")]    # 한 세그먼트 선택
+# (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 전체 포트폴리오 측정
+basis = fcf.read_basis("samples/basis.xlsx")    # {(product, channel): Basis} — 전체 dict
 
 model_points, state = fcf.read_inforce_policies(
     "samples/inforce_policies.csv",                                  # 결산 1-파일 (spec + state 결합)
     coverages="samples/coverages.csv",                               # 담보 파일
     calculation_methods="samples/calculation_methods.csv",           # 담보별 산출방식
 )
-val = fcf.gmm.measure_inforce(   # 결산(보유계약) 측정 -- 일반모형(GMM)
-    model_points, basis, state,  # state 가 prior_csm / lock_in_rate 을 품음
+val = fcf.gmm.measure_inforce(   # 전체 포트폴리오 결산 -- 일반모형(GMM)
+    model_points, basis, state,  # basis 가 dict 면 각 (product, channel) 을 자기 가정으로 라우팅
     period_months=3,             # 다음 분기 (3 개월) 까지의 평가
-)
+)                                # state 가 mp_id 별 prior_csm / lock_in_rate / count 을 품음
 fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 파일
 ```
 
