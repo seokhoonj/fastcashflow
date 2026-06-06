@@ -28,6 +28,7 @@ from functools import singledispatch
 import numpy as np
 
 from fastcashflow._typing import FloatArray
+from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement
 from fastcashflow._paa import PAAMeasurement
 from fastcashflow._vfa import VFAMeasurement
@@ -163,7 +164,7 @@ def _report_gmm(m: GMMMeasurement) -> Report:
     # axis is time: (n_time,) for a single basis, (n_mp, n_time) for a segmented
     # measurement; the array maths below broadcast over either shape.
     ds = m.discount_bom
-    monthly_rate = ds[..., :-1] / ds[..., 1:] - 1.0
+    monthly_rate = forward_rates(ds)
     monthly_discount = 1.0 / (1.0 + monthly_rate)
 
     service_expense = cf.claim_cf + cf.morbidity_cf + cf.expense_cf

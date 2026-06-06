@@ -29,6 +29,7 @@ from functools import singledispatch
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow.curves import forward_rates
 from fastcashflow._paa import PAAMeasurement
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow._vfa import VFAMeasurement
@@ -285,7 +286,7 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
         monthly_rate = out_bom[:, :-1] / out_bom[:, 1:] - 1.0
     else:
         out_bom, out_mid = bom, measurement.discount_mid
-        monthly_rate = bom[:-1] / bom[1:] - 1.0
+        monthly_rate = forward_rates(bom)
     # _csm_roll dispatches on the rate's ndim: a segmented result carries a 2-D
     # per-group discount curve, a single basis a 1-D one. (VFA and reinsurance
     # are single-basis only, so they call the 1-D _csm_kernel directly.)
@@ -337,7 +338,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
     csm0 = np.maximum(0.0, -fcf0)
     loss_component = np.maximum(0.0, fcf0)
     bom = measurement.discount_bom
-    monthly_rate = bom[:-1] / bom[1:] - 1.0
+    monthly_rate = forward_rates(bom)
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
@@ -383,7 +384,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
     # released by the grouped coverage units.
     csm0 = -(bel - ra)
     bom = measurement.discount_bom
-    monthly_rate = bom[:-1] / bom[1:] - 1.0
+    monthly_rate = forward_rates(bom)
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )

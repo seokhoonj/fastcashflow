@@ -34,6 +34,7 @@ from functools import singledispatch
 import numpy as np
 
 from fastcashflow._typing import FloatArray
+from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import PAAMeasurement
@@ -260,7 +261,7 @@ def _(
     # discount_bom is (n_time+1,) for a single basis, or (n_mp, n_time+1) for
     # a segmented (multi-basis) measurement; the last axis is time either way,
     # so the rate is (n_time,) or (n_mp, n_time) accordingly.
-    monthly_rate = discount_bom[..., :-1] / discount_bom[..., 1:] - 1.0
+    monthly_rate = forward_rates(discount_bom)
     zero = np.zeros(n_mp)
 
     bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
@@ -385,7 +386,7 @@ def _roll_forward_experience_chain(
             f"({boundaries[-1]}) reaches the projection horizon ({n_time})"
         )
     discount_bom = measurement.discount_bom
-    monthly_rate = discount_bom[..., :-1] / discount_bom[..., 1:] - 1.0
+    monthly_rate = forward_rates(discount_bom)
 
     # Cumulative in-force ratio at each boundary, laid out as a per-month
     # step factor -- 1 up to the first boundary, then each ratio onward.
@@ -516,7 +517,7 @@ def _roll_forward_vfa(
     csm_release = measurement.csm_release
     n_time = csm.shape[1] - 1
     discount_bom = measurement.discount_bom
-    monthly_rate = discount_bom[:-1] / discount_bom[1:] - 1.0
+    monthly_rate = forward_rates(discount_bom)
     movements: list[VFAPeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)

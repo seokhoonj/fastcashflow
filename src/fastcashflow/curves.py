@@ -130,3 +130,17 @@ def discount_factors_from_curve(
     np.cumprod(1.0 / (1.0 + monthly_rates), out=discount_bom[1:])
     discount_mid = discount_bom[:-1] / np.sqrt(1.0 + monthly_rates)
     return discount_bom, discount_mid
+
+
+def forward_rates(discount_bom: FloatArray) -> FloatArray:
+    """The per-month forward rate implied by a beginning-of-month discount curve.
+
+    ``discount_bom[..., t]`` discounts to the start of month ``t``; the one-month
+    forward rate over month ``t`` is ``discount_bom[t] / discount_bom[t+1] - 1``
+    -- the inverse of :func:`discount_factors_from_curve`. The trailing axis is
+    time, so ``[..., :-1]`` / ``[..., 1:]`` serves a single ``(n_time+1,)`` curve
+    and a per-MP ``(n_mp, n_time+1)`` one alike. The ellipsis is load-bearing:
+    on a segmented (per-MP) curve a bare ``[:-1]`` would slice the model-point
+    axis, not time -- the silent-wrong bug class this helper retires.
+    """
+    return discount_bom[..., :-1] / discount_bom[..., 1:] - 1.0
