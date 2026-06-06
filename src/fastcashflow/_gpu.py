@@ -235,7 +235,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_premium_term = cuda.to_device(premium_term_months)
     d_premium_freq = cuda.to_device(premium_frequency_months)
     d_annuity_freq = cuda.to_device(annuity_frequency_months)
-    d_cov_cov_idx = cuda.to_device(coverage_index)
+    d_coverage_index = cuda.to_device(coverage_index)
     d_cov_amount = cuda.to_device(coverage_amount)
     d_cov_offset = cuda.to_device(coverage_offset)
     d_coverage_rates = cuda.to_device(coverage_rates)
@@ -249,7 +249,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_disability_benefit = cuda.to_device(disability_benefit)
     d_gamma_fixed = cuda.to_device(gamma_fixed)
     d_lae_pro_rata = cuda.to_device(lae_pro_rata)
-    d_discount_start = cuda.to_device(discount_bom)
+    d_discount_bom = cuda.to_device(discount_bom)
     d_discount_mid = cuda.to_device(discount_mid)
     d_lapse_monthly = cuda.to_device(lapse_monthly)
     d_state_lapse = cuda.to_device(state_lapse)
@@ -268,13 +268,13 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         d_edge_from, d_edge_to, d_edge_prob, d_edge_lump, n_states,
         d_premium_state, d_benefit_state, d_start_state, d_issue, d_sex,
         d_term, d_boundary, d_count, d_premium, d_premium_term, d_premium_freq,
-        d_annuity_freq, d_cov_cov_idx, d_cov_amount, d_cov_offset, d_coverage_rates,
+        d_annuity_freq, d_coverage_index, d_cov_amount, d_cov_offset, d_coverage_rates,
         d_premium_factor,
         d_annuity_factor,
         d_coverage_risk, d_coverage_is_diagnosis, d_maturity, d_annuity,
         d_disability_income, d_disability_benefit,
         alpha_pro_rata, alpha_fixed, beta_pro_rata,
-        d_gamma_fixed, d_lae_pro_rata, d_discount_start,
+        d_gamma_fixed, d_lae_pro_rata, d_discount_bom,
         d_discount_mid, mortality_factor, morbidity_factor, longevity_factor,
         disability_factor, d_lapse_monthly, d_state_lapse, d_surrender_curve,
         surrender_is_amount, d_surrender_base,

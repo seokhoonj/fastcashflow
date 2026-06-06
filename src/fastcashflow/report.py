@@ -164,10 +164,10 @@ def _report_gmm(m: GMMMeasurement) -> Report:
     # measurement; the array maths below broadcast over either shape.
     ds = m.discount_bom
     monthly_rate = ds[..., :-1] / ds[..., 1:] - 1.0
-    full = 1.0 / (1.0 + monthly_rate)
+    monthly_discount = 1.0 / (1.0 + monthly_rate)
 
     service_expense = cf.claim_cf + cf.morbidity_cf + cf.expense_cf
-    ra_release = ra[:, :-1] - ra[:, 1:] * full
+    ra_release = ra[:, :-1] - ra[:, 1:] * monthly_discount
     csm_release = m.csm_release
 
     return Report(

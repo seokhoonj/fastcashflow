@@ -176,51 +176,51 @@ def show_trace(
     )
 
     # ---- Basis (segment-level)
-    asmp_lines: list[object] = []
-    asmp_lines.append(
+    basis_lines: list[object] = []
+    basis_lines.append(
         f"mortality_annual     -> {_fmt_callable(basis.mortality_annual)}"
     )
-    asmp_lines.append(
+    basis_lines.append(
         f"lapse_annual         -> {_fmt_callable(basis.lapse_annual)}"
     )
     if basis.waiver_incidence_annual is not None:
-        asmp_lines.append(
+        basis_lines.append(
             f"waiver_incidence     -> {_fmt_callable(basis.waiver_incidence_annual)}"
         )
     d = basis.discount_annual
     if np.ndim(d) == 0:
-        asmp_lines.append(f"discount_annual      = {float(d):g} (flat)")
+        basis_lines.append(f"discount_annual      = {float(d):g} (flat)")
     else:
         arr = np.asarray(d)
-        asmp_lines.append(
+        basis_lines.append(
             f"discount_annual      = ndarray len={arr.size} "
             f"[{arr.flat[0]:g}, ..., {arr.flat[-1]:g}]"
         )
     infl = basis.expense_inflation
     if np.ndim(infl) == 0:
-        asmp_lines.append(f"expense_inflation    = {float(infl):g} (flat)")
+        basis_lines.append(f"expense_inflation    = {float(infl):g} (flat)")
     else:
         arr = np.asarray(infl)
-        asmp_lines.append(
+        basis_lines.append(
             f"expense_inflation    = ndarray len={arr.size} "
             f"[{arr.flat[0]:g}, ..., {arr.flat[-1]:g}]"
         )
     rows = basis.expense_items
     if not rows:
-        asmp_lines.append("expense_items        = ()  (no expense)")
+        basis_lines.append("expense_items        = ()  (no expense)")
     else:
         row_lines: list[object] = [
             (f"ExpenseItem({r.expense_type!r}, basis={r.basis!r}, "
              f"value={r.value:g})")
             for r in rows
         ]
-        asmp_lines.append(
+        basis_lines.append(
             (f"expense_items        = tuple  (len={len(rows)})", row_lines)
         )
-    asmp_lines.append(
+    basis_lines.append(
         f"ra: method={basis.ra_method!r}, conf={basis.ra_confidence:g}"
     )
-    asmp_lines.append(
+    basis_lines.append(
         f"cv: mort={basis.mortality_cv:g} morb={basis.morbidity_cv:g} "
         f"long={basis.longevity_cv:g} disab={basis.disability_cv:g}"
     )
@@ -404,7 +404,7 @@ def show_trace(
     # Assemble the tree
     out.append(header)
     tree_items: list[object] = [
-        ("Basis (segment-level)", asmp_lines),
+        ("Basis (segment-level)", basis_lines),
         (f"Coverages (rate-driven, n={len(basis.coverages)})",
          cov_lines),
         ("Rates (annual, evaluated for this MP)", rate_lines),
@@ -863,12 +863,12 @@ def show_trace_diff(
         )
     i = mp_index
 
-    asmp_a = _resolve_basis(basis_a, model_points, i)
-    asmp_b = _resolve_basis(basis_b, model_points, i)
+    resolved_a = _resolve_basis(basis_a, model_points, i)
+    resolved_b = _resolve_basis(basis_b, model_points, i)
 
     sub = model_points.subset([i])
-    ma = measure(sub, asmp_a)
-    mb = measure(sub, asmp_b)
+    ma = measure(sub, resolved_a)
+    mb = measure(sub, resolved_b)
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
@@ -890,45 +890,45 @@ def show_trace_diff(
     labels_line = f"labels: {label_a!r}  ->  {label_b!r}"
 
     # ---- Assumption changes (suppressed when equal)
-    asmp_diffs: list[object] = []
+    basis_diffs: list[object] = []
     for name in ("mortality_annual", "lapse_annual",
                  "waiver_incidence_annual"):
         line = _diff_callable(name,
-                              getattr(asmp_a, name),
-                              getattr(asmp_b, name))
+                              getattr(resolved_a, name),
+                              getattr(resolved_b, name))
         if line is not None:
-            asmp_diffs.append(line)
+            basis_diffs.append(line)
     for name in ("discount_annual", "expense_inflation", "ra_method",
                  "ra_confidence", "cost_of_capital_rate", "mortality_cv",
                  "morbidity_cv", "longevity_cv", "disability_cv",
                  "expense_cv"):
         line = _diff_scalar(name,
-                            getattr(asmp_a, name),
-                            getattr(asmp_b, name))
+                            getattr(resolved_a, name),
+                            getattr(resolved_b, name))
         if line is not None:
-            asmp_diffs.append(line)
+            basis_diffs.append(line)
     # ExpenseItem ledger -- detect added / dropped / changed rows.
-    rows_a = asmp_a.expense_items
-    rows_b = asmp_b.expense_items
+    rows_a = resolved_a.expense_items
+    rows_b = resolved_b.expense_items
     if rows_a != rows_b:
-        asmp_diffs.append(
+        basis_diffs.append(
             f"expense_items           : len {len(rows_a)} -> len {len(rows_b)}"
         )
     # Coverages: per-coverage rate table change.
-    codes_a = [r.code for r in asmp_a.coverages]
-    codes_b = [r.code for r in asmp_b.coverages]
+    codes_a = [r.code for r in resolved_a.coverages]
+    codes_b = [r.code for r in resolved_b.coverages]
     if codes_a != codes_b:
-        asmp_diffs.append(
+        basis_diffs.append(
             f"coverages (codes)      : {codes_a} -> {codes_b}"
         )
     else:
-        for ra, rb in zip(asmp_a.coverages, asmp_b.coverages):
+        for ra, rb in zip(resolved_a.coverages, resolved_b.coverages):
             line = _diff_callable(f"coverage[{ra.code}].rate",
                                    ra.rate, rb.rate)
             if line is not None:
-                asmp_diffs.append(line)
-    if not asmp_diffs:
-        asmp_diffs.append("(no changes in tracked fields)")
+                basis_diffs.append(line)
+    if not basis_diffs:
+        basis_diffs.append("(no changes in tracked fields)")
 
     # ---- Rate deltas at sampled years
     n_years = (term + 11) // 12
@@ -950,35 +950,35 @@ def show_trace_diff(
         block: list[object] = []
         row = _maybe_row(
             "mortality(annual)",
-            _eval_rate(asmp_a.mortality_annual, sex_v, age, y,
+            _eval_rate(resolved_a.mortality_annual, sex_v, age, y,
                        issue_class_v, elapsed_v),
-            _eval_rate(asmp_b.mortality_annual, sex_v, age, y,
+            _eval_rate(resolved_b.mortality_annual, sex_v, age, y,
                        issue_class_v, elapsed_v),
         )
         if row is not None:
             block.append(row)
         row = _maybe_row(
             "lapse(annual)    ",
-            _eval_rate(asmp_a.lapse_annual, sex_v, age, y,
+            _eval_rate(resolved_a.lapse_annual, sex_v, age, y,
                        issue_class_v, elapsed_v),
-            _eval_rate(asmp_b.lapse_annual, sex_v, age, y,
+            _eval_rate(resolved_b.lapse_annual, sex_v, age, y,
                        issue_class_v, elapsed_v),
         )
         if row is not None:
             block.append(row)
-        if (asmp_a.waiver_incidence_annual is not None
-                or asmp_b.waiver_incidence_annual is not None):
+        if (resolved_a.waiver_incidence_annual is not None
+                or resolved_b.waiver_incidence_annual is not None):
             row = _maybe_row(
                 "waiver(annual)   ",
-                _eval_rate(asmp_a.waiver_incidence_annual, sex_v, age, y,
+                _eval_rate(resolved_a.waiver_incidence_annual, sex_v, age, y,
                            issue_class_v, elapsed_v),
-                _eval_rate(asmp_b.waiver_incidence_annual, sex_v, age, y,
+                _eval_rate(resolved_b.waiver_incidence_annual, sex_v, age, y,
                            issue_class_v, elapsed_v),
             )
             if row is not None:
                 block.append(row)
         if codes_a == codes_b:
-            for ra, rb in zip(asmp_a.coverages, asmp_b.coverages):
+            for ra, rb in zip(resolved_a.coverages, resolved_b.coverages):
                 row = _maybe_row(
                     f"{ra.code}(annual)".ljust(17),
                     _eval_rate(ra.rate, sex_v, age, y,
@@ -1069,7 +1069,7 @@ def show_trace_diff(
     out.append(header)
     out.append(labels_line)
     tree_items: list[object] = [
-        ("Assumption changes", asmp_diffs),
+        ("Assumption changes", basis_diffs),
         ("Rate deltas (per policy year)", rate_lines),
         (f"Cash flow deltas (annual sum, non-zero rows only)", cf_lines),
         ("Discount factor deltas (key months)", disc_lines),

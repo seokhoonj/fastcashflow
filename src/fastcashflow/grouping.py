@@ -236,10 +236,10 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
             "group() requires a full=True measurement; the trajectory fields "
             "are None on the full=False fast path. Call measure(..., full=True)."
         )
-    labels, r = _group_plan(measurement, by, measurement.bel_path.shape[0])
-    bel = r.sum(measurement.bel_path)
-    ra = r.sum(measurement.ra_path)
-    grouped_cf = _sum_cashflows(measurement.cashflows, r)
+    labels, reducer = _group_plan(measurement, by, measurement.bel_path.shape[0])
+    bel = reducer.sum(measurement.bel_path)
+    ra = reducer.sum(measurement.ra_path)
+    grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
 
     # The CSM and the loss component are re-derived on the group aggregate --
     # the max(0, ...) floor applies to the group, not the contract.
@@ -264,13 +264,13 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
         # Legitimate in-force is orders of magnitude above this floor.
         live = np.where(inforce > _INFORCE_EPS,
                         np.arange(inforce.shape[1])[None, :], -1).max(axis=1)
-        out_bom = np.empty((r.n_groups, bom.shape[1]))
-        out_mid = np.empty((r.n_groups, measurement.discount_mid.shape[1]))
+        out_bom = np.empty((reducer.n_groups, bom.shape[1]))
+        out_mid = np.empty((reducer.n_groups, measurement.discount_mid.shape[1]))
         # group -> its row indices, from a single sort rather than a full
         # ``inverse == g`` scan per group (which would be O(n_groups x n_mp)).
-        group_rows = np.split(np.argsort(r.inverse, kind="stable"),
-                              np.cumsum(r.sizes)[:-1])
-        for g in range(r.n_groups):
+        group_rows = np.split(np.argsort(reducer.inverse, kind="stable"),
+                              np.cumsum(reducer.sizes)[:-1])
+        for g in range(reducer.n_groups):
             rows = group_rows[g]
             rep = rows[np.argmax(live[rows])]
             livemask = cols[None, :] < (live[rows] + 2)[:, None]
@@ -302,12 +302,12 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=r.sum(measurement.lic),
+        lic=reducer.sum(measurement.lic),
         cashflows=grouped_cf,
         discount_bom=out_bom,
         discount_mid=out_mid,
         group_labels=labels,
-        group_sizes=r.sizes,
+        group_sizes=reducer.sizes,
     )
 
 
@@ -318,16 +318,16 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
             "group() requires a full measurement; the trajectory fields are "
             "None. Re-run vfa.measure()."
         )
-    labels, r = _group_plan(measurement, by, measurement.bel_path.shape[0])
-    bel = r.sum(measurement.bel_path)
-    ra = r.sum(measurement.ra_path)
-    grouped_cf = _sum_cashflows(measurement.cashflows, r)
+    labels, reducer = _group_plan(measurement, by, measurement.bel_path.shape[0])
+    bel = reducer.sum(measurement.bel_path)
+    ra = reducer.sum(measurement.ra_path)
+    grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
     # variable_fee (PV of the fee) and time_value (a cost) are per-MP amounts --
     # additive. account_value is a per-policy level, not a group quantity (the
     # group's fund would be sum(inforce x av), a different field), so it does not
     # carry to the grouped result.
-    time_value = r.sum(measurement.time_value)
-    variable_fee = r.sum(measurement.variable_fee)
+    time_value = reducer.sum(measurement.time_value)
+    variable_fee = reducer.sum(measurement.variable_fee)
 
     # The CSM and loss component are re-derived on the group aggregate. The VFA
     # inception fulfilment cash flows fold in the guarantee time value, and the
@@ -354,12 +354,12 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
         account_value_path=None,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=r.sum(measurement.lic),
+        lic=reducer.sum(measurement.lic),
         cashflows=grouped_cf,
         discount_bom=bom,
         model_points=None,
         group_labels=labels,
-        group_sizes=r.sizes,
+        group_sizes=reducer.sizes,
     )
 
 
@@ -370,12 +370,12 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
             "group() requires a full reinsurance measurement (cash flows and "
             "discount curve). Re-run reinsurance.measure()."
         )
-    labels, r = _group_plan(measurement, by, measurement.bel.shape[0])
-    bel = r.sum(measurement.bel)
-    ra = r.sum(measurement.ra)
-    recovery = r.sum(measurement.recovery)
-    reinsurance_premium = r.sum(measurement.reinsurance_premium)
-    grouped_cf = _sum_cashflows(measurement.cashflows, r)
+    labels, reducer = _group_plan(measurement, by, measurement.bel.shape[0])
+    bel = reducer.sum(measurement.bel)
+    ra = reducer.sum(measurement.ra)
+    recovery = reducer.sum(measurement.recovery)
+    reinsurance_premium = reducer.sum(measurement.reinsurance_premium)
+    grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
     # Reinsurance held has no loss component and no floor (paragraph 65): the
     # CSM is the net cost or gain, csm0 = -(BEL - RA). That is linear, so the
     # grouped CSM equals the sum of the per-contract CSMs; only the accretion /
@@ -400,7 +400,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
         discount_bom=bom,
         model_points=None,
         group_labels=labels,
-        group_sizes=r.sizes,
+        group_sizes=reducer.sizes,
     )
 
 
@@ -411,18 +411,18 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
             "group() requires a full PAA measurement; the trajectory fields are "
             "None. Re-run paa.measure()."
         )
-    labels, r = _group_plan(measurement, by, measurement.lrc_path.shape[0])
-    lrc_path = r.sum(measurement.lrc_path)
-    revenue = r.sum(measurement.revenue)
-    service_expense = r.sum(measurement.service_expense)
-    lic = r.sum(measurement.lic)
-    grouped_cf = _sum_cashflows(measurement.cashflows, r)
+    labels, reducer = _group_plan(measurement, by, measurement.lrc_path.shape[0])
+    lrc_path = reducer.sum(measurement.lrc_path)
+    revenue = reducer.sum(measurement.revenue)
+    service_expense = reducer.sum(measurement.service_expense)
+    lic = reducer.sum(measurement.lic)
+    grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
     # The LRC, revenue, service expense and LIC are all undiscounted and
     # additive -- there is no CSM (paragraphs 53-59). The only non-linear part
     # is the onerous loss (paragraph 57): re-derive it on the group's aggregate
     # fulfilment cash flows, so a profitable contract nets a marginally onerous
     # one within the group.
-    fcf = r.sum(measurement.fcf)
+    fcf = reducer.sum(measurement.fcf)
     loss_component = np.maximum(0.0, fcf)
     return PAAMeasurement(
         lrc=lrc_path[:, 0],
@@ -435,7 +435,7 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
         cashflows=grouped_cf,
         model_points=None,
         group_labels=labels,
-        group_sizes=r.sizes,
+        group_sizes=reducer.sizes,
     )
 
 
