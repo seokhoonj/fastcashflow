@@ -5,13 +5,13 @@
 
 - **DEATH** / **MORBIDITY** / **DIAGNOSIS** 세 산출방식이 엔진 안에서
   어떻게 **서로 다른 알고리즘으로** 처리되는지
-- "DEATH 는 한 번만 / MORBIDITY 는 여러 번 / DIAGNOSIS 는 한 번만"
-  이라는 의미가 엔진 코드 어디에 표현되어 있는가
-- 같은 `inforce × rate × benefit` 식이 DEATH 와 MORBIDITY 둘 다에
+- "한 번 vs 반복"의 정체 — 청구 식이 아니라 **그 발생률이 어떤 풀을
+  줄이는가**(1.3의 풀 모델)
+- 같은 `inforce × 발생률 × benefit` 식이 DEATH와 MORBIDITY 둘 다에
   적용되면서 결과는 정반대인 이유
-- `is_diagnosis` flag 의 진짜 의미 — "한 번만 지급되는가" 가 아니라
-  "이 보장이 자기만의 풀을 갖고 있는가"
-- 손계산 / 엔진 출력 / `gmm.trace` 의 `undiagnosed` 트리가 어떻게
+- `is_diagnosis` flag의 진짜 의미 — "한 번만 지급되는가"가 아니라
+  "이 보장이 자기만의 미진단 풀을 갖고 있는가"
+- 손계산 / 엔진 출력 / `gmm.trace`의 `undiagnosed` 트리가 어떻게
   서로를 검증하는가
 ```
 
@@ -41,22 +41,23 @@
 * - (B) `inforce × undiagnosed × rate`
   - DIAGNOSIS
   - 매월 `inforce[t] × undiagnosed[t] × rate[t] × benefit` 누적.
-    `undiagnosed` 는 보장마다 자기 풀, 매월 `(1 - rate)` 로 감쇠.
+    `undiagnosed` 는 보장마다 자기 미진단 풀, 매월 `(1 - 진단발생률)` 로 감쇠.
 ```
 
 `is_diagnosis` flag 는 정확히 이 (A)/(B) 분기 결정자입니다. False → 식 (A),
 True → 식 (B).
 
-"한 번 / 여러 번" 의 구분은 **이 식 안에 있지 않습니다**. 같은 식 (A) 가
-DEATH 와 MORBIDITY 양쪽에 적용되는데도 한 자리는 "한 번만 청구되는 듯"
-다른 자리는 "여러 번 청구되는 듯" 보이는 이유는, **`inforce` 자체가
-무엇으로 감쇠하는가** 가 사용자 calibration 의 결과로 다르기 때문입니다.
+"한 번 / 여러 번" 의 구분은 **이 청구 식 안에 있지 않습니다**. 1.3에서 본
+대로, 차이는 *그 발생률이 어떤 풀을 줄이는가* 입니다 — **DEATH**는 별도의
+**보유계약 사망률**이 공유 in-force를 깎아 "한 번", **MORBIDITY**는 **어떤
+풀도 안 줄여** "반복", **DIAGNOSIS**는 **진단 발생률**이 자기 미진단 풀을
+깎아 "한 번"이 됩니다.
 
 ```{mermaid}
 flowchart TB
-    DEATH["DEATH<br/>사망률이 inforce 를 감쇠 · 한 번"]
-    MORB["MORBIDITY<br/>inforce 안 줄임 · 반복 청구"]
-    DIAG["DIAGNOSIS<br/>보장별 undiagnosed 풀 · (1-rate) 소진"]
+    DEATH["DEATH<br/>공유 in-force 감쇠 · 한 번"]
+    MORB["MORBIDITY<br/>풀 안 줄임 · 반복"]
+    DIAG["DIAGNOSIS<br/>미진단 풀 × (1-진단발생률)"]
     classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
     classDef outflow fill:#f9eeee,stroke:#b96d6d,color:#552626
     classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
@@ -69,8 +70,10 @@ flowchart TB
 
 ## DEATH — 공유 `inforce` 풀이 자체 감쇠
 
-월 사망률 1% 의 단일 사망보장. 엔진의 `mortality_annual` 이 `inforce` 를
-같은 1% 로 감쇠시키니, **사망 사건이 곧 `inforce` 의 감소**.
+월 사망률 1% 의 단일 사망보장. **보유계약 사망률**(`mortality_annual`)이
+공유 `inforce` 를 같은 1% 로 감쇠시키니, **사망 사건이 곧 `inforce` 의
+감소**입니다. (사망보험금 발생률 자체가 풀을 줄이는 게 아니라, 별도의
+보유계약 사망률이 줄입니다 — 1.3.)
 
 ```python
 import numpy as np
@@ -131,9 +134,10 @@ cumulative 3m : 356.41
 
 ## MORBIDITY — 풀 없음, 반복 발생
 
-같은 율을 입원 보장 (MORBIDITY) 에 두면. 단, `mortality_annual = 0` 으로
-두어 사망 / 해지에 의한 `inforce` 감쇠도 없게 — 입원 자체가 `inforce` 를
-줄이지 않으니, **풀 자체가 어떤 식으로도 감쇠 안 함**.
+같은 율을 입원 보장 (MORBIDITY) 에 두면. 단, 보유계약 사망률
+(`mortality_annual`) = 0 으로 두어 사망 / 해지에 의한 `inforce` 감쇠도
+없게 — 입원 발생률 자체는 어떤 풀도 줄이지 않으니, **풀이 어떤 식으로도
+감쇠 안 함**.
 
 ```python
 import numpy as np
@@ -193,18 +197,21 @@ cumulative 3m : 360.00
 
 **핵심**: 같은 식 `inforce × rate × benefit` 인데, **`inforce` 가 안
 줄어드니까 매월 120 이 새로 발생**. "여러 번" 도 식의 특성이 아니라
-**`inforce` 가 그 rate 로 감쇠하지 않는다** 의 결과.
+**입원 발생률이 어떤 풀도 줄이지 않는다** 의 결과.
 
-DEATH 예제와 MORBIDITY 예제의 차이는 단 하나 — `mortality_annual` 이
-청구 rate 와 같은 값을 쓰는가 0 을 쓰는가. 그 한 줄 차이가 청구 시계열의
-형태를 완전히 바꿉니다.
+DEATH 예제와 MORBIDITY 예제의 차이는 단 하나 — **보유계약 사망률**이 청구
+발생률과 같은 값을 쓰는가(DEATH) 0 을 쓰는가(MORBIDITY). 즉 *발생률이
+공유 in-force라는 풀을 같이 줄이느냐* 의 차이일 뿐, 청구 식은 동일합니다.
+그 한 줄 차이가 청구 시계열의 형태를 완전히 바꿉니다.
 
 ## DIAGNOSIS — per-coverage `undiagnosed` 풀
 
-진단 보장은 `inforce` 가 안 줄어드는데도 "한 번만" 지급해야 합니다 — 한
-번 진단 받은 사람이 다음 달에 또 같은 진단을 받지 않으니까. 식 (A) 는 이걸
-못 표현하니, 엔진은 별도 알고리즘 (B) 를 씁니다 — 보장마다 자기만의
-`undiagnosed` 풀.
+진단 보장은 `inforce` (계약)가 안 줄어드는데도 "한 번만" 지급해야 합니다 —
+한 번 진단 받은 사람이 다음 달에 또 같은 진단을 받지 않으니까. 식 (A) 는
+이걸 못 표현하니, 엔진은 별도 알고리즘 (B) 를 씁니다 — 보장마다 자기만의
+`undiagnosed`(미진단) 풀을 두고, **진단 발생률**로 청구하면서 동시에 그
+풀을 `(1 - 진단발생률)` 로 깎습니다. 줄어드는 건 계약(in-force)이 아니라
+*그 담보의 미진단 풀* 이라, 사람은 계약에 그대로 남습니다(1.3).
 
 ```python
 import numpy as np

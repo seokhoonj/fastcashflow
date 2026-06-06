@@ -87,7 +87,7 @@
   - 5 종 산출방식 (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) 의
     의미. 담보별 산출방식 (`calculation_methods.csv`) 작성.
 * - 1.3
-  - [사망률의 두 가지 역할](basics/mortality-roles)
+  - [보유계약 사망률과 사망보험금 발생률](basics/mortality-roles)
   - `mortality_annual` (보유계약 감쇠) 과 `coverages` 의 DEATH rate (보장
     청구) 의 의도적 분리. 두 슬롯에 같은 callable 을 넘기는 입력 연결 패턴.
 * - 1.4
