@@ -715,9 +715,11 @@ class Basis:
             v = getattr(self, name)
             if not np.isfinite(v) or v < 0:
                 raise ValueError(f"{name} must be finite and >= 0, got {v!r}")
-        if not np.isfinite(self.investment_return):
+        if not np.isfinite(self.investment_return) or self.investment_return <= -1.0:
             raise ValueError(
-                f"investment_return must be finite, got {self.investment_return!r}")
+                "investment_return must be finite and > -1.0 (a return <= -100% "
+                f"has no monthly equivalent / NaNs the VFA account), got "
+                f"{self.investment_return!r}")
         # String-enum fields: catch a typo ("amount_policy", "margins") at
         # construction rather than late in a projection / fast-path branch.
         if self.ra_method not in RA_METHODS:

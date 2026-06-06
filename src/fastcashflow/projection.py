@@ -767,7 +767,14 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     # In-force state machine -- see ``statemodel.resolve_state_model`` for
     # the fallback policy when ``basis.state_model`` is unset.
     state_model = resolve_state_model(basis)
-    start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
+    seating = np.asarray(state_model.seating, np.int64)
+    if model_points.state.size and int(model_points.state.max()) >= seating.shape[0]:
+        raise ValueError(
+            f"ModelPoints.state has value {int(model_points.state.max())} but the "
+            f"resolved state model accepts only {seating.shape[0]} seating states "
+            f"(valid 0..{seating.shape[0] - 1}); check the state column against the "
+            "segment's state_model")
+    start_state = seating[model_points.state]
 
     # A state-conditioned death benefit (death_benefit_factor) weights only the
     # AGGREGATE death claim (the rule-free, non-diagnosis pass that pays off the

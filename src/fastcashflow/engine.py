@@ -2228,7 +2228,14 @@ def _measure_fast(
             edge_prob = np.ascontiguousarray(
                 np.transpose(compiled.edge_prob, (1, 2, 3, 0)))
             state_duration_max = None
-        start_state = np.asarray(state_model.seating, np.int64)[model_points.state]
+        seating = np.asarray(state_model.seating, np.int64)
+        if model_points.state.size and int(model_points.state.max()) >= seating.shape[0]:
+            raise ValueError(
+                f"ModelPoints.state has value {int(model_points.state.max())} but "
+                f"the resolved state model accepts only {seating.shape[0]} seating "
+                f"states (valid 0..{seating.shape[0] - 1}); check the state column "
+                "against the segment's state_model")
+        start_state = seating[model_points.state]
     # Align the basis' coverages to the order the model points were
     # built against (the one place the basis enter the coverage
     # indexing). Identity when the model points were built against this

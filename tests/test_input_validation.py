@@ -1103,3 +1103,28 @@ def test_axis_tables_rejects_duplicate_row():
     ])
     with pytest.raises(ValueError, match="duplicate year=0"):
         _axis_tables(ws, "year")
+
+
+def test_basis_investment_return_at_negative_one():
+    # A VFA return <= -100% has no monthly equivalent and NaNs the account.
+    with pytest.raises(ValueError, match="investment_return must be finite and > -1.0"):
+        _basis1(investment_return=-1.5)
+
+
+def test_modelpoints_state_above_state_model_count_rejected():
+    """A state index past the state_model's state count now raises a clear
+    error at measurement (was a late IndexError at seating lookup), on both the
+    full and fast paths. Codex 2026-06-07."""
+    from fastcashflow.statemodel import STATE_MODELS
+    mp = ModelPoints(
+        issue_age=np.array([40.0]), premium=np.array([100.0]),
+        term_months=np.array([12]), state=np.array([99]),
+        benefits={"DEATH": np.array([1000.0])},
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH},
+    )
+    basis = _basis1(state_model=STATE_MODELS["WAIVER"],
+                    waiver_incidence_annual=_flat_rate(0.01))
+    with pytest.raises(ValueError, match="accepts only .* seating states"):
+        fcf.gmm.measure(mp, basis)               # full path (projection.py)
+    with pytest.raises(ValueError, match="accepts only .* seating states"):
+        fcf.gmm.measure(mp, basis, full=False)   # fast path (engine.py)
