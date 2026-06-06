@@ -168,7 +168,7 @@ basis = fcf.Basis(
 mp = fcf.ModelPoints(
     issue_age          = np.array([40], dtype=np.int64),     # 가입연령 40세
     benefits           = {0: np.array([100_000.0])},         # 사망보험금 100,000
-    premium      = np.array([0.0]),                    # 보험료 0
+    premium            = np.array([0.0]),                    # 보험료 0
     term_months        = np.array([4], dtype=np.int64),      # 보험기간 4개월
     disability_benefit = np.array([1_000_000.0]),            # 진단금 1,000,000 (1차 = 2차)
     calculation_methods= {"DEATH": fcf.CalculationMethod.DEATH},
@@ -401,7 +401,7 @@ from dataclasses import replace
 mp_seat = fcf.ModelPoints(
     issue_age          = np.array([40], dtype=np.int64),
     benefits           = {0: np.array([100_000.0])},
-    premium      = np.array([0.0]),
+    premium            = np.array([0.0]),
     term_months        = np.array([1], dtype=np.int64),
     disability_benefit = np.array([1_000_000.0]),
     state              = np.array([1], dtype=np.int64),   # post_first 코호트 0 에 자리 지정
