@@ -160,15 +160,15 @@ def measure_paa(
         raise ValueError(
             f"revenue_basis must be 'time' or 'claims', got {revenue_basis!r}"
         )
-    w_sum = weight.sum(axis=1, keepdims=True)
-    w_sum = np.where(w_sum == 0.0, 1.0, w_sum)   # safe divide; weight=0 → revenue=0
-    revenue = premium_total[:, None] * weight / w_sum
+    weight_sum = weight.sum(axis=1, keepdims=True)
+    weight_sum = np.where(weight_sum == 0.0, 1.0, weight_sum)   # safe divide; weight=0 → revenue=0
+    revenue = premium_total[:, None] * weight / weight_sum
 
     # LRC roll-forward -- premiums build it up, revenue releases it.
-    net = proj.premium_cf - revenue
-    n_mp, n_time = net.shape
+    lrc_delta = proj.premium_cf - revenue
+    n_mp, n_time = lrc_delta.shape
     lrc = np.zeros((n_mp, n_time + 1))
-    lrc[:, 1:] = np.cumsum(net, axis=1)
+    lrc[:, 1:] = np.cumsum(lrc_delta, axis=1)
 
     # Onerous test -- the GMM inception fulfilment cash flows.
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(

@@ -472,7 +472,7 @@ def compile_state_model(
     edge_from: list[int] = []
     edge_to: list[int] = []
     edge_prob: list[FloatArray] = []
-    edge_lump: list[bool] = []
+    edge_lump_sum: list[bool] = []
     death_exit_rows: list[FloatArray] = []
     for i, state in enumerate(model.states):
         # ``survive`` accumulates prod_{j}(1 - rate_j) across the transitions
@@ -501,19 +501,19 @@ def compile_state_model(
                 edge_from.append(i)
                 edge_to.append(index[tr.to])
                 edge_prob.append(survive * rate)
-                edge_lump.append(tr.lump_sum)
+                edge_lump_sum.append(tr.lump_sum)
             survive = survive * (1.0 - rate)
         edge_from.append(i)        # the residual stays in the state
         edge_to.append(i)
         edge_prob.append(survive)
-        edge_lump.append(False)
+        edge_lump_sum.append(False)
         death_exit_rows.append(death_exit)
 
     return CompiledStateModel(
         edge_from=np.array(edge_from, dtype=np.int64),
         edge_to=np.array(edge_to, dtype=np.int64),
         edge_prob=np.ascontiguousarray(np.stack(edge_prob)),
-        edge_lump_sum=np.array(edge_lump, dtype=np.bool_),
+        edge_lump_sum=np.array(edge_lump_sum, dtype=np.bool_),
         n_states=len(model.states),
         premium_state=np.array([s.premium for s in model.states], dtype=np.bool_),
         benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),
@@ -627,7 +627,7 @@ def compile_state_model_with_duration(
     edge_from: list[int] = []
     edge_to: list[int] = []
     edge_prob_blocks: list[FloatArray] = []   # one (max_D, *grid) per edge
-    edge_lump: list[bool] = []
+    edge_lump_sum: list[bool] = []
     death_exit_rows: list[FloatArray] = []    # per-state exact death exit (cohort 0)
 
     for i, state in enumerate(model.states):
@@ -712,7 +712,7 @@ def compile_state_model_with_duration(
             edge_from.append(i)
             edge_to.append(dst)
             edge_prob_blocks.append(block)
-            edge_lump.append(lump)
+            edge_lump_sum.append(lump)
 
     # Stack edges to (n_edges, max_D, *grid), then move max_D axis to the
     # *end* so the layout matches the Markov path's (..., edges) extension:
@@ -728,7 +728,7 @@ def compile_state_model_with_duration(
         edge_from=np.array(edge_from, dtype=np.int64),
         edge_to=np.array(edge_to, dtype=np.int64),
         edge_prob=edge_prob,
-        edge_lump_sum=np.array(edge_lump, dtype=np.bool_),
+        edge_lump_sum=np.array(edge_lump_sum, dtype=np.bool_),
         n_states=len(model.states),
         premium_state=np.array([s.premium for s in model.states], dtype=np.bool_),
         benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),

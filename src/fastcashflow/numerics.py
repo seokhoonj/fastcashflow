@@ -161,7 +161,9 @@ def _norm_ppf(p: float) -> float:
     return x - err / (pdf + 0.5 * x * err)
 
 
-def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
+def _cost_of_capital_ra(
+    confidence_margin: FloatArray, monthly_rate: FloatArray, coc_rate: float
+) -> FloatArray:
     """Cost-of-capital RA -- the cost of holding the confidence-level margin
     as non-financial-risk capital over the contract's run-off.
 
@@ -172,10 +174,10 @@ def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
     ``(n_time,)``; a flat rate and a yield curve share the same form.
     """
     full = 1.0 / (1.0 + monthly_rate)             # (n_time,)
-    cap_pv = np.empty_like(cl_margin)
-    cap_pv[:, -1] = cl_margin[:, -1]
-    for t in range(cl_margin.shape[1] - 2, -1, -1):
-        cap_pv[:, t] = cl_margin[:, t] + full[t] * cap_pv[:, t + 1]
+    cap_pv = np.empty_like(confidence_margin)
+    cap_pv[:, -1] = confidence_margin[:, -1]
+    for t in range(confidence_margin.shape[1] - 2, -1, -1):
+        cap_pv[:, t] = confidence_margin[:, t] + full[t] * cap_pv[:, t + 1]
     return coc_rate * cap_pv
 
 
@@ -194,14 +196,14 @@ def _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
     cost-of-capital branch needs the trajectory; the caller slices what it needs.
     """
     z = _norm_ppf(basis.ra_confidence)
-    cl_margin = z * (basis.mortality_cv * pv_claims
+    confidence_margin = z * (basis.mortality_cv * pv_claims
                      + basis.morbidity_cv * pv_morbidity
                      + basis.disability_cv * pv_disability
                      + basis.longevity_cv * pv_survival)
     if basis.ra_method == "confidence_level":
-        return cl_margin
+        return confidence_margin
     if basis.ra_method == "cost_of_capital":
-        return _cost_of_capital_ra(cl_margin, monthly_rate,
+        return _cost_of_capital_ra(confidence_margin, monthly_rate,
                                    basis.cost_of_capital_rate)
     raise ValueError(
         "ra_method must be 'confidence_level' or 'cost_of_capital', "

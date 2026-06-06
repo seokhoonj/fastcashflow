@@ -115,20 +115,20 @@ def discount_factors(basis: Basis, n_time: int) -> tuple[FloatArray, FloatArray]
 
 
 def discount_factors_from_curve(
-    monthly_rates: FloatArray,
+    monthly_rate: FloatArray,
 ) -> tuple[FloatArray, FloatArray]:
     """Discount factors from a per-month rate curve.
 
-    ``monthly_rates`` is a ``(n_time,)`` array of monthly forward rates --
+    ``monthly_rate`` is a ``(n_time,)`` array of monthly forward rates --
     the rate applied across each projection month. Returns the same
     ``(discount_bom, discount_mid)`` pair as :func:`discount_factors`; a
     constant curve reproduces it bar floating-point rounding.
     """
-    monthly_rates = np.asarray(monthly_rates, dtype=np.float64)
-    discount_bom = np.empty(monthly_rates.shape[0] + 1)
+    monthly_rate = np.asarray(monthly_rate, dtype=np.float64)
+    discount_bom = np.empty(monthly_rate.shape[0] + 1)
     discount_bom[0] = 1.0
-    np.cumprod(1.0 / (1.0 + monthly_rates), out=discount_bom[1:])
-    discount_mid = discount_bom[:-1] / np.sqrt(1.0 + monthly_rates)
+    np.cumprod(1.0 / (1.0 + monthly_rate), out=discount_bom[1:])
+    discount_mid = discount_bom[:-1] / np.sqrt(1.0 + monthly_rate)
     return discount_bom, discount_mid
 
 
