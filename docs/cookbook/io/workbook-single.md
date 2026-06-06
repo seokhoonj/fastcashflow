@@ -223,8 +223,8 @@ CSM sum = 10,280,704
 ## 인접 레시피
 
 - [1.1 한눈에 보기](../basics/overview) — 네 입력 파일과 사용자 API 의 전체 트리.
-- [1.2 담보와 산출방식 매칭](../basics/calculation-methods) —
-  `calculation_methods.csv` 의 5 종 산출방식.
+- [1.2 담보와 산출방법 매칭](../basics/calculation-methods) —
+  `calculation_methods.csv` 의 5 종 산출방법.
 - [7.2 워크북 — 다중 segment / 다종 상품](workbook-multi) — `measure`
   라우팅과 segment 별 다른 StateModel / lapse.
 - [튜토리얼 11장](../../tutorial/11-in-practice) — 결산 워크플로와 보유계약

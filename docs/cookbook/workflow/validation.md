@@ -465,7 +465,7 @@ mp_one = ModelPoints(
     premium             = np.array([200_000.0]),                   # 월납 보험료 20 만
     term_months         = np.array([60]),                          # 보험기간 60 개월 (5 년)
     benefits            = {0: np.array([100_000_000.0])},          # 0 번 보장 (= DEATH) 의 보험금 1 억
-    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},  # 코드 → 산출방식 매핑
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},  # 코드 → 산출방법 매핑
 )
 
 fcf.gmm.trace_csm_step(0, mp_one, profitable, months=[1, 30, 60])
@@ -785,7 +785,7 @@ basis = fcf.read_basis("samples/basis.xlsx")                  # 산출기초
 mp = fcf.read_model_points(
     "samples/policies.csv",                                   # 계약 스펙
     coverages           = "samples/coverages.csv",            # 담보 가입금액
-    calculation_methods = "samples/calculation_methods.csv",  # 담보별 산출방식
+    calculation_methods = "samples/calculation_methods.csv",  # 담보별 산출방법
 )
 
 # mp_id (문자열) → 0-based 정수 인덱스

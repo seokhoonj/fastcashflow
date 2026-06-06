@@ -237,7 +237,7 @@ test 가 자동 검증).
 * - 파일
   - 내용
 * - `calculation_methods.csv`
-  - 담보별 산출방식 — 담보 코드 → 산출방식 (DEATH / MORBIDITY / ...)
+  - 담보별 산출방법 — 담보 코드 → 산출방법 (DEATH / MORBIDITY / ...)
 * - `basis.xlsx`
   - 산출기초 — 사망률 · 해지율 · 할인율 · 사업비 · 위험조정
 * - `policies.csv`
@@ -261,7 +261,7 @@ basis = fcf.read_basis("samples/basis.xlsx")    # {(product, channel): Basis}
 mp    = fcf.read_model_points(
     "samples/policies.csv",                                 # 계약 spec 파일
     coverages="samples/coverages.csv",                      # 담보 가입금액 파일
-    calculation_methods="samples/calculation_methods.csv",  # 담보별 산출방식 파일
+    calculation_methods="samples/calculation_methods.csv",  # 담보별 산출방법 파일
 )
 
 # 한 segment 의 가정을 전체 portfolio 에 적용 — 상세 trajectory
@@ -496,9 +496,9 @@ fastcashflow 의 성별 인코딩은 **0 = 남, 1 = 여**. 워크북의 `policie
 
 이 챕터를 읽고 나서 자연스럽게 갈 다음 자리들:
 
-- [담보별 산출로직](../basics/coverage-mechanics) — DEATH 외에 다른
+- [담보별 산출방법](../basics/coverage-mechanics) — DEATH 외에 다른
   보장 (DIAGNOSIS / MORBIDITY) 이 엔진 안에서 어떻게 다른 알고리즘으로
-  처리되는지. 본 챕터가 한 가지 산출방식만 다루는 이유.
+  처리되는지. 본 챕터가 한 가지 산출방법만 다루는 이유.
 - 사망 + 단순 진단 일시금 (작성 예정) — 사망보험에 진단보험금
   (CI = Critical Illness = 진단) 일시금 결합. 첫 번째 추가 담보 도입.
 - 보험료 납입면제 (waiver) (작성 예정) — `STATE_MODELS["WAIVER"]`

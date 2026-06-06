@@ -20,7 +20,7 @@ orphan: true
 | 시트 | 역할 |
 |---|---|
 | `segments` | `(product, channel)` 별 — 어느 rate table을 쓸지 + 스칼라 파라미터 (`ra_confidence`, `*_cv`, optional `*_age_shift`, `expense_table` 등). `_DEFAULTS` 행이 fallback |
-| `coverages` | rate-driven 담보 registry: `coverage → rate_table`. 모든 상품 공통 (product 별로 다른 calibration 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 코드 분리). `calculation_method` 은 별도 `calculation_methods.csv` (담보별 산출방식) 에 |
+| `coverages` | rate-driven 담보 registry: `coverage → rate_table`. 모든 상품 공통 (product 별로 다른 calibration 필요시 `CANCER_HEALTH`, `CANCER_WHOLELIFE` 처럼 코드 분리). `calculation_method` 은 별도 `calculation_methods.csv` (담보별 산출방법) 에 |
 | `mortality_tables` | 사망 발생률 가정 (`table_id` × `sex` × `age` → `rate`) |
 | `incidence_rate_tables` | 특약 발생률 가정 (구조 동일) |
 | `waiver_tables` | 납입면제 발생률 가정 (구조 동일) |
@@ -36,7 +36,7 @@ orphan: true
 
 | 파일 | 역할 |
 |---|---|
-| `calculation_methods.csv` | 담보별 산출방식 (`coverage → calculation_method` 분류). 5종 fixed pattern (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY). `basis.xlsx` 와 분리 — 신담보 추가 시에만 손댐 |
+| `calculation_methods.csv` | 담보별 산출방법 (`coverage → calculation_method` 분류). 5종 fixed pattern (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY). `basis.xlsx` 와 분리 — 신담보 추가 시에만 손댐 |
 | `inforce_state.csv` (optional) | 결산 시점 보유계약 상태 (`mp_id`, `elapsed_months`, `count`, `prior_csm`, `lock_in_rate`) |
 
 ## Column headers
@@ -69,7 +69,7 @@ orphan: true
 | `channel` | ALL UPPERCASE 약어 | `GA`, `FC`, `TM` | 업계 관용 약어 (General Agency, Financial Consultant, Telemarketing) |
 | `table_id` | SCREAMING_SNAKE_CASE 풀네임 | `MORTALITY_STD`, `LAPSE_TERM_GA`, `DISCOUNT_STD`, `INPATIENT_STD`, `ADB_STD` | named reference. 줄임말 안 씀 (`MORT_STD` 같은 abbreviation 지양). 단 industry-universal abbr 인 `ADB` 같은 매우 짧은 것은 예외 |
 | `coverage` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `INPATIENT`, `CANCER`, `MATURITY`, `ANNUITY`, `ADB` | enum-like 식별자. 사용자 카탈로그 — 엔진 reserved 코드 없음 |
-| `calculation_method` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | **engine 의 cash flow 산출방식 routing key**. 5 개 고정. 자세한 각 산출방식별 계산은 `basis-format.md` 의 coverages 시트 섹션 참조 |
+| `calculation_method` | SCREAMING_SNAKE_CASE 풀네임 | `DEATH`, `MORBIDITY`, `DIAGNOSIS`, `ANNUITY`, `MATURITY` | **engine 의 cash flow 산출방법 routing key**. 5 개 고정. 자세한 각 산출방법별 계산은 `basis-format.md` 의 coverages 시트 섹션 참조 |
 | `state` | SCREAMING_SNAKE_CASE | `ACTIVE`, `WAIVER`, `PAIDUP` | enum-like, 정책 status |
 | `_DEFAULTS` (특수 product 값) | 대문자 + 밑줄 (예약 마커) | `_DEFAULTS` | segments 시트의 fallback 행 marker (값 아닌 keyword) |
 

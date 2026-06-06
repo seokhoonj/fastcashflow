@@ -97,7 +97,7 @@ basis = fcf.read_basis("samples/basis.xlsx")                            # {(prod
 model_points, state = fcf.read_inforce_policies(
     "samples/inforce_policies.csv",                                     # 마감 1-파일 (spec + state)
     coverages="samples/coverages.csv",                                  # 담보 파일
-    calculation_methods="samples/calculation_methods.csv",              # 담보별 산출방식
+    calculation_methods="samples/calculation_methods.csv",              # 담보별 산출방법
 )
 
 # 전체 포트폴리오 결산 — dict basis 를 그대로 넘기면 각 (product, channel)

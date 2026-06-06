@@ -1,4 +1,4 @@
-# 1.4 담보별 산출로직
+# 1.4 담보별 산출방법
 
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
@@ -19,10 +19,10 @@
 각 `CalculationMethod` 값이 `calculation_methods.csv` 에 적는 라벨 이라면 —
 `DEATH` 라고 적는 것 vs `DIAGNOSIS` 라고 적는 것의 차이는 어디서 정해지나?
 그 선택은 [CalculationMethod 결정 가이드](calculation-methods) 의 자리이고,
-본 챕터는 **엔진이 그 산출방식을 받아서 무엇을 다르게 하는가** 입니다.
+본 챕터는 **엔진이 그 산출방법을 받아서 무엇을 다르게 하는가** 입니다.
 
 이 챕터의 모든 예제는 동일한 toy 설정 — 월 사망/발생/진단율 1%, 보험금
-12,000, 3 개월 — 위에서 산출방식만 바꿔 결과를 비교합니다. 한 페이지에 세 모드의
+12,000, 3 개월 — 위에서 산출방법만 바꿔 결과를 비교합니다. 한 페이지에 세 모드의
 차이가 명료하게 드러나도록 의도된 셋업입니다.
 
 ## 발생은 같고, 빠지는 풀이 다르다
@@ -127,7 +127,7 @@ mp = fcf.ModelPoints.single(
     premium             = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
     term_months         = 3,            # 보험기간 3개월
     calculation_methods = {
-        "DEATH": fcf.CalculationMethod.DEATH,   # 코드 → 산출방식 매핑
+        "DEATH": fcf.CalculationMethod.DEATH,   # 코드 → 산출방법 매핑
     },
 )
 r = fcf.gmm.measure(mp, basis)
@@ -197,7 +197,7 @@ mp = fcf.ModelPoints.single(
     premium             = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
     term_months         = 3,            # 보험기간 3개월
     calculation_methods = {
-        "CANCER": fcf.CalculationMethod.DIAGNOSIS,   # 코드 → 산출방식 매핑
+        "CANCER": fcf.CalculationMethod.DIAGNOSIS,   # 코드 → 산출방법 매핑
     },
 )
 r = fcf.gmm.measure(mp, basis)
@@ -268,7 +268,7 @@ mp = fcf.ModelPoints.single(
     premium             = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
     term_months         = 3,            # 보험기간 3개월
     calculation_methods = {
-        "INPATIENT": fcf.CalculationMethod.MORBIDITY,   # 코드 → 산출방식 매핑
+        "INPATIENT": fcf.CalculationMethod.MORBIDITY,   # 코드 → 산출방법 매핑
     },
 )
 r = fcf.gmm.measure(mp, basis)
@@ -414,8 +414,8 @@ asmp_buggy = fcf.Basis(
 
 ## 인접 레시피
 
-- [CalculationMethod 결정 가이드](calculation-methods) — 담보별 산출방식의
-  매 코드를 어느 산출방식으로 등록할지. 본 챕터는 그 산출방식이 엔진 안에서
+- [CalculationMethod 결정 가이드](calculation-methods) — 담보별 산출방법의
+  매 코드를 어느 산출방법으로 등록할지. 본 챕터는 그 산출방법이 엔진 안에서
   어떻게 다르게 동작하는지.
 - [정기보험](../simple/term-life) — DEATH 만 사용하는 가장 단순한 사례.
 - 사망 + 단순 진단 일시금 (작성 예정) — DEATH 와 DIAGNOSIS 의 결합. 본

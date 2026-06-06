@@ -239,7 +239,7 @@ t=3 cash flow 가 룰 유무와 무관하게 같은 이유.
 
 - [2.2 사망 + 단순 진단 일시금](death-diagnosis) — 면책 / 감액 없는 진단
   담보. 본 챕터의 출발점.
-- [1.4 담보별 산출로직](../basics/coverage-mechanics) — DIAGNOSIS 의
+- [1.4 담보별 산출방법](../basics/coverage-mechanics) — DIAGNOSIS 의
   `undiagnosed` 풀 동학. 면책 / 감액이 풀을 안 건드리는 이유의 근거.
 - [3.1 보험료 납입면제 (waiver)](../markov/waiver) — 상태 축. 면책 / 감액
   (담보 룰 축) 과 직교하며 한 계약에 공존 가능.

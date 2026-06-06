@@ -57,7 +57,7 @@ flowchart TB
   `Basis(...)` (1세그먼트), `samples.*` — 검산 · 토이 · 민감도용. `.single` 은
   생성자가 배열 모양이라 ModelPoints 전용 sugar 고, `Basis` 는 생성자가
   스칼라 / 콜러블을 직접 받아 별도 sugar 가 없습니다.
-- **담보의 두 측면** — *산출방식* (`CalculationMethod`) 은 계약 쪽,
+- **담보의 두 측면** — *산출방법* (`CalculationMethod`) 은 계약 쪽,
   *율* (`CoverageRate`) 은 가정 쪽.
 
 ## 입력 파일과 사용자 함수
@@ -76,8 +76,8 @@ calculation_methods 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 
 | 챕터 | 사용하는 자리 |
 |---|---|
-| [담보와 산출방식 매칭](calculation-methods) | `calculation_methods.csv` 의 자리. 다섯 산출방식의 의미. |
-| [담보별 산출로직](coverage-mechanics) | DEATH / MORBIDITY / DIAGNOSIS 의 kernel 알고리즘. |
+| [담보와 산출방법 매칭](calculation-methods) | `calculation_methods.csv` 의 자리. 다섯 산출방법의 의미. |
+| [담보별 산출방법](coverage-mechanics) | DEATH / MORBIDITY / DIAGNOSIS 의 kernel 알고리즘. |
 | [정기보험](../simple/term-life) | `samples.export` → `read_*` → `measure` → `print` |
 | [검증 패턴](../workflow/validation) | `gmm.trace` / `gmm.trace_bel_step` / `gmm.trace_csm_step` / `gmm.trace_diff` |
 | [튜토리얼 11장](../../tutorial/11-in-practice) | 파일 입출력의 자세한 schema 와 결산 워크플로 |

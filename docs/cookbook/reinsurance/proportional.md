@@ -341,7 +341,7 @@ print("거울 항등식 OK")
   측정. 같은 토이를 `gmm.measure` 로 직접 측정. 재보험을 읽기 전 출발점.
 - [9.1 결산 / 보유계약 평가](../workflow/settlement) — 보유 재보험계약은
   분기말 결산에서 원수계약과 **함께** 측정됩니다. 결산 워크플로의 자리.
-- [1.4 담보별 산출로직](../basics/coverage-mechanics) — 출재 대상이
+- [1.4 담보별 산출방법](../basics/coverage-mechanics) — 출재 대상이
   되는 사망 (claim) / morbidity 현금흐름이 엔진 안에서 어떻게 만들어지는지.
 - [확장 로드맵](../design/dynamic-lapse) 의 인접 주제 — 비비례 재보험
   (초과손해액 XL / surplus), 출재수수료, 재보험사 부도위험은 v1 범위 밖.

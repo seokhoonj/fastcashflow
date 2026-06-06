@@ -76,16 +76,16 @@
     basis) 과 fastcashflow 사용자 API 의 트리 구조. 후속 챕터를
     어디서 어떻게 호출하는지 미리 그림.
 * - 1.2
-  - [담보와 산출방식 매칭](basics/calculation-methods)
-  - 5 종 산출방식 (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) 의
-    의미. 담보별 산출방식 (`calculation_methods.csv`) 작성.
+  - [담보와 산출방법 매칭](basics/calculation-methods)
+  - 5 종 산출방법 (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY) 의
+    의미. 담보별 산출방법 (`calculation_methods.csv`) 작성.
 * - 1.3
   - [탈퇴와 발생](basics/mortality-roles)
   - 계약에서 빠지는 일(탈퇴, `mortality_annual`)과 보험금 사유가 생기는 일
     (발생, DEATH rate)이 처음부터 다른 개념인 이유. 단순 사망보험에서만 둘이
     같은 숫자가 되는 까닭과, 두 슬롯에 같은 callable 을 넘기는 입력 패턴.
 * - 1.4
-  - [담보별 산출로직](basics/coverage-mechanics)
+  - [담보별 산출방법](basics/coverage-mechanics)
   - DEATH 의 공유 `inforce` vs DIAGNOSIS 의 `undiagnosed` 풀.
     같은 식이 두 자리에 작동하는 이유.
 ```
