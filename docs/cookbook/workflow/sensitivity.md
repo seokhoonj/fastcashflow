@@ -185,7 +185,7 @@ labels: 'baseline'  ->  'mort+10%'
 - **Cash flow deltas** — 사망보험금 (claim) 이 +10%, 보험료는 사망 감쇠가
   빨라져 약간 (-0.58%) 줄어듦.
 - **BEL deltas** — 청구 증가가 BEL을 +53.74% 밀어 올림 (덜 음수로).
-- **CSM deltas** — 그 BEL 증가가 CSM을 -85.83% 깎음.
+- **CSM deltas** — 그 BEL 증가가 CSM을 -85.83% 줄임.
 - **Final** — `FCF = BEL + RA`, `CSM = max(0, -FCF)` 의 IFRS17 항등식이
   그대로 드러나, 왜 CSM이 그만큼 줄었는지를 한 줄로 설명합니다.
 
