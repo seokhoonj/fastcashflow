@@ -37,17 +37,17 @@
 * - 자리
   - 무엇이 바뀌나
 * - `Basis.coverages`
-  - `CoverageRate` 가 둘 — `("DEATH", death_fn)` 에 `("CANCER", cancer_fn)` 추가
+  - `CoverageRate` 가 둘 — `("DEATH", death_rate)` 에 `("CANCER", cancer_rate)` 추가
 * - `ModelPoints.benefits`
   - `{0: 사망보험금, 1: 진단금}` — 정수 키가 `coverages` 의 순서 (0 = 첫째, 1 = 둘째)
 * - `ModelPoints.calculation_methods`
   - `{"DEATH": DEATH, "CANCER": DIAGNOSIS}` — 각 담보가 어느 산출방법인지
 ```
 
-**진단율 `cancer_fn` 은 `mortality_annual` 에 넣지 않습니다.** 사망은
+**진단율 `cancer_rate` 은 `mortality_annual` 에 넣지 않습니다.** 사망은
 보유계약을 줄이지만 (죽으면 더 이상 보장 진행 X), 암진단은 사람을
 보유계약에서 빼지 않습니다 — 진단받아도 살아있고 보험료도 계속 냅니다.
-그래서 `mortality_annual = death_fn` 한 가지뿐이고, `cancer_fn` 은
+그래서 `mortality_annual = death_rate` 한 가지뿐이고, `cancer_rate` 은
 `coverages` 의 CANCER 한 자리에만 들어갑니다 (1.3 의 두 역할 참조).
 
 ## 한 계약 — 손계산과 엔진
@@ -64,27 +64,26 @@
 ```
 
 ```python
-import numpy as np
 import fastcashflow as fcf
 
-# 사망률 함수 -- 월 1% 의 연 환산 (모든 sex/age/duration 에 동일한 평탄 요율)
-death_fn  = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
+# 사망률 -- 월 1% 의 연 환산 (모든 sex/age/duration 에 동일한 평탄 요율)
+death_rate  = 1 - (1 - 0.01) ** 12
 # 암진단율 함수 -- 월 0.5% 의 연 환산 (평탄 요율)
-cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.005) ** 12)
-# 해지율 함수 -- 해지 없음
-lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
+cancer_rate = 1 - (1 - 0.005) ** 12
+# 해지율 -- 해지 없음
+lapse_rate  = 0.0
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual = death_fn,         # 보유계약 사망률 (death_fn 만)
-    lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
+    mortality_annual = death_rate,       # 보유계약 사망률 (death_rate 만)
+    lapse_annual     = lapse_rate,       # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
     ra_confidence    = 0.75,             # 위험조정 신뢰수준 75%
     mortality_cv     = 0.10,             # 사망률 변동계수 10%
     morbidity_cv     = 0.12,             # 진단율 변동계수 12%
     coverages        = (
-        fcf.CoverageRate("DEATH",  death_fn),   # 0번 담보 — 사망보험금 발생률
-        fcf.CoverageRate("CANCER", cancer_fn),  # 1번 담보 — 암진단율
+        fcf.CoverageRate("DEATH",  death_rate),   # 0번 담보 — 사망보험금 발생률
+        fcf.CoverageRate("CANCER", cancer_rate),  # 1번 담보 — 암진단율
     ),
 )
 
@@ -175,10 +174,10 @@ t=1 의 암진단 청구는 **미진단 풀** 0.9851 을 씁니다 — 단순히
 
 ```python
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,                               # 가입연령 40세
-    benefits            = {0: 100_000_000, 1: 30_000_000},  # 사망 1억, 암진단 3,000만
-    premium             = 80_000,                           # 월납 보험료 8만
-    term_months         = 240,                              # 보험기간 20년
+    issue_age           = 40,                                      # 가입연령 40세
+    benefits            = {0: 100_000_000, 1: 30_000_000},         # 사망 1억, 암진단 3,000만
+    premium             = 80_000,                                  # 월납 보험료 8만
+    term_months         = 240,                                     # 보험기간 20년
     calculation_methods = {"DEATH":  fcf.CalculationMethod.DEATH,
                            "CANCER": fcf.CalculationMethod.DIAGNOSIS},
 )
@@ -192,14 +191,14 @@ mp = fcf.ModelPoints.single(
 
 ```python
 # 뇌혈관 / 심혈관 발생률 -- 담보마다 별도 함수 (예: 연 0.3% / 0.4%)
-cerebral_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.003) ** 12)
-cardiac_fn  = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.004) ** 12)
+cerebral_rate = 1 - (1 - 0.003) ** 12
+cardiac_rate  = 1 - (1 - 0.004) ** 12
 
 coverages = (
-    fcf.CoverageRate("DEATH",  death_fn),                     # 0 — 사망
-    fcf.CoverageRate("CANCER", cancer_fn),                    # 1 — 암진단
-    fcf.CoverageRate("CEREBRAL", cerebral_fn),                # 2 — 뇌혈관 진단
-    fcf.CoverageRate("CARDIAC",  cardiac_fn),                 # 3 — 심혈관 진단
+    fcf.CoverageRate("DEATH",  death_rate),                     # 0 — 사망
+    fcf.CoverageRate("CANCER", cancer_rate),                    # 1 — 암진단
+    fcf.CoverageRate("CEREBRAL", cerebral_rate),                # 2 — 뇌혈관 진단
+    fcf.CoverageRate("CARDIAC",  cardiac_rate),                 # 3 — 심혈관 진단
 )
 ```
 
@@ -212,7 +211,7 @@ coverages = (
 
 ```python
 # 잘못된 예 — 진단율을 decrement 에 더함
-mortality_annual = lambda s, a, d: death_fn(s,a,d) + cancer_fn(s,a,d)   # ✗
+mortality_annual = death_rate + cancer_rate   # ✗
 ```
 
 이러면 암진단받은 사람이 보유계약에서 빠져나가, 그 이후의 사망보험금 ·

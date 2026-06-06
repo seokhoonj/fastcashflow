@@ -59,9 +59,9 @@ import numpy as np
 import fastcashflow as fcf
 
 # 계리적 가정 (평탄 toy -- 실무는 경험률표)
-mort   = lambda s, a, d: np.full(np.shape(a), 0.003)   # 사망 decrement
-cancer = lambda s, a, d: np.full(np.shape(a), 0.005)   # 암 진단율
-lapse  = lambda s, a, d: np.full(np.shape(d), 0.05)    # 해지율
+mort   = 0.003   # 사망 decrement
+cancer = 0.005   # 암 진단율
+lapse  = 0.05    # 해지율
 
 basis = fcf.Basis(
     mortality_annual=mort, lapse_annual=lapse,
@@ -71,10 +71,10 @@ basis = fcf.Basis(
 
 def renewable(boundary):
     return fcf.ModelPoints(
-        issue_age          = np.array([40], dtype=np.int64),    # 40세 가입
-        benefits           = {0: np.array([30_000_000.0])},     # 진단금 3,000만
-        premium            = np.array([25_000.0]),              # 월 2.5만
-        term_months        = np.array([480], dtype=np.int64),   # 보장 80세 (40년)
+        issue_age          = np.array([40], dtype=np.int64),   # 40세 가입
+        benefits           = {0: np.array([30_000_000.0])},    # 진단금 3,000만
+        premium            = np.array([25_000.0]),             # 월 2.5만
+        term_months        = np.array([480], dtype=np.int64),  # 보장 80세 (40년)
         contract_boundary_months=(None if boundary is None
                                   else np.array([boundary], dtype=np.int64)),
         calculation_methods= {"CANCER": fcf.CalculationMethod.MORBIDITY})
@@ -113,8 +113,8 @@ health = fcf.ModelPoints(
     issue_age          = np.array([40], dtype=np.int64),
     benefits           = {0: np.array([1_000_000.0])},
     premium            = np.array([12_000.0]),
-    term_months        = np.array([600], dtype=np.int64),       # 명목 보장기간
-    contract_boundary_months = np.array([12], dtype=np.int64),  # 1년 갱신 = 경계
+    term_months        = np.array([600], dtype=np.int64),              # 명목 보장기간
+    contract_boundary_months = np.array([12], dtype=np.int64),         # 1년 갱신 = 경계
     calculation_methods= {"CANCER": fcf.CalculationMethod.MORBIDITY})
 m = fcf.gmm.measure(health, basis, full=False)
 print(f"실손 1년갱신 (경계 12)  BEL {m.bel[0]:>10,.0f}  CSM {m.csm[0]:>10,.0f}")

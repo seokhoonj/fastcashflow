@@ -95,19 +95,18 @@ from pathlib import Path
 import fastcashflow as fcf
 
 # 계리적 가정 -- 감쇠 없는 toy (배수 효과에 집중)
-no_decr = lambda s, a, d: np.full(a.shape, 0.0)  # 사망 / 해지율 0
-care_fn = lambda s, a, d: np.full(a.shape, 1.0)   # 간병 발생률 1.0 (정액 매월 지급)
+care_rate = 1.0   # 간병 발생률 1.0 (정액 매월 지급)
 
 # 산출기초 (Basis)
 basis = fcf.Basis(
-    mortality_annual = no_decr,    # 보유계약 사망률 0
-    lapse_annual     = no_decr,    # 해지율 0
-    discount_annual  = 0.0,        # 연 할인율 0 (검증 단순화)
-    ra_confidence    = 0.75,       # 위험조정 신뢰수준 75%
-    mortality_cv     = 0.0,        # 사망률 변동계수 0
-    morbidity_cv     = 0.0,        # 발생률 변동계수 0
+    mortality_annual = 0.0,   # 보유계약 사망률 0
+    lapse_annual     = 0.0,   # 해지율 0
+    discount_annual  = 0.0,   # 연 할인율 0 (검증 단순화)
+    ra_confidence    = 0.75,  # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.0,   # 사망률 변동계수 0
+    morbidity_cv     = 0.0,   # 발생률 변동계수 0
     coverages        = (
-        fcf.CoverageRate("CARE", care_fn),  # 간병 담보 (청구 rate = care_fn)
+        fcf.CoverageRate("CARE", care_rate),  # 간병 담보 (청구 rate = care_rate)
     ),
 )
 
@@ -130,7 +129,7 @@ pl.DataFrame({
 
 mp = fcf.read_model_points(
     "samples/policies.csv",                                # 계약 spec 파일
-    coverages="samples/coverages.csv",                     # 담보 + 체증 룰
+    coverages="samples/coverages.csv",                              # 담보 + 체증 룰
     calculation_methods={"CARE": fcf.CalculationMethod.MORBIDITY},
 )
 
@@ -230,23 +229,23 @@ year 5, 6    = 2000.0, 2000.0
 annuity_factor = lambda s, a, d, ic, el: 1.05 ** d
 
 mp_ann = fcf.ModelPoints(
-    issue_age                = np.array([60]),         # 가입연령 60세
-    premium                  = np.array([0.0]),        # 보험료 0
-    term_months              = np.array([36]),         # 3년 (연 3회 지급)
-    annuity_payment          = np.array([100.0]),      # 연금 연액 100
-    annuity_frequency_months = np.array([12]),         # 매년 지급
-    benefits                 = {0: np.array([0.0])},   # 사망보험금 없음
+    issue_age                = np.array([60]),                          # 가입연령 60세
+    premium                  = np.array([0.0]),                         # 보험료 0
+    term_months              = np.array([36]),                          # 3년 (연 3회 지급)
+    annuity_payment          = np.array([100.0]),                       # 연금 연액 100
+    annuity_frequency_months = np.array([12]),                          # 매년 지급
+    benefits                 = {0: np.array([0.0])},                    # 사망보험금 없음
     calculation_methods      = {"ANN": fcf.CalculationMethod.ANNUITY},
 )
 
 basis_ann = fcf.Basis(
-    mortality_annual      = no_decr,    # 감쇠 0
-    lapse_annual          = no_decr,    # 해지 0
-    discount_annual       = 0.0,        # 할인 0
-    ra_confidence         = 0.75,       # 위험조정 신뢰수준 75%
-    mortality_cv          = 0.0,        # 변동계수 0
-    coverages             = (fcf.CoverageRate("ANN", no_decr),),
-    annuity_factor_annual = annuity_factor,   # 체증형 연금 배수
+    mortality_annual      = 0.0,                              # 감쇠 0
+    lapse_annual          = 0.0,                              # 해지 0
+    discount_annual       = 0.0,                              # 할인 0
+    ra_confidence         = 0.75,                             # 위험조정 신뢰수준 75%
+    mortality_cv          = 0.0,                              # 변동계수 0
+    coverages             = (fcf.CoverageRate("ANN", 0.0),),
+    annuity_factor_annual = annuity_factor,                   # 체증형 연금 배수
 )
 
 m = fcf.gmm.measure(mp_ann, basis_ann, full=True)
