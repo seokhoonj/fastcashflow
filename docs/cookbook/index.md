@@ -115,8 +115,8 @@
   - [다종 진단 + 면책 / 감액](simple/diagnosis-rules)
   - 가입 90일 면책 / 가입 2년 감액. coverage rule (담보 룰 축).
 * - 2.4
-  - [갱신형 보험과 계약경계](simple/renewable)
-  - IFRS 17 Sec. 34 계약경계 — 차기갱신 vs 최종만기. `contract_boundary_months`
+  - [갱신형 보험과 계약의 경계](simple/renewable)
+  - IFRS 17 Sec. 34 계약의 경계 — 차기갱신 vs 최종만기. `contract_boundary_months`
     로 측정 범위를 차기갱신에서 끊기.
 ```
 

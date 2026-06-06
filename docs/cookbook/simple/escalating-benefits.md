@@ -304,7 +304,7 @@ kernel) 로 체증형 담보를 측정하면 엔진이 `NotImplementedError` 로
 
 - [2.3 다종 진단 + 면책 / 감액](diagnosis-rules) — 같은 담보별 룰 축의
   **반대 방향** (감액). 체증과 한 담보에 공존 가능.
-- [2.4 갱신형](renewable) — 계약경계 / 갱신 구조. 보험료 쪽 시간가변
+- [2.4 갱신형](renewable) — 계약의 경계 / 갱신 구조. 보험료 쪽 시간가변
   (체증형 보험료) 은 `Basis` 의 `premium_factor_annual` 로, 본 챕터의
   보험금 체증과 짝을 이룹니다.
 - [4.3 간병 / 치매 (장기요양)](../semi-markov/long-term-care) — 상태 추적이
