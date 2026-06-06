@@ -20,7 +20,7 @@ calculation_methods 셋을 읽어 한 ModelPoints 개체로 묶습니다.
 | 챕터 | 사용하는 자리 |
 |---|---|
 | [담보와 산출방식 매칭](calculation-methods) | `calculation_methods.csv` 의 자리. 다섯 산출방식의 의미. |
-| [보장 청구 메커니즘](coverage-mechanics) | DEATH / MORBIDITY / DIAGNOSIS 의 kernel 알고리즘. |
+| [담보별 산출로직](coverage-mechanics) | DEATH / MORBIDITY / DIAGNOSIS 의 kernel 알고리즘. |
 | [정기보험](../simple/term-life) | `samples.export` → `read_*` → `measure` → `print` |
 | [검증 패턴](../workflow/validation) | `gmm.trace` / `gmm.trace_bel_step` / `gmm.trace_csm_step` / `gmm.trace_diff` |
 | [튜토리얼 11장](../../tutorial/11-in-practice) | 파일 입출력의 자세한 schema 와 결산 워크플로 |

@@ -52,7 +52,7 @@
 
 세 가지 위험률 기반 산출방식 (DEATH / MORBIDITY / DIAGNOSIS) 의 차이는 본질
 적으로 어떤 풀에서 차감되는가 의 차이입니다 — 자세한 메커니즘은
-[보장 청구 메커니즘](coverage-mechanics) 챕터.
+[담보별 산출로직](coverage-mechanics) 챕터.
 
 ```{note}
 주계약은 **상품마다 다른 산출방식** 입니다. 정기 / 종신은 DEATH, 암보험은
@@ -242,7 +242,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 
 ## 인접 레시피
 
-- [보장 청구 메커니즘](coverage-mechanics) — 각 CalculationMethod 이
+- [담보별 산출로직](coverage-mechanics) — 각 CalculationMethod 이
   엔진 안에서 어떤 알고리즘으로 처리되는지 (이 챕터는 담보별 산출방식 선택,
   메커니즘 챕터는 실행 알고리즘).
 - [검증 패턴 — gmm.trace](../workflow/validation) — 담보별 산출방식 변경이

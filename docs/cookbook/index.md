@@ -85,7 +85,7 @@
     (발생, DEATH rate)이 처음부터 다른 개념인 이유. 단순 사망보험에서만 둘이
     같은 숫자가 되는 까닭과, 두 슬롯에 같은 callable 을 넘기는 입력 패턴.
 * - 1.4
-  - [보장 청구 메커니즘](basics/coverage-mechanics)
+  - [담보별 산출로직](basics/coverage-mechanics)
   - DEATH 의 공유 `inforce` vs DIAGNOSIS 의 `undiagnosed` 풀.
     같은 식이 두 자리에 작동하는 이유.
 ```

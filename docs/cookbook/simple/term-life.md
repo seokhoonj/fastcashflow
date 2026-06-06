@@ -496,7 +496,7 @@ fastcashflow 의 성별 인코딩은 **0 = 남, 1 = 여**. 워크북의 `policie
 
 이 챕터를 읽고 나서 자연스럽게 갈 다음 자리들:
 
-- [보장 청구 메커니즘](../basics/coverage-mechanics) — DEATH 외에 다른
+- [담보별 산출로직](../basics/coverage-mechanics) — DEATH 외에 다른
   보장 (DIAGNOSIS / MORBIDITY) 이 엔진 안에서 어떻게 다른 알고리즘으로
   처리되는지. 본 챕터가 한 가지 산출방식만 다루는 이유.
 - 사망 + 단순 진단 일시금 (작성 예정) — 사망보험에 진단보험금
