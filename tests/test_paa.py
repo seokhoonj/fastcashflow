@@ -87,6 +87,22 @@ def test_paa_onerous_contract_carries_a_loss():
     assert onerous.loss_component[0] > 0.0
 
 
+def test_paa_onerous_test_honours_cost_of_capital_ra():
+    """The PAA onerous test used to hardcode the confidence-level RA, silently
+    ignoring ra_method='cost_of_capital'. It now routes through the shared RA
+    helper, so the cost-of-capital basis gives a different (non-zero) RA and
+    hence a different loss component than the confidence-level basis."""
+    mp = ModelPoints.single(40, 1_000.0, 24, benefits={0: 1e8},
+                            calculation_methods=PATTERNS)
+    cl = fcf.paa.measure(mp, _assumptions(ra_method="confidence_level"))
+    coc = fcf.paa.measure(mp, _assumptions(
+        ra_method="cost_of_capital", cost_of_capital_rate=0.06))
+    assert coc.loss_component[0] > 0.0
+    # the two RA methods give materially different onerous losses (before the
+    # fix the cost-of-capital basis silently produced the confidence-level loss)
+    assert not np.isclose(coc.loss_component[0], cl.loss_component[0])
+
+
 def test_paa_revenue_basis_claims():
     """B126(b): revenue allocated by the expected timing of incurred claims."""
     basis = _assumptions(expense_items=(

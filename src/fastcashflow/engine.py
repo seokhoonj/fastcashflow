@@ -40,6 +40,7 @@ from fastcashflow.numerics import (
     _cost_of_capital_ra,
     _csm_kernel,
     _norm_ppf,
+    _risk_adjustment,
     _rollforward_kernel,
     _settlement_factor,
     _settlement_lic,
@@ -206,22 +207,8 @@ def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.contract_boundary_months, monthly_rate,
     )
-    z = _norm_ppf(basis.ra_confidence)
-    cl_margin = z * (basis.mortality_cv * pv_claims
-                     + basis.morbidity_cv * pv_morbidity
-                     + basis.disability_cv * pv_disability
-                     + basis.longevity_cv * pv_survival)
-    if basis.ra_method == "confidence_level":
-        ra = cl_margin
-    elif basis.ra_method == "cost_of_capital":
-        ra = _cost_of_capital_ra(
-            cl_margin, monthly_rate, basis.cost_of_capital_rate
-        )
-    else:
-        raise ValueError(
-            "ra_method must be 'confidence_level' or 'cost_of_capital', "
-            f"got {basis.ra_method!r}"
-        )
+    ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
+                          pv_survival, monthly_rate)
     csm, csm_accretion, csm_release, loss_component = _compute_csm(
         bel[:, 0], ra[:, 0], proj.inforce, monthly_rate,
     )

@@ -179,6 +179,36 @@ def _cost_of_capital_ra(cl_margin, monthly_rate, coc_rate):
     return coc_rate * cap_pv
 
 
+def _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
+                     pv_survival, monthly_rate):
+    """The risk adjustment per ``basis.ra_method``.
+
+    The confidence-level margin is ``z(ra_confidence)`` times the sum over
+    risks of each coefficient-of-variation x its claim PV. ``ra_method`` then
+    selects whether that margin IS the RA (``"confidence_level"``) or seeds the
+    cost-of-capital run-off (``"cost_of_capital"``, which discounts the future
+    capital at ``monthly_rate``). Shared by the GMM and PAA measurements so the
+    two cannot diverge on the method -- the PAA onerous test used to hardcode
+    the confidence-level form and silently ignore ``cost_of_capital``. The
+    ``pv_*`` may be the full ``(n_mp, n_time+1)`` trajectory (GMM, PAA) -- the
+    cost-of-capital branch needs the trajectory; the caller slices what it needs.
+    """
+    z = _norm_ppf(basis.ra_confidence)
+    cl_margin = z * (basis.mortality_cv * pv_claims
+                     + basis.morbidity_cv * pv_morbidity
+                     + basis.disability_cv * pv_disability
+                     + basis.longevity_cv * pv_survival)
+    if basis.ra_method == "confidence_level":
+        return cl_margin
+    if basis.ra_method == "cost_of_capital":
+        return _cost_of_capital_ra(cl_margin, monthly_rate,
+                                   basis.cost_of_capital_rate)
+    raise ValueError(
+        "ra_method must be 'confidence_level' or 'cost_of_capital', "
+        f"got {basis.ra_method!r}"
+    )
+
+
 @njit(parallel=True, cache=True)
 def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
                         premium_cf, annuity_cf, maturity_cf, surrender_cf,

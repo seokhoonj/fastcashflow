@@ -39,7 +39,8 @@ from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.curves import discount_monthly_curve
-from fastcashflow.numerics import _norm_ppf, _rollforward_kernel, _settlement_lic
+from fastcashflow.numerics import (
+    _risk_adjustment, _rollforward_kernel, _settlement_lic)
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 
@@ -143,14 +144,18 @@ def measure_paa(
 
     # Insurance revenue -- total premium allocated across the periods of
     # service (Sec. B126), so total revenue equals total premium.
+    # B126(a) straight-line weight -- a flat in-coverage mask. Used for the
+    # 'time' basis and as the 'claims' fallback when a contract has no claims
+    # pattern (B126(b) -> B126(a)); the fallback used the decaying in-force
+    # before, which is neither basis.
+    in_coverage = (np.arange(proj.n_time)[None, :]
+                   < model_points.term_months[:, None]).astype(np.float64)
     if revenue_basis == "time":
-        # B126(a): premium earned straight-line over the coverage period.
-        in_coverage = np.arange(proj.n_time)[None, :] < model_points.term_months[:, None]
-        weight = in_coverage.astype(np.float64)
+        weight = in_coverage
     elif revenue_basis == "claims":
         weight = service_expense.copy()                  # B126(b)
         empty = weight.sum(axis=1) == 0.0                # no pattern -> B126(a)
-        weight[empty] = proj.inforce[empty]
+        weight[empty] = in_coverage[empty]
     else:
         raise ValueError(
             f"revenue_basis must be 'time' or 'claims', got {revenue_basis!r}"
@@ -172,12 +177,11 @@ def measure_paa(
         model_points.contract_boundary_months,
         discount_monthly_curve(basis, proj.n_time),
     )
-    z = _norm_ppf(basis.ra_confidence)
-    ra0 = z * (basis.mortality_cv * pv_claims[:, 0]
-               + basis.morbidity_cv * pv_morbidity[:, 0]
-               + basis.disability_cv * pv_disability[:, 0]
-               + basis.longevity_cv * pv_survival[:, 0])
-    fcf = bel[:, 0] + ra0
+    # Shared RA helper so PAA honours basis.ra_method (it hardcoded the
+    # confidence-level form before, silently ignoring 'cost_of_capital').
+    ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
+                          pv_survival, discount_monthly_curve(basis, proj.n_time))
+    fcf = bel[:, 0] + ra[:, 0]
     loss_component = np.maximum(0.0, fcf)
 
     return PAAMeasurement(
