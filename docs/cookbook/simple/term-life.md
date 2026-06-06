@@ -257,7 +257,7 @@ import fastcashflow as fcf
 fcf.samples.export("samples", template="gmm", quiet=True)   # basis.xlsx + policies / coverages / calculation_methods (+ inforce)
 
 # (2) 읽어서 평가
-basis = fcf.read_basis("samples/basis.xlsx")    # {(product, channel): Basis}
+basis = fcf.read_basis("samples/basis.xlsx")    # BasisRouter: {(product, channel): Basis}
 mp    = fcf.read_model_points(
     "samples/policies.csv",                                 # 계약 spec 파일
     coverages="samples/coverages.csv",                      # 담보 가입금액 파일

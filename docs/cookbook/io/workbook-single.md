@@ -192,9 +192,9 @@ CSM sum = 10,280,704
 
 `fcf.gmm.measure(mp, basis)` 에 **단일 `Basis`** 를 주면 그 한 가정을 모든
 모델포인트에 적용합니다 — 모델포인트가 동질한 한 segment 일 때 맞습니다.
-견본처럼 여러 segment 가 섞인 portfolio 는 **dict basis**
+견본처럼 여러 segment 가 섞인 portfolio 는 **BasisRouter**
 (`{(product, channel): Basis}`) 를 주면 각 계약을 자기 segment 가정으로
-라우팅합니다: `fcf.gmm.measure(mp, basis, full=False)` (dict basis 는
+라우팅합니다: `fcf.gmm.measure(mp, basis, full=False)` (BasisRouter 는
 `full=False` headline 도, `full=True` 궤적도 둘 다 라우팅합니다). 라우팅
 메커니즘은 [7.2](workbook-multi).
 ```

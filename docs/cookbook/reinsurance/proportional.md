@@ -277,10 +277,10 @@ reins   BEL=    29,205,831  RA=  605,439  CSM=   -28,600,392
 onerous 여부를 그대로 따르지 않습니다.** 거울 관계는 할인 0 · 사업비 0
 인 토이의 산물입니다.
 
-```{admonition} dict 라우팅은 measure 쪽만
+```{admonition} BasisRouter 라우팅은 measure 쪽만
 :class: note
 
-`fcf.gmm.measure(mp, basis_dict, full=False)` 처럼 segment 사전을 통째로
+`fcf.gmm.measure(mp, basis_dict, full=False)` 처럼 세그먼트 BasisRouter 를 통째로
 넘기는 라우팅은 원수 측정 (`gmm.measure`) 의 기능입니다.
 `reinsurance.measure` 는 단일 `Basis` 를 받으므로 위 예제처럼
 `basis[("TERM_LIFE_A", "GA")]` 로 한 segment 를 골라 넘깁니다.

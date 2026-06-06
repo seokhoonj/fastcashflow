@@ -92,7 +92,7 @@ import numpy as np
 fcf.samples.export("samples", template="gmm", quiet=True)
 
 # 산출기초 + 마감파일 읽기
-basis = fcf.read_basis("samples/basis.xlsx")                            # {(product, channel): Basis}
+basis = fcf.read_basis("samples/basis.xlsx")                            # BasisRouter: {(product, channel): Basis}
 
 model_points, state = fcf.read_inforce_policies(
     "samples/inforce_policies.csv",                                     # 마감 1-파일 (spec + state)
@@ -100,10 +100,10 @@ model_points, state = fcf.read_inforce_policies(
     calculation_methods="samples/calculation_methods.csv",              # 담보별 산출방법
 )
 
-# 전체 포트폴리오 결산 — dict basis 를 그대로 넘기면 각 (product, channel)
+# 전체 포트폴리오 결산 — BasisRouter 를 그대로 넘기면 각 (product, channel)
 # 을 자기 산출기초로 자동 라우팅합니다 (신계약 measure() 와 같은 방식).
 val = fcf.gmm.measure_inforce(
-    model_points, state, basis,                                 # basis = 전체 dict
+    model_points, state, basis,                                 # basis = 전체 BasisRouter
     period_months=3,                                            # 이번 분기 (3 개월)
 )
 fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 파일
@@ -117,9 +117,9 @@ fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 
 
 ## 산출기초가 세그먼트별로 다를 때
 
-`read_basis` 는 `{(product, channel): Basis}` 딕셔너리를 돌려줍니다 —
+`read_basis` 는 `BasisRouter` (= `{(product, channel): Basis}` 형) 를 돌려줍니다 —
 한 워크북에 여러 세그먼트 (상품 x 채널) 의 가정을 함께 담기 때문입니다.
-위처럼 그 **dict 를 `measure_inforce` 에 그대로 넘기면** 각 계약을 자기
+위처럼 그 **`BasisRouter` 를 `measure_inforce` 에 그대로 넘기면** 각 계약을 자기
 세그먼트의 산출기초로 자동 라우팅해 **전체 포트폴리오를 한 번에** 결산합니다
 (내부에서 세그먼트별로 잘라 측정한 뒤 다시 하나로 잇습니다 — 신계약
 `measure()` 의 dict 라우팅과 같은 방식).
@@ -138,7 +138,7 @@ import fastcashflow as fcf
 import numpy as np
 
 # 산출기초 (가정) + 보유계약 + 결산 상태
-basis     = fcf.samples.basis()          # {(product, channel): Basis}
+basis     = fcf.samples.basis()          # BasisRouter: {(product, channel): Basis}
 portfolio = fcf.samples.model_points()   # 보유계약 영구 spec
 state     = fcf.samples.inforce_state()  # 결산 상태 (경과월수 / 잔존 / 직전 CSM / lock-in)
 

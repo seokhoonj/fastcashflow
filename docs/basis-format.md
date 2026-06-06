@@ -44,7 +44,7 @@ reader 호출:
 import fastcashflow as fcf
 
 fcf.samples.export("samples", template="gmm", quiet=True)   # 견본 한 세트 (본인 파일 있으면 생략)
-basis = fcf.read_basis("samples/basis.xlsx")  # dict[(product, channel), Basis]
+basis = fcf.read_basis("samples/basis.xlsx")  # BasisRouter: {(product, channel): Basis}
 basis = basis[("TERM_LIFE_A", "GA")]  # 한 세그먼트
 ```
 

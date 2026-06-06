@@ -272,7 +272,7 @@ import fastcashflow as fcf
 fcf.samples.export("samples", template="gmm", quiet=True)
 
 # (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 전체 포트폴리오 측정
-basis = fcf.read_basis("samples/basis.xlsx")    # {(product, channel): Basis} — 전체 dict
+basis = fcf.read_basis("samples/basis.xlsx")    # BasisRouter: {(product, channel): Basis}
 
 model_points, state = fcf.read_inforce_policies(
     "samples/inforce_policies.csv",                                  # 결산 1-파일 (spec + state 결합)

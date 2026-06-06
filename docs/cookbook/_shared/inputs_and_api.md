@@ -72,7 +72,7 @@ fastcashflow 사용자 API
 │   └── fcf.samples.templates()                           ── 사용 가능한 template 목록
 │
 ├── 파일 읽어 들이기
-│   ├── fcf.read_basis(path)                              ── basis dict 반환
+│   ├── fcf.read_basis(path)                              ── BasisRouter 반환
 │   ├── fcf.read_model_points(path, coverages=, ...)      ── 신계약 평가용
 │   └── fcf.read_inforce_policies(path, coverages=, ...)  ── 결산 1-파일 reader
 │
