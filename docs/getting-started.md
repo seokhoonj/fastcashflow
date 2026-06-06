@@ -14,6 +14,13 @@ pip install git+https://github.com/seokhoonj/fastcashflow.git
 (가정). 가장 빠른 시작은 fastcashflow에 들어 있는 샘플 데이터입니다.
 파일을 따로 준비할 필요가 없습니다.
 
+```{mermaid}
+flowchart LR
+    MP["모델포인트 (계약들)"] --> M["fcf.gmm.measure"]
+    B["산출기초 Basis (가정)"] --> M
+    M --> OUT["BEL · RA · CSM · 손실요소"]
+```
+
 ```python
 import fastcashflow as fcf
 

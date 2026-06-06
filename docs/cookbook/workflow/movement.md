@@ -101,6 +101,14 @@ Closing           -1,872,658     246,497     957,984
 다섯 행을 읽는 법 (`reconcile` 은 run-off 행을 음수로 두어, **기초 + 모든
 변동 = 기말** 이 정확히 맞아떨어집니다):
 
+```{mermaid}
+flowchart LR
+    O["기초 Opening"] --> FS["+ Future service (가정변경·경험)"]
+    FS --> FIN["+ Finance (이자·할인)"]
+    FIN --> REL["− Release (보장 제공분)"]
+    REL --> C["기말 Closing"]
+```
+
 ```{list-table}
 :header-rows: 0
 :widths: 30 70
