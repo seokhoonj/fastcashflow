@@ -37,7 +37,7 @@ Issues        = "https://github.com/seokhoonj/fastcashflow/issues"
 
 [project.optional-dependencies]
 dev = ["pytest"]
-docs = ["sphinx>=7.0", "pydata-sphinx-theme", "myst-parser>=2.0", "sphinx-design", "sphinx-copybutton"]
+docs = ["sphinx>=7.0", "pydata-sphinx-theme", "myst-parser>=2.0", "sphinx-design", "sphinx-copybutton", "sphinxcontrib-mermaid"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fastcashflow"]
