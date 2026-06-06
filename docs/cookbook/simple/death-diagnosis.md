@@ -221,7 +221,7 @@ mortality_annual = lambda s, a, d: death_fn(s,a,d) + cancer_fn(s,a,d)   # ✗
 
 `mortality_annual` 에는 **보유계약을 실제로 줄이는 율** (사망 · 해지) 만
 들어갑니다. 진단 · 입원 같은 담보의 발생률은 `coverages` 의 자기 자리에만.
-(decrement 와 보장 청구의 분리 — [1.3 보유계약 사망률과 사망보험금 발생률](../basics/mortality-roles).)
+(decrement 와 보장 청구의 분리 — [1.3 탈퇴와 발생](../basics/mortality-roles).)
 
 ## 인접 레시피
 

@@ -224,7 +224,7 @@ BEL        = 285.22
 
 - [2.1 정기보험](../simple/term-life) — 상태 전이 없는 정액형, 본 챕터의
   출발점.
-- [1.3 보유계약 사망률과 사망보험금 발생률](../basics/mortality-roles) — decrement 와 보장 청구의
+- [1.3 탈퇴와 발생](../basics/mortality-roles) — decrement 와 보장 청구의
   분리. 납입면제도 같은 결 (active 감쇠 vs 전체 보장).
 - [2.3 다종 진단 + 면책 / 감액](../simple/diagnosis-rules) — 담보 룰 축.
   상태 (납입면제) 와 직교하며 한 계약에 공존.
