@@ -64,13 +64,13 @@ def shock_mortality(factor):                       # 사망률에 배수를 건 
 
 def basis_with_mortality(mort_fn):                 # 한 사망률로 가정 한 벌 조립
     return fcf.Basis(
-        mortality_annual = mort_fn,                # 보유계약 감쇠 + 사망보장 공유
+        mortality_annual = mort_fn,                # 보유계약 사망률 + 사망보험금 발생률 공유
         lapse_annual     = lapse_fn,
         discount_annual  = 0.0,                    # 할인 0 (shock 효과에 집중)
         ra_confidence    = 0.75,
         mortality_cv     = 0.10,
         coverages        = (
-            fcf.CoverageRate("DEATH", mort_fn),    # 사망 보장에 같은 사망률
+            fcf.CoverageRate("DEATH", mort_fn),    # 사망보험금 발생률 (보유계약 사망률과 동일)
         ),
     )
 

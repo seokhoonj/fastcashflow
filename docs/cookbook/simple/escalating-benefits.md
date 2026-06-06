@@ -100,7 +100,7 @@ care_fn = lambda s, a, d: np.full(a.shape, 1.0)   # 간병 발생률 1.0 (정액
 
 # 산출기초 (Basis)
 basis = fcf.Basis(
-    mortality_annual = no_decr,    # 보유계약 감쇠율 0
+    mortality_annual = no_decr,    # 보유계약 사망률 0
     lapse_annual     = no_decr,    # 해지율 0
     discount_annual  = 0.0,        # 연 할인율 0 (검증 단순화)
     ra_confidence    = 0.75,       # 위험조정 신뢰수준 75%

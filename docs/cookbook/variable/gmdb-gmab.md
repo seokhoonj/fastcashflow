@@ -84,7 +84,7 @@ import fastcashflow as fcf
 death_fn = lambda s, a, d: np.full(np.shape(d), 0.005)   # 연 0.5% 사망률
 lapse_fn = lambda s, a, d: np.full(np.shape(d), 0.04)    # 연 4% 해지율
 basis = fcf.Basis(
-    mortality_annual  = death_fn,   # 보유계약 감쇠용 사망률
+    mortality_annual  = death_fn,   # 보유계약 사망률
     lapse_annual      = lapse_fn,   # 해지율
     discount_annual   = 0.03,       # 연 할인율 (비보증 현금흐름)
     ra_confidence     = 0.95,       # 위험조정 신뢰수준 95%

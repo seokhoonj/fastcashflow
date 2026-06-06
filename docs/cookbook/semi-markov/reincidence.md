@@ -151,7 +151,7 @@ model = StateModel(states=(
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual      = death_fn,       # 보유계약 감쇠용 사망률 (월 1%)
+    mortality_annual      = death_fn,       # 보유계약 사망률 (월 1%)
     lapse_annual          = lapse_fn,       # 해지율 (없음)
     ci_incidence_annual   = incidence_fn,   # 1차 진단율 (월 5%)
     ci_reincidence_annual = reincid_fn,     # 2차 진단율 (면책 2개월 후 월 20%)

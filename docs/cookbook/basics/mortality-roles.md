@@ -32,11 +32,32 @@
 하나는 *누가 보유계약에 남아 있는가* 를, 다른 하나는 *얼마의 사망보험금을
 지급하는가* 를 정하는 **별개의 입력**입니다.
 
+```{admonition} 표준 용어로는 — 탈퇴(decrement) vs 발생(incidence)
+:class: note
+
+위 표의 최상위 축 *어떤 풀을 줄이는가* 는 다중탈퇴모형(multiple-decrement
+model)의 교과서 구분 그대로입니다.
+
+- **풀을 줄이는 입력 = 탈퇴(decrement)**. `mortality_annual`은 표준 용어로
+  **사망탈퇴율**(mortality decrement, q_x^(d)) — 연단위 *확률*이라 **율**이지
+  **력**(force, μ)이 아니고, 엔진은 `inforce x (1 - q)`로 깎습니다.
+  `lapse_annual`은 같은 줄의 해지탈퇴율.
+- **풀을 안 줄이고 급부만 트리거하는 입력 = 발생(incidence)**. 담보의
+  `rate`가 그것 — 사망 보장이면 mortality incidence, 진단/입원이면
+  morbidity incidence.
+
+엔진 코드도 같은 어휘입니다 — `mortality_annual`의 docstring은 "in-force
+decrement", 전이율은 `waiver_incidence_annual` / `ci_incidence_annual`처럼
+`_incidence` 접미사. 그래서 이 챕터가 쓰는 친근형 **보유계약 사망률**과
+**사망보험금 발생률**은 각각 **사망탈퇴율(decrement)** 과 **사망 발생률
+(incidence)** 의 다른 이름일 뿐입니다.
+```
+
 ## 1.3.1 보유계약 사망률 — 계약 전체 in-force를 줄임
 
 엔진의 모든 cash flow는 한 가지 양에 비례합니다 — 그 시점의 **보유계약 수
 `inforce`**. 그리고 `inforce`를 매월 줄이는 사망 입력이 **보유계약 사망률**
-(`mortality_annual`)입니다.
+(`mortality_annual` — 표준 용어로 **사망탈퇴율**, mortality decrement q_x^(d))입니다.
 
 ```
 inforce[t+1] = inforce[t] × (1 - 보유계약사망률_월) × (1 - 해지율_월)

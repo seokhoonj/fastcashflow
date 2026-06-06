@@ -96,7 +96,7 @@ waiver_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.10) ** 12)
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual        = death_fn,                # 보유계약 감쇠용 사망률 (월 1%)
+    mortality_annual        = death_fn,                # 보유계약 사망률 (월 1%)
     lapse_annual            = lapse_fn,                # 해지율 (해지 없음)
     waiver_incidence_annual = waiver_fn,               # active → waiver 전이율 (월 10%)
     discount_annual         = 0.0,                     # 연 할인율 0 (검증 단순화)

@@ -86,7 +86,7 @@ death_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
 lapse_fn = lambda s, a, d: np.full(d.shape, 0.0)
 
 basis = fcf.Basis(
-    mortality_annual = death_fn,                                # 보유계약 감쇠용 사망률 (위 death_fn)
+    mortality_annual = death_fn,                                # 보유계약 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,                                # 해지율 (해지 없음)
     discount_annual  = 0.0,                                     # 연 할인율 0 (검증 단순화)
     ra_confidence    = 0.75,                                    # 위험조정 신뢰수준 75%
@@ -152,7 +152,7 @@ no_decr = lambda s, a, d: np.full(a.shape, 0.0)
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual = no_decr,             # 보유계약 감쇠율 0 (감쇠 안 함)
+    mortality_annual = no_decr,             # 보유계약 사망률 0 (감쇠 안 함)
     lapse_annual     = no_decr,             # 해지율 0 (해지 없음)
     discount_annual  = 0.0,                 # 연 할인율 0 (검증 단순화)
     ra_confidence    = 0.75,                # 위험조정 신뢰수준 75%
@@ -224,7 +224,7 @@ cancer_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)
 no_decr = lambda s, a, d: np.full(a.shape, 0.0)
 
 basis = fcf.Basis(
-    mortality_annual = no_decr,                                       # 보유계약 감쇠율 0 (감쇠 안 함)
+    mortality_annual = no_decr,                                       # 보유계약 사망률 0 (감쇠 안 함)
     lapse_annual     = no_decr,                                       # 해지율 0 (해지 없음)
     discount_annual  = 0.0,                                           # 연 할인율 0 (검증 단순화)
     ra_confidence    = 0.75,                                          # 위험조정 신뢰수준 75%

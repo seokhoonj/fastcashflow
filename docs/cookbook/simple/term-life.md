@@ -93,7 +93,7 @@ mp = fcf.ModelPoints.single(
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (위 death_fn)
+    mortality_annual = death_fn,         # 보유계약 사망률 (위 death_fn)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
     ra_confidence    = 0.75,             # 위험조정 신뢰수준 75%

@@ -76,14 +76,14 @@ lapse_fn  = lambda s, a, d: np.full(d.shape, 0.0)
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual = death_fn,         # 보유계약 감쇠용 사망률 (death_fn 만)
+    mortality_annual = death_fn,         # 보유계약 사망률 (death_fn 만)
     lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
     discount_annual  = 1.005 ** 12 - 1,  # 연 할인율 (월 0.5% 의 연 환산)
     ra_confidence    = 0.75,             # 위험조정 신뢰수준 75%
     mortality_cv     = 0.10,             # 사망률 변동계수 10%
     morbidity_cv     = 0.12,             # 진단율 변동계수 12%
     coverages        = (
-        fcf.CoverageRate("DEATH",  death_fn),   # 0번 담보 — 사망 청구율
+        fcf.CoverageRate("DEATH",  death_fn),   # 0번 담보 — 사망보험금 발생률
         fcf.CoverageRate("CANCER", cancer_fn),  # 1번 담보 — 암진단율
     ),
 )

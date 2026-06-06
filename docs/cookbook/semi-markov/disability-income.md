@@ -152,7 +152,7 @@ model = StateModel(states=(
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual           = death_fn,        # 보유계약 감쇠용 사망률 (월 1%)
+    mortality_annual           = death_fn,        # 보유계약 사망률 (월 1%)
     lapse_annual               = lapse_fn,        # 해지율 (없음)
     waiver_incidence_annual    = incidence_fn,    # 장해 발생률 (DLR 이라 0)
     disability_recovery_annual = recovery_fn,     # 회복률 (급성 30% → 만성 5%)
