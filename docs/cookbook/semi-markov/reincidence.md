@@ -125,9 +125,9 @@ import fastcashflow as fcf
 from fastcashflow import State, Transition, StateModel
 
 # rate 함수 -- 모든 rate 는 평탄 상수 (실무는 경험률표 룩업)
-death_fn     = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
-lapse_fn     = lambda s, a, d: np.full(d.shape, 0.0)                   # 해지 없음
-incidence_fn = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.05) ** 12)  # 1차 진단 월 5%
+death_rate     = 1 - (1 - 0.01) ** 12  # 사망률 월 1%
+lapse_rate     = 0.0  # 해지 없음
+incidence_rate = 1 - (1 - 0.05) ** 12  # 1차 진단 월 5%
 
 # 재진단 -- 네 번째 인자 sd = post_first 진입 후 경과개월. 면책 2개월 후 월 20%
 reincid_fn   = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
@@ -142,7 +142,7 @@ model = StateModel(states=(
     State("post_first", duration_max=12, transitions=(                 # 경과 추적 (코호트)
         Transition("mortality"),
         Transition("ci_reincidence", to="post_second",
-                   lump_sum=True, duration_dependent=True),            # 2차 진단금 (면책 의존)
+                   lump_sum=True, duration_dependent=True),  # 2차 진단금 (면책 의존)
     )),
     State("post_second", transitions=(
         Transition("mortality"),
@@ -151,26 +151,26 @@ model = StateModel(states=(
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual      = death_fn,       # 보유계약 사망률 (월 1%)
-    lapse_annual          = lapse_fn,       # 해지율 (없음)
-    ci_incidence_annual   = incidence_fn,   # 1차 진단율 (월 5%)
-    ci_reincidence_annual = reincid_fn,     # 2차 진단율 (면책 2개월 후 월 20%)
-    discount_annual       = 0.0,            # 연 할인율 0 (검증 단순화)
-    ra_confidence         = 0.75,           # 위험조정 신뢰수준 75%
-    mortality_cv          = 0.10,           # 사망률 변동계수 10%
-    state_model           = model,          # 직접 조립한 Semi-Markov 모델
+    mortality_annual      = death_rate,      # 보유계약 사망률 (월 1%)
+    lapse_annual          = lapse_rate,      # 해지율 (없음)
+    ci_incidence_annual   = incidence_rate,  # 1차 진단율 (월 5%)
+    ci_reincidence_annual = reincid_fn,      # 2차 진단율 (면책 2개월 후 월 20%)
+    discount_annual       = 0.0,             # 연 할인율 0 (검증 단순화)
+    ra_confidence         = 0.75,            # 위험조정 신뢰수준 75%
+    mortality_cv          = 0.10,            # 사망률 변동계수 10%
+    state_model           = model,           # 직접 조립한 Semi-Markov 모델
     coverages             = (
-        fcf.CoverageRate("DEATH", death_fn),  # 사망 보장 1종
+        fcf.CoverageRate("DEATH", death_rate),  # 사망 보장 1종
     ),
 )
 
 # 모델 포인트
 mp = fcf.ModelPoints(
-    issue_age          = np.array([40], dtype=np.int64),     # 가입연령 40세
-    benefits           = {0: np.array([100_000.0])},         # 사망보험금 100,000
-    premium            = np.array([0.0]),                    # 보험료 0
-    term_months        = np.array([4], dtype=np.int64),      # 보험기간 4개월
-    disability_benefit = np.array([1_000_000.0]),            # 진단금 1,000,000 (1차 = 2차)
+    issue_age          = np.array([40], dtype=np.int64),          # 가입연령 40세
+    benefits           = {0: np.array([100_000.0])},              # 사망보험금 100,000
+    premium            = np.array([0.0]),                         # 보험료 0
+    term_months        = np.array([4], dtype=np.int64),           # 보험기간 4개월
+    disability_benefit = np.array([1_000_000.0]),                 # 진단금 1,000,000 (1차 = 2차)
     calculation_methods= {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
@@ -295,9 +295,9 @@ print("재발배수 sd6/24/48/72:", [float(np.select([np.array([x]) < 12, np.arr
 에 그 함수를 줍니다 — in-force 가 진단 후 더 빨리 소멸합니다:
 
 ```python
-pm_healthy = lambda s, a, d: np.full(np.shape(a), 0.005)   # 건강 사망 연 0.5%
-pm_post    = lambda s, a, d: np.full(np.shape(a), 0.02)    # 암진단 후 연 2% (건강의 4배)
-pm_lapse   = lambda s, a, d: np.full(np.shape(d), 0.05)
+pm_healthy = 0.005  # 건강 사망 연 0.5%
+pm_post    = 0.02  # 암진단 후 연 2% (건강의 4배)
+pm_lapse   = 0.05
 
 pm_model = StateModel(states=(
     State("healthy", premium=True, transitions=(
@@ -312,7 +312,7 @@ pm_model = StateModel(states=(
 pm_basis = fcf.Basis(
     mortality_annual=pm_healthy, lapse_annual=pm_lapse,
     ci_incidence_annual=ca_incidence, ci_reincidence_annual=ca_reincidence,
-    state_mortality_annual={"dth_aft_can": pm_post},       # 암진단 후 사망률 (가정)
+    state_mortality_annual={"dth_aft_can": pm_post},                                 # 암진단 후 사망률 (가정)
     discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10, morbidity_cv=0.15,
     state_model=pm_model, coverages=(fcf.CoverageRate("CANCER1", ca_incidence),))
 
@@ -363,8 +363,8 @@ print("건강 / 진단후 월사망률   :", round(1 - (1 - 0.005) ** (1 / 12), 
 
 ```python
 coverages = (
-    fcf.CoverageRate("DEATH",   death_fn),      # 사망
-    fcf.CoverageRate("CANCER1", incidence_fn),  # 1차 진단금 (DIAGNOSIS, 고유 금액)
+    fcf.CoverageRate("DEATH",   death_rate),      # 사망
+    fcf.CoverageRate("CANCER1", incidence_rate),  # 1차 진단금 (DIAGNOSIS, 고유 금액)
 )
 # ci_incidence 전이에서는 lump_sum 을 빼고 (Transition("ci_incidence", to="post_first")),
 # benefits 에 CANCER1 의 진단금을, calculation_methods 에 DIAGNOSIS 를 등록
@@ -404,7 +404,7 @@ mp_seat = fcf.ModelPoints(
     premium            = np.array([0.0]),
     term_months        = np.array([1], dtype=np.int64),
     disability_benefit = np.array([1_000_000.0]),
-    state              = np.array([1], dtype=np.int64),   # post_first 코호트 0 에 자리 지정
+    state              = np.array([1], dtype=np.int64),           # post_first 코호트 0 에 자리 지정
     calculation_methods= {"DEATH": fcf.CalculationMethod.DEATH},
 )
 # 재진단을 면책 없이 상수로 (검증용)

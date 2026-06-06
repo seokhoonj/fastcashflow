@@ -112,9 +112,9 @@ print("발생률 50/60/70/80 (남) :",
 
 ```python
 # 사망 / 해지 / 간병 상태 사망률
-active_mort = lambda s, a, d: np.full(np.shape(a), 0.01)   # active 사망 (연 1% toy)
-care_mort   = lambda s, a, d: np.full(np.shape(a), 0.20)   # 간병 상태 상승 사망률 (연 20%)
-lapse_fn    = lambda s, a, d: np.full(np.shape(d), 0.03)   # 해지 연 3%
+active_mort = 0.01  # active 사망 (연 1% toy)
+care_mort   = 0.20  # 간병 상태 상승 사망률 (연 20%)
+lapse_rate    = 0.03  # 해지 연 3%
 
 # 상태 모델 -- active -> care; care 는 진단금(lump) + 월정액(36 회) + 상승 사망률
 model = StateModel(states=(
@@ -129,26 +129,26 @@ model = StateModel(states=(
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual        = active_mort,                 # active 사망 decrement
-    lapse_annual            = lapse_fn,                     # 해지율
-    waiver_incidence_annual = ltc_incidence,               # 간병 발생률 (위 표)
-    state_mortality_annual  = {"dth_care": care_mort},     # 간병 상태 사망률
-    discount_annual         = 0.03,                        # 할인율 3%
-    ra_confidence           = 0.75,                        # 위험조정 신뢰수준
-    mortality_cv            = 0.10,                        # 사망률 변동계수
-    disability_cv           = 0.20,                        # 간병 발생 변동계수
+    mortality_annual        = active_mort,                                # active 사망 decrement
+    lapse_annual            = lapse_rate,                                 # 해지율
+    waiver_incidence_annual = ltc_incidence,                              # 간병 발생률 (위 표)
+    state_mortality_annual  = {"dth_care": care_mort},                    # 간병 상태 사망률
+    discount_annual         = 0.03,                                       # 할인율 3%
+    ra_confidence           = 0.75,                                       # 위험조정 신뢰수준
+    mortality_cv            = 0.10,                                       # 사망률 변동계수
+    disability_cv           = 0.20,                                       # 간병 발생 변동계수
     state_model             = model,
     coverages               = (fcf.CoverageRate("DEATH", active_mort),))
 
 # 모델 포인트 -- 진단금 2,000 만, 월정액 100 만
 mp = fcf.ModelPoints(
-    issue_age         = np.array([60], dtype=np.int64),    # 60 세 가입
-    benefits          = {0: np.array([0.0])},              # 사망보험금 0 (간병에 집중)
-    premium           = np.array([90_000.0]),              # 월 보험료 9 만
-    term_months       = np.array([360], dtype=np.int64),   # 90 세까지 (30 년)
-    disability_benefit = np.array([20_000_000.0]),         # 진단금 2,000 만 (lump)
-    disability_income  = np.array([1_000_000.0]),          # 월정액 100 만
-    state             = np.array([0], dtype=np.int64),     # active 가입 (신계약)
+    issue_age         = np.array([60], dtype=np.int64),            # 60 세 가입
+    benefits          = {0: np.array([0.0])},                      # 사망보험금 0 (간병에 집중)
+    premium           = np.array([90_000.0]),                      # 월 보험료 9 만
+    term_months       = np.array([360], dtype=np.int64),           # 90 세까지 (30 년)
+    disability_benefit = np.array([20_000_000.0]),                 # 진단금 2,000 만 (lump)
+    disability_income  = np.array([1_000_000.0]),                  # 월정액 100 만
+    state             = np.array([0], dtype=np.int64),             # active 가입 (신계약)
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH})
 
 m = fcf.gmm.measure(mp, basis)
@@ -175,7 +175,7 @@ Loss :              0
 보증 개월수만큼만 나와야 합니다:
 
 ```python
-zero = lambda s, a, d: np.full(np.shape(a), 0.0)
+zero = 0.0
 
 toy_model = StateModel(states=(
     State("active", premium=True, transitions=(
@@ -191,7 +191,7 @@ toy_mp = fcf.ModelPoints(
     issue_age=np.array([70], dtype=np.int64), benefits={0: np.array([0.0])},
     premium=np.array([0.0]), term_months=np.array([12], dtype=np.int64),
     disability_income=np.array([1_000_000.0]),
-    state=np.array([1], dtype=np.int64),                  # 간병 상태에 자리 지정
+    state=np.array([1], dtype=np.int64),                                      # 간병 상태에 자리 지정
     calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
 tm = fcf.gmm.measure(toy_mp, toy_basis)
 print("월정액 cf :", [f"{x:,.0f}" for x in tm.cashflows.disability_cf[0][:6]])

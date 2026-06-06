@@ -129,9 +129,9 @@ import fastcashflow as fcf
 from fastcashflow import State, Transition, StateModel
 
 # rate 함수 -- 평탄 rate (실무는 경험률표 룩업)
-death_fn     = lambda s, a, d: np.full(a.shape, 1 - (1 - 0.01) ** 12)  # 사망률 월 1%
-lapse_fn     = lambda s, a, d: np.full(d.shape, 0.0)                   # 해지 없음
-incidence_fn = lambda s, a, d: np.full(a.shape, 0.0)                   # 신규 장해 없음 (DLR)
+death_rate     = 1 - (1 - 0.01) ** 12  # 사망률 월 1%
+lapse_rate     = 0.0  # 해지 없음
+incidence_rate = 0.0  # 신규 장해 없음 (DLR)
 # 회복률 -- 네 번째 인자 sd = 장해 경과개월. 급성기 30% → 만성기 5%
 recovery_fn  = lambda s, a, d, sd: np.where(sd < 2, 1 - (1 - 0.30) ** 12,
                                                     1 - (1 - 0.05) ** 12)
@@ -146,15 +146,15 @@ model = StateModel(states=(
     State("disabled", benefit=True, duration_max=24, transitions=(  # 매월 소득 + 경과 추적
         Transition("mortality"),
         Transition("disability_recovery", to="active",
-                   duration_dependent=True),                  # 회복 (경과 의존)
+                   duration_dependent=True),  # 회복 (경과 의존)
     )),
 ), seating=(0, 1, 1))
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual           = death_fn,        # 보유계약 사망률 (월 1%)
-    lapse_annual               = lapse_fn,        # 해지율 (없음)
-    waiver_incidence_annual    = incidence_fn,    # 장해 발생률 (DLR 이라 0)
+    mortality_annual           = death_rate,      # 보유계약 사망률 (월 1%)
+    lapse_annual               = lapse_rate,      # 해지율 (없음)
+    waiver_incidence_annual    = incidence_rate,  # 장해 발생률 (DLR 이라 0)
     disability_recovery_annual = recovery_fn,     # 회복률 (급성 30% → 만성 5%)
     discount_annual            = 0.0,             # 연 할인율 0 (검증 단순화)
     ra_confidence              = 0.75,            # 위험조정 신뢰수준 75%
@@ -162,18 +162,18 @@ basis = fcf.Basis(
     disability_cv              = 0.20,            # 장해율 변동계수 20%
     state_model                = model,           # 직접 조립한 Semi-Markov 모델
     coverages                  = (
-        fcf.CoverageRate("DEATH", death_fn),      # 사망 보장 1종
+        fcf.CoverageRate("DEATH", death_rate),      # 사망 보장 1종
     ),
 )
 
 # 모델 포인트
 mp = fcf.ModelPoints(
-    issue_age         = np.array([45], dtype=np.int64),     # 가입연령 45세
-    benefits          = {0: np.array([0.0])},               # 사망보험금 0
-    premium     = np.array([0.0]),                    # 보험료 0
-    term_months       = np.array([6], dtype=np.int64),      # 잔여 6개월
-    disability_income = np.array([1_000_000.0]),            # 월 장해소득 1,000,000
-    state             = np.array([1], dtype=np.int64),      # disabled 코호트 0 에 자리 지정
+    issue_age         = np.array([45], dtype=np.int64),            # 가입연령 45세
+    benefits          = {0: np.array([0.0])},                      # 사망보험금 0
+    premium     = np.array([0.0]),                                 # 보험료 0
+    term_months       = np.array([6], dtype=np.int64),             # 잔여 6개월
+    disability_income = np.array([1_000_000.0]),                   # 월 장해소득 1,000,000
+    state             = np.array([1], dtype=np.int64),             # disabled 코호트 0 에 자리 지정
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
