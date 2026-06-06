@@ -246,7 +246,7 @@ from dataclasses import replace
 from fastcashflow import STATE_ACTIVE
 
 asmp_alr = replace(basis,
-    waiver_incidence_annual=lambda s, a, d: np.full(a.shape, 1 - (1 - 0.02) ** 12))
+    waiver_incidence_annual=1 - (1 - 0.02) ** 12)
 mp_alr = fcf.ModelPoints(
     issue_age=np.array([45], dtype=np.int64), benefits={0: np.array([0.0])},
     premium=np.array([0.0]), term_months=np.array([6], dtype=np.int64),
