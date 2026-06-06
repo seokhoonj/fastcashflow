@@ -34,7 +34,7 @@ FCF가 **양수**라면 손실이 예상되는 **손실부담계약**입니다. 
 ```{admonition} 엄밀한 IFRS 17에서 이 FCF는 보험계약집합으로 집계된 FCF다
 :class: note
 
-위 `max(0, ·)` 식은 설명을 위해 **계약 하나의 FCF**로 적었습니다. 그러나 엄밀한
+위 `max(0, -FCF)` / `max(0, FCF)` 두 식은 설명을 위해 **계약 하나의 FCF**로 적었습니다. 그러나 엄밀한
 IFRS 17 측정에서 이 FCF는 개별 모델포인트의 FCF가 아니라 **보험계약집합(Group of
 Insurance Contracts)으로 집계된 FCF**입니다. 즉 `sum(CSM_i)`가 아니라 `CSM(sum(FCF_i))` — 같은 보험계약집합
 안의 계약들은 floor를 씌우기 **전에** FCF를 합산합니다(1장의 측정단위 박스). floor가
