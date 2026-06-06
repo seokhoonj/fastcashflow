@@ -97,12 +97,16 @@ recovery_fn = lambda s, a, d, sd: np.where(sd < 2, 1 - (1 - 0.30) ** 12,
 두 상태와 회복 re-entry 를 그림으로 (disabled 에 머무는 동안 매월 소득 지급):
 
 ```{mermaid}
-stateDiagram-v2
-    [*] --> active
-    active --> disabled: waiver_incidence (장해 발생)
-    disabled --> active: disability_recovery (회복, 경과 의존)
-    active --> [*]: mortality / lapse
-    disabled --> [*]: mortality
+flowchart LR
+    START(("신계약")) --> ACT["active<br/>납입중"]
+    ACT -->|"waiver_incidence<br/>(장해 발생)"| DIS["disabled<br/>월 소득 지급"]
+    DIS -->|"disability_recovery<br/>(회복, 경과 의존)"| ACT
+    ACT -->|"mortality · lapse"| EXIT(("종료"))
+    DIS -->|"mortality"| EXIT
+    classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
+    classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
+    class ACT,DIS stock
+    class START,EXIT step
 ```
 
 ## 최소 작동 예제 — DLR (disabled 자리 지정)

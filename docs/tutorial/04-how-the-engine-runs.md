@@ -86,11 +86,11 @@ flowchart LR
     classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
     classDef inflow fill:#eef6e8,stroke:#78a65a,color:#29421b
     classDef outflow fill:#f9eeee,stroke:#b96d6d,color:#552626
-    classDef decrement fill:#f7f2e8,stroke:#b38a45,color:#493617
+    classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
     class START,NEXT stock
     class P inflow
     class D,H outflow
-    class L decrement
+    class L step
 ```
 
 이 순서에서 기억할 것이 하나 있습니다. **보험료는 월초에 들어오고,

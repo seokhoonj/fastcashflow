@@ -99,8 +99,16 @@ FCF의 부호 하나가 이익 계약과 손실부담계약을 가릅니다:
 ```{mermaid}
 flowchart TB
     FCF["FCF = BEL + RA"] --> Q{"FCF 부호?"}
-    Q -->|"FCF < 0 : 이익"| PROFIT["CSM = max(0, -FCF) / 손실요소 = 0"]
-    Q -->|"FCF > 0 : 손실"| LOSS["CSM = 0 / 손실요소 = FCF (즉시 인식)"]
+    Q -->|"FCF < 0 : 이익"| PROFIT["CSM = max(0, -FCF)<br/>손실요소 = 0"]
+    Q -->|"FCF > 0 : 손실"| LOSS["CSM = 0<br/>손실요소 = FCF (즉시 인식)"]
+    classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
+    classDef inflow fill:#eef6e8,stroke:#78a65a,color:#29421b
+    classDef outflow fill:#f9eeee,stroke:#b96d6d,color:#552626
+    classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
+    class FCF stock
+    class Q step
+    class PROFIT inflow
+    class LOSS outflow
 ```
 
 ```{admonition} 이익은 나중에, 손실은 지금

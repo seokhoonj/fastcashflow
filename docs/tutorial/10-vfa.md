@@ -95,10 +95,18 @@ VFA의 핵심입니다:
 
 ```{mermaid}
 flowchart LR
-    R["기초항목 수익률"] --> AV["계좌가치 (계약자 몫)"]
-    R --> FEE["변동수수료 (회사 몫)"]
-    FEE --> CSM["CSM 이자부리 (손익 아님)"]
-    CSM --> REL["상각 → 보장기간에 걸쳐 손익 인식"]
+    R["기초항목 수익률"] --> AV["계좌가치<br/>(계약자 몫)"]
+    R --> FEE["변동수수료<br/>(회사 몫)"]
+    FEE --> CSM["CSM 이자부리<br/>(손익 아님)"]
+    CSM --> REL["상각 → 보장기간에<br/>걸쳐 손익 인식"]
+    classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
+    classDef inflow fill:#eef6e8,stroke:#78a65a,color:#29421b
+    classDef outflow fill:#f9eeee,stroke:#b96d6d,color:#552626
+    classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
+    class AV,CSM stock
+    class R step
+    class FEE inflow
+    class REL outflow
 ```
 
 ## 10.4 손계산 예제

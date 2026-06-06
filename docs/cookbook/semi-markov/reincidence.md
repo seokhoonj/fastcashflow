@@ -82,13 +82,17 @@
 세 상태와 전이를 그림으로:
 
 ```{mermaid}
-stateDiagram-v2
-    [*] --> healthy
-    healthy --> post_first: ci_incidence (1차 진단금)
-    post_first --> post_second: ci_reincidence (2차 진단금, 경과 의존)
-    healthy --> [*]: mortality / lapse
-    post_first --> [*]: mortality
-    post_second --> [*]: mortality
+flowchart LR
+    START(("신계약")) --> H["healthy<br/>건강"]
+    H -->|"ci_incidence<br/>(1차 진단금)"| P1["post_first<br/>1차 후"]
+    P1 -->|"ci_reincidence<br/>(2차 진단금, 경과 의존)"| P2["post_second<br/>2차 후"]
+    H -->|"mortality · lapse"| EXIT(("종료"))
+    P1 -->|"mortality"| EXIT
+    P2 -->|"mortality"| EXIT
+    classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
+    classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
+    class H,P1,P2 stock
+    class START,EXIT step
 ```
 
 면책기간은 별도 필드가 아니라 **`ci_reincidence_annual` 안에서 자연스럽게**

@@ -66,19 +66,14 @@
 
 ```{mermaid}
 flowchart LR
-    START((가입)) --> ACTIVE["active<br/>보험료 납입"]
+    START(("가입")) --> ACTIVE["active<br/>보험료 납입"]
     ACTIVE -->|"간병 진입 · 진단금"| CARE["care<br/>월정액 · 지급한도"]
-    ACTIVE -->|"사망 · 해지"| EXIT((종료))
+    ACTIVE -->|"사망 · 해지"| EXIT(("종료"))
     CARE -->|"상승 사망률"| EXIT
-
-    classDef start fill:#f4f7fa,stroke:#9aa9b5,color:#24313a
-    classDef active fill:#eef6e8,stroke:#78a65a,color:#29421b
-    classDef care fill:#e8f4f1,stroke:#4b9b8d,color:#193d37
-    classDef exit fill:#f9eeee,stroke:#b96d6d,color:#552626
-    class START start
-    class ACTIVE active
-    class CARE care
-    class EXIT exit
+    classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
+    classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
+    class ACTIVE,CARE stock
+    class START,EXIT step
 ```
 
 ## 율 — 간병 발생률 (long-form 표)

@@ -103,10 +103,16 @@ Closing           -1,872,658     246,497     957,984
 
 ```{mermaid}
 flowchart LR
-    O["기초 Opening"] --> FS["+ Future service (가정변경·경험)"]
-    FS --> FIN["+ Finance (이자·할인)"]
-    FIN --> REL["− Release (보장 제공분)"]
+    O["기초 Opening"] --> FS["+ Future service<br/>(가정변경·경험)"]
+    FS --> FIN["+ Finance<br/>(이자·할인)"]
+    FIN --> REL["− Release<br/>(보장 제공분)"]
     REL --> C["기말 Closing"]
+    classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
+    classDef outflow fill:#f9eeee,stroke:#b96d6d,color:#552626
+    classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
+    class O,C stock
+    class FS,FIN step
+    class REL outflow
 ```
 
 ```{list-table}

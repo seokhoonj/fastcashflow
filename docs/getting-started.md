@@ -16,9 +16,13 @@ pip install git+https://github.com/seokhoonj/fastcashflow.git
 
 ```{mermaid}
 flowchart LR
-    MP["모델포인트 (계약들)"] --> M["fcf.gmm.measure"]
-    B["산출기초 Basis (가정)"] --> M
-    M --> OUT["BEL · RA · CSM · 손실요소"]
+    MP["모델포인트<br/>(계약들)"] --> M["fcf.gmm.measure"]
+    B["산출기초 Basis<br/>(가정)"] --> M
+    M --> OUT["BEL · RA · CSM<br/>손실요소"]
+    classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
+    classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
+    class MP,B,OUT stock
+    class M step
 ```
 
 ```python

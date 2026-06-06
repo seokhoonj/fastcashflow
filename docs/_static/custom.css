@@ -50,13 +50,13 @@ html[data-theme="dark"] .logo__cashflow { color: #e8ecef; }
 }
 .admonition.chapter-brief > .admonition-title::before { display: none; }
 .admonition.chapter-brief ul {
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.2rem 1.25rem; margin: 0; padding-left: 1.1rem;
-    font-size: 0.88rem; line-height: 1.45;
+    margin: 0; padding-left: 1.1rem;
+    font-size: 0.88rem; line-height: 1.55;
 }
 .mermaid {
-    max-width: 860px; margin: 1.25rem auto 1.6rem; padding: 0.6rem 0.8rem;
-    overflow-x: auto; border-block: 1px solid var(--pst-color-border);
+    width: fit-content; max-width: 100%; margin: 1.25rem auto 1.6rem;
+    padding: 0.6rem 0.9rem; overflow-x: auto;
+    border: 1px solid var(--pst-color-border); border-radius: 6px;
     background: color-mix(in srgb, var(--pst-color-surface) 92%, transparent);
 }
 .mermaid svg {
@@ -67,6 +67,5 @@ html[data-theme="dark"] .logo__cashflow { color: #e8ecef; }
 .mermaid .edgeLabel { padding: 0.1rem 0.25rem; border-radius: 2px; font-size: 0.78rem; }
 .mermaid .cluster rect { rx: 4px; ry: 4px; }
 @media (max-width: 767px) {
-    .admonition.chapter-brief ul { grid-template-columns: 1fr; }
     .mermaid { margin-inline: -0.5rem; padding-inline: 0.25rem; }
 }

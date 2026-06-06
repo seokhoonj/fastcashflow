@@ -49,11 +49,15 @@
 두 상태를 그림으로 (active 만 보험료를 내고, 사망보장은 둘 다 유지):
 
 ```{mermaid}
-stateDiagram-v2
-    [*] --> active: 신계약 (납입중)
-    active --> waiver: waiver_incidence (납입면제)
-    active --> [*]: mortality / lapse
-    waiver --> [*]: mortality
+flowchart LR
+    START(("신계약")) --> ACT["active<br/>납입중"]
+    ACT -->|"waiver_incidence"| WV["waiver<br/>납입면제 · 보장 유지"]
+    ACT -->|"mortality · lapse"| EXIT(("종료"))
+    WV -->|"mortality"| EXIT
+    classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
+    classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
+    class ACT,WV stock
+    class START,EXIT step
 ```
 
 핵심은 **두 상태에서 보험료와 보장이 다르게 작동** 한다는 점:
