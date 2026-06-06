@@ -159,7 +159,7 @@ def test_measure_inforce_warns_surrender_is_sample_grade():
     mp = fcf.apply_inforce_state(fcf.samples.model_points(), state)
     basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
     with pytest.warns(UserWarning, match="surrender"):
-        fcf.gmm.measure_inforce(mp, basis, state, full=False)
+        fcf.gmm.measure_inforce(mp, state, basis, full=False)
 
 
 def test_read_inforce_state_rejects_duplicate_mp_id(tmp_path: Path):

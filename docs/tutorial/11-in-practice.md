@@ -276,7 +276,7 @@ model_points, state = fcf.read_inforce_policies(
     calculation_methods="samples/calculation_methods.csv",           # 담보별 산출방식
 )
 val = fcf.gmm.measure_inforce(   # 전체 포트폴리오 결산 -- 일반모형(GMM)
-    model_points, basis, state,  # basis 가 dict 면 각 (product, channel) 을 자기 가정으로 라우팅
+    model_points, state, basis,  # basis 가 dict 면 각 (product, channel) 을 자기 가정으로 라우팅
     period_months=3,             # 다음 분기 (3 개월) 까지의 평가
 )                                # state 가 mp_id 별 prior_csm / lock_in_rate / count 을 품음
 fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 파일

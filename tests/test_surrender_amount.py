@@ -201,5 +201,5 @@ def test_inforce_amount_emits_no_surrender_warning():
     )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        fcf.gmm.measure_inforce(mp, basis, state, full=False)
+        fcf.gmm.measure_inforce(mp, state, basis, full=False)
     assert not [w for w in caught if "surrender" in str(w.message).lower()]

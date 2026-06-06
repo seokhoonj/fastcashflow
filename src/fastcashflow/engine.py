@@ -726,8 +726,8 @@ def _reconcile_state(model_points: ModelPoints,
 
 def measure_inforce(
     model_points: ModelPoints,
-    basis: "Basis | dict[tuple[str, str], Basis]",
     state: "InforceState",
+    basis: "Basis | dict[tuple[str, str], Basis]",
     *,
     period_months: int | None = None,
     full: bool = True,
@@ -853,7 +853,7 @@ def _measure_inforce_segmented(
     except KeyError:
         if len(basis) == 1:
             (single,) = basis.values()
-            return measure_inforce(model_points, single, state,
+            return measure_inforce(model_points, state, single,
                                    period_months=period_months, full=full)
         raise ValueError(
             f"model_points has no {tuple(segment_by)} axis/axes set but the "
@@ -862,8 +862,8 @@ def _measure_inforce_segmented(
         )
     n_mp = model_points.n_mp
     sub_results = [
-        (idx, measure_inforce(model_points.subset(idx), basis_norm[key],
-                              state.subset(idx),
+        (idx, measure_inforce(model_points.subset(idx), state.subset(idx),
+                              basis_norm[key],
                               period_months=period_months, full=full))
         for key, idx in segments
     ]

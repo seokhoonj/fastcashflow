@@ -71,8 +71,8 @@ fastcashflow 는 그 한 파일을 그대로 받습니다.
     시점 BEL / RA / CSM을 내고 직전 분기 CSM을 carry-forward.
 ```
 
-`gmm.measure_inforce` 의 시그니처는 `measure_inforce(model_points, basis,
-state, *, period_months=None, full=True)` 입니다. `period_months` 는 이번
+`gmm.measure_inforce` 의 시그니처는 `measure_inforce(model_points, state,
+basis, *, period_months=None, full=True)` 입니다. `period_months` 는 이번
 보고기간의 길이 (분기 결산이면 3) — 이번 기간에 release 될 부분을 그만큼
 잘라냅니다. `full=True` 는 월별 궤적까지, `full=False` 는 headline 네 숫자만
 빠르게 냅니다.
@@ -103,7 +103,7 @@ model_points, state = fcf.read_inforce_policies(
 # 전체 포트폴리오 결산 — dict basis 를 그대로 넘기면 각 (product, channel)
 # 을 자기 산출기초로 자동 라우팅합니다 (신계약 measure() 와 같은 방식).
 val = fcf.gmm.measure_inforce(
-    model_points, basis, state,                                 # basis = 전체 dict
+    model_points, state, basis,                                 # basis = 전체 dict
     period_months=3,                                            # 이번 분기 (3 개월)
 )
 fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 파일
@@ -155,8 +155,8 @@ for key, segment_basis in basis.items():
         continue
     val = fcf.gmm.measure_inforce(
         mp.subset(idx),          # 이 세그먼트의 보유계약
-        segment_basis,           # 이 세그먼트의 산출기초
         state.subset(idx),       # 이 세그먼트의 결산 상태
+        segment_basis,           # 이 세그먼트의 산출기초
         period_months=3,         # 이번 분기 (3 개월)
     )
     bel       += float(np.sum(val.bel))

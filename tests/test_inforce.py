@@ -312,7 +312,7 @@ def test_gmm_measure_inforce_headline_csm_is_as_of_and_tracks_prior():
             prior_csm=np.full(mp.n_mp, float(prior)),
             lock_in_rate=0.03,
         )
-        return fcf.gmm.measure_inforce(mp, basis, state, period_months=12, full=full)
+        return fcf.gmm.measure_inforce(mp, state, basis, period_months=12, full=full)
 
     head0 = run(0.0, full=False)
     head5k = run(5_000.0, full=False)
@@ -346,7 +346,7 @@ def test_inforce_state_subset_is_consistent_and_drives_segment_measure():
     assert sub_state.lock_in_rate == state.lock_in_rate
     assert np.allclose(sub_state.prior_csm, np.asarray(state.prior_csm)[idx])
 
-    val = fcf.gmm.measure_inforce(mp.subset(idx), basis[key], sub_state,
+    val = fcf.gmm.measure_inforce(mp.subset(idx), sub_state, basis[key],
                                   period_months=3)
     assert np.all(np.isfinite(val.bel)) and np.all(np.isfinite(val.csm))
 
@@ -365,18 +365,18 @@ def test_measure_inforce_requires_reconciled_state():
     # reconciled pair (what read_inforce_policies returns) -> passes
     mp = fcf.apply_inforce_state(portfolio, state)
     assert np.all(np.isfinite(
-        fcf.gmm.measure_inforce(mp, basis, state, full=False).bel))
+        fcf.gmm.measure_inforce(mp, state, basis, full=False).bel))
 
     # a state whose elapsed disagrees with the reconciled model_points -> reject
     stale = replace(state,
                     elapsed_months=np.asarray(state.elapsed_months) + 1)
     with pytest.raises(ValueError, match="do not match"):
-        fcf.gmm.measure_inforce(mp, basis, stale, full=False)
+        fcf.gmm.measure_inforce(mp, stale, basis, full=False)
 
     # an un-reconciled new-business model_points (elapsed backfilled to 0)
     # paired with a real period-close state is likewise rejected
     with pytest.raises(ValueError, match="do not match"):
-        fcf.gmm.measure_inforce(portfolio, basis, state, full=False)
+        fcf.gmm.measure_inforce(portfolio, state, basis, full=False)
 
 
 def test_measure_inforce_prior_csm_is_order_independent():
@@ -408,10 +408,10 @@ def test_measure_inforce_prior_csm_is_order_independent():
         count=np.array([1.0, 1.0]), prior_csm=np.array([0.0, 5_000.0]),
         lock_in_rate=0.03)
     v_shuf = fcf.gmm.measure_inforce(
-        fcf.apply_inforce_state(mp0, shuffled), basis, shuffled,
+        fcf.apply_inforce_state(mp0, shuffled), shuffled, basis,
         period_months=3, full=False)
     v_match = fcf.gmm.measure_inforce(
-        fcf.apply_inforce_state(mp0, matched), basis, matched,
+        fcf.apply_inforce_state(mp0, matched), matched, basis,
         period_months=3, full=False)
     assert np.allclose(v_shuf.csm, v_match.csm)
     # and the CSM sits on B (the contract that carried prior_csm), not A

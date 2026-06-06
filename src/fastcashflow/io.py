@@ -1444,7 +1444,7 @@ def read_inforce_policies(
             coverages="coverages.csv",
             calculation_methods="calculation_methods.csv",
         )
-        val = fcf.gmm.measure_inforce(mp, basis, state, period_months=3)
+        val = fcf.gmm.measure_inforce(mp, state, basis, period_months=3)
 
     For the two-file equivalent (separate ``policies.csv`` +
     ``inforce_state.csv``), see :func:`read_model_points` +

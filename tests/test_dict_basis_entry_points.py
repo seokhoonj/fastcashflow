@@ -90,7 +90,7 @@ def test_measure_inforce_routes_a_multi_segment_dict(tmp_path):
         coverages=str(tmp_path / "coverages.csv"),
         calculation_methods=str(tmp_path / "calculation_methods.csv"),
     )
-    routed = fcf.gmm.measure_inforce(mp, basis, state, period_months=3)
+    routed = fcf.gmm.measure_inforce(mp, state, basis, period_months=3)
     assert routed.bel.shape[0] == mp.n_mp
     st = _reconcile_state(mp, state)
     prod, chan = np.asarray(mp.product), np.asarray(mp.channel)
@@ -99,8 +99,8 @@ def test_measure_inforce_routes_a_multi_segment_dict(tmp_path):
         idx = np.nonzero((prod == key[0]) & (chan == key[1]))[0]
         if idx.size == 0:
             continue
-        ref = fcf.gmm.measure_inforce(mp.subset(idx), basis[key],
-                                      st.subset(idx), period_months=3)
+        ref = fcf.gmm.measure_inforce(mp.subset(idx), st.subset(idx),
+                                      basis[key], period_months=3)
         assert np.allclose(routed.bel[idx], ref.bel)
         assert np.allclose(routed.csm[idx], ref.csm)
         seen += idx.size
