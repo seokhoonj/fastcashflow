@@ -45,7 +45,9 @@ html[data-theme="dark"] .logo__cashflow { color: #e8ecef; }
     height: auto !important; margin: 0 auto;
 }
 .mermaid .nodeLabel, .mermaid .edgeLabel, .mermaid .stateLabel { line-height: 1.25; }
-.mermaid .edgeLabel { padding: 0.1rem 0.25rem; border-radius: 2px; font-size: 0.78rem; }
+.mermaid .edgeLabel { padding: 0.1rem 0.25rem; font-size: 0.78rem; background: transparent !important; }
+.mermaid .edgeLabel rect, .mermaid .edgeLabel foreignObject { fill: transparent !important; background: transparent !important; }
+.mermaid .labelBkg { background: transparent !important; background-color: transparent !important; }
 .mermaid .cluster rect { rx: 4px; ry: 4px; }
 @media (max-width: 767px) {
     .mermaid { margin-inline: -0.5rem; padding-inline: 0.25rem; }

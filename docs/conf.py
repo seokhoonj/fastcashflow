@@ -90,7 +90,7 @@ mermaid_init_config = {
         "lineColor": "#788a97",
         "secondaryColor": "#e8f4f1",
         "tertiaryColor": "#eef3f8",
-        "edgeLabelBackground": "#ffffff",
+        "edgeLabelBackground": "transparent",
         "clusterBkg": "#f8fafb",
         "clusterBorder": "#d5dee5",
     },
