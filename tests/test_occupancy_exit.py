@@ -84,12 +84,12 @@ def test_pay_then_exit_compose():
 
 
 # ---------------------------------------------------------------------------
-# F7.4 -- off-by-one: exit_after_months == sojourn_tracking_months RAISES (strict guard)
+# F7.4 -- an EXPLICIT sojourn_tracking_months at/below the boundary RAISES
 # ---------------------------------------------------------------------------
 def test_exit_after_must_be_below_duration_max():
-    with pytest.raises(ValueError, match="must exceed exit_after_months"):
+    with pytest.raises(ValueError, match="must exceed the deterministic sojourn boundary"):
         State("x", sojourn_tracking_months=4, exit_after_months=4)
-    with pytest.raises(ValueError, match="must exceed exit_after_months"):
+    with pytest.raises(ValueError, match="must exceed the deterministic sojourn boundary"):
         State("x", sojourn_tracking_months=3, exit_after_months=4)
     # the tightest valid stack (sojourn_tracking_months just above exit_after_months) works
     s = State("x", sojourn_tracking_months=4, exit_after_months=3)
@@ -111,12 +111,17 @@ def test_exit_after_below_cap_rejected():
 
 
 # ---------------------------------------------------------------------------
-# F7.6 -- exit_after_months needs sojourn tracking (semi-Markov)
+# F7.6 -- exit_after_months auto-derives sojourn tracking (off-by-one removed)
 # ---------------------------------------------------------------------------
-def test_exit_after_needs_duration_max():
-    # sojourn_tracking_months == 0 (Markov state) with exit_after_months fails the strict guard
-    with pytest.raises(ValueError, match="must exceed exit_after_months"):
-        State("x", exit_after_months=3)
+def test_exit_after_auto_derives_tracking():
+    # Omitting sojourn_tracking_months auto-derives one guard cohort past the
+    # boundary -- the caller never meets the off-by-one.
+    s = State("x", exit_after_months=3)
+    assert s.sojourn_tracking_months == 4
+    # cap + exit together: derive past the larger boundary
+    s2 = State("x", pays_periodic_benefit=True,
+               periodic_benefit_term_months=4, exit_after_months=6)
+    assert s2.sojourn_tracking_months == 7
 
 
 def test_exit_after_rejected_on_markov_compile():

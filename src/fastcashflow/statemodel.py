@@ -197,6 +197,11 @@ class State:
         # reaches the cap, while the lives stay in force (a guaranteed-payout
         # LTC / dementia annuity: pay 36 months, then keep cover with no
         # payment). ``0`` means unbounded (the historical behaviour).
+        # ``periodic_benefit_term_months`` caps how many months a benefit state
+        # pays -- the monthly ``disability_income`` stops once a cohort's sojourn
+        # reaches the cap, while the lives stay in force (a guaranteed-payout
+        # LTC / dementia annuity: pay 36 months, then keep cover with no
+        # payment). ``0`` means unbounded (the historical behaviour).
         cap = int(self.periodic_benefit_term_months)
         object.__setattr__(self, "periodic_benefit_term_months", cap)
         if cap < 0:
@@ -204,23 +209,11 @@ class State:
                 f"state {self.name!r}: periodic_benefit_term_months must be "
                 f"non-negative, got {cap}"
             )
-        if cap > 0:
-            if not self.pays_periodic_benefit:
-                raise ValueError(
-                    f"state {self.name!r}: periodic_benefit_term_months > 0 requires "
-                    f"pays_periodic_benefit=True (a cap on a non-paying state has no effect)"
-                )
-            # Strict ``sojourn_tracking_months > cap``: the absorbing cohort (D-1) holds
-            # everyone with sojourn >= D-1, so if ``cap == sojourn_tracking_months`` the
-            # capped lives pile into a cohort still inside ``tau < cap`` and
-            # keep being paid forever. One guard cohort past the cap is needed.
-            if self.sojourn_tracking_months <= cap:
-                raise ValueError(
-                    f"state {self.name!r}: sojourn_tracking_months ({self.sojourn_tracking_months}) "
-                    f"must exceed periodic_benefit_term_months ({cap}); otherwise the "
-                    f"absorbing cohort re-accumulates capped lives and keeps "
-                    f"paying. Set sojourn_tracking_months > periodic_benefit_term_months."
-                )
+        if cap > 0 and not self.pays_periodic_benefit:
+            raise ValueError(
+                f"state {self.name!r}: periodic_benefit_term_months > 0 requires "
+                f"pays_periodic_benefit=True (a cap on a non-paying state has no effect)"
+            )
         # ``death_benefit_factor`` multiplies the death-coverage benefit amount
         # for lives in this state. Non-negative; defaults 1.0 (no change).
         factor = float(self.death_benefit_factor)
@@ -230,11 +223,8 @@ class State:
                 f"state {self.name!r}: death_benefit_factor must be "
                 f"non-negative, got {factor}"
             )
-        # ``exit_after_months`` drops the cohort from the in-force set at the given
-        # sojourn. Semi-Markov only -- needs duration tracking; and strictly
-        # below the absorbing cohort, mirroring the periodic_benefit_term_months guard:
-        # at exit_after_months == sojourn_tracking_months the absorbing advance maxes next_tau at
-        # D-1 < exit_after_months, so the gate never fires (silent hold-forever).
+        # ``exit_after_months`` drops the cohort from the in-force set at the
+        # given sojourn (a deterministic exit). Pay the cap first, then exit.
         exit_after_months = int(self.exit_after_months)
         object.__setattr__(self, "exit_after_months", exit_after_months)
         if exit_after_months < 0:
@@ -242,21 +232,31 @@ class State:
                 f"state {self.name!r}: exit_after_months must be non-negative, "
                 f"got {exit_after_months}"
             )
-        if exit_after_months > 0:
-            if self.sojourn_tracking_months <= exit_after_months:
+        if exit_after_months > 0 and cap > 0 and exit_after_months < cap:
+            raise ValueError(
+                f"state {self.name!r}: exit_after_months ({exit_after_months}) must be "
+                f">= periodic_benefit_term_months ({cap}); pay the cap, then exit."
+            )
+        # Sojourn tracking: the engine tracks one monthly cohort per sojourn
+        # month, the last cohort absorbing everyone at that sojourn or beyond.
+        # A deterministic boundary (periodic_benefit_term_months / exit_after_months)
+        # needs one guard cohort past it -- otherwise the absorbing cohort sits
+        # at the boundary and capped / exiting lives re-accumulate and never stop.
+        # Auto-derive that ``+1`` so the caller never meets the off-by-one; an
+        # explicit sojourn_tracking_months only sets a *longer* tail (for a
+        # sojourn-dependent rate whose tail outruns the boundary) and must still
+        # clear the boundary.
+        boundary = max(cap, exit_after_months)
+        if boundary > 0:
+            if self.sojourn_tracking_months == 0:
+                object.__setattr__(self, "sojourn_tracking_months", boundary + 1)
+            elif self.sojourn_tracking_months <= boundary:
                 raise ValueError(
-                    f"state {self.name!r}: sojourn_tracking_months ({self.sojourn_tracking_months}) "
-                    f"must exceed exit_after_months ({exit_after_months}); otherwise the "
-                    f"absorbing cohort never reaches the exit boundary and the "
-                    f"cohort is held forever. Set sojourn_tracking_months > exit_after_months "
-                    f"(semi-Markov: exit_after_months needs duration tracking)."
-                )
-            if cap > 0 and exit_after_months < cap:
-                raise ValueError(
-                    f"state {self.name!r}: exit_after_months ({exit_after_months}) must be "
-                    f">= periodic_benefit_term_months ({cap}); pay the cap, then exit. "
-                    f"The valid stack is sojourn_tracking_months > exit_after_months >= "
-                    f"periodic_benefit_term_months."
+                    f"state {self.name!r}: sojourn_tracking_months "
+                    f"({self.sojourn_tracking_months}) must exceed the deterministic "
+                    f"sojourn boundary ({boundary} = max(periodic_benefit_term_months, "
+                    f"exit_after_months)); the absorbing cohort must sit strictly past "
+                    f"it. Omit sojourn_tracking_months to auto-derive {boundary + 1}."
                 )
 
 

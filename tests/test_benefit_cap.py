@@ -95,8 +95,14 @@ def test_cap_requires_benefit_state():
 
 
 def test_cap_must_be_below_duration_max():
-    with pytest.raises(ValueError, match="must exceed periodic_benefit_term_months"):
+    with pytest.raises(ValueError, match="must exceed the deterministic sojourn boundary"):
         State("x", pays_periodic_benefit=True, sojourn_tracking_months=3, periodic_benefit_term_months=3)
+
+
+def test_cap_auto_derives_tracking():
+    # Omitting sojourn_tracking_months auto-derives one guard cohort past the cap.
+    s = State("x", pays_periodic_benefit=True, periodic_benefit_term_months=36)
+    assert s.sojourn_tracking_months == 37
 
 
 def test_cap_non_negative():
