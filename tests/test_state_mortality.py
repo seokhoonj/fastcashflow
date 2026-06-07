@@ -1,4 +1,4 @@
-"""GAP A -- state-conditional mortality (``State.mortality_rate``).
+"""GAP A -- state-conditional mortality (``State.mortality_rate_name``).
 
 A state routes its in-force death decrement to a named rate; a post-diagnosis
 state (post-cancer death) can carry an elevated mortality supplied via
@@ -23,7 +23,7 @@ def _two_state(post_rate_name):
         State("healthy", premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("post", transitions=(Transition("mortality"),),
-              mortality_rate=post_rate_name),
+              mortality_rate_name=post_rate_name),
     ), seating=(0, 1))
 
 
@@ -122,8 +122,8 @@ def test_state_mortality_and_benefit_cap_compose():
     model = StateModel(states=(
         State("active", premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
-        State("disabled", benefit=True, duration_max=8, benefit_max_months=3,
-              mortality_rate="dth_dis", transitions=(Transition("mortality"),)),
+        State("disabled", benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,
+              mortality_rate_name="dth_dis", transitions=(Transition("mortality"),)),
     ), seating=(0, 1))
     basis = Basis(
         mortality_annual=_FLAT(0.10), lapse_annual=_ZERO,

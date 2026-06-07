@@ -124,7 +124,7 @@ def test_markov_can_reference_ci_incidence_annual():
         states=(
             State("healthy", premium=True, transitions=(
                 Transition("mortality"),
-                Transition("ci_incidence", to="diagnosed", lump_sum=True),
+                Transition("ci_incidence", to="diagnosed", pays_lump_sum=True),
                 Transition("lapse"),
             )),
             State("diagnosed", premium=False, transitions=(

@@ -65,7 +65,7 @@ class CompiledStateModel:
     state_duration_max
         ``None`` for Markov; ``(n_states,)`` int with the effective cohort
         count per state for semi-Markov.
-    benefit_max_months
+    periodic_benefit_term_months
         ``None`` for Markov; ``(n_states,)`` int with the per-state monthly
         benefit cap (``0`` = unbounded). Sojourn cohorts ``tau >= cap`` stop
         being paid while the lives stay in force.
@@ -78,7 +78,7 @@ class CompiledStateModel:
     premium_state: np.ndarray
     benefit_state: np.ndarray
     state_duration_max: IntArray | None = None
-    benefit_max_months: IntArray | None = None
+    periodic_benefit_term_months: IntArray | None = None
     # Per-state exact in-force death-exit probability -- ``survive x mortality``,
     # where ``survive`` is the product of ``(1 - rate)`` over the transitions
     # listed before mortality in the state. The deaths reporter multiplies it by
@@ -107,23 +107,23 @@ class Transition:
     inception, recovery, reincidence), or ``None`` when it removes occupancy
     from the in-force set entirely (death, lapse).
 
-    ``lump_sum`` flags a transition that pays a one-off benefit when it
+    ``pays_lump_sum`` flags a transition that pays a one-off benefit when it
     fires -- the ``ModelPoints.disability_benefit`` amount times the
     transitioning occupancy. It applies only to a transition with a
     destination; death and diagnosis lump sums stay on the coverage list.
 
-    ``duration_dependent`` flags a semi-Markov transition: the rate depends
+    ``sojourn_dependent`` flags a semi-Markov transition: the rate depends
     on the **sojourn time** in the source state (time since entering it),
     not just on the policy duration. The source state must have
-    ``duration_max > 0`` -- the engine tracks per-cohort occupancy there.
+    ``sojourn_tracking_months > 0`` -- the engine tracks per-cohort occupancy there.
     The rate function for a duration-dependent transition takes a fourth
     argument ``state_duration`` (months in source state).
     """
 
     rate: str
     to: str | None = None
-    lump_sum: bool = False
-    duration_dependent: bool = False
+    pays_lump_sum: bool = False
+    sojourn_dependent: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,22 +138,22 @@ class State:
     application order: the competing-decrement convention (see the module
     docstring) applies each in turn to the survivors of the previous.
 
-    ``duration_max`` switches the state to a **semi-Markov** model. When set
+    ``sojourn_tracking_months`` switches the state to a **semi-Markov** model. When set
     to ``D > 0``, the engine tracks ``D`` monthly cohorts of in-force in
     this state (cohort 0 entered this month, cohort 1 entered last month,
     and cohort ``D - 1`` absorbs everyone who has been here ``D - 1`` months
-    or longer). Transitions with ``duration_dependent=True`` then receive a
+    or longer). Transitions with ``sojourn_dependent=True`` then receive a
     cohort index and may carry different rates per cohort -- the natural
     way to express recovery, reincidence, exclusion (면책) periods, and
     other duration-since-entry effects. The default ``0`` keeps the state
     Markov (a single cohort, identical to the pre-Phase-(c) behaviour).
 
-    ``mortality_rate`` routes this state's in-force death decrement to a
+    ``mortality_rate_name`` routes this state's in-force death decrement to a
     named rate (default ``"mortality"``, the global decrement). A
     post-diagnosis state can carry an elevated death rate by naming a
     different rate, supplied via ``Basis.state_mortality_annual``.
 
-    ``benefit_max_months`` caps how many months a ``benefit`` state pays
+    ``periodic_benefit_term_months`` caps how many months a ``benefit`` state pays
     (``0`` = unbounded); see the field comment in ``__post_init__``.
 
     ``death_benefit_factor`` scales the death-coverage benefit paid for the
@@ -168,58 +168,58 @@ class State:
     ``exit_after_months`` removes occupancy from the in-force set once a cohort's
     sojourn in this state reaches ``exit_after_months`` months (default ``0`` =
     never). Semi-Markov only -- it needs sojourn tracking, so the state must
-    set ``duration_max``. Distinct from ``benefit_max_months`` (which stops the
+    set ``sojourn_tracking_months``. Distinct from ``periodic_benefit_term_months`` (which stops the
     payment but keeps the lives in force): ``exit_after_months`` ends the cover. A
     guaranteed-payout state that pays a fixed term and then lapses sets
-    ``benefit_max_months`` (pay window) and ``exit_after_months`` (cover end) together.
+    ``periodic_benefit_term_months`` (pay window) and ``exit_after_months`` (cover end) together.
     """
 
     name: str
     premium: bool = False
     benefit: bool = False
     transitions: tuple[Transition, ...] = ()
-    duration_max: int = 0
-    benefit_max_months: int = 0
-    mortality_rate: str = "mortality"
+    sojourn_tracking_months: int = 0
+    periodic_benefit_term_months: int = 0
+    mortality_rate_name: str = "mortality"
     death_benefit_factor: float = 1.0
     exit_after_months: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "transitions", tuple(self.transitions))
-        object.__setattr__(self, "duration_max", int(self.duration_max))
-        if self.duration_max < 0:
+        object.__setattr__(self, "sojourn_tracking_months", int(self.sojourn_tracking_months))
+        if self.sojourn_tracking_months < 0:
             raise ValueError(
-                f"state {self.name!r}: duration_max must be non-negative, "
-                f"got {self.duration_max}"
+                f"state {self.name!r}: sojourn_tracking_months must be non-negative, "
+                f"got {self.sojourn_tracking_months}"
             )
-        # ``benefit_max_months`` caps how many months a benefit state pays --
+        # ``periodic_benefit_term_months`` caps how many months a benefit state pays --
         # the monthly ``disability_income`` stops once a cohort's sojourn
         # reaches the cap, while the lives stay in force (a guaranteed-payout
         # LTC / dementia annuity: pay 36 months, then keep cover with no
         # payment). ``0`` means unbounded (the historical behaviour).
-        cap = int(self.benefit_max_months)
-        object.__setattr__(self, "benefit_max_months", cap)
+        cap = int(self.periodic_benefit_term_months)
+        object.__setattr__(self, "periodic_benefit_term_months", cap)
         if cap < 0:
             raise ValueError(
-                f"state {self.name!r}: benefit_max_months must be "
+                f"state {self.name!r}: periodic_benefit_term_months must be "
                 f"non-negative, got {cap}"
             )
         if cap > 0:
             if not self.benefit:
                 raise ValueError(
-                    f"state {self.name!r}: benefit_max_months > 0 requires "
+                    f"state {self.name!r}: periodic_benefit_term_months > 0 requires "
                     f"benefit=True (a cap on a non-paying state has no effect)"
                 )
-            # Strict ``duration_max > cap``: the absorbing cohort (D-1) holds
-            # everyone with sojourn >= D-1, so if ``cap == duration_max`` the
+            # Strict ``sojourn_tracking_months > cap``: the absorbing cohort (D-1) holds
+            # everyone with sojourn >= D-1, so if ``cap == sojourn_tracking_months`` the
             # capped lives pile into a cohort still inside ``tau < cap`` and
             # keep being paid forever. One guard cohort past the cap is needed.
-            if self.duration_max <= cap:
+            if self.sojourn_tracking_months <= cap:
                 raise ValueError(
-                    f"state {self.name!r}: duration_max ({self.duration_max}) "
-                    f"must exceed benefit_max_months ({cap}); otherwise the "
+                    f"state {self.name!r}: sojourn_tracking_months ({self.sojourn_tracking_months}) "
+                    f"must exceed periodic_benefit_term_months ({cap}); otherwise the "
                     f"absorbing cohort re-accumulates capped lives and keeps "
-                    f"paying. Set duration_max > benefit_max_months."
+                    f"paying. Set sojourn_tracking_months > periodic_benefit_term_months."
                 )
         # ``death_benefit_factor`` multiplies the death-coverage benefit amount
         # for lives in this state. Non-negative; defaults 1.0 (no change).
@@ -232,8 +232,8 @@ class State:
             )
         # ``exit_after_months`` drops the cohort from the in-force set at the given
         # sojourn. Semi-Markov only -- needs duration tracking; and strictly
-        # below the absorbing cohort, mirroring the benefit_max_months guard:
-        # at exit_after_months == duration_max the absorbing advance maxes next_tau at
+        # below the absorbing cohort, mirroring the periodic_benefit_term_months guard:
+        # at exit_after_months == sojourn_tracking_months the absorbing advance maxes next_tau at
         # D-1 < exit_after_months, so the gate never fires (silent hold-forever).
         exit_after_months = int(self.exit_after_months)
         object.__setattr__(self, "exit_after_months", exit_after_months)
@@ -243,20 +243,20 @@ class State:
                 f"got {exit_after_months}"
             )
         if exit_after_months > 0:
-            if self.duration_max <= exit_after_months:
+            if self.sojourn_tracking_months <= exit_after_months:
                 raise ValueError(
-                    f"state {self.name!r}: duration_max ({self.duration_max}) "
+                    f"state {self.name!r}: sojourn_tracking_months ({self.sojourn_tracking_months}) "
                     f"must exceed exit_after_months ({exit_after_months}); otherwise the "
                     f"absorbing cohort never reaches the exit boundary and the "
-                    f"cohort is held forever. Set duration_max > exit_after_months "
+                    f"cohort is held forever. Set sojourn_tracking_months > exit_after_months "
                     f"(semi-Markov: exit_after_months needs duration tracking)."
                 )
             if cap > 0 and exit_after_months < cap:
                 raise ValueError(
                     f"state {self.name!r}: exit_after_months ({exit_after_months}) must be "
-                    f">= benefit_max_months ({cap}); pay the cap, then exit. "
-                    f"The valid stack is duration_max > exit_after_months >= "
-                    f"benefit_max_months."
+                    f">= periodic_benefit_term_months ({cap}); pay the cap, then exit. "
+                    f"The valid stack is sojourn_tracking_months > exit_after_months >= "
+                    f"periodic_benefit_term_months."
                 )
 
 
@@ -295,16 +295,16 @@ class StateModel:
                         f"state {s.name!r} has a transition to an unknown "
                         f"state {tr.to!r}"
                     )
-                if tr.lump_sum and tr.to is None:
+                if tr.pays_lump_sum and tr.to is None:
                     raise ValueError(
                         f"state {s.name!r} has a lump-sum transition with no "
                         f"destination; a lump sum attaches to a transition"
                     )
-                if tr.duration_dependent and s.duration_max <= 0:
+                if tr.sojourn_dependent and s.sojourn_tracking_months <= 0:
                     raise ValueError(
-                        f"state {s.name!r} has a duration_dependent "
-                        f"transition {tr.rate!r} but its duration_max is 0; "
-                        f"set duration_max > 0 to track cohorts"
+                        f"state {s.name!r} has a sojourn_dependent "
+                        f"transition {tr.rate!r} but its sojourn_tracking_months is 0; "
+                        f"set sojourn_tracking_months > 0 to track cohorts"
                     )
         if any(not 0 <= i < len(states) for i in self.seating):
             raise ValueError(
@@ -409,12 +409,12 @@ def model_references_rate(model: StateModel, rate_name: str) -> bool:
 def is_semi_markov(model: StateModel) -> bool:
     """Return True if any state in the model tracks duration cohorts.
 
-    A semi-Markov state has ``duration_max > 0`` and tracks per-cohort
-    occupancy; its outgoing transitions may then be ``duration_dependent``.
+    A semi-Markov state has ``sojourn_tracking_months > 0`` and tracks per-cohort
+    occupancy; its outgoing transitions may then be ``sojourn_dependent``.
     A model with no such state is pure Markov and runs through the original
     :func:`compile_state_model` path.
     """
-    return any(s.duration_max > 0 for s in model.states)
+    return any(s.sojourn_tracking_months > 0 for s in model.states)
 
 
 def resolve_state_model(basis) -> "StateModel":
@@ -446,7 +446,7 @@ def compile_state_model(
     simply leaves the recursion.
 
     This function is **Markov-only**: it raises ``ValueError`` if the model
-    has any state with ``duration_max > 0``. Use
+    has any state with ``sojourn_tracking_months > 0``. Use
     :func:`compile_state_model_with_duration` for semi-Markov models.
     """
     if is_semi_markov(model):
@@ -459,7 +459,7 @@ def compile_state_model(
         if s.exit_after_months > 0:
             raise ValueError(
                 f"state {s.name!r}: exit_after_months needs sojourn tracking and is "
-                f"semi-Markov only; set duration_max to switch the state to a "
+                f"semi-Markov only; set sojourn_tracking_months to switch the state to a "
                 f"semi-Markov model"
             )
     arrays = {name: np.asarray(arr, dtype=np.float64)
@@ -481,10 +481,10 @@ def compile_state_model(
         death_exit = np.zeros(grid)   # exact death exit for the deaths reporter
         for tr in state.transitions:
             # A state's mortality decrement is routed to its own rate name
-            # (State.mortality_rate, default "mortality") so a post-diagnosis
+            # (State.mortality_rate_name, default "mortality") so a post-diagnosis
             # state can carry an elevated mortality without re-declaring the
             # transition. Any other rate name passes through unchanged.
-            rname = (state.mortality_rate
+            rname = (state.mortality_rate_name
                      if tr.rate == "mortality" else tr.rate)
             try:
                 rate = arrays[rname]
@@ -501,7 +501,7 @@ def compile_state_model(
                 edge_from.append(i)
                 edge_to.append(index[tr.to])
                 edge_prob.append(survive * rate)
-                edge_lump_sum.append(tr.lump_sum)
+                edge_lump_sum.append(tr.pays_lump_sum)
             survive = survive * (1.0 - rate)
         edge_from.append(i)        # the residual stays in the state
         edge_to.append(i)
@@ -531,17 +531,17 @@ def compile_state_model_with_duration(
     """Compile a semi-Markov StateModel into duration-aware kernel arrays.
 
     The cohort-aware counterpart of :func:`compile_state_model`. States
-    declared with ``duration_max > 0`` are tracked by monthly cohort: the
-    occupancy is a length-``duration_max`` vector indexed by sojourn time
+    declared with ``sojourn_tracking_months > 0`` are tracked by monthly cohort: the
+    occupancy is a length-``sojourn_tracking_months`` vector indexed by sojourn time
     (months since entering the state, with the last cohort absorbing
-    everyone who has been there at least ``duration_max - 1`` months).
-    Transitions marked ``duration_dependent=True`` may then carry different
+    everyone who has been there at least ``sojourn_tracking_months - 1`` months).
+    Transitions marked ``sojourn_dependent=True`` may then carry different
     rates per cohort.
 
     ``rates`` carries one array per rate name referenced by the model's
     transitions. Static (non-duration-dependent) rates broadcast to the
     ``grid`` shape -- the same convention as the Markov path. A duration-
-    dependent rate has an extra trailing axis of length ``duration_max``
+    dependent rate has an extra trailing axis of length ``sojourn_tracking_months``
     for the source state (cohort axis).
 
     Returns a :class:`CompiledStateModel`:
@@ -550,15 +550,15 @@ def compile_state_model_with_duration(
       ``edge_to == edge_from`` marks the residual stay edge (cohort
       advances by one).
     * ``edge_prob`` -- ``(n_edges, *grid, max_D)`` where ``max_D`` is the
-      max ``duration_max`` across states (1 if no state is tracked). The
+      max ``sojourn_tracking_months`` across states (1 if no state is tracked). The
       tau axis carries the cohort index for the source state; for an edge
       out of an untracked state only ``tau = 0`` is meaningful.
     * ``edge_lump_sum`` -- ``(n_edges,)`` bool, the lump-sum transitions.
     * ``n_states`` -- the number of transient states.
     * ``premium_state`` / ``benefit_state`` -- ``(n_states,)`` bool.
     * ``state_duration_max`` -- ``(n_states,)`` int. The effective cohort
-      count per state (``max(s.duration_max, 1)``). Untracked states have
-      value 1; tracked states have the declared ``duration_max``.
+      count per state (``max(s.sojourn_tracking_months, 1)``). Untracked states have
+      value 1; tracked states have the declared ``sojourn_tracking_months``.
     """
     arrays = {name: np.asarray(arr, dtype=np.float64)
               for name, arr in rates.items()}
@@ -567,9 +567,9 @@ def compile_state_model_with_duration(
             "compile_state_model_with_duration needs at least one rate array"
         )
     index = {s.name: i for i, s in enumerate(model.states)}
-    # Effective cohort count per state: untracked -> 1, tracked -> duration_max.
+    # Effective cohort count per state: untracked -> 1, tracked -> sojourn_tracking_months.
     state_duration_max = np.array(
-        [max(s.duration_max, 1) for s in model.states], dtype=np.int64,
+        [max(s.sojourn_tracking_months, 1) for s in model.states], dtype=np.int64,
     )
     max_D = int(state_duration_max.max())
 
@@ -579,7 +579,7 @@ def compile_state_model_with_duration(
     # baking the cohort axis into the grid.
     static_shapes = []
     for name, arr in arrays.items():
-        any_dyn = any(tr.rate == name and tr.duration_dependent
+        any_dyn = any(tr.rate == name and tr.sojourn_dependent
                        for s in model.states for tr in s.transitions)
         if any_dyn:
             static_shapes.append(arr.shape[:-1])
@@ -601,19 +601,19 @@ def compile_state_model_with_duration(
         # We pass the source state to look up the transition's flag.
         for tr in src_state.transitions:
             if tr.rate == rate_name:
-                if tr.duration_dependent:
+                if tr.sojourn_dependent:
                     if arr.ndim != grid_ndim + 1:
                         raise ValueError(
-                            f"rate {rate_name!r} is duration_dependent in "
+                            f"rate {rate_name!r} is sojourn_dependent in "
                             f"state {src_state.name!r} but its array shape "
                             f"{arr.shape} has no cohort axis"
                         )
-                    if arr.shape[-1] < src_state.duration_max:
+                    if arr.shape[-1] < src_state.sojourn_tracking_months:
                         raise ValueError(
                             f"rate {rate_name!r} cohort axis "
                             f"{arr.shape[-1]} shorter than state "
-                            f"{src_state.name!r} duration_max "
-                            f"{src_state.duration_max}"
+                            f"{src_state.name!r} sojourn_tracking_months "
+                            f"{src_state.sojourn_tracking_months}"
                         )
                     return arr[..., tau]
                 return arr
@@ -633,9 +633,9 @@ def compile_state_model_with_duration(
     for i, state in enumerate(model.states):
         # Validate this state's transitions reference rates we have. A
         # "mortality" transition routes to the state's own mortality rate
-        # name (State.mortality_rate), so validate the effective name.
+        # name (State.mortality_rate_name), so validate the effective name.
         for tr in state.transitions:
-            rname = (state.mortality_rate
+            rname = (state.mortality_rate_name
                      if tr.rate == "mortality" else tr.rate)
             if rname not in arrays:
                 raise ValueError(
@@ -644,7 +644,7 @@ def compile_state_model_with_duration(
                     f"compile_state_model_with_duration"
                 )
 
-        D = max(state.duration_max, 1)
+        D = max(state.sojourn_tracking_months, 1)
         # Edges produced by this state are emitted in declaration order:
         # first the transient transitions (one per Transition with `to`),
         # then the residual stay edge. We collect their per-edge cohort
@@ -655,7 +655,7 @@ def compile_state_model_with_duration(
 
         # Compose one cohort at a time. For each cohort tau, run the
         # ordered competing-decrement composition using rate values that
-        # depend on tau when the transition is duration_dependent.
+        # depend on tau when the transition is sojourn_dependent.
         # We accumulate per-edge probabilities along the tau axis.
         per_edge_per_tau: list[list[np.ndarray]] = [
             [] for _ in range(len([tr for tr in state.transitions
@@ -668,7 +668,7 @@ def compile_state_model_with_duration(
             survive = np.ones(grid)
             transient_idx = 0
             for tr in state.transitions:
-                rname = (state.mortality_rate
+                rname = (state.mortality_rate_name
                          if tr.rate == "mortality" else tr.rate)
                 r = rate_at(rname, state, tau)
                 if tr.rate == "mortality" and tau == 0:
@@ -695,7 +695,7 @@ def compile_state_model_with_duration(
                 pad = np.zeros((max_D - D,) + grid)
                 stacked = np.concatenate([stacked, pad], axis=0)
             out_edges_to.append(index[tr.to])
-            out_edges_lump.append(tr.lump_sum)
+            out_edges_lump.append(tr.pays_lump_sum)
             out_edges_blocks.append(stacked)
 
         residual = np.stack(res_per_tau)
@@ -733,8 +733,8 @@ def compile_state_model_with_duration(
         premium_state=np.array([s.premium for s in model.states], dtype=np.bool_),
         benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),
         state_duration_max=state_duration_max,
-        benefit_max_months=np.array(
-            [s.benefit_max_months for s in model.states], dtype=np.int64),
+        periodic_benefit_term_months=np.array(
+            [s.periodic_benefit_term_months for s in model.states], dtype=np.int64),
         state_death_exit=np.ascontiguousarray(np.stack(death_exit_rows)),
         state_death_benefit_factor=np.array(
             [s.death_benefit_factor for s in model.states], dtype=np.float64),

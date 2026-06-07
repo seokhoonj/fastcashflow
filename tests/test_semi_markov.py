@@ -13,17 +13,17 @@ from fastcashflow.statemodel import StateModel, State, Transition
 from conftest import PATTERNS, annual_from_monthly as _annual
 
 
-def _cancer_reincidence_model(duration_max: int) -> StateModel:
+def _cancer_reincidence_model(sojourn_tracking_months: int) -> StateModel:
     return StateModel(states=(
         State("healthy", premium=True, transitions=(
             Transition("mortality"),
             Transition("ci_incidence", to="post_first"),
             Transition("lapse"),
         )),
-        State("post_first", duration_max=duration_max, transitions=(
+        State("post_first", sojourn_tracking_months=sojourn_tracking_months, transitions=(
             Transition("mortality"),
             Transition("ci_reincidence", to="post_second",
-                       lump_sum=True, duration_dependent=True),
+                       pays_lump_sum=True, sojourn_dependent=True),
         )),
         State("post_second", transitions=(
             Transition("mortality"),
@@ -187,7 +187,7 @@ def test_reincidence_rate_zero_in_exclusion_window():
 # mixed portfolio.
 
 
-def _reincidence_assumptions(*, duration_max, exclusion_months,
+def _reincidence_assumptions(*, sojourn_tracking_months, exclusion_months,
                               reincidence_monthly):
     def ci_rein(s, a, p, sd):
         return np.where(sd < exclusion_months, 0.0, _annual(reincidence_monthly))
@@ -204,7 +204,7 @@ def _reincidence_assumptions(*, duration_max, exclusion_months,
         ),
         ra_confidence=0.75,
         mortality_cv=0.10,
-        state_model=_cancer_reincidence_model(duration_max),
+        state_model=_cancer_reincidence_model(sojourn_tracking_months),
         coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
 
@@ -213,7 +213,7 @@ def test_measure_value_agree_single_contract():
     """One contract, 36-month term, mid-exclusion -- measure().bel_path[:,0] must
     equal measure().bel within floating-point tolerance.
     """
-    basis = _reincidence_assumptions(duration_max=12, exclusion_months=6,
+    basis = _reincidence_assumptions(sojourn_tracking_months=12, exclusion_months=6,
                                      reincidence_monthly=0.01)
     mp = _single_contract(36)
     m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
@@ -235,7 +235,7 @@ def test_measure_value_agree_mixed_portfolio():
         state=rng.integers(0, 3, n).astype(np.int64),
         calculation_methods=PATTERNS,
     )
-    basis = _reincidence_assumptions(duration_max=24, exclusion_months=12,
+    basis = _reincidence_assumptions(sojourn_tracking_months=24, exclusion_months=12,
                                      reincidence_monthly=0.008)
     m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
@@ -256,7 +256,7 @@ def test_measure_value_agree_long_cohort():
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
         calculation_methods=PATTERNS,
     )
-    basis = _reincidence_assumptions(duration_max=60, exclusion_months=24,
+    basis = _reincidence_assumptions(sojourn_tracking_months=60, exclusion_months=24,
                                      reincidence_monthly=0.012)
     m, v = fcf.gmm.measure(mp, basis), fcf.gmm.measure(mp, basis, full=False)
     assert np.allclose(m.bel_path[:, 0], v.bel)
@@ -273,7 +273,7 @@ def test_measure_value_agree_long_cohort():
 # duration are orthogonal axes that must work on the same contract.
 
 
-def _reincidence_assumptions_with_extra_coverage(duration_max, exclusion_months,
+def _reincidence_assumptions_with_extra_coverage(sojourn_tracking_months, exclusion_months,
                                                   extra_is_diagnosis, extra_rate):
     """Reincidence model plus one extra coverage whose rate is constant per month.
 
@@ -286,7 +286,7 @@ def _reincidence_assumptions_with_extra_coverage(duration_max, exclusion_months,
     def extra_fn(sex, age, dur):
         return np.full(dur.shape, _annual(extra_rate))
 
-    base = _reincidence_assumptions(duration_max=duration_max,
+    base = _reincidence_assumptions(sojourn_tracking_months=sojourn_tracking_months,
                                      exclusion_months=exclusion_months,
                                      reincidence_monthly=0.01)
     return fcf.Basis(
@@ -356,7 +356,7 @@ def test_semi_markov_with_waiting_period_on_coverage():
     measure() and measure() must agree.
     """
     basis = _reincidence_assumptions_with_extra_coverage(
-        duration_max=12, exclusion_months=6,
+        sojourn_tracking_months=12, exclusion_months=6,
         extra_is_diagnosis=False, extra_rate=0.0008,
     )
     mp = _portfolio_with_rule_coverage(
@@ -374,7 +374,7 @@ def test_semi_markov_with_diagnosis_coverage():
     apply to the cohort-aware in-force trajectory.
     """
     basis = _reincidence_assumptions_with_extra_coverage(
-        duration_max=12, exclusion_months=6,
+        sojourn_tracking_months=12, exclusion_months=6,
         extra_is_diagnosis=True, extra_rate=0.0008,
     )
     mp = _portfolio_with_rule_coverage(
@@ -392,7 +392,7 @@ def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
     and the engine has to combine them correctly.
     """
     basis = _reincidence_assumptions_with_extra_coverage(
-        duration_max=12, exclusion_months=6,
+        sojourn_tracking_months=12, exclusion_months=6,
         extra_is_diagnosis=True, extra_rate=0.001,
     )
     mp = _portfolio_with_rule_coverage(
@@ -410,29 +410,29 @@ def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
 #
 # Disability-income products are the canonical motivation for semi-Markov:
 # the disabled -> active recovery (termination) rate is sharply duration-
-# dependent. fastcashflow models this with a duration_dependent transition
+# dependent. fastcashflow models this with a sojourn_dependent transition
 # back to the source state and a four-arg ``disability_recovery_annual``
 # rate. The disabled state is also a benefit state -- ``disability_income``
 # is paid each month its occupancy is held.
 
 
-def _di_model(duration_max: int) -> StateModel:
+def _di_model(sojourn_tracking_months: int) -> StateModel:
     return StateModel(states=(
         State("active", premium=True, transitions=(
             Transition("mortality"),
             Transition("waiver_incidence", to="disabled"),
             Transition("lapse"),
         )),
-        State("disabled", benefit=True, duration_max=duration_max,
+        State("disabled", benefit=True, sojourn_tracking_months=sojourn_tracking_months,
               transitions=(
                   Transition("mortality"),
                   Transition("disability_recovery", to="active",
-                             duration_dependent=True),
+                             sojourn_dependent=True),
               )),
     ), seating=(0, 1, 1))
 
 
-def _di_assumptions(*, duration_max, recovery_monthly):
+def _di_assumptions(*, sojourn_tracking_months, recovery_monthly):
     def recovery(s, a, p, sd):
         return np.full(sd.shape, _annual(recovery_monthly), dtype=float)
     return fcf.Basis(
@@ -445,7 +445,7 @@ def _di_assumptions(*, duration_max, recovery_monthly):
         ra_confidence=0.75,
         mortality_cv=0.10,
         disability_cv=0.20,
-        state_model=_di_model(duration_max),
+        state_model=_di_model(sojourn_tracking_months),
         coverages=(fcf.CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, _annual(0.001))),),
     )
 
@@ -505,9 +505,9 @@ def test_di_recovery_higher_rate_drains_disabled_occupancy_faster():
         calculation_methods=PATTERNS,
     )
     low = fcf.gmm.measure(mp, _di_assumptions(
-        duration_max=24, recovery_monthly=0.01))
+        sojourn_tracking_months=24, recovery_monthly=0.01))
     high = fcf.gmm.measure(mp, _di_assumptions(
-        duration_max=24, recovery_monthly=0.10))
+        sojourn_tracking_months=24, recovery_monthly=0.10))
     # By t = 6 months the high-recovery scenario has visibly drained the
     # disabled occupancy more than the low-recovery one.
     assert high.cashflows.disability_cf[0, 6] < low.cashflows.disability_cf[0, 6]
@@ -622,7 +622,7 @@ def test_semi_markov_with_rule_and_diagnosis_coverages_together():
     def diag_rate(sex, age, dur):
         return np.full(dur.shape, _annual(0.0009))
 
-    base = _reincidence_assumptions(duration_max=12, exclusion_months=6,
+    base = _reincidence_assumptions(sojourn_tracking_months=12, exclusion_months=6,
                                      reincidence_monthly=0.01)
     basis = fcf.Basis(
         mortality_annual=base.mortality_annual,

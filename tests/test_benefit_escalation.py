@@ -163,7 +163,7 @@ def test_semi_markov_escalation_only_coverage_is_not_dropped():
     sm = StateModel(states=(
         State("active", premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
-        State("disabled", duration_max=12, transitions=(Transition("mortality"),)),
+        State("disabled", sojourn_tracking_months=12, transitions=(Transition("mortality"),)),
     ), seating=(0, 1))
     basis = Basis(mortality_annual=_Z, lapse_annual=_Z, discount_annual=0.0,
                   ra_confidence=0.75, mortality_cv=0.10, state_model=sm,

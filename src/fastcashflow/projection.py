@@ -352,7 +352,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
 def _project_kernel_semi_markov(
     state_death_exit, state_lapse, state_death_benefit_factor, state_exit_after,
     edge_from, edge_to, edge_prob, edge_lump_sum,
-    n_states, state_duration_max, state_offset, benefit_max_months,
+    n_states, state_duration_max, state_offset, periodic_benefit_term_months,
     premium_state, benefit_state, start_state,
     term_months, contract_boundary_months, count, premium, premium_factor, annuity_factor,
     premium_term_months, premium_frequency_months, annuity_frequency_months,
@@ -370,7 +370,7 @@ def _project_kernel_semi_markov(
     Cohort-aware analogue of :func:`_project_kernel`. State ``s`` has
     ``state_duration_max[s] = D`` monthly cohorts, indexed via the flat
     occupancy vector at ``state_offset[s] + tau`` for ``tau in 0..D-1``.
-    Transitions whose rate is duration_dependent carry per-cohort
+    Transitions whose rate is sojourn_dependent carry per-cohort
     probabilities through ``edge_prob``'s trailing axis (shape
     ``(n_edges, n_mp, n_year, max_D)``).
 
@@ -456,7 +456,7 @@ def _project_kernel_semi_markov(
                 if premium_state[s]:
                     prem_occ += state_sum
                 if benefit_state[s]:
-                    cap = benefit_max_months[s]
+                    cap = periodic_benefit_term_months[s]
                     if cap > 0:
                         # Pay only the cohorts still within the cap; lives
                         # past it stay in force but stop receiving income.
@@ -604,7 +604,7 @@ def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
                                issue_class_grid, elapsed_grid):
     """Add each state's distinct mortality decrement rate to ``rate_dict``.
 
-    A state may carry its own in-force mortality under ``State.mortality_rate``
+    A state may carry its own in-force mortality under ``State.mortality_rate_name``
     (default ``"mortality"``) -- a post-diagnosis state with elevated death.
     Each distinct non-default name is read from ``basis.state_mortality_annual``
     (a name -> callable dict), falling back to the global ``mortality_annual``
@@ -612,7 +612,7 @@ def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
     behaviour.
     """
     table = basis.state_mortality_annual or {}
-    for rname in {s.mortality_rate for s in state_model.states}:
+    for rname in {s.mortality_rate_name for s in state_model.states}:
         if rname == "mortality" or rname in rate_dict:
             continue
         mort_fn = table.get(rname) or basis.mortality_annual
@@ -807,13 +807,13 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         # Phase (c) detailed projection. Build the rate dict the cohort-
         # aware compile expects: static rates stay (n_mp, n_year); the
         # duration-dependent reincidence rate carries an extra cohort
-        # axis of length ``max_cohort`` -- the largest ``duration_max``
+        # axis of length ``max_cohort`` -- the largest ``sojourn_tracking_months``
         # across the tracked states. Coverage-rule and diagnosis-coverage
         # passes ride the cohort-aware main pass: rule benefits scale the
         # saved per-month total in-force, diagnosis pools multiply that
         # same trajectory by a per-coverage depletion fraction.
-        max_cohort = max(s.duration_max for s in state_model.states
-                          if s.duration_max > 0)
+        max_cohort = max(s.sojourn_tracking_months for s in state_model.states
+                          if s.sojourn_tracking_months > 0)
         rate_dict = {"mortality": mortality, "lapse": lapse}
         _add_state_mortality_rates(rate_dict, state_model, basis,
                                    sex_grid, issue_age_grid, duration_grid,
@@ -858,7 +858,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         premium_state = compiled.premium_state
         benefit_state = compiled.benefit_state
         state_duration_max = compiled.state_duration_max
-        benefit_max_months = compiled.benefit_max_months
+        periodic_benefit_term_months = compiled.periodic_benefit_term_months
         # compile_state_model_with_duration returns ``edge_prob`` shape
         # ``(n_edges, n_mp, n_year, max_D)`` -- already in the layout the
         # detailed kernel reads (edge axis outer, cohort axis inner).
@@ -877,7 +877,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             state_death_exit, state_lapse,
             state_death_benefit_factor, state_exit_after,
             edge_from, edge_to, edge_prob, edge_lump_sum,
-            n_states, state_duration_max, state_offset, benefit_max_months,
+            n_states, state_duration_max, state_offset, periodic_benefit_term_months,
             premium_state, benefit_state, start_state,
             model_points.term_months,
             model_points.contract_boundary_months,

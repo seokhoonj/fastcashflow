@@ -2,7 +2,7 @@
 
 A cohort whose sojourn in a state reaches ``exit_after_months`` months leaves the
 in-force set (a ``to=None`` transition by sojourn). Semi-Markov only -- it
-needs duration tracking. Distinct from ``benefit_max_months``, which stops the
+needs duration tracking. Distinct from ``periodic_benefit_term_months``, which stops the
 payment but keeps the lives in force. Full path only.
 """
 import numpy as np
@@ -16,14 +16,14 @@ from fastcashflow.modelpoints import ModelPoints
 _ZERO = lambda s, a, d: np.full(np.shape(a), 0.0)   # no death / lapse
 
 
-def _model(exit_after_months, cap=0, duration_max=8):
+def _model(exit_after_months, cap=0, sojourn_tracking_months=8):
     """active + disabled (benefit) with a sojourn exit; no decrements, so a
     life seated in ``disabled`` stays until the exit boundary."""
     return StateModel(states=(
         State("active", premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
-        State("disabled", benefit=True, duration_max=duration_max,
-              benefit_max_months=cap, exit_after_months=exit_after_months,
+        State("disabled", benefit=True, sojourn_tracking_months=sojourn_tracking_months,
+              periodic_benefit_term_months=cap, exit_after_months=exit_after_months,
               transitions=(Transition("mortality"),)),
     ), seating=(0, 1))
 
@@ -39,11 +39,11 @@ def _seated_mp(term=12):
         calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
 
 
-def _basis(exit_after_months, cap=0, duration_max=8):
+def _basis(exit_after_months, cap=0, sojourn_tracking_months=8):
     return Basis(
         mortality_annual=_ZERO, lapse_annual=_ZERO,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
-        state_model=_model(exit_after_months, cap, duration_max),
+        state_model=_model(exit_after_months, cap, sojourn_tracking_months),
         coverages=(fcf.CoverageRate("DEATH", _ZERO),))
 
 
@@ -59,10 +59,10 @@ def test_exit_after_drops_cohort_at_boundary():
 
 
 # ---------------------------------------------------------------------------
-# F7.2 -- exit_after_months is NOT benefit_max_months: cap stops pay, exit ends cover
+# F7.2 -- exit_after_months is NOT periodic_benefit_term_months: cap stops pay, exit ends cover
 # ---------------------------------------------------------------------------
 def test_exit_distinct_from_benefit_cap():
-    """benefit_max_months=3 stops the payment but the lives stay in force;
+    """periodic_benefit_term_months=3 stops the payment but the lives stay in force;
     exit_after_months=3 removes them. The two mechanisms must be distinguishable."""
     cap_only = fcf.gmm.measure(_seated_mp(12), _basis(0, cap=3), full=True)
     exit_only = fcf.gmm.measure(_seated_mp(12), _basis(3), full=True)
@@ -84,29 +84,29 @@ def test_pay_then_exit_compose():
 
 
 # ---------------------------------------------------------------------------
-# F7.4 -- off-by-one: exit_after_months == duration_max RAISES (strict guard)
+# F7.4 -- off-by-one: exit_after_months == sojourn_tracking_months RAISES (strict guard)
 # ---------------------------------------------------------------------------
 def test_exit_after_must_be_below_duration_max():
     with pytest.raises(ValueError, match="must exceed exit_after_months"):
-        State("x", duration_max=4, exit_after_months=4)
+        State("x", sojourn_tracking_months=4, exit_after_months=4)
     with pytest.raises(ValueError, match="must exceed exit_after_months"):
-        State("x", duration_max=3, exit_after_months=4)
-    # the tightest valid stack (duration_max just above exit_after_months) works
-    s = State("x", duration_max=4, exit_after_months=3)
+        State("x", sojourn_tracking_months=3, exit_after_months=4)
+    # the tightest valid stack (sojourn_tracking_months just above exit_after_months) works
+    s = State("x", sojourn_tracking_months=4, exit_after_months=3)
     assert s.exit_after_months == 3
 
 
 def test_exit_after_tightest_valid_drops():
-    m = fcf.gmm.measure(_seated_mp(12), _basis(3, duration_max=4), full=True)
+    m = fcf.gmm.measure(_seated_mp(12), _basis(3, sojourn_tracking_months=4), full=True)
     assert np.allclose(m.cashflows.inforce[0][3:], 0.0)
 
 
 # ---------------------------------------------------------------------------
-# F7.5 -- exit_after_months >= benefit_max_months (pay the cap, then exit)
+# F7.5 -- exit_after_months >= periodic_benefit_term_months (pay the cap, then exit)
 # ---------------------------------------------------------------------------
 def test_exit_after_below_cap_rejected():
-    with pytest.raises(ValueError, match="must be >= benefit_max_months"):
-        State("x", benefit=True, duration_max=8, benefit_max_months=4,
+    with pytest.raises(ValueError, match="must be >= periodic_benefit_term_months"):
+        State("x", benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=4,
               exit_after_months=3)
 
 
@@ -114,7 +114,7 @@ def test_exit_after_below_cap_rejected():
 # F7.6 -- exit_after_months needs sojourn tracking (semi-Markov)
 # ---------------------------------------------------------------------------
 def test_exit_after_needs_duration_max():
-    # duration_max == 0 (Markov state) with exit_after_months fails the strict guard
+    # sojourn_tracking_months == 0 (Markov state) with exit_after_months fails the strict guard
     with pytest.raises(ValueError, match="must exceed exit_after_months"):
         State("x", exit_after_months=3)
 
@@ -124,12 +124,12 @@ def test_exit_after_rejected_on_markov_compile():
     exit_after_months is rejected at compile -- exit needs sojourn tracking."""
     from fastcashflow.statemodel import compile_state_model
     # build a Markov state and inject exit_after_months past __post_init__ (which
-    # would otherwise force duration_max); use a duration-free sibling to keep
+    # would otherwise force sojourn_tracking_months); use a duration-free sibling to keep
     # the model Markov so compile_state_model is the path taken.
     model = StateModel(states=(
         State("a", premium=True, transitions=(Transition("mortality"),)),
     ), seating=(0,))
-    # forge a state with exit_after_months but duration_max 0 by bypassing validation
+    # forge a state with exit_after_months but sojourn_tracking_months 0 by bypassing validation
     object.__setattr__(model.states[0], "exit_after_months", 3)
     with pytest.raises(ValueError, match="semi-Markov only"):
         compile_state_model(model, {"mortality": np.zeros((1, 1))})
@@ -141,7 +141,7 @@ def test_exit_after_rejected_on_markov_compile():
 def test_fast_path_rejects_exit_after():
     with pytest.raises(NotImplementedError, match="exit_after_months"):
         fcf.gmm.measure(_seated_mp(12), _basis(3), full=False)
-    # a benefit_max_months-only model still runs fast
+    # a periodic_benefit_term_months-only model still runs fast
     fast = fcf.gmm.measure(_seated_mp(12), _basis(0, cap=3), full=False)
     full = fcf.gmm.measure(_seated_mp(12), _basis(0, cap=3), full=True)
     assert fast.bel[0] == pytest.approx(full.bel[0], rel=1e-9)

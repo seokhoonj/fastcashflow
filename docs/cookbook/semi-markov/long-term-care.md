@@ -5,9 +5,9 @@
 
 - **간병 / 치매 (LTC)** 보장을 Semi-Markov 로 — 간병 상태에 진입하면 **진단금
   일시금** 한 번 + **월정액** 을 매월 받되, 지급은 **보증한도** 까지만
-- `State.benefit_max_months` — 월정액의 **sojourn 한도** (예: 36 회 보증 후
+- `State.periodic_benefit_term_months` — 월정액의 **sojourn 한도** (예: 36 회 보증 후
   지급 중단, 계약은 유지)
-- `State.mortality_rate` — **간병 상태의 상승 사망률** (간병 진입자는 사망률이
+- `State.mortality_rate_name` — **간병 상태의 상승 사망률** (간병 진입자는 사망률이
   높음); in-force 가 그만큼 빨리 소멸
 - 한 상태가 **일시금 (`disability_benefit`) + 월정액 (`disability_income`)** 을
   함께 다루는 구조 — [4.1](reincidence) 의 일시금, [4.2](disability-income) 의
@@ -26,11 +26,11 @@
 월정액은 무한정 나가지 않습니다 — **보증 개월수만큼만** 지급하고, 그 뒤에는
 계약은 살아 있되 (사망 보장 등) 월정액만 멈춥니다. 이 "상태에 머문 개월수
 (sojourn) 에 따른 지급 한도" 가 Semi-Markov 가 아니면 표현되지 않는 부분이고,
-`State.benefit_max_months` 가 그 자리입니다.
+`State.periodic_benefit_term_months` 가 그 자리입니다.
 
 또한 간병 상태 진입자는 **사망률이 일반보다 훨씬 높습니다** — in-force 가 빨리
 소멸하므로 월정액 부채도 그만큼 작아집니다. 이 상태별 사망률을
-`State.mortality_rate` 로 줍니다.
+`State.mortality_rate_name` 로 줍니다.
 
 ## 모델링 매핑 — active / care (2-state)
 
@@ -42,22 +42,22 @@
   - 역할
 * - `State("active", premium=True, ...)`
   - 건강 상태. 보험료 납입. 간병 발생 시 care 로.
-* - `Transition("waiver_incidence", to="care", lump_sum=True)`
-  - 간병 발생 — active -> care. `lump_sum=True` 가 진입 시
+* - `Transition("waiver_incidence", to="care", pays_lump_sum=True)`
+  - 간병 발생 — active -> care. `pays_lump_sum=True` 가 진입 시
     `disability_benefit` (진단금) 를 한 번 지급.
-* - `State("care", benefit=True, benefit_max_months=36, mortality_rate="dth_care", duration_max=60)`
+* - `State("care", benefit=True, periodic_benefit_term_months=36, mortality_rate_name="dth_care", sojourn_tracking_months=60)`
   - 간병 상태. `benefit=True` 가 매월 `disability_income` 지급,
-    `benefit_max_months=36` 이 **36 회까지만** 지급. `mortality_rate="dth_care"`
-    가 이 상태의 **상승 사망률** 을 라우팅. `duration_max` 가 sojourn 코호트 추적.
+    `periodic_benefit_term_months=36` 이 **36 회까지만** 지급. `mortality_rate_name="dth_care"`
+    가 이 상태의 **상승 사망률** 을 라우팅. `sojourn_tracking_months` 가 sojourn 코호트 추적.
 * - `Basis.state_mortality_annual={"dth_care": fn}`
   - `dth_care` 라는 이름의 사망률 함수. 이름이 없으면 전역 `mortality_annual`
     로 fallback.
 ```
 
-```{admonition} duration_max > benefit_max_months (strict)
+```{admonition} sojourn_tracking_months > periodic_benefit_term_months (strict)
 :class: warning
 
-`benefit_max_months > 0` 이면 `duration_max` 가 그보다 **커야** 합니다 (가드
+`periodic_benefit_term_months > 0` 이면 `sojourn_tracking_months` 가 그보다 **커야** 합니다 (가드
 코호트 1 개 이상). 같으면 마지막 흡수 코호트에 한도 넘은 계약이 고여 영원히
 지급되는 off-by-one 이 생기므로, 생성자가 명시적으로 거부합니다.
 ```
@@ -121,9 +121,9 @@ model = StateModel(states=(
     State("active", premium=True, transitions=(
         Transition("mortality"),
         Transition("lapse"),
-        Transition("waiver_incidence", to="care", lump_sum=True))),  # 진단금 lump
-    State("care", benefit=True, duration_max=60, benefit_max_months=36,
-          mortality_rate="dth_care", transitions=(
+        Transition("waiver_incidence", to="care", pays_lump_sum=True))),  # 진단금 lump
+    State("care", benefit=True, sojourn_tracking_months=60, periodic_benefit_term_months=36,
+          mortality_rate_name="dth_care", transitions=(
           Transition("mortality"),)),                                 # 상승 사망률
 ), seating=(0, 1))
 
@@ -170,7 +170,7 @@ Loss :              0
 
 ## 손계산 검증 — 보증한도가 정확히 끊는가
 
-`benefit_max_months` 가 의도대로 끊는지 작은 toy 로 확인합니다. **간병 상태에
+`periodic_benefit_term_months` 가 의도대로 끊는지 작은 toy 로 확인합니다. **간병 상태에
 자리 지정** 하고 (`state=1`), 감쇠 없이 (사망 / 해지 0, 할인 0) 굴리면, 월정액은
 보증 개월수만큼만 나와야 합니다:
 
@@ -180,7 +180,7 @@ zero = 0.0
 toy_model = StateModel(states=(
     State("active", premium=True, transitions=(
         Transition("mortality"), Transition("lapse"))),
-    State("care", benefit=True, duration_max=8, benefit_max_months=3,   # 3 회 보증
+    State("care", benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,   # 3 회 보증
           transitions=(Transition("mortality"),)),
 ), seating=(0, 1))
 toy_basis = fcf.Basis(
@@ -203,7 +203,7 @@ print(f"BEL       : {tm.bel[0]:,.0f}   (= 3 x 1,000,000, 할인 0)")
 BEL       : 3,000,000   (= 3 x 1,000,000, 할인 0)
 ```
 
-보증 3 회 (`benefit_max_months=3`) 이므로 sojourn `tau = 0, 1, 2` 세 달만
+보증 3 회 (`periodic_benefit_term_months=3`) 이므로 sojourn `tau = 0, 1, 2` 세 달만
 월정액이 나오고, `tau = 3` 부터 0 입니다. 계약은 여전히 in-force 지만 (감쇠가
 없으니 사라지지 않음) 지급만 멈춥니다 — **종신보증형 LTC** 의 "보증 후 지급중단,
 계약 유지" 가 이것입니다.
@@ -222,41 +222,41 @@ BEL       : 3,000,000   (= 3 x 1,000,000, 할인 0)
 
 간병 진단 후 일정 기간 무지급 (대기) 하거나 일부만 지급 (감액) 하는 설계는,
 지급 **금액** 을 sojourn (`sd`) 으로 가르는 별도 메커닉입니다.
-`benefit_max_months` 는 지급 **개월수** 의 한도만 끊으므로, 금액 변조 (대기 0 /
+`periodic_benefit_term_months` 는 지급 **개월수** 의 한도만 끊으므로, 금액 변조 (대기 0 /
 감액 50%) 는 현재 별도 처리 (입력 단계의 금액 조정 등) 가 필요합니다.
 
 ### 회복 (간병 상태 이탈)
 
 장기요양 등급이 호전돼 간병 상태를 벗어나는 경우는 [4.2 DI](disability-income)
-의 회복 re-entry (`disability_recovery`, `duration_dependent=True`) 와 같은
+의 회복 re-entry (`disability_recovery`, `sojourn_dependent=True`) 와 같은
 방식으로 care -> active 전이를 추가합니다. LTC 는 회복이 드물어 본 예제는
 생략했습니다.
 
 ## 함정 / 검증
 
-### 함정 1 — `duration_max <= benefit_max_months`
+### 함정 1 — `sojourn_tracking_months <= periodic_benefit_term_months`
 
-가드 코호트가 없으면 (`duration_max == cap`) 흡수 코호트에 한도 넘은 계약이
-고여 무한 지급됩니다. 생성자가 `duration_max > benefit_max_months` 를 강제하니,
-보증 36 회면 `duration_max` 를 60 (또는 그 이상) 으로 넉넉히 둡니다.
+가드 코호트가 없으면 (`sojourn_tracking_months == cap`) 흡수 코호트에 한도 넘은 계약이
+고여 무한 지급됩니다. 생성자가 `sojourn_tracking_months > periodic_benefit_term_months` 를 강제하니,
+보증 36 회면 `sojourn_tracking_months` 를 60 (또는 그 이상) 으로 넉넉히 둡니다.
 
 ### 함정 2 — 진단금과 월정액 혼동
 
-- **`disability_benefit`** — `lump_sum` 전이가 진입 시 한 번 지급 (진단금).
+- **`disability_benefit`** — `pays_lump_sum` 전이가 진입 시 한 번 지급 (진단금).
 - **`disability_income`** — benefit 상태 점유에 매월 지급 (월정액).
 
 둘은 별개 필드입니다. 진단금만 주고 월정액을 비우면 매월 0 이 나옵니다.
 
 ### 함정 3 — 간병 상태 사망률을 안 주면 전역으로 fallback
 
-`mortality_rate="dth_care"` 라고 선언해도 `state_mortality_annual` 에
+`mortality_rate_name="dth_care"` 라고 선언해도 `state_mortality_annual` 에
 `"dth_care"` 가 없으면 **전역 `mortality_annual`** 로 돌아갑니다 (기본값 보존).
 상승 사망률을 의도했다면 dict 에 그 이름의 함수를 반드시 넣으세요.
 
 ## 인접 레시피
 
 - [4.1 재진단암 보험](reincidence) — 같은 일시금 (`disability_benefit`,
-  `lump_sum`) 메커닉. 본 챕터의 진단금이 같은 자리.
+  `pays_lump_sum`) 메커닉. 본 챕터의 진단금이 같은 자리.
 - [4.2 장해소득보상 (DI)](disability-income) — 같은 월정액
   (`disability_income`, `benefit=True`) 메커닉. 본 챕터는 거기에 **보증한도** 와
   **상태 사망률** 을 더한 것.

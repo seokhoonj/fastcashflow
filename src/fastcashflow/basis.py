@@ -676,9 +676,9 @@ class Basis:
     # contract.
     disability_recovery_annual: DurationRateFn | None = None
     # Per-state in-force mortality decrement, keyed by the rate name a state
-    # declares via ``State.mortality_rate`` (default ``"mortality"``). A
+    # declares via ``State.mortality_rate_name`` (default ``"mortality"``). A
     # post-diagnosis state (post-cancer death) carries an elevated death rate
-    # without re-declaring its transition: ``State(mortality_rate="dth_post")``
+    # without re-declaring its transition: ``State(mortality_rate_name="dth_post")``
     # plus ``state_mortality_annual={"dth_post": fn}``. A name absent from the
     # dict (or a None dict) falls back to the global ``mortality_annual``, so
     # declaring the state without a table preserves behaviour.
@@ -1006,16 +1006,16 @@ def _describe_basis_lines(
             trs: list[object] = []
             for t in st.transitions:
                 target = "exit" if t.to is None else repr(t.to)
-                tag = " (lump_sum)" if t.lump_sum else ""
+                tag = " (pays_lump_sum)" if t.pays_lump_sum else ""
                 trs.append(f"{t.rate}  ->  {target}{tag}")
             # Show the non-default state knobs only when set, so an ordinary
             # state renders unchanged and a configured one (an elevated death
             # benefit, a capped / exiting benefit state) is visible.
             extras = []
-            if st.benefit_max_months:
-                extras.append(f"benefit_max_months={st.benefit_max_months}")
-            if st.mortality_rate != "mortality":
-                extras.append(f"mortality_rate={st.mortality_rate!r}")
+            if st.periodic_benefit_term_months:
+                extras.append(f"periodic_benefit_term_months={st.periodic_benefit_term_months}")
+            if st.mortality_rate_name != "mortality":
+                extras.append(f"mortality_rate_name={st.mortality_rate_name!r}")
             if st.death_benefit_factor != 1.0:
                 extras.append(f"death_benefit_factor={st.death_benefit_factor}")
             if st.exit_after_months:
@@ -1023,7 +1023,7 @@ def _describe_basis_lines(
             extra_str = (", " + ", ".join(extras)) if extras else ""
             state_items.append((
                 f"State({st.name!r}, premium={st.premium}, "
-                f"benefit={st.benefit}, duration_max={st.duration_max}{extra_str})",
+                f"benefit={st.benefit}, sojourn_tracking_months={st.sojourn_tracking_months}{extra_str})",
                 trs,
             ))
         sm_body = [(f"states : tuple  (len={len(sm.states)})", state_items)]

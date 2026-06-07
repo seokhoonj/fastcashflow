@@ -5,7 +5,7 @@ Two cash-flow kinds attached to the state machine as data:
 * a state benefit -- disability income paid each month a benefit state is
   occupied (``State.benefit`` + ``ModelPoints.disability_income``);
 * a transition lump sum -- a one-off benefit when a flagged transition fires
-  (``Transition.lump_sum`` + ``ModelPoints.disability_benefit``).
+  (``Transition.pays_lump_sum`` + ``ModelPoints.disability_benefit``).
 
 The disability model below is the active / waiver model with the waiver
 state turned into a benefit-paying ``disabled`` state and the inception
@@ -27,14 +27,14 @@ from conftest import annual_from_monthly as _annual
 Z_75 = 0.6744897501960817
 
 
-def _disability_model(*, lump_sum=True) -> StateModel:
+def _disability_model(*, pays_lump_sum=True) -> StateModel:
     """Active / disabled model -- disability income on the disabled state,
     an optional lump sum on the inception transition."""
     return StateModel(
         states=(
             State("active", premium=True, transitions=(
                 Transition("mortality"),
-                Transition("waiver_incidence", to="disabled", lump_sum=lump_sum),
+                Transition("waiver_incidence", to="disabled", pays_lump_sum=pays_lump_sum),
                 Transition("lapse"),
             )),
             State("disabled", benefit=True, transitions=(
@@ -46,7 +46,7 @@ def _disability_model(*, lump_sum=True) -> StateModel:
 
 
 def _basis(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
-          lump_sum=True) -> Basis:
+          pays_lump_sum=True) -> Basis:
     """Flat-rate, zero-discount basis. ``q`` / ``lapse`` / ``inception`` are
     the monthly rates the hand calculations use."""
     return Basis(
@@ -57,7 +57,7 @@ def _basis(*, q=0.01, lapse=0.0, inception=0.05, disability_cv=0.0,
         ra_confidence=0.75,
         mortality_cv=0.10,
         disability_cv=disability_cv,
-        state_model=_disability_model(lump_sum=lump_sum),
+        state_model=_disability_model(pays_lump_sum=pays_lump_sum),
         coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(a.shape, _annual(q))),),
     )
 
@@ -88,7 +88,7 @@ def test_lump_sum_on_exit_transition_rejected():
     with pytest.raises(ValueError, match="lump-sum"):
         StateModel(states=(
             State("active", premium=True, transitions=(
-                Transition("mortality", lump_sum=True),    # to=None -- an exit
+                Transition("mortality", pays_lump_sum=True),    # to=None -- an exit
             )),
         ))
 
@@ -164,7 +164,7 @@ def test_lump_sum_off_when_unflagged():
     when disability_benefit is set."""
     mp = ModelPoints.single(issue_age=40, benefits={0: 0.0}, premium=0.0,
                             term_months=24, disability_benefit=5_000_000.0)
-    res = measure(mp, _basis(lump_sum=False))
+    res = measure(mp, _basis(pays_lump_sum=False))
     assert np.all(res.cashflows.disability_cf[0] == 0.0)
 
 

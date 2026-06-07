@@ -78,17 +78,17 @@ def test_premium_factor_full_matches_fast_markov():
 # PF3 -- full==fast parity on a SEMI-MARKOV contract (the codegen path both
 # adversaries flagged as the highest-risk missed edit)
 # ---------------------------------------------------------------------------
-def _reincidence_model(duration_max=12):
+def _reincidence_model(sojourn_tracking_months=12):
     return StateModel(states=(
         State("active", premium=True, transitions=(
             Transition("mortality"),
             Transition("ci_incidence", to="post_first"),
             Transition("lapse"),
         )),
-        State("post_first", duration_max=duration_max, premium=True, transitions=(
+        State("post_first", sojourn_tracking_months=sojourn_tracking_months, premium=True, transitions=(
             Transition("mortality"),
             Transition("ci_reincidence", to="post_second",
-                       duration_dependent=True, lump_sum=True),
+                       sojourn_dependent=True, pays_lump_sum=True),
         )),
         State("post_second", transitions=(Transition("mortality"),)),
     ))

@@ -1,6 +1,6 @@
-"""GAP B -- sojourn-bounded monthly benefit (``State.benefit_max_months``).
+"""GAP B -- sojourn-bounded monthly benefit (``State.periodic_benefit_term_months``).
 
-A benefit state with ``benefit_max_months = cap`` pays its monthly
+A benefit state with ``periodic_benefit_term_months = cap`` pays its monthly
 ``disability_income`` only while a cohort's sojourn ``tau < cap``; the lives
 stay in force past the cap but stop being paid (a guaranteed-payout LTC /
 dementia annuity). ``cap = 0`` is unbounded (the historical behaviour).
@@ -22,7 +22,7 @@ def _capped_model(cap):
     return StateModel(states=(
         State("active", premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
-        State("disabled", benefit=True, duration_max=8, benefit_max_months=cap,
+        State("disabled", benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=cap,
               transitions=(Transition("mortality"),)),
     ), seating=(0, 1))
 
@@ -91,14 +91,14 @@ def test_benefit_cap_bel_monotone_in_cap():
 # ---------------------------------------------------------------------------
 def test_cap_requires_benefit_state():
     with pytest.raises(ValueError, match="requires benefit=True"):
-        State("x", benefit=False, duration_max=5, benefit_max_months=2)
+        State("x", benefit=False, sojourn_tracking_months=5, periodic_benefit_term_months=2)
 
 
 def test_cap_must_be_below_duration_max():
-    with pytest.raises(ValueError, match="must exceed benefit_max_months"):
-        State("x", benefit=True, duration_max=3, benefit_max_months=3)
+    with pytest.raises(ValueError, match="must exceed periodic_benefit_term_months"):
+        State("x", benefit=True, sojourn_tracking_months=3, periodic_benefit_term_months=3)
 
 
 def test_cap_non_negative():
     with pytest.raises(ValueError, match="non-negative"):
-        State("x", benefit=True, duration_max=5, benefit_max_months=-1)
+        State("x", benefit=True, sojourn_tracking_months=5, periodic_benefit_term_months=-1)

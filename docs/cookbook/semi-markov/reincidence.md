@@ -8,11 +8,11 @@
   몇 개월이냐" 가 보험금을 가른다
 - 등록된 모델이 없어 `State` / `Transition` / `StateModel` 로 **상태 모델을
   직접 조립** — 쿡북에서 처음
-- `State.duration_max` (코호트 추적) 와 `Transition.duration_dependent`
+- `State.sojourn_tracking_months` (코호트 추적) 와 `Transition.sojourn_dependent`
   (경과 의존 전이) 의 연결
 - **재진단 면책기간** 을 `ci_reincidence_annual` 의 네 번째 인자 (state
   duration) 로 표현하는 자리
-- 1차 / 2차 진단금이 `lump_sum` 전이로 들어가는 자리와, `disability_benefit`
+- 1차 / 2차 진단금이 `pays_lump_sum` 전이로 들어가는 자리와, `disability_benefit`
   한 금액을 공유하는 제약
 ```
 
@@ -45,7 +45,7 @@
 
 같은 시점에 같은 상태로 들어온 무리를 하나의 **코호트** 로 봅니다. post_first
 (1차 진단 후) 상태를 "들어온 지 0개월 / 1개월 / 2개월 ..." 코호트로 쪼개
-추적하면, 각 코호트가 면책기간을 넘겼는지 따로 알 수 있습니다. `duration_max`
+추적하면, 각 코호트가 면책기간을 넘겼는지 따로 알 수 있습니다. `sojourn_tracking_months`
 가 추적할 코호트 수 (개월) 입니다.
 ```
 
@@ -62,13 +62,13 @@
   - 무엇
 * - `State("healthy", premium=True, ...)`
   - 정상 (1차 진단 전). 보험료 납입, 사망 / 1차 진단 / 해지에 노출
-* - `State("post_first", duration_max=12, ...)`
-  - 1차 진단 후. `duration_max > 0` 이 **코호트 추적을 켠다** (Semi-Markov)
+* - `State("post_first", sojourn_tracking_months=12, ...)`
+  - 1차 진단 후. `sojourn_tracking_months > 0` 이 **코호트 추적을 켠다** (Semi-Markov)
 * - `State("post_second", ...)`
   - 2차 진단 후. 추가 추적 없이 사망까지
-* - `Transition("ci_incidence", to="post_first", lump_sum=True)`
+* - `Transition("ci_incidence", to="post_first", pays_lump_sum=True)`
   - 1차 진단 — healthy → post_first, 진단금 지급
-* - `Transition("ci_reincidence", to="post_second", lump_sum=True, duration_dependent=True)`
+* - `Transition("ci_reincidence", to="post_second", pays_lump_sum=True, sojourn_dependent=True)`
   - 2차 진단 — post_first → post_second, **경과 의존** (면책기간이 여기)
 * - `Basis.ci_incidence_annual`
   - 1차 진단율. 시그니처 `(sex, issue_age, duration)` — 기존 rate 와 동일
@@ -76,7 +76,7 @@
   - 2차 진단율. 시그니처 `(sex, issue_age, duration, state_duration)` — **네
     번째 인자 `state_duration`** 가 post_first 진입 후 경과개월
 * - `ModelPoints.disability_benefit`
-  - `lump_sum` 전이가 지급하는 금액. **모든 lump_sum 전이가 공유** (아래 함정)
+  - `pays_lump_sum` 전이가 지급하는 금액. **모든 pays_lump_sum 전이가 공유** (아래 함정)
 ```
 
 세 상태와 전이를 그림으로:
@@ -136,13 +136,13 @@ reincid_fn   = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
 model = StateModel(states=(
     State("healthy", premium=True, transitions=(
         Transition("mortality"),                                       # in-force 감쇠
-        Transition("ci_incidence", to="post_first", lump_sum=True),    # 1차 진단금
+        Transition("ci_incidence", to="post_first", pays_lump_sum=True),    # 1차 진단금
         Transition("lapse"),
     )),
-    State("post_first", duration_max=12, transitions=(                 # 경과 추적 (코호트)
+    State("post_first", sojourn_tracking_months=12, transitions=(                 # 경과 추적 (코호트)
         Transition("mortality"),
         Transition("ci_reincidence", to="post_second",
-                   lump_sum=True, duration_dependent=True),  # 2차 진단금 (면책 의존)
+                   pays_lump_sum=True, sojourn_dependent=True),  # 2차 진단금 (면책 의존)
     )),
     State("post_second", transitions=(
         Transition("mortality"),
@@ -291,7 +291,7 @@ print("재발배수 sd6/24/48/72:", [float(np.select([np.array([x]) < 12, np.arr
 재진단까지 생존자가 줄어 재진단금 부채 감소) 이자, 진단 후 월정액 같은 다른
 보장을 평가하는 사망률 가정입니다 (암을 死因으로 하는 **암사망 보험금** 과도
 별개). 진단 상태 (`post_first` / `post_second`) 가 **자기 사망률** 을 갖게 하려면
-`State.mortality_rate` 로 다른 이름을 라우팅하고, `Basis.state_mortality_annual`
+`State.mortality_rate_name` 로 다른 이름을 라우팅하고, `Basis.state_mortality_annual`
 에 그 함수를 줍니다 — in-force 가 진단 후 더 빨리 소멸합니다:
 
 ```python
@@ -302,11 +302,11 @@ pm_lapse   = 0.05
 pm_model = StateModel(states=(
     State("healthy", premium=True, transitions=(
         Transition("mortality"), Transition("lapse"),
-        Transition("ci_incidence", to="post_first", lump_sum=True))),
-    State("post_first", duration_max=120, mortality_rate="dth_aft_can", transitions=(
+        Transition("ci_incidence", to="post_first", pays_lump_sum=True))),
+    State("post_first", sojourn_tracking_months=120, mortality_rate_name="dth_aft_can", transitions=(
         Transition("mortality"), Transition("lapse"),
-        Transition("ci_reincidence", to="post_second", lump_sum=True, duration_dependent=True))),
-    State("post_second", mortality_rate="dth_aft_can", transitions=(
+        Transition("ci_reincidence", to="post_second", pays_lump_sum=True, sojourn_dependent=True))),
+    State("post_second", mortality_rate_name="dth_aft_can", transitions=(
         Transition("mortality"), Transition("lapse"))),
 ), seating=(0, 1, 2))
 pm_basis = fcf.Basis(
@@ -334,29 +334,29 @@ print("건강 / 진단후 월사망률   :", round(1 - (1 - 0.005) ** (1 / 12), 
 ```
 
 `post_first` 에 자리 지정한 계약의 사망건수 (`deaths[0]`) 가 **암진단 후 사망률
-0.00168** 을 따릅니다 (건강 0.00042 가 아니라). `mortality_rate` 를 안 주면
+0.00168** 을 따릅니다 (건강 0.00042 가 아니라). `mortality_rate_name` 를 안 주면
 전역 `mortality_annual` 로 fallback 하므로, 암진단 후 상승 사망을 의도했다면
 `state_mortality_annual` 에 그 함수를 반드시 넣습니다.
 
-### 추적기간 `duration_max`
+### 추적기간 `sojourn_tracking_months`
 
-`duration_max` 는 post_first 의 경과를 몇 개월까지 코호트로 추적할지입니다.
-한국 재진단암은 보통 1차 진단 후 5년 (60개월) 을 추적하므로 `duration_max=60`
+`sojourn_tracking_months` 는 post_first 의 경과를 몇 개월까지 코호트로 추적할지입니다.
+한국 재진단암은 보통 1차 진단 후 5년 (60개월) 을 추적하므로 `sojourn_tracking_months=60`
 이 무난합니다. 마지막 코호트는 그 이상의 경과를 모두 흡수합니다 (long-tail).
-`duration_max` 가 크면 코호트 수만큼 계산이 늘지만 시간에 선형으로 증가합니다.
+`sojourn_tracking_months` 가 크면 코호트 수만큼 계산이 늘지만 시간에 선형으로 증가합니다.
 
-```{admonition} duration_max = 0 이면 Markov 로 돌아간다
+```{admonition} sojourn_tracking_months = 0 이면 Markov 로 돌아간다
 :class: warning
 
-`post_first` 의 `duration_max` 를 0 으로 두면 코호트 추적이 꺼져 경과를 알 수
-없습니다. 그러면 `duration_dependent=True` 전이의 면책기간을 표현할 수 없습니다 —
-재진단 보장의 핵심이 사라집니다. Semi-Markov 의 본질이 이 `duration_max > 0`
+`post_first` 의 `sojourn_tracking_months` 를 0 으로 두면 코호트 추적이 꺼져 경과를 알 수
+없습니다. 그러면 `sojourn_dependent=True` 전이의 면책기간을 표현할 수 없습니다 —
+재진단 보장의 핵심이 사라집니다. Semi-Markov 의 본질이 이 `sojourn_tracking_months > 0`
 입니다.
 ```
 
 ### 1차 ≠ 2차 진단금 — DIAGNOSIS 담보로 분리
 
-본문 예제는 1차 / 2차 진단금이 **같은 금액** 입니다 — 모든 `lump_sum` 전이가
+본문 예제는 1차 / 2차 진단금이 **같은 금액** 입니다 — 모든 `pays_lump_sum` 전이가
 `disability_benefit` 한 값을 공유하기 때문입니다 (아래 함정). 1차를 다른
 금액으로 주려면, 1차 진단금을 **DIAGNOSIS 담보** 로 분리하고 (고유 금액),
 2차만 transition lump 로 남깁니다:
@@ -366,7 +366,7 @@ coverages = (
     fcf.CoverageRate("DEATH",   death_rate),      # 사망
     fcf.CoverageRate("CANCER1", incidence_rate),  # 1차 진단금 (DIAGNOSIS, 고유 금액)
 )
-# ci_incidence 전이에서는 lump_sum 을 빼고 (Transition("ci_incidence", to="post_first")),
+# ci_incidence 전이에서는 pays_lump_sum 을 빼고 (Transition("ci_incidence", to="post_first")),
 # benefits 에 CANCER1 의 진단금을, calculation_methods 에 DIAGNOSIS 를 등록
 ```
 
@@ -416,15 +416,15 @@ print(f"seated BEL = {fcf.gmm.measure(mp_seat, asmp_no_excl, full=False).bel[0]:
 
 ### 함정 1 — `disability_benefit` 한 금액을 모든 lump 이 공유
 
-`lump_sum=True` 전이는 전부 `ModelPoints.disability_benefit` 한 값을 지급합니다.
+`pays_lump_sum=True` 전이는 전부 `ModelPoints.disability_benefit` 한 값을 지급합니다.
 1차 / 2차 진단금을 다르게 주려면 위 **변형** 처럼 1차를 DIAGNOSIS 담보로
 분리해야 합니다. 같은 금액이면 본문 예제처럼 둘 다 transition lump 로 두는
 것이 가장 단순합니다.
 
-### 함정 2 — `duration_dependent` 인데 rate 가 3-인자
+### 함정 2 — `sojourn_dependent` 인데 rate 가 3-인자
 
 `ci_reincidence_annual` 은 네 번째 인자 `state_duration` 을 받아야 합니다.
-`(s, a, d)` 3-인자로 쓰면 `duration_dependent=True` 전이가 경과를 넘겨줄 자리가
+`(s, a, d)` 3-인자로 쓰면 `sojourn_dependent=True` 전이가 경과를 넘겨줄 자리가
 없습니다. 면책 / 경과 의존을 쓰려면 `(s, a, d, sd)` 4-인자로 정의하세요.
 
 ### 함정 3 — 진단을 in-force 감쇠로 착각

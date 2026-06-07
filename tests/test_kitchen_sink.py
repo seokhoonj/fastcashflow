@@ -51,29 +51,29 @@ _M_DI = StateModel(states=(
         Transition("mortality"),
         Transition("waiver_incidence", to="disabled"),
         Transition("lapse"))),
-    State("disabled", benefit=True, duration_max=24, transitions=(
+    State("disabled", benefit=True, sojourn_tracking_months=24, transitions=(
         Transition("mortality"),
-        Transition("disability_recovery", to="active", duration_dependent=True))),
+        Transition("disability_recovery", to="active", sojourn_dependent=True))),
 ), seating=(0, 1))
 
 _M_LTC = StateModel(states=(
     State("active", premium=True, transitions=(
         Transition("mortality"), Transition("lapse"),
-        Transition("waiver_incidence", to="care", lump_sum=True))),
-    State("care", benefit=True, duration_max=60, benefit_max_months=36,
-          mortality_rate="dth_care", transitions=(
+        Transition("waiver_incidence", to="care", pays_lump_sum=True))),
+    State("care", benefit=True, sojourn_tracking_months=60, periodic_benefit_term_months=36,
+          mortality_rate_name="dth_care", transitions=(
           Transition("mortality"),)),
 ), seating=(0, 1))
 
 _M_REINCID = StateModel(states=(
     State("healthy", premium=True, transitions=(
         Transition("mortality"),
-        Transition("ci_incidence", to="post_first", lump_sum=True),
+        Transition("ci_incidence", to="post_first", pays_lump_sum=True),
         Transition("lapse"))),
-    State("post_first", duration_max=12, transitions=(
+    State("post_first", sojourn_tracking_months=12, transitions=(
         Transition("mortality"),
         Transition("ci_reincidence", to="post_second",
-                   lump_sum=True, duration_dependent=True))),
+                   pays_lump_sum=True, sojourn_dependent=True))),
     State("post_second", transitions=(Transition("mortality"),)),
 ), seating=(0, 1, 2))
 

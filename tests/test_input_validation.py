@@ -740,8 +740,8 @@ def test_mixed_term_months_tail_padded_consistently():
 
 def test_statemodel_rejects_negative_duration_max():
     from fastcashflow import State
-    with pytest.raises(ValueError, match="duration_max must be non-negative"):
-        State(name="active", duration_max=-1)
+    with pytest.raises(ValueError, match="sojourn_tracking_months must be non-negative"):
+        State(name="active", sojourn_tracking_months=-1)
 
 
 def test_statemodel_rejects_empty_states():
@@ -768,7 +768,7 @@ def test_statemodel_rejects_transition_to_unknown_state():
 def test_statemodel_rejects_lump_sum_without_destination():
     from fastcashflow import State, StateModel, Transition
     s = State(name="active", transitions=(
-        Transition(rate="mortality", to=None, lump_sum=True),
+        Transition(rate="mortality", to=None, pays_lump_sum=True),
     ))
     with pytest.raises(ValueError, match="lump-sum transition with no destination"):
         StateModel(states=(s,))
