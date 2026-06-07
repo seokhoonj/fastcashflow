@@ -21,7 +21,7 @@ _ZERO = _FLAT(0.0)
 def _two_state(factor):
     """healthy(0) + post(1); the post state pays ``factor`` x the death benefit."""
     return StateModel(states=(
-        State("healthy", premium=True, transitions=(
+        State("healthy", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("post", transitions=(Transition("mortality"),),
               death_benefit_factor=factor),
@@ -84,7 +84,7 @@ def test_default_factor_is_bit_identical():
     claim element-for-element (==, not approx)."""
     mp = _seated_mp(1)
     plain = StateModel(states=(
-        State("healthy", premium=True, transitions=(
+        State("healthy", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("post", transitions=(Transition("mortality"),)),   # no factor
     ), seating=(0, 1))

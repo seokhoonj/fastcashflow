@@ -32,12 +32,12 @@ def _disability_model(*, pays_lump_sum=True) -> StateModel:
     an optional lump sum on the inception transition."""
     return StateModel(
         states=(
-            State("active", premium=True, transitions=(
+            State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
                 Transition("waiver_incidence", to="disabled", pays_lump_sum=pays_lump_sum),
                 Transition("lapse"),
             )),
-            State("disabled", benefit=True, transitions=(
+            State("disabled", pays_periodic_benefit=True, transitions=(
                 Transition("mortality"),
             )),
         ),
@@ -87,7 +87,7 @@ def test_lump_sum_on_exit_transition_rejected():
     """A lump sum must attach to a transition with a destination."""
     with pytest.raises(ValueError, match="lump-sum"):
         StateModel(states=(
-            State("active", premium=True, transitions=(
+            State("active", pays_premium=True, transitions=(
                 Transition("mortality", pays_lump_sum=True),    # to=None -- an exit
             )),
         ))

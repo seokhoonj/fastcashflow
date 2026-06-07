@@ -20,7 +20,7 @@ _ZERO = _FLAT(0.0)
 def _two_state(post_rate_name):
     """healthy(0) + post(1); post routes its mortality to ``post_rate_name``."""
     return StateModel(states=(
-        State("healthy", premium=True, transitions=(
+        State("healthy", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("post", transitions=(Transition("mortality"),),
               mortality_rate_name=post_rate_name),
@@ -120,9 +120,9 @@ def test_deaths_reporter_is_state_aware():
 def test_state_mortality_and_benefit_cap_compose():
     # disabled state: elevated mortality 0.20 AND a 3-month benefit cap.
     model = StateModel(states=(
-        State("active", premium=True, transitions=(
+        State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
-        State("disabled", benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,
+        State("disabled", pays_periodic_benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,
               mortality_rate_name="dth_dis", transitions=(Transition("mortality"),)),
     ), seating=(0, 1))
     basis = Basis(

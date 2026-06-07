@@ -20,9 +20,9 @@ def _model(exit_after_months, cap=0, sojourn_tracking_months=8):
     """active + disabled (benefit) with a sojourn exit; no decrements, so a
     life seated in ``disabled`` stays until the exit boundary."""
     return StateModel(states=(
-        State("active", premium=True, transitions=(
+        State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
-        State("disabled", benefit=True, sojourn_tracking_months=sojourn_tracking_months,
+        State("disabled", pays_periodic_benefit=True, sojourn_tracking_months=sojourn_tracking_months,
               periodic_benefit_term_months=cap, exit_after_months=exit_after_months,
               transitions=(Transition("mortality"),)),
     ), seating=(0, 1))
@@ -106,7 +106,7 @@ def test_exit_after_tightest_valid_drops():
 # ---------------------------------------------------------------------------
 def test_exit_after_below_cap_rejected():
     with pytest.raises(ValueError, match="must be >= periodic_benefit_term_months"):
-        State("x", benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=4,
+        State("x", pays_periodic_benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=4,
               exit_after_months=3)
 
 
@@ -127,7 +127,7 @@ def test_exit_after_rejected_on_markov_compile():
     # would otherwise force sojourn_tracking_months); use a duration-free sibling to keep
     # the model Markov so compile_state_model is the path taken.
     model = StateModel(states=(
-        State("a", premium=True, transitions=(Transition("mortality"),)),
+        State("a", pays_premium=True, transitions=(Transition("mortality"),)),
     ), seating=(0,))
     # forge a state with exit_after_months but sojourn_tracking_months 0 by bypassing validation
     object.__setattr__(model.states[0], "exit_after_months", 3)

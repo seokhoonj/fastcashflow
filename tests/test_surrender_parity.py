@@ -216,7 +216,7 @@ def test_paidup_surrender_uses_lapse_paidup_not_global_lapse():
     the global lapse_annual to the total in-force -- a 10x overstatement here."""
     zero = lambda s, a, d: np.full(np.shape(a), 0.0)
     paidup = StateModel(states=(
-        State("paidup", premium=False, transitions=(
+        State("paidup", pays_premium=False, transitions=(
             Transition("mortality"), Transition("lapse_paidup"))),
     ), seating=(0,))
     n, V = 12, 1000.0

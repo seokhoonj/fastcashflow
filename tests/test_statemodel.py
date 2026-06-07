@@ -89,7 +89,7 @@ def test_unknown_destination_state_rejected():
     """A decrement to a state that does not exist is rejected at build time."""
     with pytest.raises(ValueError, match="unknown state"):
         StateModel(states=(
-            State("active", premium=True,
+            State("active", pays_premium=True,
                   transitions=(Transition("waiver_incidence", to="ghost"),)),
         ))
 
@@ -122,12 +122,12 @@ def test_markov_can_reference_ci_incidence_annual():
     from the semi-Markov branch."""
     healthy_to_diag = StateModel(
         states=(
-            State("healthy", premium=True, transitions=(
+            State("healthy", pays_premium=True, transitions=(
                 Transition("mortality"),
                 Transition("ci_incidence", to="diagnosed", pays_lump_sum=True),
                 Transition("lapse"),
             )),
-            State("diagnosed", premium=False, transitions=(
+            State("diagnosed", pays_premium=False, transitions=(
                 Transition("mortality"),
             )),
         ),
@@ -160,7 +160,7 @@ def test_explicit_waiver_model_matches_default():
     reproduces it exactly -- the default path is just one StateModel."""
     rebuilt = StateModel(
         states=(
-            State("active", premium=True, transitions=(
+            State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
                 Transition("waiver_incidence", to="waiver"),
                 Transition("lapse"),
@@ -182,7 +182,7 @@ def test_single_state_no_lapse_hand_calculation():
     """A one-state model -- mortality only, no lapse, no waiver. With a flat
     1% mortality the in-force is [1, 0.99, 0.99^2]; every figure by hand."""
     no_lapse = StateModel(states=(
-        State("active", premium=True, transitions=(Transition("mortality"),)),
+        State("active", pays_premium=True, transitions=(Transition("mortality"),)),
     ))
     death_benefit = 1_000_000.0
     premium = 12_000.0
@@ -207,7 +207,7 @@ def test_decrement_order_matters():
     waiver-before-lapse order, a different BEL -- derived by hand."""
     lapse_first = StateModel(
         states=(
-            State("active", premium=True, transitions=(
+            State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
                 Transition("lapse"),
                 Transition("waiver_incidence", to="waiver"),
@@ -246,7 +246,7 @@ def test_three_state_model_runs():
     values a paid-up contract exactly as the two-state default does."""
     three = StateModel(
         states=(
-            State("active", premium=True, transitions=(
+            State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
                 Transition("waiver_incidence", to="waiver"),
                 Transition("lapse"),
@@ -318,7 +318,7 @@ def test_measure_and_value_agree_under_custom_model():
     valued on a custom three-state model."""
     three = StateModel(
         states=(
-            State("active", premium=True, transitions=(
+            State("active", pays_premium=True, transitions=(
                 Transition("mortality"),
                 Transition("waiver_incidence", to="waiver"),
                 Transition("lapse"),
@@ -367,10 +367,10 @@ def test_deaths_respect_within_month_competing_risk_order():
 
     mq, lq = annual_to_monthly(0.01), annual_to_monthly(0.05)
     # mortality first (every bundled model) -> occ x raw rate
-    first = StateModel(states=(State("active", premium=True, transitions=(
+    first = StateModel(states=(State("active", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"))),), seating=(0,))
     # mortality after lapse -> occ x (1 - lapse) x rate (fires on lapse survivors)
-    second = StateModel(states=(State("active", premium=True, transitions=(
+    second = StateModel(states=(State("active", pays_premium=True, transitions=(
         Transition("lapse"), Transition("mortality"))),), seating=(0,))
 
     assert np.isclose(_project(first).deaths[0, 0], mq)                  # unchanged

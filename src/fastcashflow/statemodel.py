@@ -130,8 +130,8 @@ class Transition:
 class State:
     """One transient state of the in-force model.
 
-    ``premium`` flags a premium-paying state -- the level and single premium
-    accrue on the occupancy of the states so flagged. ``benefit`` flags a
+    ``pays_premium`` flags a premium-paying state -- the level and single premium
+    accrue on the occupancy of the states so flagged. ``pays_periodic_benefit`` flags a
     benefit-paying state -- the ``ModelPoints.disability_income`` amount is
     paid each month its occupancy is held (disability income on a disabled
     state). ``transitions`` are the transitions out of the state, held in
@@ -175,8 +175,8 @@ class State:
     """
 
     name: str
-    premium: bool = False
-    benefit: bool = False
+    pays_premium: bool = False
+    pays_periodic_benefit: bool = False
     transitions: tuple[Transition, ...] = ()
     sojourn_tracking_months: int = 0
     periodic_benefit_term_months: int = 0
@@ -205,10 +205,10 @@ class State:
                 f"non-negative, got {cap}"
             )
         if cap > 0:
-            if not self.benefit:
+            if not self.pays_periodic_benefit:
                 raise ValueError(
                     f"state {self.name!r}: periodic_benefit_term_months > 0 requires "
-                    f"benefit=True (a cap on a non-paying state has no effect)"
+                    f"pays_periodic_benefit=True (a cap on a non-paying state has no effect)"
                 )
             # Strict ``sojourn_tracking_months > cap``: the absorbing cohort (D-1) holds
             # everyone with sojourn >= D-1, so if ``cap == sojourn_tracking_months`` the
@@ -328,12 +328,12 @@ class StateModel:
 # ceased.
 WAIVER_MODEL = StateModel(
     states=(
-        State("active", premium=True, transitions=(
+        State("active", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("waiver_incidence", to="waiver"),
             Transition("lapse"),
         )),
-        State("waiver", premium=False, transitions=(
+        State("waiver", pays_premium=False, transitions=(
             Transition("mortality"),
         )),
     ),
@@ -358,15 +358,15 @@ WAIVER_MODEL = StateModel(
 # not a modelled transition.
 WAIVER_PAIDUP_MODEL = StateModel(
     states=(
-        State("active", premium=True, transitions=(
+        State("active", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("waiver_incidence", to="waiver"),
             Transition("lapse"),
         )),
-        State("waiver", premium=False, transitions=(
+        State("waiver", pays_premium=False, transitions=(
             Transition("mortality"),
         )),
-        State("paidup", premium=False, transitions=(
+        State("paidup", pays_premium=False, transitions=(
             Transition("mortality"),
             Transition("lapse_paidup"),
         )),
@@ -515,8 +515,8 @@ def compile_state_model(
         edge_prob=np.ascontiguousarray(np.stack(edge_prob)),
         edge_lump_sum=np.array(edge_lump_sum, dtype=np.bool_),
         n_states=len(model.states),
-        premium_state=np.array([s.premium for s in model.states], dtype=np.bool_),
-        benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),
+        premium_state=np.array([s.pays_premium for s in model.states], dtype=np.bool_),
+        benefit_state=np.array([s.pays_periodic_benefit for s in model.states], dtype=np.bool_),
         state_duration_max=None,
         state_death_exit=np.ascontiguousarray(np.stack(death_exit_rows)),
         state_death_benefit_factor=np.array(
@@ -730,8 +730,8 @@ def compile_state_model_with_duration(
         edge_prob=edge_prob,
         edge_lump_sum=np.array(edge_lump_sum, dtype=np.bool_),
         n_states=len(model.states),
-        premium_state=np.array([s.premium for s in model.states], dtype=np.bool_),
-        benefit_state=np.array([s.benefit for s in model.states], dtype=np.bool_),
+        premium_state=np.array([s.pays_premium for s in model.states], dtype=np.bool_),
+        benefit_state=np.array([s.pays_periodic_benefit for s in model.states], dtype=np.bool_),
         state_duration_max=state_duration_max,
         periodic_benefit_term_months=np.array(
             [s.periodic_benefit_term_months for s in model.states], dtype=np.int64),

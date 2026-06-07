@@ -80,12 +80,12 @@ def test_premium_factor_full_matches_fast_markov():
 # ---------------------------------------------------------------------------
 def _reincidence_model(sojourn_tracking_months=12):
     return StateModel(states=(
-        State("active", premium=True, transitions=(
+        State("active", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("ci_incidence", to="post_first"),
             Transition("lapse"),
         )),
-        State("post_first", sojourn_tracking_months=sojourn_tracking_months, premium=True, transitions=(
+        State("post_first", sojourn_tracking_months=sojourn_tracking_months, pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("ci_reincidence", to="post_second",
                        sojourn_dependent=True, pays_lump_sum=True),

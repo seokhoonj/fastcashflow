@@ -42,31 +42,31 @@ _di_rec    = lambda s, a, d, sd: np.where(sd < 12, 0.45, 0.10)  # recovery, sojo
 
 # --- one state model per mechanic --------------------------------------------
 _M_DEATH = StateModel(states=(
-    State("active", premium=True, transitions=(
+    State("active", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"))),
 ), seating=(0,))
 
 _M_DI = StateModel(states=(
-    State("active", premium=True, transitions=(
+    State("active", pays_premium=True, transitions=(
         Transition("mortality"),
         Transition("waiver_incidence", to="disabled"),
         Transition("lapse"))),
-    State("disabled", benefit=True, sojourn_tracking_months=24, transitions=(
+    State("disabled", pays_periodic_benefit=True, sojourn_tracking_months=24, transitions=(
         Transition("mortality"),
         Transition("disability_recovery", to="active", sojourn_dependent=True))),
 ), seating=(0, 1))
 
 _M_LTC = StateModel(states=(
-    State("active", premium=True, transitions=(
+    State("active", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"),
         Transition("waiver_incidence", to="care", pays_lump_sum=True))),
-    State("care", benefit=True, sojourn_tracking_months=60, periodic_benefit_term_months=36,
+    State("care", pays_periodic_benefit=True, sojourn_tracking_months=60, periodic_benefit_term_months=36,
           mortality_rate_name="dth_care", transitions=(
           Transition("mortality"),)),
 ), seating=(0, 1))
 
 _M_REINCID = StateModel(states=(
-    State("healthy", premium=True, transitions=(
+    State("healthy", pays_premium=True, transitions=(
         Transition("mortality"),
         Transition("ci_incidence", to="post_first", pays_lump_sum=True),
         Transition("lapse"))),

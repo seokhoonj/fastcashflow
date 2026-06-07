@@ -40,13 +40,13 @@
 
 * - 선언
   - 역할
-* - `State("active", premium=True, ...)`
+* - `State("active", pays_premium=True, ...)`
   - 건강 상태. 보험료 납입. 간병 발생 시 care 로.
 * - `Transition("waiver_incidence", to="care", pays_lump_sum=True)`
   - 간병 발생 — active -> care. `pays_lump_sum=True` 가 진입 시
     `disability_benefit` (진단금) 를 한 번 지급.
-* - `State("care", benefit=True, periodic_benefit_term_months=36, mortality_rate_name="dth_care", sojourn_tracking_months=60)`
-  - 간병 상태. `benefit=True` 가 매월 `disability_income` 지급,
+* - `State("care", pays_periodic_benefit=True, periodic_benefit_term_months=36, mortality_rate_name="dth_care", sojourn_tracking_months=60)`
+  - 간병 상태. `pays_periodic_benefit=True` 가 매월 `disability_income` 지급,
     `periodic_benefit_term_months=36` 이 **36 회까지만** 지급. `mortality_rate_name="dth_care"`
     가 이 상태의 **상승 사망률** 을 라우팅. `sojourn_tracking_months` 가 sojourn 코호트 추적.
 * - `Basis.state_mortality_annual={"dth_care": fn}`
@@ -118,11 +118,11 @@ lapse_rate    = 0.03  # 해지 연 3%
 
 # 상태 모델 -- active -> care; care 는 진단금(lump) + 월정액(36 회) + 상승 사망률
 model = StateModel(states=(
-    State("active", premium=True, transitions=(
+    State("active", pays_premium=True, transitions=(
         Transition("mortality"),
         Transition("lapse"),
         Transition("waiver_incidence", to="care", pays_lump_sum=True))),  # 진단금 lump
-    State("care", benefit=True, sojourn_tracking_months=60, periodic_benefit_term_months=36,
+    State("care", pays_periodic_benefit=True, sojourn_tracking_months=60, periodic_benefit_term_months=36,
           mortality_rate_name="dth_care", transitions=(
           Transition("mortality"),)),                                 # 상승 사망률
 ), seating=(0, 1))
@@ -178,9 +178,9 @@ Loss :              0
 zero = 0.0
 
 toy_model = StateModel(states=(
-    State("active", premium=True, transitions=(
+    State("active", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"))),
-    State("care", benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,   # 3 회 보증
+    State("care", pays_periodic_benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,   # 3 회 보증
           transitions=(Transition("mortality"),)),
 ), seating=(0, 1))
 toy_basis = fcf.Basis(
@@ -258,7 +258,7 @@ BEL       : 3,000,000   (= 3 x 1,000,000, 할인 0)
 - [4.1 재진단암 보험](reincidence) — 같은 일시금 (`disability_benefit`,
   `pays_lump_sum`) 메커닉. 본 챕터의 진단금이 같은 자리.
 - [4.2 장해소득보상 (DI)](disability-income) — 같은 월정액
-  (`disability_income`, `benefit=True`) 메커닉. 본 챕터는 거기에 **보증한도** 와
+  (`disability_income`, `pays_periodic_benefit=True`) 메커닉. 본 챕터는 거기에 **보증한도** 와
   **상태 사망률** 을 더한 것.
 - [검증 패턴](../workflow/validation) — `gmm.trace` 로 상태별 · 코호트별 계산을
   풀어 보기.

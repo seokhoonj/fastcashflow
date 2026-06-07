@@ -20,9 +20,9 @@ def _capped_model(cap):
     """active + disabled (benefit) with a sojourn cap; no decrements, so a
     life seated in ``disabled`` stays there and only the cap stops payment."""
     return StateModel(states=(
-        State("active", premium=True, transitions=(
+        State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
-        State("disabled", benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=cap,
+        State("disabled", pays_periodic_benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=cap,
               transitions=(Transition("mortality"),)),
     ), seating=(0, 1))
 
@@ -90,15 +90,15 @@ def test_benefit_cap_bel_monotone_in_cap():
 # B3 -- validation
 # ---------------------------------------------------------------------------
 def test_cap_requires_benefit_state():
-    with pytest.raises(ValueError, match="requires benefit=True"):
-        State("x", benefit=False, sojourn_tracking_months=5, periodic_benefit_term_months=2)
+    with pytest.raises(ValueError, match="requires pays_periodic_benefit=True"):
+        State("x", pays_periodic_benefit=False, sojourn_tracking_months=5, periodic_benefit_term_months=2)
 
 
 def test_cap_must_be_below_duration_max():
     with pytest.raises(ValueError, match="must exceed periodic_benefit_term_months"):
-        State("x", benefit=True, sojourn_tracking_months=3, periodic_benefit_term_months=3)
+        State("x", pays_periodic_benefit=True, sojourn_tracking_months=3, periodic_benefit_term_months=3)
 
 
 def test_cap_non_negative():
     with pytest.raises(ValueError, match="non-negative"):
-        State("x", benefit=True, sojourn_tracking_months=5, periodic_benefit_term_months=-1)
+        State("x", pays_periodic_benefit=True, sojourn_tracking_months=5, periodic_benefit_term_months=-1)

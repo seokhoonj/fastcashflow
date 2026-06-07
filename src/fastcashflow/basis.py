@@ -1022,8 +1022,8 @@ def _describe_basis_lines(
                 extras.append(f"exit_after_months={st.exit_after_months}")
             extra_str = (", " + ", ".join(extras)) if extras else ""
             state_items.append((
-                f"State({st.name!r}, premium={st.premium}, "
-                f"benefit={st.benefit}, sojourn_tracking_months={st.sojourn_tracking_months}{extra_str})",
+                f"State({st.name!r}, pays_premium={st.pays_premium}, "
+                f"pays_periodic_benefit={st.pays_periodic_benefit}, sojourn_tracking_months={st.sojourn_tracking_months}{extra_str})",
                 trs,
             ))
         sm_body = [(f"states : tuple  (len={len(sm.states)})", state_items)]

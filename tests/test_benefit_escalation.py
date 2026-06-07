@@ -161,7 +161,7 @@ def test_semi_markov_escalation_only_coverage_is_not_dropped():
     from fastcashflow import State, Transition, StateModel
     _Z = lambda s, a, d: np.full(np.shape(a), 0.0)
     sm = StateModel(states=(
-        State("active", premium=True, transitions=(
+        State("active", pays_premium=True, transitions=(
             Transition("mortality"), Transition("lapse"))),
         State("disabled", sojourn_tracking_months=12, transitions=(Transition("mortality"),)),
     ), seating=(0, 1))

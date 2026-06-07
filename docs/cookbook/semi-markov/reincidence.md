@@ -60,7 +60,7 @@
 
 * - 자리
   - 무엇
-* - `State("healthy", premium=True, ...)`
+* - `State("healthy", pays_premium=True, ...)`
   - 정상 (1차 진단 전). 보험료 납입, 사망 / 1차 진단 / 해지에 노출
 * - `State("post_first", sojourn_tracking_months=12, ...)`
   - 1차 진단 후. `sojourn_tracking_months > 0` 이 **코호트 추적을 켠다** (Semi-Markov)
@@ -134,7 +134,7 @@ reincid_fn   = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
 
 # 상태 모델 -- healthy → post_first → post_second (직접 조립)
 model = StateModel(states=(
-    State("healthy", premium=True, transitions=(
+    State("healthy", pays_premium=True, transitions=(
         Transition("mortality"),                                       # in-force 감쇠
         Transition("ci_incidence", to="post_first", pays_lump_sum=True),    # 1차 진단금
         Transition("lapse"),
@@ -300,7 +300,7 @@ pm_post    = 0.02  # 암진단 후 연 2% (건강의 4배)
 pm_lapse   = 0.05
 
 pm_model = StateModel(states=(
-    State("healthy", premium=True, transitions=(
+    State("healthy", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"),
         Transition("ci_incidence", to="post_first", pays_lump_sum=True))),
     State("post_first", sojourn_tracking_months=120, mortality_rate_name="dth_aft_can", transitions=(

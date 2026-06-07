@@ -15,7 +15,7 @@ from conftest import PATTERNS, annual_from_monthly as _annual
 
 def _cancer_reincidence_model(sojourn_tracking_months: int) -> StateModel:
     return StateModel(states=(
-        State("healthy", premium=True, transitions=(
+        State("healthy", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("ci_incidence", to="post_first"),
             Transition("lapse"),
@@ -418,12 +418,12 @@ def test_semi_markov_with_diagnosis_and_waiting_and_reduction():
 
 def _di_model(sojourn_tracking_months: int) -> StateModel:
     return StateModel(states=(
-        State("active", premium=True, transitions=(
+        State("active", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("waiver_incidence", to="disabled"),
             Transition("lapse"),
         )),
-        State("disabled", benefit=True, sojourn_tracking_months=sojourn_tracking_months,
+        State("disabled", pays_periodic_benefit=True, sojourn_tracking_months=sojourn_tracking_months,
               transitions=(
                   Transition("mortality"),
                   Transition("disability_recovery", to="active",
@@ -461,7 +461,7 @@ def test_di_recovery_hand_calc_one_month_seated_on_disabled():
                               = 1.0 * 1_000_000 * 1 = 1_000_000
 
     BEL = 1_000_000 (only disability income; no premium since seated on
-    disabled which is premium=False, no maturity, no death claim).
+    disabled which is pays_premium=False, no maturity, no death claim).
     """
     basis = fcf.Basis(
         mortality_annual=lambda s, a, d: np.full(d.shape, _annual(0.001)),
