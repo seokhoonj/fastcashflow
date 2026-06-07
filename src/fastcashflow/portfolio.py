@@ -36,6 +36,14 @@ from fastcashflow.modelpoints import ModelPoints
 _SLOT_MEASUREMENT_TYPE = {
     "gmm": GMMMeasurement, "paa": PAAMeasurement, "vfa": VFAMeasurement}
 
+#: The single-Basis specialist + its stitch for the non-GMM models, so a model's
+#: partition that spans several routing segments is measured then scattered into
+#: one native measurement. GMM is not here: it routes through ``fcf.gmm.measure``
+#: (the ``full`` flag, its own segment stitch), not the PAA/VFA scatter.
+_MODEL_EXEC = {
+    "PAA": (measure_paa, _stitch_paa_measurements),
+    "VFA": (measure_vfa, _stitch_vfa_measurements)}
+
 
 def _measurement_rows(measurement) -> int:
     """Row count of a native measurement (GMM / VFA expose ``bel``, PAA ``lrc``)."""
@@ -245,12 +253,36 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     of the result. A non-GMM row is never silently measured as GMM. Per-segment
     VFA return scenarios (the guarantee time value) are a future extension --
     the mixed path measures the VFA intrinsic value (deterministic) only.
+
+    When the router declares a single measurement model the model partition is a
+    no-op, so the whole book routes straight to that model -- no per-row
+    partition factorise, no subset copy. (A router that *declares* PAA / VFA
+    segments but whose rows happen to be all GMM is not this case: it keeps the
+    row partition, which is what makes the unused declared segment harmless.)
     """
     if not isinstance(basis, BasisRouter):
         raise TypeError(
             "fcf.portfolio.measure requires a BasisRouter (a routed, possibly "
             "mixed-model portfolio); for a single Basis use fcf.gmm.measure / "
             "fcf.paa.measure / fcf.vfa.measure")
+    declared = {basis.measurement_model_of(k) for k in basis.segments}
+    if len(declared) == 1:
+        # Single declared model -> every row is that model; skip the partition's
+        # per-row factorise (engine.py:_factorise_segments) and the subset copy
+        # and route the whole book directly. Conservative by design: keyed on the
+        # router's *declarations*, not the rows present, so a multi-model router
+        # whose rows are currently one model still takes the partition path below.
+        (model,) = declared
+        index = np.arange(model_points.n_mp, dtype=np.int64)
+        if model == "GMM":
+            meas = _measure_gmm(model_points, basis, full=full, backend=backend)
+        else:
+            measure_one, stitch = _MODEL_EXEC[model]
+            meas = _measure_model_segmented(
+                model_points, basis, measure_one, stitch)
+        return PortfolioMeasurement(
+            model_points=model_points,
+            **{model.lower(): ModelMeasurement(index=index, measurement=meas)})
     parts = _partition_by_model(model_points, basis)
     covered = sum(part.size for part in parts.values())
     if covered != model_points.n_mp:                  # factorisation must be total
@@ -259,20 +291,15 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     slots = {}
     gmm_idx = parts["GMM"]
     if gmm_idx.size:
-        gmm_meas = _measure_gmm(
+        slots["gmm"] = ModelMeasurement(index=gmm_idx, measurement=_measure_gmm(
             model_points.subset(gmm_idx), _submodel_router(basis, "GMM"),
-            full=full, backend=backend)
-        slots["gmm"] = ModelMeasurement(index=gmm_idx, measurement=gmm_meas)
-    paa_idx = parts["PAA"]
-    if paa_idx.size:
-        paa_meas = _measure_model_segmented(
-            model_points.subset(paa_idx), _submodel_router(basis, "PAA"),
-            measure_paa, _stitch_paa_measurements)
-        slots["paa"] = ModelMeasurement(index=paa_idx, measurement=paa_meas)
-    vfa_idx = parts["VFA"]
-    if vfa_idx.size:
-        vfa_meas = _measure_model_segmented(
-            model_points.subset(vfa_idx), _submodel_router(basis, "VFA"),
-            measure_vfa, _stitch_vfa_measurements)
-        slots["vfa"] = ModelMeasurement(index=vfa_idx, measurement=vfa_meas)
+            full=full, backend=backend))
+    for model in ("PAA", "VFA"):
+        idx = parts[model]
+        if idx.size:
+            measure_one, stitch = _MODEL_EXEC[model]
+            meas = _measure_model_segmented(
+                model_points.subset(idx), _submodel_router(basis, model),
+                measure_one, stitch)
+            slots[model.lower()] = ModelMeasurement(index=idx, measurement=meas)
     return PortfolioMeasurement(model_points=model_points, **slots)

@@ -311,6 +311,74 @@ def test_summary_omits_absent_models():
     assert "paa" not in s and "vfa" not in s
 
 
+# ---------------------------------------------------------------------------
+# Gate A: single declared model short-circuits the partition (structural -- no
+# wall-clock assert; the <5% throughput target is a documented gate, measured in
+# dev/p5b_bottleneck.py, not pinned here where CI noise would flake it).
+# ---------------------------------------------------------------------------
+def _spy_partition(monkeypatch):
+    """Patch _partition_by_model to record calls, delegating to the original."""
+    import fastcashflow.portfolio as P
+    calls = []
+    orig = P._partition_by_model
+    monkeypatch.setattr(
+        P, "_partition_by_model",
+        lambda *a, **k: (calls.append(1), orig(*a, **k))[1])
+    return calls
+
+
+def test_single_model_gmm_router_skips_partition(monkeypatch):
+    calls = _spy_partition(monkeypatch)
+    router = BasisRouter({("A", "GA"): _flat_basis(0.03),
+                          ("B", "GA"): _flat_basis(0.10)})   # both GMM
+    mp = _mp(["A", "B", "A"], ["GA", "GA", "GA"])
+    pm = measure(mp, router)
+    assert calls == []                                       # short-circuited
+    assert pm.gmm.index.tolist() == [0, 1, 2] and pm.paa is None and pm.vfa is None
+    assert np.allclose(pm.gmm.measurement.bel, fcf.gmm.measure(mp, router).bel)
+
+
+def test_single_model_paa_router_skips_partition(monkeypatch):
+    calls = _spy_partition(monkeypatch)
+    router = BasisRouter({("P", "GA"): _flat_basis(), ("Q", "GA"): _flat_basis()},
+                         measurement_models={("P", "GA"): "PAA", ("Q", "GA"): "PAA"})
+    mp = ModelPoints(
+        issue_age=np.full(2, 40), premium=np.full(2, 1200.0),
+        term_months=np.full(2, 60), benefits={0: np.full(2, 1e4)},
+        product=np.array(["P", "Q"]), channel=np.array(["GA", "GA"]))
+    pm = measure(mp, router)
+    assert calls == []
+    assert pm.paa.index.tolist() == [0, 1] and pm.gmm is None
+    assert np.allclose(pm.paa.measurement.lrc_path[0],
+                       measure_paa(mp.subset([0]), _flat_basis()).lrc_path[0])
+
+
+def test_single_model_vfa_router_skips_partition(monkeypatch):
+    calls = _spy_partition(monkeypatch)
+    router = BasisRouter({("V", "GA"): _flat_basis(investment_return=0.05)},
+                         measurement_models={("V", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(2, 40), premium=np.zeros(2), term_months=np.full(2, 60),
+        account_value=np.full(2, 1e6),
+        product=np.array(["V", "V"]), channel=np.array(["GA", "GA"]))
+    pm = measure(mp, router)
+    assert calls == []
+    assert pm.vfa.index.tolist() == [0, 1] and pm.gmm is None
+
+
+def test_multi_declared_but_rows_all_gmm_still_partitions(monkeypatch):
+    """A router that declares a PAA segment the rows never use is NOT a single
+    declared model, so it keeps the row partition -- the unused-segment handling
+    must stay on that path (else a stray declaration would change routing)."""
+    calls = _spy_partition(monkeypatch)
+    router = BasisRouter({("A", "GA"): _flat_basis(), ("Z", "GA"): _flat_basis()},
+                         measurement_models={("Z", "GA"): "PAA"})   # mixed declared
+    mp = _mp(["A", "A"], ["GA", "GA"])                      # rows all GMM, Z unused
+    pm = measure(mp, router)
+    assert calls == [1]                                     # took the partition path
+    assert pm.gmm.index.size == 2 and pm.paa is None
+
+
 def test_portfolio_unused_non_gmm_segment_is_ignored():
     """A PAA segment the model points never use must not block an all-GMM book --
     the orchestrator partitions the rows present, not the router's declarations."""
