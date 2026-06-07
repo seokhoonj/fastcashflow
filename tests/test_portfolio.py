@@ -100,3 +100,14 @@ def test_portfolio_partition_must_be_complete():
     with pytest.raises(ValueError, match="partition covers"):
         PortfolioMeasurement(model_points=mp,
                              gmm=ModelMeasurement(np.array([0, 1]), meas))   # 2 of 3
+
+
+def test_portfolio_rejects_wrong_measurement_type_in_slot():
+    """A slot must hold its own model's native measurement -- a GMMMeasurement in
+    the paa slot defeats the per-model separation invariant."""
+    router = BasisRouter({("A", "GA"): _flat_basis()})
+    mp = _mp(["A", "A"], ["GA", "GA"])
+    gmm_meas = fcf.gmm.measure(mp, router)
+    with pytest.raises(TypeError, match="paa must hold a PAAMeasurement"):
+        PortfolioMeasurement(model_points=mp,
+                             paa=ModelMeasurement(np.arange(2), gmm_meas))

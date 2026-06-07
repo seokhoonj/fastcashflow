@@ -16,19 +16,21 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import numpy as np
 
 from fastcashflow._typing import IntArray
+from fastcashflow._paa import PAAMeasurement
+from fastcashflow._vfa import VFAMeasurement
 from fastcashflow.basis import BasisRouter
-from fastcashflow.engine import _factorise_segments, measure as _measure_gmm
+from fastcashflow.engine import (
+    GMMMeasurement, _factorise_segments, measure as _measure_gmm)
 from fastcashflow.modelpoints import ModelPoints
 
-if TYPE_CHECKING:                       # annotations only -- avoid runtime imports
-    from fastcashflow.engine import GMMMeasurement
-    from fastcashflow._paa import PAAMeasurement
-    from fastcashflow._vfa import VFAMeasurement
+#: The native measurement type each model slot must hold (the per-model
+#: separation invariant: a paa slot can never carry a GMMMeasurement).
+_SLOT_MEASUREMENT_TYPE = {
+    "gmm": GMMMeasurement, "paa": PAAMeasurement, "vfa": VFAMeasurement}
 
 
 def _measurement_rows(measurement) -> int:
@@ -80,6 +82,15 @@ class PortfolioMeasurement:
     vfa: ModelMeasurement | None = None
 
     def __post_init__(self):
+        # Each slot must hold its own model's native measurement -- a paa slot
+        # carrying a GMMMeasurement would defeat the per-model separation.
+        for slot, expected in _SLOT_MEASUREMENT_TYPE.items():
+            mm = getattr(self, slot)
+            if mm is not None and not isinstance(mm.measurement, expected):
+                raise TypeError(
+                    f"PortfolioMeasurement.{slot} must hold a "
+                    f"{expected.__name__}, got "
+                    f"{type(mm.measurement).__name__}")
         present = [mm for mm in (self.gmm, self.paa, self.vfa) if mm is not None]
         n = self.model_points.n_mp
         covered = sum(mm.index.size for mm in present)
