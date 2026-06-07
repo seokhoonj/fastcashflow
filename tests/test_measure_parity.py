@@ -125,12 +125,12 @@ def test_value_and_measure_agree_with_settlement_pattern():
 
 
 # ---------------------------------------------------------------------------
-# 3. measure() rejects non-zero issue_class
+# 3. measure(full=False) auto-routes non-zero issue_class to the full kernel
 # ---------------------------------------------------------------------------
 
-def test_value_rejects_nonzero_issue_class():
-    """measure() would silently look up rates at class 0; raise until per-MP
-    class is supported."""
+def test_value_auto_routes_nonzero_issue_class():
+    """The fast grid is built at class 0, so a non-zero issue_class book is
+    auto-routed to the full kernel (no longer raises) -- byte-identical."""
     mp = ModelPoints(
         issue_age=np.array([40.0]),
         premium=np.array([12_000.0]),
@@ -140,11 +140,10 @@ def test_value_rejects_nonzero_issue_class():
         calculation_methods=PATTERNS,
     )
     basis = make_death_basis(mortality_q=0.005, lapse_q=0.01)
-    with pytest.raises(NotImplementedError, match="issue_class"):
-        measure(mp, basis, full=False)
-    # measure() handles it correctly (existing behaviour).
-    m = measure(mp, basis)
-    assert m.bel.shape[0] == 1
+    fast = measure(mp, basis, full=False)
+    full = measure(mp, basis)
+    assert fast.bel.shape[0] == 1
+    assert np.allclose(fast.bel, full.bel)
 
 
 def test_value_accepts_default_issue_class():

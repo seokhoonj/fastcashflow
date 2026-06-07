@@ -204,3 +204,26 @@ def test_segmented_measure_with_sample_basis():
     expected_fc = measure(mp.subset([1]), basis.resolve(("TERM_LIFE_A", "FC")), full=False)
     assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
     assert np.allclose(val.bel[1], expected_fc.bel[0])
+
+
+def test_segmented_auto_routes_full_only_segment_per_segment():
+    """Mixed book, one full=False call: a plain segment runs the fast path while
+    a segment that trips a full-only feature (issue_class != 0) auto-routes to
+    the full kernel -- each segment matching its standalone measurement. This is
+    'fast by default, full only where needed' at segment granularity (no raise)."""
+    basis = _flat_basis()
+    router = BasisRouter({("PLAIN", "GA"): basis, ("RATED", "GA"): basis})
+    mp = ModelPoints(
+        issue_age=np.array([40, 40]),
+        premium=np.zeros(2),
+        term_months=np.array([60, 60]),
+        issue_class=np.array([0, 1]),         # row 1 trips the full-only path
+        benefits={0: np.array([10_000.0, 10_000.0])},
+        product=np.array(["PLAIN", "RATED"]),
+        channel=np.array(["GA", "GA"]),
+    )
+    val = measure(mp, router, full=False)      # previously raised NotImplementedError
+    plain = measure(mp.subset([0]), basis, full=False)   # genuine fast path
+    rated = measure(mp.subset([1]), basis, full=True)    # the auto-route target
+    assert np.allclose(val.bel[0], plain.bel[0])
+    assert np.allclose(val.bel[1], rated.bel[0])

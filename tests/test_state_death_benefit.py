@@ -110,16 +110,18 @@ def test_deaths_count_unchanged_by_factor():
 
 
 # ---------------------------------------------------------------------------
-# F6.5 -- the fast path rejects a non-default factor (selective)
+# F6.5 -- the fast path auto-routes a non-default factor to the full kernel
 # ---------------------------------------------------------------------------
-def test_fast_path_rejects_factor():
+def test_fast_path_auto_routes_factor():
     mp = _seated_mp(1)
-    with pytest.raises(NotImplementedError, match="death_benefit_factor"):
-        fcf.gmm.measure(mp, _basis(2.0), full=False)
-    # a factor-1.0 model still runs fast (the reject is selective)
-    fast = fcf.gmm.measure(mp, _basis(1.0), full=False)
-    full = fcf.gmm.measure(mp, _basis(1.0), full=True)
+    # full=False auto-routes a death_benefit_factor book to full -- equal, not raise
+    fast = fcf.gmm.measure(mp, _basis(2.0), full=False)
+    full = fcf.gmm.measure(mp, _basis(2.0), full=True)
     assert fast.bel[0] == pytest.approx(full.bel[0], rel=1e-9)
+    # a factor-1.0 model still runs the genuine fast path
+    fast1 = fcf.gmm.measure(mp, _basis(1.0), full=False)
+    full1 = fcf.gmm.measure(mp, _basis(1.0), full=True)
+    assert fast1.bel[0] == pytest.approx(full1.bel[0], rel=1e-9)
 
 
 # ---------------------------------------------------------------------------

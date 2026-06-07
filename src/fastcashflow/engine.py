@@ -1955,6 +1955,31 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
     return bel, ra, csm, loss_component
 
 
+def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
+    """True when a book uses a mechanic the fused fast path does not apply.
+
+    The full-only features (v1): non-zero ``issue_class`` (the fast grid is built
+    at class 0), benefit escalation / step-up, a state-conditioned death benefit
+    (``State.death_benefit_factor != 1``), and a deterministic transition
+    (``Transition.after_sojourn_months``). The fast path auto-routes such a book
+    to the full kernel instead of raising, so -- per segment in
+    ``_measure_segmented`` -- only the segments that need it pay, and the rest
+    stay fast. The seed of the planned portfolio-orchestrator FULL tier.
+    """
+    if np.any(model_points.issue_class != 0):
+        return True
+    if (model_points.coverage_step_month is not None
+            and (np.any(model_points.coverage_step_month)
+                 or np.any(model_points.coverage_escalation_annual))):
+        return True
+    sm = resolve_state_model(basis)
+    if any(s.death_benefit_factor != 1.0 for s in sm.states):
+        return True
+    if any(tr.after_sojourn_months for s in sm.states for tr in s.transitions):
+        return True
+    return False
+
+
 def _measure_fast(
     model_points: ModelPoints,
     basis: Basis,
@@ -1987,50 +2012,26 @@ def _measure_fast(
             "measure(full=False) computes the confidence-level RA only; use "
             f"full=True for ra_method={basis.ra_method!r}"
         )
-    # the fast path builds the rate grid at issue_class = 0 throughout; a portfolio
-    # with non-zero classes would silently look up the wrong row of any
-    # issue_class-bearing rate table. measure() handles it correctly.
-    if np.any(model_points.issue_class != 0):
-        raise NotImplementedError(
-            "measure(full=False) currently evaluates rates on a single-issue-class grid "
-            "(class=0). The portfolio carries non-zero issue_class values, "
-            "which would land at class 0 in the fast path and produce a silently "
-            "wrong BEL. Use full=True until the fast path grows per-class grid "
-            "support."
-        )
+    # Full-only mechanics (issue_class != 0, benefit escalation / step-up,
+    # state-conditioned death_benefit_factor, deterministic after_sojourn_months)
+    # are not applied by the fused fast path. Rather than reject, route the whole
+    # call to the full (trajectory) kernel -- correct, just slower for this book.
+    # In _measure_segmented this runs per segment, so only the segments that need
+    # it pay; the rest stay on the fast path. A gpu / discount_curve override
+    # cannot ride the CPU full kernel, so that exotic combination still raises.
+    if requires_full(model_points, basis):
+        if backend != "cpu" or discount_curve is not None:
+            raise NotImplementedError(
+                "a full-path-only mechanic (issue_class / benefit escalation / "
+                "state death_benefit_factor / deterministic transition) cannot be "
+                "combined with backend='gpu' or a discount_curve override; use "
+                "measure(full=True) on the CPU path."
+            )
+        return _measure_full(model_points, basis)
     if model_points.term_months.shape[0] == 0:
         raise ValueError(
             "model_points is empty (n_mp=0); measure(full=False) cannot project a "
             "zero-policy portfolio. Filter empty segments upstream."
-        )
-    # Benefit escalation / step-up (체증형) is projected only on the full path
-    # in v1; the fused fast path does not yet apply the per-coverage benefit
-    # factor, so reject it here rather than silently dropping it (which would
-    # break full==fast). Use measure(full=True) for an escalating-benefit book.
-    if (model_points.coverage_step_month is not None
-            and (np.any(model_points.coverage_step_month)
-                 or np.any(model_points.coverage_escalation_annual))):
-        raise NotImplementedError(
-            "benefit escalation / step-up (coverage_escalation_annual / "
-            "coverage_step_month) is supported on measure(full=True) only; the "
-            "fused fast path does not yet apply it. Use measure(..., full=True)."
-        )
-    # State-conditioned death benefit (death_benefit_factor) and deterministic
-    # transitions (Transition.after_sojourn_months -- occupancy exit or move) are
-    # projected on the full path only in v1. Inspect the States directly (no
-    # compile) so a periodic_benefit_term_months-only model still runs fast;
-    # reject only when a new field is non-default.
-    _sm = resolve_state_model(basis)
-    if any(s.death_benefit_factor != 1.0 for s in _sm.states):
-        raise NotImplementedError(
-            "state-conditioned death benefit (State.death_benefit_factor) is "
-            "supported on measure(full=True) only; the fused fast path applies "
-            "the aggregate death claim on plain in-force. Use full=True."
-        )
-    if any(tr.after_sojourn_months for s in _sm.states for tr in s.transitions):
-        raise NotImplementedError(
-            "a deterministic transition (Transition.after_sojourn_months) is "
-            "supported on measure(full=True) only. Use measure(..., full=True)."
         )
     # The projection horizon is the contract boundary (defaults to the term).
     n_time = int(model_points.contract_boundary_months.max())

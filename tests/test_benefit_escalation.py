@@ -127,16 +127,18 @@ def test_benefit_single_step():
     assert cf[240] / cf[0] == pytest.approx(2.0, rel=1e-9)
 
 
-def test_escalation_default_is_inert_and_fast_rejects():
+def test_escalation_default_is_inert_and_fast_auto_routes():
     """No escalation is bit-identical to today (full==fast unchanged); an
-    escalating-benefit book is rejected on the fast path (full=True only in v1)."""
+    escalating-benefit book auto-routes from full=False to the full kernel
+    (no longer raises) -- byte-identical to full=True."""
     mp = _care_mp()
     f = fcf.gmm.measure(mp, _care_basis(), full=True)
     s = fcf.gmm.measure(mp, _care_basis(), full=False)
     assert np.allclose(f.bel, s.bel) and np.allclose(f.csm, s.csm)
     esc = _care_mp(coverage_escalation_annual=np.array([0.10]))
-    with pytest.raises(NotImplementedError, match="escalation"):
-        fcf.gmm.measure(esc, _care_basis(), full=False)
+    fast = fcf.gmm.measure(esc, _care_basis(), full=False)
+    full = fcf.gmm.measure(esc, _care_basis(), full=True)
+    assert np.allclose(fast.bel, full.bel) and np.allclose(fast.csm, full.csm)
 
 
 # ---------------------------------------------------------------------------

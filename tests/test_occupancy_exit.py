@@ -171,14 +171,18 @@ def test_after_sojourn_auto_derives_tracking():
 # ---------------------------------------------------------------------------
 # Path restrictions -- deterministic transitions are full-path only in v1
 # ---------------------------------------------------------------------------
-def test_fast_path_rejects_deterministic_transition():
-    with pytest.raises(NotImplementedError, match="after_sojourn_months"):
-        fcf.gmm.measure(_seated_mp(12), _basis(_model(after=3, to=None)), full=False)
-    # a periodic_benefit_term_months-only model still runs fast
-    cap_model = _model(cap=3)
-    fast = fcf.gmm.measure(_seated_mp(12), _basis(cap_model), full=False)
-    full = fcf.gmm.measure(_seated_mp(12), _basis(cap_model), full=True)
+def test_fast_path_auto_routes_deterministic_transition():
+    # full=False auto-routes a deterministic-transition book to the full kernel
+    # (no longer raises) -- byte-identical to full=True.
+    mp, b = _seated_mp(12), _basis(_model(after=3, to=None))
+    fast = fcf.gmm.measure(mp, b, full=False)
+    full = fcf.gmm.measure(mp, b, full=True)
     assert np.isclose(float(fast.bel[0]), float(full.bel[0]))
+    # a periodic_benefit_term_months-only model still runs the genuine fast path
+    cap_model = _model(cap=3)
+    fast2 = fcf.gmm.measure(_seated_mp(12), _basis(cap_model), full=False)
+    full2 = fcf.gmm.measure(_seated_mp(12), _basis(cap_model), full=True)
+    assert np.isclose(float(fast2.bel[0]), float(full2.bel[0]))
 
 
 def test_markov_compile_rejects_deterministic_transition():
