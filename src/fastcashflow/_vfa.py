@@ -110,6 +110,34 @@ def _(measurement: VFAMeasurement, path, *, ids=None):
          "loss_component": measurement.loss_component}, path, ids)
 
 
+def _scatter_vfa_headline(n_mp, results):
+    """Scatter per-chunk headline-only VFAMeasurements into one ``(n_mp,)`` result.
+
+    ``results`` is ``[(idx, VFAMeasurement)]`` from ``measure_vfa(..., full=False)``
+    over row-blocks; only the headline ``bel`` / ``ra`` / ``csm`` /
+    ``variable_fee`` / ``time_value`` / ``loss_component`` are laid back, the
+    trajectory fields staying ``None``. The portfolio orchestrator uses this on
+    its ``full=False`` path so a chunked VFA partition costs ``O(n_mp)`` retained,
+    not ``O(n_mp x n_time)``.
+    """
+    bel = np.empty(n_mp)
+    ra = np.empty(n_mp)
+    csm = np.empty(n_mp)
+    variable_fee = np.empty(n_mp)
+    time_value = np.empty(n_mp)
+    loss_component = np.empty(n_mp)
+    for idx, m in results:
+        bel[idx] = m.bel
+        ra[idx] = m.ra
+        csm[idx] = m.csm
+        variable_fee[idx] = m.variable_fee
+        time_value[idx] = m.time_value
+        loss_component[idx] = m.loss_component
+    return VFAMeasurement(
+        bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
+        time_value=time_value, loss_component=loss_component)
+
+
 def _stitch_vfa_measurements(n_mp, sub_results):
     """Scatter per-segment VFAMeasurements into one ``(n_mp, ...)`` result.
 

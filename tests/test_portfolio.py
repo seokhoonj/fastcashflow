@@ -259,7 +259,7 @@ def test_portfolio_measures_all_three_models_in_one_call():
 # P-5a aggregation contract: loss_component_total + summary (no cross-model
 # pooling of figures that mean different things)
 # ---------------------------------------------------------------------------
-def _three_model_portfolio():
+def _three_model_inputs():
     router = BasisRouter(
         {("G", "GA"): _flat_basis(),
          ("P", "GA"): _flat_basis(),
@@ -271,7 +271,11 @@ def _three_model_portfolio():
         account_value=np.array([0.0, 0.0, 1e6, 1e6]),
         product=np.array(["G", "P", "V", "V"]),
         channel=np.array(["GA", "GA", "GA", "GA"]))
-    return measure(mp, router)
+    return mp, router
+
+
+def _three_model_portfolio():
+    return measure(*_three_model_inputs())
 
 
 def test_loss_component_total_sums_only_the_loss_across_models():
@@ -299,6 +303,73 @@ def test_summary_keeps_each_model_in_its_own_block():
     assert np.isclose(s["paa"]["lrc"], pm.paa.measurement.lrc.sum())
     assert np.isclose(s["vfa"]["csm"], pm.vfa.measurement.csm.sum())
     assert np.isclose(s["loss_component_total"], pm.loss_component_total())
+
+
+# ---------------------------------------------------------------------------
+# P-5b Gate B (1): full=False chunks PAA/VFA to headline-only, bounded memory.
+# ---------------------------------------------------------------------------
+def test_portfolio_full_false_headline_matches_full_per_mp():
+    """full=False yields the per-MP headline identical to full=True, with the
+    PAA/VFA trajectories dropped (summary works; group/roll/report would not)."""
+    mp, router = _three_model_inputs()
+    full = measure(mp, router, full=True)
+    head = measure(mp, router, full=False)
+    assert np.allclose(head.gmm.measurement.bel, full.gmm.measurement.bel)
+    assert np.allclose(head.paa.measurement.lrc, full.paa.measurement.lrc)
+    assert np.allclose(head.paa.measurement.loss_component,
+                       full.paa.measurement.loss_component)
+    assert np.allclose(head.vfa.measurement.csm, full.vfa.measurement.csm)
+    assert np.allclose(head.vfa.measurement.bel, full.vfa.measurement.bel)
+    # trajectories dropped on the headline path
+    assert head.paa.measurement.lrc_path is None
+    assert head.vfa.measurement.bel_path is None and head.vfa.measurement.cashflows is None
+    # the aggregation contract still holds on the headline result
+    assert np.isclose(head.loss_component_total(), full.loss_component_total())
+
+
+def test_portfolio_full_false_chunking_is_numeric_noop():
+    """chunk_size changes only peak memory, never the numbers -- chunk_size=1
+    (a block per row, across segments) matches one big block and full=True."""
+    prod = np.array(["PA", "VB", "PB", "VA", "PA", "VB", "PB", "VA"])
+    n = len(prod)
+    is_v = np.array([p[0] == "V" for p in prod])
+    router = BasisRouter(
+        {("PA", "GA"): _flat_basis(), ("PB", "GA"): _flat_basis(),
+         ("VA", "GA"): _flat_basis(investment_return=0.03),
+         ("VB", "GA"): _flat_basis(investment_return=0.06)},
+        measurement_models={("PA", "GA"): "PAA", ("PB", "GA"): "PAA",
+                            ("VA", "GA"): "VFA", ("VB", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(n, 40),
+        premium=np.where(is_v, 0.0, 1200.0), term_months=np.full(n, 60),
+        benefits={0: np.full(n, 1e4)},
+        account_value=np.where(is_v, 1e6, 0.0),
+        product=prod, channel=np.full(n, "GA"))
+    a = measure(mp, router, full=False, chunk_size=1)        # a block per row
+    b = measure(mp, router, full=False, chunk_size=1000)     # one block
+    full = measure(mp, router, full=True)
+    for attr in ("lrc", "loss_component", "fcf"):
+        assert np.allclose(getattr(a.paa.measurement, attr),
+                           getattr(b.paa.measurement, attr))
+        assert np.allclose(getattr(a.paa.measurement, attr),
+                           getattr(full.paa.measurement, attr))
+    for attr in ("bel", "ra", "csm", "variable_fee", "loss_component"):
+        assert np.allclose(getattr(a.vfa.measurement, attr),
+                           getattr(b.vfa.measurement, attr))
+        assert np.allclose(getattr(a.vfa.measurement, attr),
+                           getattr(full.vfa.measurement, attr))
+    assert a.vfa.measurement.bel_path is None        # headline only, regardless of chunk
+    assert a.paa.measurement.lrc_path is None
+
+
+def test_portfolio_rejects_non_positive_chunk_size():
+    """chunk_size <= 0 must raise, not silently skip every block and scatter
+    uninitialised headline arrays."""
+    mp, router = _three_model_inputs()
+    with pytest.raises(ValueError, match="chunk_size"):
+        measure(mp, router, full=False, chunk_size=0)
+    with pytest.raises(ValueError, match="chunk_size"):
+        measure(mp, router, full=False, chunk_size=-5)
 
 
 def test_summary_omits_absent_models():

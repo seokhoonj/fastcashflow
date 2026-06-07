@@ -23,9 +23,11 @@ import numpy as np
 
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
-    PAAMeasurement, measure_paa, _stitch_paa_measurements)
+    PAAMeasurement, measure_paa, _stitch_paa_measurements,
+    _scatter_paa_headline)
 from fastcashflow._vfa import (
-    VFAMeasurement, measure_vfa, _stitch_vfa_measurements)
+    VFAMeasurement, measure_vfa, _stitch_vfa_measurements,
+    _scatter_vfa_headline)
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
     GMMMeasurement, _factorise_segments, measure as _measure_gmm)
@@ -36,13 +38,20 @@ from fastcashflow.modelpoints import ModelPoints
 _SLOT_MEASUREMENT_TYPE = {
     "gmm": GMMMeasurement, "paa": PAAMeasurement, "vfa": VFAMeasurement}
 
-#: The single-Basis specialist + its stitch for the non-GMM models, so a model's
-#: partition that spans several routing segments is measured then scattered into
-#: one native measurement. GMM is not here: it routes through ``fcf.gmm.measure``
-#: (the ``full`` flag, its own segment stitch), not the PAA/VFA scatter.
+#: Per non-GMM model: the single-Basis specialist, the full-trajectory stitch,
+#: and the headline-only scatter -- so a model's partition that spans several
+#: routing segments is measured then combined into one native measurement
+#: (trajectories when ``full=True``, headline-only when ``full=False``). GMM is
+#: not here: it routes through ``fcf.gmm.measure`` (its own ``full`` flag and
+#: segment stitch), not the PAA/VFA scatter.
 _MODEL_EXEC = {
-    "PAA": (measure_paa, _stitch_paa_measurements),
-    "VFA": (measure_vfa, _stitch_vfa_measurements)}
+    "PAA": (measure_paa, _stitch_paa_measurements, _scatter_paa_headline),
+    "VFA": (measure_vfa, _stitch_vfa_measurements, _scatter_vfa_headline)}
+
+#: Default chunk for the ``full=False`` PAA/VFA path -- matches
+#: ``engine.measure_aggregate``. Bounds peak memory to ``O(chunk x n_time)``
+#: since PAA/VFA have no fused kernel (each block still builds dense transients).
+_CHUNK_SIZE = 200_000
 
 
 def _measurement_rows(measurement) -> int:
@@ -210,36 +219,64 @@ def _submodel_router(router: BasisRouter, model: str) -> BasisRouter:
                        measurement_models={k: model for k in keys})
 
 
-def _measure_model_segmented(sub_mp, sub_router, measure_one, stitch):
-    """Measure one model's partition that spans several routing segments.
+def _model_segments(sub_router, sub_mp):
+    """``[(basis, idx)]`` for one model's partition, split by routing segment.
 
-    ``measure_paa`` / ``measure_vfa`` take a single :class:`Basis`, so the
-    orchestrator splits the partition by segment, measures each on its own
-    basis, and scatters the per-segment native results back into one stitched
-    measurement -- the PAA / VFA analogue of the GMM ``_measure_segmented``.
-    ``measure_one(sub, basis)`` runs one segment; ``stitch(n_rows, sub_results)``
-    scatters ``[(idx, measurement)]`` into the combined result. The stitched
-    result is stamped with ``sub_mp`` so ``group(...)`` resolves the axes, just
-    as ``fcf.gmm.measure`` stamps its result.
-    """
+    Falls back to the whole partition under a single basis when the model points
+    carry no segment axes (mirrors ``_measure_segmented``'s convenience)."""
     try:
         basis_norm, segments = _factorise_segments(
             sub_router, sub_mp, sub_router.segment_axes, sub_mp.n_mp)
     except KeyError:
         if len(sub_router.segments) == 1:
             (basis,) = sub_router.segments.values()
-            return measure_one(sub_mp, basis)
+            return [(basis, np.arange(sub_mp.n_mp, dtype=np.int64))]
         raise ValueError(
             "model_points has no segment axes set but the sub-router has "
             f"{len(sub_router.segments)} segments; set the routing columns "
             f"{sub_router.segment_axes}")
-    sub_results = [(idx, measure_one(sub_mp.subset(idx), basis_norm[key]))
-                   for key, idx in segments]
-    return replace(stitch(sub_mp.n_mp, sub_results), model_points=sub_mp)
+    return [(basis_norm[key], idx) for key, idx in segments]
+
+
+def _measure_model_segmented(sub_mp, sub_router, model, *, full=True,
+                             chunk_size=_CHUNK_SIZE):
+    """Measure one model's partition that spans several routing segments.
+
+    ``measure_paa`` / ``measure_vfa`` take a single :class:`Basis`, so the
+    orchestrator splits the partition by segment and combines the per-segment
+    results -- the PAA / VFA analogue of the GMM ``_measure_segmented``.
+
+    ``full=True`` measures each segment's full trajectories and stitches them.
+    ``full=False`` chunks each segment into ``chunk_size`` row-blocks, measures
+    each block headline-only (``measure_one(..., full=False)``), and scatters the
+    headline back -- so peak memory is ``O(chunk_size x n_time)`` (PAA/VFA have no
+    fused kernel, so a block still builds dense transients) rather than
+    ``O(n_mp x n_time)``. The result is stamped with ``sub_mp`` so ``group(...)``
+    resolves the axes, as ``fcf.gmm.measure`` does.
+    """
+    measure_one, stitch_full, scatter_headline = _MODEL_EXEC[model]
+    segs = _model_segments(sub_router, sub_mp)
+    if full:
+        if len(segs) == 1 and segs[0][1].size == sub_mp.n_mp:
+            # One segment over the whole partition -- measure directly, no
+            # re-scatter (measure_one already stamps model_points).
+            return measure_one(sub_mp, segs[0][0], full=True)
+        sub_results = [(idx, measure_one(sub_mp.subset(idx), basis, full=True))
+                       for basis, idx in segs]
+        return replace(stitch_full(sub_mp.n_mp, sub_results), model_points=sub_mp)
+    # Headline path -- chunk within each segment to bound peak memory.
+    results = []
+    for basis, idx in segs:
+        for start in range(0, idx.size, chunk_size):
+            block = idx[start:start + chunk_size]
+            results.append(
+                (block, measure_one(sub_mp.subset(block), basis, full=False)))
+    return replace(scatter_headline(sub_mp.n_mp, results), model_points=sub_mp)
 
 
 def measure(model_points: ModelPoints, basis, *, full: bool = True,
-            backend: str = "cpu") -> PortfolioMeasurement:
+            backend: str = "cpu",
+            chunk_size: int = _CHUNK_SIZE) -> PortfolioMeasurement:
     """Measure a mixed-model portfolio in one call.
 
     ``basis`` must be a :class:`~fastcashflow.basis.BasisRouter` whose segments
@@ -248,6 +285,14 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     its segment's model; the result keeps each model's native measurement
     separate. ``full`` matches :func:`fcf.gmm.measure` (the full trajectory vs
     the fused headline).
+
+    With ``full=False`` the PAA / VFA partitions are measured headline-only in
+    ``chunk_size`` row-blocks, so peak memory stays ``O(chunk_size x n_time)``
+    instead of materialising every contract's trajectory at once (GMM's
+    ``full=False`` is already a fused, no-trajectory kernel; ``chunk_size`` does
+    not affect it). The headline-only result still serves ``summary()`` /
+    ``loss_component_total()``; ``group`` / ``roll_forward`` / ``report`` need
+    ``full=True``. ``full=True`` keeps every trajectory (and is memory-bound).
 
     Each model's rows are routed to its own kernel and kept in a separate slot
     of the result. A non-GMM row is never silently measured as GMM. Per-segment
@@ -265,6 +310,10 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
             "fcf.portfolio.measure requires a BasisRouter (a routed, possibly "
             "mixed-model portfolio); for a single Basis use fcf.gmm.measure / "
             "fcf.paa.measure / fcf.vfa.measure")
+    if chunk_size < 1:
+        # Guard before the chunk loop: chunk_size <= 0 would skip every block and
+        # scatter uninitialised np.empty() headline arrays (silently wrong).
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
     declared = {basis.measurement_model_of(k) for k in basis.segments}
     if len(declared) == 1:
         # Single declared model -> every row is that model; skip the partition's
@@ -277,9 +326,8 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
         if model == "GMM":
             meas = _measure_gmm(model_points, basis, full=full, backend=backend)
         else:
-            measure_one, stitch = _MODEL_EXEC[model]
             meas = _measure_model_segmented(
-                model_points, basis, measure_one, stitch)
+                model_points, basis, model, full=full, chunk_size=chunk_size)
         return PortfolioMeasurement(
             model_points=model_points,
             **{model.lower(): ModelMeasurement(index=index, measurement=meas)})
@@ -297,9 +345,8 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     for model in ("PAA", "VFA"):
         idx = parts[model]
         if idx.size:
-            measure_one, stitch = _MODEL_EXEC[model]
             meas = _measure_model_segmented(
                 model_points.subset(idx), _submodel_router(basis, model),
-                measure_one, stitch)
+                model, full=full, chunk_size=chunk_size)
             slots[model.lower()] = ModelMeasurement(index=idx, measurement=meas)
     return PortfolioMeasurement(model_points=model_points, **slots)

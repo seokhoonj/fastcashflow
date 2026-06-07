@@ -100,6 +100,25 @@ def _(measurement: PAAMeasurement, path, *, ids=None):
         path, ids)
 
 
+def _scatter_paa_headline(n_mp, results):
+    """Scatter per-chunk headline-only PAAMeasurements into one ``(n_mp,)`` result.
+
+    ``results`` is ``[(idx, PAAMeasurement)]`` from ``measure_paa(..., full=False)``
+    over row-blocks; only the headline ``lrc`` / ``loss_component`` / ``fcf`` are
+    laid back, the trajectory fields staying ``None``. The portfolio orchestrator
+    uses this on its ``full=False`` path so a chunked PAA partition costs
+    ``O(n_mp)`` retained, not ``O(n_mp x n_time)``.
+    """
+    lrc = np.empty(n_mp)
+    loss_component = np.empty(n_mp)
+    fcf = np.empty(n_mp)
+    for idx, m in results:
+        lrc[idx] = m.lrc
+        loss_component[idx] = m.loss_component
+        fcf[idx] = m.fcf
+    return PAAMeasurement(lrc=lrc, loss_component=loss_component, fcf=fcf)
+
+
 def _require_full_paa(measurement, entry: str) -> None:
     """Raise if a headline-only PAA measurement reaches a path needing the
     trajectory fields. PAA has no ``bel_path``, so the shared ``_require_full``
