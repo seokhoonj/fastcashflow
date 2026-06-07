@@ -376,3 +376,22 @@ def test_deaths_respect_within_month_competing_risk_order():
     assert np.isclose(_project(first).deaths[0, 0], mq)                  # unchanged
     assert np.isclose(_project(second).deaths[0, 0], (1.0 - lq) * mq)   # exact, lower
     assert _project(second).deaths[0, 0] < mq                            # was raw mq before
+
+
+def test_needs_state_machine_predicate():
+    """The extracted fast-path routing predicate (P-0): scalar path unless a
+    state model / waiver decrement / non-active seating is present."""
+    from types import SimpleNamespace
+    import numpy as np
+    from fastcashflow.statemodel import needs_state_machine, STATE_MODELS
+
+    def mp(state):
+        return SimpleNamespace(state=np.array(state, dtype=np.int64))
+
+    def basis(state_model=None, waiver=None):
+        return SimpleNamespace(state_model=state_model, waiver_incidence_annual=waiver)
+
+    assert needs_state_machine(mp([0, 0]), basis()) is False           # plain -> scalar
+    assert needs_state_machine(mp([0, 0]), basis(state_model=STATE_MODELS["WAIVER"])) is True
+    assert needs_state_machine(mp([0, 0]), basis(waiver=lambda *a: 0.0)) is True
+    assert needs_state_machine(mp([0, 1]), basis()) is True            # seated outside active

@@ -58,6 +58,7 @@ from fastcashflow.statemodel import (
     compile_state_model_with_duration,
     is_semi_markov,
     model_references_rate,
+    needs_state_machine,
     resolve_state_model,
 )
 
@@ -2098,9 +2099,7 @@ def _measure_fast(
     # pre-Phase(b) speed path; the N-state kernel is reserved for products
     # that genuinely need an occupancy vector.
     fast_path = (backend == "cpu"
-                 and basis.state_model is None
-                 and basis.waiver_incidence_annual is None
-                 and not np.any(model_points.state))
+                 and not needs_state_machine(model_points, basis))
     if not fast_path:
         if basis.waiver_incidence_annual is None:
             waiver_grid = np.zeros_like(mortality_grid)

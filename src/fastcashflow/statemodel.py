@@ -472,6 +472,23 @@ def resolve_state_model(basis) -> "StateModel":
     return basis.state_model or WAIVER_MODEL
 
 
+def needs_state_machine(model_points, basis) -> bool:
+    """True when the N-state occupancy kernel is needed, not the scalar fast path.
+
+    The scalar fused path carries in-force as a single number; it cannot
+    represent a state machine. The N-state path is required when the basis
+    declares a state model, carries a waiver decrement, or any model point is
+    seated outside the active state.
+
+    Extracted (no behaviour change) from the fast-path branch in
+    ``engine._measure_fast`` so the routing decision is one named, testable
+    predicate -- the seed of the planned portfolio-orchestrator classifier.
+    """
+    return (basis.state_model is not None
+            or basis.waiver_incidence_annual is not None
+            or bool(np.any(model_points.state)))
+
+
 def compile_state_model(
     model: StateModel, rates: dict[str, FloatArray]
 ) -> CompiledStateModel:
