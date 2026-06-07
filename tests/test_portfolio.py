@@ -2,9 +2,9 @@
 
 The orchestrator partitions rows by measurement model, runs each block through
 its own kernel, and keeps each model's native result separate. P-3 added the
-partition + GMM execution; P-4 adds the PAA executor (segments stitched into one
-PAAMeasurement). A portfolio that also carries VFA rows still raises
-NotImplementedError after the partition is validated. The master invariant:
+partition + GMM execution; P-4 adds the PAA and VFA executors (each model's
+segments stitched into one native measurement; the VFA stitch carries a per-MP
+2-D discount curve, which roll_forward / group consume). The master invariant:
 routing is numerically a no-op -- the portfolio's slice for model m is
 byte-identical to the standalone specialist on m's rows.
 """
@@ -13,16 +13,19 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import Basis, ModelPoints, CoverageRate
+from fastcashflow import group
 from fastcashflow._paa import measure_paa
+from fastcashflow._vfa import measure_vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow.portfolio import measure, PortfolioMeasurement, ModelMeasurement
 
 
-def _flat_basis(discount=0.05):
+def _flat_basis(discount=0.05, investment_return=0.0):
     return Basis(
         mortality_annual=lambda s, ia, d: np.full(s.shape, 0.001),
         lapse_annual=lambda s, ia, d: np.full(s.shape, 0.05),
         discount_annual=discount, ra_confidence=0.75, mortality_cv=0.0,
+        investment_return=investment_return, fund_fee=0.015,
         coverages=(CoverageRate("DEATH", lambda s, ia, d: np.full(s.shape, 0.001)),))
 
 
@@ -109,12 +112,147 @@ def test_portfolio_paa_stitches_ragged_segments():
     assert np.allclose(pm.paa.measurement.lrc_path[1, wQ:], 0.0)  # earned-out tail
 
 
-def test_portfolio_raises_on_vfa_rows_after_partition():
-    router = BasisRouter({("A", "GA"): _flat_basis(), ("B", "GA"): _flat_basis()},
-                         measurement_models={("B", "GA"): "VFA"})
-    mp = _mp(["A", "B"], ["GA", "GA"])              # row 1 is a VFA segment
-    with pytest.raises(NotImplementedError, match="VFA"):
-        measure(mp, router)
+def test_portfolio_vfa_stitches_segments_with_distinct_curves():
+    """VFA segments are executed (P-4) and stitched. Each segment discounts at
+    its own underlying-items return, so discount_bom is per-MP 2-D -- each row
+    carries its segment's curve, and every figure matches measure_vfa alone."""
+    router = BasisRouter(
+        {("V1", "GA"): _flat_basis(investment_return=0.03),
+         ("V2", "GA"): _flat_basis(investment_return=0.06)},
+        measurement_models={("V1", "GA"): "VFA", ("V2", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(3, 40), premium=np.zeros(3), term_months=np.full(3, 60),
+        account_value=np.full(3, 1e6),
+        product=np.array(["V1", "V2", "V1"]), channel=np.array(["GA", "GA", "GA"]))
+    pm = measure(mp, router)
+    assert pm.vfa.index.tolist() == [0, 1, 2]
+    assert pm.gmm is None and pm.paa is None
+    refV1 = measure_vfa(mp.subset([0, 2]), _flat_basis(investment_return=0.03))
+    refV2 = measure_vfa(mp.subset([1]), _flat_basis(investment_return=0.06))
+    assert np.allclose(pm.vfa.measurement.bel[[0, 2]], refV1.bel)
+    assert np.allclose(pm.vfa.measurement.bel[1], refV2.bel)
+    assert np.allclose(pm.vfa.measurement.csm[[0, 2]], refV1.csm)
+    assert np.allclose(pm.vfa.measurement.csm[1], refV2.csm)
+    assert np.allclose(pm.vfa.measurement.variable_fee[[0, 2]], refV1.variable_fee)
+    # discount_bom is per-MP 2-D, each row on its segment's own curve
+    assert pm.vfa.measurement.discount_bom.shape == (3, 61)
+    assert np.allclose(pm.vfa.measurement.discount_bom[[0, 2]], refV1.discount_bom)
+    assert np.allclose(pm.vfa.measurement.discount_bom[1], refV2.discount_bom)
+    assert not np.allclose(refV1.discount_bom, refV2.discount_bom)   # curves differ
+
+
+def test_portfolio_vfa_ragged_stitch_pads_and_flat_fills():
+    """VFA segments with different terms stitch ragged: the shorter segment's
+    trajectories zero-pad on the right and its discount_bom tail repeats the last
+    factor (a forward rate read off the tail is zero, not a 0/0)."""
+    router = BasisRouter(
+        {("L", "GA"): _flat_basis(investment_return=0.06),
+         ("S", "GA"): _flat_basis(investment_return=0.06)},
+        measurement_models={("L", "GA"): "VFA", ("S", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(3, 40), premium=np.zeros(3),
+        term_months=np.array([60, 24, 60]),       # S (row 1) shorter -> ragged
+        account_value=np.full(3, 1e6),
+        product=np.array(["L", "S", "L"]), channel=np.array(["GA", "GA", "GA"]))
+    pm = measure(mp, router)
+    refL = measure_vfa(mp.subset([0, 2]), _flat_basis(investment_return=0.06))
+    refS = measure_vfa(mp.subset([1]), _flat_basis(investment_return=0.06))
+    nL, nS = refL.bel_path.shape[1] - 1, refS.bel_path.shape[1] - 1
+    assert nS < nL
+    db = pm.vfa.measurement.discount_bom
+    assert db.shape == (3, nL + 1)                         # padded to longer horizon
+    assert np.allclose(db[1, :nS + 1], refS.discount_bom)        # S's own curve
+    assert np.allclose(db[1, nS + 1:], refS.discount_bom[-1])    # flat-filled tail
+    bp = pm.vfa.measurement.bel_path
+    assert np.allclose(bp[1, :nS + 1], refS.bel_path[0])
+    assert np.allclose(bp[1, nS + 1:], 0.0)                      # zero-padded tail
+    assert np.isclose(pm.vfa.measurement.bel[1], refS.bel[0])
+
+
+def test_portfolio_vfa_roll_forward_matches_per_segment():
+    """roll_forward on a multi-curve VFA portfolio result (2-D discount_bom)
+    matches per-segment roll_forward -- the movement layer slices the time axis,
+    not the model-point axis, on the 2-D curve."""
+    router = BasisRouter(
+        {("V1", "GA"): _flat_basis(investment_return=0.03),
+         ("V2", "GA"): _flat_basis(investment_return=0.06)},
+        measurement_models={("V1", "GA"): "VFA", ("V2", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(3, 40), premium=np.zeros(3), term_months=np.full(3, 60),
+        account_value=np.full(3, 1e6),
+        product=np.array(["V1", "V2", "V1"]), channel=np.array(["GA", "GA", "GA"]))
+    pm = measure(mp, router)
+    mv = fcf.roll_forward(pm.vfa.measurement)
+    rv1 = fcf.roll_forward(measure_vfa(mp.subset([0, 2]),
+                                       _flat_basis(investment_return=0.03)))
+    rv2 = fcf.roll_forward(measure_vfa(mp.subset([1]),
+                                       _flat_basis(investment_return=0.06)))
+    assert np.allclose(mv[0].bel_interest[[0, 2]], rv1[0].bel_interest)
+    assert np.allclose(mv[0].bel_interest[1], rv2[0].bel_interest)
+    assert np.allclose(mv[0].csm_release[[0, 2]], rv1[0].csm_release)
+
+
+def test_portfolio_vfa_group_by_curve_succeeds():
+    """group() on a multi-curve VFA result, each group sitting in one curve
+    (one product per curve), reconciles per-group and returns two groups."""
+    router = BasisRouter(
+        {("V1", "GA"): _flat_basis(investment_return=0.03),
+         ("V2", "GA"): _flat_basis(investment_return=0.06)},
+        measurement_models={("V1", "GA"): "VFA", ("V2", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(3, 40), premium=np.zeros(3), term_months=np.full(3, 60),
+        account_value=np.full(3, 1e6),
+        product=np.array(["V1", "V2", "V1"]), channel=np.array(["GA", "GA", "GA"]))
+    pm = measure(mp, router)
+    g = group(pm.vfa.measurement, "product")
+    assert g.csm.shape[0] == 2 and g.discount_bom.shape[0] == 2
+
+
+def test_portfolio_vfa_group_rejects_mixed_curves():
+    """A group spanning two underlying-items returns is incoherent (the CSM
+    accretes at one curve) -- group() raises, the same guard the GMM grouping
+    applies to a segmented result."""
+    router = BasisRouter(
+        {("V1", "GA"): _flat_basis(investment_return=0.03),
+         ("V2", "GA"): _flat_basis(investment_return=0.06)},
+        measurement_models={("V1", "GA"): "VFA", ("V2", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(2, 40), premium=np.zeros(2), term_months=np.full(2, 60),
+        account_value=np.full(2, 1e6),
+        product=np.array(["V1", "V2"]), channel=np.array(["GA", "GA"]))
+    pm = measure(mp, router)
+    with pytest.raises(ValueError, match="different .*discount curves"):
+        group(pm.vfa.measurement, "channel")     # GA spans both curves -> one group
+
+
+def test_portfolio_measures_all_three_models_in_one_call():
+    """One mixed table, one call: GMM + PAA + VFA each routed to its own kernel
+    and slot, every slice matching the standalone specialist -- routing is a
+    numeric no-op, and the partition is a clean 0..n_mp-1 cover."""
+    router = BasisRouter(
+        {("G", "GA"): _flat_basis(),
+         ("P", "GA"): _flat_basis(),
+         ("V", "GA"): _flat_basis(investment_return=0.04)},
+        measurement_models={("P", "GA"): "PAA", ("V", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(4, 40), premium=np.array([0.0, 1200.0, 0.0, 0.0]),
+        term_months=np.full(4, 60), benefits={0: np.full(4, 1e4)},
+        account_value=np.array([0.0, 0.0, 1e6, 1e6]),
+        product=np.array(["G", "P", "V", "V"]),
+        channel=np.array(["GA", "GA", "GA", "GA"]))
+    pm = measure(mp, router)
+    assert pm.gmm.index.tolist() == [0]
+    assert pm.paa.index.tolist() == [1]
+    assert pm.vfa.index.tolist() == [2, 3]
+    assert np.allclose(pm.gmm.measurement.bel,
+                       fcf.gmm.measure(mp.subset([0]), _flat_basis()).bel)
+    assert np.allclose(pm.paa.measurement.lrc_path,
+                       measure_paa(mp.subset([1]), _flat_basis()).lrc_path)
+    assert np.allclose(pm.vfa.measurement.csm,
+                       measure_vfa(mp.subset([2, 3]),
+                                   _flat_basis(investment_return=0.04)).csm)
+    assert sorted(np.concatenate(
+        [pm.gmm.index, pm.paa.index, pm.vfa.index])) == [0, 1, 2, 3]
 
 
 def test_portfolio_unused_non_gmm_segment_is_ignored():

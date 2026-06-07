@@ -230,6 +230,52 @@ def group(measurement, by):
     )
 
 
+def _per_group_bom(bom, inforce, reducer, labels):
+    """Per-group representative discount curve for a segmented (2-D) measurement.
+
+    Each model point discounts on its own curve, and a group must sit in one
+    curve. The curves are padded to the portfolio's longest horizon -- a flat
+    tail past each contract's maturity -- so two contracts on the *same* curve
+    with different terms have different tails. Compare each row only over its
+    live horizon (where it is still in force; the padded tail discounts zero
+    in-force and never reaches the CSM), and represent the group by its
+    longest-horizon row so the discounting is correct for every contract's whole
+    term. Raises if a group mixes genuinely different curves.
+
+    Returns ``(out_bom, reps)`` -- the ``(n_groups, n_time+1)`` per-group curve
+    and the representative row index per group, so a caller with a companion
+    per-MP curve (e.g. GMM's ``discount_mid``) can index it the same way. Shared
+    by the GMM and VFA grouping, both of which now see 2-D curves from the
+    portfolio orchestrator's segment stitch.
+    """
+    cols = np.arange(bom.shape[1])
+    # Live = still in force. A small floor (not exact > 0) so a numerical
+    # residual past maturity is not read as a live month, which would extend the
+    # compared horizon into the padded tail and falsely reject the group.
+    # Legitimate in-force is orders of magnitude above this floor.
+    live = np.where(inforce > _INFORCE_EPS,
+                    np.arange(inforce.shape[1])[None, :], -1).max(axis=1)
+    out_bom = np.empty((reducer.n_groups, bom.shape[1]))
+    reps = np.empty(reducer.n_groups, dtype=np.int64)
+    # group -> its row indices, from a single sort rather than a full
+    # ``inverse == g`` scan per group (which would be O(n_groups x n_mp)).
+    group_rows = np.split(np.argsort(reducer.inverse, kind="stable"),
+                          np.cumsum(reducer.sizes)[:-1])
+    for g in range(reducer.n_groups):
+        rows = group_rows[g]
+        rep = rows[np.argmax(live[rows])]
+        livemask = cols[None, :] < (live[rows] + 2)[:, None]
+        if not np.allclose(np.where(livemask, bom[rows] - bom[rep], 0.0), 0.0):
+            raise ValueError(
+                f"group {labels[g]!r} mixes model points with different "
+                "discount curves -- a group must sit in one portfolio "
+                "(basis). Split it by basis before grouping."
+            )
+        out_bom[g] = bom[rep]
+        reps[g] = rep
+    return out_bom, reps
+
+
 @group.register
 def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
     _require_full(measurement, "group()")
@@ -245,47 +291,16 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
     loss_component = np.maximum(0.0, fcf0)
     bom = measurement.discount_bom
     if bom.ndim == 2:
-        # Segmented: each model point discounts on its own curve, and a group
-        # must sit in one curve. But the curves are padded to the portfolio's
-        # longest horizon -- a flat tail past each contract's maturity -- so two
-        # contracts on the *same* curve with different terms have different
-        # tails. Compare each row only over its live horizon (where it is still
-        # in force; the padded tail discounts zero in-force and never reaches the
-        # CSM), and represent the group by its longest-horizon curve so the
-        # discounting is correct for every contract's whole term.
-        cols = np.arange(bom.shape[1])
-        inforce = measurement.cashflows.inforce
-        # Live = still in force. A small floor (not exact > 0) so a numerical
-        # residual past maturity is not read as a live month, which would extend
-        # the compared horizon into the padded tail and falsely reject the group.
-        # Legitimate in-force is orders of magnitude above this floor.
-        live = np.where(inforce > _INFORCE_EPS,
-                        np.arange(inforce.shape[1])[None, :], -1).max(axis=1)
-        out_bom = np.empty((reducer.n_groups, bom.shape[1]))
-        out_mid = np.empty((reducer.n_groups, measurement.discount_mid.shape[1]))
-        # group -> its row indices, from a single sort rather than a full
-        # ``inverse == g`` scan per group (which would be O(n_groups x n_mp)).
-        group_rows = np.split(np.argsort(reducer.inverse, kind="stable"),
-                              np.cumsum(reducer.sizes)[:-1])
-        for g in range(reducer.n_groups):
-            rows = group_rows[g]
-            rep = rows[np.argmax(live[rows])]
-            livemask = cols[None, :] < (live[rows] + 2)[:, None]
-            if not np.allclose(np.where(livemask, bom[rows] - bom[rep], 0.0), 0.0):
-                raise ValueError(
-                    f"group {labels[g]!r} mixes model points with different "
-                    "discount curves -- a group must sit in one portfolio "
-                    "(basis). Split it by basis before grouping."
-                )
-            out_bom[g] = bom[rep]
-            out_mid[g] = measurement.discount_mid[rep]
-        monthly_rate = out_bom[:, :-1] / out_bom[:, 1:] - 1.0
+        out_bom, reps = _per_group_bom(
+            bom, measurement.cashflows.inforce, reducer, labels)
+        out_mid = measurement.discount_mid[reps]
+        monthly_rate = forward_rates(out_bom)
     else:
         out_bom, out_mid = bom, measurement.discount_mid
         monthly_rate = forward_rates(bom)
     # _csm_roll dispatches on the rate's ndim: a segmented result carries a 2-D
-    # per-group discount curve, a single basis a 1-D one. (VFA and reinsurance
-    # are single-basis only, so they call the 1-D _csm_kernel directly.)
+    # per-group discount curve, a single basis a 1-D one. (Reinsurance is
+    # single-basis only, so it calls the 1-D _csm_kernel directly.)
     csm, csm_accretion, csm_release = _csm_roll(
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
@@ -328,14 +343,22 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
 
     # The CSM and loss component are re-derived on the group aggregate. The VFA
     # inception fulfilment cash flows fold in the guarantee time value, and the
-    # CSM accretes at the underlying-items return (the single VFA curve, so no
-    # per-MP curve to reconcile), released by coverage units.
+    # CSM accretes at the underlying-items return, released by coverage units.
     fcf0 = bel[:, 0] + ra[:, 0] + time_value
     csm0 = np.maximum(0.0, -fcf0)
     loss_component = np.maximum(0.0, fcf0)
     bom = measurement.discount_bom
-    monthly_rate = forward_rates(bom)
-    csm, csm_accretion, csm_release = _csm_kernel(
+    if bom.ndim == 2:
+        # Portfolio-stitched: each segment discounts at its own underlying-items
+        # return, so a group must sit in one curve (the same reconciliation the
+        # GMM grouping does). _csm_roll then dispatches on the rate's ndim.
+        out_bom, _ = _per_group_bom(
+            bom, measurement.cashflows.inforce, reducer, labels)
+        monthly_rate = forward_rates(out_bom)
+    else:
+        out_bom = bom
+        monthly_rate = forward_rates(bom)
+    csm, csm_accretion, csm_release = _csm_roll(
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
     return VFAMeasurement(
@@ -353,7 +376,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
         csm_release=csm_release,
         lic=reducer.sum(measurement.lic),
         cashflows=grouped_cf,
-        discount_bom=bom,
+        discount_bom=out_bom,
         model_points=None,
         group_labels=labels,
         group_sizes=reducer.sizes,

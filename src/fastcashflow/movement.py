@@ -513,12 +513,17 @@ def _roll_forward_vfa(
     csm_release = measurement.csm_release
     n_time = csm.shape[1] - 1
     discount_bom = measurement.discount_bom
+    # discount_bom is (n_time+1,) for a single basis, or (n_mp, n_time+1) for a
+    # segmented (portfolio-stitched) measurement; the last axis is time either
+    # way, so monthly_rate is (n_time,) or (n_mp, n_time). The trailing-axis
+    # slice serves both -- a bare [a:b] would slice the model-point axis on the
+    # 2-D curve.
     monthly_rate = forward_rates(discount_bom)
     movements: list[VFAPeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
-        bel_interest = (bel[:, a:b] * monthly_rate[a:b]).sum(axis=1)
-        ra_interest = (ra[:, a:b] * monthly_rate[a:b]).sum(axis=1)
+        bel_interest = (bel[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
+        ra_interest = (ra[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
         movements.append(VFAPeriodMovement(
             month_start=a,
             month_end=b,

@@ -81,7 +81,7 @@ class VFAMeasurement:
     csm_accretion: FloatArray | None = None       # (n_mp, n_time)
     csm_release: FloatArray | None = None          # (n_mp, n_time)
     lic: FloatArray | None = None                 # (n_mp, n_time+1)
-    discount_bom: FloatArray | None = None      # (n_time+1,)
+    discount_bom: FloatArray | None = None      # (n_time+1,), or (n_mp, n_time+1) when portfolio-stitched
     cashflows: "Cashflows | None" = None
     model_points: "ModelPoints | None" = None     # stamped by measure_vfa, for group axes
     group_labels: "np.ndarray | None" = None       # per-group label on a grouped result
@@ -108,6 +108,83 @@ def _(measurement: VFAMeasurement, path, *, ids=None):
          "variable_fee": measurement.variable_fee,
          "time_value": measurement.time_value,
          "loss_component": measurement.loss_component}, path, ids)
+
+
+def _stitch_vfa_measurements(n_mp, sub_results):
+    """Scatter per-segment VFAMeasurements into one ``(n_mp, ...)`` result.
+
+    ``sub_results`` is ``[(idx, VFAMeasurement)]`` -- each segment's headline and
+    trajectories are laid into the portfolio arrays at its rows and zero-padded
+    on the right to the portfolio's longest horizon (a contract carries no BEL /
+    CSM past its term). Like the GMM stitch, ``discount_bom`` becomes per-MP 2-D:
+    VFA discounts at each segment's underlying-items return, so the curve is a
+    property of the row, not one curve for the book. The padded tail repeats
+    each row's last factor (a flat curve -> zero forward rate) so a rate read off
+    it is finite, not a 0/0. The mixed-portfolio orchestrator
+    (``fcf.portfolio.measure``) uses this to combine a VFA partition that spans
+    several routing segments into one ``VFAMeasurement``.
+    """
+    n_time = max(m.bel_path.shape[1] - 1 for _, m in sub_results)
+
+    bel = np.empty(n_mp)
+    ra = np.empty(n_mp)
+    csm = np.empty(n_mp)
+    variable_fee = np.empty(n_mp)
+    time_value = np.empty(n_mp)
+    loss_component = np.empty(n_mp)
+    bel_path = np.zeros((n_mp, n_time + 1))
+    ra_path = np.zeros((n_mp, n_time + 1))
+    csm_path = np.zeros((n_mp, n_time + 1))
+    account_value_path = np.zeros((n_mp, n_time + 1))
+    csm_accretion = np.zeros((n_mp, n_time))
+    csm_release = np.zeros((n_mp, n_time))
+    lic = np.zeros((n_mp, n_time + 1))
+    discount_bom = np.ones((n_mp, n_time + 1))
+
+    cf_2d = ("inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
+             "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
+    cf_arrays = {name: np.zeros((n_mp, n_time)) for name in cf_2d}
+    maturity_cf = np.zeros(n_mp)
+    maturity_survivors = np.zeros(n_mp)
+
+    for idx, m in sub_results:
+        t = m.bel_path.shape[1] - 1
+        bel[idx] = m.bel
+        ra[idx] = m.ra
+        csm[idx] = m.csm
+        variable_fee[idx] = m.variable_fee
+        time_value[idx] = m.time_value
+        loss_component[idx] = m.loss_component
+        bel_path[idx, :t + 1] = m.bel_path
+        ra_path[idx, :t + 1] = m.ra_path
+        csm_path[idx, :t + 1] = m.csm_path
+        account_value_path[idx, :t + 1] = m.account_value_path
+        csm_accretion[idx, :t] = m.csm_accretion
+        csm_release[idx, :t] = m.csm_release
+        lic[idx, :t + 1] = m.lic
+        # Per-MP discount: lay the segment's 1-D curve across its rows, then
+        # flat-fill the tail so the padded months read a zero forward rate.
+        discount_bom[idx, :t + 1] = m.discount_bom
+        discount_bom[idx, t + 1:] = m.discount_bom[-1]
+        cf = m.cashflows
+        for name in cf_2d:
+            arr = getattr(cf, name)
+            cf_arrays[name][idx, :arr.shape[1]] = arr
+        maturity_cf[idx] = cf.maturity_cf
+        maturity_survivors[idx] = cf.maturity_survivors
+
+    cashflows = type(sub_results[0][1].cashflows)(
+        maturity_cf=maturity_cf, maturity_survivors=maturity_survivors,
+        **cf_arrays,
+    )
+    return VFAMeasurement(
+        bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
+        time_value=time_value, loss_component=loss_component,
+        bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
+        account_value_path=account_value_path,
+        csm_accretion=csm_accretion, csm_release=csm_release, lic=lic,
+        discount_bom=discount_bom, cashflows=cashflows,
+    )
 
 
 def measure_vfa(

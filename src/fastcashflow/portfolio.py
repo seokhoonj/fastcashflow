@@ -7,10 +7,12 @@ BEL and an LRC are never summed into one array. Each contract is routed to its
 segment's measurement model; that row partition is the orchestrator's core and
 is validated as a construction invariant.
 
-P-3 implemented the row partition and the GMM execution; P-4 adds the PAA
-executor (segments stitched into one ``PAAMeasurement``). A portfolio that
-also carries VFA rows still raises ``NotImplementedError`` after the partition
-is validated -- a non-GMM row is never silently measured as GMM.
+P-3 implemented the row partition and the GMM execution; P-4 adds the PAA and
+VFA executors (each model's segments stitched into one native measurement). A
+non-GMM row is never silently measured as GMM. The VFA stitch carries a per-MP
+2-D ``discount_bom`` because segments discount at their own underlying-items
+return, and the movement / grouping consumers handle that 2-D curve (grouping
+keeps a group inside one curve).
 """
 from __future__ import annotations
 
@@ -22,7 +24,8 @@ import numpy as np
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
     PAAMeasurement, measure_paa, _stitch_paa_measurements)
-from fastcashflow._vfa import VFAMeasurement
+from fastcashflow._vfa import (
+    VFAMeasurement, measure_vfa, _stitch_vfa_measurements)
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
     GMMMeasurement, _factorise_segments, measure as _measure_gmm)
@@ -196,10 +199,10 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     separate. ``full`` matches :func:`fcf.gmm.measure` (the full trajectory vs
     the fused headline).
 
-    GMM and PAA segments are measured; a portfolio that also has VFA rows
-    raises ``NotImplementedError`` *after* the partition is validated (the VFA
-    executor is the remaining P-4 step). A non-GMM row is never silently
-    measured as GMM -- each model's rows reach only its own kernel.
+    Each model's rows are routed to its own kernel and kept in a separate slot
+    of the result. A non-GMM row is never silently measured as GMM. Per-segment
+    VFA return scenarios (the guarantee time value) are a future extension --
+    the mixed path measures the VFA intrinsic value (deterministic) only.
     """
     if not isinstance(basis, BasisRouter):
         raise TypeError(
@@ -211,12 +214,6 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     if covered != model_points.n_mp:                  # factorisation must be total
         raise ValueError(
             f"model partition covers {covered} of {model_points.n_mp} rows")
-    if parts["VFA"].size:
-        raise NotImplementedError(
-            f"fcf.portfolio.measure measures GMM and PAA segments so far; this "
-            f"portfolio has {int(parts['VFA'].size)} VFA row(s) (VFA execution "
-            f"is the remaining P-4 step). The partition is valid -- only the VFA "
-            f"executor is missing.")
     slots = {}
     gmm_idx = parts["GMM"]
     if gmm_idx.size:
@@ -230,4 +227,10 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
             model_points.subset(paa_idx), _submodel_router(basis, "PAA"),
             measure_paa, _stitch_paa_measurements)
         slots["paa"] = ModelMeasurement(index=paa_idx, measurement=paa_meas)
+    vfa_idx = parts["VFA"]
+    if vfa_idx.size:
+        vfa_meas = _measure_model_segmented(
+            model_points.subset(vfa_idx), _submodel_router(basis, "VFA"),
+            measure_vfa, _stitch_vfa_measurements)
+        slots["vfa"] = ModelMeasurement(index=vfa_idx, measurement=vfa_meas)
     return PortfolioMeasurement(model_points=model_points, **slots)
