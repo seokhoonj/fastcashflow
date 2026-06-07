@@ -1098,6 +1098,18 @@ def test_basis_settlement_pattern_with_scalar_discount_ok():
     _basis1(settlement_pattern=np.array([0.5, 0.3, 0.2]), discount_annual=0.03)
 
 
+def test_gmm_expense_cv_raises_not_implemented():
+    """expense_cv is not priced in the GMM / PAA RA; raise rather than silently
+    ignore it (the setting would otherwise be a no-op). Both measure paths."""
+    mp = ModelPoints.single(40, 0.0, 12, benefits={"DEATH": 1000.0},
+                            calculation_methods={"DEATH": CalculationMethod.DEATH})
+    basis = _basis1(expense_cv=0.5)
+    with pytest.raises(NotImplementedError, match="expense_cv is not included"):
+        fcf.gmm.measure(mp, basis)               # full path (_risk_adjustment)
+    with pytest.raises(NotImplementedError, match="expense_cv is not included"):
+        fcf.gmm.measure(mp, basis, full=False)   # fast path (engine)
+
+
 def test_basis_expense_inflation_at_or_below_negative_one():
     with pytest.raises(ValueError, match="expense_inflation must be > -1.0"):
         _basis1(expense_inflation=-1.5)

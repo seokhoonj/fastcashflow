@@ -2294,6 +2294,13 @@ def _measure_fast(
             )
         monthly_curve = (1.0 + discount_curve) ** (1.0 / 12.0) - 1.0
         discount_bom, discount_mid = discount_factors_from_curve(monthly_curve)
+    if basis.expense_cv != 0.0:
+        raise NotImplementedError(
+            "expense_cv is not included in the GMM / PAA risk adjustment -- only "
+            "the mortality / morbidity / disability / longevity risks are priced "
+            "(there is no expense-risk PV in this RA). Set expense_cv=0 for a "
+            "GMM / PAA measurement. (The VFA RA does price expense_cv.)"
+        )
     z = _norm_ppf(basis.ra_confidence)
     mortality_factor = z * basis.mortality_cv
     morbidity_factor = z * basis.morbidity_cv

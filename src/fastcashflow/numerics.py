@@ -195,6 +195,13 @@ def _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
     ``pv_*`` may be the full ``(n_mp, n_time+1)`` trajectory (GMM, PAA) -- the
     cost-of-capital branch needs the trajectory; the caller slices what it needs.
     """
+    if basis.expense_cv != 0.0:
+        raise NotImplementedError(
+            "expense_cv is not included in the GMM / PAA risk adjustment -- only "
+            "the mortality / morbidity / disability / longevity risks are priced "
+            "(there is no expense-risk PV in this RA). Set expense_cv=0 for a "
+            "GMM / PAA measurement. (The VFA RA does price expense_cv.)"
+        )
     z = _norm_ppf(basis.ra_confidence)
     confidence_margin = z * (basis.mortality_cv * pv_claims
                      + basis.morbidity_cv * pv_morbidity
