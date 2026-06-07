@@ -2015,7 +2015,7 @@ def _measure_fast(
             "fused fast path does not yet apply it. Use measure(..., full=True)."
         )
     # State-conditioned death benefit (death_benefit_factor) and true
-    # occupancy exit (exit_after) are projected on the full path only in v1.
+    # occupancy exit (exit_after_months) are projected on the full path only in v1.
     # Inspect the States directly (no compile) so a benefit_max_months-only
     # model still runs fast; reject only when a new field is non-default.
     _sm = resolve_state_model(basis)
@@ -2025,9 +2025,9 @@ def _measure_fast(
             "supported on measure(full=True) only; the fused fast path applies "
             "the aggregate death claim on plain in-force. Use full=True."
         )
-    if any(s.exit_after for s in _sm.states):
+    if any(s.exit_after_months for s in _sm.states):
         raise NotImplementedError(
-            "true occupancy exit (State.exit_after) is supported on "
+            "true occupancy exit (State.exit_after_months) is supported on "
             "measure(full=True) only. Use measure(..., full=True)."
         )
     # The projection horizon is the contract boundary (defaults to the term).

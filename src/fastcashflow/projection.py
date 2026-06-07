@@ -503,7 +503,7 @@ def _project_kernel_semi_markov(
                 src_off = state_offset[s_from]
                 is_residual = s_from == s_to
                 if is_residual:
-                    # ``exit_after`` drops the cohort once its sojourn reaches
+                    # ``exit_after_months`` drops the cohort once its sojourn reaches
                     # the boundary: the advanced flow is simply not written to
                     # occ_next, so it leaves the in-force set (= a ``to=None``
                     # transition). ``0`` disables it (no drop). Lump-sum still

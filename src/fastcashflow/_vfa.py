@@ -156,9 +156,9 @@ def measure_vfa(
             "floor on the occupancy decrement, which the GMM death-claim "
             "factor does not reach."
         )
-    if any(s.exit_after for s in state_model.states):
+    if any(s.exit_after_months for s in state_model.states):
         raise NotImplementedError(
-            "true occupancy exit (State.exit_after) is not supported on the "
+            "true occupancy exit (State.exit_after_months) is not supported on the "
             "VFA path."
         )
     proj = project_cashflows(model_points, basis)

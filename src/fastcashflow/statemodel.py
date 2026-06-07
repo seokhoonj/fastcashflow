@@ -90,7 +90,7 @@ class CompiledStateModel:
     # ``(n_states,)`` float, all-ones default. Occupancy-weighted into the
     # aggregate death claim: ``claim = (sum_s occ[s]*factor[s]) * claim_rate``.
     state_death_benefit_factor: FloatArray | None = None
-    # Per-state sojourn exit (``State.exit_after``), ``(n_states,)`` int, zeros
+    # Per-state sojourn exit (``State.exit_after_months``), ``(n_states,)`` int, zeros
     # default. Semi-Markov only: a cohort reaching this sojourn leaves the
     # in-force set (no occ_next write). ``None`` for Markov models.
     state_exit_after: IntArray | None = None
@@ -165,13 +165,13 @@ class State:
     Supported on the full path only (``measure(full=True)``); the fast path and
     the VFA path reject a non-default factor.
 
-    ``exit_after`` removes occupancy from the in-force set once a cohort's
-    sojourn in this state reaches ``exit_after`` months (default ``0`` =
+    ``exit_after_months`` removes occupancy from the in-force set once a cohort's
+    sojourn in this state reaches ``exit_after_months`` months (default ``0`` =
     never). Semi-Markov only -- it needs sojourn tracking, so the state must
     set ``duration_max``. Distinct from ``benefit_max_months`` (which stops the
-    payment but keeps the lives in force): ``exit_after`` ends the cover. A
+    payment but keeps the lives in force): ``exit_after_months`` ends the cover. A
     guaranteed-payout state that pays a fixed term and then lapses sets
-    ``benefit_max_months`` (pay window) and ``exit_after`` (cover end) together.
+    ``benefit_max_months`` (pay window) and ``exit_after_months`` (cover end) together.
     """
 
     name: str
@@ -182,7 +182,7 @@ class State:
     benefit_max_months: int = 0
     mortality_rate: str = "mortality"
     death_benefit_factor: float = 1.0
-    exit_after: int = 0
+    exit_after_months: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "transitions", tuple(self.transitions))
@@ -230,32 +230,32 @@ class State:
                 f"state {self.name!r}: death_benefit_factor must be "
                 f"non-negative, got {factor}"
             )
-        # ``exit_after`` drops the cohort from the in-force set at the given
+        # ``exit_after_months`` drops the cohort from the in-force set at the given
         # sojourn. Semi-Markov only -- needs duration tracking; and strictly
         # below the absorbing cohort, mirroring the benefit_max_months guard:
-        # at exit_after == duration_max the absorbing advance maxes next_tau at
-        # D-1 < exit_after, so the gate never fires (silent hold-forever).
-        exit_after = int(self.exit_after)
-        object.__setattr__(self, "exit_after", exit_after)
-        if exit_after < 0:
+        # at exit_after_months == duration_max the absorbing advance maxes next_tau at
+        # D-1 < exit_after_months, so the gate never fires (silent hold-forever).
+        exit_after_months = int(self.exit_after_months)
+        object.__setattr__(self, "exit_after_months", exit_after_months)
+        if exit_after_months < 0:
             raise ValueError(
-                f"state {self.name!r}: exit_after must be non-negative, "
-                f"got {exit_after}"
+                f"state {self.name!r}: exit_after_months must be non-negative, "
+                f"got {exit_after_months}"
             )
-        if exit_after > 0:
-            if self.duration_max <= exit_after:
+        if exit_after_months > 0:
+            if self.duration_max <= exit_after_months:
                 raise ValueError(
                     f"state {self.name!r}: duration_max ({self.duration_max}) "
-                    f"must exceed exit_after ({exit_after}); otherwise the "
+                    f"must exceed exit_after_months ({exit_after_months}); otherwise the "
                     f"absorbing cohort never reaches the exit boundary and the "
-                    f"cohort is held forever. Set duration_max > exit_after "
-                    f"(semi-Markov: exit_after needs duration tracking)."
+                    f"cohort is held forever. Set duration_max > exit_after_months "
+                    f"(semi-Markov: exit_after_months needs duration tracking)."
                 )
-            if cap > 0 and exit_after < cap:
+            if cap > 0 and exit_after_months < cap:
                 raise ValueError(
-                    f"state {self.name!r}: exit_after ({exit_after}) must be "
+                    f"state {self.name!r}: exit_after_months ({exit_after_months}) must be "
                     f">= benefit_max_months ({cap}); pay the cap, then exit. "
-                    f"The valid stack is duration_max > exit_after >= "
+                    f"The valid stack is duration_max > exit_after_months >= "
                     f"benefit_max_months."
                 )
 
@@ -456,9 +456,9 @@ def compile_state_model(
             "duration-tracked states"
         )
     for s in model.states:
-        if s.exit_after > 0:
+        if s.exit_after_months > 0:
             raise ValueError(
-                f"state {s.name!r}: exit_after needs sojourn tracking and is "
+                f"state {s.name!r}: exit_after_months needs sojourn tracking and is "
                 f"semi-Markov only; set duration_max to switch the state to a "
                 f"semi-Markov model"
             )
@@ -739,5 +739,5 @@ def compile_state_model_with_duration(
         state_death_benefit_factor=np.array(
             [s.death_benefit_factor for s in model.states], dtype=np.float64),
         state_exit_after=np.array(
-            [s.exit_after for s in model.states], dtype=np.int64),
+            [s.exit_after_months for s in model.states], dtype=np.int64),
     )
