@@ -118,12 +118,44 @@ class Transition:
     ``sojourn_tracking_months > 0`` -- the engine tracks per-cohort occupancy there.
     The rate function for a duration-dependent transition takes a fourth
     argument ``state_duration`` (months in source state).
+
+    ``after_sojourn_months`` makes the transition **deterministic** (probability
+    one) at a fixed sojourn: when a cohort's sojourn in the source state reaches
+    this many months, all of it moves to ``to`` (or leaves the in-force set when
+    ``to is None``). It carries no ``rate`` (the move is certain). This expresses
+    a cover that ends after a fixed term (``to=None``), or a guaranteed
+    conversion to another state (``to="active"``). At most one deterministic
+    transition per state.
     """
 
-    rate: str
+    rate: str | None = None
     to: str | None = None
     pays_lump_sum: bool = False
     sojourn_dependent: bool = False
+    after_sojourn_months: int = 0
+
+    def __post_init__(self) -> None:
+        det = int(self.after_sojourn_months) > 0
+        object.__setattr__(self, "after_sojourn_months", int(self.after_sojourn_months))
+        if self.after_sojourn_months < 0:
+            raise ValueError(
+                "Transition.after_sojourn_months must be non-negative, got "
+                f"{self.after_sojourn_months}"
+            )
+        if det and self.rate is not None:
+            raise ValueError(
+                "a deterministic transition (after_sojourn_months > 0) carries no "
+                "rate; it fires with probability one"
+            )
+        if not det and self.rate is None:
+            raise ValueError(
+                "a Transition needs either a rate or after_sojourn_months > 0"
+            )
+        if det and self.sojourn_dependent:
+            raise ValueError(
+                "after_sojourn_months is already sojourn-keyed; do not also set "
+                "sojourn_dependent"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,16 +269,33 @@ class State:
                 f"state {self.name!r}: exit_after_months ({exit_after_months}) must be "
                 f">= periodic_benefit_term_months ({cap}); pay the cap, then exit."
             )
+        # Deterministic transitions (Transition.after_sojourn_months > 0): at
+        # most one per state (two prob-1 edges from one cohort are ill-defined),
+        # and it must clear the pay cap (pay the cap, then move / exit).
+        det_months = [tr.after_sojourn_months for tr in self.transitions
+                      if tr.after_sojourn_months > 0]
+        if len(det_months) > 1:
+            raise ValueError(
+                f"state {self.name!r}: at most one deterministic transition "
+                f"(after_sojourn_months > 0) per state, got {len(det_months)}"
+            )
+        det = max(det_months) if det_months else 0
+        if det > 0 and cap > 0 and det < cap:
+            raise ValueError(
+                f"state {self.name!r}: a deterministic transition's "
+                f"after_sojourn_months ({det}) must be >= "
+                f"periodic_benefit_term_months ({cap}); pay the cap, then move."
+            )
         # Sojourn tracking: the engine tracks one monthly cohort per sojourn
         # month, the last cohort absorbing everyone at that sojourn or beyond.
-        # A deterministic boundary (periodic_benefit_term_months / exit_after_months)
-        # needs one guard cohort past it -- otherwise the absorbing cohort sits
-        # at the boundary and capped / exiting lives re-accumulate and never stop.
-        # Auto-derive that ``+1`` so the caller never meets the off-by-one; an
-        # explicit sojourn_tracking_months only sets a *longer* tail (for a
-        # sojourn-dependent rate whose tail outruns the boundary) and must still
-        # clear the boundary.
-        boundary = max(cap, exit_after_months)
+        # A deterministic boundary (periodic_benefit_term_months / exit_after_months
+        # / a deterministic transition) needs one guard cohort past it -- otherwise
+        # the absorbing cohort sits at the boundary and capped / exiting lives
+        # re-accumulate and never stop. Auto-derive that ``+1`` so the caller never
+        # meets the off-by-one; an explicit sojourn_tracking_months only sets a
+        # *longer* tail (for a sojourn-dependent rate whose tail outruns the
+        # boundary) and must still clear the boundary.
+        boundary = max(cap, exit_after_months, det)
         if boundary > 0:
             if self.sojourn_tracking_months == 0:
                 object.__setattr__(self, "sojourn_tracking_months", boundary + 1)
@@ -462,6 +511,12 @@ def compile_state_model(
                 f"semi-Markov only; set sojourn_tracking_months to switch the state to a "
                 f"semi-Markov model"
             )
+        if any(tr.after_sojourn_months > 0 for tr in s.transitions):
+            raise ValueError(
+                f"state {s.name!r}: a deterministic transition "
+                f"(after_sojourn_months > 0) needs sojourn tracking and is "
+                f"semi-Markov only"
+            )
     arrays = {name: np.asarray(arr, dtype=np.float64)
               for name, arr in rates.items()}
     if not arrays:
@@ -567,6 +622,16 @@ def compile_state_model_with_duration(
             "compile_state_model_with_duration needs at least one rate array"
         )
     index = {s.name: i for i, s in enumerate(model.states)}
+    # Deterministic transitions (Transition.after_sojourn_months > 0) are
+    # recognised by the auto-derive and the public API, but their kernel routing
+    # lands in the next step; until then express a fixed-sojourn cover end with
+    # ``State.exit_after_months`` (to=None only). Raise rather than silently drop.
+    if any(tr.after_sojourn_months > 0
+           for s in model.states for tr in s.transitions):
+        raise NotImplementedError(
+            "Transition(after_sojourn_months=...) routing is not implemented yet; "
+            "use State.exit_after_months for a fixed-sojourn cover end"
+        )
     # Effective cohort count per state: untracked -> 1, tracked -> sojourn_tracking_months.
     state_duration_max = np.array(
         [max(s.sojourn_tracking_months, 1) for s in model.states], dtype=np.int64,

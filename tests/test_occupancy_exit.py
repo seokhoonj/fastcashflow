@@ -150,3 +150,32 @@ def test_fast_path_rejects_exit_after():
     fast = fcf.gmm.measure(_seated_mp(12), _basis(0, cap=3), full=False)
     full = fcf.gmm.measure(_seated_mp(12), _basis(0, cap=3), full=True)
     assert fast.bel[0] == pytest.approx(full.bel[0], rel=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Deterministic transition scaffold (Transition.after_sojourn_months) -- the
+# public API + auto-derive land first; kernel routing follows.
+# ---------------------------------------------------------------------------
+def test_after_sojourn_months_validation():
+    from fastcashflow.statemodel import Transition
+    with pytest.raises(ValueError, match="carries no rate"):
+        Transition(rate="recovery", after_sojourn_months=5)
+    with pytest.raises(ValueError, match="needs either a rate or after_sojourn_months"):
+        Transition()
+    with pytest.raises(ValueError, match="already sojourn-keyed"):
+        Transition(after_sojourn_months=5, sojourn_dependent=True)
+    t = Transition(after_sojourn_months=5, to=None)
+    assert t.rate is None and t.after_sojourn_months == 5
+
+
+def test_after_sojourn_months_auto_derives_tracking():
+    from fastcashflow.statemodel import State, Transition
+    s = State("x", transitions=(Transition(after_sojourn_months=6, to=None),))
+    assert s.sojourn_tracking_months == 7          # boundary 6 + 1 guard cohort
+    with pytest.raises(ValueError, match="at most one deterministic transition"):
+        State("x", transitions=(Transition(after_sojourn_months=3, to=None),
+                                Transition(after_sojourn_months=4, to=None)))
+    # must clear the pay cap
+    with pytest.raises(ValueError, match=">= "):
+        State("x", pays_periodic_benefit=True, periodic_benefit_term_months=6,
+              transitions=(Transition(after_sojourn_months=3, to=None),))
