@@ -20,7 +20,7 @@
 import fastcashflow as fcf
 
 model_points = fcf.samples.model_points()                   # 패키지 샘플 포트폴리오
-basis        = fcf.samples.basis()[("TERM_LIFE_A", "FC")]   # 이익 나는 한 세그먼트
+basis        = fcf.samples.basis().resolve(("TERM_LIFE_A", "FC"))   # 이익 나는 한 세그먼트
 m            = fcf.gmm.measure(model_points, basis)
 ```
 

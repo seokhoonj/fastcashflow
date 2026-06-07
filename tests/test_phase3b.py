@@ -139,7 +139,7 @@ def test_write_measurement_dispatches_per_model(tmp_path):
     import fastcashflow as fcf
     import numpy as np
     mp = fcf.samples.model_points()
-    b = fcf.samples.basis()[("HEALTH_A", "FC")]
+    b = fcf.samples.basis().resolve(("HEALTH_A", "FC"))
     idx = np.where((np.asarray(mp.product) == "HEALTH_A") &
                    (np.asarray(mp.channel) == "FC"))[0]
     sub = mp.subset(idx)
@@ -165,7 +165,7 @@ def test_measurement_equality_is_identity():
     import fastcashflow as fcf
     import numpy as np
     mp = fcf.samples.model_points()
-    b = fcf.samples.basis()[("HEALTH_A", "FC")]
+    b = fcf.samples.basis().resolve(("HEALTH_A", "FC"))
     idx = np.where((np.asarray(mp.product) == "HEALTH_A") &
                    (np.asarray(mp.channel) == "FC"))[0]
     m = fcf.gmm.measure(mp.subset(idx), b)
@@ -291,7 +291,7 @@ def test_measure_stream_rejects_global_duplicate_mp_id(tmp_path):
 def test_load_sample_data_runs():
     """The bundled sample data loads and values without error."""
     mps = fcf.samples.model_points()
-    basis = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().segments.values()))
     assert mps.n_mp > 0
     val = measure(mps, basis, full=False)
     assert val.bel.shape == (mps.n_mp,)
@@ -312,7 +312,7 @@ def test_describe_basis_renders_both_shapes(capsys):
     """describe_basis prints a tree for a Basis and for a dict."""
     from fastcashflow import describe_basis
     basis_dict = fcf.samples.basis()
-    seg_basis = next(iter(basis_dict.values()))
+    seg_basis = next(iter(basis_dict.segments.values()))
 
     describe_basis(seg_basis)
     out_one = capsys.readouterr().out
@@ -323,7 +323,8 @@ def test_describe_basis_renders_both_shapes(capsys):
 
     describe_basis(basis_dict)
     out_dict = capsys.readouterr().out
-    assert "(7 segments)" in out_dict
+    assert "BasisRouter" in out_dict
+    assert "7 segments" in out_dict
     # every segment unfolded -- both ('TERM_LIFE_A', 'GA') and ('TERM_LIFE_A', 'FC') appear
     assert "('TERM_LIFE_A', 'GA')" in out_dict
     assert "('TERM_LIFE_A', 'FC')" in out_dict
@@ -333,7 +334,7 @@ def test_long_form_round_trips(tmp_path):
     """A policies + coverages pair written out and re-read through
     read_model_points reproduces the valuation."""
 
-    basis = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().segments.values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     policies, coverages = mp_to_frames(mps, basis)
@@ -350,7 +351,7 @@ def test_long_form_round_trips(tmp_path):
 def test_measure_stream_streams_frames(tmp_path):
     """gmm.measure_stream streams a policies + coverages pair in chunks."""
     
-    basis = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().segments.values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     policies, coverages = mp_to_frames(mps, basis)
@@ -377,7 +378,7 @@ def test_measure_stream_routes_a_basis_dict(tmp_path):
     basis_dict = fcf.samples.basis()                 # {(product, channel): Basis}
     patterns   = fcf.samples.calculation_methods()
     mps        = fcf.samples.model_points()
-    policies, coverages = mp_to_frames(mps, next(iter(basis_dict.values())))
+    policies, coverages = mp_to_frames(mps, next(iter(basis_dict.segments.values())))
     # the dict path routes on the segment keys, so they must ride on the policies frame
     policies = policies.with_columns(
         pl.Series("product", mps.product),
@@ -406,7 +407,7 @@ def test_measure_stream_dict_needs_segment_keys(tmp_path):
     basis_dict = fcf.samples.basis()
     patterns   = fcf.samples.calculation_methods()
     mps        = fcf.samples.model_points()
-    policies, coverages = mp_to_frames(mps, next(iter(basis_dict.values())))
+    policies, coverages = mp_to_frames(mps, next(iter(basis_dict.segments.values())))
     policies.write_parquet(tmp_path / "pol.parquet")     # segment keys deliberately absent
     coverages.write_parquet(tmp_path / "cov.parquet")
 

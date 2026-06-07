@@ -95,12 +95,12 @@ def test_measure_inforce_routes_a_multi_segment_dict(tmp_path):
     st = _reconcile_state(mp, state)
     prod, chan = np.asarray(mp.product), np.asarray(mp.channel)
     seen = 0
-    for key in basis:
+    for key in basis.segments:
         idx = np.nonzero((prod == key[0]) & (chan == key[1]))[0]
         if idx.size == 0:
             continue
         ref = fcf.gmm.measure_inforce(mp.subset(idx), st.subset(idx),
-                                      basis[key], period_months=3)
+                                      basis.resolve(key), period_months=3)
         assert np.allclose(routed.bel[idx], ref.bel)
         assert np.allclose(routed.csm[idx], ref.csm)
         seen += idx.size

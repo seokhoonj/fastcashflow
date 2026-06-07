@@ -145,10 +145,10 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # 2) 워크북을 읽으면 (product, channel) → Basis 사전
     basis = fcf.read_basis(tmp / "basis.xlsx")
-    print("segments =", sorted(basis))
+    print("segments =", sorted(basis.segments))
 
     # 3) 한 segment 의 가정 개체를 꺼내 본다
-    asmp = basis[("TERM_LIFE_A", "FC")]
+    asmp = basis.resolve(("TERM_LIFE_A", "FC"))
     print("ra_confidence   =", asmp.ra_confidence)
     print("mortality_cv    =", asmp.mortality_cv)
     print("discount_annual =", asmp.discount_annual[:4].round(5), "...",
@@ -179,7 +179,7 @@ CSM sum = 10,280,704
 
 - `read_basis` 는 **사전** 을 돌려줍니다 — 견본은 7 개 segment. 단일
   segment 워크북이면 행이 하나뿐이고 사전 키도 하나입니다.
-- `basis[("TERM_LIFE_A", "FC")]` 가 그 segment 의 `Basis` 개체입니다.
+- `basis.resolve(("TERM_LIFE_A", "FC"))` 가 그 segment 의 `Basis` 개체입니다.
   `ra_confidence` 0.75 / `state_model` = WAIVER 는 `_DEFAULTS` 행에서,
   `lapse_table` = `LAPSE_TERM_FC` 는 segment 행에서 온 값입니다.
 - `discount_annual` 이 길이 101 배열인 것은 견본 `discount_tables` 가 국고채

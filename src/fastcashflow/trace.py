@@ -22,7 +22,7 @@ from typing import IO
 
 import numpy as np
 
-from fastcashflow.basis import Basis
+from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.coverage import CalculationMethod, method_attrs
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._typing import FloatArray
@@ -137,20 +137,20 @@ def show_trace(
         )
     i = mp_index
 
-    # Multi-segment dict basis: route to the right segment by (product, channel).
-    if isinstance(basis, dict):
+    # Multi-segment BasisRouter: route to the right segment by (product, channel).
+    if isinstance(basis, BasisRouter):
         if model_points.product is None or model_points.channel is None:
             raise ValueError(
-                "model_points has no product / channel columns -- a dict "
-                "basis cannot be routed; pass a single Basis instead"
+                "model_points has no product / channel columns -- a "
+                "BasisRouter cannot be routed; pass a single Basis instead"
             )
         key = (str(model_points.product[i]), str(model_points.channel[i]))
         try:
-            basis = basis[key]
+            basis = basis.segments[key]
         except KeyError:
             raise KeyError(
                 f"no basis for segment {key}; "
-                f"available: {list(basis)}"
+                f"available: {list(basis.segments)}"
             ) from None
 
     # Single-row slice + measure. Subsetting first keeps the trace cost
@@ -742,19 +742,19 @@ def _resolve_basis(
     Mirrors the dict-routing behaviour of :func:`show_trace`. Factored
     out so the diff variant can resolve two bases the same way.
     """
-    if not isinstance(basis, dict):
+    if not isinstance(basis, BasisRouter):
         return basis
     if model_points.product is None or model_points.channel is None:
         raise ValueError(
-            "model_points has no product / channel columns -- a dict "
-            "basis cannot be routed; pass a single Basis instead"
+            "model_points has no product / channel columns -- a "
+            "BasisRouter cannot be routed; pass a single Basis instead"
         )
     key = (str(model_points.product[i]), str(model_points.channel[i]))
     try:
-        return basis[key]
+        return basis.segments[key]
     except KeyError:
         raise KeyError(
-            f"no basis for segment {key}; available: {list(basis)}"
+            f"no basis for segment {key}; available: {list(basis.segments)}"
         ) from None
 
 

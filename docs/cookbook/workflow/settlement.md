@@ -148,7 +148,7 @@ state = fcf.align_inforce_state(portfolio, state)
 
 # 세그먼트별 결산 측정 -- 합계
 bel = ra = csm = csm_prior = 0.0
-for key, segment_basis in basis.items():
+for key, segment_basis in basis.segments.items():
     idx = np.where((np.asarray(mp.product) == key[0]) &
                    (np.asarray(mp.channel) == key[1]))[0]
     if len(idx) == 0:

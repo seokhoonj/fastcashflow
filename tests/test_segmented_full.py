@@ -13,13 +13,14 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
+from fastcashflow.basis import BasisRouter
 from conftest import PATTERNS, make_death_basis
 
 
 def _segments(mp, basis):
     pc = np.array(mp.product)
     ch = np.array(mp.channel)
-    for key in basis:
+    for key in basis.segments:
         idx = np.nonzero((pc == key[0]) & (ch == key[1]))[0]
         if idx.size:
             yield key, idx
@@ -41,7 +42,7 @@ def test_segmented_full_equals_per_segment():
 
     seen = 0
     for key, idx in _segments(mp, basis):
-        ref = fcf.gmm.measure(mp.subset(idx), basis[key])   # single basis -> full
+        ref = fcf.gmm.measure(mp.subset(idx), basis.resolve(key))   # single basis -> full
         t = ref.bel_path.shape[1] - 1
         for field in ("bel_path", "ra_path", "csm_path"):
             block = getattr(m, field)[idx, :t + 1]
@@ -67,7 +68,7 @@ def test_segmented_full_rollforward_matches_aggregated_segments():
                             "csm_closing", "bel_opening", "ra_opening")}
     for key, idx in _segments(mp, basis):
         r0 = fcf.reconcile(fcf.roll_forward(
-            fcf.gmm.measure(mp.subset(idx), basis[key]), period_months=12))[0]
+            fcf.gmm.measure(mp.subset(idx), basis.resolve(key)), period_months=12))[0]
         for k in agg:
             agg[k] += float(np.asarray(getattr(r0, k)).sum())
 
@@ -82,7 +83,7 @@ def test_segmented_full_rollforward_matches_aggregated_segments():
 def test_single_segment_basis_stays_1d():
     """A single Basis (not a dict) keeps the 1-D discount curve."""
     mp = fcf.samples.model_points()
-    basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "FC"))
     m = fcf.gmm.measure(mp.subset([0]), basis)
     assert m.discount_bom.ndim == 1
     assert m.discount_mid.ndim == 1
@@ -105,7 +106,7 @@ def test_segmented_full_ops_match_per_segment():
     gm = fcf.group(m, seg_id)
 
     for g, (key, idx) in enumerate(segs):
-        sm = fcf.gmm.measure(mp.subset(idx), basis[key])
+        sm = fcf.gmm.measure(mp.subset(idx), basis.resolve(key))
         t = sm.bel_path.shape[1] - 1
         # transition: per-MP CSM matches the segment measured alone
         st = fcf.transition(sm, fv[idx])
@@ -144,7 +145,7 @@ def test_segmented_full_group_rejects_mixed_curves():
     """group() refuses a group spanning genuinely different discount curves --
     a group must sit in one portfolio (basis)."""
     m = fcf.gmm.measure(_two_seg_mp([120, 120]),
-                        {("A", "X"): _disc(0.03), ("A", "Y"): _disc(0.05)}, full=True)
+                        BasisRouter({("A", "X"): _disc(0.03), ("A", "Y"): _disc(0.05)}), full=True)
     with pytest.raises(ValueError, match="different discount curves"):
         fcf.group(m, np.zeros(2, dtype=int))            # 3% and 5% in one group
 
@@ -154,7 +155,7 @@ def test_segmented_full_group_allows_same_curve_different_terms():
     maturity discounts zero in-force and never reaches the CSM, so it must not
     be mistaken for a different discount curve."""
     m = fcf.gmm.measure(_two_seg_mp([120, 240]),
-                        {("A", "X"): _disc(0.03), ("A", "Y"): _disc(0.03)}, full=True)
+                        BasisRouter({("A", "X"): _disc(0.03), ("A", "Y"): _disc(0.03)}), full=True)
     g = fcf.group(m, np.zeros(2, dtype=int))            # same 3%, terms 120 & 240
     assert g.bel.shape[0] == 1
     assert np.isclose(g.bel.sum(), m.bel.sum())         # BEL additive, totals match

@@ -77,7 +77,7 @@ def _build_workbook(path: Path, *, mortality_age_shift=None,
 
 
 def _segment(path):
-    return next(iter(read_basis(path).values()))
+    return next(iter(read_basis(path).segments.values()))
 
 
 def test_no_age_shift(tmp_path):

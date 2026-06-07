@@ -302,7 +302,7 @@ def test_gmm_measure_inforce_headline_csm_is_as_of_and_tracks_prior():
     mp = fcf.apply_inforce_state(
         fcf.samples.model_points(), fcf.samples.inforce_state()
     )
-    basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "GA"))
     rows = np.arange(mp.n_mp)
     em = np.asarray(mp.elapsed_months, dtype=np.int64)
 
@@ -346,7 +346,7 @@ def test_inforce_state_subset_is_consistent_and_drives_segment_measure():
     assert sub_state.lock_in_rate == state.lock_in_rate
     assert np.allclose(sub_state.prior_csm, np.asarray(state.prior_csm)[idx])
 
-    val = fcf.gmm.measure_inforce(mp.subset(idx), sub_state, basis[key],
+    val = fcf.gmm.measure_inforce(mp.subset(idx), sub_state, basis.resolve(key),
                                   period_months=3)
     assert np.all(np.isfinite(val.bel)) and np.all(np.isfinite(val.csm))
 
@@ -360,7 +360,7 @@ def test_measure_inforce_requires_reconciled_state():
     from dataclasses import replace
     portfolio = fcf.samples.model_points()
     state = fcf.samples.inforce_state()
-    basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "GA"))
 
     # reconciled pair (what read_inforce_policies returns) -> passes
     mp = fcf.apply_inforce_state(portfolio, state)

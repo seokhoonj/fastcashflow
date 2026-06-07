@@ -11,7 +11,7 @@ import fastcashflow as fcf
 
 
 def main() -> None:
-    basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "FC"))
     book = fcf.samples.model_points()
     seg = np.where((book.product == "TERM_LIFE_A") & (book.channel == "FC"))[0]
     book = book.subset(seg)

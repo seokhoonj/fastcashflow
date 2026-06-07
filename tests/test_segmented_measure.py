@@ -7,6 +7,7 @@ those keys, looks each segment's `Basis` up in the
 and writes the per-mp results back to a single ``(n_mp,)`` `GMMMeasurement`.
 """
 import fastcashflow as fcf
+from fastcashflow.basis import BasisRouter
 import numpy as np
 import pytest
 
@@ -115,8 +116,7 @@ def test_segmented_measure_routes_each_mp_to_its_segment():
     """Each mp's BEL should equal the measure() result on its own segment."""
     basis_high = _flat_basis(discount=0.03)               # lower discount -> larger BEL
     basis_low = _flat_basis(discount=0.10)                # higher discount -> smaller BEL
-    basis = {("TERM_A", "GA"): basis_high, ("TERM_A", "FC"): basis_low}
-
+    basis = BasisRouter({("TERM_A", "GA"): basis_high, ("TERM_A", "FC"): basis_low})
     mp = ModelPoints(
         issue_age=np.array([40, 40, 40]),
         premium=np.zeros(3),
@@ -142,7 +142,7 @@ def test_segmented_measure_routes_each_mp_to_its_segment():
 def test_segmented_measure_falls_back_to_single_segment_when_no_product():
     """A single-segment basis works even when product/channel aren't set."""
     basis = _flat_basis()
-    basis = {("TERM_A", ""): basis}
+    basis = BasisRouter({("TERM_A", ""): basis})
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
         premium=np.zeros(2),
@@ -156,7 +156,7 @@ def test_segmented_measure_falls_back_to_single_segment_when_no_product():
 
 def test_segmented_measure_rejects_multi_segment_basis_without_keys():
     """Multi-segment basis + no product/channel on MPs -> raise."""
-    basis = {("TERM_A", "GA"): _flat_basis(), ("TERM_A", "FC"): _flat_basis(discount=0.10)}
+    basis = BasisRouter({("TERM_A", "GA"): _flat_basis(), ("TERM_A", "FC"): _flat_basis(discount=0.10)})
     mp = ModelPoints(
         issue_age=np.array([40]),
         premium=np.zeros(1),
@@ -168,8 +168,8 @@ def test_segmented_measure_rejects_multi_segment_basis_without_keys():
 
 
 def test_segmented_measure_rejects_unknown_segment():
-    """A model point pointing at a segment not in basis -> raise."""
-    basis = {("TERM_A", "GA"): _flat_basis()}
+    """A model point pointing at a segment not in basis.segments -> raise."""
+    basis = BasisRouter({("TERM_A", "GA"): _flat_basis()})
     mp = ModelPoints(
         issue_age=np.array([40, 40]),
         premium=np.zeros(2),
@@ -200,7 +200,7 @@ def test_segmented_measure_with_sample_basis():
     assert val.bel.shape == (3,)
     # GA segment has worse persistency than FC (different LAPSE table) ->
     # the two GA mps should not match the FC mp's pattern.
-    expected_ga = measure(mp.subset([0, 2]), basis[("TERM_LIFE_A", "GA")], full=False)
-    expected_fc = measure(mp.subset([1]), basis[("TERM_LIFE_A", "FC")], full=False)
+    expected_ga = measure(mp.subset([0, 2]), basis.resolve(("TERM_LIFE_A", "GA")), full=False)
+    expected_fc = measure(mp.subset([1]), basis.resolve(("TERM_LIFE_A", "FC")), full=False)
     assert np.allclose(val.bel[[0, 2]], expected_ga.bel)
     assert np.allclose(val.bel[1], expected_fc.bel[0])

@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import ModelPoints
+from fastcashflow.basis import BasisRouter
 from fastcashflow.gmm import measure
 from conftest import PATTERNS, make_death_basis
 
@@ -31,10 +32,10 @@ def _mp():
 
 
 def _basis_3():
-    return {
+    return BasisRouter({
         ("TL", "GA", "A"): _b(0.05), ("TL", "GA", "B"): _b(0.10),
         ("TL", "TM", "A"): _b(0.08), ("TL", "TM", "B"): _b(0.15),
-    }
+    }, segment_axes=("product", "channel", "risk_class"))
 
 
 def test_segment_by_three_axes_routes_per_combo():
@@ -47,7 +48,7 @@ def test_segment_by_three_axes_routes_per_combo():
 
 def test_segment_by_default_is_product_channel():
     """Omitting segment_by keeps the (product, channel) default."""
-    basis2 = {("TL", "GA"): _b(0.05), ("TL", "TM"): _b(0.08)}
+    basis2 = BasisRouter({("TL", "GA"): _b(0.05), ("TL", "TM"): _b(0.08)})
     m = measure(_mp(), basis2)              # risk_class ignored
     assert np.isclose(m.bel[0], m.bel[1])  # both GA -> one basis
     assert np.isclose(m.bel[2], m.bel[3])  # both TM -> one basis
@@ -67,11 +68,12 @@ def test_segment_by_single_basis_fallback_when_axis_unset():
     mp = ModelPoints(issue_age=np.full(2, 40), benefits={0: np.full(2, 1e8)},
                      premium=np.full(2, 200_000.0), term_months=np.full(2, 120),
                      calculation_methods=PATTERNS)        # no product / channel
-    assert measure(mp, {("only",): _b(0.05)}).bel.shape[0] == 2
+    assert measure(mp, BasisRouter({("only",): _b(0.05)})).bel.shape[0] == 2
 
 
 def test_segment_by_unknown_segment_rejected():
-    incomplete = {("TL", "GA", "A"): _b(0.05)}            # missing 3 combos
+    incomplete = BasisRouter({("TL", "GA", "A"): _b(0.05)},
+                             segment_axes=("product", "channel", "risk_class"))
     with pytest.raises(ValueError, match="not in the"):
         measure(_mp(), incomplete,
                 segment_by=["product", "channel", "risk_class"])

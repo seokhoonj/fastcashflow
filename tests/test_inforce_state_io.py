@@ -101,7 +101,7 @@ def test_sample_inforce_end_to_end():
     mp_settled = fcf.apply_inforce_state(mp, state)
 
     basis = fcf.samples.basis()
-    basis = basis[("TERM_LIFE_A", "FC")]
+    basis = basis.resolve(("TERM_LIFE_A", "FC"))
 
     mif_hyp = _measure_inforce_full(mp_settled, basis)
     mif_set = _measure_inforce_full(
@@ -157,7 +157,7 @@ def test_measure_inforce_warns_surrender_is_sample_grade():
     are re-based to the valuation date, so they no longer trigger a warning."""
     state = fcf.samples.inforce_state()
     mp = fcf.apply_inforce_state(fcf.samples.model_points(), state)
-    basis = fcf.samples.basis()[("TERM_LIFE_A", "FC")]
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "FC"))
     with pytest.warns(UserWarning, match="surrender"):
         fcf.gmm.measure_inforce(mp, state, basis, full=False)
 

@@ -35,7 +35,7 @@ def test_read_basis_returns_segmented_basis_default_axes(tmp_path):
     basis = read_basis(_export(tmp_path))
     assert isinstance(basis, BasisRouter)
     assert basis.segment_axes == ("product", "channel")
-    assert all(isinstance(k, tuple) and len(k) == 2 for k in basis)   # 2-tuple keys
+    assert all(isinstance(k, tuple) and len(k) == 2 for k in basis.segments)   # 2-tuple keys
     mp = fcf.samples.model_points()
     assert fcf.gmm.measure(mp, basis).bel.shape[0] == mp.n_mp          # routes, no segment_by
 
@@ -45,7 +45,7 @@ def test_read_basis_detects_extra_axis(tmp_path):
     _insert_risk_class(path)
     basis = read_basis(path)
     assert basis.segment_axes == ("product", "channel", "risk_class")
-    assert all(len(k) == 3 and k[2] == "A" for k in basis)            # 3-tuple keys
+    assert all(len(k) == 3 and k[2] == "A" for k in basis.segments)            # 3-tuple keys
 
 
 def test_measure_routes_by_file_declared_axes(tmp_path):
@@ -73,7 +73,7 @@ def test_read_basis_detects_axis_after_assumption_column(tmp_path):
     wb.save(path)
     basis = read_basis(path)
     assert "risk_class" in basis.segment_axes         # detected despite position
-    assert all(k[-1] == "A" for k in basis)
+    assert all(k[-1] == "A" for k in basis.segments)
 
 
 def test_read_basis_rejects_ae_axis_not_in_segments(tmp_path):

@@ -247,7 +247,7 @@ with tempfile.TemporaryDirectory() as tmp:
     port_mp = fcf.read_model_points(tmp / "policies.csv", coverages=tmp / "coverages.csv",
                                     calculation_methods=tmp / "calculation_methods.csv")
 
-    b      = port_basis[("TERM_LIFE_A", "GA")]                                              # 한 segment 의 가정
+    b      = port_basis.resolve(("TERM_LIFE_A", "GA"))                                              # 한 segment 의 가정
     direct = fcf.gmm.measure(port_mp, b, full=False)                                        # 원수 측정 (headline)
     reins  = fcf.reinsurance.measure(port_mp, b, fcf.reinsurance.QuotaShare(cession=0.50))
 
@@ -283,7 +283,7 @@ onerous 여부를 그대로 따르지 않습니다.** 거울 관계는 할인 0 
 `fcf.gmm.measure(mp, basis_dict, full=False)` 처럼 세그먼트 BasisRouter 를 통째로
 넘기는 라우팅은 원수 측정 (`gmm.measure`) 의 기능입니다.
 `reinsurance.measure` 는 단일 `Basis` 를 받으므로 위 예제처럼
-`basis[("TERM_LIFE_A", "GA")]` 로 한 segment 를 골라 넘깁니다.
+`basis.resolve(("TERM_LIFE_A", "GA"))` 로 한 segment 를 골라 넘깁니다.
 ```
 
 ## 함정 — 흔한 실수와 잡는 방법

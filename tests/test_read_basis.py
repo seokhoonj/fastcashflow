@@ -16,7 +16,7 @@ def test_segments_resolve():
     """The sample workbook resolves to several (product, channel) segments."""
     basis = fcf.samples.basis()
     # The sample carries three products on FC/GA (HEALTH also adds TM).
-    assert set(basis) >= {
+    assert set(basis.segments) >= {
         ("TERM_LIFE_A", "FC"), ("TERM_LIFE_A", "GA"),
         ("HEALTH_A", "FC"), ("HEALTH_A", "GA"), ("HEALTH_A", "TM"),
         ("WHOLE_LIFE_A", "FC"), ("WHOLE_LIFE_A", "GA"),
@@ -26,7 +26,7 @@ def test_segments_resolve():
 def test_defaults_inherited():
     """Blank cells in a segment row inherit from the ``_DEFAULTS`` row."""
     basis = fcf.samples.basis()
-    ga, fc = basis[("TERM_LIFE_A", "GA")], basis[("TERM_LIFE_A", "FC")]
+    ga, fc = basis.resolve(("TERM_LIFE_A", "GA")), basis.resolve(("TERM_LIFE_A", "FC"))
     # ra_confidence / mortality_cv / morbidity_cv live only on the defaults row
     assert ga.ra_confidence == 0.75 and fc.ra_confidence == 0.75
     assert ga.mortality_cv == 0.10 and fc.mortality_cv == 0.10
@@ -52,8 +52,8 @@ def test_channel_segmented_lapse():
     basis = fcf.samples.basis()
     dur = np.arange(6)
     zero = np.zeros_like(dur)
-    ga_lapse = basis[("TERM_LIFE_A", "GA")].lapse_annual(zero, zero, dur, zero, zero)
-    fc_lapse = basis[("TERM_LIFE_A", "FC")].lapse_annual(zero, zero, dur, zero, zero)
+    ga_lapse = basis.resolve(("TERM_LIFE_A", "GA")).lapse_annual(zero, zero, dur, zero, zero)
+    fc_lapse = basis.resolve(("TERM_LIFE_A", "FC")).lapse_annual(zero, zero, dur, zero, zero)
     assert np.all(ga_lapse > fc_lapse)
 
 
@@ -71,7 +71,7 @@ def test_per_segment_acquisition_amount():
         (("WHOLE_LIFE_A","FC"), 1_600_000.0),
         (("WHOLE_LIFE_A","GA"), 1_900_000.0),
     ):
-        rows = basis[key].expense_items
+        rows = basis.resolve(key).expense_items
         acq = [r for r in rows if r.basis == "alpha_fixed"]
         assert len(acq) == 1, f"{key}: expected one per_policy_init row"
         assert acq[0].value == expected_acq, (key, expected_acq, acq[0].value)
@@ -81,7 +81,7 @@ def test_every_segment_has_expense_items():
     """The sample workbook attaches an ``expense_table`` to every segment;
     the loader populates ``Basis.expense_items`` on each."""
     basis = fcf.samples.basis()
-    for basis in basis.values():
+    for basis in basis.segments.values():
         assert basis.expense_items                       # populated
 
 
@@ -96,7 +96,7 @@ def test_coverages_resolved():
     from fastcashflow import CalculationMethod
 
     basis = fcf.samples.basis()
-    basis = basis[("TERM_LIFE_A", "GA")]
+    basis = basis.resolve(("TERM_LIFE_A", "GA"))
     assert [r.code for r in basis.coverages] == [
         "DEATH", "INPATIENT", "CANCER", "ADB", "DISEASE_DEATH",
     ]
@@ -126,9 +126,9 @@ def test_resolved_basis_values():
     # just want the two paths to agree on the no-surrender baseline.)
     import dataclasses
     basis_ga_no_surr = dataclasses.replace(
-        basis[("TERM_LIFE_A", "GA")], surrender_value_curve=None)
+        basis.resolve(("TERM_LIFE_A", "GA")), surrender_value_curve=None)
     basis_fc_no_surr = dataclasses.replace(
-        basis[("TERM_LIFE_A", "FC")], surrender_value_curve=None)
+        basis.resolve(("TERM_LIFE_A", "FC")), surrender_value_curve=None)
     ga = measure(mp, basis_ga_no_surr, full=False).bel[0]
     fc = measure(mp, basis_fc_no_surr, full=False).bel[0]
     assert np.isfinite(ga) and np.isfinite(fc)
@@ -149,7 +149,7 @@ def test_state_model_column_resolves_to_registry_entry():
     """
     from fastcashflow import STATE_MODELS
     basis = fcf.samples.basis()
-    for basis in basis.values():
+    for basis in basis.segments.values():
         assert basis.state_model is STATE_MODELS["WAIVER"]
 
 
@@ -177,7 +177,7 @@ def test_state_model_column_blank_keeps_none():
             ws.cell(row=r, column=col).value = None
         wb.save(dst)
         basis = read_basis(dst)
-        for basis in basis.values():
+        for basis in basis.segments.values():
             assert basis.state_model is None
 
 

@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory() as tmp:
     # segment 별로 BEL을 갈라 보면 라우팅이 동작한 게 보인다
     prod = np.array(mp.product)
     chan = np.array(mp.channel)
-    for key in sorted(basis):
+    for key in sorted(basis.segments):
         msk = (prod == key[0]) & (chan == key[1])
         if msk.any():
             print(f"  {key}: n={int(msk.sum())} BEL={val.bel[msk].sum():,.0f}")

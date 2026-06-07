@@ -69,7 +69,7 @@ def _build(path: Path, *, ae_rows=None):
 
 
 def _segment(path):
-    return read_basis(path)[("TERM_A", "GA")]
+    return read_basis(path).resolve(("TERM_A", "GA"))
 
 
 def test_no_ae_factor_sheet(tmp_path):

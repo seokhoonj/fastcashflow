@@ -264,10 +264,10 @@ mp    = fcf.read_model_points(
 )
 
 # 한 segment 의 가정을 전체 portfolio 에 적용 — 상세 trajectory
-detail = fcf.gmm.measure(mp, basis[("TERM_LIFE_A", "GA")])
+detail = fcf.gmm.measure(mp, basis.resolve(("TERM_LIFE_A", "GA")))
 
 # 같은 평가의 빠른 경로 — 시점 0 의 네 숫자만
-fast = fcf.gmm.measure(mp, basis[("TERM_LIFE_A", "GA")], full=False)
+fast = fcf.gmm.measure(mp, basis.resolve(("TERM_LIFE_A", "GA")), full=False)
 
 print(f"<full=True — 시점 0 합계>")
 print(f"BEL : {detail.bel.sum():>15,.0f}")
@@ -347,8 +347,8 @@ Loss:       2,363,071
 mp    = fcf.samples.model_points()
 basis = fcf.samples.basis()
 
-for key in basis:
-    val = fcf.gmm.measure(mp, basis[key], full=False)
+for key in basis.segments:
+    val = fcf.gmm.measure(mp, basis.resolve(key), full=False)
     print(f"{str(key):22}: BEL={val.bel.sum():>14,.0f}  RA={val.ra.sum():>9,.0f}  CSM={val.csm.sum():>14,.0f}")
 ```
 
@@ -387,7 +387,7 @@ portfolio = fcf.ModelPoints(
     calculation_methods = fcf.samples.calculation_methods(),
 )
 
-basis   = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+basis   = fcf.samples.basis().resolve(("TERM_LIFE_A", "GA"))
 result = fcf.gmm.measure(portfolio, basis, full=False)
 
 print(f"Total  : {result.bel.sum():>15,.0f}")                  # 합계
@@ -444,13 +444,13 @@ mp = fcf.ModelPoints.single(
 basis = fcf.samples.basis()
 
 # ✗ 없는 segment 키는 KeyError 입니다 (실행하지 마세요):
-#     basis[("TERM_LIFE_A", "TM")]   # 샘플의 TERM_LIFE_A 는 GA / FC 만
+#     basis.resolve(("TERM_LIFE_A", "TM"))   # 샘플의 TERM_LIFE_A 는 GA / FC 만
 ```
 
-`basis.keys()` 로 어떤 segment 가 있는지 먼저 확인:
+`basis.segments.keys()` 로 어떤 segment 가 있는지 먼저 확인:
 
 ```python
-print(sorted(basis.keys()))
+print(sorted(basis.segments.keys()))
 # [('HEALTH_A', 'FC'), ('HEALTH_A', 'GA'), ('HEALTH_A', 'TM'),
 #  ('TERM_LIFE_A', 'FC'), ('TERM_LIFE_A', 'GA'),
 #  ('WHOLE_LIFE_A', 'FC'), ('WHOLE_LIFE_A', 'GA')]

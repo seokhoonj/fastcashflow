@@ -260,25 +260,22 @@ def validate_factor(grid, name: str, expected_shape: tuple) -> FloatArray:
 
 
 def _single_basis(basis, *, entry: str) -> "Basis":
-    """Resolve a possibly-segmented basis to a single :class:`Basis`.
+    """Resolve a :class:`Basis` or :class:`BasisRouter` to a single ``Basis``.
 
-    ``read_basis`` always returns a ``BasisRouter`` (a ``dict`` subclass),
-    so even a single-segment workbook arrives as a one-entry dict. The entry
-    points that do not route segments (``measure_vfa`` / ``measure_paa`` /
-    ``measure_reinsurance`` / ``measure_inforce``) accept that and unwrap it;
-    a genuinely multi-segment dict is rejected with an actionable message
-    rather than crashing with a deep ``AttributeError`` in the kernel. A plain
-    :class:`Basis` passes through unchanged.
+    The entry points that do not route segments (``measure_vfa`` /
+    ``measure_paa`` / ``measure_reinsurance`` / ``measure_inforce``) accept a
+    one-segment :class:`BasisRouter` and unwrap it; a genuinely multi-segment
+    router is rejected with an actionable message rather than crashing deep in
+    the kernel. A plain :class:`Basis` passes through unchanged. A bare ``dict``
+    is no longer accepted -- build a :class:`BasisRouter` (``read_basis`` does).
     """
-    if not isinstance(basis, dict):
+    if isinstance(basis, Basis):
         return basis
-    if len(basis) == 1:
-        return next(iter(basis.values()))
-    raise ValueError(
-        f"{entry} takes a single Basis but got a {len(basis)}-segment dict "
-        f"(segments {list(basis)}); it does not route segments. Measure each "
-        f"segment on its own basis, e.g. {entry}(model_points.subset(rows), "
-        f"basis[segment], ...)."
+    if isinstance(basis, BasisRouter):
+        return basis.resolve_one(entry=entry)
+    raise TypeError(
+        f"{entry} takes a Basis or a BasisRouter (from read_basis), got "
+        f"{type(basis).__name__}"
     )
 
 
@@ -943,23 +940,23 @@ def describe_basis(obj, *, file=None) -> None:
     """
     import sys
     out_lines: list[str] = []
-    if isinstance(obj, dict):
+    if isinstance(obj, BasisRouter):
         out_lines.append(
-            f"dict[(product, channel), Basis]  ({len(obj)} segments)"
+            f"BasisRouter  ({len(obj.segments)} segments over {obj.segment_axes})"
         )
-        keys = list(obj.keys())
+        keys = list(obj.segments)
         for i, key in enumerate(keys):
             last = (i == len(keys) - 1)
             head = "└─ " if last else "├─ "
             child = "    " if last else "│   "
             out_lines.append(f"{head}{key!r}  ->  Basis")
-            _describe_basis_lines(obj[key], out_lines, prefix=child)
+            _describe_basis_lines(obj.segments[key], out_lines, prefix=child)
     elif isinstance(obj, Basis):
         out_lines.append("Basis")
         _describe_basis_lines(obj, out_lines, prefix="")
     else:
         raise TypeError(
-            f"describe_basis expects Basis or dict, got "
+            f"describe_basis expects Basis or BasisRouter, got "
             f"{type(obj).__name__}"
         )
     text = "\n".join(out_lines) + "\n"
@@ -1038,3 +1035,70 @@ def _describe_basis_lines(
     ))
 
     _emit_tree([(t, b) for t, b in sections], out, prefix)
+
+
+class BasisRouter:
+    """Routes a model point to its segment's :class:`Basis`.
+
+    Returned by :func:`fastcashflow.read_basis`. A ``BasisRouter`` is **not** a
+    ``Basis`` and **not** a ``dict`` -- it is the routing *policy* that maps a
+    segment key (a tuple over :attr:`segment_axes`, e.g. ``("TERM_LIFE_A",
+    "GA")``) to the per-segment ``Basis``. ``measure(mp, router)`` reads
+    :attr:`segment_axes` to route each model point with no ``segment_by``
+    argument; an entry point that needs one ``Basis`` calls
+    :meth:`resolve_one`.
+
+    Parameters
+    ----------
+    segments :
+        ``{segment-key: Basis}`` mapping. Copied; the router does not alias it.
+    segment_axes :
+        The axis names a segment key is read over -- ``("product", "channel")``
+        by default, or whatever non-assumption columns the segments sheet
+        declares.
+
+    Notes
+    -----
+    It deliberately does **not** implement the mapping protocol (no ``[]`` /
+    iteration / ``len``) -- reach the underlying mapping explicitly through
+    :attr:`segments`, or resolve through :meth:`resolve` / :meth:`resolve_one`.
+    """
+
+    __slots__ = ("segments", "segment_axes")
+
+    def __init__(self, segments, segment_axes=("product", "channel")):
+        self.segments = dict(segments)
+        self.segment_axes = tuple(segment_axes)
+
+    @property
+    def axes(self) -> tuple:
+        """The segment axis names (alias of :attr:`segment_axes`)."""
+        return self.segment_axes
+
+    def resolve(self, key):
+        """The :class:`Basis` for one segment key, e.g. ``("TERM_LIFE_A", "GA")``."""
+        try:
+            return self.segments[key]
+        except KeyError:
+            raise KeyError(
+                f"no segment {key!r}; known segments {list(self.segments)}"
+            ) from None
+
+    def resolve_one(self, *, entry: str = "this operation"):
+        """The single :class:`Basis` when there is exactly one segment.
+
+        Raises with an actionable message when the router carries more than one
+        segment (the caller does not route segments).
+        """
+        if len(self.segments) == 1:
+            return next(iter(self.segments.values()))
+        raise ValueError(
+            f"{entry} takes a single Basis but the router has "
+            f"{len(self.segments)} segments ({list(self.segments)}); it does "
+            f"not route segments. Measure each segment on its own basis, e.g. "
+            f"{entry}(model_points.subset(rows), router.resolve(segment), ...)."
+        )
+
+    def __repr__(self) -> str:
+        return (f"<BasisRouter: {len(self.segments)} segment(s) over "
+                f"{self.segment_axes}>")

@@ -538,7 +538,7 @@ from dataclasses import replace
 
 mp = fcf.samples.model_points()
 basis = fcf.samples.basis()
-baseline = basis[('TERM_LIFE_A', 'FC')]
+baseline = basis.resolve(('TERM_LIFE_A', 'FC'))
 
 # mortality x 1.10 shock — rate 함수를 wrap
 def shock(rate_fn, factor):

@@ -24,6 +24,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
+from fastcashflow.basis import BasisRouter
 from fastcashflow import State, Transition, StateModel
 from fastcashflow.statemodel import STATE_MODELS
 
@@ -176,9 +177,7 @@ def _basket_mp():
 
 def _basket_basis():
     bases = _bases()
-    return {(r[0], "FC"): bases[r[0]] for r in _ROWS}
-
-
+    return BasisRouter({(r[0], "FC"): bases[r[0]] for r in _ROWS})
 def test_basket_headline_matches_standalone():
     """Each segment in the mixed portfolio equals the same policy measured
     alone -- segment stitching does not corrupt a neighbour."""

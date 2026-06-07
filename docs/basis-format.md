@@ -45,7 +45,7 @@ import fastcashflow as fcf
 
 fcf.samples.export("samples", template="gmm", quiet=True)   # 견본 한 세트 (본인 파일 있으면 생략)
 basis = fcf.read_basis("samples/basis.xlsx")  # BasisRouter: {(product, channel): Basis}
-basis = basis[("TERM_LIFE_A", "GA")]  # 한 세그먼트
+basis = basis.resolve(("TERM_LIFE_A", "GA"))  # 한 세그먼트
 ```
 
 ---
@@ -482,7 +482,7 @@ import numpy as np
 import polars as pl
 
 mp    = fcf.samples.model_points()
-basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "GA"))
 
 # 견본 시나리오 파일 (보통은 회사가 만든 파일; 본인 파일 있으면 이 블록 생략)
 # wide-format 2-D table: 한 행 = 한 scenario, 한 열 = 한 projection month

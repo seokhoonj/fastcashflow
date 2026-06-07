@@ -12,7 +12,7 @@ from dataclasses import replace
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.basis import Basis
+from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.engine import measure
 from fastcashflow.modelpoints import ModelPoints
 
@@ -63,7 +63,8 @@ def solve_premium(
     # computes the confidence-level RA only; cost-of-capital RA needs the
     # trajectory path (the inception headline is identical either way). A dict
     # (segmented) basis takes the trajectory path if any segment uses it.
-    bases = basis.values() if isinstance(basis, dict) else (basis,)
+    bases = (basis.segments.values()
+             if isinstance(basis, BasisRouter) else (basis,))
     use_full = any(b.ra_method != "confidence_level" for b in bases)
     at_zero = measure(_with_premium(model_points, 0.0), basis, full=use_full)
     at_one = measure(_with_premium(model_points, 1.0), basis, full=use_full)

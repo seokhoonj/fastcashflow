@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
+from fastcashflow.basis import BasisRouter
 from fastcashflow.gmm import measure
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
@@ -29,8 +30,8 @@ def test_segmented_measure_rejects_pipe_in_product():
         benefits={0: np.array([1e8])},
         calculation_methods=PATTERNS,
     )
-    basis = {("TERM|2020", "FC"): make_death_basis(
-        mortality_q=0.005, lapse_q=0.01)}
+    basis = BasisRouter({("TERM|2020", "FC"): make_death_basis(
+        mortality_q=0.005, lapse_q=0.01)})
     with pytest.raises(ValueError, match="product.*'\\|'"):
         measure(mp, basis, full=False)
 
@@ -45,8 +46,8 @@ def test_segmented_measure_rejects_pipe_in_channel():
         benefits={0: np.array([1e8])},
         calculation_methods=PATTERNS,
     )
-    basis = {("TERM_LIFE_A", "FC|GA"): make_death_basis(
-        mortality_q=0.005, lapse_q=0.01)}
+    basis = BasisRouter({("TERM_LIFE_A", "FC|GA"): make_death_basis(
+        mortality_q=0.005, lapse_q=0.01)})
     with pytest.raises(ValueError, match="channel.*'\\|'"):
         measure(mp, basis, full=False)
 

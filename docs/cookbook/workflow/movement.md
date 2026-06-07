@@ -66,7 +66,7 @@ portfolio = fcf.samples.model_points()
 key = ("HEALTH_A", "FC")
 idx = np.where((np.asarray(portfolio.product) == key[0]) &
                (np.asarray(portfolio.channel) == key[1]))[0]
-m = fcf.gmm.measure(portfolio.subset(idx), basis[key])
+m = fcf.gmm.measure(portfolio.subset(idx), basis.resolve(key))
 
 # 보고기간으로 자르고 → 변동분석표로 집계
 movements = fcf.roll_forward(m, period_months=12)    # 12 개월 기간
@@ -156,9 +156,9 @@ from dataclasses import replace
 # 사망률 +10% 로 재산정한 산출기초 -- 기존 rate callable 을 감싸 배수.
 # 엔진이 넘기는 인자를 그대로 전달 (*args) 하므로 rate 함수의 시그니처에
 # 무관하게 동작합니다.
-base_mort = basis[key].mortality_annual                 # 샘플 기초의 사망률 함수
+base_mort = basis.resolve(key).mortality_annual                 # 샘플 기초의 사망률 함수
 revised_basis = replace(
-    basis[key],
+    basis.resolve(key),
     mortality_annual=lambda *a: base_mort(*a) * 1.10,   # 사망률 +10%
 )
 m_revised = fcf.gmm.measure(portfolio.subset(idx), revised_basis)

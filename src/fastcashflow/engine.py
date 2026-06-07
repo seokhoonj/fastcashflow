@@ -28,7 +28,7 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import (
-    Basis, annual_to_monthly, _single_basis, validate_factor,
+    Basis, BasisRouter, annual_to_monthly, _single_basis, validate_factor,
     SURRENDER_VALUE_BASES,
 )
 from fastcashflow.curves import (
@@ -276,13 +276,16 @@ def measure(
     number of axes. ``backend`` (``"cpu"``/``"gpu"``) and ``discount_curve``
     apply to the fast path only.
     """
-    if isinstance(basis, dict):
-        # A BasisRouter from read_basis remembers its axes; a plain dict
-        # defaults to (product, channel). An explicit segment_by wins.
+    if not isinstance(basis, (Basis, BasisRouter)):
+        raise TypeError(
+            "basis must be a Basis or a BasisRouter (from read_basis); got "
+            f"{type(basis).__name__}"
+        )
+    if isinstance(basis, BasisRouter):
+        # A BasisRouter remembers its axes, so measure routes without a
+        # segment_by; an explicit segment_by wins.
         if segment_by is None:
-            segment_by = getattr(
-                basis, "segment_axes", ("product", "channel"),
-            )
+            segment_by = basis.segment_axes
         if full:
             if backend != "cpu" or discount_curve is not None:
                 raise ValueError(
@@ -788,7 +791,7 @@ def measure_inforce(
     # in-force portfolio in one call: each segment is routed to its own basis
     # (its assumptions), measured, and stitched back -- no manual per-segment
     # subsetting. A single-segment dict / a bare Basis falls through.
-    if isinstance(basis, dict) and len(basis) > 1:
+    if isinstance(basis, BasisRouter) and len(basis.segments) > 1:
         return _measure_inforce_segmented(
             model_points, basis, state,
             period_months=period_months, full=full,
@@ -863,13 +866,13 @@ def _measure_inforce_segmented(
             basis, model_points, segment_by, model_points.n_mp,
         )
     except KeyError:
-        if len(basis) == 1:
-            (single,) = basis.values()
+        if len(basis.segments) == 1:
+            (single,) = basis.segments.values()
             return measure_inforce(model_points, state, single,
                                    period_months=period_months, full=full)
         raise ValueError(
             f"model_points has no {tuple(segment_by)} axis/axes set but the "
-            f"basis has {len(basis)} segments; either set the columns or "
+            f"basis has {len(basis.segments)} segments; either set the columns or "
             "pass a single-segment basis"
         )
     n_mp = model_points.n_mp
@@ -2580,15 +2583,15 @@ def _measure_segmented(
             basis, model_points, segment_by, model_points.n_mp,
         )
     except KeyError:
-        if len(basis) == 1:
-            (basis,) = basis.values()
+        if len(basis.segments) == 1:
+            (basis,) = basis.segments.values()
             return _measure_fast(
                 model_points, basis,
                 backend=backend, discount_curve=discount_curve,
             )
         raise ValueError(
             f"model_points has no {tuple(segment_by)} axis/axes set but the "
-            f"basis has {len(basis)} segments; either set the columns or "
+            f"basis has {len(basis.segments)} segments; either set the columns or "
             "pass a single-segment basis"
         )
 
@@ -2632,7 +2635,7 @@ def _factorise_segments(basis, model_points: ModelPoints, segment_by, n_mp):
     """
     norm = unicodedata.normalize
     basis_norm = {}
-    for k, a in basis.items():
+    for k, a in basis.segments.items():
         parts = k if isinstance(k, tuple) else (k,)
         basis_norm[tuple(norm("NFC", str(p)) for p in parts)] = a
     # Resolve + NFC-normalise each axis. ``axis`` raises KeyError for an unset
@@ -2768,12 +2771,12 @@ def _measure_segmented_full(
             basis, model_points, segment_by, model_points.n_mp,
         )
     except KeyError:
-        if len(basis) == 1:
-            (basis,) = basis.values()
+        if len(basis.segments) == 1:
+            (basis,) = basis.segments.values()
             return _measure_full(model_points, basis)
         raise ValueError(
             f"model_points has no {tuple(segment_by)} axis/axes set but the "
-            f"basis has {len(basis)} segments; either set the columns or "
+            f"basis has {len(basis.segments)} segments; either set the columns or "
             "pass a single-segment basis"
         )
     n_mp = model_points.n_mp

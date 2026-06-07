@@ -120,7 +120,7 @@ def test_sample_rate_scenarios_drive_stochastic():
     assert np.all(rates > 0.0)
     assert np.allclose(rates, fcf.samples.rate_scenarios())   # reproducible
     mp = fcf.samples.model_points()
-    basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "GA"))
     res = fcf.gmm.stochastic(mp, basis, rates)
     assert res.bel.shape[0] == 1000                          # one BEL per scenario
     assert np.all(np.isfinite(res.bel))

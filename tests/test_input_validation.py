@@ -14,6 +14,7 @@ import polars as pl
 import pytest
 
 import fastcashflow as fcf
+from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import _measure_inforce_full, _measure_inforce_fast
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.basis import annual_to_monthly
@@ -614,7 +615,7 @@ def test_segmented_measure_matches_nfc_and_nfd_codes():
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
     # Basis keyed under the decomposed form -- the lookup must still match.
-    basis = {(decomposed, "FC"): basis}
+    basis = BasisRouter({(decomposed, "FC"): basis})
     out = fcf.gmm.measure(mp, basis, full=False)
     assert out.bel.shape == (1,)
 
@@ -793,7 +794,7 @@ def test_construction_rejects_garbage_inputs():
         annual_to_monthly(np.array([np.nan]))
 
     # Basis: a NaN discount used to give a silently-NaN liability.
-    basis = fcf.samples.basis()[("TERM_LIFE_A", "GA")]
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "GA"))
     with pytest.raises(ValueError, match="discount_annual must be finite"):
         replace(basis, discount_annual=float("nan"))
 
@@ -828,7 +829,7 @@ def test_guards_full_false_cession_scenarios():
     with pytest.raises(ValueError, match="cession must be finite"):
         fcf.reinsurance.QuotaShare(float("nan"))
 
-    b1 = basis[("TERM_LIFE_A", "GA")]
+    b1 = basis.resolve(("TERM_LIFE_A", "GA"))
     with pytest.raises(ValueError, match="scenarios must be finite"):
         fcf.gmm.stochastic(mp, b1, np.array([0.03, np.nan]))
     with pytest.raises(ValueError, match="scenarios is empty"):

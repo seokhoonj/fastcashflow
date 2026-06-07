@@ -30,7 +30,7 @@ def _write_sheets(path, sheets):
 def test_read_xlsx(tmp_path):
     """A two-sheet .xlsx -- policies and coverages sheets in one workbook."""
     
-    basis = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().segments.values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     policies, coverages = mp_to_frames(mps, basis)
@@ -45,7 +45,7 @@ def test_read_xlsx(tmp_path):
 def test_read_feather(tmp_path):
     """A .feather (Arrow IPC) model-point file round-trips."""
     
-    basis = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().segments.values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     policies, coverages = mp_to_frames(mps, basis)
@@ -61,7 +61,7 @@ def test_read_feather(tmp_path):
 
 def test_write_measurement_feather(tmp_path):
     """write_measurement writes a .feather result file."""
-    basis = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().segments.values()))
     mps = fcf.samples.model_points()
     path = tmp_path / "results.feather"
     write_measurement(measure(mps, basis, full=False), path)
@@ -71,7 +71,7 @@ def test_write_measurement_feather(tmp_path):
 def test_reads_coverage_benefit_rules(tmp_path):
     """The coverages frame reads the waiting / reduction columns."""
     
-    basis = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().segments.values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     policies, coverages = mp_to_frames(mps, basis)
@@ -101,7 +101,7 @@ def test_policies_elapsed_months_emits_warning(tmp_path):
     """Same guard fires on the (policies + coverages) path."""
     import warnings
     
-    basis = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().segments.values()))
     patterns = fcf.samples.calculation_methods()
     mps = fcf.samples.model_points()
     policies, coverages = mp_to_frames(mps, basis)

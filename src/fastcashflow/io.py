@@ -38,7 +38,7 @@ import polars as pl
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import (
-    Basis, CoverageRate, ExpenseItem,
+    Basis, BasisRouter, CoverageRate, ExpenseItem,
 )
 from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
@@ -590,23 +590,8 @@ _SEGMENT_ASSUMPTION_COLS = frozenset({
 })
 
 
-class BasisRouter(dict):
-    """A ``{segment-key: Basis}`` dict that remembers its segment axis names.
-
-    Returned by :func:`read_basis`. A plain ``dict`` everywhere it is used;
-    :func:`~fastcashflow.gmm.measure` reads ``segment_axes`` to route without the
-    caller re-passing ``segment_by``. ``segment_axes`` are the segments-sheet
-    columns that are not assumption slots -- ``("product", "channel")``
-    by default, but any axes the workbook declares.
-    """
-
-    def __init__(self, *args, segment_axes=("product", "channel"), **kw):
-        super().__init__(*args, **kw)
-        self.segment_axes = tuple(segment_axes)
-
-
 def read_basis(path: Path | str) -> "BasisRouter":
-    """Read the basis workbook into a per-segment ``Basis`` dict.
+    """Read the basis workbook into a per-segment :class:`BasisRouter`.
 
     ``path`` is a single ``basis.xlsx`` workbook holding both the rate
     tables and the segment mapping (see the module header for the sheet
@@ -615,7 +600,7 @@ def read_basis(path: Path | str) -> "BasisRouter":
     values blank cells inherit; the ``coverages`` sheet attaches
     rate-driven coverages to products.
 
-    Returns a :class:`BasisRouter` (a ``dict`` subclass) keyed by the segment
+    Returns a :class:`~fastcashflow.basis.BasisRouter` keyed by the segment
     axes -- ``(product, channel)`` by default, or whatever
     non-assumption columns the segments sheet declares (one axis, or three);
     ``.segment_axes`` records the axis names so :func:`~fastcashflow.gmm.measure`
@@ -1660,7 +1645,7 @@ def load_sample_vfa_basis() -> Basis:
     """
     source = resources.files("fastcashflow") / "sample_data" / "sample_vfa_basis.xlsx"
     with resources.as_file(source) as path:
-        return read_basis(path)[("VAR_ANNUITY_A", "BANCA")]
+        return read_basis(path).resolve(("VAR_ANNUITY_A", "BANCA"))
 
 
 def load_sample_vfa_model_points() -> ModelPoints:

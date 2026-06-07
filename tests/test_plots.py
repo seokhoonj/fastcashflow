@@ -15,7 +15,7 @@ import fastcashflow as fcf
 @pytest.fixture(scope="module")
 def book():
     """A small measured book: model points, basis, measurement."""
-    basis = next(iter(fcf.samples.basis().values()))
+    basis = next(iter(fcf.samples.basis().segments.values()))
     mps = fcf.samples.model_points()
     return mps, basis, fcf.gmm.measure(mps, basis)
 

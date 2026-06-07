@@ -63,7 +63,7 @@ def _build(path: Path, *, improvement_curve=None):
 
 
 def _segment(path):
-    return read_basis(path)[("TERM_A", "GA")]
+    return read_basis(path).resolve(("TERM_A", "GA"))
 
 
 def test_no_improvement_sheet(tmp_path):
