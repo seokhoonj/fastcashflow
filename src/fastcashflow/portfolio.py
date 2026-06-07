@@ -112,6 +112,48 @@ class PortfolioMeasurement:
             raise ValueError(
                 f"portfolio has {n} rows but carries no model measurement")
 
+    def loss_component_total(self) -> float:
+        """The portfolio's total onerous-contract loss at inception.
+
+        This is the **only** quantity summed across measurement models: the loss
+        component is ``max(0, fulfilment cash flows)`` at inception, defined and
+        signed identically under GMM, PAA and VFA, so adding it across models is
+        meaningful. A BEL, an LRC and a VFA BEL are *not* added -- they measure
+        different things; reach those through the per-model blocks of
+        :meth:`summary` (e.g. ``pm.gmm.measurement.bel``).
+        """
+        return float(sum(
+            mm.measurement.loss_component.sum()
+            for mm in (self.gmm, self.paa, self.vfa) if mm is not None))
+
+    def summary(self) -> dict:
+        """Per-model headline totals, each model in its own block.
+
+        Returns ``{"loss_component_total": float, <model>: {...}}`` with a block
+        only for the models the portfolio carries. Each block sums that model's
+        own headline figures over its rows -- ``gmm`` / ``vfa`` give
+        ``bel`` / ``ra`` / ``csm`` / ``loss_component``, ``paa`` gives ``lrc`` /
+        ``loss_component``. Figures of different meaning are never pooled into
+        one number; ``loss_component_total`` is the single cross-model sum (see
+        :meth:`loss_component_total`).
+        """
+        out: dict = {"loss_component_total": self.loss_component_total()}
+        if self.gmm is not None:
+            m = self.gmm.measurement
+            out["gmm"] = {"bel": float(m.bel.sum()), "ra": float(m.ra.sum()),
+                          "csm": float(m.csm.sum()),
+                          "loss_component": float(m.loss_component.sum())}
+        if self.paa is not None:
+            m = self.paa.measurement
+            out["paa"] = {"lrc": float(m.lrc.sum()),
+                          "loss_component": float(m.loss_component.sum())}
+        if self.vfa is not None:
+            m = self.vfa.measurement
+            out["vfa"] = {"bel": float(m.bel.sum()), "ra": float(m.ra.sum()),
+                          "csm": float(m.csm.sum()),
+                          "loss_component": float(m.loss_component.sum())}
+        return out
+
 
 def _nfc_key(key) -> tuple:
     """NFC-normalise a segment key tuple -- mirrors ``_factorise_segments`` so a

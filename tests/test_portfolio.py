@@ -255,6 +255,62 @@ def test_portfolio_measures_all_three_models_in_one_call():
         [pm.gmm.index, pm.paa.index, pm.vfa.index])) == [0, 1, 2, 3]
 
 
+# ---------------------------------------------------------------------------
+# P-5a aggregation contract: loss_component_total + summary (no cross-model
+# pooling of figures that mean different things)
+# ---------------------------------------------------------------------------
+def _three_model_portfolio():
+    router = BasisRouter(
+        {("G", "GA"): _flat_basis(),
+         ("P", "GA"): _flat_basis(),
+         ("V", "GA"): _flat_basis(investment_return=0.04)},
+        measurement_models={("P", "GA"): "PAA", ("V", "GA"): "VFA"})
+    mp = ModelPoints(                              # premium 0 + claims -> GMM onerous
+        issue_age=np.full(4, 40), premium=np.array([0.0, 1200.0, 0.0, 0.0]),
+        term_months=np.full(4, 60), benefits={0: np.full(4, 1e4)},
+        account_value=np.array([0.0, 0.0, 1e6, 1e6]),
+        product=np.array(["G", "P", "V", "V"]),
+        channel=np.array(["GA", "GA", "GA", "GA"]))
+    return measure(mp, router)
+
+
+def test_loss_component_total_sums_only_the_loss_across_models():
+    """loss_component_total is the one cross-model additive figure -- the sum of
+    each present model's loss_component, sign-identical max(0, FCF) at inception."""
+    pm = _three_model_portfolio()
+    expected = (pm.gmm.measurement.loss_component.sum()
+                + pm.paa.measurement.loss_component.sum()
+                + pm.vfa.measurement.loss_component.sum())
+    assert isinstance(pm.loss_component_total(), float)
+    assert np.isclose(pm.loss_component_total(), expected)
+    assert pm.loss_component_total() > 0.0          # the GMM block is onerous
+
+
+def test_summary_keeps_each_model_in_its_own_block():
+    """summary() never pools a BEL with an LRC: each model has its own block with
+    its own headline fields, and loss_component_total is the only sum."""
+    pm = _three_model_portfolio()
+    s = pm.summary()
+    assert set(s) == {"loss_component_total", "gmm", "paa", "vfa"}
+    assert set(s["gmm"]) == {"bel", "ra", "csm", "loss_component"}
+    assert set(s["paa"]) == {"lrc", "loss_component"}      # LRC, not BEL/CSM
+    assert set(s["vfa"]) == {"bel", "ra", "csm", "loss_component"}
+    assert np.isclose(s["gmm"]["bel"], pm.gmm.measurement.bel.sum())
+    assert np.isclose(s["paa"]["lrc"], pm.paa.measurement.lrc.sum())
+    assert np.isclose(s["vfa"]["csm"], pm.vfa.measurement.csm.sum())
+    assert np.isclose(s["loss_component_total"], pm.loss_component_total())
+
+
+def test_summary_omits_absent_models():
+    """A block appears only for a model the portfolio carries -- an all-GMM book
+    has no paa / vfa block (the slot is None, not a fabricated zero)."""
+    router = BasisRouter({("A", "GA"): _flat_basis()})
+    pm = measure(_mp(["A", "A"], ["GA", "GA"]), router)
+    s = pm.summary()
+    assert set(s) == {"loss_component_total", "gmm"}
+    assert "paa" not in s and "vfa" not in s
+
+
 def test_portfolio_unused_non_gmm_segment_is_ignored():
     """A PAA segment the model points never use must not block an all-GMM book --
     the orchestrator partitions the rows present, not the router's declarations."""
