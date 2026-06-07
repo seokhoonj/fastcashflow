@@ -661,7 +661,9 @@ def read_basis(path: Path | str) -> "BasisRouter":
     # (product, channel).
     axis_cols = tuple(
         c for c in (seg_rows[0].keys() if seg_rows else ())
-        if c not in _SEGMENT_ASSUMPTION_COLS and not str(c).endswith("_name")
+        if c not in _SEGMENT_ASSUMPTION_COLS
+        and c != "measurement_model"          # routing/accounting metadata, not an axis
+        and not str(c).endswith("_name")
     )
     # An A/E axis that is not a segments-sheet column can never match a segment,
     # so the A/E would be silently discarded -- reject it up front.
@@ -723,6 +725,7 @@ def read_basis(path: Path | str) -> "BasisRouter":
             rate_driven_coverages.append((code, str(rt).strip()))
 
     result = {}
+    measurement_models = {}          # {seg_key: "GMM"|"PAA"|"VFA"} -- router metadata
     for seg in segments:
         product = str(seg.get("product", "") or "").strip()
         channel = str(seg.get("channel", "") or "").strip()
@@ -885,7 +888,11 @@ def read_basis(path: Path | str) -> "BasisRouter":
                 "Remove the duplicate segment row."
             )
         result[seg_key] = Basis(**kwargs)
-    return BasisRouter(result, segment_axes=axis_cols or ("product", "channel"))
+        mm = cell("measurement_model")          # router metadata, not a Basis kwarg
+        if mm is not None:
+            measurement_models[seg_key] = str(mm).strip().upper()
+    return BasisRouter(result, segment_axes=axis_cols or ("product", "channel"),
+                       measurement_models=measurement_models)
 
 
 # ---------------------------------------------------------------------------

@@ -101,3 +101,29 @@ def test_read_basis_rejects_duplicate_segment(tmp_path):
     wb.save(path)
     with pytest.raises(ValueError, match="duplicate segment"):
         read_basis(path)
+
+
+def _insert_measurement_model(path, value="PAA"):
+    """Append a measurement_model column to the segments sheet, one value per row."""
+    wb = openpyxl.load_workbook(path)
+    ws = wb["segments"]
+    col = ws.max_column + 1
+    ws.cell(row=1, column=col, value="measurement_model")
+    for r in range(2, ws.max_row + 1):
+        ws.cell(row=r, column=col, value=value)
+    wb.save(path)
+
+
+def test_read_basis_reads_measurement_model_as_metadata_not_axis(tmp_path):
+    """measurement_model is router metadata: read per segment, NOT a routing axis."""
+    path = _export(tmp_path)
+    _insert_measurement_model(path, "PAA")
+    basis = read_basis(path)
+    assert "measurement_model" not in basis.segment_axes          # not an axis
+    assert basis.segment_axes == ("product", "channel")           # keys unchanged
+    assert all(basis.measurement_model_of(k) == "PAA" for k in basis.segments)
+
+
+def test_read_basis_defaults_model_gmm_when_column_absent(tmp_path):
+    basis = read_basis(_export(tmp_path))                         # no such column
+    assert all(basis.measurement_model_of(k) == "GMM" for k in basis.segments)

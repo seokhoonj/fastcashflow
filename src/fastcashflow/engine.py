@@ -2561,6 +2561,27 @@ def _measure_fast(
     return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
 
+def _require_gmm_router(router, *, entry: str) -> None:
+    """Reject a non-GMM router from a GMM-only entry point, before any work.
+
+    A mixed-model portfolio must go through ``fcf.portfolio.measure``; silently
+    measuring a PAA or VFA segment with the GMM kernel would return a finite,
+    plausible, wrong number. Checked over the router's own segment keys
+    (self-consistent, so immune to the key-normalisation _factorise_segments
+    applies) up front, so no segment is measured before the mismatch is caught.
+    """
+    if not hasattr(router, "measurement_model_of"):
+        return
+    for key in router.segments:
+        model = router.measurement_model_of(key)
+        if model != "GMM":
+            raise ValueError(
+                f"segment {key!r} uses measurement_model={model!r}; {entry} "
+                f"measures GMM segments only. Use fcf.portfolio.measure for a "
+                f"mixed-model portfolio."
+            )
+
+
 def _measure_segmented(
     model_points: ModelPoints,
     basis: dict[tuple[str, str], Basis],
@@ -2586,6 +2607,7 @@ def _measure_segmented(
     accepted as a convenience when ``product`` / ``channel`` is
     not set.
     """
+    _require_gmm_router(basis, entry="fcf.gmm.measure")
     try:
         basis_norm, segments = _factorise_segments(
             basis, model_points, segment_by, model_points.n_mp,
@@ -2774,6 +2796,7 @@ def _measure_segmented_full(
     row's last factor (a flat curve -> zero forward rate) so a rate read off it
     is finite, not a 0/0.
     """
+    _require_gmm_router(basis, entry="fcf.gmm.measure")
     try:
         basis_norm, segments = _factorise_segments(
             basis, model_points, segment_by, model_points.n_mp,

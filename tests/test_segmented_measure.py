@@ -227,3 +227,54 @@ def test_segmented_auto_routes_full_only_segment_per_segment():
     rated = measure(mp.subset([1]), basis, full=True)    # the auto-route target
     assert np.allclose(val.bel[0], plain.bel[0])
     assert np.allclose(val.bel[1], rated.bel[0])
+
+
+# ---------------------------------------------------------------------------
+# SegmentSpec + measurement_model routing metadata (orchestrator P-2)
+# ---------------------------------------------------------------------------
+
+def test_basis_router_default_model_is_gmm():
+    r = BasisRouter({("A", "GA"): _flat_basis(), ("B", "GA"): _flat_basis()})
+    assert r.measurement_model_of(("A", "GA")) == "GMM"
+    assert r.measurement_model_of(("B", "GA")) == "GMM"
+
+
+def test_basis_router_measurement_models_override():
+    from fastcashflow.basis import SegmentSpec
+    r = BasisRouter({("A", "GA"): _flat_basis(), ("B", "GA"): _flat_basis()},
+                    measurement_models={("B", "GA"): "PAA"})
+    assert r.measurement_model_of(("A", "GA")) == "GMM"        # default
+    assert r.measurement_model_of(("B", "GA")) == "PAA"
+    assert isinstance(r.resolve(("B", "GA")), Basis)           # resolve -> Basis (compat)
+    spec = r.resolve_spec(("B", "GA"))
+    assert isinstance(spec, SegmentSpec) and spec.measurement_model == "PAA"
+
+
+def test_basis_router_rejects_unknown_model_and_stray_key():
+    with pytest.raises(ValueError, match="not a segment"):
+        BasisRouter({("A", "GA"): _flat_basis()},
+                    measurement_models={("X", "GA"): "PAA"})
+    with pytest.raises(ValueError, match="unknown measurement_model"):
+        BasisRouter({("A", "GA"): _flat_basis()},
+                    measurement_models={("A", "GA"): "XXX"})
+
+
+def test_basis_router_segments_view_is_immutable():
+    r = BasisRouter({("A", "GA"): _flat_basis()})
+    assert isinstance(r.resolve(("A", "GA")), Basis)
+    with pytest.raises(TypeError):                              # MappingProxyType
+        r.segments[("A", "GA")] = _flat_basis()
+
+
+def test_gmm_measure_rejects_non_gmm_router():
+    """A mixed-model router must not be measured by the GMM-only entry point."""
+    r = BasisRouter({("A", "GA"): _flat_basis(), ("B", "GA"): _flat_basis()},
+                    measurement_models={("B", "GA"): "PAA"})
+    mp = ModelPoints(
+        issue_age=np.array([40, 40]), premium=np.zeros(2),
+        term_months=np.array([60, 60]), benefits={0: np.array([1e4, 1e4])},
+        product=np.array(["A", "B"]), channel=np.array(["GA", "GA"]))
+    with pytest.raises(ValueError, match="measures GMM segments only"):
+        measure(mp, r, full=False)
+    with pytest.raises(ValueError, match="measures GMM segments only"):
+        measure(mp, r, full=True)

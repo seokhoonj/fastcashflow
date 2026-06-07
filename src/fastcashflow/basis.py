@@ -4,6 +4,7 @@ from __future__ import annotations
 import inspect
 import numbers
 from dataclasses import dataclass
+from types import MappingProxyType
 
 import numpy as np
 
@@ -1035,16 +1036,33 @@ def _describe_basis_lines(
     _emit_tree([(t, b) for t, b in sections], out, prefix)
 
 
+#: The IFRS 17 measurement models a segment may declare. Shared by the router,
+#: ``read_basis`` workbook validation, and the planned ``portfolio.measure``.
+MEASUREMENT_MODELS = ("GMM", "PAA", "VFA")
+
+
+@dataclass(frozen=True, slots=True)
+class SegmentSpec:
+    """The full per-segment routing spec: the :class:`Basis` plus its IFRS 17
+    measurement model. The canonical thing a :class:`BasisRouter` stores per
+    segment -- model-specific policy options (e.g. a PAA revenue basis) are added
+    here as they are wired into the routing kernels.
+    """
+
+    basis: Basis
+    measurement_model: str = "GMM"
+
+
 class BasisRouter:
-    """Routes a model point to its segment's :class:`Basis`.
+    """Routes a model point to its segment's :class:`SegmentSpec`.
 
     Returned by :func:`fastcashflow.read_basis`. A ``BasisRouter`` is **not** a
     ``Basis`` and **not** a ``dict`` -- it is the routing *policy* that maps a
     segment key (a tuple over :attr:`segment_axes`, e.g. ``("TERM_LIFE_A",
-    "GA")``) to the per-segment ``Basis``. ``measure(mp, router)`` reads
-    :attr:`segment_axes` to route each model point with no ``segment_by``
-    argument; an entry point that needs one ``Basis`` calls
-    :meth:`resolve_one`.
+    "GA")``) to that segment's :class:`SegmentSpec` (its ``Basis`` + measurement
+    model). ``measure(mp, router)`` reads :attr:`segment_axes` to route each
+    model point with no ``segment_by`` argument; an entry point that needs one
+    ``Basis`` calls :meth:`resolve_one`.
 
     Parameters
     ----------
@@ -1054,18 +1072,44 @@ class BasisRouter:
         The axis names a segment key is read over -- ``("product", "channel")``
         by default, or whatever non-assumption columns the segments sheet
         declares.
+    measurement_models :
+        Optional ``{segment-key: "GMM"|"PAA"|"VFA"}``; every other segment
+        defaults to ``"GMM"``. Validated keyed to ``segments`` so a model can
+        never name a non-existent segment.
 
     Notes
     -----
     It deliberately does **not** implement the mapping protocol (no ``[]`` /
     iteration / ``len``) -- reach the underlying mapping explicitly through
-    :attr:`segments`, or resolve through :meth:`resolve` / :meth:`resolve_one`.
+    :attr:`segments` (a read-only view of ``{key: Basis}``), or resolve through
+    :meth:`resolve` / :meth:`resolve_spec` / :meth:`resolve_one`. Both internal
+    stores are immutable, so the per-segment model can never drift from its
+    ``Basis`` after construction.
     """
 
-    __slots__ = ("segments", "segment_axes")
+    __slots__ = ("_specs", "_segments", "segment_axes")
 
-    def __init__(self, segments, segment_axes=("product", "channel")):
-        self.segments = dict(segments)
+    def __init__(self, segments, segment_axes=("product", "channel"),
+                 measurement_models=None):
+        models = dict(measurement_models or {})
+        for key in models:
+            if key not in segments:
+                raise ValueError(
+                    f"measurement_models key {key!r} is not a segment "
+                    f"(known: {list(segments)})"
+                )
+        specs = {}
+        for key, basis in segments.items():
+            model = models.get(key, "GMM")
+            if model not in MEASUREMENT_MODELS:
+                raise ValueError(
+                    f"unknown measurement_model {model!r} for segment {key}; "
+                    f"expected one of {MEASUREMENT_MODELS}"
+                )
+            specs[key] = SegmentSpec(basis=basis, measurement_model=model)
+        self._specs = MappingProxyType(specs)
+        self._segments = MappingProxyType(
+            {key: spec.basis for key, spec in specs.items()})
         self.segment_axes = tuple(segment_axes)
 
     @property
@@ -1073,30 +1117,43 @@ class BasisRouter:
         """The segment axis names (alias of :attr:`segment_axes`)."""
         return self.segment_axes
 
-    def resolve(self, key):
+    @property
+    def segments(self):
+        """Read-only ``{segment-key: Basis}`` view (immutable)."""
+        return self._segments
+
+    def resolve(self, key) -> "Basis":
         """The :class:`Basis` for one segment key, e.g. ``("TERM_LIFE_A", "GA")``."""
+        return self.resolve_spec(key).basis
+
+    def resolve_spec(self, key) -> "SegmentSpec":
+        """The full :class:`SegmentSpec` (Basis + measurement model) for a key."""
         try:
-            return self.segments[key]
+            return self._specs[key]
         except KeyError:
             raise KeyError(
-                f"no segment {key!r}; known segments {list(self.segments)}"
+                f"no segment {key!r}; known segments {list(self._specs)}"
             ) from None
 
-    def resolve_one(self, *, entry: str = "this operation"):
+    def measurement_model_of(self, key) -> str:
+        """The IFRS 17 measurement model ('GMM'|'PAA'|'VFA') for one segment."""
+        return self.resolve_spec(key).measurement_model
+
+    def resolve_one(self, *, entry: str = "this operation") -> "Basis":
         """The single :class:`Basis` when there is exactly one segment.
 
         Raises with an actionable message when the router carries more than one
         segment (the caller does not route segments).
         """
-        if len(self.segments) == 1:
-            return next(iter(self.segments.values()))
+        if len(self._specs) == 1:
+            return next(iter(self._specs.values())).basis
         raise ValueError(
             f"{entry} takes a single Basis but the router has "
-            f"{len(self.segments)} segments ({list(self.segments)}); it does "
+            f"{len(self._specs)} segments ({list(self._specs)}); it does "
             f"not route segments. Measure each segment on its own basis, e.g. "
             f"{entry}(model_points.subset(rows), router.resolve(segment), ...)."
         )
 
     def __repr__(self) -> str:
-        return (f"<BasisRouter: {len(self.segments)} segment(s) over "
+        return (f"<BasisRouter: {len(self._specs)} segment(s) over "
                 f"{self.segment_axes}>")
