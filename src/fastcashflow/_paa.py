@@ -100,6 +100,61 @@ def _(measurement: PAAMeasurement, path, *, ids=None):
         path, ids)
 
 
+def _stitch_paa_measurements(n_mp, sub_results):
+    """Scatter per-segment PAAMeasurements into one ``(n_mp, ...)`` result.
+
+    ``sub_results`` is ``[(idx, PAAMeasurement)]`` -- each segment's headline
+    and trajectories are laid into the portfolio arrays at its rows and
+    zero-padded on the right to the portfolio's longest horizon (a contract
+    carries no LRC past its coverage period). Unlike the GMM stitch the PAA
+    holds the LRC undiscounted, so there is no per-MP discount curve to lay --
+    the scatter is a pure ragged zero-pad. The mixed-portfolio orchestrator
+    (``fcf.portfolio.measure``) uses this to combine a PAA partition that spans
+    several routing segments into one ``PAAMeasurement``.
+    """
+    n_time = max(m.lrc_path.shape[1] - 1 for _, m in sub_results)
+
+    lrc = np.empty(n_mp)
+    loss_component = np.empty(n_mp)
+    fcf = np.empty(n_mp)
+    lrc_path = np.zeros((n_mp, n_time + 1))
+    revenue = np.zeros((n_mp, n_time))
+    service_expense = np.zeros((n_mp, n_time))
+    lic = np.zeros((n_mp, n_time + 1))
+
+    cf_2d = ("inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
+             "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
+    cf_arrays = {name: np.zeros((n_mp, n_time)) for name in cf_2d}
+    maturity_cf = np.zeros(n_mp)
+    maturity_survivors = np.zeros(n_mp)
+
+    for idx, m in sub_results:
+        t = m.lrc_path.shape[1] - 1
+        lrc[idx] = m.lrc
+        loss_component[idx] = m.loss_component
+        fcf[idx] = m.fcf
+        lrc_path[idx, :t + 1] = m.lrc_path
+        revenue[idx, :t] = m.revenue
+        service_expense[idx, :t] = m.service_expense
+        lic[idx, :t + 1] = m.lic
+        cf = m.cashflows
+        for name in cf_2d:
+            arr = getattr(cf, name)
+            cf_arrays[name][idx, :arr.shape[1]] = arr
+        maturity_cf[idx] = cf.maturity_cf
+        maturity_survivors[idx] = cf.maturity_survivors
+
+    cashflows = type(sub_results[0][1].cashflows)(
+        maturity_cf=maturity_cf, maturity_survivors=maturity_survivors,
+        **cf_arrays,
+    )
+    return PAAMeasurement(
+        lrc=lrc, loss_component=loss_component, fcf=fcf,
+        lrc_path=lrc_path, revenue=revenue, service_expense=service_expense,
+        lic=lic, cashflows=cashflows,
+    )
+
+
 def measure_paa(
     model_points: ModelPoints,
     basis: Basis,

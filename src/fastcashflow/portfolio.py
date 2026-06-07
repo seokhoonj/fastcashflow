@@ -7,20 +7,21 @@ BEL and an LRC are never summed into one array. Each contract is routed to its
 segment's measurement model; that row partition is the orchestrator's core and
 is validated as a construction invariant.
 
-P-3 implements the row partition and the GMM execution. PAA / VFA execution
-lands in P-4: a portfolio that also carries PAA / VFA rows raises
-``NotImplementedError`` *after* the partition is validated -- a non-GMM row is
-never silently measured as GMM.
+P-3 implemented the row partition and the GMM execution; P-4 adds the PAA
+executor (segments stitched into one ``PAAMeasurement``). A portfolio that
+also carries VFA rows still raises ``NotImplementedError`` after the partition
+is validated -- a non-GMM row is never silently measured as GMM.
 """
 from __future__ import annotations
 
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
 from fastcashflow._typing import IntArray
-from fastcashflow._paa import PAAMeasurement
+from fastcashflow._paa import (
+    PAAMeasurement, measure_paa, _stitch_paa_measurements)
 from fastcashflow._vfa import VFAMeasurement
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
@@ -147,13 +148,41 @@ def _partition_by_model(model_points: ModelPoints, router: BasisRouter):
             for model, idxs in buckets.items()}
 
 
-def _gmm_subrouter(router: BasisRouter) -> BasisRouter:
-    """A router carrying only the GMM segments, so the GMM-only entry accepts it."""
+def _submodel_router(router: BasisRouter, model: str) -> BasisRouter:
+    """A router carrying only ``model``'s segments, so the per-model entry accepts it."""
     keys = [k for k in router.segments
-            if router.measurement_model_of(k) == "GMM"]
+            if router.measurement_model_of(k) == model]
     return BasisRouter({k: router.resolve(k) for k in keys},
                        segment_axes=router.segment_axes,
-                       measurement_models={k: "GMM" for k in keys})
+                       measurement_models={k: model for k in keys})
+
+
+def _measure_model_segmented(sub_mp, sub_router, measure_one, stitch):
+    """Measure one model's partition that spans several routing segments.
+
+    ``measure_paa`` / ``measure_vfa`` take a single :class:`Basis`, so the
+    orchestrator splits the partition by segment, measures each on its own
+    basis, and scatters the per-segment native results back into one stitched
+    measurement -- the PAA / VFA analogue of the GMM ``_measure_segmented``.
+    ``measure_one(sub, basis)`` runs one segment; ``stitch(n_rows, sub_results)``
+    scatters ``[(idx, measurement)]`` into the combined result. The stitched
+    result is stamped with ``sub_mp`` so ``group(...)`` resolves the axes, just
+    as ``fcf.gmm.measure`` stamps its result.
+    """
+    try:
+        basis_norm, segments = _factorise_segments(
+            sub_router, sub_mp, sub_router.segment_axes, sub_mp.n_mp)
+    except KeyError:
+        if len(sub_router.segments) == 1:
+            (basis,) = sub_router.segments.values()
+            return measure_one(sub_mp, basis)
+        raise ValueError(
+            "model_points has no segment axes set but the sub-router has "
+            f"{len(sub_router.segments)} segments; set the routing columns "
+            f"{sub_router.segment_axes}")
+    sub_results = [(idx, measure_one(sub_mp.subset(idx), basis_norm[key]))
+                   for key, idx in segments]
+    return replace(stitch(sub_mp.n_mp, sub_results), model_points=sub_mp)
 
 
 def measure(model_points: ModelPoints, basis, *, full: bool = True,
@@ -167,9 +196,10 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     separate. ``full`` matches :func:`fcf.gmm.measure` (the full trajectory vs
     the fused headline).
 
-    P-3 measures GMM segments. A portfolio that also has PAA / VFA rows raises
-    ``NotImplementedError`` *after* the partition is validated (P-4 fills in the
-    PAA / VFA executors); a non-GMM row is never silently measured as GMM.
+    GMM and PAA segments are measured; a portfolio that also has VFA rows
+    raises ``NotImplementedError`` *after* the partition is validated (the VFA
+    executor is the remaining P-4 step). A non-GMM row is never silently
+    measured as GMM -- each model's rows reach only its own kernel.
     """
     if not isinstance(basis, BasisRouter):
         raise TypeError(
@@ -181,15 +211,23 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     if covered != model_points.n_mp:                  # factorisation must be total
         raise ValueError(
             f"model partition covers {covered} of {model_points.n_mp} rows")
-    unsupported = {m: int(parts[m].size) for m in ("PAA", "VFA") if parts[m].size}
-    if unsupported:
+    if parts["VFA"].size:
         raise NotImplementedError(
-            f"fcf.portfolio.measure measures GMM segments so far; this portfolio "
-            f"has {unsupported} (PAA / VFA execution arrives in P-4). The "
-            f"partition is valid -- only the non-GMM executors are missing.")
+            f"fcf.portfolio.measure measures GMM and PAA segments so far; this "
+            f"portfolio has {int(parts['VFA'].size)} VFA row(s) (VFA execution "
+            f"is the remaining P-4 step). The partition is valid -- only the VFA "
+            f"executor is missing.")
+    slots = {}
     gmm_idx = parts["GMM"]
-    gmm_meas = _measure_gmm(model_points.subset(gmm_idx), _gmm_subrouter(basis),
-                            full=full, backend=backend)
-    return PortfolioMeasurement(
-        model_points=model_points,
-        gmm=ModelMeasurement(index=gmm_idx, measurement=gmm_meas))
+    if gmm_idx.size:
+        gmm_meas = _measure_gmm(
+            model_points.subset(gmm_idx), _submodel_router(basis, "GMM"),
+            full=full, backend=backend)
+        slots["gmm"] = ModelMeasurement(index=gmm_idx, measurement=gmm_meas)
+    paa_idx = parts["PAA"]
+    if paa_idx.size:
+        paa_meas = _measure_model_segmented(
+            model_points.subset(paa_idx), _submodel_router(basis, "PAA"),
+            measure_paa, _stitch_paa_measurements)
+        slots["paa"] = ModelMeasurement(index=paa_idx, measurement=paa_meas)
+    return PortfolioMeasurement(model_points=model_points, **slots)
