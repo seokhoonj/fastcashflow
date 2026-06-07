@@ -354,3 +354,37 @@ def test_vfa_report_releases_the_ra_into_revenue():
     ra_in_revenue = (rep.insurance_revenue - rep.insurance_service_expense
                      - m.csm_release)
     assert np.isclose(ra_in_revenue[0].sum(), m.ra_path[0, 0])
+
+
+# ---------------------------------------------------------------------------
+# full=False headline contract (the chunked-portfolio building block) + guards
+# ---------------------------------------------------------------------------
+def _vfa_mp():
+    return ModelPoints.single(40, 0.0, 60, account_value=1e8)
+
+
+def test_vfa_full_false_matches_full_headline():
+    """full=False fills the same headline (bel / ra / csm / variable_fee /
+    time_value / loss_component) as full=True and leaves the trajectories,
+    account value and cash flows None."""
+    basis = _basis()
+    mp = _vfa_mp()
+    full = fcf.vfa.measure(mp, basis)
+    head = fcf.vfa.measure(mp, basis, full=False)
+    for f in ("bel", "ra", "csm", "variable_fee", "time_value", "loss_component"):
+        assert np.allclose(getattr(head, f), getattr(full, f)), f
+    assert head.bel_path is None and head.ra_path is None and head.csm_path is None
+    assert head.account_value_path is None and head.csm_accretion is None
+    assert head.lic is None and head.cashflows is None
+
+
+def test_vfa_headline_only_rejected_by_consumers():
+    """A headline-only VFA measurement gives a clear error in group / roll /
+    report rather than crashing on a None trajectory."""
+    head = fcf.vfa.measure(_vfa_mp(), _basis(), full=False)
+    with pytest.raises(ValueError, match="full=True"):
+        fcf.roll_forward(head)
+    with pytest.raises(ValueError, match="full=True"):
+        fcf.report(head)
+    with pytest.raises(ValueError, match="full measurement"):
+        fcf.group(head, np.zeros(1, dtype=int))

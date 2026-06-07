@@ -30,7 +30,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
-from fastcashflow._paa import PAAMeasurement
+from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._vfa import VFAMeasurement
 
 
@@ -190,6 +190,7 @@ def _report_gmm(m: GMMMeasurement) -> Report:
 
 def _report_paa(m: PAAMeasurement) -> Report:
     """PAA: the service result is already revenue less expense; no CSM."""
+    _require_full_paa(m, "report()")
     zeros = np.zeros_like(m.revenue)
     return Report(
         insurance_revenue=m.revenue,
@@ -209,6 +210,7 @@ def _report_paa(m: PAAMeasurement) -> Report:
 
 def _report_vfa(m: VFAMeasurement) -> Report:
     """VFA: profit emerges as the CSM releases; the RA covers expense risk."""
+    _require_full(m, "report()")
     csm = m.csm_path
     service_expense = m.cashflows.expense_cf       # account value is investment comp.
     csm_release = m.csm_release

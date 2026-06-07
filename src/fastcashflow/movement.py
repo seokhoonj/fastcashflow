@@ -37,7 +37,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow.numerics import _csm_roll
-from fastcashflow._paa import PAAMeasurement
+from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._vfa import VFAMeasurement
 
 
@@ -470,6 +470,7 @@ def _roll_forward_paa(
     measurement: PAAMeasurement, period_months: int
 ) -> list[PAAPeriodMovement]:
     """Slice a PAA measurement into LRC, loss-component and LIC movements."""
+    _require_full_paa(measurement, "roll_forward")
     lrc = measurement.lrc_path
     lic = measurement.lic
     premium_cf = measurement.cashflows.premium_cf
@@ -508,6 +509,7 @@ def _roll_forward_vfa(
     measurement: VFAMeasurement, period_months: int
 ) -> list[VFAPeriodMovement]:
     """Slice a VFA measurement into BEL, RA and CSM movements."""
+    _require_full(measurement, "roll_forward")
     bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
     csm_accretion = measurement.csm_accretion
     csm_release = measurement.csm_release

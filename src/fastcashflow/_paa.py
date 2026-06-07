@@ -100,6 +100,17 @@ def _(measurement: PAAMeasurement, path, *, ids=None):
         path, ids)
 
 
+def _require_full_paa(measurement, entry: str) -> None:
+    """Raise if a headline-only PAA measurement reaches a path needing the
+    trajectory fields. PAA has no ``bel_path``, so the shared ``_require_full``
+    (which checks ``bel_path``) cannot serve it -- this checks ``lrc_path``."""
+    if measurement.lrc_path is None:
+        raise ValueError(
+            f"{entry} requires a full=True PAA measurement; the trajectory "
+            f"fields are None on the full=False headline path. Call "
+            f"measure_paa(..., full=True).")
+
+
 def _stitch_paa_measurements(n_mp, sub_results):
     """Scatter per-segment PAAMeasurements into one ``(n_mp, ...)`` result.
 
@@ -160,6 +171,7 @@ def measure_paa(
     basis: Basis,
     *,
     revenue_basis: str = "time",
+    full: bool = True,
 ) -> PAAMeasurement:
     """Measure a portfolio under the Premium Allocation Approach.
 
@@ -181,16 +193,52 @@ def measure_paa(
     The onerous test reuses the GMM fulfilment cash flows: a contract whose
     inception fulfilment cash flows are a net outflow carries that outflow
     as a loss component.
+
+    ``full=True`` (default) returns the LRC / revenue / LIC trajectories;
+    ``full=False`` fills only the headline ``lrc`` / ``loss_component`` / ``fcf``
+    and leaves the trajectory and cash-flow fields ``None``. The headline path
+    skips the LRC roll, revenue allocation and LIC entirely (only the onerous
+    test is needed), so ``revenue_basis`` is immaterial there. It is the
+    building block the portfolio orchestrator chunks to bound memory.
     """
+    if revenue_basis not in ("time", "claims"):
+        raise ValueError(
+            f"revenue_basis must be 'time' or 'claims', got {revenue_basis!r}")
     basis = _single_basis(basis, entry="measure_paa")
     proj = project_cashflows(model_points, basis)
 
+    # Onerous test -- the GMM inception fulfilment cash flows. Needed by both
+    # paths and independent of the LRC roll, so it comes first; the headline
+    # path returns right after it.
+    bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
+        proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
+        proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
+        model_points.contract_boundary_months,
+        discount_monthly_curve(basis, proj.n_time),
+    )
+    # Shared RA helper so PAA honours basis.ra_method (it hardcoded the
+    # confidence-level form before, silently ignoring 'cost_of_capital').
+    ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
+                          pv_survival, discount_monthly_curve(basis, proj.n_time))
+    fcf = bel[:, 0] + ra[:, 0]
+    loss_component = np.maximum(0.0, fcf)
+
+    if not full:
+        # Headline only: the inception opening LRC is 0 (the full path's
+        # lrc[:, 0]); the trajectory, revenue and cash flows are dropped so the
+        # chunked portfolio path retains O(n_mp) per row, not O(n_mp x n_time).
+        return PAAMeasurement(
+            lrc=np.zeros(model_points.n_mp), loss_component=loss_component,
+            fcf=fcf, model_points=model_points)
+
+    # Full path only -- the (n_mp, n_time) revenue / service-expense arrays the
+    # headline never needs (kept below the early return so the headline path
+    # does not allocate them).
     premium_total = proj.premium_cf.sum(axis=1)          # (n_mp,)
     service_expense = proj.claim_cf + proj.morbidity_cf + proj.expense_cf
 
     # Liability for incurred claims -- claims incurred build it up, claims
-    # paid (spread over the settlement pattern) run it off. Held
-    # undiscounted, consistent with the LRC.
+    # paid (spread over the settlement pattern) run it off. Held undiscounted.
     incurred = proj.claim_cf + proj.morbidity_cf
     if basis.settlement_pattern is None:
         lic = np.zeros((incurred.shape[0], incurred.shape[1] + 1))
@@ -207,14 +255,10 @@ def measure_paa(
                    < model_points.term_months[:, None]).astype(np.float64)
     if revenue_basis == "time":
         weight = in_coverage
-    elif revenue_basis == "claims":
+    else:                                                # "claims" (validated above)
         weight = service_expense.copy()                  # B126(b)
         empty = weight.sum(axis=1) == 0.0                # no pattern -> B126(a)
         weight[empty] = in_coverage[empty]
-    else:
-        raise ValueError(
-            f"revenue_basis must be 'time' or 'claims', got {revenue_basis!r}"
-        )
     weight_sum = weight.sum(axis=1, keepdims=True)
     weight_sum = np.where(weight_sum == 0.0, 1.0, weight_sum)   # safe divide; weight=0 → revenue=0
     revenue = premium_total[:, None] * weight / weight_sum
@@ -224,20 +268,6 @@ def measure_paa(
     n_mp, n_time = lrc_delta.shape
     lrc = np.zeros((n_mp, n_time + 1))
     lrc[:, 1:] = np.cumsum(lrc_delta, axis=1)
-
-    # Onerous test -- the GMM inception fulfilment cash flows.
-    bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
-        proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
-        proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
-        model_points.contract_boundary_months,
-        discount_monthly_curve(basis, proj.n_time),
-    )
-    # Shared RA helper so PAA honours basis.ra_method (it hardcoded the
-    # confidence-level form before, silently ignoring 'cost_of_capital').
-    ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
-                          pv_survival, discount_monthly_curve(basis, proj.n_time))
-    fcf = bel[:, 0] + ra[:, 0]
-    loss_component = np.maximum(0.0, fcf)
 
     return PAAMeasurement(
         lrc=lrc[:, 0],

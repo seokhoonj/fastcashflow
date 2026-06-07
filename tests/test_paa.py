@@ -126,3 +126,46 @@ def test_paa_rejects_unknown_revenue_basis():
     with pytest.raises(ValueError, match="revenue_basis"):
         fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS),
                     _basis(), revenue_basis="weekly")
+
+
+# ---------------------------------------------------------------------------
+# full=False headline contract (the chunked-portfolio building block) + guards
+# ---------------------------------------------------------------------------
+def _paa_mp():
+    return ModelPoints.single(40, 1_000_000.0, 12, benefits={0: 1e8},
+                              calculation_methods=PATTERNS)
+
+
+def test_paa_full_false_matches_full_headline():
+    """full=False fills the same headline (lrc / loss_component / fcf) as
+    full=True and leaves every trajectory and the cash flows None."""
+    basis = _basis()
+    mp = _paa_mp()
+    full = fcf.paa.measure(mp, basis)
+    head = fcf.paa.measure(mp, basis, full=False)
+    assert np.allclose(head.lrc, full.lrc)
+    assert np.allclose(head.loss_component, full.loss_component)
+    assert np.allclose(head.fcf, full.fcf)
+    assert head.lrc_path is None and head.revenue is None
+    assert head.service_expense is None and head.lic is None
+    assert head.cashflows is None
+
+
+def test_paa_headline_only_rejected_by_consumers():
+    """A headline-only PAA measurement gives a clear error in group / roll /
+    report -- not an AttributeError on a None trajectory (PAA has no bel_path,
+    so the guard checks lrc_path)."""
+    head = fcf.paa.measure(_paa_mp(), _basis(), full=False)
+    with pytest.raises(ValueError, match="full=True PAA"):
+        fcf.roll_forward(head)
+    with pytest.raises(ValueError, match="full=True PAA"):
+        fcf.report(head)
+    with pytest.raises(ValueError, match="full PAA measurement"):
+        fcf.group(head, np.zeros(1, dtype=int))
+
+
+def test_paa_rejects_bad_revenue_basis_even_on_headline():
+    """revenue_basis is validated up front, so a typo is caught on the headline
+    path too (where the revenue allocation it selects is never computed)."""
+    with pytest.raises(ValueError, match="revenue_basis"):
+        fcf.paa.measure(_paa_mp(), _basis(), revenue_basis="nope", full=False)

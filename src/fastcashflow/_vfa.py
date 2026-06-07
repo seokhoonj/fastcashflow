@@ -191,6 +191,8 @@ def measure_vfa(
     model_points: ModelPoints,
     basis: Basis,
     return_scenarios: FloatArray | None = None,
+    *,
+    full: bool = True,
 ) -> VFAMeasurement:
     """Measure a direct-participation portfolio under the Variable Fee Approach.
 
@@ -212,6 +214,13 @@ def measure_vfa(
     entity's unearned variable fee -- accreted at the same return and
     released by coverage units. The RA is a confidence-level margin for
     expense risk.
+
+    ``full=True`` (default) returns the BEL / RA / CSM / account-value
+    trajectories; ``full=False`` fills only the headline ``bel`` / ``ra`` /
+    ``csm`` / ``variable_fee`` / ``time_value`` / ``loss_component`` (the
+    inception CSM is ``csm0``, so the release kernel is skipped) and leaves the
+    trajectory and cash-flow fields ``None`` -- the building block the portfolio
+    orchestrator chunks to bound memory.
 
     BEL, RA and CSM are returned as month-by-month trajectories. The
     deterministic BEL carries the guarantee's intrinsic value only; when
@@ -375,6 +384,16 @@ def measure_vfa(
     fcf = bel[:, 0] + ra[:, 0] + time_value
     loss_component = np.maximum(0.0, fcf)
     csm0 = np.maximum(0.0, -fcf)
+
+    if not full:
+        # Headline only: the inception CSM is csm0 (the full path's csm[:, 0]),
+        # so the release kernel is skipped; the trajectory and cash-flow fields
+        # are dropped so the chunked portfolio path retains O(n_mp) per row.
+        return VFAMeasurement(
+            bel=bel[:, 0], ra=ra[:, 0], csm=csm0, variable_fee=variable_fee,
+            time_value=time_value, loss_component=loss_component,
+            model_points=model_points)
+
     # VFA accretes at the underlying-items return -- flat across time in
     # the deterministic measurement; broadcast to the per-month curve the
     # kernel consumes.
