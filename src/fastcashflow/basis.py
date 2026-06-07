@@ -1018,8 +1018,6 @@ def _describe_basis_lines(
                 extras.append(f"mortality_rate_name={st.mortality_rate_name!r}")
             if st.death_benefit_factor != 1.0:
                 extras.append(f"death_benefit_factor={st.death_benefit_factor}")
-            if st.exit_after_months:
-                extras.append(f"exit_after_months={st.exit_after_months}")
             extra_str = (", " + ", ".join(extras)) if extras else ""
             state_items.append((
                 f"State({st.name!r}, pays_premium={st.pays_premium}, "

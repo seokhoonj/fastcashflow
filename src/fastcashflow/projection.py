@@ -350,7 +350,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
 
 @njit(parallel=True, cache=True)
 def _project_kernel_semi_markov(
-    state_death_exit, state_lapse, state_death_benefit_factor, state_exit_after,
+    state_death_exit, state_lapse, state_death_benefit_factor,
+    state_det_at, state_det_to, state_det_lump,
     edge_from, edge_to, edge_prob, edge_lump_sum,
     n_states, state_duration_max, state_offset, periodic_benefit_term_months,
     premium_state, benefit_state, start_state,
@@ -503,16 +504,28 @@ def _project_kernel_semi_markov(
                 src_off = state_offset[s_from]
                 is_residual = s_from == s_to
                 if is_residual:
-                    # ``exit_after_months`` drops the cohort once its sojourn reaches
-                    # the boundary: the advanced flow is simply not written to
-                    # occ_next, so it leaves the in-force set (= a ``to=None``
-                    # transition). ``0`` disables it (no drop). Lump-sum still
-                    # fires on the exiting flow on its way out.
-                    ex = state_exit_after[s_from]
+                    # Residual (stay) edge advances each cohort tau -> tau+1. A
+                    # deterministic transition (Transition.after_sojourn_months=K)
+                    # rides this gate: a cohort advancing INTO sojourn >= K is
+                    # routed prob-1 to its destination instead of advancing.
+                    #   det_to >= 0  -> route survivors to dest cohort 0 (to=state)
+                    #   det_to <  0  -> leave the in-force set (to=None; the
+                    #                   historical exit -- no occ_next write)
+                    # The route arm and the advance arm are mutually exclusive on
+                    # ``next_tau >= K``, so flow is written exactly once (no
+                    # double-count); to=None is byte-identical to the old exit.
+                    K = state_det_at[s_from]
+                    dto = state_det_to[s_from]
+                    dlump = state_det_lump[s_from]
                     for tau in range(D_from):
                         flow = occ[src_off + tau] * edge_prob[e, mp, year, tau]
                         next_tau = tau + 1 if tau + 1 < D_from else D_from - 1
-                        if not (ex > 0 and next_tau >= ex):
+                        if K > 0 and next_tau >= K:
+                            if dto >= 0:
+                                occ_next[state_offset[dto]] += flow
+                            if dlump:
+                                disability_cf[mp, t] += flow * disability_benefit[mp]
+                        else:
                             occ_next[src_off + next_tau] += flow
                         if edge_lump_sum[e]:
                             disability_cf[mp, t] += flow * disability_benefit[mp]
@@ -870,12 +883,14 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         state_death_exit = compiled.state_death_exit
         state_lapse = _state_lapse_stack(state_model, rate_dict)
         state_death_benefit_factor = compiled.state_death_benefit_factor
-        state_exit_after = compiled.state_exit_after
+        state_det_at = compiled.state_det_at
+        state_det_to = compiled.state_det_to
+        state_det_lump = compiled.state_det_lump
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
          annuity_cf, disability_cf, lapse_flow,
          maturity_cf, maturity_survivors) = _project_kernel_semi_markov(
             state_death_exit, state_lapse,
-            state_death_benefit_factor, state_exit_after,
+            state_death_benefit_factor, state_det_at, state_det_to, state_det_lump,
             edge_from, edge_to, edge_prob, edge_lump_sum,
             n_states, state_duration_max, state_offset, periodic_benefit_term_months,
             premium_state, benefit_state, start_state,

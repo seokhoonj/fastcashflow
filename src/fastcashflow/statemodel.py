@@ -90,10 +90,16 @@ class CompiledStateModel:
     # ``(n_states,)`` float, all-ones default. Occupancy-weighted into the
     # aggregate death claim: ``claim = (sum_s occ[s]*factor[s]) * claim_rate``.
     state_death_benefit_factor: FloatArray | None = None
-    # Per-state sojourn exit (``State.exit_after_months``), ``(n_states,)`` int, zeros
-    # default. Semi-Markov only: a cohort reaching this sojourn leaves the
-    # in-force set (no occ_next write). ``None`` for Markov models.
-    state_exit_after: IntArray | None = None
+    # Per-state deterministic transition (the <=1 Transition with
+    # after_sojourn_months > 0), all ``(n_states,)``, semi-Markov only / ``None``
+    # for Markov. ``state_det_at`` = the sojourn month K at which it fires (0 =
+    # none); ``state_det_to`` = destination state index, or -1 for ``to=None``
+    # (leave the in-force set); ``state_det_lump`` = its ``pays_lump_sum`` flag.
+    # A cohort advancing into sojourn >= K is routed prob-1 to the destination
+    # (or dropped), instead of advancing along the residual stay edge.
+    state_det_at: IntArray | None = None
+    state_det_to: IntArray | None = None
+    state_det_lump: np.ndarray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,13 +203,14 @@ class State:
     Supported on the full path only (``measure(full=True)``); the fast path and
     the VFA path reject a non-default factor.
 
-    ``exit_after_months`` removes occupancy from the in-force set once a cohort's
-    sojourn in this state reaches ``exit_after_months`` months (default ``0`` =
-    never). Semi-Markov only -- it needs sojourn tracking, so the state must
-    set ``sojourn_tracking_months``. Distinct from ``periodic_benefit_term_months`` (which stops the
-    payment but keeps the lives in force): ``exit_after_months`` ends the cover. A
-    guaranteed-payout state that pays a fixed term and then lapses sets
-    ``periodic_benefit_term_months`` (pay window) and ``exit_after_months`` (cover end) together.
+    A cover that ends after a fixed sojourn (or a guaranteed conversion to
+    another state at a fixed sojourn) is a deterministic
+    ``Transition(after_sojourn_months=K, to=...)`` -- ``to=None`` ends the
+    cover, ``to="active"`` converts. It is distinct from
+    ``periodic_benefit_term_months`` (which stops the payment but keeps the
+    lives in force): a guaranteed-payout state that pays a fixed term then lapses
+    sets ``periodic_benefit_term_months`` (pay window) and a
+    ``Transition(after_sojourn_months=K, to=None)`` (cover end) together.
     """
 
     name: str
@@ -214,7 +221,6 @@ class State:
     periodic_benefit_term_months: int = 0
     mortality_rate_name: str = "mortality"
     death_benefit_factor: float = 1.0
-    exit_after_months: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "transitions", tuple(self.transitions))
@@ -255,20 +261,6 @@ class State:
                 f"state {self.name!r}: death_benefit_factor must be "
                 f"non-negative, got {factor}"
             )
-        # ``exit_after_months`` drops the cohort from the in-force set at the
-        # given sojourn (a deterministic exit). Pay the cap first, then exit.
-        exit_after_months = int(self.exit_after_months)
-        object.__setattr__(self, "exit_after_months", exit_after_months)
-        if exit_after_months < 0:
-            raise ValueError(
-                f"state {self.name!r}: exit_after_months must be non-negative, "
-                f"got {exit_after_months}"
-            )
-        if exit_after_months > 0 and cap > 0 and exit_after_months < cap:
-            raise ValueError(
-                f"state {self.name!r}: exit_after_months ({exit_after_months}) must be "
-                f">= periodic_benefit_term_months ({cap}); pay the cap, then exit."
-            )
         # Deterministic transitions (Transition.after_sojourn_months > 0): at
         # most one per state (two prob-1 edges from one cohort are ill-defined),
         # and it must clear the pay cap (pay the cap, then move / exit).
@@ -288,14 +280,14 @@ class State:
             )
         # Sojourn tracking: the engine tracks one monthly cohort per sojourn
         # month, the last cohort absorbing everyone at that sojourn or beyond.
-        # A deterministic boundary (periodic_benefit_term_months / exit_after_months
-        # / a deterministic transition) needs one guard cohort past it -- otherwise
-        # the absorbing cohort sits at the boundary and capped / exiting lives
-        # re-accumulate and never stop. Auto-derive that ``+1`` so the caller never
-        # meets the off-by-one; an explicit sojourn_tracking_months only sets a
-        # *longer* tail (for a sojourn-dependent rate whose tail outruns the
+        # A deterministic boundary (periodic_benefit_term_months / a deterministic
+        # transition's after_sojourn_months) needs one guard cohort past it --
+        # otherwise the absorbing cohort sits at the boundary and capped / exiting
+        # lives re-accumulate and never stop. Auto-derive that ``+1`` so the caller
+        # never meets the off-by-one; an explicit sojourn_tracking_months only sets
+        # a *longer* tail (for a sojourn-dependent rate whose tail outruns the
         # boundary) and must still clear the boundary.
-        boundary = max(cap, exit_after_months, det)
+        boundary = max(cap, det)
         if boundary > 0:
             if self.sojourn_tracking_months == 0:
                 object.__setattr__(self, "sojourn_tracking_months", boundary + 1)
@@ -304,8 +296,8 @@ class State:
                     f"state {self.name!r}: sojourn_tracking_months "
                     f"({self.sojourn_tracking_months}) must exceed the deterministic "
                     f"sojourn boundary ({boundary} = max(periodic_benefit_term_months, "
-                    f"exit_after_months)); the absorbing cohort must sit strictly past "
-                    f"it. Omit sojourn_tracking_months to auto-derive {boundary + 1}."
+                    f"after_sojourn_months)); the absorbing cohort must sit strictly "
+                    f"past it. Omit sojourn_tracking_months to auto-derive {boundary + 1}."
                 )
 
 
@@ -344,10 +336,13 @@ class StateModel:
                         f"state {s.name!r} has a transition to an unknown "
                         f"state {tr.to!r}"
                     )
-                if tr.pays_lump_sum and tr.to is None:
+                if (tr.pays_lump_sum and tr.to is None
+                        and tr.after_sojourn_months == 0):
                     raise ValueError(
-                        f"state {s.name!r} has a lump-sum transition with no "
-                        f"destination; a lump sum attaches to a transition"
+                        f"state {s.name!r} has a rate-driven lump-sum transition "
+                        f"with no destination; a rate-driven lump attaches to a "
+                        f"transition with a destination (a deterministic "
+                        f"after_sojourn_months exit may pay a lump on its way out)"
                     )
                 if tr.sojourn_dependent and s.sojourn_tracking_months <= 0:
                     raise ValueError(
@@ -505,12 +500,6 @@ def compile_state_model(
             "duration-tracked states"
         )
     for s in model.states:
-        if s.exit_after_months > 0:
-            raise ValueError(
-                f"state {s.name!r}: exit_after_months needs sojourn tracking and is "
-                f"semi-Markov only; set sojourn_tracking_months to switch the state to a "
-                f"semi-Markov model"
-            )
         if any(tr.after_sojourn_months > 0 for tr in s.transitions):
             raise ValueError(
                 f"state {s.name!r}: a deterministic transition "
@@ -576,7 +565,7 @@ def compile_state_model(
         state_death_exit=np.ascontiguousarray(np.stack(death_exit_rows)),
         state_death_benefit_factor=np.array(
             [s.death_benefit_factor for s in model.states], dtype=np.float64),
-        state_exit_after=None,
+        state_det_at=None, state_det_to=None, state_det_lump=None,
     )
 
 
@@ -622,16 +611,6 @@ def compile_state_model_with_duration(
             "compile_state_model_with_duration needs at least one rate array"
         )
     index = {s.name: i for i, s in enumerate(model.states)}
-    # Deterministic transitions (Transition.after_sojourn_months > 0) are
-    # recognised by the auto-derive and the public API, but their kernel routing
-    # lands in the next step; until then express a fixed-sojourn cover end with
-    # ``State.exit_after_months`` (to=None only). Raise rather than silently drop.
-    if any(tr.after_sojourn_months > 0
-           for s in model.states for tr in s.transitions):
-        raise NotImplementedError(
-            "Transition(after_sojourn_months=...) routing is not implemented yet; "
-            "use State.exit_after_months for a fixed-sojourn cover end"
-        )
     # Effective cohort count per state: untracked -> 1, tracked -> sojourn_tracking_months.
     state_duration_max = np.array(
         [max(s.sojourn_tracking_months, 1) for s in model.states], dtype=np.int64,
@@ -694,12 +673,25 @@ def compile_state_model_with_duration(
     edge_prob_blocks: list[FloatArray] = []   # one (max_D, *grid) per edge
     edge_lump_sum: list[bool] = []
     death_exit_rows: list[FloatArray] = []    # per-state exact death exit (cohort 0)
+    det_at_list: list[int] = []               # per-state deterministic transition (<=1)
+    det_to_list: list[int] = []
+    det_lump_list: list[bool] = []
 
     for i, state in enumerate(model.states):
-        # Validate this state's transitions reference rates we have. A
+        # Split the deterministic transition (prob-1 at a fixed sojourn) out of
+        # the rate-driven ones: it carries no rate and is NOT a competing-
+        # decrement edge -- it rides the residual gate in the kernel via the
+        # state_det_* scalars, exactly as the old exit attribute did.
+        rate_trs = [tr for tr in state.transitions if tr.after_sojourn_months == 0]
+        det = next((tr for tr in state.transitions
+                    if tr.after_sojourn_months > 0), None)
+        det_at_list.append(det.after_sojourn_months if det else 0)
+        det_to_list.append(index[det.to] if (det and det.to is not None) else -1)
+        det_lump_list.append(bool(det.pays_lump_sum) if det else False)
+        # Validate this state's rate transitions reference rates we have. A
         # "mortality" transition routes to the state's own mortality rate
         # name (State.mortality_rate_name), so validate the effective name.
-        for tr in state.transitions:
+        for tr in rate_trs:
             rname = (state.mortality_rate_name
                      if tr.rate == "mortality" else tr.rate)
             if rname not in arrays:
@@ -723,7 +715,7 @@ def compile_state_model_with_duration(
         # depend on tau when the transition is sojourn_dependent.
         # We accumulate per-edge probabilities along the tau axis.
         per_edge_per_tau: list[list[np.ndarray]] = [
-            [] for _ in range(len([tr for tr in state.transitions
+            [] for _ in range(len([tr for tr in rate_trs
                                    if tr.to is not None]))
         ]
         res_per_tau: list[np.ndarray] = []
@@ -732,7 +724,7 @@ def compile_state_model_with_duration(
         for tau in range(D):
             survive = np.ones(grid)
             transient_idx = 0
-            for tr in state.transitions:
+            for tr in rate_trs:
                 rname = (state.mortality_rate_name
                          if tr.rate == "mortality" else tr.rate)
                 r = rate_at(rname, state, tau)
@@ -753,7 +745,7 @@ def compile_state_model_with_duration(
 
         # Stack tau slices per transient edge to (D, *grid), pad to
         # max_D (extra cohorts hold zeros; codegen won't touch them).
-        for tr_idx, tr in enumerate([t for t in state.transitions
+        for tr_idx, tr in enumerate([t for t in rate_trs
                                       if t.to is not None]):
             stacked = np.stack(per_edge_per_tau[tr_idx])  # (D, *grid)
             if D < max_D:
@@ -803,6 +795,7 @@ def compile_state_model_with_duration(
         state_death_exit=np.ascontiguousarray(np.stack(death_exit_rows)),
         state_death_benefit_factor=np.array(
             [s.death_benefit_factor for s in model.states], dtype=np.float64),
-        state_exit_after=np.array(
-            [s.exit_after_months for s in model.states], dtype=np.int64),
+        state_det_at=np.array(det_at_list, dtype=np.int64),
+        state_det_to=np.array(det_to_list, dtype=np.int64),
+        state_det_lump=np.array(det_lump_list, dtype=np.bool_),
     )
