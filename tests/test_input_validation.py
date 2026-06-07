@@ -1084,6 +1084,19 @@ def test_basis_settlement_pattern_negative_component():
         _basis1(settlement_pattern=np.array([1.2, -0.2]))
 
 
+def test_basis_settlement_pattern_with_discount_curve_rejected():
+    # Time-varying settlement discounting is not implemented; reject the combo
+    # rather than silently discount every settlement at the first-year rate.
+    with pytest.raises(ValueError, match="settlement_pattern with a discount curve"):
+        _basis1(settlement_pattern=np.array([0.5, 0.3, 0.2]),
+                discount_annual=np.array([0.03, 0.035, 0.04]))
+
+
+def test_basis_settlement_pattern_with_scalar_discount_ok():
+    # The supported combination (scalar discount + settlement) still constructs.
+    _basis1(settlement_pattern=np.array([0.5, 0.3, 0.2]), discount_annual=0.03)
+
+
 def test_basis_expense_inflation_at_or_below_negative_one():
     with pytest.raises(ValueError, match="expense_inflation must be > -1.0"):
         _basis1(expense_inflation=-1.5)

@@ -750,6 +750,23 @@ class Basis:
                 raise ValueError(
                     f"settlement_pattern must sum to 1.0, got {sp_sum!r}"
                 )
+            # A settlement pattern combined with a discount *curve* (a per-year
+            # term structure) is not supported: discounting each settlement to
+            # its payment date would need a time-varying discount factor inside
+            # the kernel (deferred). Every GMM / PAA / VFA / stochastic path
+            # otherwise falls back to the first-year (in-year) rate, silently
+            # approximating -- reject the combination rather than return a wrong
+            # number. A scalar discount_annual with a settlement_pattern is fine.
+            disc = np.asarray(self.discount_annual, dtype=np.float64)
+            if disc.ndim >= 1 and disc.size > 1:
+                raise ValueError(
+                    "settlement_pattern with a discount curve (a per-year "
+                    "discount_annual) is not supported -- settling claims over "
+                    "the pattern needs a time-varying discount factor (deferred); "
+                    "the engine would discount every settlement at the first-year "
+                    "rate. Use a scalar discount_annual with settlement_pattern, "
+                    "or drop the settlement_pattern."
+                )
         # discount_annual / expense_inflation may be negative (negative rates
         # are valid) but must be finite and > -1 -- a rate <= -100% has no
         # monthly equivalent and produces NaN, and a NaN / inf otherwise
