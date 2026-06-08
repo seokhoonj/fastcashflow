@@ -179,6 +179,14 @@ def roll_forward(
     both in a single call. A PAA or VFA measurement is also accepted -- the
     movement is then the roll of the LRC or of the CSM, to which the
     revision and experience options do not apply.
+
+    A mixed-portfolio container
+    (:class:`~fastcashflow.portfolio.PortfolioMeasurement` or
+    :class:`~fastcashflow.portfolio.PortfolioGroups`) is also accepted: each
+    model slot is rolled forward on its own measurement and a
+    :class:`~fastcashflow.portfolio.PortfolioMovements` is returned (the
+    revision / experience options, being single-GMM-measurement features, are
+    rejected on the container).
     """
     raise TypeError(
         f"roll_forward does not handle {type(measurement).__name__}"
@@ -745,6 +753,7 @@ def _reconcile_vfa(
     ]
 
 
+@singledispatch
 def reconcile(
     movements: (list[PeriodMovement] | list[PAAPeriodMovement]
                 | list[VFAPeriodMovement]),
@@ -758,6 +767,11 @@ def reconcile(
     :class:`VFAPeriodMovement` is reconciled instead into the PAA
     liability-for-remaining-coverage or VFA contractual-service-margin
     tables.
+
+    The base implementation takes a list of movements (dispatch falls through
+    to it for any list); a mixed-portfolio
+    :class:`~fastcashflow.portfolio.PortfolioMovements` registers its own arm
+    (returning a :class:`~fastcashflow.portfolio.PortfolioReconciliation`).
     """
     if movements and isinstance(movements[0], PAAPeriodMovement):
         return _reconcile_paa(movements)

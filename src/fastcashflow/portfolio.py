@@ -36,6 +36,7 @@ from fastcashflow.grouping import (
     group, group_of_contracts, _GroupReducer, _join_keys, _finalise_gmm_group,
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
 from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.movement import roll_forward, reconcile
 from fastcashflow.projection import Cashflows
 from fastcashflow.report import report, Report
 
@@ -46,7 +47,8 @@ from fastcashflow.report import report, Report
 __all__ = [
     "measure", "measure_aggregate", "measure_groups",
     "measure_group_of_contracts", "PortfolioMeasurement", "PortfolioAggregate",
-    "PortfolioGroups", "PortfolioReport", "ModelMeasurement",
+    "PortfolioGroups", "PortfolioReport", "PortfolioMovements",
+    "PortfolioReconciliation", "ModelMeasurement",
 ]
 
 #: The native measurement type each model slot must hold (the per-model
@@ -1111,3 +1113,81 @@ def _portfolio_report(measurement) -> PortfolioReport:
 
 report.register(PortfolioMeasurement, _portfolio_report)
 report.register(PortfolioGroups, _portfolio_report)
+
+
+# ---------------------------------------------------------------------------
+# Period-close roll-forward / reconciliation of a measured portfolio.
+#
+# fcf.roll_forward (singledispatch) and fcf.reconcile (singledispatch) get a
+# container arm here (one-way import: portfolio depends on movement). Each model
+# rolls / reconciles on its own native measurement; the per-model results stay
+# in their own slots -- a GMM CSM movement and a PAA LRC movement are never
+# merged.
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class PortfolioMovements:
+    """Result of :func:`fcf.roll_forward` on a portfolio container: one list of
+    period movements per model present (``None`` when absent), keyed by model.
+    Each slot is the model's own movement list (``list[PeriodMovement]`` /
+    ``list[PAAPeriodMovement]`` / ``list[VFAPeriodMovement]``) -- a GMM CSM
+    movement and a PAA LRC movement are never merged. Feed it to
+    :func:`fcf.reconcile` for a :class:`PortfolioReconciliation`.
+    """
+
+    gmm: "list | None" = None
+    paa: "list | None" = None
+    vfa: "list | None" = None
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioReconciliation:
+    """Result of :func:`fcf.reconcile` on a :class:`PortfolioMovements`: one list
+    of reconciliation tables per model present (``None`` when absent), keyed by
+    model (``list[Reconciliation]`` / ``list[PAAReconciliation]`` /
+    ``list[VFAReconciliation]``).
+    """
+
+    gmm: "list | None" = None
+    paa: "list | None" = None
+    vfa: "list | None" = None
+
+
+def _portfolio_roll_forward(measurement, period_months: int = 12, *,
+                            revised=None, revised_at=None, actual_inforce=None,
+                            experience_at=None) -> PortfolioMovements:
+    """Roll each present model slot forward on its own native measurement.
+
+    The revision / experience options are a single-GMM-measurement feature (they
+    need a matching revised book), so they are rejected on the container -- roll
+    ``pm.gmm.measurement`` directly for those. A :class:`PortfolioMeasurement`
+    slot is a :class:`ModelMeasurement` (unwrap ``.measurement``); a
+    :class:`PortfolioGroups` slot is the grouped measurement directly.
+    """
+    if any(opt is not None for opt in
+           (revised, revised_at, actual_inforce, experience_at)):
+        raise ValueError(
+            "the revision / experience options apply to a single GMM "
+            "measurement; roll pm.gmm.measurement forward directly for those")
+    slots = {}
+    for name in ("gmm", "paa", "vfa"):
+        m = getattr(measurement, name)
+        if m is not None:
+            native = m.measurement if isinstance(m, ModelMeasurement) else m
+            slots[name] = roll_forward(native, period_months)
+    return PortfolioMovements(**slots)
+
+
+roll_forward.register(PortfolioMeasurement, _portfolio_roll_forward)
+roll_forward.register(PortfolioGroups, _portfolio_roll_forward)
+
+
+@reconcile.register
+def _(movements: PortfolioMovements) -> PortfolioReconciliation:
+    """Reconcile each model's movement list, keeping the per-model split."""
+    slots = {}
+    for name in ("gmm", "paa", "vfa"):
+        mv = getattr(movements, name)
+        if mv is not None:
+            slots[name] = reconcile(mv)
+    return PortfolioReconciliation(**slots)

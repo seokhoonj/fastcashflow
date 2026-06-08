@@ -26,9 +26,12 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import (
-    Basis, ModelPoints, CoverageRate, group, group_of_contracts, report)
+    Basis, ModelPoints, CoverageRate, group, group_of_contracts, report,
+    roll_forward, reconcile)
 from fastcashflow.basis import BasisRouter
-from fastcashflow.portfolio import measure, measure_aggregate, PortfolioReport
+from fastcashflow.portfolio import (
+    measure, measure_aggregate, PortfolioReport, PortfolioMovements,
+    PortfolioReconciliation)
 
 # Contract-first: the per-group entry points do not exist yet. Skip the whole
 # module until they land, so committing this spec does not break the suite.
@@ -384,6 +387,36 @@ def test_report_on_portfolio_containers():
     rep2 = report(pg)
     assert isinstance(rep2, PortfolioReport)
     assert np.allclose(rep2.gmm.insurance_revenue, report(pg.gmm).insurance_revenue)
+
+
+def test_roll_forward_and_reconcile_on_portfolio_containers():
+    """roll_forward(container) -> PortfolioMovements (per-model movement lists);
+    reconcile(PortfolioMovements) -> PortfolioReconciliation. Each slot equals the
+    leaf roll_forward / reconcile on that slot, and a plain list still reconciles
+    through the base dispatch."""
+    mp, router = _mixed_book()
+    pm = measure(mp, router, full=True)
+    mv = roll_forward(pm, period_months=12)
+    assert isinstance(mv, PortfolioMovements)
+    assert mv.gmm is not None and mv.paa is not None and mv.vfa is not None
+    leaf_gmm = roll_forward(pm.gmm.measurement, period_months=12)
+    assert len(mv.gmm) == len(leaf_gmm)
+
+    rec = reconcile(mv)
+    assert isinstance(rec, PortfolioReconciliation)
+    assert rec.gmm is not None and len(rec.gmm) == len(reconcile(leaf_gmm))
+    # the base (list) dispatch is unchanged
+    assert isinstance(reconcile(leaf_gmm), list)
+
+
+def test_roll_forward_container_rejects_gmm_only_options():
+    """The revision / experience options need a single GMM measurement (and a
+    matching revised book), so the container rejects them -- roll the gmm slot
+    directly for those."""
+    mp, router = _mixed_book()
+    pm = measure(mp, router, full=True)
+    with pytest.raises(ValueError, match="revision / experience|single GMM"):
+        roll_forward(pm, revised=pm)
 
 
 # ===========================================================================

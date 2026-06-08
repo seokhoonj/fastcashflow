@@ -220,6 +220,20 @@ Period-close analysis of change
 .. autoclass:: fastcashflow.VFAReconciliation
    :members:
 
+``roll_forward`` and ``reconcile`` also accept the mixed-portfolio containers:
+``roll_forward`` on a :class:`~fastcashflow.portfolio.PortfolioMeasurement` /
+:class:`~fastcashflow.portfolio.PortfolioGroups` returns a
+:class:`~fastcashflow.portfolio.PortfolioMovements` (one movement list per model),
+which :func:`reconcile` turns into a
+:class:`~fastcashflow.portfolio.PortfolioReconciliation` -- a GMM CSM movement and
+a PAA LRC movement are never merged.
+
+.. autoclass:: fastcashflow.portfolio.PortfolioMovements
+   :members:
+
+.. autoclass:: fastcashflow.portfolio.PortfolioReconciliation
+   :members:
+
 Aggregation and transition
 --------------------------
 
