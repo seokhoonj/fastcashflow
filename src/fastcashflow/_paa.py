@@ -43,6 +43,9 @@ from fastcashflow.numerics import (
     _risk_adjustment, _rollforward_kernel, _settlement_lic)
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
+# In-force helpers shared with the GMM path (engine does not import _paa, and
+# io imports engine lazily, so this top-level import is cycle-free).
+from fastcashflow.engine import _reconcile_state, _inforce_rescale
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -374,3 +377,86 @@ def measure_aggregate(
     return PAAAggregate(
         lrc=lrc, loss_component=loss, lrc_path=lrc_path, revenue=revenue,
         service_expense=service_expense, lic=lic)
+
+
+def measure_inforce(
+    model_points: ModelPoints,
+    state: "InforceState",
+    basis: Basis,
+    *,
+    revenue_basis: str = "time",
+    full: bool = True,
+) -> PAAMeasurement:
+    """In-force subsequent measurement of a PAA book at the valuation date.
+
+    The PAA has no CSM, so there is no prior-CSM carry-forward (IFRS 17 Sec. 44
+    is the CSM roll, which the PAA does not have): the in-force Liability for
+    Remaining Coverage is the unearned premium still to be earned at each
+    contract's ``elapsed_months`` duration. The projection runs from inception
+    (:func:`measure_paa`) and the LRC trajectory is sliced at ``elapsed_months``
+    per model point, re-based by ``count / inforce[elapsed]`` so the as-of
+    in-force equals the input ``count`` -- exact for the LRC, which is linear in
+    the in-force.
+
+    ``state`` (an :class:`~fastcashflow.InforceState`) supplies the period-close
+    ``elapsed_months`` / ``count``, reconciled onto ``model_points`` by
+    :func:`~fastcashflow.apply_inforce_state`; its ``prior_csm`` /
+    ``lock_in_rate`` are ignored -- the PAA has no CSM. The subsequent onerous
+    re-test on remaining coverage (Sec. 57-58) is deferred to
+    :func:`~fastcashflow.roll_forward` / a later phase, so ``loss_component`` is
+    zero and ``fcf`` is ``None`` here -- the same defer-the-unlocking stance as
+    ``gmm.measure_inforce``.
+
+    ``full=True`` (default) keeps the inception-to-horizon LRC / revenue /
+    service-expense / LIC trajectories for movement analysis, with the headline
+    ``lrc`` the as-of valuation-date value; ``full=False`` returns just the
+    headline ``lrc``.
+
+    Limitations (v1): because ``fcf`` is ``None`` (the onerous re-test is
+    deferred), :func:`~fastcashflow.group_of_contracts` on a PAA in-force result
+    raises -- the re-floor has no fulfilment-cash-flow input. And the in-force
+    family is still partial: ``vfa.measure_inforce`` and
+    ``portfolio.measure_inforce`` are not yet available (the VFA in-force needs an
+    observed account value the current :class:`~fastcashflow.InforceState` does
+    not carry).
+    """
+    basis = _single_basis(basis, entry="paa.measure_inforce")
+    # Reorder state to model-points order and reject a stale snapshot whose
+    # elapsed_months / count disagree with the state (same guard as the GMM
+    # path). PAA ignores prior_csm / lock_in_rate -- there is no CSM.
+    _reconcile_state(model_points, state)
+    m = measure_paa(model_points, basis, revenue_basis=revenue_basis, full=True)
+    n_mp = m.lrc.shape[0]
+    em = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    # The LRC trajectory only extends to t = contract_boundary_months (Sec. 34;
+    # == term when no boundary cut); an as-of date past it would read a stale
+    # zero or raise -- guard with a clear error (boundary is backfilled to term
+    # in ModelPoints.__post_init__, so it is never None and <= term).
+    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    over = em > boundary
+    if np.any(over):
+        bad = int(np.argmax(over))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} > "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])}; the as-of "
+            "date is past the contract boundary (Sec. 34 horizon, equal to "
+            "term_months when no boundary cut). paa.measure_inforce needs an "
+            "as-of date within the contract boundary.")
+    rows = np.arange(n_mp)
+    # Re-base the inception-run LRC to the valuation date (see _inforce_rescale):
+    # exact for the LRC, which is linear in the in-force.
+    rescale = _inforce_rescale(m, model_points, em, rows)
+    lrc = m.lrc_path[rows, em] * rescale
+    # Subsequent onerous recognition is deferred (see docstring): zero loss, no
+    # fcf re-test -- roll_forward / a later phase performs the unlocking.
+    loss = np.zeros(n_mp, dtype=np.float64)
+    if not full:
+        return PAAMeasurement(
+            lrc=lrc, loss_component=loss, model_points=model_points)
+    # Trajectory fields keep the full inception-to-horizon paths (as the GMM
+    # in-force does); only the headline lrc is the as-of, re-based slice.
+    return PAAMeasurement(
+        lrc=lrc, loss_component=loss, fcf=None,
+        lrc_path=m.lrc_path, revenue=m.revenue,
+        service_expense=m.service_expense, lic=m.lic,
+        cashflows=m.cashflows, model_points=model_points)

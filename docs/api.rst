@@ -51,6 +51,8 @@ Premium allocation approach
 
 .. autofunction:: fastcashflow.paa.measure_aggregate
 
+.. autofunction:: fastcashflow.paa.measure_inforce
+
 .. autoclass:: fastcashflow.PAAMeasurement
    :members:
 

@@ -417,3 +417,55 @@ def test_measure_inforce_prior_csm_is_order_independent():
     # and the CSM sits on B (the contract that carried prior_csm), not A
     assert v_match.csm[0] == pytest.approx(0.0)
     assert v_match.csm[1] > 0.0
+
+
+def test_paa_measure_inforce_lrc_is_rebased_slice():
+    """PAA in-force: the LRC is the inception LRC trajectory sliced at each
+    contract's elapsed_months and re-based by count / inforce[elapsed]. There is
+    no CSM, so loss_component is zero and fcf is None (subsequent onerous re-test
+    deferred); full=False gives the same headline as full=True."""
+    import fastcashflow as fcf
+
+    mp = fcf.apply_inforce_state(
+        fcf.samples.model_points(), fcf.samples.inforce_state())
+    state = fcf.samples.inforce_state()
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "GA"))
+
+    m = fcf.paa.measure(mp, basis, full=True)
+    rows = np.arange(mp.n_mp)
+    em = np.asarray(mp.elapsed_months, dtype=np.int64)
+    inforce_em = m.cashflows.inforce[rows, em]
+    count = np.asarray(mp.count, dtype=np.float64)
+    rescale = np.where(inforce_em > 0.0,
+                       count / np.where(inforce_em > 0.0, inforce_em, 1.0), 1.0)
+    expected = m.lrc_path[rows, em] * rescale
+
+    inf = fcf.paa.measure_inforce(mp, state, basis)
+    assert np.allclose(inf.lrc, expected)
+    assert np.allclose(inf.loss_component, 0.0)
+    assert inf.fcf is None
+    # full=False headline matches full=True
+    assert np.allclose(
+        fcf.paa.measure_inforce(mp, state, basis, full=False).lrc, inf.lrc)
+
+
+def test_paa_measure_inforce_ignores_prior_csm_and_rejects_stale_state():
+    """PAA has no CSM, so prior_csm / lock_in_rate on the state are ignored; and
+    a model_points not reconciled with the state (apply_inforce_state) is
+    rejected, the same guard as the GMM path."""
+    import fastcashflow as fcf
+    from dataclasses import replace
+
+    mp = fcf.apply_inforce_state(
+        fcf.samples.model_points(), fcf.samples.inforce_state())
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "GA"))
+    base = fcf.paa.measure_inforce(mp, fcf.samples.inforce_state(), basis)
+    # a wildly different prior_csm changes nothing (PAA has no CSM)
+    weird = replace(fcf.samples.inforce_state(),
+                    prior_csm=np.full(mp.n_mp, 1e9), lock_in_rate=0.99)
+    assert np.allclose(
+        fcf.paa.measure_inforce(mp, weird, basis).lrc, base.lrc)
+    # an unreconciled (raw) model_points is rejected
+    with pytest.raises(ValueError, match="elapsed_months / count"):
+        fcf.paa.measure_inforce(
+            fcf.samples.model_points(), fcf.samples.inforce_state(), basis)
