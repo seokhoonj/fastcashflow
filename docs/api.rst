@@ -85,7 +85,7 @@ LRC are never summed into one array). ``measure`` returns the per-model-point
 :class:`~fastcashflow.portfolio.PortfolioMeasurement`; ``measure_aggregate``
 returns the chunked, bounded-memory
 :class:`~fastcashflow.portfolio.PortfolioAggregate` (a scalable sum of the
-measured model-point results -- not an IFRS group remeasurement and not a GIC
+measured model-point results -- not an IFRS group remeasurement and not a group of contracts
 re-floor). ``loss_component`` is the lone quantity summed across models.
 
 .. autofunction:: fastcashflow.portfolio.measure
@@ -101,17 +101,17 @@ re-floor). ``loss_component`` is the lone quantity summed across models.
 .. autoclass:: fastcashflow.portfolio.PortfolioAggregate
    :members:
 
-Per-GIC aggregate (scalable group of contracts)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Per-group aggregate (scalable group of contracts)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``measure_gic`` is the chunked, bounded-memory form of
+``measure_group_of_contracts`` is the chunked, bounded-memory form of
 :func:`fastcashflow.group_of_contracts`: the IFRS 17 unit of account
 (portfolio x annual cohort x profitability) computed where holding the
 per-model-point ``measure(full=True)`` would not fit in memory.
 ``measure_groups`` is the same machinery on any axis (the scalable
 :func:`fastcashflow.group`). Both return a
 :class:`~fastcashflow.portfolio.PortfolioGroups` holding each model's native
-grouped measurement -- its rows the groups -- so the GIC rows flow on into
+grouped measurement -- its rows the groups -- so the group rows flow on into
 :func:`fastcashflow.roll_forward`, :func:`fastcashflow.reconcile` and
 :func:`fastcashflow.report`.
 
@@ -120,21 +120,21 @@ The floor unit is what distinguishes this from ``measure_aggregate``:
 * ``measure_aggregate`` floors **per model point**, then sums --
   ``sum max(0, -FCF_i)``. It is a scalable sum of the already-floored
   per-contract results, never re-grouping them.
-* ``measure_gic`` / ``measure_groups`` re-floor **per group**, on the summed
+* ``measure_group_of_contracts`` / ``measure_groups`` re-floor **per group**, on the summed
   fulfilment cash flows -- ``max(0, -sum FCF_in_group)`` per group, applied once
   on the fully-accumulated group (a group spans chunks, so it is never floored
   per chunk).
 
 At initial recognition these agree: under any paragraph-16-compliant grouping a
 group never mixes inception-FCF signs, so ``CSM(sum FCF) == sum CSM(FCF)`` and
-``measure_gic`` and ``measure_aggregate`` report the same totals. The re-floor
+``measure_group_of_contracts`` and ``measure_aggregate`` report the same totals. The re-floor
 changes the number only for a deliberately coarser, sign-mixing grouping (e.g.
 ``measure_groups(by="product")`` with no profitability axis -- within-group
 mutualisation) or in subsequent measurement (out of scope here). So at inception
-``measure_gic``'s value over ``measure_aggregate`` is the **per-GIC rows**
+``measure_group_of_contracts``'s value over ``measure_aggregate`` is the **per-group rows**
 (disclosure, roll-forward, the paragraph-44 foundation), not a different number.
 
-.. autofunction:: fastcashflow.portfolio.measure_gic
+.. autofunction:: fastcashflow.portfolio.measure_group_of_contracts
 
 .. autofunction:: fastcashflow.portfolio.measure_groups
 

@@ -280,8 +280,8 @@ def _finalise_gmm_group(bel, ra, grouped_cf, lic, out_bom, out_mid,
                         labels, sizes) -> GMMMeasurement:
     """Build a grouped GMMMeasurement from already-summed group aggregates.
 
-    The tail shared by the in-memory :func:`group` and the chunked per-GIC
-    aggregate (``fcf.portfolio.measure_gic``): given the within-group sums of
+    The tail shared by the in-memory :func:`group` and the chunked per-group
+    aggregate (``fcf.portfolio.measure_group_of_contracts``): given the within-group sums of
     BEL / RA / cash flows / LIC and the per-group representative discount curve,
     re-derive the CSM and loss component on the group aggregate -- the
     ``max(0, ...)`` floor applies to the group, not the contract. ``bel`` / ``ra``
@@ -343,7 +343,7 @@ def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
     """Build a grouped VFAMeasurement from already-summed group aggregates.
 
     The VFA analogue of :func:`_finalise_gmm_group`, shared by :func:`group` and
-    the chunked per-GIC aggregate. The inception fulfilment cash flows fold in the
+    the chunked per-group aggregate. The inception fulfilment cash flows fold in the
     guarantee time value, and the CSM accretes at the underlying-items return
     (``out_bom``), released by coverage units. ``account_value`` is a per-policy
     level, not a group quantity, so it does not carry to the grouped result.
@@ -454,7 +454,7 @@ def _finalise_paa_group(lrc_path, revenue, service_expense, lic, fcf,
     """Build a grouped PAAMeasurement from already-summed group aggregates.
 
     The PAA analogue of :func:`_finalise_gmm_group`, shared by :func:`group` and
-    the chunked per-GIC aggregate. The LRC, revenue, service expense and LIC are
+    the chunked per-group aggregate. The LRC, revenue, service expense and LIC are
     undiscounted and additive -- there is no CSM (paragraphs 53-59). The only
     non-linear part is the onerous loss (paragraph 57): ``loss_component =
     max(0, fcf)`` on the group's aggregate fulfilment cash flows, so a profitable

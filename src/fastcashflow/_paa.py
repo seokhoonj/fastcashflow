@@ -100,7 +100,7 @@ class PAAAggregate:
     trajectories summed over the model-point axis (``lrc`` is the column-0 total).
     Computed in bounded memory, so it works where a per-model-point
     ``measure_paa(full=True)`` would OOM. Not an IFRS group remeasurement and not
-    a GIC re-floor engine: ``loss_component`` is the sum of each contract's
+    a group re-floor engine: ``loss_component`` is the sum of each contract's
     floored loss, matching the headline -- not a group-level re-floor.
     """
 
@@ -345,6 +345,10 @@ def measure_aggregate(
     group-level re-floor. ``basis`` is a single :class:`Basis` (mixed / routed
     portfolios go through :func:`fastcashflow.portfolio.measure_aggregate`).
     """
+    if chunk_size < 1:
+        # Guard before the chunk loop: chunk_size <= 0 would skip every block and
+        # return zero aggregates (silently wrong) instead of measuring anything.
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
     n_mp = model_points.n_mp
     # A chunk projects only to its own boundary.max(); its (shorter) aggregate
     # path adds into the leading slice of the global one -- a contract carries

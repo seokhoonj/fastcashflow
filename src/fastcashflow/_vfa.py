@@ -107,7 +107,7 @@ class VFAAggregate:
     results, holding no per-model-point row. Inception totals plus the run-off
     trajectories summed over the model-point axis. Computed in bounded memory, so
     it works where a per-model-point ``measure_vfa(full=True)`` would OOM. Not an
-    IFRS group remeasurement and not a GIC re-floor engine: ``csm`` /
+    IFRS group remeasurement and not a group re-floor engine: ``csm`` /
     ``loss_component`` are the sum of each contract's floored figure, matching the
     headline -- not a group-level re-floor.
     """
@@ -501,6 +501,10 @@ def measure_aggregate(
     aggregated here. ``basis`` is a single :class:`Basis` (mixed / routed
     portfolios go through :func:`fastcashflow.portfolio.measure_aggregate`).
     """
+    if chunk_size < 1:
+        # Guard before the chunk loop: chunk_size <= 0 would skip every block and
+        # return zero aggregates (silently wrong) instead of measuring anything.
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
     n_mp = model_points.n_mp
     n_time = int(np.asarray(model_points.contract_boundary_months).max())
     bel_path = np.zeros(n_time + 1)

@@ -38,6 +38,16 @@ from fastcashflow.grouping import (
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows
 
+#: The orchestrator's public surface -- the measurement entry points and their
+#: result containers. Set explicitly so ``from fastcashflow.portfolio import *``
+#: does not leak the imported helpers (np, dataclass, BasisRouter, ModelPoints,
+#: the leaf measure functions, ...).
+__all__ = [
+    "measure", "measure_aggregate", "measure_groups",
+    "measure_group_of_contracts", "PortfolioMeasurement", "PortfolioAggregate",
+    "PortfolioGroups", "ModelMeasurement",
+]
+
 #: The native measurement type each model slot must hold (the per-model
 #: separation invariant: a paa slot can never carry a GMMMeasurement).
 _SLOT_MEASUREMENT_TYPE = {
@@ -112,7 +122,7 @@ class PortfolioMeasurement:
     """Result of :func:`measure`: one :class:`ModelMeasurement` per model present
     (``None`` when absent), keyed by model so a BEL and an LRC are never
     conflated. ``model_points`` is the full portfolio -- the grouping axes for
-    downstream per-segment / GIC analysis (e.g. ``group(pm.gmm.measurement,
+    downstream per-segment / group of contracts analysis (e.g. ``group(pm.gmm.measurement,
     by=["product"])``). The per-model indices must partition ``0..n_mp-1``
     exactly; this is checked at construction.
     """
@@ -199,7 +209,7 @@ class PortfolioAggregate:
     run-off trajectories summed over the model-point axis. A **scalable sum of
     measured model-point results** -- no per-model-point row, so it works at a
     scale where the per-row :class:`PortfolioMeasurement` would not fit in
-    memory. **Not an IFRS group remeasurement** and **not a GIC re-floor
+    memory. **Not an IFRS group remeasurement** and **not a group re-floor
     engine**: every figure is the sum of the per-model-point results (CSM is the
     sum of each contract's floored CSM, the headline aggregated -- not
     ``group()``'s ``CSM(sum FCF)``). A BEL and an LRC are never pooled;
@@ -467,16 +477,17 @@ def measure_aggregate(model_points: ModelPoints, basis, *,
     Returns a :class:`PortfolioAggregate` keeping each model's native figures
     separate (a BEL and an LRC are never pooled).
 
-    **Not an IFRS group remeasurement** and **not a GIC re-floor engine**: every
+    **Not an IFRS group remeasurement** and **not a group re-floor engine**: every
     figure is the sum of the per-model-point results (CSM is the sum of each
     contract's floored CSM -- the :func:`measure` headline aggregated, not
-    ``group()``'s ``CSM(sum FCF)``). A per-GIC re-floor is a separate concern.
+    ``group()``'s ``CSM(sum FCF)``). A per-group re-floor is a separate concern.
     """
     if not isinstance(basis, BasisRouter):
         raise TypeError(
             "fcf.portfolio.measure_aggregate requires a BasisRouter (a routed, "
             "possibly mixed-model portfolio); for a single Basis use "
-            "fcf.gmm.measure_aggregate")
+            "fcf.gmm.measure_aggregate / fcf.paa.measure_aggregate / "
+            "fcf.vfa.measure_aggregate")
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
     declared = {basis.measurement_model_of(k) for k in basis.segments}
@@ -505,7 +516,7 @@ def measure_aggregate(model_points: ModelPoints, basis, *,
 
 
 # ---------------------------------------------------------------------------
-# Per-GIC aggregate -- the scalable form of group_of_contracts (P-5c).
+# Per-group aggregate -- the scalable form of group_of_contracts (P-5c).
 # ---------------------------------------------------------------------------
 
 #: Cash-flow streams scattered as ``(n_mp, n_time)`` (the rest -- ``maturity_cf``
@@ -522,9 +533,9 @@ _SLOT_GROUP_TYPE = {
 
 @dataclass(frozen=True, slots=True)
 class PortfolioGroups:
-    """Result of :func:`measure_groups` / :func:`measure_gic`: one native grouped
+    """Result of :func:`measure_groups` / :func:`measure_group_of_contracts`: one native grouped
     measurement per model present (``None`` when absent), its rows the groups (an
-    IFRS 17 group of contracts for :func:`measure_gic`). The scalable form of
+    IFRS 17 group of contracts for :func:`measure_group_of_contracts`). The scalable form of
     :func:`fcf.group_of_contracts` -- it **re-floors on each group's fulfilment
     cash flows** (``CSM(sum FCF)``), computed in bounded memory so it works where
     holding the per-model-point ``measure(full=True)`` would OOM. A BEL and an LRC
@@ -532,9 +543,9 @@ class PortfolioGroups:
 
     Each slot is the same native type :func:`fcf.group` returns
     (``GMMMeasurement`` / ``PAAMeasurement`` / ``VFAMeasurement`` with
-    ``group_labels`` / ``group_sizes`` set), so the GIC rows flow straight into
+    ``group_labels`` / ``group_sizes`` set), so the group rows flow straight into
     :func:`fcf.roll_forward` / :func:`fcf.reconcile` / :func:`fcf.report`. There
-    is no cross-model GIC: a portfolio (product) carries one measurement model, so
+    is no cross-model group of contracts: a portfolio (product) carries one measurement model, so
     a group always sits inside one model's slot.
     """
 
@@ -562,7 +573,7 @@ class PortfolioGroups:
     def summary(self) -> dict:
         """Per-model headline totals, each model in its own block (a BEL and an
         LRC are never pooled); ``loss_component_total`` is the lone cross-model
-        sum. Each block sums that model's figures over its GIC rows -- ``gmm`` /
+        sum. Each block sums that model's figures over its group rows -- ``gmm`` /
         ``vfa`` give ``bel`` / ``ra`` / ``csm`` / ``loss_component``, ``paa``
         gives ``lrc`` / ``loss_component``. A block appears only for a model the
         portfolio carries."""
@@ -689,7 +700,7 @@ def _resolve_rep_curves(segs, seg_bom, seg_mid, model, inverse, live,
 
 
 def _aggregate_groups_model(sub_mp, sub_router, model, group_ids, chunk_size):
-    """Chunked per-GIC aggregate of one model's partition.
+    """Chunked per-group aggregate of one model's partition.
 
     ``group_ids`` is the ``(n_sub,)`` composite group label per model point. The
     label space is global (``np.unique``), so a group spans chunks; the additive
@@ -795,7 +806,7 @@ def _add_leading(acc, block_sum):
 
 
 def _measure_groups(model_points, basis, label_fn, chunk_size):
-    """Shared driver for :func:`measure_groups` / :func:`measure_gic`.
+    """Shared driver for :func:`measure_groups` / :func:`measure_group_of_contracts`.
 
     ``label_fn(model, sub_mp, idx)`` returns the ``(n_sub,)`` group label per
     model point for one model's partition (``idx`` the partition's rows in the
@@ -805,7 +816,7 @@ def _measure_groups(model_points, basis, label_fn, chunk_size):
     """
     if not isinstance(basis, BasisRouter):
         raise TypeError(
-            "this per-GIC aggregate requires a BasisRouter (a routed, possibly "
+            "this per-group aggregate requires a BasisRouter (a routed, possibly "
             "mixed-model portfolio); for a single Basis use fcf.group_of_"
             "contracts on a single-model measurement")
     if chunk_size < 1:
@@ -846,7 +857,7 @@ def measure_groups(model_points: ModelPoints, basis, by, *,
     per-model-point ``measure(full=True)`` would OOM. ``by`` is one of a single
     axis name, a list of axis names and/or precomputed ``(n_mp,)`` label arrays,
     or a single ``(n_mp,)`` label array (as :func:`fcf.group`). For the IFRS 17
-    unit of account use :func:`measure_gic`, the preset on
+    unit of account use :func:`measure_group_of_contracts`, the preset on
     ``portfolio x annual cohort x profitability``.
     """
     full_ids = _resolve_full_group_ids(model_points, by)
@@ -859,7 +870,7 @@ def measure_groups(model_points: ModelPoints, basis, by, *,
         chunk_size)
 
 
-def measure_gic(model_points: ModelPoints, basis, *, portfolio: str = "product",
+def measure_group_of_contracts(model_points: ModelPoints, basis, *, portfolio: str = "product",
                 cohort: str = "issue_year", profitability=None,
                 chunk_size: int = _CHUNK_SIZE) -> PortfolioGroups:
     """Scalable group-of-contracts aggregation -- the IFRS 17 unit of account.
@@ -873,8 +884,8 @@ def measure_gic(model_points: ModelPoints, basis, *, portfolio: str = "product",
 
     At initial recognition, under any paragraph-16-compliant grouping a group
     never mixes inception-FCF signs, so the re-floor equals the per-model-point
-    floor sum -- ``measure_gic`` and :func:`measure_aggregate` report the same
-    totals; ``measure_gic``'s value is the **per-GIC rows** (disclosure /
+    floor sum -- ``measure_group_of_contracts`` and :func:`measure_aggregate` report the same
+    totals; ``measure_group_of_contracts``'s value is the **per-group rows** (disclosure /
     roll-forward / the paragraph-44 foundation).
 
     Arguments mirror :func:`fcf.group_of_contracts`: ``portfolio`` / ``cohort``
@@ -891,7 +902,7 @@ def measure_gic(model_points: ModelPoints, basis, *, portfolio: str = "product",
     """
     if not isinstance(basis, BasisRouter):
         raise TypeError(
-            "measure_gic requires a BasisRouter (a routed, possibly mixed-model "
+            "measure_group_of_contracts requires a BasisRouter (a routed, possibly mixed-model "
             "portfolio); for a single Basis use fcf.group_of_contracts on a "
             "single-model measurement")
     if cohort == "issue_year":
@@ -899,7 +910,7 @@ def measure_gic(model_points: ModelPoints, basis, *, portfolio: str = "product",
             model_points.axis("issue_year")
         except KeyError:
             raise ValueError(
-                "measure_gic needs issue_date to derive the annual cohort "
+                "measure_group_of_contracts needs issue_date to derive the annual cohort "
                 "(paragraph 22); it is not set. Unlike group_of_contracts, the "
                 "scalable aggregate does not silently fall back to a single "
                 "cohort -- set issue_date, or pass an explicit cohort column. "
@@ -960,13 +971,25 @@ def _resolve_full_group_ids(model_points, by):
     arrays, or a single array), resolved against the full model points so the
     per-model partitions subset it consistently.
     """
+    n_mp = model_points.n_mp
+
     def axis(name):
         return np.asarray(model_points.axis(name))
 
     if isinstance(by, str):
         return axis(by)
     if isinstance(by, (list, tuple)):
-        cols = [axis(b) if isinstance(b, str) else np.asarray(b) for b in by]
+        cols = []
+        for b in by:
+            col = axis(b) if isinstance(b, str) else np.asarray(b)
+            # Validate each precomputed array here, before _join_keys: a length-1
+            # (or otherwise short) array would broadcast in np.char.add and pass
+            # the final (n_mp,) check while silently tagging every row the same.
+            if col.shape != (n_mp,):
+                raise ValueError(
+                    f"group axis array must have one entry per model point "
+                    f"({n_mp}), got shape {col.shape}")
+            cols.append(col)
         names = [b if isinstance(b, str) else None for b in by]
         if len(cols) == 1:
             return cols[0]

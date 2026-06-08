@@ -7,9 +7,9 @@ model's inception totals and the (n_time+1,) aggregate run-off trajectories,
 summed over the model-point axis.
 
 Deliberately scoped. The aggregate is **not an IFRS group remeasurement** and
-**not a GIC re-floor engine**: every figure is the sum of the per-model-point
+**not a group re-floor engine**: every figure is the sum of the per-model-point
 results (so CSM is the sum of each contract's floored CSM, matching the measure()
-headline -- NOT group()'s CSM(sum FCF)). A genuine per-GIC re-floor (floor on the
+headline -- NOT group()'s CSM(sum FCF)). A genuine per-group re-floor (floor on the
 group's fulfilment cash flows, keyed by portfolio / annual cohort / profitability)
 is a separate concern -- see [[assumption-unit-vs-csm-unit]].
 
@@ -159,10 +159,10 @@ def test_summary_keeps_each_model_in_its_own_block():
 
 
 # ---------------------------------------------------------------------------
-# 4) NOT a GIC re-floor: CSM is the sum of per-MP floored CSM (measure headline),
+# 4) NOT a group re-floor: CSM is the sum of per-MP floored CSM (measure headline),
 #    not group()'s CSM(sum FCF)
 # ---------------------------------------------------------------------------
-def test_aggregate_csm_is_per_mp_floor_sum_not_gic_refloor():
+def test_aggregate_csm_is_per_mp_floor_sum_not_group_refloor():
     mp, router = _three_model_inputs()
     agg = measure_aggregate(mp, router)
     full = measure(mp, router, full=True)

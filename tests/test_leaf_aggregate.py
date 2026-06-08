@@ -59,6 +59,21 @@ def test_paa_aggregate_matches_full_summed_and_chunk_independent():
     assert np.isclose(multi.lrc, multi.lrc_path[0])          # col 0 = inception total
 
 
+def test_paa_aggregate_rejects_non_positive_chunk_size():
+    """chunk_size <= 0 would skip every block and return zero aggregates -- reject
+    it instead of silently measuring nothing."""
+    import pytest
+    with pytest.raises(ValueError, match="chunk_size"):
+        fcf.paa.measure_aggregate(_book(), _flat_basis(), chunk_size=0)
+
+
+def test_vfa_aggregate_rejects_non_positive_chunk_size():
+    import pytest
+    with pytest.raises(ValueError, match="chunk_size"):
+        fcf.vfa.measure_aggregate(_book(account_value=True),
+                                  _flat_basis(investment_return=0.04), chunk_size=0)
+
+
 def test_vfa_aggregate_matches_full_summed_and_chunk_independent():
     mp = _book(account_value=True)
     basis = _flat_basis(investment_return=0.04)

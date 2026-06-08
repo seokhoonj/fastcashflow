@@ -1,4 +1,4 @@
-"""Contract skeleton for the per-GIC portfolio aggregate -- P-5c.
+"""Contract skeleton for the per-group portfolio aggregate -- P-5c.
 
 The **scalable form of group_of_contracts**: the IFRS 17 unit-of-account
 aggregation (portfolio x annual cohort x profitability) computed in bounded
@@ -7,14 +7,14 @@ OOM. Unlike measure_aggregate (which sums each contract's already-floored CSM),
 this **re-floors on the group's fulfilment cash flows** -- max(0, -sum FCF) per
 group, applied once on the fully-accumulated group, never per chunk.
 
-THE PIVOTAL FACT this skeleton pins (see dev/p5c-per-gic-aggregate-contract.md):
+THE PIVOTAL FACT this skeleton pins:
 under any IFRS 17 SecParagraph16-compliant profitability split, a group never mixes
 inception-FCF signs, so at INITIAL RECOGNITION the re-floor and the per-MP-floor
-sum give the IDENTICAL headline -- measure_gic totals EQUAL measure_aggregate
-totals whenever the GIC respects SecParagraph16. The re-floor changes the number only
-for a deliberately COARSER, sign-mixing grouping (legitimate within-GIC
+sum give the IDENTICAL headline -- measure_group_of_contracts totals EQUAL measure_aggregate
+totals whenever the group of contracts respects SecParagraph16. The re-floor changes the number only
+for a deliberately COARSER, sign-mixing grouping (legitimate within-group
 mutualisation) or in SUBSEQUENT measurement (SecParagraph44, out of scope). So
-measure_gic's value at inception is STRUCTURAL (per-GIC rows for disclosure /
+measure_group_of_contracts's value at inception is STRUCTURAL (per-group rows for disclosure /
 roll-forward / the SecParagraph44 foundation), not a different number.
 
 This file is the contract, written before the implementation (skeleton-first,
@@ -29,17 +29,17 @@ from fastcashflow import Basis, ModelPoints, CoverageRate, group, group_of_contr
 from fastcashflow.basis import BasisRouter
 from fastcashflow.portfolio import measure, measure_aggregate
 
-# Contract-first: the per-GIC entry points do not exist yet. Skip the whole
+# Contract-first: the per-group entry points do not exist yet. Skip the whole
 # module until they land, so committing this spec does not break the suite.
 import fastcashflow.portfolio as _pf                          # noqa: E402
-if not hasattr(_pf, "measure_gic"):
+if not hasattr(_pf, "measure_group_of_contracts"):
     pytest.skip(
-        "per-GIC aggregate (measure_gic / measure_groups / PortfolioGroups) "
+        "per-group aggregate (measure_group_of_contracts / measure_groups / PortfolioGroups) "
         "is a contract skeleton, not yet implemented",
         allow_module_level=True)
 
 from fastcashflow.portfolio import (                          # noqa: E402
-    measure_gic, measure_groups, PortfolioGroups)
+    measure_group_of_contracts, measure_groups, PortfolioGroups)
 
 
 def _flat_basis(discount=0.05, investment_return=0.0):
@@ -95,15 +95,15 @@ def _two_gmm_same_cohort():
 # ===========================================================================
 # 1) MASTER invariant -- the scalable aggregate == the in-memory group_of_contracts
 # ===========================================================================
-def test_gic_equals_in_memory_group_of_contracts_per_model():
-    """For a book that fits in memory, measure_gic per model equals running
+def test_equals_in_memory_group_of_contracts_per_model():
+    """For a book that fits in memory, measure_group_of_contracts per model equals running
     group_of_contracts on the per-MP full measurement -- byte-for-byte the same
     native grouped measurement. The anchor: the chunked aggregate is
     group_of_contracts made memory-bounded, nothing more, so it must reproduce the
     full grouped result -- not just the headline but the trajectories, the group
     sizes and the grouped cash flows that roll_forward / report consume."""
     mp, router = _mixed_book()
-    pg = measure_gic(mp, router, chunk_size=10_000)
+    pg = measure_group_of_contracts(mp, router, chunk_size=10_000)
     full = measure(mp, router, full=True)            # full=True per-MP, in memory
 
     for model in ("gmm", "paa", "vfa"):
@@ -126,8 +126,8 @@ def test_gic_equals_in_memory_group_of_contracts_per_model():
         assert np.allclose(agg_m.cashflows.inforce, ref.cashflows.inforce)
 
 
-def test_gic_ragged_terms_same_curve_group():
-    """Two contracts on the SAME curve but DIFFERENT terms in ONE GIC, chunked one
+def test_ragged_terms_same_curve_group():
+    """Two contracts on the SAME curve but DIFFERENT terms in ONE group of contracts, chunked one
     per block. Pins the two implementation risks the contract flags: the global
     horizon (the shorter contract's path adds into the leading slice of the longer
     horizon) and the per-group representative curve (the longest-horizon row may
@@ -136,12 +136,12 @@ def test_gic_ragged_terms_same_curve_group():
     router = BasisRouter({("G", "GA"): _flat_basis()})        # single curve
     mp = ModelPoints(
         issue_age=np.full(2, 40),
-        premium=np.array([5000.0, 5200.0]),                   # both profitable -> one GIC
+        premium=np.array([5000.0, 5200.0]),                   # both profitable -> one group of contracts
         term_months=np.array([36, 60]),                       # ragged, same curve
         benefits={0: np.full(2, 1e4)},
         product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]),
         issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
-    pg = measure_gic(mp, router, chunk_size=1)                # each ragged row its own block
+    pg = measure_group_of_contracts(mp, router, chunk_size=1)                # each ragged row its own block
     ref = group_of_contracts(measure(mp, router, full=True).gmm.measurement)
     assert pg.gmm.bel.shape[0] == 1                           # one group (same curve, same cohort, both profitable)
     assert np.allclose(pg.gmm.bel_path, ref.bel_path)
@@ -149,9 +149,9 @@ def test_gic_ragged_terms_same_curve_group():
     assert np.allclose(pg.gmm.cashflows.inforce, ref.cashflows.inforce)
 
 
-def test_gic_two_segments_same_curve_late_representative():
+def test_two_segments_same_curve_late_representative():
     """The 2-D _per_group_bom SUCCESS path (contract risk #1). Two routing
-    segments of the SAME product (so one GIC) on the SAME discount curve but
+    segments of the SAME product (so one group of contracts) on the SAME discount curve but
     different terms, the short-term segment routed/chunked FIRST and the long-term
     one LATER. Two segments make the stitched discount_bom 2-D, so the per-group
     representative must be the longest-horizon row -- which only arrives in a later
@@ -169,10 +169,10 @@ def test_gic_two_segments_same_curve_late_representative():
         benefits={0: np.full(4, 1e4)},
         product=np.full(4, "G"), channel=np.array(["A", "A", "B", "B"]),
         issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"))
-    pg = measure_gic(mp, router, profitability=p, chunk_size=1)
+    pg = measure_group_of_contracts(mp, router, profitability=p, chunk_size=1)
     ref = group_of_contracts(
         measure(mp, router, full=True).gmm.measurement, profitability=p)
-    assert pg.gmm.bel.shape[0] == 1                      # one GIC across both segments
+    assert pg.gmm.bel.shape[0] == 1                      # one group of contracts across both segments
     assert np.allclose(pg.gmm.bel_path, ref.bel_path)
     assert np.allclose(pg.gmm.csm_path, ref.csm_path)    # representative curve chosen right
     assert np.allclose(pg.gmm.cashflows.inforce, ref.cashflows.inforce)
@@ -182,14 +182,14 @@ def test_gic_two_segments_same_curve_late_representative():
 # 2) THE PIVOTAL FACT -- under the SecParagraph16 split, the re-floor headline
 #    EQUALS measure_aggregate's per-MP-floor-sum headline (not a different number)
 # ===========================================================================
-def test_gic_equals_measure_aggregate_under_secparagraph16_split():
-    """A correctly-keyed GIC never mixes inception-FCF signs, so CSM(sum FCF) ==
-    sum CSM(FCF). measure_gic and measure_aggregate report the SAME totals at
+def test_equals_measure_aggregate_under_secparagraph16_split():
+    """A correctly-keyed group of contracts never mixes inception-FCF signs, so CSM(sum FCF) ==
+    sum CSM(FCF). measure_group_of_contracts and measure_aggregate report the SAME totals at
     inception under the SecParagraph16 onerous split."""
     mp, router = _mixed_book()
-    pg = measure_gic(mp, router)
+    pg = measure_group_of_contracts(mp, router)
     agg = measure_aggregate(mp, router)
-    # GMM total CSM over all its GICs == the per-MP-floor-sum aggregate
+    # GMM total CSM over all its groups of contracts == the per-MP-floor-sum aggregate
     assert np.isclose(pg.gmm.csm.sum(), agg.gmm.csm)
     assert np.isclose(pg.gmm.loss_component.sum(), agg.gmm.loss_component)
     assert np.isclose(pg.loss_component_total(), agg.loss_component_total())
@@ -199,7 +199,7 @@ def test_gic_equals_measure_aggregate_under_secparagraph16_split():
 # 3) ...but the re-floor DOES differ for a coarse, sign-mixing grouping
 #    (this is the only thing that distinguishes the two at inception)
 # ===========================================================================
-def test_gic_refloors_on_group_fcf_not_per_mp_sum():
+def test_refloors_on_group_fcf_not_per_mp_sum():
     """measure_groups(by="product") puts a profitable and an onerous GMM contract
     (same product, same cohort) in ONE group with no profitability axis, so the
     floor nets them -- the group CSM is max(0, -(FCF_profit + FCF_onerous)),
@@ -213,14 +213,14 @@ def test_gic_refloors_on_group_fcf_not_per_mp_sum():
     assert grouped.gmm.csm.sum() < agg.gmm.csm
 
 
-def test_gic_nets_within_a_group_not_across():
+def test_nets_within_a_group_not_across():
     """Splitting by profitability (the SecParagraph16 axis, derived internally by
-    measure_gic) stops the netting -- the onerous contract stands alone, restoring
+    measure_group_of_contracts) stops the netting -- the onerous contract stands alone, restoring
     the per-MP-floor total; the coarse product-only grouping absorbs its loss into
     the profitable contract's surplus."""
     mp, router = _two_gmm_same_cohort()
     coarse = measure_groups(mp, router, by="product")         # signs mixed -> netted
-    split = measure_gic(mp, router)                           # adds the onerous axis
+    split = measure_group_of_contracts(mp, router)                           # adds the onerous axis
     # the onerous contract isolated by profitability keeps its full loss
     assert np.isclose(split.gmm.loss_component.sum(),
                       measure_aggregate(mp, router).gmm.loss_component)
@@ -229,11 +229,11 @@ def test_gic_nets_within_a_group_not_across():
 
 
 # ===========================================================================
-# 4) chunk-invariance even when a GIC spans chunks -- floor ONCE on the
+# 4) chunk-invariance even when a group of contracts spans chunks -- floor ONCE on the
 #    accumulated group, never per chunk (the core correctness pin)
 # ===========================================================================
-def test_gic_floors_once_on_accumulated_group_across_chunks():
-    """chunk_size=1 puts every contract in its own block, so every GIC spans many
+def test_floors_once_on_accumulated_group_across_chunks():
+    """chunk_size=1 puts every contract in its own block, so every group of contracts spans many
     blocks. The result must equal the single-block computation: the floor is
     applied once on the fully-accumulated group FCF, not per chunk."""
     mp, router = _mixed_book()
@@ -249,7 +249,7 @@ def test_gic_floors_once_on_accumulated_group_across_chunks():
 # 5) cohort -- reject missing issue_date (no silent single-cohort fallback),
 #    never substitute issue_age/term (FLAGGED decision #3: diverges from preset)
 # ===========================================================================
-def test_gic_rejects_missing_issue_date_no_age_substitution():
+def test_rejects_missing_issue_date_no_age_substitution():
     """Unlike group_of_contracts (which silently falls back to one cohort), the
     scalable aggregate REJECTS a missing issue_date for the default cohort -- a
     silent collapse to one annual cohort would mutualise across cohorts (SecParagraph22)
@@ -262,22 +262,22 @@ def test_gic_rejects_missing_issue_date_no_age_substitution():
         benefits={0: np.full(2, 1e4)},
         product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]))
     with pytest.raises(ValueError, match="issue_date|cohort"):
-        measure_gic(mp, router)
+        measure_group_of_contracts(mp, router)
 
 
 # ===========================================================================
 # 6) profitability -- per-MP standalone inception-FCF sign, ONE rule across
 #    models (via loss_component); not a per-model headline, not post-floor
 # ===========================================================================
-def test_gic_profitability_is_per_mp_inception_fcf_sign():
+def test_profitability_is_per_mp_inception_fcf_sign():
     """The default profitability axis is each contract's standalone onerous test
     (loss_component > 0 at inception), the SAME field for GMM / PAA / VFA -- so no
     per-model definition can drift. The onerous GMM contract (row 1, zero premium)
-    lands in an 'onerous' GIC; the profitable one does not."""
+    lands in an 'onerous' group of contracts; the profitable one does not."""
     mp, router = _mixed_book()
-    pg = measure_gic(mp, router)
-    # row 1 is onerous standalone -> its GIC carries a positive loss component;
-    # the profitable row's GIC carries none. Exactly one onerous GMM GIC here.
+    pg = measure_group_of_contracts(mp, router)
+    # row 1 is onerous standalone -> its group of contracts carries a positive loss component;
+    # the profitable row's group of contracts carries none. Exactly one onerous GMM group of contracts here.
     assert (pg.gmm.loss_component > 0.0).sum() == 1
     # and it matches the per-MP standalone classification
     full = measure(mp, router, full=True)
@@ -285,14 +285,14 @@ def test_gic_profitability_is_per_mp_inception_fcf_sign():
 
 
 # ===========================================================================
-# 7) container -- each model in its own slot, no cross-model GIC; summary /
+# 7) container -- each model in its own slot, no cross-model group of contracts; summary /
 #    loss_component_total mirror PortfolioAggregate
 # ===========================================================================
-def test_gic_keeps_each_model_in_its_own_container():
+def test_keeps_each_model_in_its_own_container():
     mp, router = _mixed_book()
-    pg = measure_gic(mp, router)
+    pg = measure_group_of_contracts(mp, router)
     assert isinstance(pg, PortfolioGroups)
-    # native grouped measurement per slot (rows = that model's GICs)
+    # native grouped measurement per slot (rows = that model's groups of contracts)
     assert pg.gmm is not None and pg.paa is not None and pg.vfa is not None
     # no flat field where a BEL and an LRC could be added
     assert not hasattr(pg, "bel")
@@ -302,14 +302,14 @@ def test_gic_keeps_each_model_in_its_own_container():
     assert "bel" in s["gmm"] and "bel" in s["vfa"]
 
 
-def test_gic_omits_absent_models():
+def test_omits_absent_models():
     router = BasisRouter({("G", "GA"): _flat_basis()})
     mp = ModelPoints(
         issue_age=np.full(2, 40), premium=np.array([5000.0, 0.0]),
         term_months=np.full(2, 60), benefits={0: np.full(2, 1e4)},
         product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]),
         issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
-    pg = measure_gic(mp, router)
+    pg = measure_group_of_contracts(mp, router)
     assert pg.gmm is not None and pg.paa is None and pg.vfa is None
     assert set(pg.summary()) == {"loss_component_total", "gmm"}
 
@@ -317,27 +317,27 @@ def test_gic_omits_absent_models():
 # ===========================================================================
 # 8) guards
 # ===========================================================================
-def test_gic_rejects_non_positive_chunk_size():
+def test_rejects_non_positive_chunk_size():
     mp, router = _mixed_book()
     with pytest.raises(ValueError, match="chunk_size"):
-        measure_gic(mp, router, chunk_size=0)
+        measure_group_of_contracts(mp, router, chunk_size=0)
 
 
-def test_gic_requires_a_basis_router():
+def test_requires_a_basis_router():
     """A single Basis cannot route a mixed portfolio -- use fcf.group_of_contracts
     on a single-model measurement instead."""
     with pytest.raises(TypeError, match="BasisRouter"):
-        measure_gic(ModelPoints(
+        measure_group_of_contracts(ModelPoints(
             issue_age=np.full(2, 40), premium=np.zeros(2), term_months=np.full(2, 60),
             benefits={0: np.full(2, 1e4)}), _flat_basis())
 
 
 # ===========================================================================
-# 9) discount-curve uniformity -- a GIC sits in one portfolio = one curve
+# 9) discount-curve uniformity -- a group of contracts sits in one portfolio = one curve
 # ===========================================================================
-def test_gic_rejects_mixed_discount_curves_within_a_group():
+def test_rejects_mixed_discount_curves_within_a_group():
     """Two segments of the same product but different discount curves, forced into
-    one GIC, must be rejected -- a group must sit in one basis (the same
+    one group of contracts, must be rejected -- a group must sit in one basis (the same
     uniformity check group() enforces). Pins the incremental curve-reconciliation
     risk flagged in the contract."""
     router = BasisRouter(
@@ -350,10 +350,10 @@ def test_gic_rejects_mixed_discount_curves_within_a_group():
         product=np.array(["G", "G"]), channel=np.array(["A", "B"]),
         issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
     with pytest.raises(ValueError, match="discount curve|one portfolio|one basis"):
-        measure_gic(mp, router)        # product "G" groups both -> mixed curves
+        measure_group_of_contracts(mp, router)        # product "G" groups both -> mixed curves
 
 
-def test_gic_curve_uses_live_horizon_not_contract_boundary():
+def test_curve_uses_live_horizon_not_contract_boundary():
     """The representative-curve choice must use each contract's LIVE horizon
     (cashflows.inforce > 0), exactly as the in-memory _per_group_bom -- not the
     contract boundary. A count=0 contract is never in force, so its discount curve
@@ -381,7 +381,7 @@ def test_gic_curve_uses_live_horizon_not_contract_boundary():
     assert np.allclose(grouped.gmm.cashflows.inforce, ref.cashflows.inforce)
 
 
-def test_gic_all_dead_group_keeps_first_rows_real_curve():
+def test_all_dead_group_keeps_first_rows_real_curve():
     """A group with no live row (every contract count=0) must keep its lowest-index
     contract's REAL discount curve, exactly as _per_group_bom (whose argmax returns
     the first row when all live horizons are -1) -- not a flat placeholder. The CSM
@@ -395,14 +395,14 @@ def test_gic_all_dead_group_keeps_first_rows_real_curve():
         count=np.zeros(2),                                # nobody in force
         product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]),
         issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
-    pg = measure_gic(mp, router)
+    pg = measure_group_of_contracts(mp, router)
     ref = group_of_contracts(measure(mp, router, full=True).gmm.measurement)
     assert pg.gmm.bel.shape[0] == 1
     assert np.allclose(pg.gmm.discount_bom, ref.discount_bom)   # real curve, not flat
     assert np.allclose(pg.gmm.csm, ref.csm)                     # 0 either way
 
 
-def test_gic_rejects_wrong_length_group_array():
+def test_rejects_wrong_length_group_array():
     """A precomputed group-label array must be (n_mp,) -- a too-long array would
     silently drop its tail, a too-short one error obscurely deep inside. Reject it
     up front, as fcf.group does."""
@@ -411,17 +411,26 @@ def test_gic_rejects_wrong_length_group_array():
         measure_groups(mp, router, by=np.zeros(mp.n_mp + 1, dtype=int))
 
 
-def test_gic_rejects_wrong_length_profitability_array():
+def test_rejects_wrong_length_profitability_array():
     """A precomputed profitability array must be (n_mp,) too -- same guard."""
     mp, router = _mixed_book()
     with pytest.raises(ValueError, match="one entry per model point|profitability"):
-        measure_gic(mp, router, profitability=np.zeros(mp.n_mp + 1, dtype=int))
+        measure_group_of_contracts(mp, router, profitability=np.zeros(mp.n_mp + 1, dtype=int))
 
 
-def test_gic_vfa_two_segments_same_return_reconcile():
+def test_rejects_short_array_in_by_list_no_broadcast():
+    """A short precomputed array inside a list ``by`` must be rejected before the
+    join -- otherwise a length-1 array broadcasts in np.char.add and silently tags
+    every row with one label (passing the final (n_mp,) check)."""
+    mp, router = _mixed_book()
+    with pytest.raises(ValueError, match="one entry per model point|group axis"):
+        measure_groups(mp, router, by=["product", np.zeros(1, dtype=int)])
+
+
+def test_vfa_two_segments_same_return_reconcile():
     """The VFA 2-D discount_bom SUCCESS path (contract risk #4). Two VFA routing
     segments with the SAME investment_return but ragged terms, grouped into one
-    GIC. The bom.ndim == 2 branch of the VFA group must reconcile segments on the
+    group of contracts. The bom.ndim == 2 branch of the VFA group must reconcile segments on the
     same underlying-items return (not mis-reject), with the longest-horizon
     representative arriving in a later chunk under chunk_size=1. Mirrors the GMM
     late-representative test for the VFA curve."""
@@ -429,7 +438,7 @@ def test_gic_vfa_two_segments_same_return_reconcile():
         {("V", "A"): _flat_basis(investment_return=0.04),   # short, routed first
          ("V", "B"): _flat_basis(investment_return=0.04)},  # long, SAME return, later
         measurement_models={("V", "A"): "VFA", ("V", "B"): "VFA"})
-    p = np.zeros(4, dtype=int)                               # force one GIC
+    p = np.zeros(4, dtype=int)                               # force one group of contracts
     mp = ModelPoints(
         issue_age=np.full(4, 40), premium=np.zeros(4),
         term_months=np.array([24, 24, 60, 60]),             # ragged, short first
@@ -437,10 +446,10 @@ def test_gic_vfa_two_segments_same_return_reconcile():
         account_value=np.full(4, 1e6),
         product=np.full(4, "V"), channel=np.array(["A", "A", "B", "B"]),
         issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"))
-    pg = measure_gic(mp, router, profitability=p, chunk_size=1)
+    pg = measure_group_of_contracts(mp, router, profitability=p, chunk_size=1)
     ref = group_of_contracts(
         measure(mp, router, full=True).vfa.measurement, profitability=p)
-    assert pg.vfa.bel.shape[0] == 1                          # one GIC across both VFA segments
+    assert pg.vfa.bel.shape[0] == 1                          # one group of contracts across both VFA segments
     assert np.allclose(pg.vfa.bel_path, ref.bel_path)
     assert np.allclose(pg.vfa.csm_path, ref.csm_path)        # 2-D return curve reconciled
     assert np.allclose(pg.vfa.cashflows.inforce, ref.cashflows.inforce)
