@@ -52,12 +52,18 @@ Premium allocation approach
 .. autoclass:: fastcashflow.PAAMeasurement
    :members:
 
+.. autoclass:: fastcashflow.PAAAggregate
+   :members:
+
 Variable fee approach
 ---------------------
 
 .. autofunction:: fastcashflow.vfa.measure
 
 .. autoclass:: fastcashflow.VFAMeasurement
+   :members:
+
+.. autoclass:: fastcashflow.VFAAggregate
    :members:
 
 .. autofunction:: fastcashflow.vfa.tvog

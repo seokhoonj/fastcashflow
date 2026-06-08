@@ -93,6 +93,25 @@ class PAAMeasurement:
         return measurement_str("PAAMeasurement", self._columns())
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class PAAAggregate:
+    """Portfolio-aggregate PAA view -- a scalable sum of measured model-point
+    results, holding no per-model-point row. Inception totals plus the run-off
+    trajectories summed over the model-point axis (``lrc`` is the column-0 total).
+    Computed in bounded memory, so it works where a per-model-point
+    ``measure_paa(full=True)`` would OOM. Not an IFRS group remeasurement and not
+    a GIC re-floor engine: ``loss_component`` is the sum of each contract's
+    floored loss, matching the headline -- not a group-level re-floor.
+    """
+
+    lrc: float                   # portfolio inception LRC total
+    loss_component: float        # portfolio inception loss-component total
+    lrc_path: FloatArray         # (n_time+1,) -- aggregate LRC trajectory
+    revenue: FloatArray          # (n_time,)   -- aggregate insurance revenue
+    service_expense: FloatArray  # (n_time,)   -- aggregate service expense
+    lic: FloatArray              # (n_time+1,) -- aggregate liability for incurred claims
+
+
 @write_measurement.register
 def _(measurement: PAAMeasurement, path, *, ids=None):
     _write_measurement_columns(

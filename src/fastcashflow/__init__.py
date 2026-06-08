@@ -50,7 +50,7 @@ from fastcashflow.movement import (
     reconcile,
     roll_forward,
 )
-from fastcashflow._paa import PAAMeasurement
+from fastcashflow._paa import PAAMeasurement, PAAAggregate
 from fastcashflow.plots import (
     plot_analysis_of_change,
     plot_cashflows,
@@ -71,7 +71,7 @@ from fastcashflow.statemodel import (
 from fastcashflow.stochastic import StochasticResult
 from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult
-from fastcashflow._vfa import VFAMeasurement
+from fastcashflow._vfa import VFAMeasurement, VFAAggregate
 from fastcashflow import gmm, paa, portfolio, reinsurance, samples, vfa  # namespaces
 
 __version__ = "0.1.0.dev1"
@@ -82,7 +82,8 @@ __all__ = [
     "Basis", "BasisRouter", "ModelPoints", "clear_codegen_cache",
     "report", "roll_forward", "reconcile", "group", "group_of_contracts",
     "transition",
-    "GMMMeasurement", "GMMAggregate", "PAAMeasurement", "VFAMeasurement",
+    "GMMMeasurement", "GMMAggregate", "PAAMeasurement", "PAAAggregate",
+    "VFAMeasurement", "VFAAggregate",
     "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",

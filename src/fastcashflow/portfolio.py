@@ -23,14 +23,14 @@ import numpy as np
 
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
-    PAAMeasurement, measure_paa, _stitch_paa_measurements,
+    PAAMeasurement, PAAAggregate, measure_paa, _stitch_paa_measurements,
     _scatter_paa_headline)
 from fastcashflow._vfa import (
-    VFAMeasurement, measure_vfa, _stitch_vfa_measurements,
+    VFAMeasurement, VFAAggregate, measure_vfa, _stitch_vfa_measurements,
     _scatter_vfa_headline)
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
-    GMMMeasurement, _factorise_segments, measure as _measure_gmm)
+    GMMMeasurement, GMMAggregate, _factorise_segments, measure as _measure_gmm)
 from fastcashflow.modelpoints import ModelPoints
 
 #: The native measurement type each model slot must hold (the per-model
@@ -52,6 +52,25 @@ _MODEL_EXEC = {
 #: ``engine.measure_aggregate``. Bounds peak memory to ``O(chunk x n_time)``
 #: since PAA/VFA have no fused kernel (each block still builds dense transients).
 _CHUNK_SIZE = 200_000
+
+#: Per model, the chunked-aggregate spec for ``measure_aggregate``: the
+#: full-trajectory single-Basis measure, the scalar headline fields to total, the
+#: ``(field, extra)`` trajectory fields to sum over the model-point axis (``extra``
+#: = +1 for an ``(n_time+1,)`` path, +0 for an ``(n_time,)`` series), and the
+#: aggregate type to build. Field names match each aggregate's constructor.
+_AGG_SPEC = {
+    "GMM": (lambda mp, b: _measure_gmm(mp, b, full=True),
+            ("bel", "ra", "csm", "loss_component"),
+            (("bel_path", 1), ("ra_path", 1), ("csm_path", 1)),
+            GMMAggregate),
+    "PAA": (lambda mp, b: measure_paa(mp, b, full=True),
+            ("lrc", "loss_component"),
+            (("lrc_path", 1), ("revenue", 0), ("service_expense", 0), ("lic", 1)),
+            PAAAggregate),
+    "VFA": (lambda mp, b: measure_vfa(mp, b, full=True),
+            ("bel", "ra", "csm", "variable_fee", "time_value", "loss_component"),
+            (("bel_path", 1), ("ra_path", 1), ("csm_path", 1), ("lic", 1)),
+            VFAAggregate)}
 
 
 def _measurement_rows(measurement) -> int:
@@ -169,6 +188,50 @@ class PortfolioMeasurement:
             out["vfa"] = {"bel": float(m.bel.sum()), "ra": float(m.ra.sum()),
                           "csm": float(m.csm.sum()),
                           "loss_component": float(m.loss_component.sum())}
+        return out
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioAggregate:
+    """Result of :func:`measure_aggregate`: one aggregate per model present
+    (``None`` when absent), each holding that model's inception totals and
+    run-off trajectories summed over the model-point axis. A **scalable sum of
+    measured model-point results** -- no per-model-point row, so it works at a
+    scale where the per-row :class:`PortfolioMeasurement` would not fit in
+    memory. **Not an IFRS group remeasurement** and **not a GIC re-floor
+    engine**: every figure is the sum of the per-model-point results (CSM is the
+    sum of each contract's floored CSM, the headline aggregated -- not
+    ``group()``'s ``CSM(sum FCF)``). A BEL and an LRC are never pooled;
+    ``loss_component_total`` is the one cross-model sum.
+    """
+
+    gmm: GMMAggregate | None = None
+    paa: PAAAggregate | None = None
+    vfa: VFAAggregate | None = None
+
+    def loss_component_total(self) -> float:
+        """Portfolio total onerous-contract loss -- the only cross-model sum
+        (``max(0, FCF)`` at inception, sign-identical under GMM / PAA / VFA)."""
+        return float(sum(
+            a.loss_component for a in (self.gmm, self.paa, self.vfa)
+            if a is not None))
+
+    def summary(self) -> dict:
+        """Per-model headline totals, each model in its own block (a BEL and an
+        LRC are never pooled); ``loss_component_total`` is the lone cross-model
+        sum. A block appears only for a model the portfolio carries."""
+        out: dict = {"loss_component_total": self.loss_component_total()}
+        if self.gmm is not None:
+            out["gmm"] = {"bel": self.gmm.bel, "ra": self.gmm.ra,
+                          "csm": self.gmm.csm,
+                          "loss_component": self.gmm.loss_component}
+        if self.paa is not None:
+            out["paa"] = {"lrc": self.paa.lrc,
+                          "loss_component": self.paa.loss_component}
+        if self.vfa is not None:
+            out["vfa"] = {"bel": self.vfa.bel, "ra": self.vfa.ra,
+                          "csm": self.vfa.csm,
+                          "loss_component": self.vfa.loss_component}
         return out
 
 
@@ -350,3 +413,77 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
                 model, full=full, chunk_size=chunk_size)
             slots[model.lower()] = ModelMeasurement(index=idx, measurement=meas)
     return PortfolioMeasurement(model_points=model_points, **slots)
+
+
+def _aggregate_model(sub_mp, segs, model, chunk_size):
+    """Chunked aggregate of one model's partition: measure each (segment, block)
+    full=True and sum its headline + trajectories over the model-point axis.
+
+    ``segs`` is ``[(basis, idx)]`` from :func:`_model_segments`. The global
+    horizon is the partition's longest contract boundary; each block's (shorter)
+    path adds into the leading slice -- a contract's trajectory is zero past its
+    term. Peak memory is ``O(chunk_size x n_time)``: no per-model-point row is
+    retained, only the running sums.
+    """
+    measure_full_one, headline_fields, path_fields, cls = _AGG_SPEC[model]
+    n_time = int(np.asarray(sub_mp.contract_boundary_months).max())
+    totals = {f: 0.0 for f in headline_fields}
+    paths = {name: np.zeros(n_time + extra) for name, extra in path_fields}
+    for basis, idx in segs:
+        for start in range(0, idx.size, chunk_size):
+            block = idx[start:start + chunk_size]
+            m = measure_full_one(sub_mp.subset(block), basis)
+            for f in headline_fields:
+                totals[f] += float(getattr(m, f).sum())
+            for name, _extra in path_fields:
+                summed = getattr(m, name).sum(axis=0)
+                paths[name][:summed.shape[0]] += summed
+    return cls(**totals, **paths)
+
+
+def measure_aggregate(model_points: ModelPoints, basis, *,
+                      chunk_size: int = _CHUNK_SIZE) -> PortfolioAggregate:
+    """Chunked aggregate measurement of a mixed-model portfolio.
+
+    A **scalable sum of measured model-point results**: each model's inception
+    totals and run-off trajectories summed over the model-point axis, computed in
+    ``chunk_size`` row-blocks so peak memory is ``O(chunk_size x n_time)`` -- it
+    works where the per-model-point :func:`measure` ``full=True`` would OOM.
+    Returns a :class:`PortfolioAggregate` keeping each model's native figures
+    separate (a BEL and an LRC are never pooled).
+
+    **Not an IFRS group remeasurement** and **not a GIC re-floor engine**: every
+    figure is the sum of the per-model-point results (CSM is the sum of each
+    contract's floored CSM -- the :func:`measure` headline aggregated, not
+    ``group()``'s ``CSM(sum FCF)``). A per-GIC re-floor is a separate concern.
+    """
+    if not isinstance(basis, BasisRouter):
+        raise TypeError(
+            "fcf.portfolio.measure_aggregate requires a BasisRouter (a routed, "
+            "possibly mixed-model portfolio); for a single Basis use "
+            "fcf.gmm.measure_aggregate")
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    declared = {basis.measurement_model_of(k) for k in basis.segments}
+    slots = {}
+    if len(declared) == 1:
+        # Single declared model -> the whole book is that model; skip the model
+        # partition (mirrors measure()'s short-circuit).
+        (model,) = declared
+        segs = _model_segments(basis, model_points)
+        slots[model.lower()] = _aggregate_model(
+            model_points, segs, model, chunk_size)
+        return PortfolioAggregate(**slots)
+    parts = _partition_by_model(model_points, basis)
+    covered = sum(part.size for part in parts.values())
+    if covered != model_points.n_mp:
+        raise ValueError(
+            f"model partition covers {covered} of {model_points.n_mp} rows")
+    for model in ("GMM", "PAA", "VFA"):
+        idx = parts[model]
+        if idx.size:
+            sub_mp = model_points.subset(idx)
+            segs = _model_segments(_submodel_router(basis, model), sub_mp)
+            slots[model.lower()] = _aggregate_model(
+                sub_mp, segs, model, chunk_size)
+    return PortfolioAggregate(**slots)

@@ -101,6 +101,34 @@ class VFAMeasurement:
         return measurement_str("VFAMeasurement", self._columns())
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class VFAAggregate:
+    """Portfolio-aggregate VFA view -- a scalable sum of measured model-point
+    results, holding no per-model-point row. Inception totals plus the run-off
+    trajectories summed over the model-point axis. Computed in bounded memory, so
+    it works where a per-model-point ``measure_vfa(full=True)`` would OOM. Not an
+    IFRS group remeasurement and not a GIC re-floor engine: ``csm`` /
+    ``loss_component`` are the sum of each contract's floored figure, matching the
+    headline -- not a group-level re-floor.
+    """
+
+    bel: float                       # portfolio inception BEL total
+    ra: float                        # portfolio inception RA total
+    csm: float                       # portfolio inception CSM total
+    variable_fee: float              # portfolio variable-fee total
+    time_value: float                # portfolio guarantee TVOG total
+    loss_component: float            # portfolio inception loss-component total
+    bel_path: FloatArray             # (n_time+1,) -- aggregate BEL trajectory
+    ra_path: FloatArray              # (n_time+1,) -- aggregate RA trajectory
+    csm_path: FloatArray             # (n_time+1,) -- aggregate CSM trajectory
+    lic: FloatArray                  # (n_time+1,) -- aggregate liability for incurred claims
+    # No account_value_path: the account value is a per-policy level (its
+    # closed-form growth never terminates at the contract boundary, so summing it
+    # is horizon-dependent, not a clean aggregate) -- the group() VFA result drops
+    # it for the same reason. The group's fund would be sum(inforce x av), a
+    # different quantity, not modelled here.
+
+
 @write_measurement.register
 def _(measurement: VFAMeasurement, path, *, ids=None):
     _write_measurement_columns(
