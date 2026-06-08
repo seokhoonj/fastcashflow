@@ -469,3 +469,41 @@ def test_paa_measure_inforce_ignores_prior_csm_and_rejects_stale_state():
     with pytest.raises(ValueError, match="elapsed_months / count"):
         fcf.paa.measure_inforce(
             fcf.samples.model_points(), fcf.samples.inforce_state(), basis)
+
+
+def test_inforce_state_account_value_optional_carried_and_validated():
+    """InforceState.account_value is optional (None for GMM/PAA, backward
+    compatible); when given it is carried by subset, reordered by
+    align_inforce_state (by mp_id), and validated (length / finite / >= 0)."""
+    import fastcashflow as fcf
+
+    # default None -- existing states keep working
+    s0 = fcf.InforceState(
+        mp_id=np.array(["A", "B"]), elapsed_months=np.array([12, 12]),
+        count=np.array([1.0, 1.0]), prior_csm=np.zeros(2), lock_in_rate=0.03)
+    assert s0.account_value is None
+
+    s = fcf.InforceState(
+        mp_id=np.array(["A", "B"]), elapsed_months=np.array([12, 24]),
+        count=np.array([1.0, 2.0]), prior_csm=np.zeros(2), lock_in_rate=0.03,
+        account_value=np.array([1000.0, 2000.0]))
+    # subset carries account_value
+    assert np.allclose(s.subset([1]).account_value, [2000.0])
+    # align reorders account_value to model-points (mp_id) order [B, A]
+    mp = fcf.ModelPoints(
+        issue_age=np.array([40, 40]), premium=np.zeros(2),
+        term_months=np.full(2, 60), benefits={0: np.full(2, 1e4)},
+        mp_id=np.array(["B", "A"]))
+    aligned = fcf.align_inforce_state(mp, s)
+    assert np.allclose(aligned.account_value, [2000.0, 1000.0])
+
+    with pytest.raises(ValueError, match="account_value has length|per-MP arrays"):
+        fcf.InforceState(
+            mp_id=np.array(["A", "B"]), elapsed_months=np.array([12, 12]),
+            count=np.array([1.0, 1.0]), prior_csm=np.zeros(2), lock_in_rate=0.03,
+            account_value=np.array([1000.0]))
+    with pytest.raises(ValueError, match="account_value must be >= 0"):
+        fcf.InforceState(
+            mp_id=np.array(["A", "B"]), elapsed_months=np.array([12, 12]),
+            count=np.array([1.0, 1.0]), prior_csm=np.zeros(2), lock_in_rate=0.03,
+            account_value=np.array([1000.0, -5.0]))
