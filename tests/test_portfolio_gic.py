@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import Basis, ModelPoints, CoverageRate, group_of_contracts
+from fastcashflow import Basis, ModelPoints, CoverageRate, group, group_of_contracts
 from fastcashflow.basis import BasisRouter
 from fastcashflow.portfolio import measure, measure_aggregate
 
@@ -351,6 +351,71 @@ def test_gic_rejects_mixed_discount_curves_within_a_group():
         issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
     with pytest.raises(ValueError, match="discount curve|one portfolio|one basis"):
         measure_gic(mp, router)        # product "G" groups both -> mixed curves
+
+
+def test_gic_curve_uses_live_horizon_not_contract_boundary():
+    """The representative-curve choice must use each contract's LIVE horizon
+    (cashflows.inforce > 0), exactly as the in-memory _per_group_bom -- not the
+    contract boundary. A count=0 contract is never in force, so its discount curve
+    is irrelevant even when its boundary is the longest. Here a longer-boundary,
+    count=0 segment on a DIFFERENT curve shares the product-level group with a
+    shorter live segment; a boundary-based choice would falsely reject (or adopt
+    the dead curve), so this pins the live-horizon selection against
+    group(by='product')."""
+    router = BasisRouter(
+        {("G", "A"): _flat_basis(discount=0.04),     # live rows
+         ("G", "B"): _flat_basis(discount=0.09)},    # count=0, longer term, other curve
+        measurement_models={})
+    mp = ModelPoints(
+        issue_age=np.full(4, 40), premium=np.full(4, 5000.0),
+        term_months=np.array([36, 36, 60, 60]),      # B has the longer boundary
+        benefits={0: np.full(4, 1e4)},
+        count=np.array([1.0, 1.0, 0.0, 0.0]),        # B never in force
+        product=np.full(4, "G"), channel=np.array(["A", "A", "B", "B"]),
+        issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"))
+    grouped = measure_groups(mp, router, by="product")   # must NOT reject
+    ref = group(measure(mp, router, full=True).gmm.measurement, by="product")
+    assert grouped.gmm.bel.shape[0] == 1
+    assert np.allclose(grouped.gmm.bel_path, ref.bel_path)
+    assert np.allclose(grouped.gmm.csm_path, ref.csm_path)    # live curve, not the dead one
+    assert np.allclose(grouped.gmm.cashflows.inforce, ref.cashflows.inforce)
+
+
+def test_gic_all_dead_group_keeps_first_rows_real_curve():
+    """A group with no live row (every contract count=0) must keep its lowest-index
+    contract's REAL discount curve, exactly as _per_group_bom (whose argmax returns
+    the first row when all live horizons are -1) -- not a flat placeholder. The CSM
+    is 0 either way, but the public discount_bom and the downstream report /
+    roll-forward input must match group_of_contracts, so the master invariant holds
+    in full."""
+    router = BasisRouter({("G", "GA"): _flat_basis(discount=0.04)})
+    mp = ModelPoints(
+        issue_age=np.full(2, 40), premium=np.full(2, 5000.0),
+        term_months=np.full(2, 60), benefits={0: np.full(2, 1e4)},
+        count=np.zeros(2),                                # nobody in force
+        product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]),
+        issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
+    pg = measure_gic(mp, router)
+    ref = group_of_contracts(measure(mp, router, full=True).gmm.measurement)
+    assert pg.gmm.bel.shape[0] == 1
+    assert np.allclose(pg.gmm.discount_bom, ref.discount_bom)   # real curve, not flat
+    assert np.allclose(pg.gmm.csm, ref.csm)                     # 0 either way
+
+
+def test_gic_rejects_wrong_length_group_array():
+    """A precomputed group-label array must be (n_mp,) -- a too-long array would
+    silently drop its tail, a too-short one error obscurely deep inside. Reject it
+    up front, as fcf.group does."""
+    mp, router = _mixed_book()
+    with pytest.raises(ValueError, match="one entry per model point|group ids"):
+        measure_groups(mp, router, by=np.zeros(mp.n_mp + 1, dtype=int))
+
+
+def test_gic_rejects_wrong_length_profitability_array():
+    """A precomputed profitability array must be (n_mp,) too -- same guard."""
+    mp, router = _mixed_book()
+    with pytest.raises(ValueError, match="one entry per model point|profitability"):
+        measure_gic(mp, router, profitability=np.zeros(mp.n_mp + 1, dtype=int))
 
 
 def test_gic_vfa_two_segments_same_return_reconcile():

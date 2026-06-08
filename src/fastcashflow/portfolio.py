@@ -31,7 +31,11 @@ from fastcashflow._vfa import (
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
     GMMMeasurement, GMMAggregate, _factorise_segments, measure as _measure_gmm)
+from fastcashflow.grouping import (
+    _GroupReducer, _join_keys, _finalise_gmm_group, _finalise_vfa_group,
+    _finalise_paa_group, _INFORCE_EPS)
 from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.projection import Cashflows
 
 #: The native measurement type each model slot must hold (the per-model
 #: separation invariant: a paa slot can never carry a GMMMeasurement).
@@ -487,3 +491,479 @@ def measure_aggregate(model_points: ModelPoints, basis, *,
             slots[model.lower()] = _aggregate_model(
                 sub_mp, segs, model, chunk_size)
     return PortfolioAggregate(**slots)
+
+
+# ---------------------------------------------------------------------------
+# Per-GIC aggregate -- the scalable form of group_of_contracts (P-5c).
+# ---------------------------------------------------------------------------
+
+#: Cash-flow streams scattered as ``(n_mp, n_time)`` (the rest -- ``maturity_cf``
+#: / ``maturity_survivors`` -- are ``(n_mp,)`` scalars). Mirrors the stitch /
+#: ``_sum_cashflows`` field set so the chunked group sum matches it exactly.
+_CF_STREAMS_2D = (
+    "inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
+    "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
+
+#: The native grouped measurement type each slot of PortfolioGroups holds.
+_SLOT_GROUP_TYPE = {
+    "gmm": GMMMeasurement, "paa": PAAMeasurement, "vfa": VFAMeasurement}
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioGroups:
+    """Result of :func:`measure_groups` / :func:`measure_gic`: one native grouped
+    measurement per model present (``None`` when absent), its rows the groups (an
+    IFRS 17 group of contracts for :func:`measure_gic`). The scalable form of
+    :func:`fcf.group_of_contracts` -- it **re-floors on each group's fulfilment
+    cash flows** (``CSM(sum FCF)``), computed in bounded memory so it works where
+    holding the per-model-point ``measure(full=True)`` would OOM. A BEL and an LRC
+    are never pooled; ``loss_component_total`` is the one cross-model sum.
+
+    Each slot is the same native type :func:`fcf.group` returns
+    (``GMMMeasurement`` / ``PAAMeasurement`` / ``VFAMeasurement`` with
+    ``group_labels`` / ``group_sizes`` set), so the GIC rows flow straight into
+    :func:`fcf.roll_forward` / :func:`fcf.reconcile` / :func:`fcf.report`. There
+    is no cross-model GIC: a portfolio (product) carries one measurement model, so
+    a group always sits inside one model's slot.
+    """
+
+    gmm: GMMMeasurement | None = None
+    paa: PAAMeasurement | None = None
+    vfa: VFAMeasurement | None = None
+
+    def __post_init__(self):
+        for slot, expected in _SLOT_GROUP_TYPE.items():
+            m = getattr(self, slot)
+            if m is not None and not isinstance(m, expected):
+                raise TypeError(
+                    f"PortfolioGroups.{slot} must hold a {expected.__name__}, "
+                    f"got {type(m).__name__}")
+
+    def loss_component_total(self) -> float:
+        """The portfolio's total onerous-group loss -- the **only** quantity
+        summed across measurement models (``max(0, group FCF)``, defined and
+        signed identically under GMM / PAA / VFA). A BEL, an LRC and a VFA BEL are
+        not added; reach those through :meth:`summary`."""
+        return float(sum(
+            m.loss_component.sum()
+            for m in (self.gmm, self.paa, self.vfa) if m is not None))
+
+    def summary(self) -> dict:
+        """Per-model headline totals, each model in its own block (a BEL and an
+        LRC are never pooled); ``loss_component_total`` is the lone cross-model
+        sum. Each block sums that model's figures over its GIC rows -- ``gmm`` /
+        ``vfa`` give ``bel`` / ``ra`` / ``csm`` / ``loss_component``, ``paa``
+        gives ``lrc`` / ``loss_component``. A block appears only for a model the
+        portfolio carries."""
+        out: dict = {"loss_component_total": self.loss_component_total()}
+        if self.gmm is not None:
+            m = self.gmm
+            out["gmm"] = {"bel": float(m.bel.sum()), "ra": float(m.ra.sum()),
+                          "csm": float(m.csm.sum()),
+                          "loss_component": float(m.loss_component.sum())}
+        if self.paa is not None:
+            m = self.paa
+            out["paa"] = {"lrc": float(m.lrc.sum()),
+                          "loss_component": float(m.loss_component.sum())}
+        if self.vfa is not None:
+            m = self.vfa
+            out["vfa"] = {"bel": float(m.bel.sum()), "ra": float(m.ra.sum()),
+                          "csm": float(m.csm.sum()),
+                          "loss_component": float(m.loss_component.sum())}
+        return out
+
+
+def _pad_curve(curve, n_time):
+    """Flat-fill a segment's 1-D discount curve to the partition horizon.
+
+    The representative curve of a group is its longest-horizon contract's curve;
+    a contract shorter than the partition horizon repeats its last factor past
+    maturity (a flat curve -> zero forward rate), matching the stitch's padding so
+    the chunked representative equals the in-memory ``_per_group_bom`` choice.
+    Returns ``(n_time + 1,)``.
+    """
+    curve = np.asarray(curve)
+    out = np.empty(n_time + 1)
+    out[:curve.shape[0]] = curve
+    out[curve.shape[0]:] = curve[-1]
+    return out
+
+
+def _pad_mid(mid, n_time):
+    """Flat-fill a segment's 1-D mid-of-month curve to ``(n_time,)`` (GMM only).
+
+    Matches the stitch's ``discount_mid`` padding: repeat the last factor past
+    maturity, or ``1.0`` for a degenerate empty curve.
+    """
+    mid = np.asarray(mid)
+    out = np.empty(n_time)
+    lm = mid.shape[0]
+    out[:lm] = mid
+    if lm < n_time:
+        out[lm:] = mid[-1] if lm > 0 else 1.0
+    return out
+
+
+def _resolve_rep_curves(segs, seg_bom, seg_mid, model, inverse, live,
+                        n_groups, n_time, labels):
+    """Resolve the per-group representative discount curve after the accumulate
+    pass, from the globally-collected live horizons -- the contract's 2-pass
+    correctness intent without a second measurement.
+
+    A group must sit in one discount curve, spanning its longest **live** horizon
+    (the last in-force month, ``cashflows.inforce > _INFORCE_EPS`` -- identical to
+    :func:`grouping._per_group_bom`, *not* the contract boundary, so a count=0 or
+    early-terminal contract's curve never falsely drives the choice). Each routing
+    segment carries one curve (``seg_bom[s]``, the longest collected); for each
+    group the representative is the curve of its longest-live contributing
+    segment, and every other live contributor is reconciled to it over the
+    overlapping live horizon (raising on a genuine mismatch). A segment with no
+    live rows in a group contributes nothing -- as in ``_per_group_bom``, a dead
+    row is compared only at column 0 (trivially equal).
+
+    A group with no live row at all (every contract count=0) keeps the curve of
+    its **lowest-index** contributing contract, matching ``_per_group_bom``'s
+    ``argmax`` tie-break (it returns the first row when all live horizons are -1),
+    so the public ``discount_bom`` is identical too -- not a flat placeholder.
+
+    Returns ``(rep_bom, rep_mid)`` -- ``(n_groups, n_time+1)`` and, for GMM,
+    ``(n_groups, n_time)`` (``None`` for VFA, which has no ``discount_mid``).
+    """
+    rep_bom = np.empty((n_groups, n_time + 1))
+    rep_mid = np.empty((n_groups, n_time)) if model == "GMM" else None
+    rep_h = np.full(n_groups, -1, dtype=np.int64)
+    # Lowest contributing row index per group + its segment -- the all-dead
+    # fallback representative (matches _per_group_bom's first-row tie-break).
+    first_idx = np.full(n_groups, np.iinfo(np.int64).max, dtype=np.int64)
+    first_seg = np.full(n_groups, -1, dtype=np.int64)
+    pads = []
+    for s, (_basis, idx) in enumerate(segs):
+        pad_bom = _pad_curve(seg_bom[s], n_time)
+        pad_mid = _pad_mid(seg_mid[s], n_time) if model == "GMM" else None
+        pads.append((pad_bom, pad_mid))
+        seg_groups = inverse[idx]
+        seg_live = live[idx]
+        for g in np.unique(seg_groups):
+            mask = seg_groups == g
+            gmin = int(idx[mask].min())
+            if gmin < first_idx[g]:
+                first_idx[g] = gmin
+                first_seg[g] = s
+            h_sg = int(seg_live[mask].max())              # group's live horizon in s
+            if h_sg < 0:
+                continue                                  # all dead here -- ignore
+            if rep_h[g] < 0:
+                rep_bom[g] = pad_bom
+                if pad_mid is not None:
+                    rep_mid[g] = pad_mid
+                rep_h[g] = h_sg
+            else:
+                lcmp = min(h_sg, int(rep_h[g])) + 2        # +2 mirrors live+2 mask
+                if not np.allclose(pad_bom[:lcmp], rep_bom[g][:lcmp]):
+                    raise ValueError(
+                        f"group {labels[g]!r} mixes model points with different "
+                        "discount curves -- a group must sit in one portfolio "
+                        "(basis). Split it by basis before grouping.")
+                if h_sg > rep_h[g]:
+                    rep_bom[g] = pad_bom
+                    if pad_mid is not None:
+                        rep_mid[g] = pad_mid
+                    rep_h[g] = h_sg
+    for g in np.nonzero(rep_h < 0)[0]:                    # all-dead groups
+        pad_bom, pad_mid = pads[first_seg[g]]
+        rep_bom[g] = pad_bom
+        if pad_mid is not None:
+            rep_mid[g] = pad_mid
+    return rep_bom, rep_mid
+
+
+def _aggregate_groups_model(sub_mp, sub_router, model, group_ids, chunk_size):
+    """Chunked per-GIC aggregate of one model's partition.
+
+    ``group_ids`` is the ``(n_sub,)`` composite group label per model point. The
+    label space is global (``np.unique``), so a group spans chunks; the additive
+    fields (BEL / RA / cash flows / LIC, plus VFA fee + time value, PAA revenue +
+    service expense + FCF) are summed within each block and accumulated across
+    blocks, and the floor / CSM roll is applied **once** at the end on the
+    fully-accumulated group -- never per chunk (which would be silently wrong).
+    Returns the native grouped measurement (rows = groups), identical to
+    ``group_of_contracts`` run on the in-memory full measurement.
+    """
+    labels, inverse = np.unique(group_ids, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    n_groups = labels.shape[0]
+    sizes = np.bincount(inverse, minlength=n_groups)
+    n_time = int(np.asarray(sub_mp.contract_boundary_months).max())
+    measure_full_one = _AGG_SPEC[model][0]
+    segs = _model_segments(sub_router, sub_mp)
+    needs_curve = model in ("GMM", "VFA")
+
+    # Accumulators -- bounded O(n_groups x n_time), no per-model-point row.
+    bel = np.zeros((n_groups, n_time + 1))      # GMM/VFA BEL, PAA LRC
+    ra = np.zeros((n_groups, n_time + 1))       # GMM/VFA only
+    lic = np.zeros((n_groups, n_time + 1))
+    revenue = np.zeros((n_groups, n_time))      # PAA only
+    service_expense = np.zeros((n_groups, n_time))
+    time_value = np.zeros(n_groups)             # VFA only
+    variable_fee = np.zeros(n_groups)
+    fcf = np.zeros(n_groups)                    # PAA only
+    cf_acc = {name: np.zeros((n_groups, n_time)) for name in _CF_STREAMS_2D}
+    maturity_cf = np.zeros(n_groups)
+    maturity_survivors = np.zeros(n_groups)
+
+    # Curve metadata collected during the pass (GMM/VFA): each row's live horizon
+    # (last in-force month) and, per segment, its longest discount curve. The
+    # representative per group is resolved after the pass, from global knowledge.
+    live = np.full(sub_mp.n_mp, -1, dtype=np.int64) if needs_curve else None
+    seg_bom = [None] * len(segs)
+    seg_mid = [None] * len(segs)
+
+    for s, (basis, idx) in enumerate(segs):
+        for start in range(0, idx.size, chunk_size):
+            block = idx[start:start + chunk_size]
+            m = measure_full_one(sub_mp.subset(block), basis)
+            red = _GroupReducer(inverse[block], n_groups)
+            if model == "PAA":
+                _add_leading(bel, red.sum(m.lrc_path))
+                _add_leading(revenue, red.sum(m.revenue))
+                _add_leading(service_expense, red.sum(m.service_expense))
+                fcf += red.sum(m.fcf)
+            else:
+                _add_leading(bel, red.sum(m.bel_path))
+                _add_leading(ra, red.sum(m.ra_path))
+                if model == "VFA":
+                    time_value += red.sum(m.time_value)
+                    variable_fee += red.sum(m.variable_fee)
+            _add_leading(lic, red.sum(m.lic))
+            cf = m.cashflows
+            for name in _CF_STREAMS_2D:
+                _add_leading(cf_acc[name], red.sum(getattr(cf, name)))
+            maturity_cf += red.sum(cf.maturity_cf)
+            maturity_survivors += red.sum(cf.maturity_survivors)
+            if needs_curve:
+                inforce = np.asarray(cf.inforce)
+                cols = np.arange(inforce.shape[1])
+                live[block] = np.where(
+                    inforce > _INFORCE_EPS, cols[None, :], -1).max(axis=1)
+                bom = np.asarray(m.discount_bom)
+                if bom.ndim == 2:                  # single-basis blocks are 1-D
+                    bom = bom[0]
+                if seg_bom[s] is None or bom.shape[0] > seg_bom[s].shape[0]:
+                    seg_bom[s] = bom
+                    if model == "GMM":
+                        seg_mid[s] = np.asarray(m.discount_mid)
+
+    rep_bom = rep_mid = None
+    if needs_curve:
+        rep_bom, rep_mid = _resolve_rep_curves(
+            segs, seg_bom, seg_mid, model, inverse, live, n_groups, n_time,
+            labels)
+
+    grouped_cf = Cashflows(
+        maturity_cf=maturity_cf, maturity_survivors=maturity_survivors,
+        **cf_acc)
+    if model == "GMM":
+        return _finalise_gmm_group(
+            bel, ra, grouped_cf, lic, rep_bom, rep_mid, labels, sizes)
+    if model == "VFA":
+        return _finalise_vfa_group(
+            bel, ra, grouped_cf, lic, time_value, variable_fee, rep_bom,
+            labels, sizes)
+    return _finalise_paa_group(
+        bel, revenue, service_expense, lic, fcf, grouped_cf, labels, sizes)
+
+
+def _add_leading(acc, block_sum):
+    """Add a block's group-sum into the leading slice of the accumulator.
+
+    A block's trajectory is only as long as its own contracts' horizon (a
+    contract carries nothing past its term); add it into ``acc[:, :width]`` so
+    shorter blocks land in the leading columns of the partition-wide buffer.
+    """
+    acc[:, :block_sum.shape[1]] += block_sum
+
+
+def _measure_groups(model_points, basis, label_fn, chunk_size):
+    """Shared driver for :func:`measure_groups` / :func:`measure_gic`.
+
+    ``label_fn(model, sub_mp, idx)`` returns the ``(n_sub,)`` group label per
+    model point for one model's partition (``idx`` the partition's rows in the
+    full portfolio, for a precomputed per-MP override). Routes a single declared
+    model straight through (no partition), otherwise partitions by measurement
+    model and aggregates each present model.
+    """
+    if not isinstance(basis, BasisRouter):
+        raise TypeError(
+            "this per-GIC aggregate requires a BasisRouter (a routed, possibly "
+            "mixed-model portfolio); for a single Basis use fcf.group_of_"
+            "contracts on a single-model measurement")
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    declared = {basis.measurement_model_of(k) for k in basis.segments}
+    slots = {}
+    if len(declared) == 1:
+        (model,) = declared
+        idx = np.arange(model_points.n_mp, dtype=np.int64)
+        gids = label_fn(model, model_points, idx)
+        slots[model.lower()] = _aggregate_groups_model(
+            model_points, basis, model, gids, chunk_size)
+        return PortfolioGroups(**slots)
+    parts = _partition_by_model(model_points, basis)
+    covered = sum(part.size for part in parts.values())
+    if covered != model_points.n_mp:
+        raise ValueError(
+            f"model partition covers {covered} of {model_points.n_mp} rows")
+    for model in ("GMM", "PAA", "VFA"):
+        idx = parts[model]
+        if idx.size:
+            sub_mp = model_points.subset(idx)
+            gids = label_fn(model, sub_mp, idx)
+            slots[model.lower()] = _aggregate_groups_model(
+                sub_mp, _submodel_router(basis, model), model, gids, chunk_size)
+    return PortfolioGroups(**slots)
+
+
+def measure_groups(model_points: ModelPoints, basis, by, *,
+                   chunk_size: int = _CHUNK_SIZE) -> PortfolioGroups:
+    """Scalable group aggregation of a mixed-model portfolio on any axis.
+
+    The chunked, memory-bounded form of :func:`fcf.group`: each model's rows are
+    aggregated to the ``by`` axis (re-flooring the CSM / loss component on each
+    group's fulfilment cash flows, ``CSM(sum FCF)``), computed in ``chunk_size``
+    row-blocks so peak memory is ``O(chunk_size x n_time)`` plus the
+    ``O(n_groups x n_time)`` accumulator -- it works where holding the
+    per-model-point ``measure(full=True)`` would OOM. ``by`` is one of a single
+    axis name, a list of axis names and/or precomputed ``(n_mp,)`` label arrays,
+    or a single ``(n_mp,)`` label array (as :func:`fcf.group`). For the IFRS 17
+    unit of account use :func:`measure_gic`, the preset on
+    ``portfolio x annual cohort x profitability``.
+    """
+    full_ids = _resolve_full_group_ids(model_points, by)
+    if full_ids.shape != (model_points.n_mp,):
+        raise ValueError(
+            f"group ids must have one entry per model point "
+            f"({model_points.n_mp}), got shape {full_ids.shape}")
+    return _measure_groups(
+        model_points, basis, lambda model, sub_mp, idx: full_ids[idx],
+        chunk_size)
+
+
+def measure_gic(model_points: ModelPoints, basis, *, portfolio: str = "product",
+                cohort: str = "issue_year", profitability=None,
+                chunk_size: int = _CHUNK_SIZE) -> PortfolioGroups:
+    """Scalable group-of-contracts aggregation -- the IFRS 17 unit of account.
+
+    The chunked, memory-bounded form of :func:`fcf.group_of_contracts`: the
+    portfolio (paragraph 14) x annual cohort (22) x profitability (16) grouping,
+    re-flooring the CSM / loss component on each group's fulfilment cash flows
+    (``CSM(sum FCF)``, unlike :func:`measure_aggregate` which sums each contract's
+    already-floored CSM). Computed in ``chunk_size`` row-blocks so it works where
+    holding the per-model-point ``measure(full=True)`` would OOM.
+
+    At initial recognition, under any paragraph-16-compliant grouping a group
+    never mixes inception-FCF signs, so the re-floor equals the per-model-point
+    floor sum -- ``measure_gic`` and :func:`measure_aggregate` report the same
+    totals; ``measure_gic``'s value is the **per-GIC rows** (disclosure /
+    roll-forward / the paragraph-44 foundation).
+
+    Arguments mirror :func:`fcf.group_of_contracts`: ``portfolio`` / ``cohort``
+    name the axis columns; ``profitability`` is ``None`` (derive the onerous /
+    remaining split per model point from the inception loss component, one rule
+    across GMM / PAA / VFA), a column name (a locked classification, paragraph
+    24), or a precomputed ``(n_mp,)`` array (e.g. the three-way split).
+
+    Unlike :func:`fcf.group_of_contracts`, a missing ``issue_date`` with the
+    default cohort is **rejected**, not silently collapsed to one cohort: a silent
+    collapse would mutualise across annual cohorts (paragraph 22) invisibly at
+    settlement scale. ``issue_age`` / ``term_months`` are never a cohort
+    substitute.
+    """
+    if not isinstance(basis, BasisRouter):
+        raise TypeError(
+            "measure_gic requires a BasisRouter (a routed, possibly mixed-model "
+            "portfolio); for a single Basis use fcf.group_of_contracts on a "
+            "single-model measurement")
+    if cohort == "issue_year":
+        try:
+            model_points.axis("issue_year")
+        except KeyError:
+            raise ValueError(
+                "measure_gic needs issue_date to derive the annual cohort "
+                "(paragraph 22); it is not set. Unlike group_of_contracts, the "
+                "scalable aggregate does not silently fall back to a single "
+                "cohort -- set issue_date, or pass an explicit cohort column. "
+                "issue_age / term_months are not a cohort substitute.")
+    prof_override = None
+    if profitability is not None and not isinstance(profitability, str):
+        prof_override = np.asarray(profitability)
+        if prof_override.shape != (model_points.n_mp,):
+            raise ValueError(
+                f"profitability must have one entry per model point "
+                f"({model_points.n_mp}), got shape {prof_override.shape}")
+
+    def label_fn(model, sub_mp, idx):
+        portfolio_arr = np.asarray(sub_mp.axis(portfolio))
+        cohort_arr = np.asarray(sub_mp.axis(cohort))
+        if profitability is None:
+            loss = _per_mp_loss_component(
+                sub_mp, _model_router(basis, model), model, chunk_size)
+            prof = np.where(loss > 0.0, "onerous", "remaining")
+        elif isinstance(profitability, str):
+            prof = np.asarray(sub_mp.axis(profitability))
+        else:
+            prof = prof_override[idx]
+        return _join_keys([portfolio_arr, cohort_arr, prof], [None, None, None])
+
+    return _measure_groups(model_points, basis, label_fn, chunk_size)
+
+
+def _model_router(basis, model):
+    """The single-model sub-router for ``model`` -- the whole router when it is
+    already single-model (the short-circuit), else its restriction."""
+    declared = {basis.measurement_model_of(k) for k in basis.segments}
+    return basis if len(declared) == 1 else _submodel_router(basis, model)
+
+
+def _per_mp_loss_component(sub_mp, sub_router, model, chunk_size):
+    """Per-model-point inception loss component, chunked headline-only.
+
+    The default profitability axis (paragraph 16's onerous test) is each
+    contract's standalone ``loss_component > 0`` at inception -- a headline field,
+    so this measures full=False in ``chunk_size`` blocks (``O(n_mp)`` retained,
+    not ``O(n_mp x n_time)``). One rule, one field, across GMM / PAA / VFA.
+    """
+    measure_one = _HEADLINE_MEASURE[model]
+    out = np.empty(sub_mp.n_mp)
+    for basis, idx in _model_segments(sub_router, sub_mp):
+        for start in range(0, idx.size, chunk_size):
+            block = idx[start:start + chunk_size]
+            m = measure_one(sub_mp.subset(block), basis, full=False)
+            out[block] = m.loss_component
+    return out
+
+
+def _resolve_full_group_ids(model_points, by):
+    """Resolve ``by`` to a ``(n_mp,)`` group-label array over the full portfolio.
+
+    Mirrors :func:`fcf.group`'s ``by`` handling (a name, a list of names and/or
+    arrays, or a single array), resolved against the full model points so the
+    per-model partitions subset it consistently.
+    """
+    def axis(name):
+        return np.asarray(model_points.axis(name))
+
+    if isinstance(by, str):
+        return axis(by)
+    if isinstance(by, (list, tuple)):
+        cols = [axis(b) if isinstance(b, str) else np.asarray(b) for b in by]
+        names = [b if isinstance(b, str) else None for b in by]
+        if len(cols) == 1:
+            return cols[0]
+        return _join_keys(cols, names)
+    return np.asarray(by)
+
+
+#: Per model: the single-Basis headline-only measure, for the default
+#: profitability axis (loss component at inception).
+_HEADLINE_MEASURE = {
+    "GMM": _measure_gmm, "PAA": measure_paa, "VFA": measure_vfa}

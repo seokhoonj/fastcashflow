@@ -276,31 +276,24 @@ def _per_group_bom(bom, inforce, reducer, labels):
     return out_bom, reps
 
 
-@group.register
-def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
-    _require_full(measurement, "group()")
-    labels, reducer = _group_plan(measurement, by, measurement.bel_path.shape[0])
-    bel = reducer.sum(measurement.bel_path)
-    ra = reducer.sum(measurement.ra_path)
-    grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
+def _finalise_gmm_group(bel, ra, grouped_cf, lic, out_bom, out_mid,
+                        labels, sizes) -> GMMMeasurement:
+    """Build a grouped GMMMeasurement from already-summed group aggregates.
 
-    # The CSM and the loss component are re-derived on the group aggregate --
-    # the max(0, ...) floor applies to the group, not the contract.
+    The tail shared by the in-memory :func:`group` and the chunked per-GIC
+    aggregate (``fcf.portfolio.measure_gic``): given the within-group sums of
+    BEL / RA / cash flows / LIC and the per-group representative discount curve,
+    re-derive the CSM and loss component on the group aggregate -- the
+    ``max(0, ...)`` floor applies to the group, not the contract. ``bel`` / ``ra``
+    are ``(n_groups, n_time+1)`` trajectories. ``out_bom`` may be 1-D (a single
+    basis) or 2-D per-group (segmented / chunked); ``_csm_roll`` dispatches on its
+    ndim. Sharing this function is what makes the chunked aggregate reproduce the
+    in-memory grouping byte for byte.
+    """
     fcf0 = bel[:, 0] + ra[:, 0]
     csm0 = np.maximum(0.0, -fcf0)
     loss_component = np.maximum(0.0, fcf0)
-    bom = measurement.discount_bom
-    if bom.ndim == 2:
-        out_bom, reps = _per_group_bom(
-            bom, measurement.cashflows.inforce, reducer, labels)
-        out_mid = measurement.discount_mid[reps]
-        monthly_rate = forward_rates(out_bom)
-    else:
-        out_bom, out_mid = bom, measurement.discount_mid
-        monthly_rate = forward_rates(bom)
-    # _csm_roll dispatches on the rate's ndim: a segmented result carries a 2-D
-    # per-group discount curve, a single basis a 1-D one. (Reinsurance is
-    # single-basis only, so it calls the 1-D _csm_kernel directly.)
+    monthly_rate = forward_rates(out_bom)
     csm, csm_accretion, csm_release = _csm_roll(
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
@@ -314,50 +307,51 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=reducer.sum(measurement.lic),
+        lic=lic,
         cashflows=grouped_cf,
         discount_bom=out_bom,
         discount_mid=out_mid,
         group_labels=labels,
-        group_sizes=reducer.sizes,
+        group_sizes=sizes,
     )
 
 
 @group.register
-def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
-    if measurement.bel_path is None:
-        raise ValueError(
-            "group() requires a full measurement; the trajectory fields are "
-            "None. Re-run vfa.measure()."
-        )
+def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
+    _require_full(measurement, "group()")
     labels, reducer = _group_plan(measurement, by, measurement.bel_path.shape[0])
     bel = reducer.sum(measurement.bel_path)
     ra = reducer.sum(measurement.ra_path)
     grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
-    # variable_fee (PV of the fee) and time_value (a cost) are per-MP amounts --
-    # additive. account_value is a per-policy level, not a group quantity (the
-    # group's fund would be sum(inforce x av), a different field), so it does not
-    # carry to the grouped result.
-    time_value = reducer.sum(measurement.time_value)
-    variable_fee = reducer.sum(measurement.variable_fee)
+    lic = reducer.sum(measurement.lic)
 
-    # The CSM and loss component are re-derived on the group aggregate. The VFA
-    # inception fulfilment cash flows fold in the guarantee time value, and the
-    # CSM accretes at the underlying-items return, released by coverage units.
+    # The discount curve is per-group: a segmented result carries a 2-D per-MP
+    # curve, so reconcile each group to one curve; a single basis a 1-D one.
+    bom = measurement.discount_bom
+    if bom.ndim == 2:
+        out_bom, reps = _per_group_bom(
+            bom, measurement.cashflows.inforce, reducer, labels)
+        out_mid = measurement.discount_mid[reps]
+    else:
+        out_bom, out_mid = bom, measurement.discount_mid
+    return _finalise_gmm_group(
+        bel, ra, grouped_cf, lic, out_bom, out_mid, labels, reducer.sizes)
+
+
+def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
+                        out_bom, labels, sizes) -> VFAMeasurement:
+    """Build a grouped VFAMeasurement from already-summed group aggregates.
+
+    The VFA analogue of :func:`_finalise_gmm_group`, shared by :func:`group` and
+    the chunked per-GIC aggregate. The inception fulfilment cash flows fold in the
+    guarantee time value, and the CSM accretes at the underlying-items return
+    (``out_bom``), released by coverage units. ``account_value`` is a per-policy
+    level, not a group quantity, so it does not carry to the grouped result.
+    """
     fcf0 = bel[:, 0] + ra[:, 0] + time_value
     csm0 = np.maximum(0.0, -fcf0)
     loss_component = np.maximum(0.0, fcf0)
-    bom = measurement.discount_bom
-    if bom.ndim == 2:
-        # Portfolio-stitched: each segment discounts at its own underlying-items
-        # return, so a group must sit in one curve (the same reconciliation the
-        # GMM grouping does). _csm_roll then dispatches on the rate's ndim.
-        out_bom, _ = _per_group_bom(
-            bom, measurement.cashflows.inforce, reducer, labels)
-        monthly_rate = forward_rates(out_bom)
-    else:
-        out_bom = bom
-        monthly_rate = forward_rates(bom)
+    monthly_rate = forward_rates(out_bom)
     csm, csm_accretion, csm_release = _csm_roll(
         csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
     )
@@ -374,13 +368,44 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
         account_value_path=None,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=reducer.sum(measurement.lic),
+        lic=lic,
         cashflows=grouped_cf,
         discount_bom=out_bom,
         model_points=None,
         group_labels=labels,
-        group_sizes=reducer.sizes,
+        group_sizes=sizes,
     )
+
+
+@group.register
+def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
+    if measurement.bel_path is None:
+        raise ValueError(
+            "group() requires a full measurement; the trajectory fields are "
+            "None. Re-run vfa.measure()."
+        )
+    labels, reducer = _group_plan(measurement, by, measurement.bel_path.shape[0])
+    bel = reducer.sum(measurement.bel_path)
+    ra = reducer.sum(measurement.ra_path)
+    grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
+    lic = reducer.sum(measurement.lic)
+    # variable_fee (PV of the fee) and time_value (a cost) are per-MP amounts --
+    # additive.
+    time_value = reducer.sum(measurement.time_value)
+    variable_fee = reducer.sum(measurement.variable_fee)
+
+    bom = measurement.discount_bom
+    if bom.ndim == 2:
+        # Portfolio-stitched: each segment discounts at its own underlying-items
+        # return, so a group must sit in one curve (the same reconciliation the
+        # GMM grouping does).
+        out_bom, _ = _per_group_bom(
+            bom, measurement.cashflows.inforce, reducer, labels)
+    else:
+        out_bom = bom
+    return _finalise_vfa_group(
+        bel, ra, grouped_cf, lic, time_value, variable_fee, out_bom,
+        labels, reducer.sizes)
 
 
 @group.register
@@ -424,6 +449,33 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
     )
 
 
+def _finalise_paa_group(lrc_path, revenue, service_expense, lic, fcf,
+                        grouped_cf, labels, sizes) -> PAAMeasurement:
+    """Build a grouped PAAMeasurement from already-summed group aggregates.
+
+    The PAA analogue of :func:`_finalise_gmm_group`, shared by :func:`group` and
+    the chunked per-GIC aggregate. The LRC, revenue, service expense and LIC are
+    undiscounted and additive -- there is no CSM (paragraphs 53-59). The only
+    non-linear part is the onerous loss (paragraph 57): ``loss_component =
+    max(0, fcf)`` on the group's aggregate fulfilment cash flows, so a profitable
+    contract nets a marginally onerous one within the group.
+    """
+    loss_component = np.maximum(0.0, fcf)
+    return PAAMeasurement(
+        lrc=lrc_path[:, 0],
+        loss_component=loss_component,
+        fcf=fcf,
+        lrc_path=lrc_path,
+        revenue=revenue,
+        service_expense=service_expense,
+        lic=lic,
+        cashflows=grouped_cf,
+        model_points=None,
+        group_labels=labels,
+        group_sizes=sizes,
+    )
+
+
 @group.register
 def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
     if measurement.lrc_path is None or measurement.fcf is None:
@@ -437,26 +489,10 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
     service_expense = reducer.sum(measurement.service_expense)
     lic = reducer.sum(measurement.lic)
     grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
-    # The LRC, revenue, service expense and LIC are all undiscounted and
-    # additive -- there is no CSM (paragraphs 53-59). The only non-linear part
-    # is the onerous loss (paragraph 57): re-derive it on the group's aggregate
-    # fulfilment cash flows, so a profitable contract nets a marginally onerous
-    # one within the group.
     fcf = reducer.sum(measurement.fcf)
-    loss_component = np.maximum(0.0, fcf)
-    return PAAMeasurement(
-        lrc=lrc_path[:, 0],
-        loss_component=loss_component,
-        fcf=fcf,
-        lrc_path=lrc_path,
-        revenue=revenue,
-        service_expense=service_expense,
-        lic=lic,
-        cashflows=grouped_cf,
-        model_points=None,
-        group_labels=labels,
-        group_sizes=reducer.sizes,
-    )
+    return _finalise_paa_group(
+        lrc_path, revenue, service_expense, lic, fcf, grouped_cf,
+        labels, reducer.sizes)
 
 
 @singledispatch
