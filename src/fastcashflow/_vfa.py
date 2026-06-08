@@ -475,3 +475,54 @@ def measure_vfa(
         cashflows=proj,
         model_points=model_points,
     )
+
+
+def measure_aggregate(
+    model_points: ModelPoints,
+    basis: Basis,
+    *,
+    chunk_size: int = 200_000,
+) -> VFAAggregate:
+    """Portfolio-aggregate VFA measurement in bounded memory.
+
+    The VFA analogue of :func:`fastcashflow.gmm.measure_aggregate`: BEL / RA /
+    CSM / variable fee / time value are additive across contracts, so the
+    portfolio's run-off is the per-model-point trajectories summed over the
+    model-point axis. Runs ``measure_vfa(..., full=True)`` over row-blocks of
+    ``chunk_size`` model points and accumulates only the ``(n_time+1,)`` sums, so
+    peak memory is ``O(chunk_size x n_time)`` regardless of ``n_mp``.
+
+    Returns a :class:`VFAAggregate` (scalar totals + aggregate ``bel_path`` /
+    ``ra_path`` / ``csm_path`` / ``lic``). ``account_value`` does not carry: it is
+    a per-policy level whose closed-form growth never terminates at the boundary,
+    so summing it is horizon-dependent (the ``group`` VFA result drops it for the
+    same reason). The deterministic intrinsic value only -- the guarantee time
+    value over return scenarios is a per-contract analysis (:func:`vfa.tvog`), not
+    aggregated here. ``basis`` is a single :class:`Basis` (mixed / routed
+    portfolios go through :func:`fastcashflow.portfolio.measure_aggregate`).
+    """
+    n_mp = model_points.n_mp
+    n_time = int(np.asarray(model_points.contract_boundary_months).max())
+    bel_path = np.zeros(n_time + 1)
+    ra_path = np.zeros(n_time + 1)
+    csm_path = np.zeros(n_time + 1)
+    lic = np.zeros(n_time + 1)
+    bel = ra = csm = variable_fee = time_value = loss = 0.0
+    for start in range(0, n_mp, chunk_size):
+        idx = np.arange(start, min(start + chunk_size, n_mp))
+        m = measure_vfa(model_points.subset(idx), basis, full=True)
+        nt = m.bel_path.shape[1]
+        bel_path[:nt] += m.bel_path.sum(axis=0)
+        ra_path[:nt] += m.ra_path.sum(axis=0)
+        csm_path[:nt] += m.csm_path.sum(axis=0)
+        lic[:nt] += m.lic.sum(axis=0)
+        bel += float(m.bel.sum())
+        ra += float(m.ra.sum())
+        csm += float(m.csm.sum())
+        variable_fee += float(m.variable_fee.sum())
+        time_value += float(m.time_value.sum())
+        loss += float(m.loss_component.sum())
+    return VFAAggregate(
+        bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
+        time_value=time_value, loss_component=loss, bel_path=bel_path,
+        ra_path=ra_path, csm_path=csm_path, lic=lic)

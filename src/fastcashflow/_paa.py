@@ -318,3 +318,55 @@ def measure_paa(
         cashflows=proj,
         model_points=model_points,
     )
+
+
+def measure_aggregate(
+    model_points: ModelPoints,
+    basis: Basis,
+    *,
+    revenue_basis: str = "time",
+    chunk_size: int = 200_000,
+) -> PAAAggregate:
+    """Portfolio-aggregate PAA measurement in bounded memory.
+
+    The PAA analogue of :func:`fastcashflow.gmm.measure_aggregate`: the LRC,
+    revenue, service expense and LIC are additive across contracts, so the
+    portfolio's run-off is the per-model-point trajectories summed over the
+    model-point axis. Runs ``measure_paa(..., full=True)`` over row-blocks of
+    ``chunk_size`` model points and accumulates only the ``(n_time+1,)`` /
+    ``(n_time,)`` sums, so peak memory is ``O(chunk_size x n_time)`` regardless
+    of ``n_mp`` (the PAA has no fused kernel -- a block still materialises dense
+    transients, so chunking is the memory lever).
+
+    Returns a :class:`PAAAggregate` (scalar LRC / loss-component totals + the
+    aggregate ``lrc_path`` / ``revenue`` / ``service_expense`` / ``lic``). It is
+    a scalable sum of the measured model-point results -- not a group
+    remeasurement; the onerous loss is each contract's floored loss summed, not a
+    group-level re-floor. ``basis`` is a single :class:`Basis` (mixed / routed
+    portfolios go through :func:`fastcashflow.portfolio.measure_aggregate`).
+    """
+    n_mp = model_points.n_mp
+    # A chunk projects only to its own boundary.max(); its (shorter) aggregate
+    # path adds into the leading slice of the global one -- a contract carries
+    # nothing past its coverage period.
+    n_time = int(np.asarray(model_points.contract_boundary_months).max())
+    lrc_path = np.zeros(n_time + 1)
+    revenue = np.zeros(n_time)
+    service_expense = np.zeros(n_time)
+    lic = np.zeros(n_time + 1)
+    lrc = loss = 0.0
+    for start in range(0, n_mp, chunk_size):
+        idx = np.arange(start, min(start + chunk_size, n_mp))
+        m = measure_paa(model_points.subset(idx), basis,
+                        revenue_basis=revenue_basis, full=True)
+        nt1 = m.lrc_path.shape[1]
+        nt = m.revenue.shape[1]
+        lrc_path[:nt1] += m.lrc_path.sum(axis=0)
+        revenue[:nt] += m.revenue.sum(axis=0)
+        service_expense[:nt] += m.service_expense.sum(axis=0)
+        lic[:nt1] += m.lic.sum(axis=0)
+        lrc += float(m.lrc.sum())
+        loss += float(m.loss_component.sum())
+    return PAAAggregate(
+        lrc=lrc, loss_component=loss, lrc_path=lrc_path, revenue=revenue,
+        service_expense=service_expense, lic=lic)
