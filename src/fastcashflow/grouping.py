@@ -212,7 +212,11 @@ def group(measurement, by):
     profitability and validation views are other choices of ``by``.
 
     Dispatches on the measurement type (``GMMMeasurement``, ``VFAMeasurement``,
-    ``ReinsuranceMeasurement``, ``PAAMeasurement``).
+    ``ReinsuranceMeasurement``, ``PAAMeasurement``). A
+    :class:`~fastcashflow.portfolio.PortfolioMeasurement` (the mixed-model
+    container) is also accepted: each model slot is grouped on its own native
+    measurement and a :class:`~fastcashflow.portfolio.PortfolioGroups` is
+    returned (a precomputed array ``by`` is subset to each slot's rows).
     Returns a measurement of the same type whose rows are the groups, in
     ascending label order -- usable in turn by
     :func:`~fastcashflow.roll_forward`, :func:`~fastcashflow.reconcile` and
@@ -519,6 +523,11 @@ def group_of_contracts(measurement, *, portfolio: str = "product",
       the net-gain split (paragraph 61, ``csm > 0``), and there is no loss
       component or floor (paragraph 65), so the grouped CSM is the sum of the
       contract CSMs.
+    * :class:`~fastcashflow.portfolio.PortfolioMeasurement` -- the mixed-model
+      container; each model slot is grouped on its own native measurement and a
+      :class:`~fastcashflow.portfolio.PortfolioGroups` is returned. For a book too
+      large to hold the full per-model-point measurement, use the chunked
+      :func:`fastcashflow.portfolio.measure_group_of_contracts` instead.
 
     Arguments (keyword-only):
 

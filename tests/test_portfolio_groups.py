@@ -315,6 +315,57 @@ def test_omits_absent_models():
 
 
 # ===========================================================================
+# 7b) in-memory composition -- group / group_of_contracts accept the container
+#     (PortfolioMeasurement) and return a PortfolioGroups, like the leaf models
+# ===========================================================================
+def test_group_of_contracts_on_container_equals_scalable():
+    """For a book that fits in memory, group_of_contracts on the measured
+    PortfolioMeasurement equals the chunked measure_group_of_contracts on the same
+    model points and router -- the in-memory composition and the scalable fused
+    path are the same grouping, just different memory profiles.
+
+    They agree only because this book sets issue_date: with the default cohort and
+    no issue_date the two paths diverge by design -- the in-memory group_of_contracts
+    falls back to a single annual cohort, while the scalable path rejects it (no
+    silent cross-cohort mutualisation at settlement scale)."""
+    mp, router = _mixed_book()
+    composed = group_of_contracts(measure(mp, router, full=True))
+    scalable = measure_group_of_contracts(mp, router)
+    assert isinstance(composed, PortfolioGroups)
+    for model in ("gmm", "paa", "vfa"):
+        a, b = getattr(composed, model), getattr(scalable, model)
+        assert np.array_equal(a.group_labels, b.group_labels)
+        assert np.array_equal(a.group_sizes, b.group_sizes)
+        assert np.allclose(a.loss_component, b.loss_component)
+        if model == "paa":
+            assert np.allclose(a.lrc, b.lrc)
+        else:
+            assert np.allclose(a.bel, b.bel)
+            assert np.allclose(a.csm, b.csm)
+            assert np.allclose(a.csm_path, b.csm_path)
+
+
+def test_group_on_container_returns_portfolio_groups():
+    """The general group(by=...) arm: a PortfolioMeasurement in -> PortfolioGroups
+    out, each slot grouped on its own native measurement (no BEL/LRC pooling)."""
+    mp, router = _mixed_book()
+    pg = group(measure(mp, router, full=True), by="product")
+    assert isinstance(pg, PortfolioGroups)
+    assert pg.gmm is not None and pg.paa is not None and pg.vfa is not None
+    # one product per model slot here -> one group row each
+    assert pg.gmm.bel.shape[0] == 1 and pg.paa.lrc.shape[0] == 1
+
+
+def test_group_on_container_subsets_precomputed_array_by_slot():
+    """A precomputed (n_mp,) by-array is subset to each model slot's rows, so the
+    GMM slot (rows 0,1) is split into two groups by a per-row label."""
+    mp, router = _mixed_book()
+    labels = np.array(["a", "b", "a", "a"])          # full-portfolio (n_mp,)
+    pg = group(measure(mp, router, full=True), by=labels)
+    assert pg.gmm.bel.shape[0] == 2                  # rows 0,1 -> labels a,b
+
+
+# ===========================================================================
 # 8) guards
 # ===========================================================================
 def test_rejects_non_positive_chunk_size():

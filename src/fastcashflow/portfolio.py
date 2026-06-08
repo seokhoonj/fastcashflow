@@ -33,8 +33,8 @@ from fastcashflow.engine import (
     GMMMeasurement, GMMAggregate, _factorise_segments, measure as _measure_gmm,
     measure_aggregate as _gmm_aggregate)
 from fastcashflow.grouping import (
-    _GroupReducer, _join_keys, _finalise_gmm_group, _finalise_vfa_group,
-    _finalise_paa_group, _INFORCE_EPS)
+    group, group_of_contracts, _GroupReducer, _join_keys, _finalise_gmm_group,
+    _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows
 
@@ -1001,3 +1001,69 @@ def _resolve_full_group_ids(model_points, by):
 #: profitability axis (loss component at inception).
 _HEADLINE_MEASURE = {
     "GMM": _measure_gmm, "PAA": measure_paa, "VFA": measure_vfa}
+
+
+# ---------------------------------------------------------------------------
+# In-memory grouping of a PortfolioMeasurement -- compose like the leaf models.
+#
+# fcf.group / fcf.group_of_contracts already dispatch on the native leaf
+# measurements; register the container here (not in grouping.py) so the import
+# stays one-way: portfolio depends on grouping, never the reverse. With these
+# arms a caller groups a measured mixed portfolio the same way as a single
+# model -- group_of_contracts(portfolio.measure(..., full=True)) -- instead of
+# reaching into pm.gmm.measurement slot by slot. (At scale, where the full
+# per-model-point measurement would not fit in memory, use the chunked
+# measure_groups / measure_group_of_contracts instead.)
+# ---------------------------------------------------------------------------
+
+def _subset_by(by, index):
+    """Subset a ``by`` spec to one model slot's rows.
+
+    Names pass through (they resolve against the slot measurement's stamped model
+    points); precomputed ``(n_mp,)`` arrays are indexed by the slot's original row
+    positions so each slot sees its own rows in order.
+    """
+    if isinstance(by, str):
+        return by
+    if isinstance(by, (list, tuple)):
+        return [b if isinstance(b, str) else np.asarray(b)[index] for b in by]
+    return np.asarray(by)[index]
+
+
+@group.register
+def _(measurement: PortfolioMeasurement, by) -> PortfolioGroups:
+    """Group each model's slice and keep them in a :class:`PortfolioGroups`.
+
+    The container analogue of :func:`fcf.group`: a BEL and an LRC are never
+    pooled, so each model slot is grouped on its own native measurement and the
+    per-model grouped results are returned side by side.
+    """
+    slots = {}
+    for name in ("gmm", "paa", "vfa"):
+        mm = getattr(measurement, name)
+        if mm is not None:
+            slots[name] = group(mm.measurement, _subset_by(by, mm.index))
+    return PortfolioGroups(**slots)
+
+
+@group_of_contracts.register
+def _(measurement: PortfolioMeasurement, *, portfolio: str = "product",
+      cohort: str = "issue_year", profitability=None) -> PortfolioGroups:
+    """IFRS 17 group-of-contracts grouping of a measured mixed portfolio.
+
+    The container analogue of :func:`fcf.group_of_contracts`: each model slot is
+    grouped on ``portfolio x annual cohort x profitability`` and kept separate.
+    For a book that fits in memory this equals the chunked
+    :func:`measure_group_of_contracts` run on the same model points and router.
+    """
+    prof_is_array = profitability is not None and not isinstance(profitability, str)
+    prof_arr = np.asarray(profitability) if prof_is_array else None
+    slots = {}
+    for name in ("gmm", "paa", "vfa"):
+        mm = getattr(measurement, name)
+        if mm is not None:
+            prof = prof_arr[mm.index] if prof_is_array else profitability
+            slots[name] = group_of_contracts(
+                mm.measurement, portfolio=portfolio, cohort=cohort,
+                profitability=prof)
+    return PortfolioGroups(**slots)
