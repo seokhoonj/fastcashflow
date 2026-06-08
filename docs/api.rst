@@ -71,6 +71,32 @@ Variable fee approach
 .. autoclass:: fastcashflow.TVOGResult
    :members:
 
+Portfolio (mixed-model orchestration)
+-------------------------------------
+
+One heterogeneous portfolio -- GMM, PAA and VFA contracts in a single routed
+file -- measured in one call. Each contract is routed to its segment's
+measurement model and each model's native result is kept separate (a BEL and an
+LRC are never summed into one array). ``measure`` returns the per-model-point
+:class:`~fastcashflow.portfolio.PortfolioMeasurement`; ``measure_aggregate``
+returns the chunked, bounded-memory
+:class:`~fastcashflow.portfolio.PortfolioAggregate` (a scalable sum of the
+measured model-point results -- not an IFRS group remeasurement and not a GIC
+re-floor). ``loss_component`` is the lone quantity summed across models.
+
+.. autofunction:: fastcashflow.portfolio.measure
+
+.. autofunction:: fastcashflow.portfolio.measure_aggregate
+
+.. autoclass:: fastcashflow.portfolio.PortfolioMeasurement
+   :members:
+
+.. autoclass:: fastcashflow.portfolio.ModelMeasurement
+   :members:
+
+.. autoclass:: fastcashflow.portfolio.PortfolioAggregate
+   :members:
+
 Tracing and validation
 ----------------------
 
