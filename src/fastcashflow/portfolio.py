@@ -17,20 +17,21 @@ keeps a group inside one curve).
 from __future__ import annotations
 
 import unicodedata
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 
 import numpy as np
 
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
-    PAAMeasurement, PAAAggregate, measure_paa, _stitch_paa_measurements,
-    _scatter_paa_headline)
+    PAAMeasurement, PAAAggregate, measure_paa, measure_aggregate as _paa_aggregate,
+    _stitch_paa_measurements, _scatter_paa_headline)
 from fastcashflow._vfa import (
-    VFAMeasurement, VFAAggregate, measure_vfa, _stitch_vfa_measurements,
-    _scatter_vfa_headline)
+    VFAMeasurement, VFAAggregate, measure_vfa, measure_aggregate as _vfa_aggregate,
+    _stitch_vfa_measurements, _scatter_vfa_headline)
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
-    GMMMeasurement, GMMAggregate, _factorise_segments, measure as _measure_gmm)
+    GMMMeasurement, GMMAggregate, _factorise_segments, measure as _measure_gmm,
+    measure_aggregate as _gmm_aggregate)
 from fastcashflow.grouping import (
     _GroupReducer, _join_keys, _finalise_gmm_group, _finalise_vfa_group,
     _finalise_paa_group, _INFORCE_EPS)
@@ -57,24 +58,20 @@ _MODEL_EXEC = {
 #: since PAA/VFA have no fused kernel (each block still builds dense transients).
 _CHUNK_SIZE = 200_000
 
-#: Per model, the chunked-aggregate spec for ``measure_aggregate``: the
-#: full-trajectory single-Basis measure, the scalar headline fields to total, the
-#: ``(field, extra)`` trajectory fields to sum over the model-point axis (``extra``
-#: = +1 for an ``(n_time+1,)`` path, +0 for an ``(n_time,)`` series), and the
-#: aggregate type to build. Field names match each aggregate's constructor.
-_AGG_SPEC = {
-    "GMM": (lambda mp, b: _measure_gmm(mp, b, full=True),
-            ("bel", "ra", "csm", "loss_component"),
-            (("bel_path", 1), ("ra_path", 1), ("csm_path", 1)),
-            GMMAggregate),
-    "PAA": (lambda mp, b: measure_paa(mp, b, full=True),
-            ("lrc", "loss_component"),
-            (("lrc_path", 1), ("revenue", 0), ("service_expense", 0), ("lic", 1)),
-            PAAAggregate),
-    "VFA": (lambda mp, b: measure_vfa(mp, b, full=True),
-            ("bel", "ra", "csm", "variable_fee", "time_value", "loss_component"),
-            (("bel_path", 1), ("ra_path", 1), ("csm_path", 1), ("lic", 1)),
-            VFAAggregate)}
+#: Per model: measure one block with full trajectories (single Basis). Used by
+#: the per-group aggregate (``measure_groups`` / ``measure_group_of_contracts``),
+#: which needs each chunk's full per-MP result to group-sum and to read the
+#: discount curve.
+_MEASURE_FULL = {
+    "GMM": lambda mp, b: _measure_gmm(mp, b, full=True),
+    "PAA": lambda mp, b: measure_paa(mp, b, full=True),
+    "VFA": lambda mp, b: measure_vfa(mp, b, full=True)}
+
+#: Per model: the leaf bounded-memory aggregate (single Basis). ``measure_aggregate``
+#: reuses these so the chunked-sum logic lives once in each model's namespace, not
+#: duplicated in the orchestrator.
+_LEAF_AGGREGATE = {
+    "GMM": _gmm_aggregate, "PAA": _paa_aggregate, "VFA": _vfa_aggregate}
 
 
 def _measurement_rows(measurement) -> int:
@@ -419,30 +416,44 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     return PortfolioMeasurement(model_points=model_points, **slots)
 
 
-def _aggregate_model(sub_mp, segs, model, chunk_size):
-    """Chunked aggregate of one model's partition: measure each (segment, block)
-    full=True and sum its headline + trajectories over the model-point axis.
+def _sum_aggregates(aggs):
+    """Sum same-type ``<Model>Aggregate`` objects field by field.
 
-    ``segs`` is ``[(basis, idx)]`` from :func:`_model_segments`. The global
-    horizon is the partition's longest contract boundary; each block's (shorter)
-    path adds into the leading slice -- a contract's trajectory is zero past its
-    term. Peak memory is ``O(chunk_size x n_time)``: no per-model-point row is
-    retained, only the running sums.
+    Scalars add; trajectory arrays add into the leading slice of the longest (a
+    shorter routing segment carries nothing past its horizon, and the
+    longest-horizon segment reaches the partition horizon). Generic over the
+    aggregate dataclass, so no per-model field list is repeated in the
+    orchestrator -- the field set lives with each aggregate type.
     """
-    measure_full_one, headline_fields, path_fields, cls = _AGG_SPEC[model]
-    n_time = int(np.asarray(sub_mp.contract_boundary_months).max())
-    totals = {f: 0.0 for f in headline_fields}
-    paths = {name: np.zeros(n_time + extra) for name, extra in path_fields}
-    for basis, idx in segs:
-        for start in range(0, idx.size, chunk_size):
-            block = idx[start:start + chunk_size]
-            m = measure_full_one(sub_mp.subset(block), basis)
-            for f in headline_fields:
-                totals[f] += float(getattr(m, f).sum())
-            for name, _extra in path_fields:
-                summed = getattr(m, name).sum(axis=0)
-                paths[name][:summed.shape[0]] += summed
-    return cls(**totals, **paths)
+    cls = type(aggs[0])
+    out = {}
+    for f in fields(cls):
+        vals = [getattr(a, f.name) for a in aggs]
+        if isinstance(vals[0], np.ndarray):
+            acc = np.zeros(max(v.shape[0] for v in vals))
+            for v in vals:
+                acc[:v.shape[0]] += v
+            out[f.name] = acc
+        else:
+            out[f.name] = float(sum(float(v) for v in vals))
+    return cls(**out)
+
+
+def _aggregate_model(sub_mp, segs, model, chunk_size):
+    """Chunked aggregate of one model's partition -- the leaf bounded-memory
+    aggregate per routing segment, summed across segments.
+
+    Each routing segment is one Basis, so it runs the model's own
+    ``measure_aggregate`` (``gmm`` / ``paa`` / ``vfa``) -- the chunked-sum logic
+    lives there, single-sourced -- and the per-segment aggregates are summed field
+    by field (trajectories into the leading slice of the partition horizon).
+    ``segs`` is ``[(basis, idx)]`` from :func:`_model_segments`. Peak memory stays
+    ``O(chunk_size x n_time)``: the leaf retains only running sums per block.
+    """
+    leaf = _LEAF_AGGREGATE[model]
+    aggs = [leaf(sub_mp.subset(idx), basis, chunk_size=chunk_size)
+            for basis, idx in segs]
+    return _sum_aggregates(aggs)
 
 
 def measure_aggregate(model_points: ModelPoints, basis, *,
@@ -694,7 +705,7 @@ def _aggregate_groups_model(sub_mp, sub_router, model, group_ids, chunk_size):
     n_groups = labels.shape[0]
     sizes = np.bincount(inverse, minlength=n_groups)
     n_time = int(np.asarray(sub_mp.contract_boundary_months).max())
-    measure_full_one = _AGG_SPEC[model][0]
+    measure_full_one = _MEASURE_FULL[model]
     segs = _model_segments(sub_router, sub_mp)
     needs_curve = model in ("GMM", "VFA")
 
