@@ -41,7 +41,7 @@ Measurement (GMM)
 .. autoclass:: fastcashflow.GMMMeasurement
    :members:
 
-.. autoclass:: fastcashflow.AggregateMeasurement
+.. autoclass:: fastcashflow.GMMAggregate
    :members:
 
 Premium allocation approach
