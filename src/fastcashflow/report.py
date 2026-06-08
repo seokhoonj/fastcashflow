@@ -126,7 +126,12 @@ def report(measurement) -> Report:
 
     See the module docstring for the basis (IFRS 17 paragraphs B120-B124).
     Dispatches on the measurement type; a new model registers its own report
-    with ``@report.register``.
+    with ``@report.register``. A mixed-portfolio container
+    (:class:`~fastcashflow.portfolio.PortfolioMeasurement` or
+    :class:`~fastcashflow.portfolio.PortfolioGroups`) is also accepted: each
+    model slot is reported on its own measurement and a
+    :class:`~fastcashflow.portfolio.PortfolioReport` is returned (a GMM, PAA and
+    VFA report are never merged).
     """
     raise TypeError(
         "report() expects a GMM, PAA or VFA measurement, got "

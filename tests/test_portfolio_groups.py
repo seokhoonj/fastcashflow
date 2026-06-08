@@ -25,9 +25,10 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import Basis, ModelPoints, CoverageRate, group, group_of_contracts
+from fastcashflow import (
+    Basis, ModelPoints, CoverageRate, group, group_of_contracts, report)
 from fastcashflow.basis import BasisRouter
-from fastcashflow.portfolio import measure, measure_aggregate
+from fastcashflow.portfolio import measure, measure_aggregate, PortfolioReport
 
 # Contract-first: the per-group entry points do not exist yet. Skip the whole
 # module until they land, so committing this spec does not break the suite.
@@ -363,6 +364,26 @@ def test_group_on_container_subsets_precomputed_array_by_slot():
     labels = np.array(["a", "b", "a", "a"])          # full-portfolio (n_mp,)
     pg = group(measure(mp, router, full=True), by=labels)
     assert pg.gmm.bel.shape[0] == 2                  # rows 0,1 -> labels a,b
+
+
+def test_report_on_portfolio_containers():
+    """fcf.report dispatches the portfolio containers -> PortfolioReport, one
+    Report per model present, each equal to the leaf report on that slot. Works
+    on both PortfolioMeasurement (per-MP) and PortfolioGroups (grouped)."""
+    mp, router = _mixed_book()
+    pm = measure(mp, router, full=True)
+    rep = report(pm)
+    assert isinstance(rep, PortfolioReport)
+    assert rep.gmm is not None and rep.paa is not None and rep.vfa is not None
+    assert np.allclose(rep.gmm.insurance_revenue,
+                       report(pm.gmm.measurement).insurance_revenue)
+    assert np.allclose(rep.paa.insurance_revenue,
+                       report(pm.paa.measurement).insurance_revenue)
+    # also accepts the grouped container
+    pg = measure_group_of_contracts(mp, router)
+    rep2 = report(pg)
+    assert isinstance(rep2, PortfolioReport)
+    assert np.allclose(rep2.gmm.insurance_revenue, report(pg.gmm).insurance_revenue)
 
 
 # ===========================================================================

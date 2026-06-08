@@ -186,6 +186,15 @@ Reporting
 .. autoclass:: fastcashflow.Report
    :members:
 
+``report`` also accepts a mixed-portfolio container
+(:class:`~fastcashflow.portfolio.PortfolioMeasurement` or
+:class:`~fastcashflow.portfolio.PortfolioGroups`) and returns a
+:class:`~fastcashflow.portfolio.PortfolioReport` -- one :class:`Report` per model,
+never merged.
+
+.. autoclass:: fastcashflow.portfolio.PortfolioReport
+   :members:
+
 Period-close analysis of change
 -------------------------------
 

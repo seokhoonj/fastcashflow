@@ -37,6 +37,7 @@ from fastcashflow.grouping import (
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows
+from fastcashflow.report import report, Report
 
 #: The orchestrator's public surface -- the measurement entry points and their
 #: result containers. Set explicitly so ``from fastcashflow.portfolio import *``
@@ -45,7 +46,7 @@ from fastcashflow.projection import Cashflows
 __all__ = [
     "measure", "measure_aggregate", "measure_groups",
     "measure_group_of_contracts", "PortfolioMeasurement", "PortfolioAggregate",
-    "PortfolioGroups", "ModelMeasurement",
+    "PortfolioGroups", "PortfolioReport", "ModelMeasurement",
 ]
 
 #: The native measurement type each model slot must hold (the per-model
@@ -1067,3 +1068,46 @@ def _(measurement: PortfolioMeasurement, *, portfolio: str = "product",
                 mm.measurement, portfolio=portfolio, cohort=cohort,
                 profitability=prof)
     return PortfolioGroups(**slots)
+
+
+# ---------------------------------------------------------------------------
+# Reporting a measured portfolio -- per-model IFRS 17 reports in one container.
+#
+# fcf.report dispatches on the measurement type; register the portfolio
+# containers here (one-way import: portfolio depends on report). A GMM, PAA and
+# VFA report are never merged -- their revenue / finance-expense lines measure
+# different liabilities -- so each model's Report is kept in its own slot, the
+# same per-model separation as the measurement containers.
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class PortfolioReport:
+    """Result of :func:`fcf.report` on a portfolio container: one
+    :class:`~fastcashflow.report.Report` per model present (``None`` when absent),
+    keyed by model. Accepts a :class:`PortfolioMeasurement` (per-model-point) or a
+    :class:`PortfolioGroups` (grouped); a BEL and an LRC report are never pooled.
+    """
+
+    gmm: "Report | None" = None
+    paa: "Report | None" = None
+    vfa: "Report | None" = None
+
+
+def _portfolio_report(measurement) -> PortfolioReport:
+    """Report each present model slot on its own native measurement.
+
+    A :class:`PortfolioMeasurement` slot is a :class:`ModelMeasurement` (carrying
+    the per-MP index); a :class:`PortfolioGroups` slot is the grouped measurement
+    directly. Unwrap the former, pass the latter through.
+    """
+    slots = {}
+    for name in ("gmm", "paa", "vfa"):
+        m = getattr(measurement, name)
+        if m is not None:
+            slots[name] = report(m.measurement
+                                 if isinstance(m, ModelMeasurement) else m)
+    return PortfolioReport(**slots)
+
+
+report.register(PortfolioMeasurement, _portfolio_report)
+report.register(PortfolioGroups, _portfolio_report)
