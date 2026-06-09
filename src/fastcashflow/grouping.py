@@ -347,10 +347,14 @@ def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
     """Build a grouped VFAMeasurement from already-summed group aggregates.
 
     The VFA analogue of :func:`_finalise_gmm_group`, shared by :func:`group` and
-    the chunked per-group aggregate. The inception fulfilment cash flows fold in the
-    guarantee time value, and the CSM accretes at the underlying-items return
-    (``out_bom``), released by coverage units. ``account_value`` is a per-policy
-    level, not a group quantity, so it does not carry to the grouped result.
+    the chunked per-group aggregate. The inception fulfilment cash flows fold in
+    the guarantee time value, and the CSM and loss component are re-derived on the
+    group aggregate -- the ``max(0, ...)`` floor applies to the group, not the
+    contract (so a grouped CSM differs from a sum of per-contract floors when the
+    group mixes profitable and onerous contracts). The CSM accretes at the
+    underlying-items return (``out_bom``), released by coverage units.
+    ``account_value`` is a per-policy level, not a group quantity, so it does not
+    carry to the grouped result.
     """
     fcf0 = bel[:, 0] + ra[:, 0] + time_value
     csm0 = np.maximum(0.0, -fcf0)

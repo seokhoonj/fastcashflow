@@ -91,18 +91,20 @@ def _require_settlement_csm(measurement: "VFAMeasurement", op: str) -> None:
 class VFAMeasurement:
     """VFA measurement of a direct-participation (account-value) portfolio.
 
-    ``account_value``, ``bel``, ``ra`` and ``csm`` are ``(n_mp, n_time+1)``
-    trajectories -- column 0 is the inception figure, the RA being a
-    confidence-level margin for expense risk. The BEL is reported net of the
-    account value the entity holds. The CSM is accreted at the
-    underlying-items return and released by coverage units::
+    The headline ``bel``, ``ra``, ``csm``, ``variable_fee``, ``time_value`` and
+    ``loss_component`` are ``(n_mp,)`` inception figures (the RA a
+    confidence-level margin for expense risk; the BEL net of the account value
+    the entity holds; ``variable_fee`` the present value of the entity's fee --
+    its share of the underlying items). The full path adds the
+    ``(n_mp, n_time+1)`` trajectories ``bel_path`` / ``ra_path`` / ``csm_path`` /
+    ``account_value_path`` (column 0 the inception figure), ``None`` on the
+    headline-only path. The CSM is accreted at the underlying-items return and
+    released by coverage units::
 
-        csm[:, t+1] = csm[:, t] + csm_accretion[:, t] - csm_release[:, t]
+        csm_path[:, t+1] = csm_path[:, t] + csm_accretion[:, t] - csm_release[:, t]
 
-    ``variable_fee`` is the present value of the entity's fee -- its share
-    of the underlying items. ``loss_component`` and ``time_value`` are
-    ``(n_mp,)`` inception figures; the time value of the guarantee drives
-    the CSM but is reported separately from ``bel``.
+    The guarantee time value drives the CSM but is reported separately in
+    ``time_value``, not folded into ``bel``.
     """
 
     # headline -- always present, shape (n_mp,)
