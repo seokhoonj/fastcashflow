@@ -417,12 +417,17 @@ def _vfa_project(
             0.0, model_points.minimum_accumulation_benefit - av_at_maturity),
         0.0,
     )
-    # The maturity exit is recorded in the term - 1 column, but the guarantee
-    # top-up is paid at maturity (time = term); discount it the extra month
-    # (1 + r_m) so its present value anchors at time term, matching the GMM
-    # maturity convention (discount at the boundary index).
-    maturity_excess_at_col = maturity_excess / (1.0 + r_m)
-    benefit_cf[rows, term_idx] += maturity_excess_at_col
+    # The maturity top-up enters benefit_cf at the term - 1 exit column
+    # nominally, so the LIC settlement (and any other benefit_cf consumer) sees
+    # the incurred amount. It is paid at maturity (time = term), one month past
+    # that column, so the present-value path below discounts it the extra month.
+    benefit_cf[rows, term_idx] += maturity_excess
+    # The extra-month discount, applied to the PV path only (the LIC keeps the
+    # nominal amount above). disc_start[term] / disc_start[term - 1] = 1/(1 + r_m),
+    # so anchoring the top-up at time term scales its term - 1 cell by that factor;
+    # this matches the GMM maturity convention (discount at the boundary index).
+    mat_pv_shift = np.zeros((n_mp, n_time))
+    mat_pv_shift[rows, term_idx] = maturity_excess * (1.0 / (1.0 + r_m) - 1.0)
     # Variable fee -- the entity's share, deducted from the grown account value.
     fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m)[:, None] * f_m
     # Liability for incurred claims -- exit benefits settled over the pattern.
@@ -448,9 +453,9 @@ def _vfa_project(
 
     # A settlement pattern pays the exit benefit over later months -- so
     # discount it to those payment dates in the present value.
-    benefit_for_pv = benefit_cf
+    benefit_for_pv = benefit_cf + mat_pv_shift
     if basis.settlement_pattern is not None:
-        benefit_for_pv = benefit_cf * _settlement_factor(
+        benefit_for_pv = benefit_for_pv * _settlement_factor(
             basis.settlement_pattern, r_m
         )
     pv_benefits = _pv_trajectory(benefit_for_pv, disc_start[:n_time])
@@ -465,10 +470,10 @@ def _vfa_project(
     # deaths*(max(av,gmdb)-av); the GMAB excess sits at the maturity column. Same
     # settlement-pattern discounting as the total benefit path (above).
     guarantee_excess_cf = deaths * (death_benefit - av[:, :n_time])
-    guarantee_excess_cf[rows, term_idx] += maturity_excess_at_col
-    g_for_pv = guarantee_excess_cf
+    guarantee_excess_cf[rows, term_idx] += maturity_excess
+    g_for_pv = guarantee_excess_cf + mat_pv_shift
     if basis.settlement_pattern is not None:
-        g_for_pv = guarantee_excess_cf * _settlement_factor(
+        g_for_pv = g_for_pv * _settlement_factor(
             basis.settlement_pattern, r_m)
     guarantee_excess_pv = _pv_trajectory(g_for_pv, disc_start[:n_time])
 

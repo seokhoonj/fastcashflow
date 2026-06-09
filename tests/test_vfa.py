@@ -156,6 +156,42 @@ def test_gmab_floor_strikes_the_matured_account_value_hand_calc():
     assert not np.isclose(delta, wrong_delta)
 
 
+def test_gmab_lic_uses_the_nominal_top_up_not_the_discounted_pv():
+    """Under a settlement pattern the GMAB top-up enters the LIC at its nominal
+    incurred amount, not the present-value figure the BEL path uses.
+
+    The BEL discounts the term-1-column top-up the extra month to time term, but
+    that discount must not leak into the LIC, which settles the *incurred*
+    benefit undiscounted. Regression for the benefit_cf / LIC coupling.
+    """
+    from dataclasses import replace
+    r, f = 0.06, 0.012
+    pattern = np.array([0.6, 0.4])
+    basis = replace(_basis(investment_return=r, fund_fee=f),
+                    settlement_pattern=pattern)
+    av0, gmab, term = 1000.0, 1200.0, 24
+    base = fcf.vfa.measure(
+        ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    floored = fcf.vfa.measure(
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           minimum_accumulation_benefit=gmab), basis)
+    delta_lic = floored.lic[0] - base.lic[0]
+
+    r_m = (1 + r) ** (1 / 12) - 1
+    f_m = (1 + f) ** (1 / 12) - 1
+    growth = (1 + r_m) * (1 - f_m)
+    av_term = av0 * growth ** term
+    surv = (1 - Q) * (1 - LAPSE)
+    nominal_excess = surv ** term * (gmab - av_term)
+    # LIC right after incurral (end of the maturity month, index term): the
+    # incurred top-up less the first settlement instalment, undiscounted.
+    expected_jump = nominal_excess * (1 - pattern[0])
+    assert np.isclose(delta_lic[term], expected_jump)
+    # The pre-fix code stored the PV-discounted top-up in benefit_cf, which would
+    # understate this LIC jump by 1 / (1 + r_m).
+    assert not np.isclose(delta_lic[term], expected_jump / (1 + r_m))
+
+
 def test_floor_tvog_zero_under_flat_scenarios():
     """A flat scenario set (every path = the central return) adds no TVOG.
 
@@ -340,6 +376,30 @@ def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
     )
     with pytest.raises(NotImplementedError, match="per-MP varying"):
         fcf.vfa.measure(mp, basis, np.full((10, 120), 0.003))
+
+
+def test_tvog_boundary_cut_contract_does_not_index_out_of_bounds():
+    """A contract whose term runs past the scenario horizon (a boundary cut)
+    has no maturity, but the GMAB maturity index must stay in range. Regression
+    for the stochastic-path out-of-bounds read on the GMAB column.
+    """
+    basis = _basis(investment_return=0.04, fund_fee=0.0)
+    mp = ModelPoints(
+        issue_age=np.array([40]),
+        premium=np.array([0.0]),
+        term_months=np.array([24]),
+        contract_boundary_months=np.array([12], dtype=np.int64),
+        account_value=np.array([1000.0]),
+        minimum_crediting_rate=np.array([0.02]),
+        minimum_accumulation_benefit=np.array([1100.0]),
+    )
+    r_m = 1.04 ** (1 / 12) - 1
+    scen = np.full((4, 12), r_m)        # width = horizon (the 12-month boundary)
+    res = fcf.vfa.measure(mp, basis, return_scenarios=scen)
+    # No maturity within the boundary -> the GMAB adds no time value, but the
+    # call must complete without an out-of-bounds read.
+    assert np.isfinite(res.time_value).all()
+    assert np.isclose(res.time_value[0], 0.0, atol=1e-6)
 
 
 def test_vfa_ra_zero_without_expense_cv():

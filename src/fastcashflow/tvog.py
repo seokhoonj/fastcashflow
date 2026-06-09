@@ -202,7 +202,11 @@ def guarantee_floor_time_value(
     for mp in range(n_mp):
         av0 = account_value[mp]
         ti = int(term_index[mp])
-        mi = ti + 1                      # maturity index (time = term)
+        # Maturity index (time = term). A boundary-cut contract whose term runs
+        # past the scenario horizon has zero maturity survivors, so clamp the
+        # index to stay in range -- the zero weight makes the read harmless
+        # (mirrors the deterministic path's term_idx clamp).
+        mi = min(ti + 1, n_time)
         # GMDB: floor excess on the death exits each month (start-of-month
         # account value); GMAB: on the maturity survivors at the matured value.
         # Cost per scenario, then the mean less the central (intrinsic) cost.
