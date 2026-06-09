@@ -182,27 +182,43 @@ def guarantee_floor_time_value(
     av_c, disc_c = _av_and_discount(np.maximum(central, g_m), central, f_m)
     av_c, disc_c = av_c[0], disc_c[0]
 
+    # The GMAB strikes at maturity (time = term) -- the *matured* account value
+    # after the final month's growth -- one month past the width-n_time path the
+    # GMDB walks (whose entries are start-of-month values). Extend each path by
+    # that final month's growth and discount so the maturity index (term) reads
+    # the matured value and discounts to time term, matching the deterministic
+    # intrinsic value.
+    av_s_mat = np.concatenate(
+        [av_s, (av_s[:, -1] * (1.0 + np.maximum(return_scenarios[:, -1], g_m))
+                * (1.0 - f_m))[:, None]], axis=1)
+    disc_s_mat = np.concatenate(
+        [disc_s, (disc_s[:, -1] / (1.0 + return_scenarios[:, -1]))[:, None]],
+        axis=1)
+    av_c_mat = np.append(av_c, av_c[-1] * (1.0 + max(r_m, g_m)) * (1.0 - f_m))
+    disc_c_mat = np.append(disc_c, disc_c[-1] / (1.0 + r_m))
+
     n_mp = account_value.shape[0]
     time_value = np.zeros(n_mp)
     for mp in range(n_mp):
         av0 = account_value[mp]
         ti = int(term_index[mp])
-        # GMDB: floor excess on the death exits each month; GMAB: on the
-        # maturity survivors at the term column. Cost per scenario, then the
-        # mean less the central (intrinsic) cost.
+        mi = ti + 1                      # maturity index (time = term)
+        # GMDB: floor excess on the death exits each month (start-of-month
+        # account value); GMAB: on the maturity survivors at the matured value.
+        # Cost per scenario, then the mean less the central (intrinsic) cost.
         gdb_excess_s = np.maximum(0.0, minimum_death_benefit[mp] - av0 * av_s)
         cost_s = (deaths[mp] * gdb_excess_s * disc_s).sum(axis=1)
         gab_excess_s = np.maximum(
-            0.0, minimum_accumulation_benefit[mp] - av0 * av_s[:, ti]
+            0.0, minimum_accumulation_benefit[mp] - av0 * av_s_mat[:, mi]
         )
-        cost_s = cost_s + maturity_survivors[mp] * gab_excess_s * disc_s[:, ti]
+        cost_s = cost_s + maturity_survivors[mp] * gab_excess_s * disc_s_mat[:, mi]
 
         gdb_excess_c = np.maximum(0.0, minimum_death_benefit[mp] - av0 * av_c)
         cost_c = float((deaths[mp] * gdb_excess_c * disc_c).sum())
         gab_excess_c = max(
-            0.0, minimum_accumulation_benefit[mp] - av0 * av_c[ti]
+            0.0, minimum_accumulation_benefit[mp] - av0 * av_c_mat[mi]
         )
-        cost_c += maturity_survivors[mp] * gab_excess_c * disc_c[ti]
+        cost_c += maturity_survivors[mp] * gab_excess_c * disc_c_mat[mi]
 
         time_value[mp] = float(cost_s.mean()) - cost_c
     return time_value

@@ -219,7 +219,11 @@ def test_floor_tvog_matches_independent_reimplementation():
         d[1:] = np.cumprod(1.0 / (1 + returns))[:-1]
         av = av0 * a
         c = (deaths * np.maximum(0.0, gmdb - av) * d).sum()
-        c += ms * max(0.0, gmab - av0 * a[term - 1]) * d[term - 1]
+        # GMAB strikes the matured value at time term -- one month past the
+        # width-term path (the final month's growth / discount applied).
+        a_term = a[term - 1] * (1 + credit[term - 1])
+        d_term = d[term - 1] / (1 + returns[term - 1])
+        c += ms * max(0.0, gmab - av0 * a_term) * d_term
         return c
 
     cost_s = np.array([put_cost(scen[s]) for s in range(scen.shape[0])])
