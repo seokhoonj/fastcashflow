@@ -116,6 +116,46 @@ def test_gmab_floor_at_maturity_hand_calc():
     assert np.isclose(low.bel_path[0, 0], base.bel_path[0, 0])
 
 
+def test_gmab_floor_strikes_the_matured_account_value_hand_calc():
+    """The GMAB floors the *matured* account value (after the final month's
+    growth), paid at time ``term`` -- not the value one month earlier.
+
+    The flat-account test above (zero return, zero fee) cannot see this: there
+    ``av[term-1] == av[term]`` and r=0 means no discounting. Here a non-zero
+    return and fee make ``av[term-1] != av[term]``, so the guarantee excess must
+    strike ``av[term]`` and discount to time ``term``. The GMAB-vs-no-GMAB BEL
+    delta isolates the guarantee cost: the account-value payout, fee, deaths,
+    expenses and RA are identical in both runs and cancel.
+    """
+    r, f = 0.06, 0.012
+    basis = _basis(investment_return=r, fund_fee=f)
+    av0, gmab, term = 1000.0, 1200.0, 24
+    base = fcf.vfa.measure(
+        ModelPoints.single(40, 0.0, term, account_value=av0), basis
+    )
+    floored = fcf.vfa.measure(
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           minimum_accumulation_benefit=gmab), basis
+    )
+
+    r_m = (1 + r) ** (1 / 12) - 1
+    f_m = (1 + f) ** (1 / 12) - 1
+    growth = (1 + r_m) * (1 - f_m)
+    av_term = av0 * growth ** term                    # matured value at time term
+    surv = (1 - Q) * (1 - LAPSE)
+    maturity_survivors = surv ** term                 # in-force reaching term
+    # excess struck on the matured value, discounted to maturity (time term)
+    expected_delta = maturity_survivors * (gmab - av_term) * (1 + r_m) ** (-term)
+    delta = floored.bel_path[0, 0] - base.bel_path[0, 0]
+    assert np.isclose(delta, expected_delta)
+
+    # The off-by-one would strike av[term-1] and discount to time term-1;
+    # confirm the engine reports the matured-value figure, not that one.
+    av_prev = av0 * growth ** (term - 1)
+    wrong_delta = maturity_survivors * (gmab - av_prev) * (1 + r_m) ** (-(term - 1))
+    assert not np.isclose(delta, wrong_delta)
+
+
 def test_floor_tvog_zero_under_flat_scenarios():
     """A flat scenario set (every path = the central return) adds no TVOG.
 

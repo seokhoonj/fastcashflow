@@ -390,31 +390,39 @@ def _vfa_project(
     )
     benefit_cf = deaths * death_benefit + (exits - deaths) * av[:, :n_time]
     # GMAB: the survivors reaching each policy's term receive max(account
-    # value, minimum_accumulation_benefit). They sit in the (exits - deaths)
-    # account-value payout at the maturity (term - 1) column; lift them by the
-    # excess over the account value there. Default zero GMAB adds nothing.
+    # value, minimum_accumulation_benefit). Their account-value payout sits in
+    # the (exits - deaths) flow at the maturity exit column (term - 1); lift it
+    # by the guarantee's excess over the *matured* account value. Default zero
+    # GMAB adds nothing.
     rows = np.arange(n_mp)
-    # The GMAB pays at maturity (month term - 1), realised only when the term
-    # falls within *that contract's own* Sec. 34 boundary -- the projection runs
-    # each contract over range(boundary), so maturity_survivors is non-zero only
-    # when term <= boundary. Decide eligibility per contract, NOT from the
+    # The GMAB pays at maturity (time = term), realised only when the term falls
+    # within *that contract's own* Sec. 34 boundary -- the projection runs each
+    # contract over range(boundary), so maturity_survivors is non-zero only when
+    # term <= boundary. Decide eligibility per contract, NOT from the
     # portfolio-wide horizon n_time (= max boundary): in a mixed book a short
     # contract would otherwise read term - 1 < n_time as "within" off another
     # contract's longer horizon. When the boundary cuts before the term there is
-    # no maturity, so clamp the index to that contract's last column and zero
-    # the excess (rather than index out of bounds). At boundary == term (the
-    # common case) term_idx is term - 1, unchanged.
+    # no maturity, so clamp the index and zero the excess (rather than index out
+    # of bounds). At boundary == term (the common case) term_idx is term - 1.
     boundary_idx = model_points.contract_boundary_months - 1
     within = (model_points.term_months - 1) <= boundary_idx
     term_idx = np.where(within, model_points.term_months - 1, boundary_idx)
-    av_at_maturity = av[rows, term_idx]
+    # The matured account value is av at time `term` (index term_idx + 1) -- after
+    # the final month's growth -- not av at the start of the last month. av is
+    # width n_time + 1, so term_idx + 1 is always in range.
+    av_at_maturity = av[rows, term_idx + 1]
     maturity_excess = np.where(
         within,
         proj.maturity_survivors * np.maximum(
             0.0, model_points.minimum_accumulation_benefit - av_at_maturity),
         0.0,
     )
-    benefit_cf[rows, term_idx] += maturity_excess
+    # The maturity exit is recorded in the term - 1 column, but the guarantee
+    # top-up is paid at maturity (time = term); discount it the extra month
+    # (1 + r_m) so its present value anchors at time term, matching the GMM
+    # maturity convention (discount at the boundary index).
+    maturity_excess_at_col = maturity_excess / (1.0 + r_m)
+    benefit_cf[rows, term_idx] += maturity_excess_at_col
     # Variable fee -- the entity's share, deducted from the grown account value.
     fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m)[:, None] * f_m
     # Liability for incurred claims -- exit benefits settled over the pattern.
@@ -457,7 +465,7 @@ def _vfa_project(
     # deaths*(max(av,gmdb)-av); the GMAB excess sits at the maturity column. Same
     # settlement-pattern discounting as the total benefit path (above).
     guarantee_excess_cf = deaths * (death_benefit - av[:, :n_time])
-    guarantee_excess_cf[rows, term_idx] += maturity_excess
+    guarantee_excess_cf[rows, term_idx] += maturity_excess_at_col
     g_for_pv = guarantee_excess_cf
     if basis.settlement_pattern is not None:
         g_for_pv = guarantee_excess_cf * _settlement_factor(
