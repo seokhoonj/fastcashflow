@@ -243,47 +243,51 @@ def _stitch_vfa_measurements(n_mp, sub_results):
     )
 
 
-def measure_vfa(
+@dataclass(frozen=True, slots=True)
+class _VFAProjection:
+    """AV-anchored VFA projection shared by :func:`measure_vfa` (inception) and
+    ``vfa.measure_inforce`` (subsequent measurement).
+
+    Holds the trajectory building blocks that do not depend on the CSM choice:
+    the account-value path, the BEL / RA trajectories, the variable-fee PV
+    *trajectory* (PV of the fee from each month onward, so an in-force valuation
+    can slice the remaining fee at the valuation date), the LIC, the cash flows,
+    the coverage units and the underlying-items return. Each caller derives its
+    own CSM (inception ``csm0`` vs a carried ``prior_csm``) and headline.
+    """
+
+    bel: FloatArray                  # (n_mp, n_time+1) BEL trajectory
+    ra: FloatArray                   # (n_mp, n_time+1) RA trajectory
+    variable_fee_path: FloatArray    # (n_mp, n_time+1) PV of the fee from each t
+    time_value: FloatArray           # (n_mp,) guarantee TVOG at the anchor
+    lic: FloatArray                  # (n_mp, n_time+1)
+    cashflows: "Cashflows"
+    inforce: FloatArray              # (n_mp, n_time) coverage units
+    r_m: float                       # monthly underlying-items return
+    av: FloatArray                   # (n_mp, n_time+1) account-value path
+    disc_start: FloatArray           # (n_time+1,) start-of-month discount
+
+
+def _vfa_project(
     model_points: ModelPoints,
     basis: Basis,
     return_scenarios: FloatArray | None = None,
     *,
-    full: bool = True,
-) -> VFAMeasurement:
-    """Measure a direct-participation portfolio under the Variable Fee Approach.
+    elapsed_months: IntArray | None = None,
+    account_value: FloatArray | None = None,
+) -> "_VFAProjection":
+    """Project VFA cash flows / trajectories, optionally re-anchoring the AV.
 
-    The account value rolls forward as
-    ``AV[t+1] = AV[t] * (1 + max(r, g)) * (1 - f)`` -- the credited rate (the
-    underlying-items return ``r`` floored at any guaranteed rate ``g``) less
-    the variable fee ``f`` -- from ``AV[0]`` = the model point's
-    ``account_value``. A surrender pays the account value; a death exit pays
-    ``max(account value, minimum_death_benefit)`` (GMDB) and the survivors
-    reaching term pay ``max(account value, minimum_accumulation_benefit)``
-    (GMAB), so the excess over the account value is each guarantee's intrinsic
-    cost. When ``return_scenarios`` is given, each guarantee's *time value*
-    (the extra cost from return volatility) is folded into the CSM too -- the
-    credit-rate guarantee through the account-value growth, the GMDB and GMAB
-    floors as put options on the account value.
-
-    BEL is the present value of benefits and expenses less the premium, all
-    at the underlying-items return; the CSM is ``max(0, -(BEL + RA))`` -- the
-    entity's unearned variable fee -- accreted at the same return and
-    released by coverage units. The RA is a confidence-level margin for
-    expense risk.
-
-    ``full=True`` (default) returns the BEL / RA / CSM / account-value
-    trajectories; ``full=False`` fills only the headline ``bel`` / ``ra`` /
-    ``csm`` / ``variable_fee`` / ``time_value`` / ``loss_component`` (the
-    inception CSM is ``csm0``, so the release kernel is skipped) and leaves the
-    trajectory and cash-flow fields ``None`` -- the building block the portfolio
-    orchestrator chunks to bound memory.
-
-    BEL, RA and CSM are returned as month-by-month trajectories. The
-    deterministic BEL carries the guarantee's intrinsic value only; when
-    ``return_scenarios`` -- an ``(n_scenarios, n_time)`` array of monthly
-    underlying-items returns -- is supplied, the time value of the guarantee
-    enters the inception fulfilment cash flows too, so the CSM absorbs it,
-    and ``time_value`` records that amount per model point.
+    With ``elapsed_months`` / ``account_value`` left ``None`` (the default) this
+    is the inception projection: the account value grows from the model point's
+    ``account_value`` at issue. For subsequent measurement, pass each contract's
+    ``elapsed_months`` and its **observed** per-MP fund value (``account_value``)
+    -- the account-value path is re-anchored so it equals the observed value at
+    that duration (``av[t] = observed * growth ** (t - elapsed_months)``). The
+    decrements come from the inception projection (they depend on policy
+    duration, not the fund), and the AV-dependent benefits / fees recompute from
+    the re-anchored path; the caller slices the trajectories at the valuation
+    date.
     """
     basis = _single_basis(basis, entry="measure_vfa")
     # The VFA death money is ``deaths * death_benefit`` (below), computed from
@@ -318,10 +322,18 @@ def measure_vfa(
     credit_m = np.maximum(r_m, g_m)                            # (n_mp,)
     growth = (1.0 + credit_m) * (1.0 - f_m)                    # (n_mp,)
 
-    # Account-value trajectory -- per-policy closed form.
+    # Account-value trajectory -- per-policy closed form, anchored at the
+    # valuation date. At inception elapsed_months = 0 and account_value is the
+    # model point's, so this is exactly av0 * growth^t (the original path);
+    # for an in-force valuation the path is re-seeded to the observed fund value
+    # at t = elapsed_months.
     periods = np.arange(n_time + 1)
-    av = model_points.account_value[:, None] * (
-        growth[:, None] ** periods[None, :]
+    em = (np.zeros(n_mp, dtype=np.int64) if elapsed_months is None
+          else np.asarray(elapsed_months, dtype=np.int64))
+    av_anchor = (model_points.account_value if account_value is None
+                 else np.asarray(account_value, dtype=np.float64))
+    av = av_anchor[:, None] * (
+        growth[:, None] ** (periods[None, :] - em[:, None])
     )
 
     # Every policy eventually exits and receives its account value -- except
@@ -379,7 +391,10 @@ def measure_vfa(
         )
     pv_benefits = _pv_trajectory(benefit_for_pv, disc_start[:n_time])
     pv_expenses = _pv_trajectory(proj.expense_cf, disc_mid)
-    variable_fee = (fee_cf * disc_mid).sum(axis=1)
+    # Variable fee as a PV *trajectory* (PV of the fee from each month onward).
+    # Column 0 is the inception total (= the old scalar sum); an in-force
+    # valuation slices the remaining fee at the valuation date.
+    variable_fee_path = _pv_trajectory(fee_cf, disc_mid)
 
     # The deterministic BEL carries the guarantee's intrinsic value only.
     # Given return scenarios, fold in its time value too -- under the VFA
@@ -435,9 +450,61 @@ def measure_vfa(
     # risk an account-value contract carries (mortality risk on the amount
     # is near zero, every exit paying the account value).
     ra = _norm_ppf(basis.ra_confidence) * basis.expense_cv * pv_expenses
+    return _VFAProjection(
+        bel=bel, ra=ra, variable_fee_path=variable_fee_path,
+        time_value=time_value, lic=lic, cashflows=proj, inforce=inforce,
+        r_m=r_m, av=av, disc_start=disc_start,
+    )
+
+
+def measure_vfa(
+    model_points: ModelPoints,
+    basis: Basis,
+    return_scenarios: FloatArray | None = None,
+    *,
+    full: bool = True,
+) -> VFAMeasurement:
+    """Measure a direct-participation portfolio under the Variable Fee Approach.
+
+    The account value rolls forward as
+    ``AV[t+1] = AV[t] * (1 + max(r, g)) * (1 - f)`` -- the credited rate (the
+    underlying-items return ``r`` floored at any guaranteed rate ``g``) less
+    the variable fee ``f`` -- from ``AV[0]`` = the model point's
+    ``account_value``. A surrender pays the account value; a death exit pays
+    ``max(account value, minimum_death_benefit)`` (GMDB) and the survivors
+    reaching term pay ``max(account value, minimum_accumulation_benefit)``
+    (GMAB), so the excess over the account value is each guarantee's intrinsic
+    cost. When ``return_scenarios`` is given, each guarantee's *time value*
+    (the extra cost from return volatility) is folded into the CSM too -- the
+    credit-rate guarantee through the account-value growth, the GMDB and GMAB
+    floors as put options on the account value.
+
+    BEL is the present value of benefits and expenses less the premium, all
+    at the underlying-items return; the CSM is ``max(0, -(BEL + RA))`` -- the
+    entity's unearned variable fee -- accreted at the same return and
+    released by coverage units. The RA is a confidence-level margin for
+    expense risk.
+
+    ``full=True`` (default) returns the BEL / RA / CSM / account-value
+    trajectories; ``full=False`` fills only the headline ``bel`` / ``ra`` /
+    ``csm`` / ``variable_fee`` / ``time_value`` / ``loss_component`` (the
+    inception CSM is ``csm0``, so the release kernel is skipped) and leaves the
+    trajectory and cash-flow fields ``None`` -- the building block the portfolio
+    orchestrator chunks to bound memory.
+
+    BEL, RA and CSM are returned as month-by-month trajectories. The
+    deterministic BEL carries the guarantee's intrinsic value only; when
+    ``return_scenarios`` -- an ``(n_scenarios, n_time)`` array of monthly
+    underlying-items returns -- is supplied, the time value of the guarantee
+    enters the inception fulfilment cash flows too, so the CSM absorbs it,
+    and ``time_value`` records that amount per model point.
+    """
+    p = _vfa_project(model_points, basis, return_scenarios)
+    n_time = p.inforce.shape[1]
+    variable_fee = p.variable_fee_path[:, 0]
     # The inception fulfilment cash flows -- with the guarantee time value --
     # drive the CSM and the loss component.
-    fcf = bel[:, 0] + ra[:, 0] + time_value
+    fcf = p.bel[:, 0] + p.ra[:, 0] + p.time_value
     loss_component = np.maximum(0.0, fcf)
     csm0 = np.maximum(0.0, -fcf)
 
@@ -446,33 +513,33 @@ def measure_vfa(
         # so the release kernel is skipped; the trajectory and cash-flow fields
         # are dropped so the chunked portfolio path retains O(n_mp) per row.
         return VFAMeasurement(
-            bel=bel[:, 0], ra=ra[:, 0], csm=csm0, variable_fee=variable_fee,
-            time_value=time_value, loss_component=loss_component,
+            bel=p.bel[:, 0], ra=p.ra[:, 0], csm=csm0, variable_fee=variable_fee,
+            time_value=p.time_value, loss_component=loss_component,
             model_points=model_points)
 
     # VFA accretes at the underlying-items return -- flat across time in
     # the deterministic measurement; broadcast to the per-month curve the
     # kernel consumes.
     csm, csm_accretion, csm_release = _csm_kernel(
-        csm0, inforce, np.full(n_time, r_m),
+        csm0, p.inforce, np.full(n_time, p.r_m),
     )
 
     return VFAMeasurement(
-        bel=bel[:, 0],
-        ra=ra[:, 0],
+        bel=p.bel[:, 0],
+        ra=p.ra[:, 0],
         csm=csm[:, 0],
         variable_fee=variable_fee,
-        time_value=time_value,
+        time_value=p.time_value,
         loss_component=loss_component,
-        bel_path=bel,
-        ra_path=ra,
+        bel_path=p.bel,
+        ra_path=p.ra,
         csm_path=csm,
-        account_value_path=av,
+        account_value_path=p.av,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=lic,
-        discount_bom=disc_start,
-        cashflows=proj,
+        lic=p.lic,
+        discount_bom=p.disc_start,
+        cashflows=p.cashflows,
         model_points=model_points,
     )
 
