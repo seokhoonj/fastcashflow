@@ -529,9 +529,10 @@ def test_vfa_measure_handles_boundary_before_term():
     assert np.all(np.isfinite(res.bel_path))
 
 
-def test_vfa_measure_inforce_rejects_as_of_at_horizon():
-    """An as-of date at the projection horizon (em == n_time, the fully run-off
-    case) is rejected rather than indexing the in-force column out of bounds."""
+def test_vfa_measure_inforce_rejects_as_of_at_boundary():
+    """An as-of date at (or beyond) a contract's own Sec. 34 boundary is rejected
+    -- no remaining coverage to value -- rather than indexing a dead in-force
+    column."""
     import fastcashflow as fcf
     mp0 = ModelPoints(
         issue_age=np.array([40]), premium=np.array([0.0]),
@@ -541,5 +542,45 @@ def test_vfa_measure_inforce_rejects_as_of_at_horizon():
         mp_id=np.array(["X"]), elapsed_months=np.array([24]),
         count=np.array([1.0]), prior_csm=np.array([0.0]), lock_in_rate=0.0,
         account_value=np.array([1e8]))
-    with pytest.raises(ValueError, match="fully run off|projection horizon"):
+    with pytest.raises(ValueError, match="no remaining coverage|contract_boundary_months"):
         fcf.vfa.measure_inforce(fcf.apply_inforce_state(mp0, state), state, _basis())
+
+
+def test_vfa_measure_inforce_mixed_book_judges_each_contract_on_its_own_boundary():
+    """Per-contract horizons (not the portfolio-wide max): a short-boundary
+    contract sat next to a long one is (P1) measured identically to being valued
+    alone -- the long contract's horizon does not contaminate its GMAB
+    eligibility -- and (P2) rejected at its own boundary even though the long
+    contract makes the portfolio horizon larger."""
+    import fastcashflow as fcf
+    basis = _basis()
+    # A: term 60 but the Sec. 34 boundary cuts at 24, with a huge GMAB that must
+    # NOT apply (the maturity is past the boundary). B: a full 60-month contract,
+    # so the portfolio horizon n_time = 60 > A's boundary 24.
+    a_alone = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([0.0]),
+        term_months=np.array([60]), contract_boundary_months=np.array([24]),
+        account_value=np.array([1e8]),
+        minimum_accumulation_benefit=np.array([1e12]))
+    mixed = ModelPoints(
+        issue_age=np.array([40, 40]), premium=np.array([0.0, 0.0]),
+        term_months=np.array([60, 60]),
+        contract_boundary_months=np.array([24, 60]),
+        account_value=np.array([1e8, 1e8]),
+        minimum_accumulation_benefit=np.array([1e12, 0.0]),
+        mp_id=np.array(["A", "B"]))
+
+    # (P1) A's inception measurement is identical alone and inside the mixed book
+    # -- the GMAB does not leak in off B's longer horizon.
+    bel_alone = fcf.vfa.measure(a_alone, basis).bel[0]
+    bel_mixed_a = fcf.vfa.measure(mixed, basis).bel[0]
+    assert np.isclose(bel_alone, bel_mixed_a)
+
+    # (P2) valuing the mixed book with A at its own boundary (24) is rejected,
+    # even though B makes the portfolio horizon 60.
+    state = fcf.InforceState(
+        mp_id=np.array(["A", "B"]), elapsed_months=np.array([24, 12]),
+        count=np.array([1.0, 1.0]), prior_csm=np.array([0.0, 0.0]),
+        lock_in_rate=0.0, account_value=np.array([1e8, 1e8]))
+    with pytest.raises(ValueError, match="no remaining coverage|contract_boundary_months"):
+        fcf.vfa.measure_inforce(fcf.apply_inforce_state(mixed, state), state, basis)

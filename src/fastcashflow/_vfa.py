@@ -356,14 +356,19 @@ def _vfa_project(
     # account-value payout at the maturity (term - 1) column; lift them by the
     # excess over the account value there. Default zero GMAB adds nothing.
     rows = np.arange(n_mp)
-    # The GMAB pays at maturity (month term - 1). When the contract boundary
-    # (Sec. 34) cuts before the term -- so term - 1 falls past the projected
-    # horizon n_time -- there is no maturity within the valuation, so no GMAB:
-    # clamp the index to a valid column and zero the excess (rather than index
-    # out of bounds). At boundary == term (the common case) every contract is
-    # "within" and term_idx is term - 1, so this is unchanged.
-    within = (model_points.term_months - 1) < n_time
-    term_idx = np.where(within, model_points.term_months - 1, n_time - 1)
+    # The GMAB pays at maturity (month term - 1), realised only when the term
+    # falls within *that contract's own* Sec. 34 boundary -- the projection runs
+    # each contract over range(boundary), so maturity_survivors is non-zero only
+    # when term <= boundary. Decide eligibility per contract, NOT from the
+    # portfolio-wide horizon n_time (= max boundary): in a mixed book a short
+    # contract would otherwise read term - 1 < n_time as "within" off another
+    # contract's longer horizon. When the boundary cuts before the term there is
+    # no maturity, so clamp the index to that contract's last column and zero
+    # the excess (rather than index out of bounds). At boundary == term (the
+    # common case) term_idx is term - 1, unchanged.
+    boundary_idx = model_points.contract_boundary_months - 1
+    within = (model_points.term_months - 1) <= boundary_idx
+    term_idx = np.where(within, model_points.term_months - 1, boundary_idx)
     av_at_maturity = av[rows, term_idx]
     maturity_excess = np.where(
         within,
@@ -676,33 +681,27 @@ def measure_inforce(
             "must use the real fund. GMM / PAA in-force do not need it.)")
     n_mp = model_points.n_mp
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    # The trajectory only extends to t = contract_boundary_months (Sec. 34);
-    # an as-of date past it would read a stale value -- guard with a clear error.
+    # The valuation date must lie strictly within each contract's own Sec. 34
+    # boundary. The projection runs each contract over range(boundary), so its
+    # in-force is filled for months 0 .. boundary-1; at or beyond the boundary
+    # there is no remaining coverage to value. Decide this **per contract** --
+    # not against the portfolio-wide horizon -- so a short contract in a mixed
+    # book is judged on its own boundary, not another contract's longer one.
+    # em < boundary <= n_time, so inforce[em] is always a valid, live column.
     boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
-    over = em > boundary
-    if np.any(over):
-        bad = int(np.argmax(over))
+    runoff = em >= boundary
+    if np.any(runoff):
+        bad = int(np.argmax(runoff))
         raise ValueError(
-            f"elapsed_months[{bad}]={int(em[bad])} > "
-            f"contract_boundary_months[{bad}]={int(boundary[bad])}; the as-of "
-            "date is past the contract boundary (Sec. 34 horizon). "
-            "vfa.measure_inforce needs an as-of date within the boundary.")
+            f"elapsed_months[{bad}]={int(em[bad])} >= "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            "horizon); the contract has no remaining coverage at the valuation "
+            "date. Value it strictly before its boundary.")
 
     # Re-anchor the account-value path at the observed fund value at em, then
     # re-base the sliced headline to the valuation date (see _inforce_rescale).
     p = _vfa_project(model_points, basis,
                      elapsed_months=em, account_value=state.account_value)
-    # The coverage-unit / decrement arrays have n_time columns (the trajectories
-    # have n_time+1); an as-of date at the horizon end (em == n_time, reached
-    # when the boundary is the full term) has no in-force column to slice and the
-    # contract has fully run off -- reject it rather than index out of bounds.
-    n_time = p.inforce.shape[1]
-    if np.any(em >= n_time):
-        bad = int(np.argmax(em >= n_time))
-        raise ValueError(
-            f"elapsed_months[{bad}]={int(em[bad])} is at or beyond the "
-            f"projection horizon ({n_time} months); the contract has fully run "
-            "off, so there is no remaining in-force to value.")
     rows = np.arange(n_mp)
     rescale = _inforce_rescale(p, model_points, em, rows)
     bel = p.bel[rows, em] * rescale
