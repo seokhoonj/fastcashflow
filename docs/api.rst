@@ -71,6 +71,8 @@ Variable fee approach
 .. autoclass:: fastcashflow.VFAMeasurement
    :members:
 
+.. autodata:: fastcashflow.vfa.CSM_BASES
+
 .. autoclass:: fastcashflow.VFAAggregate
    :members:
 

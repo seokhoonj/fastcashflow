@@ -584,3 +584,38 @@ def test_vfa_measure_inforce_mixed_book_judges_each_contract_on_its_own_boundary
         lock_in_rate=0.0, account_value=np.array([1e8, 1e8]))
     with pytest.raises(ValueError, match="no remaining coverage|contract_boundary_months"):
         fcf.vfa.measure_inforce(fcf.apply_inforce_state(mixed, state), state, basis)
+
+
+def test_vfa_measure_inforce_csm_basis_is_carry_only_and_guarded(tmp_path):
+    """measure_inforce tags its result csm_basis='carry_only', and the
+    accounting-output entry points (roll_forward / report / group /
+    group_of_contracts / write_measurement) refuse it -- a carry-only in-force
+    CSM cannot be silently consumed as a paragraph-45 settlement figure. The
+    inception measurement (projected_runoff) flows through unguarded."""
+    import fastcashflow as fcf
+    basis = _basis()
+    av0, term, em = 1e8, 60, 12
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    assert inc.csm_basis == "projected_runoff"
+
+    mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
+                      term_months=np.array([60]), account_value=np.array([av0]),
+                      mp_id=np.array(["X"]))
+    state = fcf.InforceState(
+        mp_id=np.array(["X"]), elapsed_months=np.array([em]),
+        count=np.array([1.0]), prior_csm=np.array([inc.csm_path[0, 0]]),
+        lock_in_rate=0.0, account_value=np.array([inc.account_value_path[0, em]]))
+    carry = fcf.vfa.measure_inforce(fcf.apply_inforce_state(mp0, state), state, basis)
+    assert carry.csm_basis == "carry_only"
+
+    for op in (lambda: fcf.roll_forward(carry),
+               lambda: fcf.report(carry),
+               lambda: fcf.group(carry, by="product"),
+               lambda: fcf.group_of_contracts(carry),
+               lambda: fcf.write_measurement(carry, tmp_path / "carry.csv")):
+        with pytest.raises(ValueError, match="carry.only"):
+            op()
+
+    # the inception measurement remains usable by the same entry points
+    fcf.report(inc)
+    fcf.roll_forward(inc)

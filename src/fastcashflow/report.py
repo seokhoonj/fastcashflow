@@ -31,7 +31,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
-from fastcashflow._vfa import VFAMeasurement
+from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
 
 
 def _to_years(monthly: FloatArray) -> FloatArray:
@@ -151,6 +151,7 @@ def _(measurement: PAAMeasurement) -> Report:
 
 @report.register
 def _(measurement: VFAMeasurement) -> Report:
+    _require_settlement_csm(measurement, "report")
     return _report_vfa(measurement)
 
 

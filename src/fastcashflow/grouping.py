@@ -32,7 +32,7 @@ from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.curves import forward_rates
 from fastcashflow._paa import PAAMeasurement
 from fastcashflow._reinsurance import ReinsuranceMeasurement
-from fastcashflow._vfa import VFAMeasurement
+from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
 from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow.numerics import _csm_kernel, _csm_roll
 from fastcashflow.projection import Cashflows
@@ -383,6 +383,7 @@ def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
 
 @group.register
 def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
+    _require_settlement_csm(measurement, "group")
     if measurement.bel_path is None:
         raise ValueError(
             "group() requires a full measurement; the trajectory fields are "
@@ -602,6 +603,8 @@ def _group_of_contracts_onerous(measurement, *, portfolio="product",
     (paragraph 16, and 57 for the PAA); only ``group``'s per-type re-derivation
     differs.
     """
+    if isinstance(measurement, VFAMeasurement):
+        _require_settlement_csm(measurement, "group_of_contracts")
     mp, portfolio_arr, cohort_arr = _portfolio_cohort(measurement, portfolio, cohort)
     default = np.where(measurement.loss_component > 0.0, "onerous", "remaining")
     prof = _resolve_profitability(mp, profitability, default)

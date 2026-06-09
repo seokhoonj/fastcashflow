@@ -10,9 +10,11 @@ the standalone time-value-of-guarantee analysis over return scenarios;
 ``trace`` walks one model point's VFA measurement.
 """
 from fastcashflow._vfa import (
-    VFAMeasurement, measure_vfa as measure, measure_aggregate, measure_inforce)
+    VFAMeasurement, measure_vfa as measure, measure_aggregate, measure_inforce,
+    CSM_BASES)
 from fastcashflow.tvog import measure_tvog as tvog
 from fastcashflow.trace import show_trace_vfa as trace
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce", "tvog", "trace",
+           "CSM_BASES",
            "VFAMeasurement"]

@@ -38,7 +38,7 @@ from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
-from fastcashflow._vfa import VFAMeasurement
+from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -216,6 +216,7 @@ def _(measurement: VFAMeasurement, period_months: int = 12, *,
       revised=None, revised_at=None, actual_inforce=None, experience_at=None):
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
+    _require_settlement_csm(measurement, "roll_forward")
     _reject_gmm_only_opts(revised, revised_at, actual_inforce, experience_at)
     return _roll_forward_vfa(measurement, period_months)
 

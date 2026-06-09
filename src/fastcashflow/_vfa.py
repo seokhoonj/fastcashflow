@@ -51,6 +51,40 @@ from fastcashflow.tvog import guarantee_floor_time_value, tvog_weights
 from fastcashflow.engine import _reconcile_state, _inforce_rescale
 
 
+# What the ``csm`` on a VFAMeasurement represents -- so downstream accounting
+# output cannot mistake an in-force carry-only figure for a settlement CSM. The
+# discriminator is carried on the result (not just the docstring) and the
+# accounting-output entry points (roll_forward / report / group / serialise)
+# guard on it via _require_settlement_csm.
+CSM_BASIS_INITIAL = "initial_measurement"           # inception headline (csm0)
+CSM_BASIS_PROJECTED_RUNOFF = "projected_runoff"     # inception full trajectory
+CSM_BASIS_CARRY_ONLY = "carry_only"                 # measure_inforce: prior CSM
+#                                                     rolled at the basis return,
+#                                                     paragraph-45 unlock deferred
+CSM_BASIS_PARAGRAPH_45 = "paragraph_45_settlement"  # future: real subsequent meas.
+CSM_BASES = (CSM_BASIS_INITIAL, CSM_BASIS_PROJECTED_RUNOFF,
+             CSM_BASIS_CARRY_ONLY, CSM_BASIS_PARAGRAPH_45)
+
+
+def _require_settlement_csm(measurement: "VFAMeasurement", op: str) -> None:
+    """Reject a carry-only in-force CSM where a settlement CSM is required.
+
+    ``vfa.measure_inforce`` returns a carry-only CSM (the prior CSM rolled at the
+    basis return, with the IFRS 17 paragraph-45 remeasurement deferred) -- a
+    diagnostic headline, not an accounting settlement figure. Accounting-output
+    functions call this guard so that figure cannot be silently rolled forward,
+    reported, grouped or serialised as if it were paragraph-45 compliant.
+    """
+    if measurement.csm_basis == CSM_BASIS_CARRY_ONLY:
+        raise ValueError(
+            f"{op}: this VFAMeasurement carries a carry-only in-force CSM "
+            f"(csm_basis='{CSM_BASIS_CARRY_ONLY}', from vfa.measure_inforce -- "
+            "the prior CSM rolled at the basis return, with the paragraph-45 "
+            "remeasurement deferred). It is not a settlement figure, so it "
+            f"cannot be used by {op}. The real paragraph-45 VFA subsequent "
+            "measurement (opening->closing movement) is a separate, later step.")
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class VFAMeasurement:
     """VFA measurement of a direct-participation (account-value) portfolio.
@@ -89,6 +123,7 @@ class VFAMeasurement:
     model_points: "ModelPoints | None" = None     # stamped by measure_vfa, for group axes
     group_labels: "np.ndarray | None" = None       # per-group label on a grouped result
     group_sizes: IntArray | None = None         # model points per group, aligned with labels
+    csm_basis: str = CSM_BASIS_PROJECTED_RUNOFF  # what the csm represents (see CSM_BASES)
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
@@ -134,6 +169,7 @@ class VFAAggregate:
 
 @write_measurement.register
 def _(measurement: VFAMeasurement, path, *, ids=None):
+    _require_settlement_csm(measurement, "write_measurement")
     _write_measurement_columns(
         {"bel": measurement.bel, "ra": measurement.ra, "csm": measurement.csm,
          "variable_fee": measurement.variable_fee,
@@ -668,6 +704,14 @@ def measure_inforce(
        settlement CSM. A book whose fund diverged materially from the central
        return will show a CSM that lags that move until the paragraph-45
        remeasurement lands.
+
+       The result is tagged ``csm_basis = 'carry_only'`` (see
+       :data:`fastcashflow.vfa.CSM_BASES`), and the accounting-output entry
+       points -- :func:`~fastcashflow.roll_forward`,
+       :func:`~fastcashflow.report`, :func:`~fastcashflow.group`,
+       :func:`~fastcashflow.group_of_contracts` and
+       :func:`~fastcashflow.write_measurement` -- reject it, so this figure
+       cannot be silently consumed as a settlement CSM.
     """
     basis = _single_basis(basis, entry="vfa.measure_inforce")
     # Reorder state to model-points order and reject a stale snapshot whose
@@ -742,4 +786,4 @@ def measure_inforce(
     return VFAMeasurement(
         bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
         time_value=time_value, loss_component=loss_component,
-        model_points=model_points)
+        model_points=model_points, csm_basis=CSM_BASIS_CARRY_ONLY)
