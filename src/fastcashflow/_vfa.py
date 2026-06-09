@@ -45,7 +45,9 @@ from fastcashflow.numerics import (
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.statemodel import resolve_state_model
-from fastcashflow.tvog import guarantee_floor_time_value, tvog_weights
+from fastcashflow.tvog import (
+    guarantee_floor_time_value, tvog_weights, _validate_return_scenarios,
+)
 # In-force helpers shared with the GMM path (engine does not import _vfa, and io
 # imports engine lazily, so this top-level import is cycle-free).
 from fastcashflow.engine import _reconcile_state, _inforce_rescale
@@ -502,6 +504,7 @@ def _vfa_project(
                 f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
                 "the projection horizon"
             )
+        return_scenarios = _validate_return_scenarios(return_scenarios)
         # tvog_weights is portfolio-level in v1, so it expects a uniform
         # guarantee across model points; per-MP varying guarantees with
         # stochastic returns are a future extension.

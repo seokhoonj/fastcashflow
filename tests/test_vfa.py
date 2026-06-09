@@ -400,6 +400,26 @@ def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
         fcf.vfa.measure(mp, basis, np.full((10, 120), 0.003))
 
 
+def test_vfa_rejects_degenerate_return_scenarios():
+    """Empty, non-finite, or <= -100% monthly returns are rejected at both
+    stochastic entry points -- they would otherwise produce NaN CSM or a
+    sign-flipped discount silently."""
+    term = 60
+    mp = ModelPoints.single(40, 0.0, term, account_value=1e8,
+                            minimum_crediting_rate=0.02)
+    basis = _basis(investment_return=0.04)
+
+    empty = np.empty((0, term))
+    non_finite = np.full((4, term), np.inf)
+    ruin = np.full((4, term), -1.0)              # a -100% monthly return
+
+    for scen in (empty, non_finite, ruin):
+        with pytest.raises(ValueError):
+            fcf.vfa.measure(mp, basis, return_scenarios=scen)
+        with pytest.raises(ValueError):
+            fcf.vfa.tvog(mp, basis, scen)
+
+
 def test_tvog_boundary_cut_contract_does_not_index_out_of_bounds():
     """A contract whose term runs past the scenario horizon (a boundary cut)
     has no maturity, but the GMAB maturity index must stay in range. Regression

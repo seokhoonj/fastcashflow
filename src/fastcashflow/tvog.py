@@ -55,6 +55,27 @@ class TVOGResult:
         return self.intrinsic_value + self.time_value
 
 
+def _validate_return_scenarios(return_scenarios: FloatArray) -> FloatArray:
+    """Reject scenario sets the time-value kernel cannot price.
+
+    An empty set reduces the scenario mean to NaN (which flows into the CSM and
+    loss component); a non-finite return propagates NaN/inf; a monthly return of
+    -100% or worse sign-flips the ``1 / (1 + r)`` discount and returns a
+    plausible-looking wrong number. Returns the validated float array.
+    """
+    rs = np.asarray(return_scenarios, dtype=np.float64)
+    if rs.shape[0] < 1:
+        raise ValueError("return_scenarios must contain at least one scenario row")
+    if not np.all(np.isfinite(rs)):
+        raise ValueError("return_scenarios must be finite")
+    if np.any(rs <= -1.0):
+        raise ValueError(
+            "return_scenarios must be greater than -1 -- a monthly return of "
+            "-100% or worse is invalid"
+        )
+    return rs
+
+
 def _av_and_discount(
     monthly_credit: FloatArray, monthly_return: FloatArray, fund_fee_m: float
 ) -> tuple[FloatArray, FloatArray]:
@@ -124,7 +145,7 @@ def tvog_weights(
     The guarantee is taken as a scalar: TVOG is a portfolio-level aggregate
     in v1, so per-MP varying guarantees are not yet supported here.
     """
-    return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
+    return_scenarios = _validate_return_scenarios(return_scenarios)
     n_time = return_scenarios.shape[1]
     f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
     g_m = (1.0 + minimum_crediting_rate) ** (1.0 / 12.0) - 1.0
@@ -167,7 +188,7 @@ def guarantee_floor_time_value(
     ``minimum_crediting_rate`` is the (scalar, v1) crediting guarantee. The
     GMDB / GMAB floors themselves may vary by model point.
     """
-    return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
+    return_scenarios = _validate_return_scenarios(return_scenarios)
     n_time = return_scenarios.shape[1]
     f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
     g_m = (1.0 + minimum_crediting_rate) ** (1.0 / 12.0) - 1.0
@@ -264,6 +285,7 @@ def measure_tvog(
     return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
     if return_scenarios.ndim != 2:
         raise ValueError("return_scenarios must be 2-D (n_scenarios, n_time)")
+    return_scenarios = _validate_return_scenarios(return_scenarios)
 
     proj = project_cashflows(model_points, basis)
     inforce = proj.inforce
