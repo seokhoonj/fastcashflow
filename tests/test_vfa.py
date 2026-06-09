@@ -43,14 +43,16 @@ def test_vfa_account_value_and_csm_hand_calc():
     growth = (1 + r_m) * (1 - f_m)
     assert np.allclose(res.account_value_path[0], av0 * growth ** np.arange(term + 1))
 
-    # every exit pays the account value; benefits discount at r, which with
-    # the account-value growth collapses to (1 - f)^t
+    # Mid-month decrements (deaths + lapses during month t) pay the
+    # start-of-month account value av[t]; maturity survivors reach time term and
+    # are paid the matured value av[term] (one more month of growth). Benefits
+    # discount at r, which with the account-value growth collapses to (1 - f)^t.
     surv = (1 - Q) * (1 - LAPSE)
-    inforce = surv ** np.arange(term)
-    exits = np.empty(term)
-    exits[:-1] = inforce[:-1] - inforce[1:]
-    exits[-1] = inforce[-1]
-    pv_benefits = av0 * np.sum(exits * (1 - f_m) ** np.arange(term))
+    t = np.arange(term)
+    decrements = surv ** t * (1 - surv)             # deaths + lapses in month t -> av[t]@t
+    maturity = surv ** term                          # survivors -> matured av[term]@term
+    pv_benefits = av0 * (np.sum(decrements * (1 - f_m) ** t)
+                         + maturity * (1 - f_m) ** term)
     bel = pv_benefits - av0
     assert np.isclose(res.bel_path[0, 0], bel)
     assert np.isclose(res.csm_path[0, 0], max(0.0, -bel))
@@ -154,6 +156,26 @@ def test_gmab_floor_strikes_the_matured_account_value_hand_calc():
     av_prev = av0 * growth ** (term - 1)
     wrong_delta = maturity_survivors * (gmab - av_prev) * (1 + r_m) ** (-(term - 1))
     assert not np.isclose(delta, wrong_delta)
+
+
+def test_gmab_binding_pays_exactly_the_guarantee_at_maturity_hand_calc():
+    """A binding GMAB pays the maturity survivor exactly ``gmab`` at time term.
+
+    The base account-value payout (the matured av[term]) and the floor top-up
+    share one maturity date and value, so they sum to max(av[term], gmab) with
+    no one-month gap. With no decrements a single survivor reaches term, so the
+    BEL is the PV of paying ``gmab`` at time term less the account value held.
+    """
+    r, f = 0.06, 0.012
+    basis = _basis(mortality_q=0.0, lapse_q=0.0, mortality_cv=0.0,
+                   investment_return=r, fund_fee=f)
+    av0, gmab, term = 1000.0, 2000.0, 24       # gmab far above any av -> binds
+    res = fcf.vfa.measure(
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           minimum_accumulation_benefit=gmab), basis)
+    r_m = (1 + r) ** (1 / 12) - 1
+    bel = gmab * (1 + r_m) ** (-term) - av0     # exactly gmab @ time term, less the fund
+    assert np.isclose(res.bel_path[0, 0], bel)
 
 
 def test_gmab_lic_uses_the_nominal_top_up_not_the_discounted_pv():
