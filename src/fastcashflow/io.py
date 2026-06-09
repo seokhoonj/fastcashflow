@@ -44,7 +44,9 @@ from fastcashflow.statemodel import STATE_MODELS
 from fastcashflow.coverage import (
     CalculationMethod, RATE_DRIVEN_METHODS,
 )
-from fastcashflow.modelpoints import STATE_ACTIVE, STATE_NAMES, ModelPoints
+from fastcashflow.modelpoints import (
+    STATE_ACTIVE, STATE_NAMES, NO_GUARANTEE_RATE, ModelPoints,
+)
 
 # ``engine`` is the largest module in the package (codegen + the numba CPU
 # kernels) and importing it at module load pulls all of that into any
@@ -1448,7 +1450,15 @@ def read_vfa_model_points(
                 "surrender_base_amount", "contract_boundary_months",
                 "product", "channel", "mp_id"):
         if opt in df.columns:
-            fields[opt] = df[opt].to_numpy()
+            if opt == "minimum_crediting_rate":
+                # A blank crediting-rate cell means no crediting guarantee (the
+                # no-guarantee sentinel), not a 0% floor; an explicit 0.0
+                # survives as a real 0% floor. Cast first so an all-blank column
+                # (inferred as Null dtype) still fills.
+                fields[opt] = (df[opt].cast(pl.Float64)
+                               .fill_null(NO_GUARANTEE_RATE).to_numpy())
+            else:
+                fields[opt] = df[opt].to_numpy()
     if "state" in df.columns:
         fields["state"] = _read_state(df["state"])
     # The VFA reader has no grouping-attribute catch-all -- an unrecognised

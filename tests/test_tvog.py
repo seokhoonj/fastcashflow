@@ -73,20 +73,26 @@ def test_tvog_zero_when_every_scenario_is_central():
     assert res.intrinsic_value > 0.0
 
 
-def test_tvog_deep_out_of_the_money_is_nearly_zero():
-    """A guarantee far below every scenario return costs almost nothing."""
+def test_tvog_floor_below_returns_is_nearly_zero():
+    """A 0% floor the returns never breach (a high central return, tight
+    scenarios) costs almost nothing -- the guarantee never bites."""
     term = 120
     basis = _basis(investment_return=0.06)
-    scenarios = _return_paths(0.06, vol=0.005, n=500, n_time=term, seed=2)
-    res = fcf.vfa.tvog(_contract(term, g=-0.20), basis, scenarios)
-    assert abs(res.total_value) < 1.0          # the guarantee never bites
+    scenarios = _return_paths(0.06, vol=0.001, n=500, n_time=term, seed=2)
+    res = fcf.vfa.tvog(_contract(term, g=0.0), basis, scenarios)
+    assert abs(res.total_value) < 1.0          # the floor never bites
 
 
 def test_tvog_requires_a_guarantee():
-    """measure_tvog needs a non-zero guarantee on the model points."""
+    """measure_tvog rejects a contract with no crediting guarantee (the
+    NO_GUARANTEE_RATE sentinel); a 0.0 rate is a real 0% floor and is valued."""
     basis = _basis(investment_return=0.04)
-    with pytest.raises(ValueError, match="minimum_crediting_rate"):
-        fcf.vfa.tvog(_contract(120, g=0.0), basis, np.full((10, 120), 0.003))
+    scen = np.full((10, 120), 0.003)
+    with pytest.raises(ValueError, match="guarantee"):
+        fcf.vfa.tvog(_contract(120, g=fcf.NO_GUARANTEE_RATE), basis, scen)
+    # a 0% floor is a real guarantee -- accepted, not rejected
+    res = fcf.vfa.tvog(_contract(120, g=0.0), basis, scen)
+    assert np.isfinite(res.total_value)
 
 
 def test_tvog_rejects_wrong_horizon():
@@ -94,3 +100,29 @@ def test_tvog_rejects_wrong_horizon():
     basis = _basis(investment_return=0.04)
     with pytest.raises(ValueError, match="columns"):
         fcf.vfa.tvog(_contract(120, g=0.04), basis, np.full((10, 7), 0.003))
+
+
+def test_tvog_weights_no_guarantee_is_exact_zero_even_at_extreme_returns():
+    """With no crediting guarantee the credit-rate time value is identically
+    zero, and the short-circuit returns exact zeros rather than routing through
+    the over/underflowing cumulative growth/discount products (a near-ruin but
+    valid return path would otherwise give 0 * inf = NaN)."""
+    from fastcashflow.tvog import tvog_weights
+    term = 240
+    extreme = np.full((8, term), -0.95)        # valid (> -1) but near-ruin
+    w = tvog_weights(minimum_crediting_rate=fcf.NO_GUARANTEE_RATE,
+                     fund_fee=0.015, investment_return=0.04,
+                     return_scenarios=extreme)
+    assert np.all(np.isfinite(w))
+    assert np.all(w == 0.0)
+
+
+def test_tvog_weights_rejects_nonfinite_rate():
+    """A non-finite crediting rate is rejected at the helper boundary -- the
+    scalar TVOG helpers bypass the ModelPoints finite check, so the domain
+    validator must reject it itself."""
+    from fastcashflow.tvog import tvog_weights
+    with pytest.raises(ValueError, match="finite"):
+        tvog_weights(minimum_crediting_rate=np.nan, fund_fee=0.015,
+                     investment_return=0.04,
+                     return_scenarios=np.full((4, 12), 0.003))

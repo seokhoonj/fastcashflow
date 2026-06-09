@@ -90,6 +90,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **VFA `minimum_crediting_rate == 0.0` is now a real 0% floor, not "no
+  guarantee" (breaking semantic correction).** A zero crediting rate now means
+  the account is credited `max(return, 0)` -- principal protection that carries
+  a time value -- and `vfa.measure(..., return_scenarios)` and `vfa.tvog` agree
+  on it (`tvog` previously rejected zero while `measure` priced it; the two are
+  now consistent). "No crediting guarantee" (the account follows the bare
+  return, which may be negative) is the new default and is expressed by the
+  exported `fcf.NO_GUARANTEE_RATE` sentinel, which `ModelPoints` fills when
+  `minimum_crediting_rate` is omitted; `vfa.tvog` rejects it (there is no
+  credited-rate time value to measure). A stray negative rate that is neither
+  the sentinel nor `>= 0` is now rejected as a data error. The deterministic
+  BEL is unchanged whenever the central return is non-negative; only the
+  stochastic time value (and a negative-return BEL) shifts. A blank
+  `minimum_crediting_rate` cell in a VFA policies file reads as the sentinel.
 - **Routing / grouping axes are now the bare keys `product`, `channel`,
   `coverage`** (was `product_code`, `channel_code`, `coverage_code`). The
   engine treats them as opaque join keys -- whatever the input puts there

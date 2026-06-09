@@ -27,7 +27,7 @@ from fastcashflow.coverage import CalculationMethod, method_attrs
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import measure
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.modelpoints import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow._paa import measure_paa
 from fastcashflow._vfa import measure_vfa
 
@@ -466,6 +466,9 @@ def show_trace_vfa(
                if model_points.channel is not None else "-")
     av0 = float(sub.account_value[0])
     gcr = float(sub.minimum_crediting_rate[0])
+    # NO_GUARANTEE_RATE is a sentinel, not a rate -- render it as "none" rather
+    # than the bare -1.0. A 0.0 prints as a real 0% floor.
+    gcr_str = "none" if gcr == NO_GUARANTEE_RATE else f"{gcr:g}"
     gmdb = float(sub.minimum_death_benefit[0])
     gmab = float(sub.minimum_accumulation_benefit[0])
     header = (
@@ -482,7 +485,7 @@ def show_trace_vfa(
               _colw([gcr, basis.investment_return, basis.fund_fee], "g", 15))
     vfa_lines: list[object] = [
         f"{'account_value':<{_w}} = {av0:>{_vw},.2f}",
-        f"{'minimum_crediting_rate':<{_w}} = {gcr:>{_vw}g}",
+        f"{'minimum_crediting_rate':<{_w}} = {gcr_str:>{_vw}}",
         f"{'minimum_death_benefit':<{_w}} = {gmdb:>{_vw},.2f}  (GMDB)",
         f"{'minimum_accumulation_benefit':<{_w}} = {gmab:>{_vw},.2f}  (GMAB)",
         f"{'investment_return':<{_w}} = {basis.investment_return:>{_vw}g}  (VFA 할인/적립 basis)",

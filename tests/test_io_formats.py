@@ -147,6 +147,23 @@ def test_read_vfa_model_points_round_trips(tmp_path):
     assert np.allclose(fcf.vfa.measure(back, vb).csm, fcf.vfa.measure(vmp, vb).csm)
 
 
+def test_read_vfa_model_points_blank_crediting_rate_is_no_guarantee(tmp_path):
+    """A blank minimum_crediting_rate cell reads as the no-guarantee sentinel
+    (the account follows the bare return); an explicit 0.0 survives as a real
+    0% floor and a positive rate as itself."""
+    pl.DataFrame({
+        "mp_id": ["V1", "V2", "V3"],
+        "issue_age": [40, 45, 50],
+        "term_months": [120, 120, 120],
+        "account_value": [1e8, 1e8, 1e8],
+        "minimum_crediting_rate": [None, 0.0, 0.0075],
+    }).write_csv(tmp_path / "vfa.csv")
+    back = fcf.read_vfa_model_points(tmp_path / "vfa.csv")
+    assert back.minimum_crediting_rate[0] == fcf.NO_GUARANTEE_RATE   # blank
+    assert back.minimum_crediting_rate[1] == 0.0                     # explicit 0% floor
+    assert np.isclose(back.minimum_crediting_rate[2], 0.0075)        # positive
+
+
 def test_read_vfa_model_points_rejects_coverage_columns(tmp_path):
     """A ``<code>_benefit`` column is a coverage encoded as a column -- VFA
     carries no coverages, so it is rejected rather than silently dropped."""

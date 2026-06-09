@@ -32,6 +32,7 @@ from fastcashflow.io import (
     write_measurement,
 )
 from fastcashflow.modelpoints import (
+    NO_GUARANTEE_RATE,
     STATE_ACTIVE,
     STATE_PAIDUP,
     STATE_WAIVER,
@@ -100,6 +101,6 @@ __all__ = [
     "RA_METHODS", "SURRENDER_VALUE_BASES",
     "derive_expense_components",
     "RISK_MORTALITY", "RISK_MORBIDITY",
-    "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAIDUP",
+    "STATE_ACTIVE", "STATE_WAIVER", "STATE_PAIDUP", "NO_GUARANTEE_RATE",
     "StateModel", "State", "Transition", "STATE_MODELS",
 ]

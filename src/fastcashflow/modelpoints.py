@@ -27,6 +27,39 @@ STATE_NAMES = {"ACTIVE": STATE_ACTIVE, "WAIVER": STATE_WAIVER,
                "PAIDUP": STATE_PAIDUP}
 STATE_LABELS = {code: name for name, code in STATE_NAMES.items()}
 
+# A VFA ``minimum_crediting_rate`` of this sentinel means the contract carries
+# no crediting guarantee -- the account is credited the bare underlying return
+# (which may be negative), not ``max(return, floor)``. It is distinct from a
+# rate of ``0.0``, which is a real 0% floor (principal protection: the credited
+# rate is ``max(return, 0)``). The sentinel is a negative outside the valid
+# rate domain (a real rate < 0 would be a guaranteed loss), so it cannot
+# collide with a genuine guarantee; a stray negative that is not this exact
+# value is rejected as a data error rather than read as "no guarantee".
+NO_GUARANTEE_RATE = -1.0
+
+
+def validate_crediting_rate(rate: FloatArray) -> None:
+    """Reject a ``minimum_crediting_rate`` that is neither a real rate (>= 0)
+    nor the :data:`NO_GUARANTEE_RATE` sentinel.
+
+    A stray negative (a ``-0.02`` from a sign error, say) must not be silently
+    read as "no guarantee" by the credited-rate floor, so only the exact
+    sentinel is permitted below zero.
+    """
+    rate = np.asarray(rate, dtype=np.float64)
+    # A complete boundary check: the scalar TVOG helpers call this in place of
+    # the ModelPoints finite check, so a NaN / inf rate must be rejected here too.
+    if not np.all(np.isfinite(rate)):
+        raise ValueError("minimum_crediting_rate must be finite")
+    bad = (rate < 0.0) & (rate != NO_GUARANTEE_RATE)
+    if np.any(bad):
+        raise ValueError(
+            "minimum_crediting_rate must be >= 0 (a real guarantee, 0.0 being "
+            "a 0% floor) or the no-guarantee sentinel NO_GUARANTEE_RATE "
+            f"({NO_GUARANTEE_RATE}); got a negative rate that is neither "
+            "(a sign or data error)"
+        )
+
 # When True, ``ModelPoints.__post_init__`` skips the redundant re-validation
 # that ``subset`` would otherwise re-run for every segment of a large
 # portfolio. ``subset`` slices an already-validated parent, so the slice is
@@ -117,8 +150,10 @@ class ModelPoints:
     # crediting rate (annual) credited to the account value when the
     # underlying-items return falls short; cohort-dependent (a 4%-guarantee
     # 2010 block vs a 1%-guarantee 2024 block can coexist in one portfolio,
-    # which a single Basis value could not represent). Default 0.0 = no
-    # guarantee; ignored by non-VFA measurements.
+    # which a single Basis value could not represent). A rate of 0.0 is a real
+    # 0% floor (principal protection: credit = max(return, 0)); the default
+    # NO_GUARANTEE_RATE sentinel means no crediting guarantee (the account
+    # follows the bare return). Ignored by non-VFA measurements.
     minimum_crediting_rate: FloatArray | None = None
     # Guaranteed minimum death benefit (GMDB) -- the floor the death benefit
     # cannot fall below. On death the VFA pays max(account value, GMDB); the
@@ -271,13 +306,21 @@ class ModelPoints:
                      "minimum_crediting_rate", "minimum_death_benefit",
                      "minimum_accumulation_benefit"):
             value = getattr(self, name)
-            value = np.zeros(n_mp) if value is None else np.asarray(value, np.float64)
+            # minimum_crediting_rate defaults to the no-guarantee sentinel (an
+            # absent rate is "no crediting guarantee", not a 0% floor); every
+            # other field defaults to zero (absent benefit / premium / amount).
+            default = (np.full(n_mp, NO_GUARANTEE_RATE)
+                       if name == "minimum_crediting_rate" else np.zeros(n_mp))
+            value = default if value is None else np.asarray(value, np.float64)
             if not np.all(np.isfinite(value)):
                 raise ValueError(f"{name} must be finite")
             # Benefit / premium / account amounts are non-negative; a negative
-            # one is a sign or data error that flows silently into the BEL.
-            # minimum_crediting_rate is a rate, not an amount -- skip it.
-            if name != "minimum_crediting_rate" and np.any(value < 0):
+            # one is a sign or data error that flows silently into the BEL. The
+            # crediting rate is a rate (0.0 = 0% floor) and admits the
+            # NO_GUARANTEE_RATE sentinel, so it has its own domain check.
+            if name == "minimum_crediting_rate":
+                validate_crediting_rate(value)
+            elif np.any(value < 0):
                 raise ValueError(f"{name} must be >= 0 (got a negative amount)")
             object.__setattr__(self, name, value)
         # count defaults to one policy per model point (seriatim).
@@ -635,7 +678,7 @@ class ModelPoints:
         premium_frequency_months: int = 1,
         annuity_frequency_months: int = 1,
         account_value: float = 0.0,
-        minimum_crediting_rate: float = 0.0,
+        minimum_crediting_rate: float | None = None,
         minimum_death_benefit: float = 0.0,
         minimum_accumulation_benefit: float = 0.0,
         count: float = 1.0,
@@ -663,7 +706,8 @@ class ModelPoints:
             premium_frequency_months=np.array([premium_frequency_months]),
             annuity_frequency_months=np.array([annuity_frequency_months]),
             account_value=np.array([account_value]),
-            minimum_crediting_rate=np.array([minimum_crediting_rate]),
+            minimum_crediting_rate=(None if minimum_crediting_rate is None
+                                    else np.array([minimum_crediting_rate])),
             minimum_death_benefit=np.array([minimum_death_benefit]),
             minimum_accumulation_benefit=np.array([minimum_accumulation_benefit]),
             count=np.array([count]),

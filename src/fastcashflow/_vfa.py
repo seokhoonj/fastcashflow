@@ -47,6 +47,7 @@ from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.statemodel import resolve_state_model
 from fastcashflow.tvog import (
     guarantee_floor_time_value, tvog_weights, _validate_return_scenarios,
+    credited_monthly_rate,
 )
 # In-force helpers shared with the GMM path (engine does not import _vfa, and io
 # imports engine lazily, so this top-level import is cycle-free).
@@ -364,10 +365,10 @@ def _vfa_project(
     f_m = (1.0 + basis.fund_fee) ** (1.0 / 12.0) - 1.0
     # A minimum guarantee credits max(return, guarantee) to the account. The
     # guarantee is a per-policy contract term (locked at issue, cohort-aware),
-    # carried on the model point -- zero means no effective guarantee when the
-    # central return is non-negative.
-    g_m = (1.0 + model_points.minimum_crediting_rate) ** (1.0 / 12.0) - 1.0
-    credit_m = np.maximum(r_m, g_m)                            # (n_mp,)
+    # carried on the model point: NO_GUARANTEE_RATE means the account follows
+    # the bare return, 0.0 is a real 0% floor (see credited_monthly_rate). r_m
+    # is a scalar and the guarantee is per model point, so credit_m is (n_mp,).
+    credit_m = credited_monthly_rate(r_m, model_points.minimum_crediting_rate)
     growth = (1.0 + credit_m) * (1.0 - f_m)                    # (n_mp,)
 
     # Account-value trajectory -- per-policy closed form, anchored at the

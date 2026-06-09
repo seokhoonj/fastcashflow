@@ -837,8 +837,9 @@ def test_guards_full_false_cession_scenarios():
 
 
 def test_guards_negative_amounts_and_premium():
-    """Benefit / premium / account amounts are non-negative; a rate field is
-    not (a guaranteed minimum crediting rate may legitimately be negative).
+    """Benefit / premium / account amounts are non-negative. The crediting rate
+    admits 0.0 (a real 0% floor) and the NO_GUARANTEE_RATE sentinel (no
+    guarantee); a stray negative that is neither is a sign error, rejected.
     A negative level premium is a sign error -- accounting adjustments are
     actual experience and belong in movement analysis, not the projection."""
     base = dict(issue_age=np.array([40.0]), premium=np.array([100.0]),
@@ -849,8 +850,13 @@ def test_guards_negative_amounts_and_premium():
         fcf.ModelPoints(**base, account_value=np.array([-5.0]))
     with pytest.raises(ValueError, match=r"maturity_benefit must be >= 0"):
         fcf.ModelPoints(**base, maturity_benefit=np.array([-5.0]))
-    # a rate, not an amount -- negative is allowed
-    fcf.ModelPoints(**base, minimum_crediting_rate=np.array([-0.01]))
+    # 0.0 (a 0% floor) and the no-guarantee sentinel are accepted ...
+    fcf.ModelPoints(**base, minimum_crediting_rate=np.array([0.0]))
+    fcf.ModelPoints(**base,
+                    minimum_crediting_rate=np.array([fcf.NO_GUARANTEE_RATE]))
+    # ... but a stray negative is neither, and is rejected.
+    with pytest.raises(ValueError, match="minimum_crediting_rate"):
+        fcf.ModelPoints(**base, minimum_crediting_rate=np.array([-0.01]))
 
 
 def test_guards_inforce_state():

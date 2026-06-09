@@ -361,15 +361,15 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
 
 def test_vfa_tvog_floors_only_points_to_measure_time_value():
     """vfa.tvog values an explicit credited-rate guarantee only and refuses a
-    contract without one (minimum_crediting_rate == 0), pointing to
+    contract with none (the NO_GUARANTEE_RATE default), pointing to
     measure().time_value -- where the GMDB / GMAB floor time value lives.
 
     The GMAB contribution is isolated as the time_value delta over an otherwise
     identical contract with no GMAB (it is non-zero, and can be negative: a deep
     in-the-money floor discounted at the underlying return -- not a risk-neutral
     measure -- carries negative time value, since volatility mostly lets
-    scenarios escape it). A bare measure().time_value would not isolate the GMAB:
-    the always-on 0% crediting floor dominates it.
+    scenarios escape it). Neither contract here carries a crediting guarantee,
+    so measure().time_value is the account-value floor time value alone.
     """
     term = 60
     basis = _basis(investment_return=0.04)
@@ -377,7 +377,7 @@ def test_vfa_tvog_floors_only_points_to_measure_time_value():
     floored = ModelPoints.single(40, 0.0, term, account_value=1e8,
                                  minimum_accumulation_benefit=1.2e8)
     plain = ModelPoints.single(40, 0.0, term, account_value=1e8)
-    # the standalone credited-rate tvog refuses a no-explicit-rate contract
+    # the standalone credited-rate tvog refuses a no-crediting-guarantee contract
     with pytest.raises(ValueError, match="time_value"):
         fcf.vfa.tvog(floored, basis, scenarios)
     # the GMAB floor's time value shows up in measure().time_value
@@ -469,6 +469,72 @@ def test_tvog_boundary_cut_contract_does_not_index_out_of_bounds():
     # call must complete without an out-of-bounds read.
     assert np.isfinite(res.time_value).all()
     assert np.isclose(res.time_value[0], 0.0, atol=1e-6)
+
+
+def test_vfa_crediting_sentinel_vs_zero_floor_vs_positive():
+    """The three crediting-rate cases, valued under scenarios that straddle
+    zero (so a 0% floor genuinely bites; a positive central return would hide
+    the distinction). No GMDB/GMAB here, so time_value is the credited-rate
+    TVOG alone. NO_GUARANTEE_RATE -> credit = return -> zero TVOG; 0.0 -> a real
+    0% floor with a positive time value; a positive rate floors higher still."""
+    term = 60
+    basis = _basis(investment_return=0.0)                  # flat central at 0%
+    scen = _return_paths(0.0, vol=0.03, n=4000, n_time=term, seed=11)
+    none_c = ModelPoints.single(40, 0.0, term, account_value=1e8,
+                                minimum_crediting_rate=fcf.NO_GUARANTEE_RATE)
+    floor0 = ModelPoints.single(40, 0.0, term, account_value=1e8,
+                                minimum_crediting_rate=0.0)
+    floor2 = ModelPoints.single(40, 0.0, term, account_value=1e8,
+                                minimum_crediting_rate=0.02)
+    tv_none = fcf.vfa.measure(none_c, basis, scen).time_value[0]
+    tv_floor0 = fcf.vfa.measure(floor0, basis, scen).time_value[0]
+    tv_floor2 = fcf.vfa.measure(floor2, basis, scen).time_value[0]
+    assert np.isclose(tv_none, 0.0, atol=1.0)              # no guarantee -> no TVOG
+    assert tv_floor0 > 0.0                                  # 0% floor has time value
+    assert tv_floor2 > tv_floor0                            # a higher floor costs more
+
+
+def test_vfa_zero_floor_matches_no_guarantee_bel_only_when_return_positive():
+    """A 0% floor and no crediting guarantee give the same deterministic BEL
+    when the central return is positive (max(return, 0) = return), and diverge
+    once it is negative -- where the floor holds the account up, raising the
+    account-value payout and the BEL."""
+    term = 60
+    none_c = ModelPoints.single(40, 0.0, term, account_value=1e8,
+                                minimum_crediting_rate=fcf.NO_GUARANTEE_RATE)
+    floor0 = ModelPoints.single(40, 0.0, term, account_value=1e8,
+                                minimum_crediting_rate=0.0)
+    pos = _basis(investment_return=0.04)
+    assert np.isclose(fcf.vfa.measure(none_c, pos).bel_path[0, 0],
+                      fcf.vfa.measure(floor0, pos).bel_path[0, 0])
+    neg = _basis(investment_return=-0.02)
+    assert (fcf.vfa.measure(floor0, neg).bel_path[0, 0]
+            > fcf.vfa.measure(none_c, neg).bel_path[0, 0])
+
+
+def test_vfa_rejects_stray_negative_crediting_rate():
+    """A negative crediting rate that is not the sentinel is a sign/data error,
+    not 'no guarantee', and is rejected at construction."""
+    with pytest.raises(ValueError, match="minimum_crediting_rate"):
+        ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                           minimum_crediting_rate=-0.02)
+
+
+def test_vfa_scenarios_reject_mixed_sentinel_and_floor():
+    """A book mixing no-guarantee and a real 0% floor is genuinely
+    heterogeneous; the scalar-guarantee stochastic pass (v1) rejects it."""
+    term = 60
+    basis = _basis(investment_return=0.03)
+    scen = _return_paths(0.03, vol=0.02, n=100, n_time=term, seed=5)
+    mp = ModelPoints(
+        issue_age=np.array([40, 40]),
+        premium=np.array([0.0, 0.0]),
+        term_months=np.array([term, term]),
+        account_value=np.array([1e8, 1e8]),
+        minimum_crediting_rate=np.array([fcf.NO_GUARANTEE_RATE, 0.0]),
+    )
+    with pytest.raises(NotImplementedError, match="per-MP varying"):
+        fcf.vfa.measure(mp, basis, scen)
 
 
 def test_vfa_ra_zero_without_expense_cv():

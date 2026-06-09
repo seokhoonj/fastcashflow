@@ -30,7 +30,9 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.modelpoints import (
+    ModelPoints, NO_GUARANTEE_RATE, validate_crediting_rate,
+)
 from fastcashflow.projection import project_cashflows
 
 
@@ -74,6 +76,33 @@ def _validate_return_scenarios(return_scenarios: FloatArray) -> FloatArray:
             "-100% or worse is invalid"
         )
     return rs
+
+
+def credited_monthly_rate(
+    monthly_return: FloatArray, annual_rate: FloatArray
+) -> FloatArray:
+    """The monthly rate credited to a VFA account under its minimum guarantee.
+
+    Each month the account is credited ``max(monthly_return, monthly_floor)``,
+    where ``monthly_floor`` is the monthly equivalent of the annual
+    ``minimum_crediting_rate``. A rate of :data:`NO_GUARANTEE_RATE` carries no
+    crediting guarantee -- the bare ``monthly_return`` is credited, which may be
+    negative -- while ``0.0`` is a real 0% floor (principal protection). A
+    positive rate floors the credited rate at its monthly equivalent.
+
+    ``annual_rate`` is a scalar or an array broadcastable against
+    ``monthly_return`` (a per-model-point vector, a scenario matrix, or the
+    central path). This is the single site the crediting floor is applied:
+    every deterministic, stochastic and maturity path routes through here, so
+    no path can silently omit the floor. Callers validate the rate domain
+    (:func:`validate_crediting_rate`) at the boundary, so the only sub-zero
+    value reaching here is the exact sentinel.
+    """
+    annual_rate = np.asarray(annual_rate, dtype=np.float64)
+    monthly_floor = (1.0 + annual_rate) ** (1.0 / 12.0) - 1.0
+    # No guarantee -> floor at -inf, so the maximum leaves the return untouched.
+    floor = np.where(annual_rate == NO_GUARANTEE_RATE, -np.inf, monthly_floor)
+    return np.maximum(monthly_return, floor)
 
 
 def _av_and_discount(
@@ -145,16 +174,26 @@ def tvog_weights(
     The guarantee is taken as a scalar: TVOG is a portfolio-level aggregate
     in v1, so per-MP varying guarantees are not yet supported here.
     """
+    validate_crediting_rate(minimum_crediting_rate)
     return_scenarios = _validate_return_scenarios(return_scenarios)
     n_time = return_scenarios.shape[1]
+    if minimum_crediting_rate == NO_GUARANTEE_RATE:
+        # No crediting guarantee -> the credited rate is the bare return, so the
+        # account growth and the discount cancel exactly and the credit-rate
+        # TVOG is identically zero. Return it directly rather than route through
+        # the separate cumulative growth / discount products, which over/underflow
+        # (yielding 0 * inf = NaN) for an extreme-but-valid near-ruin return path.
+        return np.zeros(n_time)
     f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
-    g_m = (1.0 + minimum_crediting_rate) ** (1.0 / 12.0) - 1.0
     r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
-    stochastic = _discounted_growth(
-        np.maximum(return_scenarios, g_m), return_scenarios, f_m
-    ).mean(axis=0)
     central = np.full((1, n_time), r_m)
-    central_factor = _discounted_growth(np.maximum(central, g_m), central, f_m)[0]
+    stochastic = _discounted_growth(
+        credited_monthly_rate(return_scenarios, minimum_crediting_rate),
+        return_scenarios, f_m
+    ).mean(axis=0)
+    central_factor = _discounted_growth(
+        credited_monthly_rate(central, minimum_crediting_rate), central, f_m
+    )[0]
     return stochastic - central_factor
 
 
@@ -188,19 +227,24 @@ def guarantee_floor_time_value(
     ``minimum_crediting_rate`` is the (scalar, v1) crediting guarantee. The
     GMDB / GMAB floors themselves may vary by model point.
     """
+    validate_crediting_rate(minimum_crediting_rate)
     return_scenarios = _validate_return_scenarios(return_scenarios)
     n_time = return_scenarios.shape[1]
     f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
-    g_m = (1.0 + minimum_crediting_rate) ** (1.0 / 12.0) - 1.0
     r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
+    central = np.full((1, n_time), r_m)
 
     # Account-value multiplier and discount under each scenario, and under the
-    # central flat-return path (whose floor cost is the intrinsic value).
+    # central flat-return path (whose floor cost is the intrinsic value). The
+    # account is credited max(return, guarantee), or the bare return when the
+    # crediting guarantee is off (NO_GUARANTEE_RATE).
     av_s, disc_s = _av_and_discount(
-        np.maximum(return_scenarios, g_m), return_scenarios, f_m
+        credited_monthly_rate(return_scenarios, minimum_crediting_rate),
+        return_scenarios, f_m
     )
-    central = np.full((1, n_time), r_m)
-    av_c, disc_c = _av_and_discount(np.maximum(central, g_m), central, f_m)
+    av_c, disc_c = _av_and_discount(
+        credited_monthly_rate(central, minimum_crediting_rate), central, f_m
+    )
     av_c, disc_c = av_c[0], disc_c[0]
 
     # The GMAB strikes at maturity (time = term) -- the *matured* account value
@@ -210,12 +254,17 @@ def guarantee_floor_time_value(
     # the matured value and discounts to time term, matching the deterministic
     # intrinsic value.
     av_s_mat = np.concatenate(
-        [av_s, (av_s[:, -1] * (1.0 + np.maximum(return_scenarios[:, -1], g_m))
+        [av_s, (av_s[:, -1]
+                * (1.0 + credited_monthly_rate(return_scenarios[:, -1],
+                                               minimum_crediting_rate))
                 * (1.0 - f_m))[:, None]], axis=1)
     disc_s_mat = np.concatenate(
         [disc_s, (disc_s[:, -1] / (1.0 + return_scenarios[:, -1]))[:, None]],
         axis=1)
-    av_c_mat = np.append(av_c, av_c[-1] * (1.0 + max(r_m, g_m)) * (1.0 - f_m))
+    av_c_mat = np.append(
+        av_c, av_c[-1]
+        * (1.0 + credited_monthly_rate(r_m, minimum_crediting_rate))
+        * (1.0 - f_m))
     disc_c_mat = np.append(disc_c, disc_c[-1] / (1.0 + r_m))
 
     n_mp = account_value.shape[0]
@@ -263,19 +312,21 @@ def measure_tvog(
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns -- one path per scenario, ``n_time`` being the
-    projection horizon. The model points must carry an explicit
-    ``minimum_crediting_rate`` > 0; the always-on 0% crediting floor
-    (``max(return, 0)``) and the GMDB / GMAB account-value floors are valued by
-    ``vfa.measure(..., return_scenarios).time_value``, not here. In v1 the rate
-    is taken as a portfolio-wide scalar (per-MP varying rates with stochastic
-    returns are a future extension), so the column is required to be uniform
-    across rows.
+    projection horizon. The model points must carry a crediting guarantee --
+    a ``minimum_crediting_rate`` of ``0.0`` (a real 0% floor, ``max(return, 0)``)
+    or a positive rate. A contract with no crediting guarantee
+    (``NO_GUARANTEE_RATE``) is rejected: it has no credited-rate time value to
+    measure (use ``vfa.measure(..., return_scenarios).time_value`` for the
+    GMDB / GMAB floor time value instead). In v1 the rate is taken as a
+    portfolio-wide scalar (per-MP varying rates with stochastic returns are a
+    future extension), so the column is required to be uniform across rows.
 
     The guarantee cost is the present value of account-value benefits in
     excess of the no-guarantee benefits. Its mean over the scenarios is the
     total value; the cost in the central scenario (``investment_return``) is
     the intrinsic value; the difference is the time value (TVOG).
     """
+    validate_crediting_rate(model_points.minimum_crediting_rate)
     g_unique = np.unique(np.asarray(model_points.minimum_crediting_rate,
                                      dtype=np.float64))
     if g_unique.size > 1:
@@ -284,13 +335,13 @@ def measure_tvog(
             "model points in v1; per-MP varying rates with stochastic "
             "returns are a future extension"
         )
-    if g_unique.size == 0 or float(g_unique[0]) == 0.0:
+    if g_unique.size == 0 or float(g_unique[0]) == NO_GUARANTEE_RATE:
         raise ValueError(
-            "measure_tvog values an explicit minimum-crediting-rate guarantee "
-            "(rate > 0), and this contract sets minimum_crediting_rate == 0. The "
-            "always-on 0% crediting floor and the GMDB / GMAB account-value "
-            "floors are valued by vfa.measure(..., return_scenarios).time_value "
-            "instead."
+            "measure_tvog values a credited-rate guarantee, and this contract "
+            "carries none (minimum_crediting_rate == NO_GUARANTEE_RATE). A 0.0 "
+            "rate is a real 0% floor and is valued here; the GMDB / GMAB "
+            "account-value floors are valued by "
+            "vfa.measure(..., return_scenarios).time_value instead."
         )
     g_annual = float(g_unique[0])
 
@@ -315,14 +366,13 @@ def measure_tvog(
     exit_value = (model_points.account_value[:, None] * exits).sum(axis=0)   # (n_time,)
 
     f_m = (1.0 + basis.fund_fee) ** (1.0 / 12.0) - 1.0
-    g_m = (1.0 + g_annual) ** (1.0 / 12.0) - 1.0
 
     # Without a guarantee the return cancels between growth and discount, so
     # the no-guarantee benefit is identical in every scenario.
     no_guarantee = float(np.sum(exit_value * (1.0 - f_m) ** np.arange(n_time)))
 
     # Stochastic: credit max(return, guarantee), discount at the return.
-    credit = np.maximum(return_scenarios, g_m)
+    credit = credited_monthly_rate(return_scenarios, g_annual)
     pv_stochastic = _pv_account_benefits(exit_value, credit, return_scenarios, f_m)
     guarantee_cost = pv_stochastic - no_guarantee
 
@@ -330,7 +380,7 @@ def measure_tvog(
     r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
     central = np.full((1, n_time), r_m)
     pv_central = _pv_account_benefits(
-        exit_value, np.maximum(central, g_m), central, f_m
+        exit_value, credited_monthly_rate(central, g_annual), central, f_m
     )[0]
     intrinsic_value = float(pv_central - no_guarantee)
 
