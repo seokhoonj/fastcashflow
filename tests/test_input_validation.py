@@ -539,7 +539,7 @@ def test_inforce_fast_rejects_elapsed_past_term():
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
-    with pytest.raises(ValueError, match="past the contract boundary"):
+    with pytest.raises(ValueError, match="no remaining coverage"):
         _measure_inforce_fast(mp, basis)
 
 
@@ -557,7 +557,7 @@ def test_inforce_full_rejects_elapsed_past_term():
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", _flat_rate()),),
     )
-    with pytest.raises(ValueError, match="past the contract boundary"):
+    with pytest.raises(ValueError, match="no remaining coverage"):
         _measure_inforce_full(
             mp, basis, prior_csm=np.array([0.0]),
             lock_in_rate=0.03, period_months=12,

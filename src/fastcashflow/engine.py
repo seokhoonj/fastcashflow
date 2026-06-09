@@ -443,24 +443,24 @@ def _measure_inforce_fast(
     m = _measure_full(model_points, basis)
     n_mp = m.bel.shape[0]
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    # ``elapsed_months > contract_boundary_months`` means the as-of date is
-    # past the projected horizon: the BEL / RA trajectory only extends to
-    # t = contract_boundary_months (Sec. 34; == term_months when no boundary
-    # cut). Reading ``bel_path[rows, em]`` beyond that column is either a
-    # silent stale zero (em within the padded width) or an IndexError (em
-    # past the widest boundary) -- guard against both with a clear error.
-    # boundary is backfilled to term in ModelPoints.__post_init__, so it is
-    # never None here and is <= term_months by construction.
+    # The as-of date must lie strictly within each contract's own Sec. 34
+    # boundary. The BEL / RA trajectory and the in-force only extend to
+    # t = contract_boundary_months (== term_months when no boundary cut); at or
+    # beyond the boundary there is no remaining coverage to value, and
+    # _inforce_rescale's ``inforce[rows, em]`` would read a stale zero (em within
+    # the padded width) or index out of bounds (em == the widest boundary).
+    # boundary is backfilled to term in ModelPoints.__post_init__, so it is never
+    # None here and is <= term_months by construction.
     boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
-    over = em > boundary
-    if np.any(over):
-        bad = int(np.argmax(over))
+    runoff = em >= boundary
+    if np.any(runoff):
+        bad = int(np.argmax(runoff))
         raise ValueError(
-            f"elapsed_months[{bad}]={int(em[bad])} > "
-            f"contract_boundary_months[{bad}]={int(boundary[bad])}; the "
-            "as-of date is past the contract boundary (Sec. 34 horizon; "
-            "equal to term_months when no boundary cut). measure_inforce "
-            "needs an as-of date within the contract boundary."
+            f"elapsed_months[{bad}]={int(em[bad])} >= "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            "horizon; equal to term_months when no boundary cut); the contract "
+            "has no remaining coverage at the valuation date. measure_inforce "
+            "needs an as-of date strictly before the contract boundary."
         )
     rows = np.arange(n_mp)
     # Re-base the inception-run projection to the valuation date (see
@@ -599,20 +599,21 @@ def _measure_inforce_full(
         )
     period_months = int(period_months) if period_months is not None else 12
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    # Guard on the contract boundary, not term: the projected trajectory only
-    # extends to t = contract_boundary_months (Sec. 34; == term when no cut),
-    # and indexing past it is a silent stale zero or an IndexError. boundary
-    # is backfilled to term in ModelPoints.__post_init__ (never None, <= term).
+    # Guard on the contract boundary, not term: the projected trajectory and
+    # in-force only extend to t = contract_boundary_months (Sec. 34; == term when
+    # no cut). At or beyond the boundary there is no remaining coverage, and
+    # indexing there is a stale zero or an IndexError. boundary is backfilled to
+    # term in ModelPoints.__post_init__ (never None, <= term).
     boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
-    over = em > boundary
-    if np.any(over):
-        bad = int(np.argmax(over))
+    runoff = em >= boundary
+    if np.any(runoff):
+        bad = int(np.argmax(runoff))
         raise ValueError(
-            f"elapsed_months[{bad}]={int(em[bad])} > "
-            f"contract_boundary_months[{bad}]={int(boundary[bad])}; the as-of "
-            "date is past the contract boundary (Sec. 34 horizon; equal to "
-            "term_months when no boundary cut). roll_forward needs an as-of "
-            "date within the contract boundary."
+            f"elapsed_months[{bad}]={int(em[bad])} >= "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            "horizon; equal to term_months when no boundary cut); the contract "
+            "has no remaining coverage at the valuation date. roll_forward needs "
+            "an as-of date strictly before the contract boundary."
         )
     prior_t = em - period_months
     if np.any(prior_t < 0):

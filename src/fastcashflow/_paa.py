@@ -428,20 +428,21 @@ def measure_inforce(
     m = measure_paa(model_points, basis, revenue_basis=revenue_basis, full=True)
     n_mp = m.lrc.shape[0]
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    # The LRC trajectory only extends to t = contract_boundary_months (Sec. 34;
-    # == term when no boundary cut); an as-of date past it would read a stale
-    # zero or raise -- guard with a clear error (boundary is backfilled to term
-    # in ModelPoints.__post_init__, so it is never None and <= term).
+    # The LRC trajectory and in-force only extend to t = contract_boundary_months
+    # (Sec. 34; == term when no boundary cut). At or beyond the boundary there is
+    # no remaining coverage, and _inforce_rescale's inforce[rows, em] would read a
+    # stale zero or index out of bounds. boundary is backfilled to term in
+    # ModelPoints.__post_init__ (never None, <= term).
     boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
-    over = em > boundary
-    if np.any(over):
-        bad = int(np.argmax(over))
+    runoff = em >= boundary
+    if np.any(runoff):
+        bad = int(np.argmax(runoff))
         raise ValueError(
-            f"elapsed_months[{bad}]={int(em[bad])} > "
-            f"contract_boundary_months[{bad}]={int(boundary[bad])}; the as-of "
-            "date is past the contract boundary (Sec. 34 horizon, equal to "
-            "term_months when no boundary cut). paa.measure_inforce needs an "
-            "as-of date within the contract boundary.")
+            f"elapsed_months[{bad}]={int(em[bad])} >= "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            "horizon; equal to term_months when no boundary cut); the contract "
+            "has no remaining coverage at the valuation date. paa.measure_inforce "
+            "needs an as-of date strictly before the contract boundary.")
     rows = np.arange(n_mp)
     # Re-base the inception-run LRC to the valuation date (see _inforce_rescale):
     # exact for the LRC, which is linear in the in-force.

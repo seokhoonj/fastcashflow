@@ -197,6 +197,22 @@ def test_inforce_fast_settlement_elapsed_too_small():
         )
 
 
+def test_inforce_fast_at_the_contract_boundary_is_rejected():
+    """Valuing exactly at the contract boundary (== term with no cut) leaves no
+    remaining coverage; the call raises a clear ValueError rather than indexing
+    the in-force out of bounds (em == boundary == n_time)."""
+    basis = _basis()
+    mp = ModelPoints(
+        issue_age=np.array([40]),
+        premium=np.array([50_000.0]),
+        term_months=np.array([240]),
+        benefits={0: np.array([100_000_000.0])},
+        elapsed_months=np.array([240]),        # == boundary -> no remaining coverage
+    )
+    with pytest.raises(ValueError, match="no remaining coverage"):
+        _measure_inforce_fast(mp, basis)
+
+
 def test_inforce_full_hypothetical_is_measure():
     """``_measure_inforce_full`` without prior_csm returns the measure() result
     unchanged -- it is the trajectory-variant of the hypothetical mode."""
@@ -447,6 +463,21 @@ def test_paa_measure_inforce_lrc_is_rebased_slice():
     # full=False headline matches full=True
     assert np.allclose(
         fcf.paa.measure_inforce(mp, state, basis, full=False).lrc, inf.lrc)
+
+
+def test_paa_measure_inforce_at_the_contract_boundary_is_rejected():
+    """PAA in-force at the contract boundary has no remaining coverage -- a clear
+    ValueError, not an out-of-bounds index (the same guard as the GMM path)."""
+    import fastcashflow as fcf
+    from dataclasses import replace
+
+    base_mp = fcf.samples.model_points()
+    boundary = np.asarray(base_mp.contract_boundary_months, dtype=np.int64)
+    state = replace(fcf.samples.inforce_state(), elapsed_months=boundary.copy())
+    mp = fcf.apply_inforce_state(base_mp, state)
+    basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "GA"))
+    with pytest.raises(ValueError, match="no remaining coverage"):
+        fcf.paa.measure_inforce(mp, state, basis)
 
 
 def test_paa_measure_inforce_ignores_prior_csm_and_rejects_stale_state():
