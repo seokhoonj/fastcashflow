@@ -529,8 +529,11 @@ def _vfa_project(
         time_value = time_value + guarantee_floor_time_value(
             account_value=model_points.account_value,
             deaths=proj.deaths,
-            maturity_survivors=proj.maturity_survivors,
-            term_index=model_points.term_months - 1,
+            # Reuse the deterministic maturity column / survivor weight so the
+            # floor time value strikes the same per-contract maturity index the
+            # deterministic GMAB does (boundary-clamped; zero past a cut).
+            maturity_survivors=maturity_survivors,
+            term_index=term_idx,
             minimum_death_benefit=model_points.minimum_death_benefit,
             minimum_accumulation_benefit=model_points.minimum_accumulation_benefit,
             minimum_crediting_rate=float(g_unique[0]),
