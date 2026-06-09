@@ -10,6 +10,9 @@ Inputs
 .. autoclass:: fastcashflow.Basis
    :members:
 
+.. autoclass:: fastcashflow.BasisRouter
+   :members:
+
 .. autoclass:: fastcashflow.CoverageRate
    :members:
 

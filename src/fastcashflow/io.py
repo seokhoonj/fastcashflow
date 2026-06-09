@@ -85,6 +85,9 @@ def _write_frame(df: pl.DataFrame, path) -> None:
         # Single-sheet xlsx via openpyxl (polars's own write_excel needs an
         # extra ``xlsxwriter`` dependency we do not require). The reader
         # side already accepts .xlsx via ``_read_frame``.
+        # Caveat: openpyxl reads an all-None row back as a blank separator, so
+        # a fully-null data row would not survive an xlsx round-trip. Use csv,
+        # parquet or feather for round-tripping frames that may carry such rows.
         import openpyxl
         wb = openpyxl.Workbook()
         ws = wb.active
