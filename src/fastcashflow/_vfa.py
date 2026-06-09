@@ -305,6 +305,8 @@ class _VFAProjection:
     r_m: float                       # monthly underlying-items return
     av: FloatArray                   # (n_mp, n_time+1) account-value path
     disc_start: FloatArray           # (n_time+1,) start-of-month discount
+    guarantee_excess_pv: FloatArray  # (n_mp, n_time+1) PV of the GMDB/GMAB excess over AV
+    expense_pv: FloatArray           # (n_mp, n_time+1) PV of expenses
 
 
 def _vfa_project(
@@ -449,6 +451,18 @@ def _vfa_project(
     # Column 0 is the inception total (= the old scalar sum); an in-force
     # valuation slices the remaining fee at the valuation date.
     variable_fee_path = _pv_trajectory(fee_cf, disc_mid)
+    # Guarantee-excess PV (the GMDB/GMAB cost over the account value) and the
+    # expense PV, exposed for the paragraph-45 settlement movement's
+    # future-service change (c) = -(dG + dE + dRA). The GMDB excess each month is
+    # deaths*(max(av,gmdb)-av); the GMAB excess sits at the maturity column. Same
+    # settlement-pattern discounting as the total benefit path (above).
+    guarantee_excess_cf = deaths * (death_benefit - av[:, :n_time])
+    guarantee_excess_cf[rows, term_idx] += maturity_excess
+    g_for_pv = guarantee_excess_cf
+    if basis.settlement_pattern is not None:
+        g_for_pv = guarantee_excess_cf * _settlement_factor(
+            basis.settlement_pattern, r_m)
+    guarantee_excess_pv = _pv_trajectory(g_for_pv, disc_start[:n_time])
 
     # The deterministic BEL carries the guarantee's intrinsic value only.
     # Given return scenarios, fold in its time value too -- under the VFA
@@ -508,6 +522,7 @@ def _vfa_project(
         bel=bel, ra=ra, variable_fee_path=variable_fee_path,
         time_value=time_value, lic=lic, cashflows=proj, inforce=inforce,
         r_m=r_m, av=av, disc_start=disc_start,
+        guarantee_excess_pv=guarantee_excess_pv, expense_pv=pv_expenses,
     )
 
 

@@ -619,3 +619,26 @@ def test_vfa_measure_inforce_csm_basis_is_carry_only_and_guarded(tmp_path):
     # the inception measurement remains usable by the same entry points
     fcf.report(inc)
     fcf.roll_forward(inc)
+
+
+def test_vfa_project_exposes_guarantee_excess_and_expense_pv():
+    """_vfa_project exposes the guarantee-excess PV (G) and expense PV (E) for
+    the paragraph-45 settlement movement's future-service term (c) = -(dG+dE+dRA).
+    G[:,0] must equal the BEL increase from adding the GMDB (with r=0, f=0 it is
+    the total death decrement times the per-death excess gmdb-av0)."""
+    from fastcashflow._vfa import _vfa_project
+    basis = _basis(investment_return=0.0, fund_fee=0.0)
+    av0, gmdb, term = 1000.0, 1200.0, 60
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0,
+                            minimum_death_benefit=gmdb)
+    p = _vfa_project(mp, basis)
+    base = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0),
+                           basis)
+    floored = fcf.vfa.measure(mp, basis)
+    assert np.isclose(p.guarantee_excess_pv[0, 0],
+                      floored.bel_path[0, 0] - base.bel_path[0, 0])
+    # hand value: total death decrement * (gmdb - av0)
+    surv = (1 - Q) * (1 - LAPSE)
+    deaths = surv ** np.arange(term) * Q
+    assert np.isclose(p.guarantee_excess_pv[0, 0], deaths.sum() * (gmdb - av0))
+    assert p.expense_pv.shape == p.bel.shape       # E exposed as a trajectory
