@@ -360,19 +360,30 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
 
 
 def test_vfa_tvog_floors_only_points_to_measure_time_value():
-    """vfa.tvog values the credited-rate guarantee only; a floors-only contract
-    (minimum_crediting_rate == 0) raises with a pointer to measure().time_value,
-    where the GMDB / GMAB floor time value actually lives."""
+    """vfa.tvog values an explicit credited-rate guarantee only and refuses a
+    contract without one (minimum_crediting_rate == 0), pointing to
+    measure().time_value -- where the GMDB / GMAB floor time value lives.
+
+    The GMAB contribution is isolated as the time_value delta over an otherwise
+    identical contract with no GMAB (it is non-zero, and can be negative: a deep
+    in-the-money floor discounted at the underlying return -- not a risk-neutral
+    measure -- carries negative time value, since volatility mostly lets
+    scenarios escape it). A bare measure().time_value would not isolate the GMAB:
+    the always-on 0% crediting floor dominates it.
+    """
     term = 60
-    mp = ModelPoints.single(40, 0.0, term, account_value=1e8,
-                            minimum_accumulation_benefit=1.2e8)   # GMAB, no crediting rate
     basis = _basis(investment_return=0.04)
     scenarios = _return_paths(0.04, vol=0.01, n=500, n_time=term, seed=3)
-    # the standalone credited-rate tvog refuses it and points to measure()
+    floored = ModelPoints.single(40, 0.0, term, account_value=1e8,
+                                 minimum_accumulation_benefit=1.2e8)
+    plain = ModelPoints.single(40, 0.0, term, account_value=1e8)
+    # the standalone credited-rate tvog refuses a no-explicit-rate contract
     with pytest.raises(ValueError, match="time_value"):
-        fcf.vfa.tvog(mp, basis, scenarios)
-    # measure() does value the GMAB floor's time value
-    assert fcf.vfa.measure(mp, basis, scenarios).time_value[0] != 0.0
+        fcf.vfa.tvog(floored, basis, scenarios)
+    # the GMAB floor's time value shows up in measure().time_value
+    gmab_tv = (fcf.vfa.measure(floored, basis, scenarios).time_value[0]
+               - fcf.vfa.measure(plain, basis, scenarios).time_value[0])
+    assert not np.isclose(gmab_tv, 0.0)
 
 
 def test_vfa_large_tvog_turns_the_contract_onerous():

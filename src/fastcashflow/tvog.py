@@ -263,11 +263,13 @@ def measure_tvog(
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns -- one path per scenario, ``n_time`` being the
-    projection horizon. The model points must carry a non-zero
-    ``minimum_crediting_rate`` (otherwise there is no credited-rate guarantee to
-    value); in v1 the rate is taken as a portfolio-wide scalar (per-MP varying
-    rates with stochastic returns are a future extension), so the column is
-    required to be uniform across rows.
+    projection horizon. The model points must carry an explicit
+    ``minimum_crediting_rate`` > 0; the always-on 0% crediting floor
+    (``max(return, 0)``) and the GMDB / GMAB account-value floors are valued by
+    ``vfa.measure(..., return_scenarios).time_value``, not here. In v1 the rate
+    is taken as a portfolio-wide scalar (per-MP varying rates with stochastic
+    returns are a future extension), so the column is required to be uniform
+    across rows.
 
     The guarantee cost is the present value of account-value benefits in
     excess of the no-guarantee benefits. Its mean over the scenarios is the
@@ -284,10 +286,11 @@ def measure_tvog(
         )
     if g_unique.size == 0 or float(g_unique[0]) == 0.0:
         raise ValueError(
-            "measure_tvog values the minimum-crediting-rate guarantee only, and "
-            "this contract has none (minimum_crediting_rate == 0). For the time "
-            "value of GMDB / GMAB account-value floors, read "
-            "vfa.measure(..., return_scenarios).time_value instead."
+            "measure_tvog values an explicit minimum-crediting-rate guarantee "
+            "(rate > 0), and this contract sets minimum_crediting_rate == 0. The "
+            "always-on 0% crediting floor and the GMDB / GMAB account-value "
+            "floors are valued by vfa.measure(..., return_scenarios).time_value "
+            "instead."
         )
     g_annual = float(g_unique[0])
 

@@ -92,14 +92,17 @@ class VFAMeasurement:
     """VFA measurement of a direct-participation (account-value) portfolio.
 
     The headline ``bel``, ``ra``, ``csm``, ``variable_fee``, ``time_value`` and
-    ``loss_component`` are ``(n_mp,)`` inception figures (the RA a
+    ``loss_component`` are ``(n_mp,)`` as-of figures -- at inception for
+    ``measure``, at the valuation date for ``measure_inforce`` (the RA a
     confidence-level margin for expense risk; the BEL net of the account value
     the entity holds; ``variable_fee`` the present value of the entity's fee --
     its share of the underlying items). The full path adds the
     ``(n_mp, n_time+1)`` trajectories ``bel_path`` / ``ra_path`` / ``csm_path`` /
-    ``account_value_path`` (column 0 the inception figure), ``None`` on the
-    headline-only path. The CSM is accreted at the underlying-items return and
-    released by coverage units::
+    ``account_value_path`` (column 0 the as-of figure), ``None`` on the
+    headline-only path; a grouped result also leaves ``account_value_path``
+    ``None`` (the account value is a per-policy level, not a group quantity). The
+    CSM is accreted at the underlying-items return and released by coverage
+    units::
 
         csm_path[:, t+1] = csm_path[:, t] + csm_accretion[:, t] - csm_release[:, t]
 
