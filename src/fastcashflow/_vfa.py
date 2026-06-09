@@ -46,6 +46,9 @@ from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.statemodel import resolve_state_model
 from fastcashflow.tvog import guarantee_floor_time_value, tvog_weights
+# In-force helpers shared with the GMM path (engine does not import _vfa, and io
+# imports engine lazily, so this top-level import is cycle-free).
+from fastcashflow.engine import _reconcile_state, _inforce_rescale
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -353,10 +356,20 @@ def _vfa_project(
     # account-value payout at the maturity (term - 1) column; lift them by the
     # excess over the account value there. Default zero GMAB adds nothing.
     rows = np.arange(n_mp)
-    term_idx = model_points.term_months - 1
+    # The GMAB pays at maturity (month term - 1). When the contract boundary
+    # (Sec. 34) cuts before the term -- so term - 1 falls past the projected
+    # horizon n_time -- there is no maturity within the valuation, so no GMAB:
+    # clamp the index to a valid column and zero the excess (rather than index
+    # out of bounds). At boundary == term (the common case) every contract is
+    # "within" and term_idx is term - 1, so this is unchanged.
+    within = (model_points.term_months - 1) < n_time
+    term_idx = np.where(within, model_points.term_months - 1, n_time - 1)
     av_at_maturity = av[rows, term_idx]
-    maturity_excess = proj.maturity_survivors * np.maximum(
-        0.0, model_points.minimum_accumulation_benefit - av_at_maturity
+    maturity_excess = np.where(
+        within,
+        proj.maturity_survivors * np.maximum(
+            0.0, model_points.minimum_accumulation_benefit - av_at_maturity),
+        0.0,
     )
     benefit_cf[rows, term_idx] += maturity_excess
     # Variable fee -- the entity's share, deducted from the grown account value.
@@ -597,3 +610,137 @@ def measure_aggregate(
         bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
         time_value=time_value, loss_component=loss, bel_path=bel_path,
         ra_path=ra_path, csm_path=csm_path, lic=lic)
+
+
+def measure_inforce(
+    model_points: ModelPoints,
+    state: "InforceState",
+    basis: Basis,
+    *,
+    period_months: int | None = None,
+) -> VFAMeasurement:
+    """In-force subsequent measurement of a VFA book at the valuation date.
+
+    Unlike the PAA (no CSM) and like the GMM settlement, the prior period's
+    closing CSM is carried forward; unlike the GMM, the VFA CSM accretes at the
+    underlying-items return (not a locked-in rate), so the carry is
+    ``_csm_kernel(state.prior_csm, coverage_units, r_m)`` -- the GMM settlement
+    roll with the return substituted for the lock-in rate. The fulfilment cash
+    flows (BEL / RA / variable fee / guarantee intrinsic value) are re-measured
+    from the **observed** fund value at the valuation date
+    (``state.account_value``): the account-value path is re-anchored at that
+    observed value (:func:`_vfa_project`), the decrements come from the inception
+    projection (they depend on policy duration, not the fund), and the result is
+    sliced at each contract's ``elapsed_months`` and re-based by
+    ``count / inforce[elapsed]`` (exact for cash flows linear in the in-force).
+
+    ``state`` (an :class:`~fastcashflow.InforceState`) supplies the period-close
+    ``elapsed_months`` / ``count`` (reconciled onto ``model_points`` by
+    :func:`~fastcashflow.apply_inforce_state`), the carried ``prior_csm``, and
+    the observed ``account_value`` (required here -- a VFA in-force needs the
+    real fund value, not the modelled one). ``period_months`` (default 12) is the
+    length of the period the prior CSM is rolled.
+
+    v1 returns the **as-of valuation-date headline** (``bel`` / ``ra`` / ``csm``
+    / ``variable_fee`` / ``time_value`` / ``loss_component``); the trajectory
+    fields are ``None``. Deferred, with the same defer-the-unlocking stance as
+    ``gmm.measure_inforce``: the paragraph-45 remeasurement (the change in the
+    entity's share of the underlying-items fair value and the guarantee
+    future-service cash flows), the loss-component path (``loss_component`` is
+    zero), the stochastic time value of the guarantee (``time_value`` is zero --
+    the deterministic intrinsic value only), and the full movement trajectory
+    (use a period-close roll-forward, a later phase).
+
+    .. warning::
+
+       The CSM is a **carry-only approximation**: it is the prior CSM accreted
+       at the basis underlying-items return and released by the *expected*
+       (inception-run) coverage units. Unlike the BEL / RA / variable fee, it
+       does **not** respond to the observed account value -- the paragraph-45
+       adjustment for the change in the entity's share of the underlying-items
+       fair value is deferred. So the fulfilment-cash-flow figures are
+       observed-AV-consistent but the CSM is not yet a paragraph-45-compliant
+       settlement CSM. A book whose fund diverged materially from the central
+       return will show a CSM that lags that move until the paragraph-45
+       remeasurement lands.
+    """
+    basis = _single_basis(basis, entry="vfa.measure_inforce")
+    # Reorder state to model-points order and reject a stale snapshot whose
+    # elapsed_months / count disagree (same guard as the GMM/PAA paths).
+    state = _reconcile_state(model_points, state)
+    if state.account_value is None:
+        raise ValueError(
+            "vfa.measure_inforce needs the observed fund value at the valuation "
+            "date: set InforceState.account_value. (The modelled account value "
+            "would assume the fund followed the central return; a settlement "
+            "must use the real fund. GMM / PAA in-force do not need it.)")
+    n_mp = model_points.n_mp
+    em = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    # The trajectory only extends to t = contract_boundary_months (Sec. 34);
+    # an as-of date past it would read a stale value -- guard with a clear error.
+    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    over = em > boundary
+    if np.any(over):
+        bad = int(np.argmax(over))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} > "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])}; the as-of "
+            "date is past the contract boundary (Sec. 34 horizon). "
+            "vfa.measure_inforce needs an as-of date within the boundary.")
+
+    # Re-anchor the account-value path at the observed fund value at em, then
+    # re-base the sliced headline to the valuation date (see _inforce_rescale).
+    p = _vfa_project(model_points, basis,
+                     elapsed_months=em, account_value=state.account_value)
+    # The coverage-unit / decrement arrays have n_time columns (the trajectories
+    # have n_time+1); an as-of date at the horizon end (em == n_time, reached
+    # when the boundary is the full term) has no in-force column to slice and the
+    # contract has fully run off -- reject it rather than index out of bounds.
+    n_time = p.inforce.shape[1]
+    if np.any(em >= n_time):
+        bad = int(np.argmax(em >= n_time))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} is at or beyond the "
+            f"projection horizon ({n_time} months); the contract has fully run "
+            "off, so there is no remaining in-force to value.")
+    rows = np.arange(n_mp)
+    rescale = _inforce_rescale(p, model_points, em, rows)
+    bel = p.bel[rows, em] * rescale
+    ra = p.ra[rows, em] * rescale
+    variable_fee = p.variable_fee_path[rows, em] * rescale
+    time_value = np.zeros(n_mp)            # stochastic TVOG deferred (intrinsic only)
+
+    # Carry the prior closing CSM forward one period: accrete at the
+    # underlying-items return r_m and release by coverage units, from
+    # t = em - period_months to t = em -- the GMM settlement roll with r_m in
+    # place of the lock-in rate (the VFA CSM has no locked-in rate). The carry
+    # needs no rescale: the coverage-unit release is an in-force *fraction*.
+    period = 12 if period_months is None else int(period_months)
+    if period < 1:
+        raise ValueError(f"period_months must be >= 1, got {period_months}")
+    prior_t = em - period
+    if np.any(prior_t < 0):
+        bad = int(np.argmin(prior_t))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} < period_months={period}; "
+            "the prior closing date precedes inception, which has no CSM to "
+            "carry forward")
+    inforce = p.inforce
+    n_time_total = inforce.shape[1]
+    max_len = n_time_total - int(prior_t.min())
+    col_offsets = np.arange(max_len)
+    src_cols = prior_t[:, None] + col_offsets[None, :]
+    mask = src_cols < n_time_total
+    src_cols_safe = np.where(mask, src_cols, 0)
+    inforce_seg = np.ascontiguousarray(
+        np.where(mask, inforce[rows[:, None], src_cols_safe], 0.0))
+    csm_traj, _, _ = _csm_kernel(
+        np.asarray(state.prior_csm, dtype=np.float64),
+        inforce_seg, np.full(max_len, p.r_m))
+    csm = csm_traj[:, period]
+    loss_component = np.zeros(n_mp)        # paragraph-45 onerous unlocking deferred
+
+    return VFAMeasurement(
+        bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
+        time_value=time_value, loss_component=loss_component,
+        model_points=model_points)

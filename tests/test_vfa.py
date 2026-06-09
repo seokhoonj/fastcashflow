@@ -388,3 +388,158 @@ def test_vfa_headline_only_rejected_by_consumers():
         fcf.report(head)
     with pytest.raises(ValueError, match="full measurement"):
         fcf.group(head, np.zeros(1, dtype=int))
+
+
+def test_vfa_measure_inforce_reproduces_inception_slice_when_av_is_modelled():
+    """VFA in-force consistency anchor: when the observed account value at the
+    valuation date equals the modelled value (av0 * growth^em) and the carried
+    prior_csm is the inception csm0, the in-force BEL is the inception trajectory
+    slice re-based by count / inforce[em], and the carried CSM (accreted at the
+    underlying return + coverage-unit release from t=0) equals the inception
+    csm_path[em]. This pins the re-anchor + re-base + return-accretion carry."""
+    import fastcashflow as fcf
+
+    basis = _basis()
+    av0, term, em = 1e8, 60, 12
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+
+    av_modelled = inc.account_value_path[0, em]      # observed == modelled here
+    state = fcf.InforceState(
+        mp_id=np.array(["X"]), elapsed_months=np.array([em]),
+        count=np.array([1.0]), prior_csm=np.array([inc.csm_path[0, 0]]),
+        lock_in_rate=0.0, account_value=np.array([av_modelled]))
+    mp = fcf.apply_inforce_state(
+        ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
+                    term_months=np.array([60]), account_value=np.array([av0]),
+                    mp_id=np.array(["X"])),
+        state)
+
+    v = fcf.vfa.measure_inforce(mp, state, basis, period_months=12)
+    rescale = 1.0 / inc.cashflows.inforce[0, em]
+    assert np.isclose(v.bel[0], inc.bel_path[0, em] * rescale)
+    assert np.isclose(v.csm[0], inc.csm_path[0, em])      # carried csm0 -> csm_path[em]
+    assert np.isclose(v.loss_component[0], 0.0)           # deferred
+    assert np.isclose(v.time_value[0], 0.0)               # intrinsic only
+
+
+def test_vfa_measure_inforce_uses_observed_account_value():
+    """A higher observed fund than the modelled one raises the in-force variable
+    fee (fee is a share of the fund) -- confirming the observed AV, not the
+    modelled path, drives the result."""
+    import fastcashflow as fcf
+
+    basis = _basis()
+    av0, term, em = 1e8, 60, 12
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    av_modelled = inc.account_value_path[0, em]
+    mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
+                      term_months=np.array([60]), account_value=np.array([av0]),
+                      mp_id=np.array(["X"]))
+
+    def run(obs):
+        state = fcf.InforceState(
+            mp_id=np.array(["X"]), elapsed_months=np.array([em]),
+            count=np.array([1.0]), prior_csm=np.array([inc.csm_path[0, 0]]),
+            lock_in_rate=0.0, account_value=np.array([obs]))
+        return fcf.vfa.measure_inforce(fcf.apply_inforce_state(mp0, state), state, basis)
+
+    base = run(av_modelled)
+    higher = run(av_modelled * 1.5)
+    assert higher.variable_fee[0] > base.variable_fee[0]
+
+
+def test_vfa_measure_inforce_requires_account_value():
+    """A VFA in-force needs the observed fund value; a state without
+    account_value is rejected (GMM/PAA states have None)."""
+    import fastcashflow as fcf
+    basis = _basis()
+    mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
+                      term_months=np.array([60]), account_value=np.array([1e8]),
+                      mp_id=np.array(["X"]))
+    state = fcf.InforceState(
+        mp_id=np.array(["X"]), elapsed_months=np.array([12]),
+        count=np.array([1.0]), prior_csm=np.array([0.0]), lock_in_rate=0.0)
+    with pytest.raises(ValueError, match="account_value"):
+        fcf.vfa.measure_inforce(fcf.apply_inforce_state(mp0, state), state, basis)
+
+
+def test_vfa_measure_inforce_nonzero_prior_t_carries_inception_csm():
+    """Nonzero prior_t (em=24, period=12 -> prior_t=12): carrying the inception
+    closing CSM at month 12 forward one period (accrete at the return + release
+    by coverage units) reproduces the inception csm_path[24]. Pins the
+    inforce-segment offset (the carry must start at prior_t, not em)."""
+    import fastcashflow as fcf
+
+    basis = _basis()
+    av0, term, em, period = 1e8, 60, 24, 12
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
+                      term_months=np.array([60]), account_value=np.array([av0]),
+                      mp_id=np.array(["X"]))
+    state = fcf.InforceState(
+        mp_id=np.array(["X"]), elapsed_months=np.array([em]),
+        count=np.array([1.0]), prior_csm=np.array([inc.csm_path[0, em - period]]),
+        lock_in_rate=0.0, account_value=np.array([inc.account_value_path[0, em]]))
+    v = fcf.vfa.measure_inforce(fcf.apply_inforce_state(mp0, state), state, basis,
+                                period_months=period)
+    assert np.isclose(v.csm[0], inc.csm_path[0, em])
+    assert np.isclose(v.bel[0], inc.bel_path[0, em] / inc.cashflows.inforce[0, em])
+
+
+def test_vfa_measure_inforce_bel_scales_with_count():
+    """The re-base uses count / inforce[em]: doubling the as-of count doubles the
+    BEL (and the variable fee), while the carried CSM -- an absolute amount in
+    state.prior_csm, released by a count-invariant coverage-unit fraction -- is
+    unchanged."""
+    import fastcashflow as fcf
+
+    basis = _basis()
+    av0, term, em = 1e8, 60, 12
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
+                      term_months=np.array([60]), account_value=np.array([av0]),
+                      mp_id=np.array(["X"]))
+
+    def run(count):
+        state = fcf.InforceState(
+            mp_id=np.array(["X"]), elapsed_months=np.array([em]),
+            count=np.array([float(count)]), prior_csm=np.array([inc.csm_path[0, 0]]),
+            lock_in_rate=0.0, account_value=np.array([inc.account_value_path[0, em]]))
+        return fcf.vfa.measure_inforce(fcf.apply_inforce_state(mp0, state), state, basis)
+
+    one, two = run(1), run(2)
+    assert np.isclose(two.bel[0], 2.0 * one.bel[0])
+    assert np.isclose(two.variable_fee[0], 2.0 * one.variable_fee[0])
+    assert np.isclose(two.csm[0], one.csm[0])     # CSM is the absolute carried amount
+
+
+def test_vfa_measure_handles_boundary_before_term():
+    """A contract whose Sec. 34 boundary cuts before the term: the projection
+    runs only to the boundary, the GMAB maturity (at the term, beyond the
+    horizon) is not applied, and nothing indexes out of bounds (regression for
+    the term_idx clamp in _vfa_project)."""
+    import fastcashflow as fcf
+    mp = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([0.0]),
+        term_months=np.array([60]), contract_boundary_months=np.array([24]),
+        account_value=np.array([1e8]),
+        minimum_accumulation_benefit=np.array([1e9]))   # huge GMAB, must NOT apply
+    res = fcf.vfa.measure(mp, _basis())
+    assert res.bel_path.shape[1] == 25                  # n_time = boundary 24 (+1)
+    assert np.all(np.isfinite(res.bel_path))
+
+
+def test_vfa_measure_inforce_rejects_as_of_at_horizon():
+    """An as-of date at the projection horizon (em == n_time, the fully run-off
+    case) is rejected rather than indexing the in-force column out of bounds."""
+    import fastcashflow as fcf
+    mp0 = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([0.0]),
+        term_months=np.array([24]), account_value=np.array([1e8]),
+        mp_id=np.array(["X"]))
+    state = fcf.InforceState(
+        mp_id=np.array(["X"]), elapsed_months=np.array([24]),
+        count=np.array([1.0]), prior_csm=np.array([0.0]), lock_in_rate=0.0,
+        account_value=np.array([1e8]))
+    with pytest.raises(ValueError, match="fully run off|projection horizon"):
+        fcf.vfa.measure_inforce(fcf.apply_inforce_state(mp0, state), state, _basis())

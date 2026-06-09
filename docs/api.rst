@@ -66,6 +66,8 @@ Variable fee approach
 
 .. autofunction:: fastcashflow.vfa.measure_aggregate
 
+.. autofunction:: fastcashflow.vfa.measure_inforce
+
 .. autoclass:: fastcashflow.VFAMeasurement
    :members:
 
