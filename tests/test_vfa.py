@@ -359,6 +359,22 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
     assert stoch.csm_path[0, 0] < plain.csm_path[0, 0]           # the CSM absorbs it
 
 
+def test_vfa_tvog_floors_only_points_to_measure_time_value():
+    """vfa.tvog values the credited-rate guarantee only; a floors-only contract
+    (minimum_crediting_rate == 0) raises with a pointer to measure().time_value,
+    where the GMDB / GMAB floor time value actually lives."""
+    term = 60
+    mp = ModelPoints.single(40, 0.0, term, account_value=1e8,
+                            minimum_accumulation_benefit=1.2e8)   # GMAB, no crediting rate
+    basis = _basis(investment_return=0.04)
+    scenarios = _return_paths(0.04, vol=0.01, n=500, n_time=term, seed=3)
+    # the standalone credited-rate tvog refuses it and points to measure()
+    with pytest.raises(ValueError, match="time_value"):
+        fcf.vfa.tvog(mp, basis, scenarios)
+    # measure() does value the GMAB floor's time value
+    assert fcf.vfa.measure(mp, basis, scenarios).time_value[0] != 0.0
+
+
 def test_vfa_large_tvog_turns_the_contract_onerous():
     """A guarantee time value beyond the unearned fee makes the contract onerous."""
     basis = _basis(investment_return=0.05)

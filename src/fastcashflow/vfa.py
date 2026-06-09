@@ -6,8 +6,10 @@ account-value/BEL/RA/CSM measurement (the guarantee time value folded in);
 too large to hold every trajectory; ``measure_inforce`` is the
 subsequent-measurement (settlement / period-close) entry point, valuing an
 in-force book at its valuation date from the observed fund value; ``tvog`` is
-the standalone time-value-of-guarantee analysis over return scenarios;
-``trace`` walks one model point's VFA measurement.
+the standalone time-value analysis of the credited-rate guarantee over return
+scenarios (the GMDB / GMAB floor time value lives in
+``measure(..., return_scenarios).time_value``); ``trace`` walks one model
+point's VFA measurement.
 """
 from fastcashflow._vfa import (
     VFAMeasurement, measure_vfa as measure, measure_aggregate, measure_inforce,

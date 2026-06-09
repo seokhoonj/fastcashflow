@@ -253,14 +253,20 @@ def guarantee_floor_time_value(
 def measure_tvog(
     model_points: ModelPoints, basis: Basis, return_scenarios: FloatArray
 ) -> TVOGResult:
-    """Measure the time value of a VFA contract's minimum guarantee.
+    """Measure the time value of a VFA contract's minimum-crediting-rate guarantee.
+
+    Values the credited-rate floor only -- the guarantee that the account is
+    credited ``max(return, minimum_crediting_rate)`` each month. The GMDB / GMAB
+    account-value floors are NOT included here; their time value is folded into
+    ``vfa.measure(..., return_scenarios).time_value`` instead. This function is
+    the standalone credited-rate analysis.
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns -- one path per scenario, ``n_time`` being the
     projection horizon. The model points must carry a non-zero
-    ``minimum_crediting_rate`` (otherwise there is no guarantee to value); in
-    v1 the rate is taken as a portfolio-wide scalar (per-MP varying rates
-    with stochastic returns are a future extension), so the column is
+    ``minimum_crediting_rate`` (otherwise there is no credited-rate guarantee to
+    value); in v1 the rate is taken as a portfolio-wide scalar (per-MP varying
+    rates with stochastic returns are a future extension), so the column is
     required to be uniform across rows.
 
     The guarantee cost is the present value of account-value benefits in
@@ -278,8 +284,10 @@ def measure_tvog(
         )
     if g_unique.size == 0 or float(g_unique[0]) == 0.0:
         raise ValueError(
-            "measure_tvog requires a non-zero minimum_crediting_rate on the "
-            "model points -- there is no guarantee to value otherwise"
+            "measure_tvog values the minimum-crediting-rate guarantee only, and "
+            "this contract has none (minimum_crediting_rate == 0). For the time "
+            "value of GMDB / GMAB account-value floors, read "
+            "vfa.measure(..., return_scenarios).time_value instead."
         )
     g_annual = float(g_unique[0])
 
