@@ -136,3 +136,73 @@ def test_reinsurance_trace_rejects_bad_index():
                             calculation_methods=PATTERNS)
     with pytest.raises(IndexError):
         fcf.reinsurance.trace(9, mp, basis, fcf.reinsurance.QuotaShare(0.5))
+
+
+def test_reinsurance_inforce_carries_csm_and_rebases_bel():
+    """In-force subsequent measurement (Sec. 44): the prior reinsurance CSM is
+    carried forward (accreted at lock-in, released over coverage units) and the
+    BEL / RA are the inception slice re-based to the valuation-date count.
+
+    Pinned two ways: (a) with prior_csm taken from the inception CSM trajectory
+    at E - period and lock_in = the current discount, rolling one period must
+    reproduce that trajectory's CSM at E (the CSM is scale-invariant); (b) the
+    BEL equals the PV at E of the remaining ceded flows (re-derived here from the
+    measure's own recovery / reinsurance_premium streams), re-based by 1/inforce[E].
+    """
+    from fastcashflow import InforceState
+    from fastcashflow.curves import discount_factors
+
+    basis = _basis()
+    treaty = fcf.reinsurance.QuotaShare(cession=0.4)
+    mp_new = ModelPoints.single(40, 80_000.0, 240, benefits={0: 1e8},
+                                calculation_methods=PATTERNS)
+    m = fcf.reinsurance.measure(mp_new, basis, treaty)
+    elapsed, period = 36, 12
+    prior_csm = m.csm_path[:, elapsed - period]
+
+    state = InforceState(
+        mp_id=np.array(["R1"]), elapsed_months=np.array([elapsed]),
+        count=np.array([1.0]), prior_csm=prior_csm,
+        lock_in_rate=basis.discount_annual,
+    )
+    mp_inf = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([80_000.0]),
+        term_months=np.array([240]), benefits={0: np.array([1e8])},
+        calculation_methods=PATTERNS, mp_id=np.array(["R1"]),
+        elapsed_months=np.array([elapsed]), count=np.array([1.0]),
+    )
+    v = fcf.reinsurance.measure_inforce(mp_inf, state, basis, treaty,
+                                        period_months=period)
+
+    # (a) CSM carry reproduces the inception trajectory's CSM at E
+    assert np.isclose(v.csm[0], m.csm_path[0, elapsed])
+
+    # (b) BEL = PV-at-E of the remaining ceded flows, re-based to count = 1
+    bom, mid = discount_factors(basis, m.cashflows.n_time)
+    rp, rec = m.reinsurance_premium[0], m.recovery[0]
+    pv_at_E = ((rp[elapsed:] * bom[elapsed:-1]).sum()
+               - (rec[elapsed:] * mid[elapsed:]).sum()) / bom[elapsed]
+    rescale = 1.0 / m.cashflows.inforce[0, elapsed]
+    assert np.isclose(v.bel[0], pv_at_E * rescale)
+
+
+def test_reinsurance_inforce_rejects_runoff():
+    """An as-of date at or past the contract boundary (no remaining coverage)
+    is rejected -- there is nothing left to value."""
+    from fastcashflow import InforceState
+
+    basis = _basis()
+    state = InforceState(
+        mp_id=np.array(["R1"]), elapsed_months=np.array([60]),
+        count=np.array([1.0]), prior_csm=np.array([0.0]),
+        lock_in_rate=basis.discount_annual,
+    )
+    mp_inf = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([80_000.0]),
+        term_months=np.array([60]), benefits={0: np.array([1e8])},
+        calculation_methods=PATTERNS, mp_id=np.array(["R1"]),
+        elapsed_months=np.array([60]), count=np.array([1.0]),
+    )
+    with pytest.raises(ValueError, match="no remaining coverage"):
+        fcf.reinsurance.measure_inforce(mp_inf, state, basis,
+                                        fcf.reinsurance.QuotaShare(0.5))

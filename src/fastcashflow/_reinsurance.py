@@ -31,8 +31,11 @@ from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.curves import discount_factors, discount_monthly_curve
 from fastcashflow.numerics import _csm_kernel, _norm_ppf
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.modelpoints import InforceState, ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
+# In-force helpers shared with the GMM path (engine does not import
+# _reinsurance, so this top-level import is cycle-free -- same pattern as _paa).
+from fastcashflow.engine import _reconcile_state
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -153,6 +156,125 @@ def measure_reinsurance(
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
+        recovery=recovery,
+        reinsurance_premium=reinsurance_premium,
+        cashflows=proj,
+        discount_bom=discount_bom,
+        model_points=model_points,
+    )
+
+
+def _pv_path(month_pv: FloatArray, discount_bom: FloatArray) -> FloatArray:
+    """PV-at-t trajectory of a stream whose per-month PV-to-inception is
+    ``month_pv`` (shape ``(n_mp, n_time)``).
+
+    Reverse-cumsum gives ``sum_{s>=t}`` of the inception-discounted flows
+    (the PV to inception of everything from month ``t`` on); dividing by
+    ``discount_bom[t]`` re-anchors it to time ``t``. Column ``n_time`` (no
+    remaining flow) is 0. Column 0 reproduces the inception PV.
+    """
+    rev = np.cumsum(month_pv[:, ::-1], axis=1)[:, ::-1]          # sum_{s>=t}
+    rev = np.concatenate([rev, np.zeros((rev.shape[0], 1))], axis=1)  # +t=n_time
+    return rev / discount_bom[None, :]
+
+
+def measure_reinsurance_inforce(
+    model_points: ModelPoints,
+    state: InforceState,
+    basis: Basis,
+    treaty: Treaty,
+    *,
+    period_months: int | None = None,
+) -> ReinsuranceMeasurement:
+    """In-force subsequent measurement of a reinsurance contract held (IFRS 17
+    Sec. 44, modified by Sec. 60-70) at the valuation date.
+
+    The reinsurance counterpart of :func:`~fastcashflow.gmm.measure_inforce`.
+    Each model point is valued at its ``elapsed_months`` duration: the BEL
+    (PV of remaining reinsurance premiums less recoveries) and the RA (risk
+    still transferred) are the inception projection sliced at the valuation
+    date and re-based by ``count / inforce[elapsed]``, and the prior period's
+    closing reinsurance CSM (``state.prior_csm``) is carried forward -- accreted
+    at ``state.lock_in_rate`` and released over the coverage units across
+    ``period_months`` (default 12). The CSM is the net cost or gain of the
+    cover and may be negative; there is no loss component (Sec. 65), so the
+    onerous unlocking deferred in ``gmm.measure_inforce`` does not arise here.
+
+    ``state`` (an :class:`~fastcashflow.InforceState`) supplies the period-close
+    ``elapsed_months`` / ``count`` (reconciled onto ``model_points`` by
+    :func:`~fastcashflow.apply_inforce_state`) plus ``prior_csm`` /
+    ``lock_in_rate``. ``treaty`` is the same cession as the new-business
+    :func:`measure_reinsurance`.
+    """
+    basis = _single_basis(basis, entry="reinsurance.measure_inforce")
+    state = _reconcile_state(model_points, state)
+    proj = project_cashflows(model_points, basis)
+    n_time = proj.n_time
+    n_mp = proj.inforce.shape[0]
+    discount_bom, discount_mid = discount_factors(basis, n_time)
+
+    ceded_mortality, ceded_morbidity, reinsurance_premium = treaty.cede(proj)
+    recovery = ceded_mortality + ceded_morbidity
+
+    # BEL / RA trajectories (PV at each t of the remaining ceded flows), so the
+    # valuation-date slice is the PV of the *future* cash flows. Premiums are
+    # bom-timed, recoveries / ceded claims mid-timed -- same convention as the
+    # inception measure, so column 0 reproduces measure_reinsurance's headline.
+    z = _norm_ppf(basis.ra_confidence)
+    bel_path = (_pv_path(reinsurance_premium * discount_bom[:-1], discount_bom)
+                - _pv_path(recovery * discount_mid, discount_bom))
+    ra_path = z * (
+        basis.mortality_cv * _pv_path(ceded_mortality * discount_mid, discount_bom)
+        + basis.morbidity_cv * _pv_path(ceded_morbidity * discount_mid, discount_bom)
+    )
+
+    em = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    runoff = em >= boundary
+    if np.any(runoff):
+        bad = int(np.argmax(runoff))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} >= "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            "horizon; equal to term_months when no boundary cut); the contract "
+            "has no remaining coverage at the valuation date. "
+            "reinsurance.measure_inforce needs an as-of date strictly before the "
+            "contract boundary.")
+    rows = np.arange(n_mp)
+    # Re-base the inception-run slice to the valuation-date count (exact for the
+    # BEL / RA, which are linear in the in-force).
+    inforce_em = proj.inforce[rows, em]
+    count = np.asarray(model_points.count, dtype=np.float64)
+    rescale = np.where(inforce_em > 0.0, count / np.where(inforce_em > 0.0, inforce_em, 1.0), 1.0)
+    bel = bel_path[rows, em] * rescale
+    ra = ra_path[rows, em] * rescale
+
+    # CSM carry-forward (Sec. 44): roll the prior closing CSM one period over the
+    # coverage units (the direct in-force, which the recoveries scale with) from
+    # t = em - period_months to t = em. No loss-component floor -- a reinsurance
+    # CSM may stay negative (a net cost deferred).
+    prior_csm = np.asarray(state.prior_csm, dtype=np.float64)
+    if prior_csm.shape != (n_mp,):
+        raise ValueError(f"prior_csm must have shape ({n_mp},), got {prior_csm.shape}")
+    period_months = int(period_months) if period_months is not None else 12
+    prior_t = em - period_months
+    if np.any(prior_t < 0):
+        bad = int(np.argmin(prior_t))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em[bad])} < period_months={period_months}; "
+            "the prior closing date precedes inception, which has no CSM to carry")
+    max_len = proj.inforce.shape[1] - int(prior_t.min())
+    src_cols = prior_t[:, None] + np.arange(max_len)[None, :]
+    mask = src_cols < proj.inforce.shape[1]
+    inforce_seg = np.ascontiguousarray(
+        np.where(mask, proj.inforce[rows[:, None], np.where(mask, src_cols, 0)], 0.0))
+    lock_in_monthly = (1.0 + float(state.lock_in_rate)) ** (1.0 / 12.0) - 1.0
+    csm_traj, _, _ = _csm_kernel(prior_csm, inforce_seg,
+                                 np.full(max_len, lock_in_monthly))
+    csm = csm_traj[:, period_months]
+
+    return ReinsuranceMeasurement(
+        bel=bel, ra=ra, csm=csm,
         recovery=recovery,
         reinsurance_premium=reinsurance_premium,
         cashflows=proj,
