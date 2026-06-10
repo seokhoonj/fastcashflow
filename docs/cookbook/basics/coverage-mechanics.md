@@ -312,6 +312,18 @@ cumulative 3m : 360.00
 
 ```python
 import fastcashflow as fcf
+
+# 위 DIAGNOSIS (CANCER) 예제 재구성 (바로 앞 INPATIENT 예제가 mp / basis 를 덮었으므로)
+basis = fcf.Basis(
+    mortality_annual = 0.0, lapse_annual = 0.0, discount_annual = 0.0,
+    ra_confidence    = 0.75, mortality_cv = 0.0,
+    coverages        = (fcf.CoverageRate("CANCER", cancer_rate),),
+)
+mp = fcf.ModelPoints.single(
+    issue_age           = 40, sex = 0, benefits = {0: 12_000},
+    premium             = 0, term_months = 3,
+    calculation_methods = {"CANCER": fcf.CalculationMethod.DIAGNOSIS},
+)
 fcf.gmm.trace(0, mp, basis)   # 위 DIAGNOSIS (CANCER) 예제의 mp / basis
 ```
 
