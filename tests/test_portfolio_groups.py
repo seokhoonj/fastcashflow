@@ -586,3 +586,37 @@ def test_portfolio_trace_requires_router_and_valid_index():
         fcf.portfolio.trace(0, mp, router.resolve(("G", "GA")))   # a single Basis
     with pytest.raises(IndexError):
         fcf.portfolio.trace(99, mp, router)
+
+
+def test_portfolio_trace_diff_routes_each_row_to_its_model():
+    """portfolio.trace_diff renders a row's shock diff with its segment's model
+    diff tracer: GMM row -> GMM diff, PAA row -> PAA diff, VFA row -> VFA diff."""
+    import io
+    from dataclasses import replace
+
+    mp, router = _mixed_book()
+    router_b = BasisRouter(
+        {k: replace(router.resolve(k), mortality_cv=0.20) for k in router.segments},
+        segment_axes=router.segment_axes,
+        measurement_models={k: router.measurement_model_of(k)
+                            for k in router.segments})
+
+    def render(row):
+        buf = io.StringIO()
+        fcf.portfolio.trace_diff(row, mp, router, router_b, file=buf)
+        return buf.getvalue()
+
+    gmm, paa, vfa = render(0), render(2), render(3)
+    assert gmm.startswith("diff mp[0]")            # GMM diff tracer (no model tag)
+    assert "diff-paa" in paa                        # PAA diff tracer
+    assert "diff-vfa" in vfa                         # VFA diff tracer
+
+
+def test_portfolio_trace_diff_requires_routers():
+    """Both bases must be a BasisRouter (a routed book)."""
+    mp, router = _mixed_book()
+    single = router.resolve(("G", "GA"))
+    with pytest.raises(TypeError, match="BasisRouter"):
+        fcf.portfolio.trace_diff(0, mp, single, router)
+    with pytest.raises(TypeError, match="BasisRouter"):
+        fcf.portfolio.trace_diff(0, mp, router, single)

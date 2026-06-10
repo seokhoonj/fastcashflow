@@ -39,7 +39,9 @@ from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.movement import roll_forward, reconcile
 from fastcashflow.projection import Cashflows
 from fastcashflow.report import report, Report
-from fastcashflow.trace import show_trace, show_trace_vfa, show_trace_paa
+from fastcashflow.trace import (
+    show_trace, show_trace_vfa, show_trace_paa,
+    show_trace_diff, show_trace_diff_vfa, show_trace_diff_paa)
 
 #: The orchestrator's public surface -- the measurement entry points and their
 #: result containers. Set explicitly so ``from fastcashflow.portfolio import *``
@@ -47,13 +49,36 @@ from fastcashflow.trace import show_trace, show_trace_vfa, show_trace_paa
 #: the leaf measure functions, ...).
 __all__ = [
     "measure", "measure_aggregate", "measure_groups",
-    "measure_group_of_contracts", "trace", "PortfolioMeasurement",
-    "PortfolioAggregate", "PortfolioGroups", "PortfolioReport",
-    "PortfolioMovements", "PortfolioReconciliation", "ModelMeasurement",
+    "measure_group_of_contracts", "trace", "trace_diff",
+    "PortfolioMeasurement", "PortfolioAggregate", "PortfolioGroups",
+    "PortfolioReport", "PortfolioMovements", "PortfolioReconciliation",
+    "ModelMeasurement",
 ]
 
 #: Route one model point to its model's tracer (the mixed-portfolio trace).
 _MODEL_TRACE = {"GMM": show_trace, "VFA": show_trace_vfa, "PAA": show_trace_paa}
+_MODEL_TRACE_DIFF = {"GMM": show_trace_diff, "VFA": show_trace_diff_vfa,
+                     "PAA": show_trace_diff_paa}
+
+
+def _model_of_row(mp_index: int, model_points: ModelPoints,
+                  router: BasisRouter) -> str:
+    """The measurement model of one row, via the same partition the measures
+    use. Shared by the routed tracers."""
+    if not isinstance(router, BasisRouter):
+        raise TypeError(
+            "a routed (mixed-model) portfolio is required here -- pass a "
+            "BasisRouter; for a single Basis use the per-model fcf.gmm / "
+            "fcf.paa / fcf.vfa entry points")
+    if not 0 <= mp_index < model_points.n_mp:
+        raise IndexError(
+            f"mp_index {mp_index} out of range for n_mp={model_points.n_mp}")
+    partition = _partition_by_model(model_points, router)
+    model = next((m for m, idx in partition.items()
+                  if idx.size and mp_index in idx), None)
+    if model is None:   # every row is partitioned, so this is defensive only
+        raise ValueError(f"mp_index {mp_index} was not routed to any model")
+    return model
 
 
 def trace(mp_index: int, model_points: ModelPoints, basis, *, file=None) -> None:
@@ -66,20 +91,29 @@ def trace(mp_index: int, model_points: ModelPoints, basis, *, file=None) -> None
     so a VFA row is never traced as GMM and the reader need not know a contract's
     model up front. ``file`` defaults to stdout.
     """
-    if not isinstance(basis, BasisRouter):
-        raise TypeError(
-            "fcf.portfolio.trace requires a BasisRouter (a routed, possibly "
-            "mixed-model portfolio); for a single Basis use fcf.gmm.trace / "
-            "fcf.paa.trace / fcf.vfa.trace")
-    if not 0 <= mp_index < model_points.n_mp:
-        raise IndexError(
-            f"mp_index {mp_index} out of range for n_mp={model_points.n_mp}")
-    partition = _partition_by_model(model_points, basis)
-    model = next((m for m, idx in partition.items()
-                  if idx.size and mp_index in idx), None)
-    if model is None:   # every row is partitioned, so this is defensive only
-        raise ValueError(f"mp_index {mp_index} was not routed to any model")
+    model = _model_of_row(mp_index, model_points, basis)
     _MODEL_TRACE[model](mp_index, model_points, basis, file=file)
+
+
+def trace_diff(mp_index: int, model_points: ModelPoints, basis_a, basis_b, *,
+               label_a: str = "before", label_b: str = "after",
+               file=None) -> None:
+    """Diff one model point across two bases in a mixed portfolio, routed to its
+    model's diff tracer.
+
+    The portfolio counterpart of the per-model ``trace_diff``: ``basis_a`` /
+    ``basis_b`` are two :class:`~fastcashflow.basis.BasisRouter` s, the row's
+    segment selects its measurement model, and the shock diff is rendered by
+    that model's diff tracer (``fcf.gmm.trace_diff`` / ``fcf.vfa.trace_diff`` /
+    ``fcf.paa.trace_diff``). The model is taken from ``basis_a``. ``file``
+    defaults to stdout.
+    """
+    model = _model_of_row(mp_index, model_points, basis_a)
+    if not isinstance(basis_b, BasisRouter):
+        raise TypeError("fcf.portfolio.trace_diff requires both bases to be a "
+                        "BasisRouter")
+    _MODEL_TRACE_DIFF[model](mp_index, model_points, basis_a, basis_b,
+                             label_a=label_a, label_b=label_b, file=file)
 
 #: The native measurement type each model slot must hold (the per-model
 #: separation invariant: a paa slot can never carry a GMMMeasurement).
