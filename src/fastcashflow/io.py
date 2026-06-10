@@ -1428,7 +1428,16 @@ def read_vfa_model_points(
     column is the lossy wide form, and coverages belong in their own frame which
     can hold the per-coverage waiting / reduction rules a flat column cannot.
     """
-    df = _read_frame(path)
+    return _vfa_model_points_from_frame(_read_frame(path), calculation_methods)
+
+
+def _vfa_model_points_from_frame(df, calculation_methods) -> ModelPoints:
+    """Build a VFA :class:`ModelPoints` from a single policies frame.
+
+    The frame-level body of :func:`read_vfa_model_points`, factored out so the
+    out-of-core ``vfa.measure_stream`` can build model points from each parquet
+    chunk slice without re-reading the whole file.
+    """
     named_benefit = {"maturity_benefit", "disability_benefit",
                      "minimum_death_benefit", "minimum_accumulation_benefit"}
     coverage_cols = sorted(c for c in df.columns
@@ -2048,6 +2057,34 @@ def measure_stream(
     # model points or writes results never pays the engine import cost.
     from fastcashflow.engine import measure
 
+    return _stream_policies_coverages(
+        input_path, output_dir, coverages=coverages,
+        calculation_methods=calculation_methods, chunk_size=chunk_size,
+        id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
+        measure_fn=lambda mp: measure(mp, basis, full=False, backend=backend),
+    )
+
+
+def _stream_policies_coverages(
+    input_path: Path | str,
+    output_dir: Path | str,
+    *,
+    coverages: Path | str | None,
+    calculation_methods,
+    chunk_size: int,
+    id_column: str | None,
+    validate_unique_mp_id: bool,
+    measure_fn,
+) -> int:
+    """Shared out-of-core driver for the policies + coverages models.
+
+    Reads ``input_path`` (policies parquet) in ``chunk_size`` blocks, pulls each
+    block's coverage rows from ``coverages`` by ``mp_id``, builds the
+    :class:`ModelPoints`, and writes ``measure_fn(model_points)`` to one
+    ``part-NNNNN.parquet`` per chunk. ``measure_fn`` is the only model-specific
+    piece -- ``gmm`` / ``paa`` / ``reinsurance`` pass their own measure closure.
+    Returns the number of model points processed.
+    """
     input_path = Path(input_path)
     output_dir = Path(output_dir)
     if input_path.suffix != ".parquet":
@@ -2117,7 +2154,7 @@ def measure_stream(
             ).collect()
             model_points = _model_points_from_frames(pol, cov, methods_dict)
             write_measurement(
-                measure(model_points, basis, full=False, backend=backend),
+                measure_fn(model_points),
                 output_dir / f"part-{part:05d}.parquet",
                 ids=ids.to_numpy(),
             )
@@ -2130,3 +2167,69 @@ def measure_stream(
         "(wide) file cannot carry per-coverage waiting / reduction rules and is "
         "not accepted."
     )
+
+
+def _stream_validate(input_path: Path, output_dir: Path, id_column: str | None,
+                     validate_unique_mp_id: bool):
+    """Shared up-front checks for the streaming drivers: parquet input, empty
+    output dir, mp_id present + unique, id_column present. Returns
+    ``(scan, n_total, id_col)``."""
+    if input_path.suffix != ".parquet":
+        raise ValueError(
+            f"measure_stream streams parquet input only; got {str(input_path)!r}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if any(output_dir.glob("part-*.parquet")):
+        raise ValueError(
+            f"output directory {str(output_dir)!r} already contains part "
+            "files; use a fresh directory")
+    scan = pl.scan_parquet(input_path)
+    n_total = scan.select(pl.len()).collect().item()
+    schema_names = scan.collect_schema().names()
+    if "mp_id" not in schema_names:
+        raise ValueError(
+            f"measure_stream: the policies file {str(input_path)!r} has no "
+            "'mp_id' column; mp_id is the contract identity.")
+    id_col = id_column if id_column is not None else "mp_id"
+    if id_col not in schema_names:
+        raise ValueError(
+            f"measure_stream: id_column {id_col!r} is not a column of the "
+            f"policies file {str(input_path)!r}")
+    if validate_unique_mp_id:
+        dups = (scan.select("mp_id").group_by("mp_id").len()
+                .filter(pl.col("len") > 1).head(5).collect())
+        if dups.height:
+            raise ValueError(
+                f"measure_stream: duplicate mp_id in {str(input_path)!r} (e.g. "
+                f"{dups['mp_id'].to_list()}); mp_id must be unique across the "
+                "whole file. Pass validate_unique_mp_id=False to skip this scan.")
+    return scan, n_total, id_col
+
+
+def _stream_single_file(
+    input_path: Path | str,
+    output_dir: Path | str,
+    *,
+    chunk_size: int,
+    id_column: str | None,
+    validate_unique_mp_id: bool,
+    build_mp,
+    measure_fn,
+) -> int:
+    """Out-of-core driver for a single-frame model (no coverages join), e.g. the
+    VFA account-value book. ``build_mp(frame)`` turns each parquet chunk slice
+    into a :class:`ModelPoints`; ``measure_fn(model_points)`` measures it. Writes
+    one ``part-NNNNN.parquet`` per chunk; returns the model points processed."""
+    input_path = Path(input_path)
+    output_dir = Path(output_dir)
+    scan, n_total, id_col = _stream_validate(
+        input_path, output_dir, id_column, validate_unique_mp_id)
+    processed = 0
+    for part, offset in enumerate(range(0, n_total, chunk_size)):
+        pol = scan.slice(offset, chunk_size).collect()
+        ids = pol[id_col]
+        model_points = build_mp(pol)
+        write_measurement(measure_fn(model_points),
+                          output_dir / f"part-{part:05d}.parquet",
+                          ids=ids.to_numpy())
+        processed += model_points.n_mp
+    return processed

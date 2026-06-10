@@ -33,6 +33,8 @@ from fastcashflow.curves import discount_factors, discount_monthly_curve
 from fastcashflow.numerics import _csm_kernel, _norm_ppf
 from fastcashflow.modelpoints import InforceState, ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
+from fastcashflow.io import (
+    write_measurement, _write_measurement_columns, _stream_policies_coverages)
 # In-force helpers shared with the GMM path (engine does not import
 # _reinsurance, so this top-level import is cycle-free -- same pattern as _paa).
 from fastcashflow.engine import _reconcile_state
@@ -65,6 +67,13 @@ class ReinsuranceMeasurement:
     model_points: "ModelPoints | None" = None  # stamped by measure_reinsurance, for group axes
     group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
     group_sizes: IntArray | None = None     # model points per group, aligned with labels
+
+
+@write_measurement.register
+def _(measurement: ReinsuranceMeasurement, path, *, ids=None):
+    _write_measurement_columns(
+        {"bel": measurement.bel, "ra": measurement.ra, "csm": measurement.csm},
+        path, ids)
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -230,6 +239,42 @@ def measure_reinsurance_aggregate(
     return ReinsuranceAggregate(
         bel=bel, ra=ra, csm=csm, csm_path=csm_path,
         recovery=recovery, reinsurance_premium=reinsurance_premium)
+
+
+def measure_reinsurance_stream(
+    input_path,
+    output_dir,
+    basis: Basis,
+    treaty: Treaty,
+    *,
+    coverages=None,
+    calculation_methods=None,
+    chunk_size: int = 20_000_000,
+    id_column: str | None = None,
+    validate_unique_mp_id: bool = True,
+) -> int:
+    """Stream a reinsurance-held valuation through a parquet file, chunk by chunk.
+
+    The reinsurance counterpart of :func:`~fastcashflow.gmm.measure_stream`:
+    reads the direct policies + coverages parquet in ``chunk_size`` blocks,
+    cedes and measures each with ``treaty``, and writes per-chunk
+    ``part-NNNNN.parquet`` results (bel / ra / csm). Returns the number of model
+    points processed. ``basis`` is a single :class:`Basis`.
+
+    Marginal benefit note: streaming exists for portfolios too large to hold in
+    memory (a GMM book of 1e8 rows). A ceded reinsurance book is almost always
+    far smaller -- one treaty over a direct portfolio -- so in practice
+    :func:`~fastcashflow.reinsurance.measure` or
+    :func:`~fastcashflow.reinsurance.measure_aggregate` is enough and this adds
+    little over them. It exists for API symmetry with the other models.
+    """
+    basis = _single_basis(basis, entry="reinsurance.measure_stream")
+    return _stream_policies_coverages(
+        input_path, output_dir, coverages=coverages,
+        calculation_methods=calculation_methods, chunk_size=chunk_size,
+        id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
+        measure_fn=lambda mp: measure_reinsurance(mp, basis, treaty),
+    )
 
 
 def _pv_path(month_pv: FloatArray, discount_bom: FloatArray) -> FloatArray:

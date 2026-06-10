@@ -12,12 +12,12 @@ scenarios (the GMDB / GMAB floor time value lives in
 point's VFA measurement.
 """
 from fastcashflow._vfa import (
-    VFAMeasurement, measure_vfa as measure, measure_aggregate, measure_inforce,
-    CSM_BASES)
+    VFAMeasurement, measure_vfa as measure, measure_aggregate,
+    measure_inforce, measure_stream, CSM_BASES)
 from fastcashflow.tvog import measure_tvog as tvog
 from fastcashflow.trace import (
     show_trace_vfa as trace, show_trace_diff_vfa as trace_diff)
 
-__all__ = ["measure", "measure_aggregate", "measure_inforce", "tvog", "trace",
-           "trace_diff", "CSM_BASES",
+__all__ = ["measure", "measure_aggregate", "measure_inforce",
+           "measure_stream", "tvog", "trace", "trace_diff", "CSM_BASES",
            "VFAMeasurement"]

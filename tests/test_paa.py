@@ -204,3 +204,29 @@ def test_paa_trace_diff_renders_assumption_and_headline():
     fcf.paa.trace_diff(0, mp, b1, b2, file=buf)
     t = buf.getvalue()
     assert "diff-paa" in t and "discount_annual" in t and "LRC" in t
+
+
+def test_paa_measure_stream_matches_in_memory(tmp_path):
+    """Streaming a parquet book chunk by chunk gives the same per-policy
+    headline as the in-memory measure (low-benefit out-of-core path)."""
+    import polars as pl
+
+    basis = _basis()
+    pol = pl.DataFrame({"mp_id": ["A", "B", "C"], "issue_age": [40, 45, 50],
+                        "term_months": [12, 12, 12],
+                        "premium_term_months": [12, 12, 12],
+                        "count": [1.0, 1.0, 1.0]})
+    cov = pl.DataFrame({"mp_id": ["A", "B", "C"], "coverage": ["DEATH"] * 3,
+                        "amount": [1e8, 1e8, 1e8],
+                        "premium": [10_000.0, 11_000.0, 12_000.0]})
+    pp, cp, od = tmp_path / "pol.parquet", tmp_path / "cov.parquet", tmp_path / "out"
+    pol.write_parquet(pp)
+    cov.write_parquet(cp)
+    n = fcf.paa.measure_stream(pp, od, basis, coverages=cp,
+                               calculation_methods=PATTERNS, chunk_size=2)
+    assert n == 3
+    parts = pl.concat([pl.read_parquet(p) for p in sorted(od.glob("part-*.parquet"))])
+    mp = fcf.read_model_points(pp, coverages=cp, calculation_methods=PATTERNS)
+    ref = fcf.paa.measure(mp, basis)
+    assert np.allclose(sorted(parts["loss_component"].to_list()),
+                       sorted(ref.loss_component.tolist()))

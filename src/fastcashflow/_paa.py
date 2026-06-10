@@ -37,7 +37,8 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis, _single_basis
-from fastcashflow.io import write_measurement, _write_measurement_columns
+from fastcashflow.io import (
+    write_measurement, _write_measurement_columns, _stream_policies_coverages)
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import (
     _carry_lic_residual, _risk_adjustment, _rollforward_kernel,
@@ -337,6 +338,41 @@ def measure_paa(
         lic=lic,
         cashflows=proj,
         model_points=model_points,
+    )
+
+
+def measure_stream(
+    input_path,
+    output_dir,
+    basis: Basis,
+    *,
+    coverages=None,
+    calculation_methods=None,
+    chunk_size: int = 20_000_000,
+    revenue_basis: str = "time",
+    id_column: str | None = None,
+    validate_unique_mp_id: bool = True,
+) -> int:
+    """Stream a PAA valuation through a parquet file, chunk by chunk.
+
+    The PAA counterpart of :func:`~fastcashflow.gmm.measure_stream`: reads the
+    policies + coverages parquet in ``chunk_size`` blocks, measures each with
+    ``paa.measure(..., full=False)``, and writes per-chunk
+    ``part-NNNNN.parquet`` results (lrc / loss_component). Returns the number of
+    model points processed. ``basis`` is a single :class:`Basis`.
+
+    Marginal benefit note: streaming is for portfolios too large to hold in
+    memory (a GMM book of 1e8 rows). PAA books -- short-duration, often grouped
+    -- are typically small, so :func:`measure` or :func:`measure_aggregate` is
+    usually enough; this exists for API symmetry with the other models.
+    """
+    basis = _single_basis(basis, entry="paa.measure_stream")
+    return _stream_policies_coverages(
+        input_path, output_dir, coverages=coverages,
+        calculation_methods=calculation_methods, chunk_size=chunk_size,
+        id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
+        measure_fn=lambda mp: measure_paa(mp, basis, revenue_basis=revenue_basis,
+                                          full=False),
     )
 
 

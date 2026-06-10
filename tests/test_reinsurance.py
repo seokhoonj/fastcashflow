@@ -261,3 +261,29 @@ def test_reinsurance_trace_diff_renders_assumption_and_headline():
     assert "diff-reinsurance" in t
     assert "mortality_cv" in t                 # the changed assumption surfaces
     assert "RA" in t and "CSM" in t            # the headline deltas
+
+
+def test_reinsurance_measure_stream_matches_in_memory(tmp_path):
+    """Streaming a parquet ceded book chunk by chunk gives the same per-policy
+    CSM as the in-memory measure (low-benefit out-of-core path)."""
+    import polars as pl
+
+    basis = _basis()
+    treaty = fcf.reinsurance.QuotaShare(0.4)
+    pol = pl.DataFrame({"mp_id": ["A", "B", "C"], "issue_age": [40, 45, 50],
+                        "term_months": [12, 12, 12],
+                        "premium_term_months": [12, 12, 12],
+                        "count": [1.0, 1.0, 1.0]})
+    cov = pl.DataFrame({"mp_id": ["A", "B", "C"], "coverage": ["DEATH"] * 3,
+                        "amount": [1e8, 1e8, 1e8],
+                        "premium": [10_000.0, 11_000.0, 12_000.0]})
+    pp, cp, od = tmp_path / "pol.parquet", tmp_path / "cov.parquet", tmp_path / "out"
+    pol.write_parquet(pp)
+    cov.write_parquet(cp)
+    n = fcf.reinsurance.measure_stream(pp, od, basis, treaty, coverages=cp,
+                                       calculation_methods=PATTERNS, chunk_size=2)
+    assert n == 3
+    parts = pl.concat([pl.read_parquet(p) for p in sorted(od.glob("part-*.parquet"))])
+    mp = fcf.read_model_points(pp, coverages=cp, calculation_methods=PATTERNS)
+    ref = fcf.reinsurance.measure(mp, basis, treaty)
+    assert np.allclose(sorted(parts["csm"].to_list()), sorted(ref.csm.tolist()))

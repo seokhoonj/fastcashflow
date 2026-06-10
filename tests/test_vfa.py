@@ -1079,3 +1079,23 @@ def test_vfa_trace_diff_renders_assumption_and_headline():
     fcf.vfa.trace_diff(0, mp, b1, b2, file=buf)
     t = buf.getvalue()
     assert "diff-vfa" in t and "investment_return" in t and "TVOG" in t
+
+
+def test_vfa_measure_stream_matches_in_memory(tmp_path):
+    """Streaming the VFA account-value book (single frame, no coverages) gives
+    the same per-policy CSM as the in-memory measure (deterministic; TVOG needs
+    portfolio-wide scenarios a stream does not carry)."""
+    import polars as pl
+
+    basis = _basis()
+    pol = pl.DataFrame({"mp_id": ["V1", "V2"], "issue_age": [45, 50],
+                        "term_months": [120, 120],
+                        "account_value": [1e8, 2e8],
+                        "minimum_death_benefit": [1.1e8, 0.0]})
+    pp, od = tmp_path / "vpol.parquet", tmp_path / "out"
+    pol.write_parquet(pp)
+    n = fcf.vfa.measure_stream(pp, od, basis, chunk_size=1)
+    assert n == 2
+    parts = pl.concat([pl.read_parquet(p) for p in sorted(od.glob("part-*.parquet"))])
+    ref = fcf.vfa.measure(fcf.read_vfa_model_points(pp), basis)
+    assert np.allclose(sorted(parts["csm"].to_list()), sorted(ref.csm.tolist()))
