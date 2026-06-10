@@ -56,7 +56,7 @@ from fastcashflow.trace import (
 #: the leaf measure functions, ...).
 __all__ = [
     "measure", "measure_aggregate", "measure_inforce", "measure_stream",
-    "measure_groups", "measure_group_of_contracts", "trace", "trace_diff",
+    "measure_group", "measure_group_of_contracts", "trace", "trace_diff",
     "PortfolioMeasurement", "PortfolioAggregate", "PortfolioGroups",
     "PortfolioReport", "PortfolioMovements", "PortfolioReconciliation",
     "ModelMeasurement",
@@ -257,7 +257,7 @@ _MODEL_EXEC = {
 _CHUNK_SIZE = 200_000
 
 #: Per model: measure one block with full trajectories (single Basis). Used by
-#: the per-group aggregate (``measure_groups`` / ``measure_group_of_contracts``),
+#: the per-group aggregate (``measure_group`` / ``measure_group_of_contracts``),
 #: which needs each chunk's full per-MP result to group-sum and to read the
 #: discount curve.
 _MEASURE_FULL = {
@@ -721,7 +721,7 @@ _SLOT_GROUP_TYPE = {
 
 @dataclass(frozen=True, slots=True)
 class PortfolioGroups:
-    """Result of :func:`measure_groups` / :func:`measure_group_of_contracts`: one native grouped
+    """Result of :func:`measure_group` / :func:`measure_group_of_contracts`: one native grouped
     measurement per model present (``None`` when absent), its rows the groups (an
     IFRS 17 group of contracts for :func:`measure_group_of_contracts`). The scalable form of
     :func:`fcf.group_of_contracts` -- it **re-floors on each group's fulfilment
@@ -994,7 +994,7 @@ def _add_leading(acc, block_sum):
 
 
 def _measure_groups(model_points, basis, label_fn, chunk_size):
-    """Shared driver for :func:`measure_groups` / :func:`measure_group_of_contracts`.
+    """Shared driver for :func:`measure_group` / :func:`measure_group_of_contracts`.
 
     ``label_fn(model, sub_mp, idx)`` returns the ``(n_sub,)`` group label per
     model point for one model's partition (``idx`` the partition's rows in the
@@ -1033,7 +1033,7 @@ def _measure_groups(model_points, basis, label_fn, chunk_size):
     return PortfolioGroups(**slots)
 
 
-def measure_groups(model_points: ModelPoints, basis, by, *,
+def measure_group(model_points: ModelPoints, basis, by, *,
                    chunk_size: int = _CHUNK_SIZE) -> PortfolioGroups:
     """Scalable group aggregation of a mixed-model portfolio on any axis.
 
@@ -1201,7 +1201,7 @@ _HEADLINE_MEASURE = {
 # model -- group_of_contracts(portfolio.measure(..., full=True)) -- instead of
 # reaching into pm.gmm.measurement slot by slot. (At scale, where the full
 # per-model-point measurement would not fit in memory, use the chunked
-# measure_groups / measure_group_of_contracts instead.)
+# measure_group / measure_group_of_contracts instead.)
 # ---------------------------------------------------------------------------
 
 def _subset_by(by, index):

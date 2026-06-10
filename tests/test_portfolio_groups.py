@@ -38,12 +38,12 @@ from fastcashflow.portfolio import (
 import fastcashflow.portfolio as _pf                          # noqa: E402
 if not hasattr(_pf, "measure_group_of_contracts"):
     pytest.skip(
-        "per-group aggregate (measure_group_of_contracts / measure_groups / PortfolioGroups) "
+        "per-group aggregate (measure_group_of_contracts / measure_group / PortfolioGroups) "
         "is a contract skeleton, not yet implemented",
         allow_module_level=True)
 
 from fastcashflow.portfolio import (                          # noqa: E402
-    measure_group_of_contracts, measure_groups, PortfolioGroups)
+    measure_group_of_contracts, measure_group, PortfolioGroups)
 
 
 def _flat_basis(discount=0.05, investment_return=0.0):
@@ -204,13 +204,13 @@ def test_equals_measure_aggregate_under_secparagraph16_split():
 #    (this is the only thing that distinguishes the two at inception)
 # ===========================================================================
 def test_refloors_on_group_fcf_not_per_mp_sum():
-    """measure_groups(by="product") puts a profitable and an onerous GMM contract
+    """measure_group(by="product") puts a profitable and an onerous GMM contract
     (same product, same cohort) in ONE group with no profitability axis, so the
     floor nets them -- the group CSM is max(0, -(FCF_profit + FCF_onerous)),
     strictly less than summing each contract's floored CSM. This is the re-floor;
     measure_aggregate cannot show it."""
     mp, router = _two_gmm_same_cohort()
-    grouped = measure_groups(mp, router, by="product")        # coarse: mixes signs
+    grouped = measure_group(mp, router, by="product")        # coarse: mixes signs
     agg = measure_aggregate(mp, router)
     assert grouped.gmm.bel.shape[0] == 1                      # both contracts in one group
     # netting the profitable contract's surplus before the floor lowers the CSM
@@ -223,7 +223,7 @@ def test_nets_within_a_group_not_across():
     the per-MP-floor total; the coarse product-only grouping absorbs its loss into
     the profitable contract's surplus."""
     mp, router = _two_gmm_same_cohort()
-    coarse = measure_groups(mp, router, by="product")         # signs mixed -> netted
+    coarse = measure_group(mp, router, by="product")         # signs mixed -> netted
     split = measure_group_of_contracts(mp, router)                           # adds the onerous axis
     # the onerous contract isolated by profitability keeps its full loss
     assert np.isclose(split.gmm.loss_component.sum(),
@@ -241,8 +241,8 @@ def test_floors_once_on_accumulated_group_across_chunks():
     blocks. The result must equal the single-block computation: the floor is
     applied once on the fully-accumulated group FCF, not per chunk."""
     mp, router = _mixed_book()
-    a = measure_groups(mp, router, by="product", chunk_size=1)
-    b = measure_groups(mp, router, by="product", chunk_size=10_000)
+    a = measure_group(mp, router, by="product", chunk_size=1)
+    b = measure_group(mp, router, by="product", chunk_size=10_000)
     assert np.array_equal(a.gmm.group_labels, b.gmm.group_labels)
     assert np.allclose(a.gmm.csm, b.gmm.csm)
     assert np.allclose(a.gmm.bel, b.gmm.bel)
@@ -478,7 +478,7 @@ def test_curve_uses_live_horizon_not_contract_boundary():
         count=np.array([1.0, 1.0, 0.0, 0.0]),        # B never in force
         product=np.full(4, "G"), channel=np.array(["A", "A", "B", "B"]),
         issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"))
-    grouped = measure_groups(mp, router, by="product")   # must NOT reject
+    grouped = measure_group(mp, router, by="product")   # must NOT reject
     ref = group(measure(mp, router, full=True).gmm.measurement, by="product")
     assert grouped.gmm.bel.shape[0] == 1
     assert np.allclose(grouped.gmm.bel_path, ref.bel_path)
@@ -513,7 +513,7 @@ def test_rejects_wrong_length_group_array():
     up front, as fcf.group does."""
     mp, router = _mixed_book()
     with pytest.raises(ValueError, match="one entry per model point|group ids"):
-        measure_groups(mp, router, by=np.zeros(mp.n_mp + 1, dtype=int))
+        measure_group(mp, router, by=np.zeros(mp.n_mp + 1, dtype=int))
 
 
 def test_rejects_wrong_length_profitability_array():
@@ -529,7 +529,7 @@ def test_rejects_short_array_in_by_list_no_broadcast():
     every row with one label (passing the final (n_mp,) check)."""
     mp, router = _mixed_book()
     with pytest.raises(ValueError, match="one entry per model point|group axis"):
-        measure_groups(mp, router, by=["product", np.zeros(1, dtype=int)])
+        measure_group(mp, router, by=["product", np.zeros(1, dtype=int)])
 
 
 def test_vfa_two_segments_same_return_reconcile():
