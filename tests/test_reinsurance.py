@@ -92,7 +92,7 @@ def test_reinsurance_measure_treaty_is_keyword_only_and_full_false_drops_paths()
     treaty = fcf.reinsurance.QuotaShare(cession=0.5)
 
     with pytest.raises(TypeError):
-        fcf.reinsurance.measure(mp, _basis(), treaty)
+        fcf.reinsurance.measure(mp, _basis(), treaty)   # positional treaty rejected
 
     full = fcf.reinsurance.measure(mp, _basis(), treaty=treaty)
     head = fcf.reinsurance.measure(mp, _basis(), treaty=treaty, full=False)
@@ -126,7 +126,7 @@ def test_reinsurance_trace_renders_and_matches_measure():
     m = fcf.reinsurance.measure(mp, basis, treaty=treaty)
 
     buf = io.StringIO()
-    fcf.reinsurance.trace(0, mp, basis, treaty, file=buf)
+    fcf.reinsurance.trace(0, mp, basis, treaty=treaty, file=buf)
     text = buf.getvalue()
 
     assert "Reinsurance" in text
@@ -145,7 +145,7 @@ def test_reinsurance_trace_routes_a_dict_basis():
     mp = fcf.samples.model_points()
     basis = fcf.samples.basis()
     buf = io.StringIO()
-    fcf.reinsurance.trace(0, mp, basis, fcf.reinsurance.QuotaShare(0.5), file=buf)
+    fcf.reinsurance.trace(0, mp, basis, treaty=fcf.reinsurance.QuotaShare(0.5), file=buf)
     assert "Reinsurance" in buf.getvalue()
 
 
@@ -154,7 +154,7 @@ def test_reinsurance_trace_rejects_bad_index():
     mp = ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8},
                             calculation_methods=PATTERNS)
     with pytest.raises(IndexError):
-        fcf.reinsurance.trace(9, mp, basis, fcf.reinsurance.QuotaShare(0.5))
+        fcf.reinsurance.trace(9, mp, basis, treaty=fcf.reinsurance.QuotaShare(0.5))
 
 
 def test_reinsurance_inforce_carries_csm_and_rebases_bel():
@@ -190,7 +190,7 @@ def test_reinsurance_inforce_carries_csm_and_rebases_bel():
         calculation_methods=PATTERNS, mp_id=np.array(["R1"]),
         elapsed_months=np.array([elapsed]), count=np.array([1.0]),
     )
-    v = fcf.reinsurance.measure_inforce(mp_inf, state, basis, treaty,
+    v = fcf.reinsurance.measure_inforce(mp_inf, state, basis, treaty=treaty,
                                         period_months=period)
 
     # (a) CSM carry reproduces the inception trajectory's CSM at E
@@ -209,7 +209,7 @@ def test_reinsurance_inforce_carries_csm_and_rebases_bel():
     assert np.isclose(v.ra_path[0, 0], m.ra[0])
 
     head = fcf.reinsurance.measure_inforce(
-        mp_inf, state, basis, treaty, period_months=period, full=False)
+        mp_inf, state, basis, treaty=treaty, period_months=period, full=False)
     assert np.allclose(head.bel, v.bel)
     assert np.allclose(head.ra, v.ra)
     assert np.allclose(head.csm, v.csm)
@@ -236,7 +236,7 @@ def test_reinsurance_inforce_rejects_non_positive_period():
     )
     with pytest.raises(ValueError, match="period_months"):
         fcf.reinsurance.measure_inforce(
-            mp, state, basis, fcf.reinsurance.QuotaShare(0.5), period_months=0)
+            mp, state, basis, treaty=fcf.reinsurance.QuotaShare(0.5), period_months=0)
 
 
 def test_reinsurance_inforce_rejects_runoff():
@@ -258,7 +258,7 @@ def test_reinsurance_inforce_rejects_runoff():
     )
     with pytest.raises(ValueError, match="no remaining coverage"):
         fcf.reinsurance.measure_inforce(mp_inf, state, basis,
-                                        fcf.reinsurance.QuotaShare(0.5))
+                                        treaty=fcf.reinsurance.QuotaShare(0.5))
 
 
 def test_reinsurance_aggregate_sums_per_mp_and_is_chunk_invariant():
@@ -281,12 +281,15 @@ def test_reinsurance_aggregate_sums_per_mp_and_is_chunk_invariant():
     assert np.isclose(agg.bel, full.bel.sum())
     assert np.isclose(agg.ra, full.ra.sum())
     assert np.isclose(agg.csm, full.csm.sum())
+    assert np.allclose(agg.bel_path, full.bel_path.sum(axis=0))
+    assert np.allclose(agg.ra_path, full.ra_path.sum(axis=0))
     assert np.allclose(agg.csm_path, full.csm_path.sum(axis=0))
     assert np.allclose(agg.recovery, full.recovery.sum(axis=0))
     assert np.allclose(agg.reinsurance_premium, full.reinsurance_premium.sum(axis=0))
 
-    agg1 = fcf.reinsurance.measure_aggregate(mp, basis, treaty, chunk_size=1)
+    agg1 = fcf.reinsurance.measure_aggregate(mp, basis, treaty=treaty, chunk_size=1)
     assert np.isclose(agg1.bel, agg.bel)
+    assert np.allclose(agg1.bel_path, agg.bel_path)
     assert np.allclose(agg1.csm_path, agg.csm_path)
 
 
@@ -296,7 +299,7 @@ def test_reinsurance_aggregate_rejects_bad_chunk_size():
                             calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="chunk_size"):
         fcf.reinsurance.measure_aggregate(mp, basis,
-                                          fcf.reinsurance.QuotaShare(0.5), chunk_size=0)
+                                          treaty=fcf.reinsurance.QuotaShare(0.5), chunk_size=0)
 
 
 def test_reinsurance_trace_diff_renders_assumption_and_headline():
@@ -308,7 +311,7 @@ def test_reinsurance_trace_diff_renders_assumption_and_headline():
     mp = ModelPoints.single(40, 80_000.0, 120, benefits={0: 1e8},
                             calculation_methods=PATTERNS)
     buf = io.StringIO()
-    fcf.reinsurance.trace_diff(0, mp, b1, b2, fcf.reinsurance.QuotaShare(0.4),
+    fcf.reinsurance.trace_diff(0, mp, b1, b2, treaty=fcf.reinsurance.QuotaShare(0.4),
                                file=buf)
     t = buf.getvalue()
     assert "diff-reinsurance" in t
@@ -319,7 +322,7 @@ def test_reinsurance_trace_diff_renders_assumption_and_headline():
     # least one headline metric must show a non-zero numeric delta (not just the
     # metric label being present).
     base = io.StringIO()
-    fcf.reinsurance.trace_diff(0, mp, b1, b1, fcf.reinsurance.QuotaShare(0.4), file=base)
+    fcf.reinsurance.trace_diff(0, mp, b1, b1, treaty=fcf.reinsurance.QuotaShare(0.4), file=base)
     assert "(no changes in tracked fields)" in base.getvalue()
     assert "(no changes in tracked fields)" not in t
     moved = False
@@ -351,7 +354,7 @@ def test_reinsurance_measure_stream_matches_in_memory(tmp_path):
     pp, cp, od = tmp_path / "pol.parquet", tmp_path / "cov.parquet", tmp_path / "out"
     pol.write_parquet(pp)
     cov.write_parquet(cp)
-    n = fcf.reinsurance.measure_stream(pp, od, basis, treaty, coverages=cp,
+    n = fcf.reinsurance.measure_stream(pp, od, basis, treaty=treaty, coverages=cp,
                                        calculation_methods=PATTERNS, chunk_size=2)
     assert n == 3
     parts = pl.concat([pl.read_parquet(p) for p in sorted(od.glob("part-*.parquet"))])
@@ -400,7 +403,7 @@ def test_reinsurance_inforce_high_lapse_stays_finite():
         term_months=np.array([120]), benefits={0: np.array([1e8])},
         calculation_methods=PATTERNS, mp_id=np.array(["R1"]),
         elapsed_months=np.array([elapsed]), count=np.array([100.0]))
-    v = fcf.reinsurance.measure_inforce(mp, state, basis, treaty, period_months=12)
+    v = fcf.reinsurance.measure_inforce(mp, state, basis, treaty=treaty, period_months=12)
     assert np.isfinite(v.bel[0]) and np.isfinite(v.ra[0]) and np.isfinite(v.csm[0])
 
 
@@ -433,7 +436,7 @@ def test_reinsurance_inforce_per_mp_varying_elapsed_carries_each_csm():
         issue_age=age, premium=prem, term_months=term, benefits={0: ben},
         calculation_methods=PATTERNS, mp_id=np.array(["R1", "R2"]),
         elapsed_months=elapsed, count=np.array([1.0, 1.0]))
-    v = fcf.reinsurance.measure_inforce(mp_inf, state, basis, treaty,
+    v = fcf.reinsurance.measure_inforce(mp_inf, state, basis, treaty=treaty,
                                         period_months=period)
     # each row carries its own CSM, sliced at its own elapsed
     assert np.isclose(v.csm[0], m.csm_path[0, elapsed[0]])

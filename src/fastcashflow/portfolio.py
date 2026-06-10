@@ -124,8 +124,7 @@ def trace_diff(mp_index: int, model_points: ModelPoints, basis_a, basis_b, *,
 
 
 def measure_inforce(model_points: ModelPoints, state: InforceState, basis, *,
-                    period_months: int | None = None,
-                    revenue_basis: str = "time", full: bool = True,
+                    period_months: int | None = None, full: bool = True,
                     backend: str = "cpu") -> PortfolioMeasurement:
     """In-force subsequent measurement of a mixed-model portfolio (IFRS 17 Sec. 44).
 
@@ -136,12 +135,14 @@ def measure_inforce(model_points: ModelPoints, state: InforceState, basis, *,
     :class:`~fastcashflow.basis.BasisRouter`; ``state`` an :class:`InforceState`
     aligned to ``model_points`` by ``mp_id`` (each model's leaf re-aligns it to
     its own partition). ``period_months`` drives the GMM / VFA prior-CSM carry
-    (PAA has no CSM, so it is immaterial to the PAA slot); ``revenue_basis`` is
-    the PAA revenue pattern.
+    (PAA has no CSM, so it is immaterial to the PAA slot).
 
-    GMM rows may span multiple segments; the VFA / PAA partitions must resolve to
-    a single :class:`Basis` per model (their leaf in-force is single-Basis), as
-    for :func:`fcf.vfa.measure` / :func:`fcf.paa.measure`.
+    Like :func:`measure`, the mixed path uses each model's default sub-options
+    (the PAA partition uses the ``"time"`` revenue basis; per-segment VFA return
+    scenarios are deferred) -- set a model-specific option through that model's
+    own ``measure_inforce``. GMM rows may span multiple segments; the VFA / PAA
+    partitions must resolve to a single :class:`Basis` per model (their leaf
+    in-force is single-Basis), as for :func:`fcf.vfa.measure` / :func:`fcf.paa.measure`.
     """
     if not isinstance(basis, BasisRouter):
         raise TypeError(
@@ -168,7 +169,7 @@ def measure_inforce(model_points: ModelPoints, state: InforceState, basis, *,
     if paa_idx.size:
         slots["paa"] = ModelMeasurement(index=paa_idx, measurement=_paa_inforce(
             model_points.subset(paa_idx), state.subset(paa_idx),
-            _submodel_router(basis, "PAA"), revenue_basis=revenue_basis, full=full))
+            _submodel_router(basis, "PAA"), full=full))
     vfa_idx = parts["VFA"]
     if vfa_idx.size:
         slots["vfa"] = ModelMeasurement(index=vfa_idx, measurement=_vfa_inforce(

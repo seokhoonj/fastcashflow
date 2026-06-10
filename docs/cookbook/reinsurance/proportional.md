@@ -343,7 +343,7 @@ print("거울 항등식 OK")
   분기말 결산에서 원수계약과 **함께** 측정됩니다. 결산 워크플로의 자리.
 - [1.4 담보별 산출방법](../basics/coverage-mechanics) — 출재 대상이
   되는 사망 (claim) / morbidity 현금흐름이 엔진 안에서 어떻게 만들어지는지.
-- `reinsurance.trace(mp_index, mp, basis, treaty)` — 이 재보험계약의 출재
+- `reinsurance.trace(mp_index, mp, basis, treaty=treaty)` — 이 재보험계약의 출재
   현금흐름 (회수 / 재보험료), BEL = PV(재보험료) - PV(회수), 전가위험 (RA),
   순원가/이익 (CSM) 의 계산 경로를 트리로 확인 (다른 모형의 `gmm.trace` 에
   대응하는 재보험 버전).

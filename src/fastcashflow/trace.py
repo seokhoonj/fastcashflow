@@ -739,8 +739,8 @@ def show_trace_reinsurance(
     mp_index: int,
     model_points: ModelPoints,
     basis: Basis | dict,
-    treaty: Treaty,
     *,
+    treaty: Treaty,
     file: IO | None = None,
 ) -> None:
     """Print a tree of how one reinsurance-held model point's BEL / RA / CSM is built.
@@ -1347,8 +1347,8 @@ def show_trace_diff_reinsurance(
     model_points: ModelPoints,
     basis_a: Basis | dict,
     basis_b: Basis | dict,
-    treaty: Treaty,
     *,
+    treaty: Treaty,
     label_a: str = "before",
     label_b: str = "after",
     file: IO | None = None,

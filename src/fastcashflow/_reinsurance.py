@@ -85,15 +85,18 @@ class ReinsuranceAggregate:
     BEL / RA / CSM are additive across contracts, so a large ceded book's
     reinsurance asset/liability run-off is its per-model-point trajectories
     summed over the model-point axis. Holds the scalar inception totals plus the
-    ``(n_time+1,)`` aggregate ``csm_path`` and the ``(n_time,)`` aggregate
-    ``recovery`` / ``reinsurance_premium``. There is no loss component (Sec. 65).
-    What :func:`~fastcashflow.reinsurance.measure_aggregate` returns, computed in
+    ``(n_time+1,)`` aggregate ``bel_path`` / ``ra_path`` / ``csm_path`` (matching
+    the GMM / VFA aggregates) and the ``(n_time,)`` aggregate ``recovery`` /
+    ``reinsurance_premium``. There is no loss component (Sec. 65). What
+    :func:`~fastcashflow.reinsurance.measure_aggregate` returns, computed in
     bounded memory.
     """
 
     bel: float                      # portfolio inception BEL total
     ra: float                       # portfolio inception RA total
     csm: float                      # portfolio inception CSM total
+    bel_path: FloatArray            # (n_time+1,) -- aggregate BEL trajectory
+    ra_path: FloatArray             # (n_time+1,) -- aggregate RA trajectory
     csm_path: FloatArray            # (n_time+1,) -- aggregate CSM trajectory
     recovery: FloatArray            # (n_time,)   -- aggregate recoveries
     reinsurance_premium: FloatArray  # (n_time,)  -- aggregate reinsurance premiums
@@ -218,8 +221,8 @@ def measure_reinsurance(
 def measure_reinsurance_aggregate(
     model_points: ModelPoints,
     basis: Basis,
-    treaty: Treaty,
     *,
+    treaty: Treaty,
     chunk_size: int = 200_000,
 ) -> ReinsuranceAggregate:
     """Portfolio-aggregate reinsurance-held measurement in bounded memory.
@@ -242,6 +245,8 @@ def measure_reinsurance_aggregate(
     # path adds into the leading slice of the global one -- a contract carries
     # nothing past its coverage period.
     n_time = int(np.asarray(model_points.contract_boundary_months).max())
+    bel_path = np.zeros(n_time + 1)
+    ra_path = np.zeros(n_time + 1)
     csm_path = np.zeros(n_time + 1)
     recovery = np.zeros(n_time)
     reinsurance_premium = np.zeros(n_time)
@@ -252,6 +257,8 @@ def measure_reinsurance_aggregate(
             model_points.subset(idx), basis, treaty=treaty, full=True)
         nt1 = m.csm_path.shape[1]
         nt = m.recovery.shape[1]
+        bel_path[:nt1] += m.bel_path.sum(axis=0)
+        ra_path[:nt1] += m.ra_path.sum(axis=0)
         csm_path[:nt1] += m.csm_path.sum(axis=0)
         recovery[:nt] += m.recovery.sum(axis=0)
         reinsurance_premium[:nt] += m.reinsurance_premium.sum(axis=0)
@@ -259,16 +266,17 @@ def measure_reinsurance_aggregate(
         ra += float(m.ra.sum())
         csm += float(m.csm.sum())
     return ReinsuranceAggregate(
-        bel=bel, ra=ra, csm=csm, csm_path=csm_path,
-        recovery=recovery, reinsurance_premium=reinsurance_premium)
+        bel=bel, ra=ra, csm=csm, bel_path=bel_path, ra_path=ra_path,
+        csm_path=csm_path, recovery=recovery,
+        reinsurance_premium=reinsurance_premium)
 
 
 def measure_reinsurance_stream(
     input_path,
     output_dir,
     basis: Basis,
-    treaty: Treaty,
     *,
+    treaty: Treaty,
     coverages=None,
     calculation_methods=None,
     chunk_size: int = 20_000_000,
@@ -318,8 +326,8 @@ def measure_reinsurance_inforce(
     model_points: ModelPoints,
     state: InforceState,
     basis: Basis,
-    treaty: Treaty,
     *,
+    treaty: Treaty,
     period_months: int | None = None,
     full: bool = True,
 ) -> ReinsuranceMeasurement:
