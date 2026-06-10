@@ -144,7 +144,7 @@
   - 챕터
   - 다루는 것
 * - 4.1
-  - [재진단암 보험](semi-markov/reincidence)
+  - [재진단암](semi-markov/reincidence)
   - 한국 시장 highlight. 1차/2차 진단 일시금, 재진단 면책기간. Semi-Markov
     (상태 경과 의존) 의 첫 챕터.
 * - 4.2
@@ -174,6 +174,10 @@
   - [최저보증의 시간가치 (TVOG)](variable/gmdb-gmab-tvog)
   - 같은 계약에 `return_scenarios` 를 넣어 보증의 시간가치를 측정.
     intrinsic 대 시간가치 분해.
+* - 5.3
+  - [적립이율 보증 (크레딧 floor)](variable/crediting-floor)
+  - 계좌를 매월 `max(수익률, 보증이율)` 로 떠받치는 세 번째 보증. 0% 원금보존,
+    `vfa.tvog`, 월 래칫이 비싼 이유.
 ```
 
 ### 6. 재보험
@@ -349,6 +353,7 @@ semi-markov/long-term-care
 
 variable/gmdb-gmab
 variable/gmdb-gmab-tvog
+variable/crediting-floor
 ```
 
 ```{toctree}
