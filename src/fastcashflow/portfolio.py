@@ -39,6 +39,7 @@ from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.movement import roll_forward, reconcile
 from fastcashflow.projection import Cashflows
 from fastcashflow.report import report, Report
+from fastcashflow.trace import show_trace, show_trace_vfa, show_trace_paa
 
 #: The orchestrator's public surface -- the measurement entry points and their
 #: result containers. Set explicitly so ``from fastcashflow.portfolio import *``
@@ -46,10 +47,39 @@ from fastcashflow.report import report, Report
 #: the leaf measure functions, ...).
 __all__ = [
     "measure", "measure_aggregate", "measure_groups",
-    "measure_group_of_contracts", "PortfolioMeasurement", "PortfolioAggregate",
-    "PortfolioGroups", "PortfolioReport", "PortfolioMovements",
-    "PortfolioReconciliation", "ModelMeasurement",
+    "measure_group_of_contracts", "trace", "PortfolioMeasurement",
+    "PortfolioAggregate", "PortfolioGroups", "PortfolioReport",
+    "PortfolioMovements", "PortfolioReconciliation", "ModelMeasurement",
 ]
+
+#: Route one model point to its model's tracer (the mixed-portfolio trace).
+_MODEL_TRACE = {"GMM": show_trace, "VFA": show_trace_vfa, "PAA": show_trace_paa}
+
+
+def trace(mp_index: int, model_points: ModelPoints, basis, *, file=None) -> None:
+    """Trace one model point in a mixed portfolio, routed to its model's tracer.
+
+    The portfolio counterpart of the per-model ``trace``: ``basis`` is a
+    :class:`~fastcashflow.basis.BasisRouter` (as for :func:`measure`), the row's
+    segment selects its measurement model, and the trace is rendered by that
+    model's tracer (``fcf.gmm.trace`` / ``fcf.vfa.trace`` / ``fcf.paa.trace``) --
+    so a VFA row is never traced as GMM and the reader need not know a contract's
+    model up front. ``file`` defaults to stdout.
+    """
+    if not isinstance(basis, BasisRouter):
+        raise TypeError(
+            "fcf.portfolio.trace requires a BasisRouter (a routed, possibly "
+            "mixed-model portfolio); for a single Basis use fcf.gmm.trace / "
+            "fcf.paa.trace / fcf.vfa.trace")
+    if not 0 <= mp_index < model_points.n_mp:
+        raise IndexError(
+            f"mp_index {mp_index} out of range for n_mp={model_points.n_mp}")
+    partition = _partition_by_model(model_points, basis)
+    model = next((m for m, idx in partition.items()
+                  if idx.size and mp_index in idx), None)
+    if model is None:   # every row is partitioned, so this is defensive only
+        raise ValueError(f"mp_index {mp_index} was not routed to any model")
+    _MODEL_TRACE[model](mp_index, model_points, basis, file=file)
 
 #: The native measurement type each model slot must hold (the per-model
 #: separation invariant: a paa slot can never carry a GMMMeasurement).

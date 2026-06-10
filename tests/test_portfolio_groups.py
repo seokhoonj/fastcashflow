@@ -558,3 +558,31 @@ def test_vfa_two_segments_same_return_reconcile():
     assert np.allclose(pg.vfa.bel_path, ref.bel_path)
     assert np.allclose(pg.vfa.csm_path, ref.csm_path)        # 2-D return curve reconciled
     assert np.allclose(pg.vfa.cashflows.inforce, ref.cashflows.inforce)
+
+
+def test_portfolio_trace_routes_each_row_to_its_model():
+    """portfolio.trace renders a row with its segment's model tracer: a GMM row
+    via the GMM tracer, a PAA row via the PAA tracer, a VFA row via the VFA
+    tracer -- a non-GMM row is never traced as GMM."""
+    import io
+
+    mp, router = _mixed_book()                     # GMM rows 0,1; PAA row 2; VFA row 3
+
+    def render(row):
+        buf = io.StringIO()
+        fcf.portfolio.trace(row, mp, router, file=buf)
+        return buf.getvalue()
+
+    gmm, paa, vfa = render(0), render(2), render(3)
+    assert "PAA" not in gmm and "VFA" not in gmm   # GMM row -> GMM tracer (no model tag)
+    assert "PAA" in paa                            # PAA row -> PAA tracer
+    assert "VFA" in vfa                            # VFA row -> VFA tracer
+
+
+def test_portfolio_trace_requires_router_and_valid_index():
+    """portfolio.trace needs a BasisRouter (a routed book) and an in-range row."""
+    mp, router = _mixed_book()
+    with pytest.raises(TypeError, match="BasisRouter"):
+        fcf.portfolio.trace(0, mp, router.resolve(("G", "GA")))   # a single Basis
+    with pytest.raises(IndexError):
+        fcf.portfolio.trace(99, mp, router)
