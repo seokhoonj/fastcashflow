@@ -67,6 +67,27 @@ class ReinsuranceMeasurement:
     group_sizes: IntArray | None = None     # model points per group, aligned with labels
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class ReinsuranceAggregate:
+    """Portfolio-aggregate reinsurance-held trajectories -- the scalable view.
+
+    BEL / RA / CSM are additive across contracts, so a large ceded book's
+    reinsurance asset/liability run-off is its per-model-point trajectories
+    summed over the model-point axis. Holds the scalar inception totals plus the
+    ``(n_time+1,)`` aggregate ``csm_path`` and the ``(n_time,)`` aggregate
+    ``recovery`` / ``reinsurance_premium``. There is no loss component (Sec. 65).
+    What :func:`~fastcashflow.reinsurance.measure_aggregate` returns, computed in
+    bounded memory.
+    """
+
+    bel: float                      # portfolio inception BEL total
+    ra: float                       # portfolio inception RA total
+    csm: float                      # portfolio inception CSM total
+    csm_path: FloatArray            # (n_time+1,) -- aggregate CSM trajectory
+    recovery: FloatArray            # (n_time,)   -- aggregate recoveries
+    reinsurance_premium: FloatArray  # (n_time,)  -- aggregate reinsurance premiums
+
+
 class Treaty(Protocol):
     """How a reinsurance treaty cedes the direct cash flows.
 
@@ -162,6 +183,53 @@ def measure_reinsurance(
         discount_bom=discount_bom,
         model_points=model_points,
     )
+
+
+def measure_reinsurance_aggregate(
+    model_points: ModelPoints,
+    basis: Basis,
+    treaty: Treaty,
+    *,
+    chunk_size: int = 200_000,
+) -> ReinsuranceAggregate:
+    """Portfolio-aggregate reinsurance-held measurement in bounded memory.
+
+    The reinsurance counterpart of :func:`~fastcashflow.gmm.measure_aggregate`:
+    BEL / RA / CSM and the ceded cash flows are additive across contracts, so the
+    ceded book's run-off is the per-model-point trajectories summed over the
+    model-point axis. Runs :func:`measure_reinsurance` over row-blocks of
+    ``chunk_size`` model points and accumulates only the ``(n_time+1,)`` /
+    ``(n_time,)`` sums, so peak memory is ``O(chunk_size x n_time)`` regardless of
+    ``n_mp``. Returns a :class:`ReinsuranceAggregate` (scalar totals + aggregate
+    ``csm_path`` / ``recovery`` / ``reinsurance_premium``) -- a scalable sum of
+    the measured results, not a group remeasurement. ``basis`` is a single
+    :class:`Basis`, as for :func:`measure_reinsurance`.
+    """
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    n_mp = model_points.n_mp
+    # A chunk projects only to its own boundary.max(); its (shorter) aggregate
+    # path adds into the leading slice of the global one -- a contract carries
+    # nothing past its coverage period.
+    n_time = int(np.asarray(model_points.contract_boundary_months).max())
+    csm_path = np.zeros(n_time + 1)
+    recovery = np.zeros(n_time)
+    reinsurance_premium = np.zeros(n_time)
+    bel = ra = csm = 0.0
+    for start in range(0, n_mp, chunk_size):
+        idx = np.arange(start, min(start + chunk_size, n_mp))
+        m = measure_reinsurance(model_points.subset(idx), basis, treaty)
+        nt1 = m.csm_path.shape[1]
+        nt = m.recovery.shape[1]
+        csm_path[:nt1] += m.csm_path.sum(axis=0)
+        recovery[:nt] += m.recovery.sum(axis=0)
+        reinsurance_premium[:nt] += m.reinsurance_premium.sum(axis=0)
+        bel += float(m.bel.sum())
+        ra += float(m.ra.sum())
+        csm += float(m.csm.sum())
+    return ReinsuranceAggregate(
+        bel=bel, ra=ra, csm=csm, csm_path=csm_path,
+        recovery=recovery, reinsurance_premium=reinsurance_premium)
 
 
 def _pv_path(month_pv: FloatArray, discount_bom: FloatArray) -> FloatArray:

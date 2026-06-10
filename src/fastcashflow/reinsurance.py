@@ -7,11 +7,13 @@ mechanics.
 """
 from fastcashflow._reinsurance import (
     QuotaShare,
+    ReinsuranceAggregate,
     ReinsuranceMeasurement,
     measure_reinsurance as measure,
+    measure_reinsurance_aggregate as measure_aggregate,
     measure_reinsurance_inforce as measure_inforce,
 )
 from fastcashflow.trace import show_trace_reinsurance as trace
 
-__all__ = ["measure", "measure_inforce", "trace", "QuotaShare",
-           "ReinsuranceMeasurement"]
+__all__ = ["measure", "measure_aggregate", "measure_inforce", "trace",
+           "QuotaShare", "ReinsuranceMeasurement", "ReinsuranceAggregate"]

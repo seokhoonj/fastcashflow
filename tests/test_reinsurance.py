@@ -206,3 +206,41 @@ def test_reinsurance_inforce_rejects_runoff():
     with pytest.raises(ValueError, match="no remaining coverage"):
         fcf.reinsurance.measure_inforce(mp_inf, state, basis,
                                         fcf.reinsurance.QuotaShare(0.5))
+
+
+def test_reinsurance_aggregate_sums_per_mp_and_is_chunk_invariant():
+    """measure_aggregate is the scalable sum of the per-model-point measure:
+    BEL / RA / CSM totals and the aggregate csm_path / recovery /
+    reinsurance_premium equal the full result summed over the model-point axis,
+    and the chunk size does not change the totals."""
+    basis = _basis()
+    treaty = fcf.reinsurance.QuotaShare(0.4)
+    mp = ModelPoints(
+        issue_age=np.array([35, 40, 45, 50, 55]),
+        premium=np.array([60_000.0, 70_000.0, 80_000.0, 90_000.0, 100_000.0]),
+        term_months=np.array([120, 180, 240, 120, 60]),
+        benefits={0: np.array([1e8, 8e7, 1.2e8, 5e7, 9e7])},
+        calculation_methods=PATTERNS,
+    )
+    agg = fcf.reinsurance.measure_aggregate(mp, basis, treaty)
+    full = fcf.reinsurance.measure(mp, basis, treaty)
+
+    assert np.isclose(agg.bel, full.bel.sum())
+    assert np.isclose(agg.ra, full.ra.sum())
+    assert np.isclose(agg.csm, full.csm.sum())
+    assert np.allclose(agg.csm_path, full.csm_path.sum(axis=0))
+    assert np.allclose(agg.recovery, full.recovery.sum(axis=0))
+    assert np.allclose(agg.reinsurance_premium, full.reinsurance_premium.sum(axis=0))
+
+    agg1 = fcf.reinsurance.measure_aggregate(mp, basis, treaty, chunk_size=1)
+    assert np.isclose(agg1.bel, agg.bel)
+    assert np.allclose(agg1.csm_path, agg.csm_path)
+
+
+def test_reinsurance_aggregate_rejects_bad_chunk_size():
+    basis = _basis()
+    mp = ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8},
+                            calculation_methods=PATTERNS)
+    with pytest.raises(ValueError, match="chunk_size"):
+        fcf.reinsurance.measure_aggregate(mp, basis,
+                                          fcf.reinsurance.QuotaShare(0.5), chunk_size=0)
