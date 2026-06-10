@@ -20,7 +20,7 @@
 **시간가치 (TVOG)** 입니다. 이 챕터는 같은 계약에 시나리오를 넣어 시간가치를
 드러냅니다.
 
-```{admonition} 이 챕터도 GMDB / GMAB 만 — 적립이율 보증은 끔
+```{admonition} 이 챕터도 GMDB / GMAB 만 — 적립이율 보증 제외
 :class: note
 
 5.1 과 마찬가지로 `minimum_crediting_rate` (적립이율 보증, 계좌 크레딧

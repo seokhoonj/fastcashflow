@@ -45,9 +45,12 @@ html[data-theme="dark"] .logo__cashflow { color: #e8ecef; }
     height: auto !important; margin: 0 auto;
 }
 .mermaid .nodeLabel, .mermaid .edgeLabel, .mermaid .stateLabel { line-height: 1.25; }
-.mermaid .edgeLabel { padding: 0.1rem 0.25rem; font-size: 0.78rem; background: transparent !important; }
-.mermaid .edgeLabel rect, .mermaid .edgeLabel foreignObject { fill: transparent !important; background: transparent !important; }
-.mermaid .labelBkg { background: transparent !important; background-color: transparent !important; }
+/* Edge labels: opaque background matching the diagram surface, so the label
+   covers the edge line behind it (legible) without showing a contrasting white
+   box. Transparent backgrounds let the line bleed through the text. */
+.mermaid .edgeLabel { padding: 0.1rem 0.25rem; font-size: 0.78rem; background: var(--pst-color-surface) !important; }
+.mermaid .edgeLabel rect, .mermaid .edgeLabel foreignObject { fill: var(--pst-color-surface) !important; background: var(--pst-color-surface) !important; }
+.mermaid .labelBkg { background: var(--pst-color-surface) !important; background-color: var(--pst-color-surface) !important; }
 .mermaid .cluster rect { rx: 4px; ry: 4px; }
 @media (max-width: 767px) {
     .mermaid { margin-inline: -0.5rem; padding-inline: 0.25rem; }
