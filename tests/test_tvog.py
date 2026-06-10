@@ -126,3 +126,44 @@ def test_tvog_weights_rejects_nonfinite_rate():
         tvog_weights(minimum_crediting_rate=np.nan, fund_fee=0.015,
                      investment_return=0.04,
                      return_scenarios=np.full((4, 12), 0.003))
+
+
+def test_tvog_term_weight_extends_one_month():
+    """The maturity term weight is the n_time-grid credit-rate weight extended
+    exactly one month -- the matured-term discounted-growth factor a maturity
+    survivor carries (it stayed in the fund the full final month).
+
+    Verified against the closed form recomputed from the same _av_and_discount
+    products, and that the per-column tvog_weights curve is unchanged (the term
+    weight is a sibling, not a widening of the (n_time,) contract). A direction
+    assertion (w_term >= w[-1]) is deliberately NOT made -- it holds on average
+    but inverts on small scenario sets from Monte-Carlo noise.
+    """
+    from fastcashflow.tvog import (
+        tvog_weights, tvog_term_weight, _av_and_discount, credited_monthly_rate)
+    g, f, r = 0.06, 0.015, 0.04
+    rng = np.random.default_rng(11)
+    r_m = (1 + r) ** (1 / 12) - 1
+    f_m = (1 + f) ** (1 / 12) - 1
+    scen = r_m + 0.02 * rng.standard_normal((400, 3))
+    kw = dict(minimum_crediting_rate=g, fund_fee=f, investment_return=r,
+              return_scenarios=scen)
+    w = tvog_weights(**kw)
+    w_term = tvog_term_weight(**kw)
+
+    # closed-form recomputation of the one-month extension
+    av_s, disc_s = _av_and_discount(credited_monthly_rate(scen, g), scen, f_m)
+    central = np.full((1, 3), r_m)
+    av_c, disc_c = _av_and_discount(credited_monthly_rate(central, g), central, f_m)
+    av_c, disc_c = av_c[0], disc_c[0]
+    ext_s = (av_s[:, -1] * (1 + credited_monthly_rate(scen[:, -1], g)) * (1 - f_m)
+             * (disc_s[:, -1] / (1 + scen[:, -1])))
+    ext_c = (av_c[-1] * (1 + credited_monthly_rate(r_m, g)) * (1 - f_m)
+             * (disc_c[-1] / (1 + r_m)))
+    assert w_term == pytest.approx(float(ext_s.mean() - ext_c), rel=1e-12)
+    assert w.shape == (3,)                       # the per-column curve is unchanged
+
+    # no crediting guarantee -> exact zero, finite even on a near-ruin path
+    assert tvog_term_weight(minimum_crediting_rate=fcf.NO_GUARANTEE_RATE,
+                            fund_fee=f, investment_return=r,
+                            return_scenarios=np.full((4, 6), -0.95)) == 0.0

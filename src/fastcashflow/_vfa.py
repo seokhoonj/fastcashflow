@@ -47,7 +47,8 @@ from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.statemodel import resolve_state_model
 from fastcashflow.tvog import (
-    guarantee_floor_time_value, tvog_weights, _validate_return_scenarios,
+    guarantee_floor_time_value, tvog_weights, tvog_term_weight,
+    _validate_return_scenarios,
     credited_monthly_rate,
 )
 # In-force helpers shared with the GMM path (engine does not import _vfa, and io
@@ -541,13 +542,32 @@ def _vfa_project(
                 "is not supported yet; the time-value pass uses a scalar "
                 "guarantee in v1"
             )
+        w = tvog_weights(
+            minimum_crediting_rate=float(g_unique[0]),
+            fund_fee=basis.fund_fee,
+            investment_return=basis.investment_return,
+            return_scenarios=return_scenarios,
+        )
+        w_term = tvog_term_weight(
+            minimum_crediting_rate=float(g_unique[0]),
+            fund_fee=basis.fund_fee,
+            investment_return=basis.investment_return,
+            return_scenarios=return_scenarios,
+        )
+        # Maturity survivors sit in `exits` at term_idx (= term - 1) but exit at
+        # time = term, credited the full final month -- peel them off that column
+        # weight w[term_idx] and re-seat one month later, mirroring the GMAB /
+        # floor-time-value maturity handling (Sec. B119). The re-seat weight is
+        # per model point: an interior-term maturity (term < the portfolio
+        # horizon) takes that column's own weight w[term_idx + 1]; the
+        # longest-term maturity takes the one-month extension w_term. w_ext =
+        # [w, w_term] selects either by term_idx + 1, matching measure_tvog's
+        # dg_mat[:, term_idx + 1]. Deaths and non-maturity lapses stay at w[t].
+        w_ext = np.append(w, w_term)
         time_value = model_points.account_value * (
-            exits @ tvog_weights(
-                minimum_crediting_rate=float(g_unique[0]),
-                fund_fee=basis.fund_fee,
-                investment_return=basis.investment_return,
-                return_scenarios=return_scenarios,
-            )
+            exits @ w
+            - maturity_survivors * w[term_idx]
+            + maturity_survivors * w_ext[term_idx + 1]
         )
         # The credit-rate guarantee above lifts the account growth; the GMDB
         # and GMAB are put-option floors on the account value. Add their time

@@ -412,6 +412,30 @@ def test_vfa_tvog_matches_measure_tvog():
     assert np.isclose(folded, standalone)
 
 
+def test_vfa_tvog_matches_measure_tvog_mixed_term():
+    """The folded == standalone coupling holds on a MIXED-term book.
+
+    The shorter-term contract matures at an interior column (its term < the
+    portfolio horizon), so its maturity survivor must be re-seated at that
+    column's own credit-rate weight, not the portfolio-horizon one-month
+    extension. Applying a single scalar term weight to every maturity would
+    break this equality -- this is the mixed-term regression guard the
+    single-MP coupling test cannot provide.
+    """
+    basis = _basis(investment_return=0.04)
+    mp = ModelPoints(
+        issue_age=np.array([40, 45]),
+        premium=np.array([0.0, 0.0]),
+        term_months=np.array([60, 120]),               # shorter maturity is interior
+        account_value=np.array([1e8, 7e7]),
+        minimum_crediting_rate=np.array([0.045, 0.045]),   # uniform guarantee (v1)
+    )
+    scenarios = _return_paths(0.04, vol=0.012, n=1500, n_time=120, seed=9)
+    folded = fcf.vfa.measure(mp, basis, scenarios).time_value.sum()
+    standalone = fcf.vfa.tvog(mp, basis, scenarios).time_value
+    assert np.isclose(folded, standalone)
+
+
 def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
     """Per-MP varying minimum_crediting_rate with stochastic return scenarios
     is not supported in v1 -- the time-value pass is portfolio-level."""
@@ -965,3 +989,44 @@ def test_vfa_fee_fix_leaves_bel_ra_csm_byte_identical():
     # the entity's fee PV stays at or above the unearned CSM it mirrors
     assert np.isclose(m.variable_fee[0], 11217277.272926314)
     assert m.variable_fee[0] >= m.csm[0]
+
+
+def test_vfa_credit_tvog_maturity_carries_term_weight():
+    """The folded credit-rate TVOG weights maturity survivors at the matured
+    term (time = term), one month past their term - 1 exit column.
+
+    One policy, a crediting guarantee that bites, a short term, no GMDB/GMAB so
+    the time value is the credit-rate guarantee alone. The corrected stochastic
+    time value differs from the old (term - 1) contraction by EXACTLY
+    account_value * maturity_survivors * (w_term - w[term - 1]) -- the isolated
+    maturity re-seat -- proving deaths / non-maturity lapses are untouched. The
+    deterministic (no-scenario) run is unaffected.
+    """
+    from fastcashflow.tvog import tvog_weights, tvog_term_weight
+    from fastcashflow._vfa import _vfa_project
+    g, r, f, term, av0 = 0.05, 0.04, 0.015, 6, 1e8
+    basis = make_death_basis(mortality_q=0.001, lapse_q=0.01, discount_annual=0.03,
+                             ra_confidence=0.75, mortality_cv=0.10, expense_cv=0.10,
+                             investment_return=r, fund_fee=f)
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0, minimum_crediting_rate=g)
+    rng = np.random.default_rng(3)
+    r_m = (1 + r) ** (1 / 12) - 1
+    scen = r_m + 0.02 * rng.standard_normal((4000, term))
+
+    assert fcf.vfa.measure(mp, basis).time_value[0] == 0.0     # deterministic untouched
+    m = fcf.vfa.measure(mp, basis, return_scenarios=scen)
+
+    kw = dict(minimum_crediting_rate=g, fund_fee=f, investment_return=r,
+              return_scenarios=scen)
+    w = tvog_weights(**kw)
+    w_term = tvog_term_weight(**kw)
+    p = _vfa_project(mp, basis, scen)
+    inforce = p.inforce
+    ip = np.concatenate([inforce, np.zeros((1, 1))], axis=1)
+    exits = ip[:, :-1] - ip[:, 1:]
+    ms = p.cashflows.maturity_survivors
+    ti = term - 1
+    old = av0 * (exits @ w)[0]                                  # old term-1 contraction
+    new = av0 * ((exits @ w)[0] - ms[0] * w[ti] + ms[0] * w_term)
+    assert m.time_value[0] == pytest.approx(new, rel=1e-9)      # corrected fold
+    assert m.time_value[0] - old == pytest.approx(av0 * ms[0] * (w_term - w[ti]))

@@ -197,6 +197,57 @@ def tvog_weights(
     return stochastic - central_factor
 
 
+def tvog_term_weight(
+    *,
+    minimum_crediting_rate: float,
+    fund_fee: float,
+    investment_return: float,
+    return_scenarios: FloatArray,
+) -> float:
+    """The maturity term-column credit-rate TVOG weight (one scalar).
+
+    A maturity survivor exits at time = term -- one month past the width-n_time
+    grid :func:`tvog_weights` covers (whose entries weight start-of-month
+    exits). It stayed in the fund that final month, credited
+    ``max(return, guarantee)`` and charged the fee, so it carries one more month
+    of the guarantee's discounted-growth factor. Returns the mean-over-scenarios
+    less-central weight at the matured term, extending each path by that final
+    month exactly as :func:`guarantee_floor_time_value` does for the GMAB
+    (Sec. B119), so the deterministic GMAB, the floor time value and the
+    credit-rate TVOG agree on the maturity date. ``0.0`` when there is no
+    crediting guarantee -- the short-circuit avoids forming the
+    over/underflowing cumulative product (0 * inf = NaN) on an
+    extreme-but-valid near-ruin return path.
+    """
+    validate_crediting_rate(minimum_crediting_rate)
+    return_scenarios = _validate_return_scenarios(return_scenarios)
+    n_time = return_scenarios.shape[1]
+    if minimum_crediting_rate == NO_GUARANTEE_RATE:
+        return 0.0
+    f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
+    r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
+    central = np.full((1, n_time), r_m)
+    av_s, disc_s = _av_and_discount(
+        credited_monthly_rate(return_scenarios, minimum_crediting_rate),
+        return_scenarios, f_m
+    )
+    av_c, disc_c = _av_and_discount(
+        credited_monthly_rate(central, minimum_crediting_rate), central, f_m
+    )
+    av_c, disc_c = av_c[0], disc_c[0]
+    # One extra month -- the final month's credited growth net of fee on the AV
+    # factor and one more month of return-discount -- so the factor lands on the
+    # matured term column (mirror the GMAB extension in guarantee_floor_time_value).
+    ext_s = (av_s[:, -1]
+             * (1.0 + credited_monthly_rate(return_scenarios[:, -1],
+                                            minimum_crediting_rate))
+             * (1.0 - f_m)) * (disc_s[:, -1] / (1.0 + return_scenarios[:, -1]))
+    ext_c = (av_c[-1]
+             * (1.0 + credited_monthly_rate(r_m, minimum_crediting_rate))
+             * (1.0 - f_m)) * (disc_c[-1] / (1.0 + r_m))
+    return float(ext_s.mean() - ext_c)
+
+
 def guarantee_floor_time_value(
     *,
     account_value: FloatArray,
@@ -325,6 +376,10 @@ def measure_tvog(
     excess of the no-guarantee benefits. Its mean over the scenarios is the
     total value; the cost in the central scenario (``investment_return``) is
     the intrinsic value; the difference is the time value (TVOG).
+
+    Maturity survivors are weighted at the matured term (time = term, one month
+    past their term - 1 exit column), the same re-seat the folded credit-rate
+    TVOG in :func:`vfa.measure` uses, so the two agree on a mixed-term book.
     """
     validate_crediting_rate(model_points.minimum_crediting_rate)
     g_unique = np.unique(np.asarray(model_points.minimum_crediting_rate,
@@ -365,23 +420,53 @@ def measure_tvog(
     exits = inforce_pad[:, :-1] - inforce_pad[:, 1:]
     exit_value = (model_points.account_value[:, None] * exits).sum(axis=0)   # (n_time,)
 
+    # Maturity survivors exit at time = term, not term - 1; weight them at the
+    # matured-term discounted-growth column (one month past the n_time grid) so
+    # this standalone path matches the folded measure_vfa credit-rate TVOG
+    # (test_vfa_tvog_matches_measure_tvog). Boundary-clamp the maturity column
+    # exactly as the deterministic VFA path. Peel the per-MP maturity
+    # account-value mass out of exit_value BEFORE the term re-seat (a mixed-term
+    # book has the maturity slice at different columns per model point).
+    boundary_idx = model_points.contract_boundary_months - 1
+    within = (model_points.term_months - 1) <= boundary_idx
+    term_idx = np.where(within, model_points.term_months - 1, boundary_idx)
+    maturity_survivors = np.where(within, proj.maturity_survivors, 0.0)
+    mat_value = model_points.account_value * maturity_survivors          # (n_mp,)
+    nm_exit_value = exit_value.copy()
+    np.add.at(nm_exit_value, term_idx, -mat_value)
+
     f_m = (1.0 + basis.fund_fee) ** (1.0 / 12.0) - 1.0
 
-    # Without a guarantee the return cancels between growth and discount, so
-    # the no-guarantee benefit is identical in every scenario.
-    no_guarantee = float(np.sum(exit_value * (1.0 - f_m) ** np.arange(n_time)))
+    # Without a guarantee the return cancels between growth and discount, so the
+    # no-guarantee benefit is identical in every scenario. Non-maturity exits on
+    # the n_time fee grid; the maturity slice takes one extra (1 - f_m) month (it
+    # stays in the fund to time = term), keeping the intrinsic value an
+    # apples-to-apples central comparison.
+    fee_grid = (1.0 - f_m) ** np.arange(n_time)
+    no_guarantee = float(nm_exit_value @ fee_grid
+                         + (mat_value * (1.0 - f_m) ** (term_idx + 1)).sum())
 
-    # Stochastic: credit max(return, guarantee), discount at the return.
-    credit = credited_monthly_rate(return_scenarios, g_annual)
-    pv_stochastic = _pv_account_benefits(exit_value, credit, return_scenarios, f_m)
-    guarantee_cost = pv_stochastic - no_guarantee
-
-    # Deterministic central scenario -- a flat return path.
     r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
     central = np.full((1, n_time), r_m)
-    pv_central = _pv_account_benefits(
-        exit_value, credited_monthly_rate(central, g_annual), central, f_m
-    )[0]
+
+    # Stochastic: credit max(return, guarantee), discount at the return. Extend
+    # each path one month so the maturity slice reads the matured term column.
+    dg_s = _discounted_growth(
+        credited_monthly_rate(return_scenarios, g_annual), return_scenarios, f_m)
+    ext_s = (dg_s[:, -1]
+             * (1.0 + credited_monthly_rate(return_scenarios[:, -1], g_annual))
+             * (1.0 - f_m) / (1.0 + return_scenarios[:, -1]))
+    dg_s_mat = np.concatenate([dg_s, ext_s[:, None]], axis=1)     # (n_scen, n_time+1)
+    pv_stochastic = dg_s @ nm_exit_value + dg_s_mat[:, term_idx + 1] @ mat_value
+    guarantee_cost = pv_stochastic - no_guarantee
+
+    # Deterministic central scenario -- a flat return path, the intrinsic value.
+    dg_c = _discounted_growth(
+        credited_monthly_rate(central, g_annual), central, f_m)[0]
+    ext_c = (dg_c[-1] * (1.0 + credited_monthly_rate(r_m, g_annual))
+             * (1.0 - f_m) / (1.0 + r_m))
+    dg_c_mat = np.append(dg_c, ext_c)                            # (n_time+1,)
+    pv_central = float(dg_c @ nm_exit_value + dg_c_mat[term_idx + 1] @ mat_value)
     intrinsic_value = float(pv_central - no_guarantee)
 
     time_value = float(guarantee_cost.mean() - intrinsic_value)
