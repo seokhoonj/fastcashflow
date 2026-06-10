@@ -39,7 +39,7 @@ def _two_reins(**extra) -> ModelPoints:
 
 def _measure(**extra):
     return fcf.reinsurance.measure(
-        _two_reins(**extra), _basis(), fcf.reinsurance.QuotaShare(cession=0.4)
+        _two_reins(**extra), _basis(), treaty=fcf.reinsurance.QuotaShare(cession=0.4)
     )
 
 
@@ -52,6 +52,8 @@ def test_reinsurance_group_per_mp_reproduces_original():
     np.testing.assert_allclose(g.ra, m.ra, rtol=0, atol=1e-6)
     np.testing.assert_allclose(g.csm, m.csm, rtol=0, atol=1e-6)
     np.testing.assert_allclose(g.csm_path, m.csm_path, rtol=0, atol=1e-6)
+    np.testing.assert_allclose(g.bel_path, m.bel_path, rtol=0, atol=1e-6)
+    np.testing.assert_allclose(g.ra_path, m.ra_path, rtol=0, atol=1e-6)
 
 
 def test_reinsurance_group_csm_is_additive_no_floor():
@@ -80,7 +82,7 @@ def test_reinsurance_group_csm_path_reconciles():
 def test_reinsurance_group_of_contracts_net_gain_split():
     """group_of_contracts splits by the net gain at initial recognition (paragraph 61)."""
     mp = _two_reins(product=np.array(["RE", "RE"]))
-    m = fcf.reinsurance.measure(mp, _basis(), fcf.reinsurance.QuotaShare(cession=0.4))
+    m = fcf.reinsurance.measure(mp, _basis(), treaty=fcf.reinsurance.QuotaShare(cession=0.4))
     g = group_of_contracts(m)
     assert isinstance(g, ReinsuranceMeasurement)
     # one product, one cohort -> groups split only by the net-gain classification
@@ -93,5 +95,5 @@ def test_reinsurance_group_of_contracts_net_gain_split():
 
 def test_reinsurance_group_by_axis_name():
     mp = _two_reins(product=np.array(["RA", "RB"]))
-    m = fcf.reinsurance.measure(mp, _basis(), fcf.reinsurance.QuotaShare(cession=0.4))
+    m = fcf.reinsurance.measure(mp, _basis(), treaty=fcf.reinsurance.QuotaShare(cession=0.4))
     assert group(m, "product").bel.shape[0] == 2   # two products

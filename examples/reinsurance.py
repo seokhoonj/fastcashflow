@@ -18,7 +18,7 @@ def main() -> None:
     book = book.subset(seg)
 
     # A 30% quota-share cession of the direct book.
-    reins = fcf.reinsurance.measure(book, basis, fcf.reinsurance.QuotaShare(cession=0.30))
+    reins = fcf.reinsurance.measure(book, basis, treaty=fcf.reinsurance.QuotaShare(cession=0.30))
 
     print("reinsurance held -- 30% quota share")
     print(f"  BEL (PV premiums - recoveries)  {reins.bel.sum():>16,.0f}")

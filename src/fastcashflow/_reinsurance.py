@@ -57,6 +57,8 @@ class ReinsuranceMeasurement:
     ra: FloatArray             # risk transferred to the reinsurer
     csm: FloatArray            # inception net cost/gain
     # trajectory -- full only (None on the headline-only path)
+    bel_path: FloatArray | None = None         # (n_mp, n_time+1)
+    ra_path: FloatArray | None = None          # (n_mp, n_time+1)
     csm_path: FloatArray | None = None         # (n_mp, n_time+1) -- net cost/gain trajectory
     csm_accretion: FloatArray | None = None    # (n_mp, n_time)
     csm_release: FloatArray | None = None      # (n_mp, n_time)
@@ -141,7 +143,11 @@ class QuotaShare:
 
 
 def measure_reinsurance(
-    model_points: ModelPoints, basis: Basis, treaty: Treaty
+    model_points: ModelPoints,
+    basis: Basis,
+    *,
+    treaty: Treaty,
+    full: bool = True,
 ) -> ReinsuranceMeasurement:
     """Measure a reinsurance contract held over a direct portfolio.
 
@@ -152,6 +158,9 @@ def measure_reinsurance(
     or gain of the cover -- and may be negative; it is accreted and released
     by coverage units like a direct contract's CSM, but with no loss
     component (paragraph 65).
+    ``basis`` must resolve to a single :class:`Basis`; multi-segment routers are not
+    accepted. ``full=False`` returns only the headline BEL / RA / CSM and leaves
+    all trajectory and cash-flow fields ``None``.
     """
     basis = _single_basis(basis, entry="measure_reinsurance")
     proj = project_cashflows(model_points, basis)
@@ -174,6 +183,16 @@ def measure_reinsurance(
     # CSM -- the net cost or gain of the cover. No loss component: a net cost
     # is a negative CSM, deferred and amortised over the coverage.
     csm0 = -(bel - ra)
+    if not full:
+        return ReinsuranceMeasurement(
+            bel=bel, ra=ra, csm=csm0, model_points=model_points)
+
+    bel_path = (_pv_path(reinsurance_premium * discount_bom[:-1], discount_bom)
+                - _pv_path(recovery * discount_mid, discount_bom))
+    ra_path = z * (
+        basis.mortality_cv * _pv_path(ceded_mortality * discount_mid, discount_bom)
+        + basis.morbidity_cv * _pv_path(ceded_morbidity * discount_mid, discount_bom)
+    )
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, proj.inforce,
         discount_monthly_curve(basis, proj.n_time),
@@ -183,6 +202,8 @@ def measure_reinsurance(
         bel=bel,
         ra=ra,
         csm=csm[:, 0],
+        bel_path=bel_path,
+        ra_path=ra_path,
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
@@ -227,7 +248,8 @@ def measure_reinsurance_aggregate(
     bel = ra = csm = 0.0
     for start in range(0, n_mp, chunk_size):
         idx = np.arange(start, min(start + chunk_size, n_mp))
-        m = measure_reinsurance(model_points.subset(idx), basis, treaty)
+        m = measure_reinsurance(
+            model_points.subset(idx), basis, treaty=treaty, full=True)
         nt1 = m.csm_path.shape[1]
         nt = m.recovery.shape[1]
         csm_path[:nt1] += m.csm_path.sum(axis=0)
@@ -273,7 +295,8 @@ def measure_reinsurance_stream(
         input_path, output_dir, coverages=coverages,
         calculation_methods=calculation_methods, chunk_size=chunk_size,
         id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
-        measure_fn=lambda mp: measure_reinsurance(mp, basis, treaty),
+        measure_fn=lambda mp: measure_reinsurance(
+            mp, basis, treaty=treaty, full=False),
     )
 
 
@@ -298,6 +321,7 @@ def measure_reinsurance_inforce(
     treaty: Treaty,
     *,
     period_months: int | None = None,
+    full: bool = True,
 ) -> ReinsuranceMeasurement:
     """In-force subsequent measurement of a reinsurance contract held (IFRS 17
     Sec. 44, modified by Sec. 60-70) at the valuation date.
@@ -318,6 +342,9 @@ def measure_reinsurance_inforce(
     :func:`~fastcashflow.apply_inforce_state`) plus ``prior_csm`` /
     ``lock_in_rate``. ``treaty`` is the same cession as the new-business
     :func:`measure_reinsurance`.
+    ``basis`` must resolve to a single :class:`Basis`; multi-segment routers are not
+    accepted. ``full=False`` returns only the as-of headline BEL / RA / CSM and
+    leaves all trajectory and cash-flow fields ``None``.
     """
     basis = _single_basis(basis, entry="reinsurance.measure_inforce")
     state = _reconcile_state(model_points, state)
@@ -370,6 +397,8 @@ def measure_reinsurance_inforce(
     if prior_csm.shape != (n_mp,):
         raise ValueError(f"prior_csm must have shape ({n_mp},), got {prior_csm.shape}")
     period_months = int(period_months) if period_months is not None else 12
+    if period_months < 1:
+        raise ValueError(f"period_months must be >= 1, got {period_months}")
     prior_t = em - period_months
     if np.any(prior_t < 0):
         bad = int(np.argmin(prior_t))
@@ -382,12 +411,21 @@ def measure_reinsurance_inforce(
     inforce_seg = np.ascontiguousarray(
         np.where(mask, proj.inforce[rows[:, None], np.where(mask, src_cols, 0)], 0.0))
     lock_in_monthly = (1.0 + float(state.lock_in_rate)) ** (1.0 / 12.0) - 1.0
-    csm_traj, _, _ = _csm_kernel(prior_csm, inforce_seg,
-                                 np.full(max_len, lock_in_monthly))
+    csm_traj, csm_accretion, csm_release = _csm_kernel(
+        prior_csm, inforce_seg, np.full(max_len, lock_in_monthly))
     csm = csm_traj[:, period_months]
+
+    if not full:
+        return ReinsuranceMeasurement(
+            bel=bel, ra=ra, csm=csm, model_points=model_points)
 
     return ReinsuranceMeasurement(
         bel=bel, ra=ra, csm=csm,
+        bel_path=bel_path,
+        ra_path=ra_path,
+        csm_path=csm_traj,
+        csm_accretion=csm_accretion,
+        csm_release=csm_release,
         recovery=recovery,
         reinsurance_premium=reinsurance_premium,
         cashflows=proj,

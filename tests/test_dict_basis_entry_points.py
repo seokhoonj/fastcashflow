@@ -46,8 +46,8 @@ def test_paa_unwraps_single_segment_dict():
 def test_reinsurance_unwraps_single_segment_dict():
     mp, basis = _death_portfolio()
     treaty = fcf.reinsurance.QuotaShare(cession=0.5)
-    plain = fcf.reinsurance.measure(mp, basis, treaty)
-    viadict = fcf.reinsurance.measure(mp, _wrap(basis), treaty)
+    plain = fcf.reinsurance.measure(mp, basis, treaty=treaty)
+    viadict = fcf.reinsurance.measure(mp, _wrap(basis), treaty=treaty)
     assert np.allclose(viadict.bel, plain.bel)
 
 
@@ -73,7 +73,7 @@ def test_non_gmm_entry_points_reject_multi_segment_dict():
     with pytest.raises(ValueError, match="single Basis"):
         fcf.paa.measure(mp, multi)
     with pytest.raises(ValueError, match="single Basis"):
-        fcf.reinsurance.measure(mp, multi, treaty)
+        fcf.reinsurance.measure(mp, multi, treaty=treaty)
     with pytest.raises(ValueError, match="single Basis"):
         fcf.vfa.measure(mpv, multi)
 

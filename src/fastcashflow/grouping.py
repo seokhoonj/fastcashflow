@@ -445,6 +445,8 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
         bel=bel,
         ra=ra,
         csm=csm[:, 0],
+        bel_path=reducer.sum(measurement.bel_path),
+        ra_path=reducer.sum(measurement.ra_path),
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,

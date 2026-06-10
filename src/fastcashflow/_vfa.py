@@ -641,6 +641,8 @@ def measure_vfa(
     inception CSM is ``csm0``, so the release kernel is skipped) and leaves the
     trajectory and cash-flow fields ``None`` -- the building block the portfolio
     orchestrator chunks to bound memory.
+    ``basis`` must resolve to a single :class:`Basis`; multi-segment routers are not
+    accepted.
 
     BEL, RA and CSM are returned as month-by-month trajectories. The
     deterministic BEL carries the guarantee's intrinsic value only; when

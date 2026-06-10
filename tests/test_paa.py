@@ -194,16 +194,34 @@ def test_paa_onerous_matches_gmm_with_settlement_discount():
 
 def test_paa_trace_diff_renders_assumption_and_headline():
     """trace_diff shows the changed assumption and the headline LRC / LIC move."""
-    import io, dataclasses
+    import io
 
     b1 = _basis()
-    b2 = dataclasses.replace(b1, discount_annual=0.05)
+    b2 = _basis(mortality_q=0.02)   # onerous claims -> loss_component moves
     mp = ModelPoints.single(40, 10_000.0, 12, benefits={0: 1e6},
                             calculation_methods=PATTERNS)
     buf = io.StringIO()
     fcf.paa.trace_diff(0, mp, b1, b2, file=buf)
     t = buf.getvalue()
-    assert "diff-paa" in t and "discount_annual" in t and "LRC" in t
+    assert "diff-paa" in t and "mortality_annual" in t and "LRC" in t
+
+    # a no-change baseline reports no changes; the shocked diff must not, and at
+    # least one headline metric must show a non-zero numeric delta (not just the
+    # metric label being present).
+    base = io.StringIO()
+    fcf.paa.trace_diff(0, mp, b1, b1, file=base)
+    assert "(no changes in tracked fields)" in base.getvalue()
+    assert "(no changes in tracked fields)" not in t
+    moved = False
+    for line in t.splitlines():
+        if "->" in line and "(" in line and "=" not in line:
+            try:
+                lo = float(line.split("->")[0].split()[-1].replace(",", ""))
+                hi = float(line.split("->")[1].split()[0].replace(",", ""))
+                moved = moved or abs(hi - lo) > 1e-9
+            except (ValueError, IndexError):
+                pass
+    assert moved   # the shocked assumption moved at least one headline metric
 
 
 def test_paa_measure_stream_matches_in_memory(tmp_path):
@@ -226,6 +244,8 @@ def test_paa_measure_stream_matches_in_memory(tmp_path):
                                calculation_methods=PATTERNS, chunk_size=2)
     assert n == 3
     parts = pl.concat([pl.read_parquet(p) for p in sorted(od.glob("part-*.parquet"))])
+    assert parts.height == 3                       # no row dropped on write
+    assert parts["id"].n_unique() == 3             # no id duplicated
     mp = fcf.read_model_points(pp, coverages=cp, calculation_methods=PATTERNS)
     ref = fcf.paa.measure(mp, basis)
     assert np.allclose(sorted(parts["loss_component"].to_list()),

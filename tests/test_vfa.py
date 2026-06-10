@@ -1080,6 +1080,24 @@ def test_vfa_trace_diff_renders_assumption_and_headline():
     t = buf.getvalue()
     assert "diff-vfa" in t and "investment_return" in t and "TVOG" in t
 
+    # a no-change baseline reports no changes; the shocked diff must not, and at
+    # least one headline metric must show a non-zero numeric delta (not just the
+    # metric label being present).
+    base = io.StringIO()
+    fcf.vfa.trace_diff(0, mp, b1, b1, file=base)
+    assert "(no changes in tracked fields)" in base.getvalue()
+    assert "(no changes in tracked fields)" not in t
+    moved = False
+    for line in t.splitlines():
+        if "->" in line and "(" in line and "=" not in line:
+            try:
+                lo = float(line.split("->")[0].split()[-1].replace(",", ""))
+                hi = float(line.split("->")[1].split()[0].replace(",", ""))
+                moved = moved or abs(hi - lo) > 1e-9
+            except (ValueError, IndexError):
+                pass
+    assert moved   # the shocked assumption moved at least one headline metric
+
 
 def test_vfa_measure_stream_matches_in_memory(tmp_path):
     """Streaming the VFA account-value book (single frame, no coverages) gives
@@ -1097,5 +1115,7 @@ def test_vfa_measure_stream_matches_in_memory(tmp_path):
     n = fcf.vfa.measure_stream(pp, od, basis, chunk_size=1)
     assert n == 2
     parts = pl.concat([pl.read_parquet(p) for p in sorted(od.glob("part-*.parquet"))])
+    assert parts.height == 2                       # no row dropped on write
+    assert parts["id"].n_unique() == 2             # no id duplicated
     ref = fcf.vfa.measure(fcf.read_vfa_model_points(pp), basis)
     assert np.allclose(sorted(parts["csm"].to_list()), sorted(ref.csm.tolist()))

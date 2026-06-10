@@ -344,6 +344,8 @@ def measure_aggregate(
     hold every trajectory. ``basis`` may be a single :class:`Basis` or a
     per-segment dict, routed per chunk exactly as :func:`measure` routes it.
     """
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
     n_mp = int(model_points.issue_age.shape[0])
     # The global horizon: a chunk projects only to its own boundary.max(), so
     # its (shorter) aggregate path is added to the leading slice of the global

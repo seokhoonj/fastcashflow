@@ -246,6 +246,8 @@ def measure_paa(
     skips the LRC roll, revenue allocation and LIC entirely (only the onerous
     test is needed), so ``revenue_basis`` is immaterial there. It is the
     building block the portfolio orchestrator chunks to bound memory.
+    ``basis`` must resolve to a single :class:`Basis`; multi-segment routers are not
+    accepted.
     """
     if revenue_basis not in ("time", "claims"):
         raise ValueError(

@@ -67,6 +67,12 @@ def test_paa_aggregate_rejects_non_positive_chunk_size():
         fcf.paa.measure_aggregate(_book(), _flat_basis(), chunk_size=0)
 
 
+def test_gmm_aggregate_rejects_non_positive_chunk_size():
+    import pytest
+    with pytest.raises(ValueError, match="chunk_size"):
+        fcf.gmm.measure_aggregate(_book(), _flat_basis(), chunk_size=0)
+
+
 def test_vfa_aggregate_rejects_non_positive_chunk_size():
     import pytest
     with pytest.raises(ValueError, match="chunk_size"):

@@ -763,7 +763,7 @@ def show_trace_reinsurance(
     i = mp_index
     basis = _resolve_basis(basis, model_points, i)
     sub = model_points.subset([i])
-    m = measure_reinsurance(sub, basis, treaty)
+    m = measure_reinsurance(sub, basis, treaty=treaty)
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
@@ -1369,8 +1369,8 @@ def show_trace_diff_reinsurance(
     ra_basis = _resolve_basis(basis_a, model_points, i)
     rb_basis = _resolve_basis(basis_b, model_points, i)
     sub = model_points.subset([i])
-    ma = measure_reinsurance(sub, ra_basis, treaty)
-    mb = measure_reinsurance(sub, rb_basis, treaty)
+    ma = measure_reinsurance(sub, ra_basis, treaty=treaty)
+    mb = measure_reinsurance(sub, rb_basis, treaty=treaty)
 
     final_lines: list[object] = [
         f"BEL  {_money_delta(float(ma.bel[0]), float(mb.bel[0]))}",

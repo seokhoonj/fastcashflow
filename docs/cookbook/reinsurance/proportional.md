@@ -53,7 +53,7 @@
 * - 지급하는 재보험료
   - `reinsurance_premium` = `cession` × 원수 보험료
 * - 보유 재보험계약 측정
-  - `fcf.reinsurance.measure(mp, basis, treaty)` → `ReinsuranceMeasurement`
+  - `fcf.reinsurance.measure(mp, basis, treaty=treaty)` → `ReinsuranceMeasurement`
 ```
 
 IFRS 17 은 보유 재보험계약을 일반모형 (GMM) 으로 측정하되 **두 가지를
@@ -147,7 +147,7 @@ basis = fcf.Basis(
 treaty = fcf.reinsurance.QuotaShare(cession=0.50)  # 출재비율 50%
 
 # 보유 재보험계약 측정
-r = fcf.reinsurance.measure(mp, basis, treaty)
+r = fcf.reinsurance.measure(mp, basis, treaty=treaty)
 print(f"BEL = {r.bel[0]:.2f}")               # PV(재보험료) - PV(회수금)
 print(f"RA  = {r.ra[0]:.2f}")                # 전가위험
 print(f"CSM = {r.csm[0]:.2f}")               # 순원가(-) / 순이익(+)
@@ -212,7 +212,7 @@ quota share 는 보험금·보험료에 같은 비율을 곱하므로 BEL / RA /
 
 ```python
 for c in (0.25, 0.50, 0.75, 1.00):
-    rr = fcf.reinsurance.measure(mp, basis, fcf.reinsurance.QuotaShare(cession=c))
+    rr = fcf.reinsurance.measure(mp, basis, treaty=fcf.reinsurance.QuotaShare(cession=c))
     print(f"cession={c:.2f}  BEL={rr.bel[0]:>8.4f}  RA={rr.ra[0]:>7.4f}  CSM={rr.csm[0]:>8.4f}")
 ```
 
@@ -249,7 +249,7 @@ with tempfile.TemporaryDirectory() as tmp:
 
     b      = port_basis.resolve(("TERM_LIFE_A", "GA"))                                              # 한 segment 의 가정
     direct = fcf.gmm.measure(port_mp, b, full=False)                                        # 원수 측정 (headline)
-    reins  = fcf.reinsurance.measure(port_mp, b, fcf.reinsurance.QuotaShare(cession=0.50))
+    reins  = fcf.reinsurance.measure(port_mp, b, treaty=fcf.reinsurance.QuotaShare(cession=0.50))
 
     print(f"direct  BEL={direct.bel.sum():>14,.0f}  RA={direct.ra.sum():>9,.0f}  CSM={direct.csm.sum():>14,.0f}")
     print(f"reins   BEL={reins.bel.sum():>14,.0f}  RA={reins.ra.sum():>9,.0f}  CSM={reins.csm.sum():>14,.0f}")
@@ -308,7 +308,7 @@ inf) 값이면 `QuotaShare(...)` 생성 시점에 바로 `ValueError` 로
 
 ```python
 d = fcf.gmm.measure(mp, basis)
-r = fcf.reinsurance.measure(mp, basis, fcf.reinsurance.QuotaShare(cession=0.50))
+r = fcf.reinsurance.measure(mp, basis, treaty=fcf.reinsurance.QuotaShare(cession=0.50))
 assert abs(r.bel[0] - (-0.50 * d.bel[0])) < 1e-9    # BEL 거울
 assert abs(r.ra[0]  - ( 0.50 * d.ra[0])) < 1e-9     # RA 비례
 print("거울 항등식 OK")
