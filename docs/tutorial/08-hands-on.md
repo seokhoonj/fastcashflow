@@ -109,7 +109,7 @@ basis = fcf.Basis(
 엔진은 모든 rate 함수를 **5-인자** `(sex, issue_age, duration, issue_class,
 elapsed)` 로 부릅니다 (issue_class=직업/언더라이팅 등급, elapsed=상태 경과).
 위처럼 3-인자 `(sex, issue_age, duration)` 로 써도 자동으로 5-인자로 감싸여
-잘 돕니다. **함정**: 배수 같은 상수를 *네 번째 기본인자* 로 끼워 넣지 마세요 —
+잘 돕니다. **함정**: 배수 같은 상수를 **네 번째 기본인자** 로 끼워 넣지 마세요 —
 `lambda s, a, d, f=0.9: ...` 는 4-인자 rate 로 읽혀 엔진이 `issue_class` 를
 `f` 자리에 밀어넣어 **조용히 덮어씁니다** (에러 없이 틀린 율). 상수는 클로저로
 잡으세요 (`def shock(f): return lambda s, a, d: base(s, a, d) * f`).

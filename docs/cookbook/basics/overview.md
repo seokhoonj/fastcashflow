@@ -57,8 +57,8 @@ flowchart TB
   `Basis(...)` (1세그먼트), `samples.*` — 검산 · 토이 · 민감도용. `.single` 은
   생성자가 배열 모양이라 ModelPoints 전용 sugar 고, `Basis` 는 생성자가
   스칼라 / 콜러블을 직접 받아 별도 sugar 가 없습니다.
-- **담보의 두 측면** — *산출방법* (`CalculationMethod`) 은 계약 쪽,
-  *율* (`CoverageRate`) 은 가정 쪽.
+- **담보의 두 측면** — **산출방법** (`CalculationMethod`) 은 계약 쪽,
+  **율** (`CoverageRate`) 은 가정 쪽.
 
 ## 율(rate) 입력 형태
 
