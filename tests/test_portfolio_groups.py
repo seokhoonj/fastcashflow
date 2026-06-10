@@ -620,3 +620,59 @@ def test_portfolio_trace_diff_requires_routers():
         fcf.portfolio.trace_diff(0, mp, single, router)
     with pytest.raises(TypeError, match="BasisRouter"):
         fcf.portfolio.trace_diff(0, mp, router, single)
+
+
+def test_portfolio_measure_inforce_routes_each_partition_to_its_model():
+    """portfolio.measure_inforce values each row at its valuation date with its
+    segment's model measure_inforce, keeping the native measurements per slot --
+    each slot equals the direct per-model in-force call on that partition."""
+    from fastcashflow import InforceState
+    from fastcashflow.portfolio import _submodel_router
+
+    router = BasisRouter(
+        {("G", "GA"): _flat_basis(), ("P", "GA"): _flat_basis(),
+         ("V", "GA"): _flat_basis(investment_return=0.04)},
+        measurement_models={("P", "GA"): "PAA", ("V", "GA"): "VFA"})
+    ids = np.array(["m0", "m1", "m2", "m3"])
+    mp = ModelPoints(
+        issue_age=np.full(4, 40), premium=np.array([5000.0, 0.0, 1200.0, 0.0]),
+        term_months=np.full(4, 60), benefits={0: np.full(4, 1e4)},
+        account_value=np.array([0.0, 0.0, 0.0, 1e6]),
+        product=np.array(["G", "G", "P", "V"]), channel=np.array(["GA"] * 4),
+        mp_id=ids, elapsed_months=np.full(4, 24), count=np.full(4, 1.0))
+    state = InforceState(
+        mp_id=ids, elapsed_months=np.full(4, 24), count=np.full(4, 1.0),
+        prior_csm=np.zeros(4), lock_in_rate=0.03,
+        account_value=np.array([0.0, 0.0, 0.0, 1.05e6]))   # observed fund for VFA
+
+    pm = fcf.portfolio.measure_inforce(mp, state, router, period_months=12)
+
+    g = fcf.gmm.measure_inforce(mp.subset([0, 1]), state.subset([0, 1]),
+                                _submodel_router(router, "GMM"), period_months=12)
+    p = fcf.paa.measure_inforce(mp.subset([2]), state.subset([2]),
+                                _submodel_router(router, "PAA"))
+    v = fcf.vfa.measure_inforce(mp.subset([3]), state.subset([3]),
+                                _submodel_router(router, "VFA"), period_months=12)
+    np.testing.assert_array_equal(pm.gmm.index, [0, 1])
+    np.testing.assert_array_equal(pm.paa.index, [2])
+    np.testing.assert_array_equal(pm.vfa.index, [3])
+    assert np.allclose(pm.gmm.measurement.bel, g.bel)
+    assert np.allclose(pm.gmm.measurement.csm, g.csm)
+    assert np.allclose(pm.paa.measurement.lrc, p.lrc)
+    assert np.allclose(pm.vfa.measurement.bel, v.bel)
+
+
+def test_portfolio_measure_inforce_requires_router():
+    """A routed (mixed-model) book is required -- a single Basis is rejected."""
+    from fastcashflow import InforceState
+    router = BasisRouter({("G", "GA"): _flat_basis()})
+    mp = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([5000.0]),
+        term_months=np.array([60]), benefits={0: np.array([1e4])},
+        product=np.array(["G"]), channel=np.array(["GA"]),
+        mp_id=np.array(["m0"]), elapsed_months=np.array([24]), count=np.array([1.0]))
+    state = InforceState(
+        mp_id=np.array(["m0"]), elapsed_months=np.array([24]),
+        count=np.array([1.0]), prior_csm=np.zeros(1), lock_in_rate=0.03)
+    with pytest.raises(TypeError, match="BasisRouter"):
+        fcf.portfolio.measure_inforce(mp, state, router.resolve(("G", "GA")))

@@ -24,18 +24,20 @@ import numpy as np
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
     PAAMeasurement, PAAAggregate, measure_paa, measure_aggregate as _paa_aggregate,
+    measure_inforce as _paa_inforce,
     _stitch_paa_measurements, _scatter_paa_headline)
 from fastcashflow._vfa import (
     VFAMeasurement, VFAAggregate, measure_vfa, measure_aggregate as _vfa_aggregate,
+    measure_inforce as _vfa_inforce,
     _stitch_vfa_measurements, _scatter_vfa_headline)
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
     GMMMeasurement, GMMAggregate, _factorise_segments, measure as _measure_gmm,
-    measure_aggregate as _gmm_aggregate)
+    measure_aggregate as _gmm_aggregate, measure_inforce as _gmm_inforce)
 from fastcashflow.grouping import (
     group, group_of_contracts, _GroupReducer, _join_keys, _finalise_gmm_group,
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.modelpoints import ModelPoints, InforceState, align_inforce_state
 from fastcashflow.movement import roll_forward, reconcile
 from fastcashflow.projection import Cashflows
 from fastcashflow.report import report, Report
@@ -48,7 +50,7 @@ from fastcashflow.trace import (
 #: does not leak the imported helpers (np, dataclass, BasisRouter, ModelPoints,
 #: the leaf measure functions, ...).
 __all__ = [
-    "measure", "measure_aggregate", "measure_groups",
+    "measure", "measure_aggregate", "measure_inforce", "measure_groups",
     "measure_group_of_contracts", "trace", "trace_diff",
     "PortfolioMeasurement", "PortfolioAggregate", "PortfolioGroups",
     "PortfolioReport", "PortfolioMovements", "PortfolioReconciliation",
@@ -114,6 +116,60 @@ def trace_diff(mp_index: int, model_points: ModelPoints, basis_a, basis_b, *,
                         "BasisRouter")
     _MODEL_TRACE_DIFF[model](mp_index, model_points, basis_a, basis_b,
                              label_a=label_a, label_b=label_b, file=file)
+
+
+def measure_inforce(model_points: ModelPoints, state: InforceState, basis, *,
+                    period_months: int | None = None,
+                    revenue_basis: str = "time", full: bool = True,
+                    backend: str = "cpu") -> PortfolioMeasurement:
+    """In-force subsequent measurement of a mixed-model portfolio (IFRS 17 Sec. 44).
+
+    The portfolio counterpart of :func:`fcf.gmm.measure_inforce`: each row is
+    routed to its segment's model and valued at its ``elapsed_months`` valuation
+    date by that model's ``measure_inforce``, the native measurements kept in
+    separate slots (a non-GMM row is never measured as GMM). ``basis`` is a
+    :class:`~fastcashflow.basis.BasisRouter`; ``state`` an :class:`InforceState`
+    aligned to ``model_points`` by ``mp_id`` (each model's leaf re-aligns it to
+    its own partition). ``period_months`` drives the GMM / VFA prior-CSM carry
+    (PAA has no CSM, so it is immaterial to the PAA slot); ``revenue_basis`` is
+    the PAA revenue pattern.
+
+    GMM rows may span multiple segments; the VFA / PAA partitions must resolve to
+    a single :class:`Basis` per model (their leaf in-force is single-Basis), as
+    for :func:`fcf.vfa.measure` / :func:`fcf.paa.measure`.
+    """
+    if not isinstance(basis, BasisRouter):
+        raise TypeError(
+            "fcf.portfolio.measure_inforce requires a BasisRouter (a routed, "
+            "possibly mixed-model portfolio); for a single Basis use "
+            "fcf.gmm.measure_inforce / fcf.paa.measure_inforce / "
+            "fcf.vfa.measure_inforce")
+    # Row-align the state to the full book once, so each model partition's
+    # state.subset(idx) lines up with model_points.subset(idx) -- the leaf
+    # measure_inforce requires the state to cover exactly its valued contracts.
+    state = align_inforce_state(model_points, state)
+    parts = _partition_by_model(model_points, basis)
+    covered = sum(part.size for part in parts.values())
+    if covered != model_points.n_mp:                  # factorisation must be total
+        raise ValueError(
+            f"model partition covers {covered} of {model_points.n_mp} rows")
+    slots = {}
+    gmm_idx = parts["GMM"]
+    if gmm_idx.size:
+        slots["gmm"] = ModelMeasurement(index=gmm_idx, measurement=_gmm_inforce(
+            model_points.subset(gmm_idx), state.subset(gmm_idx),
+            _submodel_router(basis, "GMM"), period_months=period_months, full=full))
+    paa_idx = parts["PAA"]
+    if paa_idx.size:
+        slots["paa"] = ModelMeasurement(index=paa_idx, measurement=_paa_inforce(
+            model_points.subset(paa_idx), state.subset(paa_idx),
+            _submodel_router(basis, "PAA"), revenue_basis=revenue_basis, full=full))
+    vfa_idx = parts["VFA"]
+    if vfa_idx.size:
+        slots["vfa"] = ModelMeasurement(index=vfa_idx, measurement=_vfa_inforce(
+            model_points.subset(vfa_idx), state.subset(vfa_idx),
+            _submodel_router(basis, "VFA"), period_months=period_months))
+    return PortfolioMeasurement(model_points=model_points, **slots)
 
 #: The native measurement type each model slot must hold (the per-model
 #: separation invariant: a paa slot can never carry a GMMMeasurement).
