@@ -190,7 +190,7 @@ def csm_with(gmdb, gmab):
     )
     return fcf.vfa.measure(m, basis).csm[0]
 
-csm_off  = csm_with(0.0,    0.0)     # 두 보증 모두 끔
+csm_off  = csm_with(0.0,    0.0)     # 두 보증 모두 끄기
 csm_gmdb = csm_with(1.02e8, 0.0)     # GMDB 만
 csm_gmab = csm_with(0.0,    1.05e8)  # GMAB 만
 csm_both = csm_with(1.02e8, 1.05e8)  # 둘 다

@@ -207,7 +207,7 @@ mp = fcf.read_model_points(
 )
 cf = fcf.gmm.measure(mp, basis).cashflows.morbidity_cf[0]
 print(f"year 0, 1, 2 = {cf[0]:.1f}, {cf[12]:.1f}, {cf[24]:.1f}")  # x1, x1.15, x1.15^2
-print(f"year 5, 6    = {cf[60]:.1f}, {cf[72]:.1f}")               # 상한이 무는 자리
+print(f"year 5, 6    = {cf[60]:.1f}, {cf[72]:.1f}")               # 상한에 닿는 자리
 ```
 
 출력:

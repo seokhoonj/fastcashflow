@@ -215,7 +215,7 @@ print(f"보증 없음 TVOG = {none.time_value[0]:>14,.0f}")
 
 `minimum_crediting_rate = 0.0` 은 "보증 없음" 이 아니라 **0% 원금보존 보증**
 입니다 (시간가치를 가짐). 끄려면 인자를 생략하거나 `fcf.NO_GUARANTEE_RATE` 를
-씁니다. 금액 보증 (GMDB / GMAB) 의 `0 = 끔` 과 규칙이 갈리는 자리입니다
+씁니다. 금액 보증 (GMDB / GMAB) 의 `0 = 보증 없음` 과 규칙이 달라지는 자리입니다
 ([5.1](gmdb-gmab) 참조).
 
 ## 인접 레시피
