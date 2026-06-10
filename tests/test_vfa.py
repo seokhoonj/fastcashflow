@@ -962,15 +962,20 @@ def test_vfa_maturity_survivor_keeps_last_month_fee():
     assert m.variable_fee[0] > float(monthly[:2].sum())          # term-month fee present
 
 
-def test_vfa_fee_fix_leaves_bel_ra_csm_byte_identical():
+def test_vfa_fee_fix_leaves_bel_ra_csm_unchanged():
     """Re-timing the fee moves ONLY variable_fee: BEL / RA / CSM / loss / LIC are
     unchanged because the fee never enters them (BEL = PV(benefits) +
     PV(expenses) - fund; FCF = BEL + RA + time_value). Golden values pinned from
     the build; a future edit routing the fee into BEL / CSM breaks this.
 
+    Compared with ``np.isclose`` rather than exact equality: a fee leaking into
+    BEL / CSM would move them by millions (the fee PV is ~1.1e7), far beyond any
+    tolerance, while a last-ULP difference in the float sum across platforms
+    (BLAS / numpy build) must not redden CI.
+
     The fixture carries a non-zero RA (expense items + expense_cv) and a non-zero
-    LIC (a settlement pattern), so the RA / LIC byte-identity assertions actually
-    bite rather than comparing zero to zero.
+    LIC (a settlement pattern), so the RA / LIC assertions actually bite rather
+    than comparing zero to zero.
     """
     from dataclasses import replace
     basis = make_death_basis(mortality_q=0.005 / 12, lapse_q=0.04 / 12,
@@ -981,11 +986,11 @@ def test_vfa_fee_fix_leaves_bel_ra_csm_byte_identical():
     basis = replace(basis, expense_cv=0.10, settlement_pattern=np.array([0.5, 0.3, 0.2]))
     m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 120, account_value=1e8), basis)
     assert m.ra[0] > 0.0 and np.asarray(m.lic).sum() > 0.0    # the assertions bite
-    assert m.bel[0] == -10866232.448249847           # fee never enters BEL
-    assert m.ra[0] == 42126.06353465136              # ... nor RA
-    assert m.csm[0] == 10824106.384715196            # ... nor CSM
+    assert np.isclose(m.bel[0], -10866232.448249847)      # fee never enters BEL
+    assert np.isclose(m.ra[0], 42126.06353465136)         # ... nor RA
+    assert np.isclose(m.csm[0], 10824106.384715196)       # ... nor CSM
     assert m.loss_component[0] == 0.0
-    assert np.asarray(m.lic).sum() == 80303961.70710817   # ... nor LIC
+    assert np.isclose(np.asarray(m.lic).sum(), 80303961.70710817)   # ... nor LIC
     # the entity's fee PV stays at or above the unearned CSM it mirrors
     assert np.isclose(m.variable_fee[0], 11217277.272926314)
     assert m.variable_fee[0] >= m.csm[0]
