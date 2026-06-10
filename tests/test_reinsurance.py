@@ -93,3 +93,46 @@ def test_reinsurance_rejects_bad_cession_rate():
             ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS),
             _basis(), fcf.reinsurance.QuotaShare(cession=1.5)
         )
+
+
+def test_reinsurance_trace_renders_and_matches_measure():
+    """reinsurance.trace prints a tree whose headline BEL / RA / CSM match the
+    measure -- the tree is a faithful view of the same computation."""
+    import io
+
+    basis = _basis()
+    treaty = fcf.reinsurance.QuotaShare(cession=0.4)
+    mp = ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8},
+                            calculation_methods=PATTERNS)
+    m = fcf.reinsurance.measure(mp, basis, treaty)
+
+    buf = io.StringIO()
+    fcf.reinsurance.trace(0, mp, basis, treaty, file=buf)
+    text = buf.getvalue()
+
+    assert "Reinsurance" in text
+    assert "Treaty / inputs" in text
+    assert "CSM roll-forward" in text
+    # the headline figures in the tree equal the measure's (no drift)
+    assert f"{float(m.bel[0]):>15,.2f}" in text
+    assert f"{float(m.ra[0]):>15,.2f}" in text
+    assert f"{float(m.csm[0]):>15,.2f}" in text
+
+
+def test_reinsurance_trace_routes_a_dict_basis():
+    """A dict / BasisRouter basis routes by (product, channel), like show_trace."""
+    import io
+
+    mp = fcf.samples.model_points()
+    basis = fcf.samples.basis()
+    buf = io.StringIO()
+    fcf.reinsurance.trace(0, mp, basis, fcf.reinsurance.QuotaShare(0.5), file=buf)
+    assert "Reinsurance" in buf.getvalue()
+
+
+def test_reinsurance_trace_rejects_bad_index():
+    basis = _basis()
+    mp = ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8},
+                            calculation_methods=PATTERNS)
+    with pytest.raises(IndexError):
+        fcf.reinsurance.trace(9, mp, basis, fcf.reinsurance.QuotaShare(0.5))

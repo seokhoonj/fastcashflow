@@ -10,5 +10,6 @@ from fastcashflow._reinsurance import (
     ReinsuranceMeasurement,
     measure_reinsurance as measure,
 )
+from fastcashflow.trace import show_trace_reinsurance as trace
 
-__all__ = ["measure", "QuotaShare", "ReinsuranceMeasurement"]
+__all__ = ["measure", "trace", "QuotaShare", "ReinsuranceMeasurement"]
