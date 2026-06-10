@@ -441,3 +441,34 @@ def test_reinsurance_inforce_per_mp_varying_elapsed_carries_each_csm():
     # each row carries its own CSM, sliced at its own elapsed
     assert np.isclose(v.csm[0], m.csm_path[0, elapsed[0]])
     assert np.isclose(v.csm[1], m.csm_path[1, elapsed[1]])
+
+
+def test_reinsurance_roll_forward_and_reconcile_balance():
+    """roll_forward slices a reinsurance measurement into BEL/RA/CSM period
+    movements; reconcile aggregates them. Each per-MP movement and each
+    portfolio reconciliation block balances (opening + finance/accretion -
+    release == closing), and the CSM runs off to ~0 (no loss component)."""
+    basis = _basis()
+    treaty = fcf.reinsurance.QuotaShare(0.4)
+    mp = ModelPoints(
+        issue_age=np.array([40, 50]), premium=np.array([80_000.0, 60_000.0]),
+        term_months=np.array([60, 60]), benefits={0: np.array([1e8, 7e7])},
+        calculation_methods=PATTERNS)
+    m = fcf.reinsurance.measure(mp, basis, treaty=treaty)
+
+    movs = fcf.roll_forward(m, 12)
+    recs = fcf.reconcile(movs)
+    assert all(isinstance(x, fcf.ReinsurancePeriodMovement) for x in movs)
+    assert all(isinstance(x, fcf.ReinsuranceReconciliation) for x in recs)
+
+    for mv in movs:                                   # per-MP blocks balance
+        assert np.allclose(mv.bel_opening + mv.bel_interest - mv.bel_release,
+                           mv.bel_closing)
+        assert np.allclose(mv.csm_opening + mv.csm_accretion - mv.csm_release,
+                           mv.csm_closing)
+    for r in recs:                                    # portfolio totals balance
+        for comp in ("bel", "ra", "csm"):
+            o = getattr(r, f"{comp}_opening"); fin = getattr(r, f"{comp}_finance")
+            rel = getattr(r, f"{comp}_release"); c = getattr(r, f"{comp}_closing")
+            assert np.isclose(o + fin + rel, c, atol=1e-4)
+    assert np.isclose(recs[-1].csm_closing, 0.0, atol=1e-3)   # fully amortised
