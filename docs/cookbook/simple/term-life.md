@@ -200,7 +200,7 @@ headline 네 숫자만 돌려줍니다.
 :header-rows: 1
 :widths: 12 44 44
 
-* -
+* - 구분
   - `measure(...)` (`full=True`, 기본)
   - `measure(..., full=False)`
 * - 출력
