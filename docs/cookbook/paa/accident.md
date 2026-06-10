@@ -6,7 +6,7 @@
 - 단기 계약을 **PAA (Premium Allocation Approach, 보험료배분접근법)** 로
   측정하는 자리 — `paa.measure`. CSM 대신 미경과보험료식 잔액 (LRC) 을 굴린다
 - 청구가 사고 즉시가 아니라 여러 달에 걸쳐 지급되는 **정산 패턴**
-  (`settlement_pattern`, 청구 run-off) 을 산출기초에 거는 법
+  (`settlement_pattern`, 청구 run-off) 을 산출기초에 설정하는 법
 - 정산 패턴이 있으면 할인은 **스칼라** 여야 하는 이유 (할인 곡선과는 결합 불가)
 - 보험료가 손익분기 아래라 손실요소 (loss component) 가 잡히는 onerous 단기
   계약의 모습
@@ -144,5 +144,5 @@ print(f"4개월 정산  loss = {v_set.loss_component.sum():>12,.2f}")
   으로 재측정하는 워크플로.
 - [8.2 검증 패턴](../workflow/validation) — 한 계약의 측정 경로를 손계산으로
   대조.
-- `fcf.show_trace_paa(0, mp, basis)` — 이 계약의 LRC roll-forward, 보험수익
+- `paa.trace(0, mp, basis)` — 이 계약의 LRC roll-forward, 보험수익
   인식, LIC, 손실요소를 트리로 확인 (PAA 전용 트레이서).

@@ -36,7 +36,7 @@ flowchart TB
     PAA --> RES
     VFA --> RES
     REI --> RES
-    RES --> AN["분석 / 검증<br/>roll_forward · reconcile · transition<br/>group · report · show_trace<br/>plot_* · write_measurement"]
+    RES --> AN["분석 / 검증<br/>roll_forward · reconcile · transition<br/>group · report · trace<br/>plot_* · write_measurement"]
     classDef input fill:#f4f7fa,stroke:#9aa9b5,color:#24313a
     classDef stock fill:#eaf1f8,stroke:#547fa6,color:#17344e
     classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617

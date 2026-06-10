@@ -6,7 +6,7 @@
 - 변액보험이 보장형 (GMM) 과 다른 측정 모델 (VFA) 로 평가되는 이유 —
   계좌가치가 굴러가고 보험사는 수수료를 번다
 - `account_value` + 최저보증 (`minimum_death_benefit` /
-  `minimum_accumulation_benefit`) 을 모델 포인트에 거는 자리
+  `minimum_accumulation_benefit`) 을 모델 포인트에 설정하는 자리
 - `vfa.measure` 의 **결정론 측정** — 보증의 intrinsic value (중앙 시나리오
   비용) 가 CSM 을 얼마나 갉아먹는가
 - 보증을 켜고 끄는 차이로 GMDB / GMAB 의 비용을 각각 분리하는 법

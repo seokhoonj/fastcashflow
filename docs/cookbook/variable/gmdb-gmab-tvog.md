@@ -207,7 +207,7 @@ vol 5%  loss =      7,321,586
 
 `return_scenarios` 의 시간가치 패스에서 GMDB / GMAB **보증액 자체는 계약마다
 달라도** 됩니다 (`max(AV, 보증)` 의 floor 는 per-MP). 적립이율 보증
-(`minimum_crediting_rate`) 에 stochastic 을 거는 경우만 v1 에서 portfolio 전체
+(`minimum_crediting_rate`) 에 stochastic 을 적용하는 경우만 v1 에서 portfolio 전체
 동일 값을 요구하지만, 이 챕터는 적립이율 보증을 쓰지 않으니 해당되지
 않습니다.
 
@@ -234,7 +234,7 @@ vol 5%  loss =      7,321,586
 ## 인접 레시피
 
 - [5.1 변액보험 최저보증 — 결정론 측정](gmdb-gmab) — 같은 계약의 intrinsic
-  value 와 GMDB / GMAB 거는 자리, 계좌가치 궤적. 이 챕터의 전제.
+  value 와 GMDB / GMAB 설정 위치, 계좌가치 궤적. 이 챕터의 전제.
 - `vfa.trace(mp_index, mp, basis, return_scenarios=scen)` — 이 계약의 계좌가치
   궤적, floor 가 무는 자리, TVOG 까지 트리로 확인 (`return_scenarios` 를 주면
   시간가치 경로도).

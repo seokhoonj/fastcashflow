@@ -5,9 +5,9 @@
 
 - 여러 `(product, channel)` 가 섞인 portfolio 를
   **`measure` 로 한 번에** 평가 — 각 계약을 자기 segment 가정으로 라우팅
-- segment 마다 다른 테이블을 거는 법 — 견본의 채널별 `lapse_table`,
+- segment 마다 다른 테이블을 설정하는 법 — 견본의 채널별 `lapse_table`,
   상품×채널별 `expense_table`
-- segment 마다 다른 **StateModel** 을 거는 `state_model` 열
+- segment 마다 다른 **StateModel** 을 지정하는 `state_model` 열
 - 라우팅 키 매칭 (`product` / `channel`) 과 흔한 키 불일치 함정
 ```
 
