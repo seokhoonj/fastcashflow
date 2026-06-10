@@ -40,7 +40,8 @@ from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import (
-    _carry_lic_residual, _risk_adjustment, _rollforward_kernel, _settlement_lic)
+    _carry_lic_residual, _risk_adjustment, _rollforward_kernel,
+    _settlement_factor, _settlement_lic)
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 # In-force helpers shared with the GMM path (engine does not import _paa, and
@@ -254,8 +255,21 @@ def measure_paa(
     # Onerous test -- the GMM inception fulfilment cash flows. Needed by both
     # paths and independent of the LRC roll, so it comes first; the headline
     # path returns right after it.
+    onerous_claim_cf, onerous_morbidity_cf = proj.claim_cf, proj.morbidity_cf
+    if basis.settlement_pattern is not None:
+        # Claims are paid over the settlement pattern, not at incurrence --
+        # discount them to their payment dates in the fulfilment cash flows,
+        # exactly as the GMM onerous test does (engine._measure_full), so the
+        # PAA loss component matches GMM for identical incurred claims. The LIC
+        # below stays undiscounted (Sec. 59); only the onerous-test FCF / RA
+        # see the settlement discount. With a discount curve a settlement
+        # pattern is rejected at Basis construction, so discount_monthly is the
+        # scalar in-year reference (Sec. 40 / B71 -- the rate at incurrence).
+        factor = _settlement_factor(basis.settlement_pattern, basis.discount_monthly)
+        onerous_claim_cf = onerous_claim_cf * factor
+        onerous_morbidity_cf = onerous_morbidity_cf * factor
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
-        proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
+        onerous_claim_cf, onerous_morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.contract_boundary_months,
         discount_monthly_curve(basis, proj.n_time),

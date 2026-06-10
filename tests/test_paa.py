@@ -169,3 +169,24 @@ def test_paa_rejects_bad_revenue_basis_even_on_headline():
     path too (where the revenue allocation it selects is never computed)."""
     with pytest.raises(ValueError, match="revenue_basis"):
         fcf.paa.measure(_paa_mp(), _basis(), revenue_basis="nope", full=False)
+
+
+def test_paa_onerous_matches_gmm_with_settlement_discount():
+    """The PAA onerous test discounts claims to their settlement dates exactly
+    as the GMM does, so the loss component matches GMM for identical claims.
+
+    With both a settlement pattern and a non-zero discount, claims paid later
+    are worth less; the PAA onerous test reuses the GMM fulfilment cash flows
+    and so applies the same _settlement_factor. The LIC stays undiscounted, but
+    the onerous-test FCF / loss component must equal GMM's.
+    """
+    from dataclasses import replace
+    basis = replace(_basis(mortality_q=0.02, discount_annual=0.06),
+                    settlement_pattern=np.array([0.4, 0.3, 0.2, 0.1]))
+    mp = ModelPoints.single(40, 5_000.0, 24, benefits={0: 5e8},
+                            calculation_methods=PATTERNS)
+    gmm = fcf.gmm.measure(mp, basis)
+    paa = fcf.paa.measure(mp, basis)
+    assert paa.loss_component[0] > 0.0                          # genuinely onerous
+    assert np.isclose(paa.loss_component[0], gmm.loss_component[0])
+    assert np.isclose(paa.fcf[0], gmm.bel[0] + gmm.ra[0])
