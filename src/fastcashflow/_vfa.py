@@ -454,8 +454,24 @@ def _vfa_project(
         return shift
     mat_pv_shift = _mat_shift(maturity_benefit)
     g_pv_shift = _mat_shift(maturity_excess)
-    # Variable fee -- the entity's share, deducted from the grown account value.
-    fee_cf = inforce * av[:, :n_time] * (1.0 + credit_m)[:, None] * f_m
+    # Variable fee -- the entity's share, skimmed from the grown account value.
+    # Charged only on the policies in the fund THROUGH month-end, which incur
+    # that month's credit-and-fee growth: the start-of-month in-force less this
+    # month's mid-month exits (deaths and non-maturity lapses). Those exits
+    # leave at the start of the month with the un-grown av[t] -- the same
+    # convention benefit_cf uses above (lines 425-429) -- so they take no part
+    # in the growth or the fee. The maturity survivors are NOT in
+    # non_maturity_exits (removed at term_idx above): they reach the maturity
+    # date with the matured av[term] and so correctly keep the final month's
+    # fee. A Sec. 34 boundary cut sets maturity_survivors = 0, so a censored
+    # contract pays no final-month fee, matching its un-grown start-of-month
+    # payout. Written subtractively (== inforce_pad[:, 1:] + maturity_survivors
+    # at term_idx) so it never MUTATES inforce_pad: the slice inforce_pad[:, 1:]
+    # is a view, so scattering the maturity add-back in place would corrupt the
+    # BEL fund (fund = inforce_pad * av) computed below -- the subtractive form
+    # needs no defensive copy.
+    fee_base = inforce - deaths - non_maturity_exits
+    fee_cf = fee_base * av[:, :n_time] * (1.0 + credit_m)[:, None] * f_m
     # Liability for incurred claims -- exit benefits settled over the pattern.
     if basis.settlement_pattern is None:
         lic = np.zeros((n_mp, n_time + 1))

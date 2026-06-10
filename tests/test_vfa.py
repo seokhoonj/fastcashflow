@@ -881,3 +881,87 @@ def test_vfa_project_exposes_guarantee_excess_and_expense_pv():
     deaths = surv ** np.arange(term) * Q
     assert np.isclose(p.guarantee_excess_pv[0, 0], deaths.sum() * (gmdb - av0))
     assert p.expense_pv.shape == p.bel.shape       # E exposed as a trajectory
+
+
+def test_vfa_fee_excludes_midmonth_exits_hand_calc():
+    """The variable fee is charged on the in-fund-through-month-end population,
+    so a mid-month lapser pays no fee that month.
+
+    Lapse-only (q = 0), term 3, av0 = 1000, no crediting floor. The
+    start-of-month in-force is [1, s, s^2] with s = 1 - LAPSE; the END-of-month
+    population that actually incurs each month's growth-and-fee is [s, s^2, s^3]
+    (the maturity survivor s^3 keeps the last month). The fee discounts
+    mid-month at the underlying return. The corrected fee is strictly below the
+    old start-of-month base [1, s, s^2].
+    """
+    s = 1.0 - LAPSE
+    r, f, term, av0 = 0.06, 0.015, 3, 1000.0
+    basis = make_death_basis(mortality_q=0.0, lapse_q=LAPSE, discount_annual=0.03,
+                             ra_confidence=0.75, mortality_cv=0.10,
+                             investment_return=r, fund_fee=f)
+    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+
+    r_m = (1 + r) ** (1 / 12) - 1
+    f_m = (1 + f) ** (1 / 12) - 1
+    growth = (1 + r_m) * (1 - f_m)
+    av = av0 * growth ** np.arange(term)
+    disc_mid = (1 + r_m) ** -(np.arange(term) + 0.5)
+    monthly = av * (1 + r_m) * f_m * disc_mid
+    eom_base = s ** np.arange(1, term + 1)            # [s, s^2, s^3]  end-of-month
+    expected = float(np.sum(eom_base * monthly))
+    assert np.isclose(m.variable_fee[0], expected)
+    som_base = s ** np.arange(term)                   # [1, s, s^2]    start-of-month (old)
+    assert m.variable_fee[0] < float(np.sum(som_base * monthly))
+
+
+def test_vfa_maturity_survivor_keeps_last_month_fee():
+    """A maturity survivor stays in the fund through the term-month end, so it
+    keeps the final month's fee -- the corrected base does not drop it.
+
+    No decrements (q = 0, lapse = 0), term 3: the in-fund population is [1, 1, 1]
+    including the term month, so the fee spans all three months. With no exits
+    the corrected base collapses to the old start-of-month in-force, a
+    no-regression check on the decrement-free path.
+    """
+    r, f, term, av0 = 0.06, 0.015, 3, 1000.0
+    basis = make_death_basis(mortality_q=0.0, lapse_q=0.0, discount_annual=0.03,
+                             ra_confidence=0.75, mortality_cv=0.10,
+                             investment_return=r, fund_fee=f)
+    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+
+    r_m = (1 + r) ** (1 / 12) - 1
+    f_m = (1 + f) ** (1 / 12) - 1
+    growth = (1 + r_m) * (1 - f_m)
+    monthly = av0 * growth ** np.arange(term) * (1 + r_m) * f_m \
+        * (1 + r_m) ** -(np.arange(term) + 0.5)
+    assert np.isclose(m.variable_fee[0], float(monthly.sum()))   # all 3 months
+    assert m.variable_fee[0] > float(monthly[:2].sum())          # term-month fee present
+
+
+def test_vfa_fee_fix_leaves_bel_ra_csm_byte_identical():
+    """Re-timing the fee moves ONLY variable_fee: BEL / RA / CSM / loss / LIC are
+    unchanged because the fee never enters them (BEL = PV(benefits) +
+    PV(expenses) - fund; FCF = BEL + RA + time_value). Golden values pinned from
+    the build; a future edit routing the fee into BEL / CSM breaks this.
+
+    The fixture carries a non-zero RA (expense items + expense_cv) and a non-zero
+    LIC (a settlement pattern), so the RA / LIC byte-identity assertions actually
+    bite rather than comparing zero to zero.
+    """
+    from dataclasses import replace
+    basis = make_death_basis(mortality_q=0.005 / 12, lapse_q=0.04 / 12,
+                             discount_annual=0.03, ra_confidence=0.75,
+                             mortality_cv=0.10, investment_return=0.06, fund_fee=0.015,
+                             expense_items=(ExpenseItem("maintenance", "gamma_fixed",
+                                                        100_000.0),))
+    basis = replace(basis, expense_cv=0.10, settlement_pattern=np.array([0.5, 0.3, 0.2]))
+    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 120, account_value=1e8), basis)
+    assert m.ra[0] > 0.0 and np.asarray(m.lic).sum() > 0.0    # the assertions bite
+    assert m.bel[0] == -10866232.448249847           # fee never enters BEL
+    assert m.ra[0] == 42126.06353465136              # ... nor RA
+    assert m.csm[0] == 10824106.384715196            # ... nor CSM
+    assert m.loss_component[0] == 0.0
+    assert np.asarray(m.lic).sum() == 80303961.70710817   # ... nor LIC
+    # the entity's fee PV stays at or above the unearned CSM it mirrors
+    assert np.isclose(m.variable_fee[0], 11217277.272926314)
+    assert m.variable_fee[0] >= m.csm[0]
