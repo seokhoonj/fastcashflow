@@ -22,7 +22,7 @@ import numpy as np
 from fastcashflow import io as _io
 
 #: Available sample templates -- see :func:`templates`.
-_TEMPLATES = ("gmm", "vfa")
+_TEMPLATES = ("gmm", "vfa", "paa")
 
 #: Fixed seed for :func:`scenarios` -- a reproducible toy path set, not a
 #: calibration parameter.
@@ -35,7 +35,8 @@ _FORMATS = {"csv": ".csv", "parquet": ".parquet",
 
 
 def templates() -> list[str]:
-    """The available :func:`export` / load template names (``["gmm", "vfa"]``)."""
+    """The available :func:`export` / load template names
+    (``["gmm", "vfa", "paa"]``)."""
     return list(_TEMPLATES)
 
 
@@ -45,6 +46,8 @@ def basis(template: str = "gmm"):
     single variable-contract :class:`~fastcashflow.Basis`."""
     if template == "vfa":
         return _io.load_sample_vfa_basis()
+    if template == "paa":
+        return _io.load_sample_paa_basis()
     if template == "gmm":
         return _io.load_sample_basis()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -55,6 +58,8 @@ def model_points(template: str = "gmm"):
     variable account-value contracts)."""
     if template == "vfa":
         return _io.load_sample_vfa_model_points()
+    if template == "paa":
+        return _io.load_sample_paa_model_points()
     if template == "gmm":
         return _io.load_sample_model_points()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -179,10 +184,15 @@ def export(output_dir, template: str = "gmm", format: str = "csv",
         files = ["basis.xlsx", f"policies{ext}", f"coverages{ext}",
                  f"calculation_methods{ext}", f"inforce_state{ext}",
                  f"inforce_policies{ext}"]
-    else:  # vfa
+    elif template == "vfa":
         _io._drop_sample_table("sample_vfa_basis.xlsx", dest / "basis.xlsx")
         _io._drop_sample_table("sample_vfa_policies.csv", dest / f"policies{ext}")
         files = ["basis.xlsx", f"policies{ext}"]
+    else:  # paa
+        _io._drop_sample_table("sample_paa_basis.xlsx", dest / "basis.xlsx")
+        _io._drop_sample_table("sample_paa_policies.csv", dest / f"policies{ext}")
+        _io._drop_sample_table("sample_paa_coverages.csv", dest / f"coverages{ext}")
+        files = ["basis.xlsx", f"policies{ext}", f"coverages{ext}"]
     if not quiet:
         print(f"fastcashflow sample export -- template={template!r}, "
               f"{len(files)} files")

@@ -50,6 +50,9 @@
   - 보유계약 평가 + 변동분해
   - 분기말 결산 측정과 직전 분기 대비 변동을 가정변경 / 경험 / 이자 /
     상각으로 귀속.
+* - 단기 (PAA)
+  - 보험료배분접근법
+  - 1년 안팎 단기 계약을 PAA로. LRC / LIC, 청구 정산 패턴 (settlement_pattern).
 * - 확장 로드맵 (미구현)
   - 미구현 엔진 기능의 설계 노트
   - 아직 코드에 없는 기능의 설계 스케치. 실행 레시피가 아니라 로드맵.
@@ -241,7 +244,7 @@
     `roll_forward` / `reconcile`, 가정변경 (`revised`) / 경험 (`actual_inforce`).
 ```
 
-### 10. 확장 로드맵 (미구현)
+### 10. 단기 측정 (PAA)
 
 ```{list-table}
 :header-rows: 1
@@ -251,6 +254,21 @@
   - 챕터
   - 다루는 것
 * - 10.1
+  - [단기 정산형 상해보험](paa/accident)
+  - 1년 단기 계약을 `paa.measure` 로. LRC / 손실요소, 청구 정산 패턴
+    (`settlement_pattern`) 과 스칼라 할인.
+```
+
+### 11. 확장 로드맵 (미구현)
+
+```{list-table}
+:header-rows: 1
+:widths: 8 28 64
+
+* - 번호
+  - 챕터
+  - 다루는 것
+* - 11.1
   - [⚠ 동적해지율 엔진설계](design/dynamic-lapse)
   - 시나리오 / moneyness 에 반응하는 해지율. **⚠ 미구현** — 정적 격자에서 루프
     내 평가로 옮기는 설계 스케치. 실행 불가.
@@ -366,7 +384,14 @@ workflow/movement
 
 ```{toctree}
 :hidden:
-:caption: 10. 확장 로드맵 (미구현)
+:caption: 10. 단기 측정 (PAA)
+
+paa/accident
+```
+
+```{toctree}
+:hidden:
+:caption: 11. 확장 로드맵 (미구현)
 
 design/dynamic-lapse
 ```

@@ -13,7 +13,7 @@ from fastcashflow.gmm import measure
 
 
 def test_templates_lists_available():
-    assert fcf.samples.templates() == ["gmm", "vfa"]
+    assert fcf.samples.templates() == ["gmm", "vfa", "paa"]
 
 
 def test_export_gmm_round_trips(tmp_path):
@@ -73,11 +73,18 @@ def test_export_returns_directory(tmp_path):
 
 def test_export_rejects_unknown_template_and_format(tmp_path):
     with pytest.raises(ValueError, match="template must be one of"):
-        fcf.samples.export(tmp_path, template="paa")
+        fcf.samples.export(tmp_path, template="gi")
     with pytest.raises(ValueError, match="format must be one of"):
         fcf.samples.export(tmp_path, format="json")
     with pytest.raises(ValueError, match="template must be one of"):
-        fcf.samples.basis(template="paa")
+        fcf.samples.basis(template="gi")
+
+
+def test_export_paa(tmp_path):
+    fcf.samples.export(tmp_path, template="paa")
+    assert (tmp_path / "basis.xlsx").exists()
+    assert (tmp_path / "policies.csv").exists()
+    assert (tmp_path / "coverages.csv").exists()
 
 
 def test_sample_supports_group_of_contracts_cohorts():

@@ -587,7 +587,7 @@ def _axis_tables(ws, axis, *, value_col="rate"):
 _SEGMENT_ASSUMPTION_COLS = frozenset({
     "mortality_table", "mortality_improvement_table", "lapse_table",
     "waiver_table", "surrender_value_table", "discount_table", "expense_table",
-    "inflation_table",
+    "inflation_table", "settlement_table",
     "mortality_age_shift", "morbidity_age_shift", "waiver_age_shift",
     "ra_confidence", "mortality_cv", "morbidity_cv", "longevity_cv",
     "disability_cv", "expense_cv", "cost_of_capital_rate", "investment_return",
@@ -655,6 +655,14 @@ def read_basis(path: Path | str) -> "BasisRouter":
     # Expense ledger -- item form. Optional; per-segment ``expense_table``
     # in the segments sheet selects which table_id to attach.
     expense_t = optional("expense_tables", _read_expense_tables)
+    # Claims run-off (settlement) patterns -- per-month weights summing to 1,
+    # read as a month-indexed array (the ``Basis.settlement_pattern`` input).
+    # Optional; per-segment ``settlement_table`` selects which table_id to
+    # attach. Absent (or unattached) means every claim settles immediately.
+    settlement_t = optional(
+        "settlement_tables",
+        lambda w: _axis_tables(w, "month", value_col="weight"),
+    )
 
     defaults: dict = {}
     segments: list = []
@@ -836,6 +844,9 @@ def read_basis(path: Path | str) -> "BasisRouter":
             mortality_cv=scalar("mortality_cv", required=True),
             coverages=tuple(coverage_list),
             surrender_value_curve=surrender_curve,
+            settlement_pattern=lookup(
+                settlement_t, "settlement_table", optional_ref=True,
+            ),
         )
         for opt_col in ("morbidity_cv", "longevity_cv", "disability_cv",
                         "expense_cv", "cost_of_capital_rate",
@@ -1686,6 +1697,39 @@ def load_sample_vfa_model_points() -> ModelPoints:
         # time, even though these account-value contracts hold no coverages.
         return read_vfa_model_points(
             path, calculation_methods=load_sample_calculation_methods(),
+        )
+
+
+def load_sample_paa_basis() -> Basis:
+    """Bundled PAA (Premium Allocation Approach) basis -- a single basis.
+
+    A short-tail group-accident cover: a scalar valuation discount, a flat
+    short-term lapse, and a ``settlement_pattern`` spreading each incurred
+    inpatient claim over four months (a claims run-off). Pair with
+    :func:`load_sample_paa_model_points`; ``paa.measure`` takes a single
+    :class:`Basis`. The settlement pattern is why the discount is scalar: a
+    per-year discount curve combined with a settlement pattern is rejected
+    (discounting each settlement to its payment date needs a flat rate).
+    """
+    source = resources.files("fastcashflow") / "sample_data" / "sample_paa_basis.xlsx"
+    with resources.as_file(source) as path:
+        return read_basis(path).resolve(("ACCIDENT_A", "GA"))
+
+
+def load_sample_paa_model_points() -> ModelPoints:
+    """Bundled PAA sample -- two onerous 12-month group-accident contracts.
+
+    Each carries a single inpatient (MORBIDITY) claim coverage; the premium is
+    set below break-even so the block is onerous at inception, exercising the
+    PAA onerous test on the settlement-discounted claims. Pair with
+    :func:`load_sample_paa_basis`; measure with ``paa.measure``.
+    """
+    base = resources.files("fastcashflow") / "sample_data"
+    with resources.as_file(base / "sample_paa_policies.csv") as policies, \
+            resources.as_file(base / "sample_paa_coverages.csv") as coverages:
+        return read_model_points(
+            policies, coverages=coverages,
+            calculation_methods=load_sample_calculation_methods(),
         )
 
 

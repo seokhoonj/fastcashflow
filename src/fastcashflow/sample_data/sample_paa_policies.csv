@@ -1,0 +1,3 @@
+mp_id,product,channel,issue_age,sex,term_months,premium_term_months,count
+PA001,ACCIDENT_A,GA,40,0,12,12,1
+PA002,ACCIDENT_A,GA,50,1,12,12,1
