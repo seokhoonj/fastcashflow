@@ -402,3 +402,39 @@ def test_reinsurance_inforce_high_lapse_stays_finite():
         elapsed_months=np.array([elapsed]), count=np.array([100.0]))
     v = fcf.reinsurance.measure_inforce(mp, state, basis, treaty, period_months=12)
     assert np.isfinite(v.bel[0]) and np.isfinite(v.ra[0]) and np.isfinite(v.csm[0])
+
+
+def test_reinsurance_inforce_per_mp_varying_elapsed_carries_each_csm():
+    """Two ceded contracts valued in-force at DIFFERENT elapsed_months each carry
+    their own prior CSM -- the per-MP ``prior_t = elapsed - period`` gather must
+    pick the right column per row. With each prior_csm taken from that contract's
+    inception csm_path[elapsed-period] and lock_in = the discount, rolling one
+    period must reproduce each contract's csm_path[elapsed] (CSM is
+    scale-invariant). This pins the per-row gather the single-MP test cannot."""
+    from fastcashflow import InforceState
+
+    basis = _basis()
+    treaty = fcf.reinsurance.QuotaShare(0.4)
+    age = np.array([40, 50]); prem = np.array([80_000.0, 60_000.0])
+    term = np.array([240, 180]); ben = np.array([1e8, 7e7])
+    m = fcf.reinsurance.measure(
+        ModelPoints(issue_age=age, premium=prem, term_months=term,
+                    benefits={0: ben}, calculation_methods=PATTERNS),
+        basis, treaty=treaty)
+
+    elapsed = np.array([36, 24]); period = 12
+    prior_csm = np.array([m.csm_path[0, elapsed[0] - period],
+                          m.csm_path[1, elapsed[1] - period]])
+    state = InforceState(
+        mp_id=np.array(["R1", "R2"]), elapsed_months=elapsed,
+        count=np.array([1.0, 1.0]), prior_csm=prior_csm,
+        lock_in_rate=basis.discount_annual)
+    mp_inf = ModelPoints(
+        issue_age=age, premium=prem, term_months=term, benefits={0: ben},
+        calculation_methods=PATTERNS, mp_id=np.array(["R1", "R2"]),
+        elapsed_months=elapsed, count=np.array([1.0, 1.0]))
+    v = fcf.reinsurance.measure_inforce(mp_inf, state, basis, treaty,
+                                        period_months=period)
+    # each row carries its own CSM, sliced at its own elapsed
+    assert np.isclose(v.csm[0], m.csm_path[0, elapsed[0]])
+    assert np.isclose(v.csm[1], m.csm_path[1, elapsed[1]])
