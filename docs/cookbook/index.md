@@ -164,8 +164,13 @@
   - 챕터
   - 다루는 것
 * - 5.1
-  - [변액보험 최저보증 (GMDB / GMAB)](variable/gmdb-gmab)
-  - 계좌가치 + 최저보증. `vfa.measure`, intrinsic vs 시간가치 (TVOG).
+  - [변액보험 최저보증 — 결정론 측정](variable/gmdb-gmab)
+  - 계좌가치 + 최저보증. `vfa.measure` 결정론 측정, 보증의 intrinsic value 를
+    GMDB / GMAB 로 분리.
+* - 5.2
+  - [최저보증의 시간가치 (TVOG)](variable/gmdb-gmab-tvog)
+  - 같은 계약에 `return_scenarios` 를 넣어 보증의 시간가치를 측정.
+    intrinsic 대 시간가치 분해.
 ```
 
 ### 6. 재보험
@@ -325,6 +330,7 @@ semi-markov/long-term-care
 :caption: 5. 변액 (VFA)
 
 variable/gmdb-gmab
+variable/gmdb-gmab-tvog
 ```
 
 ```{toctree}

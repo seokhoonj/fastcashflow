@@ -1,4 +1,4 @@
-# 5.1 변액보험 최저보증 (GMDB / GMAB)
+# 5.1 변액보험 최저보증 — 결정론 측정 (GMDB / GMAB)
 
 ```{admonition} 이 챕터에서 배우는 것
 :class: tip
@@ -7,12 +7,14 @@
   계좌가치가 굴러가고 보험사는 수수료를 번다
 - `account_value` + 최저보증 (`minimum_death_benefit` /
   `minimum_accumulation_benefit`) 을 모델 포인트에 거는 자리
-- `vfa.measure` 의 결정론 측정 — 보증의 intrinsic value 가 BEL에 들어가는 모습
-- `return_scenarios` 를 넣으면 드러나는 보증의 시간가치 (TVOG = Time Value of Options and Guarantees) — 단일
-  결정론 run 에는 보이지 않는 비용
+- `vfa.measure` 의 **결정론 측정** — 보증의 intrinsic value (중앙 시나리오
+  비용) 가 CSM 을 얼마나 갉아먹는가
+- 보증을 켜고 끄는 차이로 GMDB / GMAB 의 비용을 각각 분리하는 법
+- 결정론 run 의 `TVOG = 0` — 보증의 **시간가치** 는 여기 안 보이고, 다음
+  챕터 [5.2 시간가치](gmdb-gmab-tvog) 에서 시나리오로 드러난다
 ```
 
-지금까지의 보장형 (GMM) 상품은 위험률 × 보험금으로 청구를 계산했습니다.
+지금까지의 보장형 (GMM) 상품은 위험률 x 보험금으로 청구를 계산했습니다.
 변액보험은 다릅니다 — 계약자의 계좌가치가 펀드 수익률로 굴러가고, 사망 /
 해지 / 만기에 그 계좌가치를 (또는 최저보증을) 지급합니다. 보험사의 이익은
 계좌에서 떼는 수수료입니다. IFRS 17 은 이런 직접참가 계약을 **VFA
@@ -50,8 +52,6 @@
   - GMDB 보증액. 기본 0 = 보증 없음 (`max(AV, 0) = AV`)
 * - `ModelPoints.minimum_accumulation_benefit`
   - GMAB 보증액. 기본 0 = 보증 없음
-* - `ModelPoints.minimum_crediting_rate`
-  - 최저 적립이율 — 계좌 크레딧 floor (`max(수익률, 보증이율)`)
 * - `Basis.investment_return`
   - 기초자산(펀드) 수익률 — VFA의 할인·적립 basis
 * - `Basis.fund_fee`
@@ -63,17 +63,34 @@
 핵심: **사망·만기 exit 은 `max(계좌가치, 보증)`, 해지 exit 은 계좌가치 그대로.**
 보험사의 이익 = 수수료 현재가치 = 가입 시 CSM. 보증 비용이 그 마진을 갉아먹습니다.
 
-## 한 계약 — 결정론 측정과 시나리오
+```{admonition} 이 챕터는 GMDB / GMAB 만 — 적립이율 보증은 별개
+:class: note
 
-계약 하나로 보증 비용이 두 단계로 드러나는 것을 봅니다 — 먼저 결정론
-(intrinsic), 그 다음 시나리오 (시간가치).
+모델포인트에는 적립이율 보증 (`minimum_crediting_rate`, 계좌 크레딧
+floor) 자리도 있지만, 이 챕터와 [5.2 시간가치](gmdb-gmab-tvog) 챕터는
+**둘 다 그 자리를 비워둡니다** (보증 없음). 적립이율 보증은 계좌가치
+**자체** 를 매월 떠받치는 다른 종류의 보증이고, GMDB / GMAB 의 사망·만기
+floor 와 비용 구조가 다릅니다. 입력으로 "보증 없음" 을 표현하는 법은 아래
+**변형** 절의 "보증 없음은 어떻게 표현하나" 에서 세 보증을 한꺼번에
+정리합니다.
+```
+
+## 한 계약 — 결정론 측정
+
+계약 하나로 보증의 **intrinsic value** (중앙 시나리오에서 floor 가 무는
+비용) 가 CSM 에 들어가는 모습을 봅니다.
 
 ```{admonition} 예제 설정
 :class: note
 
 - 가입연령 40세, 보험기간 10년 (120개월), 일시납 변액계약
 - 계좌가치 1억, GMDB 1.02억 (102%), GMAB 1.05억 (105%)
-- 펀드 연 수익률 6%, 변동수수료 연 2.5%, 사망 0.5% / 해지 4%
+- 펀드 연 수익률 3%, 변동수수료 연 2.5% (순성장 +0.5%/년), 사망 0.5% / 해지 4%
+
+수익률 3% 에서 수수료 2.5% 를 빼면 계좌는 연 0.5% 로 거의 평탄하게 굴러가,
+102% / 105% 보증이 실제로 무는 구간을 만듭니다. 6% 처럼 빠른 성장 가정이면
+계좌가 보증을 금세 넘어 floor 가 거의 안 물리고, intrinsic 은 0 에 가깝게
+보입니다.
 ```
 
 ```python
@@ -82,19 +99,19 @@ import fastcashflow as fcf
 
 # 산출기초
 death_rate = 0.005  # 연 0.5% 사망률
-lapse_rate = 0.04  # 연 4% 해지율
+lapse_rate = 0.04   # 연 4% 해지율
 basis = fcf.Basis(
-    mortality_annual  = death_rate,  # 보유계약 사망률
+    mortality_annual  = death_rate,  # 보유계약 사망률 (in-force 감쇠)
     lapse_annual      = lapse_rate,  # 해지율
     discount_annual   = 0.03,        # 연 할인율 (비보증 현금흐름)
     ra_confidence     = 0.95,        # 위험조정 신뢰수준 95%
     mortality_cv      = 0.10,        # 사망률 변동계수
     expense_cv        = 0.10,        # 사업비 변동계수 (VFA의 RA = 사업비위험)
-    investment_return = 0.06,        # 기초자산(펀드) 연 수익률
+    investment_return = 0.03,        # 기초자산(펀드) 연 수익률 3%
     fund_fee          = 0.025,       # 변동수수료 연 2.5% (= 보험사 이익원)
 )
 
-# 모델 포인트 (변액계약 하나: 계좌 1억, GMDB 1.02억, GMAB 1.05억)
+# 변액계약 하나 (계좌 1억, GMDB 1.02억, GMAB 1.05억)
 mp = fcf.ModelPoints.single(
     issue_age                    = 40,      # 가입연령
     premium                      = 0.0,     # 일시납 (계좌가치로 납입)
@@ -107,103 +124,140 @@ mp = fcf.ModelPoints.single(
 det = fcf.vfa.measure(mp, basis)                # 결정론 측정 (intrinsic 만)
 print(f"BEL  = {det.bel[0]:>14,.0f}")           # 계좌가치 차감 순부채
 print(f"fee  = {det.variable_fee[0]:>14,.0f}")  # 수수료 현재가치 (이익원)
-print(f"CSM  = {det.csm[0]:>14,.0f}")           # 미실현 수수료 - 보증 intrinsic
+print(f"CSM  = {det.csm[0]:>14,.0f}")           # 미실현 수수료 - 보증 비용
 print(f"TVOG = {det.time_value[0]:>14,.0f}")    # 시간가치 (시나리오 없으면 0)
-
-# 펀드 수익률 시나리오 (외부 ESG 산출: 1,000 경로 x 120 개월)
-rng  = np.random.default_rng(7)
-r_m  = (1 + 0.06) ** (1 / 12) - 1                      # 중앙 월수익률
-scen = r_m + 0.005 * rng.standard_normal((1000, 120))  # (n_scenarios, n_time)
-
-sto = fcf.vfa.measure(mp, basis, return_scenarios=scen)  # intrinsic + 시간가치
-print(f"\nTVOG = {sto.time_value[0]:>14,.0f}")           # 보증의 시간가치 (변동성 비용)
-print(f"CSM  = {sto.csm[0]:>14,.0f}")                    # TVOG 흡수 후 마진
 ```
 
 출력:
 
-```
-BEL  =    -17,610,124
-fee  =     17,826,387
-CSM  =     17,610,124
+```text
+BEL  =    -17,664,772
+fee  =     17,737,198
+CSM  =     17,664,772
 TVOG =              0
-
-TVOG =      3,433,960
-CSM  =     14,176,164
 ```
 
-**결정론 run 은 보증의 intrinsic value (중앙 시나리오에서의 비용) 만 봅니다.**
-6% 성장 가정이면 계좌가 빠르게 보증액 (102% / 105%) 을 넘어 floor 가 거의
-안 물립니다 — 그래서 intrinsic 은 작습니다 (수수료 17.83M 와 CSM 17.61M 의
-차이 ≈ 0.22M 뿐). 단일 결정론 run 만 보면 "보증이 거의 공짜" 라는 틀린
-결론에 이릅니다.
+**결정론 run 은 보증의 intrinsic value — 중앙 시나리오에서 floor 가 무는
+비용 — 만 봅니다.** 계좌 궤적을 펼치면 어디서 무는지 보입니다:
 
-**시나리오를 넣으면 보증의 진짜 비용 — 시간가치 (TVOG) 가 드러납니다.**
-변동성 때문에 일부 경로에서 계좌가 보증액 아래로 떨어지고, 그 풋옵션 비용의
-기대값이 시간가치입니다. 여기서 3.43M — intrinsic 의 15배가 넘습니다. 이
-비용이 CSM을 17.61M → 14.18M 로 낮춥니다 (계약은 여전히 이익: CSM > 0).
-
-```{admonition} 시나리오는 외부에서 — fastcashflow 는 엔진
-:class: note
-
-`return_scenarios` 는 당신의 ESG (Economic Scenario Generator, 경제 시나리오
-생성기) 산출물입니다. fastcashflow 는 시나리오를 생성 하지 않고, 받아 보증
-비용을 평가합니다. 한 변수 (여기선 펀드 월수익률) 의 `(n_scenarios, n_time)`
-배열로 건네면 됩니다 — 열 수는 투영 개월수와 같아야 합니다.
+```python
+av = det.account_value_path[0]                  # 계좌가치 궤적 (월말, 121개)
+print("month       account    GMDB    GMAB")
+for m in (0, 24, 48, 60, 72, 96, 120):
+    gmdb = "물림" if av[m] < 1.02e8 else " - "
+    gmab = "물림" if av[m] < 1.05e8 else " - "
+    print(f"{m:5d}  {av[m]:>14,.0f}   {gmdb}    {gmab}")
 ```
 
-```{admonition} TVOG의 부호는 보장되지 않음
-:class: warning
+출력:
 
-VFA는 위험중립 measure 가 아니라 기초자산 수익률 로 할인합니다. 그래서
-floor 의 시간가치는 부호가 고정이 아닙니다 — 깊은 in-the-money (보증액이 계좌가치보다 한참 높은) 보증은
-변동성이 오히려 일부 시나리오를 floor 위로 끌어올려 비용을 낮춰 시간가치가
-음수일 수도 있습니다. 위험중립 풋옵션의 "시간가치 >= 0" 직관이 여기선 그대로
-통하지 않습니다.
+```text
+month       account    GMDB    GMAB
+    0     100,000,000   물림    물림
+   24     100,967,707   물림    물림
+   48     101,944,779   물림    물림
+   60     102,436,855    -     물림
+   72     102,931,306    -     물림
+   96     103,927,380    -     물림
+  120     104,933,092    -     물림
 ```
 
-## 결과 읽기 — 수수료 vs 보증 비용
+계좌는 연 0.5% 로 100,000,000 → 104,933,092 로 굴러갑니다.
+
+- **GMDB (102%)** 는 계좌가 102,000,000 을 넘는 5년차 (month 60) 전까지만
+  무립니다. 그 구간의 사망자에게만 보증 top-up 이 나갑니다.
+- **GMAB (105%)** 는 만기 계좌 104,933,092 가 105,000,000 에 못 미쳐 **만기까지
+  내내 ITM (in-the-money, 보증액이 계좌가치보다 높은 상태)** — 만기 생존자
+  전원에게 보증 top-up 이 나갑니다.
+
+## 결과 읽기 — 보증 비용을 GMDB / GMAB 로 분리
 
 VFA 측정의 한 줄 요약: **보험사는 수수료를 벌고, 보증 비용이 그 마진을 줄인다.**
 
 - **BEL** 은 계좌가치를 차감한 순액입니다. 보험사가 들고 있는 계좌는 계약자
   몫 (부채) 이자 운용 자산이라, 그 둘이 상쇄되고 남는 게 BEL.
-- **CSM** = 미실현 수수료 − 보증 비용. 위 예제에서 수수료 17.83M 가 보증
-  intrinsic (~0.2M) 과 시간가치 (3.43M) 를 흡수하고도 14.18M 남습니다.
-- **시간가치가 수수료를 넘으면** CSM이 0 으로 줄고 손실요소
-  (loss component) 가 잡힙니다 — onerous 변액계약.
+- **CSM** = 미실현 수수료 - 보증 비용. 위에서 수수료 17,737,198 이 보증
+  비용을 흡수하고도 17,664,772 남았습니다.
+
+보증 비용 (intrinsic) 이 정확히 얼마인지는 **보증을 끄고 다시 재보면** 분리됩니다 —
+보증을 켜서 CSM 이 떨어진 만큼이 그 보증의 비용입니다:
+
+```python
+def csm_with(gmdb, gmab):
+    m = fcf.ModelPoints.single(
+        issue_age=40, premium=0.0, term_months=120, account_value=1.0e8,
+        minimum_death_benefit=gmdb, minimum_accumulation_benefit=gmab,
+    )
+    return fcf.vfa.measure(m, basis).csm[0]
+
+csm_off  = csm_with(0.0,    0.0)     # 두 보증 모두 끔
+csm_gmdb = csm_with(1.02e8, 0.0)     # GMDB 만
+csm_gmab = csm_with(0.0,    1.05e8)  # GMAB 만
+csm_both = csm_with(1.02e8, 1.05e8)  # 둘 다
+
+print(f"보증 없음 CSM    = {csm_off:>14,.0f}")
+print(f"GMDB intrinsic  = {csm_off - csm_gmdb:>14,.0f}")
+print(f"GMAB intrinsic  = {csm_off - csm_gmab:>14,.0f}")
+print(f"둘 다 intrinsic  = {csm_off - csm_both:>14,.0f}")
+```
+
+출력:
+
+```text
+보증 없음 CSM    =     17,715,366
+GMDB intrinsic  =         19,113
+GMAB intrinsic  =         31,481
+둘 다 intrinsic  =         50,594
+```
+
+GMDB 19,113 + GMAB 31,481 = 50,594 — 두 보증 비용이 정확히 합산됩니다.
+이 계약에서 보증의 결정론 비용은 50,594 뿐 — 수수료 17,737,198 에 견주면
+0.3% 입니다.
+
+```{admonition} fee - CSM 은 72,426 인데 보증 비용은 왜 50,594 인가
+:class: note
+
+위 출력의 수수료 17,737,198 에서 CSM 17,664,772 을 빼면 72,426 이지만, 보증을
+켜고 끄는 차분으로 분리한 보증 비용은 50,594 입니다. 차이 21,832 는 보증과
+무관한 **수수료 타이밍 효과** 입니다 — 변동수수료는 월말 생존자에게만 부과되는데,
+월중 사망·해지자는 그 달 수수료가 빠지기 전 계좌가치를 받아, 걷지 못한 수수료
+만큼이 마진에서 샙니다. 이 효과는 보증을 켜든 끄든 똑같이 있어 차분에서
+상쇄되므로, 순수 보증 비용은 50,594 입니다. 보증 비용을 측정할 때는 raw
+fee - CSM 이 아니라 **floor 를 켜고 끈 차분** 을 봐야 합니다.
+```
+
+```{admonition} GMAB intrinsic 31,481 을 손으로 확인
+:class: note
+
+GMAB 는 만기 (month 120) 생존자에게 `max(계좌, 105,000,000)` 을 지급합니다.
+
+- 만기 계좌 = 104,933,092 → 보증 top-up = 105,000,000 - 104,933,092 = **66,908** (계약당)
+- 만기 생존율 = `(1 - 0.005 - 0.04)^10` ~ **0.632** (연 사망 0.5% + 해지 4% 감쇠)
+- 10년 할인 = `1.03^-10` = **0.744**
+
+66,908 x 0.632 x 0.744 ~ **31,460** ~ 엔진의 31,481. GMDB 는 처음 5년 사망자에게만,
+그것도 점점 줄어드는 top-up 으로 무니 훨씬 작은 19,113.
+```
+
+```{admonition} 결정론만 보고 "보증이 싸다" 판단하면 안 됩니다
+:class: warning
+
+위 50,594 는 **중앙 시나리오 하나** 에서의 비용입니다. 펀드 수익률이
+변동하면 일부 경로에서 계좌가 보증액 아래로 더 깊이 떨어지고, 그 풋옵션
+비용의 기대값 — **시간가치 (TVOG)** — 은 단일 결정론 run 에 원리상 보이지
+않습니다 (`TVOG = 0`). 같은 계약의 시간가치는 [5.2](gmdb-gmab-tvog) 에서
+시나리오로 측정하며, intrinsic 50,594 의 120배가 넘습니다.
+```
 
 ## 변형
 
-### per-MP 보증률 + 시나리오는 v1 미지원
+### per-MP 보증액
 
-`return_scenarios` 의 시간가치 패스는 v1 에서 `minimum_crediting_rate` (적립
-보증이율) 가 portfolio 전체에서 동일해야 합니다 — per-MP로 다른 적립보증률에
-stochastic 을 거는 건 미래 확장입니다. **GMDB / GMAB 보증액 자체는 계약마다
-달라도** 됩니다 (`max(AV, 보증)` 의 floor 는 per-MP).
+`minimum_death_benefit` / `minimum_accumulation_benefit` 는 계약마다 달라도
+됩니다 — `max(AV, 보증)` 의 floor 는 per-MP 로 계산됩니다. 포트폴리오를 numpy
+배열로 직접 만들면 계약별로 다른 보증액을 한 번에 평가합니다.
 
-### onerous 변액 만들어 보기
-
-위 예제에서 시나리오 변동성 (`0.005`) 을 키우거나 보증액을 올리면 시간가치가
-수수료를 넘어 CSM = 0, 손실요소 양수가 됩니다. 후한 보증 + 높은 변동성 +
-얇은 수수료의 조합이 변액 보증의 손실부담 신호입니다.
-
-### 적립이율 보증 (크레딧 floor)
-
-`minimum_crediting_rate` 를 주면 계좌가 매월 `max(수익률, 보증이율)` 로
-크레딧됩니다 — 계좌가치 자체를 떠받치는 또 다른 보증이고, 그 시간가치도 같은
-`return_scenarios` 패스가 함께 흡수합니다. 값의 의미가 둘로 갈립니다:
-
-* `0.0` = 진짜 **0% 바닥** (원금 보존: `max(수익률, 0)`, 마이너스 달에도
-  계좌가 안 줄어듦) — 시간가치를 갖는 실제 보증.
-* **미설정 / 빈칸** = **보증 없음** (계좌가 수익률을 그대로 따라가 마이너스도
-  가능). 기본값이며, `vfa.tvog` 는 이 경우 측정할 적립이율 시간가치가 없어
-  거부합니다.
-
-왜 `0.0` 과 "미설정" 이 다른지, 그리고 GMDB / GMAB 의 "0 = 보증 없음" 과는 왜
-규칙이 갈리는지는 바로 아래 절에서 한꺼번에 다룹니다.
-
-## 보증 없음은 어떻게 표현하나 — 세 보증 공통 원리
+### 보증 없음은 어떻게 표현하나 — 세 보증 공통 원리
 
 GMDB · GMAB · 적립이율 보증은 전부 같은 모양입니다 — **바닥(floor)**:
 
@@ -214,13 +268,13 @@ GMAB     :  만기보험금 = max(계좌가치, minimum_accumulation_benefit)
 ```
 
 그래서 **"보증 없음" = "절대 안 무는 바닥"** 이라는 원리도 셋이 같습니다. 다만
-*그 바닥이 0일 때 정말 안 무느냐* 가 금액 보증과 율 보증에서 갈립니다.
+**그 바닥이 0일 때 정말 안 무느냐** 가 금액 보증과 율 보증에서 갈립니다.
 
 * **GMDB / GMAB (금액 바닥)** — 계좌가치는 항상 0 이상이라 `max(계좌가치, 0) =
   계좌가치`. 즉 **0이 자연스럽게 "안 무는 바닥"** 이라 `0 = 보증 없음`.
   "보험금이 0 이상" 을 보장하는 상품은 없으니, 0을 "끔" 으로 써도 잃는 표현이
   없습니다.
-* **적립이율 (율 바닥)** — 수익률은 음수가 될 수 있어 `max(수익률, 0) ≠
+* **적립이율 (율 바닥)** — 수익률은 음수가 될 수 있어 `max(수익률, 0) !=
   수익률`. 즉 **0이 진짜 0% 바닥** (마이너스 달에 계좌를 떠받치는 실제 상품)
   이라, 0을 "끔" 으로 쓸 수 없습니다. 그래서 "보증 없음" 은 0 이 아닌 별도
   값으로 표시합니다.
@@ -245,7 +299,7 @@ GMAB     :  만기보험금 = max(계좌가치, minimum_accumulation_benefit)
 * **CSV** — 적립이율 칸을 **빈칸** 으로 두면 보증 없음. 0% / 양수 바닥은 숫자로
   명시.
 * **`ModelPoints.single(...)`** — `minimum_crediting_rate` 인자를 **생략** 하면
-  보증 없음.
+  보증 없음 (이 챕터의 예제가 그렇습니다).
 * **배열로 직접 (혼합북)** — 일부는 보증, 일부는 무보증인 포트폴리오를 numpy
   배열로 만들 때만, 무보증 행에 이름값 `fcf.NO_GUARANTEE_RATE` 를 넣습니다:
 
@@ -255,8 +309,7 @@ minimum_crediting_rate = [fcf.NO_GUARANTEE_RATE,  0.0,    0.0075]
 ```
 
 일상 입력에서 이 값을 숫자로 직접 쓸 일은 없습니다 — 빈칸이나 인자 생략이면
-충분합니다. (만든 객체를 그대로 찍어보면 무보증 행이 내부 저장값으로 보이지만,
-`show_trace_vfa` 는 이를 `none` 으로 표시합니다.)
+충분합니다.
 
 ```{admonition} 왜 0 이 아닌 별도 값인가 — 속도 때문
 :class: note
@@ -276,23 +329,25 @@ minimum_crediting_rate = [fcf.NO_GUARANTEE_RATE,  0.0,    0.0075]
 변액은 보장형의 `measure` (GMM) 가 아니라 `vfa.measure` (VFA) 로
 측정합니다. GMM으로 돌리면 계좌가치 mechanic 이 없어 결과가 틀립니다.
 
-### 함정 2 — 결정론만 보고 "보증이 싸다" 판단
-
-중앙 성장 가정에선 floor 가 거의 안 물려 intrinsic 이 작게 나옵니다. 보증의
-진짜 비용 (시간가치) 은 `return_scenarios` 를 넣어야 드러납니다 — 단일
-결정론 run 에는 원리상 보이지 않습니다.
-
-### 함정 3 — 보증액 기본 0
+### 함정 2 — 보증액 기본 0
 
 `minimum_death_benefit` / `minimum_accumulation_benefit` 를 안 주면 0
 입니다 (`max(AV, 0) = AV` = 보증 없음). 보증을 평가하려면 보증액을 명시적으로
 줘야 합니다.
 
+### 함정 3 — 결정론 intrinsic 을 보증의 전체 비용으로 착각
+
+결정론 run 의 intrinsic (여기선 50,594) 은 보증 비용의 **일부** — 중앙
+시나리오 몫 — 일 뿐입니다. 보증의 진짜 비용은 여기에 **시간가치 (TVOG)** 를
+더한 것이고, 시간가치는 시나리오를 넣어야 드러납니다 ([5.2](gmdb-gmab-tvog)).
+
 ## 인접 레시피
 
+- [5.2 변액보험 최저보증의 시간가치 (TVOG)](gmdb-gmab-tvog) — 같은 계약에
+  `return_scenarios` 를 넣어 보증의 시간가치를 측정. 결정론 intrinsic 50,594
+  대 시간가치 6백만의 분해.
 - [2.1 정기보험](../simple/term-life) — 보장형 (GMM) 측정의 출발점. 변액은
   같은 in-force 감쇠 위에 계좌가치·수수료·보증을 얹은 다른 측정 모델.
 - `vfa.trace(mp_index, mp, basis)` — 이 계약의 계좌가치 궤적, GMDB / GMAB
   floor 가 무는 자리, BEL / CSM 계산 경로를 트리로 확인 (GMM의 `gmm.trace` 에
-  대응하는 VFA 버전; `return_scenarios` 를 주면 TVOG까지). 보장형 계약의
-  `gmm.trace` 는 [검증 패턴](../workflow/validation) 챕터.
+  대응하는 VFA 버전). 보장형 계약의 `gmm.trace` 는 [검증 패턴](../workflow/validation) 챕터.
