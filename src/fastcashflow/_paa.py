@@ -40,7 +40,7 @@ from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import (
-    _risk_adjustment, _rollforward_kernel, _settlement_lic)
+    _carry_lic_residual, _risk_adjustment, _rollforward_kernel, _settlement_lic)
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 # In-force helpers shared with the GMM path (engine does not import _paa, and
@@ -74,6 +74,8 @@ class PAAMeasurement:
     revenue: FloatArray | None = None          # (n_mp, n_time)   -- insurance revenue earned
     service_expense: FloatArray | None = None  # (n_mp, n_time)   -- claims + expenses incurred
     lic: FloatArray | None = None              # (n_mp, n_time+1) -- liability for incurred claims
+    # The terminal column holds the residual of claims whose settlement tail
+    # runs past the horizon (stays non-zero by design, not a leak).
     cashflows: "Cashflows | None" = None
     model_points: "ModelPoints | None" = None  # stamped by measure_paa, for group axes
     group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
@@ -189,6 +191,7 @@ def _stitch_paa_measurements(n_mp, sub_results):
         revenue[idx, :t] = m.revenue
         service_expense[idx, :t] = m.service_expense
         lic[idx, :t + 1] = m.lic
+        _carry_lic_residual(lic, idx, t, n_time, m.lic)
         cf = m.cashflows
         for name in cf_2d:
             arr = getattr(cf, name)

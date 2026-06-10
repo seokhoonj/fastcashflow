@@ -185,3 +185,42 @@ def test_measure_aggregate_matches_full_summed_and_is_chunk_independent():
     assert np.isclose(multi.loss_component, float(full.loss_component.sum()))
     # column 0 of each path is the inception total
     assert np.isclose(multi.bel, multi.bel_path[0])
+
+
+def test_stitched_lic_residual_persists_past_segment_horizon():
+    """A short segment's beyond-horizon LIC residual is carried to the global terminal.
+
+    A claim settling past a segment's own term stays outstanding -- the stitch
+    must hold its parked residual flat, not zero-pad it. Two segments (term 3
+    vs 8) share a [0.2]*5 settlement pattern that runs past the short term;
+    the global horizon is 8. The short row's stitched LIC must equal the short
+    policy measured ALONE (terminal residual), carried flat to month 8 -- not
+    dropped to zero after column 3 (the bug this guards).
+    """
+    pat = np.full(5, 0.2)
+
+    def _sb():
+        return make_death_basis(mortality_q=0.01, lapse_q=0.0,
+                                discount_annual=0.0, settlement_pattern=pat)
+
+    mp = fcf.ModelPoints(
+        issue_age=np.array([40, 40]), benefits={0: np.array([1_000_000.0, 1_000_000.0])},
+        premium=np.array([0.0, 0.0]), term_months=np.array([3, 8]),
+        calculation_methods=PATTERNS,
+        product=np.array(["A", "A"]), channel=np.array(["X", "Y"]),
+    )
+    m = fcf.gmm.measure(mp, BasisRouter({("A", "X"): _sb(), ("A", "Y"): _sb()}),
+                        full=True)
+
+    mp_alone = mp.subset([0])
+    m_alone = fcf.gmm.measure(mp_alone, _sb(), full=True)
+    residual = m_alone.lic[0, -1]
+
+    assert residual > 0.0                                   # the tail is genuinely parked
+    # cols 0..3 match the alone measure, cols 3..8 hold the residual flat
+    np.testing.assert_allclose(m.lic[0, :4], m_alone.lic[0])
+    np.testing.assert_allclose(m.lic[0, 3:], residual)
+    # the horizon-defining segment (term 8 == global horizon) is laid in
+    # directly with no tail to fill -- it must equal its alone measurement.
+    m_long = fcf.gmm.measure(mp.subset([1]), _sb(), full=True)
+    np.testing.assert_allclose(m.lic[1], m_long.lic[0])

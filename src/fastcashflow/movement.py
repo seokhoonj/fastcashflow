@@ -101,6 +101,10 @@ class PAAPeriodMovement:
     released by insurance revenue; the loss component runs off over the
     coverage; the LIC (liability for incurred claims) is built up as claims
     are incurred and run off as they are paid. All are held undiscounted.
+
+    When a settlement tail runs past the horizon, the final period's
+    ``lic_closing`` stays non-zero -- the parked LIC residual of claims still
+    outstanding at the horizon. The invariant above still holds.
     """
 
     month_start: int

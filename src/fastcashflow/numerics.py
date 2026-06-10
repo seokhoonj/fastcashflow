@@ -37,6 +37,15 @@ def _settlement_lic(
     ``settlement_pattern`` is the run-off pattern, summing to 1. Returns the
     ``(n_mp, n_time+1)`` LIC trajectory -- claims build it up as incurred and
     run it off as paid -- held undiscounted.
+
+    When the run-off tail extends past the projection horizon (a claim
+    incurred near ``n_time`` whose settlement would fall after it), the unpaid
+    tail is retained in the terminal column ``lic[:, -1]``: it stays
+    outstanding rather than being dropped -- an incurred claim is a liability
+    for incurred claims regardless of whether the coverage period has ended
+    (IFRS 17). ``lic[:, 0]`` is always 0, so the LIC never double-counts the
+    BEL, which values the full incurred claim separately (the caller applies
+    the settlement discount factor).
     """
     incurred = np.asarray(incurred, dtype=np.float64)
     pattern = np.asarray(settlement_pattern, dtype=np.float64)
@@ -45,11 +54,54 @@ def _settlement_lic(
     n_mp, n_time = incurred.shape
     paid = np.zeros_like(incurred)
     for k, weight in enumerate(pattern):
+        # Lags k >= n_time settle PAST the projection horizon. Leaving them
+        # un-subtracted from `paid` keeps their weight in cumsum(incurred -
+        # paid), so it parks at the terminal column lic[:, -1] -- the LIC for
+        # claims whose settlement runs beyond the horizon. Do NOT 'simplify'
+        # this guard away: a wrapping / truncating convolution would silently
+        # drop the tail and understate the liability, and for a pattern longer
+        # than n_time the stop index incurred[:, :n_time - k] would go negative
+        # and broadcast-error.
         if k < n_time:
             paid[:, k:] += weight * incurred[:, :n_time - k]
     lic = np.zeros((n_mp, n_time + 1))
     lic[:, 1:] = np.cumsum(incurred - paid, axis=1)
+    # Set the terminal residual -- claims whose settlement runs past the horizon
+    # -- from the exact analytic tail rather than the cumsum, so a book that
+    # fully settles within the horizon lands on exact zero (not float run-off
+    # dust). A claim incurred at month i still owes the settlement weight that
+    # pays at or after the horizon, sum(pattern[n_time - i:]); tail_weight[m] is
+    # that reverse-cumulative sum (0 past the pattern length).
+    tail_weight = np.concatenate([np.cumsum(pattern[::-1])[::-1], [0.0]])
+    j = np.clip(n_time - np.arange(n_time), 0, pattern.size)
+    lic[:, -1] = incurred @ tail_weight[j]
     return lic
+
+
+def _carry_lic_residual(lic, idx, t, n_time, seg_lic):
+    """Flat-fill a stitched segment's parked LIC residual to the global terminal.
+
+    When a portfolio is measured per segment, each segment is measured on its
+    own horizon ``t`` and scattered into the global ``(n_mp, n_time+1)`` array
+    by ``lic[idx, :t+1] = seg_lic``. A claim whose settlement tail runs past the
+    segment horizon leaves an outstanding liability for incurred claims at the
+    segment's terminal column ``seg_lic[:, -1]`` (IFRS 17 -- an incurred claim
+    is a liability whether or not the coverage period has ended). Carry it flat
+    across the padded tail -- mirroring the discount-tail flat-fill and the
+    single-segment path -- so the residual does not vanish (which would
+    understate the closing liability and book a phantom claims_paid in the
+    roll-forward). Unlike BEL / RA / CSM, which are legitimately zero past term.
+
+    The carried residual ``seg_lic[:, -1]`` is the exact analytic tail computed
+    by ``_settlement_lic`` (not the float-dusty cumsum), so a fully-settled
+    segment carries exact zero -- pads like its BEL / RA / CSM siblings -- and a
+    genuine residual, however small, carries exactly. No-op when ``t == n_time``
+    (the horizon-defining segment: nothing to pad) and when the segment has no
+    settlement residual (``seg_lic[:, -1]`` is zero).
+    """
+    if t >= n_time:
+        return
+    lic[idx, t + 1:] = seg_lic[:, -1:]
 
 
 def _settlement_factor(

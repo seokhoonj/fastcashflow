@@ -114,6 +114,9 @@ GEMINI.md
 # Local-only dev scripts and data
 dev/
 
+# Local-only design notes (published later)
+notes/
+
 # Local-only Korean reference material (regulator guides)
 references/
 

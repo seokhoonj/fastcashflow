@@ -39,6 +39,7 @@ from fastcashflow.curves import (
 from fastcashflow.numerics import (
     _cost_of_capital_ra,
     _csm_kernel,
+    _carry_lic_residual,
     _norm_ppf,
     _risk_adjustment,
     _rollforward_kernel,
@@ -99,6 +100,8 @@ class GMMMeasurement:
     csm_accretion: FloatArray | None = None   # (n_mp, n_time)   -- CSM interest accreted
     csm_release: FloatArray | None = None     # (n_mp, n_time)   -- CSM released each month
     lic: FloatArray | None = None             # (n_mp, n_time+1) -- liability for incurred claims
+    # The terminal column holds the residual of claims whose settlement tail
+    # runs past the horizon (stays non-zero by design, not a leak).
     cashflows: "Cashflows | None" = None
     # bom = beginning of month, mom = mid of month: discount factors for a flow
     # at the start vs the middle of each month. Shape (n_time+1,) / (n_time,)
@@ -2752,6 +2755,7 @@ def _stitch_full_measurements(n_mp, sub_results):
         ra_path[idx, :t + 1] = m.ra_path
         csm_path[idx, :t + 1] = m.csm_path
         lic[idx, :t + 1] = m.lic
+        _carry_lic_residual(lic, idx, t, n_time, m.lic)
         csm_accretion[idx, :t] = m.csm_accretion
         csm_release[idx, :t] = m.csm_release
         # Per-MP discount: lay the segment's curve, then flat-fill the tail so

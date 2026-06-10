@@ -12,7 +12,8 @@ import pytest
 
 from fastcashflow import CoverageRate, ExpenseItem, ModelPoints, reconcile, roll_forward
 from fastcashflow.gmm import measure
-from conftest import annual_from_monthly as _annual, make_death_basis
+from fastcashflow.basis import BasisRouter
+from conftest import annual_from_monthly as _annual, make_death_basis, PATTERNS
 
 
 def _basis():
@@ -386,6 +387,43 @@ def test_roll_forward_paa_reconciles_all_three_components():
         assert np.allclose(p.loss_component_opening - p.loss_component_release, p.loss_component_closing)
         assert np.allclose(
             p.lic_opening + p.claims_incurred - p.claims_paid, p.lic_closing)
+
+
+def test_paa_no_phantom_claims_paid_past_segment_horizon():
+    """A stitched short PAA segment's parked LIC residual is not booked as paid.
+
+    Two PAA segments (term 3 vs 8) share a [0.2]*5 settlement pattern that runs
+    past the short term. The stitch carries the short row's beyond-horizon
+    residual flat to the global terminal (month 8), so the roll-forward sees no
+    settlement past month 3 -- claims_paid stays 0 there. The bug dropped the
+    residual to zero at the segment horizon and booked a phantom claims_paid in
+    the period that spanned the drop. The raw-movement invariant
+    ``lic_opening + claims_incurred - claims_paid == lic_closing`` holds for
+    every period either way.
+    """
+    def _sb():
+        return make_death_basis(mortality_q=0.01, lapse_q=0.0,
+                                discount_annual=0.0, settlement_pattern=np.full(5, 0.2))
+
+    router = BasisRouter(
+        {("P", "GA"): _sb(), ("Q", "GA"): _sb()},
+        measurement_models={("P", "GA"): "PAA", ("Q", "GA"): "PAA"})
+    mp = ModelPoints(
+        issue_age=np.array([40, 40]), premium=np.array([0.0, 0.0]),
+        term_months=np.array([3, 8]), benefits={0: np.array([1e6, 1e6])},
+        calculation_methods=PATTERNS,
+        product=np.array(["P", "Q"]), channel=np.array(["GA", "GA"]))
+    pm = fcf.portfolio.measure(mp, router)
+    periods = roll_forward(pm.paa.measurement, period_months=2)
+
+    short = 0
+    for p in periods:
+        assert np.allclose(
+            p.lic_opening + p.claims_incurred - p.claims_paid, p.lic_closing)
+        if p.month_start >= 4:                       # fully past the short term (3)
+            assert p.claims_paid[short] == pytest.approx(0.0)
+            assert p.claims_incurred[short] == pytest.approx(0.0)
+    assert periods[-1].lic_closing[short] > 0.0      # residual parked, not paid
 
 
 def test_paa_lic_builds_with_a_settlement_pattern():

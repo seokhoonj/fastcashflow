@@ -37,6 +37,7 @@ from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import (
+    _carry_lic_residual,
     _csm_kernel,
     _norm_ppf,
     _settlement_factor,
@@ -125,7 +126,9 @@ class VFAMeasurement:
     account_value_path: FloatArray | None = None  # (n_mp, n_time+1) -- account-value trajectory
     csm_accretion: FloatArray | None = None       # (n_mp, n_time)
     csm_release: FloatArray | None = None          # (n_mp, n_time)
-    lic: FloatArray | None = None                 # (n_mp, n_time+1)
+    lic: FloatArray | None = None                 # (n_mp, n_time+1) -- liability for incurred claims.
+    # The terminal column holds the residual of claims whose settlement tail
+    # runs past the horizon (stays non-zero by design, not a leak).
     discount_bom: FloatArray | None = None      # (n_time+1,), or (n_mp, n_time+1) when portfolio-stitched
     cashflows: "Cashflows | None" = None
     model_points: "ModelPoints | None" = None     # stamped by measure_vfa, for group axes
@@ -265,6 +268,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
         csm_accretion[idx, :t] = m.csm_accretion
         csm_release[idx, :t] = m.csm_release
         lic[idx, :t + 1] = m.lic
+        _carry_lic_residual(lic, idx, t, n_time, m.lic)
         # Per-MP discount: lay the segment's 1-D curve across its rows, then
         # flat-fill the tail so the padded months read a zero forward rate.
         discount_bom[idx, :t + 1] = m.discount_bom
