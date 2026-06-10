@@ -1030,3 +1030,33 @@ def test_vfa_credit_tvog_maturity_carries_term_weight():
     new = av0 * ((exits @ w)[0] - ms[0] * w[ti] + ms[0] * w_term)
     assert m.time_value[0] == pytest.approx(new, rel=1e-9)      # corrected fold
     assert m.time_value[0] - old == pytest.approx(av0 * ms[0] * (w_term - w[ti]))
+
+
+def test_sample_vfa_itm_policy_exercises_floor_paths():
+    """The shipped VFA sample's V004 is in-the-money: at the central return the
+    account matures BELOW its GMAB, so the maturity-survivor top-up and the
+    deterministic floor cost (in CSM, not time_value) fire -- the V001-V003
+    policies are all out-of-the-money and never touch those paths."""
+    import dataclasses
+
+    mp = fcf.samples.model_points("vfa")
+    basis = fcf.samples.basis("vfa")
+    ids = [str(x) for x in np.asarray(mp.mp_id).tolist()]
+    v004 = mp.subset([ids.index("V004")])
+    gmab = float(v004.minimum_accumulation_benefit[0])
+
+    det = fcf.vfa.measure(v004, basis)
+    matured_av = det.account_value_path[0][int(v004.term_months[0])]
+    assert matured_av < gmab                                   # GMAB genuinely ITM at maturity
+    assert np.allclose(det.time_value, 0.0)                    # intrinsic is in CSM, not TVOG
+
+    # The GMAB floor has a deterministic cost: turning it off lifts CSM.
+    no_gmab = dataclasses.replace(
+        v004, minimum_accumulation_benefit=np.zeros_like(v004.minimum_accumulation_benefit))
+    assert fcf.vfa.measure(no_gmab, basis).csm[0] > det.csm[0]
+
+    # With scenarios the floor's time value is positive (and is driven by the
+    # maturity weighting, since V004 is ITM at the term).
+    scen = fcf.samples.return_scenarios()
+    sto = fcf.vfa.measure(v004, basis, return_scenarios=scen[:, :int(v004.term_months[0])])
+    assert sto.time_value[0] > 0.0
