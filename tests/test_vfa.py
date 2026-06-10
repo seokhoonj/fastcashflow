@@ -1065,3 +1065,17 @@ def test_sample_vfa_itm_policy_exercises_floor_paths():
     scen = fcf.samples.return_scenarios()
     sto = fcf.vfa.measure(v004, basis, return_scenarios=scen[:, :int(v004.term_months[0])])
     assert sto.time_value[0] > 0.0
+
+
+def test_vfa_trace_diff_renders_assumption_and_headline():
+    """trace_diff shows the changed VFA assumption and the headline move (TVOG)."""
+    import io, dataclasses
+
+    b1 = _basis()
+    b2 = dataclasses.replace(b1, investment_return=0.02)
+    mp = ModelPoints.single(40, 0.0, 120, account_value=1e8,
+                            minimum_death_benefit=1.05e8)
+    buf = io.StringIO()
+    fcf.vfa.trace_diff(0, mp, b1, b2, file=buf)
+    t = buf.getvalue()
+    assert "diff-vfa" in t and "investment_return" in t and "TVOG" in t

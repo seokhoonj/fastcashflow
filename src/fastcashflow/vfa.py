@@ -15,8 +15,9 @@ from fastcashflow._vfa import (
     VFAMeasurement, measure_vfa as measure, measure_aggregate, measure_inforce,
     CSM_BASES)
 from fastcashflow.tvog import measure_tvog as tvog
-from fastcashflow.trace import show_trace_vfa as trace
+from fastcashflow.trace import (
+    show_trace_vfa as trace, show_trace_diff_vfa as trace_diff)
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce", "tvog", "trace",
-           "CSM_BASES",
+           "trace_diff", "CSM_BASES",
            "VFAMeasurement"]

@@ -190,3 +190,17 @@ def test_paa_onerous_matches_gmm_with_settlement_discount():
     assert paa.loss_component[0] > 0.0                          # genuinely onerous
     assert np.isclose(paa.loss_component[0], gmm.loss_component[0])
     assert np.isclose(paa.fcf[0], gmm.bel[0] + gmm.ra[0])
+
+
+def test_paa_trace_diff_renders_assumption_and_headline():
+    """trace_diff shows the changed assumption and the headline LRC / LIC move."""
+    import io, dataclasses
+
+    b1 = _basis()
+    b2 = dataclasses.replace(b1, discount_annual=0.05)
+    mp = ModelPoints.single(40, 10_000.0, 12, benefits={0: 1e6},
+                            calculation_methods=PATTERNS)
+    buf = io.StringIO()
+    fcf.paa.trace_diff(0, mp, b1, b2, file=buf)
+    t = buf.getvalue()
+    assert "diff-paa" in t and "discount_annual" in t and "LRC" in t

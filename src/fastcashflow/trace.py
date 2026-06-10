@@ -953,6 +953,61 @@ def _diff_callable(name: str, fa, fb) -> str | None:
     return f"{name:<22} : {_fmt_callable(fa)}  ->  {_fmt_callable(fb)}"
 
 
+def _basis_diff_lines(a: Basis, b: Basis) -> list[object]:
+    """The 'what changed' lines between two bases -- model-agnostic.
+
+    Surfaces only the fields that differ: the rate callables (by source id /
+    modifier chain), the scalar economic / risk parameters (including the VFA
+    ``investment_return`` / ``fund_fee``), the expense ledger length, and each
+    coverage's rate. Shared by every ``trace_diff`` so the assumption-change
+    view reads the same across GMM / VFA / PAA / reinsurance.
+    """
+    lines: list[object] = []
+    for name in ("mortality_annual", "lapse_annual", "waiver_incidence_annual"):
+        line = _diff_callable(name, getattr(a, name), getattr(b, name))
+        if line is not None:
+            lines.append(line)
+    for name in ("discount_annual", "expense_inflation", "ra_method",
+                 "ra_confidence", "cost_of_capital_rate", "mortality_cv",
+                 "morbidity_cv", "longevity_cv", "disability_cv", "expense_cv",
+                 "investment_return", "fund_fee"):
+        line = _diff_scalar(name, getattr(a, name), getattr(b, name))
+        if line is not None:
+            lines.append(line)
+    if a.expense_items != b.expense_items:
+        lines.append(
+            f"expense_items           : len {len(a.expense_items)} -> "
+            f"len {len(b.expense_items)}")
+    codes_a = [r.code for r in a.coverages]
+    codes_b = [r.code for r in b.coverages]
+    if codes_a != codes_b:
+        lines.append(f"coverages (codes)      : {codes_a} -> {codes_b}")
+    else:
+        for ra, rb in zip(a.coverages, b.coverages):
+            line = _diff_callable(f"coverage[{ra.code}].rate", ra.rate, rb.rate)
+            if line is not None:
+                lines.append(line)
+    if not lines:
+        lines.append("(no changes in tracked fields)")
+    return lines
+
+
+def _diff_mp_header(model_points: ModelPoints, sub: ModelPoints, i: int,
+                    tag: str) -> str:
+    """The ``diff[-tag] mp[i] (...)`` identity line shared by the trace_diffs."""
+    sex_v = int(sub.sex[0]) if sub.sex is not None else 0
+    sex_label = "남" if sex_v == 0 else "여"
+    age = float(sub.issue_age[0])
+    term = int(sub.term_months[0])
+    count = float(sub.count[0]) if sub.count is not None else 1.0
+    product = (str(model_points.product[i])
+               if model_points.product is not None else "-")
+    channel = (str(model_points.channel[i])
+               if model_points.channel is not None else "-")
+    return (f"diff{tag} mp[{i}]  ({product}/{channel}, sex={sex_label}, "
+            f"issue_age={age:g}, term={term}m, count={count:g})")
+
+
 def show_trace_diff(
     mp_index: int,
     model_points: ModelPoints,
@@ -1038,45 +1093,10 @@ def show_trace_diff(
     labels_line = f"labels: {label_a!r}  ->  {label_b!r}"
 
     # ---- Assumption changes (suppressed when equal)
-    basis_diffs: list[object] = []
-    for name in ("mortality_annual", "lapse_annual",
-                 "waiver_incidence_annual"):
-        line = _diff_callable(name,
-                              getattr(resolved_a, name),
-                              getattr(resolved_b, name))
-        if line is not None:
-            basis_diffs.append(line)
-    for name in ("discount_annual", "expense_inflation", "ra_method",
-                 "ra_confidence", "cost_of_capital_rate", "mortality_cv",
-                 "morbidity_cv", "longevity_cv", "disability_cv",
-                 "expense_cv"):
-        line = _diff_scalar(name,
-                            getattr(resolved_a, name),
-                            getattr(resolved_b, name))
-        if line is not None:
-            basis_diffs.append(line)
-    # ExpenseItem ledger -- detect added / dropped / changed rows.
-    rows_a = resolved_a.expense_items
-    rows_b = resolved_b.expense_items
-    if rows_a != rows_b:
-        basis_diffs.append(
-            f"expense_items           : len {len(rows_a)} -> len {len(rows_b)}"
-        )
-    # Coverages: per-coverage rate table change.
+    basis_diffs = _basis_diff_lines(resolved_a, resolved_b)
+    # codes used again below to gate the per-coverage rate-delta rows
     codes_a = [r.code for r in resolved_a.coverages]
     codes_b = [r.code for r in resolved_b.coverages]
-    if codes_a != codes_b:
-        basis_diffs.append(
-            f"coverages (codes)      : {codes_a} -> {codes_b}"
-        )
-    else:
-        for ra, rb in zip(resolved_a.coverages, resolved_b.coverages):
-            line = _diff_callable(f"coverage[{ra.code}].rate",
-                                   ra.rate, rb.rate)
-            if line is not None:
-                basis_diffs.append(line)
-    if not basis_diffs:
-        basis_diffs.append("(no changes in tracked fields)")
 
     # ---- Rate deltas at sampled years
     n_years = (term + 11) // 12
@@ -1226,6 +1246,141 @@ def show_trace_diff(
         ("Final (headline change, per policy)", final_lines),
     ]
     _emit_tree(tree_items, out, "")
+    file.write("\n".join(out) + "\n")
+
+
+def show_trace_diff_vfa(
+    mp_index: int,
+    model_points: ModelPoints,
+    basis_a: Basis | dict,
+    basis_b: Basis | dict,
+    *,
+    return_scenarios: FloatArray | None = None,
+    label_a: str = "before",
+    label_b: str = "after",
+    file: IO | None = None,
+) -> None:
+    """Diff one VFA model point's headline (BEL / RA / fee / CSM / TVOG / loss)
+    across two bases, with the assumption changes that drive it.
+
+    The VFA counterpart of :func:`show_trace_diff` -- a headline-level diff
+    (assumption changes plus the metric deltas), not the per-month path deltas
+    the GMM version also prints. ``return_scenarios`` (if given) is applied to
+    both measures so the time-value (TVOG) delta is meaningful.
+    """
+    if file is None:
+        file = sys.stdout
+    if not 0 <= mp_index < model_points.n_mp:
+        raise IndexError(
+            f"mp_index {mp_index} out of range for n_mp={model_points.n_mp}")
+    i = mp_index
+    ra_basis = _resolve_basis(basis_a, model_points, i)
+    rb_basis = _resolve_basis(basis_b, model_points, i)
+    sub = model_points.subset([i])
+    ma = measure_vfa(sub, ra_basis, return_scenarios=return_scenarios)
+    mb = measure_vfa(sub, rb_basis, return_scenarios=return_scenarios)
+
+    def g(m, name):
+        return float(getattr(m, name)[0])
+    final_lines: list[object] = [
+        f"BEL  {_money_delta(g(ma,'bel'), g(mb,'bel'))}",
+        f"RA   {_money_delta(g(ma,'ra'), g(mb,'ra'))}",
+        f"fee  {_money_delta(g(ma,'variable_fee'), g(mb,'variable_fee'))}",
+        f"CSM  {_money_delta(g(ma,'csm'), g(mb,'csm'))}",
+        f"TVOG {_money_delta(g(ma,'time_value'), g(mb,'time_value'))}",
+        f"loss {_money_delta(g(ma,'loss_component'), g(mb,'loss_component'))}",
+    ]
+    out = [_diff_mp_header(model_points, sub, i, "-vfa"),
+           f"labels: {label_a!r}  ->  {label_b!r}"]
+    _emit_tree([("Assumption changes", _basis_diff_lines(ra_basis, rb_basis)),
+                ("Final (headline change, per policy)", final_lines)], out, "")
+    file.write("\n".join(out) + "\n")
+
+
+def show_trace_diff_paa(
+    mp_index: int,
+    model_points: ModelPoints,
+    basis_a: Basis | dict,
+    basis_b: Basis | dict,
+    *,
+    revenue_basis: str = "time",
+    label_a: str = "before",
+    label_b: str = "after",
+    file: IO | None = None,
+) -> None:
+    """Diff one PAA model point's headline (LRC / revenue / service result /
+    LIC / loss) across two bases, with the assumption changes that drive it.
+
+    The PAA counterpart of :func:`show_trace_diff` -- a headline-level diff. PAA
+    has no CSM; the metrics are the unearned-premium LRC, the recognised
+    revenue, the insurance service result, the incurred-claims liability peak
+    and the loss component.
+    """
+    if file is None:
+        file = sys.stdout
+    if not 0 <= mp_index < model_points.n_mp:
+        raise IndexError(
+            f"mp_index {mp_index} out of range for n_mp={model_points.n_mp}")
+    i = mp_index
+    ra_basis = _resolve_basis(basis_a, model_points, i)
+    rb_basis = _resolve_basis(basis_b, model_points, i)
+    sub = model_points.subset([i])
+    ma = measure_paa(sub, ra_basis, revenue_basis=revenue_basis)
+    mb = measure_paa(sub, rb_basis, revenue_basis=revenue_basis)
+
+    final_lines: list[object] = [
+        f"LRC[0]          {_money_delta(float(ma.lrc[0]), float(mb.lrc[0]))}",
+        f"total revenue   {_money_delta(float(ma.revenue[0].sum()), float(mb.revenue[0].sum()))}",
+        f"svc result      {_money_delta(float(ma.service_result[0].sum()), float(mb.service_result[0].sum()))}",
+        f"LIC (peak)      {_money_delta(float(ma.lic[0].max()), float(mb.lic[0].max()))}",
+        f"loss_component  {_money_delta(float(ma.loss_component[0]), float(mb.loss_component[0]))}",
+    ]
+    out = [_diff_mp_header(model_points, sub, i, "-paa"),
+           f"labels: {label_a!r}  ->  {label_b!r}"]
+    _emit_tree([("Assumption changes", _basis_diff_lines(ra_basis, rb_basis)),
+                ("Final (headline change, per policy)", final_lines)], out, "")
+    file.write("\n".join(out) + "\n")
+
+
+def show_trace_diff_reinsurance(
+    mp_index: int,
+    model_points: ModelPoints,
+    basis_a: Basis | dict,
+    basis_b: Basis | dict,
+    treaty: Treaty,
+    *,
+    label_a: str = "before",
+    label_b: str = "after",
+    file: IO | None = None,
+) -> None:
+    """Diff one reinsurance-held model point's headline (BEL / RA / CSM) across
+    two bases (same ``treaty``), with the assumption changes that drive it.
+
+    The reinsurance counterpart of :func:`show_trace_diff` -- a headline-level
+    diff. The CSM is the net cost / gain of the cover and may be negative; there
+    is no loss component (Sec. 65).
+    """
+    if file is None:
+        file = sys.stdout
+    if not 0 <= mp_index < model_points.n_mp:
+        raise IndexError(
+            f"mp_index {mp_index} out of range for n_mp={model_points.n_mp}")
+    i = mp_index
+    ra_basis = _resolve_basis(basis_a, model_points, i)
+    rb_basis = _resolve_basis(basis_b, model_points, i)
+    sub = model_points.subset([i])
+    ma = measure_reinsurance(sub, ra_basis, treaty)
+    mb = measure_reinsurance(sub, rb_basis, treaty)
+
+    final_lines: list[object] = [
+        f"BEL  {_money_delta(float(ma.bel[0]), float(mb.bel[0]))}",
+        f"RA   {_money_delta(float(ma.ra[0]), float(mb.ra[0]))}",
+        f"CSM  {_money_delta(float(ma.csm[0]), float(mb.csm[0]))}",
+    ]
+    out = [_diff_mp_header(model_points, sub, i, "-reinsurance"),
+           f"labels: {label_a!r}  ->  {label_b!r}"]
+    _emit_tree([("Assumption changes", _basis_diff_lines(ra_basis, rb_basis)),
+                ("Final (headline change, per policy)", final_lines)], out, "")
     file.write("\n".join(out) + "\n")
 
 

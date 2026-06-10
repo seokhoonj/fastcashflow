@@ -244,3 +244,20 @@ def test_reinsurance_aggregate_rejects_bad_chunk_size():
     with pytest.raises(ValueError, match="chunk_size"):
         fcf.reinsurance.measure_aggregate(mp, basis,
                                           fcf.reinsurance.QuotaShare(0.5), chunk_size=0)
+
+
+def test_reinsurance_trace_diff_renders_assumption_and_headline():
+    """trace_diff shows the changed assumption and the headline BEL/RA/CSM move."""
+    import io, dataclasses
+
+    b1 = _basis()
+    b2 = dataclasses.replace(b1, mortality_cv=0.20)
+    mp = ModelPoints.single(40, 80_000.0, 120, benefits={0: 1e8},
+                            calculation_methods=PATTERNS)
+    buf = io.StringIO()
+    fcf.reinsurance.trace_diff(0, mp, b1, b2, fcf.reinsurance.QuotaShare(0.4),
+                               file=buf)
+    t = buf.getvalue()
+    assert "diff-reinsurance" in t
+    assert "mortality_cv" in t                 # the changed assumption surfaces
+    assert "RA" in t and "CSM" in t            # the headline deltas
