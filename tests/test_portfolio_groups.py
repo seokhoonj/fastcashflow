@@ -676,3 +676,47 @@ def test_portfolio_measure_inforce_requires_router():
         count=np.array([1.0]), prior_csm=np.zeros(1), lock_in_rate=0.03)
     with pytest.raises(TypeError, match="BasisRouter"):
         fcf.portfolio.measure_inforce(mp, state, router.resolve(("G", "GA")))
+
+
+def test_portfolio_measure_stream_splits_results_by_model(tmp_path):
+    """portfolio.measure_stream routes a mixed parquet book by model and writes
+    each model's heterogeneous results to its own subdirectory; each subdir's
+    values match the in-memory portfolio.measure."""
+    import polars as pl
+    from conftest import PATTERNS
+
+    router = BasisRouter(
+        {("G", "GA"): _flat_basis(), ("P", "GA"): _flat_basis(),
+         ("V", "GA"): _flat_basis(investment_return=0.04)},
+        measurement_models={("P", "GA"): "PAA", ("V", "GA"): "VFA"})
+    pol = pl.DataFrame({
+        "mp_id": ["m0", "m1", "m2", "m3"], "issue_age": [40] * 4,
+        "premium": [5000.0, 0.0, 1200.0, 0.0], "term_months": [60] * 4,
+        "premium_term_months": [60] * 4, "account_value": [0.0, 0.0, 0.0, 1e6],
+        "product": ["G", "G", "P", "V"], "channel": ["GA"] * 4})
+    cov = pl.DataFrame({"mp_id": ["m0", "m1", "m2"], "coverage": ["DEATH"] * 3,
+                        "amount": [1e4] * 3})
+    pp, cp, od = tmp_path / "pol.parquet", tmp_path / "cov.parquet", tmp_path / "out"
+    pol.write_parquet(pp)
+    cov.write_parquet(cp)
+
+    n = fcf.portfolio.measure_stream(pp, od, router, coverages=cp,
+                                     calculation_methods=PATTERNS, chunk_size=2)
+    assert n == 4
+    mp = fcf.read_model_points(pp, coverages=cp, calculation_methods=PATTERNS)
+    pm = fcf.portfolio.measure(mp, router, full=False)
+    for model, attr in (("gmm", "csm"), ("paa", "lrc"), ("vfa", "csm")):
+        parts = pl.concat([pl.read_parquet(f)
+                           for f in sorted((od / model).glob("part-*.parquet"))])
+        ref = getattr(getattr(pm, model).measurement, attr)
+        assert parts.height == len(ref)                 # each model's rows land
+        assert parts["id"].n_unique() == len(ref)       # no id dropped/duplicated
+        assert np.allclose(sorted(parts[attr].to_list()), sorted(ref.tolist()))
+
+
+def test_portfolio_measure_stream_requires_router(tmp_path):
+    """A routed (mixed-model) book is required -- a single Basis is rejected."""
+    router = BasisRouter({("G", "GA"): _flat_basis()})
+    with pytest.raises(TypeError, match="BasisRouter"):
+        fcf.portfolio.measure_stream("x.parquet", tmp_path / "o",
+                                     router.resolve(("G", "GA")))

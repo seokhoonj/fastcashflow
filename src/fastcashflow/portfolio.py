@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass, fields, replace
+from pathlib import Path
 
 import numpy as np
+import polars as pl
 
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
@@ -34,6 +36,9 @@ from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
     GMMMeasurement, GMMAggregate, _factorise_segments, measure as _measure_gmm,
     measure_aggregate as _gmm_aggregate, measure_inforce as _gmm_inforce)
+from fastcashflow.io import (
+    _stream_validate, write_measurement, _model_points_from_frames,
+    _parse_calculation_methods)
 from fastcashflow.grouping import (
     group, group_of_contracts, _GroupReducer, _join_keys, _finalise_gmm_group,
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
@@ -50,8 +55,8 @@ from fastcashflow.trace import (
 #: does not leak the imported helpers (np, dataclass, BasisRouter, ModelPoints,
 #: the leaf measure functions, ...).
 __all__ = [
-    "measure", "measure_aggregate", "measure_inforce", "measure_groups",
-    "measure_group_of_contracts", "trace", "trace_diff",
+    "measure", "measure_aggregate", "measure_inforce", "measure_stream",
+    "measure_groups", "measure_group_of_contracts", "trace", "trace_diff",
     "PortfolioMeasurement", "PortfolioAggregate", "PortfolioGroups",
     "PortfolioReport", "PortfolioMovements", "PortfolioReconciliation",
     "ModelMeasurement",
@@ -170,6 +175,66 @@ def measure_inforce(model_points: ModelPoints, state: InforceState, basis, *,
             model_points.subset(vfa_idx), state.subset(vfa_idx),
             _submodel_router(basis, "VFA"), period_months=period_months))
     return PortfolioMeasurement(model_points=model_points, **slots)
+
+
+def measure_stream(input_path, output_dir, basis, *, coverages=None,
+                   calculation_methods=None, chunk_size: int = 20_000_000,
+                   full: bool = False, backend: str = "cpu",
+                   id_column: str | None = None,
+                   validate_unique_mp_id: bool = True) -> int:
+    """Stream a mixed-model portfolio valuation through a parquet file, chunk by
+    chunk.
+
+    The portfolio counterpart of the per-model ``measure_stream``: read the
+    policies (+ ``coverages``) parquet in ``chunk_size`` blocks, route each
+    chunk by model with :func:`measure`, and write each model's results to its
+    OWN subdirectory -- ``output_dir/{gmm,paa,vfa}/part-NNNNN.parquet`` -- since
+    the models' result columns differ (GMM / VFA write bel / ra / csm, PAA
+    lrc / loss_component). Returns the number of model points processed.
+    ``basis`` is a :class:`~fastcashflow.basis.BasisRouter`, as for
+    :func:`measure`.
+
+    Marginal benefit note: :func:`measure` already bounds memory via
+    ``chunk_size``; this is the file-based out-of-core form for a book too large
+    to read at once. The split-by-model output is what lets one streamed book
+    carry heterogeneous per-model result schemas.
+    """
+    if not isinstance(basis, BasisRouter):
+        raise TypeError(
+            "fcf.portfolio.measure_stream requires a BasisRouter (a routed, "
+            "possibly mixed-model portfolio); for a single Basis use "
+            "fcf.gmm.measure_stream / fcf.paa.measure_stream / "
+            "fcf.vfa.measure_stream")
+    input_path, output_dir = Path(input_path), Path(output_dir)
+    scan, n_total, id_col = _stream_validate(
+        input_path, output_dir, id_column, validate_unique_mp_id)
+    if any(output_dir.glob("*/part-*.parquet")):
+        raise ValueError(
+            f"output directory {str(output_dir)!r} already contains model part "
+            "files; use a fresh directory")
+    methods_dict = (_parse_calculation_methods(calculation_methods)
+                    if isinstance(calculation_methods, (str, Path))
+                    else calculation_methods)
+    cov_scan = pl.scan_parquet(Path(coverages)) if coverages is not None else None
+    processed = 0
+    for part, offset in enumerate(range(0, n_total, chunk_size)):
+        pol = scan.slice(offset, chunk_size).collect()
+        ids = pol[id_col].to_numpy()
+        cov = (cov_scan.join(pol.lazy().select("mp_id"), on="mp_id", how="semi")
+               .collect() if cov_scan is not None else None)
+        chunk_mp = _model_points_from_frames(pol, cov, methods_dict)
+        pm = measure(chunk_mp, basis, full=full, backend=backend,
+                     chunk_size=chunk_size)
+        for model in ("gmm", "paa", "vfa"):
+            slot = getattr(pm, model)
+            if slot is not None:
+                sub = output_dir / model
+                sub.mkdir(parents=True, exist_ok=True)
+                write_measurement(slot.measurement,
+                                  sub / f"part-{part:05d}.parquet",
+                                  ids=ids[slot.index])
+        processed += chunk_mp.n_mp
+    return processed
 
 #: The native measurement type each model slot must hold (the per-model
 #: separation invariant: a paa slot can never carry a GMMMeasurement).
