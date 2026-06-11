@@ -64,7 +64,7 @@ from fastcashflow.plots import (
 )
 from fastcashflow.pricing import solve_premium
 from fastcashflow._reinsurance import ReinsuranceMeasurement
-from fastcashflow.report import Report, report
+from fastcashflow.report import ReinsuranceReport, Report, report
 from fastcashflow.statemodel import (
     STATE_MODELS,
     State,
@@ -87,7 +87,8 @@ __all__ = [
     "transition",
     "GMMMeasurement", "GMMAggregate", "PAAMeasurement", "PAAAggregate",
     "VFAMeasurement", "VFAAggregate",
-    "ReinsuranceMeasurement", "Report", "StochasticResult", "TVOGResult",
+    "ReinsuranceMeasurement", "Report", "ReinsuranceReport",
+    "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
     "ReinsurancePeriodMovement", "ReinsuranceReconciliation",

@@ -127,7 +127,7 @@ def test_report_loss_component():
 
 def test_report_rejects_unknown_measurement():
     """A non-measurement input is an error."""
-    with pytest.raises(TypeError, match="GMM, PAA or VFA"):
+    with pytest.raises(TypeError, match="GMM, PAA, VFA or reinsurance"):
         report(object())
 
 
