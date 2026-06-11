@@ -347,6 +347,24 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
     built in a single backward pass so the roll-forward stays linear in
     time. Monthly interest and release are returned too, so the roll-forward
     is fully decomposable: ``csm[t+1] = csm[t] + accretion[t] - release[t]``.
+
+    The release is the IFRS 17 B119 coverage-unit allocation: the
+    end-of-period (i.e. post-accretion) CSM is spread over the coverage units
+    provided this period and expected in future, and this period's share is
+    recognised::
+
+        release[t] = csm_accreted[t] * coverage_units[t] / sum_{s>=t} coverage_units[s]
+
+    Two choices B119 leaves to judgement are fixed here:
+
+    * **coverage units = in-force.** The caller passes ``proj.inforce`` as
+      ``coverage_units``, so one coverage unit is one in-force contract-month
+      (a fixed-benefit-protection convention; for a contract whose benefit
+      amount varies over time the quantity of coverage would differ from raw
+      in-force).
+    * **future coverage units are undiscounted.** The tail sum ``sum_{s>=t}``
+      carries no discount factor -- B119 permits discounting future coverage
+      units or not, as an accounting-policy choice, and this engine does not.
     """
     n_mp, n_time = coverage_units.shape
     csm = np.zeros((n_mp, n_time + 1))
