@@ -329,6 +329,11 @@ Visualisation
 -------------
 
 The plotting helpers use matplotlib, which is included in the standard install.
+The measurement and reconciliation charts dispatch on the result type -- GMM,
+PAA, VFA and reinsurance held each draw their own model's quantities (a PAA
+result draws its LRC and LIC; a reinsurance-held result draws the ceded
+streams and its possibly-negative CSM). A portfolio container is refused --
+plot one model slot's native result instead.
 
 .. autofunction:: fastcashflow.plot_liability
 
