@@ -30,7 +30,7 @@ from fastcashflow._paa import (
     _stitch_paa_measurements, _scatter_paa_headline)
 from fastcashflow._vfa import (
     VFAMeasurement, VFAAggregate, measure_vfa, measure_aggregate as _vfa_aggregate,
-    measure_inforce as _vfa_inforce,
+    measure_inforce as _vfa_inforce, _require_settlement_csm,
     _stitch_vfa_measurements, _scatter_vfa_headline)
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
@@ -389,6 +389,43 @@ class PortfolioMeasurement:
                           "csm": float(m.csm.sum()),
                           "loss_component": float(m.loss_component.sum())}
         return out
+
+
+@write_measurement.register
+def _(measurement: PortfolioMeasurement, path, *, ids=None):
+    """Write each model slot's headline results to its own file.
+
+    The models' column sets differ (GMM / VFA write bel / ra / csm, PAA
+    lrc / loss_component), so one portfolio writes one file per model
+    present, the model name appended to the stem -- ``results.parquet``
+    becomes ``results-gmm.parquet`` / ``results-paa.parquet`` /
+    ``results-vfa.parquet``. Unlike the single-model writers, every file
+    carries an ``id`` column even when ``ids`` is not passed: a model's
+    rows are a partition slice of the portfolio, so without an id they
+    could not be joined back. The column is ``ids[index]`` when ``ids`` is
+    given, the portfolio row position otherwise.
+    """
+    path = Path(path)
+    if ids is not None:
+        ids = np.asarray(ids)
+        if ids.shape[0] != measurement.model_points.n_mp:
+            raise ValueError(
+                f"ids has {ids.shape[0]} rows but the portfolio has "
+                f"{measurement.model_points.n_mp}")
+    # Preflight the one known per-slot rejection (a carry-only VFA CSM, e.g.
+    # from measure_inforce) before the first file is written, so a refusal
+    # cannot leave a partial gmm/paa output on disk.
+    if measurement.vfa is not None:
+        _require_settlement_csm(measurement.vfa.measurement, "write_measurement")
+    for model in ("gmm", "paa", "vfa"):
+        mm = getattr(measurement, model)
+        if mm is None:
+            continue
+        row_ids = mm.index if ids is None else ids[mm.index]
+        write_measurement(
+            mm.measurement,
+            path.with_name(f"{path.stem}-{model}{path.suffix}"),
+            ids=row_ids)
 
 
 @dataclass(frozen=True, slots=True)

@@ -491,3 +491,68 @@ def test_portfolio_rejects_wrong_measurement_type_in_slot():
     with pytest.raises(TypeError, match="paa must hold a PAAMeasurement"):
         PortfolioMeasurement(model_points=mp,
                              paa=ModelMeasurement(np.arange(2), gmm_meas))
+
+
+# ---------------------------------------------------------------------------
+# write_measurement: one file per model present
+# ---------------------------------------------------------------------------
+def test_write_measurement_portfolio_one_file_per_model(tmp_path):
+    """A portfolio writes results-{gmm,paa,vfa}.parquet, each slot's native
+    columns plus an id column carrying the portfolio row positions."""
+    import polars as pl
+
+    pm = _three_model_portfolio()
+    fcf.write_measurement(pm, tmp_path / "results.parquet")
+    assert not (tmp_path / "results.parquet").exists()
+
+    gmm = pl.read_parquet(tmp_path / "results-gmm.parquet")
+    paa = pl.read_parquet(tmp_path / "results-paa.parquet")
+    vfa = pl.read_parquet(tmp_path / "results-vfa.parquet")
+    assert gmm["id"].to_list() == pm.gmm.index.tolist()
+    assert paa["id"].to_list() == pm.paa.index.tolist()
+    assert vfa["id"].to_list() == pm.vfa.index.tolist()
+    assert "bel" in gmm.columns and "loss_component" in gmm.columns
+    assert "lrc" in paa.columns and "bel" not in paa.columns
+    assert "variable_fee" in vfa.columns and "time_value" in vfa.columns
+    assert np.allclose(gmm["bel"].to_numpy(), pm.gmm.measurement.bel)
+    assert np.allclose(paa["lrc"].to_numpy(), pm.paa.measurement.lrc)
+    assert np.allclose(vfa["csm"].to_numpy(), pm.vfa.measurement.csm)
+
+
+def test_write_measurement_portfolio_maps_ids_through_the_partition(tmp_path):
+    """Caller ids land on each model's rows via the partition index, and a
+    wrong-length ids array is rejected. An absent model writes no file."""
+    import polars as pl
+
+    pm = _three_model_portfolio()
+    ids = np.array(["p0", "p1", "p2", "p3"])
+    fcf.write_measurement(pm, tmp_path / "out.csv", ids=ids)
+    vfa = pl.read_csv(tmp_path / "out-vfa.csv")
+    assert vfa["id"].to_list() == ids[pm.vfa.index].tolist()
+
+    with pytest.raises(ValueError, match="ids has 2 rows"):
+        fcf.write_measurement(pm, tmp_path / "bad.csv", ids=ids[:2])
+
+    router = BasisRouter({("A", "GA"): _flat_basis()})
+    all_gmm = measure(_mp(["A", "A"], ["GA", "GA"]), router)
+    fcf.write_measurement(all_gmm, tmp_path / "g.parquet")
+    assert (tmp_path / "g-gmm.parquet").exists()
+    assert not (tmp_path / "g-paa.parquet").exists()
+    assert not (tmp_path / "g-vfa.parquet").exists()
+
+
+def test_write_measurement_portfolio_preflights_carry_only_vfa(tmp_path):
+    """A carry-only VFA CSM is refused before any file is written -- no
+    partial gmm/paa output left on disk."""
+    from dataclasses import replace
+
+    from fastcashflow._vfa import CSM_BASIS_CARRY_ONLY
+
+    pm = _three_model_portfolio()
+    carry = replace(pm.vfa.measurement, csm_basis=CSM_BASIS_CARRY_ONLY)
+    pm2 = PortfolioMeasurement(
+        model_points=pm.model_points, gmm=pm.gmm, paa=pm.paa,
+        vfa=ModelMeasurement(pm.vfa.index, carry))
+    with pytest.raises(ValueError, match="carry-only"):
+        fcf.write_measurement(pm2, tmp_path / "results.parquet")
+    assert not list(tmp_path.iterdir())

@@ -1984,13 +1984,19 @@ def write_measurement(
     ``id`` column so the results join back to policies. Dispatches on the
     measurement type -- GMM writes ``bel`` / ``ra`` / ``csm`` /
     ``loss_component``, PAA writes ``lrc`` / ``loss_component``, VFA adds
-    ``variable_fee`` / ``time_value``. A new model registers its columns with
+    ``variable_fee`` / ``time_value``, reinsurance held writes ``bel`` /
+    ``ra`` / ``csm``. A mixed-portfolio
+    :class:`~fastcashflow.portfolio.PortfolioMeasurement` writes one file
+    per model present (``results.parquet`` becomes ``results-gmm.parquet`` /
+    ``results-paa.parquet`` / ...), each with an ``id`` column joining its
+    rows back to the portfolio. A new model registers its columns with
     ``@write_measurement.register`` in the module that defines its measurement
     type (so io.py stays free of the engine import).
     """
     raise TypeError(
         f"write_measurement does not handle {type(measurement).__name__}; "
-        "pass a GMM / PAA / VFA measurement"
+        "pass a GMM / PAA / VFA / reinsurance measurement or a portfolio "
+        "measurement"
     )
 
 
