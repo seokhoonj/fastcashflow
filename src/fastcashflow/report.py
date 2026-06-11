@@ -144,11 +144,14 @@ class ReinsuranceReport:
     ``reinsurance_service_result`` is the analog of the issuer service result --
     the release of the risk transferred plus the release of the CSM
     (``ra_release + csm_release``, IFRS 17 paragraphs 82 + B119), *not* the gross
-    recovery-less-premium netting, which the issuer service result also is not.
-    ``ra_release`` is the period unwind of the risk transferred (paragraph 64);
-    it is computed the movement-consistent way -- ``opening + interest -
-    closing`` -- so summing the monthly figures over a reporting period ties out
-    exactly to :class:`~fastcashflow.ReinsuranceReconciliation`.
+    recovery-less-premium netting (that is ``net_reinsurance_result``).
+    ``ra_release`` is the period release of the risk transferred (paragraph 64)
+    excluding interest -- the same revenue-earned form as the issuer
+    ``_report_gmm`` (the RA interest is in the finance line). The report (a P&L
+    view) and the :class:`~fastcashflow.ReinsuranceReconciliation` (a liability
+    roll-forward) decompose the same opening->closing transition differently, so
+    ``ra_release`` here is the revenue-earned amount, not the reconciliation's
+    movement residual; the finance lines and the CSM release do tie out.
 
     ``reinsurance_finance_expense`` is the interest unwind on the BEL and RA
     plus the CSM accretion at the locked-in rate, disaggregated by source (IFRS
@@ -327,14 +330,17 @@ def _report_reinsurance(m: ReinsuranceMeasurement) -> ReinsuranceReport:
     recoveries received exposed as disaggregated line items (the paragraph-86
     net is then a presentation choice, computed by the report property).
 
-    The RA release is computed the movement-consistent way -- ``opening +
-    interest - closing`` rather than the issuer's ``opening - closing * discount``
-    -- so the monthly figures sum over a reporting period to exactly the
-    ``ra_release`` of :func:`~fastcashflow.movement._roll_forward_reinsurance`,
-    and the report ties out to the reinsurance reconciliation. The finance
-    expense is the interest on the BEL and RA at the locked-in rate plus the CSM
-    accretion, disaggregated by source (B130-B136). There is no loss component
-    (Sec. 65); the CSM may be negative and the trajectory carries it through.
+    The RA release is the change in the risk transferred excluding interest
+    (``opening - closing discounted``), the same revenue-earned form as the
+    issuer ``_report_gmm`` -- so the RA interest goes to the finance line and the
+    service result is the pure release. The report (a P&L view) and the
+    reconciliation (a liability roll-forward) decompose the same opening->closing
+    transition differently, so this ``ra_release`` is the revenue-earned amount,
+    not the reconciliation's movement residual; the finance lines and the CSM
+    release, however, do tie out to the reconciliation. The finance expense is
+    the interest on the BEL and RA at the locked-in rate plus the CSM accretion,
+    disaggregated by source (B130-B136). There is no loss component (Sec. 65);
+    the CSM may be negative and the trajectory carries it through.
     """
     _require_full(m, "report()")
     bel, ra, csm = m.bel_path, m.ra_path, m.csm_path
@@ -343,11 +349,17 @@ def _report_reinsurance(m: ReinsuranceMeasurement) -> ReinsuranceReport:
     # month. The last axis is time: (n_time,) for a single basis, (n_mp, n_time)
     # for a segmented measurement; the maths below broadcast over either shape.
     monthly_rate = forward_rates(m.discount_bom)
+    monthly_discount = 1.0 / (1.0 + monthly_rate)
 
-    # The RA release the movement-consistent way -- opening + interest - closing
-    # -- so it sums over a reporting period to the reconciliation's ra_release
-    # (movement._roll_forward_reinsurance: ra[:, a] + ra_interest - ra[:, b]).
-    ra_release = ra[:, :-1] * (1.0 + monthly_rate) - ra[:, 1:]
+    # The RA release the same form as the issuer _report_gmm -- the change in
+    # the risk transferred EXCLUDING interest (opening - closing discounted) --
+    # so the RA interest sits in the finance line and the service result is the
+    # pure release. The report (a P&L view) and the reconciliation (a liability
+    # roll-forward) are different decompositions of the same opening->closing
+    # transition, so this revenue-earned ra_release is NOT the reconciliation's
+    # movement residual (opening + interest - closing); the finance lines and the
+    # CSM release do tie out to the reconciliation, the RA run-off line does not.
+    ra_release = ra[:, :-1] - ra[:, 1:] * monthly_discount
     csm_release = m.csm_release
 
     return ReinsuranceReport(
