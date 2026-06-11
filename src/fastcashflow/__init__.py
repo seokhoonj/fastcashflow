@@ -50,6 +50,8 @@ from fastcashflow.movement import (
     ReinsuranceReconciliation,
     VFAPeriodMovement,
     VFAReconciliation,
+    VFASettlementMovement,
+    VFASettlementReconciliation,
     reconcile,
     roll_forward,
 )
@@ -91,6 +93,7 @@ __all__ = [
     "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
+    "VFASettlementMovement", "VFASettlementReconciliation",
     "ReinsurancePeriodMovement", "ReinsuranceReconciliation",
     "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",

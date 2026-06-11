@@ -88,8 +88,9 @@ def _require_settlement_csm(measurement: "VFAMeasurement", op: str) -> None:
             f"(csm_basis='{CSM_BASIS_CARRY_ONLY}', from vfa.measure_inforce -- "
             "the prior CSM rolled at the basis return, with the paragraph-45 "
             "remeasurement deferred). It is not a settlement figure, so it "
-            f"cannot be used by {op}. The real paragraph-45 VFA subsequent "
-            "measurement (opening->closing movement) is a separate, later step.")
+            f"cannot be used by {op}. For the real paragraph-45 subsequent "
+            "measurement (the opening->closing settlement movement) use "
+            "fastcashflow.vfa.settle(...).")
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -331,6 +332,7 @@ def _vfa_project(
     *,
     elapsed_months: IntArray | None = None,
     account_value: FloatArray | None = None,
+    _proj: "Cashflows | None" = None,
 ) -> "_VFAProjection":
     """Project VFA cash flows / trajectories, optionally re-anchoring the AV.
 
@@ -344,6 +346,11 @@ def _vfa_project(
     duration, not the fund), and the AV-dependent benefits / fees recompute from
     the re-anchored path; the caller slices the trajectories at the valuation
     date.
+
+    ``_proj`` (private) lets a caller running this twice on the same book
+    (``vfa.settle``: an expected and an observed leg) share one decrement
+    projection -- the legs differ only in the AV anchor, and sharing makes
+    the in-force / coverage-unit arrays bit-identical between them.
     """
     basis = _single_basis(basis, entry="measure_vfa")
     # The VFA death money is ``deaths * death_benefit`` (below), computed from
@@ -364,7 +371,7 @@ def _vfa_project(
             "a deterministic transition (Transition.after_sojourn_months) is not "
             "supported on the VFA path."
         )
-    proj = project_cashflows(model_points, basis)
+    proj = _proj if _proj is not None else project_cashflows(model_points, basis)
     inforce = proj.inforce
     n_mp, n_time = inforce.shape
 
@@ -818,13 +825,13 @@ def measure_inforce(
 
     v1 returns the **as-of valuation-date headline** (``bel`` / ``ra`` / ``csm``
     / ``variable_fee`` / ``time_value`` / ``loss_component``); the trajectory
-    fields are ``None``. Deferred, with the same defer-the-unlocking stance as
-    ``gmm.measure_inforce``: the paragraph-45 remeasurement (the change in the
-    entity's share of the underlying-items fair value and the guarantee
-    future-service cash flows), the loss-component path (``loss_component`` is
-    zero), the stochastic time value of the guarantee (``time_value`` is zero --
-    the deterministic intrinsic value only), and the full movement trajectory
-    (use a period-close roll-forward, a later phase).
+    fields are ``None``. Deferred here: the paragraph-45 remeasurement (the
+    change in the entity's share of the underlying-items fair value and the
+    guarantee future-service cash flows) and the loss-component movement --
+    **both live in** :func:`~fastcashflow.vfa.settle`, the paragraph-45
+    settlement of the same state -- plus the stochastic time value of the
+    guarantee (``time_value`` is zero -- the deterministic intrinsic value
+    only) and the full movement trajectory.
 
     .. warning::
 
@@ -835,9 +842,8 @@ def measure_inforce(
        adjustment for the change in the entity's share of the underlying-items
        fair value is deferred. So the fulfilment-cash-flow figures are
        observed-AV-consistent but the CSM is not yet a paragraph-45-compliant
-       settlement CSM. A book whose fund diverged materially from the central
-       return will show a CSM that lags that move until the paragraph-45
-       remeasurement lands.
+       settlement CSM; for that, settle the same state with
+       :func:`~fastcashflow.vfa.settle`.
 
        The result is tagged ``csm_basis = 'carry_only'`` (see
        :data:`fastcashflow.vfa.CSM_BASES`), and the accounting-output entry
@@ -921,3 +927,292 @@ def measure_inforce(
         bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
         time_value=time_value, loss_component=loss_component,
         model_points=model_points, csm_basis=CSM_BASIS_CARRY_ONLY)
+
+
+def _paragraph45_csm_algebra(accreted, x, lc_open):
+    """The paragraph-45/48/50(b) CSM and loss-component step, branchless.
+
+    ``accreted`` is the opening CSM accreted to the adjustment date, ``x`` the
+    favourable(+)/unfavourable(-) future-service change, ``lc_open`` the
+    opening loss component. A favourable change reverses the loss component
+    before rebuilding the CSM (50(b)); an unfavourable change beyond the CSM
+    falls into the loss component (48). Returns
+    ``(csm_after, lc_reversed, lc_recognised, lc_closing)`` satisfying the
+    conservation identity ``(csm_after - accreted) - (lc_closing - lc_open)
+    == x`` in every sign case.
+    """
+    lc_reversed = np.minimum(lc_open, np.maximum(x, 0.0))
+    csm_adj = accreted + x - lc_reversed
+    csm_after = np.maximum(csm_adj, 0.0)
+    lc_recognised = np.maximum(-csm_adj, 0.0)
+    lc_closing = lc_open - lc_reversed + lc_recognised
+    return csm_after, lc_reversed, lc_recognised, lc_closing
+
+
+def settle(
+    model_points: ModelPoints,
+    state: "InforceState",
+    basis: Basis,
+    *,
+    period_months: int | None = None,
+) -> "VFASettlementMovement":
+    """Paragraph-45 subsequent-measurement settlement of a VFA in-force book
+    (period close).
+
+    The real IFRS 17 paragraph-45 opening -> closing movement, replacing the
+    carry-only ``vfa.measure_inforce`` headline for settlement / disclosure:
+    the CSM is adjusted for the change in the entity's share of the fair
+    value of the underlying items (45(b)) and for the changes in fulfilment
+    cash flows relating to future service (45(c)), the loss component is
+    reversed / recognised per paragraphs 48 and 50(b), and one paragraph-B119
+    coverage-unit release is taken on the post-adjustment balance. Returns a
+    :class:`~fastcashflow.movement.VFASettlementMovement` whose blocks
+    reconcile exactly and whose :meth:`closing_measurement
+    <fastcashflow.movement.VFASettlementMovement.closing_measurement>` is a
+    settlement-grade closing balance sheet
+    (``csm_basis='paragraph_45_settlement'``).
+
+    ``state`` is the closing-dated :class:`~fastcashflow.InforceState`
+    extended with the prior reporting date's figures, all at month
+    ``elapsed_months - period_months``: ``prior_csm`` (the opening CSM),
+    ``prior_count``, ``prior_account_value`` and (optionally)
+    ``prior_loss_component``; plus the closing snapshot's ``count`` and
+    observed ``account_value``. The same state feeds ``measure_inforce``
+    (the fast carry-only diagnostic) and this settlement.
+
+    How it computes: two forward projections of the same book share one
+    decrement run -- the EXPECTED leg anchors the account value at the
+    opening observation and advances it under the basis return; the OBSERVED
+    leg anchors at the closing observation -- and both are sliced at the
+    closing date. The paragraph-45 future-service change is **minus the
+    observed-vs-expected difference of the engine's own BEL and RA** (exact
+    with respect to every engine convention, including the end-of-month fee
+    timing and a binding minimum-crediting-rate floor); the 45(b) /
+    45(c) split is a disclosure decomposition of that exact total, the
+    45(b) line being the fund-consistent (end-of-month-weighted)
+    variable-fee PV difference. The CSM accretes by direct compounding at
+    the underlying-items return over the period and is released once at
+    period end over the coverage units provided in the period against those
+    provided plus expected from the opening date. With no experience
+    deviation this reproduces the ``measure_inforce`` monthly carry exactly
+    (a telescoping identity of the release weights).
+
+    A contract whose Sec. 34 boundary falls inside the period is a **final
+    settlement**: allowed, provided its closing ``count`` and
+    ``account_value`` are zero (validated) -- its remaining CSM releases in
+    full. The opening date must lie strictly within every contract's
+    boundary.
+
+    v1 scope (see :class:`~fastcashflow.movement.VFASettlementMovement` for
+    the full statement): deterministic, single basis rate (the
+    finance-not-adjusting-CSM split is an exact zero residual), intrinsic
+    guarantee only, no assumption change, within-period experience assumed
+    equal to expected (only the closing count and observed account value
+    deviate), no paragraph 50(a)-52 systematic loss-component allocation,
+    per-model-point floors. A basis with a ``settlement_pattern`` is
+    rejected: the book would carry a liability for incurred claims at both
+    dates, which this movement does not yet reconcile.
+    """
+    from fastcashflow.movement import VFASettlementMovement
+
+    basis = _single_basis(basis, entry="vfa.settle")
+    if basis.settlement_pattern is not None:
+        raise NotImplementedError(
+            "vfa.settle does not support a basis settlement_pattern in v1: "
+            "the book carries a liability for incurred claims at both dates, "
+            "and this movement reconciles the remaining-coverage liability "
+            "only. Settle the book without the pattern, or wait for the LIC "
+            "movement block.")
+    period = 12 if period_months is None else int(period_months)
+    if period < 1:
+        raise ValueError(f"period_months must be >= 1, got {period_months}")
+    # Reorder state to model-points order and reject a stale snapshot whose
+    # elapsed_months / count disagree (same guard as measure_inforce).
+    state = _reconcile_state(model_points, state)
+    if state.account_value is None:
+        raise ValueError(
+            "vfa.settle needs the observed fund value at the closing date: "
+            "set InforceState.account_value.")
+    if state.prior_account_value is None:
+        raise ValueError(
+            "vfa.settle needs the observed fund value at the opening date: "
+            "set InforceState.prior_account_value (the prior reporting "
+            "date's observation, like prior_csm).")
+    if state.prior_count is None:
+        raise ValueError(
+            "vfa.settle needs the in-force count at the opening date: set "
+            "InforceState.prior_count (the prior reporting date's count, "
+            "like prior_csm).")
+    n_mp = model_points.n_mp
+    prior_csm = np.asarray(state.prior_csm, dtype=np.float64)
+    if np.any(prior_csm < 0.0):
+        raise ValueError(
+            "InforceState.prior_csm must be >= 0 for vfa.settle; a VFA CSM "
+            "is floored at zero (an onerous balance is the loss component)")
+    lc_open = (np.zeros(n_mp) if state.prior_loss_component is None
+               else np.asarray(state.prior_loss_component, dtype=np.float64))
+    both = np.minimum(prior_csm, lc_open) > 0.0
+    if np.any(both):
+        bad = np.flatnonzero(both)[:5].tolist()
+        raise ValueError(
+            f"prior_csm and prior_loss_component are both positive at "
+            f"row(s) {bad}; an IFRS 17 group carries a CSM or a loss "
+            "component, never both")
+    em_close = np.asarray(state.elapsed_months, dtype=np.int64)
+    em_open = em_close - period
+    if np.any(em_open < 0):
+        bad = int(np.argmin(em_open))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em_close[bad])} < "
+            f"period_months={period}; the opening date precedes inception, "
+            "which has no state to settle from")
+    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    dead_at_open = em_open >= boundary
+    if np.any(dead_at_open):
+        bad = int(np.argmax(dead_at_open))
+        raise ValueError(
+            f"elapsed_months[{bad}] - period_months = {int(em_open[bad])} >= "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the "
+            "Sec. 34 horizon); the contract had no remaining coverage at the "
+            "opening date, so there is nothing to settle.")
+    # A boundary inside the period is a final settlement -- legitimate, but
+    # the closing snapshot must agree that the contract is gone.
+    count = np.asarray(state.count, dtype=np.float64)
+    observed_av = np.asarray(state.account_value, dtype=np.float64)
+    runoff = em_close >= boundary
+    bad_runoff = runoff & ((count != 0.0) | (observed_av != 0.0))
+    if np.any(bad_runoff):
+        bad = int(np.argmax(bad_runoff))
+        raise ValueError(
+            f"row {bad} reaches its contract boundary within the period "
+            f"(elapsed_months={int(em_close[bad])} >= "
+            f"contract_boundary_months={int(boundary[bad])}) -- a final "
+            "settlement -- but its closing count / account_value is not "
+            "zero. A matured contract must close with count=0 and "
+            "account_value=0.")
+    # Per-MP clamped closing column: value-neutral (a contract's trajectory
+    # columns at/past its own boundary are zero), needed only so a mixed
+    # book's short contract never indexes off the shared arrays.
+    em_c = np.minimum(em_close, boundary)
+
+    # Two forward projections, one shared decrement run. The legs take their
+    # anchors EXPLICITLY from the state -- never from the seated model points,
+    # whose elapsed_months / count are the closing snapshot. The projection
+    # itself is seeded at count = 1 (the survival curve): the seated count is
+    # the CLOSING observation, and seeding with it would zero the whole
+    # in-force for a matured or mass-lapsed row -- the re-basing factors
+    # below carry the real opening / closing counts instead.
+    from dataclasses import replace as _replace
+    proj_mp = _replace(model_points, count=np.ones(n_mp))
+    proj = project_cashflows(proj_mp, basis)
+    p_exp = _vfa_project(proj_mp, basis, elapsed_months=em_open,
+                         account_value=state.prior_account_value, _proj=proj)
+    p_obs = _vfa_project(proj_mp, basis, elapsed_months=em_close,
+                         account_value=observed_av, _proj=proj)
+    rows = np.arange(n_mp)
+    inforce = p_exp.inforce                       # the ONE shared array
+    n_time = inforce.shape[1]
+    inforce_pad = np.concatenate([inforce, np.zeros((n_mp, 1))], axis=1)
+    r_m = p_exp.r_m
+    v_half = (1.0 + r_m) ** -0.5
+
+    # Re-basing factors -- per-MP scalars from the state's own opening /
+    # closing counts (computed inline: _inforce_rescale reads
+    # model_points.count, which is the CLOSING count). A dead-mid-life
+    # cohort (count = 0 on a live column) gets k_obs = 0 -- full
+    # derecognition -- not the dead-column no-op.
+    if_open = inforce[rows, em_open]
+    k_exp = (np.asarray(state.prior_count, dtype=np.float64)
+             / np.where(if_open > 0.0, if_open, 1.0))
+    if_close = inforce_pad[rows, em_c]
+    k_obs = np.where(if_close > 0.0,
+                     count / np.where(if_close > 0.0, if_close, 1.0), 1.0)
+
+    def _fcf_block(exp_path, obs_path):
+        """The five movement lines of one FCF block (BEL or RA).
+
+        One residual -- the release line (the expected run-off, the
+        roll-forward convention); every other line is computed directly, so
+        an error cannot hide in two places at once.
+        """
+        opening = k_exp * exp_path[rows, em_open]
+        offsets = np.arange(period)
+        src = em_open[:, None] + offsets[None, :]
+        mask = src <= n_time
+        vals = np.where(mask, exp_path[rows[:, None], np.where(mask, src, 0)],
+                        0.0)
+        interest = r_m * k_exp * vals.sum(axis=1)
+        expected_close = k_exp * exp_path[rows, em_c]
+        release = opening + interest - expected_close
+        closing = k_obs * obs_path[rows, em_c]
+        experience = closing - expected_close
+        return opening, interest, release, experience, closing
+
+    (bel_opening, bel_interest, bel_release,
+     bel_experience, bel_closing) = _fcf_block(p_exp.bel, p_obs.bel)
+    (ra_opening, ra_interest, ra_release,
+     ra_experience, ra_closing) = _fcf_block(p_exp.ra, p_obs.ra)
+
+    # The paragraph-45 future-service change: exactly minus the
+    # observed-vs-expected FCF difference. The 45(b)/45(c) lines are a
+    # disclosure split of this exact total -- the fee line weighted
+    # end-of-month (the fee is skimmed on the grown account value, while
+    # variable_fee_path discounts mid-month), so a pure account-value move
+    # with no guarantee and no crediting floor lands entirely in 45(b).
+    x = -(bel_experience + ra_experience)
+    fee_exp = p_exp.variable_fee_path[rows, em_c]
+    fee_obs = p_obs.variable_fee_path[rows, em_c]
+    csm_fv_share = v_half * k_obs * (fee_obs - fee_exp)
+    csm_future_service = x - csm_fv_share
+
+    # CSM / loss-component algebra (paragraphs 45 / 48 / 50(b)). Accrete by
+    # direct compounding (NOT the monthly roll -- that would interleave
+    # releases and double-count against the single B119 release below).
+    accreted = prior_csm * (1.0 + r_m) ** period
+    csm_accretion = accreted - prior_csm
+    csm_after, lc_reversed, lc_recognised, lc_closing = (
+        _paragraph45_csm_algebra(accreted, x, lc_open))
+
+    # Paragraph-B119 release, once, on the post-adjustment balance: units
+    # provided in the period (expected basis) over those provided plus
+    # expected from the OPENING date (the closing-date remainder at the
+    # observed count). With on-track experience this equals the monthly
+    # carry's telescoped release exactly; at a final settlement the future
+    # units are zero and the whole balance releases.
+    cu_tail = np.concatenate(
+        [np.cumsum(inforce[:, ::-1], axis=1)[:, ::-1], np.zeros((n_mp, 1))],
+        axis=1)
+    cu_period = k_exp * (cu_tail[rows, em_open] - cu_tail[rows, em_c])
+    cu_future = k_obs * cu_tail[rows, em_c]
+    denom = cu_period + cu_future
+    eps = 1e-12 * np.where(denom > 0.0, denom, 1.0)
+    live = denom > eps
+    frac = np.where(live, cu_period / np.where(live, denom, 1.0), 0.0)
+    csm_release = csm_after * frac
+    csm_closing = csm_after - csm_release
+
+    return VFASettlementMovement(
+        period_months=period,
+        bel_opening=bel_opening,
+        bel_interest=bel_interest,
+        bel_release=bel_release,
+        bel_experience=bel_experience,
+        bel_closing=bel_closing,
+        ra_opening=ra_opening,
+        ra_interest=ra_interest,
+        ra_release=ra_release,
+        ra_experience=ra_experience,
+        ra_closing=ra_closing,
+        csm_opening=prior_csm,
+        csm_accretion=csm_accretion,
+        csm_fv_share=csm_fv_share,
+        csm_future_service=csm_future_service,
+        loss_component_reversed=lc_reversed,
+        loss_component_recognised=lc_recognised,
+        csm_release=csm_release,
+        csm_closing=csm_closing,
+        loss_component_opening=lc_open,
+        loss_component_closing=lc_closing,
+        variable_fee_closing=k_obs * fee_obs,
+        model_points=model_points,
+    )

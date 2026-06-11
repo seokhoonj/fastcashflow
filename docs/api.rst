@@ -71,6 +71,14 @@ Variable fee approach
 
 .. autofunction:: fastcashflow.vfa.measure_inforce
 
+.. autofunction:: fastcashflow.vfa.settle
+
+.. autoclass:: fastcashflow.VFASettlementMovement
+   :members:
+
+.. autoclass:: fastcashflow.VFASettlementReconciliation
+   :members:
+
 .. autoclass:: fastcashflow.VFAMeasurement
    :members:
 

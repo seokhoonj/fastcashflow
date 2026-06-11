@@ -839,6 +839,16 @@ class InforceState:
       (``vfa.measure_inforce``) re-anchors the account-value path at this
       observed value; GMM / PAA ignore it. It stays on the state -- it does not
       overwrite the model point's inception ``account_value``.
+    * ``prior_count`` -- in-force at month ``elapsed_months - period_months``,
+      the prior reporting date (``None`` unless the state feeds
+      ``vfa.settle``). Mirrors ``prior_csm``: a prior-date figure carried on
+      the closing-dated state.
+    * ``prior_account_value`` -- observed per-MP fund value at the prior
+      reporting date (``None`` unless the state feeds ``vfa.settle``).
+    * ``prior_loss_component`` -- closing loss component at the prior
+      reporting date (``None`` means zero). Read by ``vfa.settle``; the
+      paragraph-48/50(b) algebra reverses it on favourable changes before
+      rebuilding the CSM.
     """
 
     mp_id: np.ndarray
@@ -847,6 +857,9 @@ class InforceState:
     prior_csm: FloatArray
     lock_in_rate: float
     account_value: FloatArray | None = None
+    prior_count: FloatArray | None = None
+    prior_account_value: FloatArray | None = None
+    prior_loss_component: FloatArray | None = None
 
     def __post_init__(self) -> None:
         # Coerce each array to its canonical dtype so a hand-built state
@@ -902,42 +915,53 @@ class InforceState:
                 f"InforceState.mp_id must be unique (it is the join key); "
                 f"duplicates: {dup[:5]}"
             )
-        # account_value is optional (VFA only). When given it is a per-MP
-        # observed fund value: coerce, match length, and validate finite /
-        # non-negative -- a NaN reseeds a NaN account-value path.
-        if self.account_value is not None:
-            av = np.asarray(self.account_value, dtype=np.float64)
-            if av.shape[0] != n:
+        # The optional fields (VFA only). When given, each is a per-MP array:
+        # coerce, match length, and validate finite / non-negative -- a NaN
+        # account value reseeds a NaN account-value path; a negative prior
+        # count or loss component is meaningless.
+        for nm in ("account_value", "prior_count", "prior_account_value",
+                   "prior_loss_component"):
+            value = getattr(self, nm)
+            if value is None:
+                continue
+            arr = np.asarray(value, dtype=np.float64)
+            if arr.shape[0] != n:
                 raise ValueError(
-                    f"InforceState.account_value has length {av.shape[0]} but "
+                    f"InforceState.{nm} has length {arr.shape[0]} but "
                     f"elapsed_months has {n}; per-MP arrays must match"
                 )
-            if not np.all(np.isfinite(av)):
-                raise ValueError("InforceState.account_value must be finite")
-            if np.any(av < 0):
-                raise ValueError("InforceState.account_value must be >= 0")
-            object.__setattr__(self, "account_value", av)
+            if not np.all(np.isfinite(arr)):
+                raise ValueError(f"InforceState.{nm} must be finite")
+            if np.any(arr < 0):
+                raise ValueError(f"InforceState.{nm} must be >= 0")
+            object.__setattr__(self, nm, arr)
 
     def subset(self, indices) -> "InforceState":
         """Return a new ``InforceState`` carrying the rows at ``indices``.
 
         The per-MP fields (``mp_id``, ``elapsed_months``, ``count``,
-        ``prior_csm``, and ``account_value`` when present) are sliced together
-        and the scalar ``lock_in_rate`` is carried, so the result stays
-        internally consistent. Use it alongside :meth:`ModelPoints.subset` to
-        split a period-close state by segment before a per-segment
-        :func:`fastcashflow.gmm.measure_inforce` (slicing only ``prior_csm``
-        would leave the state ragged).
+        ``prior_csm``, and the optional ``account_value`` / ``prior_*`` fields
+        when present) are sliced together and the scalar ``lock_in_rate`` is
+        carried, so the result stays internally consistent. Use it alongside
+        :meth:`ModelPoints.subset` to split a period-close state by segment
+        before a per-segment :func:`fastcashflow.gmm.measure_inforce` (slicing
+        only ``prior_csm`` would leave the state ragged).
         """
         idx = np.asarray(indices, dtype=np.int64)
+
+        def _opt(value):
+            return None if value is None else value[idx]
+
         return InforceState(
             mp_id=np.asarray(self.mp_id)[idx],
             elapsed_months=self.elapsed_months[idx],
             count=self.count[idx],
             prior_csm=self.prior_csm[idx],
             lock_in_rate=self.lock_in_rate,
-            account_value=(None if self.account_value is None
-                           else self.account_value[idx]),
+            account_value=_opt(self.account_value),
+            prior_count=_opt(self.prior_count),
+            prior_account_value=_opt(self.prior_account_value),
+            prior_loss_component=_opt(self.prior_loss_component),
         )
 
 

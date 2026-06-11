@@ -38,7 +38,8 @@ from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
-from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
+from fastcashflow._vfa import (
+    CSM_BASIS_PARAGRAPH_45, VFAMeasurement, _require_settlement_csm)
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 
 
@@ -840,6 +841,248 @@ def _reconcile_vfa(
     ]
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class VFASettlementMovement:
+    """One period's IFRS 17 paragraph-45 settlement movement of a VFA book.
+
+    What :func:`fastcashflow.vfa.settle` returns: the opening -> closing
+    movement of the BEL, RA, CSM and loss component over one reporting period
+    of ``period_months``, per model point. Unlike :class:`VFAPeriodMovement`
+    (the *expected* movement sliced from an inception measurement), this is a
+    *subsequent measurement*: the closing figures respond to the observed
+    account value and in-force count, and the CSM absorbs the future-service
+    change per paragraph 45. Every array is ``(n_mp,)`` and each block
+    reconciles exactly::
+
+        bel_closing == bel_opening + bel_interest - bel_release + bel_experience
+        ra_closing  == ra_opening  + ra_interest  - ra_release  + ra_experience
+        csm_closing == csm_opening + csm_accretion + csm_fv_share
+                       + csm_future_service - loss_component_reversed
+                       + loss_component_recognised - csm_release
+        loss_component_closing == loss_component_opening
+                       - loss_component_reversed + loss_component_recognised
+
+    and the blocks tie across: ``csm_fv_share + csm_future_service ==
+    -(bel_experience + ra_experience)`` -- the paragraph-45 future-service
+    change is exactly minus the observed-vs-expected FCF difference.
+
+    Line semantics:
+
+    * ``bel_interest`` / ``ra_interest`` -- the unwind at the underlying-items
+      return over the period (the engine's roll-forward convention); the
+      fee / crediting wedge of the fund's own growth sits inside the release.
+    * ``bel_release`` / ``ra_release`` -- the *expected* run-off, the one
+      residual line per block.
+    * ``bel_experience`` / ``ra_experience`` -- observed minus expected close,
+      the future effect of the account-value and count deviation.
+    * ``csm_accretion`` -- ``prior_csm * ((1 + r_m)**period - 1)``, the
+      expected financial growth of the CSM. Under the VFA there is no
+      paragraph-B72(b) locked-rate accretion; this is the expected part of
+      the paragraph-45(b) change, presented jointly with ``csm_fv_share``
+      as the financial / entity's-share block.
+    * ``csm_fv_share`` -- paragraph 45(b), the change in the entity's share
+      of the underlying items: the observed-vs-expected variable-fee PV at
+      the closing date (fund-consistent end-of-month weight).
+    * ``csm_future_service`` -- paragraph 45(c), every other future-service
+      change: the guarantee cost (GMDB / GMAB), the crediting-floor cost and
+      the count deviation's future effect.
+    * ``loss_component_reversed`` / ``loss_component_recognised`` --
+      paragraphs 48 / 50(b): a favourable change reverses the loss component
+      before rebuilding the CSM; an unfavourable change beyond the CSM falls
+      into the loss component.
+    * ``csm_release`` -- paragraph B119, one period-end release of the
+      post-adjustment balance over the coverage units provided in the period
+      against those provided plus expected from the *opening* date.
+
+    v1 limitations (documented, not silent): within-period experience --
+    actual deaths, lapses, benefits, expenses, AND the fees actually skimmed
+    on the realized fund path -- is assumed equal to expected; only the
+    closing count and observed account value deviate. Part of the
+    paragraph 45(b) realized entity share is therefore not captured, and the
+    period's total comprehensive income is approximate even though
+    opening-to-closing balances reconcile. The loss component changes only
+    through the paragraph-48/50(b) future-service adjustments above; the
+    paragraph 50(a)-52 systematic allocation (finance accretion on the loss
+    component, allocation of claims and risk-adjustment release between the
+    loss component and the remaining LRC, and the paragraph-52 run-to-zero
+    constraint) is not implemented -- an onerous book's loss component is
+    static between remeasurements, shows zero P&L emergence and may remain
+    non-zero at final settlement, so the paragraph 50(a)/B124 revenue split
+    for onerous groups is not produced (balance-sheet figures are
+    paragraph 45/48 compliant; the onerous revenue presentation is not). An
+    opening CSM that embeds a stochastic guarantee time value is accreted
+    and released but its time-value component is never remeasured (the
+    movement is deterministic, intrinsic-guarantee only). Floors and the
+    loss-component algebra operate per model point; within-group offsetting
+    between favourable and unfavourable contracts (the group-level CSM floor
+    of paragraphs 47-52) is not performed, consistent with the rest of the
+    engine.
+    """
+
+    period_months: int
+    bel_opening: FloatArray
+    bel_interest: FloatArray
+    bel_release: FloatArray
+    bel_experience: FloatArray
+    bel_closing: FloatArray
+    ra_opening: FloatArray
+    ra_interest: FloatArray
+    ra_release: FloatArray
+    ra_experience: FloatArray
+    ra_closing: FloatArray
+    csm_opening: FloatArray
+    csm_accretion: FloatArray
+    csm_fv_share: FloatArray
+    csm_future_service: FloatArray
+    loss_component_reversed: FloatArray
+    loss_component_recognised: FloatArray
+    csm_release: FloatArray
+    csm_closing: FloatArray
+    loss_component_opening: FloatArray
+    loss_component_closing: FloatArray
+    variable_fee_closing: FloatArray
+    model_points: "object | None" = None
+    csm_basis: str = CSM_BASIS_PARAGRAPH_45
+
+    def closing_measurement(self) -> VFAMeasurement:
+        """The closing balance sheet as a headline-only
+        :class:`~fastcashflow.vfa.VFAMeasurement`, tagged
+        ``csm_basis='paragraph_45_settlement'`` -- a settlement figure,
+        unlike the carry-only diagnostic, so the carry-only guard does not
+        reject it: ``write_measurement`` serialises it, and its figures seed
+        next period's ``prior_*`` state. (``report`` / ``group`` /
+        ``roll_forward`` still need the full trajectories a headline-only
+        result does not carry.) ``time_value`` is zero (the movement is
+        intrinsic-guarantee only)."""
+        return VFAMeasurement(
+            bel=self.bel_closing,
+            ra=self.ra_closing,
+            csm=self.csm_closing,
+            variable_fee=self.variable_fee_closing,
+            time_value=np.zeros_like(self.bel_closing),
+            loss_component=self.loss_component_closing,
+            model_points=self.model_points,
+            csm_basis=CSM_BASIS_PARAGRAPH_45,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class VFASettlementReconciliation:
+    """Portfolio totals of a paragraph-45 VFA settlement movement.
+
+    One reporting period of ``period_months`` (the per-MP valuation dates
+    are elapsed months, which differ across cohorts -- so the table is
+    labelled by the period length, not by a policy-month range). The
+    release and loss-component-reversed rows are *stored* negative -- the
+    convention of every reconciliation type here -- so within each block
+    the opening plus every row equals the closing.
+    """
+
+    period_months: int
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_fv_share: float
+    csm_future_service: float
+    loss_component_reversed: float
+    loss_component_recognised: float
+    csm_release: float
+    csm_closing: float
+    loss_component_opening: float
+    loss_component_closing: float
+
+    def __str__(self) -> str:
+        blocks = (
+            ("BEL", (
+                ("Opening", self.bel_opening),
+                ("Interest", self.bel_interest),
+                ("Release", self.bel_release),
+                ("Experience", self.bel_experience),
+                ("Closing", self.bel_closing),
+            )),
+            ("RA", (
+                ("Opening", self.ra_opening),
+                ("Interest", self.ra_interest),
+                ("Release", self.ra_release),
+                ("Experience", self.ra_experience),
+                ("Closing", self.ra_closing),
+            )),
+            ("CSM", (
+                ("Opening", self.csm_opening),
+                ("Accretion", self.csm_accretion),
+                ("FV share (45(b))", self.csm_fv_share),
+                ("Future service (45(c))", self.csm_future_service),
+                ("Loss comp. reversed", self.loss_component_reversed),
+                ("Loss comp. recognised", self.loss_component_recognised),
+                ("Release", self.csm_release),
+                ("Closing", self.csm_closing),
+            )),
+            ("Loss component", (
+                ("Opening", self.loss_component_opening),
+                ("Reversed", self.loss_component_reversed),
+                ("Recognised", self.loss_component_recognised),
+                ("Closing", self.loss_component_closing),
+            )),
+        )
+        lines = [
+            f"VFA settlement reconciliation -- {self.period_months}-month period"
+        ]
+        for title, rows in blocks:
+            lines.append(f"  {title}")
+            for name, value in rows:
+                lines.append(f"    {name:24}{value:>18,.0f}")
+        return "\n".join(lines)
+
+
+def _reconcile_vfa_settlement(
+    movements: list[VFASettlementMovement],
+) -> list[VFASettlementReconciliation]:
+    """Aggregate paragraph-45 settlement movements into portfolio totals.
+
+    Release and loss-component-reversed rows are stored negative (the
+    reconciliation display convention), so opening plus every row equals
+    closing in each block. Note the CSM block reads the same
+    ``loss_component_reversed`` row: a favourable change reverses the loss
+    component *instead of* crediting the CSM, so the row subtracts there
+    too.
+    """
+    return [
+        VFASettlementReconciliation(
+            period_months=m.period_months,
+            bel_opening=float(m.bel_opening.sum()),
+            bel_interest=float(m.bel_interest.sum()),
+            bel_release=float(-m.bel_release.sum()),
+            bel_experience=float(m.bel_experience.sum()),
+            bel_closing=float(m.bel_closing.sum()),
+            ra_opening=float(m.ra_opening.sum()),
+            ra_interest=float(m.ra_interest.sum()),
+            ra_release=float(-m.ra_release.sum()),
+            ra_experience=float(m.ra_experience.sum()),
+            ra_closing=float(m.ra_closing.sum()),
+            csm_opening=float(m.csm_opening.sum()),
+            csm_accretion=float(m.csm_accretion.sum()),
+            csm_fv_share=float(m.csm_fv_share.sum()),
+            csm_future_service=float(m.csm_future_service.sum()),
+            loss_component_reversed=float(-m.loss_component_reversed.sum()),
+            loss_component_recognised=float(m.loss_component_recognised.sum()),
+            csm_release=float(-m.csm_release.sum()),
+            csm_closing=float(m.csm_closing.sum()),
+            loss_component_opening=float(m.loss_component_opening.sum()),
+            loss_component_closing=float(m.loss_component_closing.sum()),
+        )
+        for m in movements
+    ]
+
+
 @dataclass(frozen=True, slots=True)
 class ReinsuranceReconciliation:
     """An IFRS 17 reconciliation of a reinsurance-held asset/liability.
@@ -931,6 +1174,8 @@ def reconcile(
         return _reconcile_paa(movements)
     if movements and isinstance(movements[0], VFAPeriodMovement):
         return _reconcile_vfa(movements)
+    if movements and isinstance(movements[0], VFASettlementMovement):
+        return _reconcile_vfa_settlement(movements)
     if movements and isinstance(movements[0], ReinsurancePeriodMovement):
         return _reconcile_reinsurance(movements)
     out: list[Reconciliation] = []

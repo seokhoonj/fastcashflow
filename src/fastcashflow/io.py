@@ -1538,6 +1538,11 @@ def read_inforce_policies(
     ``prior_csm``, ``lock_in_rate``, plus whatever the spec side of
     :func:`read_model_points` needs (``issue_age``, ``term_months``,
     optional ``sex``, premiums, ``<code>_benefit`` columns for wide form).
+    Optional VFA state columns: ``account_value`` (the *observed* fund value
+    at the valuation date -- it rides on the returned ``InforceState``; the
+    snapshot has no separate inception fund column), ``prior_count``,
+    ``prior_account_value`` and ``prior_loss_component`` (the prior reporting
+    date's figures :func:`fastcashflow.vfa.settle` needs).
     Variance / movement analysis (:func:`roll_forward`,
     :func:`reconcile`) is unaffected -- mp_id-based matching across
     periods works the same regardless of which reader built each
@@ -1569,14 +1574,20 @@ def read_inforce_policies(
         count=df["count"].to_numpy().astype(np.float64),
         prior_csm=df["prior_csm"].to_numpy().astype(np.float64),
         lock_in_rate=float(lock[0]) if lock.size else 0.0,
+        **_optional_state_columns(df),
     )
 
     # Drop the state-only columns before handing the frame to the
     # standard policies reader, which would otherwise warn about
     # ``elapsed_months`` on a policies frame and ignore the rest. ``count``
     # stays -- it is a valid policies column too, and ``apply_inforce_state``
-    # will overwrite it with the state value below anyway.
-    spec_df = df.drop("elapsed_months", "prior_csm", "lock_in_rate")
+    # will overwrite it with the state value below anyway. ``account_value``
+    # also stays (a valid VFA policies column -- the inception fund value);
+    # the state's observed fund value rides on the InforceState above.
+    state_only = [c for c in ("elapsed_months", "prior_csm", "lock_in_rate",
+                              "prior_count", "prior_account_value",
+                              "prior_loss_component") if c in df.columns]
+    spec_df = df.drop(*state_only)
 
     if isinstance(calculation_methods, (str, Path)):
         methods_dict = _parse_calculation_methods(calculation_methods)
@@ -1899,14 +1910,30 @@ def _save_sample_inforce_policies(path: Path | str) -> Path:
 # Economic scenarios
 # ---------------------------------------------------------------------------
 
+def _optional_state_columns(df) -> dict:
+    """Collect the optional per-MP state columns (VFA workflows) from a
+    state-carrying frame -- absent columns stay ``None``. ``account_value``
+    feeds ``vfa.measure_inforce`` / ``vfa.settle``; the ``prior_*`` columns
+    are the prior reporting date's figures ``vfa.settle`` needs."""
+    out: dict = {}
+    for col in ("account_value", "prior_count", "prior_account_value",
+                "prior_loss_component"):
+        if col in df.columns:
+            out[col] = df[col].to_numpy().astype(np.float64)
+    return out
+
+
 def read_inforce_state(path: Path | str) -> "InforceState":
     """Read an in-force state file -- the per-MP closing state from the
     prior reporting period.
 
     The file has one row per model point with columns ``mp_id``,
-    ``elapsed_months``, ``count``, ``prior_csm`` and ``lock_in_rate``.
-    Reads ``.parquet``, ``.csv``, ``.xlsx`` or ``.feather`` / ``.arrow``
-    via :func:`_read_frame`.
+    ``elapsed_months``, ``count``, ``prior_csm`` and ``lock_in_rate``,
+    plus the optional VFA columns ``account_value`` (observed fund value at
+    the valuation date), ``prior_count``, ``prior_account_value`` and
+    ``prior_loss_component`` (the prior reporting date's figures
+    :func:`fastcashflow.vfa.settle` needs). Reads ``.parquet``, ``.csv``,
+    ``.xlsx`` or ``.feather`` / ``.arrow`` via :func:`_read_frame`.
 
     Pair with :func:`apply_inforce_state` to join the state onto a
     :class:`ModelPoints` built from the static policies file, then pass
@@ -1939,6 +1966,7 @@ def read_inforce_state(path: Path | str) -> "InforceState":
         count=df["count"].to_numpy().astype(np.float64),
         prior_csm=df["prior_csm"].to_numpy().astype(np.float64),
         lock_in_rate=float(lock[0]) if lock.size else 0.0,
+        **_optional_state_columns(df),
     )
 
 
