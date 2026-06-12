@@ -1477,3 +1477,208 @@ def reconcile(
             loss_component_recognised=float(m.loss_component_recognised.sum()),
         ))
     return out
+
+
+# ---------------------------------------------------------------------------
+# Settlement aggregates -- bounded-memory portfolio totals of the movements
+# ---------------------------------------------------------------------------
+
+# Every per-MP array line of the settlement movements, in movement sign.
+# The aggregate entries sum exactly these; the scalar / reference fields
+# (period_months, lock_in_rate, model_points, csm_basis) follow their own
+# rules -- identity across chunks for the scalars, dropped for the
+# references (a sum has no per-MP source to point back to).
+_GMM_SETTLEMENT_LINES = (
+    "bel_opening", "bel_interest", "bel_release", "bel_experience",
+    "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_opening", "csm_accretion", "csm_experience_unlocking",
+    "finance_wedge", "csm_release", "csm_closing",
+    "loss_component_opening", "loss_component_reversed",
+    "loss_component_recognised", "loss_component_closing",
+    "coverage_units_provided", "coverage_units_future",
+)
+
+_VFA_SETTLEMENT_LINES = (
+    "bel_opening", "bel_interest", "bel_release", "bel_experience",
+    "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_opening", "csm_accretion", "csm_fv_share", "csm_future_service",
+    "csm_release", "csm_closing",
+    "loss_component_opening", "loss_component_reversed",
+    "loss_component_recognised", "loss_component_closing",
+    "variable_fee_closing", "account_value_closing",
+    "coverage_units_provided", "coverage_units_future",
+)
+
+_AGGREGATE_NO_CHAIN = (
+    "an aggregate cannot seed the next period: chaining needs the per-MP "
+    "closing balances, which the sums no longer carry. Chain through the "
+    "per-MP movement's closing_inputs() instead (settle the book in row "
+    "blocks if it does not fit in memory)."
+)
+
+
+@dataclass(frozen=True, slots=True)
+class GMMSettlementAggregate:
+    """Portfolio totals of the paragraph-44 settlement movement.
+
+    What :func:`fastcashflow.gmm.settle_aggregate` returns: every line of
+    :class:`GMMSettlementMovement` summed over the model-point axis, in
+    bounded memory. The lines keep the MOVEMENT sign -- the release and
+    loss-component-reversed totals are positive run-offs, exactly like the
+    per-MP movement; :func:`reconcile` applies the display negation. Each
+    block therefore foots in movement form::
+
+        bel_closing == bel_opening + bel_interest - bel_release + bel_experience
+
+    and ``reconcile(aggregate)`` equals the per-MP movement's
+    reconciliation table fieldwise.
+
+    An aggregate is not a chaining citizen: the next period's settle needs
+    per-MP prior balances, which the sums no longer carry --
+    :meth:`closing_inputs` raises ValueError.
+    """
+
+    period_months: int
+    lock_in_rate: float
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_experience_unlocking: float
+    finance_wedge: float
+    csm_release: float
+    csm_closing: float
+    loss_component_opening: float
+    loss_component_reversed: float
+    loss_component_recognised: float
+    loss_component_closing: float
+    coverage_units_provided: float
+    coverage_units_future: float
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """Always raises -- see the class docstring."""
+        raise ValueError(_AGGREGATE_NO_CHAIN)
+
+
+@dataclass(frozen=True, slots=True)
+class VFASettlementAggregate:
+    """Portfolio totals of the paragraph-45 settlement movement.
+
+    What :func:`fastcashflow.vfa.settle_aggregate` returns: every line of
+    :class:`VFASettlementMovement` summed over the model-point axis, in
+    bounded memory, movement-positive (the display negation happens in
+    :func:`reconcile`). ``reconcile(aggregate)`` equals the per-MP
+    movement's reconciliation table fieldwise, and :meth:`closing_inputs`
+    raises ValueError -- chaining needs per-MP balances.
+    """
+
+    period_months: int
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_fv_share: float
+    csm_future_service: float
+    csm_release: float
+    csm_closing: float
+    loss_component_opening: float
+    loss_component_reversed: float
+    loss_component_recognised: float
+    loss_component_closing: float
+    variable_fee_closing: float
+    account_value_closing: float
+    coverage_units_provided: float
+    coverage_units_future: float
+    lock_in_rate: float = 0.0            # state echo only; no VFA locked rate
+    csm_basis: str = CSM_BASIS_PARAGRAPH_45
+
+    @property
+    def measurement_basis(self) -> str:
+        """Cross-model time-basis discriminator, derived from ``csm_basis``
+        (mirrors :class:`VFASettlementMovement`)."""
+        return _CSM_TO_MEASUREMENT_BASIS[self.csm_basis]
+
+    def closing_inputs(self):
+        """Always raises -- see the class docstring."""
+        raise ValueError(_AGGREGATE_NO_CHAIN)
+
+
+@reconcile.register
+def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
+    """The paragraph-44 settlement table of an aggregate -- identical to
+    reconciling the per-MP movement (the oracle identity); the display
+    negation of the run-off rows happens here, never in the aggregate."""
+    a = aggregate
+    return GMMSettlementReconciliation(
+        period_months=a.period_months,
+        bel_opening=a.bel_opening,
+        bel_interest=a.bel_interest,
+        bel_release=-a.bel_release,
+        bel_experience=a.bel_experience,
+        bel_closing=a.bel_closing,
+        ra_opening=a.ra_opening,
+        ra_interest=a.ra_interest,
+        ra_release=-a.ra_release,
+        ra_experience=a.ra_experience,
+        ra_closing=a.ra_closing,
+        csm_opening=a.csm_opening,
+        csm_accretion=a.csm_accretion,
+        csm_experience_unlocking=a.csm_experience_unlocking,
+        finance_wedge=a.finance_wedge,
+        loss_component_reversed=-a.loss_component_reversed,
+        loss_component_recognised=a.loss_component_recognised,
+        csm_release=-a.csm_release,
+        csm_closing=a.csm_closing,
+        loss_component_opening=a.loss_component_opening,
+        loss_component_closing=a.loss_component_closing,
+    )
+
+
+@reconcile.register
+def _(aggregate: VFASettlementAggregate) -> VFASettlementReconciliation:
+    """The paragraph-45 settlement table of an aggregate -- identical to
+    reconciling the per-MP movement (the oracle identity); the display
+    negation of the run-off rows happens here, never in the aggregate."""
+    a = aggregate
+    return VFASettlementReconciliation(
+        period_months=a.period_months,
+        bel_opening=a.bel_opening,
+        bel_interest=a.bel_interest,
+        bel_release=-a.bel_release,
+        bel_experience=a.bel_experience,
+        bel_closing=a.bel_closing,
+        ra_opening=a.ra_opening,
+        ra_interest=a.ra_interest,
+        ra_release=-a.ra_release,
+        ra_experience=a.ra_experience,
+        ra_closing=a.ra_closing,
+        csm_opening=a.csm_opening,
+        csm_accretion=a.csm_accretion,
+        csm_fv_share=a.csm_fv_share,
+        csm_future_service=a.csm_future_service,
+        loss_component_reversed=-a.loss_component_reversed,
+        loss_component_recognised=a.loss_component_recognised,
+        csm_release=-a.csm_release,
+        csm_closing=a.csm_closing,
+        loss_component_opening=a.loss_component_opening,
+        loss_component_closing=a.loss_component_closing,
+    )

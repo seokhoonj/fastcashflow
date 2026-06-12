@@ -9,6 +9,7 @@ in-force book at its valuation date from the observed fund value (with a
 carry-only CSM); ``settle`` is the IFRS 17 paragraph-45 opening -> closing
 settlement movement of that in-force book (the CSM remeasured for the
 entity's share of the underlying items and the future-service changes);
+``settle_aggregate`` is its bounded-memory portfolio-total variant;
 ``tvog`` is the standalone time-value analysis of the credited-rate
 guarantee over return scenarios (the GMDB / GMAB floor time value lives in
 ``measure(..., return_scenarios).time_value``); ``trace`` walks one model
@@ -16,12 +17,13 @@ point's VFA measurement.
 """
 from fastcashflow._vfa import (
     VFAMeasurement, measure_vfa as measure, measure_aggregate,
-    measure_inforce, measure_stream, settle, CSM_BASES)
+    measure_inforce, measure_stream, settle, settle_aggregate, CSM_BASES)
 from fastcashflow.movement import VFASettlementMovement
 from fastcashflow.tvog import measure_tvog as tvog
 from fastcashflow.trace import (
     show_trace_vfa as trace, show_trace_diff_vfa as trace_diff)
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
-           "measure_stream", "settle", "tvog", "trace", "trace_diff",
-           "CSM_BASES", "VFAMeasurement", "VFASettlementMovement"]
+           "measure_stream", "settle", "settle_aggregate", "tvog", "trace",
+           "trace_diff", "CSM_BASES", "VFAMeasurement",
+           "VFASettlementMovement"]

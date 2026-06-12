@@ -43,10 +43,15 @@ Measurement (GMM)
 
 .. autofunction:: fastcashflow.gmm.settle
 
+.. autofunction:: fastcashflow.gmm.settle_aggregate
+
 .. autoclass:: fastcashflow.GMMSettlementMovement
    :members:
 
 .. autoclass:: fastcashflow.GMMSettlementReconciliation
+   :members:
+
+.. autoclass:: fastcashflow.GMMSettlementAggregate
    :members:
 
 .. autoclass:: fastcashflow.GMMMeasurement
@@ -81,10 +86,15 @@ Variable fee approach
 
 .. autofunction:: fastcashflow.vfa.settle
 
+.. autofunction:: fastcashflow.vfa.settle_aggregate
+
 .. autoclass:: fastcashflow.VFASettlementMovement
    :members:
 
 .. autoclass:: fastcashflow.VFASettlementReconciliation
+   :members:
+
+.. autoclass:: fastcashflow.VFASettlementAggregate
    :members:
 
 .. autoclass:: fastcashflow.VFAMeasurement

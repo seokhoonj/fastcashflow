@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import math
 import os
 import sys
 import unicodedata
@@ -1155,6 +1156,60 @@ def settle(
         period_months=period, lock_in_rate=lock,
         model_points=model_points,
     )
+
+
+def settle_aggregate(
+    model_points: ModelPoints,
+    state: "InforceState",
+    basis: "Basis",
+    *,
+    period_months: int | None = None,
+    chunk_size: int = 200_000,
+) -> "GMMSettlementAggregate":
+    """Portfolio-total paragraph-44 settlement in bounded memory.
+
+    :func:`settle` materialises ``(n_mp, n_time)`` projection intermediates
+    -- two backward kernel passes over the whole book -- so a
+    million-policy close would peak far beyond memory. Every line of the
+    settlement movement is additive across contracts, so this runs
+    :func:`settle` over row blocks of ``chunk_size`` model points and
+    accumulates only the scalar line totals; peak memory is
+    ``O(chunk_size x n_time)`` regardless of ``n_mp``.
+
+    Returns a :class:`~fastcashflow.movement.GMMSettlementAggregate`: the
+    movement's lines summed, movement-positive (``reconcile`` applies the
+    display negation and reproduces the per-MP movement's table exactly).
+    The aggregate cannot be chained -- ``closing_inputs()`` raises; chain
+    per-MP movements instead. ``state`` joins ``model_points`` by mp_id
+    once, before chunking, so a period-close file in its own row order
+    never pairs one contract's rows with another's prior balances.
+    """
+    from fastcashflow.movement import (
+        _GMM_SETTLEMENT_LINES, GMMSettlementAggregate)
+
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    period = 12 if period_months is None else int(period_months)
+    if period < 1:
+        raise ValueError(f"period_months must be >= 1, got {period}")
+    # One global mp_id join (and stale-snapshot check) BEFORE slicing, so a
+    # chunk's model points and state rows always belong to the same
+    # contracts; the per-chunk settle re-checks the aligned pair (a no-op).
+    state = _reconcile_state(model_points, state)
+    n_mp = int(model_points.issue_age.shape[0])
+    # Per-chunk partial sums, combined with fsum so the total does not
+    # depend on the chunking (compensated summation: chunk_size is a memory
+    # knob, never a numbers knob).
+    parts: dict[str, list[float]] = {n: [] for n in _GMM_SETTLEMENT_LINES}
+    for start in range(0, n_mp, chunk_size):
+        idx = np.arange(start, min(start + chunk_size, n_mp))
+        mv = settle(model_points.subset(idx), state.subset(idx), basis,
+                    period_months=period)
+        for name in _GMM_SETTLEMENT_LINES:
+            parts[name].append(float(getattr(mv, name).sum()))
+    return GMMSettlementAggregate(
+        period_months=period, lock_in_rate=float(state.lock_in_rate),
+        **{name: math.fsum(vals) for name, vals in parts.items()})
 
 
 # ---------------------------------------------------------------------------

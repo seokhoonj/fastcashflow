@@ -42,6 +42,7 @@ from fastcashflow.modelpoints import (
     apply_inforce_state,
 )
 from fastcashflow.movement import (
+    GMMSettlementAggregate,
     GMMSettlementMovement,
     GMMSettlementReconciliation,
     PAAPeriodMovement,
@@ -52,6 +53,7 @@ from fastcashflow.movement import (
     ReinsuranceReconciliation,
     VFAPeriodMovement,
     VFAReconciliation,
+    VFASettlementAggregate,
     VFASettlementMovement,
     VFASettlementReconciliation,
     reconcile,
@@ -96,7 +98,9 @@ __all__ = [
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
     "GMMSettlementMovement", "GMMSettlementReconciliation",
+    "GMMSettlementAggregate",
     "VFASettlementMovement", "VFASettlementReconciliation",
+    "VFASettlementAggregate",
     "ReinsurancePeriodMovement", "ReinsuranceReconciliation",
     "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",

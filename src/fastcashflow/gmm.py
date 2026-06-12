@@ -4,7 +4,8 @@ The default IFRS 17 measurement model. ``measure`` is the single entry point
 for new-business inception (``full=True`` for trajectories, ``full=False``
 for the fused headline-only fast path); ``settle`` is the paragraph-44
 settlement (period-close) entry point -- the opening -> closing movement of
-an in-force book; ``measure_inforce`` is the in-force diagnostic / runoff
+an in-force book; ``settle_aggregate`` is its bounded-memory portfolio-total
+variant; ``measure_inforce`` is the in-force diagnostic / runoff
 projector (valuation-date BEL / RA with a prior-CSM carry, no unlocking);
 ``stochastic`` runs measure across economic scenarios for the liability
 distribution; ``measure_aggregate`` is the bounded-memory portfolio-aggregate
@@ -13,7 +14,7 @@ distribution; ``measure_aggregate`` is the bounded-memory portfolio-aggregate
 point's measurement as a tree.
 """
 from fastcashflow.engine import (
-    measure, measure_aggregate, measure_inforce, settle)
+    measure, measure_aggregate, measure_inforce, settle, settle_aggregate)
 from fastcashflow.io import measure_stream
 from fastcashflow.stochastic import measure_stochastic as stochastic
 from fastcashflow.trace import (
@@ -24,5 +25,5 @@ from fastcashflow.trace import (
 )
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
-           "measure_stream", "settle", "stochastic", "trace", "trace_diff",
-           "trace_bel_step", "trace_csm_step"]
+           "measure_stream", "settle", "settle_aggregate", "stochastic",
+           "trace", "trace_diff", "trace_bel_step", "trace_csm_step"]
