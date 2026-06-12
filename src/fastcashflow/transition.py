@@ -23,6 +23,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import GMMMeasurement, _require_full
+from fastcashflow._measurement_basis import _require_inception
 from fastcashflow.numerics import _csm_roll
 
 
@@ -40,6 +41,10 @@ def transition(measurement: GMMMeasurement, fair_value: FloatArray) -> GMMMeasur
     and RA are unchanged. It flows on into :func:`~fastcashflow.roll_forward`,
     :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.report`.
     """
+    # transition() assumes column 0 IS the transition date and re-floors from
+    # it -- a settlement-carry result (headline as-of, trajectories on the
+    # inception axis, carried CSM) would be silently corrupted.
+    _require_inception(measurement, "transition()")
     _require_full(measurement, "transition()")
     fair_value = np.asarray(fair_value, dtype=np.float64)
     n_mp = measurement.bel_path.shape[0]

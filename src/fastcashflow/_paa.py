@@ -36,6 +36,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow._measurement_basis import (
+    MEASUREMENT_BASIS_INCEPTION,
+    MEASUREMENT_BASIS_SETTLEMENT_CARRY,
+    _inforce_marker_columns,
+)
 from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import (
     write_measurement, _write_measurement_columns, _stream_policies_coverages)
@@ -82,6 +87,10 @@ class PAAMeasurement:
     model_points: "ModelPoints | None" = None  # stamped by measure_paa, for group axes
     group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
     group_sizes: IntArray | None = None     # model points per group, aligned with labels
+    # Time basis of the result (see _measurement_basis): the in-force LRC is an
+    # as-of re-based headline over inception-axis trajectories, so
+    # inception-axis consumers reject it via _require_inception.
+    measurement_basis: str = MEASUREMENT_BASIS_INCEPTION
 
     @property
     def service_result(self) -> FloatArray:
@@ -121,9 +130,11 @@ class PAAAggregate:
 
 @write_measurement.register
 def _(measurement: PAAMeasurement, path, *, ids=None):
-    _write_measurement_columns(
-        {"lrc": measurement.lrc, "loss_component": measurement.loss_component},
-        path, ids)
+    cols = {"lrc": measurement.lrc,
+            "loss_component": measurement.loss_component}
+    # In-force output gets marker columns (see _measurement_basis).
+    cols.update(_inforce_marker_columns(measurement, measurement.lrc.shape[0]))
+    _write_measurement_columns(cols, path, ids)
 
 
 def _scatter_paa_headline(n_mp, results):
@@ -508,11 +519,13 @@ def measure_inforce(
     loss = np.zeros(n_mp, dtype=np.float64)
     if not full:
         return PAAMeasurement(
-            lrc=lrc, loss_component=loss, model_points=model_points)
+            lrc=lrc, loss_component=loss, model_points=model_points,
+            measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
     # Trajectory fields keep the full inception-to-horizon paths (as the GMM
     # in-force does); only the headline lrc is the as-of, re-based slice.
     return PAAMeasurement(
         lrc=lrc, loss_component=loss, fcf=None,
         lrc_path=m.lrc_path, revenue=m.revenue,
         service_expense=m.service_expense, lic=m.lic,
-        cashflows=m.cashflows, model_points=model_points)
+        cashflows=m.cashflows, model_points=model_points,
+        measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)

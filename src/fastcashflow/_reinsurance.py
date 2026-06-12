@@ -28,6 +28,11 @@ from typing import Protocol
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow._measurement_basis import (
+    MEASUREMENT_BASIS_INCEPTION,
+    MEASUREMENT_BASIS_SETTLEMENT_CARRY,
+    _inforce_marker_columns,
+)
 from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.curves import discount_factors, discount_monthly_curve
 from fastcashflow.numerics import _csm_kernel, _norm_ppf
@@ -69,13 +74,20 @@ class ReinsuranceMeasurement:
     model_points: "ModelPoints | None" = None  # stamped by measure_reinsurance, for group axes
     group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
     group_sizes: IntArray | None = None     # model points per group, aligned with labels
+    # Time basis (see _measurement_basis). NOTE the in-force anchors differ by
+    # field: bel_path/ra_path stay inception-anchored while csm_path is
+    # prior_t-anchored (column 0 = the opening date) -- one more reason the
+    # inception-axis consumers must reject 'settlement_carry'.
+    measurement_basis: str = MEASUREMENT_BASIS_INCEPTION
 
 
 @write_measurement.register
 def _(measurement: ReinsuranceMeasurement, path, *, ids=None):
-    _write_measurement_columns(
-        {"bel": measurement.bel, "ra": measurement.ra, "csm": measurement.csm},
-        path, ids)
+    cols = {"bel": measurement.bel, "ra": measurement.ra,
+            "csm": measurement.csm}
+    # In-force output gets marker columns (see _measurement_basis).
+    cols.update(_inforce_marker_columns(measurement, measurement.bel.shape[0]))
+    _write_measurement_columns(cols, path, ids)
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -425,10 +437,12 @@ def measure_reinsurance_inforce(
 
     if not full:
         return ReinsuranceMeasurement(
-            bel=bel, ra=ra, csm=csm, model_points=model_points)
+            bel=bel, ra=ra, csm=csm, model_points=model_points,
+            measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
 
     return ReinsuranceMeasurement(
         bel=bel, ra=ra, csm=csm,
+        measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY,
         bel_path=bel_path,
         ra_path=ra_path,
         csm_path=csm_traj,

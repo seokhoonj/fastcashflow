@@ -36,6 +36,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
+from fastcashflow._measurement_basis import _require_inception
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._vfa import (
@@ -245,6 +246,7 @@ def _reject_gmm_only_opts(revised, revised_at, actual_inforce, experience_at):
 @roll_forward.register
 def _(measurement: PAAMeasurement, period_months: int = 12, *,
       revised=None, revised_at=None, actual_inforce=None, experience_at=None):
+    _require_inception(measurement, "roll_forward()")
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
     _reject_gmm_only_opts(revised, revised_at, actual_inforce, experience_at)
@@ -264,6 +266,7 @@ def _(measurement: VFAMeasurement, period_months: int = 12, *,
 @roll_forward.register
 def _(measurement: ReinsuranceMeasurement, period_months: int = 12, *,
       revised=None, revised_at=None, actual_inforce=None, experience_at=None):
+    _require_inception(measurement, "roll_forward()")
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
     _reject_gmm_only_opts(revised, revised_at, actual_inforce, experience_at)
@@ -280,6 +283,7 @@ def _(
     actual_inforce: FloatArray | None = None,
     experience_at: int | None = None,
 ) -> list[PeriodMovement]:
+    _require_inception(measurement, "roll_forward()")
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
     _require_full(measurement, "roll_forward")

@@ -34,6 +34,7 @@ from fastcashflow._paa import PAAMeasurement
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
 from fastcashflow.engine import GMMMeasurement, _require_full
+from fastcashflow._measurement_basis import _require_inception
 from fastcashflow.numerics import _csm_kernel, _csm_roll
 from fastcashflow.projection import Cashflows
 
@@ -322,6 +323,7 @@ def _finalise_gmm_group(bel, ra, grouped_cf, lic, out_bom, out_mid,
 
 @group.register
 def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
+    _require_inception(measurement, "group()")
     _require_full(measurement, "group()")
     labels, reducer = _group_plan(measurement, by, measurement.bel_path.shape[0])
     bel = reducer.sum(measurement.bel_path)
@@ -419,6 +421,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
 
 @group.register
 def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
+    _require_inception(measurement, "group()")
     if measurement.cashflows is None or measurement.discount_bom is None:
         raise ValueError(
             "group() requires a full reinsurance measurement (cash flows and "
@@ -489,10 +492,11 @@ def _finalise_paa_group(lrc_path, revenue, service_expense, lic, fcf,
 
 @group.register
 def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
+    _require_inception(measurement, "group()")
     if measurement.lrc_path is None or measurement.fcf is None:
         raise ValueError(
-            "group() requires a full PAA measurement; the trajectory fields are "
-            "None. Re-run paa.measure()."
+            "group() requires a full PAA measurement (the fcf and trajectory "
+            "fields); re-run paa.measure(full=True)."
         )
     labels, reducer = _group_plan(measurement, by, measurement.lrc_path.shape[0])
     lrc_path = reducer.sum(measurement.lrc_path)
@@ -611,6 +615,10 @@ def _group_of_contracts_onerous(measurement, *, portfolio="product",
     """
     if isinstance(measurement, VFAMeasurement):
         _require_settlement_csm(measurement, "group_of_contracts")
+    else:
+        # Before any axis resolution: an in-force result must be rejected for
+        # the right reason (the time basis), not a missing-axis side effect.
+        _require_inception(measurement, "group_of_contracts()")
     mp, portfolio_arr, cohort_arr = _portfolio_cohort(measurement, portfolio, cohort)
     default = np.where(measurement.loss_component > 0.0, "onerous", "remaining")
     prof = _resolve_profitability(mp, profitability, default)
@@ -625,6 +633,7 @@ group_of_contracts.register(PAAMeasurement, _group_of_contracts_onerous)
 @group_of_contracts.register
 def _(measurement: ReinsuranceMeasurement, *, portfolio: str = "product",
       cohort: str = "issue_year", profitability=None) -> ReinsuranceMeasurement:
+    _require_inception(measurement, "group_of_contracts()")
     # Reinsurance held replaces the onerous test with a net gain at initial
     # recognition (paragraph 61). The CSM is the net cost (negative) or net gain
     # (positive), so csm > 0 is the net-gain group.

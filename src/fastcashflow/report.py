@@ -33,6 +33,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
+from fastcashflow._measurement_basis import _require_inception
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
 from fastcashflow._reinsurance import ReinsuranceMeasurement
@@ -261,11 +262,13 @@ def report(measurement) -> Report:
 
 @report.register
 def _(measurement: GMMMeasurement) -> Report:
+    _require_inception(measurement, "report()")
     return _report_gmm(measurement)
 
 
 @report.register
 def _(measurement: PAAMeasurement) -> Report:
+    _require_inception(measurement, "report()")
     return _report_paa(measurement)
 
 
@@ -277,6 +280,7 @@ def _(measurement: VFAMeasurement) -> Report:
 
 @report.register
 def _(measurement: ReinsuranceMeasurement) -> ReinsuranceReport:
+    _require_inception(measurement, "report()")
     return _report_reinsurance(measurement)
 
 

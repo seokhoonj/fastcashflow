@@ -34,6 +34,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow._measurement_basis import (
+    MEASUREMENT_BASIS_INCEPTION,
+    MEASUREMENT_BASIS_SETTLEMENT,
+    MEASUREMENT_BASIS_SETTLEMENT_CARRY,
+)
 from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import (
     write_measurement, _write_measurement_columns,
@@ -71,6 +76,15 @@ CSM_BASIS_CARRY_ONLY = "carry_only"                 # measure_inforce: prior CSM
 CSM_BASIS_PARAGRAPH_45 = "paragraph_45_settlement"  # future: real subsequent meas.
 CSM_BASES = (CSM_BASIS_INITIAL, CSM_BASIS_PROJECTED_RUNOFF,
              CSM_BASIS_CARRY_ONLY, CSM_BASIS_PARAGRAPH_45)
+
+# The VFA keeps csm_basis as the stored field (single source of truth) and
+# derives the cross-model measurement_basis from it (see _measurement_basis).
+_CSM_TO_MEASUREMENT_BASIS = {
+    CSM_BASIS_INITIAL: MEASUREMENT_BASIS_INCEPTION,
+    CSM_BASIS_PROJECTED_RUNOFF: MEASUREMENT_BASIS_INCEPTION,
+    CSM_BASIS_CARRY_ONLY: MEASUREMENT_BASIS_SETTLEMENT_CARRY,
+    CSM_BASIS_PARAGRAPH_45: MEASUREMENT_BASIS_SETTLEMENT,
+}
 
 
 def _require_settlement_csm(measurement: "VFAMeasurement", op: str) -> None:
@@ -139,6 +153,12 @@ class VFAMeasurement:
     group_labels: "np.ndarray | None" = None       # per-group label on a grouped result
     group_sizes: IntArray | None = None         # model points per group, aligned with labels
     csm_basis: str = CSM_BASIS_PROJECTED_RUNOFF  # what the csm represents (see CSM_BASES)
+
+    @property
+    def measurement_basis(self) -> str:
+        """Cross-model time-basis discriminator, derived from ``csm_basis``
+        (the VFA's stored field stays the single source of truth)."""
+        return _CSM_TO_MEASUREMENT_BASIS[self.csm_basis]
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),

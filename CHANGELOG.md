@@ -11,6 +11,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Measurement time-basis discriminator (`measurement_basis`).** Every
+  measurement now states what its numbers are: `'inception'` (new business),
+  `'hypothetical'` (a what-if of a seasoned book), `'settlement_carry'` (the
+  in-force diagnostic from `measure_inforce` -- as-of headline over
+  inception-axis trajectories, prior CSM carried without unlocking) or
+  `'settlement'` (the settle family). The VFA derives it from its existing
+  `csm_basis`. The inception-axis consumers -- `group`, `group_of_contracts`,
+  `roll_forward`, `report`, `transition` and the `plot_*` charts -- now reject
+  a non-inception result with a pointer to the settle family instead of
+  silently re-flooring a carried CSM at inception; `write_measurement` keeps
+  accepting in-force output and adds `measurement_basis` / `elapsed_months`
+  marker columns so the files stay distinguishable from new-business output.
+  `gmm.measure_inforce` also rejects a mixed-model `BasisRouter` up front
+  (route through `fcf.portfolio.measure_inforce`).
 - **Time-varying premium and annuity (`Basis.premium_factor_annual` /
   `Basis.annuity_factor_annual`).** A per-policy-year multiplicative factor on
   the level premium / annuity, so a renewable / step-rated or escalating

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from fastcashflow.engine import GMMMeasurement, _require_full
+from fastcashflow._measurement_basis import _require_inception
 from fastcashflow.movement import (
     PAAReconciliation,
     Reconciliation,
@@ -25,7 +26,7 @@ from fastcashflow.movement import (
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._reinsurance import ReinsuranceMeasurement
-from fastcashflow._vfa import VFAMeasurement
+from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -218,18 +219,21 @@ def _bel_ra_csm_lines(measurement, ax, title):
 @plot_liability.register
 def _(measurement: GMMMeasurement, *, ax=None,
       title="Liability components over time"):
+    _require_inception(measurement, "plot_liability()")
     return _bel_ra_csm_lines(measurement, ax, title)
 
 
 @plot_liability.register
 def _(measurement: VFAMeasurement, *, ax=None,
       title="Liability components over time"):
+    _require_settlement_csm(measurement, "plot_liability()")
     return _bel_ra_csm_lines(measurement, ax, title)
 
 
 @plot_liability.register
 def _(measurement: ReinsuranceMeasurement, *, ax=None,
       title="Reinsurance-held components over time"):
+    _require_inception(measurement, "plot_liability()")
     return _bel_ra_csm_lines(measurement, ax, title)
 
 
@@ -239,6 +243,7 @@ def _(measurement: PAAMeasurement, *, ax=None,
     # The LRC trajectory excludes the loss component (the paragraph-100
     # split); the label says so, and plot_analysis_of_change shows the loss
     # component's own run-off (component="loss_component").
+    _require_inception(measurement, "plot_liability()")
     _require_full_paa(measurement, "plot_liability()")
     return _component_lines(
         (("LRC (excl. loss component)", "bel", measurement.lrc_path),
@@ -310,6 +315,7 @@ def _direct_cashflow_chart(measurement, period_months, ax, title):
 @plot_cashflows.register
 def _(measurement: GMMMeasurement, *, period_months=12, ax=None,
       title="Projected cash flows"):
+    _require_inception(measurement, "plot_cashflows()")
     _require_full(measurement, "plot_cashflows()")
     return _direct_cashflow_chart(measurement, period_months, ax, title)
 
@@ -317,6 +323,7 @@ def _(measurement: GMMMeasurement, *, period_months=12, ax=None,
 @plot_cashflows.register
 def _(measurement: VFAMeasurement, *, period_months=12, ax=None,
       title="Projected cash flows"):
+    _require_settlement_csm(measurement, "plot_cashflows()")
     _require_full(measurement, "plot_cashflows()")
     return _direct_cashflow_chart(measurement, period_months, ax, title)
 
@@ -324,6 +331,7 @@ def _(measurement: VFAMeasurement, *, period_months=12, ax=None,
 @plot_cashflows.register
 def _(measurement: PAAMeasurement, *, period_months=12, ax=None,
       title="Projected cash flows"):
+    _require_inception(measurement, "plot_cashflows()")
     _require_full_paa(measurement, "plot_cashflows()")
     return _direct_cashflow_chart(measurement, period_months, ax, title)
 
@@ -331,6 +339,7 @@ def _(measurement: PAAMeasurement, *, period_months=12, ax=None,
 @plot_cashflows.register
 def _(measurement: ReinsuranceMeasurement, *, period_months=12, ax=None,
       title="Projected ceded cash flows"):
+    _require_inception(measurement, "plot_cashflows()")
     _require_full(measurement, "plot_cashflows()")
     return _cashflow_bars(
         measurement.recovery.sum(axis=0),
@@ -374,17 +383,20 @@ def _csm_area(measurement, ax, title, *, clamp):
 
 @plot_csm_runoff.register
 def _(measurement: GMMMeasurement, *, ax=None, title="CSM run-off"):
+    _require_inception(measurement, "plot_csm_runoff()")
     return _csm_area(measurement, ax, title, clamp=True)
 
 
 @plot_csm_runoff.register
 def _(measurement: VFAMeasurement, *, ax=None, title="CSM run-off"):
+    _require_settlement_csm(measurement, "plot_csm_runoff()")
     return _csm_area(measurement, ax, title, clamp=True)
 
 
 @plot_csm_runoff.register
 def _(measurement: ReinsuranceMeasurement, *, ax=None,
       title="Reinsurance CSM run-off"):
+    _require_inception(measurement, "plot_csm_runoff()")
     return _csm_area(measurement, ax, title, clamp=False)
 
 
@@ -465,6 +477,7 @@ def _ra_fan(mu, ra, z_confidence, bands, ax, title, xlabel, side=1.0):
 @plot_risk_adjustment.register
 def _(measurement: GMMMeasurement, basis, *, bands=(0.75, 0.85), ax=None,
       title="The risk adjustment as a confidence level"):
+    _require_inception(measurement, "plot_risk_adjustment()")
     if basis.ra_method != "confidence_level":
         raise ValueError(
             "plot_risk_adjustment shows the confidence-level risk "
@@ -478,6 +491,7 @@ def _(measurement: GMMMeasurement, basis, *, bands=(0.75, 0.85), ax=None,
 @plot_risk_adjustment.register
 def _(measurement: VFAMeasurement, basis, *, bands=(0.75, 0.85), ax=None,
       title="The risk adjustment as a confidence level"):
+    _require_settlement_csm(measurement, "plot_risk_adjustment()")
     # The VFA RA is always a confidence-level margin for expense risk
     # (z(ra_confidence) x expense_cv x PV(expenses)) -- no method check.
     return _ra_fan(float(measurement.bel.sum()), float(measurement.ra.sum()),
@@ -488,6 +502,7 @@ def _(measurement: VFAMeasurement, basis, *, bands=(0.75, 0.85), ax=None,
 @plot_risk_adjustment.register
 def _(measurement: ReinsuranceMeasurement, basis, *, bands=(0.75, 0.85),
       ax=None, title="The risk adjustment as a confidence level"):
+    _require_inception(measurement, "plot_risk_adjustment()")
     # The reinsurance-held RA is always the confidence-level margin on the
     # ceded claims -- the risk transferred (paragraph 64) -- no method check.
     # It reduces the net cost (FCF = BEL - RA), so the margin shades to the

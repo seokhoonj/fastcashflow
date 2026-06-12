@@ -27,6 +27,12 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow._measurement_basis import (
+    MEASUREMENT_BASIS_HYPOTHETICAL,
+    MEASUREMENT_BASIS_INCEPTION,
+    MEASUREMENT_BASIS_SETTLEMENT_CARRY,
+    _inforce_marker_columns,
+)
 from fastcashflow.basis import (
     Basis, BasisRouter, annual_to_monthly, _single_basis, validate_factor,
     SURRENDER_VALUE_BASES,
@@ -118,6 +124,12 @@ class GMMMeasurement:
     group_labels: "np.ndarray | None" = None
     # The number of model points in each group, aligned with ``group_labels``.
     group_sizes: IntArray | None = None
+    # Time basis of the result (see _measurement_basis): 'inception' for
+    # new-business measure(); in-force results re-base the headline to the
+    # valuation date while the trajectories stay on the inception axis, so
+    # inception-axis consumers (group / roll_forward / report / transition /
+    # plot_*) reject anything else via _require_inception.
+    measurement_basis: str = MEASUREMENT_BASIS_INCEPTION
 
     def _columns(self):
         return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
@@ -156,9 +168,13 @@ class GMMAggregate:
 
 @write_measurement.register
 def _(measurement: GMMMeasurement, path, *, ids=None):
-    _write_measurement_columns(
-        {"bel": measurement.bel, "ra": measurement.ra, "csm": measurement.csm,
-         "loss_component": measurement.loss_component}, path, ids)
+    cols = {"bel": measurement.bel, "ra": measurement.ra,
+            "csm": measurement.csm,
+            "loss_component": measurement.loss_component}
+    # In-force output gets marker columns so it stays distinguishable from
+    # new-business output at the file boundary; inception output is unchanged.
+    cols.update(_inforce_marker_columns(measurement, measurement.bel.shape[0]))
+    _write_measurement_columns(cols, path, ids)
 
 
 def _compute_csm(bel0, ra0, inforce, monthly_rate):
@@ -478,6 +494,7 @@ def _measure_inforce_fast(
         csm = m.csm_path[rows, em]
         return GMMMeasurement(
             bel=bel, ra=ra, csm=csm, loss_component=m.loss_component,
+            measurement_basis=MEASUREMENT_BASIS_HYPOTHETICAL,
         )
 
     # Settlement carry-forward: roll the prior closing CSM one period over
@@ -523,7 +540,8 @@ def _measure_inforce_fast(
     # Returning max(0, bel + ra - csm) would conflate "carried CSM is short"
     # with "true onerous recognition" and mis-signal a Sec. 44 hit.
     loss = np.zeros(n_mp, dtype=np.float64)
-    return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss)
+    return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss,
+                          measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
 
 
 def _validate_settlement_args(
@@ -594,7 +612,10 @@ def _measure_inforce_full(
     )
     m = _measure_full(model_points, basis)
     if not settlement_mode:
-        return m
+        # Hypothetical mode returns the measure() result re-tagged: the
+        # trajectory is what a freshly issued contract would produce, seated
+        # mid-life -- a what-if, not an inception or settlement figure.
+        return replace(m, measurement_basis=MEASUREMENT_BASIS_HYPOTHETICAL)
 
     prior_csm = np.asarray(prior_csm, dtype=np.float64)
     n_mp = m.bel.shape[0]
@@ -708,6 +729,7 @@ def _measure_inforce_full(
         cashflows=m.cashflows,
         discount_bom=m.discount_bom,
         discount_mid=m.discount_mid,
+        measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY,
     )
 
 
@@ -794,6 +816,11 @@ def measure_inforce(
     :func:`roll_forward` with prior and current measurements for the full
     movement.
     """
+    # A mixed-model router must go through fcf.portfolio.measure_inforce --
+    # silently measuring a PAA / VFA segment with the GMM kernel would return
+    # a finite, plausible, wrong number. Checked before any segment is
+    # measured (no-op for a bare Basis).
+    _require_gmm_router(basis, entry="measure_inforce")
     # A multi-segment ``{(product, channel): Basis}`` settles the whole
     # in-force portfolio in one call: each segment is routed to its own basis
     # (its assumptions), measured, and stitched back -- no manual per-segment
@@ -903,7 +930,10 @@ def _measure_inforce_segmented(
             loss_component[idx] = m.loss_component
         result = GMMMeasurement(bel=bel, ra=ra, csm=csm,
                                 loss_component=loss_component)
-    return replace(result, model_points=model_points)
+    # Re-tag: _stitch_full_measurements is shared with the new-business
+    # segmented path and constructs a default ('inception') measurement.
+    return replace(result, model_points=model_points,
+                   measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
 
 
 # ---------------------------------------------------------------------------
