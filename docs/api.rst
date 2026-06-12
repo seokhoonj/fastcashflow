@@ -71,6 +71,14 @@ Premium allocation approach
 
 .. autofunction:: fastcashflow.paa.measure_inforce
 
+.. autofunction:: fastcashflow.paa.settle
+
+.. autoclass:: fastcashflow.PAASettlementMovement
+   :members:
+
+.. autoclass:: fastcashflow.PAASettlementReconciliation
+   :members:
+
 .. autoclass:: fastcashflow.PAAMeasurement
    :members:
 

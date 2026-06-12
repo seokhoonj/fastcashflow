@@ -1351,6 +1351,156 @@ def _reconcile_gmm_settlement(
     ]
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class PAASettlementMovement:
+    """One period's IFRS 17 paragraph-55(b) settlement movement of a PAA book.
+
+    What :func:`fastcashflow.paa.settle` returns: the opening -> closing
+    movement of the LRC, loss component, and LIC over one reporting period,
+    per model point. Every measurement array is ``(n_mp,)`` and each block
+    reconciles exactly::
+
+        lrc_closing == lrc_opening + premiums - revenue + lrc_experience
+        loss_component_closing == loss_component_opening
+                       + loss_component_recognised - loss_component_reversed
+        lic_closing == lic_opening + claims_incurred - claims_paid
+
+    The LRC follows Sec. 55(b), with insurance revenue allocated under
+    Sec. B126. The loss component is recalculated under Sec. 57-58 at each
+    date rather than carried, so exactly one of the recognised / reversed
+    rows is positive. The LIC block supports settlement-pattern books and
+    provides the Sec. 100(c) incurred-claims movement; the risk-adjustment
+    column of that table is structurally zero in this PAA view. There is no
+    CSM block and no finance line -- the PAA carries no CSM and holds the
+    LRC undiscounted (Sec. 56), so neither exists to move.
+    """
+
+    lrc_opening: FloatArray
+    premiums: FloatArray
+    revenue: FloatArray
+    lrc_experience: FloatArray
+    lrc_closing: FloatArray
+    loss_component_opening: FloatArray
+    loss_component_recognised: FloatArray
+    loss_component_reversed: FloatArray
+    loss_component_closing: FloatArray
+    lic_opening: FloatArray
+    claims_incurred: FloatArray
+    claims_paid: FloatArray
+    lic_closing: FloatArray
+    period_months: int = 12
+    revenue_basis: str = "time"
+    model_points: object | None = None
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds
+        the next period's settle. The PAA has no CSM and no locked-in rate,
+        so those state slots carry neutral values; the closing loss component
+        is preserved for state-file continuity, though the next settle
+        recalculates it under Sec. 57-58 rather than reading it."""
+        from fastcashflow.modelpoints import InforceState
+        mp = self.model_points
+        if mp is None or mp.mp_id is None:
+            raise ValueError(
+                "closing_inputs() needs the source model points with mp_id "
+                "(the settle entry stamps them; per-MP chaining joins by id)")
+        n_mp = self.lrc_closing.shape[0]
+        state = InforceState(
+            mp_id=mp.mp_id,
+            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
+            count=np.asarray(mp.count, dtype=np.float64),
+            prior_csm=np.zeros(n_mp, dtype=np.float64),
+            lock_in_rate=0.0,
+            prior_count=np.asarray(mp.count, dtype=np.float64),
+            prior_loss_component=self.loss_component_closing,
+        )
+        return mp, state
+
+
+@dataclass(frozen=True, slots=True)
+class PAASettlementReconciliation:
+    """Portfolio totals of a :class:`PAASettlementMovement` -- the
+    paragraph-55(b) settlement table. Revenue, claims-paid and
+    loss-component-reversed rows are stored negative (display convention),
+    so opening plus every row of a block equals its closing; the movement
+    keeps those lines positive."""
+
+    period_months: int
+    revenue_basis: str
+    lrc_opening: float
+    premiums: float
+    revenue: float
+    lrc_experience: float
+    lrc_closing: float
+    loss_component_opening: float
+    loss_component_recognised: float
+    loss_component_reversed: float
+    loss_component_closing: float
+    lic_opening: float
+    claims_incurred: float
+    claims_paid: float
+    lic_closing: float
+
+
+def _reconcile_paa_settlement(
+    movements: list[PAASettlementMovement],
+) -> list[PAASettlementReconciliation]:
+    """Aggregate paragraph-55(b) settlement movements into portfolio totals."""
+    return [
+        PAASettlementReconciliation(
+            period_months=m.period_months,
+            revenue_basis=m.revenue_basis,
+            lrc_opening=float(m.lrc_opening.sum()),
+            premiums=float(m.premiums.sum()),
+            revenue=float(-m.revenue.sum()),
+            lrc_experience=float(m.lrc_experience.sum()),
+            lrc_closing=float(m.lrc_closing.sum()),
+            loss_component_opening=float(m.loss_component_opening.sum()),
+            loss_component_recognised=float(m.loss_component_recognised.sum()),
+            loss_component_reversed=float(-m.loss_component_reversed.sum()),
+            loss_component_closing=float(m.loss_component_closing.sum()),
+            lic_opening=float(m.lic_opening.sum()),
+            claims_incurred=float(m.claims_incurred.sum()),
+            claims_paid=float(-m.claims_paid.sum()),
+            lic_closing=float(m.lic_closing.sum()),
+        )
+        for m in movements
+    ]
+
+
+@write_measurement.register
+def _(movement: PAASettlementMovement, path, *, ids=None):
+    cols = {
+        "lrc_opening": movement.lrc_opening,
+        "premiums": movement.premiums,
+        "revenue": movement.revenue,
+        "lrc_experience": movement.lrc_experience,
+        "lrc_closing": movement.lrc_closing,
+        "loss_component_opening": movement.loss_component_opening,
+        "loss_component_recognised": movement.loss_component_recognised,
+        "loss_component_reversed": movement.loss_component_reversed,
+        "loss_component_closing": movement.loss_component_closing,
+        "lic_opening": movement.lic_opening,
+        "claims_incurred": movement.claims_incurred,
+        "claims_paid": movement.claims_paid,
+        "lic_closing": movement.lic_closing,
+        "revenue_basis": [movement.revenue_basis]
+                         * movement.lrc_closing.shape[0],
+        "measurement_basis": [movement.measurement_basis]
+                             * movement.lrc_closing.shape[0],
+    }
+    # The closing-state chain columns ride only when the source model
+    # points are stamped (the settle entry always stamps them); a
+    # hand-built movement writes the lines and markers alone.
+    if movement.model_points is not None:
+        cols["elapsed_months"] = np.asarray(
+            movement.model_points.elapsed_months, dtype=np.int64)
+        cols["count"] = np.asarray(
+            movement.model_points.count, dtype=np.float64)
+    _write_measurement_columns(cols, path, ids)
+
+
 @write_measurement.register
 def _(movement: GMMSettlementMovement, path, *, ids=None):
     cols = {
@@ -1460,6 +1610,8 @@ def reconcile(
         return _reconcile_vfa_settlement(movements)
     if movements and isinstance(movements[0], GMMSettlementMovement):
         return _reconcile_gmm_settlement(movements)
+    if movements and isinstance(movements[0], PAASettlementMovement):
+        return _reconcile_paa_settlement(movements)
     if movements and isinstance(movements[0], ReinsurancePeriodMovement):
         return _reconcile_reinsurance(movements)
     out: list[Reconciliation] = []

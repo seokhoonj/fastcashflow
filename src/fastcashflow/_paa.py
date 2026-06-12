@@ -31,7 +31,7 @@ Scope and simplifications, each with the standard's basis:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -525,3 +525,202 @@ def measure_inforce(
         service_expense=m.service_expense, lic=m.lic,
         cashflows=m.cashflows, model_points=model_points,
         measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
+
+
+def settle(
+    model_points: ModelPoints,
+    state: "InforceState",
+    basis: Basis,
+    *,
+    revenue_basis: str = "time",
+    period_months: int | None = None,
+) -> "PAASettlementMovement":
+    """Paragraph-55(b) period-close settlement of a PAA in-force book.
+
+    The opening -> closing movement over one reporting period: the Liability
+    for Remaining Coverage rolled per Sec. 55(b), the loss component
+    recalculated per Sec. 57-58 at each date (no balance tracking), and the
+    Liability for Incurred Claims rolled on the expected basis -- including
+    settlement-pattern books, unlike ``gmm.settle`` / ``vfa.settle``.
+
+    The PAA's structural simplification: the opening balances are
+    RECONSTRUCTED from a unit projection rather than carried. The GMM CSM is
+    history-dependent (accumulated unlocking) and must arrive in
+    ``state.prior_csm``; the PAA LRC is the mechanical Sec. 55(b) roll, so
+    with expected within-period cash flows (the v1 cut) the unit projection
+    rebuilds every opening figure exactly. ``state.prior_count`` is therefore
+    the only required prior-date input; ``prior_csm`` / ``lock_in_rate`` /
+    ``prior_loss_component`` are ignored (``prior_loss_component`` is echoed
+    by ``closing_inputs()`` for state-file continuity only). Chaining
+    telescopes without any carried state -- the next period's reconstructed
+    opening equals this period's closing as an identity, on- or off-track.
+
+    One unit projection (``count = 1``), two scales:
+    ``k_exp = prior_count / unit_inforce[em_open]`` (the expected leg --
+    opening LRC, premiums, revenue, the whole LIC block) and
+    ``k_obs = count / unit_inforce[em_close]`` (the observation -- closing
+    LRC). Their gap is the ``lrc_experience`` line. The LIC block stays
+    entirely at ``k_exp``: incurred claims are past events, not in-force, so
+    re-scaling them by the closing count would be meaningless.
+
+    Sec. 55(b) items with no movement line are documented engine cuts, not
+    omissions: acquisition cash flows and their amortisation are zero under
+    the Sec. 59(a) expensed-as-incurred option, the financing adjustment is
+    zero because the LRC is held undiscounted (Sec. 56), and investment
+    components are out of scope for the short-coverage book (v1). For the
+    Sec. 100(c) incurred-claims table the LIC lines supply the cash-flow
+    column; the risk-adjustment column is structurally zero (the PAA LIC
+    carries no risk adjustment, Sec. 59(b)).
+
+    v1 scope (documented cuts, mirroring the gmm / vfa settles): within-period
+    cash flows are as expected -- the observed input is the closing count
+    only (actual premiums received are the Sec. 55(b)(i) input verbatim, so
+    they and actual claims paid are the v1.1 priority); a pure LIC-runoff
+    close (opening date at or past the boundary, only the claims tail left)
+    is rejected; no subsequent Sec. 53 eligibility re-test; no OCI (the
+    Sec. 56 undiscounted LRC has no finance line at all). A final settlement
+    (``em_close >= boundary``) is allowed with a zero closing count: the LRC
+    releases in full through revenue while the LIC tail stays outstanding.
+    """
+    if revenue_basis not in ("time", "claims"):
+        raise ValueError(
+            f"revenue_basis must be 'time' or 'claims', got {revenue_basis!r}")
+    basis = _single_basis(basis, entry="paa.settle")
+    state = _reconcile_state(model_points, state)
+    if state.prior_count is None:
+        raise ValueError(
+            "paa.settle needs state.prior_count -- the in-force count at the "
+            "opening date (the expected leg's scale for the Sec. 55(b) roll)."
+        )
+    period = 12 if period_months is None else int(period_months)
+    if period < 1:
+        raise ValueError(f"period_months must be >= 1, got {period}")
+
+    n_mp = model_points.n_mp
+    em_close = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    em_open = em_close - period
+    if np.any(em_open < 0):
+        bad = int(np.argmin(em_open))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em_close[bad])} < "
+            f"period_months={period}; the opening date precedes inception, "
+            "which has no balances to settle from."
+        )
+
+    boundary = np.asarray(model_points.contract_boundary_months,
+                          dtype=np.int64)
+    if np.any(em_open >= boundary):
+        bad = int(np.argmax(em_open >= boundary))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em_close[bad])} - "
+            f"period_months={period} is at or past the contract boundary "
+            f"({int(boundary[bad])}); the opening date must lie inside the "
+            "remaining coverage period. A pure LIC-runoff settlement is a "
+            "v1 cut."
+        )
+
+    count = np.asarray(model_points.count, dtype=np.float64)
+    final = em_close >= boundary
+    if np.any(final & (count > 0.0)):
+        bad = int(np.argmax(final & (count > 0.0)))
+        raise ValueError(
+            f"row {bad} closes at or past the contract boundary with "
+            f"count={count[bad]}; a final settlement needs a zero closing "
+            "snapshot."
+        )
+
+    # One unit projection, two scales (contract Sec. 2): seed count=1 so the
+    # k factors carry the actual book scale.
+    unit_mp = replace(model_points, count=np.ones(n_mp, dtype=np.float64))
+    unit = measure_paa(unit_mp, basis, revenue_basis=revenue_basis, full=True)
+    cf = unit.cashflows
+    rows = np.arange(n_mp)
+    n_time = cf.inforce.shape[1]
+    cap = np.minimum(em_close, boundary)
+
+    surv_open = cf.inforce[rows, em_open]
+    k_exp = (np.asarray(state.prior_count, dtype=np.float64)
+             / np.where(surv_open > 0.0, surv_open, 1.0))
+
+    close_idx = np.minimum(cap, n_time - 1)
+    surv_close = np.where(final, 0.0, cf.inforce[rows, close_idx])
+    dead_unit = (~final) & (surv_close <= 0.0) & (count > 0.0)
+    if np.any(dead_unit):
+        bad = int(np.argmax(dead_unit))
+        raise ValueError(
+            f"row {bad}: the projection has no survivors at the closing date "
+            f"but the observed count is {count[bad]}; reconcile the snapshot."
+        )
+    k_obs = np.where(surv_close > 0.0,
+                     count / np.where(surv_close > 0.0, surv_close, 1.0), 0.0)
+
+    # Within-period sums over [em_open, cap) -- expected (k_exp) scale.
+    cols = em_open[:, None] + np.arange(period)[None, :]
+    col_ok = cols < cap[:, None]
+    cols_safe = np.where(col_ok, cols, n_time - 1)
+
+    premiums = k_exp * (cf.premium_cf[rows[:, None], cols_safe]
+                        * col_ok).sum(axis=1)
+    revenue = k_exp * (unit.revenue[rows[:, None], cols_safe]
+                       * col_ok).sum(axis=1)
+
+    lrc_opening    = k_exp * unit.lrc_path[rows, em_open]
+    lrc_closing    = k_obs * unit.lrc_path[rows, cap]
+    lrc_experience = (k_obs - k_exp) * unit.lrc_path[rows, cap]
+
+    # Sec. 57-58 re-test: the fulfilment cash flows for remaining coverage at
+    # each date, with the settlement discount on claims exactly as the
+    # inception onerous test applies it (measure_paa above).
+    onerous_claim_cf, onerous_morbidity_cf = cf.claim_cf, cf.morbidity_cf
+    if basis.settlement_pattern is not None:
+        factor = _settlement_factor(basis.settlement_pattern,
+                                    basis.discount_monthly)
+        onerous_claim_cf = onerous_claim_cf * factor
+        onerous_morbidity_cf = onerous_morbidity_cf * factor
+    monthly_rate = discount_monthly_curve(basis, n_time)
+    bel, pv_claims, pv_morbidity, pv_disability, pv_survival = (
+        _rollforward_kernel(
+            onerous_claim_cf, onerous_morbidity_cf, cf.disability_cf,
+            cf.expense_cf, cf.premium_cf, cf.annuity_cf, cf.maturity_cf,
+            cf.surrender_cf, boundary, monthly_rate))
+    ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
+                          pv_survival, monthly_rate)
+
+    fcf_open  = k_exp * (bel[rows, em_open] + ra[rows, em_open])
+    fcf_close = k_obs * (bel[rows, cap] + ra[rows, cap])
+    loss_component_opening = np.maximum(0.0, fcf_open - lrc_opening)
+    loss_component_closing = np.maximum(0.0, fcf_close - lrc_closing)
+    loss_component_recognised = np.maximum(
+        0.0, loss_component_closing - loss_component_opening)
+    loss_component_reversed = np.maximum(
+        0.0, loss_component_opening - loss_component_closing)
+
+    # LIC block -- entirely expected-scale; claims_paid is the residual, so
+    # the block identity closes by construction (and the terminal-column
+    # residual convention of the settlement tail is preserved).
+    incurred = cf.claim_cf + cf.morbidity_cf
+    claims_incurred = k_exp * (incurred[rows[:, None], cols_safe]
+                               * col_ok).sum(axis=1)
+    lic_opening = k_exp * unit.lic[rows, em_open]
+    lic_closing = k_exp * unit.lic[rows, cap]
+    claims_paid = lic_opening + claims_incurred - lic_closing
+
+    from fastcashflow.movement import PAASettlementMovement
+    return PAASettlementMovement(
+        lrc_opening=lrc_opening,
+        premiums=premiums,
+        revenue=revenue,
+        lrc_experience=lrc_experience,
+        lrc_closing=lrc_closing,
+        loss_component_opening=loss_component_opening,
+        loss_component_recognised=loss_component_recognised,
+        loss_component_reversed=loss_component_reversed,
+        loss_component_closing=loss_component_closing,
+        lic_opening=lic_opening,
+        claims_incurred=claims_incurred,
+        claims_paid=claims_paid,
+        lic_closing=lic_closing,
+        period_months=period,
+        revenue_basis=revenue_basis,
+        model_points=model_points,
+    )

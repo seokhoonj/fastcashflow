@@ -423,7 +423,15 @@ def test_bundled_paa_sample_settles():
     mv = settle(mp_c, state, basis, period_months=3)
     _assert_blocks(mv)
     assert np.all(mv.lic_closing > 0)          # the pattern leaves a tail
-    assert np.all(mv.loss_component_closing > 0)   # both contracts onerous
+    # Both contracts are onerous AT INCEPTION, driven by the t=0 acquisition
+    # expense. The Sec. 57-58 re-test measures the REMAINING coverage: with
+    # the acquisition outflow behind it, PA001's remaining book is already
+    # profitable by month 3 (loss component zero at BOTH dates) while PA002
+    # stays onerous -- the re-test discriminates where an inception carry
+    # could not.
+    assert mv.loss_component_opening[0] == 0.0
+    assert mv.loss_component_closing[0] == 0.0
+    assert mv.loss_component_closing[1] > 0.0
 
 
 def test_reconcile_returns_a_footing_settlement_table():
