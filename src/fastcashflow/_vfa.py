@@ -38,6 +38,7 @@ from fastcashflow._measurement_basis import (
     MEASUREMENT_BASIS_INCEPTION,
     MEASUREMENT_BASIS_SETTLEMENT,
     MEASUREMENT_BASIS_SETTLEMENT_CARRY,
+    _inforce_marker_columns,
 )
 from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import (
@@ -73,7 +74,7 @@ CSM_BASIS_PROJECTED_RUNOFF = "projected_runoff"     # inception full trajectory
 CSM_BASIS_CARRY_ONLY = "carry_only"                 # measure_inforce: prior CSM
 #                                                     rolled at the basis return,
 #                                                     paragraph-45 unlock deferred
-CSM_BASIS_PARAGRAPH_45 = "paragraph_45_settlement"  # future: real subsequent meas.
+CSM_BASIS_PARAGRAPH_45 = "paragraph_45_settlement"  # vfa.settle: subsequent meas.
 CSM_BASES = (CSM_BASIS_INITIAL, CSM_BASIS_PROJECTED_RUNOFF,
              CSM_BASIS_CARRY_ONLY, CSM_BASIS_PARAGRAPH_45)
 
@@ -205,11 +206,15 @@ class VFAAggregate:
 @write_measurement.register
 def _(measurement: VFAMeasurement, path, *, ids=None):
     _require_settlement_csm(measurement, "write_measurement")
-    _write_measurement_columns(
-        {"bel": measurement.bel, "ra": measurement.ra, "csm": measurement.csm,
-         "variable_fee": measurement.variable_fee,
-         "time_value": measurement.time_value,
-         "loss_component": measurement.loss_component}, path, ids)
+    cols = {"bel": measurement.bel, "ra": measurement.ra,
+            "csm": measurement.csm,
+            "variable_fee": measurement.variable_fee,
+            "time_value": measurement.time_value,
+            "loss_component": measurement.loss_component}
+    # A paragraph-45 closing balance gets the same marker columns as the
+    # other models' non-inception output; inception output is unchanged.
+    cols.update(_inforce_marker_columns(measurement, measurement.bel.shape[0]))
+    _write_measurement_columns(cols, path, ids)
 
 
 def _scatter_vfa_headline(n_mp, results):
@@ -1220,5 +1225,9 @@ def settle(
         loss_component_opening=lc_open,
         loss_component_closing=lc_closing,
         variable_fee_closing=k_obs * fee_obs,
+        coverage_units_provided=cu_period,
+        coverage_units_future=cu_future,
+        account_value_closing=observed_av,
+        lock_in_rate=float(state.lock_in_rate),
         model_points=model_points,
     )

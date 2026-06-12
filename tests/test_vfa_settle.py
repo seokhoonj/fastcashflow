@@ -80,10 +80,12 @@ def _book(basis, mp0, *, em_open, period, av_close=None, count_close=None,
         count_close = inforce_pad[rows, np.minimum(em_close, boundary)]
     if prior_csm is None:
         prior_csm = m0.csm_path[rows, em_open]
-    mp = replace(mp0, elapsed_months=np.full(n_mp, em_close, dtype=np.int64),
+    ids = np.array([f"P{i}" for i in range(n_mp)])
+    mp = replace(mp0, mp_id=ids,
+                 elapsed_months=np.full(n_mp, em_close, dtype=np.int64),
                  count=np.asarray(count_close, dtype=np.float64))
     state = InforceState(
-        mp_id=np.array([f"P{i}" for i in range(n_mp)]),
+        mp_id=ids,
         elapsed_months=np.full(n_mp, em_close, dtype=np.int64),
         count=np.asarray(count_close, dtype=np.float64),
         prior_csm=np.asarray(prior_csm, dtype=np.float64),
@@ -612,3 +614,139 @@ def test_inforce_state_validates_optional_fields():
         InforceState(mp_id=np.array(["A"]), elapsed_months=[1], count=[1.0],
                      prior_csm=[0.0], lock_in_rate=0.0,
                      prior_account_value=np.array([1.0, 2.0]))
+
+
+# ---------------------------------------------------------------------------
+# stage-2 plumbing: coverage-unit lines, closing_inputs(), the write arm
+# ---------------------------------------------------------------------------
+def test_coverage_unit_lines_are_recorded():
+    """B119 inputs for the per-GoC re-aggregation, kept on the movement:
+    release == csm_after x provided / (provided + future), and on-track the
+    units are the unit in-force tails themselves (count = 1 book), pinned
+    independently of the release fraction."""
+    basis = _basis()
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    em_open, period = 6, 12
+    em_close = em_open + period
+    mp, state = _book(basis, mp0, em_open=em_open, period=period)
+    mv = fcf.vfa.settle(mp, state, basis, period_months=period)
+    assert np.all(mv.coverage_units_provided > 0.0)
+    assert np.all(mv.coverage_units_future > 0.0)
+    csm_after = (mv.csm_opening + mv.csm_accretion + mv.csm_fv_share
+                 + mv.csm_future_service - mv.loss_component_reversed
+                 + mv.loss_component_recognised)
+    frac = mv.coverage_units_provided / (mv.coverage_units_provided
+                                         + mv.coverage_units_future)
+    np.testing.assert_allclose(mv.csm_release, csm_after * frac, rtol=1e-10)
+    # independent pin: on-track k_exp == k_obs == 1, so the unit lines are
+    # the survival-curve tails read off the engine's own inception run
+    surv = fcf.vfa.measure(mp0, basis).cashflows.inforce[0]
+    tail = np.concatenate([np.cumsum(surv[::-1])[::-1], [0.0]])
+    np.testing.assert_allclose(mv.coverage_units_provided,
+                               [tail[em_open] - tail[em_close]], rtol=1e-10)
+    np.testing.assert_allclose(mv.coverage_units_future,
+                               [tail[em_close]], rtol=1e-10)
+
+
+def test_final_settlement_has_zero_future_units():
+    """A boundary inside the period releases everything: the future-unit
+    line is zero and the provided line carries the whole remaining tail."""
+    basis = _basis()
+    mp0 = ModelPoints.single(40, 0.0, 12, account_value=1e6)
+    mp, state = _book(basis, mp0, em_open=6, period=12, av_close=0.0,
+                      count_close=np.array([0.0]))
+    mv = fcf.vfa.settle(mp, state, basis, period_months=12)
+    np.testing.assert_allclose(mv.coverage_units_future, 0.0, atol=1e-12)
+    assert np.all(mv.coverage_units_provided > 0.0)
+    np.testing.assert_allclose(mv.csm_closing, 0.0, atol=1e-9)
+
+
+def test_closing_inputs_seeds_the_next_period():
+    """closing_inputs() returns the closing-date pair whose prior_* fields
+    are the closing balances and whose prior_account_value is the observed
+    closing fund value; advanced to the next on-track snapshot, 6m x 2 ==
+    12m (the GMM recipe with the account value advanced too)."""
+    basis = _basis()
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    growth = _growth(basis, mp0)
+    inforce = fcf.vfa.measure(mp0, basis).cashflows.inforce[0]
+
+    mp12, state12 = _book(basis, mp0, em_open=6, period=12)
+    one = fcf.vfa.settle(mp12, state12, basis, period_months=12)
+
+    mp6, state6 = _book(basis, mp0, em_open=6, period=6)
+    first = fcf.vfa.settle(mp6, state6, basis, period_months=6)
+    mp_mid, state_mid = first.closing_inputs()
+    assert isinstance(mp_mid, ModelPoints)
+    assert isinstance(state_mid, InforceState)
+    np.testing.assert_array_equal(state_mid.elapsed_months, [12])
+    np.testing.assert_allclose(state_mid.prior_csm, first.csm_closing)
+    np.testing.assert_allclose(state_mid.prior_count, state6.count)
+    np.testing.assert_allclose(state_mid.prior_account_value,
+                               state6.account_value)
+    np.testing.assert_allclose(state_mid.prior_loss_component,
+                               first.loss_component_closing)
+    np.testing.assert_allclose(state_mid.account_value, state6.account_value)
+    # advance the pair to the next observation (on-track at month 18)
+    em_end = 18
+    count_end = np.array([inforce[em_end]])
+    av_end = np.array([1e6 * growth[0] ** em_end])
+    mp_next = replace(mp_mid,
+                      elapsed_months=np.array([em_end], dtype=np.int64),
+                      count=count_end)
+    state_next = replace(state_mid,
+                         elapsed_months=np.array([em_end], dtype=np.int64),
+                         count=count_end, account_value=av_end)
+    second = fcf.vfa.settle(mp_next, state_next, basis, period_months=6)
+    np.testing.assert_allclose(second.csm_closing, one.csm_closing,
+                               rtol=1e-10)
+    np.testing.assert_allclose(second.bel_closing, one.bel_closing,
+                               rtol=1e-10)
+
+
+def test_closing_inputs_needs_stamped_model_points():
+    basis = _basis()
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    mp, state = _book(basis, mp0, em_open=6, period=6)
+    mv = fcf.vfa.settle(mp, state, basis, period_months=6)
+    bare = replace(mv, model_points=None)
+    with pytest.raises(ValueError, match="mp_id"):
+        bare.closing_inputs()
+
+
+def test_write_measurement_writes_the_movement_with_markers(tmp_path):
+    import polars as pl
+    basis = _basis()
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    mp, state = _book(basis, mp0, em_open=6, period=12)
+    mv = fcf.vfa.settle(mp, state, basis, period_months=12)
+    out = tmp_path / "settle.parquet"
+    fcf.write_measurement(mv, out)
+    df = pl.read_parquet(out)
+    for col in ("csm_opening", "csm_fv_share", "csm_future_service",
+                "csm_release", "csm_closing", "bel_closing",
+                "variable_fee_closing", "account_value_closing",
+                "coverage_units_provided", "coverage_units_future",
+                "measurement_basis", "elapsed_months"):
+        assert col in df.columns
+    assert df["measurement_basis"].to_list() == ["settlement"]
+
+
+def test_closing_measurement_write_carries_the_marker(tmp_path):
+    """The paragraph-45 closing balance sheet is marked on disk like every
+    other non-inception output; inception output stays marker-free
+    (byte-compatible with new-business files)."""
+    import polars as pl
+    basis = _basis()
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    mp, state = _book(basis, mp0, em_open=6, period=12)
+    mv = fcf.vfa.settle(mp, state, basis, period_months=12)
+    closing_path = tmp_path / "close.parquet"
+    fcf.write_measurement(mv.closing_measurement(), closing_path)
+    df = pl.read_parquet(closing_path)
+    assert df["measurement_basis"].to_list() == ["settlement"]
+    assert "elapsed_months" in df.columns
+
+    inception_path = tmp_path / "inception.parquet"
+    fcf.write_measurement(fcf.vfa.measure(mp0, basis), inception_path)
+    assert "measurement_basis" not in pl.read_parquet(inception_path).columns

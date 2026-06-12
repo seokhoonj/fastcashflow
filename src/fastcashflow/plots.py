@@ -537,6 +537,10 @@ def plot_analysis_of_change(reconciliation, *, component: str = "csm",
     release. A PAA reconciliation selects one of its paragraph-100 blocks:
     ``component`` is ``"lrc"`` (the default there), ``"loss_component"`` or
     ``"lic"``.
+
+    A *settlement* reconciliation (from ``gmm.settle`` / ``vfa.settle`` via
+    ``reconcile``) has no waterfall arm in v1 and is rejected here; its
+    ``str()`` form prints the full paragraph-44 / paragraph-45 table.
     """
     raise _reject("plot_analysis_of_change()",
                   "a GMM, PAA, VFA or reinsurance reconciliation",

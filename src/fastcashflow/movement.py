@@ -41,7 +41,8 @@ from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._vfa import (
-    CSM_BASIS_PARAGRAPH_45, VFAMeasurement, _require_settlement_csm)
+    CSM_BASIS_PARAGRAPH_45, _CSM_TO_MEASUREMENT_BASIS, VFAMeasurement,
+    _require_settlement_csm)
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 
 
@@ -898,6 +899,14 @@ class VFASettlementMovement:
     * ``csm_release`` -- paragraph B119, one period-end release of the
       post-adjustment balance over the coverage units provided in the period
       against those provided plus expected from the *opening* date.
+    * ``coverage_units_provided`` / ``coverage_units_future`` -- the B119
+      numerator and remainder behind that release (expected scale over the
+      period, observed scale from the closing date), kept per model point
+      so a group-of-contracts settlement can re-pool the release fraction
+      at the group grain.
+    * ``account_value_closing`` -- the *observed* fund value at the closing
+      date, echoed from the input state; with the closing balances it seeds
+      the next period's state (:meth:`closing_inputs`).
 
     v1 limitations (documented, not silent): within-period experience --
     actual deaths, lapses, benefits, expenses, AND the fees actually skimmed
@@ -946,8 +955,45 @@ class VFASettlementMovement:
     loss_component_opening: FloatArray
     loss_component_closing: FloatArray
     variable_fee_closing: FloatArray
+    coverage_units_provided: FloatArray  # B119 numerator, expected scale
+    coverage_units_future: FloatArray    # B119 remainder, observed scale
+    account_value_closing: FloatArray    # observed fund value at the close
+    lock_in_rate: float = 0.0            # state echo only; no VFA locked rate
     model_points: "object | None" = None
     csm_basis: str = CSM_BASIS_PARAGRAPH_45
+
+    @property
+    def measurement_basis(self) -> str:
+        """Cross-model time-basis discriminator, derived from ``csm_basis``
+        (mirrors :class:`~fastcashflow.vfa.VFAMeasurement`)."""
+        return _CSM_TO_MEASUREMENT_BASIS[self.csm_basis]
+
+    def closing_inputs(self):
+        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds
+        the next period's settle: ``prior_csm`` / ``prior_loss_component``
+        are this period's closing balances, ``prior_count`` the closing
+        count and ``prior_account_value`` the observed closing fund value.
+        The caller advances the pair to the next observation date
+        (``elapsed_months`` / ``count`` / ``account_value``) before the
+        next call."""
+        from fastcashflow.modelpoints import InforceState
+        mp = self.model_points
+        if mp is None or mp.mp_id is None:
+            raise ValueError(
+                "closing_inputs() needs the source model points with mp_id "
+                "(the settle entry stamps them; per-MP chaining joins by id)")
+        state = InforceState(
+            mp_id=mp.mp_id,
+            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
+            count=np.asarray(mp.count, dtype=np.float64),
+            prior_csm=self.csm_closing,
+            lock_in_rate=self.lock_in_rate,
+            account_value=self.account_value_closing,
+            prior_count=np.asarray(mp.count, dtype=np.float64),
+            prior_account_value=self.account_value_closing,
+            prior_loss_component=self.loss_component_closing,
+        )
+        return mp, state
 
     def closing_measurement(self) -> VFAMeasurement:
         """The closing balance sheet as a headline-only
@@ -1328,6 +1374,42 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
         "loss_component_reversed": movement.loss_component_reversed,
         "loss_component_recognised": movement.loss_component_recognised,
         "loss_component_closing": movement.loss_component_closing,
+        "coverage_units_provided": movement.coverage_units_provided,
+        "coverage_units_future": movement.coverage_units_future,
+        "measurement_basis": [movement.measurement_basis]
+                             * movement.bel_closing.shape[0],
+    }
+    if movement.model_points is not None:
+        cols["elapsed_months"] = np.asarray(
+            movement.model_points.elapsed_months, dtype=np.int64)
+    _write_measurement_columns(cols, path, ids)
+
+
+@write_measurement.register
+def _(movement: VFASettlementMovement, path, *, ids=None):
+    cols = {
+        "bel_opening": movement.bel_opening,
+        "bel_interest": movement.bel_interest,
+        "bel_release": movement.bel_release,
+        "bel_experience": movement.bel_experience,
+        "bel_closing": movement.bel_closing,
+        "ra_opening": movement.ra_opening,
+        "ra_interest": movement.ra_interest,
+        "ra_release": movement.ra_release,
+        "ra_experience": movement.ra_experience,
+        "ra_closing": movement.ra_closing,
+        "csm_opening": movement.csm_opening,
+        "csm_accretion": movement.csm_accretion,
+        "csm_fv_share": movement.csm_fv_share,
+        "csm_future_service": movement.csm_future_service,
+        "csm_release": movement.csm_release,
+        "csm_closing": movement.csm_closing,
+        "loss_component_opening": movement.loss_component_opening,
+        "loss_component_reversed": movement.loss_component_reversed,
+        "loss_component_recognised": movement.loss_component_recognised,
+        "loss_component_closing": movement.loss_component_closing,
+        "variable_fee_closing": movement.variable_fee_closing,
+        "account_value_closing": movement.account_value_closing,
         "coverage_units_provided": movement.coverage_units_provided,
         "coverage_units_future": movement.coverage_units_future,
         "measurement_basis": [movement.measurement_basis]
