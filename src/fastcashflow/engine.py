@@ -779,13 +779,19 @@ def measure_inforce(
     period_months: int | None = None,
     full: bool = True,
 ) -> GMMMeasurement:
-    """In-force subsequent measurement (IFRS 17 Sec. 44) at the valuation date.
+    """In-force diagnostic / runoff valuation at a single date.
 
-    The single entry point for settlement / period-close valuation of an
-    in-force book. Each model point is valued at its ``elapsed_months``
-    duration, and the prior period's closing CSM (``state.prior_csm``) is
-    carried forward -- accreted at ``state.lock_in_rate`` and released over
-    coverage units across ``period_months`` (default 12).
+    The diagnostic companion to :func:`fastcashflow.gmm.settle` (the
+    paragraph-44 period-close settlement). Each model point is valued at its
+    ``elapsed_months`` duration: the BEL / RA are full current estimates at
+    that date (Sec. 40), while the CSM is a **carry-only approximation** --
+    the prior period's closing CSM (``state.prior_csm``) accreted at
+    ``state.lock_in_rate`` and released over coverage units across
+    ``period_months`` (default 12), with no paragraph-44(c) unlocking. The
+    result is stamped ``measurement_basis='settlement_carry'`` and the
+    inception-only consumers (``group`` / ``group_of_contracts`` /
+    ``roll_forward`` / ``report`` / ``transition`` / the plots) reject it;
+    period-close balances come from ``settle``.
 
     The ``bel`` / ``ra`` are re-based to the valuation date: the projection runs
     from inception, so the slice is scaled by ``count / inforce[elapsed]`` to
@@ -814,10 +820,11 @@ def measure_inforce(
     flows for movement analysis; ``full=False`` returns just the headline
     numbers (faster).
 
-    Sec. 44 onerous unlocking and experience adjustments are not yet folded
-    in here (``loss_component`` is zero in this mode); use
-    :func:`roll_forward` with prior and current measurements for the full
-    movement.
+    Paragraph-44(c) unlocking, experience adjustments and the loss-component
+    movement live in :func:`fastcashflow.gmm.settle` (``loss_component`` is
+    zero in this mode); the opening -> closing movement of a reporting period
+    comes from ``settle``'s :class:`~fastcashflow.GMMSettlementMovement`, not
+    from this projector.
     """
     # A mixed-model router must go through fcf.portfolio.measure_inforce --
     # silently measuring a PAA / VFA segment with the GMM kernel would return
@@ -949,7 +956,7 @@ def settle(
     """Paragraph-44 subsequent-measurement settlement of a GMM in-force book.
 
     The opening -> closing movement over one reporting period: BEL / RA
-    re-measured at current rates (B72(1)), the CSM accreted at the locked-in
+    re-measured at current rates (B72(a)), the CSM accreted at the locked-in
     rate (44(b)/B72(b), direct compounding), adjusted for the future-service
     change measured at the locked-in rate (44(c)/B72(c) -- the gap to the
     current-rate measure is the ``finance_wedge``, insurance finance

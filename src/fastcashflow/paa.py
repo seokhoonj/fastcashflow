@@ -2,10 +2,11 @@
 
 The short-duration simplified model. ``measure`` returns the LRC/revenue
 roll-forward; ``measure_aggregate`` is the bounded-memory portfolio-aggregate
-view for books too large to hold every trajectory; ``measure_inforce`` is the
-subsequent-measurement (settlement / period-close) entry point, valuing an
-in-force book's remaining LRC at its valuation date; ``trace`` walks one model
-point's PAA measurement.
+view for books too large to hold every trajectory and ``measure_stream`` its
+out-of-core variant; ``measure_inforce`` is the in-force diagnostic / runoff
+view, valuing an in-force book's remaining LRC at its valuation date (the
+PAA has no CSM, so there is no carry; the period-close settle is a later
+phase); ``trace`` walks one model point's PAA measurement.
 """
 from fastcashflow._paa import (
     PAAMeasurement, measure_paa as measure, measure_aggregate, measure_inforce,

@@ -9,7 +9,7 @@ activated unchanged by it. The anchor facts, from dev/gmm-settle-contract.md
   unit_inforce[em_open], k_obs = count / unit_inforce[em_close].
 * CSM accretion and the paragraph-44(c) unlocking are measured at the
   LOCKED-IN rate (B72(b)/(c), "determined on initial recognition" -- AASB 17
-  verbatim, g1-verbatim.md); the BEL / RA blocks are current-rate (B72(1)).
+  verbatim, g1-verbatim.md); the BEL / RA blocks are current-rate (B72(a)).
   The difference is a named ``finance_wedge`` line (B97(a), outside the CSM
   block) -- the VFA two-term cross-tie does NOT carry over; the GMM tie is
   three-term:

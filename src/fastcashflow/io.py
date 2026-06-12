@@ -1513,21 +1513,24 @@ def read_inforce_policies(
     Returns a ``(ModelPoints, InforceState)`` tuple. The ``ModelPoints``
     has the state's ``elapsed_months`` and ``count`` already folded in;
     the ``InforceState`` carries ``prior_csm`` and ``lock_in_rate`` for
-    the in-force valuation call::
+    the period-close settlement call::
 
         mp, state = fcf.read_inforce_policies(
             "inforce_2026Q1.csv",
             coverages="coverages.csv",
             calculation_methods="calculation_methods.csv",
         )
-        val = fcf.gmm.measure_inforce(mp, state, basis, period_months=3)
+        movement = fcf.gmm.settle(mp, state, basis, period_months=3)
+
+    (For a diagnostics / run-off view without the movement lines, the same
+    inputs feed :func:`fastcashflow.gmm.measure_inforce`.)
 
     For the two-file equivalent (separate ``policies.csv`` +
     ``inforce_state.csv``), see :func:`read_model_points` +
     :func:`read_inforce_state` + :func:`apply_inforce_state`. Both
     workflows produce valuation-ready inputs that give the same valuation:
-    ``measure_inforce`` re-aligns the state by mp_id internally, so the
-    answer does not depend on the state file's row order. The returned
+    ``settle`` and ``measure_inforce`` re-align the state by mp_id
+    internally, so the answer does not depend on the state file's row order. The returned
     ``InforceState`` is itself row-aligned to the model points here; in the
     two-file path the state object keeps its file order (only the model points
     are reordered by :func:`apply_inforce_state`), so call
@@ -1538,11 +1541,14 @@ def read_inforce_policies(
     ``prior_csm``, ``lock_in_rate``, plus whatever the spec side of
     :func:`read_model_points` needs (``issue_age``, ``term_months``,
     optional ``sex``, premiums, ``<code>_benefit`` columns for wide form).
-    Optional VFA state columns: ``account_value`` (the *observed* fund value
-    at the valuation date -- it rides on the returned ``InforceState``; the
-    snapshot has no separate inception fund column), ``prior_count``,
-    ``prior_account_value`` and ``prior_loss_component`` (the prior reporting
-    date's figures :func:`fastcashflow.vfa.settle` needs).
+    Optional settlement columns: ``prior_count`` (the in-force count at the
+    opening date -- both :func:`fastcashflow.gmm.settle` and
+    :func:`fastcashflow.vfa.settle` need it) and ``prior_loss_component``
+    (the prior period's closing loss component). Optional VFA state
+    columns: ``account_value`` (the *observed* fund value at the valuation
+    date -- it rides on the returned ``InforceState``; the snapshot has no
+    separate inception fund column) and ``prior_account_value`` (the prior
+    reporting date's observed fund value, which ``vfa.settle`` needs).
     Variance / movement analysis (:func:`roll_forward`,
     :func:`reconcile`) is unaffected -- mp_id-based matching across
     periods works the same regardless of which reader built each
@@ -1672,9 +1678,10 @@ def load_sample_inforce_state() -> "InforceState":
 
     Aligned row-for-row with :func:`load_sample_model_points`. Pair with
     :func:`apply_inforce_state` to fold ``elapsed_months`` and ``count``
-    into the sample model points, then call
-    :func:`fastcashflow.gmm.measure_inforce` with the returned
-    :class:`InforceState`.
+    into the sample model points, then settle the period with
+    :func:`fastcashflow.gmm.settle` (it reads ``prior_csm`` /
+    ``prior_count`` / ``lock_in_rate``) or value the book diagnostically
+    with :func:`fastcashflow.gmm.measure_inforce`.
     """
     base = resources.files("fastcashflow") / "sample_data"
     with resources.as_file(base / "sample_inforce_state.csv") as path:
@@ -1861,11 +1868,13 @@ def _save_sample_inforce_state(path: Path | str) -> Path:
     The dynamic state-at-valuation companion to the static
     :func:`_save_sample_policies` file: one row per ``mp_id`` carrying
     the closing state from the prior reporting period
-    (``elapsed_months``, ``count``, ``prior_csm``, ``lock_in_rate``).
-    Pair the dropped file with :func:`read_inforce_state` and feed the
-    result through :func:`apply_inforce_state` before
-    :func:`fastcashflow.gmm.measure_inforce` -- the
-    subsequent-measurement workflow at each period close.
+    (``elapsed_months``, ``count``, ``prior_csm``, ``lock_in_rate``,
+    ``prior_count``). Pair the dropped file with
+    :func:`read_inforce_state` and feed the result through
+    :func:`apply_inforce_state`; the period close runs through
+    :func:`fastcashflow.gmm.settle` (it needs ``prior_count``, the opening
+    in-force), the diagnostic / runoff view through
+    :func:`fastcashflow.gmm.measure_inforce`.
 
     Supported extensions: ``.csv``, ``.xlsx``, ``.parquet``, ``.feather``
     / ``.arrow``. One row per contract, so the ``.xlsx`` row cap
@@ -1880,7 +1889,8 @@ def _save_sample_inforce_policies(path: Path | str) -> Path:
     The companion to :func:`read_inforce_policies`. Each row carries
     the permanent spec (issue_age, sex, term_months, premium_term_months,
     product, channel) and the closing state from the prior
-    period (elapsed_months, count, prior_csm, lock_in_rate). Built on
+    period (elapsed_months, count, prior_csm, lock_in_rate, prior_count).
+    Built on
     the fly by joining the packaged ``sample_policies.csv`` and
     ``sample_inforce_state.csv`` on ``mp_id``; ``count`` is the state
     value (post-decrement), not the inception count.
@@ -1909,10 +1919,11 @@ def _save_sample_inforce_policies(path: Path | str) -> Path:
 # ---------------------------------------------------------------------------
 
 def _optional_state_columns(df) -> dict:
-    """Collect the optional per-MP state columns (VFA workflows) from a
-    state-carrying frame -- absent columns stay ``None``. ``account_value``
-    feeds ``vfa.measure_inforce`` / ``vfa.settle``; the ``prior_*`` columns
-    are the prior reporting date's figures ``vfa.settle`` needs."""
+    """Collect the optional per-MP state columns from a state-carrying
+    frame -- absent columns stay ``None``. ``account_value`` feeds
+    ``vfa.measure_inforce`` / ``vfa.settle``; the ``prior_*`` columns are
+    the prior reporting date's figures the period-close settle entry
+    points (``gmm.settle`` / ``vfa.settle``) need."""
     out: dict = {}
     for col in ("account_value", "prior_count", "prior_account_value",
                 "prior_loss_component"):
@@ -1927,17 +1938,18 @@ def read_inforce_state(path: Path | str) -> "InforceState":
 
     The file has one row per model point with columns ``mp_id``,
     ``elapsed_months``, ``count``, ``prior_csm`` and ``lock_in_rate``,
-    plus the optional VFA columns ``account_value`` (observed fund value at
-    the valuation date), ``prior_count``, ``prior_account_value`` and
+    plus the optional settlement columns ``prior_count`` and
     ``prior_loss_component`` (the prior reporting date's figures
-    :func:`fastcashflow.vfa.settle` needs). Reads ``.parquet``, ``.csv``,
-    ``.xlsx`` or ``.feather`` / ``.arrow`` via :func:`_read_frame`.
+    :func:`fastcashflow.gmm.settle` / :func:`fastcashflow.vfa.settle` need)
+    and the VFA columns ``account_value`` (observed fund value at the
+    valuation date) and ``prior_account_value``. Reads ``.parquet``,
+    ``.csv``, ``.xlsx`` or ``.feather`` / ``.arrow`` via :func:`_read_frame`.
 
     Pair with :func:`apply_inforce_state` to join the state onto a
-    :class:`ModelPoints` built from the static policies file, then pass
-    the result to :func:`fastcashflow.gmm.measure_inforce` with the
-    returned
-    :class:`InforceState`.
+    :class:`ModelPoints` built from the static policies file, then settle
+    the period with :func:`fastcashflow.gmm.settle` and the returned
+    :class:`InforceState` (or value the book diagnostically with
+    :func:`fastcashflow.gmm.measure_inforce`).
 
     ``lock_in_rate`` is required to be uniform across rows in v1 -- the
     engine takes a scalar locked-in rate. Cohort-aware per-MP rates are

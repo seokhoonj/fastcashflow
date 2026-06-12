@@ -827,12 +827,13 @@ def measure_inforce(
     *,
     period_months: int | None = None,
 ) -> VFAMeasurement:
-    """In-force subsequent measurement of a VFA book at the valuation date.
+    """In-force diagnostic / runoff valuation of a VFA book at a single date.
 
-    Unlike the PAA (no CSM) and like the GMM settlement, the prior period's
+    Unlike the PAA (no CSM) and like the GMM carry
+    (:func:`fastcashflow.gmm.measure_inforce`), the prior period's
     closing CSM is carried forward; unlike the GMM, the VFA CSM accretes at the
     underlying-items return (not a locked-in rate), so the carry is
-    ``_csm_kernel(state.prior_csm, coverage_units, r_m)`` -- the GMM settlement
+    ``_csm_kernel(state.prior_csm, coverage_units, r_m)`` -- the GMM carry
     roll with the return substituted for the lock-in rate. The fulfilment cash
     flows (BEL / RA / variable fee / guarantee intrinsic value) are re-measured
     from the **observed** fund value at the valuation date

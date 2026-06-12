@@ -1225,7 +1225,7 @@ class GMMSettlementMovement:
 
     because B72(c) measures the paragraph-44(c) CSM adjustment at the rates
     determined on initial recognition while the BEL block is current-rate
-    (B72(1)); the gap is insurance finance income/expense (B97(a)), carried
+    (B72(a)); the gap is insurance finance income/expense (B97(a)), carried
     as the named ``finance_wedge`` line OUTSIDE the CSM block. The RA part
     of the change has no rate prescription (B96(d)) and enters the CSM at
     its current measure -- a documented accounting policy.

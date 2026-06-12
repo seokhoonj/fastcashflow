@@ -453,7 +453,7 @@ def measure_inforce(
     revenue_basis: str = "time",
     full: bool = True,
 ) -> PAAMeasurement:
-    """In-force subsequent measurement of a PAA book at the valuation date.
+    """In-force diagnostic / runoff valuation of a PAA book at a single date.
 
     The PAA has no CSM, so there is no prior-CSM carry-forward (IFRS 17 Sec. 44
     is the CSM roll, which the PAA does not have): the in-force Liability for
@@ -468,9 +468,9 @@ def measure_inforce(
     ``elapsed_months`` / ``count``, reconciled onto ``model_points`` by
     :func:`~fastcashflow.apply_inforce_state`; its ``prior_csm`` /
     ``lock_in_rate`` are ignored -- the PAA has no CSM. The subsequent onerous
-    re-test on remaining coverage (Sec. 57-58) is deferred to
-    :func:`~fastcashflow.roll_forward` / a later phase, so ``loss_component`` is
-    zero and ``fcf`` is ``None`` here -- the same defer-the-unlocking stance as
+    re-test on remaining coverage (Sec. 57-58) belongs to the PAA period-close
+    settlement (a later phase), so ``loss_component`` is zero and ``fcf`` is
+    ``None`` here -- this is a diagnostic / runoff view, like
     ``gmm.measure_inforce``.
 
     ``full=True`` (default) keeps the inception-to-horizon LRC / revenue /
@@ -480,11 +480,7 @@ def measure_inforce(
 
     Limitations (v1): because ``fcf`` is ``None`` (the onerous re-test is
     deferred), :func:`~fastcashflow.group_of_contracts` on a PAA in-force result
-    raises -- the re-floor has no fulfilment-cash-flow input. And the in-force
-    family is still partial: ``vfa.measure_inforce`` and
-    ``portfolio.measure_inforce`` are not yet available (the VFA in-force needs an
-    observed account value the current :class:`~fastcashflow.InforceState` does
-    not carry).
+    raises -- the re-floor has no fulfilment-cash-flow input.
     """
     basis = _single_basis(basis, entry="paa.measure_inforce")
     # Reorder state to model-points order and reject a stale snapshot whose
