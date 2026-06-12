@@ -1376,12 +1376,19 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
         "loss_component_closing": movement.loss_component_closing,
         "coverage_units_provided": movement.coverage_units_provided,
         "coverage_units_future": movement.coverage_units_future,
+        "lock_in_rate": np.full(movement.bel_closing.shape[0],
+                                movement.lock_in_rate),
         "measurement_basis": [movement.measurement_basis]
                              * movement.bel_closing.shape[0],
     }
+    # The closing-state chain columns ride only when the source model
+    # points are stamped (the settle entries always stamp them); a
+    # hand-built movement writes the lines and markers alone.
     if movement.model_points is not None:
         cols["elapsed_months"] = np.asarray(
             movement.model_points.elapsed_months, dtype=np.int64)
+        cols["count"] = np.asarray(
+            movement.model_points.count, dtype=np.float64)
     _write_measurement_columns(cols, path, ids)
 
 
@@ -1412,12 +1419,16 @@ def _(movement: VFASettlementMovement, path, *, ids=None):
         "account_value_closing": movement.account_value_closing,
         "coverage_units_provided": movement.coverage_units_provided,
         "coverage_units_future": movement.coverage_units_future,
+        "lock_in_rate": np.full(movement.bel_closing.shape[0],
+                                movement.lock_in_rate),
         "measurement_basis": [movement.measurement_basis]
                              * movement.bel_closing.shape[0],
     }
     if movement.model_points is not None:
         cols["elapsed_months"] = np.asarray(
             movement.model_points.elapsed_months, dtype=np.int64)
+        cols["count"] = np.asarray(
+            movement.model_points.count, dtype=np.float64)
     _write_measurement_columns(cols, path, ids)
 
 

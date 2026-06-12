@@ -1584,9 +1584,7 @@ def read_inforce_policies(
     # will overwrite it with the state value below anyway. ``account_value``
     # also stays (a valid VFA policies column -- the inception fund value);
     # the state's observed fund value rides on the InforceState above.
-    state_only = [c for c in ("elapsed_months", "prior_csm", "lock_in_rate",
-                              "prior_count", "prior_account_value",
-                              "prior_loss_component") if c in df.columns]
+    state_only = [c for c in _INFORCE_STATE_ONLY if c in df.columns]
     spec_df = df.drop(*state_only)
 
     if isinstance(calculation_methods, (str, Path)):
@@ -2204,13 +2202,14 @@ def _stream_policies_coverages(
 
 
 def _stream_validate(input_path: Path, output_dir: Path, id_column: str | None,
-                     validate_unique_mp_id: bool):
+                     validate_unique_mp_id: bool,
+                     entry: str = "measure_stream"):
     """Shared up-front checks for the streaming drivers: parquet input, empty
     output dir, mp_id present + unique, id_column present. Returns
     ``(scan, n_total, id_col)``."""
     if input_path.suffix != ".parquet":
         raise ValueError(
-            f"measure_stream streams parquet input only; got {str(input_path)!r}")
+            f"{entry} streams parquet input only; got {str(input_path)!r}")
     output_dir.mkdir(parents=True, exist_ok=True)
     if any(output_dir.glob("part-*.parquet")):
         raise ValueError(
@@ -2221,19 +2220,19 @@ def _stream_validate(input_path: Path, output_dir: Path, id_column: str | None,
     schema_names = scan.collect_schema().names()
     if "mp_id" not in schema_names:
         raise ValueError(
-            f"measure_stream: the policies file {str(input_path)!r} has no "
+            f"{entry}: the policies file {str(input_path)!r} has no "
             "'mp_id' column; mp_id is the contract identity.")
     id_col = id_column if id_column is not None else "mp_id"
     if id_col not in schema_names:
         raise ValueError(
-            f"measure_stream: id_column {id_col!r} is not a column of the "
+            f"{entry}: id_column {id_col!r} is not a column of the "
             f"policies file {str(input_path)!r}")
     if validate_unique_mp_id:
         dups = (scan.select("mp_id").group_by("mp_id").len()
                 .filter(pl.col("len") > 1).head(5).collect())
         if dups.height:
             raise ValueError(
-                f"measure_stream: duplicate mp_id in {str(input_path)!r} (e.g. "
+                f"{entry}: duplicate mp_id in {str(input_path)!r} (e.g. "
                 f"{dups['mp_id'].to_list()}); mp_id must be unique across the "
                 "whole file. Pass validate_unique_mp_id=False to skip this scan.")
     return scan, n_total, id_col
@@ -2267,3 +2266,261 @@ def _stream_single_file(
                           ids=ids.to_numpy())
         processed += model_points.n_mp
     return processed
+
+
+# ---------------------------------------------------------------------------
+# Out-of-core settlement -- the stream variant of gmm/vfa.settle
+# ---------------------------------------------------------------------------
+
+# The closing-state columns of a combined in-force file (the period-close
+# snapshot layout of read_inforce_policies). Split off each chunk frame
+# before the spec readers see it; ``count`` and ``account_value`` stay --
+# they are valid policies columns too, and apply_inforce_state /
+# vfa.settle take their state-side values from the InforceState.
+_INFORCE_STATE_ONLY = ("elapsed_months", "prior_csm", "lock_in_rate",
+                       "prior_count", "prior_account_value",
+                       "prior_loss_component")
+
+_STATE_REQUIRED = ("mp_id", "elapsed_months", "count", "prior_csm",
+                   "lock_in_rate")
+
+
+def _state_from_chunk(df, lock_in_rate: float) -> "InforceState":
+    """Build the per-chunk :class:`InforceState` from a state-carrying frame
+    slice. ``lock_in_rate`` is the globally validated scalar -- the chunk's
+    own column is not re-read (uniformity was checked across the whole
+    file, the v1 scalar contract)."""
+    from fastcashflow.modelpoints import InforceState
+
+    return InforceState(
+        mp_id=df["mp_id"].to_numpy(),
+        elapsed_months=df["elapsed_months"].to_numpy().astype(np.int64),
+        count=df["count"].to_numpy().astype(np.float64),
+        prior_csm=df["prior_csm"].to_numpy().astype(np.float64),
+        lock_in_rate=lock_in_rate,
+        **_optional_state_columns(df),
+    )
+
+
+def _settle_stream_driver(
+    input_path: Path | str,
+    output_dir: Path | str,
+    *,
+    state_path: Path | str | None,
+    chunk_size: int,
+    id_column: str | None,
+    validate_unique_mp_id: bool,
+    build_mp,
+    settle_fn,
+    entry: str,
+) -> int:
+    """Shared out-of-core driver for the settlement stream.
+
+    Reads the in-force book in ``chunk_size`` blocks, assembles each block's
+    ``(ModelPoints, InforceState)`` pair, and writes
+    ``settle_fn(model_points, state)`` -- a per-MP settlement movement --
+    to one ``part-NNNNN.parquet`` per chunk through the movement write
+    arms. Two input layouts:
+
+    * ``state_path is None`` -- ONE combined file: policies spec plus the
+      closing-state columns in the same parquet (the period-close snapshot
+      of :func:`read_inforce_policies`); the state columns are split off
+      each chunk before ``build_mp`` sees the spec.
+    * ``state_path`` given -- TWO files: a policies parquet plus a state
+      parquet, semi-joined per chunk on ``mp_id``. A semi-join hides both
+      missing and surplus rows, so the GLOBAL id sets are checked for
+      bidirectional equality up front.
+
+    ``lock_in_rate`` must be uniform across the whole book (the v1 scalar
+    contract) -- validated globally, since a per-chunk check would pass a
+    book whose rates differ only across chunks. Returns the number of model
+    points processed.
+    """
+    from fastcashflow.modelpoints import apply_inforce_state
+
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    input_path = Path(input_path)
+    output_dir = Path(output_dir)
+    scan, n_total, id_col = _stream_validate(
+        input_path, output_dir, id_column, validate_unique_mp_id,
+        entry=entry)
+    schema_names = scan.collect_schema().names()
+
+    if state_path is None:
+        missing = [c for c in _STATE_REQUIRED if c not in schema_names]
+        if missing:
+            raise ValueError(
+                f"{entry}: the combined in-force file {str(input_path)!r} is "
+                f"missing closing-state column(s) {missing}. Add them (the "
+                "read_inforce_policies snapshot layout) or pass "
+                "state_path=<state parquet> for the two-file layout."
+            )
+        state_scan = None
+        lock_scan = scan
+    else:
+        state_path = Path(state_path)
+        if state_path.suffix != ".parquet":
+            raise ValueError(
+                f"{entry} streams parquet state input only; got "
+                f"{str(state_path)!r}")
+        state_scan = pl.scan_parquet(state_path)
+        st_names = state_scan.collect_schema().names()
+        missing = [c for c in _STATE_REQUIRED if c not in st_names]
+        if missing:
+            raise ValueError(
+                f"{entry}: the state file {str(state_path)!r} is missing "
+                f"column(s) {missing} (the read_inforce_state layout)."
+            )
+        dups = (state_scan.select("mp_id").group_by("mp_id").len()
+                .filter(pl.col("len") > 1).head(5).collect())
+        if dups.height:
+            raise ValueError(
+                f"{entry}: duplicate mp_id in the state file "
+                f"{str(state_path)!r} (e.g. {dups['mp_id'].to_list()}); one "
+                "state row per contract."
+            )
+        # A semi-join silently STARVES a policies row with no state row and
+        # silently IGNORES a state row with no policies row -- guard the
+        # global id sets in both directions before any chunk is cut. Join on
+        # the STRING form of mp_id: the in-memory join (align_inforce_state)
+        # compares ids as strings, so an integer-id policies file matches a
+        # string-id state file here too instead of a polars SchemaError.
+        id_key = pl.col("mp_id").cast(pl.String).alias("__mp_id_str")
+        pol_keys = scan.select(id_key)
+        state_keys = state_scan.select(id_key)
+        starved = (pol_keys.join(state_keys, on="__mp_id_str", how="anti")
+                   .select(pl.len()).collect().item())
+        ignored = (state_keys.join(pol_keys, on="__mp_id_str", how="anti")
+                   .select(pl.len()).collect().item())
+        if starved or ignored:
+            raise ValueError(
+                f"{entry}: the policies file and the state file must cover "
+                f"exactly the same contracts -- {starved} policies row(s) "
+                f"have no state row and {ignored} state row(s) have no "
+                "policies row. A per-chunk semi-join would silently drop "
+                "them; fix the extracts so the mp_id sets match."
+            )
+        lock_scan = state_scan
+
+    # v1 scalar lock-in, validated across the WHOLE book (the in-memory
+    # readers check the same thing per file).
+    locks = (lock_scan.select(pl.col("lock_in_rate").unique())
+             .collect()["lock_in_rate"].to_numpy())
+    if locks.size > 1:
+        raise NotImplementedError(
+            f"{entry}: lock_in_rate must be uniform across rows in v1 "
+            f"(found {locks.size} distinct values, e.g. "
+            f"{np.sort(locks)[:3].tolist()}); per-MP (cohort-aware) lock-in "
+            "rates are a future extension"
+        )
+    lock = float(locks[0]) if locks.size else 0.0
+
+    processed = 0
+    for part, offset in enumerate(range(0, n_total, chunk_size)):
+        pol = scan.slice(offset, chunk_size).collect()
+        ids = pol[id_col]
+        if state_scan is None:
+            sdf = pol
+        else:
+            id_key = pl.col("mp_id").cast(pl.String).alias("__mp_id_str")
+            sdf = (state_scan.with_columns(id_key)
+                   .join(pol.lazy().select(id_key), on="__mp_id_str",
+                         how="semi")
+                   .drop("__mp_id_str").collect())
+        # Split the closing-state columns off the spec in BOTH layouts: in
+        # the combined file they belong to the state object built above; in
+        # the two-file layout a stray stale state column on the policies
+        # file must not be absorbed as a grouping attribute (the state file
+        # is the only state authority).
+        spec = pol.drop([c for c in _INFORCE_STATE_ONLY
+                         if c in pol.columns])
+        state = _state_from_chunk(sdf, lock)
+        model_points = apply_inforce_state(build_mp(spec), state)
+        write_measurement(settle_fn(model_points, state),
+                          output_dir / f"part-{part:05d}.parquet",
+                          ids=ids.to_numpy())
+        processed += model_points.n_mp
+    return processed
+
+
+def settle_stream(
+    input_path: Path | str,
+    output_dir: Path | str,
+    basis: Basis | dict[tuple[str, str], Basis],
+    *,
+    coverages: Path | str | None = None,
+    calculation_methods: Path | str | dict[str, CalculationMethod] | None = None,
+    state_path: Path | str | None = None,
+    period_months: int | None = None,
+    chunk_size: int = 200_000,
+    id_column: str | None = None,
+    validate_unique_mp_id: bool = True,
+) -> int:
+    """Stream a paragraph-44 period close through a parquet file, chunk by
+    chunk.
+
+    The out-of-core variant of :func:`fastcashflow.gmm.settle`: reads the
+    in-force book in ``chunk_size`` blocks, settles each block, and writes
+    the per-MP settlement movements as a parquet dataset -- one
+    ``part-NNNNN.parquet`` per chunk under ``output_dir``, every movement
+    line plus the ``measurement_basis`` marker. Peak memory is one chunk's
+    projection, so a book whose per-MP movements would not fit in memory
+    still closes. Returns the number of model points processed.
+
+    Input layouts (both produce identical output):
+
+    * **One combined file** (primary): ``input_path`` carries the policies
+      spec plus the closing-state columns (``elapsed_months``, ``count``,
+      ``prior_csm``, ``lock_in_rate``, ``prior_count``,
+      ``prior_loss_component``) -- the period-close snapshot of
+      :func:`read_inforce_policies`.
+    * **Two files**: ``input_path`` is the standard policies parquet and
+      ``state_path`` the state parquet (the :func:`read_inforce_state`
+      layout), semi-joined per chunk on ``mp_id``. The global id sets must
+      match in both directions (validated up front -- a semi-join would
+      silently drop a mismatch); a duplicate state ``mp_id`` is rejected
+      like a duplicate policies ``mp_id``.
+
+    ``coverages`` is the per-contract coverage parquet (required, as in
+    :func:`~fastcashflow.gmm.measure_stream`); ``lock_in_rate`` must be
+    uniform across the whole book (v1 scalar, validated globally).
+
+    **Chaining on disk**: each part carries the closing-state columns --
+    ``count``, ``lock_in_rate``, ``elapsed_months`` and the closing
+    balances -- so the next period's state file is assembled from the
+    parts alone: ``prior_csm <- csm_closing``, ``prior_loss_component <-
+    loss_component_closing``, ``prior_count <- count``, then advance
+    ``elapsed_months`` / ``count`` to the next observation. The disk side
+    of :meth:`GMMSettlementMovement.closing_inputs()
+    <fastcashflow.movement.GMMSettlementMovement.closing_inputs>`.
+    """
+    from fastcashflow.engine import settle
+
+    if coverages is None:
+        raise ValueError(
+            "settle_stream needs a coverages frame: pass coverages=<parquet "
+            "path> (an mp_id / coverage / amount frame). A flat "
+            "one-row-per-policy (wide) file cannot carry per-coverage "
+            "waiting / reduction rules and is not accepted."
+        )
+    if isinstance(calculation_methods, (str, Path)):
+        methods_dict = _parse_calculation_methods(calculation_methods)
+    else:
+        methods_dict = calculation_methods
+    cov_scan = pl.scan_parquet(Path(coverages))
+
+    def build_mp(spec):
+        cov = cov_scan.join(
+            spec.lazy().select("mp_id"), on="mp_id", how="semi"
+        ).collect()
+        return _model_points_from_frames(spec, cov, methods_dict)
+
+    return _settle_stream_driver(
+        input_path, output_dir, state_path=state_path, chunk_size=chunk_size,
+        id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
+        build_mp=build_mp,
+        settle_fn=lambda mp, st: settle(mp, st, basis,
+                                        period_months=period_months),
+        entry="gmm.settle_stream",
+    )

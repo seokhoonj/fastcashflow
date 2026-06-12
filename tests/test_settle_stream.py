@@ -110,6 +110,7 @@ def _write_gmm_files(mp, state, tmp_path, *, combined, shuffle_state=False,
                      state_tweak=None, lock_override=None):
     """Write the book to disk; returns (input_path, coverages_path,
     state_path-or-None)."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
     n = mp.n_mp
     spec = {
         "mp_id": np.asarray(mp.mp_id).astype(str),
@@ -196,6 +197,7 @@ def _vfa_book(n=5, *, em_close=18):
 
 
 def _write_vfa_files(mp, state, tmp_path, *, combined):
+    tmp_path.mkdir(parents=True, exist_ok=True)
     n = mp.n_mp
     spec = {
         "mp_id": np.asarray(mp.mp_id).astype(str),
@@ -441,3 +443,58 @@ def test_part_columns_seed_the_next_period(tmp_path):
         np.testing.assert_allclose(getattr(mv2_disk, name),
                                    getattr(mv2_mem, name),
                                    rtol=1e-12, err_msg=name)
+
+
+def test_two_file_mp_id_dtypes_may_differ(tmp_path):
+    """An integer-id policies file matches a string-id state file -- the
+    disk join compares ids as strings, like the in-memory
+    align_inforce_state contract -- and a stale state column left on the
+    policies file is ignored (the state file is the only state authority)."""
+    basis = _gmm_basis()
+    mp, state = _gmm_book()
+    n = mp.n_mp
+    base = tmp_path / "ref"
+    ip0, cp0, sp0 = _write_gmm_files(mp, state, base, combined=False)
+    out0 = base / "out"
+    fcf.gmm.settle_stream(ip0, out0, basis, coverages=cp0,
+                          calculation_methods=CM, state_path=sp0,
+                          period_months=12, chunk_size=3)
+
+    mixed = tmp_path / "mixed"
+    mixed.mkdir()
+    int_ids = np.arange(n)                       # "P0".."P6" -> 0..6
+    pl.DataFrame({
+        "mp_id": int_ids,
+        "issue_age": np.asarray(mp.issue_age),
+        "premium": np.asarray(mp.premium),
+        "term_months": np.asarray(mp.term_months),
+        "prior_csm": np.zeros(n),                # stale stray state column
+    }).write_parquet(mixed / "policies.parquet")
+    pl.DataFrame({
+        "mp_id": int_ids.astype(str),            # string ids on the state
+        "elapsed_months": np.asarray(state.elapsed_months),
+        "count": np.asarray(state.count),
+        "prior_csm": np.asarray(state.prior_csm),
+        "lock_in_rate": np.full(n, state.lock_in_rate),
+        "prior_count": np.asarray(state.prior_count),
+        "prior_loss_component": np.asarray(state.prior_loss_component),
+    }).write_parquet(mixed / "state.parquet")
+    pl.DataFrame({
+        "mp_id": int_ids, "coverage": ["DEATH"] * n,
+        "amount": np.full(n, 1e6),
+    }).write_parquet(mixed / "coverages.parquet")
+    out1 = mixed / "out"
+    fcf.gmm.settle_stream(mixed / "policies.parquet", out1, basis,
+                          coverages=mixed / "coverages.parquet",
+                          calculation_methods=CM,
+                          state_path=mixed / "state.parquet",
+                          period_months=12, chunk_size=3)
+    ref, got = _parts(out0), _parts(out1)
+    # undo each output's id sort to recover book row order, then compare
+    ref_back = np.argsort(np.argsort(np.asarray(mp.mp_id).astype(str)))
+    got_back = np.argsort(np.argsort(int_ids.astype(str)))
+    for name in _GMM_LINES:
+        np.testing.assert_allclose(
+            got[name].to_numpy()[got_back],
+            ref[name].to_numpy()[ref_back],
+            rtol=1e-12, err_msg=name)

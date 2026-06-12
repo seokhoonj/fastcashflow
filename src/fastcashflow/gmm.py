@@ -15,7 +15,7 @@ point's measurement as a tree.
 """
 from fastcashflow.engine import (
     measure, measure_aggregate, measure_inforce, settle, settle_aggregate)
-from fastcashflow.io import measure_stream
+from fastcashflow.io import measure_stream, settle_stream
 from fastcashflow.stochastic import measure_stochastic as stochastic
 from fastcashflow.trace import (
     show_trace_bel_step as trace_bel_step,
@@ -25,5 +25,6 @@ from fastcashflow.trace import (
 )
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
-           "measure_stream", "settle", "settle_aggregate", "stochastic",
-           "trace", "trace_diff", "trace_bel_step", "trace_csm_step"]
+           "measure_stream", "settle", "settle_aggregate", "settle_stream",
+           "stochastic", "trace", "trace_diff", "trace_bel_step",
+           "trace_csm_step"]

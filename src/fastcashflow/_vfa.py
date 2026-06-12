@@ -1286,3 +1286,60 @@ def settle_aggregate(
     return VFASettlementAggregate(
         period_months=period, lock_in_rate=float(state.lock_in_rate),
         **{name: math.fsum(vals) for name, vals in parts.items()})
+
+
+def settle_stream(
+    input_path,
+    output_dir,
+    basis: Basis,
+    *,
+    calculation_methods=None,
+    state_path=None,
+    period_months: int | None = None,
+    chunk_size: int = 200_000,
+    id_column: str | None = None,
+    validate_unique_mp_id: bool = True,
+) -> int:
+    """Stream a paragraph-45 period close through a parquet file, chunk by
+    chunk.
+
+    The out-of-core variant of :func:`settle` and the VFA counterpart of
+    :func:`fastcashflow.gmm.settle_stream`. The VFA base is a single
+    policies frame (account value + guarantee floors, no coverages), so
+    ``input_path`` is read in ``chunk_size`` blocks, each block's
+    ``(ModelPoints, InforceState)`` pair is settled, and the per-MP
+    settlement movements land as one ``part-NNNNN.parquet`` per chunk under
+    ``output_dir`` -- every movement line plus the ``measurement_basis``
+    marker. Returns the model points processed.
+
+    Input layouts, as in the GMM variant: ONE combined file (policies spec
+    plus the closing-state columns, including the observed ``account_value``
+    and the ``prior_count`` / ``prior_account_value`` /
+    ``prior_loss_component`` figures :func:`settle` needs) or TWO files
+    (policies parquet + ``state_path`` state parquet, semi-joined per chunk
+    on ``mp_id`` with the global id sets validated bidirectionally).
+    ``lock_in_rate`` must be uniform across the book (v1 scalar; the VFA
+    carries it as a state echo only).
+
+    **Chaining on disk**: each part carries ``count``, ``lock_in_rate``,
+    ``elapsed_months``, ``account_value_closing`` and the closing balances,
+    so the next period's state file is assembled from the parts alone
+    (``prior_csm <- csm_closing``, ``prior_loss_component <-
+    loss_component_closing``, ``prior_count <- count``,
+    ``prior_account_value <- account_value_closing``, then advance to the
+    next observation) -- the disk side of
+    :meth:`VFASettlementMovement.closing_inputs()
+    <fastcashflow.movement.VFASettlementMovement.closing_inputs>`.
+    """
+    from fastcashflow.io import _settle_stream_driver
+
+    basis = _single_basis(basis, entry="vfa.settle_stream")
+    return _settle_stream_driver(
+        input_path, output_dir, state_path=state_path, chunk_size=chunk_size,
+        id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
+        build_mp=lambda spec: _vfa_model_points_from_frame(
+            spec, calculation_methods),
+        settle_fn=lambda mp, st: settle(mp, st, basis,
+                                        period_months=period_months),
+        entry="vfa.settle_stream",
+    )
