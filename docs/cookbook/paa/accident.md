@@ -140,8 +140,8 @@ print(f"4개월 정산  loss = {v_set.loss_component.sum():>12,.2f}")
 
 ## 인접 레시피
 
-- [9.1 결산 / 보유계약 평가](../workflow/settlement) — 보유계약을 결산일 기준
-  으로 재측정하는 워크플로.
+- [9.1 결산 / 보유계약 평가](../workflow/settlement) — 보유계약의 기초 → 기말
+  결산 정산 워크플로 (GMM `settle`; PAA의 결산 정산은 후속 단계).
 - [8.2 검증 패턴](../workflow/validation) — 한 계약의 측정 경로를 손계산으로
   대조.
 - `paa.trace(0, mp, basis)` — 이 계약의 LRC roll-forward, 보험수익

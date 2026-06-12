@@ -37,7 +37,7 @@ orphan: true
 | 파일 | 역할 |
 |---|---|
 | `calculation_methods.csv` | 담보별 산출방법 (`coverage → calculation_method` 분류). 5종 fixed pattern (DEATH / MORBIDITY / DIAGNOSIS / ANNUITY / MATURITY). `basis.xlsx` 와 분리 — 신담보 추가 시에만 손댐 |
-| `inforce_state.csv` (optional) | 결산 시점 보유계약 상태 (`mp_id`, `elapsed_months`, `count`, `prior_csm`, `lock_in_rate`) |
+| `inforce_state.csv` (optional) | 결산 시점 보유계약 상태 (`mp_id`, `elapsed_months`, `count`, `prior_csm`, `lock_in_rate`, `prior_count`; 선택 `prior_loss_component`, VFA는 `account_value` / `prior_account_value`) |
 
 ## Column headers
 

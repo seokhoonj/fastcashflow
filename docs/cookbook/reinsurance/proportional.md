@@ -339,8 +339,9 @@ print("대칭 항등식 OK")
 
 - [2.1 정기보험](../simple/term-life) — 본 챕터가 출재한 **원수계약** 의
   측정. 같은 토이를 `gmm.measure` 로 직접 측정. 재보험을 읽기 전 출발점.
-- [9.1 결산 / 보유계약 평가](../workflow/settlement) — 보유 재보험계약은
-  분기말 결산에서 원수계약과 **함께** 측정됩니다. 결산 워크플로의 자리.
+- [9.1 결산 / 보유계약 평가](../workflow/settlement) — 보유계약의 기초 → 기말
+  결산 정산 워크플로. 보유 재보험계약은 분기말 결산에서 원수계약과 **함께**
+  평가됩니다 (재보험의 결산 정산은 후속 단계).
 - [1.4 담보별 산출방법](../basics/coverage-mechanics) — 출재 대상이
   되는 사망 (claim) / morbidity 현금흐름이 엔진 안에서 어떻게 만들어지는지.
 - `reinsurance.trace(mp_index, mp, basis, treaty=treaty)` — 이 재보험계약의 출재

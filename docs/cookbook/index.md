@@ -47,9 +47,9 @@
   - 시나리오 / 손계산 검증
   - 가정을 흔들어 보고, 결과의 한 항씩 풀어 보는 워크플로 도구.
 * - 결산 워크플로
-  - 보유계약 평가 + 변동분해
-  - 분기말 결산 측정과 직전 분기 대비 변동을 가정변경 / 경험 / 이자 /
-    상각으로 귀속.
+  - 보유계약 정산 + 변동분해
+  - 분기말 기초 → 기말 정산 (`gmm.settle`) 과 변동의 행별 귀속
+    (이자 / 경험 / 상각 / 손실요소).
 * - 단기 (PAA)
   - 보험료배분접근법
   - 1년 안팎 단기 계약을 PAA로. LRC / LIC, 청구 정산 패턴 (settlement_pattern).
@@ -240,12 +240,14 @@
   - 다루는 것
 * - 9.1
   - [결산 / 보유계약 평가](workflow/settlement)
-  - 분기말 마감파일 한 장으로 보유계약 평가. `gmm.measure_inforce`, 직전
-    분기 CSM carry-forward, lock-in 율, 세그먼트별 `state.subset`.
+  - 분기말 마감파일 한 장으로 Sec. 44 기초 → 기말 정산. `gmm.settle`,
+    변동분석표 (`reconcile`), 분기 체이닝 (`closing_inputs`), 진단 뷰
+    (`gmm.measure_inforce`).
 * - 9.2
   - [변동분해](workflow/movement)
-  - 두 시점 사이 BEL / CSM 움직임을 미래서비스 / 이자 / 상각으로 귀속.
-    `roll_forward` / `reconcile`, 가정변경 (`revised`) / 경험 (`actual_inforce`).
+  - 신계약 측정을 보고기간별로 잘라 BEL / CSM 움직임을 미래서비스 / 이자 /
+    상각으로 귀속. `roll_forward` / `reconcile`, 가정변경 (`revised`) /
+    경험 (`actual_inforce`).
 ```
 
 ### 10. 단기 측정 (PAA)

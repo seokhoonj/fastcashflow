@@ -128,19 +128,24 @@ DB 연결·추출은 사내 ETL 의 몫입니다.
   세트를 적용할지
 - 나머지 — 가입연령 / 성별 / 보험기간 / 납입기간 / 계약 수
 
-**결산 모드** (보유계약 평가) 는 같은 파일에 **상태 컬럼 네 개**가 더
+**결산 모드** (보유계약 평가) 는 같은 파일에 **상태 컬럼 다섯 개**가 더
 들어옵니다. 정책관리 시스템이 매 분기 끝에 떨어뜨리는 "보유계약
 마감파일" 형태:
 
-| ... | elapsed_months | count | prior_csm | lock_in_rate |
-|---|---|---|---|---|
-| ... | 36 | 0.92 | 55000 | 0.03 |
-| ... | 48 | 0.88 | 42000 | 0.03 |
+| ... | elapsed_months | count | prior_csm | lock_in_rate | prior_count |
+|---|---|---|---|---|---|
+| ... | 36 | 0.92 | 55000 | 0.03 | 0.93 |
+| ... | 48 | 0.88 | 42000 | 0.03 | 0.89 |
 
 - `elapsed_months` — 가입 후 경과 개월수
 - `count` — 결산일 기준 잔존 (사망 / 해지 빠진 후)
-- `prior_csm` — 직전 분기 종가 CSM (이번 분기로 carry-forward)
+- `prior_csm` — 직전 분기 종가 CSM (이번 분기 정산의 기초 잔액)
 - `lock_in_rate` — 가입 시점의 할인율
+- `prior_count` — 기초 (직전 분기말) 시점의 잔존 — 이번 분기의 기대
+  경로 스케일과 환입 분모
+
+직전 분기가 손실부담 (CSM 0 + 손실요소) 이었다면 `prior_loss_component`
+컬럼이 하나 더 붙습니다.
 
 이 결합 파일을 보통 `inforce_2026Q1.csv` 같은 분기명으로 부릅니다.
 신계약 평가는 영구 spec 만 있는 `policies.csv`, 결산 평가는 spec + 상태가
@@ -264,6 +269,7 @@ fastcashflow 는 그 한 파일을 그대로 받습니다. `read_inforce_policie
 
 ```python
 import fastcashflow as fcf
+import numpy as np
 
 # (1) 샘플 파일을 samples 폴더에 생성 (한 번만 — 이미 자기 파일이 있으면 생략).
 # basis.xlsx + policies / coverages / calculation_methods / inforce_state /
@@ -271,7 +277,7 @@ import fastcashflow as fcf
 # (시트당 ~1M row 인 .xlsx 한계 회피).
 fcf.samples.export("samples", template="gmm", quiet=True)
 
-# (2) 결산 평가 — 한 분기의 inforce 한 파일을 그대로 읽어 전체 포트폴리오 측정
+# (2) 결산 정산 — 한 분기의 inforce 한 파일을 그대로 읽어 세그먼트별로 정산
 basis = fcf.read_basis("samples/basis.xlsx")    # BasisRouter: {(product, channel): Basis}
 
 model_points, state = fcf.read_inforce_policies(
@@ -279,11 +285,18 @@ model_points, state = fcf.read_inforce_policies(
     coverages="samples/coverages.csv",                               # 담보 파일
     calculation_methods="samples/calculation_methods.csv",           # 담보별 산출방법
 )
-val = fcf.gmm.measure_inforce(   # 전체 포트폴리오 결산 -- 일반모형(GMM)
-    model_points, state, basis,  # basis 가 dict 면 각 (product, channel) 을 자기 가정으로 라우팅
-    period_months=3,             # 다음 분기 (3 개월) 까지의 평가
-)                                # state 가 mp_id 별 prior_csm / lock_in_rate / count 을 품음
-fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 파일
+for key, segment_basis in basis.segments.items():        # settle 은 세그먼트(단일 Basis) 단위
+    idx = np.where((np.asarray(model_points.product) == key[0]) &
+                   (np.asarray(model_points.channel) == key[1]))[0]
+    if len(idx) == 0:
+        continue
+    mv = fcf.gmm.settle(             # Sec. 44 기초 -> 기말 정산 -- 일반모형(GMM)
+        model_points.subset(idx),    # 이 세그먼트의 보유계약
+        state.subset(idx),           # 결산 상태 (직전 CSM / 기초 잔존 / lock-in)
+        segment_basis,               # 이 세그먼트의 가정
+        period_months=3,             # 이번 분기 (3 개월)
+    )
+    fcf.write_measurement(mv, f"samples/settle_2026Q1_{key[0]}_{key[1]}.csv")
 ```
 
 각 함수의 역할:
@@ -298,15 +311,24 @@ fcf.write_measurement(val, "samples/results_2026Q1.csv")               # 결과 
   키로 골라냅니다.
 - `read_inforce_policies` — 결산 1-파일을 읽어 **`(ModelPoints, InforceState)`
   튜플** 을 돌려줍니다. ModelPoints 에는 `elapsed_months` / `count` 가
-  이미 fold 되어 있고, InforceState 는 `prior_csm` / `lock_in_rate` 을
-  carry — 다음 줄의 `gmm.measure_inforce` 에 `state` 로 그대로 넘깁니다.
-- `gmm.measure_inforce` — 결산 평가. 신계약 `gmm.measure` 와 다른 점은:
-  (a) 가입 시 lock-in 된 할인율(`state.lock_in_rate`)을 받음, (b) 직전 분기의
-  CSM(`state.prior_csm`)을 출발점으로 carry-forward, (c) `period_months` 로
-  이번 분기에만 release 될 부분을 잘라냄. 헤드라인 BEL·RA·CSM은 결산일
-  (`elapsed_months`) 시점 값이고, `full=False` 면 헤드라인만 빠르게 냅니다.
-- `write_measurement` — BEL·RA·CSM·손실요소를 모델포인트마다 한 줄씩
-  파일로 저장합니다.
+  이미 fold 되어 있고, InforceState 는 `prior_csm` / `prior_count` /
+  `lock_in_rate` 을 carry — 다음 줄의 `gmm.settle` 에 `state` 로 그대로
+  넘깁니다.
+- `gmm.settle` — 결산 정산. 신계약 `gmm.measure` 와 다른 점은: (a) 직전
+  분기 종가 CSM(`state.prior_csm`)을 기초 잔액으로 받아, (b) 가입 시
+  lock-in 된 할인율(`state.lock_in_rate`)로 이자부리·조정하고, (c)
+  `period_months` 한 보고기간의 기초 → 기말 movement (이자부리 / 경험조정 /
+  환입 / 손실요소) 를 행별로 돌려줍니다. BEL / RA는 현재 가정으로 재측정
+  — 기말 잔액과 "왜 움직였는지" 가 한 번에 나옵니다.
+- `write_measurement` — movement 의 행들 (기초 / 이자 / 조정 / 환입 / 기말)
+  을 모델포인트마다 한 줄씩 파일로 저장합니다.
+
+결산일 한 시점의 가치만 빠르게 보고 싶을 때 (기중 모니터링, 런오프
+프로젝션) 는 진단 뷰 `gmm.measure_inforce(model_points, state, basis)` 를
+씁니다 — BEL / RA는 결산일 현행추정 그대로이고, CSM은 정산 없이 직전
+잔액을 굴리기만 한 근사입니다. 행별 정산표·분기 체이닝·규모 변형
+(`settle_aggregate` / `settle_stream`) 은 쿡북
+[9.1 결산 / 보유계약 평가](../cookbook/workflow/settlement) 에서 다룹니다.
 
 ```{admonition} 신계약 평가는 어떻게?
 :class: note

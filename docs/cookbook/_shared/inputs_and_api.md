@@ -57,10 +57,11 @@ ModelPoints (mp = fcf.read_model_points(...))
 ```
 
 결산 모드 (보유계약 평가) 에서는 `policies.csv` 가 분기말 상태 컬럼
-네 개를 더 갖는 `inforce_2026Q1.csv` 같은 한 파일로 들어옵니다 —
+다섯 개를 더 갖는 `inforce_2026Q1.csv` 같은 한 파일로 들어옵니다 —
 `elapsed_months` / `count` (잔존) / `prior_csm` (직전 분기 CSM) /
-`lock_in_rate` (가입 시점의 할인율). reader 도
-`mp, state = fcf.read_inforce_policies(...)` 로 바뀌어 두 개체를 돌려줍니다.
+`lock_in_rate` (가입 시점의 할인율) / `prior_count` (기초 시점의 잔존).
+reader 도 `mp, state = fcf.read_inforce_policies(...)` 로 바뀌어 두
+개체를 돌려줍니다.
 
 ### 사용자 함수
 
@@ -79,15 +80,17 @@ fastcashflow 사용자 API
 ├── 평가
 │   ├── fcf.gmm.measure(mp, basis)                                       ── 신계약, 시간 trajectory 전체
 │   ├── fcf.gmm.measure(mp, basis, full=False)                           ── 시점 0 headline 4 숫자 (빠름); basis 가 dict 면 세그먼트 라우팅
-│   └── fcf.gmm.measure_inforce(mp, state, basis, full=)                 ── 결산(보유계약) 측정; full=False 면 headline 만
+│   ├── fcf.gmm.settle(mp, state, basis, period_months=)                 ── 결산: Sec. 44 기초 → 기말 정산 (세그먼트 단위)
+│   └── fcf.gmm.measure_inforce(mp, state, basis, full=)                 ── 보유계약 진단 뷰 (BEL/RA 현행추정 + carry CSM)
 │
 ├── 결과 저장
-│   ├── fcf.write_measurement(val, path)                                 ── 결과 한 파일에 저장
-│   └── fcf.gmm.measure_stream(policies, out_dir, basis, coverages=...)  ── 메모리 초과 portfolio 스트리밍
+│   ├── fcf.write_measurement(val, path)                                 ── 결과 한 파일에 저장 (측정 / 정산 movement 둘 다)
+│   ├── fcf.gmm.measure_stream(policies, out_dir, basis, coverages=...)  ── 메모리 초과 portfolio 스트리밍
+│   └── fcf.gmm.settle_stream(inforce, out_dir, basis, coverages=...)    ── 메모리 초과 결산 스트리밍 (part 로 체이닝)
 │
 ├── 변동분해 (분기간 비교)
-│   ├── fcf.roll_forward(m, period_months=...)                           ── 분기 사이 변동 분해
-│   └── fcf.reconcile(movements)                                         ── 분해 결과를 항별로 합산
+│   ├── fcf.roll_forward(m, period_months=...)                           ── 신계약 측정을 분기로 잘라 변동 분해
+│   └── fcf.reconcile(movements)                                         ── 분해 / 정산 movement 를 변동분석표로 합산
 │
 └── 검증 / 시각화
     ├── fcf.gmm.trace(mp_index, mp, basis)                               ── 한 계약의 BEL 계산 ASCII 트리
