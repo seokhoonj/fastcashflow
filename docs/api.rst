@@ -41,6 +41,14 @@ Measurement (GMM)
 
 .. autofunction:: fastcashflow.gmm.measure_inforce
 
+.. autofunction:: fastcashflow.gmm.settle
+
+.. autoclass:: fastcashflow.GMMSettlementMovement
+   :members:
+
+.. autoclass:: fastcashflow.GMMSettlementReconciliation
+   :members:
+
 .. autoclass:: fastcashflow.GMMMeasurement
    :members:
 

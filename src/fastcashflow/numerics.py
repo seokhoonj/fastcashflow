@@ -451,3 +451,25 @@ def _csm_roll(csm0, coverage_units, monthly_rate):
         return _csm_kernel_permp(csm0, coverage_units,
                                  np.ascontiguousarray(monthly_rate))
     return _csm_kernel(csm0, coverage_units, monthly_rate)
+
+
+def _paragraph45_csm_algebra(accreted, x, lc_open):
+    """The paragraph-45/48/50(b) CSM and loss-component step, branchless.
+
+    ``accreted`` is the opening CSM accreted to the adjustment date, ``x`` the
+    favourable(+)/unfavourable(-) future-service change, ``lc_open`` the
+    opening loss component. A favourable change reverses the loss component
+    before rebuilding the CSM (50(b)); an unfavourable change beyond the CSM
+    falls into the loss component (48). Returns
+    ``(csm_after, lc_reversed, lc_recognised, lc_closing)`` satisfying the
+    conservation identity ``(csm_after - accreted) - (lc_closing - lc_open)
+    == x`` in every sign case. Shared by the VFA (paragraph 45) and GMM
+    (paragraph 44) settlement movements -- the loss-component algebra is the
+    same in both models.
+    """
+    lc_reversed = np.minimum(lc_open, np.maximum(x, 0.0))
+    csm_adj = accreted + x - lc_reversed
+    csm_after = np.maximum(csm_adj, 0.0)
+    lc_recognised = np.maximum(-csm_adj, 0.0)
+    lc_closing = lc_open - lc_reversed + lc_recognised
+    return csm_after, lc_reversed, lc_recognised, lc_closing

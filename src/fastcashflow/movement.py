@@ -37,6 +37,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow._measurement_basis import _require_inception
+from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._vfa import (
@@ -1154,6 +1155,190 @@ def _reconcile_reinsurance(
     ]
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class GMMSettlementMovement:
+    """One period's IFRS 17 paragraph-44 settlement movement of a GMM book.
+
+    What :func:`fastcashflow.gmm.settle` returns: the opening -> closing
+    movement of the BEL, RA, CSM and loss component over one reporting
+    period, per model point. Every measurement array is ``(n_mp,)`` and each
+    block reconciles exactly::
+
+        bel_closing == bel_opening + bel_interest - bel_release + bel_experience
+        ra_closing  == ra_opening  + ra_interest  - ra_release  + ra_experience
+        csm_closing == csm_opening + csm_accretion + csm_experience_unlocking
+                       - loss_component_reversed + loss_component_recognised
+                       - csm_release
+        loss_component_closing == loss_component_opening
+                       - loss_component_reversed + loss_component_recognised
+
+    The GMM cross identity is THREE-term (unlike the VFA's two-term tie)::
+
+        csm_experience_unlocking + finance_wedge
+            == -(bel_experience + ra_experience)
+
+    because B72(c) measures the paragraph-44(c) CSM adjustment at the rates
+    determined on initial recognition while the BEL block is current-rate
+    (B72(1)); the gap is insurance finance income/expense (B97(a)), carried
+    as the named ``finance_wedge`` line OUTSIDE the CSM block. The RA part
+    of the change has no rate prescription (B96(d)) and enters the CSM at
+    its current measure -- a documented accounting policy.
+
+    ``csm_accretion`` is direct compounding of the prior CSM at the
+    locked-in rate (44(b)/B72(b)); ``csm_release`` is the single period-end
+    B119 release on the post-adjustment balance, with the coverage-unit
+    fraction ``coverage_units_provided / (coverage_units_provided +
+    coverage_units_future)`` (em_open denominator, k_exp/k_obs mixed scale).
+    """
+
+    bel_opening: FloatArray
+    bel_interest: FloatArray
+    bel_release: FloatArray
+    bel_experience: FloatArray
+    bel_closing: FloatArray
+    ra_opening: FloatArray
+    ra_interest: FloatArray
+    ra_release: FloatArray
+    ra_experience: FloatArray
+    ra_closing: FloatArray
+    csm_opening: FloatArray
+    csm_accretion: FloatArray            # 44(b)/B72(b): locked-in, direct compounding
+    csm_experience_unlocking: FloatArray  # 44(c)/B96(b)(d): locked-in measure
+    finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, not CSM
+    csm_release: FloatArray              # 44(e)/B119: single period-end release
+    csm_closing: FloatArray
+    loss_component_opening: FloatArray
+    loss_component_reversed: FloatArray
+    loss_component_recognised: FloatArray
+    loss_component_closing: FloatArray
+    coverage_units_provided: FloatArray  # k_exp x (tail[em_open] - tail[em_close])
+    coverage_units_future: FloatArray    # k_obs x tail[em_close]
+    period_months: int = 12
+    lock_in_rate: float = 0.0
+    model_points: object | None = None
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds
+        the next period's settle: ``prior_csm`` / ``prior_loss_component``
+        are this period's closing balances and ``prior_count`` the closing
+        count. The caller advances the pair to the next observation date
+        (``elapsed_months`` / ``count``) before the next call."""
+        from fastcashflow.modelpoints import InforceState
+        mp = self.model_points
+        if mp is None or mp.mp_id is None:
+            raise ValueError(
+                "closing_inputs() needs the source model points with mp_id "
+                "(the settle entry stamps them; per-MP chaining joins by id)")
+        state = InforceState(
+            mp_id=mp.mp_id,
+            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
+            count=np.asarray(mp.count, dtype=np.float64),
+            prior_csm=self.csm_closing,
+            lock_in_rate=self.lock_in_rate,
+            prior_count=np.asarray(mp.count, dtype=np.float64),
+            prior_loss_component=self.loss_component_closing,
+        )
+        return mp, state
+
+
+@dataclass(frozen=True, slots=True)
+class GMMSettlementReconciliation:
+    """Portfolio totals of a :class:`GMMSettlementMovement` -- the
+    paragraph-44 settlement table. Release and loss-component-reversed rows
+    are stored negative (display convention), so opening plus every row of a
+    block equals its closing; ``finance_wedge`` keeps the movement sign (it
+    is a P&L line outside the CSM block, not a CSM row)."""
+
+    period_months: int
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_experience_unlocking: float
+    finance_wedge: float
+    loss_component_reversed: float
+    loss_component_recognised: float
+    csm_release: float
+    csm_closing: float
+    loss_component_opening: float
+    loss_component_closing: float
+
+
+def _reconcile_gmm_settlement(
+    movements: list[GMMSettlementMovement],
+) -> list[GMMSettlementReconciliation]:
+    """Aggregate paragraph-44 settlement movements into portfolio totals."""
+    return [
+        GMMSettlementReconciliation(
+            period_months=m.period_months,
+            bel_opening=float(m.bel_opening.sum()),
+            bel_interest=float(m.bel_interest.sum()),
+            bel_release=float(-m.bel_release.sum()),
+            bel_experience=float(m.bel_experience.sum()),
+            bel_closing=float(m.bel_closing.sum()),
+            ra_opening=float(m.ra_opening.sum()),
+            ra_interest=float(m.ra_interest.sum()),
+            ra_release=float(-m.ra_release.sum()),
+            ra_experience=float(m.ra_experience.sum()),
+            ra_closing=float(m.ra_closing.sum()),
+            csm_opening=float(m.csm_opening.sum()),
+            csm_accretion=float(m.csm_accretion.sum()),
+            csm_experience_unlocking=float(m.csm_experience_unlocking.sum()),
+            finance_wedge=float(m.finance_wedge.sum()),
+            loss_component_reversed=float(-m.loss_component_reversed.sum()),
+            loss_component_recognised=float(m.loss_component_recognised.sum()),
+            csm_release=float(-m.csm_release.sum()),
+            csm_closing=float(m.csm_closing.sum()),
+            loss_component_opening=float(m.loss_component_opening.sum()),
+            loss_component_closing=float(m.loss_component_closing.sum()),
+        )
+        for m in movements
+    ]
+
+
+@write_measurement.register
+def _(movement: GMMSettlementMovement, path, *, ids=None):
+    cols = {
+        "bel_opening": movement.bel_opening,
+        "bel_interest": movement.bel_interest,
+        "bel_release": movement.bel_release,
+        "bel_experience": movement.bel_experience,
+        "bel_closing": movement.bel_closing,
+        "ra_opening": movement.ra_opening,
+        "ra_interest": movement.ra_interest,
+        "ra_release": movement.ra_release,
+        "ra_experience": movement.ra_experience,
+        "ra_closing": movement.ra_closing,
+        "csm_opening": movement.csm_opening,
+        "csm_accretion": movement.csm_accretion,
+        "csm_experience_unlocking": movement.csm_experience_unlocking,
+        "finance_wedge": movement.finance_wedge,
+        "csm_release": movement.csm_release,
+        "csm_closing": movement.csm_closing,
+        "loss_component_opening": movement.loss_component_opening,
+        "loss_component_reversed": movement.loss_component_reversed,
+        "loss_component_recognised": movement.loss_component_recognised,
+        "loss_component_closing": movement.loss_component_closing,
+        "coverage_units_provided": movement.coverage_units_provided,
+        "coverage_units_future": movement.coverage_units_future,
+        "measurement_basis": [movement.measurement_basis]
+                             * movement.bel_closing.shape[0],
+    }
+    if movement.model_points is not None:
+        cols["elapsed_months"] = np.asarray(
+            movement.model_points.elapsed_months, dtype=np.int64)
+    _write_measurement_columns(cols, path, ids)
+
+
 @singledispatch
 def reconcile(
     movements: (list[PeriodMovement] | list[PAAPeriodMovement]
@@ -1180,6 +1365,8 @@ def reconcile(
         return _reconcile_vfa(movements)
     if movements and isinstance(movements[0], VFASettlementMovement):
         return _reconcile_vfa_settlement(movements)
+    if movements and isinstance(movements[0], GMMSettlementMovement):
+        return _reconcile_gmm_settlement(movements)
     if movements and isinstance(movements[0], ReinsurancePeriodMovement):
         return _reconcile_reinsurance(movements)
     out: list[Reconciliation] = []

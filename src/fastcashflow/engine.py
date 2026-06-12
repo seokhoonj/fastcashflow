@@ -41,12 +41,14 @@ from fastcashflow.curves import (
     discount_factors,
     discount_factors_from_curve,
     discount_monthly_curve,
+    forward_rates,
 )
 from fastcashflow.numerics import (
     _cost_of_capital_ra,
     _csm_kernel,
     _carry_lic_residual,
     _norm_ppf,
+    _paragraph45_csm_algebra,
     _risk_adjustment,
     _rollforward_kernel,
     _settlement_factor,
@@ -934,6 +936,225 @@ def _measure_inforce_segmented(
     # segmented path and constructs a default ('inception') measurement.
     return replace(result, model_points=model_points,
                    measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
+
+
+def settle(
+    model_points: ModelPoints,
+    state: "InforceState",
+    basis: "Basis",
+    *,
+    period_months: int | None = None,
+) -> "GMMSettlementMovement":
+    """Paragraph-44 subsequent-measurement settlement of a GMM in-force book.
+
+    The opening -> closing movement over one reporting period: BEL / RA
+    re-measured at current rates (B72(1)), the CSM accreted at the locked-in
+    rate (44(b)/B72(b), direct compounding), adjusted for the future-service
+    change measured at the locked-in rate (44(c)/B72(c) -- the gap to the
+    current-rate measure is the ``finance_wedge``, insurance finance
+    income/expense per B97(a), outside the CSM block), run through the
+    paragraph-48/50(b) loss-component algebra, and released once at the
+    period end over coverage units (44(e)/B119, em_open denominator).
+
+    GMM carries no account value, so the expected and observed legs share
+    one unit projection (``count = 1``) and differ only by scale:
+    ``k_exp = prior_count / unit_inforce[em_open]`` (the on-track
+    expectation) and ``k_obs = count / unit_inforce[em_close]`` (the
+    observation). On-track counts make every experience line zero and the
+    closing CSM telescopes to ``measure_inforce``'s monthly carry exactly.
+
+    v1 scope (documented cuts, mirroring ``vfa.settle``): within-period cash
+    flows are as expected -- the observed input is the closing count only
+    (B96(a) premium experience is first-order for a premium-paying GMM book
+    and is the v1.1 priority); no B96(c) investment-component split; no
+    paragraph 50(a)-52 systematic loss-component allocation; no
+    ``settlement_pattern`` book (the LIC would straddle both dates); the RA
+    change enters the CSM at its current measure (B96(d) prescribes no
+    rate); no OCI -- the ``finance_wedge`` is the period's P&L line, not an
+    accumulated-OCI state. A maturity falling inside the period is expected
+    service (it seeds the unit BEL at the boundary and runs off through the
+    release line), not experience.
+    """
+    _require_gmm_router(basis, entry="gmm.settle")
+    basis = _single_basis(basis, entry="gmm.settle")
+    if basis.settlement_pattern is not None:
+        raise ValueError(
+            "gmm.settle does not support a settlement_pattern basis: the book "
+            "would carry a liability for incurred claims at both the opening "
+            "and closing dates, and v1 has no LIC movement lines. Settle the "
+            "claims as they fall due (settlement_pattern=None)."
+        )
+    state = _reconcile_state(model_points, state)
+    if state.prior_count is None:
+        raise ValueError(
+            "gmm.settle needs state.prior_count -- the in-force count at the "
+            "opening date (the expected leg's scale and the B119 release "
+            "denominator)."
+        )
+    period = 12 if period_months is None else int(period_months)
+    if period < 1:
+        raise ValueError(f"period_months must be >= 1, got {period}")
+
+    n_mp = model_points.n_mp
+    prior_csm = np.asarray(state.prior_csm, dtype=np.float64)
+    if np.any(prior_csm < 0.0):
+        bad = int(np.argmin(prior_csm))
+        raise ValueError(
+            f"prior_csm[{bad}]={prior_csm[bad]} is negative; a GMM CSM is "
+            "floored at zero (an onerous balance is the loss component -- "
+            "pass it as prior_loss_component)."
+        )
+    lc_open = (np.asarray(state.prior_loss_component, dtype=np.float64)
+               if state.prior_loss_component is not None
+               else np.zeros(n_mp))
+    both = (prior_csm > 0.0) & (lc_open > 0.0)
+    if np.any(both):
+        bad = int(np.argmax(both))
+        raise ValueError(
+            f"row {bad} carries both prior_csm={prior_csm[bad]} and "
+            f"prior_loss_component={lc_open[bad]}; a group has a CSM or a "
+            "loss_component, never both (paragraphs 44 / 47-52)."
+        )
+
+    em_close = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    em_open = em_close - period
+    if np.any(em_open < 0):
+        bad = int(np.argmin(em_open))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em_close[bad])} < "
+            f"period_months={period}; the opening date precedes inception, "
+            "which has no balances to settle from."
+        )
+    boundary = np.asarray(model_points.contract_boundary_months,
+                          dtype=np.int64)
+    if np.any(em_open >= boundary):
+        bad = int(np.argmax(em_open >= boundary))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em_close[bad])} - "
+            f"period_months={period} is at or past the contract boundary "
+            f"({int(boundary[bad])}); the opening date must lie strictly "
+            "inside the coverage period."
+        )
+    count = np.asarray(model_points.count, dtype=np.float64)
+    final = em_close >= boundary
+    if np.any(final & (count > 0.0)):
+        bad = int(np.argmax(final & (count > 0.0)))
+        raise ValueError(
+            f"row {bad} closes at or past the contract boundary with "
+            f"count={count[bad]}; a final settlement needs a zero closing "
+            "snapshot (full B119 derecognition)."
+        )
+
+    # One unit projection (count = 1) carries both legs; the real scales ride
+    # on k_exp / k_obs (the vfa.settle unit-count seeding, correction 6).
+    unit = replace(model_points, count=np.ones(n_mp))
+    m = _measure_full(unit, basis)
+    cf = m.cashflows
+    inforce = cf.inforce
+    n_time = inforce.shape[1]
+    rows = np.arange(n_mp)
+
+    surv_open = inforce[rows, em_open]
+    k_exp = np.where(surv_open > 0.0,
+                     np.asarray(state.prior_count, dtype=np.float64)
+                     / np.where(surv_open > 0.0, surv_open, 1.0), 0.0)
+    close_idx = np.minimum(em_close, n_time - 1)
+    surv_close = np.where(final, 0.0, inforce[rows, close_idx])
+    dead_unit = (~final) & (surv_close <= 0.0) & (count > 0.0)
+    if np.any(dead_unit):
+        bad = int(np.argmax(dead_unit))
+        raise ValueError(
+            f"row {bad}: the projection has no survivors at the closing date "
+            f"but the observed count is {count[bad]}; reconcile the snapshot "
+            "(the closing date may be past the decrement horizon)."
+        )
+    k_obs = np.where(surv_close > 0.0,
+                     count / np.where(surv_close > 0.0, surv_close, 1.0), 0.0)
+
+    # A final settlement's expected close is ZERO, not the boundary column
+    # (bel_path[boundary] seeds the maturity as still-owed; a maturity paid
+    # on schedule is expected service inside the release, not experience).
+    live_close = np.where(final, 0.0, 1.0)
+    # A final settlement may close past the boundary (a long-matured row,
+    # em_close > n_time): clamp every closing-column read -- the clamped
+    # values are zeroed by live_close / k_obs / the tail's zero terminal.
+    em_c = np.minimum(em_close, n_time)
+
+    monthly_rate = forward_rates(m.discount_bom)
+    cols = em_open[:, None] + np.arange(period)[None, :]
+    col_ok = cols < n_time
+    cols_safe = np.where(col_ok, cols, n_time - 1)
+
+    def _block(path):
+        opening = k_exp * path[rows, em_open]
+        close_unit = path[rows, em_c] * live_close
+        close_exp = k_exp * close_unit
+        closing = k_obs * close_unit
+        interest = k_exp * (path[rows[:, None], cols_safe]
+                            * monthly_rate[cols_safe] * col_ok).sum(axis=1)
+        release = opening + interest - close_exp
+        experience = closing - close_exp
+        return opening, interest, release, experience, closing
+
+    bel_o, bel_i, bel_r, bel_e, bel_c = _block(m.bel_path)
+    ra_o, ra_i, ra_r, ra_e, ra_c = _block(m.ra_path)
+
+    # The locked-in second pass: the SAME backward kernel on the same unit
+    # cash flows, at the flat locked-in rate -- exactly one extra pass (the
+    # G1 gate (3) cost fact), and identical code path so a flat current
+    # basis equal to the lock-in gives a zero wedge identically.
+    lock = float(state.lock_in_rate)
+    lock_monthly = np.full(n_time, (1.0 + lock) ** (1.0 / 12.0) - 1.0)
+    bel_lock = _rollforward_kernel(
+        cf.claim_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
+        cf.premium_cf, cf.annuity_cf, cf.maturity_cf, cf.surrender_cf,
+        boundary, lock_monthly)[0]
+    delta_lock = (k_obs - k_exp) * bel_lock[rows, em_c] * live_close
+
+    # 44(c) at the locked-in rate (B72(c)); the RA change has no rate
+    # prescription (B96(d)) and enters at its current measure. The wedge is
+    # the current-vs-locked-in gap of the BEL delta -- B97(a), P&L.
+    csm_experience_unlocking = -(delta_lock + ra_e)
+    finance_wedge = -(bel_e - delta_lock)
+
+    csm_accretion = prior_csm * ((1.0 + lock) ** (period / 12.0) - 1.0)
+    accreted = prior_csm + csm_accretion
+    csm_after, lc_reversed, lc_recognised, lc_closing = (
+        _paragraph45_csm_algebra(accreted, csm_experience_unlocking, lc_open))
+
+    # B119: single period-end release on the post-adjustment balance. The
+    # provided units run at the expected scale over [em_open, em_close), the
+    # future units at the observed scale -- the em_open-denominator fraction
+    # that telescopes to the monthly carry when on-track.
+    tail = np.zeros((n_mp, n_time + 1))
+    tail[:, :n_time] = np.cumsum(inforce[:, ::-1], axis=1)[:, ::-1]
+    cu_provided = k_exp * (tail[rows, em_open] - tail[rows, em_c])
+    cu_future = k_obs * tail[rows, em_c]
+    denom = cu_provided + cu_future
+    frac = np.where(denom > 0.0,
+                    cu_provided / np.where(denom > 0.0, denom, 1.0), 1.0)
+    csm_release = csm_after * frac
+    csm_closing = csm_after - csm_release
+
+    from fastcashflow.movement import GMMSettlementMovement
+    return GMMSettlementMovement(
+        bel_opening=bel_o, bel_interest=bel_i, bel_release=bel_r,
+        bel_experience=bel_e, bel_closing=bel_c,
+        ra_opening=ra_o, ra_interest=ra_i, ra_release=ra_r,
+        ra_experience=ra_e, ra_closing=ra_c,
+        csm_opening=prior_csm, csm_accretion=csm_accretion,
+        csm_experience_unlocking=csm_experience_unlocking,
+        finance_wedge=finance_wedge,
+        csm_release=csm_release, csm_closing=csm_closing,
+        loss_component_opening=lc_open,
+        loss_component_reversed=lc_reversed,
+        loss_component_recognised=lc_recognised,
+        loss_component_closing=lc_closing,
+        coverage_units_provided=cu_provided,
+        coverage_units_future=cu_future,
+        period_months=period, lock_in_rate=lock,
+        model_points=model_points,
+    )
 
 
 # ---------------------------------------------------------------------------

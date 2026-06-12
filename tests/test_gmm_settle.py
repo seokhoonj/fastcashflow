@@ -85,7 +85,8 @@ def _book(basis, *, em_open=12, period=12, scale=1000.0, term=36,
     em_close = em_open + period
     surv = _unit(basis, term=term).cashflows.inforce[0]
     prior_count = scale * surv[em_open]
-    count_close = scale * surv[em_close] * count_factor
+    surv_close = surv[em_close] if em_close < surv.shape[0] else 0.0
+    count_close = scale * surv_close * count_factor
     ids = np.array([f"P{i}" for i in range(n)])
     rep = lambda v: np.full(n, v)
     mp = ModelPoints(
@@ -169,12 +170,21 @@ def test_two_rate_unlocking_matches_first_principles():
     bom_l = (1.0 + 0.03) ** (-t / 12.0)                   # locked-in factors
     mid_l = (1.0 + 0.03) ** (-(t + 0.5) / 12.0)
     bom_l_T = (1.0 + 0.03) ** (-term / 12.0)
-    out_mid = (cf.claim_cf + cf.morbidity_cf + cf.expense_cf + cf.annuity_cf
+    # engine timing (numerics._rollforward_kernel): premiums and annuities at
+    # the month start, claims / morbidity / disability / expenses / surrender
+    # mid-month, the maturity benefit at the boundary
+    out_mid = (cf.claim_cf + cf.morbidity_cf + cf.expense_cf
                + cf.disability_cf + cf.surrender_cf)[0]
     pv_lock = ((out_mid[em_close:] * mid_l[em_close:]).sum()
-               - (cf.premium_cf[0, em_close:] * bom_l[em_close:]).sum()
+               + ((cf.annuity_cf - cf.premium_cf)[0, em_close:]
+                  * bom_l[em_close:]).sum()
                + cf.maturity_cf[0] * bom_l_T) / bom_l[em_close]
-    expected_unlocking = -dk * pv_lock / surv[em_close]
+    # dk carries the per-survivor normalisation (k = count / inforce), so the
+    # cohort-level locked PV multiplies dk directly -- the exact locked-in
+    # analogue of bel_experience = dk x bel_path[em_close]. The RA change
+    # has no rate prescription (B96(d), g1-verbatim.md) and enters the CSM
+    # at its current measure: dk x ra_path[em_close].
+    expected_unlocking = -(dk * pv_lock + dk * m.ra_path[0, em_close])
 
     mp, state = _book(basis, em_open=em_open, period=period, term=term,
                       lock_in=0.03, count_factor=factor)
@@ -386,6 +396,30 @@ def test_final_settlement_releases_everything():
                  + mv.csm_experience_unlocking - mv.loss_component_reversed
                  + mv.loss_component_recognised)
     np.testing.assert_allclose(mv.csm_release, csm_after, rtol=1e-9)
+
+
+def test_final_settlement_closing_past_the_boundary():
+    """A long-matured row may close PAST the boundary (term 36, elapsed 42):
+    every closing-column read is clamped and zeroed -- full derecognition,
+    no IndexError (Codex review P0)."""
+    basis = _basis()
+    surv = _unit(basis).cashflows.inforce[0]
+    ids = np.array(["P0"])
+    mp = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([100.0]),
+        term_months=np.array([36]), benefits={0: np.array([1e6])},
+        count=np.array([0.0]), elapsed_months=np.array([42]), mp_id=ids,
+        product=np.array(["A"]), calculation_methods=CM,
+    )
+    state = InforceState(
+        mp_id=ids, elapsed_months=np.array([42], dtype=np.int64),
+        count=np.array([0.0]), prior_csm=np.array([5_000.0]),
+        lock_in_rate=0.03, prior_count=np.array([1000.0 * surv[30]]),
+    )
+    mv = settle(mp, state, basis, period_months=12)
+    np.testing.assert_allclose(mv.csm_closing, 0.0, atol=1e-9)
+    np.testing.assert_allclose(mv.bel_closing, 0.0, atol=1e-9)
+    np.testing.assert_allclose(mv.loss_component_closing, 0.0, atol=1e-9)
 
 
 def test_zero_count_before_the_boundary_fully_derecognises():

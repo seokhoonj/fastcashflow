@@ -11,6 +11,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`gmm.settle` -- the IFRS 17 paragraph-44 settlement movement.** The
+  period-close opening -> closing movement of a GMM in-force book: BEL / RA
+  at current rates (B72(1)), CSM accretion and the paragraph-44(c)
+  future-service unlocking at the locked-in rate (B72(b)/(c)) with the
+  current-vs-locked-in gap carried as a named `finance_wedge` line (B97(a),
+  insurance finance income/expense -- outside the CSM block), the
+  paragraph-48/50(b) loss-component algebra (shared with `vfa.settle`), and
+  a single period-end B119 coverage-unit release that telescopes exactly to
+  `measure_inforce`'s monthly carry when experience is on-track. Returns a
+  `GMMSettlementMovement` whose blocks reconcile by construction and whose
+  `closing_inputs()` seeds the next period; `reconcile` and
+  `write_measurement` accept it. Final settlement (a zero closing snapshot
+  at the contract boundary) and mid-period full surrender derecognise the
+  whole CSM through the release line.
 - **Measurement time-basis discriminator (`measurement_basis`).** Every
   measurement now states what its numbers are: `'inception'` (new business),
   `'hypothetical'` (a what-if of a seasoned book), `'settlement_carry'` (the
