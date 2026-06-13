@@ -22,7 +22,9 @@ later.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+import warnings
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 import numpy as np
@@ -30,11 +32,13 @@ import numpy as np
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow._measurement_basis import (
     MEASUREMENT_BASIS_INCEPTION,
+    MEASUREMENT_BASIS_SETTLEMENT,
     MEASUREMENT_BASIS_SETTLEMENT_CARRY,
     _inforce_marker_columns,
 )
 from fastcashflow.basis import Basis, _single_basis
-from fastcashflow.curves import discount_factors, discount_monthly_curve
+from fastcashflow.curves import (
+    discount_factors, discount_monthly_curve, forward_rates)
 from fastcashflow.numerics import _csm_kernel, _norm_ppf
 from fastcashflow.modelpoints import InforceState, ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
@@ -392,6 +396,11 @@ def measure_reinsurance_inforce(
     accepted. ``full=False`` returns only the as-of headline BEL / RA / CSM and
     leaves all trajectory and cash-flow fields ``None``.
     """
+    warnings.warn(
+        "reinsurance.measure_inforce is a carry bridge superseded by "
+        "reinsurance.settle (the paragraph-66 subsequent measurement): it "
+        "rolls the prior CSM forward without the future-service unlocking. "
+        "Use reinsurance.settle.", DeprecationWarning, stacklevel=2)
     basis = _single_basis(basis, entry="reinsurance.measure_inforce")
     state = _reconcile_state(model_points, state)
     proj = project_cashflows(model_points, basis)
@@ -515,6 +524,12 @@ def measure_reinsurance_inforce_aggregate(
     """
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    warnings.warn(
+        "reinsurance.measure_inforce_aggregate is a carry bridge superseded "
+        "by reinsurance.settle_aggregate (the paragraph-66 subsequent "
+        "measurement): it rolls the prior CSM forward without the "
+        "future-service unlocking. Use reinsurance.settle_aggregate.",
+        DeprecationWarning, stacklevel=2)
     # Align the period-close state onto the model points ONCE, before chunking,
     # so a shuffled state file cannot pair one contract's rows with another's
     # prior CSM after a chunk slice (measure_reinsurance_inforce re-reconciles
@@ -532,11 +547,206 @@ def measure_reinsurance_inforce_aggregate(
     bel = ra = csm = 0.0
     for start in range(0, n_mp, chunk_size):
         idx = np.arange(start, min(start + chunk_size, n_mp))
-        m = measure_reinsurance_inforce(
-            model_points.subset(idx), state.subset(idx), basis,
-            treaty=treaty, period_months=period, full=False)
+        with warnings.catch_warnings():       # the inner per-MP bridge already warned above
+            warnings.simplefilter("ignore", DeprecationWarning)
+            m = measure_reinsurance_inforce(
+                model_points.subset(idx), state.subset(idx), basis,
+                treaty=treaty, period_months=period, full=False)
         bel += float(m.bel.sum())
         ra += float(m.ra.sum())
         csm += float(m.csm.sum())
     return ReinsuranceInforceAggregate(
         bel=bel, ra=ra, csm=csm, period_months=period)
+
+
+def settle_reinsurance(
+    model_points: ModelPoints,
+    state: InforceState,
+    basis: Basis,
+    *,
+    treaty: Treaty,
+    period_months: int | None = None,
+) -> "ReinsuranceSettlementMovement":
+    """Paragraph-66 subsequent-measurement settlement of a reinsurance contract
+    held (the reinsurance counterpart of :func:`~fastcashflow.gmm.settle`).
+
+    The opening -> closing movement over one reporting period: BEL / RA
+    re-measured at current rates, the CSM accreted at the locked-in rate
+    (66(b)/B72(b)), adjusted for the future-service change measured at the
+    locked-in rate (66(c)/B72(c) -- the current-rate gap is the
+    ``finance_wedge``), and released once at the period end over coverage units
+    (66(e)/B119). The ONE difference from ``gmm.settle``: a reinsurance contract
+    held cannot be onerous (paragraph 65), so the CSM is NOT floored and there
+    is no loss component -- the closing CSM may be negative (a net cost of
+    cover). The BEL is PV(reinsurance premium) - PV(recovery), so the locked-in
+    second leg re-prices the ceded cash flows at the locked-in rate.
+
+    On-track experience makes every experience line zero and telescopes the
+    closing CSM to the carry bridge (:func:`measure_reinsurance_inforce`)
+    exactly. A row whose closing date reaches the contract boundary with
+    ``count = 0`` is a final settlement (full B119 derecognition, Sec. 76).
+
+    v1 cut (documented): the loss-recovery component (paragraphs 66A-66B), which
+    arises for onerous underlying contracts, needs the underlying group's loss
+    component and is omitted, consistent with the inception measure.
+    """
+    basis = _single_basis(basis, entry="reinsurance.settle")
+    state = _reconcile_state(model_points, state)
+    period = 12 if period_months is None else int(period_months)
+    if period < 1:
+        raise ValueError(f"period_months must be >= 1, got {period}")
+    if state.prior_count is None:
+        raise ValueError(
+            "reinsurance.settle needs state.prior_count -- the in-force count "
+            "at the opening date (the expected leg's scale and the B119 "
+            "release denominator).")
+    n_mp = model_points.n_mp
+    prior_csm = np.asarray(state.prior_csm, dtype=np.float64)
+    if prior_csm.shape != (n_mp,):
+        raise ValueError(f"prior_csm must have shape ({n_mp},), got {prior_csm.shape}")
+    # No floor / xor check: a reinsurance CSM may be negative (net cost) and
+    # there is no loss component (paragraph 65).
+
+    em_close = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    em_open = em_close - period
+    if np.any(em_open < 0):
+        bad = int(np.argmin(em_open))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em_close[bad])} < period_months={period}; "
+            "the opening date precedes inception, which has no CSM to settle from.")
+    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    if np.any(em_open >= boundary):
+        bad = int(np.argmax(em_open >= boundary))
+        raise ValueError(
+            f"elapsed_months[{bad}]={int(em_close[bad])} - period_months={period} "
+            f"is at or past the contract boundary ({int(boundary[bad])}); the "
+            "opening date must lie strictly inside the coverage period.")
+    count = np.asarray(model_points.count, dtype=np.float64)
+    final = em_close >= boundary
+    if np.any(final & (count > 0.0)):
+        bad = int(np.argmax(final & (count > 0.0)))
+        raise ValueError(
+            f"row {bad} closes at or past the contract boundary with "
+            f"count={count[bad]}; a final settlement needs a zero closing "
+            "snapshot (full B119 derecognition).")
+
+    unit = replace(model_points, count=np.ones(n_mp))
+    m = measure_reinsurance(unit, basis, treaty=treaty)
+    inforce = m.cashflows.inforce
+    n_time = inforce.shape[1]
+    rows = np.arange(n_mp)
+    bel_path = m.bel_path
+    ra_path = m.ra_path
+    discount_bom = m.discount_bom
+
+    # Locked-in BEL leg: re-price the ceded cash flows at the flat locked-in
+    # rate (the reinsurance analogue of gmm.settle's locked-in kernel pass).
+    lock = float(state.lock_in_rate)
+    lock_m = (1.0 + lock) ** (1.0 / 12.0) - 1.0
+    db_lock = (1.0 + lock_m) ** -np.arange(n_time + 1, dtype=np.float64)
+    dm_lock = (1.0 + lock_m) ** -(np.arange(n_time, dtype=np.float64) + 0.5)
+    bel_lock = (_pv_path(m.reinsurance_premium * db_lock[:-1], db_lock)
+                - _pv_path(m.recovery * dm_lock, db_lock))
+
+    surv_open = inforce[rows, em_open]
+    k_exp = np.where(surv_open > 0.0,
+                     np.asarray(state.prior_count, dtype=np.float64)
+                     / np.where(surv_open > 0.0, surv_open, 1.0), 0.0)
+    close_idx = np.minimum(em_close, n_time - 1)
+    surv_close = np.where(final, 0.0, inforce[rows, close_idx])
+    dead_unit = (~final) & (surv_close <= 0.0) & (count > 0.0)
+    if np.any(dead_unit):
+        bad = int(np.argmax(dead_unit))
+        raise ValueError(
+            f"row {bad}: the projection has no survivors at the closing date "
+            f"but the observed count is {count[bad]}; reconcile the snapshot.")
+    k_obs = np.where(surv_close > 0.0,
+                     count / np.where(surv_close > 0.0, surv_close, 1.0), 0.0)
+    live_close = np.where(final, 0.0, 1.0)
+    em_c = np.minimum(em_close, n_time)
+    monthly_rate = forward_rates(discount_bom)
+    cols = em_open[:, None] + np.arange(period)[None, :]
+    col_ok = cols < n_time
+    cols_safe = np.where(col_ok, cols, n_time - 1)
+
+    def _block(path):
+        opening = k_exp * path[rows, em_open]
+        close_unit = path[rows, em_c] * live_close
+        close_exp = k_exp * close_unit
+        closing = k_obs * close_unit
+        interest = k_exp * (path[rows[:, None], cols_safe]
+                            * monthly_rate[cols_safe] * col_ok).sum(axis=1)
+        release = opening + interest - close_exp
+        experience = closing - close_exp
+        return opening, interest, release, experience, closing
+
+    bel_o, bel_i, bel_r, bel_e, bel_c = _block(bel_path)
+    ra_o, ra_i, ra_r, ra_e, ra_c = _block(ra_path)
+    delta_lock = (k_obs - k_exp) * bel_lock[rows, em_c] * live_close
+    csm_experience_unlocking = -(delta_lock + ra_e)
+    finance_wedge = -(bel_e - delta_lock)
+    csm_accretion = prior_csm * ((1.0 + lock) ** (period / 12.0) - 1.0)
+    # Paragraph 65: NO floor, NO loss component -- the net cost/gain rolls on.
+    csm_after = prior_csm + csm_accretion + csm_experience_unlocking
+
+    tail = np.zeros((n_mp, n_time + 1))
+    tail[:, :n_time] = np.cumsum(inforce[:, ::-1], axis=1)[:, ::-1]
+    cu_provided = k_exp * (tail[rows, em_open] - tail[rows, em_c])
+    cu_future = k_obs * tail[rows, em_c]
+    denom = cu_provided + cu_future
+    frac = np.where(denom > 0.0,
+                    cu_provided / np.where(denom > 0.0, denom, 1.0), 1.0)
+    csm_release = csm_after * frac
+    csm_closing = csm_after - csm_release
+
+    from fastcashflow.movement import ReinsuranceSettlementMovement
+    return ReinsuranceSettlementMovement(
+        bel_opening=bel_o, bel_interest=bel_i, bel_release=bel_r,
+        bel_experience=bel_e, bel_closing=bel_c,
+        ra_opening=ra_o, ra_interest=ra_i, ra_release=ra_r,
+        ra_experience=ra_e, ra_closing=ra_c,
+        csm_opening=prior_csm, csm_accretion=csm_accretion,
+        csm_experience_unlocking=csm_experience_unlocking,
+        finance_wedge=finance_wedge,
+        csm_release=csm_release, csm_closing=csm_closing,
+        coverage_units_provided=cu_provided, coverage_units_future=cu_future,
+        period_months=period, lock_in_rate=lock,
+        model_points=model_points)
+
+
+def settle_reinsurance_aggregate(
+    model_points: ModelPoints,
+    state: InforceState,
+    basis: Basis,
+    *,
+    treaty: Treaty,
+    period_months: int | None = None,
+    chunk_size: int = 200_000,
+) -> "ReinsuranceSettlementAggregate":
+    """Portfolio-total paragraph-66 reinsurance settlement in bounded memory.
+
+    Runs :func:`settle_reinsurance` over row blocks of ``chunk_size`` model
+    points and accumulates only the scalar line totals (every settlement line
+    is additive across contracts), combined with ``math.fsum`` so the total
+    does not depend on the chunking. Replaces the carry-bridge aggregate
+    :func:`measure_reinsurance_inforce_aggregate` with a true settlement.
+    """
+    from fastcashflow.movement import (
+        _REINSURANCE_SETTLEMENT_LINES, ReinsuranceSettlementAggregate)
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    period = 12 if period_months is None else int(period_months)
+    if period < 1:
+        raise ValueError(f"period_months must be >= 1, got {period}")
+    state = _reconcile_state(model_points, state)
+    n_mp = model_points.n_mp
+    parts: dict[str, list[float]] = {n: [] for n in _REINSURANCE_SETTLEMENT_LINES}
+    for start in range(0, n_mp, chunk_size):
+        idx = np.arange(start, min(start + chunk_size, n_mp))
+        mv = settle_reinsurance(model_points.subset(idx), state.subset(idx),
+                                basis, treaty=treaty, period_months=period)
+        for name in _REINSURANCE_SETTLEMENT_LINES:
+            parts[name].append(float(getattr(mv, name).sum()))
+    return ReinsuranceSettlementAggregate(
+        period_months=period, lock_in_rate=float(state.lock_in_rate),
+        **{name: math.fsum(vals) for name, vals in parts.items()})

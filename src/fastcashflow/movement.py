@@ -1368,6 +1368,135 @@ def _reconcile_gmm_settlement(
 
 
 @dataclass(frozen=True, slots=True, eq=False)
+class ReinsuranceSettlementMovement:
+    """One period's IFRS 17 paragraph-66 settlement movement of a reinsurance
+    contract held.
+
+    The reinsurance counterpart of :class:`GMMSettlementMovement`. The BEL / RA
+    blocks and the CSM accretion / future-service unlocking / finance wedge /
+    B119 release are identical to the GMM settlement, with ONE modification:
+    a reinsurance contract held cannot be onerous (paragraph 65), so the CSM is
+    NOT floored and there is NO loss component. The closing CSM is simply::
+
+        csm_closing == csm_opening + csm_accretion + csm_experience_unlocking
+                       - csm_release
+
+    and may be negative throughout -- a net cost of cover, deferred and
+    amortised. The three-term cross identity still holds (the future-service
+    change is measured at the B72(c) locked-in rate, the wedge to the
+    current-rate BEL block is insurance finance income/expense)::
+
+        csm_experience_unlocking + finance_wedge
+            == -(bel_experience + ra_experience)
+
+    v1 cut (documented): the loss-recovery component (paragraphs 66A-66B), which
+    arises when an underlying group of contracts is onerous, needs that group's
+    loss component (a cross-contract link not modelled here); it is omitted,
+    consistent with the inception measure and the carry bridge.
+    """
+
+    bel_opening: FloatArray
+    bel_interest: FloatArray
+    bel_release: FloatArray
+    bel_experience: FloatArray
+    bel_closing: FloatArray
+    ra_opening: FloatArray
+    ra_interest: FloatArray
+    ra_release: FloatArray
+    ra_experience: FloatArray
+    ra_closing: FloatArray
+    csm_opening: FloatArray
+    csm_accretion: FloatArray            # 66(b)/B72(b): locked-in, direct compounding
+    csm_experience_unlocking: FloatArray  # 66(c): future-service change, no floor
+    finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, P&L
+    csm_release: FloatArray              # 66(e)/B119: single period-end release
+    csm_closing: FloatArray
+    coverage_units_provided: FloatArray
+    coverage_units_future: FloatArray
+    period_months: int = 12
+    lock_in_rate: float = 0.0
+    model_points: object | None = None
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds the
+        next period's settle: ``prior_csm`` is this period's closing CSM (which
+        may be negative -- there is no loss component) and ``prior_count`` the
+        closing count. The caller advances ``elapsed_months`` / ``count`` to the
+        next observation date before the next call."""
+        from fastcashflow.modelpoints import InforceState
+        mp = self.model_points
+        if mp is None or mp.mp_id is None:
+            raise ValueError(
+                "closing_inputs() needs the source model points with mp_id "
+                "(the settle entry stamps them; per-MP chaining joins by id)")
+        state = InforceState(
+            mp_id=mp.mp_id,
+            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
+            count=np.asarray(mp.count, dtype=np.float64),
+            prior_csm=self.csm_closing,
+            lock_in_rate=self.lock_in_rate,
+            prior_count=np.asarray(mp.count, dtype=np.float64),
+        )
+        return mp, state
+
+
+@dataclass(frozen=True, slots=True)
+class ReinsuranceSettlementReconciliation:
+    """Portfolio totals of a :class:`ReinsuranceSettlementMovement` -- the
+    paragraph-66 settlement table. Release rows are stored negative (display
+    convention); ``finance_wedge`` keeps the movement sign (a P&L line outside
+    the CSM block). There is no loss-component row -- a reinsurance contract
+    held cannot be onerous."""
+
+    period_months: int
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_experience_unlocking: float
+    finance_wedge: float
+    csm_release: float
+    csm_closing: float
+
+
+def _reconcile_reinsurance_settlement(
+    movements: list[ReinsuranceSettlementMovement],
+) -> list[ReinsuranceSettlementReconciliation]:
+    """Aggregate paragraph-66 reinsurance settlement movements into totals."""
+    return [
+        ReinsuranceSettlementReconciliation(
+            period_months=m.period_months,
+            bel_opening=float(m.bel_opening.sum()),
+            bel_interest=float(m.bel_interest.sum()),
+            bel_release=float(-m.bel_release.sum()),
+            bel_experience=float(m.bel_experience.sum()),
+            bel_closing=float(m.bel_closing.sum()),
+            ra_opening=float(m.ra_opening.sum()),
+            ra_interest=float(m.ra_interest.sum()),
+            ra_release=float(-m.ra_release.sum()),
+            ra_experience=float(m.ra_experience.sum()),
+            ra_closing=float(m.ra_closing.sum()),
+            csm_opening=float(m.csm_opening.sum()),
+            csm_accretion=float(m.csm_accretion.sum()),
+            csm_experience_unlocking=float(m.csm_experience_unlocking.sum()),
+            finance_wedge=float(m.finance_wedge.sum()),
+            csm_release=float(-m.csm_release.sum()),
+            csm_closing=float(m.csm_closing.sum()),
+        )
+        for m in movements
+    ]
+
+
+@dataclass(frozen=True, slots=True, eq=False)
 class PAASettlementMovement:
     """One period's IFRS 17 paragraph-55(b) settlement movement of a PAA book.
 
@@ -1561,6 +1690,40 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
 
 
 @write_measurement.register
+def _(movement: ReinsuranceSettlementMovement, path, *, ids=None):
+    cols = {
+        "bel_opening": movement.bel_opening,
+        "bel_interest": movement.bel_interest,
+        "bel_release": movement.bel_release,
+        "bel_experience": movement.bel_experience,
+        "bel_closing": movement.bel_closing,
+        "ra_opening": movement.ra_opening,
+        "ra_interest": movement.ra_interest,
+        "ra_release": movement.ra_release,
+        "ra_experience": movement.ra_experience,
+        "ra_closing": movement.ra_closing,
+        "csm_opening": movement.csm_opening,
+        "csm_accretion": movement.csm_accretion,
+        "csm_experience_unlocking": movement.csm_experience_unlocking,
+        "finance_wedge": movement.finance_wedge,
+        "csm_release": movement.csm_release,
+        "csm_closing": movement.csm_closing,
+        "coverage_units_provided": movement.coverage_units_provided,
+        "coverage_units_future": movement.coverage_units_future,
+        "lock_in_rate": np.full(movement.bel_closing.shape[0],
+                                movement.lock_in_rate),
+        "measurement_basis": [movement.measurement_basis]
+                             * movement.bel_closing.shape[0],
+    }
+    if movement.model_points is not None:
+        cols["elapsed_months"] = np.asarray(
+            movement.model_points.elapsed_months, dtype=np.int64)
+        cols["count"] = np.asarray(
+            movement.model_points.count, dtype=np.float64)
+    _write_measurement_columns(cols, path, ids)
+
+
+@write_measurement.register
 def _(movement: VFASettlementMovement, path, *, ids=None):
     cols = {
         "bel_opening": movement.bel_opening,
@@ -1630,6 +1793,8 @@ def reconcile(
         return _reconcile_gmm_settlement(movements)
     if movements and isinstance(movements[0], PAASettlementMovement):
         return _reconcile_paa_settlement(movements)
+    if movements and isinstance(movements[0], ReinsuranceSettlementMovement):
+        return _reconcile_reinsurance_settlement(movements)
     if movements and isinstance(movements[0], ReinsurancePeriodMovement):
         return _reconcile_reinsurance(movements)
     out: list[Reconciliation] = []
@@ -1693,6 +1858,15 @@ _VFA_SETTLEMENT_LINES = (
     "coverage_units_provided", "coverage_units_future",
 )
 
+_REINSURANCE_SETTLEMENT_LINES = (
+    "bel_opening", "bel_interest", "bel_release", "bel_experience",
+    "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_opening", "csm_accretion", "csm_experience_unlocking",
+    "finance_wedge", "csm_release", "csm_closing",
+    "coverage_units_provided", "coverage_units_future",
+)
+
 _AGGREGATE_NO_CHAIN = (
     "an aggregate cannot seed the next period: chaining needs the per-MP "
     "closing balances, which the sums no longer carry. Chain through the "
@@ -1746,6 +1920,45 @@ class GMMSettlementAggregate:
     loss_component_reversed: float
     loss_component_recognised: float
     loss_component_closing: float
+    coverage_units_provided: float
+    coverage_units_future: float
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """Always raises -- see the class docstring."""
+        raise ValueError(_AGGREGATE_NO_CHAIN)
+
+
+@dataclass(frozen=True, slots=True)
+class ReinsuranceSettlementAggregate:
+    """Portfolio totals of the paragraph-66 reinsurance settlement movement.
+
+    What :func:`fastcashflow.reinsurance.settle_aggregate` returns: every line
+    of :class:`ReinsuranceSettlementMovement` summed over the model-point axis,
+    movement-positive (``reconcile`` applies the display negation and
+    reproduces the per-MP movement's table). There is no loss-component line --
+    a reinsurance contract held cannot be onerous. :meth:`closing_inputs`
+    raises -- chaining needs the per-MP balances.
+    """
+
+    period_months: int
+    lock_in_rate: float
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_experience_unlocking: float
+    finance_wedge: float
+    csm_release: float
+    csm_closing: float
     coverage_units_provided: float
     coverage_units_future: float
     measurement_basis: str = "settlement"
@@ -1836,6 +2049,34 @@ def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
         csm_closing=a.csm_closing,
         loss_component_opening=a.loss_component_opening,
         loss_component_closing=a.loss_component_closing,
+    )
+
+
+@reconcile.register
+def _(aggregate: ReinsuranceSettlementAggregate
+      ) -> ReinsuranceSettlementReconciliation:
+    """The paragraph-66 reinsurance settlement table of an aggregate --
+    identical to reconciling the per-MP movement; run-off rows display-negated
+    here, never in the aggregate."""
+    a = aggregate
+    return ReinsuranceSettlementReconciliation(
+        period_months=a.period_months,
+        bel_opening=a.bel_opening,
+        bel_interest=a.bel_interest,
+        bel_release=-a.bel_release,
+        bel_experience=a.bel_experience,
+        bel_closing=a.bel_closing,
+        ra_opening=a.ra_opening,
+        ra_interest=a.ra_interest,
+        ra_release=-a.ra_release,
+        ra_experience=a.ra_experience,
+        ra_closing=a.ra_closing,
+        csm_opening=a.csm_opening,
+        csm_accretion=a.csm_accretion,
+        csm_experience_unlocking=a.csm_experience_unlocking,
+        finance_wedge=a.finance_wedge,
+        csm_release=-a.csm_release,
+        csm_closing=a.csm_closing,
     )
 
 

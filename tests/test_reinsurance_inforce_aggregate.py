@@ -31,10 +31,15 @@ from conftest import PATTERNS, make_death_basis
 
 measure_inforce_aggregate = getattr(
     fcf.reinsurance, "measure_inforce_aggregate", None)
-pytestmark = pytest.mark.skipif(
-    measure_inforce_aggregate is None,
-    reason="reinsurance.measure_inforce_aggregate not implemented yet "
-           "(redesign step 7; skeleton activates unchanged once it lands)")
+pytestmark = [
+    pytest.mark.skipif(
+        measure_inforce_aggregate is None,
+        reason="reinsurance.measure_inforce_aggregate not implemented yet "
+               "(redesign step 7; skeleton activates unchanged once it lands)"),
+    # The carry bridge is deprecated now that reinsurance.settle exists; this
+    # file still verifies its behaviour, so silence its own deprecation notice.
+    pytest.mark.filterwarnings("ignore::DeprecationWarning"),
+]
 
 QS = fcf.reinsurance.QuotaShare
 

@@ -227,10 +227,17 @@ Reinsurance
 
 .. autofunction:: fastcashflow.reinsurance.measure
 
+.. autofunction:: fastcashflow.reinsurance.settle
+
+.. autofunction:: fastcashflow.reinsurance.settle_aggregate
+
 .. autoclass:: fastcashflow.reinsurance.QuotaShare
    :members:
 
 .. autoclass:: fastcashflow.reinsurance.ReinsuranceMeasurement
+   :members:
+
+.. autoclass:: fastcashflow.reinsurance.ReinsuranceSettlementMovement
    :members:
 
 Pricing

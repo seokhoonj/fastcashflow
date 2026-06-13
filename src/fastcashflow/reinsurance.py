@@ -15,6 +15,13 @@ from fastcashflow._reinsurance import (
     measure_reinsurance_inforce as measure_inforce,
     measure_reinsurance_inforce_aggregate as measure_inforce_aggregate,
     measure_reinsurance_stream as measure_stream,
+    settle_reinsurance as settle,
+    settle_reinsurance_aggregate as settle_aggregate,
+)
+from fastcashflow.movement import (
+    ReinsuranceSettlementMovement,
+    ReinsuranceSettlementReconciliation,
+    ReinsuranceSettlementAggregate,
 )
 from fastcashflow.trace import (
     show_trace_reinsurance as trace,
@@ -23,5 +30,9 @@ from fastcashflow.trace import (
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_inforce_aggregate", "measure_stream",
+           "settle", "settle_aggregate",
            "trace", "trace_diff", "QuotaShare", "ReinsuranceMeasurement",
-           "ReinsuranceAggregate", "ReinsuranceInforceAggregate"]
+           "ReinsuranceAggregate", "ReinsuranceInforceAggregate",
+           "ReinsuranceSettlementMovement",
+           "ReinsuranceSettlementReconciliation",
+           "ReinsuranceSettlementAggregate"]

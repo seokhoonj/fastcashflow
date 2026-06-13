@@ -34,6 +34,11 @@ from fastcashflow._vfa import (
 
 CM = {"DEATH": CalculationMethod.DEATH}
 
+# A few guard tests call the deprecated carry bridge (measure_inforce); silence
+# only its own deprecation notice.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:reinsurance.measure_inforce:DeprecationWarning")
+
 
 def _flat_rate(value):
     def fn(sex, issue_age, duration):
