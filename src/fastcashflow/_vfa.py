@@ -51,6 +51,7 @@ from fastcashflow.numerics import (
     _norm_ppf,
     _settlement_factor,
     _settlement_lic,
+    _settlement_lic_discounted,
 )
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
@@ -1292,13 +1293,21 @@ def settle(
     csm_release = csm_after * frac
     csm_closing = csm_after - csm_release
 
-    # Liability for incurred claims (paragraphs 40(b) / 42 / 103(b)) -- the VFA
-    # mirror of the GMM/PAA LIC block. Benefit claims build it up as incurred
-    # (42(a)) and run it off over the settlement pattern; entirely
-    # expected-scale with claims_paid the residual, so it closes by
-    # construction. p_exp.lic is the undiscounted unit trajectory built from the
-    # same benefit_cf (all-zero without a settlement_pattern => claims paid as
-    # incurred, the LIC zero at both dates).
+    # Liability for incurred claims (paragraphs 40(b) / 42(c) / 103(b)) -- the
+    # VFA mirror of the GMM/PAA LIC block. Benefit claims build it up as
+    # incurred (42(a)) and run it off over the settlement pattern. The LIC is
+    # measured at fulfilment cash flows -- the discounted PV of the unpaid
+    # run-off (42(c)). It carries NO risk adjustment: the VFA RA prices expense
+    # risk only (z x expense_cv x pv_expenses), the benefit risk sitting in the
+    # variable fee, so the incurred benefits carry no RA in the LIC either. This
+    # INHERITS the engine's VFA-RA-is-expense-only convention -- a benefit RA on
+    # the LIC (paragraphs 32/37) would first require pricing benefit RA in the
+    # VFA LRC; adding it here alone would make the LIC and LRC inconsistent.
+    # claims_incurred and claims_paid stay NOMINAL (claims_paid the residual on
+    # the undiscounted trajectory p_exp.lic); lic_finance is the reconciling
+    # residual -- the 42(c) discount unwind plus the discounting measurement
+    # effect. p_exp.lic is all-zero without a settlement_pattern (claims paid as
+    # incurred, the LIC zero at both dates and lic_finance zero).
     offsets = np.arange(period)
     inc_src = em_open[:, None] + offsets[None, :]
     inc_mask = inc_src < n_time
@@ -1306,9 +1315,17 @@ def settle(
     claims_incurred = k_exp * np.where(
         inc_mask, benefit[rows[:, None], np.where(inc_mask, inc_src, 0)],
         0.0).sum(axis=1)
-    lic_opening = k_exp * p_exp.lic[rows, em_open]
-    lic_closing = k_exp * p_exp.lic[rows, em_c]
-    claims_paid = lic_opening + claims_incurred - lic_closing
+    claims_paid = (k_exp * p_exp.lic[rows, em_open] + claims_incurred
+                   - k_exp * p_exp.lic[rows, em_c])
+    if basis.settlement_pattern is not None:
+        lic_disc = _settlement_lic_discounted(
+            benefit, basis.settlement_pattern, basis.discount_monthly)
+        lic_opening = k_exp * lic_disc[rows, em_open]
+        lic_closing = k_exp * lic_disc[rows, em_c]
+    else:
+        lic_opening = k_exp * p_exp.lic[rows, em_open]
+        lic_closing = k_exp * p_exp.lic[rows, em_c]
+    lic_finance = lic_closing - lic_opening - claims_incurred + claims_paid
 
     # B97(b)/(c) within-period claims and expense experience (the gmm.settle
     # mirror): the actual benefits / expenses incurred over the period less the
@@ -1365,6 +1382,7 @@ def settle(
         account_value_closing=observed_av,
         lic_opening=lic_opening,
         claims_incurred=claims_incurred,
+        lic_finance=lic_finance,
         claims_paid=claims_paid,
         lic_closing=lic_closing,
         lock_in_rate=float(state.lock_in_rate),

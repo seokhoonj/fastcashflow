@@ -870,14 +870,20 @@ class VFASettlementMovement:
         loss_component_closing == loss_component_opening
                        + loss_component_finance - loss_component_amortised
                        - loss_component_reversed + loss_component_recognised
-        lic_closing == lic_opening + claims_incurred - claims_paid
+        lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
 
     The liability for incurred claims (``lic_opening`` / ``claims_incurred`` /
-    ``claims_paid`` / ``lic_closing``, paragraphs 40(b) / 42 / 103(b)) is
-    present when the basis carries a ``settlement_pattern``: benefit claims
-    build it up as incurred and run it off over the pattern, undiscounted, at
-    the expected scale, reconstructed from the projection each period (zero at
-    both dates without a pattern). It mirrors the GMM / PAA block.
+    ``lic_finance`` / ``claims_paid`` / ``lic_closing``, paragraphs 40(b) /
+    42(c) / 103(b)) is present when the basis carries a ``settlement_pattern``:
+    benefit claims build it up as incurred and run it off over the pattern. The
+    LIC is measured at fulfilment cash flows -- the discounted PV of the unpaid
+    run-off (42(c)). It carries NO risk adjustment: the VFA RA prices expense
+    risk only (the benefit risk sits in the variable fee), so the incurred
+    benefits carry no RA in the LIC either. ``claims_incurred`` and
+    ``claims_paid`` stay nominal (``claims_paid`` the residual on the
+    undiscounted trajectory); ``lic_finance`` is the reconciling residual (the
+    42(c) discount unwind + discounting measurement effect), zero at both dates
+    without a pattern. It mirrors the GMM block (which adds the LIC RA).
 
     and the blocks tie across: ``csm_fv_share + csm_future_service ==
     -(bel_experience + ra_experience)`` -- the paragraph-45 future-service
@@ -989,9 +995,10 @@ class VFASettlementMovement:
     coverage_units_provided: FloatArray  # B119 numerator, expected scale
     coverage_units_future: FloatArray    # B119 remainder, observed scale
     account_value_closing: FloatArray    # observed fund value at the close
-    lic_opening: FloatArray              # 40(b)/42: liability for incurred claims
-    claims_incurred: FloatArray          # 42(a)/103(b)(i): claims incurred this period
-    claims_paid: FloatArray              # the settlement-pattern run-off (residual)
+    lic_opening: FloatArray              # 40(b)/42(c): discounted PV of incurred claims
+    claims_incurred: FloatArray          # 42(a)/103(b)(i): claims incurred this period (nominal)
+    lic_finance: FloatArray              # 42(c): discount unwind + discounting measurement
+    claims_paid: FloatArray              # the settlement-pattern run-off (nominal residual)
     lic_closing: FloatArray
     lock_in_rate: float = 0.0            # state echo only; no VFA locked rate
     model_points: "object | None" = None
@@ -1094,6 +1101,7 @@ class VFASettlementReconciliation:
     loss_component_closing: float
     lic_opening: float = 0.0
     claims_incurred: float = 0.0
+    lic_finance: float = 0.0
     claims_paid: float = 0.0
     lic_closing: float = 0.0
 
@@ -1136,6 +1144,7 @@ class VFASettlementReconciliation:
             ("Liability for incurred claims", (
                 ("Opening", self.lic_opening),
                 ("Claims incurred", self.claims_incurred),
+                ("Finance (42(c))", self.lic_finance),
                 ("Claims paid", self.claims_paid),
                 ("Closing", self.lic_closing),
             )),
@@ -1203,6 +1212,7 @@ def _reconcile_vfa_settlement(
             loss_component_closing=float(m.loss_component_closing.sum()),
             lic_opening=float(m.lic_opening.sum()),
             claims_incurred=float(m.claims_incurred.sum()),
+            lic_finance=float(m.lic_finance.sum()),
             claims_paid=float(-m.claims_paid.sum()),
             lic_closing=float(m.lic_closing.sum()),
         )
@@ -1969,6 +1979,7 @@ def _(movement: VFASettlementMovement, path, *, ids=None):
         "coverage_units_future": movement.coverage_units_future,
         "lic_opening": movement.lic_opening,
         "claims_incurred": movement.claims_incurred,
+        "lic_finance": movement.lic_finance,
         "claims_paid": movement.claims_paid,
         "lic_closing": movement.lic_closing,
         "lock_in_rate": np.full(movement.bel_closing.shape[0],
@@ -2084,7 +2095,7 @@ _VFA_SETTLEMENT_LINES = (
     "loss_component_recognised", "loss_component_closing",
     "variable_fee_closing", "account_value_closing",
     "coverage_units_provided", "coverage_units_future",
-    "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
+    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
 )
 
 _REINSURANCE_SETTLEMENT_LINES = (
@@ -2267,6 +2278,7 @@ class VFASettlementAggregate:
     coverage_units_future: float
     lic_opening: float = 0.0
     claims_incurred: float = 0.0
+    lic_finance: float = 0.0
     claims_paid: float = 0.0
     lic_closing: float = 0.0
     lock_in_rate: float = 0.0            # state echo only; no VFA locked rate
@@ -2460,6 +2472,7 @@ def _(aggregate: VFASettlementAggregate) -> VFASettlementReconciliation:
         loss_component_closing=a.loss_component_closing,
         lic_opening=a.lic_opening,
         claims_incurred=a.claims_incurred,
+        lic_finance=a.lic_finance,
         claims_paid=-a.claims_paid,
         lic_closing=a.lic_closing,
     )

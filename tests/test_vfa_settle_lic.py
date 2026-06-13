@@ -1,12 +1,14 @@
 """vfa.settle -- the liability-for-incurred-claims (LIC) block under a
-settlement_pattern basis (paragraphs 40(b) / 42 / 103(b)).
+settlement_pattern basis (paragraphs 40(b) / 42(c) / 103(b)).
 
-Authoritative skeleton. The VFA mirror of test_gmm_settle_lic.py: vfa.settle
-previously rejected a settlement_pattern basis; this adds the four LIC movement
-lines, built from the VFA benefit_cf incurred stream, entirely expected-scale
-with claims_paid the residual::
+The VFA mirror of test_gmm_settle_lic.py: the LIC is built from the VFA
+benefit_cf incurred stream and measured at fulfilment cash flows -- the
+discounted PV of the unpaid run-off (42(c)). It carries NO risk adjustment (the
+VFA RA prices expense risk only, the benefit risk sitting in the variable fee).
+claims_incurred / claims_paid stay nominal; lic_finance is the reconciling
+residual::
 
-    lic_closing == lic_opening + claims_incurred - claims_paid
+    lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
 """
 from dataclasses import replace
 
@@ -27,12 +29,12 @@ pytestmark = pytest.mark.skipif(
 PATTERN = np.array([0.6, 0.3, 0.1])
 
 
-def _basis(*, settlement_pattern=None):
+def _basis(*, settlement_pattern=None, discount_annual=0.05):
     death_fn = lambda s, ia, d: np.full(s.shape, 0.012)
     return Basis(
         mortality_annual=death_fn,
         lapse_annual=lambda s, ia, d: np.full(s.shape, 0.05),
-        discount_annual=0.05, ra_confidence=0.75, mortality_cv=0.0,
+        discount_annual=discount_annual, ra_confidence=0.75, mortality_cv=0.0,
         expense_cv=0.10, investment_return=0.05, fund_fee=0.015,
         expense_items=(ExpenseItem("maintenance", "gamma_fixed", 1_000.0),),
         settlement_pattern=settlement_pattern,
@@ -77,10 +79,11 @@ def test_settlement_pattern_basis_is_accepted_and_block_reconciles():
     basis = _basis(settlement_pattern=PATTERN)
     mp, state = _book(basis)
     mv = settle(mp, state, basis, period_months=6)
-    for nm in ("lic_opening", "claims_incurred", "claims_paid", "lic_closing"):
+    for nm in ("lic_opening", "claims_incurred", "lic_finance",
+               "claims_paid", "lic_closing"):
         assert hasattr(mv, nm)
     np.testing.assert_allclose(
-        mv.lic_opening + mv.claims_incurred - mv.claims_paid,
+        mv.lic_opening + mv.claims_incurred + mv.lic_finance - mv.claims_paid,
         mv.lic_closing, rtol=1e-10)
 
 
@@ -93,12 +96,26 @@ def test_settlement_pattern_leaves_an_outstanding_lic():
     assert np.all(mv.claims_incurred > 0.0)
 
 
+def test_lic_is_discounted_below_the_nominal_balance():
+    """The VFA LIC is the discounted PV of the benefit run-off (no RA), so on a
+    positive discount it sits strictly below the undiscounted nominal balance."""
+    nodisc = _basis(settlement_pattern=PATTERN, discount_annual=0.0)
+    disc = _basis(settlement_pattern=PATTERN, discount_annual=0.05)
+    mp_n, st_n = _book(nodisc)
+    mp_d, st_d = _book(disc)
+    mv_n = settle(mp_n, st_n, nodisc, period_months=6)
+    mv_d = settle(mp_d, st_d, disc, period_months=6)
+    assert np.all(mv_d.lic_opening < mv_n.lic_opening)
+    np.testing.assert_array_equal(mv_n.lic_finance, 0.0)   # r=0 => no unwind
+
+
 def test_no_pattern_has_zero_lic_and_claims_paid_equals_incurred():
     basis = _basis(settlement_pattern=None)
     mp, state = _book(basis)
     mv = settle(mp, state, basis, period_months=6)
     np.testing.assert_array_equal(mv.lic_opening, 0.0)
     np.testing.assert_array_equal(mv.lic_closing, 0.0)
+    np.testing.assert_array_equal(mv.lic_finance, 0.0)
     np.testing.assert_allclose(mv.claims_paid, mv.claims_incurred, rtol=1e-12)
 
 
