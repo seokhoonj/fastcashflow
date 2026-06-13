@@ -248,6 +248,11 @@
   - 신계약 측정을 보고기간별로 잘라 BEL / CSM 움직임을 미래서비스 / 이자 /
     상각으로 귀속. `roll_forward` / `reconcile`, 가정변경 (`revised`) /
     경험 (`actual_inforce`).
+* - 9.3
+  - [손실부담 계약과 경험조정의 결산](workflow/onerous-settle)
+  - settle 의 고급 라인. 손실요소 체계적 배분 (Sec. 50(a)-52), 발생손해부채
+    (`settlement_pattern`, Sec. 40(b)), 보험료 (Sec. B96(a)) / 투자요소
+    (Sec. B96(c)) 경험조정.
 ```
 
 ### 10. 단기 측정 (PAA)
@@ -387,6 +392,7 @@ workflow/validation
 
 workflow/settlement
 workflow/movement
+workflow/onerous-settle
 ```
 
 ```{toctree}
