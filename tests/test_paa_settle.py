@@ -292,6 +292,109 @@ def test_final_settlement_releases_lrc_and_keeps_the_lic_tail():
     _assert_blocks(mv)
 
 
+# ---------------------------------------------------------------------------
+# pure-LIC-runoff close (opening date at or past the boundary) -- gap (3)
+# ---------------------------------------------------------------------------
+
+def _runoff_state(mp, prior_lic, em_close):
+    """A runoff InforceState seated at em_close with a zero closing count and a
+    carried prior_lic (no in-force past the boundary)."""
+    from dataclasses import replace
+    ids = mp.mp_id
+    mp_r = replace(mp, elapsed_months=np.array([em_close]), count=np.array([0.0]))
+    st_r = InforceState(
+        mp_id=ids, elapsed_months=np.array([em_close]), count=np.array([0.0]),
+        prior_csm=np.array([0.0]), lock_in_rate=0.0,
+        prior_count=np.array([0.0]), prior_lic=np.asarray(prior_lic))
+    return mp_r, st_r
+
+
+def test_pure_lic_runoff_past_the_boundary():
+    """A settlement period opening at the contract boundary: coverage has ended,
+    only the claims tail of already-incurred claims remains. Every in-force-
+    scaled line is zero; the carried prior_lic seeds the LIC run-off."""
+    basis = _basis(mortality_q=0.01, discount_annual=0.03,
+                   settlement_pattern=np.array([0.6, 0.4]))
+    surv = _unit_inforce(basis, **ONEROUS)
+    # the final coverage settle (em_close == boundary == 12) leaves the tail
+    mp_f, st_f = _book(**ONEROUS, em_close=12, prior_count=float(surv[9]),
+                       count=0.0)
+    mv_f = settle(mp_f, st_f, basis, period_months=3)
+    tail = mv_f.lic_closing
+    assert np.all(tail > 0.0)                    # month-11 claims' 0.4 still owed
+    # a pure-runoff period: em_open == 12 (boundary), em_close == 13
+    mp_r, st_r = _runoff_state(mp_f, tail, em_close=13)
+    mv = settle(mp_r, st_r, basis, period_months=1)
+    # every in-force-scaled line is zero (coverage ended)
+    np.testing.assert_array_equal(mv.lrc_opening, 0.0)
+    np.testing.assert_array_equal(mv.lrc_closing, 0.0)
+    np.testing.assert_array_equal(mv.revenue, 0.0)
+    np.testing.assert_array_equal(mv.premiums, 0.0)
+    np.testing.assert_array_equal(mv.loss_component_closing, 0.0)
+    np.testing.assert_array_equal(mv.claims_incurred, 0.0)
+    # the LIC opens at the carried tail (seam identity) and runs off
+    np.testing.assert_allclose(mv.lic_opening, tail, rtol=1e-9)
+    assert np.all(mv.claims_paid > 0.0)          # the tail pays down
+    assert np.all(mv.lic_closing < mv.lic_opening)
+    _assert_blocks(mv)
+
+
+def test_runoff_telescopes_to_a_full_run_off():
+    """Settling the whole run-off month by month pays out exactly the carried
+    tail and drives the closing LIC to zero (the pattern is fully settled)."""
+    basis = _basis(mortality_q=0.01, discount_annual=0.0,   # undiscounted: paid == tail
+                   mortality_cv=0.0, settlement_pattern=np.array([0.5, 0.3, 0.2]))
+    surv = _unit_inforce(basis, **ONEROUS)
+    mp_f, st_f = _book(**ONEROUS, em_close=12, prior_count=float(surv[9]),
+                       count=0.0)
+    tail = settle(mp_f, st_f, basis, period_months=3).lic_closing
+    total_paid = 0.0
+    plic = tail
+    for em_close in (13, 14, 15):                # run the 3-month tail off
+        mp_r, st_r = _runoff_state(mp_f, plic, em_close=em_close)
+        mv = settle(mp_r, st_r, basis, period_months=1)
+        total_paid += float(mv.claims_paid[0])
+        plic = mv.lic_closing
+    np.testing.assert_allclose(plic, 0.0, atol=1e-9)          # fully run off
+    np.testing.assert_allclose(total_paid, float(tail[0]), rtol=1e-9)
+
+
+def test_runoff_without_prior_lic_raises():
+    basis = _basis(mortality_q=0.01, settlement_pattern=np.array([0.6, 0.4]))
+    mp_f, _ = _book(**ONEROUS, em_close=12, prior_count=1.0, count=0.0)
+    from dataclasses import replace
+    mp_r = replace(mp_f, elapsed_months=np.array([13]), count=np.array([0.0]))
+    bare = InforceState(
+        mp_id=mp_r.mp_id, elapsed_months=np.array([13]), count=np.array([0.0]),
+        prior_csm=np.array([0.0]), lock_in_rate=0.0, prior_count=np.array([0.0]))
+    with pytest.raises(ValueError, match="prior_lic"):
+        settle(mp_r, bare, basis, period_months=1)
+
+
+def test_runoff_with_exhausted_schedule_but_positive_prior_lic_raises():
+    """A carried prior_lic > 0 opening past the full run-off (the pattern is
+    already exhausted) is an inconsistent input -- rejected, not silently
+    zeroed."""
+    basis = _basis(mortality_q=0.01, settlement_pattern=np.array([0.6, 0.4]))
+    mp_f, _ = _book(**ONEROUS, em_close=12, prior_count=1.0, count=0.0)
+    # boundary 12, pattern length 2 -> the tail is fully settled by month 13;
+    # opening at month 20 with a positive carried tail is inconsistent
+    mp_r, st_r = _runoff_state(mp_f, np.array([5.0]), em_close=21)
+    with pytest.raises(ValueError, match="run-off schedule"):
+        settle(mp_r, st_r, basis, period_months=1)
+
+
+def test_closing_inputs_carries_prior_lic():
+    basis = _basis(mortality_q=0.01, discount_annual=0.03,
+                   settlement_pattern=np.array([0.6, 0.4]))
+    surv = _unit_inforce(basis, **ONEROUS)
+    mp, state = _book(**ONEROUS, em_close=6, prior_count=float(surv[3]),
+                      count=float(surv[6]))
+    mv = settle(mp, state, basis, period_months=3)
+    _, next_state = mv.closing_inputs()
+    np.testing.assert_allclose(next_state.prior_lic, mv.lic_closing, rtol=1e-12)
+
+
 def _chain(basis, surv, grains):
     """Settle em 0 -> 12 in the given grains through closing_inputs(),
     on-track counts from the unit survival (the boundary step closes the

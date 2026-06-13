@@ -870,6 +870,12 @@ class InforceState:
       current service (Sec. B97(b)/(c)): it is recognised in the insurance
       service result (P&L) and does NOT adjust the CSM. Reported on
       ``gmm.settle`` as ``claims_experience`` / ``expense_experience``.
+    * ``prior_lic`` -- closing liability for incurred claims at the prior
+      reporting date (``None`` means reconstruct from the in-force). Required to
+      settle a PAA pure-LIC-runoff period (the opening date at or past the
+      contract boundary): once coverage has ended there is no in-force to scale
+      the LIC by, so the carried balance seeds the run-off. ``paa.settle``'s
+      ``closing_inputs()`` carries the period's ``lic_closing`` here.
     """
 
     mp_id: np.ndarray
@@ -886,6 +892,7 @@ class InforceState:
     actual_investment_component: FloatArray | None = None
     actual_claims: FloatArray | None = None
     actual_expenses: FloatArray | None = None
+    prior_lic: FloatArray | None = None
 
     def __post_init__(self) -> None:
         # Coerce each array to its canonical dtype so a hand-built state
@@ -953,7 +960,7 @@ class InforceState:
         # account value reseeds a NaN account-value path; a negative prior
         # count or loss component is meaningless.
         for nm in ("account_value", "prior_count", "prior_account_value",
-                   "prior_loss_component"):
+                   "prior_loss_component", "prior_lic"):
             value = getattr(self, nm)
             if value is None:
                 continue
@@ -1020,6 +1027,7 @@ class InforceState:
             actual_investment_component=_opt(self.actual_investment_component),
             actual_claims=_opt(self.actual_claims),
             actual_expenses=_opt(self.actual_expenses),
+            prior_lic=_opt(self.prior_lic),
         )
 
 

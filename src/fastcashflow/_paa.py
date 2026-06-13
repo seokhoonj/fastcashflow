@@ -584,15 +584,21 @@ def settle(
     column; the risk-adjustment column is structurally zero (the PAA LIC
     carries no risk adjustment, Sec. 59(b)).
 
-    v1 scope (documented cuts, mirroring the gmm / vfa settles): within-period
-    cash flows are as expected -- the observed input is the closing count
-    only (actual premiums received are the Sec. 55(b)(i) input verbatim, so
-    they and actual claims paid are the v1.1 priority); a pure LIC-runoff
-    close (opening date at or past the boundary, only the claims tail left)
-    is rejected; no subsequent Sec. 53 eligibility re-test; no OCI (the
-    Sec. 56 undiscounted LRC has no finance line at all). A final settlement
+    A pure-LIC-runoff close (opening date at or past the contract boundary,
+    only the claims tail of already-incurred claims left) is supported: coverage
+    has ended so every in-force-scaled line is zero, and the carried
+    ``state.prior_lic`` seeds the LIC run-off over an extended horizon (claims
+    incurred in the last coverage months still settle). A final settlement
     (``em_close >= boundary``) is allowed with a zero closing count: the LRC
-    releases in full through revenue while the LIC tail stays outstanding.
+    releases in full through revenue while the LIC tail stays outstanding, and
+    ``closing_inputs()`` carries that tail forward as the next period's
+    ``prior_lic``.
+
+    v1 scope (documented cuts, mirroring the gmm / vfa settles): within-period
+    cash flows are as expected -- the observed input is the closing count only
+    (actual premiums received are the Sec. 55(b)(i) input verbatim, so they and
+    actual claims paid are the v1.1 priority); no subsequent Sec. 53 eligibility
+    re-test; no OCI (the Sec. 56 undiscounted LRC has no finance line at all).
     """
     if revenue_basis not in ("time", "claims"):
         raise ValueError(
@@ -621,14 +627,22 @@ def settle(
 
     boundary = np.asarray(model_points.contract_boundary_months,
                           dtype=np.int64)
-    if np.any(em_open >= boundary):
-        bad = int(np.argmax(em_open >= boundary))
+    # A pure-LIC-runoff period opens at or past the contract boundary: coverage
+    # has ended (the LRC is fully released) and only the claims tail of
+    # already-incurred claims remains. There is no in-force to scale the LIC by,
+    # so the carried closing LIC (state.prior_lic) seeds the run-off (the LIC
+    # block below scales the extended run-off trajectory by prior_lic instead of
+    # the in-force k_exp). paa.settle's closing_inputs() carries prior_lic.
+    runoff = em_open >= boundary
+    if np.any(runoff) and state.prior_lic is None:
+        bad = int(np.argmax(runoff))
         raise ValueError(
             f"elapsed_months[{bad}]={int(em_close[bad])} - "
             f"period_months={period} is at or past the contract boundary "
-            f"({int(boundary[bad])}); the opening date must lie inside the "
-            "remaining coverage period. A pure LIC-runoff settlement is a "
-            "v1 cut."
+            f"({int(boundary[bad])}); a pure-LIC-runoff settlement needs "
+            "state.prior_lic (the carried closing liability for incurred "
+            "claims) -- there is no in-force left to reconstruct the liability "
+            "from. paa.settle's closing_inputs() carries it forward."
         )
 
     count = np.asarray(model_points.count, dtype=np.float64)
@@ -649,10 +663,19 @@ def settle(
     rows = np.arange(n_mp)
     n_time = cf.inforce.shape[1]
     cap = np.minimum(em_close, boundary)
+    # Runoff MPs open at or past the boundary -- clamp their index into the
+    # coverage-period trajectories (their k_exp is forced to zero just below, so
+    # every in-force-scaled line auto-zeros; only the LIC, scaled by prior_lic
+    # over the extended run-off, is non-zero for them).
+    em_open_idx = np.minimum(em_open, n_time - 1)
 
-    surv_open = cf.inforce[rows, em_open]
+    surv_open = cf.inforce[rows, em_open_idx]
     k_exp = (np.asarray(state.prior_count, dtype=np.float64)
              / np.where(surv_open > 0.0, surv_open, 1.0))
+    # No in-force expected leg past the boundary: zero k_exp so the LRC, revenue,
+    # premiums, loss-component and claims_incurred lines are all zero for runoff
+    # MPs, regardless of the (meaningless) prior_count at a past-coverage date.
+    k_exp = np.where(runoff, 0.0, k_exp)
 
     close_idx = np.minimum(cap, n_time - 1)
     surv_close = np.where(final, 0.0, cf.inforce[rows, close_idx])
@@ -676,7 +699,7 @@ def settle(
     revenue = k_exp * (unit.revenue[rows[:, None], cols_safe]
                        * col_ok).sum(axis=1)
 
-    lrc_opening    = k_exp * unit.lrc_path[rows, em_open]
+    lrc_opening    = k_exp * unit.lrc_path[rows, em_open_idx]
     lrc_closing    = k_obs * unit.lrc_path[rows, cap]
     lrc_experience = (k_obs - k_exp) * unit.lrc_path[rows, cap]
 
@@ -713,7 +736,7 @@ def settle(
     ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
                           pv_survival, monthly_rate)
 
-    fcf_open  = k_exp * (bel[rows, em_open] + ra[rows, em_open])
+    fcf_open  = k_exp * (bel[rows, em_open_idx] + ra[rows, em_open_idx])
     fcf_close = k_obs * (bel[rows, cap] + ra[rows, cap])
     loss_component_opening = np.maximum(0.0, fcf_open - lrc_opening)
     loss_component_closing = np.maximum(0.0, fcf_close - lrc_closing)
@@ -727,29 +750,74 @@ def settle(
     # run-off plus the risk adjustment. paragraph 59(b) PERMITS omitting the
     # discounting for <=1yr PAA claims, but discounting is also compliant and
     # keeps the LIC uniform with the GMM block (and 59(b) never exempts the RA).
-    # claims_incurred and claims_paid stay NOMINAL (claims_paid the residual on
-    # the undiscounted trajectory unit.lic); lic_finance is the reconciling
-    # residual (the 42(c) discount unwind + discounting/RA measurement effect).
+    # claims_incurred and claims_paid stay NOMINAL; lic_finance is the
+    # reconciling residual (the 42(c) discount unwind + discounting/RA effect).
+    #
+    # One formula spans in-coverage and pure-runoff MPs via a unified SCALE: an
+    # in-coverage period reconstructs the run-off from the projection at the
+    # in-force scale k_exp; a runoff period (em_open >= boundary, k_exp forced to
+    # zero above) has no in-force, so the carried prior_lic implies the scale and
+    # the run-off extends past the boundary -- claims incurred in the last
+    # coverage months still settle (the run-off trajectory is padded by
+    # pattern_length - 1 months). For an in-coverage MP the extended trajectory
+    # equals the in-coverage one within the boundary, so this is byte-identical.
     incurred = cf.claim_cf + cf.morbidity_cf
     claims_incurred = k_exp * (incurred[rows[:, None], cols_safe]
                                * col_ok).sum(axis=1)
-    claims_paid = (k_exp * unit.lic[rows, em_open] + claims_incurred
-                   - k_exp * unit.lic[rows, cap])
     if basis.settlement_pattern is not None:
+        pattern = np.asarray(basis.settlement_pattern, dtype=np.float64)
+        pad = pattern.size - 1                 # claims in the last coverage months
+        claim_ext = np.concatenate([cf.claim_cf, np.zeros((n_mp, pad))], axis=1)
+        morb_ext = np.concatenate([cf.morbidity_cf, np.zeros((n_mp, pad))], axis=1)
         r_lic = basis.discount_monthly
-        lic_death = _settlement_lic_discounted(
-            cf.claim_cf, basis.settlement_pattern, r_lic)
-        lic_morb = _settlement_lic_discounted(
-            cf.morbidity_cf, basis.settlement_pattern, r_lic)
+        lic_death = _settlement_lic_discounted(claim_ext, pattern, r_lic)
+        lic_morb = _settlement_lic_discounted(morb_ext, pattern, r_lic)
         z = _norm_ppf(basis.ra_confidence)
         lic_ra = z * (basis.mortality_cv * lic_death
                       + basis.morbidity_cv * lic_morb)
-        lic_fcf = lic_death + lic_morb + lic_ra
-        lic_opening = k_exp * lic_fcf[rows, em_open]
-        lic_closing = k_exp * lic_fcf[rows, cap]
+        lic_fcf_ext = lic_death + lic_morb + lic_ra
+        lic_undisc_ext = _settlement_lic(claim_ext + morb_ext, pattern)
+        n_ext = lic_fcf_ext.shape[1]
+        # in-coverage closing caps at the boundary (the retained tail); runoff
+        # opens / closes in the extended range and runs the carried tail down.
+        open_idx = np.where(runoff, np.minimum(em_open, n_ext - 1), em_open)
+        close_idx = np.where(runoff, np.minimum(em_close, n_ext - 1), cap)
+        fcf_open_unit = lic_fcf_ext[rows, open_idx]
+        if state.prior_lic is not None:
+            prior_lic = np.asarray(state.prior_lic, dtype=np.float64)
+            # An inconsistent carry: a positive prior_lic with no remaining
+            # run-off schedule at the opening date (the unit run-off is already
+            # exhausted there, so the carried tail and the settlement pattern
+            # disagree). Reject rather than silently zero the carried balance --
+            # correct closing_inputs() chaining never reaches this (prior_lic is
+            # zero once the tail has fully run off).
+            stuck = runoff & (prior_lic > 1e-9) & (fcf_open_unit <= 1e-12)
+            if np.any(stuck):
+                bad = int(np.argmax(stuck))
+                raise ValueError(
+                    f"row {bad}: state.prior_lic={float(prior_lic[bad]):.6g} > 0 "
+                    "but the claims run-off schedule is already exhausted at the "
+                    f"opening date (elapsed_months - period_months = "
+                    f"{int(em_open[bad])}); the carried liability and the "
+                    "settlement pattern disagree -- check the opening date or "
+                    "prior_lic."
+                )
+            scale = np.where(
+                runoff,
+                prior_lic / np.where(fcf_open_unit > 0.0, fcf_open_unit, 1.0),
+                k_exp)
+        else:
+            scale = k_exp
+        lic_opening = scale * fcf_open_unit
+        lic_closing = scale * lic_fcf_ext[rows, close_idx]
+        claims_paid = (scale * lic_undisc_ext[rows, open_idx] + claims_incurred
+                       - scale * lic_undisc_ext[rows, close_idx])
     else:
-        lic_opening = k_exp * unit.lic[rows, em_open]
+        # no settlement pattern: claims pay as incurred, so there is no LIC and
+        # no run-off (the carried prior_lic, if any, is zero).
+        lic_opening = k_exp * unit.lic[rows, em_open_idx]
         lic_closing = k_exp * unit.lic[rows, cap]
+        claims_paid = lic_opening + claims_incurred - lic_closing
     lic_finance = lic_closing - lic_opening - claims_incurred + claims_paid
 
     # B97(b)/(c) within-period claims and expense experience (the gmm.settle /

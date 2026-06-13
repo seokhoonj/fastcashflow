@@ -1764,6 +1764,10 @@ class PAASettlementMovement:
             lock_in_rate=0.0,
             prior_count=np.asarray(mp.count, dtype=np.float64),
             prior_loss_component=self.loss_component_closing,
+            # carry the closing LIC so the next period -- in particular a
+            # pure-LIC-runoff close past the contract boundary -- can run the
+            # incurred-claims tail down with no in-force to reconstruct it from.
+            prior_lic=self.lic_closing,
         )
         return mp, state
 
