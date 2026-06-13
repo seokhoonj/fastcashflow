@@ -18,7 +18,7 @@ from fastcashflow.basis import (
 )
 from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTALITY
 from fastcashflow.engine import (
-    GMMAggregate, GMMMeasurement, clear_codegen_cache,
+    GMMAggregate, GMMMeasurement, CSMRecognitionSchedule, clear_codegen_cache,
 )
 from fastcashflow.grouping import group, group_of_contracts
 from fastcashflow.io import (
@@ -101,7 +101,7 @@ __all__ = [
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",
     "GMMSettlementMovement", "GMMSettlementReconciliation",
-    "GMMSettlementAggregate",
+    "GMMSettlementAggregate", "CSMRecognitionSchedule",
     "GoCSettlement", "settle_group_of_contracts",
     "PAASettlementMovement", "PAASettlementReconciliation",
     "VFASettlementMovement", "VFASettlementReconciliation",

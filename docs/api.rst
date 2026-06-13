@@ -47,6 +47,8 @@ Measurement (GMM)
 
 .. autofunction:: fastcashflow.gmm.settle_stream
 
+.. autofunction:: fastcashflow.gmm.recognition_schedule
+
 .. autoclass:: fastcashflow.GMMSettlementMovement
    :members:
 
@@ -54,6 +56,9 @@ Measurement (GMM)
    :members:
 
 .. autoclass:: fastcashflow.GMMSettlementAggregate
+   :members:
+
+.. autoclass:: fastcashflow.CSMRecognitionSchedule
    :members:
 
 .. autoclass:: fastcashflow.GMMMeasurement
