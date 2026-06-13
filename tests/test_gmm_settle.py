@@ -441,16 +441,19 @@ def test_guards():
     basis = _basis()
     mp, state = _book(basis)
 
-    # settlement_pattern is rejected (the book would carry an LIC at both
-    # dates -- v1 cut, mirroring vfa.settle)
+    # settlement_pattern is now accepted -- it carries the liability for
+    # incurred claims (paragraphs 40(b)/42); the dedicated LIC behaviour lives
+    # in test_gmm_settle_lic.py.
     sp = Basis(
         mortality_annual=_flat(0.012), lapse_annual=_flat(0.05),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         settlement_pattern=np.array([0.5, 0.5]),
         coverages=(CoverageRate("DEATH", _flat(0.012)),),
     )
-    with pytest.raises(ValueError, match="settlement_pattern"):
-        settle(mp, state, sp, period_months=12)
+    sp_mv = settle(mp, state, sp, period_months=12)
+    np.testing.assert_allclose(
+        sp_mv.lic_opening + sp_mv.claims_incurred - sp_mv.claims_paid,
+        sp_mv.lic_closing, rtol=1e-10)
 
     # prior_count is mandatory (the expected leg's scale)
     bare = InforceState(

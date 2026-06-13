@@ -1219,6 +1219,7 @@ class GMMSettlementMovement:
         loss_component_closing == loss_component_opening
                        + loss_component_finance - loss_component_amortised
                        - loss_component_reversed + loss_component_recognised
+        lic_closing == lic_opening + claims_incurred - claims_paid
 
     The GMM cross identity is THREE-term (unlike the VFA's two-term tie)::
 
@@ -1262,6 +1263,16 @@ class GMMSettlementMovement:
     ``r`` is re-derived every period. The future-service algebra acts on the
     POST-amortisation loss component, so ``loss_component_reversed`` is capped
     by the loss component net of this channel.
+
+    ``lic_opening`` / ``claims_incurred`` / ``claims_paid`` / ``lic_closing``
+    are the liability for incurred claims (paragraphs 40(b) / 42 / 103(b)),
+    meaningful when the basis carries a ``settlement_pattern``: claims build the
+    LIC up as incurred (42(a)) and run it off over the pattern, ``claims_paid``
+    the residual so ``lic_closing == lic_opening + claims_incurred -
+    claims_paid``. The block is entirely expected-scale and the LIC is the
+    undiscounted incurred-but-unpaid balance, reconstructed from the projection
+    each period. Without a settlement pattern claims are paid as incurred, so
+    the LIC is zero at both dates and ``claims_paid == claims_incurred``.
     """
 
     bel_opening: FloatArray
@@ -1290,6 +1301,10 @@ class GMMSettlementMovement:
     loss_component_closing: FloatArray
     coverage_units_provided: FloatArray  # k_exp x (tail[em_open] - tail[em_close])
     coverage_units_future: FloatArray    # k_obs x tail[em_close]
+    lic_opening: FloatArray              # 40(b)/42: liability for incurred claims
+    claims_incurred: FloatArray          # 42(a)/103(b)(i): claims incurred this period
+    claims_paid: FloatArray              # the settlement-pattern run-off (residual)
+    lic_closing: FloatArray
     period_months: int = 12
     lock_in_rate: float = 0.0
     model_points: object | None = None
@@ -1352,6 +1367,10 @@ class GMMSettlementReconciliation:
     csm_closing: float
     loss_component_opening: float
     loss_component_closing: float
+    lic_opening: float = 0.0
+    claims_incurred: float = 0.0
+    claims_paid: float = 0.0
+    lic_closing: float = 0.0
 
 
 def _reconcile_gmm_settlement(
@@ -1385,6 +1404,10 @@ def _reconcile_gmm_settlement(
             csm_closing=float(m.csm_closing.sum()),
             loss_component_opening=float(m.loss_component_opening.sum()),
             loss_component_closing=float(m.loss_component_closing.sum()),
+            lic_opening=float(m.lic_opening.sum()),
+            claims_incurred=float(m.claims_incurred.sum()),
+            claims_paid=float(-m.claims_paid.sum()),
+            lic_closing=float(m.lic_closing.sum()),
         )
         for m in movements
     ]
@@ -1698,6 +1721,10 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
         "loss_component_closing": movement.loss_component_closing,
         "coverage_units_provided": movement.coverage_units_provided,
         "coverage_units_future": movement.coverage_units_future,
+        "lic_opening": movement.lic_opening,
+        "claims_incurred": movement.claims_incurred,
+        "claims_paid": movement.claims_paid,
+        "lic_closing": movement.lic_closing,
         "lock_in_rate": np.full(movement.bel_closing.shape[0],
                                 movement.lock_in_rate),
         "measurement_basis": [movement.measurement_basis]
@@ -1870,6 +1897,7 @@ _GMM_SETTLEMENT_LINES = (
     "loss_component_amortised", "loss_component_reversed",
     "loss_component_recognised", "loss_component_closing",
     "coverage_units_provided", "coverage_units_future",
+    "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
 )
 
 _VFA_SETTLEMENT_LINES = (
@@ -1957,6 +1985,10 @@ class GMMSettlementAggregate:
     loss_component_closing: float
     coverage_units_provided: float
     coverage_units_future: float
+    lic_opening: float = 0.0
+    claims_incurred: float = 0.0
+    claims_paid: float = 0.0
+    lic_closing: float = 0.0
     measurement_basis: str = "settlement"
 
     def closing_inputs(self):
@@ -2121,6 +2153,10 @@ def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
         csm_closing=a.csm_closing,
         loss_component_opening=a.loss_component_opening,
         loss_component_closing=a.loss_component_closing,
+        lic_opening=a.lic_opening,
+        claims_incurred=a.claims_incurred,
+        claims_paid=-a.claims_paid,
+        lic_closing=a.lic_closing,
     )
 
 

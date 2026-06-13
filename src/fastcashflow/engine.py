@@ -993,13 +993,21 @@ def settle(
     pool_opening`` between the loss component and the LRC excluding it, running
     the loss component to zero by the end of coverage (52).
 
+    A ``settlement_pattern`` basis is supported: the movement carries the
+    liability for incurred claims (``lic_opening`` / ``claims_incurred`` /
+    ``claims_paid`` / ``lic_closing``, paragraphs 40(b) / 42 / 103(b)) -- claims
+    build it up as incurred and run it off over the pattern, undiscounted and at
+    the expected scale, reconstructed from the projection each period.
+
     v1 scope (documented cuts, mirroring ``vfa.settle``): other within-period
     cash flows (claims, expenses, benefits) are as expected -- only the
-    closing count and the premium are observed inputs; no B96(c)
+    closing count and the premium are observed inputs, so the LIC roll is
+    expected-scale (the 42(b) subsequent-remeasurement for actual claims
+    experience is not modelled) and undiscounted (no 42(c) finance / 33-37
+    discount + RA on the LIC, the same cut the measure takes); no B96(c)
     investment-component split, so the paragraph-50(a) pool includes the whole
     non-premium outflow (surrender / maturity not separated as investment
-    components, B124(ii)); no ``settlement_pattern`` book (the LIC would
-    straddle both dates); the RA change enters the CSM at its current measure
+    components, B124(ii)); the RA change enters the CSM at its current measure
     (B96(d) prescribes no rate); no OCI -- the ``finance_wedge`` is the
     period's P&L line, not an accumulated-OCI state. A maturity falling inside
     the period is expected service (it seeds the unit BEL at the boundary and
@@ -1007,13 +1015,6 @@ def settle(
     """
     _require_gmm_router(basis, entry="gmm.settle")
     basis = _single_basis(basis, entry="gmm.settle")
-    if basis.settlement_pattern is not None:
-        raise ValueError(
-            "gmm.settle does not support a settlement_pattern basis: the book "
-            "would carry a liability for incurred claims at both the opening "
-            "and closing dates, and v1 has no LIC movement lines. Settle the "
-            "claims as they fall due (settlement_pattern=None)."
-        )
     state = _reconcile_state(model_points, state)
     if state.prior_count is None:
         raise ValueError(
@@ -1227,6 +1228,21 @@ def settle(
     csm_release = csm_after * frac
     csm_closing = csm_after - csm_release
 
+    # Liability for incurred claims (paragraphs 40(b) / 42 / 103(b)): claims
+    # build it up as incurred (42(a)) and run it off over the settlement
+    # pattern. Entirely expected-scale (k_exp) with claims_paid the residual,
+    # so the block closes by construction -- the same reconstruction as
+    # paa.settle. m.lic is the undiscounted unit trajectory (all-zero when the
+    # basis has no settlement_pattern, i.e. claims paid as incurred -- the LIC
+    # is zero at both dates and claims_paid == claims_incurred). The BEL has
+    # already discounted claims to their payment dates (_measure_full).
+    incurred = cf.claim_cf + cf.morbidity_cf
+    claims_incurred = k_exp * (incurred[rows[:, None], cols_safe]
+                               * col_ok).sum(axis=1)
+    lic_opening = k_exp * m.lic[rows, em_open]
+    lic_closing = k_exp * m.lic[rows, em_c]
+    claims_paid = lic_opening + claims_incurred - lic_closing
+
     from fastcashflow.movement import GMMSettlementMovement
     return GMMSettlementMovement(
         bel_opening=bel_o, bel_interest=bel_i, bel_release=bel_r,
@@ -1247,6 +1263,10 @@ def settle(
         loss_component_closing=lc_closing,
         coverage_units_provided=cu_provided,
         coverage_units_future=cu_future,
+        lic_opening=lic_opening,
+        claims_incurred=claims_incurred,
+        claims_paid=claims_paid,
+        lic_closing=lic_closing,
         period_months=period, lock_in_rate=lock,
         model_points=model_points,
     )

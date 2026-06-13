@@ -837,6 +837,7 @@ _GOC_SETTLEMENT_LINEAR = (
     "csm_accretion", "csm_experience_unlocking", "csm_premium_experience",
     "loss_component_opening", "loss_component_finance",
     "loss_component_amortised",
+    "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
 )
 _GOC_SETTLEMENT_NONLINEAR = (
     "csm_release", "csm_closing", "loss_component_reversed",
@@ -878,6 +879,10 @@ class GoCSettlement:
     loss_component_opening: np.ndarray
     loss_component_finance: np.ndarray
     loss_component_amortised: np.ndarray
+    lic_opening: np.ndarray
+    claims_incurred: np.ndarray
+    claims_paid: np.ndarray
+    lic_closing: np.ndarray
     coverage_units_provided: np.ndarray
     coverage_units_future: np.ndarray
     csm_release: np.ndarray
@@ -1331,6 +1336,10 @@ def _(settlement: GoCSettlement) -> GMMSettlementReconciliation:
         csm_closing=float(a.csm_closing.sum()),
         loss_component_opening=float(a.loss_component_opening.sum()),
         loss_component_closing=float(a.loss_component_closing.sum()),
+        lic_opening=float(a.lic_opening.sum()),
+        claims_incurred=float(a.claims_incurred.sum()),
+        claims_paid=float(-a.claims_paid.sum()),
+        lic_closing=float(a.lic_closing.sum()),
     )
 
 
