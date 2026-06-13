@@ -452,8 +452,8 @@ def test_guards():
     )
     sp_mv = settle(mp, state, sp, period_months=12)
     np.testing.assert_allclose(
-        sp_mv.lic_opening + sp_mv.claims_incurred - sp_mv.claims_paid,
-        sp_mv.lic_closing, rtol=1e-10)
+        sp_mv.lic_opening + sp_mv.claims_incurred + sp_mv.lic_finance
+        - sp_mv.claims_paid, sp_mv.lic_closing, rtol=1e-10)
 
     # prior_count is mandatory (the expected leg's scale)
     bare = InforceState(

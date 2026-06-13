@@ -1295,7 +1295,7 @@ class GMMSettlementMovement:
         loss_component_closing == loss_component_opening
                        + loss_component_finance - loss_component_amortised
                        - loss_component_reversed + loss_component_recognised
-        lic_closing == lic_opening + claims_incurred - claims_paid
+        lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
 
     The GMM cross identity is THREE-term (unlike the VFA's two-term tie)::
 
@@ -1354,15 +1354,30 @@ class GMMSettlementMovement:
     POST-amortisation loss component, so ``loss_component_reversed`` is capped
     by the loss component net of this channel.
 
-    ``lic_opening`` / ``claims_incurred`` / ``claims_paid`` / ``lic_closing``
-    are the liability for incurred claims (paragraphs 40(b) / 42 / 103(b)),
-    meaningful when the basis carries a ``settlement_pattern``: claims build the
-    LIC up as incurred (42(a)) and run it off over the pattern, ``claims_paid``
-    the residual so ``lic_closing == lic_opening + claims_incurred -
-    claims_paid``. The block is entirely expected-scale and the LIC is the
-    undiscounted incurred-but-unpaid balance, reconstructed from the projection
-    each period. Without a settlement pattern claims are paid as incurred, so
-    the LIC is zero at both dates and ``claims_paid == claims_incurred``.
+    ``lic_opening`` / ``claims_incurred`` / ``lic_finance`` / ``claims_paid`` /
+    ``lic_closing`` are the liability for incurred claims (paragraphs 40(b) / 42
+    / 103(b) / 37), meaningful when the basis carries a ``settlement_pattern``:
+    claims build the LIC up as incurred (42(a)) and run it off over the pattern.
+    The LIC is measured at fulfilment cash flows -- the discounted PV of the
+    unpaid run-off plus the risk adjustment (40(b)/42(c)/37). ``claims_incurred``
+    and ``claims_paid`` stay NOMINAL cash amounts (``claims_paid`` the nominal
+    residual on the undiscounted trajectory); the discounting and RA move only
+    the balances, and ``lic_finance`` is the reconciling residual -- the insurance
+    finance (42(c) discount unwind) plus the discounting / RA measurement effect
+    -- so ``lic_closing == lic_opening + claims_incurred + lic_finance -
+    claims_paid``. The block is entirely expected-scale, reconstructed from the
+    projection each period. The LIC RA is the confidence-level margin on the
+    discounted run-off, split by risk class (a cost-of-capital LIC run-off is a
+    refinement). Without a settlement pattern claims are paid as incurred, so the
+    LIC is zero at both dates and ``lic_finance`` is zero.
+
+    v1 presentation limitation: ``lic_finance`` is a single reconciling line, so
+    the RA run-off / remeasurement is bundled with the 42(c) time-value movement
+    rather than separated into its own insurance-service line. The balances
+    (``lic_opening`` / ``lic_closing``) are the correct 40(b)/37 fulfilment cash
+    flow; a fully separated P&L attribution (pure 42(c) finance vs RA release vs
+    the nominal-minus-PV measurement of newly incurred claims) needs a monthly
+    finance-accrual decomposition and is a future refinement.
     """
 
     bel_opening: FloatArray
@@ -1394,9 +1409,10 @@ class GMMSettlementMovement:
     loss_component_closing: FloatArray
     coverage_units_provided: FloatArray  # k_exp x (tail[em_open] - tail[em_close])
     coverage_units_future: FloatArray    # k_obs x tail[em_close]
-    lic_opening: FloatArray              # 40(b)/42: liability for incurred claims
-    claims_incurred: FloatArray          # 42(a)/103(b)(i): claims incurred this period
-    claims_paid: FloatArray              # the settlement-pattern run-off (residual)
+    lic_opening: FloatArray              # 40(b)/42/37: discounted PV + RA of incurred claims
+    claims_incurred: FloatArray          # 42(a)/103(b)(i): claims incurred this period (nominal)
+    lic_finance: FloatArray              # 42(c): discount unwind + discounting/RA measurement
+    claims_paid: FloatArray              # the settlement-pattern run-off (nominal residual)
     lic_closing: FloatArray
     period_months: int = 12
     lock_in_rate: float = 0.0
@@ -1465,6 +1481,7 @@ class GMMSettlementReconciliation:
     loss_component_closing: float
     lic_opening: float = 0.0
     claims_incurred: float = 0.0
+    lic_finance: float = 0.0
     claims_paid: float = 0.0
     lic_closing: float = 0.0
 
@@ -1505,6 +1522,7 @@ def _reconcile_gmm_settlement(
             loss_component_closing=float(m.loss_component_closing.sum()),
             lic_opening=float(m.lic_opening.sum()),
             claims_incurred=float(m.claims_incurred.sum()),
+            lic_finance=float(m.lic_finance.sum()),
             claims_paid=float(-m.claims_paid.sum()),
             lic_closing=float(m.lic_closing.sum()),
         )
@@ -1858,6 +1876,7 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
         "coverage_units_future": movement.coverage_units_future,
         "lic_opening": movement.lic_opening,
         "claims_incurred": movement.claims_incurred,
+        "lic_finance": movement.lic_finance,
         "claims_paid": movement.claims_paid,
         "lic_closing": movement.lic_closing,
         "lock_in_rate": np.full(movement.bel_closing.shape[0],
@@ -2049,7 +2068,7 @@ _GMM_SETTLEMENT_LINES = (
     "loss_component_amortised", "loss_component_reversed",
     "loss_component_recognised", "loss_component_closing",
     "coverage_units_provided", "coverage_units_future",
-    "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
+    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
 )
 
 _VFA_SETTLEMENT_LINES = (
@@ -2149,6 +2168,7 @@ class GMMSettlementAggregate:
     coverage_units_future: float
     lic_opening: float = 0.0
     claims_incurred: float = 0.0
+    lic_finance: float = 0.0
     claims_paid: float = 0.0
     lic_closing: float = 0.0
     measurement_basis: str = "settlement"
@@ -2337,6 +2357,7 @@ def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
         loss_component_closing=a.loss_component_closing,
         lic_opening=a.lic_opening,
         claims_incurred=a.claims_incurred,
+        lic_finance=a.lic_finance,
         claims_paid=-a.claims_paid,
         lic_closing=a.lic_closing,
     )

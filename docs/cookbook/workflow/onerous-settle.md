@@ -8,7 +8,7 @@
 | 메커니즘 | IFRS 17 | movement 라인 | 켜는 입력 |
 |---|---|---|---|
 | 손실요소 체계적 배분 | Sec. 50(a)-52 | `loss_component_finance` / `_amortised` | `prior_loss_component` (손실부담 책) |
-| 발생손해부채 (LIC) | Sec. 40(b) / 42 | `lic_opening` / `claims_incurred` / `claims_paid` / `lic_closing` | `settlement_pattern` (산출기초) |
+| 발생손해부채 (LIC) | Sec. 40(b) / 42(c) / 37 | `lic_opening` / `claims_incurred` / `lic_finance` / `claims_paid` / `lic_closing` | `settlement_pattern` (산출기초) |
 | 보험료 경험조정 | Sec. B96(a) / B97(c) | `csm_premium_experience` / `premium_experience_revenue` | `actual_premium` (결산 상태) |
 | 투자요소 경험조정 | Sec. B96(c) | `csm_investment_experience` | `actual_investment_component` (결산 상태) |
 
@@ -105,8 +105,12 @@ loss_component_closing   =    19,643.56
 청구가 발생 즉시 지급되지 않고 **정산 패턴** 으로 풀려나가면, 미지급 청구가
 발생손해부채 (LIC, Liability for Incurred Claims) 로 쌓입니다 (Sec. 40(b)).
 산출기초에 `settlement_pattern` (발생월·익월·… 지급 비율, 합 = 1) 을 주면
-`gmm.settle` 이 LIC 블록을 냅니다 — `claims_paid` 는 잔차라 블록이 구조적으로
-닫힙니다 (`lic_closing == lic_opening + claims_incurred - claims_paid`).
+`gmm.settle` 이 LIC 블록을 냅니다. LIC 는 **이행현금흐름** 으로 측정합니다 —
+미지급 runoff 의 할인 현재가치 + 위험조정 (Sec. 40(b)/42(c)/37). `claims_incurred`
+와 `claims_paid` 는 명목 현금 그대로 (`claims_paid` 는 무할인 잔차) 두고, 할인·
+위험조정은 잔액만 움직이며, `lic_finance` 가 그 차이 — 보험금융손익 (Sec. 42(c)
+할인 unwind) + 할인·위험조정 측정효과 — 를 받는 잔차라 블록이 닫힙니다
+(`lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid`).
 
 ```python
 # 발생 청구를 60% 당월 / 30% 익월 / 10% 익익월로 지급하는 정산 패턴
@@ -114,30 +118,32 @@ sp = basis(settlement=np.array([0.6, 0.3, 0.1]))
 mp, state = book(sp)
 mv = fcf.gmm.settle(mp, state, sp, period_months=12)
 
-print("=== liability for incurred claims (Sec. 40(b)/42) ===")
-print(f"lic_opening     = {float(mv.lic_opening[0]):>12,.2f}")
-print(f"claims_incurred = {float(mv.claims_incurred[0]):>12,.2f}")  # 42(a)
-print(f"claims_paid     = {float(mv.claims_paid[0]):>12,.2f}")      # 패턴 runoff
+print("=== liability for incurred claims (Sec. 40(b)/42/37) ===")
+print(f"lic_opening     = {float(mv.lic_opening[0]):>12,.2f}")   # 할인 PV + RA
+print(f"claims_incurred = {float(mv.claims_incurred[0]):>12,.2f}")  # 42(a) 명목
+print(f"lic_finance     = {float(mv.lic_finance[0]):>12,.2f}")   # 42(c) + 측정효과
+print(f"claims_paid     = {float(mv.claims_paid[0]):>12,.2f}")      # 패턴 runoff 명목
 print(f"lic_closing     = {float(mv.lic_closing[0]):>12,.2f}")
 ```
 
 출력:
 
 ```
-=== liability for incurred claims (Sec. 40(b)/42) ===
-lic_opening     =   474,901.91
+=== liability for incurred claims (Sec. 40(b)/42/37) ===
+lic_opening     =   506,684.39
 claims_incurred = 11,003,258.44
+lic_finance     =    -1,951.44
 claims_paid     = 11,032,417.42
-lic_closing     =   445,742.93
+lic_closing     =   475,573.97
 ```
 
-지급 시차가 있으니 기초·기말 모두 미지급 청구 (445,743 / 474,902) 가 남아
-있습니다. 엔진은 LIC 를 **무할인 명목 잔액** 으로 들고 매기 projection 에서
-재구성하므로 결산 상태에 따로 운반하지 않습니다 — 다만 **무할인은 엔진 v1 의
-단순화** 입니다. 표준 Sec. 42(c) 는 LIC 의 화폐 시간가치 (보험금융손익) 를
-규정하므로 (Sec. 40(b) 는 LIC 를 이행현금흐름으로 측정), 할인·위험조정된 LIC
-는 향후 확장입니다. `settlement_pattern` 이 없으면 청구는 발생 즉시 지급되어
-LIC 는 양쪽 0, `claims_paid == claims_incurred` 입니다.
+지급 시차가 있으니 기초·기말 모두 미지급 청구 (475,574 / 506,684) 가 남아
+있습니다. 이 잔액은 **할인 현재가치 + 위험조정** 이라 무할인 명목 잔액보다 큽니다
+(여기서는 RA 가 할인효과를 압도해 순증). `lic_finance` (-1,951) 는 명목 in/out
+과 할인·위험조정 잔액의 차이를 받는 보험금융손익 라인입니다. LIC RA 는 할인
+runoff 의 신뢰수준 마진을 위험군별로 쪼갠 것입니다 (cost-of-capital LIC runoff 는
+향후 정교화). `settlement_pattern` 이 없으면 청구는 발생 즉시 지급되어 LIC 는
+양쪽 0, `lic_finance` 0, `claims_paid == claims_incurred` 입니다.
 
 ## 보험료 경험조정 — Sec. B96(a) / B97(c)
 
@@ -228,8 +234,9 @@ mv = fcf.vfa.settle(vfa_mp, vfa_state, vfa_basis, period_months=12,
 - **손실요소 pool 은 claims+expenses 만** — 해지환급금 / 만기 / 연금 (투자
   요소) 은 빠집니다 (Sec. 51(a) / 85). 순수 보장 책은 투자요소가 없어 배분
   숫자가 기존과 같습니다.
-- **`settlement_pattern` 은 합이 정확히 1**, 스칼라 `discount_annual` 과만
-  (곡선 할인과 함께는 거부). LIC 는 무할인입니다.
+- **`settlement_pattern` 은 합이 정확히 1.** LIC 는 이행현금흐름 (할인 PV +
+  위험조정, Sec. 40(b)/42(c)/37) 으로 측정하고, 명목 in/out 과 잔액의 차이는
+  `lic_finance` 가 받습니다. LIC 할인은 평탄 월금리 (`discount_monthly`) 를 씁니다.
 - **`premium_experience_future_fraction` 기본 0.0** — 해지구동 미래 보험료가
   이미 건수 채널에 잡히므로, 0 이 이중계상을 막습니다. 진짜 미래 coverage 의
   선납만 0 초과로.

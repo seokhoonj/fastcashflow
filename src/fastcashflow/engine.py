@@ -54,6 +54,7 @@ from fastcashflow.numerics import (
     _rollforward_kernel,
     _settlement_factor,
     _settlement_lic,
+    _settlement_lic_discounted,
 )
 from fastcashflow.coverage import (
     align_coverages, build_coverage_rates, coverage_arrays, validate_csr_codes,
@@ -1262,20 +1263,43 @@ def settle(
     csm_release = csm_after * frac
     csm_closing = csm_after - csm_release
 
-    # Liability for incurred claims (paragraphs 40(b) / 42 / 103(b)): claims
-    # build it up as incurred (42(a)) and run it off over the settlement
-    # pattern. Entirely expected-scale (k_exp) with claims_paid the residual,
-    # so the block closes by construction -- the same reconstruction as
-    # paa.settle. m.lic is the undiscounted unit trajectory (all-zero when the
-    # basis has no settlement_pattern, i.e. claims paid as incurred -- the LIC
-    # is zero at both dates and claims_paid == claims_incurred). The BEL has
-    # already discounted claims to their payment dates (_measure_full).
+    # Liability for incurred claims (paragraphs 40(b) / 42 / 103(b) / 37):
+    # claims build it up as incurred (42(a)) and run it off over the settlement
+    # pattern. The LIC is measured at fulfilment cash flows -- the discounted PV
+    # of the unpaid run-off plus the risk adjustment. claims_incurred and
+    # claims_paid stay NOMINAL cash amounts (claims_paid the nominal residual on
+    # the undiscounted trajectory m.lic, the same reconstruction as paa.settle);
+    # the discounting (42(c)) and RA (37) move only the balances, and lic_finance
+    # is the reconciling residual -- the insurance finance (discount unwind) plus
+    # the discounting / RA measurement effect. m.lic is the undiscounted unit
+    # trajectory (all-zero when the basis has no settlement_pattern, i.e. claims
+    # paid as incurred -- the LIC is zero at both dates and lic_finance is zero).
     incurred = cf.claim_cf + cf.morbidity_cf
     claims_incurred = k_exp * (incurred[rows[:, None], cols_safe]
                                * col_ok).sum(axis=1)
-    lic_opening = k_exp * m.lic[rows, em_open]
-    lic_closing = k_exp * m.lic[rows, em_c]
-    claims_paid = lic_opening + claims_incurred - lic_closing
+    claims_paid = (k_exp * m.lic[rows, em_open] + claims_incurred
+                   - k_exp * m.lic[rows, em_c])
+    if basis.settlement_pattern is not None:
+        # discounted PV of the unpaid run-off, split by risk class for the RA
+        r_lic = basis.discount_monthly
+        lic_death = _settlement_lic_discounted(
+            cf.claim_cf, basis.settlement_pattern, r_lic)
+        lic_morb = _settlement_lic_discounted(
+            cf.morbidity_cf, basis.settlement_pattern, r_lic)
+        # RA on the LIC (paragraph 37): z x cv-weighted discounted LIC by risk
+        # class -- the confidence-level margin, the well-defined form for the
+        # short incurred-claims run-off (a cost-of-capital LIC run-off is a
+        # refinement; the LIC RA was previously omitted entirely).
+        z = _norm_ppf(basis.ra_confidence)
+        lic_ra = z * (basis.mortality_cv * lic_death
+                      + basis.morbidity_cv * lic_morb)
+        lic_fcf = lic_death + lic_morb + lic_ra
+        lic_opening = k_exp * lic_fcf[rows, em_open]
+        lic_closing = k_exp * lic_fcf[rows, em_c]
+    else:
+        lic_opening = k_exp * m.lic[rows, em_open]
+        lic_closing = k_exp * m.lic[rows, em_c]
+    lic_finance = lic_closing - lic_opening - claims_incurred + claims_paid
 
     # B97(b)/(c) within-period claims and expense experience: the actual claims
     # incurred / expenses incurred over the period less the expected. The v1
@@ -1325,6 +1349,7 @@ def settle(
         coverage_units_future=cu_future,
         lic_opening=lic_opening,
         claims_incurred=claims_incurred,
+        lic_finance=lic_finance,
         claims_paid=claims_paid,
         lic_closing=lic_closing,
         period_months=period, lock_in_rate=lock,

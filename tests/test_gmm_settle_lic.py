@@ -4,17 +4,18 @@ settlement_pattern basis (paragraphs 40(b) / 42 / 103(b)).
 Authoritative skeleton (P-5c pattern). Anchors from dev/lic-settle-gate.md and
 the hand-calc oracle dev/scratch_lic_settle_gate.py.
 
-gmm.settle previously REJECTED a settlement_pattern basis (no LIC movement
-lines). The LIC trajectory is already built by the measure
-(``_settlement_lic``, GMMMeasurement.lic) and the BEL already discounts claims
-to their payment dates; this adds the four LIC movement lines, mirroring
-paa.settle exactly::
+The LIC is measured at fulfilment cash flows (paragraphs 40(b) / 42(c) / 37):
+the discounted PV of the unpaid run-off plus the risk adjustment. The nominal
+in/out lines (``claims_incurred`` / ``claims_paid``) keep their meaning --
+``claims_paid`` is the nominal residual on the undiscounted trajectory --
+while the discounting and RA move the balances, and ``lic_finance`` is the
+reconciling residual::
 
-    lic_closing == lic_opening + claims_incurred - claims_paid
+    lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
 
-entirely at the expected scale (k_exp), claims_paid the residual. The LIC is
-the undiscounted incurred-but-unpaid balance, reconstructed from the unit
-projection each period (no prior_lic on the state).
+entirely at the expected scale (k_exp), reconstructed from the unit projection
+each period (no prior_lic on the state). With discount=0 and cv=0 it reduces to
+the undiscounted balance and lic_finance is zero.
 """
 import numpy as np
 import pytest
@@ -83,7 +84,8 @@ def test_settlement_pattern_basis_is_accepted_and_carries_lic_lines():
     basis = _basis()
     mp, state = _book(basis)
     mv = settle(mp, state, basis, period_months=12)
-    for nm in ("lic_opening", "claims_incurred", "claims_paid", "lic_closing"):
+    for nm in ("lic_opening", "claims_incurred", "lic_finance",
+               "claims_paid", "lic_closing"):
         assert hasattr(mv, nm)
 
 
@@ -92,7 +94,7 @@ def test_lic_block_identity():
     mp, state = _book(basis)
     mv = settle(mp, state, basis, period_months=12)
     np.testing.assert_allclose(
-        mv.lic_opening + mv.claims_incurred - mv.claims_paid,
+        mv.lic_opening + mv.claims_incurred + mv.lic_finance - mv.claims_paid,
         mv.lic_closing, rtol=1e-10)
 
 
@@ -109,10 +111,15 @@ def test_settlement_pattern_leaves_an_outstanding_lic():
     assert np.all(mv.claims_paid > 0.0)
 
 
-def test_lic_opening_is_k_exp_times_the_unit_trajectory():
-    """The LIC opening is the unit LIC trajectory at em_open scaled by k_exp --
-    the same reconstruction paa.settle uses."""
-    basis = _basis()
+def test_flat_basis_reduces_to_the_undiscounted_unit_trajectory():
+    """With discount=0 and mortality_cv=0 the fulfilment-cash-flow LIC reduces
+    to the undiscounted balance (k_exp x the unit LIC trajectory) and
+    lic_finance is zero -- byte-identical to the pre-discounting behaviour."""
+    basis = Basis(
+        mortality_annual=_flat(0.012), lapse_annual=_flat(0.05),
+        discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", _flat(0.012)),),
+        settlement_pattern=PATTERN)
     em_open, period, term, scale = 12, 12, 36, 1000.0
     mp, state = _book(basis, em_open=em_open, period=period, term=term,
                       scale=scale)
@@ -122,10 +129,35 @@ def test_lic_opening_is_k_exp_times_the_unit_trajectory():
                     term_months=np.array([term]), benefits={0: np.array([1e6])},
                     count=np.array([1.0]), calculation_methods=CM),
         basis, full=True)
-    surv_open = unit.cashflows.inforce[0][em_open]
-    k_exp = (scale * surv_open) / surv_open      # == scale (prior_count/surv)
     np.testing.assert_allclose(
-        mv.lic_opening[0], k_exp * unit.lic[0][em_open], rtol=1e-9)
+        mv.lic_opening[0], scale * unit.lic[0][em_open], rtol=1e-9)
+    np.testing.assert_allclose(mv.lic_finance, 0.0, atol=1e-7)
+
+
+def test_lic_opening_is_the_discounted_pv_plus_ra():
+    """The LIC opening is k_exp x (discounted PV of the unpaid run-off + RA),
+    the paragraph-40(b)/42(c)/37 fulfilment cash flow -- built directly from the
+    unit claim run-off via the discounted settlement kernel and the z x cv RA."""
+    from fastcashflow.numerics import _norm_ppf, _settlement_lic_discounted
+    basis = _basis()                                  # discount=0.03, cv=0.10
+    em_open, period, term, scale = 12, 12, 36, 1000.0
+    mp, state = _book(basis, em_open=em_open, period=period, term=term,
+                      scale=scale)
+    mv = settle(mp, state, basis, period_months=period)
+    unit = fcf.gmm.measure(
+        ModelPoints(issue_age=np.array([40]), premium=np.array([100.0]),
+                    term_months=np.array([term]), benefits={0: np.array([1e6])},
+                    count=np.array([1.0]), calculation_methods=CM),
+        basis, full=True)
+    cf = unit.cashflows
+    lic_d = _settlement_lic_discounted(cf.claim_cf, PATTERN, basis.discount_monthly)
+    lic_m = _settlement_lic_discounted(cf.morbidity_cf, PATTERN, basis.discount_monthly)
+    z = _norm_ppf(basis.ra_confidence)
+    lic_ra = z * (basis.mortality_cv * lic_d + basis.morbidity_cv * lic_m)
+    expected = scale * (lic_d + lic_m + lic_ra)[0][em_open]
+    np.testing.assert_allclose(mv.lic_opening[0], expected, rtol=1e-9)
+    # discounted+RA differs from the plain undiscounted balance
+    assert not np.isclose(mv.lic_opening[0], scale * unit.lic[0][em_open])
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +173,7 @@ def test_no_pattern_has_zero_lic_balance_and_claims_paid_equals_incurred():
     mv = settle(mp, state, basis, period_months=12)
     np.testing.assert_array_equal(mv.lic_opening, 0.0)
     np.testing.assert_array_equal(mv.lic_closing, 0.0)
+    np.testing.assert_array_equal(mv.lic_finance, 0.0)
     np.testing.assert_allclose(mv.claims_paid, mv.claims_incurred, rtol=1e-12)
 
 
@@ -155,11 +188,19 @@ def test_reconciliation_and_aggregate_carry_the_lic_lines():
     recon = fcf.reconcile([mv])[0]
     assert hasattr(recon, "lic_closing")
     # claims_paid is a run-off, stored negative by display convention (mirrors
-    # the PAA reconciliation).
+    # the PAA reconciliation); lic_finance keeps its sign (an addition to the LIC).
     np.testing.assert_allclose(
         recon.claims_paid, -float(mv.claims_paid.sum()), rtol=1e-10)
+    np.testing.assert_allclose(
+        recon.lic_finance, float(mv.lic_finance.sum()), rtol=1e-10)
+    # the reconciliation block foots with lic_finance in it
+    np.testing.assert_allclose(
+        recon.lic_opening + recon.claims_incurred + recon.lic_finance
+        + recon.claims_paid, recon.lic_closing, rtol=1e-9)
     agg = fcf.gmm.settle_aggregate(mp, state, basis, period_months=12)
     np.testing.assert_allclose(
         agg.lic_closing, float(mv.lic_closing.sum()), rtol=1e-9)
     np.testing.assert_allclose(
         agg.claims_incurred, float(mv.claims_incurred.sum()), rtol=1e-9)
+    np.testing.assert_allclose(
+        agg.lic_finance, float(mv.lic_finance.sum()), rtol=1e-9)

@@ -78,6 +78,59 @@ def _settlement_lic(
     return lic
 
 
+def _settlement_lic_discounted(
+    incurred: FloatArray, settlement_pattern: FloatArray,
+    monthly_rate: float,
+) -> FloatArray:
+    """Discounted liability for incurred claims (Sec. 40(b) / 42(c)).
+
+    The present-value mirror of :func:`_settlement_lic`: a claim incurred ``j``
+    months ago contributes the present value -- at the current month boundary --
+    of the part of its run-off still outstanding::
+
+        LIC_disc[:, d] = sum_{1 <= j <= n_pat} incurred[:, d - j] x w[j]
+        w[j] = sum_{k >= j} pattern[k] x v^(k - j),  v = 1 / (1 + monthly_rate)
+
+    ``w[j]`` is the PV (at the claim's age ``j``) of the outstanding run-off; it
+    values every payment still owed, including those settling past the
+    projection horizon, so the terminal column ``LIC_disc[:, -1]`` retains the
+    discounted tail exactly as :func:`_settlement_lic` retains the undiscounted
+    one. With ``monthly_rate == 0`` this reduces to ``_settlement_lic``.
+
+    ``monthly_rate`` is a flat per-month scalar: the LIC run-off is short (at
+    most the pattern length) so a flat rate over it is a close approximation to
+    the full discount curve used for the BEL. ``LIC_disc[:, 0]`` is 0 -- a claim
+    incurred at ``d`` is not yet in the LIC at ``d`` -- so the LIC never
+    double-counts the BEL.
+    """
+    incurred = np.asarray(incurred, dtype=np.float64)
+    pattern = np.asarray(settlement_pattern, dtype=np.float64)
+    if not np.isclose(pattern.sum(), 1.0):
+        raise ValueError(f"settlement_pattern must sum to 1, got {pattern.sum()}")
+    n_mp, n_time = incurred.shape
+    n_pat = pattern.size
+    r = float(monthly_rate)
+    v = 1.0 / (1.0 + r)
+    # w[j], j = 1 .. n_pat: PV at age j of the outstanding run-off. w[n_pat] = 0
+    # (a claim older than the pattern is fully settled), so the loop below stops
+    # contributing once a claim has run off.
+    w = np.zeros(n_pat + 1)
+    for j in range(1, n_pat + 1):
+        ks = np.arange(j, n_pat)
+        w[j] = float(np.sum(pattern[ks] * v ** (ks - j)))
+    lic = np.zeros((n_mp, n_time + 1))
+    # Lag j shifts the incurred claims forward by j months: incurred[:, s] (the
+    # claim incurred at s) lands in LIC[:, s + j] with weight w[j]. The largest
+    # boundary is n_time, where each recently-incurred claim sits at age
+    # n_time - s -- captured by the matching j -- so the terminal column holds
+    # the discounted outstanding tail without separate parking.
+    for j in range(1, min(n_pat, n_time) + 1):
+        if w[j] == 0.0:
+            continue
+        lic[:, j:n_time + 1] += w[j] * incurred[:, : n_time + 1 - j]
+    return lic
+
+
 def _carry_lic_residual(lic, idx, t, n_time, seg_lic):
     """Flat-fill a stitched segment's parked LIC residual to the global terminal.
 
