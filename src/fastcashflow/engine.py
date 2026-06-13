@@ -1146,10 +1146,18 @@ def settle(
     # every period (at the final close the whole pool releases and lc_amortised
     # == lc carried). The future-service algebra below acts on the
     # POST-amortisation loss component.
+    #
+    # paragraph 51(a) allocates "claims and expenses"; investment components
+    # (surrender / annuity / maturity -- amounts repaid regardless of an insured
+    # event, paragraph 85 / B96(c)) are NOT claims or expenses, so the pool and
+    # the amortised release exclude them (kernel run with those streams zeroed).
     zero_prem = np.zeros_like(cf.premium_cf)
+    zero_ann = np.zeros_like(cf.annuity_cf)
+    zero_mat = np.zeros_like(cf.maturity_cf)
+    zero_surr = np.zeros_like(cf.surrender_cf)
     outflow_path = _rollforward_kernel(
         cf.claim_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
-        zero_prem, cf.annuity_cf, cf.maturity_cf, cf.surrender_cf,
+        zero_prem, zero_ann, zero_mat, zero_surr,
         boundary, monthly_rate)[0]
     out_o, out_i, out_r, out_e, out_c = _block(outflow_path)
     pool_open = out_o + ra_o
@@ -1189,6 +1197,26 @@ def settle(
     csm_premium_experience = frac * premium_experience
     premium_experience_revenue = (1.0 - frac) * premium_experience
 
+    # B96(c) investment-component experience: the difference between the
+    # expected and the actual investment component (surrender / annuity) that
+    # becomes payable over the period. The whole difference adjusts the CSM (no
+    # fraction -- B96(c) is entirely future service); the investment component
+    # does not touch insurance revenue. The expected runs at the k_exp scale of
+    # the within-period cash flows (only the closing count and the premium are
+    # observed in v1), so this does NOT double-count the count channel. An
+    # extra payout (actual > expected) is unfavourable (CSM down); retained
+    # business (actual < expected) is favourable. Absent
+    # actual_investment_component => zero (byte-identical).
+    ic_streams = cf.surrender_cf + cf.annuity_cf
+    expected_ic = k_exp * (ic_streams[rows[:, None], cols_safe]
+                           * col_ok).sum(axis=1)
+    if state.actual_investment_component is not None:
+        actual_ic = np.asarray(state.actual_investment_component,
+                               dtype=np.float64)
+        csm_investment_experience = expected_ic - actual_ic
+    else:
+        csm_investment_experience = np.zeros(n_mp)
+
     # The locked-in second pass: the SAME backward kernel on the same unit
     # cash flows, at the flat locked-in rate -- exactly one extra pass (the
     # G1 gate (3) cost fact), and identical code path so a flat current
@@ -1211,7 +1239,8 @@ def settle(
     accreted = prior_csm + csm_accretion
     csm_after, lc_reversed, lc_recognised, lc_closing = (
         _paragraph45_csm_algebra(
-            accreted, csm_experience_unlocking + csm_premium_experience,
+            accreted, csm_experience_unlocking + csm_premium_experience
+            + csm_investment_experience,
             lc_after_incurred))
 
     # B119: single period-end release on the post-adjustment balance. The
@@ -1252,6 +1281,7 @@ def settle(
         csm_opening=prior_csm, csm_accretion=csm_accretion,
         csm_experience_unlocking=csm_experience_unlocking,
         csm_premium_experience=csm_premium_experience,
+        csm_investment_experience=csm_investment_experience,
         finance_wedge=finance_wedge,
         premium_experience_revenue=premium_experience_revenue,
         csm_release=csm_release, csm_closing=csm_closing,

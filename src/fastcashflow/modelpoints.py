@@ -858,6 +858,12 @@ class InforceState:
       the experience adjustment ``actual_premium - expected_premium`` between
       future service (CSM, Sec. B96(a)) and current/past service (P&L, Sec.
       B97(c)). May be negative (a net refund period, TRG 2018-09 Example B).
+    * ``actual_investment_component`` -- observed per-MP investment component
+      actually paid over the period (surrender values, annuity / maturity
+      repayments -- the amounts repaid regardless of an insured event;
+      ``None`` means as expected). ``gmm.settle`` routes the whole difference
+      ``expected - actual`` into the CSM (Sec. B96(c)); investment components
+      do not affect insurance revenue.
     """
 
     mp_id: np.ndarray
@@ -871,6 +877,7 @@ class InforceState:
     prior_loss_component: FloatArray | None = None
     profitability: np.ndarray | None = None
     actual_premium: FloatArray | None = None
+    actual_investment_component: FloatArray | None = None
 
     def __post_init__(self) -> None:
         # Coerce each array to its canonical dtype so a hand-built state
@@ -1002,6 +1009,7 @@ class InforceState:
             prior_loss_component=_opt(self.prior_loss_component),
             profitability=_opt(self.profitability),
             actual_premium=_opt(self.actual_premium),
+            actual_investment_component=_opt(self.actual_investment_component),
         )
 
 

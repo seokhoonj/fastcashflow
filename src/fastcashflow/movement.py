@@ -1259,7 +1259,7 @@ class GMMSettlementMovement:
         bel_closing == bel_opening + bel_interest - bel_release + bel_experience
         ra_closing  == ra_opening  + ra_interest  - ra_release  + ra_experience
         csm_closing == csm_opening + csm_accretion + csm_experience_unlocking
-                       + csm_premium_experience
+                       + csm_premium_experience + csm_investment_experience
                        - loss_component_reversed + loss_component_recognised
                        - csm_release
         loss_component_closing == loss_component_opening
@@ -1287,6 +1287,14 @@ class GMMSettlementMovement:
     does NOT appear in the three-term tie above); the current/past leg is a
     P&L memo (insurance revenue), in NO balance recursion, exactly like
     ``finance_wedge``. Both are zero unless ``state.actual_premium`` is given.
+
+    ``csm_investment_experience`` (B96(c)) is the investment-component
+    counterpart: the expected less the actual investment component (surrender /
+    annuity repayments) that becomes payable over the period. The WHOLE
+    difference enters the CSM (no fraction -- B96(c) is entirely future
+    service), a new future-service change outside the three-term tie; the
+    investment component does not touch insurance revenue. Zero unless
+    ``state.actual_investment_component`` is given.
 
     ``csm_accretion`` is direct compounding of the prior CSM at the
     locked-in rate (44(b)/B72(b)); ``csm_release`` is the single period-end
@@ -1335,6 +1343,7 @@ class GMMSettlementMovement:
     csm_accretion: FloatArray            # 44(b)/B72(b): locked-in, direct compounding
     csm_experience_unlocking: FloatArray  # 44(c)/B96(b)(d): locked-in measure
     csm_premium_experience: FloatArray   # B96(a): future-service premium exp, into CSM
+    csm_investment_experience: FloatArray  # B96(c): investment-component exp, into CSM
     finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, not CSM
     premium_experience_revenue: FloatArray  # B97(c): current/past premium exp, P&L memo
     csm_release: FloatArray              # 44(e)/B119: single period-end release
@@ -1403,6 +1412,7 @@ class GMMSettlementReconciliation:
     csm_accretion: float
     csm_experience_unlocking: float
     csm_premium_experience: float
+    csm_investment_experience: float
     finance_wedge: float
     premium_experience_revenue: float
     loss_component_finance: float
@@ -1440,6 +1450,7 @@ def _reconcile_gmm_settlement(
             csm_accretion=float(m.csm_accretion.sum()),
             csm_experience_unlocking=float(m.csm_experience_unlocking.sum()),
             csm_premium_experience=float(m.csm_premium_experience.sum()),
+            csm_investment_experience=float(m.csm_investment_experience.sum()),
             finance_wedge=float(m.finance_wedge.sum()),
             premium_experience_revenue=float(m.premium_experience_revenue.sum()),
             loss_component_finance=float(m.loss_component_finance.sum()),
@@ -1755,6 +1766,7 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
         "csm_accretion": movement.csm_accretion,
         "csm_experience_unlocking": movement.csm_experience_unlocking,
         "csm_premium_experience": movement.csm_premium_experience,
+        "csm_investment_experience": movement.csm_investment_experience,
         "finance_wedge": movement.finance_wedge,
         "premium_experience_revenue": movement.premium_experience_revenue,
         "csm_release": movement.csm_release,
@@ -1943,7 +1955,8 @@ _GMM_SETTLEMENT_LINES = (
     "bel_closing",
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_opening", "csm_accretion", "csm_experience_unlocking",
-    "csm_premium_experience", "finance_wedge", "premium_experience_revenue",
+    "csm_premium_experience", "csm_investment_experience",
+    "finance_wedge", "premium_experience_revenue",
     "csm_release", "csm_closing",
     "loss_component_opening", "loss_component_finance",
     "loss_component_amortised", "loss_component_reversed",
@@ -2027,6 +2040,7 @@ class GMMSettlementAggregate:
     csm_accretion: float
     csm_experience_unlocking: float
     csm_premium_experience: float
+    csm_investment_experience: float
     finance_wedge: float
     premium_experience_revenue: float
     csm_release: float
@@ -2203,6 +2217,7 @@ def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
         csm_accretion=a.csm_accretion,
         csm_experience_unlocking=a.csm_experience_unlocking,
         csm_premium_experience=a.csm_premium_experience,
+        csm_investment_experience=a.csm_investment_experience,
         finance_wedge=a.finance_wedge,
         premium_experience_revenue=a.premium_experience_revenue,
         loss_component_finance=a.loss_component_finance,

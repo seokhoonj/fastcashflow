@@ -835,6 +835,7 @@ _GOC_SETTLEMENT_LINEAR = (
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "finance_wedge", "premium_experience_revenue", "csm_opening",
     "csm_accretion", "csm_experience_unlocking", "csm_premium_experience",
+    "csm_investment_experience",
     "loss_component_opening", "loss_component_finance",
     "loss_component_amortised",
     "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
@@ -876,6 +877,7 @@ class GoCSettlement:
     csm_accretion: np.ndarray
     csm_experience_unlocking: np.ndarray
     csm_premium_experience: np.ndarray
+    csm_investment_experience: np.ndarray
     loss_component_opening: np.ndarray
     loss_component_finance: np.ndarray
     loss_component_amortised: np.ndarray
@@ -952,7 +954,8 @@ def _finalise_goc_settlement(pre: dict[str, np.ndarray]) -> dict[str, np.ndarray
                          - pre["loss_component_amortised"])
     csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
         accreted,
-        pre["csm_experience_unlocking"] + pre["csm_premium_experience"],
+        pre["csm_experience_unlocking"] + pre["csm_premium_experience"]
+        + pre["csm_investment_experience"],
         lc_after_incurred)
     denom = pre["coverage_units_provided"] + pre["coverage_units_future"]
     frac = np.where(denom > 0.0, pre["coverage_units_provided"] / denom, 1.0)
@@ -1345,6 +1348,7 @@ def _(settlement: GoCSettlement) -> GMMSettlementReconciliation:
         csm_accretion=float(a.csm_accretion.sum()),
         csm_experience_unlocking=float(a.csm_experience_unlocking.sum()),
         csm_premium_experience=float(a.csm_premium_experience.sum()),
+        csm_investment_experience=float(a.csm_investment_experience.sum()),
         finance_wedge=float(a.finance_wedge.sum()),
         premium_experience_revenue=float(a.premium_experience_revenue.sum()),
         loss_component_finance=float(a.loss_component_finance.sum()),
