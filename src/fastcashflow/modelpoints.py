@@ -180,7 +180,7 @@ class ModelPoints:
     count: FloatArray | None = None              # policies the row stands for
     sex: IntArray | None = None                  # 0 = male, 1 = female
     state: IntArray | None = None                # contract state (STATE_*)
-    # At-issue classification axis (직업class / UW class) -- one integer per
+    # At-issue classification axis (occupational / UW class) -- one integer per
     # model point, default 0 for every policy. Rate tables that key on
     # ``issue_class`` look up the per-policy value; tables without the axis
     # broadcast over it (no effect).
@@ -499,7 +499,7 @@ class ModelPoints:
         coverage_reduction_factor = self.coverage_reduction_factor
         coverage_reduction_factor = (np.ones(n_cov) if coverage_reduction_factor is None
                                 else np.asarray(coverage_reduction_factor, np.float64))
-        # Benefit step-up (체증): the bidirectional partner of the reduction rule.
+        # Benefit step-up: the bidirectional partner of the reduction rule.
         # coverage_step_month is the month the benefit steps to coverage_step_factor
         # (an absolute level, 1.2 = benefit x1.2 from that month on); 0 = no step.
         coverage_step_month = self.coverage_step_month
@@ -508,7 +508,7 @@ class ModelPoints:
         coverage_step_factor = self.coverage_step_factor
         coverage_step_factor = (np.ones(n_cov) if coverage_step_factor is None
                            else np.asarray(coverage_step_factor, np.float64))
-        # Annual benefit escalation (체증형 보험금 / 연금): the benefit grows
+        # Annual benefit escalation: the benefit grows
         # (1 + escalation_annual) ** policy_year, capped at escalation_cap x base
         # (0 = unbounded). 0 growth = level. Compounding %; a step is the
         # separate coverage_step_*.
@@ -636,7 +636,7 @@ class ModelPoints:
                 raise KeyError("issue_year needs issue_date, which is not set")
             return self.issue_date.astype("datetime64[Y]").astype(int) + 1970
         # Engine-native per-MP fields are axes too, and take precedence over a
-        # same-named attribute. ``issue_class`` (위험등급), sex, state and
+        # same-named attribute. ``issue_class`` (risk class), sex, state and
         # elapsed_months default to a filled array, so they always resolve;
         # product / channel / issue_date may be None.
         _fields = ("product", "channel", "issue_date",

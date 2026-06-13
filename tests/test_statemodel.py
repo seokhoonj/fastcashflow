@@ -279,7 +279,7 @@ def test_paidup_state_uses_its_own_lapse():
     carry its own lapse (Basis.lapse_paidup_annual). A paid-up-seated
     contract decrements by mortality + the paid-up lapse; with the paid-up
     lapse above the active lapse its in-force falls faster than the active
-    track -- the Korean post-payment (납입후) lapse jump."""
+    track -- the Korean post-payment lapse jump."""
     q = _annual(0.01)
     basis = Basis(
         mortality_annual=lambda s, a, d: np.full(a.shape, q),

@@ -182,7 +182,7 @@ class State:
     and cohort ``D - 1`` absorbs everyone who has been here ``D - 1`` months
     or longer). Transitions with ``sojourn_dependent=True`` then receive a
     cohort index and may carry different rates per cohort -- the natural
-    way to express recovery, reincidence, exclusion (면책) periods, and
+    way to express recovery, reincidence, exclusion periods, and
     other duration-since-entry effects. The default ``0`` keeps the state
     Markov (a single cohort, identical to the pre-Phase-(c) behaviour).
 
@@ -390,7 +390,7 @@ WAIVER_MODEL = StateModel(
 # two identical cash flows), this model keeps paid-up distinct so it can carry
 # its own lapse: the paid-up state references the ``lapse_paidup`` rate
 # (Basis.lapse_paidup_annual, falling back to lapse_annual). The Korean
-# post-payment (납입후) lapse jump is the motivating case -- a contract that
+# post-payment lapse jump is the motivating case -- a contract that
 # has finished paying premium typically surrenders at a different rate than a
 # premium-paying active. Paid-up still has no premium and is exposed to
 # mortality + its own lapse; there is no waiver-inception out of paid-up (you
@@ -398,7 +398,7 @@ WAIVER_MODEL = StateModel(
 # active (0), STATE_WAIVER on waiver (1) and STATE_PAIDUP on paid-up (2).
 # There is no active -> paid-up transition: paid-up contracts are seated on
 # the paid-up state at the valuation date (an in-force valuation of the
-# 납입후 cohort), since premium cessation is a ``premium_term_months`` control,
+# paid-up cohort), since premium cessation is a ``premium_term_months`` control,
 # not a modelled transition.
 WAIVER_PAIDUP_MODEL = StateModel(
     states=(

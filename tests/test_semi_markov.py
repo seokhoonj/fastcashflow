@@ -268,8 +268,8 @@ def test_measure_value_agree_long_cohort():
 # ---------------------------------------------------------------------------
 #
 # Real cancer-reincidence products combine the state-duration mechanism
-# (reincidence exclusion) with contract-level coverage rules (가입 면책 /
-# 감액) and additional diagnosis coverages. State duration and policy
+# (reincidence exclusion) with contract-level coverage rules (a policy-level waiting /
+# reduction period) and additional diagnosis coverages. State duration and policy
 # duration are orthogonal axes that must work on the same contract.
 
 
@@ -661,7 +661,7 @@ def test_workbook_elapsed_axis_drives_semi_markov_reincidence(tmp_path):
     from fastcashflow.io import _flex_rate_table
 
     # Sheet with the new sojourn axis. Six-month exclusion window then a
-    # flat 5% recurrence -- a 재진단암 면책기간 of one half-year.
+    # flat 5% recurrence -- a recurrence-cancer waiting period of one half-year.
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     ws = wb.create_sheet("rates")

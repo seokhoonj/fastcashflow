@@ -2127,7 +2127,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
         pv_premium = 0.0
         pv_expense = 0.0
         pv_annuity = 0.0
-        pv_surrender = 0.0  # PV of surrender value (해약환급금)
+        pv_surrender = 0.0  # PV of surrender value
         cum_premium = 0.0  # cumulative premium paid -- surrender basis
         last_year = -1
         claim_rate = 0.0
@@ -2463,7 +2463,7 @@ def _measure_fast(
                 # Build the (sex, age, year, cohort) grid by sweeping cohort
                 # months 0..max_cohort-1. Duration-dependent rate callables
                 # take the four-argument signature -- ``state_duration``
-                # (the sojourn-time cohort index) lets a 면책 (exclusion)
+                # (the sojourn-time cohort index) lets an exclusion
                 # window on reincidence or the duration-since-disablement
                 # taper on a DI recovery rate drop straight in.
                 cohort_idx = np.arange(max_cohort)

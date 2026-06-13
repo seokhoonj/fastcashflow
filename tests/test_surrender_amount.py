@@ -1,4 +1,4 @@
-"""Hand-calc anchors for amount-based surrender value (해약환급금) -- S1.
+"""Hand-calc anchors for amount-based surrender value -- S1.
 
 The current engine post-computes ``surrender_cf = lapse_flow x cum_premium
 x factor`` -- a factor on cumulative premium, which is path-dependent on

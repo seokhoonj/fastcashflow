@@ -1,11 +1,11 @@
-"""Escalating benefits (체증형).
+"""Escalating benefits.
 
 Two orthogonal mechanisms:
 * ``Basis.annuity_factor_annual`` -- the survival-benefit twin of
   ``premium_factor_annual``: a per-MP year-grid factor on ``annuity_payment``
-  for an escalating annuity (체증형 연금, e.g. 5%/yr).
+  for an escalating annuity (e.g. 5%/yr).
 * per-coverage step (``coverage_step_month`` / ``coverage_step_factor``) -- a
-  benefit step-up at a duration (체증형 종신 / 간병비), the bidirectional
+  benefit step-up at a duration (escalating whole-life / LTC), the bidirectional
   partner of the existing reduction rule.
 
 The factor must apply identically across every kernel path, so the key tests are
@@ -76,7 +76,7 @@ def test_annuity_escalation_full_matches_fast():
 
 
 # ---------------------------------------------------------------------------
-# BE2 -- per-coverage benefit step / escalation (체증형 보험금 / 간병비)
+# BE2 -- per-coverage benefit step / escalation (escalating benefit / LTC)
 # ---------------------------------------------------------------------------
 _ONE = lambda s, a, d: np.full(np.shape(a), 1.0)
 
@@ -99,7 +99,7 @@ def _care_mp(**kw):
 
 
 def test_benefit_annual_escalation_hand_calc():
-    """체증형 보험금: 10%/yr compounds the benefit -- claim ratios are 1.1, 1.21."""
+    """Escalating benefit: 10%/yr compounds the benefit -- claim ratios are 1.1, 1.21."""
     mp = _care_mp(coverage_escalation_annual=np.array([0.10]))
     cf = fcf.gmm.measure(mp, _care_basis(), full=True).cashflows.morbidity_cf[0]
     assert cf[12] / cf[0] == pytest.approx(1.10, rel=1e-9)
@@ -118,7 +118,7 @@ def test_benefit_escalation_cap():
 
 
 def test_benefit_single_step():
-    """체증형 간병비 '20년 후 2배': the benefit steps to 2x at month 240 and the
+    """Escalating LTC, '2x after 20 years': the benefit steps to 2x at month 240 and the
     direction is correct (base early, step UP after -- not the reverse)."""
     mp = _care_mp(coverage_step_month=np.array([240], np.int64),
                   coverage_step_factor=np.array([2.0]))

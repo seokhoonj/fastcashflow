@@ -612,7 +612,7 @@ class Basis:
     # shape contract as discount_annual; the engine expands either to a
     # per-month inflation_index via fastcashflow.curves.
     expense_inflation: float | FloatArray = 0.0
-    # Surrender value (해약환급금) curve -- per-month value applied at each
+    # Surrender value curve -- per-month value applied at each
     # policy-duration. Its meaning is set by ``surrender_value_basis``.
     # None = no surrender value (lapse silently removes the contract, the
     # historical behaviour).
@@ -631,7 +631,7 @@ class Basis:
     #       per-MP ``surrender_base_amount`` (explicit; no default base).
     surrender_value_basis: str = "cum_premium_factor"
     waiver_incidence_annual: RateFn | None = None
-    # Lapse rate for the paid-up state (납입후) -- used only by a state model
+    # Lapse rate for the paid-up state -- used only by a state model
     # whose paid-up state references the ``lapse_paidup`` transition rate
     # (e.g. STATE_MODELS["WAIVER_PAIDUP"]). Paid-up contracts (premium
     # payment finished) typically surrender at a different rate than
@@ -642,7 +642,7 @@ class Basis:
     # by ``(sex, issue_age, duration, issue_class, elapsed)`` (the standard 5-arg
     # RateFn). The charge each premium-paying month is
     # ``premium[mp] * premium_factor_annual(.., year)``: a step-rated / renewable
-    # premium (갱신요율) is ``f(issue_age + duration)``, a step-up (체증형 보험료)
+    # premium is ``f(issue_age + duration)``, a step-up premium
     # is ``1 + step * duration``. ``premium[mp]`` stays the scalar SCALE
     # ``solve_premium`` solves for, so FCF stays linear in it. NOTE this is a
     # multiplicative scale, NOT a decrement -- values may exceed 1.0 (step-up)
@@ -651,7 +651,7 @@ class Basis:
     premium_factor_annual: RateFn | None = None
     # Annuity SHAPE -- the survival-benefit twin of premium_factor_annual: a
     # multiplicative factor on ``ModelPoints.annuity_payment`` by year, for an
-    # escalating annuity (체증형 연금, e.g. ``lambda s,a,d,ic,el: 1.05 ** d`` for
+    # escalating annuity (e.g. ``lambda s,a,d,ic,el: 1.05 ** d`` for
     # 5%/yr). Same 5-arg RateFn shape; a multiplicative scale, never
     # annual_to_monthly. None -> level annuity (factor 1.0), bit-identical.
     annuity_factor_annual: RateFn | None = None
@@ -660,12 +660,12 @@ class Basis:
     # ``ci_reincidence_annual`` is the duration-dependent reincidence rate
     # (post_first -> post_second) -- its callable receives an extra
     # ``state_duration`` argument (months since first diagnosis), the
-    # natural place to express a 면책 (exclusion) period or any sojourn-
+    # natural place to express an exclusion period or any sojourn-
     # time effect.
     ci_incidence_annual: RateFn | None = None
     # ``DurationRateFn`` takes (sex, age, policy_duration, state_duration).
     # The fourth argument is the cohort index (months since entering the
-    # source state), the natural place to express a 면책 (exclusion)
+    # source state), the natural place to express an exclusion
     # period or any sojourn-time effect on the rate.
     ci_reincidence_annual: DurationRateFn | None = None
     # ``disability_recovery_annual`` is the duration-dependent recovery
@@ -820,7 +820,7 @@ class Basis:
             object.__setattr__(self, "coverages", new_coverages)
         # Coverage code is the key the engine resolves a model point's coverage
         # against (align_coverages -> {r.code: r}); a duplicate code silently
-        # keeps only the last rate (the vintage / 개정 copy-paste mistake).
+        # keeps only the last rate (the vintage / revision copy-paste mistake).
         codes = [r.code for r in self.coverages]
         if len(set(codes)) != len(codes):
             seen, dup = set(), []

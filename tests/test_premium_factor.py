@@ -1,7 +1,7 @@
 """Premium SHAPE -- ``Basis.premium_factor_annual``.
 
 A multiplicative factor on the level ``ModelPoints.premium`` by policy year, so
-a renewable / step-rated (갱신요율) or step-up (체증형) premium can be projected
+a renewable / step-rated (renewable) or step-up premium can be projected
 while ``premium[mp]`` stays the scalar SCALE ``solve_premium`` solves for. The
 factor must apply identically across every kernel path (the full Markov / full
 semi-Markov projection and the fused fast / codegen / GPU value paths), so the

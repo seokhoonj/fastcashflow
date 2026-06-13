@@ -1,4 +1,4 @@
-"""Surrender value (해약환급금) cash flow tests.
+"""Surrender value cash flow tests.
 
 The engine post-computes surrender_cf as
 ``lapse_flow * cum_premium * surrender_value_curve[t]``. These tests

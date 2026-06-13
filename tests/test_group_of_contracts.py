@@ -210,7 +210,7 @@ def test_group_rejects_pipe_in_axis_value():
 
 
 def test_axis_resolves_engine_native_field_issue_class():
-    """issue_class (위험등급) is a grouping axis even though it is a reserved field."""
+    """issue_class (risk class) is a grouping axis even though it is a reserved field."""
     m = measure(_two_contracts(issue_class=np.array([0, 1])), _basis())
     assert group(m, by=["issue_class"]).bel.shape[0] == 2      # two classes -> two groups
 

@@ -22,7 +22,7 @@ IntArray = NDArray[np.int64]
 #
 #   (sex, issue_age, duration, issue_class, elapsed) -> annual rate
 #
-# ``issue_class`` is the at-issue classification axis (직업class / UW
+# ``issue_class`` is the at-issue classification axis (occupational / UW
 # class) the rate table may key on. ``elapsed`` is the semi-Markov sojourn
 # axis (state-duration since entering the source state). A table without
 # a given axis broadcasts over it; the engine passes zeros for axes a

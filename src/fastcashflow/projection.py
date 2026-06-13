@@ -79,7 +79,7 @@ class Cashflows:
     disability_cf: FloatArray # disability income + lump-sum outflow per month
     maturity_cf: FloatArray   # (n_mp,) maturity benefit, paid at time = term
     maturity_survivors: FloatArray  # (n_mp,) in-force reaching term (the maturity exit count)
-    surrender_cf: FloatArray  # surrender value (해약환급금) paid on lapse
+    surrender_cf: FloatArray  # surrender value paid on lapse
 
     @property
     def n_time(self) -> int:
@@ -118,9 +118,9 @@ def _benefit_factor(t, year, red_factor, red_end, step_month, step_factor,
     """The per-coverage benefit multiplier at month ``t`` (policy ``year``).
 
     Three independent, composable shapes, all neutral by default:
-    reduction (감액, factor < 1 before ``red_end``), annual escalation (체증형
-    보험금 / 연금, the benefit compounds at ``esc`` per year, capped at ``cap``
-    x base when ``cap > 0``), and a single step-up (계단식, factor from
+    reduction (factor < 1 before ``red_end``), annual escalation (the
+    benefit compounds at ``esc`` per year, capped at ``cap``
+    x base when ``cap > 0``), and a single step-up (factor from
     ``step_month`` on). The reduction term is the historical expression
     verbatim, so a contract with no escalation / step is bit-identical.
     """
@@ -1007,7 +1007,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             lae_pro_rata,
             n_time,
         )
-    # Surrender value (해약환급금) -- post-projection compute. ``lapse_flow``
+    # Surrender value -- post-projection compute. ``lapse_flow``
     # is the per-month state-machine lapse exit count (occupancy on each state
     # times that state's own lapse rate), so the surrender follows the actual
     # lapse: a non-lapsing WAIVER state pays no surrender, and a paid-up state

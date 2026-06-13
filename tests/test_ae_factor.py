@@ -87,7 +87,7 @@ def test_scalar_ae_factor_per_coverage(tmp_path):
     p = tmp_path / "a.xlsx"
     _build(p, ae_rows=[
         ["product", "channel", "coverage", "factor"],
-        ["TERM_A", "GA", "INPATIENT", 1.5],          # 손해율 150%
+        ["TERM_A", "GA", "INPATIENT", 1.5],          # loss ratio 150%
     ])
     basis = _segment(p)
     s = np.array([0]); a = np.array([30]); d = np.array([0])

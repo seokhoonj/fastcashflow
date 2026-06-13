@@ -192,7 +192,7 @@ def _truncate_list(items, cap=10):
 # A sheet may include any subset; missing axes broadcast (the rate is held
 # flat over that axis at lookup time). ``age`` (attained) is mutually
 # exclusive with ``issue_age`` / ``duration`` (select-and-ultimate schema).
-# ``issue_class`` is the at-issue classification axis (직업class / UW
+# ``issue_class`` is the at-issue classification axis (occupational / UW
 # class) -- absent from most tables, broadcasts to a no-op when absent.
 # ``elapsed`` is the semi-Markov sojourn axis (state-duration in years
 # since entering the source state) -- carried by re-incidence /
@@ -1357,7 +1357,7 @@ def read_model_points(
       ``premium`` / ``waiting`` / ``reduction_end`` / ``reduction_factor`` and
       the benefit step-up / escalation columns ``step_month`` / ``step_factor``
       (a benefit step at a duration) / ``escalation_annual`` / ``escalation_cap``
-      (annual compounding growth, capped -- the 체증형 escalating-benefits
+      (annual compounding growth, capped -- the escalating-benefits
       recipe in the cookbook)), one row per policy x coverage -- so per-coverage
       rules (waiting, reduction and escalation) ride along, which a flat
       one-row-per-policy file cannot carry.
@@ -1422,7 +1422,7 @@ def read_vfa_model_points(
     required; the named policy / account columns are read if present.
 
     Protection riders attached to a variable product (death / cancer /
-    hospitalisation 특약) are separate coverages, read and measured on their own
+    hospitalisation rider) are separate coverages, read and measured on their own
     -- a policies + coverages book through :func:`read_model_points` (GMM). So a
     ``<coverage>_benefit`` column is rejected here: a coverage encoded as a
     column is the lossy wide form, and coverages belong in their own frame which
@@ -1506,7 +1506,7 @@ def read_inforce_policies(
     permanent contract spec (``issue_age``, ``sex``, ``term_months``,
     premiums, benefits, ...) and the closing state from the prior period
     (``elapsed_months``, ``count``, ``prior_csm``, ``lock_in_rate``). This
-    matches the Korean industry "보유계약 마감파일" pattern -- one
+    matches the Korean industry period-close file pattern -- one
     self-contained snapshot per period, no separate state file to keep
     in sync.
 

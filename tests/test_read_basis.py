@@ -32,7 +32,7 @@ def test_defaults_inherited():
     assert ga.mortality_cv == 0.10 and fc.mortality_cv == 0.10
     assert ga.morbidity_cv == 0.12 and fc.morbidity_cv == 0.12
     # Shared economic curve -- inherited identically (a per-year forward
-    # curve derived from the 국고채 spot rates, not a flat scalar).
+    # curve derived from the government-bond spot rates, not a flat scalar).
     assert np.allclose(np.asarray(ga.discount_annual),
                        np.asarray(fc.discount_annual))
     # Shared maintenance row in both segments' expense ledgers --
