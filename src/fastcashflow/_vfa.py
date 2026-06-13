@@ -970,6 +970,7 @@ def settle(
     basis: Basis,
     *,
     period_months: int | None = None,
+    premium_experience_future_fraction: float | FloatArray = 0.0,
 ) -> "VFASettlementMovement":
     """Paragraph-45 subsequent-measurement settlement of a VFA in-force book
     (period close).
@@ -1176,13 +1177,49 @@ def settle(
     csm_fv_share = v_half * k_obs * (fee_obs - fee_exp)
     csm_future_service = x - csm_fv_share
 
+    # B96(a)/B97(c) premium experience -- the VFA mirror of the gmm.settle
+    # split. The actual premium received less the expected (on-track) premium
+    # over the period splits by the entity's future-service fraction: the
+    # future leg adjusts the CSM (B96(a), a NEW future-service change with no
+    # BEL/RA counterpart, so it stays OUTSIDE the csm_fv_share / csm_future_
+    # service cross-tie -- it enters the paragraph-45 algebra on top of x); the
+    # current/past leg is a P&L memo (B97(c)). Absent actual_premium => zero on
+    # both lines (byte-identical to the pre-feature settle).
+    pe_frac = np.asarray(premium_experience_future_fraction, dtype=np.float64)
+    if pe_frac.ndim > 1 or (pe_frac.ndim == 1 and pe_frac.shape[0] != n_mp):
+        raise ValueError(
+            "premium_experience_future_fraction must be a scalar or one entry "
+            f"per model point ({n_mp}), got shape {pe_frac.shape}")
+    if (not np.all(np.isfinite(pe_frac))
+            or np.any(pe_frac < 0.0) or np.any(pe_frac > 1.0)):
+        raise ValueError(
+            "premium_experience_future_fraction must be finite and lie in "
+            "[0, 1] (the entity's split of the premium experience between "
+            "future service -> CSM and current/past service -> P&L); got "
+            f"{premium_experience_future_fraction}")
+    if state.actual_premium is not None:
+        pe_off = np.arange(period)
+        pe_src = em_open[:, None] + pe_off[None, :]
+        pe_mask = pe_src < n_time
+        exp_premium = k_exp * np.where(
+            pe_mask, proj.premium_cf[rows[:, None], np.where(pe_mask, pe_src, 0)],
+            0.0).sum(axis=1)
+        premium_experience = (np.asarray(state.actual_premium,
+                                         dtype=np.float64) - exp_premium)
+    else:
+        premium_experience = np.zeros(n_mp)
+    csm_premium_experience = pe_frac * premium_experience
+    premium_experience_revenue = (1.0 - pe_frac) * premium_experience
+
     # CSM / loss-component algebra (paragraphs 45 / 48 / 50(b)). Accrete by
     # direct compounding (NOT the monthly roll -- that would interleave
-    # releases and double-count against the single B119 release below).
+    # releases and double-count against the single B119 release below). The
+    # premium-experience future leg is a new future-service change with no
+    # BEL/RA counterpart, so it enters here on top of x.
     accreted = prior_csm * (1.0 + r_m) ** period
     csm_accretion = accreted - prior_csm
     csm_after, lc_reversed, lc_recognised, lc_closing = (
-        _paragraph45_csm_algebra(accreted, x, lc_open))
+        _paragraph45_csm_algebra(accreted, x + csm_premium_experience, lc_open))
 
     # Paragraph-B119 release, once, on the post-adjustment balance: units
     # provided in the period (expected basis) over those provided plus
@@ -1236,6 +1273,8 @@ def settle(
         csm_accretion=csm_accretion,
         csm_fv_share=csm_fv_share,
         csm_future_service=csm_future_service,
+        csm_premium_experience=csm_premium_experience,
+        premium_experience_revenue=premium_experience_revenue,
         loss_component_reversed=lc_reversed,
         loss_component_recognised=lc_recognised,
         csm_release=csm_release,
@@ -1262,6 +1301,7 @@ def settle_aggregate(
     *,
     period_months: int | None = None,
     chunk_size: int = 200_000,
+    premium_experience_future_fraction: float | FloatArray = 0.0,
 ) -> "VFASettlementAggregate":
     """Portfolio-total paragraph-45 settlement in bounded memory.
 
@@ -1294,14 +1334,24 @@ def settle_aggregate(
     # contracts; the per-chunk settle re-checks the aligned pair (a no-op).
     state = _reconcile_state(model_points, state)
     n_mp = model_points.n_mp
+    # A per-MP fraction is sliced per chunk so the aggregate equals the per-MP
+    # settle sum even when the split varies by contract (the per-chunk settle
+    # re-validates the value range / finiteness).
+    pe_frac = np.asarray(premium_experience_future_fraction, dtype=np.float64)
+    if pe_frac.ndim > 1 or (pe_frac.ndim == 1 and pe_frac.shape[0] != n_mp):
+        raise ValueError(
+            "premium_experience_future_fraction must be a scalar or one entry "
+            f"per model point ({n_mp}), got shape {pe_frac.shape}")
     # Per-chunk partial sums, combined with fsum so the total does not
     # depend on the chunking (compensated summation: chunk_size is a memory
     # knob, never a numbers knob).
     parts: dict[str, list[float]] = {n: [] for n in _VFA_SETTLEMENT_LINES}
     for start in range(0, n_mp, chunk_size):
         idx = np.arange(start, min(start + chunk_size, n_mp))
+        frac_arg = (float(pe_frac) if pe_frac.ndim == 0 else pe_frac[idx])
         mv = settle(model_points.subset(idx), state.subset(idx), basis,
-                    period_months=period)
+                    period_months=period,
+                    premium_experience_future_fraction=frac_arg)
         for name in _VFA_SETTLEMENT_LINES:
             parts[name].append(float(getattr(mv, name).sum()))
     return VFASettlementAggregate(

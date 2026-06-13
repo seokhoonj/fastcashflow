@@ -972,7 +972,8 @@ _VFA_GOC_SETTLEMENT_LINEAR = (
     "bel_opening", "bel_interest", "bel_release", "bel_experience",
     "bel_closing",
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
-    "csm_fv_share", "csm_future_service", "csm_opening", "csm_accretion",
+    "csm_fv_share", "csm_future_service", "csm_premium_experience",
+    "premium_experience_revenue", "csm_opening", "csm_accretion",
     "variable_fee_closing", "account_value_closing", "loss_component_opening",
     "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
 )
@@ -1014,6 +1015,8 @@ class VFAGoCSettlement:
     ra_closing: np.ndarray
     csm_fv_share: np.ndarray
     csm_future_service: np.ndarray
+    csm_premium_experience: np.ndarray
+    premium_experience_revenue: np.ndarray
     csm_opening: np.ndarray
     csm_accretion: np.ndarray
     variable_fee_closing: np.ndarray
@@ -1094,9 +1097,13 @@ class VFAGoCSettlement:
 def _finalise_vfa_goc_settlement(
         pre: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     accreted = pre["csm_opening"] + pre["csm_accretion"]
+    # The premium-experience future leg (B96(a)) is a new future-service change
+    # with no BEL/RA counterpart, so it enters the algebra on top of x (which
+    # stays the csm_fv_share / csm_future_service cross-tie quantity).
     x = pre["csm_fv_share"] + pre["csm_future_service"]
     csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
-        accreted, x, pre["loss_component_opening"])
+        accreted, x + pre["csm_premium_experience"],
+        pre["loss_component_opening"])
     denom = pre["coverage_units_provided"] + pre["coverage_units_future"]
     frac = np.where(denom > 0.0, pre["coverage_units_provided"] / denom, 0.0)
     release = csm_after * frac
@@ -1147,8 +1154,9 @@ def settle_group_of_contracts(
     floor, so a per-GoC algebra is meaningless -- use ``paa.settle`` and sum by
     your own groupby), and a book mixing GMM and VFA is rejected whole: a group
     of contracts sits in one product, hence one measurement model. The
-    ``premium_experience_future_fraction`` argument applies to the GMM path
-    only (Sec. B96(a); VFA has no premium experience leg).
+    ``premium_experience_future_fraction`` argument applies to both the GMM and
+    VFA paths (Sec. B96(a); each routes the future leg into its own
+    paragraph-45 algebra).
     """
     if not isinstance(basis, BasisRouter):
         raise TypeError(
@@ -1239,6 +1247,14 @@ def settle_group_of_contracts(
         if not np.all(np.isfinite(weights)) or np.any(weights < 0.0):
             raise ValueError("coverage_units must be finite and >= 0")
 
+    # The B96(a) premium-experience split applies to both the GMM and VFA
+    # paths (each routes the future leg into its own paragraph-45 algebra).
+    pe_frac = np.asarray(premium_experience_future_fraction, dtype=np.float64)
+    if pe_frac.ndim > 0 and pe_frac.shape != (n_mp,):
+        raise ValueError(
+            "premium_experience_future_fraction must be a scalar or one entry "
+            f"per model point ({n_mp}), got shape {pe_frac.shape}")
+
     if model == "VFA":
         # The VFA mirror: group-sum the per-MP VFA settlement lines (each
         # carrying its own v_half / k_obs, so the group 45(b) fv_share is the
@@ -1258,8 +1274,11 @@ def settle_group_of_contracts(
                     rows = block[inverse[block] == g]
                     sub_state = replace(state.subset(rows),
                                         lock_in_rate=group_lock[g])
+                    frac_arg = (float(pe_frac) if pe_frac.ndim == 0
+                                else pe_frac[rows])
                     mv = _settle_vfa(model_points.subset(rows), sub_state,
-                                     seg_basis, period_months=period)
+                                     seg_basis, period_months=period,
+                                     premium_experience_future_fraction=frac_arg)
                     for name in _VFA_GOC_SETTLEMENT_LINEAR:
                         vfa_pre[name][g] += float(getattr(mv, name).sum())
                     for name in _GOC_SETTLEMENT_UNIT_LINES:
@@ -1273,11 +1292,6 @@ def settle_group_of_contracts(
             profitability_by_mp=prof, account_value_by_mp=av_by_mp,
             **vfa_lines)
 
-    pe_frac = np.asarray(premium_experience_future_fraction, dtype=np.float64)
-    if pe_frac.ndim > 0 and pe_frac.shape != (n_mp,):
-        raise ValueError(
-            "premium_experience_future_fraction must be a scalar or one entry "
-            f"per model point ({n_mp}), got shape {pe_frac.shape}")
     pre = {name: np.zeros(n_groups, dtype=np.float64)
            for name in _GOC_SETTLEMENT_LINEAR + _GOC_SETTLEMENT_UNIT_LINES}
     gmm_router = _submodel_router(basis, "GMM")
@@ -1384,6 +1398,8 @@ def _(settlement: VFAGoCSettlement) -> VFASettlementReconciliation:
         csm_accretion=float(a.csm_accretion.sum()),
         csm_fv_share=float(a.csm_fv_share.sum()),
         csm_future_service=float(a.csm_future_service.sum()),
+        csm_premium_experience=float(a.csm_premium_experience.sum()),
+        premium_experience_revenue=float(a.premium_experience_revenue.sum()),
         loss_component_reversed=float(-a.loss_component_reversed.sum()),
         loss_component_recognised=float(a.loss_component_recognised.sum()),
         csm_release=float(-a.csm_release.sum()),

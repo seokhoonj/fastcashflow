@@ -863,7 +863,8 @@ class VFASettlementMovement:
         bel_closing == bel_opening + bel_interest - bel_release + bel_experience
         ra_closing  == ra_opening  + ra_interest  - ra_release  + ra_experience
         csm_closing == csm_opening + csm_accretion + csm_fv_share
-                       + csm_future_service - loss_component_reversed
+                       + csm_future_service + csm_premium_experience
+                       - loss_component_reversed
                        + loss_component_recognised - csm_release
         loss_component_closing == loss_component_opening
                        - loss_component_reversed + loss_component_recognised
@@ -879,6 +880,13 @@ class VFASettlementMovement:
     and the blocks tie across: ``csm_fv_share + csm_future_service ==
     -(bel_experience + ra_experience)`` -- the paragraph-45 future-service
     change is exactly minus the observed-vs-expected FCF difference.
+    ``csm_premium_experience`` (B96(a)) and ``premium_experience_revenue``
+    (B97(c)) are the two legs of the premium experience adjustment (actual
+    premium received less the expected premium, split by the entity's
+    future-service fraction). The future leg is a NEW future-service change with
+    no BEL/RA counterpart, so it enters the CSM block but does NOT appear in the
+    cross-tie above; the current/past leg is a P&L memo, in no balance
+    recursion. Both are zero unless ``state.actual_premium`` is given.
 
     Line semantics:
 
@@ -956,6 +964,8 @@ class VFASettlementMovement:
     csm_accretion: FloatArray
     csm_fv_share: FloatArray
     csm_future_service: FloatArray
+    csm_premium_experience: FloatArray  # B96(a): future-service premium exp, into CSM
+    premium_experience_revenue: FloatArray  # B97(c): current/past premium exp, P&L memo
     loss_component_reversed: FloatArray
     loss_component_recognised: FloatArray
     csm_release: FloatArray
@@ -1056,6 +1066,8 @@ class VFASettlementReconciliation:
     csm_accretion: float
     csm_fv_share: float
     csm_future_service: float
+    csm_premium_experience: float
+    premium_experience_revenue: float
     loss_component_reversed: float
     loss_component_recognised: float
     csm_release: float
@@ -1088,6 +1100,7 @@ class VFASettlementReconciliation:
                 ("Accretion", self.csm_accretion),
                 ("FV share (45(b))", self.csm_fv_share),
                 ("Future service (45(c))", self.csm_future_service),
+                ("Premium experience (B96(a))", self.csm_premium_experience),
                 ("Loss comp. reversed", self.loss_component_reversed),
                 ("Loss comp. recognised", self.loss_component_recognised),
                 ("Release", self.csm_release),
@@ -1113,6 +1126,11 @@ class VFASettlementReconciliation:
             lines.append(f"  {title}")
             for name, value in rows:
                 lines.append(f"    {name:24}{value:>18,.0f}")
+        # P&L memo lines -- not part of any block foot (B97(c) revenue, the
+        # current/past leg of the premium experience).
+        lines.append("  Memo (P&L)")
+        lines.append(f"    {'Premium exp. revenue':24}"
+                     f"{self.premium_experience_revenue:>18,.0f}")
         return "\n".join(lines)
 
 
@@ -1145,6 +1163,8 @@ def _reconcile_vfa_settlement(
             csm_accretion=float(m.csm_accretion.sum()),
             csm_fv_share=float(m.csm_fv_share.sum()),
             csm_future_service=float(m.csm_future_service.sum()),
+            csm_premium_experience=float(m.csm_premium_experience.sum()),
+            premium_experience_revenue=float(m.premium_experience_revenue.sum()),
             loss_component_reversed=float(-m.loss_component_reversed.sum()),
             loss_component_recognised=float(m.loss_component_recognised.sum()),
             csm_release=float(-m.csm_release.sum()),
@@ -1818,6 +1838,8 @@ def _(movement: VFASettlementMovement, path, *, ids=None):
         "csm_accretion": movement.csm_accretion,
         "csm_fv_share": movement.csm_fv_share,
         "csm_future_service": movement.csm_future_service,
+        "csm_premium_experience": movement.csm_premium_experience,
+        "premium_experience_revenue": movement.premium_experience_revenue,
         "csm_release": movement.csm_release,
         "csm_closing": movement.csm_closing,
         "loss_component_opening": movement.loss_component_opening,
@@ -1935,6 +1957,7 @@ _VFA_SETTLEMENT_LINES = (
     "bel_closing",
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_opening", "csm_accretion", "csm_fv_share", "csm_future_service",
+    "csm_premium_experience", "premium_experience_revenue",
     "csm_release", "csm_closing",
     "loss_component_opening", "loss_component_reversed",
     "loss_component_recognised", "loss_component_closing",
@@ -2093,6 +2116,8 @@ class VFASettlementAggregate:
     csm_accretion: float
     csm_fv_share: float
     csm_future_service: float
+    csm_premium_experience: float
+    premium_experience_revenue: float
     csm_release: float
     csm_closing: float
     loss_component_opening: float
@@ -2271,6 +2296,8 @@ def _(aggregate: VFASettlementAggregate) -> VFASettlementReconciliation:
         csm_accretion=a.csm_accretion,
         csm_fv_share=a.csm_fv_share,
         csm_future_service=a.csm_future_service,
+        csm_premium_experience=a.csm_premium_experience,
+        premium_experience_revenue=a.premium_experience_revenue,
         loss_component_reversed=-a.loss_component_reversed,
         loss_component_recognised=a.loss_component_recognised,
         csm_release=-a.csm_release,
