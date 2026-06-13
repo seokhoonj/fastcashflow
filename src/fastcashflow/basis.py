@@ -917,8 +917,8 @@ def _emit_tree(lines: list[object], out: list[str], prefix: str) -> None:
     n = len(lines)
     for i, item in enumerate(lines):
         last = (i == n - 1)
-        head = "└─ " if last else "├─ "
-        child = prefix + ("    " if last else "│   ")
+        head = "`- " if last else "+- "
+        child = prefix + ("    " if last else "|   ")
         if isinstance(item, tuple):
             header, subs = item
             out.append(f"{prefix}{head}{header}")
@@ -948,8 +948,8 @@ def describe_basis(obj, *, file=None) -> None:
         keys = list(obj.segments)
         for i, key in enumerate(keys):
             last = (i == len(keys) - 1)
-            head = "└─ " if last else "├─ "
-            child = "    " if last else "│   "
+            head = "`- " if last else "+- "
+            child = "    " if last else "|   "
             out_lines.append(f"{head}{key!r}  ->  Basis")
             _describe_basis_lines(obj.segments[key], out_lines, prefix=child)
     elif isinstance(obj, Basis):

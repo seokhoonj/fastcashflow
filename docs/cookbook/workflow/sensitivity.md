@@ -141,42 +141,42 @@ fcf.gmm.trace_diff(0, mp, base, shock10, label_a="baseline", label_b="mort+10%")
 ```
 diff mp[0]  (-/-, sex=M, issue_age=40, term=24m, premium_term=24m, count=1)
 labels: 'baseline'  ->  'mort+10%'
-├─ Assumption changes
-│   ├─ mortality_annual       : <callable>  ->  <callable>
-│   ├─ lapse_annual           : <callable>  ->  <callable>
-│   └─ coverage[DEATH].rate   : <callable>  ->  <callable>
-├─ Rate deltas (per policy year)
-│   ├─ axes: sex=0, issue_age=40, issue_class=0, elapsed_at_issue=0m
-│   ├─ year  0
-│   │   ├─ mortality(annual)    0.113615  ->    0.124977   ( +0.011362,   +10.00%)
-│   │   └─ DEATH(annual)        0.113615  ->    0.124977   ( +0.011362,   +10.00%)
-│   └─ year  1
-│       ├─ mortality(annual)    0.113615  ->    0.124977   ( +0.011362,   +10.00%)
-│       └─ DEATH(annual)        0.113615  ->    0.124977   ( +0.011362,   +10.00%)
-├─ Cash flow deltas (annual sum, non-zero rows only)
-│   ├─           year          stream   sum(baseline)   sum(mort+10%)               Δ              %Δ
-│   ├─              0         premium          13,634          13,555             -79          -0.58%
-│   ├─              0           claim          11,362          12,498          +1,136         +10.00%
-│   ├─              1         premium          12,085          11,861            -224          -1.85%
-│   └─              1           claim          10,071          10,936            +865          +8.59%
-├─ Discount factor deltas (key months)
-│   ├─ t=   0m: ds  1.000000  ->  1.000000  (+0.000000)
-│   ├─ t=  12m: ds  1.000000  ->  1.000000  (+0.000000)
-│   └─ t=  24m: ds  1.000000  ->  1.000000  (+0.000000)
-├─ BEL deltas (key months)
-│   ├─ BEL[   0]        -4,286.44  ->       -1,983.05   (    +2,303.39,   -53.74%)
-│   ├─ BEL[  12]        -2,014.13  ->         -925.44   (    +1,088.70,   -54.05%)
-│   └─ BEL[  24]             0.00  ->            0.00   (        +0.00,        --)
-├─ CSM deltas (key months)
-│   ├─ CSM[   0]         2,840.86  ->          402.49   (    -2,438.37,   -85.83%)
-│   ├─ CSM[  12]         1,334.88  ->          187.83   (    -1,147.05,   -85.93%)
-│   └─ CSM[  24]             0.00  ->           -0.00   (        -0.00,        --)
-└─ Final (headline change, per policy)
-    ├─ BEL                   -4,286.44  ->       -1,983.05   (    +2,303.39,   -53.74%)
-    ├─ RA                     1,445.58  ->        1,580.56   (      +134.98,    +9.34%)
-    ├─ FCF = BEL+RA          -2,840.86  ->         -402.49   (    +2,438.37,   -85.83%)
-    ├─ CSM = max(0,-FCF)      2,840.86  ->          402.49   (    -2,438.37,   -85.83%)
-    └─ loss_component             0.00  ->            0.00   (        +0.00,        --)
++- Assumption changes
+|   +- mortality_annual       : <callable>  ->  <callable>
+|   +- lapse_annual           : <callable>  ->  <callable>
+|   `- coverage[DEATH].rate   : <callable>  ->  <callable>
++- Rate deltas (per policy year)
+|   +- axes: sex=0, issue_age=40, issue_class=0, elapsed_at_issue=0m
+|   +- year  0
+|   |   +- mortality(annual)    0.113615  ->    0.124977   ( +0.011362,   +10.00%)
+|   |   `- DEATH(annual)        0.113615  ->    0.124977   ( +0.011362,   +10.00%)
+|   `- year  1
+|       +- mortality(annual)    0.113615  ->    0.124977   ( +0.011362,   +10.00%)
+|       `- DEATH(annual)        0.113615  ->    0.124977   ( +0.011362,   +10.00%)
++- Cash flow deltas (annual sum, non-zero rows only)
+|   +-           year          stream   sum(baseline)   sum(mort+10%)               diff              %diff
+|   +-              0         premium          13,634          13,555             -79          -0.58%
+|   +-              0           claim          11,362          12,498          +1,136         +10.00%
+|   +-              1         premium          12,085          11,861            -224          -1.85%
+|   `-              1           claim          10,071          10,936            +865          +8.59%
++- Discount factor deltas (key months)
+|   +- t=   0m: ds  1.000000  ->  1.000000  (+0.000000)
+|   +- t=  12m: ds  1.000000  ->  1.000000  (+0.000000)
+|   `- t=  24m: ds  1.000000  ->  1.000000  (+0.000000)
++- BEL deltas (key months)
+|   +- BEL[   0]        -4,286.44  ->       -1,983.05   (    +2,303.39,   -53.74%)
+|   +- BEL[  12]        -2,014.13  ->         -925.44   (    +1,088.70,   -54.05%)
+|   `- BEL[  24]             0.00  ->            0.00   (        +0.00,        --)
++- CSM deltas (key months)
+|   +- CSM[   0]         2,840.86  ->          402.49   (    -2,438.37,   -85.83%)
+|   +- CSM[  12]         1,334.88  ->          187.83   (    -1,147.05,   -85.93%)
+|   `- CSM[  24]             0.00  ->           -0.00   (        -0.00,        --)
+`- Final (headline change, per policy)
+    +- BEL                   -4,286.44  ->       -1,983.05   (    +2,303.39,   -53.74%)
+    +- RA                     1,445.58  ->        1,580.56   (      +134.98,    +9.34%)
+    +- FCF = BEL+RA          -2,840.86  ->         -402.49   (    +2,438.37,   -85.83%)
+    +- CSM = max(0,-FCF)      2,840.86  ->          402.49   (    -2,438.37,   -85.83%)
+    `- loss_component             0.00  ->            0.00   (        +0.00,        --)
 ```
 
 트리를 위에서 아래로 읽으면 shock 의 **전파 경로** 가 보입니다:

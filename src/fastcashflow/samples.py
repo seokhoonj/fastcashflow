@@ -132,15 +132,15 @@ def _export_tree(dest: Path, files: list[str]) -> str:
     lines = [f"{dest}/"]
     for i, name in enumerate(files):
         last_file = i == len(files) - 1
-        lines.append(f"{'└── ' if last_file else '├── '}{name}")
+        lines.append(f"{'`-- ' if last_file else '+-- '}{name}")
         if name.endswith(".xlsx"):
             wb = openpyxl.load_workbook(dest / name, read_only=True)
             sheets = wb.sheetnames
             wb.close()
-            pad = "    " if last_file else "│   "
+            pad = "    " if last_file else "|   "
             for j, sheet in enumerate(sheets):
                 last_sheet = j == len(sheets) - 1
-                lines.append(f"{pad}{'└── ' if last_sheet else '├── '}{sheet}")
+                lines.append(f"{pad}{'`-- ' if last_sheet else '+-- '}{sheet}")
     return "\n".join(lines)
 
 

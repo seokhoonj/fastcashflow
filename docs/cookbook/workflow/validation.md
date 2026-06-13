@@ -97,96 +97,96 @@ fcf.gmm.trace(0, mp, basis)
 
 ```
 mp[0]  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m, premium_term=240m, count=1)
-├─ Basis (segment-level)
-│   ├─ mortality_annual     -> MORTALITY_STD
-│   ├─ lapse_annual         -> LAPSE_TERM_FC
-│   ├─ waiver_incidence     -> WAIVER_STD
-│   ├─ discount_annual      = ndarray len=101 [0.03103, ..., 0.0405]
-│   ├─ expense_inflation    = ndarray len=1 [0.02, ..., 0.02]
-│   ├─ expense_items        = tuple  (len=2)
-│   │   ├─ ExpenseItem('acquisition', basis='alpha_fixed', value=700000)
-│   │   └─ ExpenseItem('maintenance', basis='gamma_fixed', value=90000)
-│   ├─ ra: method='confidence_level', conf=0.75
-│   └─ cv: mort=0.1 morb=0.12 long=0 disab=0
-├─ Coverages (rate-driven, n=5)
-│   ├─ 'DEATH'           method=DEATH      risk=0  is_diagnosis=False  rate -> MORTALITY_STD
-│   ├─ 'INPATIENT'       method=MORBIDITY  risk=1  is_diagnosis=False  rate -> INPATIENT_STD
-│   ├─ 'CANCER'          method=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> CANCER_STD
-│   ├─ 'ADB'             method=DEATH      risk=0  is_diagnosis=False  rate -> ADB_STD
-│   └─ 'DISEASE_DEATH'   method=DEATH      risk=0  is_diagnosis=False  rate -> DISEASE_DEATH_STD
-├─ Rates (annual, evaluated for this MP)
-│   ├─ axes: sex=0, issue_age=35, issue_class=0, elapsed_at_issue=0m
-│   ├─         year      mort(an)     lapse(an)    waiver(an)     DEATH(an)  INPATIENT(an)    CANCER(an)       ADB(an)  DISEASE_DEATH(an)
-│   ├─            0      0.000780      0.107640      0.000980      0.000780      0.079173      0.001587      0.000036      0.000630
-│   ├─            1      0.000860      0.142678      0.001081      0.000860      0.079173      0.001587      0.000039      0.000694
-│   ├─            2      0.000940      0.142678      0.001181      0.000940      0.079173      0.001587      0.000043      0.000759
-│   ├─            3      0.001020      0.142678      0.001282      0.001020      0.079173      0.001587      0.000047      0.000823
-│   ├─            4      0.001090      0.142678      0.001370      0.001090      0.079173      0.001587      0.000050      0.000880
-│   ├─           10      0.001720      0.036800      0.002281      0.001720      0.091039      0.002712      0.000066      0.001477
-│   └─           19      0.003910      0.036800      0.005285      0.003910      0.103026      0.004092      0.000149      0.003424
-├─ Cash flows (annual sum over 240m horizon)
-│   ├─         year       premium         claim     morbidity       expense       annuity     surrender    disability
-│   ├─            0       449,802        59,260             0       786,204             0           512             0
-│   ├─            1       393,535        57,233             0        77,014             0         4,352             0
-│   ├─            2       336,705        53,606             0        67,311             0        10,543             0
-│   ├─            3       288,029        49,853             0        58,841             0        18,738             0
-│   ├─            4       246,348        45,669             0        51,449             0        28,453             0
-│   ├─            5       212,969        42,130             0        45,489             0        32,352             0
-│   ├─            6       188,584        39,995             0        41,206             0        33,010             0
-│   ├─            7       170,943        39,885             0        38,216             0        31,165             0
-│   ├─            8       158,521        40,922             0        36,260             0        26,690             0
-│   ├─            9       150,309        42,035             0        35,176             0        19,469             0
-│   ├─           10       144,222        42,955             0        34,532             0        21,844             0
-│   ├─           11       138,341        44,228             0        33,899             0        23,739             0
-│   ├─           12       132,657        46,503             0        33,278             0        25,644             0
-│   ├─           13       127,149        49,657             0        32,667             0        27,552             0
-│   ├─           14       121,800        53,576             0        32,063             0        29,455             0
-│   ├─           15       116,601        56,919             0        31,468             0        31,343             0
-│   ├─           16       111,552        59,732             0        30,883             0        33,212             0
-│   ├─           17       106,657        62,630             0        30,306             0        35,053             0
-│   ├─           18       101,909        65,589             0        29,739             0        36,860             0
-│   ├─           19        97,301        69,116             0        29,181             0        38,625             0
-│   └─ maturity benefit at t=240m: 2,159,681
-├─ Undiagnosed share (key months, per coverage)
-│   └─ 'CANCER':
-│       ├─ t=   0m: undiagnosed=1.000000
-│       ├─ t=  12m: undiagnosed=0.998413
-│       ├─ t=  60m: undiagnosed=0.992090
-│       ├─ t= 120m: undiagnosed=0.981269
-│       ├─ t= 228m: undiagnosed=0.952287
-│       └─ t= 240m: undiagnosed=0.948391
-├─ Discount factors (key months)
-│   ├─ t=   0m: ds=1.000000
-│   ├─ t=  12m: ds=0.969904
-│   ├─ t=  60m: ds=0.835840
-│   ├─ t= 120m: ds=0.679134
-│   ├─ t= 228m: ds=0.471163
-│   └─ t= 240m: ds=0.452457
-├─ BEL roll-forward (key months)
-│   ├─ BEL[t] = annuity[t] - premium[t] + (claim+morbidity+disability+expense+surrender)[t] * (1+i)^(-1/2) + BEL[t+1] * (1+i)^(-1)
-│   ├─ BEL[ 240] =    2,159,680.98  (maturity seed -- a single payment at term)
-│   ├─ BEL[ 228] =    2,112,593.93
-│   ├─ BEL[ 120] =    1,389,753.94
-│   ├─ BEL[  60] =      819,188.11
-│   ├─ BEL[  12] =        4,269.76
-│   └─ BEL[   0] =      403,359.82
-├─ CSM roll-forward (key months)
-│   ├─ FCF[0]    = BEL[0] + RA[0] = 403,359.82 + 47,359.86 = 450,719.68
-│   ├─ CSM[0]    = max(0, -FCF[0]) = 0.00
-│   ├─ loss_comp = max(0,  FCF[0]) = 450,719.68
-│   ├─ csm[t+1] = csm[t] + accretion[t] - release[t]
-│   ├─ t=   0m: csm=          0.00  acc=      0.00  rel=      0.00
-│   ├─ t=  12m: csm=          0.00  acc=      0.00  rel=      0.00
-│   ├─ t=  60m: csm=          0.00  acc=      0.00  rel=      0.00
-│   ├─ t= 120m: csm=          0.00  acc=      0.00  rel=      0.00
-│   ├─ t= 228m: csm=          0.00  acc=      0.00  rel=      0.00
-│   └─ t= 240m: csm=          0.00  (past last accretion month)
-└─ Final (headline numbers, per policy)
-    ├─ BEL              =      403,359.82
-    ├─ RA               =       47,359.86
-    ├─ FCF = BEL + RA   =      450,719.68
-    ├─ CSM = max(0,-FCF)=            0.00
-    └─ loss_component   =      450,719.68
++- Basis (segment-level)
+|   +- mortality_annual     -> MORTALITY_STD
+|   +- lapse_annual         -> LAPSE_TERM_FC
+|   +- waiver_incidence     -> WAIVER_STD
+|   +- discount_annual      = ndarray len=101 [0.03103, ..., 0.0405]
+|   +- expense_inflation    = ndarray len=1 [0.02, ..., 0.02]
+|   +- expense_items        = tuple  (len=2)
+|   |   +- ExpenseItem('acquisition', basis='alpha_fixed', value=700000)
+|   |   `- ExpenseItem('maintenance', basis='gamma_fixed', value=90000)
+|   +- ra: method='confidence_level', conf=0.75
+|   `- cv: mort=0.1 morb=0.12 long=0 disab=0
++- Coverages (rate-driven, n=5)
+|   +- 'DEATH'           method=DEATH      risk=0  is_diagnosis=False  rate -> MORTALITY_STD
+|   +- 'INPATIENT'       method=MORBIDITY  risk=1  is_diagnosis=False  rate -> INPATIENT_STD
+|   +- 'CANCER'          method=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> CANCER_STD
+|   +- 'ADB'             method=DEATH      risk=0  is_diagnosis=False  rate -> ADB_STD
+|   `- 'DISEASE_DEATH'   method=DEATH      risk=0  is_diagnosis=False  rate -> DISEASE_DEATH_STD
++- Rates (annual, evaluated for this MP)
+|   +- axes: sex=0, issue_age=35, issue_class=0, elapsed_at_issue=0m
+|   +-         year      mort(an)     lapse(an)    waiver(an)     DEATH(an)  INPATIENT(an)    CANCER(an)       ADB(an)  DISEASE_DEATH(an)
+|   +-            0      0.000780      0.107640      0.000980      0.000780      0.079173      0.001587      0.000036      0.000630
+|   +-            1      0.000860      0.142678      0.001081      0.000860      0.079173      0.001587      0.000039      0.000694
+|   +-            2      0.000940      0.142678      0.001181      0.000940      0.079173      0.001587      0.000043      0.000759
+|   +-            3      0.001020      0.142678      0.001282      0.001020      0.079173      0.001587      0.000047      0.000823
+|   +-            4      0.001090      0.142678      0.001370      0.001090      0.079173      0.001587      0.000050      0.000880
+|   +-           10      0.001720      0.036800      0.002281      0.001720      0.091039      0.002712      0.000066      0.001477
+|   `-           19      0.003910      0.036800      0.005285      0.003910      0.103026      0.004092      0.000149      0.003424
++- Cash flows (annual sum over 240m horizon)
+|   +-         year       premium         claim     morbidity       expense       annuity     surrender    disability
+|   +-            0       449,802        59,260             0       786,204             0           512             0
+|   +-            1       393,535        57,233             0        77,014             0         4,352             0
+|   +-            2       336,705        53,606             0        67,311             0        10,543             0
+|   +-            3       288,029        49,853             0        58,841             0        18,738             0
+|   +-            4       246,348        45,669             0        51,449             0        28,453             0
+|   +-            5       212,969        42,130             0        45,489             0        32,352             0
+|   +-            6       188,584        39,995             0        41,206             0        33,010             0
+|   +-            7       170,943        39,885             0        38,216             0        31,165             0
+|   +-            8       158,521        40,922             0        36,260             0        26,690             0
+|   +-            9       150,309        42,035             0        35,176             0        19,469             0
+|   +-           10       144,222        42,955             0        34,532             0        21,844             0
+|   +-           11       138,341        44,228             0        33,899             0        23,739             0
+|   +-           12       132,657        46,503             0        33,278             0        25,644             0
+|   +-           13       127,149        49,657             0        32,667             0        27,552             0
+|   +-           14       121,800        53,576             0        32,063             0        29,455             0
+|   +-           15       116,601        56,919             0        31,468             0        31,343             0
+|   +-           16       111,552        59,732             0        30,883             0        33,212             0
+|   +-           17       106,657        62,630             0        30,306             0        35,053             0
+|   +-           18       101,909        65,589             0        29,739             0        36,860             0
+|   +-           19        97,301        69,116             0        29,181             0        38,625             0
+|   `- maturity benefit at t=240m: 2,159,681
++- Undiagnosed share (key months, per coverage)
+|   `- 'CANCER':
+|       +- t=   0m: undiagnosed=1.000000
+|       +- t=  12m: undiagnosed=0.998413
+|       +- t=  60m: undiagnosed=0.992090
+|       +- t= 120m: undiagnosed=0.981269
+|       +- t= 228m: undiagnosed=0.952287
+|       `- t= 240m: undiagnosed=0.948391
++- Discount factors (key months)
+|   +- t=   0m: ds=1.000000
+|   +- t=  12m: ds=0.969904
+|   +- t=  60m: ds=0.835840
+|   +- t= 120m: ds=0.679134
+|   +- t= 228m: ds=0.471163
+|   `- t= 240m: ds=0.452457
++- BEL roll-forward (key months)
+|   +- BEL[t] = annuity[t] - premium[t] + (claim+morbidity+disability+expense+surrender)[t] * (1+i)^(-1/2) + BEL[t+1] * (1+i)^(-1)
+|   +- BEL[ 240] =    2,159,680.98  (maturity seed -- a single payment at term)
+|   +- BEL[ 228] =    2,112,593.93
+|   +- BEL[ 120] =    1,389,753.94
+|   +- BEL[  60] =      819,188.11
+|   +- BEL[  12] =        4,269.76
+|   `- BEL[   0] =      403,359.82
++- CSM roll-forward (key months)
+|   +- FCF[0]    = BEL[0] + RA[0] = 403,359.82 + 47,359.86 = 450,719.68
+|   +- CSM[0]    = max(0, -FCF[0]) = 0.00
+|   +- loss_comp = max(0,  FCF[0]) = 450,719.68
+|   +- csm[t+1] = csm[t] + accretion[t] - release[t]
+|   +- t=   0m: csm=          0.00  acc=      0.00  rel=      0.00
+|   +- t=  12m: csm=          0.00  acc=      0.00  rel=      0.00
+|   +- t=  60m: csm=          0.00  acc=      0.00  rel=      0.00
+|   +- t= 120m: csm=          0.00  acc=      0.00  rel=      0.00
+|   +- t= 228m: csm=          0.00  acc=      0.00  rel=      0.00
+|   `- t= 240m: csm=          0.00  (past last accretion month)
+`- Final (headline numbers, per policy)
+    +- BEL              =      403,359.82
+    +- RA               =       47,359.86
+    +- FCF = BEL + RA   =      450,719.68
+    +- CSM = max(0,-FCF)=            0.00
+    `- loss_component   =      450,719.68
 ```
 
 아홉 섹션이 한 화면에 다 들어옵니다. 검증 관점에서 가장 자주 보는 것:
@@ -279,67 +279,67 @@ term-1, term}` — 시작, 1년 끝, 중간, 마지막 step, seed.
 
 ```
 mp[0] BEL step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
-├─ Recursion (back-pass)
-│   ├─ BEL[t] = annuity[t] - premium[t]
-│   ├─        + (claim + morbidity + disability + expense + surrender)[t] * (1 + i[t])^(-1/2)
-│   ├─        + BEL[t+1] * (1 + i[t])^(-1)
-│   └─ seed:   BEL[240] = maturity_benefit = 2,159,680.98
-├─ Steps
-│   ├─ t=   0
-│   │   ├─ i[t]                      = 0.002550
-│   │   ├─ half = (1+i)^(-1/2)       = 0.998728
-│   │   ├─ full = (1+i)^(-1)         = 0.997457
-│   │   ├─ premium[t]                =       39,502.00
-│   │   ├─ annuity[t]                =            0.00
-│   │   ├─ claim[t]                  =        5,201.86
-│   │   ├─ morbidity[t]              =            0.00
-│   │   ├─ disability[t]             =            0.00
-│   │   ├─ expense[t]                =      707,500.00
-│   │   ├─ surrender[t]              =            0.00
-│   │   ├─ mid-month sum             =      712,701.86
-│   │   ├─ mid-month piece (×half)   =      711,794.98
-│   │   ├─ BEL[t+1]                  =     -269,618.88
-│   │   ├─ tail piece (BEL[t+1]×full)=     -268,933.16
-│   │   ├─ recomputed BEL[t]         =      403,359.82
-│   │   └─ engine BEL[t]             =      403,359.82  (residual +0.0000e+00)
-│   ├─ t=  12
-│   │   ├─ i[t]                      = 0.002550
-│   │   ├─ half = (1+i)^(-1/2)       = 0.998728
-│   │   ├─ full = (1+i)^(-1)         = 0.997457
-│   │   ├─ premium[t]                =       35,187.98
-│   │   ├─ annuity[t]                =            0.00
-│   │   ├─ claim[t]                  =        5,114.54
-│   │   ├─ morbidity[t]              =            0.00
-│   │   ├─ disability[t]             =            0.00
-│   │   ├─ expense[t]                =        6,821.66
-│   │   ├─ surrender[t]              =          185.26
-│   │   ├─ mid-month sum             =       12,121.47
-│   │   ├─ mid-month piece (×half)   =       12,106.04
-│   │   ├─ BEL[t+1]                  =       27,421.44
-│   │   ├─ tail piece (BEL[t+1]×full)=       27,351.70
-│   │   ├─ recomputed BEL[t]         =        4,269.76
-│   │   └─ engine BEL[t]             =        4,269.76  (residual +0.0000e+00)
-│   ├─ t= 239
-│   │   ├─ i[t]                      = 0.003382
-│   │   ├─ half = (1+i)^(-1/2)       = 0.998313
-│   │   ├─ full = (1+i)^(-1)         = 0.996630
-│   │   ├─ premium[t]                =        7,935.97
-│   │   ├─ annuity[t]                =            0.00
-│   │   ├─ claim[t]                  =        5,657.88
-│   │   ├─ morbidity[t]              =            0.00
-│   │   ├─ disability[t]             =            0.00
-│   │   ├─ expense[t]                =        2,410.67
-│   │   ├─ surrender[t]              =        3,285.04
-│   │   ├─ mid-month sum             =       11,353.59
-│   │   ├─ mid-month piece (×half)   =       11,334.44
-│   │   ├─ BEL[t+1]                  =    2,159,680.98
-│   │   ├─ tail piece (BEL[t+1]×full)=    2,152,402.14
-│   │   ├─ recomputed BEL[t]         =    2,155,800.61
-│   │   └─ engine BEL[t]             =    2,155,800.61  (residual +0.0000e+00)
-│   └─ t= 240  (seed -- no recursion below)
-│       └─ BEL[240] =    2,159,680.98  (= maturity_benefit)
-└─ Inception BEL
-    └─ BEL[0] =      403,359.82
++- Recursion (back-pass)
+|   +- BEL[t] = annuity[t] - premium[t]
+|   +-        + (claim + morbidity + disability + expense + surrender)[t] * (1 + i[t])^(-1/2)
+|   +-        + BEL[t+1] * (1 + i[t])^(-1)
+|   `- seed:   BEL[240] = maturity_benefit = 2,159,680.98
++- Steps
+|   +- t=   0
+|   |   +- i[t]                      = 0.002550
+|   |   +- half = (1+i)^(-1/2)       = 0.998728
+|   |   +- full = (1+i)^(-1)         = 0.997457
+|   |   +- premium[t]                =       39,502.00
+|   |   +- annuity[t]                =            0.00
+|   |   +- claim[t]                  =        5,201.86
+|   |   +- morbidity[t]              =            0.00
+|   |   +- disability[t]             =            0.00
+|   |   +- expense[t]                =      707,500.00
+|   |   +- surrender[t]              =            0.00
+|   |   +- mid-month sum             =      712,701.86
+|   |   +- mid-month piece (*half)   =      711,794.98
+|   |   +- BEL[t+1]                  =     -269,618.88
+|   |   +- tail piece (BEL[t+1]*full)=     -268,933.16
+|   |   +- recomputed BEL[t]         =      403,359.82
+|   |   `- engine BEL[t]             =      403,359.82  (residual +0.0000e+00)
+|   +- t=  12
+|   |   +- i[t]                      = 0.002550
+|   |   +- half = (1+i)^(-1/2)       = 0.998728
+|   |   +- full = (1+i)^(-1)         = 0.997457
+|   |   +- premium[t]                =       35,187.98
+|   |   +- annuity[t]                =            0.00
+|   |   +- claim[t]                  =        5,114.54
+|   |   +- morbidity[t]              =            0.00
+|   |   +- disability[t]             =            0.00
+|   |   +- expense[t]                =        6,821.66
+|   |   +- surrender[t]              =          185.26
+|   |   +- mid-month sum             =       12,121.47
+|   |   +- mid-month piece (*half)   =       12,106.04
+|   |   +- BEL[t+1]                  =       27,421.44
+|   |   +- tail piece (BEL[t+1]*full)=       27,351.70
+|   |   +- recomputed BEL[t]         =        4,269.76
+|   |   `- engine BEL[t]             =        4,269.76  (residual +0.0000e+00)
+|   +- t= 239
+|   |   +- i[t]                      = 0.003382
+|   |   +- half = (1+i)^(-1/2)       = 0.998313
+|   |   +- full = (1+i)^(-1)         = 0.996630
+|   |   +- premium[t]                =        7,935.97
+|   |   +- annuity[t]                =            0.00
+|   |   +- claim[t]                  =        5,657.88
+|   |   +- morbidity[t]              =            0.00
+|   |   +- disability[t]             =            0.00
+|   |   +- expense[t]                =        2,410.67
+|   |   +- surrender[t]              =        3,285.04
+|   |   +- mid-month sum             =       11,353.59
+|   |   +- mid-month piece (*half)   =       11,334.44
+|   |   +- BEL[t+1]                  =    2,159,680.98
+|   |   +- tail piece (BEL[t+1]*full)=    2,152,402.14
+|   |   +- recomputed BEL[t]         =    2,155,800.61
+|   |   `- engine BEL[t]             =    2,155,800.61  (residual +0.0000e+00)
+|   `- t= 240  (seed -- no recursion below)
+|       `- BEL[240] =    2,159,680.98  (= maturity_benefit)
+`- Inception BEL
+    `- BEL[0] =      403,359.82
 ```
 
 **residual** (잔차 = recomputed - engine) 이 핵심입니다. 모든 step
@@ -373,64 +373,64 @@ fcf.gmm.trace_csm_step(0, mp, basis, months=[1, 60, 120, 240])
 
 ```
 mp[0] CSM step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
-├─ Recursion (forward-pass)
-│   ├─ csm[0]   = max(0, -(BEL[0] + RA[0]))
-│   ├─ csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]
-│   ├─ accretion[t-1] = csm[t-1] * i[t-1]
-│   └─ release[t-1]   = (csm[t-1] + accretion[t-1]) * coverage_units[t-1] / sum(coverage_units[t-1:])
-├─ Seed (t = 0)
-│   ├─ BEL[0]               =      403,359.82
-│   ├─ RA[0]                =       47,359.86
-│   ├─ FCF[0] = BEL + RA    =      450,719.68
-│   ├─ csm[0] = max(0,-FCF) =            0.00
-│   └─ onerous contract -- csm = 0 throughout; release/accretion are 0 by construction.
-├─ Steps
-│   ├─ t=   1
-│   │   ├─ csm[t-1]                  =            0.00
-│   │   ├─ i[t-1]                    = 0.002550
-│   │   ├─ accretion[t-1] = csm*i    =            0.00
-│   │   ├─ accreted = csm + acc      =            0.00
-│   │   ├─ coverage_units[t-1]       = 1.000000
-│   │   ├─ cu_tail[t-1] = sum(cu[t-1:]) = 97.866195
-│   │   ├─ release fraction          = cov_units / cu_tail = 1.000000 / 97.866195 = 0.010218
-│   │   ├─ release[t-1] = accreted * frac =            0.00
-│   │   ├─ recomputed csm[t]         =            0.00
-│   │   └─ engine csm[t]             =            0.00  (residual +0.0000e+00)
-│   ├─ t=  60
-│   │   ├─ csm[t-1]                  =            0.00
-│   │   ├─ i[t-1]                    = 0.003363
-│   │   ├─ accretion[t-1] = csm*i    =            0.00
-│   │   ├─ accreted = csm + acc      =            0.00
-│   │   ├─ coverage_units[t-1]       = 0.487350
-│   │   ├─ cu_tail[t-1] = sum(cu[t-1:]) = 54.822982
-│   │   ├─ release fraction          = cov_units / cu_tail = 0.487350 / 54.822982 = 0.008890
-│   │   ├─ release[t-1] = accreted * frac =            0.00
-│   │   ├─ recomputed csm[t]         =            0.00
-│   │   └─ engine csm[t]             =            0.00  (residual +0.0000e+00)
-│   ├─ t= 120
-│   │   ├─ csm[t-1]                  =            0.00
-│   │   ├─ i[t-1]                    = 0.003535
-│   │   ├─ accretion[t-1] = csm*i    =            0.00
-│   │   ├─ accreted = csm + acc      =            0.00
-│   │   ├─ coverage_units[t-1]       = 0.318446
-│   │   ├─ cu_tail[t-1] = sum(cu[t-1:]) = 31.998881
-│   │   ├─ release fraction          = cov_units / cu_tail = 0.318446 / 31.998881 = 0.009952
-│   │   ├─ release[t-1] = accreted * frac =            0.00
-│   │   ├─ recomputed csm[t]         =            0.00
-│   │   └─ engine csm[t]             =            0.00  (residual +0.0000e+00)
-│   └─ t= 240
-│       ├─ csm[t-1]                  =            0.00
-│       ├─ i[t-1]                    = 0.003382
-│       ├─ accretion[t-1] = csm*i    =            0.00
-│       ├─ accreted = csm + acc      =            0.00
-│       ├─ coverage_units[t-1]       = 0.216665
-│       ├─ cu_tail[t-1] = sum(cu[t-1:]) = 0.216665
-│       ├─ release fraction          = cov_units / cu_tail = 0.216665 / 0.216665 = 1.000000
-│       ├─ release[t-1] = accreted * frac =            0.00
-│       ├─ recomputed csm[t]         =            0.00
-│       └─ engine csm[t]             =            0.00  (residual +0.0000e+00)
-└─ End CSM
-    └─ csm[240] =            0.00
++- Recursion (forward-pass)
+|   +- csm[0]   = max(0, -(BEL[0] + RA[0]))
+|   +- csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]
+|   +- accretion[t-1] = csm[t-1] * i[t-1]
+|   `- release[t-1]   = (csm[t-1] + accretion[t-1]) * coverage_units[t-1] / sum(coverage_units[t-1:])
++- Seed (t = 0)
+|   +- BEL[0]               =      403,359.82
+|   +- RA[0]                =       47,359.86
+|   +- FCF[0] = BEL + RA    =      450,719.68
+|   +- csm[0] = max(0,-FCF) =            0.00
+|   `- onerous contract -- csm = 0 throughout; release/accretion are 0 by construction.
++- Steps
+|   +- t=   1
+|   |   +- csm[t-1]                  =            0.00
+|   |   +- i[t-1]                    = 0.002550
+|   |   +- accretion[t-1] = csm*i    =            0.00
+|   |   +- accreted = csm + acc      =            0.00
+|   |   +- coverage_units[t-1]       = 1.000000
+|   |   +- cu_tail[t-1] = sum(cu[t-1:]) = 97.866195
+|   |   +- release fraction          = cov_units / cu_tail = 1.000000 / 97.866195 = 0.010218
+|   |   +- release[t-1] = accreted * frac =            0.00
+|   |   +- recomputed csm[t]         =            0.00
+|   |   `- engine csm[t]             =            0.00  (residual +0.0000e+00)
+|   +- t=  60
+|   |   +- csm[t-1]                  =            0.00
+|   |   +- i[t-1]                    = 0.003363
+|   |   +- accretion[t-1] = csm*i    =            0.00
+|   |   +- accreted = csm + acc      =            0.00
+|   |   +- coverage_units[t-1]       = 0.487350
+|   |   +- cu_tail[t-1] = sum(cu[t-1:]) = 54.822982
+|   |   +- release fraction          = cov_units / cu_tail = 0.487350 / 54.822982 = 0.008890
+|   |   +- release[t-1] = accreted * frac =            0.00
+|   |   +- recomputed csm[t]         =            0.00
+|   |   `- engine csm[t]             =            0.00  (residual +0.0000e+00)
+|   +- t= 120
+|   |   +- csm[t-1]                  =            0.00
+|   |   +- i[t-1]                    = 0.003535
+|   |   +- accretion[t-1] = csm*i    =            0.00
+|   |   +- accreted = csm + acc      =            0.00
+|   |   +- coverage_units[t-1]       = 0.318446
+|   |   +- cu_tail[t-1] = sum(cu[t-1:]) = 31.998881
+|   |   +- release fraction          = cov_units / cu_tail = 0.318446 / 31.998881 = 0.009952
+|   |   +- release[t-1] = accreted * frac =            0.00
+|   |   +- recomputed csm[t]         =            0.00
+|   |   `- engine csm[t]             =            0.00  (residual +0.0000e+00)
+|   `- t= 240
+|       +- csm[t-1]                  =            0.00
+|       +- i[t-1]                    = 0.003382
+|       +- accretion[t-1] = csm*i    =            0.00
+|       +- accreted = csm + acc      =            0.00
+|       +- coverage_units[t-1]       = 0.216665
+|       +- cu_tail[t-1] = sum(cu[t-1:]) = 0.216665
+|       +- release fraction          = cov_units / cu_tail = 0.216665 / 0.216665 = 1.000000
+|       +- release[t-1] = accreted * frac =            0.00
+|       +- recomputed csm[t]         =            0.00
+|       `- engine csm[t]             =            0.00  (residual +0.0000e+00)
+`- End CSM
+    `- csm[240] =            0.00
 ```
 
 수익성 있는 계약 (BEL < 0) 으로 바꿔 보면 매월 recursion 이 의미를
@@ -475,52 +475,52 @@ fcf.gmm.trace_csm_step(0, mp_one, profitable, months=[1, 30, 60])
 
 ```
 mp[0] CSM step-by-step  (-/-, sex=M, issue_age=40, term=60m)
-├─ Recursion (forward-pass)
-│   ├─ csm[0]   = max(0, -(BEL[0] + RA[0]))
-│   ├─ csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]
-│   ├─ accretion[t-1] = csm[t-1] * i[t-1]
-│   └─ release[t-1]   = (csm[t-1] + accretion[t-1]) * coverage_units[t-1] / sum(coverage_units[t-1:])
-├─ Seed (t = 0)
-│   ├─ BEL[0]               =  -10,411,844.82
-│   ├─ RA[0]                =        7,463.29
-│   ├─ FCF[0] = BEL + RA    =  -10,404,381.52
-│   └─ csm[0] = max(0,-FCF) =   10,404,381.52
-├─ Steps
-│   ├─ t=   1
-│   │   ├─ csm[t-1]                  =   10,404,381.52
-│   │   ├─ i[t-1]                    = 0.002466
-│   │   ├─ accretion[t-1] = csm*i    =       25,660.01
-│   │   ├─ accreted = csm + acc      =   10,430,041.53
-│   │   ├─ coverage_units[t-1]       = 1.000000
-│   │   ├─ cu_tail[t-1] = sum(cu[t-1:]) = 57.048193
-│   │   ├─ release fraction          = cov_units / cu_tail = 1.000000 / 57.048193 = 0.017529
-│   │   ├─ release[t-1] = accreted * frac =      182,828.60
-│   │   ├─ recomputed csm[t]         =   10,247,212.93
-│   │   └─ engine csm[t]             =   10,247,212.93  (residual +0.0000e+00)
-│   ├─ t=  30
-│   │   ├─ csm[t-1]                  =    5,629,160.18
-│   │   ├─ i[t-1]                    = 0.002466
-│   │   ├─ accretion[t-1] = csm*i    =       13,883.03
-│   │   ├─ accreted = csm + acc      =    5,643,043.21
-│   │   ├─ coverage_units[t-1]       = 0.951199
-│   │   ├─ cu_tail[t-1] = sum(cu[t-1:]) = 28.737298
-│   │   ├─ release fraction          = cov_units / cu_tail = 0.951199 / 28.737298 = 0.033100
-│   │   ├─ release[t-1] = accreted * frac =      186,783.66
-│   │   ├─ recomputed csm[t]         =    5,456,259.55
-│   │   └─ engine csm[t]             =    5,456,259.55  (residual +0.0000e+00)
-│   └─ t=  60
-│       ├─ csm[t-1]                  =      190,495.34
-│       ├─ i[t-1]                    = 0.002466
-│       ├─ accretion[t-1] = csm*i    =          469.81
-│       ├─ accreted = csm + acc      =      190,965.16
-│       ├─ coverage_units[t-1]       = 0.903220
-│       ├─ cu_tail[t-1] = sum(cu[t-1:]) = 0.903220
-│       ├─ release fraction          = cov_units / cu_tail = 0.903220 / 0.903220 = 1.000000
-│       ├─ release[t-1] = accreted * frac =      190,965.16
-│       ├─ recomputed csm[t]         =            0.00
-│       └─ engine csm[t]             =            0.00  (residual +0.0000e+00)
-└─ End CSM
-    └─ csm[60] =            0.00
++- Recursion (forward-pass)
+|   +- csm[0]   = max(0, -(BEL[0] + RA[0]))
+|   +- csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]
+|   +- accretion[t-1] = csm[t-1] * i[t-1]
+|   `- release[t-1]   = (csm[t-1] + accretion[t-1]) * coverage_units[t-1] / sum(coverage_units[t-1:])
++- Seed (t = 0)
+|   +- BEL[0]               =  -10,411,844.82
+|   +- RA[0]                =        7,463.29
+|   +- FCF[0] = BEL + RA    =  -10,404,381.52
+|   `- csm[0] = max(0,-FCF) =   10,404,381.52
++- Steps
+|   +- t=   1
+|   |   +- csm[t-1]                  =   10,404,381.52
+|   |   +- i[t-1]                    = 0.002466
+|   |   +- accretion[t-1] = csm*i    =       25,660.01
+|   |   +- accreted = csm + acc      =   10,430,041.53
+|   |   +- coverage_units[t-1]       = 1.000000
+|   |   +- cu_tail[t-1] = sum(cu[t-1:]) = 57.048193
+|   |   +- release fraction          = cov_units / cu_tail = 1.000000 / 57.048193 = 0.017529
+|   |   +- release[t-1] = accreted * frac =      182,828.60
+|   |   +- recomputed csm[t]         =   10,247,212.93
+|   |   `- engine csm[t]             =   10,247,212.93  (residual +0.0000e+00)
+|   +- t=  30
+|   |   +- csm[t-1]                  =    5,629,160.18
+|   |   +- i[t-1]                    = 0.002466
+|   |   +- accretion[t-1] = csm*i    =       13,883.03
+|   |   +- accreted = csm + acc      =    5,643,043.21
+|   |   +- coverage_units[t-1]       = 0.951199
+|   |   +- cu_tail[t-1] = sum(cu[t-1:]) = 28.737298
+|   |   +- release fraction          = cov_units / cu_tail = 0.951199 / 28.737298 = 0.033100
+|   |   +- release[t-1] = accreted * frac =      186,783.66
+|   |   +- recomputed csm[t]         =    5,456,259.55
+|   |   `- engine csm[t]             =    5,456,259.55  (residual +0.0000e+00)
+|   `- t=  60
+|       +- csm[t-1]                  =      190,495.34
+|       +- i[t-1]                    = 0.002466
+|       +- accretion[t-1] = csm*i    =          469.81
+|       +- accreted = csm + acc      =      190,965.16
+|       +- coverage_units[t-1]       = 0.903220
+|       +- cu_tail[t-1] = sum(cu[t-1:]) = 0.903220
+|       +- release fraction          = cov_units / cu_tail = 0.903220 / 0.903220 = 1.000000
+|       +- release[t-1] = accreted * frac =      190,965.16
+|       +- recomputed csm[t]         =            0.00
+|       `- engine csm[t]             =            0.00  (residual +0.0000e+00)
+`- End CSM
+    `- csm[60] =            0.00
 ```
 
 마지막 월에서 `release fraction = 1.0` (잔존 coverage_unit 전부 환입)
@@ -567,140 +567,140 @@ fcf.gmm.trace_diff(0, mp, baseline, shocked,
 ```
 diff mp[0]  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m, premium_term=240m, count=1)
 labels: 'baseline'  ->  'mort+10%'
-├─ Assumption changes
-│   ├─ mortality_annual       : MORTALITY_STD  ->  MORTALITY_STD (+x1.1)
-│   └─ coverage[DEATH].rate   : MORTALITY_STD  ->  MORTALITY_STD (+x1.1)
-├─ Rate deltas (per policy year)
-│   ├─ axes: sex=0, issue_age=35, issue_class=0, elapsed_at_issue=0m
-│   ├─ year  0
-│   │   ├─ mortality(annual)    0.000780  ->    0.000858   ( +0.000078,   +10.00%)
-│   │   └─ DEATH(annual)        0.000780  ->    0.000858   ( +0.000078,   +10.00%)
-│   ├─ year  1
-│   │   ├─ mortality(annual)    0.000860  ->    0.000946   ( +0.000086,   +10.00%)
-│   │   └─ DEATH(annual)        0.000860  ->    0.000946   ( +0.000086,   +10.00%)
-│   ├─ year  2
-│   │   ├─ mortality(annual)    0.000940  ->    0.001034   ( +0.000094,   +10.00%)
-│   │   └─ DEATH(annual)        0.000940  ->    0.001034   ( +0.000094,   +10.00%)
-│   ├─ year  3
-│   │   ├─ mortality(annual)    0.001020  ->    0.001122   ( +0.000102,   +10.00%)
-│   │   └─ DEATH(annual)        0.001020  ->    0.001122   ( +0.000102,   +10.00%)
-│   ├─ year  4
-│   │   ├─ mortality(annual)    0.001090  ->    0.001199   ( +0.000109,   +10.00%)
-│   │   └─ DEATH(annual)        0.001090  ->    0.001199   ( +0.000109,   +10.00%)
-│   ├─ year 10
-│   │   ├─ mortality(annual)    0.001720  ->    0.001892   ( +0.000172,   +10.00%)
-│   │   └─ DEATH(annual)        0.001720  ->    0.001892   ( +0.000172,   +10.00%)
-│   └─ year 19
-│       ├─ mortality(annual)    0.003910  ->    0.004301   ( +0.000391,   +10.00%)
-│       └─ DEATH(annual)        0.003910  ->    0.004301   ( +0.000391,   +10.00%)
-├─ Cash flow deltas (annual sum, non-zero rows only)
-│   ├─           year          stream   sum(baseline)   sum(mort+10%)               Δ              %Δ
-│   ├─              0         premium         449,802         449,786             -16          -0.00%
-│   ├─              0           claim          59,260          65,186          +5,926         +10.00%
-│   ├─              0         expense         786,204         786,201              -3          -0.00%
-│   ├─              1         premium         393,535         393,489             -46          -0.01%
-│   ├─              1           claim          57,233          62,952          +5,718          +9.99%
-│   ├─              1         expense          77,014          77,005              -9          -0.01%
-│   ├─              2         premium         336,705         336,635             -69          -0.02%
-│   ├─              2           claim          53,606          58,957          +5,351          +9.98%
-│   ├─              2         expense          67,311          67,297             -14          -0.02%
-│   ├─              2       surrender          10,543          10,542              -1          -0.01%
-│   ├─              3         premium         288,029         287,942             -87          -0.03%
-│   ├─              3           claim          49,853          54,824          +4,971          +9.97%
-│   ├─              3         expense          58,841          58,823             -18          -0.03%
-│   ├─              3       surrender          18,738          18,735              -2          -0.01%
-│   ├─              4         premium         246,348         246,247            -101          -0.04%
-│   ├─              4           claim          45,669          50,218          +4,549          +9.96%
-│   ├─              4         expense          51,449          51,428             -21          -0.04%
-│   ├─              4       surrender          28,453          28,448              -5          -0.02%
-│   ├─              5         premium         212,969         212,858            -111          -0.05%
-│   ├─              5           claim          42,130          46,321          +4,191          +9.95%
-│   ├─              5         expense          45,489          45,465             -24          -0.05%
-│   ├─              5       surrender          32,352          32,345              -7          -0.02%
-│   ├─              6         premium         188,584         188,463            -121          -0.06%
-│   ├─              6           claim          39,995          43,969          +3,974          +9.94%
-│   ├─              6         expense          41,206          41,180             -26          -0.06%
-│   ├─              6       surrender          33,010          33,002              -8          -0.02%
-│   ├─              7         premium         170,943         170,811            -132          -0.08%
-│   ├─              7           claim          39,885          43,842          +3,957          +9.92%
-│   ├─              7         expense          38,216          38,186             -29          -0.08%
-│   ├─              7       surrender          31,165          31,156              -9          -0.03%
-│   ├─              8         premium         158,521         158,376            -145          -0.09%
-│   ├─              8           claim          40,922          44,976          +4,054          +9.91%
-│   ├─              8         expense          36,260          36,227             -33          -0.09%
-│   ├─              8       surrender          26,690          26,682              -9          -0.03%
-│   ├─              9         premium         150,309         150,148            -161          -0.11%
-│   ├─              9           claim          42,035          46,192          +4,157          +9.89%
-│   ├─              9         expense          35,176          35,139             -38          -0.11%
-│   ├─              9       surrender          19,469          19,462              -7          -0.04%
-│   ├─             10         premium         144,222         144,043            -178          -0.12%
-│   ├─             10           claim          42,955          47,196          +4,241          +9.87%
-│   ├─             10         expense          34,532          34,489             -43          -0.12%
-│   ├─             10       surrender          21,844          21,835              -9          -0.04%
-│   ├─             11         premium         138,341         138,146            -196          -0.14%
-│   ├─             11           claim          44,228          48,587          +4,358          +9.85%
-│   ├─             11         expense          33,899          33,852             -48          -0.14%
-│   ├─             11       surrender          23,739          23,728             -11          -0.05%
-│   ├─             12         premium         132,657         132,444            -213          -0.16%
-│   ├─             12           claim          46,503          51,076          +4,573          +9.83%
-│   ├─             12         expense          33,278          33,225             -53          -0.16%
-│   ├─             12       surrender          25,644          25,631             -13          -0.05%
-│   ├─             13         premium         127,149         126,918            -231          -0.18%
-│   ├─             13           claim          49,657          54,529          +4,872          +9.81%
-│   ├─             13         expense          32,667          32,607             -59          -0.18%
-│   ├─             13       surrender          27,552          27,537             -15          -0.06%
-│   ├─             14         premium         121,800         121,550            -250          -0.21%
-│   ├─             14           claim          53,576          58,820          +5,243          +9.79%
-│   ├─             14         expense          32,063          31,998             -66          -0.21%
-│   ├─             14       surrender          29,455          29,437             -18          -0.06%
-│   ├─             15         premium         116,601         116,331            -270          -0.23%
-│   ├─             15           claim          56,919          62,474          +5,555          +9.76%
-│   ├─             15         expense          31,468          31,396             -73          -0.23%
-│   ├─             15       surrender          31,343          31,323             -21          -0.07%
-│   ├─             16         premium         111,552         111,262            -290          -0.26%
-│   ├─             16           claim          59,732          65,543          +5,811          +9.73%
-│   ├─             16         expense          30,883          30,802             -80          -0.26%
-│   ├─             16       surrender          33,212          33,188             -24          -0.07%
-│   ├─             17         premium         106,657         106,346            -311          -0.29%
-│   ├─             17           claim          62,630          68,703          +6,073          +9.70%
-│   ├─             17         expense          30,306          30,218             -88          -0.29%
-│   ├─             17       surrender          35,053          35,026             -28          -0.08%
-│   ├─             18         premium         101,909         101,578            -332          -0.33%
-│   ├─             18           claim          65,589          71,925          +6,336          +9.66%
-│   ├─             18         expense          29,739          29,642             -97          -0.33%
-│   ├─             18       surrender          36,860          36,829             -31          -0.09%
-│   ├─             19         premium          97,301          96,948            -353          -0.36%
-│   ├─             19           claim          69,116          75,765          +6,649          +9.62%
-│   ├─             19         expense          29,181          29,075            -106          -0.36%
-│   ├─             19       surrender          38,625          38,590             -36          -0.09%
-│   └─ maturity benefit at t=240m: 2,159,681  ->  2,151,383  (-8,298)
-├─ Discount factor deltas (key months)
-│   ├─ t=   0m: ds  1.000000  ->  1.000000  (+0.000000)
-│   ├─ t=  12m: ds  0.969904  ->  0.969904  (+0.000000)
-│   ├─ t=  60m: ds  0.835840  ->  0.835840  (+0.000000)
-│   ├─ t= 120m: ds  0.679134  ->  0.679134  (+0.000000)
-│   ├─ t= 228m: ds  0.471163  ->  0.471163  (+0.000000)
-│   └─ t= 240m: ds  0.452457  ->  0.452457  (+0.000000)
-├─ BEL deltas (key months)
-│   ├─ BEL[   0]       403,359.82  ->      470,449.29   (   +67,089.47,   +16.63%)
-│   ├─ BEL[  12]         4,269.76  ->       67,408.91   (   +63,139.14, +1478.75%)
-│   ├─ BEL[  60]       819,188.11  ->      869,834.02   (   +50,645.91,    +6.18%)
-│   ├─ BEL[ 120]     1,389,753.94  ->    1,428,944.08   (   +39,190.14,    +2.82%)
-│   ├─ BEL[ 228]     2,112,593.93  ->    2,111,350.80   (    -1,243.14,    -0.06%)
-│   └─ BEL[ 240]     2,159,680.98  ->    2,151,383.05   (    -8,297.92,    -0.38%)
-├─ CSM deltas (key months)
-│   ├─ CSM[   0]             0.00  ->            0.00   (        +0.00,        --)
-│   ├─ CSM[  12]             0.00  ->            0.00   (        +0.00,        --)
-│   ├─ CSM[  60]             0.00  ->            0.00   (        +0.00,        --)
-│   ├─ CSM[ 120]             0.00  ->            0.00   (        +0.00,        --)
-│   ├─ CSM[ 228]             0.00  ->            0.00   (        +0.00,        --)
-│   └─ CSM[ 240]             0.00  ->            0.00   (        +0.00,        --)
-└─ Final (headline change, per policy)
-    ├─ BEL                  403,359.82  ->      470,449.29   (   +67,089.47,   +16.63%)
-    ├─ RA                    47,359.86  ->       52,035.88   (    +4,676.03,    +9.87%)
-    ├─ FCF = BEL+RA         450,719.68  ->      522,485.17   (   +71,765.49,   +15.92%)
-    ├─ CSM = max(0,-FCF)          0.00  ->            0.00   (        +0.00,        --)
-    └─ loss_component       450,719.68  ->      522,485.17   (   +71,765.49,   +15.92%)
++- Assumption changes
+|   +- mortality_annual       : MORTALITY_STD  ->  MORTALITY_STD (+x1.1)
+|   `- coverage[DEATH].rate   : MORTALITY_STD  ->  MORTALITY_STD (+x1.1)
++- Rate deltas (per policy year)
+|   +- axes: sex=0, issue_age=35, issue_class=0, elapsed_at_issue=0m
+|   +- year  0
+|   |   +- mortality(annual)    0.000780  ->    0.000858   ( +0.000078,   +10.00%)
+|   |   `- DEATH(annual)        0.000780  ->    0.000858   ( +0.000078,   +10.00%)
+|   +- year  1
+|   |   +- mortality(annual)    0.000860  ->    0.000946   ( +0.000086,   +10.00%)
+|   |   `- DEATH(annual)        0.000860  ->    0.000946   ( +0.000086,   +10.00%)
+|   +- year  2
+|   |   +- mortality(annual)    0.000940  ->    0.001034   ( +0.000094,   +10.00%)
+|   |   `- DEATH(annual)        0.000940  ->    0.001034   ( +0.000094,   +10.00%)
+|   +- year  3
+|   |   +- mortality(annual)    0.001020  ->    0.001122   ( +0.000102,   +10.00%)
+|   |   `- DEATH(annual)        0.001020  ->    0.001122   ( +0.000102,   +10.00%)
+|   +- year  4
+|   |   +- mortality(annual)    0.001090  ->    0.001199   ( +0.000109,   +10.00%)
+|   |   `- DEATH(annual)        0.001090  ->    0.001199   ( +0.000109,   +10.00%)
+|   +- year 10
+|   |   +- mortality(annual)    0.001720  ->    0.001892   ( +0.000172,   +10.00%)
+|   |   `- DEATH(annual)        0.001720  ->    0.001892   ( +0.000172,   +10.00%)
+|   `- year 19
+|       +- mortality(annual)    0.003910  ->    0.004301   ( +0.000391,   +10.00%)
+|       `- DEATH(annual)        0.003910  ->    0.004301   ( +0.000391,   +10.00%)
++- Cash flow deltas (annual sum, non-zero rows only)
+|   +-           year          stream   sum(baseline)   sum(mort+10%)               diff              %diff
+|   +-              0         premium         449,802         449,786             -16          -0.00%
+|   +-              0           claim          59,260          65,186          +5,926         +10.00%
+|   +-              0         expense         786,204         786,201              -3          -0.00%
+|   +-              1         premium         393,535         393,489             -46          -0.01%
+|   +-              1           claim          57,233          62,952          +5,718          +9.99%
+|   +-              1         expense          77,014          77,005              -9          -0.01%
+|   +-              2         premium         336,705         336,635             -69          -0.02%
+|   +-              2           claim          53,606          58,957          +5,351          +9.98%
+|   +-              2         expense          67,311          67,297             -14          -0.02%
+|   +-              2       surrender          10,543          10,542              -1          -0.01%
+|   +-              3         premium         288,029         287,942             -87          -0.03%
+|   +-              3           claim          49,853          54,824          +4,971          +9.97%
+|   +-              3         expense          58,841          58,823             -18          -0.03%
+|   +-              3       surrender          18,738          18,735              -2          -0.01%
+|   +-              4         premium         246,348         246,247            -101          -0.04%
+|   +-              4           claim          45,669          50,218          +4,549          +9.96%
+|   +-              4         expense          51,449          51,428             -21          -0.04%
+|   +-              4       surrender          28,453          28,448              -5          -0.02%
+|   +-              5         premium         212,969         212,858            -111          -0.05%
+|   +-              5           claim          42,130          46,321          +4,191          +9.95%
+|   +-              5         expense          45,489          45,465             -24          -0.05%
+|   +-              5       surrender          32,352          32,345              -7          -0.02%
+|   +-              6         premium         188,584         188,463            -121          -0.06%
+|   +-              6           claim          39,995          43,969          +3,974          +9.94%
+|   +-              6         expense          41,206          41,180             -26          -0.06%
+|   +-              6       surrender          33,010          33,002              -8          -0.02%
+|   +-              7         premium         170,943         170,811            -132          -0.08%
+|   +-              7           claim          39,885          43,842          +3,957          +9.92%
+|   +-              7         expense          38,216          38,186             -29          -0.08%
+|   +-              7       surrender          31,165          31,156              -9          -0.03%
+|   +-              8         premium         158,521         158,376            -145          -0.09%
+|   +-              8           claim          40,922          44,976          +4,054          +9.91%
+|   +-              8         expense          36,260          36,227             -33          -0.09%
+|   +-              8       surrender          26,690          26,682              -9          -0.03%
+|   +-              9         premium         150,309         150,148            -161          -0.11%
+|   +-              9           claim          42,035          46,192          +4,157          +9.89%
+|   +-              9         expense          35,176          35,139             -38          -0.11%
+|   +-              9       surrender          19,469          19,462              -7          -0.04%
+|   +-             10         premium         144,222         144,043            -178          -0.12%
+|   +-             10           claim          42,955          47,196          +4,241          +9.87%
+|   +-             10         expense          34,532          34,489             -43          -0.12%
+|   +-             10       surrender          21,844          21,835              -9          -0.04%
+|   +-             11         premium         138,341         138,146            -196          -0.14%
+|   +-             11           claim          44,228          48,587          +4,358          +9.85%
+|   +-             11         expense          33,899          33,852             -48          -0.14%
+|   +-             11       surrender          23,739          23,728             -11          -0.05%
+|   +-             12         premium         132,657         132,444            -213          -0.16%
+|   +-             12           claim          46,503          51,076          +4,573          +9.83%
+|   +-             12         expense          33,278          33,225             -53          -0.16%
+|   +-             12       surrender          25,644          25,631             -13          -0.05%
+|   +-             13         premium         127,149         126,918            -231          -0.18%
+|   +-             13           claim          49,657          54,529          +4,872          +9.81%
+|   +-             13         expense          32,667          32,607             -59          -0.18%
+|   +-             13       surrender          27,552          27,537             -15          -0.06%
+|   +-             14         premium         121,800         121,550            -250          -0.21%
+|   +-             14           claim          53,576          58,820          +5,243          +9.79%
+|   +-             14         expense          32,063          31,998             -66          -0.21%
+|   +-             14       surrender          29,455          29,437             -18          -0.06%
+|   +-             15         premium         116,601         116,331            -270          -0.23%
+|   +-             15           claim          56,919          62,474          +5,555          +9.76%
+|   +-             15         expense          31,468          31,396             -73          -0.23%
+|   +-             15       surrender          31,343          31,323             -21          -0.07%
+|   +-             16         premium         111,552         111,262            -290          -0.26%
+|   +-             16           claim          59,732          65,543          +5,811          +9.73%
+|   +-             16         expense          30,883          30,802             -80          -0.26%
+|   +-             16       surrender          33,212          33,188             -24          -0.07%
+|   +-             17         premium         106,657         106,346            -311          -0.29%
+|   +-             17           claim          62,630          68,703          +6,073          +9.70%
+|   +-             17         expense          30,306          30,218             -88          -0.29%
+|   +-             17       surrender          35,053          35,026             -28          -0.08%
+|   +-             18         premium         101,909         101,578            -332          -0.33%
+|   +-             18           claim          65,589          71,925          +6,336          +9.66%
+|   +-             18         expense          29,739          29,642             -97          -0.33%
+|   +-             18       surrender          36,860          36,829             -31          -0.09%
+|   +-             19         premium          97,301          96,948            -353          -0.36%
+|   +-             19           claim          69,116          75,765          +6,649          +9.62%
+|   +-             19         expense          29,181          29,075            -106          -0.36%
+|   +-             19       surrender          38,625          38,590             -36          -0.09%
+|   `- maturity benefit at t=240m: 2,159,681  ->  2,151,383  (-8,298)
++- Discount factor deltas (key months)
+|   +- t=   0m: ds  1.000000  ->  1.000000  (+0.000000)
+|   +- t=  12m: ds  0.969904  ->  0.969904  (+0.000000)
+|   +- t=  60m: ds  0.835840  ->  0.835840  (+0.000000)
+|   +- t= 120m: ds  0.679134  ->  0.679134  (+0.000000)
+|   +- t= 228m: ds  0.471163  ->  0.471163  (+0.000000)
+|   `- t= 240m: ds  0.452457  ->  0.452457  (+0.000000)
++- BEL deltas (key months)
+|   +- BEL[   0]       403,359.82  ->      470,449.29   (   +67,089.47,   +16.63%)
+|   +- BEL[  12]         4,269.76  ->       67,408.91   (   +63,139.14, +1478.75%)
+|   +- BEL[  60]       819,188.11  ->      869,834.02   (   +50,645.91,    +6.18%)
+|   +- BEL[ 120]     1,389,753.94  ->    1,428,944.08   (   +39,190.14,    +2.82%)
+|   +- BEL[ 228]     2,112,593.93  ->    2,111,350.80   (    -1,243.14,    -0.06%)
+|   `- BEL[ 240]     2,159,680.98  ->    2,151,383.05   (    -8,297.92,    -0.38%)
++- CSM deltas (key months)
+|   +- CSM[   0]             0.00  ->            0.00   (        +0.00,        --)
+|   +- CSM[  12]             0.00  ->            0.00   (        +0.00,        --)
+|   +- CSM[  60]             0.00  ->            0.00   (        +0.00,        --)
+|   +- CSM[ 120]             0.00  ->            0.00   (        +0.00,        --)
+|   +- CSM[ 228]             0.00  ->            0.00   (        +0.00,        --)
+|   `- CSM[ 240]             0.00  ->            0.00   (        +0.00,        --)
+`- Final (headline change, per policy)
+    +- BEL                  403,359.82  ->      470,449.29   (   +67,089.47,   +16.63%)
+    +- RA                    47,359.86  ->       52,035.88   (    +4,676.03,    +9.87%)
+    +- FCF = BEL+RA         450,719.68  ->      522,485.17   (   +71,765.49,   +15.92%)
+    +- CSM = max(0,-FCF)          0.00  ->            0.00   (        +0.00,        --)
+    `- loss_component       450,719.68  ->      522,485.17   (   +71,765.49,   +15.92%)
 ```
 
 BEL이 +16.24% 움직였습니다. 이 16% 가 어디서 왔는지 위쪽 섹션이

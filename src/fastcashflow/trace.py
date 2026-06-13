@@ -39,8 +39,8 @@ def _emit_tree(items: list[object], out: list[str], prefix: str) -> None:
     n = len(items)
     for i, item in enumerate(items):
         last = (i == n - 1)
-        head = "└─ " if last else "├─ "
-        child = prefix + ("    " if last else "│   ")
+        head = "`- " if last else "+- "
+        child = prefix + ("    " if last else "|   ")
         if isinstance(item, tuple):
             header, subs = item
             out.append(f"{prefix}{head}{header}")
@@ -907,7 +907,7 @@ def _resolve_basis(
 
 
 def _money_delta(a: float, b: float, *, width: int = 14) -> str:
-    """Format ``a -> b   (Δ, %Δ)`` for two money amounts."""
+    """Format ``a -> b   (diff, %diff)`` for two money amounts."""
     d = b - a
     if abs(a) > 1e-12:
         pct = 100.0 * d / a
@@ -918,7 +918,7 @@ def _money_delta(a: float, b: float, *, width: int = 14) -> str:
 
 
 def _rate_delta(a: float, b: float) -> str:
-    """Format ``a -> b   (Δ)`` for two annual rates (6-dp probabilities)."""
+    """Format ``a -> b   (diff)`` for two annual rates (6-dp probabilities)."""
     d = b - a
     if abs(a) > 1e-12:
         pct = 100.0 * d / a
@@ -1166,7 +1166,7 @@ def show_trace_diff(
     cf_b = mb.cashflows
     cf_lines: list[object] = []
     headers = ["year", "stream", f"sum({label_a})", f"sum({label_b})",
-               "Δ", "%Δ"]
+               "diff", "%diff"]
     cf_lines.append("  ".join(f"{h:>14}" for h in headers))
     for y in range(n_years):
         a0 = y * 12
@@ -1524,9 +1524,9 @@ def show_trace_bel_step(
             f"expense[t]                = {exp:>15,.2f}",
             f"surrender[t]              = {surr:>15,.2f}",
             f"mid-month sum             = {mid_sum:>15,.2f}",
-            f"mid-month piece (×half)   = {mid_piece:>15,.2f}",
+            f"mid-month piece (*half)   = {mid_piece:>15,.2f}",
             f"BEL[t+1]                  = {float(bel_engine[t + 1]):>15,.2f}",
-            f"tail piece (BEL[t+1]×full)= {tail_piece:>15,.2f}",
+            f"tail piece (BEL[t+1]*full)= {tail_piece:>15,.2f}",
             f"recomputed BEL[t]         = {bel_recompute:>15,.2f}",
             f"engine BEL[t]             = {float(bel_engine[t]):>15,.2f}  "
             f"(residual {residual:+.4e})",

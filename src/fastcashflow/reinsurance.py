@@ -1,6 +1,6 @@
 """Reinsurance-held namespace -- ``fcf.reinsurance.*``.
 
-Measurement of a reinsurance contract held (出再) over a direct portfolio.
+Measurement of a reinsurance contract held over a direct portfolio.
 ``measure`` takes the direct portfolio, its basis and a cession and returns
 the reinsurance asset/liability (BEL/RA/CSM), measured with general-model
 mechanics.

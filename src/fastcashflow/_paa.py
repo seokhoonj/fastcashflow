@@ -332,7 +332,7 @@ def measure_paa(
         empty = weight.sum(axis=1) == 0.0                # no pattern -> B126(a)
         weight[empty] = in_coverage[empty]
     weight_sum = weight.sum(axis=1, keepdims=True)
-    weight_sum = np.where(weight_sum == 0.0, 1.0, weight_sum)   # safe divide; weight=0 → revenue=0
+    weight_sum = np.where(weight_sum == 0.0, 1.0, weight_sum)   # safe divide; weight=0 -> revenue=0
     revenue = premium_total[:, None] * weight / weight_sum
 
     # LRC roll-forward -- premiums build it up, revenue releases it.

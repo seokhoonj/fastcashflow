@@ -615,7 +615,7 @@ def _(reconciliation: Reconciliation, *, component="csm", ax=None,
     )
     if title is None:
         title = (f"{component.upper()} analysis of change "
-                 f"-- months {r.month_start + 1}–{r.month_end}")
+                 f"-- months {r.month_start + 1}-{r.month_end}")
     return _waterfall(steps, ax, title, component.upper())
 
 
@@ -629,7 +629,7 @@ def _finance_release_waterfall(r, component, ax, title, kind):
     )
     if title is None:
         title = (f"{kind}{component.upper()} analysis of change "
-                 f"-- months {r.month_start + 1}–{r.month_end}")
+                 f"-- months {r.month_start + 1}-{r.month_end}")
     return _waterfall(steps, ax, title, component.upper())
 
 
@@ -679,7 +679,7 @@ def _(reconciliation: PAAReconciliation, *, component="lrc", ax=None,
     label, steps = blocks[component]
     if title is None:
         title = (f"{label} analysis of change "
-                 f"-- months {r.month_start + 1}–{r.month_end}")
+                 f"-- months {r.month_start + 1}-{r.month_end}")
     return _waterfall(steps, ax, title, label)
 
 

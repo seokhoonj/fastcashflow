@@ -231,10 +231,10 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 보여줍니다:
 
 ```
-├─ Coverages (rate-driven, n=3)
-│   ├─ 'INPATIENT'       method=MORBIDITY  risk=1  is_diagnosis=False  rate -> INPATIENT_STD
-│   ├─ 'CANCER'          method=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> CANCER_STD
-│   └─ 'ADB'             method=DEATH      risk=0  is_diagnosis=False  rate -> ADB_STD
++- Coverages (rate-driven, n=3)
+|   +- 'INPATIENT'       method=MORBIDITY  risk=1  is_diagnosis=False  rate -> INPATIENT_STD
+|   +- 'CANCER'          method=DIAGNOSIS  risk=1  is_diagnosis=True   rate -> CANCER_STD
+|   `- 'ADB'             method=DEATH      risk=0  is_diagnosis=False  rate -> ADB_STD
 ```
 
 `method` 칸이 담보별 산출방법에서 가져온 값, `risk` / `is_diagnosis` 는

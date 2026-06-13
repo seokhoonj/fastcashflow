@@ -119,7 +119,7 @@ def test_inforce_fast_settlement_matches_trajectory():
     """Settlement-mode carry-forward: with ``prior_csm`` taken from the
     measure() CSM trajectory at ``E - period_months`` and a ``lock_in_rate``
     equal to the current discount, rolling one period forward must
-    reproduce the same trajectory's CSM at ``E``. This pins the §44
+    reproduce the same trajectory's CSM at ``E``. This pins the Sec. 44
     accretion + coverage-unit release path."""
     basis = _basis()
     mp_new = ModelPoints.single(
