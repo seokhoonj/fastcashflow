@@ -264,8 +264,11 @@ def test_favourable_premium_experience_reverses_loss_component():
     mv = settle(mp, state, basis, period_months=12,
                 premium_experience_future_fraction=1.0)
     assert mv.loss_component_reversed[0] > 0.0
+    # The full reconciliation identity now carries the paragraph-50(a) incurred
+    # channel (finance + amortised) alongside the 48/50(b) reversed/recognised.
     np.testing.assert_allclose(
-        mv.loss_component_opening - mv.loss_component_reversed
+        mv.loss_component_opening + mv.loss_component_finance
+        - mv.loss_component_amortised - mv.loss_component_reversed
         + mv.loss_component_recognised, mv.loss_component_closing, rtol=1e-10)
 
 

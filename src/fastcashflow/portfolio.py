@@ -835,7 +835,8 @@ _GOC_SETTLEMENT_LINEAR = (
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "finance_wedge", "premium_experience_revenue", "csm_opening",
     "csm_accretion", "csm_experience_unlocking", "csm_premium_experience",
-    "loss_component_opening",
+    "loss_component_opening", "loss_component_finance",
+    "loss_component_amortised",
 )
 _GOC_SETTLEMENT_NONLINEAR = (
     "csm_release", "csm_closing", "loss_component_reversed",
@@ -875,6 +876,8 @@ class GoCSettlement:
     csm_experience_unlocking: np.ndarray
     csm_premium_experience: np.ndarray
     loss_component_opening: np.ndarray
+    loss_component_finance: np.ndarray
+    loss_component_amortised: np.ndarray
     coverage_units_provided: np.ndarray
     coverage_units_future: np.ndarray
     csm_release: np.ndarray
@@ -936,10 +939,16 @@ class GoCSettlement:
 
 def _finalise_goc_settlement(pre: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     accreted = pre["csm_opening"] + pre["csm_accretion"]
+    # The paragraph-50(a) incurred channel is LINEAR (group-summed per-MP); the
+    # future-service algebra runs once at group grain on the POST-amortisation
+    # loss component, mirroring the per-MP settle.
+    lc_after_incurred = (pre["loss_component_opening"]
+                         + pre["loss_component_finance"]
+                         - pre["loss_component_amortised"])
     csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
         accreted,
         pre["csm_experience_unlocking"] + pre["csm_premium_experience"],
-        pre["loss_component_opening"])
+        lc_after_incurred)
     denom = pre["coverage_units_provided"] + pre["coverage_units_future"]
     frac = np.where(denom > 0.0, pre["coverage_units_provided"] / denom, 1.0)
     release = csm_after * frac
@@ -1314,6 +1323,8 @@ def _(settlement: GoCSettlement) -> GMMSettlementReconciliation:
         csm_premium_experience=float(a.csm_premium_experience.sum()),
         finance_wedge=float(a.finance_wedge.sum()),
         premium_experience_revenue=float(a.premium_experience_revenue.sum()),
+        loss_component_finance=float(a.loss_component_finance.sum()),
+        loss_component_amortised=float(-a.loss_component_amortised.sum()),
         loss_component_reversed=float(-a.loss_component_reversed.sum()),
         loss_component_recognised=float(a.loss_component_recognised.sum()),
         csm_release=float(-a.csm_release.sum()),

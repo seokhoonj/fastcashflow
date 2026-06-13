@@ -1217,6 +1217,7 @@ class GMMSettlementMovement:
                        - loss_component_reversed + loss_component_recognised
                        - csm_release
         loss_component_closing == loss_component_opening
+                       + loss_component_finance - loss_component_amortised
                        - loss_component_reversed + loss_component_recognised
 
     The GMM cross identity is THREE-term (unlike the VFA's two-term tie)::
@@ -1245,6 +1246,22 @@ class GMMSettlementMovement:
     B119 release on the post-adjustment balance, with the coverage-unit
     fraction ``coverage_units_provided / (coverage_units_provided +
     coverage_units_future)`` (em_open denominator, k_exp/k_obs mixed scale).
+
+    ``loss_component_finance`` (B97(a)/51(c)) and ``loss_component_amortised``
+    (49/50(a)/51(a)+(b)) are the INCURRED-service channel of an onerous group,
+    distinct from the FUTURE-service ``reversed`` / ``recognised`` lines
+    (48/50(b)). As coverage is provided the period's paragraph-51 changes are
+    split on the systematic loss-component ratio ``r = loss_component_opening /
+    pool_opening`` (``pool_opening`` = the opening PV of remaining claims and
+    expenses plus the RA): the loss component accretes ``r`` x the pool's
+    interest unwind and amortises ``r`` x the pool's release. The amortised
+    amount is the paragraph-49/B123(b) loss reversal -- presented in P&L and
+    EXCLUDED from insurance revenue (B124(a)(i) / (b)(iii)). Both are zero on a
+    profitable book (``r`` = 0) and the cumulative amortisation runs the loss
+    component to zero by the end of coverage (paragraph 52), exact because
+    ``r`` is re-derived every period. The future-service algebra acts on the
+    POST-amortisation loss component, so ``loss_component_reversed`` is capped
+    by the loss component net of this channel.
     """
 
     bel_opening: FloatArray
@@ -1266,6 +1283,8 @@ class GMMSettlementMovement:
     csm_release: FloatArray              # 44(e)/B119: single period-end release
     csm_closing: FloatArray
     loss_component_opening: FloatArray
+    loss_component_finance: FloatArray   # 51(c): r x pool interest unwind
+    loss_component_amortised: FloatArray  # 50(a)/51(a)+(b): the systematic loss reversal
     loss_component_reversed: FloatArray
     loss_component_recognised: FloatArray
     loss_component_closing: FloatArray
@@ -1325,6 +1344,8 @@ class GMMSettlementReconciliation:
     csm_premium_experience: float
     finance_wedge: float
     premium_experience_revenue: float
+    loss_component_finance: float
+    loss_component_amortised: float
     loss_component_reversed: float
     loss_component_recognised: float
     csm_release: float
@@ -1356,6 +1377,8 @@ def _reconcile_gmm_settlement(
             csm_premium_experience=float(m.csm_premium_experience.sum()),
             finance_wedge=float(m.finance_wedge.sum()),
             premium_experience_revenue=float(m.premium_experience_revenue.sum()),
+            loss_component_finance=float(m.loss_component_finance.sum()),
+            loss_component_amortised=float(-m.loss_component_amortised.sum()),
             loss_component_reversed=float(-m.loss_component_reversed.sum()),
             loss_component_recognised=float(m.loss_component_recognised.sum()),
             csm_release=float(-m.csm_release.sum()),
@@ -1668,6 +1691,8 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
         "csm_release": movement.csm_release,
         "csm_closing": movement.csm_closing,
         "loss_component_opening": movement.loss_component_opening,
+        "loss_component_finance": movement.loss_component_finance,
+        "loss_component_amortised": movement.loss_component_amortised,
         "loss_component_reversed": movement.loss_component_reversed,
         "loss_component_recognised": movement.loss_component_recognised,
         "loss_component_closing": movement.loss_component_closing,
@@ -1841,7 +1866,8 @@ _GMM_SETTLEMENT_LINES = (
     "csm_opening", "csm_accretion", "csm_experience_unlocking",
     "csm_premium_experience", "finance_wedge", "premium_experience_revenue",
     "csm_release", "csm_closing",
-    "loss_component_opening", "loss_component_reversed",
+    "loss_component_opening", "loss_component_finance",
+    "loss_component_amortised", "loss_component_reversed",
     "loss_component_recognised", "loss_component_closing",
     "coverage_units_provided", "coverage_units_future",
 )
@@ -1924,6 +1950,8 @@ class GMMSettlementAggregate:
     csm_release: float
     csm_closing: float
     loss_component_opening: float
+    loss_component_finance: float
+    loss_component_amortised: float
     loss_component_reversed: float
     loss_component_recognised: float
     loss_component_closing: float
@@ -2085,6 +2113,8 @@ def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
         csm_premium_experience=a.csm_premium_experience,
         finance_wedge=a.finance_wedge,
         premium_experience_revenue=a.premium_experience_revenue,
+        loss_component_finance=a.loss_component_finance,
+        loss_component_amortised=-a.loss_component_amortised,
         loss_component_reversed=-a.loss_component_reversed,
         loss_component_recognised=a.loss_component_recognised,
         csm_release=-a.csm_release,

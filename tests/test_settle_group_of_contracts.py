@@ -307,10 +307,15 @@ def test_case3_chain_grain_diverges():
                 [SURV[12] * 1.06, SURV[12] * 0.75]]
     goc = _goc_closing_chain([3, 3], counts_q, [60.0, 12.0], [0.0, 0.0])
     np.testing.assert_allclose(goc.csm_closing[0], 0.0, atol=1e-6)
-    np.testing.assert_allclose(goc.loss_component_closing[0], 387.447062,
+    # The loss component emerges in Q1 (lc_open = 0, so the paragraph-50(a)
+    # incurred channel is dormant -- recognised 294.93, closing 294.93) and is
+    # then amortised in Q2 by that channel (finance +3.563, amortised -13.737,
+    # net -10.174 against the further recognised 92.518), so the chained closing
+    # is 387.447 - 10.174 == 377.274 (the pre-50(a) figure was 387.447062).
+    np.testing.assert_allclose(goc.loss_component_closing[0], 377.273686,
                                rtol=1e-6)
-    # the per-MP chain summed at the end lands elsewhere (290.69 / 694.67) --
-    # grains must not be mixed (pinned in the hand-calc script).
+    # the per-MP chain summed at the end still lands far away -- grains must not
+    # be mixed (the divergence is the point of this case).
     assert abs(goc.loss_component_closing[0] - 694.665856) > 1.0
 
 

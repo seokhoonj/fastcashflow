@@ -985,17 +985,25 @@ def settle(
     double-counting -- set the fraction above 0 only for premium received now
     for genuinely future coverage the count deviation does not capture.
 
+    An onerous book amortises its loss component through the paragraph-50(a)/51
+    incurred-service channel (``loss_component_finance`` /
+    ``loss_component_amortised`` on the movement): the period's released
+    claims and expenses (51a), RA release (51b) and finance (51c) are split on
+    the systematic loss-component ratio ``r = loss_component_opening /
+    pool_opening`` between the loss component and the LRC excluding it, running
+    the loss component to zero by the end of coverage (52).
+
     v1 scope (documented cuts, mirroring ``vfa.settle``): other within-period
     cash flows (claims, expenses, benefits) are as expected -- only the
     closing count and the premium are observed inputs; no B96(c)
-    investment-component split; no
-    paragraph 50(a)-52 systematic loss-component allocation; no
-    ``settlement_pattern`` book (the LIC would straddle both dates); the RA
-    change enters the CSM at its current measure (B96(d) prescribes no
-    rate); no OCI -- the ``finance_wedge`` is the period's P&L line, not an
-    accumulated-OCI state. A maturity falling inside the period is expected
-    service (it seeds the unit BEL at the boundary and runs off through the
-    release line), not experience.
+    investment-component split, so the paragraph-50(a) pool includes the whole
+    non-premium outflow (surrender / maturity not separated as investment
+    components, B124(ii)); no ``settlement_pattern`` book (the LIC would
+    straddle both dates); the RA change enters the CSM at its current measure
+    (B96(d) prescribes no rate); no OCI -- the ``finance_wedge`` is the
+    period's P&L line, not an accumulated-OCI state. A maturity falling inside
+    the period is expected service (it seeds the unit BEL at the boundary and
+    runs off through the release line), not experience.
     """
     _require_gmm_router(basis, entry="gmm.settle")
     basis = _single_basis(basis, entry="gmm.settle")
@@ -1121,6 +1129,35 @@ def settle(
     bel_o, bel_i, bel_r, bel_e, bel_c = _block(m.bel_path)
     ra_o, ra_i, ra_r, ra_e, ra_c = _block(m.ra_path)
 
+    # paragraph 50(a)/51 incurred-service channel: as coverage is provided the
+    # period's released claims and expenses (51a), RA release (51b) and finance
+    # (51c) are allocated on a systematic basis between the loss component and
+    # the LRC excluding it. The claims+expenses pool is the BEL path GROSS of
+    # premiums -- the same backward kernel with premiums zeroed, at the current
+    # rate -- so out_o/out_i/out_r are the pool's opening / interest unwind /
+    # period release. The systematic basis (entity judgment, paragraph 50(a))
+    # is the proportional loss-component ratio r = lc_open / pool_open: the LC
+    # accretes r x the pool interest (51c) and amortises r x the pool release
+    # (50(a)). A profitable book has lc_open == 0 => r == 0 => both lines
+    # vanish (byte-identical to the pre-feature settle). The amortisation is the
+    # paragraph-49/B123(b) loss reversal, excluded from insurance revenue; it
+    # runs the LC to zero by the end of coverage (52) because r is re-derived
+    # every period (at the final close the whole pool releases and lc_amortised
+    # == lc carried). The future-service algebra below acts on the
+    # POST-amortisation loss component.
+    zero_prem = np.zeros_like(cf.premium_cf)
+    outflow_path = _rollforward_kernel(
+        cf.claim_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
+        zero_prem, cf.annuity_cf, cf.maturity_cf, cf.surrender_cf,
+        boundary, monthly_rate)[0]
+    out_o, out_i, out_r, out_e, out_c = _block(outflow_path)
+    pool_open = out_o + ra_o
+    lc_ratio = np.where(pool_open > 0.0,
+                        lc_open / np.where(pool_open > 0.0, pool_open, 1.0), 0.0)
+    lc_finance = lc_ratio * (out_i + ra_i)          # 51(c)
+    lc_amortised = lc_ratio * (out_r + ra_r)        # 50(a)/51(a)+(b)
+    lc_after_incurred = lc_open + lc_finance - lc_amortised
+
     # B96(a)/B97(c) premium experience: actual premium received over the
     # period vs the expected (on-track) premium, summed over the same window
     # and at the same k_exp scale as the interest line. The entity's
@@ -1174,7 +1211,7 @@ def settle(
     csm_after, lc_reversed, lc_recognised, lc_closing = (
         _paragraph45_csm_algebra(
             accreted, csm_experience_unlocking + csm_premium_experience,
-            lc_open))
+            lc_after_incurred))
 
     # B119: single period-end release on the post-adjustment balance. The
     # provided units run at the expected scale over [em_open, em_close), the
@@ -1203,6 +1240,8 @@ def settle(
         premium_experience_revenue=premium_experience_revenue,
         csm_release=csm_release, csm_closing=csm_closing,
         loss_component_opening=lc_open,
+        loss_component_finance=lc_finance,
+        loss_component_amortised=lc_amortised,
         loss_component_reversed=lc_reversed,
         loss_component_recognised=lc_recognised,
         loss_component_closing=lc_closing,
