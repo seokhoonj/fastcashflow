@@ -864,6 +864,12 @@ class InforceState:
       ``None`` means as expected). ``gmm.settle`` routes the whole difference
       ``expected - actual`` into the CSM (Sec. B96(c)); investment components
       do not affect insurance revenue.
+    * ``actual_claims`` / ``actual_expenses`` -- observed per-MP claims incurred
+      / expenses incurred over the period (``None`` means as expected). The
+      difference from expected is an experience adjustment relating to past /
+      current service (Sec. B97(b)/(c)): it is recognised in the insurance
+      service result (P&L) and does NOT adjust the CSM. Reported on
+      ``gmm.settle`` as ``claims_experience`` / ``expense_experience``.
     """
 
     mp_id: np.ndarray
@@ -878,6 +884,8 @@ class InforceState:
     profitability: np.ndarray | None = None
     actual_premium: FloatArray | None = None
     actual_investment_component: FloatArray | None = None
+    actual_claims: FloatArray | None = None
+    actual_expenses: FloatArray | None = None
 
     def __post_init__(self) -> None:
         # Coerce each array to its canonical dtype so a hand-built state
@@ -1010,6 +1018,8 @@ class InforceState:
             profitability=_opt(self.profitability),
             actual_premium=_opt(self.actual_premium),
             actual_investment_component=_opt(self.actual_investment_component),
+            actual_claims=_opt(self.actual_claims),
+            actual_expenses=_opt(self.actual_expenses),
         )
 
 

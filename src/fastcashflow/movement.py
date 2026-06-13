@@ -1308,6 +1308,12 @@ class GMMSettlementMovement:
     P&L memo (insurance revenue), in NO balance recursion, exactly like
     ``finance_wedge``. Both are zero unless ``state.actual_premium`` is given.
 
+    ``claims_experience`` / ``expense_experience`` (B97(b)/(c)) are the
+    within-period claims / expense experience -- the actual claims / expenses
+    incurred over the period less the expected -- recognised in the insurance
+    service result (P&L memos, in NO balance recursion, not the CSM). Zero
+    unless ``state.actual_claims`` / ``state.actual_expenses`` are given.
+
     ``csm_investment_experience`` (B96(c)) is the investment-component
     counterpart: the expected less the actual investment component (surrender /
     annuity repayments) that becomes payable over the period. The WHOLE
@@ -1366,6 +1372,8 @@ class GMMSettlementMovement:
     csm_investment_experience: FloatArray  # B96(c): investment-component exp, into CSM
     finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, not CSM
     premium_experience_revenue: FloatArray  # B97(c): current/past premium exp, P&L memo
+    claims_experience: FloatArray        # B97(b)/(c): actual-vs-expected claims, P&L memo
+    expense_experience: FloatArray       # B97(b)/(c): actual-vs-expected expenses, P&L memo
     csm_release: FloatArray              # 44(e)/B119: single period-end release
     csm_closing: FloatArray
     loss_component_opening: FloatArray
@@ -1435,6 +1443,8 @@ class GMMSettlementReconciliation:
     csm_investment_experience: float
     finance_wedge: float
     premium_experience_revenue: float
+    claims_experience: float
+    expense_experience: float
     loss_component_finance: float
     loss_component_amortised: float
     loss_component_reversed: float
@@ -1473,6 +1483,8 @@ def _reconcile_gmm_settlement(
             csm_investment_experience=float(m.csm_investment_experience.sum()),
             finance_wedge=float(m.finance_wedge.sum()),
             premium_experience_revenue=float(m.premium_experience_revenue.sum()),
+            claims_experience=float(m.claims_experience.sum()),
+            expense_experience=float(m.expense_experience.sum()),
             loss_component_finance=float(m.loss_component_finance.sum()),
             loss_component_amortised=float(-m.loss_component_amortised.sum()),
             loss_component_reversed=float(-m.loss_component_reversed.sum()),
@@ -1812,6 +1824,8 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
         "csm_experience_unlocking": movement.csm_experience_unlocking,
         "csm_premium_experience": movement.csm_premium_experience,
         "csm_investment_experience": movement.csm_investment_experience,
+        "claims_experience": movement.claims_experience,
+        "expense_experience": movement.expense_experience,
         "finance_wedge": movement.finance_wedge,
         "premium_experience_revenue": movement.premium_experience_revenue,
         "csm_release": movement.csm_release,
@@ -2009,6 +2023,7 @@ _GMM_SETTLEMENT_LINES = (
     "csm_opening", "csm_accretion", "csm_experience_unlocking",
     "csm_premium_experience", "csm_investment_experience",
     "finance_wedge", "premium_experience_revenue",
+    "claims_experience", "expense_experience",
     "csm_release", "csm_closing",
     "loss_component_opening", "loss_component_finance",
     "loss_component_amortised", "loss_component_reversed",
@@ -2099,6 +2114,8 @@ class GMMSettlementAggregate:
     csm_investment_experience: float
     finance_wedge: float
     premium_experience_revenue: float
+    claims_experience: float
+    expense_experience: float
     csm_release: float
     csm_closing: float
     loss_component_opening: float
@@ -2283,6 +2300,8 @@ def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
         csm_investment_experience=a.csm_investment_experience,
         finance_wedge=a.finance_wedge,
         premium_experience_revenue=a.premium_experience_revenue,
+        claims_experience=a.claims_experience,
+        expense_experience=a.expense_experience,
         loss_component_finance=a.loss_component_finance,
         loss_component_amortised=-a.loss_component_amortised,
         loss_component_reversed=-a.loss_component_reversed,

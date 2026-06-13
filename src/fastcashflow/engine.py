@@ -999,11 +999,16 @@ def settle(
     build it up as incurred and run it off over the pattern, undiscounted and at
     the expected scale, reconstructed from the projection each period.
 
-    v1 scope (documented cuts, mirroring ``vfa.settle``): other within-period
-    cash flows (claims, expenses, benefits) are as expected -- only the
-    closing count and the premium are observed inputs, so the LIC roll is
-    expected-scale (the 42(b) subsequent-remeasurement for actual claims
-    experience is not modelled) and undiscounted (no 42(c) finance / 33-37
+    Within-period claims and expense experience (B97(b)/(c)) is surfaced when
+    ``state.actual_claims`` / ``state.actual_expenses`` are given: the
+    actual-minus-expected difference is recognised in the insurance service
+    result (``claims_experience`` / ``expense_experience``, P&L memos, not the
+    CSM and not a balance recursion). Absent the inputs they are zero.
+
+    v1 scope (documented cuts, mirroring ``vfa.settle``): the closing balances
+    (BEL / RA / CSM / LIC) are still built on the expected within-period run
+    (the experience above is a P&L memo, not a re-derivation of the balances);
+    the LIC roll is expected-scale and undiscounted (no 42(c) finance / 33-37
     discount + RA on the LIC, the same cut the measure takes); no B96(c)
     investment-component split, so the paragraph-50(a) pool includes the whole
     non-premium outflow (surrender / maturity not separated as investment
@@ -1272,6 +1277,29 @@ def settle(
     lic_closing = k_exp * m.lic[rows, em_c]
     claims_paid = lic_opening + claims_incurred - lic_closing
 
+    # B97(b)/(c) within-period claims and expense experience: the actual claims
+    # incurred / expenses incurred over the period less the expected. The v1
+    # settle otherwise assumes within-period cash flows equal expected (only the
+    # closing count, premium and investment component are observed); these two
+    # lines surface the remaining experience. It relates to past/current service
+    # (B97) -- recognised in the insurance service result (P&L), NOT the CSM and
+    # NOT a balance recursion (a memo, like premium_experience_revenue and
+    # finance_wedge). Absent the inputs => zero (byte-identical). The expected
+    # claims are claims_incurred (above); the expected expenses are the period
+    # expense run at the expected scale.
+    exp_expenses = k_exp * (cf.expense_cf[rows[:, None], cols_safe]
+                            * col_ok).sum(axis=1)
+    if state.actual_claims is not None:
+        claims_experience = (np.asarray(state.actual_claims, dtype=np.float64)
+                             - claims_incurred)
+    else:
+        claims_experience = np.zeros(n_mp)
+    if state.actual_expenses is not None:
+        expense_experience = (np.asarray(state.actual_expenses, dtype=np.float64)
+                              - exp_expenses)
+    else:
+        expense_experience = np.zeros(n_mp)
+
     from fastcashflow.movement import GMMSettlementMovement
     return GMMSettlementMovement(
         bel_opening=bel_o, bel_interest=bel_i, bel_release=bel_r,
@@ -1284,6 +1312,8 @@ def settle(
         csm_investment_experience=csm_investment_experience,
         finance_wedge=finance_wedge,
         premium_experience_revenue=premium_experience_revenue,
+        claims_experience=claims_experience,
+        expense_experience=expense_experience,
         csm_release=csm_release, csm_closing=csm_closing,
         loss_component_opening=lc_open,
         loss_component_finance=lc_finance,

@@ -835,7 +835,7 @@ _GOC_SETTLEMENT_LINEAR = (
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "finance_wedge", "premium_experience_revenue", "csm_opening",
     "csm_accretion", "csm_experience_unlocking", "csm_premium_experience",
-    "csm_investment_experience",
+    "csm_investment_experience", "claims_experience", "expense_experience",
     "loss_component_opening", "loss_component_finance",
     "loss_component_amortised",
     "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
@@ -878,6 +878,8 @@ class GoCSettlement:
     csm_experience_unlocking: np.ndarray
     csm_premium_experience: np.ndarray
     csm_investment_experience: np.ndarray
+    claims_experience: np.ndarray
+    expense_experience: np.ndarray
     loss_component_opening: np.ndarray
     loss_component_finance: np.ndarray
     loss_component_amortised: np.ndarray
@@ -1362,6 +1364,8 @@ def _(settlement: GoCSettlement) -> GMMSettlementReconciliation:
         csm_investment_experience=float(a.csm_investment_experience.sum()),
         finance_wedge=float(a.finance_wedge.sum()),
         premium_experience_revenue=float(a.premium_experience_revenue.sum()),
+        claims_experience=float(a.claims_experience.sum()),
+        expense_experience=float(a.expense_experience.sum()),
         loss_component_finance=float(a.loss_component_finance.sum()),
         loss_component_amortised=float(-a.loss_component_amortised.sum()),
         loss_component_reversed=float(-a.loss_component_reversed.sum()),
