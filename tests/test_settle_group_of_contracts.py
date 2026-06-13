@@ -600,6 +600,51 @@ def test_returns_marked_goc_settlement():
         assert getattr(goc, name).shape == (1,)
 
 
+def test_two_goc_rows_each_equals_its_standalone_settle():
+    """Two products -> two groups of contracts -> two rows. Each row's closing
+    lines equal that product's standalone gmm.settle (the grouping keys the
+    book correctly and the per-group accumulation does not leak across groups),
+    and chunk_size=1 (every row its own block, groups span the chunk loop)
+    reproduces it."""
+    n = 2
+    ids = np.array(["A0", "B0"])
+    counts = [SURV[6] * 0.95, SURV[6] * 0.93]
+    mp = ModelPoints(
+        issue_age=np.full(n, 40, dtype=np.int64), premium=np.full(n, 250.0),
+        term_months=np.full(n, 120, dtype=np.int64),
+        premium_term_months=np.full(n, 120, dtype=np.int64),
+        benefits={0: np.array([10_000.0, 50_000.0])},
+        count=np.asarray(counts), elapsed_months=np.full(n, 6, dtype=np.int64),
+        mp_id=ids, product=np.array(["A", "B"]), channel=np.full(n, "GA"),
+        issue_date=np.array(["2026-02-01"] * n, dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
+    state = InforceState(
+        mp_id=ids, elapsed_months=np.full(n, 6, dtype=np.int64),
+        count=np.asarray(counts), prior_csm=np.array([60.0, 300.0]),
+        lock_in_rate=0.03, prior_count=np.array([1.0, 1.0]),
+        prior_loss_component=np.zeros(2))
+    router = BasisRouter({("A", "GA"): BASIS, ("B", "GA"): BASIS})
+
+    goc = settle_group_of_contracts(
+        mp, state, router, period_months=6, coverage_units="count",
+        profitability=np.zeros(2, dtype=np.int64))
+    spanned = settle_group_of_contracts(
+        mp, state, router, period_months=6, coverage_units="count",
+        profitability=np.zeros(2, dtype=np.int64), chunk_size=1)
+
+    assert goc.group_labels.shape == (2,)
+    assert list(goc.group_sizes) == [1, 1]
+    for product, row in (("A", 0), ("B", 1)):              # labels sort A < B
+        assert str(goc.group_labels[row]).startswith(product)
+        idx = [int(np.where(mp.product == product)[0][0])]
+        mv = fcf.gmm.settle(mp.subset(idx), state.subset(idx), BASIS,
+                            period_months=6)
+        np.testing.assert_allclose(goc.csm_closing[row],
+                                   float(mv.csm_closing[0]), rtol=1e-12)
+        np.testing.assert_allclose(goc.csm_closing[row], spanned.csm_closing[row],
+                                   rtol=1e-12)
+
+
 def test_closing_inputs_seeds_per_mp_pro_rata():
     """Sec. 4 (B2/P0-1): closing_inputs() returns per-MP (ModelPoints,
     InforceState) by closing-count pro-rata of the group closing balances, so

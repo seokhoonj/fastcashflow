@@ -183,9 +183,14 @@ mutualisation) or in subsequent measurement (out of scope here). So at inception
 
 .. autofunction:: fastcashflow.portfolio.measure_group_of_contracts
 
+.. autofunction:: fastcashflow.portfolio.settle_group_of_contracts
+
 .. autofunction:: fastcashflow.portfolio.measure_group
 
 .. autoclass:: fastcashflow.portfolio.PortfolioGroups
+   :members:
+
+.. autoclass:: fastcashflow.portfolio.GoCSettlement
    :members:
 
 Tracing and validation

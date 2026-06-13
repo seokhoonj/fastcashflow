@@ -19,6 +19,7 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import polars as pl
@@ -35,15 +36,18 @@ from fastcashflow._vfa import (
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
     GMMMeasurement, GMMAggregate, _factorise_segments, measure as _measure_gmm,
-    measure_aggregate as _gmm_aggregate, measure_inforce as _gmm_inforce)
+    measure_aggregate as _gmm_aggregate, measure_inforce as _gmm_inforce,
+    settle as _settle_gmm, _reconcile_state)
 from fastcashflow.io import (
     _stream_validate, write_measurement, _model_points_from_frames,
-    _parse_calculation_methods)
+    _parse_calculation_methods, _write_measurement_columns)
 from fastcashflow.grouping import (
     group, group_of_contracts, _GroupReducer, _join_keys, _finalise_gmm_group,
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
 from fastcashflow.modelpoints import ModelPoints, InforceState, align_inforce_state
-from fastcashflow.movement import roll_forward, reconcile
+from fastcashflow.movement import (
+    roll_forward, reconcile, GMMSettlementReconciliation)
+from fastcashflow.numerics import _paragraph45_csm_algebra
 from fastcashflow.projection import Cashflows
 from fastcashflow.report import report, Report
 from fastcashflow.trace import (
@@ -56,8 +60,10 @@ from fastcashflow.trace import (
 #: the leaf measure functions, ...).
 __all__ = [
     "measure", "measure_aggregate", "measure_inforce", "measure_stream",
-    "measure_group", "measure_group_of_contracts", "trace", "trace_diff",
+    "measure_group", "measure_group_of_contracts",
+    "settle_group_of_contracts", "trace", "trace_diff",
     "PortfolioMeasurement", "PortfolioAggregate", "PortfolioGroups",
+    "GoCSettlement",
     "PortfolioReport", "PortfolioMovements", "PortfolioReconciliation",
     "ModelMeasurement",
 ]
@@ -819,6 +825,320 @@ class PortfolioGroups:
                           "csm": float(m.csm.sum()),
                           "loss_component": float(m.loss_component.sum())}
         return out
+
+
+_GOC_SETTLEMENT_LINEAR = (
+    "bel_opening", "bel_interest", "bel_release", "bel_experience",
+    "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "finance_wedge", "csm_opening", "csm_accretion",
+    "csm_experience_unlocking", "loss_component_opening",
+)
+_GOC_SETTLEMENT_NONLINEAR = (
+    "csm_release", "csm_closing", "loss_component_reversed",
+    "loss_component_recognised", "loss_component_closing",
+)
+_GOC_SETTLEMENT_UNIT_LINES = ("coverage_units_provided", "coverage_units_future")
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class GoCSettlement:
+    """Group-of-contracts paragraph-44 settlement movement.
+
+    Rows are IFRS 17 groups. Linear GMM settlement lines are group-summed; the
+    paragraph-48/50(b) CSM/loss-component algebra and the B119 release are
+    applied once at group grain. ``closing_inputs()`` allocates group closing
+    balances back to model points by closing-count pro-rata, or by an explicit
+    per-row allocation weight.
+    """
+
+    group_labels: np.ndarray
+    group_sizes: IntArray
+    period_months: int
+    bel_opening: np.ndarray
+    bel_interest: np.ndarray
+    bel_release: np.ndarray
+    bel_experience: np.ndarray
+    bel_closing: np.ndarray
+    ra_opening: np.ndarray
+    ra_interest: np.ndarray
+    ra_release: np.ndarray
+    ra_experience: np.ndarray
+    ra_closing: np.ndarray
+    finance_wedge: np.ndarray
+    csm_opening: np.ndarray
+    csm_accretion: np.ndarray
+    csm_experience_unlocking: np.ndarray
+    loss_component_opening: np.ndarray
+    coverage_units_provided: np.ndarray
+    coverage_units_future: np.ndarray
+    csm_release: np.ndarray
+    csm_closing: np.ndarray
+    loss_component_reversed: np.ndarray
+    loss_component_recognised: np.ndarray
+    loss_component_closing: np.ndarray
+    lock_in_rate: np.ndarray
+    model_points: ModelPoints | None = None
+    group_inverse: IntArray | None = None
+    lock_in_rate_by_mp: np.ndarray | float = 0.0
+    profitability_by_mp: np.ndarray | None = None
+    measurement_basis: str = "settlement"
+
+    _LINEAR: ClassVar[tuple[str, ...]] = _GOC_SETTLEMENT_LINEAR
+    _NONLINEAR: ClassVar[tuple[str, ...]] = _GOC_SETTLEMENT_NONLINEAR
+
+    def closing_inputs(self, *, allocation=None):
+        from fastcashflow.modelpoints import InforceState
+        mp = self.model_points
+        inv = self.group_inverse
+        if mp is None or inv is None or mp.mp_id is None:
+            raise ValueError(
+                "closing_inputs() needs the source model points with mp_id and "
+                "group membership; use settle_group_of_contracts to create it")
+        n_mp = mp.n_mp
+        if allocation is None:
+            weights = np.asarray(mp.count, dtype=np.float64)
+        else:
+            weights = np.asarray(allocation, dtype=np.float64)
+            if weights.shape != (n_mp,):
+                raise ValueError(
+                    f"allocation must have one entry per model point ({n_mp}), "
+                    f"got shape {weights.shape}")
+            if not np.all(np.isfinite(weights)) or np.any(weights < 0.0):
+                raise ValueError("allocation must be finite and >= 0")
+        denom = np.bincount(inv, weights=weights, minlength=self.group_labels.shape[0])
+        share = np.zeros(n_mp, dtype=np.float64)
+        for g in range(self.group_labels.shape[0]):
+            rows = inv == g
+            if denom[g] > 0.0:
+                share[rows] = weights[rows] / denom[g]
+            else:
+                share[rows] = 1.0 / max(1, int(rows.sum()))
+        prior_csm = self.csm_closing[inv] * share
+        prior_lc = self.loss_component_closing[inv] * share
+        state = InforceState(
+            mp_id=mp.mp_id,
+            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
+            count=np.asarray(mp.count, dtype=np.float64),
+            prior_csm=prior_csm,
+            lock_in_rate=self.lock_in_rate_by_mp,
+            prior_count=np.asarray(mp.count, dtype=np.float64),
+            prior_loss_component=prior_lc,
+            profitability=self.profitability_by_mp,
+        )
+        return mp, state
+
+
+def _finalise_goc_settlement(pre: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    accreted = pre["csm_opening"] + pre["csm_accretion"]
+    csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
+        accreted, pre["csm_experience_unlocking"],
+        pre["loss_component_opening"])
+    denom = pre["coverage_units_provided"] + pre["coverage_units_future"]
+    frac = np.where(denom > 0.0, pre["coverage_units_provided"] / denom, 1.0)
+    release = csm_after * frac
+    out = {name: pre[name] for name in _GOC_SETTLEMENT_LINEAR}
+    out["coverage_units_provided"] = pre["coverage_units_provided"]
+    out["coverage_units_future"] = pre["coverage_units_future"]
+    out["loss_component_reversed"] = lc_rev
+    out["loss_component_recognised"] = lc_rec
+    out["loss_component_closing"] = lc_close
+    out["csm_release"] = release
+    out["csm_closing"] = csm_after - release
+    return out
+
+
+def _settlement_axis(mp: ModelPoints, state: InforceState, spec, name: str):
+    if isinstance(spec, str):
+        if hasattr(state, spec):
+            val = getattr(state, spec)
+            if val is not None:
+                return np.asarray(val)
+        return np.asarray(mp.axis(spec))
+    arr = np.asarray(spec)
+    if arr.shape != (mp.n_mp,):
+        raise ValueError(
+            f"{name} must have one entry per model point ({mp.n_mp}), "
+            f"got shape {arr.shape}")
+    return arr
+
+
+def settle_group_of_contracts(
+    model_points: ModelPoints,
+    inforce_state: InforceState,
+    basis,
+    period_months: int | None = None,
+    *,
+    portfolio="product",
+    cohort="issue_year",
+    coverage_units=None,
+    profitability=None,
+    chunk_size: int = _CHUNK_SIZE,
+) -> GoCSettlement:
+    """Group-of-contracts paragraph-44 settlement for routed GMM portfolios.
+
+    ``coverage_units`` and ``profitability`` are required and explicit. The
+    entry rejects any row routed to PAA or VFA; those models must be settled
+    through their per-model APIs and grouped by the caller where appropriate.
+    """
+    if not isinstance(basis, BasisRouter):
+        raise TypeError(
+            "settle_group_of_contracts requires a BasisRouter; for a single "
+            "Basis use the per-model settlement or group a native measurement")
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    period = 12 if period_months is None else int(period_months)
+    if period < 1:
+        raise ValueError(f"period_months must be >= 1, got {period}")
+    if coverage_units is None:
+        raise ValueError("coverage_units is required; pass 'count' or an array")
+    if profitability is None:
+        raise ValueError("profitability is required and must be explicit")
+    if cohort == "issue_year":
+        try:
+            model_points.axis("issue_year")
+        except KeyError:
+            raise ValueError(
+                "settle_group_of_contracts needs issue_date to derive the "
+                "annual cohort; pass an explicit cohort array/column or set "
+                "issue_date")
+
+    state = _reconcile_state(model_points, inforce_state)
+    parts = _partition_by_model(model_points, basis)
+    non_gmm = [m for m in ("PAA", "VFA") if parts[m].size]
+    if non_gmm:
+        model = non_gmm[0]
+        if model == "PAA":
+            raise ValueError(
+                "settle_group_of_contracts is GMM-only. PAA has no CSM/floor; "
+                "use paa.settle and sum by your own groupby for PAA books.")
+        raise ValueError(
+            "settle_group_of_contracts is GMM-only; VFA settlement is v1.1. "
+            "Use per-model calls and split the portfolio by measurement model.")
+
+    n_mp = model_points.n_mp
+    prof = _settlement_axis(model_points, state, profitability, "profitability")
+    if prof.shape != (n_mp,):
+        raise ValueError("profitability must have one entry per model point")
+    gids = _join_keys([
+        _settlement_axis(model_points, state, portfolio, "portfolio"),
+        _settlement_axis(model_points, state, cohort, "cohort"),
+        prof,
+    ], ["portfolio", "cohort", "profitability"])
+    labels, inverse = np.unique(gids, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    n_groups = labels.shape[0]
+    sizes = np.bincount(inverse, minlength=n_groups).astype(np.int64)
+
+    lc_open = (np.asarray(state.prior_loss_component, dtype=np.float64)
+               if state.prior_loss_component is not None
+               else np.zeros(n_mp))
+    csm_sum = np.bincount(inverse, weights=state.prior_csm, minlength=n_groups)
+    lc_sum = np.bincount(inverse, weights=lc_open, minlength=n_groups)
+    bad_xor = (csm_sum > 0.0) & (lc_sum > 0.0)
+    if np.any(bad_xor):
+        g = int(np.argmax(bad_xor))
+        raise ValueError(
+            f"group {labels[g]!r} has positive prior_csm and prior_loss_component; "
+            "check GoC grouping/re-grouping before settlement")
+
+    lock = np.asarray(state.lock_in_rate, dtype=np.float64)
+    lock_mp = np.full(n_mp, float(lock)) if lock.ndim == 0 else lock
+    group_lock = np.empty(n_groups, dtype=np.float64)
+    for g in range(n_groups):
+        vals = lock_mp[inverse == g]
+        if not np.allclose(vals, vals[0], rtol=0.0, atol=1e-14):
+            raise ValueError(
+                f"group {labels[g]!r} mixes non-uniform lock_in_rate values; "
+                "IFRS 17 B73 requires one cohort locked-in rate. Supply the "
+                "cohort weighted-average rate per GoC.")
+        group_lock[g] = vals[0]
+
+    if isinstance(coverage_units, str):
+        if coverage_units != "count":
+            raise ValueError("coverage_units must be 'count' or an array")
+        weights = np.ones(n_mp, dtype=np.float64)
+    else:
+        weights = np.asarray(coverage_units, dtype=np.float64)
+        if weights.shape != (n_mp,):
+            raise ValueError(
+                f"coverage_units must have one entry per model point ({n_mp}), "
+                f"got shape {weights.shape}")
+        if not np.all(np.isfinite(weights)) or np.any(weights < 0.0):
+            raise ValueError("coverage_units must be finite and >= 0")
+
+    pre = {name: np.zeros(n_groups, dtype=np.float64)
+           for name in _GOC_SETTLEMENT_LINEAR + _GOC_SETTLEMENT_UNIT_LINES}
+    gmm_router = _submodel_router(basis, "GMM")
+    for seg_basis, seg_idx in _model_segments(gmm_router, model_points):
+        for start in range(0, seg_idx.size, chunk_size):
+            block = seg_idx[start:start + chunk_size]
+            for g in np.unique(inverse[block]):
+                rows = block[inverse[block] == g]
+                sub_state = replace(state.subset(rows), lock_in_rate=group_lock[g])
+                mv = _settle_gmm(
+                    model_points.subset(rows), sub_state, seg_basis,
+                    period_months=period)
+                for name in _GOC_SETTLEMENT_LINEAR:
+                    pre[name][g] += float(getattr(mv, name).sum())
+                for name in _GOC_SETTLEMENT_UNIT_LINES:
+                    pre[name][g] += float((weights[rows] * getattr(mv, name)).sum())
+
+    lines = _finalise_goc_settlement(pre)
+    return GoCSettlement(
+        group_labels=labels,
+        group_sizes=sizes,
+        period_months=period,
+        lock_in_rate=group_lock,
+        model_points=model_points,
+        group_inverse=inverse,
+        lock_in_rate_by_mp=state.lock_in_rate,
+        profitability_by_mp=prof,
+        **lines,
+    )
+
+
+@reconcile.register
+def _(settlement: GoCSettlement) -> GMMSettlementReconciliation:
+    a = settlement
+    return GMMSettlementReconciliation(
+        period_months=a.period_months,
+        bel_opening=float(a.bel_opening.sum()),
+        bel_interest=float(a.bel_interest.sum()),
+        bel_release=float(-a.bel_release.sum()),
+        bel_experience=float(a.bel_experience.sum()),
+        bel_closing=float(a.bel_closing.sum()),
+        ra_opening=float(a.ra_opening.sum()),
+        ra_interest=float(a.ra_interest.sum()),
+        ra_release=float(-a.ra_release.sum()),
+        ra_experience=float(a.ra_experience.sum()),
+        ra_closing=float(a.ra_closing.sum()),
+        csm_opening=float(a.csm_opening.sum()),
+        csm_accretion=float(a.csm_accretion.sum()),
+        csm_experience_unlocking=float(a.csm_experience_unlocking.sum()),
+        finance_wedge=float(a.finance_wedge.sum()),
+        loss_component_reversed=float(-a.loss_component_reversed.sum()),
+        loss_component_recognised=float(a.loss_component_recognised.sum()),
+        csm_release=float(-a.csm_release.sum()),
+        csm_closing=float(a.csm_closing.sum()),
+        loss_component_opening=float(a.loss_component_opening.sum()),
+        loss_component_closing=float(a.loss_component_closing.sum()),
+    )
+
+
+@write_measurement.register
+def _(settlement: GoCSettlement, path, *, ids=None):
+    cols = {
+        "group_label": settlement.group_labels,
+        "group_size": settlement.group_sizes,
+        **{name: getattr(settlement, name)
+           for name in (_GOC_SETTLEMENT_LINEAR + _GOC_SETTLEMENT_UNIT_LINES
+                        + _GOC_SETTLEMENT_NONLINEAR)},
+        "lock_in_rate": settlement.lock_in_rate,
+        "measurement_basis": [settlement.measurement_basis]
+                             * settlement.group_labels.shape[0],
+    }
+    _write_measurement_columns(cols, path, ids)
 
 
 def _pad_curve(curve, n_time):

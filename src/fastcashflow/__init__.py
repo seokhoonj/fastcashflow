@@ -83,6 +83,7 @@ from fastcashflow.stochastic import StochasticResult
 from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult
 from fastcashflow._vfa import VFAMeasurement, VFAAggregate
+from fastcashflow.portfolio import GoCSettlement, settle_group_of_contracts
 from fastcashflow import gmm, paa, portfolio, reinsurance, samples, vfa  # namespaces
 
 __version__ = "0.1.0.dev1"
@@ -101,6 +102,7 @@ __all__ = [
     "VFAPeriodMovement", "VFAReconciliation",
     "GMMSettlementMovement", "GMMSettlementReconciliation",
     "GMMSettlementAggregate",
+    "GoCSettlement", "settle_group_of_contracts",
     "PAASettlementMovement", "PAASettlementReconciliation",
     "VFASettlementMovement", "VFASettlementReconciliation",
     "VFASettlementAggregate",

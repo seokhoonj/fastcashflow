@@ -833,7 +833,9 @@ class InforceState:
       ``elapsed_months - period_months``, the prior reporting date's
       result carried into this period.
     * ``lock_in_rate`` -- annual locked-in discount rate (Sec. B72(b)).
-      Scalar in v1; per-MP cohort-aware rates are a future extension.
+      Usually scalar; per-MP cohort-aware rates are accepted for GoC-grain
+      settlement, where the portfolio entry validates uniformity inside each
+      group before calling the scalar GMM kernel.
     * ``account_value`` -- observed per-MP fund value at the valuation date
       (``None`` for non-VFA states). VFA subsequent measurement
       (``vfa.measure_inforce``) re-anchors the account-value path at this
@@ -849,17 +851,20 @@ class InforceState:
       reporting date (``None`` means zero). Read by ``vfa.settle``; the
       paragraph-48/50(b) algebra reverses it on favourable changes before
       rebuilding the CSM.
+    * ``profitability`` -- optional inception-frozen profitability class used
+      as an explicit group-of-contracts axis at settlement.
     """
 
     mp_id: np.ndarray
     elapsed_months: IntArray
     count: FloatArray
     prior_csm: FloatArray
-    lock_in_rate: float
+    lock_in_rate: float | FloatArray
     account_value: FloatArray | None = None
     prior_count: FloatArray | None = None
     prior_account_value: FloatArray | None = None
     prior_loss_component: FloatArray | None = None
+    profitability: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         # Coerce each array to its canonical dtype so a hand-built state
@@ -877,7 +882,9 @@ class InforceState:
         object.__setattr__(
             self, "prior_csm", np.asarray(self.prior_csm, dtype=np.float64),
         )
-        object.__setattr__(self, "lock_in_rate", float(self.lock_in_rate))
+        lock = np.asarray(self.lock_in_rate, dtype=np.float64)
+        object.__setattr__(
+            self, "lock_in_rate", float(lock) if lock.ndim == 0 else lock)
         # Validate: a negative elapsed month indexes backwards into the
         # trajectory (silently wrong); a NaN prior CSM / lock-in rate makes the
         # carried-forward CSM NaN with no error; a ragged array reads n from
@@ -896,7 +903,12 @@ class InforceState:
             raise ValueError("InforceState.count must be >= 0")
         if not np.all(np.isfinite(self.prior_csm)):
             raise ValueError("InforceState.prior_csm must be finite")
-        if not np.isfinite(self.lock_in_rate):
+        lock = np.asarray(self.lock_in_rate, dtype=np.float64)
+        if lock.ndim > 0 and lock.shape[0] != n:
+            raise ValueError(
+                f"InforceState.lock_in_rate has length {lock.shape[0]} but "
+                f"elapsed_months has {n}; use a scalar or one rate per model point")
+        if not np.all(np.isfinite(lock)):
             raise ValueError("InforceState.lock_in_rate must be finite")
         # mp_id is the identity key the period-close state is joined on
         # (align_inforce_state / apply_inforce_state). A duplicate id makes
@@ -935,6 +947,13 @@ class InforceState:
             if np.any(arr < 0):
                 raise ValueError(f"InforceState.{nm} must be >= 0")
             object.__setattr__(self, nm, arr)
+        if self.profitability is not None:
+            prof = np.asarray(self.profitability, dtype=object)
+            if prof.shape[0] != n:
+                raise ValueError(
+                    f"InforceState.profitability has length {prof.shape[0]} but "
+                    f"elapsed_months has {n}; per-MP arrays must match")
+            object.__setattr__(self, "profitability", prof)
 
     def subset(self, indices) -> "InforceState":
         """Return a new ``InforceState`` carrying the rows at ``indices``.
@@ -952,16 +971,19 @@ class InforceState:
         def _opt(value):
             return None if value is None else value[idx]
 
+        lock = np.asarray(self.lock_in_rate, dtype=np.float64)
+
         return InforceState(
             mp_id=np.asarray(self.mp_id)[idx],
             elapsed_months=self.elapsed_months[idx],
             count=self.count[idx],
             prior_csm=self.prior_csm[idx],
-            lock_in_rate=self.lock_in_rate,
+            lock_in_rate=self.lock_in_rate if lock.ndim == 0 else lock[idx],
             account_value=_opt(self.account_value),
             prior_count=_opt(self.prior_count),
             prior_account_value=_opt(self.prior_account_value),
             prior_loss_component=_opt(self.prior_loss_component),
+            profitability=_opt(self.profitability),
         )
 
 
