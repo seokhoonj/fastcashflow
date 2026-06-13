@@ -564,6 +564,14 @@ def settle(
     entirely at ``k_exp``: incurred claims are past events, not in-force, so
     re-scaling them by the closing count would be meaningless.
 
+    Sec. 55(b)(i) premium experience (the PAA counterpart of the GMM B96(a)):
+    when ``state.actual_premium`` is given, the ``premiums`` line is the actual
+    premium received over the period rather than the expected. PAA has no CSM,
+    so the difference sits in the LRC (the unearned premium, Sec. 55(a)) and is
+    earned as revenue over the remaining coverage -- there is no future/current
+    split. The higher LRC also feeds the Sec. 57-58 onerous re-test. Absent
+    the input the premiums stay expected (byte-identical).
+
     Sec. 55(b) items with no movement line are documented engine cuts, not
     omissions: acquisition cash flows and their amortisation are zero under
     the Sec. 59(a) expensed-as-incurred option, the financing adjustment is
@@ -668,6 +676,21 @@ def settle(
     lrc_opening    = k_exp * unit.lrc_path[rows, em_open]
     lrc_closing    = k_obs * unit.lrc_path[rows, cap]
     lrc_experience = (k_obs - k_exp) * unit.lrc_path[rows, cap]
+
+    # Sec. 55(b)(i) premium experience (the PAA counterpart of the GMM B96(a)):
+    # the premiums line is the ACTUAL premium received over the period. PAA has
+    # no CSM, so the difference from expected sits in the LRC (the unearned
+    # premium, Sec. 55(a)) and is earned as revenue over the remaining coverage
+    # -- there is no future/current split. The higher LRC also feeds the
+    # Sec. 57-58 onerous re-test below (more premium -> a higher LRC -> less
+    # onerous). Absent state.actual_premium => premiums stay expected
+    # (byte-identical). The block identity lrc_closing == lrc_opening +
+    # premiums - revenue + lrc_experience is preserved.
+    if state.actual_premium is not None:
+        actual_premium = np.asarray(state.actual_premium, dtype=np.float64)
+        premium_experience = actual_premium - premiums
+        premiums = actual_premium
+        lrc_closing = lrc_closing + premium_experience
 
     # Sec. 57-58 re-test: the fulfilment cash flows for remaining coverage at
     # each date, with the settlement discount on claims exactly as the
