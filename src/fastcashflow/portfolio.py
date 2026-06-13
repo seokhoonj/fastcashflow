@@ -831,8 +831,9 @@ _GOC_SETTLEMENT_LINEAR = (
     "bel_opening", "bel_interest", "bel_release", "bel_experience",
     "bel_closing",
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
-    "finance_wedge", "csm_opening", "csm_accretion",
-    "csm_experience_unlocking", "loss_component_opening",
+    "finance_wedge", "premium_experience_revenue", "csm_opening",
+    "csm_accretion", "csm_experience_unlocking", "csm_premium_experience",
+    "loss_component_opening",
 )
 _GOC_SETTLEMENT_NONLINEAR = (
     "csm_release", "csm_closing", "loss_component_reversed",
@@ -866,9 +867,11 @@ class GoCSettlement:
     ra_experience: np.ndarray
     ra_closing: np.ndarray
     finance_wedge: np.ndarray
+    premium_experience_revenue: np.ndarray
     csm_opening: np.ndarray
     csm_accretion: np.ndarray
     csm_experience_unlocking: np.ndarray
+    csm_premium_experience: np.ndarray
     loss_component_opening: np.ndarray
     coverage_units_provided: np.ndarray
     coverage_units_future: np.ndarray
@@ -932,7 +935,8 @@ class GoCSettlement:
 def _finalise_goc_settlement(pre: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     accreted = pre["csm_opening"] + pre["csm_accretion"]
     csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
-        accreted, pre["csm_experience_unlocking"],
+        accreted,
+        pre["csm_experience_unlocking"] + pre["csm_premium_experience"],
         pre["loss_component_opening"])
     denom = pre["coverage_units_provided"] + pre["coverage_units_future"]
     frac = np.where(denom > 0.0, pre["coverage_units_provided"] / denom, 1.0)
@@ -973,6 +977,7 @@ def settle_group_of_contracts(
     cohort="issue_year",
     coverage_units=None,
     profitability=None,
+    premium_experience_future_fraction=0.0,
     chunk_size: int = _CHUNK_SIZE,
 ) -> GoCSettlement:
     """Group-of-contracts paragraph-44 settlement for routed GMM portfolios.
@@ -1067,6 +1072,11 @@ def settle_group_of_contracts(
         if not np.all(np.isfinite(weights)) or np.any(weights < 0.0):
             raise ValueError("coverage_units must be finite and >= 0")
 
+    pe_frac = np.asarray(premium_experience_future_fraction, dtype=np.float64)
+    if pe_frac.ndim > 0 and pe_frac.shape != (n_mp,):
+        raise ValueError(
+            "premium_experience_future_fraction must be a scalar or one entry "
+            f"per model point ({n_mp}), got shape {pe_frac.shape}")
     pre = {name: np.zeros(n_groups, dtype=np.float64)
            for name in _GOC_SETTLEMENT_LINEAR + _GOC_SETTLEMENT_UNIT_LINES}
     gmm_router = _submodel_router(basis, "GMM")
@@ -1076,9 +1086,12 @@ def settle_group_of_contracts(
             for g in np.unique(inverse[block]):
                 rows = block[inverse[block] == g]
                 sub_state = replace(state.subset(rows), lock_in_rate=group_lock[g])
+                frac_arg = (float(pe_frac) if pe_frac.ndim == 0
+                            else pe_frac[rows])
                 mv = _settle_gmm(
                     model_points.subset(rows), sub_state, seg_basis,
-                    period_months=period)
+                    period_months=period,
+                    premium_experience_future_fraction=frac_arg)
                 for name in _GOC_SETTLEMENT_LINEAR:
                     pre[name][g] += float(getattr(mv, name).sum())
                 for name in _GOC_SETTLEMENT_UNIT_LINES:
@@ -1116,7 +1129,9 @@ def _(settlement: GoCSettlement) -> GMMSettlementReconciliation:
         csm_opening=float(a.csm_opening.sum()),
         csm_accretion=float(a.csm_accretion.sum()),
         csm_experience_unlocking=float(a.csm_experience_unlocking.sum()),
+        csm_premium_experience=float(a.csm_premium_experience.sum()),
         finance_wedge=float(a.finance_wedge.sum()),
+        premium_experience_revenue=float(a.premium_experience_revenue.sum()),
         loss_component_reversed=float(-a.loss_component_reversed.sum()),
         loss_component_recognised=float(a.loss_component_recognised.sum()),
         csm_release=float(-a.csm_release.sum()),

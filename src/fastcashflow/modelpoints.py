@@ -853,6 +853,11 @@ class InforceState:
       rebuilding the CSM.
     * ``profitability`` -- optional inception-frozen profitability class used
       as an explicit group-of-contracts axis at settlement.
+    * ``actual_premium`` -- observed per-MP premium cash actually received over
+      the reporting period (``None`` means as expected). ``gmm.settle`` splits
+      the experience adjustment ``actual_premium - expected_premium`` between
+      future service (CSM, Sec. B96(a)) and current/past service (P&L, Sec.
+      B97(c)). May be negative (a net refund period, TRG 2018-09 Example B).
     """
 
     mp_id: np.ndarray
@@ -865,6 +870,7 @@ class InforceState:
     prior_account_value: FloatArray | None = None
     prior_loss_component: FloatArray | None = None
     profitability: np.ndarray | None = None
+    actual_premium: FloatArray | None = None
 
     def __post_init__(self) -> None:
         # Coerce each array to its canonical dtype so a hand-built state
@@ -954,6 +960,17 @@ class InforceState:
                     f"InforceState.profitability has length {prof.shape[0]} but "
                     f"elapsed_months has {n}; per-MP arrays must match")
             object.__setattr__(self, "profitability", prof)
+        # actual_premium (settlement only) is finite but may be negative (a
+        # net premium refund), so it is validated apart from the >= 0 group.
+        if self.actual_premium is not None:
+            ap = np.asarray(self.actual_premium, dtype=np.float64)
+            if ap.shape[0] != n:
+                raise ValueError(
+                    f"InforceState.actual_premium has length {ap.shape[0]} but "
+                    f"elapsed_months has {n}; per-MP arrays must match")
+            if not np.all(np.isfinite(ap)):
+                raise ValueError("InforceState.actual_premium must be finite")
+            object.__setattr__(self, "actual_premium", ap)
 
     def subset(self, indices) -> "InforceState":
         """Return a new ``InforceState`` carrying the rows at ``indices``.
@@ -984,6 +1001,7 @@ class InforceState:
             prior_account_value=_opt(self.prior_account_value),
             prior_loss_component=_opt(self.prior_loss_component),
             profitability=_opt(self.profitability),
+            actual_premium=_opt(self.actual_premium),
         )
 
 

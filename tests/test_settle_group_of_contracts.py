@@ -86,7 +86,10 @@ def goc_settle(mv, w):
     B119 release once at group grain."""
     csm_open = float(mv.csm_opening.sum())
     accretion = float(mv.csm_accretion.sum())
-    x = float(mv.csm_experience_unlocking.sum())
+    # B96(a) premium experience is a future-service CSM change with no BEL/RA
+    # counterpart -- folded into the group-grain algebra alongside 44(c).
+    x = (float(mv.csm_experience_unlocking.sum())
+         + float(mv.csm_premium_experience.sum()))
     lc_open = float(mv.loss_component_opening.sum())
     cu_p = float((w * mv.coverage_units_provided).sum())
     cu_f = float((w * mv.coverage_units_future).sum())
@@ -111,8 +114,9 @@ _LINEAR = (
     "bel_opening", "bel_interest", "bel_release", "bel_experience",
     "bel_closing",
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
-    "finance_wedge", "csm_opening", "csm_accretion",
-    "csm_experience_unlocking", "loss_component_opening",
+    "finance_wedge", "premium_experience_revenue", "csm_opening",
+    "csm_accretion", "csm_experience_unlocking", "csm_premium_experience",
+    "loss_component_opening",
 )
 # lines that go through the group-grain algebra / B119 release
 _NONLINEAR = (
@@ -816,3 +820,36 @@ def test_requires_a_basis_router():
         settle_group_of_contracts(mp, state, BASIS, period_months=6,
                                   coverage_units="count",
                                   profitability=np.zeros(2, dtype=np.int64))
+
+
+# ===========================================================================
+# B96(a)/B97(c) premium experience routes through the per-GoC settle exactly
+# as the per-MP movement sums (linear lines; the CSM leg folds into the algebra)
+# ===========================================================================
+def test_premium_experience_flows_through_goc_consistently():
+    """actual_premium with a future-service fraction: csm_premium_experience
+    (B96(a), into the group-grain algebra) and premium_experience_revenue
+    (B97(c), a group-summed P&L memo) match the per-MP movement at group
+    grain -- the GoC path neither drops nor double-floors the premium leg."""
+    counts = [SURV[6] * 1.02, SURV[6] * 0.98]
+    mp, state = book(benefits=BENEFITS, em_close=6, prior_counts=[1.0, 1.0],
+                     counts=counts, prior_csms=[600.0, 500.0],
+                     prior_lcs=[0.0, 0.0])
+    # observed premium clearly off expected on both rows (distinct per row)
+    state = replace(state, actual_premium=np.array([40_000.0, 60_000.0]))
+    frac = 0.4
+    mv = fcf.gmm.settle(mp, state, BASIS, period_months=6,
+                        premium_experience_future_fraction=frac)
+    goc = settle_goc(mp, state, period=6,
+                     premium_experience_future_fraction=frac)
+    # both legs genuinely nonzero, and partition the experience
+    assert abs(float(mv.csm_premium_experience.sum())) > 0.0
+    assert abs(float(mv.premium_experience_revenue.sum())) > 0.0
+    # every line (incl. the two new ones) equals the group-grain oracle
+    assert_group_matches_oracle(goc, mv, w=np.ones(2))
+    np.testing.assert_allclose(
+        goc.csm_premium_experience[0],
+        float(mv.csm_premium_experience.sum()), rtol=1e-12)
+    np.testing.assert_allclose(
+        goc.premium_experience_revenue[0],
+        float(mv.premium_experience_revenue.sum()), rtol=1e-12)

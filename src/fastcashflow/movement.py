@@ -1213,6 +1213,7 @@ class GMMSettlementMovement:
         bel_closing == bel_opening + bel_interest - bel_release + bel_experience
         ra_closing  == ra_opening  + ra_interest  - ra_release  + ra_experience
         csm_closing == csm_opening + csm_accretion + csm_experience_unlocking
+                       + csm_premium_experience
                        - loss_component_reversed + loss_component_recognised
                        - csm_release
         loss_component_closing == loss_component_opening
@@ -1229,6 +1230,15 @@ class GMMSettlementMovement:
     as the named ``finance_wedge`` line OUTSIDE the CSM block. The RA part
     of the change has no rate prescription (B96(d)) and enters the CSM at
     its current measure -- a documented accounting policy.
+
+    ``csm_premium_experience`` (B96(a)) and ``premium_experience_revenue``
+    (B97(c)) are the two legs of the premium experience adjustment (actual
+    premium received over the period less the expected premium), split by the
+    entity's future-service fraction. The future-service leg enters the CSM
+    block (it is a NEW future-service change with no BEL/RA counterpart, so it
+    does NOT appear in the three-term tie above); the current/past leg is a
+    P&L memo (insurance revenue), in NO balance recursion, exactly like
+    ``finance_wedge``. Both are zero unless ``state.actual_premium`` is given.
 
     ``csm_accretion`` is direct compounding of the prior CSM at the
     locked-in rate (44(b)/B72(b)); ``csm_release`` is the single period-end
@@ -1250,7 +1260,9 @@ class GMMSettlementMovement:
     csm_opening: FloatArray
     csm_accretion: FloatArray            # 44(b)/B72(b): locked-in, direct compounding
     csm_experience_unlocking: FloatArray  # 44(c)/B96(b)(d): locked-in measure
+    csm_premium_experience: FloatArray   # B96(a): future-service premium exp, into CSM
     finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, not CSM
+    premium_experience_revenue: FloatArray  # B97(c): current/past premium exp, P&L memo
     csm_release: FloatArray              # 44(e)/B119: single period-end release
     csm_closing: FloatArray
     loss_component_opening: FloatArray
@@ -1310,7 +1322,9 @@ class GMMSettlementReconciliation:
     csm_opening: float
     csm_accretion: float
     csm_experience_unlocking: float
+    csm_premium_experience: float
     finance_wedge: float
+    premium_experience_revenue: float
     loss_component_reversed: float
     loss_component_recognised: float
     csm_release: float
@@ -1339,7 +1353,9 @@ def _reconcile_gmm_settlement(
             csm_opening=float(m.csm_opening.sum()),
             csm_accretion=float(m.csm_accretion.sum()),
             csm_experience_unlocking=float(m.csm_experience_unlocking.sum()),
+            csm_premium_experience=float(m.csm_premium_experience.sum()),
             finance_wedge=float(m.finance_wedge.sum()),
+            premium_experience_revenue=float(m.premium_experience_revenue.sum()),
             loss_component_reversed=float(-m.loss_component_reversed.sum()),
             loss_component_recognised=float(m.loss_component_recognised.sum()),
             csm_release=float(-m.csm_release.sum()),
@@ -1517,7 +1533,9 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
         "csm_opening": movement.csm_opening,
         "csm_accretion": movement.csm_accretion,
         "csm_experience_unlocking": movement.csm_experience_unlocking,
+        "csm_premium_experience": movement.csm_premium_experience,
         "finance_wedge": movement.finance_wedge,
+        "premium_experience_revenue": movement.premium_experience_revenue,
         "csm_release": movement.csm_release,
         "csm_closing": movement.csm_closing,
         "loss_component_opening": movement.loss_component_opening,
@@ -1656,7 +1674,8 @@ _GMM_SETTLEMENT_LINES = (
     "bel_closing",
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_opening", "csm_accretion", "csm_experience_unlocking",
-    "finance_wedge", "csm_release", "csm_closing",
+    "csm_premium_experience", "finance_wedge", "premium_experience_revenue",
+    "csm_release", "csm_closing",
     "loss_component_opening", "loss_component_reversed",
     "loss_component_recognised", "loss_component_closing",
     "coverage_units_provided", "coverage_units_future",
@@ -1718,7 +1737,9 @@ class GMMSettlementAggregate:
     csm_opening: float
     csm_accretion: float
     csm_experience_unlocking: float
+    csm_premium_experience: float
     finance_wedge: float
+    premium_experience_revenue: float
     csm_release: float
     csm_closing: float
     loss_component_opening: float
@@ -1806,7 +1827,9 @@ def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
         csm_opening=a.csm_opening,
         csm_accretion=a.csm_accretion,
         csm_experience_unlocking=a.csm_experience_unlocking,
+        csm_premium_experience=a.csm_premium_experience,
         finance_wedge=a.finance_wedge,
+        premium_experience_revenue=a.premium_experience_revenue,
         loss_component_reversed=-a.loss_component_reversed,
         loss_component_recognised=a.loss_component_recognised,
         csm_release=-a.csm_release,

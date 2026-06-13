@@ -952,6 +952,7 @@ def settle(
     basis: "Basis",
     *,
     period_months: int | None = None,
+    premium_experience_future_fraction: float | FloatArray = 0.0,
 ) -> "GMMSettlementMovement":
     """Paragraph-44 subsequent-measurement settlement of a GMM in-force book.
 
@@ -971,10 +972,23 @@ def settle(
     observation). On-track counts make every experience line zero and the
     closing CSM telescopes to ``measure_inforce``'s monthly carry exactly.
 
-    v1 scope (documented cuts, mirroring ``vfa.settle``): within-period cash
-    flows are as expected -- the observed input is the closing count only
-    (B96(a) premium experience is first-order for a premium-paying GMM book
-    and is the v1.1 priority); no B96(c) investment-component split; no
+    Premium experience (B96(a)/B97(c)): pass ``state.actual_premium`` (the
+    premium cash actually received over the period) and the entity's
+    ``premium_experience_future_fraction`` to split the experience adjustment
+    ``actual_premium - expected_premium`` between future service (the CSM, at
+    the B72(c) locked-in measure -- ``csm_premium_experience``) and
+    current/past service (a P&L memo -- ``premium_experience_revenue``,
+    recognised in insurance revenue, TRG 2018-09). The fraction defaults to
+    0.0 (all current/past, the BC233 general rule); the standard leaves the
+    split to entity judgment. The lapse-driven future-premium effect is
+    already carried by the count channel, so default 0.0 avoids
+    double-counting -- set the fraction above 0 only for premium received now
+    for genuinely future coverage the count deviation does not capture.
+
+    v1 scope (documented cuts, mirroring ``vfa.settle``): other within-period
+    cash flows (claims, expenses, benefits) are as expected -- only the
+    closing count and the premium are observed inputs; no B96(c)
+    investment-component split; no
     paragraph 50(a)-52 systematic loss-component allocation; no
     ``settlement_pattern`` book (the LIC would straddle both dates); the RA
     change enters the CSM at its current measure (B96(d) prescribes no
@@ -1107,6 +1121,36 @@ def settle(
     bel_o, bel_i, bel_r, bel_e, bel_c = _block(m.bel_path)
     ra_o, ra_i, ra_r, ra_e, ra_c = _block(m.ra_path)
 
+    # B96(a)/B97(c) premium experience: actual premium received over the
+    # period vs the expected (on-track) premium, summed over the same window
+    # and at the same k_exp scale as the interest line. The entity's
+    # future-service fraction routes the favourable(+)/unfavourable(-)
+    # difference: the future part adjusts the CSM (B96(a), into the
+    # paragraph-48/50(b) algebra at the locked-in measure); the current/past
+    # part is a P&L memo (B97(c), insurance revenue), in no balance recursion.
+    # Absent actual_premium => zero on both lines (byte-identical to the cut).
+    frac = np.asarray(premium_experience_future_fraction, dtype=np.float64)
+    if frac.ndim > 1 or (frac.ndim == 1 and frac.shape[0] != n_mp):
+        raise ValueError(
+            "premium_experience_future_fraction must be a scalar or one entry "
+            f"per model point ({n_mp}), got shape {frac.shape}")
+    if (not np.all(np.isfinite(frac))
+            or np.any(frac < 0.0) or np.any(frac > 1.0)):
+        raise ValueError(
+            "premium_experience_future_fraction must be finite and lie in "
+            "[0, 1] (the entity's split of the premium experience between "
+            "future service -> CSM and current/past service -> P&L); got "
+            f"{premium_experience_future_fraction}")
+    if state.actual_premium is not None:
+        exp_premium = k_exp * (cf.premium_cf[rows[:, None], cols_safe]
+                               * col_ok).sum(axis=1)
+        premium_experience = (np.asarray(state.actual_premium,
+                                         dtype=np.float64) - exp_premium)
+    else:
+        premium_experience = np.zeros(n_mp)
+    csm_premium_experience = frac * premium_experience
+    premium_experience_revenue = (1.0 - frac) * premium_experience
+
     # The locked-in second pass: the SAME backward kernel on the same unit
     # cash flows, at the flat locked-in rate -- exactly one extra pass (the
     # G1 gate (3) cost fact), and identical code path so a flat current
@@ -1128,7 +1172,9 @@ def settle(
     csm_accretion = prior_csm * ((1.0 + lock) ** (period / 12.0) - 1.0)
     accreted = prior_csm + csm_accretion
     csm_after, lc_reversed, lc_recognised, lc_closing = (
-        _paragraph45_csm_algebra(accreted, csm_experience_unlocking, lc_open))
+        _paragraph45_csm_algebra(
+            accreted, csm_experience_unlocking + csm_premium_experience,
+            lc_open))
 
     # B119: single period-end release on the post-adjustment balance. The
     # provided units run at the expected scale over [em_open, em_close), the
@@ -1152,7 +1198,9 @@ def settle(
         ra_experience=ra_e, ra_closing=ra_c,
         csm_opening=prior_csm, csm_accretion=csm_accretion,
         csm_experience_unlocking=csm_experience_unlocking,
+        csm_premium_experience=csm_premium_experience,
         finance_wedge=finance_wedge,
+        premium_experience_revenue=premium_experience_revenue,
         csm_release=csm_release, csm_closing=csm_closing,
         loss_component_opening=lc_open,
         loss_component_reversed=lc_reversed,
@@ -1171,6 +1219,7 @@ def settle_aggregate(
     basis: "Basis",
     *,
     period_months: int | None = None,
+    premium_experience_future_fraction: float | FloatArray = 0.0,
     chunk_size: int = 200_000,
 ) -> "GMMSettlementAggregate":
     """Portfolio-total paragraph-44 settlement in bounded memory.
@@ -1204,14 +1253,24 @@ def settle_aggregate(
     # contracts; the per-chunk settle re-checks the aligned pair (a no-op).
     state = _reconcile_state(model_points, state)
     n_mp = int(model_points.issue_age.shape[0])
+    # A per-MP fraction is sliced per chunk so the aggregate equals the per-MP
+    # settle sum even when the premium split varies by contract (the per-chunk
+    # settle re-validates the value range / finiteness).
+    pe_frac = np.asarray(premium_experience_future_fraction, dtype=np.float64)
+    if pe_frac.ndim > 1 or (pe_frac.ndim == 1 and pe_frac.shape[0] != n_mp):
+        raise ValueError(
+            "premium_experience_future_fraction must be a scalar or one entry "
+            f"per model point ({n_mp}), got shape {pe_frac.shape}")
     # Per-chunk partial sums, combined with fsum so the total does not
     # depend on the chunking (compensated summation: chunk_size is a memory
     # knob, never a numbers knob).
     parts: dict[str, list[float]] = {n: [] for n in _GMM_SETTLEMENT_LINES}
     for start in range(0, n_mp, chunk_size):
         idx = np.arange(start, min(start + chunk_size, n_mp))
+        frac_arg = (float(pe_frac) if pe_frac.ndim == 0 else pe_frac[idx])
         mv = settle(model_points.subset(idx), state.subset(idx), basis,
-                    period_months=period)
+                    period_months=period,
+                    premium_experience_future_fraction=frac_arg)
         for name in _GMM_SETTLEMENT_LINES:
             parts[name].append(float(getattr(mv, name).sum()))
     return GMMSettlementAggregate(
