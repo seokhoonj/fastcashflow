@@ -109,6 +109,8 @@ Variable fee approach
 
 .. autofunction:: fastcashflow.vfa.settle_stream
 
+.. autofunction:: fastcashflow.vfa.recognition_schedule
+
 .. autoclass:: fastcashflow.VFASettlementMovement
    :members:
 
@@ -234,6 +236,8 @@ Reinsurance
 .. autofunction:: fastcashflow.reinsurance.settle
 
 .. autofunction:: fastcashflow.reinsurance.settle_aggregate
+
+.. autofunction:: fastcashflow.reinsurance.settle_stream
 
 .. autoclass:: fastcashflow.reinsurance.QuotaShare
    :members:

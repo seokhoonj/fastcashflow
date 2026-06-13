@@ -750,3 +750,43 @@ def settle_reinsurance_aggregate(
     return ReinsuranceSettlementAggregate(
         period_months=period, lock_in_rate=float(state.lock_in_rate),
         **{name: math.fsum(vals) for name, vals in parts.items()})
+
+
+def settle_reinsurance_stream(
+    input_path,
+    output_dir,
+    basis: Basis,
+    *,
+    treaty: Treaty,
+    coverages=None,
+    calculation_methods=None,
+    state_path=None,
+    period_months: int | None = None,
+    chunk_size: int = 200_000,
+    id_column: str | None = None,
+    validate_unique_mp_id: bool = True,
+) -> int:
+    """Stream a paragraph-66 reinsurance period close through a parquet file.
+
+    The out-of-core variant of :func:`~fastcashflow.reinsurance.settle`: reads
+    the direct policies + coverages parquet in ``chunk_size`` blocks, cedes
+    with ``treaty``, settles each block, and writes the per-MP settlement
+    movements (one ``part-NNNNN.parquet`` per chunk). Same one-combined-file /
+    two-file (``state_path``) layouts as
+    :func:`~fastcashflow.gmm.settle_stream`; the reinsurance state carries
+    ``prior_csm`` (which may be negative -- a net cost) and ``prior_count``.
+    Returns the number of model points processed. A ceded book is usually small
+    enough for :func:`settle` / :func:`settle_aggregate`; this exists for API
+    symmetry with the other models.
+    """
+    from fastcashflow.io import _settle_stream_driver, _coverages_build_mp
+    basis = _single_basis(basis, entry="reinsurance.settle_stream")
+    build_mp = _coverages_build_mp(coverages, calculation_methods,
+                                   entry="reinsurance.settle_stream")
+    return _settle_stream_driver(
+        input_path, output_dir, state_path=state_path, chunk_size=chunk_size,
+        id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
+        build_mp=build_mp,
+        settle_fn=lambda mp, st: settle_reinsurance(
+            mp, st, basis, treaty=treaty, period_months=period_months),
+        entry="reinsurance.settle_stream")

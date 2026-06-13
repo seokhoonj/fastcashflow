@@ -160,3 +160,47 @@ def test_carry_bridge_warns_now_that_settle_exists():
     with pytest.warns(DeprecationWarning, match="settle"):
         fcf.reinsurance.measure_inforce_aggregate(
             mp, state, basis, treaty=treaty, period_months=12)
+
+
+# ---------------------------------------------------------------------------
+# settle_stream: out-of-core, matches the in-memory settle
+# ---------------------------------------------------------------------------
+def test_settle_stream_matches_in_memory(tmp_path):
+    import polars as pl
+    settle_stream = getattr(fcf.reinsurance, "settle_stream", None)
+    if settle_stream is None:
+        pytest.skip("reinsurance.settle_stream not implemented")
+    mp, state, basis, treaty = _book(n=3, count_factor=1.2)
+    n = mp.n_mp
+    spec = {
+        "mp_id": np.asarray(mp.mp_id).astype(str),
+        "issue_age": np.asarray(mp.issue_age),
+        "premium": np.asarray(mp.premium),
+        "term_months": np.asarray(mp.term_months),
+    }
+    st = {
+        "mp_id": np.asarray(state.mp_id).astype(str),
+        "elapsed_months": np.asarray(state.elapsed_months),
+        "count": np.asarray(state.count),
+        "prior_csm": np.asarray(state.prior_csm),
+        "lock_in_rate": np.full(n, float(state.lock_in_rate)),
+        "prior_count": np.asarray(state.prior_count),
+    }
+    cov = pl.DataFrame({"mp_id": spec["mp_id"], "coverage": ["DEATH"] * n,
+                        "amount": np.asarray(mp.benefits[0], dtype=np.float64)})
+    cp = tmp_path / "rcov.parquet"; cov.write_parquet(cp)
+    ip = tmp_path / "rinforce.parquet"
+    pl.DataFrame({**spec, **{k: v for k, v in st.items()
+                             if k != "mp_id"}}).write_parquet(ip)
+    out = tmp_path / "rout"
+    count = settle_stream(ip, out, basis, treaty=treaty, coverages=cp,
+                          calculation_methods=PATTERNS, period_months=12,
+                          chunk_size=2)
+    assert count == n
+    parts = pl.read_parquet(str(out / "part-*.parquet")).sort("id")
+    mv = settle(mp, state, basis, treaty=treaty, period_months=12)
+    order = {str(i): k for k, i in enumerate(np.asarray(mp.mp_id).astype(str))}
+    idx = [order[i] for i in parts["id"].to_list()]
+    np.testing.assert_allclose(parts["csm_closing"].to_numpy(),
+                               np.asarray(mv.csm_closing)[idx], rtol=1e-9,
+                               atol=1e-3)

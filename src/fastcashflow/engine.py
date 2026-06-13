@@ -1331,21 +1331,39 @@ def recognition_schedule(
     date (default 12 / 36 / 60, the four-band disclosure axis); ``period_months``
     is the settlement period (default 12), as for :func:`settle`.
     """
+    edges = _validate_band_edges(band_edges_months)
+    mv = settle(model_points, state, basis, period_months=period_months)
+    inforce = measure(model_points, basis, full=True).cashflows.inforce
+    em = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    return _build_recognition_schedule(
+        np.asarray(mv.csm_closing, dtype=np.float64), inforce, em, boundary,
+        edges)
+
+
+def _validate_band_edges(band_edges_months) -> tuple:
+    """Coerce / validate paragraph-109 band edges -- strictly ascending
+    positive integer months from the valuation date. Shared by the GMM and VFA
+    recognition schedules so the edge contract cannot drift between them."""
     edges = tuple(int(e) for e in band_edges_months)
     if (not edges or any(e <= 0 for e in edges)
             or list(edges) != sorted(set(edges))):
         raise ValueError(
             "band_edges_months must be strictly ascending positive integers "
             f"(months from the valuation date), got {band_edges_months!r}")
-    mv = settle(model_points, state, basis, period_months=period_months)
-    csm_closing = np.asarray(mv.csm_closing, dtype=np.float64)
-    inforce = measure(model_points, basis, full=True).cashflows.inforce
-    em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    return edges
+
+
+def _build_recognition_schedule(csm_closing, inforce, em, boundary, edges):
+    """Allocate the per-MP closing CSM to maturity bands by each contract's
+    forward coverage-unit (in-force) fraction; the bands sum to the closing
+    CSM. Onerous contracts (CSM <= 0) contribute nothing. Shared by the GMM
+    (paragraph 44) and VFA (paragraph 45) settlement schedules -- the
+    paragraph-109 allocation is identical, only the source settle differs."""
     bounds = (0,) + edges
     n_bands = len(bounds)
     band = np.zeros(n_bands)
-    for i in range(model_points.n_mp):
+    for i in range(csm_closing.shape[0]):
         csm_i = float(csm_closing[i])
         if csm_i <= 0.0:                  # onerous / no CSM -> nothing to recognise
             continue

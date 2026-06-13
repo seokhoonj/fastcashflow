@@ -791,28 +791,10 @@ def settle_stream(
     ``prior_count`` in the state (the LRC roll reconstructs the rest). Returns
     the number of model points processed.
     """
-    from pathlib import Path
-    import polars as pl
-    from fastcashflow.io import (
-        _settle_stream_driver, _parse_calculation_methods,
-        _model_points_from_frames)
+    from fastcashflow.io import _settle_stream_driver, _coverages_build_mp
     basis = _single_basis(basis, entry="paa.settle_stream")
-    if coverages is None:
-        raise ValueError(
-            "paa.settle_stream needs a coverages frame: pass coverages="
-            "<parquet path> (an mp_id / coverage / amount frame), as in "
-            "paa.measure_stream.")
-    if isinstance(calculation_methods, (str, Path)):
-        methods_dict = _parse_calculation_methods(calculation_methods)
-    else:
-        methods_dict = calculation_methods
-    cov_scan = pl.scan_parquet(Path(coverages))
-
-    def build_mp(spec):
-        cov = cov_scan.join(
-            spec.lazy().select("mp_id"), on="mp_id", how="semi").collect()
-        return _model_points_from_frames(spec, cov, methods_dict)
-
+    build_mp = _coverages_build_mp(coverages, calculation_methods,
+                                   entry="paa.settle_stream")
     return _settle_stream_driver(
         input_path, output_dir, state_path=state_path, chunk_size=chunk_size,
         id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,

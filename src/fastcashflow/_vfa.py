@@ -1344,3 +1344,34 @@ def settle_stream(
                                         period_months=period_months),
         entry="vfa.settle_stream",
     )
+
+
+def recognition_schedule(
+    model_points: ModelPoints,
+    state: "InforceState",
+    basis: Basis,
+    *,
+    band_edges_months=(12, 36, 60),
+    period_months: int | None = None,
+):
+    """Paragraph-109 maturity-band disclosure for a settled VFA book.
+
+    The VFA counterpart of :func:`~fastcashflow.gmm.recognition_schedule`:
+    allocates the :func:`settle` closing CSM to maturity bands by each
+    contract's forward coverage-unit (in-force) fraction, so the bands sum to
+    the closing CSM -- when, in maturity terms, the remaining CSM is expected
+    to be recognised in profit or loss. Onerous contracts carry no CSM and
+    contribute nothing. ``band_edges_months`` are the band boundaries in months
+    from the valuation date (default 12 / 36 / 60); ``period_months`` is the
+    settlement period (default 12).
+    """
+    from fastcashflow.engine import (
+        _validate_band_edges, _build_recognition_schedule)
+    edges = _validate_band_edges(band_edges_months)
+    mv = settle(model_points, state, basis, period_months=period_months)
+    inforce = measure_vfa(model_points, basis, full=True).cashflows.inforce
+    em = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
+    return _build_recognition_schedule(
+        np.asarray(mv.csm_closing, dtype=np.float64), inforce, em, boundary,
+        edges)

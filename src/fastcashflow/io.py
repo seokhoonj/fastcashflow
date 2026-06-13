@@ -2509,13 +2509,30 @@ def settle_stream(
     """
     from fastcashflow.engine import settle
 
+    build_mp = _coverages_build_mp(coverages, calculation_methods,
+                                   entry="gmm.settle_stream")
+    return _settle_stream_driver(
+        input_path, output_dir, state_path=state_path, chunk_size=chunk_size,
+        id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
+        build_mp=build_mp,
+        settle_fn=lambda mp, st: settle(mp, st, basis,
+                                        period_months=period_months),
+        entry="gmm.settle_stream",
+    )
+
+
+def _coverages_build_mp(coverages, calculation_methods, *, entry):
+    """The coverages-based ``build_mp`` shared by the GMM / PAA / reinsurance
+    settlement streams: scan the per-contract coverage parquet once and, for
+    each policies chunk, semi-join its coverages and assemble the model points.
+    The coverages frame is required -- a flat one-row-per-policy (wide) file
+    cannot carry per-coverage waiting / reduction rules."""
     if coverages is None:
         raise ValueError(
-            "settle_stream needs a coverages frame: pass coverages=<parquet "
-            "path> (an mp_id / coverage / amount frame). A flat "
-            "one-row-per-policy (wide) file cannot carry per-coverage "
-            "waiting / reduction rules and is not accepted."
-        )
+            f"{entry} needs a coverages frame: pass coverages=<parquet path> "
+            "(an mp_id / coverage / amount frame). A flat one-row-per-policy "
+            "(wide) file cannot carry per-coverage waiting / reduction rules "
+            "and is not accepted.")
     if isinstance(calculation_methods, (str, Path)):
         methods_dict = _parse_calculation_methods(calculation_methods)
     else:
@@ -2528,11 +2545,4 @@ def settle_stream(
         ).collect()
         return _model_points_from_frames(spec, cov, methods_dict)
 
-    return _settle_stream_driver(
-        input_path, output_dir, state_path=state_path, chunk_size=chunk_size,
-        id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
-        build_mp=build_mp,
-        settle_fn=lambda mp, st: settle(mp, st, basis,
-                                        period_months=period_months),
-        entry="gmm.settle_stream",
-    )
+    return build_mp
