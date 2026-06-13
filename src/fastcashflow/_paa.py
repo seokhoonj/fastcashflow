@@ -24,10 +24,13 @@ Scope and simplifications, each with the standard's basis:
   ``max(0, fulfilment cash flows for remaining coverage - LRC)``, which at
   inception equals ``max(0, the GMM fulfilment cash flows)``. It is
   reported separately rather than folded into the LRC carrying amount.
-* The Liability for Incurred Claims (Sec. 59(b)) runs off a claims
-  settlement pattern; with no pattern set, claims settle when incurred and
-  it is zero. It is held undiscounted -- Sec. 59(b) permits this when
-  claims are paid within a year of being incurred.
+* The Liability for Incurred Claims runs off a claims settlement pattern;
+  with no pattern set, claims settle when incurred and it is zero. In the
+  settlement measurement it is measured at fulfilment cash flows -- the
+  discounted PV of the unpaid run-off plus the risk adjustment (Sec. 40(b)
+  / 42(c) / 37), like the GMM LIC. (Sec. 59(b) permits omitting the
+  discounting when claims are paid within a year of being incurred;
+  discounting is also compliant and kept uniform with the GMM block.)
 """
 from __future__ import annotations
 
@@ -48,7 +51,7 @@ from fastcashflow.io import (
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import (
     _carry_lic_residual, _risk_adjustment, _rollforward_kernel,
-    _settlement_factor, _settlement_lic)
+    _norm_ppf, _settlement_factor, _settlement_lic, _settlement_lic_discounted)
 from fastcashflow.modelpoints import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 # In-force helpers shared with the GMM path (engine does not import _paa, and
@@ -719,15 +722,35 @@ def settle(
     loss_component_reversed = np.maximum(
         0.0, loss_component_opening - loss_component_closing)
 
-    # LIC block -- entirely expected-scale; claims_paid is the residual, so
-    # the block identity closes by construction (and the terminal-column
-    # residual convention of the settlement tail is preserved).
+    # LIC block (paragraphs 40(b) / 42(c) / 37): the liability for incurred
+    # claims measured at fulfilment cash flows -- the discounted PV of the unpaid
+    # run-off plus the risk adjustment. paragraph 59(b) PERMITS omitting the
+    # discounting for <=1yr PAA claims, but discounting is also compliant and
+    # keeps the LIC uniform with the GMM block (and 59(b) never exempts the RA).
+    # claims_incurred and claims_paid stay NOMINAL (claims_paid the residual on
+    # the undiscounted trajectory unit.lic); lic_finance is the reconciling
+    # residual (the 42(c) discount unwind + discounting/RA measurement effect).
     incurred = cf.claim_cf + cf.morbidity_cf
     claims_incurred = k_exp * (incurred[rows[:, None], cols_safe]
                                * col_ok).sum(axis=1)
-    lic_opening = k_exp * unit.lic[rows, em_open]
-    lic_closing = k_exp * unit.lic[rows, cap]
-    claims_paid = lic_opening + claims_incurred - lic_closing
+    claims_paid = (k_exp * unit.lic[rows, em_open] + claims_incurred
+                   - k_exp * unit.lic[rows, cap])
+    if basis.settlement_pattern is not None:
+        r_lic = basis.discount_monthly
+        lic_death = _settlement_lic_discounted(
+            cf.claim_cf, basis.settlement_pattern, r_lic)
+        lic_morb = _settlement_lic_discounted(
+            cf.morbidity_cf, basis.settlement_pattern, r_lic)
+        z = _norm_ppf(basis.ra_confidence)
+        lic_ra = z * (basis.mortality_cv * lic_death
+                      + basis.morbidity_cv * lic_morb)
+        lic_fcf = lic_death + lic_morb + lic_ra
+        lic_opening = k_exp * lic_fcf[rows, em_open]
+        lic_closing = k_exp * lic_fcf[rows, cap]
+    else:
+        lic_opening = k_exp * unit.lic[rows, em_open]
+        lic_closing = k_exp * unit.lic[rows, cap]
+    lic_finance = lic_closing - lic_opening - claims_incurred + claims_paid
 
     # B97(b)/(c) within-period claims and expense experience (the gmm.settle /
     # vfa.settle mirror): the actual claims / expenses incurred over the period
@@ -763,6 +786,7 @@ def settle(
         loss_component_closing=loss_component_closing,
         lic_opening=lic_opening,
         claims_incurred=claims_incurred,
+        lic_finance=lic_finance,
         claims_paid=claims_paid,
         lic_closing=lic_closing,
         period_months=period,

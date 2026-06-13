@@ -94,7 +94,7 @@ def _assert_blocks(mv):
         - mv.loss_component_reversed, mv.loss_component_closing,
         rtol=1e-10, atol=1e-12)
     np.testing.assert_allclose(
-        mv.lic_opening + mv.claims_incurred - mv.claims_paid,
+        mv.lic_opening + mv.claims_incurred + mv.lic_finance - mv.claims_paid,
         mv.lic_closing, rtol=1e-10, atol=1e-12)
     # the recalculation form makes the LC rows mutually exclusive
     assert not np.any((mv.loss_component_recognised > 0)
@@ -226,19 +226,39 @@ def test_inception_anchor_matches_measure_paa():
 # ---------------------------------------------------------------------------
 
 def test_lic_block_hand_calc_settlement_pattern():
-    """settlement_pattern [0.6, 0.4] with 3% scalar discount, on-track.
-    The LIC block is entirely expected-scale (k_exp == 1 here)."""
+    """settlement_pattern [0.6, 0.4] with 3% scalar discount, on-track. The LIC
+    is measured at fulfilment cash flows (discounted PV + RA, like the GMM LIC,
+    validated against the kernel in test_gmm_settle_lic.py); claims_incurred /
+    claims_paid stay nominal. k_exp == 1 here."""
     basis = _basis(mortality_q=0.002, discount_annual=0.03,
                    settlement_pattern=np.array([0.6, 0.4]))
     surv = _unit_inforce(basis, **ONEROUS)
     mp, state = _book(**ONEROUS, prior_count=float(surv[3]),
                       count=float(surv[6]))
     mv = settle(mp, state, basis, period_months=3)
-    np.testing.assert_allclose(mv.lic_opening, [4.780819], rtol=1e-6)
+    np.testing.assert_allclose(mv.lic_opening, [5.103281], rtol=1e-6)
     np.testing.assert_allclose(mv.claims_incurred, [35.712911], rtol=1e-6)
     np.testing.assert_allclose(mv.claims_paid, [35.741538], rtol=1e-6)
-    np.testing.assert_allclose(mv.lic_closing, [4.752192], rtol=1e-6)
+    np.testing.assert_allclose(mv.lic_finance, [-0.001931], atol=1e-6)
+    np.testing.assert_allclose(mv.lic_closing, [5.072722], rtol=1e-6)
     np.testing.assert_allclose(mv.lrc_experience, [0.0], atol=1e-10)
+    # the LIC opening is the discounted PV + RA (z x cv-weighted), built from the
+    # unit claim run-off via the discounted settlement kernel (k_exp == 1 here)
+    from fastcashflow.numerics import _norm_ppf, _settlement_lic_discounted
+    pattern = np.array([0.6, 0.4])
+    unit = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([60.0]),
+        term_months=np.array([12]), premium_term_months=np.array([1]),
+        benefits={0: np.array([6000.0])}, count=np.array([1.0]),
+        calculation_methods=PATTERNS)
+    cf = fcf.paa.measure(unit, basis, full=True).cashflows
+    lic_d = _settlement_lic_discounted(cf.claim_cf, pattern, basis.discount_monthly)
+    lic_m = _settlement_lic_discounted(cf.morbidity_cf, pattern, basis.discount_monthly)
+    z = _norm_ppf(basis.ra_confidence)
+    lic_ra = z * (basis.mortality_cv * lic_d + basis.morbidity_cv * lic_m)
+    # k_exp = prior_count / unit_inforce[em_open] = surv[3] / surv[3] = 1
+    np.testing.assert_allclose(
+        mv.lic_opening[0], (lic_d + lic_m + lic_ra)[0][3], rtol=1e-6)
     # the LC recalculation works under the settlement discount too
     np.testing.assert_allclose(mv.loss_component_opening, [67.323850],
                                rtol=1e-6)
@@ -268,7 +288,7 @@ def test_final_settlement_releases_lrc_and_keeps_the_lic_tail():
     np.testing.assert_allclose(mv.loss_component_reversed, [22.490884],
                                rtol=1e-6)
     np.testing.assert_allclose(mv.loss_component_closing, [0.0], atol=1e-10)
-    np.testing.assert_allclose(mv.lic_closing, [4.695450], rtol=1e-6)
+    np.testing.assert_allclose(mv.lic_closing, [5.012153], rtol=1e-6)
     _assert_blocks(mv)
 
 
@@ -331,7 +351,7 @@ def test_chaining_telescopes_without_carried_state():
         summed = {
             line: np.sum([getattr(m, line) for m in chain], axis=0)
             for line in ("premiums", "revenue", "lrc_experience",
-                         "claims_incurred", "claims_paid",
+                         "claims_incurred", "claims_paid", "lic_finance",
                          "loss_component_recognised",
                          "loss_component_reversed")
         }

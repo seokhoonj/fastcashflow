@@ -1706,16 +1706,20 @@ class PAASettlementMovement:
         lrc_closing == lrc_opening + premiums - revenue + lrc_experience
         loss_component_closing == loss_component_opening
                        + loss_component_recognised - loss_component_reversed
-        lic_closing == lic_opening + claims_incurred - claims_paid
+        lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
 
     The LRC follows Sec. 55(b), with insurance revenue allocated under
     Sec. B126. The loss component is recalculated under Sec. 57-58 at each
     date rather than carried, so exactly one of the recognised / reversed
     rows is positive. The LIC block supports settlement-pattern books and
-    provides the Sec. 100(c) incurred-claims movement; the risk-adjustment
-    column of that table is structurally zero in this PAA view. There is no
-    CSM block and no finance line -- the PAA carries no CSM and holds the
-    LRC undiscounted (Sec. 56), so neither exists to move.
+    provides the Sec. 100(c) incurred-claims movement, measured at fulfilment
+    cash flows -- the discounted PV of the unpaid run-off plus the risk
+    adjustment (40(b)/42(c)/37), exactly like the GMM LIC; ``claims_incurred`` /
+    ``claims_paid`` stay nominal and ``lic_finance`` is the reconciling
+    residual. (Sec. 59(b) permits omitting the LIC discounting for <=1yr claims;
+    discounting is also compliant and kept uniform with the GMM block.) There is
+    no CSM block -- the PAA carries no CSM -- and the LRC itself stays
+    undiscounted (Sec. 56); the finance line is on the LIC only.
     """
 
     lrc_opening: FloatArray
@@ -1729,6 +1733,7 @@ class PAASettlementMovement:
     loss_component_closing: FloatArray
     lic_opening: FloatArray
     claims_incurred: FloatArray
+    lic_finance: FloatArray
     claims_paid: FloatArray
     lic_closing: FloatArray
     claims_experience: FloatArray        # B97(b)/(c): actual-vs-expected claims, P&L memo
@@ -1784,6 +1789,7 @@ class PAASettlementReconciliation:
     loss_component_closing: float
     lic_opening: float
     claims_incurred: float
+    lic_finance: float
     claims_paid: float
     lic_closing: float
     claims_experience: float = 0.0
@@ -1809,6 +1815,7 @@ def _reconcile_paa_settlement(
             loss_component_closing=float(m.loss_component_closing.sum()),
             lic_opening=float(m.lic_opening.sum()),
             claims_incurred=float(m.claims_incurred.sum()),
+            lic_finance=float(m.lic_finance.sum()),
             claims_paid=float(-m.claims_paid.sum()),
             lic_closing=float(m.lic_closing.sum()),
             claims_experience=float(m.claims_experience.sum()),
@@ -1832,6 +1839,7 @@ def _(movement: PAASettlementMovement, path, *, ids=None):
         "loss_component_closing": movement.loss_component_closing,
         "lic_opening": movement.lic_opening,
         "claims_incurred": movement.claims_incurred,
+        "lic_finance": movement.lic_finance,
         "claims_paid": movement.claims_paid,
         "lic_closing": movement.lic_closing,
         "claims_experience": movement.claims_experience,
@@ -2114,7 +2122,7 @@ _PAA_SETTLEMENT_LINES = (
     "claims_experience", "expense_experience",
     "loss_component_opening", "loss_component_recognised",
     "loss_component_reversed", "loss_component_closing",
-    "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
+    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
 )
 
 _AGGREGATE_NO_CHAIN = (
@@ -2303,8 +2311,9 @@ class PAASettlementAggregate:
     :class:`PAASettlementMovement` summed over the model-point axis,
     movement-positive (``reconcile`` applies the display negation of the
     revenue / claims-paid / loss-component-reversed rows and reproduces the
-    per-MP movement's table). There is no CSM or finance line -- the PAA holds
-    the LRC undiscounted and carries no CSM. :meth:`closing_inputs` raises --
+    per-MP movement's table). There is no CSM block -- the PAA holds the LRC
+    undiscounted and carries no CSM -- but the LIC carries a finance line (the
+    discount unwind on incurred claims). :meth:`closing_inputs` raises --
     chaining needs the per-MP balances.
     """
 
@@ -2321,6 +2330,7 @@ class PAASettlementAggregate:
     loss_component_closing: float
     lic_opening: float
     claims_incurred: float
+    lic_finance: float
     claims_paid: float
     lic_closing: float
     claims_experience: float = 0.0
@@ -2428,6 +2438,7 @@ def _(aggregate: PAASettlementAggregate) -> PAASettlementReconciliation:
         loss_component_closing=a.loss_component_closing,
         lic_opening=a.lic_opening,
         claims_incurred=a.claims_incurred,
+        lic_finance=a.lic_finance,
         claims_paid=-a.claims_paid,
         lic_closing=a.lic_closing,
         claims_experience=a.claims_experience,
