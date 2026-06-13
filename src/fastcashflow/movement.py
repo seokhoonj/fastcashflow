@@ -1516,10 +1516,23 @@ class ReinsuranceSettlementMovement:
         csm_experience_unlocking + finance_wedge
             == -(bel_experience + ra_experience)
 
-    v1 cut (documented): the loss-recovery component (paragraphs 66A-66B), which
-    arises when an underlying group of contracts is onerous, needs that group's
-    loss component (a cross-contract link not modelled here); it is omitted,
-    consistent with the inception measure and the carry bridge.
+    ``loss_recovery_opening`` / ``loss_recovery_recognised`` /
+    ``loss_recovery_reversed`` / ``loss_recovery_closing`` are the
+    loss-recovery component (paragraphs 66A-66B), present when the cover is held
+    over an ONEROUS underlying group: a separate tracked balance on the asset
+    for remaining coverage, re-derived each period as the underlying group's
+    loss component x the claim recovery % (B95B / B119D) and amortised in
+    lock-step with the underlying loss component (B119F, paragraphs 50-52) --
+    its change is a recovery recognised / reversed in P&L, excluded from the
+    premium allocation. It does NOT adjust the CSM here (the 66A CSM effect is a
+    one-time inception event in ``measure_reinsurance``: csm_after = csm0 -
+    loss_recovery). Identity::
+
+        loss_recovery_closing == loss_recovery_opening
+            + loss_recovery_recognised - loss_recovery_reversed
+
+    Zero unless ``underlying_loss_opening`` / ``underlying_loss_closing`` are
+    supplied (byte-identical to a book with no onerous underlying).
     """
 
     bel_opening: FloatArray
@@ -1538,6 +1551,10 @@ class ReinsuranceSettlementMovement:
     finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, P&L
     csm_release: FloatArray              # 66(e)/B119: single period-end release
     csm_closing: FloatArray
+    loss_recovery_opening: FloatArray      # 66B/B119F: underlying loss x recovery %
+    loss_recovery_recognised: FloatArray   # more underlying loss -> more recovery
+    loss_recovery_reversed: FloatArray     # underlying loss amortises -> recovery reverses (P&L)
+    loss_recovery_closing: FloatArray
     coverage_units_provided: FloatArray
     coverage_units_future: FloatArray
     period_months: int = 12
@@ -1593,6 +1610,10 @@ class ReinsuranceSettlementReconciliation:
     finance_wedge: float
     csm_release: float
     csm_closing: float
+    loss_recovery_opening: float = 0.0
+    loss_recovery_recognised: float = 0.0
+    loss_recovery_reversed: float = 0.0
+    loss_recovery_closing: float = 0.0
 
 
 def _reconcile_reinsurance_settlement(
@@ -1618,6 +1639,10 @@ def _reconcile_reinsurance_settlement(
             finance_wedge=float(m.finance_wedge.sum()),
             csm_release=float(-m.csm_release.sum()),
             csm_closing=float(m.csm_closing.sum()),
+            loss_recovery_opening=float(m.loss_recovery_opening.sum()),
+            loss_recovery_recognised=float(m.loss_recovery_recognised.sum()),
+            loss_recovery_reversed=float(-m.loss_recovery_reversed.sum()),
+            loss_recovery_closing=float(m.loss_recovery_closing.sum()),
         )
         for m in movements
     ]
@@ -1842,6 +1867,10 @@ def _(movement: ReinsuranceSettlementMovement, path, *, ids=None):
         "finance_wedge": movement.finance_wedge,
         "csm_release": movement.csm_release,
         "csm_closing": movement.csm_closing,
+        "loss_recovery_opening": movement.loss_recovery_opening,
+        "loss_recovery_recognised": movement.loss_recovery_recognised,
+        "loss_recovery_reversed": movement.loss_recovery_reversed,
+        "loss_recovery_closing": movement.loss_recovery_closing,
         "coverage_units_provided": movement.coverage_units_provided,
         "coverage_units_future": movement.coverage_units_future,
         "lock_in_rate": np.full(movement.bel_closing.shape[0],
@@ -2014,6 +2043,8 @@ _REINSURANCE_SETTLEMENT_LINES = (
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_opening", "csm_accretion", "csm_experience_unlocking",
     "finance_wedge", "csm_release", "csm_closing",
+    "loss_recovery_opening", "loss_recovery_recognised",
+    "loss_recovery_reversed", "loss_recovery_closing",
     "coverage_units_provided", "coverage_units_future",
 )
 
@@ -2125,6 +2156,10 @@ class ReinsuranceSettlementAggregate:
     csm_closing: float
     coverage_units_provided: float
     coverage_units_future: float
+    loss_recovery_opening: float = 0.0
+    loss_recovery_recognised: float = 0.0
+    loss_recovery_reversed: float = 0.0
+    loss_recovery_closing: float = 0.0
     measurement_basis: str = "settlement"
 
     def closing_inputs(self):
@@ -2292,6 +2327,10 @@ def _(aggregate: ReinsuranceSettlementAggregate
         finance_wedge=a.finance_wedge,
         csm_release=-a.csm_release,
         csm_closing=a.csm_closing,
+        loss_recovery_opening=a.loss_recovery_opening,
+        loss_recovery_recognised=a.loss_recovery_recognised,
+        loss_recovery_reversed=-a.loss_recovery_reversed,
+        loss_recovery_closing=a.loss_recovery_closing,
     )
 
 

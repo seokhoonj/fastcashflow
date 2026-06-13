@@ -64,7 +64,8 @@ class ReinsuranceMeasurement:
     # headline -- always present, shape (n_mp,)
     bel: FloatArray            # PV(reinsurance premiums) - PV(recoveries)
     ra: FloatArray             # risk transferred to the reinsurer
-    csm: FloatArray            # inception net cost/gain
+    csm: FloatArray            # inception net cost/gain (after any 66A loss recovery)
+    loss_recovery_component: FloatArray | None = None  # (n_mp,) 66A/66B: underlying loss x recovery %
     # trajectory -- full only (None on the headline-only path)
     bel_path: FloatArray | None = None         # (n_mp, n_time+1)
     ra_path: FloatArray | None = None          # (n_mp, n_time+1)
@@ -187,11 +188,33 @@ class QuotaShare:
                 self.cession * proj.premium_cf)
 
 
+def _resolve_recovery_pct(recovery_percentage, treaty) -> float:
+    """The percentage of claims expected to recover (B119D / B95B). An explicit
+    ``recovery_percentage`` wins; otherwise the proportional treaty cession
+    (the claim cession a QuotaShare applies). A treaty without a single claim
+    cession (excess-of-loss, limits) must pass ``recovery_percentage``."""
+    if recovery_percentage is not None:
+        pct = float(recovery_percentage)
+    else:
+        cession = getattr(treaty, "cession", None)
+        if cession is None:
+            raise ValueError(
+                "a loss-recovery component needs the claim recovery percentage "
+                "(B119D); this treaty has no single `cession`, so pass "
+                "recovery_percentage explicitly.")
+        pct = float(cession)
+    if not np.isfinite(pct) or not 0.0 <= pct <= 1.0:
+        raise ValueError(f"recovery_percentage must be in [0, 1], got {pct}")
+    return pct
+
+
 def measure_reinsurance(
     model_points: ModelPoints,
     basis: Basis,
     *,
     treaty: Treaty,
+    underlying_loss_component: FloatArray | None = None,
+    recovery_percentage: float | None = None,
     full: bool = True,
 ) -> ReinsuranceMeasurement:
     """Measure a reinsurance contract held over a direct portfolio.
@@ -228,9 +251,30 @@ def measure_reinsurance(
     # CSM -- the net cost or gain of the cover. No loss component: a net cost
     # is a negative CSM, deferred and amortised over the coverage.
     csm0 = -(bel - ra)
+
+    # 66A/66B loss recovery: when the cover is held over an ONEROUS underlying
+    # group, the matching recovery is recognised as immediate income and the
+    # reinsurance CSM is reduced by it -- csm_after = csm0 - loss_recovery
+    # (IASB AP2C Dec 2019, Examples 1-3). loss_recovery = underlying loss x the
+    # claim recovery % (B95B / B119D). No floor (para 65): the CSM may go
+    # negative. Absent the input => zero (byte-identical). B119C (timing: the
+    # cover entered before/at the onerous underlying) is the caller's
+    # responsibility -- supply underlying_loss_component only when it holds.
+    n_mp = bel.shape[0]
+    if underlying_loss_component is not None:
+        rec_pct = _resolve_recovery_pct(recovery_percentage, treaty)
+        loss_recovery_component = np.maximum(
+            0.0, np.asarray(underlying_loss_component, dtype=np.float64)) * rec_pct
+        loss_recovery_component = np.broadcast_to(
+            loss_recovery_component, (n_mp,)).astype(np.float64, copy=True)
+    else:
+        loss_recovery_component = np.zeros(n_mp)
+    csm0 = csm0 - loss_recovery_component
     if not full:
         return ReinsuranceMeasurement(
-            bel=bel, ra=ra, csm=csm0, model_points=model_points)
+            bel=bel, ra=ra, csm=csm0,
+            loss_recovery_component=loss_recovery_component,
+            model_points=model_points)
 
     bel_path = (_pv_path(reinsurance_premium * discount_bom[:-1], discount_bom)
                 - _pv_path(recovery * discount_mid, discount_bom))
@@ -252,6 +296,7 @@ def measure_reinsurance(
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
+        loss_recovery_component=loss_recovery_component,
         recovery=recovery,
         reinsurance_premium=reinsurance_premium,
         cashflows=proj,
@@ -566,6 +611,9 @@ def settle_reinsurance(
     *,
     treaty: Treaty,
     period_months: int | None = None,
+    underlying_loss_opening: FloatArray | None = None,
+    underlying_loss_closing: FloatArray | None = None,
+    recovery_percentage: float | None = None,
 ) -> "ReinsuranceSettlementMovement":
     """Paragraph-66 subsequent-measurement settlement of a reinsurance contract
     held (the reinsurance counterpart of :func:`~fastcashflow.gmm.settle`).
@@ -586,9 +634,18 @@ def settle_reinsurance(
     exactly. A row whose closing date reaches the contract boundary with
     ``count = 0`` is a final settlement (full B119 derecognition, Sec. 76).
 
-    v1 cut (documented): the loss-recovery component (paragraphs 66A-66B), which
-    arises for onerous underlying contracts, needs the underlying group's loss
-    component and is omitted, consistent with the inception measure.
+    The loss-recovery component (paragraphs 66A-66B / B119F) is tracked when the
+    cover is held over an onerous underlying group: pass
+    ``underlying_loss_opening`` / ``underlying_loss_closing`` (the underlying
+    group's loss component at the two dates, from the direct ``gmm.settle``) and,
+    for a non-proportional treaty, ``recovery_percentage``. The four
+    ``loss_recovery_*`` movement lines re-derive the component as the underlying
+    loss x the claim recovery % and amortise it in lock-step with the underlying
+    loss (the recovery reverses in P&L as the underlying runs off). The CSM is
+    NOT re-adjusted here -- the 66A CSM effect (csm_after = csm0 - loss_recovery)
+    is a one-time inception event in ``reinsurance.measure``. Absent the inputs
+    => zero (byte-identical). B119C timing (the cover entered before/at the
+    onerous underlying) is the caller's responsibility.
     """
     basis = _single_basis(basis, entry="reinsurance.settle")
     state = _reconcile_state(model_points, state)
@@ -699,6 +756,35 @@ def settle_reinsurance(
     csm_release = csm_after * frac
     csm_closing = csm_after - csm_release
 
+    # 66B/B119F loss-recovery component: a SEPARATE tracked balance on the asset
+    # for remaining coverage (NOT a CSM adjustment -- the 66A CSM effect is a
+    # one-time inception event in measure_reinsurance). Re-derived each period
+    # as the underlying loss component x the claim recovery %, amortised in
+    # lock-step with the underlying loss (B119F, paragraphs 50-52): as the
+    # underlying loss runs off, the recovery reverses in P&L (excluded from the
+    # premium allocation). Absent the underlying-loss inputs => zero
+    # (byte-identical to the pre-feature settle).
+    if (underlying_loss_opening is not None
+            or underlying_loss_closing is not None):
+        rec_pct = _resolve_recovery_pct(recovery_percentage, treaty)
+        ul_open = (np.zeros(n_mp) if underlying_loss_opening is None
+                   else np.maximum(0.0, np.broadcast_to(np.asarray(
+                       underlying_loss_opening, dtype=np.float64), (n_mp,))))
+        ul_close = (np.zeros(n_mp) if underlying_loss_closing is None
+                    else np.maximum(0.0, np.broadcast_to(np.asarray(
+                        underlying_loss_closing, dtype=np.float64), (n_mp,))))
+        loss_recovery_opening = ul_open * rec_pct
+        loss_recovery_closing = ul_close * rec_pct
+        loss_recovery_recognised = np.maximum(
+            0.0, loss_recovery_closing - loss_recovery_opening)
+        loss_recovery_reversed = np.maximum(
+            0.0, loss_recovery_opening - loss_recovery_closing)
+    else:
+        loss_recovery_opening = np.zeros(n_mp)
+        loss_recovery_closing = np.zeros(n_mp)
+        loss_recovery_recognised = np.zeros(n_mp)
+        loss_recovery_reversed = np.zeros(n_mp)
+
     from fastcashflow.movement import ReinsuranceSettlementMovement
     return ReinsuranceSettlementMovement(
         bel_opening=bel_o, bel_interest=bel_i, bel_release=bel_r,
@@ -709,6 +795,10 @@ def settle_reinsurance(
         csm_experience_unlocking=csm_experience_unlocking,
         finance_wedge=finance_wedge,
         csm_release=csm_release, csm_closing=csm_closing,
+        loss_recovery_opening=loss_recovery_opening,
+        loss_recovery_recognised=loss_recovery_recognised,
+        loss_recovery_reversed=loss_recovery_reversed,
+        loss_recovery_closing=loss_recovery_closing,
         coverage_units_provided=cu_provided, coverage_units_future=cu_future,
         period_months=period, lock_in_rate=lock,
         model_points=model_points)
@@ -722,6 +812,9 @@ def settle_reinsurance_aggregate(
     treaty: Treaty,
     period_months: int | None = None,
     chunk_size: int = 200_000,
+    underlying_loss_opening: FloatArray | None = None,
+    underlying_loss_closing: FloatArray | None = None,
+    recovery_percentage: float | None = None,
 ) -> "ReinsuranceSettlementAggregate":
     """Portfolio-total paragraph-66 reinsurance settlement in bounded memory.
 
@@ -740,11 +833,24 @@ def settle_reinsurance_aggregate(
         raise ValueError(f"period_months must be >= 1, got {period}")
     state = _reconcile_state(model_points, state)
     n_mp = model_points.n_mp
+
+    # The underlying loss components ride per chunk (scalar or per-MP), so the
+    # aggregate equals the per-MP settle sum even when the loss varies by row.
+    def _slice(v, idx):
+        if v is None:
+            return None
+        a = np.asarray(v, dtype=np.float64)
+        return float(a) if a.ndim == 0 else a[idx]
+
     parts: dict[str, list[float]] = {n: [] for n in _REINSURANCE_SETTLEMENT_LINES}
     for start in range(0, n_mp, chunk_size):
         idx = np.arange(start, min(start + chunk_size, n_mp))
-        mv = settle_reinsurance(model_points.subset(idx), state.subset(idx),
-                                basis, treaty=treaty, period_months=period)
+        mv = settle_reinsurance(
+            model_points.subset(idx), state.subset(idx), basis, treaty=treaty,
+            period_months=period,
+            underlying_loss_opening=_slice(underlying_loss_opening, idx),
+            underlying_loss_closing=_slice(underlying_loss_closing, idx),
+            recovery_percentage=recovery_percentage)
         for name in _REINSURANCE_SETTLEMENT_LINES:
             parts[name].append(float(getattr(mv, name).sum()))
     return ReinsuranceSettlementAggregate(
