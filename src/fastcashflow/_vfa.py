@@ -342,6 +342,7 @@ class _VFAProjection:
     variable_fee_path: FloatArray    # (n_mp, n_time+1) PV of the fee from each t
     time_value: FloatArray           # (n_mp,) guarantee TVOG at the anchor
     lic: FloatArray                  # (n_mp, n_time+1)
+    benefit_cf: FloatArray           # (n_mp, n_time) incurred benefit claims (builds the LIC)
     cashflows: "Cashflows"
     inforce: FloatArray              # (n_mp, n_time) coverage units
     r_m: float                       # monthly underlying-items return
@@ -634,7 +635,8 @@ def _vfa_project(
     ra = _norm_ppf(basis.ra_confidence) * basis.expense_cv * pv_expenses
     return _VFAProjection(
         bel=bel, ra=ra, variable_fee_path=variable_fee_path,
-        time_value=time_value, lic=lic, cashflows=proj, inforce=inforce,
+        time_value=time_value, lic=lic, benefit_cf=benefit_cf,
+        cashflows=proj, inforce=inforce,
         r_m=r_m, av=av, disc_start=disc_start,
         guarantee_excess_pv=guarantee_excess_pv, expense_pv=pv_expenses,
     )
@@ -1022,20 +1024,16 @@ def settle(
     guarantee only, no assumption change, within-period experience assumed
     equal to expected (only the closing count and observed account value
     deviate), no paragraph 50(a)-52 systematic loss-component allocation,
-    per-model-point floors. A basis with a ``settlement_pattern`` is
-    rejected: the book would carry a liability for incurred claims at both
-    dates, which this movement does not yet reconcile.
+    per-model-point floors. A basis with a ``settlement_pattern`` is supported:
+    the movement carries the liability for incurred claims (``lic_opening`` /
+    ``claims_incurred`` / ``claims_paid`` / ``lic_closing``, paragraphs 40(b) /
+    42 / 103(b)) -- benefit claims build it up as incurred and run it off over
+    the pattern, undiscounted and at the expected scale, reconstructed from the
+    projection each period (the same v1 cuts as gmm.settle: no 42(b)/(c)).
     """
     from fastcashflow.movement import VFASettlementMovement
 
     basis = _single_basis(basis, entry="vfa.settle")
-    if basis.settlement_pattern is not None:
-        raise NotImplementedError(
-            "vfa.settle does not support a basis settlement_pattern in v1: "
-            "the book carries a liability for incurred claims at both dates, "
-            "and this movement reconciles the remaining-coverage liability "
-            "only. Settle the book without the pattern, or wait for the LIC "
-            "movement block.")
     period = 12 if period_months is None else int(period_months)
     if period < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
@@ -1204,6 +1202,24 @@ def settle(
     csm_release = csm_after * frac
     csm_closing = csm_after - csm_release
 
+    # Liability for incurred claims (paragraphs 40(b) / 42 / 103(b)) -- the VFA
+    # mirror of the GMM/PAA LIC block. Benefit claims build it up as incurred
+    # (42(a)) and run it off over the settlement pattern; entirely
+    # expected-scale with claims_paid the residual, so it closes by
+    # construction. p_exp.lic is the undiscounted unit trajectory built from the
+    # same benefit_cf (all-zero without a settlement_pattern => claims paid as
+    # incurred, the LIC zero at both dates).
+    offsets = np.arange(period)
+    inc_src = em_open[:, None] + offsets[None, :]
+    inc_mask = inc_src < n_time
+    benefit = p_exp.benefit_cf
+    claims_incurred = k_exp * np.where(
+        inc_mask, benefit[rows[:, None], np.where(inc_mask, inc_src, 0)],
+        0.0).sum(axis=1)
+    lic_opening = k_exp * p_exp.lic[rows, em_open]
+    lic_closing = k_exp * p_exp.lic[rows, em_c]
+    claims_paid = lic_opening + claims_incurred - lic_closing
+
     return VFASettlementMovement(
         period_months=period,
         bel_opening=bel_opening,
@@ -1230,6 +1246,10 @@ def settle(
         coverage_units_provided=cu_period,
         coverage_units_future=cu_future,
         account_value_closing=observed_av,
+        lic_opening=lic_opening,
+        claims_incurred=claims_incurred,
+        claims_paid=claims_paid,
+        lic_closing=lic_closing,
         lock_in_rate=float(state.lock_in_rate),
         model_points=model_points,
     )

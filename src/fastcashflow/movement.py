@@ -867,6 +867,14 @@ class VFASettlementMovement:
                        + loss_component_recognised - csm_release
         loss_component_closing == loss_component_opening
                        - loss_component_reversed + loss_component_recognised
+        lic_closing == lic_opening + claims_incurred - claims_paid
+
+    The liability for incurred claims (``lic_opening`` / ``claims_incurred`` /
+    ``claims_paid`` / ``lic_closing``, paragraphs 40(b) / 42 / 103(b)) is
+    present when the basis carries a ``settlement_pattern``: benefit claims
+    build it up as incurred and run it off over the pattern, undiscounted, at
+    the expected scale, reconstructed from the projection each period (zero at
+    both dates without a pattern). It mirrors the GMM / PAA block.
 
     and the blocks tie across: ``csm_fv_share + csm_future_service ==
     -(bel_experience + ra_experience)`` -- the paragraph-45 future-service
@@ -958,6 +966,10 @@ class VFASettlementMovement:
     coverage_units_provided: FloatArray  # B119 numerator, expected scale
     coverage_units_future: FloatArray    # B119 remainder, observed scale
     account_value_closing: FloatArray    # observed fund value at the close
+    lic_opening: FloatArray              # 40(b)/42: liability for incurred claims
+    claims_incurred: FloatArray          # 42(a)/103(b)(i): claims incurred this period
+    claims_paid: FloatArray              # the settlement-pattern run-off (residual)
+    lic_closing: FloatArray
     lock_in_rate: float = 0.0            # state echo only; no VFA locked rate
     model_points: "object | None" = None
     csm_basis: str = CSM_BASIS_PARAGRAPH_45
@@ -1050,6 +1062,10 @@ class VFASettlementReconciliation:
     csm_closing: float
     loss_component_opening: float
     loss_component_closing: float
+    lic_opening: float = 0.0
+    claims_incurred: float = 0.0
+    claims_paid: float = 0.0
+    lic_closing: float = 0.0
 
     def __str__(self) -> str:
         blocks = (
@@ -1082,6 +1098,12 @@ class VFASettlementReconciliation:
                 ("Reversed", self.loss_component_reversed),
                 ("Recognised", self.loss_component_recognised),
                 ("Closing", self.loss_component_closing),
+            )),
+            ("Liability for incurred claims", (
+                ("Opening", self.lic_opening),
+                ("Claims incurred", self.claims_incurred),
+                ("Claims paid", self.claims_paid),
+                ("Closing", self.lic_closing),
             )),
         )
         lines = [
@@ -1129,6 +1151,10 @@ def _reconcile_vfa_settlement(
             csm_closing=float(m.csm_closing.sum()),
             loss_component_opening=float(m.loss_component_opening.sum()),
             loss_component_closing=float(m.loss_component_closing.sum()),
+            lic_opening=float(m.lic_opening.sum()),
+            claims_incurred=float(m.claims_incurred.sum()),
+            claims_paid=float(-m.claims_paid.sum()),
+            lic_closing=float(m.lic_closing.sum()),
         )
         for m in movements
     ]
@@ -1802,6 +1828,10 @@ def _(movement: VFASettlementMovement, path, *, ids=None):
         "account_value_closing": movement.account_value_closing,
         "coverage_units_provided": movement.coverage_units_provided,
         "coverage_units_future": movement.coverage_units_future,
+        "lic_opening": movement.lic_opening,
+        "claims_incurred": movement.claims_incurred,
+        "claims_paid": movement.claims_paid,
+        "lic_closing": movement.lic_closing,
         "lock_in_rate": np.full(movement.bel_closing.shape[0],
                                 movement.lock_in_rate),
         "measurement_basis": [movement.measurement_basis]
@@ -1910,6 +1940,7 @@ _VFA_SETTLEMENT_LINES = (
     "loss_component_recognised", "loss_component_closing",
     "variable_fee_closing", "account_value_closing",
     "coverage_units_provided", "coverage_units_future",
+    "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
 )
 
 _REINSURANCE_SETTLEMENT_LINES = (
@@ -2072,6 +2103,10 @@ class VFASettlementAggregate:
     account_value_closing: float
     coverage_units_provided: float
     coverage_units_future: float
+    lic_opening: float = 0.0
+    claims_incurred: float = 0.0
+    claims_paid: float = 0.0
+    lic_closing: float = 0.0
     lock_in_rate: float = 0.0            # state echo only; no VFA locked rate
     csm_basis: str = CSM_BASIS_PARAGRAPH_45
 
@@ -2242,4 +2277,8 @@ def _(aggregate: VFASettlementAggregate) -> VFASettlementReconciliation:
         csm_closing=a.csm_closing,
         loss_component_opening=a.loss_component_opening,
         loss_component_closing=a.loss_component_closing,
+        lic_opening=a.lic_opening,
+        claims_incurred=a.claims_incurred,
+        claims_paid=-a.claims_paid,
+        lic_closing=a.lic_closing,
     )

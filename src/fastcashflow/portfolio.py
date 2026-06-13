@@ -974,6 +974,7 @@ _VFA_GOC_SETTLEMENT_LINEAR = (
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_fv_share", "csm_future_service", "csm_opening", "csm_accretion",
     "variable_fee_closing", "account_value_closing", "loss_component_opening",
+    "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
 )
 _VFA_GOC_SETTLEMENT_NONLINEAR = (
     "csm_release", "csm_closing", "loss_component_reversed",
@@ -1018,6 +1019,10 @@ class VFAGoCSettlement:
     variable_fee_closing: np.ndarray
     account_value_closing: np.ndarray
     loss_component_opening: np.ndarray
+    lic_opening: np.ndarray
+    claims_incurred: np.ndarray
+    claims_paid: np.ndarray
+    lic_closing: np.ndarray
     coverage_units_provided: np.ndarray
     coverage_units_future: np.ndarray
     csm_release: np.ndarray
@@ -1385,6 +1390,10 @@ def _(settlement: VFAGoCSettlement) -> VFASettlementReconciliation:
         csm_closing=float(a.csm_closing.sum()),
         loss_component_opening=float(a.loss_component_opening.sum()),
         loss_component_closing=float(a.loss_component_closing.sum()),
+        lic_opening=float(a.lic_opening.sum()),
+        claims_incurred=float(a.claims_incurred.sum()),
+        claims_paid=float(-a.claims_paid.sum()),
+        lic_closing=float(a.lic_closing.sum()),
     )
 
 

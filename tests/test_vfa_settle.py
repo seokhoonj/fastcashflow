@@ -446,10 +446,14 @@ def test_guards():
     mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6)
     mp, state = _book(basis, mp0, em_open=6, period=3)
 
-    with pytest.raises(NotImplementedError, match="settlement_pattern"):
-        fcf.vfa.settle(mp, state,
-                       _basis(settlement_pattern=np.array([0.6, 0.4])),
-                       period_months=3)
+    # settlement_pattern is now accepted -- it carries the liability for
+    # incurred claims (the dedicated behaviour is in test_vfa_settle_lic.py).
+    sp_mv = fcf.vfa.settle(mp, state,
+                           _basis(settlement_pattern=np.array([0.6, 0.4])),
+                           period_months=3)
+    np.testing.assert_allclose(
+        sp_mv.lic_opening + sp_mv.claims_incurred - sp_mv.claims_paid,
+        sp_mv.lic_closing, rtol=1e-10)
     with pytest.raises(ValueError, match="prior_account_value"):
         fcf.vfa.settle(mp, replace(state, prior_account_value=None), basis,
                        period_months=3)
