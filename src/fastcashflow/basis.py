@@ -851,7 +851,7 @@ class Basis:
 
 
 _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("상태 전이율 (state transition rate, callable)", (
+    ("State transition rates (callable)", (
         "mortality_annual",
         "lapse_annual",
         "waiver_incidence_annual",
@@ -859,11 +859,11 @@ _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "ci_reincidence_annual",
         "disability_recovery_annual",
     )),
-    ("경제 / 비용", (
+    ("Economic / expense", (
         "discount_annual",
         "expense_inflation",
     )),
-    ("위험조정 (RA)", (
+    ("Risk adjustment (RA)", (
         "ra_method",
         "ra_confidence",
         "cost_of_capital_rate",
@@ -873,7 +873,7 @@ _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "disability_cv",
         "expense_cv",
     )),
-    ("기타 (VFA / 정산)", (
+    ("Other (VFA / settlement)", (
         "investment_return",
         "fund_fee",
         "settlement_pattern",
@@ -994,7 +994,7 @@ def _describe_basis_lines(
             f"CoverageRate(code={r.code!r:{width+2}}, "
             f"rate={_fmt_callable(r.rate)})"
         )
-    sections.append((f"{marks[3]} 특약 / 담보 정의", [
+    sections.append((f"{marks[3]} Rider / coverage definitions", [
         (f"coverages : tuple  (len={len(coverages)})", coverage_lines),
     ]))
 

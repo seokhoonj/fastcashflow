@@ -139,7 +139,7 @@ fcf.gmm.trace_diff(0, mp, base, shock10, label_a="baseline", label_b="mort+10%")
 출력:
 
 ```
-diff mp[0]  (-/-, sex=남, issue_age=40, term=24m, premium_term=24m, count=1)
+diff mp[0]  (-/-, sex=M, issue_age=40, term=24m, premium_term=24m, count=1)
 labels: 'baseline'  ->  'mort+10%'
 ├─ Assumption changes
 │   ├─ mortality_annual       : <callable>  ->  <callable>

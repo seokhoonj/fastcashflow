@@ -96,7 +96,7 @@ fcf.gmm.trace(0, mp, basis)
 출력 (발췌):
 
 ```
-mp[0]  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m, premium_term=240m, count=1)
+mp[0]  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m, premium_term=240m, count=1)
 ├─ Basis (segment-level)
 │   ├─ mortality_annual     -> MORTALITY_STD
 │   ├─ lapse_annual         -> LAPSE_TERM_FC
@@ -278,7 +278,7 @@ term-1, term}` — 시작, 1년 끝, 중간, 마지막 step, seed.
 출력 (`t=0` 부분):
 
 ```
-mp[0] BEL step-by-step  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m)
+mp[0] BEL step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
 ├─ Recursion (back-pass)
 │   ├─ BEL[t] = annuity[t] - premium[t]
 │   ├─        + (claim + morbidity + disability + expense + surrender)[t] * (1 + i[t])^(-1/2)
@@ -372,7 +372,7 @@ fcf.gmm.trace_csm_step(0, mp, basis, months=[1, 60, 120, 240])
 출력의 `Seed (t = 0)` 블록이 명시적으로 알려줍니다:
 
 ```
-mp[0] CSM step-by-step  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m)
+mp[0] CSM step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
 ├─ Recursion (forward-pass)
 │   ├─ csm[0]   = max(0, -(BEL[0] + RA[0]))
 │   ├─ csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]
@@ -474,7 +474,7 @@ fcf.gmm.trace_csm_step(0, mp_one, profitable, months=[1, 30, 60])
 마지막 step (`t = 60`) 의 행:
 
 ```
-mp[0] CSM step-by-step  (-/-, sex=남, issue_age=40, term=60m)
+mp[0] CSM step-by-step  (-/-, sex=M, issue_age=40, term=60m)
 ├─ Recursion (forward-pass)
 │   ├─ csm[0]   = max(0, -(BEL[0] + RA[0]))
 │   ├─ csm[t]   = csm[t-1] + accretion[t-1] - release[t-1]
@@ -565,7 +565,7 @@ fcf.gmm.trace_diff(0, mp, baseline, shocked,
 출력 (Final 블록):
 
 ```
-diff mp[0]  (TERM_LIFE_A/FC, sex=남, issue_age=35, term=240m, premium_term=240m, count=1)
+diff mp[0]  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m, premium_term=240m, count=1)
 labels: 'baseline'  ->  'mort+10%'
 ├─ Assumption changes
 │   ├─ mortality_annual       : MORTALITY_STD  ->  MORTALITY_STD (+x1.1)

@@ -317,7 +317,7 @@ def test_describe_basis_renders_both_shapes(capsys):
     describe_basis(seg_basis)
     out_one = capsys.readouterr().out
     assert out_one.startswith("Basis")
-    assert "상태 전이율" in out_one
+    assert "State transition rates" in out_one
     assert "state_model" in out_one
     assert "coverages" in out_one
 

@@ -162,7 +162,7 @@ def show_trace(
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
-    sex_label = "남" if sex_v == 0 else "여"
+    sex_label = "M" if sex_v == 0 else "F"
     age = float(sub.issue_age[0])
     term = int(sub.term_months[0])
     prem_term = (int(sub.premium_term_months[0])
@@ -458,7 +458,7 @@ def show_trace_vfa(
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
-    sex_label = "남" if sex_v == 0 else "여"
+    sex_label = "M" if sex_v == 0 else "F"
     age = float(sub.issue_age[0])
     term = int(sub.term_months[0])
     count = float(sub.count[0]) if sub.count is not None else 1.0
@@ -490,8 +490,8 @@ def show_trace_vfa(
         f"{'minimum_crediting_rate':<{_w}} = {gcr_str:>{_vw}}",
         f"{'minimum_death_benefit':<{_w}} = {gmdb:>{_vw},.2f}  (GMDB)",
         f"{'minimum_accumulation_benefit':<{_w}} = {gmab:>{_vw},.2f}  (GMAB)",
-        f"{'investment_return':<{_w}} = {basis.investment_return:>{_vw}g}  (VFA 할인/적립 basis)",
-        f"{'fund_fee':<{_w}} = {basis.fund_fee:>{_vw}g}  (= 이익원)",
+        f"{'investment_return':<{_w}} = {basis.investment_return:>{_vw}g}  (VFA discount / accrual basis)",
+        f"{'fund_fee':<{_w}} = {basis.fund_fee:>{_vw}g}  (= source of profit)",
         f"{'mortality_annual':<{_w}} -> {_fmt_callable(basis.mortality_annual)}",
         f"{'lapse_annual':<{_w}} -> {_fmt_callable(basis.lapse_annual)}",
         f"{'ra':<{_w}} -> method={basis.ra_method!r} conf={basis.ra_confidence:g} "
@@ -577,14 +577,14 @@ def show_trace_vfa(
     lc = float(m.loss_component[0])
     fcf0 = float(bel[0] + ra[0] + tv)
     if return_scenarios is None:
-        fcf_label, tv_note = "FCF = BEL + RA   ", "(시나리오 없음 -> intrinsic 만)"
+        fcf_label, tv_note = "FCF = BEL + RA   ", "(no scenarios -> intrinsic only)"
     else:
-        fcf_label, tv_note = "FCF = BEL+RA+TVOG", "(보증 시간가치)"
-    outcome = ("-> onerous (TVOG 가 미실현 수수료 초과)" if lc > 0.0
-               else "-> 수익성 (CSM 이 흡수)")
+        fcf_label, tv_note = "FCF = BEL+RA+TVOG", "(time value of the guarantee)"
+    outcome = ("-> onerous (TVOG exceeds the unearned fee)" if lc > 0.0
+               else "-> profitable (CSM absorbs it)")
     _fw = _colw([fee, float(bel[0]), float(ra[0]), tv, fcf0, float(csm[0]), lc], ",.2f", 15)
     final_lines: list[object] = [
-        f"variable_fee     = {fee:>{_fw},.2f}  (수수료 PV = 이익원)",
+        f"variable_fee     = {fee:>{_fw},.2f}  (fee PV = source of profit)",
         f"BEL              = {bel[0]:>{_fw},.2f}",
         f"RA               = {ra[0]:>{_fw},.2f}",
         f"TVOG (time_value)= {tv:>{_fw},.2f}  {tv_note}",
@@ -637,7 +637,7 @@ def show_trace_paa(
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
-    sex_label = "남" if sex_v == 0 else "여"
+    sex_label = "M" if sex_v == 0 else "F"
     age = float(sub.issue_age[0])
     term = int(sub.term_months[0])
     count = float(sub.count[0]) if sub.count is not None else 1.0
@@ -662,20 +662,20 @@ def show_trace_paa(
     lc = float(m.loss_component[0])
 
     sp = basis.settlement_pattern
-    sp_desc = ("None (지급 lag 없음 -> LIC=0)" if sp is None
+    sp_desc = ("None (no payment lag -> LIC=0)" if sp is None
                else f"len={np.asarray(sp).size}")
-    basis_desc = ("B126(a) 시간기준" if revenue_basis == "time"
-                  else "B126(b) 청구기준")
+    basis_desc = ("B126(a) time-based" if revenue_basis == "time"
+                  else "B126(b) claims-based")
 
     # ---- PAA inputs
     paa_lines: list[object] = [
         f"premium_total      = {float(premium.sum()):>15,.2f}",
         f"revenue_basis      = {revenue_basis!r}  ({basis_desc})",
-        f"settlement_pattern = {sp_desc}  (발생 claim 의 지급 분산 = LIC)",
+        f"settlement_pattern = {sp_desc}  (payment spread of incurred claims = LIC)",
         f"mortality_annual   -> {_fmt_callable(basis.mortality_annual)}",
         f"lapse_annual       -> {_fmt_callable(basis.lapse_annual)}",
         f"ra: method={basis.ra_method!r} conf={basis.ra_confidence:g} "
-        f"(onerous test 용)",
+        f"(for the onerous test)",
     ]
 
     # ---- LRC roll-forward
@@ -714,13 +714,13 @@ def show_trace_paa(
 
     # ---- Final headline
     final_lines: list[object] = [
-        f"LRC[0]                = {lrc[0]:>15,.2f}  (= 0, 보험료 유입 전)",
+        f"LRC[0]                = {lrc[0]:>15,.2f}  (= 0, before premium inflow)",
         f"total revenue         = {float(revenue.sum()):>15,.2f}  (= total premium)",
         f"total service_expense = {float(svc_exp.sum()):>15,.2f}",
         f"insurance svc result  = {float(svc_result.sum()):>15,.2f}",
-        f"loss_component        = {lc:>15,.2f}  (onerous; GMM FCF 로 산정)",
+        f"loss_component        = {lc:>15,.2f}  (onerous; from the GMM FCF)",
         f"LIC (peak)            = {float(lic.max()):>15,.2f}",
-        "(PAA 는 CSM 없음 -- LRC 가 미경과보험료식 잔액)",
+        "(PAA has no CSM -- LRC is the unearned-premium balance)",
     ]
 
     out.append(header)
@@ -767,7 +767,7 @@ def show_trace_reinsurance(
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
-    sex_label = "남" if sex_v == 0 else "여"
+    sex_label = "M" if sex_v == 0 else "F"
     age = float(sub.issue_age[0])
     term = int(sub.term_months[0])
     count = float(sub.count[0]) if sub.count is not None else 1.0
@@ -806,12 +806,12 @@ def show_trace_reinsurance(
     # ---- Treaty / inputs
     treaty_lines: list[object] = [
         f"treaty             = {cession_desc}",
-        "recovery           = cession x (claim_cf + morbidity_cf)  (직접 청구의 출재분)",
-        "reinsurance_premium= cession x premium_cf  (재보험료)",
+        "recovery           = cession x (claim_cf + morbidity_cf)  (ceded share of direct claims)",
+        "reinsurance_premium= cession x premium_cf  (reinsurance premium)",
         f"mortality_annual   -> {_fmt_callable(basis.mortality_annual)}",
         f"lapse_annual       -> {_fmt_callable(basis.lapse_annual)}",
         f"ra: conf={basis.ra_confidence:g}  mort_cv={basis.mortality_cv:g}  "
-        f"morb_cv={basis.morbidity_cv:g}  (전가위험; 손실요소 없음)",
+        f"morb_cv={basis.morbidity_cv:g}  (risk transferred; no loss component)",
     ]
 
     # ---- Ceded cash flows
@@ -837,12 +837,12 @@ def show_trace_reinsurance(
     build_lines: list[object] = [
         f"PV(reinsurance_premium) = {pv_reins_prem:>15,.2f}",
         f"PV(recovery)            = {pv_recovery:>15,.2f}",
-        f"BEL = PV(reins_prem) - PV(recovery) = {bel:>15,.2f}  (양수 = 순원가)",
+        f"BEL = PV(reins_prem) - PV(recovery) = {bel:>15,.2f}  (positive = net cost)",
         f"PV(ceded mortality)     = {pv_ceded_mort:>15,.2f}",
         f"PV(ceded morbidity)     = {pv_ceded_morb:>15,.2f}",
         f"RA = z({basis.ra_confidence:g})={z:.4f} x "
         f"(mort_cv*PV_mort + morb_cv*PV_morb) = {ra:>15,.2f}",
-        f"CSM[0] = -(BEL - RA) = {csm0:>15,.2f}  (순원가면 음수; para 65)",
+        f"CSM[0] = -(BEL - RA) = {csm0:>15,.2f}  (negative when a net cost; para 65)",
     ]
 
     # ---- CSM roll-forward
@@ -860,9 +860,9 @@ def show_trace_reinsurance(
 
     # ---- Final headline
     final_lines: list[object] = [
-        f"BEL = {bel:>15,.2f}  (PV 재보험료 - PV 회수; 순원가)",
-        f"RA  = {ra:>15,.2f}  (재보험자에게 전가한 위험, para 64)",
-        f"CSM = {csm0:>15,.2f}  (순원가/이익; 음수 가능, para 65, 손실요소 없음)",
+        f"BEL = {bel:>15,.2f}  (PV reinsurance premium - PV recoveries; net cost)",
+        f"RA  = {ra:>15,.2f}  (risk transferred to the reinsurer, para 64)",
+        f"CSM = {csm0:>15,.2f}  (net cost / gain; may be negative, para 65, no loss component)",
     ]
 
     out.append(header)
@@ -996,7 +996,7 @@ def _diff_mp_header(model_points: ModelPoints, sub: ModelPoints, i: int,
                     tag: str) -> str:
     """The ``diff[-tag] mp[i] (...)`` identity line shared by the trace_diffs."""
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
-    sex_label = "남" if sex_v == 0 else "여"
+    sex_label = "M" if sex_v == 0 else "F"
     age = float(sub.issue_age[0])
     term = int(sub.term_months[0])
     count = float(sub.count[0]) if sub.count is not None else 1.0
@@ -1075,7 +1075,7 @@ def show_trace_diff(
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
-    sex_label = "남" if sex_v == 0 else "여"
+    sex_label = "M" if sex_v == 0 else "F"
     age = float(sub.issue_age[0])
     term = int(sub.term_months[0])
     prem_term = (int(sub.premium_term_months[0])
@@ -1465,7 +1465,7 @@ def show_trace_bel_step(
 
     # Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
-    sex_label = "남" if sex_v == 0 else "여"
+    sex_label = "M" if sex_v == 0 else "F"
     age = float(sub.issue_age[0])
     product = (str(model_points.product[i])
                if model_points.product is not None else "-")
@@ -1633,7 +1633,7 @@ def show_trace_csm_step(
         cu_tail[s] = running
 
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
-    sex_label = "남" if sex_v == 0 else "여"
+    sex_label = "M" if sex_v == 0 else "F"
     age = float(sub.issue_age[0])
     product = (str(model_points.product[i])
                if model_points.product is not None else "-")
