@@ -729,12 +729,33 @@ def settle(
     lic_closing = k_exp * unit.lic[rows, cap]
     claims_paid = lic_opening + claims_incurred - lic_closing
 
+    # B97(b)/(c) within-period claims and expense experience (the gmm.settle /
+    # vfa.settle mirror): the actual claims / expenses incurred over the period
+    # less the expected, recognised in the insurance service result (P&L memos
+    # -- not a balance recursion). Expected claims are claims_incurred (above);
+    # expected expenses are the period expense run at the expected scale. Absent
+    # state.actual_claims / state.actual_expenses => zero (byte-identical).
+    exp_expenses = k_exp * (cf.expense_cf[rows[:, None], cols_safe]
+                            * col_ok).sum(axis=1)
+    if state.actual_claims is not None:
+        claims_experience = (np.asarray(state.actual_claims, dtype=np.float64)
+                             - claims_incurred)
+    else:
+        claims_experience = np.zeros(n_mp)
+    if state.actual_expenses is not None:
+        expense_experience = (np.asarray(state.actual_expenses, dtype=np.float64)
+                              - exp_expenses)
+    else:
+        expense_experience = np.zeros(n_mp)
+
     from fastcashflow.movement import PAASettlementMovement
     return PAASettlementMovement(
         lrc_opening=lrc_opening,
         premiums=premiums,
         revenue=revenue,
         lrc_experience=lrc_experience,
+        claims_experience=claims_experience,
+        expense_experience=expense_experience,
         lrc_closing=lrc_closing,
         loss_component_opening=loss_component_opening,
         loss_component_recognised=loss_component_recognised,

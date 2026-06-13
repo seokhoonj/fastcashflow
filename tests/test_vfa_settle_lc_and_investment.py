@@ -45,7 +45,7 @@ def _growth(basis):
 
 
 def _book(basis, *, em_open=6, period=6, term=24, lc_open=0.0, prior_csm=None,
-          actual_ic=None, final=False):
+          actual_ic=None, actual_claims=None, actual_expenses=None, final=False):
     # a GMAB crediting guarantee ABOVE the fund return gives a non-zero
     # guarantee excess -> a real claims+expenses pool for the 50(a) allocation.
     mp0 = ModelPoints.single(40, 100.0, term, account_value=1e6,
@@ -77,8 +77,26 @@ def _book(basis, *, em_open=6, period=6, term=24, lc_open=0.0, prior_csm=None,
         prior_account_value=av_open,
         prior_loss_component=(np.array([lc_open]) if lc_open else None),
         actual_investment_component=(None if actual_ic is None
-                                     else np.array([actual_ic])))
+                                     else np.array([actual_ic])),
+        actual_claims=(None if actual_claims is None else np.array([actual_claims])),
+        actual_expenses=(None if actual_expenses is None else np.array([actual_expenses])))
     return mp, state
+
+
+def test_within_period_experience_is_a_pl_memo():
+    """actual_claims / actual_expenses surface the within-period experience
+    (B97) as P&L memos; absent => zero, and they do not move the CSM."""
+    basis = _basis()
+    mp0, st0 = _book(basis)
+    mv0 = settle(mp0, st0, basis, period_months=6)
+    np.testing.assert_array_equal(mv0.claims_experience, 0.0)
+    np.testing.assert_array_equal(mv0.expense_experience, 0.0)
+    expected_claims = float(mv0.claims_incurred[0])
+    mp, state = _book(basis, actual_claims=expected_claims + 5_000.0,
+                      actual_expenses=2_000.0)
+    mv = settle(mp, state, basis, period_months=6)
+    np.testing.assert_allclose(mv.claims_experience[0], 5_000.0, rtol=1e-7)
+    np.testing.assert_allclose(mv.csm_closing, mv0.csm_closing, rtol=1e-12)
 
 
 # ---------------------------------------------------------------------------

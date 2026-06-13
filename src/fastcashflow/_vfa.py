@@ -1310,6 +1310,26 @@ def settle(
     lic_closing = k_exp * p_exp.lic[rows, em_c]
     claims_paid = lic_opening + claims_incurred - lic_closing
 
+    # B97(b)/(c) within-period claims and expense experience (the gmm.settle
+    # mirror): the actual benefits / expenses incurred over the period less the
+    # expected, recognised in the insurance service result (P&L memos -- not the
+    # CSM, no balance recursion). Expected claims are claims_incurred (above);
+    # expected expenses are the period expense run at the expected scale. Absent
+    # state.actual_claims / state.actual_expenses => zero (byte-identical).
+    exp_expenses = k_exp * np.where(
+        inc_mask, proj.expense_cf[rows[:, None], np.where(inc_mask, inc_src, 0)],
+        0.0).sum(axis=1)
+    if state.actual_claims is not None:
+        claims_experience = (np.asarray(state.actual_claims, dtype=np.float64)
+                             - claims_incurred)
+    else:
+        claims_experience = np.zeros(n_mp)
+    if state.actual_expenses is not None:
+        expense_experience = (np.asarray(state.actual_expenses, dtype=np.float64)
+                              - exp_expenses)
+    else:
+        expense_experience = np.zeros(n_mp)
+
     return VFASettlementMovement(
         period_months=period,
         bel_opening=bel_opening,
@@ -1329,6 +1349,8 @@ def settle(
         csm_premium_experience=csm_premium_experience,
         premium_experience_revenue=premium_experience_revenue,
         csm_investment_experience=csm_investment_experience,
+        claims_experience=claims_experience,
+        expense_experience=expense_experience,
         loss_component_reversed=lc_reversed,
         loss_component_recognised=lc_recognised,
         csm_release=csm_release,

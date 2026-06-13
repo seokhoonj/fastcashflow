@@ -979,6 +979,7 @@ _VFA_GOC_SETTLEMENT_LINEAR = (
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_fv_share", "csm_future_service", "csm_premium_experience",
     "premium_experience_revenue", "csm_investment_experience",
+    "claims_experience", "expense_experience",
     "csm_opening", "csm_accretion",
     "variable_fee_closing", "account_value_closing", "loss_component_opening",
     "loss_component_finance", "loss_component_amortised",
@@ -1025,6 +1026,8 @@ class VFAGoCSettlement:
     csm_premium_experience: np.ndarray
     premium_experience_revenue: np.ndarray
     csm_investment_experience: np.ndarray
+    claims_experience: np.ndarray
+    expense_experience: np.ndarray
     csm_opening: np.ndarray
     csm_accretion: np.ndarray
     variable_fee_closing: np.ndarray
@@ -1420,6 +1423,8 @@ def _(settlement: VFAGoCSettlement) -> VFASettlementReconciliation:
         csm_premium_experience=float(a.csm_premium_experience.sum()),
         premium_experience_revenue=float(a.premium_experience_revenue.sum()),
         csm_investment_experience=float(a.csm_investment_experience.sum()),
+        claims_experience=float(a.claims_experience.sum()),
+        expense_experience=float(a.expense_experience.sum()),
         loss_component_finance=float(a.loss_component_finance.sum()),
         loss_component_amortised=float(-a.loss_component_amortised.sum()),
         loss_component_reversed=float(-a.loss_component_reversed.sum()),

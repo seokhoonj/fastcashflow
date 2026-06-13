@@ -975,6 +975,8 @@ class VFASettlementMovement:
     csm_premium_experience: FloatArray  # B96(a): future-service premium exp, into CSM
     premium_experience_revenue: FloatArray  # B97(c): current/past premium exp, P&L memo
     csm_investment_experience: FloatArray  # B96(c): investment-component exp, into CSM
+    claims_experience: FloatArray        # B97(b)/(c): actual-vs-expected claims, P&L memo
+    expense_experience: FloatArray       # B97(b)/(c): actual-vs-expected expenses, P&L memo
     loss_component_reversed: FloatArray
     loss_component_recognised: FloatArray
     csm_release: FloatArray
@@ -1080,6 +1082,8 @@ class VFASettlementReconciliation:
     csm_premium_experience: float
     premium_experience_revenue: float
     csm_investment_experience: float
+    claims_experience: float
+    expense_experience: float
     loss_component_reversed: float
     loss_component_recognised: float
     csm_release: float
@@ -1148,6 +1152,10 @@ class VFASettlementReconciliation:
         lines.append("  Memo (P&L)")
         lines.append(f"    {'Premium exp. revenue':24}"
                      f"{self.premium_experience_revenue:>18,.0f}")
+        lines.append(f"    {'Claims experience':24}"
+                     f"{self.claims_experience:>18,.0f}")
+        lines.append(f"    {'Expense experience':24}"
+                     f"{self.expense_experience:>18,.0f}")
         return "\n".join(lines)
 
 
@@ -1183,6 +1191,8 @@ def _reconcile_vfa_settlement(
             csm_premium_experience=float(m.csm_premium_experience.sum()),
             premium_experience_revenue=float(m.premium_experience_revenue.sum()),
             csm_investment_experience=float(m.csm_investment_experience.sum()),
+            claims_experience=float(m.claims_experience.sum()),
+            expense_experience=float(m.expense_experience.sum()),
             loss_component_finance=float(m.loss_component_finance.sum()),
             loss_component_amortised=float(-m.loss_component_amortised.sum()),
             loss_component_reversed=float(-m.loss_component_reversed.sum()),
@@ -1693,6 +1703,8 @@ class PAASettlementMovement:
     claims_incurred: FloatArray
     claims_paid: FloatArray
     lic_closing: FloatArray
+    claims_experience: FloatArray        # B97(b)/(c): actual-vs-expected claims, P&L memo
+    expense_experience: FloatArray       # B97(b)/(c): actual-vs-expected expenses, P&L memo
     period_months: int = 12
     revenue_basis: str = "time"
     model_points: object | None = None
@@ -1746,6 +1758,8 @@ class PAASettlementReconciliation:
     claims_incurred: float
     claims_paid: float
     lic_closing: float
+    claims_experience: float = 0.0
+    expense_experience: float = 0.0
 
 
 def _reconcile_paa_settlement(
@@ -1769,6 +1783,8 @@ def _reconcile_paa_settlement(
             claims_incurred=float(m.claims_incurred.sum()),
             claims_paid=float(-m.claims_paid.sum()),
             lic_closing=float(m.lic_closing.sum()),
+            claims_experience=float(m.claims_experience.sum()),
+            expense_experience=float(m.expense_experience.sum()),
         )
         for m in movements
     ]
@@ -1790,6 +1806,8 @@ def _(movement: PAASettlementMovement, path, *, ids=None):
         "claims_incurred": movement.claims_incurred,
         "claims_paid": movement.claims_paid,
         "lic_closing": movement.lic_closing,
+        "claims_experience": movement.claims_experience,
+        "expense_experience": movement.expense_experience,
         "revenue_basis": [movement.revenue_basis]
                          * movement.lrc_closing.shape[0],
         "measurement_basis": [movement.measurement_basis]
@@ -1916,6 +1934,8 @@ def _(movement: VFASettlementMovement, path, *, ids=None):
         "csm_premium_experience": movement.csm_premium_experience,
         "premium_experience_revenue": movement.premium_experience_revenue,
         "csm_investment_experience": movement.csm_investment_experience,
+        "claims_experience": movement.claims_experience,
+        "expense_experience": movement.expense_experience,
         "csm_release": movement.csm_release,
         "csm_closing": movement.csm_closing,
         "loss_component_opening": movement.loss_component_opening,
@@ -2038,7 +2058,7 @@ _VFA_SETTLEMENT_LINES = (
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_opening", "csm_accretion", "csm_fv_share", "csm_future_service",
     "csm_premium_experience", "premium_experience_revenue",
-    "csm_investment_experience",
+    "csm_investment_experience", "claims_experience", "expense_experience",
     "csm_release", "csm_closing",
     "loss_component_opening", "loss_component_finance",
     "loss_component_amortised", "loss_component_reversed",
@@ -2061,6 +2081,7 @@ _REINSURANCE_SETTLEMENT_LINES = (
 
 _PAA_SETTLEMENT_LINES = (
     "lrc_opening", "premiums", "revenue", "lrc_experience", "lrc_closing",
+    "claims_experience", "expense_experience",
     "loss_component_opening", "loss_component_recognised",
     "loss_component_reversed", "loss_component_closing",
     "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
@@ -2210,6 +2231,8 @@ class VFASettlementAggregate:
     csm_premium_experience: float
     premium_experience_revenue: float
     csm_investment_experience: float
+    claims_experience: float
+    expense_experience: float
     csm_release: float
     csm_closing: float
     loss_component_opening: float
@@ -2268,6 +2291,8 @@ class PAASettlementAggregate:
     claims_incurred: float
     claims_paid: float
     lic_closing: float
+    claims_experience: float = 0.0
+    expense_experience: float = 0.0
     measurement_basis: str = "settlement"
 
     def closing_inputs(self):
@@ -2372,6 +2397,8 @@ def _(aggregate: PAASettlementAggregate) -> PAASettlementReconciliation:
         claims_incurred=a.claims_incurred,
         claims_paid=-a.claims_paid,
         lic_closing=a.lic_closing,
+        claims_experience=a.claims_experience,
+        expense_experience=a.expense_experience,
     )
 
 
@@ -2400,6 +2427,8 @@ def _(aggregate: VFASettlementAggregate) -> VFASettlementReconciliation:
         csm_premium_experience=a.csm_premium_experience,
         premium_experience_revenue=a.premium_experience_revenue,
         csm_investment_experience=a.csm_investment_experience,
+        claims_experience=a.claims_experience,
+        expense_experience=a.expense_experience,
         loss_component_finance=a.loss_component_finance,
         loss_component_amortised=-a.loss_component_amortised,
         loss_component_reversed=-a.loss_component_reversed,

@@ -30,8 +30,8 @@ def _basis(**overrides):
     return make_death_basis(**kw)
 
 
-def _book(*, premium, benefit, actual_premium=None, em_close=6, term=12,
-          basis=None):
+def _book(*, premium, benefit, actual_premium=None, actual_claims=None,
+          actual_expenses=None, em_close=6, term=12, basis=None):
     basis = _basis() if basis is None else basis
     surv = fcf.paa.measure(
         ModelPoints(issue_age=np.array([40]), premium=np.array([premium]),
@@ -52,8 +52,25 @@ def _book(*, premium, benefit, actual_premium=None, em_close=6, term=12,
         count=np.array([surv[em_close]]), prior_csm=np.array([0.0]),
         lock_in_rate=0.0, prior_count=np.array([1.0]),
         actual_premium=(None if actual_premium is None
-                        else np.array([actual_premium])))
+                        else np.array([actual_premium])),
+        actual_claims=(None if actual_claims is None else np.array([actual_claims])),
+        actual_expenses=(None if actual_expenses is None else np.array([actual_expenses])))
     return mp, state
+
+
+def test_within_period_claims_experience_is_a_pl_memo():
+    """actual_claims surfaces the within-period claims experience (B97) as a
+    P&L memo; absent => zero."""
+    onerous = _basis(mortality_q=0.05)
+    mp0, st0 = _book(premium=60.0, benefit=6000.0, em_close=6, basis=onerous)
+    mv0 = settle(mp0, st0, onerous, period_months=6)
+    np.testing.assert_array_equal(mv0.claims_experience, 0.0)
+    expected_claims = float(mv0.claims_incurred[0])
+    mp, state = _book(premium=60.0, benefit=6000.0,
+                      actual_claims=expected_claims + 100.0, em_close=6,
+                      basis=onerous)
+    mv = settle(mp, state, onerous, period_months=6)
+    np.testing.assert_allclose(mv.claims_experience[0], 100.0, rtol=1e-6)
 
 
 def test_premiums_line_is_the_actual_received():
