@@ -24,11 +24,12 @@ DROPPED (no double floor): they have already passed the per-MP floor, so the
 group nets within the CSM/LC that the per-MP floor cannot see. The whole point
 is the legitimate within-GoC mutualisation: per-MP floor sum != group floor.
 
-Scope (contract Sec. 1, confirmed): v1 is GMM segments only. VFA is v1.1
-(the observed account value is per-MP, so the k_obs re-summation needs its own
-gate), PAA is rejected on purpose (no CSM / floor, so a per-GoC algebra is
-meaningless -- ``paa.settle`` summed by the user's own groupby is enough), and
-reinsurance is a stage-7 seam. A mixed book is rejected WHOLE, never partially.
+Scope (contract Sec. 1): this file covers the GMM path. VFA per-GoC (its own
+VFAGoCSettlement) landed in v1.1 and is covered by
+test_settle_group_of_contracts_vfa.py. PAA is rejected on purpose (no CSM /
+floor, so a per-GoC algebra is meaningless -- ``paa.settle`` summed by the
+user's own groupby is enough), and reinsurance is a stage-7 seam. A book
+mixing GMM and VFA is rejected WHOLE, never partially.
 
 coverage_units is REQUIRED with no default (O-7 confirmed: the B119 benefit-
 amount axis is a place the standard leaves to entity judgement, so the library
@@ -797,13 +798,14 @@ def test_pure_paa_book_is_rejected_with_guidance():
             profitability=np.zeros(n, dtype=np.int64))
 
 
-def test_vfa_book_is_rejected_as_v1_1():
-    """VFA is v1.1: the observed account value is per-MP, so the k_obs
-    re-summation needs its own gate. The entry rejects a VFA book in v1."""
+def test_mixed_gmm_vfa_book_is_rejected_whole():
+    """A pure GMM or pure VFA book is settled (VFA returns a VFAGoCSettlement),
+    but a book mixing GMM and VFA is rejected whole: a group of contracts sits
+    in one product, hence one measurement model."""
     mp, state = _two_product_book()
-    router = _two_product_router("VFA")
+    router = _two_product_router("VFA")            # PROT_A=GMM, OTHER=VFA
     state = replace(state, account_value=np.zeros(mp.n_mp))
-    with pytest.raises(ValueError, match="VFA|v1.1|GMM"):
+    with pytest.raises(ValueError, match="one measurement model|mixes GMM"):
         settle_group_of_contracts(
             mp, state, router, period_months=6, coverage_units="count",
             profitability=np.zeros(mp.n_mp, dtype=np.int64))

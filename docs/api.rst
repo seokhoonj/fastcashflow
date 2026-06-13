@@ -198,6 +198,9 @@ mutualisation) or in subsequent measurement (out of scope here). So at inception
 .. autoclass:: fastcashflow.portfolio.GoCSettlement
    :members:
 
+.. autoclass:: fastcashflow.portfolio.VFAGoCSettlement
+   :members:
+
 Tracing and validation
 ----------------------
 
