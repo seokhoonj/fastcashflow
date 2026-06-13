@@ -114,6 +114,32 @@ class ReinsuranceAggregate:
     reinsurance_premium: FloatArray  # (n_time,)  -- aggregate reinsurance premiums
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class ReinsuranceInforceAggregate:
+    """Portfolio-aggregate reinsurance-held in-force carry -- the scale bridge.
+
+    A headline-only total: the period-close BEL / RA / CSM of a ceded book,
+    summed over the model-point axis from :func:`measure_reinsurance_inforce`.
+    There is no loss component (Sec. 65). ``measurement_basis`` is
+    ``'settlement_carry'`` -- this is a carry bridge, not a settlement: the
+    reinsurance leaf has no ``settle`` yet, so the prior CSM is rolled forward
+    (Sec. 44) without the Sec. 66 unlocking / loss-recovery component. It is
+    deprecated once ``reinsurance.settle`` lands. A total cannot be chained.
+    """
+
+    bel: float
+    ra: float
+    csm: float
+    period_months: int
+    measurement_basis: str = MEASUREMENT_BASIS_SETTLEMENT_CARRY
+
+    def closing_inputs(self):
+        raise ValueError(
+            "a ReinsuranceInforceAggregate is a portfolio total, not a per-MP "
+            "chaining citizen; carry the per-MP reinsurance.measure_inforce "
+            "(or reinsurance.settle once available) to roll a period forward")
+
+
 class Treaty(Protocol):
     """How a reinsurance treaty cedes the direct cash flows.
 
@@ -454,3 +480,63 @@ def measure_reinsurance_inforce(
         discount_bom=discount_bom,
         model_points=model_points,
     )
+
+
+def measure_reinsurance_inforce_aggregate(
+    model_points: ModelPoints,
+    state: InforceState,
+    basis: Basis,
+    *,
+    treaty: Treaty,
+    period_months: int | None = None,
+    chunk_size: int = 200_000,
+) -> ReinsuranceInforceAggregate:
+    """Portfolio-aggregate reinsurance-held in-force carry in bounded memory.
+
+    The carry bridge for a ceded book's period close: runs
+    :func:`measure_reinsurance_inforce` over row-blocks of ``chunk_size`` model
+    points and accumulates only the headline BEL / RA / CSM, so peak memory is
+    ``O(chunk_size x n_time)`` regardless of ``n_mp``. Returns a
+    :class:`ReinsuranceInforceAggregate` -- a scalable SUM of the measured
+    per-model-point results, equal to them to machine precision, not a group
+    remeasurement.
+
+    It is a bridge, not a settlement (``measurement_basis == 'settlement_carry'``):
+    the reinsurance leaf has no ``settle``, so the prior CSM is rolled one
+    period (Sec. 44) without the Sec. 66 reinsurance-specific unlocking or a
+    loss-recovery component, and the function is deprecated once
+    ``reinsurance.settle`` lands. ``basis`` is a single :class:`Basis`, as for
+    :func:`measure_reinsurance_inforce`.
+
+    A zero-count row is REJECTED: this carry bridge cannot value a contract
+    derecognized during the period (Sec. 76) -- that needs a settlement, which
+    ``reinsurance.settle`` will provide. (``gmm.settle`` handles count=0 as
+    normal derecognition; this bridge does not.)
+    """
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    # Align the period-close state onto the model points ONCE, before chunking,
+    # so a shuffled state file cannot pair one contract's rows with another's
+    # prior CSM after a chunk slice (measure_reinsurance_inforce re-reconciles
+    # each chunk, which is then a no-op).
+    state = _reconcile_state(model_points, state)
+    count = np.asarray(model_points.count, dtype=np.float64)
+    if np.any(count == 0.0):
+        bad = int(np.argmin(count))
+        raise ValueError(
+            f"count[{bad}]=0 is a row derecognized during the period (Sec. 76); "
+            "this carry bridge cannot value it. Use reinsurance.settle for a "
+            "period close with derecognition, or drop the row before valuing.")
+    period = 12 if period_months is None else int(period_months)
+    n_mp = model_points.n_mp
+    bel = ra = csm = 0.0
+    for start in range(0, n_mp, chunk_size):
+        idx = np.arange(start, min(start + chunk_size, n_mp))
+        m = measure_reinsurance_inforce(
+            model_points.subset(idx), state.subset(idx), basis,
+            treaty=treaty, period_months=period, full=False)
+        bel += float(m.bel.sum())
+        ra += float(m.ra.sum())
+        csm += float(m.csm.sum())
+    return ReinsuranceInforceAggregate(
+        bel=bel, ra=ra, csm=csm, period_months=period)
