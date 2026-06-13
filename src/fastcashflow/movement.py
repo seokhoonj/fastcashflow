@@ -1867,6 +1867,13 @@ _REINSURANCE_SETTLEMENT_LINES = (
     "coverage_units_provided", "coverage_units_future",
 )
 
+_PAA_SETTLEMENT_LINES = (
+    "lrc_opening", "premiums", "revenue", "lrc_experience", "lrc_closing",
+    "loss_component_opening", "loss_component_recognised",
+    "loss_component_reversed", "loss_component_closing",
+    "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
+)
+
 _AGGREGATE_NO_CHAIN = (
     "an aggregate cannot seed the next period: chaining needs the per-MP "
     "closing balances, which the sums no longer carry. Chain through the "
@@ -2019,6 +2026,41 @@ class VFASettlementAggregate:
         raise ValueError(_AGGREGATE_NO_CHAIN)
 
 
+@dataclass(frozen=True, slots=True)
+class PAASettlementAggregate:
+    """Portfolio totals of the paragraph-55(b) PAA settlement movement.
+
+    What :func:`fastcashflow.paa.settle_aggregate` returns: every line of
+    :class:`PAASettlementMovement` summed over the model-point axis,
+    movement-positive (``reconcile`` applies the display negation of the
+    revenue / claims-paid / loss-component-reversed rows and reproduces the
+    per-MP movement's table). There is no CSM or finance line -- the PAA holds
+    the LRC undiscounted and carries no CSM. :meth:`closing_inputs` raises --
+    chaining needs the per-MP balances.
+    """
+
+    period_months: int
+    revenue_basis: str
+    lrc_opening: float
+    premiums: float
+    revenue: float
+    lrc_experience: float
+    lrc_closing: float
+    loss_component_opening: float
+    loss_component_recognised: float
+    loss_component_reversed: float
+    loss_component_closing: float
+    lic_opening: float
+    claims_incurred: float
+    claims_paid: float
+    lic_closing: float
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """Always raises -- see the class docstring."""
+        raise ValueError(_AGGREGATE_NO_CHAIN)
+
+
 @reconcile.register
 def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
     """The paragraph-44 settlement table of an aggregate -- identical to
@@ -2077,6 +2119,32 @@ def _(aggregate: ReinsuranceSettlementAggregate
         finance_wedge=a.finance_wedge,
         csm_release=-a.csm_release,
         csm_closing=a.csm_closing,
+    )
+
+
+@reconcile.register
+def _(aggregate: PAASettlementAggregate) -> PAASettlementReconciliation:
+    """The paragraph-55(b) PAA settlement table of an aggregate -- identical to
+    reconciling the per-MP movement; the revenue / claims-paid /
+    loss-component-reversed rows are display-negated here, never in the
+    aggregate."""
+    a = aggregate
+    return PAASettlementReconciliation(
+        period_months=a.period_months,
+        revenue_basis=a.revenue_basis,
+        lrc_opening=a.lrc_opening,
+        premiums=a.premiums,
+        revenue=-a.revenue,
+        lrc_experience=a.lrc_experience,
+        lrc_closing=a.lrc_closing,
+        loss_component_opening=a.loss_component_opening,
+        loss_component_recognised=a.loss_component_recognised,
+        loss_component_reversed=-a.loss_component_reversed,
+        loss_component_closing=a.loss_component_closing,
+        lic_opening=a.lic_opening,
+        claims_incurred=a.claims_incurred,
+        claims_paid=-a.claims_paid,
+        lic_closing=a.lic_closing,
     )
 
 

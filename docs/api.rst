@@ -78,6 +78,10 @@ Premium allocation approach
 
 .. autofunction:: fastcashflow.paa.settle
 
+.. autofunction:: fastcashflow.paa.settle_aggregate
+
+.. autofunction:: fastcashflow.paa.settle_stream
+
 .. autoclass:: fastcashflow.PAASettlementMovement
    :members:
 

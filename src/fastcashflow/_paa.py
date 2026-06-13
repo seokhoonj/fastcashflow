@@ -31,6 +31,7 @@ Scope and simplifications, each with the standard's basis:
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 
 import numpy as np
@@ -724,3 +725,99 @@ def settle(
         revenue_basis=revenue_basis,
         model_points=model_points,
     )
+
+
+def settle_aggregate(
+    model_points: ModelPoints,
+    state: "InforceState",
+    basis: Basis,
+    *,
+    revenue_basis: str = "time",
+    period_months: int | None = None,
+    chunk_size: int = 200_000,
+) -> "PAASettlementAggregate":
+    """Portfolio-total paragraph-55(b) PAA settlement in bounded memory.
+
+    The PAA counterpart of :func:`~fastcashflow.gmm.settle_aggregate`: runs
+    :func:`settle` over row blocks of ``chunk_size`` model points and
+    accumulates only the scalar line totals (every LRC / loss-component / LIC
+    line is additive across contracts), combined with ``math.fsum`` so the
+    total does not depend on the chunking. ``state`` joins ``model_points`` by
+    mp_id once, before chunking. The aggregate cannot be chained --
+    ``closing_inputs()`` raises; chain per-MP movements instead.
+    """
+    from fastcashflow.movement import (
+        _PAA_SETTLEMENT_LINES, PAASettlementAggregate)
+    if chunk_size < 1:
+        raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
+    period = 12 if period_months is None else int(period_months)
+    if period < 1:
+        raise ValueError(f"period_months must be >= 1, got {period}")
+    state = _reconcile_state(model_points, state)
+    n_mp = model_points.n_mp
+    parts: dict[str, list[float]] = {n: [] for n in _PAA_SETTLEMENT_LINES}
+    for start in range(0, n_mp, chunk_size):
+        idx = np.arange(start, min(start + chunk_size, n_mp))
+        mv = settle(model_points.subset(idx), state.subset(idx), basis,
+                    revenue_basis=revenue_basis, period_months=period)
+        for name in _PAA_SETTLEMENT_LINES:
+            parts[name].append(float(getattr(mv, name).sum()))
+    return PAASettlementAggregate(
+        period_months=period, revenue_basis=revenue_basis,
+        **{name: math.fsum(vals) for name, vals in parts.items()})
+
+
+def settle_stream(
+    input_path,
+    output_dir,
+    basis: Basis,
+    *,
+    coverages=None,
+    calculation_methods=None,
+    state_path=None,
+    revenue_basis: str = "time",
+    period_months: int | None = None,
+    chunk_size: int = 200_000,
+    id_column: str | None = None,
+    validate_unique_mp_id: bool = True,
+) -> int:
+    """Stream a paragraph-55(b) PAA period close through a parquet file.
+
+    The out-of-core variant of :func:`~fastcashflow.paa.settle`: reads the
+    in-force book in ``chunk_size`` blocks, settles each, and writes the per-MP
+    settlement movements as a parquet dataset (one ``part-NNNNN.parquet`` per
+    chunk). Same one-combined-file / two-file (``state_path``) layouts as
+    :func:`~fastcashflow.gmm.settle_stream`; the PAA needs only
+    ``prior_count`` in the state (the LRC roll reconstructs the rest). Returns
+    the number of model points processed.
+    """
+    from pathlib import Path
+    import polars as pl
+    from fastcashflow.io import (
+        _settle_stream_driver, _parse_calculation_methods,
+        _model_points_from_frames)
+    basis = _single_basis(basis, entry="paa.settle_stream")
+    if coverages is None:
+        raise ValueError(
+            "paa.settle_stream needs a coverages frame: pass coverages="
+            "<parquet path> (an mp_id / coverage / amount frame), as in "
+            "paa.measure_stream.")
+    if isinstance(calculation_methods, (str, Path)):
+        methods_dict = _parse_calculation_methods(calculation_methods)
+    else:
+        methods_dict = calculation_methods
+    cov_scan = pl.scan_parquet(Path(coverages))
+
+    def build_mp(spec):
+        cov = cov_scan.join(
+            spec.lazy().select("mp_id"), on="mp_id", how="semi").collect()
+        return _model_points_from_frames(spec, cov, methods_dict)
+
+    return _settle_stream_driver(
+        input_path, output_dir, state_path=state_path, chunk_size=chunk_size,
+        id_column=id_column, validate_unique_mp_id=validate_unique_mp_id,
+        build_mp=build_mp,
+        settle_fn=lambda mp, st: settle(mp, st, basis,
+                                        revenue_basis=revenue_basis,
+                                        period_months=period_months),
+        entry="paa.settle_stream")
