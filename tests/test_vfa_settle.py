@@ -111,12 +111,14 @@ def _assert_blocks_foot(mv):
     np.testing.assert_allclose(
         mv.csm_closing,
         mv.csm_opening + mv.csm_accretion + mv.csm_fv_share
-        + mv.csm_future_service - mv.loss_component_reversed
+        + mv.csm_future_service + mv.csm_premium_experience
+        + mv.csm_investment_experience - mv.loss_component_reversed
         + mv.loss_component_recognised - mv.csm_release,
         rtol=1e-10, atol=1e-9)
     np.testing.assert_allclose(
         mv.loss_component_closing,
-        mv.loss_component_opening - mv.loss_component_reversed
+        mv.loss_component_opening + mv.loss_component_finance
+        - mv.loss_component_amortised - mv.loss_component_reversed
         + mv.loss_component_recognised,
         rtol=1e-10, atol=1e-9)
     np.testing.assert_allclose(
@@ -378,9 +380,10 @@ def test_dead_cohort_mid_life_fully_derecognises():
     _assert_blocks_foot(mv)
 
 
-def test_onerous_book_loss_component_is_static_between_remeasurements():
-    """The documented v1 cut: with x ~ 0 an onerous book's loss component
-    carries over unchanged and no profit emerges."""
+def test_onerous_book_loss_component_amortises_via_the_50a_channel():
+    """An onerous book stays onerous (csm 0) but its loss component now
+    amortises through the paragraph-50(a) incurred-service channel (the loss
+    component is no longer static between remeasurements -- the prior v1 cut)."""
     basis = _basis()
     mp, state = _book(basis, ModelPoints.single(40, 0.0, 24, account_value=1e6),
                       em_open=6, period=3,
@@ -388,8 +391,13 @@ def test_onerous_book_loss_component_is_static_between_remeasurements():
     mv = fcf.vfa.settle(mp, state, basis, period_months=3)
     assert mv.csm_release[0] == 0.0
     assert mv.csm_closing[0] == 0.0
-    np.testing.assert_allclose(mv.loss_component_closing,
-                               mv.loss_component_opening, atol=1e-6)
+    # the 50(a) channel moves the loss component (finance up, amortised down);
+    # the four-term identity holds.
+    np.testing.assert_allclose(
+        mv.loss_component_opening + mv.loss_component_finance
+        - mv.loss_component_amortised - mv.loss_component_reversed
+        + mv.loss_component_recognised, mv.loss_component_closing, rtol=1e-10)
+    assert mv.loss_component_amortised[0] > 0.0
     _assert_blocks_foot(mv)
 
 

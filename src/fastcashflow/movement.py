@@ -864,9 +864,11 @@ class VFASettlementMovement:
         ra_closing  == ra_opening  + ra_interest  - ra_release  + ra_experience
         csm_closing == csm_opening + csm_accretion + csm_fv_share
                        + csm_future_service + csm_premium_experience
+                       + csm_investment_experience
                        - loss_component_reversed
                        + loss_component_recognised - csm_release
         loss_component_closing == loss_component_opening
+                       + loss_component_finance - loss_component_amortised
                        - loss_component_reversed + loss_component_recognised
         lic_closing == lic_opening + claims_incurred - claims_paid
 
@@ -887,6 +889,16 @@ class VFASettlementMovement:
     no BEL/RA counterpart, so it enters the CSM block but does NOT appear in the
     cross-tie above; the current/past leg is a P&L memo, in no balance
     recursion. Both are zero unless ``state.actual_premium`` is given.
+    ``csm_investment_experience`` (B96(c)) is the same for the investment
+    component (the account value returned on exits): expected less actual
+    account value payable, the whole difference into the CSM, outside the
+    cross-tie; zero unless ``state.actual_investment_component`` is given.
+    ``loss_component_finance`` / ``loss_component_amortised`` are the
+    paragraph-50(a)/51 incurred-service channel of an onerous book -- the
+    guarantee-excess + expense release (the claims+expenses pool, excluding the
+    account-value investment component) split on the loss-component ratio,
+    running the loss component to zero by the end of coverage (52); zero on a
+    profitable book.
 
     Line semantics:
 
@@ -966,11 +978,14 @@ class VFASettlementMovement:
     csm_future_service: FloatArray
     csm_premium_experience: FloatArray  # B96(a): future-service premium exp, into CSM
     premium_experience_revenue: FloatArray  # B97(c): current/past premium exp, P&L memo
+    csm_investment_experience: FloatArray  # B96(c): investment-component exp, into CSM
     loss_component_reversed: FloatArray
     loss_component_recognised: FloatArray
     csm_release: FloatArray
     csm_closing: FloatArray
     loss_component_opening: FloatArray
+    loss_component_finance: FloatArray   # 51(c): r x pool interest unwind
+    loss_component_amortised: FloatArray  # 50(a)/51(a)+(b): the systematic loss reversal
     loss_component_closing: FloatArray
     variable_fee_closing: FloatArray
     coverage_units_provided: FloatArray  # B119 numerator, expected scale
@@ -1068,11 +1083,14 @@ class VFASettlementReconciliation:
     csm_future_service: float
     csm_premium_experience: float
     premium_experience_revenue: float
+    csm_investment_experience: float
     loss_component_reversed: float
     loss_component_recognised: float
     csm_release: float
     csm_closing: float
     loss_component_opening: float
+    loss_component_finance: float
+    loss_component_amortised: float
     loss_component_closing: float
     lic_opening: float = 0.0
     claims_incurred: float = 0.0
@@ -1101,6 +1119,7 @@ class VFASettlementReconciliation:
                 ("FV share (45(b))", self.csm_fv_share),
                 ("Future service (45(c))", self.csm_future_service),
                 ("Premium experience (B96(a))", self.csm_premium_experience),
+                ("Investment exp. (B96(c))", self.csm_investment_experience),
                 ("Loss comp. reversed", self.loss_component_reversed),
                 ("Loss comp. recognised", self.loss_component_recognised),
                 ("Release", self.csm_release),
@@ -1108,6 +1127,8 @@ class VFASettlementReconciliation:
             )),
             ("Loss component", (
                 ("Opening", self.loss_component_opening),
+                ("Finance (51(c))", self.loss_component_finance),
+                ("Amortised (50(a))", self.loss_component_amortised),
                 ("Reversed", self.loss_component_reversed),
                 ("Recognised", self.loss_component_recognised),
                 ("Closing", self.loss_component_closing),
@@ -1165,6 +1186,9 @@ def _reconcile_vfa_settlement(
             csm_future_service=float(m.csm_future_service.sum()),
             csm_premium_experience=float(m.csm_premium_experience.sum()),
             premium_experience_revenue=float(m.premium_experience_revenue.sum()),
+            csm_investment_experience=float(m.csm_investment_experience.sum()),
+            loss_component_finance=float(m.loss_component_finance.sum()),
+            loss_component_amortised=float(-m.loss_component_amortised.sum()),
             loss_component_reversed=float(-m.loss_component_reversed.sum()),
             loss_component_recognised=float(m.loss_component_recognised.sum()),
             csm_release=float(-m.csm_release.sum()),
@@ -1852,9 +1876,12 @@ def _(movement: VFASettlementMovement, path, *, ids=None):
         "csm_future_service": movement.csm_future_service,
         "csm_premium_experience": movement.csm_premium_experience,
         "premium_experience_revenue": movement.premium_experience_revenue,
+        "csm_investment_experience": movement.csm_investment_experience,
         "csm_release": movement.csm_release,
         "csm_closing": movement.csm_closing,
         "loss_component_opening": movement.loss_component_opening,
+        "loss_component_finance": movement.loss_component_finance,
+        "loss_component_amortised": movement.loss_component_amortised,
         "loss_component_reversed": movement.loss_component_reversed,
         "loss_component_recognised": movement.loss_component_recognised,
         "loss_component_closing": movement.loss_component_closing,
@@ -1971,8 +1998,10 @@ _VFA_SETTLEMENT_LINES = (
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_opening", "csm_accretion", "csm_fv_share", "csm_future_service",
     "csm_premium_experience", "premium_experience_revenue",
+    "csm_investment_experience",
     "csm_release", "csm_closing",
-    "loss_component_opening", "loss_component_reversed",
+    "loss_component_opening", "loss_component_finance",
+    "loss_component_amortised", "loss_component_reversed",
     "loss_component_recognised", "loss_component_closing",
     "variable_fee_closing", "account_value_closing",
     "coverage_units_provided", "coverage_units_future",
@@ -2132,9 +2161,12 @@ class VFASettlementAggregate:
     csm_future_service: float
     csm_premium_experience: float
     premium_experience_revenue: float
+    csm_investment_experience: float
     csm_release: float
     csm_closing: float
     loss_component_opening: float
+    loss_component_finance: float
+    loss_component_amortised: float
     loss_component_reversed: float
     loss_component_recognised: float
     loss_component_closing: float
@@ -2313,6 +2345,9 @@ def _(aggregate: VFASettlementAggregate) -> VFASettlementReconciliation:
         csm_future_service=a.csm_future_service,
         csm_premium_experience=a.csm_premium_experience,
         premium_experience_revenue=a.premium_experience_revenue,
+        csm_investment_experience=a.csm_investment_experience,
+        loss_component_finance=a.loss_component_finance,
+        loss_component_amortised=-a.loss_component_amortised,
         loss_component_reversed=-a.loss_component_reversed,
         loss_component_recognised=a.loss_component_recognised,
         csm_release=-a.csm_release,

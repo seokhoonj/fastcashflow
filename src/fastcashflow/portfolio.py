@@ -976,8 +976,10 @@ _VFA_GOC_SETTLEMENT_LINEAR = (
     "bel_closing",
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_fv_share", "csm_future_service", "csm_premium_experience",
-    "premium_experience_revenue", "csm_opening", "csm_accretion",
+    "premium_experience_revenue", "csm_investment_experience",
+    "csm_opening", "csm_accretion",
     "variable_fee_closing", "account_value_closing", "loss_component_opening",
+    "loss_component_finance", "loss_component_amortised",
     "lic_opening", "claims_incurred", "claims_paid", "lic_closing",
 )
 _VFA_GOC_SETTLEMENT_NONLINEAR = (
@@ -1020,11 +1022,14 @@ class VFAGoCSettlement:
     csm_future_service: np.ndarray
     csm_premium_experience: np.ndarray
     premium_experience_revenue: np.ndarray
+    csm_investment_experience: np.ndarray
     csm_opening: np.ndarray
     csm_accretion: np.ndarray
     variable_fee_closing: np.ndarray
     account_value_closing: np.ndarray
     loss_component_opening: np.ndarray
+    loss_component_finance: np.ndarray
+    loss_component_amortised: np.ndarray
     lic_opening: np.ndarray
     claims_incurred: np.ndarray
     claims_paid: np.ndarray
@@ -1100,13 +1105,19 @@ class VFAGoCSettlement:
 def _finalise_vfa_goc_settlement(
         pre: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     accreted = pre["csm_opening"] + pre["csm_accretion"]
-    # The premium-experience future leg (B96(a)) is a new future-service change
-    # with no BEL/RA counterpart, so it enters the algebra on top of x (which
-    # stays the csm_fv_share / csm_future_service cross-tie quantity).
+    # The premium- and investment-experience future legs (B96(a)/(c)) are new
+    # future-service changes with no BEL/RA counterpart, so they enter the
+    # algebra on top of x (which stays the csm_fv_share / csm_future_service
+    # cross-tie quantity). The paragraph-50(a) incurred channel is LINEAR
+    # (group-summed); the algebra runs once on the POST-amortisation LC.
+    lc_after_incurred = (pre["loss_component_opening"]
+                         + pre["loss_component_finance"]
+                         - pre["loss_component_amortised"])
     x = pre["csm_fv_share"] + pre["csm_future_service"]
     csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
-        accreted, x + pre["csm_premium_experience"],
-        pre["loss_component_opening"])
+        accreted,
+        x + pre["csm_premium_experience"] + pre["csm_investment_experience"],
+        lc_after_incurred)
     denom = pre["coverage_units_provided"] + pre["coverage_units_future"]
     frac = np.where(denom > 0.0, pre["coverage_units_provided"] / denom, 0.0)
     release = csm_after * frac
@@ -1404,6 +1415,9 @@ def _(settlement: VFAGoCSettlement) -> VFASettlementReconciliation:
         csm_future_service=float(a.csm_future_service.sum()),
         csm_premium_experience=float(a.csm_premium_experience.sum()),
         premium_experience_revenue=float(a.premium_experience_revenue.sum()),
+        csm_investment_experience=float(a.csm_investment_experience.sum()),
+        loss_component_finance=float(a.loss_component_finance.sum()),
+        loss_component_amortised=float(-a.loss_component_amortised.sum()),
         loss_component_reversed=float(-a.loss_component_reversed.sum()),
         loss_component_recognised=float(a.loss_component_recognised.sum()),
         csm_release=float(-a.csm_release.sum()),

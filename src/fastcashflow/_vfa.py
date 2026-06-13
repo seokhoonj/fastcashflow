@@ -343,6 +343,7 @@ class _VFAProjection:
     time_value: FloatArray           # (n_mp,) guarantee TVOG at the anchor
     lic: FloatArray                  # (n_mp, n_time+1)
     benefit_cf: FloatArray           # (n_mp, n_time) incurred benefit claims (builds the LIC)
+    guarantee_excess_cf: FloatArray  # (n_mp, n_time) GMDB/GMAB excess over AV (the insurance claim, IC-excluded)
     cashflows: "Cashflows"
     inforce: FloatArray              # (n_mp, n_time) coverage units
     r_m: float                       # monthly underlying-items return
@@ -636,6 +637,7 @@ def _vfa_project(
     return _VFAProjection(
         bel=bel, ra=ra, variable_fee_path=variable_fee_path,
         time_value=time_value, lic=lic, benefit_cf=benefit_cf,
+        guarantee_excess_cf=guarantee_excess_cf,
         cashflows=proj, inforce=inforce,
         r_m=r_m, av=av, disc_start=disc_start,
         guarantee_excess_pv=guarantee_excess_pv, expense_pv=pv_expenses,
@@ -1019,13 +1021,22 @@ def settle(
     full. The opening date must lie strictly within every contract's
     boundary.
 
+    An onerous book amortises its loss component through the paragraph-50(a)/51
+    incurred-service channel (``loss_component_finance`` /
+    ``loss_component_amortised``): the period's guarantee-excess + expense
+    release (the claims+expenses pool, which for VFA excludes the account-value
+    investment component) is split on the loss-component ratio, running the loss
+    component to zero by the end of coverage (52). The B96(c) investment-
+    component experience (``csm_investment_experience`` -- the expected less the
+    actual account value returned on exits) adjusts the CSM when
+    ``state.actual_investment_component`` is given.
+
     v1 scope (see :class:`~fastcashflow.movement.VFASettlementMovement` for
     the full statement): deterministic, single basis rate (the
     finance-not-adjusting-CSM split is an exact zero residual), intrinsic
     guarantee only, no assumption change, within-period experience assumed
     equal to expected (only the closing count and observed account value
-    deviate), no paragraph 50(a)-52 systematic loss-component allocation,
-    per-model-point floors. A basis with a ``settlement_pattern`` is supported:
+    deviate), per-model-point floors. A basis with a ``settlement_pattern`` is supported:
     the movement carries the liability for incurred claims (``lic_opening`` /
     ``claims_incurred`` / ``claims_paid`` / ``lic_closing``, paragraphs 40(b) /
     42 / 103(b)) -- benefit claims build it up as incurred and run it off over
@@ -1211,15 +1222,57 @@ def settle(
     csm_premium_experience = pe_frac * premium_experience
     premium_experience_revenue = (1.0 - pe_frac) * premium_experience
 
+    # paragraph 50(a)/51 incurred-service loss-component channel (the VFA
+    # mirror of gmm.settle). paragraph 51(a) allocates claims and expenses
+    # excluding investment components -- for VFA the investment component IS the
+    # account value, so the insurance "claims" are the guarantee excess (the
+    # GMDB/GMAB benefit above the account value). The pool is therefore
+    # guarantee_excess + expenses + RA (inherently IC-excluded). The loss
+    # component accretes r x the pool interest (51c) and amortises r x the pool
+    # release (50(a)); r = lc_open / pool_open is re-derived every period so the
+    # LC runs to zero by the end of coverage (52). A profitable book
+    # (lc_open == 0) is byte-identical. The algebra below acts on the
+    # POST-amortisation loss component.
+    ge_o, ge_i, ge_r, _, _ = _fcf_block(p_exp.guarantee_excess_pv,
+                                        p_exp.guarantee_excess_pv)
+    ex_o, ex_i, ex_r, _, _ = _fcf_block(p_exp.expense_pv, p_exp.expense_pv)
+    pool_open = ge_o + ex_o + ra_opening
+    lc_ratio = np.where(pool_open > 0.0,
+                        lc_open / np.where(pool_open > 0.0, pool_open, 1.0), 0.0)
+    loss_component_finance = lc_ratio * (ge_i + ex_i + ra_interest)
+    loss_component_amortised = lc_ratio * (ge_r + ex_r + ra_release)
+    lc_after_incurred = lc_open + loss_component_finance - loss_component_amortised
+
+    # B96(c) investment-component experience (VFA): the investment component is
+    # the account value returned on exits (benefit_cf - guarantee_excess_cf).
+    # The expected less the actual account value payable over the period adjusts
+    # the CSM (the whole difference, no fraction -- B96(c) is entirely future
+    # service); the account value does not touch insurance revenue. Absent
+    # actual_investment_component => zero (byte-identical).
+    ic_cf = p_exp.benefit_cf - p_exp.guarantee_excess_cf
+    ic_src = em_open[:, None] + np.arange(period)[None, :]
+    ic_mask = ic_src < n_time
+    expected_ic = k_exp * np.where(
+        ic_mask, ic_cf[rows[:, None], np.where(ic_mask, ic_src, 0)],
+        0.0).sum(axis=1)
+    if state.actual_investment_component is not None:
+        actual_ic = np.asarray(state.actual_investment_component,
+                               dtype=np.float64)
+        csm_investment_experience = expected_ic - actual_ic
+    else:
+        csm_investment_experience = np.zeros(n_mp)
+
     # CSM / loss-component algebra (paragraphs 45 / 48 / 50(b)). Accrete by
     # direct compounding (NOT the monthly roll -- that would interleave
     # releases and double-count against the single B119 release below). The
-    # premium-experience future leg is a new future-service change with no
-    # BEL/RA counterpart, so it enters here on top of x.
+    # premium- and investment-experience future legs are new future-service
+    # changes with no BEL/RA counterpart, so they enter here on top of x.
     accreted = prior_csm * (1.0 + r_m) ** period
     csm_accretion = accreted - prior_csm
     csm_after, lc_reversed, lc_recognised, lc_closing = (
-        _paragraph45_csm_algebra(accreted, x + csm_premium_experience, lc_open))
+        _paragraph45_csm_algebra(
+            accreted, x + csm_premium_experience + csm_investment_experience,
+            lc_after_incurred))
 
     # Paragraph-B119 release, once, on the post-adjustment balance: units
     # provided in the period (expected basis) over those provided plus
@@ -1275,11 +1328,14 @@ def settle(
         csm_future_service=csm_future_service,
         csm_premium_experience=csm_premium_experience,
         premium_experience_revenue=premium_experience_revenue,
+        csm_investment_experience=csm_investment_experience,
         loss_component_reversed=lc_reversed,
         loss_component_recognised=lc_recognised,
         csm_release=csm_release,
         csm_closing=csm_closing,
         loss_component_opening=lc_open,
+        loss_component_finance=loss_component_finance,
+        loss_component_amortised=loss_component_amortised,
         loss_component_closing=lc_closing,
         variable_fee_closing=k_obs * fee_obs,
         coverage_units_provided=cu_period,
