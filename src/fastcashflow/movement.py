@@ -942,16 +942,12 @@ class VFASettlementMovement:
     closing count and observed account value deviate. Part of the
     paragraph 45(b) realized entity share is therefore not captured, and the
     period's total comprehensive income is approximate even though
-    opening-to-closing balances reconcile. The loss component changes only
-    through the paragraph-48/50(b) future-service adjustments above; the
-    paragraph 50(a)-52 systematic allocation (finance accretion on the loss
-    component, allocation of claims and risk-adjustment release between the
-    loss component and the remaining LRC, and the paragraph-52 run-to-zero
-    constraint) is not implemented -- an onerous book's loss component is
-    static between remeasurements, shows zero P&L emergence and may remain
-    non-zero at final settlement, so the paragraph 50(a)/B124 revenue split
-    for onerous groups is not produced (balance-sheet figures are
-    paragraph 45/48 compliant; the onerous revenue presentation is not). An
+    opening-to-closing balances reconcile. The loss component moves through both
+    channels: the paragraph-48/50(b) future-service adjustments (``reversed`` /
+    ``recognised``) and the paragraph-50(a)-52 systematic incurred-service
+    allocation (``loss_component_finance`` / ``loss_component_amortised``, the
+    guarantee-excess + expense pool excluding the account-value investment
+    component), which runs the loss component to zero by the end of coverage. An
     opening CSM that embeds a stochastic guarantee time value is accreted
     and released but its time-value component is never remeasured (the
     movement is deterministic, intrinsic-guarantee only). Floors and the
