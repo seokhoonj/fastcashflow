@@ -26,7 +26,7 @@ from functools import singledispatch
 
 import polars as pl
 
-from fastcashflow.io import _write_frame
+from fastcashflow.io import _write_frame, write_measurement
 from fastcashflow.movement import (
     GMMSettlementReconciliation, PAASettlementReconciliation,
     ReinsuranceSettlementReconciliation, VFASettlementReconciliation)
@@ -319,3 +319,104 @@ def line_metadata() -> pl.DataFrame:
                     "is_memo": memo, "sort_order": order})
                 order += 1
     return pl.DataFrame(rows)
+
+
+# The close pack's sheet order. The aggregate statements an entity reads; the
+# per-model-point movement detail goes to a parquet sidecar (Excel's row limit).
+_CLOSE_PACK_SHEETS = (
+    ("00_Index", None),                      # cover metadata, built below
+    ("01_SoFP", "sofp"),
+    ("02_Service_Result", "service_result"),  # only if assembled
+    ("03_Finance", "finance"),
+    ("04_Reconciliation", "reconciliation"),  # the rich tidy detail
+)
+
+
+def _append_sheet(workbook, title: str, frame: pl.DataFrame) -> None:
+    """Append a polars frame to a new sheet -- header row then data rows."""
+    sheet = workbook.create_sheet(title=title)
+    sheet.append(list(frame.columns))
+    for row in frame.iter_rows():
+        sheet.append(list(row))
+
+
+def _index_frame(period_months: int, reconciliation: pl.DataFrame,
+                 sheets, sidecar) -> pl.DataFrame:
+    """The 00_Index cover sheet -- the reporting period, the models and groups
+    in the pack, the sheet list, and the per-MP sidecar reference."""
+    models = ", ".join(reconciliation["model"].unique().sort().to_list())
+    groups = [g for g in reconciliation["group_id"].unique().sort().to_list()
+              if g is not None]
+    rows = [
+        {"item": "Reporting period (months)", "value": str(period_months)},
+        {"item": "Models", "value": models},
+        {"item": "Groups", "value": ", ".join(groups) if groups else "(unlabelled)"},
+        {"item": "Sheets", "value": ", ".join(sheets)},
+        {"item": "Per-MP detail",
+         "value": sidecar if sidecar else "(not included)"},
+    ]
+    return pl.DataFrame(rows, schema={"item": pl.Utf8, "value": pl.Utf8})
+
+
+def write_close_pack(package, path, *, movements=None) -> None:
+    """Write a close pack (a :class:`~fastcashflow.closing.ClosePackage`) to a
+    multi-sheet ``.xlsx`` -- the aggregate IFRS 17 statements an entity reads --
+    and, when ``movements`` is given, a per-model-point parquet sidecar.
+
+    The workbook carries an index cover, the statement of financial position, the
+    service result (if it was assembled), the finance statement, and the
+    reconciliation detail with the rich audit columns (line_code, the IFRS 17
+    paragraph anchor, the memo flag, the deterministic order) materialised by
+    joining :func:`line_metadata` -- so the artifact is self-contained.
+
+    The per-model-point settlement movement does NOT go in the workbook (a sheet
+    caps at ~1,048,576 rows); ``movements`` -- one settlement movement or a list
+    -- is written to ``<path>_permp[_i].parquet`` beside the workbook via
+    :func:`write_measurement`, and the index sheet names the file(s).
+    """
+    p = str(path)
+    if not p.endswith(".xlsx"):
+        raise ValueError(
+            f"write_close_pack: path must be a .xlsx workbook, got {path!r}")
+    import openpyxl
+
+    frames = package.to_frames()
+    stem = p[:-len(".xlsx")]
+
+    # Per-MP sidecar(s) first, so the index can name them. The naming keys off
+    # the CALL SHAPE, not the count: a single movement -> one bare file; a list
+    # (or tuple) -> one indexed file per entry, even if it holds just one.
+    sidecar_label = None
+    movement_list = None
+    if movements is not None:
+        is_single = not isinstance(movements, (list, tuple))
+        movement_list = [movements] if is_single else list(movements)
+        sidecar_paths = ([f"{stem}_permp.parquet"] if is_single
+                         else [f"{stem}_permp_{i}.parquet"
+                               for i in range(len(movement_list))])
+        sidecar_label = ", ".join(sp.rsplit("/", 1)[-1] for sp in sidecar_paths)
+
+    # The sheets actually present (service result only if assembled).
+    present = [(title, key) for title, key in _CLOSE_PACK_SHEETS
+               if key is None or key in frames]
+    sheet_titles = [title for title, _key in present]
+
+    workbook = openpyxl.Workbook()
+    workbook.remove(workbook.active)        # drop the default empty sheet
+    for title, key in present:
+        if key is None:
+            frame = _index_frame(package.period_months, frames["reconciliation"],
+                                 sheet_titles, sidecar_label)
+        elif key == "reconciliation":
+            # Materialise the rich audit columns at the emit boundary (DELTA 2):
+            # the lean in-process frame stays lean; the file is self-contained.
+            frame = frames[key].join(
+                line_metadata(), on=["model", "block", "line"], how="left")
+        else:
+            frame = frames[key]
+        _append_sheet(workbook, title, frame)
+    workbook.save(p)
+
+    if movement_list is not None:
+        for movement, sidecar_path in zip(movement_list, sidecar_paths):
+            write_measurement(movement, sidecar_path)
