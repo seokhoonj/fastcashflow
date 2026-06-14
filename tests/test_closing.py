@@ -98,11 +98,12 @@ def test_reinsurance_is_an_asset_that_nets_against_issued():
     assert _cell(df, _KIND_REINSURANCE, _COMP_LC) == pytest.approx(0.0)
     assert _cell(df, _KIND_REINSURANCE, _COMP_LIC) == pytest.approx(0.0)
     assert _cell(df, _KIND_REINSURANCE, _COMP_TOTAL) == pytest.approx(-150.0)
-    # net = issued less reinsurance, component by component
+    # net = issued + reinsurance held, component by component (one signed frame:
+    # the -150 reinsurance recoverable is added in, reducing the net).
     # issued: LRC 1000, LC 0, LIC 300, total 1300
-    assert _cell(df, _KIND_NET, _COMP_LRC) == pytest.approx(1000.0 - (-150.0))
-    assert _cell(df, _KIND_NET, _COMP_LIC) == pytest.approx(300.0 - 0.0)
-    assert _cell(df, _KIND_NET, _COMP_TOTAL) == pytest.approx(1300.0 - (-150.0))
+    assert _cell(df, _KIND_NET, _COMP_LRC) == pytest.approx(1000.0 + (-150.0))
+    assert _cell(df, _KIND_NET, _COMP_LIC) == pytest.approx(300.0 + 0.0)
+    assert _cell(df, _KIND_NET, _COMP_TOTAL) == pytest.approx(1300.0 + (-150.0))
 
 
 def test_issued_aggregates_across_models():
@@ -183,7 +184,8 @@ def test_finance_reinsurance_nets_against_issued():
     assert _fcell(df, _KIND_REINSURANCE, _FINANCE_TOTAL) == pytest.approx(reins_total)
     # reinsurance held has no LIC block -> zero finance there
     assert _fcell(df, _KIND_REINSURANCE, "LIC finance") == pytest.approx(0.0)
-    assert _fcell(df, _KIND_NET, _FINANCE_TOTAL) == pytest.approx(21.0 - reins_total)
+    # net finance = issued + reinsurance held in the one signed frame
+    assert _fcell(df, _KIND_NET, _FINANCE_TOTAL) == pytest.approx(21.0 + reins_total)
 
 
 def test_close_packages_sofp_finance_and_reconciliation_detail():
@@ -195,7 +197,7 @@ def test_close_packages_sofp_finance_and_reconciliation_detail():
     assert isinstance(pack, ClosePackage)
     assert pack.period_months == 12
     assert set(pack.to_frames()) == {"sofp", "finance", "reconciliation"}
-    assert _fcell(pack.finance, _KIND_NET, _FINANCE_TOTAL) == pytest.approx(4.0 - (-1.0))
+    assert _fcell(pack.finance, _KIND_NET, _FINANCE_TOTAL) == pytest.approx(4.0 + (-1.0))
     # the reconciliation detail is stamped with the group ids and both models
     recon = pack.reconciliation
     assert set(recon["group_id"].unique().to_list()) == {"GoC-1", "RE-1"}

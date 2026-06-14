@@ -22,8 +22,9 @@ loss component sits in a different place in each measurement model:
   ``LRC = lrc + loss_component``.
 * Reinsurance held -- an ASSET for remaining coverage (``BEL + RA + CSM``,
   paragraph 82), no loss component (a reinsurance contract held cannot be
-  onerous, paragraph 65) and no liability for incurred claims block; it enters
-  the net position as a deduction from the issued liability (paragraph 78).
+  onerous, paragraph 65) and no liability for incurred claims block. A
+  recoverable is a negative carrying amount in the one signed liability frame,
+  so it is ADDED into the net position and thereby reduces it (paragraph 78).
 """
 from __future__ import annotations
 
@@ -130,9 +131,12 @@ def _accumulate(position: dict[str, float], comp: _Components) -> None:
 
 
 def _net(issued: dict[str, float], reins: dict[str, float]) -> dict[str, float]:
-    # Net carrying amount = issued liability less the reinsurance asset
-    # (paragraph 78). The reinsurance asset reduces the net liability.
-    return {key: issued[key] - reins[key] for key in issued}
+    # Net carrying amount = issued liability net of reinsurance held (paragraph
+    # 78). Both kinds carry their amount in the one signed liability frame (BEL +
+    # RA + CSM, _components), where a reinsurance recoverable is a NEGATIVE
+    # carrying amount (a negative liability). So the net is the algebraic SUM:
+    # adding the negative reinsurance asset reduces the net liability.
+    return {key: issued[key] + reins[key] for key in issued}
 
 
 def _kind_rows(kind: str, position: dict[str, float]) -> list[dict]:
@@ -167,8 +171,9 @@ def assemble_sofp(reconciliations) -> pl.DataFrame:
     contracts issued, reinsurance contracts held, and the net -- each with the
     opening balance, the period change and the closing balance. Per row,
     ``opening + change == closing``; per kind, the Total row is the sum of the
-    three components (the carrying amount); the Net kind is issued less
-    reinsurance.
+    three components (the carrying amount); the Net kind sums issued and
+    reinsurance held in the one signed liability frame (a reinsurance recoverable
+    is a negative carrying amount, so it reduces the net).
     """
     issued = _zero_position()
     reins = _zero_position()
@@ -247,7 +252,9 @@ def assemble_finance(reconciliations) -> pl.DataFrame:
     recons = list(reconciliations)
     issued = _finance_position(recons, "issued")
     reins = _finance_position(recons, "reinsurance")
-    net = {field: issued[field] - reins[field] for field in issued}
+    # One signed frame (cf. _net): the net finance expense is the algebraic sum
+    # of issued and reinsurance-held finance, not a subtraction.
+    net = {field: issued[field] + reins[field] for field in issued}
     rows = (
         _kind_finance_rows(_KIND_ISSUED, issued)
         + _kind_finance_rows(_KIND_REINSURANCE, reins)

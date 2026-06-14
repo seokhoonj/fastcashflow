@@ -94,7 +94,8 @@ def test_close_pack_writes_the_aggregate_sheets(tmp_path):
     header, rows = _sheet_rows(wb["01_SoFP"])
     assert header == ("kind", "component", "opening", "change", "closing")
     net_total = [r for r in rows if r["kind"] == "Net" and r["component"] == "Total"]
-    assert net_total[0]["closing"] == pytest.approx(1300.0 - (-150.0))
+    # one signed frame: the -150 reinsurance recoverable is added in (reduces net)
+    assert net_total[0]["closing"] == pytest.approx(1300.0 + (-150.0))
 
 
 def test_reconciliation_sheet_materialises_rich_audit_columns(tmp_path):
