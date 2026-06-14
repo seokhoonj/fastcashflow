@@ -11,6 +11,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Period-close reporting -- the IFRS 17 close pack.** `close(...)` assembles a
+  reporting period's settlement reconciliations (one per group of contracts) into
+  the disclosure statements -- the statement of financial position
+  (`assemble_sofp`, paragraphs 78 / 99-101), the insurance finance statement
+  (`assemble_finance`, B130-B136) and, when reports are supplied, the insurance
+  service result (`assemble_service_result`, B120-B124) -- as a `ClosePackage`.
+  The net statement adds reinsurance held to contracts issued in one signed frame
+  (a recoverable lowers the net, paragraph 78). `write_close_pack` serialises the
+  package to a multi-sheet `.xlsx`, keeping the per-model-point movement in a
+  parquet sidecar; `reconciliation_to_frame` / `write_reconciliation` expose the
+  per-reconciliation tidy frame and `line_metadata` the audit registry (line
+  code, IFRS 17 paragraph, memo flag, sort order). `report.by_period` buckets a
+  report on the elapsed or calendar basis. The four settlement reconciliations
+  print a readable blocked table driven from that shared line spec.
+- **Settlement family extended to every model.** `settle` / `settle_aggregate` /
+  `settle_stream` now cover VFA (paragraph-45 CSM, account-value-linked LIC), PAA
+  (paragraph-55(b) LRC roll) and reinsurance held (paragraph-66, no floor, with
+  the 66A-66B loss-recovery component) alongside GMM, plus per-group-of-contracts
+  settlement for the CSM-bearing models. `fcf.samples.treaty()` returns a bundled
+  quota-share treaty so the reinsurance and close-pack examples run on the
+  packaged book.
 - **`gmm.settle` -- the IFRS 17 paragraph-44 settlement movement.** The
   period-close opening -> closing movement of a GMM in-force book: BEL / RA
   at current rates (B72(1)), CSM accretion and the paragraph-44(c)
