@@ -242,7 +242,7 @@
   - [결산 / 보유계약 평가](workflow/settlement)
   - 분기말 마감파일 한 장으로 Sec. 44 기초 → 기말 정산. `gmm.settle`,
     변동분석표 (`reconcile`), 분기 체이닝 (`closing_inputs`), 진단 뷰
-    (`gmm.measure_inforce`), 단기 책의 `paa.settle` (Sec. 55(b)).
+    (`gmm.measure_inforce`), 단기 계약의 `paa.settle` (Sec. 55(b)).
 * - 9.2
   - [변동분해](workflow/movement)
   - 신계약 측정을 보고기간별로 잘라 BEL / CSM 움직임을 미래서비스 / 이자 /

@@ -310,11 +310,18 @@ pm_model = StateModel(states=(
         Transition("mortality"), Transition("lapse"))),
 ), seating=(0, 1, 2))
 pm_basis = fcf.Basis(
-    mortality_annual=pm_healthy, lapse_annual=pm_lapse,
-    ci_incidence_annual=ca_incidence, ci_reincidence_annual=ca_reincidence,
-    state_mortality_annual={"dth_aft_can": pm_post},                                 # 암진단 후 사망률 (가정)
-    discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10, morbidity_cv=0.15,
-    state_model=pm_model, coverages=(fcf.CoverageRate("CANCER1", ca_incidence),))
+    mortality_annual=pm_healthy,                  # 건강상태 사망률
+    lapse_annual=pm_lapse,                        # 해지
+    ci_incidence_annual=ca_incidence,             # 1차 암 진단율
+    ci_reincidence_annual=ca_reincidence,         # 재진단율 (sojourn 의존)
+    state_mortality_annual={"dth_aft_can": pm_post},  # 암진단 후 사망률 (가정)
+    discount_annual=0.03,                         # 할인율
+    ra_confidence=0.75,                           # 위험조정 신뢰수준
+    mortality_cv=0.10,                            # 사망 변동계수
+    morbidity_cv=0.15,                            # 발생 변동계수
+    state_model=pm_model,                         # 상태기계
+    coverages=(fcf.CoverageRate("CANCER1", ca_incidence),),  # 1차 암 진단 담보
+)
 
 # post_first 에 자리 지정 -> 사망건수가 암진단 후 사망률을 따른다
 pm_mp = fcf.ModelPoints(

@@ -81,7 +81,7 @@ fastcashflow 사용자 API
 │   ├── fcf.gmm.measure(mp, basis)                                       ── 신계약, 시간 trajectory 전체
 │   ├── fcf.gmm.measure(mp, basis, full=False)                           ── 시점 0 headline 4 숫자 (빠름); basis 가 dict 면 세그먼트 라우팅
 │   ├── fcf.gmm.settle(mp, state, basis, period_months=)                 ── 결산: Sec. 44 기초 → 기말 정산 (세그먼트 단위)
-│   ├── fcf.paa.settle(mp, state, basis, period_months=)                 ── 단기 (PAA) 책의 결산: Sec. 55(b) LRC 정산
+│   ├── fcf.paa.settle(mp, state, basis, period_months=)                 ── 단기 (PAA) 계약의 결산: Sec. 55(b) LRC 정산
 │   └── fcf.gmm.measure_inforce(mp, state, basis, full=)                 ── 보유계약 진단 뷰 (BEL/RA 현행추정 + carry CSM)
 │
 ├── 결과 저장

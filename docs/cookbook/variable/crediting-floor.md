@@ -184,7 +184,10 @@ floor 를 깔 때는 백킹 펀드의 변동성을 훨씬 보수적으로 잡아
 
 ```python
 mp_none = fcf.ModelPoints.single(
-    issue_age=40, premium=0.0, term_months=120, account_value=1.0e8,
+    issue_age=40,         # 가입연령
+    premium=0.0,          # 거치형
+    term_months=120,      # 10년
+    account_value=1.0e8,  # 기초 계좌가치
 )   # minimum_crediting_rate 생략 = 보증 없음
 none = fcf.vfa.measure(mp_none, basis, return_scenarios=scen)
 print(f"보증 없음 TVOG = {none.time_value[0]:>14,.0f}")

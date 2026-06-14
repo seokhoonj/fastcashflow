@@ -96,9 +96,13 @@ issued = fcf.reconcile([fcf.gmm.settle(valued, st, seg_basis, period_months=12)]
 reins    = fcf.reinsurance.measure(mp, seg_basis, treaty=treaty)
 opening  = np.asarray(st.elapsed_months) - 12
 re_state = InforceState(
-    mp_id=st.mp_id, elapsed_months=st.elapsed_months, count=st.count,
-    prior_csm=reins.csm_path[np.arange(mp.mp_id.shape[0]), opening],
-    lock_in_rate=st.lock_in_rate, prior_count=st.prior_count)
+    mp_id=st.mp_id,
+    elapsed_months=st.elapsed_months,
+    count=st.count,
+    prior_csm=reins.csm_path[np.arange(mp.mp_id.shape[0]), opening],   # 재보험 CSM 시드
+    lock_in_rate=st.lock_in_rate,
+    prior_count=st.prior_count,
+)
 held = fcf.reconcile([fcf.reinsurance.settle(
     valued, re_state, seg_basis, treaty=treaty, period_months=12)])[0]
 

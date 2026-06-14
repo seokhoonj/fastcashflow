@@ -184,9 +184,14 @@ toy_model = StateModel(states=(
           transitions=(Transition("mortality"),)),
 ), seating=(0, 1))
 toy_basis = fcf.Basis(
-    mortality_annual=zero, lapse_annual=zero, discount_annual=0.0,
-    ra_confidence=0.75, mortality_cv=0.10, state_model=toy_model,
-    coverages=(fcf.CoverageRate("DEATH", zero),))
+    mortality_annual=zero,                        # 탈퇴 (toy: 0)
+    lapse_annual=zero,                            # 해지 (toy: 0)
+    discount_annual=0.0,                          # 무할인 (toy)
+    ra_confidence=0.75,                           # 위험조정 신뢰수준
+    mortality_cv=0.10,                            # 사망 변동계수
+    state_model=toy_model,                        # 상태기계
+    coverages=(fcf.CoverageRate("DEATH", zero),),  # 사망 보장
+)
 toy_mp = fcf.ModelPoints(
     issue_age=np.array([70], dtype=np.int64), benefits={0: np.array([0.0])},
     premium=np.array([0.0]), term_months=np.array([12], dtype=np.int64),

@@ -46,9 +46,13 @@ def main() -> None:
     # the inception measure at the opening duration.
     opening  = np.asarray(st.elapsed_months) - period
     re_state = InforceState(
-        mp_id=st.mp_id, elapsed_months=st.elapsed_months, count=st.count,
+        mp_id=st.mp_id,
+        elapsed_months=st.elapsed_months,
+        count=st.count,
         prior_csm=reins.csm_path[np.arange(mp.mp_id.shape[0]), opening],
-        lock_in_rate=st.lock_in_rate, prior_count=st.prior_count)
+        lock_in_rate=st.lock_in_rate,
+        prior_count=st.prior_count,
+    )
     held = fcf.reconcile([fcf.reinsurance.settle(
         valued, re_state, seg_basis, treaty=treaty, period_months=period)])[0]
 
