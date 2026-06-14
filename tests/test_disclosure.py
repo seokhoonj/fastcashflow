@@ -7,11 +7,12 @@ and the frame faithfully carries each line's amount.
 """
 import numpy as np
 import polars as pl
+import pytest
 
 import fastcashflow as fcf
 from fastcashflow import InforceState, ModelPoints
 from fastcashflow.disclosure import (
-    reconciliation_to_frame, _GMM_RECON_BLOCKS, _LEAN_COLUMNS)
+    reconciliation_to_frame, _GMM_RECON_BLOCKS, _LEAN_COLUMNS, _RECON_SPECS)
 from fastcashflow.movement import GMMSettlementReconciliation
 from conftest import PATTERNS, make_death_basis
 
@@ -47,16 +48,18 @@ def _spec_fields(blocks):
     return {field for _b, lines in blocks for _l, field, _p, _m in lines}
 
 
-def test_gmm_block_spec_covers_exactly_the_reconciliation_fields():
-    """The disclosure spine is single-source: the GMM block spec names exactly
-    the reconciliation's float fields -- no disclosure line is dropped or
-    invented. (loss_component_reversed / recognised appear in two blocks; the
-    field set still matches exactly.)"""
-    float_fields = {n for n, f in GMMSettlementReconciliation.__dataclass_fields__.items()
+@pytest.mark.parametrize("model,blocks,cls", _RECON_SPECS,
+                         ids=[m for m, _b, _c in _RECON_SPECS])
+def test_block_spec_covers_exactly_the_reconciliation_fields(model, blocks, cls):
+    """The disclosure spine is single-source: each settlement family's block
+    spec names exactly its reconciliation's float fields -- no disclosure line
+    is dropped or invented. (loss_component_reversed / recognised appear in two
+    blocks; the field set still matches exactly.)"""
+    float_fields = {n for n, f in cls.__dataclass_fields__.items()
                     if str(f.type) == "float"}
-    spec = _spec_fields(_GMM_RECON_BLOCKS)
+    spec = _spec_fields(blocks)
     assert spec == float_fields, (
-        f"spec-only: {sorted(spec - float_fields)}; "
+        f"{model} spec-only: {sorted(spec - float_fields)}; "
         f"fields-only: {sorted(float_fields - spec)}")
 
 
