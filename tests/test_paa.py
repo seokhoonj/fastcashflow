@@ -250,3 +250,25 @@ def test_paa_measure_stream_matches_in_memory(tmp_path):
     ref = fcf.paa.measure(mp, basis)
     assert np.allclose(sorted(parts["loss_component"].to_list()),
                        sorted(ref.loss_component.tolist()))
+
+
+def test_paa_revenue_stops_at_the_contract_boundary():
+    """B126(a) straight-line revenue runs to the contract boundary (Sec. 34),
+    not the nominal term: a contract with a boundary cut (boundary < term)
+    recognises no revenue past coverage end. Keying the in-coverage mask on
+    term_months over-allocated premium to post-boundary months with no service.
+    """
+    mp = ModelPoints(
+        issue_age=np.array([40, 40]), premium=np.array([120.0, 120.0]),
+        term_months=np.array([12, 12]), premium_term_months=np.array([1, 1]),
+        benefits={0: np.array([480.0, 480.0])}, count=np.array([1.0, 1.0]),
+        contract_boundary_months=np.array([12, 6]),
+        calculation_methods=PATTERNS)
+    basis = _basis(mortality_q=0.0, lapse_q=0.0)
+    rev = fcf.paa.measure(mp, basis, full=True).revenue
+    # the boundary-cut contract earns 120 over [0, 6) and nothing after month 6
+    np.testing.assert_allclose(rev[1, :6], 20.0, rtol=1e-9)
+    np.testing.assert_allclose(rev[1, 6:], 0.0, atol=1e-9)
+    np.testing.assert_allclose(rev[1].sum(), 120.0, rtol=1e-9)
+    # the full-term contract (boundary == term) is unchanged
+    np.testing.assert_allclose(rev[0], 10.0, rtol=1e-9)

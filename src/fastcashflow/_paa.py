@@ -326,9 +326,13 @@ def measure_paa(
     # B126(a) straight-line weight -- a flat in-coverage mask. Used for the
     # 'time' basis and as the 'claims' fallback when a contract has no claims
     # pattern (B126(b) -> B126(a)); the fallback used the decaying in-force
-    # before, which is neither basis.
+    # before, which is neither basis. The mask runs to the CONTRACT BOUNDARY
+    # (Sec. 34, where coverage ends), not term_months: a contract with a
+    # boundary cut (boundary < term) provides no service past the boundary, so
+    # spreading revenue to term over-allocates it past coverage end.
     in_coverage = (np.arange(proj.n_time)[None, :]
-                   < model_points.term_months[:, None]).astype(np.float64)
+                   < model_points.contract_boundary_months[:, None]
+                   ).astype(np.float64)
     if revenue_basis == "time":
         weight = in_coverage
     else:                                                # "claims" (validated above)
