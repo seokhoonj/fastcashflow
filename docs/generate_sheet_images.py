@@ -158,6 +158,20 @@ def csv_matrix(path):
     return rows
 
 
+def parquet_matrix(path, cols=None, max_rows=None):
+    """A parquet frame as a render matrix. ``cols`` selects (and orders) a
+    readable column slice -- the per-MP sidecar is ~38 columns wide."""
+    df = pl.read_parquet(path)
+    if cols is not None:
+        df = df.select([c for c in cols if c in df.columns])
+    rows = [df.columns]
+    for r in df.iter_rows():
+        rows.append([_fmt(v) for v in r])
+        if max_rows and len(rows) >= max_rows:
+            break
+    return rows
+
+
 def _fmt(v):
     if isinstance(v, bool):
         return str(v)
@@ -222,10 +236,27 @@ def main():
     render(csv_matrix(s("inforce_state.csv")), out("sample-inforce-state.png"),
            title="inforce_state.csv")
 
+    # The close pack -- every sheet the entity reads, plus a slice of the
+    # per-model-point parquet sidecar that carries the group-level detail.
     cp = openpyxl.load_workbook(s("close_pack_2026Q1.xlsx"),
                                 read_only=True, data_only=True)
-    render(sheet_matrix(cp, "01_SoFP"), out("close-pack-output.png"),
+    render(sheet_matrix(cp, "00_Index"), out("close-pack-00-index.png"),
+           title="close_pack_2026Q1.xlsx  --  00_Index")
+    render(sheet_matrix(cp, "01_SoFP"), out("close-pack-01-sofp.png"),
            title="close_pack_2026Q1.xlsx  --  01_SoFP")
+    render(sheet_matrix(cp, "03_Finance"), out("close-pack-03-finance.png"),
+           title="close_pack_2026Q1.xlsx  --  03_Finance")
+    render(sheet_matrix(cp, "04_Reconciliation", max_rows=18),
+           out("close-pack-04-reconciliation.png"),
+           title="close_pack_2026Q1.xlsx  --  04_Reconciliation  (top rows)")
+
+    sidecar_cols = ["group_label", "group_size", "bel_opening", "bel_closing",
+                    "ra_opening", "ra_closing", "csm_opening", "csm_release",
+                    "csm_closing", "loss_component_closing"]
+    render(parquet_matrix(s("close_pack_2026Q1_permp_0.parquet"),
+                          cols=sidecar_cols),
+           out("close-pack-sidecar.png"),
+           title="close_pack_2026Q1_permp_0.parquet  (sidecar -- selected columns)")
 
 
 if __name__ == "__main__":

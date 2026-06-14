@@ -175,13 +175,55 @@ IFRS 17 close pack -- 12-month period
 fcf.write_close_pack(pack, "samples/close_pack_2026Q1.xlsx", movements=[goc])
 ```
 
-```{figure} ../../images/close-pack-output.png
-:width: 95%
-:alt: 결산팩 출력 엑셀
+`close_pack_2026Q1.xlsx` 한 권은 **엔티티가 읽는 집계 명세서 시트들**과, 옆에
+떨어지는 **보험계약집합별 상세 parquet 사이드카**로 이뤄집니다. 시트를 하나씩
+보면:
 
-`close_pack_2026Q1.xlsx` -- 00_Index · 01_SoFP · 03_Finance · 04_Reconciliation
-시트 (+ 보험계약집합별 상세는 옆에 parquet 사이드카).
+```{figure} ../../images/close-pack-00-index.png
+:width: 70%
+:alt: 결산팩 00_Index 시트
+
+`00_Index` -- 표지: 보고기간, 담긴 모델 / 그룹, 시트 목록, per-MP 사이드카 참조.
 ```
+
+```{figure} ../../images/close-pack-01-sofp.png
+:width: 95%
+:alt: 결산팩 01_SoFP 시트
+
+`01_SoFP` -- 재무상태표의 보험계약부채: LRC (잔여보장, 손실요소 분리) + LIC
+(발생사고). 세 컬럼은 **기초 | 변동 | 기말**. 9개 보험계약집합이 엔티티 한 장으로
+합산됩니다.
+```
+
+```{figure} ../../images/close-pack-03-finance.png
+:width: 80%
+:alt: 결산팩 03_Finance 시트
+
+`03_Finance` -- 보험금융손익 (Sec. B72): BEL / RA / CSM / LIC 이자부리 +
+finance wedge, 발행계약 · 보유재보험 · 순액 세 묶음.
+```
+
+```{figure} ../../images/close-pack-04-reconciliation.png
+:width: 95%
+:alt: 결산팩 04_Reconciliation 시트 (상위 행)
+
+`04_Reconciliation` -- 변동분석표의 tidy 상세 (감사조인용). 한 행 = 한 라인, 각
+라인이 `line_code` 와 **IFRS 17 문단 앵커** (`100(a)`, `B72(a)`, `B123` ...) 를
+달고 나옵니다. (상위 행만 -- 전체는 35행.)
+```
+
+```{figure} ../../images/close-pack-sidecar.png
+:width: 95%
+:alt: per-MP parquet 사이드카 (선택 컬럼)
+
+`close_pack_2026Q1_permp_0.parquet` -- 보험계약집합 (9개) 단위 상세. 그룹별
+BEL / RA / CSM 의 개시·종가가 그대로 남습니다 (38컬럼 중 일부만 표시).
+```
+
+세 컬럼(`01_SoFP`)은 **기초 | 변동 | 기말** 입니다 (`기초 + 변동 = 기말`).
+집계 시트는 엔티티가 읽고, 집합별 상세는 사이드카에 남습니다. 그룹 내 floor
+상계 (profitable 이 onerous 손실을 흡수) 덕분에 손실요소가 per-세그먼트 합산보다
+작게 잡힙니다.
 
 입력이 어디로 갔는지 역추적하면:
 
