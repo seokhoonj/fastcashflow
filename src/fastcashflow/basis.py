@@ -928,14 +928,14 @@ def _emit_tree(lines: list[object], out: list[str], prefix: str) -> None:
 
 
 def describe_basis(obj, *, file=None) -> None:
-    """Print the tree structure of a Basis (or read_basis dict).
+    """Print the tree structure of a Basis (or read_basis BasisRouter).
 
     Groups the fields by role -- rates, economic / expense, risk adjustment,
     coverages / coverage types, state machine, other -- so a reader can see
     what is inside the object without scanning every dataclass field.
 
-    Pass a single :class:`Basis` to see one segment, or pass the dict
-    returned by :func:`fastcashflow.io.read_basis` /
+    Pass a single :class:`Basis` to see one segment, or pass the
+    :class:`BasisRouter` returned by :func:`fastcashflow.io.read_basis` /
     :func:`fastcashflow.io.load_sample_basis` to also see the
     ``(product, channel)`` keys.
     """

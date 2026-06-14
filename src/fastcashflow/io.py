@@ -612,8 +612,8 @@ def read_basis(path: Path | str) -> "BasisRouter":
     routes without a ``segment_by`` argument.
 
     v1: the discount and inflation tables are read but used flat (their
-    first entry); the per-segment dict is returned for the caller to value
-    segment by segment.
+    first entry); the per-segment BasisRouter is returned for the caller to
+    value segment by segment.
     """
     wb = openpyxl.load_workbook(path, data_only=True)
 

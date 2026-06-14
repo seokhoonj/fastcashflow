@@ -116,9 +116,9 @@ def show_trace(
         row before running :func:`measure`, so a 1M-row portfolio does
         not pay for the trace of one contract.
     basis
-        A single :class:`Basis`, or the dict returned by
-        :func:`fastcashflow.io.read_basis` /
-        :func:`fastcashflow.io.load_sample_basis`. With the dict
+        A single :class:`Basis`, or the :class:`~fastcashflow.BasisRouter`
+        returned by :func:`fastcashflow.io.read_basis` /
+        :func:`fastcashflow.io.load_sample_basis`. With the router
         form the function looks up the segment via the model point's
         ``(product, channel)``.
     file
@@ -1030,8 +1030,8 @@ def show_trace_diff(
         each :func:`measure` so the diff cost stays proportional to one MP.
     basis_a, basis_b
         Two basis to compare. Either a :class:`Basis` or the
-        dict from :func:`fastcashflow.io.read_basis`. With dicts,
-        each is routed independently by the model point's
+        :class:`~fastcashflow.BasisRouter` from :func:`fastcashflow.io.read_basis`.
+        With a router, each is routed independently by the model point's
         ``(product, channel)`` -- comparing two segments is also fine.
     label_a, label_b
         Short labels for the two columns in the printed diff (e.g.
@@ -1422,7 +1422,7 @@ def show_trace_bel_step(
         Portfolio :class:`ModelPoints`. Subset to the single row before
         running :func:`measure`.
     basis
-        A :class:`Basis` or the dict from
+        A :class:`Basis` or the :class:`~fastcashflow.BasisRouter` from
         :func:`fastcashflow.io.read_basis` (routed by the row's
         ``(product, channel)`` like :func:`show_trace`).
     months
