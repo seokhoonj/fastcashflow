@@ -16,8 +16,8 @@ import polars as pl
 import pytest
 
 from fastcashflow.closing import (
-    ClosePackage, assemble_sofp, close,
-    _COMP_LRC, _COMP_LC, _COMP_LIC, _COMP_TOTAL,
+    ClosePackage, assemble_sofp, assemble_finance, close,
+    _COMP_LRC, _COMP_LC, _COMP_LIC, _COMP_TOTAL, _FINANCE_TOTAL,
     _KIND_ISSUED, _KIND_REINSURANCE, _KIND_NET)
 from fastcashflow.movement import (
     GMMSettlementReconciliation, PAASettlementReconciliation,
@@ -136,13 +136,64 @@ def test_every_row_foots_opening_plus_change_equals_closing():
         assert _cell(df, kind, _COMP_TOTAL) == pytest.approx(parts)
 
 
-def test_close_packages_sofp_and_reconciliation_detail():
-    gmm = _build(GMMSettlementReconciliation, bel_closing=100.0, lic_closing=10.0)
-    held = _build(ReinsuranceSettlementReconciliation, bel_closing=-30.0)
+def _fcell(df, kind, line):
+    row = df.filter((pl.col("kind") == kind) & (pl.col("line") == line))
+    assert row.height == 1, f"{kind}/{line} not emitted once"
+    return row["amount"][0]
+
+
+def test_finance_sums_sources_and_keeps_loss_finance_a_memo():
+    """The five finance sources sum to the total; loss_component_finance is a
+    memo (a share of BEL finance), excluded from the total."""
+    recon = _build(
+        GMMSettlementReconciliation,
+        bel_interest=10.0, ra_interest=2.0, csm_accretion=5.0,
+        lic_finance=1.0, finance_wedge=3.0, loss_component_finance=4.0)
+    df = assemble_finance([recon])
+    # total = 10 + 2 + 5 + 1 + 3 = 21 (finance_wedge included, B97(a))
+    assert _fcell(df, _KIND_ISSUED, _FINANCE_TOTAL) == pytest.approx(21.0)
+    assert _fcell(df, _KIND_ISSUED, "Finance wedge") == pytest.approx(3.0)
+    # the memo is reported but NOT part of the total
+    memo = df.filter((pl.col("kind") == _KIND_ISSUED)
+                     & (pl.col("line") == "Loss component finance"))
+    assert bool(memo["is_memo"][0]) is True
+    assert memo["amount"][0] == pytest.approx(4.0)
+
+
+def test_finance_paa_has_only_lic_finance():
+    """PAA holds the LRC undiscounted: its only finance line is the LIC unwind."""
+    recon = _build(PAASettlementReconciliation, lic_finance=7.0)
+    df = assemble_finance([recon])
+    assert _fcell(df, _KIND_ISSUED, "LIC finance") == pytest.approx(7.0)
+    assert _fcell(df, _KIND_ISSUED, "BEL finance") == pytest.approx(0.0)
+    assert _fcell(df, _KIND_ISSUED, _FINANCE_TOTAL) == pytest.approx(7.0)
+
+
+def test_finance_reinsurance_nets_against_issued():
+    issued = _build(GMMSettlementReconciliation,
+                    bel_interest=10.0, ra_interest=2.0, csm_accretion=5.0,
+                    lic_finance=1.0, finance_wedge=3.0)
+    held = _build(ReinsuranceSettlementReconciliation,
+                  bel_interest=-1.0, ra_interest=0.5, csm_accretion=1.0,
+                  finance_wedge=0.5)
+    df = assemble_finance([issued, held])
+    reins_total = -1.0 + 0.5 + 1.0 + 0.0 + 0.5
+    assert _fcell(df, _KIND_REINSURANCE, _FINANCE_TOTAL) == pytest.approx(reins_total)
+    # reinsurance held has no LIC block -> zero finance there
+    assert _fcell(df, _KIND_REINSURANCE, "LIC finance") == pytest.approx(0.0)
+    assert _fcell(df, _KIND_NET, _FINANCE_TOTAL) == pytest.approx(21.0 - reins_total)
+
+
+def test_close_packages_sofp_finance_and_reconciliation_detail():
+    gmm = _build(GMMSettlementReconciliation, bel_closing=100.0, lic_closing=10.0,
+                 bel_interest=4.0)
+    held = _build(ReinsuranceSettlementReconciliation, bel_closing=-30.0,
+                  bel_interest=-1.0)
     pack = close([gmm, held], group_ids=["GoC-1", "RE-1"])
     assert isinstance(pack, ClosePackage)
     assert pack.period_months == 12
-    assert set(pack.to_frames()) == {"sofp", "reconciliation"}
+    assert set(pack.to_frames()) == {"sofp", "finance", "reconciliation"}
+    assert _fcell(pack.finance, _KIND_NET, _FINANCE_TOTAL) == pytest.approx(4.0 - (-1.0))
     # the reconciliation detail is stamped with the group ids and both models
     recon = pack.reconciliation
     assert set(recon["group_id"].unique().to_list()) == {"GoC-1", "RE-1"}

@@ -181,11 +181,85 @@ def assemble_sofp(reconciliations) -> pl.DataFrame:
     return pl.DataFrame(rows, schema=_SOFP_SCHEMA)
 
 
+# The insurance finance statement (IFRS 17 paragraphs 87-89, B130-B136). One
+# row per kind x line. The five sources sum to the insurance finance expense;
+# loss_component_finance is a MEMO -- the loss component's share (r x pool
+# interest unwind, 51(c)) of the BEL finance, not an amount on top of it.
+_FINANCE_SCHEMA = {
+    "kind": pl.Utf8, "line": pl.Utf8, "is_memo": pl.Boolean, "amount": pl.Float64,
+}
+_FINANCE_LINES = (
+    ("BEL finance", "bel_interest"),        # B130-B136: finance on the FCF estimates
+    ("RA finance", "ra_interest"),          # finance on the risk adjustment
+    ("CSM finance", "csm_accretion"),       # CSM interest at the locked-in rate (B72)
+    ("LIC finance", "lic_finance"),         # 42(c): incurred-claims discount unwind
+    ("Finance wedge", "finance_wedge"),     # B97(a): current vs locked-in rate gap
+)
+_FINANCE_MEMO_LINES = (
+    ("Loss component finance", "loss_component_finance"),  # 51(c): sub-component of BEL finance
+)
+_FINANCE_TOTAL = "Insurance finance expense"
+
+
+def _finance_position(recons, kind: str) -> dict[str, float]:
+    """Sum each finance line of the reconciliations of one kind. Reads fields
+    with getattr defaults so a model lacking a line (PAA has no CSM accretion,
+    VFA no finance wedge, reinsurance no LIC) contributes zero to it."""
+    fields = [field for _l, field in _FINANCE_LINES + _FINANCE_MEMO_LINES]
+    acc = {field: 0.0 for field in fields}
+    for recon in recons:
+        if _components(recon).kind != kind:
+            continue
+        for field in fields:
+            acc[field] += float(getattr(recon, field, 0.0))
+    return acc
+
+
+def _kind_finance_rows(kind: str, acc: dict[str, float]) -> list[dict]:
+    rows = []
+    total = 0.0
+    for line, field in _FINANCE_LINES:
+        total += acc[field]
+        rows.append({"kind": kind, "line": line, "is_memo": False,
+                     "amount": acc[field]})
+    rows.append({"kind": kind, "line": _FINANCE_TOTAL, "is_memo": False,
+                 "amount": total})
+    for line, field in _FINANCE_MEMO_LINES:
+        rows.append({"kind": kind, "line": line, "is_memo": True,
+                     "amount": acc[field]})
+    return rows
+
+
+def assemble_finance(reconciliations) -> pl.DataFrame:
+    """The insurance finance statement (IFRS 17 paragraphs 87-89, B130-B136).
+
+    The period's insurance finance expense disaggregated by source -- finance on
+    the BEL, the RA, the CSM (accretion at the locked-in rate, B72), the
+    liability for incurred claims (42(c)), and the B97(a) finance wedge (the
+    current-vs-locked-in rate gap on the experience adjustment) -- for contracts
+    issued, reinsurance contracts held, and the net. The five sources sum to the
+    ``Insurance finance expense`` total line. ``Loss component finance`` is a
+    memo: the loss component's share of the BEL finance (51(c)), already inside
+    the BEL finance line, not an additional amount.
+    """
+    recons = list(reconciliations)
+    issued = _finance_position(recons, "issued")
+    reins = _finance_position(recons, "reinsurance")
+    net = {field: issued[field] - reins[field] for field in issued}
+    rows = (
+        _kind_finance_rows(_KIND_ISSUED, issued)
+        + _kind_finance_rows(_KIND_REINSURANCE, reins)
+        + _kind_finance_rows(_KIND_NET, net)
+    )
+    return pl.DataFrame(rows, schema=_FINANCE_SCHEMA)
+
+
 @dataclass(frozen=True, slots=True)
 class ClosePackage:
     """The assembled IFRS 17 close pack for one reporting period.
 
     ``sofp`` is the statement of financial position (:func:`assemble_sofp`);
+    ``finance`` is the insurance finance statement (:func:`assemble_finance`);
     ``reconciliation`` is the stacked per-model settlement detail (the lean tidy
     frame of :func:`~fastcashflow.disclosure.reconciliation_to_frame`, one block
     of rows per reconciliation, stamped with ``group_id``). The disclosure
@@ -194,12 +268,14 @@ class ClosePackage:
 
     period_months: int
     sofp: pl.DataFrame
+    finance: pl.DataFrame
     reconciliation: pl.DataFrame
 
     def to_frames(self) -> dict[str, pl.DataFrame]:
         """The close pack as named frames -- the sheet-shaped views the
         disclosure emitter writes."""
-        return {"sofp": self.sofp, "reconciliation": self.reconciliation}
+        return {"sofp": self.sofp, "finance": self.finance,
+                "reconciliation": self.reconciliation}
 
     def __str__(self) -> str:
         net = self.sofp.filter(pl.col("kind") == _KIND_NET)
@@ -238,6 +314,7 @@ def close(reconciliations, *, group_ids=None) -> ClosePackage:
             f"close: group_ids has {len(group_ids)} entries for "
             f"{len(recons)} reconciliations")
     sofp = assemble_sofp(recons)
+    finance = assemble_finance(recons)
     frames = []
     for i, recon in enumerate(recons):
         frame = reconciliation_to_frame(recon)
@@ -245,5 +322,5 @@ def close(reconciliations, *, group_ids=None) -> ClosePackage:
         frames.append(frame.with_columns(
             pl.lit(gid, dtype=pl.Utf8).alias("group_id")))
     reconciliation = pl.concat(frames)
-    return ClosePackage(period_months=periods.pop(), sofp=sofp,
+    return ClosePackage(period_months=periods.pop(), sofp=sofp, finance=finance,
                         reconciliation=reconciliation)
