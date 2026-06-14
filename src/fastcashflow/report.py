@@ -48,6 +48,108 @@ def _to_years(monthly: FloatArray) -> FloatArray:
     return padded.reshape(n_years, 12).sum(axis=1)
 
 
+# The flow lines a Report buckets into reporting periods (balances -- csm_opening
+# / csm_closing -- are not summed; the period view reports flows).
+_PERIOD_LINES = (
+    "insurance_revenue", "insurance_service_expense", "insurance_service_result",
+    "insurance_finance_expense", "bel_finance_expense", "ra_finance_expense",
+    "csm_finance_expense", "csm_accretion", "csm_release",
+)
+_REINSURANCE_PERIOD_LINES = (
+    "reinsurance_premium_allocated", "amounts_recovered",
+    "reinsurance_service_result", "ra_release", "reinsurance_finance_expense",
+    "bel_finance_expense", "ra_finance_expense", "csm_finance_expense",
+    "csm_accretion", "csm_release",
+)
+
+
+def _period_offsets(basis: str, inception_month, n_mp: int) -> FloatArray:
+    """The per-model-point calendar offset of policy-month 0.
+
+    ``elapsed`` aligns every cohort at its own inception (offset 0): the period
+    view sums by elapsed policy time, the generalisation of :meth:`annual`.
+    ``calendar`` shifts each model point by its ``inception_month`` -- the
+    calendar-month index (0-based, relative to the report origin) at which that
+    cohort's coverage begins -- so flows fall in the calendar period they occur
+    in, the basis a multi-cohort close reports on.
+    """
+    if basis == "elapsed":
+        if inception_month is not None:
+            raise ValueError(
+                "by_period: 'elapsed' basis takes no inception_month "
+                "(every cohort is aligned at its own inception)")
+        return np.zeros(n_mp, dtype=np.int64)
+    if basis == "calendar":
+        if inception_month is None:
+            raise ValueError(
+                "by_period: 'calendar' basis needs inception_month -- the "
+                "calendar-month index of each model point's inception")
+        offsets = np.asarray(inception_month, dtype=np.int64)
+        if offsets.shape != (n_mp,):
+            raise ValueError(
+                f"by_period: inception_month has {offsets.shape} entries for "
+                f"{n_mp} model points")
+        if (offsets < 0).any():
+            raise ValueError("by_period: inception_month must be non-negative")
+        return offsets
+    raise ValueError(
+        f"by_period: basis must be 'elapsed' or 'calendar', got {basis!r}")
+
+
+def _chunk(collapsed: FloatArray, period_months: int, n_periods: int) -> FloatArray:
+    """Sum a per-month portfolio series into ``n_periods`` reporting periods --
+    the generalisation of :func:`_to_years` to an arbitrary period length."""
+    padded = np.zeros(n_periods * period_months)
+    padded[:collapsed.shape[0]] = collapsed
+    return padded.reshape(n_periods, period_months).sum(axis=1)
+
+
+def _by_period(report, line_names, period_months, basis, inception_month,
+               loss_component):
+    """Sum a report's flow lines into reporting periods of ``period_months``.
+
+    Returns ``dict[str, FloatArray]`` -- each line's portfolio total per period
+    (period 0 first). ``loss_component`` (an inception per-MP scalar), when
+    given, is placed in the period containing each cohort's inception."""
+    if period_months <= 0:
+        raise ValueError(
+            f"by_period: period_months must be positive, got {period_months}")
+    n_mp, n_time = getattr(report, line_names[0]).shape
+    offsets = _period_offsets(basis, inception_month, n_mp)
+
+    if basis == "elapsed":
+        # Every cohort is aligned at policy-month 0, so sum across model points
+        # FIRST and then chunk -- the exact order :meth:`annual` uses, so
+        # by_period(12) reproduces annual() bit for bit (a scatter-order sum
+        # would diverge under floating-point cancellation).
+        n_periods = (n_time + period_months - 1) // period_months
+        result = {name: _chunk(getattr(report, name).sum(axis=0),
+                               period_months, n_periods)
+                  for name in line_names}
+        if loss_component is not None:
+            totals = np.zeros(n_periods)
+            totals[0] = loss_component.sum()    # recognised at inception
+            result["loss_component"] = totals
+        return result
+
+    # Calendar basis: cohorts have different inception months, so a flow at
+    # (mp, month) lands in period (offset[mp] + month) // period_months. There
+    # is no annual() counterpart, so the scatter accumulation is the form.
+    period_index = ((offsets[:, None] + np.arange(n_time)[None, :])
+                    // period_months).ravel()
+    n_periods = int(period_index.max()) + 1
+    result = {}
+    for name in line_names:
+        totals = np.zeros(n_periods)
+        np.add.at(totals, period_index, getattr(report, name).ravel())
+        result[name] = totals
+    if loss_component is not None:
+        totals = np.zeros(n_periods)
+        np.add.at(totals, offsets // period_months, loss_component)
+        result["loss_component"] = totals
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class Report:
     """IFRS 17 reporting figures, period by period.
@@ -97,6 +199,24 @@ class Report:
                 "csm_accretion", "csm_release",
             )
         }
+
+    def by_period(self, period_months: int = 12, *, basis: str = "elapsed",
+                  inception_month=None) -> dict[str, FloatArray]:
+        """Portfolio totals bucketed into reporting periods of ``period_months``.
+
+        The general form of :meth:`annual` (which is ``by_period(12)`` on the
+        elapsed basis for its six lines): every flow line of the report --
+        revenue, service expense, service result, the finance expense and its
+        B130-B136 split, and the CSM accretion / release -- summed across model
+        points into each reporting period, plus ``loss_component`` placed in the
+        period of each cohort's inception. ``basis='elapsed'`` (default) buckets
+        by elapsed policy time; ``basis='calendar'`` shifts each cohort by its
+        ``inception_month`` so flows fall in the calendar period they occur in
+        (see :func:`_period_offsets`). Returns ``dict[str, FloatArray]``, each
+        array one entry per period (period 0 first).
+        """
+        return _by_period(self, _PERIOD_LINES, period_months, basis,
+                          inception_month, self.loss_component)
 
     def __str__(self) -> str:
         annual = self.annual()
@@ -209,6 +329,19 @@ class ReinsuranceReport:
                 "csm_accretion", "csm_release",
             )
         }
+
+    def by_period(self, period_months: int = 12, *, basis: str = "elapsed",
+                  inception_month=None) -> dict[str, FloatArray]:
+        """Portfolio totals bucketed into reporting periods of ``period_months``.
+
+        The reinsurance-held counterpart of :meth:`Report.by_period`: premiums
+        paid, amounts recovered, the service result, the RA release, and the
+        finance expense with its B130-B136 split, summed across model points
+        into each reporting period. There is no loss component (IFRS 17 Sec. 65).
+        ``basis`` and ``inception_month`` behave as in :meth:`Report.by_period`.
+        """
+        return _by_period(self, _REINSURANCE_PERIOD_LINES, period_months, basis,
+                          inception_month, None)
 
     def __str__(self) -> str:
         annual = self.annual()
