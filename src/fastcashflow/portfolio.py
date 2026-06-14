@@ -45,7 +45,7 @@ from fastcashflow.io import (
 from fastcashflow.grouping import (
     group, group_of_contracts, _GroupReducer, _join_keys, _finalise_gmm_group,
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
-from fastcashflow.modelpoints import ModelPoints, InforceState, align_inforce_state
+from fastcashflow.model_points import ModelPoints, InforceState, align_inforce_state
 from fastcashflow.movement import (
     roll_forward, reconcile, GMMSettlementReconciliation,
     VFASettlementReconciliation)
@@ -906,7 +906,7 @@ class GoCSettlement:
     _NONLINEAR: ClassVar[tuple[str, ...]] = _GOC_SETTLEMENT_NONLINEAR
 
     def closing_inputs(self, *, allocation=None):
-        from fastcashflow.modelpoints import InforceState
+        from fastcashflow.model_points import InforceState
         mp = self.model_points
         inv = self.group_inverse
         if mp is None or inv is None or mp.mp_id is None:
@@ -1060,7 +1060,7 @@ class VFAGoCSettlement:
     _NONLINEAR: ClassVar[tuple[str, ...]] = _VFA_GOC_SETTLEMENT_NONLINEAR
 
     def closing_inputs(self, *, allocation=None):
-        from fastcashflow.modelpoints import InforceState
+        from fastcashflow.model_points import InforceState
         mp = self.model_points
         inv = self.group_inverse
         if mp is None or inv is None or mp.mp_id is None:

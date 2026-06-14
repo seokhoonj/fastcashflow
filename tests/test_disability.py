@@ -17,7 +17,7 @@ import pytest
 
 from fastcashflow import STATE_WAIVER, Basis, ModelPoints, State, StateModel, Transition, CoverageRate
 from fastcashflow.gmm import measure
-from fastcashflow.statemodel import compile_state_model
+from fastcashflow.state_model import compile_state_model
 
 from conftest import annual_from_monthly as _annual
 

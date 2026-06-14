@@ -60,11 +60,11 @@ from fastcashflow.coverage import (
     align_coverages, build_coverage_rates, coverage_arrays, validate_csr_codes,
 )
 from fastcashflow.io import write_measurement, _write_measurement_columns
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 from fastcashflow.projection import (
     Cashflows, project_cashflows, _add_state_mortality_rates, _state_lapse_stack,
 )
-from fastcashflow.statemodel import (
+from fastcashflow.state_model import (
     compile_state_model,
     compile_state_model_with_duration,
     is_semi_markov,
@@ -750,7 +750,7 @@ def _reconcile_state(model_points: ModelPoints,
     model-points order, not the state file's order -- the returned state is
     reordered by mp_id so prior_csm lines up with the rows it belongs to.
     A reconciled, same-order pair passes through unchanged."""
-    from fastcashflow.modelpoints import align_inforce_state
+    from fastcashflow.model_points import align_inforce_state
     # align_inforce_state does the mp_id join (and rejects mismatched id sets)
     # and reorders every per-MP field -- crucially prior_csm -- to mp order.
     state = align_inforce_state(model_points, state)
@@ -2749,7 +2749,7 @@ def _measure_fast(
                 basis.waiver_incidence_annual(
                     sex_grid, issue_age_grid, duration_grid,
                     issue_class_grid, elapsed_grid)))
-        # In-force state machine -- see ``statemodel.resolve_state_model``
+        # In-force state machine -- see ``state_model.resolve_state_model``
         # for the fallback policy when ``basis.state_model`` is unset.
         # The transition rates land on the sex x age x duration grid the
         # kernel indexes.

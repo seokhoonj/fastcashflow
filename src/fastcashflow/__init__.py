@@ -37,7 +37,7 @@ from fastcashflow.io import (
     sample_data_dir,
     write_measurement,
 )
-from fastcashflow.modelpoints import (
+from fastcashflow.model_points import (
     NO_GUARANTEE_RATE,
     STATE_ACTIVE,
     STATE_PAIDUP,
@@ -79,7 +79,7 @@ from fastcashflow.plots import (
 from fastcashflow.pricing import solve_premium
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import ReinsuranceReport, Report, report
-from fastcashflow.statemodel import (
+from fastcashflow.state_model import (
     STATE_MODELS,
     State,
     StateModel,

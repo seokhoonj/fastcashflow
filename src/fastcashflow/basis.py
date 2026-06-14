@@ -9,7 +9,7 @@ from types import MappingProxyType
 import numpy as np
 
 from fastcashflow._typing import DurationRateFn, FloatArray, RateFn, RateLike
-from fastcashflow.statemodel import StateModel
+from fastcashflow.state_model import StateModel
 
 
 # RateFn fields on Basis that follow the standard
@@ -441,7 +441,7 @@ class CoverageRate:
     claim, and which risk class the RA prices it as, is *derived* from
     the portfolio-level :class:`CalculationMethod` taxonomy (the
     ``calculation_methods.csv`` file, surfaced as
-    :attr:`fastcashflow.modelpoints.ModelPoints.calculation_methods`). Those
+    :attr:`fastcashflow.model_points.ModelPoints.calculation_methods`). Those
     two flags do not live on :class:`CoverageRate`.
     """
 
@@ -585,14 +585,14 @@ class Basis:
         payout) that happen to share a table in most products. The taxonomy
         side -- whether a coverage code runs as a diagnosis pool vs a
         recurring claim -- lives on the portfolio
-        (:attr:`fastcashflow.modelpoints.ModelPoints.calculation_methods`),
+        (:attr:`fastcashflow.model_points.ModelPoints.calculation_methods`),
         not here.
     state_model :
-        The product's in-force state machine -- a :class:`~fastcashflow.statemodel.StateModel`
+        The product's in-force state machine -- a :class:`~fastcashflow.state_model.StateModel`
         declaring the transient states, their transitions and which states
         pay premium or a benefit. ``None`` uses the default active / waiver
         model
-        (:data:`~fastcashflow.statemodel.WAIVER_MODEL`); the
+        (:data:`~fastcashflow.state_model.WAIVER_MODEL`); the
         ``waiver_incidence_annual`` rate then drives the active -> waiver
         transition. A product with a different state set supplies its own.
     """

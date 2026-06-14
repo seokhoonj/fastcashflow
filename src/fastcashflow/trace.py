@@ -27,7 +27,7 @@ from fastcashflow.coverage import CalculationMethod, method_attrs
 from fastcashflow.curves import discount_factors, discount_monthly_curve
 from fastcashflow._typing import FloatArray
 from fastcashflow.engine import measure
-from fastcashflow.modelpoints import ModelPoints, NO_GUARANTEE_RATE
+from fastcashflow.model_points import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow._paa import measure_paa
 from fastcashflow._reinsurance import QuotaShare, Treaty, measure_reinsurance

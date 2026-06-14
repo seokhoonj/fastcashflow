@@ -19,7 +19,7 @@ import numpy as np
 import polars as pl
 
 from fastcashflow import Basis, CalculationMethod, CoverageRate
-from fastcashflow.modelpoints import STATE_LABELS
+from fastcashflow.model_points import STATE_LABELS
 
 
 PATTERNS = {"DEATH": CalculationMethod.DEATH}

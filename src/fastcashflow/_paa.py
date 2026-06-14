@@ -52,7 +52,7 @@ from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import (
     _carry_lic_residual, _risk_adjustment, _rollforward_kernel,
     _norm_ppf, _settlement_factor, _settlement_lic, _settlement_lic_discounted)
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 # In-force helpers shared with the GMM path (engine does not import _paa, and
 # io imports engine lazily, so this top-level import is cycle-free).

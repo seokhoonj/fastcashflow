@@ -8,7 +8,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow.basis import Basis, BasisRouter
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 from fastcashflow.trace import (
     _resolve_basis,
     show_trace_bel_step, show_trace_csm_step, show_trace, show_trace_diff, show_trace_paa,

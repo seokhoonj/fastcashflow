@@ -47,8 +47,8 @@ from fastcashflow.coverage import (
     align_coverages, build_coverage_rates, coverage_arrays, validate_csr_codes,
 )
 from fastcashflow.curves import inflation_index
-from fastcashflow.modelpoints import ModelPoints
-from fastcashflow.statemodel import (
+from fastcashflow.model_points import ModelPoints
+from fastcashflow.state_model import (
     compile_state_model,
     compile_state_model_with_duration,
     is_semi_markov,
@@ -777,7 +777,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         basis, n_time,
     )
 
-    # In-force state machine -- see ``statemodel.resolve_state_model`` for
+    # In-force state machine -- see ``state_model.resolve_state_model`` for
     # the fallback policy when ``basis.state_model`` is unset.
     state_model = resolve_state_model(basis)
     seating = np.asarray(state_model.seating, np.int64)

@@ -11,7 +11,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import State, Transition, StateModel
 from fastcashflow.basis import Basis
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 
 _FLAT = lambda v: (lambda s, a, d: np.full(np.shape(a), v))
 _ZERO = _FLAT(0.0)

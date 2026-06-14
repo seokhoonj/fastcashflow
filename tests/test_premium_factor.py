@@ -14,7 +14,7 @@ from numba import cuda
 
 import fastcashflow as fcf
 from fastcashflow.basis import Basis, CoverageRate
-from fastcashflow.statemodel import StateModel, State, Transition
+from fastcashflow.state_model import StateModel, State, Transition
 
 CM = {"DEATH": fcf.CalculationMethod.DEATH}
 _MORT = lambda s, a, d: np.full(np.shape(a), 0.01)

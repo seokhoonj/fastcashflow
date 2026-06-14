@@ -13,7 +13,7 @@ import pytest
 
 from fastcashflow import read_scenarios, CoverageRate
 from fastcashflow.basis import Basis
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 
 
 def _flat_basis() -> Basis:

@@ -40,11 +40,11 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.basis import (
     Basis, BasisRouter, CoverageRate, ExpenseItem,
 )
-from fastcashflow.statemodel import STATE_MODELS
+from fastcashflow.state_model import STATE_MODELS
 from fastcashflow.coverage import (
     CalculationMethod, RATE_DRIVEN_METHODS,
 )
-from fastcashflow.modelpoints import (
+from fastcashflow.model_points import (
     STATE_ACTIVE, STATE_NAMES, NO_GUARANTEE_RATE, ModelPoints,
 )
 
@@ -1554,7 +1554,7 @@ def read_inforce_policies(
     periods works the same regardless of which reader built each
     snapshot.
     """
-    from fastcashflow.modelpoints import (
+    from fastcashflow.model_points import (
         InforceState, ModelPoints, apply_inforce_state,
     )
 
@@ -1958,7 +1958,7 @@ def read_inforce_state(path: Path | str) -> "InforceState":
     a future extension; for now the reader errors out if the column is
     not constant rather than silently dropping the per-row detail.
     """
-    from fastcashflow.modelpoints import InforceState
+    from fastcashflow.model_points import InforceState
     df = _read_frame(path)
     needed = ("mp_id", "elapsed_months", "count", "prior_csm", "lock_in_rate")
     for col in needed:
@@ -2304,7 +2304,7 @@ def _state_from_chunk(df, lock_in_rate: float) -> "InforceState":
     slice. ``lock_in_rate`` is the globally validated scalar -- the chunk's
     own column is not re-read (uniformity was checked across the whole
     file, the v1 scalar contract)."""
-    from fastcashflow.modelpoints import InforceState
+    from fastcashflow.model_points import InforceState
 
     return InforceState(
         mp_id=df["mp_id"].to_numpy(),
@@ -2350,7 +2350,7 @@ def _settle_stream_driver(
     book whose rates differ only across chunks. Returns the number of model
     points processed.
     """
-    from fastcashflow.modelpoints import apply_inforce_state
+    from fastcashflow.model_points import apply_inforce_state
 
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")

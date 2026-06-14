@@ -14,7 +14,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.engine import measure
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 
 
 def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:

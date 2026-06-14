@@ -1147,7 +1147,7 @@ def test_modelpoints_state_above_state_model_count_rejected():
     """A state index past the state_model's state count now raises a clear
     error at measurement (was a late IndexError at seating lookup), on both the
     full and fast paths. Codex 2026-06-07."""
-    from fastcashflow.statemodel import STATE_MODELS
+    from fastcashflow.state_model import STATE_MODELS
     mp = ModelPoints(
         issue_age=np.array([40.0]), premium=np.array([100.0]),
         term_months=np.array([12]), state=np.array([99]),

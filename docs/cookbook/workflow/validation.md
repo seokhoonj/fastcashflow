@@ -439,7 +439,7 @@ mp[0] CSM step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
 ```python
 import numpy as np
 from fastcashflow.basis import Basis
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 
 # 사망률 함수 -- 연 0.05% 의 평탄 사망률 (보험금 대비 매우 낮은 율)
 def death_fn(s, ia, d, ic, em):

@@ -18,7 +18,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import State, Transition, StateModel
 from fastcashflow.basis import Basis
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 
 _ZERO = lambda s, a, d: np.full(np.shape(a), 0.0)   # no death / lapse decrement
 
@@ -186,7 +186,7 @@ def test_fast_path_auto_routes_deterministic_transition():
 
 
 def test_markov_compile_rejects_deterministic_transition():
-    from fastcashflow.statemodel import compile_state_model
+    from fastcashflow.state_model import compile_state_model
     # force a Markov compile path on a model carrying a deterministic transition
     # by bypassing the auto-derive (which would make it semi-Markov)
     model = StateModel(states=(

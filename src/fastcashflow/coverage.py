@@ -21,7 +21,7 @@ benefit whose claims run off a depleting pool) and ``coverage_risk`` (the
 risk class the Risk Adjustment prices) -- built by :func:`coverage_arrays`,
 so a new coverage needs no kernel change. The two arrays are *derived* from the
 portfolio's ``calculation_methods`` taxonomy (the
-:class:`~fastcashflow.modelpoints.ModelPoints` ``calculation_methods`` dict);
+:class:`~fastcashflow.model_points.ModelPoints` ``calculation_methods`` dict);
 the company-level taxonomy is the single source of truth for whether a
 coverage is a diagnosis pool or a recurring claim, and which risk class
 the RA prices.

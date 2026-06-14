@@ -53,9 +53,9 @@ from fastcashflow.numerics import (
     _settlement_lic,
     _settlement_lic_discounted,
 )
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
-from fastcashflow.statemodel import resolve_state_model
+from fastcashflow.state_model import resolve_state_model
 from fastcashflow.tvog import (
     guarantee_floor_time_value, tvog_weights, tvog_term_weight,
     _validate_return_scenarios,

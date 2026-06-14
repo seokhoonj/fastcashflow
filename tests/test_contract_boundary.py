@@ -10,7 +10,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow.basis import Basis
-from fastcashflow.modelpoints import ModelPoints
+from fastcashflow.model_points import ModelPoints
 
 _MORT = lambda s, a, d: np.full(np.shape(a), 0.01)
 _ZERO = lambda s, a, d: np.full(np.shape(d), 0.0)

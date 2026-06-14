@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.statemodel import StateModel, State, Transition
+from fastcashflow.state_model import StateModel, State, Transition
 from conftest import PATTERNS, annual_from_monthly as _annual
 
 

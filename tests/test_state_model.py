@@ -11,7 +11,7 @@ import pytest
 
 from fastcashflow import STATE_ACTIVE, STATE_PAIDUP, STATE_WAIVER, STATE_MODELS, Basis, ModelPoints, State, StateModel, Transition, CoverageRate, CalculationMethod
 from fastcashflow.gmm import measure
-from fastcashflow.statemodel import compile_state_model
+from fastcashflow.state_model import compile_state_model
 
 from conftest import annual_from_monthly as _annual
 
@@ -383,7 +383,7 @@ def test_needs_state_machine_predicate():
     state model / waiver decrement / non-active seating is present."""
     from types import SimpleNamespace
     import numpy as np
-    from fastcashflow.statemodel import needs_state_machine, STATE_MODELS
+    from fastcashflow.state_model import needs_state_machine, STATE_MODELS
 
     def mp(state):
         return SimpleNamespace(state=np.array(state, dtype=np.int64))

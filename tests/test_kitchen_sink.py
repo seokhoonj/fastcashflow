@@ -26,7 +26,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow.basis import BasisRouter
 from fastcashflow import State, Transition, StateModel
-from fastcashflow.statemodel import STATE_MODELS
+from fastcashflow.state_model import STATE_MODELS
 
 CM = fcf.CalculationMethod
 

@@ -40,7 +40,7 @@ from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.curves import (
     discount_factors, discount_monthly_curve, forward_rates)
 from fastcashflow.numerics import _csm_kernel, _norm_ppf
-from fastcashflow.modelpoints import InforceState, ModelPoints
+from fastcashflow.model_points import InforceState, ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.io import (
     write_measurement, _write_measurement_columns, _stream_policies_coverages)

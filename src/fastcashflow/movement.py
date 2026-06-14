@@ -1018,7 +1018,7 @@ class VFASettlementMovement:
         The caller advances the pair to the next observation date
         (``elapsed_months`` / ``count`` / ``account_value``) before the
         next call."""
-        from fastcashflow.modelpoints import InforceState
+        from fastcashflow.model_points import InforceState
         mp = self.model_points
         if mp is None or mp.mp_id is None:
             raise ValueError(
@@ -1565,7 +1565,7 @@ class GMMSettlementMovement:
         are this period's closing balances and ``prior_count`` the closing
         count. The caller advances the pair to the next observation date
         (``elapsed_months`` / ``count``) before the next call."""
-        from fastcashflow.modelpoints import InforceState
+        from fastcashflow.model_points import InforceState
         mp = self.model_points
         if mp is None or mp.mp_id is None:
             raise ValueError(
@@ -1748,7 +1748,7 @@ class ReinsuranceSettlementMovement:
         may be negative -- there is no loss component) and ``prior_count`` the
         closing count. The caller advances ``elapsed_months`` / ``count`` to the
         next observation date before the next call."""
-        from fastcashflow.modelpoints import InforceState
+        from fastcashflow.model_points import InforceState
         mp = self.model_points
         if mp is None or mp.mp_id is None:
             raise ValueError(
@@ -1888,7 +1888,7 @@ class PAASettlementMovement:
         so those state slots carry neutral values; the closing loss component
         is preserved for state-file continuity, though the next settle
         recalculates it under Sec. 57-58 rather than reading it."""
-        from fastcashflow.modelpoints import InforceState
+        from fastcashflow.model_points import InforceState
         mp = self.model_points
         if mp is None or mp.mp_id is None:
             raise ValueError(
