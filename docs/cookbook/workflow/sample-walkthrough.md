@@ -5,12 +5,14 @@
 짚으며 그것이 **결산파일(.xlsx)** 까지 어떻게 흘러가는지 끝까지 추적합니다.
 샘플은 합성 데이터라 마음껏 열어봐도 안전합니다.
 
-```{admonition} 이미지는 캡쳐 자리입니다
+```{admonition} 그림은 샘플 데이터에서 자동 렌더됩니다
 :class: note
 
-아래 그림은 **placeholder** 입니다 -- `samples/` 에 떨어진 실제 엑셀 파일을 열어
-스크린샷으로 교체하세요. `docs/images/` 의 파일명을 그대로 두면 문서에 자동
-반영됩니다 (예: `sample-basis-segments.png`).
+아래 그림은 **번들 샘플을 그대로 옮긴 렌더** 입니다 (placeholder 가 아님) --
+값·`_DEFAULTS` 행·열머리글까지 실제 `samples/` 산출물 그대로입니다. 샘플
+데이터나 결산팩 레이아웃이 바뀌면 한 번에 다시 그립니다:
+
+    .venv/bin/python docs/generate_sheet_images.py
 ```
 
 ## 0. 샘플 파일 떨구기
