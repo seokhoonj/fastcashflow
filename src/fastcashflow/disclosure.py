@@ -26,6 +26,7 @@ from functools import singledispatch
 
 import polars as pl
 
+from fastcashflow.io import _write_frame
 from fastcashflow.movement import (
     GMMSettlementReconciliation, PAASettlementReconciliation,
     ReinsuranceSettlementReconciliation, VFASettlementReconciliation)
@@ -39,6 +40,17 @@ _LEAN_SCHEMA = {
     "model": pl.Utf8, "group_id": pl.Utf8, "statement": pl.Utf8,
     "period_start": pl.Int64, "period_end": pl.Int64,
     "block": pl.Utf8, "line": pl.Utf8, "amount": pl.Float64,
+}
+# The emitted artifact (file / sheet / audit join) is self-contained: the rich
+# reference columns -- the machine line_code, the IFRS 17 paragraph anchor, the
+# P&L-memo flag and the deterministic order -- are MATERIALISED at the write
+# boundary, not denormalised onto the lean in-process frame.
+_RICH_SCHEMA = {
+    "model": pl.Utf8, "group_id": pl.Utf8, "statement": pl.Utf8,
+    "period_start": pl.Int64, "period_end": pl.Int64,
+    "block": pl.Utf8, "line": pl.Utf8, "line_code": pl.Utf8,
+    "ifrs17_paragraph": pl.Utf8, "is_memo": pl.Boolean, "sort_order": pl.Int64,
+    "amount": pl.Float64,
 }
 
 # Block spec -- the single source for the GMM settlement reconciliation line spine.
@@ -211,21 +223,27 @@ _PAA_RECON_BLOCKS = (
 )
 
 
-def _recon_frame(recon, model: str, blocks) -> pl.DataFrame:
-    """The lean canonical tidy frame for one reconciliation: one row per
-    disclosure line, read from the block spec so the spine has a single source.
-    period_start / period_end are the relative period (the close assembler
-    re-stamps absolute reporting positions when stacking a schedule)."""
-    rows = [
-        {
-            "model": model, "group_id": None, "statement": "settlement",
-            "period_start": 0, "period_end": int(recon.period_months),
-            "block": block, "line": line, "amount": float(getattr(recon, field)),
-        }
-        for block, lines in blocks
-        for line, field, _para, _memo in lines
-    ]
-    return pl.DataFrame(rows, schema=_LEAN_SCHEMA)
+def _recon_frame(recon, model: str, blocks, *, rich: bool = False) -> pl.DataFrame:
+    """The canonical tidy frame for one reconciliation: one row per disclosure
+    line, read from the block spec so the spine has a single source. period_start
+    / period_end are the relative period (the close assembler re-stamps absolute
+    reporting positions when stacking a schedule). ``rich`` adds the audit
+    reference columns for an emitted, self-contained artifact."""
+    rows = []
+    order = 0
+    for block, lines in blocks:
+        for line, field, para, memo in lines:
+            row = {
+                "model": model, "group_id": None, "statement": "settlement",
+                "period_start": 0, "period_end": int(recon.period_months),
+                "block": block, "line": line, "amount": float(getattr(recon, field)),
+            }
+            if rich:
+                row.update({"line_code": field, "ifrs17_paragraph": para,
+                            "is_memo": memo, "sort_order": order})
+            rows.append(row)
+            order += 1
+    return pl.DataFrame(rows, schema=_RICH_SCHEMA if rich else _LEAN_SCHEMA)
 
 
 @singledispatch
@@ -263,3 +281,41 @@ _RECON_SPECS = (
     ("reinsurance", _REINSURANCE_RECON_BLOCKS, ReinsuranceSettlementReconciliation),
     ("paa", _PAA_RECON_BLOCKS, PAASettlementReconciliation),
 )
+_SPEC_BY_TYPE = {cls: (model, blocks) for model, blocks, cls in _RECON_SPECS}
+
+
+def write_reconciliation(reconciliation, path) -> None:
+    """Serialize a settlement reconciliation (or a list of them, one per
+    reporting period) to a tidy file -- parquet / csv / xlsx -- with the rich
+    audit columns materialised. A list is stacked with a 0-based ``period_index``
+    so a multi-period close schedule round-trips as one long frame.
+
+    Mirrors :func:`write_measurement` (which serializes the per-MP movements);
+    this is the disclosure-shaped (reconciliation / close) serialization path.
+    """
+    recons = (list(reconciliation)
+              if isinstance(reconciliation, (list, tuple)) else [reconciliation])
+    frames = []
+    for i, recon in enumerate(recons):
+        model, blocks = _SPEC_BY_TYPE[type(recon)]
+        frame = _recon_frame(recon, model, blocks, rich=True)
+        frames.append(frame.with_columns(pl.lit(i, dtype=pl.Int64).alias("period_index")))
+    _write_frame(pl.concat(frames), str(path))
+
+
+def line_metadata() -> pl.DataFrame:
+    """The disclosure line registry as a frame -- (model, block, line, line_code,
+    ifrs17_paragraph, is_memo, sort_order) -- the single source the lean
+    :func:`reconciliation_to_frame` and the emitter both read. Exposed so a user
+    can join the reference columns onto a lean frame themselves."""
+    rows = []
+    for model, blocks, _cls in _RECON_SPECS:
+        order = 0
+        for block, lines in blocks:
+            for line, field, para, memo in lines:
+                rows.append({
+                    "model": model, "block": block, "line": line,
+                    "line_code": field, "ifrs17_paragraph": para,
+                    "is_memo": memo, "sort_order": order})
+                order += 1
+    return pl.DataFrame(rows)
