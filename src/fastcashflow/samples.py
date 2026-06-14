@@ -42,8 +42,9 @@ def templates() -> list[str]:
 
 def basis(template: str = "gmm"):
     """Bundled sample basis. ``template="gmm"`` (default) returns the per-segment
-    ``{(product, channel): Basis}`` dict; ``template="vfa"`` returns the
-    single variable-contract :class:`~fastcashflow.Basis`."""
+    :class:`~fastcashflow.BasisRouter` (a ``(product, channel)`` -> ``Basis``
+    mapping); ``template="vfa"`` returns the single variable-contract
+    :class:`~fastcashflow.Basis`."""
     if template == "vfa":
         return _io.load_sample_vfa_basis()
     if template == "paa":
@@ -68,6 +69,20 @@ def model_points(template: str = "gmm"):
 def calculation_methods():
     """Bundled sample coverage-code -> calculation-method taxonomy."""
     return _io.load_sample_calculation_methods()
+
+
+def treaty(cession: float = 0.30):
+    """Bundled sample reinsurance treaty -- a quota share ceding ``cession`` of
+    the direct book (default 30%).
+
+    A treaty is a parameter object, not a data file, so this is the one
+    reinsurance-specific sample object: the underlying ceded contracts are the
+    same :func:`model_points` / :func:`basis` portfolio. Pass it to
+    :func:`~fastcashflow.reinsurance.measure` or
+    :func:`~fastcashflow.reinsurance.settle` over a segment of the sample book
+    (reinsurance is measured on a single :class:`~fastcashflow.Basis`)."""
+    from fastcashflow.reinsurance import QuotaShare
+    return QuotaShare(cession=cession)
 
 
 def inforce_state():
@@ -201,4 +216,5 @@ def export(output_dir, template: str = "gmm", format: str = "csv",
 
 
 __all__ = ["templates", "basis", "model_points", "calculation_methods",
-           "inforce_state", "return_scenarios", "rate_scenarios", "export"]
+           "treaty", "inforce_state", "return_scenarios", "rate_scenarios",
+           "export"]

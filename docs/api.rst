@@ -407,6 +407,8 @@ Input and output
 
 .. autofunction:: fastcashflow.samples.calculation_methods
 
+.. autofunction:: fastcashflow.samples.treaty
+
 .. autofunction:: fastcashflow.samples.export
 
 .. autofunction:: fastcashflow.samples.templates

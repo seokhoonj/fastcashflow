@@ -131,3 +131,58 @@ def test_sample_rate_scenarios_drive_stochastic():
     res = fcf.gmm.stochastic(mp, basis, rates)
     assert res.bel.shape[0] == 1000                          # one BEL per scenario
     assert np.all(np.isfinite(res.bel))
+
+
+def test_treaty_is_a_bundled_quota_share():
+    """samples.treaty() returns the bundled quota-share treaty (a parameter
+    object, not a data file); cession defaults to 30% and is overridable."""
+    t = fcf.samples.treaty()
+    assert isinstance(t, fcf.reinsurance.QuotaShare)
+    assert t.cession == pytest.approx(0.30)
+    assert fcf.samples.treaty(0.5).cession == pytest.approx(0.50)
+
+
+def test_close_pack_nets_reinsurance_on_the_bundled_book():
+    """A quota-share cession of a bundled segment, settled alongside the issued
+    book, reduces the close pack's net carrying amount -- the reinsurance
+    recoverable is added in the one signed frame (net == issued + reins)."""
+    import polars as pl
+    from fastcashflow import InforceState
+
+    basis  = fcf.samples.basis()
+    book   = fcf.samples.model_points()
+    state  = fcf.samples.inforce_state()
+    treaty = fcf.samples.treaty()
+    segment   = ("TERM_LIFE_A", "FC")
+    seg_basis = basis.resolve(segment)
+    rows = np.flatnonzero((book.product == segment[0]) & (book.channel == segment[1]))
+    mp   = book.subset(rows)
+    st   = state.subset(np.flatnonzero(np.isin(state.mp_id, mp.mp_id)))
+    valued = fcf.apply_inforce_state(mp, st)
+    period = 12
+
+    issued = fcf.reconcile([fcf.gmm.settle(valued, st, seg_basis, period_months=period)])[0]
+    reins_m = fcf.reinsurance.measure(mp, seg_basis, treaty=treaty)
+    opening = np.asarray(st.elapsed_months) - period
+    re_state = InforceState(
+        mp_id=st.mp_id, elapsed_months=st.elapsed_months, count=st.count,
+        prior_csm=reins_m.csm_path[np.arange(mp.mp_id.shape[0]), opening],
+        lock_in_rate=st.lock_in_rate, prior_count=st.prior_count)
+    held = fcf.reconcile([fcf.reinsurance.settle(
+        valued, re_state, seg_basis, treaty=treaty, period_months=period)])[0]
+
+    pack = fcf.close([issued, held], group_ids=["issued", "reins"])
+    sofp = pack.sofp
+
+    def total(kind):
+        r = sofp.filter((pl.col("kind") == kind) & (pl.col("component") == "Total"))
+        return float(r["closing"][0])
+
+    iss = total("Insurance contracts issued")
+    rei = total("Reinsurance contracts held")
+    net = total("Net")
+    # net is the signed sum (the P0 fix: add, do not subtract)
+    assert net == pytest.approx(iss + rei)
+    # this cession is a recoverable (negative carrying), so it lowers the net
+    assert rei < 0.0
+    assert net < iss
