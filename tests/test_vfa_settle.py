@@ -762,3 +762,18 @@ def test_closing_measurement_write_carries_the_marker(tmp_path):
     inception_path = tmp_path / "inception.parquet"
     fcf.write_measurement(fcf.vfa.measure(mp0, basis), inception_path)
     assert "measurement_basis" not in pl.read_parquet(inception_path).columns
+
+
+def test_vfa_zero_count_fully_derecognises_releases_full_csm():
+    """A VFA mass surrender (count=0, no coverage units left) releases the WHOLE
+    remaining CSM (B119 / paragraph 76), frac=1 -- matching gmm.settle. The old
+    0.0 fallback stranded the derecognised group's CSM. Closing CSM == 0."""
+    basis = _basis()
+    mp0 = ModelPoints.single(40, 100.0, 24, account_value=1e6,
+                             minimum_crediting_rate=0.08)
+    mp, state = _book(basis, mp0, em_open=6, period=6,
+                      count_close=np.array([0.0]), av_close=np.array([0.0]),
+                      prior_csm=np.array([50_000.0]))
+    mv = fcf.vfa.settle(mp, state, basis, period_months=6)
+    assert mv.csm_release[0] > 0.0               # there was CSM to release
+    np.testing.assert_allclose(mv.csm_closing, 0.0, atol=1e-9)

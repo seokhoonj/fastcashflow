@@ -1289,7 +1289,11 @@ def settle(
     denom = cu_period + cu_future
     eps = 1e-12 * np.where(denom > 0.0, denom, 1.0)
     live = denom > eps
-    frac = np.where(live, cu_period / np.where(live, denom, 1.0), 0.0)
+    # No coverage units at all (full derecognition -- a mass surrender / all
+    # exits) releases the WHOLE remaining CSM (B119 / paragraph 76), frac=1,
+    # matching gmm.settle; a 0.0 fallback would strand the CSM of a group that
+    # no longer provides coverage.
+    frac = np.where(live, cu_period / np.where(live, denom, 1.0), 1.0)
     csm_release = csm_after * frac
     csm_closing = csm_after - csm_release
 

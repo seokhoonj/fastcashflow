@@ -1126,7 +1126,10 @@ def _finalise_vfa_goc_settlement(
         x + pre["csm_premium_experience"] + pre["csm_investment_experience"],
         lc_after_incurred)
     denom = pre["coverage_units_provided"] + pre["coverage_units_future"]
-    frac = np.where(denom > 0.0, pre["coverage_units_provided"] / denom, 0.0)
+    # Full group derecognition (no coverage units) releases the whole remaining
+    # CSM (B119 / paragraph 76), frac=1, matching the GMM GoC and per-MP settle;
+    # a 0.0 fallback would strand a fully-derecognised group's CSM.
+    frac = np.where(denom > 0.0, pre["coverage_units_provided"] / denom, 1.0)
     release = csm_after * frac
     out = {name: pre[name] for name in _VFA_GOC_SETTLEMENT_LINEAR}
     out["coverage_units_provided"] = pre["coverage_units_provided"]
