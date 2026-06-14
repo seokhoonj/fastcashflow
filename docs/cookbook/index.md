@@ -258,6 +258,11 @@
   - 세그먼트별 정산표를 IFRS 17 공시 명세서로 조립. `close` (SoFP /
     보험금융손익 / 보험서비스손익), 재보험 차감 (Sec. 78), 멀티시트 엑셀
     (`write_close_pack`), 감사 컬럼 (`line_metadata`).
+* - 9.5
+  - [샘플 워크북으로 결산하기](workflow/sample-walkthrough)
+  - 번들 샘플 엑셀을 시트·컬럼 하나하나 짚으며 결산파일까지 추적. `segments` /
+    위험률 / 계약 파일 / `inforce_state` → `settle` → `close` →
+    `write_close_pack` 의 입력-출력 매핑.
 ```
 
 ### 10. 단기 측정 (PAA)
@@ -399,6 +404,7 @@ workflow/settlement
 workflow/movement
 workflow/onerous-settle
 workflow/close-pack
+workflow/sample-walkthrough
 ```
 
 ```{toctree}
