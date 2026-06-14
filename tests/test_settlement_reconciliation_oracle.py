@@ -22,14 +22,151 @@ Two oracles here:
   alongside the per-model settle fixtures; this file pins the structural spine,
   which needs no projection.)
 """
-import numpy as np
+from dataclasses import replace
 
+import numpy as np
+import pytest
+
+import fastcashflow as fcf
+from fastcashflow import (
+    Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints)
 from fastcashflow.movement import (
     GMMSettlementMovement, PAASettlementMovement,
     ReinsuranceSettlementMovement, VFASettlementMovement,
     _GMM_SETTLEMENT_LINES, _PAA_SETTLEMENT_LINES,
     _REINSURANCE_SETTLEMENT_LINES, _VFA_SETTLEMENT_LINES,
 )
+from conftest import PATTERNS, make_death_basis
+
+
+def _reconciled(mv, agg):
+    """(per-MP movement, aggregate, reconcile(per-MP), reconcile(aggregate))."""
+    return mv, agg, fcf.reconcile([mv])[0], fcf.reconcile(agg)
+
+
+@pytest.fixture
+def gmm_settlement():
+    # onerous (prior loss component) + settlement pattern + discount, so the
+    # bel/ra releases, loss-component amortisation and claims_paid are all nonzero.
+    basis = make_death_basis(
+        mortality_q=0.02, lapse_q=0.03, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.10,
+        settlement_pattern=np.array([0.6, 0.4]))
+    surv = fcf.gmm.measure(
+        ModelPoints(issue_age=np.array([40]), premium=np.array([100.0]),
+                    term_months=np.array([36]), benefits={0: np.array([1e6])},
+                    count=np.array([1.0]), calculation_methods=PATTERNS),
+        basis, full=True).cashflows.inforce[0]
+    eo, p, scale = 12, 12, 1000.0
+    ec = eo + p
+    mp = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([100.0]),
+        term_months=np.array([36]), benefits={0: np.array([1e6])},
+        count=np.array([scale * surv[ec]]), elapsed_months=np.array([ec]),
+        mp_id=np.array(["P0"]), product=np.array(["A"]),
+        calculation_methods=PATTERNS)
+    st = InforceState(
+        mp_id=np.array(["P0"]), elapsed_months=np.array([ec]),
+        count=np.array([scale * surv[ec]]), prior_csm=np.array([0.0]),
+        lock_in_rate=0.03, prior_count=np.array([scale * surv[eo]]),
+        prior_loss_component=np.array([200_000.0]))
+    mv = fcf.gmm.settle(mp, st, basis, period_months=12)
+    agg = fcf.gmm.settle_aggregate(mp, st, basis, period_months=12)
+    return _reconciled(mv, agg)
+
+
+@pytest.fixture
+def paa_settlement():
+    basis = make_death_basis(
+        mortality_q=0.02, lapse_q=0.0, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.10,
+        settlement_pattern=np.array([0.6, 0.4]))
+    surv = fcf.paa.measure(
+        ModelPoints(issue_age=np.array([40]), premium=np.array([60.0]),
+                    term_months=np.array([12]), premium_term_months=np.array([1]),
+                    benefits={0: np.array([6000.0])}, count=np.array([1.0]),
+                    calculation_methods=PATTERNS),
+        basis, full=True).cashflows.inforce[0]
+    eo, ec = 3, 6
+    mp = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([60.0]),
+        term_months=np.array([12]), premium_term_months=np.array([1]),
+        benefits={0: np.array([6000.0])}, count=np.array([surv[ec]]),
+        elapsed_months=np.array([ec]), mp_id=np.array(["PA0"]),
+        product=np.array(["ACC"]), calculation_methods=PATTERNS)
+    st = InforceState(
+        mp_id=np.array(["PA0"]), elapsed_months=np.array([ec]),
+        count=np.array([surv[ec]]), prior_csm=np.array([0.0]),
+        lock_in_rate=0.0, prior_count=np.array([surv[eo]]))
+    mv = fcf.paa.settle(mp, st, basis, period_months=3)
+    agg = fcf.paa.settle_aggregate(mp, st, basis, period_months=3)
+    return _reconciled(mv, agg)
+
+
+@pytest.fixture
+def reinsurance_settlement():
+    basis = make_death_basis(
+        mortality_q=0.002, lapse_q=0.005, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.10)
+    treaty = fcf.reinsurance.QuotaShare(0.4)
+    unit = ModelPoints.single(40, 400_000.0, 240, benefits={0: 1e8},
+                              calculation_methods=PATTERNS)
+    m = fcf.reinsurance.measure(unit, basis, treaty=treaty)
+    surv = m.cashflows.inforce[0]
+    eo, ec, scale = 24, 36, 1000.0
+    csm_seed = float(m.csm_path[0, eo])
+    mp = ModelPoints(
+        issue_age=np.array([40]), premium=np.array([400_000.0]),
+        term_months=np.array([240]), benefits={0: np.array([1e8])},
+        count=np.array([scale * surv[ec]]), elapsed_months=np.array([ec]),
+        mp_id=np.array(["R0"]), calculation_methods=PATTERNS)
+    st = InforceState(
+        mp_id=np.array(["R0"]), elapsed_months=np.array([ec]),
+        count=np.array([scale * surv[ec]]), prior_csm=np.array([csm_seed * scale]),
+        lock_in_rate=0.03, prior_count=np.array([scale * surv[eo]]))
+    mv = fcf.reinsurance.settle(mp, st, basis, treaty=treaty, period_months=12)
+    agg = fcf.reinsurance.settle_aggregate(mp, st, basis, treaty=treaty,
+                                           period_months=12)
+    return _reconciled(mv, agg)
+
+
+@pytest.fixture
+def vfa_settlement():
+    death_fn = lambda s, ia, d: np.full(s.shape, 0.012)
+    basis = Basis(
+        mortality_annual=death_fn,
+        lapse_annual=lambda s, ia, d: np.full(s.shape, 0.05),
+        discount_annual=0.05, ra_confidence=0.75, mortality_cv=0.0,
+        expense_cv=0.10, investment_return=0.05, fund_fee=0.015,
+        expense_items=(ExpenseItem("maintenance", "gamma_fixed", 1_000.0),),
+        settlement_pattern=np.array([0.6, 0.4]),
+        coverages=(CoverageRate("DEATH", death_fn),))
+    mp0 = ModelPoints.single(40, 100.0, 24, account_value=1e6,
+                             minimum_crediting_rate=0.08)
+    m0 = fcf.vfa.measure(mp0, basis)
+    inforce = m0.cashflows.inforce
+    eo, p = 6, 6
+    ec = eo + p
+    r_m = (1.05) ** (1.0 / 12.0) - 1.0
+    f_m = (1.015) ** (1.0 / 12.0) - 1.0
+    growth = (1.0 + r_m) * (1.0 - f_m)
+    av_open = 1e6 * growth ** eo
+    av_close = av_open * growth ** p
+    boundary = np.asarray(mp0.contract_boundary_months)
+    pad = np.concatenate([inforce, np.zeros((1, 1))], axis=1)
+    count_close = pad[np.arange(1), np.minimum(ec, boundary)]
+    mp = replace(mp0, mp_id=np.array(["P0"]),
+                 elapsed_months=np.full(1, ec, dtype=np.int64), count=count_close)
+    st = InforceState(
+        mp_id=np.array(["P0"]), elapsed_months=np.full(1, ec, dtype=np.int64),
+        count=count_close, prior_csm=m0.csm_path[np.arange(1), eo],
+        lock_in_rate=0.0, account_value=np.array([av_close]),
+        prior_count=inforce[np.arange(1), eo],
+        prior_account_value=np.array([av_open]),
+        prior_loss_component=np.array([20_000.0]))
+    mv = fcf.vfa.settle(mp, st, basis, period_months=6)
+    agg = fcf.vfa.settle_aggregate(mp, st, basis, period_months=6)
+    return _reconciled(mv, agg)
 
 
 # (lines tuple, movement class) for each of the four settlement families.
@@ -73,3 +210,88 @@ def test_settlement_lines_are_ordered_and_nonempty():
     for key, lines, _cls in _FAMILIES:
         assert lines, f"{key}: empty _SETTLEMENT_LINES"
         assert all(isinstance(n, str) for n in lines), f"{key}: non-str line name"
+
+
+# ---------------------------------------------------------------------------
+# the display-negation SIGN oracle + the aggregate==per-MP identity
+# ---------------------------------------------------------------------------
+# The run-off / draw-down lines are stored NEGATED in the reconciliation so that
+# opening + every row foots to closing. These sets are the lines each
+# _reconcile_*_settlement body wraps in float(-m.x.sum()); pinning recon.x ==
+# -mv.x.sum() (not merely reconcile(agg)==reconcile(per-MP)) catches a uniform
+# negate-flip that the round-trip identity would mask.
+_NEGATED = {
+    "gmm": {"bel_release", "ra_release", "loss_component_amortised",
+            "loss_component_reversed", "csm_release", "claims_paid"},
+    "vfa": {"bel_release", "ra_release", "loss_component_amortised",
+            "loss_component_reversed", "csm_release", "claims_paid"},
+    "reinsurance": {"bel_release", "ra_release", "csm_release",
+                    "loss_recovery_reversed"},
+    "paa": {"revenue", "loss_component_reversed", "claims_paid"},
+}
+
+
+def _assert_sign_convention(model, mv, recon):
+    """Every reconciliation float field that mirrors a movement FloatArray line
+    equals +/- that line's portfolio sum -- minus for the draw-down lines, plus
+    for the build-up lines. Independent of the reconcile code's own negation."""
+    mv_lines = _float_array_fields(type(mv))
+    negated = _NEGATED[model]
+    checked = 0
+    for name in type(recon).__dataclass_fields__:
+        val = getattr(recon, name)
+        if name in mv_lines and isinstance(val, float):
+            sign = -1.0 if name in negated else 1.0
+            np.testing.assert_allclose(
+                val, sign * float(getattr(mv, name).sum()),
+                rtol=1e-9, atol=1e-6,
+                err_msg=f"{model}.{name}: wrong display sign/magnitude")
+            checked += 1
+    assert checked >= 4, f"{model}: oracle only checked {checked} lines (too few)"
+
+
+def _assert_some_negated_nonzero(model, mv):
+    """Guard against a vacuous sign test: at least two draw-down lines must be
+    materially non-zero on the fixture."""
+    nz = sum(1 for n in _NEGATED[model]
+             if hasattr(mv, n) and abs(float(getattr(mv, n).sum())) > 1.0)
+    assert nz >= 2, f"{model}: fixture exercises only {nz} non-zero negated lines"
+
+
+def test_gmm_settlement_reconciliation_signs_and_identity(gmm_settlement):
+    mv, agg, recon, recon_agg = gmm_settlement
+    _assert_some_negated_nonzero("gmm", mv)
+    _assert_sign_convention("gmm", mv, recon)
+    _assert_reconcile_aggregate_matches(recon, recon_agg)
+
+
+def test_vfa_settlement_reconciliation_signs_and_identity(vfa_settlement):
+    mv, agg, recon, recon_agg = vfa_settlement
+    _assert_some_negated_nonzero("vfa", mv)
+    _assert_sign_convention("vfa", mv, recon)
+    _assert_reconcile_aggregate_matches(recon, recon_agg)
+
+
+def test_paa_settlement_reconciliation_signs_and_identity(paa_settlement):
+    mv, agg, recon, recon_agg = paa_settlement
+    _assert_some_negated_nonzero("paa", mv)
+    _assert_sign_convention("paa", mv, recon)
+    _assert_reconcile_aggregate_matches(recon, recon_agg)
+
+
+def test_reinsurance_settlement_reconciliation_signs_and_identity(reinsurance_settlement):
+    mv, agg, recon, recon_agg = reinsurance_settlement
+    _assert_some_negated_nonzero("reinsurance", mv)
+    _assert_sign_convention("reinsurance", mv, recon)
+    _assert_reconcile_aggregate_matches(recon, recon_agg)
+
+
+def _assert_reconcile_aggregate_matches(recon, recon_agg):
+    """reconcile(aggregate) reproduces reconcile(per-MP) fieldwise -- the
+    bounded-memory path is numerically identical to the per-MP path."""
+    for name in type(recon).__dataclass_fields__:
+        a, b = getattr(recon, name), getattr(recon_agg, name)
+        if isinstance(a, float):
+            np.testing.assert_allclose(b, a, rtol=1e-9, atol=1e-6, err_msg=name)
+        else:
+            assert b == a, f"{name}: {b!r} != {a!r}"
