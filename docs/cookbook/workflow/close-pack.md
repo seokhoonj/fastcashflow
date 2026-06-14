@@ -20,17 +20,18 @@ basis = fcf.samples.basis()
 book  = fcf.samples.model_points()
 state = fcf.samples.inforce_state()
 
-# 보험계약집합(= 상품 / 채널 세그먼트) 별로 결산 정산 -> 변동분석표 수집
-recons, group_labels = [], []
+# 보험계약집합(= 상품 / 채널 세그먼트) 별로 결산 정산 -> movement / 변동분석표 수집
+movements, recons, group_labels = [], [], []
 for segment in basis.segments:
     rows = np.flatnonzero((book.product == segment[0]) & (book.channel == segment[1]))
     if rows.size == 0:
         continue
-    mp     = book.subset(rows)                       # 이 세그먼트의 보유계약
-    st     = state.subset(np.flatnonzero(np.isin(state.mp_id, mp.mp_id)))
-    valued = fcf.apply_inforce_state(mp, st)         # 결산일 기준 재평가
-    recons.append(fcf.reconcile(
-        [fcf.gmm.settle(valued, st, basis.resolve(segment), period_months=12)])[0])
+    mp       = book.subset(rows)                     # 이 세그먼트의 보유계약
+    st       = state.subset(np.flatnonzero(np.isin(state.mp_id, mp.mp_id)))
+    valued   = fcf.apply_inforce_state(mp, st)       # 결산일 기준 재평가
+    movement = fcf.gmm.settle(valued, st, basis.resolve(segment), period_months=12)
+    movements.append(movement)                       # per-MP 상세 (사이드카용)
+    recons.append(fcf.reconcile([movement])[0])      # 보험계약집합 단위 집계
     group_labels.append("/".join(segment))
 
 # 결산팩 조립 -- 재계산이 아니라 정산표의 집계
@@ -133,17 +134,22 @@ net of reins       3,085,180
 표지(00_Index) · SoFP · 보험금융손익 · (있으면) 보험서비스손익 · reconciliation
 명세 (감사용 `line_code` / IFRS 17 문단 anchor / memo 플래그 / 정렬순서를
 join 으로 materialize). 모델포인트 단위 movement 는 엑셀 행 한계 (~1,048,576) 를
-넘기 쉬워 별도 parquet 사이드카로 분리됩니다.
+넘기 쉬워, `movements=` 로 넘기면 본 워크북 옆에 **parquet 사이드카** (본 파일
+옆에 따로 두는 보조 파일) 로 분리해 씁니다 — 정산 movement 하나당 한 파일.
 
 ```python
 import tempfile
 from pathlib import Path
 
 with tempfile.TemporaryDirectory() as tmp:
-    out = Path(tmp) / "close_pack_2026Q4.xlsx"
-    fcf.write_close_pack(pack, out)
-    print(out.name, "--", len(pack.to_frames()), "sheets")
+    out = Path(tmp) / "close_pack_2026.xlsx"
+    fcf.write_close_pack(pack, out, movements=movements)   # 워크북 + per-MP 사이드카
+    sidecars = sorted(p.name for p in Path(tmp).glob("*_permp_*.parquet"))
+    print(f"{out.name}  (+ per-MP 사이드카 {len(sidecars)} 개)")
 ```
+
+워크북 옆에 `close_pack_2026_permp_0.parquet` ... 처럼 정산 movement 하나당 한
+사이드카가 떨어집니다 (`movements=` 를 생략하면 집계 워크북만 씁니다).
 
 ## 감사 추적 컬럼 — `line_metadata`
 

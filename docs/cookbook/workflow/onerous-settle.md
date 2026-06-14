@@ -248,3 +248,4 @@ mv = fcf.vfa.settle(vfa_mp, vfa_state, vfa_basis, period_months=12,
 
 - [9.1 결산 / 보유계약 평가](settlement) — settle 의 뼈대.
 - [9.2 변동분해](movement) — 신계약 측정의 보고기간별 귀속.
+- [9.4 결산팩 — 공시 명세서 조립](close-pack) — 정산표를 공시 명세서·엑셀 결산팩으로.
