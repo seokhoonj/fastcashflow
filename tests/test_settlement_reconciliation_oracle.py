@@ -295,3 +295,81 @@ def _assert_reconcile_aggregate_matches(recon, recon_agg):
             np.testing.assert_allclose(b, a, rtol=1e-9, atol=1e-6, err_msg=name)
         else:
             assert b == a, f"{name}: {b!r} != {a!r}"
+
+
+# -- write_measurement output schema characterization -------------------------
+# The exact column order write_measurement emits for each settlement family.
+# Pinned so the writer-collapse refactor (driving the columns from
+# _X_SETTLEMENT_LINES) stays byte-identical, and so a later line addition is a
+# deliberate, visible schema change rather than a silent drift.
+import os
+import tempfile
+
+import polars as pl
+
+
+def _written_columns(mv):
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "out.csv")
+        fcf.write_measurement(mv, path)
+        return pl.read_csv(path).columns
+
+
+_GMM_WRITE_COLUMNS = [
+    "bel_opening", "bel_interest", "bel_release", "bel_experience", "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_opening", "csm_accretion", "csm_experience_unlocking",
+    "csm_premium_experience", "csm_investment_experience",
+    "claims_experience", "expense_experience", "finance_wedge",
+    "premium_experience_revenue", "csm_release", "csm_closing",
+    "loss_component_opening", "loss_component_finance", "loss_component_amortised",
+    "loss_component_reversed", "loss_component_recognised", "loss_component_closing",
+    "coverage_units_provided", "coverage_units_future",
+    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
+    "lock_in_rate", "measurement_basis", "elapsed_months", "count",
+]
+_PAA_WRITE_COLUMNS = [
+    "lrc_opening", "premiums", "revenue", "lrc_experience", "lrc_closing",
+    "loss_component_opening", "loss_component_recognised", "loss_component_reversed",
+    "loss_component_closing", "lic_opening", "claims_incurred", "lic_finance",
+    "claims_paid", "lic_closing", "claims_experience", "expense_experience",
+    "revenue_basis", "measurement_basis", "elapsed_months", "count",
+]
+_REINSURANCE_WRITE_COLUMNS = [
+    "bel_opening", "bel_interest", "bel_release", "bel_experience", "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_opening", "csm_accretion", "csm_experience_unlocking", "finance_wedge",
+    "csm_release", "csm_closing", "loss_recovery_opening", "loss_recovery_recognised",
+    "loss_recovery_reversed", "loss_recovery_closing",
+    "coverage_units_provided", "coverage_units_future",
+    "lock_in_rate", "measurement_basis", "elapsed_months", "count",
+]
+_VFA_WRITE_COLUMNS = [
+    "bel_opening", "bel_interest", "bel_release", "bel_experience", "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_opening", "csm_accretion", "csm_fv_share", "csm_future_service",
+    "csm_premium_experience", "premium_experience_revenue", "csm_investment_experience",
+    "claims_experience", "expense_experience", "csm_release", "csm_closing",
+    "loss_component_opening", "loss_component_finance", "loss_component_amortised",
+    "loss_component_reversed", "loss_component_recognised", "loss_component_closing",
+    "variable_fee_closing", "account_value_closing",
+    "coverage_units_provided", "coverage_units_future",
+    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
+    "lock_in_rate", "measurement_basis", "elapsed_months", "count",
+]
+
+
+def test_gmm_write_measurement_column_order(gmm_settlement):
+    assert _written_columns(gmm_settlement[0]) == _GMM_WRITE_COLUMNS
+
+
+def test_paa_write_measurement_column_order(paa_settlement):
+    assert _written_columns(paa_settlement[0]) == _PAA_WRITE_COLUMNS
+
+
+def test_reinsurance_write_measurement_column_order(reinsurance_settlement):
+    assert _written_columns(reinsurance_settlement[0]) == _REINSURANCE_WRITE_COLUMNS
+
+
+def test_vfa_write_measurement_column_order(vfa_settlement):
+    assert _written_columns(vfa_settlement[0]) == _VFA_WRITE_COLUMNS

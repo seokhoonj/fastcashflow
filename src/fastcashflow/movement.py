@@ -1974,28 +1974,10 @@ def _reconcile_paa_settlement(
 
 @write_measurement.register
 def _(movement: PAASettlementMovement, path, *, ids=None):
-    cols = {
-        "lrc_opening": movement.lrc_opening,
-        "premiums": movement.premiums,
-        "revenue": movement.revenue,
-        "lrc_experience": movement.lrc_experience,
-        "lrc_closing": movement.lrc_closing,
-        "loss_component_opening": movement.loss_component_opening,
-        "loss_component_recognised": movement.loss_component_recognised,
-        "loss_component_reversed": movement.loss_component_reversed,
-        "loss_component_closing": movement.loss_component_closing,
-        "lic_opening": movement.lic_opening,
-        "claims_incurred": movement.claims_incurred,
-        "lic_finance": movement.lic_finance,
-        "claims_paid": movement.claims_paid,
-        "lic_closing": movement.lic_closing,
-        "claims_experience": movement.claims_experience,
-        "expense_experience": movement.expense_experience,
-        "revenue_basis": [movement.revenue_basis]
-                         * movement.lrc_closing.shape[0],
-        "measurement_basis": [movement.measurement_basis]
-                             * movement.lrc_closing.shape[0],
-    }
+    n = movement.lrc_closing.shape[0]
+    cols = {name: getattr(movement, name) for name in _PAA_SETTLEMENT_LINES}
+    cols["revenue_basis"] = [movement.revenue_basis] * n
+    cols["measurement_basis"] = [movement.measurement_basis] * n
     # The closing-state chain columns ride only when the source model
     # points are stamped (the settle entry always stamps them); a
     # hand-built movement writes the lines and markers alone.
@@ -2009,46 +1991,10 @@ def _(movement: PAASettlementMovement, path, *, ids=None):
 
 @write_measurement.register
 def _(movement: GMMSettlementMovement, path, *, ids=None):
-    cols = {
-        "bel_opening": movement.bel_opening,
-        "bel_interest": movement.bel_interest,
-        "bel_release": movement.bel_release,
-        "bel_experience": movement.bel_experience,
-        "bel_closing": movement.bel_closing,
-        "ra_opening": movement.ra_opening,
-        "ra_interest": movement.ra_interest,
-        "ra_release": movement.ra_release,
-        "ra_experience": movement.ra_experience,
-        "ra_closing": movement.ra_closing,
-        "csm_opening": movement.csm_opening,
-        "csm_accretion": movement.csm_accretion,
-        "csm_experience_unlocking": movement.csm_experience_unlocking,
-        "csm_premium_experience": movement.csm_premium_experience,
-        "csm_investment_experience": movement.csm_investment_experience,
-        "claims_experience": movement.claims_experience,
-        "expense_experience": movement.expense_experience,
-        "finance_wedge": movement.finance_wedge,
-        "premium_experience_revenue": movement.premium_experience_revenue,
-        "csm_release": movement.csm_release,
-        "csm_closing": movement.csm_closing,
-        "loss_component_opening": movement.loss_component_opening,
-        "loss_component_finance": movement.loss_component_finance,
-        "loss_component_amortised": movement.loss_component_amortised,
-        "loss_component_reversed": movement.loss_component_reversed,
-        "loss_component_recognised": movement.loss_component_recognised,
-        "loss_component_closing": movement.loss_component_closing,
-        "coverage_units_provided": movement.coverage_units_provided,
-        "coverage_units_future": movement.coverage_units_future,
-        "lic_opening": movement.lic_opening,
-        "claims_incurred": movement.claims_incurred,
-        "lic_finance": movement.lic_finance,
-        "claims_paid": movement.claims_paid,
-        "lic_closing": movement.lic_closing,
-        "lock_in_rate": np.full(movement.bel_closing.shape[0],
-                                movement.lock_in_rate),
-        "measurement_basis": [movement.measurement_basis]
-                             * movement.bel_closing.shape[0],
-    }
+    n = movement.bel_closing.shape[0]
+    cols = {name: getattr(movement, name) for name in _GMM_SETTLEMENT_LINES}
+    cols["lock_in_rate"] = np.full(n, movement.lock_in_rate)
+    cols["measurement_basis"] = [movement.measurement_basis] * n
     # The closing-state chain columns ride only when the source model
     # points are stamped (the settle entries always stamp them); a
     # hand-built movement writes the lines and markers alone.
@@ -2062,34 +2008,10 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
 
 @write_measurement.register
 def _(movement: ReinsuranceSettlementMovement, path, *, ids=None):
-    cols = {
-        "bel_opening": movement.bel_opening,
-        "bel_interest": movement.bel_interest,
-        "bel_release": movement.bel_release,
-        "bel_experience": movement.bel_experience,
-        "bel_closing": movement.bel_closing,
-        "ra_opening": movement.ra_opening,
-        "ra_interest": movement.ra_interest,
-        "ra_release": movement.ra_release,
-        "ra_experience": movement.ra_experience,
-        "ra_closing": movement.ra_closing,
-        "csm_opening": movement.csm_opening,
-        "csm_accretion": movement.csm_accretion,
-        "csm_experience_unlocking": movement.csm_experience_unlocking,
-        "finance_wedge": movement.finance_wedge,
-        "csm_release": movement.csm_release,
-        "csm_closing": movement.csm_closing,
-        "loss_recovery_opening": movement.loss_recovery_opening,
-        "loss_recovery_recognised": movement.loss_recovery_recognised,
-        "loss_recovery_reversed": movement.loss_recovery_reversed,
-        "loss_recovery_closing": movement.loss_recovery_closing,
-        "coverage_units_provided": movement.coverage_units_provided,
-        "coverage_units_future": movement.coverage_units_future,
-        "lock_in_rate": np.full(movement.bel_closing.shape[0],
-                                movement.lock_in_rate),
-        "measurement_basis": [movement.measurement_basis]
-                             * movement.bel_closing.shape[0],
-    }
+    n = movement.bel_closing.shape[0]
+    cols = {name: getattr(movement, name) for name in _REINSURANCE_SETTLEMENT_LINES}
+    cols["lock_in_rate"] = np.full(n, movement.lock_in_rate)
+    cols["measurement_basis"] = [movement.measurement_basis] * n
     if movement.model_points is not None:
         cols["elapsed_months"] = np.asarray(
             movement.model_points.elapsed_months, dtype=np.int64)
@@ -2100,48 +2022,10 @@ def _(movement: ReinsuranceSettlementMovement, path, *, ids=None):
 
 @write_measurement.register
 def _(movement: VFASettlementMovement, path, *, ids=None):
-    cols = {
-        "bel_opening": movement.bel_opening,
-        "bel_interest": movement.bel_interest,
-        "bel_release": movement.bel_release,
-        "bel_experience": movement.bel_experience,
-        "bel_closing": movement.bel_closing,
-        "ra_opening": movement.ra_opening,
-        "ra_interest": movement.ra_interest,
-        "ra_release": movement.ra_release,
-        "ra_experience": movement.ra_experience,
-        "ra_closing": movement.ra_closing,
-        "csm_opening": movement.csm_opening,
-        "csm_accretion": movement.csm_accretion,
-        "csm_fv_share": movement.csm_fv_share,
-        "csm_future_service": movement.csm_future_service,
-        "csm_premium_experience": movement.csm_premium_experience,
-        "premium_experience_revenue": movement.premium_experience_revenue,
-        "csm_investment_experience": movement.csm_investment_experience,
-        "claims_experience": movement.claims_experience,
-        "expense_experience": movement.expense_experience,
-        "csm_release": movement.csm_release,
-        "csm_closing": movement.csm_closing,
-        "loss_component_opening": movement.loss_component_opening,
-        "loss_component_finance": movement.loss_component_finance,
-        "loss_component_amortised": movement.loss_component_amortised,
-        "loss_component_reversed": movement.loss_component_reversed,
-        "loss_component_recognised": movement.loss_component_recognised,
-        "loss_component_closing": movement.loss_component_closing,
-        "variable_fee_closing": movement.variable_fee_closing,
-        "account_value_closing": movement.account_value_closing,
-        "coverage_units_provided": movement.coverage_units_provided,
-        "coverage_units_future": movement.coverage_units_future,
-        "lic_opening": movement.lic_opening,
-        "claims_incurred": movement.claims_incurred,
-        "lic_finance": movement.lic_finance,
-        "claims_paid": movement.claims_paid,
-        "lic_closing": movement.lic_closing,
-        "lock_in_rate": np.full(movement.bel_closing.shape[0],
-                                movement.lock_in_rate),
-        "measurement_basis": [movement.measurement_basis]
-                             * movement.bel_closing.shape[0],
-    }
+    n = movement.bel_closing.shape[0]
+    cols = {name: getattr(movement, name) for name in _VFA_SETTLEMENT_LINES}
+    cols["lock_in_rate"] = np.full(n, movement.lock_in_rate)
+    cols["measurement_basis"] = [movement.measurement_basis] * n
     if movement.model_points is not None:
         cols["elapsed_months"] = np.asarray(
             movement.model_points.elapsed_months, dtype=np.int64)
@@ -2221,14 +2105,17 @@ def reconcile(
 # (period_months, lock_in_rate, model_points, csm_basis) follow their own
 # rules -- identity across chunks for the scalars, dropped for the
 # references (a sum has no per-MP source to point back to).
+# The order is the write_measurement output column order -- the writer arm drives
+# its columns from this tuple, so the spine has one source. (The disclosure /
+# __str__ block order is separate, _GMM_RECON_BLOCKS.)
 _GMM_SETTLEMENT_LINES = (
     "bel_opening", "bel_interest", "bel_release", "bel_experience",
     "bel_closing",
     "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
     "csm_opening", "csm_accretion", "csm_experience_unlocking",
     "csm_premium_experience", "csm_investment_experience",
-    "finance_wedge", "premium_experience_revenue",
     "claims_experience", "expense_experience",
+    "finance_wedge", "premium_experience_revenue",
     "csm_release", "csm_closing",
     "loss_component_opening", "loss_component_finance",
     "loss_component_amortised", "loss_component_reversed",
@@ -2266,10 +2153,10 @@ _REINSURANCE_SETTLEMENT_LINES = (
 
 _PAA_SETTLEMENT_LINES = (
     "lrc_opening", "premiums", "revenue", "lrc_experience", "lrc_closing",
-    "claims_experience", "expense_experience",
     "loss_component_opening", "loss_component_recognised",
     "loss_component_reversed", "loss_component_closing",
     "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
+    "claims_experience", "expense_experience",
 )
 
 _AGGREGATE_NO_CHAIN = (
