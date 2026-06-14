@@ -689,6 +689,7 @@ def measure_vfa(
     enters the inception fulfilment cash flows too, so the CSM absorbs it,
     and ``time_value`` records that amount per model point.
     """
+    basis = _single_basis(basis, entry="measure_vfa")
     p = _vfa_project(model_points, basis, return_scenarios)
     n_time = p.inforce.shape[1]
     variable_fee = p.variable_fee_path[:, 0]
@@ -712,6 +713,7 @@ def measure_vfa(
     # kernel consumes.
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, p.inforce, np.full(n_time, p.r_m),
+        basis.coverage_unit_discount,
     )
 
     return VFAMeasurement(
@@ -951,7 +953,7 @@ def measure_inforce(
         np.where(mask, inforce[rows[:, None], src_cols_safe], 0.0))
     csm_traj, _, _ = _csm_kernel(
         np.asarray(state.prior_csm, dtype=np.float64),
-        inforce_seg, np.full(max_len, p.r_m))
+        inforce_seg, np.full(max_len, p.r_m), basis.coverage_unit_discount)
     csm = csm_traj[:, period]
     loss_component = np.zeros(n_mp)        # paragraph-45 onerous unlocking deferred
 

@@ -181,7 +181,7 @@ def _(measurement: GMMMeasurement, path, *, ids=None):
     _write_measurement_columns(cols, path, ids)
 
 
-def _compute_csm(bel0, ra0, inforce, monthly_rate):
+def _compute_csm(bel0, ra0, inforce, monthly_rate, discount_units=False):
     """CSM at initial recognition (Sec. 38) and deterministic roll-forward (Sec. 44).
 
     Pure-array orchestration: fulfilment cash flows ``FCF = BEL + RA``,
@@ -197,7 +197,8 @@ def _compute_csm(bel0, ra0, inforce, monthly_rate):
     fcf = bel0 + ra0
     csm0 = np.maximum(0.0, -fcf)
     loss_component = np.maximum(0.0, fcf)
-    csm, accretion, release = _csm_kernel(csm0, inforce, monthly_rate)
+    csm, accretion, release = _csm_kernel(csm0, inforce, monthly_rate,
+                                          discount_units)
     return csm, accretion, release, loss_component
 
 
@@ -235,6 +236,7 @@ def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
                           pv_survival, monthly_rate)
     csm, csm_accretion, csm_release, loss_component = _compute_csm(
         bel[:, 0], ra[:, 0], proj.inforce, monthly_rate,
+        basis.coverage_unit_discount,
     )
 
     return GMMMeasurement(
@@ -535,7 +537,8 @@ def _measure_inforce_fast(
     inforce_seg = np.ascontiguousarray(inforce_seg)
     lock_in_monthly = (1.0 + float(lock_in_rate)) ** (1.0 / 12.0) - 1.0
     monthly_rates = np.full(max_len, lock_in_monthly)
-    csm_traj, _, _ = _csm_kernel(prior_csm, inforce_seg, monthly_rates)
+    csm_traj, _, _ = _csm_kernel(prior_csm, inforce_seg, monthly_rates,
+                                 basis.coverage_unit_discount)
     csm = csm_traj[:, period_months]
     # Sec. 44 loss component is left as zeros here. v1 only rolls the prior
     # CSM forward (accretion + coverage-unit release); the unlocking that
@@ -679,7 +682,8 @@ def _measure_inforce_full(
     )
     inforce_seg = np.ascontiguousarray(inforce_seg)
     monthly_rates = np.full(max_len, lock_in_monthly)
-    csm_traj, acc, rel = _csm_kernel(prior_csm, inforce_seg, monthly_rates)
+    csm_traj, acc, rel = _csm_kernel(prior_csm, inforce_seg, monthly_rates,
+                                     basis.coverage_unit_discount)
 
     # Scatter the per-MP segments back into the (n_mp, n_time_total+1) /
     # (n_mp, n_time_total) trajectories. csm_traj has one more column
@@ -1269,7 +1273,18 @@ def settle(
     # future units at the observed scale -- the em_open-denominator fraction
     # that telescopes to the monthly carry when on-track.
     tail = np.zeros((n_mp, n_time + 1))
-    tail[:, :n_time] = np.cumsum(inforce[:, ::-1], axis=1)[:, ::-1]
+    if basis.coverage_unit_discount:
+        # B119 discounted coverage units (accounting-policy choice): weight
+        # each month's units by the cumulative locked-in discount factor before
+        # the reverse-cumsum, so provided and future units are compared on a
+        # common present-value basis. The fraction is invariant to the discount
+        # reference point, so discounting to t=0 suffices.
+        lock_m = (1.0 + lock) ** (1.0 / 12.0) - 1.0
+        disc = (1.0 + lock_m) ** (-np.arange(n_time))
+        weighted = inforce[:, :n_time] * disc[None, :]
+        tail[:, :n_time] = np.cumsum(weighted[:, ::-1], axis=1)[:, ::-1]
+    else:
+        tail[:, :n_time] = np.cumsum(inforce[:, ::-1], axis=1)[:, ::-1]
     cu_provided = k_exp * (tail[rows, em_open] - tail[rows, em_c])
     cu_future = k_obs * tail[rows, em_c]
     denom = cu_provided + cu_future

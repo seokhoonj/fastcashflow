@@ -1586,6 +1586,9 @@ def _aggregate_groups_model(sub_mp, sub_router, model, group_ids, chunk_size):
     measure_full_one = _MEASURE_FULL[model]
     segs = _model_segments(sub_router, sub_mp)
     needs_curve = model in ("GMM", "VFA")
+    # B119 coverage-unit discounting is an entity-level accounting policy, so
+    # the grouped re-roll inherits it from the segments (uniform across them).
+    discount_units = bool(segs[0][0].coverage_unit_discount) if segs else False
 
     # Accumulators -- bounded O(n_groups x n_time), no per-model-point row.
     bel = np.zeros((n_groups, n_time + 1))      # GMM/VFA BEL, PAA LRC
@@ -1653,11 +1656,12 @@ def _aggregate_groups_model(sub_mp, sub_router, model, group_ids, chunk_size):
         **cf_acc)
     if model == "GMM":
         return _finalise_gmm_group(
-            bel, ra, grouped_cf, lic, rep_bom, rep_mid, labels, sizes)
+            bel, ra, grouped_cf, lic, rep_bom, rep_mid, labels, sizes,
+            discount_units)
     if model == "VFA":
         return _finalise_vfa_group(
             bel, ra, grouped_cf, lic, time_value, variable_fee, rep_bom,
-            labels, sizes)
+            labels, sizes, discount_units)
     return _finalise_paa_group(
         bel, revenue, service_expense, lic, fcf, grouped_cf, labels, sizes)
 

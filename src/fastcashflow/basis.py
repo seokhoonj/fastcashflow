@@ -690,6 +690,11 @@ class Basis:
     disability_cv: float = 0.0
     ra_method: str = "confidence_level"
     cost_of_capital_rate: float = 0.06
+    # B119 accounting-policy choice: discount future coverage units when
+    # allocating the CSM release (True), or leave them undiscounted (False,
+    # default). Affects only the CSM roll-forward (full=True / settle /
+    # movement), not the inception CSM_0 on the fast path.
+    coverage_unit_discount: bool = False
     investment_return: float = 0.0
     fund_fee: float = 0.0
     settlement_pattern: FloatArray | None = None

@@ -390,7 +390,7 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
 
 
 @njit(parallel=True, cache=True)
-def _csm_kernel(csm0, coverage_units, monthly_rate):
+def _csm_kernel(csm0, coverage_units, monthly_rate, discount_units):
     """Compiled CSM roll-forward kernel -- raw numpy arrays only.
 
     Per model point (run in parallel across cores): interest accretion at the
@@ -415,9 +415,13 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
       (a fixed-benefit-protection convention; for a contract whose benefit
       amount varies over time the quantity of coverage would differ from raw
       in-force).
-    * **future coverage units are undiscounted.** The tail sum ``sum_{s>=t}``
-      carries no discount factor -- B119 permits discounting future coverage
-      units or not, as an accounting-policy choice, and this engine does not.
+    * **future coverage units: discounted or not is an accounting-policy
+      choice (B119), exposed via ``discount_units``.** When ``False`` (the
+      default) the tail sum ``sum_{s>=t}`` carries no discount factor. When
+      ``True`` each future period's coverage units are discounted back to the
+      current period at the same locked-in ``monthly_rate`` used for accretion,
+      so the tail becomes ``sum_{s>=t} coverage_units[s] * v(t->s)`` with
+      ``v`` the locked-in discount factor -- the choice many entities make.
     """
     n_mp, n_time = coverage_units.shape
     csm = np.zeros((n_mp, n_time + 1))
@@ -427,11 +431,19 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
     for mp in prange(n_mp):
         csm[mp, 0] = csm0[mp]
 
-        cu_tail = np.empty(n_time)          # cu_tail[s] = sum of coverage_units[mp, s:]
-        running = 0.0
-        for s in range(n_time - 1, -1, -1):
-            running += coverage_units[mp, s]
-            cu_tail[s] = running
+        cu_tail = np.empty(n_time)          # cu_tail[s] = (discounted) sum of coverage_units[mp, s:]
+        if discount_units:
+            # Discount future coverage units back to each period at the
+            # locked-in rate: cu_tail[s] = cu[s] + cu_tail[s+1] / (1 + rate[s]).
+            cu_tail[n_time - 1] = coverage_units[mp, n_time - 1]
+            for s in range(n_time - 2, -1, -1):
+                cu_tail[s] = (coverage_units[mp, s]
+                              + cu_tail[s + 1] / (1.0 + monthly_rate[s]))
+        else:
+            running = 0.0
+            for s in range(n_time - 1, -1, -1):
+                running += coverage_units[mp, s]
+                cu_tail[s] = running
 
         # Epsilon (not exact > 0) so the rounding residual of a reverse
         # cumulative sum near the end of the run-off cannot produce a
@@ -456,12 +468,14 @@ def _csm_kernel(csm0, coverage_units, monthly_rate):
 
 
 @njit(parallel=True, cache=True)
-def _csm_kernel_permp(csm0, coverage_units, monthly_rate):
+def _csm_kernel_permp(csm0, coverage_units, monthly_rate, discount_units):
     """CSM roll-forward with a **per-model-point** rate -- ``monthly_rate`` is
     ``(n_mp, n_time)`` rather than the shared ``(n_time,)`` of
     :func:`_csm_kernel`. Used when a portfolio's model points discount on
     different curves (a segmented measurement, where each row carries its own
     segment's rate). Identical roll-forward, only the rate is indexed by row.
+    ``discount_units`` is the B119 coverage-unit discounting choice (see
+    :func:`_csm_kernel`); when ``True`` the per-row locked-in rate is used.
     """
     n_mp, n_time = coverage_units.shape
     csm = np.zeros((n_mp, n_time + 1))
@@ -472,10 +486,16 @@ def _csm_kernel_permp(csm0, coverage_units, monthly_rate):
         csm[mp, 0] = csm0[mp]
 
         cu_tail = np.empty(n_time)
-        running = 0.0
-        for s in range(n_time - 1, -1, -1):
-            running += coverage_units[mp, s]
-            cu_tail[s] = running
+        if discount_units:
+            cu_tail[n_time - 1] = coverage_units[mp, n_time - 1]
+            for s in range(n_time - 2, -1, -1):
+                cu_tail[s] = (coverage_units[mp, s]
+                              + cu_tail[s + 1] / (1.0 + monthly_rate[mp, s]))
+        else:
+            running = 0.0
+            for s in range(n_time - 1, -1, -1):
+                running += coverage_units[mp, s]
+                cu_tail[s] = running
         eps = 1e-12 * cu_tail[0] if cu_tail[0] > 0.0 else 1e-12
 
         for t in range(1, n_time + 1):
@@ -493,17 +513,20 @@ def _csm_kernel_permp(csm0, coverage_units, monthly_rate):
     return csm, accretion, release
 
 
-def _csm_roll(csm0, coverage_units, monthly_rate):
+def _csm_roll(csm0, coverage_units, monthly_rate, discount_units=False):
     """Roll the CSM with a shared ``(n_time,)`` or per-MP ``(n_mp, n_time)`` rate.
 
     A single-basis portfolio shares one discount curve (1-D rate); a segmented
     (per-basis-dict) one discounts each row on its own curve (2-D rate). Picks
-    the matching kernel so callers do not branch.
+    the matching kernel so callers do not branch. ``discount_units`` is the
+    B119 coverage-unit discounting accounting-policy choice (default ``False``
+    -- undiscounted; see :func:`_csm_kernel`).
     """
     if np.asarray(monthly_rate).ndim == 2:
         return _csm_kernel_permp(csm0, coverage_units,
-                                 np.ascontiguousarray(monthly_rate))
-    return _csm_kernel(csm0, coverage_units, monthly_rate)
+                                 np.ascontiguousarray(monthly_rate),
+                                 discount_units)
+    return _csm_kernel(csm0, coverage_units, monthly_rate, discount_units)
 
 
 def _paragraph45_csm_algebra(accreted, x, lc_open):

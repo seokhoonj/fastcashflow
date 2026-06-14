@@ -285,6 +285,7 @@ def measure_reinsurance(
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, proj.inforce,
         discount_monthly_curve(basis, proj.n_time),
+        basis.coverage_unit_discount,
     )
 
     return ReinsuranceMeasurement(
@@ -512,7 +513,8 @@ def measure_reinsurance_inforce(
         np.where(mask, proj.inforce[rows[:, None], np.where(mask, src_cols, 0)], 0.0))
     lock_in_monthly = (1.0 + float(state.lock_in_rate)) ** (1.0 / 12.0) - 1.0
     csm_traj, csm_accretion, csm_release = _csm_kernel(
-        prior_csm, inforce_seg, np.full(max_len, lock_in_monthly))
+        prior_csm, inforce_seg, np.full(max_len, lock_in_monthly),
+        basis.coverage_unit_discount)
     csm = csm_traj[:, period_months]
 
     if not full:

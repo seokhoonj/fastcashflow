@@ -282,7 +282,7 @@ def _per_group_bom(bom, inforce, reducer, labels):
 
 
 def _finalise_gmm_group(bel, ra, grouped_cf, lic, out_bom, out_mid,
-                        labels, sizes) -> GMMMeasurement:
+                        labels, sizes, discount_units=False) -> GMMMeasurement:
     """Build a grouped GMMMeasurement from already-summed group aggregates.
 
     The tail shared by the in-memory :func:`group` and the chunked per-group
@@ -300,7 +300,8 @@ def _finalise_gmm_group(bel, ra, grouped_cf, lic, out_bom, out_mid,
     loss_component = np.maximum(0.0, fcf0)
     monthly_rate = forward_rates(out_bom)
     csm, csm_accretion, csm_release = _csm_roll(
-        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
+        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate,
+        discount_units,
     )
     return GMMMeasurement(
         bel=bel[:, 0],
@@ -345,7 +346,8 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
 
 
 def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
-                        out_bom, labels, sizes) -> VFAMeasurement:
+                        out_bom, labels, sizes,
+                        discount_units=False) -> VFAMeasurement:
     """Build a grouped VFAMeasurement from already-summed group aggregates.
 
     The VFA analogue of :func:`_finalise_gmm_group`, shared by :func:`group` and
@@ -363,7 +365,8 @@ def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
     loss_component = np.maximum(0.0, fcf0)
     monthly_rate = forward_rates(out_bom)
     csm, csm_accretion, csm_release = _csm_roll(
-        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
+        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate,
+        discount_units,
     )
     return VFAMeasurement(
         bel=bel[:, 0],
@@ -442,7 +445,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
     bom = measurement.discount_bom
     monthly_rate = forward_rates(bom)
     csm, csm_accretion, csm_release = _csm_kernel(
-        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate
+        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate, False
     )
     return ReinsuranceMeasurement(
         bel=bel,
