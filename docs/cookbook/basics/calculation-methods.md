@@ -71,7 +71,7 @@ DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은 ANNUITY. 엔진은 "주계약
 | Portfolio | `policies.csv` + `coverages.csv` | 어떤 계약이 어떤 담보를 얼마에 |
 | 담보별 산출방법 | `calculation_methods.csv` | 어떤 담보가 어떤 산출방법인가 |
 
-세 파일이 각자 자기 계약임만 가지면 한 갱신이 다른 파일에 닿지 않습니다.
+세 파일이 각자 자기 책임만 가지면 한 갱신이 다른 파일에 닿지 않습니다.
 담보별 산출방법은 신담보 추가 작업의 자리, basis 는 위험률 calibration
 의 자리, portfolio 는 정책관리 의 자리 — 그래서 한 작업이 다른 자리를
 건드리지 않습니다.
