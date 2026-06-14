@@ -320,7 +320,7 @@ print(val.csm)      # 모델포인트별 CSM 배열 (길이 11)
 
 `samples.model_points()`는 패키지에 든 작은 포트폴리오(계약 11건,
 정기보험·건강보험·종신보험)를, `samples.basis()`는 그에 맞는
-가정을 `{(product, channel): Basis}` 딕셔너리로
+가정을 `(product, channel)` → `Basis` 매핑인 `BasisRouter` 로
 돌려줍니다. `measure()`는 각 계약을 자기 (상품, 채널) 세그먼트의
 가정에 맞춰 자동 라우팅해 한 번에 평가합니다. 계약마다 주계약에 더해
 진단·입원·재해사망·연금·생존 같은 특약이 붙어 있죠. 결과는 모델포인트

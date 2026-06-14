@@ -1623,13 +1623,15 @@ def sample_data_dir() -> Path:
     return Path(str(resources.files("fastcashflow") / "sample_data"))
 
 
-def load_sample_basis() -> dict[tuple[str, str], Basis]:
+def load_sample_basis() -> "BasisRouter":
     """Read fastcashflow's bundled sample basis workbook.
 
     A filled-in workbook packaged with the library, the companion to
     :func:`load_sample_model_points`. See :func:`read_basis` for the
-    workbook format. The bundled sample has two segments
-    (``("term_a", "GA")`` and ``("term_a", "FC")``); pick one to use it as
+    workbook format. The bundled sample is a :class:`BasisRouter` over seven
+    ``(product, channel)`` segments -- three products (``TERM_LIFE_A``,
+    ``HEALTH_A``, ``WHOLE_LIFE_A``) across the ``FC`` / ``GA`` / ``TM``
+    channels; resolve one segment (``router.resolve(segment)``) to use it as
     a single ``Basis``.
     """
     source = resources.files("fastcashflow") / "sample_data" / "sample_basis.xlsx"
