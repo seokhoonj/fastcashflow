@@ -130,7 +130,7 @@ def test_index_sheet_lists_models_and_sidecar(tmp_path):
     write_close_pack(pack, out, movements=mv)
 
     # the per-MP sidecar parquet was written beside the workbook
-    sidecar = tmp_path / "pack_permp.parquet"
+    sidecar = tmp_path / "pack_per_mp.parquet"
     assert sidecar.exists()
     side = pl.read_parquet(sidecar)
     assert side.height >= 1
@@ -140,7 +140,7 @@ def test_index_sheet_lists_models_and_sidecar(tmp_path):
     index = {r["item"]: r["value"] for r in rows}
     assert index["Reporting period (months)"] == "12"
     assert "gmm" in index["Models"]
-    assert index["Per-MP detail"] == "pack_permp.parquet"
+    assert index["Per-MP detail"] == "pack_per_mp.parquet"
 
 
 def test_sidecar_naming_keys_off_call_shape(tmp_path):
@@ -149,12 +149,12 @@ def test_sidecar_naming_keys_off_call_shape(tmp_path):
     pack = close([recon])
     out = tmp_path / "pack.xlsx"
     write_close_pack(pack, out, movements=[mv])      # list, one entry
-    assert (tmp_path / "pack_permp_0.parquet").exists()
-    assert not (tmp_path / "pack_permp.parquet").exists()
+    assert (tmp_path / "pack_per_mp_0.parquet").exists()
+    assert not (tmp_path / "pack_per_mp.parquet").exists()
     wb = openpyxl.load_workbook(out)
     _header, rows = _sheet_rows(wb["00_Index"])
     index = {r["item"]: r["value"] for r in rows}
-    assert index["Per-MP detail"] == "pack_permp_0.parquet"
+    assert index["Per-MP detail"] == "pack_per_mp_0.parquet"
 
 
 def test_close_pack_rejects_non_xlsx(tmp_path):

@@ -211,7 +211,7 @@ def write_close_pack(package, path, *, movements=None) -> None:
 
     The per-model-point settlement movement does NOT go in the workbook (a sheet
     caps at ~1,048,576 rows); ``movements`` -- one settlement movement or a list
-    -- is written to ``<path>_permp[_i].parquet`` beside the workbook via
+    -- is written to ``<path>_per_mp[_i].parquet`` beside the workbook via
     :func:`write_measurement`, and the index sheet names the file(s).
     """
     p = str(path)
@@ -231,8 +231,8 @@ def write_close_pack(package, path, *, movements=None) -> None:
     if movements is not None:
         is_single = not isinstance(movements, (list, tuple))
         movement_list = [movements] if is_single else list(movements)
-        sidecar_paths = ([f"{stem}_permp.parquet"] if is_single
-                         else [f"{stem}_permp_{i}.parquet"
+        sidecar_paths = ([f"{stem}_per_mp.parquet"] if is_single
+                         else [f"{stem}_per_mp_{i}.parquet"
                                for i in range(len(movement_list))])
         sidecar_label = ", ".join(sp.rsplit("/", 1)[-1] for sp in sidecar_paths)
 

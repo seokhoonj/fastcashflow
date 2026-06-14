@@ -87,7 +87,7 @@ fastcashflow 사용자 API
 ├── 결과 저장
 │   ├── fcf.write_measurement(val, path)                                 ── 결과 한 파일에 저장 (측정 / 정산 movement 둘 다)
 │   ├── fcf.close(recons, group_ids=)                                    ── 정산표 → 결산팩 (SoFP / 보험금융손익 / 보험서비스손익 명세)
-│   ├── fcf.write_close_pack(pack, path, movements=)                     ── 결산팩 멀티시트 엑셀 + per-MP parquet 사이드카
+│   ├── fcf.write_close_pack(pack, path, movements=)                     ── 결산팩 멀티시트 엑셀 + per-MP parquet 상세 파일
 │   ├── fcf.gmm.measure_stream(policies, out_dir, basis, coverages=...)  ── 메모리 초과 portfolio 스트리밍
 │   └── fcf.gmm.settle_stream(inforce, out_dir, basis, coverages=...)    ── 메모리 초과 결산 스트리밍 (part 로 체이닝)
 │

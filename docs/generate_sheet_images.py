@@ -253,10 +253,10 @@ def main():
     sidecar_cols = ["group_label", "group_size", "bel_opening", "bel_closing",
                     "ra_opening", "ra_closing", "csm_opening", "csm_release",
                     "csm_closing", "loss_component_closing"]
-    render(parquet_matrix(s("close_pack_2026Q1_permp_0.parquet"),
+    render(parquet_matrix(s("close_pack_2026Q1_per_mp_0.parquet"),
                           cols=sidecar_cols),
            out("close-pack-sidecar.png"),
-           title="close_pack_2026Q1_permp_0.parquet  (sidecar -- selected columns)")
+           title="close_pack_2026Q1_per_mp_0.parquet  (per-MP detail -- selected columns)")
 
 
 if __name__ == "__main__":

@@ -165,9 +165,10 @@ IFRS 17 close pack -- 12-month period
 ```
 
 세 컬럼은 **기초 | 변동 | 기말** 입니다 (`기초 + 변동 = 기말`). 9개 보험계약집합
-(상품 x 연도코호트 x 수익성) 은 합산돼 **엔티티 SoFP 한 장**으로 나오고, 집합별
-상세는 사이드카(parquet)에 남습니다. 그룹 내 floor 상계 (profitable 이 onerous
-손실을 흡수) 덕분에 손실요소가 per-세그먼트 합산보다 작게 잡힙니다.
+(상품 x 연도코호트 x 수익성) 은 합산돼 **회사 전체 SoFP 한 장**으로 나오고, 집합별
+상세는 그 옆에 함께 떨어지는 **별도 parquet 파일**에 남습니다. 그룹 내 floor 상계
+(profitable 이 onerous 손실을 흡수) 덕분에 손실요소가 per-세그먼트 합산보다 작게
+잡힙니다.
 
 ## 6. 산출 -- 결산팩 엑셀
 
@@ -175,15 +176,15 @@ IFRS 17 close pack -- 12-month period
 fcf.write_close_pack(pack, "samples/close_pack_2026Q1.xlsx", movements=[goc])
 ```
 
-`close_pack_2026Q1.xlsx` 한 권은 **엔티티가 읽는 집계 명세서 시트들**과, 옆에
-떨어지는 **보험계약집합별 상세 parquet 사이드카**로 이뤄집니다. 시트를 하나씩
+`close_pack_2026Q1.xlsx` 한 권은 **회사 전체로 집계된 명세서 시트들**과, 그 옆에
+함께 떨어지는 **보험계약집합별 상세 parquet 파일**로 이뤄집니다. 시트를 하나씩
 보면:
 
 ```{figure} ../../images/close-pack-00-index.png
 :width: 70%
 :alt: 결산팩 00_Index 시트
 
-`00_Index` -- 표지: 보고기간, 담긴 모델 / 그룹, 시트 목록, per-MP 사이드카 참조.
+`00_Index` -- 표지: 보고기간, 담긴 모델 / 그룹, 시트 목록, per-MP 상세 파일 참조.
 ```
 
 ```{figure} ../../images/close-pack-01-sofp.png
@@ -191,7 +192,7 @@ fcf.write_close_pack(pack, "samples/close_pack_2026Q1.xlsx", movements=[goc])
 :alt: 결산팩 01_SoFP 시트
 
 `01_SoFP` -- 재무상태표의 보험계약부채: LRC (잔여보장, 손실요소 분리) + LIC
-(발생사고). 세 컬럼은 **기초 | 변동 | 기말**. 9개 보험계약집합이 엔티티 한 장으로
+(발생사고). 세 컬럼은 **기초 | 변동 | 기말**. 9개 보험계약집합이 회사 전체 한 장으로
 합산됩니다.
 ```
 
@@ -214,16 +215,11 @@ finance wedge, 발행계약 · 보유재보험 · 순액 세 묶음.
 
 ```{figure} ../../images/close-pack-sidecar.png
 :width: 95%
-:alt: per-MP parquet 사이드카 (선택 컬럼)
+:alt: per-MP parquet 상세 파일 (선택 컬럼)
 
-`close_pack_2026Q1_permp_0.parquet` -- 보험계약집합 (9개) 단위 상세. 그룹별
+`close_pack_2026Q1_per_mp_0.parquet` -- 보험계약집합 (9개) 단위 상세. 그룹별
 BEL / RA / CSM 의 개시·종가가 그대로 남습니다 (38컬럼 중 일부만 표시).
 ```
-
-세 컬럼(`01_SoFP`)은 **기초 | 변동 | 기말** 입니다 (`기초 + 변동 = 기말`).
-집계 시트는 엔티티가 읽고, 집합별 상세는 사이드카에 남습니다. 그룹 내 floor
-상계 (profitable 이 onerous 손실을 흡수) 덕분에 손실요소가 per-세그먼트 합산보다
-작게 잡힙니다.
 
 입력이 어디로 갔는지 역추적하면:
 
@@ -231,7 +227,7 @@ BEL / RA / CSM 의 개시·종가가 그대로 남습니다 (38컬럼 중 일부
 - `policies` / `coverages` -> 측정되는 계약과 현금흐름
 - `inforce_state.prior_csm` / `lock_in_rate` -> CSM roll-forward 의 기초
 - 보험계약집합 정산 -> `reconcile` -> `close` -> **01_SoFP / 03_Finance / 04_Reconciliation** 시트
-- 보험계약집합 (9개) 단위 상세 -> parquet 사이드카
+- 보험계약집합 (9개) 단위 상세 -> 별도 parquet 파일
 
 ## 인접 레시피
 

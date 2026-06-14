@@ -155,7 +155,7 @@ runoff 의 신뢰수준 마진을 위험군별로 쪼갠 것입니다 (cost-of-c
 
 이번 분기 실제 수취 보험료가 기대와 다르면, 그 차이를 미래서비스 (CSM,
 Sec. B96(a)) 와 당기·과거서비스 (보험수익, Sec. B97(c)) 로 나눕니다. 분할은
-엔티티 판단이라 `premium_experience_future_fraction` (기본 0.0 = 전부 수익) 로
+회사 차원 판단이라 `premium_experience_future_fraction` (기본 0.0 = 전부 수익) 로
 노출합니다. 실제 보험료는 결산 상태의 `actual_premium` 으로 줍니다.
 
 ```python
