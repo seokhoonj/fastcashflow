@@ -1308,6 +1308,15 @@ def settle(
     # residual -- the 42(c) discount unwind plus the discounting measurement
     # effect. p_exp.lic is all-zero without a settlement_pattern (claims paid as
     # incurred, the LIC zero at both dates and lic_finance zero).
+    #
+    # DISCOUNT RATE -- the LIC discounts at basis.discount_monthly (the IFRS 17
+    # discount curve), NOT the underlying-items return r_m the rest of the VFA
+    # measurement uses. This is deliberate: an INCURRED claim is a fixed,
+    # determined amount that no longer varies with the underlying items, so its
+    # liability discounts at a rate that does not reflect underlying-item
+    # variability (B74) -- the same rate the GMM/PAA LIC uses. r_m is for the
+    # not-yet-incurred, account-value-linked future benefits. (Pinned by an
+    # off-diagonal test where discount_annual != investment_return.)
     offsets = np.arange(period)
     inc_src = em_open[:, None] + offsets[None, :]
     inc_mask = inc_src < n_time

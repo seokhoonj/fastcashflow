@@ -133,3 +133,20 @@ def test_reconciliation_and_aggregate_carry_the_lic_lines():
         agg.lic_closing, float(mv.lic_closing.sum()), rtol=1e-9)
     np.testing.assert_allclose(
         agg.claims_incurred, float(mv.claims_incurred.sum()), rtol=1e-9)
+
+
+def test_lic_discounts_at_the_ifrs_rate_not_the_fund_return():
+    """The incurred-claims LIC discounts at the IFRS discount curve
+    (discount_monthly from discount_annual), NOT the underlying-items return r_m
+    the rest of the VFA path uses. An incurred claim is a fixed, determined
+    amount that no longer varies with the fund (B74). Off-diagonal: vary
+    discount_annual with investment_return held fixed (0.05); the LIC opening
+    must move, and a higher rate must lower it."""
+    pat = np.array([0.25, 0.25, 0.25, 0.25])     # a longer tail makes it visible
+    lo = _basis(settlement_pattern=pat, discount_annual=0.02)
+    hi = _basis(settlement_pattern=pat, discount_annual=0.10)
+    mv_lo = settle(*_book(lo), lo, period_months=6)
+    mv_hi = settle(*_book(hi), hi, period_months=6)
+    # depends on discount_annual -> discounts at the IFRS rate, not r_m (fixed)
+    assert not np.isclose(mv_lo.lic_opening[0], mv_hi.lic_opening[0])
+    assert mv_hi.lic_opening[0] < mv_lo.lic_opening[0]   # higher rate, lower LIC
