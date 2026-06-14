@@ -88,8 +88,8 @@ from fastcashflow import State, Transition, StateModel
 
 # 계리적 가정 -- 간병 발생률 연령표 (long-form 룩업; 실무는 Excel)
 ages  = np.array([    50,     60,     70,     80,     90])
-ltc_m = np.array([0.0015, 0.0050, 0.0160, 0.0450, 0.1000])   # 남
-ltc_f = np.array([0.0018, 0.0060, 0.0190, 0.0520, 0.1100])   # 여
+ltc_m = np.array([0.0015, 0.0050, 0.0160, 0.0450, 0.1000])  # 남
+ltc_f = np.array([0.0018, 0.0060, 0.0190, 0.0520, 0.1100])  # 여
 
 def ltc_incidence(s, a, d):                          # 연령표 룩업 (VLOOKUP 식)
     a = np.asarray(a, dtype=float)
@@ -112,8 +112,8 @@ incidence 50/60/70/80 (M) : [0.0015, 0.005, 0.016, 0.045]
 
 ```python
 # 사망 / 해지 / 간병 상태 사망률
-active_mort = 0.01  # active 사망 (연 1% toy)
-care_mort   = 0.20  # 간병 상태 상승 사망률 (연 20%)
+active_mort = 0.01    # active 사망 (연 1% toy)
+care_mort   = 0.20    # 간병 상태 상승 사망률 (연 20%)
 lapse_rate    = 0.03  # 해지 연 3%
 
 # 상태 모델 -- active -> care; care 는 진단금(lump) + 월정액(36 회) + 상승 사망률
@@ -129,26 +129,26 @@ model = StateModel(states=(
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual        = active_mort,                                # active 사망 decrement
-    lapse_annual            = lapse_rate,                                 # 해지율
-    waiver_incidence_annual = ltc_incidence,                              # 간병 발생률 (위 표)
-    state_mortality_annual  = {"dth_care": care_mort},                    # 간병 상태 사망률
-    discount_annual         = 0.03,                                       # 할인율 3%
-    ra_confidence           = 0.75,                                       # 위험조정 신뢰수준
-    mortality_cv            = 0.10,                                       # 사망률 변동계수
-    disability_cv           = 0.20,                                       # 간병 발생 변동계수
+    mortality_annual        = active_mort,              # active 사망 decrement
+    lapse_annual            = lapse_rate,               # 해지율
+    waiver_incidence_annual = ltc_incidence,            # 간병 발생률 (위 표)
+    state_mortality_annual  = {"dth_care": care_mort},  # 간병 상태 사망률
+    discount_annual         = 0.03,                     # 할인율 3%
+    ra_confidence           = 0.75,                     # 위험조정 신뢰수준
+    mortality_cv            = 0.10,                     # 사망률 변동계수
+    disability_cv           = 0.20,                     # 간병 발생 변동계수
     state_model             = model,
     coverages               = (fcf.CoverageRate("DEATH", active_mort),))
 
 # 모델 포인트 -- 진단금 2,000 만, 월정액 100 만
 mp = fcf.ModelPoints(
-    issue_age         = np.array([60], dtype=np.int64),            # 60 세 가입
-    benefits          = {0: np.array([0.0])},                      # 사망보험금 0 (간병에 집중)
-    premium           = np.array([90_000.0]),                      # 월 보험료 9 만
-    term_months       = np.array([360], dtype=np.int64),           # 90 세까지 (30 년)
-    disability_benefit = np.array([20_000_000.0]),                 # 진단금 2,000 만 (lump)
-    disability_income  = np.array([1_000_000.0]),                  # 월정액 100 만
-    state             = np.array([0], dtype=np.int64),             # active 가입 (신계약)
+    issue_age         = np.array([60], dtype=np.int64),   # 60 세 가입
+    benefits          = {0: np.array([0.0])},             # 사망보험금 0 (간병에 집중)
+    premium           = np.array([90_000.0]),             # 월 보험료 9 만
+    term_months       = np.array([360], dtype=np.int64),  # 90 세까지 (30 년)
+    disability_benefit = np.array([20_000_000.0]),        # 진단금 2,000 만 (lump)
+    disability_income  = np.array([1_000_000.0]),         # 월정액 100 만
+    state             = np.array([0], dtype=np.int64),    # active 가입 (신계약)
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH})
 
 m = fcf.gmm.measure(mp, basis)
@@ -184,12 +184,12 @@ toy_model = StateModel(states=(
           transitions=(Transition("mortality"),)),
 ), seating=(0, 1))
 toy_basis = fcf.Basis(
-    mortality_annual=zero,                        # 탈퇴 (toy: 0)
-    lapse_annual=zero,                            # 해지 (toy: 0)
-    discount_annual=0.0,                          # 무할인 (toy)
-    ra_confidence=0.75,                           # 위험조정 신뢰수준
-    mortality_cv=0.10,                            # 사망 변동계수
-    state_model=toy_model,                        # 상태기계
+    mortality_annual=zero,                         # 탈퇴 (toy: 0)
+    lapse_annual=zero,                             # 해지 (toy: 0)
+    discount_annual=0.0,                           # 무할인 (toy)
+    ra_confidence=0.75,                            # 위험조정 신뢰수준
+    mortality_cv=0.10,                             # 사망 변동계수
+    state_model=toy_model,                         # 상태기계
     coverages=(fcf.CoverageRate("DEATH", zero),),  # 사망 보장
 )
 toy_mp = fcf.ModelPoints(

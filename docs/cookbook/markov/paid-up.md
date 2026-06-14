@@ -159,7 +159,7 @@ from fastcashflow import STATE_MODELS, STATE_PAIDUP, STATE_ACTIVE
 death_rate        = 1 - (1 - 0.01) ** 12  # 사망률 월 1%
 lapse_rate        = 1 - (1 - 0.10) ** 12  # 납입중 해지 월 10%
 lapse_paidup_rate = 1 - (1 - 0.02) ** 12  # 납입후 해지 월 2%
-waiver_rate       = 0.0  # 납입면제 없음
+waiver_rate       = 0.0                   # 납입면제 없음
 
 # 산출기초
 basis = fcf.Basis(
@@ -179,12 +179,12 @@ basis = fcf.Basis(
 # 같은 계약을 시작 상태만 바꿔 두 번 평가
 def measure_in(state):
     mp = fcf.ModelPoints.single(
-        issue_age           = 40,                                      # 가입연령 40세
-        sex                 = 0,                                       # 성별 (0=남, 1=여)
-        benefits            = {0: 100_000},                            # 0번 보장 (= DEATH) 의 보험금 100,000
-        premium             = 0,                                       # 보험료 0 (이미 완납)
-        term_months         = 3,                                       # 잔여 보험기간 3개월
-        state               = state,                                   # 시작 상태 (자리 지정)
+        issue_age           = 40,            # 가입연령 40세
+        sex                 = 0,             # 성별 (0=남, 1=여)
+        benefits            = {0: 100_000},  # 0번 보장 (= DEATH) 의 보험금 100,000
+        premium             = 0,             # 보험료 0 (이미 완납)
+        term_months         = 3,             # 잔여 보험기간 3개월
+        state               = state,         # 시작 상태 (자리 지정)
         calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
     )
     return fcf.gmm.measure(mp, basis)
@@ -277,11 +277,11 @@ import numpy as np
 import fastcashflow as fcf
 
 # rate 함수 -- 해지율을 가입경과 (policy duration, 연 단위) 의 단계함수로
-death_rate = 1 - (1 - 0.01) ** 12  # 사망률 월 1%
-lapse_rate = lambda s, a, d: np.where(                               # 완납 시점에 해지율 하락
+death_rate = 1 - (1 - 0.01) ** 12       # 사망률 월 1%
+lapse_rate = lambda s, a, d: np.where(  # 완납 시점에 해지율 하락
     d < 1,
-    1 - (1 - 0.30) ** 12,   # 납입중 (가입 1년 이내) 월 30%
-    1 - (1 - 0.02) ** 12,   # 납입후 (1년 이후)      월 2%
+    1 - (1 - 0.30) ** 12,  # 납입중 (가입 1년 이내) 월 30%
+    1 - (1 - 0.02) ** 12,  # 납입후 (1년 이후)      월 2%
 )
 
 # 산출기초
@@ -298,12 +298,12 @@ basis = fcf.Basis(
 
 # 모델 포인트
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,                                      # 가입연령 40세
-    sex                 = 0,                                       # 성별 (0=남, 1=여)
-    benefits            = {0: 100_000},                            # 사망보험금 100,000
-    premium             = 1_000,                                   # 월납 보험료 1,000
-    term_months         = 24,                                      # 보험기간 2년
-    premium_term_months = 12,                                      # 납입기간 1년 (이후 완납)
+    issue_age           = 40,            # 가입연령 40세
+    sex                 = 0,             # 성별 (0=남, 1=여)
+    benefits            = {0: 100_000},  # 사망보험금 100,000
+    premium             = 1_000,         # 월납 보험료 1,000
+    term_months         = 24,            # 보험기간 2년
+    premium_term_months = 12,            # 납입기간 1년 (이후 완납)
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
@@ -311,15 +311,15 @@ m   = fcf.gmm.measure(mp, basis)
 ifc = m.cashflows.inforce[0]
 pcf = m.cashflows.premium_cf[0]
 print(f"premium month 11 / 12        = {pcf[11]:.4f} / {pcf[12]:.4f}")  # 보험료 중단
-print(f"inforce ratio m11/m10 (paying) = {ifc[11] / ifc[10]:.4f}")      # 해지 30%
-print(f"inforce ratio m13/m12 (paid-up) = {ifc[13] / ifc[12]:.4f}")      # 해지 2%
+print(f"inforce ratio m11/m10 (paying)  = {ifc[11] / ifc[10]:.4f}")     # 해지 30%
+print(f"inforce ratio m13/m12 (paid-up) = {ifc[13] / ifc[12]:.4f}")     # 해지 2%
 ```
 
 출력:
 
 ```
 premium month 11 / 12        = 17.7038 / 0.0000
-inforce ratio m11/m10 (paying) = 0.6930
+inforce ratio m11/m10 (paying)  = 0.6930
 inforce ratio m13/m12 (paid-up) = 0.9702
 ```
 

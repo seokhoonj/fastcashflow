@@ -116,13 +116,13 @@ TVOG =              0
 
 ```python
 rng  = np.random.default_rng(7)
-r_m  = (1 + 0.03) ** (1 / 12) - 1                     # 중앙 월수익률 (연 3%)
-vol  = 0.003                                           # 월 변동성 0.3% (보수적 펀드)
-scen = r_m + vol * rng.standard_normal((2000, 120))    # (n_scenarios, n_time)
+r_m  = (1 + 0.03) ** (1 / 12) - 1                    # 중앙 월수익률 (연 3%)
+vol  = 0.003                                         # 월 변동성 0.3% (보수적 펀드)
+scen = r_m + vol * rng.standard_normal((2000, 120))  # (n_scenarios, n_time)
 
 sto = fcf.vfa.measure(mp, basis, return_scenarios=scen)
-print(f"TVOG = {sto.time_value[0]:>14,.0f}")           # 적립이율 보증의 시간가치
-print(f"CSM  = {sto.csm[0]:>14,.0f}")                  # TVOG 흡수 후 마진
+print(f"TVOG = {sto.time_value[0]:>14,.0f}")  # 적립이율 보증의 시간가치
+print(f"CSM  = {sto.csm[0]:>14,.0f}")         # TVOG 흡수 후 마진
 
 tvog = fcf.vfa.tvog(mp, basis, scen)                   # 적립이율 보증만 격리
 print(f"vfa.tvog = {tvog.time_value:>14,.0f}")

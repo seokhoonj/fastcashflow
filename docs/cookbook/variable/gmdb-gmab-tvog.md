@@ -58,8 +58,8 @@ mp = fcf.ModelPoints.single(
     minimum_accumulation_benefit = 1.05e8,  # GMAB (105%)
 )
 
-det = fcf.vfa.measure(mp, basis)               # 결정론 (시나리오 없음)
-print(f"deterministic CSM  = {det.csm[0]:>14,.0f}")  # intrinsic 흡수 후 마진
+det = fcf.vfa.measure(mp, basis)                            # 결정론 (시나리오 없음)
+print(f"deterministic CSM  = {det.csm[0]:>14,.0f}")         # intrinsic 흡수 후 마진
 print(f"deterministic TVOG = {det.time_value[0]:>14,.0f}")  # 시간가치 (안 보임)
 ```
 
@@ -83,9 +83,9 @@ deterministic TVOG =              0
 ```python
 # 펀드 월수익률 시나리오 (외부 ESG 산출: 1,000 경로 x 120 개월)
 rng  = np.random.default_rng(7)
-r_m  = (1 + 0.03) ** (1 / 12) - 1                     # 중앙 월수익률 (연 3%)
-vol  = 0.02                                            # 월 변동성 2%
-scen = r_m + vol * rng.standard_normal((1000, 120))   # (n_scenarios, n_time)
+r_m  = (1 + 0.03) ** (1 / 12) - 1                    # 중앙 월수익률 (연 3%)
+vol  = 0.02                                          # 월 변동성 2%
+scen = r_m + vol * rng.standard_normal((1000, 120))  # (n_scenarios, n_time)
 
 sto = fcf.vfa.measure(mp, basis, return_scenarios=scen)
 print(f"stochastic TVOG = {sto.time_value[0]:>14,.0f}")  # 보증의 시간가치

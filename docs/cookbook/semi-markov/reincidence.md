@@ -126,7 +126,7 @@ from fastcashflow import State, Transition, StateModel
 
 # rate 함수 -- 모든 rate 는 평탄 상수 (실무는 경험률표 룩업)
 death_rate     = 1 - (1 - 0.01) ** 12  # 사망률 월 1%
-lapse_rate     = 0.0  # 해지 없음
+lapse_rate     = 0.0                   # 해지 없음
 incidence_rate = 1 - (1 - 0.05) ** 12  # 1차 진단 월 5%
 
 # 재진단 -- 네 번째 인자 sd = post_first 진입 후 경과개월. 면책 2개월 후 월 20%
@@ -135,8 +135,8 @@ reincid_fn   = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
 # 상태 모델 -- healthy → post_first → post_second (직접 조립)
 model = StateModel(states=(
     State("healthy", pays_premium=True, transitions=(
-        Transition("mortality"),                                       # in-force 감쇠
-        Transition("ci_incidence", to="post_first", pays_lump_sum=True),    # 1차 진단금
+        Transition("mortality"),                                          # in-force 감쇠
+        Transition("ci_incidence", to="post_first", pays_lump_sum=True),  # 1차 진단금
         Transition("lapse"),
     )),
     State("post_first", sojourn_tracking_months=12, transitions=(                 # 경과 추적 (코호트)
@@ -166,11 +166,11 @@ basis = fcf.Basis(
 
 # 모델 포인트
 mp = fcf.ModelPoints(
-    issue_age          = np.array([40], dtype=np.int64),          # 가입연령 40세
-    benefits           = {0: np.array([100_000.0])},              # 사망보험금 100,000
-    premium            = np.array([0.0]),                         # 보험료 0
-    term_months        = np.array([4], dtype=np.int64),           # 보험기간 4개월
-    disability_benefit = np.array([1_000_000.0]),                 # 진단금 1,000,000 (1차 = 2차)
+    issue_age          = np.array([40], dtype=np.int64),  # 가입연령 40세
+    benefits           = {0: np.array([100_000.0])},      # 사망보험금 100,000
+    premium            = np.array([0.0]),                 # 보험료 0
+    term_months        = np.array([4], dtype=np.int64),   # 보험기간 4개월
+    disability_benefit = np.array([1_000_000.0]),         # 진단금 1,000,000 (1차 = 2차)
     calculation_methods= {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
@@ -246,8 +246,8 @@ import numpy as np
 
 # 계리적 가정 -- 1차 진단율 = KOSIS 국가암등록 연령표 (long-form; 실무는 Excel 룩업)
 ages = np.array([   30,     40,     50,     60,     70])
-ca_m = np.array([0.0010, 0.0023, 0.0052, 0.0117, 0.0264])   # 남
-ca_f = np.array([0.0028, 0.0040, 0.0061, 0.0108, 0.0220])   # 여 (젊은연령 갑상선↑)
+ca_m = np.array([0.0010, 0.0023, 0.0052, 0.0117, 0.0264])  # 남
+ca_f = np.array([0.0028, 0.0040, 0.0061, 0.0108, 0.0220])  # 여 (젊은연령 갑상선↑)
 
 def ca_incidence(s, a, d):                          # 연령표 룩업 (VLOOKUP 식 보간)
     a = np.asarray(a, dtype=float)
@@ -296,7 +296,7 @@ reincidence mult sd6/24/48/72: [0.0, 1.8, 1.2, 0.9]
 
 ```python
 pm_healthy = 0.005  # 건강 사망 연 0.5%
-pm_post    = 0.02  # 암진단 후 연 2% (건강의 4배)
+pm_post    = 0.02   # 암진단 후 연 2% (건강의 4배)
 pm_lapse   = 0.05
 
 pm_model = StateModel(states=(
@@ -310,16 +310,16 @@ pm_model = StateModel(states=(
         Transition("mortality"), Transition("lapse"))),
 ), seating=(0, 1, 2))
 pm_basis = fcf.Basis(
-    mortality_annual=pm_healthy,                  # 건강상태 사망률
-    lapse_annual=pm_lapse,                        # 해지
-    ci_incidence_annual=ca_incidence,             # 1차 암 진단율
-    ci_reincidence_annual=ca_reincidence,         # 재진단율 (sojourn 의존)
-    state_mortality_annual={"dth_aft_can": pm_post},  # 암진단 후 사망률 (가정)
-    discount_annual=0.03,                         # 할인율
-    ra_confidence=0.75,                           # 위험조정 신뢰수준
-    mortality_cv=0.10,                            # 사망 변동계수
-    morbidity_cv=0.15,                            # 발생 변동계수
-    state_model=pm_model,                         # 상태기계
+    mortality_annual=pm_healthy,                             # 건강상태 사망률
+    lapse_annual=pm_lapse,                                   # 해지
+    ci_incidence_annual=ca_incidence,                        # 1차 암 진단율
+    ci_reincidence_annual=ca_reincidence,                    # 재진단율 (sojourn 의존)
+    state_mortality_annual={"dth_aft_can": pm_post},         # 암진단 후 사망률 (가정)
+    discount_annual=0.03,                                    # 할인율
+    ra_confidence=0.75,                                      # 위험조정 신뢰수준
+    mortality_cv=0.10,                                       # 사망 변동계수
+    morbidity_cv=0.15,                                       # 발생 변동계수
+    state_model=pm_model,                                    # 상태기계
     coverages=(fcf.CoverageRate("CANCER1", ca_incidence),),  # 1차 암 진단 담보
 )
 

@@ -59,17 +59,17 @@ import numpy as np
 import fastcashflow as fcf
 
 # 계리적 가정 (평탄 toy -- 실무는 경험률표)
-mort   = 0.003   # 사망 decrement
-cancer = 0.005   # 암 진단율
-lapse  = 0.05    # 해지율
+mort   = 0.003  # 사망 decrement
+cancer = 0.005  # 암 진단율
+lapse  = 0.05   # 해지율
 
 basis = fcf.Basis(
-    mortality_annual=mort,                        # 사망 decrement
-    lapse_annual=lapse,                           # 해지
-    discount_annual=0.03,                         # 할인율
-    ra_confidence=0.75,                           # 위험조정 신뢰수준
-    mortality_cv=0.10,                            # 사망 변동계수
-    morbidity_cv=0.15,                            # 발생 변동계수
+    mortality_annual=mort,                            # 사망 decrement
+    lapse_annual=lapse,                               # 해지
+    discount_annual=0.03,                             # 할인율
+    ra_confidence=0.75,                               # 위험조정 신뢰수준
+    mortality_cv=0.10,                                # 사망 변동계수
+    morbidity_cv=0.15,                                # 발생 변동계수
     coverages=(fcf.CoverageRate("CANCER", cancer),),  # 암 진단 담보
 )
 
@@ -83,8 +83,8 @@ def renewable(boundary):
                                   else np.array([boundary], dtype=np.int64)),
         calculation_methods= {"CANCER": fcf.CalculationMethod.MORBIDITY})
 
-final = fcf.gmm.measure(renewable(None), basis, full=False)   # 경계 = 보장만기 480
-bdy   = fcf.gmm.measure(renewable(120),  basis, full=False)   # 경계 = 차기갱신 120
+final = fcf.gmm.measure(renewable(None), basis, full=False)  # 경계 = 보장만기 480
+bdy   = fcf.gmm.measure(renewable(120),  basis, full=False)  # 경계 = 차기갱신 120
 
 print(f"final maturity (480)  BEL {final.bel[0]:>12,.0f}  CSM {final.csm[0]:>11,.0f}")
 print(f"next renewal (120)  BEL {bdy.bel[0]:>12,.0f}  CSM {bdy.csm[0]:>11,.0f}")
@@ -117,8 +117,8 @@ health = fcf.ModelPoints(
     issue_age          = np.array([40], dtype=np.int64),
     benefits           = {0: np.array([1_000_000.0])},
     premium            = np.array([12_000.0]),
-    term_months        = np.array([600], dtype=np.int64),              # 명목 보장기간
-    contract_boundary_months = np.array([12], dtype=np.int64),         # 1년 갱신 = 경계
+    term_months        = np.array([600], dtype=np.int64),       # 명목 보장기간
+    contract_boundary_months = np.array([12], dtype=np.int64),  # 1년 갱신 = 경계
     calculation_methods= {"CANCER": fcf.CalculationMethod.MORBIDITY})
 m = fcf.gmm.measure(health, basis, full=False)
 print(f"medical 1yr renewal (boundary 12)  BEL {m.bel[0]:>10,.0f}  CSM {m.csm[0]:>10,.0f}")
