@@ -64,12 +64,12 @@ cancer = 0.005  # 암 진단율
 lapse  = 0.05   # 해지율
 
 basis = fcf.Basis(
-    mortality_annual=mort,                            # 사망 decrement
-    lapse_annual=lapse,                               # 해지
-    discount_annual=0.03,                             # 할인율
-    ra_confidence=0.75,                               # 위험조정 신뢰수준
-    mortality_cv=0.10,                                # 사망 변동계수
-    morbidity_cv=0.15,                                # 발생 변동계수
+    mortality_annual=mort,  # 사망 decrement
+    lapse_annual=lapse,     # 해지
+    discount_annual=0.03,   # 할인율
+    ra_confidence=0.75,     # 위험조정 신뢰수준
+    mortality_cv=0.10,      # 사망 변동계수
+    morbidity_cv=0.15,      # 발생 변동계수
     coverages=(fcf.CoverageRate("CANCER", cancer),),  # 암 진단 담보
 )
 

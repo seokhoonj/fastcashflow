@@ -135,7 +135,7 @@ reincid_fn   = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
 # 상태 모델 -- healthy → post_first → post_second (직접 조립)
 model = StateModel(states=(
     State("healthy", pays_premium=True, transitions=(
-        Transition("mortality"),                                          # in-force 감쇠
+        Transition("mortality"),  # in-force 감쇠
         Transition("ci_incidence", to="post_first", pays_lump_sum=True),  # 1차 진단금
         Transition("lapse"),
     )),
@@ -175,12 +175,12 @@ mp = fcf.ModelPoints(
 )
 
 m = fcf.gmm.measure(mp, basis)
-print(f"inforce       = {m.cashflows.inforce[0]}")        # 보유계약 (사망으로만 감쇠)
-print(f"claim_cf      = {m.cashflows.claim_cf[0]}")       # 사망보험금
+print(f"inforce       = {m.cashflows.inforce[0]}")  # 보유계약 (사망으로만 감쇠)
+print(f"claim_cf      = {m.cashflows.claim_cf[0]}")  # 사망보험금
 print(f"disability_cf = {m.cashflows.disability_cf[0]}")  # 진단금 (1차 + 2차)
-print(f"BEL           = {m.bel[0]:.2f}")                  # 최선추정부채
-print(f"RA            = {m.ra[0]:.2f}")                   # 위험조정
-print(f"CSM           = {m.csm[0]:.2f}")                  # 계약서비스마진
+print(f"BEL           = {m.bel[0]:.2f}")  # 최선추정부채
+print(f"RA            = {m.ra[0]:.2f}")   # 위험조정
+print(f"CSM           = {m.csm[0]:.2f}")  # 계약서비스마진
 ```
 
 출력:
@@ -310,16 +310,16 @@ pm_model = StateModel(states=(
         Transition("mortality"), Transition("lapse"))),
 ), seating=(0, 1, 2))
 pm_basis = fcf.Basis(
-    mortality_annual=pm_healthy,                             # 건강상태 사망률
-    lapse_annual=pm_lapse,                                   # 해지
-    ci_incidence_annual=ca_incidence,                        # 1차 암 진단율
-    ci_reincidence_annual=ca_reincidence,                    # 재진단율 (sojourn 의존)
-    state_mortality_annual={"dth_aft_can": pm_post},         # 암진단 후 사망률 (가정)
-    discount_annual=0.03,                                    # 할인율
-    ra_confidence=0.75,                                      # 위험조정 신뢰수준
-    mortality_cv=0.10,                                       # 사망 변동계수
-    morbidity_cv=0.15,                                       # 발생 변동계수
-    state_model=pm_model,                                    # 상태기계
+    mortality_annual=pm_healthy,           # 건강상태 사망률
+    lapse_annual=pm_lapse,                 # 해지
+    ci_incidence_annual=ca_incidence,      # 1차 암 진단율
+    ci_reincidence_annual=ca_reincidence,  # 재진단율 (sojourn 의존)
+    state_mortality_annual={"dth_aft_can": pm_post},  # 암진단 후 사망률 (가정)
+    discount_annual=0.03,                  # 할인율
+    ra_confidence=0.75,                    # 위험조정 신뢰수준
+    mortality_cv=0.10,                     # 사망 변동계수
+    morbidity_cv=0.15,                     # 발생 변동계수
+    state_model=pm_model,                  # 상태기계
     coverages=(fcf.CoverageRate("CANCER1", ca_incidence),),  # 1차 암 진단 담보
 )
 

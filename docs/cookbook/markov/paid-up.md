@@ -163,13 +163,13 @@ waiver_rate       = 0.0                   # 납입면제 없음
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual        = death_rate,                     # 보유계약 사망률 (월 1%)
-    lapse_annual            = lapse_rate,                     # active 해지율 (납입중 월 10%)
-    lapse_paidup_annual     = lapse_paidup_rate,              # paidup 해지율 (납입후 월 2%)
-    waiver_incidence_annual = waiver_rate,                    # active → waiver 전이율 (없음)
-    discount_annual         = 0.0,                            # 연 할인율 0 (검증 단순화)
-    ra_confidence           = 0.75,                           # 위험조정 신뢰수준 75%
-    mortality_cv            = 0.10,                           # 사망률 변동계수 10%
+    mortality_annual        = death_rate,         # 보유계약 사망률 (월 1%)
+    lapse_annual            = lapse_rate,         # active 해지율 (납입중 월 10%)
+    lapse_paidup_annual     = lapse_paidup_rate,  # paidup 해지율 (납입후 월 2%)
+    waiver_incidence_annual = waiver_rate,        # active → waiver 전이율 (없음)
+    discount_annual         = 0.0,                # 연 할인율 0 (검증 단순화)
+    ra_confidence           = 0.75,               # 위험조정 신뢰수준 75%
+    mortality_cv            = 0.10,               # 사망률 변동계수 10%
     state_model             = STATE_MODELS["WAIVER_PAIDUP"],  # 3-state
     coverages               = (
         fcf.CoverageRate("DEATH", death_rate),     # 사망 보장 1종 (청구 rate = death_rate)
