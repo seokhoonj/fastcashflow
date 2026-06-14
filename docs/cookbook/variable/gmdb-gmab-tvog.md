@@ -59,15 +59,15 @@ mp = fcf.ModelPoints.single(
 )
 
 det = fcf.vfa.measure(mp, basis)               # 결정론 (시나리오 없음)
-print(f"결정론  CSM  = {det.csm[0]:>14,.0f}")  # intrinsic 흡수 후 마진
-print(f"결정론  TVOG = {det.time_value[0]:>14,.0f}")  # 시간가치 (안 보임)
+print(f"deterministic CSM  = {det.csm[0]:>14,.0f}")  # intrinsic 흡수 후 마진
+print(f"deterministic TVOG = {det.time_value[0]:>14,.0f}")  # 시간가치 (안 보임)
 ```
 
 출력:
 
 ```text
-결정론  CSM  =     17,664,772
-결정론  TVOG =              0
+deterministic CSM  =     17,664,772
+deterministic TVOG =              0
 ```
 
 중앙 시나리오에서 계좌는 100,000,000 → 104,933,092 로 평탄하게 굴러갑니다
@@ -88,15 +88,15 @@ vol  = 0.02                                            # 월 변동성 2%
 scen = r_m + vol * rng.standard_normal((1000, 120))   # (n_scenarios, n_time)
 
 sto = fcf.vfa.measure(mp, basis, return_scenarios=scen)
-print(f"확률론  TVOG = {sto.time_value[0]:>14,.0f}")  # 보증의 시간가치
-print(f"확률론  CSM  = {sto.csm[0]:>14,.0f}")         # TVOG 흡수 후 마진
+print(f"stochastic TVOG = {sto.time_value[0]:>14,.0f}")  # 보증의 시간가치
+print(f"stochastic CSM  = {sto.csm[0]:>14,.0f}")         # TVOG 흡수 후 마진
 ```
 
 출력:
 
 ```text
-확률론  TVOG =      6,205,470
-확률론  CSM  =     11,459,302
+stochastic TVOG =      6,205,470
+stochastic CSM  =     11,459,302
 ```
 
 **보증의 시간가치는 6,205,470 — 결정론 intrinsic 50,594 의 120배가 넘습니다.**
@@ -146,17 +146,17 @@ def tvog_with(gmdb, gmab):
     s = r_m + vol * rng2.standard_normal((1000, 120))
     return fcf.vfa.measure(m, basis, return_scenarios=s).time_value[0]
 
-print(f"GMDB 시간가치 = {tvog_with(1.02e8, 0.0):>14,.0f}")
-print(f"GMAB 시간가치 = {tvog_with(0.0, 1.05e8):>14,.0f}")
-print(f"둘 다         = {tvog_with(1.02e8, 1.05e8):>14,.0f}")
+print(f"GMDB time value = {tvog_with(1.02e8, 0.0):>14,.0f}")
+print(f"GMAB time value = {tvog_with(0.0, 1.05e8):>14,.0f}")
+print(f"both            = {tvog_with(1.02e8, 1.05e8):>14,.0f}")
 ```
 
 출력:
 
 ```text
-GMDB 시간가치 =        236,056
-GMAB 시간가치 =      5,969,414
-둘 다         =      6,205,470
+GMDB time value =        236,056
+GMAB time value =      5,969,414
+both            =      6,205,470
 ```
 
 GMDB 236,056 + GMAB 5,969,414 = 6,205,470 — 정확히 합산됩니다.

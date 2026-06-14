@@ -311,13 +311,13 @@ d = fcf.gmm.measure(mp, basis)
 r = fcf.reinsurance.measure(mp, basis, treaty=fcf.reinsurance.QuotaShare(cession=0.50))
 assert abs(r.bel[0] - (-0.50 * d.bel[0])) < 1e-9    # BEL 대칭
 assert abs(r.ra[0]  - ( 0.50 * d.ra[0])) < 1e-9     # RA 비례
-print("대칭 항등식 OK")
+print("symmetric identity OK")
 ```
 
 출력:
 
 ```
-대칭 항등식 OK
+symmetric identity OK
 ```
 
 이 항등식이 깨지면 (할인이나 사업비를 끄지 않았거나, rate 를 한쪽만

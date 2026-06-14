@@ -149,7 +149,7 @@ with tempfile.TemporaryDirectory() as tmp:
     out = Path(tmp) / "close_pack_2026.xlsx"
     fcf.write_close_pack(pack, out, movements=movements)   # 워크북 + per-MP 사이드카
     sidecars = sorted(p.name for p in Path(tmp).glob("*_permp_*.parquet"))
-    print(f"{out.name}  (+ per-MP 사이드카 {len(sidecars)} 개)")
+    print(f"{out.name}  (+{len(sidecars)} per-MP parquet sidecars)")
 ```
 
 워크북 옆에 `close_pack_2026_permp_0.parquet` ... 처럼 정산 movement 하나당 한

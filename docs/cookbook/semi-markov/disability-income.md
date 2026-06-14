@@ -283,14 +283,14 @@ def di_incidence(s, a, d):                          # 연령표 룩업 (VLOOKUP 
 def di_recovery(s, a, d, sd):
     return np.select([sd < 12, sd < 24, sd < 60], [0.45, 0.16, 0.09], default=0.05)
 
-print("발생률 30/40/50/60 :", [round(float(di_incidence(np.array([0]), np.array([a]), 0)[0]), 5)
+print("incidence 30/40/50/60 :", [round(float(di_incidence(np.array([0]), np.array([a]), 0)[0]), 5)
                               for a in (30, 40, 50, 60)])
-print("회복률 1/2/4/6년   :", [float(di_recovery(0, 0, 0, m)) for m in (6, 18, 48, 72)])
+print("recovery 1/2/4/6yr :", [float(di_recovery(0, 0, 0, m)) for m in (6, 18, 48, 72)])
 ```
 
 ```text
-발생률 30/40/50/60 : [0.001, 0.0026, 0.0066, 0.0168]
-회복률 1/2/4/6년   : [0.45, 0.16, 0.09, 0.05]
+incidence 30/40/50/60 : [0.001, 0.0026, 0.0066, 0.0168]
+recovery 1/2/4/6yr : [0.45, 0.16, 0.09, 0.05]
 ```
 
 `di_incidence` 를 `waiver_incidence_annual` 에, `di_recovery` 를

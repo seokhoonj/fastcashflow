@@ -85,7 +85,7 @@ movements = fcf.roll_forward(m, period_months=12)    # 12 개월 기간
 recon     = fcf.reconcile(movements)                 # 기간 수만큼의 변동분석표
 
 r = recon[0]                                         # 첫 보고기간
-print(f"변동분해 -- HEALTH_A / FC, months {r.month_start + 1}-{r.month_end}")
+print(f"analysis of change -- HEALTH_A / FC, months {r.month_start + 1}-{r.month_end}")
 print(f"{'':<16}{'BEL':>12}{'RA':>12}{'CSM':>12}")
 for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
                  ("finance", "Finance"), ("release", "Release"),
@@ -99,7 +99,7 @@ for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
 출력:
 
 ```
-변동분해 -- HEALTH_A / FC, months 1-12
+analysis of change -- HEALTH_A / FC, months 1-12
                          BEL          RA         CSM
 Opening           -1,336,523     271,401   1,065,122
 Future service             0           0           0
@@ -185,7 +185,7 @@ movements = fcf.roll_forward(
 recon = fcf.reconcile(movements)
 
 r = recon[1]                 # 변경이 발효된 기간 (months 12-24)
-print(f"변동분해 -- HEALTH_A / FC, months {r.month_start + 1}-{r.month_end}"
+print(f"analysis of change -- HEALTH_A / FC, months {r.month_start + 1}-{r.month_end}"
       f"  (mortality +10% at month 12)")
 print(f"{'':<16}{'BEL':>12}{'RA':>12}{'CSM':>12}")
 for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
@@ -200,7 +200,7 @@ for row, lab in (("opening", "Opening"), ("future_service", "Future service"),
 출력:
 
 ```
-변동분해 -- HEALTH_A / FC, months 13-24  (mortality +10% at month 12)
+analysis of change -- HEALTH_A / FC, months 13-24  (mortality +10% at month 12)
                          BEL          RA         CSM
 Opening           -1,872,658     246,497     957,984
 Future service        -1,017        -379       1,396

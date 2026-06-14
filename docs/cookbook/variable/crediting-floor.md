@@ -190,13 +190,13 @@ mp_none = fcf.ModelPoints.single(
     account_value=1.0e8,  # 기초 계좌가치
 )   # minimum_crediting_rate 생략 = 보증 없음
 none = fcf.vfa.measure(mp_none, basis, return_scenarios=scen)
-print(f"보증 없음 TVOG = {none.time_value[0]:>14,.0f}")
+print(f"no-guarantee TVOG = {none.time_value[0]:>14,.0f}")
 ```
 
 출력:
 
 ```text
-보증 없음 TVOG =              0
+no-guarantee TVOG =              0
 ```
 
 ### GMDB / GMAB 와 함께

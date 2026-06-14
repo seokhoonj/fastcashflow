@@ -96,13 +96,13 @@ def ltc_incidence(s, a, d):                          # 연령표 룩업 (VLOOKUP
     return np.where(np.asarray(s) == 1,
                     np.interp(a, ages, ltc_f), np.interp(a, ages, ltc_m))
 
-print("발생률 50/60/70/80 (남) :",
+print("incidence 50/60/70/80 (M) :",
       [round(float(ltc_incidence(np.array([0]), np.array([a]), 0)[0]), 4)
        for a in (50, 60, 70, 80)])
 ```
 
 ```text
-발생률 50/60/70/80 (남) : [0.0015, 0.005, 0.016, 0.045]
+incidence 50/60/70/80 (M) : [0.0015, 0.005, 0.016, 0.045]
 ```
 
 ## 최소 작동 예제 — 진단금 + 보증한도 월정액 + 상승 사망률
@@ -199,13 +199,13 @@ toy_mp = fcf.ModelPoints(
     state=np.array([1], dtype=np.int64),                                      # 간병 상태에 자리 지정
     calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
 tm = fcf.gmm.measure(toy_mp, toy_basis)
-print("월정액 cf :", [f"{x:,.0f}" for x in tm.cashflows.disability_cf[0][:6]])
-print(f"BEL       : {tm.bel[0]:,.0f}   (= 3 x 1,000,000, 할인 0)")
+print("monthly benefit cf :", [f"{x:,.0f}" for x in tm.cashflows.disability_cf[0][:6]])
+print(f"BEL       : {tm.bel[0]:,.0f}   (= 3 x 1,000,000, discount 0)")
 ```
 
 ```text
-월정액 cf : ['1,000,000', '1,000,000', '1,000,000', '0', '0', '0']
-BEL       : 3,000,000   (= 3 x 1,000,000, 할인 0)
+monthly benefit cf : ['1,000,000', '1,000,000', '1,000,000', '0', '0', '0']
+BEL       : 3,000,000   (= 3 x 1,000,000, discount 0)
 ```
 
 보증 3 회 (`periodic_benefit_term_months=3`) 이므로 sojourn `tau = 0, 1, 2` 세 달만

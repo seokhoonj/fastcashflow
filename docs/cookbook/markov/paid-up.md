@@ -311,16 +311,16 @@ m   = fcf.gmm.measure(mp, basis)
 ifc = m.cashflows.inforce[0]
 pcf = m.cashflows.premium_cf[0]
 print(f"premium month 11 / 12        = {pcf[11]:.4f} / {pcf[12]:.4f}")  # 보험료 중단
-print(f"inforce ratio m11/m10 (납입중) = {ifc[11] / ifc[10]:.4f}")      # 해지 30%
-print(f"inforce ratio m13/m12 (납입후) = {ifc[13] / ifc[12]:.4f}")      # 해지 2%
+print(f"inforce ratio m11/m10 (paying) = {ifc[11] / ifc[10]:.4f}")      # 해지 30%
+print(f"inforce ratio m13/m12 (paid-up) = {ifc[13] / ifc[12]:.4f}")      # 해지 2%
 ```
 
 출력:
 
 ```
 premium month 11 / 12        = 17.7038 / 0.0000
-inforce ratio m11/m10 (납입중) = 0.6930
-inforce ratio m13/m12 (납입후) = 0.9702
+inforce ratio m11/m10 (paying) = 0.6930
+inforce ratio m13/m12 (paid-up) = 0.9702
 ```
 
 납입기간이 끝나는 12개월째에 보험료가 0 으로 멈추고 (`premium_term_months`),

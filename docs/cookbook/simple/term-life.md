@@ -269,13 +269,13 @@ detail = fcf.gmm.measure(mp, basis.resolve(("TERM_LIFE_A", "GA")))
 # 같은 평가의 빠른 경로 — 시점 0 의 네 숫자만
 fast = fcf.gmm.measure(mp, basis.resolve(("TERM_LIFE_A", "GA")), full=False)
 
-print(f"<full=True — 시점 0 합계>")
+print(f"<full=True -- portfolio totals at t=0>")
 print(f"BEL : {detail.bel.sum():>15,.0f}")
 print(f"RA  : {detail.ra.sum():>15,.0f}")
 print(f"CSM : {detail.csm.sum():>15,.0f}")
 print(f"Loss: {detail.loss_component.sum():>15,.0f}")
 print()
-print(f"<full=False — 시점 0>")
+print(f"<full=False -- headline at t=0>")
 print(f"BEL : {fast.bel.sum():>15,.0f}")
 print(f"RA  : {fast.ra.sum():>15,.0f}")
 print(f"CSM : {fast.csm.sum():>15,.0f}")
@@ -285,13 +285,13 @@ print(f"Loss: {fast.loss_component.sum():>15,.0f}")
 출력 (샘플 그대로):
 
 ```
-<full=True — 시점 0 합계>
+<full=True -- portfolio totals at t=0>
 BEL :     -26,441,301
 RA  :       1,210,877
 CSM :      27,593,495
 Loss:       2,363,071
 
-<full=False — 시점 0>
+<full=False -- headline at t=0>
 BEL :     -26,441,301
 RA  :       1,210,877
 CSM :      27,593,495

@@ -86,13 +86,13 @@ def renewable(boundary):
 final = fcf.gmm.measure(renewable(None), basis, full=False)   # 경계 = 보장만기 480
 bdy   = fcf.gmm.measure(renewable(120),  basis, full=False)   # 경계 = 차기갱신 120
 
-print(f"최종만기 (480)  BEL {final.bel[0]:>12,.0f}  CSM {final.csm[0]:>11,.0f}")
-print(f"차기갱신 (120)  BEL {bdy.bel[0]:>12,.0f}  CSM {bdy.csm[0]:>11,.0f}")
+print(f"final maturity (480)  BEL {final.bel[0]:>12,.0f}  CSM {final.csm[0]:>11,.0f}")
+print(f"next renewal (120)  BEL {bdy.bel[0]:>12,.0f}  CSM {bdy.csm[0]:>11,.0f}")
 ```
 
 ```text
-최종만기 (480)  BEL   -1,730,470  CSM   1,555,019
-차기갱신 (120)  BEL   -1,017,896  CSM     914,693
+final maturity (480)  BEL   -1,730,470  CSM   1,555,019
+next renewal (120)  BEL   -1,017,896  CSM     914,693
 ```
 
 ## 결과 읽기 — 경계가 측정 범위를 끊는다
@@ -121,11 +121,11 @@ health = fcf.ModelPoints(
     contract_boundary_months = np.array([12], dtype=np.int64),         # 1년 갱신 = 경계
     calculation_methods= {"CANCER": fcf.CalculationMethod.MORBIDITY})
 m = fcf.gmm.measure(health, basis, full=False)
-print(f"실손 1년갱신 (경계 12)  BEL {m.bel[0]:>10,.0f}  CSM {m.csm[0]:>10,.0f}")
+print(f"medical 1yr renewal (boundary 12)  BEL {m.bel[0]:>10,.0f}  CSM {m.csm[0]:>10,.0f}")
 ```
 
 ```text
-실손 1년갱신 (경계 12)  BEL   -133,793  CSM    133,305
+medical 1yr renewal (boundary 12)  BEL   -133,793  CSM    133,305
 ```
 
 명목 보장기간이 600개월이어도, 경계가 12개월이라 **첫 1년치 현금흐름만** 측정에

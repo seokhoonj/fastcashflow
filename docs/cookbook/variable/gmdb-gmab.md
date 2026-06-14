@@ -199,19 +199,19 @@ csm_gmdb = csm_with(1.02e8, 0.0)     # GMDB 만
 csm_gmab = csm_with(0.0,    1.05e8)  # GMAB 만
 csm_both = csm_with(1.02e8, 1.05e8)  # 둘 다
 
-print(f"보증 없음 CSM    = {csm_off:>14,.0f}")
+print(f"no-guarantee CSM    = {csm_off:>14,.0f}")
 print(f"GMDB intrinsic  = {csm_off - csm_gmdb:>14,.0f}")
 print(f"GMAB intrinsic  = {csm_off - csm_gmab:>14,.0f}")
-print(f"둘 다 intrinsic  = {csm_off - csm_both:>14,.0f}")
+print(f"both intrinsic  = {csm_off - csm_both:>14,.0f}")
 ```
 
 출력:
 
 ```text
-보증 없음 CSM    =     17,715,366
+no-guarantee CSM    =     17,715,366
 GMDB intrinsic  =         19,113
 GMAB intrinsic  =         31,481
-둘 다 intrinsic  =         50,594
+both intrinsic  =         50,594
 ```
 
 GMDB 19,113 + GMAB 31,481 = 50,594 — 두 보증비용이 정확히 합산됩니다.
