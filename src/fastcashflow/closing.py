@@ -29,12 +29,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import polars as pl
 
 from fastcashflow.disclosure import reconciliation_to_frame
 from fastcashflow.movement import (
     GMMSettlementReconciliation, PAASettlementReconciliation,
     ReinsuranceSettlementReconciliation, VFASettlementReconciliation)
+from fastcashflow.report import ReinsuranceReport, Report
 
 # The SoFP statement frame -- a presentation table (one row per kind x
 # component), not the tidy disclosure spine. opening + change == closing per row.
@@ -254,28 +256,129 @@ def assemble_finance(reconciliations) -> pl.DataFrame:
     return pl.DataFrame(rows, schema=_FINANCE_SCHEMA)
 
 
+# The insurance service result statement (IFRS 17 paragraphs 83, B120-B124).
+# One row per kind x line x period. Issued and reinsurance held are presented
+# separately (paragraph 82): the reinsurance result is NOT netted into the
+# insurance service result.
+_SERVICE_SCHEMA = {
+    "kind": pl.Utf8, "line": pl.Utf8, "period_index": pl.Int64,
+    "amount": pl.Float64,
+}
+# (display line, the report.by_period field it reads) for an issued Report.
+_SERVICE_ISSUED_LINES = (
+    ("Insurance revenue", "insurance_revenue"),
+    ("Insurance service expense", "insurance_service_expense"),
+    ("Insurance service result", "insurance_service_result"),
+)
+# (display line, the ReinsuranceReport.by_period field) -- "Net reinsurance
+# result" (amounts recovered less premiums allocated, paragraph 86) is computed,
+# inserted after "Amounts recovered".
+_SERVICE_REINS_LINES = (
+    ("Reinsurance premium", "reinsurance_premium_allocated"),
+    ("Amounts recovered", "amounts_recovered"),
+    ("Reinsurance service result", "reinsurance_service_result"),
+)
+
+
+def _aggregate_service(reports, line_fields, period_months):
+    """Sum each line's by_period schedule across the reports of one kind, padded
+    to the longest schedule. Returns ``(dict[line -> FloatArray], n_periods)``."""
+    schedules = [r.by_period(period_months) for r in reports]
+    probe = line_fields[0][1]
+    n_periods = max((sched[probe].shape[0] for sched in schedules), default=0)
+    agg = {line: np.zeros(n_periods) for line, _f in line_fields}
+    for sched in schedules:
+        for line, field in line_fields:
+            series = sched[field]
+            agg[line][:series.shape[0]] += series
+    return agg, n_periods
+
+
+def _service_rows(kind, ordered_lines, n_periods):
+    """One row per (line, period) from an ordered list of (line, FloatArray)."""
+    return [
+        {"kind": kind, "line": line, "period_index": t, "amount": float(series[t])}
+        for line, series in ordered_lines
+        for t in range(n_periods)
+    ]
+
+
+def assemble_service_result(reports, *, period_months: int = 12) -> pl.DataFrame:
+    """The insurance service result statement (IFRS 17 paragraphs 83, B120-B124).
+
+    The period-by-period insurance revenue, service expense and service result
+    for contracts issued, and the premiums / recoveries / net / service result
+    for reinsurance contracts held (presented separately, paragraph 82), summed
+    across the reports of each kind. ``reports`` is a list of
+    :class:`~fastcashflow.Report` (issued) and / or
+    :class:`~fastcashflow.ReinsuranceReport` (held).
+
+    The service result is sourced from :meth:`Report.by_period`, NOT the
+    settlement reconciliation: insurance revenue (B120-B124) needs the gross
+    expected claims and expenses, which the settlement table does not carry (its
+    BEL release is net of premiums). It is therefore the EARNED / projected P&L
+    of the measurement -- for a new-business group's first reporting period it
+    ties to that period's settlement; for a later in-force period it is the
+    projection, with experience variances carried in the reconciliation and
+    finance memos. v1 buckets on the elapsed basis (the calendar basis needs a
+    per-report inception offset -- use :meth:`Report.by_period` directly for it).
+    """
+    reports = list(reports)
+    for r in reports:
+        if not isinstance(r, (Report, ReinsuranceReport)):
+            raise TypeError(
+                "assemble_service_result: expects Report / ReinsuranceReport, "
+                f"got {type(r).__name__}")
+    rows = []
+    issued = [r for r in reports if isinstance(r, Report)]
+    if issued:
+        agg, n_periods = _aggregate_service(issued, _SERVICE_ISSUED_LINES,
+                                            period_months)
+        ordered = [(line, agg[line]) for line, _f in _SERVICE_ISSUED_LINES]
+        rows += _service_rows(_KIND_ISSUED, ordered, n_periods)
+    held = [r for r in reports if isinstance(r, ReinsuranceReport)]
+    if held:
+        agg, n_periods = _aggregate_service(held, _SERVICE_REINS_LINES,
+                                            period_months)
+        net = agg["Amounts recovered"] - agg["Reinsurance premium"]
+        ordered = [
+            ("Reinsurance premium", agg["Reinsurance premium"]),
+            ("Amounts recovered", agg["Amounts recovered"]),
+            ("Net reinsurance result", net),
+            ("Reinsurance service result", agg["Reinsurance service result"]),
+        ]
+        rows += _service_rows(_KIND_REINSURANCE, ordered, n_periods)
+    return pl.DataFrame(rows, schema=_SERVICE_SCHEMA)
+
+
 @dataclass(frozen=True, slots=True)
 class ClosePackage:
     """The assembled IFRS 17 close pack for one reporting period.
 
     ``sofp`` is the statement of financial position (:func:`assemble_sofp`);
     ``finance`` is the insurance finance statement (:func:`assemble_finance`);
-    ``reconciliation`` is the stacked per-model settlement detail (the lean tidy
-    frame of :func:`~fastcashflow.disclosure.reconciliation_to_frame`, one block
-    of rows per reconciliation, stamped with ``group_id``). The disclosure
-    emitter materialises these into the multi-sheet close-pack artifact.
+    ``service_result`` is the insurance service result statement
+    (:func:`assemble_service_result`), present only when ``close`` is given the
+    reports; ``reconciliation`` is the stacked per-model settlement detail (the
+    lean tidy frame of :func:`~fastcashflow.disclosure.reconciliation_to_frame`,
+    one block of rows per reconciliation, stamped with ``group_id``). The
+    disclosure emitter materialises these into the multi-sheet close-pack artifact.
     """
 
     period_months: int
     sofp: pl.DataFrame
     finance: pl.DataFrame
     reconciliation: pl.DataFrame
+    service_result: pl.DataFrame | None = None
 
     def to_frames(self) -> dict[str, pl.DataFrame]:
         """The close pack as named frames -- the sheet-shaped views the
-        disclosure emitter writes."""
-        return {"sofp": self.sofp, "finance": self.finance,
-                "reconciliation": self.reconciliation}
+        disclosure emitter writes (the service result only if it was assembled)."""
+        frames = {"sofp": self.sofp, "finance": self.finance,
+                  "reconciliation": self.reconciliation}
+        if self.service_result is not None:
+            frames["service_result"] = self.service_result
+        return frames
 
     def __str__(self) -> str:
         net = self.sofp.filter(pl.col("kind") == _KIND_NET)
@@ -290,14 +393,19 @@ class ClosePackage:
         return "\n".join(lines)
 
 
-def close(reconciliations, *, group_ids=None) -> ClosePackage:
+def close(reconciliations, *, reports=None, group_ids=None) -> ClosePackage:
     """Assemble the close pack from a reporting period's settlement reconciliations.
 
     ``reconciliations`` is the GMM / VFA / PAA / reinsurance settlement
     reconciliations of one reporting period (what :func:`fastcashflow.reconcile`
-    returns, one per model / group). ``group_ids``, if given, names the group of
-    contracts each reconciliation belongs to (parallel to ``reconciliations``);
-    it stamps the reconciliation detail so per-group lines stay identifiable.
+    returns, one per model / group) -- the source of the SoFP, the finance
+    statement and the reconciliation detail. ``reports``, if given, is the list
+    of :class:`~fastcashflow.Report` / :class:`~fastcashflow.ReinsuranceReport`
+    that adds the insurance service result statement (sourced from the report,
+    not the settlement -- see :func:`assemble_service_result`). ``group_ids``, if
+    given, names the group of contracts each reconciliation belongs to (parallel
+    to ``reconciliations``); it stamps the reconciliation detail so per-group
+    lines stay identifiable.
 
     All reconciliations must share the same ``period_months`` -- a close pack is
     one reporting period.
@@ -313,8 +421,11 @@ def close(reconciliations, *, group_ids=None) -> ClosePackage:
         raise ValueError(
             f"close: group_ids has {len(group_ids)} entries for "
             f"{len(recons)} reconciliations")
+    period_months = periods.pop()
     sofp = assemble_sofp(recons)
     finance = assemble_finance(recons)
+    service_result = (None if reports is None
+                      else assemble_service_result(reports, period_months=period_months))
     frames = []
     for i, recon in enumerate(recons):
         frame = reconciliation_to_frame(recon)
@@ -322,5 +433,5 @@ def close(reconciliations, *, group_ids=None) -> ClosePackage:
         frames.append(frame.with_columns(
             pl.lit(gid, dtype=pl.Utf8).alias("group_id")))
     reconciliation = pl.concat(frames)
-    return ClosePackage(period_months=periods.pop(), sofp=sofp, finance=finance,
-                        reconciliation=reconciliation)
+    return ClosePackage(period_months=period_months, sofp=sofp, finance=finance,
+                        reconciliation=reconciliation, service_result=service_result)

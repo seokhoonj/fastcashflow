@@ -12,16 +12,18 @@ arithmetic is hand-checked in isolation from the settle pipeline.
 """
 import dataclasses
 
+import numpy as np
 import polars as pl
 import pytest
 
 from fastcashflow.closing import (
-    ClosePackage, assemble_sofp, assemble_finance, close,
+    ClosePackage, assemble_sofp, assemble_finance, assemble_service_result, close,
     _COMP_LRC, _COMP_LC, _COMP_LIC, _COMP_TOTAL, _FINANCE_TOTAL,
     _KIND_ISSUED, _KIND_REINSURANCE, _KIND_NET)
 from fastcashflow.movement import (
     GMMSettlementReconciliation, PAASettlementReconciliation,
     ReinsuranceSettlementReconciliation, VFASettlementReconciliation)
+from fastcashflow.report import ReinsuranceReport, Report
 
 
 def _build(cls, **over):
@@ -199,6 +201,91 @@ def test_close_packages_sofp_finance_and_reconciliation_detail():
     assert set(recon["group_id"].unique().to_list()) == {"GoC-1", "RE-1"}
     assert set(recon["model"].unique().to_list()) == {"gmm", "reinsurance"}
     assert str(pack).startswith("IFRS 17 close pack")
+
+
+def _report(revenue, expense, **over):
+    revenue = np.asarray(revenue, dtype=float)
+    expense = np.asarray(expense, dtype=float)
+    z = np.zeros_like(revenue)
+    fields = dict(
+        insurance_revenue=revenue, insurance_service_expense=expense,
+        insurance_service_result=revenue - expense,
+        insurance_finance_expense=z, bel_finance_expense=z, ra_finance_expense=z,
+        csm_finance_expense=z, loss_component=np.zeros(revenue.shape[0]),
+        csm_opening=z, csm_accretion=z, csm_release=z, csm_closing=z)
+    fields.update(over)
+    return Report(**fields)
+
+
+def _reins_report(premium, recovered, **over):
+    premium = np.asarray(premium, dtype=float)
+    recovered = np.asarray(recovered, dtype=float)
+    z = np.zeros_like(premium)
+    fields = dict(
+        reinsurance_premium_allocated=premium, amounts_recovered=recovered,
+        reinsurance_service_result=z, ra_release=z, reinsurance_finance_expense=z,
+        bel_finance_expense=z, ra_finance_expense=z, csm_finance_expense=z,
+        csm_opening=z, csm_accretion=z, csm_release=z, csm_closing=z)
+    fields.update(over)
+    return ReinsuranceReport(**fields)
+
+
+def _scell(df, kind, line, period):
+    row = df.filter((pl.col("kind") == kind) & (pl.col("line") == line)
+                    & (pl.col("period_index") == period))
+    assert row.height == 1, f"{kind}/{line}/p{period} not emitted once"
+    return row["amount"][0]
+
+
+def test_service_result_buckets_issued_revenue_expense_result():
+    # 1 MP, 24 months, period_months=12 -> 2 periods
+    revenue = np.array([[10.0] * 12 + [20.0] * 12])
+    expense = np.array([[4.0] * 12 + [5.0] * 12])
+    df = assemble_service_result([_report(revenue, expense)], period_months=12)
+    assert _scell(df, _KIND_ISSUED, "Insurance revenue", 0) == pytest.approx(120.0)
+    assert _scell(df, _KIND_ISSUED, "Insurance revenue", 1) == pytest.approx(240.0)
+    assert _scell(df, _KIND_ISSUED, "Insurance service expense", 1) == pytest.approx(60.0)
+    assert _scell(df, _KIND_ISSUED, "Insurance service result", 1) == pytest.approx(180.0)
+
+
+def test_service_result_sums_across_reports_and_pads_periods():
+    short = _report(np.array([[1.0] * 12]), np.zeros((1, 12)))            # 1 period
+    longr = _report(np.array([[2.0] * 24]), np.zeros((1, 24)))           # 2 periods
+    df = assemble_service_result([short, longr], period_months=12)
+    # period 0: 12 + 24 = 36; period 1: only the long report contributes 24
+    assert _scell(df, _KIND_ISSUED, "Insurance revenue", 0) == pytest.approx(36.0)
+    assert _scell(df, _KIND_ISSUED, "Insurance revenue", 1) == pytest.approx(24.0)
+
+
+def test_service_result_reinsurance_net_is_recovered_less_premium():
+    premium = np.array([[3.0] * 12])
+    recovered = np.array([[10.0] * 12])
+    df = assemble_service_result([_reins_report(premium, recovered)], period_months=12)
+    assert _scell(df, _KIND_REINSURANCE, "Reinsurance premium", 0) == pytest.approx(36.0)
+    assert _scell(df, _KIND_REINSURANCE, "Amounts recovered", 0) == pytest.approx(120.0)
+    assert _scell(df, _KIND_REINSURANCE, "Net reinsurance result", 0) == pytest.approx(84.0)
+
+
+def test_service_result_rejects_non_report():
+    recon = _build(GMMSettlementReconciliation, bel_closing=1.0)
+    with pytest.raises(TypeError, match="Report"):
+        assemble_service_result([recon])
+
+
+def test_close_with_reports_adds_service_result():
+    gmm = _build(GMMSettlementReconciliation, bel_closing=100.0)
+    rep = _report(np.array([[10.0] * 12]), np.array([[4.0] * 12]))
+    pack = close([gmm], reports=[rep])
+    assert set(pack.to_frames()) == {"sofp", "finance", "service_result", "reconciliation"}
+    assert pack.service_result is not None
+    assert _scell(pack.service_result, _KIND_ISSUED, "Insurance revenue", 0) == pytest.approx(120.0)
+
+
+def test_close_without_reports_omits_service_result():
+    gmm = _build(GMMSettlementReconciliation, bel_closing=100.0)
+    pack = close([gmm])
+    assert pack.service_result is None
+    assert "service_result" not in pack.to_frames()
 
 
 def test_close_rejects_mixed_periods():
