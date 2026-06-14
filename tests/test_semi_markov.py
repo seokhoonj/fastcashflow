@@ -692,3 +692,26 @@ def test_workbook_elapsed_axis_drives_semi_markov_reincidence(tmp_path):
     basis_zero = _flat_assumptions(ci_reincidence_fn=zero_fn)
     v_zero = fcf.gmm.measure(mp, basis_zero, full=False)
     assert not np.isclose(v.bel[0], v_zero.bel[0])
+
+
+def test_report_service_expense_includes_disability_cf():
+    """report()'s insurance service expense includes the disability income /
+    lump-sum flow (a protection benefit, B120-B124), not only death / morbidity
+    / expense. A DI book must not lose its disability flow from the service
+    result and revenue (the disability_cf-omission seam fix)."""
+    basis = _di_assumptions(sojourn_tracking_months=12, recovery_monthly=0.02)
+    mp = fcf.ModelPoints(
+        issue_age=np.array([45], dtype=np.int64),
+        benefits={0: np.array([0.0])}, premium=np.array([1000.0]),
+        term_months=np.array([60], dtype=np.int64),
+        disability_income=np.array([1_000_000.0]),
+        calculation_methods=PATTERNS)            # seated active by default
+    m = fcf.gmm.measure(mp, basis, full=True)
+    cf = m.cashflows
+    assert cf.disability_cf.sum() > 0.0          # the book genuinely pays DI
+    rep = fcf.report(m)
+    expected = (cf.claim_cf + cf.morbidity_cf + cf.disability_cf + cf.expense_cf)
+    np.testing.assert_allclose(rep.insurance_service_expense, expected, rtol=1e-12)
+    # the fix is non-vacuous: dropping disability_cf would give a different line
+    without = cf.claim_cf + cf.morbidity_cf + cf.expense_cf
+    assert not np.allclose(rep.insurance_service_expense, without)

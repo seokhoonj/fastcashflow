@@ -298,7 +298,13 @@ def _report_gmm(m: GMMMeasurement) -> Report:
     monthly_rate = forward_rates(ds)
     monthly_discount = 1.0 / (1.0 + monthly_rate)
 
-    service_expense = cf.claim_cf + cf.morbidity_cf + cf.expense_cf
+    # Insurance service expense is the incurred protection benefit + expenses
+    # (B120-B124). disability_cf -- the semi-Markov disability income / lump-sum
+    # benefit -- is a protection claim, not an investment component, so it
+    # belongs here; omitting it dropped the disability flow from a DI book's
+    # revenue and service result entirely.
+    service_expense = (cf.claim_cf + cf.morbidity_cf + cf.disability_cf
+                       + cf.expense_cf)
     ra_release = ra[:, :-1] - ra[:, 1:] * monthly_discount
     csm_release = m.csm_release
 
