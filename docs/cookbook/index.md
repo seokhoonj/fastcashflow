@@ -253,6 +253,11 @@
   - settle 의 고급 라인. 손실요소 체계적 배분 (Sec. 50(a)-52), 발생손해부채
     (`settlement_pattern`, Sec. 40(b)), 보험료 (Sec. B96(a)) / 투자요소
     (Sec. B96(c)) 경험조정.
+* - 9.4
+  - [결산팩 — 공시 명세서 조립](workflow/close-pack)
+  - 세그먼트별 정산표를 IFRS 17 공시 명세서로 조립. `close` (SoFP /
+    보험금융손익 / 보험서비스손익), 재보험 차감 (Sec. 78), 멀티시트 엑셀
+    (`write_close_pack`), 감사 컬럼 (`line_metadata`).
 ```
 
 ### 10. 단기 측정 (PAA)
@@ -393,6 +398,7 @@ workflow/validation
 workflow/settlement
 workflow/movement
 workflow/onerous-settle
+workflow/close-pack
 ```
 
 ```{toctree}
