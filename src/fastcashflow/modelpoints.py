@@ -982,17 +982,24 @@ class InforceState:
                     f"InforceState.profitability has length {prof.shape[0]} but "
                     f"elapsed_months has {n}; per-MP arrays must match")
             object.__setattr__(self, "profitability", prof)
-        # actual_premium (settlement only) is finite but may be negative (a
-        # net premium refund), so it is validated apart from the >= 0 group.
-        if self.actual_premium is not None:
-            ap = np.asarray(self.actual_premium, dtype=np.float64)
-            if ap.shape[0] != n:
+        # The settlement within-period experience inputs are finite but may be
+        # negative (a net premium refund; a favourable claims / expense / IC
+        # experience), so they are validated apart from the >= 0 group -- coerce
+        # dtype, match length, and require finiteness (a NaN here silently
+        # poisons the experience line it feeds).
+        for nm in ("actual_premium", "actual_investment_component",
+                   "actual_claims", "actual_expenses"):
+            value = getattr(self, nm)
+            if value is None:
+                continue
+            arr = np.asarray(value, dtype=np.float64)
+            if arr.shape[0] != n:
                 raise ValueError(
-                    f"InforceState.actual_premium has length {ap.shape[0]} but "
+                    f"InforceState.{nm} has length {arr.shape[0]} but "
                     f"elapsed_months has {n}; per-MP arrays must match")
-            if not np.all(np.isfinite(ap)):
-                raise ValueError("InforceState.actual_premium must be finite")
-            object.__setattr__(self, "actual_premium", ap)
+            if not np.all(np.isfinite(arr)):
+                raise ValueError(f"InforceState.{nm} must be finite")
+            object.__setattr__(self, nm, arr)
 
     def subset(self, indices) -> "InforceState":
         """Return a new ``InforceState`` carrying the rows at ``indices``.

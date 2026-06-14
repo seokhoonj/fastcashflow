@@ -947,6 +947,20 @@ def _measure_inforce_segmented(
                    measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
 
 
+def _require_scalar_lock_in_rate(state, entry: str) -> None:
+    """gmm.settle / settle_aggregate value the locked-in CSM pass at a single
+    flat rate; ``InforceState.lock_in_rate`` may be a per-MP array (the dataclass
+    permits it), which would otherwise reach ``float(...)`` as an opaque numpy
+    TypeError. Reject it with the same message settle_stream uses, so all three
+    settle entry points share one clear v1-scope error."""
+    lock = np.asarray(state.lock_in_rate, dtype=np.float64)
+    if lock.ndim != 0:
+        raise NotImplementedError(
+            f"{entry}: lock_in_rate must be uniform across rows in v1; per-MP "
+            "(cohort-aware) lock-in rates are a future extension"
+        )
+
+
 def settle(
     model_points: ModelPoints,
     state: "InforceState",
@@ -1022,6 +1036,7 @@ def settle(
     _require_gmm_router(basis, entry="gmm.settle")
     basis = _single_basis(basis, entry="gmm.settle")
     state = _reconcile_state(model_points, state)
+    _require_scalar_lock_in_rate(state, "gmm.settle")
     if state.prior_count is None:
         raise ValueError(
             "gmm.settle needs state.prior_count -- the in-force count at the "
@@ -1396,6 +1411,7 @@ def settle_aggregate(
     # chunk's model points and state rows always belong to the same
     # contracts; the per-chunk settle re-checks the aligned pair (a no-op).
     state = _reconcile_state(model_points, state)
+    _require_scalar_lock_in_rate(state, "gmm.settle_aggregate")
     n_mp = int(model_points.issue_age.shape[0])
     # A per-MP fraction is sliced per chunk so the aggregate equals the per-MP
     # settle sum even when the premium split varies by contract (the per-chunk

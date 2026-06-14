@@ -649,6 +649,18 @@ def settle_reinsurance(
     """
     basis = _single_basis(basis, entry="reinsurance.settle")
     state = _reconcile_state(model_points, state)
+    # The within-period experience inputs (actual_premium / actual_claims /
+    # actual_expenses / actual_investment_component) are gmm.settle's B96-B97
+    # lines; reinsurance.settle does not model them, so a state file reused from
+    # a direct settle would SILENTLY drop them. Reject rather than ignore.
+    dropped = [nm for nm in ("actual_premium", "actual_claims",
+                             "actual_expenses", "actual_investment_component")
+               if getattr(state, nm) is not None]
+    if dropped:
+        raise NotImplementedError(
+            "reinsurance.settle does not model within-period experience; "
+            f"state carries {dropped} which would be silently dropped. Clear "
+            "them (they belong to a direct gmm.settle state).")
     period = 12 if period_months is None else int(period_months)
     if period < 1:
         raise ValueError(f"period_months must be >= 1, got {period}")
