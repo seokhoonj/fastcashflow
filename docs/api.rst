@@ -318,6 +318,34 @@ Aggregation and transition
 
 .. autofunction:: fastcashflow.transition
 
+Period close and disclosure
+---------------------------
+
+The reporting-period close assembles the settlement reconciliations of a
+period (one per group of contracts) into the aggregate IFRS 17 statements --
+the statement of financial position, the insurance finance statement and the
+insurance service result -- and serialises them to a disclosure artifact. The
+tidy-frame helpers expose the same content as audit-traceable rows.
+
+.. autofunction:: fastcashflow.close
+
+.. autoclass:: fastcashflow.ClosePackage
+   :members:
+
+.. autofunction:: fastcashflow.assemble_sofp
+
+.. autofunction:: fastcashflow.assemble_finance
+
+.. autofunction:: fastcashflow.assemble_service_result
+
+.. autofunction:: fastcashflow.reconciliation_to_frame
+
+.. autofunction:: fastcashflow.line_metadata
+
+.. autofunction:: fastcashflow.write_reconciliation
+
+.. autofunction:: fastcashflow.write_close_pack
+
 State models
 ------------
 

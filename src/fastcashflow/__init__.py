@@ -16,7 +16,13 @@ from fastcashflow.basis import (
     Basis, BasisRouter, CoverageRate, EXPENSE_BASES, RA_METHODS,
     SURRENDER_VALUE_BASES, ExpenseItem, derive_expense_components, describe_basis,
 )
+from fastcashflow.closing import (
+    ClosePackage, assemble_finance, assemble_service_result, assemble_sofp, close,
+)
 from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTALITY
+from fastcashflow.disclosure import (
+    line_metadata, reconciliation_to_frame, write_close_pack, write_reconciliation,
+)
 from fastcashflow.engine import (
     GMMAggregate, GMMMeasurement, CSMRecognitionSchedule, clear_codegen_cache,
 )
@@ -94,6 +100,9 @@ __all__ = [
     "Basis", "BasisRouter", "ModelPoints", "clear_codegen_cache",
     "report", "roll_forward", "reconcile", "group", "group_of_contracts",
     "transition",
+    "close", "ClosePackage", "assemble_sofp", "assemble_finance",
+    "assemble_service_result", "reconciliation_to_frame", "line_metadata",
+    "write_reconciliation", "write_close_pack",
     "GMMMeasurement", "GMMAggregate", "PAAMeasurement", "PAAAggregate",
     "VFAMeasurement", "VFAAggregate",
     "ReinsuranceMeasurement", "Report", "ReinsuranceReport",
