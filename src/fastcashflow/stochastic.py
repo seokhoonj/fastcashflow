@@ -33,7 +33,7 @@ from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _norm_ppf
-from fastcashflow.projection import project_cashflows
+from fastcashflow.projection import project_cashflows, reject_account_book
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -175,6 +175,11 @@ def measure_stochastic(
     if (basis.ra_method == "confidence_level"
             and basis.settlement_pattern is None):
         proj = project_cashflows(model_points, basis)
+        # The fast inception kernel reads the benefit cash flows raw (no account
+        # fund netting); reject a universal-life book here. (The per-scenario
+        # fallback below re-measures through measure(), which routes an account
+        # book to the full measurement and handles it correctly.)
+        reject_account_book(proj, "measure_stochastic")
         n_time = proj.claim_cf.shape[1]
         if rate_scenarios.ndim == 2:
             if rate_scenarios.shape[1] != n_time:

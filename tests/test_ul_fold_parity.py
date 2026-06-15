@@ -16,6 +16,7 @@ DEATH coverage (rate = ``coi_annual``) with the account flags so the shared
 projection routes the death leg through the account roll.
 """
 import numpy as np
+import pytest
 
 import fastcashflow as fcf
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
@@ -157,6 +158,28 @@ def test_callable_coi_rate_keeps_account_flags():
     ref = measure_ul(_single_mp(with_coverage=False), Basis(**common),
                      measurement_model="GMM", full=True)
     assert np.array_equal(m.bel, ref.bel) and np.array_equal(m.csm, ref.csm)
+
+
+def test_account_book_gated_on_raw_consumers():
+    # Step 3.5 -- paths that read the benefit cash flows raw (no account fund
+    # netting) must REJECT a universal-life book rather than double-count it.
+    mp = _two_mp(with_coverage=True)
+    basis = _ul_basis(with_coverage=True)
+    n_time = fcf.gmm.measure(mp, basis, full=True).bel_path.shape[1] - 1
+
+    with pytest.raises(NotImplementedError):
+        fcf.reinsurance.measure(mp, basis, treaty=fcf.samples.treaty())
+    # stochastic fast branch (confidence RA + no settlement_pattern -- the UL
+    # basis defaults) reads claim_cf raw.
+    with pytest.raises(NotImplementedError):
+        fcf.gmm.stochastic(mp, basis, np.linspace(0.01, 0.05, 8))
+    with pytest.raises(NotImplementedError):
+        fcf.vfa.tvog(mp, basis,
+                     np.tile(np.linspace(-0.01, 0.03, 8)[:, None], (1, n_time)))
+    # roll_forward reads claim_cf as incurred claims.
+    m = fcf.gmm.measure(mp, basis, full=True)
+    with pytest.raises(NotImplementedError):
+        fcf.roll_forward(m, 12)
 
 
 def test_non_account_portfolio_has_no_account_sidecar():

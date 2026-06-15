@@ -62,7 +62,8 @@ from fastcashflow.coverage import (
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.projection import (
-    Cashflows, project_cashflows, _add_state_mortality_rates, _state_lapse_stack,
+    Cashflows, project_cashflows, reject_account_book,
+    _add_state_mortality_rates, _state_lapse_stack,
 )
 from fastcashflow.state_model import (
     compile_state_model,
@@ -1148,6 +1149,10 @@ def settle(
     unit = replace(model_points, count=np.ones(n_mp))
     m = _measure_full(unit, basis)
     cf = m.cashflows
+    # The settlement movement reads claim_cf / maturity_cf / surrender_cf raw as
+    # incurred / paid benefits; an account book's benefits are not priced claims,
+    # so reject it (settle_aggregate funnels through here, so it is covered too).
+    reject_account_book(cf, "gmm.settle")
     inforce = cf.inforce
     n_time = inforce.shape[1]
     rows = np.arange(n_mp)

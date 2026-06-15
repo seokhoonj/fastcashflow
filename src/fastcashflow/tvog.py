@@ -33,7 +33,7 @@ from fastcashflow.basis import Basis
 from fastcashflow.model_points import (
     ModelPoints, NO_GUARANTEE_RATE, validate_crediting_rate,
 )
-from fastcashflow.projection import project_cashflows
+from fastcashflow.projection import project_cashflows, reject_account_book
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -406,6 +406,7 @@ def measure_tvog(
     return_scenarios = _validate_return_scenarios(return_scenarios)
 
     proj = project_cashflows(model_points, basis)
+    reject_account_book(proj, "measure_tvog")
     inforce = proj.inforce
     n_mp, n_time = inforce.shape
     if return_scenarios.shape[1] != n_time:

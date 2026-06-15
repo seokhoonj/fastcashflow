@@ -41,7 +41,8 @@ from fastcashflow.curves import (
     discount_factors, discount_monthly_curve, forward_rates)
 from fastcashflow.numerics import _csm_kernel, _norm_ppf
 from fastcashflow.model_points import InforceState, ModelPoints
-from fastcashflow.projection import Cashflows, project_cashflows
+from fastcashflow.projection import (
+    Cashflows, project_cashflows, reject_account_book)
 from fastcashflow.io import (
     write_measurement, _write_measurement_columns, _stream_policies_coverages)
 # In-force helpers shared with the GMM path (engine does not import
@@ -232,6 +233,7 @@ def measure_reinsurance(
     """
     basis = _single_basis(basis, entry="measure_reinsurance")
     proj = project_cashflows(model_points, basis)
+    reject_account_book(proj, "reinsurance.measure")
     discount_bom, discount_mid = discount_factors(basis, proj.n_time)
 
     ceded_mortality, ceded_morbidity, reinsurance_premium = treaty.cede(proj)
@@ -450,6 +452,7 @@ def measure_reinsurance_inforce(
     basis = _single_basis(basis, entry="reinsurance.measure_inforce")
     state = _reconcile_state(model_points, state)
     proj = project_cashflows(model_points, basis)
+    reject_account_book(proj, "reinsurance.measure_inforce")
     n_time = proj.n_time
     n_mp = proj.inforce.shape[0]
     discount_bom, discount_mid = discount_factors(basis, n_time)

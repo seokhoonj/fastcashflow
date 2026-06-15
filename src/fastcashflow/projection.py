@@ -114,6 +114,25 @@ class Cashflows:
         return int(self.inforce.shape[1])
 
 
+def reject_account_book(cashflows: "Cashflows | None", entry: str) -> None:
+    """Raise if a projection carries a universal-life account (the Step-3.5 gate).
+
+    Measure paths that read the benefit cash flows (``claim_cf`` /
+    ``surrender_cf`` / ``maturity_cf``) RAW -- without netting the account
+    ``fund`` or splitting the net amount at risk -- would double-count a
+    universal-life account book (the account benefit is the policyholder's own
+    money, not a priced claim). Until each such path grows account support,
+    reject it rather than mis-measure. Measure the contract through
+    :func:`fastcashflow.gmm.measure` / :func:`fastcashflow.vfa.measure` instead.
+    """
+    if cashflows is not None and cashflows.account is not None:
+        raise NotImplementedError(
+            f"{entry} does not yet support a universal-life account book -- the "
+            "account is not netted on this path, so the benefit cash flows would "
+            "be double-counted. Measure the contract through gmm.measure / "
+            "vfa.measure instead.")
+
+
 def _expense_kernel_args(
     basis: Basis, n_time: int,
 ) -> tuple[float, float, float, FloatArray, FloatArray]:
