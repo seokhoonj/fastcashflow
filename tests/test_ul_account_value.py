@@ -7,7 +7,7 @@ recursion as a cross-check of the vectorised/parallel kernel.
 """
 import numpy as np
 
-from fastcashflow._ul import _ul_av_kernel, _ul_benefits, _ul_project
+from fastcashflow._ul import _ul_av_kernel, _ul_benefits, _ul_project, measure_ul
 from fastcashflow.basis import Basis, annual_to_monthly
 from fastcashflow.model_points import ModelPoints
 
@@ -248,3 +248,114 @@ def test_ul_project_weaves_decrements_and_load():
     exp_benefit = exp_death + exp_surr
     exp_benefit[0, term_idx] += p.maturity_cf[0]
     assert np.allclose(p.benefit_cf, exp_benefit)
+
+
+def test_measure_ul_margin_hand_calc():
+    # 1 policy, 1-month term, premium 1e6 (load 10%), face 1e7, no decrements
+    # other than maturity, zero return / 0% floor / no admin, zero discount. The
+    # account takes in the net-of-load premium, the COI is charged on the NAR
+    # (but no death occurs), and the survivor takes the matured account. The BEL
+    # is then exactly -(load amount + COI) -- the insurer keeps the load and the
+    # COI as margin -- and the CSM is its negative.
+    premium = 1_000_000.0
+    load = 0.1
+    face = 10_000_000.0
+    coi_a = 0.012
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        premium=np.array([premium]),
+        term_months=np.array([1]),
+        account_value=np.array([0.0]),
+        minimum_death_benefit=np.array([face]),
+        minimum_crediting_rate=np.array([0.0]),
+        sex=np.array([0]),
+    )
+    basis = _ul_basis(
+        coi_a, mortality_annual=0.0, lapse_annual=0.0, discount_annual=0.0,
+        premium_load=load)
+    m = measure_ul(mp, basis, measurement_model="GMM")
+
+    q = annual_to_monthly(np.array(coi_a)).item()
+    prem_to_av = premium * (1.0 - load)
+    coi0 = q * (face - prem_to_av)               # NAR = face - prem_to_av
+    av1 = prem_to_av - coi0                       # matured account (no credit / admin)
+    # BEL = PV(maturity) - PV(premium) - fund0; fund0 = 0, no discount.
+    assert np.isclose(m.bel[0], av1 - premium)   # = -(load amount + COI)
+    assert np.isclose(m.bel[0], -(load * premium + coi0))
+    assert np.isclose(m.ra[0], 0.0)              # no death -> no NAR claim; expense_cv 0
+    assert np.isclose(m.csm[0], load * premium + coi0)
+    assert np.isclose(m.loss_component[0], 0.0)
+    assert m.measurement_model == "GMM"
+
+
+def test_measure_ul_single_premium_pass_through_is_zero():
+    # A pure pass-through: single-premium account, no load, no COI, no admin, no
+    # decrements but maturity, zero return and zero discount. The account is
+    # returned in full at maturity with no margin, so BEL / RA / CSM are all
+    # zero -- and the fund netting (BEL = PV(maturity) - fund0, premium_cf = 0)
+    # reduces to the VFA single-premium form.
+    mp = ModelPoints(
+        issue_age=np.array([50.0]),
+        premium=np.array([0.0]),                 # single premium sits in the account
+        term_months=np.array([1]),
+        account_value=np.array([1_000_000.0]),
+        minimum_death_benefit=np.array([10_000_000.0]),
+        minimum_crediting_rate=np.array([0.0]),
+        sex=np.array([1]),
+    )
+    basis = _ul_basis(
+        0.0, mortality_annual=0.0, lapse_annual=0.0, discount_annual=0.0)
+    m = measure_ul(mp, basis, measurement_model="GMM")
+    assert np.isclose(m.bel[0], 0.0)
+    assert np.isclose(m.ra[0], 0.0)
+    assert np.isclose(m.csm[0], 0.0)
+    assert np.isclose(m.loss_component[0], 0.0)
+
+
+def test_measure_ul_routing_changes_only_the_discount():
+    # GMM discounts at the locked-in rate, VFA at the underlying-items return.
+    # With a profitable spread (COI > mortality, plus a load) both give a
+    # positive CSM, and the two differ purely through the discount basis.
+    mp = ModelPoints(
+        issue_age=np.array([45.0]),
+        premium=np.array([400_000.0]),
+        term_months=np.array([60]),
+        account_value=np.array([0.0]),
+        minimum_death_benefit=np.array([50_000_000.0]),
+        minimum_crediting_rate=np.array([0.0]),
+        sex=np.array([0]),
+    )
+    basis = _ul_basis(
+        0.003, mortality_annual=0.002, lapse_annual=0.03,
+        discount_annual=0.03, investment_return=0.05, premium_load=0.08)
+    gmm = measure_ul(mp, basis, measurement_model="GMM")
+    vfa = measure_ul(mp, basis, measurement_model="VFA")
+    assert gmm.csm[0] > 0 and vfa.csm[0] > 0
+    assert gmm.measurement_model == "GMM"
+    assert vfa.measurement_model == "VFA"
+    # Different discount basis -> different BEL / CSM.
+    assert not np.isclose(gmm.bel[0], vfa.bel[0])
+
+
+def test_measure_ul_headline_matches_full_path_inception():
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        premium=np.array([500_000.0]),
+        term_months=np.array([36]),
+        account_value=np.array([0.0]),
+        minimum_death_benefit=np.array([80_000_000.0]),
+        minimum_crediting_rate=np.array([0.0]),
+        sex=np.array([0]),
+    )
+    basis = _ul_basis(
+        0.0025, mortality_annual=0.0018, lapse_annual=0.04,
+        discount_annual=0.025, investment_return=0.03, premium_load=0.06)
+    full = measure_ul(mp, basis, full=True)
+    head = measure_ul(mp, basis, full=False)
+    assert np.isclose(full.bel[0], head.bel[0])
+    assert np.isclose(full.ra[0], head.ra[0])
+    assert np.isclose(full.csm[0], head.csm[0])
+    assert head.csm_path is None and full.csm_path is not None
+    # The full path's column 0 is the headline.
+    assert np.isclose(full.csm_path[0, 0], full.csm[0])
+    assert np.isclose(full.bel_path[0, 0], full.bel[0])

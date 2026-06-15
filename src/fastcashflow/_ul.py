@@ -38,7 +38,10 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis, _single_basis, annual_to_monthly, validate_factor
+from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.model_points import ModelPoints
+from fastcashflow.numerics import (
+    _cost_of_capital_ra, _csm_kernel, _norm_ppf, _rollforward_kernel)
 from fastcashflow.projection import Cashflows, project_cashflows, _expense_kernel_args
 from fastcashflow.state_model import resolve_state_model
 from fastcashflow.tvog import credited_monthly_rate
@@ -310,3 +313,193 @@ def _ul_project(
         fund=fund, benefit_cf=benefit_cf, death_cf=death_cf,
         surrender_cf=surrender_cf, maturity_cf=maturity_cf, term_idx=term_idx,
         maturity_survivors=maturity_survivors)
+
+
+#: The IFRS 17 measurement models a universal-life contract may be measured
+#: under -- VFA for a participating (return-share) account, GMM for a fixed /
+#: declared-rate account. UL is not a fourth model; the choice selects only the
+#: discounting / CSM-accretion rate (the account mechanics are identical).
+UL_MEASUREMENT_MODELS = ("GMM", "VFA")
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class ULMeasurement:
+    """Universal-life measurement of an account-value portfolio.
+
+    The headline ``bel`` / ``ra`` / ``csm`` / ``loss_component`` are ``(n_mp,)``
+    as-of figures at inception. The BEL is reported net of the account value the
+    entity holds and of the present value of future premiums::
+
+        BEL = PV(benefit_cf + expense_cf) - PV(premium_cf) - fund
+
+    -- a generalisation of the VFA's ``PV(benefits + expenses) - fund`` to a
+    recurring-premium account (a single-premium account, with ``premium_cf = 0``,
+    reduces to the VFA form). The RA is a confidence-level (or cost-of-capital)
+    margin on the mortality risk borne on the NET AMOUNT AT RISK -- the part of
+    the death benefit above the account value, the only insurance-risk exposure
+    -- plus expense risk. The CSM is ``max(0, -(BEL + RA))``, accreted at the
+    measurement model's rate and released by coverage units::
+
+        csm_path[:, t+1] = csm_path[:, t] + csm_accretion[:, t] - csm_release[:, t]
+
+    ``measurement_model`` records which discounting basis was used: ``"GMM"``
+    (locked-in ``discount_annual``) or ``"VFA"`` (the underlying-items return
+    ``investment_return``). The account credits at the declared rate either way.
+
+    The full path adds the ``(n_mp, n_time+1)`` trajectories ``bel_path`` /
+    ``ra_path`` / ``csm_path`` / ``account_value_path`` (column 0 the as-of
+    figure), ``None`` on the headline-only (``full=False``) path.
+    """
+
+    # headline -- always present, shape (n_mp,)
+    bel: FloatArray
+    ra: FloatArray
+    csm: FloatArray
+    loss_component: FloatArray
+    measurement_model: str
+    # trajectory -- full only (None on the headline-only path)
+    bel_path: FloatArray | None = None            # (n_mp, n_time+1)
+    ra_path: FloatArray | None = None             # (n_mp, n_time+1)
+    csm_path: FloatArray | None = None            # (n_mp, n_time+1)
+    account_value_path: FloatArray | None = None  # (n_mp, n_time+1)
+    csm_accretion: FloatArray | None = None       # (n_mp, n_time)
+    csm_release: FloatArray | None = None         # (n_mp, n_time)
+    discount_bom: FloatArray | None = None        # (n_time+1,) start-of-month discount
+    cashflows: "Cashflows | None" = None
+    model_points: "ModelPoints | None" = None
+
+    def _columns(self):
+        return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
+                ("loss", self.loss_component)]
+
+    def __repr__(self) -> str:
+        from fastcashflow._display import measurement_repr
+        return measurement_repr("ULMeasurement", self._columns())
+
+    def __str__(self) -> str:
+        from fastcashflow._display import measurement_str
+        return measurement_str("ULMeasurement", self._columns())
+
+
+def measure_ul(
+    model_points: ModelPoints,
+    basis: Basis,
+    *,
+    measurement_model: str = "GMM",
+    full: bool = True,
+) -> ULMeasurement:
+    """Measure a universal-life (account-value) portfolio.
+
+    Rolls the recursive account value (:func:`_ul_project`) and measures the
+    contract liability. The death benefit pays ``max(account value, face)``, a
+    surrender the account value, and the survivors reaching maturity
+    ``max(matured account value, GMAB)``; the account is built from premium net
+    of ``basis.premium_load``, charged a cost-of-insurance on the net amount at
+    risk (``basis.coi_annual``) and a maintenance fee, and credited the declared
+    ``investment_return`` floored at each contract's ``minimum_crediting_rate``.
+
+    The BEL nets the present value of benefits and expenses against the present
+    value of future premiums and the account value the entity holds
+    (``PV(benefit + expense) - PV(premium) - fund``). The RA prices the mortality
+    risk on the net amount at risk (the death benefit above the account) plus
+    expense risk; the CSM is ``max(0, -(BEL + RA))``.
+
+    ``measurement_model`` selects the discounting / CSM-accretion basis -- the
+    only thing that varies between a participating and a fixed-rate UL:
+
+    * ``"GMM"`` (default) -- the locked-in ``discount_annual`` curve (Sec. 36).
+      A fixed / declared-rate (interest-sensitive) account.
+    * ``"VFA"`` -- the underlying-items return ``investment_return``. A
+      participating (unit-linked / with-profits) account.
+
+    ``full=True`` (default) returns the BEL / RA / CSM / account-value
+    trajectories; ``full=False`` fills only the headline figures (the inception
+    CSM is ``csm0``, so the release kernel is skipped) and leaves the trajectory
+    fields ``None``. ``basis`` must resolve to a single :class:`Basis`.
+    """
+    basis = _single_basis(basis, entry="measure_ul")
+    if measurement_model not in UL_MEASUREMENT_MODELS:
+        raise ValueError(
+            f"measurement_model must be one of {UL_MEASUREMENT_MODELS}, got "
+            f"{measurement_model!r}")
+
+    p = _ul_project(model_points, basis)
+    inforce = p.inforce
+    n_mp, n_time = inforce.shape
+    proj = p.cashflows
+
+    # Discount / CSM-accretion rate -- the locked-in curve for GMM, the flat
+    # underlying-items return for VFA. The account credits at the declared rate
+    # either way (that is set inside _ul_project, independent of this choice).
+    if measurement_model == "VFA":
+        r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
+        disc_monthly = np.full(n_time, r_m)
+    else:
+        disc_monthly = discount_monthly_curve(basis, n_time)
+    boundary = model_points.contract_boundary_months
+    zeros_t = np.zeros((n_mp, n_time))
+    zeros_mp = np.zeros(n_mp)
+
+    # BEL backward pass (reuse the GMM roll-forward kernel): death + surrender +
+    # expense settle mid-month, premium at the start of month, maturity at the
+    # contract boundary. fund is the account value held -- subtracted to report
+    # the BEL net of the deposit (and of the premiums that build it).
+    bel_pre_fund, *_ = _rollforward_kernel(
+        np.ascontiguousarray(p.death_cf), zeros_t, zeros_t,
+        proj.expense_cf, proj.premium_cf, zeros_t,
+        np.ascontiguousarray(p.maturity_cf),
+        np.ascontiguousarray(p.surrender_cf), boundary, disc_monthly)
+    bel = bel_pre_fund - p.fund
+
+    # Risk-adjustment present values. The insurance risk is the mortality borne
+    # on the NET AMOUNT AT RISK -- the death benefit above the account
+    # (``deaths * max(0, face - av_mid)``); the account portion returns the
+    # policyholder's own money and bears no insurance risk. Run the at-risk
+    # claim and the expense through one kernel pass (both discounted mid-month).
+    face = model_points.minimum_death_benefit
+    nar_claim = np.ascontiguousarray(
+        proj.deaths * np.maximum(0.0, face[:, None] - p.av_mid))
+    _, pv_nar, pv_expense, *_ = _rollforward_kernel(
+        nar_claim, proj.expense_cf, zeros_t, zeros_t, zeros_t, zeros_t,
+        zeros_mp, zeros_t, boundary, disc_monthly)
+    z = _norm_ppf(basis.ra_confidence)
+    confidence_margin = z * (basis.mortality_cv * pv_nar
+                             + basis.expense_cv * pv_expense)
+    if basis.ra_method == "cost_of_capital":
+        ra = _cost_of_capital_ra(
+            confidence_margin, disc_monthly, basis.cost_of_capital_rate)
+    else:
+        ra = confidence_margin
+
+    fcf = bel[:, 0] + ra[:, 0]
+    loss_component = np.maximum(0.0, fcf)
+    csm0 = np.maximum(0.0, -fcf)
+
+    full_factor = 1.0 / (1.0 + disc_monthly)
+    discount_bom = np.concatenate([[1.0], np.cumprod(full_factor)])
+
+    if not full:
+        return ULMeasurement(
+            bel=bel[:, 0], ra=ra[:, 0], csm=csm0,
+            loss_component=loss_component, measurement_model=measurement_model,
+            model_points=model_points)
+
+    # CSM accretes at the measurement-model rate, released by coverage units.
+    csm, csm_accretion, csm_release = _csm_kernel(
+        csm0, inforce, disc_monthly, basis.coverage_unit_discount)
+
+    return ULMeasurement(
+        bel=bel[:, 0],
+        ra=ra[:, 0],
+        csm=csm[:, 0],
+        loss_component=loss_component,
+        measurement_model=measurement_model,
+        bel_path=bel,
+        ra_path=ra,
+        csm_path=csm,
+        account_value_path=p.av,
+        csm_accretion=csm_accretion,
+        csm_release=csm_release,
+        discount_bom=discount_bom,
+        cashflows=proj,
+        model_points=model_points)
