@@ -726,9 +726,13 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         coverages=aligned_coverages,
         calculation_methods=model_points.calculation_methods,
     )
-    coverage_is_diagnosis, coverage_risk = coverage_arrays(
+    (coverage_is_diagnosis, coverage_risk,
+     coverage_funds_from_account, coverage_pays_account_balance) = coverage_arrays(
         aligned_coverages, model_points.calculation_methods,
     )
+    # coverage_funds_from_account / coverage_pays_account_balance are the
+    # account-chassis interaction flags (all-False today; the universal-life
+    # account roll folds onto them in a later step). Unused here for now.
     # build_coverage_rates stacks the per-coverage annual rates; the whole
     # stack is converted to monthly. mortality_annual above is the separate
     # in-force decrement input; a death coverage's claim payout is driven

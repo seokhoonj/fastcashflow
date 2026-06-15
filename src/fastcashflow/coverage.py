@@ -154,7 +154,8 @@ def build_coverage_rates(rate_fns, sex_grid, issue_age_grid,
     return np.ascontiguousarray(np.stack(slabs))
 
 
-def coverage_arrays(coverages, calculation_methods=None):
+def coverage_arrays(coverages, calculation_methods=None, *,
+                    funds_from_account=None, pays_account_balance=None):
     """Per-code kernel flag arrays for the coverage list.
 
     ``coverages`` is the ordered rate-driven coverages, in the same order as
@@ -174,9 +175,29 @@ def coverage_arrays(coverages, calculation_methods=None):
        mistake on the most error-prone surface (a DEATH-only contract whose
        claim payouts would otherwise score zero RA against ``mortality_cv``).
 
-    Returns ``(coverage_is_diagnosis, coverage_risk)``, each indexed by
-    coverage code.
+    The universal-life account "chassis" (a contract-level *funding mechanism*,
+    not a benefit method -- see ``dev`` design notes) adds two ORTHOGONAL
+    per-coverage interaction flags, declared by code rather than derived from
+    the :class:`CalculationMethod`:
+
+    - ``funds_from_account`` -- codes whose monthly risk charge is drawn from
+      the account (the death leg's cost-of-insurance on the net amount at risk;
+      later, a rider charge);
+    - ``pays_account_balance`` -- codes whose benefit reads the account balance
+      (death ``max(av, face)``; later surrender / maturity / annuity legs).
+
+    Both default to ``None`` (no account), so every existing portfolio gets the
+    two flags all-``False`` -- a strict no-op. ``has_account`` is the contract
+    predicate ``coverage_funds_from_account.any() or
+    coverage_pays_account_balance.any()`` (NEVER ``account_value != 0``, which
+    would wrongly flip the variable-annuity product onto the recursive roll).
+
+    Returns ``(coverage_is_diagnosis, coverage_risk,
+    coverage_funds_from_account, coverage_pays_account_balance)``, each indexed
+    by coverage code.
     """
+    funds_set = set(funds_from_account) if funds_from_account else set()
+    pays_set = set(pays_account_balance) if pays_account_balance else set()
     flags: list[tuple[bool, int]] = []
     unresolved: list[str] = []
     for r in coverages:
@@ -207,7 +228,12 @@ def coverage_arrays(coverages, calculation_methods=None):
         )
     coverage_is_diagnosis = np.array([f[0] for f in flags], np.bool_)
     coverage_risk = np.array([f[1] for f in flags], np.int64)
-    return coverage_is_diagnosis, coverage_risk
+    coverage_funds_from_account = np.array(
+        [r.code in funds_set for r in coverages], np.bool_)
+    coverage_pays_account_balance = np.array(
+        [r.code in pays_set for r in coverages], np.bool_)
+    return (coverage_is_diagnosis, coverage_risk,
+            coverage_funds_from_account, coverage_pays_account_balance)
 
 
 def align_coverages(coverages, coverage_codes):
