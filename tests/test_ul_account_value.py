@@ -7,7 +7,7 @@ recursion as a cross-check of the vectorised/parallel kernel.
 """
 import numpy as np
 
-from fastcashflow._ul import _ul_av_kernel
+from fastcashflow._ul import _ul_av_kernel, _ul_benefits
 
 
 def test_ul_av_kernel_hand_calc():
@@ -84,6 +84,52 @@ def test_ul_av_kernel_matches_reference_recursion():
     exp = _reference(av0, prem, sa, coi_r, admin, credit)
     for g, e in zip(got, exp):
         assert np.allclose(g, e)
+
+
+def test_ul_benefits_hand_calc():
+    # 1 policy, 3 months, matures at month 3 (term_idx = 2). SA 1e8.
+    av_mid = np.array([[400_000.0, 900_000.0, 1_400_000.0]])
+    av_end = np.array([[0.0, 466_000.0, 982_000.0, 1_500_000.0]])  # n_time+1
+    deaths = np.array([[0.001, 0.001, 0.001]])
+    lapses = np.array([[0.05, 0.05, 0.0]])
+    maturity_survivors = np.array([0.8])
+    term_idx = np.array([2])
+    sa = np.array([100_000_000.0])
+    surr_charge = np.array([[50_000.0, 30_000.0, 0.0]])
+    gmab = np.array([0.0])
+
+    benefit_cf, death_cf, surr_cf, mat_cf = _ul_benefits(
+        av_end, av_mid, deaths, lapses, maturity_survivors, term_idx,
+        sa, surr_charge, gmab)
+
+    # death: max(av_mid, SA) = SA here (face >> account)
+    assert np.allclose(death_cf[0], [100_000.0, 100_000.0, 100_000.0])
+    # surrender: lapse * max(0, av_mid - charge)
+    assert np.allclose(surr_cf[0], [0.05 * 350_000.0, 0.05 * 870_000.0, 0.0])
+    # maturity: survivors * max(av_at_maturity=av_end[3]=1.5e6, gmab=0)
+    assert np.isclose(mat_cf[0], 0.8 * 1_500_000.0)
+    # combined, with maturity entered at term_idx=2
+    assert np.allclose(benefit_cf[0], [117_500.0, 143_500.0, 100_000.0 + 1_200_000.0])
+
+
+def test_ul_benefits_gmab_floor_and_account_exceeds_face():
+    # av_mid exceeds the face -> death pays the account, not the face.
+    # av_at_maturity below the GMAB -> maturity pays the GMAB.
+    av_mid = np.array([[120_000_000.0]])
+    av_end = np.array([[100_000_000.0, 110_000_000.0]])
+    deaths = np.array([[0.01]])
+    lapses = np.array([[0.0]])
+    maturity_survivors = np.array([0.5])
+    term_idx = np.array([0])
+    sa = np.array([100_000_000.0])
+    surr_charge = np.array([[0.0]])
+    gmab = np.array([130_000_000.0])
+
+    benefit_cf, death_cf, surr_cf, mat_cf = _ul_benefits(
+        av_end, av_mid, deaths, lapses, maturity_survivors, term_idx,
+        sa, surr_charge, gmab)
+    assert np.isclose(death_cf[0, 0], 0.01 * 120_000_000.0)        # account > face
+    assert np.isclose(mat_cf[0], 0.5 * 130_000_000.0)              # GMAB > matured av
 
 
 def test_ul_av_nar_floored_when_account_exceeds_sum_assured():

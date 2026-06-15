@@ -84,3 +84,39 @@ def _ul_av_kernel(av0, prem_to_av, sum_assured, coi_rate_m, admin_fee_m, credit_
             av[mp, t + 1] = a
 
     return av, coi, av_mid, nar
+
+
+def _ul_benefits(av_end, av_mid, deaths, lapses, maturity_survivors, term_idx,
+                 sum_assured, surr_charge, minimum_accumulation_benefit):
+    """Universal-life benefit cash flows from the account-value trajectory.
+
+    The account value determines every benefit:
+    - **death** (mid-month) pays ``max(account value, sum_assured)`` -- the
+      account is returned and, where the face exceeds it, the net amount at risk
+      tops it up. Settled on the half-month-credited ``av_mid``.
+    - **surrender** (mid-month lapse) pays the account value less the duration's
+      surrender charge, floored at zero: ``max(0, av_mid - surr_charge)``.
+    - **maturity** pays ``max(matured account value, guaranteed accumulation
+      benefit)`` on the month-end value at the contract's term.
+
+    ``deaths`` / ``lapses`` are ``(n_mp, n_time)`` mid-month head-counts;
+    ``maturity_survivors`` is ``(n_mp,)`` -- the count reaching the contract's
+    maturity; ``term_idx`` is each contract's maturity column index.
+    ``av_end`` is ``(n_mp, n_time + 1)`` (month-end values incl. the matured
+    value at ``term_idx + 1``); ``av_mid`` / ``surr_charge`` are ``(n_mp, n_time)``.
+
+    Returns ``(benefit_cf, death_cf, surrender_cf, maturity_cf)`` -- benefit_cf is
+    the combined ``(n_mp, n_time)`` outflow with maturity entered nominally at
+    ``term_idx``.
+    """
+    n_mp, n_time = av_mid.shape
+    rows = np.arange(n_mp)
+    death_cf = deaths * np.maximum(av_mid, sum_assured[:, None])
+    surrender_cf = lapses * np.maximum(0.0, av_mid - surr_charge)
+    av_at_maturity = av_end[rows, term_idx + 1]
+    maturity_cf = maturity_survivors * np.maximum(
+        av_at_maturity, minimum_accumulation_benefit)
+
+    benefit_cf = death_cf + surrender_cf
+    benefit_cf[rows, term_idx] += maturity_cf
+    return benefit_cf, death_cf, surrender_cf, maturity_cf
