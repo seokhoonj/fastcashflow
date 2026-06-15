@@ -7,7 +7,9 @@ recursion as a cross-check of the vectorised/parallel kernel.
 """
 import numpy as np
 
-from fastcashflow._ul import _ul_av_kernel, _ul_benefits
+from fastcashflow._ul import _ul_av_kernel, _ul_benefits, _ul_project
+from fastcashflow.basis import Basis, annual_to_monthly
+from fastcashflow.model_points import ModelPoints
 
 
 def test_ul_av_kernel_hand_calc():
@@ -144,3 +146,105 @@ def test_ul_av_nar_floored_when_account_exceeds_sum_assured():
     assert np.all(nar[0] == 0.0)
     assert np.all(coi[0] == 0.0)
     assert np.allclose(av[0], 200_000_000.0)  # no premium, no charge, no credit
+
+
+def _ul_basis(coi_annual_value, **overrides):
+    """A minimal UL basis -- flat COI, no expenses; rates overridable per test."""
+    kw = dict(
+        mortality_annual=0.0,
+        lapse_annual=0.0,
+        discount_annual=0.03,
+        ra_confidence=0.75,
+        mortality_cv=0.1,
+        investment_return=0.0,            # r_m = 0 -> credit = guarantee floor
+        coi_annual=coi_annual_value,
+    )
+    kw.update(overrides)
+    return Basis(**kw)
+
+
+def test_ul_project_maturity_only_hand_calc():
+    # No decrements (mortality = lapse = 0): the single policy survives to its
+    # 2-month maturity, so the only benefit is maturity = the matured account
+    # value. With zero return and a 0% guarantee floor, crediting is nil, so the
+    # account simply runs down by the COI each month -- the whole AV path, the
+    # fund and the maturity benefit are hand-derivable.
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        premium=np.array([0.0]),                       # no premium into the account
+        term_months=np.array([2]),
+        account_value=np.array([1_000_000.0]),         # single-premium account at issue
+        minimum_death_benefit=np.array([10_000_000.0]),  # the UL face
+        minimum_crediting_rate=np.array([0.0]),        # 0% floor; r_m = 0 -> credit 0
+        sex=np.array([0]),
+    )
+    coi_a = 0.0012
+    basis = _ul_basis(coi_a)
+    p = _ul_project(mp, basis)
+
+    q = annual_to_monthly(np.array(coi_a)).item()      # monthly COI rate
+    face = 10_000_000.0
+    # Account roll by hand (no premium, no credit, no admin fee):
+    av0 = 1_000_000.0
+    coi0 = q * (face - av0)
+    av1 = av0 - coi0
+    coi1 = q * (face - av1)
+    av2 = av1 - coi1
+    assert np.allclose(p.av[0], [av0, av1, av2])
+    assert np.allclose(p.coi[0], [coi0, coi1])
+    assert np.allclose(p.nar[0], [face - av0, face - av1])
+
+    # Survivor reaches maturity at term_idx = 1 with the matured value av2.
+    assert p.term_idx[0] == 1
+    assert np.isclose(p.maturity_survivors[0], 1.0)
+    assert np.isclose(p.maturity_cf[0], av2)           # GMAB = 0 -> matured av
+    # No deaths / surrenders; maturity enters benefit_cf at term_idx.
+    assert np.allclose(p.death_cf[0], [0.0, 0.0])
+    assert np.allclose(p.surrender_cf[0], [0.0, 0.0])
+    assert np.allclose(p.benefit_cf[0], [0.0, av2])
+    # Fund = in-force-weighted account value; in force = 1 through maturity, the
+    # padded month-end column 0.
+    assert np.allclose(p.fund[0], [av0, av1, 0.0])
+
+
+def test_ul_project_weaves_decrements_and_load():
+    # With non-zero mortality / lapse, the orchestration must weave the right
+    # arrays: death on the occupancy deaths at max(av_mid, face), surrender on
+    # the non-maturity exits at av_mid, fund in-force weighted -- and the premium
+    # load must reach the account (prem_to_av = premium * (1 - load)).
+    mp = ModelPoints(
+        issue_age=np.array([45.0]),
+        premium=np.array([300_000.0]),
+        term_months=np.array([12]),
+        account_value=np.array([0.0]),
+        minimum_death_benefit=np.array([50_000_000.0]),
+        minimum_crediting_rate=np.array([0.0]),
+        sex=np.array([1]),
+    )
+    basis = _ul_basis(
+        0.001, mortality_annual=0.005, lapse_annual=0.03,
+        investment_return=0.024, premium_load=0.1)
+    p = _ul_project(mp, basis)
+    proj = p.cashflows
+
+    # The premium load reaches the account: month-0 NAR = face - prem_to_av,
+    # prem_to_av = 300_000 * (1 - 0.1) = 270_000 (av0 = 0).
+    assert np.isclose(p.nar[0, 0], 50_000_000.0 - 270_000.0)
+
+    # Benefit weaving, re-derived from the projection decrements and AV path.
+    inforce_pad = np.concatenate([p.inforce, np.zeros((1, 1))], axis=1)
+    exits = inforce_pad[:, :-1] - inforce_pad[:, 1:]
+    deaths = proj.deaths
+    non_maturity_exits = exits - deaths
+    term_idx = p.term_idx[0]
+    non_maturity_exits[0, term_idx] -= p.maturity_survivors[0]
+
+    exp_death = deaths * np.maximum(p.av_mid, mp.minimum_death_benefit[:, None])
+    exp_surr = non_maturity_exits * p.av_mid          # surr_charge = 0
+    assert np.allclose(p.death_cf, exp_death)
+    assert np.allclose(p.surrender_cf, exp_surr)
+    assert np.allclose(p.fund, inforce_pad * p.av)
+    # benefit_cf = death + surrender, with maturity added at term_idx.
+    exp_benefit = exp_death + exp_surr
+    exp_benefit[0, term_idx] += p.maturity_cf[0]
+    assert np.allclose(p.benefit_cf, exp_benefit)

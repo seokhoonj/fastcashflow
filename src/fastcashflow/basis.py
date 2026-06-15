@@ -24,6 +24,7 @@ _RATE_FN_FIELDS: tuple[str, ...] = (
     "ci_incidence_annual",
     "premium_factor_annual",
     "annuity_factor_annual",
+    "coi_annual",
 )
 
 # DurationRateFn-shape fields on Basis -- semi-Markov rates whose
@@ -567,6 +568,22 @@ class Basis:
     fund_fee :
         Annual variable-fee rate -- the entity's share of the underlying
         items, deducted from the account value each period (VFA).
+    coi_annual :
+        Universal-life cost-of-insurance charge rate -- the same five-arg
+        :data:`RateFn` shape as ``mortality_annual``. The monthly COI deducted
+        from a UL account is ``annual_to_monthly(coi_annual(grid)) * NAR``,
+        where the net amount at risk ``NAR = max(0, face - account value)``
+        and the face is the model point's ``minimum_death_benefit``. It is a
+        contractual charge, DISTINCT from the best-estimate ``mortality_annual``
+        used to value actual death claims; their spread is the mortality margin
+        that drives the UL CSM. ``None`` charges no COI. UL-only.
+    premium_load :
+        Universal-life premium load -- the fraction (0..1) of each premium
+        withheld before crediting to the account
+        (``prem_to_av = premium * (1 - premium_load)``). The full premium is
+        still the insurer inflow; the load margin emerges in the fulfilment cash
+        flows because only the net-of-load amount grows the account. An
+        account-mechanics parameter, not an expense-ledger row. UL-only.
     settlement_pattern :
         Claims run-off pattern -- the fractions of an incurred claim paid in
         the month it is incurred, the next month, and so on, summing to 1.
@@ -697,6 +714,23 @@ class Basis:
     coverage_unit_discount: bool = False
     investment_return: float = 0.0
     fund_fee: float = 0.0
+    # Universal-life cost-of-insurance (COI) charge rate -- the standard 5-arg
+    # RateFn shape, like mortality_annual. The monthly COI deducted from a UL
+    # account is ``annual_to_monthly(coi_annual(grid)) * NAR`` (NAR = net amount
+    # at risk = max(0, face - account value)); it is DISTINCT from the
+    # best-estimate ``mortality_annual`` used to value actual claims, and their
+    # spread is the mortality margin that emerges as the UL CSM. None means no
+    # COI charge (a pure-accumulation account, NAR-charge zero). UL-only -- the
+    # GMM / VFA / PAA paths ignore it.
+    coi_annual: RateFn | None = None
+    # Universal-life premium load -- the fraction of each premium withheld
+    # before it is credited to the account: ``prem_to_av = premium * (1 -
+    # premium_load)``. The full premium is still the insurer inflow; only the
+    # net-of-load amount grows the account (and hence the AV-based benefits), so
+    # the load margin emerges in the fulfilment cash flows. An account-mechanics
+    # parameter, NOT an expense-ledger row (folding it into expense_items would
+    # double-count). 0.0 credits the full premium. UL-only.
+    premium_load: float = 0.0
     settlement_pattern: FloatArray | None = None
     coverages: tuple[CoverageRate, ...] = ()
     state_model: StateModel | None = None
@@ -723,6 +757,14 @@ class Basis:
                 "investment_return must be finite and > -1.0 (a return <= -100% "
                 f"has no monthly equivalent / NaNs the VFA account), got "
                 f"{self.investment_return!r}")
+        # premium_load is a fraction of premium withheld before crediting -- it
+        # must be finite and in [0, 1). A load >= 1 would credit nothing (or a
+        # negative amount) to the account; a negative load would credit more
+        # than the premium paid.
+        if not np.isfinite(self.premium_load) or not (0.0 <= self.premium_load < 1.0):
+            raise ValueError(
+                "premium_load must be finite and in [0, 1) (a fraction of "
+                f"premium withheld before crediting), got {self.premium_load!r}")
         # String-enum fields: catch a typo ("amount_policy", "margins") at
         # construction rather than late in a projection / fast-path branch.
         if self.ra_method not in RA_METHODS:
@@ -878,9 +920,11 @@ _DESCRIBE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "disability_cv",
         "expense_cv",
     )),
-    ("Other (VFA / settlement)", (
+    ("Other (VFA / UL / settlement)", (
         "investment_return",
         "fund_fee",
+        "coi_annual",
+        "premium_load",
         "settlement_pattern",
     )),
 )
