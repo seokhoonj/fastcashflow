@@ -211,8 +211,8 @@ def _account_risk_adjustment(model_points, basis, proj, monthly_rate):
     ``deaths * max(0, face - av_mid)``) -- the account portion returns the
     policyholder's own money and bears no insurance risk -- plus expense risk.
     This BYPASSES :func:`_risk_adjustment` and its ``expense_cv != 0`` guard (a
-    UL RA legitimately prices ``expense_cv``). Matches ``_ul.py`` exactly: run
-    the at-risk claim and the expense through one roll-forward pass, then the
+    UL RA legitimately prices ``expense_cv``): run the at-risk claim and the
+    expense through one roll-forward pass, then the
     confidence margin ``z(ra_confidence) * (mortality_cv*pv_nar +
     expense_cv*pv_expense)``, cost-of-capital-wrapped per ``ra_method``.
     """
@@ -2586,8 +2586,8 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
             pv_premium += level * ds
             pv_mortality += inforce * claim_rate * dm
             if roll_av:
-                # Universal-life within-month account roll (verbatim order from
-                # _ul_av_kernel): premium in, COI on the net amount at risk,
+                # Universal-life within-month account roll (the account-roll
+                # within-month order): premium in, COI on the net amount at risk,
                 # admin fee, floor at zero, half / full crediting. The account
                 # death / surrender / NAR claims settle on the half-credited
                 # av_mid, the maturity on the month-end balance.

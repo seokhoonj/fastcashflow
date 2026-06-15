@@ -1,34 +1,30 @@
-"""Universal-life fold parity -- gmm.measure == measure_ul (the bit-identity
-target of Step 2+3).
+"""Universal-life fold -- the account roll lives in the shared kernels.
 
-The standalone ``measure_ul`` path (``_ul.py``) rolls the account value in a
-separate kernel and measures it. Step 2+3 folds that roll into the shared
-projection kernel (``_project_kernel``) behind the per-coverage account-chassis
-flags, so a UL contract carrying ``CoverageRate("DEATH", coi_annual,
-funds_from_account=True, pays_account_balance=True)`` measured through
-``gmm.measure(full=True)`` must reproduce ``measure_ul(..., "GMM", full=True)``
-exactly.
+A universal-life contract carrying ``CoverageRate("DEATH", coi_annual,
+funds_from_account=True, pays_account_balance=True)`` is measured through the
+shared projection (``gmm.measure`` / ``vfa.measure``): the death leg is routed
+through the recursive account roll, the account benefits stay in-band on
+:class:`Cashflows` (``claim_cf`` / ``surrender_cf`` / ``maturity_cf``), and the
+account-state trajectory is exposed on the ``cashflows.account`` sidecar.
 
-The two portfolios differ only in expression: the ``measure_ul`` portfolio
-carries the COI / load / crediting assumptions on the Basis with NO coverage
-list (the old separate path); the folded portfolio additionally registers the
-DEATH coverage (rate = ``coi_annual``) with the account flags so the shared
-projection routes the death leg through the account roll.
+These tests pin the SELF-CONSISTENCY of that fold -- the fused fast path
+(``full=False``) against the full roll-forward (``full=True``), the Step-4 routing
+that decides which kernel a book runs, the Step-3.5 gate that rejects an account
+book on the raw-consumer paths, and the sidecar population -- without an external
+reference. (The hand-calc anchor lives in ``test_ul_account_value.py``.)
 """
 import numpy as np
 import pytest
 
 import fastcashflow as fcf
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
-from fastcashflow._ul import measure_ul
 
 
-def _ul_basis(*, with_coverage: bool):
-    """The UL basis. ``with_coverage=True`` adds the DEATH coverage (rate =
-    coi_annual) with the account-chassis flags, so the shared projection folds
-    the account roll; ``False`` is the standalone ``measure_ul`` basis."""
+def _ul_basis():
+    """The UL basis -- the DEATH coverage (rate = coi_annual) carries the
+    account-chassis flags, so the shared projection folds the account roll."""
     coi = 0.0015
-    kw = dict(
+    return Basis(
         mortality_annual=0.004,
         lapse_annual=0.03,
         discount_annual=0.03,
@@ -37,17 +33,15 @@ def _ul_basis(*, with_coverage: bool):
         investment_return=0.024,
         coi_annual=coi,
         premium_load=0.08,
-    )
-    if with_coverage:
-        kw["coverages"] = (
+        coverages=(
             CoverageRate("DEATH", coi, funds_from_account=True,
                          pays_account_balance=True),
-        )
-    return Basis(**kw)
+        ),
+    )
 
 
-def _single_mp(*, with_coverage: bool):
-    common = dict(
+def _single_mp():
+    return ModelPoints(
         issue_age=np.array([40.0]),
         premium=np.array([500_000.0]),
         term_months=np.array([36]),
@@ -56,17 +50,15 @@ def _single_mp(*, with_coverage: bool):
         minimum_accumulation_benefit=np.array([0.0]),
         minimum_crediting_rate=np.array([0.0]),
         sex=np.array([0]),
-    )
-    if with_coverage:
         # The DEATH coverage's amount is unused (the account death reads the
         # account balance, not coverage_amount); set it to the face for clarity.
-        common["benefits"] = {"DEATH": np.array([80_000_000.0])}
-        common["calculation_methods"] = {"DEATH": CalculationMethod.DEATH}
-    return ModelPoints(**common)
+        benefits={"DEATH": np.array([80_000_000.0])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
+    )
 
 
-def _two_mp(*, with_coverage: bool):
-    common = dict(
+def _two_mp():
+    return ModelPoints(
         issue_age=np.array([40.0, 55.0]),
         premium=np.array([500_000.0, 300_000.0]),
         term_months=np.array([36, 24]),
@@ -75,67 +67,35 @@ def _two_mp(*, with_coverage: bool):
         minimum_accumulation_benefit=np.array([0.0, 0.0]),
         minimum_crediting_rate=np.array([0.0, 0.01]),
         sex=np.array([0, 1]),
+        benefits={"DEATH": np.array([80_000_000.0, 50_000_000.0])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
-    if with_coverage:
-        common["benefits"] = {"DEATH": np.array([80_000_000.0, 50_000_000.0])}
-        common["calculation_methods"] = {"DEATH": CalculationMethod.DEATH}
-    return ModelPoints(**common)
 
 
-def _assert_parity(make_mp):
-    ref = measure_ul(make_mp(with_coverage=False), _ul_basis(with_coverage=False),
-                     measurement_model="GMM", full=True)
-    got = fcf.gmm.measure(make_mp(with_coverage=True),
-                          _ul_basis(with_coverage=True), full=True)
-    for name in ("bel", "ra", "csm", "loss_component"):
-        r = getattr(ref, name)
-        g = getattr(got, name)
-        # The fold reuses the SAME shared roll-forward / CSM kernels on the
-        # SAME inputs as measure_ul, so parity is bit-identical, not merely
-        # within tolerance.
-        assert np.array_equal(g, r), (
-            f"{name} parity: gmm.measure={g} vs measure_ul={r} "
-            f"(max abs delta {np.abs(g - r).max()})")
-    # The full-path trajectories match bit-for-bit too.
-    assert np.array_equal(got.bel_path, ref.bel_path)
-    assert np.array_equal(got.ra_path, ref.ra_path)
-    assert np.array_equal(got.csm_path, ref.csm_path)
+def _assert_self_consistent(make_mp):
+    mp = make_mp()
+    basis = _ul_basis()
 
-    # full=False (the fused fast path) now carries the account roll in the
-    # SCALAR fused kernel itself (Step 4) -- an account book no longer routes to
+    # full=False (the fused fast path) carries the account roll in the SCALAR
+    # fused kernel itself (Step 4) -- an account book no longer routes to
     # _measure_full, it runs the account-aware scalar kernel directly. Confirm
     # the routing actually exercises the scalar fast path (requires_full is now
     # False for an account book; the account check was removed from it).
     from fastcashflow.engine import requires_full, _portfolio_has_account
-    mp_c = make_mp(with_coverage=True)
-    basis_c = _ul_basis(with_coverage=True)
-    assert _portfolio_has_account(mp_c, basis_c)
-    assert not requires_full(mp_c, basis_c), (
+    assert _portfolio_has_account(mp, basis)
+    assert not requires_full(mp, basis), (
         "Step 4: an account book must run the scalar fast path, not auto-route "
         "to the full kernel via requires_full")
 
     # The scalar fused kernel accumulates present values FORWARD (pv += cf x
-    # discount factor), whereas measure_ul / _measure_full run the BACKWARD
-    # roll-forward recursion (bel[t] = cf x half[t] + bel[t+1] x full[t]). The
-    # two are mathematically equal but differ in floating-point summation order,
-    # so the fused path is numerically equal -- NOT bit-identical -- to the
-    # backward roll, exactly as every other fused (full=False) book is to its
-    # full=True counterpart. So this is np.allclose, not np.array_equal.
-    ref_h = measure_ul(make_mp(with_coverage=False), _ul_basis(with_coverage=False),
-                       measurement_model="GMM", full=False)
-    got_h = fcf.gmm.measure(mp_c, basis_c, full=False)
-    for name in ("bel", "ra", "csm", "loss_component"):
-        g = getattr(got_h, name)
-        r = getattr(ref_h, name)
-        assert np.allclose(g, r), (
-            f"{name} full=False parity (scalar kernel) vs measure_ul: "
-            f"max abs delta {np.abs(g - r).max()}")
-
-    # Explicit gmm.measure(full=False) == gmm.measure(full=True): this now
-    # exercises the SCALAR account kernel against the full-path account fold.
-    # Same forward-vs-backward floating-point story -> np.allclose, the same
-    # fast-vs-full relationship a plain protection book has.
-    got_full = fcf.gmm.measure(mp_c, basis_c, full=True)
+    # discount factor), whereas _measure_full runs the BACKWARD roll-forward
+    # recursion (bel[t] = cf x half[t] + bel[t+1] x full[t]). The two are
+    # mathematically equal but differ in floating-point summation order, so the
+    # fused path is numerically equal -- NOT bit-identical -- to the backward
+    # roll, exactly as every other fused (full=False) book is to its full=True
+    # counterpart. So this is np.allclose, not np.array_equal.
+    got_h = fcf.gmm.measure(mp, basis, full=False)
+    got_full = fcf.gmm.measure(mp, basis, full=True)
     for name in ("bel", "ra", "csm", "loss_component"):
         g = getattr(got_h, name)
         f = getattr(got_full, name)
@@ -144,42 +104,32 @@ def _assert_parity(make_mp):
             f"max abs delta {np.abs(g - f).max()}")
 
 
-def test_ul_fold_parity_single_policy():
-    _assert_parity(_single_mp)
+def test_ul_fold_self_consistent_single_policy():
+    _assert_self_consistent(_single_mp)
 
 
-def test_ul_fold_parity_two_policy():
-    _assert_parity(_two_mp)
+def test_ul_fold_self_consistent_two_policy():
+    _assert_self_consistent(_two_mp)
 
 
-def test_vfa_ul_parity():
-    # Step 5: vfa.measure of a universal-life book == measure_ul(...,"VFA")
-    # bit-identical -- variable UL is the recursive account roll discounted at
-    # the underlying-items return (the only thing the VFA model changes).
+def test_vfa_ul_self_consistent():
+    # Variable UL is the recursive account roll discounted at the underlying-items
+    # return (the only thing the VFA model changes). The fused headline matches
+    # the full roll, and a UL book has no asset-based fee / guarantee TVOG (v1).
     for make_mp in (_single_mp, _two_mp):
-        ref = measure_ul(make_mp(with_coverage=False),
-                         _ul_basis(with_coverage=False),
-                         measurement_model="VFA", full=True)
-        got = fcf.vfa.measure(make_mp(with_coverage=True),
-                              _ul_basis(with_coverage=True))
+        mp = make_mp()
+        basis = _ul_basis()
+        got_full = fcf.vfa.measure(mp, basis, full=True)
+        got_h = fcf.vfa.measure(mp, basis, full=False)
         for name in ("bel", "ra", "csm", "loss_component"):
-            assert np.array_equal(getattr(got, name), getattr(ref, name)), (
-                f"{name} VFA parity: vfa.measure={getattr(got, name)} vs "
-                f"measure_ul={getattr(ref, name)}")
-        assert np.array_equal(got.bel_path, ref.bel_path)
-        assert np.array_equal(got.ra_path, ref.ra_path)
-        assert np.array_equal(got.csm_path, ref.csm_path)
+            g = getattr(got_h, name)
+            f = getattr(got_full, name)
+            assert np.allclose(g, f), (
+                f"{name} VFA full=False vs full=True: "
+                f"max abs delta {np.abs(g - f).max()}")
         # A universal-life book has no asset-based fee / guarantee TVOG (v1).
-        assert np.array_equal(got.variable_fee, np.zeros_like(got.bel))
-        assert np.array_equal(got.time_value, np.zeros_like(got.bel))
-        # full=False headline matches too.
-        got_h = fcf.vfa.measure(make_mp(with_coverage=True),
-                                _ul_basis(with_coverage=True), full=False)
-        ref_h = measure_ul(make_mp(with_coverage=False),
-                           _ul_basis(with_coverage=False),
-                           measurement_model="VFA", full=False)
-        for name in ("bel", "ra", "csm", "loss_component"):
-            assert np.array_equal(getattr(got_h, name), getattr(ref_h, name))
+        assert np.array_equal(got_full.variable_fee, np.zeros_like(got_full.bel))
+        assert np.array_equal(got_full.time_value, np.zeros_like(got_full.bel))
 
 
 def test_ul_settlement_pattern_rejected():
@@ -193,7 +143,7 @@ def test_ul_settlement_pattern_rejected():
         settlement_pattern=np.array([0.6, 0.4]),
         coverages=(CoverageRate("DEATH", 0.0015, funds_from_account=True,
                                 pays_account_balance=True),))
-    mp = _single_mp(with_coverage=True)
+    mp = _single_mp()
     with pytest.raises(NotImplementedError):
         fcf.gmm.measure(mp, basis, full=True)
     with pytest.raises(NotImplementedError):
@@ -203,15 +153,13 @@ def test_ul_settlement_pattern_rejected():
 def test_vfa_ul_return_scenarios_rejected():
     # UL guarantee time value under VFA is deferred -- return_scenarios raises.
     with pytest.raises(NotImplementedError):
-        fcf.vfa.measure(_single_mp(with_coverage=True),
-                        _ul_basis(with_coverage=True),
+        fcf.vfa.measure(_single_mp(), _ul_basis(),
                         return_scenarios=np.zeros((4, 36)))
 
 
 def test_ul_fold_account_sidecar_populated():
     # The folded projection exposes the account trajectory as a nested sidecar.
-    got = fcf.gmm.measure(_two_mp(with_coverage=True),
-                          _ul_basis(with_coverage=True), full=True)
+    got = fcf.gmm.measure(_two_mp(), _ul_basis(), full=True)
     acct = got.cashflows.account
     assert acct is not None
     n_mp, n_time = got.cashflows.claim_cf.shape
@@ -237,12 +185,8 @@ def test_callable_coi_rate_keeps_account_flags():
     # The flags survived the rate-arity rebuild -> the account roll is active.
     assert folded.coverages[0].funds_from_account is True
     assert folded.coverages[0].pays_account_balance is True
-    m = fcf.gmm.measure(_single_mp(with_coverage=True), folded, full=True)
+    m = fcf.gmm.measure(_single_mp(), folded, full=True)
     assert m.cashflows.account is not None
-    # And it still matches the standalone measure_ul (same callable COI).
-    ref = measure_ul(_single_mp(with_coverage=False), Basis(**common),
-                     measurement_model="GMM", full=True)
-    assert np.array_equal(m.bel, ref.bel) and np.array_equal(m.csm, ref.csm)
 
 
 def test_account_coc_routes_full_false_to_full():
@@ -256,7 +200,7 @@ def test_account_coc_routes_full_false_to_full():
         ra_method="cost_of_capital", cost_of_capital_rate=0.06,
         coverages=(CoverageRate("DEATH", 0.0015, funds_from_account=True,
                                 pays_account_balance=True),))
-    mp = _single_mp(with_coverage=True)
+    mp = _single_mp()
     fast = fcf.gmm.measure(mp, coc, full=False)
     full = fcf.gmm.measure(mp, coc, full=True)
     for name in ("bel", "ra", "csm", "loss_component"):
@@ -267,7 +211,7 @@ def test_account_boundary_cut_routes_full_false_to_full():
     # Step 4 routing: a contract boundary shorter than the term pays the boundary
     # survivors a terminal surrender that the scalar fold does not handle, so a
     # boundary-cut account book routes full=False -> full (bit-identical headline).
-    basis = _ul_basis(with_coverage=True)
+    basis = _ul_basis()
     mp = ModelPoints(
         issue_age=np.array([40.0]),
         premium=np.array([500_000.0]),
@@ -289,8 +233,8 @@ def test_account_boundary_cut_routes_full_false_to_full():
 def test_account_book_gated_on_raw_consumers():
     # Step 3.5 -- paths that read the benefit cash flows raw (no account fund
     # netting) must REJECT a universal-life book rather than double-count it.
-    mp = _two_mp(with_coverage=True)
-    basis = _ul_basis(with_coverage=True)
+    mp = _two_mp()
+    basis = _ul_basis()
     n_time = fcf.gmm.measure(mp, basis, full=True).bel_path.shape[1] - 1
 
     with pytest.raises(NotImplementedError):

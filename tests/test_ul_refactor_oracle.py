@@ -27,7 +27,6 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
-from fastcashflow._ul import measure_ul
 
 SNAPSHOT = os.path.join(os.path.dirname(__file__), "_ul_oracle_snapshot.json")
 
@@ -94,7 +93,8 @@ def _capture(out: dict, label: str, obj, depth: int = 2) -> None:
 # ---------------------------------------------------------------------------
 
 def _ul_mp():
-    """A small recurring-premium UL portfolio (the death leg the refactor folds)."""
+    """A small recurring-premium UL portfolio -- the account-backed DEATH
+    coverage the shared projection routes through the account roll."""
     return ModelPoints(
         issue_age=np.array([40.0, 55.0]),
         premium=np.array([500_000.0, 300_000.0]),
@@ -104,10 +104,13 @@ def _ul_mp():
         minimum_accumulation_benefit=np.array([0.0, 0.0]),
         minimum_crediting_rate=np.array([0.0, 0.01]),
         sex=np.array([0, 1]),
+        benefits={"DEATH": np.array([80_000_000.0, 50_000_000.0])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
 
 
 def _ul_basis():
+    coi = 0.0015
     return Basis(
         mortality_annual=0.004,
         lapse_annual=0.03,
@@ -115,8 +118,12 @@ def _ul_basis():
         ra_confidence=0.75,
         mortality_cv=0.1,
         investment_return=0.024,
-        coi_annual=0.0015,
+        coi_annual=coi,
         premium_load=0.08,
+        coverages=(
+            CoverageRate("DEATH", coi, funds_from_account=True,
+                         pays_account_balance=True),
+        ),
     )
 
 
@@ -147,13 +154,13 @@ def _gmm_single_basis():
 def _collect() -> dict:
     out: dict = {}
 
-    # ----- UL reference path (the bit-identity target for the refactor) -----
+    # ----- UL canonical path (the account roll folded into the shared kernels) -----
     ul_mp, ul_basis = _ul_mp(), _ul_basis()
-    for model in ("GMM", "VFA"):
-        for full in (True, False):
-            tag = f"ul.{model}.full{full}"
-            _capture(out, tag, measure_ul(ul_mp, ul_basis,
-                                          measurement_model=model, full=full))
+    for full in (True, False):
+        _capture(out, f"gmm.ul.full{full}",
+                 fcf.gmm.measure(ul_mp, ul_basis, full=full))
+        _capture(out, f"vfa.ul.full{full}",
+                 fcf.vfa.measure(ul_mp, ul_basis, full=full))
 
     # ----- GMM protection portfolio (samples are file-backed, deterministic) -----
     g_mp = fcf.samples.model_points("gmm")
