@@ -234,16 +234,26 @@ def _account_risk_adjustment(model_points, basis, proj, monthly_rate):
     return confidence_margin
 
 
-def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
+def _measure_full(model_points: ModelPoints, basis: Basis, *,
+                  monthly_rate: FloatArray | None = None) -> GMMMeasurement:
     """Full GMM measurement: BEL, RA and CSM rolled forward over time.
 
     Returns a :class:`GMMMeasurement` carrying both the ``(n_mp,)`` inception
     headline (column 0 of each trajectory) and the ``(n_mp, n_time+1)``
     ``*_path`` trajectories. Reached by ``measure(..., full=True)``.
+
+    ``monthly_rate`` overrides the discount / CSM-accretion curve (default: the
+    locked-in ``discount_monthly_curve``). ``vfa.measure`` passes the flat
+    underlying-items return here to measure a universal-life account book under
+    the VFA model -- the account roll (generation) is identical to GMM, only the
+    discount rate differs. The override is only used by the account path, which
+    carries no ``settlement_pattern``, so the settlement factor below (keyed on
+    ``basis.discount_monthly``) is never reached together with an override.
     """
     proj = project_cashflows(model_points, basis)
     claim_cf, morbidity_cf = proj.claim_cf, proj.morbidity_cf
-    monthly_rate = discount_monthly_curve(basis, proj.n_time)
+    if monthly_rate is None:
+        monthly_rate = discount_monthly_curve(basis, proj.n_time)
     if basis.settlement_pattern is None:
         lic = np.zeros((claim_cf.shape[0], proj.n_time + 1))
     else:

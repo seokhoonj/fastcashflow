@@ -690,6 +690,39 @@ def measure_vfa(
     and ``time_value`` records that amount per model point.
     """
     basis = _single_basis(basis, entry="measure_vfa")
+    # Variable universal life: an account-backed (universal-life) book is
+    # measured through the SHARED recursive account roll (the projection fold,
+    # identical to the GMM path), discounted at the underlying-items return --
+    # the only thing the VFA model changes. The closed-form _vfa_project
+    # (variable-annuity, no cost-of-insurance) handles the account-flag-absent
+    # case. Branch STRICTLY on the coverage flags, never account_value (the
+    # variable-annuity product carries an account value too).
+    from fastcashflow.engine import _measure_full, _portfolio_has_account
+    if _portfolio_has_account(model_points, basis):
+        if return_scenarios is not None:
+            raise NotImplementedError(
+                "return_scenarios (guarantee time value) is not yet supported "
+                "for a universal-life account book under VFA -- measure it "
+                "deterministically (return_scenarios=None).")
+        r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
+        n_time = int(model_points.contract_boundary_months.max())
+        m = _measure_full(model_points, basis,
+                          monthly_rate=np.full(n_time, r_m))
+        zeros = np.zeros_like(m.bel)  # UL has no asset-based fee / TVOG (v1)
+        if not full:
+            return VFAMeasurement(
+                bel=m.bel, ra=m.ra, csm=m.csm, variable_fee=zeros,
+                time_value=zeros, loss_component=m.loss_component,
+                model_points=model_points)
+        return VFAMeasurement(
+            bel=m.bel, ra=m.ra, csm=m.csm, variable_fee=zeros,
+            time_value=zeros, loss_component=m.loss_component,
+            bel_path=m.bel_path, ra_path=m.ra_path, csm_path=m.csm_path,
+            account_value_path=m.cashflows.account.av,
+            csm_accretion=m.csm_accretion, csm_release=m.csm_release,
+            lic=m.lic, discount_bom=m.discount_bom,
+            cashflows=m.cashflows, model_points=model_points)
+
     p = _vfa_project(model_points, basis, return_scenarios)
     n_time = p.inforce.shape[1]
     variable_fee = p.variable_fee_path[:, 0]

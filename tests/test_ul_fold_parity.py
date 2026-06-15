@@ -152,6 +152,62 @@ def test_ul_fold_parity_two_policy():
     _assert_parity(_two_mp)
 
 
+def test_vfa_ul_parity():
+    # Step 5: vfa.measure of a universal-life book == measure_ul(...,"VFA")
+    # bit-identical -- variable UL is the recursive account roll discounted at
+    # the underlying-items return (the only thing the VFA model changes).
+    for make_mp in (_single_mp, _two_mp):
+        ref = measure_ul(make_mp(with_coverage=False),
+                         _ul_basis(with_coverage=False),
+                         measurement_model="VFA", full=True)
+        got = fcf.vfa.measure(make_mp(with_coverage=True),
+                              _ul_basis(with_coverage=True))
+        for name in ("bel", "ra", "csm", "loss_component"):
+            assert np.array_equal(getattr(got, name), getattr(ref, name)), (
+                f"{name} VFA parity: vfa.measure={getattr(got, name)} vs "
+                f"measure_ul={getattr(ref, name)}")
+        assert np.array_equal(got.bel_path, ref.bel_path)
+        assert np.array_equal(got.ra_path, ref.ra_path)
+        assert np.array_equal(got.csm_path, ref.csm_path)
+        # A universal-life book has no asset-based fee / guarantee TVOG (v1).
+        assert np.array_equal(got.variable_fee, np.zeros_like(got.bel))
+        assert np.array_equal(got.time_value, np.zeros_like(got.bel))
+        # full=False headline matches too.
+        got_h = fcf.vfa.measure(make_mp(with_coverage=True),
+                                _ul_basis(with_coverage=True), full=False)
+        ref_h = measure_ul(make_mp(with_coverage=False),
+                           _ul_basis(with_coverage=False),
+                           measurement_model="VFA", full=False)
+        for name in ("bel", "ra", "csm", "loss_component"):
+            assert np.array_equal(getattr(got_h, name), getattr(ref_h, name))
+
+
+def test_ul_settlement_pattern_rejected():
+    # An account book settles its benefit at exit, not over a settlement
+    # pattern; the measurement's settlement factor would mis-discount it (GMM
+    # in-year rate, also wrong under VFA), so it is rejected on both paths.
+    basis = Basis(
+        mortality_annual=0.004, lapse_annual=0.03, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.1, investment_return=0.024,
+        coi_annual=0.0015, premium_load=0.08,
+        settlement_pattern=np.array([0.6, 0.4]),
+        coverages=(CoverageRate("DEATH", 0.0015, funds_from_account=True,
+                                pays_account_balance=True),))
+    mp = _single_mp(with_coverage=True)
+    with pytest.raises(NotImplementedError):
+        fcf.gmm.measure(mp, basis, full=True)
+    with pytest.raises(NotImplementedError):
+        fcf.vfa.measure(mp, basis)
+
+
+def test_vfa_ul_return_scenarios_rejected():
+    # UL guarantee time value under VFA is deferred -- return_scenarios raises.
+    with pytest.raises(NotImplementedError):
+        fcf.vfa.measure(_single_mp(with_coverage=True),
+                        _ul_basis(with_coverage=True),
+                        return_scenarios=np.zeros((4, 36)))
+
+
 def test_ul_fold_account_sidecar_populated():
     # The folded projection exposes the account trajectory as a nested sidecar.
     got = fcf.gmm.measure(_two_mp(with_coverage=True),

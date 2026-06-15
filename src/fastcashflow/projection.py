@@ -1011,6 +1011,15 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             "model points is not yet supported -- measure the account and "
             "non-account subsets separately. (Per-model-point RA splitting for "
             "mixed books is a planned follow-up.)")
+    # A universal-life account book pays its benefits (the account value) at the
+    # exit, not over a settlement pattern; the measurement's settlement factor is
+    # keyed on basis.discount_monthly (the GMM in-year rate), which would also be
+    # wrong under VFA. Reject a settlement_pattern on an account book rather than
+    # mis-discount it (a follow-up if a UL claim-settlement lag is ever needed).
+    if has_account and basis.settlement_pattern is not None:
+        raise NotImplementedError(
+            "a settlement_pattern is not supported on a universal-life account "
+            "book (the account benefit settles at exit, not over a pattern).")
 
     # In-force state machine -- see ``state_model.resolve_state_model`` for
     # the fallback policy when ``basis.state_model`` is unset.
