@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import inspect
 import numbers
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 
 import numpy as np
@@ -436,6 +436,19 @@ class CoverageRate:
         normalised to a ``RateFn`` here; the engine converts the annual rate
         to a monthly one (see :func:`annual_to_monthly`).
 
+    funds_from_account :
+        Account-chassis interaction flag (universal-life funding mechanism). When
+        ``True`` the coverage's monthly risk charge is drawn from the policy's
+        account value -- the death leg's cost-of-insurance on the net amount at
+        risk. The coverage's ``rate`` is then the COI rate (``coi_annual``).
+        Defaults to ``False`` (a plain rate-driven claim).
+    pays_account_balance :
+        Account-chassis interaction flag. When ``True`` the coverage's benefit
+        reads the account balance -- death pays ``max(account value, face)``.
+        Such a coverage is EXCLUDED from the aggregate claim-rate accumulator and
+        the rule-bearing claim loop; the account death benefit is written once
+        from the rolled account value. Defaults to ``False``.
+
     Notes
     -----
     Whether a coverage runs as a depleting diagnosis pool vs a recurring
@@ -443,11 +456,15 @@ class CoverageRate:
     the portfolio-level :class:`CalculationMethod` taxonomy (the
     ``calculation_methods.csv`` file, surfaced as
     :attr:`fastcashflow.model_points.ModelPoints.calculation_methods`). Those
-    two flags do not live on :class:`CoverageRate`.
+    two flags do not live on :class:`CoverageRate`. The two account-chassis
+    flags above DO live here -- they are a contract-level funding choice, not
+    a benefit-method routing key.
     """
 
     code: str
     rate: RateLike
+    funds_from_account: bool = False
+    pays_account_balance: bool = False
 
     def __post_init__(self) -> None:
         # Normalise a RateLike (scalar / array / DataFrame) into a RateFn so
@@ -858,9 +875,14 @@ class Basis:
         # Coverage rates take the RateFn shape; wrap each coverage's rate too.
         # ``coverages`` is a tuple of frozen CoverageRate dataclasses -- rebuild
         # the tuple with the adapted callables.
+        # ``replace`` (not ``CoverageRate(code, rate)``) so every other field --
+        # notably the account-chassis flags funds_from_account /
+        # pays_account_balance -- survives the rate-arity rebuild. Rebuilding
+        # with only (code, rate) silently dropped them, disabling UL routing for
+        # any coverage whose rate is a callable.
         new_coverages = tuple(
             (r if r.rate is _adapt_rate_arity(r.rate)
-             else CoverageRate(code=r.code, rate=_adapt_rate_arity(r.rate)))
+             else replace(r, rate=_adapt_rate_arity(r.rate)))
             for r in self.coverages
         )
         if any(nr is not r for nr, r in zip(new_coverages, self.coverages)):

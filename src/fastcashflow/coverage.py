@@ -186,18 +186,29 @@ def coverage_arrays(coverages, calculation_methods=None, *,
     - ``pays_account_balance`` -- codes whose benefit reads the account balance
       (death ``max(av, face)``; later surrender / maturity / annuity legs).
 
-    Both default to ``None`` (no account), so every existing portfolio gets the
-    two flags all-``False`` -- a strict no-op. ``has_account`` is the contract
-    predicate ``coverage_funds_from_account.any() or
-    coverage_pays_account_balance.any()`` (NEVER ``account_value != 0``, which
-    would wrongly flip the variable-annuity product onto the recursive roll).
+    The flags are read from each :class:`~fastcashflow.basis.CoverageRate`'s own
+    ``funds_from_account`` / ``pays_account_balance`` attributes (the contract's
+    funding choice lives on the coverage). The optional ``funds_from_account`` /
+    ``pays_account_balance`` keyword arguments are an explicit set-of-codes
+    OVERRIDE that supersedes the per-coverage attributes when supplied -- a code
+    listed there is flagged regardless of its attribute (used by tests / callers
+    that mark coverages by code). When omitted, the attributes alone decide.
+
+    Both sources default to off, so every existing portfolio gets the two flags
+    all-``False`` -- a strict no-op. ``has_account`` is the contract predicate
+    ``coverage_funds_from_account.any() or coverage_pays_account_balance.any()``
+    (NEVER ``account_value != 0``, which would wrongly flip the variable-annuity
+    product onto the recursive roll).
 
     Returns ``(coverage_is_diagnosis, coverage_risk,
     coverage_funds_from_account, coverage_pays_account_balance)``, each indexed
     by coverage code.
     """
-    funds_set = set(funds_from_account) if funds_from_account else set()
-    pays_set = set(pays_account_balance) if pays_account_balance else set()
+    # A set-of-codes keyword overrides the per-coverage attribute when supplied;
+    # None means "fall back to each coverage's own funds_from_account /
+    # pays_account_balance attribute".
+    funds_set = set(funds_from_account) if funds_from_account is not None else None
+    pays_set = set(pays_account_balance) if pays_account_balance is not None else None
     flags: list[tuple[bool, int]] = []
     unresolved: list[str] = []
     for r in coverages:
@@ -229,9 +240,13 @@ def coverage_arrays(coverages, calculation_methods=None, *,
     coverage_is_diagnosis = np.array([f[0] for f in flags], np.bool_)
     coverage_risk = np.array([f[1] for f in flags], np.int64)
     coverage_funds_from_account = np.array(
-        [r.code in funds_set for r in coverages], np.bool_)
+        [(r.code in funds_set) if funds_set is not None
+         else bool(getattr(r, "funds_from_account", False))
+         for r in coverages], np.bool_)
     coverage_pays_account_balance = np.array(
-        [r.code in pays_set for r in coverages], np.bool_)
+        [(r.code in pays_set) if pays_set is not None
+         else bool(getattr(r, "pays_account_balance", False))
+         for r in coverages], np.bool_)
     return (coverage_is_diagnosis, coverage_risk,
             coverage_funds_from_account, coverage_pays_account_balance)
 

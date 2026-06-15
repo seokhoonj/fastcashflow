@@ -202,6 +202,37 @@ def _compute_csm(bel0, ra0, inforce, monthly_rate, discount_units=False):
     return csm, accretion, release, loss_component
 
 
+def _account_risk_adjustment(model_points, basis, proj, monthly_rate):
+    """Universal-life risk adjustment -- priced on the net amount at risk.
+
+    The insurance risk of an account-backed death leg is the mortality borne on
+    the NET AMOUNT AT RISK (the death benefit above the account,
+    ``deaths * max(0, face - av_mid)``) -- the account portion returns the
+    policyholder's own money and bears no insurance risk -- plus expense risk.
+    This BYPASSES :func:`_risk_adjustment` and its ``expense_cv != 0`` guard (a
+    UL RA legitimately prices ``expense_cv``). Matches ``_ul.py`` exactly: run
+    the at-risk claim and the expense through one roll-forward pass, then the
+    confidence margin ``z(ra_confidence) * (mortality_cv*pv_nar +
+    expense_cv*pv_expense)``, cost-of-capital-wrapped per ``ra_method``.
+    """
+    face = model_points.minimum_death_benefit
+    n_mp, n_time = proj.claim_cf.shape
+    zeros_t = np.zeros((n_mp, n_time))
+    zeros_mp = np.zeros(n_mp)
+    nar_claim = np.ascontiguousarray(
+        proj.deaths * np.maximum(0.0, face[:, None] - proj.account.av_mid))
+    _, pv_nar, pv_expense, *_ = _rollforward_kernel(
+        nar_claim, proj.expense_cf, zeros_t, zeros_t, zeros_t, zeros_t,
+        zeros_mp, zeros_t, model_points.contract_boundary_months, monthly_rate)
+    z = _norm_ppf(basis.ra_confidence)
+    confidence_margin = z * (basis.mortality_cv * pv_nar
+                             + basis.expense_cv * pv_expense)
+    if basis.ra_method == "cost_of_capital":
+        return _cost_of_capital_ra(
+            confidence_margin, monthly_rate, basis.cost_of_capital_rate)
+    return confidence_margin
+
+
 def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
     """Full GMM measurement: BEL, RA and CSM rolled forward over time.
 
@@ -232,8 +263,19 @@ def _measure_full(model_points: ModelPoints, basis: Basis) -> GMMMeasurement:
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.contract_boundary_months, monthly_rate,
     )
-    ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
-                          pv_survival, monthly_rate)
+    if proj.account is not None:
+        # Universal-life account-backed measurement. The BEL nets the account
+        # value the entity holds (fund) -- premium is the lone gross inflow
+        # (counted once in the roll-forward), and the account it builds is held
+        # as fund and subtracted ONCE post-PV. The RA prices the mortality risk
+        # on the NET AMOUNT AT RISK (the death benefit above the account) plus
+        # expense risk, bypassing the slot-RA machinery (which hard-raises on
+        # expense_cv and would price mortality on the full death benefit).
+        bel = bel - proj.account.fund
+        ra = _account_risk_adjustment(model_points, basis, proj, monthly_rate)
+    else:
+        ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
+                              pv_survival, monthly_rate)
     csm, csm_accretion, csm_release, loss_component = _compute_csm(
         bel[:, 0], ra[:, 0], proj.inforce, monthly_rate,
         basis.coverage_unit_discount,
@@ -2610,17 +2652,36 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
     return bel, ra, csm, loss_component
 
 
+def _portfolio_has_account(model_points: ModelPoints, basis: Basis) -> bool:
+    """True when any coverage carries a universal-life account-chassis flag.
+
+    Derived STRICTLY from the per-coverage ``funds_from_account`` /
+    ``pays_account_balance`` flags read off the :class:`CoverageRate` objects
+    (never ``account_value != 0``, which would wrongly flip the variable-annuity
+    product onto the recursive roll). Deliberately does NOT resolve calculation
+    methods -- the flags are independent of the method.
+    """
+    return any(getattr(r, "funds_from_account", False)
+               or getattr(r, "pays_account_balance", False)
+               for r in basis.coverages)
+
+
 def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
     """True when a book uses a mechanic the fused fast path does not apply.
 
     The full-only features (v1): non-zero ``issue_class`` (the fast grid is built
     at class 0), benefit escalation / step-up, a state-conditioned death benefit
-    (``State.death_benefit_factor != 1``), and a deterministic transition
-    (``Transition.after_sojourn_months``). The fast path auto-routes such a book
-    to the full kernel instead of raising, so -- per segment in
-    ``_measure_segmented`` -- only the segments that need it pay, and the rest
-    stay fast. The seed of the planned portfolio-orchestrator FULL tier.
+    (``State.death_benefit_factor != 1``), a deterministic transition
+    (``Transition.after_sojourn_months``), and a universal-life account
+    (``_portfolio_has_account`` -- the fused account carrier is a deferred
+    follow-up, so an account book routes to the fund-netting full measurement).
+    The fast path auto-routes such a book to the full kernel instead of raising,
+    so -- per segment in ``_measure_segmented`` -- only the segments that need it
+    pay, and the rest stay fast. The seed of the planned portfolio-orchestrator
+    FULL tier.
     """
+    if _portfolio_has_account(model_points, basis):
+        return True
     if np.any(model_points.issue_class != 0):
         return True
     if (model_points.coverage_step_month is not None
@@ -3470,6 +3531,19 @@ def _measure_segmented_full(
             f"basis has {len(basis.segments)} segments; either set the columns or "
             "pass a single-segment basis"
         )
+    # Each segment's _measure_full handles an account book correctly (fund
+    # netting + NAR RA), but _stitch_full_measurements reassembles only the flat
+    # trajectories -- it would drop the nested AccountTrajectory sidecar, so a
+    # stitched account book would silently lose its account diagnostics. Reject
+    # it until the stitch forwards the sidecar (a follow-up). The single-segment
+    # convenience path above returns _measure_full directly and keeps the
+    # sidecar, so this only blocks the genuine multi-segment stitch.
+    if any(_portfolio_has_account(model_points, b) for b in basis_norm.values()):
+        raise NotImplementedError(
+            "segmented full measurement of an account-backed (universal-life) "
+            "book is not yet supported -- the per-segment account trajectory is "
+            "not stitched back. Measure the account segment on its own Basis.")
+
     n_mp = model_points.n_mp
 
     sub_results = [(idx, _measure_full(model_points.subset(idx), basis_norm[key]))

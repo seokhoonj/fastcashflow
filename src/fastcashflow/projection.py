@@ -58,6 +58,30 @@ from fastcashflow.state_model import (
 
 
 @dataclass(frozen=True, slots=True)
+class AccountTrajectory:
+    """Universal-life account-value diagnostics -- a nested sidecar on
+    :class:`Cashflows`, populated only when the portfolio carries an
+    account-referencing coverage (``has_account``).
+
+    The benefits the account drives stay in-band on :class:`Cashflows`
+    (``claim_cf`` / ``surrender_cf`` / ``maturity_cf``) so the BEL measurement
+    inherits them with no new parameter; this object localises the
+    account-state arrays that the flat ``(n_mp, n_time)`` stitch loops would
+    otherwise trip on (``av`` / ``fund`` carry the extra month-end column).
+    A single nested field is invisible to those flat-FloatArray loops -- they
+    enumerate the known flat fields and skip it.
+
+    ``nar`` is NOT stored; it is recomputed as ``max(0, face - av_mid)`` where
+    the net amount at risk is needed (the RA on the death leg).
+    """
+
+    av: FloatArray      # (n_mp, n_time+1) account value at month start (col 0 = av0)
+    av_mid: FloatArray  # (n_mp, n_time)   half-month-credited AV (death / lapse + NAR base)
+    coi: FloatArray     # (n_mp, n_time)   cost-of-insurance charged (diagnostic)
+    fund: FloatArray    # (n_mp, n_time+1) inforce-weighted AV held = inforce_pad * av
+
+
+@dataclass(frozen=True, slots=True)
 class Cashflows:
     """Projected cash flows.
 
@@ -80,6 +104,9 @@ class Cashflows:
     maturity_cf: FloatArray   # (n_mp,) maturity benefit, paid at time = term
     maturity_survivors: FloatArray  # (n_mp,) in-force reaching term (the maturity exit count)
     surrender_cf: FloatArray  # surrender value paid on lapse
+    # Universal-life account diagnostics -- None for every non-account
+    # portfolio (the flat-array stitch loops skip the nested object).
+    account: "AccountTrajectory | None" = None
 
     @property
     def n_time(self) -> int:
@@ -110,6 +137,104 @@ def _expense_kernel_args(
     return derive_expense_components(
         basis.expense_items, n_time, inflation_index(basis, n_time),
     )
+
+
+def _account_kernel_args(
+    model_points, basis, coverage_rates, coverage_funds_from_account,
+    coverage_pays_account_balance, gamma_fixed, n_time, n_years,
+):
+    """Build the per-policy universal-life account-roll inputs for the kernel.
+
+    Returns ``(has_account, mp_account, account_value0, account_face,
+    prem_to_av, coi_rate_m, admin_fee, credit)`` -- per-policy scalars / arrays
+    the kernel rolls the account value with. The roll is NOT in-force weighted
+    (it tracks a single policy's account); in-force enters at the fund / benefit
+    aggregation. ``has_account`` is derived STRICTLY from the coverage flags
+    (NEVER ``account_value != 0``).
+
+    The COI rate the account is charged is the monthly rate of the
+    ``funds_from_account`` coverage each MP carries (its ``rate_table`` is
+    ``coi_annual``); the admin fee deducted from the account is the per-policy
+    monthly ``gamma_fixed`` (NOT in-force weighted); crediting is the declared
+    ``investment_return`` floored at each contract's ``minimum_crediting_rate``.
+    """
+    from fastcashflow.tvog import credited_monthly_rate
+
+    n_mp = model_points.issue_age.shape[0]
+    # Per-MP gate: an MP carries the account roll iff one of its coverages is
+    # account-referencing (funds_from_account or pays_account_balance). A term
+    # row in a mixed book stays untouched.
+    account_cov = coverage_funds_from_account | coverage_pays_account_balance
+    mp_account = np.zeros(n_mp, np.bool_)
+    coi_cov_of_mp = np.full(n_mp, -1, np.int64)  # the funds coverage's index per MP
+    if model_points.coverage_index.size and account_cov.any():
+        cov_idx = model_points.coverage_index
+        offset = model_points.coverage_offset
+        for mp in range(n_mp):
+            for k in range(offset[mp], offset[mp + 1]):
+                ci = cov_idx[k]
+                if account_cov[ci]:
+                    mp_account[mp] = True
+                if coverage_funds_from_account[ci]:
+                    coi_cov_of_mp[mp] = ci
+    has_account = bool(mp_account.any())
+    if not has_account:
+        # Strict no-op: a 1-wide stub for every kernel-required array; the
+        # kernel never reads them (has_account=False short-circuits the roll).
+        z1 = np.zeros((1, 1))
+        return (False, mp_account, np.zeros(1), np.zeros(1),
+                z1, z1, np.zeros(1), np.zeros(1))
+
+    year_of_month = np.arange(n_time) // 12
+
+    # Per-policy premium credited to the account, net of the load. premium_cf
+    # in the kernel stays GROSS (the BEL inflow); only the load-net amount
+    # builds the account.
+    if basis.premium_factor_annual is None:
+        premium_factor = np.ones((n_mp, n_years))
+    else:
+        sex_grid, _ = np.meshgrid(model_points.sex, np.arange(n_years),
+                                  indexing="ij")
+        issue_age_grid, duration_grid = np.meshgrid(
+            model_points.issue_age, np.arange(n_years), indexing="ij")
+        issue_class_grid, _ = np.meshgrid(model_points.issue_class,
+                                          np.arange(n_years), indexing="ij")
+        elapsed_grid = np.zeros_like(duration_grid)
+        premium_factor = validate_factor(
+            basis.premium_factor_annual(
+                sex_grid, issue_age_grid, duration_grid,
+                issue_class_grid, elapsed_grid),
+            "premium_factor_annual", (n_mp, n_years))
+    pf_m = premium_factor[:, year_of_month]               # (n_mp, n_time)
+    t_idx = np.arange(n_time)[None, :]
+    premium_term = model_points.premium_term_months[:, None]
+    prem_freq = model_points.premium_frequency_months[:, None]
+    paying = (t_idx < premium_term) & (t_idx % prem_freq == 0)
+    prem_to_av = np.ascontiguousarray(
+        model_points.premium[:, None] * pf_m * paying * (1.0 - basis.premium_load))
+
+    # COI monthly charge rate per MP, year-expanded to (n_mp, n_time). The rate
+    # is the funds_from_account coverage's own monthly rate; an MP without a
+    # funds coverage (pays-only, not used in v1) charges zero COI.
+    coi_rate_m = np.zeros((n_mp, n_time))
+    for mp in range(n_mp):
+        ci = coi_cov_of_mp[mp]
+        if ci >= 0:
+            coi_rate_m[mp] = coverage_rates[ci, mp, year_of_month]
+    coi_rate_m = np.ascontiguousarray(coi_rate_m)
+
+    # Admin fee = per-policy monthly gamma_fixed (NOT ift-weighted). Crediting
+    # = declared return floored at each contract's guarantee.
+    admin_fee = np.ascontiguousarray(np.asarray(gamma_fixed, np.float64))
+    r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
+    credit = np.ascontiguousarray(
+        credited_monthly_rate(r_m, model_points.minimum_crediting_rate))
+    account_value0 = np.ascontiguousarray(
+        np.asarray(model_points.account_value, np.float64))
+    account_face = np.ascontiguousarray(
+        np.asarray(model_points.minimum_death_benefit, np.float64))
+    return (True, mp_account, account_value0, account_face,
+            prem_to_av, coi_rate_m, admin_fee, credit)
 
 
 @njit(cache=True)
@@ -145,10 +270,14 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     coverage_reduction_end, coverage_reduction_factor,
     coverage_step_month, coverage_step_factor,
     coverage_escalation_annual, coverage_escalation_cap, coverage_rates,
-                    coverage_risk, coverage_is_diagnosis, maturity_benefit,
+                    coverage_risk, coverage_is_diagnosis,
+                    coverage_pays_account_balance, maturity_benefit,
                     annuity_payment, disability_income, disability_benefit,
                     alpha_pro_rata, alpha_fixed, beta_pro_rata,
-                    gamma_fixed, lae_pro_rata, n_time):
+                    gamma_fixed, lae_pro_rata,
+                    has_account, mp_account, account_value0, account_face,
+                    account_prem_to_av, account_coi_rate, account_admin_fee,
+                    account_credit, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -184,6 +313,13 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
     lapse_flow = np.zeros((n_mp, n_time))   # state-machine lapse exits, for surrender
     maturity_cf = np.zeros(n_mp)
     maturity_survivors = np.zeros(n_mp)
+    # Universal-life account-value trajectory. Sized densely only when the
+    # portfolio carries an account coverage; otherwise a 1-wide stub the
+    # caller discards (numba needs a concrete array either branch).
+    av_rows = n_mp if has_account else 1
+    av = np.zeros((av_rows, n_time + 1))
+    av_mid = np.zeros((av_rows, n_time))
+    coi_av = np.zeros((av_rows, n_time))
 
     n_edges = edge_from.shape[0]
     for mp in prange(n_mp):
@@ -195,6 +331,34 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
         cnt = count[mp]
         c_start = coverage_offset[mp]
         c_end = coverage_offset[mp + 1]
+        # Per-policy universal-life account-value roll (only for MPs carrying an
+        # account-referencing coverage). The roll is a single policy's account;
+        # in-force weighting enters at the fund / benefit aggregation, not here.
+        # Within-month order is verbatim from the standalone UL kernel:
+        #   a += prem_to_av; risk = max(0, face - a); coi = coi_rate * risk;
+        #   a -= admin_fee + coi; if a < 0: a = 0;
+        #   av_mid = a*(1+cr)^0.5; a = a*(1+cr).
+        roll_av = has_account and mp_account[mp]
+        if roll_av:
+            a_av = account_value0[mp]
+            av[mp, 0] = a_av
+            face_av = account_face[mp]
+            cr_av = account_credit[mp]
+            half_credit = (1.0 + cr_av) ** 0.5
+            full_credit = 1.0 + cr_av
+            for t in range(boundary):
+                a_av += account_prem_to_av[mp, t]
+                risk = face_av - a_av
+                if risk < 0.0:
+                    risk = 0.0
+                c_av = account_coi_rate[mp, t] * risk
+                coi_av[mp, t] = c_av
+                a_av -= account_admin_fee[t] + c_av
+                if a_av < 0.0:
+                    a_av = 0.0
+                av_mid[mp, t] = a_av * half_credit
+                a_av = a_av * full_credit
+                av[mp, t + 1] = a_av
         # In-force occupancy over the transient states; the input state
         # seats the model point's count on its starting state.
         occ = np.zeros(n_states)
@@ -229,6 +393,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     cov_idx = coverage_index[k]
                     if coverage_is_diagnosis[cov_idx]:
                         continue          # diagnosis coverages run separately
+                    if coverage_pays_account_balance[cov_idx]:
+                        continue          # account-backed death pays from the AV
                     if (coverage_waiting[k] != 0 or coverage_reduction_end[k] != 0
                             or coverage_step_month[k] != 0
                             or coverage_escalation_annual[k] != 0.0):
@@ -244,6 +410,16 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
             claim_cf[mp, t] = dclaim_occ * claim_rate
+            if roll_av:
+                # Account-backed death pays max(account value, face) on the
+                # occupancy deaths -- written ONCE here, the pays_account_balance
+                # coverage having been excluded from claim_rate above. The
+                # account portion returns the policyholder's own money; the face
+                # tops it up where it exceeds the account (the net amount at
+                # risk). Added to any non-account death claim already accrued.
+                av_m = av_mid[mp, t]
+                fa = account_face[mp]
+                claim_cf[mp, t] += deaths_acc * (av_m if av_m > fa else fa)
             morbidity_cf[mp, t] = ift * morb_rate
             annuity_cf[mp, t] = (ift * annuity_payment[mp] * annuity_factor[mp, year]
                                  if t % ann_freq == 0 else 0.0)
@@ -279,7 +455,18 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 total_next = 0.0
                 for s in range(n_states):
                     total_next += occ_next[s]
-                maturity_cf[mp] = total_next * maturity_benefit[mp]
+                if roll_av:
+                    # Account maturity: survivors * max(matured av, GMAB). The
+                    # matured account value is the month-end balance at the term
+                    # (av[mp, term] = av[mp, t+1]); account_face carries no GMAB,
+                    # so maturity_benefit doubles as the guaranteed accumulation
+                    # benefit floor here.
+                    av_term = av[mp, t + 1]
+                    gmab = maturity_benefit[mp]
+                    maturity_cf[mp] = total_next * (
+                        av_term if av_term > gmab else gmab)
+                else:
+                    maturity_cf[mp] = total_next * maturity_benefit[mp]
                 maturity_survivors[mp] = total_next
             for s in range(n_states):
                 occ[s] = occ_next[s]
@@ -291,6 +478,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             cov_idx = coverage_index[k]
             if coverage_is_diagnosis[cov_idx]:
                 continue
+            if coverage_pays_account_balance[cov_idx]:
+                continue          # account-backed death pays from the AV (above)
             wait = coverage_waiting[k]
             red_end = coverage_reduction_end[k]
             step_month = coverage_step_month[k]
@@ -345,7 +534,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 undiagnosed *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-            annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors)
+            annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors,
+            av, av_mid, coi_av)
 
 
 @njit(parallel=True, cache=True)
@@ -781,6 +971,28 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         basis, n_time,
     )
 
+    # Universal-life account-roll inputs (per-policy scalars / arrays). All
+    # all-False / stub for a non-account portfolio -- a strict no-op.
+    (has_account, mp_account, account_value0, account_face,
+     account_prem_to_av, account_coi_rate, account_admin_fee,
+     account_credit) = _account_kernel_args(
+        model_points, basis, coverage_rates, coverage_funds_from_account,
+        coverage_pays_account_balance, gamma_fixed, n_time, n_years,
+    )
+    # v1 supports a homogeneous account portfolio (every model point carries the
+    # account-backed death coverage). A MIXED book -- some account rows, some
+    # plain protection rows -- needs a per-model-point risk-adjustment split
+    # (NAR-priced RA on the account rows, slot RA on the rest); until that lands
+    # the account RA path would mis-price the non-account rows, so reject mixed
+    # input rather than mis-measure. Measure the account and non-account subsets
+    # separately.
+    if has_account and not bool(mp_account.all()):
+        raise NotImplementedError(
+            "a portfolio mixing account-backed (universal-life) and plain "
+            "model points is not yet supported -- measure the account and "
+            "non-account subsets separately. (Per-model-point RA splitting for "
+            "mixed books is a planned follow-up.)")
+
     # In-force state machine -- see ``state_model.resolve_state_model`` for
     # the fallback policy when ``basis.state_model`` is unset.
     state_model = resolve_state_model(basis)
@@ -820,6 +1032,15 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
                 "death claim and not the other. Use a plain death coverage."
             )
 
+    if has_account and is_semi_markov(state_model):
+        # The account roll is folded into the Markov kernel only (v1). A plain
+        # UL contract has no state model, so it routes to the Markov path; a
+        # semi-Markov account product is a deferred kernel step.
+        raise NotImplementedError(
+            "universal-life account roll is supported on the Markov projection "
+            "path only (v1); this portfolio resolves to a semi-Markov state "
+            "model. Account-on-semi-Markov is a later step."
+        )
     if is_semi_markov(state_model):
         # Phase (c) detailed projection. Build the rate dict the cohort-
         # aware compile expects: static rates stay (n_mp, n_year); the
@@ -966,7 +1187,8 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         state_lapse = _state_lapse_stack(state_model, rate_dict)
         state_death_benefit_factor = compiled.state_death_benefit_factor
         (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
-         annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors) = _project_kernel(
+         annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors,
+         av, av_mid, coi_av) = _project_kernel(
             state_death_exit,
             state_lapse,
             state_death_benefit_factor,
@@ -1000,6 +1222,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             coverage_rates,
             coverage_risk,
             coverage_is_diagnosis,
+            coverage_pays_account_balance,
             model_points.maturity_benefit,
             model_points.annuity_payment,
             model_points.disability_income,
@@ -1009,6 +1232,14 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             expense_beta_pro_rata,
             gamma_fixed,
             lae_pro_rata,
+            has_account,
+            mp_account,
+            account_value0,
+            account_face,
+            account_prem_to_av,
+            account_coi_rate,
+            account_admin_fee,
+            account_credit,
             n_time,
         )
     # Surrender value -- post-projection compute. ``lapse_flow``
@@ -1063,6 +1294,30 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
                 f"unknown surrender_value_basis {mode!r}; expected one of "
                 f"{SURRENDER_VALUE_BASES}."
             )
+    account = None
+    if has_account:
+        # Account-backed surrender overrides the curve-based surrender for the
+        # account rows: a surrender pays max(0, av_mid - charge) per lapse exit
+        # (charge = 0 in v1). The lapse count is the per-month NON-maturity,
+        # non-death exit (``exits - deaths``, with the maturing survivors removed
+        # at the term) -- the actual lapses net of the within-month competing
+        # risk, NOT the raw rate-weighted ``lapse_flow``. Term rows in a mixed
+        # book keep their curve-based surrender (mp_account False -> untouched).
+        n_mp_ = inforce.shape[0]
+        inforce_pad = np.concatenate([inforce, np.zeros((n_mp_, 1))], axis=1)
+        exits = inforce_pad[:, :-1] - inforce_pad[:, 1:]
+        non_maturity_exits = exits - deaths
+        boundary_idx = model_points.contract_boundary_months - 1
+        within = (model_points.term_months - 1) <= boundary_idx
+        term_idx = np.where(within, model_points.term_months - 1, boundary_idx)
+        rows = np.arange(n_mp_)
+        non_maturity_exits[rows, term_idx] -= np.where(
+            within, maturity_survivors, 0.0)
+        acct_surr = non_maturity_exits * np.maximum(0.0, av_mid)
+        surrender_cf = np.where(mp_account[:, None], acct_surr, surrender_cf)
+        # The entity holds the in-force-weighted account value (the VFA fund).
+        fund = inforce_pad * av
+        account = AccountTrajectory(av=av, av_mid=av_mid, coi=coi_av, fund=fund)
     return Cashflows(
         inforce=inforce,
         deaths=deaths,
@@ -1075,4 +1330,5 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         maturity_cf=maturity_cf,
         maturity_survivors=maturity_survivors,
         surrender_cf=surrender_cf,
+        account=account,
     )
