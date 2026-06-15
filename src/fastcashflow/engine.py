@@ -2469,9 +2469,15 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                          discount_bom, discount_mid,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
+                         coverage_pays_account_balance,
                          survival_monthly, lapse_monthly, surrender_curve,
                          use_morbidity, use_annuity, use_lae, use_surrender,
-                         surrender_is_amount, surrender_base):
+                         surrender_is_amount, surrender_base,
+                         mortality_monthly,
+                         has_account, mp_account, account_value0, account_face,
+                         account_prem_to_av, account_coi_rate, account_admin_fee,
+                         account_credit, account_gmab,
+                         account_mortality_cv, account_expense_cv, account_z):
     """Scalar-inforce fast path of the general codegen fast kernel
     (:func:`_codegen_fast_kernel_source`).
 
@@ -2515,6 +2521,20 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
         last_year = -1
         claim_rate = 0.0
         morb_rate = 0.0
+        # Universal-life account-value carrier (only rolled for account rows).
+        # The account is a single policy's balance, rolled with the within-month
+        # order verbatim from the standalone UL kernel; in-force weighting enters
+        # at the death / surrender / maturity / fund aggregation, not in the roll.
+        roll_av = has_account and mp_account[mp]
+        a_av = account_value0[mp] if roll_av else 0.0
+        face_av = account_face[mp] if roll_av else 0.0
+        cr_av = account_credit[mp] if roll_av else 0.0
+        half_credit_av = (1.0 + cr_av) ** 0.5
+        full_credit_av = 1.0 + cr_av
+        pv_account_death = 0.0  # PV of account death claim, inforce*q*max(av_mid,face)
+        pv_account_surr = 0.0   # PV of account surrender, inforce*l*(1-q)*av_mid
+        pv_account_nar = 0.0    # PV of net-amount-at-risk death (the UL RA base)
+        av_term = 0.0           # month-end account value at the contract boundary
         # Counters replace modulo / less-than checks in the inner loop --
         # ``prem_due`` ticks down to the next premium-paying month,
         # ``ann_due`` to the next annuity month, and ``prem_left`` to the
@@ -2534,6 +2554,8 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                     cov_idx = coverage_index[k]
                     if coverage_is_diagnosis[cov_idx]:
                         continue
+                    if coverage_pays_account_balance[cov_idx]:
+                        continue          # account-backed death pays from the AV
                     if coverage_waiting[k] != 0 or coverage_reduction_end[k] != 0:
                         continue
                     rate = coverage_rates[cov_idx, sx, age_idx, year] * coverage_amount[k]
@@ -2553,6 +2575,42 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
             prem_left -= 1
             pv_premium += level * ds
             pv_mortality += inforce * claim_rate * dm
+            if roll_av:
+                # Universal-life within-month account roll (verbatim order from
+                # _ul_av_kernel): premium in, COI on the net amount at risk,
+                # admin fee, floor at zero, half / full crediting. The account
+                # death / surrender / NAR claims settle on the half-credited
+                # av_mid, the maturity on the month-end balance.
+                a_av += account_prem_to_av[mp, t]
+                risk = face_av - a_av
+                if risk < 0.0:
+                    risk = 0.0
+                a_av -= account_admin_fee[t] + account_coi_rate[mp, t] * risk
+                if a_av < 0.0:
+                    a_av = 0.0
+                av_mid_t = a_av * half_credit_av
+                a_av = a_av * full_credit_av
+                av_term = a_av
+                # Account death pays max(av_mid, face) on the month's deaths
+                # (inforce * q); the pays_account_balance coverage was excluded
+                # from claim_rate above, so this is written ONCE here.
+                q_m = mortality_monthly[sx, age_idx, year]
+                deaths_m = inforce * q_m
+                best = av_mid_t if av_mid_t > face_av else face_av
+                pv_account_death += deaths_m * best * dm
+                # The net amount at risk (face above the account) is the only
+                # insurance-risk exposure -- the UL RA prices mortality on it.
+                nar = face_av - av_mid_t
+                if nar < 0.0:
+                    nar = 0.0
+                pv_account_nar += deaths_m * nar * dm
+                # Surrender pays the account value on the mid-month lapse exits.
+                # The non-maturity, non-death exit count in the single-survival
+                # track is inforce * l * (1 - q) (the lapses net of the competing
+                # death decrement) -- matching the full path's exits - deaths.
+                l_m = lapse_monthly[sx, age_idx, year]
+                surr_av = av_mid_t if av_mid_t > 0.0 else 0.0
+                pv_account_surr += inforce * l_m * (1.0 - q_m) * surr_av * dm
             # Streams the portfolio does not use are skipped wholesale: the
             # guards are loop-invariant per call, so the branch predicts
             # perfectly and the per-cell array gathers / multiplies of an
@@ -2595,8 +2653,19 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                     pv_surrender += (lapse_monthly[sx, age_idx, year]
                                      * cum_premium * surrender_curve[t] * dm)
             inforce *= survival_monthly[sx, age_idx, year]
-        pm = (inforce * maturity_benefit[mp] * discount_bom[boundary]
-              if boundary == term else 0.0)
+        if roll_av:
+            # Account maturity: survivors reaching the boundary take
+            # max(matured account value, GMAB) (the maturity benefit doubles as
+            # the guaranteed accumulation-benefit floor). Seeded at the boundary
+            # and discounted with the boundary start-of-month factor, mirroring
+            # the full path's _rollforward_kernel maturity seed.
+            gmab = account_gmab[mp]
+            mat_av = av_term if av_term > gmab else gmab
+            pm = (inforce * mat_av * discount_bom[boundary]
+                  if boundary == term else 0.0)
+        else:
+            pm = (inforce * maturity_benefit[mp] * discount_bom[boundary]
+                  if boundary == term else 0.0)
         # Non-diagnosis coverages with a waiting or reduced-benefit rule:
         # rerun the survival on the same scalar track so the benefit
         # multiplier (which can change mid-year) applies cleanly.
@@ -2604,6 +2673,8 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
             cov_idx = coverage_index[k]
             if coverage_is_diagnosis[cov_idx]:
                 continue
+            if coverage_pays_account_balance[cov_idx]:
+                continue          # account-backed death pays from the AV (above)
             wait = coverage_waiting[k]
             red_end = coverage_reduction_end[k]
             if wait == 0 and red_end == 0:
@@ -2645,9 +2716,25 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                     mult = red_factor if t < red_end else 1.0
                     pv_morbidity += healthy * d_rate * benefit * mult * discount_mid[t]
                 healthy *= survival_monthly[sx, age_idx, year] * (1.0 - d_rate)
-        bel_mp = pv_mortality + pv_morbidity + pm + pv_annuity + pv_expense + pv_surrender - pv_premium
-        ra_mp = (mortality_factor * pv_mortality + morbidity_factor * pv_morbidity
-                 + longevity_factor * (pm + pv_annuity))
+        if roll_av:
+            # Universal-life BEL: the slot mortality / surrender streams are
+            # empty for the account leg (the pays_account_balance coverage was
+            # excluded from claim_rate, and account surrender bypasses the slot
+            # surrender path), so the account death / surrender / maturity PVs
+            # enter here instead. The account value the entity holds (fund) is
+            # netted ONCE -- only the inception fund (inforce[0] * av0 = cnt*av0)
+            # survives into the as-of BEL, the premium that builds it counted
+            # once via pv_premium. The RA prices mortality on the net amount at
+            # risk plus expense risk, bypassing the slot RA factors.
+            bel_mp = (pv_account_death + pv_account_surr + pm
+                      + pv_morbidity + pv_annuity + pv_expense
+                      - pv_premium - cnt * account_value0[mp])
+            ra_mp = (account_z * (account_mortality_cv * pv_account_nar
+                                  + account_expense_cv * pv_expense))
+        else:
+            bel_mp = pv_mortality + pv_morbidity + pm + pv_annuity + pv_expense + pv_surrender - pv_premium
+            ra_mp = (mortality_factor * pv_mortality + morbidity_factor * pv_morbidity
+                     + longevity_factor * (pm + pv_annuity))
         fcf = bel_mp + ra_mp
         bel[mp] = bel_mp
         ra[mp] = ra_mp
@@ -2676,17 +2763,17 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
 
     The full-only features (v1): non-zero ``issue_class`` (the fast grid is built
     at class 0), benefit escalation / step-up, a state-conditioned death benefit
-    (``State.death_benefit_factor != 1``), a deterministic transition
-    (``Transition.after_sojourn_months``), and a universal-life account
-    (``_portfolio_has_account`` -- the fused account carrier is a deferred
-    follow-up, so an account book routes to the fund-netting full measurement).
+    (``State.death_benefit_factor != 1``) and a deterministic transition
+    (``Transition.after_sojourn_months``). A universal-life account is NOT in this
+    set as of Step 4: the scalar fused kernel carries the account roll itself, so
+    an account book runs on the fast path directly (the routing exceptions --
+    account + state machine, account + gpu, account + discount_curve override --
+    are handled in :func:`_measure_fast`, not here).
     The fast path auto-routes such a book to the full kernel instead of raising,
     so -- per segment in ``_measure_segmented`` -- only the segments that need it
     pay, and the rest stay fast. The seed of the planned portfolio-orchestrator
     FULL tier.
     """
-    if _portfolio_has_account(model_points, basis):
-        return True
     if np.any(model_points.issue_class != 0):
         return True
     if (model_points.coverage_step_month is not None
@@ -2729,6 +2816,14 @@ def _measure_fast(
         and bypasses the curves layer for the discount step.
     """
     if basis.ra_method != "confidence_level":
+        # The fused fast path computes the confidence-level RA only. A
+        # universal-life account book auto-routes to the full measurement (which
+        # prices the cost-of-capital RA on the net amount at risk) when it can --
+        # on the CPU path with no discount_curve override; otherwise a clear
+        # error. A non-account book tells the user to use full=True.
+        if (_portfolio_has_account(model_points, basis)
+                and backend == "cpu" and discount_curve is None):
+            return _measure_full(model_points, basis)
         raise ValueError(
             "measure(full=False) computes the confidence-level RA only; use "
             f"full=True for ra_method={basis.ra_method!r}"
@@ -2747,6 +2842,33 @@ def _measure_fast(
                 "state death_benefit_factor / deterministic transition) cannot be "
                 "combined with backend='gpu' or a discount_curve override; use "
                 "measure(full=True) on the CPU path."
+            )
+        return _measure_full(model_points, basis)
+    # Universal-life account book. The scalar fused kernel carries the account
+    # roll itself (Step 4), so a plain account book runs the fast path directly.
+    # The combinations the scalar kernel does not cover still route to the
+    # fund-netting full measurement: (a) a state machine -- the account roll is
+    # folded only into the scalar kernel, NOT the codegen Markov / semi-Markov
+    # fused sources; (b) backend='gpu' -- the CUDA account carrier is deferred;
+    # (c) a discount_curve override -- the account RA / fund netting are wired
+    # through the standard curve. cost_of_capital RA already routed to full via
+    # the confidence-level guard at the top.
+    has_account = _portfolio_has_account(model_points, basis)
+    # A contract boundary shorter than the term (Sec. 34 cut) pays the boundary
+    # survivors their account value as a terminal surrender; the full path's
+    # exit accounting handles that, the scalar account fold (v1) does not, so
+    # route a boundary-cut account book to the full measurement.
+    account_boundary_cut = has_account and bool(np.any(
+        model_points.contract_boundary_months < model_points.term_months))
+    if has_account and (backend != "cpu" or discount_curve is not None
+                        or needs_state_machine(model_points, basis)
+                        or account_boundary_cut):
+        if backend != "cpu" or discount_curve is not None:
+            raise NotImplementedError(
+                "a universal-life account book cannot be combined with "
+                "backend='gpu' or a discount_curve override on the fused path; "
+                "use measure(full=True) on the CPU path (the account roll is "
+                "folded into the scalar fast kernel and the full kernel only)."
             )
         return _measure_full(model_points, basis)
     if model_points.term_months.shape[0] == 0:
@@ -3020,7 +3142,7 @@ def _measure_fast(
             )
         monthly_curve = (1.0 + discount_curve) ** (1.0 / 12.0) - 1.0
         discount_bom, discount_mid = discount_factors_from_curve(monthly_curve)
-    if basis.expense_cv != 0.0:
+    if basis.expense_cv != 0.0 and not has_account:
         raise NotImplementedError(
             "expense_cv is not included in the GMM / PAA risk adjustment -- only "
             "the mortality / morbidity / disability / longevity risks are priced "
@@ -3086,6 +3208,55 @@ def _measure_fast(
     use_morbidity = bool(np.any(coverage_risk != 0))
     use_disability = bool(np.any(model_points.disability_income != 0.0))
 
+    # Universal-life account-roll inputs for the scalar fused kernel (Step 4).
+    # Reuses projection._account_kernel_args -- the SAME per-policy prem_to_av /
+    # COI / admin / credit arithmetic the full path folds -- so the fast path is
+    # bit-identical to the full path. The helper indexes a per-MP coverage-rate
+    # view (cov, mp, year); build it from the dense (cov, sex, age, year) grid at
+    # each MP's (sex, age). The fast path only reaches here at issue_class 0 (the
+    # requires_full guard routes class != 0 to full), so the dense-grid lookup
+    # equals the per-MP rate. account_admin_fee carries gamma_fixed.
+    if has_account:
+        from fastcashflow.projection import _account_kernel_args
+        coverage_rates_per_mp = np.ascontiguousarray(
+            coverage_rates[:, model_points.sex, issue_index, :])  # (cov, mp, year)
+        (acct_has, acct_mp, acct_value0, acct_face,
+         acct_prem_to_av, acct_coi_rate, acct_admin_fee,
+         acct_credit) = _account_kernel_args(
+            model_points, basis, coverage_rates_per_mp,
+            coverage_funds_from_account, coverage_pays_account_balance,
+            gamma_fixed, n_time, n_years,
+        )
+        # v1 supports a homogeneous account portfolio only (every MP carries the
+        # account-backed death coverage). A mixed account / plain book needs a
+        # per-MP RA split; reject rather than mis-price, mirroring the full path.
+        if not bool(acct_mp.all()):
+            raise NotImplementedError(
+                "a portfolio mixing account-backed (universal-life) and plain "
+                "model points is not yet supported -- measure the account and "
+                "non-account subsets separately. (Per-model-point RA splitting "
+                "for mixed books is a planned follow-up.)")
+        acct_gmab = np.ascontiguousarray(
+            np.asarray(model_points.maturity_benefit, np.float64))
+        acct_mortality_cv = float(basis.mortality_cv)
+        acct_expense_cv = float(basis.expense_cv)
+        acct_z = float(z)
+    else:
+        acct_has = False
+        acct_mp = np.zeros(1, np.bool_)
+        z1 = np.zeros((1, 1))
+        acct_value0 = np.zeros(1)
+        acct_face = np.zeros(1)
+        acct_prem_to_av = z1
+        acct_coi_rate = z1
+        acct_admin_fee = np.zeros(1)
+        acct_credit = np.zeros(1)
+        acct_gmab = np.zeros(1)
+        acct_mortality_cv = 0.0
+        acct_expense_cv = 0.0
+        acct_z = 0.0
+    mortality_monthly = np.ascontiguousarray(mortality_grid)
+
     if fast_path:
         survival_monthly = np.ascontiguousarray(
             (1.0 - mortality_grid) * (1.0 - lapse_grid)
@@ -3123,6 +3294,7 @@ def _measure_fast(
             model_points.coverage_waiting,
             model_points.coverage_reduction_end,
             model_points.coverage_reduction_factor,
+            coverage_pays_account_balance,
             survival_monthly,
             lapse_grid,
             surrender_curve_kernel,
@@ -3132,6 +3304,19 @@ def _measure_fast(
             use_surrender,
             surrender_is_amount,
             surrender_base,
+            mortality_monthly,
+            acct_has,
+            acct_mp,
+            acct_value0,
+            acct_face,
+            acct_prem_to_av,
+            acct_coi_rate,
+            acct_admin_fee,
+            acct_credit,
+            acct_gmab,
+            acct_mortality_cv,
+            acct_expense_cv,
+            acct_z,
         )
         return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 

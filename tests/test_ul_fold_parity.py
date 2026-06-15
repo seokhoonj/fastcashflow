@@ -101,18 +101,47 @@ def _assert_parity(make_mp):
     assert np.array_equal(got.ra_path, ref.ra_path)
     assert np.array_equal(got.csm_path, ref.csm_path)
 
-    # full=False (the fused fast path) must produce the same headline: an
-    # account book auto-routes to the full measurement via requires_full (the
-    # fused account carrier is a deferred Step 4), so the headline is correct,
-    # not silently wrong on the account-unaware fast kernel.
+    # full=False (the fused fast path) now carries the account roll in the
+    # SCALAR fused kernel itself (Step 4) -- an account book no longer routes to
+    # _measure_full, it runs the account-aware scalar kernel directly. Confirm
+    # the routing actually exercises the scalar fast path (requires_full is now
+    # False for an account book; the account check was removed from it).
+    from fastcashflow.engine import requires_full, _portfolio_has_account
+    mp_c = make_mp(with_coverage=True)
+    basis_c = _ul_basis(with_coverage=True)
+    assert _portfolio_has_account(mp_c, basis_c)
+    assert not requires_full(mp_c, basis_c), (
+        "Step 4: an account book must run the scalar fast path, not auto-route "
+        "to the full kernel via requires_full")
+
+    # The scalar fused kernel accumulates present values FORWARD (pv += cf x
+    # discount factor), whereas measure_ul / _measure_full run the BACKWARD
+    # roll-forward recursion (bel[t] = cf x half[t] + bel[t+1] x full[t]). The
+    # two are mathematically equal but differ in floating-point summation order,
+    # so the fused path is numerically equal -- NOT bit-identical -- to the
+    # backward roll, exactly as every other fused (full=False) book is to its
+    # full=True counterpart. So this is np.allclose, not np.array_equal.
     ref_h = measure_ul(make_mp(with_coverage=False), _ul_basis(with_coverage=False),
                        measurement_model="GMM", full=False)
-    got_h = fcf.gmm.measure(make_mp(with_coverage=True),
-                            _ul_basis(with_coverage=True), full=False)
+    got_h = fcf.gmm.measure(mp_c, basis_c, full=False)
     for name in ("bel", "ra", "csm", "loss_component"):
-        assert np.array_equal(getattr(got_h, name), getattr(ref_h, name)), (
-            f"{name} full=False parity failed -- account book did not route to "
-            f"the full measurement")
+        g = getattr(got_h, name)
+        r = getattr(ref_h, name)
+        assert np.allclose(g, r), (
+            f"{name} full=False parity (scalar kernel) vs measure_ul: "
+            f"max abs delta {np.abs(g - r).max()}")
+
+    # Explicit gmm.measure(full=False) == gmm.measure(full=True): this now
+    # exercises the SCALAR account kernel against the full-path account fold.
+    # Same forward-vs-backward floating-point story -> np.allclose, the same
+    # fast-vs-full relationship a plain protection book has.
+    got_full = fcf.gmm.measure(mp_c, basis_c, full=True)
+    for name in ("bel", "ra", "csm", "loss_component"):
+        g = getattr(got_h, name)
+        f = getattr(got_full, name)
+        assert np.allclose(g, f), (
+            f"{name} full=False (scalar) vs full=True (fold): "
+            f"max abs delta {np.abs(g - f).max()}")
 
 
 def test_ul_fold_parity_single_policy():
@@ -158,6 +187,47 @@ def test_callable_coi_rate_keeps_account_flags():
     ref = measure_ul(_single_mp(with_coverage=False), Basis(**common),
                      measurement_model="GMM", full=True)
     assert np.array_equal(m.bel, ref.bel) and np.array_equal(m.csm, ref.csm)
+
+
+def test_account_coc_routes_full_false_to_full():
+    # Step 4 routing: an account book with a cost-of-capital RA cannot run the
+    # confidence-level-only fused kernel, so full=False auto-routes to the full
+    # measurement -> the headline is bit-identical to full=True.
+    coc = Basis(
+        mortality_annual=0.004, lapse_annual=0.03, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.1, investment_return=0.024,
+        coi_annual=0.0015, premium_load=0.08,
+        ra_method="cost_of_capital", cost_of_capital_rate=0.06,
+        coverages=(CoverageRate("DEATH", 0.0015, funds_from_account=True,
+                                pays_account_balance=True),))
+    mp = _single_mp(with_coverage=True)
+    fast = fcf.gmm.measure(mp, coc, full=False)
+    full = fcf.gmm.measure(mp, coc, full=True)
+    for name in ("bel", "ra", "csm", "loss_component"):
+        assert np.array_equal(getattr(fast, name), getattr(full, name))
+
+
+def test_account_boundary_cut_routes_full_false_to_full():
+    # Step 4 routing: a contract boundary shorter than the term pays the boundary
+    # survivors a terminal surrender that the scalar fold does not handle, so a
+    # boundary-cut account book routes full=False -> full (bit-identical headline).
+    basis = _ul_basis(with_coverage=True)
+    mp = ModelPoints(
+        issue_age=np.array([40.0]),
+        premium=np.array([500_000.0]),
+        term_months=np.array([36]),
+        contract_boundary_months=np.array([24]),   # boundary < term
+        account_value=np.array([0.0]),
+        minimum_death_benefit=np.array([80_000_000.0]),
+        minimum_crediting_rate=np.array([0.0]),
+        sex=np.array([0]),
+        benefits={"DEATH": np.array([80_000_000.0])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
+    )
+    fast = fcf.gmm.measure(mp, basis, full=False)
+    full = fcf.gmm.measure(mp, basis, full=True)
+    for name in ("bel", "ra", "csm", "loss_component"):
+        assert np.array_equal(getattr(fast, name), getattr(full, name))
 
 
 def test_account_book_gated_on_raw_consumers():
