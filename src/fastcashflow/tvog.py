@@ -108,11 +108,11 @@ def credited_monthly_rate(
 def _av_and_discount(
     monthly_credit: FloatArray, monthly_return: FloatArray, fund_fee_m: float
 ) -> tuple[FloatArray, FloatArray]:
-    """Return ``(av_factor, discount)``, each ``(n_scenarios, n_time)``.
+    """Return ``(av_factor, discount_factor)``, each ``(n_scenarios, n_time)``.
 
     ``av_factor[s, t]`` is the account-value multiplier at the start of month
     ``t`` -- the product of ``(1 + credit)(1 - fee)`` over the months before
-    ``t``. ``discount[s, t]`` is the product of ``1 / (1 + return)`` over those
+    ``t``. ``discount_factor[s, t]`` is the product of ``1 / (1 + return)`` over those
     months. Kept separate so a non-linear payoff (a guarantee floor on the
     account value) can use the account-value path on its own; their product is
     :func:`_discounted_growth`.
@@ -121,23 +121,23 @@ def _av_and_discount(
     n = monthly_credit.shape[0]
     ones = np.ones((n, 1))
     av_factor = np.concatenate([ones, np.cumprod(growth, axis=1)[:, :-1]], axis=1)
-    discount = np.concatenate(
+    discount_factor = np.concatenate(
         [ones, np.cumprod(1.0 / (1.0 + monthly_return), axis=1)[:, :-1]], axis=1
     )
-    return av_factor, discount
+    return av_factor, discount_factor
 
 
 def _discounted_growth(
     monthly_credit: FloatArray, monthly_return: FloatArray, fund_fee_m: float
 ) -> FloatArray:
-    """The ``(n_scenarios, n_time)`` factor ``av_factor * discount``.
+    """The ``(n_scenarios, n_time)`` factor ``av_factor * discount_factor``.
 
     The account grows each month at the credited rate net of the fund fee;
     the exit benefit discounts at the underlying-items return. Entry
     ``[s, t]`` is the product of those two over the months before ``t``.
     """
-    av_factor, discount = _av_and_discount(monthly_credit, monthly_return, fund_fee_m)
-    return av_factor * discount
+    av_factor, discount_factor = _av_and_discount(monthly_credit, monthly_return, fund_fee_m)
+    return av_factor * discount_factor
 
 
 def _pv_account_benefits(
@@ -227,24 +227,24 @@ def tvog_term_weight(
     f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
     r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
     central = np.full((1, n_time), r_m)
-    av_s, disc_s = _av_and_discount(
+    av_s, discount_factor_s = _av_and_discount(
         credited_monthly_rate(return_scenarios, minimum_crediting_rate),
         return_scenarios, f_m
     )
-    av_c, disc_c = _av_and_discount(
+    av_c, discount_factor_c = _av_and_discount(
         credited_monthly_rate(central, minimum_crediting_rate), central, f_m
     )
-    av_c, disc_c = av_c[0], disc_c[0]
+    av_c, discount_factor_c = av_c[0], discount_factor_c[0]
     # One extra month -- the final month's credited growth net of fee on the AV
     # factor and one more month of return-discount -- so the factor lands on the
     # matured term column (mirror the GMAB extension in guarantee_floor_time_value).
     ext_s = (av_s[:, -1]
              * (1.0 + credited_monthly_rate(return_scenarios[:, -1],
                                             minimum_crediting_rate))
-             * (1.0 - f_m)) * (disc_s[:, -1] / (1.0 + return_scenarios[:, -1]))
+             * (1.0 - f_m)) * (discount_factor_s[:, -1] / (1.0 + return_scenarios[:, -1]))
     ext_c = (av_c[-1]
              * (1.0 + credited_monthly_rate(r_m, minimum_crediting_rate))
-             * (1.0 - f_m)) * (disc_c[-1] / (1.0 + r_m))
+             * (1.0 - f_m)) * (discount_factor_c[-1] / (1.0 + r_m))
     return float(ext_s.mean() - ext_c)
 
 
@@ -289,14 +289,14 @@ def guarantee_floor_time_value(
     # central flat-return path (whose floor cost is the intrinsic value). The
     # account is credited max(return, guarantee), or the bare return when the
     # crediting guarantee is off (NO_GUARANTEE_RATE).
-    av_s, disc_s = _av_and_discount(
+    av_s, discount_factor_s = _av_and_discount(
         credited_monthly_rate(return_scenarios, minimum_crediting_rate),
         return_scenarios, f_m
     )
-    av_c, disc_c = _av_and_discount(
+    av_c, discount_factor_c = _av_and_discount(
         credited_monthly_rate(central, minimum_crediting_rate), central, f_m
     )
-    av_c, disc_c = av_c[0], disc_c[0]
+    av_c, discount_factor_c = av_c[0], discount_factor_c[0]
 
     # The GMAB strikes at maturity (time = term) -- the *matured* account value
     # after the final month's growth -- one month past the width-n_time path the
@@ -309,14 +309,14 @@ def guarantee_floor_time_value(
                 * (1.0 + credited_monthly_rate(return_scenarios[:, -1],
                                                minimum_crediting_rate))
                 * (1.0 - f_m))[:, None]], axis=1)
-    disc_s_mat = np.concatenate(
-        [disc_s, (disc_s[:, -1] / (1.0 + return_scenarios[:, -1]))[:, None]],
+    discount_factor_s_mat = np.concatenate(
+        [discount_factor_s, (discount_factor_s[:, -1] / (1.0 + return_scenarios[:, -1]))[:, None]],
         axis=1)
     av_c_mat = np.append(
         av_c, av_c[-1]
         * (1.0 + credited_monthly_rate(r_m, minimum_crediting_rate))
         * (1.0 - f_m))
-    disc_c_mat = np.append(disc_c, disc_c[-1] / (1.0 + r_m))
+    discount_factor_c_mat = np.append(discount_factor_c, discount_factor_c[-1] / (1.0 + r_m))
 
     n_mp = account_value.shape[0]
     time_value = np.zeros(n_mp)
@@ -333,18 +333,18 @@ def guarantee_floor_time_value(
         # account value); GMAB: on the maturity survivors at the matured value.
         # Cost per scenario, then the mean less the central (intrinsic) cost.
         gdb_excess_s = np.maximum(0.0, minimum_death_benefit[mp] - av0 * av_s)
-        cost_s = (deaths[mp] * gdb_excess_s * disc_s).sum(axis=1)
+        cost_s = (deaths[mp] * gdb_excess_s * discount_factor_s).sum(axis=1)
         gab_excess_s = np.maximum(
             0.0, minimum_accumulation_benefit[mp] - av0 * av_s_mat[:, mi]
         )
-        cost_s = cost_s + maturity_survivors[mp] * gab_excess_s * disc_s_mat[:, mi]
+        cost_s = cost_s + maturity_survivors[mp] * gab_excess_s * discount_factor_s_mat[:, mi]
 
         gdb_excess_c = np.maximum(0.0, minimum_death_benefit[mp] - av0 * av_c)
-        cost_c = float((deaths[mp] * gdb_excess_c * disc_c).sum())
+        cost_c = float((deaths[mp] * gdb_excess_c * discount_factor_c).sum())
         gab_excess_c = max(
             0.0, minimum_accumulation_benefit[mp] - av0 * av_c_mat[mi]
         )
-        cost_c += maturity_survivors[mp] * gab_excess_c * disc_c_mat[mi]
+        cost_c += maturity_survivors[mp] * gab_excess_c * discount_factor_c_mat[mi]
 
         time_value[mp] = float(cost_s.mean()) - cost_c
     return time_value

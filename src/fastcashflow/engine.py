@@ -1740,7 +1740,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             line(indent, f"occ_next_{et} += flow_{e}")
             if include_lump and ls:
                 line(indent,
-                     f"pv_disability += flow_{e} * disability_benefit[mp] * dm")
+                     f"pv_disability += flow_{e} * disability_benefit[mp] * discount_factor_mid_t")
         for i in range(n_states):
             line(indent, f"occ_{i} = occ_next_{i}")
 
@@ -1826,8 +1826,8 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, f"prem_occ = {sum_prem}")
     if use_disability:
         line(12, f"benefit_occ = {sum_ben}")
-    line(12, "ds = discount_factor_bom[t]")
-    line(12, "dm = discount_factor_mid[t]")
+    line(12, "discount_factor_bom_t = discount_factor_bom[t]")
+    line(12, "discount_factor_mid_t = discount_factor_mid[t]")
     line(12, "if prem_due == 0 and prem_left > 0:")
     line(16, "level = prem_occ * prem * pf")
     line(16, "prem_due = prem_freq - 1")
@@ -1835,20 +1835,20 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "level = 0.0")
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
-    line(12, "pv_premium += level * ds")
+    line(12, "pv_premium += level * discount_factor_bom_t")
     if use_surrender and not surrender_is_amount:
         line(12, "cum_premium += level")
-    line(12, "pv_mortality += inforce_t * claim_rate * dm")
+    line(12, "pv_mortality += inforce_t * claim_rate * discount_factor_mid_t")
     if use_morbidity:
-        line(12, "pv_morbidity += inforce_t * morb_rate * dm")
+        line(12, "pv_morbidity += inforce_t * morb_rate * discount_factor_mid_t")
     if use_annuity:
         line(12, "if ann_due == 0:")
-        line(16, "pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * ds")
+        line(16, "pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * discount_factor_bom_t")
         line(16, "ann_due = ann_freq - 1")
         line(12, "else:")
         line(16, "ann_due -= 1")
     if use_disability:
-        line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
+        line(12, "pv_disability += benefit_occ * disability_income[mp] * discount_factor_mid_t")
     if use_surrender:
         line(12, f"lapse_flow = {sum_lapse}")
         if surrender_is_amount:
@@ -1857,7 +1857,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             # surrender_base[mp]); lapse_flow is the number lapsing.
             # surrender_base is 1.0 for amount_per_policy.
             line(12, "pv_surrender += (lapse_flow * surrender_curve[t]")
-            line(12, "                 * surrender_base[mp] * dm)")
+            line(12, "                 * surrender_base[mp] * discount_factor_mid_t)")
         else:
             # cum_premium_factor: cum_premium aggregates inforce * premium; the
             # effective lapse fraction is lapse_flow / inforce_t (the raw rate for a
@@ -1865,16 +1865,16 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             # cnt^2 scaling.
             line(12, "eff_lapse = lapse_flow / inforce_t if inforce_t > 0.0 else 0.0")
             line(12, "pv_surrender += (eff_lapse")
-            line(12, "                 * cum_premium * surrender_curve[t] * dm)")
+            line(12, "                 * cum_premium * surrender_curve[t] * discount_factor_mid_t)")
     line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
     line(12, "beta = inforce_t * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = inforce_t * gamma_fixed[t]")
     if use_lae:
         line(12, "lae = lae_pro_rata[t] * "
                 "inforce_t * (claim_rate + morb_rate)")
-        line(12, "pv_expense += (alpha + beta + gamma + lae) * dm")
+        line(12, "pv_expense += (alpha + beta + gamma + lae) * discount_factor_mid_t")
     else:
-        line(12, "pv_expense += (alpha + beta + gamma) * dm")
+        line(12, "pv_expense += (alpha + beta + gamma) * discount_factor_mid_t")
     emit_edge_step(12, scale="", include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -2215,7 +2215,7 @@ def _codegen_fast_kernel_source_semi_markov(
                 if include_lump and ls:
                     line(indent,
                          f"pv_disability += flow_{e}_{tau} "
-                         f"* disability_benefit[mp] * dm")
+                         f"* disability_benefit[mp] * discount_factor_mid_t")
         # Copy back.
         for s in range(n_states):
             for tau in range(D[s]):
@@ -2315,8 +2315,8 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, "inforce_traj[t] = inforce_t")
     line(12, f"prem_occ = {sum_prem}")
     line(12, f"benefit_occ = {sum_ben}")
-    line(12, "ds = discount_factor_bom[t]")
-    line(12, "dm = discount_factor_mid[t]")
+    line(12, "discount_factor_bom_t = discount_factor_bom[t]")
+    line(12, "discount_factor_mid_t = discount_factor_mid[t]")
     line(12, "if prem_due == 0 and prem_left > 0:")
     line(16, "level = prem_occ * prem * pf")
     line(16, "prem_due = prem_freq - 1")
@@ -2324,18 +2324,18 @@ def _codegen_fast_kernel_source_semi_markov(
     line(16, "level = 0.0")
     line(16, "prem_due -= 1")
     line(12, "prem_left -= 1")
-    line(12, "pv_premium += level * ds")
+    line(12, "pv_premium += level * discount_factor_bom_t")
     if use_surrender and not surrender_is_amount:
         line(12, "cum_premium += level")
-    line(12, "pv_mortality += inforce_t * claim_rate * dm")
-    line(12, "pv_morbidity += inforce_t * morb_rate * dm")
+    line(12, "pv_mortality += inforce_t * claim_rate * discount_factor_mid_t")
+    line(12, "pv_morbidity += inforce_t * morb_rate * discount_factor_mid_t")
     if use_annuity:
         line(12, "if ann_due == 0:")
-        line(16, "pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * ds")
+        line(16, "pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * discount_factor_bom_t")
         line(16, "ann_due = ann_freq - 1")
         line(12, "else:")
         line(16, "ann_due -= 1")
-    line(12, "pv_disability += benefit_occ * disability_income[mp] * dm")
+    line(12, "pv_disability += benefit_occ * disability_income[mp] * discount_factor_mid_t")
     if use_surrender:
         line(12, f"lapse_flow = {sum_lapse}")
         if surrender_is_amount:
@@ -2344,7 +2344,7 @@ def _codegen_fast_kernel_source_semi_markov(
             # surrender_base[mp]); lapse_flow is the number lapsing.
             # surrender_base is 1.0 for amount_per_policy.
             line(12, "pv_surrender += (lapse_flow * surrender_curve[t]")
-            line(12, "                 * surrender_base[mp] * dm)")
+            line(12, "                 * surrender_base[mp] * discount_factor_mid_t)")
         else:
             # cum_premium_factor: cum_premium aggregates inforce * premium; the
             # effective lapse fraction is lapse_flow / inforce_t (the raw rate for a
@@ -2352,16 +2352,16 @@ def _codegen_fast_kernel_source_semi_markov(
             # cnt^2 scaling.
             line(12, "eff_lapse = lapse_flow / inforce_t if inforce_t > 0.0 else 0.0")
             line(12, "pv_surrender += (eff_lapse")
-            line(12, "                 * cum_premium * surrender_curve[t] * dm)")
+            line(12, "                 * cum_premium * surrender_curve[t] * discount_factor_mid_t)")
     line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
     line(12, "beta = inforce_t * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
     line(12, "gamma = inforce_t * gamma_fixed[t]")
     if use_lae:
         line(12, "lae = lae_pro_rata[t] * "
                 "inforce_t * (claim_rate + morb_rate)")
-        line(12, "pv_expense += (alpha + beta + gamma + lae) * dm")
+        line(12, "pv_expense += (alpha + beta + gamma + lae) * discount_factor_mid_t")
     else:
-        line(12, "pv_expense += (alpha + beta + gamma) * dm")
+        line(12, "pv_expense += (alpha + beta + gamma) * discount_factor_mid_t")
     emit_edge_step(12, include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -2607,8 +2607,8 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                     else:
                         morb_rate += rate
                 last_year = year
-            ds = discount_factor_bom[t]
-            dm = discount_factor_mid[t]
+            discount_factor_bom_t = discount_factor_bom[t]
+            discount_factor_mid_t = discount_factor_mid[t]
             if prem_due == 0 and prem_left > 0:
                 level = inforce_t * prem * premium_factor[sx, age_idx, year]
                 prem_due = prem_freq - 1
@@ -2616,8 +2616,8 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                 level = 0.0
                 prem_due -= 1
             prem_left -= 1
-            pv_premium += level * ds
-            pv_mortality += inforce_t * claim_rate * dm
+            pv_premium += level * discount_factor_bom_t
+            pv_mortality += inforce_t * claim_rate * discount_factor_mid_t
             if roll_av:
                 # Universal-life within-month account roll (the account-roll
                 # within-month order): premium in, COI on the net amount at risk,
@@ -2642,30 +2642,30 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                 q_m = mortality_monthly[sx, age_idx, year]
                 deaths_m = inforce_t * q_m
                 best = av_mid_t if av_mid_t > face_av else face_av
-                pv_account_death += deaths_m * best * dm
+                pv_account_death += deaths_m * best * discount_factor_mid_t
                 # The net amount at risk (face above the account) is the only
                 # insurance-risk exposure -- the UL RA prices mortality on it.
                 nar = face_av - av_mid_t
                 if nar < 0.0:
                     nar = 0.0
-                pv_account_nar += deaths_m * nar * dm
+                pv_account_nar += deaths_m * nar * discount_factor_mid_t
                 # Surrender pays the account value on the mid-month lapse exits.
                 # The non-maturity, non-death exit count in the single-survival
                 # track is inforce_t * l * (1 - q) (the lapses net of the competing
                 # death decrement) -- matching the full path's exits - deaths.
                 l_m = lapse_monthly[sx, age_idx, year]
                 surr_av = av_mid_t if av_mid_t > 0.0 else 0.0
-                pv_account_surr += inforce_t * l_m * (1.0 - q_m) * surr_av * dm
+                pv_account_surr += inforce_t * l_m * (1.0 - q_m) * surr_av * discount_factor_mid_t
             # Streams the portfolio does not use are skipped wholesale: the
             # guards are loop-invariant per call, so the branch predicts
             # perfectly and the per-cell array gathers / multiplies of an
             # absent stream are not paid. A death-only book pays for none of
             # surrender, annuity, morbidity or LAE.
             if use_morbidity:
-                pv_morbidity += inforce_t * morb_rate * dm
+                pv_morbidity += inforce_t * morb_rate * discount_factor_mid_t
             if use_annuity:
                 if ann_due == 0:
-                    pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * ds
+                    pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * discount_factor_bom_t
                     ann_due = ann_freq - 1
                 else:
                     ann_due -= 1
@@ -2677,9 +2677,9 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
             gamma = inforce_t * gamma_fixed[t]
             if use_lae:
                 lae = lae_pro_rata[t] * inforce_t * (claim_rate + morb_rate)
-                pv_expense += (alpha + beta + gamma + lae) * dm
+                pv_expense += (alpha + beta + gamma + lae) * discount_factor_mid_t
             else:
-                pv_expense += (alpha + beta + gamma) * dm
+                pv_expense += (alpha + beta + gamma) * discount_factor_mid_t
             if use_surrender:
                 if surrender_is_amount:
                     # amount_per_policy / amount_per_unit: surrender_curve[t] is
@@ -2688,7 +2688,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                     # number lapsing. surrender_base is 1.0 for amount_per_policy.
                     pv_surrender += (lapse_monthly[sx, age_idx, year]
                                      * inforce_t * surrender_curve[t]
-                                     * surrender_base[mp] * dm)
+                                     * surrender_base[mp] * discount_factor_mid_t)
                 else:
                     # cum_premium_factor: cum_premium aggregates inforce_t *
                     # premium and is the surrender basis; multiplying by
@@ -2696,7 +2696,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                     # (the count is already in cum_premium).
                     cum_premium += level
                     pv_surrender += (lapse_monthly[sx, age_idx, year]
-                                     * cum_premium * surrender_curve[t] * dm)
+                                     * cum_premium * surrender_curve[t] * discount_factor_mid_t)
             inforce_t *= survival_monthly[sx, age_idx, year]
         if roll_av:
             # Account maturity: survivors reaching the boundary take

@@ -100,17 +100,17 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 prem_occ += occ[s]
             if benefit_state[s]:
                 benefit_occ += occ[s]
-        ds = discount_factor_bom[t]
-        dm = discount_factor_mid[t]
+        discount_factor_bom_t = discount_factor_bom[t]
+        discount_factor_mid_t = discount_factor_mid[t]
         level = (prem_occ * prem * premium_factor[sx, age_idx, year]
                  if (t < premium_term and t % prem_freq == 0) else 0.0)
-        pv_premium += level * ds
+        pv_premium += level * discount_factor_bom_t
         cum_premium += level
-        pv_mortality += inforce_t * claim_rate * dm
-        pv_morbidity += inforce_t * morb_rate * dm
+        pv_mortality += inforce_t * claim_rate * discount_factor_mid_t
+        pv_morbidity += inforce_t * morb_rate * discount_factor_mid_t
         if t % ann_freq == 0:
-            pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * ds
-        pv_disability += benefit_occ * disability_income[mp] * dm
+            pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * discount_factor_bom_t
+        pv_disability += benefit_occ * disability_income[mp] * discount_factor_mid_t
         ann_prem = premium[mp] * premium_factor[sx, age_idx, year] * 12.0 / prem_freq
         alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                  if t == 0 else 0.0)
@@ -118,7 +118,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 if t < premium_term else 0.0)
         gamma = inforce_t * gamma_fixed[t]
         lae = lae_pro_rata[t] * inforce_t * (claim_rate + morb_rate)
-        pv_expense += (alpha + beta + gamma + lae) * dm
+        pv_expense += (alpha + beta + gamma + lae) * discount_factor_mid_t
         lapse_flow = 0.0
         for s in range(n_states):
             lapse_flow += occ[s] * state_lapse[s, sx, age_idx, year]
@@ -127,20 +127,20 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
             # surrender amount at duration t (per policy, or per unit of
             # surrender_base[mp]); lapse_flow is the state-machine number lapsing.
             pv_surrender += (lapse_flow * surrender_curve[t]
-                             * surrender_base[mp] * dm)
+                             * surrender_base[mp] * discount_factor_mid_t)
         else:
             # cum_premium aggregates inforce * premium; the effective lapse
             # fraction is lapse_flow / inforce_t (the raw rate for a single state).
             eff_lapse = lapse_flow / inforce_t if inforce_t > 0.0 else 0.0
             pv_surrender += (eff_lapse
-                             * cum_premium * surrender_curve[t] * dm)
+                             * cum_premium * surrender_curve[t] * discount_factor_mid_t)
         for s in range(n_states):
             occ_next[s] = 0.0
         for e in range(n_edges):
             flow = occ[edge_from[e]] * edge_prob[sx, age_idx, year, e]
             occ_next[edge_to[e]] += flow
             if edge_lump_sum[e]:
-                pv_disability += flow * disability_benefit[mp] * dm
+                pv_disability += flow * disability_benefit[mp] * discount_factor_mid_t
         for s in range(n_states):
             occ[s] = occ_next[s]
     total = 0.0
