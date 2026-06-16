@@ -427,7 +427,7 @@ def _report_gmm(m: GMMMeasurement) -> Report:
     # right rate in every month -- the same pattern movement.py uses. The last
     # axis is time: (n_time,) for a single basis, (n_mp, n_time) for a segmented
     # measurement; the array maths below broadcast over either shape.
-    ds = m.discount_bom
+    ds = m.discount_factor_bom
     discount_monthly = forward_rates(ds)
     monthly_discount = 1.0 / (1.0 + discount_monthly)
 
@@ -491,7 +491,7 @@ def _report_reinsurance(m: ReinsuranceMeasurement) -> ReinsuranceReport:
     # _report_gmm and movement.py use, so the finance unwind matches in every
     # month. The last axis is time: (n_time,) for a single basis, (n_mp, n_time)
     # for a segmented measurement; the maths below broadcast over either shape.
-    discount_monthly = forward_rates(m.discount_bom)
+    discount_monthly = forward_rates(m.discount_factor_bom)
     monthly_discount = 1.0 / (1.0 + discount_monthly)
 
     # The RA release the same form as the issuer _report_gmm -- the change in

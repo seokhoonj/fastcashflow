@@ -106,7 +106,7 @@ def test_reinsurance_measure_treaty_is_keyword_only_and_full_false_drops_paths()
     assert np.allclose(head.csm, full.csm)
     for name in ("bel_path", "ra_path", "csm_path", "csm_accretion",
                  "csm_release", "recovery", "reinsurance_premium", "cashflows",
-                 "discount_bom"):
+                 "discount_factor_bom"):
         assert getattr(head, name) is None
 
 
@@ -220,7 +220,7 @@ def test_reinsurance_inforce_carries_csm_and_rebases_bel():
     assert np.allclose(head.csm, v.csm)
     for name in ("bel_path", "ra_path", "csm_path", "csm_accretion",
                  "csm_release", "recovery", "reinsurance_premium", "cashflows",
-                 "discount_bom"):
+                 "discount_factor_bom"):
         assert getattr(head, name) is None
 
 

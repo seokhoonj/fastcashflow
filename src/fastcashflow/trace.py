@@ -291,7 +291,7 @@ def show_trace(
     csm_acc = m.csm_accretion[0]
     csm_rel = m.csm_release[0]
     lc = m.loss_component[0]
-    discount_bom = m.discount_bom
+    discount_factor_bom = m.discount_factor_bom
 
     cf_lines: list[object] = []
     cf_names = ["premium_cf", "claim_cf", "morbidity_cf", "expense_cf",
@@ -325,7 +325,7 @@ def show_trace(
     # month as ``undiagnosed *= (1 - discount_monthly)``. Storing the trajectory
     # here makes the depleting-pool mechanism visible alongside the in-force
     # trajectory it composes with.
-    picks = _key_months(term, discount_bom.shape[0] - 1)
+    picks = _key_months(term, discount_factor_bom.shape[0] - 1)
     diag_pool_lines: list[object] = []
     for r in basis.coverages:
         method = methods.get(r.code, CalculationMethod.MORBIDITY)
@@ -354,7 +354,7 @@ def show_trace(
         diag_pool_lines.append((f"{r.code!r}:", cov_pool_lines))
 
     disc_lines: list[object] = [
-        f"t={t:>4d}m: ds={discount_bom[t]:.6f}" for t in picks
+        f"t={t:>4d}m: ds={discount_factor_bom[t]:.6f}" for t in picks
     ]
 
     # ---- Universal-life account mechanic (only when the contract is an
@@ -993,11 +993,11 @@ def show_trace_reinsurance(
     ceded_mort, ceded_morb, reins_prem = treaty.cede(proj)
     ceded_mort, ceded_morb, reins_prem = ceded_mort[0], ceded_morb[0], reins_prem[0]
     recovery = m.recovery[0]
-    discount_bom, discount_mid = discount_factors(basis, n_time)
-    pv_recovery = float((recovery * discount_mid).sum())
-    pv_reins_prem = float((reins_prem * discount_bom[:-1]).sum())
-    pv_ceded_mort = float((ceded_mort * discount_mid).sum())
-    pv_ceded_morb = float((ceded_morb * discount_mid).sum())
+    discount_factor_bom, discount_factor_mid = discount_factors(basis, n_time)
+    pv_recovery = float((recovery * discount_factor_mid).sum())
+    pv_reins_prem = float((reins_prem * discount_factor_bom[:-1]).sum())
+    pv_ceded_mort = float((ceded_mort * discount_factor_mid).sum())
+    pv_ceded_morb = float((ceded_morb * discount_factor_mid).sum())
     z = _norm_ppf(basis.ra_confidence)
     bel = float(m.bel[0])
     ra = float(m.ra[0])
@@ -1034,8 +1034,8 @@ def show_trace_reinsurance(
 
     # ---- Discount factors
     disc_lines: list[object] = [
-        f"t={t:>4d}m: bom={discount_bom[t]:.6f}"
-        + (f"  mid={discount_mid[t]:.6f}" if t < n_time else "")
+        f"t={t:>4d}m: bom={discount_factor_bom[t]:.6f}"
+        + (f"  mid={discount_factor_mid[t]:.6f}" if t < n_time else "")
         for t in picks if t <= n_time
     ]
 
@@ -1406,10 +1406,10 @@ def show_trace_diff(
         )
 
     # ---- Discount factor deltas
-    picks = _key_months(term, ma.discount_bom.shape[0] - 1)
+    picks = _key_months(term, ma.discount_factor_bom.shape[0] - 1)
     disc_lines: list[object] = [
-        f"t={t:>4d}m: ds  {ma.discount_bom[t]:.6f}  ->  "
-        f"{mb.discount_bom[t]:.6f}  ({mb.discount_bom[t] - ma.discount_bom[t]:+.6f})"
+        f"t={t:>4d}m: ds  {ma.discount_factor_bom[t]:.6f}  ->  "
+        f"{mb.discount_factor_bom[t]:.6f}  ({mb.discount_factor_bom[t] - ma.discount_factor_bom[t]:+.6f})"
         for t in picks
     ]
 

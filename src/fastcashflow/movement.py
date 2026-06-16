@@ -322,11 +322,11 @@ def _(
             "not both in a single call"
         )
 
-    discount_bom = measurement.discount_bom
-    # discount_bom is (n_time+1,) for a single basis, or (n_mp, n_time+1) for
+    discount_factor_bom = measurement.discount_factor_bom
+    # discount_factor_bom is (n_time+1,) for a single basis, or (n_mp, n_time+1) for
     # a segmented (multi-basis) measurement; the last axis is time either way,
     # so the rate is (n_time,) or (n_mp, n_time) accordingly.
-    discount_monthly = forward_rates(discount_bom)
+    discount_monthly = forward_rates(discount_factor_bom)
     zero = np.zeros(n_mp)
 
     bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
@@ -450,8 +450,8 @@ def _roll_forward_experience_chain(
             f"actual_inforce has {n_known} rows; the last boundary "
             f"({boundaries[-1]}) reaches the projection horizon ({n_time})"
         )
-    discount_bom = measurement.discount_bom
-    discount_monthly = forward_rates(discount_bom)
+    discount_factor_bom = measurement.discount_factor_bom
+    discount_monthly = forward_rates(discount_factor_bom)
 
     # Cumulative in-force ratio at each boundary, laid out as a per-month
     # step factor -- 1 up to the first boundary, then each ratio onward.
@@ -583,13 +583,13 @@ def _roll_forward_vfa(
     csm_accretion = measurement.csm_accretion
     csm_release = measurement.csm_release
     n_time = csm.shape[1] - 1
-    discount_bom = measurement.discount_bom
-    # discount_bom is (n_time+1,) for a single basis, or (n_mp, n_time+1) for a
+    discount_factor_bom = measurement.discount_factor_bom
+    # discount_factor_bom is (n_time+1,) for a single basis, or (n_mp, n_time+1) for a
     # segmented (portfolio-stitched) measurement; the last axis is time either
     # way, so discount_monthly is (n_time,) or (n_mp, n_time). The trailing-axis
     # slice serves both -- a bare [a:b] would slice the model-point axis on the
     # 2-D curve.
-    discount_monthly = forward_rates(discount_bom)
+    discount_monthly = forward_rates(discount_factor_bom)
     movements: list[VFAPeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
@@ -627,7 +627,7 @@ def _roll_forward_reinsurance(
     csm_accretion = measurement.csm_accretion
     csm_release = measurement.csm_release
     n_time = csm.shape[1] - 1
-    discount_monthly = forward_rates(measurement.discount_bom)
+    discount_monthly = forward_rates(measurement.discount_factor_bom)
     movements: list[ReinsurancePeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)

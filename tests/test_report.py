@@ -152,7 +152,7 @@ def test_report_finance_expense_is_curve_aware():
     )
     m = measure(ModelPoints.single(40, 50_000.0, 120, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), a)
     r = report(m)
-    ds = m.discount_bom
+    ds = m.discount_factor_bom
     rate = ds[:-1] / ds[1:] - 1.0
     expected = rate * (m.bel_path[0, :-1] + m.ra_path[0, :-1]) + m.csm_accretion[0]
     assert np.allclose(r.insurance_finance_expense[0], expected)
@@ -177,7 +177,7 @@ def test_report_finance_expense_disaggregates_by_source():
                    lambda sex, ia, dur: np.full(ia.shape, _annual(0.001))),))
     m = measure(ModelPoints.single(40, 150_000.0, 120, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), a)
     r = report(m)
-    ds = m.discount_bom
+    ds = m.discount_factor_bom
     rate = ds[:-1] / ds[1:] - 1.0
     # each component is exactly its own source's interest unwind
     assert np.allclose(r.bel_finance_expense[0], rate * m.bel_path[0, :-1])

@@ -10,7 +10,7 @@ is validated as a construction invariant.
 P-3 implemented the row partition and the GMM execution; P-4 adds the PAA and
 VFA executors (each model's segments stitched into one native measurement). A
 non-GMM row is never silently measured as GMM. The VFA stitch carries a per-MP
-2-D ``discount_bom`` because segments discount at their own underlying-items
+2-D ``discount_factor_bom`` because segments discount at their own underlying-items
 return, and the movement / grouping consumers handle that 2-D curve (grouping
 keeps a group inside one curve).
 """
@@ -1481,7 +1481,7 @@ def _pad_curve(curve, n_time):
 def _pad_mid(mid, n_time):
     """Flat-fill a segment's 1-D mid-of-month curve to ``(n_time,)`` (GMM only).
 
-    Matches the stitch's ``discount_mid`` padding: repeat the last factor past
+    Matches the stitch's ``discount_factor_mid`` padding: repeat the last factor past
     maturity, or ``1.0`` for a degenerate empty curve.
     """
     mid = np.asarray(mid)
@@ -1513,10 +1513,10 @@ def _resolve_rep_curves(segs, seg_bom, seg_mid, model, inverse, live,
     A group with no live row at all (every contract count=0) keeps the curve of
     its **lowest-index** contributing contract, matching ``_per_group_bom``'s
     ``argmax`` tie-break (it returns the first row when all live horizons are -1),
-    so the public ``discount_bom`` is identical too -- not a flat placeholder.
+    so the public ``discount_factor_bom`` is identical too -- not a flat placeholder.
 
     Returns ``(rep_bom, rep_mid)`` -- ``(n_groups, n_time+1)`` and, for GMM,
-    ``(n_groups, n_time)`` (``None`` for VFA, which has no ``discount_mid``).
+    ``(n_groups, n_time)`` (``None`` for VFA, which has no ``discount_factor_mid``).
     """
     rep_bom = np.empty((n_groups, n_time + 1))
     rep_mid = np.empty((n_groups, n_time)) if model == "GMM" else None
@@ -1637,13 +1637,13 @@ def _aggregate_groups_model(sub_mp, sub_router, model, group_ids, chunk_size):
                 cols = np.arange(inforce.shape[1])
                 live[block] = np.where(
                     inforce > _INFORCE_EPS, cols[None, :], -1).max(axis=1)
-                bom = np.asarray(m.discount_bom)
+                bom = np.asarray(m.discount_factor_bom)
                 if bom.ndim == 2:                  # single-basis blocks are 1-D
                     bom = bom[0]
                 if seg_bom[s] is None or bom.shape[0] > seg_bom[s].shape[0]:
                     seg_bom[s] = bom
                     if model == "GMM":
-                        seg_mid[s] = np.asarray(m.discount_mid)
+                        seg_mid[s] = np.asarray(m.discount_factor_mid)
 
     rep_bom = rep_mid = None
     if needs_curve:

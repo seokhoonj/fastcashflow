@@ -561,8 +561,8 @@ def test_roll_forward_experience_chain_on_segmented_measurement():
     dict-basis (segmented) measurement."""
     mp = fcf.samples.model_points()
     basis = fcf.samples.basis()
-    m = measure(mp, basis)                                 # segmented -> 2-D discount_bom
-    assert m.discount_bom.ndim == 2
+    m = measure(mp, basis)                                 # segmented -> 2-D discount_factor_bom
+    assert m.discount_factor_bom.ndim == 2
     actuals = np.stack([m.cashflows.inforce[:, 12] * 0.97,
                         m.cashflows.inforce[:, 24] * 0.93,
                         m.cashflows.inforce[:, 36] * 0.88])

@@ -118,7 +118,7 @@ def test_portfolio_paa_stitches_ragged_segments():
 
 def test_portfolio_vfa_stitches_segments_with_distinct_curves():
     """VFA segments are executed (P-4) and stitched. Each segment discounts at
-    its own underlying-items return, so discount_bom is per-MP 2-D -- each row
+    its own underlying-items return, so discount_factor_bom is per-MP 2-D -- each row
     carries its segment's curve, and every figure matches measure_vfa alone."""
     router = BasisRouter(
         {("V1", "GA"): _flat_basis(investment_return=0.03),
@@ -139,16 +139,16 @@ def test_portfolio_vfa_stitches_segments_with_distinct_curves():
     assert np.allclose(pm.vfa.measurement.csm[[0, 2]], refV1.csm)
     assert np.allclose(pm.vfa.measurement.csm[1], refV2.csm)
     assert np.allclose(pm.vfa.measurement.variable_fee[[0, 2]], refV1.variable_fee)
-    # discount_bom is per-MP 2-D, each row on its segment's own curve
-    assert pm.vfa.measurement.discount_bom.shape == (3, 61)
-    assert np.allclose(pm.vfa.measurement.discount_bom[[0, 2]], refV1.discount_bom)
-    assert np.allclose(pm.vfa.measurement.discount_bom[1], refV2.discount_bom)
-    assert not np.allclose(refV1.discount_bom, refV2.discount_bom)   # curves differ
+    # discount_factor_bom is per-MP 2-D, each row on its segment's own curve
+    assert pm.vfa.measurement.discount_factor_bom.shape == (3, 61)
+    assert np.allclose(pm.vfa.measurement.discount_factor_bom[[0, 2]], refV1.discount_factor_bom)
+    assert np.allclose(pm.vfa.measurement.discount_factor_bom[1], refV2.discount_factor_bom)
+    assert not np.allclose(refV1.discount_factor_bom, refV2.discount_factor_bom)   # curves differ
 
 
 def test_portfolio_vfa_ragged_stitch_pads_and_flat_fills():
     """VFA segments with different terms stitch ragged: the shorter segment's
-    trajectories zero-pad on the right and its discount_bom tail repeats the last
+    trajectories zero-pad on the right and its discount_factor_bom tail repeats the last
     factor (a forward rate read off the tail is zero, not a 0/0)."""
     router = BasisRouter(
         {("L", "GA"): _flat_basis(investment_return=0.06),
@@ -165,10 +165,10 @@ def test_portfolio_vfa_ragged_stitch_pads_and_flat_fills():
     refS = measure_vfa(mp.subset([1]), _flat_basis(investment_return=0.06))
     nL, nS = refL.bel_path.shape[1] - 1, refS.bel_path.shape[1] - 1
     assert nS < nL
-    db = pm.vfa.measurement.discount_bom
+    db = pm.vfa.measurement.discount_factor_bom
     assert db.shape == (3, nL + 1)                         # padded to longer horizon
-    assert np.allclose(db[1, :nS + 1], refS.discount_bom)        # S's own curve
-    assert np.allclose(db[1, nS + 1:], refS.discount_bom[-1])    # flat-filled tail
+    assert np.allclose(db[1, :nS + 1], refS.discount_factor_bom)        # S's own curve
+    assert np.allclose(db[1, nS + 1:], refS.discount_factor_bom[-1])    # flat-filled tail
     bp = pm.vfa.measurement.bel_path
     assert np.allclose(bp[1, :nS + 1], refS.bel_path[0])
     assert np.allclose(bp[1, nS + 1:], 0.0)                      # zero-padded tail
@@ -176,7 +176,7 @@ def test_portfolio_vfa_ragged_stitch_pads_and_flat_fills():
 
 
 def test_portfolio_vfa_roll_forward_matches_per_segment():
-    """roll_forward on a multi-curve VFA portfolio result (2-D discount_bom)
+    """roll_forward on a multi-curve VFA portfolio result (2-D discount_factor_bom)
     matches per-segment roll_forward -- the movement layer slices the time axis,
     not the model-point axis, on the 2-D curve."""
     router = BasisRouter(
@@ -213,7 +213,7 @@ def test_portfolio_vfa_group_by_curve_succeeds():
         calculation_methods=PATTERNS)
     pm = measure(mp, router)
     g = group(pm.vfa.measurement, "product")
-    assert g.csm.shape[0] == 2 and g.discount_bom.shape[0] == 2
+    assert g.csm.shape[0] == 2 and g.discount_factor_bom.shape[0] == 2
 
 
 def test_portfolio_vfa_group_rejects_mixed_curves():

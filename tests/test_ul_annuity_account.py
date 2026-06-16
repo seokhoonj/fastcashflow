@@ -246,8 +246,8 @@ def test_ul_annuity_full_matches_independent_forward_pv():
     # the engine uses (the curve itself is tested elsewhere; here we cross-check
     # the cash-flow -> BEL assembly: conversion, payout, mortality-only decrement,
     # fund netting). Premiums and annuity payments discount at the start of their
-    # month (discount_bom), claims / morbidity / disability / expense / surrender
-    # mid-month (discount_mid); the maturity lump rolls to the boundary column.
+    # month (discount_factor_bom), claims / morbidity / disability / expense / surrender
+    # mid-month (discount_factor_mid); the maturity lump rolls to the boundary column.
     bom, mid = discount_factors_from_curve(discount_monthly_curve(basis, proj.n_time))
     bom_t = bom[:proj.n_time]
     mid_legs = (proj.claim_cf[0] + proj.morbidity_cf[0] + proj.disability_cf[0]

@@ -100,11 +100,11 @@ def inflation_index(basis: Basis, n_time: int) -> FloatArray:
 def discount_factors(basis: Basis, n_time: int) -> tuple[FloatArray, FloatArray]:
     """Discount factors back to time 0, by cash-flow timing.
 
-    Returns ``(discount_bom, discount_mid)``:
+    Returns ``(discount_factor_bom, discount_factor_mid)``:
 
-    * ``discount_bom[t]`` -- shape ``(n_time+1,)`` -- start-of-month flows
+    * ``discount_factor_bom[t]`` -- shape ``(n_time+1,)`` -- start-of-month flows
       (premiums) and the maturity benefit at time = term.
-    * ``discount_mid[t]`` -- shape ``(n_time,)`` -- mid-month flows
+    * ``discount_factor_mid[t]`` -- shape ``(n_time,)`` -- mid-month flows
       (claims and expenses, which arise during the month).
 
     The discount basis is the locked-in rate or rate curve carried on
@@ -121,26 +121,26 @@ def discount_factors_from_curve(
 
     ``discount_monthly`` is a ``(n_time,)`` array of monthly forward rates --
     the rate applied across each projection month. Returns the same
-    ``(discount_bom, discount_mid)`` pair as :func:`discount_factors`; a
+    ``(discount_factor_bom, discount_factor_mid)`` pair as :func:`discount_factors`; a
     constant curve reproduces it bar floating-point rounding.
     """
     discount_monthly = np.asarray(discount_monthly, dtype=np.float64)
-    discount_bom = np.empty(discount_monthly.shape[0] + 1)
-    discount_bom[0] = 1.0
-    np.cumprod(1.0 / (1.0 + discount_monthly), out=discount_bom[1:])
-    discount_mid = discount_bom[:-1] / np.sqrt(1.0 + discount_monthly)
-    return discount_bom, discount_mid
+    discount_factor_bom = np.empty(discount_monthly.shape[0] + 1)
+    discount_factor_bom[0] = 1.0
+    np.cumprod(1.0 / (1.0 + discount_monthly), out=discount_factor_bom[1:])
+    discount_factor_mid = discount_factor_bom[:-1] / np.sqrt(1.0 + discount_monthly)
+    return discount_factor_bom, discount_factor_mid
 
 
-def forward_rates(discount_bom: FloatArray) -> FloatArray:
+def forward_rates(discount_factor_bom: FloatArray) -> FloatArray:
     """The per-month forward rate implied by a beginning-of-month discount curve.
 
-    ``discount_bom[..., t]`` discounts to the start of month ``t``; the one-month
-    forward rate over month ``t`` is ``discount_bom[t] / discount_bom[t+1] - 1``
+    ``discount_factor_bom[..., t]`` discounts to the start of month ``t``; the one-month
+    forward rate over month ``t`` is ``discount_factor_bom[t] / discount_factor_bom[t+1] - 1``
     -- the inverse of :func:`discount_factors_from_curve`. The trailing axis is
     time, so ``[..., :-1]`` / ``[..., 1:]`` serves a single ``(n_time+1,)`` curve
     and a per-MP ``(n_mp, n_time+1)`` one alike. The ellipsis is load-bearing:
     on a segmented (per-MP) curve a bare ``[:-1]`` would slice the model-point
     axis, not time -- the silent-wrong bug class this helper retires.
     """
-    return discount_bom[..., :-1] / discount_bom[..., 1:] - 1.0
+    return discount_factor_bom[..., :-1] / discount_factor_bom[..., 1:] - 1.0

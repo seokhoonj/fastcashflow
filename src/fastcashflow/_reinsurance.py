@@ -76,7 +76,7 @@ class ReinsuranceMeasurement:
     recovery: FloatArray | None = None         # (n_mp, n_time) -- recoveries received
     reinsurance_premium: FloatArray | None = None    # (n_mp, n_time) -- reinsurance premiums paid
     cashflows: "Cashflows | None" = None
-    discount_bom: FloatArray | None = None     # (n_time+1,) -- for grouped CSM re-derivation
+    discount_factor_bom: FloatArray | None = None     # (n_time+1,) -- for grouped CSM re-derivation
     model_points: "ModelPoints | None" = None  # stamped by measure_reinsurance, for group axes
     group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
     group_sizes: IntArray | None = None     # model points per group, aligned with labels
@@ -234,19 +234,19 @@ def measure_reinsurance(
     basis = _single_basis(basis, entry="measure_reinsurance")
     proj = project_cashflows(model_points, basis)
     reject_account_book(proj, "reinsurance.measure")
-    discount_bom, discount_mid = discount_factors(basis, proj.n_time)
+    discount_factor_bom, discount_factor_mid = discount_factors(basis, proj.n_time)
 
     ceded_mortality, ceded_morbidity, reinsurance_premium = treaty.cede(proj)
     recovery = ceded_mortality + ceded_morbidity
 
-    pv_recovery = (recovery * discount_mid).sum(axis=1)
-    pv_reinsurance_premium = (reinsurance_premium * discount_bom[:-1]).sum(axis=1)
+    pv_recovery = (recovery * discount_factor_mid).sum(axis=1)
+    pv_reinsurance_premium = (reinsurance_premium * discount_factor_bom[:-1]).sum(axis=1)
     bel = pv_reinsurance_premium - pv_recovery
 
     # RA -- the risk transferred, i.e. the margin on the ceded claims.
     z = _norm_ppf(basis.ra_confidence)
-    pv_ceded_mortality = (ceded_mortality * discount_mid).sum(axis=1)
-    pv_ceded_morbidity = (ceded_morbidity * discount_mid).sum(axis=1)
+    pv_ceded_mortality = (ceded_mortality * discount_factor_mid).sum(axis=1)
+    pv_ceded_morbidity = (ceded_morbidity * discount_factor_mid).sum(axis=1)
     ra = z * (basis.mortality_cv * pv_ceded_mortality
               + basis.morbidity_cv * pv_ceded_morbidity)
 
@@ -278,11 +278,11 @@ def measure_reinsurance(
             loss_recovery_component=loss_recovery_component,
             model_points=model_points)
 
-    bel_path = (_pv_path(reinsurance_premium * discount_bom[:-1], discount_bom)
-                - _pv_path(recovery * discount_mid, discount_bom))
+    bel_path = (_pv_path(reinsurance_premium * discount_factor_bom[:-1], discount_factor_bom)
+                - _pv_path(recovery * discount_factor_mid, discount_factor_bom))
     ra_path = z * (
-        basis.mortality_cv * _pv_path(ceded_mortality * discount_mid, discount_bom)
-        + basis.morbidity_cv * _pv_path(ceded_morbidity * discount_mid, discount_bom)
+        basis.mortality_cv * _pv_path(ceded_mortality * discount_factor_mid, discount_factor_bom)
+        + basis.morbidity_cv * _pv_path(ceded_morbidity * discount_factor_mid, discount_factor_bom)
     )
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, proj.inforce,
@@ -303,7 +303,7 @@ def measure_reinsurance(
         recovery=recovery,
         reinsurance_premium=reinsurance_premium,
         cashflows=proj,
-        discount_bom=discount_bom,
+        discount_factor_bom=discount_factor_bom,
         model_points=model_points,
     )
 
@@ -398,18 +398,18 @@ def measure_reinsurance_stream(
     )
 
 
-def _pv_path(month_pv: FloatArray, discount_bom: FloatArray) -> FloatArray:
+def _pv_path(month_pv: FloatArray, discount_factor_bom: FloatArray) -> FloatArray:
     """PV-at-t trajectory of a stream whose per-month PV-to-inception is
     ``month_pv`` (shape ``(n_mp, n_time)``).
 
     Reverse-cumsum gives ``sum_{s>=t}`` of the inception-discounted flows
     (the PV to inception of everything from month ``t`` on); dividing by
-    ``discount_bom[t]`` re-anchors it to time ``t``. Column ``n_time`` (no
+    ``discount_factor_bom[t]`` re-anchors it to time ``t``. Column ``n_time`` (no
     remaining flow) is 0. Column 0 reproduces the inception PV.
     """
     rev = np.cumsum(month_pv[:, ::-1], axis=1)[:, ::-1]          # sum_{s>=t}
     rev = np.concatenate([rev, np.zeros((rev.shape[0], 1))], axis=1)  # +t=n_time
-    return rev / discount_bom[None, :]
+    return rev / discount_factor_bom[None, :]
 
 
 def measure_reinsurance_inforce(
@@ -455,7 +455,7 @@ def measure_reinsurance_inforce(
     reject_account_book(proj, "reinsurance.measure_inforce")
     n_time = proj.n_time
     n_mp = proj.inforce.shape[0]
-    discount_bom, discount_mid = discount_factors(basis, n_time)
+    discount_factor_bom, discount_factor_mid = discount_factors(basis, n_time)
 
     ceded_mortality, ceded_morbidity, reinsurance_premium = treaty.cede(proj)
     recovery = ceded_mortality + ceded_morbidity
@@ -465,11 +465,11 @@ def measure_reinsurance_inforce(
     # bom-timed, recoveries / ceded claims mid-timed -- same convention as the
     # inception measure, so column 0 reproduces measure_reinsurance's headline.
     z = _norm_ppf(basis.ra_confidence)
-    bel_path = (_pv_path(reinsurance_premium * discount_bom[:-1], discount_bom)
-                - _pv_path(recovery * discount_mid, discount_bom))
+    bel_path = (_pv_path(reinsurance_premium * discount_factor_bom[:-1], discount_factor_bom)
+                - _pv_path(recovery * discount_factor_mid, discount_factor_bom))
     ra_path = z * (
-        basis.mortality_cv * _pv_path(ceded_mortality * discount_mid, discount_bom)
-        + basis.morbidity_cv * _pv_path(ceded_morbidity * discount_mid, discount_bom)
+        basis.mortality_cv * _pv_path(ceded_mortality * discount_factor_mid, discount_factor_bom)
+        + basis.morbidity_cv * _pv_path(ceded_morbidity * discount_factor_mid, discount_factor_bom)
     )
 
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
@@ -536,7 +536,7 @@ def measure_reinsurance_inforce(
         recovery=recovery,
         reinsurance_premium=reinsurance_premium,
         cashflows=proj,
-        discount_bom=discount_bom,
+        discount_factor_bom=discount_factor_bom,
         model_points=model_points,
     )
 
@@ -711,7 +711,7 @@ def settle_reinsurance(
     rows = np.arange(n_mp)
     bel_path = m.bel_path
     ra_path = m.ra_path
-    discount_bom = m.discount_bom
+    discount_factor_bom = m.discount_factor_bom
 
     # Locked-in BEL leg: re-price the ceded cash flows at the flat locked-in
     # rate (the reinsurance analogue of gmm.settle's locked-in kernel pass).
@@ -738,7 +738,7 @@ def settle_reinsurance(
                      count / np.where(surv_close > 0.0, surv_close, 1.0), 0.0)
     live_close = np.where(final, 0.0, 1.0)
     em_c = np.minimum(em_close, n_time)
-    discount_monthly = forward_rates(discount_bom)
+    discount_monthly = forward_rates(discount_factor_bom)
     cols = em_open[:, None] + np.arange(period)[None, :]
     col_ok = cols < n_time
     cols_safe = np.where(col_ok, cols, n_time - 1)

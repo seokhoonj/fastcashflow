@@ -38,7 +38,7 @@ def test_cost_of_capital_ra_hand_calc():
                                    cost_of_capital_rate=coc_rate))
 
     # the confidence-level run's RA trajectory is the capital held under CoC
-    full = cl.discount_bom[1]                       # (1 + i)^-1
+    full = cl.discount_factor_bom[1]                       # (1 + i)^-1
     capital = cl.ra_path[0]
     cap_pv0 = float(np.sum(capital * full ** np.arange(capital.shape[0])))
     assert np.isclose(coc.ra_path[0, 0], coc_rate * cap_pv0)

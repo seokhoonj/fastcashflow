@@ -162,11 +162,11 @@ def test_two_segments_same_curve_late_representative():
     """The 2-D _per_group_bom SUCCESS path (contract risk #1). Two routing
     segments of the SAME product (so one group of contracts) on the SAME discount curve but
     different terms, the short-term segment routed/chunked FIRST and the long-term
-    one LATER. Two segments make the stitched discount_bom 2-D, so the per-group
+    one LATER. Two segments make the stitched discount_factor_bom 2-D, so the per-group
     representative must be the longest-horizon row -- which only arrives in a later
     chunk -- and same-curve different-term rows must reconcile, not be
     mis-rejected. chunk_size=1 forces the late arrival. (The 1-D ragged test above
-    cannot exercise this: a single segment keeps discount_bom 1-D.)"""
+    cannot exercise this: a single segment keeps discount_factor_bom 1-D.)"""
     router = BasisRouter(
         {("G", "A"): _flat_basis(discount=0.04),       # short term, routed first
          ("G", "B"): _flat_basis(discount=0.04)},      # long term, SAME curve, later
@@ -501,7 +501,7 @@ def test_all_dead_group_keeps_first_rows_real_curve():
     """A group with no live row (every contract count=0) must keep its lowest-index
     contract's REAL discount curve, exactly as _per_group_bom (whose argmax returns
     the first row when all live horizons are -1) -- not a flat placeholder. The CSM
-    is 0 either way, but the public discount_bom and the downstream report /
+    is 0 either way, but the public discount_factor_bom and the downstream report /
     roll-forward input must match group_of_contracts, so the master invariant holds
     in full."""
     router = BasisRouter({("G", "GA"): _flat_basis(discount=0.04)})
@@ -515,7 +515,7 @@ def test_all_dead_group_keeps_first_rows_real_curve():
     pg = measure_group_of_contracts(mp, router)
     ref = group_of_contracts(measure(mp, router, full=True).gmm.measurement)
     assert pg.gmm.bel.shape[0] == 1
-    assert np.allclose(pg.gmm.discount_bom, ref.discount_bom)   # real curve, not flat
+    assert np.allclose(pg.gmm.discount_factor_bom, ref.discount_factor_bom)   # real curve, not flat
     assert np.allclose(pg.gmm.csm, ref.csm)                     # 0 either way
 
 
@@ -545,7 +545,7 @@ def test_rejects_short_array_in_by_list_no_broadcast():
 
 
 def test_vfa_two_segments_same_return_reconcile():
-    """The VFA 2-D discount_bom SUCCESS path (contract risk #4). Two VFA routing
+    """The VFA 2-D discount_factor_bom SUCCESS path (contract risk #4). Two VFA routing
     segments with the SAME investment_return but ragged terms, grouped into one
     group of contracts. The bom.ndim == 2 branch of the VFA group must reconcile segments on the
     same underlying-items return (not mis-reject), with the longest-horizon

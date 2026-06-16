@@ -249,7 +249,7 @@ def _per_group_bom(bom, inforce, reducer, labels):
 
     Returns ``(out_bom, reps)`` -- the ``(n_groups, n_time+1)`` per-group curve
     and the representative row index per group, so a caller with a companion
-    per-MP curve (e.g. GMM's ``discount_mid``) can index it the same way. Shared
+    per-MP curve (e.g. GMM's ``discount_factor_mid``) can index it the same way. Shared
     by the GMM and VFA grouping, both of which now see 2-D curves from the
     portfolio orchestrator's segment stitch.
     """
@@ -315,8 +315,8 @@ def _finalise_gmm_group(bel, ra, grouped_cf, lic, out_bom, out_mid,
         csm_release=csm_release,
         lic=lic,
         cashflows=grouped_cf,
-        discount_bom=out_bom,
-        discount_mid=out_mid,
+        discount_factor_bom=out_bom,
+        discount_factor_mid=out_mid,
         group_labels=labels,
         group_sizes=sizes,
     )
@@ -334,13 +334,13 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
 
     # The discount curve is per-group: a segmented result carries a 2-D per-MP
     # curve, so reconcile each group to one curve; a single basis a 1-D one.
-    bom = measurement.discount_bom
+    bom = measurement.discount_factor_bom
     if bom.ndim == 2:
         out_bom, reps = _per_group_bom(
             bom, measurement.cashflows.inforce, reducer, labels)
-        out_mid = measurement.discount_mid[reps]
+        out_mid = measurement.discount_factor_mid[reps]
     else:
-        out_bom, out_mid = bom, measurement.discount_mid
+        out_bom, out_mid = bom, measurement.discount_factor_mid
     return _finalise_gmm_group(
         bel, ra, grouped_cf, lic, out_bom, out_mid, labels, reducer.sizes)
 
@@ -383,7 +383,7 @@ def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
         csm_release=csm_release,
         lic=lic,
         cashflows=grouped_cf,
-        discount_bom=out_bom,
+        discount_factor_bom=out_bom,
         model_points=None,
         group_labels=labels,
         group_sizes=sizes,
@@ -408,7 +408,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
     time_value = reducer.sum(measurement.time_value)
     variable_fee = reducer.sum(measurement.variable_fee)
 
-    bom = measurement.discount_bom
+    bom = measurement.discount_factor_bom
     if bom.ndim == 2:
         # Portfolio-stitched: each segment discounts at its own underlying-items
         # return, so a group must sit in one curve (the same reconciliation the
@@ -425,7 +425,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
 @group.register
 def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
     _require_inception(measurement, "group()")
-    if measurement.cashflows is None or measurement.discount_bom is None:
+    if measurement.cashflows is None or measurement.discount_factor_bom is None:
         raise ValueError(
             "group() requires a full reinsurance measurement (cash flows and "
             "discount curve). Re-run reinsurance.measure()."
@@ -442,7 +442,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
     # release trajectory changes, re-derived at the single discount curve and
     # released by the grouped coverage units.
     csm0 = -(bel - ra)
-    bom = measurement.discount_bom
+    bom = measurement.discount_factor_bom
     discount_monthly = forward_rates(bom)
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, np.ascontiguousarray(grouped_cf.inforce), discount_monthly, False
@@ -459,7 +459,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
         recovery=recovery,
         reinsurance_premium=reinsurance_premium,
         cashflows=grouped_cf,
-        discount_bom=bom,
+        discount_factor_bom=bom,
         model_points=None,
         group_labels=labels,
         group_sizes=reducer.sizes,

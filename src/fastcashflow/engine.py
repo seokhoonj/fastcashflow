@@ -118,8 +118,8 @@ class GMMMeasurement:
     # at the start vs the middle of each month. Shape (n_time+1,) / (n_time,)
     # for a single basis; (n_mp, n_time+1) / (n_mp, n_time) when measured under
     # a per-segment basis dict, where each row discounts on its own curve.
-    discount_bom: FloatArray | None = None  # beginning-of-month discount factors
-    discount_mid: FloatArray | None = None  # mid-of-month discount factors
+    discount_factor_bom: FloatArray | None = None  # beginning-of-month discount factors
+    discount_factor_mid: FloatArray | None = None  # mid-of-month discount factors
     # Source model points, stamped by ``measure`` so ``group(m, by=[...])`` can
     # resolve axis names without re-passing them. A reference, not a copy; None
     # on a grouped result (its rows are groups, not model points).
@@ -287,7 +287,7 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
         factor = _settlement_factor(basis.settlement_pattern, basis.discount_monthly)
         claim_cf = claim_cf * factor
         morbidity_cf = morbidity_cf * factor
-    discount_bom, discount_mid = discount_factors_from_curve(discount_monthly)
+    discount_factor_bom, discount_factor_mid = discount_factors_from_curve(discount_monthly)
 
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
         claim_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
@@ -324,8 +324,8 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
         csm_release=csm_release,
         lic=lic,
         cashflows=proj,
-        discount_bom=discount_bom,
-        discount_mid=discount_mid,
+        discount_factor_bom=discount_factor_bom,
+        discount_factor_mid=discount_factor_mid,
     )
 
 
@@ -821,8 +821,8 @@ def _measure_inforce_full(
         csm_release=csm_release_new,
         lic=m.lic,
         cashflows=m.cashflows,
-        discount_bom=m.discount_bom,
-        discount_mid=m.discount_mid,
+        discount_factor_bom=m.discount_factor_bom,
+        discount_factor_mid=m.discount_factor_mid,
         measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY,
     )
 
@@ -1226,7 +1226,7 @@ def settle(
     # values are zeroed by live_close / k_obs / the tail's zero terminal.
     em_c = np.minimum(em_close, n_time)
 
-    discount_monthly = forward_rates(m.discount_bom)
+    discount_monthly = forward_rates(m.discount_factor_bom)
     cols = em_open[:, None] + np.arange(period)[None, :]
     col_ok = cols < n_time
     cols_safe = np.where(col_ok, cols, n_time - 1)
@@ -1758,7 +1758,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           disability_income, disability_benefit,")
     line(0, "           alpha_pro_rata, alpha_fixed, beta_pro_rata,")
     line(0, "           gamma_fixed, lae_pro_rata,")
-    line(0, "           discount_bom, discount_mid, mortality_factor,")
+    line(0, "           discount_factor_bom, discount_factor_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
@@ -1826,8 +1826,8 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(12, f"prem_occ = {sum_prem}")
     if use_disability:
         line(12, f"benefit_occ = {sum_ben}")
-    line(12, "ds = discount_bom[t]")
-    line(12, "dm = discount_mid[t]")
+    line(12, "ds = discount_factor_bom[t]")
+    line(12, "dm = discount_factor_mid[t]")
     line(12, "if prem_due == 0 and prem_left > 0:")
     line(16, "level = prem_occ * prem * pf")
     line(16, "prem_due = prem_freq - 1")
@@ -1878,7 +1878,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     emit_edge_step(12, scale="", include_lump=True)
 
     line(8, f"total = {sum_all}")
-    line(8, "pm = (total * maturity_benefit[mp] * discount_bom[boundary]) "
+    line(8, "pm = (total * maturity_benefit[mp] * discount_factor_bom[boundary]) "
          "if boundary == term else 0.0")
 
     # Coverage-rule pass
@@ -1900,7 +1900,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(20, "mult = red_factor if t < red_end else 1.0")
     line(20, f"inf = {sum_all}")
     line(20, "contrib = (inf * coverage_rates[cov_idx, sx, age_idx, year]")
-    line(20, "           * benefit * mult * discount_mid[t])")
+    line(20, "           * benefit * mult * discount_factor_mid[t])")
     line(20, "if mortality_risk:")
     line(24, "pv_mortality += contrib")
     line(20, "else:")
@@ -1927,7 +1927,7 @@ def _codegen_fast_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(16, "if t >= wait:")
     line(20, "mult = red_factor if t < red_end else 1.0")
     line(20, f"healthy = {sum_all}")
-    line(20, "pv_morbidity += healthy * d_rate * benefit * mult * discount_mid[t]")
+    line(20, "pv_morbidity += healthy * d_rate * benefit * mult * discount_factor_mid[t]")
     line(16, "undiagnosed = 1.0 - d_rate")
     emit_edge_step(16, scale=" * undiagnosed", include_lump=False)
 
@@ -2240,7 +2240,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(0, "           disability_income, disability_benefit,")
     line(0, "           alpha_pro_rata, alpha_fixed, beta_pro_rata,")
     line(0, "           gamma_fixed, lae_pro_rata,")
-    line(0, "           discount_bom, discount_mid, mortality_factor,")
+    line(0, "           discount_factor_bom, discount_factor_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
     line(0, "           coverage_waiting, coverage_reduction_end, "
@@ -2315,8 +2315,8 @@ def _codegen_fast_kernel_source_semi_markov(
     line(12, "inforce_traj[t] = ift")
     line(12, f"prem_occ = {sum_prem}")
     line(12, f"benefit_occ = {sum_ben}")
-    line(12, "ds = discount_bom[t]")
-    line(12, "dm = discount_mid[t]")
+    line(12, "ds = discount_factor_bom[t]")
+    line(12, "dm = discount_factor_mid[t]")
     line(12, "if prem_due == 0 and prem_left > 0:")
     line(16, "level = prem_occ * prem * pf")
     line(16, "prem_due = prem_freq - 1")
@@ -2365,7 +2365,7 @@ def _codegen_fast_kernel_source_semi_markov(
     emit_edge_step(12, include_lump=True)
 
     line(8, f"total = {sum_all}")
-    line(8, "pm = (total * maturity_benefit[mp] * discount_bom[boundary]) "
+    line(8, "pm = (total * maturity_benefit[mp] * discount_factor_bom[boundary]) "
          "if boundary == term else 0.0")
 
     # --- Coverage-rule pass --------------------------------------------
@@ -2389,7 +2389,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(16, "year = t // 12")
     line(16, "mult = red_factor if t < red_end else 1.0")
     line(16, "contrib = (inforce_traj[t] * coverage_rates[cov_idx, sx, age_idx, year]")
-    line(16, "           * benefit * mult * discount_mid[t])")
+    line(16, "           * benefit * mult * discount_factor_mid[t])")
     line(16, "if mortality_risk:")
     line(20, "pv_mortality += contrib")
     line(16, "else:")
@@ -2420,7 +2420,7 @@ def _codegen_fast_kernel_source_semi_markov(
     line(16, "if t >= wait:")
     line(20, "mult = red_factor if t < red_end else 1.0")
     line(20, "pv_morbidity += (inforce_traj[t] * undiagnosed * d_rate * benefit")
-    line(20, "                 * mult * discount_mid[t])")
+    line(20, "                 * mult * discount_factor_mid[t])")
     line(16, "undiagnosed *= (1.0 - d_rate)")
 
     # --- Final output --------------------------------------------------
@@ -2509,7 +2509,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                          maturity_benefit, annuity_payment,
                          alpha_pro_rata, alpha_fixed, beta_pro_rata,
                          gamma_fixed, lae_pro_rata,
-                         discount_bom, discount_mid,
+                         discount_factor_bom, discount_factor_mid,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
                          coverage_pays_account_balance,
@@ -2607,8 +2607,8 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                     else:
                         morb_rate += rate
                 last_year = year
-            ds = discount_bom[t]
-            dm = discount_mid[t]
+            ds = discount_factor_bom[t]
+            dm = discount_factor_mid[t]
             if prem_due == 0 and prem_left > 0:
                 level = inforce * prem * premium_factor[sx, age_idx, year]
                 prem_due = prem_freq - 1
@@ -2706,10 +2706,10 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
             # the full path's _rollforward_kernel maturity seed.
             gmab = account_gmab[mp]
             mat_av = av_term if av_term > gmab else gmab
-            pm = (inforce * mat_av * discount_bom[boundary]
+            pm = (inforce * mat_av * discount_factor_bom[boundary]
                   if boundary == term else 0.0)
         else:
-            pm = (inforce * maturity_benefit[mp] * discount_bom[boundary]
+            pm = (inforce * maturity_benefit[mp] * discount_factor_bom[boundary]
                   if boundary == term else 0.0)
         # Non-diagnosis coverages with a waiting or reduced-benefit rule:
         # rerun the survival on the same scalar track so the benefit
@@ -2733,7 +2733,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                 if t >= wait:
                     mult = red_factor if t < red_end else 1.0
                     contrib = (inf * coverage_rates[cov_idx, sx, age_idx, year]
-                               * benefit * mult * discount_mid[t])
+                               * benefit * mult * discount_factor_mid[t])
                     if mortality_risk:
                         pv_mortality += contrib
                     else:
@@ -2759,7 +2759,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                     d_year = year
                 if t >= wait:
                     mult = red_factor if t < red_end else 1.0
-                    pv_morbidity += healthy * d_rate * benefit * mult * discount_mid[t]
+                    pv_morbidity += healthy * d_rate * benefit * mult * discount_factor_mid[t]
                 healthy *= survival_monthly[sx, age_idx, year] * (1.0 - d_rate)
         if roll_av:
             # Universal-life BEL: the slot mortality / surrender streams are
@@ -3186,7 +3186,7 @@ def _measure_fast(
         basis, n_time,
     )
     if discount_curve is None:
-        discount_bom, discount_mid = discount_factors(basis, n_time)
+        discount_factor_bom, discount_factor_mid = discount_factors(basis, n_time)
     else:
         discount_curve = np.asarray(discount_curve, dtype=np.float64)
         if discount_curve.shape != (n_time,):
@@ -3195,7 +3195,7 @@ def _measure_fast(
                 f"rate per projection month -- got {discount_curve.shape}"
             )
         monthly_curve = (1.0 + discount_curve) ** (1.0 / 12.0) - 1.0
-        discount_bom, discount_mid = discount_factors_from_curve(monthly_curve)
+        discount_factor_bom, discount_factor_mid = discount_factors_from_curve(monthly_curve)
     if basis.expense_cv != 0.0 and not has_account:
         raise NotImplementedError(
             "expense_cv is not included in the GMM / PAA risk adjustment -- only "
@@ -3341,8 +3341,8 @@ def _measure_fast(
             expense_beta_pro_rata,
             gamma_fixed,
             lae_pro_rata,
-            discount_bom,
-            discount_mid,
+            discount_factor_bom,
+            discount_factor_mid,
             mortality_factor,
             morbidity_factor,
             longevity_factor,
@@ -3414,8 +3414,8 @@ def _measure_fast(
         expense_beta_pro_rata,
         gamma_fixed,
         lae_pro_rata,
-        discount_bom,
-        discount_mid,
+        discount_factor_bom,
+        discount_factor_mid,
         mortality_factor,
         morbidity_factor,
         longevity_factor,
@@ -3467,8 +3467,8 @@ def _measure_fast(
                 expense_beta_pro_rata,
                 gamma_fixed,
                 lae_pro_rata,
-                discount_bom,
-                discount_mid,
+                discount_factor_bom,
+                discount_factor_mid,
                 mortality_factor,
                 morbidity_factor,
                 longevity_factor,
@@ -3680,7 +3680,7 @@ def _stitch_full_measurements(n_mp, sub_results):
     ``sub_results`` is ``[(idx, GMMMeasurement)]`` -- each segment's full
     trajectories are laid into the portfolio arrays at its rows and zero-padded
     on the right to the portfolio's longest horizon (a contract carries no BEL /
-    RA / CSM past its term). ``discount_bom`` / ``discount_mid`` become per-MP
+    RA / CSM past its term). ``discount_factor_bom`` / ``discount_factor_mid`` become per-MP
     2-D because segments discount on different curves; the padded tail repeats
     each row's last factor so a forward rate read off it is finite, not a 0/0.
     Shared by the new-business segmented measurement and the in-force segmented
@@ -3698,8 +3698,8 @@ def _stitch_full_measurements(n_mp, sub_results):
     lic = np.zeros((n_mp, n_time + 1))
     csm_accretion = np.zeros((n_mp, n_time))
     csm_release = np.zeros((n_mp, n_time))
-    discount_bom = np.ones((n_mp, n_time + 1))
-    discount_mid = np.ones((n_mp, n_time))
+    discount_factor_bom = np.ones((n_mp, n_time + 1))
+    discount_factor_mid = np.ones((n_mp, n_time))
 
     cf_2d = ("inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
              "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
@@ -3722,11 +3722,11 @@ def _stitch_full_measurements(n_mp, sub_results):
         csm_release[idx, :t] = m.csm_release
         # Per-MP discount: lay the segment's curve, then flat-fill the tail so
         # the padded months read a zero forward rate, not a 0/0.
-        discount_bom[idx, :t + 1] = m.discount_bom
-        discount_bom[idx, t + 1:] = m.discount_bom[-1]
-        discount_mid[idx, :t] = m.discount_mid
+        discount_factor_bom[idx, :t + 1] = m.discount_factor_bom
+        discount_factor_bom[idx, t + 1:] = m.discount_factor_bom[-1]
+        discount_factor_mid[idx, :t] = m.discount_factor_mid
         if t < n_time:
-            discount_mid[idx, t:] = m.discount_mid[-1] if t > 0 else 1.0
+            discount_factor_mid[idx, t:] = m.discount_factor_mid[-1] if t > 0 else 1.0
         cf = m.cashflows
         for name in cf_2d:
             arr = getattr(cf, name)
@@ -3741,7 +3741,7 @@ def _stitch_full_measurements(n_mp, sub_results):
         bel=bel, ra=ra, csm=csm, loss_component=loss_component,
         bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
         csm_accretion=csm_accretion, csm_release=csm_release, lic=lic,
-        cashflows=cashflows, discount_bom=discount_bom, discount_mid=discount_mid,
+        cashflows=cashflows, discount_factor_bom=discount_factor_bom, discount_factor_mid=discount_factor_mid,
     )
 
 
@@ -3756,10 +3756,10 @@ def _measure_segmented_full(
     trajectories are scattered back into one ``(n_mp, n_time+1)`` result, where
     ``n_time`` is the portfolio's longest horizon. A segment whose contracts
     mature earlier is zero-padded on the right -- a contract carries no BEL /
-    RA / CSM past its term. ``discount_bom`` / ``discount_mid`` are per-MP
+    RA / CSM past its term. ``discount_factor_bom`` / ``discount_factor_mid`` are per-MP
     ``(n_mp, ...)`` here, not the single ``(n_time+1,)`` curve of the
     single-basis path: segments discount on different curves, so the rate is a
-    property of the row. The padded tail of ``discount_bom`` repeats each
+    property of the row. The padded tail of ``discount_factor_bom`` repeats each
     row's last factor (a flat curve -> zero forward rate) so a rate read off it
     is finite, not a 0/0.
     """

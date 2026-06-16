@@ -45,7 +45,7 @@ def test_reinsurance_report_field_formulas():
     assert isinstance(rep, fcf.ReinsuranceReport)
 
     bel, ra, csm = m.bel_path, m.ra_path, m.csm_path
-    discount_monthly = forward_rates(m.discount_bom)
+    discount_monthly = forward_rates(m.discount_factor_bom)
 
     # Disaggregated cash flows are passed straight through (positive both).
     assert np.allclose(rep.reinsurance_premium_allocated, m.reinsurance_premium)

@@ -5,7 +5,7 @@ channel) segment under its own basis and stitches the per-segment
 trajectories into one ``(n_mp, n_time+1)`` result. The correctness anchor is
 equivalence: a model point's stitched trajectory must equal the trajectory it
 gets when its segment is measured alone, zero-padded to the portfolio horizon.
-discount_bom / discount_mid become per-MP (2-D) because segments discount on
+discount_factor_bom / discount_factor_mid become per-MP (2-D) because segments discount on
 different curves; the operations that do not yet handle that shape must refuse
 loudly rather than compute a wrong number.
 """
@@ -34,10 +34,10 @@ def test_segmented_full_equals_per_segment():
 
     n_mp = mp.n_mp
     assert m.bel_path.shape[0] == n_mp
-    assert m.discount_bom.ndim == 2                     # per-MP curves
-    assert m.discount_bom.shape == m.bel_path.shape
-    assert m.discount_mid.shape == (n_mp, m.bel_path.shape[1] - 1)
-    for arr in (m.bel_path, m.ra_path, m.csm_path, m.discount_bom):
+    assert m.discount_factor_bom.ndim == 2                     # per-MP curves
+    assert m.discount_factor_bom.shape == m.bel_path.shape
+    assert m.discount_factor_mid.shape == (n_mp, m.bel_path.shape[1] - 1)
+    for arr in (m.bel_path, m.ra_path, m.csm_path, m.discount_factor_bom):
         assert not np.isnan(arr).any() and not np.isinf(arr).any()
 
     seen = 0
@@ -85,8 +85,8 @@ def test_single_segment_basis_stays_1d():
     mp = fcf.samples.model_points()
     basis = fcf.samples.basis().resolve(("TERM_LIFE_A", "FC"))
     m = fcf.gmm.measure(mp.subset([0]), basis)
-    assert m.discount_bom.ndim == 1
-    assert m.discount_mid.ndim == 1
+    assert m.discount_factor_bom.ndim == 1
+    assert m.discount_factor_mid.ndim == 1
 
 
 def test_segmented_full_ops_match_per_segment():

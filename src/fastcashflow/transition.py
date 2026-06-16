@@ -58,8 +58,8 @@ def transition(measurement: GMMMeasurement, fair_value: FloatArray) -> GMMMeasur
     # ratio of consecutive start-of-month factors. Carries the locked-in curve
     # even if it is non-flat. The last axis is time, so this is (n_time,) for a
     # single basis or (n_mp, n_time) for a segmented (per-row-curve) measurement.
-    discount_monthly = (measurement.discount_bom[..., :-1]
-                        / measurement.discount_bom[..., 1:]) - 1.0
+    discount_monthly = (measurement.discount_factor_bom[..., :-1]
+                        / measurement.discount_factor_bom[..., 1:]) - 1.0
     csm, csm_accretion, csm_release = _csm_roll(
         csm0, np.ascontiguousarray(measurement.cashflows.inforce), discount_monthly
     )

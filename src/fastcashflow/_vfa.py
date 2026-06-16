@@ -150,7 +150,7 @@ class VFAMeasurement:
     lic: FloatArray | None = None                 # (n_mp, n_time+1) -- liability for incurred claims.
     # The terminal column holds the residual of claims whose settlement tail
     # runs past the horizon (stays non-zero by design, not a leak).
-    discount_bom: FloatArray | None = None      # (n_time+1,), or (n_mp, n_time+1) when portfolio-stitched
+    discount_factor_bom: FloatArray | None = None      # (n_time+1,), or (n_mp, n_time+1) when portfolio-stitched
     cashflows: "Cashflows | None" = None
     model_points: "ModelPoints | None" = None     # stamped by measure_vfa, for group axes
     group_labels: "np.ndarray | None" = None       # per-group label on a grouped result
@@ -253,7 +253,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
     ``sub_results`` is ``[(idx, VFAMeasurement)]`` -- each segment's headline and
     trajectories are laid into the portfolio arrays at its rows and zero-padded
     on the right to the portfolio's longest horizon (a contract carries no BEL /
-    CSM past its term). Like the GMM stitch, ``discount_bom`` becomes per-MP 2-D:
+    CSM past its term). Like the GMM stitch, ``discount_factor_bom`` becomes per-MP 2-D:
     VFA discounts at each segment's underlying-items return, so the curve is a
     property of the row, not one curve for the book. The padded tail repeats
     each row's last factor (a flat curve -> zero forward rate) so a rate read off
@@ -276,7 +276,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
     csm_accretion = np.zeros((n_mp, n_time))
     csm_release = np.zeros((n_mp, n_time))
     lic = np.zeros((n_mp, n_time + 1))
-    discount_bom = np.ones((n_mp, n_time + 1))
+    discount_factor_bom = np.ones((n_mp, n_time + 1))
 
     cf_2d = ("inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
              "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
@@ -302,8 +302,8 @@ def _stitch_vfa_measurements(n_mp, sub_results):
         _carry_lic_residual(lic, idx, t, n_time, m.lic)
         # Per-MP discount: lay the segment's 1-D curve across its rows, then
         # flat-fill the tail so the padded months read a zero forward rate.
-        discount_bom[idx, :t + 1] = m.discount_bom
-        discount_bom[idx, t + 1:] = m.discount_bom[-1]
+        discount_factor_bom[idx, :t + 1] = m.discount_factor_bom
+        discount_factor_bom[idx, t + 1:] = m.discount_factor_bom[-1]
         cf = m.cashflows
         for name in cf_2d:
             arr = getattr(cf, name)
@@ -321,7 +321,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
         bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
         account_value_path=account_value_path,
         csm_accretion=csm_accretion, csm_release=csm_release, lic=lic,
-        discount_bom=discount_bom, cashflows=cashflows,
+        discount_factor_bom=discount_factor_bom, cashflows=cashflows,
     )
 
 
@@ -720,7 +720,7 @@ def measure_vfa(
             bel_path=m.bel_path, ra_path=m.ra_path, csm_path=m.csm_path,
             account_value_path=m.cashflows.account.av,
             csm_accretion=m.csm_accretion, csm_release=m.csm_release,
-            lic=m.lic, discount_bom=m.discount_bom,
+            lic=m.lic, discount_factor_bom=m.discount_factor_bom,
             cashflows=m.cashflows, model_points=model_points)
 
     p = _vfa_project(model_points, basis, return_scenarios)
@@ -763,7 +763,7 @@ def measure_vfa(
         csm_accretion=csm_accretion,
         csm_release=csm_release,
         lic=p.lic,
-        discount_bom=p.disc_start,
+        discount_factor_bom=p.disc_start,
         cashflows=p.cashflows,
         model_points=model_points,
     )

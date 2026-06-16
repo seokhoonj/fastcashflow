@@ -29,7 +29,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        disability_income, disability_benefit,
                        alpha_pro_rata, alpha_fixed, beta_pro_rata,
                        gamma_fixed, lae_pro_rata,
-                       discount_bom, discount_mid,
+                       discount_factor_bom, discount_factor_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
                        disability_factor, lapse_monthly, state_lapse, surrender_curve,
                        surrender_is_amount, surrender_base,
@@ -100,8 +100,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 prem_occ += occ[s]
             if benefit_state[s]:
                 benefit_occ += occ[s]
-        ds = discount_bom[t]
-        dm = discount_mid[t]
+        ds = discount_factor_bom[t]
+        dm = discount_factor_mid[t]
         level = (prem_occ * prem * premium_factor[sx, age_idx, year]
                  if (t < premium_term and t % prem_freq == 0) else 0.0)
         pv_premium += level * ds
@@ -146,7 +146,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     total = 0.0
     for s in range(n_states):
         total += occ[s]
-    pm = (total * maturity_benefit[mp] * discount_bom[boundary]
+    pm = (total * maturity_benefit[mp] * discount_factor_bom[boundary]
           if boundary == term else 0.0)
     # Diagnosis coverages: claims run off a depleting "not yet diagnosed"
     # occupancy, carried over the transient states.
@@ -168,7 +168,7 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
             healthy = 0.0
             for s in range(n_states):
                 healthy += occ[s]
-            pv_morbidity += healthy * d_rate * benefit * discount_mid[t]
+            pv_morbidity += healthy * d_rate * benefit * discount_factor_mid[t]
             undiagnosed = 1.0 - d_rate
             for s in range(n_states):
                 occ_next[s] = 0.0
@@ -199,7 +199,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               disability_income, disability_benefit,
               alpha_pro_rata, alpha_fixed, beta_pro_rata,
               gamma_fixed, lae_pro_rata,
-              discount_bom, discount_mid,
+              discount_factor_bom, discount_factor_mid,
               mortality_factor, morbidity_factor, longevity_factor,
               disability_factor, lapse_monthly, state_lapse, surrender_curve,
               surrender_is_amount=False, surrender_base=None):
@@ -249,8 +249,8 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_disability_benefit = cuda.to_device(disability_benefit)
     d_gamma_fixed = cuda.to_device(gamma_fixed)
     d_lae_pro_rata = cuda.to_device(lae_pro_rata)
-    d_discount_bom = cuda.to_device(discount_bom)
-    d_discount_mid = cuda.to_device(discount_mid)
+    d_discount_factor_bom = cuda.to_device(discount_factor_bom)
+    d_discount_factor_mid = cuda.to_device(discount_factor_mid)
     d_lapse_monthly = cuda.to_device(lapse_monthly)
     d_state_lapse = cuda.to_device(state_lapse)
     d_surrender_curve = cuda.to_device(surrender_curve)
@@ -274,8 +274,8 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         d_coverage_risk, d_coverage_is_diagnosis, d_maturity, d_annuity,
         d_disability_income, d_disability_benefit,
         alpha_pro_rata, alpha_fixed, beta_pro_rata,
-        d_gamma_fixed, d_lae_pro_rata, d_discount_bom,
-        d_discount_mid, mortality_factor, morbidity_factor, longevity_factor,
+        d_gamma_fixed, d_lae_pro_rata, d_discount_factor_bom,
+        d_discount_factor_mid, mortality_factor, morbidity_factor, longevity_factor,
         disability_factor, d_lapse_monthly, d_state_lapse, d_surrender_curve,
         surrender_is_amount, d_surrender_base,
         d_bel, d_ra, d_csm, d_loss,

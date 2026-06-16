@@ -232,6 +232,6 @@ def test_b96_higher_discount_reduces_pv_of_claims():
     )
     res_lo = measure(ModelPoints.single(**kwargs, calculation_methods=PATTERNS), _flat_assumptions(discount_annual=0.0))
     res_hi = measure(ModelPoints.single(**kwargs, calculation_methods=PATTERNS), _flat_assumptions(discount_annual=0.10))
-    pv_claims_lo = float(np.sum(res_lo.cashflows.claim_cf[0] * res_lo.discount_mid))
-    pv_claims_hi = float(np.sum(res_hi.cashflows.claim_cf[0] * res_hi.discount_mid))
+    pv_claims_lo = float(np.sum(res_lo.cashflows.claim_cf[0] * res_lo.discount_factor_mid))
+    pv_claims_hi = float(np.sum(res_hi.cashflows.claim_cf[0] * res_hi.discount_factor_mid))
     assert pv_claims_hi < pv_claims_lo
