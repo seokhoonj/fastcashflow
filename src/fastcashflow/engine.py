@@ -222,12 +222,22 @@ def _account_risk_adjustment(model_points, basis, proj, monthly_rate):
     zeros_mp = np.zeros(n_mp)
     nar_claim = np.ascontiguousarray(
         proj.deaths * np.maximum(0.0, face[:, None] - proj.account.av_mid))
-    _, pv_nar, pv_expense, *_ = _rollforward_kernel(
-        nar_claim, proj.expense_cf, zeros_t, zeros_t, zeros_t, zeros_t,
+    # The annuity payout (an annuitizing UL contract, phase 2) bears longevity
+    # risk -- the insurer pays the income for as long as the annuitant lives --
+    # so its PV is priced through longevity_cv, alongside the at-risk mortality
+    # and expense. The annuity stream rides the survival slot of the
+    # roll-forward (position 6); a non-annuitizing account book has annuity_cf
+    # == 0, so pv_annuity == 0 and this term vanishes (byte-identical). The
+    # account maturity lump is the return of the policyholder's own balance (an
+    # investment component) and bears no insurance risk, so it is deliberately
+    # NOT longevity-priced (it stays out, the maturity slot is zero here).
+    _, pv_nar, pv_expense, _, pv_annuity = _rollforward_kernel(
+        nar_claim, proj.expense_cf, zeros_t, zeros_t, zeros_t, proj.annuity_cf,
         zeros_mp, zeros_t, model_points.contract_boundary_months, monthly_rate)
     z = _norm_ppf(basis.ra_confidence)
     confidence_margin = z * (basis.mortality_cv * pv_nar
-                             + basis.expense_cv * pv_expense)
+                             + basis.expense_cv * pv_expense
+                             + basis.longevity_cv * pv_annuity)
     if basis.ra_method == "cost_of_capital":
         return _cost_of_capital_ra(
             confidence_margin, monthly_rate, basis.cost_of_capital_rate)
@@ -2870,9 +2880,13 @@ def _measure_fast(
     # route a boundary-cut account book to the full measurement.
     account_boundary_cut = has_account and bool(np.any(
         model_points.contract_boundary_months < model_points.term_months))
+    # The scalar fast kernel does not yet carry the annuitization phase switch
+    # (a later step); route an annuitizing account book to the full measurement.
+    account_annuitizing = has_account and bool(np.any(
+        model_points.annuitization_months > 0))
     if has_account and (backend != "cpu" or discount_curve is not None
                         or needs_state_machine(model_points, basis)
-                        or account_boundary_cut):
+                        or account_boundary_cut or account_annuitizing):
         if backend != "cpu" or discount_curve is not None:
             raise NotImplementedError(
                 "a universal-life account book cannot be combined with "

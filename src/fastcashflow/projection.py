@@ -296,7 +296,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     gamma_fixed, lae_pro_rata,
                     has_account, mp_account, account_value0, account_face,
                     account_prem_to_av, account_coi_rate, account_admin_fee,
-                    account_credit, n_time):
+                    account_credit, annuitization_months, annuitization_rate,
+                    min_accumulation_benefit, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -358,6 +359,14 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
         #   a -= admin_fee + coi; if a < 0: a = 0;
         #   av_mid = a*(1+cr)^0.5; a = a*(1+cr).
         roll_av = has_account and mp_account[mp]
+        A_annz = annuitization_months[mp]
+        # An MP annuitizes iff it is account-backed and carries a conversion
+        # month: at A_annz the account accumulation stops and the balance buys a
+        # survival-contingent income (phase 2). A_annz == 0 -> the ordinary
+        # account (a maturity lump), every existing book byte-identical.
+        annuitizing = roll_av and A_annz > 0
+        converted_balance = 0.0
+        locked_annuity_payment = 0.0
         if roll_av:
             a_av = account_value0[mp]
             av[mp, 0] = a_av
@@ -365,7 +374,11 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             cr_av = account_credit[mp]
             half_credit = (1.0 + cr_av) ** 0.5
             full_credit = 1.0 + cr_av
-            for t in range(boundary):
+            # Accumulation stops at the conversion month for an annuitizing MP
+            # (the balance is spent to buy the annuity); otherwise it rolls to
+            # the projection horizon as before.
+            roll_end = A_annz if annuitizing else boundary
+            for t in range(roll_end):
                 a_av += account_prem_to_av[mp, t]
                 risk = face_av - a_av
                 if risk < 0.0:
@@ -378,6 +391,16 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 av_mid[mp, t] = a_av * half_credit
                 a_av = a_av * full_credit
                 av[mp, t + 1] = a_av
+            if annuitizing:
+                # Conversion: the balance carried into month A (the month-A
+                # start = month A-1 end, no month-A credit), floored at the GMAB
+                # (minimum_accumulation_benefit). The GAO rate locks the level
+                # payment once -- a guaranteed annuity, not re-credited.
+                converted_balance = av[mp, A_annz]
+                gmab_acc = min_accumulation_benefit[mp]
+                if gmab_acc > converted_balance:
+                    converted_balance = gmab_acc
+                locked_annuity_payment = converted_balance * annuitization_rate[mp]
         # In-force occupancy over the transient states; the input state
         # seats the model point's count on its starting state.
         occ = np.zeros(n_states)
@@ -388,6 +411,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
         morb_rate = 0.0       # aggregate morbidity claim per unit in-force
         for t in range(boundary):
             year = t // 12
+            in_payout = annuitizing and t >= A_annz
             ift = 0.0         # total in-force
             dclaim_occ = 0.0  # death-benefit-weighted in-force (claim base)
             prem_occ = 0.0    # in-force on the premium-paying states
@@ -404,7 +428,9 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 if benefit_state[s]:
                     benefit_occ += occ[s]
             inforce[mp, t] = ift
-            lapse_flow[mp, t] = lapse_acc
+            # No surrender in the payout phase (a life annuity in payment cannot
+            # lapse); phase 1 reports the actual state-machine lapse exit.
+            lapse_flow[mp, t] = 0.0 if in_payout else lapse_acc
             if year != last_year:
                 claim_rate = 0.0
                 morb_rate = 0.0
@@ -429,7 +455,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
             claim_cf[mp, t] = dclaim_occ * claim_rate
-            if roll_av:
+            if roll_av and not in_payout:
                 # Account-backed death pays max(account value, face) on the
                 # occupancy deaths -- written ONCE here, the pays_account_balance
                 # coverage having been excluded from claim_rate above. The
@@ -440,8 +466,17 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 fa = account_face[mp]
                 claim_cf[mp, t] += deaths_acc * (av_m if av_m > fa else fa)
             morbidity_cf[mp, t] = ift * morb_rate
-            annuity_cf[mp, t] = (ift * annuity_payment[mp] * annuity_factor[mp, year]
-                                 if t % ann_freq == 0 else 0.0)
+            if annuitizing:
+                # Phase 2 (t >= A): the locked guaranteed annuity, paid annuity-
+                # due from the conversion month on the surviving in-force, every
+                # annuity_frequency_months. Phase 1 pays nothing here.
+                annuity_cf[mp, t] = (
+                    ift * locked_annuity_payment
+                    if (in_payout and (t - A_annz) % ann_freq == 0) else 0.0)
+            else:
+                annuity_cf[mp, t] = (
+                    ift * annuity_payment[mp] * annuity_factor[mp, year]
+                    if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: alpha / beta / gamma maintenance plus LAE on the
             # month's claim + morbidity total. Dispatched from
@@ -465,12 +500,23 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             # transition pays its benefit on the occupancy it carries.
             for s in range(n_states):
                 occ_next[s] = 0.0
-            for e in range(n_edges):
-                flow = occ[edge_from[e]] * edge_prob[e, mp, year]
-                occ_next[edge_to[e]] += flow
-                if edge_lump_sum[e]:
-                    disability_cf[mp, t] += flow * disability_benefit[mp]
-            if t + 1 == term:
+            if in_payout:
+                # Phase 2 occupancy: mortality-only decrement (survivors stay,
+                # deaths leave). Lapse and inter-state transitions are suppressed
+                # -- a life annuity in payment does not lapse. Single active
+                # state in v1; a multi-state book freezes transitions here.
+                for s in range(n_states):
+                    occ_next[s] = occ[s] * (1.0 - state_death_exit[s, mp, year])
+            else:
+                for e in range(n_edges):
+                    flow = occ[edge_from[e]] * edge_prob[e, mp, year]
+                    occ_next[edge_to[e]] += flow
+                    if edge_lump_sum[e]:
+                        disability_cf[mp, t] += flow * disability_benefit[mp]
+            # Maturity lump: skipped for an annuitizing MP (the balance was
+            # already converted to the annuity at A; paying a lump too would
+            # double-count).
+            if t + 1 == term and not annuitizing:
                 total_next = 0.0
                 for s in range(n_states):
                     total_next += occ_next[s]
@@ -1011,6 +1057,23 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             "model points is not yet supported -- measure the account and "
             "non-account subsets separately. (Per-model-point RA splitting for "
             "mixed books is a planned follow-up.)")
+    # Universal-life annuitization cross-checks: an annuitizing MP needs an
+    # account to convert (the coverage flags, known only here) and must leave at
+    # least one payout month inside the projection horizon (the boundary).
+    annz = model_points.annuitization_months > 0
+    if np.any(annz):
+        if not has_account or np.any(annz & ~mp_account):
+            raise ValueError(
+                "annuitization_months is set on a model point with no "
+                "account-backed coverage -- there is no balance to convert. An "
+                "annuitizing contract must carry a funds_from_account / "
+                "pays_account_balance coverage.")
+        if np.any(annz & (model_points.annuitization_months
+                          >= model_points.contract_boundary_months)):
+            raise ValueError(
+                "annuitization_months must be < contract_boundary_months (the "
+                "projection runs to the boundary, so the conversion month must "
+                "leave at least one payout month inside the horizon).")
     # A universal-life account book pays its benefits (the account value) at the
     # exit, not over a settlement pattern; the measurement's settlement factor is
     # keyed on basis.discount_monthly (the GMM in-year rate), which would also be
@@ -1268,6 +1331,9 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             account_coi_rate,
             account_admin_fee,
             account_credit,
+            model_points.annuitization_months,
+            model_points.annuitization_rate,
+            model_points.minimum_accumulation_benefit,
             n_time,
         )
     # Surrender value -- post-projection compute. ``lapse_flow``
