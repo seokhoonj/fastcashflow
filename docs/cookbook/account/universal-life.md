@@ -239,6 +239,59 @@ fcf.gmm.trace(0, ann_mp, ann_basis)        # 전환 + 지급 섹션을 포함한
 현가가 지급단계에 내줄 연금의 현가보다 커서 BEL 이 음수 (이익) 가 되고, 그만큼이
 CSM 으로 인식됩니다.
 
+## 계좌차감 특약 (계좌서 비용을 빼가는 특약)
+
+유니버설 계좌는 사망 레그의 COI 만 빼가는 게 아닙니다. **계좌차감 특약** (예:
+유니버설 재진단암) 은 매월 위험보험료를 **계좌에서 차감**하되, 급부는 계좌잔액이
+아니라 **고정 진단금**입니다. 사망 레그와의 차이는 담보 상호작용 플래그 하나뿐:
+
+```{list-table}
+:header-rows: 1
+:widths: 30 22 22 26
+
+* - 담보
+  - `funds_from_account`
+  - `pays_account_balance`
+  - 차감 / 급부
+* - 사망 레그
+  - `True`
+  - `True`
+  - NAR-COI `coi x (face - av)` 차감 / `max(av, face)` 지급
+* - 계좌차감 특약
+  - `True`
+  - `False`
+  - 고정 `rate x amount` 차감 / 고정 진단금 (계좌 무관)
+```
+
+그래서 계좌는 매월 **두 가지** 비용을 빼갑니다 — 사망 레그의 NAR-COI 와 모든
+계좌차감 특약의 고정 charge (`rate x amount`). 특약의 **급부**는 보통 특약처럼
+claim 쪽에서 지급됩니다 (재진단암 -> 반복지급 `MORBIDITY`); 옮겨진 건 **비용**
+뿐입니다 — 별도 보험료가 아니라 계좌에서 차감. 그 charge 만큼 계좌가 덜 쌓여
+환급 / 사망 / 만기 급부가 줄고, 그게 보험사가 특약 원가를 회수하는 경로입니다.
+특약 진단금은 morbidity 위험을 지므로 계좌형 RA 에 `morbidity_cv` 항으로 가격됩니다.
+
+번들 샘플 `"ul-cost-deduct"` 는 사망 레그 + 재진단암 계좌차감 특약을 든 두 계약입니다:
+
+```python
+cd_mp    = fcf.samples.model_points("ul-cost-deduct")
+cd_basis = fcf.samples.basis("ul-cost-deduct")
+m = fcf.gmm.measure(cd_mp, cd_basis)
+
+print(f"contract 0: BEL={m.bel[0]:,.0f}  RA={m.ra[0]:,.0f}  CSM={m.csm[0]:,.0f}")
+print(f"contract 1: BEL={m.bel[1]:,.0f}  RA={m.ra[1]:,.0f}  CSM={m.csm[1]:,.0f}")
+```
+
+출력:
+
+```
+contract 0: BEL=-2,466,380  RA=145,797  CSM=2,320,583
+contract 1: BEL=-1,159,364  RA=78,412  CSM=1,080,952
+```
+
+특약 (`CANCER`) 은 `CoverageRate("CANCER", rate, funds_from_account=True,
+pays_account_balance=False)` 로 선언하고, 진단금은 `benefits={"CANCER": ...}` +
+`calculation_methods={"CANCER": CalculationMethod.MORBIDITY}` 로 줍니다.
+
 ## 한국 상품과의 매핑
 
 유니버설 = 적립 방식이므로 담보 / 측정모델과 자유롭게 조합됩니다:
@@ -264,8 +317,8 @@ CSM 으로 인식됩니다.
 ```{admonition} v1 범위
 :class: note
 
-현재는 **사망 레그** (`max(계좌, face)` + NAR-COI) 와 **연금화 레그** (적립 ->
-종신연금 2단계 전환, 위 절) 를 다룹니다. 계좌에서 비용을 빼가는 특약 (예: 유니버설
-재진단암) 은 데이터모델이 자리를 비워뒀지만 (담보 상호작용 플래그) 아직 커널 구현
-전입니다.
+현재는 **사망 레그** (`max(계좌, face)` + NAR-COI), **연금화 레그** (적립 ->
+종신연금 2단계 전환), **계좌차감 특약** (계좌서 비용 차감 + 고정 진단금, 위 절들)
+을 다룹니다. 연금 지급단계가 펀드 수익률로 재부유하는 실적배당형 변액연금, 보증
+시간가치 (TVOG) 를 함께 측정하는 변액 계좌, 연금자 전용 위험률은 아직 범위 밖입니다.
 ```

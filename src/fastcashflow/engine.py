@@ -209,12 +209,14 @@ def _account_risk_adjustment(model_points, basis, proj, monthly_rate):
     The insurance risk of an account-backed death leg is the mortality borne on
     the NET AMOUNT AT RISK (the death benefit above the account,
     ``deaths * max(0, face - av_mid)``) -- the account portion returns the
-    policyholder's own money and bears no insurance risk -- plus expense risk.
-    This BYPASSES :func:`_risk_adjustment` and its ``expense_cv != 0`` guard (a
-    UL RA legitimately prices ``expense_cv``): run the at-risk claim and the
-    expense through one roll-forward pass, then the
-    confidence margin ``z(ra_confidence) * (mortality_cv*pv_nar +
-    expense_cv*pv_expense)``, cost-of-capital-wrapped per ``ra_method``.
+    policyholder's own money and bears no insurance risk -- plus expense risk,
+    plus the morbidity risk of any cost-deducting rider (a fixed health benefit
+    funded from the account). This BYPASSES :func:`_risk_adjustment` and its
+    ``expense_cv != 0`` guard (a UL RA legitimately prices ``expense_cv``): run
+    the at-risk claim, the morbidity claim and the expense through one
+    roll-forward pass, then the confidence margin ``z(ra_confidence) *
+    (mortality_cv*pv_nar + morbidity_cv*pv_morbidity + expense_cv*pv_expense)``,
+    cost-of-capital-wrapped per ``ra_method``.
     """
     face = model_points.minimum_death_benefit
     n_mp, n_time = proj.claim_cf.shape
@@ -231,11 +233,19 @@ def _account_risk_adjustment(model_points, basis, proj, monthly_rate):
     # account maturity lump is the return of the policyholder's own balance (an
     # investment component) and bears no insurance risk, so it is deliberately
     # NOT longevity-priced (it stays out, the maturity slot is zero here).
-    _, pv_nar, pv_expense, _, pv_annuity = _rollforward_kernel(
-        nar_claim, proj.expense_cf, zeros_t, zeros_t, zeros_t, proj.annuity_cf,
-        zeros_mp, zeros_t, model_points.contract_boundary_months, monthly_rate)
+    # The morbidity claim of a cost-deducting rider (funds from the account, but
+    # pays a fixed health benefit -- not the balance) bears morbidity risk; it
+    # rides the DISABILITY slot of the roll-forward (position 3, otherwise empty
+    # for an account book) purely to harvest its PV. A book with no such rider
+    # has morbidity_cf == 0, so pv_morbidity == 0 and the term vanishes
+    # (byte-identical). expense_cf rides the morbidity slot for the same reason.
+    _, pv_nar, pv_expense, pv_morbidity, pv_annuity = _rollforward_kernel(
+        nar_claim, proj.expense_cf, proj.morbidity_cf, zeros_t, zeros_t,
+        proj.annuity_cf, zeros_mp, zeros_t,
+        model_points.contract_boundary_months, monthly_rate)
     z = _norm_ppf(basis.ra_confidence)
     confidence_margin = z * (basis.mortality_cv * pv_nar
+                             + basis.morbidity_cv * pv_morbidity
                              + basis.expense_cv * pv_expense
                              + basis.longevity_cv * pv_annuity)
     if basis.ra_method == "cost_of_capital":
@@ -2496,7 +2506,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                          mortality_monthly,
                          has_account, mp_account, account_value0, account_face,
                          account_prem_to_av, account_coi_rate, account_admin_fee,
-                         account_credit, account_gmab,
+                         account_credit, account_charge, account_gmab,
                          account_mortality_cv, account_expense_cv, account_z):
     """Scalar-inforce fast path of the general codegen fast kernel
     (:func:`_codegen_fast_kernel_source`).
@@ -2598,14 +2608,16 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
             if roll_av:
                 # Universal-life within-month account roll (the account-roll
                 # within-month order): premium in, COI on the net amount at risk,
-                # admin fee, floor at zero, half / full crediting. The account
+                # admin fee, every cost-deducting rider's fixed charge, floor at
+                # zero, half / full crediting. The account
                 # death / surrender / NAR claims settle on the half-credited
                 # av_mid, the maturity on the month-end balance.
                 a_av += account_prem_to_av[mp, t]
                 risk = face_av - a_av
                 if risk < 0.0:
                     risk = 0.0
-                a_av -= account_admin_fee[t] + account_coi_rate[mp, t] * risk
+                a_av -= (account_admin_fee[t] + account_coi_rate[mp, t] * risk
+                         + account_charge[mp, t])
                 if a_av < 0.0:
                     a_av = 0.0
                 av_mid_t = a_av * half_credit_av
@@ -2749,8 +2761,13 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
             bel_mp = (pv_account_death + pv_account_surr + pm
                       + pv_morbidity + pv_annuity + pv_expense
                       - pv_premium - cnt * account_value0[mp])
+            # A cost-deducting rider's health benefit (pv_morbidity) bears
+            # morbidity risk -- priced alongside the at-risk mortality and
+            # expense (morbidity_factor == account_z * morbidity_cv). Zero for an
+            # account book with no such rider, so byte-identical.
             ra_mp = (account_z * (account_mortality_cv * pv_account_nar
-                                  + account_expense_cv * pv_expense))
+                                  + account_expense_cv * pv_expense)
+                     + morbidity_factor * pv_morbidity)
         else:
             bel_mp = pv_mortality + pv_morbidity + pm + pv_annuity + pv_expense + pv_surrender - pv_premium
             ra_mp = (mortality_factor * pv_mortality + morbidity_factor * pv_morbidity
@@ -3246,7 +3263,7 @@ def _measure_fast(
             coverage_rates[:, model_points.sex, issue_index, :])  # (cov, mp, year)
         (acct_has, acct_mp, acct_value0, acct_face,
          acct_prem_to_av, acct_coi_rate, acct_admin_fee,
-         acct_credit) = _account_kernel_args(
+         acct_credit, acct_charge) = _account_kernel_args(
             model_points, basis, coverage_rates_per_mp,
             coverage_funds_from_account, coverage_pays_account_balance,
             gamma_fixed, n_time, n_years,
@@ -3275,6 +3292,7 @@ def _measure_fast(
         acct_coi_rate = z1
         acct_admin_fee = np.zeros(1)
         acct_credit = np.zeros(1)
+        acct_charge = z1
         acct_gmab = np.zeros(1)
         acct_mortality_cv = 0.0
         acct_expense_cv = 0.0
@@ -3337,6 +3355,7 @@ def _measure_fast(
             acct_coi_rate,
             acct_admin_fee,
             acct_credit,
+            acct_charge,
             acct_gmab,
             acct_mortality_cv,
             acct_expense_cv,

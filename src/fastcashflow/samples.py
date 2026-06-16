@@ -22,7 +22,7 @@ import numpy as np
 from fastcashflow import io as _io
 
 #: Available sample templates -- see :func:`templates`.
-_TEMPLATES = ("gmm", "vfa", "paa", "ul", "ul-annuity")
+_TEMPLATES = ("gmm", "vfa", "paa", "ul", "ul-annuity", "ul-cost-deduct")
 
 #: Fixed seed for :func:`scenarios` -- a reproducible toy path set, not a
 #: calibration parameter.
@@ -36,7 +36,7 @@ _FORMATS = {"csv": ".csv", "parquet": ".parquet",
 
 def templates() -> list[str]:
     """The available :func:`export` / load template names
-    (``["gmm", "vfa", "paa", "ul", "ul-annuity"]``)."""
+    (``["gmm", "vfa", "paa", "ul", "ul-annuity", "ul-cost-deduct"]``)."""
     return list(_TEMPLATES)
 
 
@@ -163,6 +163,73 @@ def _ul_annuity_basis():
     )
 
 
+def _ul_cost_deduct_model_points():
+    """A small synthetic universal-life portfolio carrying a cost-deducting rider.
+
+    Two account-backed contracts whose account funds BOTH the death-leg COI and a
+    recurring-cancer rider (a fixed health benefit). The rider
+    is declared ``funds_from_account=True, pays_account_balance=False`` on its
+    :class:`~fastcashflow.basis.CoverageRate`: its monthly charge (``rate x
+    amount``) is drawn from the account, but its benefit is the fixed CANCER sum,
+    paid as a recurring morbidity claim -- never the account balance. Pair with
+    :func:`_ul_cost_deduct_basis`; measure through ``gmm.measure``. Synthetic demo
+    figures, never sourced from a real portfolio.
+    """
+    from fastcashflow import CalculationMethod, ModelPoints
+
+    face = np.array([100_000_000.0, 50_000_000.0])
+    cancer = np.array([30_000_000.0, 20_000_000.0])
+    return ModelPoints(
+        sex=np.array([0, 1]),
+        issue_age=np.array([45.0, 50.0]),
+        term_months=np.array([240, 240]),
+        premium_term_months=np.array([240, 240]),
+        premium=np.array([600_000.0, 400_000.0]),
+        count=np.array([1.0, 1.0]),
+        account_value=np.array([0.0, 1_000_000.0]),
+        minimum_death_benefit=face,
+        minimum_crediting_rate=np.array([0.02, 0.02]),
+        benefits={"DEATH": face, "CANCER": cancer},
+        calculation_methods={"DEATH": CalculationMethod.DEATH,
+                             "CANCER": CalculationMethod.MORBIDITY},
+        product=np.array(["UL_CD", "UL_CD"]),
+        channel=np.array(["FC", "FC"]),
+    )
+
+
+def _ul_cost_deduct_basis():
+    """The synthetic universal-life basis paired with
+    :func:`_ul_cost_deduct_model_points`.
+
+    The same account chassis as :func:`_ul_basis` plus a CANCER rider that funds
+    its charge from the account (``funds_from_account=True``) but pays a fixed
+    benefit (``pays_account_balance=False``). ``morbidity_cv`` prices the rider's
+    health-benefit risk in the account-book risk adjustment. A single
+    :class:`~fastcashflow.Basis`; measure through ``gmm.measure``.
+    """
+    from fastcashflow import Basis, CoverageRate
+
+    coi = 0.004
+    cancer_rate = 0.0024
+    return Basis(
+        mortality_annual=0.002,
+        lapse_annual=0.04,
+        discount_annual=0.03,
+        ra_confidence=0.75,
+        mortality_cv=0.1,
+        morbidity_cv=0.15,
+        investment_return=0.04,
+        premium_load=0.10,
+        coi_annual=coi,
+        coverages=(
+            CoverageRate("DEATH", coi, funds_from_account=True,
+                         pays_account_balance=True),
+            CoverageRate("CANCER", cancer_rate, funds_from_account=True,
+                         pays_account_balance=False),
+        ),
+    )
+
+
 def basis(template: str = "gmm"):
     """Bundled sample basis. ``template="gmm"`` (default) returns the per-segment
     :class:`~fastcashflow.BasisRouter` (a ``(product, channel)`` -> ``Basis``
@@ -179,6 +246,8 @@ def basis(template: str = "gmm"):
         return _ul_basis()
     if template == "ul-annuity":
         return _ul_annuity_basis()
+    if template == "ul-cost-deduct":
+        return _ul_cost_deduct_basis()
     if template == "gmm":
         return _io.load_sample_basis()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -197,6 +266,8 @@ def model_points(template: str = "gmm"):
         return _ul_model_points()
     if template == "ul-annuity":
         return _ul_annuity_model_points()
+    if template == "ul-cost-deduct":
+        return _ul_cost_deduct_model_points()
     if template == "gmm":
         return _io.load_sample_model_points()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -344,7 +415,7 @@ def export(output_dir, template: str = "gmm", format: str = "csv",
         _io._drop_sample_table("sample_paa_policies.csv", dest / f"policies{ext}")
         _io._drop_sample_table("sample_paa_coverages.csv", dest / f"coverages{ext}")
         files = ["basis.xlsx", f"policies{ext}", f"coverages{ext}"]
-    else:  # ul / ul-annuity -- load-only, constructed inline (no bundled files)
+    else:  # ul / ul-annuity / ul-cost-deduct -- load-only, inline (no files)
         raise NotImplementedError(
             f"the {template!r} template is load-only -- build it in memory with "
             f"samples.model_points({template!r}) / samples.basis({template!r}); "

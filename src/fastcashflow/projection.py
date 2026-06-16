@@ -165,8 +165,11 @@ def _account_kernel_args(
     """Build the per-policy universal-life account-roll inputs for the kernel.
 
     Returns ``(has_account, mp_account, account_value0, account_face,
-    prem_to_av, coi_rate_m, admin_fee, credit)`` -- per-policy scalars / arrays
-    the kernel rolls the account value with. The roll is NOT in-force weighted
+    prem_to_av, coi_rate_m, admin_fee, credit, account_charge)`` -- per-policy
+    scalars / arrays the kernel rolls the account value with. ``coi_rate_m`` is
+    the NAR-priced death-leg rate; ``account_charge`` is the level per-month
+    charge of every cost-deducting rider (funds from the account, fixed
+    benefit). The roll is NOT in-force weighted
     (it tracks a single policy's account); in-force enters at the fund / benefit
     aggregation. ``has_account`` is derived STRICTLY from the coverage flags
     (NEVER ``account_value != 0``).
@@ -185,7 +188,12 @@ def _account_kernel_args(
     # row in a mixed book stays untouched.
     account_cov = coverage_funds_from_account | coverage_pays_account_balance
     mp_account = np.zeros(n_mp, np.bool_)
-    coi_cov_of_mp = np.full(n_mp, -1, np.int64)  # the funds coverage's index per MP
+    # The death-leg COI is the net-amount-at-risk charge of the account-backed
+    # death coverage -- the one that BOTH funds from the account AND pays the
+    # account balance (max(av, face)). A cost-deducting rider funds from the
+    # account but does NOT pay the balance; it charges a fixed amount, summed
+    # into ``account_charge`` below, never into this NAR-priced rate.
+    coi_cov_of_mp = np.full(n_mp, -1, np.int64)  # the death-leg coverage index per MP
     if model_points.coverage_index.size and account_cov.any():
         cov_idx = model_points.coverage_index
         offset = model_points.coverage_offset
@@ -194,7 +202,8 @@ def _account_kernel_args(
                 ci = cov_idx[k]
                 if account_cov[ci]:
                     mp_account[mp] = True
-                if coverage_funds_from_account[ci]:
+                if (coverage_funds_from_account[ci]
+                        and coverage_pays_account_balance[ci]):
                     coi_cov_of_mp[mp] = ci
     has_account = bool(mp_account.any())
     if not has_account:
@@ -202,7 +211,7 @@ def _account_kernel_args(
         # kernel never reads them (has_account=False short-circuits the roll).
         z1 = np.zeros((1, 1))
         return (False, mp_account, np.zeros(1), np.zeros(1),
-                z1, z1, np.zeros(1), np.zeros(1))
+                z1, z1, np.zeros(1), np.zeros(1), z1)
 
     year_of_month = np.arange(n_time) // 12
 
@@ -233,14 +242,36 @@ def _account_kernel_args(
         model_points.premium[:, None] * pf_m * paying * (1.0 - basis.premium_load))
 
     # COI monthly charge rate per MP, year-expanded to (n_mp, n_time). The rate
-    # is the funds_from_account coverage's own monthly rate; an MP without a
-    # funds coverage (pays-only, not used in v1) charges zero COI.
+    # is the account-backed death leg's own monthly rate (funds AND pays); an MP
+    # with no such leg charges zero NAR-COI (e.g. a savings-only account whose
+    # only account charge is a cost-deducting rider).
     coi_rate_m = np.zeros((n_mp, n_time))
     for mp in range(n_mp):
         ci = coi_cov_of_mp[mp]
         if ci >= 0:
             coi_rate_m[mp] = coverage_rates[ci, mp, year_of_month]
     coi_rate_m = np.ascontiguousarray(coi_rate_m)
+
+    # Fixed per-month account charge of every cost-deducting rider (funds from
+    # the account, does NOT pay the balance). Each such coverage draws
+    # ``rate * amount`` from the account; its benefit is paid normally on the
+    # claim side (it is NOT excluded from the claim accumulators, only the
+    # pays_account_balance death leg is). The charge is NOT net-amount-at-risk
+    # priced -- the benefit is a fixed sum, not the account -- so it is summed
+    # here into a level charge, separate from the NAR-priced ``coi_rate_m``.
+    account_charge = np.zeros((n_mp, n_time))
+    if model_points.coverage_index.size:
+        cov_idx = model_points.coverage_index
+        cov_amt = model_points.coverage_amount
+        offset = model_points.coverage_offset
+        for mp in range(n_mp):
+            for k in range(offset[mp], offset[mp + 1]):
+                ci = cov_idx[k]
+                if (coverage_funds_from_account[ci]
+                        and not coverage_pays_account_balance[ci]):
+                    account_charge[mp] += (
+                        coverage_rates[ci, mp, year_of_month] * cov_amt[k])
+    account_charge = np.ascontiguousarray(account_charge)
 
     # Admin fee = per-policy monthly gamma_fixed (NOT ift-weighted). Crediting
     # = declared return floored at each contract's guarantee.
@@ -253,7 +284,7 @@ def _account_kernel_args(
     account_face = np.ascontiguousarray(
         np.asarray(model_points.minimum_death_benefit, np.float64))
     return (True, mp_account, account_value0, account_face,
-            prem_to_av, coi_rate_m, admin_fee, credit)
+            prem_to_av, coi_rate_m, admin_fee, credit, account_charge)
 
 
 @njit(cache=True)
@@ -296,7 +327,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     gamma_fixed, lae_pro_rata,
                     has_account, mp_account, account_value0, account_face,
                     account_prem_to_av, account_coi_rate, account_admin_fee,
-                    account_credit, annuitization_months, annuitization_rate,
+                    account_credit, account_charge,
+                    annuitization_months, annuitization_rate,
                     min_accumulation_benefit, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
@@ -385,7 +417,9 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     risk = 0.0
                 c_av = account_coi_rate[mp, t] * risk
                 coi_av[mp, t] = c_av
-                a_av -= account_admin_fee[t] + c_av
+                # The death-leg NAR-COI plus every cost-deducting rider's fixed
+                # charge are both drawn from the account this month.
+                a_av -= account_admin_fee[t] + c_av + account_charge[mp, t]
                 if a_av < 0.0:
                     a_av = 0.0
                 av_mid[mp, t] = a_av * half_credit
@@ -1040,7 +1074,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     # all-False / stub for a non-account portfolio -- a strict no-op.
     (has_account, mp_account, account_value0, account_face,
      account_prem_to_av, account_coi_rate, account_admin_fee,
-     account_credit) = _account_kernel_args(
+     account_credit, account_charge) = _account_kernel_args(
         model_points, basis, coverage_rates, coverage_funds_from_account,
         coverage_pays_account_balance, gamma_fixed, n_time, n_years,
     )
@@ -1331,6 +1365,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             account_coi_rate,
             account_admin_fee,
             account_credit,
+            account_charge,
             model_points.annuitization_months,
             model_points.annuitization_rate,
             model_points.minimum_accumulation_benefit,
