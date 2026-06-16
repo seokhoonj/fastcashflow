@@ -39,7 +39,6 @@ from fastcashflow.engine import GMMMeasurement, _require_full
 from fastcashflow._measurement_basis import _require_inception
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_roll
-from fastcashflow.projection import reject_account_book
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._vfa import (
     CSM_BASIS_PARAGRAPH_45, _CSM_TO_MEASUREMENT_BASIS, VFAMeasurement,
@@ -290,10 +289,10 @@ def _(
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
     _require_full(measurement, "roll_forward")
-    # The movement reads mortality_cf / morbidity_cf raw as incurred claims; a
-    # universal-life account book's account death benefit is not a priced claim,
-    # so reject it until the movement nets the account (a follow-up).
-    reject_account_book(measurement.cashflows, "roll_forward")
+    # A universal-life account book needs no guard here: this roll-forward reads
+    # only the account-netted bel_path / ra_path / csm_path and the in-force
+    # count, never the raw benefit cash flows, so the BEL / RA / CSM waterfall
+    # telescopes correctly (the account was netted once at measurement).
     n_time = measurement.bel_path.shape[1] - 1
     n_mp = measurement.bel_path.shape[0]
     if actual_inforce is not None:

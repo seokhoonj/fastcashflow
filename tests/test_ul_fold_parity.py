@@ -246,10 +246,10 @@ def test_account_book_gated_on_raw_consumers():
     with pytest.raises(NotImplementedError):
         fcf.vfa.tvog(mp, basis,
                      np.tile(np.linspace(-0.01, 0.03, 8)[:, None], (1, n_time)))
-    # roll_forward reads mortality_cf as incurred claims.
-    m = fcf.gmm.measure(mp, basis, full=True)
-    with pytest.raises(NotImplementedError):
-        fcf.roll_forward(m, 12)
+    # roll_forward is NOT gated: it reads only the account-netted bel / ra / csm
+    # paths and the in-force count, never the raw benefit cash flows, so it
+    # supports an account book (see
+    # test_movement.test_roll_forward_universal_life_account_reconciles).
 
 
 def test_non_account_portfolio_has_no_account_sidecar():

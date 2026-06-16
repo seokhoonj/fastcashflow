@@ -67,6 +67,28 @@ def test_roll_forward_bel_and_ra_reconcile():
         )
 
 
+def test_roll_forward_universal_life_account_reconciles():
+    """A universal-life account book rolls forward off the account-netted
+    bel / ra / csm paths -- no raw-claim netting is needed, the account was
+    netted once at measurement -- so every period's BEL / RA / CSM waterfall
+    telescopes. (Previously gated by reject_account_book.)
+    """
+    m = measure(fcf.samples.model_points("ul"), fcf.samples.basis("ul"), full=True)
+    assert m.cashflows.account is not None          # it really is an account book
+    periods = roll_forward(m, period_months=12)
+    assert periods
+    for p in periods:
+        assert np.allclose(
+            p.bel_opening + p.bel_interest - p.bel_release, p.bel_closing
+        )
+        assert np.allclose(
+            p.ra_opening + p.ra_interest - p.ra_release, p.ra_closing
+        )
+        assert np.allclose(
+            p.csm_opening + p.csm_accretion - p.csm_release, p.csm_closing
+        )
+
+
 def test_roll_forward_periods_chain():
     """Each period's closing balances are the next period's opening balances."""
     periods = roll_forward(measure(_portfolio(), _basis()), 12)
