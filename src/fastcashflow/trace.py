@@ -367,6 +367,10 @@ def show_trace(
     # account up to the face (max(av_mid, face)).
     account_lines: list[object] = []
     acct = cf.account
+    # Conversion month for an annuitizing UL (0 = ordinary account, never
+    # converts). Always an array post-construction, so the index is safe.
+    A_annz = (int(sub.annuitization_months[0])
+              if sub.annuitization_months is not None else 0)
     if acct is not None:
         av = acct.av[0]            # (n_time+1,) month-start AV (col 0 = av0)
         av_mid = acct.av_mid[0]    # (n_time,)   half-month-credited AV
@@ -393,6 +397,15 @@ def show_trace(
             "death = max(av_mid, face);  NAR = max(0, face - av_mid);  "
             "COI = coi_m * NAR"
         )
+        # Annuitizing UL: the account roll stops at the conversion month, so the
+        # av rows below read 0 past it -- flag that here rather than leave the
+        # reader puzzling over the zeros (the conversion is detailed in its own
+        # section).
+        if A_annz > 0:
+            account_lines.append(
+                f"annuitizes at t={A_annz}m -- account is spent at conversion; "
+                f"av is 0 after (see the annuitization section)"
+            )
         # Per-month account rows at the key months. av / fund carry the extra
         # month-end column (index up to n_time); av_mid / coi are (n_time,) so
         # they are shown only where t < n_time.
@@ -421,6 +434,58 @@ def show_trace(
                     f"{'(boundary)':>{_mw}}  {'':>{_cw2}}  {'':>{_nw}}  "
                     f"{'':>{_aw}}  fund={fund[t]:>{_fw2},.2f}"
                 )
+
+    # ---- Universal-life annuitization (conversion + payout) -- only when the
+    # contract carries a conversion month. The account roll above stops at A;
+    # here the balance is converted to a guaranteed survival income: the balance
+    # carried into month A, floored at the GMAB, times the locked GAO rate. The
+    # payout (phase 2) pays annuity-due on the surviving in-force, with no
+    # further premium / COI / surrender and no maturity lump.
+    annz_lines: list[object] = []
+    if acct is not None and A_annz > 0:
+        av = acct.av[0]
+        annuity = cf.annuity_cf[0]
+        inforce = cf.inforce[0]
+        annz_rate = float(sub.annuitization_rate[0])
+        gmab_acc = (float(sub.minimum_accumulation_benefit[0])
+                    if sub.minimum_accumulation_benefit is not None else 0.0)
+        bal_in = float(av[A_annz])            # balance carried into month A
+        converted = bal_in if bal_in > gmab_acc else gmab_acc
+        locked = converted * annz_rate
+        _zw = _colw([bal_in, gmab_acc, converted, locked], ",.2f", 15)
+        annz_lines.append(
+            f"annuitization_months  = {A_annz:>{_zw}d}  "
+            "(account stops, converts to income)")
+        annz_lines.append(
+            f"balance at conversion = {bal_in:>{_zw},.2f}  "
+            f"(av[{A_annz}], no month-{A_annz} credit)")
+        annz_lines.append(
+            f"GMAB floor            = {gmab_acc:>{_zw},.2f}  "
+            "(minimum_accumulation_benefit)")
+        annz_lines.append(
+            f"converted_balance     = {converted:>{_zw},.2f}  (= max(balance, GMAB))")
+        annz_lines.append(
+            f"annuitization_rate    = {annz_rate:>{_zw}g}  (GAO rate, locked once)")
+        annz_lines.append(
+            f"locked_annuity_payment= {locked:>{_zw},.2f}  "
+            "(= converted_balance x rate)")
+        annz_lines.append(
+            "phase 2: annuity-due on surviving in-force; no premium / COI / "
+            "surrender, no maturity lump")
+        # Phase-2 annuity payments at the payout key months (annuity_cf is the
+        # paid amount; nonzero only on a payment month). The conversion month and
+        # a payout midpoint are added so a short pick list still shows the income
+        # starting and decrementing with survival.
+        p_picks = sorted(
+            {t for t in picks if A_annz <= t < cf.n_time}
+            | {A_annz, (A_annz + cf.n_time) // 2})
+        p_picks = [t for t in p_picks if A_annz <= t < cf.n_time]
+        if p_picks:
+            _pw = _colw((annuity[t] for t in p_picks), ",.2f", 15)
+            for t in p_picks:
+                annz_lines.append(
+                    f"t={t:>4d}m: annuity={annuity[t]:>{_pw},.2f}  "
+                    f"inforce={inforce[t]:.6f}")
 
     # ---- BEL roll-forward at key months
     bel_lines: list[object] = [
@@ -480,6 +545,10 @@ def show_trace(
     if account_lines:
         tree_items.append(
             ("Universal-life account (key months)", account_lines)
+        )
+    if annz_lines:
+        tree_items.append(
+            ("Universal-life annuitization (conversion + payout)", annz_lines)
         )
     if diag_pool_lines:
         tree_items.append(

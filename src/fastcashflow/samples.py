@@ -22,7 +22,7 @@ import numpy as np
 from fastcashflow import io as _io
 
 #: Available sample templates -- see :func:`templates`.
-_TEMPLATES = ("gmm", "vfa", "paa", "ul")
+_TEMPLATES = ("gmm", "vfa", "paa", "ul", "ul-annuity")
 
 #: Fixed seed for :func:`scenarios` -- a reproducible toy path set, not a
 #: calibration parameter.
@@ -36,7 +36,7 @@ _FORMATS = {"csv": ".csv", "parquet": ".parquet",
 
 def templates() -> list[str]:
     """The available :func:`export` / load template names
-    (``["gmm", "vfa", "paa", "ul"]``)."""
+    (``["gmm", "vfa", "paa", "ul", "ul-annuity"]``)."""
     return list(_TEMPLATES)
 
 
@@ -98,18 +98,87 @@ def _ul_basis():
     )
 
 
+def _ul_annuity_model_points():
+    """A small synthetic universal-life *annuity* portfolio (2-phase).
+
+    Two account-backed contracts that accumulate (phase 1, the ordinary UL roll)
+    and then convert the balance to a guaranteed survival-contingent income
+    (phase 2) at ``annuitization_months``: ``locked_annuity_payment =
+    max(account, GMAB) * annuitization_rate``, paid annuity-due on the surviving
+    in-force, with no further premium / COI / surrender and no maturity lump.
+    Contract 0 is regular-premium (pays through the 15-year accumulation, then
+    converts); contract 1 is single-premium (a seeded account, converts at year
+    10). ``minimum_accumulation_benefit`` is the GMAB floor the conversion takes.
+    Pair with :func:`_ul_annuity_basis`; measure through ``gmm.measure``.
+    Synthetic demo figures, never sourced from a real portfolio.
+    """
+    from fastcashflow import CalculationMethod, ModelPoints
+
+    face = np.array([50_000_000.0, 30_000_000.0])
+    return ModelPoints(
+        sex=np.array([0, 1]),
+        issue_age=np.array([50.0, 55.0]),
+        term_months=np.array([360, 300]),
+        premium_term_months=np.array([180, 0]),       # <= annuitization_months
+        premium=np.array([400_000.0, 0.0]),           # contract 1 = single-premium
+        count=np.array([1.0, 1.0]),
+        account_value=np.array([0.0, 30_000_000.0]),
+        minimum_death_benefit=face,
+        minimum_accumulation_benefit=np.array([40_000_000.0, 30_000_000.0]),
+        minimum_crediting_rate=np.array([0.02, 0.02]),
+        annuitization_months=np.array([180, 120]),    # convert at year 15 / 10
+        annuitization_rate=np.array([0.004, 0.0045]), # monthly GAO rate
+        benefits={"DEATH": face},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
+        product=np.array(["UL_ANN", "UL_ANN"]),
+        channel=np.array(["FC", "FC"]),
+    )
+
+
+def _ul_annuity_basis():
+    """The synthetic universal-life-annuity basis paired with
+    :func:`_ul_annuity_model_points`.
+
+    The same account chassis as :func:`_ul_basis` (a flat COI, a premium load,
+    an ``investment_return`` the account credits at) plus a ``longevity_cv`` --
+    the payout phase is a survival-contingent income, so its risk adjustment is
+    driven by longevity (annuitants living longer), not mortality. A single
+    :class:`~fastcashflow.Basis`; measure it through ``gmm.measure``.
+    """
+    from fastcashflow import Basis, CoverageRate
+
+    coi = 0.0025
+    return Basis(
+        mortality_annual=0.005,
+        lapse_annual=0.03,
+        discount_annual=0.03,
+        ra_confidence=0.75,
+        mortality_cv=0.1,
+        longevity_cv=0.15,
+        investment_return=0.035,
+        premium_load=0.05,
+        coi_annual=coi,
+        coverages=(CoverageRate("DEATH", coi, funds_from_account=True,
+                                pays_account_balance=True),),
+    )
+
+
 def basis(template: str = "gmm"):
     """Bundled sample basis. ``template="gmm"`` (default) returns the per-segment
     :class:`~fastcashflow.BasisRouter` (a ``(product, channel)`` -> ``Basis``
     mapping); ``template="vfa"`` returns the single variable-contract
     :class:`~fastcashflow.Basis`; ``template="ul"`` returns the single
-    account-backed universal-life :class:`~fastcashflow.Basis`."""
+    account-backed universal-life :class:`~fastcashflow.Basis`;
+    ``template="ul-annuity"`` returns the universal-life-annuity (2-phase
+    accumulation -> income) :class:`~fastcashflow.Basis`."""
     if template == "vfa":
         return _io.load_sample_vfa_basis()
     if template == "paa":
         return _io.load_sample_paa_basis()
     if template == "ul":
         return _ul_basis()
+    if template == "ul-annuity":
+        return _ul_annuity_basis()
     if template == "gmm":
         return _io.load_sample_basis()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -118,13 +187,16 @@ def basis(template: str = "gmm"):
 def model_points(template: str = "gmm"):
     """Bundled sample model points (``template="gmm"`` default, ``"vfa"`` for the
     variable account-value contracts, ``"ul"`` for the account-backed
-    universal-life contracts)."""
+    universal-life contracts, ``"ul-annuity"`` for the universal-life-annuity
+    2-phase accumulation -> income contracts)."""
     if template == "vfa":
         return _io.load_sample_vfa_model_points()
     if template == "paa":
         return _io.load_sample_paa_model_points()
     if template == "ul":
         return _ul_model_points()
+    if template == "ul-annuity":
+        return _ul_annuity_model_points()
     if template == "gmm":
         return _io.load_sample_model_points()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -272,11 +344,11 @@ def export(output_dir, template: str = "gmm", format: str = "csv",
         _io._drop_sample_table("sample_paa_policies.csv", dest / f"policies{ext}")
         _io._drop_sample_table("sample_paa_coverages.csv", dest / f"coverages{ext}")
         files = ["basis.xlsx", f"policies{ext}", f"coverages{ext}"]
-    else:  # ul -- a load-only template, constructed inline (no bundled files)
+    else:  # ul / ul-annuity -- load-only, constructed inline (no bundled files)
         raise NotImplementedError(
-            "the 'ul' template is load-only -- build it in memory with "
-            "samples.model_points('ul') / samples.basis('ul'); it has no "
-            "exportable starter files")
+            f"the {template!r} template is load-only -- build it in memory with "
+            f"samples.model_points({template!r}) / samples.basis({template!r}); "
+            "it has no exportable starter files")
     if not quiet:
         print(f"fastcashflow sample export -- template={template!r}, "
               f"{len(files)} files")

@@ -98,3 +98,69 @@ def test_gmm_trace_non_account_has_no_account_section():
     text = _trace_text(mp, basis, 0)
     assert "Universal-life account" not in text
     assert "account_value0" not in text
+
+
+# ---------------------------------------------------------------------------
+# The "ul-annuity" sample template + the annuitization trace section.
+# ---------------------------------------------------------------------------
+
+def test_ul_annuity_template_listed():
+    assert "ul-annuity" in fcf.samples.templates()
+
+
+def test_ul_annuity_sample_measures_through_gmm():
+    mp = fcf.samples.model_points("ul-annuity")
+    basis = fcf.samples.basis("ul-annuity")
+    m = fcf.gmm.measure(mp, basis)
+    assert np.all(np.isfinite(m.bel))
+    assert np.all(np.isfinite(m.ra))
+    assert np.all(np.isfinite(m.csm))
+    assert np.all(m.csm >= 0.0)
+    # It is an account book -- the GMM measurement carries the account sidecar.
+    assert m.cashflows.account is not None
+    # Annuitizing contracts pay a survival income (phase 2) and no maturity lump.
+    assert np.all(m.cashflows.annuity_cf.sum(axis=1) > 0.0)
+    assert np.allclose(m.cashflows.maturity_cf, 0.0)
+    assert isinstance(m, fcf.GMMMeasurement)
+
+
+def test_ul_annuity_sample_export_is_load_only():
+    import pytest
+    with pytest.raises(NotImplementedError):
+        fcf.samples.export("/tmp/should_not_be_written", template="ul-annuity")
+
+
+def test_gmm_trace_ul_annuity_shows_annuitization_section():
+    mp = fcf.samples.model_points("ul-annuity")
+    basis = fcf.samples.basis("ul-annuity")
+    text = _trace_text(mp, basis, 0)
+    # The conversion section header and its load-bearing rows.
+    assert "Universal-life annuitization (conversion + payout)" in text
+    assert "annuitization_months" in text
+    assert "balance at conversion" in text
+    assert "GMAB floor" in text
+    assert "converted_balance" in text
+    assert "locked_annuity_payment" in text
+    # The conversion arithmetic is spelled out.
+    assert "(= max(balance, GMAB))" in text
+    assert "(= converted_balance x rate)" in text
+    # The account section flags that the roll stops at conversion.
+    assert "annuitizes at t=180m" in text
+
+
+def test_gmm_trace_ul_annuity_output_is_ascii():
+    mp = fcf.samples.model_points("ul-annuity")
+    basis = fcf.samples.basis("ul-annuity")
+    for i in range(mp.n_mp):
+        _trace_text(mp, basis, i).encode("ascii")  # raises on non-ASCII
+
+
+def test_gmm_trace_non_annuitizing_ul_has_no_annuitization_section():
+    # A plain (non-annuitizing) UL account book grows the account section but
+    # NOT the annuitization section -- the latter is gated on a conversion month.
+    mp = fcf.samples.model_points("ul")
+    basis = fcf.samples.basis("ul")
+    text = _trace_text(mp, basis, 0)
+    assert "Universal-life account" in text
+    assert "Universal-life annuitization" not in text
+    assert "annuitizes at t=" not in text
