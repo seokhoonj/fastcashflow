@@ -1,7 +1,7 @@
-"""Universal-life variable (실적배당) annuity payout -- hand-calc anchor.
+"""Universal-life variable (performance-linked) annuity payout -- hand-calc anchor.
 
 A variable-payout annuity re-floats the phase-2 income each elapsed month by the
-ratio of the realised fund return to an assumed interest rate (AIR, 예정이율):
+ratio of the realised fund return to an assumed interest rate (AIR):
 
     payment_k = locked_annuity_payment * ((1 + fund) / (1 + air))^k,  k = t - A
 
@@ -17,12 +17,20 @@ The payout is turned on per model point by a finite ``annuity_air_annual``; NaN
 NO_GUARANTEE here so the credited rate equals the fund return and the
 cancellation is exact (the floor's value is a separate, deferred guarantee).
 """
+import io
+
 import numpy as np
 import pytest
 
 import fastcashflow as fcf
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.model_points import NO_GUARANTEE_RATE
+
+
+def _vfa_trace_text(mp, basis, index=0):
+    buf = io.StringIO()
+    fcf.vfa.trace(index, mp, basis, file=buf)
+    return buf.getvalue()
 
 
 def _basis(**overrides):
@@ -232,3 +240,45 @@ def test_ul_var_annuity_sample_measures():
     # gmm rejects the variable book; vfa accepts it.
     with pytest.raises(NotImplementedError):
         fcf.gmm.measure(mp, basis)
+
+
+# ---------------------------------------------------------------------------
+# vfa.trace grows an annuitization (conversion + payout) section, flagging the
+# variable (AIR) payout; a fixed payout shows the fixed note; a non-annuitizing
+# VFA contract has no such section. ASCII-only throughout.
+# ---------------------------------------------------------------------------
+
+def test_vfa_trace_shows_variable_payout_section():
+    mp = fcf.samples.model_points("ul-var-annuity")
+    basis = fcf.samples.basis("ul-var-annuity")
+    text = _vfa_trace_text(mp, basis, 0)        # contract 0 = variable @ AIR 2%
+    assert "Universal-life annuitization (conversion + payout)" in text
+    assert "converted_balance" in text
+    assert "locked_annuity_payment" in text
+    assert "annuity_air_annual" in text
+    assert "AIR; variable payout" in text
+    assert "VARIABLE payout" in text
+
+
+def test_vfa_trace_fixed_payout_has_no_air_line():
+    mp = fcf.samples.model_points("ul-var-annuity")
+    basis = fcf.samples.basis("ul-var-annuity")
+    text = _vfa_trace_text(mp, basis, 1)        # contract 1 = fixed GAO
+    assert "Universal-life annuitization (conversion + payout)" in text
+    assert "FIXED payout" in text
+    assert "annuity_air_annual" not in text
+    assert "VARIABLE payout" not in text
+
+
+def test_vfa_trace_non_annuitizing_has_no_annuitization_section():
+    mp = fcf.samples.model_points("vfa")
+    basis = fcf.samples.basis("vfa")
+    text = _vfa_trace_text(mp, basis, 0)
+    assert "Universal-life annuitization" not in text
+
+
+def test_vfa_trace_variable_payout_output_is_ascii():
+    mp = fcf.samples.model_points("ul-var-annuity")
+    basis = fcf.samples.basis("ul-var-annuity")
+    for i in range(mp.n_mp):
+        _vfa_trace_text(mp, basis, i).encode("ascii")  # raises on non-ASCII

@@ -679,6 +679,69 @@ def show_trace_vfa(
         for left, amt, ex, rl, rate in floor_rows
     ]
 
+    # ---- Universal-life annuitization (conversion + payout) -- only when the
+    # contract carries a conversion month. The account roll stops at A and the
+    # balance converts to a survival income: the balance carried into month A,
+    # floored at the GMAB, times the locked annuitization rate (the initial
+    # payment). A variable payout then re-floats that level each elapsed month by
+    # (1+fund)/(1+air) (the annuity-unit value); a fixed payout keeps it level.
+    # No maturity lump is paid (the balance was already converted), so the
+    # maturity row in the floors section above is moot for an annuitizing book.
+    annz_lines: list[object] = []
+    A_annz = (int(sub.annuitization_months[0])
+              if sub.annuitization_months is not None else 0)
+    if A_annz > 0 and A_annz < av.shape[0]:
+        annuity = cf.annuity_cf[0]
+        annz_rate = float(sub.annuitization_rate[0])
+        gmab_acc = (float(sub.minimum_accumulation_benefit[0])
+                    if sub.minimum_accumulation_benefit is not None else 0.0)
+        bal_in = float(av[A_annz])            # balance carried into month A
+        converted = bal_in if bal_in > gmab_acc else gmab_acc
+        locked = converted * annz_rate
+        air = (float(sub.annuity_air_annual[0])
+               if sub.annuity_air_annual is not None else float("nan"))
+        variable = bool(np.isfinite(air))
+        _zw = _colw([bal_in, gmab_acc, converted, locked], ",.2f", 15)
+        annz_lines.append(
+            f"annuitization_months  = {A_annz:>{_zw}d}  "
+            "(account stops, converts to income)")
+        annz_lines.append(
+            f"balance at conversion = {bal_in:>{_zw},.2f}  "
+            f"(av[{A_annz}], no month-{A_annz} credit)")
+        annz_lines.append(
+            f"GMAB floor            = {gmab_acc:>{_zw},.2f}  "
+            "(minimum_accumulation_benefit)")
+        annz_lines.append(
+            f"converted_balance     = {converted:>{_zw},.2f}  (= max(balance, GMAB))")
+        annz_lines.append(
+            f"annuitization_rate    = {annz_rate:>{_zw}g}  (initial income rate)")
+        annz_lines.append(
+            f"locked_annuity_payment= {locked:>{_zw},.2f}  "
+            "(= converted_balance x rate; the initial payment)")
+        if variable:
+            annz_lines.append(
+                f"annuity_air_annual    = {air:>{_zw}g}  (AIR; variable payout)")
+            annz_lines.append(
+                "phase 2: VARIABLE payout -- re-floats by ((1+fund)/(1+air))^k, "
+                "k = t-A; annuity-due on surviving in-force, no maturity lump")
+        else:
+            annz_lines.append(
+                "phase 2: FIXED payout -- annuity-due on surviving in-force; no "
+                "premium / COI / surrender, no maturity lump")
+        # Phase-2 payments at the payout key months (annuity_cf is the in-force-
+        # weighted paid amount). The conversion month and a payout midpoint are
+        # added so a short pick list still shows the income starting / moving.
+        p_picks = sorted(
+            {t for t in picks if A_annz <= t < n_time}
+            | {A_annz, (A_annz + n_time) // 2})
+        p_picks = [t for t in p_picks if A_annz <= t < n_time]
+        if p_picks:
+            _pw = _colw((annuity[t] for t in p_picks), ",.2f", 15)
+            for t in p_picks:
+                annz_lines.append(
+                    f"t={t:>4d}m: annuity={annuity[t]:>{_pw},.2f}  "
+                    f"inforce={inforce[t]:.6f}")
+
     # ---- BEL / CSM trajectory + roll-forward
     bel = m.bel_path[0]
     ra = m.ra_path[0]
@@ -736,6 +799,11 @@ def show_trace_vfa(
         ("VFA inputs", vfa_lines),
         ("Account value & in-force (key months)", av_lines),
         ("Guarantee floors (GMDB / GMAB)", floor_lines),
+    ]
+    if annz_lines:
+        tree_items.append(
+            ("Universal-life annuitization (conversion + payout)", annz_lines))
+    tree_items += [
         ("BEL / CSM trajectory (key months)", belcsm_lines),
         ("CSM roll-forward (key months)", csm_lines),
         ("Final (headline numbers, per policy)", final_lines),
