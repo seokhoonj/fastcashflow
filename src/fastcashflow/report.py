@@ -427,8 +427,7 @@ def _report_gmm(m: GMMMeasurement) -> Report:
     # right rate in every month -- the same pattern movement.py uses. The last
     # axis is time: (n_time,) for a single basis, (n_mp, n_time) for a segmented
     # measurement; the array maths below broadcast over either shape.
-    ds = m.discount_factor_bom
-    discount_monthly = forward_rates(ds)
+    discount_monthly = forward_rates(m.discount_factor_bom)
     monthly_discount = 1.0 / (1.0 + discount_monthly)
 
     # Insurance service expense is the incurred protection benefit + expenses
