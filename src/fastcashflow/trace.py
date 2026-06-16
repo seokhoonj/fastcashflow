@@ -322,7 +322,7 @@ def show_trace(
     # ---- Diagnosis pool undiagnosed share at key months (only when
     # DIAGNOSIS coverages exist). `undiagnosed` is the kernel's per-coverage
     # scalar (`# fraction of the in-force still undiagnosed`) updated each
-    # month as ``undiagnosed *= (1 - monthly_rate)``. Storing the trajectory
+    # month as ``undiagnosed *= (1 - discount_monthly)``. Storing the trajectory
     # here makes the depleting-pool mechanism visible alongside the in-force
     # trajectory it composes with.
     picks = _key_months(term, discount_bom.shape[0] - 1)
@@ -1667,7 +1667,7 @@ def show_trace_bel_step(
     # recover ``i[t]`` from the same curve here so the printed identity
     # uses the engine's numbers, not a parallel computation that could
     # drift.
-    monthly_rate = discount_monthly_curve(basis, n_time)
+    discount_monthly = discount_monthly_curve(basis, n_time)
 
     # Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
@@ -1703,7 +1703,7 @@ def show_trace_bel_step(
             ))
             continue
         # Inside the recursion: 0 <= t < term.
-        rate = float(monthly_rate[t])
+        rate = float(discount_monthly[t])
         half = (1.0 + rate) ** (-0.5)
         full = 1.0 / (1.0 + rate)
         prem = float(cf.premium_cf[0, t])
@@ -1820,7 +1820,7 @@ def show_trace_csm_step(
         raise ValueError(f"months must be whole-month integers; got {bad}")
     months = [int(t) for t in months if 1 <= int(t) <= n_time]
 
-    monthly_rate = discount_monthly_curve(basis, n_time)
+    discount_monthly = discount_monthly_curve(basis, n_time)
     inforce = m.cashflows.inforce[0]              # (n_time,)
     bel0 = float(m.bel_path[0, 0])
     ra0 = float(m.ra_path[0, 0])
@@ -1874,7 +1874,7 @@ def show_trace_csm_step(
     step_blocks: list[object] = []
     for t in months:
         prior_csm = float(csm[t - 1])
-        rate = float(monthly_rate[t - 1])
+        rate = float(discount_monthly[t - 1])
         acc = float(csm_acc[t - 1])
         accreted = prior_csm + acc
         cu = float(inforce[t - 1])

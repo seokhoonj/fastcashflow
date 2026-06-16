@@ -182,7 +182,7 @@ def _(measurement: GMMMeasurement, path, *, ids=None):
     _write_measurement_columns(cols, path, ids)
 
 
-def _compute_csm(bel0, ra0, inforce, monthly_rate, discount_units=False):
+def _compute_csm(bel0, ra0, inforce, discount_monthly, discount_units=False):
     """CSM at initial recognition (Sec. 38) and deterministic roll-forward (Sec. 44).
 
     Pure-array orchestration: fulfilment cash flows ``FCF = BEL + RA``,
@@ -198,12 +198,12 @@ def _compute_csm(bel0, ra0, inforce, monthly_rate, discount_units=False):
     fcf = bel0 + ra0
     csm0 = np.maximum(0.0, -fcf)
     loss_component = np.maximum(0.0, fcf)
-    csm, accretion, release = _csm_kernel(csm0, inforce, monthly_rate,
+    csm, accretion, release = _csm_kernel(csm0, inforce, discount_monthly,
                                           discount_units)
     return csm, accretion, release, loss_component
 
 
-def _account_risk_adjustment(model_points, basis, proj, monthly_rate):
+def _account_risk_adjustment(model_points, basis, proj, discount_monthly):
     """Universal-life risk adjustment -- priced on the net amount at risk.
 
     The insurance risk of an account-backed death leg is the mortality borne on
@@ -242,7 +242,7 @@ def _account_risk_adjustment(model_points, basis, proj, monthly_rate):
     _, pv_nar, pv_expense, pv_morbidity, pv_annuity = _rollforward_kernel(
         nar_claim, proj.expense_cf, proj.morbidity_cf, zeros_t, zeros_t,
         proj.annuity_cf, zeros_mp, zeros_t,
-        model_points.contract_boundary_months, monthly_rate)
+        model_points.contract_boundary_months, discount_monthly)
     z = _norm_ppf(basis.ra_confidence)
     confidence_margin = z * (basis.mortality_cv * pv_nar
                              + basis.morbidity_cv * pv_morbidity
@@ -250,19 +250,19 @@ def _account_risk_adjustment(model_points, basis, proj, monthly_rate):
                              + basis.longevity_cv * pv_annuity)
     if basis.ra_method == "cost_of_capital":
         return _cost_of_capital_ra(
-            confidence_margin, monthly_rate, basis.cost_of_capital_rate)
+            confidence_margin, discount_monthly, basis.cost_of_capital_rate)
     return confidence_margin
 
 
 def _measure_full(model_points: ModelPoints, basis: Basis, *,
-                  monthly_rate: FloatArray | None = None) -> GMMMeasurement:
+                  discount_monthly: FloatArray | None = None) -> GMMMeasurement:
     """Full GMM measurement: BEL, RA and CSM rolled forward over time.
 
     Returns a :class:`GMMMeasurement` carrying both the ``(n_mp,)`` inception
     headline (column 0 of each trajectory) and the ``(n_mp, n_time+1)``
     ``*_path`` trajectories. Reached by ``measure(..., full=True)``.
 
-    ``monthly_rate`` overrides the discount / CSM-accretion curve (default: the
+    ``discount_monthly`` overrides the discount / CSM-accretion curve (default: the
     locked-in ``discount_monthly_curve``). ``vfa.measure`` passes the flat
     underlying-items return here to measure a universal-life account book under
     the VFA model -- the account roll (generation) is identical to GMM, only the
@@ -272,8 +272,8 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
     """
     proj = project_cashflows(model_points, basis)
     claim_cf, morbidity_cf = proj.claim_cf, proj.morbidity_cf
-    if monthly_rate is None:
-        monthly_rate = discount_monthly_curve(basis, proj.n_time)
+    if discount_monthly is None:
+        discount_monthly = discount_monthly_curve(basis, proj.n_time)
     if basis.settlement_pattern is None:
         lic = np.zeros((claim_cf.shape[0], proj.n_time + 1))
     else:
@@ -287,12 +287,12 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
         factor = _settlement_factor(basis.settlement_pattern, basis.discount_monthly)
         claim_cf = claim_cf * factor
         morbidity_cf = morbidity_cf * factor
-    discount_bom, discount_mid = discount_factors_from_curve(monthly_rate)
+    discount_bom, discount_mid = discount_factors_from_curve(discount_monthly)
 
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
         claim_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
-        model_points.contract_boundary_months, monthly_rate,
+        model_points.contract_boundary_months, discount_monthly,
     )
     if proj.account is not None:
         # Universal-life account-backed measurement. The BEL nets the account
@@ -303,12 +303,12 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
         # expense risk, bypassing the slot-RA machinery (which hard-raises on
         # expense_cv and would price mortality on the full death benefit).
         bel = bel - proj.account.fund
-        ra = _account_risk_adjustment(model_points, basis, proj, monthly_rate)
+        ra = _account_risk_adjustment(model_points, basis, proj, discount_monthly)
     else:
         ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
-                              pv_survival, monthly_rate)
+                              pv_survival, discount_monthly)
     csm, csm_accretion, csm_release, loss_component = _compute_csm(
-        bel[:, 0], ra[:, 0], proj.inforce, monthly_rate,
+        bel[:, 0], ra[:, 0], proj.inforce, discount_monthly,
         basis.coverage_unit_discount,
     )
 
@@ -1226,7 +1226,7 @@ def settle(
     # values are zeroed by live_close / k_obs / the tail's zero terminal.
     em_c = np.minimum(em_close, n_time)
 
-    monthly_rate = forward_rates(m.discount_bom)
+    discount_monthly = forward_rates(m.discount_bom)
     cols = em_open[:, None] + np.arange(period)[None, :]
     col_ok = cols < n_time
     cols_safe = np.where(col_ok, cols, n_time - 1)
@@ -1237,7 +1237,7 @@ def settle(
         close_exp = k_exp * close_unit
         closing = k_obs * close_unit
         interest = k_exp * (path[rows[:, None], cols_safe]
-                            * monthly_rate[cols_safe] * col_ok).sum(axis=1)
+                            * discount_monthly[cols_safe] * col_ok).sum(axis=1)
         release = opening + interest - close_exp
         experience = closing - close_exp
         return opening, interest, release, experience, closing
@@ -1273,7 +1273,7 @@ def settle(
     outflow_path = _rollforward_kernel(
         cf.claim_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
         zero_prem, zero_ann, zero_mat, zero_surr,
-        boundary, monthly_rate)[0]
+        boundary, discount_monthly)[0]
     out_o, out_i, out_r, out_e, out_c = _block(outflow_path)
     pool_open = out_o + ra_o
     lc_ratio = np.where(pool_open > 0.0,

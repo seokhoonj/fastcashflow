@@ -715,15 +715,15 @@ def test_settlement_factor_rejects_bad_pattern_sum():
     """numerics._settlement_factor's pattern.sum() != 1 guard."""
     from fastcashflow.numerics import _settlement_factor
     with pytest.raises(ValueError, match="settlement_pattern must sum to 1"):
-        _settlement_factor(np.array([0.3, 0.3, 0.3]), monthly_rate=0.0)
+        _settlement_factor(np.array([0.3, 0.3, 0.3]), discount_monthly=0.0)
 
 
 def test_settlement_factor_rejects_bad_rate_shape():
-    """_settlement_factor rejects a 2-D monthly_rate."""
+    """_settlement_factor rejects a 2-D discount_monthly."""
     from fastcashflow.numerics import _settlement_factor
-    with pytest.raises(ValueError, match="monthly_rate must be a scalar"):
+    with pytest.raises(ValueError, match="discount_monthly must be a scalar"):
         _settlement_factor(
-            np.array([1.0]), monthly_rate=np.zeros((3, 3)),
+            np.array([1.0]), discount_monthly=np.zeros((3, 3)),
         )
 
 

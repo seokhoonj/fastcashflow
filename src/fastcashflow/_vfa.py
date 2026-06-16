@@ -707,7 +707,7 @@ def measure_vfa(
         r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
         n_time = int(model_points.contract_boundary_months.max())
         m = _measure_full(model_points, basis,
-                          monthly_rate=np.full(n_time, r_m))
+                          discount_monthly=np.full(n_time, r_m))
         zeros = np.zeros_like(m.bel)  # UL has no asset-based fee / TVOG (v1)
         if not full:
             return VFAMeasurement(

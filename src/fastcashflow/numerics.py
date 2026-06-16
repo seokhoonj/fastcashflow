@@ -80,7 +80,7 @@ def _settlement_lic(
 
 def _settlement_lic_discounted(
     incurred: FloatArray, settlement_pattern: FloatArray,
-    monthly_rate: float,
+    discount_monthly: float,
 ) -> FloatArray:
     """Discounted liability for incurred claims (Sec. 40(b) / 42(c)).
 
@@ -89,15 +89,15 @@ def _settlement_lic_discounted(
     of the part of its run-off still outstanding::
 
         LIC_disc[:, d] = sum_{1 <= j <= n_pat} incurred[:, d - j] x w[j]
-        w[j] = sum_{k >= j} pattern[k] x v^(k - j),  v = 1 / (1 + monthly_rate)
+        w[j] = sum_{k >= j} pattern[k] x v^(k - j),  v = 1 / (1 + discount_monthly)
 
     ``w[j]`` is the PV (at the claim's age ``j``) of the outstanding run-off; it
     values every payment still owed, including those settling past the
     projection horizon, so the terminal column ``LIC_disc[:, -1]`` retains the
     discounted tail exactly as :func:`_settlement_lic` retains the undiscounted
-    one. With ``monthly_rate == 0`` this reduces to ``_settlement_lic``.
+    one. With ``discount_monthly == 0`` this reduces to ``_settlement_lic``.
 
-    ``monthly_rate`` is a flat per-month scalar: the LIC run-off is short (at
+    ``discount_monthly`` is a flat per-month scalar: the LIC run-off is short (at
     most the pattern length) so a flat rate over it is a close approximation to
     the full discount curve used for the BEL. ``LIC_disc[:, 0]`` is 0 -- a claim
     incurred at ``d`` is not yet in the LIC at ``d`` -- so the LIC never
@@ -109,7 +109,7 @@ def _settlement_lic_discounted(
         raise ValueError(f"settlement_pattern must sum to 1, got {pattern.sum()}")
     n_mp, n_time = incurred.shape
     n_pat = pattern.size
-    r = float(monthly_rate)
+    r = float(discount_monthly)
     v = 1.0 / (1.0 + r)
     # w[j], j = 1 .. n_pat: PV at age j of the outstanding run-off. w[n_pat] = 0
     # (a claim older than the pattern is fully settled), so the loop below stops
@@ -158,22 +158,22 @@ def _carry_lic_residual(lic, idx, t, n_time, seg_lic):
 
 
 def _settlement_factor(
-    settlement_pattern: FloatArray, monthly_rate: float | FloatArray
+    settlement_pattern: FloatArray, discount_monthly: float | FloatArray
 ) -> float | FloatArray:
     """Present-value factor for a claim spread over a settlement pattern.
 
     The present value, at the month a claim is incurred, of paying a unit
-    claim over ``settlement_pattern`` -- discounted at ``monthly_rate``.
+    claim over ``settlement_pattern`` -- discounted at ``discount_monthly``.
     A pattern that pays everything immediately gives 1.
 
-    ``monthly_rate`` may be either:
+    ``discount_monthly`` may be either:
 
     * a scalar -- the run-off is discounted at a flat per-month rate and
       the result is a single scalar factor (the legacy behaviour, kept
       for callers that need one number);
     * a per-month rate curve of shape ``(n_time,)`` -- the result is an
       ``(n_time,)`` factor whose element ``t`` discounts the run-off
-      starting at month ``t`` using ``monthly_rate[t:]``. The tail past
+      starting at month ``t`` using ``discount_monthly[t:]``. The tail past
       ``n_time`` is held flat at the last curve value, so a settlement
       pattern with more lags than the curve still terminates.
 
@@ -187,7 +187,7 @@ def _settlement_factor(
     if not np.isclose(pattern.sum(), 1.0):
         raise ValueError(f"settlement_pattern must sum to 1, got {pattern.sum()}")
 
-    rate = np.asarray(monthly_rate, dtype=np.float64)
+    rate = np.asarray(discount_monthly, dtype=np.float64)
     n_pat = pattern.shape[0]
     if rate.ndim == 0:
         months = np.arange(n_pat)
@@ -195,7 +195,7 @@ def _settlement_factor(
 
     if rate.ndim != 1:
         raise ValueError(
-            f"monthly_rate must be a scalar or a 1-D curve, got shape {rate.shape}"
+            f"discount_monthly must be a scalar or a 1-D curve, got shape {rate.shape}"
         )
     n_time = rate.shape[0]
     # Hold the curve flat past its end so the run-off can extend into the
@@ -267,7 +267,7 @@ def _norm_ppf(p: float) -> float:
 
 
 def _cost_of_capital_ra(
-    confidence_margin: FloatArray, monthly_rate: FloatArray, coc_rate: float
+    confidence_margin: FloatArray, discount_monthly: FloatArray, coc_rate: float
 ) -> FloatArray:
     """Cost-of-capital RA -- the cost of holding the confidence-level margin
     as non-financial-risk capital over the contract's run-off.
@@ -275,10 +275,10 @@ def _cost_of_capital_ra(
     The capital required at each future month is taken as the confidence-
     level margin there; the RA at month ``t`` is the cost-of-capital rate
     times the present value, at ``t``, of that capital over months ``t``
-    onward. ``monthly_rate`` is the per-month rate curve, shape
+    onward. ``discount_monthly`` is the per-month rate curve, shape
     ``(n_time,)``; a flat rate and a yield curve share the same form.
     """
-    full = 1.0 / (1.0 + monthly_rate)             # (n_time,)
+    full = 1.0 / (1.0 + discount_monthly)             # (n_time,)
     cap_pv = np.empty_like(confidence_margin)
     cap_pv[:, -1] = confidence_margin[:, -1]
     for t in range(confidence_margin.shape[1] - 2, -1, -1):
@@ -287,14 +287,14 @@ def _cost_of_capital_ra(
 
 
 def _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
-                     pv_survival, monthly_rate):
+                     pv_survival, discount_monthly):
     """The risk adjustment per ``basis.ra_method``.
 
     The confidence-level margin is ``z(ra_confidence)`` times the sum over
     risks of each coefficient-of-variation x its claim PV. ``ra_method`` then
     selects whether that margin IS the RA (``"confidence_level"``) or seeds the
     cost-of-capital run-off (``"cost_of_capital"``, which discounts the future
-    capital at ``monthly_rate``). Shared by the GMM and PAA measurements so the
+    capital at ``discount_monthly``). Shared by the GMM and PAA measurements so the
     two cannot diverge on the method -- the PAA onerous test used to hardcode
     the confidence-level form and silently ignore ``cost_of_capital``. The
     ``pv_*`` may be the full ``(n_mp, n_time+1)`` trajectory (GMM, PAA) -- the
@@ -315,7 +315,7 @@ def _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
     if basis.ra_method == "confidence_level":
         return confidence_margin
     if basis.ra_method == "cost_of_capital":
-        return _cost_of_capital_ra(confidence_margin, monthly_rate,
+        return _cost_of_capital_ra(confidence_margin, discount_monthly,
                                    basis.cost_of_capital_rate)
     raise ValueError(
         "ra_method must be 'confidence_level' or 'cost_of_capital', "
@@ -326,7 +326,7 @@ def _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
 @njit(parallel=True, cache=True)
 def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
                         premium_cf, annuity_cf, maturity_cf, surrender_cf,
-                        contract_boundary_months, monthly_rate):
+                        contract_boundary_months, discount_monthly):
     """Backward pass -- the BEL and the four RA present-value trajectories.
 
     ``BEL[t]`` is the present value, at month boundary ``t``, of the cash
@@ -339,7 +339,7 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
                     + expense[t] + surrender[t]) * (1+i[t])^-0.5
                  + BEL[t+1] * (1+i[t])^-1
 
-    ``monthly_rate`` is the per-month rate curve, shape ``(n_time,)``, so
+    ``discount_monthly`` is the per-month rate curve, shape ``(n_time,)``, so
     the locked-in rate can be flat or a yield curve. The maturity benefit
     is a single payment at ``t = term``, so it seeds ``BEL[term]``.
     ``BEL[:, 0]`` is then the inception BEL.
@@ -358,8 +358,8 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
     pv_disability = np.zeros((n_mp, n_time + 1))
     pv_survival = np.zeros((n_mp, n_time + 1))
 
-    half = (1.0 + monthly_rate) ** (-0.5)
-    full = 1.0 / (1.0 + monthly_rate)
+    half = (1.0 + discount_monthly) ** (-0.5)
+    full = 1.0 / (1.0 + discount_monthly)
 
     for mp in prange(n_mp):
         # The backward pass runs from the Sec. 34 contract boundary (= term
@@ -390,11 +390,11 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
 
 
 @njit(parallel=True, cache=True)
-def _csm_kernel(csm0, coverage_units, monthly_rate, discount_units):
+def _csm_kernel(csm0, coverage_units, discount_monthly, discount_units):
     """Compiled CSM roll-forward kernel -- raw numpy arrays only.
 
     Per model point (run in parallel across cores): interest accretion at the
-    locked-in rate -- a per-month curve ``monthly_rate`` of length
+    locked-in rate -- a per-month curve ``discount_monthly`` of length
     ``n_time``, so flat scalar and yield curve share the kernel -- then
     release proportional to coverage units. The coverage-unit tail sum is
     built in a single backward pass so the roll-forward stays linear in
@@ -419,7 +419,7 @@ def _csm_kernel(csm0, coverage_units, monthly_rate, discount_units):
       choice (B119), exposed via ``discount_units``.** When ``False`` (the
       default) the tail sum ``sum_{s>=t}`` carries no discount factor. When
       ``True`` each future period's coverage units are discounted back to the
-      current period at the same locked-in ``monthly_rate`` used for accretion,
+      current period at the same locked-in ``discount_monthly`` used for accretion,
       so the tail becomes ``sum_{s>=t} coverage_units[s] * v(t->s)`` with
       ``v`` the locked-in discount factor -- the choice many entities make.
     """
@@ -438,7 +438,7 @@ def _csm_kernel(csm0, coverage_units, monthly_rate, discount_units):
             cu_tail[n_time - 1] = coverage_units[mp, n_time - 1]
             for s in range(n_time - 2, -1, -1):
                 cu_tail[s] = (coverage_units[mp, s]
-                              + cu_tail[s + 1] / (1.0 + monthly_rate[s]))
+                              + cu_tail[s + 1] / (1.0 + discount_monthly[s]))
         else:
             running = 0.0
             for s in range(n_time - 1, -1, -1):
@@ -453,7 +453,7 @@ def _csm_kernel(csm0, coverage_units, monthly_rate, discount_units):
         eps = 1e-12 * cu_tail[0] if cu_tail[0] > 0.0 else 1e-12
 
         for t in range(1, n_time + 1):
-            interest = csm[mp, t - 1] * monthly_rate[t - 1]
+            interest = csm[mp, t - 1] * discount_monthly[t - 1]
             accreted = csm[mp, t - 1] + interest
             cu_remaining = cu_tail[t - 1]
             if cu_remaining > eps:
@@ -468,8 +468,8 @@ def _csm_kernel(csm0, coverage_units, monthly_rate, discount_units):
 
 
 @njit(parallel=True, cache=True)
-def _csm_kernel_permp(csm0, coverage_units, monthly_rate, discount_units):
-    """CSM roll-forward with a **per-model-point** rate -- ``monthly_rate`` is
+def _csm_kernel_permp(csm0, coverage_units, discount_monthly, discount_units):
+    """CSM roll-forward with a **per-model-point** rate -- ``discount_monthly`` is
     ``(n_mp, n_time)`` rather than the shared ``(n_time,)`` of
     :func:`_csm_kernel`. Used when a portfolio's model points discount on
     different curves (a segmented measurement, where each row carries its own
@@ -490,7 +490,7 @@ def _csm_kernel_permp(csm0, coverage_units, monthly_rate, discount_units):
             cu_tail[n_time - 1] = coverage_units[mp, n_time - 1]
             for s in range(n_time - 2, -1, -1):
                 cu_tail[s] = (coverage_units[mp, s]
-                              + cu_tail[s + 1] / (1.0 + monthly_rate[mp, s]))
+                              + cu_tail[s + 1] / (1.0 + discount_monthly[mp, s]))
         else:
             running = 0.0
             for s in range(n_time - 1, -1, -1):
@@ -499,7 +499,7 @@ def _csm_kernel_permp(csm0, coverage_units, monthly_rate, discount_units):
         eps = 1e-12 * cu_tail[0] if cu_tail[0] > 0.0 else 1e-12
 
         for t in range(1, n_time + 1):
-            interest = csm[mp, t - 1] * monthly_rate[mp, t - 1]
+            interest = csm[mp, t - 1] * discount_monthly[mp, t - 1]
             accreted = csm[mp, t - 1] + interest
             cu_remaining = cu_tail[t - 1]
             if cu_remaining > eps:
@@ -513,7 +513,7 @@ def _csm_kernel_permp(csm0, coverage_units, monthly_rate, discount_units):
     return csm, accretion, release
 
 
-def _csm_roll(csm0, coverage_units, monthly_rate, discount_units=False):
+def _csm_roll(csm0, coverage_units, discount_monthly, discount_units=False):
     """Roll the CSM with a shared ``(n_time,)`` or per-MP ``(n_mp, n_time)`` rate.
 
     A single-basis portfolio shares one discount curve (1-D rate); a segmented
@@ -522,11 +522,11 @@ def _csm_roll(csm0, coverage_units, monthly_rate, discount_units=False):
     B119 coverage-unit discounting accounting-policy choice (default ``False``
     -- undiscounted; see :func:`_csm_kernel`).
     """
-    if np.asarray(monthly_rate).ndim == 2:
+    if np.asarray(discount_monthly).ndim == 2:
         return _csm_kernel_permp(csm0, coverage_units,
-                                 np.ascontiguousarray(monthly_rate),
+                                 np.ascontiguousarray(discount_monthly),
                                  discount_units)
-    return _csm_kernel(csm0, coverage_units, monthly_rate, discount_units)
+    return _csm_kernel(csm0, coverage_units, discount_monthly, discount_units)
 
 
 def _paragraph45_csm_algebra(accreted, x, lc_open):

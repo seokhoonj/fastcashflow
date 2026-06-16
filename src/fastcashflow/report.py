@@ -428,8 +428,8 @@ def _report_gmm(m: GMMMeasurement) -> Report:
     # axis is time: (n_time,) for a single basis, (n_mp, n_time) for a segmented
     # measurement; the array maths below broadcast over either shape.
     ds = m.discount_bom
-    monthly_rate = forward_rates(ds)
-    monthly_discount = 1.0 / (1.0 + monthly_rate)
+    discount_monthly = forward_rates(ds)
+    monthly_discount = 1.0 / (1.0 + discount_monthly)
 
     # Insurance service expense is the incurred protection benefit + expenses
     # (B120-B124). disability_cf -- the semi-Markov disability income / lump-sum
@@ -446,13 +446,13 @@ def _report_gmm(m: GMMMeasurement) -> Report:
         insurance_service_expense=service_expense,
         insurance_service_result=ra_release + csm_release,
         insurance_finance_expense=(
-            monthly_rate * (bel[:, :-1] + ra[:, :-1]) + m.csm_accretion
+            discount_monthly * (bel[:, :-1] + ra[:, :-1]) + m.csm_accretion
         ),
         # Disaggregated by source (B130-B136). Computed as separate values --
         # NOT a refactor of the aggregate above -- so the aggregate expression
         # stays byte-identical (a*b + a*c is not bit-identical to a*(b+c)).
-        bel_finance_expense=monthly_rate * bel[:, :-1],
-        ra_finance_expense=monthly_rate * ra[:, :-1],
+        bel_finance_expense=discount_monthly * bel[:, :-1],
+        ra_finance_expense=discount_monthly * ra[:, :-1],
         csm_finance_expense=m.csm_accretion,
         loss_component=m.loss_component,
         csm_opening=csm[:, :-1],
@@ -491,8 +491,8 @@ def _report_reinsurance(m: ReinsuranceMeasurement) -> ReinsuranceReport:
     # _report_gmm and movement.py use, so the finance unwind matches in every
     # month. The last axis is time: (n_time,) for a single basis, (n_mp, n_time)
     # for a segmented measurement; the maths below broadcast over either shape.
-    monthly_rate = forward_rates(m.discount_bom)
-    monthly_discount = 1.0 / (1.0 + monthly_rate)
+    discount_monthly = forward_rates(m.discount_bom)
+    monthly_discount = 1.0 / (1.0 + discount_monthly)
 
     # The RA release the same form as the issuer _report_gmm -- the change in
     # the risk transferred EXCLUDING interest (opening - closing discounted) --
@@ -515,13 +515,13 @@ def _report_reinsurance(m: ReinsuranceMeasurement) -> ReinsuranceReport:
         reinsurance_service_result=ra_release + csm_release,
         ra_release=ra_release,
         reinsurance_finance_expense=(
-            monthly_rate * (bel[:, :-1] + ra[:, :-1]) + m.csm_accretion
+            discount_monthly * (bel[:, :-1] + ra[:, :-1]) + m.csm_accretion
         ),
         # Disaggregated by source (B130-B136). Computed as separate values --
         # NOT a refactor of the aggregate above -- so the aggregate expression
         # stays byte-identical (a*b + a*c is not bit-identical to a*(b+c)).
-        bel_finance_expense=monthly_rate * bel[:, :-1],
-        ra_finance_expense=monthly_rate * ra[:, :-1],
+        bel_finance_expense=discount_monthly * bel[:, :-1],
+        ra_finance_expense=discount_monthly * ra[:, :-1],
         csm_finance_expense=m.csm_accretion,
         csm_opening=csm[:, :-1],
         csm_accretion=m.csm_accretion,

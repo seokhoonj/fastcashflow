@@ -731,14 +731,14 @@ def settle(
                                     basis.discount_monthly)
         onerous_claim_cf = onerous_claim_cf * factor
         onerous_morbidity_cf = onerous_morbidity_cf * factor
-    monthly_rate = discount_monthly_curve(basis, n_time)
+    discount_monthly = discount_monthly_curve(basis, n_time)
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = (
         _rollforward_kernel(
             onerous_claim_cf, onerous_morbidity_cf, cf.disability_cf,
             cf.expense_cf, cf.premium_cf, cf.annuity_cf, cf.maturity_cf,
-            cf.surrender_cf, boundary, monthly_rate))
+            cf.surrender_cf, boundary, discount_monthly))
     ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
-                          pv_survival, monthly_rate)
+                          pv_survival, discount_monthly)
 
     fcf_open  = k_exp * (bel[rows, em_open_idx] + ra[rows, em_open_idx])
     fcf_close = k_obs * (bel[rows, cap] + ra[rows, cap])

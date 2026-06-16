@@ -554,7 +554,7 @@ def test_reconcile_vfa():
 
 def test_roll_forward_experience_chain_on_segmented_measurement():
     """Regression (P0): the experience-chain interest accrual indexed
-    monthly_rate[a:b] / monthly_rate[a] -- correct for a single-basis 1-D rate,
+    discount_monthly[a:b] / discount_monthly[a] -- correct for a single-basis 1-D rate,
     but for a SEGMENTED measurement the rate is per-MP (n_mp, n_time) and that
     sliced the model-point axis, crashing / mis-computing. With the time-axis
     ellipsis it reconciles. Drives the chain path (2-D actual_inforce) on a

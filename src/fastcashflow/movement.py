@@ -326,7 +326,7 @@ def _(
     # discount_bom is (n_time+1,) for a single basis, or (n_mp, n_time+1) for
     # a segmented (multi-basis) measurement; the last axis is time either way,
     # so the rate is (n_time,) or (n_mp, n_time) accordingly.
-    monthly_rate = forward_rates(discount_bom)
+    discount_monthly = forward_rates(discount_bom)
     zero = np.zeros(n_mp)
 
     bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
@@ -372,7 +372,7 @@ def _(
         loss = np.maximum(0.0, delta_fcf - csm_before)
         re_csm, re_acc, re_rel = _csm_roll(
             csm_after, np.ascontiguousarray(post_inforce[:, k:]),
-            monthly_rate[..., k:],
+            discount_monthly[..., k:],
         )
         bel = np.concatenate([measurement.bel_path[:, :k + 1], post_bel[:, k + 1:]],
                              axis=1)
@@ -400,8 +400,8 @@ def _(
                 bel_ex, ra_ex, csm_ex = d_bel, d_ra, d_csm
             loss_line = loss
             bel_traj, ra_traj = post_bel, post_ra
-        bel_interest = (bel_traj[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
-        ra_interest = (ra_traj[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
+        bel_interest = (bel_traj[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
+        ra_interest = (ra_traj[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
         movements.append(PeriodMovement(
             month_start=a,
             month_end=b,
@@ -451,7 +451,7 @@ def _roll_forward_experience_chain(
             f"({boundaries[-1]}) reaches the projection horizon ({n_time})"
         )
     discount_bom = measurement.discount_bom
-    monthly_rate = forward_rates(discount_bom)
+    discount_monthly = forward_rates(discount_bom)
 
     # Cumulative in-force ratio at each boundary, laid out as a per-month
     # step factor -- 1 up to the first boundary, then each ratio onward.
@@ -480,7 +480,7 @@ def _roll_forward_experience_chain(
         seg_csm, seg_acc, seg_rel = _csm_roll(
             np.ascontiguousarray(cur),
             np.ascontiguousarray(base_inforce[:, s:]),
-            monthly_rate[..., s:],
+            discount_monthly[..., s:],
         )
         width = e - s
         csm[:, s + 1:e + 1] = seg_csm[:, 1:width + 1]
@@ -505,10 +505,10 @@ def _roll_forward_experience_chain(
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
         bel_ex, ra_ex, csm_ex, loss = exp_lines.get(a, (zero, zero, zero, zero))
-        bel_interest = ((bel[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
-                        + bel_ex * monthly_rate[..., a])
-        ra_interest = ((ra[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
-                       + ra_ex * monthly_rate[..., a])
+        bel_interest = ((bel[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
+                        + bel_ex * discount_monthly[..., a])
+        ra_interest = ((ra[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
+                       + ra_ex * discount_monthly[..., a])
         movements.append(PeriodMovement(
             month_start=a,
             month_end=b,
@@ -586,15 +586,15 @@ def _roll_forward_vfa(
     discount_bom = measurement.discount_bom
     # discount_bom is (n_time+1,) for a single basis, or (n_mp, n_time+1) for a
     # segmented (portfolio-stitched) measurement; the last axis is time either
-    # way, so monthly_rate is (n_time,) or (n_mp, n_time). The trailing-axis
+    # way, so discount_monthly is (n_time,) or (n_mp, n_time). The trailing-axis
     # slice serves both -- a bare [a:b] would slice the model-point axis on the
     # 2-D curve.
-    monthly_rate = forward_rates(discount_bom)
+    discount_monthly = forward_rates(discount_bom)
     movements: list[VFAPeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
-        bel_interest = (bel[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
-        ra_interest = (ra[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
+        bel_interest = (bel[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
+        ra_interest = (ra[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
         movements.append(VFAPeriodMovement(
             month_start=a,
             month_end=b,
@@ -627,12 +627,12 @@ def _roll_forward_reinsurance(
     csm_accretion = measurement.csm_accretion
     csm_release = measurement.csm_release
     n_time = csm.shape[1] - 1
-    monthly_rate = forward_rates(measurement.discount_bom)
+    discount_monthly = forward_rates(measurement.discount_bom)
     movements: list[ReinsurancePeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
-        bel_interest = (bel[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
-        ra_interest = (ra[:, a:b] * monthly_rate[..., a:b]).sum(axis=1)
+        bel_interest = (bel[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
+        ra_interest = (ra[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
         movements.append(ReinsurancePeriodMovement(
             month_start=a,
             month_end=b,

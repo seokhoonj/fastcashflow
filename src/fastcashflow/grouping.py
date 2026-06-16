@@ -298,9 +298,9 @@ def _finalise_gmm_group(bel, ra, grouped_cf, lic, out_bom, out_mid,
     fcf0 = bel[:, 0] + ra[:, 0]
     csm0 = np.maximum(0.0, -fcf0)
     loss_component = np.maximum(0.0, fcf0)
-    monthly_rate = forward_rates(out_bom)
+    discount_monthly = forward_rates(out_bom)
     csm, csm_accretion, csm_release = _csm_roll(
-        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate,
+        csm0, np.ascontiguousarray(grouped_cf.inforce), discount_monthly,
         discount_units,
     )
     return GMMMeasurement(
@@ -363,9 +363,9 @@ def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
     fcf0 = bel[:, 0] + ra[:, 0] + time_value
     csm0 = np.maximum(0.0, -fcf0)
     loss_component = np.maximum(0.0, fcf0)
-    monthly_rate = forward_rates(out_bom)
+    discount_monthly = forward_rates(out_bom)
     csm, csm_accretion, csm_release = _csm_roll(
-        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate,
+        csm0, np.ascontiguousarray(grouped_cf.inforce), discount_monthly,
         discount_units,
     )
     return VFAMeasurement(
@@ -443,9 +443,9 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
     # released by the grouped coverage units.
     csm0 = -(bel - ra)
     bom = measurement.discount_bom
-    monthly_rate = forward_rates(bom)
+    discount_monthly = forward_rates(bom)
     csm, csm_accretion, csm_release = _csm_kernel(
-        csm0, np.ascontiguousarray(grouped_cf.inforce), monthly_rate, False
+        csm0, np.ascontiguousarray(grouped_cf.inforce), discount_monthly, False
     )
     return ReinsuranceMeasurement(
         bel=bel,

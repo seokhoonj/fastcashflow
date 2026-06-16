@@ -45,7 +45,7 @@ def test_reinsurance_report_field_formulas():
     assert isinstance(rep, fcf.ReinsuranceReport)
 
     bel, ra, csm = m.bel_path, m.ra_path, m.csm_path
-    monthly_rate = forward_rates(m.discount_bom)
+    discount_monthly = forward_rates(m.discount_bom)
 
     # Disaggregated cash flows are passed straight through (positive both).
     assert np.allclose(rep.reinsurance_premium_allocated, m.reinsurance_premium)
@@ -59,7 +59,7 @@ def test_reinsurance_report_field_formulas():
 
     # RA release the issuer revenue form: opening - closing discounted (the RA
     # interest is in the finance line, not the service result).
-    monthly_discount = 1.0 / (1.0 + monthly_rate)
+    monthly_discount = 1.0 / (1.0 + discount_monthly)
     ra_release = ra[:, :-1] - ra[:, 1:] * monthly_discount
     assert np.allclose(rep.ra_release, ra_release)
 
@@ -68,12 +68,12 @@ def test_reinsurance_report_field_formulas():
         rep.reinsurance_service_result, ra_release + m.csm_release)
 
     # Finance: interest on BEL + RA + CSM accretion, disaggregated by source.
-    assert np.allclose(rep.bel_finance_expense, monthly_rate * bel[:, :-1])
-    assert np.allclose(rep.ra_finance_expense, monthly_rate * ra[:, :-1])
+    assert np.allclose(rep.bel_finance_expense, discount_monthly * bel[:, :-1])
+    assert np.allclose(rep.ra_finance_expense, discount_monthly * ra[:, :-1])
     assert np.allclose(rep.csm_finance_expense, m.csm_accretion)
     assert np.allclose(
         rep.reinsurance_finance_expense,
-        monthly_rate * (bel[:, :-1] + ra[:, :-1]) + m.csm_accretion)
+        discount_monthly * (bel[:, :-1] + ra[:, :-1]) + m.csm_accretion)
     # The three parts sum to the aggregate (B130-B136).
     assert np.allclose(
         rep.bel_finance_expense + rep.ra_finance_expense

@@ -738,7 +738,7 @@ def settle_reinsurance(
                      count / np.where(surv_close > 0.0, surv_close, 1.0), 0.0)
     live_close = np.where(final, 0.0, 1.0)
     em_c = np.minimum(em_close, n_time)
-    monthly_rate = forward_rates(discount_bom)
+    discount_monthly = forward_rates(discount_bom)
     cols = em_open[:, None] + np.arange(period)[None, :]
     col_ok = cols < n_time
     cols_safe = np.where(col_ok, cols, n_time - 1)
@@ -749,7 +749,7 @@ def settle_reinsurance(
         close_exp = k_exp * close_unit
         closing = k_obs * close_unit
         interest = k_exp * (path[rows[:, None], cols_safe]
-                            * monthly_rate[cols_safe] * col_ok).sum(axis=1)
+                            * discount_monthly[cols_safe] * col_ok).sum(axis=1)
         release = opening + interest - close_exp
         experience = closing - close_exp
         return opening, interest, release, experience, closing
