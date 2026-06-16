@@ -125,7 +125,7 @@ mp[0]  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m, premium_term=240m, count
 |   +-           10      0.001720      0.036800      0.002281      0.001720      0.091039      0.002712      0.000066      0.001477
 |   `-           19      0.003910      0.036800      0.005285      0.003910      0.103026      0.004092      0.000149      0.003424
 +- Cash flows (annual sum over 240m horizon)
-|   +-         year       premium         claim     morbidity       expense       annuity     surrender    disability
+|   +-         year       premium     mortality     morbidity       expense       annuity     surrender    disability
 |   +-            0       449,802        59,260             0       786,204             0           512             0
 |   +-            1       393,535        57,233             0        77,014             0         4,352             0
 |   +-            2       336,705        53,606             0        67,311             0        10,543             0
@@ -163,7 +163,7 @@ mp[0]  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m, premium_term=240m, count
 |   +- t= 228m: ds=0.471163
 |   `- t= 240m: ds=0.452457
 +- BEL roll-forward (key months)
-|   +- BEL[t] = annuity[t] - premium[t] + (claim+morbidity+disability+expense+surrender)[t] * (1+i)^(-1/2) + BEL[t+1] * (1+i)^(-1)
+|   +- BEL[t] = annuity[t] - premium[t] + (mortality+morbidity+disability+expense+surrender)[t] * (1+i)^(-1/2) + BEL[t+1] * (1+i)^(-1)
 |   +- BEL[ 240] =    2,159,680.98  (maturity seed -- a single payment at term)
 |   +- BEL[ 228] =    2,112,593.93
 |   +- BEL[ 120] =    1,389,753.94
@@ -235,7 +235,7 @@ age=35, year=0)` 셀을 찾아 일치하는지 확인할 수 있습니다.
 
 ```
 BEL[t] = annuity[t] - premium[t]
-       + (claim+morbidity+disability+expense+surrender)[t] * (1+i)^(-1/2)
+       + (mortality+morbidity+disability+expense+surrender)[t] * (1+i)^(-1/2)
        + BEL[t+1] * (1+i)^(-1)
 ```
 
@@ -281,7 +281,7 @@ term-1, term}` — 시작, 1년 끝, 중간, 마지막 step, seed.
 mp[0] BEL step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
 +- Recursion (back-pass)
 |   +- BEL[t] = annuity[t] - premium[t]
-|   +-        + (claim + morbidity + disability + expense + surrender)[t] * (1 + i[t])^(-1/2)
+|   +-        + (mortality + morbidity + disability + expense + surrender)[t] * (1 + i[t])^(-1/2)
 |   +-        + BEL[t+1] * (1 + i[t])^(-1)
 |   `- seed:   BEL[240] = maturity_benefit = 2,159,680.98
 +- Steps
@@ -291,7 +291,7 @@ mp[0] BEL step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
 |   |   +- full = (1+i)^(-1)         = 0.997457
 |   |   +- premium[t]                =       39,502.00
 |   |   +- annuity[t]                =            0.00
-|   |   +- claim[t]                  =        5,201.86
+|   |   +- mortality[t]              =        5,201.86
 |   |   +- morbidity[t]              =            0.00
 |   |   +- disability[t]             =            0.00
 |   |   +- expense[t]                =      707,500.00
@@ -308,7 +308,7 @@ mp[0] BEL step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
 |   |   +- full = (1+i)^(-1)         = 0.997457
 |   |   +- premium[t]                =       35,187.98
 |   |   +- annuity[t]                =            0.00
-|   |   +- claim[t]                  =        5,114.54
+|   |   +- mortality[t]              =        5,114.54
 |   |   +- morbidity[t]              =            0.00
 |   |   +- disability[t]             =            0.00
 |   |   +- expense[t]                =        6,821.66
@@ -325,7 +325,7 @@ mp[0] BEL step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
 |   |   +- full = (1+i)^(-1)         = 0.996630
 |   |   +- premium[t]                =        7,935.97
 |   |   +- annuity[t]                =            0.00
-|   |   +- claim[t]                  =        5,657.88
+|   |   +- mortality[t]              =        5,657.88
 |   |   +- morbidity[t]              =            0.00
 |   |   +- disability[t]             =            0.00
 |   |   +- expense[t]                =        2,410.67
@@ -352,7 +352,7 @@ mp[0] BEL step-by-step  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m)
 - `i[t]` — 월 할인율. 샘플 할인은 국고채 곡선이라 연도별로 다름 — 1년차
   약 3.10% 면 `(1.0310)^(1/12) - 1 = 0.002550`
 - `premium[t]` — `premium × in-force` 와 어림셈으로 일치해야
-- `claim[t]` — `coverage_amount × in-force × mortality_monthly` 정도
+- `mortality[t]` — `coverage_amount × in-force × mortality_monthly` 정도
 
 `t = term` (시드) 행은 `maturity_benefit` 만 표시하고 recursion 식은
 없습니다 (그 아래 월이 없기 때문).
@@ -596,81 +596,81 @@ labels: 'baseline'  ->  'mort+10%'
 +- Cash flow deltas (annual sum, non-zero rows only)
 |   +-           year          stream   sum(baseline)   sum(mort+10%)               diff              %diff
 |   +-              0         premium         449,802         449,786             -16          -0.00%
-|   +-              0           claim          59,260          65,186          +5,926         +10.00%
+|   +-              0       mortality          59,260          65,186          +5,926         +10.00%
 |   +-              0         expense         786,204         786,201              -3          -0.00%
 |   +-              1         premium         393,535         393,489             -46          -0.01%
-|   +-              1           claim          57,233          62,952          +5,718          +9.99%
+|   +-              1       mortality          57,233          62,952          +5,718          +9.99%
 |   +-              1         expense          77,014          77,005              -9          -0.01%
 |   +-              2         premium         336,705         336,635             -69          -0.02%
-|   +-              2           claim          53,606          58,957          +5,351          +9.98%
+|   +-              2       mortality          53,606          58,957          +5,351          +9.98%
 |   +-              2         expense          67,311          67,297             -14          -0.02%
 |   +-              2       surrender          10,543          10,542              -1          -0.01%
 |   +-              3         premium         288,029         287,942             -87          -0.03%
-|   +-              3           claim          49,853          54,824          +4,971          +9.97%
+|   +-              3       mortality          49,853          54,824          +4,971          +9.97%
 |   +-              3         expense          58,841          58,823             -18          -0.03%
 |   +-              3       surrender          18,738          18,735              -2          -0.01%
 |   +-              4         premium         246,348         246,247            -101          -0.04%
-|   +-              4           claim          45,669          50,218          +4,549          +9.96%
+|   +-              4       mortality          45,669          50,218          +4,549          +9.96%
 |   +-              4         expense          51,449          51,428             -21          -0.04%
 |   +-              4       surrender          28,453          28,448              -5          -0.02%
 |   +-              5         premium         212,969         212,858            -111          -0.05%
-|   +-              5           claim          42,130          46,321          +4,191          +9.95%
+|   +-              5       mortality          42,130          46,321          +4,191          +9.95%
 |   +-              5         expense          45,489          45,465             -24          -0.05%
 |   +-              5       surrender          32,352          32,345              -7          -0.02%
 |   +-              6         premium         188,584         188,463            -121          -0.06%
-|   +-              6           claim          39,995          43,969          +3,974          +9.94%
+|   +-              6       mortality          39,995          43,969          +3,974          +9.94%
 |   +-              6         expense          41,206          41,180             -26          -0.06%
 |   +-              6       surrender          33,010          33,002              -8          -0.02%
 |   +-              7         premium         170,943         170,811            -132          -0.08%
-|   +-              7           claim          39,885          43,842          +3,957          +9.92%
+|   +-              7       mortality          39,885          43,842          +3,957          +9.92%
 |   +-              7         expense          38,216          38,186             -29          -0.08%
 |   +-              7       surrender          31,165          31,156              -9          -0.03%
 |   +-              8         premium         158,521         158,376            -145          -0.09%
-|   +-              8           claim          40,922          44,976          +4,054          +9.91%
+|   +-              8       mortality          40,922          44,976          +4,054          +9.91%
 |   +-              8         expense          36,260          36,227             -33          -0.09%
 |   +-              8       surrender          26,690          26,682              -9          -0.03%
 |   +-              9         premium         150,309         150,148            -161          -0.11%
-|   +-              9           claim          42,035          46,192          +4,157          +9.89%
+|   +-              9       mortality          42,035          46,192          +4,157          +9.89%
 |   +-              9         expense          35,176          35,139             -38          -0.11%
 |   +-              9       surrender          19,469          19,462              -7          -0.04%
 |   +-             10         premium         144,222         144,043            -178          -0.12%
-|   +-             10           claim          42,955          47,196          +4,241          +9.87%
+|   +-             10       mortality          42,955          47,196          +4,241          +9.87%
 |   +-             10         expense          34,532          34,489             -43          -0.12%
 |   +-             10       surrender          21,844          21,835              -9          -0.04%
 |   +-             11         premium         138,341         138,146            -196          -0.14%
-|   +-             11           claim          44,228          48,587          +4,358          +9.85%
+|   +-             11       mortality          44,228          48,587          +4,358          +9.85%
 |   +-             11         expense          33,899          33,852             -48          -0.14%
 |   +-             11       surrender          23,739          23,728             -11          -0.05%
 |   +-             12         premium         132,657         132,444            -213          -0.16%
-|   +-             12           claim          46,503          51,076          +4,573          +9.83%
+|   +-             12       mortality          46,503          51,076          +4,573          +9.83%
 |   +-             12         expense          33,278          33,225             -53          -0.16%
 |   +-             12       surrender          25,644          25,631             -13          -0.05%
 |   +-             13         premium         127,149         126,918            -231          -0.18%
-|   +-             13           claim          49,657          54,529          +4,872          +9.81%
+|   +-             13       mortality          49,657          54,529          +4,872          +9.81%
 |   +-             13         expense          32,667          32,607             -59          -0.18%
 |   +-             13       surrender          27,552          27,537             -15          -0.06%
 |   +-             14         premium         121,800         121,550            -250          -0.21%
-|   +-             14           claim          53,576          58,820          +5,243          +9.79%
+|   +-             14       mortality          53,576          58,820          +5,243          +9.79%
 |   +-             14         expense          32,063          31,998             -66          -0.21%
 |   +-             14       surrender          29,455          29,437             -18          -0.06%
 |   +-             15         premium         116,601         116,331            -270          -0.23%
-|   +-             15           claim          56,919          62,474          +5,555          +9.76%
+|   +-             15       mortality          56,919          62,474          +5,555          +9.76%
 |   +-             15         expense          31,468          31,396             -73          -0.23%
 |   +-             15       surrender          31,343          31,323             -21          -0.07%
 |   +-             16         premium         111,552         111,262            -290          -0.26%
-|   +-             16           claim          59,732          65,543          +5,811          +9.73%
+|   +-             16       mortality          59,732          65,543          +5,811          +9.73%
 |   +-             16         expense          30,883          30,802             -80          -0.26%
 |   +-             16       surrender          33,212          33,188             -24          -0.07%
 |   +-             17         premium         106,657         106,346            -311          -0.29%
-|   +-             17           claim          62,630          68,703          +6,073          +9.70%
+|   +-             17       mortality          62,630          68,703          +6,073          +9.70%
 |   +-             17         expense          30,306          30,218             -88          -0.29%
 |   +-             17       surrender          35,053          35,026             -28          -0.08%
 |   +-             18         premium         101,909         101,578            -332          -0.33%
-|   +-             18           claim          65,589          71,925          +6,336          +9.66%
+|   +-             18       mortality          65,589          71,925          +6,336          +9.66%
 |   +-             18         expense          29,739          29,642             -97          -0.33%
 |   +-             18       surrender          36,860          36,829             -31          -0.09%
 |   +-             19         premium          97,301          96,948            -353          -0.36%
-|   +-             19           claim          69,116          75,765          +6,649          +9.62%
+|   +-             19       mortality          69,116          75,765          +6,649          +9.62%
 |   +-             19         expense          29,181          29,075            -106          -0.36%
 |   +-             19       surrender          38,625          38,590             -36          -0.09%
 |   `- maturity benefit at t=240m: 2,159,681  ->  2,151,383  (-8,298)

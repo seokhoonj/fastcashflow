@@ -156,9 +156,9 @@ labels: 'baseline'  ->  'mort+10%'
 +- Cash flow deltas (annual sum, non-zero rows only)
 |   +-           year          stream   sum(baseline)   sum(mort+10%)               diff              %diff
 |   +-              0         premium          13,634          13,555             -79          -0.58%
-|   +-              0           claim          11,362          12,498          +1,136         +10.00%
+|   +-              0       mortality          11,362          12,498          +1,136         +10.00%
 |   +-              1         premium          12,085          11,861            -224          -1.85%
-|   `-              1           claim          10,071          10,936            +865          +8.59%
+|   `-              1       mortality          10,071          10,936            +865          +8.59%
 +- Discount factor deltas (key months)
 |   +- t=   0m: ds  1.000000  ->  1.000000  (+0.000000)
 |   +- t=  12m: ds  1.000000  ->  1.000000  (+0.000000)

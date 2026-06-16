@@ -296,7 +296,7 @@ def show_trace(
     cf_lines: list[object] = []
     cf_names = ["premium_cf", "mortality_cf", "morbidity_cf", "expense_cf",
                 "annuity_cf", "surrender_cf", "disability_cf"]
-    cf_heads = ["premium", "claim", "morbidity", "expense",
+    cf_heads = ["premium", "mortality", "morbidity", "expense",
                 "annuity", "surrender", "disability"]
     cf_rows: list[object] = []  # (year, [column sums])
     for y in range(n_years):
@@ -489,7 +489,7 @@ def show_trace(
 
     # ---- BEL roll-forward at key months
     bel_lines: list[object] = [
-        "BEL[t] = annuity[t] - premium[t] + (claim+morbidity+disability+"
+        "BEL[t] = annuity[t] - premium[t] + (mortality+morbidity+disability+"
         "expense+surrender)[t] * (1+i)^(-1/2) + BEL[t+1] * (1+i)^(-1)",
         # Keep the value column aligned with the rows below by putting the
         # "maturity seed" annotation after the number, not in the middle.
@@ -1379,13 +1379,9 @@ def show_trace_diff(
         a1 = min(a0 + 12, cf_a.n_time)
         if a1 <= a0:
             break
-        # (field, display head) -- the head matches show_trace's ``cf_heads``
-        # so both tools label the streams identically; ``mortality_cf`` shows as
-        # the short "claim" column, not the field name stripped of ``_cf``.
-        for name, head in (("premium_cf", "premium"), ("mortality_cf", "claim"),
-                           ("morbidity_cf", "morbidity"), ("expense_cf", "expense"),
-                           ("annuity_cf", "annuity"), ("surrender_cf", "surrender"),
-                           ("disability_cf", "disability")):
+        for name in ("premium_cf", "mortality_cf", "morbidity_cf",
+                     "expense_cf", "annuity_cf", "surrender_cf",
+                     "disability_cf"):
             sa = float(getattr(cf_a, name)[0, a0:a1].sum())
             sb = float(getattr(cf_b, name)[0, a0:a1].sum())
             if abs(sa) + abs(sb) < 0.5:
@@ -1396,7 +1392,7 @@ def show_trace_diff(
             pct = (100.0 * d / sa) if abs(sa) > 1e-12 else float("nan")
             pct_s = f"{pct:>+8.2f}%" if not np.isnan(pct) else "      --"
             cf_lines.append(
-                f"{y:>14d}  {head:>14}  "
+                f"{y:>14d}  {name[:-3]:>14}  "
                 f"{sa:>14,.0f}  {sb:>14,.0f}  {d:>+14,.0f}  {pct_s:>14}"
             )
     if len(cf_lines) == 1:                                # only the header
@@ -1611,7 +1607,7 @@ def show_trace_bel_step(
     The kernel runs the IFRS 17 backward recursion::
 
         BEL[t] = annuity[t] - premium[t]
-               + (claim + morbidity + disability + expense + surrender)[t]
+               + (mortality + morbidity + disability + expense + surrender)[t]
                  * (1 + i[t])^(-1/2)
                + BEL[t+1] * (1 + i[t])^(-1)
 
@@ -1688,7 +1684,7 @@ def show_trace_bel_step(
 
     recursion_lines: list[object] = [
         "BEL[t] = annuity[t] - premium[t]",
-        "       + (claim + morbidity + disability + expense + surrender)[t]"
+        "       + (mortality + morbidity + disability + expense + surrender)[t]"
         " * (1 + i[t])^(-1/2)",
         "       + BEL[t+1] * (1 + i[t])^(-1)",
         f"seed:   BEL[{term}] = maturity_benefit = "
@@ -1728,7 +1724,7 @@ def show_trace_bel_step(
             f"full = (1+i)^(-1)         = {full:.6f}",
             f"premium[t]                = {prem:>15,.2f}",
             f"annuity[t]                = {ann:>15,.2f}",
-            f"claim[t]                  = {claim:>15,.2f}",
+            f"mortality[t]              = {claim:>15,.2f}",
             f"morbidity[t]              = {morb:>15,.2f}",
             f"disability[t]             = {disab:>15,.2f}",
             f"expense[t]                = {exp:>15,.2f}",
