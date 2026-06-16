@@ -41,14 +41,14 @@ def _book(*, actual_claims=None, actual_expenses=None, em_open=12, period=12,
     basis = _basis()
     surv = fcf.gmm.measure(
         ModelPoints(issue_age=np.array([40]), premium=np.array([100.0]),
-                    term_months=np.array([term]), benefits={0: np.array([1e6])},
+                    term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
                     count=np.array([1.0]), calculation_methods=CM),
         basis, full=True).cashflows.inforce[0]
     em_close = em_open + period
     ids = np.array(["P0"])
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([term]), benefits={0: np.array([1e6])},
+        term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
         count=np.array([scale * surv[em_close]]),
         elapsed_months=np.array([em_close]), mp_id=ids,
         product=np.array(["A"]), calculation_methods=CM)

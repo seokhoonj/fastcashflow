@@ -44,7 +44,8 @@ def _book(*, n=3, em_open=24, period=12):
     mp0 = ModelPoints(
         issue_age=np.full(n, 40), premium=np.zeros(n),
         term_months=np.full(n, 120), account_value=np.full(n, 1.0e6),
-        product=np.full(n, "VA"), benefits={0: np.zeros(n)}, count=np.ones(n))
+        product=np.full(n, "VA"), benefits={"DEATH": np.zeros(n)}, count=np.ones(n),
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     m0 = fcf.vfa.measure(mp0, basis)
     inforce = m0.cashflows.inforce
     rows = np.arange(n)

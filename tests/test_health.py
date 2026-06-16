@@ -24,7 +24,8 @@ LAPSE = 0.005        # flat monthly lapse
 MORB_RATE = 0.03     # flat monthly morbidity rate (events per in-force month)
 
 # Coverage codes -- entry i of ``_basis().coverages`` lives at code i.
-DEATH, INPATIENT, SURGERY, OUTPATIENT, DIAGNOSIS = 0, 1, 2, 3, 4
+DEATH, INPATIENT, SURGERY, OUTPATIENT, DIAGNOSIS = (
+    "death", "inpatient", "surgery", "outpatient", "diagnosis")
 
 
 def _mortality(sex, issue_age, duration):
@@ -78,13 +79,13 @@ def test_health_claim_is_non_decrementing():
     basis = _basis()
     term = 36
     plain = measure(
-        ModelPoints.single(40, 50_000.0, term, benefits={0: 1e8}, calculation_methods=PATTERNS),
+        ModelPoints.single(40, 50_000.0, term, benefits={DEATH: 1e8}, calculation_methods=PATTERNS),
         basis,
     )
     with_health = measure(
         ModelPoints.single(
             40, 50_000.0, term,
-            benefits={0: 1e8, INPATIENT: 30_000.0, SURGERY: 2e6},
+            benefits={DEATH: 1e8, INPATIENT: 30_000.0, SURGERY: 2e6},
             calculation_methods=PATTERNS,
         ),
         basis,
@@ -118,7 +119,7 @@ def test_value_matches_measure_health():
         issue_age=rng.integers(30, 55, n),
         premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
-        benefits={0: rng.integers(10, 80, n) * 1_000_000, INPATIENT: rng.integers(0, 5, n) * 10_000,
+        benefits={DEATH: rng.integers(10, 80, n) * 1_000_000, INPATIENT: rng.integers(0, 5, n) * 10_000,
             SURGERY: rng.integers(0, 3, n) * 1_000_000,
             OUTPATIENT: rng.integers(0, 4, n) * 5_000},
         calculation_methods=PATTERNS,
@@ -182,7 +183,7 @@ def test_value_matches_measure_diagnosis():
         issue_age=rng.integers(30, 55, n),
         premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
-        benefits={0: rng.integers(10, 80, n) * 1_000_000, DIAGNOSIS: rng.integers(0, 6, n) * 10_000_000,
+        benefits={DEATH: rng.integers(10, 80, n) * 1_000_000, DIAGNOSIS: rng.integers(0, 6, n) * 10_000_000,
             INPATIENT: rng.integers(0, 4, n) * 10_000},
         calculation_methods=PATTERNS,
     )

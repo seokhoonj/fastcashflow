@@ -128,7 +128,7 @@ def test_segmented_full_ops_match_per_segment():
 def _two_seg_mp(terms):
     """Two model points in two channels of one product, given terms."""
     return fcf.ModelPoints(
-        issue_age=np.array([40, 40]), benefits={0: np.array([1e8, 1e8])},
+        issue_age=np.array([40, 40]), benefits={"DEATH": np.array([1e8, 1e8])},
         premium=np.array([200_000.0, 200_000.0]),
         term_months=np.array(terms), calculation_methods=PATTERNS,
         product=np.array(["A", "A"]), channel=np.array(["X", "Y"]),
@@ -204,7 +204,7 @@ def test_stitched_lic_residual_persists_past_segment_horizon():
                                 discount_annual=0.0, settlement_pattern=pat)
 
     mp = fcf.ModelPoints(
-        issue_age=np.array([40, 40]), benefits={0: np.array([1_000_000.0, 1_000_000.0])},
+        issue_age=np.array([40, 40]), benefits={"DEATH": np.array([1_000_000.0, 1_000_000.0])},
         premium=np.array([0.0, 0.0]), term_months=np.array([3, 8]),
         calculation_methods=PATTERNS,
         product=np.array(["A", "A"]), channel=np.array(["X", "Y"]),

@@ -532,6 +532,7 @@ def test_inforce_fast_rejects_elapsed_past_term():
         premium=np.array([0.0]),
         term_months=np.array([12]),
         elapsed_months=np.array([15]),         # past the boundary (== term)
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
@@ -550,6 +551,7 @@ def test_inforce_full_rejects_elapsed_past_term():
         premium=np.array([0.0]),
         term_months=np.array([12]),
         elapsed_months=np.array([15]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
@@ -607,6 +609,7 @@ def test_segmented_measure_matches_nfc_and_nfd_codes():
         term_months=np.array([12]),
         product=np.array([composed], dtype=object),
         channel=np.array(["FC"], dtype=object),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     basis = Basis(
         mortality_annual=_flat_rate(), lapse_annual=_flat_rate(),
@@ -700,6 +703,7 @@ def test_single_month_measure():
         issue_age=np.array([40.0]),
         premium=np.array([0.0]),
         term_months=np.array([1]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     basis = Basis(
         mortality_annual=_flat_rate(0.01), lapse_annual=_flat_rate(0.0),
@@ -720,6 +724,7 @@ def test_mixed_term_months_tail_padded_consistently():
         issue_age=np.array([40.0, 40.0]),
         premium=np.array([0.0, 0.0]),
         term_months=np.array([3, 12]),       # mixed
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     basis = Basis(
         mortality_annual=_flat_rate(0.01), lapse_annual=_flat_rate(0.0),
@@ -809,7 +814,7 @@ def test_construction_rejects_garbage_inputs():
                         premium=np.array([np.nan]), term_months=np.array([12]))
     with pytest.raises(ValueError, match="coverage amounts must be >= 0"):
         fcf.ModelPoints(issue_age=np.array([40.0]), premium=np.array([100.0]),
-                        term_months=np.array([12]), benefits={0: np.array([-1e6])})
+                        term_months=np.array([12]), benefits={"DEATH": np.array([-1e6])})
 
 
 def test_guards_full_false_cession_scenarios():
@@ -939,7 +944,7 @@ def test_coverage_amount_csr_path_rejects_negative_and_nan():
     # the benefits-map path is still guarded by the same unified check
     with pytest.raises(ValueError, match="coverage amounts must be >= 0"):
         ModelPoints(issue_age=np.array([40.0]), premium=np.array([0.0]),
-                    term_months=np.array([12]), benefits={0: np.array([-5.0])})
+                    term_months=np.array([12]), benefits={"DEATH": np.array([-5.0])})
 
 
 def test_reader_warns_on_near_reserved_column_typo(tmp_path):
@@ -967,7 +972,7 @@ def test_coverage_rate_callable_wrong_shape_is_value_error():
     basis = Basis(mortality_annual=z, lapse_annual=z, discount_annual=0.0,
                   ra_confidence=0.75, mortality_cv=0.10,
                   coverages=(CoverageRate("CANCER", lambda s, a, d: 0.01),))
-    mp = ModelPoints.single(40, 0.0, 24, benefits={0: 1000.0},
+    mp = ModelPoints.single(40, 0.0, 24, benefits={"CANCER": 1000.0},
                             calculation_methods={"CANCER": CalculationMethod.DIAGNOSIS})
     for full in (True, False):
         with pytest.raises(ValueError, match=r"coverage rate 'CANCER' must return an array"):
@@ -975,21 +980,12 @@ def test_coverage_rate_callable_wrong_shape_is_value_error():
 
 
 def test_benefits_accepts_coverage_code_keys():
-    """benefits can be keyed by coverage CODE ('DEATH') -- self-documenting and
-    aligned by code -- as well as by integer index. The two agree; a code-keyed
-    map is order-independent (it pins coverage_codes, so the engine matches by
-    code regardless of the basis' registration order); mixed keys are rejected."""
+    """benefits must be keyed by coverage CODE ('DEATH') -- self-documenting and
+    aligned by code. A code-keyed map is order-independent (it pins
+    coverage_codes, so the engine matches by code regardless of the basis'
+    registration order); integer index keys are rejected."""
     _F = lambda v: (lambda s, a, d: np.full(np.shape(a), v))
     cm = {"DEATH": CalculationMethod.DEATH, "CANCER": CalculationMethod.DIAGNOSIS}
-    # int and code keys give the same measurement
-    basis1 = Basis(mortality_annual=_F(0.01), lapse_annual=_F(0.0), discount_annual=0.03,
-                   ra_confidence=0.75, mortality_cv=0.10,
-                   coverages=(CoverageRate("DEATH", _F(0.01)),))
-    by_idx = fcf.gmm.measure(
-        ModelPoints.single(40, 100.0, 24, benefits={0: 12000.0}, calculation_methods=cm), basis1)
-    by_code = fcf.gmm.measure(
-        ModelPoints.single(40, 100.0, 24, benefits={"DEATH": 12000.0}, calculation_methods=cm), basis1)
-    assert np.allclose(by_idx.bel, by_code.bel)
     # order-independent: basis registers CANCER first, DEATH second; code keys
     # still route DEATH->DEATH rate and CANCER->CANCER rate.
     basis2 = Basis(mortality_annual=_F(0.0), lapse_annual=_F(0.0), discount_annual=0.0,
@@ -1002,8 +998,11 @@ def test_benefits_accepts_coverage_code_keys():
     q = lambda a: 1 - (1 - a) ** (1 / 12)            # annual -> monthly
     assert m.cashflows.claim_cf[0, 0] == pytest.approx(1000.0 * q(0.01))      # DEATH rate
     assert m.cashflows.morbidity_cf[0, 0] == pytest.approx(5000.0 * q(0.02))  # CANCER rate
-    # mixed int + str keys are rejected
-    with pytest.raises(ValueError, match="all coverage codes .* or all coverage indices"):
+    # integer index keys are rejected -- key each benefit by its coverage code
+    with pytest.raises(ValueError, match="integer index keys are not supported"):
+        ModelPoints.single(40, 100.0, 24, benefits={0: 12000.0}, calculation_methods=cm)
+    # mixed int + str keys are likewise rejected (any non-str key)
+    with pytest.raises(ValueError, match="integer index keys are not supported"):
         ModelPoints.single(40, 100.0, 24, benefits={0: 1.0, "CANCER": 2.0}, calculation_methods=cm)
 
 

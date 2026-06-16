@@ -81,7 +81,7 @@ def _two_track_bel(death_benefit, premium, term, state, *,
 
 def test_state_default_is_active():
     """A model point with no `state` is an ordinary active contract."""
-    kw = dict(issue_age=40, benefits={0: 1_000_000.0},
+    kw = dict(issue_age=40, benefits={"DEATH": 1_000_000.0},
               premium=12_000.0, term_months=12)
     basis = _basis()
     default = ModelPoints.single(**kw, calculation_methods=PATTERNS)
@@ -94,7 +94,7 @@ def test_state_default_is_active():
 
 def test_waiver_track_does_not_lapse():
     """A waiver contract's in-force decays by mortality alone -- no lapse."""
-    mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1_000_000.0},
                             premium=12_000.0, term_months=3,
                             state=STATE_WAIVER,
                             calculation_methods=PATTERNS,
@@ -107,7 +107,7 @@ def test_waiver_track_does_not_lapse():
 def test_waiver_hand_calculation():
     """Input-waiver, 2-month term: coverage continues, no premium, no lapse."""
     death_benefit = 1_000_000.0
-    mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": death_benefit},
                             premium=12_000.0, term_months=2,
                             state=STATE_WAIVER,
                             calculation_methods=PATTERNS,
@@ -129,7 +129,7 @@ def test_waiver_hand_calculation():
 
 def test_waiver_collects_no_premium():
     """The waiver track pays no premium -- every premium cash flow is zero."""
-    mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1_000_000.0},
                             premium=12_000.0, term_months=24,
                             state=STATE_WAIVER,
                             calculation_methods=PATTERNS,
@@ -141,7 +141,7 @@ def test_waiver_collects_no_premium():
 def test_paidup_matches_waiver():
     """Paid-up and waiver differ in cause, not cash flows -- identical
     BEL, RA, CSM and loss component."""
-    kw = dict(issue_age=42, benefits={0: 80_000_000.0},
+    kw = dict(issue_age=42, benefits={"DEATH": 80_000_000.0},
               premium=40_000.0, term_months=180)
     basis = _basis()
     waiver = measure(ModelPoints.single(**kw, state=STATE_WAIVER, calculation_methods=PATTERNS), basis, full=False)
@@ -153,7 +153,7 @@ def test_paidup_matches_waiver():
 def test_zero_waiver_rate_is_no_transition():
     """With no waiver-inception assumption the active track never leaks --
     the result is the ordinary single-track projection."""
-    kw = dict(issue_age=45, benefits={0: 50_000_000.0},
+    kw = dict(issue_age=45, benefits={"DEATH": 50_000_000.0},
               premium=30_000.0, term_months=120)
     plain = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), _basis(), full=False)
     with_zero = measure(ModelPoints.single(**kw, calculation_methods=PATTERNS), _basis(waiver_rate=0.0), full=False)
@@ -166,7 +166,7 @@ def test_dynamic_transition_hand_calculation():
     death_benefit = 1_000_000.0
     premium = 12_000.0
     basis = _basis(waiver_rate=0.05)
-    mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": death_benefit},
                             premium=premium, term_months=2,
                             calculation_methods=PATTERNS,
                             )
@@ -197,7 +197,7 @@ def test_dynamic_transition_matches_reference():
         for state in (STATE_ACTIVE, STATE_WAIVER):
             basis = _basis(waiver_rate=w)
             mp = ModelPoints.single(
-                issue_age=40, benefits={0: death_benefit},
+                issue_age=40, benefits={"DEATH": death_benefit},
                 premium=premium, term_months=term, state=state,
                 calculation_methods=PATTERNS,
             )
@@ -210,7 +210,7 @@ def test_dynamic_transition_matches_reference():
 
 def test_measure_and_value_agree_under_transition():
     """The detailed and the fused path give the same BEL with a transition."""
-    mp = ModelPoints.single(issue_age=50, benefits={0: 30_000_000.0},
+    mp = ModelPoints.single(issue_age=50, benefits={"DEATH": 30_000_000.0},
                             premium=25_000.0, term_months=240,
                             calculation_methods=PATTERNS,
                             )
@@ -226,7 +226,7 @@ def test_state_column_round_trips(tmp_path):
         issue_age=np.array([40, 40]),
         premium=np.array([12_000.0, 12_000.0]),
         term_months=np.array([24, 24]),
-        benefits={0: np.array([1_000_000.0, 1_000_000.0])},
+        benefits={"DEATH": np.array([1_000_000.0, 1_000_000.0])},
         state=np.array([STATE_ACTIVE, STATE_WAIVER]),
         calculation_methods=PATTERNS,
     )
@@ -285,8 +285,8 @@ def test_diagnosis_transition_measure_value_agree():
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(float),
         benefits={
-            0: rng.integers(10, 80, n) * 1_000_000.0,
-            1: rng.integers(5, 30, n) * 1_000_000.0,
+            "DEATH": rng.integers(10, 80, n) * 1_000_000.0,
+            "dx":    rng.integers(5, 30, n) * 1_000_000.0,
         },
         premium=rng.integers(2, 10, n) * 10_000.0,
         term_months=np.full(n, 120),

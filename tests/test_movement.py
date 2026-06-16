@@ -35,9 +35,10 @@ def _portfolio(n: int = 50) -> ModelPoints:
     rng = np.random.default_rng(4)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        benefits={0: rng.integers(20, 90, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(20, 90, n) * 1_000_000},
         premium=rng.integers(8, 20, n) * 10_000,
         term_months=np.full(n, 120),
+        calculation_methods=PATTERNS,
     )
 
 
@@ -410,7 +411,7 @@ def test_paa_no_phantom_claims_paid_past_segment_horizon():
         measurement_models={("P", "GA"): "PAA", ("Q", "GA"): "PAA"})
     mp = ModelPoints(
         issue_age=np.array([40, 40]), premium=np.array([0.0, 0.0]),
-        term_months=np.array([3, 8]), benefits={0: np.array([1e6, 1e6])},
+        term_months=np.array([3, 8]), benefits={"DEATH": np.array([1e6, 1e6])},
         calculation_methods=PATTERNS,
         product=np.array(["P", "Q"]), channel=np.array(["GA", "GA"]))
     pm = fcf.portfolio.measure(mp, router)
@@ -502,7 +503,8 @@ def _vfa_assumptions():
 
 
 def _vfa_contract() -> ModelPoints:
-    return ModelPoints.single(40, 0.0, 120, account_value=1e8)
+    return ModelPoints.single(40, 0.0, 120, account_value=1e8,
+                              calculation_methods=PATTERNS)
 
 
 def test_roll_forward_vfa_reconciles():

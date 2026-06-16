@@ -9,7 +9,7 @@ import fastcashflow as fcf
 import numpy as np
 import pytest
 
-from conftest import annual_from_monthly as _annual
+from conftest import annual_from_monthly as _annual, PATTERNS
 from fastcashflow import Basis, ExpenseItem, ModelPoints, report, CoverageRate
 from fastcashflow.gmm import measure
 
@@ -36,9 +36,10 @@ def _portfolio(n: int = 300) -> ModelPoints:
     rng = np.random.default_rng(4)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        benefits={0: rng.integers(20, 90, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(20, 90, n) * 1_000_000},
         premium=rng.integers(5, 18, n) * 10_000,
         term_months=rng.integers(60, 180, n),
+        calculation_methods=PATTERNS,
     )
 
 
@@ -65,7 +66,7 @@ def test_report_service_result_is_revenue_less_expense():
 
 def test_report_csm_fully_releases_with_non_negative_profit():
     """A profitable contract releases its whole CSM, earning profit each month."""
-    res = report(measure(ModelPoints.single(40, 150_000.0, 120, benefits={0: 1e8}), _basis()))
+    res = report(measure(ModelPoints.single(40, 150_000.0, 120, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), _basis()))
     assert res.csm_opening[0, 0] > 0.0                  # there is a CSM
     assert np.isclose(res.csm_closing[0, -1], 0.0)      # all released by term end
     assert np.all(res.insurance_service_result[0] >= -1e-6)   # profit emerges >= 0
@@ -95,7 +96,7 @@ def test_report_str_renders_the_annual_table():
 
 def test_report_handles_paa():
     """report() accepts a PAA measurement -- which has no CSM."""
-    m = fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}), _basis())
+    m = fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), _basis())
     res = report(m)
     assert np.allclose(res.insurance_revenue, m.revenue)
     assert np.allclose(res.insurance_service_result, m.service_result)
@@ -106,7 +107,8 @@ def test_report_handles_paa():
 def test_report_handles_vfa():
     """report() accepts a VFA measurement -- the result is the CSM release."""
     m = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 60, account_value=1e8), _basis()
+        ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                           calculation_methods=PATTERNS), _basis()
     )
     res = report(m)
     assert np.allclose(
@@ -118,9 +120,9 @@ def test_report_handles_vfa():
 def test_report_loss_component():
     """The loss component is zero when profitable, positive when onerous."""
     profitable = report(measure(
-        ModelPoints.single(40, 150_000.0, 120, benefits={0: 1e8}), _basis()))
+        ModelPoints.single(40, 150_000.0, 120, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), _basis()))
     onerous = report(measure(
-        ModelPoints.single(40, 1_000.0, 120, benefits={0: 1e8}), _basis()))
+        ModelPoints.single(40, 1_000.0, 120, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), _basis()))
     assert np.allclose(profitable.loss_component, 0.0)
     assert onerous.loss_component[0] > 0.0
 
@@ -148,7 +150,7 @@ def test_report_finance_expense_is_curve_aware():
         mortality_cv=0.10,
         coverages=(CoverageRate("DEATH", lambda sex, ia, dur: np.full(ia.shape, _annual(0.001))),),
     )
-    m = measure(ModelPoints.single(40, 50_000.0, 120, benefits={0: 1e8}), a)
+    m = measure(ModelPoints.single(40, 50_000.0, 120, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), a)
     r = report(m)
     ds = m.discount_bom
     rate = ds[:-1] / ds[1:] - 1.0
@@ -173,7 +175,7 @@ def test_report_finance_expense_disaggregates_by_source():
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("DEATH",
                    lambda sex, ia, dur: np.full(ia.shape, _annual(0.001))),))
-    m = measure(ModelPoints.single(40, 150_000.0, 120, benefits={0: 1e8}), a)
+    m = measure(ModelPoints.single(40, 150_000.0, 120, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), a)
     r = report(m)
     ds = m.discount_bom
     rate = ds[:-1] / ds[1:] - 1.0
@@ -195,9 +197,10 @@ def test_report_finance_disaggregation_identity_all_models():
     its CSM component must carry the whole line."""
     gmm = report(measure(_portfolio(), _basis()))
     paa = report(fcf.paa.measure(
-        ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}), _basis()))
+        ModelPoints.single(40, 50_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), _basis()))
     vfa = report(fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 60, account_value=1e8), _basis()))
+        ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                           calculation_methods=PATTERNS), _basis()))
     for r in (gmm, paa, vfa):
         np.testing.assert_allclose(
             r.bel_finance_expense + r.ra_finance_expense + r.csm_finance_expense,

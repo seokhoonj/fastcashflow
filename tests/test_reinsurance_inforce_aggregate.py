@@ -56,7 +56,7 @@ def _book(*, n=3, elapsed=36, period=12, cession=0.4):
     trajectory so the carry is alive. A chunk split crosses unlike rows."""
     basis = _basis()
     treaty = QS(cession)
-    unit = ModelPoints.single(40, 80_000.0, 240, benefits={0: 1e8},
+    unit = ModelPoints.single(40, 80_000.0, 240, benefits={"DEATH": 1e8},
                               calculation_methods=PATTERNS)
     m = fcf.reinsurance.measure(unit, basis, treaty=treaty)
     surv = m.cashflows.inforce[0]
@@ -68,7 +68,7 @@ def _book(*, n=3, elapsed=36, period=12, cession=0.4):
     rep = lambda v: np.full(n, v)
     mp = ModelPoints(
         issue_age=rep(40).astype(np.int64), premium=rep(80_000.0),
-        term_months=rep(240).astype(np.int64), benefits={0: rep(1e8)},
+        term_months=rep(240).astype(np.int64), benefits={"DEATH": rep(1e8)},
         count=count, elapsed_months=rep(elapsed).astype(np.int64), mp_id=ids,
         calculation_methods=PATTERNS)
     state = InforceState(

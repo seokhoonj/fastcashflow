@@ -464,7 +464,7 @@ mp_one = ModelPoints(
     issue_age           = np.array([40.0]),                        # 가입연령 40 세
     premium             = np.array([200_000.0]),                   # 월납 보험료 20 만
     term_months         = np.array([60]),                          # 보험기간 60 개월 (5 년)
-    benefits            = {0: np.array([100_000_000.0])},          # 0 번 보장 (= DEATH) 의 보험금 1 억
+    benefits            = {"DEATH": np.array([100_000_000.0])},    # DEATH 보장의 보험금 1 억
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},  # 코드 → 산출방법 매핑
 )
 

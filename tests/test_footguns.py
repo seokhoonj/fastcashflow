@@ -27,7 +27,7 @@ def test_segmented_measure_rejects_pipe_in_product():
         term_months=np.array([60]),
         product=np.array(["TERM|2020"]),         # the trap
         channel=np.array(["FC"]),
-        benefits={0: np.array([1e8])},
+        benefits={"DEATH": np.array([1e8])},
         calculation_methods=PATTERNS,
     )
     basis = BasisRouter({("TERM|2020", "FC"): make_death_basis(
@@ -43,7 +43,7 @@ def test_segmented_measure_rejects_pipe_in_channel():
         term_months=np.array([60]),
         product=np.array(["TERM_LIFE_A"]),
         channel=np.array(["FC|GA"]),            # the trap
-        benefits={0: np.array([1e8])},
+        benefits={"DEATH": np.array([1e8])},
         calculation_methods=PATTERNS,
     )
     basis = BasisRouter({("TERM_LIFE_A", "FC|GA"): make_death_basis(
@@ -61,7 +61,7 @@ def test_engine_rejects_catalogue_mismatch():
     calculation_methods catalogue lands without a routing pattern and the
     engine falls back silently. Catch it loudly."""
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 1e8},
+        issue_age=40, benefits={"DEATH": 1e8},
         premium=12_000.0, term_months=60,
         calculation_methods={"DEATH": CalculationMethod.DEATH},  # catalogue: DEATH
     )
@@ -72,9 +72,9 @@ def test_engine_rejects_catalogue_mismatch():
         ra_confidence=0.75, mortality_cv=0.10,
         coverages=(CoverageRate("CANCER", _flat(_annual(0.005))),),  # mismatch
     )
-    with pytest.raises(ValueError, match="catalogue"):
+    with pytest.raises(ValueError, match="no registered coverage"):
         measure(mp, basis)
-    with pytest.raises(ValueError, match="catalogue"):
+    with pytest.raises(ValueError, match="no registered coverage"):
         measure(mp, basis, full=False)
 
 
@@ -95,7 +95,7 @@ def test_engine_reorders_coverages_by_code():
         issue_age=np.array([40.0]),
         premium=np.array([12_000.0]),
         term_months=np.array([60]),
-        benefits={0: np.array([1e8]), 1: np.array([1e7])},
+        benefits={"DEATH": np.array([1e8]), "CANCER": np.array([1e7])},
         calculation_methods={"DEATH": CalculationMethod.DEATH,
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
@@ -129,7 +129,7 @@ def test_engine_rejects_unregistered_coverage():
         issue_age=np.array([40.0]),
         premium=np.array([12_000.0]),
         term_months=np.array([60]),
-        benefits={0: np.array([1e8]), 1: np.array([1e7])},
+        benefits={"DEATH": np.array([1e8]), "CANCER": np.array([1e7])},
         calculation_methods={"DEATH": CalculationMethod.DEATH,
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
@@ -154,7 +154,7 @@ def test_engine_accepts_matching_coverage_codes():
         issue_age=np.array([40.0]),
         premium=np.array([12_000.0]),
         term_months=np.array([60]),
-        benefits={0: np.array([1e8]), 1: np.array([1e7])},
+        benefits={"DEATH": np.array([1e8]), "CANCER": np.array([1e7])},
         calculation_methods={"DEATH": CalculationMethod.DEATH,
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH", "CANCER"),
@@ -186,7 +186,7 @@ def test_engine_ignores_unreferenced_assumptions_coverage():
         issue_age=np.array([40.0]),
         premium=np.array([12_000.0]),
         term_months=np.array([60]),
-        benefits={0: np.array([1e8])},
+        benefits={"DEATH": np.array([1e8])},
         calculation_methods={"DEATH": CalculationMethod.DEATH,
                           "CANCER": CalculationMethod.DIAGNOSIS},
         coverage_codes=("DEATH",),

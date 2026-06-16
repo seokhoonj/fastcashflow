@@ -143,7 +143,7 @@ basis = fcf.Basis(
 # 모델 포인트 -- 진단금 2,000 만, 월정액 100 만
 mp = fcf.ModelPoints(
     issue_age         = np.array([60], dtype=np.int64),   # 60 세 가입
-    benefits          = {0: np.array([0.0])},             # 사망보험금 0 (간병에 집중)
+    benefits          = {"DEATH": np.array([0.0])},       # 사망보험금 0 (간병에 집중)
     premium           = np.array([90_000.0]),             # 월 보험료 9 만
     term_months       = np.array([360], dtype=np.int64),  # 90 세까지 (30 년)
     disability_benefit = np.array([20_000_000.0]),        # 진단금 2,000 만 (lump)
@@ -193,7 +193,7 @@ toy_basis = fcf.Basis(
     coverages=(fcf.CoverageRate("DEATH", zero),),  # 사망 보장
 )
 toy_mp = fcf.ModelPoints(
-    issue_age=np.array([70], dtype=np.int64), benefits={0: np.array([0.0])},
+    issue_age=np.array([70], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
     premium=np.array([0.0]), term_months=np.array([12], dtype=np.int64),
     disability_income=np.array([1_000_000.0]),
     state=np.array([1], dtype=np.int64),                                      # 간병 상태에 자리 지정

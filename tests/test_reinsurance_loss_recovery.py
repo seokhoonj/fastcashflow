@@ -21,7 +21,7 @@ QS = fcf.reinsurance.QuotaShare
 settle = getattr(fcf.reinsurance, "settle", None)
 _HAS_LR = (settle is not None
            and hasattr(fcf.reinsurance.measure(
-               ModelPoints.single(40, 400_000.0, 240, benefits={0: 1e8},
+               ModelPoints.single(40, 400_000.0, 240, benefits={"DEATH": 1e8},
                                   calculation_methods=PATTERNS),
                make_death_basis(mortality_q=0.002, lapse_q=0.005,
                                 discount_annual=0.03, ra_confidence=0.75,
@@ -38,7 +38,7 @@ def _basis():
 
 
 def _unit(basis, *, premium=400_000.0):
-    return ModelPoints.single(40, premium, 240, benefits={0: 1e8},
+    return ModelPoints.single(40, premium, 240, benefits={"DEATH": 1e8},
                               calculation_methods=PATTERNS)
 
 
@@ -92,7 +92,7 @@ def _settle_book(*, elapsed=36, period=12, cession=0.4):
     ids = np.array(["R0"])
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([400_000.0]),
-        term_months=np.array([240]), benefits={0: np.array([1e8])},
+        term_months=np.array([240]), benefits={"DEATH": np.array([1e8])},
         count=np.array([scale * surv[elapsed]]),
         elapsed_months=np.array([elapsed]), mp_id=ids,
         calculation_methods=PATTERNS)

@@ -34,7 +34,7 @@ def _portfolio(n: int = 200) -> ModelPoints:
     rng = np.random.default_rng(6)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        benefits={0: rng.integers(20, 90, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(20, 90, n) * 1_000_000},
         premium=rng.integers(8, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         calculation_methods=PATTERNS,
@@ -138,7 +138,7 @@ def _boundary_portfolio(n: int = 50) -> ModelPoints:
     term = rng.integers(120, 240, n)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        benefits={0: rng.integers(20, 90, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(20, 90, n) * 1_000_000},
         premium=rng.integers(8, 20, n) * 10_000,
         term_months=term,
         contract_boundary_months=term // 3,        # cut at a third of the term

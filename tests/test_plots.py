@@ -124,21 +124,24 @@ def vfa_book():
         _flat_basis(), expense_cv=0.10,
         expense_items=(fcf.ExpenseItem("maintenance", "gamma_fixed", 60_000.0),))
     m = fcf.vfa.measure(
-        fcf.ModelPoints.single(40, 0.0, 60, account_value=1e8), vfa_basis)
+        fcf.ModelPoints.single(40, 0.0, 60, account_value=1e8,
+            calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}), vfa_basis)
     return vfa_basis, m
 
 
 @pytest.fixture(scope="module")
 def paa_m():
     return fcf.paa.measure(
-        fcf.ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}),
+        fcf.ModelPoints.single(40, 50_000.0, 12, benefits={"DEATH": 1e8},
+            calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}),
         _flat_basis())
 
 
 @pytest.fixture(scope="module")
 def reins_m():
     return fcf.reinsurance.measure(
-        fcf.ModelPoints.single(40, 50_000.0, 120, benefits={0: 1e8}),
+        fcf.ModelPoints.single(40, 50_000.0, 120, benefits={"DEATH": 1e8},
+            calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}),
         _flat_basis(), treaty=fcf.reinsurance.QuotaShare(0.5))
 
 

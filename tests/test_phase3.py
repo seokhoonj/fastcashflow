@@ -36,9 +36,10 @@ def test_value_matches_measure():
     # distinct and repeated issue ages -- exercises the unique-age grid
     mps = ModelPoints(
         issue_age=np.array([30, 45, 45, 55, 38]),
-        benefits={0: np.array([1e8, 5e7, 8e7, 3e7, 6e7])},
+        benefits={"DEATH": np.array([1e8, 5e7, 8e7, 3e7, 6e7])},
         premium=np.array([70_000, 90_000, 110_000, 130_000, 80_000]),
         term_months=np.array([120, 120, 120, 120, 120]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
 
     fast = measure(mps, basis, full=False)
@@ -61,8 +62,9 @@ def test_value_onerous():
         coverages=(CoverageRate("DEATH", lambda sex, issue_age, duration: np.full(issue_age.shape, _annual(0.05))),),
     )
     mps = ModelPoints.single(
-        issue_age=40, benefits={0: 1_000_000.0},
+        issue_age=40, benefits={"DEATH": 1_000_000.0},
         premium=100.0, term_months=12,
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     v = measure(mps, basis, full=False)
     assert v.csm[0] == 0.0
@@ -95,9 +97,10 @@ def test_fast_gpu_matches_cpu():
     n = 5_000
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
-        benefits={0: rng.integers(10, 100, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(10, 100, n) * 1_000_000},
         premium=rng.integers(3, 15, n) * 10_000,
         term_months=np.full(n, 120),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
 
     cpu = measure(mps, basis, backend="cpu", full=False)
@@ -140,7 +143,7 @@ def test_fast_gpu_matches_cpu_with_transition():
     n = 4_000
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n).astype(float),
-        benefits={0: rng.integers(10, 100, n) * 1_000_000.0, 1: rng.integers(5, 30, n) * 1_000_000.0},
+        benefits={"DEATH": rng.integers(10, 100, n) * 1_000_000.0, "dx": rng.integers(5, 30, n) * 1_000_000.0},
         premium=rng.integers(3, 15, n) * 10_000.0,
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),

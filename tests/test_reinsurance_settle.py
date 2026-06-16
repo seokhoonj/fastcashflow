@@ -54,7 +54,7 @@ def _book(*, n=1, elapsed=36, period=12, cession=0.4, count_factor=1.0,
     closing count off the expected survival."""
     basis = _basis()
     treaty = QS(cession)
-    unit = ModelPoints.single(40, premium, 240, benefits={0: 1e8},
+    unit = ModelPoints.single(40, premium, 240, benefits={"DEATH": 1e8},
                               calculation_methods=PATTERNS)
     m = fcf.reinsurance.measure(unit, basis, treaty=treaty)
     surv = m.cashflows.inforce[0]
@@ -66,7 +66,7 @@ def _book(*, n=1, elapsed=36, period=12, cession=0.4, count_factor=1.0,
     rep = lambda v: np.full(n, v)
     mp = ModelPoints(
         issue_age=rep(40).astype(np.int64), premium=rep(premium),
-        term_months=rep(240).astype(np.int64), benefits={0: rep(1e8)},
+        term_months=rep(240).astype(np.int64), benefits={"DEATH": rep(1e8)},
         count=count, elapsed_months=rep(elapsed).astype(np.int64), mp_id=ids,
         calculation_methods=PATTERNS)
     state = InforceState(
@@ -187,7 +187,7 @@ def test_settle_stream_matches_in_memory(tmp_path):
         "prior_count": np.asarray(state.prior_count),
     }
     cov = pl.DataFrame({"mp_id": spec["mp_id"], "coverage": ["DEATH"] * n,
-                        "amount": np.asarray(mp.benefits[0], dtype=np.float64)})
+                        "amount": np.asarray(mp.benefits["DEATH"], dtype=np.float64)})
     cp = tmp_path / "rcov.parquet"; cov.write_parquet(cp)
     ip = tmp_path / "rinforce.parquet"
     pl.DataFrame({**spec, **{k: v for k, v in st.items()

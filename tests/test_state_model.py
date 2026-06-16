@@ -144,8 +144,9 @@ def test_markov_can_reference_ci_incidence_annual():
         state_model=healthy_to_diag,
         coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(d.shape, q_a)),),
     )
-    mp = ModelPoints.single(issue_age=40, benefits={0: 1_000_000.0},
-                            premium=0.0, term_months=12)
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1_000_000.0},
+                            premium=0.0, term_months=12,
+                            calculation_methods={"DEATH": CalculationMethod.DEATH})
     val = measure(mp, basis, full=False)
     m = measure(mp, basis)
     assert np.isclose(m.bel_path[0, 0], val.bel[0])
@@ -169,10 +170,11 @@ def test_explicit_waiver_model_matches_default():
         ),
         seating=(0, 1, 1),
     )
-    kw = dict(issue_age=45, benefits={0: 50_000_000.0},
+    kw = dict(issue_age=45, benefits={"DEATH": 50_000_000.0},
               premium=30_000.0, term_months=120)
     for state in (STATE_ACTIVE, STATE_WAIVER, STATE_PAIDUP):
-        mp = ModelPoints.single(**kw, state=state)
+        mp = ModelPoints.single(**kw, state=state,
+                                calculation_methods={"DEATH": CalculationMethod.DEATH})
         default = measure(mp, _basis(waiver_rate=0.03), full=False)
         custom = measure(mp, _basis(waiver_rate=0.03, state_model=rebuilt), full=False)
         assert np.isclose(default.bel[0], custom.bel[0])
@@ -186,8 +188,9 @@ def test_single_state_no_lapse_hand_calculation():
     ))
     death_benefit = 1_000_000.0
     premium = 12_000.0
-    mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
-                            premium=premium, term_months=3)
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": death_benefit},
+                            premium=premium, term_months=3,
+                            calculation_methods={"DEATH": CalculationMethod.DEATH})
     basis = _basis(state_model=no_lapse)
 
     inforce = [1.0, 0.99, 0.99 ** 2]
@@ -218,8 +221,9 @@ def test_decrement_order_matters():
     )
     death_benefit = 1_000_000.0
     premium = 12_000.0
-    mp = ModelPoints.single(issue_age=40, benefits={0: death_benefit},
-                            premium=premium, term_months=2)
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": death_benefit},
+                            premium=premium, term_months=2,
+                            calculation_methods={"DEATH": CalculationMethod.DEATH})
     basis = _basis(waiver_rate=0.05, lapse=0.02, state_model=lapse_first)
 
     # t=0: act=1, wav=0.
@@ -257,19 +261,21 @@ def test_three_state_model_runs():
         seating=(0, 1, 2),       # active / waiver / paid-up each own a state
     )
     assert three.n_states == 3
-    kw = dict(issue_age=42, benefits={0: 80_000_000.0},
+    kw = dict(issue_age=42, benefits={"DEATH": 80_000_000.0},
               premium=40_000.0, term_months=180)
 
     # A paid-up contract: identical to the default, which seats paid-up on
     # the waiver state -- both are mortality-only, premium-free.
-    paidup = ModelPoints.single(**kw, state=STATE_PAIDUP)
+    paidup = ModelPoints.single(**kw, state=STATE_PAIDUP,
+                                calculation_methods={"DEATH": CalculationMethod.DEATH})
     base = measure(paidup, _basis(waiver_rate=0.03), full=False)
     custom = measure(paidup, _basis(waiver_rate=0.03, state_model=three), full=False)
     for field in ("bel", "ra", "csm", "loss_component"):
         assert np.isclose(getattr(base, field)[0], getattr(custom, field)[0])
 
     # An active contract is unaffected by the unreachable paid-up state.
-    active = ModelPoints.single(**kw, state=STATE_ACTIVE)
+    active = ModelPoints.single(**kw, state=STATE_ACTIVE,
+                                calculation_methods={"DEATH": CalculationMethod.DEATH})
     assert np.isclose(measure(active, _basis(waiver_rate=0.03), full=False).bel[0],
                       measure(active, _basis(waiver_rate=0.03, state_model=three), full=False).bel[0])
 
@@ -290,8 +296,9 @@ def test_paidup_state_uses_its_own_lapse():
                                 lambda s, a, d: np.full(a.shape, q)),),
         state_model=STATE_MODELS["WAIVER_PAIDUP"],
     )
-    kw = dict(issue_age=40, benefits={0: 100_000.0}, premium=0.0,
-              term_months=3)
+    kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
+              term_months=3,
+              calculation_methods={"DEATH": CalculationMethod.DEATH})
     paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), basis)
     step = 0.99 * 0.90        # (1 - mortality)(1 - paid-up lapse)
     assert np.allclose(paid.cashflows.inforce[0, :3], [1.0, step, step ** 2])
@@ -306,8 +313,9 @@ def test_paidup_lapse_falls_back_to_lapse_annual():
     paid-up state just lapses at the ordinary rate."""
     basis = _basis(q=0.01, lapse=0.05,
                  state_model=STATE_MODELS["WAIVER_PAIDUP"])
-    kw = dict(issue_age=40, benefits={0: 100_000.0}, premium=0.0,
-              term_months=3)
+    kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
+              term_months=3,
+              calculation_methods={"DEATH": CalculationMethod.DEATH})
     paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), basis)
     step = 0.99 * 0.95        # falls back to the 5% active lapse
     assert np.allclose(paid.cashflows.inforce[0, :3], [1.0, step, step ** 2])
@@ -332,10 +340,11 @@ def test_measure_and_value_agree_under_custom_model():
     n = 50
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(float),
-        benefits={0: rng.integers(10, 80, n) * 1_000_000.0},
+        benefits={"DEATH": rng.integers(10, 80, n) * 1_000_000.0},
         premium=rng.integers(2, 10, n) * 10_000.0,
         term_months=np.full(n, 120),
         state=rng.integers(0, 3, n),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     basis = _basis(waiver_rate=0.03, state_model=three)
     assert np.allclose(measure(mps, basis).bel_path[:, 0], measure(mps, basis, full=False).bel)
@@ -360,7 +369,7 @@ def test_deaths_respect_within_month_competing_risk_order():
                       discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
                       state_model=model, coverages=(CoverageRate("DEATH", death),))
         mp = ModelPoints(issue_age=np.array([40], dtype=np.int64),
-                         benefits={0: np.array([0.0])}, premium=np.array([0.0]),
+                         benefits={"DEATH": np.array([0.0])}, premium=np.array([0.0]),
                          term_months=np.array([3], dtype=np.int64),
                          calculation_methods={"DEATH": CalculationMethod.DEATH})
         return project_cashflows(mp, basis)

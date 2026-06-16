@@ -30,7 +30,7 @@ def _two_state(post_rate_name):
 def _seated_post_mp(term=12):
     return ModelPoints(
         issue_age=np.array([50], dtype=np.int64),
-        benefits={0: np.array([0.0])},
+        benefits={"DEATH": np.array([0.0])},
         premium=np.array([0.0]),
         term_months=np.array([term], dtype=np.int64),
         state=np.array([1], dtype=np.int64),          # seated in post
@@ -83,7 +83,7 @@ def test_state_mortality_detailed_matches_fused():
     # give the post state a death benefit so BEL is non-trivial
     mp = ModelPoints(
         issue_age=np.array([50], dtype=np.int64),
-        benefits={0: np.array([100_000.0])},
+        benefits={"DEATH": np.array([100_000.0])},
         premium=np.array([0.0]),
         term_months=np.array([120], dtype=np.int64),
         state=np.array([1], dtype=np.int64),
@@ -133,7 +133,7 @@ def test_state_mortality_and_benefit_cap_compose():
         coverages=(fcf.CoverageRate("DEATH", _FLAT(0.10)),))
     mp = ModelPoints(
         issue_age=np.array([55], dtype=np.int64),
-        benefits={0: np.array([0.0])},
+        benefits={"DEATH": np.array([0.0])},
         premium=np.array([0.0]),
         term_months=np.array([24], dtype=np.int64),
         disability_income=np.array([100.0]),

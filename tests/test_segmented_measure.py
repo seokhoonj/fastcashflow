@@ -11,7 +11,7 @@ from fastcashflow.basis import BasisRouter
 import numpy as np
 import pytest
 
-from fastcashflow import Basis, ModelPoints, CoverageRate
+from fastcashflow import Basis, CalculationMethod, ModelPoints, CoverageRate
 from fastcashflow.gmm import measure
 
 
@@ -36,7 +36,7 @@ def test_subset_keeps_selected_rows():
         issue_age=np.array([30, 40, 50, 60]),
         premium=np.array([100.0, 200.0, 300.0, 400.0]),
         term_months=np.array([120, 120, 120, 120]),
-        benefits={0: np.array([1_000.0, 2_000.0, 3_000.0, 4_000.0])},
+        benefits={"DEATH": np.array([1_000.0, 2_000.0, 3_000.0, 4_000.0])},
     )
     sub = mp.subset([0, 2])
     assert sub.n_mp == 2
@@ -54,7 +54,7 @@ def test_subset_rebuilds_csr_coverages():
         issue_age=np.array([30, 40, 50]),
         premium=np.zeros(3),
         term_months=np.array([120, 120, 120]),
-        benefits={0: np.array([1_000.0, 2_000.0, 3_000.0]), 2: np.array([0.0, 500.0, 0.0])},      # second coverage on mp 1
+        benefits={"DEATH": np.array([1_000.0, 2_000.0, 3_000.0]), "CANCER": np.array([0.0, 500.0, 0.0])},      # second coverage on mp 1
     )
     assert mp.coverage_offset.tolist() == [0, 1, 3, 4]       # 1 + 2 + 1
 
@@ -70,7 +70,7 @@ def test_subset_slices_product_and_channel_when_set():
         issue_age=np.array([30, 40, 50]),
         premium=np.zeros(3),
         term_months=np.array([120, 120, 120]),
-        benefits={0: np.array([1_000.0, 2_000.0, 3_000.0])},
+        benefits={"DEATH": np.array([1_000.0, 2_000.0, 3_000.0])},
         product=np.array(["TERM_A", "TERM_A", "term_b"]),
         channel=np.array(["GA", "FC", "GA"]),
     )
@@ -88,7 +88,7 @@ def test_subset_preserves_issue_class_and_elapsed_months():
         issue_age=np.array([30, 40, 50]),
         premium=np.zeros(3),
         term_months=np.array([120, 120, 120]),
-        benefits={0: np.array([1_000.0, 2_000.0, 3_000.0])},
+        benefits={"DEATH": np.array([1_000.0, 2_000.0, 3_000.0])},
         issue_class=np.array([0, 1, 2], dtype=np.int64),
         elapsed_months=np.array([0, 24, 60], dtype=np.int64),
     )
@@ -102,7 +102,7 @@ def test_subset_leaves_product_none_when_unset():
         issue_age=np.array([30, 40]),
         premium=np.zeros(2),
         term_months=np.array([120, 120]),
-        benefits={0: np.array([1_000.0, 2_000.0])},
+        benefits={"DEATH": np.array([1_000.0, 2_000.0])},
     )
     assert mp.subset([0]).product is None
     assert mp.subset([0]).channel is None
@@ -121,9 +121,10 @@ def test_segmented_measure_routes_each_mp_to_its_segment():
         issue_age=np.array([40, 40, 40]),
         premium=np.zeros(3),
         term_months=np.array([60, 60, 60]),
-        benefits={0: np.array([10_000.0, 10_000.0, 10_000.0])},
+        benefits={"DEATH": np.array([10_000.0, 10_000.0, 10_000.0])},
         product=np.array(["TERM_A", "TERM_A", "TERM_A"]),
         channel=np.array(["GA", "FC", "GA"]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     val = measure(mp, basis, full=False)
 
@@ -147,7 +148,8 @@ def test_segmented_measure_falls_back_to_single_segment_when_no_product():
         issue_age=np.array([40, 40]),
         premium=np.zeros(2),
         term_months=np.array([60, 60]),
-        benefits={0: np.array([10_000.0, 20_000.0])},
+        benefits={"DEATH": np.array([10_000.0, 20_000.0])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     val = measure(mp, basis, full=False)
     expected = measure(mp, basis, full=False)
@@ -161,7 +163,7 @@ def test_segmented_measure_rejects_multi_segment_basis_without_keys():
         issue_age=np.array([40]),
         premium=np.zeros(1),
         term_months=np.array([60]),
-        benefits={0: np.array([10_000.0])},
+        benefits={"DEATH": np.array([10_000.0])},
     )
     with pytest.raises(ValueError, match="product"):
         measure(mp, basis, full=False)
@@ -174,7 +176,7 @@ def test_segmented_measure_rejects_unknown_segment():
         issue_age=np.array([40, 40]),
         premium=np.zeros(2),
         term_months=np.array([60, 60]),
-        benefits={0: np.array([10_000.0, 10_000.0])},
+        benefits={"DEATH": np.array([10_000.0, 10_000.0])},
         product=np.array(["TERM_A", "term_b"]),
         channel=np.array(["GA", "GA"]),
     )
@@ -191,7 +193,7 @@ def test_segmented_measure_with_sample_basis():
         issue_age=np.array([40, 50, 45]),
         premium=np.array([50_000.0, 60_000.0, 55_000.0]),
         term_months=np.array([120, 120, 120]),
-        benefits={0: np.array([100_000_000.0, 80_000_000.0, 90_000_000.0])},
+        benefits={"DEATH": np.array([100_000_000.0, 80_000_000.0, 90_000_000.0])},
         product=np.array(["TERM_LIFE_A", "TERM_LIFE_A", "TERM_LIFE_A"]),
         channel=np.array(["GA", "FC", "GA"]),
         calculation_methods=fcf.samples.calculation_methods(),
@@ -218,9 +220,10 @@ def test_segmented_auto_routes_full_only_segment_per_segment():
         premium=np.zeros(2),
         term_months=np.array([60, 60]),
         issue_class=np.array([0, 1]),         # row 1 trips the full-only path
-        benefits={0: np.array([10_000.0, 10_000.0])},
+        benefits={"DEATH": np.array([10_000.0, 10_000.0])},
         product=np.array(["PLAIN", "RATED"]),
         channel=np.array(["GA", "GA"]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     val = measure(mp, router, full=False)      # previously raised NotImplementedError
     plain = measure(mp.subset([0]), basis, full=False)   # genuine fast path
@@ -272,7 +275,7 @@ def test_gmm_measure_rejects_non_gmm_router():
                     measurement_models={("B", "GA"): "PAA"})
     mp = ModelPoints(
         issue_age=np.array([40, 40]), premium=np.zeros(2),
-        term_months=np.array([60, 60]), benefits={0: np.array([1e4, 1e4])},
+        term_months=np.array([60, 60]), benefits={"DEATH": np.array([1e4, 1e4])},
         product=np.array(["A", "B"]), channel=np.array(["GA", "GA"]))
     with pytest.raises(ValueError, match="measures GMM segments only"):
         measure(mp, r, full=False)

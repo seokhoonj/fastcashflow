@@ -94,7 +94,7 @@ def _gmm_book(n=7, *, em_close=24, lock_in=0.03):
                        rng.uniform(500.0, 5_000.0, n).round(2), 0.0)
     mp = ModelPoints(
         issue_age=rng.integers(30, 55, n), premium=rep(100.0),
-        term_months=rep(36).astype(np.int64), benefits={0: rep(1e6)},
+        term_months=rep(36).astype(np.int64), benefits={"DEATH": rep(1e6)},
         count=count_close, elapsed_months=rep(em_close).astype(np.int64),
         mp_id=ids, product=np.full(n, "A"), calculation_methods=CM,
     )

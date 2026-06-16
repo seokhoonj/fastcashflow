@@ -15,7 +15,7 @@ flat, zero-discount basis.
 import numpy as np
 import pytest
 
-from fastcashflow import STATE_WAIVER, Basis, ModelPoints, State, StateModel, Transition, CoverageRate
+from fastcashflow import STATE_WAIVER, Basis, CalculationMethod, ModelPoints, State, StateModel, Transition, CoverageRate
 from fastcashflow.gmm import measure
 from fastcashflow.state_model import compile_state_model
 
@@ -101,7 +101,8 @@ def test_disability_income_hand_calculation():
     """A contract already disabled: income is paid on the disabled occupancy,
     which decays by mortality alone. Every figure by hand."""
     income = 500_000.0
-    mp = ModelPoints.single(issue_age=45, benefits={0: 0.0}, premium=0.0,
+    mp = ModelPoints.single(issue_age=45, benefits={"DEATH": 0.0}, premium=0.0,
+                            calculation_methods={"DEATH": CalculationMethod.DEATH},
                             term_months=3, disability_income=income,
                             state=STATE_WAIVER)        # seated on 'disabled'
     basis = _basis(disability_cv=0.20)
@@ -121,7 +122,8 @@ def test_disability_income_hand_calculation():
 def test_disability_income_needs_a_benefit_state():
     """With no benefit state the income is never paid -- the default waiver
     model has no benefit state, so disability_income is inert there."""
-    kw = dict(issue_age=45, benefits={0: 0.0}, premium=0.0,
+    kw = dict(issue_age=45, benefits={"DEATH": 0.0}, premium=0.0,
+              calculation_methods={"DEATH": CalculationMethod.DEATH},
               term_months=12, disability_income=500_000.0, state=STATE_WAIVER)
     # default model (no state_model) -- waiver state is not a benefit state
     plain = Basis(
@@ -143,7 +145,8 @@ def test_disability_lump_sum_hand_calculation():
     """An active contract: a lump sum is paid on each cohort that becomes
     disabled. Two-month term, derived by hand from the transition flow."""
     lump = 10_000_000.0
-    mp = ModelPoints.single(issue_age=40, benefits={0: 0.0}, premium=0.0,
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 0.0}, premium=0.0,
+                            calculation_methods={"DEATH": CalculationMethod.DEATH},
                             term_months=2, disability_benefit=lump)
     basis = _basis(q=0.01, lapse=0.0, inception=0.05)
 
@@ -162,7 +165,8 @@ def test_disability_lump_sum_hand_calculation():
 def test_lump_sum_off_when_unflagged():
     """With the inception transition not flagged, no lump sum is paid even
     when disability_benefit is set."""
-    mp = ModelPoints.single(issue_age=40, benefits={0: 0.0}, premium=0.0,
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 0.0}, premium=0.0,
+                            calculation_methods={"DEATH": CalculationMethod.DEATH},
                             term_months=24, disability_benefit=5_000_000.0)
     res = measure(mp, _basis(pays_lump_sum=False))
     assert np.all(res.cashflows.disability_cf[0] == 0.0)
@@ -179,7 +183,8 @@ def test_measure_value_agree_disability_portfolio():
     n = 40
     mps = ModelPoints(
         issue_age=rng.integers(35, 55, n).astype(float),
-        benefits={0: rng.integers(0, 50, n) * 1_000_000.0},
+        benefits={"DEATH": rng.integers(0, 50, n) * 1_000_000.0},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
         premium=rng.integers(2, 8, n) * 10_000.0,
         term_months=np.full(n, 120),
         disability_income=rng.integers(0, 5, n) * 100_000.0,
@@ -195,7 +200,8 @@ def test_measure_value_agree_disability_portfolio():
 def test_disability_cv_drives_the_risk_adjustment():
     """The disability-risk RA component is governed by disability_cv -- with
     cv = 0 a disability-only contract carries no RA."""
-    mp = ModelPoints.single(issue_age=45, benefits={0: 0.0}, premium=0.0,
+    mp = ModelPoints.single(issue_age=45, benefits={"DEATH": 0.0}, premium=0.0,
+                            calculation_methods={"DEATH": CalculationMethod.DEATH},
                             term_months=12, disability_income=300_000.0,
                             state=STATE_WAIVER)
     assert measure(mp, _basis(disability_cv=0.0), full=False).ra[0] == 0.0

@@ -14,7 +14,8 @@ RATE = 1 - (1 - 0.01) ** 12  # 1%/month, annualised
 
 def _bel(mort, cov, *, term=2, sex=0):
     mp = fcf.ModelPoints.single(
-        issue_age=40, sex=sex, benefits={0: 12_000}, premium=100, term_months=term
+        issue_age=40, sex=sex, benefits={"DEATH": 12_000}, premium=100, term_months=term,
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH},
     )
     basis = fcf.Basis(
         mortality_annual=mort, lapse_annual=0.0, discount_annual=1.005 ** 12 - 1,

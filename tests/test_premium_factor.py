@@ -43,7 +43,7 @@ def test_premium_factor_hand_calc():
     b0 = Basis(mortality_annual=_NONE, lapse_annual=_NONE, discount_annual=0.0,
                ra_confidence=0.75, mortality_cv=0.10,
                coverages=(CoverageRate("DEATH", _NONE),))
-    mp = fcf.ModelPoints.single(issue_age=40, benefits={0: 12_000.0}, premium=100.0,
+    mp = fcf.ModelPoints.single(issue_age=40, benefits={"DEATH": 12_000.0}, premium=100.0,
                                 term_months=24, premium_frequency_months=12,
                                 calculation_methods=CM)
     m = fcf.gmm.measure(mp, b, full=True)
@@ -63,7 +63,7 @@ def test_premium_factor_hand_calc():
 # ---------------------------------------------------------------------------
 def test_premium_factor_full_matches_fast_markov():
     pf = lambda s, a, d, ic, el: 1.0 + 0.3 * d
-    mp = fcf.ModelPoints.single(issue_age=40, benefits={0: 1e6}, premium=1000.0,
+    mp = fcf.ModelPoints.single(issue_age=40, benefits={"DEATH": 1e6}, premium=1000.0,
                                 term_months=60, calculation_methods=CM)
     full = fcf.gmm.measure(mp, _basis(pf), full=True)
     fast = fcf.gmm.measure(mp, _basis(pf), full=False)
@@ -112,7 +112,7 @@ def test_premium_factor_full_matches_fast_semi_markov():
     )
     mp = fcf.ModelPoints(
         issue_age=np.array([45], dtype=np.int64),
-        benefits={0: np.array([1e8])},
+        benefits={"DEATH": np.array([1e8])},
         premium=np.array([50_000.0]),
         term_months=np.array([60], dtype=np.int64),
         disability_benefit=np.array([2e7]),
@@ -134,7 +134,7 @@ def test_solve_premium_on_a_shape():
     from dataclasses import replace
     pf = lambda s, a, d, ic, el: 1.0 + 0.3 * d
     basis = _basis(pf)
-    mp = fcf.ModelPoints.single(issue_age=40, benefits={0: 1e6}, premium=0.0,
+    mp = fcf.ModelPoints.single(issue_age=40, benefits={"DEATH": 1e6}, premium=0.0,
                                 term_months=60, calculation_methods=CM)
     s = solve_premium(mp, basis, break_even=True)
     assert np.all(np.isfinite(s)) and np.all(s > 0)
@@ -154,7 +154,7 @@ def test_solve_premium_on_a_shape():
 # ModelPoints premium >= 0 invariant), on BOTH the full and the fast path
 # ---------------------------------------------------------------------------
 def test_premium_factor_rejects_negative_and_nan():
-    mp = fcf.ModelPoints.single(issue_age=40, benefits={0: 1e6}, premium=1000.0,
+    mp = fcf.ModelPoints.single(issue_age=40, benefits={"DEATH": 1e6}, premium=1000.0,
                                 term_months=24, calculation_methods=CM)
     neg = lambda s, a, d, ic, el: np.full(np.shape(a), -1.0)
     nan = lambda s, a, d, ic, el: np.full(np.shape(a), np.nan)
@@ -174,7 +174,7 @@ def test_premium_factor_rejects_wrong_shape():
     ValueError (an input-contract failure), not an AssertionError -- which
     would also vanish under ``python -O`` and let a mis-shaped factor through.
     Checked on both the full and the fast path."""
-    mp = fcf.ModelPoints.single(issue_age=40, benefits={0: 1e6}, premium=1000.0,
+    mp = fcf.ModelPoints.single(issue_age=40, benefits={"DEATH": 1e6}, premium=1000.0,
                                 term_months=24, calculation_methods=CM)
     scalar = lambda s, a, d, ic, el: 1.0
     for full in (True, False):
@@ -196,7 +196,7 @@ def test_premium_factor_fast_matches_gpu():
     n = 3_000
     mps = fcf.ModelPoints(
         issue_age=rng.integers(25, 60, n),
-        benefits={0: rng.integers(10, 100, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(10, 100, n) * 1_000_000},
         premium=rng.integers(3, 15, n) * 10_000,
         term_months=np.full(n, 120),
     )
@@ -213,7 +213,7 @@ def test_premium_factor_fast_matches_gpu():
 def test_annuity_factor_rejects_negative_and_nan():
     """The annuity factor twin is guarded the same way (a negative annuity
     factor would flip a survival benefit into an inflow)."""
-    mp = fcf.ModelPoints.single(issue_age=60, benefits={0: 0.0}, premium=0.0,
+    mp = fcf.ModelPoints.single(issue_age=60, benefits={"ANN": 0.0}, premium=0.0,
                                 term_months=36, annuity_payment=100.0,
                                 annuity_frequency_months=12,
                                 calculation_methods={"ANN": fcf.CalculationMethod.ANNUITY})

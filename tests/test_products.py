@@ -35,11 +35,11 @@ def test_maturity_benefit_adds_its_present_value():
     death_benefit, maturity, premium, term = 1e8, 5e7, 50_000.0, 24
 
     term_life = measure(
-        ModelPoints.single(40, premium, term, benefits={0: death_benefit}, calculation_methods=PATTERNS), basis
+        ModelPoints.single(40, premium, term, benefits={"DEATH": death_benefit}, calculation_methods=PATTERNS), basis
     )
     endowment = measure(
         ModelPoints.single(
-            40, premium, term, benefits={0: death_benefit}, maturity_benefit=maturity,
+            40, premium, term, benefits={"DEATH": death_benefit}, maturity_benefit=maturity,
             calculation_methods=PATTERNS,
         ),
         basis,
@@ -78,7 +78,7 @@ def test_value_matches_measure_endowment():
     n = 400
     mps = ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        benefits={0: rng.integers(10, 80, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(10, 80, n) * 1_000_000},
         premium=rng.integers(5, 20, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         maturity_benefit=rng.integers(5, 40, n) * 1_000_000,
@@ -125,7 +125,7 @@ def test_value_matches_measure_annuity():
     n = 300
     mps = ModelPoints(
         issue_age=rng.integers(55, 75, n),
-        benefits={0: np.zeros(n)},
+        benefits={"DEATH": np.zeros(n)},
         premium=rng.integers(80, 200, n) * 1_000_000.0,
         term_months=rng.integers(120, 300, n),
         annuity_payment=rng.integers(30, 100, n) * 10_000,

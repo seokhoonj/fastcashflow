@@ -31,7 +31,7 @@ def _two_reins(**extra) -> ModelPoints:
         issue_age=np.array([40, 40]),
         premium=np.array([500_000.0, 30_000.0]),
         term_months=np.array([60, 60]),
-        benefits={0: np.array([1e8, 1e8])},
+        benefits={"DEATH": np.array([1e8, 1e8])},
         calculation_methods=PATTERNS,
         **extra,
     )

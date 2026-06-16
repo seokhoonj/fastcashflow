@@ -60,7 +60,7 @@ def test_amount_per_policy_per_month_hand_calc():
     is the contractual amount at duration t, not cumulative premium. A
     distinct amount per duration catches a wrong (off-by-month) index."""
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=10_000.0, term_months=12,
         calculation_methods=PATTERNS,
     )
@@ -81,7 +81,7 @@ def test_amount_per_policy_independent_of_premium():
 
     def surr(premium):
         mp = ModelPoints.single(
-            issue_age=40, benefits={0: 100_000_000.0},
+            issue_age=40, benefits={"DEATH": 100_000_000.0},
             premium=premium, term_months=12,
             calculation_methods=PATTERNS,
         )
@@ -108,7 +108,7 @@ def test_inforce_amount_surrender_rescale_is_exact():
     # fresh, count = 1, from inception -> engine survival = inforce_fresh
     fresh = ModelPoints(
         issue_age=np.array([40]), premium=np.array([0.0]),
-        term_months=np.array([48]), benefits={0: np.array([1e6])},
+        term_months=np.array([48]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), calculation_methods=CM,
     )
     m = measure(fresh, basis)
@@ -117,7 +117,7 @@ def test_inforce_amount_surrender_rescale_is_exact():
     E, c = 12, 0.8
     inforce_mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([0.0]),
-        term_months=np.array([48]), benefits={0: np.array([1e6])},
+        term_months=np.array([48]), benefits={"DEATH": np.array([1e6])},
         count=np.array([c]), elapsed_months=np.array([E]),
         calculation_methods=CM,
     )
@@ -153,7 +153,7 @@ def test_amount_per_unit_scales_by_base():
         issue_age=np.array([40, 40]),
         premium=np.array([0.0, 0.0]),
         term_months=np.array([12, 12]),
-        benefits={0: np.array([1e6, 1e6])},
+        benefits={"DEATH": np.array([1e6, 1e6])},
         count=np.array([1.0, 1.0]),
         surrender_base_amount=np.array([1_000.0, 2_000.0]),
         calculation_methods={"DEATH": CalculationMethod.DEATH},
@@ -172,7 +172,7 @@ def test_amount_per_unit_requires_base():
     base is inferred (it differs by product)."""
     amount = np.full(13, 100.0)
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=10_000.0, term_months=12,
         calculation_methods=PATTERNS,
     )
@@ -188,7 +188,7 @@ def test_inforce_amount_emits_no_surrender_warning():
     basis = _amount_basis(0.1, amount)
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([0.0]),
-        term_months=np.array([48]), benefits={0: np.array([1e6])},
+        term_months=np.array([48]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), elapsed_months=np.array([12]),
         calculation_methods=CM,
     )

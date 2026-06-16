@@ -57,7 +57,7 @@ def test_inforce_rescale_matches_fresh_valuation_date_start():
     CM = {"DEATH": CalculationMethod.DEATH}
     inforce = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([24]), benefits={0: np.array([1e6])},
+        term_months=np.array([24]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1000.0]), elapsed_months=np.array([12]),
         calculation_methods=CM,
     )
@@ -65,7 +65,7 @@ def test_inforce_rescale_matches_fresh_valuation_date_start():
     # fresh contract from the valuation date: attained age 41, remaining 12m
     fresh = ModelPoints(
         issue_age=np.array([41]), premium=np.array([100.0]),
-        term_months=np.array([12]), benefits={0: np.array([1e6])},
+        term_months=np.array([12]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1000.0]), calculation_methods=CM,
     )
     bel_fresh = measure(fresh, basis).bel_path[0, 0]
@@ -76,8 +76,9 @@ def test_inforce_fast_zero_elapsed_matches_value():
     """When every ``elapsed_months`` is 0 the in-force valuation collapses
     to the new-business :func:`measure` (= ``GMMMeasurement.bel_path[:, 0]``)."""
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=120,
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     basis = _basis()
     v_new = measure(mp, basis, full=False)
@@ -94,8 +95,9 @@ def test_inforce_fast_matches_trajectory_slice():
     so ``1 / survival(0->E)``) to set the as-of in-force to the input count."""
     elapsed = 36
     mp_new = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=120,
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     basis = _basis()
     m = measure(mp_new, basis)
@@ -104,8 +106,9 @@ def test_inforce_fast_matches_trajectory_slice():
         issue_age=np.array([40]),
         premium=np.array([50_000.0]),
         term_months=np.array([120]),
-        benefits={0: np.array([100_000_000.0])},
+        benefits={"DEATH": np.array([100_000_000.0])},
         elapsed_months=np.array([elapsed]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     v_inf = _measure_inforce_fast(mp_inforce, basis)
     # The in-force BEL is the trajectory slice at t = elapsed, re-based so the
@@ -123,8 +126,9 @@ def test_inforce_fast_settlement_matches_trajectory():
     accretion + coverage-unit release path."""
     basis = _basis()
     mp_new = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=240,
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     m = measure(mp_new, basis)
     elapsed, period = 36, 12
@@ -135,8 +139,9 @@ def test_inforce_fast_settlement_matches_trajectory():
         issue_age=np.array([40]),
         premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        benefits={0: np.array([100_000_000.0])},
+        benefits={"DEATH": np.array([100_000_000.0])},
         elapsed_months=np.array([elapsed]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     v = _measure_inforce_fast(
         mp_inforce, basis,
@@ -155,8 +160,9 @@ def test_inforce_fast_period_months_rejected_in_hypothetical_mode():
     prior_csm / lock_in_rate is a no-op trap and now raises."""
     basis = _basis()
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=120,
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     with pytest.raises(ValueError, match="period_months applies only in"):
         _measure_inforce_fast(mp, basis, period_months=12)
@@ -167,8 +173,9 @@ def test_inforce_fast_settlement_paired_args():
     without the other is a silent-wrong-result trap and raises."""
     basis = _basis()
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=240,
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     with pytest.raises(ValueError, match="both be given.*both omitted"):
         _measure_inforce_fast(mp, basis, prior_csm=np.array([0.0]))
@@ -185,8 +192,9 @@ def test_inforce_fast_settlement_elapsed_too_small():
         issue_age=np.array([40]),
         premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        benefits={0: np.array([100_000_000.0])},
+        benefits={"DEATH": np.array([100_000_000.0])},
         elapsed_months=np.array([6]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     with pytest.raises(ValueError, match="precedes inception"):
         _measure_inforce_fast(
@@ -206,8 +214,9 @@ def test_inforce_fast_at_the_contract_boundary_is_rejected():
         issue_age=np.array([40]),
         premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        benefits={0: np.array([100_000_000.0])},
+        benefits={"DEATH": np.array([100_000_000.0])},
         elapsed_months=np.array([240]),        # == boundary -> no remaining coverage
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     with pytest.raises(ValueError, match="no remaining coverage"):
         _measure_inforce_fast(mp, basis)
@@ -221,8 +230,9 @@ def test_inforce_full_hypothetical_is_measure():
         issue_age=np.array([40]),
         premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        benefits={0: np.array([100_000_000.0])},
+        benefits={"DEATH": np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     m = measure(mp, basis)
     mif = _measure_inforce_full(mp, basis)
@@ -239,8 +249,9 @@ def test_inforce_full_settlement_matches__measure_inforce_fast():
         issue_age=np.array([40]),
         premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        benefits={0: np.array([100_000_000.0])},
+        benefits={"DEATH": np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     m_baseline = measure(mp, basis)
     period = 12
@@ -264,8 +275,9 @@ def test_inforce_full_settlement_roundtrip_to_measure():
         issue_age=np.array([40]),
         premium=np.array([50_000.0]),
         term_months=np.array([240]),
-        benefits={0: np.array([100_000_000.0])},
+        benefits={"DEATH": np.array([100_000_000.0])},
         elapsed_months=np.array([36]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     m = measure(mp, basis)
     period = 12
@@ -295,8 +307,9 @@ def test_inforce_bel_smaller_term_left():
             issue_age=np.array([40]),
             premium=np.array([0.0]),               # claims-only
             term_months=np.array([240]),
-            benefits={0: np.array([100_000_000.0])},
+            benefits={"DEATH": np.array([100_000_000.0])},
             elapsed_months=np.array([e]),
+            calculation_methods={"DEATH": CalculationMethod.DEATH},
         )
         return abs(_measure_inforce_fast(mp, basis).bel[0])
     # Strictly decreasing in elapsed -- the remaining claims shorten.
@@ -408,7 +421,7 @@ def test_measure_inforce_prior_csm_is_order_independent():
     mp0 = ModelPoints(
         mp_id=np.array(["A", "B"]),
         issue_age=np.array([40, 40], dtype=np.int64),
-        benefits={0: np.array([100_000.0, 100_000.0])},
+        benefits={"DEATH": np.array([100_000.0, 100_000.0])},
         premium=np.array([100.0, 100.0]),
         term_months=np.array([24, 24], dtype=np.int64),
         calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
@@ -523,7 +536,7 @@ def test_inforce_state_account_value_optional_carried_and_validated():
     # align reorders account_value to model-points (mp_id) order [B, A]
     mp = fcf.ModelPoints(
         issue_age=np.array([40, 40]), premium=np.zeros(2),
-        term_months=np.full(2, 60), benefits={0: np.full(2, 1e4)},
+        term_months=np.full(2, 60), benefits={"DEATH": np.full(2, 1e4)},
         mp_id=np.array(["B", "A"]))
     aligned = fcf.align_inforce_state(mp, s)
     assert np.allclose(aligned.account_value, [2000.0, 1000.0])

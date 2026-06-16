@@ -34,7 +34,7 @@ def _closing_and_forward_units(lock_in=0.06):
     basis = make_death_basis(mortality_q=0.0015, lapse_q=0.004,
                              discount_annual=lock_in, ra_confidence=0.75,
                              mortality_cv=0.10)
-    unit = ModelPoints.single(40, 600.0, 240, benefits={0: 100_000.0},
+    unit = ModelPoints.single(40, 600.0, 240, benefits={"DEATH": 100_000.0},
                               calculation_methods=PATTERNS)
     m = fcf.gmm.measure(unit, basis, full=True)
     elapsed = 24

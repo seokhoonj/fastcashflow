@@ -33,7 +33,7 @@ def test_surrender_cf_zero_when_curve_is_none():
     """``surrender_value_curve=None`` reproduces the historical behaviour:
     lapse silently removes the contract, no surrender cash flow."""
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=12,
         calculation_methods=PATTERNS,
     )
@@ -47,7 +47,7 @@ def test_surrender_cf_hand_calc_single_period():
     surrender_cf at month 0 equals
     ``lapse_flow * cum_premium * factor[0]``."""
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=10_000.0, term_months=12,
         calculation_methods=PATTERNS,
     )
@@ -76,7 +76,7 @@ def test_surrender_cf_accumulates_with_cum_premium():
     ratio (the inforce-decay is already absorbed into cum_premium, which
     aggregates inforce * premium each month)."""
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=10_000.0, term_months=24,
         calculation_methods=PATTERNS,
     )
@@ -91,7 +91,7 @@ def test_surrender_cf_accumulates_with_cum_premium():
 def test_surrender_cf_widens_bel():
     """Enabling surrender increases BEL (more outflow on lapse)."""
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=10_000.0, term_months=24,
         calculation_methods=PATTERNS,
     )

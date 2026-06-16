@@ -117,7 +117,7 @@ def test_resolved_basis_values():
     segmentation actually bites the valuation)."""
     
     basis = fcf.samples.basis()
-    mp = ModelPoints.single(issue_age=40, benefits={0: 100_000_000.0},
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 100_000_000.0},
                             premium=50_000.0, term_months=120,
                             calculation_methods=fcf.samples.calculation_methods())
     # Strip surrender for the fused / detailed equivalence assertion below so

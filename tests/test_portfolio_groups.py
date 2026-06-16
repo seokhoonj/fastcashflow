@@ -45,6 +45,8 @@ if not hasattr(_pf, "measure_group_of_contracts"):
 from fastcashflow.portfolio import (                          # noqa: E402
     measure_group_of_contracts, measure_group, PortfolioGroups)
 
+from conftest import PATTERNS                                 # noqa: E402
+
 
 def _flat_basis(discount=0.05, investment_return=0.0):
     return Basis(
@@ -70,12 +72,13 @@ def _mixed_book():
         issue_age=np.full(4, 40),
         premium=np.array([5000.0, 0.0, 1200.0, 0.0]),       # row0 profitable, row1 onerous
         term_months=np.full(4, 60),
-        benefits={0: np.full(4, 1e4)},
+        benefits={"DEATH": np.full(4, 1e4)},
         account_value=np.array([0.0, 0.0, 0.0, 1e6]),
         product=np.array(["G", "G", "P", "V"]),
         channel=np.array(["GA", "GA", "GA", "GA"]),
         issue_date=np.array(["2026-02-01", "2027-02-01", "2026-02-01", "2026-02-01"],
-                            dtype="datetime64[D]"))
+                            dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
     return mp, router
 
 
@@ -88,11 +91,12 @@ def _two_gmm_same_cohort():
         issue_age=np.full(2, 40),
         premium=np.array([5000.0, 0.0]),                      # profitable, onerous
         term_months=np.full(2, 60),
-        benefits={0: np.full(2, 1e4)},
+        benefits={"DEATH": np.full(2, 1e4)},
         product=np.array(["G", "G"]),
         channel=np.array(["GA", "GA"]),
         issue_date=np.array(["2026-02-01", "2026-02-01"],     # one cohort
-                            dtype="datetime64[D]"))
+                            dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
     return mp, router
 
 
@@ -142,9 +146,10 @@ def test_ragged_terms_same_curve_group():
         issue_age=np.full(2, 40),
         premium=np.array([5000.0, 5200.0]),                   # both profitable -> one group of contracts
         term_months=np.array([36, 60]),                       # ragged, same curve
-        benefits={0: np.full(2, 1e4)},
+        benefits={"DEATH": np.full(2, 1e4)},
         product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]),
-        issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
+        issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
     pg = measure_group_of_contracts(mp, router, chunk_size=1)                # each ragged row its own block
     ref = group_of_contracts(measure(mp, router, full=True).gmm.measurement)
     assert pg.gmm.bel.shape[0] == 1                           # one group (same curve, same cohort, both profitable)
@@ -170,9 +175,10 @@ def test_two_segments_same_curve_late_representative():
     mp = ModelPoints(
         issue_age=np.full(4, 40), premium=np.full(4, 5000.0),
         term_months=np.array([24, 24, 60, 60]),         # A short, B long
-        benefits={0: np.full(4, 1e4)},
+        benefits={"DEATH": np.full(4, 1e4)},
         product=np.full(4, "G"), channel=np.array(["A", "A", "B", "B"]),
-        issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"))
+        issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
     pg = measure_group_of_contracts(mp, router, profitability=p, chunk_size=1)
     ref = group_of_contracts(
         measure(mp, router, full=True).gmm.measurement, profitability=p)
@@ -263,8 +269,9 @@ def test_rejects_missing_issue_date_no_age_substitution():
     mp = ModelPoints(                                  # no issue_date
         issue_age=np.array([40, 50]),                  # ages present, but not a cohort
         premium=np.array([5000.0, 0.0]), term_months=np.full(2, 60),
-        benefits={0: np.full(2, 1e4)},
-        product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]))
+        benefits={"DEATH": np.full(2, 1e4)},
+        product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]),
+        calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="issue_date|cohort"):
         measure_group_of_contracts(mp, router)
 
@@ -310,9 +317,10 @@ def test_omits_absent_models():
     router = BasisRouter({("G", "GA"): _flat_basis()})
     mp = ModelPoints(
         issue_age=np.full(2, 40), premium=np.array([5000.0, 0.0]),
-        term_months=np.full(2, 60), benefits={0: np.full(2, 1e4)},
+        term_months=np.full(2, 60), benefits={"DEATH": np.full(2, 1e4)},
         product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]),
-        issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
+        issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
     pg = measure_group_of_contracts(mp, router)
     assert pg.gmm is not None and pg.paa is None and pg.vfa is None
     assert set(pg.summary()) == {"loss_component_total", "gmm"}
@@ -434,7 +442,8 @@ def test_requires_a_basis_router():
     with pytest.raises(TypeError, match="BasisRouter"):
         measure_group_of_contracts(ModelPoints(
             issue_age=np.full(2, 40), premium=np.zeros(2), term_months=np.full(2, 60),
-            benefits={0: np.full(2, 1e4)}), _flat_basis())
+            benefits={"DEATH": np.full(2, 1e4)},
+            calculation_methods=PATTERNS), _flat_basis())
 
 
 # ===========================================================================
@@ -451,9 +460,10 @@ def test_rejects_mixed_discount_curves_within_a_group():
         measurement_models={})                               # both GMM
     mp = ModelPoints(
         issue_age=np.full(2, 40), premium=np.array([5000.0, 5000.0]),
-        term_months=np.full(2, 60), benefits={0: np.full(2, 1e4)},
+        term_months=np.full(2, 60), benefits={"DEATH": np.full(2, 1e4)},
         product=np.array(["G", "G"]), channel=np.array(["A", "B"]),
-        issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
+        issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="discount curve|one portfolio|one basis"):
         measure_group_of_contracts(mp, router)        # product "G" groups both -> mixed curves
 
@@ -474,10 +484,11 @@ def test_curve_uses_live_horizon_not_contract_boundary():
     mp = ModelPoints(
         issue_age=np.full(4, 40), premium=np.full(4, 5000.0),
         term_months=np.array([36, 36, 60, 60]),      # B has the longer boundary
-        benefits={0: np.full(4, 1e4)},
+        benefits={"DEATH": np.full(4, 1e4)},
         count=np.array([1.0, 1.0, 0.0, 0.0]),        # B never in force
         product=np.full(4, "G"), channel=np.array(["A", "A", "B", "B"]),
-        issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"))
+        issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
     grouped = measure_group(mp, router, by="product")   # must NOT reject
     ref = group(measure(mp, router, full=True).gmm.measurement, by="product")
     assert grouped.gmm.bel.shape[0] == 1
@@ -496,10 +507,11 @@ def test_all_dead_group_keeps_first_rows_real_curve():
     router = BasisRouter({("G", "GA"): _flat_basis(discount=0.04)})
     mp = ModelPoints(
         issue_age=np.full(2, 40), premium=np.full(2, 5000.0),
-        term_months=np.full(2, 60), benefits={0: np.full(2, 1e4)},
+        term_months=np.full(2, 60), benefits={"DEATH": np.full(2, 1e4)},
         count=np.zeros(2),                                # nobody in force
         product=np.array(["G", "G"]), channel=np.array(["GA", "GA"]),
-        issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"))
+        issue_date=np.array(["2026-02-01", "2026-02-01"], dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
     pg = measure_group_of_contracts(mp, router)
     ref = group_of_contracts(measure(mp, router, full=True).gmm.measurement)
     assert pg.gmm.bel.shape[0] == 1
@@ -547,10 +559,11 @@ def test_vfa_two_segments_same_return_reconcile():
     mp = ModelPoints(
         issue_age=np.full(4, 40), premium=np.zeros(4),
         term_months=np.array([24, 24, 60, 60]),             # ragged, short first
-        benefits={0: np.full(4, 1e4)},
+        benefits={"DEATH": np.full(4, 1e4)},
         account_value=np.full(4, 1e6),
         product=np.full(4, "V"), channel=np.array(["A", "A", "B", "B"]),
-        issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"))
+        issue_date=np.array(["2026-02-01"] * 4, dtype="datetime64[D]"),
+        calculation_methods=PATTERNS)
     pg = measure_group_of_contracts(mp, router, profitability=p, chunk_size=1)
     ref = group_of_contracts(
         measure(mp, router, full=True).vfa.measurement, profitability=p)
@@ -636,10 +649,11 @@ def test_portfolio_measure_inforce_routes_each_partition_to_its_model():
     ids = np.array(["m0", "m1", "m2", "m3"])
     mp = ModelPoints(
         issue_age=np.full(4, 40), premium=np.array([5000.0, 0.0, 1200.0, 0.0]),
-        term_months=np.full(4, 60), benefits={0: np.full(4, 1e4)},
+        term_months=np.full(4, 60), benefits={"DEATH": np.full(4, 1e4)},
         account_value=np.array([0.0, 0.0, 0.0, 1e6]),
         product=np.array(["G", "G", "P", "V"]), channel=np.array(["GA"] * 4),
-        mp_id=ids, elapsed_months=np.full(4, 24), count=np.full(4, 1.0))
+        mp_id=ids, elapsed_months=np.full(4, 24), count=np.full(4, 1.0),
+        calculation_methods=PATTERNS)
     state = InforceState(
         mp_id=ids, elapsed_months=np.full(4, 24), count=np.full(4, 1.0),
         prior_csm=np.zeros(4), lock_in_rate=0.03,
@@ -668,9 +682,10 @@ def test_portfolio_measure_inforce_requires_router():
     router = BasisRouter({("G", "GA"): _flat_basis()})
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([5000.0]),
-        term_months=np.array([60]), benefits={0: np.array([1e4])},
+        term_months=np.array([60]), benefits={"DEATH": np.array([1e4])},
         product=np.array(["G"]), channel=np.array(["GA"]),
-        mp_id=np.array(["m0"]), elapsed_months=np.array([24]), count=np.array([1.0]))
+        mp_id=np.array(["m0"]), elapsed_months=np.array([24]), count=np.array([1.0]),
+        calculation_methods=PATTERNS)
     state = InforceState(
         mp_id=np.array(["m0"]), elapsed_months=np.array([24]),
         count=np.array([1.0]), prior_csm=np.zeros(1), lock_in_rate=0.03)

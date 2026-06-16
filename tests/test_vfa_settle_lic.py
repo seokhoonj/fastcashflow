@@ -49,7 +49,8 @@ def _growth(basis, mp):
 
 
 def _book(basis, *, em_open=6, period=6):
-    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     em_close = em_open + period
     m0 = fcf.vfa.measure(mp0, basis)
     inforce = m0.cashflows.inforce

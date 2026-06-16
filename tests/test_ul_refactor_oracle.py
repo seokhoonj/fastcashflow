@@ -140,7 +140,7 @@ def _fixed_rate_scenarios(n_scen: int = 8):
 
 def _gmm_single_mp():
     return ModelPoints.single(
-        issue_age=40, benefits={0: 1_000_000.0}, premium=12_000.0,
+        issue_age=40, benefits={"DEATH": 1_000_000.0}, premium=12_000.0,
         term_months=60, calculation_methods={"DEATH": CalculationMethod.DEATH})
 
 

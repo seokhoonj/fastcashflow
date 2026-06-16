@@ -49,7 +49,8 @@ def _book(basis, *, em_open=6, period=6, term=24, lc_open=0.0, prior_csm=None,
     # a GMAB crediting guarantee ABOVE the fund return gives a non-zero
     # guarantee excess -> a real claims+expenses pool for the 50(a) allocation.
     mp0 = ModelPoints.single(40, 100.0, term, account_value=1e6,
-                             minimum_crediting_rate=0.08)
+                             minimum_crediting_rate=0.08,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     em_close = term if final else em_open + period
     m0 = fcf.vfa.measure(mp0, basis)
     inforce = m0.cashflows.inforce

@@ -30,7 +30,7 @@ def _portfolio(n: int = 300) -> ModelPoints:
     rng = np.random.default_rng(8)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        benefits={0: rng.integers(20, 100, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(20, 100, n) * 1_000_000},
         premium=np.zeros(n),          # ignored by solve_premium
         term_months=rng.integers(60, 180, n),
         calculation_methods=PATTERNS,

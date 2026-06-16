@@ -18,6 +18,7 @@ from fastcashflow._paa import measure_paa
 from fastcashflow._vfa import measure_vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow.portfolio import measure, PortfolioMeasurement, ModelMeasurement
+from conftest import PATTERNS
 
 
 def _flat_basis(discount=0.05, investment_return=0.0):
@@ -33,8 +34,9 @@ def _mp(products, channels):
     n = len(products)
     return ModelPoints(
         issue_age=np.full(n, 40), premium=np.zeros(n),
-        term_months=np.full(n, 60), benefits={0: np.full(n, 1e4)},
-        product=np.array(products), channel=np.array(channels))
+        term_months=np.full(n, 60), benefits={"DEATH": np.full(n, 1e4)},
+        product=np.array(products), channel=np.array(channels),
+        calculation_methods=PATTERNS)
 
 
 # ---------------------------------------------------------------------------
@@ -76,8 +78,9 @@ def test_portfolio_measures_paa_rows_matching_measure_paa():
                          measurement_models={("B", "GA"): "PAA"})
     mp = ModelPoints(                               # row 0 GMM, rows 1-2 PAA
         issue_age=np.full(3, 40), premium=np.array([0.0, 1200.0, 1200.0]),
-        term_months=np.full(3, 60), benefits={0: np.full(3, 1e4)},
-        product=np.array(["A", "B", "B"]), channel=np.array(["GA", "GA", "GA"]))
+        term_months=np.full(3, 60), benefits={"DEATH": np.full(3, 1e4)},
+        product=np.array(["A", "B", "B"]), channel=np.array(["GA", "GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     assert pm.gmm.index.tolist() == [0]
     assert pm.paa.index.tolist() == [1, 2]
@@ -100,8 +103,9 @@ def test_portfolio_paa_stitches_ragged_segments():
     mp = ModelPoints(
         issue_age=np.full(3, 40), premium=np.full(3, 1200.0),
         term_months=np.array([60, 24, 60]),        # Q (row 1) shorter -> ragged
-        benefits={0: np.full(3, 1e4)},
-        product=np.array(["P", "Q", "P"]), channel=np.array(["GA", "GA", "GA"]))
+        benefits={"DEATH": np.full(3, 1e4)},
+        product=np.array(["P", "Q", "P"]), channel=np.array(["GA", "GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     assert pm.paa.index.tolist() == [0, 1, 2]
     refP = measure_paa(mp.subset([0, 2]), _flat_basis())
@@ -123,7 +127,8 @@ def test_portfolio_vfa_stitches_segments_with_distinct_curves():
     mp = ModelPoints(
         issue_age=np.full(3, 40), premium=np.zeros(3), term_months=np.full(3, 60),
         account_value=np.full(3, 1e6),
-        product=np.array(["V1", "V2", "V1"]), channel=np.array(["GA", "GA", "GA"]))
+        product=np.array(["V1", "V2", "V1"]), channel=np.array(["GA", "GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     assert pm.vfa.index.tolist() == [0, 1, 2]
     assert pm.gmm is None and pm.paa is None
@@ -153,7 +158,8 @@ def test_portfolio_vfa_ragged_stitch_pads_and_flat_fills():
         issue_age=np.full(3, 40), premium=np.zeros(3),
         term_months=np.array([60, 24, 60]),       # S (row 1) shorter -> ragged
         account_value=np.full(3, 1e6),
-        product=np.array(["L", "S", "L"]), channel=np.array(["GA", "GA", "GA"]))
+        product=np.array(["L", "S", "L"]), channel=np.array(["GA", "GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     refL = measure_vfa(mp.subset([0, 2]), _flat_basis(investment_return=0.06))
     refS = measure_vfa(mp.subset([1]), _flat_basis(investment_return=0.06))
@@ -180,7 +186,8 @@ def test_portfolio_vfa_roll_forward_matches_per_segment():
     mp = ModelPoints(
         issue_age=np.full(3, 40), premium=np.zeros(3), term_months=np.full(3, 60),
         account_value=np.full(3, 1e6),
-        product=np.array(["V1", "V2", "V1"]), channel=np.array(["GA", "GA", "GA"]))
+        product=np.array(["V1", "V2", "V1"]), channel=np.array(["GA", "GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     mv = fcf.roll_forward(pm.vfa.measurement)
     rv1 = fcf.roll_forward(measure_vfa(mp.subset([0, 2]),
@@ -202,7 +209,8 @@ def test_portfolio_vfa_group_by_curve_succeeds():
     mp = ModelPoints(
         issue_age=np.full(3, 40), premium=np.zeros(3), term_months=np.full(3, 60),
         account_value=np.full(3, 1e6),
-        product=np.array(["V1", "V2", "V1"]), channel=np.array(["GA", "GA", "GA"]))
+        product=np.array(["V1", "V2", "V1"]), channel=np.array(["GA", "GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     g = group(pm.vfa.measurement, "product")
     assert g.csm.shape[0] == 2 and g.discount_bom.shape[0] == 2
@@ -219,7 +227,8 @@ def test_portfolio_vfa_group_rejects_mixed_curves():
     mp = ModelPoints(
         issue_age=np.full(2, 40), premium=np.zeros(2), term_months=np.full(2, 60),
         account_value=np.full(2, 1e6),
-        product=np.array(["V1", "V2"]), channel=np.array(["GA", "GA"]))
+        product=np.array(["V1", "V2"]), channel=np.array(["GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     with pytest.raises(ValueError, match="different .*discount curves"):
         group(pm.vfa.measurement, "channel")     # GA spans both curves -> one group
@@ -236,10 +245,11 @@ def test_portfolio_measures_all_three_models_in_one_call():
         measurement_models={("P", "GA"): "PAA", ("V", "GA"): "VFA"})
     mp = ModelPoints(
         issue_age=np.full(4, 40), premium=np.array([0.0, 1200.0, 0.0, 0.0]),
-        term_months=np.full(4, 60), benefits={0: np.full(4, 1e4)},
+        term_months=np.full(4, 60), benefits={"DEATH": np.full(4, 1e4)},
         account_value=np.array([0.0, 0.0, 1e6, 1e6]),
         product=np.array(["G", "P", "V", "V"]),
-        channel=np.array(["GA", "GA", "GA", "GA"]))
+        channel=np.array(["GA", "GA", "GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     assert pm.gmm.index.tolist() == [0]
     assert pm.paa.index.tolist() == [1]
@@ -267,10 +277,11 @@ def _three_model_inputs():
         measurement_models={("P", "GA"): "PAA", ("V", "GA"): "VFA"})
     mp = ModelPoints(                              # premium 0 + claims -> GMM onerous
         issue_age=np.full(4, 40), premium=np.array([0.0, 1200.0, 0.0, 0.0]),
-        term_months=np.full(4, 60), benefits={0: np.full(4, 1e4)},
+        term_months=np.full(4, 60), benefits={"DEATH": np.full(4, 1e4)},
         account_value=np.array([0.0, 0.0, 1e6, 1e6]),
         product=np.array(["G", "P", "V", "V"]),
-        channel=np.array(["GA", "GA", "GA", "GA"]))
+        channel=np.array(["GA", "GA", "GA", "GA"]),
+        calculation_methods=PATTERNS)
     return mp, router
 
 
@@ -342,9 +353,10 @@ def test_portfolio_full_false_chunking_is_numeric_noop():
     mp = ModelPoints(
         issue_age=np.full(n, 40),
         premium=np.where(is_v, 0.0, 1200.0), term_months=np.full(n, 60),
-        benefits={0: np.full(n, 1e4)},
+        benefits={"DEATH": np.full(n, 1e4)},
         account_value=np.where(is_v, 1e6, 0.0),
-        product=prod, channel=np.full(n, "GA"))
+        product=prod, channel=np.full(n, "GA"),
+        calculation_methods=PATTERNS)
     a = measure(mp, router, full=False, chunk_size=1)        # a block per row
     b = measure(mp, router, full=False, chunk_size=1000)     # one block
     full = measure(mp, router, full=True)
@@ -415,8 +427,9 @@ def test_single_model_paa_router_skips_partition(monkeypatch):
                          measurement_models={("P", "GA"): "PAA", ("Q", "GA"): "PAA"})
     mp = ModelPoints(
         issue_age=np.full(2, 40), premium=np.full(2, 1200.0),
-        term_months=np.full(2, 60), benefits={0: np.full(2, 1e4)},
-        product=np.array(["P", "Q"]), channel=np.array(["GA", "GA"]))
+        term_months=np.full(2, 60), benefits={"DEATH": np.full(2, 1e4)},
+        product=np.array(["P", "Q"]), channel=np.array(["GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     assert calls == []
     assert pm.paa.index.tolist() == [0, 1] and pm.gmm is None
@@ -431,7 +444,8 @@ def test_single_model_vfa_router_skips_partition(monkeypatch):
     mp = ModelPoints(
         issue_age=np.full(2, 40), premium=np.zeros(2), term_months=np.full(2, 60),
         account_value=np.full(2, 1e6),
-        product=np.array(["V", "V"]), channel=np.array(["GA", "GA"]))
+        product=np.array(["V", "V"]), channel=np.array(["GA", "GA"]),
+        calculation_methods=PATTERNS)
     pm = measure(mp, router)
     assert calls == []
     assert pm.vfa.index.tolist() == [0, 1] and pm.gmm is None

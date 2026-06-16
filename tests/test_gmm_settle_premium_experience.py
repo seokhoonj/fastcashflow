@@ -79,7 +79,7 @@ def _basis(*, discount=0.03):
 def _unit(basis, *, term=36):
     unit = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([term]), benefits={0: np.array([1e6])},
+        term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), calculation_methods=CM,
     )
     return fcf.gmm.measure(unit, basis, full=True)
@@ -95,7 +95,7 @@ def _book(basis, *, em_open=12, period=12, scale=1000.0, term=36,
     rep = lambda v: np.full(1, v)
     mp = ModelPoints(
         issue_age=rep(40).astype(np.int64), premium=rep(100.0),
-        term_months=rep(term).astype(np.int64), benefits={0: rep(1e6)},
+        term_months=rep(term).astype(np.int64), benefits={"DEATH": rep(1e6)},
         count=rep(count_close), elapsed_months=rep(em_close).astype(np.int64),
         mp_id=ids, product=np.full(1, "A"), calculation_methods=CM,
     )
@@ -117,7 +117,7 @@ def _expected_premium_oracle(basis, *, em_open=12, period=12, scale=1000.0,
     from fastcashflow.engine import _measure_full
     unit = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([term]), benefits={0: np.array([1e6])},
+        term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
         count=np.ones(1), calculation_methods=CM)
     m = _measure_full(unit, basis)
     cf = m.cashflows

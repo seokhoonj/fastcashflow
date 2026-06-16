@@ -76,7 +76,7 @@ def _onerous_book(basis, *, em_open=12, period=12, term=36, scale=1000.0,
     em_close = term if final else em_open + period
     surv = fcf.gmm.measure(
         ModelPoints(issue_age=np.array([40]), premium=np.array([100.0]),
-                    term_months=np.array([term]), benefits={0: np.array([1e6])},
+                    term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
                     count=np.array([1.0]), calculation_methods=CM),
         basis, full=True).cashflows.inforce[0]
     prior_count = scale * surv[em_open]
@@ -86,7 +86,7 @@ def _onerous_book(basis, *, em_open=12, period=12, term=36, scale=1000.0,
     rep = lambda v: np.full(n, v)
     mp = ModelPoints(
         issue_age=rep(40).astype(np.int64), premium=rep(100.0),
-        term_months=rep(term).astype(np.int64), benefits={0: rep(1e6)},
+        term_months=rep(term).astype(np.int64), benefits={"DEATH": rep(1e6)},
         count=rep(count_close), elapsed_months=rep(em_close).astype(np.int64),
         mp_id=ids, product=np.full(n, "A"), calculation_methods=CM,
     )
@@ -161,7 +161,7 @@ def test_loss_component_amortises_down_each_period():
     term = 48
     surv = fcf.gmm.measure(
         ModelPoints(issue_age=np.array([40]), premium=np.array([100.0]),
-                    term_months=np.array([term]), benefits={0: np.array([1e6])},
+                    term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
                     count=np.array([1.0]), calculation_methods=CM),
         basis, full=True).cashflows.inforce[0]
     mp, state = _onerous_book(basis, em_open=0, period=12, term=term)
@@ -193,13 +193,13 @@ def test_profitable_book_has_zero_lc_allocation_lines():
     # a profitable book: prior_csm > 0, no loss component
     surv = fcf.gmm.measure(
         ModelPoints(issue_age=np.array([40]), premium=np.array([100.0]),
-                    term_months=np.array([36]), benefits={0: np.array([1e6])},
+                    term_months=np.array([36]), benefits={"DEATH": np.array([1e6])},
                     count=np.array([1.0]), calculation_methods=CM),
         basis, full=True).cashflows.inforce[0]
     ids = np.array(["P0"])
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([36]), benefits={0: np.array([1e6])},
+        term_months=np.array([36]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1000.0 * surv[24]]), elapsed_months=np.array([24]),
         mp_id=ids, product=np.array(["A"]), calculation_methods=CM)
     state = InforceState(

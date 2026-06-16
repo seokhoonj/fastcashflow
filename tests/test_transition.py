@@ -8,7 +8,7 @@ import pytest
 
 from fastcashflow import ExpenseItem, ModelPoints, roll_forward, transition
 from fastcashflow.gmm import measure
-from conftest import annual_from_monthly as _annual, make_death_basis
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 def _basis():
@@ -30,9 +30,10 @@ def _portfolio(n: int = 50) -> ModelPoints:
     rng = np.random.default_rng(8)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        benefits={0: rng.integers(20, 90, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(20, 90, n) * 1_000_000},
         premium=rng.integers(8, 20, n) * 10_000,
         term_months=np.full(n, 120),
+        calculation_methods=PATTERNS,
     )
 
 

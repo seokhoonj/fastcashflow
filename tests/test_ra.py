@@ -31,7 +31,7 @@ def _basis(**overrides):
 def test_cost_of_capital_ra_hand_calc():
     """The CoC RA at inception is the cost-of-capital rate times the present
     value of the confidence-level margin held as capital."""
-    mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
+    mp = ModelPoints.single(40, 60_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS)
     coc_rate = 0.06
     cl = measure(mp, _basis())
     coc = measure(mp, _basis(ra_method="cost_of_capital",
@@ -46,7 +46,7 @@ def test_cost_of_capital_ra_hand_calc():
 
 def test_coc_ra_scales_with_the_rate():
     """The cost-of-capital RA is linear in the cost-of-capital rate."""
-    mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
+    mp = ModelPoints.single(40, 60_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS)
     coc1 = measure(mp, _basis(ra_method="cost_of_capital",
                                     cost_of_capital_rate=0.04))
     coc2 = measure(mp, _basis(ra_method="cost_of_capital",
@@ -56,7 +56,7 @@ def test_coc_ra_scales_with_the_rate():
 
 def test_coc_ra_differs_from_confidence_level():
     """The two methods give genuinely different RAs of the same order."""
-    mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
+    mp = ModelPoints.single(40, 60_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS)
     cl = measure(mp, _basis())
     coc = measure(mp, _basis(ra_method="cost_of_capital"))
     assert not np.isclose(cl.ra_path[0, 0], coc.ra_path[0, 0])
@@ -65,13 +65,13 @@ def test_coc_ra_differs_from_confidence_level():
 
 def test_value_rejects_cost_of_capital():
     """measure() computes the confidence-level RA only."""
-    mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
+    mp = ModelPoints.single(40, 60_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="confidence-level"):
         measure(mp, _basis(ra_method="cost_of_capital"), full=False)
 
 
 def test_invalid_ra_method_is_rejected():
     """An unrecognised ra_method is an error."""
-    mp = ModelPoints.single(40, 60_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS)
+    mp = ModelPoints.single(40, 60_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="ra_method"):
         measure(mp, _basis(ra_method="margins"))

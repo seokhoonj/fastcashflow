@@ -54,14 +54,14 @@ def gmm_settlement():
         settlement_pattern=np.array([0.6, 0.4]))
     surv = fcf.gmm.measure(
         ModelPoints(issue_age=np.array([40]), premium=np.array([100.0]),
-                    term_months=np.array([36]), benefits={0: np.array([1e6])},
+                    term_months=np.array([36]), benefits={"DEATH": np.array([1e6])},
                     count=np.array([1.0]), calculation_methods=PATTERNS),
         basis, full=True).cashflows.inforce[0]
     eo, p, scale = 12, 12, 1000.0
     ec = eo + p
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([36]), benefits={0: np.array([1e6])},
+        term_months=np.array([36]), benefits={"DEATH": np.array([1e6])},
         count=np.array([scale * surv[ec]]), elapsed_months=np.array([ec]),
         mp_id=np.array(["P0"]), product=np.array(["A"]),
         calculation_methods=PATTERNS)
@@ -84,14 +84,14 @@ def paa_settlement():
     surv = fcf.paa.measure(
         ModelPoints(issue_age=np.array([40]), premium=np.array([60.0]),
                     term_months=np.array([12]), premium_term_months=np.array([1]),
-                    benefits={0: np.array([6000.0])}, count=np.array([1.0]),
+                    benefits={"DEATH": np.array([6000.0])}, count=np.array([1.0]),
                     calculation_methods=PATTERNS),
         basis, full=True).cashflows.inforce[0]
     eo, ec = 3, 6
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([60.0]),
         term_months=np.array([12]), premium_term_months=np.array([1]),
-        benefits={0: np.array([6000.0])}, count=np.array([surv[ec]]),
+        benefits={"DEATH": np.array([6000.0])}, count=np.array([surv[ec]]),
         elapsed_months=np.array([ec]), mp_id=np.array(["PA0"]),
         product=np.array(["ACC"]), calculation_methods=PATTERNS)
     st = InforceState(
@@ -109,7 +109,7 @@ def reinsurance_settlement():
         mortality_q=0.002, lapse_q=0.005, discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.10)
     treaty = fcf.reinsurance.QuotaShare(0.4)
-    unit = ModelPoints.single(40, 400_000.0, 240, benefits={0: 1e8},
+    unit = ModelPoints.single(40, 400_000.0, 240, benefits={"DEATH": 1e8},
                               calculation_methods=PATTERNS)
     m = fcf.reinsurance.measure(unit, basis, treaty=treaty)
     surv = m.cashflows.inforce[0]
@@ -117,7 +117,7 @@ def reinsurance_settlement():
     csm_seed = float(m.csm_path[0, eo])
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([400_000.0]),
-        term_months=np.array([240]), benefits={0: np.array([1e8])},
+        term_months=np.array([240]), benefits={"DEATH": np.array([1e8])},
         count=np.array([scale * surv[ec]]), elapsed_months=np.array([ec]),
         mp_id=np.array(["R0"]), calculation_methods=PATTERNS)
     st = InforceState(
@@ -142,7 +142,8 @@ def vfa_settlement():
         settlement_pattern=np.array([0.6, 0.4]),
         coverages=(CoverageRate("DEATH", death_fn),))
     mp0 = ModelPoints.single(40, 100.0, 24, account_value=1e6,
-                             minimum_crediting_rate=0.08)
+                             minimum_crediting_rate=0.08,
+                             calculation_methods=PATTERNS)
     m0 = fcf.vfa.measure(mp0, basis)
     inforce = m0.cashflows.inforce
     eo, p = 6, 6

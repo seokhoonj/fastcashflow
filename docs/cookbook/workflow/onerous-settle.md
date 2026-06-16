@@ -43,7 +43,7 @@ def book(b, *, prior_csm=0.0, lc_open=0.0,
     # 한 보유계약을 가입 후 em_open + period 개월 시점에 앉힘 (on-track).
     surv = fcf.gmm.measure(
         ModelPoints(issue_age=np.array([45]), premium=np.array([120.0]),
-                    term_months=np.array([term]), benefits={0: np.array([1e6])},
+                    term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
                     count=np.array([1.0]), calculation_methods=CM),
         b, full=True).cashflows.inforce[0]
     em_close     = em_open + period
@@ -52,7 +52,7 @@ def book(b, *, prior_csm=0.0, lc_open=0.0,
     ids = np.array(["H1"])
     mp = ModelPoints(
         issue_age=np.array([45]), premium=np.array([120.0]),
-        term_months=np.array([term]), benefits={0: np.array([1e6])},
+        term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
         count=np.array([count_close]), elapsed_months=np.array([em_close]),
         mp_id=ids, product=np.array(["HEALTH"]), calculation_methods=CM)
     state = InforceState(

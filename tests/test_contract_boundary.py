@@ -25,7 +25,7 @@ def _basis():
 def _mp(boundary):
     return ModelPoints(
         issue_age=np.array([40], dtype=np.int64),
-        benefits={0: np.array([100_000.0])},
+        benefits={"DEATH": np.array([100_000.0])},
         premium=np.array([100.0]),
         term_months=np.array([24], dtype=np.int64),
         maturity_benefit=np.array([1000.0]),
@@ -129,7 +129,7 @@ def test_reader_applies_contract_boundary_months(tmp_path):
 def _inforce_mp(term, boundary, elapsed):
     return ModelPoints(
         issue_age=np.array([40], dtype=np.int64),
-        benefits={0: np.array([100_000.0])},
+        benefits={"DEATH": np.array([100_000.0])},
         premium=np.array([100.0]),
         term_months=np.array([term], dtype=np.int64),
         contract_boundary_months=np.array([boundary], dtype=np.int64),

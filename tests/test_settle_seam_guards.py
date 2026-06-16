@@ -20,13 +20,13 @@ def _gmm_book(**state_over):
                              ra_confidence=0.75, mortality_cv=0.10)
     surv = fcf.gmm.measure(
         ModelPoints(issue_age=np.array([40]), premium=np.array([100.0]),
-                    term_months=np.array([36]), benefits={0: np.array([1e6])},
+                    term_months=np.array([36]), benefits={"DEATH": np.array([1e6])},
                     count=np.array([1.0]), calculation_methods=PATTERNS),
         basis, full=True).cashflows.inforce[0]
     eo, ec = 12, 24
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([36]), benefits={0: np.array([1e6])},
+        term_months=np.array([36]), benefits={"DEATH": np.array([1e6])},
         count=np.array([surv[ec]]), elapsed_months=np.array([ec]),
         mp_id=np.array(["P0"]), product=np.array(["A"]),
         calculation_methods=PATTERNS)
@@ -104,14 +104,14 @@ def _reins_book(**state_over):
     basis = make_death_basis(mortality_q=0.002, lapse_q=0.005, discount_annual=0.03,
                              ra_confidence=0.75, mortality_cv=0.10)
     treaty = fcf.reinsurance.QuotaShare(0.4)
-    unit = ModelPoints.single(40, 400_000.0, 240, benefits={0: 1e8},
+    unit = ModelPoints.single(40, 400_000.0, 240, benefits={"DEATH": 1e8},
                               calculation_methods=PATTERNS)
     m = fcf.reinsurance.measure(unit, basis, treaty=treaty)
     surv = m.cashflows.inforce[0]
     eo, ec, scale = 24, 36, 1000.0
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([400_000.0]),
-        term_months=np.array([240]), benefits={0: np.array([1e8])},
+        term_months=np.array([240]), benefits={"DEATH": np.array([1e8])},
         count=np.array([scale * surv[ec]]), elapsed_months=np.array([ec]),
         mp_id=np.array(["R0"]), calculation_methods=PATTERNS)
     kw = dict(mp_id=np.array(["R0"]), elapsed_months=np.array([ec]),

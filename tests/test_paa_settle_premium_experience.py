@@ -37,14 +37,14 @@ def _book(*, premium, benefit, actual_premium=None, actual_claims=None,
         ModelPoints(issue_age=np.array([40]), premium=np.array([premium]),
                     term_months=np.array([term]),
                     premium_term_months=np.array([1]),
-                    benefits={0: np.array([benefit])}, count=np.array([1.0]),
+                    benefits={"DEATH": np.array([benefit])}, count=np.array([1.0]),
                     calculation_methods=PATTERNS),
         basis, full=True).cashflows.inforce[0]
     ids = np.array(["PA0"])
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([premium]),
         term_months=np.array([term]), premium_term_months=np.array([1]),
-        benefits={0: np.array([benefit])}, count=np.array([surv[em_close]]),
+        benefits={"DEATH": np.array([benefit])}, count=np.array([surv[em_close]]),
         elapsed_months=np.array([em_close]), mp_id=ids,
         product=np.array(["ACC"]), calculation_methods=PATTERNS)
     state = InforceState(

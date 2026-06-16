@@ -21,7 +21,7 @@ from conftest import make_death_basis
 def _death_portfolio():
     mp = ModelPoints(
         issue_age           = np.array([40, 45], dtype=np.int64),
-        benefits            = {0: np.array([1e8, 8e7])},
+        benefits            = {"DEATH": np.array([1e8, 8e7])},
         premium             = np.array([50_000.0, 40_000.0]),
         term_months         = np.array([120, 120], dtype=np.int64),
         calculation_methods = {"DEATH": CalculationMethod.DEATH},

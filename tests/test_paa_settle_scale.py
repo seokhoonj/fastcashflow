@@ -55,7 +55,7 @@ def _multi_book(*, premiums, benefits, em_close=6, count_factor=None,
         issue_age=np.full(n, 40, dtype=np.int64), premium=premiums,
         term_months=np.full(n, term, dtype=np.int64),
         premium_term_months=np.full(n, 1, dtype=np.int64),
-        benefits={0: benefits}, count=count,
+        benefits={"DEATH": benefits}, count=count,
         elapsed_months=np.full(n, em_close, dtype=np.int64), mp_id=ids,
         product=np.full(n, "ACC"), calculation_methods=PATTERNS)
     state = InforceState(
@@ -162,7 +162,7 @@ def _write_paa_files(mp, state, tmp_path, *, combined):
     }
     cov = pl.DataFrame({
         "mp_id": spec["mp_id"], "coverage": ["DEATH"] * n,
-        "amount": np.asarray(mp.benefits[0], dtype=np.float64),
+        "amount": np.asarray(mp.benefits["DEATH"], dtype=np.float64),
     })
     cp = tmp_path / "coverages.parquet"
     cov.write_parquet(cp)

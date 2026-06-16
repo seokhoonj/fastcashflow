@@ -14,7 +14,7 @@ def _portfolio(n: int = 400) -> ModelPoints:
     rng = np.random.default_rng(3)
     return ModelPoints(
         issue_age=rng.integers(25, 60, n),
-        benefits={0: rng.integers(10, 100, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(10, 100, n) * 1_000_000},
         premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         calculation_methods=PATTERNS,
@@ -213,7 +213,7 @@ def test_measure_stream_streaming_matches_in_memory(tmp_path):
     n = 1000
     mps = ModelPoints(
         issue_age=rng.integers(25, 60, n),
-        benefits={0: rng.integers(10, 100, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(10, 100, n) * 1_000_000},
         premium=rng.integers(3, 15, n) * 10_000,
         term_months=rng.integers(60, 180, n),
         calculation_methods=PATTERNS,

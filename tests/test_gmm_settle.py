@@ -67,7 +67,7 @@ def _basis(*, discount=0.03, surrender=False):
 def _unit(basis, *, term=36, age=40, prem=100.0):
     unit = ModelPoints(
         issue_age=np.array([age]), premium=np.array([prem]),
-        term_months=np.array([term]), benefits={0: np.array([1e6])},
+        term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), calculation_methods=CM,
     )
     return fcf.gmm.measure(unit, basis, full=True)
@@ -91,7 +91,7 @@ def _book(basis, *, em_open=12, period=12, scale=1000.0, term=36,
     rep = lambda v: np.full(n, v)
     mp = ModelPoints(
         issue_age=rep(40).astype(np.int64), premium=rep(100.0),
-        term_months=rep(term).astype(np.int64), benefits={0: rep(1e6)},
+        term_months=rep(term).astype(np.int64), benefits={"DEATH": rep(1e6)},
         count=rep(count_close), elapsed_months=rep(em_close).astype(np.int64),
         mp_id=ids, product=np.full(n, "A"), calculation_methods=CM,
     )
@@ -407,7 +407,7 @@ def test_final_settlement_closing_past_the_boundary():
     ids = np.array(["P0"])
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([36]), benefits={0: np.array([1e6])},
+        term_months=np.array([36]), benefits={"DEATH": np.array([1e6])},
         count=np.array([0.0]), elapsed_months=np.array([42]), mp_id=ids,
         product=np.array(["A"]), calculation_methods=CM,
     )

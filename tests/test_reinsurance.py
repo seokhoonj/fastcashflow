@@ -38,7 +38,7 @@ def test_reinsurance_hand_calc():
     basis = _basis()
     death_benefit, premium, term, cession = 1e8, 80_000.0, 60, 0.4
     res = fcf.reinsurance.measure(
-        ModelPoints.single(40, premium, term, benefits={0: death_benefit}, calculation_methods=PATTERNS),
+        ModelPoints.single(40, premium, term, benefits={"DEATH": death_benefit}, calculation_methods=PATTERNS),
         basis, treaty=fcf.reinsurance.QuotaShare(cession=cession)
     )
 
@@ -61,7 +61,7 @@ def test_reinsurance_hand_calc():
 def test_reinsurance_csm_can_be_negative():
     """Ceding a profitable book has a net cost -- a negative CSM, no loss component."""
     res = fcf.reinsurance.measure(
-        ModelPoints.single(40, 300_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS),
+        ModelPoints.single(40, 300_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS),
         _basis(), treaty=fcf.reinsurance.QuotaShare(cession=0.5)
     )
     assert res.bel[0] > 0.0           # reinsurance premiums ceded exceed recoveries
@@ -71,7 +71,7 @@ def test_reinsurance_csm_can_be_negative():
 def test_reinsurance_csm_analysis_of_change_reconciles():
     """The reinsurance CSM waterfall reconciles opening to closing."""
     res = fcf.reinsurance.measure(
-        ModelPoints.single(40, 80_000.0, 120, benefits={0: 1e8}, calculation_methods=PATTERNS),
+        ModelPoints.single(40, 80_000.0, 120, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS),
         _basis(), treaty=fcf.reinsurance.QuotaShare(cession=0.3)
     )
     assert np.allclose(
@@ -82,7 +82,7 @@ def test_reinsurance_csm_analysis_of_change_reconciles():
 def test_reinsurance_zero_cession_is_nothing():
     """A zero cession rate cedes nothing -- every figure is zero."""
     res = fcf.reinsurance.measure(
-        ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS),
+        ModelPoints.single(40, 80_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS),
         _basis(), treaty=fcf.reinsurance.QuotaShare(cession=0.0)
     )
     assert np.allclose(res.bel, 0.0)
@@ -92,7 +92,7 @@ def test_reinsurance_zero_cession_is_nothing():
 
 
 def test_reinsurance_measure_treaty_is_keyword_only_and_full_false_drops_paths():
-    mp = ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8},
+    mp = ModelPoints.single(40, 80_000.0, 60, benefits={"DEATH": 1e8},
                             calculation_methods=PATTERNS)
     treaty = fcf.reinsurance.QuotaShare(cession=0.5)
 
@@ -114,7 +114,7 @@ def test_reinsurance_rejects_bad_cession_rate():
     """A cession rate outside [0, 1] is an error."""
     with pytest.raises(ValueError, match="cession"):
         fcf.reinsurance.measure(
-            ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8}, calculation_methods=PATTERNS),
+            ModelPoints.single(40, 80_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS),
             _basis(), treaty=fcf.reinsurance.QuotaShare(cession=1.5)
         )
 
@@ -126,7 +126,7 @@ def test_reinsurance_trace_renders_and_matches_measure():
 
     basis = _basis()
     treaty = fcf.reinsurance.QuotaShare(cession=0.4)
-    mp = ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8},
+    mp = ModelPoints.single(40, 80_000.0, 60, benefits={"DEATH": 1e8},
                             calculation_methods=PATTERNS)
     m = fcf.reinsurance.measure(mp, basis, treaty=treaty)
 
@@ -156,7 +156,7 @@ def test_reinsurance_trace_routes_a_dict_basis():
 
 def test_reinsurance_trace_rejects_bad_index():
     basis = _basis()
-    mp = ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8},
+    mp = ModelPoints.single(40, 80_000.0, 60, benefits={"DEATH": 1e8},
                             calculation_methods=PATTERNS)
     with pytest.raises(IndexError):
         fcf.reinsurance.trace(9, mp, basis, treaty=fcf.reinsurance.QuotaShare(0.5))
@@ -178,7 +178,7 @@ def test_reinsurance_inforce_carries_csm_and_rebases_bel():
 
     basis = _basis()
     treaty = fcf.reinsurance.QuotaShare(cession=0.4)
-    mp_new = ModelPoints.single(40, 80_000.0, 240, benefits={0: 1e8},
+    mp_new = ModelPoints.single(40, 80_000.0, 240, benefits={"DEATH": 1e8},
                                 calculation_methods=PATTERNS)
     m = fcf.reinsurance.measure(mp_new, basis, treaty=treaty)
     elapsed, period = 36, 12
@@ -191,7 +191,7 @@ def test_reinsurance_inforce_carries_csm_and_rebases_bel():
     )
     mp_inf = ModelPoints(
         issue_age=np.array([40]), premium=np.array([80_000.0]),
-        term_months=np.array([240]), benefits={0: np.array([1e8])},
+        term_months=np.array([240]), benefits={"DEATH": np.array([1e8])},
         calculation_methods=PATTERNS, mp_id=np.array(["R1"]),
         elapsed_months=np.array([elapsed]), count=np.array([1.0]),
     )
@@ -230,7 +230,7 @@ def test_reinsurance_inforce_rejects_non_positive_period():
     basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([80_000.0]),
-        term_months=np.array([60]), benefits={0: np.array([1e8])},
+        term_months=np.array([60]), benefits={"DEATH": np.array([1e8])},
         calculation_methods=PATTERNS, mp_id=np.array(["R1"]),
         elapsed_months=np.array([12]), count=np.array([1.0]),
     )
@@ -257,7 +257,7 @@ def test_reinsurance_inforce_rejects_runoff():
     )
     mp_inf = ModelPoints(
         issue_age=np.array([40]), premium=np.array([80_000.0]),
-        term_months=np.array([60]), benefits={0: np.array([1e8])},
+        term_months=np.array([60]), benefits={"DEATH": np.array([1e8])},
         calculation_methods=PATTERNS, mp_id=np.array(["R1"]),
         elapsed_months=np.array([60]), count=np.array([1.0]),
     )
@@ -277,7 +277,7 @@ def test_reinsurance_aggregate_sums_per_mp_and_is_chunk_invariant():
         issue_age=np.array([35, 40, 45, 50, 55]),
         premium=np.array([60_000.0, 70_000.0, 80_000.0, 90_000.0, 100_000.0]),
         term_months=np.array([120, 180, 240, 120, 60]),
-        benefits={0: np.array([1e8, 8e7, 1.2e8, 5e7, 9e7])},
+        benefits={"DEATH": np.array([1e8, 8e7, 1.2e8, 5e7, 9e7])},
         calculation_methods=PATTERNS,
     )
     agg = fcf.reinsurance.measure_aggregate(mp, basis, treaty=treaty)
@@ -300,7 +300,7 @@ def test_reinsurance_aggregate_sums_per_mp_and_is_chunk_invariant():
 
 def test_reinsurance_aggregate_rejects_bad_chunk_size():
     basis = _basis()
-    mp = ModelPoints.single(40, 80_000.0, 60, benefits={0: 1e8},
+    mp = ModelPoints.single(40, 80_000.0, 60, benefits={"DEATH": 1e8},
                             calculation_methods=PATTERNS)
     with pytest.raises(ValueError, match="chunk_size"):
         fcf.reinsurance.measure_aggregate(mp, basis,
@@ -313,7 +313,7 @@ def test_reinsurance_trace_diff_renders_assumption_and_headline():
 
     b1 = _basis()
     b2 = dataclasses.replace(b1, mortality_cv=0.20)
-    mp = ModelPoints.single(40, 80_000.0, 120, benefits={0: 1e8},
+    mp = ModelPoints.single(40, 80_000.0, 120, benefits={"DEATH": 1e8},
                             calculation_methods=PATTERNS)
     buf = io.StringIO()
     fcf.reinsurance.trace_diff(0, mp, b1, b2, treaty=fcf.reinsurance.QuotaShare(0.4),
@@ -405,7 +405,7 @@ def test_reinsurance_inforce_high_lapse_stays_finite():
         lock_in_rate=basis.discount_annual)
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([80_000.0]),
-        term_months=np.array([120]), benefits={0: np.array([1e8])},
+        term_months=np.array([120]), benefits={"DEATH": np.array([1e8])},
         calculation_methods=PATTERNS, mp_id=np.array(["R1"]),
         elapsed_months=np.array([elapsed]), count=np.array([100.0]))
     v = fcf.reinsurance.measure_inforce(mp, state, basis, treaty=treaty, period_months=12)
@@ -427,7 +427,7 @@ def test_reinsurance_inforce_per_mp_varying_elapsed_carries_each_csm():
     term = np.array([240, 180]); ben = np.array([1e8, 7e7])
     m = fcf.reinsurance.measure(
         ModelPoints(issue_age=age, premium=prem, term_months=term,
-                    benefits={0: ben}, calculation_methods=PATTERNS),
+                    benefits={"DEATH": ben}, calculation_methods=PATTERNS),
         basis, treaty=treaty)
 
     elapsed = np.array([36, 24]); period = 12
@@ -438,7 +438,7 @@ def test_reinsurance_inforce_per_mp_varying_elapsed_carries_each_csm():
         count=np.array([1.0, 1.0]), prior_csm=prior_csm,
         lock_in_rate=basis.discount_annual)
     mp_inf = ModelPoints(
-        issue_age=age, premium=prem, term_months=term, benefits={0: ben},
+        issue_age=age, premium=prem, term_months=term, benefits={"DEATH": ben},
         calculation_methods=PATTERNS, mp_id=np.array(["R1", "R2"]),
         elapsed_months=elapsed, count=np.array([1.0, 1.0]))
     v = fcf.reinsurance.measure_inforce(mp_inf, state, basis, treaty=treaty,
@@ -457,7 +457,7 @@ def test_reinsurance_roll_forward_and_reconcile_balance():
     treaty = fcf.reinsurance.QuotaShare(0.4)
     mp = ModelPoints(
         issue_age=np.array([40, 50]), premium=np.array([80_000.0, 60_000.0]),
-        term_months=np.array([60, 60]), benefits={0: np.array([1e8, 7e7])},
+        term_months=np.array([60, 60]), benefits={"DEATH": np.array([1e8, 7e7])},
         calculation_methods=PATTERNS)
     m = fcf.reinsurance.measure(mp, basis, treaty=treaty)
 

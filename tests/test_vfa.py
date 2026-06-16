@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import ExpenseItem, ModelPoints, report
-from conftest import annual_from_monthly as _annual, make_death_basis
+from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 
 Q = 0.002          # flat monthly mortality
@@ -35,7 +35,8 @@ def test_vfa_account_value_and_csm_hand_calc():
     basis = _basis()
     av0, term = 1e8, 60
     res = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, term, account_value=av0), basis
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           calculation_methods=PATTERNS), basis
     )
 
     r_m = 1.06 ** (1 / 12) - 1
@@ -69,11 +70,13 @@ def test_gmdb_floor_on_death_hand_calc():
     basis = _basis(investment_return=0.0, fund_fee=0.0)
     av0, gmdb, term = 1000.0, 1200.0, 60
     base = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, term, account_value=av0), basis
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           calculation_methods=PATTERNS), basis
     )
     floored = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_death_benefit=gmdb), basis
+                           minimum_death_benefit=gmdb,
+                           calculation_methods=PATTERNS), basis
     )
     surv = (1 - Q) * (1 - LAPSE)
     deaths = surv ** np.arange(term) * Q             # monthly death decrement
@@ -83,7 +86,8 @@ def test_gmdb_floor_on_death_hand_calc():
     # A floor below the account value never bites -- max(AV, gmdb) == AV.
     low = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_death_benefit=500.0), basis
+                           minimum_death_benefit=500.0,
+                           calculation_methods=PATTERNS), basis
     )
     assert np.isclose(low.bel_path[0, 0], base.bel_path[0, 0])
 
@@ -99,11 +103,13 @@ def test_gmab_floor_at_maturity_hand_calc():
     basis = _basis(investment_return=0.0, fund_fee=0.0)
     av0, gmab, term = 1000.0, 1200.0, 60
     base = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, term, account_value=av0), basis
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           calculation_methods=PATTERNS), basis
     )
     floored = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_accumulation_benefit=gmab), basis
+                           minimum_accumulation_benefit=gmab,
+                           calculation_methods=PATTERNS), basis
     )
     surv = (1 - Q) * (1 - LAPSE)
     maturity_survivors = surv ** term                # in-force reaching term
@@ -113,7 +119,8 @@ def test_gmab_floor_at_maturity_hand_calc():
     # A floor below the account value never bites -- max(AV, gmab) == AV.
     low = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_accumulation_benefit=500.0), basis
+                           minimum_accumulation_benefit=500.0,
+                           calculation_methods=PATTERNS), basis
     )
     assert np.isclose(low.bel_path[0, 0], base.bel_path[0, 0])
 
@@ -133,11 +140,13 @@ def test_gmab_floor_strikes_the_matured_account_value_hand_calc():
     basis = _basis(investment_return=r, fund_fee=f)
     av0, gmab, term = 1000.0, 1200.0, 24
     base = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, term, account_value=av0), basis
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           calculation_methods=PATTERNS), basis
     )
     floored = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_accumulation_benefit=gmab), basis
+                           minimum_accumulation_benefit=gmab,
+                           calculation_methods=PATTERNS), basis
     )
 
     r_m = (1 + r) ** (1 / 12) - 1
@@ -172,7 +181,8 @@ def test_gmab_binding_pays_exactly_the_guarantee_at_maturity_hand_calc():
     av0, gmab, term = 1000.0, 2000.0, 24       # gmab far above any av -> binds
     res = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_accumulation_benefit=gmab), basis)
+                           minimum_accumulation_benefit=gmab,
+                           calculation_methods=PATTERNS), basis)
     r_m = (1 + r) ** (1 / 12) - 1
     bel = gmab * (1 + r_m) ** (-term) - av0     # exactly gmab @ time term, less the fund
     assert np.isclose(res.bel_path[0, 0], bel)
@@ -193,10 +203,12 @@ def test_gmab_lic_uses_the_nominal_top_up_not_the_discounted_pv():
                     settlement_pattern=pattern)
     av0, gmab, term = 1000.0, 1200.0, 24
     base = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+        ModelPoints.single(40, 0.0, term, account_value=av0,
+                           calculation_methods=PATTERNS), basis)
     floored = fcf.vfa.measure(
         ModelPoints.single(40, 0.0, term, account_value=av0,
-                           minimum_accumulation_benefit=gmab), basis)
+                           minimum_accumulation_benefit=gmab,
+                           calculation_methods=PATTERNS), basis)
     delta_lic = floored.lic[0] - base.lic[0]
 
     r_m = (1 + r) ** (1 / 12) - 1
@@ -225,7 +237,8 @@ def test_floor_tvog_zero_under_flat_scenarios():
     av0, term = 1000.0, 36
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
                             minimum_death_benefit=1100.0,
-                            minimum_accumulation_benefit=1100.0)
+                            minimum_accumulation_benefit=1100.0,
+                            calculation_methods=PATTERNS)
     deterministic = fcf.vfa.measure(mp, basis)
     r_m = 1.04 ** (1 / 12) - 1
     flat = np.full((8, term), r_m)
@@ -251,7 +264,8 @@ def test_floor_tvog_matches_independent_reimplementation():
     av0, gmdb, gmab, term = 1000.0, 1100.0, 1100.0, 24
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
                             minimum_death_benefit=gmdb,
-                            minimum_accumulation_benefit=gmab)
+                            minimum_accumulation_benefit=gmab,
+                            calculation_methods=PATTERNS)
     proj = project_cashflows(mp, basis)
     deaths, ms = proj.deaths[0], float(proj.maturity_survivors[0])
 
@@ -293,7 +307,8 @@ def test_floor_tvog_matches_independent_reimplementation():
 def test_vfa_zero_fee_gives_no_profit():
     """With no variable fee the contract is a pure pass-through -- no CSM."""
     res = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 60, account_value=1e8),
+        ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                           calculation_methods=PATTERNS),
         _basis(fund_fee=0.0),
     )
     assert np.isclose(res.csm_path[0, 0], 0.0, atol=1.0)   # ~0 vs a 1e8 contract
@@ -303,7 +318,8 @@ def test_vfa_zero_fee_gives_no_profit():
 def test_vfa_csm_releases_over_the_term():
     """The CSM builds at inception and releases to zero over the term."""
     res = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 120, account_value=1e8), _basis()
+        ModelPoints.single(40, 0.0, 120, account_value=1e8,
+                           calculation_methods=PATTERNS), _basis()
     )
     assert res.csm_path[0, 0] > 0.0
     assert np.isclose(res.csm_path[0, -1], 0.0)
@@ -313,9 +329,11 @@ def test_vfa_csm_releases_over_the_term():
 
 def test_vfa_variable_fee_scales_with_the_fee():
     """A larger fund fee leaves the entity a larger variable fee and CSM."""
-    small = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8),
+    small = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                        calculation_methods=PATTERNS),
                         _basis(fund_fee=0.01))
-    large = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8),
+    large = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                        calculation_methods=PATTERNS),
                         _basis(fund_fee=0.03))
     assert large.variable_fee[0] > small.variable_fee[0] > 0.0
     assert large.csm_path[0, 0] > small.csm_path[0, 0] > 0.0
@@ -324,10 +342,12 @@ def test_vfa_variable_fee_scales_with_the_fee():
 def test_vfa_onerous_when_expenses_exceed_the_fee():
     """Heavy acquisition expense makes the contract onerous."""
     profitable = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 60, account_value=1e8), _basis()
+        ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                           calculation_methods=PATTERNS), _basis()
     )
     onerous = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 60, account_value=1e8),
+        ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                           calculation_methods=PATTERNS),
         _basis(expense_items=(
             ExpenseItem("acquisition", "alpha_fixed", 10_000_000.0),
         )),
@@ -346,7 +366,8 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
     """Return scenarios fold the guarantee's time value into the BEL."""
     basis = _basis(investment_return=0.05)
     mp = ModelPoints.single(40, 0.0, 120,
-                             account_value=1e8, minimum_crediting_rate=0.05)
+                             account_value=1e8, minimum_crediting_rate=0.05,
+                             calculation_methods=PATTERNS)
     scenarios = _return_paths(0.05, vol=0.008, n=2000, n_time=120, seed=7)
 
     plain = fcf.vfa.measure(mp, basis)
@@ -375,8 +396,10 @@ def test_vfa_tvog_floors_only_points_to_measure_time_value():
     basis = _basis(investment_return=0.04)
     scenarios = _return_paths(0.04, vol=0.01, n=500, n_time=term, seed=3)
     floored = ModelPoints.single(40, 0.0, term, account_value=1e8,
-                                 minimum_accumulation_benefit=1.2e8)
-    plain = ModelPoints.single(40, 0.0, term, account_value=1e8)
+                                 minimum_accumulation_benefit=1.2e8,
+                                 calculation_methods=PATTERNS)
+    plain = ModelPoints.single(40, 0.0, term, account_value=1e8,
+                               calculation_methods=PATTERNS)
     # the standalone credited-rate tvog refuses a no-crediting-guarantee contract
     with pytest.raises(ValueError, match="time_value"):
         fcf.vfa.tvog(floored, basis, scenarios)
@@ -390,7 +413,8 @@ def test_vfa_large_tvog_turns_the_contract_onerous():
     """A guarantee time value beyond the unearned fee makes the contract onerous."""
     basis = _basis(investment_return=0.05)
     mp = ModelPoints.single(40, 0.0, 120,
-                             account_value=1e8, minimum_crediting_rate=0.05)
+                             account_value=1e8, minimum_crediting_rate=0.05,
+                             calculation_methods=PATTERNS)
     scenarios = _return_paths(0.05, vol=0.03, n=2000, n_time=120, seed=8)
 
     plain = fcf.vfa.measure(mp, basis)
@@ -404,7 +428,8 @@ def test_vfa_tvog_matches_measure_tvog():
     """The TVOG folded into measure_vfa equals the stand-alone measure_tvog."""
     basis = _basis(investment_return=0.04)
     mp = ModelPoints.single(40, 0.0, 120,
-                             account_value=1e8, minimum_crediting_rate=0.045)
+                             account_value=1e8, minimum_crediting_rate=0.045,
+                             calculation_methods=PATTERNS)
     scenarios = _return_paths(0.04, vol=0.012, n=1500, n_time=120, seed=9)
 
     folded = fcf.vfa.measure(mp, basis, scenarios).time_value.sum()
@@ -429,6 +454,7 @@ def test_vfa_tvog_matches_measure_tvog_mixed_term():
         term_months=np.array([60, 120]),               # shorter maturity is interior
         account_value=np.array([1e8, 7e7]),
         minimum_crediting_rate=np.array([0.045, 0.045]),   # uniform guarantee (v1)
+        calculation_methods=PATTERNS,
     )
     scenarios = _return_paths(0.04, vol=0.012, n=1500, n_time=120, seed=9)
     folded = fcf.vfa.measure(mp, basis, scenarios).time_value.sum()
@@ -446,6 +472,7 @@ def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
         term_months=np.array([120, 120]),
         account_value=np.array([1e8, 1e8]),
         minimum_crediting_rate=np.array([0.04, 0.05]),
+        calculation_methods=PATTERNS,
     )
     with pytest.raises(NotImplementedError, match="per-MP varying"):
         fcf.vfa.measure(mp, basis, np.full((10, 120), 0.003))
@@ -457,7 +484,8 @@ def test_vfa_rejects_degenerate_return_scenarios():
     sign-flipped discount silently."""
     term = 60
     mp = ModelPoints.single(40, 0.0, term, account_value=1e8,
-                            minimum_crediting_rate=0.02)
+                            minimum_crediting_rate=0.02,
+                            calculation_methods=PATTERNS)
     basis = _basis(investment_return=0.04)
 
     empty = np.empty((0, term))
@@ -485,6 +513,7 @@ def test_tvog_boundary_cut_contract_does_not_index_out_of_bounds():
         account_value=np.array([1000.0]),
         minimum_crediting_rate=np.array([0.02]),
         minimum_accumulation_benefit=np.array([1100.0]),
+        calculation_methods=PATTERNS,
     )
     r_m = 1.04 ** (1 / 12) - 1
     scen = np.full((4, 12), r_m)        # width = horizon (the 12-month boundary)
@@ -505,11 +534,14 @@ def test_vfa_crediting_sentinel_vs_zero_floor_vs_positive():
     basis = _basis(investment_return=0.0)                  # flat central at 0%
     scen = _return_paths(0.0, vol=0.03, n=4000, n_time=term, seed=11)
     none_c = ModelPoints.single(40, 0.0, term, account_value=1e8,
-                                minimum_crediting_rate=fcf.NO_GUARANTEE_RATE)
+                                minimum_crediting_rate=fcf.NO_GUARANTEE_RATE,
+                                calculation_methods=PATTERNS)
     floor0 = ModelPoints.single(40, 0.0, term, account_value=1e8,
-                                minimum_crediting_rate=0.0)
+                                minimum_crediting_rate=0.0,
+                                calculation_methods=PATTERNS)
     floor2 = ModelPoints.single(40, 0.0, term, account_value=1e8,
-                                minimum_crediting_rate=0.02)
+                                minimum_crediting_rate=0.02,
+                                calculation_methods=PATTERNS)
     tv_none = fcf.vfa.measure(none_c, basis, scen).time_value[0]
     tv_floor0 = fcf.vfa.measure(floor0, basis, scen).time_value[0]
     tv_floor2 = fcf.vfa.measure(floor2, basis, scen).time_value[0]
@@ -525,9 +557,11 @@ def test_vfa_zero_floor_matches_no_guarantee_bel_only_when_return_positive():
     account-value payout and the BEL."""
     term = 60
     none_c = ModelPoints.single(40, 0.0, term, account_value=1e8,
-                                minimum_crediting_rate=fcf.NO_GUARANTEE_RATE)
+                                minimum_crediting_rate=fcf.NO_GUARANTEE_RATE,
+                                calculation_methods=PATTERNS)
     floor0 = ModelPoints.single(40, 0.0, term, account_value=1e8,
-                                minimum_crediting_rate=0.0)
+                                minimum_crediting_rate=0.0,
+                                calculation_methods=PATTERNS)
     pos = _basis(investment_return=0.04)
     assert np.isclose(fcf.vfa.measure(none_c, pos).bel_path[0, 0],
                       fcf.vfa.measure(floor0, pos).bel_path[0, 0])
@@ -541,7 +575,8 @@ def test_vfa_rejects_stray_negative_crediting_rate():
     not 'no guarantee', and is rejected at construction."""
     with pytest.raises(ValueError, match="minimum_crediting_rate"):
         ModelPoints.single(40, 0.0, 60, account_value=1e8,
-                           minimum_crediting_rate=-0.02)
+                           minimum_crediting_rate=-0.02,
+                           calculation_methods=PATTERNS)
 
 
 def test_vfa_scenarios_reject_mixed_sentinel_and_floor():
@@ -556,6 +591,7 @@ def test_vfa_scenarios_reject_mixed_sentinel_and_floor():
         term_months=np.array([term, term]),
         account_value=np.array([1e8, 1e8]),
         minimum_crediting_rate=np.array([fcf.NO_GUARANTEE_RATE, 0.0]),
+        calculation_methods=PATTERNS,
     )
     with pytest.raises(NotImplementedError, match="per-MP varying"):
         fcf.vfa.measure(mp, basis, scen)
@@ -564,7 +600,8 @@ def test_vfa_scenarios_reject_mixed_sentinel_and_floor():
 def test_vfa_ra_zero_without_expense_cv():
     """With no expense_cv the VFA RA is zero -- the v1 default."""
     res = fcf.vfa.measure(
-        ModelPoints.single(40, 0.0, 60, account_value=1e8),
+        ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                           calculation_methods=PATTERNS),
         _basis(expense_items=(
             ExpenseItem("maintenance", "gamma_fixed", 120_000.0),
         )),
@@ -574,7 +611,8 @@ def test_vfa_ra_zero_without_expense_cv():
 
 def test_vfa_ra_scales_with_expense_cv():
     """The VFA RA is a confidence-level margin linear in the expense CV."""
-    mp = ModelPoints.single(40, 0.0, 60, account_value=1e8)
+    mp = ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                            calculation_methods=PATTERNS)
     _g120k = (ExpenseItem("maintenance", "gamma_fixed", 120_000.0),)
     r1 = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.10))
     r2 = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.20))
@@ -584,7 +622,8 @@ def test_vfa_ra_scales_with_expense_cv():
 
 def test_vfa_ra_reduces_the_csm():
     """The RA is part of the fulfilment cash flows, so it reduces the CSM."""
-    mp = ModelPoints.single(40, 0.0, 60, account_value=1e8)
+    mp = ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                            calculation_methods=PATTERNS)
     _g120k = (ExpenseItem("maintenance", "gamma_fixed", 120_000.0),)
     no_ra = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.0))
     with_ra = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.30))
@@ -612,7 +651,8 @@ def test_vfa_report_releases_the_ra_into_revenue():
     basis = _basis(expense_items=(
         ExpenseItem("maintenance", "gamma_fixed", 120_000.0),
     ), expense_cv=0.25)
-    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8), basis)
+    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                        calculation_methods=PATTERNS), basis)
     rep = report(m)
     ra_in_revenue = (rep.insurance_revenue - rep.insurance_service_expense
                      - m.csm_release)
@@ -623,7 +663,8 @@ def test_vfa_report_releases_the_ra_into_revenue():
 # full=False headline contract (the chunked-portfolio building block) + guards
 # ---------------------------------------------------------------------------
 def _vfa_mp():
-    return ModelPoints.single(40, 0.0, 60, account_value=1e8)
+    return ModelPoints.single(40, 0.0, 60, account_value=1e8,
+                              calculation_methods=PATTERNS)
 
 
 def test_vfa_full_false_matches_full_headline():
@@ -664,7 +705,8 @@ def test_vfa_measure_inforce_reproduces_inception_slice_when_av_is_modelled():
 
     basis = _basis()
     av0, term, em = 1e8, 60, 12
-    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0,
+                          calculation_methods=PATTERNS), basis)
 
     av_modelled = inc.account_value_path[0, em]      # observed == modelled here
     state = fcf.InforceState(
@@ -674,7 +716,7 @@ def test_vfa_measure_inforce_reproduces_inception_slice_when_av_is_modelled():
     mp = fcf.apply_inforce_state(
         ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
                     term_months=np.array([60]), account_value=np.array([av0]),
-                    mp_id=np.array(["X"])),
+                    mp_id=np.array(["X"]), calculation_methods=PATTERNS),
         state)
 
     v = fcf.vfa.measure_inforce(mp, state, basis, period_months=12)
@@ -693,11 +735,12 @@ def test_vfa_measure_inforce_uses_observed_account_value():
 
     basis = _basis()
     av0, term, em = 1e8, 60, 12
-    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0,
+                          calculation_methods=PATTERNS), basis)
     av_modelled = inc.account_value_path[0, em]
     mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
                       term_months=np.array([60]), account_value=np.array([av0]),
-                      mp_id=np.array(["X"]))
+                      mp_id=np.array(["X"]), calculation_methods=PATTERNS)
 
     def run(obs):
         state = fcf.InforceState(
@@ -718,7 +761,7 @@ def test_vfa_measure_inforce_requires_account_value():
     basis = _basis()
     mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
                       term_months=np.array([60]), account_value=np.array([1e8]),
-                      mp_id=np.array(["X"]))
+                      mp_id=np.array(["X"]), calculation_methods=PATTERNS)
     state = fcf.InforceState(
         mp_id=np.array(["X"]), elapsed_months=np.array([12]),
         count=np.array([1.0]), prior_csm=np.array([0.0]), lock_in_rate=0.0)
@@ -735,10 +778,11 @@ def test_vfa_measure_inforce_nonzero_prior_t_carries_inception_csm():
 
     basis = _basis()
     av0, term, em, period = 1e8, 60, 24, 12
-    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0,
+                          calculation_methods=PATTERNS), basis)
     mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
                       term_months=np.array([60]), account_value=np.array([av0]),
-                      mp_id=np.array(["X"]))
+                      mp_id=np.array(["X"]), calculation_methods=PATTERNS)
     state = fcf.InforceState(
         mp_id=np.array(["X"]), elapsed_months=np.array([em]),
         count=np.array([1.0]), prior_csm=np.array([inc.csm_path[0, em - period]]),
@@ -758,10 +802,11 @@ def test_vfa_measure_inforce_bel_scales_with_count():
 
     basis = _basis()
     av0, term, em = 1e8, 60, 12
-    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0,
+                          calculation_methods=PATTERNS), basis)
     mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
                       term_months=np.array([60]), account_value=np.array([av0]),
-                      mp_id=np.array(["X"]))
+                      mp_id=np.array(["X"]), calculation_methods=PATTERNS)
 
     def run(count):
         state = fcf.InforceState(
@@ -786,7 +831,8 @@ def test_vfa_measure_handles_boundary_before_term():
         issue_age=np.array([40]), premium=np.array([0.0]),
         term_months=np.array([60]), contract_boundary_months=np.array([24]),
         account_value=np.array([1e8]),
-        minimum_accumulation_benefit=np.array([1e9]))   # huge GMAB, must NOT apply
+        minimum_accumulation_benefit=np.array([1e9]),   # huge GMAB, must NOT apply
+        calculation_methods=PATTERNS)
     res = fcf.vfa.measure(mp, _basis())
     assert res.bel_path.shape[1] == 25                  # n_time = boundary 24 (+1)
     assert np.all(np.isfinite(res.bel_path))
@@ -800,7 +846,7 @@ def test_vfa_measure_inforce_rejects_as_of_at_boundary():
     mp0 = ModelPoints(
         issue_age=np.array([40]), premium=np.array([0.0]),
         term_months=np.array([24]), account_value=np.array([1e8]),
-        mp_id=np.array(["X"]))
+        mp_id=np.array(["X"]), calculation_methods=PATTERNS)
     state = fcf.InforceState(
         mp_id=np.array(["X"]), elapsed_months=np.array([24]),
         count=np.array([1.0]), prior_csm=np.array([0.0]), lock_in_rate=0.0,
@@ -824,14 +870,15 @@ def test_vfa_measure_inforce_mixed_book_judges_each_contract_on_its_own_boundary
         issue_age=np.array([40]), premium=np.array([0.0]),
         term_months=np.array([60]), contract_boundary_months=np.array([24]),
         account_value=np.array([1e8]),
-        minimum_accumulation_benefit=np.array([1e12]))
+        minimum_accumulation_benefit=np.array([1e12]),
+        calculation_methods=PATTERNS)
     mixed = ModelPoints(
         issue_age=np.array([40, 40]), premium=np.array([0.0, 0.0]),
         term_months=np.array([60, 60]),
         contract_boundary_months=np.array([24, 60]),
         account_value=np.array([1e8, 1e8]),
         minimum_accumulation_benefit=np.array([1e12, 0.0]),
-        mp_id=np.array(["A", "B"]))
+        mp_id=np.array(["A", "B"]), calculation_methods=PATTERNS)
 
     # (P1) A's inception measurement is identical alone and inside the mixed book
     # -- the GMAB does not leak in off B's longer horizon.
@@ -858,12 +905,13 @@ def test_vfa_measure_inforce_csm_basis_is_carry_only_and_guarded(tmp_path):
     import fastcashflow as fcf
     basis = _basis()
     av0, term, em = 1e8, 60, 12
-    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    inc = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0,
+                          calculation_methods=PATTERNS), basis)
     assert inc.csm_basis == "projected_runoff"
 
     mp0 = ModelPoints(issue_age=np.array([40]), premium=np.array([0.0]),
                       term_months=np.array([60]), account_value=np.array([av0]),
-                      mp_id=np.array(["X"]))
+                      mp_id=np.array(["X"]), calculation_methods=PATTERNS)
     state = fcf.InforceState(
         mp_id=np.array(["X"]), elapsed_months=np.array([em]),
         count=np.array([1.0]), prior_csm=np.array([inc.csm_path[0, 0]]),
@@ -893,9 +941,11 @@ def test_vfa_project_exposes_guarantee_excess_and_expense_pv():
     basis = _basis(investment_return=0.0, fund_fee=0.0)
     av0, gmdb, term = 1000.0, 1200.0, 60
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
-                            minimum_death_benefit=gmdb)
+                            minimum_death_benefit=gmdb,
+                            calculation_methods=PATTERNS)
     p = _vfa_project(mp, basis)
-    base = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0),
+    base = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0,
+                           calculation_methods=PATTERNS),
                            basis)
     floored = fcf.vfa.measure(mp, basis)
     assert np.isclose(p.guarantee_excess_pv[0, 0],
@@ -923,7 +973,8 @@ def test_vfa_fee_excludes_midmonth_exits_hand_calc():
     basis = make_death_basis(mortality_q=0.0, lapse_q=LAPSE, discount_annual=0.03,
                              ra_confidence=0.75, mortality_cv=0.10,
                              investment_return=r, fund_fee=f)
-    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0,
+                        calculation_methods=PATTERNS), basis)
 
     r_m = (1 + r) ** (1 / 12) - 1
     f_m = (1 + f) ** (1 / 12) - 1
@@ -951,7 +1002,8 @@ def test_vfa_maturity_survivor_keeps_last_month_fee():
     basis = make_death_basis(mortality_q=0.0, lapse_q=0.0, discount_annual=0.03,
                              ra_confidence=0.75, mortality_cv=0.10,
                              investment_return=r, fund_fee=f)
-    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0), basis)
+    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0,
+                        calculation_methods=PATTERNS), basis)
 
     r_m = (1 + r) ** (1 / 12) - 1
     f_m = (1 + f) ** (1 / 12) - 1
@@ -984,7 +1036,8 @@ def test_vfa_fee_fix_leaves_bel_ra_csm_unchanged():
                              expense_items=(ExpenseItem("maintenance", "gamma_fixed",
                                                         100_000.0),))
     basis = replace(basis, expense_cv=0.10, settlement_pattern=np.array([0.5, 0.3, 0.2]))
-    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 120, account_value=1e8), basis)
+    m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 120, account_value=1e8,
+                        calculation_methods=PATTERNS), basis)
     assert m.ra[0] > 0.0 and np.asarray(m.lic).sum() > 0.0    # the assertions bite
     assert np.isclose(m.bel[0], -10866232.448249847)      # fee never enters BEL
     assert np.isclose(m.ra[0], 42126.06353465136)         # ... nor RA
@@ -1013,7 +1066,8 @@ def test_vfa_credit_tvog_maturity_carries_term_weight():
     basis = make_death_basis(mortality_q=0.001, lapse_q=0.01, discount_annual=0.03,
                              ra_confidence=0.75, mortality_cv=0.10, expense_cv=0.10,
                              investment_return=r, fund_fee=f)
-    mp = ModelPoints.single(40, 0.0, term, account_value=av0, minimum_crediting_rate=g)
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0, minimum_crediting_rate=g,
+                            calculation_methods=PATTERNS)
     rng = np.random.default_rng(3)
     r_m = (1 + r) ** (1 / 12) - 1
     scen = r_m + 0.02 * rng.standard_normal((4000, term))
@@ -1074,7 +1128,8 @@ def test_vfa_trace_diff_renders_assumption_and_headline():
     b1 = _basis()
     b2 = dataclasses.replace(b1, investment_return=0.02)
     mp = ModelPoints.single(40, 0.0, 120, account_value=1e8,
-                            minimum_death_benefit=1.05e8)
+                            minimum_death_benefit=1.05e8,
+                            calculation_methods=PATTERNS)
     buf = io.StringIO()
     fcf.vfa.trace_diff(0, mp, b1, b2, file=buf)
     t = buf.getvalue()
@@ -1112,10 +1167,12 @@ def test_vfa_measure_stream_matches_in_memory(tmp_path):
                         "minimum_death_benefit": [1.1e8, 0.0]})
     pp, od = tmp_path / "vpol.parquet", tmp_path / "out"
     pol.write_parquet(pp)
-    n = fcf.vfa.measure_stream(pp, od, basis, chunk_size=1)
+    n = fcf.vfa.measure_stream(pp, od, basis, chunk_size=1,
+                               calculation_methods=PATTERNS)
     assert n == 2
     parts = pl.concat([pl.read_parquet(p) for p in sorted(od.glob("part-*.parquet"))])
     assert parts.height == 2                       # no row dropped on write
     assert parts["id"].n_unique() == 2             # no id duplicated
-    ref = fcf.vfa.measure(fcf.read_vfa_model_points(pp), basis)
+    ref = fcf.vfa.measure(
+        fcf.read_vfa_model_points(pp, calculation_methods=PATTERNS), basis)
     assert np.allclose(sorted(parts["csm"].to_list()), sorted(ref.csm.tolist()))

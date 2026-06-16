@@ -10,7 +10,7 @@ covers). A scalable sum, not a group remeasurement.
 import numpy as np
 
 import fastcashflow as fcf
-from fastcashflow import Basis, ModelPoints, CoverageRate
+from fastcashflow import Basis, CalculationMethod, ModelPoints, CoverageRate
 
 
 def _flat_basis(discount=0.05, investment_return=0.0):
@@ -30,7 +30,8 @@ def _book(n=7, *, account_value=False):
         issue_age=np.full(n, 40),
         premium=premium,
         term_months=rng_terms,
-        benefits={0: np.full(n, 1e4)})
+        benefits={"DEATH": np.full(n, 1e4)},
+        calculation_methods={"DEATH": CalculationMethod.DEATH})
     if account_value:
         kw["account_value"] = np.full(n, 1e6)
     return ModelPoints(**kw)

@@ -77,7 +77,7 @@ basis = fcf.Basis(
 # one policy -- age 40, 100M death benefit, 70k monthly premium, 10-year term
 mp = fcf.ModelPoints.single(
     issue_age           = 40,                                      # age at inception
-    benefits            = {0: 100_000_000},                        # 100M on coverage 0 (DEATH)
+    benefits            = {"DEATH": 100_000_000},                  # 100M DEATH benefit
     premium             = 70_000,                                  # monthly premium
     term_months         = 120,                                     # 10-year term (in months)
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},  # coverage code -> method

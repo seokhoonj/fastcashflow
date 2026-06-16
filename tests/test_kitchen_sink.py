@@ -120,7 +120,7 @@ _ROWS = [
     ("DEATH_A",   40, 100_000_000., 50_000, 240,         0.,          0., 240, 5_000_000.,         0., {"DEATH": CM.DEATH}),
     ("DIAG_A",    45,  30_000_000., 28_000, 240,         0.,          0., 240,         0.,         0., {"CANCER_DIAGNOSIS": CM.DIAGNOSIS}),
     ("MORB_A",    45,   1_000_000., 12_000, 240,         0.,          0., 240,         0.,         0., {"CANCER_INPATIENT": CM.MORBIDITY}),
-    ("ANN_A",     60,           0.,     0., 240,         0.,          0., 240,         0., 1_000_000., {}),
+    ("ANN_A",     60,           0.,     0., 240,         0.,          0., 240,         0., 1_000_000., {"DEATH": CM.DEATH}),
     ("WAIVER_A",  40, 100_000_000., 45_000, 240,         0.,          0., 240,         0.,         0., {"DEATH": CM.DEATH}),
     ("REINCID_A", 40,     100_000.,     0.,   4,         0.,  1_000_000.,   4,         0.,         0., {"DEATH": CM.DEATH}),
     ("DI_A",      45,           0., 30_000, 120, 1_000_000.,          0., 120,         0.,         0., {"DEATH": CM.DEATH}),
@@ -137,9 +137,14 @@ _METHODS = {"DEATH": CM.DEATH,
 
 def _standalone_mp(spec):
     p, age, ben, prem, term, di, db, bdy, mat, ann, methods = spec
+    # Each segment basis registers exactly one rate-driven coverage at index 0;
+    # build the CSR directly (coverage_codes stays None -> positional align) so
+    # the single benefit attaches to that lone coverage regardless of its code.
     kw = dict(
         issue_age                = np.array([age], dtype=np.int64),
-        benefits                 = {0: np.array([ben])},
+        coverage_index           = np.array([0], dtype=np.int64),
+        coverage_amount          = np.array([ben]),
+        coverage_offset          = np.array([0, 1], dtype=np.int64),
         premium                  = np.array([float(prem)]),
         term_months              = np.array([term], dtype=np.int64),
         disability_income        = np.array([di]),
@@ -157,9 +162,15 @@ def _standalone_mp(spec):
 
 def _basket_mp():
     col = lambda i: [r[i] for r in _ROWS]
+    n = len(_ROWS)
+    # Per-segment alignment: every row's segment basis registers one coverage at
+    # index 0, so the CSR is one row per model point pointing at index 0 with its
+    # benefit amount (coverage_codes stays None -> positional align per segment).
     return fcf.ModelPoints(
         issue_age                = np.array(col(1), dtype=np.int64),
-        benefits                 = {0: np.array(col(2))},
+        coverage_index           = np.zeros(n, dtype=np.int64),
+        coverage_amount          = np.array(col(2)),
+        coverage_offset          = np.arange(n + 1, dtype=np.int64),
         premium                  = np.array([float(x) for x in col(3)]),
         term_months              = np.array(col(4), dtype=np.int64),
         product                  = np.array(col(0)),

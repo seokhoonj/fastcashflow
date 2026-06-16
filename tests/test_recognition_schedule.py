@@ -42,7 +42,7 @@ def _book(*, n=3, elapsed=24, period=12, premium=600.0):
     """A profitable in-force GMM book (csm_closing > 0), prior_csm seeded from
     the inception CSM trajectory so the carry is alive."""
     basis = _basis()
-    unit = ModelPoints.single(40, premium, 240, benefits={0: 100_000.0},
+    unit = ModelPoints.single(40, premium, 240, benefits={"DEATH": 100_000.0},
                               calculation_methods=PATTERNS)
     m = fcf.gmm.measure(unit, basis, full=True)
     surv = m.cashflows.inforce[0]
@@ -54,7 +54,7 @@ def _book(*, n=3, elapsed=24, period=12, premium=600.0):
     rep = lambda v: np.full(n, v)
     mp = ModelPoints(
         issue_age=rep(40).astype(np.int64), premium=rep(premium),
-        term_months=rep(240).astype(np.int64), benefits={0: rep(100_000.0)},
+        term_months=rep(240).astype(np.int64), benefits={"DEATH": rep(100_000.0)},
         count=count, elapsed_months=rep(elapsed).astype(np.int64), mp_id=ids,
         calculation_methods=PATTERNS)
     state = InforceState(

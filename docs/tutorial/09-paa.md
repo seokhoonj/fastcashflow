@@ -186,12 +186,13 @@ basis = fcf.Basis(
 
 # 모델 포인트 -- 4개월 단기 보장, 단일보험료 120만 일시납
 model_points = fcf.ModelPoints.single(
-    issue_age           = 40,                # 가입연령 40세
-    sex                 = 0,                 # 성별 (0=남, 1=여)
-    benefits            = {0: 100_000_000},  # 0번 보장 (= DEATH) 의 보험금 1억
-    premium             = 1_200_000,         # 일시납 보험료 120만
-    term_months         = 4,                 # 보험기간 4개월
-    premium_term_months = 1,                 # 납입기간 1개월 = 일시납 (한 번 납입)
+    issue_age           = 40,                      # 가입연령 40세
+    sex                 = 0,                       # 성별 (0=남, 1=여)
+    benefits            = {"DEATH": 100_000_000},  # DEATH 보장의 보험금 1억
+    premium             = 1_200_000,               # 일시납 보험료 120만
+    term_months         = 4,                       # 보험기간 4개월
+    premium_term_months = 1,                       # 납입기간 1개월 = 일시납 (한 번 납입)
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
 # 측정 -- PAA 경로

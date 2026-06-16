@@ -31,7 +31,7 @@ def _two_state(factor):
 def _seated_mp(state, term=12, benefit=100_000.0):
     return ModelPoints(
         issue_age=np.array([50], dtype=np.int64),
-        benefits={0: np.array([benefit])},
+        benefits={"DEATH": np.array([benefit])},
         premium=np.array([0.0]),
         term_months=np.array([term], dtype=np.int64),
         state=np.array([state], dtype=np.int64),

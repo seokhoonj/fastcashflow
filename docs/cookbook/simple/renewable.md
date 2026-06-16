@@ -76,7 +76,7 @@ basis = fcf.Basis(
 def renewable(boundary):
     return fcf.ModelPoints(
         issue_age          = np.array([40], dtype=np.int64),   # 40세 가입
-        benefits           = {0: np.array([30_000_000.0])},    # 진단금 3,000만
+        benefits           = {"CANCER": np.array([30_000_000.0])},  # 진단금 3,000만
         premium            = np.array([25_000.0]),             # 월 2.5만
         term_months        = np.array([480], dtype=np.int64),  # 보장 80세 (40년)
         contract_boundary_months=(None if boundary is None
@@ -115,7 +115,7 @@ next renewal (120)  BEL   -1,017,896  CSM     914,693
 ```python
 health = fcf.ModelPoints(
     issue_age          = np.array([40], dtype=np.int64),
-    benefits           = {0: np.array([1_000_000.0])},
+    benefits           = {"CANCER": np.array([1_000_000.0])},
     premium            = np.array([12_000.0]),
     term_months        = np.array([600], dtype=np.int64),       # 명목 보장기간
     contract_boundary_months = np.array([12], dtype=np.int64),  # 1년 갱신 = 경계

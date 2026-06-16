@@ -134,7 +134,9 @@ def test_on_track_settle_equals_the_monthly_carry():
     """x ~ 0 with on-track experience, and the single period-end release
     telescopes to vfa.measure_inforce's monthly _csm_kernel carry exactly."""
     basis = _basis()
-    mp, state = _book(basis, ModelPoints.single(40, 0.0, 24, account_value=1e6),
+    mp, state = _book(basis, ModelPoints.single(
+                          40, 0.0, 24, account_value=1e6,
+                          calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}),
                       em_open=6, period=3)
     mv = fcf.vfa.settle(mp, state, basis, period_months=3)
     money = float(state.prior_account_value[0])
@@ -149,7 +151,8 @@ def test_pure_av_move_lands_entirely_in_fv_share():
     """No guarantee, no floor, on-track count, observed AV +10%: the
     paragraph-45(c) line is exactly zero and 45(b) carries all of x."""
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     m0 = fcf.vfa.measure(mp0, basis)
     growth = _growth(basis, mp0)
     av_exp = 1e6 * growth ** 9
@@ -171,7 +174,8 @@ def test_crediting_floor_cost_lands_in_future_service():
     materially non-zero."""
     basis = _basis(investment_return=0.03)
     mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
-                             minimum_crediting_rate=0.05)
+                             minimum_crediting_rate=0.05,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     growth = _growth(basis, mp0)
     av_exp = 1e6 * growth[0] ** 9
     mp, state = _book(basis, mp0, em_open=6, period=3, av_close=av_exp * 1.10)
@@ -189,7 +193,8 @@ def test_itm_guarantee_pushes_the_csm_down():
     line falls too."""
     basis = _basis()
     mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
-                             minimum_death_benefit=2e6)
+                             minimum_death_benefit=2e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     growth = _growth(basis, mp0)
     av_exp = 1e6 * growth[0] ** 9
     mp, state = _book(basis, mp0, em_open=6, period=3, av_close=av_exp * 0.80,
@@ -231,7 +236,9 @@ def test_lc_algebra_sign_grid(accreted, x, lc_open, csm_after, lc_reversed,
 
 def test_rejects_a_state_carrying_both_csm_and_loss_component():
     basis = _basis()
-    mp, state = _book(basis, ModelPoints.single(40, 0.0, 24, account_value=1e6),
+    mp, state = _book(basis, ModelPoints.single(
+                          40, 0.0, 24, account_value=1e6,
+                          calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}),
                       em_open=6, period=3,
                       prior_csm=np.array([10.0]), lc_open=np.array([5.0]))
     with pytest.raises(ValueError, match=r"both positive at row\(s\) \[0\]"):
@@ -246,7 +253,8 @@ def test_opening_lines_match_measure_inforce_at_the_opening_date():
     of the opening date -- zero drift between the two entry points."""
     basis = _basis()
     em_open, period = 6, 3
-    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=em_open, period=period)
     mv = fcf.vfa.settle(mp, state, basis, period_months=period)
 
@@ -271,7 +279,9 @@ def test_zero_fee_zero_expense_book_has_zero_bel_lines():
     the discount equals the growth, so the BEL is identically zero -- every
     BEL line of the movement vanishes while the CSM still rolls."""
     basis = _basis(fund_fee=0.0, expense=0.0)
-    mp, state = _book(basis, ModelPoints.single(40, 0.0, 24, account_value=1e6),
+    mp, state = _book(basis, ModelPoints.single(
+                          40, 0.0, 24, account_value=1e6,
+                          calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}),
                       em_open=6, period=3, prior_csm=np.array([1_000.0]))
     mv = fcf.vfa.settle(mp, state, basis, period_months=3)
     for line in (mv.bel_opening, mv.bel_interest, mv.bel_release,
@@ -289,7 +299,8 @@ def test_interest_line_is_the_rate_times_the_expected_trajectory():
     recomputation from _vfa_project."""
     basis = _basis()
     em_open, period = 6, 3
-    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=em_open, period=period)
     mv = fcf.vfa.settle(mp, state, basis, period_months=period)
 
@@ -309,7 +320,8 @@ def test_final_settlement_releases_the_whole_csm():
     """A contract whose boundary falls inside the period closes at zero:
     no remaining units, the post-adjustment CSM releases in full."""
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=22, period=2,
                       av_close=np.array([0.0]), count_close=np.array([0.0]),
                       prior_csm=np.array([5_000.0]))
@@ -326,7 +338,8 @@ def test_final_settlement_releases_the_whole_csm():
 
 def test_final_settlement_requires_a_zero_closing_snapshot():
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=22, period=2,
                       av_close=np.array([0.0]),
                       count_close=np.array([0.5]))   # matured but count > 0
@@ -342,8 +355,9 @@ def test_mixed_book_straddling_one_boundary():
     mp0 = ModelPoints(
         issue_age=np.array([40, 40]), premium=np.zeros(2),
         term_months=np.array([24, 120]),
-        benefits={0: np.zeros(2)},
-        account_value=np.array([1e6, 1e6]))
+        benefits={"DEATH": np.zeros(2)},
+        account_value=np.array([1e6, 1e6]),
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=22, period=2)
     # the short row matured inside the period: zero its closing snapshot
     count = state.count.copy(); count[0] = 0.0
@@ -367,7 +381,8 @@ def test_dead_cohort_mid_life_fully_derecognises():
     """count = 0 on a live column (mass lapse): the observed factor is zero,
     no future units remain, the whole post-adjustment CSM releases."""
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 60, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 60, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=6, period=3,
                       av_close=np.array([0.0]), count_close=np.array([0.0]))
     mv = fcf.vfa.settle(mp, state, basis, period_months=3)
@@ -385,7 +400,9 @@ def test_onerous_book_loss_component_amortises_via_the_50a_channel():
     amortises through the paragraph-50(a) incurred-service channel (the loss
     component is no longer static between remeasurements -- the prior v1 cut)."""
     basis = _basis()
-    mp, state = _book(basis, ModelPoints.single(40, 0.0, 24, account_value=1e6),
+    mp, state = _book(basis, ModelPoints.single(
+                          40, 0.0, 24, account_value=1e6,
+                          calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}),
                       em_open=6, period=3,
                       prior_csm=np.array([0.0]), lc_open=np.array([1_000.0]))
     mv = fcf.vfa.settle(mp, state, basis, period_months=3)
@@ -412,8 +429,9 @@ def test_heterogeneous_elapsed_months_in_one_call():
     mp0 = ModelPoints(
         issue_age=np.array([40, 45]), premium=np.zeros(2),
         term_months=np.array([24, 36]),
-        benefits={0: np.zeros(2)},
-        account_value=np.array([1e6, 2e6]))
+        benefits={"DEATH": np.zeros(2)},
+        account_value=np.array([1e6, 2e6]),
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     m0 = fcf.vfa.measure(mp0, basis)
     inforce = m0.cashflows.inforce
     rows = np.arange(2)
@@ -451,7 +469,8 @@ def test_heterogeneous_elapsed_months_in_one_call():
 # ---------------------------------------------------------------------------
 def test_guards():
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=6, period=3)
 
     # settlement_pattern is now accepted -- it carries the liability for
@@ -494,7 +513,9 @@ def test_guards():
 # ---------------------------------------------------------------------------
 def test_reconcile_returns_a_footing_settlement_table():
     basis = _basis()
-    mp, state = _book(basis, ModelPoints.single(40, 0.0, 24, account_value=1e6),
+    mp, state = _book(basis, ModelPoints.single(
+                          40, 0.0, 24, account_value=1e6,
+                          calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}),
                       em_open=6, period=3)
     mv = fcf.vfa.settle(mp, state, basis, period_months=3)
     table = fcf.reconcile([mv])[0]
@@ -523,7 +544,9 @@ def test_closing_measurement_is_settlement_grade():
     which a headline-only result does not carry); a carry-only measurement
     stays rejected everywhere (regression)."""
     basis = _basis()
-    mp, state = _book(basis, ModelPoints.single(40, 0.0, 24, account_value=1e6),
+    mp, state = _book(basis, ModelPoints.single(
+                          40, 0.0, 24, account_value=1e6,
+                          calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}),
                       em_open=6, period=3)
     mv = fcf.vfa.settle(mp, state, basis, period_months=3)
     closing = mv.closing_measurement()
@@ -548,7 +571,8 @@ def test_two_six_month_settles_chain_to_one_twelve_month():
     figures, settle 6 more -- with on-track experience the closing CSM
     equals one 12-month settle (the telescoping identity again)."""
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     m0 = fcf.vfa.measure(mp0, basis)
     growth = _growth(basis, mp0)
     inforce = m0.cashflows.inforce[0]
@@ -637,7 +661,8 @@ def test_coverage_unit_lines_are_recorded():
     units are the unit in-force tails themselves (count = 1 book), pinned
     independently of the release fraction."""
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     em_open, period = 6, 12
     em_close = em_open + period
     mp, state = _book(basis, mp0, em_open=em_open, period=period)
@@ -664,7 +689,8 @@ def test_final_settlement_has_zero_future_units():
     """A boundary inside the period releases everything: the future-unit
     line is zero and the provided line carries the whole remaining tail."""
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 12, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 12, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=6, period=12, av_close=0.0,
                       count_close=np.array([0.0]))
     mv = fcf.vfa.settle(mp, state, basis, period_months=12)
@@ -679,7 +705,8 @@ def test_closing_inputs_seeds_the_next_period():
     closing fund value; advanced to the next on-track snapshot, 6m x 2 ==
     12m (the GMM recipe with the account value advanced too)."""
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     growth = _growth(basis, mp0)
     inforce = fcf.vfa.measure(mp0, basis).cashflows.inforce[0]
 
@@ -718,7 +745,8 @@ def test_closing_inputs_seeds_the_next_period():
 
 def test_closing_inputs_needs_stamped_model_points():
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=6, period=6)
     mv = fcf.vfa.settle(mp, state, basis, period_months=6)
     bare = replace(mv, model_points=None)
@@ -729,7 +757,8 @@ def test_closing_inputs_needs_stamped_model_points():
 def test_write_measurement_writes_the_movement_with_markers(tmp_path):
     import polars as pl
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=6, period=12)
     mv = fcf.vfa.settle(mp, state, basis, period_months=12)
     out = tmp_path / "settle.parquet"
@@ -750,7 +779,8 @@ def test_closing_measurement_write_carries_the_marker(tmp_path):
     (byte-compatible with new-business files)."""
     import polars as pl
     basis = _basis()
-    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6)
+    mp0 = ModelPoints.single(40, 0.0, 36, account_value=1e6,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=6, period=12)
     mv = fcf.vfa.settle(mp, state, basis, period_months=12)
     closing_path = tmp_path / "close.parquet"
@@ -770,7 +800,8 @@ def test_vfa_zero_count_fully_derecognises_releases_full_csm():
     0.0 fallback stranded the derecognised group's CSM. Closing CSM == 0."""
     basis = _basis()
     mp0 = ModelPoints.single(40, 100.0, 24, account_value=1e6,
-                             minimum_crediting_rate=0.08)
+                             minimum_crediting_rate=0.08,
+                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
     mp, state = _book(basis, mp0, em_open=6, period=6,
                       count_close=np.array([0.0]), av_close=np.array([0.0]),
                       prior_csm=np.array([50_000.0]))

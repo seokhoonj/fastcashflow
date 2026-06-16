@@ -25,13 +25,13 @@ def _gmm_recon():
         settlement_pattern=np.array([0.6, 0.4]))
     surv = fcf.gmm.measure(
         ModelPoints(issue_age=np.array([40]), premium=np.array([100.0]),
-                    term_months=np.array([36]), benefits={0: np.array([1e6])},
+                    term_months=np.array([36]), benefits={"DEATH": np.array([1e6])},
                     count=np.array([1.0]), calculation_methods=PATTERNS),
         basis, full=True).cashflows.inforce[0]
     eo, ec, scale = 12, 24, 1000.0
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([36]), benefits={0: np.array([1e6])},
+        term_months=np.array([36]), benefits={"DEATH": np.array([1e6])},
         count=np.array([scale * surv[ec]]), elapsed_months=np.array([ec]),
         mp_id=np.array(["P0"]), product=np.array(["A"]),
         calculation_methods=PATTERNS)

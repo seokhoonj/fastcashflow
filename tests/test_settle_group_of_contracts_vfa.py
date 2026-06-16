@@ -30,7 +30,8 @@ from dataclasses import replace
 
 import fastcashflow as fcf
 from fastcashflow import (
-    Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints)
+    Basis, CalculationMethod, CoverageRate, ExpenseItem, InforceState,
+    ModelPoints)
 from fastcashflow.basis import BasisRouter
 
 import fastcashflow.portfolio as _pf
@@ -84,7 +85,8 @@ def vfa_book(*, em_open=6, period=6, mdb=(0.0, 2.0e6),
         account_value=np.full(n, 1.0e6),
         product=np.full(n, "VA_A"), channel=np.full(n, "GA"),
         issue_date=np.array(["2026-02-01"] * n, dtype="datetime64[D]"),
-        benefits={0: np.zeros(n)}, count=np.ones(n))
+        benefits={"DEATH": np.zeros(n)}, count=np.ones(n),
+        calculation_methods={"DEATH": CalculationMethod.DEATH})
     m0 = fcf.vfa.measure(mp0, VFA_BASIS)
     inforce = m0.cashflows.inforce
     rows = np.arange(n)

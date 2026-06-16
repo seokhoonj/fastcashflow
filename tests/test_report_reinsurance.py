@@ -32,7 +32,7 @@ def _basis():
 
 def _measurement(term=60, premium=80_000.0, death_benefit=1e8, cession=0.4):
     return fcf.reinsurance.measure(
-        ModelPoints.single(40, premium, term, benefits={0: death_benefit},
+        ModelPoints.single(40, premium, term, benefits={"DEATH": death_benefit},
                            calculation_methods=PATTERNS),
         _basis(), treaty=fcf.reinsurance.QuotaShare(cession=cession),
     )

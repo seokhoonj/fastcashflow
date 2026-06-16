@@ -30,7 +30,7 @@ def _portfolio(n: int = 60) -> ModelPoints:
     rng = np.random.default_rng(7)
     return ModelPoints(
         issue_age=rng.integers(30, 55, n),
-        benefits={0: rng.integers(20, 90, n) * 1_000_000},
+        benefits={"DEATH": rng.integers(20, 90, n) * 1_000_000},
         premium=rng.integers(8, 20, n) * 10_000,
         term_months=np.full(n, 120),
         calculation_methods=PATTERNS,
@@ -41,7 +41,7 @@ def _two_contracts() -> ModelPoints:
     """Two term-life model points -- the first profitable, the second onerous."""
     return ModelPoints(
         issue_age=np.array([40, 40]),
-        benefits={0: np.array([1e8, 1e8])},
+        benefits={"DEATH": np.array([1e8, 1e8])},
         premium=np.array([300_000.0, 60_000.0]),
         term_months=np.array([120, 120]),
         calculation_methods=PATTERNS,

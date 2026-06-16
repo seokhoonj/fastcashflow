@@ -63,7 +63,7 @@ def _book(*, premium, benefit, em_close=6, count=1.0, prior_count=1.0,
         issue_age=rep(40).astype(np.int64), premium=rep(premium),
         term_months=rep(term).astype(np.int64),
         premium_term_months=rep(1).astype(np.int64),
-        benefits={0: rep(benefit)}, count=rep(float(count)),
+        benefits={"DEATH": rep(benefit)}, count=rep(float(count)),
         elapsed_months=rep(em_close).astype(np.int64), mp_id=ids,
         product=np.full(n, "ACC"), calculation_methods=PATTERNS,
     )
@@ -79,7 +79,7 @@ def _unit_inforce(basis, *, premium, benefit, term=12):
     unit = ModelPoints(
         issue_age=np.array([40]), premium=np.array([premium]),
         term_months=np.array([term]), premium_term_months=np.array([1]),
-        benefits={0: np.array([benefit])}, count=np.array([1.0]),
+        benefits={"DEATH": np.array([benefit])}, count=np.array([1.0]),
         calculation_methods=PATTERNS,
     )
     return fcf.paa.measure(unit, basis, full=True).cashflows.inforce[0]
@@ -213,7 +213,7 @@ def test_inception_anchor_matches_measure_paa():
     unit = ModelPoints(
         issue_age=np.array([40]), premium=np.array([60.0]),
         term_months=np.array([12]), premium_term_months=np.array([1]),
-        benefits={0: np.array([6000.0])}, count=np.array([1.0]),
+        benefits={"DEATH": np.array([6000.0])}, count=np.array([1.0]),
         calculation_methods=PATTERNS,
     )
     inception = fcf.paa.measure(unit, basis)
@@ -249,7 +249,7 @@ def test_lic_block_hand_calc_settlement_pattern():
     unit = ModelPoints(
         issue_age=np.array([40]), premium=np.array([60.0]),
         term_months=np.array([12]), premium_term_months=np.array([1]),
-        benefits={0: np.array([6000.0])}, count=np.array([1.0]),
+        benefits={"DEATH": np.array([6000.0])}, count=np.array([1.0]),
         calculation_methods=PATTERNS)
     cf = fcf.paa.measure(unit, basis, full=True).cashflows
     lic_d = _settlement_lic_discounted(cf.claim_cf, pattern, basis.discount_monthly)

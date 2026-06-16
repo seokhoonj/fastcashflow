@@ -9,7 +9,7 @@ by hand against a small two-year contract.
 """
 import numpy as np
 
-from fastcashflow import Basis, ExpenseItem, ModelPoints, CoverageRate
+from fastcashflow import Basis, CalculationMethod, ExpenseItem, ModelPoints, CoverageRate
 from fastcashflow.gmm import measure
 from fastcashflow.curves import discount_monthly_curve
 
@@ -82,7 +82,8 @@ def test_bel_with_curve_discount_matches_hand_calc():
         ),
         discount_annual=np.array([0.03, 0.05]),    # 3% year 0, 5% year 1
     )
-    mp = ModelPoints.single(issue_age=40, benefits={0: 0.0},
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 0.0},
+                            calculation_methods={"DEATH": CalculationMethod.DEATH},
                             premium=0.0, term_months=24, count=1)
     m = measure(mp, basis)
 
@@ -108,7 +109,8 @@ def test_bel_value_matches_measure_with_curve_discount():
         ),
         discount_annual=np.array([0.03, 0.05, 0.06]),
     )
-    mp = ModelPoints.single(issue_age=40, benefits={0: 100_000.0},
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 100_000.0},
+                            calculation_methods={"DEATH": CalculationMethod.DEATH},
                             premium=1_000.0, term_months=36, count=1)
     m = measure(mp, basis).bel_path[0, 0]
     v = measure(mp, basis, full=False).bel[0]
@@ -126,7 +128,8 @@ def test_csm_accretes_at_curve_rate():
         ),
         discount_annual=np.array([0.03, 0.10]),   # step UP at year 1
     )
-    mp = ModelPoints.single(issue_age=40, benefits={0: 0.0},
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 0.0},
+                            calculation_methods={"DEATH": CalculationMethod.DEATH},
                             premium=5_000.0, term_months=24, count=1)
     m = measure(mp, basis)
     csm_open = m.csm_path[0, 0]

@@ -31,7 +31,7 @@ def _basis(**overrides):
 
 def test_paa_revenue_equals_total_premium():
     """Insurance revenue recognised over the contract equals total premium."""
-    res = fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS), _basis())
+    res = fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), _basis())
     assert np.isclose(res.revenue.sum(), res.cashflows.premium_cf.sum())
 
 
@@ -40,7 +40,7 @@ def test_paa_lrc_hand_calc():
     basis = _basis()
     single, term = 1_000_000.0, 12
     res = fcf.paa.measure(
-        ModelPoints.single(40, single, term, benefits={0: 1e8}, premium_term_months=1, calculation_methods=PATTERNS), basis
+        ModelPoints.single(40, single, term, benefits={"DEATH": 1e8}, premium_term_months=1, calculation_methods=PATTERNS), basis
     )
 
     # straight-line earning: the premium spread evenly over the coverage period
@@ -55,7 +55,7 @@ def test_paa_lrc_hand_calc():
 
 def test_paa_lrc_builds_and_releases():
     """The LRC builds from zero and releases back to zero over the term."""
-    res = fcf.paa.measure(ModelPoints.single(35, 40_000.0, 24, benefits={0: 5e7}, calculation_methods=PATTERNS), _basis())
+    res = fcf.paa.measure(ModelPoints.single(35, 40_000.0, 24, benefits={"DEATH": 5e7}, calculation_methods=PATTERNS), _basis())
     assert np.isclose(res.lrc_path[0, 0], 0.0)        # builds from zero
     assert np.isclose(res.lrc_path[0, -1], 0.0)       # releases back to zero
     assert np.all(res.lrc_path[0] >= -1e-6)           # a liability, never negative
@@ -68,7 +68,7 @@ def test_paa_service_result_is_the_underwriting_profit():
         ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
         ExpenseItem("maintenance",  "gamma_fixed",  12_000.0),
     ))
-    res = fcf.paa.measure(ModelPoints.single(45, 60_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS), basis)
+    res = fcf.paa.measure(ModelPoints.single(45, 60_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), basis)
     cf = res.cashflows
     profit = (cf.premium_cf.sum() - cf.claim_cf.sum()
               - cf.morbidity_cf.sum() - cf.expense_cf.sum())
@@ -78,10 +78,10 @@ def test_paa_service_result_is_the_underwriting_profit():
 def test_paa_onerous_contract_carries_a_loss():
     """A contract whose claims exceed its premiums is flagged onerous."""
     profitable = fcf.paa.measure(
-        ModelPoints.single(40, 500_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS), _basis()
+        ModelPoints.single(40, 500_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), _basis()
     )
     onerous = fcf.paa.measure(
-        ModelPoints.single(40, 1_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS), _basis()
+        ModelPoints.single(40, 1_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), _basis()
     )
     assert np.allclose(profitable.loss_component, 0.0)
     assert onerous.loss_component[0] > 0.0
@@ -92,7 +92,7 @@ def test_paa_onerous_test_honours_cost_of_capital_ra():
     ignoring ra_method='cost_of_capital'. It now routes through the shared RA
     helper, so the cost-of-capital basis gives a different (non-zero) RA and
     hence a different loss component than the confidence-level basis."""
-    mp = ModelPoints.single(40, 1_000.0, 24, benefits={0: 1e8},
+    mp = ModelPoints.single(40, 1_000.0, 24, benefits={"DEATH": 1e8},
                             calculation_methods=PATTERNS)
     cl = fcf.paa.measure(mp, _basis(ra_method="confidence_level"))
     coc = fcf.paa.measure(mp, _basis(
@@ -108,7 +108,7 @@ def test_paa_revenue_basis_claims():
     basis = _basis(expense_items=(
         ExpenseItem("acquisition", "alpha_fixed", 500_000.0),
     ))
-    mps = ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS)
+    mps = ModelPoints.single(40, 50_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS)
     by_time = fcf.paa.measure(mps, basis, revenue_basis="time")
     by_claims = fcf.paa.measure(mps, basis, revenue_basis="claims")
 
@@ -124,7 +124,7 @@ def test_paa_revenue_basis_claims():
 def test_paa_rejects_unknown_revenue_basis():
     """An unrecognised revenue basis is an error."""
     with pytest.raises(ValueError, match="revenue_basis"):
-        fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={0: 1e8}, calculation_methods=PATTERNS),
+        fcf.paa.measure(ModelPoints.single(40, 50_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS),
                     _basis(), revenue_basis="weekly")
 
 
@@ -132,7 +132,7 @@ def test_paa_rejects_unknown_revenue_basis():
 # full=False headline contract (the chunked-portfolio building block) + guards
 # ---------------------------------------------------------------------------
 def _paa_mp():
-    return ModelPoints.single(40, 1_000_000.0, 12, benefits={0: 1e8},
+    return ModelPoints.single(40, 1_000_000.0, 12, benefits={"DEATH": 1e8},
                               calculation_methods=PATTERNS)
 
 
@@ -183,7 +183,7 @@ def test_paa_onerous_matches_gmm_with_settlement_discount():
     from dataclasses import replace
     basis = replace(_basis(mortality_q=0.02, discount_annual=0.06),
                     settlement_pattern=np.array([0.4, 0.3, 0.2, 0.1]))
-    mp = ModelPoints.single(40, 5_000.0, 24, benefits={0: 5e8},
+    mp = ModelPoints.single(40, 5_000.0, 24, benefits={"DEATH": 5e8},
                             calculation_methods=PATTERNS)
     gmm = fcf.gmm.measure(mp, basis)
     paa = fcf.paa.measure(mp, basis)
@@ -198,7 +198,7 @@ def test_paa_trace_diff_renders_assumption_and_headline():
 
     b1 = _basis()
     b2 = _basis(mortality_q=0.02)   # onerous claims -> loss_component moves
-    mp = ModelPoints.single(40, 10_000.0, 12, benefits={0: 1e6},
+    mp = ModelPoints.single(40, 10_000.0, 12, benefits={"DEATH": 1e6},
                             calculation_methods=PATTERNS)
     buf = io.StringIO()
     fcf.paa.trace_diff(0, mp, b1, b2, file=buf)
@@ -261,7 +261,7 @@ def test_paa_revenue_stops_at_the_contract_boundary():
     mp = ModelPoints(
         issue_age=np.array([40, 40]), premium=np.array([120.0, 120.0]),
         term_months=np.array([12, 12]), premium_term_months=np.array([1, 1]),
-        benefits={0: np.array([480.0, 480.0])}, count=np.array([1.0, 1.0]),
+        benefits={"DEATH": np.array([480.0, 480.0])}, count=np.array([1.0, 1.0]),
         contract_boundary_months=np.array([12, 6]),
         calculation_methods=PATTERNS)
     basis = _basis(mortality_q=0.0, lapse_q=0.0)

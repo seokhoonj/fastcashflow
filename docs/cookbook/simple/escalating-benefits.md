@@ -238,7 +238,7 @@ mp_ann = fcf.ModelPoints(
     term_months              = np.array([36]),                          # 3년 (연 3회 지급)
     annuity_payment          = np.array([100.0]),                       # 연금 연액 100
     annuity_frequency_months = np.array([12]),                          # 매년 지급
-    benefits                 = {0: np.array([0.0])},                    # 사망보험금 없음
+    benefits                 = {"ANN": np.array([0.0])},                # 사망보험금 없음
     calculation_methods      = {"ANN": fcf.CalculationMethod.ANNUITY},
 )
 

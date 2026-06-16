@@ -255,7 +255,7 @@ def test_account_book_gated_on_raw_consumers():
 def test_non_account_portfolio_has_no_account_sidecar():
     # A plain protection portfolio (no account coverage) gets account=None.
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 1_000_000.0}, premium=12_000.0,
+        issue_age=40, benefits={"DEATH": 1_000_000.0}, premium=12_000.0,
         term_months=60, calculation_methods={"DEATH": CalculationMethod.DEATH})
     basis = Basis(
         mortality_annual=0.005, lapse_annual=0.01, discount_annual=0.03,

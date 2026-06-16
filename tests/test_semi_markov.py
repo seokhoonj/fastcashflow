@@ -49,7 +49,7 @@ def _single_contract(term_months: int, *, death_benefit: float = 10_000_000.0,
                      reincidence_benefit: float = 5_000_000.0) -> fcf.ModelPoints:
     return fcf.ModelPoints(
         issue_age=np.array([40], dtype=np.int64),
-        benefits={0: np.array([death_benefit])},
+        benefits={"DEATH": np.array([death_benefit])},
         premium=np.array([0.0]),
         term_months=np.array([term_months], dtype=np.int64),
         disability_benefit=np.array([reincidence_benefit]),
@@ -140,7 +140,7 @@ def test_one_month_reincidence_active_via_seating():
     basis = _flat_assumptions(ci_reincidence_fn=ci_rein)
     mp = fcf.ModelPoints(
         issue_age=np.array([40], dtype=np.int64),
-        benefits={0: np.array([10_000_000.0])},
+        benefits={"DEATH": np.array([10_000_000.0])},
         premium=np.array([0.0]),
         term_months=np.array([1], dtype=np.int64),
         disability_benefit=np.array([5_000_000.0]),
@@ -164,7 +164,7 @@ def test_reincidence_rate_zero_in_exclusion_window():
 
     mp = fcf.ModelPoints(
         issue_age=np.array([40], dtype=np.int64),
-        benefits={0: np.array([10_000_000.0])},
+        benefits={"DEATH": np.array([10_000_000.0])},
         premium=np.array([0.0]),
         term_months=np.array([1], dtype=np.int64),
         disability_benefit=np.array([5_000_000.0]),
@@ -228,7 +228,7 @@ def test_measure_value_agree_mixed_portfolio():
     mp = fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
-        benefits={0: rng.integers(10, 80, n) * 1_000_000.0},
+        benefits={"DEATH": rng.integers(10, 80, n) * 1_000_000.0},
         premium=np.zeros(n),
         term_months=rng.integers(60, 180, n).astype(np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
@@ -250,7 +250,7 @@ def test_measure_value_agree_long_cohort():
     mp = fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
-        benefits={0: rng.integers(10, 80, n) * 1_000_000.0},
+        benefits={"DEATH": rng.integers(10, 80, n) * 1_000_000.0},
         premium=np.zeros(n),
         term_months=np.full(n, 120, dtype=np.int64),
         disability_benefit=rng.integers(5, 30, n) * 1_000_000.0,
@@ -478,7 +478,7 @@ def test_di_recovery_hand_calc_one_month_seated_on_disabled():
     )
     mp = fcf.ModelPoints(
         issue_age=np.array([45], dtype=np.int64),
-        benefits={0: np.array([0.0])},
+        benefits={"DEATH": np.array([0.0])},
         premium=np.array([0.0]),
         term_months=np.array([1], dtype=np.int64),
         disability_income=np.array([1_000_000.0]),
@@ -497,7 +497,7 @@ def test_di_recovery_higher_rate_drains_disabled_occupancy_faster():
     """
     mp = fcf.ModelPoints(
         issue_age=np.array([45], dtype=np.int64),
-        benefits={0: np.array([0.0])},
+        benefits={"DEATH": np.array([0.0])},
         premium=np.array([0.0]),
         term_months=np.array([24], dtype=np.int64),
         disability_income=np.array([1_000_000.0]),
@@ -548,7 +548,7 @@ def test_di_recovery_measure_value_agree_mixed_portfolio():
     mp = fcf.ModelPoints(
         issue_age=rng.integers(30, 55, n).astype(np.int64),
         sex=rng.integers(0, 2, n).astype(np.int64),
-        benefits={0: rng.integers(10, 80, n) * 1_000_000.0},
+        benefits={"DEATH": rng.integers(10, 80, n) * 1_000_000.0},
         premium=rng.integers(2, 10, n) * 10_000.0,
         term_months=rng.integers(60, 180, n).astype(np.int64),
         disability_income=rng.integers(3, 10, n) * 100_000.0,
@@ -702,7 +702,7 @@ def test_report_service_expense_includes_disability_cf():
     basis = _di_assumptions(sojourn_tracking_months=12, recovery_monthly=0.02)
     mp = fcf.ModelPoints(
         issue_age=np.array([45], dtype=np.int64),
-        benefits={0: np.array([0.0])}, premium=np.array([1000.0]),
+        benefits={"DEATH": np.array([0.0])}, premium=np.array([1000.0]),
         term_months=np.array([60], dtype=np.int64),
         disability_income=np.array([1_000_000.0]),
         calculation_methods=PATTERNS)            # seated active by default

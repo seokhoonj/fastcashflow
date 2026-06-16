@@ -91,7 +91,7 @@ basis = fcf.Basis(
 mp = fcf.ModelPoints.single(
     issue_age           = 40,                      # 가입연령 40세
     sex                 = 0,                       # 성별 (0=남, 1=여)
-    benefits            = {0: 12_000, 1: 20_000},  # 0 = 사망보험금 12,000, 1 = 암진단금 20,000
+    benefits            = {"DEATH": 12_000, "CANCER": 20_000},  # 사망보험금 12,000, 암진단금 20,000
     premium             = 100,                     # 월납 보험료 100
     term_months         = 2,                       # 보험기간 2개월
     calculation_methods = {
@@ -175,7 +175,7 @@ t=1 의 암진단 청구는 **미진단 풀** 0.9851 을 씁니다 — 단순히
 ```python
 mp = fcf.ModelPoints.single(
     issue_age           = 40,                                      # 가입연령 40세
-    benefits            = {0: 100_000_000, 1: 30_000_000},         # 사망 1억, 암진단 3,000만
+    benefits            = {"DEATH": 100_000_000, "CANCER": 30_000_000},  # 사망 1억, 암진단 3,000만
     premium             = 80_000,                                  # 월납 보험료 8만
     term_months         = 240,                                     # 보험기간 20년
     calculation_methods = {"DEATH":  fcf.CalculationMethod.DEATH,

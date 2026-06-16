@@ -57,7 +57,7 @@ def _gmm_book(basis, *, em_open=12, period=12, term=36):
     em_close = em_open + period
     unit = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([term]), benefits={0: np.array([1e6])},
+        term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), calculation_methods=CM,
     )
     surv = fcf.gmm.measure(unit, basis, full=True).cashflows.inforce[0]
@@ -70,7 +70,7 @@ def _gmm_book(basis, *, em_open=12, period=12, term=36):
     rep = lambda v: np.full(n, v)
     mp = ModelPoints(
         issue_age=rep(40).astype(np.int64), premium=rep(100.0),
-        term_months=rep(term).astype(np.int64), benefits={0: rep(1e6)},
+        term_months=rep(term).astype(np.int64), benefits={"DEATH": rep(1e6)},
         count=count_close, elapsed_months=rep(em_close).astype(np.int64),
         mp_id=ids, product=np.full(n, "A"), calculation_methods=CM,
     )
@@ -119,7 +119,7 @@ def _vfa_book(basis, *, em_open=6, period=12, term=36):
     av0 = np.array([1e6, 5e5, 2e6])
     mp0 = ModelPoints(
         issue_age=np.array([40, 45, 50], dtype=np.int64), premium=rep(0.0),
-        term_months=rep(term).astype(np.int64), benefits={0: rep(1e6)},
+        term_months=rep(term).astype(np.int64), benefits={"DEATH": rep(1e6)},
         count=rep(1.0), account_value=av0, mp_id=ids,
         calculation_methods=CM,
     )

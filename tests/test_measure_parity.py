@@ -53,7 +53,7 @@ def test_value_uses_coverage_rate_not_mortality_annual():
         coverages=(CoverageRate("DEATH", _flat(_annual(0.020))),),  # death > mort
     )
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 1_000_000.0},
+        issue_age=40, benefits={"DEATH": 1_000_000.0},
         premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )
@@ -86,7 +86,7 @@ def test_measure_uses_coverage_rate_not_mortality_annual():
         coverages=(CoverageRate("DEATH", _flat(_annual(0.020))),),
     )
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 1_000_000.0},
+        issue_age=40, benefits={"DEATH": 1_000_000.0},
         premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )
@@ -113,7 +113,7 @@ def test_value_and_measure_agree_with_settlement_pattern():
         settlement_pattern = np.array([0.5, 0.3, 0.2]),
     )
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 1e8},
+        issue_age=40, benefits={"DEATH": 1e8},
         premium=80_000.0, term_months=120,
         calculation_methods=PATTERNS,
     )
@@ -136,7 +136,7 @@ def test_value_auto_routes_nonzero_issue_class():
         premium=np.array([12_000.0]),
         term_months=np.array([60]),
         issue_class=np.array([1]),               # non-default class
-        benefits={0: np.array([1e8])},
+        benefits={"DEATH": np.array([1e8])},
         calculation_methods=PATTERNS,
     )
     basis = make_death_basis(mortality_q=0.005, lapse_q=0.01)
@@ -149,7 +149,7 @@ def test_value_auto_routes_nonzero_issue_class():
 def test_value_accepts_default_issue_class():
     """The default (zero everywhere) issue_class must not trigger the guard."""
     mp = ModelPoints.single(
-        issue_age=40, benefits={0: 1e8},
+        issue_age=40, benefits={"DEATH": 1e8},
         premium=12_000.0, term_months=60,
         calculation_methods=PATTERNS,
     )

@@ -62,7 +62,7 @@ def _carry_book(n=3, full=True):
     ids = np.array([f"P{i}" for i in range(n)])
     mp = ModelPoints(
         issue_age=np.full(n, 40), premium=np.full(n, 100.0),
-        term_months=np.full(n, 24), benefits={0: np.full(n, 1e6)},
+        term_months=np.full(n, 24), benefits={"DEATH": np.full(n, 1e6)},
         count=np.full(n, 1000.0), elapsed_months=np.full(n, 12),
         mp_id=ids, product=np.full(n, "A"), calculation_methods=CM,
     )
@@ -82,7 +82,7 @@ def _carry_book(n=3, full=True):
 # ---------------------------------------------------------------------------
 
 def test_inception_measurement_is_tagged_inception():
-    mp = ModelPoints.single(40, 50_000.0, 120, benefits={0: 1e8},
+    mp = ModelPoints.single(40, 50_000.0, 120, benefits={"DEATH": 1e8},
                             calculation_methods=CM)
     assert fcf.gmm.measure(mp, _basis()).measurement_basis == "inception"
     assert fcf.gmm.measure(mp, _basis(), full=False).measurement_basis == "inception"
@@ -102,7 +102,7 @@ def test_segmented_measure_inforce_keeps_the_tag():
     ids = np.array(["A0", "B0"])
     mp = ModelPoints(
         issue_age=np.full(n, 40), premium=np.full(n, 100.0),
-        term_months=np.full(n, 24), benefits={0: np.full(n, 1e6)},
+        term_months=np.full(n, 24), benefits={"DEATH": np.full(n, 1e6)},
         count=np.full(n, 10.0), elapsed_months=np.full(n, 12), mp_id=ids,
         calculation_methods=CM, product=np.array(["A", "B"]),
         channel=np.array(["GA", "GA"]),
@@ -122,7 +122,7 @@ def test_segmented_measure_inforce_keeps_the_tag():
 def test_hypothetical_mode_is_tagged():
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([24]), benefits={0: np.array([1e6])},
+        term_months=np.array([24]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), elapsed_months=np.array([12]),
         calculation_methods=CM,
     )
@@ -134,7 +134,7 @@ def test_paa_and_reinsurance_inforce_are_tagged():
     ids = np.array(["P0"])
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([1200.0]),
-        term_months=np.array([12]), benefits={0: np.array([1e6])},
+        term_months=np.array([12]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), elapsed_months=np.array([6]), mp_id=ids,
         calculation_methods=CM,
     )
@@ -197,7 +197,7 @@ def test_guard_matrix_rejects_hypothetical_gmm():
     basis = _basis()
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
-        term_months=np.array([24]), benefits={0: np.array([1e6])},
+        term_months=np.array([24]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), elapsed_months=np.array([12]),
         product=np.array(["A"]), calculation_methods=CM,
     )
@@ -211,7 +211,7 @@ def test_guards_reject_paa_and_reinsurance_carry():
     ids = np.array(["P0"])
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([1200.0]),
-        term_months=np.array([12]), benefits={0: np.array([1e6])},
+        term_months=np.array([12]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), elapsed_months=np.array([6]), mp_id=ids,
         product=np.array(["A"]), calculation_methods=CM,
     )
@@ -263,7 +263,7 @@ def test_write_measurement_marks_paa_and_reinsurance_inforce(tmp_path):
     ids = np.array(["P0"])
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([1200.0]),
-        term_months=np.array([12]), benefits={0: np.array([1e6])},
+        term_months=np.array([12]), benefits={"DEATH": np.array([1e6])},
         count=np.array([1.0]), elapsed_months=np.array([6]), mp_id=ids,
         calculation_methods=CM,
     )
@@ -296,7 +296,7 @@ def test_inception_paths_still_flow_end_to_end():
     """The default path is untouched: measure -> group / roll_forward /
     report all run, and the dataclass carries the new field with its
     default (the asdict-level targeted assertion)."""
-    mp = ModelPoints.single(40, 50_000.0, 120, benefits={0: 1e8},
+    mp = ModelPoints.single(40, 50_000.0, 120, benefits={"DEATH": 1e8},
                             calculation_methods=CM)
     basis = Basis(
         mortality_annual=_flat_rate(0.005), lapse_annual=_flat_rate(0.05),
@@ -330,7 +330,7 @@ def test_write_measurement_marks_inforce_output(tmp_path):
 
 
 def test_write_measurement_inception_schema_is_unchanged(tmp_path):
-    mp = ModelPoints.single(40, 50_000.0, 120, benefits={0: 1e8},
+    mp = ModelPoints.single(40, 50_000.0, 120, benefits={"DEATH": 1e8},
                             calculation_methods=CM)
     m = fcf.gmm.measure(mp, _basis(), full=False)
     out = tmp_path / "new.parquet"
@@ -348,7 +348,7 @@ def test_measure_inforce_rejects_a_mixed_model_router():
     ids = np.array(["A0", "B0"])
     mp = ModelPoints(
         issue_age=np.full(2, 40), premium=np.full(2, 100.0),
-        term_months=np.full(2, 24), benefits={0: np.full(2, 1e6)},
+        term_months=np.full(2, 24), benefits={"DEATH": np.full(2, 1e6)},
         count=np.full(2, 1.0), elapsed_months=np.full(2, 12), mp_id=ids,
         calculation_methods=CM, product=np.array(["A", "B"]),
         channel=np.array(["GA", "GA"]),
@@ -364,7 +364,7 @@ def test_measure_inforce_rejects_a_mixed_model_router():
 
 
 def test_paa_group_full_false_message_names_full_true():
-    mp = ModelPoints.single(40, 1200.0, 12, benefits={0: 1e6},
+    mp = ModelPoints.single(40, 1200.0, 12, benefits={"DEATH": 1e6},
                             calculation_methods=CM)
     m = fcf.paa.measure(mp, _basis(), full=False)
     with pytest.raises(ValueError, match=r"full=True"):

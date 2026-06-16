@@ -47,7 +47,7 @@ def test_multiple_death_coverages_sum_to_one():
         calculation_methods=PATTERNS,
     )
     combined = ModelPoints.single(
-        40, 80_000.0, term, benefits={0: a + b}, calculation_methods=PATTERNS,
+        40, 80_000.0, term, benefits={"DEATH": a + b}, calculation_methods=PATTERNS,
     )
 
     m_split, m_comb = measure(split, basis), measure(combined, basis)
@@ -65,7 +65,7 @@ def test_no_coverages_matches_zero_death_benefit():
     """An empty coverage list equals a death benefit of zero."""
     basis = _basis()
     explicit_zero = ModelPoints.single(
-        45, 50_000.0, 60, benefits={0: 0.0}, calculation_methods=PATTERNS,
+        45, 50_000.0, 60, benefits={"DEATH": 0.0}, calculation_methods=PATTERNS,
     )
     no_coverages = ModelPoints(
         issue_age=np.array([45.0]),

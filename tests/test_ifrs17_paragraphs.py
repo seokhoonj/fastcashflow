@@ -58,7 +58,7 @@ def test_sec32_bel_is_pv_of_future_cashflows():
 
     res = measure(
         ModelPoints.single(
-            issue_age=40, benefits={0: death_benefit},
+            issue_age=40, benefits={"DEATH": death_benefit},
             premium=premium, term_months=term,
             calculation_methods=PATTERNS,
         ),
@@ -84,7 +84,7 @@ def test_sec34_b65_contract_boundary():
     term = 12
     res = measure(
         ModelPoints.single(
-            issue_age=40, benefits={0: 1_000_000.0},
+            issue_age=40, benefits={"DEATH": 1_000_000.0},
             premium=12_000.0, term_months=term,
             calculation_methods=PATTERNS,
         ),
@@ -108,7 +108,7 @@ def test_sec37_ra_addition_to_bel():
     """
     res = measure(
         ModelPoints.single(
-            issue_age=40, benefits={0: 1_000_000.0},
+            issue_age=40, benefits={"DEATH": 1_000_000.0},
             premium=12_000.0, term_months=24,
             calculation_methods=PATTERNS,
         ),
@@ -126,7 +126,7 @@ def test_sec38_initial_csm_profitable():
     """Sec.38(b): for a profitable group CSM_0 = max(0, -FCF), loss = 0."""
     res = measure(
         ModelPoints.single(
-            issue_age=35, benefits={0: 1_000_000.0},
+            issue_age=35, benefits={"DEATH": 1_000_000.0},
             premium=15_000.0, term_months=36,
             calculation_methods=PATTERNS,
         ),
@@ -142,7 +142,7 @@ def test_sec38_loss_component_onerous():
     """Sec.38(c): for an onerous group CSM_0 = 0, loss component = max(0, FCF)."""
     res = measure(
         ModelPoints.single(
-            issue_age=40, benefits={0: 1_000_000.0},
+            issue_age=40, benefits={"DEATH": 1_000_000.0},
             premium=100.0,                  # premium far too low
             term_months=12,
             calculation_methods=PATTERNS,
@@ -171,7 +171,7 @@ def test_sec44_csm_accretion_at_locked_in_rate():
     basis = _flat_assumptions(discount_annual=0.06)
     res = measure(
         ModelPoints.single(
-            issue_age=35, benefits={0: 1_000_000.0},
+            issue_age=35, benefits={"DEATH": 1_000_000.0},
             premium=15_000.0, term_months=36,
             calculation_methods=PATTERNS,
         ),
@@ -199,7 +199,7 @@ def test_sec44_b119_csm_release_proportional_to_coverage_units():
     )
     res = measure(
         ModelPoints.single(
-            issue_age=40, benefits={0: 1_000_000.0},
+            issue_age=40, benefits={"DEATH": 1_000_000.0},
             premium=12_000.0, term_months=term,
             calculation_methods=PATTERNS,
         ),
@@ -227,7 +227,7 @@ def test_b96_higher_discount_reduces_pv_of_claims():
     unchanged), so only the discount factors differ.
     """
     kwargs = dict(
-        issue_age=40, benefits={0: 1_000_000.0},
+        issue_age=40, benefits={"DEATH": 1_000_000.0},
         premium=12_000.0, term_months=60,
     )
     res_lo = measure(ModelPoints.single(**kwargs, calculation_methods=PATTERNS), _flat_assumptions(discount_annual=0.0))

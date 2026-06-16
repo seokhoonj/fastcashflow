@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import Basis, ModelPoints, CoverageRate
+from fastcashflow import Basis, CalculationMethod, ModelPoints, CoverageRate
 from fastcashflow.basis import BasisRouter
 # Native aggregate types are public at the top level (fcf.GMMAggregate, ...);
 # the portfolio orchestrator entry + container live in the fcf.portfolio
@@ -47,7 +47,8 @@ def _three_model_inputs():
         measurement_models={("P", "GA"): "PAA", ("V", "GA"): "VFA"})
     mp = ModelPoints(
         issue_age=np.full(4, 40), premium=np.array([0.0, 1200.0, 0.0, 0.0]),
-        term_months=np.full(4, 60), benefits={0: np.full(4, 1e4)},
+        term_months=np.full(4, 60), benefits={"DEATH": np.full(4, 1e4)},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
         account_value=np.array([0.0, 0.0, 1e6, 1e6]),
         product=np.array(["G", "P", "V", "V"]),
         channel=np.array(["GA", "GA", "GA", "GA"]))
@@ -101,7 +102,8 @@ def test_aggregate_ragged_terms_pad_into_leading_slice():
         issue_age=np.full(4, 40),
         premium=np.array([1200.0, 1200.0, 0.0, 0.0]),
         term_months=np.array([24, 60, 36, 60]),      # ragged within each model
-        benefits={0: np.full(4, 1e4)},
+        benefits={"DEATH": np.full(4, 1e4)},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
         account_value=np.array([0.0, 0.0, 1e6, 1e6]),
         product=np.array(["P", "P", "V", "V"]),
         channel=np.array(["GA", "GA", "GA", "GA"]))
@@ -179,7 +181,8 @@ def test_aggregate_omits_absent_models():
     router = BasisRouter({("A", "GA"): _flat_basis()})
     mp = ModelPoints(
         issue_age=np.full(2, 40), premium=np.zeros(2), term_months=np.full(2, 60),
-        benefits={0: np.full(2, 1e4)},
+        benefits={"DEATH": np.full(2, 1e4)},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
         product=np.array(["A", "A"]), channel=np.array(["GA", "GA"]))
     agg = measure_aggregate(mp, router)
     assert agg.gmm is not None and agg.paa is None and agg.vfa is None

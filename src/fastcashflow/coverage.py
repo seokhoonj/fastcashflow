@@ -168,12 +168,12 @@ def coverage_arrays(coverages, calculation_methods=None, *,
     identifier and is never silently treated as a method:
 
     1. If ``calculation_methods`` maps the code, use that :class:`CalculationMethod`.
-    2. Else, raise :class:`ValueError` naming the unresolved codes. (No
-       code-as-method auto-inference: a coverage code that happens to read
-       ``"DEATH"`` is still just a code, so map it explicitly. A silent
-       MORBIDITY fallback would hide a configuration mistake on the most
-       error-prone surface -- a DEATH-only contract whose claim payouts would
-       otherwise score zero RA against ``mortality_cv``.)
+    2. Else, raise :class:`ValueError` naming the unresolved codes. A coverage
+       code that reads like a method name (e.g. ``"DEATH"``) is still just a
+       code -- map it explicitly. A silent MORBIDITY fallback would hide a
+       configuration mistake on the most error-prone surface -- a DEATH-only
+       contract whose claim payouts would otherwise score zero RA against
+       ``mortality_cv``.
 
     The universal-life account "chassis" (a contract-level *funding mechanism*,
     not a benefit method -- see ``dev`` design notes) adds two ORTHOGONAL

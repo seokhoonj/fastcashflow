@@ -16,7 +16,7 @@ from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 def _profitable(**basis_overrides):
     kw = dict(
-        issue_age=35, benefits={0: 50_000_000.0}, premium=80_000.0,
+        issue_age=35, benefits={"DEATH": 50_000_000.0}, premium=80_000.0,
         term_months=4, calculation_methods=PATTERNS,
     )
     over = dict(
@@ -98,7 +98,7 @@ def test_settle_honors_coverage_unit_discount():
     def book(basis, em_open=12, period=12, scale=1000.0, term=36, prior_csm=5000.0):
         unit = ModelPoints(
             issue_age=np.array([40]), premium=np.array([100.0]),
-            term_months=np.array([term]), benefits={0: np.array([1e6])},
+            term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
             count=np.array([1.0]), calculation_methods=CM)
         surv = fcf.gmm.measure(unit, basis, full=True).cashflows.inforce[0]
         em_close = em_open + period
@@ -106,7 +106,7 @@ def test_settle_honors_coverage_unit_discount():
         cc = scale * (surv[em_close] if em_close < surv.shape[0] else 0.0)
         mp = ModelPoints(
             issue_age=np.array([40]), premium=np.array([100.0]),
-            term_months=np.array([term]), benefits={0: np.array([1e6])},
+            term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
             count=np.array([cc]), elapsed_months=np.array([em_close]),
             mp_id=ids, product=np.array(["A"]), calculation_methods=CM)
         st = InforceState(

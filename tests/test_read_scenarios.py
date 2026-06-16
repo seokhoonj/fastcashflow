@@ -74,8 +74,9 @@ def test_read_scenarios_feeds_measure_stochastic(tmp_path):
     df.write_parquet(p)
 
     basis = _flat_basis()
-    mp = ModelPoints.single(issue_age=40, benefits={0: 1_000.0},
-                            premium=10.0, term_months=24, count=1)
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1_000.0},
+                            premium=10.0, term_months=24, count=1,
+                            calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
 
     scenarios = read_scenarios(p)
     result = fcf.gmm.stochastic(mp, basis, scenarios)

@@ -12,7 +12,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import ExpenseItem, ModelPoints, VFAMeasurement, group, group_of_contracts
-from conftest import make_death_basis
+from conftest import PATTERNS, make_death_basis
 
 
 def _vfa_basis(**overrides):
@@ -43,6 +43,7 @@ def _two_vfa(**extra) -> ModelPoints:
         minimum_crediting_rate=np.zeros(n),
         minimum_death_benefit=np.zeros(n),
         minimum_accumulation_benefit=np.zeros(n),
+        calculation_methods=PATTERNS,
         **extra,
     )
 

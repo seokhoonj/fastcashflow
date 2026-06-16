@@ -43,8 +43,9 @@ def _basis(**overrides):
 
 def _mp():
     return ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=240,
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
 
 
@@ -90,12 +91,14 @@ def test_surrender_scales_linearly_in_count():
     n_time = 120
     basis = _basis(surrender_value_curve=np.full(n_time, 0.5))
     mp_single = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=n_time, count=1.0,
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     mp_grouped = ModelPoints.single(
-        issue_age=40, benefits={0: 100_000_000.0},
+        issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=n_time, count=10.0,
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
     m_single = measure(mp_single, basis)
     m_grouped = measure(mp_grouped, basis)
@@ -166,7 +169,7 @@ def _mp_with_base(n_time, base):
     """One MP carrying a surrender_base_amount."""
     return ModelPoints(
         issue_age=np.array([40]), premium=np.array([50_000.0]),
-        term_months=np.array([n_time]), benefits={0: np.array([1e8])},
+        term_months=np.array([n_time]), benefits={"DEATH": np.array([1e8])},
         count=np.array([1.0]), surrender_base_amount=np.array([float(base)]),
         calculation_methods={"DEATH": CalculationMethod.DEATH},
     )
@@ -228,7 +231,7 @@ def test_paidup_surrender_uses_lapse_paidup_not_global_lapse():
         surrender_value_curve=np.full(n, V), surrender_value_basis="amount_per_policy",
         state_model=paidup, coverages=(CoverageRate("DEATH", zero),))
     mp = ModelPoints(
-        issue_age=np.array([40], dtype=np.int64), benefits={0: np.array([0.0])},
+        issue_age=np.array([40], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
         premium=np.array([0.0]), term_months=np.array([n], dtype=np.int64),
         state=np.array([0], dtype=np.int64),
         calculation_methods={"DEATH": CalculationMethod.DEATH})
@@ -255,7 +258,7 @@ def test_waiver_state_is_not_surrendered():
         surrender_value_curve=np.full(n, V), surrender_value_basis="amount_per_policy",
         state_model=STATE_MODELS["WAIVER"], coverages=(CoverageRate("DEATH", zero),))
     mp = ModelPoints(
-        issue_age=np.array([40], dtype=np.int64), benefits={0: np.array([0.0])},
+        issue_age=np.array([40], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
         premium=np.array([1000.0]), term_months=np.array([n], dtype=np.int64),
         calculation_methods={"DEATH": CalculationMethod.DEATH})
     m = measure(mp, basis, full=True)

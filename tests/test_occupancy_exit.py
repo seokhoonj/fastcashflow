@@ -46,7 +46,7 @@ def _model(*, after=0, to=None, cap=0, lump=False, benefit=True,
 def _seated_mp(term=12, lump_amount=0.0):
     return ModelPoints(
         issue_age=np.array([50], dtype=np.int64),
-        benefits={0: np.array([0.0])},
+        benefits={"DEATH": np.array([0.0])},
         premium=np.array([0.0]),
         term_months=np.array([term], dtype=np.int64),
         disability_income=np.array([100.0]),

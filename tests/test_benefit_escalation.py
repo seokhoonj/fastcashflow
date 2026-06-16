@@ -30,7 +30,7 @@ def _annuity_mp():
         term_months=np.array([36], dtype=np.int64),
         annuity_payment=np.array([100.0]),
         annuity_frequency_months=np.array([12], dtype=np.int64),
-        benefits={0: np.array([0.0])},
+        benefits={"ANN": np.array([0.0])},
         calculation_methods={"ANN": fcf.CalculationMethod.ANNUITY})
 
 
