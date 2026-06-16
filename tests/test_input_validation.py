@@ -57,6 +57,73 @@ def test_modelpoints_rejects_negative_count():
 
 
 # ---------------------------------------------------------------------------
+# Universal-life annuitization field guards (2-phase annuity, GAO conversion)
+# ---------------------------------------------------------------------------
+
+def _annz_mp(**overrides):
+    kw = dict(issue_age=40.0, premium=1e6, term_months=240)
+    kw.update(overrides)
+    return ModelPoints.single(**kw)
+
+
+def test_annuitization_defaults_to_none_no_op():
+    mp = _annz_mp()
+    assert mp.annuitization_months.tolist() == [0]
+    assert mp.annuitization_rate.tolist() == [0.0]
+    assert mp.annuitization_months.dtype == np.int64
+    assert mp.annuitization_rate.dtype == np.float64
+
+
+def test_annuitization_month_without_rate_rejected():
+    with pytest.raises(ValueError, match="set together"):
+        _annz_mp(annuitization_months=120)
+
+
+def test_annuitization_rate_without_month_rejected():
+    with pytest.raises(ValueError, match="set together"):
+        _annz_mp(annuitization_rate=0.004)
+
+
+def test_annuitization_month_past_term_rejected():
+    with pytest.raises(ValueError, match="not exceed term_months"):
+        _annz_mp(annuitization_months=300, annuitization_rate=0.004)
+
+
+def test_annuitization_negative_rate_rejected():
+    with pytest.raises(ValueError, match="annuitization_rate must be >= 0"):
+        _annz_mp(annuitization_months=120, annuitization_rate=-0.004)
+
+
+def test_annuitization_premium_term_must_cease_by_conversion():
+    with pytest.raises(ValueError, match="premium_term_months must be <="):
+        _annz_mp(annuitization_months=120, annuitization_rate=0.004,
+                 premium_term_months=200)
+
+
+def test_annuitization_with_maturity_lump_rejected():
+    # The maturity lump is skipped for an annuitizing MP -- a non-zero lump
+    # would never pay, so it is a hard error (double-count footgun).
+    with pytest.raises(ValueError, match="maturity_benefit must be 0"):
+        _annz_mp(annuitization_months=120, annuitization_rate=0.004,
+                 premium_term_months=120, maturity_benefit=1e7)
+
+
+def test_annuitization_survives_subset():
+    mp = ModelPoints(
+        issue_age=np.array([40.0, 50.0]),
+        premium=np.array([1e6, 2e6]),
+        term_months=np.array([240, 240]),
+        premium_term_months=np.array([120, 120]),
+        annuitization_months=np.array([120, 0]),
+        annuitization_rate=np.array([0.004, 0.0]),
+        account_value=np.array([1e7, 0.0]),
+    )
+    s = mp.subset([0])
+    assert s.annuitization_months.tolist() == [120]
+    assert s.annuitization_rate.tolist() == [0.004]
+
+
+# ---------------------------------------------------------------------------
 # Basis scalar guards
 # ---------------------------------------------------------------------------
 

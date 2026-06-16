@@ -167,6 +167,22 @@ class ModelPoints:
     # intrinsic cost. Locked at issue, per policy. Default 0.0 = no floor
     # (max(AV, 0) = AV); ignored by non-VFA measurements.
     minimum_accumulation_benefit: FloatArray | None = None
+    # Universal-life annuitization (2-phase annuity): the month -- a policy
+    # duration, same clock as term_months -- at which account accumulation ends
+    # and the accumulated balance converts to a guaranteed survival-contingent
+    # income stream. 0 = no annuitization (the account pays a maturity lump, the
+    # ordinary account behaviour). The conversion floors the balance at
+    # minimum_accumulation_benefit (GMAB) and pays converted_balance *
+    # annuitization_rate every annuity_frequency_months on survival; premiums
+    # must cease by this month. Per policy, locked at issue.
+    annuitization_months: IntArray | None = None
+    # Guaranteed annuity option (GAO) rate -- the balance-to-income conversion
+    # rate: locked_annuity_payment = converted_balance * annuitization_rate (a
+    # per-period income per unit of accumulated balance, e.g. 0.004 = monthly
+    # income of 0.4% of the balance). A financial guarantee locked at issue; NOT
+    # a unit-free multiplier. 0 = none. Must be set together with
+    # annuitization_months.
+    annuitization_rate: FloatArray | None = None
     coverage_index: IntArray | None = None             # CSR: coverage index
     coverage_amount: FloatArray | None = None         # CSR: coverage amount
     coverage_offset: IntArray | None = None           # CSR: per-policy slice bounds
@@ -304,7 +320,7 @@ class ModelPoints:
         for name in ("maturity_benefit", "annuity_payment", "disability_income",
                      "disability_benefit", "account_value",
                      "minimum_crediting_rate", "minimum_death_benefit",
-                     "minimum_accumulation_benefit"):
+                     "minimum_accumulation_benefit", "annuitization_rate"):
             value = getattr(self, name)
             # minimum_crediting_rate defaults to the no-guarantee sentinel (an
             # absent rate is "no crediting guarantee", not a 0% floor); every
@@ -427,6 +443,44 @@ class ModelPoints:
             if np.any(freq < 1):
                 raise ValueError(f"{name} must be >= 1")
             object.__setattr__(self, name, freq)
+        # Universal-life annuitization: the conversion month + GAO rate. Default
+        # 0 (no annuitization -- the account pays a maturity lump). When set, the
+        # month is a policy duration in [1, term]; the month and rate must be set
+        # together (one alone can never produce a payment); premiums must cease
+        # by the month; and the maturity lump must be 0 (it is skipped -- the
+        # balance converts to the annuity, so a non-zero lump would never pay).
+        # The "MP must be account-backed" and "month < contract_boundary"
+        # cross-checks need the Basis / boundary and are done at engine entry.
+        annz_months = self.annuitization_months
+        annz_months = (np.zeros(n_mp, np.int64) if annz_months is None
+                       else np.asarray(annz_months, np.int64))
+        if annz_months.shape != (n_mp,):
+            raise ValueError(
+                f"annuitization_months has length {annz_months.size} but n_mp "
+                f"is {n_mp}")
+        if np.any(annz_months < 0):
+            raise ValueError("annuitization_months must be >= 0 (0 = none)")
+        if np.any(annz_months > self.term_months):
+            raise ValueError(
+                "annuitization_months must not exceed term_months")
+        object.__setattr__(self, "annuitization_months", annz_months)
+        # annuitization_rate was validated finite / >= 0 in the float loop above.
+        annz_on = annz_months > 0
+        rate_on = self.annuitization_rate > 0
+        if np.any(annz_on != rate_on):
+            raise ValueError(
+                "annuitization_months and annuitization_rate must be set "
+                "together (a month with no rate, or a rate with no month, can "
+                "never produce a payment)")
+        if np.any(annz_on & (self.premium_term_months > annz_months)):
+            raise ValueError(
+                "premium_term_months must be <= annuitization_months where "
+                "annuitization is set (premiums must cease by annuitization)")
+        if np.any(annz_on & (self.maturity_benefit > 0)):
+            raise ValueError(
+                "maturity_benefit must be 0 where annuitization is set (the "
+                "maturity lump is skipped -- the balance converts to the "
+                "annuity, so a non-zero lump would never pay)")
         # Coverage CSR: explicit arrays win; otherwise build from the
         # general benefits map. With no shortcut field, an empty input
         # yields an empty coverage list -- a portfolio with no rate-driven
@@ -678,6 +732,8 @@ class ModelPoints:
         minimum_crediting_rate: float | None = None,
         minimum_death_benefit: float = 0.0,
         minimum_accumulation_benefit: float = 0.0,
+        annuitization_months: int = 0,
+        annuitization_rate: float = 0.0,
         count: float = 1.0,
         sex: int = 0,
         state: int = STATE_ACTIVE,
@@ -709,6 +765,8 @@ class ModelPoints:
                                     else np.array([minimum_crediting_rate])),
             minimum_death_benefit=np.array([minimum_death_benefit]),
             minimum_accumulation_benefit=np.array([minimum_accumulation_benefit]),
+            annuitization_months=np.array([annuitization_months]),
+            annuitization_rate=np.array([annuitization_rate]),
             count=np.array([count]),
             sex=np.array([sex]),
             state=np.array([state]),
@@ -749,6 +807,7 @@ class ModelPoints:
             "premium_frequency_months", "annuity_frequency_months",
             "account_value", "minimum_crediting_rate", "minimum_death_benefit",
             "minimum_accumulation_benefit",
+            "annuitization_months", "annuitization_rate",
             "count", "sex", "state", "issue_class", "elapsed_months",
         )
         kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}
