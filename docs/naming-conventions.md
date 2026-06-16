@@ -61,6 +61,64 @@ orphan: true
 리더가 `rate`는 확률 검증, `amount`는 통화 처리, `factor`는 곱셈자 처리를
 할 수 있도록 컬럼명이 의미를 운반합니다.
 
+## 측정 결과의 필드 접미사 — `_cf` / `_path` / `_cv`
+
+위는 *입력* 워크북 컬럼이고, 아래는 측정 *결과* 객체 (`gmm.measure` /
+`paa.measure` / `vfa.measure` 가 돌려주는 `Cashflows`·`Measurement`) 의 필드
+접미사다. **`_cf` 와 `_cv` 는 글자가 비슷하지만 완전히 다른 것**이라 먼저 못을
+박는다:
+
+| 접미사 | 무엇 | 단위 | 예 |
+|---|---|---|---|
+| `_cf` | **cash flow** — 그 달의 현금흐름 (돈) | 통화 / 월 | `premium_cf`, `mortality_cf`, `morbidity_cf` |
+| `_path` | **stock** — 매월 롤포워드되는 잔액 궤적 | 통화 (잔액) | `lic_path`, `lrc_path`, `csm_path`, `ra_path` |
+| (접미사 없음) | **count** — 사람/계약 수 (돈 아님) | 명 / 건 | `inforce`, `deaths` |
+| `_cv` | **coefficient of variation** — RA 가 쓰는 변동계수 (위험의 불확실성) | 무차원 | `mortality_cv`, `morbidity_cv`, `longevity_cv` |
+
+### `_cf` — 현금흐름 레그 (flow)
+
+`Cashflows` 의 `(n_mp, n_time)` 배열들. 각 월에 발생하는 돈의 유입/유출이다
+(부채 관점, 유출 양수):
+
+- `premium_cf` — 보험료 유입 (부채 감소)
+- `mortality_cf` / `morbidity_cf` — 사망위험 / 질병위험 청구 (RA risk class
+  로 갈림; 아래 "위험조정 (RA) 와 `_cv`" 참조). 진단 (`DIAGNOSIS`) 청구는 자기
+  레그가 없고 morbidity 위험으로 `morbidity_cf` 에 합쳐진다
+- `annuity_cf` / `disability_cf` — 생존연금 / 장해소득 지급
+- `maturity_cf` — 만기보험금 (만기 1회), `surrender_cf` — 해약환급, `expense_cf` — 사업비
+
+계산은 "in-force × 율 × 보장금액" 꼴이다. 예: 어느 달의 `mortality_cf` =
+유지 건수 × 그 달 사망률 × 사망보험금. BEL 은 이 레그들의 현가 합:
+`BEL = PV(claims) - PV(premiums)`.
+
+### `_path` — 잔액 궤적 (stock)
+
+flow 가 아니라 *잔액*이다 — 매월 롤포워드되는 부채/마진의 시점별 값
+(`(n_mp, n_time+1)`, 마지막 열은 잔존 tail). `lic_path` (발생사고부채),
+`lrc_path` (잔여보장부채), `csm_path` (보험계약마진), `ra_path` (위험조정 잔액).
+flow 를 쌓아 만든 누적량이라 `_cf` 와 단위는 같아도 (돈) 성격이 다르다.
+
+### 위험조정 (RA) 와 `_cv`
+
+`_cv` 는 현금흐름이 *아니라* 각 보험위험의 **변동계수** (coefficient of
+variation = 표준편차/평균, 청구의 불확실성) 다. `Basis` 의 입력값이고
+(`mortality_cv` / `morbidity_cv` / `longevity_cv` / `disability_cv`, VFA 는
+`expense_cv` 도), IFRS 17 위험조정 (RA, 비금융위험 보상) 을 만드는 데 쓰인다.
+RA 는 청구 레그의 현가를 **risk class 별로** 그 class 의 cv 로 가중한다:
+
+```
+z  = norm_ppf(ra_confidence)              # 신뢰수준 -> 정규분위수
+RA = z * ( mortality_cv  * PV(mortality_cf)     # 사망위험
+         + morbidity_cv  * PV(morbidity_cf)     # 질병위험 (진단 포함)
+         + longevity_cv  * PV(annuity + maturity)
+         + disability_cv * PV(disability_cf) )
+```
+
+그래서 청구 레그가 risk class 로 쪼개져 있는 것 (`mortality_cf` vs
+`morbidity_cf`) 이다 — RA 가 각 class 에 자기 cv 를 곱하려면 PV 를 class 별로
+따로 들고 있어야 하기 때문. (cost-of-capital 방식 RA 는 cv 대신 자본비용율을
+쓰지만 risk-class 분리는 동일하다.)
+
 ## Value conventions
 
 | 컬럼 | 규칙 | 예 | 이유 |
