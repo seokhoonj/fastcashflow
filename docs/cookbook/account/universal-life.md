@@ -239,6 +239,52 @@ fcf.gmm.trace(0, ann_mp, ann_basis)        # 전환 + 지급 섹션을 포함한
 현가가 지급단계에 내줄 연금의 현가보다 커서 BEL 이 음수 (이익) 가 되고, 그만큼이
 CSM 으로 인식됩니다.
 
+## 실적배당형 변액연금 payout (예정이율 기준 재부유)
+
+위 GAO 연금은 전환 후 **고정**입니다. 실적배당형 변액연금은 지급액이 **펀드 실적
+으로 매월 재부유**합니다 — 전환 시 적립금으로 "연금 unit" 을 사고, 매월 unit 가치가
+실제수익률 대비 **예정이율 (AIR, assumed interest rate)** 만큼 오르내립니다:
+
+```text
+payment_k = locked_annuity_payment x ((1 + 실제수익률) / (1 + 예정이율))^k,   k = 경과월
+```
+
+실적이 예정이율보다 좋으면 연금이 늘고, 나쁘면 줍니다. 계약별로 `annuity_air_annual`
+(예정이율) 을 주면 그 계약이 실적배당, NaN (기본) 이면 고정 GAO 입니다.
+
+**변액 payout 은 `vfa.measure` 전용입니다.** VFA 는 할인율 = 펀드수익률이라, 지급액의
+펀드 재부유와 할인의 펀드가 **상쇄**되어 BEL 이 "예정이율짜리 정기연금 (AIR-적립금)"
+으로 떨어집니다 — 투자위험은 계약자가 전부 지고 보험사엔 장수위험만 남습니다. GMM
+(locked-in 할인) 에선 상쇄가 안 돼 무의미하므로 `gmm.measure` 는 변액 payout 책을
+거부합니다.
+
+번들 샘플 `"ul-var-annuity"` 는 0 번 = 실적배당 (예정이율 2%), 1 번 = 고정 GAO 의
+혼재 책입니다 (`vfa.measure` 가 둘 다 측정):
+
+```python
+va_mp    = fcf.samples.model_points("ul-var-annuity")
+va_basis = fcf.samples.basis("ul-var-annuity")
+m = fcf.vfa.measure(va_mp, va_basis)
+
+print(f"contract 0 (실적배당@2%): BEL={m.bel[0]:,.0f}  RA={m.ra[0]:,.0f}  CSM={m.csm[0]:,.0f}")
+print(f"contract 1 (고정 GAO):    BEL={m.bel[1]:,.0f}  RA={m.ra[1]:,.0f}  CSM={m.csm[1]:,.0f}")
+```
+
+출력:
+
+```
+contract 0 (실적배당@2%): BEL=-14,121,491  RA=2,028,567  CSM=12,092,924
+contract 1 (고정 GAO):    BEL=-8,152,879  RA=1,361,061  CSM=6,791,818
+```
+
+```{admonition} 최저보증연금은 아직
+:class: note
+
+실적이 나빠도 깔아주는 **최저지급보증** (payment floor) 은 금융보증이라 그 가치는
+확률적 시나리오 (TVOG) 가 필요합니다 — GMDB/GMAB 의 시간가치를 TVOG 로 분리한 것과
+같은 경계로, 아직 범위 밖입니다. v1 은 순수 실적배당입니다.
+```
+
 ## 계좌차감 특약 (계좌서 비용을 빼가는 특약)
 
 유니버설 계좌는 사망 레그의 COI 만 빼가는 게 아닙니다. **계좌차감 특약** (예:
@@ -318,7 +364,8 @@ pays_account_balance=False)` 로 선언하고, 진단금은 `benefits={"CANCER":
 :class: note
 
 현재는 **사망 레그** (`max(계좌, face)` + NAR-COI), **연금화 레그** (적립 ->
-종신연금 2단계 전환), **계좌차감 특약** (계좌서 비용 차감 + 고정 진단금, 위 절들)
-을 다룹니다. 연금 지급단계가 펀드 수익률로 재부유하는 실적배당형 변액연금, 보증
-시간가치 (TVOG) 를 함께 측정하는 변액 계좌, 연금자 전용 위험률은 아직 범위 밖입니다.
+종신연금 2단계 전환), **실적배당형 변액연금 payout** (예정이율 기준 재부유),
+**계좌차감 특약** (계좌서 비용 차감 + 고정 진단금, 위 절들) 을 다룹니다. 변액
+payout 의 **최저지급보증** 과 보증 시간가치 (TVOG), 연금자 전용 위험률,
+보증기간부 / 원금보증은 아직 범위 밖입니다.
 ```

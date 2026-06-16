@@ -183,6 +183,15 @@ class ModelPoints:
     # a unit-free multiplier. 0 = none. Must be set together with
     # annuitization_months.
     annuitization_rate: FloatArray | None = None
+    # Variable annuity payout assumed interest rate (AIR, annual).
+    # When finite, the phase-2 income re-floats each elapsed month by the realised
+    # fund return relative to this AIR: payment_k = locked_annuity_payment *
+    # ((1 + fund) / (1 + air))^k (the annuity-unit method). NaN (the default) =
+    # a FIXED GAO payout (level locked_annuity_payment). A variable payout is a
+    # direct-participation feature -- measure it through vfa.measure (rejected on
+    # gmm.measure, where the locked-in discount makes the re-float meaningless).
+    # Per policy; a finite value requires annuitization_months > 0.
+    annuity_air_annual: FloatArray | None = None
     coverage_index: IntArray | None = None             # CSR: coverage index
     coverage_amount: FloatArray | None = None         # CSR: coverage amount
     coverage_offset: IntArray | None = None           # CSR: per-policy slice bounds
@@ -481,6 +490,30 @@ class ModelPoints:
                 "maturity_benefit must be 0 where annuitization is set (the "
                 "maturity lump is skipped -- the balance converts to the "
                 "annuity, so a non-zero lump would never pay)")
+        # annuity_air_annual (the variable-payout AIR) is NOT in the finite/non-negative
+        # loop above: NaN is its legal "fixed payout" sentinel. Default -> all-NaN
+        # (every payout fixed). A finite entry is a real rate (>= 0) and requires
+        # an annuitization to apply to.
+        air = self.annuity_air_annual
+        air = np.full(n_mp, np.nan) if air is None else np.asarray(air, np.float64)
+        if air.shape != (n_mp,):
+            raise ValueError(
+                f"annuity_air_annual has length {air.size} but n_mp is {n_mp}")
+        # Legal values: NaN (the fixed-payout sentinel) OR a finite rate >= 0
+        # (a variable payout). Anything else -- +/-inf, or a finite negative -- is
+        # a data error: inf must NOT slip through as "non-NaN" and reach the
+        # kernel's variable-payout gate (where it would zero the income), so it is
+        # rejected here rather than skipped by an isfinite test.
+        air_on = np.isfinite(air)
+        if np.any(~(np.isnan(air) | (air_on & (air >= 0.0)))):
+            raise ValueError(
+                "annuity_air_annual must be NaN (a fixed GAO payout) or a finite "
+                "rate >= 0 (a variable payout); got +/-inf or a negative rate")
+        if np.any(air_on & ~annz_on):
+            raise ValueError(
+                "annuity_air_annual (a variable-payout AIR) requires "
+                "annuitization_months > 0 -- there is no payout to re-float")
+        object.__setattr__(self, "annuity_air_annual", air)
         # Coverage CSR: explicit arrays win; otherwise build from the
         # general benefits map. With no shortcut field, an empty input
         # yields an empty coverage list -- a portfolio with no rate-driven
@@ -734,6 +767,7 @@ class ModelPoints:
         minimum_accumulation_benefit: float = 0.0,
         annuitization_months: int = 0,
         annuitization_rate: float = 0.0,
+        annuity_air_annual: float = float("nan"),
         count: float = 1.0,
         sex: int = 0,
         state: int = STATE_ACTIVE,
@@ -767,6 +801,7 @@ class ModelPoints:
             minimum_accumulation_benefit=np.array([minimum_accumulation_benefit]),
             annuitization_months=np.array([annuitization_months]),
             annuitization_rate=np.array([annuitization_rate]),
+            annuity_air_annual=np.array([annuity_air_annual]),
             count=np.array([count]),
             sex=np.array([sex]),
             state=np.array([state]),
@@ -807,7 +842,7 @@ class ModelPoints:
             "premium_frequency_months", "annuity_frequency_months",
             "account_value", "minimum_crediting_rate", "minimum_death_benefit",
             "minimum_accumulation_benefit",
-            "annuitization_months", "annuitization_rate",
+            "annuitization_months", "annuitization_rate", "annuity_air_annual",
             "count", "sex", "state", "issue_class", "elapsed_months",
         )
         kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}

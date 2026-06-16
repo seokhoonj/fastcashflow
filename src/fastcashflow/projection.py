@@ -329,7 +329,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     account_prem_to_av, account_coi_rate, account_admin_fee,
                     account_credit, account_charge,
                     annuitization_months, annuitization_rate,
-                    min_accumulation_benefit, n_time):
+                    annuity_air_monthly, min_accumulation_benefit, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -397,6 +397,14 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
         # survival-contingent income (phase 2). A_annz == 0 -> the ordinary
         # account (a maturity lump), every existing book byte-identical.
         annuitizing = roll_av and A_annz > 0
+        # Variable payout: a finite per-MP AIR re-floats the phase-2 income by
+        # (1+fund)/(1+air) each elapsed month; NaN keeps a fixed GAO payout. The
+        # fund rate is the account's own credited rate.
+        air_m = annuity_air_monthly[mp]
+        # Variable iff the AIR is a finite rate (NaN = fixed). isfinite, not
+        # "not isnan", so a stray inf cannot reach the re-float (validation
+        # rejects inf upstream; this is the matching kernel-side guard).
+        variable_payout = annuitizing and np.isfinite(air_m)
         converted_balance = 0.0
         locked_annuity_payment = 0.0
         if roll_av:
@@ -501,12 +509,20 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 claim_cf[mp, t] += deaths_acc * (av_m if av_m > fa else fa)
             morbidity_cf[mp, t] = ift * morb_rate
             if annuitizing:
-                # Phase 2 (t >= A): the locked guaranteed annuity, paid annuity-
-                # due from the conversion month on the surviving in-force, every
-                # annuity_frequency_months. Phase 1 pays nothing here.
-                annuity_cf[mp, t] = (
-                    ift * locked_annuity_payment
-                    if (in_payout and (t - A_annz) % ann_freq == 0) else 0.0)
+                # Phase 2 (t >= A): the guaranteed annuity, paid annuity-due from
+                # the conversion month on the surviving in-force, every
+                # annuity_frequency_months. Phase 1 pays nothing here. A variable
+                # payout re-floats the level by ((1+fund)/(1+air))^k,
+                # k = t - A (the annuity-unit value); a fixed payout keeps the
+                # locked level (variable_payout False -> the multiplier is 1).
+                if in_payout and (t - A_annz) % ann_freq == 0:
+                    pay = locked_annuity_payment
+                    if variable_payout:
+                        pay *= ((1.0 + account_credit[mp])
+                                / (1.0 + air_m)) ** (t - A_annz)
+                    annuity_cf[mp, t] = ift * pay
+                else:
+                    annuity_cf[mp, t] = 0.0
             else:
                 annuity_cf[mp, t] = (
                     ift * annuity_payment[mp] * annuity_factor[mp, year]
@@ -1108,6 +1124,12 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
                 "annuitization_months must be < contract_boundary_months (the "
                 "projection runs to the boundary, so the conversion month must "
                 "leave at least one payout month inside the horizon).")
+    # Variable payout: the per-MP monthly assumed interest rate (AIR).
+    # NaN where the payout is fixed (the default) -- NaN propagates through the
+    # power so finite-AIR rows convert and fixed rows stay NaN; the kernel
+    # re-floats only the finite-AIR annuitizing rows.
+    annuity_air_monthly = np.ascontiguousarray(
+        (1.0 + model_points.annuity_air_annual) ** (1.0 / 12.0) - 1.0)
     # A universal-life account book pays its benefits (the account value) at the
     # exit, not over a settlement pattern; the measurement's settlement factor is
     # keyed on basis.discount_monthly (the GMM in-year rate), which would also be
@@ -1368,6 +1390,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             account_charge,
             model_points.annuitization_months,
             model_points.annuitization_rate,
+            annuity_air_monthly,
             model_points.minimum_accumulation_benefit,
             n_time,
         )

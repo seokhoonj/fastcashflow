@@ -380,6 +380,19 @@ def measure(
             "basis must be a Basis or a BasisRouter (from read_basis); got "
             f"{type(basis).__name__}"
         )
+    # A variable annuity payout (a finite annuity_air_annual on an annuitizing
+    # row) re-floats the phase-2 income at the realised fund return; only a
+    # direct-participation (VFA) discount equals that fund return and makes the
+    # re-float meaningful. Under the GMM locked-in discount the fund-linked
+    # payout would be valued at an unrelated rate -- reject it here rather than
+    # return a meaningless number. Measure it through vfa.measure.
+    if np.any(np.isfinite(model_points.annuity_air_annual)
+              & (model_points.annuitization_months > 0)):
+        raise NotImplementedError(
+            "a variable annuity payout (a finite annuity_air_annual) is a "
+            "direct-participation feature -- measure it through vfa.measure, "
+            "not gmm.measure (the GMM locked-in discount cannot value a "
+            "fund-linked payout that re-floats at the fund return).")
     if isinstance(basis, BasisRouter):
         # A BasisRouter remembers its axes, so measure routes without a
         # segment_by; an explicit segment_by wins.
