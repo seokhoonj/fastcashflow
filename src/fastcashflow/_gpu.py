@@ -91,11 +91,11 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                 else:
                     morb_rate += rate
             last_year = year
-        ift = 0.0
+        inforce_t = 0.0
         prem_occ = 0.0
         benefit_occ = 0.0
         for s in range(n_states):
-            ift += occ[s]
+            inforce_t += occ[s]
             if premium_state[s]:
                 prem_occ += occ[s]
             if benefit_state[s]:
@@ -106,18 +106,18 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                  if (t < premium_term and t % prem_freq == 0) else 0.0)
         pv_premium += level * ds
         cum_premium += level
-        pv_mortality += ift * claim_rate * dm
-        pv_morbidity += ift * morb_rate * dm
+        pv_mortality += inforce_t * claim_rate * dm
+        pv_morbidity += inforce_t * morb_rate * dm
         if t % ann_freq == 0:
-            pv_annuity += ift * annuity * annuity_factor[sx, age_idx, year] * ds
+            pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * ds
         pv_disability += benefit_occ * disability_income[mp] * dm
         ann_prem = premium[mp] * premium_factor[sx, age_idx, year] * 12.0 / prem_freq
         alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                  if t == 0 else 0.0)
-        beta = (ift * beta_pro_rata * ann_prem / 12.0
+        beta = (inforce_t * beta_pro_rata * ann_prem / 12.0
                 if t < premium_term else 0.0)
-        gamma = ift * gamma_fixed[t]
-        lae = lae_pro_rata[t] * ift * (claim_rate + morb_rate)
+        gamma = inforce_t * gamma_fixed[t]
+        lae = lae_pro_rata[t] * inforce_t * (claim_rate + morb_rate)
         pv_expense += (alpha + beta + gamma + lae) * dm
         lapse_flow = 0.0
         for s in range(n_states):
@@ -130,8 +130,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                              * surrender_base[mp] * dm)
         else:
             # cum_premium aggregates inforce * premium; the effective lapse
-            # fraction is lapse_flow / ift (the raw rate for a single state).
-            eff_lapse = lapse_flow / ift if ift > 0.0 else 0.0
+            # fraction is lapse_flow / inforce_t (the raw rate for a single state).
+            eff_lapse = lapse_flow / inforce_t if inforce_t > 0.0 else 0.0
             pv_surrender += (eff_lapse
                              * cum_premium * surrender_curve[t] * dm)
         for s in range(n_states):

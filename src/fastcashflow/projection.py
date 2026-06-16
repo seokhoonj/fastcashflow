@@ -91,6 +91,13 @@ class Cashflows:
     the Risk Adjustment can price the two risks separately; ``disability_cf``
     is a third risk class -- the income paid while in a benefit state plus
     the on-transition lump sum.
+
+    Field-name convention (applies across the engine): a ``_cf`` suffix marks a
+    per-month money flow (the signed cash flow in or out that month); a
+    ``_path`` suffix marks a running stock / balance trajectory (``lrc_path`` /
+    ``csm_path`` / ``ra_path`` on the measure results); no suffix marks a count
+    (``inforce`` / ``deaths`` -- policies / lives, not money). The scalar an
+    in-force loop carries for the current month is spelled ``inforce_t``.
     """
 
     inforce: FloatArray       # policies in force at the start of each month
@@ -273,7 +280,7 @@ def _account_kernel_args(
                         coverage_rates[ci, mp, year_of_month] * cov_amt[k])
     account_charge = np.ascontiguousarray(account_charge)
 
-    # Admin fee = per-policy monthly gamma_fixed (NOT ift-weighted). Crediting
+    # Admin fee = per-policy monthly gamma_fixed (NOT inforce_t-weighted). Crediting
     # = declared return floored at each contract's guarantee.
     admin_fee = np.ascontiguousarray(np.asarray(gamma_fixed, np.float64))
     r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
@@ -454,14 +461,14 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
         for t in range(boundary):
             year = t // 12
             in_payout = annuitizing and t >= A_annz
-            ift = 0.0         # total in-force
+            inforce_t = 0.0   # total in-force
             dclaim_occ = 0.0  # death-benefit-weighted in-force (claim base)
             prem_occ = 0.0    # in-force on the premium-paying states
             benefit_occ = 0.0 # in-force on the benefit-paying states
             deaths_acc = 0.0  # state-conditional death count
             lapse_acc = 0.0   # state-conditional lapse count (surrender)
             for s in range(n_states):
-                ift += occ[s]
+                inforce_t += occ[s]
                 dclaim_occ += occ[s] * state_death_benefit_factor[s]
                 deaths_acc += occ[s] * state_death_exit[s, mp, year]
                 lapse_acc += occ[s] * state_lapse[s, mp, year]
@@ -469,7 +476,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     prem_occ += occ[s]
                 if benefit_state[s]:
                     benefit_occ += occ[s]
-            inforce[mp, t] = ift
+            inforce[mp, t] = inforce_t
             # No surrender in the payout phase (a life annuity in payment cannot
             # lapse); phase 1 reports the actual state-machine lapse exit.
             lapse_flow[mp, t] = 0.0 if in_payout else lapse_acc
@@ -507,7 +514,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 av_m = av_mid[mp, t]
                 fa = account_face[mp]
                 claim_cf[mp, t] += deaths_acc * (av_m if av_m > fa else fa)
-            morbidity_cf[mp, t] = ift * morb_rate
+            morbidity_cf[mp, t] = inforce_t * morb_rate
             if annuitizing:
                 # Phase 2 (t >= A): the guaranteed annuity, paid annuity-due from
                 # the conversion month on the surviving in-force, every
@@ -520,12 +527,12 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     if variable_payout:
                         pay *= ((1.0 + account_credit[mp])
                                 / (1.0 + air_m)) ** (t - A_annz)
-                    annuity_cf[mp, t] = ift * pay
+                    annuity_cf[mp, t] = inforce_t * pay
                 else:
                     annuity_cf[mp, t] = 0.0
             else:
                 annuity_cf[mp, t] = (
-                    ift * annuity_payment[mp] * annuity_factor[mp, year]
+                    inforce_t * annuity_payment[mp] * annuity_factor[mp, year]
                     if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: alpha / beta / gamma maintenance plus LAE on the
@@ -535,9 +542,9 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             ann_prem = premium[mp] * premium_factor[mp, year] * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
-            beta = (ift * beta_pro_rata * ann_prem / 12.0
+            beta = (inforce_t * beta_pro_rata * ann_prem / 12.0
                     if t < premium_term else 0.0)
-            gamma = ift * gamma_fixed[t]
+            gamma = inforce_t * gamma_fixed[t]
             # LAE applies to mortality + morbidity claims only --
             # disability income is a periodic annuity-like benefit, lump
             # sums are one-off transitions, and conflating either with
@@ -743,7 +750,7 @@ def _project_kernel_semi_markov(
                         morb_rate += rate
                 last_year = year
 
-            ift = 0.0
+            inforce_t = 0.0
             dclaim_occ = 0.0  # death-benefit-weighted in-force (claim base)
             prem_occ = 0.0
             benefit_occ = 0.0
@@ -755,7 +762,7 @@ def _project_kernel_semi_markov(
                 state_sum = 0.0
                 for tau in range(D):
                     state_sum += occ[s_off + tau]
-                ift += state_sum
+                inforce_t += state_sum
                 dclaim_occ += state_sum * state_death_benefit_factor[s]
                 deaths_acc += state_sum * state_death_exit[s, mp, year]
                 lapse_acc += state_sum * state_lapse[s, mp, year]
@@ -773,24 +780,24 @@ def _project_kernel_semi_markov(
                     else:
                         benefit_occ += state_sum
 
-            inforce[mp, t] = ift
+            inforce[mp, t] = inforce_t
             lapse_flow[mp, t] = lapse_acc
             deaths[mp, t] = deaths_acc
             level = (prem_occ * premium[mp] * premium_factor[mp, year]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
             claim_cf[mp, t] = dclaim_occ * claim_rate
-            morbidity_cf[mp, t] = ift * morb_rate
-            annuity_cf[mp, t] = (ift * annuity_payment[mp] * annuity_factor[mp, year]
+            morbidity_cf[mp, t] = inforce_t * morb_rate
+            annuity_cf[mp, t] = (inforce_t * annuity_payment[mp] * annuity_factor[mp, year]
                                   if t % ann_freq == 0 else 0.0)
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: same dispatch as _project_kernel (see its comment).
             ann_prem = premium[mp] * premium_factor[mp, year] * 12.0 / prem_freq
             alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
                      if t == 0 else 0.0)
-            beta = (ift * beta_pro_rata * ann_prem / 12.0
+            beta = (inforce_t * beta_pro_rata * ann_prem / 12.0
                     if t < premium_term else 0.0)
-            gamma = ift * gamma_fixed[t]
+            gamma = inforce_t * gamma_fixed[t]
             # LAE applies to mortality + morbidity claims only --
             # disability income is a periodic annuity-like benefit, lump
             # sums are one-off transitions, and conflating either with
