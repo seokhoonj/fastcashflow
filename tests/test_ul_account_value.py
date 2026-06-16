@@ -14,7 +14,7 @@ forward and exposes the trajectory on the ``cashflows.account`` sidecar
 ``av_mid`` (n_mp, n_time), ``coi`` (n_mp, n_time), ``fund`` (n_mp, n_time+1).
 The net amount at risk is NOT stored -- it is recomputed as
 ``max(0, face - av_mid)`` where needed. The account-driven benefits stay in-band
-on :class:`fastcashflow.projection.Cashflows`: the death leg in ``claim_cf``
+on :class:`fastcashflow.projection.Cashflows`: the death leg in ``mortality_cf``
 (deaths * max(av_mid, face)), the surrender in ``surrender_cf``, and the
 maturity in ``maturity_cf`` (a ``(n_mp,)`` payment entered at the term column).
 """
@@ -221,7 +221,7 @@ def test_ul_benefits_hand_calc():
     # The face dominates the small account -> death pays max(av_mid, face) = face.
     assert np.all(acct.av_mid[0] < face)
     exp_death = proj.deaths * np.maximum(acct.av_mid, face)
-    assert np.allclose(proj.claim_cf, exp_death)
+    assert np.allclose(proj.mortality_cf, exp_death)
 
     # Surrender = (non-maturity exits) * av_mid (no surrender charge in v1).
     inforce_pad = np.concatenate([proj.inforce, np.zeros((1, 1))], axis=1)
@@ -238,7 +238,7 @@ def test_ul_benefits_hand_calc():
     # Combined benefit, with maturity entered at the term column.
     exp_benefit = exp_death + exp_surr
     exp_benefit[0, term_idx] += proj.maturity_cf[0]
-    got_benefit = proj.claim_cf + proj.surrender_cf
+    got_benefit = proj.mortality_cf + proj.surrender_cf
     got_benefit[0, term_idx] += proj.maturity_cf[0]
     assert np.allclose(got_benefit, exp_benefit)
 
@@ -272,7 +272,7 @@ def test_ul_benefits_gmab_floor_and_account_exceeds_face():
     assert np.isclose(proj.maturity_survivors[0], 1.0 - q)
     # account (120e6) > face (100e6): death pays the account, not the face.
     assert acct.av_mid[0, 0] > face
-    assert np.isclose(proj.claim_cf[0, 0], q * 120_000_000.0)
+    assert np.isclose(proj.mortality_cf[0, 0], q * 120_000_000.0)
     # matured av (120e6) < GMAB (130e6): maturity pays the GMAB floor (130e6).
     assert acct.av[0, 1] < gmab
     assert np.isclose(proj.maturity_cf[0], (1.0 - q) * gmab)
@@ -346,9 +346,9 @@ def test_ul_project_maturity_only_hand_calc():
     assert np.isclose(proj.maturity_survivors[0], 1.0)
     assert np.isclose(proj.maturity_cf[0], av2)        # GMAB = 0 -> matured av
     # No deaths / surrenders; maturity enters benefit_cf at term_idx.
-    assert np.allclose(proj.claim_cf[0], [0.0, 0.0])
+    assert np.allclose(proj.mortality_cf[0], [0.0, 0.0])
     assert np.allclose(proj.surrender_cf[0], [0.0, 0.0])
-    benefit_cf = proj.claim_cf + proj.surrender_cf
+    benefit_cf = proj.mortality_cf + proj.surrender_cf
     benefit_cf[0, term_idx] += proj.maturity_cf[0]
     assert np.allclose(benefit_cf[0], [0.0, av2])
     # Fund = in-force-weighted account value; in force = 1 through maturity, the
@@ -397,13 +397,13 @@ def test_ul_project_weaves_decrements_and_load():
 
     exp_death = deaths * np.maximum(acct.av_mid, mp.minimum_death_benefit[:, None])
     exp_surr = non_maturity_exits * acct.av_mid       # surr_charge = 0
-    assert np.allclose(proj.claim_cf, exp_death)
+    assert np.allclose(proj.mortality_cf, exp_death)
     assert np.allclose(proj.surrender_cf, exp_surr)
     assert np.allclose(acct.fund, inforce_pad * acct.av)
     # benefit_cf = death + surrender, with maturity added at term_idx.
     exp_benefit = exp_death + exp_surr
     exp_benefit[0, term_idx] += proj.maturity_cf[0]
-    got_benefit = proj.claim_cf + proj.surrender_cf
+    got_benefit = proj.mortality_cf + proj.surrender_cf
     got_benefit[0, term_idx] += proj.maturity_cf[0]
     assert np.allclose(got_benefit, exp_benefit)
 

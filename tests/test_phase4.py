@@ -47,7 +47,7 @@ def test_bel_rollforward():
     bel = np.zeros(n_time + 1)
     for t in range(n_time - 1, -1, -1):
         bel[t] = (
-            (cf.claim_cf[0, t] + cf.expense_cf[0, t]) * half
+            (cf.mortality_cf[0, t] + cf.expense_cf[0, t]) * half
             - cf.premium_cf[0, t]
             + bel[t + 1] * full
         )

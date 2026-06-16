@@ -121,7 +121,7 @@ mp = fcf.ModelPoints.single(
 m = fcf.gmm.measure(mp, basis)
 print(f"inforce    = {m.cashflows.inforce[0, :3]}")     # 보유계약 (active + waiver)
 print(f"premium_cf = {m.cashflows.premium_cf[0, :3]}")  # 보험료 (active 만 납입)
-print(f"claim_cf   = {m.cashflows.claim_cf[0, :3]}")    # 사망보험금 (전체 inforce)
+print(f"mortality_cf   = {m.cashflows.mortality_cf[0, :3]}")    # 사망보험금 (전체 inforce)
 print(f"BEL        = {m.bel[0]:.2f}")                   # 최선추정부채
 ```
 
@@ -130,7 +130,7 @@ print(f"BEL        = {m.bel[0]:.2f}")                   # 최선추정부채
 ```
 inforce    = [1.     0.99   0.9801]
 premium_cf = [1000.    891.    793.881]
-claim_cf   = [1000.    990.    980.1]
+mortality_cf   = [1000.    990.    980.1]
 BEL        = 285.22
 ```
 
@@ -148,7 +148,7 @@ BEL        = 285.22
 - BEL = PV(사망보험금) − PV(보험료) = (1,000 + 990 + 980.1) −
   (1,000 + 891 + 793.88) = 2,970.1 − 2,684.88 = **285.22**
 
-엔진의 `premium_cf` / `claim_cf` 가 표의 두 열과 정확히 일치합니다.
+엔진의 `premium_cf` / `mortality_cf` 가 표의 두 열과 정확히 일치합니다.
 
 ```{admonition} 납입면제가 없으면 BEL = 0
 :class: note
@@ -164,7 +164,7 @@ BEL        = 285.22
 
 납입면제 모델의 한 줄 요약: **보험료는 active 에만, 보장은 전체 inforce 에.**
 
-- `premium_cf` 가 `claim_cf` 보다 빠르게 줄어드는 게 핵심 신호입니다. 위
+- `premium_cf` 가 `mortality_cf` 보다 빠르게 줄어드는 게 핵심 신호입니다. 위
   예제에서 t=2 의 보험료 793.88 vs 사망보험금 980.10 — active 점유가
   전체 inforce 보다 작아서 생기는 격차.
 - 이 격차의 현재가치 합이 BEL을 양수로 (= 손실 쪽으로) 밀어 올립니다.

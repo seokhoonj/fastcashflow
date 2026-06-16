@@ -91,7 +91,7 @@ def test_sec34_b65_contract_boundary():
         _flat_assumptions(),
     )
     assert res.cashflows.premium_cf.shape == (1, term)
-    assert res.cashflows.claim_cf.shape    == (1, term)
+    assert res.cashflows.mortality_cf.shape    == (1, term)
     assert res.cashflows.expense_cf.shape  == (1, term)
 
 
@@ -223,7 +223,7 @@ def test_b96_higher_discount_reduces_pv_of_claims():
     isolated from any premium / claim balance effect: the PV of the
     projected death-claim cash flow at 10% annual discount is strictly
     less than at 0%. The same contract under both bases produces an
-    identical ``claim_cf`` series (in-force, mortality and benefit are
+    identical ``mortality_cf`` series (in-force, mortality and benefit are
     unchanged), so only the discount factors differ.
     """
     kwargs = dict(
@@ -232,6 +232,6 @@ def test_b96_higher_discount_reduces_pv_of_claims():
     )
     res_lo = measure(ModelPoints.single(**kwargs, calculation_methods=PATTERNS), _flat_assumptions(discount_annual=0.0))
     res_hi = measure(ModelPoints.single(**kwargs, calculation_methods=PATTERNS), _flat_assumptions(discount_annual=0.10))
-    pv_claims_lo = float(np.sum(res_lo.cashflows.claim_cf[0] * res_lo.discount_factor_mid))
-    pv_claims_hi = float(np.sum(res_hi.cashflows.claim_cf[0] * res_hi.discount_factor_mid))
+    pv_claims_lo = float(np.sum(res_lo.cashflows.mortality_cf[0] * res_lo.discount_factor_mid))
+    pv_claims_hi = float(np.sum(res_hi.cashflows.mortality_cf[0] * res_hi.discount_factor_mid))
     assert pv_claims_hi < pv_claims_lo

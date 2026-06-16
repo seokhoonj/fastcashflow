@@ -710,8 +710,8 @@ def test_report_service_expense_includes_disability_cf():
     cf = m.cashflows
     assert cf.disability_cf.sum() > 0.0          # the book genuinely pays DI
     rep = fcf.report(m)
-    expected = (cf.claim_cf + cf.morbidity_cf + cf.disability_cf + cf.expense_cf)
+    expected = (cf.mortality_cf + cf.morbidity_cf + cf.disability_cf + cf.expense_cf)
     np.testing.assert_allclose(rep.insurance_service_expense, expected, rtol=1e-12)
     # the fix is non-vacuous: dropping disability_cf would give a different line
-    without = cf.claim_cf + cf.morbidity_cf + cf.expense_cf
+    without = cf.mortality_cf + cf.morbidity_cf + cf.expense_cf
     assert not np.allclose(rep.insurance_service_expense, without)

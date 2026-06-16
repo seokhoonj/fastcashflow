@@ -84,7 +84,7 @@ def test_ul_annuity_conversion_and_cashflows_hand_calc():
     # Annuity-due from month 1, in-force = 1 (no decrement): three payments.
     assert np.allclose(proj.annuity_cf[0], [0.0, locked, locked, locked])
     # Phase-2 hygiene: no account-death claim, no surrender, no maturity lump.
-    assert np.allclose(proj.claim_cf[0], 0.0)
+    assert np.allclose(proj.mortality_cf[0], 0.0)
     assert np.allclose(proj.surrender_cf[0], 0.0)
     assert np.isclose(proj.maturity_cf[0], 0.0)
     # Account is spent at conversion -- av is not carried past A (av[2:] == 0).
@@ -185,7 +185,7 @@ def test_ul_annuity_no_surrender_or_account_death_in_payout():
     basis = _annuity_basis(0.001, mortality_annual=0.02, lapse_annual=0.3)
     proj = fcf.gmm.measure(mp, basis, full=True).cashflows
     A = 2
-    assert np.allclose(proj.claim_cf[0, A:], 0.0)
+    assert np.allclose(proj.mortality_cf[0, A:], 0.0)
     assert np.allclose(proj.surrender_cf[0, A:], 0.0)
 
 
@@ -250,7 +250,7 @@ def test_ul_annuity_full_matches_independent_forward_pv():
     # mid-month (discount_factor_mid); the maturity lump rolls to the boundary column.
     bom, mid = discount_factors_from_curve(discount_monthly_curve(basis, proj.n_time))
     bom_t = bom[:proj.n_time]
-    mid_legs = (proj.claim_cf[0] + proj.morbidity_cf[0] + proj.disability_cf[0]
+    mid_legs = (proj.mortality_cf[0] + proj.morbidity_cf[0] + proj.disability_cf[0]
                 + proj.expense_cf[0] + proj.surrender_cf[0])
     pv = (float(np.dot(proj.annuity_cf[0], bom_t))
           - float(np.dot(proj.premium_cf[0], bom_t))

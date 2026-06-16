@@ -252,7 +252,7 @@ def test_lic_block_hand_calc_settlement_pattern():
         benefits={"DEATH": np.array([6000.0])}, count=np.array([1.0]),
         calculation_methods=PATTERNS)
     cf = fcf.paa.measure(unit, basis, full=True).cashflows
-    lic_d = _settlement_lic_discounted(cf.claim_cf, pattern, basis.discount_monthly)
+    lic_d = _settlement_lic_discounted(cf.mortality_cf, pattern, basis.discount_monthly)
     lic_m = _settlement_lic_discounted(cf.morbidity_cf, pattern, basis.discount_monthly)
     z = _norm_ppf(basis.ra_confidence)
     lic_ra = z * (basis.mortality_cv * lic_d + basis.morbidity_cv * lic_m)

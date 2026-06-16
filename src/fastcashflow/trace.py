@@ -294,7 +294,7 @@ def show_trace(
     discount_factor_bom = m.discount_factor_bom
 
     cf_lines: list[object] = []
-    cf_names = ["premium_cf", "claim_cf", "morbidity_cf", "expense_cf",
+    cf_names = ["premium_cf", "mortality_cf", "morbidity_cf", "expense_cf",
                 "annuity_cf", "surrender_cf", "disability_cf"]
     cf_heads = ["premium", "claim", "morbidity", "expense",
                 "annuity", "surrender", "disability"]
@@ -1012,7 +1012,7 @@ def show_trace_reinsurance(
     # ---- Treaty / inputs
     treaty_lines: list[object] = [
         f"treaty             = {cession_desc}",
-        "recovery           = cession x (claim_cf + morbidity_cf)  (ceded share of direct claims)",
+        "recovery           = cession x (mortality_cf + morbidity_cf)  (ceded share of direct claims)",
         "reinsurance_premium= cession x premium_cf  (reinsurance premium)",
         f"mortality_annual   -> {_fmt_callable(basis.mortality_annual)}",
         f"lapse_annual       -> {_fmt_callable(basis.lapse_annual)}",
@@ -1379,9 +1379,13 @@ def show_trace_diff(
         a1 = min(a0 + 12, cf_a.n_time)
         if a1 <= a0:
             break
-        for name in ("premium_cf", "claim_cf", "morbidity_cf",
-                     "expense_cf", "annuity_cf", "surrender_cf",
-                     "disability_cf"):
+        # (field, display head) -- the head matches show_trace's ``cf_heads``
+        # so both tools label the streams identically; ``mortality_cf`` shows as
+        # the short "claim" column, not the field name stripped of ``_cf``.
+        for name, head in (("premium_cf", "premium"), ("mortality_cf", "claim"),
+                           ("morbidity_cf", "morbidity"), ("expense_cf", "expense"),
+                           ("annuity_cf", "annuity"), ("surrender_cf", "surrender"),
+                           ("disability_cf", "disability")):
             sa = float(getattr(cf_a, name)[0, a0:a1].sum())
             sb = float(getattr(cf_b, name)[0, a0:a1].sum())
             if abs(sa) + abs(sb) < 0.5:
@@ -1392,7 +1396,7 @@ def show_trace_diff(
             pct = (100.0 * d / sa) if abs(sa) > 1e-12 else float("nan")
             pct_s = f"{pct:>+8.2f}%" if not np.isnan(pct) else "      --"
             cf_lines.append(
-                f"{y:>14d}  {name[:-3]:>14}  "
+                f"{y:>14d}  {head:>14}  "
                 f"{sa:>14,.0f}  {sb:>14,.0f}  {d:>+14,.0f}  {pct_s:>14}"
             )
     if len(cf_lines) == 1:                                # only the header
@@ -1708,7 +1712,7 @@ def show_trace_bel_step(
         full = 1.0 / (1.0 + rate)
         prem = float(cf.premium_cf[0, t])
         ann = float(cf.annuity_cf[0, t])
-        claim = float(cf.claim_cf[0, t])
+        claim = float(cf.mortality_cf[0, t])
         morb = float(cf.morbidity_cf[0, t])
         disab = float(cf.disability_cf[0, t])
         exp = float(cf.expense_cf[0, t])

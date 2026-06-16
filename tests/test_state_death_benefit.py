@@ -55,8 +55,8 @@ def test_post_factor_doubles_death_claim():
     mp = _seated_mp(1)                       # seated in post
     f1 = fcf.gmm.measure(mp, _basis(1.0), full=True)
     f2 = fcf.gmm.measure(mp, _basis(2.0), full=True)
-    c1 = f1.cashflows.claim_cf[0]
-    c2 = f2.cashflows.claim_cf[0]
+    c1 = f1.cashflows.mortality_cf[0]
+    c2 = f2.cashflows.mortality_cf[0]
     assert np.all(c1 > 0.0)
     assert np.allclose(c2, 2.0 * c1, rtol=1e-12)
     assert f2.bel[0] == pytest.approx(2.0 * f1.bel[0], rel=1e-12)
@@ -71,8 +71,8 @@ def test_factor_is_occupancy_weighted():
     identical with or without the factor: it applies per occupancy, not
     globally."""
     mp = _seated_mp(0)                       # seated in healthy, factor 2 on post
-    healthy = fcf.gmm.measure(mp, _basis(2.0), full=True).cashflows.claim_cf[0]
-    control = fcf.gmm.measure(mp, _basis(1.0), full=True).cashflows.claim_cf[0]
+    healthy = fcf.gmm.measure(mp, _basis(2.0), full=True).cashflows.mortality_cf[0]
+    control = fcf.gmm.measure(mp, _basis(1.0), full=True).cashflows.mortality_cf[0]
     assert np.allclose(healthy, control, rtol=1e-12)
 
 
@@ -92,8 +92,8 @@ def test_default_factor_is_bit_identical():
         mortality_annual=_FLAT(0.10), lapse_annual=_ZERO,
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
         state_model=plain, coverages=(fcf.CoverageRate("DEATH", _FLAT(0.10)),))
-    a = fcf.gmm.measure(mp, b_plain, full=True).cashflows.claim_cf[0]
-    b = fcf.gmm.measure(mp, _basis(1.0), full=True).cashflows.claim_cf[0]
+    a = fcf.gmm.measure(mp, b_plain, full=True).cashflows.mortality_cf[0]
+    b = fcf.gmm.measure(mp, _basis(1.0), full=True).cashflows.mortality_cf[0]
     assert np.array_equal(a, b)
 
 

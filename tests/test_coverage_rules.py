@@ -143,8 +143,8 @@ def test_reduction_on_death_benefit():
         basis,
     )
 
-    ccf_plain = plain.cashflows.claim_cf[0]
-    ccf_reduced = reduced.cashflows.claim_cf[0]
+    ccf_plain = plain.cashflows.mortality_cf[0]
+    ccf_reduced = reduced.cashflows.mortality_cf[0]
     # claims are scaled by rf during the reduced period, full afterwards
     assert np.allclose(ccf_reduced[:red_end], rf * ccf_plain[:red_end])
     assert np.allclose(ccf_reduced[red_end:], ccf_plain[red_end:])

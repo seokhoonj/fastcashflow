@@ -757,7 +757,7 @@ def measure_aggregate(model_points: ModelPoints, basis, *,
 #: / ``maturity_survivors`` -- are ``(n_mp,)`` scalars). Mirrors the stitch /
 #: ``_sum_cashflows`` field set so the chunked group sum matches it exactly.
 _CF_STREAMS_2D = (
-    "inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
+    "inforce", "deaths", "premium_cf", "mortality_cf", "morbidity_cf",
     "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
 
 #: The native grouped measurement type each slot of PortfolioGroups holds.

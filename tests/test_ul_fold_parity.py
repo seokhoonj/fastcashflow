@@ -4,7 +4,7 @@ A universal-life contract carrying ``CoverageRate("DEATH", coi_annual,
 funds_from_account=True, pays_account_balance=True)`` is measured through the
 shared projection (``gmm.measure`` / ``vfa.measure``): the death leg is routed
 through the recursive account roll, the account benefits stay in-band on
-:class:`Cashflows` (``claim_cf`` / ``surrender_cf`` / ``maturity_cf``), and the
+:class:`Cashflows` (``mortality_cf`` / ``surrender_cf`` / ``maturity_cf``), and the
 account-state trajectory is exposed on the ``cashflows.account`` sidecar.
 
 These tests pin the SELF-CONSISTENCY of that fold -- the fused fast path
@@ -162,7 +162,7 @@ def test_ul_fold_account_sidecar_populated():
     got = fcf.gmm.measure(_two_mp(), _ul_basis(), full=True)
     acct = got.cashflows.account
     assert acct is not None
-    n_mp, n_time = got.cashflows.claim_cf.shape
+    n_mp, n_time = got.cashflows.mortality_cf.shape
     assert acct.av.shape == (n_mp, n_time + 1)
     assert acct.av_mid.shape == (n_mp, n_time)
     assert acct.coi.shape == (n_mp, n_time)
@@ -240,13 +240,13 @@ def test_account_book_gated_on_raw_consumers():
     with pytest.raises(NotImplementedError):
         fcf.reinsurance.measure(mp, basis, treaty=fcf.samples.treaty())
     # stochastic fast branch (confidence RA + no settlement_pattern -- the UL
-    # basis defaults) reads claim_cf raw.
+    # basis defaults) reads mortality_cf raw.
     with pytest.raises(NotImplementedError):
         fcf.gmm.stochastic(mp, basis, np.linspace(0.01, 0.05, 8))
     with pytest.raises(NotImplementedError):
         fcf.vfa.tvog(mp, basis,
                      np.tile(np.linspace(-0.01, 0.03, 8)[:, None], (1, n_time)))
-    # roll_forward reads claim_cf as incurred claims.
+    # roll_forward reads mortality_cf as incurred claims.
     m = fcf.gmm.measure(mp, basis, full=True)
     with pytest.raises(NotImplementedError):
         fcf.roll_forward(m, 12)

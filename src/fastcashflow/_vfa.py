@@ -278,7 +278,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
     lic = np.zeros((n_mp, n_time + 1))
     discount_factor_bom = np.ones((n_mp, n_time + 1))
 
-    cf_2d = ("inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
+    cf_2d = ("inforce", "deaths", "premium_cf", "mortality_cf", "morbidity_cf",
              "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
     cf_arrays = {name: np.zeros((n_mp, n_time)) for name in cf_2d}
     maturity_cf = np.zeros(n_mp)

@@ -244,7 +244,7 @@ def test_show_trace_diff_mortality_shock_raises_claim_and_bel():
     shocked = replace(basis, mortality_annual=shocked_mort, coverages=new_coverages)
     ma = fcf.gmm.measure(mp.subset([0]), basis)
     mb = fcf.gmm.measure(mp.subset([0]), shocked)
-    assert mb.cashflows.claim_cf.sum() > ma.cashflows.claim_cf.sum()
+    assert mb.cashflows.mortality_cf.sum() > ma.cashflows.mortality_cf.sum()
     assert mb.bel_path[0, 0] > ma.bel_path[0, 0]
     # And the diff renders without raising.
     buf = io.StringIO()

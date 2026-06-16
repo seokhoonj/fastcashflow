@@ -173,7 +173,7 @@ def test_two_rate_unlocking_matches_first_principles():
     # engine timing (numerics._rollforward_kernel): premiums and annuities at
     # the month start, claims / morbidity / disability / expenses / surrender
     # mid-month, the maturity benefit at the boundary
-    out_mid = (cf.claim_cf + cf.morbidity_cf + cf.expense_cf
+    out_mid = (cf.mortality_cf + cf.morbidity_cf + cf.expense_cf
                + cf.disability_cf + cf.surrender_cf)[0]
     pv_lock = ((out_mid[em_close:] * mid_l[em_close:]).sum()
                + ((cf.annuity_cf - cf.premium_cf)[0, em_close:]

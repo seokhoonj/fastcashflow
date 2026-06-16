@@ -184,7 +184,7 @@ class QuotaShare:
     def cede(self, proj: Cashflows) -> tuple[FloatArray, FloatArray, FloatArray]:
         if not 0.0 <= self.cession <= 1.0:
             raise ValueError(f"cession must be in [0, 1], got {self.cession}")
-        return (self.cession * proj.claim_cf,
+        return (self.cession * proj.mortality_cf,
                 self.cession * proj.morbidity_cf,
                 self.cession * proj.premium_cf)
 

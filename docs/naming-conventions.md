@@ -123,5 +123,5 @@ IFRS 17 GMM의 BEL은 편의 없는 최선추정으로 측정해야 합니다 (S
 워크북에 들어가는 mortality/morbidity/lapse 등은 회사가 외부에서
 경험분석·A/E 보정을 거쳐 만든 **best-estimate 발생률 가정**입니다.
 pricing 마진은 `premium`에 이미 녹아 있어, BEL의 입력이 best
-estimate일 때 `premium_cf > E(claim_cf)`가 자연스럽게 발생하고, 이 차이가
+estimate일 때 `premium_cf > E(mortality_cf)`가 자연스럽게 발생하고, 이 차이가
 CSM의 원천이 됩니다.

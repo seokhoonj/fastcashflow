@@ -176,7 +176,7 @@ mp = fcf.ModelPoints(
 
 m = fcf.gmm.measure(mp, basis)
 print(f"inforce       = {m.cashflows.inforce[0]}")  # 보유계약 (사망으로만 감쇠)
-print(f"claim_cf      = {m.cashflows.claim_cf[0]}")  # 사망보험금
+print(f"mortality_cf      = {m.cashflows.mortality_cf[0]}")  # 사망보험금
 print(f"disability_cf = {m.cashflows.disability_cf[0]}")  # 진단금 (1차 + 2차)
 print(f"BEL           = {m.bel[0]:.2f}")  # 최선추정부채
 print(f"RA            = {m.ra[0]:.2f}")   # 위험조정
@@ -187,7 +187,7 @@ print(f"CSM           = {m.csm[0]:.2f}")  # 계약서비스마진
 
 ```
 inforce       = [1.       0.99     0.9801   0.970299]
-claim_cf      = [1000.     990.     980.1    970.299]
+mortality_cf      = [1000.     990.     980.1    970.299]
 disability_cf = [49500.         46554.75       43784.742375   50785.51030369]
 BEL           = 194565.40
 RA            = 265.78
@@ -208,7 +208,7 @@ CSM           = 0.00
 - **`inforce = 0.99^t`** — 사망 (월 1%) 으로만 줄어듭니다. 1차 / 2차 진단은
   상태 사이를 옮길 뿐 보유계약을 떠나보내지 않으므로 (healthy → post_first
   → post_second 모두 보유계약), in-force 총합은 진단과 무관합니다.
-- **`claim_cf`** — 사망보험금. `inforce × 1% × 100,000`.
+- **`mortality_cf`** — 사망보험금. `inforce × 1% × 100,000`.
 - **`disability_cf`** — 진단금 lump 들의 합. 여기에 면책기간이 드러납니다:
 
 | t | disability_cf | 내역 |

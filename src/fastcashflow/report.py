@@ -435,7 +435,7 @@ def _report_gmm(m: GMMMeasurement) -> Report:
     # benefit -- is a protection claim, not an investment component, so it
     # belongs here; omitting it dropped the disability flow from a DI book's
     # revenue and service result entirely.
-    service_expense = (cf.claim_cf + cf.morbidity_cf + cf.disability_cf
+    service_expense = (cf.mortality_cf + cf.morbidity_cf + cf.disability_cf
                        + cf.expense_cf)
     ra_release = ra[:, :-1] - ra[:, 1:] * monthly_discount
     csm_release = m.csm_release

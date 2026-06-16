@@ -92,7 +92,7 @@ def test_health_claim_is_non_decrementing():
     )
 
     # death claims and the in-force run-off are untouched by health coverages
-    assert np.allclose(plain.cashflows.claim_cf, with_health.cashflows.claim_cf)
+    assert np.allclose(plain.cashflows.mortality_cf, with_health.cashflows.mortality_cf)
     assert np.allclose(plain.cashflows.inforce, with_health.cashflows.inforce)
     # health only adds its own outflow, which raises the BEL
     assert with_health.cashflows.morbidity_cf.sum() > 0.0

@@ -58,7 +58,7 @@ def test_boundary_cut_withholds_maturity_and_cash_flows():
     # premium / claim only within the boundary
     assert int(np.sum(full.cashflows.premium_cf[0] > 0)) == 24
     assert int(np.sum(cut.cashflows.premium_cf[0] > 0)) == 12
-    assert int(np.sum(cut.cashflows.claim_cf[0] > 0)) == 12
+    assert int(np.sum(cut.cashflows.mortality_cf[0] > 0)) == 12
     # the cut excludes future claims + the maturity -> a different BEL
     assert cut.bel[0] != pytest.approx(full.bel[0])
 

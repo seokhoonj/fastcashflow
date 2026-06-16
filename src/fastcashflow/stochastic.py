@@ -63,7 +63,7 @@ class StochasticResult:
 
 @njit(parallel=True, cache=True)
 def _stochastic_inception_kernel(
-    claim_cf, morbidity_cf, disability_cf, expense_cf,
+    mortality_cf, morbidity_cf, disability_cf, expense_cf,
     premium_cf, annuity_cf, maturity_cf, surrender_cf,
     contract_boundary_months, monthly_rate_all,
     mort_factor, morb_factor, disab_factor, long_factor,
@@ -85,7 +85,7 @@ def _stochastic_inception_kernel(
     to the portfolio.
     """
     n_scen, n_time = monthly_rate_all.shape
-    n_mp = claim_cf.shape[0]
+    n_mp = mortality_cf.shape[0]
     bel_out = np.empty(n_scen)
     ra_out = np.empty(n_scen)
     csm_out = np.empty(n_scen)
@@ -107,7 +107,7 @@ def _stochastic_inception_kernel(
                 mr = monthly_rate_all[s, t]
                 half = (1.0 + mr) ** (-0.5)
                 full = 1.0 / (1.0 + mr)
-                claim = claim_cf[mp, t]
+                claim = mortality_cf[mp, t]
                 morb = morbidity_cf[mp, t]
                 disab = disability_cf[mp, t]
                 ann = annuity_cf[mp, t]
@@ -180,7 +180,7 @@ def measure_stochastic(
         # fallback below re-measures through measure(), which routes an account
         # book to the full measurement and handles it correctly.)
         reject_account_book(proj, "measure_stochastic")
-        n_time = proj.claim_cf.shape[1]
+        n_time = proj.mortality_cf.shape[1]
         if rate_scenarios.ndim == 2:
             if rate_scenarios.shape[1] != n_time:
                 raise ValueError(
@@ -194,7 +194,7 @@ def measure_stochastic(
         monthly_rate_all = np.ascontiguousarray(monthly_rate_all)
         z = _norm_ppf(basis.ra_confidence)
         bel, ra, csm, loss_component = _stochastic_inception_kernel(
-            proj.claim_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
+            proj.mortality_cf, proj.morbidity_cf, proj.disability_cf, proj.expense_cf,
             proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
             np.asarray(model_points.contract_boundary_months, dtype=np.int64),
             monthly_rate_all,

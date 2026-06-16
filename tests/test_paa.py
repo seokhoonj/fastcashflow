@@ -70,7 +70,7 @@ def test_paa_service_result_is_the_underwriting_profit():
     ))
     res = fcf.paa.measure(ModelPoints.single(45, 60_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), basis)
     cf = res.cashflows
-    profit = (cf.premium_cf.sum() - cf.claim_cf.sum()
+    profit = (cf.premium_cf.sum() - cf.mortality_cf.sum()
               - cf.morbidity_cf.sum() - cf.expense_cf.sum())
     assert np.isclose(res.service_result.sum(), profit)
 

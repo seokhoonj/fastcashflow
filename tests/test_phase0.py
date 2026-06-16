@@ -50,8 +50,8 @@ def test_hand_calculation():
     # cash flows (discount factors are all 1 -- zero discount)
     deaths = [inforce[0] * 0.01, inforce[1] * 0.01]
     premium_cf = [inforce[0] * premium, inforce[1] * premium]
-    claim_cf = [deaths[0] * death_benefit, deaths[1] * death_benefit]
-    pv_claims = sum(claim_cf)        # 10000 + 9702 = 19702
+    mortality_cf = [deaths[0] * death_benefit, deaths[1] * death_benefit]
+    pv_claims = sum(mortality_cf)        # 10000 + 9702 = 19702
     pv_premiums = sum(premium_cf)    # 12000 + 11642.4 = 23642.4
 
     # BEL = PV(claims) + PV(expenses) - PV(premiums); expenses = 0 here

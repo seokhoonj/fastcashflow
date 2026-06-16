@@ -178,7 +178,7 @@ def test_lae_pro_rata_row_lifts_expense():
     assert np.all(m_lae.cashflows.expense_cf >=
                   m_base.cashflows.expense_cf - 1e-9)
     # Strictly higher in months where the policy has any claim flow.
-    has_claim = (m_base.cashflows.claim_cf[0]
+    has_claim = (m_base.cashflows.mortality_cf[0]
                  + m_base.cashflows.morbidity_cf[0]) > 0.0
     assert np.any(m_lae.cashflows.expense_cf[0, has_claim]
                   > m_base.cashflows.expense_cf[0, has_claim])

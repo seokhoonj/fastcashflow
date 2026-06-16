@@ -193,7 +193,7 @@ m_paidup = measure_in(STATE_PAIDUP)  # 완납 (해지 월 2%)
 m_active = measure_in(STATE_ACTIVE)  # 납입중 (해지 월 10%) -- 대조용
 
 print(f"paidup inforce  = {m_paidup.cashflows.inforce[0, :3]}")   # 보유계약 (해지 2%)
-print(f"paidup claim_cf = {m_paidup.cashflows.claim_cf[0, :3]}")  # 사망보험금
+print(f"paidup mortality_cf = {m_paidup.cashflows.mortality_cf[0, :3]}")  # 사망보험금
 print(f"paidup BEL      = {m_paidup.bel[0]:.2f}")                 # 최선추정부채
 print(f"active inforce  = {m_active.cashflows.inforce[0, :3]}")   # 보유계약 (해지 10%)
 print(f"active BEL      = {m_active.bel[0]:.2f}")                 # 대조용 BEL
@@ -203,7 +203,7 @@ print(f"active BEL      = {m_active.bel[0]:.2f}")                 # 대조용 BE
 
 ```
 paidup inforce  = [1.         0.9702     0.94128804]
-paidup claim_cf = [1000.       970.2      941.28804]
+paidup mortality_cf = [1000.       970.2      941.28804]
 paidup BEL      = 2911.49
 active inforce  = [1.       0.891    0.793881]
 active BEL      = 2684.88

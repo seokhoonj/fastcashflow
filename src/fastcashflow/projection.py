@@ -3,7 +3,7 @@
 Sign convention (liability perspective, used consistently across the engine):
 
     premium_cf  : insurer INFLOW  -- reduces the insurance liability
-    claim_cf    : insurer OUTFLOW -- DEATH-pattern claims (priced via mortality_cv)
+    mortality_cf    : insurer OUTFLOW -- DEATH-pattern claims (priced via mortality_cv)
     morbidity_cf: insurer OUTFLOW -- MORBIDITY-pattern claims (priced via morbidity_cv)
     expense_cf  : insurer OUTFLOW -- increases the insurance liability
     annuity_cf  : insurer OUTFLOW -- increases the insurance liability
@@ -64,7 +64,7 @@ class AccountTrajectory:
     account-referencing coverage (``has_account``).
 
     The benefits the account drives stay in-band on :class:`Cashflows`
-    (``claim_cf`` / ``surrender_cf`` / ``maturity_cf``) so the BEL measurement
+    (``mortality_cf`` / ``surrender_cf`` / ``maturity_cf``) so the BEL measurement
     inherits them with no new parameter; this object localises the
     account-state arrays that the flat ``(n_mp, n_time)`` stitch loops would
     otherwise trip on (``av`` / ``fund`` carry the extra month-end column).
@@ -87,7 +87,7 @@ class Cashflows:
 
     The per-month arrays are shaped ``(n_mp, n_time)``; ``maturity_cf`` is
     ``(n_mp,)`` -- one payment per policy, at that policy's term. Death and
-    health claims are kept apart -- ``claim_cf`` and ``morbidity_cf`` -- so
+    health claims are kept apart -- ``mortality_cf`` and ``morbidity_cf`` -- so
     the Risk Adjustment can price the two risks separately; ``disability_cf``
     is a third risk class -- the income paid while in a benefit state plus
     the on-transition lump sum.
@@ -103,7 +103,7 @@ class Cashflows:
     inforce: FloatArray       # policies in force at the start of each month
     deaths: FloatArray        # deaths during each month
     premium_cf: FloatArray    # premium inflow per month (single premium at t=0)
-    claim_cf: FloatArray      # DEATH-pattern claim outflow per month (priced via mortality_cv)
+    mortality_cf: FloatArray  # DEATH-pattern claim outflow per month (priced via mortality_cv)
     morbidity_cf: FloatArray  # MORBIDITY-pattern claim outflow per month (priced via morbidity_cv)
     expense_cf: FloatArray    # expense outflow per month
     annuity_cf: FloatArray    # annuity (survival income) outflow per month
@@ -124,7 +124,7 @@ class Cashflows:
 def reject_account_book(cashflows: "Cashflows | None", entry: str) -> None:
     """Raise if a projection carries a universal-life account (the Step-3.5 gate).
 
-    Measure paths that read the benefit cash flows (``claim_cf`` /
+    Measure paths that read the benefit cash flows (``mortality_cf`` /
     ``surrender_cf`` / ``maturity_cf``) RAW -- without netting the account
     ``fund`` or splitting the net amount at risk -- would double-count a
     universal-life account book (the account benefit is the policyholder's own
@@ -364,7 +364,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
     inforce = np.zeros((n_mp, n_time))
     deaths = np.zeros((n_mp, n_time))
     premium_cf = np.zeros((n_mp, n_time))
-    claim_cf = np.zeros((n_mp, n_time))
+    mortality_cf = np.zeros((n_mp, n_time))
     morbidity_cf = np.zeros((n_mp, n_time))
     expense_cf = np.zeros((n_mp, n_time))
     annuity_cf = np.zeros((n_mp, n_time))
@@ -503,7 +503,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             level = (prem_occ * premium[mp] * premium_factor[mp, year]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
-            claim_cf[mp, t] = dclaim_occ * claim_rate
+            mortality_cf[mp, t] = dclaim_occ * claim_rate
             if roll_av and not in_payout:
                 # Account-backed death pays max(account value, face) on the
                 # occupancy deaths -- written ONCE here, the pays_account_balance
@@ -513,7 +513,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 # risk). Added to any non-account death claim already accrued.
                 av_m = av_mid[mp, t]
                 fa = account_face[mp]
-                claim_cf[mp, t] += deaths_acc * (av_m if av_m > fa else fa)
+                mortality_cf[mp, t] += deaths_acc * (av_m if av_m > fa else fa)
             morbidity_cf[mp, t] = inforce_t * morb_rate
             if annuitizing:
                 # Phase 2 (t >= A): the guaranteed annuity, paid annuity-due from
@@ -545,13 +545,13 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             beta = (inforce_t * beta_pro_rata * ann_prem / 12.0
                     if t < premium_term else 0.0)
             gamma = inforce_t * gamma_fixed[t]
-            # LAE applies to mortality + morbidity claims only --
+            # LAE applies to claim + morbidity claims only --
             # disability income is a periodic annuity-like benefit, lump
             # sums are one-off transitions, and conflating either with
             # LAE would double-count. Add a dedicated basis later if the
             # practice ever needs it.
             lae = lae_pro_rata[t] * (
-                claim_cf[mp, t] + morbidity_cf[mp, t])
+                mortality_cf[mp, t] + morbidity_cf[mp, t])
             expense_cf[mp, t] = alpha + beta + gamma + lae
             # Advance the occupancy along the transition edges; a lump-sum
             # transition pays its benefit on the occupancy it carries.
@@ -619,7 +619,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 amt = (inforce[mp, t] * coverage_rates[cov_idx, mp, t // 12]
                        * benefit * mult)
                 if mortality_risk:
-                    claim_cf[mp, t] += amt
+                    mortality_cf[mp, t] += amt
                 else:
                     morbidity_cf[mp, t] += amt
 
@@ -655,7 +655,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                                             * d_rate * benefit * mult)
                 undiagnosed *= (1.0 - d_rate)
 
-    return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
+    return (inforce, deaths, premium_cf, mortality_cf, morbidity_cf, expense_cf,
             annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors,
             av, av_mid, coi_av)
 
@@ -699,7 +699,7 @@ def _project_kernel_semi_markov(
     inforce = np.zeros((n_mp, n_time))
     deaths = np.zeros((n_mp, n_time))
     premium_cf = np.zeros((n_mp, n_time))
-    claim_cf = np.zeros((n_mp, n_time))
+    mortality_cf = np.zeros((n_mp, n_time))
     morbidity_cf = np.zeros((n_mp, n_time))
     expense_cf = np.zeros((n_mp, n_time))
     annuity_cf = np.zeros((n_mp, n_time))
@@ -786,7 +786,7 @@ def _project_kernel_semi_markov(
             level = (prem_occ * premium[mp] * premium_factor[mp, year]
                      if (t < premium_term and t % prem_freq == 0) else 0.0)
             premium_cf[mp, t] = level
-            claim_cf[mp, t] = dclaim_occ * claim_rate
+            mortality_cf[mp, t] = dclaim_occ * claim_rate
             morbidity_cf[mp, t] = inforce_t * morb_rate
             annuity_cf[mp, t] = (inforce_t * annuity_payment[mp] * annuity_factor[mp, year]
                                   if t % ann_freq == 0 else 0.0)
@@ -798,13 +798,13 @@ def _project_kernel_semi_markov(
             beta = (inforce_t * beta_pro_rata * ann_prem / 12.0
                     if t < premium_term else 0.0)
             gamma = inforce_t * gamma_fixed[t]
-            # LAE applies to mortality + morbidity claims only --
+            # LAE applies to claim + morbidity claims only --
             # disability income is a periodic annuity-like benefit, lump
             # sums are one-off transitions, and conflating either with
             # LAE would double-count. Add a dedicated basis later if the
             # practice ever needs it.
             lae = lae_pro_rata[t] * (
-                claim_cf[mp, t] + morbidity_cf[mp, t])
+                mortality_cf[mp, t] + morbidity_cf[mp, t])
             expense_cf[mp, t] = alpha + beta + gamma + lae
 
             for i in range(total_cohorts):
@@ -886,7 +886,7 @@ def _project_kernel_semi_markov(
                 amt = (inforce[mp, t] * coverage_rates[cov_idx, mp, t // 12]
                        * benefit * mult)
                 if mortality_risk:
-                    claim_cf[mp, t] += amt
+                    mortality_cf[mp, t] += amt
                 else:
                     morbidity_cf[mp, t] += amt
 
@@ -920,7 +920,7 @@ def _project_kernel_semi_markov(
                                             * d_rate * benefit * mult)
                 undiagnosed *= (1.0 - d_rate)
 
-    return (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
+    return (inforce, deaths, premium_cf, mortality_cf, morbidity_cf, expense_cf,
             annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors)
 
 
@@ -1265,7 +1265,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         state_det_at = compiled.state_det_at
         state_det_to = compiled.state_det_to
         state_det_lump = compiled.state_det_lump
-        (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
+        (inforce, deaths, premium_cf, mortality_cf, morbidity_cf, expense_cf,
          annuity_cf, disability_cf, lapse_flow,
          maturity_cf, maturity_survivors) = _project_kernel_semi_markov(
             state_death_exit, state_lapse,
@@ -1340,7 +1340,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         state_death_exit = compiled.state_death_exit
         state_lapse = _state_lapse_stack(state_model, rate_dict)
         state_death_benefit_factor = compiled.state_death_benefit_factor
-        (inforce, deaths, premium_cf, claim_cf, morbidity_cf, expense_cf,
+        (inforce, deaths, premium_cf, mortality_cf, morbidity_cf, expense_cf,
          annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors,
          av, av_mid, coi_av) = _project_kernel(
             state_death_exit,
@@ -1481,7 +1481,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         inforce=inforce,
         deaths=deaths,
         premium_cf=premium_cf,
-        claim_cf=claim_cf,
+        mortality_cf=mortality_cf,
         morbidity_cf=morbidity_cf,
         expense_cf=expense_cf,
         annuity_cf=annuity_cf,

@@ -1063,7 +1063,7 @@ def test_benefits_accepts_coverage_code_keys():
     assert mp.coverage_codes == ("DEATH", "CANCER")
     m = fcf.gmm.measure(mp, basis2)
     q = lambda a: 1 - (1 - a) ** (1 / 12)            # annual -> monthly
-    assert m.cashflows.claim_cf[0, 0] == pytest.approx(1000.0 * q(0.01))      # DEATH rate
+    assert m.cashflows.mortality_cf[0, 0] == pytest.approx(1000.0 * q(0.01))      # DEATH rate
     assert m.cashflows.morbidity_cf[0, 0] == pytest.approx(5000.0 * q(0.02))  # CANCER rate
     # integer index keys are rejected -- key each benefit by its coverage code
     with pytest.raises(ValueError, match="integer index keys are not supported"):

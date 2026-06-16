@@ -219,7 +219,7 @@ def _account_risk_adjustment(model_points, basis, proj, discount_monthly):
     cost-of-capital-wrapped per ``ra_method``.
     """
     face = model_points.minimum_death_benefit
-    n_mp, n_time = proj.claim_cf.shape
+    n_mp, n_time = proj.mortality_cf.shape
     zeros_t = np.zeros((n_mp, n_time))
     zeros_mp = np.zeros(n_mp)
     nar_claim = np.ascontiguousarray(
@@ -271,13 +271,13 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
     ``basis.discount_monthly``) is never reached together with an override.
     """
     proj = project_cashflows(model_points, basis)
-    claim_cf, morbidity_cf = proj.claim_cf, proj.morbidity_cf
+    mortality_cf, morbidity_cf = proj.mortality_cf, proj.morbidity_cf
     if discount_monthly is None:
         discount_monthly = discount_monthly_curve(basis, proj.n_time)
     if basis.settlement_pattern is None:
-        lic = np.zeros((claim_cf.shape[0], proj.n_time + 1))
+        lic = np.zeros((mortality_cf.shape[0], proj.n_time + 1))
     else:
-        lic = _settlement_lic(claim_cf + morbidity_cf, basis.settlement_pattern)
+        lic = _settlement_lic(mortality_cf + morbidity_cf, basis.settlement_pattern)
         # Claims are paid over the pattern, not at incurrence -- discount
         # them to their payment dates in the fulfilment cash flows. With a
         # discount curve we use the in-year scalar (Sec. 40 / B71 -- the
@@ -285,12 +285,12 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
         # full-curve treatment would require a time-varying settlement
         # factor inside the kernel, deferred.
         factor = _settlement_factor(basis.settlement_pattern, basis.discount_monthly)
-        claim_cf = claim_cf * factor
+        mortality_cf = mortality_cf * factor
         morbidity_cf = morbidity_cf * factor
     discount_factor_bom, discount_factor_mid = discount_factors_from_curve(discount_monthly)
 
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
-        claim_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
+        mortality_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.contract_boundary_months, discount_monthly,
     )
@@ -1192,7 +1192,7 @@ def settle(
     unit = replace(model_points, count=np.ones(n_mp))
     m = _measure_full(unit, basis)
     cf = m.cashflows
-    # The settlement movement reads claim_cf / maturity_cf / surrender_cf raw as
+    # The settlement movement reads mortality_cf / maturity_cf / surrender_cf raw as
     # incurred / paid benefits; an account book's benefits are not priced claims,
     # so reject it (settle_aggregate funnels through here, so it is covered too).
     reject_account_book(cf, "gmm.settle")
@@ -1271,7 +1271,7 @@ def settle(
     zero_mat = np.zeros_like(cf.maturity_cf)
     zero_surr = np.zeros_like(cf.surrender_cf)
     outflow_path = _rollforward_kernel(
-        cf.claim_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
+        cf.mortality_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
         zero_prem, zero_ann, zero_mat, zero_surr,
         boundary, discount_monthly)[0]
     out_o, out_i, out_r, out_e, out_c = _block(outflow_path)
@@ -1339,7 +1339,7 @@ def settle(
     lock = float(state.lock_in_rate)
     lock_monthly = np.full(n_time, (1.0 + lock) ** (1.0 / 12.0) - 1.0)
     bel_lock = _rollforward_kernel(
-        cf.claim_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
+        cf.mortality_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
         cf.premium_cf, cf.annuity_cf, cf.maturity_cf, cf.surrender_cf,
         boundary, lock_monthly)[0]
     delta_lock = (k_obs - k_exp) * bel_lock[rows, em_c] * live_close
@@ -1394,7 +1394,7 @@ def settle(
     # the discounting / RA measurement effect. m.lic is the undiscounted unit
     # trajectory (all-zero when the basis has no settlement_pattern, i.e. claims
     # paid as incurred -- the LIC is zero at both dates and lic_finance is zero).
-    incurred = cf.claim_cf + cf.morbidity_cf
+    incurred = cf.mortality_cf + cf.morbidity_cf
     claims_incurred = k_exp * (incurred[rows[:, None], cols_safe]
                                * col_ok).sum(axis=1)
     claims_paid = (k_exp * m.lic[rows, em_open] + claims_incurred
@@ -1403,7 +1403,7 @@ def settle(
         # discounted PV of the unpaid run-off, split by risk class for the RA
         r_lic = basis.discount_monthly
         lic_death = _settlement_lic_discounted(
-            cf.claim_cf, basis.settlement_pattern, r_lic)
+            cf.mortality_cf, basis.settlement_pattern, r_lic)
         lic_morb = _settlement_lic_discounted(
             cf.morbidity_cf, basis.settlement_pattern, r_lic)
         # RA on the LIC (paragraph 37): z x cv-weighted discounted LIC by risk
@@ -3701,7 +3701,7 @@ def _stitch_full_measurements(n_mp, sub_results):
     discount_factor_bom = np.ones((n_mp, n_time + 1))
     discount_factor_mid = np.ones((n_mp, n_time))
 
-    cf_2d = ("inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
+    cf_2d = ("inforce", "deaths", "premium_cf", "mortality_cf", "morbidity_cf",
              "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
     cf_arrays = {name: np.zeros((n_mp, n_time)) for name in cf_2d}
     maturity_cf = np.zeros(n_mp)

@@ -193,7 +193,7 @@ def _stitch_paa_measurements(n_mp, sub_results):
     service_expense = np.zeros((n_mp, n_time))
     lic = np.zeros((n_mp, n_time + 1))
 
-    cf_2d = ("inforce", "deaths", "premium_cf", "claim_cf", "morbidity_cf",
+    cf_2d = ("inforce", "deaths", "premium_cf", "mortality_cf", "morbidity_cf",
              "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
     cf_arrays = {name: np.zeros((n_mp, n_time)) for name in cf_2d}
     maturity_cf = np.zeros(n_mp)
@@ -273,7 +273,7 @@ def measure_paa(
     # Onerous test -- the GMM inception fulfilment cash flows. Needed by both
     # paths and independent of the LRC roll, so it comes first; the headline
     # path returns right after it.
-    onerous_claim_cf, onerous_morbidity_cf = proj.claim_cf, proj.morbidity_cf
+    onerous_mortality_cf, onerous_morbidity_cf = proj.mortality_cf, proj.morbidity_cf
     if basis.settlement_pattern is not None:
         # Claims are paid over the settlement pattern, not at incurrence --
         # discount them to their payment dates in the fulfilment cash flows,
@@ -284,10 +284,10 @@ def measure_paa(
         # pattern is rejected at Basis construction, so discount_monthly is the
         # scalar in-year reference (Sec. 40 / B71 -- the rate at incurrence).
         factor = _settlement_factor(basis.settlement_pattern, basis.discount_monthly)
-        onerous_claim_cf = onerous_claim_cf * factor
+        onerous_mortality_cf = onerous_mortality_cf * factor
         onerous_morbidity_cf = onerous_morbidity_cf * factor
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
-        onerous_claim_cf, onerous_morbidity_cf, proj.disability_cf, proj.expense_cf,
+        onerous_mortality_cf, onerous_morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.contract_boundary_months,
         discount_monthly_curve(basis, proj.n_time),
@@ -311,11 +311,11 @@ def measure_paa(
     # headline never needs (kept below the early return so the headline path
     # does not allocate them).
     premium_total = proj.premium_cf.sum(axis=1)          # (n_mp,)
-    service_expense = proj.claim_cf + proj.morbidity_cf + proj.expense_cf
+    service_expense = proj.mortality_cf + proj.morbidity_cf + proj.expense_cf
 
     # Liability for incurred claims -- claims incurred build it up, claims
     # paid (spread over the settlement pattern) run it off. Held undiscounted.
-    incurred = proj.claim_cf + proj.morbidity_cf
+    incurred = proj.mortality_cf + proj.morbidity_cf
     if basis.settlement_pattern is None:
         lic = np.zeros((incurred.shape[0], incurred.shape[1] + 1))
     else:
@@ -725,16 +725,16 @@ def settle(
     # Sec. 57-58 re-test: the fulfilment cash flows for remaining coverage at
     # each date, with the settlement discount on claims exactly as the
     # inception onerous test applies it (measure_paa above).
-    onerous_claim_cf, onerous_morbidity_cf = cf.claim_cf, cf.morbidity_cf
+    onerous_mortality_cf, onerous_morbidity_cf = cf.mortality_cf, cf.morbidity_cf
     if basis.settlement_pattern is not None:
         factor = _settlement_factor(basis.settlement_pattern,
                                     basis.discount_monthly)
-        onerous_claim_cf = onerous_claim_cf * factor
+        onerous_mortality_cf = onerous_mortality_cf * factor
         onerous_morbidity_cf = onerous_morbidity_cf * factor
     discount_monthly = discount_monthly_curve(basis, n_time)
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = (
         _rollforward_kernel(
-            onerous_claim_cf, onerous_morbidity_cf, cf.disability_cf,
+            onerous_mortality_cf, onerous_morbidity_cf, cf.disability_cf,
             cf.expense_cf, cf.premium_cf, cf.annuity_cf, cf.maturity_cf,
             cf.surrender_cf, boundary, discount_monthly))
     ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
@@ -765,13 +765,13 @@ def settle(
     # coverage months still settle (the run-off trajectory is padded by
     # pattern_length - 1 months). For an in-coverage MP the extended trajectory
     # equals the in-coverage one within the boundary, so this is byte-identical.
-    incurred = cf.claim_cf + cf.morbidity_cf
+    incurred = cf.mortality_cf + cf.morbidity_cf
     claims_incurred = k_exp * (incurred[rows[:, None], cols_safe]
                                * col_ok).sum(axis=1)
     if basis.settlement_pattern is not None:
         pattern = np.asarray(basis.settlement_pattern, dtype=np.float64)
         pad = pattern.size - 1                 # claims in the last coverage months
-        claim_ext = np.concatenate([cf.claim_cf, np.zeros((n_mp, pad))], axis=1)
+        claim_ext = np.concatenate([cf.mortality_cf, np.zeros((n_mp, pad))], axis=1)
         morb_ext = np.concatenate([cf.morbidity_cf, np.zeros((n_mp, pad))], axis=1)
         r_lic = basis.discount_monthly
         lic_death = _settlement_lic_discounted(claim_ext, pattern, r_lic)

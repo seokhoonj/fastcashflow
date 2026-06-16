@@ -150,7 +150,7 @@ def test_lic_opening_is_the_discounted_pv_plus_ra():
                     count=np.array([1.0]), calculation_methods=CM),
         basis, full=True)
     cf = unit.cashflows
-    lic_d = _settlement_lic_discounted(cf.claim_cf, PATTERN, basis.discount_monthly)
+    lic_d = _settlement_lic_discounted(cf.mortality_cf, PATTERN, basis.discount_monthly)
     lic_m = _settlement_lic_discounted(cf.morbidity_cf, PATTERN, basis.discount_monthly)
     z = _norm_ppf(basis.ra_confidence)
     lic_ra = z * (basis.mortality_cv * lic_d + basis.morbidity_cv * lic_m)

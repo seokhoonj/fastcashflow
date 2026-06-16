@@ -176,7 +176,7 @@ def _sum_cashflows(cf: Cashflows, reducer: _GroupReducer) -> Cashflows:
         inforce=reducer.sum(cf.inforce),
         deaths=reducer.sum(cf.deaths),
         premium_cf=reducer.sum(cf.premium_cf),
-        claim_cf=reducer.sum(cf.claim_cf),
+        mortality_cf=reducer.sum(cf.mortality_cf),
         morbidity_cf=reducer.sum(cf.morbidity_cf),
         expense_cf=reducer.sum(cf.expense_cf),
         annuity_cf=reducer.sum(cf.annuity_cf),

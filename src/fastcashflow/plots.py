@@ -306,7 +306,7 @@ def _direct_cashflow_chart(measurement, period_months, ax, title):
     # morbidity, annuity, expenses, disability income/lump and surrender value.
     # (maturity_cf is a per-policy lump at each policy's term, not a monthly
     # series, so it is not placed on this period-binned timeline.)
-    outgo = (cf.claim_cf + cf.morbidity_cf + cf.annuity_cf + cf.expense_cf
+    outgo = (cf.mortality_cf + cf.morbidity_cf + cf.annuity_cf + cf.expense_cf
              + cf.disability_cf + cf.surrender_cf).sum(axis=0)
     return _cashflow_bars(premium, outgo, "premiums in",
                           "claims & expenses out", period_months, ax, title)

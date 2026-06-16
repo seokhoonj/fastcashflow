@@ -324,7 +324,7 @@ def _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
 
 
 @njit(parallel=True, cache=True)
-def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
+def _rollforward_kernel(mortality_cf, morbidity_cf, disability_cf, expense_cf,
                         premium_cf, annuity_cf, maturity_cf, surrender_cf,
                         contract_boundary_months, discount_monthly):
     """Backward pass -- the BEL and the four RA present-value trajectories.
@@ -351,7 +351,7 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
     the maturity benefit -- longevity risk). All five trajectories have shape
     ``(n_mp, n_time+1)``.
     """
-    n_mp, n_time = claim_cf.shape
+    n_mp, n_time = mortality_cf.shape
     bel = np.zeros((n_mp, n_time + 1))
     pv_claims = np.zeros((n_mp, n_time + 1))
     pv_morbidity = np.zeros((n_mp, n_time + 1))
@@ -370,7 +370,7 @@ def _rollforward_kernel(claim_cf, morbidity_cf, disability_cf, expense_cf,
         bel[mp, boundary] = maturity_cf[mp]
         pv_survival[mp, boundary] = maturity_cf[mp]
         for t in range(boundary - 1, -1, -1):
-            claim = claim_cf[mp, t]
+            claim = mortality_cf[mp, t]
             morbidity = morbidity_cf[mp, t]
             disability = disability_cf[mp, t]
             annuity = annuity_cf[mp, t]

@@ -290,7 +290,7 @@ def _(
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
     _require_full(measurement, "roll_forward")
-    # The movement reads claim_cf / morbidity_cf raw as incurred claims; a
+    # The movement reads mortality_cf / morbidity_cf raw as incurred claims; a
     # universal-life account book's account death benefit is not a priced claim,
     # so reject it until the movement nets the account (a follow-up).
     reject_account_book(measurement.cashflows, "roll_forward")
@@ -544,7 +544,7 @@ def _roll_forward_paa(
     lic = measurement.lic
     premium_cf = measurement.cashflows.premium_cf
     revenue = measurement.revenue
-    incurred = measurement.cashflows.claim_cf + measurement.cashflows.morbidity_cf
+    incurred = measurement.cashflows.mortality_cf + measurement.cashflows.morbidity_cf
     loss_component = measurement.loss_component
     n_time = lrc.shape[1] - 1
     total_revenue = revenue.sum(axis=1)
