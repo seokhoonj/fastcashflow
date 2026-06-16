@@ -16,6 +16,14 @@ reporting exactly which ``path.field`` changed.
 
 To regenerate intentionally (only when a number is *meant* to change): delete
 ``tests/_ul_oracle_snapshot.json`` and re-run.
+
+Portability: the bit-exact digest only reproduces in the environment that wrote
+the snapshot. A different numba / numpy build vectorises the kernels differently
+and shifts the low float bits, breaking the sha256 even when the source is
+unchanged. So this test is SKIPPED under CI (``CI`` env set) and runs only on
+the developer's machine; portable UL correctness is covered by the hand-calc and
+parity suites (``test_ul_account_value``, ``test_ul_annuity_account``,
+``test_ul_fold_parity``), which do run in CI.
 """
 import dataclasses
 import hashlib
@@ -212,6 +220,19 @@ def _collect() -> dict:
 # The oracle test
 # ---------------------------------------------------------------------------
 
+# The digest is bit-exact (sha256 of the raw float bytes), so it only reproduces
+# in the environment the snapshot was written in. A different numba / numpy build
+# vectorises the kernels differently and shifts the low bits, breaking the hash
+# even when the source is unchanged (verified: the snapshot regenerates identical
+# on the dev machine, yet diverges on CI's build). This is a Step-0 refactor
+# guard, meaningful on the developer's machine where the refactor happens;
+# portable UL correctness is pinned by the hand-calc and parity suites
+# (test_ul_account_value, test_ul_annuity_account, test_ul_fold_parity), which do
+# run in CI. So skip the bit-exact pin where the build environment differs.
+@pytest.mark.skipif(
+    os.environ.get("CI") is not None,
+    reason="bit-exact digest is not portable across numba / numpy builds; "
+           "portable UL coverage runs via the hand-calc / parity suites")
 def test_ul_refactor_oracle():
     current = _collect()
     if not os.path.exists(SNAPSHOT):
