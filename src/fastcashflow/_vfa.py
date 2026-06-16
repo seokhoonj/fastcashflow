@@ -349,7 +349,7 @@ class _VFAProjection:
     inforce: FloatArray              # (n_mp, n_time) coverage units
     r_m: float                       # monthly underlying-items return
     av: FloatArray                   # (n_mp, n_time+1) account-value path
-    disc_start: FloatArray           # (n_time+1,) start-of-month discount
+    discount_factor_bom: FloatArray  # (n_time+1,) start-of-month discount
     guarantee_excess_pv: FloatArray  # (n_mp, n_time+1) PV of the GMDB/GMAB excess over AV
     expense_pv: FloatArray           # (n_mp, n_time+1) PV of expenses
 
@@ -482,7 +482,7 @@ def _vfa_project(
     # that column, so the present-value path below discounts it the extra month.
     benefit_cf[rows, term_idx] += maturity_benefit
     # The extra-month discount, applied to the PV path only (the LIC keeps the
-    # nominal amount). disc_start[term] / disc_start[term - 1] = 1/(1 + r_m), so
+    # nominal amount). discount_factor_bom[term] / discount_factor_bom[term - 1] = 1/(1 + r_m), so
     # anchoring the maturity payout at time term scales its term - 1 cell by that
     # factor; this matches the GMM maturity convention (discount at the boundary
     # index). The guarantee-excess disclosure path takes the same shift on its
@@ -521,7 +521,7 @@ def _vfa_project(
     # discounted start-of-month, consistent with the account value, so a
     # zero fee leaves no profit.
     base = 1.0 + r_m
-    disc_start = base ** (-np.arange(n_time + 1))
+    discount_factor_bom = base ** (-np.arange(n_time + 1))
     disc_mid = base ** (-(np.arange(n_time) + 0.5))
 
     # Present-value trajectories -- the PV at each month t of the cash flows
@@ -530,7 +530,7 @@ def _vfa_project(
         tail = np.cumsum((cashflow * discount)[:, ::-1], axis=1)[:, ::-1]
         pv = np.zeros((n_mp, n_time + 1))
         pv[:, :n_time] = tail
-        return pv / disc_start
+        return pv / discount_factor_bom
 
     # A settlement pattern pays the exit benefit over later months -- so
     # discount it to those payment dates in the present value.
@@ -539,7 +539,7 @@ def _vfa_project(
         benefit_for_pv = benefit_for_pv * _settlement_factor(
             basis.settlement_pattern, r_m
         )
-    pv_benefits = _pv_trajectory(benefit_for_pv, disc_start[:n_time])
+    pv_benefits = _pv_trajectory(benefit_for_pv, discount_factor_bom[:n_time])
     pv_expenses = _pv_trajectory(proj.expense_cf, disc_mid)
     # Variable fee as a PV *trajectory* (PV of the fee from each month onward).
     # Column 0 is the inception total (= the old scalar sum); an in-force
@@ -556,7 +556,7 @@ def _vfa_project(
     if basis.settlement_pattern is not None:
         g_for_pv = g_for_pv * _settlement_factor(
             basis.settlement_pattern, r_m)
-    guarantee_excess_pv = _pv_trajectory(g_for_pv, disc_start[:n_time])
+    guarantee_excess_pv = _pv_trajectory(g_for_pv, discount_factor_bom[:n_time])
 
     # The deterministic BEL carries the guarantee's intrinsic value only.
     # Given return scenarios, fold in its time value too -- under the VFA
@@ -640,7 +640,7 @@ def _vfa_project(
         time_value=time_value, lic=lic, benefit_cf=benefit_cf,
         guarantee_excess_cf=guarantee_excess_cf,
         cashflows=proj, inforce=inforce,
-        r_m=r_m, av=av, disc_start=disc_start,
+        r_m=r_m, av=av, discount_factor_bom=discount_factor_bom,
         guarantee_excess_pv=guarantee_excess_pv, expense_pv=pv_expenses,
     )
 
@@ -763,7 +763,7 @@ def measure_vfa(
         csm_accretion=csm_accretion,
         csm_release=csm_release,
         lic=p.lic,
-        discount_factor_bom=p.disc_start,
+        discount_factor_bom=p.discount_factor_bom,
         cashflows=p.cashflows,
         model_points=model_points,
     )
