@@ -147,7 +147,7 @@ def test_paa_full_false_matches_full_headline():
     assert np.allclose(head.loss_component, full.loss_component)
     assert np.allclose(head.fcf, full.fcf)
     assert head.lrc_path is None and head.revenue is None
-    assert head.service_expense is None and head.lic is None
+    assert head.service_expense is None and head.lic_path is None
     assert head.cashflows is None
 
 

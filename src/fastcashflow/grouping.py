@@ -281,7 +281,7 @@ def _per_group_bom(bom, inforce, reducer, labels):
     return out_bom, reps
 
 
-def _finalise_gmm_group(bel, ra, grouped_cf, lic, out_bom, out_mid,
+def _finalise_gmm_group(bel, ra, grouped_cf, lic_path, out_bom, out_mid,
                         labels, sizes, discount_units=False) -> GMMMeasurement:
     """Build a grouped GMMMeasurement from already-summed group aggregates.
 
@@ -313,7 +313,7 @@ def _finalise_gmm_group(bel, ra, grouped_cf, lic, out_bom, out_mid,
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=lic,
+        lic_path=lic_path,
         cashflows=grouped_cf,
         discount_factor_bom=out_bom,
         discount_factor_mid=out_mid,
@@ -330,7 +330,7 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
     bel = reducer.sum(measurement.bel_path)
     ra = reducer.sum(measurement.ra_path)
     grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
-    lic = reducer.sum(measurement.lic)
+    lic_path = reducer.sum(measurement.lic_path)
 
     # The discount curve is per-group: a segmented result carries a 2-D per-MP
     # curve, so reconcile each group to one curve; a single basis a 1-D one.
@@ -342,10 +342,10 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
     else:
         out_bom, out_mid = bom, measurement.discount_factor_mid
     return _finalise_gmm_group(
-        bel, ra, grouped_cf, lic, out_bom, out_mid, labels, reducer.sizes)
+        bel, ra, grouped_cf, lic_path, out_bom, out_mid, labels, reducer.sizes)
 
 
-def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
+def _finalise_vfa_group(bel, ra, grouped_cf, lic_path, time_value, variable_fee,
                         out_bom, labels, sizes,
                         discount_units=False) -> VFAMeasurement:
     """Build a grouped VFAMeasurement from already-summed group aggregates.
@@ -381,7 +381,7 @@ def _finalise_vfa_group(bel, ra, grouped_cf, lic, time_value, variable_fee,
         account_value_path=None,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=lic,
+        lic_path=lic_path,
         cashflows=grouped_cf,
         discount_factor_bom=out_bom,
         model_points=None,
@@ -402,7 +402,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
     bel = reducer.sum(measurement.bel_path)
     ra = reducer.sum(measurement.ra_path)
     grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
-    lic = reducer.sum(measurement.lic)
+    lic_path = reducer.sum(measurement.lic_path)
     # variable_fee (PV of the fee) and time_value (a cost) are per-MP amounts --
     # additive.
     time_value = reducer.sum(measurement.time_value)
@@ -418,7 +418,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
     else:
         out_bom = bom
     return _finalise_vfa_group(
-        bel, ra, grouped_cf, lic, time_value, variable_fee, out_bom,
+        bel, ra, grouped_cf, lic_path, time_value, variable_fee, out_bom,
         labels, reducer.sizes)
 
 
@@ -466,7 +466,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
     )
 
 
-def _finalise_paa_group(lrc_path, revenue, service_expense, lic, fcf,
+def _finalise_paa_group(lrc_path, revenue, service_expense, lic_path, fcf,
                         grouped_cf, labels, sizes) -> PAAMeasurement:
     """Build a grouped PAAMeasurement from already-summed group aggregates.
 
@@ -485,7 +485,7 @@ def _finalise_paa_group(lrc_path, revenue, service_expense, lic, fcf,
         lrc_path=lrc_path,
         revenue=revenue,
         service_expense=service_expense,
-        lic=lic,
+        lic_path=lic_path,
         cashflows=grouped_cf,
         model_points=None,
         group_labels=labels,
@@ -505,11 +505,11 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
     lrc_path = reducer.sum(measurement.lrc_path)
     revenue = reducer.sum(measurement.revenue)
     service_expense = reducer.sum(measurement.service_expense)
-    lic = reducer.sum(measurement.lic)
+    lic_path = reducer.sum(measurement.lic_path)
     grouped_cf = _sum_cashflows(measurement.cashflows, reducer)
     fcf = reducer.sum(measurement.fcf)
     return _finalise_paa_group(
-        lrc_path, revenue, service_expense, lic, fcf, grouped_cf,
+        lrc_path, revenue, service_expense, lic_path, fcf, grouped_cf,
         labels, reducer.sizes)
 
 

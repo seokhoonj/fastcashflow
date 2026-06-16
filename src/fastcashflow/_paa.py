@@ -67,7 +67,7 @@ class PAAMeasurement:
     ``lrc`` is an ``(n_mp, n_time+1)`` trajectory; column 0 is the inception
     LRC. ``revenue`` and ``service_expense`` are ``(n_mp, n_time)`` -- the
     insurance revenue earned and the insurance service expense incurred each
-    month. ``service_result`` (a property) is their difference. ``lic`` is
+    month. ``service_result`` (a property) is their difference. ``lic_path`` is
     the ``(n_mp, n_time+1)`` liability for incurred claims -- claims build it
     up as they are incurred and run it off as they are paid.
     """
@@ -84,7 +84,7 @@ class PAAMeasurement:
     lrc_path: FloatArray | None = None         # (n_mp, n_time+1) -- LRC trajectory
     revenue: FloatArray | None = None          # (n_mp, n_time)   -- insurance revenue earned
     service_expense: FloatArray | None = None  # (n_mp, n_time)   -- claims + expenses incurred
-    lic: FloatArray | None = None              # (n_mp, n_time+1) -- liability for incurred claims
+    lic_path: FloatArray | None = None         # (n_mp, n_time+1) -- liability for incurred claims
     # The terminal column holds the residual of claims whose settlement tail
     # runs past the horizon (stays non-zero by design, not a leak).
     cashflows: "Cashflows | None" = None
@@ -129,7 +129,7 @@ class PAAAggregate:
     lrc_path: FloatArray         # (n_time+1,) -- aggregate LRC trajectory
     revenue: FloatArray          # (n_time,)   -- aggregate insurance revenue
     service_expense: FloatArray  # (n_time,)   -- aggregate service expense
-    lic: FloatArray              # (n_time+1,) -- aggregate liability for incurred claims
+    lic_path: FloatArray         # (n_time+1,) -- aggregate liability for incurred claims
 
 
 @write_measurement.register
@@ -191,7 +191,7 @@ def _stitch_paa_measurements(n_mp, sub_results):
     lrc_path = np.zeros((n_mp, n_time + 1))
     revenue = np.zeros((n_mp, n_time))
     service_expense = np.zeros((n_mp, n_time))
-    lic = np.zeros((n_mp, n_time + 1))
+    lic_path = np.zeros((n_mp, n_time + 1))
 
     cf_2d = ("inforce", "deaths", "premium_cf", "mortality_cf", "morbidity_cf",
              "expense_cf", "annuity_cf", "disability_cf", "surrender_cf")
@@ -207,8 +207,8 @@ def _stitch_paa_measurements(n_mp, sub_results):
         lrc_path[idx, :t + 1] = m.lrc_path
         revenue[idx, :t] = m.revenue
         service_expense[idx, :t] = m.service_expense
-        lic[idx, :t + 1] = m.lic
-        _carry_lic_residual(lic, idx, t, n_time, m.lic)
+        lic_path[idx, :t + 1] = m.lic_path
+        _carry_lic_residual(lic_path, idx, t, n_time, m.lic_path)
         cf = m.cashflows
         for name in cf_2d:
             arr = getattr(cf, name)
@@ -223,7 +223,7 @@ def _stitch_paa_measurements(n_mp, sub_results):
     return PAAMeasurement(
         lrc=lrc, loss_component=loss_component, fcf=fcf,
         lrc_path=lrc_path, revenue=revenue, service_expense=service_expense,
-        lic=lic, cashflows=cashflows,
+        lic_path=lic_path, cashflows=cashflows,
     )
 
 
@@ -317,9 +317,9 @@ def measure_paa(
     # paid (spread over the settlement pattern) run it off. Held undiscounted.
     incurred = proj.mortality_cf + proj.morbidity_cf
     if basis.settlement_pattern is None:
-        lic = np.zeros((incurred.shape[0], incurred.shape[1] + 1))
+        lic_path = np.zeros((incurred.shape[0], incurred.shape[1] + 1))
     else:
-        lic = _settlement_lic(incurred, basis.settlement_pattern)
+        lic_path = _settlement_lic(incurred, basis.settlement_pattern)
 
     # Insurance revenue -- total premium allocated across the periods of
     # service (Sec. B126), so total revenue equals total premium.
@@ -356,7 +356,7 @@ def measure_paa(
         lrc_path=lrc,
         revenue=revenue,
         service_expense=service_expense,
-        lic=lic,
+        lic_path=lic_path,
         cashflows=proj,
         model_points=model_points,
     )
@@ -416,7 +416,7 @@ def measure_aggregate(
     transients, so chunking is the memory lever).
 
     Returns a :class:`PAAAggregate` (scalar LRC / loss-component totals + the
-    aggregate ``lrc_path`` / ``revenue`` / ``service_expense`` / ``lic``). It is
+    aggregate ``lrc_path`` / ``revenue`` / ``service_expense`` / ``lic_path``). It is
     a scalable sum of the measured model-point results -- not a group
     remeasurement; the onerous loss is each contract's floored loss summed, not a
     group-level re-floor. ``basis`` is a single :class:`Basis` (mixed / routed
@@ -434,7 +434,7 @@ def measure_aggregate(
     lrc_path = np.zeros(n_time + 1)
     revenue = np.zeros(n_time)
     service_expense = np.zeros(n_time)
-    lic = np.zeros(n_time + 1)
+    lic_path = np.zeros(n_time + 1)
     lrc = loss = 0.0
     for start in range(0, n_mp, chunk_size):
         idx = np.arange(start, min(start + chunk_size, n_mp))
@@ -445,12 +445,12 @@ def measure_aggregate(
         lrc_path[:nt1] += m.lrc_path.sum(axis=0)
         revenue[:nt] += m.revenue.sum(axis=0)
         service_expense[:nt] += m.service_expense.sum(axis=0)
-        lic[:nt1] += m.lic.sum(axis=0)
+        lic_path[:nt1] += m.lic_path.sum(axis=0)
         lrc += float(m.lrc.sum())
         loss += float(m.loss_component.sum())
     return PAAAggregate(
         lrc=lrc, loss_component=loss, lrc_path=lrc_path, revenue=revenue,
-        service_expense=service_expense, lic=lic)
+        service_expense=service_expense, lic_path=lic_path)
 
 
 def measure_inforce(
@@ -530,7 +530,7 @@ def measure_inforce(
     return PAAMeasurement(
         lrc=lrc, loss_component=loss, fcf=None,
         lrc_path=m.lrc_path, revenue=m.revenue,
-        service_expense=m.service_expense, lic=m.lic,
+        service_expense=m.service_expense, lic_path=m.lic_path,
         cashflows=m.cashflows, model_points=model_points,
         measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
 
@@ -819,8 +819,8 @@ def settle(
     else:
         # no settlement pattern: claims pay as incurred, so there is no LIC and
         # no run-off (the carried prior_lic, if any, is zero).
-        lic_opening = k_exp * unit.lic[rows, em_open_idx]
-        lic_closing = k_exp * unit.lic[rows, cap]
+        lic_opening = k_exp * unit.lic_path[rows, em_open_idx]
+        lic_closing = k_exp * unit.lic_path[rows, cap]
         claims_paid = lic_opening + claims_incurred - lic_closing
     lic_finance = lic_closing - lic_opening - claims_incurred + claims_paid
 

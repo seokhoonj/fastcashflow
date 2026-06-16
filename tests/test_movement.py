@@ -434,8 +434,8 @@ def test_paa_lic_builds_with_a_settlement_pattern():
         replace(_basis(), settlement_pattern=np.array([0.5, 0.3, 0.2])),
     )
     immediate = fcf.paa.measure(_portfolio(), _basis())
-    assert np.any(lagged.lic > 0.0)
-    assert np.allclose(immediate.lic, 0.0)
+    assert np.any(lagged.lic_path > 0.0)
+    assert np.allclose(immediate.lic_path, 0.0)
 
 
 def test_gmm_lic_builds_with_a_settlement_pattern():
@@ -443,8 +443,8 @@ def test_gmm_lic_builds_with_a_settlement_pattern():
     pattern = np.array([0.5, 0.3, 0.2])
     lagged = measure(_portfolio(), replace(_basis(), settlement_pattern=pattern))
     immediate = measure(_portfolio(), _basis())
-    assert np.any(lagged.lic > 0.0)
-    assert np.allclose(immediate.lic, 0.0)
+    assert np.any(lagged.lic_path > 0.0)
+    assert np.allclose(immediate.lic_path, 0.0)
 
 
 def test_vfa_lic_builds_with_a_settlement_pattern():
@@ -453,8 +453,8 @@ def test_vfa_lic_builds_with_a_settlement_pattern():
     lagged = fcf.vfa.measure(_vfa_contract(),
                          replace(_vfa_assumptions(), settlement_pattern=pattern))
     immediate = fcf.vfa.measure(_vfa_contract(), _vfa_assumptions())
-    assert np.any(lagged.lic > 0.0)
-    assert np.allclose(immediate.lic, 0.0)
+    assert np.any(lagged.lic_path > 0.0)
+    assert np.allclose(immediate.lic_path, 0.0)
 
 
 def test_settlement_lag_lowers_the_bel():

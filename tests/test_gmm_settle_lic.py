@@ -1,7 +1,7 @@
 """gmm.settle -- the liability-for-incurred-claims (LIC) block under a
 settlement_pattern basis (paragraphs 40(b) / 42 / 103(b)).
 
-Authoritative skeleton (P-5c pattern). Anchors from dev/lic-settle-gate.md and
+Authoritative skeleton (P-5c pattern). Anchors from dev/lic_path-settle-gate.md and
 the hand-calc oracle dev/scratch_lic_settle_gate.py.
 
 The LIC is measured at fulfilment cash flows (paragraphs 40(b) / 42(c) / 37):
@@ -130,7 +130,7 @@ def test_flat_basis_reduces_to_the_undiscounted_unit_trajectory():
                     count=np.array([1.0]), calculation_methods=CM),
         basis, full=True)
     np.testing.assert_allclose(
-        mv.lic_opening[0], scale * unit.lic[0][em_open], rtol=1e-9)
+        mv.lic_opening[0], scale * unit.lic_path[0][em_open], rtol=1e-9)
     np.testing.assert_allclose(mv.lic_finance, 0.0, atol=1e-7)
 
 
@@ -157,7 +157,7 @@ def test_lic_opening_is_the_discounted_pv_plus_ra():
     expected = scale * (lic_d + lic_m + lic_ra)[0][em_open]
     np.testing.assert_allclose(mv.lic_opening[0], expected, rtol=1e-9)
     # discounted+RA differs from the plain undiscounted balance
-    assert not np.isclose(mv.lic_opening[0], scale * unit.lic[0][em_open])
+    assert not np.isclose(mv.lic_opening[0], scale * unit.lic_path[0][em_open])
 
 
 # ---------------------------------------------------------------------------

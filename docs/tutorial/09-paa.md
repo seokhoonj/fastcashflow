@@ -232,7 +232,7 @@ print(m.loss_component[0])   # 손실요소 (0 = 손실부담계약 아님)
 발생했지만 아직 지급하지 않은 보험금의 부채입니다(59항(b)).
 fastcashflow는 보험금이 발생한 달에 곧바로 지급된다고 보면 LIC를
 0으로 두고, 가정에 보험금 지급 패턴(`settlement_pattern`)이 있으면 그
-패턴으로 LIC를 굴립니다. `paa.measure`의 결과에서 `m.lic`로 얻습니다.
+패턴으로 LIC를 굴립니다. `paa.measure`의 결과에서 `m.lic_path`로 얻습니다.
 ```
 
 ## 9.6 다음 장

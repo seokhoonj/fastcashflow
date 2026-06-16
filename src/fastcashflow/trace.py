@@ -864,7 +864,7 @@ def show_trace_paa(
     revenue = m.revenue[0]
     svc_exp = m.service_expense[0]
     svc_result = m.service_result[0]
-    lic = m.lic[0]
+    lic_path = m.lic_path[0]
     lc = float(m.loss_component[0])
 
     sp = basis.settlement_pattern
@@ -915,7 +915,7 @@ def show_trace_paa(
 
     # ---- LIC
     lic_lines: list[object] = [
-        f"t={t:>4d}m: LIC={lic[t]:>15,.2f}" for t in picks if t < lic.shape[0]
+        f"t={t:>4d}m: LIC={lic_path[t]:>15,.2f}" for t in picks if t < lic_path.shape[0]
     ]
 
     # ---- Final headline
@@ -925,7 +925,7 @@ def show_trace_paa(
         f"total service_expense = {float(svc_exp.sum()):>15,.2f}",
         f"insurance svc result  = {float(svc_result.sum()):>15,.2f}",
         f"loss_component        = {lc:>15,.2f}  (onerous; from the GMM FCF)",
-        f"LIC (peak)            = {float(lic.max()):>15,.2f}",
+        f"LIC (peak)            = {float(lic_path.max()):>15,.2f}",
         "(PAA has no CSM -- LRC is the unearned-premium balance)",
     ]
 
@@ -1538,7 +1538,7 @@ def show_trace_diff_paa(
         f"LRC[0]          {_money_delta(float(ma.lrc[0]), float(mb.lrc[0]))}",
         f"total revenue   {_money_delta(float(ma.revenue[0].sum()), float(mb.revenue[0].sum()))}",
         f"svc result      {_money_delta(float(ma.service_result[0].sum()), float(mb.service_result[0].sum()))}",
-        f"LIC (peak)      {_money_delta(float(ma.lic[0].max()), float(mb.lic[0].max()))}",
+        f"LIC (peak)      {_money_delta(float(ma.lic_path[0].max()), float(mb.lic_path[0].max()))}",
         f"loss_component  {_money_delta(float(ma.loss_component[0]), float(mb.loss_component[0]))}",
     ]
     out = [_diff_mp_header(model_points, sub, i, "-paa"),

@@ -47,7 +47,7 @@ def test_paa_group_per_mp_reproduces_original():
     np.testing.assert_allclose(g.loss_component, m.loss_component, rtol=0, atol=1e-6)
     np.testing.assert_allclose(g.revenue, m.revenue, rtol=0, atol=1e-6)
     np.testing.assert_allclose(g.service_expense, m.service_expense, rtol=0, atol=1e-6)
-    np.testing.assert_allclose(g.lic, m.lic, rtol=0, atol=1e-6)
+    np.testing.assert_allclose(g.lic_path, m.lic_path, rtol=0, atol=1e-6)
 
 
 def test_paa_group_is_additive_and_refloors_loss():
@@ -58,7 +58,7 @@ def test_paa_group_is_additive_and_refloors_loss():
     assert np.isclose(g.lrc[0], m.lrc.sum())
     assert np.isclose(g.revenue.sum(), m.revenue.sum())
     assert np.isclose(g.service_expense.sum(), m.service_expense.sum())
-    assert np.isclose(g.lic[:, 0].sum(), m.lic[:, 0].sum())
+    assert np.isclose(g.lic_path[:, 0].sum(), m.lic_path[:, 0].sum())
     # the onerous loss is re-derived on the aggregate fulfilment cash flows
     assert np.isclose(g.loss_component[0], max(0.0, m.fcf.sum()))
 

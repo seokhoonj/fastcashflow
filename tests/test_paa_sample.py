@@ -42,9 +42,9 @@ def test_paa_sample_lic_holds_its_settlement_tail_past_term():
     residual is held, not zero-padded (245a7c0)."""
     basis = fcf.samples.basis("paa")
     mp = fcf.samples.model_points("paa")
-    lic = np.asarray(fcf.paa.measure(mp, basis, full=True).lic)
-    assert lic.ndim == 2
-    assert np.all(lic[:, -1] > 0.0)                       # tail residual held, not 0
+    lic_path = np.asarray(fcf.paa.measure(mp, basis, full=True).lic_path)
+    assert lic_path.ndim == 2
+    assert np.all(lic_path[:, -1] > 0.0)                       # tail residual held, not 0
 
 
 def test_paa_sample_round_trips_through_export():

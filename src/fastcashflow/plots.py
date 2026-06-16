@@ -247,7 +247,7 @@ def _(measurement: PAAMeasurement, *, ax=None,
     _require_full_paa(measurement, "plot_liability()")
     return _component_lines(
         (("LRC (excl. loss component)", "bel", measurement.lrc_path),
-         ("LIC", "ra", measurement.lic)), ax, title)
+         ("LIC", "ra", measurement.lic_path)), ax, title)
 
 
 # ---------------------------------------------------------------------------
@@ -536,7 +536,7 @@ def plot_analysis_of_change(reconciliation, *, component: str = "csm",
     release drivers; a VFA or reinsurance reconciliation through finance and
     release. A PAA reconciliation selects one of its paragraph-100 blocks:
     ``component`` is ``"lrc"`` (the default there), ``"loss_component"`` or
-    ``"lic"``.
+    ``"lic_path"``.
 
     A *settlement* reconciliation (from ``gmm.settle`` / ``vfa.settle`` via
     ``reconcile``) has no waterfall arm in v1 and is rejected here; its
@@ -663,7 +663,7 @@ def _(reconciliation: PAAReconciliation, *, component="lrc", ax=None,
             ("Released", r.loss_component_release),
             ("Closing", r.loss_component_closing),
         )),
-        "lic": ("LIC", (
+        "lic_path": ("LIC", (
             ("Opening", r.lic_opening),
             ("Claims\nincurred", r.claims_incurred),
             ("Claims\npaid", r.claims_paid),
@@ -673,7 +673,7 @@ def _(reconciliation: PAAReconciliation, *, component="lrc", ax=None,
     component = component.lower()
     if component not in blocks:
         raise ValueError(
-            "component must be 'lrc', 'loss_component' or 'lic', got "
+            "component must be 'lrc', 'loss_component' or 'lic_path', got "
             f"{component!r}"
         )
     label, steps = blocks[component]

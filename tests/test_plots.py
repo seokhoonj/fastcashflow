@@ -204,7 +204,7 @@ def test_plot_analysis_of_change_dispatches_per_model(vfa_book, paa_m, reins_m):
 def test_plot_analysis_of_change_paa_components(paa_m):
     """The PAA waterfall draws each paragraph-100 block."""
     recon = fcf.reconcile(fcf.roll_forward(paa_m, period_months=12))[0]
-    for component in ("lrc", "loss_component", "lic"):
+    for component in ("lrc", "loss_component", "lic_path"):
         assert isinstance(
             fcf.plot_analysis_of_change(recon, component=component), Axes)
     with pytest.raises(ValueError, match="lrc"):

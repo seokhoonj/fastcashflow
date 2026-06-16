@@ -147,7 +147,7 @@ class VFAMeasurement:
     account_value_path: FloatArray | None = None  # (n_mp, n_time+1) -- account-value trajectory
     csm_accretion: FloatArray | None = None       # (n_mp, n_time)
     csm_release: FloatArray | None = None          # (n_mp, n_time)
-    lic: FloatArray | None = None                 # (n_mp, n_time+1) -- liability for incurred claims.
+    lic_path: FloatArray | None = None            # (n_mp, n_time+1) -- liability for incurred claims.
     # The terminal column holds the residual of claims whose settlement tail
     # runs past the horizon (stays non-zero by design, not a leak).
     discount_factor_bom: FloatArray | None = None      # (n_time+1,), or (n_mp, n_time+1) when portfolio-stitched
@@ -197,7 +197,7 @@ class VFAAggregate:
     bel_path: FloatArray             # (n_time+1,) -- aggregate BEL trajectory
     ra_path: FloatArray              # (n_time+1,) -- aggregate RA trajectory
     csm_path: FloatArray             # (n_time+1,) -- aggregate CSM trajectory
-    lic: FloatArray                  # (n_time+1,) -- aggregate liability for incurred claims
+    lic_path: FloatArray             # (n_time+1,) -- aggregate liability for incurred claims
     # No account_value_path: the account value is a per-policy level (its
     # closed-form growth never terminates at the contract boundary, so summing it
     # is horizon-dependent, not a clean aggregate) -- the group() VFA result drops
@@ -275,7 +275,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
     account_value_path = np.zeros((n_mp, n_time + 1))
     csm_accretion = np.zeros((n_mp, n_time))
     csm_release = np.zeros((n_mp, n_time))
-    lic = np.zeros((n_mp, n_time + 1))
+    lic_path = np.zeros((n_mp, n_time + 1))
     discount_factor_bom = np.ones((n_mp, n_time + 1))
 
     cf_2d = ("inforce", "deaths", "premium_cf", "mortality_cf", "morbidity_cf",
@@ -298,8 +298,8 @@ def _stitch_vfa_measurements(n_mp, sub_results):
         account_value_path[idx, :t + 1] = m.account_value_path
         csm_accretion[idx, :t] = m.csm_accretion
         csm_release[idx, :t] = m.csm_release
-        lic[idx, :t + 1] = m.lic
-        _carry_lic_residual(lic, idx, t, n_time, m.lic)
+        lic_path[idx, :t + 1] = m.lic_path
+        _carry_lic_residual(lic_path, idx, t, n_time, m.lic_path)
         # Per-MP discount: lay the segment's 1-D curve across its rows, then
         # flat-fill the tail so the padded months read a zero forward rate.
         discount_factor_bom[idx, :t + 1] = m.discount_factor_bom
@@ -320,7 +320,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
         time_value=time_value, loss_component=loss_component,
         bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
         account_value_path=account_value_path,
-        csm_accretion=csm_accretion, csm_release=csm_release, lic=lic,
+        csm_accretion=csm_accretion, csm_release=csm_release, lic_path=lic_path,
         discount_factor_bom=discount_factor_bom, cashflows=cashflows,
     )
 
@@ -342,7 +342,7 @@ class _VFAProjection:
     ra: FloatArray                   # (n_mp, n_time+1) RA trajectory
     variable_fee_path: FloatArray    # (n_mp, n_time+1) PV of the fee from each t
     time_value: FloatArray           # (n_mp,) guarantee TVOG at the anchor
-    lic: FloatArray                  # (n_mp, n_time+1)
+    lic_path: FloatArray             # (n_mp, n_time+1)
     benefit_cf: FloatArray           # (n_mp, n_time) incurred benefit claims (builds the LIC)
     guarantee_excess_cf: FloatArray  # (n_mp, n_time) GMDB/GMAB excess over AV (the insurance claim, IC-excluded)
     cashflows: "Cashflows"
@@ -513,9 +513,9 @@ def _vfa_project(
     fee_cf = fee_base * av[:, :n_time] * (1.0 + credit_m)[:, None] * f_m
     # Liability for incurred claims -- exit benefits settled over the pattern.
     if basis.settlement_pattern is None:
-        lic = np.zeros((n_mp, n_time + 1))
+        lic_path = np.zeros((n_mp, n_time + 1))
     else:
-        lic = _settlement_lic(benefit_cf, basis.settlement_pattern)
+        lic_path = _settlement_lic(benefit_cf, basis.settlement_pattern)
 
     # Discount at the underlying-items return -- the VFA basis. Benefits are
     # discounted start-of-month, consistent with the account value, so a
@@ -637,7 +637,7 @@ def _vfa_project(
     ra = _norm_ppf(basis.ra_confidence) * basis.expense_cv * pv_expenses
     return _VFAProjection(
         bel=bel, ra=ra, variable_fee_path=variable_fee_path,
-        time_value=time_value, lic=lic, benefit_cf=benefit_cf,
+        time_value=time_value, lic_path=lic_path, benefit_cf=benefit_cf,
         guarantee_excess_cf=guarantee_excess_cf,
         cashflows=proj, inforce=inforce,
         r_m=r_m, av=av, discount_factor_bom=discount_factor_bom,
@@ -720,7 +720,7 @@ def measure_vfa(
             bel_path=m.bel_path, ra_path=m.ra_path, csm_path=m.csm_path,
             account_value_path=m.cashflows.account.av,
             csm_accretion=m.csm_accretion, csm_release=m.csm_release,
-            lic=m.lic, discount_factor_bom=m.discount_factor_bom,
+            lic_path=m.lic_path, discount_factor_bom=m.discount_factor_bom,
             cashflows=m.cashflows, model_points=model_points)
 
     p = _vfa_project(model_points, basis, return_scenarios)
@@ -762,7 +762,7 @@ def measure_vfa(
         account_value_path=p.av,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=p.lic,
+        lic_path=p.lic_path,
         discount_factor_bom=p.discount_factor_bom,
         cashflows=p.cashflows,
         model_points=model_points,
@@ -821,7 +821,7 @@ def measure_aggregate(
     peak memory is ``O(chunk_size x n_time)`` regardless of ``n_mp``.
 
     Returns a :class:`VFAAggregate` (scalar totals + aggregate ``bel_path`` /
-    ``ra_path`` / ``csm_path`` / ``lic``). ``account_value`` does not carry: it is
+    ``ra_path`` / ``csm_path`` / ``lic_path``). ``account_value`` does not carry: it is
     a per-policy level whose closed-form growth never terminates at the boundary,
     so summing it is horizon-dependent (the ``group`` VFA result drops it for the
     same reason). The deterministic intrinsic value only -- the guarantee time
@@ -838,7 +838,7 @@ def measure_aggregate(
     bel_path = np.zeros(n_time + 1)
     ra_path = np.zeros(n_time + 1)
     csm_path = np.zeros(n_time + 1)
-    lic = np.zeros(n_time + 1)
+    lic_path = np.zeros(n_time + 1)
     bel = ra = csm = variable_fee = time_value = loss = 0.0
     for start in range(0, n_mp, chunk_size):
         idx = np.arange(start, min(start + chunk_size, n_mp))
@@ -847,7 +847,7 @@ def measure_aggregate(
         bel_path[:nt] += m.bel_path.sum(axis=0)
         ra_path[:nt] += m.ra_path.sum(axis=0)
         csm_path[:nt] += m.csm_path.sum(axis=0)
-        lic[:nt] += m.lic.sum(axis=0)
+        lic_path[:nt] += m.lic_path.sum(axis=0)
         bel += float(m.bel.sum())
         ra += float(m.ra.sum())
         csm += float(m.csm.sum())
@@ -857,7 +857,7 @@ def measure_aggregate(
     return VFAAggregate(
         bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
         time_value=time_value, loss_component=loss, bel_path=bel_path,
-        ra_path=ra_path, csm_path=csm_path, lic=lic)
+        ra_path=ra_path, csm_path=csm_path, lic_path=lic_path)
 
 
 def measure_inforce(
@@ -1343,9 +1343,9 @@ def settle(
     # the LIC (paragraphs 32/37) would first require pricing benefit RA in the
     # VFA LRC; adding it here alone would make the LIC and LRC inconsistent.
     # claims_incurred and claims_paid stay NOMINAL (claims_paid the residual on
-    # the undiscounted trajectory p_exp.lic); lic_finance is the reconciling
+    # the undiscounted trajectory p_exp.lic_path); lic_finance is the reconciling
     # residual -- the 42(c) discount unwind plus the discounting measurement
-    # effect. p_exp.lic is all-zero without a settlement_pattern (claims paid as
+    # effect. p_exp.lic_path is all-zero without a settlement_pattern (claims paid as
     # incurred, the LIC zero at both dates and lic_finance zero).
     #
     # DISCOUNT RATE -- the LIC discounts at basis.discount_monthly (the IFRS 17
@@ -1363,16 +1363,16 @@ def settle(
     claims_incurred = k_exp * np.where(
         inc_mask, benefit[rows[:, None], np.where(inc_mask, inc_src, 0)],
         0.0).sum(axis=1)
-    claims_paid = (k_exp * p_exp.lic[rows, em_open] + claims_incurred
-                   - k_exp * p_exp.lic[rows, em_c])
+    claims_paid = (k_exp * p_exp.lic_path[rows, em_open] + claims_incurred
+                   - k_exp * p_exp.lic_path[rows, em_c])
     if basis.settlement_pattern is not None:
         lic_disc = _settlement_lic_discounted(
             benefit, basis.settlement_pattern, basis.discount_monthly)
         lic_opening = k_exp * lic_disc[rows, em_open]
         lic_closing = k_exp * lic_disc[rows, em_c]
     else:
-        lic_opening = k_exp * p_exp.lic[rows, em_open]
-        lic_closing = k_exp * p_exp.lic[rows, em_c]
+        lic_opening = k_exp * p_exp.lic_path[rows, em_open]
+        lic_closing = k_exp * p_exp.lic_path[rows, em_c]
     lic_finance = lic_closing - lic_opening - claims_incurred + claims_paid
 
     # B97(b)/(c) within-period claims and expense experience (the gmm.settle

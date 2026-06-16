@@ -67,17 +67,17 @@ def test_settlement_lic_holds_tail_beyond_horizon():
     within-horizon paid each month is 0.2 * (running incurred): col0 = 2000,
     col1 = 0.2*19900 = 3980, col2 = 0.2*29701 = 5940.2. The LIC is the
     undiscounted cumsum of (incurred - paid):
-        lic[:, 1:] = cumsum([8000, 5920, 3860.8]) = [8000, 13920, 17780.8].
+        lic_path[:, 1:] = cumsum([8000, 5920, 3860.8]) = [8000, 13920, 17780.8].
     The terminal 17780.8 == total incurred (29701) - paid-within (11920.2):
-    the unpaid tail is HELD, not dropped. lic[:, 0] is 0 (no double-count with
+    the unpaid tail is HELD, not dropped. lic_path[:, 0] is 0 (no double-count with
     the BEL, which values the full claim via _settlement_factor = 1 at r = 0).
     """
     incurred = np.array([[10000.0, 9900.0, 9801.0]])
     pattern = np.full(5, 0.2)
-    lic = _settlement_lic(incurred, pattern)
-    np.testing.assert_allclose(lic, [[0.0, 8000.0, 13920.0, 17780.8]])
-    assert lic[0, -1] == pytest.approx(29701.0 - 11920.2)
-    assert lic[0, 0] == 0.0
+    lic_path = _settlement_lic(incurred, pattern)
+    np.testing.assert_allclose(lic_path, [[0.0, 8000.0, 13920.0, 17780.8]])
+    assert lic_path[0, -1] == pytest.approx(29701.0 - 11920.2)
+    assert lic_path[0, 0] == 0.0
     # The BEL values the full incurred claim separately -- factor 1 at r = 0.
     assert _settlement_factor(pattern, 0.0) == pytest.approx(1.0)
 
@@ -91,10 +91,10 @@ def test_settlement_lic_pattern_longer_than_book():
     stop index incurred[:, :n_time - k] would go negative and broadcast-error.
     """
     incurred = np.array([[10000.0, 9900.0, 9801.0]])
-    lic = _settlement_lic(incurred, np.full(10, 0.1))
-    assert lic.shape == (1, 4)
-    assert lic[0, -1] == pytest.approx(23740.9)
-    assert np.all(lic >= 0.0)
+    lic_path = _settlement_lic(incurred, np.full(10, 0.1))
+    assert lic_path.shape == (1, 4)
+    assert lic_path[0, -1] == pytest.approx(23740.9)
+    assert np.all(lic_path >= 0.0)
 
 
 def test_settlement_lic_runs_off_to_zero_within_horizon():
@@ -105,8 +105,8 @@ def test_settlement_lic_runs_off_to_zero_within_horizon():
     """
     incurred = np.zeros((1, 8))
     incurred[0, :3] = [10000.0, 9900.0, 9801.0]
-    lic = _settlement_lic(incurred, np.full(5, 0.2))
-    assert lic[0, -1] == 0.0                  # analytic terminal -> exact zero, no dust
+    lic_path = _settlement_lic(incurred, np.full(5, 0.2))
+    assert lic_path[0, -1] == 0.0                  # analytic terminal -> exact zero, no dust
 
 
 def test_settlement_lic_tiny_tail_weight_preserved_exactly():
@@ -118,9 +118,9 @@ def test_settlement_lic_tiny_tail_weight_preserved_exactly():
     with pattern [0.9999, 0.0001] leaves 1e6 * 0.0001 = 100 outstanding.
     """
     incurred = np.array([[0.0, 0.0, 1_000_000.0]])
-    lic = _settlement_lic(incurred, np.array([0.9999, 0.0001]))
-    assert lic[0, -1] == pytest.approx(100.0, rel=1e-12)
-    assert lic[0, -1] > 0.0
+    lic_path = _settlement_lic(incurred, np.array([0.9999, 0.0001]))
+    assert lic_path[0, -1] == pytest.approx(100.0, rel=1e-12)
+    assert lic_path[0, -1] > 0.0
 
 
 def test_carry_lic_residual_holds_residual_flat():
@@ -132,21 +132,21 @@ def test_carry_lic_residual_holds_residual_flat():
     """
     seg = np.array([[0.0, 8000.0, 17780.8],   # genuine outstanding residual
                     [0.0, 5000.0, 0.0]])       # fully settled -> exact zero
-    lic = np.zeros((2, 6))
-    lic[[0, 1], :3] = seg
-    _carry_lic_residual(lic, np.array([0, 1]), 2, 5, seg)
-    np.testing.assert_allclose(lic[0, 3:], 17780.8)      # genuine residual held flat
-    assert np.all(lic[1, 3:] == 0.0)                     # fully-settled pads exact zero
+    lic_path = np.zeros((2, 6))
+    lic_path[[0, 1], :3] = seg
+    _carry_lic_residual(lic_path, np.array([0, 1]), 2, 5, seg)
+    np.testing.assert_allclose(lic_path[0, 3:], 17780.8)      # genuine residual held flat
+    assert np.all(lic_path[1, 3:] == 0.0)                     # fully-settled pads exact zero
 
 
 def test_carry_lic_residual_noop_at_horizon_segment():
     """The horizon-defining segment (t == n_time) is laid in directly -- no tail."""
     seg = np.array([[0.0, 1.0, 2.0, 3.0]])
-    lic = np.zeros((1, 4))
-    lic[[0], :4] = seg
-    before = lic.copy()
-    _carry_lic_residual(lic, np.array([0]), 3, 3, seg)   # t == n_time
-    np.testing.assert_array_equal(lic, before)
+    lic_path = np.zeros((1, 4))
+    lic_path[[0], :4] = seg
+    before = lic_path.copy()
+    _carry_lic_residual(lic_path, np.array([0]), 3, 3, seg)   # t == n_time
+    np.testing.assert_array_equal(lic_path, before)
 
 
 def test_norm_ppf_extreme_tail_full_precision():

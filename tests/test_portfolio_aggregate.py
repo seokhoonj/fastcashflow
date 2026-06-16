@@ -76,14 +76,14 @@ def test_aggregate_is_the_sum_of_full_per_mp_measurement():
     assert np.isclose(agg.paa.lrc, full.paa.measurement.lrc.sum())
     assert np.allclose(agg.paa.lrc_path,
                        full.paa.measurement.lrc_path.sum(axis=0))
-    assert np.allclose(agg.paa.lic, full.paa.measurement.lic.sum(axis=0))
+    assert np.allclose(agg.paa.lic_path, full.paa.measurement.lic_path.sum(axis=0))
 
-    # VFA block (note: lic is carried here too -- VFA full measurement has it)
+    # VFA block (note: lic_path is carried here too -- VFA full measurement has it)
     assert isinstance(agg.vfa, VFAAggregate)
     assert np.isclose(agg.vfa.csm, full.vfa.measurement.csm.sum())
     assert np.allclose(agg.vfa.csm_path,
                        full.vfa.measurement.csm_path.sum(axis=0))
-    assert np.allclose(agg.vfa.lic, full.vfa.measurement.lic.sum(axis=0))
+    assert np.allclose(agg.vfa.lic_path, full.vfa.measurement.lic_path.sum(axis=0))
     # No account_value_path on the aggregate -- a per-policy level, not a clean
     # group/aggregate quantity (group() drops it for the same reason).
     assert not hasattr(agg.vfa, "account_value_path")
@@ -110,7 +110,7 @@ def test_aggregate_ragged_terms_pad_into_leading_slice():
     agg = measure_aggregate(mp, router, chunk_size=1)   # a block per row
     full = measure(mp, router, full=True)
     assert np.allclose(agg.paa.lrc_path, full.paa.measurement.lrc_path.sum(axis=0))
-    assert np.allclose(agg.paa.lic, full.paa.measurement.lic.sum(axis=0))
+    assert np.allclose(agg.paa.lic_path, full.paa.measurement.lic_path.sum(axis=0))
     assert np.allclose(agg.vfa.bel_path, full.vfa.measurement.bel_path.sum(axis=0))
     assert np.allclose(agg.vfa.csm_path, full.vfa.measurement.csm_path.sum(axis=0))
     # the aggregate is also chunk-invariant under ragged terms

@@ -214,13 +214,13 @@ def test_stitched_lic_residual_persists_past_segment_horizon():
 
     mp_alone = mp.subset([0])
     m_alone = fcf.gmm.measure(mp_alone, _sb(), full=True)
-    residual = m_alone.lic[0, -1]
+    residual = m_alone.lic_path[0, -1]
 
     assert residual > 0.0                                   # the tail is genuinely parked
     # cols 0..3 match the alone measure, cols 3..8 hold the residual flat
-    np.testing.assert_allclose(m.lic[0, :4], m_alone.lic[0])
-    np.testing.assert_allclose(m.lic[0, 3:], residual)
+    np.testing.assert_allclose(m.lic_path[0, :4], m_alone.lic_path[0])
+    np.testing.assert_allclose(m.lic_path[0, 3:], residual)
     # the horizon-defining segment (term 8 == global horizon) is laid in
     # directly with no tail to fill -- it must equal its alone measurement.
     m_long = fcf.gmm.measure(mp.subset([1]), _sb(), full=True)
-    np.testing.assert_allclose(m.lic[1], m_long.lic[0])
+    np.testing.assert_allclose(m.lic_path[1], m_long.lic_path[0])

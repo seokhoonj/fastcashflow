@@ -93,7 +93,7 @@ class GMMMeasurement:
     the inception value (so ``bel == bel_path[:, 0]`` when full). The CSM
     roll-forward decomposes as
     ``csm_path[:, t+1] = csm_path[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
-    ``lic`` is the liability for incurred claims -- zero unless a claims
+    ``lic_path`` is the liability for incurred claims -- zero unless a claims
     settlement pattern is set, which also discounts claims to their payment
     dates in the BEL.
     """
@@ -110,7 +110,7 @@ class GMMMeasurement:
     csm_path: FloatArray | None = None        # (n_mp, n_time+1) -- CSM trajectory
     csm_accretion: FloatArray | None = None   # (n_mp, n_time)   -- CSM interest accreted
     csm_release: FloatArray | None = None     # (n_mp, n_time)   -- CSM released each month
-    lic: FloatArray | None = None             # (n_mp, n_time+1) -- liability for incurred claims
+    lic_path: FloatArray | None = None        # (n_mp, n_time+1) -- liability for incurred claims
     # The terminal column holds the residual of claims whose settlement tail
     # runs past the horizon (stays non-zero by design, not a leak).
     cashflows: "Cashflows | None" = None
@@ -275,9 +275,9 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
     if discount_monthly is None:
         discount_monthly = discount_monthly_curve(basis, proj.n_time)
     if basis.settlement_pattern is None:
-        lic = np.zeros((mortality_cf.shape[0], proj.n_time + 1))
+        lic_path = np.zeros((mortality_cf.shape[0], proj.n_time + 1))
     else:
-        lic = _settlement_lic(mortality_cf + morbidity_cf, basis.settlement_pattern)
+        lic_path = _settlement_lic(mortality_cf + morbidity_cf, basis.settlement_pattern)
         # Claims are paid over the pattern, not at incurrence -- discount
         # them to their payment dates in the fulfilment cash flows. With a
         # discount curve we use the in-year scalar (Sec. 40 / B71 -- the
@@ -322,7 +322,7 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic=lic,
+        lic_path=lic_path,
         cashflows=proj,
         discount_factor_bom=discount_factor_bom,
         discount_factor_mid=discount_factor_mid,
@@ -819,7 +819,7 @@ def _measure_inforce_full(
         csm_path=csm_new,
         csm_accretion=csm_accretion_new,
         csm_release=csm_release_new,
-        lic=m.lic,
+        lic_path=m.lic_path,
         cashflows=m.cashflows,
         discount_factor_bom=m.discount_factor_bom,
         discount_factor_mid=m.discount_factor_mid,
@@ -1388,17 +1388,17 @@ def settle(
     # pattern. The LIC is measured at fulfilment cash flows -- the discounted PV
     # of the unpaid run-off plus the risk adjustment. claims_incurred and
     # claims_paid stay NOMINAL cash amounts (claims_paid the nominal residual on
-    # the undiscounted trajectory m.lic, the same reconstruction as paa.settle);
+    # the undiscounted trajectory m.lic_path, the same reconstruction as paa.settle);
     # the discounting (42(c)) and RA (37) move only the balances, and lic_finance
     # is the reconciling residual -- the insurance finance (discount unwind) plus
-    # the discounting / RA measurement effect. m.lic is the undiscounted unit
+    # the discounting / RA measurement effect. m.lic_path is the undiscounted unit
     # trajectory (all-zero when the basis has no settlement_pattern, i.e. claims
     # paid as incurred -- the LIC is zero at both dates and lic_finance is zero).
     incurred = cf.mortality_cf + cf.morbidity_cf
     claims_incurred = k_exp * (incurred[rows[:, None], cols_safe]
                                * col_ok).sum(axis=1)
-    claims_paid = (k_exp * m.lic[rows, em_open] + claims_incurred
-                   - k_exp * m.lic[rows, em_c])
+    claims_paid = (k_exp * m.lic_path[rows, em_open] + claims_incurred
+                   - k_exp * m.lic_path[rows, em_c])
     if basis.settlement_pattern is not None:
         # discounted PV of the unpaid run-off, split by risk class for the RA
         r_lic = basis.discount_monthly
@@ -1417,8 +1417,8 @@ def settle(
         lic_opening = k_exp * lic_fcf[rows, em_open]
         lic_closing = k_exp * lic_fcf[rows, em_c]
     else:
-        lic_opening = k_exp * m.lic[rows, em_open]
-        lic_closing = k_exp * m.lic[rows, em_c]
+        lic_opening = k_exp * m.lic_path[rows, em_open]
+        lic_closing = k_exp * m.lic_path[rows, em_c]
     lic_finance = lic_closing - lic_opening - claims_incurred + claims_paid
 
     # B97(b)/(c) within-period claims and expense experience: the actual claims
@@ -3695,7 +3695,7 @@ def _stitch_full_measurements(n_mp, sub_results):
     bel_path = np.zeros((n_mp, n_time + 1))
     ra_path = np.zeros((n_mp, n_time + 1))
     csm_path = np.zeros((n_mp, n_time + 1))
-    lic = np.zeros((n_mp, n_time + 1))
+    lic_path = np.zeros((n_mp, n_time + 1))
     csm_accretion = np.zeros((n_mp, n_time))
     csm_release = np.zeros((n_mp, n_time))
     discount_factor_bom = np.ones((n_mp, n_time + 1))
@@ -3716,8 +3716,8 @@ def _stitch_full_measurements(n_mp, sub_results):
         bel_path[idx, :t + 1] = m.bel_path
         ra_path[idx, :t + 1] = m.ra_path
         csm_path[idx, :t + 1] = m.csm_path
-        lic[idx, :t + 1] = m.lic
-        _carry_lic_residual(lic, idx, t, n_time, m.lic)
+        lic_path[idx, :t + 1] = m.lic_path
+        _carry_lic_residual(lic_path, idx, t, n_time, m.lic_path)
         csm_accretion[idx, :t] = m.csm_accretion
         csm_release[idx, :t] = m.csm_release
         # Per-MP discount: lay the segment's curve, then flat-fill the tail so
@@ -3740,7 +3740,7 @@ def _stitch_full_measurements(n_mp, sub_results):
     return GMMMeasurement(
         bel=bel, ra=ra, csm=csm, loss_component=loss_component,
         bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
-        csm_accretion=csm_accretion, csm_release=csm_release, lic=lic,
+        csm_accretion=csm_accretion, csm_release=csm_release, lic_path=lic_path,
         cashflows=cashflows, discount_factor_bom=discount_factor_bom, discount_factor_mid=discount_factor_mid,
     )
 

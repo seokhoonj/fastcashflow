@@ -40,10 +40,10 @@ def _settlement_lic(
 
     When the run-off tail extends past the projection horizon (a claim
     incurred near ``n_time`` whose settlement would fall after it), the unpaid
-    tail is retained in the terminal column ``lic[:, -1]``: it stays
+    tail is retained in the terminal column ``lic_path[:, -1]``: it stays
     outstanding rather than being dropped -- an incurred claim is a liability
     for incurred claims regardless of whether the coverage period has ended
-    (IFRS 17). ``lic[:, 0]`` is always 0, so the LIC never double-counts the
+    (IFRS 17). ``lic_path[:, 0]`` is always 0, so the LIC never double-counts the
     BEL, which values the full incurred claim separately (the caller applies
     the settlement discount factor).
     """
@@ -56,7 +56,7 @@ def _settlement_lic(
     for k, weight in enumerate(pattern):
         # Lags k >= n_time settle PAST the projection horizon. Leaving them
         # un-subtracted from `paid` keeps their weight in cumsum(incurred -
-        # paid), so it parks at the terminal column lic[:, -1] -- the LIC for
+        # paid), so it parks at the terminal column lic_path[:, -1] -- the LIC for
         # claims whose settlement runs beyond the horizon. Do NOT 'simplify'
         # this guard away: a wrapping / truncating convolution would silently
         # drop the tail and understate the liability, and for a pattern longer
@@ -64,8 +64,8 @@ def _settlement_lic(
         # and broadcast-error.
         if k < n_time:
             paid[:, k:] += weight * incurred[:, :n_time - k]
-    lic = np.zeros((n_mp, n_time + 1))
-    lic[:, 1:] = np.cumsum(incurred - paid, axis=1)
+    lic_path = np.zeros((n_mp, n_time + 1))
+    lic_path[:, 1:] = np.cumsum(incurred - paid, axis=1)
     # Set the terminal residual -- claims whose settlement runs past the horizon
     # -- from the exact analytic tail rather than the cumsum, so a book that
     # fully settles within the horizon lands on exact zero (not float run-off
@@ -74,8 +74,8 @@ def _settlement_lic(
     # that reverse-cumulative sum (0 past the pattern length).
     tail_weight = np.concatenate([np.cumsum(pattern[::-1])[::-1], [0.0]])
     j = np.clip(n_time - np.arange(n_time), 0, pattern.size)
-    lic[:, -1] = incurred @ tail_weight[j]
-    return lic
+    lic_path[:, -1] = incurred @ tail_weight[j]
+    return lic_path
 
 
 def _settlement_lic_discounted(
@@ -118,7 +118,7 @@ def _settlement_lic_discounted(
     for j in range(1, n_pat + 1):
         ks = np.arange(j, n_pat)
         w[j] = float(np.sum(pattern[ks] * v ** (ks - j)))
-    lic = np.zeros((n_mp, n_time + 1))
+    lic_path = np.zeros((n_mp, n_time + 1))
     # Lag j shifts the incurred claims forward by j months: incurred[:, s] (the
     # claim incurred at s) lands in LIC[:, s + j] with weight w[j]. The largest
     # boundary is n_time, where each recently-incurred claim sits at age
@@ -127,16 +127,16 @@ def _settlement_lic_discounted(
     for j in range(1, min(n_pat, n_time) + 1):
         if w[j] == 0.0:
             continue
-        lic[:, j:n_time + 1] += w[j] * incurred[:, : n_time + 1 - j]
-    return lic
+        lic_path[:, j:n_time + 1] += w[j] * incurred[:, : n_time + 1 - j]
+    return lic_path
 
 
-def _carry_lic_residual(lic, idx, t, n_time, seg_lic):
+def _carry_lic_residual(lic_path, idx, t, n_time, seg_lic):
     """Flat-fill a stitched segment's parked LIC residual to the global terminal.
 
     When a portfolio is measured per segment, each segment is measured on its
     own horizon ``t`` and scattered into the global ``(n_mp, n_time+1)`` array
-    by ``lic[idx, :t+1] = seg_lic``. A claim whose settlement tail runs past the
+    by ``lic_path[idx, :t+1] = seg_lic``. A claim whose settlement tail runs past the
     segment horizon leaves an outstanding liability for incurred claims at the
     segment's terminal column ``seg_lic[:, -1]`` (IFRS 17 -- an incurred claim
     is a liability whether or not the coverage period has ended). Carry it flat
@@ -154,7 +154,7 @@ def _carry_lic_residual(lic, idx, t, n_time, seg_lic):
     """
     if t >= n_time:
         return
-    lic[idx, t + 1:] = seg_lic[:, -1:]
+    lic_path[idx, t + 1:] = seg_lic[:, -1:]
 
 
 def _settlement_factor(

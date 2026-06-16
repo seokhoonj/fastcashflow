@@ -1593,7 +1593,7 @@ def _aggregate_groups_model(sub_mp, sub_router, model, group_ids, chunk_size):
     # Accumulators -- bounded O(n_groups x n_time), no per-model-point row.
     bel = np.zeros((n_groups, n_time + 1))      # GMM/VFA BEL, PAA LRC
     ra = np.zeros((n_groups, n_time + 1))       # GMM/VFA only
-    lic = np.zeros((n_groups, n_time + 1))
+    lic_path = np.zeros((n_groups, n_time + 1))
     revenue = np.zeros((n_groups, n_time))      # PAA only
     service_expense = np.zeros((n_groups, n_time))
     time_value = np.zeros(n_groups)             # VFA only
@@ -1626,7 +1626,7 @@ def _aggregate_groups_model(sub_mp, sub_router, model, group_ids, chunk_size):
                 if model == "VFA":
                     time_value += red.sum(m.time_value)
                     variable_fee += red.sum(m.variable_fee)
-            _add_leading(lic, red.sum(m.lic))
+            _add_leading(lic_path, red.sum(m.lic_path))
             cf = m.cashflows
             for name in _CF_STREAMS_2D:
                 _add_leading(cf_acc[name], red.sum(getattr(cf, name)))
@@ -1656,14 +1656,14 @@ def _aggregate_groups_model(sub_mp, sub_router, model, group_ids, chunk_size):
         **cf_acc)
     if model == "GMM":
         return _finalise_gmm_group(
-            bel, ra, grouped_cf, lic, rep_bom, rep_mid, labels, sizes,
+            bel, ra, grouped_cf, lic_path, rep_bom, rep_mid, labels, sizes,
             discount_units)
     if model == "VFA":
         return _finalise_vfa_group(
-            bel, ra, grouped_cf, lic, time_value, variable_fee, rep_bom,
+            bel, ra, grouped_cf, lic_path, time_value, variable_fee, rep_bom,
             labels, sizes, discount_units)
     return _finalise_paa_group(
-        bel, revenue, service_expense, lic, fcf, grouped_cf, labels, sizes)
+        bel, revenue, service_expense, lic_path, fcf, grouped_cf, labels, sizes)
 
 
 def _add_leading(acc, block_sum):

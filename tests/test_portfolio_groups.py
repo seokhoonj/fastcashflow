@@ -122,7 +122,7 @@ def test_equals_in_memory_group_of_contracts_per_model():
         if model == "paa":
             assert np.allclose(agg_m.lrc, ref.lrc)
             assert np.allclose(agg_m.lrc_path, ref.lrc_path)
-            assert np.allclose(agg_m.lic, ref.lic)
+            assert np.allclose(agg_m.lic_path, ref.lic_path)
         else:
             assert np.allclose(agg_m.bel, ref.bel)
             assert np.allclose(agg_m.csm, ref.csm)

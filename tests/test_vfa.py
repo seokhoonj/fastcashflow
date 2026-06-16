@@ -209,7 +209,7 @@ def test_gmab_lic_uses_the_nominal_top_up_not_the_discounted_pv():
         ModelPoints.single(40, 0.0, term, account_value=av0,
                            minimum_accumulation_benefit=gmab,
                            calculation_methods=PATTERNS), basis)
-    delta_lic = floored.lic[0] - base.lic[0]
+    delta_lic = floored.lic_path[0] - base.lic_path[0]
 
     r_m = (1 + r) ** (1 / 12) - 1
     f_m = (1 + f) ** (1 / 12) - 1
@@ -679,7 +679,7 @@ def test_vfa_full_false_matches_full_headline():
         assert np.allclose(getattr(head, f), getattr(full, f)), f
     assert head.bel_path is None and head.ra_path is None and head.csm_path is None
     assert head.account_value_path is None and head.csm_accretion is None
-    assert head.lic is None and head.cashflows is None
+    assert head.lic_path is None and head.cashflows is None
 
 
 def test_vfa_headline_only_rejected_by_consumers():
@@ -1038,12 +1038,12 @@ def test_vfa_fee_fix_leaves_bel_ra_csm_unchanged():
     basis = replace(basis, expense_cv=0.10, settlement_pattern=np.array([0.5, 0.3, 0.2]))
     m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 120, account_value=1e8,
                         calculation_methods=PATTERNS), basis)
-    assert m.ra[0] > 0.0 and np.asarray(m.lic).sum() > 0.0    # the assertions bite
+    assert m.ra[0] > 0.0 and np.asarray(m.lic_path).sum() > 0.0    # the assertions bite
     assert np.isclose(m.bel[0], -10866232.448249847)      # fee never enters BEL
     assert np.isclose(m.ra[0], 42126.06353465136)         # ... nor RA
     assert np.isclose(m.csm[0], 10824106.384715196)       # ... nor CSM
     assert m.loss_component[0] == 0.0
-    assert np.isclose(np.asarray(m.lic).sum(), 80303961.70710817)   # ... nor LIC
+    assert np.isclose(np.asarray(m.lic_path).sum(), 80303961.70710817)   # ... nor LIC
     # the entity's fee PV stays at or above the unearned CSM it mirrors
     assert np.isclose(m.variable_fee[0], 11217277.272926314)
     assert m.variable_fee[0] >= m.csm[0]

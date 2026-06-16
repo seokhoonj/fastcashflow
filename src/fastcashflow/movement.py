@@ -541,7 +541,7 @@ def _roll_forward_paa(
     """Slice a PAA measurement into LRC, loss-component and LIC movements."""
     _require_full_paa(measurement, "roll_forward")
     lrc = measurement.lrc_path
-    lic = measurement.lic
+    lic_path = measurement.lic_path
     premium_cf = measurement.cashflows.premium_cf
     revenue = measurement.revenue
     incurred = measurement.cashflows.mortality_cf + measurement.cashflows.morbidity_cf
@@ -566,10 +566,10 @@ def _roll_forward_paa(
             loss_component_opening=loss_open,
             loss_component_release=loss_open - loss_close,
             loss_component_closing=loss_close,
-            lic_opening=lic[:, a],
+            lic_opening=lic_path[:, a],
             claims_incurred=period_incurred,
-            claims_paid=period_incurred - (lic[:, b] - lic[:, a]),
-            lic_closing=lic[:, b],
+            claims_paid=period_incurred - (lic_path[:, b] - lic_path[:, a]),
+            lic_closing=lic_path[:, b],
         ))
     return movements
 

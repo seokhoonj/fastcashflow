@@ -50,7 +50,7 @@ def test_paa_aggregate_matches_full_summed_and_chunk_independent():
     assert np.allclose(multi.lrc_path, one.lrc_path)
     assert np.allclose(multi.revenue, one.revenue)
     assert np.allclose(multi.service_expense, one.service_expense)
-    assert np.allclose(multi.lic, one.lic)
+    assert np.allclose(multi.lic_path, one.lic_path)
     # reproduces the full measure summed over the model-point axis
     ref_lrc = np.zeros(n_time + 1)
     ref_lrc[:full.lrc_path.shape[1]] = full.lrc_path.sum(axis=0)
@@ -92,7 +92,7 @@ def test_vfa_aggregate_matches_full_summed_and_chunk_independent():
 
     assert np.allclose(multi.bel_path, one.bel_path)
     assert np.allclose(multi.csm_path, one.csm_path)
-    assert np.allclose(multi.lic, one.lic)
+    assert np.allclose(multi.lic_path, one.lic_path)
     ref_bel = np.zeros(n_time + 1)
     ref_bel[:full.bel_path.shape[1]] = full.bel_path.sum(axis=0)
     assert np.allclose(multi.bel_path, ref_bel)
