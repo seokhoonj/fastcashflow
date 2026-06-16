@@ -1,7 +1,7 @@
 """Universal-life cost-deducting rider -- hand-calc anchor.
 
-A cost-deducting rider (e.g. a universal recurring-cancer rider, 유니버설 재진단암)
-draws its monthly risk charge from the account value, but pays a FIXED benefit on
+A cost-deducting rider (e.g. a universal recurring-cancer rider) draws its
+monthly risk charge from the account value, but pays a FIXED benefit on
 the claim side -- it does not read the account balance. It is expressed with the
 account-chassis flags ``funds_from_account=True`` and ``pays_account_balance=False``
 on its :class:`fastcashflow.basis.CoverageRate`.
