@@ -437,19 +437,18 @@ class ModelPoints:
             coverage_amount = np.asarray(self.coverage_amount, np.float64)
             coverage_offset = np.asarray(self.coverage_offset, np.int64)
         else:
-            items = []   # (cov_idx, per-mp amount array), in coverage-list order
-            benefit_codes = None   # set when benefits is keyed by coverage code
+            items = []   # (position, per-mp amount array), in benefits order
+            benefit_codes = None   # the coverage codes the benefits map pins
             if self.benefits is not None:
                 keys = list(self.benefits)
-                is_str = [isinstance(k, str) for k in keys]
-                if any(is_str) and not all(is_str):
+                if not all(isinstance(k, str) for k in keys):
                     raise ValueError(
-                        "benefits keys must be all coverage codes (str, e.g. "
-                        "'DEATH') or all coverage indices (int, e.g. 0), not a mix"
+                        "benefits keys must be coverage codes (str, e.g. "
+                        "'DEATH'); integer index keys are not supported -- key "
+                        "each benefit by its coverage code so the engine aligns "
+                        "by code, not by Basis.coverages position."
                     )
-                if keys and all(is_str):
-                    # Code-keyed: the keys ARE the coverage codes, in this order.
-                    benefit_codes = tuple(keys)
+                benefit_codes = tuple(keys) if keys else None
                 for pos, (key, amount) in enumerate(self.benefits.items()):
                     amt = np.asarray(amount, np.float64)
                     if amt.shape != (n_mp,):
@@ -457,12 +456,10 @@ class ModelPoints:
                             f"benefits[{key!r}] has length {amt.size} but "
                             f"n_mp is {n_mp}"
                         )
-                    items.append((pos if benefit_codes else int(key), amt))
+                    items.append((pos, amt))
             coverage_index, coverage_amount, coverage_offset = _build_csr(items, n_mp)
-            # A code-keyed benefits map pins the coverage codes, so the engine
-            # aligns by code (order-independent) rather than by position. (The
-            # int-keyed form leaves coverage_codes None: indices follow
-            # Basis.coverages order, the historical behaviour.)
+            # The benefits map is keyed by coverage code, so the engine aligns by
+            # code (order-independent) rather than by Basis.coverages position.
             if benefit_codes is not None and self.coverage_codes is None:
                 object.__setattr__(self, "coverage_codes", benefit_codes)
         # Validate the packed benefit amounts in one place, after both input
@@ -669,7 +666,7 @@ class ModelPoints:
         issue_age: float,
         premium: float,
         term_months: int,
-        benefits: dict[int, float] | None = None,
+        benefits: dict[str, float] | None = None,
         maturity_benefit: float = 0.0,
         annuity_payment: float = 0.0,
         disability_income: float = 0.0,
@@ -689,9 +686,11 @@ class ModelPoints:
         """Build a single-model-point set -- a convenience for hand checks.
 
         ``benefits`` is the per-coverage benefit-amount map keyed by
-        coverage code (the index into :attr:`Basis.coverages`); pass
-        ``{0: 1_000_000.0}`` to attach the benefit to the first registered
-        coverage. None means no claim benefits.
+        coverage CODE (str), e.g. ``{"DEATH": 1_000_000.0}`` -- the engine
+        aligns it to ``Basis.coverages`` by code, not by position. Each code
+        must also be mapped to a :class:`CalculationMethod` via
+        ``calculation_methods`` (no code-as-method auto-inference). None means
+        no claim benefits.
         """
         return cls(
             issue_age=np.array([issue_age]),

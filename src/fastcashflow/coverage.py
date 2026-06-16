@@ -163,17 +163,17 @@ def coverage_arrays(coverages, calculation_methods=None, *,
     taxonomy (``{coverage: CalculationMethod}``). Each coverage's method
     looked up by code gives the two flags via :func:`method_attrs`.
 
-    Method resolution per coverage:
+    Method resolution per coverage -- the method is ALWAYS given explicitly by
+    the ``calculation_methods`` taxonomy; a coverage code is the company's open
+    identifier and is never silently treated as a method:
 
-    1. If ``calculation_methods`` is a dict and the code is a key, use that.
-    2. Else, if the code itself is the bare name of a :class:`CalculationMethod`
-       member (``"DEATH"``, ``"MORBIDITY"``, ``"DIAGNOSIS"``, ``"ANNUITY"``,
-       ``"MATURITY"``), use that method -- the auto-inference convention
-       for terse Python construction.
-    3. Else, raise :class:`ValueError` naming the unresolved codes. This is a
-       deliberate choice: a silent MORBIDITY fallback hides a configuration
-       mistake on the most error-prone surface (a DEATH-only contract whose
-       claim payouts would otherwise score zero RA against ``mortality_cv``).
+    1. If ``calculation_methods`` maps the code, use that :class:`CalculationMethod`.
+    2. Else, raise :class:`ValueError` naming the unresolved codes. (No
+       code-as-method auto-inference: a coverage code that happens to read
+       ``"DEATH"`` is still just a code, so map it explicitly. A silent
+       MORBIDITY fallback would hide a configuration mistake on the most
+       error-prone surface -- a DEATH-only contract whose claim payouts would
+       otherwise score zero RA against ``mortality_cv``.)
 
     The universal-life account "chassis" (a contract-level *funding mechanism*,
     not a benefit method -- see ``dev`` design notes) adds two ORTHOGONAL
@@ -216,12 +216,6 @@ def coverage_arrays(coverages, calculation_methods=None, *,
         if calculation_methods is not None:
             method = calculation_methods.get(r.code)
         if method is None:
-            # Step 2 -- code-as-method auto-inference.
-            try:
-                method = CalculationMethod(r.code)
-            except ValueError:
-                method = None
-        if method is None:
             unresolved.append(r.code)
             # Append a placeholder so the loop builds a same-length list;
             # the raise below short-circuits the result.
@@ -234,8 +228,7 @@ def coverage_arrays(coverages, calculation_methods=None, *,
             f"coverage code(s) {unresolved!r} have no CalculationMethod: pass a "
             "calculation_methods dict on the model points (or load it from a "
             "calculation_methods.csv) mapping each code to one of "
-            f"{{{valid}}} -- or rename the coverage to a CalculationMethod "
-            "member name (the auto-inference rule)."
+            f"{{{valid}}}."
         )
     coverage_is_diagnosis = np.array([f[0] for f in flags], np.bool_)
     coverage_risk = np.array([f[1] for f in flags], np.int64)
