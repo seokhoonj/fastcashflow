@@ -22,7 +22,7 @@ import numpy as np
 from fastcashflow import io as _io
 
 #: Available sample templates -- see :func:`templates`.
-_TEMPLATES = ("gmm", "vfa", "paa")
+_TEMPLATES = ("gmm", "vfa", "paa", "ul")
 
 #: Fixed seed for :func:`scenarios` -- a reproducible toy path set, not a
 #: calibration parameter.
@@ -36,19 +36,80 @@ _FORMATS = {"csv": ".csv", "parquet": ".parquet",
 
 def templates() -> list[str]:
     """The available :func:`export` / load template names
-    (``["gmm", "vfa", "paa"]``)."""
+    (``["gmm", "vfa", "paa", "ul"]``)."""
     return list(_TEMPLATES)
+
+
+def _ul_model_points():
+    """A small synthetic universal-life portfolio.
+
+    Three account-backed contracts that differ in face, account value at issue
+    and premium. The face is carried on ``minimum_death_benefit`` and a DEATH
+    coverage is registered (the account-backed death leg reads the account
+    balance, topping up to the face); a uniform 2% ``minimum_crediting_rate``
+    floor sits under the account. Pair with :func:`_ul_basis`; measure through
+    ``gmm.measure`` (locked-in discount) or ``vfa.measure`` (underlying-items
+    return). Synthetic demo figures, never sourced from a real portfolio.
+    """
+    from fastcashflow import CalculationMethod, ModelPoints
+
+    face = np.array([100_000_000.0, 50_000_000.0, 80_000_000.0])
+    return ModelPoints(
+        sex=np.array([0, 1, 0]),
+        issue_age=np.array([40.0, 50.0, 45.0]),
+        term_months=np.array([120, 120, 60]),
+        premium_term_months=np.array([120, 120, 60]),
+        premium=np.array([500_000.0, 300_000.0, 600_000.0]),
+        count=np.array([1.0, 1.0, 1.0]),
+        account_value=np.array([0.0, 1_000_000.0, 0.0]),
+        minimum_death_benefit=face,
+        minimum_crediting_rate=np.array([0.02, 0.02, 0.02]),
+        benefits={"DEATH": face},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
+        product=np.array(["UL_A", "UL_A", "UL_A"]),
+        channel=np.array(["FC", "FC", "FC"]),
+    )
+
+
+def _ul_basis():
+    """The synthetic universal-life basis paired with :func:`_ul_model_points`.
+
+    A flat COI (``coi_annual``) above the mortality, a 6% premium load, and a
+    4% ``investment_return`` the account credits at. The DEATH coverage carries
+    the account-chassis flags (``funds_from_account=True``,
+    ``pays_account_balance=True``) so the shared projection routes its death
+    leg through the account roll. A single :class:`~fastcashflow.Basis` (no
+    per-segment router) -- both ``gmm.measure`` and ``vfa.measure`` take it.
+    """
+    from fastcashflow import Basis, CoverageRate
+
+    coi = 0.0025
+    return Basis(
+        mortality_annual=0.002,
+        lapse_annual=0.04,
+        discount_annual=0.03,
+        ra_confidence=0.75,
+        mortality_cv=0.1,
+        investment_return=0.04,
+        premium_load=0.06,
+        coi_annual=coi,
+        coverages=(CoverageRate("DEATH", coi, funds_from_account=True,
+                                pays_account_balance=True),),
+    )
 
 
 def basis(template: str = "gmm"):
     """Bundled sample basis. ``template="gmm"`` (default) returns the per-segment
     :class:`~fastcashflow.BasisRouter` (a ``(product, channel)`` -> ``Basis``
     mapping); ``template="vfa"`` returns the single variable-contract
-    :class:`~fastcashflow.Basis`."""
+    :class:`~fastcashflow.Basis`; ``template="ul"`` returns the single
+    account-backed universal-life :class:`~fastcashflow.Basis`."""
     if template == "vfa":
         return _io.load_sample_vfa_basis()
     if template == "paa":
         return _io.load_sample_paa_basis()
+    if template == "ul":
+        return _ul_basis()
     if template == "gmm":
         return _io.load_sample_basis()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -56,11 +117,14 @@ def basis(template: str = "gmm"):
 
 def model_points(template: str = "gmm"):
     """Bundled sample model points (``template="gmm"`` default, ``"vfa"`` for the
-    variable account-value contracts)."""
+    variable account-value contracts, ``"ul"`` for the account-backed
+    universal-life contracts)."""
     if template == "vfa":
         return _io.load_sample_vfa_model_points()
     if template == "paa":
         return _io.load_sample_paa_model_points()
+    if template == "ul":
+        return _ul_model_points()
     if template == "gmm":
         return _io.load_sample_model_points()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -203,11 +267,16 @@ def export(output_dir, template: str = "gmm", format: str = "csv",
         _io._drop_sample_table("sample_vfa_basis.xlsx", dest / "basis.xlsx")
         _io._drop_sample_table("sample_vfa_policies.csv", dest / f"policies{ext}")
         files = ["basis.xlsx", f"policies{ext}"]
-    else:  # paa
+    elif template == "paa":
         _io._drop_sample_table("sample_paa_basis.xlsx", dest / "basis.xlsx")
         _io._drop_sample_table("sample_paa_policies.csv", dest / f"policies{ext}")
         _io._drop_sample_table("sample_paa_coverages.csv", dest / f"coverages{ext}")
         files = ["basis.xlsx", f"policies{ext}", f"coverages{ext}"]
+    else:  # ul -- a load-only template, constructed inline (no bundled files)
+        raise NotImplementedError(
+            "the 'ul' template is load-only -- build it in memory with "
+            "samples.model_points('ul') / samples.basis('ul'); it has no "
+            "exportable starter files")
     if not quiet:
         print(f"fastcashflow sample export -- template={template!r}, "
               f"{len(files)} files")

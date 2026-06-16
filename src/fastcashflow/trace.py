@@ -357,6 +357,71 @@ def show_trace(
         f"t={t:>4d}m: ds={discount_bom[t]:.6f}" for t in picks
     ]
 
+    # ---- Universal-life account mechanic (only when the contract is an
+    # account book -- cf.account is the AccountTrajectory sidecar the shared
+    # projection populates). Gated on account is not None so a non-account
+    # contract's trace stays byte-identical. This mirrors show_trace_vfa's
+    # account section, but for the GMM-measured UL: the account value carried
+    # forward, the COI charged, the net amount at risk the COI prices, the
+    # in-force-weighted fund the BEL nets, and that the death benefit tops the
+    # account up to the face (max(av_mid, face)).
+    account_lines: list[object] = []
+    acct = cf.account
+    if acct is not None:
+        av = acct.av[0]            # (n_time+1,) month-start AV (col 0 = av0)
+        av_mid = acct.av_mid[0]    # (n_time,)   half-month-credited AV
+        coi = acct.coi[0]          # (n_time,)   cost-of-insurance charged
+        fund = acct.fund[0]        # (n_time+1,) in-force-weighted AV held
+        face = (float(sub.minimum_death_benefit[0])
+                if sub.minimum_death_benefit is not None else 0.0)
+        n_t = cf.n_time
+        load = float(basis.premium_load)
+        inv = float(basis.investment_return)
+        account_lines.append(f"account_value0 (av0)  = {av[0]:>15,.2f}")
+        account_lines.append(f"face (min_death_ben)  = {face:>15,.2f}")
+        account_lines.append(
+            f"premium_load          = {load:>15g}  "
+            "(prem_to_av = premium * (1 - load))"
+        )
+        account_lines.append(
+            f"investment_return     = {inv:>15g}  (account crediting basis)"
+        )
+        account_lines.append(
+            "coi_annual            -> " + _fmt_callable(basis.coi_annual)
+        )
+        account_lines.append(
+            "death = max(av_mid, face);  NAR = max(0, face - av_mid);  "
+            "COI = coi_m * NAR"
+        )
+        # Per-month account rows at the key months. av / fund carry the extra
+        # month-end column (index up to n_time); av_mid / coi are (n_time,) so
+        # they are shown only where t < n_time.
+        a_picks = [t for t in picks if t <= n_t]
+        _aw = _colw((av[t] for t in a_picks if t < av.shape[0]), ",.2f", 15)
+        _mw = _colw((av_mid[t] for t in a_picks if t < n_t), ",.2f", 15)
+        _cw2 = _colw((coi[t] for t in a_picks if t < n_t), ",.2f", 12)
+        _nw = _colw(
+            (max(0.0, face - av_mid[t]) for t in a_picks if t < n_t), ",.2f", 15)
+        _fw2 = _colw((fund[t] for t in a_picks if t < fund.shape[0]), ",.2f", 15)
+        for t in a_picks:
+            if t < n_t:
+                nar = max(0.0, face - av_mid[t])
+                death = max(av_mid[t], face)
+                account_lines.append(
+                    f"t={t:>4d}m: av={av[t]:>{_aw},.2f}  "
+                    f"av_mid={av_mid[t]:>{_mw},.2f}  coi={coi[t]:>{_cw2},.2f}  "
+                    f"nar={nar:>{_nw},.2f}  death={death:>{_aw},.2f}  "
+                    f"fund={fund[t]:>{_fw2},.2f}"
+                )
+            else:
+                # Month-end boundary column: av / fund have it, av_mid / coi
+                # do not (no within-month roll past the contract boundary).
+                account_lines.append(
+                    f"t={t:>4d}m: av={av[t]:>{_aw},.2f}  "
+                    f"{'(boundary)':>{_mw}}  {'':>{_cw2}}  {'':>{_nw}}  "
+                    f"{'':>{_aw}}  fund={fund[t]:>{_fw2},.2f}"
+                )
+
     # ---- BEL roll-forward at key months
     bel_lines: list[object] = [
         "BEL[t] = annuity[t] - premium[t] + (claim+morbidity+disability+"
@@ -412,6 +477,10 @@ def show_trace(
         ("Rates (annual, evaluated for this MP)", rate_lines),
         (f"Cash flows (annual sum over {cf.n_time}m horizon)", cf_lines),
     ]
+    if account_lines:
+        tree_items.append(
+            ("Universal-life account (key months)", account_lines)
+        )
     if diag_pool_lines:
         tree_items.append(
             ("Undiagnosed share (key months, per coverage)",

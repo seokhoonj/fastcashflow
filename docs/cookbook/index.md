@@ -157,7 +157,7 @@
     사망률 (`State.mortality_rate_name`). 상태지속 정액 보장의 sojourn 한도.
 ```
 
-### 5. 변액 (VFA)
+### 5. 계좌형 — 변액 (VFA) · 유니버설
 
 ```{list-table}
 :header-rows: 1
@@ -178,6 +178,10 @@
   - [적립이율 보증 (크레딧 floor)](variable/crediting-floor)
   - 계좌를 매월 `max(수익률, 보증이율)` 로 떠받치는 세 번째 보증. 0% 원금보존,
     `vfa.tvog`, 월 래칫이 비싼 이유.
+* - 5.4
+  - [유니버설 (적립 방식)](account/universal-life)
+  - 유니버설 = 세 번째 축 (적립 방식). 계좌-백 사망담보, 금리연동형은
+    `gmm.measure` / 변액은 `vfa.measure`, COI on NAR, `gmm.trace` 검산.
 ```
 
 ### 6. 재보험
@@ -366,11 +370,12 @@ semi-markov/long-term-care
 
 ```{toctree}
 :hidden:
-:caption: 5. 변액 (VFA)
+:caption: 5. 계좌형 — 변액 (VFA) · 유니버설
 
 variable/gmdb-gmab
 variable/gmdb-gmab-tvog
 variable/crediting-floor
+account/universal-life
 ```
 
 ```{toctree}
