@@ -30,6 +30,8 @@ Sign of a count shock on this outflow-heavy test book (claims >> premiums,
 unit BEL > 0): MORE survivors than expected -> more future net outflow ->
 bel_experience > 0 -> x < 0, UNFAVOURABLE; fewer survivors -> FAVOURABLE.
 """
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -130,6 +132,84 @@ def test_settle_blocks_reconcile():
         + mv.loss_component_recognised, mv.loss_component_closing, rtol=1e-10)
     assert mv.measurement_basis == "settlement"
     assert mv.period_months == 12
+
+
+def test_settle_universal_life_reconciles_and_matches_measure_inforce():
+    """A universal-life account book settles: the locked-in BEL is netted of the
+    account fund and the incurred-claims line reads the net amount at risk (the
+    account-value part of the death benefit is the policyholder's deposit, an
+    investment component, B121). On-track, the movement reconciles, the
+    experience lines vanish, and the closing BEL lands exactly on a fresh
+    measure_inforce of the same account book at the closing date.
+    """
+    basis = fcf.samples.basis("ul")
+    one = fcf.samples.model_points("ul").subset([0])
+    em_open, period = 12, 12
+    em_close = em_open + period
+    mu = fcf.gmm.measure(replace(one, count=np.ones(1)), basis, full=True)
+    surv = mu.cashflows.inforce[0]
+    scale = 1000.0
+    ids = np.array(["U0"])
+    rep = lambda v: np.full(1, v)
+    mp = replace(one, count=rep(scale * surv[em_close]),
+                 elapsed_months=rep(em_close).astype(np.int64),
+                 mp_id=ids, product=np.full(1, "A"))
+    state = InforceState(
+        mp_id=ids, elapsed_months=rep(em_close).astype(np.int64),
+        count=rep(scale * surv[em_close]),
+        prior_csm=rep(float(mu.csm[0]) * scale),
+        lock_in_rate=basis.discount_annual,
+        prior_count=rep(scale * surv[em_open]))
+    assert mu.cashflows.account is not None          # it really is an account book
+    mv = settle(mp, state, basis, period_months=period)
+    np.testing.assert_allclose(
+        mv.bel_opening + mv.bel_interest - mv.bel_release + mv.bel_experience,
+        mv.bel_closing, rtol=1e-9)
+    np.testing.assert_allclose(_csm_walk(mv), mv.csm_closing, rtol=1e-9)
+    # on-track: the experience / unlocking lines vanish
+    np.testing.assert_allclose(mv.bel_experience, 0.0, atol=1.0)
+    np.testing.assert_allclose(mv.csm_experience_unlocking, 0.0, atol=1.0)
+    # gold anchor: the settled closing BEL == a fresh measure_inforce of the same
+    # account book at the closing date (the fund netting telescopes exactly).
+    carry = fcf.gmm.measure_inforce(mp, state, basis, period_months=period,
+                                    full=True)
+    np.testing.assert_allclose(mv.bel_closing, carry.bel, rtol=1e-6)
+
+
+def test_settle_annuitizing_universal_life_payout_has_no_phantom_death_claim():
+    """In an annuitizing UL's payout phase the account is converted (av_mid == 0)
+    and there is no death benefit, so the incurred insurance claim is zero. The
+    NAR is cf.mortality_cf - deaths * av_mid (the actual gross less the account
+    part), NOT a face-minus-av_mid reconstruction -- which would fabricate a
+    full-face claim where the account no longer exists. Regression for the
+    annuitizing-payout phantom-claim defect.
+    """
+    basis = fcf.samples.basis("ul-annuity")
+    one = fcf.samples.model_points("ul-annuity").subset([0])
+    a = int(np.asarray(one.annuitization_months)[0])
+    em_open, period = a + 12, 12          # a window inside the payout phase
+    em_close = em_open + period
+    mu = fcf.gmm.measure(replace(one, count=np.ones(1)), basis, full=True)
+    surv = mu.cashflows.inforce[0]
+    # the death benefit is genuinely zero across the payout window
+    assert mu.cashflows.mortality_cf[0, em_open:em_close].sum() == 0.0
+    scale = 1000.0
+    ids = np.array(["U0"])
+    rep = lambda v: np.full(1, v)
+    mp = replace(one, count=rep(scale * surv[em_close]),
+                 elapsed_months=rep(em_close).astype(np.int64),
+                 mp_id=ids, product=np.full(1, "A"))
+    state = InforceState(
+        mp_id=ids, elapsed_months=rep(em_close).astype(np.int64),
+        count=rep(scale * surv[em_close]),
+        prior_csm=rep(float(mu.csm[0]) * scale),
+        lock_in_rate=basis.discount_annual,
+        prior_count=rep(scale * surv[em_open]))
+    mv = settle(mp, state, basis, period_months=period)
+    np.testing.assert_allclose(mv.claims_incurred, 0.0, atol=1e-6)
+    np.testing.assert_allclose(
+        mv.bel_opening + mv.bel_interest - mv.bel_release + mv.bel_experience,
+        mv.bel_closing, rtol=1e-9)
 
 
 def test_three_term_tie_is_the_gmm_cross_identity():

@@ -62,7 +62,7 @@ from fastcashflow.coverage import (
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.projection import (
-    Cashflows, project_cashflows, reject_account_book,
+    Cashflows, project_cashflows,
     _add_state_mortality_rates, _state_lapse_stack,
 )
 from fastcashflow.state_model import (
@@ -1192,10 +1192,25 @@ def settle(
     unit = replace(model_points, count=np.ones(n_mp))
     m = _measure_full(unit, basis)
     cf = m.cashflows
-    # The settlement movement reads mortality_cf / maturity_cf / surrender_cf raw as
-    # incurred / paid benefits; an account book's benefits are not priced claims,
-    # so reject it (settle_aggregate funnels through here, so it is covered too).
-    reject_account_book(cf, "gmm.settle")
+    # A universal-life account book is supported here. A mixed account /
+    # non-account portfolio is already rejected at measurement
+    # (projection._account_kernel_args), so either every row carries an account
+    # or none does. Only the net amount at risk is an insurance claim -- the
+    # account-value part of the death benefit (deaths * av_mid) is the
+    # policyholder's own deposit (B121, an investment component), already netted
+    # from the BEL via the account fund. The NAR is the ACTUAL gross death
+    # benefit (cf.mortality_cf = deaths * max(av_mid, face) while accumulating,
+    # and zero in an annuity payout phase where the account is converted) less
+    # that account part -- subtracting from the real cf.mortality_cf is robust to
+    # the payout phase (a face-minus-av_mid reconstruction would fabricate a
+    # full-face claim there). So the loss-component pool and the incurred-claims
+    # line read the NAR claim, while the locked-in BEL is netted of the fund
+    # exactly as gmm.measure nets the current-rate BEL.
+    account = cf.account
+    if account is not None:
+        mort_claim = cf.mortality_cf - cf.deaths * account.av_mid
+    else:
+        mort_claim = cf.mortality_cf
     inforce = cf.inforce
     n_time = inforce.shape[1]
     rows = np.arange(n_mp)
@@ -1271,7 +1286,7 @@ def settle(
     zero_mat = np.zeros_like(cf.maturity_cf)
     zero_surr = np.zeros_like(cf.surrender_cf)
     outflow_path = _rollforward_kernel(
-        cf.mortality_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
+        mort_claim, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
         zero_prem, zero_ann, zero_mat, zero_surr,
         boundary, discount_monthly)[0]
     out_o, out_i, out_r, out_e, out_c = _block(outflow_path)
@@ -1342,6 +1357,12 @@ def settle(
         cf.mortality_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
         cf.premium_cf, cf.annuity_cf, cf.maturity_cf, cf.surrender_cf,
         boundary, lock_monthly)[0]
+    if account is not None:
+        # Net the account value held, exactly as gmm.measure nets the
+        # current-rate BEL. The fund is rate-independent (it grows at the
+        # crediting rate), so the same array nets the locked-in BEL -- the
+        # 44(c) wedge then isolates only the discount-rate effect.
+        bel_lock = bel_lock - account.fund
     delta_lock = (k_obs - k_exp) * bel_lock[rows, em_c] * live_close
 
     # 44(c) at the locked-in rate (B72(c)); the RA change has no rate
@@ -1394,7 +1415,7 @@ def settle(
     # the discounting / RA measurement effect. m.lic_path is the undiscounted unit
     # trajectory (all-zero when the basis has no settlement_pattern, i.e. claims
     # paid as incurred -- the LIC is zero at both dates and lic_finance is zero).
-    incurred = cf.mortality_cf + cf.morbidity_cf
+    incurred = mort_claim + cf.morbidity_cf
     claims_incurred = k_exp * (incurred[rows[:, None], cols_safe]
                                * col_ok).sum(axis=1)
     claims_paid = (k_exp * m.lic_path[rows, em_open] + claims_incurred
@@ -1403,7 +1424,7 @@ def settle(
         # discounted PV of the unpaid run-off, split by risk class for the RA
         r_lic = basis.discount_monthly
         lic_death = _settlement_lic_discounted(
-            cf.mortality_cf, basis.settlement_pattern, r_lic)
+            mort_claim, basis.settlement_pattern, r_lic)
         lic_morb = _settlement_lic_discounted(
             cf.morbidity_cf, basis.settlement_pattern, r_lic)
         # RA on the LIC (paragraph 37): z x cv-weighted discounted LIC by risk
