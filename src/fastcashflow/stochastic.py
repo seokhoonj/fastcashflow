@@ -33,7 +33,7 @@ from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _norm_ppf
-from fastcashflow.projection import project_cashflows, reject_account_book
+from fastcashflow.projection import project_cashflows
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -172,14 +172,15 @@ def measure_stochastic(
     # month of incurrence in the settlement factor would otherwise have to
     # vary per scenario). Other configurations fall back to the per-scenario
     # measure(full=False) loop, which handles them correctly if more slowly.
+    from fastcashflow.engine import _portfolio_has_account
     if (basis.ra_method == "confidence_level"
-            and basis.settlement_pattern is None):
-        proj = project_cashflows(model_points, basis)
+            and basis.settlement_pattern is None
+            and not _portfolio_has_account(model_points, basis)):
         # The fast inception kernel reads the benefit cash flows raw (no account
-        # fund netting); reject a universal-life book here. (The per-scenario
-        # fallback below re-measures through measure(), which routes an account
-        # book to the full measurement and handles it correctly.)
-        reject_account_book(proj, "measure_stochastic")
+        # fund netting), so a universal-life account book skips it and falls to
+        # the per-scenario fallback below, which re-measures through measure()
+        # -- the account book is routed to the full measurement and netted there.
+        proj = project_cashflows(model_points, basis)
         n_time = proj.mortality_cf.shape[1]
         if rate_scenarios.ndim == 2:
             if rate_scenarios.shape[1] != n_time:

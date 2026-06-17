@@ -252,17 +252,30 @@ def test_account_book_gated_on_raw_consumers():
 
     with pytest.raises(NotImplementedError):
         fcf.reinsurance.measure(mp, basis, treaty=fcf.samples.treaty())
-    # stochastic fast branch (confidence RA + no settlement_pattern -- the UL
-    # basis defaults) reads mortality_cf raw.
-    with pytest.raises(NotImplementedError):
-        fcf.gmm.stochastic(mp, basis, np.linspace(0.01, 0.05, 8))
+    # The standalone vfa.tvog diagnostic still reads the account raw; the real
+    # guarantee time value comes through vfa.measure(return_scenarios), which IS
+    # supported (test_vfa_ul_guarantee_time_value).
     with pytest.raises(NotImplementedError):
         fcf.vfa.tvog(mp, basis,
                      np.tile(np.linspace(-0.01, 0.03, 8)[:, None], (1, n_time)))
+    # gmm.stochastic is NOT gated: a universal-life book skips the raw fast kernel
+    # and falls to the per-scenario measure() loop, which nets the account (see
+    # test_stochastic_universal_life_distribution).
     # roll_forward is NOT gated: it reads only the account-netted bel / ra / csm
     # paths and the in-force count, never the raw benefit cash flows, so it
     # supports an account book (see
     # test_movement.test_roll_forward_universal_life_account_reconciles).
+
+
+def test_stochastic_universal_life_distribution():
+    # A universal-life account book runs through measure_stochastic via the
+    # per-scenario measure() fallback (which routes the account book to the full
+    # measurement and nets it), so the liability distribution under interest-rate
+    # scenarios is produced -- finite and monotone (higher discount -> lower PV).
+    mp, basis = _two_mp(), _ul_basis()
+    r = fcf.gmm.stochastic(mp, basis, np.array([0.02, 0.03, 0.04, 0.05]))
+    assert r.bel.shape == (4,) and np.isfinite(r.bel).all()
+    np.testing.assert_array_less(np.diff(r.bel), 1e-6)   # decreasing in the rate
 
 
 def test_non_account_portfolio_has_no_account_sidecar():
