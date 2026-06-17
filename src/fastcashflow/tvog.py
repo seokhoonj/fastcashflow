@@ -33,7 +33,7 @@ from fastcashflow.basis import Basis
 from fastcashflow.model_points import (
     ModelPoints, NO_GUARANTEE_RATE, validate_crediting_rate,
 )
-from fastcashflow.projection import project_cashflows, reject_account_book
+from fastcashflow.projection import Cashflows, project_cashflows
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -431,6 +431,180 @@ def ul_guarantee_floor_time_value(
     return cost[1:].mean(axis=0) - cost[0]
 
 
+def ul_credit_rate_time_value(
+    *,
+    account_value0: FloatArray,
+    face: FloatArray,
+    prem_to_av: FloatArray,
+    coi_rate_m: FloatArray,
+    admin_fee: FloatArray,
+    account_charge: FloatArray,
+    gmab: FloatArray,
+    minimum_crediting_rate: float,
+    deaths: FloatArray,
+    surrenders: FloatArray,
+    maturity_survivors: FloatArray,
+    boundary: FloatArray,
+    investment_return: float,
+    return_scenarios: FloatArray,
+) -> FloatArray:
+    """Per-path cost of the credited-rate floor on a UNIVERSAL-LIFE account book.
+
+    The minimum-crediting-rate guarantee credits ``max(return, floor)`` each
+    month; the entity funds the shortfall when the return is below the floor.
+    That funded extra account value is paid out on the policy's account exits.
+    Unlike :func:`ul_guarantee_floor_time_value` -- which prices a put on the
+    account from BELOW (``max(0, guarantee - av)``) on a single floored roll --
+    the credited-rate floor is the account-value LIFT the guarantee itself funds,
+    so the account is rolled TWICE per path: once credited at the floor
+    (``credited_monthly_rate(return, minimum_crediting_rate)``) and once at the
+    bare return (no floor). Their exit-payout difference is the guarantee's cost.
+
+    The cost of insurance is recomputed inside each roll from that roll's own
+    running balance (``risk = max(0, face - a)``), so the COI feedback -- a higher
+    credit lifts ``a``, lowers the net amount at risk, lowers the COI drain, lifts
+    ``a`` further -- is captured automatically; the two rolls cannot be a single
+    closed-form factor (which is why the variable-annuity :func:`tvog_weights`
+    cannot be reused). The lift is realized only where the account value is what
+    is paid: a surrender pays ``av_mid`` (the full lift), a death pays
+    ``max(av_mid, face)`` (the lift only above the face), and a maturity pays
+    ``max(av_term, gmab)`` (the lift only above the GMAB). Below those strikes the
+    death / maturity payout is unchanged by the floor (it is the separately-valued
+    GMDB / GMAB floor that bites there), so the credited-rate and GMDB / GMAB
+    guarantees partition the account-value region with no double count.
+
+    Discounting is at the underlying-items return (the VFA basis). Row 0 of the
+    returned ``(1 + n_scenarios, n_mp)`` array is the central flat-return path (the
+    deterministic intrinsic cost already in the BEL); rows 1.. are the scenarios.
+    """
+    validate_crediting_rate(minimum_crediting_rate)
+    return_scenarios = _validate_return_scenarios(return_scenarios)
+    n_scen, n_time = return_scenarios.shape
+    n_mp = account_value0.shape[0]
+    r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
+    # Central (flat-r_m) path first, then the scenarios -- the central credit
+    # reproduces the deterministic account_credit, so its lift is the intrinsic
+    # value already in the deterministic BEL.
+    all_returns = np.concatenate(
+        [np.full((1, n_time), r_m), return_scenarios], axis=0)   # (1+n_scen, n_time)
+    cr_floor = credited_monthly_rate(all_returns, minimum_crediting_rate)
+    # The bare counterfactual: no crediting floor, so the raw return is credited.
+    cr_bare = credited_monthly_rate(all_returns, NO_GUARANTEE_RATE)
+    n_path = all_returns.shape[0]
+    bound = np.asarray(boundary, dtype=np.int64)
+
+    disc = np.ones((n_path, n_time + 1))
+    disc[:, 1:] = np.cumprod(1.0 / (1.0 + all_returns), axis=1)
+    disc_mid = disc[:, :n_time] * (1.0 + all_returns) ** (-0.5)
+
+    av0 = np.asarray(account_value0, dtype=np.float64)
+    cost = np.zeros((n_path, n_mp))
+    for p in range(n_path):
+        a_f = av0.copy()         # floored-credit account
+        a_b = av0.copy()         # bare-return account
+        avt_f = a_f.copy()
+        avt_b = a_b.copy()
+        half_f = (1.0 + cr_floor[p]) ** 0.5
+        full_f = 1.0 + cr_floor[p]
+        half_b = (1.0 + cr_bare[p]) ** 0.5
+        full_b = 1.0 + cr_bare[p]
+        for t in range(n_time):
+            active = t < bound                                   # per-MP boundary stop
+            charge = admin_fee[t] + account_charge[:, t]
+            # Floored roll: same within-month order as the deterministic kernel,
+            # COI recomputed from this roll's own balance.
+            a_f = a_f + np.where(active, prem_to_av[:, t], 0.0)
+            a_f = a_f - np.where(active,
+                                 charge + coi_rate_m[:, t] * np.maximum(0.0, face - a_f),
+                                 0.0)
+            a_f = np.maximum(0.0, a_f)
+            av_mid_f = np.where(active, a_f * half_f[t], 0.0)
+            # Bare roll: identical inputs, the bare return as the credit.
+            a_b = a_b + np.where(active, prem_to_av[:, t], 0.0)
+            a_b = a_b - np.where(active,
+                                 charge + coi_rate_m[:, t] * np.maximum(0.0, face - a_b),
+                                 0.0)
+            a_b = np.maximum(0.0, a_b)
+            av_mid_b = np.where(active, a_b * half_b[t], 0.0)
+            # Death pays max(av_mid, face) (lift only above the face); a surrender
+            # pays av_mid directly (the full lift). Both settle mid-month.
+            death_lift = np.maximum(av_mid_f, face) - np.maximum(av_mid_b, face)
+            surr_lift = av_mid_f - av_mid_b
+            cost[p] += (deaths[:, t] * death_lift
+                        + surrenders[:, t] * surr_lift) * disc_mid[p, t]
+            a_f = np.where(active, a_f * full_f[t], a_f)
+            avt_f = np.where(active, a_f, avt_f)
+            a_b = np.where(active, a_b * full_b[t], a_b)
+            avt_b = np.where(active, a_b, avt_b)
+        # Maturity pays max(av_term, gmab) -- the lift only above the GMAB.
+        mat_lift = np.maximum(avt_f, gmab) - np.maximum(avt_b, gmab)
+        cost[p] += maturity_survivors * mat_lift * disc[p, np.minimum(bound, n_time)]
+
+    return cost
+
+
+def _measure_tvog_ul(
+    model_points: ModelPoints,
+    basis: Basis,
+    proj: Cashflows,
+    return_scenarios: FloatArray,
+    g_annual: float,
+) -> TVOGResult:
+    """measure_tvog for a universal-life account book -- the credited-rate floor.
+
+    The closed-form variable-annuity path (:func:`tvog_weights`) cannot price a UL
+    account (additive, COI feedback), so the account is re-rolled floored vs bare
+    by :func:`ul_credit_rate_time_value`. Rejects an annuitizing book (the
+    conversion floor is a different mechanic), mirroring the VFA GMDB / GMAB path.
+    """
+    am = getattr(model_points, "annuitization_months", None)
+    if am is not None and np.any(np.asarray(am) > 0):
+        raise NotImplementedError(
+            "measure_tvog (credited-rate floor) is not yet supported for an "
+            "annuitizing universal-life book.")
+
+    inforce = proj.inforce
+    n_mp, n_time = inforce.shape
+
+    # Maturity survivors exit at time = term; a boundary-cut contract (term beyond
+    # the contract boundary) has none -- exactly the within / term_idx clamp the
+    # variable-annuity path uses.
+    boundary_idx = model_points.contract_boundary_months - 1
+    within = (model_points.term_months - 1) <= boundary_idx
+    term_idx = np.where(within, model_points.term_months - 1, boundary_idx)
+    maturity_survivors = np.where(within, proj.maturity_survivors, 0.0)
+
+    # Surrender count = all exits less deaths, with the maturity mass peeled out of
+    # the per-MP boundary column (death and lapse are the only mid-month exits).
+    inforce_pad = np.concatenate([inforce, np.zeros((n_mp, 1))], axis=1)
+    surrenders = inforce_pad[:, :-1] - inforce_pad[:, 1:] - proj.deaths   # (n_mp, n_time)
+    surrenders[np.arange(n_mp), term_idx] -= maturity_survivors
+
+    from fastcashflow.engine import _account_roll_inputs
+    (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
+     gmab, _g) = _account_roll_inputs(model_points, basis)
+
+    cost = ul_credit_rate_time_value(
+        account_value0=av0, face=face, prem_to_av=prem_to_av,
+        coi_rate_m=coi_rate_m, admin_fee=admin_fee,
+        account_charge=account_charge, gmab=gmab,
+        minimum_crediting_rate=g_annual,
+        deaths=proj.deaths, surrenders=surrenders,
+        maturity_survivors=maturity_survivors,
+        boundary=np.asarray(model_points.contract_boundary_months, np.int64),
+        investment_return=basis.investment_return,
+        return_scenarios=return_scenarios)                  # (1 + n_scen, n_mp)
+
+    guarantee_cost = cost[1:].sum(axis=1)                   # (n_scenarios,)
+    intrinsic_value = float(cost[0].sum())
+    time_value = float(guarantee_cost.mean() - intrinsic_value)
+    return TVOGResult(
+        guarantee_cost=guarantee_cost,
+        intrinsic_value=intrinsic_value,
+        time_value=time_value,
+    )
+
+
 def measure_tvog(
     model_points: ModelPoints, basis: Basis, return_scenarios: FloatArray
 ) -> TVOGResult:
@@ -487,7 +661,6 @@ def measure_tvog(
     return_scenarios = _validate_return_scenarios(return_scenarios)
 
     proj = project_cashflows(model_points, basis)
-    reject_account_book(proj, "measure_tvog")
     inforce = proj.inforce
     n_mp, n_time = inforce.shape
     if return_scenarios.shape[1] != n_time:
@@ -495,6 +668,11 @@ def measure_tvog(
             f"return_scenarios must have {n_time} columns (the projection "
             f"horizon), got {return_scenarios.shape[1]}"
         )
+
+    # A universal-life account book takes the re-rolled credited-rate floor; the
+    # closed-form path below is the variable-annuity (account_value-only) case.
+    if proj.account is not None:
+        return _measure_tvog_ul(model_points, basis, proj, return_scenarios, g_annual)
 
     # Portfolio total of (account value x policies exiting) per month -- the
     # benefit base before any return growth.

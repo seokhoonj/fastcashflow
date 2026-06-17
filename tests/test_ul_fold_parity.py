@@ -250,11 +250,14 @@ def test_account_book_gated_on_raw_consumers():
     basis = _ul_basis()
     n_time = fcf.gmm.measure(mp, basis, full=True).bel_path.shape[1] - 1
 
-    # The standalone vfa.tvog diagnostic still reads the account raw -- and it
-    # values the CREDITED-RATE floor (a different guarantee from the GMDB/GMAB
-    # account-value floors, whose time value DOES come through
-    # vfa.measure(return_scenarios), test_vfa_ul_guarantee_time_value).
-    with pytest.raises(NotImplementedError):
+    # The standalone vfa.tvog diagnostic is NOT gated: it values the CREDITED-RATE
+    # floor for a universal-life book (a different guarantee from the GMDB/GMAB
+    # account-value floors, whose time value comes through vfa.measure --
+    # test_vfa_ul_guarantee_time_value; the credited-rate floor is
+    # test_ul_credit_rate_tvog_*). _two_mp carries a per-MP-varying crediting rate
+    # (0.0 vs 0.01), so it raises for THAT reason (scalar guarantee in v1), not an
+    # account gate -- a uniform-rate UL book is measured (test below).
+    with pytest.raises(NotImplementedError, match="uniform"):
         fcf.vfa.tvog(mp, basis,
                      np.tile(np.linspace(-0.01, 0.03, 8)[:, None], (1, n_time)))
     # reinsurance.measure is NOT gated: a universal-life book cedes the net amount
@@ -289,6 +292,155 @@ def test_reinsurance_universal_life_cedes_nar():
     r = fcf.reinsurance.measure(mp, basis, treaty=fcf.samples.treaty())
     assert np.isfinite(np.atleast_1d(r.bel)).all()
     assert np.isfinite(np.atleast_1d(r.ra)).all()
+
+
+# --- credited-rate floor TVOG for a universal-life book (standalone vfa.tvog) ---
+#
+# The minimum-crediting-rate guarantee credits max(return, floor) each month; the
+# entity funds the shortfall, and that funded extra account value is paid out on
+# the account exits. Unlike the GMDB / GMAB floors (a put on the account, valued
+# through vfa.measure(return_scenarios)), the credited-rate floor is the account
+# LIFT itself, so the account is re-rolled floored vs bare and the exit-payout
+# difference is the cost. measure_tvog routes a universal-life book here.
+
+def _credit_mp(g, term=24, av0=2_000_000.0, premium=400_000.0,
+               face=60_000_000.0, gmab=0.0):
+    return ModelPoints(
+        issue_age=np.array([45.0]),
+        premium=np.array([premium]),
+        term_months=np.array([term]),
+        account_value=np.array([av0]),
+        minimum_death_benefit=np.array([face]),
+        minimum_accumulation_benefit=np.array([0.0]),
+        maturity_benefit=np.array([gmab]),
+        minimum_crediting_rate=np.array([g]),
+        sex=np.array([0]),
+        benefits={"DEATH": np.array([face])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
+    )
+
+
+def _flat(r_annual: float, n_time: int, rows: int = 1):
+    r_m = (1.0 + r_annual) ** (1.0 / 12.0) - 1.0
+    return np.full((rows, n_time), r_m)
+
+
+def test_ul_credit_rate_tvog_zero_vol_and_intrinsic():
+    # Zero volatility -> the time value vanishes (mean cost == central). When the
+    # central flat return sits BELOW the crediting floor the floor bites even
+    # deterministically (intrinsic > 0); above it the deterministic account is
+    # never floored (intrinsic == 0), and only volatility creates a time value.
+    basis = _ul_basis()                                  # investment_return = 0.024
+    n_time = 24
+    # central floors: r (0.024) < g (0.04)
+    mp_lo = _credit_mp(g=0.04, term=n_time)
+    res = fcf.vfa.tvog(mp_lo, basis, _flat(0.024, n_time, rows=8))
+    assert res.intrinsic_value > 0.0
+    np.testing.assert_allclose(res.time_value, 0.0, atol=1e-6)
+    # central out-of-the-money: r (0.024) > g (0.0) -> no deterministic floor cost
+    mp_hi = _credit_mp(g=0.0, term=n_time)
+    res_hi = fcf.vfa.tvog(mp_hi, basis, _flat(0.024, n_time, rows=8))
+    np.testing.assert_allclose(res_hi.intrinsic_value, 0.0, atol=1e-6)
+    np.testing.assert_allclose(res_hi.time_value, 0.0, atol=1e-6)
+
+
+def test_ul_credit_rate_tvog_hand_roll():
+    # Correctness anchor: an INDEPENDENT dual roll of the account (floored at g vs
+    # bare return), differenced on the death / surrender / maturity exits and
+    # discounted at the path's own return, reproduces both the intrinsic (central
+    # path) and a single scenario's guarantee cost to floating-point.
+    from fastcashflow.engine import _account_roll_inputs
+    from fastcashflow.projection import project_cashflows
+    from fastcashflow.tvog import credited_monthly_rate
+
+    g, r = 0.03, 0.024
+    basis = _ul_basis()
+    mp = _credit_mp(g=g, term=24)
+    n_time = int(np.asarray(mp.contract_boundary_months).max())
+    r_m = (1.0 + r) ** (1.0 / 12.0) - 1.0
+
+    proj = project_cashflows(mp, basis)
+    deaths, inforce = proj.deaths, proj.inforce
+    n_mp = inforce.shape[0]
+    boundary_idx = mp.contract_boundary_months - 1
+    within = (mp.term_months - 1) <= boundary_idx
+    term_idx = np.where(within, mp.term_months - 1, boundary_idx)
+    matsurv = np.where(within, proj.maturity_survivors, 0.0)
+    pad = np.concatenate([inforce, np.zeros((n_mp, 1))], axis=1)
+    surr = pad[:, :-1] - pad[:, 1:] - deaths
+    surr[np.arange(n_mp), term_idx] -= matsurv
+    (av0, face, prem, coi, admin, charge, gmab, _g) = _account_roll_inputs(mp, basis)
+    bound = np.asarray(mp.contract_boundary_months, np.int64)
+
+    def hand(returns):
+        cr_f = credited_monthly_rate(returns, g)
+        disc = np.ones(n_time + 1)
+        disc[1:] = np.cumprod(1.0 / (1.0 + returns))
+        disc_mid = disc[:n_time] * (1.0 + returns) ** (-0.5)
+        a_f = av0.astype(float).copy(); a_b = av0.astype(float).copy()
+        avt_f = a_f.copy(); avt_b = a_b.copy()
+        cost = np.zeros(n_mp)
+        for t in range(n_time):
+            act = t < bound
+            ch = admin[t] + charge[:, t]
+            a_f = a_f + np.where(act, prem[:, t], 0.0)
+            a_f = a_f - np.where(act, ch + coi[:, t] * np.maximum(0.0, face - a_f), 0.0)
+            a_f = np.maximum(0.0, a_f)
+            am_f = np.where(act, a_f * (1.0 + cr_f[t]) ** 0.5, 0.0)
+            a_b = a_b + np.where(act, prem[:, t], 0.0)
+            a_b = a_b - np.where(act, ch + coi[:, t] * np.maximum(0.0, face - a_b), 0.0)
+            a_b = np.maximum(0.0, a_b)
+            am_b = np.where(act, a_b * (1.0 + returns[t]) ** 0.5, 0.0)
+            dl = np.maximum(am_f, face) - np.maximum(am_b, face)
+            cost += (deaths[:, t] * dl + surr[:, t] * (am_f - am_b)) * disc_mid[t]
+            a_f = np.where(act, a_f * (1.0 + cr_f[t]), a_f); avt_f = np.where(act, a_f, avt_f)
+            a_b = np.where(act, a_b * (1.0 + returns[t]), a_b); avt_b = np.where(act, a_b, avt_b)
+        ml = np.maximum(avt_f, gmab) - np.maximum(avt_b, gmab)
+        cost += matsurv * ml * disc[np.minimum(bound, n_time)]
+        return float(cost.sum())
+
+    scen = r_m + np.tile(np.array([0.01, -0.02, 0.005, -0.03, 0.0, 0.02, -0.01, 0.015]),
+                         n_time // 8 + 1)[:n_time]
+    res = fcf.vfa.tvog(mp, basis, scen[None, :])
+    np.testing.assert_allclose(res.intrinsic_value, hand(np.full(n_time, r_m)), rtol=1e-12)
+    np.testing.assert_allclose(res.guarantee_cost[0], hand(scen), rtol=1e-12)
+
+
+def test_ul_credit_rate_tvog_monotone_in_g():
+    # A higher crediting floor is worth at least as much (max(return, g) is
+    # non-decreasing in g), and every scenario cost is non-negative (the floored
+    # account never falls below the bare account).
+    basis = _ul_basis()
+    n_time = 24
+    rng = np.random.default_rng(7)
+    r_m = (1.024) ** (1.0 / 12.0) - 1.0
+    scen = rng.normal(r_m, 0.03, (256, n_time))
+    tv = [fcf.vfa.tvog(_credit_mp(g=g, term=n_time), basis, scen) for g in (0.0, 0.02, 0.04)]
+    assert tv[2].total_value >= tv[1].total_value >= tv[0].total_value >= -1e-6
+    for res in tv:
+        assert np.all(res.guarantee_cost >= -1e-6)
+
+
+def test_ul_credit_rate_tvog_rejects():
+    # NO_GUARANTEE_RATE has no credited-rate floor (ValueError); a per-MP varying
+    # rate is a scalar-only v1 restriction (NotImplementedError); an annuitizing
+    # book uses a different conversion floor (NotImplementedError); the scenario
+    # width must match the horizon.
+    basis = _ul_basis()
+    n_time = 24
+    scen = np.full((6, n_time), (1.024) ** (1.0 / 12.0) - 1.0)
+    with pytest.raises(ValueError, match="guarantee"):
+        fcf.vfa.tvog(_credit_mp(g=fcf.NO_GUARANTEE_RATE, term=n_time), basis, scen)
+    with pytest.raises(NotImplementedError, match="uniform"):
+        fcf.vfa.tvog(_two_mp(), basis,
+                     np.full((6, int(_two_mp().contract_boundary_months.max())),
+                             (1.024) ** (1.0 / 12.0) - 1.0))
+    annz = _credit_mp(g=0.02, term=n_time)
+    object.__setattr__(annz, "annuitization_months", np.array([12]))
+    with pytest.raises(NotImplementedError, match="annuitizing"):
+        fcf.vfa.tvog(annz, basis, scen)
+    with pytest.raises(ValueError, match="columns"):
+        fcf.vfa.tvog(_credit_mp(g=0.02, term=n_time), basis, np.full((6, 7), 0.002))
 
 
 def test_non_account_portfolio_has_no_account_sidecar():
