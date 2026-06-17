@@ -250,14 +250,16 @@ def test_account_book_gated_on_raw_consumers():
     basis = _ul_basis()
     n_time = fcf.gmm.measure(mp, basis, full=True).bel_path.shape[1] - 1
 
-    with pytest.raises(NotImplementedError):
-        fcf.reinsurance.measure(mp, basis, treaty=fcf.samples.treaty())
-    # The standalone vfa.tvog diagnostic still reads the account raw; the real
-    # guarantee time value comes through vfa.measure(return_scenarios), which IS
-    # supported (test_vfa_ul_guarantee_time_value).
+    # The standalone vfa.tvog diagnostic still reads the account raw -- and it
+    # values the CREDITED-RATE floor (a different guarantee from the GMDB/GMAB
+    # account-value floors, whose time value DOES come through
+    # vfa.measure(return_scenarios), test_vfa_ul_guarantee_time_value).
     with pytest.raises(NotImplementedError):
         fcf.vfa.tvog(mp, basis,
                      np.tile(np.linspace(-0.01, 0.03, 8)[:, None], (1, n_time)))
+    # reinsurance.measure is NOT gated: a universal-life book cedes the net amount
+    # at risk (not the gross account death), netted before the cession (see
+    # test_reinsurance_universal_life_cedes_nar).
     # gmm.stochastic is NOT gated: a universal-life book skips the raw fast kernel
     # and falls to the per-scenario measure() loop, which nets the account (see
     # test_stochastic_universal_life_distribution).
@@ -276,6 +278,17 @@ def test_stochastic_universal_life_distribution():
     r = fcf.gmm.stochastic(mp, basis, np.array([0.02, 0.03, 0.04, 0.05]))
     assert r.bel.shape == (4,) and np.isfinite(r.bel).all()
     np.testing.assert_array_less(np.diff(r.bel), 1e-6)   # decreasing in the rate
+
+
+def test_reinsurance_universal_life_cedes_nar():
+    # A universal-life account book reinsures the NET AMOUNT AT RISK, not the
+    # gross account death benefit -- the account-value part of the death benefit
+    # is the policyholder's deposit, not reinsured risk. The death claim is netted
+    # (mortality_cf - deaths * av_mid) before the treaty cession.
+    mp, basis = _two_mp(), _ul_basis()
+    r = fcf.reinsurance.measure(mp, basis, treaty=fcf.samples.treaty())
+    assert np.isfinite(np.atleast_1d(r.bel)).all()
+    assert np.isfinite(np.atleast_1d(r.ra)).all()
 
 
 def test_non_account_portfolio_has_no_account_sidecar():
