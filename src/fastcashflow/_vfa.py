@@ -57,7 +57,8 @@ from fastcashflow.model_points import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.state_model import resolve_state_model
 from fastcashflow.tvog import (
-    guarantee_floor_time_value, tvog_weights, tvog_term_weight,
+    guarantee_floor_time_value, ul_guarantee_floor_time_value,
+    tvog_weights, tvog_term_weight,
     _validate_return_scenarios,
     credited_monthly_rate,
 )
@@ -699,27 +700,71 @@ def measure_vfa(
     # variable-annuity product carries an account value too).
     from fastcashflow.engine import _measure_full, _portfolio_has_account
     if _portfolio_has_account(model_points, basis):
-        if return_scenarios is not None:
-            raise NotImplementedError(
-                "return_scenarios (guarantee time value) is not yet supported "
-                "for a universal-life account book under VFA -- measure it "
-                "deterministically (return_scenarios=None).")
         r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
         n_time = int(model_points.contract_boundary_months.max())
         m = _measure_full(model_points, basis,
                           discount_monthly=np.full(n_time, r_m))
-        zeros = np.zeros_like(m.bel)  # UL has no asset-based fee / TVOG (v1)
+        zeros = np.zeros_like(m.bel)  # UL has no asset-based variable fee
+        if return_scenarios is None:
+            # Deterministic: the BEL carries the guarantee's intrinsic value only.
+            time_value = zeros
+        else:
+            # Guarantee time value: re-roll the account under the return
+            # scenarios and price the GMDB / GMAB floors (mean cost less the
+            # central intrinsic). v1 rejects an annuitizing book (the conversion
+            # floor differs from the GMDB/GMAB-at-maturity option) and a per-MP
+            # varying crediting guarantee (scalar in v1, as the VA path).
+            return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
+            if return_scenarios.ndim != 2 or return_scenarios.shape[1] != n_time:
+                raise ValueError(
+                    f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
+                    "the projection horizon")
+            from fastcashflow.engine import _account_roll_inputs
+            am = getattr(model_points, "annuitization_months", None)
+            if am is not None and np.any(np.asarray(am) > 0):
+                raise NotImplementedError(
+                    "return_scenarios (guarantee time value) is not yet supported "
+                    "for an annuitizing universal-life book.")
+            g_unique = np.unique(model_points.minimum_crediting_rate)
+            if g_unique.size > 1:
+                raise NotImplementedError(
+                    "return_scenarios with per-MP varying minimum_crediting_rate "
+                    "is not supported yet (a scalar guarantee in v1).")
+            (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
+             gmab, _g) = _account_roll_inputs(model_points, basis)
+            time_value = ul_guarantee_floor_time_value(
+                account_value0=av0, face=face, prem_to_av=prem_to_av,
+                coi_rate_m=coi_rate_m, admin_fee=admin_fee,
+                account_charge=account_charge, gmab=gmab,
+                minimum_crediting_rate=float(g_unique[0]),
+                deaths=m.cashflows.deaths,
+                maturity_survivors=m.cashflows.maturity_survivors,
+                boundary=np.asarray(model_points.contract_boundary_months, np.int64),
+                investment_return=basis.investment_return,
+                return_scenarios=return_scenarios)
+        # Fold the time value into the inception FCF; the CSM absorbs it (with
+        # time_value == 0 this reproduces the deterministic m.csm / m.loss_component).
+        fcf = m.bel + m.ra + time_value
+        loss_component = np.maximum(0.0, fcf)
+        csm0 = np.maximum(0.0, -fcf)
         if not full:
             return VFAMeasurement(
-                bel=m.bel, ra=m.ra, csm=m.csm, variable_fee=zeros,
-                time_value=zeros, loss_component=m.loss_component,
+                bel=m.bel, ra=m.ra, csm=csm0, variable_fee=zeros,
+                time_value=time_value, loss_component=loss_component,
                 model_points=model_points)
+        if return_scenarios is None:
+            csm_path, csm_accretion, csm_release = (
+                m.csm_path, m.csm_accretion, m.csm_release)
+        else:
+            csm_path, csm_accretion, csm_release = _csm_kernel(
+                csm0, m.cashflows.inforce, np.full(n_time, r_m),
+                basis.coverage_unit_discount)
         return VFAMeasurement(
-            bel=m.bel, ra=m.ra, csm=m.csm, variable_fee=zeros,
-            time_value=zeros, loss_component=m.loss_component,
-            bel_path=m.bel_path, ra_path=m.ra_path, csm_path=m.csm_path,
+            bel=m.bel, ra=m.ra, csm=csm_path[:, 0], variable_fee=zeros,
+            time_value=time_value, loss_component=loss_component,
+            bel_path=m.bel_path, ra_path=m.ra_path, csm_path=csm_path,
             account_value_path=m.cashflows.account.av,
-            csm_accretion=m.csm_accretion, csm_release=m.csm_release,
+            csm_accretion=csm_accretion, csm_release=csm_release,
             lic_path=m.lic_path, discount_factor_bom=m.discount_factor_bom,
             cashflows=m.cashflows, model_points=model_points)
 

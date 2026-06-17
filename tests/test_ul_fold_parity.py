@@ -150,11 +150,24 @@ def test_ul_settlement_pattern_rejected():
         fcf.vfa.measure(mp, basis)
 
 
-def test_vfa_ul_return_scenarios_rejected():
-    # UL guarantee time value under VFA is deferred -- return_scenarios raises.
-    with pytest.raises(NotImplementedError):
-        fcf.vfa.measure(_single_mp(), _ul_basis(),
-                        return_scenarios=np.zeros((4, 36)))
+def test_vfa_ul_guarantee_time_value():
+    # The UL guarantee time value is now computed: re-roll the account under the
+    # return scenarios, price the GMDB/GMAB floors, mean cost less the central
+    # intrinsic. Zero-volatility scenarios carry no time value; volatile ones do,
+    # and the CSM absorbs it (FCF = BEL + RA + TVOG).
+    mp, basis = _single_mp(), _ul_basis()
+    n_time = int(np.asarray(mp.contract_boundary_months).max())
+    r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
+    zv = fcf.vfa.measure(mp, basis, return_scenarios=np.full((8, n_time), r_m))
+    np.testing.assert_allclose(zv.time_value, 0.0, atol=1e-6)   # no volatility -> no TVOG
+    rng = np.random.default_rng(0)
+    m = fcf.vfa.measure(
+        mp, basis, return_scenarios=rng.normal(r_m, 0.04, (64, n_time)))
+    assert np.isfinite(m.time_value).all()
+    np.testing.assert_allclose(                                 # CSM absorbs the TVOG
+        m.csm, np.maximum(0.0, -(m.bel + m.ra + m.time_value)), rtol=1e-9)
+    with pytest.raises(ValueError):                             # width != horizon
+        fcf.vfa.measure(mp, basis, return_scenarios=np.zeros((4, n_time - 3)))
 
 
 def test_ul_fold_account_sidecar_populated():

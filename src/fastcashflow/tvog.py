@@ -350,6 +350,87 @@ def guarantee_floor_time_value(
     return time_value
 
 
+def ul_guarantee_floor_time_value(
+    *,
+    account_value0: FloatArray,
+    face: FloatArray,
+    prem_to_av: FloatArray,
+    coi_rate_m: FloatArray,
+    admin_fee: FloatArray,
+    account_charge: FloatArray,
+    gmab: FloatArray,
+    minimum_crediting_rate: float,
+    deaths: FloatArray,
+    maturity_survivors: FloatArray,
+    boundary: FloatArray,
+    investment_return: float,
+    return_scenarios: FloatArray,
+) -> FloatArray:
+    """Per-model-point time value of the GMDB / GMAB floors on a UNIVERSAL-LIFE
+    account book.
+
+    Unlike :func:`guarantee_floor_time_value` (the closed-form variable-annuity
+    account), the UL account path is additive and path-dependent -- a premium
+    injection, a cost-of-insurance drain on the net amount at risk, an admin fee
+    and a charge, with a floor-at-zero clamp -- so the account is RE-ROLLED under
+    each return scenario (and under the central flat-return path), reproducing the
+    deterministic within-month order verbatim with the monthly credit replaced by
+    ``credited_monthly_rate(return, minimum_crediting_rate)`` per scenario-month.
+
+    A death pays ``max(av_mid, face)`` and a maturity ``max(av_term, gmab)`` -- put
+    options on the account, struck at the guarantee; the time value is the mean
+    floor cost over the scenarios less the central-path (intrinsic) cost.
+    Discounting is at the underlying-items return (the VFA basis), so this is not
+    sign-constrained. Returns ``(n_mp,)``.
+    """
+    validate_crediting_rate(minimum_crediting_rate)
+    return_scenarios = _validate_return_scenarios(return_scenarios)
+    n_scen, n_time = return_scenarios.shape
+    n_mp = account_value0.shape[0]
+    r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
+    # Central (flat-r_m) path first, then the scenarios. The central credit
+    # reproduces the deterministic account_credit, so its floor cost is the
+    # intrinsic value already in the deterministic BEL.
+    all_returns = np.concatenate(
+        [np.full((1, n_time), r_m), return_scenarios], axis=0)   # (1+n_scen, n_time)
+    cr = credited_monthly_rate(all_returns, minimum_crediting_rate)  # (n_path, n_time)
+    n_path = all_returns.shape[0]
+    bound = np.asarray(boundary, dtype=np.int64)
+
+    # Start-of-month discount at each path's own return (length n_time+1 so the
+    # maturity at t=boundary reads). Deaths settle mid-month, maturity at the
+    # boundary start-of-month -- mirroring the deterministic UL kernel.
+    disc = np.ones((n_path, n_time + 1))
+    disc[:, 1:] = np.cumprod(1.0 / (1.0 + all_returns), axis=1)
+    disc_mid = disc[:, :n_time] * (1.0 + all_returns) ** (-0.5)
+
+    cost = np.zeros((n_path, n_mp))
+    for p in range(n_path):
+        a = np.asarray(account_value0, dtype=np.float64).copy()
+        av_term = a.copy()
+        half = (1.0 + cr[p]) ** 0.5
+        full = 1.0 + cr[p]
+        for t in range(n_time):
+            active = t < bound                                   # per-MP boundary stop
+            a = a + np.where(active, prem_to_av[:, t], 0.0)
+            risk = np.maximum(0.0, face - a)
+            a = a - np.where(active,
+                             admin_fee[t] + coi_rate_m[:, t] * risk
+                             + account_charge[:, t], 0.0)
+            a = np.maximum(0.0, a)
+            av_mid_t = np.where(active, a * half[t], 0.0)
+            # GMDB floor on this month's death exits.
+            cost[p] += deaths[:, t] * np.maximum(0.0, face - av_mid_t) * disc_mid[p, t]
+            a = np.where(active, a * full[t], a)
+            av_term = np.where(active, a, av_term)
+        # GMAB floor on the maturity survivors at the matured balance.
+        cost[p] += (maturity_survivors
+                    * np.maximum(0.0, gmab - av_term)
+                    * disc[p, np.minimum(bound, n_time)])
+
+    return cost[1:].mean(axis=0) - cost[0]
+
+
 def measure_tvog(
     model_points: ModelPoints, basis: Basis, return_scenarios: FloatArray
 ) -> TVOGResult:
