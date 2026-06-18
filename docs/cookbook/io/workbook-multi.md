@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory() as tmp:
     for key in sorted(basis.segments):
         msk = (prod == key[0]) & (chan == key[1])
         if msk.any():
-            print(f"  {key}: n={int(msk.sum())} BEL={val.bel[msk].sum():,.0f}")
+            print(f"  {str(key):<22}  n={int(msk.sum())}  BEL ={val.bel[msk].sum():>12,.0f}")
 ```
 
 출력:
@@ -62,13 +62,13 @@ BEL            sum =  -10,182,300
 RA             sum =     1,309,817
 CSM            sum =    10,280,704
 loss component sum =     1,408,220
-  ('HEALTH_A', 'FC'): n=2 BEL=-1,336,523
-  ('HEALTH_A', 'GA'): n=2 BEL=-1,505,011
-  ('HEALTH_A', 'TM'): n=2 BEL=426,305
-  ('TERM_LIFE_A', 'FC'): n=2 BEL=649,555
-  ('TERM_LIFE_A', 'GA'): n=1 BEL=-247,612
-  ('WHOLE_LIFE_A', 'FC'): n=1 BEL=-3,960,653
-  ('WHOLE_LIFE_A', 'GA'): n=1 BEL=-4,208,361
+  ('HEALTH_A', 'FC')      n=2  BEL =  -1,336,523
+  ('HEALTH_A', 'GA')      n=2  BEL =  -1,505,011
+  ('HEALTH_A', 'TM')      n=2  BEL =     426,305
+  ('TERM_LIFE_A', 'FC')   n=2  BEL =     649,555
+  ('TERM_LIFE_A', 'GA')   n=1  BEL =    -247,612
+  ('WHOLE_LIFE_A', 'FC')  n=1  BEL =  -3,960,653
+  ('WHOLE_LIFE_A', 'GA')  n=1  BEL =  -4,208,361
 ```
 
 11 개 계약이 7 개 segment 로 갈라져, 각 묶음이 자기 segment 의 사망률 ·
