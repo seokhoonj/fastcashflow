@@ -325,10 +325,13 @@ pm_basis = fcf.Basis(
 
 # post_first 에 자리 지정 -> 사망건수가 암진단 후 사망률을 따른다
 pm_mp = fcf.ModelPoints(
-    issue_age=np.array([50], dtype=np.int64), benefits={"CANCER1": np.array([0.0])},
-    premium=np.array([20_000.0]), term_months=np.array([13], dtype=np.int64),
-    disability_benefit=np.array([20_000_000.0]), state=np.array([1], dtype=np.int64),
-    calculation_methods={"CANCER1": fcf.CalculationMethod.DIAGNOSIS})
+    issue_age           = np.array([50], dtype=np.int64),
+    benefits            = {"CANCER1": np.array([0.0])},
+    premium             = np.array([20_000.0]),
+    term_months         = np.array([13], dtype=np.int64),
+    disability_benefit  = np.array([20_000_000.0]),
+    state               = np.array([1], dtype=np.int64),
+    calculation_methods = {"CANCER1": fcf.CalculationMethod.DIAGNOSIS})
 pm_m = fcf.gmm.measure(pm_mp, pm_basis)
 print("post-dx seated deaths[0] :", round(float(pm_m.cashflows.deaths[0][0]), 5))
 print("healthy / post-dx monthly mort :", round(1 - (1 - 0.005) ** (1 / 12), 5),

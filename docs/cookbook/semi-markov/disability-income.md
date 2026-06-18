@@ -248,10 +248,13 @@ from fastcashflow import STATE_ACTIVE
 asmp_alr = replace(basis,
     waiver_incidence_annual=1 - (1 - 0.02) ** 12)
 mp_alr = fcf.ModelPoints(
-    issue_age=np.array([45], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
-    premium=np.array([0.0]), term_months=np.array([6], dtype=np.int64),
-    disability_income=np.array([1_000_000.0]), state=np.array([STATE_ACTIVE], dtype=np.int64),
-    calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
+    issue_age           = np.array([45], dtype=np.int64),
+    benefits            = {"DEATH": np.array([0.0])},
+    premium             = np.array([0.0]),
+    term_months         = np.array([6], dtype=np.int64),
+    disability_income   = np.array([1_000_000.0]),
+    state               = np.array([STATE_ACTIVE], dtype=np.int64),
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH})
 ```
 
 ### 현실적 율 — 호주 경험표 (IAD89-93) 기반
@@ -328,10 +331,13 @@ disabled 에 자리 지정하고 (`state=1`) 한 달만 굴리면, 그 달의 �
 
 ```python
 mp1 = fcf.ModelPoints(
-    issue_age=np.array([45], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
-    premium=np.array([0.0]), term_months=np.array([1], dtype=np.int64),
-    disability_income=np.array([1_000_000.0]), state=np.array([1], dtype=np.int64),
-    calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
+    issue_age           = np.array([45], dtype=np.int64),
+    benefits            = {"DEATH": np.array([0.0])},
+    premium             = np.array([0.0]),
+    term_months         = np.array([1], dtype=np.int64),
+    disability_income   = np.array([1_000_000.0]),
+    state               = np.array([1], dtype=np.int64),
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH})
 print(f"seated 1mo BEL = {fcf.gmm.measure(mp1, basis, full=False).bel[0]:.2f}")   # -> 1000000.00
 ```
 

@@ -193,11 +193,13 @@ toy_basis = fcf.Basis(
     coverages=(fcf.CoverageRate("DEATH", zero),),  # 사망 보장
 )
 toy_mp = fcf.ModelPoints(
-    issue_age=np.array([70], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
-    premium=np.array([0.0]), term_months=np.array([12], dtype=np.int64),
-    disability_income=np.array([1_000_000.0]),
-    state=np.array([1], dtype=np.int64),  # 간병 상태에 자리 지정
-    calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
+    issue_age           = np.array([70], dtype=np.int64),
+    benefits            = {"DEATH": np.array([0.0])},
+    premium             = np.array([0.0]),
+    term_months         = np.array([12], dtype=np.int64),
+    disability_income   = np.array([1_000_000.0]),
+    state               = np.array([1], dtype=np.int64),  # 간병 상태에 자리 지정
+    calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH})
 tm = fcf.gmm.measure(toy_mp, toy_basis)
 print("monthly benefit cf :", [f"{x:,.0f}" for x in tm.cashflows.disability_cf[0][:6]])
 print(f"BEL       : {tm.bel[0]:,.0f}   (= 3 x 1,000,000, discount 0)")
