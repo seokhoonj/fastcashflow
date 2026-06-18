@@ -1,6 +1,6 @@
 # 7.1 워크북 — 단일 segment
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - 엔진은 `Basis` 와 `ModelPoints` 두 **개체** 만 받고, **입력 파일은
@@ -11,7 +11,7 @@
 - `_DEFAULTS` 행으로 공통값을 한 번만 적고 segment 가 덮어쓰는 패턴
 - rate 테이블의 **축 자동 감지** (sex / age / issue_age+duration / ...)
 - `samples.export` 로 견본을 만들고 `read_*` 로 읽어 평가까지 돌리는 라운드트립
-```
+:::
 
 지금까지의 챕터는 가정을 Python 코드 (`fcf.Basis(...)`) 로 직접
 지었습니다. 실무에서는 가정이 **회사 워크북** 에 있고, 그 워크북을 엔진이 읽는
@@ -37,7 +37,7 @@
 워크북은 한 시트가 한 가지 역할을 맡는 multi-sheet 파일입니다. 견본
 (`samples.export` 가 떨구는 `basis.xlsx`) 의 시트는 다음과 같습니다:
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 26 14 60
 
@@ -75,7 +75,7 @@
 * - `inflation_tables`
   - 선택
   - 사업비 인플레이션 (`table_id` × `year`)
-```
+:::
 
 (reader 는 `ae_factors` / `improvement_tables` 시트도 선택적으로 읽습니다 —
 A/E 보정과 사망률 개선. 견본에는 없습니다.)
@@ -187,7 +187,7 @@ CSM sum = 10,280,704
   있기 때문입니다 — `year` 별 한 행씩, 그 **전체 연도별 곡선** 이 그대로
   들어옵니다 (한 행만 있으면 그 값이 평탄 적용).
 
-```{admonition} 단일 가정 적용 vs segment 별 라우팅
+:::{admonition} 단일 가정 적용 vs segment 별 라우팅
 :class: note
 
 `fcf.gmm.measure(mp, basis)` 에 **단일 `Basis`** 를 주면 그 한 가정을 모든
@@ -197,7 +197,7 @@ CSM sum = 10,280,704
 라우팅합니다: `fcf.gmm.measure(mp, basis, full=False)` (BasisRouter 는
 `full=False` headline 도, `full=True` 궤적도 둘 다 라우팅합니다). 라우팅
 메커니즘은 [7.2](workbook-multi).
-```
+:::
 
 ## 함정
 

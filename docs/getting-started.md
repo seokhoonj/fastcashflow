@@ -14,7 +14,7 @@ pip install git+https://github.com/seokhoonj/fastcashflow.git
 (가정). 가장 빠른 시작은 fastcashflow에 들어 있는 샘플 데이터입니다.
 파일을 따로 준비할 필요가 없습니다.
 
-```{mermaid}
+:::{mermaid}
 flowchart LR
     MP["모델포인트<br/>(계약들)"] --> M["fcf.gmm.measure"]
     B["산출기초 Basis<br/>(가정)"] --> M
@@ -23,7 +23,7 @@ flowchart LR
     classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
     class MP,B,OUT stock
     class M step
-```
+:::
 
 ```python
 import fastcashflow as fcf
@@ -61,10 +61,10 @@ print(m)   # BEL · RA · CSM · 손실요소 한눈에 (계약별 + 합계)
 fcf.plot_liability(m)
 ```
 
-```{image} images/first-valuation.png
+:::{image} images/first-valuation.png
 :alt: 계약 기간에 걸친 BEL·RA·CSM 궤적
 :class: hero
-```
+:::
 
 BEL·RA·CSM·손실요소 네 값만 빠르게 얻으려면 `measure(..., full=False)` 를
 씁니다. 시점별 궤적을 만들지 않는, 메모리를 거의 안 쓰는 빠른 경로입니다.

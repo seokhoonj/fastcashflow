@@ -1,6 +1,6 @@
 # 3.1 보험료 납입면제 (waiver)
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - 보험료 납입면제가 **상태 전이** (active → waiver) 로 모델링되는 이유 —
@@ -8,7 +8,7 @@
 - `state_model` 과 `waiver_incidence_annual` 두 자리의 연결
 - waiver 상태에서 바뀌는 것 — **보험료는 멈추고 보장은 계속**
 - 납입면제가 BEL을 어떻게 키우는지 (보험료 수입이 면제되니 부채 증가)
-```
+:::
 
 지금까지 (2 장) 의 정액형 상품은 보유계약이 사망 / 해지로 줄기만 했습니다.
 이 챕터는 계약이 한 상태에서 다른 상태로 옮겨 가는 첫 사례입니다.
@@ -32,7 +32,7 @@
 
 ## 모델링 매핑 — 2-state
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 32 68
 
@@ -44,11 +44,11 @@
   - active → waiver 연 전이율 callable `(sex, issue_age, duration)`
 * - `ModelPoints.state`
   - 각 계약의 시작 상태. 신계약은 `STATE_ACTIVE` (납입 중)
-```
+:::
 
 두 상태를 그림으로 (active 만 보험료를 내고, 사망보장은 둘 다 유지):
 
-```{mermaid}
+:::{mermaid}
 flowchart LR
     START(("신계약")) --> ACT["active<br/>납입중"]
     ACT -->|"waiver_incidence"| WV["waiver<br/>납입면제 · 보장 유지"]
@@ -58,7 +58,7 @@ flowchart LR
     classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
     class ACT,WV stock
     class START,EXIT step
-```
+:::
 
 핵심은 **두 상태에서 보험료와 보장이 다르게 작동** 한다는 점:
 
@@ -73,14 +73,14 @@ flowchart LR
 설정합니다 (월 보험료 1,000 = 월 사망보험금 기대값 1% × 100,000). 납입면제가
 없으면 BEL = 0 이고, 납입면제가 들어오면 그만큼 부채가 생깁니다.
 
-```{admonition} 예제 설정
+:::{admonition} 예제 설정
 :class: note
 
 - 가입연령 40세, 보험기간 3개월, active 로 시작
 - 월 사망률 1%, 해지 없음, 월 납입면제 발생률 10%
 - 사망보험금 100,000, 월 보험료 1,000
 - 월 할인율 0 (상태 전이에 집중)
-```
+:::
 
 ```python
 import fastcashflow as fcf
@@ -150,7 +150,7 @@ BEL        = 285.22
 
 엔진의 `premium_cf` / `mortality_cf` 가 표의 두 열과 정확히 일치합니다.
 
-```{admonition} 납입면제가 없으면 BEL = 0
+:::{admonition} 납입면제가 없으면 BEL = 0
 :class: note
 
 `waiver_incidence_annual` 을 0 으로 두면 active 점유가 전체 inforce 와
@@ -158,7 +158,7 @@ BEL        = 285.22
 1,000 × inforce) 을 매월 정확히 상쇄 → **BEL = 0**. 납입면제가 들어오는
 순간 보험료 수입만 빠지고 보장은 그대로라, 그 차액이 곧 부채 285.22 로
 나타납니다. 이것이 납입면제의 비용입니다.
-```
+:::
 
 ## 결과 읽기 — 보험료와 보장의 비대칭
 
@@ -171,7 +171,7 @@ BEL        = 285.22
 - 납입면제 발생률이 높을수록 active 가 빨리 빠져 보험료 수입이 줄고 BEL이
   커집니다.
 
-```{admonition} 상태 점유는 trajectory 에 직접 노출되지 않음
+:::{admonition} 상태 점유는 trajectory 에 직접 노출되지 않음
 :class: note
 
 `Measurement` 는 active / waiver 의 분리 점유를 따로 내주지 않습니다 —
@@ -179,7 +179,7 @@ BEL        = 285.22
 `premium_cf / premium` 로 역산할 수 있습니다 (보험료가 active 에만
 곱해지므로). 상태별 점유가 필요한 정밀 검증은 [검증 패턴](../workflow/validation)
 의 `gmm.trace` 로.
-```
+:::
 
 ## 변형 — 발생률 축과 워크북 연결
 

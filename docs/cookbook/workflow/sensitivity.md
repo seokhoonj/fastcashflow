@@ -1,6 +1,6 @@
 # 8.1 시나리오 / 민감도 분석
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - 가정을 **shock** 하는 것 = rate 함수를 교체하는 것. 사망률 +10% 등을 명시
@@ -11,7 +11,7 @@
 - `gmm.trace_diff` 로 한 계약의 shock 전파 (rate → cash flow → BEL → CSM)
   를 ASCII 트리로
 - shock 함수는 **3-인자** 로 — 4-인자 default 패턴은 엔진이 잘못 호출 (함정)
-```
+:::
 
 fastcashflow 의 핵심 가치는 숫자를 한 번 내는 것이 아니라, **가정을 바꾸면
 IFRS17 숫자가 어떻게 움직이는지 즉시 보는 것** 입니다. 이 챕터는 그 도구 —
@@ -35,7 +35,7 @@ def shock_mortality(factor):                       # 사망률에 배수를 건 
 **양쪽** 에 들어갑니다. 둘 다 같은 사망률이므로, shock 도 한 번 만들어 두
 자리에 함께 먹입니다 — 한쪽만 흔들면 사망 감쇠와 사망보험금이 어긋납니다.
 
-```{admonition} shock 함수는 3-인자로
+:::{admonition} shock 함수는 3-인자로
 :class: warning
 
 `shock_mortality` 의 안쪽 lambda 는 `(s, a, d)` **3-인자** 입니다. 무심코
@@ -44,7 +44,7 @@ rate 를 5-인자 `(sex, age, dur, issue_class, elapsed)` 로 호출하면서 **
 번째 자리 (issue_class) 가 `f` 를 덮어써** shock 이 엉뚱하게 적용됩니다
 (issue_class=0 이면 사망률이 0 이 되는 식). 배수는 반드시 **클로저로 캡처**
 (위처럼 factory 함수가 `factor` 를 닫아 잡음) 하세요.
-```
+:::
 
 ## 작동 예제 — 사망률 민감도 sweep
 

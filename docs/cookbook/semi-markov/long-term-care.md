@@ -1,6 +1,6 @@
 # 4.3 간병 / 치매 (LTC, Semi-Markov)
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - **간병 / 치매 (LTC)** 보장을 Semi-Markov 로 — 간병 상태에 진입하면 **진단금
@@ -12,7 +12,7 @@
 - 한 상태가 **일시금 (`disability_benefit`) + 월정액 (`disability_income`)** 을
   함께 다루는 구조 — [4.1](reincidence) 의 일시금, [4.2](disability-income) 의
   월정액을 한 챕터에서 결합
-```
+:::
 
 ## 상품 소개 — 간병 / 치매
 
@@ -34,7 +34,7 @@
 
 ## 모델링 매핑 — active / care (2-state)
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 42 58
 
@@ -52,19 +52,19 @@
 * - `Basis.state_mortality_annual={"dth_care": fn}`
   - `dth_care` 라는 이름의 사망률 함수. 이름이 없으면 전역 `mortality_annual`
     로 fallback.
-```
+:::
 
-```{admonition} sojourn_tracking_months > periodic_benefit_term_months (strict)
+:::{admonition} sojourn_tracking_months > periodic_benefit_term_months (strict)
 :class: warning
 
 `periodic_benefit_term_months > 0` 이면 `sojourn_tracking_months` 가 그보다 **커야** 합니다 (가드
 코호트 1 개 이상). 같으면 마지막 흡수 코호트에 한도 넘은 계약이 고여 영원히
 지급되는 off-by-one 이 생기므로, 생성자가 명시적으로 거부합니다.
-```
+:::
 
 두 상태를 그림으로 (care 에 머무는 동안 월정액 지급, 한도까지; 상승 사망률):
 
-```{mermaid}
+:::{mermaid}
 flowchart LR
     START(("가입")) --> ACTIVE["active<br/>보험료 납입"]
     ACTIVE -->|"간병 진입 · 진단금"| CARE["care<br/>월정액 · 지급한도"]
@@ -74,7 +74,7 @@ flowchart LR
     classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
     class ACTIVE,CARE stock
     class START,EXIT step
-```
+:::
 
 ## 율 — 간병 발생률 (long-form 표)
 

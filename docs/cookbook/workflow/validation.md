@@ -1,6 +1,6 @@
 # 8.2 검증 패턴
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - 한 계약의 BEL / RA / CSM이 **어떤 테이블, 어떤 rate, 어떤 cash flow**
@@ -15,7 +15,7 @@
 이 챕터는 회사 데이터로 평가를 돌려보고 **결과를 신뢰** 하기 위한
 검증 워크플로를 모읍니다. "엔진이 뭘 하는지 보이지 않는다" 는 가장
 흔한 도입 마찰을 정면으로 푸는 도구들입니다.
-```
+:::
 
 ## 검증 워크플로 — 왜 / 언제
 
@@ -42,7 +42,7 @@ backward / forward recursion 을 거쳐 BEL / RA / CSM 하나의 숫자로
 
 ## 모델링 매핑 — 4개의 도구
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 25 35 40
 
@@ -67,7 +67,7 @@ backward / forward recursion 을 거쳐 BEL / RA / CSM 하나의 숫자로
     전파 / BEL / RA / CSM의 절대·% 변화
   - 시나리오 / 민감도. mortality +10% 가 BEL에 16.2%, RA에 9.9% 라면
     각각 어디서 왔는지
-```
+:::
 
 모두 ASCII 트리로 출력합니다. 외부 의존성 없고, Jupyter / REPL /
 파이프로 파일에 넣기 자유롭습니다. 실제 계산은 새로 하지 않고
@@ -809,7 +809,7 @@ fcf.gmm.trace(int(idx), mp, basis)
 기본 튜토리얼의 5장 (BEL 계산) / 7장 (CSM 계산) 이 `gmm.trace_bel_step` /
 `gmm.trace_csm_step` 이 풀어 보여주는 식의 derivation (유도) 을 다룹니다.
 
-```{admonition} 검증으로 무엇이 보장되고 무엇이 안 보장되나
+:::{admonition} 검증으로 무엇이 보장되고 무엇이 안 보장되나
 :class: warning
 
 이 챕터의 도구들은 **엔진이 출력된 식을 정확히 따른다** 는 것을
@@ -821,4 +821,4 @@ fcf.gmm.trace(int(idx), mp, basis)
 검증으로 안 잡히는 것: 입력 가정이 옳은지, 식의 선택이 회사 상황에
 적합한지, IFRS 17 의 §B71 mid-month 가정이 회사 회계정책과 정합한지.
 이 판단은 도구 너머의 영역입니다.
-```
+:::

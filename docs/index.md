@@ -2,20 +2,20 @@
 
 현금흐름 추정부터 손익 리포트까지 — 오픈소스 IFRS 평가 엔진
 
-```{image} images/hero.png
+:::{image} images/hero.png
 :alt: fastcashflow가 산출하는 IFRS 17 수치 — 부채 구성요소, 보험계약마진 상각, 변동분석
 :class: hero
-```
+:::
 
 fastcashflow는 보험계약부채 — 최선추정부채(BEL), 위험조정(RA),
 보험계약마진(CSM) — 를 계약 건별로, IFRS 17의 세 가지 회계모형
 모두에 대해 측정합니다.
 
-```{button-link} https://demo.fastcashflow.org
+:::{button-link} https://demo.fastcashflow.org
 :color: primary
 :shadow:
 라이브 데모 열기
-```
+:::
 
 데모 사이트는 fastcashflow를 계산 엔진으로 사용하는 별도 웹 애플리케이션입니다.
 fastcashflow 자체는 Python 라이브러리입니다.
@@ -43,11 +43,11 @@ numba로 컴파일한 수치 커널 — 계약 건별 대규모 평가를 위한
 
 ::::
 
-```{toctree}
+:::{toctree}
 :hidden:
 
 시작하기 <getting-started>
 튜토리얼 <tutorial/index>
 쿡북 <cookbook/index>
 api
-```
+:::

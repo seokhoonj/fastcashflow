@@ -1,6 +1,6 @@
 # 2.2 사망 + 단순 진단 일시금
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - 정기보험 (2.1) 에 **진단 일시금 담보** 를 하나 더 얹는 가장 작은 확장
@@ -13,7 +13,7 @@
 
 면책 / 감액 기간 없는 **단순** 결합만 다룹니다. 90일 면책 같은 룰은
 [2.3 다종 진단 + 면책 / 감액](diagnosis-rules) 에서.
-```
+:::
 
 ## 상품 소개 — 사망 + 진단 결합
 
@@ -30,7 +30,7 @@
 
 담보가 하나에서 둘로 늘면 세 자리가 함께 바뀝니다:
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 30 70
 
@@ -42,7 +42,7 @@
   - `{0: 사망보험금, 1: 진단금}` — 정수 키가 `coverages` 의 순서 (0 = 첫째, 1 = 둘째)
 * - `ModelPoints.calculation_methods`
   - `{"DEATH": DEATH, "CANCER": DIAGNOSIS}` — 각 담보가 어느 산출방법인지
-```
+:::
 
 **진단율 `cancer_rate` 은 `mortality_annual` 에 넣지 않습니다.** 사망은
 보유계약을 줄이지만 (죽으면 더 이상 보장 진행 X), 암진단은 사람을
@@ -54,14 +54,14 @@
 
 2.1 과 같은 두 달짜리 toy 계약에 암진단 담보를 추가합니다.
 
-```{admonition} 예제 설정
+:::{admonition} 예제 설정
 :class: note
 
 - 가입연령 40세, 보험기간 2개월
 - 월 사망률 1%, 월 암진단율 0.5%, 해지 없음
 - 사망보험금 12,000, 암진단금 20,000, 월 보험료 100
 - 월 할인율 0.5%
-```
+:::
 
 ```python
 import fastcashflow as fcf
@@ -131,7 +131,7 @@ Loss = 268.64
 
 엔진 236.63 과 손계산이 일치합니다.
 
-```{admonition} 미진단 풀이 두 번 줄어드는 것에 주목
+:::{admonition} 미진단 풀이 두 번 줄어드는 것에 주목
 :class: note
 
 t=1 의 암진단 청구는 **미진단 풀** 0.9851 을 씁니다 — 단순히 진단율로만
@@ -139,7 +139,7 @@ t=1 의 암진단 청구는 **미진단 풀** 0.9851 을 씁니다 — 단순히
 사람이라, 보유계약 감쇠 (0.99) 와 자기 진단 감쇠 (0.995) 를 **둘 다**
 받습니다: `0.99 × 0.995 = 0.98505`. 사망 보장의 `inforce` 와 진단 보장의
 `undiagnosed` 풀이 어떻게 다른지는 [담보별 산출방법](../basics/coverage-mechanics).
-```
+:::
 
 ## 결과 읽기 — 담보 추가가 BEL·RA에 미치는 영향
 
@@ -158,13 +158,13 @@ t=1 의 암진단 청구는 **미진단 풀** 0.9851 을 씁니다 — 단순히
 `morbidity_cv` 를 빼면 (또는 0 으로 두면) RA는 16.03 으로 돌아갑니다 —
 진단 담보가 RA에 기여하려면 자기 변동계수가 필요합니다.
 
-```{admonition} gmm.trace 로 두 담보 확인
+:::{admonition} gmm.trace 로 두 담보 확인
 :class: tip
 
 `fcf.gmm.trace(0, mp, basis)` 의 Coverages 노드가 두 담보를 나란히
 보여줍니다 — `'DEATH' method=DEATH`, `'CANCER' method=DIAGNOSIS  is_diagnosis=True`.
 `is_diagnosis=True` 인 CANCER 만 별도 `undiagnosed` 풀 노드가 붙습니다.
-```
+:::
 
 ## 자주 쓰는 변형
 

@@ -1,6 +1,6 @@
 # 1.4 담보별 산출방법
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - 사망·진단·입원 세 보장의 보험금이 **모두 발생(incidence)으로 계산**되고,
@@ -14,7 +14,7 @@
   "이 보장이 자기만의 미진단 풀을 갖고 있는가"
 - 손계산 / 엔진 출력 / `gmm.trace`의 `undiagnosed` 트리가 어떻게
   서로를 검증하는가
-```
+:::
 
 각 `CalculationMethod` 값이 `calculation_methods.csv` 에 적는 라벨 이라면 —
 `DEATH` 라고 적는 것 vs `DIAGNOSIS` 라고 적는 것의 차이는 어디서 정해지나?
@@ -32,7 +32,7 @@
 가르는 건 식이 아니라, 1.3에서 본 그 축 — **그 발생 사건이 너를 어느 풀에서
 빼내는가**:
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 20 16 44 20
 
@@ -52,9 +52,9 @@
   - 입원
   - 없음 (축소되는 풀 없음)
   - 반복
-```
+:::
 
-```{mermaid}
+:::{mermaid}
 flowchart TB
     DEATH["사망 (DEATH)<br/>계약 전체 풀에서 탈퇴 · 한 번"]
     DIAG["진단 (DIAGNOSIS)<br/>자기 미진단 풀에서 탈퇴 · 한 번"]
@@ -65,12 +65,12 @@ flowchart TB
     class DEATH step
     class DIAG stock
     class MORB outflow
-```
+:::
 
 엔진 **구현**으로는 청구 알고리즘이 둘뿐입니다 — 자기 미진단 풀을 가진
 진단(B)과, 그렇지 않은 나머지(A):
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 22 18 60
 
@@ -84,7 +84,7 @@ flowchart TB
   - 진단
   - 매월 `inforce[t] × undiagnosed[t] × rate[t] × benefit` 누적.
     `undiagnosed` 는 보장마다 자기 미진단 풀, 매월 `(1 - 진단발생률)` 로 감쇠.
-```
+:::
 
 `is_diagnosis` flag 가 정확히 이 (A)/(B) 분기 결정자입니다. False → 식 (A),
 True → 식 (B). 한 가지 주의 — 사망의 "한 번"은 알고리즘 (A) **안**이 아니라

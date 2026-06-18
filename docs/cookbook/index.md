@@ -14,7 +14,7 @@
 
 ## 쿡북의 구성
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 16 30 54
 
@@ -56,7 +56,7 @@
 * - 확장 로드맵 (미구현)
   - 미구현 엔진 기능의 설계 노트
   - 아직 코드에 없는 기능의 설계 스케치. 실행 레시피가 아니라 로드맵.
-```
+:::
 
 기초 → 단순 → Markov → Semi-Markov 의 순서는 **학습 곡선**입니다.
 하지만 회사 상품에 해당하는 챕터로 바로 점프해도 됩니다 — 각 챕터는
@@ -66,7 +66,7 @@
 
 ### 1. 기초
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -91,11 +91,11 @@
   - [담보별 산출방법](basics/coverage-mechanics)
   - DEATH 의 공유 `inforce` vs DIAGNOSIS 의 `undiagnosed` 풀.
     같은 식이 두 자리에 작동하는 이유.
-```
+:::
 
 ### 2. 단순 상품
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -115,11 +115,11 @@
   - [갱신형 보험과 계약의 경계](simple/renewable)
   - IFRS 17 Sec. 34 계약의 경계 — 차기갱신 vs 최종만기. `contract_boundary_months`
     로 측정 범위를 차기갱신에서 끊기.
-```
+:::
 
 ### 3. Markov 상태
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -132,11 +132,11 @@
 * - 3.2
   - [paid-up 분리 (3-state)](markov/paid-up)
   - active / waiver / paidup 을 각각 별도 state 로. 납입후 해지율 점프.
-```
+:::
 
 ### 4. Semi-Markov 상태
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -155,11 +155,11 @@
   - [간병 / 치매 (LTC)](semi-markov/long-term-care)
   - 진단금 일시금 + 보증한도 월정액 (`periodic_benefit_term_months`) + 간병상태 상승
     사망률 (`State.mortality_rate_name`). 상태지속 정액 보장의 sojourn 한도.
-```
+:::
 
 ### 5. 계좌형 — 변액 (VFA) · 유니버설
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -182,11 +182,11 @@
   - [유니버설 (적립 방식)](account/universal-life)
   - 유니버설 = 세 번째 축 (적립 방식). 계좌-백 사망담보, 금리연동형은
     `gmm.measure` / 변액은 `vfa.measure`, COI on NAR, `gmm.trace` 검산.
-```
+:::
 
 ### 6. 재보험
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -196,11 +196,11 @@
 * - 6.1
   - [비례 재보험 (quota share)](reinsurance/proportional)
   - 보유 quota-share 재보험계약 측정. 전가위험 (RA) 과 순원가 / 이익 (CSM).
-```
+:::
 
 ### 7. I/O (Excel 워크북)
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -213,11 +213,11 @@
 * - 7.2
   - [워크북 — 다중 segment / 다종 상품](io/workbook-multi)
   - `measure` + 상품 / 채널 별 다른 StateModel.
-```
+:::
 
 ### 8. 분석 / 검증
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -231,11 +231,11 @@
 * - 8.2
   - [검증 패턴](workflow/validation)
   - 한 계약의 BEL / CSM 계산 경로 추적. 손계산 매칭, shock 전파, residual 검증.
-```
+:::
 
 ### 9. 결산 워크플로
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -267,11 +267,11 @@
   - 번들 샘플 엑셀을 시트·컬럼 하나하나 짚으며 결산파일까지 추적. `segments` /
     위험률 / 계약 파일 / `inforce_state` → `settle` → `close` →
     `write_close_pack` 의 입력-출력 매핑.
-```
+:::
 
 ### 10. 단기 측정 (PAA)
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -282,11 +282,11 @@
   - [단기 정산형 상해보험](paa/accident)
   - 1년 단기 계약을 `paa.measure` 로. LRC / 손실요소, 청구 정산 패턴
     (`settlement_pattern`) 과 스칼라 할인.
-```
+:::
 
 ### 11. 확장 로드맵 (미구현)
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 28 64
 
@@ -297,7 +297,7 @@
   - [⚠ 동적해지율 엔진설계](design/dynamic-lapse)
   - 시나리오 / moneyness 에 반응하는 해지율. **⚠ 미구현** — 정적 격자에서 루프
     내 평가로 옮기는 설계 스케치. 실행 불가.
-```
+:::
 
 ## 모든 챕터의 공통 구조
 
@@ -330,7 +330,7 @@
 각 챕터 코드 블록은 위의 `import` 구문부터 출력 (`print`) 까지 전체를
 포함합니다 — 그대로 복사해서 실행하면 됩니다.
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 1. 기초
 
@@ -338,9 +338,9 @@ basics/overview
 basics/calculation-methods
 basics/mortality-roles
 basics/coverage-mechanics
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 2. 단순 상품
 
@@ -349,26 +349,26 @@ simple/death-diagnosis
 simple/diagnosis-rules
 simple/renewable
 simple/escalating-benefits
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 3. Markov 상태
 
 markov/waiver
 markov/paid-up
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 4. Semi-Markov 상태
 
 semi-markov/reincidence
 semi-markov/disability-income
 semi-markov/long-term-care
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 5. 계좌형 — 변액 (VFA) · 유니버설
 
@@ -376,32 +376,32 @@ variable/gmdb-gmab
 variable/gmdb-gmab-tvog
 variable/crediting-floor
 account/universal-life
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 6. 재보험
 
 reinsurance/proportional
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 7. I/O (Excel 워크북)
 
 io/workbook-single
 io/workbook-multi
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 8. 분석 / 검증
 
 workflow/sensitivity
 workflow/validation
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 9. 결산 워크플로
 
@@ -410,18 +410,18 @@ workflow/movement
 workflow/onerous-settle
 workflow/close-pack
 workflow/sample-walkthrough
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 10. 단기 측정 (PAA)
 
 paa/accident
-```
+:::
 
-```{toctree}
+:::{toctree}
 :hidden:
 :caption: 11. 확장 로드맵 (미구현)
 
 design/dynamic-lapse
-```
+:::

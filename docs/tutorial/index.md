@@ -10,7 +10,7 @@
 
 ## 이 튜토리얼이 다루는 것
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 40 52
 
@@ -56,9 +56,9 @@
 * - 13
   - 엔진 설계와 벤치마크
   - 벡터화·컴파일·메모리 구조, 고정 메뉴 설계, 벤치마크
-```
+:::
 
-```{toctree}
+:::{toctree}
 :maxdepth: 1
 :caption: 차례
 
@@ -75,4 +75,4 @@
 11-in-practice
 12-in-practice-2
 13-engine-design
-```
+:::

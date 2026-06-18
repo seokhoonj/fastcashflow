@@ -1,6 +1,6 @@
 # 1.2 담보와 산출방법 매칭
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - 엔진이 **왜** 각 담보의 산출방법을 미리 알아야 하는가
@@ -8,7 +8,7 @@
 - 사용자가 지정해주는 자리 (`calculation_methods.csv`) 가 왜 별도 파일인가
 - 사망 종류 (일반사망 / 질병사망 / 재해사망) 가 모두 같은 산출방법인 이유
 - 한국 상품의 매핑 표, 담보별 산출방법 작성, 등록 누락 시 잡히는 자리
-```
+:::
 
 ## 왜 사용자가 산출방법을 지정해야 하나
 
@@ -26,7 +26,7 @@
 
 다섯 가지 분기로 단순화됩니다:
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 18 35 47
 
@@ -48,18 +48,18 @@
 * - **MATURITY**
   - 만기 생존계약 × 정액. 만기 시 1 회.
   - 만기환급금
-```
+:::
 
 세 가지 위험률 기반 산출방법 (DEATH / MORBIDITY / DIAGNOSIS) 의 차이는 본질
 적으로 어떤 풀에서 차감되는가 의 차이입니다 — 자세한 메커니즘은
 [담보별 산출방법](coverage-mechanics) 챕터.
 
-```{note}
+:::{note}
 주계약은 **상품마다 다른 산출방법** 입니다. 정기 / 종신은 DEATH, 암보험은
 DIAGNOSIS, 건강 / 실손은 MORBIDITY, 연금은 ANNUITY. 엔진은 "주계약"
 자체를 모릅니다 — 담보별 산출방법에 등록된 담보들 중 어느 것이 주계약인지는
 회사 / product 단위 결정.
-```
+:::
 
 ## 왜 별도 파일인가 — 책임 분리
 
@@ -92,7 +92,7 @@ mp = fcf.read_model_points(
 
 ## 한국 상품 → 산출방법 매핑 표
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 25 25 50
 
@@ -123,14 +123,14 @@ mp = fcf.read_model_points(
 * - 만기환급금 / 단기납 종신의 환급
   - MATURITY
   - 생존 시 1 회. rate 없음
-```
+:::
 
-```{warning}
+:::{warning}
 **모든 사망 종류는 DEATH 산출방법**입니다 — 한국 시장의 사망 보장 분화
 (일반사망 / 질병사망 / 재해사망) 는 **같은 mechanic** (사건 발생 시
 amount 지급). 차이는 *rate_table* 일 뿐. 담보별 산출방법에 각자 별도
 `coverage` 로 등록하되 산출방법은 모두 `DEATH`.
-```
+:::
 
 ## 담보별 산출방법 작성 — `calculation_methods.csv`
 
@@ -157,7 +157,7 @@ MATURITY,만기환급,MATURITY
 * `calculation_method` — 위 다섯 enum 값 중 하나. 다른 값이면
   `ValueError` 가 어느 행에서 났는지 알려줍니다.
 
-```{note}
+:::{note}
 엔진에는 reserved 코드가 없습니다. 사망 보장은 다른 담보와 똑같이
 `basis.xlsx` 의 `coverages` 시트 (rate-driven 자리) 에 등록하고, `rate_table` 에
 mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
@@ -167,7 +167,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 상품에 항상 일어나는 사건이라 별도 입력으로 두지만, 사망 보장금의
 지급 rate 는 담보별 산출방법에 등록된 DEATH 담보의 자체 `rate_table` 이
 결정합니다.
-```
+:::
 
 ## 변형 — 담보별 산출방법을 어떻게 짜는가
 
@@ -189,7 +189,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 
 네 단계 검증이 담보별 산출방법 미스를 catch 합니다:
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 8 30 60
 
@@ -208,7 +208,7 @@ mortality_tables (또는 incidence_rate_tables) 의 항목을 가리키게
 * - V4
   - `measure()` 진입
   - 담보별 산출방법에 있는 rate-driven 코드의 rate_table 이 basis 에 없음
-```
+:::
 
 ```python
 # V1 예시 — 알 수 없는 산출방법

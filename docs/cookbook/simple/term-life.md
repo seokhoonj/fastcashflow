@@ -1,6 +1,6 @@
 # 2.1 정기보험
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - **정기보험** 한 계약을 fastcashflow 로 평가하는 가장 짧은 코드 — 20 줄로 끝
@@ -11,7 +11,7 @@
 
 이 챕터만 봐도 정기보험 평가는 끝까지 갈 수 있도록 만들었습니다.
 다른 자료로 점프할 필요 없음.
-```
+:::
 
 ## 상품 소개 — 정기보험
 
@@ -35,8 +35,8 @@
 잡고 갑니다. 본 챕터의 코드는 이 트리를 그대로 따라갑니다. (같은 그림이
 기초 part 의 [한눈에 보기](../basics/overview) 에도 정리되어 있습니다.)
 
-```{include} ../_shared/inputs_and_api.md
-```
+:::{include} ../_shared/inputs_and_api.md
+:::
 
 본 챕터는 위 그림 중 **samples.export → read_\* → measure →
 print** 정도만 씁니다. 변동분해 / 시각화는 후속 챕터의 자리.
@@ -46,7 +46,7 @@ print** 정도만 씁니다. 변동분해 / 시각화는 후속 챕터의 자리
 가장 단순한 케이스부터 시작합니다. 한 계약, 두 달짜리. 손계산이 그대로
 잡히는 작은 예입니다.
 
-```{admonition} 예제 설정
+:::{admonition} 예제 설정
 :class: note
 
 - 가입연령 40세, 보험기간 2개월
@@ -54,7 +54,7 @@ print** 정도만 씁니다. 변동분해 / 시각화는 후속 챕터의 자리
 - 사망보험금 12,000, 월 보험료 100
 - 월 할인율 0.5%
 - 사업비 0 (할인과 후방재귀에 집중)
-```
+:::
 
 손계산은 두 시점 (t=0, t=1) 의 cash flow 를 현재가치로 가져와 합칩니다:
 
@@ -122,7 +122,7 @@ Loss = 55.14
 손계산 39.11 과 엔진 39.11 이 정확히 일치합니다. **작은 toy 계약을 손으로
 풀어 엔진을 신뢰할 수 있는지 확인하는 것이 cookbook 의 핵심 패턴입니다.**
 
-```{admonition} 두 자리에 같은 사망률를 넘기는 이유
+:::{admonition} 두 자리에 같은 사망률를 넘기는 이유
 :class: note
 
 `mortality_annual` 은 **보유계약이 사망으로 감쇠** 하는 율, `coverages`
@@ -131,16 +131,16 @@ Loss = 55.14
 가정에서 답을 도출했으므로, 코드에서도 같은 `death_rate` 을 두 자리에
 공유합니다. 한 자리만 바꾸면 두 양이 silent 어긋나 BEL이 안 맞으니,
 한 변수에 lift 후 두 자리에 통과시키는 게 안전한 패턴.
-```
+:::
 
-```{admonition} gmm.trace 로 한 줄씩 풀어 보기
+:::{admonition} gmm.trace 로 한 줄씩 풀어 보기
 :class: tip
 
 `fcf.gmm.trace(0, mp, basis)` 한 줄이면 매월 cash flow, BEL의 후방
 재귀, CSM의 전방 진행이 ASCII 트리로 풀려 나옵니다. 손계산과 엔진이
 어긋날 때 어느 단계에서 갈렸는지 한눈에 확인. 자세한 사용은
 [검증 패턴](../workflow/validation).
-```
+:::
 
 ## 결과 읽기 — BEL / RA / CSM
 
@@ -169,13 +169,13 @@ RA (Risk Adjustment = 위험조정) 는 미래 사망률 / 비용 / 해지의
 **불확실성** 에 대해 보험사가 받는 보상. 75% 신뢰수준이면
 "BEL + RA" 가 75% 백분위 부채 추정치에 해당.
 
-```{admonition} 확인 포인트
+:::{admonition} 확인 포인트
 :class: note
 
 RA가 작으면 BEL의 불확실성이 작다는 뜻. `mortality_cv` (사망률
 변동계수) 를 `0.10 → 0.50` 으로 바꾸면 RA가 5배 커집니다. 한 번
 실험해보세요.
-```
+:::
 
 ### CSM = 0, Loss = 55.14 — 보험계약마진과 손실요소
 
@@ -197,7 +197,7 @@ CSM (Contractual Service Margin = 보험계약마진) 은 IFRS 17 의 핵심
 `full=True` (기본) 는 시간 trajectory 전체를, `full=False` 는 시점 0 의
 headline 네 숫자만 돌려줍니다.
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 12 44 44
 
@@ -216,7 +216,7 @@ headline 네 숫자만 돌려줍니다.
 * - 속도 (100만 MP)
   - 수 초
   - 80–300 ms
-```
+:::
 
 **규칙**: 시간 trajectory 가 필요하면 (검증 / 변동분해 / 시각화 / 보고)
 `full=True` (기본), 시점 0 의 결과 4 개만 필요하면 (대량 portfolio 평가,
@@ -230,7 +230,7 @@ test 가 자동 검증).
 수백 ~ 수천만 건이고, 보통 엑셀 / CSV 파일로 들어옵니다. fastcashflow
 는 네 갈래의 파일을 입력으로 받습니다:
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 30 70
 
@@ -244,7 +244,7 @@ test 가 자동 검증).
   - 보유 계약 — 한 줄 = 한 계약 (가입연령 / 성별 / 보험기간 / 계약수)
 * - `coverages.csv`
   - 담보 가입금액 — 한 줄 = 한 (계약, 담보)
-```
+:::
 
 각 파일의 자세한 구조는 [튜토리얼 11장](../../tutorial/11-in-practice) 에
 정리되어 있습니다. 본 챕터에서는 패키지에 동봉된 샘플 파일을 그대로
@@ -302,14 +302,14 @@ Loss:       2,363,071
 `full=True` 와 `full=False` 의 시점 0 결과가 정확히 일치 — parity 가 항상
 보장됩니다.
 
-```{admonition} 데모용 라우팅의 한계
+:::{admonition} 데모용 라우팅의 한계
 :class: note
 
 위 코드는 한 segment 의 가정 (`("TERM_LIFE_A", "GA")`) 을 11건 전체에
 적용합니다 — portfolio 안에 다른 (상품, 채널) 의 계약이 섞여 있어도
 같은 가정을 씁니다. 실무에서는 각 계약을 자기 segment 의 가정에
 라우팅하는 `measure(mp, basis)` 를 씁니다 — 자세한 건 11장.
-```
+:::
 
 자기 데이터로 돌리려면 (1) 단계를 건너뛰고 (2) 단계의 파일명을 자기
 파일 경로로 바꾸면 됩니다. 입력은 늘 `policies` + `coverages` 두 프레임입니다
@@ -428,14 +428,14 @@ mp = fcf.ModelPoints.single(
 
 `premium_frequency_months=12` 이면 연납, `=6` 이면 반기납.
 
-```{admonition} 사망률 / 해지율 표를 바꾸려면
+:::{admonition} 사망률 / 해지율 표를 바꾸려면
 :class: note
 
 회사 경험률표로 평가하려면 워크북의 `mortality_tables` / `lapse_tables`
 시트에 행을 추가하고 `segments` 시트의 `mortality_table` /
 `lapse_table` 컬럼에서 그 `table_id` 를 가리키면 됩니다. 자세한 워크북
 편집 가이드는 [튜토리얼 11장](../../tutorial/11-in-practice).
-```
+:::
 
 ## 함정 — 흔한 실수와 잡는 방법
 
@@ -514,11 +514,11 @@ fastcashflow 의 성별 인코딩은 **0 = 남, 1 = 여**. 워크북의 `policie
 7장 (CSM 계산) 이 본 챕터의 출력값을 도출하는 IFRS 17 의 자세한 수식과
 손계산 예제를 다룹니다.
 
-```{admonition} 가정의 정확성과 결과의 의미
+:::{admonition} 가정의 정확성과 결과의 의미
 :class: warning
 
 본 챕터의 BEL / RA / CSM 숫자는 **샘플 가정 그대로** 의 결과입니다.
 실제 회사 평가에서는 mortality_cv / discount_annual / 사업비를 회사
 설정에 맞춰야 의미 있는 숫자가 나옵니다. fastcashflow 의 결과는
 "입력 가정에 충실한 산출" 이지, 회사 portfolio 의 진실값은 아닙니다.
-```
+:::

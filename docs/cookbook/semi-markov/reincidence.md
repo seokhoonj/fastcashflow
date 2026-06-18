@@ -1,6 +1,6 @@
 # 4.1 재진단암 (Semi-Markov)
 
-```{admonition} 이 챕터에서 배우는 것
+:::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
 - **Semi-Markov** (상태 안에서의 **경과 시간** 에 의존하는 모델) 의 첫 사례 —
@@ -14,7 +14,7 @@
   duration) 로 표현하는 자리
 - 1차 / 2차 진단금이 `pays_lump_sum` 전이로 들어가는 자리와, `disability_benefit`
   한 금액을 공유하는 제약
-```
+:::
 
 [3. Markov 상태](../markov/waiver) 는 "어느 상태에 있느냐" 로 보험료와
 보장이 갈렸습니다. 이 챕터는 한 걸음 더 갑니다 — **그 상태에 들어온 지 얼마나
@@ -40,21 +40,21 @@
 가 더해지면 **상태별 경과(코호트)를 추적** 해야 합니다. 그것이 Semi-Markov
 입니다.
 
-```{admonition} 코호트 (cohort) 란
+:::{admonition} 코호트 (cohort) 란
 :class: note
 
 같은 시점에 같은 상태로 들어온 무리를 하나의 **코호트** 로 봅니다. post_first
 (1차 진단 후) 상태를 "들어온 지 0개월 / 1개월 / 2개월 ..." 코호트로 쪼개
 추적하면, 각 코호트가 면책기간을 넘겼는지 따로 알 수 있습니다. `sojourn_tracking_months`
 가 추적할 코호트 수 (개월) 입니다.
-```
+:::
 
 ## 모델링 매핑 — Semi-Markov 3-state
 
 이 상품은 번들 모델 (`STATE_MODELS`) 에 없습니다. `State` / `Transition` /
 `StateModel` 로 직접 조립합니다 — 세 상태와 그 사이 전이를 그대로 적습니다.
 
-```{list-table}
+:::{list-table}
 :header-rows: 1
 :widths: 34 66
 
@@ -77,11 +77,11 @@
     번째 인자 `state_duration`** 가 post_first 진입 후 경과개월
 * - `ModelPoints.disability_benefit`
   - `pays_lump_sum` 전이가 지급하는 금액. **모든 pays_lump_sum 전이가 공유** (아래 함정)
-```
+:::
 
 세 상태와 전이를 그림으로:
 
-```{mermaid}
+:::{mermaid}
 flowchart LR
     START(("신계약")) --> H["healthy<br/>건강"]
     H -->|"ci_incidence<br/>(1차 진단금)"| P1["post_first<br/>1차 후"]
@@ -93,7 +93,7 @@ flowchart LR
     classDef step fill:#f7f2e8,stroke:#b38a45,color:#493617
     class H,P1,P2 stock
     class START,EXIT step
-```
+:::
 
 면책기간은 별도 필드가 아니라 **`ci_reincidence_annual` 안에서 자연스럽게**
 표현됩니다 — 네 번째 인자 `state_duration` 가 면책개월 미만이면 0 을
@@ -110,14 +110,14 @@ reincid_fn = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
 평탄하게 (실무는 경험률표 룩업) 두고, 진단율 · 진단금을 일부러 크게 잡아
 면책기간의 효과가 또렷이 보이게 했습니다.
 
-```{admonition} 예제 설정
+:::{admonition} 예제 설정
 :class: note
 
 - 가입연령 40세, 보험기간 4개월, healthy 로 시작
 - 월 사망률 1%, 사망보험금 100,000, 보험료 0 (보장 움직임에 집중)
 - 1차 진단 월 5%, 재진단 월 20% (면책 2개월), 진단금 1,000,000 (1차 = 2차)
 - 월 할인율 0
-```
+:::
 
 ```python
 import numpy as np
@@ -194,11 +194,11 @@ RA            = 265.78
 CSM           = 0.00
 ```
 
-```{note}
+:::{note}
 이 예제는 전체 생성자 `fcf.ModelPoints(...)` 를 씁니다 — `single()` 도
 `disability_benefit` / `state` 를 받지만, Semi-Markov 예제들과 같은 **명시적
 배열 스타일**을 유지하려고 전체 생성자로 넘깁니다.
-```
+:::
 
 ## 결과 읽기 — 면책기간이 만드는 점프
 
@@ -273,7 +273,7 @@ reincidence mult sd6/24/48/72: [0.0, 1.8, 1.2, 0.9]
 에 넣으면 1차 진단은 공개 발생률을, 재진단은 면책 + 경과 의존 재발 hazard 를
 따릅니다.
 
-```{admonition} 출처 / 근거
+:::{admonition} 출처 / 근거
 :class: note
 
 - **1차 진단율 연령 구조** — 국가암등록통계 (KOSIS, 공개) 의 암 발생률 곡선
@@ -281,7 +281,7 @@ reincidence mult sd6/24/48/72: [0.0, 1.8, 1.2, 0.9]
 - **재발 hazard 패턴** — 재발 위험이 진단 후 1~3년에 높고 5년 후 신규 원발암
   수준으로 가라앉는 임상적 재발 곡선; `sd` 경과 배수로 표현.
 - 면책 (1~2년) 은 `sd` 임계 하나로 — `sd < 12` (1년) / `sd < 24` (2년).
-```
+:::
 
 ### 암진단 후 사망률 (조건부 사망 가정)
 
@@ -352,14 +352,14 @@ healthy / post-dx monthly mort : 0.00042 / 0.00168
 이 무난합니다. 마지막 코호트는 그 이상의 경과를 모두 흡수합니다 (long-tail).
 `sojourn_tracking_months` 가 크면 코호트 수만큼 계산이 늘지만 시간에 선형으로 증가합니다.
 
-```{admonition} sojourn_tracking_months = 0 이면 Markov 로 돌아간다
+:::{admonition} sojourn_tracking_months = 0 이면 Markov 로 돌아간다
 :class: warning
 
 `post_first` 의 `sojourn_tracking_months` 를 0 으로 두면 코호트 추적이 꺼져 경과를 알 수
 없습니다. 그러면 `sojourn_dependent=True` 전이의 면책기간을 표현할 수 없습니다 —
 재진단 보장의 핵심이 사라집니다. Semi-Markov 의 본질이 이 `sojourn_tracking_months > 0`
 입니다.
-```
+:::
 
 ### 1차 ≠ 2차 진단금 — DIAGNOSIS 담보로 분리
 

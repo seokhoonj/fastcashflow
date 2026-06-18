@@ -9,7 +9,7 @@
 계산 파라미터) — 을 각각 read 해 `measure(model_points, basis)` 에서 합칩니다.
 메인 경로는 양쪽 다 **read → 객체 → measure** 로 대칭입니다.
 
-```{mermaid}
+:::{mermaid}
 flowchart TB
     subgraph IN["입력 — 두 peer 객체"]
         direction LR
@@ -45,7 +45,7 @@ flowchart TB
     class MP,BS,RES stock
     class M,GMM,PAA,VFA,REI step
     class AN margin
-```
+:::
 
 - **두 peer 객체, 합류점은 `measure`.** `mp = read_model_points(...)` /
   `basis = read_basis(...)` — 양쪽 다 read → 객체 → measure. 사용 모양은 대칭.
@@ -91,8 +91,8 @@ fcf.Basis(
 
 ## 입력 파일과 사용자 함수
 
-```{include} ../_shared/inputs_and_api.md
-```
+:::{include} ../_shared/inputs_and_api.md
+:::
 
 자세한 결산 모드 워크플로는 [튜토리얼 11장](../../tutorial/11-in-practice)
 참조.
