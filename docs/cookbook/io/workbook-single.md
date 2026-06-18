@@ -98,7 +98,7 @@ A/E 보정과 사망률 개선. 견본에는 없습니다.)
   `cost_of_capital_rate` / `state_model` / `investment_return` /
   `fund_fee` 등 (선택), `mortality_age_shift` 등 연령 shift (선택).
 
-```{admonition} `_DEFAULTS` 행 — 공통값을 한 번만
+:::{admonition} `_DEFAULTS` 행 — 공통값을 한 번만
 :class: note
 
 `product` 가 `_DEFAULTS` 인 첫 행은 **다른 행의 빈 칸을 채우는 기본값**
@@ -107,7 +107,7 @@ A/E 보정과 사망률 개선. 견본에는 없습니다.)
 **다른 부분만** 덮어씁니다 — 예컨대 `lapse_table` 과 `expense_table` 은
 상품×채널별로 (`LAPSE_TERM_FC` / `EXPENSE_TERM_FC` 등). 같은 값을 모든 행에
 반복하지 않아도 됩니다.
-```
+:::
 
 ### rate 시트의 축 자동 감지
 
