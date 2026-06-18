@@ -3079,6 +3079,23 @@ def _measure_fast(
     # through the standard curve. cost_of_capital RA already routed to full via
     # the confidence-level guard at the top.
     has_account = _portfolio_has_account(model_points, basis)
+    # The plain-annuity payout forms (deferred start / term-certain / guaranteed
+    # period) live only in the full projection kernel; the fused / codegen / GPU
+    # kernels pay a level income from inception and would silently mis-project.
+    # Route a book that uses any of them to the full measurement.
+    uses_annuity_forms = bool(np.any(
+        (model_points.annuity_start_months > 0)
+        | (model_points.annuity_term_months > 0)
+        | (model_points.annuity_guarantee_months > 0)))
+    if uses_annuity_forms:
+        if backend != "cpu" or discount_curve is not None:
+            raise NotImplementedError(
+                "the deferred / term-certain / guaranteed-period annuity forms "
+                "are not supported on backend='gpu' or with a discount_curve "
+                "override; use measure(full=True) on the CPU path (these forms "
+                "live in the full projection kernel only)."
+            )
+        return _measure_full(model_points, basis)
     # A contract boundary shorter than the term (Sec. 34 cut) pays the boundary
     # survivors their account value as a terminal surrender; the full path's
     # exit accounting handles that, the scalar account fold (v1) does not, so

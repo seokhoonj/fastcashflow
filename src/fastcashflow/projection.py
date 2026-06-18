@@ -359,7 +359,9 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     account_prem_to_av, account_coi_rate, account_admin_fee,
                     account_credit, account_charge,
                     annuitization_months, annuitization_rate,
-                    annuity_air_monthly, min_accumulation_benefit, n_time):
+                    annuity_air_monthly, min_accumulation_benefit,
+                    annuity_start_months, annuity_term_months,
+                    annuity_guarantee_months, n_time):
     """Compiled, parallel time-loop kernel -- raw numpy arrays and scalars only.
 
     The model-point axis is the independent (outer) loop, run in parallel
@@ -410,6 +412,10 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
         premium_term = premium_term_months[mp]   # months the premium is paid
         prem_freq = premium_frequency_months[mp]        # months between premiums
         ann_freq = annuity_frequency_months[mp]         # months between annuity payouts
+        # Plain-annuity payout schedule (annuitizing books reject these upstream).
+        ann_start = annuity_start_months[mp]    # deferred payout start (0 = inception)
+        ann_term = annuity_term_months[mp]      # term-certain payout count (0 = life)
+        ann_guar = annuity_guarantee_months[mp]  # certain-and-life window (0 = pure life)
         cnt = count[mp]
         c_start = coverage_offset[mp]
         c_end = coverage_offset[mp + 1]
@@ -487,6 +493,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
         last_year = -1
         claim_rate = 0.0      # aggregate mortality claim per unit in-force
         morb_rate = 0.0       # aggregate morbidity claim per unit in-force
+        cnt0_annuity = 0.0    # in-force at the payout-start month (guarantee base)
         for t in range(boundary):
             year = t // 12
             in_payout = annuitizing and t >= A_annz
@@ -544,6 +551,10 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 fa = account_face[mp]
                 mortality_cf[mp, t] += deaths_acc * (av_m if av_m > fa else fa)
             morbidity_cf[mp, t] = inforce_t * morb_rate
+            # Capture the in-force at the payout-start month -- the guaranteed
+            # payments are paid on this count regardless of later survival.
+            if (not annuitizing) and t == ann_start:
+                cnt0_annuity = inforce_t
             if annuitizing:
                 # Phase 2 (t >= A): the guaranteed annuity, paid annuity-due from
                 # the conversion month on the surviving in-force, every
@@ -560,9 +571,25 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 else:
                     annuity_cf[mp, t] = 0.0
             else:
-                annuity_cf[mp, t] = (
-                    inforce_t * annuity_payment[mp] * annuity_factor[mp, year]
-                    if t % ann_freq == 0 else 0.0)
+                # Plain annuity with the deferred-start / term-certain /
+                # guaranteed-period schedule. k = months since the payout start;
+                # all-zero fields reduce to today's level-from-inception income.
+                if t < ann_start:
+                    annuity_cf[mp, t] = 0.0                  # before the start
+                else:
+                    k = t - ann_start
+                    if ann_term > 0 and k >= ann_term:
+                        annuity_cf[mp, t] = 0.0              # term-certain exhausted
+                    elif k % ann_freq == 0:
+                        base = annuity_payment[mp] * annuity_factor[mp, year]
+                        if k < ann_guar:
+                            # Guarantee window: certain payment on the payout-start
+                            # survivor count, regardless of later survival.
+                            annuity_cf[mp, t] = cnt0_annuity * base
+                        else:
+                            annuity_cf[mp, t] = inforce_t * base
+                    else:
+                        annuity_cf[mp, t] = 0.0
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: alpha / beta / gamma maintenance plus LAE on the
             # month's claim + morbidity total. Dispatched from
@@ -1428,6 +1455,9 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
             model_points.annuitization_rate,
             annuity_air_monthly,
             model_points.minimum_accumulation_benefit,
+            model_points.annuity_start_months,
+            model_points.annuity_term_months,
+            model_points.annuity_guarantee_months,
             n_time,
         )
     # Surrender value -- post-projection compute. ``lapse_flow``

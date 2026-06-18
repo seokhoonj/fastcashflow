@@ -12,7 +12,38 @@ each form's kernel stage). All three default to 0, so an existing book is a no-o
 import numpy as np
 import pytest
 
-from fastcashflow import ModelPoints
+from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
+from fastcashflow.gmm import measure
+
+
+def _flat(value):
+    def fn(sex, issue_age, duration):
+        return np.full(duration.shape, value, dtype=np.float64)
+    return fn
+
+
+_Q = 0.012
+_CM = {"DEATH": CalculationMethod.DEATH}
+
+
+def _payout_basis():
+    """Flat mortality, no lapse, zero discount, RA off -- every figure by hand."""
+    return Basis(
+        mortality_annual=_flat(_Q), lapse_annual=_flat(0.0), discount_annual=0.0,
+        ra_confidence=0.75, mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", _flat(_Q)),))
+
+
+def _surv(term):
+    """Deterministic in-force from inception under the flat monthly mortality."""
+    mq = 1.0 - (1.0 - _Q) ** (1.0 / 12.0)
+    return (1.0 - mq) ** np.arange(term)
+
+
+def _annuity_payout_mp(term=24, payment=100.0, **forms):
+    return ModelPoints.single(issue_age=40, premium=0.0, term_months=term,
+                              annuity_payment=payment, calculation_methods=_CM,
+                              **forms)
 
 
 def _annuity_mp(**overrides):
@@ -67,3 +98,59 @@ def test_new_form_with_annuitization_raises():
             issue_age=40, premium=0.0, term_months=120, account_value=1000.0,
             premium_term_months=0, annuitization_months=60,
             annuitization_rate=0.004, annuity_guarantee_months=24)
+
+
+# ---------------------------------------------------------------------------
+# Cash-flow behaviour -- hand-calc anchors (zero discount, flat mortality)
+# ---------------------------------------------------------------------------
+
+def test_deferred_start_handcalc():
+    """A deferred annuity pays nothing before the start month; the BEL is the
+    undiscounted PV of the survival-contingent income from the start onward."""
+    S, term = 12, 24
+    m = measure(_annuity_payout_mp(term=term, annuity_start_months=S), _payout_basis())
+    acf = m.cashflows.annuity_cf[0]
+    assert np.allclose(acf[:S], 0.0)
+    inforce = _surv(term)
+    assert np.isclose(m.bel[0], float(np.sum(inforce[S:] * 100.0)), rtol=1e-9)
+
+
+def test_term_certain_handcalc():
+    """A term-certain annuity pays exactly N payouts then stops."""
+    N, term = 6, 24
+    m = measure(_annuity_payout_mp(term=term, annuity_term_months=N), _payout_basis())
+    acf = m.cashflows.annuity_cf[0]
+    assert np.all(acf[:N] > 0) and np.allclose(acf[N:], 0.0)
+    inforce = _surv(term)
+    assert np.isclose(m.bel[0], float(np.sum(inforce[:N] * 100.0)), rtol=1e-9)
+
+
+def test_guaranteed_period_handcalc():
+    """The guarantee window is paid with CERTAINTY on the payout-start count
+    (here 1 policy, so a flat level even as in-force decays), then the income
+    reverts to survival-contingent. BEL = PV(certain G payments) + PV(tail)."""
+    G, term = 6, 24
+    m = measure(_annuity_payout_mp(term=term, annuity_guarantee_months=G), _payout_basis())
+    acf = m.cashflows.annuity_cf[0]
+    inforce = _surv(term)
+    # first G payments are the level (the count is 1), NOT inforce-decayed
+    assert np.allclose(acf[:G], 100.0)
+    assert not np.allclose(acf[1:G], inforce[1:G] * 100.0)   # would decay if contingent
+    assert np.allclose(acf[G:], inforce[G:] * 100.0)         # contingent tail
+    bel_hand = float(np.sum(np.ones(G) * 100.0) + np.sum(inforce[G:] * 100.0))
+    assert np.isclose(m.bel[0], bel_hand, rtol=1e-9)
+
+
+def test_immediate_annuity_unchanged():
+    """All-zero forms reproduce the level whole-life-from-inception income."""
+    term = 24
+    m = measure(_annuity_payout_mp(term=term), _payout_basis())
+    inforce = _surv(term)
+    assert np.isclose(m.bel[0], float(np.sum(inforce * 100.0)), rtol=1e-9)
+
+
+def test_annuity_forms_route_to_full_on_fast_path():
+    """measure(full=False) routes a forms book to the full kernel (same BEL)."""
+    mp = _annuity_payout_mp(annuity_start_months=12)
+    basis = _payout_basis()
+    assert np.isclose(measure(mp, basis, full=False).bel[0], measure(mp, basis).bel[0])
