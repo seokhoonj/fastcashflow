@@ -108,15 +108,15 @@ basis = fcf.samples.basis("ul")            # coi_annual / premium_load / investm
 fixed    = fcf.gmm.measure(mp, basis)      # 금리연동형 UL -- locked-in 할인
 variable = fcf.vfa.measure(mp, basis)      # 변액 UL       -- 기초자산 수익률 할인
 
-print(f"고정(GMM) CSM[0] = {fixed.csm[0]:,.0f}")
-print(f"변액(VFA) CSM[0] = {variable.csm[0]:,.0f}")
+print(f"GMM CSM[0] = {fixed.csm[0]:>9,.0f}   (고정 / 금리연동형)")
+print(f"VFA CSM[0] = {variable.csm[0]:>9,.0f}   (변액)")
 ```
 
 출력:
 
 ```
-고정(GMM) CSM[0] = 875,109
-변액(VFA) CSM[0] = 2,649,946
+GMM CSM[0] =   875,109   (고정 / 금리연동형)
+VFA CSM[0] = 2,649,946   (변액)
 ```
 
 계좌가 굴러가는 방식 (generation) 은 둘이 똑같고, 할인 기준만 달라 BEL / CSM 이
@@ -239,15 +239,15 @@ ann_mp    = fcf.samples.model_points("ul-annuity")
 ann_basis = fcf.samples.basis("ul-annuity")
 m = fcf.gmm.measure(ann_mp, ann_basis)
 
-print(f"contract 0 (적립15년): BEL={m.bel[0]:,.0f}  RA={m.ra[0]:,.0f}  CSM={m.csm[0]:,.0f}")
-print(f"contract 1 (일시납):   BEL={m.bel[1]:,.0f}  RA={m.ra[1]:,.0f}  CSM={m.csm[1]:,.0f}")
+print(f"contract 0: BEL ={m.bel[0]:>12,.0f}  RA ={m.ra[0]:>10,.0f}  CSM ={m.csm[0]:>11,.0f}   (적립15년)")
+print(f"contract 1: BEL ={m.bel[1]:>12,.0f}  RA ={m.ra[1]:>10,.0f}  CSM ={m.csm[1]:>11,.0f}   (일시납)")
 ```
 
 출력:
 
 ```
-contract 0 (적립15년): BEL=-14,870,126  RA=2,047,038  CSM=12,823,088
-contract 1 (일시납):   BEL=-6,855,295  RA=1,476,207  CSM=5,379,088
+contract 0: BEL = -14,870,126  RA = 2,047,038  CSM = 12,823,088   (적립15년)
+contract 1: BEL =  -6,855,295  RA = 1,476,207  CSM =  5,379,088   (일시납)
 ```
 
 `gmm.trace` 의 **연금화 섹션** 이 전환 산식을 그대로 풀어 보여줍니다 — 전환월의
@@ -302,15 +302,15 @@ va_mp    = fcf.samples.model_points("ul-var-annuity")
 va_basis = fcf.samples.basis("ul-var-annuity")
 m = fcf.vfa.measure(va_mp, va_basis)
 
-print(f"contract 0 (실적배당@2%): BEL={m.bel[0]:,.0f}  RA={m.ra[0]:,.0f}  CSM={m.csm[0]:,.0f}")
-print(f"contract 1 (고정 GAO):    BEL={m.bel[1]:,.0f}  RA={m.ra[1]:,.0f}  CSM={m.csm[1]:,.0f}")
+print(f"contract 0: BEL ={m.bel[0]:>12,.0f}  RA ={m.ra[0]:>10,.0f}  CSM ={m.csm[0]:>11,.0f}   (실적배당@2%)")
+print(f"contract 1: BEL ={m.bel[1]:>12,.0f}  RA ={m.ra[1]:>10,.0f}  CSM ={m.csm[1]:>11,.0f}   (고정 GAO)")
 ```
 
 출력:
 
 ```
-contract 0 (실적배당@2%): BEL=-14,121,491  RA=2,028,567  CSM=12,092,924
-contract 1 (고정 GAO):    BEL=-8,152,879  RA=1,361,061  CSM=6,791,818
+contract 0: BEL = -14,121,491  RA = 2,028,567  CSM = 12,092,924   (실적배당@2%)
+contract 1: BEL =  -8,152,879  RA = 1,361,061  CSM =  6,791,818   (고정 GAO)
 ```
 
 :::{admonition} 최저보증연금은 아직
@@ -359,15 +359,15 @@ cd_mp    = fcf.samples.model_points("ul-cost-deduct")
 cd_basis = fcf.samples.basis("ul-cost-deduct")
 m = fcf.gmm.measure(cd_mp, cd_basis)
 
-print(f"contract 0: BEL={m.bel[0]:,.0f}  RA={m.ra[0]:,.0f}  CSM={m.csm[0]:,.0f}")
-print(f"contract 1: BEL={m.bel[1]:,.0f}  RA={m.ra[1]:,.0f}  CSM={m.csm[1]:,.0f}")
+print(f"contract 0: BEL ={m.bel[0]:>12,.0f}  RA ={m.ra[0]:>10,.0f}  CSM ={m.csm[0]:>11,.0f}")
+print(f"contract 1: BEL ={m.bel[1]:>12,.0f}  RA ={m.ra[1]:>10,.0f}  CSM ={m.csm[1]:>11,.0f}")
 ```
 
 출력:
 
 ```
-contract 0: BEL=-2,466,380  RA=145,797  CSM=2,320,583
-contract 1: BEL=-1,159,364  RA=78,412  CSM=1,080,952
+contract 0: BEL =  -2,466,380  RA =   145,797  CSM =  2,320,583
+contract 1: BEL =  -1,159,364  RA =    78,412  CSM =  1,080,952
 ```
 
 특약 (`CANCER`) 은 `CoverageRate("CANCER", rate, funds_from_account=True,
