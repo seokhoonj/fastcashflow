@@ -76,11 +76,11 @@ def basis_with_mortality(mort_fn):                 # 한 사망률로 가정 한
 
 # 모델 포인트
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,            # 가입연령 40세
-    sex                 = 0,             # 성별 (0=남, 1=여)
+    issue_age           = 40,                  # 가입연령 40세
+    sex                 = 0,                   # 성별 (0=남, 1=여)
     benefits            = {"DEATH": 100_000},  # 사망보험금 100,000
-    premium             = 1_200,         # 월납 보험료 1,200 (claims 보다 커 흑자)
-    term_months         = 24,            # 보험기간 2년
+    premium             = 1_200,               # 월납 보험료 1,200 (claims 보다 커 흑자)
+    term_months         = 24,                  # 보험기간 2년
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
@@ -208,7 +208,7 @@ labels: 'baseline'  ->  'mort+10%'
 
 ### segment 별 shock
 
-[7.2](../io/workbook-multi) 의 `basis` 사전을 통째로 흔들 수도 있습니다 —
+[7.2 워크북 — 다중 segment](../io/workbook-multi) 의 `basis` 사전을 통째로 흔들 수도 있습니다 —
 각 segment 의 `Basis` 를 shock 한 새 사전을 만들어 `measure`
 에 넘기면 portfolio 전체의 shock 영향이 한 번에 나옵니다.
 
@@ -239,7 +239,7 @@ shock 으로 FCF가 양수가 되면 CSM은 0 에서 멈추고 초과분이 loss
 로 갑니다. "CSM이 -3,000 이 됐다" 는 결과는 없습니다 — CSM 0 + loss 3,000
 입니다. 민감도 표에서 CSM과 loss 를 **함께** 봐야 하는 이유입니다.
 
-### 함정 4 — portfolio 합산은 netting 이 아님
+### 함정 4 — portfolio 합산은 상계가 아님
 
 계약별 CSM과 loss 는 상계되지 않습니다 — 한 계약의 CSM 여력이 다른 계약의
 loss 를 덮지 못합니다 (각 계약/그룹이 따로 floor). portfolio 민감도는
