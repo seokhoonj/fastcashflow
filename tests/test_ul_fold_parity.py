@@ -13,6 +13,8 @@ that decides which kernel a book runs, the Step-3.5 gate that rejects an account
 book on the raw-consumer paths, and the sidecar population -- without an external
 reference. (The hand-calc anchor lives in ``test_ul_account_value.py``.)
 """
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -369,7 +371,7 @@ def test_ul_credit_rate_tvog_hand_roll():
     pad = np.concatenate([inforce, np.zeros((n_mp, 1))], axis=1)
     surr = pad[:, :-1] - pad[:, 1:] - deaths
     surr[np.arange(n_mp), term_idx] -= matsurv
-    (av0, face, prem, coi, admin, charge, gmab, _g) = _account_roll_inputs(mp, basis)
+    (av0, face, prem, coi, admin, charge, gmab, _g, sc) = _account_roll_inputs(mp, basis)
     bound = np.asarray(mp.contract_boundary_months, np.int64)
 
     def hand(returns):
@@ -391,8 +393,10 @@ def test_ul_credit_rate_tvog_hand_roll():
             a_b = a_b - np.where(act, ch + coi[:, t] * np.maximum(0.0, face - a_b), 0.0)
             a_b = np.maximum(0.0, a_b)
             am_b = np.where(act, a_b * (1.0 + returns[t]) ** 0.5, 0.0)
+            keep = 1.0 - sc[:, t]
             dl = np.maximum(am_f, face) - np.maximum(am_b, face)
-            cost += (deaths[:, t] * dl + surr[:, t] * (am_f - am_b)) * disc_mid[t]
+            sl = np.maximum(0.0, am_f * keep) - np.maximum(0.0, am_b * keep)
+            cost += (deaths[:, t] * dl + surr[:, t] * sl) * disc_mid[t]
             a_f = np.where(act, a_f * (1.0 + cr_f[t]), a_f); avt_f = np.where(act, a_f, avt_f)
             a_b = np.where(act, a_b * (1.0 + returns[t]), a_b); avt_b = np.where(act, a_b, avt_b)
         ml = np.maximum(avt_f, gmab) - np.maximum(avt_b, gmab)
@@ -441,6 +445,75 @@ def test_ul_credit_rate_tvog_rejects():
         fcf.vfa.tvog(annz, basis, scen)
     with pytest.raises(ValueError, match="columns"):
         fcf.vfa.tvog(_credit_mp(g=0.02, term=n_time), basis, np.full((6, 7), 0.002))
+
+
+# ----------------------- universal-life surrender charge -----------------------
+#
+# A surrender pays the account value net of a surrender charge (a fraction of the
+# account withheld to recover acquisition costs, declining by policy year). The
+# charge scales only the surrender PAYOUT -- the account roll and the decrements
+# are unchanged -- so surrender_cf scales exactly by (1 - rate).
+
+def test_ul_surrender_charge_scales_payout_and_lowers_bel():
+    mp = _single_mp()
+    base = _ul_basis()
+    charged = replace(base, surrender_charge_annual=0.10)   # flat 10% withheld
+    m0 = fcf.gmm.measure(mp, base, full=True)
+    m1 = fcf.gmm.measure(mp, charged, full=True)
+    s0 = np.asarray(m0.cashflows.surrender_cf)
+    s1 = np.asarray(m1.cashflows.surrender_cf)
+    # surrender payout scales exactly by (1 - 0.10)
+    np.testing.assert_allclose(s1, 0.90 * s0, rtol=1e-12)
+    # the account roll itself is untouched by the charge (it hits the payout only)
+    np.testing.assert_array_equal(
+        np.asarray(m0.cashflows.account.av), np.asarray(m1.cashflows.account.av))
+    # less surrender outflow -> a lower (more profitable) BEL
+    assert float(np.atleast_1d(m1.bel)[0]) < float(np.atleast_1d(m0.bel)[0])
+
+
+def test_ul_surrender_charge_declining_schedule_hand_calc():
+    # A declining schedule max(0.10 - 0.02*year, 0): year 0 -> 10%, year 1 -> 8%.
+    mp = _single_mp()                                       # 36-month term
+    sched = lambda s, a, d, ic, el: np.maximum(0.10 - 0.02 * d, 0.0)
+    charged = replace(_ul_basis(), surrender_charge_annual=sched)
+    m0 = fcf.gmm.measure(mp, _ul_basis(), full=True)
+    m1 = fcf.gmm.measure(mp, charged, full=True)
+    s0 = np.asarray(m0.cashflows.surrender_cf)[0]
+    s1 = np.asarray(m1.cashflows.surrender_cf)[0]
+    keep = np.where(np.arange(s0.shape[0]) // 12 == 0, 0.90, 0.0)
+    keep = np.where(np.arange(s0.shape[0]) // 12 == 1, 0.92, keep)
+    keep = np.where(np.arange(s0.shape[0]) // 12 >= 2, 0.94, keep)
+    np.testing.assert_allclose(s1, keep * s0, rtol=1e-12)
+
+
+def test_ul_surrender_charge_fast_matches_full():
+    mp = _single_mp()
+    charged = replace(_ul_basis(), surrender_charge_annual=0.10)
+    fast = fcf.gmm.measure(mp, charged, full=False)
+    full = fcf.gmm.measure(mp, charged, full=True)
+    np.testing.assert_allclose(
+        np.atleast_1d(fast.bel), np.atleast_1d(full.bel), rtol=1e-9)
+
+
+def test_ul_surrender_charge_reduces_credit_floor_tvog():
+    # The credited-rate floor's surrender leg pays av_mid * (1 - charge), so a
+    # surrender charge reduces that leg (death / maturity legs are unchanged).
+    mp = _credit_mp(g=0.05, term=24)
+    base = _ul_basis()
+    charged = replace(base, surrender_charge_annual=0.10)
+    rng = np.random.default_rng(3)
+    scen = rng.normal((1.024) ** (1.0 / 12.0) - 1.0, 0.03, (200, 24))
+    t0 = fcf.vfa.tvog(mp, base, scen)
+    t1 = fcf.vfa.tvog(mp, charged, scen)
+    assert t1.time_value < t0.time_value
+    assert t1.intrinsic_value <= t0.intrinsic_value + 1e-6
+    # A full (100%) charge zeroes the surrender leg; a >100% charge cannot drive it
+    # negative -- the leg is the marginal of max(0, av_mid*(1-charge)), so charge
+    # 1.0 and 1.5 give the SAME (surrender-free) time value.
+    t_full = fcf.vfa.tvog(mp, replace(base, surrender_charge_annual=1.0), scen)
+    t_over = fcf.vfa.tvog(mp, replace(base, surrender_charge_annual=1.5), scen)
+    np.testing.assert_allclose(t_over.time_value, t_full.time_value, rtol=1e-12)
+    assert t_full.time_value <= t1.time_value + 1e-6
 
 
 def test_non_account_portfolio_has_no_account_sidecar():

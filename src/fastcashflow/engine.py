@@ -2540,7 +2540,8 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                          mortality_monthly,
                          has_account, mp_account, account_value0, account_face,
                          account_prem_to_av, account_coi_rate, account_admin_fee,
-                         account_credit, account_charge, account_gmab,
+                         account_credit, account_charge, account_surr_charge,
+                         account_gmab,
                          account_mortality_cv, account_expense_cv, account_z):
     """Scalar-inforce fast path of the general codegen fast kernel
     (:func:`_codegen_fast_kernel_source`).
@@ -2675,7 +2676,10 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
                 # track is inforce_t * l * (1 - q) (the lapses net of the competing
                 # death decrement) -- matching the full path's exits - deaths.
                 l_m = lapse_monthly[sx, age_idx, year]
-                surr_av = av_mid_t if av_mid_t > 0.0 else 0.0
+                # Surrender pays the account net of the surrender charge.
+                surr_av = av_mid_t * (1.0 - account_surr_charge[mp, t])
+                if surr_av < 0.0:
+                    surr_av = 0.0
                 pv_account_surr += inforce_t * l_m * (1.0 - q_m) * surr_av * discount_factor_mid_t
             # Streams the portfolio does not use are skipped wholesale: the
             # guards are loop-invariant per call, so the branch predicts
@@ -2836,8 +2840,8 @@ def _account_roll_inputs(model_points: ModelPoints, basis: Basis):
     expense gamma -> :func:`projection._account_kernel_args`) so a guarantee
     time-value pass can re-roll the account under return scenarios. Returns
     ``(account_value0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
-    gmab, minimum_crediting_rate)`` -- everything the scenario roll needs beyond
-    the credit (which the scenario supplies).
+    gmab, minimum_crediting_rate, surr_charge_rate)`` -- everything the scenario
+    roll needs beyond the credit (which the scenario supplies).
     """
     from fastcashflow.projection import _expense_kernel_args, _account_kernel_args
     n_time = int(model_points.contract_boundary_months.max())
@@ -2860,13 +2864,14 @@ def _account_roll_inputs(model_points: ModelPoints, basis: Basis):
         coverage_rates[:, np.asarray(model_points.sex, np.int64), issue_index, :])
     _a, _b, _c, gamma_fixed, _lae = _expense_kernel_args(basis, n_time)
     (_has, _mp_acc, account_value0, face, prem_to_av, coi_rate_m, admin_fee,
-     _credit, account_charge) = _account_kernel_args(
+     _credit, account_charge, surr_charge_rate) = _account_kernel_args(
         model_points, basis, coverage_rates_per_mp, cov_funds, cov_pays,
         gamma_fixed, n_time, n_years)
     gmab = np.asarray(model_points.maturity_benefit, dtype=np.float64)
     return (account_value0, face, prem_to_av, coi_rate_m, admin_fee,
             account_charge, gmab,
-            np.asarray(model_points.minimum_crediting_rate, dtype=np.float64))
+            np.asarray(model_points.minimum_crediting_rate, dtype=np.float64),
+            surr_charge_rate)
 
 
 def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
@@ -3337,7 +3342,7 @@ def _measure_fast(
             coverage_rates[:, model_points.sex, issue_index, :])  # (cov, mp, year)
         (acct_has, acct_mp, acct_value0, acct_face,
          acct_prem_to_av, acct_coi_rate, acct_admin_fee,
-         acct_credit, acct_charge) = _account_kernel_args(
+         acct_credit, acct_charge, acct_surr_charge) = _account_kernel_args(
             model_points, basis, coverage_rates_per_mp,
             coverage_funds_from_account, coverage_pays_account_balance,
             gamma_fixed, n_time, n_years,
@@ -3367,6 +3372,7 @@ def _measure_fast(
         acct_admin_fee = np.zeros(1)
         acct_credit = np.zeros(1)
         acct_charge = z1
+        acct_surr_charge = z1
         acct_gmab = np.zeros(1)
         acct_mortality_cv = 0.0
         acct_expense_cv = 0.0
@@ -3430,6 +3436,7 @@ def _measure_fast(
             acct_admin_fee,
             acct_credit,
             acct_charge,
+            acct_surr_charge,
             acct_gmab,
             acct_mortality_cv,
             acct_expense_cv,

@@ -444,6 +444,7 @@ def ul_credit_rate_time_value(
     deaths: FloatArray,
     surrenders: FloatArray,
     maturity_survivors: FloatArray,
+    surr_charge_rate: FloatArray,
     boundary: FloatArray,
     investment_return: float,
     return_scenarios: FloatArray,
@@ -466,7 +467,8 @@ def ul_credit_rate_time_value(
     ``a`` further -- is captured automatically; the two rolls cannot be a single
     closed-form factor (which is why the variable-annuity :func:`tvog_weights`
     cannot be reused). The lift is realized only where the account value is what
-    is paid: a surrender pays ``av_mid`` (the full lift), a death pays
+    is paid: a surrender pays ``av_mid * (1 - surr_charge_rate)`` (the lift net of
+    the surrender charge), a death pays
     ``max(av_mid, face)`` (the lift only above the face), and a maturity pays
     ``max(av_term, gmab)`` (the lift only above the GMAB). Below those strikes the
     death / maturity payout is unchanged by the floor (it is the separately-valued
@@ -527,9 +529,15 @@ def ul_credit_rate_time_value(
             a_b = np.maximum(0.0, a_b)
             av_mid_b = np.where(active, a_b * half_b[t], 0.0)
             # Death pays max(av_mid, face) (lift only above the face); a surrender
-            # pays av_mid directly (the full lift). Both settle mid-month.
+            # pays max(0, av_mid * (1 - surr_charge_rate)) -- the exact marginal of
+            # the deterministic surrender, so the lift is the floored-minus-bare
+            # net payout (clamped per term to match the deterministic floor-at-zero
+            # for a >100% charge; a no-op for the supported [0, 1] domain). Both
+            # settle mid-month.
+            keep = 1.0 - surr_charge_rate[:, t]
             death_lift = np.maximum(av_mid_f, face) - np.maximum(av_mid_b, face)
-            surr_lift = av_mid_f - av_mid_b
+            surr_lift = (np.maximum(0.0, av_mid_f * keep)
+                         - np.maximum(0.0, av_mid_b * keep))
             cost[p] += (deaths[:, t] * death_lift
                         + surrenders[:, t] * surr_lift) * discount_factor_mid[p, t]
             a_f = np.where(active, a_f * full_f[t], a_f)
@@ -582,7 +590,7 @@ def _measure_tvog_ul(
 
     from fastcashflow.engine import _account_roll_inputs
     (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
-     gmab, _g) = _account_roll_inputs(model_points, basis)
+     gmab, _g, surr_charge_rate) = _account_roll_inputs(model_points, basis)
 
     cost = ul_credit_rate_time_value(
         account_value0=av0, face=face, prem_to_av=prem_to_av,
@@ -591,6 +599,7 @@ def _measure_tvog_ul(
         minimum_crediting_rate=g_annual,
         deaths=proj.deaths, surrenders=surrenders,
         maturity_survivors=maturity_survivors,
+        surr_charge_rate=surr_charge_rate,
         boundary=np.asarray(model_points.contract_boundary_months, np.int64),
         investment_return=basis.investment_return,
         return_scenarios=return_scenarios)                  # (1 + n_scen, n_mp)

@@ -24,6 +24,7 @@ _RATE_FN_FIELDS: tuple[str, ...] = (
     "ci_incidence_annual",
     "premium_factor_annual",
     "annuity_factor_annual",
+    "surrender_charge_annual",
     "coi_annual",
 )
 
@@ -689,6 +690,16 @@ class Basis:
     # 5%/yr). Same 5-arg RateFn shape; a multiplicative scale, never
     # annual_to_monthly. None -> level annuity (factor 1.0), bit-identical.
     annuity_factor_annual: RateFn | None = None
+    # Universal-life SURRENDER CHARGE -- the fraction of the account value the
+    # insurer withholds on a surrender, by policy year, to recover acquisition
+    # costs (typically large early and declining to zero, e.g. a 5-arg RateFn
+    # ``lambda s,a,d,ic,el: max(0.10 - 0.01 * d, 0.0)``). The account surrender
+    # value is ``av_mid * (1 - surrender_charge_annual(.., year))``; a rate in
+    # ``[0, 1]``, NOT run through ``annual_to_monthly`` (it is a level-by-year
+    # fraction, not a decrement). Applies ONLY to account (universal-life) rows;
+    # a term row's curve-based surrender is untouched. None -> no charge (the
+    # full account value is paid), bit-identical to the prior behaviour.
+    surrender_charge_annual: RateFn | None = None
     # Semi-Markov (Phase (c)) prototype rates. ``ci_incidence_annual`` is the
     # first-cancer diagnosis rate (active -> post_first transition, Markov);
     # ``ci_reincidence_annual`` is the duration-dependent reincidence rate

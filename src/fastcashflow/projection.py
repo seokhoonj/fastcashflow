@@ -218,7 +218,7 @@ def _account_kernel_args(
         # kernel never reads them (has_account=False short-circuits the roll).
         z1 = np.zeros((1, 1))
         return (False, mp_account, np.zeros(1), np.zeros(1),
-                z1, z1, np.zeros(1), np.zeros(1), z1)
+                z1, z1, np.zeros(1), np.zeros(1), z1, z1)
 
     year_of_month = np.arange(n_time) // 12
 
@@ -290,8 +290,31 @@ def _account_kernel_args(
         np.asarray(model_points.account_value, np.float64))
     account_face = np.ascontiguousarray(
         np.asarray(model_points.minimum_death_benefit, np.float64))
+
+    # Surrender charge rate per policy year, year-expanded to (n_mp, n_time). The
+    # account surrender value is av_mid * (1 - surr_charge_rate); a fraction in
+    # [0, 1], NOT a decrement (never annual_to_monthly). None -> 0 (full account
+    # value paid), so an account book with no charge stays bit-identical.
+    if basis.surrender_charge_annual is None:
+        surr_charge_rate = np.zeros((n_mp, n_time))
+    else:
+        sex_grid, _ = np.meshgrid(model_points.sex, np.arange(n_years),
+                                  indexing="ij")
+        issue_age_grid, duration_grid = np.meshgrid(
+            model_points.issue_age, np.arange(n_years), indexing="ij")
+        issue_class_grid, _ = np.meshgrid(model_points.issue_class,
+                                          np.arange(n_years), indexing="ij")
+        elapsed_grid = np.zeros_like(duration_grid)
+        sc_year = validate_factor(
+            basis.surrender_charge_annual(
+                sex_grid, issue_age_grid, duration_grid,
+                issue_class_grid, elapsed_grid),
+            "surrender_charge_annual", (n_mp, n_years))
+        surr_charge_rate = sc_year[:, year_of_month]          # (n_mp, n_time)
+    surr_charge_rate = np.ascontiguousarray(surr_charge_rate)
     return (True, mp_account, account_value0, account_face,
-            prem_to_av, coi_rate_m, admin_fee, credit, account_charge)
+            prem_to_av, coi_rate_m, admin_fee, credit, account_charge,
+            surr_charge_rate)
 
 
 @njit(cache=True)
@@ -1103,7 +1126,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     # all-False / stub for a non-account portfolio -- a strict no-op.
     (has_account, mp_account, account_value0, account_face,
      account_prem_to_av, account_coi_rate, account_admin_fee,
-     account_credit, account_charge) = _account_kernel_args(
+     account_credit, account_charge, account_surr_charge) = _account_kernel_args(
         model_points, basis, coverage_rates, coverage_funds_from_account,
         coverage_pays_account_balance, gamma_fixed, n_time, n_years,
     )
@@ -1462,8 +1485,8 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     account = None
     if has_account:
         # Account-backed surrender overrides the curve-based surrender for the
-        # account rows: a surrender pays max(0, av_mid - charge) per lapse exit
-        # (charge = 0 in v1). The lapse count is the per-month NON-maturity,
+        # account rows: a surrender pays max(0, av_mid * (1 - surr_charge_rate))
+        # per lapse exit. The lapse count is the per-month NON-maturity,
         # non-death exit (``exits - deaths``, with the maturing survivors removed
         # at the term) -- the actual lapses net of the within-month competing
         # risk, NOT the raw rate-weighted ``lapse_flow``. Term rows in a mixed
@@ -1478,7 +1501,10 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         rows = np.arange(n_mp_)
         non_maturity_exits[rows, term_idx] -= np.where(
             within, maturity_survivors, 0.0)
-        acct_surr = non_maturity_exits * np.maximum(0.0, av_mid)
+        # Surrender pays the account value net of the surrender charge:
+        # av_mid * (1 - surr_charge_rate). surr_charge_rate is 0 with no charge.
+        acct_surr = non_maturity_exits * np.maximum(
+            0.0, av_mid * (1.0 - account_surr_charge))
         surrender_cf = np.where(mp_account[:, None], acct_surr, surrender_cf)
         # The entity holds the in-force-weighted account value (the VFA fund).
         fund = inforce_pad * av

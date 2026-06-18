@@ -731,7 +731,7 @@ def measure_vfa(
                     "return_scenarios with per-MP varying minimum_crediting_rate "
                     "is not supported yet (a scalar guarantee in v1).")
             (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
-             gmab, _g) = _account_roll_inputs(model_points, basis)
+             gmab, _g, _sc) = _account_roll_inputs(model_points, basis)
             time_value = ul_guarantee_floor_time_value(
                 account_value0=av0, face=face, prem_to_av=prem_to_av,
                 coi_rate_m=coi_rate_m, admin_fee=admin_fee,
