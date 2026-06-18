@@ -234,8 +234,9 @@ no-guarantee TVOG =              0
 ### 유니버설보험 계좌에서 (COI 차감형)
 
 위 예제의 계좌는 적립만 하는 변액계좌 (`account_value` 만) 였습니다.
-[5.4](../account/universal-life) 의 **유니버설보험 계좌** — 매월 위험보험료 (COI)
-를 순보장금액 (NAR) 에 물려 차감하는 계좌 — 에도 같은 적립이율 보증이 붙고,
+[5.4](../account/universal-life) 의 **유니버설보험 계좌** — 매월 위험보험료
+(COI, cost of insurance) 를 순보장금액 (NAR, net amount at risk) 에 물려 차감하는
+계좌 — 에도 같은 적립이율 보증이 붙고,
 `vfa.tvog` 가 **동일하게** 작동합니다. 닫힌형이 아니라 계좌를 시나리오마다 다시
 굴려 (COI 피드백 포함) floor 가 떠받친 적립을 평가할 뿐, 호출은 똑같습니다.
 
