@@ -419,6 +419,12 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             av[mp, 0] = a_av
             face_av = account_face[mp]
             cr_av = account_credit[mp]
+            # Mid-month (death / lapse) credit is GEOMETRIC half: (1+cr)^0.5, the
+            # unique h with h*h = (1+cr) so two half-months compose to the full
+            # month, and consistent with the geometric mid-month discount
+            # (1+r)^-(t+0.5). A deliberate, validated choice -- do NOT "simplify"
+            # it to the linear 1 + 0.5*cr (which overshoots a full month by
+            # 0.25*cr^2 and is not self-consistent).
             half_credit = (1.0 + cr_av) ** 0.5
             full_credit = 1.0 + cr_av
             # Accumulation stops at the conversion month for an annuitizing MP
