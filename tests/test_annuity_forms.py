@@ -154,3 +154,52 @@ def test_annuity_forms_route_to_full_on_fast_path():
     mp = _annuity_payout_mp(annuity_start_months=12)
     basis = _payout_basis()
     assert np.isclose(measure(mp, basis, full=False).bel[0], measure(mp, basis).bel[0])
+
+
+# ---------------------------------------------------------------------------
+# Guaranteed-period longevity-RA split -- the certain payments bear no risk
+# ---------------------------------------------------------------------------
+
+def _ra_basis():
+    """Longevity RA on, mortality RA off, zero discount -- isolates longevity."""
+    return Basis(
+        mortality_annual=_flat(_Q), lapse_annual=_flat(0.0), discount_annual=0.0,
+        ra_confidence=0.75, mortality_cv=0.0, longevity_cv=0.10,
+        coverages=(CoverageRate("DEATH", _flat(_Q)),))
+
+
+def test_guaranteed_period_ra_excludes_certain_payments():
+    """The longevity RA prices ONLY the survival-contingent tail (t >= G); the
+    guaranteed payments are certain, so they carry no longevity risk and the BEL
+    still includes them."""
+    from fastcashflow.numerics import _norm_ppf
+    G, term = 6, 24
+    basis = _ra_basis()
+    m = measure(_annuity_payout_mp(term=term, annuity_guarantee_months=G), basis)
+    inforce = _surv(term)
+    z = _norm_ppf(0.75)
+    ra_hand = z * 0.10 * float(np.sum(inforce[G:] * 100.0))   # contingent tail only
+    assert np.isclose(m.ra[0], ra_hand, rtol=1e-9)
+    # the BEL still carries the certain payments (only the RA drops them)
+    bel_hand = float(np.sum(np.ones(G) * 100.0) + np.sum(inforce[G:] * 100.0))
+    assert np.isclose(m.bel[0], bel_hand, rtol=1e-9)
+
+
+def test_guarantee_ra_below_pure_life_ra():
+    """A guaranteed annuity's longevity RA is below the same pure-life annuity's
+    (the certain portion is removed from the risk-bearing PV)."""
+    basis = _ra_basis()
+    mg = measure(_annuity_payout_mp(annuity_guarantee_months=6), basis)
+    ml = measure(_annuity_payout_mp(), basis)
+    assert mg.ra[0] < ml.ra[0]
+
+
+def test_no_guarantee_ra_unchanged():
+    """Without a guarantee, the longevity RA prices the whole survival stream."""
+    from fastcashflow.numerics import _norm_ppf
+    term = 24
+    basis = _ra_basis()
+    m = measure(_annuity_payout_mp(term=term), basis)
+    inforce = _surv(term)
+    z = _norm_ppf(0.75)
+    assert np.isclose(m.ra[0], z * 0.10 * float(np.sum(inforce * 100.0)), rtol=1e-9)

@@ -414,8 +414,24 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
         bel = bel - proj.account.fund
         ra = _account_risk_adjustment(model_points, basis, proj, discount_monthly)
     else:
+        pv_survival_ra = pv_survival
+        ac = proj.annuity_certain_cf
+        if ac is not None and np.any(ac != 0.0):
+            # The guaranteed (certain) annuity payments are paid regardless of
+            # survival, so they carry no longevity risk -- remove their PV from
+            # the survival PV that feeds the longevity RA (the BEL still includes
+            # them via the full annuity_cf). A second roll-forward over the
+            # certain stream alone (everything else zero) yields its PV in the
+            # pv_survival slot, with the kernel's exact start-of-month discount.
+            zero = np.zeros_like(ac)
+            zero_mat = np.zeros(ac.shape[0])
+            _, _, _, _, pv_certain = _rollforward_kernel(
+                zero, zero, zero, zero, zero, ac, zero_mat, zero,
+                model_points.contract_boundary_months, discount_monthly,
+            )
+            pv_survival_ra = pv_survival - pv_certain
         ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
-                              pv_survival, discount_monthly)
+                              pv_survival_ra, discount_monthly)
     csm, csm_accretion, csm_release, loss_component = _compute_csm(
         bel[:, 0], ra[:, 0], proj.inforce, discount_monthly,
         basis.coverage_unit_discount,

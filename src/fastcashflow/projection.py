@@ -114,6 +114,11 @@ class Cashflows:
     # Universal-life account diagnostics -- None for every non-account
     # portfolio (the flat-array stitch loops skip the nested object).
     account: "AccountTrajectory | None" = None
+    # The guaranteed (certain) part of annuity_cf -- the payments inside a
+    # certain-and-life guarantee window, paid regardless of survival. None when
+    # no model point carries a guarantee period. Used to remove the certain
+    # payments from the longevity Risk Adjustment (they bear no longevity risk).
+    annuity_certain_cf: "FloatArray | None" = None
 
     @property
     def n_time(self) -> int:
@@ -393,6 +398,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
     morbidity_cf = np.zeros((n_mp, n_time))
     expense_cf = np.zeros((n_mp, n_time))
     annuity_cf = np.zeros((n_mp, n_time))
+    annuity_certain_cf = np.zeros((n_mp, n_time))  # the guaranteed (certain) part
     disability_cf = np.zeros((n_mp, n_time))
     lapse_flow = np.zeros((n_mp, n_time))   # state-machine lapse exits, for surrender
     maturity_cf = np.zeros(n_mp)
@@ -584,8 +590,11 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                         base = annuity_payment[mp] * annuity_factor[mp, year]
                         if k < ann_guar:
                             # Guarantee window: certain payment on the payout-start
-                            # survivor count, regardless of later survival.
-                            annuity_cf[mp, t] = cnt0_annuity * base
+                            # survivor count, regardless of later survival. Tracked
+                            # separately so the longevity RA can exclude it.
+                            certain = cnt0_annuity * base
+                            annuity_cf[mp, t] = certain
+                            annuity_certain_cf[mp, t] = certain
                         else:
                             annuity_cf[mp, t] = inforce_t * base
                     else:
@@ -712,7 +721,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 undiagnosed *= (1.0 - d_rate)
 
     return (inforce, deaths, premium_cf, mortality_cf, morbidity_cf, expense_cf,
-            annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors,
+            annuity_cf, annuity_certain_cf, disability_cf, lapse_flow,
+            maturity_cf, maturity_survivors,
             av, av_mid, coi_av)
 
 
@@ -1242,6 +1252,18 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
                 "death claim and not the other. Use a plain death coverage."
             )
 
+    uses_annuity_forms = bool(np.any(
+        (model_points.annuity_start_months > 0)
+        | (model_points.annuity_term_months > 0)
+        | (model_points.annuity_guarantee_months > 0)))
+    if uses_annuity_forms and is_semi_markov(state_model):
+        raise NotImplementedError(
+            "the deferred / term-certain / guaranteed-period annuity payout forms "
+            "are supported on the Markov projection path only (v1); this portfolio "
+            "resolves to a semi-Markov state model.")
+    # The guaranteed (certain) annuity stream -- the Markov kernel sets it; it
+    # stays None on the semi-Markov path (which rejects the forms above).
+    annuity_certain_cf = None
     if has_account and is_semi_markov(state_model):
         # The account roll is folded into the Markov kernel only (v1). A plain
         # UL contract has no state model, so it routes to the Markov path; a
@@ -1397,7 +1419,8 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         state_lapse = _state_lapse_stack(state_model, rate_dict)
         state_death_benefit_factor = compiled.state_death_benefit_factor
         (inforce, deaths, premium_cf, mortality_cf, morbidity_cf, expense_cf,
-         annuity_cf, disability_cf, lapse_flow, maturity_cf, maturity_survivors,
+         annuity_cf, annuity_certain_cf, disability_cf, lapse_flow,
+         maturity_cf, maturity_survivors,
          av, av_mid, coi_av) = _project_kernel(
             state_death_exit,
             state_lapse,
@@ -1552,4 +1575,5 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         maturity_survivors=maturity_survivors,
         surrender_cf=surrender_cf,
         account=account,
+        annuity_certain_cf=annuity_certain_cf,
     )
