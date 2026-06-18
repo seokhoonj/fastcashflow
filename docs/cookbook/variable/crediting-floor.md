@@ -205,6 +205,61 @@ no-guarantee TVOG =              0
 적립이율 보증만 따로 보려면 `vfa.tvog` 를, GMDB / GMAB 의 몫을 보려면 5.2 처럼
 보증을 켜고 끄며 차분합니다.
 
+### 유니버설보험 계좌에서 (COI 차감형)
+
+위 예제의 계좌는 적립만 하는 변액계좌 (`account_value` 만) 였습니다.
+[5.4](../account/universal-life) 의 **유니버설보험 계좌** — 매월 위험보험료 (COI)
+를 순보장금액 (NAR) 에 물려 차감하는 계좌 — 에도 같은 적립이율 보증이 붙고,
+`vfa.tvog` 가 **동일하게** 작동합니다. 닫힌형이 아니라 계좌를 시나리오마다 다시
+굴려 (COI 피드백 포함) floor 가 떠받친 적립을 평가할 뿐, 호출은 똑같습니다.
+
+```python
+ul_mp    = fcf.samples.model_points("ul")   # COI 차감형 계좌 (적립이율 보증 2%)
+ul_basis = fcf.samples.basis("ul")
+n_time   = int(ul_mp.contract_boundary_months.max())
+r_m      = (1 + ul_basis.investment_return) ** (1 / 12) - 1
+rng      = np.random.default_rng(7)
+scen     = r_m + 0.005 * rng.standard_normal((2000, n_time))
+
+cr = fcf.vfa.tvog(ul_mp, ul_basis, scen)            # 적립이율 floor (유니버설 계좌)
+print(f"vfa.tvog (적립이율 floor) = {cr.time_value:>16,.0f}")
+```
+
+출력:
+
+```text
+vfa.tvog (적립이율 floor) =        6,022,315
+```
+
+#### 두 보증을 한 번에 — `vfa.guarantee_tvog`
+
+유니버설 계좌는 적립이율 floor 와 GMDB / GMAB floor 를 **동시에** 가질 수 있고,
+둘은 계좌가치의 서로 다른 영역에서 작동해 (적립이율은 계좌를 아래에서 떠받치고,
+GMDB / GMAB 는 계좌가 보증액에 못 미칠 때 차액을 메움) 시간가치가 **합산** 됩니다.
+`vfa.guarantee_tvog` 는 둘을 한 번에 돌려줍니다:
+
+```python
+g = fcf.vfa.guarantee_tvog(ul_mp, ul_basis, scen)
+print(f"적립이율 floor = {g.credited_rate_floor:>16,.0f}")
+print(f"GMDB/GMAB floor = {g.account_floor:>16,.0f}")
+print(f"합계          = {g.total:>16,.0f}")
+```
+
+출력:
+
+```text
+적립이율 floor =        6,022,315
+GMDB/GMAB floor =          -33,520
+합계          =        5,988,795
+```
+
+여기선 적립이율 floor (6.0M) 가 보증 시간가치를 지배합니다. GMDB / GMAB 몫이
+작은 음수인 것은 정상입니다 — 이 계약은 계좌가 사망보장액보다 한참 낮아 GMDB 가
+**결정론적으로 깊이 in-the-money** 라, 그 floor 의 *시간가치* 는 기초자산 수익률로
+할인하는 VFA 기준에서 부호 제약이 없습니다 ([5.2](gmdb-gmab-tvog) 의 부호 설명).
+`credited_rate_floor` 는 `vfa.tvog` 와, `account_floor` 는
+`vfa.measure(..., return_scenarios=...).time_value` 의 합과 같습니다.
+
 ## 함정
 
 ### 함정 1 — 월 floor 와 연 floor 는 다르다
