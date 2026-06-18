@@ -60,7 +60,7 @@ AV[t]
 
 사망보험금은 `max(계좌가치, face)` 입니다 — 계좌가 돌려지고, 부족하면 face 까지
 얹어줍니다. 보험사의 진짜 위험은 그 **순보장액** `NAR = max(0, face - AV)` 뿐이고,
-COI 는 바로 그 NAR 에 부과됩니다 (최저적립이율 보증은 [5.3](crediting-floor) 참고).
+COI 는 바로 그 NAR 에 부과됩니다 (최저적립이율 보증은 [5.3](../variable/crediting-floor) 참고).
 
 ## 모델링 매핑
 
@@ -75,7 +75,7 @@ COI 는 바로 그 NAR 에 부과됩니다 (최저적립이율 보증은 [5.3](c
 * - `ModelPoints.minimum_death_benefit`
   - 사망보장 face — 사망보험금 = `max(계좌가치, face)`
 * - `ModelPoints.minimum_crediting_rate`
-  - 최저적립이율 보증 (`max(수익률, 보증이율)`; [5.3](crediting-floor))
+  - 최저적립이율 보증 (`max(수익률, 보증이율)`; [5.3](../variable/crediting-floor))
 * - `Basis.coi_annual`
   - 위험보험료율 — 계좌가 NAR 에 부과하는 COI. 보장원가이지 best-estimate
     탈퇴율이 아니며, 그 스프레드가 사망 마진
