@@ -400,9 +400,9 @@ def ul_guarantee_floor_time_value(
     # Start-of-month discount at each path's own return (length n_time+1 so the
     # maturity at t=boundary reads). Deaths settle mid-month, maturity at the
     # boundary start-of-month -- mirroring the deterministic UL kernel.
-    disc = np.ones((n_path, n_time + 1))
-    disc[:, 1:] = np.cumprod(1.0 / (1.0 + all_returns), axis=1)
-    disc_mid = disc[:, :n_time] * (1.0 + all_returns) ** (-0.5)
+    discount_factor_bom = np.ones((n_path, n_time + 1))
+    discount_factor_bom[:, 1:] = np.cumprod(1.0 / (1.0 + all_returns), axis=1)
+    discount_factor_mid = discount_factor_bom[:, :n_time] * (1.0 + all_returns) ** (-0.5)
 
     cost = np.zeros((n_path, n_mp))
     for p in range(n_path):
@@ -420,13 +420,13 @@ def ul_guarantee_floor_time_value(
             a = np.maximum(0.0, a)
             av_mid_t = np.where(active, a * half[t], 0.0)
             # GMDB floor on this month's death exits.
-            cost[p] += deaths[:, t] * np.maximum(0.0, face - av_mid_t) * disc_mid[p, t]
+            cost[p] += deaths[:, t] * np.maximum(0.0, face - av_mid_t) * discount_factor_mid[p, t]
             a = np.where(active, a * full[t], a)
             av_term = np.where(active, a, av_term)
         # GMAB floor on the maturity survivors at the matured balance.
         cost[p] += (maturity_survivors
                     * np.maximum(0.0, gmab - av_term)
-                    * disc[p, np.minimum(bound, n_time)])
+                    * discount_factor_bom[p, np.minimum(bound, n_time)])
 
     return cost[1:].mean(axis=0) - cost[0]
 
@@ -493,9 +493,9 @@ def ul_credit_rate_time_value(
     n_path = all_returns.shape[0]
     bound = np.asarray(boundary, dtype=np.int64)
 
-    disc = np.ones((n_path, n_time + 1))
-    disc[:, 1:] = np.cumprod(1.0 / (1.0 + all_returns), axis=1)
-    disc_mid = disc[:, :n_time] * (1.0 + all_returns) ** (-0.5)
+    discount_factor_bom = np.ones((n_path, n_time + 1))
+    discount_factor_bom[:, 1:] = np.cumprod(1.0 / (1.0 + all_returns), axis=1)
+    discount_factor_mid = discount_factor_bom[:, :n_time] * (1.0 + all_returns) ** (-0.5)
 
     av0 = np.asarray(account_value0, dtype=np.float64)
     cost = np.zeros((n_path, n_mp))
@@ -531,14 +531,14 @@ def ul_credit_rate_time_value(
             death_lift = np.maximum(av_mid_f, face) - np.maximum(av_mid_b, face)
             surr_lift = av_mid_f - av_mid_b
             cost[p] += (deaths[:, t] * death_lift
-                        + surrenders[:, t] * surr_lift) * disc_mid[p, t]
+                        + surrenders[:, t] * surr_lift) * discount_factor_mid[p, t]
             a_f = np.where(active, a_f * full_f[t], a_f)
             avt_f = np.where(active, a_f, avt_f)
             a_b = np.where(active, a_b * full_b[t], a_b)
             avt_b = np.where(active, a_b, avt_b)
         # Maturity pays max(av_term, gmab) -- the lift only above the GMAB.
         mat_lift = np.maximum(avt_f, gmab) - np.maximum(avt_b, gmab)
-        cost[p] += maturity_survivors * mat_lift * disc[p, np.minimum(bound, n_time)]
+        cost[p] += maturity_survivors * mat_lift * discount_factor_bom[p, np.minimum(bound, n_time)]
 
     return cost
 
