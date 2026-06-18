@@ -192,6 +192,24 @@ class ModelPoints:
     # gmm.measure, where the locked-in discount makes the re-float meaningless).
     # Per policy; a finite value requires annuitization_months > 0.
     annuity_air_annual: FloatArray | None = None
+    # Plain-annuity payout schedule (shapes the annuity_payment income, distinct
+    # from the UL annuitization above) -- the deferred / term-certain /
+    # guaranteed-period forms. All default 0 = the historical behaviour: a level
+    # whole-life income paid to survivors from inception. A book that sets any of
+    # these routes to the full projection kernel.
+    #
+    # Months until the first payout (a deferred annuity: income starts here, not
+    # at inception). 0 = pays from inception. Policy duration, same clock as
+    # term_months.
+    annuity_start_months: IntArray | None = None
+    # Number of payout months from the start, after which the income stops (a
+    # term-certain / temporary annuity). 0 = unlimited (life-contingent to the
+    # horizon, the historical behaviour).
+    annuity_term_months: IntArray | None = None
+    # Guaranteed-period length (certain-and-life): the first this-many payout
+    # months are paid with certainty -- regardless of survival -- then the income
+    # reverts to survival-contingent. 0 = pure life annuity (no guarantee).
+    annuity_guarantee_months: IntArray | None = None
     coverage_index: IntArray | None = None             # CSR: coverage index
     coverage_amount: FloatArray | None = None         # CSR: coverage amount
     coverage_offset: IntArray | None = None           # CSR: per-policy slice bounds
@@ -514,6 +532,45 @@ class ModelPoints:
                 "annuity_air_annual (a variable-payout AIR) requires "
                 "annuitization_months > 0 -- there is no payout to re-float")
         object.__setattr__(self, "annuity_air_annual", air)
+        # Plain-annuity payout schedule -- start / term / guarantee, all IntArray
+        # defaulting to 0 (the historical level whole-life-from-inception income).
+        # Each is >= 0; the guarantee window cannot outlast the payout term; a
+        # deferred start must leave >= 1 payout month inside the contract boundary
+        # (else the annuity silently never pays -- the same guard annuitization
+        # uses against A >= boundary).
+        for name in ("annuity_start_months", "annuity_term_months",
+                     "annuity_guarantee_months"):
+            months = getattr(self, name)
+            months = (np.zeros(n_mp, np.int64) if months is None
+                      else np.asarray(months, np.int64))
+            if months.shape != (n_mp,):
+                raise ValueError(
+                    f"{name} has length {months.size} but n_mp is {n_mp}")
+            if np.any(months < 0):
+                raise ValueError(f"{name} must be >= 0 (0 = none)")
+            object.__setattr__(self, name, months)
+        term_on = self.annuity_term_months > 0
+        if np.any(term_on & (self.annuity_guarantee_months
+                             > self.annuity_term_months)):
+            raise ValueError(
+                "annuity_guarantee_months must be <= annuity_term_months where a "
+                "payout term is set (the guarantee cannot outlast the payout)")
+        if np.any(self.annuity_start_months >= self.contract_boundary_months):
+            raise ValueError(
+                "annuity_start_months must be < contract_boundary_months (the "
+                "deferred payout must leave at least one payout month in the "
+                "horizon, else the annuity silently never pays)")
+        # These plain-annuity payout forms are not yet supported together with UL
+        # annuitization (annuitization_months > 0) -- the UL-converted guaranteed
+        # annuity is a follow-up. Raise rather than silently mis-project.
+        new_form = ((self.annuity_start_months > 0)
+                    | (self.annuity_term_months > 0)
+                    | (self.annuity_guarantee_months > 0))
+        if np.any(new_form & annz_on):
+            raise NotImplementedError(
+                "annuity_start_months / annuity_term_months / "
+                "annuity_guarantee_months are not yet supported together with UL "
+                "annuitization (annuitization_months > 0)")
         # Coverage CSR: explicit arrays win; otherwise build from the
         # general benefits map. With no shortcut field, an empty input
         # yields an empty coverage list -- a portfolio with no rate-driven
@@ -768,6 +825,9 @@ class ModelPoints:
         annuitization_months: int = 0,
         annuitization_rate: float = 0.0,
         annuity_air_annual: float = float("nan"),
+        annuity_start_months: int = 0,
+        annuity_term_months: int = 0,
+        annuity_guarantee_months: int = 0,
         count: float = 1.0,
         sex: int = 0,
         state: int = STATE_ACTIVE,
@@ -802,6 +862,9 @@ class ModelPoints:
             annuitization_months=np.array([annuitization_months]),
             annuitization_rate=np.array([annuitization_rate]),
             annuity_air_annual=np.array([annuity_air_annual]),
+            annuity_start_months=np.array([annuity_start_months]),
+            annuity_term_months=np.array([annuity_term_months]),
+            annuity_guarantee_months=np.array([annuity_guarantee_months]),
             count=np.array([count]),
             sex=np.array([sex]),
             state=np.array([state]),
@@ -843,6 +906,8 @@ class ModelPoints:
             "account_value", "minimum_crediting_rate", "minimum_death_benefit",
             "minimum_accumulation_benefit",
             "annuitization_months", "annuitization_rate", "annuity_air_annual",
+            "annuity_start_months", "annuity_term_months",
+            "annuity_guarantee_months",
             "count", "sex", "state", "issue_class", "elapsed_months",
         )
         kwargs: dict = {name: getattr(self, name)[idx] for name in per_row}
