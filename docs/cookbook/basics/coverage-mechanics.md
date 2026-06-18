@@ -131,9 +131,9 @@ mp = fcf.ModelPoints.single(
 )
 r = fcf.gmm.measure(mp, basis)
 
-print(f"inforce       : {r.cashflows.inforce[0, :3]}")   # 보유계약 trajectory
-print(f"mortality_cf      : {r.cashflows.mortality_cf[0, :3]}")  # 사망보험금 cash flow
-print(f"BEL[0]        : {float(r.bel[0]):.2f}")          # 최선추정부채
+print(f"inforce       : {r.cashflows.inforce[0, :3]}")  # 보유계약 trajectory
+print(f"mortality_cf  : {r.cashflows.mortality_cf[0, :3]}")  # 사망보험금 cash flow
+print(f"BEL[0]        : {float(r.bel[0]):.2f}")  # 최선추정부채
 print(f"cumulative 3m : {float(r.cashflows.mortality_cf[0, :3].sum()):.2f}")
 ```
 
@@ -141,7 +141,7 @@ print(f"cumulative 3m : {float(r.cashflows.mortality_cf[0, :3].sum()):.2f}")
 
 ```
 inforce       : [1.     0.99   0.9801]
-mortality_cf      : [120.    118.8   117.612]
+mortality_cf  : [120.    118.8   117.612]
 BEL[0]        : 356.41
 cumulative 3m : 356.41
 ```
@@ -198,7 +198,7 @@ mp = fcf.ModelPoints.single(
 r = fcf.gmm.measure(mp, basis)
 
 print(f"inforce       : {r.cashflows.inforce[0, :3]}")
-print(f"morbidity_cf  : {r.cashflows.morbidity_cf[0, :3]}")           # 진단 cash flow
+print(f"morbidity_cf  : {r.cashflows.morbidity_cf[0, :3]}")  # 진단 cash flow
 print(f"BEL[0]        : {float(r.bel[0]):.2f}")
 print(f"cumulative 3m : {float(r.cashflows.morbidity_cf[0, :3].sum()):.2f}")
 ```
@@ -250,6 +250,7 @@ basis = fcf.Basis(
     mortality_cv     = 0.0,   # 사망률 변동계수 0 (RA = 0 강제)
     coverages        = (fcf.CoverageRate("INPATIENT", inpatient_rate),),
 )
+
 # 모델 포인트 (계약 하나)
 mp = fcf.ModelPoints.single(
     issue_age           = 40,                     # 가입연령 40세
@@ -315,13 +316,19 @@ import fastcashflow as fcf
 
 # 위 DIAGNOSIS (CANCER) 예제 재구성 (바로 앞 INPATIENT 예제가 mp / basis 를 덮었으므로)
 basis = fcf.Basis(
-    mortality_annual = 0.0, lapse_annual = 0.0, discount_annual = 0.0,
-    ra_confidence    = 0.75, mortality_cv = 0.0,
+    mortality_annual = 0.0,
+    lapse_annual     = 0.0,
+    discount_annual  = 0.0,
+    ra_confidence    = 0.75,
+    mortality_cv     = 0.0,
     coverages        = (fcf.CoverageRate("CANCER", cancer_rate),),
 )
 mp = fcf.ModelPoints.single(
-    issue_age           = 40, sex = 0, benefits = {"CANCER": 12_000},
-    premium             = 0, term_months = 3,
+    issue_age           = 40,
+    sex                 = 0,
+    benefits            = {"CANCER": 12_000},
+    premium             = 0,
+    term_months         = 3,
     calculation_methods = {"CANCER": fcf.CalculationMethod.DIAGNOSIS},
 )
 fcf.gmm.trace(0, mp, basis)   # 위 DIAGNOSIS (CANCER) 예제의 mp / basis
