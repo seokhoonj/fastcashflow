@@ -22,7 +22,8 @@ import numpy as np
 from fastcashflow import io as _io
 
 #: Available sample templates -- see :func:`templates`.
-_TEMPLATES = ("gmm", "vfa", "paa", "ul", "ul-annuity", "ul-cost-deduct", "ul-var-annuity")
+_TEMPLATES = ("gmm", "vfa", "paa", "ul", "ul-annuity", "ul-cost-deduct",
+              "ul-var-annuity", "annuity")
 
 #: Fixed seed for :func:`scenarios` -- a reproducible toy path set, not a
 #: calibration parameter.
@@ -293,6 +294,66 @@ def _ul_var_annuity_basis():
     )
 
 
+def _annuity_model_points():
+    """A small synthetic standalone (non-account) deferred-annuity portfolio.
+
+    Two traditional annuity contracts that accumulate the reserve through a
+    premium-paying deferral window, then pay a survival income on the new payout
+    schedule (these forms route to the full projection kernel):
+
+    * Contract 0 -- a deferred GUARANTEED-PERIOD life annuity: a 10-year deferral
+      (``annuity_start_months=120``), then a life annuity whose first 20 years
+      (``annuity_guarantee_months=240``) are paid regardless of survival.
+    * Contract 1 -- a deferred TERM-CERTAIN annuity: a 5-year deferral, then a
+      20-year (``annuity_term_months=240``) certain payout.
+
+    Pair with :func:`_annuity_basis`; measure through ``gmm.measure``. Synthetic
+    demo figures, never sourced from a real portfolio.
+    """
+    from fastcashflow import CalculationMethod, ModelPoints
+
+    death = np.array([10_000_000.0, 10_000_000.0])
+    return ModelPoints(
+        sex=np.array([0, 1]),
+        issue_age=np.array([50.0, 55.0]),
+        term_months=np.array([600, 360]),
+        premium_term_months=np.array([120, 60]),       # premium only in deferral
+        premium=np.array([500_000.0, 300_000.0]),
+        count=np.array([1.0, 1.0]),
+        annuity_payment=np.array([250_000.0, 100_000.0]),
+        annuity_start_months=np.array([120, 60]),      # deferral: income starts here
+        annuity_guarantee_months=np.array([240, 0]),   # contract 0: 20y guaranteed
+        annuity_term_months=np.array([0, 240]),        # contract 1: 20y term-certain
+        benefits={"DEATH": death},
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
+        product=np.array(["ANNUITY", "ANNUITY"]),
+        channel=np.array(["FC", "FC"]),
+    )
+
+
+def _annuity_basis():
+    """The synthetic standalone deferred-annuity basis paired with
+    :func:`_annuity_model_points`.
+
+    The payout is a survival-contingent income, so its risk adjustment is driven
+    by ``longevity_cv`` (annuitants living longer); ``mortality_cv`` prices the
+    death benefit during the deferral. A single :class:`~fastcashflow.Basis`;
+    measure it through ``gmm.measure``.
+    """
+    from fastcashflow import Basis, CoverageRate
+
+    q = 0.008
+    return Basis(
+        mortality_annual=q,
+        lapse_annual=0.02,
+        discount_annual=0.03,
+        ra_confidence=0.75,
+        mortality_cv=0.10,
+        longevity_cv=0.15,
+        coverages=(CoverageRate("DEATH", q),),
+    )
+
+
 def basis(template: str = "gmm"):
     """Bundled sample basis. ``template="gmm"`` (default) returns the per-segment
     :class:`~fastcashflow.BasisRouter` (a ``(product, channel)`` -> ``Basis``
@@ -313,6 +374,8 @@ def basis(template: str = "gmm"):
         return _ul_cost_deduct_basis()
     if template == "ul-var-annuity":
         return _ul_var_annuity_basis()
+    if template == "annuity":
+        return _annuity_basis()
     if template == "gmm":
         return _io.load_sample_basis()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")
@@ -335,6 +398,8 @@ def model_points(template: str = "gmm"):
         return _ul_cost_deduct_model_points()
     if template == "ul-var-annuity":
         return _ul_var_annuity_model_points()
+    if template == "annuity":
+        return _annuity_model_points()
     if template == "gmm":
         return _io.load_sample_model_points()
     raise ValueError(f"template must be one of {_TEMPLATES}, got {template!r}")

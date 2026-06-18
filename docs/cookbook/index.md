@@ -353,6 +353,7 @@ simple/death-diagnosis
 simple/diagnosis-rules
 simple/renewable
 simple/escalating-benefits
+simple/deferred-annuity
 :::
 
 :::{toctree}

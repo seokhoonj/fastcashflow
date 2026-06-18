@@ -15,7 +15,7 @@ from fastcashflow.gmm import measure
 def test_templates_lists_available():
     assert fcf.samples.templates() == [
         "gmm", "vfa", "paa", "ul", "ul-annuity", "ul-cost-deduct",
-        "ul-var-annuity"]
+        "ul-var-annuity", "annuity"]
 
 
 def test_export_gmm_round_trips(tmp_path):
