@@ -148,6 +148,115 @@ class GMMMeasurement:
         from fastcashflow._display import measurement_str
         return measurement_str("GMMMeasurement", self._columns())
 
+    def estimate_at(self, month: int) -> "CurrentEstimate":
+        """The current estimate (BEL / RA / CSM / LIC) at a future ``month``.
+
+        This is the deterministic nested-projection view (IFRS 17 Sec. 40): the
+        cohort liability the entity would carry at month ``t`` if the central
+        best-estimate scenario unfolds to it. It is column ``t`` of the
+        trajectories -- so ``estimate_at(0).bel`` equals the inception headline
+        ``bel`` -- and equals a fresh in-force measurement at that month,
+        ``gmm.measure_inforce(elapsed=t)`` carrying the deterministic survivor
+        count (reading the trajectory and re-projecting agree; the tests assert
+        this for every ``t``). The returned object's ``per_survivor`` re-bases
+        every figure to one surviving policy.
+
+        Requires a ``full=True`` measurement (the trajectory paths); the fast
+        path carries only the inception headline. GMM only for now -- VFA / PAA
+        carry the same ``*_path`` shape and can gain this later.
+        """
+        if self.bel_path is None or self.cashflows is None:
+            raise ValueError(
+                "estimate_at requires a full=True measurement (trajectory "
+                "paths); the fast path (full=False) carries only the headline."
+            )
+        n_time = self.bel_path.shape[1] - 1
+        t = int(month)
+        if not 0 <= t <= n_time:
+            raise ValueError(
+                f"month must be in [0, {n_time}] (the projection horizon); "
+                f"got {month}."
+            )
+        # Survivors at the start of month t. The terminal column t == n_time has
+        # no in-force column (inforce is (n_mp, n_time)), so the count there is
+        # the maturity exit count -- the in-force that reached term.
+        if t < n_time:
+            inforce = self.cashflows.inforce[:, t]
+        else:
+            inforce = self.cashflows.maturity_survivors
+        lic = (self.lic_path[:, t] if self.lic_path is not None
+               else np.zeros_like(self.bel_path[:, t]))
+        return CurrentEstimate(
+            month=t,
+            bel=self.bel_path[:, t],
+            ra=self.ra_path[:, t],
+            csm=self.csm_path[:, t],
+            lic=lic,
+            inforce=np.asarray(inforce, dtype=np.float64),
+        )
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class CurrentEstimate:
+    """The GMM current estimate at one future month (IFRS 17 Sec. 40).
+
+    Returned by :meth:`GMMMeasurement.estimate_at`. The fields are the cohort
+    BEL / RA / CSM / LIC at ``month`` -- the liability the entity would carry at
+    that date if the central scenario runs to it -- each shape ``(n_mp,)``.
+    ``inforce`` is the deterministic survivor count at ``month``. Derived views
+    are properties: ``fcf`` = BEL + RA, ``lrc`` = FCF + CSM (the GMM carrying
+    amount), and ``per_survivor`` re-bases every money figure to one surviving
+    policy (money / ``inforce``).
+    """
+
+    month: int
+    bel: FloatArray          # (n_mp,) cohort BEL at `month`
+    ra: FloatArray           # (n_mp,) cohort RA at `month`
+    csm: FloatArray          # (n_mp,) cohort CSM at `month`
+    lic: FloatArray          # (n_mp,) cohort LIC at `month`
+    inforce: FloatArray      # (n_mp,) deterministic survivors at `month`
+
+    @property
+    def fcf(self) -> FloatArray:
+        """Fulfilment cash flows = BEL + RA (IFRS 17 Sec. 32, 37)."""
+        return self.bel + self.ra
+
+    @property
+    def lrc(self) -> FloatArray:
+        """Liability for remaining coverage = FCF + CSM (the GMM carrying amount)."""
+        return self.bel + self.ra + self.csm
+
+    @property
+    def per_survivor(self) -> "CurrentEstimate":
+        """The same estimate re-based to one surviving policy (money / inforce).
+
+        Where ``inforce`` is zero (a fully run-off cohort) the money figures are
+        already zero, so the per-policy figure is a zero-safe 0.0.
+        """
+        inf = np.where(self.inforce > 0.0, self.inforce, 1.0)
+        return CurrentEstimate(
+            month=self.month,
+            bel=self.bel / inf,
+            ra=self.ra / inf,
+            csm=self.csm / inf,
+            lic=self.lic / inf,
+            inforce=np.ones_like(self.inforce),
+        )
+
+    def _columns(self):
+        return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm),
+                ("LIC", self.lic)]
+
+    def __repr__(self) -> str:
+        from fastcashflow._display import measurement_repr
+        return measurement_repr(f"CurrentEstimate(month={self.month})",
+                                self._columns())
+
+    def __str__(self) -> str:
+        from fastcashflow._display import measurement_str
+        return measurement_str(f"CurrentEstimate(month={self.month})",
+                               self._columns())
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class GMMAggregate:

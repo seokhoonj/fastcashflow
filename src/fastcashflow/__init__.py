@@ -24,7 +24,8 @@ from fastcashflow.disclosure import (
     line_metadata, reconciliation_to_frame, write_close_pack, write_reconciliation,
 )
 from fastcashflow.engine import (
-    GMMAggregate, GMMMeasurement, CSMRecognitionSchedule, clear_codegen_cache,
+    GMMAggregate, GMMMeasurement, CurrentEstimate, CSMRecognitionSchedule,
+    clear_codegen_cache,
 )
 from fastcashflow.grouping import group, group_of_contracts
 from fastcashflow.io import (
@@ -104,7 +105,8 @@ __all__ = [
     "close", "ClosePackage", "assemble_sofp", "assemble_finance",
     "assemble_service_result", "reconciliation_to_frame", "line_metadata",
     "write_reconciliation", "write_close_pack",
-    "GMMMeasurement", "GMMAggregate", "PAAMeasurement", "PAAAggregate",
+    "GMMMeasurement", "GMMAggregate", "CurrentEstimate",
+    "PAAMeasurement", "PAAAggregate",
     "VFAMeasurement", "VFAAggregate",
     "ReinsuranceMeasurement", "Report", "ReinsuranceReport",
     "StochasticResult", "TVOGResult",

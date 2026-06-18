@@ -250,6 +250,52 @@ movements = fcf.roll_forward(
 )
 ```
 
+## 미래 시점의 현재추정 — `estimate_at`
+
+`roll_forward` 가 두 시점 **사이의 움직임** 을 설명한다면, `estimate_at(t)` 는
+**한 미래 시점 t의 잔액** 을 바로 줍니다 — 결정론적 시나리오가 t까지 흘렀을 때
+계약집합이 들고 있을 BEL / RA / CSM / LIC (IFRS 17 Sec. 40 의 현재추정). 변동분해가
+가르는 그 기초·기말 **스냅샷** 이 곧 이것입니다.
+
+별도 재투영이 아니라 측정의 궤적 열을 읽는 것이라 `full=True` 측정이 필요합니다.
+
+```python
+m = fcf.gmm.measure(portfolio.subset(idx), basis.resolve(key))   # full=True 기본
+
+print(f"{'month':>6}{'BEL':>14}{'RA':>12}{'CSM':>12}")
+for t in (0, 12, 60, 120):
+    e = m.estimate_at(t)              # 월 t 의 현재추정 (세그먼트 합계로 표시)
+    print(f"{t:>6}{e.bel.sum():>14,.0f}{e.ra.sum():>12,.0f}{e.csm.sum():>12,.0f}")
+```
+
+출력:
+
+```
+ month           BEL          RA         CSM
+     0    -1,336,523     271,401   1,065,122
+    12    -1,872,658     246,497     957,984
+    60       969,060     165,553     638,333
+   120     2,463,159      79,729     348,564
+```
+
+`estimate_at(0)` 은 신계약 측정의 헤드라인 (`m.bel` / `m.ra` / `m.csm`) 과 같고,
+위 변동분석표의 **Opening** 과 정확히 일치합니다. `estimate_at(12)` 은 첫 보고기간의
+**Closing** (months 1-12) 과 같습니다 — `roll_forward` 가 분해한 그 두 스냅샷입니다.
+
+각 결과는 파생 뷰를 줍니다: `e.fcf` (= BEL + RA), `e.lrc` (= FCF + CSM, GMM 장부금액),
+`e.per_survivor` (모든 금액을 생존계약 한 건당으로 재기준).
+
+:::{admonition} 재투영과의 동치 — 검증된 성질
+:class: note
+
+`estimate_at(t)` 는 미래 t에서 **새로 측정** 한 결과와 같습니다 — 결정론적 생존
+계약수를 들고 `gmm.measure_inforce` 를 `elapsed=t` 로 부른 것 (BEL / RA 가 모든 t에서
+기계정밀도로 일치). 즉 "궤적을 읽는 것" 과 "각 미래 시점에서 재투영하는 것" 이 같은
+값이라는 게 테스트로 보장됩니다 (`tests/test_current_estimate.py`). 곡선이 잠긴
+가정 하의 결정론적 궤적이라 가능한 일이고, 미래에 시나리오별 가정으로 다시 측정하는
+중첩확률 평가의 inner 값이 바로 이 자리입니다.
+:::
+
 ## 함정 / 검증
 
 - **`full=True` 필수** — 변동분해는 월별 궤적을 자릅니다. `full=False`
