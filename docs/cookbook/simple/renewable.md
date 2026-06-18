@@ -87,12 +87,12 @@ final = fcf.gmm.measure(renewable(None), basis, full=False)  # 경계 = 보장�
 bdy   = fcf.gmm.measure(renewable(120),  basis, full=False)  # 경계 = 차기갱신 120
 
 print(f"final maturity (480)  BEL {final.bel[0]:>12,.0f}  CSM {final.csm[0]:>11,.0f}")
-print(f"next renewal (120)  BEL {bdy.bel[0]:>12,.0f}  CSM {bdy.csm[0]:>11,.0f}")
+print(f"next renewal (120)    BEL {bdy.bel[0]:>12,.0f}  CSM {bdy.csm[0]:>11,.0f}")
 ```
 
 ```text
 final maturity (480)  BEL   -1,730,470  CSM   1,555,019
-next renewal (120)  BEL   -1,017,896  CSM     914,693
+next renewal (120)    BEL   -1,017,896  CSM     914,693
 ```
 
 ## 결과 읽기 — 경계가 측정 범위를 끊는다

@@ -92,14 +92,14 @@ immediate = dataclasses.replace(basis, settlement_pattern=None)  # 사고 당월
 v_imm = fcf.paa.measure(mp, immediate)
 v_set = fcf.paa.measure(mp, basis)                               # 4개월 정산
 
-print(f"immediate pay loss = {v_imm.loss_component.sum():>12,.2f}")
+print(f"immediate pay loss  = {v_imm.loss_component.sum():>12,.2f}")
 print(f"4-month settle loss = {v_set.loss_component.sum():>12,.2f}")
 ```
 
 출력:
 
 ```text
-immediate pay loss =   115,563.64
+immediate pay loss  =   115,563.64
 4-month settle loss =   114,713.77
 ```
 

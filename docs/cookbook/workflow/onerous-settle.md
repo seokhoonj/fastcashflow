@@ -125,22 +125,22 @@ mp, state = book(sp)
 mv = fcf.gmm.settle(mp, state, sp, period_months=12)
 
 print("=== liability for incurred claims (Sec. 40(b)/42/37) ===")
-print(f"lic_opening     = {float(mv.lic_opening[0]):>12,.2f}")      # 할인 PV + RA
-print(f"claims_incurred = {float(mv.claims_incurred[0]):>12,.2f}")  # 42(a) 명목
-print(f"lic_finance     = {float(mv.lic_finance[0]):>12,.2f}")      # 42(c) + 측정효과
-print(f"claims_paid     = {float(mv.claims_paid[0]):>12,.2f}")      # 패턴 runoff 명목
-print(f"lic_closing     = {float(mv.lic_closing[0]):>12,.2f}")
+print(f"lic_opening     = {float(mv.lic_opening[0]):>13,.2f}")      # 할인 PV + RA
+print(f"claims_incurred = {float(mv.claims_incurred[0]):>13,.2f}")  # 42(a) 명목
+print(f"lic_finance     = {float(mv.lic_finance[0]):>13,.2f}")      # 42(c) + 측정효과
+print(f"claims_paid     = {float(mv.claims_paid[0]):>13,.2f}")      # 패턴 runoff 명목
+print(f"lic_closing     = {float(mv.lic_closing[0]):>13,.2f}")
 ```
 
 출력:
 
 ```
 === liability for incurred claims (Sec. 40(b)/42/37) ===
-lic_opening     =   506,684.39
+lic_opening     =    506,684.39
 claims_incurred = 11,003,258.44
-lic_finance     =    -1,951.44
+lic_finance     =     -1,951.44
 claims_paid     = 11,032,417.42
-lic_closing     =   475,573.97
+lic_closing     =    475,573.97
 ```
 
 지급 시차가 있으니 기초·기말 모두 미지급 청구 (475,574 / 506,684) 가 남아

@@ -161,8 +161,8 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # 5) 평가 -- 각 계약을 자기 (product, channel) 가정으로 라우팅 (6.2 에서 자세히)
     val = fcf.gmm.measure(mp, basis, full=False)
-    print("BEL sum =", f"{val.bel.sum():,.0f}")
-    print("CSM sum =", f"{val.csm.sum():,.0f}")
+    print(f"BEL sum = {val.bel.sum():>12,.0f}")
+    print(f"CSM sum = {val.csm.sum():>12,.0f}")
 ```
 
 출력:
@@ -173,8 +173,8 @@ ra_confidence   = 0.75
 mortality_cv    = 0.1
 discount_annual = [0.03103 0.03103 0.03999 0.03947] ... (len 101)
 n model points  = 11
-BEL sum = -10,182,300
-CSM sum = 10,280,704
+BEL sum =  -10,182,300
+CSM sum =   10,280,704
 ```
 
 - `read_basis` 는 **사전** 을 돌려줍니다 — 견본은 7 개 segment. 단일
