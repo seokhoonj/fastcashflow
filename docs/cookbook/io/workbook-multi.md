@@ -41,10 +41,10 @@ with tempfile.TemporaryDirectory() as tmp:
 
     # 각 계약을 자기 (product, channel) 가정으로 라우팅
     val = fcf.gmm.measure(mp, basis, full=False)
-    print("BEL            sum =", f"{val.bel.sum():,.0f}")
-    print("RA             sum =", f"{val.ra.sum():,.0f}")
-    print("CSM            sum =", f"{val.csm.sum():,.0f}")
-    print("loss component sum =", f"{val.loss_component.sum():,.0f}")
+    print(f"BEL            sum = {val.bel.sum():>12,.0f}")
+    print(f"RA             sum = {val.ra.sum():>12,.0f}")
+    print(f"CSM            sum = {val.csm.sum():>12,.0f}")
+    print(f"loss component sum = {val.loss_component.sum():>12,.0f}")
 
     # segment 별로 BEL을 갈라 보면 라우팅이 동작한 게 보인다
     prod = np.array(mp.product)
@@ -58,10 +58,10 @@ with tempfile.TemporaryDirectory() as tmp:
 출력:
 
 ```
-BEL            sum = -10,182,300
-RA             sum = 1,309,817
-CSM            sum = 10,280,704
-loss component sum = 1,408,220
+BEL            sum =  -10,182,300
+RA             sum =     1,309,817
+CSM            sum =    10,280,704
+loss component sum =     1,408,220
   ('HEALTH_A', 'FC'): n=2 BEL=-1,336,523
   ('HEALTH_A', 'GA'): n=2 BEL=-1,505,011
   ('HEALTH_A', 'TM'): n=2 BEL=426,305
