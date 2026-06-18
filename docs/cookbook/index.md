@@ -341,6 +341,12 @@ basics/overview
 basics/calculation-methods
 basics/mortality-roles
 basics/coverage-mechanics
+:::
+
+:::{toctree}
+:hidden:
+:caption: 경제적 가정 — 할인율 곡선 · 시나리오
+
 basics/discount-curve
 basics/scenario-generation
 :::

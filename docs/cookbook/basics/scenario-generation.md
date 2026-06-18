@@ -1,4 +1,4 @@
-# 1.6 경제 시나리오 생성 — Hull-White + 변액
+# 경제 시나리오 생성 — Hull-White + 변액
 
 :::{admonition} 이 챕터에서 배우는 것
 :class: tip
@@ -14,7 +14,7 @@
 
 fcf는 TVOG/확률측정에서 시나리오를 **소비** 하지만, 번들 샘플(`samples.return_scenarios`)은
 스스로 "calibrated economic scenario generator가 아니다"라고 적은 toy 입니다. 이 챕터의
-`fcf.esg` 는 [1.5 할인율 곡선](discount-curve)에서 만든 곡선을 받아 **그 곡선을 재현하는
+`fcf.esg` 는 [할인율 곡선](discount-curve)에서 만든 곡선을 받아 **그 곡선을 재현하는
 위험중립 시나리오** 를 만듭니다 — "곡선 -> 시나리오 -> TVOG" 가 fcf 안에서 닫힙니다.
 
 ## 두 요인 — 금리와 펀드
@@ -115,6 +115,6 @@ VFA guarantee time value (TVOG)  947,191,493
 
 ## 인접 레시피
 
-- [1.5 할인율 곡선 — Smith-Wilson](discount-curve) — 이 생성기가 캘리브레이션하는 곡선.
+- [할인율 곡선 — Smith-Wilson](discount-curve) — 이 생성기가 캘리브레이션하는 곡선.
 - [변액 보증 / 크레딧 floor TVOG](../variable/crediting-floor) — `return_scenarios` 를
   받는 보증 시간가치 평가.
