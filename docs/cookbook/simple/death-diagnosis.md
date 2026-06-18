@@ -89,11 +89,11 @@ basis = fcf.Basis(
 
 # 모델 포인트 (계약 하나, 담보 둘)
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,                      # 가입연령 40세
-    sex                 = 0,                       # 성별 (0=남, 1=여)
+    issue_age           = 40,                                   # 가입연령 40세
+    sex                 = 0,                                    # 성별 (0=남, 1=여)
     benefits            = {"DEATH": 12_000, "CANCER": 20_000},  # 사망보험금 12,000, 암진단금 20,000
-    premium             = 100,                     # 월납 보험료 100
-    term_months         = 2,                       # 보험기간 2개월
+    premium             = 100,                                  # 월납 보험료 100
+    term_months         = 2,                                    # 보험기간 2개월
     calculation_methods = {
         "DEATH":  fcf.CalculationMethod.DEATH,      # 사망 = 사망형 계산
         "CANCER": fcf.CalculationMethod.DIAGNOSIS,  # 암 = 진단형 (미진단 풀)
@@ -174,10 +174,10 @@ t=1 의 암진단 청구는 **미진단 풀** 0.9851 을 씁니다 — 단순히
 
 ```python
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,                                      # 가입연령 40세
+    issue_age           = 40,                                            # 가입연령 40세
     benefits            = {"DEATH": 100_000_000, "CANCER": 30_000_000},  # 사망 1억, 암진단 3,000만
-    premium             = 80_000,                                  # 월납 보험료 8만
-    term_months         = 240,                                     # 보험기간 20년
+    premium             = 80_000,                                        # 월납 보험료 8만
+    term_months         = 240,                                           # 보험기간 20년
     calculation_methods = {"DEATH":  fcf.CalculationMethod.DEATH,
                            "CANCER": fcf.CalculationMethod.DIAGNOSIS},
 )
@@ -195,10 +195,10 @@ cerebral_rate = 1 - (1 - 0.003) ** 12
 cardiac_rate  = 1 - (1 - 0.004) ** 12
 
 coverages = (
-    fcf.CoverageRate("DEATH",  death_rate),                     # 0 — 사망
-    fcf.CoverageRate("CANCER", cancer_rate),                    # 1 — 암진단
-    fcf.CoverageRate("CEREBRAL", cerebral_rate),                # 2 — 뇌혈관 진단
-    fcf.CoverageRate("CARDIAC",  cardiac_rate),                 # 3 — 심혈관 진단
+    fcf.CoverageRate("DEATH",  death_rate),       # 0 — 사망
+    fcf.CoverageRate("CANCER", cancer_rate),      # 1 — 암진단
+    fcf.CoverageRate("CEREBRAL", cerebral_rate),  # 2 — 뇌혈관 진단
+    fcf.CoverageRate("CARDIAC",  cardiac_rate),   # 3 — 심혈관 진단
 )
 ```
 

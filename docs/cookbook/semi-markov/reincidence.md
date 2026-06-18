@@ -135,11 +135,11 @@ reincid_fn   = lambda s, a, d, sd: np.where(sd < 2, 0.0, 1 - (1 - 0.20) ** 12)
 # 상태 모델 -- healthy → post_first → post_second (직접 조립)
 model = StateModel(states=(
     State("healthy", pays_premium=True, transitions=(
-        Transition("mortality"),  # in-force 감쇠
+        Transition("mortality"),                                          # in-force 감쇠
         Transition("ci_incidence", to="post_first", pays_lump_sum=True),  # 1차 진단금
         Transition("lapse"),
     )),
-    State("post_first", sojourn_tracking_months=12, transitions=(                 # 경과 추적 (코호트)
+    State("post_first", sojourn_tracking_months=12, transitions=(  # 경과 추적 (코호트)
         Transition("mortality"),
         Transition("ci_reincidence", to="post_second",
                    pays_lump_sum=True, sojourn_dependent=True),  # 2차 진단금 (면책 의존)
@@ -166,11 +166,11 @@ basis = fcf.Basis(
 
 # 모델 포인트
 mp = fcf.ModelPoints(
-    issue_age          = np.array([40], dtype=np.int64),  # 가입연령 40세
+    issue_age          = np.array([40], dtype=np.int64),    # 가입연령 40세
     benefits           = {"DEATH": np.array([100_000.0])},  # 사망보험금 100,000
-    premium            = np.array([0.0]),                 # 보험료 0
-    term_months        = np.array([4], dtype=np.int64),   # 보험기간 4개월
-    disability_benefit = np.array([1_000_000.0]),         # 진단금 1,000,000 (1차 = 2차)
+    premium            = np.array([0.0]),                   # 보험료 0
+    term_months        = np.array([4], dtype=np.int64),     # 보험기간 4개월
+    disability_benefit = np.array([1_000_000.0]),           # 진단금 1,000,000 (1차 = 2차)
     calculation_methods= {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
@@ -310,16 +310,16 @@ pm_model = StateModel(states=(
         Transition("mortality"), Transition("lapse"))),
 ), seating=(0, 1, 2))
 pm_basis = fcf.Basis(
-    mortality_annual=pm_healthy,           # 건강상태 사망률
-    lapse_annual=pm_lapse,                 # 해지
-    ci_incidence_annual=ca_incidence,      # 1차 암 진단율
-    ci_reincidence_annual=ca_reincidence,  # 재진단율 (sojourn 의존)
-    state_mortality_annual={"dth_aft_can": pm_post},  # 암진단 후 사망률 (가정)
-    discount_annual=0.03,                  # 할인율
-    ra_confidence=0.75,                    # 위험조정 신뢰수준
-    mortality_cv=0.10,                     # 사망 변동계수
-    morbidity_cv=0.15,                     # 발생 변동계수
-    state_model=pm_model,                  # 상태기계
+    mortality_annual=pm_healthy,                             # 건강상태 사망률
+    lapse_annual=pm_lapse,                                   # 해지
+    ci_incidence_annual=ca_incidence,                        # 1차 암 진단율
+    ci_reincidence_annual=ca_reincidence,                    # 재진단율 (sojourn 의존)
+    state_mortality_annual={"dth_aft_can": pm_post},         # 암진단 후 사망률 (가정)
+    discount_annual=0.03,                                    # 할인율
+    ra_confidence=0.75,                                      # 위험조정 신뢰수준
+    mortality_cv=0.10,                                       # 사망 변동계수
+    morbidity_cv=0.15,                                       # 발생 변동계수
+    state_model=pm_model,                                    # 상태기계
     coverages=(fcf.CoverageRate("CANCER1", ca_incidence),),  # 1차 암 진단 담보
 )
 
@@ -411,7 +411,7 @@ mp_seat = fcf.ModelPoints(
     premium            = np.array([0.0]),
     term_months        = np.array([1], dtype=np.int64),
     disability_benefit = np.array([1_000_000.0]),
-    state              = np.array([1], dtype=np.int64),           # post_first 코호트 0 에 자리 지정
+    state              = np.array([1], dtype=np.int64),  # post_first 코호트 0 에 자리 지정
     calculation_methods= {"DEATH": fcf.CalculationMethod.DEATH},
 )
 # 재진단을 면책 없이 상수로 (검증용)

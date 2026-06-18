@@ -26,12 +26,12 @@ for segment in basis.segments:
     rows = np.flatnonzero((book.product == segment[0]) & (book.channel == segment[1]))
     if rows.size == 0:
         continue
-    mp       = book.subset(rows)                     # 이 세그먼트의 보유계약
+    mp       = book.subset(rows)  # 이 세그먼트의 보유계약
     st       = state.subset(np.flatnonzero(np.isin(state.mp_id, mp.mp_id)))
-    valued   = fcf.apply_inforce_state(mp, st)       # 결산일 기준 재평가
+    valued   = fcf.apply_inforce_state(mp, st)  # 결산일 기준 재평가
     movement = fcf.gmm.settle(valued, st, basis.resolve(segment), period_months=12)
-    movements.append(movement)                       # per-MP 상세 (상세 파일용)
-    recons.append(fcf.reconcile([movement])[0])      # 보험계약집합 단위 집계
+    movements.append(movement)                   # per-MP 상세 (상세 파일용)
+    recons.append(fcf.reconcile([movement])[0])  # 보험계약집합 단위 집계
     group_labels.append("/".join(segment))
 
 # 결산팩 조립 -- 재계산이 아니라 정산표의 집계
@@ -99,7 +99,7 @@ re_state = InforceState(
     mp_id=st.mp_id,
     elapsed_months=st.elapsed_months,
     count=st.count,
-    prior_csm=reins.csm_path[np.arange(mp.mp_id.shape[0]), opening],   # 재보험 CSM 시드
+    prior_csm=reins.csm_path[np.arange(mp.mp_id.shape[0]), opening],  # 재보험 CSM 시드
     lock_in_rate=st.lock_in_rate,
     prior_count=st.prior_count,
 )
@@ -147,7 +147,7 @@ from pathlib import Path
 
 with tempfile.TemporaryDirectory() as tmp:
     out = Path(tmp) / "close_pack_2026.xlsx"
-    fcf.write_close_pack(pack, out, movements=movements)   # 워크북 + per-MP 상세 파일
+    fcf.write_close_pack(pack, out, movements=movements)  # 워크북 + per-MP 상세 파일
     sidecars = sorted(p.name for p in Path(tmp).glob("*_per_mp_*.parquet"))
     print(f"{out.name}  (+{len(sidecars)} per-MP parquet sidecars)")
 ```

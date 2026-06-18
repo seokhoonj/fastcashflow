@@ -94,7 +94,7 @@ for y in (1, 5, 10, 20, 30, 50, 100):
 basis = fcf.Basis(
     mortality_annual = 0.004,
     lapse_annual     = 0.03,
-    discount_annual  = curve,        # Smith-Wilson 곡선을 그대로
+    discount_annual  = curve,  # Smith-Wilson 곡선을 그대로
     ra_confidence    = 0.75,
     mortality_cv     = 0.10,
     coverages        = (fcf.CoverageRate("DEATH", 0.004),),

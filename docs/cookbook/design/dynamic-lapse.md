@@ -124,9 +124,9 @@ VFA의 `return_scenarios` (펀드 수익률 경로를 받아 보증의 시간가
 # 설계 스케치 -- 아직 구현 안 됨
 @dataclass(frozen=True, slots=True)
 class DynamicLapse:
-    driver: str                      # {"account_value_moneyness", "rate_spread"}
-    breakpoints: FloatArray          # moneyness 구간 경계 (오름차순)
-    multipliers: FloatArray          # 각 구간의 base lapse 배수
+    driver: str              # {"account_value_moneyness", "rate_spread"}
+    breakpoints: FloatArray  # moneyness 구간 경계 (오름차순)
+    multipliers: FloatArray  # 각 구간의 base lapse 배수
     # → 구간선형 / 계단형. 코드가 아닌 '데이터' 라 numba 가 룩업으로 처리
 ```
 

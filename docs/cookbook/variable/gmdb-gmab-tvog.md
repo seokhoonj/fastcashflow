@@ -142,7 +142,7 @@ def tvog_with(gmdb, gmab):
         minimum_death_benefit=gmdb,         # GMDB 사망보증
         minimum_accumulation_benefit=gmab,  # GMAB 만기보증
     )
-    rng2 = np.random.default_rng(7)                       # 같은 시나리오
+    rng2 = np.random.default_rng(7)  # 같은 시나리오
     s = r_m + vol * rng2.standard_normal((1000, 120))
     return fcf.vfa.measure(m, basis, return_scenarios=s).time_value[0]
 

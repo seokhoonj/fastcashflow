@@ -124,19 +124,19 @@ model = StateModel(states=(
         Transition("waiver_incidence", to="care", pays_lump_sum=True))),  # 진단금 lump
     State("care", pays_periodic_benefit=True, sojourn_tracking_months=60, periodic_benefit_term_months=36,
           mortality_rate_name="dth_care", transitions=(
-          Transition("mortality"),)),                                 # 상승 사망률
+          Transition("mortality"),)),  # 상승 사망률
 ), seating=(0, 1))
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual        = active_mort,    # active 사망 decrement
-    lapse_annual            = lapse_rate,     # 해지율
-    waiver_incidence_annual = ltc_incidence,  # 간병 발생률 (위 표)
+    mortality_annual        = active_mort,              # active 사망 decrement
+    lapse_annual            = lapse_rate,               # 해지율
+    waiver_incidence_annual = ltc_incidence,            # 간병 발생률 (위 표)
     state_mortality_annual  = {"dth_care": care_mort},  # 간병 상태 사망률
-    discount_annual         = 0.03,           # 할인율 3%
-    ra_confidence           = 0.75,           # 위험조정 신뢰수준
-    mortality_cv            = 0.10,           # 사망률 변동계수
-    disability_cv           = 0.20,           # 간병 발생 변동계수
+    discount_annual         = 0.03,                     # 할인율 3%
+    ra_confidence           = 0.75,                     # 위험조정 신뢰수준
+    mortality_cv            = 0.10,                     # 사망률 변동계수
+    disability_cv           = 0.20,                     # 간병 발생 변동계수
     state_model             = model,
     coverages               = (fcf.CoverageRate("DEATH", active_mort),))
 
@@ -180,23 +180,23 @@ zero = 0.0
 toy_model = StateModel(states=(
     State("active", pays_premium=True, transitions=(
         Transition("mortality"), Transition("lapse"))),
-    State("care", pays_periodic_benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,   # 3 회 보증
+    State("care", pays_periodic_benefit=True, sojourn_tracking_months=8, periodic_benefit_term_months=3,  # 3 회 보증
           transitions=(Transition("mortality"),)),
 ), seating=(0, 1))
 toy_basis = fcf.Basis(
-    mortality_annual=zero,  # 탈퇴 (toy: 0)
-    lapse_annual=zero,      # 해지 (toy: 0)
-    discount_annual=0.0,    # 무할인 (toy)
-    ra_confidence=0.75,     # 위험조정 신뢰수준
-    mortality_cv=0.10,      # 사망 변동계수
-    state_model=toy_model,  # 상태기계
+    mortality_annual=zero,                         # 탈퇴 (toy: 0)
+    lapse_annual=zero,                             # 해지 (toy: 0)
+    discount_annual=0.0,                           # 무할인 (toy)
+    ra_confidence=0.75,                            # 위험조정 신뢰수준
+    mortality_cv=0.10,                             # 사망 변동계수
+    state_model=toy_model,                         # 상태기계
     coverages=(fcf.CoverageRate("DEATH", zero),),  # 사망 보장
 )
 toy_mp = fcf.ModelPoints(
     issue_age=np.array([70], dtype=np.int64), benefits={"DEATH": np.array([0.0])},
     premium=np.array([0.0]), term_months=np.array([12], dtype=np.int64),
     disability_income=np.array([1_000_000.0]),
-    state=np.array([1], dtype=np.int64),                                      # 간병 상태에 자리 지정
+    state=np.array([1], dtype=np.int64),  # 간병 상태에 자리 지정
     calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
 tm = fcf.gmm.measure(toy_mp, toy_basis)
 print("monthly benefit cf :", [f"{x:,.0f}" for x in tm.cashflows.disability_cf[0][:6]])

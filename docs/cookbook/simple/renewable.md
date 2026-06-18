@@ -64,21 +64,21 @@ cancer = 0.005  # 암 진단율
 lapse  = 0.05   # 해지율
 
 basis = fcf.Basis(
-    mortality_annual=mort,  # 사망 decrement
-    lapse_annual=lapse,     # 해지
-    discount_annual=0.03,   # 할인율
-    ra_confidence=0.75,     # 위험조정 신뢰수준
-    mortality_cv=0.10,      # 사망 변동계수
-    morbidity_cv=0.15,      # 발생 변동계수
+    mortality_annual=mort,                            # 사망 decrement
+    lapse_annual=lapse,                               # 해지
+    discount_annual=0.03,                             # 할인율
+    ra_confidence=0.75,                               # 위험조정 신뢰수준
+    mortality_cv=0.10,                                # 사망 변동계수
+    morbidity_cv=0.15,                                # 발생 변동계수
     coverages=(fcf.CoverageRate("CANCER", cancer),),  # 암 진단 담보
 )
 
 def renewable(boundary):
     return fcf.ModelPoints(
-        issue_age          = np.array([40], dtype=np.int64),   # 40세 가입
+        issue_age          = np.array([40], dtype=np.int64),        # 40세 가입
         benefits           = {"CANCER": np.array([30_000_000.0])},  # 진단금 3,000만
-        premium            = np.array([25_000.0]),             # 월 2.5만
-        term_months        = np.array([480], dtype=np.int64),  # 보장 80세 (40년)
+        premium            = np.array([25_000.0]),                  # 월 2.5만
+        term_months        = np.array([480], dtype=np.int64),       # 보장 80세 (40년)
         contract_boundary_months=(None if boundary is None
                                   else np.array([boundary], dtype=np.int64)),
         calculation_methods= {"CANCER": fcf.CalculationMethod.MORBIDITY})

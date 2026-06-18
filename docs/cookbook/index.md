@@ -91,6 +91,9 @@
   - [담보별 산출방법](basics/coverage-mechanics)
   - DEATH 의 공유 `inforce` vs DIAGNOSIS 의 `undiagnosed` 풀.
     같은 식이 두 자리에 작동하는 이유.
+* - 1.5
+  - [할인율 곡선 구성 — Smith-Wilson](basics/discount-curve)
+  - 시장금리(국고채)에서 `discount_annual` 곡선을 `fcf.smith_wilson` 으로 구성.
 :::
 
 ### 2. 단순 상품
@@ -213,9 +216,6 @@
 * - 7.2
   - [워크북 — 다중 segment / 다종 상품](io/workbook-multi)
   - `measure` + 상품 / 채널 별 다른 StateModel.
-* - 7.3
-  - [할인율 곡선 구성 — Smith-Wilson](io/discount-curve)
-  - 시장금리(국고채)에서 `discount_annual` 곡선을 `fcf.smith_wilson` 으로 구성.
 :::
 
 ### 8. 분석 / 검증
@@ -341,6 +341,7 @@ basics/overview
 basics/calculation-methods
 basics/mortality-roles
 basics/coverage-mechanics
+basics/discount-curve
 :::
 
 :::{toctree}
@@ -394,7 +395,6 @@ reinsurance/proportional
 
 io/workbook-single
 io/workbook-multi
-io/discount-curve
 :::
 
 :::{toctree}

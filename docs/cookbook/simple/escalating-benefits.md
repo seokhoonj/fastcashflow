@@ -113,29 +113,29 @@ basis = fcf.Basis(
 # 입력 파일 -- coverages 에 계단식 체증 두 컬럼
 Path("samples").mkdir(exist_ok=True)
 pl.DataFrame({
-    "mp_id":       ["P001"],   # 계약 식별자
-    "issue_age":   [50],       # 가입연령 50세
-    "term_months": [24],       # 보험기간 24개월
-    "premium":     [0],        # 월납 보험료 0
+    "mp_id":       ["P001"],  # 계약 식별자
+    "issue_age":   [50],      # 가입연령 50세
+    "term_months": [24],      # 보험기간 24개월
+    "premium":     [0],       # 월납 보험료 0
 }).write_csv("samples/policies.csv")
 
 pl.DataFrame({
-    "mp_id":       ["P001"],    # 어느 계약의 담보인지
-    "coverage":    ["CARE"],    # 담보 코드
-    "amount":      [1000],      # 간병 월정액 1,000
-    "step_month":  [12],        # 12개월 후 계단
-    "step_factor": [2.0],       # 계단 이후 2배
+    "mp_id":       ["P001"],  # 어느 계약의 담보인지
+    "coverage":    ["CARE"],  # 담보 코드
+    "amount":      [1000],    # 간병 월정액 1,000
+    "step_month":  [12],      # 12개월 후 계단
+    "step_factor": [2.0],     # 계단 이후 2배
 }).write_csv("samples/coverages.csv")
 
 mp = fcf.read_model_points(
-    "samples/policies.csv",                                # 계약 spec 파일
-    coverages="samples/coverages.csv",                              # 담보 + 체증 룰
+    "samples/policies.csv",             # 계약 spec 파일
+    coverages="samples/coverages.csv",  # 담보 + 체증 룰
     calculation_methods={"CARE": fcf.CalculationMethod.MORBIDITY},
 )
 
 m = fcf.gmm.measure(mp, basis)
 print(f"morbidity_cf[11], [12] = {m.cashflows.morbidity_cf[0, 11]}, "
-      f"{m.cashflows.morbidity_cf[0, 12]}")        # 계단 직전 / 직후
+      f"{m.cashflows.morbidity_cf[0, 12]}")  # 계단 직전 / 직후
 print(f"BEL                    = {m.bel[0]:.2f}")  # 최선추정부채
 ```
 
@@ -188,15 +188,15 @@ pl.DataFrame({
     "mp_id":             ["P001"],
     "coverage":          ["CARE"],
     "amount":            [1000],
-    "escalation_annual": [0.15],   # 매년 15% 복리 체증
-    "escalation_cap":    [2.0],    # 최대 2배에서 멈춤
+    "escalation_annual": [0.15],  # 매년 15% 복리 체증
+    "escalation_cap":    [2.0],   # 최대 2배에서 멈춤
 }).write_csv("samples/coverages.csv")
 
 # 상한이 무는 것을 보려면 보험기간을 늘립니다 (12년)
 pl.DataFrame({
     "mp_id":       ["P001"],
     "issue_age":   [50],
-    "term_months": [144],          # 12년
+    "term_months": [144],  # 12년
     "premium":     [0],
 }).write_csv("samples/policies.csv")
 
@@ -233,23 +233,23 @@ year 5, 6    = 2000.0, 2000.0
 annuity_factor = lambda s, a, d, ic, el: 1.05 ** d
 
 mp_ann = fcf.ModelPoints(
-    issue_age                = np.array([60]),                          # 가입연령 60세
-    premium                  = np.array([0.0]),                         # 보험료 0
-    term_months              = np.array([36]),                          # 3년 (연 3회 지급)
-    annuity_payment          = np.array([100.0]),                       # 연금 연액 100
-    annuity_frequency_months = np.array([12]),                          # 매년 지급
-    benefits                 = {"ANN": np.array([0.0])},                # 사망보험금 없음
+    issue_age                = np.array([60]),            # 가입연령 60세
+    premium                  = np.array([0.0]),           # 보험료 0
+    term_months              = np.array([36]),            # 3년 (연 3회 지급)
+    annuity_payment          = np.array([100.0]),         # 연금 연액 100
+    annuity_frequency_months = np.array([12]),            # 매년 지급
+    benefits                 = {"ANN": np.array([0.0])},  # 사망보험금 없음
     calculation_methods      = {"ANN": fcf.CalculationMethod.ANNUITY},
 )
 
 basis_ann = fcf.Basis(
-    mortality_annual      = 0.0,                              # 감쇠 0
-    lapse_annual          = 0.0,                              # 해지 0
-    discount_annual       = 0.0,                              # 할인 0
-    ra_confidence         = 0.75,                             # 위험조정 신뢰수준 75%
-    mortality_cv          = 0.0,                              # 변동계수 0
+    mortality_annual      = 0.0,   # 감쇠 0
+    lapse_annual          = 0.0,   # 해지 0
+    discount_annual       = 0.0,   # 할인 0
+    ra_confidence         = 0.75,  # 위험조정 신뢰수준 75%
+    mortality_cv          = 0.0,   # 변동계수 0
     coverages             = (fcf.CoverageRate("ANN", 0.0),),
-    annuity_factor_annual = annuity_factor,                   # 체증형 연금 배수
+    annuity_factor_annual = annuity_factor,  # 체증형 연금 배수
 )
 
 m = fcf.gmm.measure(mp_ann, basis_ann, full=True)

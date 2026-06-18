@@ -78,7 +78,7 @@ flowchart TB
 ```text
 death = 0.012
 fcf.Basis(
-    mortality_annual = death,                        # 탈퇴
+    mortality_annual = death,                                # 탈퇴
     coverages        = (fcf.CoverageRate("DEATH", death),),  # 발생 (같은 값 공유)
     lapse_annual = ..., discount_annual = ..., ...
 )

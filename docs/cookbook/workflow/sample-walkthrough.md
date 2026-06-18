@@ -145,8 +145,8 @@ profitability = np.where(
 # 수익성) 그룹핑 + 보험계약집합별 정산 (Sec. 44, 그룹 내 floor 상계 포함).
 goc = fcf.settle_group_of_contracts(
     model_points, state, basis,
-    period_months=12,                  # Sec. 44 기초 -> 기말
-    coverage_units="count",            # CSM 배분 단위 (보장수량)
+    period_months=12,        # Sec. 44 기초 -> 기말
+    coverage_units="count",  # CSM 배분 단위 (보장수량)
     profitability=profitability,
 )
 pack = fcf.close([fcf.reconcile(goc)])                             # 공시 명세서 조립

@@ -106,7 +106,7 @@ mp = fcf.ModelPoints.single(
     premium                = 0.0,
     term_months            = 120,
     account_value          = 1.0e8,
-    minimum_crediting_rate = 0.0,   # 0% 적립 floor (원금보존), GMDB/GMAB 없음
+    minimum_crediting_rate = 0.0,  # 0% 적립 floor (원금보존), GMDB/GMAB 없음
 )
 
 det = fcf.vfa.measure(mp, basis)              # 결정론 (시나리오 없음)

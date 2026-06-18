@@ -222,13 +222,13 @@ lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual  = death_fn,           # 보유계약 사망률 (사망 없음 가정)
-    lapse_annual      = lapse_fn,           # 해지율 (해지 없음 가정)
-    discount_annual   = 0.03,               # 연 할인율 3%
-    ra_confidence     = 0.75,               # 위험조정 신뢰수준 75%
-    mortality_cv      = 0.10,               # 사망률 변동계수 10%
-    investment_return = 1.01 ** 12 - 1,     # 기초항목 월 수익률 1% (연 환산)
-    fund_fee          = 1.005 ** 12 - 1,    # 월 펀드수수료 0.5% (연 환산)
+    mortality_annual  = death_fn,         # 보유계약 사망률 (사망 없음 가정)
+    lapse_annual      = lapse_fn,         # 해지율 (해지 없음 가정)
+    discount_annual   = 0.03,             # 연 할인율 3%
+    ra_confidence     = 0.75,             # 위험조정 신뢰수준 75%
+    mortality_cv      = 0.10,             # 사망률 변동계수 10%
+    investment_return = 1.01 ** 12 - 1,   # 기초항목 월 수익률 1% (연 환산)
+    fund_fee          = 1.005 ** 12 - 1,  # 월 펀드수수료 0.5% (연 환산)
 )
 
 # 모델 포인트

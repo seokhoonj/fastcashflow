@@ -120,13 +120,13 @@ basis = fcf.Basis(
     coverages        = (fcf.CoverageRate("DEATH", death_rate),),  # 사망 보장 1 종 (청구 rate = 같은 death_rate)
 )
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,           # 가입연령 40세
-    sex                 = 0,            # 성별 (0=남, 1=여)
+    issue_age           = 40,                 # 가입연령 40세
+    sex                 = 0,                  # 성별 (0=남, 1=여)
     benefits            = {"DEATH": 12_000},  # DEATH 보장의 보험금 12,000
-    premium             = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
-    term_months         = 3,            # 보험기간 3개월
+    premium             = 0,                  # 월납 보험료 0 (보험료 cash flow 무시)
+    term_months         = 3,                  # 보험기간 3개월
     calculation_methods = {
-        "DEATH": fcf.CalculationMethod.DEATH,   # 코드 → 산출방법 매핑
+        "DEATH": fcf.CalculationMethod.DEATH,  # 코드 → 산출방법 매핑
     },
 )
 r = fcf.gmm.measure(mp, basis)
@@ -186,13 +186,13 @@ basis = fcf.Basis(
     coverages        = (fcf.CoverageRate("CANCER", cancer_rate),),  # 암진단 보장 1 종 (청구 rate = cancer_rate)
 )
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,           # 가입연령 40세
-    sex                 = 0,            # 성별 (0=남, 1=여)
+    issue_age           = 40,                  # 가입연령 40세
+    sex                 = 0,                   # 성별 (0=남, 1=여)
     benefits            = {"CANCER": 12_000},  # CANCER 보장의 진단 일시금 12,000
-    premium             = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
-    term_months         = 3,            # 보험기간 3개월
+    premium             = 0,                   # 월납 보험료 0 (보험료 cash flow 무시)
+    term_months         = 3,                   # 보험기간 3개월
     calculation_methods = {
-        "CANCER": fcf.CalculationMethod.DIAGNOSIS,   # 코드 → 산출방법 매핑
+        "CANCER": fcf.CalculationMethod.DIAGNOSIS,  # 코드 → 산출방법 매핑
     },
 )
 r = fcf.gmm.measure(mp, basis)
@@ -243,22 +243,22 @@ inpatient_rate = 1 - (1 - 0.01) ** 12
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual = 0.0,                                               # 보유계약 사망률 0 (감쇠 안 함)
-    lapse_annual     = 0.0,                                               # 해지율 0 (해지 없음)
-    discount_annual  = 0.0,                                               # 연 할인율 0 (검증 단순화)
-    ra_confidence    = 0.75,                                              # 위험조정 신뢰수준 75%
-    mortality_cv     = 0.0,                                               # 사망률 변동계수 0 (RA = 0 강제)
+    mortality_annual = 0.0,   # 보유계약 사망률 0 (감쇠 안 함)
+    lapse_annual     = 0.0,   # 해지율 0 (해지 없음)
+    discount_annual  = 0.0,   # 연 할인율 0 (검증 단순화)
+    ra_confidence    = 0.75,  # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.0,   # 사망률 변동계수 0 (RA = 0 강제)
     coverages        = (fcf.CoverageRate("INPATIENT", inpatient_rate),),
 )
 # 모델 포인트 (계약 하나)
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,           # 가입연령 40세
-    sex                 = 0,            # 성별 (0=남, 1=여)
+    issue_age           = 40,                     # 가입연령 40세
+    sex                 = 0,                      # 성별 (0=남, 1=여)
     benefits            = {"INPATIENT": 12_000},  # INPATIENT 보장의 입원 1건당 12,000
-    premium             = 0,            # 월납 보험료 0 (보험료 cash flow 무시)
-    term_months         = 3,            # 보험기간 3개월
+    premium             = 0,                      # 월납 보험료 0 (보험료 cash flow 무시)
+    term_months         = 3,                      # 보험기간 3개월
     calculation_methods = {
-        "INPATIENT": fcf.CalculationMethod.MORBIDITY,   # 코드 → 산출방법 매핑
+        "INPATIENT": fcf.CalculationMethod.MORBIDITY,  # 코드 → 산출방법 매핑
     },
 )
 r = fcf.gmm.measure(mp, basis)

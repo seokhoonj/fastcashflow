@@ -141,7 +141,7 @@ with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
 
     # 1) 견본 네 파일을 폴더에 생성 (자기 파일이 있으면 이 블록은 생략)
-    fcf.samples.export(tmp, template="gmm", quiet=True)   # basis.xlsx + policies/coverages/calculation_methods
+    fcf.samples.export(tmp, template="gmm", quiet=True)  # basis.xlsx + policies/coverages/calculation_methods
 
     # 2) 워크북을 읽으면 (product, channel) → Basis 사전
     basis = fcf.read_basis(tmp / "basis.xlsx")

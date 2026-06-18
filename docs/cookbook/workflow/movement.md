@@ -171,16 +171,16 @@ from dataclasses import replace
 base_mort = basis.resolve(key).mortality_annual                 # 샘플 기초의 사망률 함수
 revised_basis = replace(
     basis.resolve(key),
-    mortality_annual=lambda *a: base_mort(*a) * 1.10,   # 사망률 +10%
+    mortality_annual=lambda *a: base_mort(*a) * 1.10,  # 사망률 +10%
 )
 m_revised = fcf.gmm.measure(portfolio.subset(idx), revised_basis)
 
 # month 12 에 발효된 가정변경을 얹어 변동분해
 movements = fcf.roll_forward(
-    m,                       # 기준 측정 (변경 전)
-    period_months=12,        # 12 개월 기간
-    revised=m_revised,       # 변경 후 재측정
-    revised_at=12,           # 변경 발효 시점 (period_months 의 배수)
+    m,                  # 기준 측정 (변경 전)
+    period_months=12,   # 12 개월 기간
+    revised=m_revised,  # 변경 후 재측정
+    revised_at=12,      # 변경 발효 시점 (period_months 의 배수)
 )
 recon = fcf.reconcile(movements)
 
@@ -245,8 +245,8 @@ actual = np.full(m.bel_path.shape[0], 0.97)
 
 movements = fcf.roll_forward(
     m, period_months=12,
-    actual_inforce=actual,   # 기간 말 실제 잔존 (n_mp,)
-    experience_at=12,        # 경험 반영 시점
+    actual_inforce=actual,  # 기간 말 실제 잔존 (n_mp,)
+    experience_at=12,       # 경험 반영 시점
 )
 ```
 

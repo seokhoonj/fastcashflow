@@ -180,7 +180,7 @@ cause-specific* 의 구분.
 mortality_annual = rate_all_cause                # 보유계약 사망률 (all-cause)
 
 coverages = (
-    fcf.CoverageRate("ADB", rate_accident),      # 사망보험금 발생률: 재해사망만 (예: 연 0.3%)
+    fcf.CoverageRate("ADB", rate_accident),  # 사망보험금 발생률: 재해사망만 (예: 연 0.3%)
 )
 ```
 
@@ -197,9 +197,9 @@ all-cause(예: 연 1.2%). 하지만 사망보험금 발생률은 **재해 사고
 mortality_annual = rate_all_cause                         # 보유계약 사망률: all-cause (예: 연 1.2%)
 
 coverages = (
-    fcf.CoverageRate("DEATH",         rate_all_cause),    # 사망보험금 발생률: 일반사망 (1.2%)
-    fcf.CoverageRate("DISEASE_DEATH", rate_disease),      # 사망보험금 발생률: 질병사망 (0.9%)
-    fcf.CoverageRate("ADB",           rate_accident),     # 사망보험금 발생률: 재해사망 (0.3%)
+    fcf.CoverageRate("DEATH",         rate_all_cause),  # 사망보험금 발생률: 일반사망 (1.2%)
+    fcf.CoverageRate("DISEASE_DEATH", rate_disease),    # 사망보험금 발생률: 질병사망 (0.9%)
+    fcf.CoverageRate("ADB",           rate_accident),   # 사망보험금 발생률: 재해사망 (0.3%)
 )
 ```
 

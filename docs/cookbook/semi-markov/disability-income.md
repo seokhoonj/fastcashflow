@@ -139,8 +139,8 @@ recovery_fn  = lambda s, a, d, sd: np.where(sd < 2, 1 - (1 - 0.30) ** 12,
 # 상태 모델 -- active ↔ disabled (회복 re-entry)
 model = StateModel(states=(
     State("active", pays_premium=True, transitions=(
-        Transition("mortality"),                              # in-force 감쇠
-        Transition("waiver_incidence", to="disabled"),        # 장해 발생
+        Transition("mortality"),                        # in-force 감쇠
+        Transition("waiver_incidence", to="disabled"),  # 장해 발생
         Transition("lapse"),
     )),
     State("disabled", pays_periodic_benefit=True, sojourn_tracking_months=24, transitions=(  # 매월 소득 + 경과 추적
@@ -162,18 +162,18 @@ basis = fcf.Basis(
     disability_cv              = 0.20,            # 장해율 변동계수 20%
     state_model                = model,           # 직접 조립한 Semi-Markov 모델
     coverages                  = (
-        fcf.CoverageRate("DEATH", death_rate),      # 사망 보장 1종
+        fcf.CoverageRate("DEATH", death_rate),  # 사망 보장 1종
     ),
 )
 
 # 모델 포인트
 mp = fcf.ModelPoints(
-    issue_age         = np.array([45], dtype=np.int64),            # 가입연령 45세
-    benefits          = {"DEATH": np.array([0.0])},                # 사망보험금 0
-    premium     = np.array([0.0]),                                 # 보험료 0
-    term_months       = np.array([6], dtype=np.int64),             # 잔여 6개월
-    disability_income = np.array([1_000_000.0]),                   # 월 장해소득 1,000,000
-    state             = np.array([1], dtype=np.int64),             # disabled 코호트 0 에 자리 지정
+    issue_age         = np.array([45], dtype=np.int64),  # 가입연령 45세
+    benefits          = {"DEATH": np.array([0.0])},      # 사망보험금 0
+    premium     = np.array([0.0]),                       # 보험료 0
+    term_months       = np.array([6], dtype=np.int64),   # 잔여 6개월
+    disability_income = np.array([1_000_000.0]),         # 월 장해소득 1,000,000
+    state             = np.array([1], dtype=np.int64),   # disabled 코호트 0 에 자리 지정
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 

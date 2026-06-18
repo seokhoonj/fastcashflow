@@ -174,11 +174,11 @@ lapse_fn = lambda sex, issue_age, duration: np.full(duration.shape, 0.0)
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual = death_fn,         # 보유계약 사망률 (연 0.1%)
-    lapse_annual     = lapse_fn,         # 해지율 (해지 없음)
-    discount_annual  = 0.03,             # 연 할인율 3%
-    ra_confidence    = 0.75,             # 위험조정 신뢰수준 75%
-    mortality_cv     = 0.10,             # 사망률 변동계수 10%
+    mortality_annual = death_fn,  # 보유계약 사망률 (연 0.1%)
+    lapse_annual     = lapse_fn,  # 해지율 (해지 없음)
+    discount_annual  = 0.03,      # 연 할인율 3%
+    ra_confidence    = 0.75,      # 위험조정 신뢰수준 75%
+    mortality_cv     = 0.10,      # 사망률 변동계수 10%
     coverages        = (
         fcf.CoverageRate("DEATH", death_fn),  # 사망 보장 1종 (청구 rate = death_fn)
     ),

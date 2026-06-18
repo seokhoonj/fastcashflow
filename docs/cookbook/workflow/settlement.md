@@ -114,9 +114,9 @@ fcf.samples.export("samples", template="gmm", quiet=True)
 basis = fcf.read_basis("samples/basis.xlsx")                            # BasisRouter: {(product, channel): Basis}
 
 model_points, state = fcf.read_inforce_policies(
-    "samples/inforce_policies.csv",                                     # 마감 1-파일 (spec + state)
-    coverages="samples/coverages.csv",                                  # 담보 파일
-    calculation_methods="samples/calculation_methods.csv",              # 담보별 산출방법
+    "samples/inforce_policies.csv",                         # 마감 1-파일 (spec + state)
+    coverages="samples/coverages.csv",                      # 담보 파일
+    calculation_methods="samples/calculation_methods.csv",  # 담보별 산출방법
 )
 
 # 세그먼트별 결산 정산 -- settle 은 세그먼트(단일 Basis) 단위
@@ -127,10 +127,10 @@ for key, segment_basis in basis.segments.items():
     if len(idx) == 0:
         continue
     movements.append(fcf.gmm.settle(
-        model_points.subset(idx),    # 이 세그먼트의 보유계약
-        state.subset(idx),           # 결산 상태 (직전 CSM / 기초 잔존 / lock-in)
-        segment_basis,               # 이 세그먼트의 산출기초
-        period_months=3,             # 이번 분기 (3 개월)
+        model_points.subset(idx),  # 이 세그먼트의 보유계약
+        state.subset(idx),         # 결산 상태 (직전 CSM / 기초 잔존 / lock-in)
+        segment_basis,             # 이 세그먼트의 산출기초
+        period_months=3,           # 이번 분기 (3 개월)
     ))
 
 # 포트폴리오 합계 -- 기말 잔액
@@ -179,10 +179,10 @@ key = ("HEALTH_A", "GA")
 idx = np.where((np.asarray(model_points.product) == key[0]) &
                (np.asarray(model_points.channel) == key[1]))[0]
 mv = fcf.gmm.settle(
-    model_points.subset(idx),        # 이 세그먼트의 보유계약
-    state.subset(idx),               # 결산 상태
-    basis.resolve(key),              # 단일 Basis 로 resolve
-    period_months=3,                 # 이번 분기 (3 개월)
+    model_points.subset(idx),  # 이 세그먼트의 보유계약
+    state.subset(idx),         # 결산 상태
+    basis.resolve(key),        # 단일 Basis 로 resolve
+    period_months=3,           # 이번 분기 (3 개월)
 )
 r = fcf.reconcile([mv])[0]           # movement -> 변동분석표
 
@@ -335,8 +335,8 @@ per-계약 movement 를 다 들 수 없는 계약은 두 규모 변형으로 닫
 # 포트폴리오 합계만 -- bounded memory (chunk 단위 정산, 합계 누적)
 agg = fcf.gmm.settle_aggregate(
     model_points.subset(idx), state.subset(idx), basis.resolve(key),
-    period_months=3,                  # 이번 분기
-    chunk_size=200_000,               # 한 번에 드는 계약 수
+    period_months=3,     # 이번 분기
+    chunk_size=200_000,  # 한 번에 드는 계약 수
 )
 print(f"aggregate csm_closing = {agg.csm_closing:>12,.0f}")
 ```
@@ -360,7 +360,7 @@ aggregate csm_closing =       84,599
 
 ```text
 fcf.gmm.settle_stream(
-    "inforce_2026Q1.parquet", "out/2026Q1",   # 마감파일 -> movement parts
+    "inforce_2026Q1.parquet", "out/2026Q1",  # 마감파일 -> movement parts
     basis,
     coverages="coverages.parquet",
     calculation_methods="calculation_methods.csv",
@@ -444,11 +444,11 @@ close = full.cashflows.inforce[rows, 6]       # 기말 (month 6) 잔존
 paa_mp    = replace(paa_mp, elapsed_months=np.full(paa_mp.n_mp, 6), count=close)
 paa_state = fcf.InforceState(
     mp_id=paa_mp.mp_id,
-    elapsed_months=np.full(paa_mp.n_mp, 6),   # 결산일 경과월수
-    count=close,                              # 결산일 관측 잔존
-    prior_csm=np.zeros(paa_mp.n_mp),          # PAA 는 CSM 없음 -- 중립 슬롯
-    lock_in_rate=0.0,                         # 동상 (무할인 LRC)
-    prior_count=prior,                        # 기초 잔존 -- 유일한 필수 prior 입력
+    elapsed_months=np.full(paa_mp.n_mp, 6),  # 결산일 경과월수
+    count=close,                             # 결산일 관측 잔존
+    prior_csm=np.zeros(paa_mp.n_mp),         # PAA 는 CSM 없음 -- 중립 슬롯
+    lock_in_rate=0.0,                        # 동상 (무할인 LRC)
+    prior_count=prior,                       # 기초 잔존 -- 유일한 필수 prior 입력
 )
 
 # Sec. 55(b) 결산 정산 + 변동분석표
@@ -559,13 +559,13 @@ for key, segment_basis in basis.segments.items():
     sub = model_points.subset(idx)
     mv  = fcf.gmm.settle(sub, state.subset(idx), segment_basis, period_months=3)
     inforce  = fcf.gmm.measure(sub, segment_basis, full=True).cashflows.inforce  # 보장단위 궤적
-    em       = np.asarray(sub.elapsed_months)                # 결산일 (가입 후 개월)
-    boundary = np.asarray(sub.contract_boundary_months)      # 계약경계 (Sec. 34)
+    em       = np.asarray(sub.elapsed_months)                                    # 결산일 (가입 후 개월)
+    boundary = np.asarray(sub.contract_boundary_months)                          # 계약경계 (Sec. 34)
     for i in range(sub.n_mp):
         csm_i = float(mv.csm_closing[i])
-        if csm_i <= 0.0:                                     # 손실부담 / CSM 없음 -> 제외
+        if csm_i <= 0.0:  # 손실부담 / CSM 없음 -> 제외
             continue
-        cu = inforce[i, em[i]:boundary[i]]                   # 결산일 이후 잔여 보장단위
+        cu = inforce[i, em[i]:boundary[i]]  # 결산일 이후 잔여 보장단위
         for b, (_, lo, hi) in enumerate(bands):
             hi = len(cu) if hi is None else hi
             band_csm[b] += csm_i * cu[lo:hi].sum() / cu.sum()

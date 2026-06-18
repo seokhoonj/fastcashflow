@@ -99,24 +99,24 @@ basis = fcf.Basis(
 # 입력 파일 -- coverages 에 면책/감액 세 컬럼 (samples 폴더에)
 Path("samples").mkdir(exist_ok=True)
 pl.DataFrame({
-    "mp_id":         ["P001"],   # 계약 식별자
-    "issue_age":     [40],       # 가입연령 40세
-    "term_months":   [4],        # 보험기간 4개월
-    "premium": [0],        # 월납 보험료 0 (진단 풀에 집중)
+    "mp_id":         ["P001"],  # 계약 식별자
+    "issue_age":     [40],      # 가입연령 40세
+    "term_months":   [4],       # 보험기간 4개월
+    "premium": [0],             # 월납 보험료 0 (진단 풀에 집중)
 }).write_csv("samples/policies.csv")
 
 pl.DataFrame({
-    "mp_id":            ["P001"],     # 어느 계약의 담보인지
-    "coverage":    ["CANCER"],   # 담보 코드
-    "amount":           [100_000],    # 진단금 100,000
-    "waiting":          [1],          # 면책 1개월
-    "reduction_end":    [3],          # 감액 3개월까지
-    "reduction_factor": [0.5],        # 감액기간 중 50% 지급
+    "mp_id":            ["P001"],   # 어느 계약의 담보인지
+    "coverage":    ["CANCER"],      # 담보 코드
+    "amount":           [100_000],  # 진단금 100,000
+    "waiting":          [1],        # 면책 1개월
+    "reduction_end":    [3],        # 감액 3개월까지
+    "reduction_factor": [0.5],      # 감액기간 중 50% 지급
 }).write_csv("samples/coverages.csv")
 
 mp = fcf.read_model_points(
-    "samples/policies.csv",                                  # 계약 spec 파일
-    coverages="samples/coverages.csv",                                # 담보 + 면책/감액 룰
+    "samples/policies.csv",             # 계약 spec 파일
+    coverages="samples/coverages.csv",  # 담보 + 면책/감액 룰
     calculation_methods={"CANCER": fcf.CalculationMethod.DIAGNOSIS},
 )
 
@@ -187,9 +187,9 @@ pl.DataFrame({
     "mp_id":            ["P001",    "P001"],
     "coverage":    ["CANCER",  "CEREBRAL"],
     "amount":           [100_000,   200_000],
-    "waiting":          [1,         0],     # 암만 면책 1개월
-    "reduction_end":    [3,         0],     # 암만 감액 3개월까지
-    "reduction_factor": [0.5,       1.0],   # 뇌혈관은 룰 없음 (1.0)
+    "waiting":          [1,         0],    # 암만 면책 1개월
+    "reduction_end":    [3,         0],    # 암만 감액 3개월까지
+    "reduction_factor": [0.5,       1.0],  # 뇌혈관은 룰 없음 (1.0)
 }).write_csv("samples/coverages.csv")
 
 mp = fcf.read_model_points(

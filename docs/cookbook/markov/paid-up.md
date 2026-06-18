@@ -163,28 +163,28 @@ waiver_rate       = 0.0                   # 납입면제 없음
 
 # 산출기초
 basis = fcf.Basis(
-    mortality_annual        = death_rate,         # 보유계약 사망률 (월 1%)
-    lapse_annual            = lapse_rate,         # active 해지율 (납입중 월 10%)
-    lapse_paidup_annual     = lapse_paidup_rate,  # paidup 해지율 (납입후 월 2%)
-    waiver_incidence_annual = waiver_rate,        # active → waiver 전이율 (없음)
-    discount_annual         = 0.0,                # 연 할인율 0 (검증 단순화)
-    ra_confidence           = 0.75,               # 위험조정 신뢰수준 75%
-    mortality_cv            = 0.10,               # 사망률 변동계수 10%
+    mortality_annual        = death_rate,                     # 보유계약 사망률 (월 1%)
+    lapse_annual            = lapse_rate,                     # active 해지율 (납입중 월 10%)
+    lapse_paidup_annual     = lapse_paidup_rate,              # paidup 해지율 (납입후 월 2%)
+    waiver_incidence_annual = waiver_rate,                    # active → waiver 전이율 (없음)
+    discount_annual         = 0.0,                            # 연 할인율 0 (검증 단순화)
+    ra_confidence           = 0.75,                           # 위험조정 신뢰수준 75%
+    mortality_cv            = 0.10,                           # 사망률 변동계수 10%
     state_model             = STATE_MODELS["WAIVER_PAIDUP"],  # 3-state
     coverages               = (
-        fcf.CoverageRate("DEATH", death_rate),     # 사망 보장 1종 (청구 rate = death_rate)
+        fcf.CoverageRate("DEATH", death_rate),  # 사망 보장 1종 (청구 rate = death_rate)
     ),
 )
 
 # 같은 계약을 시작 상태만 바꿔 두 번 평가
 def measure_in(state):
     mp = fcf.ModelPoints.single(
-        issue_age           = 40,            # 가입연령 40세
-        sex                 = 0,             # 성별 (0=남, 1=여)
+        issue_age           = 40,                  # 가입연령 40세
+        sex                 = 0,                   # 성별 (0=남, 1=여)
         benefits            = {"DEATH": 100_000},  # DEATH 보장의 보험금 100,000
-        premium             = 0,             # 보험료 0 (이미 완납)
-        term_months         = 3,             # 잔여 보험기간 3개월
-        state               = state,         # 시작 상태 (자리 지정)
+        premium             = 0,                   # 보험료 0 (이미 완납)
+        term_months         = 3,                   # 잔여 보험기간 3개월
+        state               = state,               # 시작 상태 (자리 지정)
         calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
     )
     return fcf.gmm.measure(mp, basis)
@@ -298,12 +298,12 @@ basis = fcf.Basis(
 
 # 모델 포인트
 mp = fcf.ModelPoints.single(
-    issue_age           = 40,            # 가입연령 40세
-    sex                 = 0,             # 성별 (0=남, 1=여)
+    issue_age           = 40,                  # 가입연령 40세
+    sex                 = 0,                   # 성별 (0=남, 1=여)
     benefits            = {"DEATH": 100_000},  # 사망보험금 100,000
-    premium             = 1_000,         # 월납 보험료 1,000
-    term_months         = 24,            # 보험기간 2년
-    premium_term_months = 12,            # 납입기간 1년 (이후 완납)
+    premium             = 1_000,               # 월납 보험료 1,000
+    term_months         = 24,                  # 보험기간 2년
+    premium_term_months = 12,                  # 납입기간 1년 (이후 완납)
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 

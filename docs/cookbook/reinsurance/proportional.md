@@ -124,11 +124,11 @@ lapse_rate = 0.0
 
 # 원수 모델 포인트 (계약 하나)
 mp = fcf.ModelPoints.single(
-    issue_age   = 40,           # 가입연령 40세
-    sex         = 0,            # 성별 (0=남, 1=여)
+    issue_age   = 40,                 # 가입연령 40세
+    sex         = 0,                  # 성별 (0=남, 1=여)
     benefits    = {"DEATH": 12_000},  # DEATH 보장의 보험금 12,000
-    premium     = 100,          # 월납 보험료 100
-    term_months = 2,            # 보험기간 2개월
+    premium     = 100,                # 월납 보험료 100
+    term_months = 2,                  # 보험기간 2개월
     calculation_methods = {"DEATH": fcf.CalculationMethod.DEATH},
 )
 
@@ -242,14 +242,14 @@ import fastcashflow as fcf
 
 with tempfile.TemporaryDirectory() as tmp:
     tmp = Path(tmp)
-    fcf.samples.export(tmp, template="gmm", quiet=True)        # basis.xlsx + 데이터 파일들
+    fcf.samples.export(tmp, template="gmm", quiet=True)  # basis.xlsx + 데이터 파일들
 
-    port_basis = fcf.read_basis(tmp / "basis.xlsx")                                         # segment 가정 사전
+    port_basis = fcf.read_basis(tmp / "basis.xlsx")  # segment 가정 사전
     port_mp = fcf.read_model_points(tmp / "policies.csv", coverages=tmp / "coverages.csv",
                                     calculation_methods=tmp / "calculation_methods.csv")
 
-    b      = port_basis.resolve(("TERM_LIFE_A", "GA"))                                              # 한 segment 의 가정
-    direct = fcf.gmm.measure(port_mp, b, full=False)                                        # 원수 측정 (headline)
+    b      = port_basis.resolve(("TERM_LIFE_A", "GA"))  # 한 segment 의 가정
+    direct = fcf.gmm.measure(port_mp, b, full=False)    # 원수 측정 (headline)
     reins  = fcf.reinsurance.measure(port_mp, b, treaty=fcf.reinsurance.QuotaShare(cession=0.50))
 
     print(f"direct  BEL={direct.bel.sum():>14,.0f}  RA={direct.ra.sum():>9,.0f}  CSM={direct.csm.sum():>14,.0f}")
