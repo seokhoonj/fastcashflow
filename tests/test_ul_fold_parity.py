@@ -516,6 +516,39 @@ def test_ul_surrender_charge_reduces_credit_floor_tvog():
     assert t_full.time_value <= t1.time_value + 1e-6
 
 
+# ------------------ combined guarantee TVOG (credited floor + GMDB/GMAB) ------------------
+
+def test_guarantee_tvog_is_additive():
+    # guarantee_tvog sums the credited-rate floor (vfa.tvog) and the GMDB/GMAB
+    # account-value floors (vfa.measure.time_value, over the model points) -- the
+    # two disjoint guarantees -- so total equals the two separate calls.
+    mp = _credit_mp(g=0.05, term=24, gmab=12_000_000.0)   # both guarantees live
+    basis = _ul_basis()
+    rng = np.random.default_rng(5)
+    scen = rng.normal((1.024) ** (1.0 / 12.0) - 1.0, 0.04, (300, 24))
+    g = fcf.vfa.guarantee_tvog(mp, basis, scen)
+    cr = fcf.vfa.tvog(mp, basis, scen).time_value
+    af = float(np.sum(fcf.vfa.measure(mp, basis, return_scenarios=scen).time_value))
+    np.testing.assert_allclose(g.credited_rate_floor, cr, rtol=1e-12)
+    np.testing.assert_allclose(g.account_floor, af, rtol=1e-12)
+    np.testing.assert_allclose(g.total, cr + af, rtol=1e-12)
+
+
+def test_guarantee_tvog_no_crediting_guarantee_is_zero_not_raise():
+    # A book with no crediting guarantee contributes a zero crediting floor (rather
+    # than raising as the standalone vfa.tvog does) and still reports the GMDB/GMAB
+    # account floor.
+    mp = _credit_mp(g=fcf.NO_GUARANTEE_RATE, term=24, gmab=12_000_000.0)
+    basis = _ul_basis()
+    rng = np.random.default_rng(6)
+    scen = rng.normal((1.024) ** (1.0 / 12.0) - 1.0, 0.04, (200, 24))
+    g = fcf.vfa.guarantee_tvog(mp, basis, scen)
+    assert g.credited_rate_floor == 0.0
+    af = float(np.sum(fcf.vfa.measure(mp, basis, return_scenarios=scen).time_value))
+    np.testing.assert_allclose(g.account_floor, af, rtol=1e-12)
+    assert g.total == g.account_floor
+
+
 def test_non_account_portfolio_has_no_account_sidecar():
     # A plain protection portfolio (no account coverage) gets account=None.
     mp = ModelPoints.single(

@@ -22,10 +22,11 @@ that return-rate accretion. A minimum guaranteed credited rate is supported
 -- the account is credited ``max(return, guarantee)`` each period. Its
 intrinsic cost appears in this deterministic measurement; the time value of
 the guarantee, the extra cost from return volatility, is measured
-stochastically by ``measure_tvog``. Surrender penalties and a lapse-risk
-adjustment are left for later; the risk adjustment here covers expense risk
--- the main non-financial risk an account-value contract carries, with the
-policyholder bearing the investment risk.
+stochastically by ``measure_tvog``. A surrender charge (a fraction of the
+account withheld on surrender, ``Basis.surrender_charge_annual``) is supported;
+a lapse-risk adjustment is left for later. The risk adjustment here covers
+expense risk -- the main non-financial risk an account-value contract carries,
+with the policyholder bearing the investment risk.
 """
 from __future__ import annotations
 
@@ -53,11 +54,12 @@ from fastcashflow.numerics import (
     _settlement_lic,
     _settlement_lic_discounted,
 )
-from fastcashflow.model_points import ModelPoints
+from fastcashflow.model_points import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.state_model import resolve_state_model
 from fastcashflow.tvog import (
     guarantee_floor_time_value, ul_guarantee_floor_time_value,
+    measure_tvog,
     tvog_weights, tvog_term_weight,
     _validate_return_scenarios,
     credited_monthly_rate,
@@ -1634,3 +1636,59 @@ def recognition_schedule(
     return _build_recognition_schedule(
         np.asarray(mv.csm_closing, dtype=np.float64), inforce, em, boundary,
         edges)
+
+
+@dataclass(frozen=True, slots=True)
+class GuaranteeTVOG:
+    """Total time value of a VFA / universal-life book's guarantees.
+
+    A participating account can carry two economically distinct guarantees that
+    bite on disjoint regions of the account value, so their time values add:
+
+    * ``credited_rate_floor`` -- the minimum-crediting-rate guarantee (the account
+      is credited ``max(return, floor)`` each month), measured by
+      :func:`measure_tvog`. It lifts the account value itself, realised across the
+      account exits. Zero when the book carries no crediting guarantee.
+    * ``account_floor`` -- the GMDB / GMAB account-value floors (a death pays
+      ``max(account, GMDB)``, a maturity ``max(account, GMAB)``), measured through
+      :func:`measure_vfa` and summed over the model points. They pay the SHORTFALL
+      when the account falls below the guaranteed benefit.
+
+    The crediting floor lifts the account from below the credited rate; the GMDB /
+    GMAB floors top a benefit up when the account is short -- disjoint payoffs, so
+    :attr:`total` is their sum, the book's full guarantee time value.
+    """
+
+    credited_rate_floor: float   # crediting-guarantee TVOG (portfolio)
+    account_floor: float         # GMDB / GMAB floor TVOG (portfolio, summed over MP)
+
+    @property
+    def total(self) -> float:
+        """The full guarantee time value -- crediting floor plus account floors."""
+        return self.credited_rate_floor + self.account_floor
+
+
+def guarantee_tvog(
+    model_points: ModelPoints, basis: Basis, return_scenarios: FloatArray
+) -> GuaranteeTVOG:
+    """Total guarantee time value of a VFA / universal-life book.
+
+    Sums the two guarantees a participating account can carry -- the
+    minimum-crediting-rate floor (:func:`measure_tvog`) and the GMDB / GMAB
+    account-value floors (:func:`measure_vfa`, summed over the model points).
+    They bite on disjoint regions of the account value, so the sum is the book's
+    full guarantee time value. A book with no crediting guarantee (every
+    ``minimum_crediting_rate`` is :data:`NO_GUARANTEE_RATE`) contributes a zero
+    crediting floor rather than raising. ``return_scenarios`` is the shared
+    ``(n_scenarios, n_time)`` set of monthly underlying-items returns.
+    """
+    g = np.asarray(model_points.minimum_crediting_rate, dtype=np.float64)
+    if g.size == 0 or np.all(g == NO_GUARANTEE_RATE):
+        credited_rate_floor = 0.0
+    else:
+        credited_rate_floor = measure_tvog(
+            model_points, basis, return_scenarios).time_value
+    account_floor = float(np.sum(measure_vfa(
+        model_points, basis, return_scenarios=return_scenarios).time_value))
+    return GuaranteeTVOG(
+        credited_rate_floor=credited_rate_floor, account_floor=account_floor)
