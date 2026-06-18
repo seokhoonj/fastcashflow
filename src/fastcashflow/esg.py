@@ -103,16 +103,21 @@ def _hw_drift(prices, a, sigma, n_time):
     return a_full[1:] - a_full[:-1]                                     # alpha_0..alpha_{n_time-1}
 
 
-def _normals(n_scenarios, n_time, n_factors, seed, antithetic):
-    """Standard normals ``(n_scenarios, n_time, n_factors)``, deterministic in the
-    seed. With ``antithetic`` the second half of the paths is the negation of the
-    first (a variance-reduction pairing); an odd count drops the spare mirror."""
+def _normals(n_scenarios, n_time, seed, antithetic):
+    """Two independent standard-normal matrices ``(n_scenarios, n_time)``,
+    deterministic in the seed. With ``antithetic`` the second half of each path
+    set is the negation of the first (a variance-reduction pairing); an odd count
+    drops the one spare mirror path. Two 2-D draws (not one 3-D array) keep the
+    correlation step a plain elementwise combination."""
     rng = np.random.default_rng(seed)
     if antithetic:
         half = (n_scenarios + 1) // 2
-        z = rng.standard_normal((half, n_time, n_factors))
-        return np.concatenate([z, -z], axis=0)[:n_scenarios]
-    return rng.standard_normal((n_scenarios, n_time, n_factors))
+        za = rng.standard_normal((half, n_time))
+        zb = rng.standard_normal((half, n_time))
+        return (np.concatenate([za, -za])[:n_scenarios],
+                np.concatenate([zb, -zb])[:n_scenarios])
+    return (rng.standard_normal((n_scenarios, n_time)),
+            rng.standard_normal((n_scenarios, n_time)))
 
 
 def simulate(
@@ -153,32 +158,44 @@ def simulate(
         raise ValueError("correlation must be in [-1, 1]")
     if n_scenarios < 1 or n_time < 1:
         raise ValueError("n_scenarios and n_time must be >= 1")
+    if not np.all(np.isfinite([a, sigma, sig_s, rho, float(ufr), float(alpha)])):
+        raise ValueError(
+            "mean_reversion / rate_vol / equity_vol / correlation / ufr / alpha "
+            "must be finite (a NaN would propagate silently to every scenario)")
+    if not (np.all(np.isfinite(np.asarray(maturities, float)))
+            and np.all(np.isfinite(np.asarray(rates, float)))):
+        raise ValueError("maturities and rates must be finite")
 
     prices = _initial_prices(maturities, rates, ufr, alpha, n_time)
     drift = _hw_drift(prices, a, sigma, n_time)            # alpha_i, (n_time,)
 
-    # Two correlated Brownian factors per step (rate, equity).
-    z = _normals(n_scenarios, n_time, 2, seed, antithetic)
-    chol = np.array([[1.0, 0.0], [rho, np.sqrt(1.0 - rho * rho)]])
-    zc = z @ chol.T
-    z_rate = zc[:, :, 0]
-    z_eq = zc[:, :, 1]
+    # Two correlated Brownian factors per step. Correlate the equity factor
+    # explicitly (rho * rate + sqrt(1 - rho^2) * independent), reusing its own
+    # buffer -- lighter and clearer than a 3-D array plus a Cholesky matmul.
+    z_rate, z_eq = _normals(n_scenarios, n_time, seed, antithetic)
+    z_eq *= np.sqrt(1.0 - rho * rho)
+    z_eq += rho * z_rate
 
-    # Exact Ornstein-Uhlenbeck step for the mean-zero factor x; r = x + alpha.
+    # Exact Ornstein-Uhlenbeck step for the mean-zero factor; r_i = x_i + alpha_i
+    # written straight into short_rate (no separate x array).
     decay = np.exp(-a * _DT)
     vol_step = sigma * np.sqrt((1.0 - np.exp(-2.0 * a * _DT)) / (2.0 * a))
-    x = np.empty((n_scenarios, n_time))
+    short_rate = np.empty((n_scenarios, n_time))
     x_prev = np.zeros(n_scenarios)                         # x(0) = 0
     for i in range(n_time):
-        x[:, i] = x_prev
+        short_rate[:, i] = x_prev + drift[i]
         x_prev = x_prev * decay + vol_step * z_rate[:, i]
-    short_rate = x + drift[None, :]                        # r_t, (n_scen, n_time)
 
-    annual = np.exp(short_rate) - 1.0                      # annual rate per month
+    # Annual rate per month -- the engine's (1+r)^(1/12) discount then matches the
+    # HW continuous month discount exp(-r/12). expm1 is exact near zero.
+    annual = np.expm1(short_rate)
     # Lognormal fund return; risk-neutral drift = short rate, so the discounted
-    # fund value is a martingale. exp(.) > 0 keeps every return > -1.
-    fund_return = np.exp((short_rate - 0.5 * sig_s * sig_s) * _DT
-                         + sig_s * _SQRT_DT * z_eq) - 1.0
+    # fund value is a martingale. exp(.) - 1 keeps every return > -1. Built in the
+    # z_eq buffer to avoid a second full-size intermediate.
+    z_eq *= sig_s * _SQRT_DT
+    z_eq += (short_rate - 0.5 * sig_s * sig_s) * _DT
+    np.expm1(z_eq, out=z_eq)
+    fund_return = z_eq
 
     return EconomicScenarios(rates=annual, returns=fund_return,
                              short_rate=short_rate, initial_prices=prices)

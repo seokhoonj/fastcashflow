@@ -56,8 +56,8 @@ print(f"equity martingale err  {equity_err:.2e}")
 ```text
 rates    (20000, 240)   annual rate per month -> gmm.stochastic
 returns  (20000, 240)   monthly fund return  -> vfa.measure
-bond reprice error     3.28e-04
-equity martingale err  1.34e-03
+bond reprice error     4.58e-04
+equity martingale err  1.00e-03
 ```
 
 `martingale_error()` 가 **확률 생성기의 정확성 검증** 입니다(손계산이 아니라 무차익 성질로
@@ -95,7 +95,7 @@ print(f"VFA guarantee time value (TVOG)  {float(np.sum(vm.time_value)):,.0f}")
 출력:
 
 ```text
-VFA guarantee time value (TVOG)  947,191,493
+VFA guarantee time value (TVOG)  948,138,777
 ```
 
 `es.rates` 는 같은 방식으로 `gmm.stochastic(model_points, basis, es.rates)` 에 들어갑니다
