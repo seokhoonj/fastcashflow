@@ -81,6 +81,7 @@ from fastcashflow.pricing import solve_premium
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import ReinsuranceReport, Report, report
 from fastcashflow.smithwilson import smith_wilson, smith_wilson_prices
+from fastcashflow.esg import EconomicScenarios
 from fastcashflow.state_model import (
     STATE_MODELS,
     State,
@@ -92,13 +93,13 @@ from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult
 from fastcashflow._vfa import VFAMeasurement, VFAAggregate
 from fastcashflow.portfolio import GoCSettlement, settle_group_of_contracts
-from fastcashflow import gmm, paa, portfolio, reinsurance, samples, vfa  # namespaces
+from fastcashflow import gmm, paa, portfolio, reinsurance, samples, vfa, esg  # namespaces
 
 __version__ = "0.1.0.dev1"
 __all__ = [
     # measurement-model namespaces -- the headline entry points live here
     # (e.g. ``fastcashflow.gmm.measure``, ``fastcashflow.samples.basis``).
-    "gmm", "paa", "vfa", "reinsurance", "samples",
+    "gmm", "paa", "vfa", "reinsurance", "samples", "esg",
     "Basis", "BasisRouter", "ModelPoints", "clear_codegen_cache",
     "report", "roll_forward", "reconcile", "group", "group_of_contracts",
     "transition",
@@ -119,7 +120,7 @@ __all__ = [
     "VFASettlementMovement", "VFASettlementReconciliation",
     "VFASettlementAggregate",
     "ReinsurancePeriodMovement", "ReinsuranceReconciliation",
-    "smith_wilson", "smith_wilson_prices",
+    "smith_wilson", "smith_wilson_prices", "EconomicScenarios",
     "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",
     "apply_inforce_state", "align_inforce_state", "InforceState",

@@ -342,6 +342,7 @@ basics/calculation-methods
 basics/mortality-roles
 basics/coverage-mechanics
 basics/discount-curve
+basics/scenario-generation
 :::
 
 :::{toctree}
