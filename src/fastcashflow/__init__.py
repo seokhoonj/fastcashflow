@@ -79,6 +79,7 @@ from fastcashflow.plots import (
 from fastcashflow.pricing import solve_premium
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import ReinsuranceReport, Report, report
+from fastcashflow.smithwilson import smith_wilson, smith_wilson_prices
 from fastcashflow.state_model import (
     STATE_MODELS,
     State,
@@ -116,6 +117,7 @@ __all__ = [
     "VFASettlementMovement", "VFASettlementReconciliation",
     "VFASettlementAggregate",
     "ReinsurancePeriodMovement", "ReinsuranceReconciliation",
+    "smith_wilson", "smith_wilson_prices",
     "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",
     "apply_inforce_state", "align_inforce_state", "InforceState",

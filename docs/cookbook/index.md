@@ -213,6 +213,9 @@
 * - 7.2
   - [워크북 — 다중 segment / 다종 상품](io/workbook-multi)
   - `measure` + 상품 / 채널 별 다른 StateModel.
+* - 7.3
+  - [할인율 곡선 구성 — Smith-Wilson](io/discount-curve)
+  - 시장금리(국고채)에서 `discount_annual` 곡선을 `fcf.smith_wilson` 으로 구성.
 :::
 
 ### 8. 분석 / 검증
@@ -391,6 +394,7 @@ reinsurance/proportional
 
 io/workbook-single
 io/workbook-multi
+io/discount-curve
 :::
 
 :::{toctree}
