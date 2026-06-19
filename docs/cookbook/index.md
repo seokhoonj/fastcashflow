@@ -234,6 +234,10 @@
 * - 8.2
   - [검증 패턴](workflow/validation)
   - 한 계약의 BEL / CSM 계산 경로 추적. 손계산 매칭, shock 전파, residual 검증.
+* - 8.3
+  - [수익성 분석 / profit-testing](workflow/profit-testing)
+  - 측정 결과에서 NBV / 마진 / 이익 시그니처 / IRR 추출. 전통형 (통계) NLP 준비금과
+    이익원천 (보험료차 / 이자차) emergence — `fcf.pricing`.
 :::
 
 ### 9. 결산 워크플로
@@ -411,6 +415,7 @@ io/workbook-multi
 
 workflow/sensitivity
 workflow/validation
+workflow/profit-testing
 :::
 
 :::{toctree}

@@ -253,6 +253,29 @@ Pricing
 
 .. autofunction:: fastcashflow.solve_premium
 
+Profit testing
+--------------
+
+New-business value and profit emergence over a GMM measurement, plus the
+traditional net-level-premium reserve and statutory profit test.
+
+.. autofunction:: fastcashflow.pricing.nbv
+
+.. autofunction:: fastcashflow.pricing.profit_margin
+
+.. autofunction:: fastcashflow.pricing.signature
+
+.. autoclass:: fastcashflow.ProfitSignature
+   :members:
+
+.. autofunction:: fastcashflow.pricing.irr
+
+.. autofunction:: fastcashflow.pricing.break_even_year
+
+.. autofunction:: fastcashflow.pricing.statutory_reserve
+
+.. autofunction:: fastcashflow.pricing.statutory_profit_signature
+
 Reporting
 ---------
 
