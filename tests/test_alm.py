@@ -62,6 +62,39 @@ def test_key_rate_durations_sum_to_parallel():
     assert krd.shape[0] == 10                          # 120-month term -> 10 years
 
 
+def test_bond_textbook_duration():
+    """A 5% annual-coupon 10-year bond at a flat 5% is par; Macaulay / Modified /
+    DV01 match an independent closed-form computation."""
+    bond = alm.Bond(face=100.0, coupon_rate=0.05, maturity_years=10, frequency=1)
+    d = alm.bond_duration(bond, 0.05)
+    assert np.isclose(d.pv, 100.0)                    # par
+    t = np.arange(1, 11, dtype=float)
+    cf = np.full(10, 5.0); cf[-1] += 100.0
+    v = 1.05 ** (-t)
+    mac = float((t * cf * v).sum() / (cf * v).sum())
+    assert np.isclose(d.macaulay, mac)
+    assert np.isclose(d.modified, mac / 1.05)
+    assert np.isclose(d.dv01, d.modified * d.pv * 1e-4)
+
+
+def test_bond_effective_matches_analytic():
+    """Re-pricing the bond at +/-1bp (effective DV01) matches the analytic DV01."""
+    bond = alm.Bond(80.0, 0.04, 7, frequency=2)
+    eff = -(alm.bond_value(bond, 0.05 + 1e-4)
+            - alm.bond_value(bond, 0.05 - 1e-4)) / (2.0 * 1e-4) * 1e-4
+    assert np.isclose(alm.bond_duration(bond, 0.05).dv01, eff, rtol=1e-4)
+
+
+def test_matched_book_gap_is_zero():
+    """A bond book sized to the liability DV01 immunises the parallel gap."""
+    mp, basis = _mp(), _basis()
+    liab = alm.liability_dv01(mp, basis)
+    per_face = alm.bond_duration(alm.Bond(100.0, 0.03, 10, 1), 0.03).dv01
+    matched = alm.Bond(100.0 * liab / per_face, 0.03, 10, 1)
+    g = alm.alm_gap(alm.bond_duration(matched, 0.03).dv01, liab)
+    assert np.isclose(g["dv01_gap"], 0.0, atol=abs(liab) * 1e-6)
+
+
 def test_modified_guard_near_zero_bel():
     """At break-even the BEL is ~ 0, so the modified-duration ratio is guarded to
     nan while the DV01 stays finite."""

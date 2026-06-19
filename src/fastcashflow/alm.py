@@ -155,7 +155,111 @@ def key_rate_durations(model_points: ModelPoints, basis: Basis, *,
     return krd
 
 
+# ---------------------------------------------------------------------------
+# Bonds -- the asset side's interest-rate sensitivity (single-sign cash flows,
+# so the textbook Macaulay / Modified duration applies cleanly).
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class Bond:
+    """A fixed-coupon bullet bond. ``coupon_rate`` is the annual coupon as a
+    fraction of ``face``; ``frequency`` is the number of coupons per year."""
+
+    face: float
+    coupon_rate: float
+    maturity_years: float
+    frequency: int = 1
+
+
+def bond_cashflows(bond: Bond) -> tuple[FloatArray, FloatArray]:
+    """The bond's ``(times_years, amounts)`` -- a coupon at each period and the
+    face repaid with the final coupon."""
+    n = int(round(bond.maturity_years * bond.frequency))
+    times = np.arange(1, n + 1, dtype=np.float64) / bond.frequency
+    coupon = bond.face * bond.coupon_rate / bond.frequency
+    amounts = np.full(n, coupon, dtype=np.float64)
+    amounts[-1] += bond.face
+    return times, amounts
+
+
+def _annual_df(times: FloatArray, discount_annual) -> FloatArray:
+    """Annual-compounding discount factors at ``times`` (years) for a flat scalar
+    rate or a per-year rate array (the spot, year by year, held flat past its
+    end). Constant-force monthly discounting agrees with this at the year grid."""
+    times = np.asarray(times, dtype=np.float64)
+    c = np.asarray(discount_annual, dtype=np.float64)
+    if c.ndim == 0:
+        return (1.0 + float(c)) ** (-times)
+    n_max = int(np.ceil(times.max())) if times.size else 0
+    rates = np.array([c[min(k, c.shape[0] - 1)] for k in range(n_max)])
+    cum = np.concatenate([[0.0], np.cumsum(np.log1p(rates))])   # cum[n] = sum_{k<n} ln(1+c_k)
+    floor = np.floor(times).astype(np.int64)
+    frac = times - floor
+    last_ln = np.array([np.log1p(c[min(k, c.shape[0] - 1)]) for k in floor])
+    return np.exp(-(cum[floor] + frac * last_ln))
+
+
+def bond_value(bond: Bond, discount_annual) -> float:
+    """Market value of the bond -- its cash flows discounted at the curve."""
+    t, a = bond_cashflows(bond)
+    return float((a * _annual_df(t, discount_annual)).sum())
+
+
+def _bond_irr(times: FloatArray, amounts: FloatArray, pv: float) -> float:
+    """The flat annual yield reproducing ``pv`` (bisection; price falls in yield).
+
+    The bracket ``(-0.99, 100)`` contains any realistic bond yield -- a
+    positive-cash-flow bond has price ``-> +inf`` as the yield approaches -100%
+    and ``-> 0`` as it grows, so the root is always inside. Raises if the price is
+    not bracketed (e.g. non-positive or non-monotone cash flows)."""
+    lo, hi = -0.99, 100.0
+
+    def f(y: float) -> float:
+        return float((amounts * (1.0 + y) ** (-times)).sum()) - pv
+
+    f_lo, f_hi = f(lo), f(hi)
+    if f_lo * f_hi > 0.0:
+        raise ValueError(
+            "bond yield is not bracketed in (-0.99, 100) -- check the bond cash "
+            "flows and price")
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        f_mid = f(mid)
+        if abs(f_mid) < 1e-10 or (hi - lo) < 1e-13:
+            return mid
+        if f_lo * f_mid < 0.0:
+            hi = mid
+        else:
+            lo, f_lo = mid, f_mid
+    return 0.5 * (lo + hi)
+
+
+def bond_duration(bond: Bond, discount_annual) -> DurationResult:
+    """The bond's market value, Macaulay / Modified duration and DV01. Macaulay is
+    the present-value-weighted time; Modified is ``Macaulay / (1 + y)`` with ``y``
+    the flat-equivalent yield; DV01 is ``Modified * value * 1bp`` (the value drop
+    per +1bp)."""
+    t, a = bond_cashflows(bond)
+    pv_t = a * _annual_df(t, discount_annual)
+    pv = float(pv_t.sum())
+    macaulay = float((t * pv_t).sum() / pv)
+    y = _bond_irr(t, a, pv)
+    modified = macaulay / (1.0 + y)
+    return DurationResult(pv=pv, macaulay=macaulay, modified=modified,
+                          dv01=modified * pv * _BP)
+
+
+def alm_gap(asset_dv01: float, liability_dv01: float) -> dict:
+    """The asset-liability DV01 gap -- ``asset_dv01 - liability_dv01``. Zero means
+    the net value is immunised against a small parallel rate move (the asset and
+    liability fall by the same amount per 1bp). Both inputs are DV01s on the same
+    curve (e.g. summed :func:`bond_duration` DV01s and :func:`liability_dv01`)."""
+    return {"asset_dv01": asset_dv01, "liability_dv01": liability_dv01,
+            "dv01_gap": asset_dv01 - liability_dv01}
+
+
 __all__ = [
-    "DurationResult", "net_liability_cashflows",
+    "DurationResult", "Bond", "net_liability_cashflows",
     "liability_dv01", "liability_duration", "key_rate_durations",
+    "bond_cashflows", "bond_value", "bond_duration", "alm_gap",
 ]

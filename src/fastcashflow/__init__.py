@@ -85,7 +85,8 @@ from fastcashflow.solvency import (
 )
 from fastcashflow import solvency
 from fastcashflow.alm import (
-    DurationResult, liability_duration, liability_dv01, key_rate_durations,
+    DurationResult, Bond, liability_duration, liability_dv01, key_rate_durations,
+    bond_duration, bond_value, alm_gap,
 )
 from fastcashflow import alm
 from fastcashflow._reinsurance import ReinsuranceMeasurement
@@ -143,8 +144,8 @@ __all__ = [
     "embedded_value", "EmbeddedValue",
     "solvency", "required_capital", "solvency_ratio",
     "RegimeSpec", "SCRResult", "SubRisk", "Stress", "SOLVENCY2", "KICS",
-    "alm", "DurationResult", "liability_duration", "liability_dv01",
-    "key_rate_durations",
+    "alm", "DurationResult", "Bond", "liability_duration", "liability_dv01",
+    "key_rate_durations", "bond_duration", "bond_value", "alm_gap",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
