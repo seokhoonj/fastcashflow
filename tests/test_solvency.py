@@ -281,3 +281,55 @@ def test_solvency_ratio():
     res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
     assert np.isclose(sv.solvency_ratio(res, 20_000_000.0),
                       20_000_000.0 / res.total_scr)
+
+
+def test_catastrophe_scr_hand_calc():
+    """K-ICS catastrophe (handbook 2-8): pandemic = death SA x 0.1%; large accident
+    = sum of zone-exposure x max(SA x shock - prior claims, 0); total = sqrt of the
+    two (correlation 0)."""
+    assert np.isclose(sv.catastrophe_scr(pandemic_death=1e12), 1e12 * 0.001)
+    ad = sv.catastrophe_scr(accident_death=1e12)
+    assert np.isclose(ad, 0.0000711 * 1e12 * 0.15 + 0.0003733 * 1e12 * 0.015)
+    full = sv.catastrophe_scr(pandemic_death=1e12, accident_death=1e12,
+                              disability=5e11, property=2e11)
+    pan = 1e12 * 0.001
+    large = (0.0000711 * 1e12 * 0.15 + 0.0003733 * 1e12 * 0.015
+             + 0.0000711 * 5e11 * 0.20 + 0.0003733 * 5e11 * 0.10
+             + 0.0000711 * 2e11 * 1.00 + 0.0002133 * 2e11 * 0.25
+             + 0.0000160 * 2e11 * 0.10)
+    assert np.isclose(full, np.sqrt(pan**2 + large**2))
+
+
+def test_catastrophe_prior_year_claims_offset():
+    """Prior-year claims net the large-accident exposure, floored at zero."""
+    off = sv.catastrophe_scr(accident_death=1e12, prior_year_claims={"death": 1e11})
+    # 1e12 x 1.5% = 1.5e10 < 1e11 -> second term floored to 0
+    assert np.isclose(off, 0.0000711 * max(1e12 * 0.15 - 1e11, 0.0))
+
+
+def test_required_capital_folds_catastrophe_table6():
+    """Catastrophe folds into the insurance module via the table-6 correlation; the
+    risk margin EXCLUDES it (handbook: insurance amount ex-catastrophe)."""
+    mp, basis = _mp(), _basis()
+    base = sv.required_capital(mp, basis, regime=sv.KICS)
+    cat = 200_000.0
+    got = sv.required_capital(mp, basis, regime=sv.KICS, catastrophe=cat)
+    names = ["mortality", "longevity", "morbidity", "lapse", "expense"]
+    c = np.array([base.sub_risk_capital[n] for n in names] + [cat])
+    R = np.eye(6)
+    R[:5, :5] = sv._KICS_CORRELATION
+    cc = np.array([0.25, 0.0, 0.25, 0.25, 0.25])
+    R[:5, 5] = R[5, :5] = cc
+    assert np.isclose(got.insurance_scr, np.sqrt(c @ R @ c))
+    assert got.insurance_scr > base.insurance_scr
+    assert np.isclose(got.risk_margin, base.risk_margin)        # margin ex-catastrophe
+    assert np.isclose(got.sub_risk_capital["catastrophe"], cat)
+
+
+def test_catastrophe_ignored_when_regime_has_no_correlation():
+    """Solvency II has no catastrophe_correlation -> a passed catastrophe is not
+    folded (it would be a separate shock sub-risk there, deferred)."""
+    mp, basis = _mp(), _basis()
+    base = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    got = sv.required_capital(mp, basis, regime=sv.SOLVENCY2, catastrophe=200_000.0)
+    assert np.isclose(got.insurance_scr, base.insurance_scr)

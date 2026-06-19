@@ -292,6 +292,8 @@ asset side and available capital are caller-supplied.
 
 .. autofunction:: fastcashflow.required_capital
 
+.. autofunction:: fastcashflow.catastrophe_scr
+
 .. autoclass:: fastcashflow.SCRResult
    :members:
 

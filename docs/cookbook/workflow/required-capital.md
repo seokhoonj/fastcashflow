@@ -127,6 +127,37 @@ K-ICS 가 덜 보수적입니다 -- 충격이 작고 (사망 +12.5% vs +15%, 해
 는 None). 그래서 같은 계약에 SCR 이 21.2M (SII) 에서 13.5M (K-ICS) 으로 작습니다.
 위험마진도 방식이 달라 -- SII 는 자본비용 6%, K-ICS 는 보험위험액 x 0.40 입니다.
 
+## 대재해위험액 -- factor 방식, 보험위험액에 합산
+
+사망/장수/해지 등은 가정 충격-재측정이지만, **대재해위험액** (전염병·대형사고 같은 극단
+사건) 은 가정 변동성으로 못 잡아 **가입금액에 위험계수** 를 매깁니다 (해설서 2-8). 전염병
+= 사망담보 가입금액 x 0.1%, 대형사고 = 사망/장해/장기재물 가입금액에 지역노출 factor.
+담보의 대재해 분류는 매핑 결정이라 **가입금액 버킷을 인자로** 받습니다.
+
+```python
+sa = 100_000_000.0                              # death sum assured (benefit x count)
+cat = fcf.catastrophe_scr(pandemic_death=sa, accident_death=sa)
+kc = fcf.required_capital(mp, basis, regime=fcf.KICS, catastrophe=cat)
+print(f"catastrophe amount     = {cat:>14,.0f}")
+print(f"insurance SCR (ex-cat) = {k.insurance_scr:>14,.0f}")
+print(f"insurance SCR (w/ cat) = {kc.insurance_scr:>14,.0f}")
+print(f"risk margin (ex-cat)   = {kc.risk_margin:>14,.0f}")
+```
+
+출력:
+
+```text
+catastrophe amount     =        100,013
+insurance SCR (ex-cat) =     13,453,447
+insurance SCR (w/ cat) =     13,480,841
+risk margin (ex-cat)   =      5,381,379
+```
+
+대재해위험액 (100,013) 은 표6 상관 (사망 0.25, 장수 0, 장해질병/해지/사업비 0.25) 으로
+보험위험액에 합산돼 13.45M -> 13.48M 으로 올라갑니다. **위험마진은 대재해를 제외** 합니다
+(해설서: 위험마진 = 보험위험액 (대재해 제외) x 0.40). 보장성 책에선 대재해가 작지만,
+전염병/대형사고 노출이 큰 책에선 더 커집니다.
+
 ## 지급여력비율과 임베디드밸류 연결
 
 요구자본 (분모) 은 이 엔진이 내지만, **가용자본 (분자) 은 자산-부채라 사용자 입력**

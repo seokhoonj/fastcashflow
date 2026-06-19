@@ -84,6 +84,11 @@ class RegimeSpec:
     or ``None`` when the regime's interest scenarios are caller-supplied. The
     risk margin is either ``"percentile"`` (``insurance_scr * risk_margin_factor``)
     or ``"cost_of_capital"`` (``risk_margin_coc_rate`` over the capital run-off).
+
+    ``catastrophe_correlation`` is the catastrophe sub-risk's correlation with each
+    of the ``sub_risks`` (same order), used when a caller passes a catastrophe
+    charge to :func:`required_capital`; ``None`` means the regime does not fold a
+    (factor-based) catastrophe charge into its insurance module.
     """
 
     name: str
@@ -93,6 +98,7 @@ class RegimeSpec:
     risk_margin_method: str = "percentile"
     risk_margin_factor: float = 0.0
     risk_margin_coc_rate: float = 0.06
+    catastrophe_correlation: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
         # The capital vector is built positionally from sub_risks, so the
@@ -310,8 +316,46 @@ def solvency_ratio(scr: SCRResult, available_capital: float) -> float:
     return available_capital / scr.total_scr
 
 
+# K-ICS catastrophe factors (handbook 2-8). Pandemic = death sum assured x 0.1%.
+# Large accident = death + disability + property (correlation 1, simple sum); each
+# is a sum of zone-exposure x max(sum-assured x shock - prior-year claims, 0). The
+# catastrophe amount is sqrt(pandemic^2 + large-accident^2) (correlation 0).
+_PANDEMIC_FACTOR = 0.001
+_ACCIDENT_TERMS = {            # category -> [(zone exposure ratio, shock), ...]
+    "death":      ((0.0000711, 0.150), (0.0003733, 0.015)),
+    "disability": ((0.0000711, 0.200), (0.0003733, 0.100)),
+    "property":   ((0.0000711, 1.000), (0.0002133, 0.250), (0.0000160, 0.100)),
+}
+
+
+def catastrophe_scr(*, pandemic_death: float = 0.0, accident_death: float = 0.0,
+                    disability: float = 0.0, property: float = 0.0,
+                    prior_year_claims: dict[str, float] | None = None) -> float:
+    """The K-ICS catastrophe risk amount (handbook 2-8) -- a factor on sum assured.
+
+    ``pandemic_death`` is the sum assured of pandemic death-exposed coverages
+    (charged 0.1%). ``accident_death`` / ``disability`` / ``property`` are the
+    large-accident sum-assured buckets, each charged the zone-exposure factors
+    against ``max(sum_assured x shock - prior_year_claims[bucket], 0)``. The result
+    is ``sqrt(pandemic^2 + large_accident^2)`` (the two are uncorrelated). The
+    exposure buckets are caller-supplied (the catastrophe categorisation of a
+    coverage is a mapping decision, not derivable from the engine type)."""
+    pyc = prior_year_claims or {}
+    pandemic = max(0.0, pandemic_death) * _PANDEMIC_FACTOR     # exposure >= 0
+
+    def accident(sa: float, key: str) -> float:
+        claims = pyc.get(key, 0.0)
+        return sum(ratio * max(sa * shock - claims, 0.0)
+                   for ratio, shock in _ACCIDENT_TERMS[key])
+
+    large = (accident(accident_death, "death") + accident(disability, "disability")
+             + accident(property, "property"))                  # correlation 1: sum
+    return float(np.sqrt(pandemic ** 2 + large ** 2))
+
+
 def required_capital(
     model_points: ModelPoints, basis: Basis, *, regime: RegimeSpec,
+    catastrophe: float = 0.0,
 ) -> SCRResult:
     """Required capital (SCR) for a portfolio under ``regime``.
 
@@ -321,6 +365,11 @@ def required_capital(
     risk margin. v1 is liability-side: the total is ``insurance_scr +
     interest_capital`` (no inter-module diversification). Pass ``SCRResult`` on to
     :func:`fastcashflow.embedded_value` via its ``required_capital`` argument.
+
+    ``catastrophe`` (the factor-based K-ICS catastrophe amount from
+    :func:`catastrophe_scr`) is folded into the insurance module through the
+    regime's ``catastrophe_correlation`` (table 6). The risk margin EXCLUDES
+    catastrophe (handbook: the margin is the insurance amount ex-catastrophe).
     """
     m_base = measure(model_points, basis, full=False)
     base_bel = float(m_base.bel.sum())
@@ -332,7 +381,20 @@ def required_capital(
     capital: dict[str, float] = {}
     for sr in regime.sub_risks:
         capital[sr.name] = max(0.0, max(delta(v) for v in sr.variants))
-    insurance_scr = aggregate(capital, regime)
+    insurance_ex_cat = aggregate(capital, regime)               # margin basis (ex-cat)
+
+    if catastrophe > 0.0 and regime.catastrophe_correlation is not None:
+        cc = np.asarray(regime.catastrophe_correlation, dtype=np.float64)
+        base = np.asarray(regime.correlation, dtype=np.float64)
+        k = base.shape[0]
+        R = np.eye(k + 1)
+        R[:k, :k] = base
+        R[:k, k] = R[k, :k] = cc
+        c = np.array([capital[sr.name] for sr in regime.sub_risks] + [catastrophe])
+        insurance_scr = float(np.sqrt(c @ R @ c))
+        capital["catastrophe"] = catastrophe
+    else:
+        insurance_scr = insurance_ex_cat
 
     interest_capital = 0.0
     if regime.interest_curves is not None:
@@ -341,7 +403,7 @@ def required_capital(
     total_scr = insurance_scr + interest_capital
 
     if regime.risk_margin_method == "percentile":
-        risk_margin = insurance_scr * regime.risk_margin_factor
+        risk_margin = insurance_ex_cat * regime.risk_margin_factor   # ex-catastrophe
         scr_path = None
     elif regime.risk_margin_method == "cost_of_capital":
         # The risk margin covers non-hedgeable (insurance / underwriting) risk;
@@ -356,7 +418,7 @@ def required_capital(
         if d0 <= 0.0:
             driver = np.abs(m_full.bel_path.sum(axis=0))
             d0 = float(driver[0]) if driver[0] != 0.0 else 1.0
-        scr_path = np.maximum(insurance_scr * driver / d0, 0.0)
+        scr_path = np.maximum(insurance_ex_cat * driver / d0, 0.0)
         n_time = scr_path.shape[0] - 1
         disc_m = discount_monthly_curve(basis, n_time)
         risk_margin = float(_cost_of_capital_ra(
@@ -471,6 +533,8 @@ KICS = RegimeSpec(
                              # via the caller; not baked in.
     risk_margin_method="percentile",
     risk_margin_factor=0.40,  # risk margin = insurance-risk amount x 0.40 (= /Z99.5% x Z85%)
+    # table 6 catastrophe row vs (mortality, longevity, morbidity, lapse, expense):
+    catastrophe_correlation=(0.25, 0.0, 0.25, 0.25, 0.25),
 )
 
 
@@ -478,5 +542,6 @@ __all__ = [
     "Stress", "SubRisk", "RegimeSpec", "SCRResult",
     "scale_mortality", "scale_longevity", "scale_lapse", "mass_lapse",
     "scale_coverages", "scale_annuity", "scale_expense", "shock_curve",
-    "aggregate", "required_capital", "solvency_ratio", "SOLVENCY2", "KICS",
+    "aggregate", "required_capital", "catastrophe_scr", "solvency_ratio",
+    "SOLVENCY2", "KICS",
 ]

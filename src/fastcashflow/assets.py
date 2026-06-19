@@ -557,8 +557,8 @@ class SolvencyAssessment:
 
 def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
                     basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
-                    tax_recoverability_limit: float | None = None
-                    ) -> SolvencyAssessment:
+                    tax_recoverability_limit: float | None = None,
+                    catastrophe: float = 0.0) -> SolvencyAssessment:
     """Assemble the t=0 solvency ratio from the assets and the liability SCR.
 
     Runs :func:`~fastcashflow.required_capital` for the liability (insurance) SCR,
@@ -579,13 +579,18 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     ``tax_recoverability_limit`` for the regulatory recoverability cap (else the
     relief is uncapped at ``basic x tax_rate``).
 
+    ``catastrophe`` (the K-ICS catastrophe amount from
+    :func:`~fastcashflow.catastrophe_scr`) is folded into the insurance module
+    (table-6 correlation); it defaults to 0.
+
     Notes: K-ICS supplies no interest curves (its scenarios are caller-supplied),
     so the net interest component is zero here -- equity and property still apply.
     Credit, FX and concentration risk are charged for K-ICS only (the Solvency II
     equivalents are deferred). A non-positive total required capital (a risk-free
     book) gives an unbounded ratio.
     """
-    scr = required_capital(model_points, basis, regime=regime)
+    scr = required_capital(model_points, basis, regime=regime,
+                           catastrophe=catastrophe)
     pv = portfolio_value(portfolio, basis.discount_annual)
     ac = available_capital(pv, scr.base_bel, scr.risk_margin)
 
