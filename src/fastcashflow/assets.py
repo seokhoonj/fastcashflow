@@ -12,12 +12,11 @@ scope. This module sits above :mod:`fastcashflow.alm` (it prices bonds) and
 :mod:`fastcashflow.solvency` (it consumes the liability SCR); it adds no new
 regulatory numbers.
 
-The asset-side SCR modules are the market risk (interest / equity / property / FX)
-and the credit risk (bond default + downgrade). Credit and FX risk are charged for
-K-ICS only; Solvency II's spread / counterparty and currency calibrations are
-separate and not encoded here (deferred), so those charges are zero under Solvency
-II. Asset concentration risk is not yet modelled, so a book heavy in single-name
-concentration is an upper bound.
+The asset-side SCR modules are the market risk (interest / equity / property / FX /
+asset concentration) and the credit risk (bond default + downgrade). Credit, FX and
+concentration risk are charged for K-ICS only; the Solvency II spread / counterparty,
+currency and concentration calibrations are separate and not encoded here (deferred),
+so those charges are zero under Solvency II.
 """
 from __future__ import annotations
 
@@ -39,17 +38,21 @@ class Equity:
 
     ``risk_type`` selects the market-risk shock (``"developed"`` or ``"emerging"``
     market listed equity); the shock magnitude is the regime's calibration.
-    ``currency`` (ISO code, "KRW" for domestic) drives the FX SCR."""
+    ``currency`` (ISO code, "KRW" for domestic) drives the FX SCR. ``issuer``
+    (counterparty) and ``credit_rating`` group exposures for the concentration
+    SCR."""
 
     market_value: float
     risk_type: str = "developed"
     currency: str = "KRW"
+    issuer: str = ""
+    credit_rating: str = "AA"
 
 
 @dataclass(frozen=True, slots=True)
 class Property:
     """A property holding carried at a given market value. ``currency`` (ISO code)
-    drives the FX SCR."""
+    drives the FX SCR; property contributes to the property concentration SCR."""
 
     market_value: float
     currency: str = "KRW"
@@ -58,10 +61,13 @@ class Property:
 @dataclass(frozen=True, slots=True)
 class Cash:
     """A cash holding, carried at face (curve-insensitive). ``currency`` (ISO code)
-    drives the FX SCR."""
+    drives the FX SCR. ``issuer`` (the deposit counterparty) and ``credit_rating``
+    group exposures for the concentration SCR."""
 
     market_value: float
     currency: str = "KRW"
+    issuer: str = ""
+    credit_rating: str = "AA"
 
 
 Holding = "Bond | Equity | Property | Cash"
@@ -136,14 +142,16 @@ def net_interest_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
 
 # Market sub-risks ordered (interest, equity, property) for the correlation axis.
 # K-ICS table 19: market sub-risk correlation -- interest / equity / property / FX
-# (asset concentration is independent, correlation 0, and is not modelled here).
-# Note equity <-> FX is NEGATIVE 0.25 (the standard's triangle mark): a won spike
-# tends to coincide with foreign selling that drops equities, so they diversify.
+# / asset concentration. Note equity <-> FX is NEGATIVE 0.25 (the standard's
+# triangle mark): a won spike tends to coincide with foreign selling that drops
+# equities, so they diversify. Asset concentration is independent (correlation 0
+# with every other sub-risk) -- it is each holding's own idiosyncratic risk.
 _MARKET_CORRELATION = np.array([
-    [1.00,  0.25, 0.25,  0.25],
-    [0.25,  1.00, 0.25, -0.25],
-    [0.25,  0.25, 1.00,  0.25],
-    [0.25, -0.25, 0.25,  1.00],
+    [1.00,  0.25, 0.25,  0.25, 0.00],
+    [0.25,  1.00, 0.25, -0.25, 0.00],
+    [0.25,  0.25, 1.00,  0.25, 0.00],
+    [0.25, -0.25, 0.25,  1.00, 0.00],
+    [0.00,  0.00, 0.00,  0.00, 1.00],
 ])
 
 _MARKET_CALIBRATION = {
@@ -258,19 +266,106 @@ def fx_scr(portfolio: AssetPortfolio, regime, discount_annual) -> float:
     return max(_fx_aggregate(down), _fx_aggregate(up))   # price volatility: 0 (v1)
 
 
+# ---------------------------------------------------------------------------
+# Asset concentration risk -- the idiosyncratic risk of an undiversified book.
+# K-ICS (tables 23 / 24): for each counterparty, the exposure ABOVE a limit (total
+# assets x a rating-based percentage) is charged a factor; the per-counterparty
+# charges combine at correlation 0 (root-sum-of-squares). Property is charged
+# separately (individual and whole-book limits, the worse of the two). The asset
+# concentration SCR is sqrt(counterparty^2 + property^2). It enters the market
+# module as the independent (correlation-0) fifth sub-risk. Solvency II
+# concentration is a separate calibration and is deferred.
+# ---------------------------------------------------------------------------
+
+_CONCENTRATION_BANDS = {       # K-ICS table 23: (limit % of total assets, factor)
+    "1-2": (0.040, 0.15),
+    "3-4": (0.030, 0.25),
+    "5-7": (0.015, 0.50),
+}
+_PROPERTY_CONCENTRATION = {    # K-ICS table 24
+    "individual_limit": 0.06, "total_limit": 0.25, "factor": 0.20,
+}
+_BAND_ORDER = {"1-2": 0, "3-4": 1, "5-7": 2}   # higher = more conservative
+
+_RATING_TO_BAND = {
+    "AAA": "1-2", "AA": "1-2", "A": "3-4", "BBB": "3-4",
+    "BB": "5-7", "B": "5-7", "CCC": "5-7",
+}
+
+
+def _concentration_band(rating: str) -> str:
+    """Map an external rating to its K-ICS concentration band; unrated and default
+    map to the most conservative band."""
+    r = (rating or "").strip().upper()
+    if r in ("UNRATED", "NR", "", "D"):
+        return "5-7"
+    base = r.rstrip("+-0123456789")
+    return _RATING_TO_BAND.get(base, "5-7")
+
+
+def concentration_scr(portfolio: AssetPortfolio, regime, discount_annual, *,
+                      total_assets: float | None = None) -> float:
+    """The asset-concentration SCR -- ``sqrt(counterparty^2 + property^2)``.
+
+    Counterparty: exposures are grouped by ``issuer`` (deposits, equity and bonds);
+    the amount above the limit (``total_assets`` times the rating band's percentage,
+    table 23) is charged the band's factor, and the per-issuer charges combine at
+    correlation 0. Property: each holding above the individual limit (6% of total
+    assets) and the whole book above the total limit (25%) are charged 20% (table
+    24), taking the worse of the two. ``total_assets`` defaults to the portfolio
+    value. Returns 0 for Solvency II (its concentration calibration is deferred)
+    and when a book has no tagged issuers and no property."""
+    if regime.name != "K-ICS":
+        return 0.0
+    ta = total_assets if total_assets is not None else portfolio_value(
+        portfolio, discount_annual)
+    if ta <= 0.0:
+        return 0.0
+
+    exposure, band = {}, {}
+    for h in portfolio.holdings:
+        issuer = getattr(h, "issuer", "").strip()
+        if not issuer or isinstance(h, Property):
+            continue
+        exposure[issuer] = exposure.get(issuer, 0.0) + holding_value(h, discount_annual)
+        b = _concentration_band(getattr(h, "credit_rating", "AA"))
+        if issuer not in band or _BAND_ORDER[b] > _BAND_ORDER[band[issuer]]:
+            band[issuer] = b
+    cp_sq = 0.0
+    for issuer, exp in exposure.items():
+        limit_pct, factor = _CONCENTRATION_BANDS[band[issuer]]
+        excess = max(0.0, exp - ta * limit_pct)
+        cp_sq += (excess * factor) ** 2
+    counterparty = float(np.sqrt(cp_sq))
+
+    props = [holding_value(h, discount_annual)
+             for h in portfolio.holdings if isinstance(h, Property)]
+    f = _PROPERTY_CONCENTRATION["factor"]
+    ind_limit = ta * _PROPERTY_CONCENTRATION["individual_limit"]
+    tot_limit = ta * _PROPERTY_CONCENTRATION["total_limit"]
+    individual = float(np.sqrt(sum((max(0.0, p - ind_limit) * f) ** 2 for p in props)))
+    whole = max(0.0, sum(props) - tot_limit) * f
+    property_conc = max(individual, whole)
+
+    return float(np.sqrt(counterparty ** 2 + property_conc ** 2))
+
+
 def market_module_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
                       basis: Basis, *, regime) -> float:
     """The market-risk module SCR -- the interest (net of liabilities), equity,
-    property and FX sub-risks aggregated through the regime's market correlation
-    matrix (``sqrt(c^T R c)``). Interest is the net :func:`net_interest_scr` (zero
-    when the regime supplies no interest curves, e.g. K-ICS)."""
+    property, FX and asset-concentration sub-risks aggregated through the regime's
+    market correlation matrix (``sqrt(c^T R c)``). Interest is the net
+    :func:`net_interest_scr` (zero when the regime supplies no interest curves,
+    e.g. K-ICS)."""
     cal = _market_cal(regime)
     interest = (net_interest_scr(portfolio, model_points, basis,
                                  interest_curves=regime.interest_curves)
                 if regime.interest_curves is not None else 0.0)
     c = np.array([interest, equity_scr(portfolio, regime),
                   property_scr(portfolio, regime),
-                  fx_scr(portfolio, regime, basis.discount_annual)], dtype=np.float64)
+                  fx_scr(portfolio, regime, basis.discount_annual),
+                  concentration_scr(portfolio, regime, basis.discount_annual)],
+                 dtype=np.float64)
     R = np.asarray(cal["market_correlation"], dtype=np.float64)
     return float(np.sqrt(max(0.0, c @ R @ c)))
 
@@ -431,8 +526,8 @@ class SolvencyAssessment:
 
     ``available_capital`` is ``portfolio_value - (bel + risk_margin)``. The market
     module aggregates the ``net_interest_scr`` (assets and liabilities), the
-    ``equity_scr``, the ``property_scr`` and the ``fx_scr`` through the market
-    correlation; the
+    ``equity_scr``, the ``property_scr``, the ``fx_scr`` and the
+    ``concentration_scr`` through the market correlation; the
     ``bscr`` (basic SCR) aggregates the ``insurance_scr``, the ``market_module_scr``
     and the ``credit_scr`` at the top level; ``total_scr`` adds the
     ``operational_scr`` on top of the BSCR. ``solvency_ratio`` is
@@ -447,6 +542,7 @@ class SolvencyAssessment:
     equity_scr: float
     property_scr: float
     fx_scr: float
+    concentration_scr: float
     market_module_scr: float
     credit_scr: float
     operational_scr: float
@@ -485,7 +581,8 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     eq = equity_scr(portfolio, regime)
     pr = property_scr(portfolio, regime)
     fx = fx_scr(portfolio, regime, basis.discount_annual)
-    c = np.array([ni, eq, pr, fx], dtype=np.float64)
+    conc = concentration_scr(portfolio, regime, basis.discount_annual, total_assets=pv)
+    c = np.array([ni, eq, pr, fx, conc], dtype=np.float64)
     R = np.asarray(cal["market_correlation"], dtype=np.float64)
     market = float(np.sqrt(max(0.0, c @ R @ c)))
 
@@ -508,14 +605,14 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     return SolvencyAssessment(
         portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
         available_capital=ac, insurance_scr=ins, net_interest_scr=ni,
-        equity_scr=eq, property_scr=pr, fx_scr=fx, market_module_scr=market,
-        credit_scr=cr, operational_scr=op, bscr=bscr, total_scr=total,
-        solvency_ratio=ratio)
+        equity_scr=eq, property_scr=pr, fx_scr=fx, concentration_scr=conc,
+        market_module_scr=market, credit_scr=cr, operational_scr=op, bscr=bscr,
+        total_scr=total, solvency_ratio=ratio)
 
 
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital", "net_interest_scr",
-    "equity_scr", "property_scr", "fx_scr", "market_module_scr", "credit_scr",
-    "operational_scr", "assess_solvency",
+    "equity_scr", "property_scr", "fx_scr", "concentration_scr",
+    "market_module_scr", "credit_scr", "operational_scr", "assess_solvency",
 ]

@@ -168,9 +168,10 @@ class Bond:
     ``credit_rating`` (external / S&P scale: AAA, AA, A, BBB, BB, B, CCC, D, or
     "unrated") and ``exposure_class`` ("corporate", "public", "securitisation")
     drive the credit-risk SCR (:func:`fastcashflow.credit_scr`); ``currency`` (ISO
-    code, "KRW" for domestic) drives the FX SCR (:func:`fastcashflow.fx_scr`). None
-    of these affect the price or duration; the market value is in the reporting
-    currency."""
+    code, "KRW" for domestic) drives the FX SCR (:func:`fastcashflow.fx_scr`);
+    ``issuer`` (counterparty name) groups exposures for the concentration SCR
+    (:func:`fastcashflow.concentration_scr`). None of these affect the price or
+    duration; the market value is in the reporting currency."""
 
     face: float
     coupon_rate: float
@@ -179,6 +180,7 @@ class Bond:
     credit_rating: str = "AA"
     exposure_class: str = "corporate"
     currency: str = "KRW"
+    issuer: str = ""
 
 
 def bond_cashflows(bond: Bond) -> tuple[FloatArray, FloatArray]:

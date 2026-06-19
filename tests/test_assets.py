@@ -102,15 +102,19 @@ def test_property_scr():
 
 
 def test_market_module_aggregates_sub_risks():
-    """The market module is sqrt(c^T R c) over (interest, equity, property)."""
+    """The market module is sqrt(c^T R c) over (interest, equity, property, FX,
+    concentration) with the table-19 correlation."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
         assets.Equity(3_000_000.0, "developed"), assets.Property(1_000_000.0)))
-    # K-ICS: no interest curves -> interest component 0
+    # K-ICS: no interest curves -> interest 0; no foreign currency -> FX 0; the
+    # property holding does exceed the 6% individual limit -> a concentration charge
     eq = assets.equity_scr(p, fcf.KICS)
     pr = assets.property_scr(p, fcf.KICS)
-    c = np.array([0.0, eq, pr])
-    R = np.array([[1.0, 0.25, 0.25], [0.25, 1.0, 0.25], [0.25, 0.25, 1.0]])
+    fx = assets.fx_scr(p, fcf.KICS, basis.discount_annual)
+    conc = assets.concentration_scr(p, fcf.KICS, basis.discount_annual)
+    c = np.array([0.0, eq, pr, fx, conc])
+    R = assets._MARKET_CORRELATION
     assert np.isclose(assets.market_module_scr(p, mp, basis, regime=fcf.KICS),
                       np.sqrt(c @ R @ c))
 
@@ -228,6 +232,52 @@ def test_market_module_includes_fx_negative_correlation():
     fx = assets.fx_scr(p, fcf.KICS, basis.discount_annual)   # 250
     got = assets.market_module_scr(p, mp, basis, regime=fcf.KICS)
     assert np.isclose(got, np.sqrt(eq**2 + fx**2 + 2 * (-0.25) * eq * fx))
+
+
+def test_concentration_scr_hand_calc():
+    """K-ICS concentration = sqrt(counterparty^2 + property^2). Total assets 10m:
+    an AA issuer (band 1-2: limit 4%, factor 15%) with 1m exposure charges
+    (1m - 400k) x 15% = 90k; a 1m property charges (1m - 600k) x 20% = 80k."""
+    p = assets.AssetPortfolio(holdings=(
+        alm.Bond(1_000_000.0, 0.03, 5, 1, credit_rating="AA", issuer="KB"),
+        assets.Property(1_000_000.0), assets.Cash(8_000_000.0)))
+    cp = (1_000_000.0 - 10_000_000.0 * 0.04) * 0.15
+    pr = (1_000_000.0 - 10_000_000.0 * 0.06) * 0.20
+    got = assets.concentration_scr(p, fcf.KICS, 0.03, total_assets=10_000_000.0)
+    assert np.isclose(got, np.sqrt(cp**2 + pr**2))
+
+
+def test_concentration_scr_untagged_is_zero():
+    """A book with no tagged issuers and no property has no concentration charge."""
+    p = assets.AssetPortfolio(holdings=(alm.Bond(1e6, 0.03, 5, 1), assets.Cash(1e6)))
+    assert assets.concentration_scr(p, fcf.KICS, 0.03) == 0.0
+    # Solvency II concentration is deferred
+    tagged = assets.AssetPortfolio(holdings=(
+        alm.Bond(1e6, 0.03, 5, 1, issuer="X"),))
+    assert assets.concentration_scr(tagged, fcf.SOLVENCY2, 0.03) == 0.0
+
+
+def test_concentration_band_by_rating():
+    """Lower-rated issuers fall in a tighter band (lower limit, higher factor)."""
+    aa = assets.AssetPortfolio(holdings=(
+        alm.Bond(1e6, 0.03, 5, 1, credit_rating="AA", issuer="X"),))
+    bb = assets.AssetPortfolio(holdings=(
+        alm.Bond(1e6, 0.03, 5, 1, credit_rating="BB", issuer="X"),))
+    s_aa = assets.concentration_scr(aa, fcf.KICS, 0.03, total_assets=10e6)  # 4%/15%
+    s_bb = assets.concentration_scr(bb, fcf.KICS, 0.03, total_assets=10e6)  # 1.5%/50%
+    assert np.isclose(s_aa, (1e6 - 10e6 * 0.04) * 0.15)
+    assert np.isclose(s_bb, (1e6 - 10e6 * 0.015) * 0.50)
+    assert s_bb > s_aa
+
+
+def test_concentration_property_whole_book_limit():
+    """Property concentration takes the worse of the individual (6%) and whole-book
+    (25%) limits. Two 2m properties on 10m assets: whole-book excess (4m - 2.5m)."""
+    p = assets.AssetPortfolio(holdings=(assets.Property(2e6), assets.Property(2e6)))
+    got = assets.concentration_scr(p, fcf.KICS, 0.03, total_assets=10e6)
+    individual = np.sqrt(2 * ((2e6 - 10e6 * 0.06) * 0.20) ** 2)
+    whole = (4e6 - 10e6 * 0.25) * 0.20
+    assert np.isclose(got, max(individual, whole))
 
 
 def test_assess_solvency_components():
