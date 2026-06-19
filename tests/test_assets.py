@@ -147,9 +147,10 @@ def test_assess_solvency_components():
         alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
     a = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
     # no equity/property -> the market module is just the net interest SCR, and the
-    # SII top-level is a simple sum
+    # SII top-level BSCR is a simple sum; the total adds operational on top
     assert np.isclose(a.market_module_scr, a.net_interest_scr)
-    assert np.isclose(a.total_scr, a.insurance_scr + a.net_interest_scr)
+    assert np.isclose(a.bscr, a.insurance_scr + a.net_interest_scr)
+    assert np.isclose(a.total_scr, a.bscr + a.operational_scr)
     assert np.isclose(a.solvency_ratio, a.available_capital / a.total_scr)
     assert np.isclose(a.available_capital, a.portfolio_value - (a.bel + a.risk_margin))
 
@@ -161,7 +162,8 @@ def test_assess_solvency_kics_no_curves():
     p = assets.AssetPortfolio(holdings=(assets.Cash(8_000_000.0),))
     a = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
     assert a.net_interest_scr == 0.0
-    assert np.isclose(a.total_scr, a.insurance_scr)
+    assert np.isclose(a.bscr, a.insurance_scr)              # all-cash -> no market risk
+    assert np.isclose(a.total_scr, a.bscr + a.operational_scr)
     assert np.isfinite(a.solvency_ratio)
 
 
@@ -173,10 +175,11 @@ def test_top_level_aggregation_kics_vs_sii():
         alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Equity(3_000_000.0, "developed")))
     k = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
     s = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
-    assert np.isclose(s.total_scr, s.insurance_scr + s.market_module_scr)     # SII sum
+    assert np.isclose(s.bscr, s.insurance_scr + s.market_module_scr)          # SII sum
     ins, mkt = k.insurance_scr, k.market_module_scr
-    assert np.isclose(k.total_scr,
+    assert np.isclose(k.bscr,
                       np.sqrt(ins * ins + mkt * mkt + 2 * 0.25 * ins * mkt))   # K-ICS sqrt
+    assert np.isclose(k.total_scr, k.bscr + k.operational_scr)                # + operational
 
 
 def test_equity_now_charges_scr():

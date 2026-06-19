@@ -250,8 +250,9 @@ class SolvencyAssessment:
     ``available_capital`` is ``portfolio_value - (bel + risk_margin)``. The market
     module aggregates the ``net_interest_scr`` (assets and liabilities), the
     ``equity_scr`` and the ``property_scr`` through the market correlation; the
-    ``total_scr`` (BSCR) aggregates the ``insurance_scr`` and the
-    ``market_module_scr`` at the top level. ``solvency_ratio`` is
+    ``bscr`` (basic SCR) aggregates the ``insurance_scr`` and the
+    ``market_module_scr`` at the top level; ``total_scr`` adds the
+    ``operational_scr`` on top of the BSCR. ``solvency_ratio`` is
     ``available_capital / total_scr``."""
 
     portfolio_value: float
@@ -263,6 +264,8 @@ class SolvencyAssessment:
     equity_scr: float
     property_scr: float
     market_module_scr: float
+    operational_scr: float
+    bscr: float
     total_scr: float
     solvency_ratio: float
 
@@ -275,10 +278,11 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     values the portfolio, forms available capital (assets less the technical
     provision), and builds the market-risk module (net interest, equity, property)
     aggregated through the market correlation. The total SCR (BSCR) aggregates the
-    insurance and market modules at the top level: K-ICS uses the life-vs-market
-    correlation (0.25); Solvency II's top-level inter-module matrix is not
-    extracted here, so it falls back to a simple sum (no diversification credit --
-    conservative). The ratio is available capital over the BSCR.
+    insurance and market modules at the top level into the BSCR: K-ICS uses the
+    life-vs-market correlation (0.25); Solvency II's top-level inter-module matrix
+    is not extracted here, so it falls back to a simple sum (no diversification
+    credit -- conservative). The operational-risk SCR is then added on top of the
+    BSCR for the total. The ratio is available capital over the total SCR.
 
     Notes: K-ICS supplies no interest curves (its scenarios are caller-supplied),
     so the net interest component is zero here -- equity and property still apply.
@@ -305,15 +309,18 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     else:                                   # K-ICS: life <-> market correlation
         bscr = float(np.sqrt(ins * ins + market * market + 2.0 * imc * ins * market))
 
-    if bscr > 0.0:
-        ratio = ac / bscr
+    op = operational_scr(model_points, basis, regime, bscr=bscr)
+    total = bscr + op                       # operational is added on top of the BSCR
+
+    if total > 0.0:
+        ratio = ac / total
     else:
         ratio = float("inf") if ac >= 0.0 else float("-inf")
     return SolvencyAssessment(
         portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
         available_capital=ac, insurance_scr=ins, net_interest_scr=ni,
         equity_scr=eq, property_scr=pr, market_module_scr=market,
-        total_scr=bscr, solvency_ratio=ratio)
+        operational_scr=op, bscr=bscr, total_scr=total, solvency_ratio=ratio)
 
 
 __all__ = [

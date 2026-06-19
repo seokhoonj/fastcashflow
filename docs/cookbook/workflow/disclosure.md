@@ -78,6 +78,7 @@ print(f"  available capital      = {a.available_capital:>15,.0f}")
 print(f"  required capital (SCR) = {a.total_scr:>15,.0f}")
 print(f"    insurance risk       = {a.insurance_scr:>15,.0f}")
 print(f"    market risk          = {a.market_module_scr:>15,.0f}")
+print(f"    operational risk     = {a.operational_scr:>15,.0f}")
 print(f"  solvency ratio         = {a.solvency_ratio:>14.1%}")
 ```
 
@@ -85,13 +86,14 @@ print(f"  solvency ratio         = {a.solvency_ratio:>14.1%}")
 
 ```text
   available capital      =       5,191,995
-  required capital (SCR) =       2,651,789
+  required capital (SCR) =       2,680,035
     insurance risk       =       1,938,361
     market risk          =         713,427
-  solvency ratio         =         195.8%
+    operational risk     =          28,246
+  solvency ratio         =         193.7%
 ```
 
-`지급여력비율 = 가용자본 / 요구자본` 의 195.8% 는 실제 대형 생보사의 공시 범위
+`지급여력비율 = 가용자본 / 요구자본` 의 193.7% 는 실제 대형 생보사의 공시 범위
 (대략 185~210%) 에 듭니다 -- 합성데이터인데도 **구조와 크기** 가 현실 공시와 맞물립니다.
 요구자본은 보험위험과 시장위험 (금리·주식·부동산) 의 분산집계입니다.
 
