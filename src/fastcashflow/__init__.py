@@ -89,6 +89,11 @@ from fastcashflow.alm import (
     bond_duration, bond_value, alm_gap,
 )
 from fastcashflow import alm
+from fastcashflow.assets import (
+    Equity, Property, Cash, AssetPortfolio,
+    portfolio_value, available_capital,
+)
+from fastcashflow import assets
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import ReinsuranceReport, Report, report
 from fastcashflow.smithwilson import smith_wilson, smith_wilson_prices
@@ -146,6 +151,8 @@ __all__ = [
     "RegimeSpec", "SCRResult", "SubRisk", "Stress", "SOLVENCY2", "KICS",
     "alm", "DurationResult", "Bond", "liability_duration", "liability_dv01",
     "key_rate_durations", "bond_duration", "bond_value", "alm_gap",
+    "assets", "Equity", "Property", "Cash", "AssetPortfolio",
+    "portfolio_value", "available_capital",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
