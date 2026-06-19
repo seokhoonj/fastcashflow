@@ -15,16 +15,18 @@ from dataclasses import replace
 
 import numpy as np
 
-from fastcashflow._typing import FloatArray
+from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis, BasisRouter
+from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.profit import (
     ProfitSignature, break_even_year, irr, nbv, profit_margin, signature,
 )
 
-__all__ = ["solve_premium", "ProfitSignature", "nbv", "profit_margin",
-           "signature", "irr", "break_even_year"]
+__all__ = ["solve_premium", "statutory_reserve", "statutory_profit_signature",
+           "ProfitSignature", "nbv", "profit_margin", "signature", "irr",
+           "break_even_year"]
 
 
 def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:
@@ -95,3 +97,90 @@ def solve_premium(
     if margin is not None:
         return a / (b * (1.0 - margin))
     return (csm + a) / b
+
+
+def statutory_reserve(
+    model_points: ModelPoints,
+    statutory_basis: Basis,
+) -> tuple[FloatArray, FloatArray]:
+    """The net-level-premium (NLP) reserve trajectory on a locked statutory basis.
+
+    Computed by projection -- the engine's backward present value IS the
+    prospective reserve, so **no commutation functions** (Dx / Nx / Mx) are
+    needed: the net premium is the break-even premium (it funds the benefits with
+    no margin), and the reserve at each month is the BEL carrying that net premium.
+
+    Returns ``(reserve, net_premium)``. ``reserve`` is ``(n_mp, n_time+1)`` -- the
+    cohort prospective reserve, column 0 approximately zero (the net premium makes
+    the issue value nil); ``net_premium`` is ``(n_mp,)``.
+
+    ``statutory_basis`` is the locked reserving basis (its mortality / interest /
+    lapse). For a pure NLP reserve use a deterministic one (``mortality_cv = 0``,
+    no expense loading); a gross-premium or expense-loaded reserve follows from
+    putting those into the basis.
+    """
+    net = solve_premium(model_points, statutory_basis, break_even=True)
+    m = measure(replace(model_points, premium=net), statutory_basis)
+    return m.bel_path, net
+
+
+def statutory_profit_signature(
+    model_points: ModelPoints,
+    pricing_basis: Basis,
+    statutory_basis: Basis,
+    *,
+    period_months: int = 12,
+    earned_rate: float | None = None,
+) -> ProfitSignature:
+    """The traditional / statutory profit signature.
+
+    Holds the net-level-premium reserve ``V`` on ``statutory_basis`` and lets the
+    profit emerge on the ``pricing_basis`` experience (the actual gross premium in
+    ``model_points`` and the best-estimate decrements). Per month, matching the
+    engine's within-month discount convention (premium / annuity beginning of
+    month, claims and expenses mid-month):
+
+        profit_t = (V_t + premium_t - annuity_t)(1 + i)
+                   - outgo_t (1 + i)^0.5 - V_{t+1}
+
+    with ``i`` the monthly earned rate (``earned_rate`` if given, else the pricing
+    discount). On a run where the pricing basis equals the statutory basis and the
+    premium is the net premium this is identically zero (the reserve is
+    self-financing); profit emerges from the premium loading (gross over net) and
+    the interest spread (earned over the valuation rate). The result feeds
+    :func:`irr` / :func:`break_even_year` once the day-0 strain is prepended.
+
+    v1 assumes the pricing and statutory bases share decrements (mortality /
+    lapse) -- only the valuation interest differs; a reserve re-based onto
+    different decrements is a follow-up. Pass a single :class:`Basis` (not a
+    router) for each.
+    """
+    if isinstance(pricing_basis, BasisRouter) or isinstance(statutory_basis, BasisRouter):
+        raise NotImplementedError(
+            "statutory_profit_signature takes a single Basis for each argument "
+            "(profit testing is per product); resolve the router per segment.")
+    reserve, _ = statutory_reserve(model_points, statutory_basis)
+    m = measure(model_points, pricing_basis)             # actual gross premium
+    cf = m.cashflows
+    n_time = cf.premium_cf.shape[1]
+    V = reserve.sum(axis=0)                               # portfolio cohort reserve
+    if earned_rate is None:
+        i = discount_monthly_curve(pricing_basis, n_time)   # (n_time,)
+    else:
+        i = np.full(n_time, (1.0 + earned_rate) ** (1.0 / 12.0) - 1.0)
+    premium = cf.premium_cf.sum(axis=0)
+    annuity = cf.annuity_cf.sum(axis=0)
+    outgo = (cf.mortality_cf + cf.morbidity_cf + cf.disability_cf
+             + cf.expense_cf + cf.surrender_cf).sum(axis=0)
+    profit_m = ((V[:n_time] + premium - annuity) * (1.0 + i)
+                - outgo * (1.0 + i) ** 0.5 - V[1:n_time + 1])
+    # Aggregate the monthly profit into reporting periods.
+    n_periods = (n_time + period_months - 1) // period_months
+    pad = n_periods * period_months
+    profit = np.zeros(pad)
+    profit[:n_time] = profit_m
+    profit = profit.reshape(n_periods, period_months).sum(axis=1)
+    month_end = (np.minimum(np.arange(1, n_periods + 1) * period_months, n_time)
+                 ).astype(np.int64)
+    return ProfitSignature(period_months=period_months, month_end=month_end,
+                           profit=profit)
