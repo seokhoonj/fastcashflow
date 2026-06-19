@@ -263,3 +263,21 @@ def test_sii_runs_end_to_end():
     assert res.scr_path is not None             # cost-of-capital margin builds a path
     assert res.risk_margin > 0.0
     assert res.regime == "Solvency II"
+
+
+def test_cost_of_capital_run_off_excludes_interest():
+    """The cost-of-capital risk margin covers non-hedgeable (insurance) risk, so
+    its capital run-off starts at the insurance SCR, not the total (interest-rate
+    risk is excluded) -- Codex gate D finding."""
+    mp, basis = _mp(), _basis()
+    res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    assert res.interest_capital > 0.0           # interest is material here
+    assert np.isclose(res.scr_path[0], res.insurance_scr)
+    assert np.all(res.scr_path >= 0.0)
+
+
+def test_solvency_ratio():
+    mp, basis = _mp(), _basis()
+    res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    assert np.isclose(sv.solvency_ratio(res, 20_000_000.0),
+                      20_000_000.0 / res.total_scr)

@@ -246,6 +246,10 @@
   - [임베디드밸류 / 신계약가치](workflow/embedded-value)
   - `VNB = PVFP - CoC - TVOG`. 이익 시그니처에서 요구자본 보유비용과 보증 시간가치를
     차감한 신계약가치 -- `embedded_value`.
+* - 8.6
+  - [요구자본 (Solvency II / K-ICS)](workflow/required-capital)
+  - 충격 -> 재측정 -> 상관집계로 위험기반 요구자본 (SCR). 같은 엔진에 제도만 바꿔
+    (`SOLVENCY2` / `KICS`) -- `required_capital`, `solvency_ratio`.
 :::
 
 ### 9. 결산 워크플로
@@ -426,6 +430,7 @@ workflow/validation
 workflow/profit-testing
 workflow/interest-guarantee
 workflow/embedded-value
+workflow/required-capital
 :::
 
 :::{toctree}

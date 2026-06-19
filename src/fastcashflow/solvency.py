@@ -296,6 +296,20 @@ def aggregate(capital: dict[str, float], spec: RegimeSpec) -> float:
     return float(np.sqrt(c @ R @ c))
 
 
+def solvency_ratio(scr: SCRResult, available_capital: float) -> float:
+    """The solvency ratio -- available capital over the required capital
+    (``available_capital / scr.total_scr``).
+
+    ``available_capital`` is a CALLER INPUT: the market value of assets less the
+    market value of liabilities (on the prudential balance sheet), tiered per the
+    regime. fastcashflow is a liability engine with no asset model, so it cannot
+    produce the available capital itself -- supply it (e.g. from an asset system).
+    The denominator is the liability-side required capital this module computes;
+    asset-side market-risk modules are out of scope, so for a book with material
+    asset risk the ratio is an upper bound on the regulatory one."""
+    return available_capital / scr.total_scr
+
+
 def required_capital(
     model_points: ModelPoints, basis: Basis, *, regime: RegimeSpec,
 ) -> SCRResult:
@@ -330,17 +344,19 @@ def required_capital(
         risk_margin = insurance_scr * regime.risk_margin_factor
         scr_path = None
     elif regime.risk_margin_method == "cost_of_capital":
-        # The capital run-off is proxied by the confidence-level RA trajectory
-        # (the engine's own non-financial risk-capital path -- non-negative and
-        # declining over the run-off). v1 approximation: SCR(t) = total_scr scaled
-        # to that shape, not a full SCR re-projection at each future month.
+        # The risk margin covers non-hedgeable (insurance / underwriting) risk;
+        # interest-rate risk is excluded from its capital, so the run-off scales
+        # the INSURANCE SCR, not the total. The run-off shape is proxied by the
+        # confidence-level RA trajectory (the engine's own non-financial
+        # risk-capital path). v1 approximation: the SCR run-off shape, not a full
+        # SCR re-projection at each future month; clamped non-negative.
         m_full = measure(model_points, basis, full=True)
         driver = m_full.ra_path.sum(axis=0)
         d0 = float(driver[0])
         if d0 <= 0.0:
             driver = np.abs(m_full.bel_path.sum(axis=0))
             d0 = float(driver[0]) if driver[0] != 0.0 else 1.0
-        scr_path = total_scr * driver / d0
+        scr_path = np.maximum(insurance_scr * driver / d0, 0.0)
         n_time = scr_path.shape[0] - 1
         disc_m = discount_monthly_curve(basis, n_time)
         risk_margin = float(_cost_of_capital_ra(
@@ -354,46 +370,6 @@ def required_capital(
         regime=regime.name, sub_risk_capital=capital, insurance_scr=insurance_scr,
         interest_capital=interest_capital, total_scr=total_scr,
         risk_margin=risk_margin, base_bel=base_bel, scr_path=scr_path)
-
-
-# ---------------------------------------------------------------------------
-# K-ICS calibration (K-ICS handbook, primary source). Catastrophe is excluded
-# from v1 -- under K-ICS it is a factor charge on sum insured, not a Delta-BEL
-# shock, so it sits outside the shock-and-re-measure engine. Sub-risk order is
-# locked to the correlation axes (the 5x5 sub-matrix of the life sub-risk
-# correlation table for the sub-risks present here: mortality / longevity /
-# morbidity / lapse / expense).
-# ---------------------------------------------------------------------------
-
-_KICS_CORRELATION = np.array([
-    #  mortality  longevity  morbidity  lapse   expense
-    [   1.00,     -0.25,      0.25,     0.00,    0.25],   # mortality
-    [  -0.25,      1.00,      0.00,     0.25,    0.25],   # longevity
-    [   0.25,      0.00,      1.00,     0.00,    0.50],   # morbidity (disability/illness)
-    [   0.00,      0.25,      0.00,     1.00,    0.50],   # lapse
-    [   0.25,      0.25,      0.50,     0.50,    1.00],   # expense
-])
-
-KICS = RegimeSpec(
-    name="K-ICS",
-    sub_risks=(
-        SubRisk("mortality", (scale_mortality(1.125),), "single"),     # mortality +12.5%
-        SubRisk("longevity", (scale_longevity(0.825),), "single"),     # mortality -17.5%
-        SubRisk("morbidity", (scale_coverages({                        # disability/illness:
-            CalculationMethod.DIAGNOSIS: 1.13,                         #   fixed-benefit +13%
-            CalculationMethod.MORBIDITY: 1.10,                         #   indemnity    +10%
-        }),), "single"),
-        SubRisk("lapse", (scale_lapse(1.35), scale_lapse(0.65),        # option-exercise +/-35%
-                          mass_lapse(0.30)), "worst_of"),              # mass lapse 30%
-        SubRisk("expense", (scale_expense(1.10, 0.01),), "single"),    # expense +10%, inflation +1pp
-    ),
-    correlation=_KICS_CORRELATION,
-    interest_curves=None,    # K-ICS interest shock is AFDNS-model-derived (not a
-                             # static table) -- supply the official curve scenarios
-                             # via the caller; not baked in.
-    risk_margin_method="percentile",
-    risk_margin_factor=0.40,  # risk margin = insurance-risk amount x 0.40 (= /Z99.5% x Z85%)
-)
 
 
 # ---------------------------------------------------------------------------
@@ -458,9 +434,49 @@ SOLVENCY2 = RegimeSpec(
 )
 
 
+# ---------------------------------------------------------------------------
+# K-ICS calibration (K-ICS handbook, primary source). Catastrophe is excluded
+# from v1 -- under K-ICS it is a factor charge on sum insured, not a Delta-BEL
+# shock, so it sits outside the shock-and-re-measure engine. Sub-risk order is
+# locked to the correlation axes (the 5x5 sub-matrix of the life sub-risk
+# correlation table for the sub-risks present here: mortality / longevity /
+# morbidity / lapse / expense).
+# ---------------------------------------------------------------------------
+
+_KICS_CORRELATION = np.array([
+    #  mortality  longevity  morbidity  lapse   expense
+    [   1.00,     -0.25,      0.25,     0.00,    0.25],   # mortality
+    [  -0.25,      1.00,      0.00,     0.25,    0.25],   # longevity
+    [   0.25,      0.00,      1.00,     0.00,    0.50],   # morbidity (disability/illness)
+    [   0.00,      0.25,      0.00,     1.00,    0.50],   # lapse
+    [   0.25,      0.25,      0.50,     0.50,    1.00],   # expense
+])
+
+KICS = RegimeSpec(
+    name="K-ICS",
+    sub_risks=(
+        SubRisk("mortality", (scale_mortality(1.125),), "single"),     # mortality +12.5%
+        SubRisk("longevity", (scale_longevity(0.825),), "single"),     # mortality -17.5%
+        SubRisk("morbidity", (scale_coverages({                        # disability/illness:
+            CalculationMethod.DIAGNOSIS: 1.13,                         #   fixed-benefit +13%
+            CalculationMethod.MORBIDITY: 1.10,                         #   indemnity    +10%
+        }),), "single"),
+        SubRisk("lapse", (scale_lapse(1.35), scale_lapse(0.65),        # option-exercise +/-35%
+                          mass_lapse(0.30)), "worst_of"),              # mass lapse 30%
+        SubRisk("expense", (scale_expense(1.10, 0.01),), "single"),    # expense +10%, inflation +1pp
+    ),
+    correlation=_KICS_CORRELATION,
+    interest_curves=None,    # K-ICS interest shock is AFDNS-model-derived (not a
+                             # static table) -- supply the official curve scenarios
+                             # via the caller; not baked in.
+    risk_margin_method="percentile",
+    risk_margin_factor=0.40,  # risk margin = insurance-risk amount x 0.40 (= /Z99.5% x Z85%)
+)
+
+
 __all__ = [
     "Stress", "SubRisk", "RegimeSpec", "SCRResult",
     "scale_mortality", "scale_longevity", "scale_lapse", "mass_lapse",
     "scale_coverages", "scale_annuity", "scale_expense", "shock_curve",
-    "aggregate", "required_capital", "KICS", "SOLVENCY2",
+    "aggregate", "required_capital", "solvency_ratio", "SOLVENCY2", "KICS",
 ]

@@ -283,6 +283,29 @@ traditional net-level-premium reserve and statutory profit test.
 .. autoclass:: fastcashflow.EmbeddedValue
    :members:
 
+Required capital (solvency)
+---------------------------
+
+Regime-agnostic required capital (SCR) by shock-and-aggregate, with the Solvency
+II and K-ICS calibrations. Liability-side (insurance and interest risk); the
+asset side and available capital are caller-supplied.
+
+.. autofunction:: fastcashflow.required_capital
+
+.. autoclass:: fastcashflow.SCRResult
+   :members:
+
+.. autoclass:: fastcashflow.RegimeSpec
+   :members:
+
+.. autofunction:: fastcashflow.solvency_ratio
+
+.. autodata:: fastcashflow.SOLVENCY2
+   :no-value:
+
+.. autodata:: fastcashflow.KICS
+   :no-value:
+
 Reporting
 ---------
 
