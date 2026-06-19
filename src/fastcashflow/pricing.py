@@ -20,13 +20,15 @@ from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
+from fastcashflow.embedded_value import EmbeddedValue, embedded_value
 from fastcashflow.profit import (
     ProfitSignature, break_even_year, irr, nbv, profit_margin, signature,
 )
 from fastcashflow.tvog import TVOGResult
 
 __all__ = ["solve_premium", "statutory_reserve", "statutory_profit_signature",
-           "interest_guarantee_tvog", "ProfitSignature", "TVOGResult",
+           "interest_guarantee_tvog", "embedded_value",
+           "ProfitSignature", "TVOGResult", "EmbeddedValue",
            "nbv", "profit_margin", "signature", "irr", "break_even_year"]
 
 

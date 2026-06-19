@@ -78,6 +78,7 @@ from fastcashflow.plots import (
     plot_stochastic,
 )
 from fastcashflow.pricing import solve_premium, interest_guarantee_tvog
+from fastcashflow.embedded_value import EmbeddedValue, embedded_value
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import ReinsuranceReport, Report, report
 from fastcashflow.smithwilson import smith_wilson, smith_wilson_prices
@@ -130,6 +131,7 @@ __all__ = [
     "sample_data_dir",
     "describe_basis",
     "solve_premium", "interest_guarantee_tvog",
+    "embedded_value", "EmbeddedValue",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
