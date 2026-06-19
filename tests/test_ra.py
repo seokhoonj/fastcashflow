@@ -29,8 +29,9 @@ def _basis(**overrides):
 
 
 def test_cost_of_capital_ra_hand_calc():
-    """The CoC RA at inception is the cost-of-capital rate times the present
-    value of the confidence-level margin held as capital."""
+    """The CoC RA at inception is the per-month cost-of-capital charge
+    (``coc_rate / 12``) times the present value of the confidence-level margin
+    held as capital over the run-off."""
     mp = ModelPoints.single(40, 60_000.0, 60, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS)
     coc_rate = 0.06
     cl = measure(mp, _basis())
@@ -41,7 +42,8 @@ def test_cost_of_capital_ra_hand_calc():
     full = cl.discount_factor_bom[1]                       # (1 + i)^-1
     capital = cl.ra_path[0]
     cap_pv0 = float(np.sum(capital * full ** np.arange(capital.shape[0])))
-    assert np.isclose(coc.ra_path[0, 0], coc_rate * cap_pv0)
+    # annual coc_rate is charged per month (1/12) over the monthly run-off
+    assert np.isclose(coc.ra_path[0, 0], coc_rate / 12.0 * cap_pv0)
 
 
 def test_coc_ra_scales_with_the_rate():

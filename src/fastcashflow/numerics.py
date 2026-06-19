@@ -273,17 +273,21 @@ def _cost_of_capital_ra(
     as non-financial-risk capital over the contract's run-off.
 
     The capital required at each future month is taken as the confidence-
-    level margin there; the RA at month ``t`` is the cost-of-capital rate
-    times the present value, at ``t``, of that capital over months ``t``
-    onward. ``discount_monthly`` is the per-month rate curve, shape
-    ``(n_time,)``; a flat rate and a yield curve share the same form.
+    level margin there; the RA at month ``t`` is the present value, at ``t``,
+    of holding that capital over months ``t`` onward, each month charged the
+    cost-of-capital rate for one month (``coc_rate / 12``). ``coc_rate`` is an
+    annual rate, so the per-month charge carries the ``1/12`` time step --
+    without it the monthly accumulation would overstate the annual
+    cost-of-capital risk margin twelvefold. ``discount_monthly`` is the
+    per-month rate curve, shape ``(n_time,)``; a flat rate and a yield curve
+    share the same form.
     """
     full = 1.0 / (1.0 + discount_monthly)             # (n_time,)
     cap_pv = np.empty_like(confidence_margin)
     cap_pv[:, -1] = confidence_margin[:, -1]
     for t in range(confidence_margin.shape[1] - 2, -1, -1):
         cap_pv[:, t] = confidence_margin[:, t] + full[t] * cap_pv[:, t + 1]
-    return coc_rate * cap_pv
+    return (coc_rate / 12.0) * cap_pv                 # annual rate -> per-month charge
 
 
 def _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
