@@ -222,8 +222,42 @@ solvency ratio    =        282.4%
 **상관 0** (각 자산의 고유위험) 이라 시장모듈에 제곱합으로 더해집니다. K-ICS 만 반영했고
 Solvency II 의 집중위험 (별도 체계) 은 후속입니다.
 
+## 법인세효과 -- 총요구자본
+
+충격 시 손실이 나면 과세소득이 줄어 법인세가 절감되고, 이 절감분만큼 손실이 흡수됩니다.
+K-ICS 는 이를 **총요구자본 = 기본요구자본 - 법인세조정액** 으로 반영합니다
+(법인세조정액 = min(기본요구자본 x 평균세율, 실현가능성 한도), 해설서 제7장). 평균세율은
+회사별 (직전 3년 세전이익 기준) 이라 인자로 받습니다 (기본값 0 = 미반영, 보수적).
+
+```python
+port = fcf.AssetPortfolio(holdings=(
+    alm.Bond(3_000_000.0, 0.03, 10, 1, credit_rating="AA"), fcf.Cash(4_000_000.0)))
+a = fcf.assess_solvency(port, mp, basis, regime=fcf.KICS, tax_rate=0.22)
+print(f"basic required capital = {a.basic_required_capital:>14,.0f}")
+print(f"  tax adjustment       = {a.tax_adjustment:>14,.0f}")
+print(f"total required capital = {a.total_scr:>14,.0f}")
+print(f"solvency ratio         = {a.solvency_ratio:>13.1%}")
+```
+
+출력:
+
+```text
+basic required capital =      1,224,840
+  tax adjustment       =        269,465
+total required capital =        955,376
+solvency ratio         =        164.0%
+```
+
+평균세율 22% 면 기본요구자본의 22% (269,465) 가 법인세조정액으로 차감돼 총요구자본이
+955,376 으로 줄고, 비율은 (세효과 미반영) 127.9% 에서 164.0% 로 올라갑니다. 실현가능성
+한도 (직전 5년 세전이익 x 50% + 순이연법인세 등) 가 있으면 `tax_recoverability_limit` 로
+넘기면 차감액이 그만큼 캡 됩니다.
+
 ## 함정 / 검증
 
+- **법인세효과는 옵트인** -- `tax_rate` 기본값 0 이면 총요구자본 = 기본요구자본 (보수적).
+  평균세율을 주면 기본요구자본 x 세율 (한도 내) 만큼 차감해 비율이 올라갑니다. 회사별
+  세무자료 (세전이익 / 이연법인세) 는 엔진 밖이라 세율 / 한도를 caller 가 공급합니다.
 - **자산집중은 K-ICS, SII 는 후속** -- 자산집중위험액 = sqrt(거래상대방집중^2 + 부동산집중^2),
   각 한도초과분 (총자산 x 등급별 / 부동산 한도) 에 위험계수. 발행자 미태깅 + 부동산 없으면 0.
   시장모듈에 상관 0 으로 들어갑니다. Solvency II 집중위험은 별도라 0 (후속).

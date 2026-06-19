@@ -529,8 +529,10 @@ class SolvencyAssessment:
     ``equity_scr``, the ``property_scr``, the ``fx_scr`` and the
     ``concentration_scr`` through the market correlation; the
     ``bscr`` (basic SCR) aggregates the ``insurance_scr``, the ``market_module_scr``
-    and the ``credit_scr`` at the top level; ``total_scr`` adds the
-    ``operational_scr`` on top of the BSCR. ``solvency_ratio`` is
+    and the ``credit_scr`` at the top level; ``basic_required_capital`` adds the
+    ``operational_scr`` on top of the BSCR. ``total_scr`` (the ratio denominator)
+    subtracts the ``tax_adjustment`` (loss-absorbing capacity of deferred taxes)
+    from the basic required capital. ``solvency_ratio`` is
     ``available_capital / total_scr``."""
 
     portfolio_value: float
@@ -547,28 +549,41 @@ class SolvencyAssessment:
     credit_scr: float
     operational_scr: float
     bscr: float
+    basic_required_capital: float
+    tax_adjustment: float
     total_scr: float
     solvency_ratio: float
 
 
 def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
-                    basis: Basis, *, regime: RegimeSpec) -> SolvencyAssessment:
+                    basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
+                    tax_recoverability_limit: float | None = None
+                    ) -> SolvencyAssessment:
     """Assemble the t=0 solvency ratio from the assets and the liability SCR.
 
     Runs :func:`~fastcashflow.required_capital` for the liability (insurance) SCR,
     values the portfolio, forms available capital (assets less the technical
-    provision), and builds the market-risk module (net interest, equity, property)
-    aggregated through the market correlation. The BSCR aggregates the insurance,
-    market and credit modules at the top level: K-ICS uses the table-3 correlation
-    (all pairwise 0.25); Solvency II's top-level inter-module matrix is not
-    extracted here, so it falls back to a simple sum (no diversification credit --
-    conservative). The operational-risk SCR is then added on top of the BSCR for
-    the total. The ratio is available capital over the total SCR.
+    provision), and builds the market-risk module (net interest, equity, property,
+    FX, concentration) aggregated through the market correlation. The BSCR
+    aggregates the insurance, market and credit modules at the top level: K-ICS uses
+    the table-3 correlation (all pairwise 0.25); Solvency II's top-level inter-module
+    matrix is not extracted here, so it falls back to a simple sum (no
+    diversification credit -- conservative). The operational-risk SCR is added on
+    top to form the basic required capital.
+
+    ``tax_adjustment`` (K-ICS chapter 7 -- the loss-absorbing capacity of deferred
+    taxes) is then subtracted to give the total required capital, the ratio
+    denominator: ``min(basic_required_capital x tax_rate, tax_recoverability_limit)``.
+    ``tax_rate`` is the company's average effective rate (over its recent pre-tax
+    profits) and defaults to 0 (no tax relief -- conservative); supply
+    ``tax_recoverability_limit`` for the regulatory recoverability cap (else the
+    relief is uncapped at ``basic x tax_rate``).
 
     Notes: K-ICS supplies no interest curves (its scenarios are caller-supplied),
     so the net interest component is zero here -- equity and property still apply.
-    Credit risk is charged for K-ICS only (Solvency II spread / counterparty is
-    deferred). A non-positive BSCR (a risk-free book) gives an unbounded ratio.
+    Credit, FX and concentration risk are charged for K-ICS only (the Solvency II
+    equivalents are deferred). A non-positive total required capital (a risk-free
+    book) gives an unbounded ratio.
     """
     scr = required_capital(model_points, basis, regime=regime)
     pv = portfolio_value(portfolio, basis.discount_annual)
@@ -596,7 +611,14 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
         bscr = float(np.sqrt(modules @ _TOPLEVEL_CORRELATION @ modules))
 
     op = operational_scr(model_points, basis, regime, bscr=bscr)
-    total = bscr + op                       # operational is added on top of the BSCR
+    basic = bscr + op                       # K-ICS basic required capital (incl. op)
+
+    tax_adj = 0.0
+    if tax_rate > 0.0:                       # K-ICS ch.7: tax loss-absorption
+        tax_adj = basic * tax_rate
+        if tax_recoverability_limit is not None:
+            tax_adj = min(tax_adj, max(0.0, tax_recoverability_limit))
+    total = basic - tax_adj                  # total required capital (ratio denominator)
 
     if total > 0.0:
         ratio = ac / total
@@ -607,6 +629,7 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
         available_capital=ac, insurance_scr=ins, net_interest_scr=ni,
         equity_scr=eq, property_scr=pr, fx_scr=fx, concentration_scr=conc,
         market_module_scr=market, credit_scr=cr, operational_scr=op, bscr=bscr,
+        basic_required_capital=basic, tax_adjustment=tax_adj,
         total_scr=total, solvency_ratio=ratio)
 
 

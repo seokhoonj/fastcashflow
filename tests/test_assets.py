@@ -291,9 +291,29 @@ def test_assess_solvency_components():
     assert np.isclose(a.market_module_scr, a.net_interest_scr)
     assert a.credit_scr == 0.0                              # SII credit deferred
     assert np.isclose(a.bscr, a.insurance_scr + a.net_interest_scr + a.credit_scr)
-    assert np.isclose(a.total_scr, a.bscr + a.operational_scr)
+    assert np.isclose(a.basic_required_capital, a.bscr + a.operational_scr)
+    assert a.tax_adjustment == 0.0                          # no tax relief by default
+    assert np.isclose(a.total_scr, a.basic_required_capital - a.tax_adjustment)
     assert np.isclose(a.solvency_ratio, a.available_capital / a.total_scr)
     assert np.isclose(a.available_capital, a.portfolio_value - (a.bel + a.risk_margin))
+
+
+def test_tax_adjustment_loss_absorption():
+    """K-ICS chapter 7: the tax adjustment = min(basic x tax_rate, recoverability
+    limit) is subtracted from the basic required capital, raising the ratio."""
+    mp, basis = _mp(), _basis()
+    p = assets.AssetPortfolio(holdings=(
+        alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
+    base = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    taxed = assets.assess_solvency(p, mp, basis, regime=fcf.KICS, tax_rate=0.22)
+    assert np.isclose(taxed.tax_adjustment, base.basic_required_capital * 0.22)
+    assert np.isclose(taxed.total_scr, base.basic_required_capital * (1 - 0.22))
+    assert taxed.solvency_ratio > base.solvency_ratio       # tax relief lowers the SCR
+    # the recoverability limit caps the relief
+    cap = base.basic_required_capital * 0.22 / 3
+    capped = assets.assess_solvency(p, mp, basis, regime=fcf.KICS, tax_rate=0.22,
+                                    tax_recoverability_limit=cap)
+    assert np.isclose(capped.tax_adjustment, cap)
 
 
 def test_assess_solvency_kics_no_curves():
