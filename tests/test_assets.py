@@ -119,17 +119,48 @@ def test_assess_solvency_components():
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
     a = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
+    # no equity/property -> the market module is just the net interest SCR, and the
+    # SII top-level is a simple sum
+    assert np.isclose(a.market_module_scr, a.net_interest_scr)
     assert np.isclose(a.total_scr, a.insurance_scr + a.net_interest_scr)
     assert np.isclose(a.solvency_ratio, a.available_capital / a.total_scr)
     assert np.isclose(a.available_capital, a.portfolio_value - (a.bel + a.risk_margin))
-    assert a.net_interest_scr != a.liability_interest_capital   # net replaces liability-only
 
 
-def test_assess_solvency_kics_fallback():
-    """K-ICS carries no interest curves -> net interest falls back to the liability
-    figure (no crash, no silently dropped interest risk)."""
+def test_assess_solvency_kics_no_curves():
+    """K-ICS supplies no interest curves -> the net interest component is 0;
+    an all-cash book then has total SCR == the insurance SCR (no market risk)."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(assets.Cash(8_000_000.0),))
     a = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
-    assert a.net_interest_scr == a.liability_interest_capital
+    assert a.net_interest_scr == 0.0
+    assert np.isclose(a.total_scr, a.insurance_scr)
     assert np.isfinite(a.solvency_ratio)
+
+
+def test_top_level_aggregation_kics_vs_sii():
+    """K-ICS aggregates insurance and market with the 0.25 correlation; Solvency II
+    falls back to a simple sum (top-level matrix not extracted)."""
+    mp, basis = _mp(), _basis()
+    p = assets.AssetPortfolio(holdings=(
+        alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Equity(3_000_000.0, "developed")))
+    k = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    s = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
+    assert np.isclose(s.total_scr, s.insurance_scr + s.market_module_scr)     # SII sum
+    ins, mkt = k.insurance_scr, k.market_module_scr
+    assert np.isclose(k.total_scr,
+                      np.sqrt(ins * ins + mkt * mkt + 2 * 0.25 * ins * mkt))   # K-ICS sqrt
+
+
+def test_equity_now_charges_scr():
+    """Equity now raises BOTH available capital and the SCR (the v1 overstatement
+    where it lifted only the numerator is fixed)."""
+    mp, basis = _mp(), _basis()
+    base = assets.AssetPortfolio(holdings=(
+        alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Cash(5_000_000.0)))
+    with_eq = assets.AssetPortfolio(holdings=base.holdings + (assets.Equity(3_000_000.0),))
+    a0 = assets.assess_solvency(base, mp, basis, regime=fcf.SOLVENCY2)
+    a1 = assets.assess_solvency(with_eq, mp, basis, regime=fcf.SOLVENCY2)
+    assert a1.available_capital > a0.available_capital
+    assert a1.total_scr > a0.total_scr                       # equity now charges market SCR
+    assert np.isclose(a1.equity_scr, 3_000_000.0 * 0.35)

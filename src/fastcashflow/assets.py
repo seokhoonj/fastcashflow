@@ -203,10 +203,12 @@ def market_module_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
 class SolvencyAssessment:
     """The asset-inclusive solvency picture at t=0 -- the full ratio and its parts.
 
-    ``available_capital`` is ``portfolio_value - (bel + risk_margin)``;
-    ``total_scr`` is ``insurance_scr + net_interest_scr`` (the asset-aware net
-    interest replacing the liability-only ``liability_interest_capital``);
-    ``solvency_ratio`` is ``available_capital / total_scr``."""
+    ``available_capital`` is ``portfolio_value - (bel + risk_margin)``. The market
+    module aggregates the ``net_interest_scr`` (assets and liabilities), the
+    ``equity_scr`` and the ``property_scr`` through the market correlation; the
+    ``total_scr`` (BSCR) aggregates the ``insurance_scr`` and the
+    ``market_module_scr`` at the top level. ``solvency_ratio`` is
+    ``available_capital / total_scr``."""
 
     portfolio_value: float
     bel: float
@@ -214,7 +216,9 @@ class SolvencyAssessment:
     available_capital: float
     insurance_scr: float
     net_interest_scr: float
-    liability_interest_capital: float
+    equity_scr: float
+    property_scr: float
+    market_module_scr: float
     total_scr: float
     solvency_ratio: float
 
@@ -223,39 +227,49 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
                     basis: Basis, *, regime: RegimeSpec) -> SolvencyAssessment:
     """Assemble the t=0 solvency ratio from the assets and the liability SCR.
 
-    Runs :func:`~fastcashflow.required_capital` for the liability-side SCR, values
-    the portfolio, forms available capital (assets less the technical provision),
-    and replaces the liability-only interest capital with the NET interest SCR
-    (assets and liabilities re-priced together) when the regime carries interest
-    curves -- else it keeps the regime's liability interest figure (e.g. K-ICS,
-    whose curve scenarios are caller-supplied).
+    Runs :func:`~fastcashflow.required_capital` for the liability (insurance) SCR,
+    values the portfolio, forms available capital (assets less the technical
+    provision), and builds the market-risk module (net interest, equity, property)
+    aggregated through the market correlation. The total SCR (BSCR) aggregates the
+    insurance and market modules at the top level: K-ICS uses the life-vs-market
+    correlation (0.25); Solvency II's top-level inter-module matrix is not
+    extracted here, so it falls back to a simple sum (no diversification credit --
+    conservative). The ratio is available capital over the BSCR.
 
-    v1 LIMITATION: equity and property holdings raise available capital but carry
-    NO asset-side market-risk SCR yet (the equity / property shock sub-modules are
-    a follow-up). A book with material equity / property therefore has an
-    understated ``total_scr`` and an OVERSTATED ``solvency_ratio`` -- read it as an
-    upper bound until that follow-up lands.
+    Notes: K-ICS supplies no interest curves (its scenarios are caller-supplied),
+    so the net interest component is zero here -- equity and property still apply.
+    A non-positive BSCR (a risk-free book) gives an unbounded ratio.
     """
     scr = required_capital(model_points, basis, regime=regime)
     pv = portfolio_value(portfolio, basis.discount_annual)
     ac = available_capital(pv, scr.base_bel, scr.risk_margin)
-    if regime.interest_curves is not None:
-        ni = net_interest_scr(portfolio, model_points, basis,
-                              interest_curves=regime.interest_curves)
-    else:
-        ni = scr.interest_capital
-    total = scr.insurance_scr + ni
-    # A non-positive required capital (a risk-free / fully-immunised book) makes
-    # the ratio unbounded -- avoid the divide-by-zero and signal it as infinite.
-    if total > 0.0:
-        ratio = ac / total
+
+    cal = _market_cal(regime)
+    ni = (net_interest_scr(portfolio, model_points, basis,
+                           interest_curves=regime.interest_curves)
+          if regime.interest_curves is not None else 0.0)
+    eq = equity_scr(portfolio, regime)
+    pr = property_scr(portfolio, regime)
+    c = np.array([ni, eq, pr], dtype=np.float64)
+    R = np.asarray(cal["market_correlation"], dtype=np.float64)
+    market = float(np.sqrt(c @ R @ c))
+
+    ins = scr.insurance_scr
+    imc = cal["insurance_market_corr"]
+    if imc is None:                         # SII: top-level matrix not extracted
+        bscr = ins + market
+    else:                                   # K-ICS: life <-> market correlation
+        bscr = float(np.sqrt(ins * ins + market * market + 2.0 * imc * ins * market))
+
+    if bscr > 0.0:
+        ratio = ac / bscr
     else:
         ratio = float("inf") if ac >= 0.0 else float("-inf")
     return SolvencyAssessment(
         portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
-        available_capital=ac, insurance_scr=scr.insurance_scr, net_interest_scr=ni,
-        liability_interest_capital=scr.interest_capital, total_scr=total,
-        solvency_ratio=ratio)
+        available_capital=ac, insurance_scr=ins, net_interest_scr=ni,
+        equity_scr=eq, property_scr=pr, market_module_scr=market,
+        total_scr=bscr, solvency_ratio=ratio)
 
 
 __all__ = [

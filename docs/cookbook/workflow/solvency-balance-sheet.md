@@ -6,9 +6,9 @@
 - **자산 포트폴리오** 를 시가평가하고 (`fcf.AssetPortfolio`, `fcf.Bond` / `Equity` /
   `Property` / `Cash`), **가용자본** (자산 - 부채) 을 산출 (`fcf.available_capital`)
 - 자산과 부채를 같은 곡선충격으로 재평가하는 **순금리 SCR** (`fcf.net_interest_scr`)
-- 한 번에 **지급여력비율** 까지 조립 (`fcf.assess_solvency`)
-- v1 의 정직한 한계 -- 주식/부동산은 가용자본을 올리되 아직 SCR 에 안 들어가
-  비율이 **상한** 이라는 점
+- **주식 / 부동산 시장위험 SCR** (선진 -35% / 신흥 -48% / 부동산 -25%) 과 시장모듈 집계
+- 한 번에 **지급여력비율** 까지 조립 (`fcf.assess_solvency`) -- 보험위험 + 시장위험을
+  BSCR 로 묶어 (K-ICS 는 상관집계, Solvency II 는 단순합)
 :::
 
 지급여력비율 = 가용자본 / SCR. fastcashflow 는 부채측 (BEL, SCR) 을 내고, 이 챕터는
@@ -63,38 +63,48 @@ solvency ratio    =        156.1%
 보험위험 + **순금리** (채권이 부채 DV01 에 매칭돼 43,467 로 작음 -- 면역에 가까움). 비율
 156.1% 는 가용자본 / 총 SCR. 채권이 부채 금리민감도를 헤지하니 순금리 SCR 이 작습니다.
 
-## v1 의 한계 -- 주식은 분자만 올린다
+## 주식 / 부동산 -- 시장위험 SCR
 
-주식/부동산은 v1 에서 **시가 carrier** 입니다 -- 가용자본 (분자) 은 올리되 아직 시장위험
-SCR (분모) 에 안 들어갑니다. 그래서 주식이 많으면 비율이 **과대** 됩니다.
+주식·부동산은 가용자본 (분자) 을 올리는 동시에 **시장위험 SCR (분모)** 도 매깁니다. 주식
+3,000,000 (선진시장) 을 더하면:
 
 ```python
-port2 = fcf.AssetPortfolio(holdings=(bond, fcf.Cash(5_000_000.0), fcf.Equity(3_000_000.0)))
+port2 = fcf.AssetPortfolio(holdings=(bond, fcf.Cash(5_000_000.0),
+                                     fcf.Equity(3_000_000.0, "developed")))
 b = fcf.assess_solvency(port2, mp, basis, regime=fcf.SOLVENCY2)
-print(f"+3,000,000 equity -> available capital {b.available_capital:>14,.0f}")
-print(f"                     total SCR          {b.total_scr:>14,.0f}  (unchanged)")
-print(f"                     solvency ratio     {b.solvency_ratio:>13.1%}  (overstated -- no equity SCR yet)")
+print(f"+3,000,000 equity -> equity SCR      {b.equity_scr:>14,.0f}")
+print(f"                     market module    {b.market_module_scr:>14,.0f}")
+print(f"                     total SCR (BSCR) {b.total_scr:>14,.0f}")
+print(f"                     available capital{b.available_capital:>14,.0f}")
+print(f"                     solvency ratio   {b.solvency_ratio:>13.1%}")
 ```
 
 출력:
 
 ```text
-+3,000,000 equity -> available capital      5,290,189
-                     total SCR               1,467,287  (unchanged)
-                     solvency ratio            360.5%  (overstated -- no equity SCR yet)
++3,000,000 equity -> equity SCR           1,050,000
+                     market module         1,061,701
+                     total SCR (BSCR)      2,485,521
+                     available capital     5,290,189
+                     solvency ratio          212.8%
 ```
 
-주식 3,000,000 을 더하면 가용자본은 5,290,189 로 오르지만 total SCR 은 그대로라 비율이
-360.5% 로 뜁니다 -- 주식하락 SCR (SII -35%/-48%, 부동산 -25%) 이 아직 안 들어간
-**상한** 입니다. 자산측 시장위험 SCR 은 후속 단계 (규제 충격수치 추출 필요) 입니다.
+주식하락 충격 (선진시장 -35%) 으로 주식 SCR 1,050,000 이 잡히고, 금리 (43,467) 와 함께
+시장모듈 (1,061,701, 상관 0.25) 로 묶입니다. BSCR 은 보험위험 (1,423,820) 과 시장모듈을
+top-level 집계 -- Solvency II 는 단순합 (2,485,521), K-ICS 는 0.25 상관집계. 가용자본은
+주식만큼 올라 5,290,189 지만 SCR 도 같이 올라 비율은 212.8% 로 **분자만 오르던 과대가
+사라졌습니다**.
 
 ## 함정 / 검증
 
-- **주식/부동산 SCR 미반영 (v1)** -- 위 한계. 채권 (금리) 과 부채는 완전하지만, 주식/
-  부동산이 많은 책은 SCR 과소 -> 비율 과대. 채권 백업 책에서는 비율이 정확합니다.
+- **주식 세분·자산군은 일부만** -- 주식은 선진/신흥, 부동산 단일까지 반영했습니다.
+  인프라/장기보유/우선주/기타 주식 세분, 외환·자산집중·신용·운영 위험액은 후속 -- 그런
+  자산이 큰 책은 아직 SCR 과소입니다.
+- **SII top-level 은 단순합** -- Solvency II 의 모듈간 상관행렬 (Directive Annex IV) 은
+  여기서 추출 못 해, 보험 + 시장을 분산효과 없이 단순합 (보수적). K-ICS 는 0.25 상관집계.
 - **순금리 SCR 은 자산+부채 net** -- 같은 곡선충격으로 둘 다 재평가, worst-of up/down.
   매칭 (DV01) 책은 0 에 가깝고, 미스매치는 양(+). K-ICS 는 `interest_curves` 가 없어
-  (곡선 caller 공급) 부채측 금리값으로 fallback.
+  (곡선 caller 공급) 순금리 성분이 0 -- 주식/부동산은 그대로 잡힙니다.
 - **가용자본은 자산-기술준비금** -- 기타 대차대조표 부채가 있으면 포트폴리오 값에서 미리
   차감해 넘기세요. 계층화 (기본/보완자본) 는 v1 단순화 (순자산 총액).
 - **정적 t=0** -- 동적 자산투영 (롤·재투자) = 동적 ALM 은 범위 밖. 표준공식 비율엔 불필요.
