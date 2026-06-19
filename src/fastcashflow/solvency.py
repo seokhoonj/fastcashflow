@@ -218,6 +218,17 @@ def mass_lapse(fraction: float) -> Stress:
     return Stress(name=f"mass lapse {fraction:g}", apply=apply)
 
 
+def scale_annuity(factor: float) -> Stress:
+    """Scale the annuity benefit amount by ``factor`` (revision risk -- the risk
+    that in-payment annuity benefits are revised upward). A no-op for model points
+    that carry no annuity payment."""
+    def apply(mp: ModelPoints, basis: Basis):
+        if mp.annuity_payment is None:
+            return mp, basis
+        return replace(mp, annuity_payment=np.asarray(mp.annuity_payment, float) * factor), basis
+    return Stress(name=f"annuity x{factor:g}", apply=apply)
+
+
 def scale_coverages(factor_by_method: dict[CalculationMethod, float]) -> Stress:
     """Scale each coverage's claim rate by the factor for its
     :class:`CalculationMethod` (e.g. ``{MORBIDITY: 1.10, DIAGNOSIS: 1.13}`` for a
@@ -385,9 +396,71 @@ KICS = RegimeSpec(
 )
 
 
+# ---------------------------------------------------------------------------
+# Solvency II calibration (Delegated Regulation (EU) 2015/35, primary source).
+# Life underwriting sub-risks (Articles 137-143) and the life sub-risk
+# correlation matrix (Annex IV point 3). Catastrophe (Art 143, +0.15pp absolute
+# mortality) is excluded from v1 for symmetry with K-ICS; it could be added as an
+# additive mortality variant. Order is locked to the Annex IV axes for the
+# sub-risks present: mortality / longevity / disability / expense / revision /
+# lapse.
+# ---------------------------------------------------------------------------
+
+_SII_CORRELATION = np.array([
+    #  mortality  longevity  disability  expense  revision  lapse
+    [   1.00,     -0.25,      0.25,      0.25,     0.00,    0.00],   # mortality
+    [  -0.25,      1.00,      0.00,      0.25,     0.25,    0.25],   # longevity
+    [   0.25,      0.00,      1.00,      0.50,     0.00,    0.00],   # disability
+    [   0.25,      0.25,      0.50,      1.00,     0.50,    0.50],   # expense
+    [   0.00,      0.25,      0.00,      0.50,     1.00,    0.00],   # revision
+    [   0.00,      0.25,      0.00,      0.50,     0.00,    1.00],   # lapse
+])
+
+# Interest-rate stress -- the EIOPA maturity-relative shock table (Art 166 up /
+# Art 167 down), interpolated to a per-year array. Up is floored at +1pp; the
+# down shock leaves already-negative base rates unshocked.
+_SII_RATE_UP = [(1, 0.70), (2, 0.70), (3, 0.64), (5, 0.55),
+                (10, 0.42), (15, 0.33), (20, 0.26), (90, 0.20)]
+_SII_RATE_DOWN = [(1, -0.75), (2, -0.65), (3, -0.56), (5, -0.46), (10, -0.31),
+                  (15, -0.27), (16, -0.28), (20, -0.29), (90, -0.20)]
+
+
+def _per_year_rel(points, n_years: int = 60) -> FloatArray:
+    """Interpolate (maturity, relative-shock) points to a per-year array."""
+    mats = np.array([m for m, _ in points], dtype=np.float64)
+    vals = np.array([v for _, v in points], dtype=np.float64)
+    return np.interp(np.arange(1, n_years + 1), mats, vals)
+
+
+SOLVENCY2 = RegimeSpec(
+    name="Solvency II",
+    sub_risks=(
+        SubRisk("mortality", (scale_mortality(1.15),), "single"),      # +15%
+        SubRisk("longevity", (scale_longevity(0.80),), "single"),      # -20%
+        SubRisk("disability", (scale_coverages({                       # disability-morbidity:
+            CalculationMethod.MORBIDITY: 1.25,                        #   v1 single +25% (steady);
+            CalculationMethod.DIAGNOSIS: 1.25,                        #   the +35% year-1 and the
+        }),), "single"),                                              #   -20% recovery are not modelled
+        SubRisk("expense", (scale_expense(1.10, 0.01),), "single"),    # +10%, inflation +1pp
+        SubRisk("revision", (scale_annuity(1.03),), "single"),         # annuity benefits +3%
+        SubRisk("lapse", (scale_lapse(1.50), scale_lapse(0.50),        # option-exercise +/-50%
+                          mass_lapse(0.40)), "worst_of"),              # mass lapse 40%
+    ),
+    correlation=_SII_CORRELATION,
+    interest_curves=(
+        shock_curve(_per_year_rel(_SII_RATE_UP), up=True, floor_pp=0.01,
+                    name="interest up"),
+        shock_curve(_per_year_rel(_SII_RATE_DOWN), up=False, zero_floor=True,
+                    name="interest down"),
+    ),
+    risk_margin_method="cost_of_capital",
+    risk_margin_coc_rate=0.06,    # RM = CoC 6% x sum SCR(t)/(1+r)^(t+1) (Art 37, 39)
+)
+
+
 __all__ = [
     "Stress", "SubRisk", "RegimeSpec", "SCRResult",
     "scale_mortality", "scale_longevity", "scale_lapse", "mass_lapse",
-    "scale_coverages", "scale_expense", "shock_curve",
-    "aggregate", "required_capital", "KICS",
+    "scale_coverages", "scale_annuity", "scale_expense", "shock_curve",
+    "aggregate", "required_capital", "KICS", "SOLVENCY2",
 ]

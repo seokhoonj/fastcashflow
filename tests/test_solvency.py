@@ -223,3 +223,43 @@ def test_kics_runs_end_to_end():
     assert all(c >= 0.0 for c in res.sub_risk_capital.values())
     assert np.isclose(res.risk_margin, res.insurance_scr * 0.40)
     assert res.regime == "K-ICS"
+
+
+# ---------------------------------------------------------------------------
+# Solvency II calibration (primary-source numbers; Codex gate C cross-checks)
+# ---------------------------------------------------------------------------
+
+def test_sii_parameters():
+    spec = sv.SOLVENCY2
+    names = [sr.name for sr in spec.sub_risks]
+    assert names == ["mortality", "longevity", "disability", "expense", "revision", "lapse"]
+    grid = (np.array([0]), np.array([40]), np.array([24]), np.array([0]), np.array([24]))
+    base = _basis()
+    _, b_m = spec.sub_risks[0].variants[0].apply(_mp(), _basis())
+    _, b_l = spec.sub_risks[1].variants[0].apply(_mp(), _basis())
+    assert np.allclose(b_m.mortality_annual(*grid), base.mortality_annual(*grid) * 1.15)
+    assert np.allclose(b_l.mortality_annual(*grid), base.mortality_annual(*grid) * 0.80)
+    # lapse worst-of (+/-50%, mass 40%)
+    assert spec.sub_risks[5].combine == "worst_of" and len(spec.sub_risks[5].variants) == 3
+    # correlation cells from Annex IV point 3
+    R = np.asarray(spec.correlation)
+    assert np.allclose(R, R.T) and np.allclose(np.diag(R), 1.0)
+    assert R[0, 1] == -0.25       # mortality x longevity
+    assert R[2, 3] == 0.50        # disability x expense
+    assert R[3, 5] == 0.50        # expense x lapse
+    assert R[0, 4] == 0.00        # mortality x revision
+    # cost-of-capital risk margin, EIOPA interest curves present
+    assert spec.risk_margin_method == "cost_of_capital" and spec.risk_margin_coc_rate == 0.06
+    assert spec.interest_curves is not None and len(spec.interest_curves) == 2
+
+
+def test_sii_runs_end_to_end():
+    mp, basis = _mp(), _basis()
+    res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    assert set(res.sub_risk_capital) == {
+        "mortality", "longevity", "disability", "expense", "revision", "lapse"}
+    assert res.insurance_scr > 0.0
+    assert res.interest_capital >= 0.0
+    assert res.scr_path is not None             # cost-of-capital margin builds a path
+    assert res.risk_margin > 0.0
+    assert res.regime == "Solvency II"

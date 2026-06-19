@@ -80,7 +80,7 @@ from fastcashflow.plots import (
 from fastcashflow.pricing import solve_premium, interest_guarantee_tvog
 from fastcashflow.embedded_value import EmbeddedValue, embedded_value
 from fastcashflow.solvency import (
-    RegimeSpec, SCRResult, SubRisk, Stress, required_capital, KICS,
+    RegimeSpec, SCRResult, SubRisk, Stress, required_capital, KICS, SOLVENCY2,
 )
 from fastcashflow import solvency
 from fastcashflow._reinsurance import ReinsuranceMeasurement
@@ -137,7 +137,7 @@ __all__ = [
     "solve_premium", "interest_guarantee_tvog",
     "embedded_value", "EmbeddedValue",
     "solvency", "required_capital", "RegimeSpec", "SCRResult", "SubRisk", "Stress",
-    "KICS",
+    "KICS", "SOLVENCY2",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
