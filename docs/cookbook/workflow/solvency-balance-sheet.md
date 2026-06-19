@@ -103,6 +103,25 @@ top-level 집계 -- Solvency II 는 단순합 (2,485,521), K-ICS 는 0.25 상관
 주식만큼 올라 5,290,189 지만 SCR 도 같이 올라 비율은 210.8% 로 **분자만 오르던 과대가
 사라졌습니다**.
 
+주식은 유형별로 충격이 다릅니다 (`Equity(..., "developed")` 등) -- 선진 35% / 신흥 48% /
+인프라 20% / 장기보유 20% / 기타 49% / 우선주 35% (해설서 4-3). **유형별 위험액은 상관
+0.75 로 묶여** 단순합보다 작습니다:
+
+```python
+mix = fcf.AssetPortfolio(holdings=(
+    fcf.Equity(3_000_000.0, "developed"), fcf.Equity(2_000_000.0, "infrastructure"),
+    fcf.Equity(1_000_000.0, "other")))
+print(f"equity SCR (3 types) = {fcf.equity_scr(mix, fcf.KICS):>12,.0f}")
+print(f"  vs simple sum       = {3e6*0.35 + 2e6*0.20 + 1e6*0.49:>12,.0f}")
+```
+
+출력:
+
+```text
+equity SCR (3 types) =    1,788,393
+  vs simple sum       =    1,940,000
+```
+
 ## 신용위험 SCR -- K-ICS
 
 채권은 신용위험을 집니다 -- 발행자 부도와 등급하락. K-ICS 는 이를 **신용등급 x 유효만기**

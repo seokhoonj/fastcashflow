@@ -154,15 +154,25 @@ _MARKET_CORRELATION = np.array([
     [0.00,  0.00, 0.00,  0.00, 1.00],
 ])
 
+# K-ICS equity price-fall shocks by type (handbook 4-3): developed listed 35%,
+# emerging listed 48%, infrastructure 20%, long-term holdings 20%, other 49%,
+# preferred 35% (the table-20 unrated/other default; full rating differentiation is
+# a follow-up). The type-level amounts aggregate at the 0.75 inter-type correlation.
+_EQUITY_SHOCKS = {
+    "developed": 0.35, "emerging": 0.48, "infrastructure": 0.20,
+    "long_term": 0.20, "other": 0.49, "preferred": 0.35,
+}
+_EQUITY_TYPE_CORR = 0.75       # handbook 4-3.da.(4): inter-equity-type correlation
+
 _MARKET_CALIBRATION = {
     "K-ICS": {
-        "equity_shocks": {"developed": 0.35, "emerging": 0.48},
+        "equity_shocks": _EQUITY_SHOCKS,
         "property_shock": 0.25,
         "market_correlation": _MARKET_CORRELATION,
         "insurance_market_corr": 0.25,     # table 3 (life-long-term <-> market)
     },
     "Solvency II": {
-        "equity_shocks": {"developed": 0.35, "emerging": 0.48},
+        "equity_shocks": _EQUITY_SHOCKS,
         "property_shock": 0.25,
         "market_correlation": _MARKET_CORRELATION,
         "insurance_market_corr": None,     # top-level matrix not extracted -> simple sum
@@ -180,18 +190,28 @@ def _market_cal(regime):
 
 
 def equity_scr(portfolio: AssetPortfolio, regime) -> float:
-    """The equity market-risk SCR -- each equity holding's market value times the
-    regime's price-fall shock for its ``risk_type``. Raises on an unknown type."""
+    """The equity market-risk SCR -- the per-type amounts (each type's holdings'
+    market value times its price-fall shock) aggregated at the 0.75 inter-type
+    correlation (handbook 4-3). Types: developed / emerging listed, infrastructure,
+    long_term, other, preferred. Raises on an unknown type."""
     shocks = _market_cal(regime)["equity_shocks"]
-    total = 0.0
+    by_type: dict[str, float] = {}
     for h in portfolio.holdings:
         if isinstance(h, Equity):
             if h.risk_type not in shocks:
                 raise ValueError(
                     f"unknown equity risk_type {h.risk_type!r} for regime "
                     f"{regime.name!r}; known: {sorted(shocks)}")
-            total += h.market_value * shocks[h.risk_type]
-    return max(0.0, total)         # a capital requirement is non-negative
+            by_type[h.risk_type] = (by_type.get(h.risk_type, 0.0)
+                                    + h.market_value * shocks[h.risk_type])
+    amounts = [a for a in by_type.values() if a > 0.0]    # losing types only
+    n = len(amounts)
+    if n == 0:
+        return 0.0
+    a = np.array(amounts, dtype=np.float64)
+    R = np.full((n, n), _EQUITY_TYPE_CORR)
+    np.fill_diagonal(R, 1.0)
+    return float(np.sqrt(max(0.0, a @ R @ a)))
 
 
 def property_scr(portfolio: AssetPortfolio, regime) -> float:

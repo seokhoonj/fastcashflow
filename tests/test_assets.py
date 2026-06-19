@@ -84,16 +84,28 @@ def test_unmatched_book_positive_net_interest():
 
 
 def test_equity_scr_by_type():
-    """Equity SCR = market value times the regime price-fall shock; unknown type raises."""
+    """Equity SCR aggregates the per-type amounts at the 0.75 inter-type correlation
+    (handbook 4-3); a single type is just its amount; unknown type raises."""
     import pytest
+    one = assets.AssetPortfolio(holdings=(assets.Equity(3_000_000.0, "developed"),))
+    assert np.isclose(assets.equity_scr(one, fcf.KICS), 3_000_000.0 * 0.35)
     p = assets.AssetPortfolio(holdings=(
         assets.Equity(1_000_000.0, "developed"), assets.Equity(500_000.0, "emerging")))
-    assert np.isclose(assets.equity_scr(p, fcf.SOLVENCY2),
-                      1_000_000.0 * 0.35 + 500_000.0 * 0.48)
-    assert np.isclose(assets.equity_scr(p, fcf.KICS), assets.equity_scr(p, fcf.SOLVENCY2))
+    dev, emg = 1_000_000.0 * 0.35, 500_000.0 * 0.48
+    assert np.isclose(assets.equity_scr(p, fcf.KICS),
+                      np.sqrt(dev**2 + emg**2 + 2 * 0.75 * dev * emg))
+    assert assets.equity_scr(p, fcf.KICS) < dev + emg            # diversification
     bad = assets.AssetPortfolio(holdings=(assets.Equity(1.0, "exotic"),))
     with pytest.raises(ValueError, match="risk_type"):
         assets.equity_scr(bad, fcf.SOLVENCY2)
+
+
+def test_equity_subtypes_shocks():
+    """K-ICS equity sub-types each carry their handbook 4-3 shock."""
+    for risk_type, shock in [("infrastructure", 0.20), ("long_term", 0.20),
+                             ("other", 0.49), ("preferred", 0.35)]:
+        p = assets.AssetPortfolio(holdings=(assets.Equity(1_000_000.0, risk_type),))
+        assert np.isclose(assets.equity_scr(p, fcf.KICS), 1_000_000.0 * shock)
 
 
 def test_property_scr():
