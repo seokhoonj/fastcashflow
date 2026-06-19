@@ -84,6 +84,10 @@ from fastcashflow.solvency import (
     SOLVENCY2, KICS,
 )
 from fastcashflow import solvency
+from fastcashflow.alm import (
+    DurationResult, liability_duration, liability_dv01, key_rate_durations,
+)
+from fastcashflow import alm
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import ReinsuranceReport, Report, report
 from fastcashflow.smithwilson import smith_wilson, smith_wilson_prices
@@ -139,6 +143,8 @@ __all__ = [
     "embedded_value", "EmbeddedValue",
     "solvency", "required_capital", "solvency_ratio",
     "RegimeSpec", "SCRResult", "SubRisk", "Stress", "SOLVENCY2", "KICS",
+    "alm", "DurationResult", "liability_duration", "liability_dv01",
+    "key_rate_durations",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
