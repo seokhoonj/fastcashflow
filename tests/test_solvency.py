@@ -185,3 +185,41 @@ def test_total_is_insurance_plus_interest():
     res = sv.required_capital(mp, basis, regime=_dummy())
     assert np.isclose(res.total_scr, res.insurance_scr + res.interest_capital)
     assert res.interest_capital == 0.0          # dummy has no interest curves
+
+
+# ---------------------------------------------------------------------------
+# K-ICS calibration (primary-source numbers; Codex gate B cross-checks the source)
+# ---------------------------------------------------------------------------
+
+def test_kics_parameters():
+    spec = sv.KICS
+    names = [sr.name for sr in spec.sub_risks]
+    assert names == ["mortality", "longevity", "morbidity", "lapse", "expense"]
+    # mortality factor 1.125, longevity 0.825 (evaluate the wrapped rate)
+    _, b_m = spec.sub_risks[0].variants[0].apply(*( _mp(), _basis()))
+    _, b_l = spec.sub_risks[1].variants[0].apply(*( _mp(), _basis()))
+    grid = (np.array([0]), np.array([40]), np.array([24]), np.array([0]), np.array([24]))
+    base = _basis()
+    assert np.allclose(b_m.mortality_annual(*grid), base.mortality_annual(*grid) * 1.125)
+    assert np.allclose(b_l.mortality_annual(*grid), base.mortality_annual(*grid) * 0.825)
+    # lapse worst-of has three variants incl. mass lapse
+    assert spec.sub_risks[3].combine == "worst_of"
+    assert len(spec.sub_risks[3].variants) == 3
+    # correlation: symmetric, unit diagonal, named cells from the source table
+    R = np.asarray(spec.correlation)
+    assert np.allclose(R, R.T) and np.allclose(np.diag(R), 1.0)
+    assert R[0, 1] == -0.25       # mortality x longevity
+    assert R[2, 4] == 0.50        # morbidity x expense
+    assert R[0, 3] == 0.00        # mortality x lapse
+    # percentile risk margin factor
+    assert spec.risk_margin_method == "percentile" and spec.risk_margin_factor == 0.40
+
+
+def test_kics_runs_end_to_end():
+    mp, basis = _mp(), _basis()
+    res = sv.required_capital(mp, basis, regime=sv.KICS)
+    assert set(res.sub_risk_capital) == {"mortality", "longevity", "morbidity", "lapse", "expense"}
+    assert res.insurance_scr > 0.0
+    assert all(c >= 0.0 for c in res.sub_risk_capital.values())
+    assert np.isclose(res.risk_margin, res.insurance_scr * 0.40)
+    assert res.regime == "K-ICS"
