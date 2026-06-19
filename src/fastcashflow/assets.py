@@ -25,6 +25,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow.alm import Bond, bond_value
+from fastcashflow.basis import Basis
+from fastcashflow.engine import measure
+from fastcashflow.model_points import ModelPoints
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +87,33 @@ def available_capital(portfolio_value: float, bel: float,
     return portfolio_value - (bel + risk_margin)
 
 
+def net_interest_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
+                     basis: Basis, *, interest_curves: tuple) -> float:
+    """The net interest-rate SCR -- the worst loss in own funds (assets less
+    liabilities) over the regime's up / down curve shocks.
+
+    A rate rise lowers BOTH the asset value (bonds) and the BEL; the capital is
+    the fall in net asset value ``NAV(base) - NAV(stress)``, where ``NAV(c) =
+    portfolio_value(c) - BEL(c)``. Both sides re-price on the SAME shocked curve
+    (the shock's ``Stress`` rebuilds ``basis.discount_annual``, which prices the
+    bonds and the liability alike). The worst of the up / down shocks is taken,
+    floored at zero. A duration-matched book gives ~ 0 -- the immunised gap.
+
+    ``interest_curves`` is the regime's tuple of interest-rate stresses
+    (``RegimeSpec.interest_curves``); pass a non-empty tuple (the assembler
+    handles a regime with no curves)."""
+    base_nav = (portfolio_value(portfolio, basis.discount_annual)
+                - float(measure(model_points, basis, full=False).bel.sum()))
+    worst = 0.0
+    for stress in interest_curves:
+        mp_s, basis_s = stress.apply(model_points, basis)
+        stress_nav = (portfolio_value(portfolio, basis_s.discount_annual)
+                      - float(measure(mp_s, basis_s, full=False).bel.sum()))
+        worst = max(worst, base_nav - stress_nav)
+    return worst
+
+
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio",
-    "holding_value", "portfolio_value", "available_capital",
+    "holding_value", "portfolio_value", "available_capital", "net_interest_scr",
 ]
