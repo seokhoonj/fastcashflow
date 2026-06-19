@@ -164,6 +164,19 @@ _EQUITY_SHOCKS = {
 }
 _EQUITY_TYPE_CORR = 0.75       # handbook 4-3.da.(4): inter-equity-type correlation
 
+# Preferred equity (table 20): the price-fall shock differs by the K-ICS grade of
+# the issue -- 1-2 grade 4%, 3 grade 6%, 4 grade 11%, 5 grade 21%, 6+ grade 35%;
+# unrated defaults to 35% (the "other" issue-form row).
+_PREFERRED_SHOCK_BY_GRADE = {
+    "1-2": 0.04, "3": 0.06, "4": 0.11, "5": 0.21,
+    "6": 0.35, "7": 0.35, "default": 0.35, "unrated": 0.35,
+}
+
+
+def _preferred_shock(rating: str) -> float:
+    """The table-20 preferred-equity shock for a rating (via its K-ICS grade)."""
+    return _PREFERRED_SHOCK_BY_GRADE[_rating_row(rating)]
+
 _MARKET_CALIBRATION = {
     "K-ICS": {
         "equity_shocks": _EQUITY_SHOCKS,
@@ -202,8 +215,11 @@ def equity_scr(portfolio: AssetPortfolio, regime) -> float:
                 raise ValueError(
                     f"unknown equity risk_type {h.risk_type!r} for regime "
                     f"{regime.name!r}; known: {sorted(shocks)}")
+            # preferred equity is charged by the issue's rating (table 20)
+            shock = (_preferred_shock(h.credit_rating)
+                     if h.risk_type == "preferred" else shocks[h.risk_type])
             by_type[h.risk_type] = (by_type.get(h.risk_type, 0.0)
-                                    + h.market_value * shocks[h.risk_type])
+                                    + h.market_value * shock)
     amounts = [a for a in by_type.values() if a > 0.0]    # losing types only
     n = len(amounts)
     if n == 0:

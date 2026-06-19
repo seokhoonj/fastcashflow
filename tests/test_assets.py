@@ -101,9 +101,10 @@ def test_equity_scr_by_type():
 
 
 def test_equity_subtypes_shocks():
-    """K-ICS equity sub-types each carry their handbook 4-3 shock."""
+    """K-ICS equity sub-types each carry their handbook 4-3 shock (preferred is
+    rating-based, tested separately)."""
     for risk_type, shock in [("infrastructure", 0.20), ("long_term", 0.20),
-                             ("other", 0.49), ("preferred", 0.35)]:
+                             ("other", 0.49)]:
         p = assets.AssetPortfolio(holdings=(assets.Equity(1_000_000.0, risk_type),))
         assert np.isclose(assets.equity_scr(p, fcf.KICS), 1_000_000.0 * shock)
 
@@ -427,3 +428,13 @@ def test_aggregate_required_capital_reproduces_disclosures():
     s = assets.aggregate_required_capital(100.0, 200.0, 50.0, regime=fcf.SOLVENCY2,
                                           operational=10.0)
     assert np.isclose(s, 360.0)
+
+
+def test_preferred_equity_by_rating_table20():
+    """Preferred equity (table 20) is charged by the issue's K-ICS grade: 1-2 grade
+    4%, 3 grade 6%, 4 grade 11%, 5 grade 21%, 6+ grade 35%, unrated 35%."""
+    for rating, shock in [("AA", 0.04), ("A", 0.06), ("BBB", 0.11), ("BB", 0.21),
+                          ("B", 0.35), ("unrated", 0.35)]:
+        p = assets.AssetPortfolio(holdings=(
+            assets.Equity(1_000_000.0, "preferred", credit_rating=rating),))
+        assert np.isclose(assets.equity_scr(p, fcf.KICS), 1_000_000.0 * shock)
