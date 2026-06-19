@@ -82,6 +82,7 @@ from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import ReinsuranceReport, Report, report
 from fastcashflow.smithwilson import smith_wilson, smith_wilson_prices
 from fastcashflow.esg import EconomicScenarios
+from fastcashflow.profit import ProfitSignature
 from fastcashflow.state_model import (
     STATE_MODELS,
     State,
@@ -121,6 +122,7 @@ __all__ = [
     "VFASettlementAggregate",
     "ReinsurancePeriodMovement", "ReinsuranceReconciliation",
     "smith_wilson", "smith_wilson_prices", "EconomicScenarios",
+    "ProfitSignature",
     "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",
     "apply_inforce_state", "align_inforce_state", "InforceState",

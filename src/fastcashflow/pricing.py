@@ -1,9 +1,13 @@
-"""Premium solving -- pricing on the level-premium term product.
+"""Pricing -- premium solving and profit testing.
 
-Fulfilment cash flows are linear in the premium: claims, expenses and the
-in-force run-off do not depend on it, so ``FCF = A - premium * B``. Two
-valuations pin down ``A`` and ``B``, and the premium that meets a
-profitability target then has a closed form -- no iteration.
+Premium solving exploits that fulfilment cash flows are linear in the premium:
+claims, expenses and the in-force run-off do not depend on it, so
+``FCF = A - premium * B``. Two valuations pin down ``A`` and ``B``, and the
+premium that meets a profitability target then has a closed form -- no iteration.
+
+Profit testing (re-exported from :mod:`fastcashflow.profit`) adds the value and
+emergence of new business: the present-value metrics (``nbv``, ``profit_margin``),
+the per-period ``signature``, and the rate metrics (``irr``, ``break_even_year``).
 """
 from __future__ import annotations
 
@@ -15,6 +19,12 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
+from fastcashflow.profit import (
+    ProfitSignature, break_even_year, irr, nbv, profit_margin, signature,
+)
+
+__all__ = ["solve_premium", "ProfitSignature", "nbv", "profit_margin",
+           "signature", "irr", "break_even_year"]
 
 
 def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:
