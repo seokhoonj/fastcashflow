@@ -12,11 +12,12 @@ scope. This module sits above :mod:`fastcashflow.alm` (it prices bonds) and
 :mod:`fastcashflow.solvency` (it consumes the liability SCR); it adds no new
 regulatory numbers.
 
-The asset-side SCR modules are the market risk (interest / equity / property) and
-the credit risk (bond default + downgrade). Credit risk is charged for K-ICS only;
-Solvency II's spread / counterparty framework is a separate calibration not encoded
-here (deferred), so a Solvency II credit charge is zero. Currency and asset
-concentration risk are not yet modelled, so a book heavy in those is an upper bound.
+The asset-side SCR modules are the market risk (interest / equity / property / FX)
+and the credit risk (bond default + downgrade). Credit and FX risk are charged for
+K-ICS only; Solvency II's spread / counterparty and currency calibrations are
+separate and not encoded here (deferred), so those charges are zero under Solvency
+II. Asset concentration risk is not yet modelled, so a book heavy in single-name
+concentration is an upper bound.
 """
 from __future__ import annotations
 
@@ -37,25 +38,30 @@ class Equity:
     """An equity holding carried at a given market value (asset-positive).
 
     ``risk_type`` selects the market-risk shock (``"developed"`` or ``"emerging"``
-    market listed equity); the shock magnitude is the regime's calibration."""
+    market listed equity); the shock magnitude is the regime's calibration.
+    ``currency`` (ISO code, "KRW" for domestic) drives the FX SCR."""
 
     market_value: float
     risk_type: str = "developed"
+    currency: str = "KRW"
 
 
 @dataclass(frozen=True, slots=True)
 class Property:
-    """A property holding carried at a given market value. As for :class:`Equity`,
-    v1 carries the value without a property-shock SCR."""
+    """A property holding carried at a given market value. ``currency`` (ISO code)
+    drives the FX SCR."""
 
     market_value: float
+    currency: str = "KRW"
 
 
 @dataclass(frozen=True, slots=True)
 class Cash:
-    """A cash holding, carried at face (curve-insensitive)."""
+    """A cash holding, carried at face (curve-insensitive). ``currency`` (ISO code)
+    drives the FX SCR."""
 
     market_value: float
+    currency: str = "KRW"
 
 
 Holding = "Bond | Equity | Property | Cash"
@@ -129,10 +135,15 @@ def net_interest_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
 # ---------------------------------------------------------------------------
 
 # Market sub-risks ordered (interest, equity, property) for the correlation axis.
+# K-ICS table 19: market sub-risk correlation -- interest / equity / property / FX
+# (asset concentration is independent, correlation 0, and is not modelled here).
+# Note equity <-> FX is NEGATIVE 0.25 (the standard's triangle mark): a won spike
+# tends to coincide with foreign selling that drops equities, so they diversify.
 _MARKET_CORRELATION = np.array([
-    [1.00, 0.25, 0.25],
-    [0.25, 1.00, 0.25],
-    [0.25, 0.25, 1.00],
+    [1.00,  0.25, 0.25,  0.25],
+    [0.25,  1.00, 0.25, -0.25],
+    [0.25,  0.25, 1.00,  0.25],
+    [0.25, -0.25, 0.25,  1.00],
 ])
 
 _MARKET_CALIBRATION = {
@@ -184,20 +195,84 @@ def property_scr(portfolio: AssetPortfolio, regime) -> float:
     return max(0.0, float(total))
 
 
+# ---------------------------------------------------------------------------
+# FX risk -- a market sub-risk on net foreign-currency exposure. K-ICS (table 22):
+# shock each currency vs the won, sum the net-asset-value LOSSES (declining
+# currencies only) under a won-up (rates fall) and a won-down scenario through a
+# 0.5 inter-currency correlation, and take the worse of the two. FX derivative
+# price volatility is a further term, taken as 0 here. Solvency II currency risk
+# is a separate calibration (a flat 25% shock) and is deferred. Holding values are
+# in the reporting currency (won); the currency tag only selects the shock.
+# ---------------------------------------------------------------------------
+
+_FX_SHOCK_KRW = {              # K-ICS table 22, won-base currency shock (percent)
+    "AUD": 30, "BRL": 50, "CAD": 25, "CHF": 40, "CLP": 30, "CNY": 25,
+    "COP": 35, "CZK": 35, "DKK": 35, "EUR": 35, "GBP": 30, "HKD": 25,
+    "HUF": 40, "IDR": 40, "ILS": 30, "INR": 25, "JPY": 40, "MXN": 30,
+    "MYR": 25, "NOK": 35, "NZD": 35, "PEN": 25, "PHP": 25, "PLN": 35,
+    "RON": 35, "RUB": 40, "SAR": 25, "SEK": 35, "SGD": 20, "THB": 25,
+    "TRY": 55, "TWD": 20, "USD": 25, "ZAR": 45,
+}
+
+_FX_CALIBRATION = {"K-ICS": _FX_SHOCK_KRW, "Solvency II": None}
+
+_FX_CORRELATION = 0.5          # table 22: inter-currency correlation (declining only)
+
+
+def _fx_aggregate(losses) -> float:
+    """Aggregate per-currency NAV losses through the 0.5 inter-currency
+    correlation: ``sqrt(L^T R L)`` with R = 0.5 off-diagonal, 1 on it."""
+    vals = [v for v in losses.values() if v > 0.0]
+    n = len(vals)
+    if n == 0:
+        return 0.0
+    L = np.array(vals, dtype=np.float64)
+    R = np.full((n, n), _FX_CORRELATION)
+    np.fill_diagonal(R, 1.0)
+    return float(np.sqrt(max(0.0, L @ R @ L)))
+
+
+def fx_scr(portfolio: AssetPortfolio, regime, discount_annual) -> float:
+    """The FX-risk SCR -- the worse of the won-up and won-down currency shocks on
+    the net foreign-currency exposure, aggregated through the 0.5 correlation.
+
+    Each non-won holding's market value is netted by currency; under the won-up
+    (foreign-down) scenario a net-long currency loses ``shock x exposure`` (only
+    losing currencies are summed), and symmetrically for the won-down scenario on
+    net-short currencies. The SCR is the larger aggregate. Returns 0 for Solvency
+    II (its currency-risk calibration is deferred)."""
+    shocks = _FX_CALIBRATION.get(regime.name)
+    if shocks is None:
+        return 0.0
+    exposure = {}
+    for h in portfolio.holdings:
+        cur = getattr(h, "currency", "KRW")
+        if cur == "KRW":
+            continue
+        if cur not in shocks:
+            raise ValueError(
+                f"unknown currency {cur!r}; known: {sorted(shocks)}")
+        exposure[cur] = exposure.get(cur, 0.0) + holding_value(h, discount_annual)
+    down = {c: shocks[c] / 100.0 * e for c, e in exposure.items() if e > 0.0}
+    up = {c: shocks[c] / 100.0 * (-e) for c, e in exposure.items() if e < 0.0}
+    return max(_fx_aggregate(down), _fx_aggregate(up))   # price volatility: 0 (v1)
+
+
 def market_module_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
                       basis: Basis, *, regime) -> float:
-    """The market-risk module SCR -- the interest (net of liabilities), equity and
-    property sub-risks aggregated through the regime's market correlation matrix
-    (``sqrt(c^T R c)``). Interest is the net :func:`net_interest_scr` (zero when
-    the regime supplies no interest curves, e.g. K-ICS)."""
+    """The market-risk module SCR -- the interest (net of liabilities), equity,
+    property and FX sub-risks aggregated through the regime's market correlation
+    matrix (``sqrt(c^T R c)``). Interest is the net :func:`net_interest_scr` (zero
+    when the regime supplies no interest curves, e.g. K-ICS)."""
     cal = _market_cal(regime)
     interest = (net_interest_scr(portfolio, model_points, basis,
                                  interest_curves=regime.interest_curves)
                 if regime.interest_curves is not None else 0.0)
     c = np.array([interest, equity_scr(portfolio, regime),
-                  property_scr(portfolio, regime)], dtype=np.float64)
+                  property_scr(portfolio, regime),
+                  fx_scr(portfolio, regime, basis.discount_annual)], dtype=np.float64)
     R = np.asarray(cal["market_correlation"], dtype=np.float64)
-    return float(np.sqrt(c @ R @ c))
+    return float(np.sqrt(max(0.0, c @ R @ c)))
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +431,8 @@ class SolvencyAssessment:
 
     ``available_capital`` is ``portfolio_value - (bel + risk_margin)``. The market
     module aggregates the ``net_interest_scr`` (assets and liabilities), the
-    ``equity_scr`` and the ``property_scr`` through the market correlation; the
+    ``equity_scr``, the ``property_scr`` and the ``fx_scr`` through the market
+    correlation; the
     ``bscr`` (basic SCR) aggregates the ``insurance_scr``, the ``market_module_scr``
     and the ``credit_scr`` at the top level; ``total_scr`` adds the
     ``operational_scr`` on top of the BSCR. ``solvency_ratio`` is
@@ -370,6 +446,7 @@ class SolvencyAssessment:
     net_interest_scr: float
     equity_scr: float
     property_scr: float
+    fx_scr: float
     market_module_scr: float
     credit_scr: float
     operational_scr: float
@@ -407,9 +484,10 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
           if regime.interest_curves is not None else 0.0)
     eq = equity_scr(portfolio, regime)
     pr = property_scr(portfolio, regime)
-    c = np.array([ni, eq, pr], dtype=np.float64)
+    fx = fx_scr(portfolio, regime, basis.discount_annual)
+    c = np.array([ni, eq, pr, fx], dtype=np.float64)
     R = np.asarray(cal["market_correlation"], dtype=np.float64)
-    market = float(np.sqrt(c @ R @ c))
+    market = float(np.sqrt(max(0.0, c @ R @ c)))
 
     ins = scr.insurance_scr
     cr = credit_scr(portfolio, regime, basis.discount_annual)
@@ -430,13 +508,14 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     return SolvencyAssessment(
         portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
         available_capital=ac, insurance_scr=ins, net_interest_scr=ni,
-        equity_scr=eq, property_scr=pr, market_module_scr=market, credit_scr=cr,
-        operational_scr=op, bscr=bscr, total_scr=total, solvency_ratio=ratio)
+        equity_scr=eq, property_scr=pr, fx_scr=fx, market_module_scr=market,
+        credit_scr=cr, operational_scr=op, bscr=bscr, total_scr=total,
+        solvency_ratio=ratio)
 
 
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital", "net_interest_scr",
-    "equity_scr", "property_scr", "market_module_scr", "credit_scr",
+    "equity_scr", "property_scr", "fx_scr", "market_module_scr", "credit_scr",
     "operational_scr", "assess_solvency",
 ]

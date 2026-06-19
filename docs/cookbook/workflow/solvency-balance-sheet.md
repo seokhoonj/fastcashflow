@@ -143,8 +143,52 @@ table 3 상관 (전부 0.25) 으로 묶습니다 (여기선 K-ICS 라 곡선 미
 신용위험은 K-ICS 격자만 반영했고, Solvency II 의 스프레드 / 거래상대방 위험은 별도
 체계라 아직 0 (후속) 입니다.
 
+## 외환위험 SCR -- K-ICS
+
+외화자산은 환율위험을 집니다. K-ICS 는 통화별 순익스포저에 원화 기준 환율충격 (표22, 통화
+별로 다름 -- USD 25% / EUR 35% / JPY 40% ...) 을 주고, **순자산이 감소하는 통화만 상관 0.5**
+로 묶어 (원화상승 / 원화하락 시나리오 중 나쁜 쪽) 외환위험액을 냅니다. 자산에 `currency`
+(ISO 코드) 를 달면 됩니다. 외환은 시장모듈의 네 번째 하위위험으로, 금리 / 주식 / 부동산과
+표19 상관으로 묶입니다 (주식-외환은 **음(-)의 0.25** -- 환율 급등 시 외국인 매도로 주가가
+빠지는 국내 특성).
+
+```python
+fxport = fcf.AssetPortfolio(holdings=(
+    alm.Bond(3_000_000.0, 0.03, 10, 1, credit_rating="A", currency="USD"),
+    alm.Bond(2_000_000.0, 0.03, 8, 1, credit_rating="AA", currency="EUR"),
+    fcf.Cash(2_500_000.0)))
+k = fcf.assess_solvency(fxport, mp, basis, regime=fcf.KICS)
+print(f"FX SCR            = {k.fx_scr:>14,.0f}")
+print(f"credit SCR        = {k.credit_scr:>14,.0f}")
+print(f"market module SCR = {k.market_module_scr:>14,.0f}")
+print(f"insurance SCR     = {k.insurance_scr:>14,.0f}")
+print(f"BSCR              = {k.bscr:>14,.0f}")
+print(f"total SCR         = {k.total_scr:>14,.0f}")
+print(f"solvency ratio    = {k.solvency_ratio:>13.1%}")
+```
+
+출력:
+
+```text
+FX SCR            =      1,255,986
+credit SCR        =        128,000
+market module SCR =      1,255,986
+insurance SCR     =      1,187,554
+BSCR              =      1,976,444
+total SCR         =      1,997,328
+solvency ratio    =        103.5%
+```
+
+USD 채권 (시가 x 25%) 과 EUR 채권 (x 35%) 의 손실을 상관 0.5 로 묶어
+sqrt(750k^2 + 700k^2 + 2 x 0.5 x 750k x 700k) = 1,255,986. 외화 비중이 크면 외환위험액이
+요구자본을 지배합니다 (비율 103.5%). 외환위험은 K-ICS 만 반영했고, Solvency II 의 통화위험
+(별도 충격) 은 후속입니다.
+
 ## 함정 / 검증
 
+- **외환위험은 K-ICS, SII 는 후속** -- 외환위험액 = max(원화상승, 원화하락) 손실 (통화별
+  표22 충격, 감소통화만 상관 0.5) + 가격변동 (파생, v1 은 0). 시장모듈에 네 번째로 들어가며
+  주식-외환 상관은 음(-) 입니다. Solvency II 통화위험은 별도 체계라 0 (후속).
 - **신용위험은 K-ICS 격자, SII 는 후속** -- 채권 신용 SCR = 시가 x 위험계수 (신용등급 x
   유효만기, 공공 / 일반기업 / 유동화 표). Solvency II 의 스프레드 / 거래상대방 위험은 별도
   체계라 미반영 (0). 현금은 무위험, 주식 / 부동산은 시장위험으로 잡힙니다.

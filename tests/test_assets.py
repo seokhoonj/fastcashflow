@@ -191,6 +191,45 @@ def test_credit_scr_rating_and_class():
         assets.credit_scr(assets.AssetPortfolio(holdings=(bad,)), fcf.KICS, 0.03)
 
 
+def test_fx_scr_hand_calc():
+    """K-ICS FX SCR = worse of won-up / won-down, aggregated at 0.5 correlation.
+    USD 1000 (shock 25% -> 250) and JPY 500 (40% -> 200), both long, so the won-up
+    scenario binds: sqrt(250^2 + 200^2 + 2 x 0.5 x 250 x 200)."""
+    p = assets.AssetPortfolio(holdings=(
+        assets.Cash(1000.0, currency="USD"), assets.Cash(500.0, currency="JPY"),
+        assets.Cash(2000.0)))                          # 2000 won: no FX
+    expected = np.sqrt(250.0**2 + 200.0**2 + 2 * 0.5 * 250.0 * 200.0)
+    assert np.isclose(assets.fx_scr(p, fcf.KICS, 0.03), expected)
+
+
+def test_fx_scr_sii_deferred():
+    """Solvency II currency risk is a separate calibration -> 0."""
+    p = assets.AssetPortfolio(holdings=(assets.Cash(1000.0, currency="USD"),))
+    assert assets.fx_scr(p, fcf.SOLVENCY2, 0.03) == 0.0
+
+
+def test_fx_scr_short_position_up_scenario():
+    """A net-short currency (a foreign liability) loses under the won-down scenario:
+    a short EUR 800 -> 35% x 800."""
+    p = assets.AssetPortfolio(holdings=(assets.Cash(-800.0, currency="EUR"),))
+    assert np.isclose(assets.fx_scr(p, fcf.KICS, 0.03), 0.35 * 800.0)
+    bad = assets.AssetPortfolio(holdings=(assets.Cash(1.0, currency="XXX"),))
+    with pytest.raises(ValueError, match="currency"):
+        assets.fx_scr(bad, fcf.KICS, 0.03)
+
+
+def test_market_module_includes_fx_negative_correlation():
+    """FX enters the market module; equity <-> FX is NEGATIVE 0.25, so an equity +
+    FX book diversifies: sqrt(eq^2 + fx^2 - 2 x 0.25 x eq x fx)."""
+    mp, basis = _mp(), _basis()
+    p = assets.AssetPortfolio(holdings=(
+        assets.Equity(1000.0, "developed"), assets.Cash(1000.0, currency="USD")))
+    eq = assets.equity_scr(p, fcf.KICS)                # 350
+    fx = assets.fx_scr(p, fcf.KICS, basis.discount_annual)   # 250
+    got = assets.market_module_scr(p, mp, basis, regime=fcf.KICS)
+    assert np.isclose(got, np.sqrt(eq**2 + fx**2 + 2 * (-0.25) * eq * fx))
+
+
 def test_assess_solvency_components():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
