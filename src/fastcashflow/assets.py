@@ -531,6 +531,32 @@ _TOPLEVEL_CORRELATION_4 = np.array([
 ])
 
 
+def aggregate_required_capital(insurance: float, market: float, credit: float, *,
+                               regime, operational: float = 0.0,
+                               general_insurance: float = 0.0) -> float:
+    """The basic required capital from disclosed module amounts -- the top-level
+    aggregate of the (life) insurance, market and credit modules plus the
+    operational charge (added OUTSIDE the aggregate).
+
+    K-ICS uses the table-3 correlation (life-vs-general 0, every other pair 0.25;
+    ``general_insurance`` adds a fourth P&C module); Solvency II's top-level matrix
+    is not extracted, so the modules sum. The disclosed ``diversification effect``
+    is the simple module sum minus this aggregate. Use it to reproduce a disclosed
+    basic required capital from the published module risk amounts, or for a what-if
+    on the module mix without re-running a book."""
+    if general_insurance > 0.0:
+        c = np.array([insurance, general_insurance, market, credit], dtype=np.float64)
+        R = _TOPLEVEL_CORRELATION_4
+    else:
+        c = np.array([insurance, market, credit], dtype=np.float64)
+        R = _TOPLEVEL_CORRELATION
+    if regime.name == "K-ICS":
+        agg = float(np.sqrt(c @ R @ c))
+    else:                                   # SII: top-level matrix not extracted
+        agg = float(c.sum())
+    return agg + operational
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class SolvencyAssessment:
     """The asset-inclusive solvency picture at t=0 -- the full ratio and its parts.
@@ -627,17 +653,8 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     ins = scr.insurance_scr
     gen = max(0.0, general_insurance_scr)   # general (P&C) insurance, caller-supplied
     cr = credit_scr(portfolio, regime, basis.discount_annual)
-    imc = cal["insurance_market_corr"]
-    if gen > 0.0:                           # life + general insurance -> 4 modules
-        modules = np.array([ins, gen, market, cr], dtype=np.float64)
-        R4 = _TOPLEVEL_CORRELATION_4
-    else:
-        modules = np.array([ins, market, cr], dtype=np.float64)
-        R4 = _TOPLEVEL_CORRELATION
-    if imc is None:                         # SII: top-level matrix not extracted
-        bscr = float(modules.sum())
-    else:                                   # K-ICS: table-3 correlation
-        bscr = float(np.sqrt(modules @ R4 @ modules))
+    bscr = aggregate_required_capital(ins, market, cr, regime=regime,
+                                      general_insurance=gen)   # table 3 (no operational)
 
     op = operational_scr(model_points, basis, regime, bscr=bscr)
     basic = bscr + op                       # K-ICS basic required capital (incl. op)
@@ -667,5 +684,6 @@ __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital", "net_interest_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
-    "market_module_scr", "credit_scr", "operational_scr", "assess_solvency",
+    "market_module_scr", "credit_scr", "operational_scr",
+    "aggregate_required_capital", "assess_solvency",
 ]

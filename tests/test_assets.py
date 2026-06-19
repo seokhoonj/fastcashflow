@@ -391,3 +391,27 @@ def test_general_insurance_disclosed_reproduction():
                   [.25, .25, 1, .25], [.25, .25, .25, 1]])
     basic = np.sqrt(m @ R @ m) + op
     assert np.isclose(basic, 16_977_612_719, rtol=0, atol=2)   # disclosed, to the won
+
+
+def test_aggregate_required_capital_reproduces_disclosures():
+    """The public top-level aggregation reproduces disclosed K-ICS basic required
+    capital from the published module amounts. A pure-life book (general = 0) and a
+    life + P&C book (general module added) both match the disclosure to the won."""
+    # life insurer, general insurance = 0 (KRW millions)
+    basic = assets.aggregate_required_capital(
+        11_628_115, 34_552_189, 4_166_014, regime=fcf.KICS, operational=1_083_844)
+    assert np.isclose(basic, 41_624_006, rtol=0, atol=2)
+    # life + general insurance (KRW thousands)
+    basic_g = assets.aggregate_required_capital(
+        10_654_450_301, 7_191_902_855, 2_495_852_957, regime=fcf.KICS,
+        operational=1_648_722_264, general_insurance=542_312_823)
+    assert np.isclose(basic_g, 16_977_612_719, rtol=0, atol=2)
+    # the diversification effect = simple sum - aggregate (ex operational)
+    agg = assets.aggregate_required_capital(11_628_115, 34_552_189, 4_166_014,
+                                            regime=fcf.KICS)
+    div = (11_628_115 + 34_552_189 + 4_166_014) - agg
+    assert np.isclose(div, 9_806_156, rtol=0, atol=2)
+    # Solvency II sums the modules (no top-level diversification)
+    s = assets.aggregate_required_capital(100.0, 200.0, 50.0, regime=fcf.SOLVENCY2,
+                                          operational=10.0)
+    assert np.isclose(s, 360.0)

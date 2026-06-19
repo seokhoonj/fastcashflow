@@ -52,9 +52,11 @@ print(f"  insurance liability    = {bel + ra + csm:>15,.0f}")
   insurance liability    =      17,697,565
 ```
 
-공시의 `보험계약부채 = 최선추정액 + 위험조정 + 보험계약마진` 과 같은 분해입니다 (실제
-대형사는 이 합이 수십~수백조; 유배당 / 무배당 / 변액으로 더 나뉩니다 -- 변액은
-`vfa.measure`).
+공시의 `보험계약부채 = 최선추정액 + 위험조정 + 보험계약마진` 과 같은 분해입니다 (BEL=
+현행추정부채=최선추정, RA=위험마진=위험조정, CSM=보험계약마진). 실제 대형사는 이 합이
+수십~수백조; 유배당 / 무배당 / 변액으로 더 나뉩니다 (변액은 `vfa.measure`). **현실 비율
+감각** -- 한 대형 생보사 FY2025 공시는 BEL 206.9조, RA 4.58조 (**RA/BEL ~2.2%**), CSM 13.5조
+(**CSM/BEL ~6.5%**) 였습니다. RA 는 BEL 의 수% 수준이 자연스럽습니다.
 
 ## K-ICS 지급여력 -- 가용자본 / 요구자본 / 비율
 
@@ -96,6 +98,42 @@ print(f"  solvency ratio         = {a.solvency_ratio:>14.1%}")
 `지급여력비율 = 가용자본 / 요구자본` 의 193.7% 는 실제 대형 생보사의 공시 범위
 (대략 185~210%) 에 듭니다 -- 합성데이터인데도 **구조와 크기** 가 현실 공시와 맞물립니다.
 요구자본은 보험위험과 시장위험 (금리·주식·부동산) 의 분산집계입니다.
+
+## 실제 공시 요구자본 재현 -- 모듈 위험액 -> 기본요구자본
+
+위 합성예제는 구조를 보여주지만, **공시된 모듈 위험액을 그대로 넣으면 실제 지급여력기준금액이
+원 단위로 재현**됩니다. `fcf.aggregate_required_capital` 이 표3 상관집계 (생명장기·시장·신용
+0.25, 운영은 밖에서 가산) 를 합니다. 아래는 **국내 대형 생보사 FY2025 경영공시 (DART)** 의
+요구자본 모듈 (단위: 백만원) 입니다.
+
+```python
+ins, mkt, cr, op = 11_628_115, 34_552_189, 4_166_014, 1_083_844   # 공시 모듈 위험액
+tax, other = 11_153_682, 2_737_202                                # 법인세조정 / 기타요구자본
+avail = 65_740_200                                                # 지급여력금액 (가용자본)
+
+basic = fcf.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS, operational=op)
+div = (ins + mkt + cr) - fcf.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS)
+total = basic - tax + other                                       # 기본 - 법인세 + 기타
+print(f"basic required capital = {basic:>14,.0f}")
+print(f"  diversification      = {div:>14,.0f}")
+print(f"total required capital = {total:>14,.0f}")
+print(f"solvency ratio         = {avail / total:>13.1%}")
+```
+
+출력:
+
+```text
+basic required capital =     41,624,007
+  diversification      =      9,806,155
+total required capital =     33,207,527
+solvency ratio         =        198.0%
+```
+
+공시값 (기본요구자본 41,624,006 / 분산효과 9,806,156 / 지급여력기준금액 33,207,526 / 비율
+198.0%) 과 **반올림 (+/-1 백만원) 까지 일치**합니다. 표3 0.25 상관·운영 외부가산·법인세조정·
+기타요구자본 구조가 그대로 재현됩니다. 손보를 겸영하면 `general_insurance=` 로 일반손해
+모듈을 넷째로 더합니다 (생명장기-일반손해 상관 0). 모듈 위험액 자체는 보유계약을 측정해
+나오지만 (앞 챕터들), 이 집계 단계는 **공시와 동일한 산식**입니다.
 
 ## 금리 민감도
 

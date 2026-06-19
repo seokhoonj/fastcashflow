@@ -93,7 +93,7 @@ from fastcashflow.assets import (
     Equity, Property, Cash, AssetPortfolio, SolvencyAssessment,
     portfolio_value, available_capital, net_interest_scr,
     equity_scr, property_scr, fx_scr, concentration_scr, market_module_scr,
-    credit_scr, operational_scr, assess_solvency,
+    credit_scr, operational_scr, aggregate_required_capital, assess_solvency,
 )
 from fastcashflow import assets
 from fastcashflow._reinsurance import ReinsuranceMeasurement
@@ -157,7 +157,8 @@ __all__ = [
     "assets", "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "portfolio_value", "available_capital", "net_interest_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
-    "market_module_scr", "credit_scr", "operational_scr", "assess_solvency",
+    "market_module_scr", "credit_scr", "operational_scr",
+    "aggregate_required_capital", "assess_solvency",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
