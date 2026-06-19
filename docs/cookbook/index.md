@@ -238,6 +238,10 @@
   - [수익성 분석 / profit-testing](workflow/profit-testing)
   - 측정 결과에서 NBV / 마진 / 이익 시그니처 / IRR 추출. 전통형 (통계) NLP 준비금과
     이익원천 (보험료차 / 이자차) emergence — `fcf.pricing`.
+* - 8.4
+  - [전통형 금리보증 비용 (TVOG)](workflow/interest-guarantee)
+  - 최저보증이율의 비용을 intrinsic / 시간가치로 분해. `statutory_reserve` (준비금) +
+    `esg.simulate` (금리시나리오) 를 엮은 `interest_guarantee_tvog`.
 :::
 
 ### 9. 결산 워크플로
@@ -416,6 +420,7 @@ io/workbook-multi
 workflow/sensitivity
 workflow/validation
 workflow/profit-testing
+workflow/interest-guarantee
 :::
 
 :::{toctree}
