@@ -254,6 +254,10 @@
   - [ALM -- 듀레이션 / DV01 / gap](workflow/alm-duration)
   - 부채·채권의 금리 민감도 (DV01 / duration / key-rate) 와 자산-부채 DV01 gap (면역화) --
     `liability_duration`, `bond_duration`, `alm_gap`.
+* - 8.8
+  - [자산 - 가용자본 - 지급여력비율](workflow/solvency-balance-sheet)
+  - 자산 시가평가 + 가용자본 (자산-부채) + 순금리 SCR 로 지급여력비율 조립 --
+    `AssetPortfolio`, `available_capital`, `assess_solvency`.
 :::
 
 ### 9. 결산 워크플로
@@ -436,6 +440,7 @@ workflow/interest-guarantee
 workflow/embedded-value
 workflow/required-capital
 workflow/alm-duration
+workflow/solvency-balance-sheet
 :::
 
 :::{toctree}

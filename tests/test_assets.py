@@ -80,3 +80,24 @@ def test_unmatched_book_positive_net_interest():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(assets.Cash(10_000_000.0),))
     assert assets.net_interest_scr(p, mp, basis, interest_curves=_parallel_curves()) > 0.0
+
+
+def test_assess_solvency_components():
+    mp, basis = _mp(), _basis()
+    p = assets.AssetPortfolio(holdings=(
+        alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
+    a = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
+    assert np.isclose(a.total_scr, a.insurance_scr + a.net_interest_scr)
+    assert np.isclose(a.solvency_ratio, a.available_capital / a.total_scr)
+    assert np.isclose(a.available_capital, a.portfolio_value - (a.bel + a.risk_margin))
+    assert a.net_interest_scr != a.liability_interest_capital   # net replaces liability-only
+
+
+def test_assess_solvency_kics_fallback():
+    """K-ICS carries no interest curves -> net interest falls back to the liability
+    figure (no crash, no silently dropped interest risk)."""
+    mp, basis = _mp(), _basis()
+    p = assets.AssetPortfolio(holdings=(assets.Cash(8_000_000.0),))
+    a = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    assert a.net_interest_scr == a.liability_interest_capital
+    assert np.isfinite(a.solvency_ratio)

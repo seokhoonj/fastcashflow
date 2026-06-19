@@ -28,6 +28,7 @@ from fastcashflow.alm import Bond, bond_value
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
+from fastcashflow.solvency import RegimeSpec, required_capital
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +114,67 @@ def net_interest_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
     return worst
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class SolvencyAssessment:
+    """The asset-inclusive solvency picture at t=0 -- the full ratio and its parts.
+
+    ``available_capital`` is ``portfolio_value - (bel + risk_margin)``;
+    ``total_scr`` is ``insurance_scr + net_interest_scr`` (the asset-aware net
+    interest replacing the liability-only ``liability_interest_capital``);
+    ``solvency_ratio`` is ``available_capital / total_scr``."""
+
+    portfolio_value: float
+    bel: float
+    risk_margin: float
+    available_capital: float
+    insurance_scr: float
+    net_interest_scr: float
+    liability_interest_capital: float
+    total_scr: float
+    solvency_ratio: float
+
+
+def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
+                    basis: Basis, *, regime: RegimeSpec) -> SolvencyAssessment:
+    """Assemble the t=0 solvency ratio from the assets and the liability SCR.
+
+    Runs :func:`~fastcashflow.required_capital` for the liability-side SCR, values
+    the portfolio, forms available capital (assets less the technical provision),
+    and replaces the liability-only interest capital with the NET interest SCR
+    (assets and liabilities re-priced together) when the regime carries interest
+    curves -- else it keeps the regime's liability interest figure (e.g. K-ICS,
+    whose curve scenarios are caller-supplied).
+
+    v1 LIMITATION: equity and property holdings raise available capital but carry
+    NO asset-side market-risk SCR yet (the equity / property shock sub-modules are
+    a follow-up). A book with material equity / property therefore has an
+    understated ``total_scr`` and an OVERSTATED ``solvency_ratio`` -- read it as an
+    upper bound until that follow-up lands.
+    """
+    scr = required_capital(model_points, basis, regime=regime)
+    pv = portfolio_value(portfolio, basis.discount_annual)
+    ac = available_capital(pv, scr.base_bel, scr.risk_margin)
+    if regime.interest_curves is not None:
+        ni = net_interest_scr(portfolio, model_points, basis,
+                              interest_curves=regime.interest_curves)
+    else:
+        ni = scr.interest_capital
+    total = scr.insurance_scr + ni
+    # A non-positive required capital (a risk-free / fully-immunised book) makes
+    # the ratio unbounded -- avoid the divide-by-zero and signal it as infinite.
+    if total > 0.0:
+        ratio = ac / total
+    else:
+        ratio = float("inf") if ac >= 0.0 else float("-inf")
+    return SolvencyAssessment(
+        portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
+        available_capital=ac, insurance_scr=scr.insurance_scr, net_interest_scr=ni,
+        liability_interest_capital=scr.interest_capital, total_scr=total,
+        solvency_ratio=ratio)
+
+
 __all__ = [
-    "Equity", "Property", "Cash", "AssetPortfolio",
+    "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital", "net_interest_scr",
+    "assess_solvency",
 ]
