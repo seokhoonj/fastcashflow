@@ -519,6 +519,17 @@ _TOPLEVEL_CORRELATION = np.array([
     [0.25, 0.25, 1.00],
 ])
 
+# Table 3 with the general (P&C) insurance module added: order is
+# (life-long-term, general insurance, market, credit). Life-vs-general is 0; all
+# other pairs are 0.25. Used when a caller supplies a general-insurance SCR (for a
+# life + P&C book); the life-only engine leaves it at zero.
+_TOPLEVEL_CORRELATION_4 = np.array([
+    [1.00, 0.00, 0.25, 0.25],
+    [0.00, 1.00, 0.25, 0.25],
+    [0.25, 0.25, 1.00, 0.25],
+    [0.25, 0.25, 0.25, 1.00],
+])
+
 
 @dataclass(frozen=True, slots=True, eq=False)
 class SolvencyAssessment:
@@ -528,8 +539,9 @@ class SolvencyAssessment:
     module aggregates the ``net_interest_scr`` (assets and liabilities), the
     ``equity_scr``, the ``property_scr``, the ``fx_scr`` and the
     ``concentration_scr`` through the market correlation; the
-    ``bscr`` (basic SCR) aggregates the ``insurance_scr``, the ``market_module_scr``
-    and the ``credit_scr`` at the top level; ``basic_required_capital`` adds the
+    ``bscr`` (basic SCR) aggregates the ``insurance_scr``, the (optional)
+    ``general_insurance_scr``, the ``market_module_scr`` and the ``credit_scr`` at
+    the top level; ``basic_required_capital`` adds the
     ``operational_scr`` on top of the BSCR. ``total_scr`` (the ratio denominator)
     subtracts the ``tax_adjustment`` (loss-absorbing capacity of deferred taxes)
     from the basic required capital. ``solvency_ratio`` is
@@ -540,6 +552,7 @@ class SolvencyAssessment:
     risk_margin: float
     available_capital: float
     insurance_scr: float
+    general_insurance_scr: float
     net_interest_scr: float
     equity_scr: float
     property_scr: float
@@ -558,8 +571,8 @@ class SolvencyAssessment:
 def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
                     basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
                     tax_recoverability_limit: float | None = None,
-                    catastrophe: float = 0.0, property_codes=()
-                    ) -> SolvencyAssessment:
+                    catastrophe: float = 0.0, property_codes=(),
+                    general_insurance_scr: float = 0.0) -> SolvencyAssessment:
     """Assemble the t=0 solvency ratio from the assets and the liability SCR.
 
     Runs :func:`~fastcashflow.required_capital` for the liability (insurance) SCR,
@@ -583,7 +596,10 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     ``catastrophe`` (the K-ICS catastrophe amount from
     :func:`~fastcashflow.catastrophe_scr`) and ``property_codes`` (the long-term
     property / other coverages, a +16% rate shock) fold into the insurance module
-    (table-6 correlation); both default to off.
+    (table-6 correlation); both default to off. ``general_insurance_scr`` (a
+    caller-supplied P&C amount for a life + general book) enters the BSCR as a
+    fourth top-level module (table 3: life-vs-general 0, else 0.25); the life-only
+    engine leaves it at 0.
 
     Notes: K-ICS supplies no interest curves (its scenarios are caller-supplied),
     so the net interest component is zero here -- equity and property still apply.
@@ -609,13 +625,19 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     market = float(np.sqrt(max(0.0, c @ R @ c)))
 
     ins = scr.insurance_scr
+    gen = max(0.0, general_insurance_scr)   # general (P&C) insurance, caller-supplied
     cr = credit_scr(portfolio, regime, basis.discount_annual)
     imc = cal["insurance_market_corr"]
-    modules = np.array([ins, market, cr], dtype=np.float64)
+    if gen > 0.0:                           # life + general insurance -> 4 modules
+        modules = np.array([ins, gen, market, cr], dtype=np.float64)
+        R4 = _TOPLEVEL_CORRELATION_4
+    else:
+        modules = np.array([ins, market, cr], dtype=np.float64)
+        R4 = _TOPLEVEL_CORRELATION
     if imc is None:                         # SII: top-level matrix not extracted
         bscr = float(modules.sum())
-    else:                                   # K-ICS: table-3 correlation (all 0.25)
-        bscr = float(np.sqrt(modules @ _TOPLEVEL_CORRELATION @ modules))
+    else:                                   # K-ICS: table-3 correlation
+        bscr = float(np.sqrt(modules @ R4 @ modules))
 
     op = operational_scr(model_points, basis, regime, bscr=bscr)
     basic = bscr + op                       # K-ICS basic required capital (incl. op)
@@ -633,7 +655,8 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
         ratio = float("inf") if ac >= 0.0 else float("-inf")
     return SolvencyAssessment(
         portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
-        available_capital=ac, insurance_scr=ins, net_interest_scr=ni,
+        available_capital=ac, insurance_scr=ins, general_insurance_scr=gen,
+        net_interest_scr=ni,
         equity_scr=eq, property_scr=pr, fx_scr=fx, concentration_scr=conc,
         market_module_scr=market, credit_scr=cr, operational_scr=op, bscr=bscr,
         basic_required_capital=basic, tax_adjustment=tax_adj,

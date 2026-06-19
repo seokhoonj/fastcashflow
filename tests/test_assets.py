@@ -360,3 +360,34 @@ def test_equity_now_charges_scr():
     assert a1.available_capital > a0.available_capital
     assert a1.total_scr > a0.total_scr                       # equity now charges market SCR
     assert np.isclose(a1.equity_scr, 3_000_000.0 * 0.35)
+
+
+def test_general_insurance_fourth_module():
+    """A caller-supplied general (P&C) SCR enters the BSCR as a 4th top-level module
+    (table 3: life-vs-general 0, else 0.25), matching disclosed K-ICS structure."""
+    mp, basis = _mp(), _basis()
+    p = assets.AssetPortfolio(holdings=(
+        alm.Bond(2_000_000.0, 0.03, 10, 1, credit_rating="A"), assets.Cash(3_000_000.0)))
+    gen = 800_000.0
+    a = assets.assess_solvency(p, mp, basis, regime=fcf.KICS, general_insurance_scr=gen)
+    m = np.array([a.insurance_scr, gen, a.market_module_scr, a.credit_scr])
+    R = np.array([[1, 0, .25, .25], [0, 1, .25, .25],
+                  [.25, .25, 1, .25], [.25, .25, .25, 1]])
+    assert np.isclose(a.general_insurance_scr, gen)
+    assert np.isclose(a.bscr, np.sqrt(m @ R @ m))
+    # zero general -> the 3-module aggregation (unchanged)
+    a0 = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    assert a0.general_insurance_scr == 0.0
+    assert a.bscr > a0.bscr                                  # adding a module raises BSCR
+
+
+def test_general_insurance_disclosed_reproduction():
+    """The 4-module table-3 aggregation reproduces a disclosed K-ICS basic required
+    capital (Hanwha Life FY2025, KRW thousands): sqrt over the 4 modules + operational."""
+    life, pc, mkt, cr = 10_654_450_301, 542_312_823, 7_191_902_855, 2_495_852_957
+    op = 1_648_722_264
+    m = np.array([life, pc, mkt, cr], dtype=float)
+    R = np.array([[1, 0, .25, .25], [0, 1, .25, .25],
+                  [.25, .25, 1, .25], [.25, .25, .25, 1]])
+    basic = np.sqrt(m @ R @ m) + op
+    assert np.isclose(basic, 16_977_612_719, rtol=0, atol=2)   # disclosed, to the won
