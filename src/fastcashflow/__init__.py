@@ -86,13 +86,14 @@ from fastcashflow.solvency import (
 from fastcashflow import solvency
 from fastcashflow.alm import (
     DurationResult, Bond, liability_duration, liability_dv01, key_rate_durations,
-    bond_duration, bond_value, alm_gap,
+    bond_duration, bond_value, effective_maturity, alm_gap,
 )
 from fastcashflow import alm
 from fastcashflow.assets import (
     Equity, Property, Cash, AssetPortfolio, SolvencyAssessment,
     portfolio_value, available_capital, net_interest_scr,
-    equity_scr, property_scr, market_module_scr, operational_scr, assess_solvency,
+    equity_scr, property_scr, market_module_scr, credit_scr, operational_scr,
+    assess_solvency,
 )
 from fastcashflow import assets
 from fastcashflow._reinsurance import ReinsuranceMeasurement
@@ -151,11 +152,12 @@ __all__ = [
     "solvency", "required_capital", "solvency_ratio",
     "RegimeSpec", "SCRResult", "SubRisk", "Stress", "SOLVENCY2", "KICS",
     "alm", "DurationResult", "Bond", "liability_duration", "liability_dv01",
-    "key_rate_durations", "bond_duration", "bond_value", "alm_gap",
+    "key_rate_durations", "bond_duration", "bond_value", "effective_maturity",
+    "alm_gap",
     "assets", "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "portfolio_value", "available_capital", "net_interest_scr",
-    "equity_scr", "property_scr", "market_module_scr", "operational_scr",
-    "assess_solvency",
+    "equity_scr", "property_scr", "market_module_scr", "credit_scr",
+    "operational_scr", "assess_solvency",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",

@@ -1,5 +1,6 @@
 """Assets and the solvency balance sheet -- hand-calc anchors."""
 import numpy as np
+import pytest
 
 import fastcashflow as fcf
 from fastcashflow import assets, alm
@@ -141,15 +142,66 @@ def test_operational_scr_sii_cap():
                       op_uncapped)
 
 
+def test_effective_maturity_hand_calc():
+    """Effective maturity = sum(t x CF) / sum(CF). A 10y 3% annual bond:
+    sum(t x CF) = 3 x (1+..+10) + 100 x 10 = 1165; sum(CF) = 130; 1165/130."""
+    b = alm.Bond(100.0, 0.03, 10, 1)
+    assert np.isclose(alm.effective_maturity(b), 1165.0 / 130.0)
+
+
+def test_credit_bucket_boundaries():
+    """Bucket k is k < m <= k+1 (so 0-1 is index 0), capped at the 14+ bucket."""
+    assert assets._credit_bucket(0.5) == 0
+    assert assets._credit_bucket(1.0) == 0
+    assert assets._credit_bucket(1.5) == 1
+    assert assets._credit_bucket(10.0) == 9
+    assert assets._credit_bucket(14.0) == 13
+    assert assets._credit_bucket(20.0) == 14
+
+
+def test_credit_scr_kics_hand_calc():
+    """K-ICS credit SCR = market value x factor[rating row][maturity bucket].
+    An AA corporate bond (10y 3%) has effective maturity 8.96 -> bucket 8, and the
+    corporate '1-2' row there is 2.0% (handbook table 30)."""
+    b = alm.Bond(100.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate")
+    p = assets.AssetPortfolio(holdings=(b, assets.Cash(1000.0), assets.Equity(500.0)))
+    mv = alm.bond_value(b, 0.03)
+    assert np.isclose(assets.credit_scr(p, fcf.KICS, 0.03), mv * 0.02)   # only the bond
+
+
+def test_credit_scr_sii_deferred():
+    """Solvency II credit (spread / counterparty) is a separate framework -> 0."""
+    b = alm.Bond(100.0, 0.03, 10, 1, credit_rating="BBB")
+    p = assets.AssetPortfolio(holdings=(b,))
+    assert assets.credit_scr(p, fcf.SOLVENCY2, 0.03) == 0.0
+
+
+def test_credit_scr_rating_and_class():
+    """A lower rating and a riskier exposure class both raise the factor."""
+    aa = alm.Bond(100.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate")
+    bb = alm.Bond(100.0, 0.03, 10, 1, credit_rating="BB", exposure_class="corporate")
+    sec = alm.Bond(100.0, 0.03, 10, 1, credit_rating="BB", exposure_class="securitisation")
+    s_aa = assets.credit_scr(assets.AssetPortfolio(holdings=(aa,)), fcf.KICS, 0.03)
+    s_bb = assets.credit_scr(assets.AssetPortfolio(holdings=(bb,)), fcf.KICS, 0.03)
+    s_sec = assets.credit_scr(assets.AssetPortfolio(holdings=(sec,)), fcf.KICS, 0.03)
+    assert s_bb > s_aa                       # BB (grade 5) charges more than AA (1-2)
+    assert s_sec > s_bb                      # securitisation BB charges more than corporate
+    bad = alm.Bond(100.0, 0.03, 10, 1, exposure_class="exotic")
+    with pytest.raises(ValueError, match="exposure_class"):
+        assets.credit_scr(assets.AssetPortfolio(holdings=(bad,)), fcf.KICS, 0.03)
+
+
 def test_assess_solvency_components():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
     a = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
     # no equity/property -> the market module is just the net interest SCR, and the
-    # SII top-level BSCR is a simple sum; the total adds operational on top
+    # SII top-level BSCR is a simple sum; SII credit is deferred (0); the total
+    # adds operational on top
     assert np.isclose(a.market_module_scr, a.net_interest_scr)
-    assert np.isclose(a.bscr, a.insurance_scr + a.net_interest_scr)
+    assert a.credit_scr == 0.0                              # SII credit deferred
+    assert np.isclose(a.bscr, a.insurance_scr + a.net_interest_scr + a.credit_scr)
     assert np.isclose(a.total_scr, a.bscr + a.operational_scr)
     assert np.isclose(a.solvency_ratio, a.available_capital / a.total_scr)
     assert np.isclose(a.available_capital, a.portfolio_value - (a.bel + a.risk_margin))
@@ -168,18 +220,23 @@ def test_assess_solvency_kics_no_curves():
 
 
 def test_top_level_aggregation_kics_vs_sii():
-    """K-ICS aggregates insurance and market with the 0.25 correlation; Solvency II
-    falls back to a simple sum (top-level matrix not extracted)."""
+    """K-ICS aggregates insurance, market and credit with the table-3 correlation
+    (all 0.25); Solvency II falls back to a simple sum (top-level matrix not
+    extracted, and SII credit deferred)."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Equity(3_000_000.0, "developed")))
     k = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
     s = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
-    assert np.isclose(s.bscr, s.insurance_scr + s.market_module_scr)          # SII sum
-    ins, mkt = k.insurance_scr, k.market_module_scr
-    assert np.isclose(k.bscr,
-                      np.sqrt(ins * ins + mkt * mkt + 2 * 0.25 * ins * mkt))   # K-ICS sqrt
-    assert np.isclose(k.total_scr, k.bscr + k.operational_scr)                # + operational
+    # SII: simple sum, credit deferred (0)
+    assert s.credit_scr == 0.0
+    assert np.isclose(s.bscr, s.insurance_scr + s.market_module_scr + s.credit_scr)
+    # K-ICS: the bond now carries a credit charge -> 3-module sqrt aggregation
+    assert k.credit_scr > 0.0
+    m = np.array([k.insurance_scr, k.market_module_scr, k.credit_scr])
+    R = np.array([[1.0, 0.25, 0.25], [0.25, 1.0, 0.25], [0.25, 0.25, 1.0]])
+    assert np.isclose(k.bscr, np.sqrt(m @ R @ m))                            # K-ICS sqrt
+    assert np.isclose(k.total_scr, k.bscr + k.operational_scr)               # + operational
 
 
 def test_equity_now_charges_scr():

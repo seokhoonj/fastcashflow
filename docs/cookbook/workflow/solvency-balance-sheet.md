@@ -103,8 +103,51 @@ top-level 집계 -- Solvency II 는 단순합 (2,485,521), K-ICS 는 0.25 상관
 주식만큼 올라 5,290,189 지만 SCR 도 같이 올라 비율은 210.8% 로 **분자만 오르던 과대가
 사라졌습니다**.
 
+## 신용위험 SCR -- K-ICS
+
+채권은 신용위험을 집니다 -- 발행자 부도와 등급하락. K-ICS 는 이를 **신용등급 x 유효만기**
+격자의 위험계수 (부도 + 등급하락 부담률, 시가의 %) 로 매깁니다 (공공 / 일반기업 / 유동화
+익스포저별로 표가 다름). `Bond` 에 `credit_rating` (AAA~D / unrated) 과 `exposure_class`
+(corporate / public / securitisation) 를 주면 됩니다. 유효만기는 현금흐름가중 평균만기
+(`fcf.effective_maturity`) 라 같은 만기라도 쿠폰이 크면 짧아집니다.
+
+```python
+mixed = fcf.AssetPortfolio(holdings=(
+    alm.Bond(3_000_000.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate"),
+    alm.Bond(2_000_000.0, 0.04, 8, 1, credit_rating="BBB", exposure_class="corporate"),
+    fcf.Cash(2_000_000.0)))
+k = fcf.assess_solvency(mixed, mp, basis, regime=fcf.KICS)
+print(f"insurance SCR     = {k.insurance_scr:>14,.0f}")
+print(f"credit SCR        = {k.credit_scr:>14,.0f}")
+print(f"market module SCR = {k.market_module_scr:>14,.0f}")
+print(f"BSCR              = {k.bscr:>14,.0f}")
+print(f"operational SCR   = {k.operational_scr:>14,.0f}")
+print(f"total SCR         = {k.total_scr:>14,.0f}")
+print(f"solvency ratio    = {k.solvency_ratio:>13.1%}")
+```
+
+출력:
+
+```text
+insurance SCR     =      1,187,554
+credit SCR        =        173,441
+market module SCR =              0
+BSCR              =      1,242,317
+operational SCR   =         20,884
+total SCR         =      1,263,201
+solvency ratio    =        135.1%
+```
+
+낮은 등급 (BBB) 과 긴 만기일수록 위험계수가 큽니다. BSCR 은 보험 + 시장 + **신용** 을
+table 3 상관 (전부 0.25) 으로 묶습니다 (여기선 K-ICS 라 곡선 미공급 -> 시장모듈 0).
+신용위험은 K-ICS 격자만 반영했고, Solvency II 의 스프레드 / 거래상대방 위험은 별도
+체계라 아직 0 (후속) 입니다.
+
 ## 함정 / 검증
 
+- **신용위험은 K-ICS 격자, SII 는 후속** -- 채권 신용 SCR = 시가 x 위험계수 (신용등급 x
+  유효만기, 공공 / 일반기업 / 유동화 표). Solvency II 의 스프레드 / 거래상대방 위험은 별도
+  체계라 미반영 (0). 현금은 무위험, 주식 / 부동산은 시장위험으로 잡힙니다.
 - **운영위험은 부채 factor** -- 보험료·BEL 에 위험계수 (K-ICS max(보험료 3.5%, BEL 0.4%) /
   SII min(0.3 BSCR, max(0.04 보험료, 0.0045 BEL))) 를 적용해 BSCR 위에 가산합니다.
 - **주식 세분·자산군은 일부만** -- 주식은 선진/신흥, 부동산 단일까지 반영했습니다.

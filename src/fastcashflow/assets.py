@@ -12,19 +12,20 @@ scope. This module sits above :mod:`fastcashflow.alm` (it prices bonds) and
 :mod:`fastcashflow.solvency` (it consumes the liability SCR); it adds no new
 regulatory numbers.
 
-v1 limitation (documented on :func:`assess_solvency`): equity and property
-holdings are carried at their market value -- they raise available capital but do
-NOT yet contribute an asset-side market-risk SCR (the equity / property shock
-sub-modules are a follow-up). A book with material equity / property therefore has
-an understated SCR, so its ratio is an upper bound until that follow-up lands.
+The asset-side SCR modules are the market risk (interest / equity / property) and
+the credit risk (bond default + downgrade). Credit risk is charged for K-ICS only;
+Solvency II's spread / counterparty framework is a separate calibration not encoded
+here (deferred), so a Solvency II credit charge is zero. Currency and asset
+concentration risk are not yet modelled, so a book heavy in those is an upper bound.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
 
-from fastcashflow.alm import Bond, bond_value
+from fastcashflow.alm import Bond, bond_value, effective_maturity
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
@@ -243,6 +244,112 @@ def operational_scr(model_points: ModelPoints, basis: Basis, regime, *,
     return op
 
 
+# ---------------------------------------------------------------------------
+# Credit risk -- an asset-side factor charge on credit exposures (bonds).
+# K-ICS (chapter 5): the credit risk factor = default + downgrade charge, read
+# off a (rating x effective-maturity) grid that differs by exposure class
+# (public / corporate / securitisation -- handbook tables 29 / 30 / 31). The
+# factor is a percent of market value (it already embeds the spread shock), so
+# the charge is factor x market value -- no re-measure. Effective maturity is the
+# cash-flow-weighted average maturity (:func:`fastcashflow.effective_maturity`).
+# External (S&P) ratings map to the K-ICS grades AAA/AA -> 1-2, A -> 3, BBB -> 4,
+# BB -> 5, B -> 6, CCC and below -> 7, D -> default. Solvency II credit (spread /
+# counterparty default) is a separate framework not encoded here -- deferred.
+# ---------------------------------------------------------------------------
+
+_CREDIT_FACTORS = {            # K-ICS handbook tables 29 / 30 / 31, in PERCENT;
+    "public": {                # rows: K-ICS grade, columns: maturity bucket 0-1 .. 14+
+        "1-2": (0.1, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1, 1.1, 1.1, 1.2, 1.2, 1.2, 1.3),
+        "3": (0.4, 1, 1.3, 1.5, 1.8, 2, 2.2, 2.4, 2.5, 2.7, 2.8, 2.9, 3, 3, 3.1),
+        "4": (1, 2.2, 2.6, 3, 3.3, 3.6, 3.9, 4.1, 4.2, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9),
+        "5": (2.5, 5.1, 6, 6.6, 7, 7.3, 7.5, 7.6, 7.6, 7.7, 7.8, 7.8, 7.9, 7.9, 7.9),
+        "6": (6.3, 10.8, 11.8, 12.3, 12.5, 12.7, 12.7, 12.7, 12.7, 12.7, 12.7, 12.7, 12.7, 12.7, 12.7),
+        "7": (22, 24.7, 25.2, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3, 25.3),
+        "unrated": (2.5, 5.1, 6, 6.6, 7, 7.3, 7.5, 7.6, 7.6, 7.7, 7.8, 7.8, 7.9, 7.9, 7.9),
+        "default": (35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35),
+    },
+    "corporate": {             # the non-covered-bond ("other") rows for grades 1-2 / 3
+        "1-2": (0.2, 0.7, 0.9, 1.2, 1.4, 1.6, 1.7, 1.9, 2, 2.1, 2.2, 2.3, 2.4, 2.4, 2.5),
+        "3": (0.6, 1.3, 1.6, 1.8, 2.1, 2.3, 2.6, 2.8, 3, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7),
+        "4": (1.4, 3, 3.6, 4.1, 4.5, 4.9, 5.1, 5.3, 5.4, 5.6, 5.7, 5.8, 5.9, 6, 6),
+        "5": (3.6, 7.1, 8.3, 9, 9.4, 9.7, 9.8, 9.8, 9.8, 9.8, 9.8, 9.8, 9.8, 9.8, 9.8),
+        "6": (8.9, 14.4, 15.3, 15.6, 15.6, 15.6, 15.6, 15.6, 15.6, 15.6, 15.6, 15.6, 15.6, 15.6, 15.6),
+        "7": (35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35),
+        "unrated": (6.3, 10.7, 11.8, 12.3, 12.5, 12.6, 12.7, 12.7, 12.7, 12.7, 12.7, 12.7, 12.7, 12.7, 12.7),
+        "default": (35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35, 35),
+    },
+    "securitisation": {
+        "1-2": (0.2, 0.7, 0.9, 1.2, 1.4, 1.6, 1.7, 1.9, 2, 2.1, 2.2, 2.3, 2.4, 2.4, 2.5),
+        "3": (0.6, 1.3, 1.6, 1.8, 2.1, 2.3, 2.6, 2.8, 3, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7),
+        "4": (1.4, 3, 3.6, 4.1, 4.5, 4.9, 5.1, 5.3, 5.4, 5.6, 5.7, 5.8, 5.9, 6, 6),
+        "5": (10.8, 21.3, 24.9, 27, 28.2, 29.1, 29.4, 29.4, 29.4, 29.4, 29.4, 29.4, 29.4, 29.4, 29.4),
+        "6": (100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100),
+        "7": (100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100),
+        "unrated": (100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100),
+        "default": (100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100),
+    },
+}
+
+# Per regime: the K-ICS grid above; Solvency II spread/counterparty is deferred.
+_CREDIT_CALIBRATION = {"K-ICS": _CREDIT_FACTORS, "Solvency II": None}
+
+_RATING_TO_ROW = {             # external (S&P) base letter -> K-ICS factor-table row
+    "AAA": "1-2", "AA": "1-2", "A": "3", "BBB": "4", "BB": "5", "B": "6",
+    "CCC": "7", "CC": "7", "C": "7", "D": "default",
+}
+
+
+def _rating_row(rating: str) -> str:
+    """Map an external rating (e.g. ``"AA+"``, ``"BBB-"``, ``"unrated"``) to its
+    K-ICS factor-table row, stripping the +/- and any numeric modifier."""
+    r = (rating or "").strip().upper()
+    if r in ("UNRATED", "NR", ""):
+        return "unrated"
+    base = r.rstrip("+-0123456789")
+    return _RATING_TO_ROW.get(base, "unrated")
+
+
+def _credit_bucket(maturity: float) -> int:
+    """The maturity-bucket index for the factor grid: bucket k is ``k < m <= k+1``
+    (so ``0-1`` is index 0), capped at index 14 (the ``14+`` bucket)."""
+    return min(14, max(0, math.ceil(maturity) - 1))
+
+
+def credit_scr(portfolio: AssetPortfolio, regime, discount_annual) -> float:
+    """The credit-risk SCR -- each bond's market value times its credit factor.
+
+    The factor is read off the K-ICS (rating x effective-maturity) grid for the
+    bond's ``exposure_class`` (handbook tables 29 / 30 / 31); it is a percent of
+    market value and already embeds the default + downgrade charge, so the SCR is
+    ``sum(market_value x factor)`` -- no re-measure. ``Cash`` is risk-free and
+    equity / property carry market (not credit) risk, so only bonds contribute.
+    Returns 0 for Solvency II (its spread / counterparty framework is deferred)."""
+    factors = _CREDIT_CALIBRATION.get(regime.name)
+    if factors is None:
+        return 0.0
+    total = 0.0
+    for h in portfolio.holdings:
+        if isinstance(h, Bond):
+            table = factors.get(h.exposure_class)
+            if table is None:
+                raise ValueError(
+                    f"unknown bond exposure_class {h.exposure_class!r}; "
+                    f"known: {sorted(factors)}")
+            row = table[_rating_row(h.credit_rating)]
+            factor = row[_credit_bucket(effective_maturity(h))] / 100.0
+            total += bond_value(h, discount_annual) * factor
+    return max(0.0, total)
+
+
+# K-ICS table 3: the top-level correlation among the insurance, market and credit
+# risk modules -- all pairwise 0.25 (life-long-term / market / credit).
+_TOPLEVEL_CORRELATION = np.array([
+    [1.00, 0.25, 0.25],
+    [0.25, 1.00, 0.25],
+    [0.25, 0.25, 1.00],
+])
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class SolvencyAssessment:
     """The asset-inclusive solvency picture at t=0 -- the full ratio and its parts.
@@ -250,8 +357,8 @@ class SolvencyAssessment:
     ``available_capital`` is ``portfolio_value - (bel + risk_margin)``. The market
     module aggregates the ``net_interest_scr`` (assets and liabilities), the
     ``equity_scr`` and the ``property_scr`` through the market correlation; the
-    ``bscr`` (basic SCR) aggregates the ``insurance_scr`` and the
-    ``market_module_scr`` at the top level; ``total_scr`` adds the
+    ``bscr`` (basic SCR) aggregates the ``insurance_scr``, the ``market_module_scr``
+    and the ``credit_scr`` at the top level; ``total_scr`` adds the
     ``operational_scr`` on top of the BSCR. ``solvency_ratio`` is
     ``available_capital / total_scr``."""
 
@@ -264,6 +371,7 @@ class SolvencyAssessment:
     equity_scr: float
     property_scr: float
     market_module_scr: float
+    credit_scr: float
     operational_scr: float
     bscr: float
     total_scr: float
@@ -277,16 +385,17 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     Runs :func:`~fastcashflow.required_capital` for the liability (insurance) SCR,
     values the portfolio, forms available capital (assets less the technical
     provision), and builds the market-risk module (net interest, equity, property)
-    aggregated through the market correlation. The total SCR (BSCR) aggregates the
-    insurance and market modules at the top level into the BSCR: K-ICS uses the
-    life-vs-market correlation (0.25); Solvency II's top-level inter-module matrix
-    is not extracted here, so it falls back to a simple sum (no diversification
-    credit -- conservative). The operational-risk SCR is then added on top of the
-    BSCR for the total. The ratio is available capital over the total SCR.
+    aggregated through the market correlation. The BSCR aggregates the insurance,
+    market and credit modules at the top level: K-ICS uses the table-3 correlation
+    (all pairwise 0.25); Solvency II's top-level inter-module matrix is not
+    extracted here, so it falls back to a simple sum (no diversification credit --
+    conservative). The operational-risk SCR is then added on top of the BSCR for
+    the total. The ratio is available capital over the total SCR.
 
     Notes: K-ICS supplies no interest curves (its scenarios are caller-supplied),
     so the net interest component is zero here -- equity and property still apply.
-    A non-positive BSCR (a risk-free book) gives an unbounded ratio.
+    Credit risk is charged for K-ICS only (Solvency II spread / counterparty is
+    deferred). A non-positive BSCR (a risk-free book) gives an unbounded ratio.
     """
     scr = required_capital(model_points, basis, regime=regime)
     pv = portfolio_value(portfolio, basis.discount_annual)
@@ -303,11 +412,13 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     market = float(np.sqrt(c @ R @ c))
 
     ins = scr.insurance_scr
+    cr = credit_scr(portfolio, regime, basis.discount_annual)
     imc = cal["insurance_market_corr"]
+    modules = np.array([ins, market, cr], dtype=np.float64)
     if imc is None:                         # SII: top-level matrix not extracted
-        bscr = ins + market
-    else:                                   # K-ICS: life <-> market correlation
-        bscr = float(np.sqrt(ins * ins + market * market + 2.0 * imc * ins * market))
+        bscr = float(modules.sum())
+    else:                                   # K-ICS: table-3 correlation (all 0.25)
+        bscr = float(np.sqrt(modules @ _TOPLEVEL_CORRELATION @ modules))
 
     op = operational_scr(model_points, basis, regime, bscr=bscr)
     total = bscr + op                       # operational is added on top of the BSCR
@@ -319,13 +430,13 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     return SolvencyAssessment(
         portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
         available_capital=ac, insurance_scr=ins, net_interest_scr=ni,
-        equity_scr=eq, property_scr=pr, market_module_scr=market,
+        equity_scr=eq, property_scr=pr, market_module_scr=market, credit_scr=cr,
         operational_scr=op, bscr=bscr, total_scr=total, solvency_ratio=ratio)
 
 
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital", "net_interest_scr",
-    "equity_scr", "property_scr", "market_module_scr", "operational_scr",
-    "assess_solvency",
+    "equity_scr", "property_scr", "market_module_scr", "credit_scr",
+    "operational_scr", "assess_solvency",
 ]

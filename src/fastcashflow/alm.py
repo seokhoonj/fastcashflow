@@ -163,12 +163,19 @@ def key_rate_durations(model_points: ModelPoints, basis: Basis, *,
 @dataclass(frozen=True, slots=True)
 class Bond:
     """A fixed-coupon bullet bond. ``coupon_rate`` is the annual coupon as a
-    fraction of ``face``; ``frequency`` is the number of coupons per year."""
+    fraction of ``face``; ``frequency`` is the number of coupons per year.
+
+    ``credit_rating`` (external / S&P scale: AAA, AA, A, BBB, BB, B, CCC, D, or
+    "unrated") and ``exposure_class`` ("corporate", "public", "securitisation")
+    drive the credit-risk SCR (:func:`fastcashflow.credit_scr`); they do not
+    affect the price or duration."""
 
     face: float
     coupon_rate: float
     maturity_years: float
     frequency: int = 1
+    credit_rating: str = "AA"
+    exposure_class: str = "corporate"
 
 
 def bond_cashflows(bond: Bond) -> tuple[FloatArray, FloatArray]:
@@ -180,6 +187,16 @@ def bond_cashflows(bond: Bond) -> tuple[FloatArray, FloatArray]:
     amounts = np.full(n, coupon, dtype=np.float64)
     amounts[-1] += bond.face
     return times, amounts
+
+
+def effective_maturity(bond: Bond) -> float:
+    """The cash-flow-weighted average maturity ``sum(t * CF_t) / sum(CF_t)``
+    (K-ICS effective maturity, undiscounted as written in the standard). Used to
+    pick the credit-risk maturity bucket. A coupon bond's effective maturity is
+    shorter than its final maturity (early coupons pull the weight in)."""
+    t, a = bond_cashflows(bond)
+    total = float(a.sum())
+    return float((t * a).sum() / total) if total > 0.0 else 0.0
 
 
 def _annual_df(times: FloatArray, discount_annual) -> FloatArray:
@@ -261,5 +278,6 @@ def alm_gap(asset_dv01: float, liability_dv01: float) -> dict:
 __all__ = [
     "DurationResult", "Bond", "net_liability_cashflows",
     "liability_dv01", "liability_duration", "key_rate_durations",
-    "bond_cashflows", "bond_value", "bond_duration", "alm_gap",
+    "bond_cashflows", "bond_value", "bond_duration", "effective_maturity",
+    "alm_gap",
 ]

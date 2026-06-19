@@ -328,6 +328,8 @@ it -- duration, DV01, key-rate duration, and the asset-liability DV01 gap.
 
 .. autofunction:: fastcashflow.bond_value
 
+.. autofunction:: fastcashflow.effective_maturity
+
 .. autofunction:: fastcashflow.alm_gap
 
 Solvency balance sheet (assets)
@@ -359,6 +361,8 @@ the net interest-rate SCR, and the assembled solvency ratio.
 .. autofunction:: fastcashflow.property_scr
 
 .. autofunction:: fastcashflow.market_module_scr
+
+.. autofunction:: fastcashflow.credit_scr
 
 .. autofunction:: fastcashflow.operational_scr
 
