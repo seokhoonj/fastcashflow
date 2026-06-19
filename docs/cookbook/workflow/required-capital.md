@@ -158,6 +158,40 @@ risk margin (ex-cat)   =      5,381,379
 (해설서: 위험마진 = 보험위험액 (대재해 제외) x 0.40). 보장성 책에선 대재해가 작지만,
 전염병/대형사고 노출이 큰 책에선 더 커집니다.
 
+## 장기재물·기타위험액 -- 코드 지정 +16% 충격
+
+K-ICS 보험위험액의 일곱 번째 하위위험 **장기재물·기타** (장기손해보험의 재물/비용/배상/기타
+담보) 는 해당 담보 위험률을 **+16% 충격** 해 재측정합니다 (해설서 2-5). 어느 담보가 장기재물
+인지는 매핑 결정이라 **코드로 지정** 합니다 (`property_codes`). 표6 상관 (사망/장수/장해질병/
+해지 0, 사업비 0.5, 대재해 0.25) 으로 보험위험액에 합산되고, 위험마진엔 **포함** 됩니다
+(대재해와 달리).
+
+```python
+pmp = fcf.ModelPoints.single(45, 90_000.0, 240,
+    benefits={"DEATH": 50_000_000.0, "FIRE": 30_000_000.0},
+    calculation_methods={"DEATH": fcf.CalculationMethod.DEATH,
+                         "FIRE": fcf.CalculationMethod.MORBIDITY})
+pbasis = fcf.Basis(mortality_annual=0.005, lapse_annual=0.02, discount_annual=0.03,
+    ra_confidence=0.75, mortality_cv=0.10, morbidity_cv=0.10,
+    coverages=(fcf.CoverageRate("DEATH", 0.005), fcf.CoverageRate("FIRE", 0.02)))
+pk = fcf.required_capital(pmp, pbasis, regime=fcf.KICS, property_codes=("FIRE",))
+print(f"property capital       = {pk.sub_risk_capital['property']:>14,.0f}")
+print(f"insurance SCR (w/ prop)= {pk.insurance_scr:>14,.0f}")
+print(f"risk margin (incl prop)= {pk.risk_margin:>14,.0f}")
+```
+
+출력:
+
+```text
+property capital       =      1,191,442
+insurance SCR (w/ prop)=      1,717,763
+risk margin (incl prop)=        687,105
+```
+
+`FIRE` 담보를 장기재물로 지정하면 그 위험률을 16% 올려 재측정한 ΔBEL (1,191,442) 이
+장기재물위험액이 되고, 표6 으로 다른 하위위험과 묶여 보험위험액에 들어갑니다. 대재해와
+함께 주면 둘은 상관 0.25 로 묶입니다.
+
 ## 지급여력비율과 임베디드밸류 연결
 
 요구자본 (분모) 은 이 엔진이 내지만, **가용자본 (분자) 은 자산-부채라 사용자 입력**

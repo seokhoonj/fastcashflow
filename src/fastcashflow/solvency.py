@@ -85,10 +85,11 @@ class RegimeSpec:
     risk margin is either ``"percentile"`` (``insurance_scr * risk_margin_factor``)
     or ``"cost_of_capital"`` (``risk_margin_coc_rate`` over the capital run-off).
 
-    ``catastrophe_correlation`` is the catastrophe sub-risk's correlation with each
-    of the ``sub_risks`` (same order), used when a caller passes a catastrophe
-    charge to :func:`required_capital`; ``None`` means the regime does not fold a
-    (factor-based) catastrophe charge into its insurance module.
+    ``catastrophe_correlation`` and ``property_correlation`` are the catastrophe /
+    long-term-property sub-risks' correlation with each of the ``sub_risks`` (same
+    order), used when a caller passes a catastrophe charge / property coverage codes
+    to :func:`required_capital`; ``None`` means the regime does not fold that
+    (extra) sub-risk into its insurance module.
     """
 
     name: str
@@ -99,6 +100,7 @@ class RegimeSpec:
     risk_margin_factor: float = 0.0
     risk_margin_coc_rate: float = 0.06
     catastrophe_correlation: tuple[float, ...] | None = None
+    property_correlation: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
         # The capital vector is built positionally from sub_risks, so the
@@ -250,6 +252,20 @@ def scale_coverages(factor_by_method: dict[CalculationMethod, float]) -> Stress:
     return Stress(name="coverage rates", apply=apply)
 
 
+def scale_coverage_codes(codes, factor: float) -> Stress:
+    """Scale the claim rate of the named coverage ``codes`` by ``factor`` (the
+    others untouched). Used for the long-term property / other sub-risk, whose
+    coverages are identified by code (the property categorisation is finer than the
+    engine's :class:`CalculationMethod`)."""
+    targets = set(codes)
+    def apply(mp: ModelPoints, basis: Basis):
+        coverages = tuple(
+            replace(r, rate=_scaled(r.rate, factor)) if r.code in targets else r
+            for r in basis.coverages)
+        return mp, replace(basis, coverages=coverages)
+    return Stress(name="property coverage rates", apply=apply)
+
+
 def scale_expense(level: float = 1.10, inflation_add: float = 0.01) -> Stress:
     """Stress expenses -- scale every expense item's value by ``level`` and add
     ``inflation_add`` (percentage points, as a decimal) to the expense inflation
@@ -299,6 +315,27 @@ def aggregate(capital: dict[str, float], spec: RegimeSpec) -> float:
     capital vector ordered by ``spec.sub_risks`` and the regime matrix ``R``."""
     c = np.array([capital[sr.name] for sr in spec.sub_risks], dtype=np.float64)
     R = np.asarray(spec.correlation, dtype=np.float64)
+    return float(np.sqrt(c @ R @ c))
+
+
+def _aggregate_with_extras(base_caps, base_corr, extras) -> float:
+    """``sqrt(c^T R c)`` over the base sub-risks plus the ``extras`` (each a
+    ``(name, capital, correlation-vs-base)`` tuple). The base block is
+    ``base_corr``; an extra correlates with the base by its vector and with another
+    extra via :data:`_EXTRA_CROSS` (0 if unlisted)."""
+    n = len(base_caps)
+    m = len(extras)
+    R = np.eye(n + m)
+    R[:n, :n] = np.asarray(base_corr, dtype=np.float64)
+    c = list(base_caps)
+    for i, (name, cap, corr_base) in enumerate(extras):
+        c.append(cap)
+        R[:n, n + i] = R[n + i, :n] = np.asarray(corr_base, dtype=np.float64)
+        for j in range(i):
+            other = extras[j][0]
+            rho = _EXTRA_CROSS.get((other, name), _EXTRA_CROSS.get((name, other), 0.0))
+            R[n + j, n + i] = R[n + i, n + j] = rho
+    c = np.array(c, dtype=np.float64)
     return float(np.sqrt(c @ R @ c))
 
 
@@ -353,9 +390,12 @@ def catastrophe_scr(*, pandemic_death: float = 0.0, accident_death: float = 0.0,
     return float(np.sqrt(pandemic ** 2 + large ** 2))
 
 
+_PROPERTY_SHOCK = 1.16         # K-ICS handbook 2-5: long-term property/other +16%
+
+
 def required_capital(
     model_points: ModelPoints, basis: Basis, *, regime: RegimeSpec,
-    catastrophe: float = 0.0,
+    catastrophe: float = 0.0, property_codes=(),
 ) -> SCRResult:
     """Required capital (SCR) for a portfolio under ``regime``.
 
@@ -366,10 +406,12 @@ def required_capital(
     interest_capital`` (no inter-module diversification). Pass ``SCRResult`` on to
     :func:`fastcashflow.embedded_value` via its ``required_capital`` argument.
 
-    ``catastrophe`` (the factor-based K-ICS catastrophe amount from
-    :func:`catastrophe_scr`) is folded into the insurance module through the
-    regime's ``catastrophe_correlation`` (table 6). The risk margin EXCLUDES
-    catastrophe (handbook: the margin is the insurance amount ex-catastrophe).
+    Two EXTRA insurance sub-risks fold into the module through table 6 when the
+    regime supports them: ``property_codes`` (the long-term property / other
+    coverages -- a +16% rate shock, re-measured) via ``property_correlation``, and
+    ``catastrophe`` (the factor-based amount from :func:`catastrophe_scr`) via
+    ``catastrophe_correlation``. The risk margin EXCLUDES catastrophe (handbook: the
+    margin is the insurance amount ex-catastrophe), but INCLUDES property.
     """
     m_base = measure(model_points, basis, full=False)
     base_bel = float(m_base.bel.sum())
@@ -381,20 +423,20 @@ def required_capital(
     capital: dict[str, float] = {}
     for sr in regime.sub_risks:
         capital[sr.name] = max(0.0, max(delta(v) for v in sr.variants))
-    insurance_ex_cat = aggregate(capital, regime)               # margin basis (ex-cat)
+    base_caps = [capital[sr.name] for sr in regime.sub_risks]
 
+    extras_margin = []          # property is in the risk-margin base; catastrophe is not
+    if len(property_codes) and regime.property_correlation is not None:
+        prop = max(0.0, delta(scale_coverage_codes(property_codes, _PROPERTY_SHOCK)))
+        capital["property"] = prop
+        extras_margin.append(("property", prop, regime.property_correlation))
+    extras_all = list(extras_margin)
     if catastrophe > 0.0 and regime.catastrophe_correlation is not None:
-        cc = np.asarray(regime.catastrophe_correlation, dtype=np.float64)
-        base = np.asarray(regime.correlation, dtype=np.float64)
-        k = base.shape[0]
-        R = np.eye(k + 1)
-        R[:k, :k] = base
-        R[:k, k] = R[k, :k] = cc
-        c = np.array([capital[sr.name] for sr in regime.sub_risks] + [catastrophe])
-        insurance_scr = float(np.sqrt(c @ R @ c))
         capital["catastrophe"] = catastrophe
-    else:
-        insurance_scr = insurance_ex_cat
+        extras_all.append(("catastrophe", catastrophe, regime.catastrophe_correlation))
+
+    insurance_ex_cat = _aggregate_with_extras(base_caps, regime.correlation, extras_margin)
+    insurance_scr = _aggregate_with_extras(base_caps, regime.correlation, extras_all)
 
     interest_capital = 0.0
     if regime.interest_curves is not None:
@@ -533,15 +575,20 @@ KICS = RegimeSpec(
                              # via the caller; not baked in.
     risk_margin_method="percentile",
     risk_margin_factor=0.40,  # risk margin = insurance-risk amount x 0.40 (= /Z99.5% x Z85%)
-    # table 6 catastrophe row vs (mortality, longevity, morbidity, lapse, expense):
+    # table 6 rows vs (mortality, longevity, morbidity, lapse, expense):
     catastrophe_correlation=(0.25, 0.0, 0.25, 0.25, 0.25),
+    property_correlation=(0.0, 0.0, 0.0, 0.0, 0.5),   # long-term property/other
 )
+
+# Table 6 cross-correlation between the two extra (non-shock-vector) sub-risks.
+_EXTRA_CROSS = {("property", "catastrophe"): 0.25}
 
 
 __all__ = [
     "Stress", "SubRisk", "RegimeSpec", "SCRResult",
     "scale_mortality", "scale_longevity", "scale_lapse", "mass_lapse",
-    "scale_coverages", "scale_annuity", "scale_expense", "shock_curve",
+    "scale_coverages", "scale_coverage_codes", "scale_annuity", "scale_expense",
+    "shock_curve",
     "aggregate", "required_capital", "catastrophe_scr", "solvency_ratio",
     "SOLVENCY2", "KICS",
 ]

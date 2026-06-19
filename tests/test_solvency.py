@@ -333,3 +333,69 @@ def test_catastrophe_ignored_when_regime_has_no_correlation():
     base = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
     got = sv.required_capital(mp, basis, regime=sv.SOLVENCY2, catastrophe=200_000.0)
     assert np.isclose(got.insurance_scr, base.insurance_scr)
+
+
+def _mp_with_property():
+    """A death + property-coverage policy (the property coverage runs as a
+    MORBIDITY indemnity but is its own catastrophe/property category by code)."""
+    return fcf.ModelPoints.single(
+        45, 80_000.0, 240, benefits={"DEATH": 5e7, "PROP": 3e7},
+        calculation_methods={"DEATH": CalculationMethod.DEATH,
+                             "PROP": CalculationMethod.MORBIDITY})
+
+
+def _basis_with_property():
+    return fcf.Basis(mortality_annual=0.005, lapse_annual=0.02, discount_annual=0.03,
+                     ra_confidence=0.75, mortality_cv=0.10, morbidity_cv=0.10,
+                     coverages=(fcf.CoverageRate("DEATH", 0.005),
+                                fcf.CoverageRate("PROP", 0.02)))
+
+
+def test_property_subrisk_shock_and_fold():
+    """Long-term property/other = +16% rate shock on the named codes, folded into
+    the insurance module via the table-6 property row (vs base = 0,0,0,0,0.5)."""
+    mp, basis = _mp_with_property(), _basis_with_property()
+    base = sv.required_capital(mp, basis, regime=sv.KICS)
+    got = sv.required_capital(mp, basis, regime=sv.KICS, property_codes=("PROP",))
+    # property capital = max(0, delta BEL under a +16% PROP-rate shock)
+    shocked = sv.scale_coverage_codes(("PROP",), 1.16).apply(mp, basis)
+    from fastcashflow.engine import measure as _measure
+    dbel = (float(_measure(*shocked, full=False).bel.sum())
+            - float(_measure(mp, basis, full=False).bel.sum()))
+    assert np.isclose(got.sub_risk_capital["property"], max(0.0, dbel))
+    names = ["mortality", "longevity", "morbidity", "lapse", "expense"]
+    c = np.array([got.sub_risk_capital[n] for n in names]
+                 + [got.sub_risk_capital["property"]])
+    R = np.eye(6)
+    R[:5, :5] = sv._KICS_CORRELATION
+    R[:5, 5] = R[5, :5] = [0.0, 0.0, 0.0, 0.0, 0.5]
+    assert np.isclose(got.insurance_scr, np.sqrt(c @ R @ c))
+    assert got.insurance_scr > base.insurance_scr
+
+
+def test_property_and_catastrophe_cross_correlation():
+    """Property and catastrophe both fold in, cross-correlated 0.25 (table 6); the
+    margin includes property but excludes catastrophe."""
+    mp, basis = _mp_with_property(), _basis_with_property()
+    prop = sv.required_capital(mp, basis, regime=sv.KICS, property_codes=("PROP",))
+    both = sv.required_capital(mp, basis, regime=sv.KICS, property_codes=("PROP",),
+                               catastrophe=300_000.0)
+    cap = both.sub_risk_capital
+    names = ["mortality", "longevity", "morbidity", "lapse", "expense"]
+    c = np.array([cap[n] for n in names] + [cap["property"], cap["catastrophe"]])
+    R = np.eye(7)
+    R[:5, :5] = sv._KICS_CORRELATION
+    R[:5, 5] = R[5, :5] = [0.0, 0.0, 0.0, 0.0, 0.5]
+    R[:5, 6] = R[6, :5] = [0.25, 0.0, 0.25, 0.25, 0.25]
+    R[5, 6] = R[6, 5] = 0.25
+    assert np.isclose(both.insurance_scr, np.sqrt(c @ R @ c))
+    assert np.isclose(both.risk_margin, prop.risk_margin)   # margin: +property, -catastrophe
+
+
+def test_property_ignored_for_solvency2():
+    """Solvency II has no property_correlation -> property_codes are ignored."""
+    mp, basis = _mp_with_property(), _basis_with_property()
+    base = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    got = sv.required_capital(mp, basis, regime=sv.SOLVENCY2, property_codes=("PROP",))
+    assert np.isclose(got.insurance_scr, base.insurance_scr)
+    assert "property" not in got.sub_risk_capital
