@@ -186,11 +186,19 @@ def test_credit_scr_kics_hand_calc():
     assert np.isclose(assets.credit_scr(p, fcf.KICS, 0.03), mv * 0.02)   # only the bond
 
 
-def test_credit_scr_sii_deferred():
-    """Solvency II credit (spread / counterparty) is a separate framework -> 0."""
-    b = alm.Bond(100.0, 0.03, 10, 1, credit_rating="BBB")
-    p = assets.AssetPortfolio(holdings=(b,))
-    assert assets.credit_scr(p, fcf.SOLVENCY2, 0.03) == 0.0
+def test_credit_scr_sii_spread():
+    """Solvency II credit (Art 176 spread) = market value times a stress that is
+    piecewise-linear in modified duration by credit quality step."""
+    b = alm.Bond(100.0, 0.03, 10, 1, credit_rating="A")        # CQS 2
+    mod = alm.bond_duration(b, 0.03).modified                  # ~8.53 -> bucket 5-10
+    factor = 0.070 + 0.007 * (mod - 5)                         # a + b x (dur - 5)
+    p = assets.AssetPortfolio(holdings=(b, assets.Cash(1000.0)))
+    assert np.isclose(assets.credit_scr(p, fcf.SOLVENCY2, 0.03),
+                      alm.bond_value(b, 0.03) * factor)
+    # the piecewise stress at representative points
+    assert np.isclose(assets._sii_spread_stress("AAA", 3), 0.009 * 3)        # 0-5
+    assert np.isclose(assets._sii_spread_stress("BBB", 12), 0.200 + 0.010 * 2)  # 10-15
+    assert np.isclose(assets._sii_spread_stress("BB", 25), 0.466 + 0.005 * 5)   # 20+
 
 
 def test_credit_scr_rating_and_class():
@@ -219,10 +227,16 @@ def test_fx_scr_hand_calc():
     assert np.isclose(assets.fx_scr(p, fcf.KICS, 0.03), expected)
 
 
-def test_fx_scr_sii_deferred():
-    """Solvency II currency risk is a separate calibration -> 0."""
-    p = assets.AssetPortfolio(holdings=(assets.Cash(1000.0, currency="USD"),))
-    assert assets.fx_scr(p, fcf.SOLVENCY2, 0.03) == 0.0
+def test_fx_scr_sii_flat_25():
+    """Solvency II currency risk (Art 188) is a flat 25% per foreign currency,
+    summed (no diversification); any currency applies (no table lookup)."""
+    p = assets.AssetPortfolio(holdings=(
+        assets.Cash(1000.0, currency="USD"), assets.Cash(500.0, currency="EUR"),
+        assets.Cash(2000.0)))
+    assert np.isclose(assets.fx_scr(p, fcf.SOLVENCY2, 0.03), 0.25 * 1000 + 0.25 * 500)
+    # an unlisted currency is fine under Solvency II (no table)
+    q = assets.AssetPortfolio(holdings=(assets.Cash(800.0, currency="XYZ"),))
+    assert np.isclose(assets.fx_scr(q, fcf.SOLVENCY2, 0.03), 0.25 * 800)
 
 
 def test_fx_scr_short_position_up_scenario():
@@ -261,13 +275,25 @@ def test_concentration_scr_hand_calc():
 
 
 def test_concentration_scr_untagged_is_zero():
-    """A book with no tagged issuers and no property has no concentration charge."""
+    """A book with no tagged issuers and no property has no concentration charge,
+    under both regimes."""
     p = assets.AssetPortfolio(holdings=(alm.Bond(1e6, 0.03, 5, 1), assets.Cash(1e6)))
     assert assets.concentration_scr(p, fcf.KICS, 0.03) == 0.0
-    # Solvency II concentration is deferred
-    tagged = assets.AssetPortfolio(holdings=(
-        alm.Bond(1e6, 0.03, 5, 1, issuer="X"),))
-    assert assets.concentration_scr(tagged, fcf.SOLVENCY2, 0.03) == 0.0
+    assert assets.concentration_scr(p, fcf.SOLVENCY2, 0.03) == 0.0
+
+
+def test_concentration_scr_sii_excess():
+    """Solvency II concentration (Art 184-187): single-name excess
+    max(0, exposure - CT(CQS) x assets) x g(CQS). A BBB issuer is CQS 3 (CT 1.5%,
+    g 27%); an AA issuer is CQS 1 (CT 3%, g 12%)."""
+    bbb = assets.AssetPortfolio(holdings=(
+        alm.Bond(1e6, 0.03, 5, 1, credit_rating="BBB", issuer="X"),))
+    assert np.isclose(assets.concentration_scr(bbb, fcf.SOLVENCY2, 0.03, total_assets=10e6),
+                      max(0.0, 1e6 - 10e6 * 0.015) * 0.27)
+    aa = assets.AssetPortfolio(holdings=(
+        alm.Bond(1e6, 0.03, 5, 1, credit_rating="AA", issuer="Y"),))
+    assert np.isclose(assets.concentration_scr(aa, fcf.SOLVENCY2, 0.03, total_assets=10e6),
+                      max(0.0, 1e6 - 10e6 * 0.03) * 0.12)
 
 
 def test_concentration_band_by_rating():
@@ -298,11 +324,11 @@ def test_assess_solvency_components():
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
     a = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
-    # no equity/property -> the market module is just the net interest SCR, and the
-    # SII top-level BSCR is a simple sum; SII credit is deferred (0); the total
+    # no equity/property -> the market module is just the net interest SCR; the SII
+    # top-level BSCR is a simple sum (insurance + market + Art-176 credit); the total
     # adds operational on top
     assert np.isclose(a.market_module_scr, a.net_interest_scr)
-    assert a.credit_scr == 0.0                              # SII credit deferred
+    assert a.credit_scr > 0.0                               # SII Art-176 spread on the bond
     assert np.isclose(a.bscr, a.insurance_scr + a.net_interest_scr + a.credit_scr)
     assert np.isclose(a.basic_required_capital, a.bscr + a.operational_scr)
     assert a.tax_adjustment == 0.0                          # no tax relief by default
@@ -344,14 +370,14 @@ def test_assess_solvency_kics_no_curves():
 def test_top_level_aggregation_kics_vs_sii():
     """K-ICS aggregates insurance, market and credit with the table-3 correlation
     (all 0.25); Solvency II falls back to a simple sum (top-level matrix not
-    extracted, and SII credit deferred)."""
+    extracted)."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Equity(3_000_000.0, "developed")))
     k = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
     s = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
-    # SII: simple sum, credit deferred (0)
-    assert s.credit_scr == 0.0
+    # SII: simple sum (insurance + market + Art-176 credit)
+    assert s.credit_scr > 0.0
     assert np.isclose(s.bscr, s.insurance_scr + s.market_module_scr + s.credit_scr)
     # K-ICS: the bond now carries a credit charge -> 3-module sqrt aggregation
     assert k.credit_scr > 0.0

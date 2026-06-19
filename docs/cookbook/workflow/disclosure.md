@@ -80,6 +80,7 @@ print(f"  available capital      = {a.available_capital:>15,.0f}")
 print(f"  required capital (SCR) = {a.total_scr:>15,.0f}")
 print(f"    insurance risk       = {a.insurance_scr:>15,.0f}")
 print(f"    market risk          = {a.market_module_scr:>15,.0f}")
+print(f"    credit risk          = {a.credit_scr:>15,.0f}")
 print(f"    operational risk     = {a.operational_scr:>15,.0f}")
 print(f"  solvency ratio         = {a.solvency_ratio:>14.1%}")
 ```
@@ -88,16 +89,18 @@ print(f"  solvency ratio         = {a.solvency_ratio:>14.1%}")
 
 ```text
   available capital      =       5,191,995
-  required capital (SCR) =       2,680,035
+  required capital (SCR) =       2,987,150
     insurance risk       =       1,938,361
     market risk          =         713,427
+    credit risk          =         307,115
     operational risk     =          28,246
-  solvency ratio         =         193.7%
+  solvency ratio         =         173.8%
 ```
 
-`지급여력비율 = 가용자본 / 요구자본` 의 193.7% 는 실제 대형 생보사의 공시 범위
-(대략 185~210%) 에 듭니다 -- 합성데이터인데도 **구조와 크기** 가 현실 공시와 맞물립니다.
-요구자본은 보험위험과 시장위험 (금리·주식·부동산) 의 분산집계입니다.
+`지급여력비율 = 가용자본 / 요구자본` 의 173.8% 는 실제 대형 생보사의 공시 범위
+(대략 185~210%) 근처입니다 -- 합성데이터인데도 **구조와 크기** 가 현실 공시와 맞물립니다.
+요구자본은 보험·시장·신용·운영 위험의 집계입니다 (여기선 Solvency II regime 이라 신용은
+Art 176 스프레드).
 
 ## 실제 공시 요구자본 재현 -- 모듈 위험액 -> 기본요구자본
 
@@ -162,10 +165,10 @@ for bp in (-50, 50):
   재현합니다. 회사 전체 공시는 수많은 계약·자산의 집계 (per-portfolio 합) 입니다.
 - **시점 일관성** -- 완전한 공시는 보고시점 한 날에 자산·부채를 함께 평가합니다. 위 세
   표는 각 항목의 골격을 보이는 예시 (IFRS17 부채는 보유시점, K-ICS 는 별도 백업 포지션).
-- **모듈 구성** -- 보험·시장·운영 위험액이 들어 있습니다. 신용위험액은 K-ICS 격자로
-  구현돼 있지만 (채권 등급 x 유효만기, [8.8](solvency-balance-sheet) 참고) 이 예시는
-  Solvency II regime 이라 0 입니다 (SII 스프레드 / 거래상대방은 별도 체계, 후속).
-  외환·자산집중 위험액도 아직 빠져 있어 (공시엔 있음) 비율은 그만큼 보수적이지 않습니다.
+- **모듈 구성** -- 보험·시장·신용·운영 위험액이 들어 있습니다. 이 예시는 Solvency II
+  regime 이라 신용은 Art 176 스프레드 (위 307,115) 로 잡힙니다. 외환·자산집중도 양 regime
+  구현돼 있고 (해당 익스포저가 있을 때 발동), top-level 모듈간 상관 (SII Directive Annex IV)
+  만 미추출이라 SII 는 단순합 (보수적) -- 그만큼 비율이 낮게 나옵니다.
 
 ## 인접 레시피
 

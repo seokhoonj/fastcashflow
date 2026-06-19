@@ -13,10 +13,10 @@ scope. This module sits above :mod:`fastcashflow.alm` (it prices bonds) and
 regulatory numbers.
 
 The asset-side SCR modules are the market risk (interest / equity / property / FX /
-asset concentration) and the credit risk (bond default + downgrade). Credit, FX and
-concentration risk are charged for K-ICS only; the Solvency II spread / counterparty,
-currency and concentration calibrations are separate and not encoded here (deferred),
-so those charges are zero under Solvency II.
+asset concentration) and the credit risk (bond default + downgrade). Both regimes
+are calibrated: K-ICS from the handbook (tables 22 / 29-31 / 23-24) and Solvency II
+from the Delegated Regulation (Art 176 spread, Art 188 currency, Art 184-187
+concentration).
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fastcashflow.alm import Bond, bond_value, effective_maturity
+from fastcashflow.alm import Bond, bond_value, bond_duration, effective_maturity
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
@@ -245,8 +245,8 @@ def property_scr(portfolio: AssetPortfolio, regime) -> float:
 # currencies only) under a won-up (rates fall) and a won-down scenario through a
 # 0.5 inter-currency correlation, and take the worse of the two. FX derivative
 # price volatility is a further term, taken as 0 here. Solvency II currency risk
-# is a separate calibration (a flat 25% shock) and is deferred. Holding values are
-# in the reporting currency (won); the currency tag only selects the shock.
+# (Art 188) is a flat 25% shock per currency, summed. Holding values are in the
+# reporting currency (won); the currency tag only selects the shock.
 # ---------------------------------------------------------------------------
 
 _FX_SHOCK_KRW = {              # K-ICS table 22, won-base currency shock (percent)
@@ -258,7 +258,7 @@ _FX_SHOCK_KRW = {              # K-ICS table 22, won-base currency shock (percen
     "TRY": 55, "TWD": 20, "USD": 25, "ZAR": 45,
 }
 
-_FX_CALIBRATION = {"K-ICS": _FX_SHOCK_KRW, "Solvency II": None}
+_SII_FX_SHOCK = 0.25           # Solvency II Art 188: 25% per foreign currency
 
 _FX_CORRELATION = 0.5          # table 22: inter-currency correlation (declining only)
 
@@ -277,28 +277,31 @@ def _fx_aggregate(losses) -> float:
 
 
 def fx_scr(portfolio: AssetPortfolio, regime, discount_annual) -> float:
-    """The FX-risk SCR -- the worse of the won-up and won-down currency shocks on
-    the net foreign-currency exposure, aggregated through the 0.5 correlation.
+    """The FX-risk SCR on the net foreign-currency exposure (vs the won, the local
+    currency here).
 
-    Each non-won holding's market value is netted by currency; under the won-up
-    (foreign-down) scenario a net-long currency loses ``shock x exposure`` (only
-    losing currencies are summed), and symmetrically for the won-down scenario on
-    net-short currencies. The SCR is the larger aggregate. Returns 0 for Solvency
-    II (its currency-risk calibration is deferred)."""
-    shocks = _FX_CALIBRATION.get(regime.name)
-    if shocks is None:
+    K-ICS: each currency's table-22 shock, summing the net-asset-value losses of
+    the declining currencies under a won-up and a won-down scenario through a 0.5
+    correlation, the worse of the two. Solvency II (Art 188): a flat 25% per
+    currency, each currency's larger of the up / down loss, SUMMED (no
+    diversification). Returns 0 for an unknown regime."""
+    if regime.name not in ("K-ICS", "Solvency II"):
         return 0.0
     exposure = {}
     for h in portfolio.holdings:
         cur = getattr(h, "currency", "KRW")
         if cur == "KRW":
             continue
-        if cur not in shocks:
-            raise ValueError(
-                f"unknown currency {cur!r}; known: {sorted(shocks)}")
         exposure[cur] = exposure.get(cur, 0.0) + holding_value(h, discount_annual)
-    down = {c: shocks[c] / 100.0 * e for c, e in exposure.items() if e > 0.0}
-    up = {c: shocks[c] / 100.0 * (-e) for c, e in exposure.items() if e < 0.0}
+
+    if regime.name == "Solvency II":        # Art 188: 25% flat, per-currency, summed
+        return float(sum(_SII_FX_SHOCK * abs(e) for e in exposure.values()))
+
+    for cur in exposure:                    # K-ICS: table 22 must list the currency
+        if cur not in _FX_SHOCK_KRW:
+            raise ValueError(f"unknown currency {cur!r}; known: {sorted(_FX_SHOCK_KRW)}")
+    down = {c: _FX_SHOCK_KRW[c] / 100.0 * e for c, e in exposure.items() if e > 0.0}
+    up = {c: _FX_SHOCK_KRW[c] / 100.0 * (-e) for c, e in exposure.items() if e < 0.0}
     return max(_fx_aggregate(down), _fx_aggregate(up))   # price volatility: 0 (v1)
 
 
@@ -310,7 +313,7 @@ def fx_scr(portfolio: AssetPortfolio, regime, discount_annual) -> float:
 # separately (individual and whole-book limits, the worse of the two). The asset
 # concentration SCR is sqrt(counterparty^2 + property^2). It enters the market
 # module as the independent (correlation-0) fifth sub-risk. Solvency II
-# concentration is a separate calibration and is deferred.
+# concentration (Art 184-187) is a single-name excess charge, root-sum-of-squares.
 # ---------------------------------------------------------------------------
 
 _CONCENTRATION_BANDS = {       # K-ICS table 23: (limit % of total assets, factor)
@@ -322,6 +325,16 @@ _PROPERTY_CONCENTRATION = {    # K-ICS table 24
     "individual_limit": 0.06, "total_limit": 0.25, "factor": 0.20,
 }
 _BAND_ORDER = {"1-2": 0, "3-4": 1, "5-7": 2}   # higher = more conservative
+
+# Solvency II concentration (Art 185 threshold CT, Art 186 risk factor g) by CQS.
+_SII_CONC_THRESHOLD = {0: 0.03, 1: 0.03, 2: 0.03, 3: 0.015, 4: 0.015, 5: 0.015, 6: 0.015}
+_SII_CONC_FACTOR = {0: 0.12, 1: 0.12, 2: 0.21, 3: 0.27, 4: 0.73, 5: 0.73, 6: 0.73}
+
+
+def _sii_cqs(rating: str) -> int:
+    """The Solvency II credit quality step for a rating; unrated -> CQS 3."""
+    base = (rating or "").strip().upper().rstrip("+-0123456789")
+    return _SII_CQS.get(base, 3)
 
 _RATING_TO_BAND = {
     "AAA": "1-2", "AA": "1-2", "A": "3-4", "BBB": "3-4",
@@ -349,14 +362,32 @@ def concentration_scr(portfolio: AssetPortfolio, regime, discount_annual, *,
     correlation 0. Property: each holding above the individual limit (6% of total
     assets) and the whole book above the total limit (25%) are charged 20% (table
     24), taking the worse of the two. ``total_assets`` defaults to the portfolio
-    value. Returns 0 for Solvency II (its concentration calibration is deferred)
-    and when a book has no tagged issuers and no property."""
-    if regime.name != "K-ICS":
+    value. Solvency II (Art 184-187) uses the single-name excess
+    ``max(0, exposure - threshold(CQS) x assets) x g(CQS)`` aggregated as a
+    root-sum-of-squares. Returns 0 when a book has no tagged issuers and no
+    property, or for an unknown regime."""
+    if regime.name not in ("K-ICS", "Solvency II"):
         return 0.0
     ta = total_assets if total_assets is not None else portfolio_value(
         portfolio, discount_annual)
     if ta <= 0.0:
         return 0.0
+
+    if regime.name == "Solvency II":        # Art 184-187: single-name excess, RSS
+        exp_s, cqs_s = {}, {}
+        for h in portfolio.holdings:
+            issuer = getattr(h, "issuer", "").strip()
+            if not issuer or isinstance(h, Property):
+                continue
+            exp_s[issuer] = exp_s.get(issuer, 0.0) + holding_value(h, discount_annual)
+            q = _sii_cqs(getattr(h, "credit_rating", "AA"))
+            cqs_s[issuer] = max(q, cqs_s.get(issuer, 0))   # most conservative (highest CQS)
+        sq = 0.0
+        for issuer, exp in exp_s.items():
+            q = cqs_s[issuer]
+            xs = max(0.0, exp - ta * _SII_CONC_THRESHOLD[q])
+            sq += (xs * _SII_CONC_FACTOR[q]) ** 2
+        return float(np.sqrt(sq))
 
     exposure, band = {}, {}
     for h in portfolio.holdings:
@@ -459,8 +490,8 @@ def operational_scr(model_points: ModelPoints, basis: Basis, regime, *,
 # the charge is factor x market value -- no re-measure. Effective maturity is the
 # cash-flow-weighted average maturity (:func:`fastcashflow.effective_maturity`).
 # External (S&P) ratings map to the K-ICS grades AAA/AA -> 1-2, A -> 3, BBB -> 4,
-# BB -> 5, B -> 6, CCC and below -> 7, D -> default. Solvency II credit (spread /
-# counterparty default) is a separate framework not encoded here -- deferred.
+# BB -> 5, B -> 6, CCC and below -> 7, D -> default. Solvency II uses the Art-176
+# spread stress (piecewise-linear in modified duration by credit quality step).
 # ---------------------------------------------------------------------------
 
 _CREDIT_FACTORS = {            # K-ICS handbook tables 29 / 30 / 31, in PERCENT;
@@ -496,8 +527,39 @@ _CREDIT_FACTORS = {            # K-ICS handbook tables 29 / 30 / 31, in PERCENT;
     },
 }
 
-# Per regime: the K-ICS grid above; Solvency II spread/counterparty is deferred.
-_CREDIT_CALIBRATION = {"K-ICS": _CREDIT_FACTORS, "Solvency II": None}
+# Solvency II spread risk on bonds (Art 176): the stress factor is piecewise-linear
+# in modified duration, a + b x (dur - lower), with (a, b) per credit quality step
+# (CQS 0-6) and duration bucket [0-5, 5-10, 10-15, 15-20, 20+].
+_SII_SPREAD = {                # CQS -> [(lower, a, b), ...]
+    0: [(0, 0.000, 0.009), (5, 0.045, 0.005), (10, 0.070, 0.005), (15, 0.095, 0.005), (20, 0.120, 0.005)],
+    1: [(0, 0.000, 0.011), (5, 0.055, 0.006), (10, 0.085, 0.005), (15, 0.110, 0.005), (20, 0.135, 0.005)],
+    2: [(0, 0.000, 0.014), (5, 0.070, 0.007), (10, 0.105, 0.005), (15, 0.130, 0.005), (20, 0.155, 0.005)],
+    3: [(0, 0.000, 0.025), (5, 0.125, 0.015), (10, 0.200, 0.010), (15, 0.250, 0.010), (20, 0.300, 0.005)],
+    4: [(0, 0.000, 0.045), (5, 0.225, 0.025), (10, 0.350, 0.018), (15, 0.440, 0.005), (20, 0.466, 0.005)],
+    5: [(0, 0.000, 0.075), (5, 0.375, 0.042), (10, 0.585, 0.005), (15, 0.610, 0.005), (20, 0.635, 0.005)],
+}
+_SII_CQS = {                   # S&P base letter -> credit quality step (5 = CQS 5 and 6)
+    "AAA": 0, "AA": 1, "A": 2, "BBB": 3, "BB": 4, "B": 5, "CCC": 5, "CC": 5, "C": 5,
+}
+
+
+def _sii_spread_stress(rating: str, modified_duration: float) -> float:
+    """The Solvency II Art-176 spread stress factor for a bond's rating and modified
+    duration; unrated maps to CQS 3 (BBB-equivalent) as a v1 simplification."""
+    r = (rating or "").strip().upper()
+    base = r.rstrip("+-0123456789")
+    cqs = _SII_CQS.get(base, 3)
+    d = max(0.0, modified_duration)
+    buckets = _SII_SPREAD[cqs]
+    idx = min(4, int(d // 5)) if d > 0 else 0
+    if d > 20.0:
+        idx = 4
+    lower, a, b = buckets[idx]
+    return min(1.0, a + b * (d - lower))
+
+
+# Per regime: the K-ICS grid above; Solvency II uses the Art-176 spread stress.
+_CREDIT_CALIBRATION = {"K-ICS": _CREDIT_FACTORS, "Solvency II": "sii_spread"}
 
 _RATING_TO_ROW = {             # external (S&P) base letter -> K-ICS factor-table row
     "AAA": "1-2", "AA": "1-2", "A": "3", "BBB": "4", "BB": "5", "B": "6",
@@ -529,13 +591,19 @@ def credit_scr(portfolio: AssetPortfolio, regime, discount_annual) -> float:
     market value and already embeds the default + downgrade charge, so the SCR is
     ``sum(market_value x factor)`` -- no re-measure. ``Cash`` is risk-free and
     equity / property carry market (not credit) risk, so only bonds contribute.
-    Returns 0 for Solvency II (its spread / counterparty framework is deferred)."""
+    Solvency II uses the Art-176 spread stress (piecewise-linear in modified
+    duration by credit quality step)."""
     factors = _CREDIT_CALIBRATION.get(regime.name)
     if factors is None:
         return 0.0
     total = 0.0
     for h in portfolio.holdings:
-        if isinstance(h, Bond):
+        if not isinstance(h, Bond):
+            continue
+        if factors == "sii_spread":             # Solvency II Art 176
+            mod = bond_duration(h, discount_annual).modified
+            factor = _sii_spread_stress(h.credit_rating, mod)
+        else:                                   # K-ICS rating x maturity grid
             table = factors.get(h.exposure_class)
             if table is None:
                 raise ValueError(
@@ -543,7 +611,7 @@ def credit_scr(portfolio: AssetPortfolio, regime, discount_annual) -> float:
                     f"known: {sorted(factors)}")
             row = table[_rating_row(h.credit_rating)]
             factor = row[_credit_bucket(effective_maturity(h))] / 100.0
-            total += bond_value(h, discount_annual) * factor
+        total += bond_value(h, discount_annual) * factor
     return max(0.0, total)
 
 
@@ -665,9 +733,9 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
 
     Notes: K-ICS supplies no interest curves (its scenarios are caller-supplied),
     so the net interest component is zero here -- equity and property still apply.
-    Credit, FX and concentration risk are charged for K-ICS only (the Solvency II
-    equivalents are deferred). A non-positive total required capital (a risk-free
-    book) gives an unbounded ratio.
+    Credit, FX and concentration risk are calibrated for both regimes (K-ICS
+    handbook / Solvency II Delegated Regulation). A non-positive total required
+    capital (a risk-free book) gives an unbounded ratio.
     """
     scr = required_capital(model_points, basis, regime=regime,
                            catastrophe=catastrophe, property_codes=property_codes)
