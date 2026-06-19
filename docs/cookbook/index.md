@@ -258,6 +258,10 @@
   - [자산 - 가용자본 - 지급여력비율](workflow/solvency-balance-sheet)
   - 자산 시가평가 + 가용자본 (자산-부채) + 순금리 SCR 로 지급여력비율 조립 --
     `AssetPortfolio`, `available_capital`, `assess_solvency`.
+* - 8.9
+  - [공시 재현 -- IFRS17 + K-ICS](workflow/disclosure)
+  - 한국 보험사 공개공시 골격 재현 -- IFRS17 보험계약부채 (BEL/RA/CSM), K-ICS 지급여력비율,
+    금리 민감도. `estimate_at` / `assess_solvency`.
 :::
 
 ### 9. 결산 워크플로
@@ -441,6 +445,7 @@ workflow/embedded-value
 workflow/required-capital
 workflow/alm-duration
 workflow/solvency-balance-sheet
+workflow/disclosure
 :::
 
 :::{toctree}
