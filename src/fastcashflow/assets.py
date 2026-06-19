@@ -33,10 +33,13 @@ from fastcashflow.solvency import RegimeSpec, required_capital
 
 @dataclass(frozen=True, slots=True)
 class Equity:
-    """An equity holding carried at a given market value (asset-positive). v1
-    applies no equity shock, so it adds to available capital but not to the SCR."""
+    """An equity holding carried at a given market value (asset-positive).
+
+    ``risk_type`` selects the market-risk shock (``"developed"`` or ``"emerging"``
+    market listed equity); the shock magnitude is the regime's calibration."""
 
     market_value: float
+    risk_type: str = "developed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +117,88 @@ def net_interest_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
     return worst
 
 
+# ---------------------------------------------------------------------------
+# Asset-side market-risk SCR (equity / property shocks, factor x market value).
+# Primary-source calibration (K-ICS handbook Ch.4 -- developed equity -35%,
+# emerging -48%, property -25%; market sub-risk correlation table 19 with 0.25
+# off-diagonals; top-level life <-> market 0.25 from table 3. Solvency II uses the
+# same equity / property magnitudes; its top-level inter-module matrix is in the
+# Directive (Annex IV point 1) and is not extractable here, so the top-level
+# aggregation falls back to a simple sum -- no diversification credit).
+# ---------------------------------------------------------------------------
+
+# Market sub-risks ordered (interest, equity, property) for the correlation axis.
+_MARKET_CORRELATION = np.array([
+    [1.00, 0.25, 0.25],
+    [0.25, 1.00, 0.25],
+    [0.25, 0.25, 1.00],
+])
+
+_MARKET_CALIBRATION = {
+    "K-ICS": {
+        "equity_shocks": {"developed": 0.35, "emerging": 0.48},
+        "property_shock": 0.25,
+        "market_correlation": _MARKET_CORRELATION,
+        "insurance_market_corr": 0.25,     # table 3 (life-long-term <-> market)
+    },
+    "Solvency II": {
+        "equity_shocks": {"developed": 0.35, "emerging": 0.48},
+        "property_shock": 0.25,
+        "market_correlation": _MARKET_CORRELATION,
+        "insurance_market_corr": None,     # top-level matrix not extracted -> simple sum
+    },
+}
+
+
+def _market_cal(regime):
+    try:
+        return _MARKET_CALIBRATION[regime.name]
+    except KeyError:
+        raise ValueError(
+            f"no market-risk calibration for regime {regime.name!r} "
+            f"(known: {sorted(_MARKET_CALIBRATION)})")
+
+
+def equity_scr(portfolio: AssetPortfolio, regime) -> float:
+    """The equity market-risk SCR -- each equity holding's market value times the
+    regime's price-fall shock for its ``risk_type``. Raises on an unknown type."""
+    shocks = _market_cal(regime)["equity_shocks"]
+    total = 0.0
+    for h in portfolio.holdings:
+        if isinstance(h, Equity):
+            if h.risk_type not in shocks:
+                raise ValueError(
+                    f"unknown equity risk_type {h.risk_type!r} for regime "
+                    f"{regime.name!r}; known: {sorted(shocks)}")
+            total += h.market_value * shocks[h.risk_type]
+    return max(0.0, total)         # a capital requirement is non-negative
+
+
+def property_scr(portfolio: AssetPortfolio, regime) -> float:
+    """The property market-risk SCR -- property market value times the regime's
+    price-fall shock."""
+    shock = _market_cal(regime)["property_shock"]
+    total = sum(h.market_value * shock
+                for h in portfolio.holdings if isinstance(h, Property))
+    return max(0.0, float(total))
+
+
+def market_module_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
+                      basis: Basis, *, regime) -> float:
+    """The market-risk module SCR -- the interest (net of liabilities), equity and
+    property sub-risks aggregated through the regime's market correlation matrix
+    (``sqrt(c^T R c)``). Interest is the net :func:`net_interest_scr` (zero when
+    the regime supplies no interest curves, e.g. K-ICS)."""
+    cal = _market_cal(regime)
+    interest = (net_interest_scr(portfolio, model_points, basis,
+                                 interest_curves=regime.interest_curves)
+                if regime.interest_curves is not None else 0.0)
+    c = np.array([interest, equity_scr(portfolio, regime),
+                  property_scr(portfolio, regime)], dtype=np.float64)
+    R = np.asarray(cal["market_correlation"], dtype=np.float64)
+    return float(np.sqrt(c @ R @ c))
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class SolvencyAssessment:
     """The asset-inclusive solvency picture at t=0 -- the full ratio and its parts.
@@ -176,5 +261,5 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital", "net_interest_scr",
-    "assess_solvency",
+    "equity_scr", "property_scr", "market_module_scr", "assess_solvency",
 ]

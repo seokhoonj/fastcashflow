@@ -82,6 +82,38 @@ def test_unmatched_book_positive_net_interest():
     assert assets.net_interest_scr(p, mp, basis, interest_curves=_parallel_curves()) > 0.0
 
 
+def test_equity_scr_by_type():
+    """Equity SCR = market value times the regime price-fall shock; unknown type raises."""
+    import pytest
+    p = assets.AssetPortfolio(holdings=(
+        assets.Equity(1_000_000.0, "developed"), assets.Equity(500_000.0, "emerging")))
+    assert np.isclose(assets.equity_scr(p, fcf.SOLVENCY2),
+                      1_000_000.0 * 0.35 + 500_000.0 * 0.48)
+    assert np.isclose(assets.equity_scr(p, fcf.KICS), assets.equity_scr(p, fcf.SOLVENCY2))
+    bad = assets.AssetPortfolio(holdings=(assets.Equity(1.0, "exotic"),))
+    with pytest.raises(ValueError, match="risk_type"):
+        assets.equity_scr(bad, fcf.SOLVENCY2)
+
+
+def test_property_scr():
+    p = assets.AssetPortfolio(holdings=(assets.Property(2_000_000.0),))
+    assert np.isclose(assets.property_scr(p, fcf.SOLVENCY2), 2_000_000.0 * 0.25)
+
+
+def test_market_module_aggregates_sub_risks():
+    """The market module is sqrt(c^T R c) over (interest, equity, property)."""
+    mp, basis = _mp(), _basis()
+    p = assets.AssetPortfolio(holdings=(
+        assets.Equity(3_000_000.0, "developed"), assets.Property(1_000_000.0)))
+    # K-ICS: no interest curves -> interest component 0
+    eq = assets.equity_scr(p, fcf.KICS)
+    pr = assets.property_scr(p, fcf.KICS)
+    c = np.array([0.0, eq, pr])
+    R = np.array([[1.0, 0.25, 0.25], [0.25, 1.0, 0.25], [0.25, 0.25, 1.0]])
+    assert np.isclose(assets.market_module_scr(p, mp, basis, regime=fcf.KICS),
+                      np.sqrt(c @ R @ c))
+
+
 def test_assess_solvency_components():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
