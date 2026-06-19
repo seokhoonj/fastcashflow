@@ -250,6 +250,10 @@
   - [요구자본 (Solvency II / K-ICS)](workflow/required-capital)
   - 충격 -> 재측정 -> 상관집계로 위험기반 요구자본 (SCR). 같은 엔진에 제도만 바꿔
     (`SOLVENCY2` / `KICS`) -- `required_capital`, `solvency_ratio`.
+* - 8.7
+  - [ALM -- 듀레이션 / DV01 / gap](workflow/alm-duration)
+  - 부채·채권의 금리 민감도 (DV01 / duration / key-rate) 와 자산-부채 DV01 gap (면역화) --
+    `liability_duration`, `bond_duration`, `alm_gap`.
 :::
 
 ### 9. 결산 워크플로
@@ -431,6 +435,7 @@ workflow/profit-testing
 workflow/interest-guarantee
 workflow/embedded-value
 workflow/required-capital
+workflow/alm-duration
 :::
 
 :::{toctree}

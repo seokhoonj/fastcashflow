@@ -306,6 +306,30 @@ asset side and available capital are caller-supplied.
 .. autodata:: fastcashflow.KICS
    :no-value:
 
+Asset-liability management
+--------------------------
+
+Deterministic interest-rate sensitivity of the liability and the assets backing
+it -- duration, DV01, key-rate duration, and the asset-liability DV01 gap.
+
+.. autoclass:: fastcashflow.DurationResult
+   :members:
+
+.. autofunction:: fastcashflow.liability_duration
+
+.. autofunction:: fastcashflow.liability_dv01
+
+.. autofunction:: fastcashflow.key_rate_durations
+
+.. autoclass:: fastcashflow.Bond
+   :members:
+
+.. autofunction:: fastcashflow.bond_duration
+
+.. autofunction:: fastcashflow.bond_value
+
+.. autofunction:: fastcashflow.alm_gap
+
 Reporting
 ---------
 
