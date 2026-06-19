@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.smithwilson import smith_wilson_prices
@@ -120,6 +121,26 @@ def _normals(n_scenarios, n_time, seed, antithetic):
             rng.standard_normal((n_scenarios, n_time)))
 
 
+@njit(parallel=True, cache=True)
+def _ou_short_rate(z_rate, drift, decay, vol_step):
+    """The HW1F short rate ``r_i = x_i + alpha_i`` from the rate innovations.
+
+    ``x`` is the exact mean-zero Ornstein-Uhlenbeck step ``x_{i+1} = x_i * decay
+    + vol_step * z_i`` (``x_0 = 0``). The scenario axis is independent, so it runs
+    in parallel (``prange``); the time axis is the sequential recursion. The
+    arithmetic is identical to the plain numpy loop -- this only removes the
+    per-step Python overhead and intermediates. Returns ``(n_scenarios, n_time)``.
+    """
+    n_scen, n_time = z_rate.shape
+    short_rate = np.empty((n_scen, n_time))
+    for s in prange(n_scen):
+        x = 0.0
+        for i in range(n_time):
+            short_rate[s, i] = x + drift[i]
+            x = x * decay + vol_step * z_rate[s, i]
+    return short_rate
+
+
 def simulate(
     maturities: FloatArray,
     rates: FloatArray,
@@ -176,26 +197,18 @@ def simulate(
     z_eq *= np.sqrt(1.0 - rho * rho)
     z_eq += rho * z_rate
 
-    # Exact Ornstein-Uhlenbeck step for the mean-zero factor; r_i = x_i + alpha_i
-    # written straight into short_rate (no separate x array).
+    # Exact Ornstein-Uhlenbeck short rate (the scenario axis runs in parallel).
     decay = np.exp(-a * _DT)
     vol_step = sigma * np.sqrt((1.0 - np.exp(-2.0 * a * _DT)) / (2.0 * a))
-    short_rate = np.empty((n_scenarios, n_time))
-    x_prev = np.zeros(n_scenarios)                         # x(0) = 0
-    for i in range(n_time):
-        short_rate[:, i] = x_prev + drift[i]
-        x_prev = x_prev * decay + vol_step * z_rate[:, i]
+    short_rate = _ou_short_rate(z_rate, drift, decay, vol_step)
 
     # Annual rate per month -- the engine's (1+r)^(1/12) discount then matches the
     # HW continuous month discount exp(-r/12). expm1 is exact near zero.
     annual = np.expm1(short_rate)
     # Lognormal fund return; risk-neutral drift = short rate, so the discounted
-    # fund value is a martingale. exp(.) - 1 keeps every return > -1. Built in the
-    # z_eq buffer to avoid a second full-size intermediate.
-    z_eq *= sig_s * _SQRT_DT
-    z_eq += (short_rate - 0.5 * sig_s * sig_s) * _DT
-    np.expm1(z_eq, out=z_eq)
-    fund_return = z_eq
+    # fund value is a martingale. exp(.) - 1 keeps every return > -1.
+    fund_return = np.expm1((short_rate - 0.5 * sig_s * sig_s) * _DT
+                           + sig_s * _SQRT_DT * z_eq)
 
     return EconomicScenarios(rates=annual, returns=fund_return,
                              short_rate=short_rate, initial_prices=prices)
