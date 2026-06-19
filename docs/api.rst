@@ -278,6 +278,11 @@ traditional net-level-premium reserve and statutory profit test.
 
 .. autofunction:: fastcashflow.pricing.interest_guarantee_tvog
 
+.. autofunction:: fastcashflow.embedded_value
+
+.. autoclass:: fastcashflow.EmbeddedValue
+   :members:
+
 Reporting
 ---------
 
