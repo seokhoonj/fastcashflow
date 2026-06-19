@@ -114,6 +114,33 @@ def test_market_module_aggregates_sub_risks():
                       np.sqrt(c @ R @ c))
 
 
+def test_operational_scr_kics():
+    """K-ICS operational = max(premium x 3.5%, BEL x 0.4%)."""
+    mp, basis = _mp(), _basis()
+    m = measure(mp, basis, full=True)
+    bel = max(0.0, float(m.bel.sum()))
+    prem = max(0.0, float(m.cashflows.premium_cf[:, :12].sum()))
+    expected = max(prem * 0.035, bel * 0.004)
+    assert np.isclose(assets.operational_scr(mp, basis, fcf.KICS), expected)
+    assert assets.operational_scr(mp, basis, fcf.KICS) > 0.0
+
+
+def test_operational_scr_sii_cap():
+    """Solvency II operational is capped at 0.3 x BSCR."""
+    mp, basis = _mp(), _basis()
+    m = measure(mp, basis, full=True)
+    bel = max(0.0, float(m.bel.sum()))
+    prem = max(0.0, float(m.cashflows.premium_cf[:, :12].sum()))
+    op_uncapped = max(prem * 0.04, bel * 0.0045)
+    # a tiny BSCR makes the 0.3 x BSCR cap bite
+    small = op_uncapped / 10.0
+    assert np.isclose(assets.operational_scr(mp, basis, fcf.SOLVENCY2, bscr=small),
+                      0.30 * small)
+    # a large BSCR leaves it uncapped
+    assert np.isclose(assets.operational_scr(mp, basis, fcf.SOLVENCY2, bscr=1e12),
+                      op_uncapped)
+
+
 def test_assess_solvency_components():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
