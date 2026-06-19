@@ -23,10 +23,11 @@ from fastcashflow.model_points import ModelPoints
 from fastcashflow.profit import (
     ProfitSignature, break_even_year, irr, nbv, profit_margin, signature,
 )
+from fastcashflow.tvog import TVOGResult
 
 __all__ = ["solve_premium", "statutory_reserve", "statutory_profit_signature",
-           "ProfitSignature", "nbv", "profit_margin", "signature", "irr",
-           "break_even_year"]
+           "interest_guarantee_tvog", "ProfitSignature", "TVOGResult",
+           "nbv", "profit_margin", "signature", "irr", "break_even_year"]
 
 
 def _with_premium(model_points: ModelPoints, premium: float) -> ModelPoints:
@@ -184,3 +185,171 @@ def statutory_profit_signature(
                  ).astype(np.int64)
     return ProfitSignature(period_months=period_months, month_end=month_end,
                            profit=profit)
+
+
+def _validate_rate_block(rates: FloatArray, name: str) -> FloatArray:
+    """A ``(n_path, n_time)`` annual-rate block the TVOG kernel can discount.
+
+    Reject a non-2-D / empty / non-finite block, or any annual rate ``<= -100%``
+    (which sign-flips the ``1 / (1 + r_m)`` discount and returns a
+    plausible-looking wrong number). Returns the validated float array.
+    """
+    a = np.asarray(rates, dtype=np.float64)
+    if a.ndim != 2:
+        raise ValueError(f"{name} must be 2-D (n_scenarios, n_time)")
+    if a.shape[0] < 1:
+        raise ValueError(f"{name} must contain at least one scenario row")
+    if not np.all(np.isfinite(a)):
+        raise ValueError(f"{name} must be finite")
+    if np.any(a <= -1.0):
+        raise ValueError(
+            f"{name} must be greater than -1 -- an annual rate of -100% or "
+            "worse is invalid")
+    return a
+
+
+def _forward_central_path(initial_prices: FloatArray) -> FloatArray:
+    """The deterministic central rate path -- the one-month forward curve implied
+    by ``P(0, t)``, as an annual rate per month ``(n_time,)``.
+
+    ``f(t) = (P(0, t+1) / P(0, t)) ** (-12) - 1`` is the exact inverse of the
+    engine's ``(1 + annual) ** (1/12)`` month discount, so ``(1 + f) ** (1/12) =
+    P(0, t) / P(0, t+1)``. Under a risk-neutral generator the forward path is the
+    zero-volatility short-rate path that reproduces the same ``P(0, t)``, so it is
+    the no-volatility baseline whose only gap to the scenario mean is the
+    guarantee's convexity (the time value).
+    """
+    p = np.asarray(initial_prices, dtype=np.float64)
+    if p.ndim != 1 or p.shape[0] < 2:
+        raise ValueError(
+            "initial_prices must be a 1-D array of length n_time+1 (P(0,t), P[0]=1)")
+    if not np.all(np.isfinite(p)) or np.any(p <= 0.0):
+        raise ValueError("initial_prices must be finite and strictly positive")
+    one_month_disc = p[1:] / p[:-1]                    # P(0,t+1)/P(0,t), (n_time,)
+    return one_month_disc ** (-12.0) - 1.0             # annual forward per month
+
+
+def interest_guarantee_tvog(
+    model_points: ModelPoints,
+    statutory_basis: Basis,
+    rate_scenarios: FloatArray,
+    *,
+    guaranteed_rate: float | None = None,
+    central_rates: FloatArray | None = None,
+    initial_prices: FloatArray | None = None,
+) -> TVOGResult:
+    """The cost of a traditional minimum interest-rate guarantee, split into
+    intrinsic value and time value (TVOG).
+
+    A general-account (GMM) traditional / interest-sensitive contract credits the
+    policy reserve at a minimum guaranteed rate ``i_g``. When the company's earned
+    investment rate ``r`` falls below ``i_g`` the company funds the shortfall on
+    the reserve. Because ``max(i_g - r, 0)`` is convex, a deterministic projection
+    at the central rate sees only the *intrinsic value*; the extra cost from rate
+    volatility -- the *time value* -- appears only over many scenarios.
+
+    This composes two pieces: the net-level-premium reserve ``V_t`` from
+    :func:`statutory_reserve` (which accrues at ``i_g``), and the earned-rate
+    scenarios ``rate_scenarios`` (e.g. ``fastcashflow.esg.simulate(...).rates``).
+    Per scenario ``s`` the guarantee cost is the present value of the funded
+    shortfall::
+
+        cost_s = sum_t  D_s(t) * max(i_g_m - r_m[s, t], 0) * V_t
+
+    with monthly rates ``i_g_m = (1 + i_g) ** (1/12) - 1`` and likewise ``r_m``,
+    ``V_t`` the portfolio reserve held at the start of month ``t``, and ``D_s(t)``
+    the end-of-month stochastic discount along the scenario's own short rate (the
+    shortfall rides the reserve's full-month interest credit). The scenario mean
+    of ``D_s`` reprices ``P(0, t+1)``, so the measure stays risk-neutral.
+
+    Parameters
+    ----------
+    rate_scenarios
+        ``(n_scenarios, n_time)`` annual earned rate per projection month, where
+        ``n_time = statutory_reserve(...)[0].shape[1] - 1`` (the contract-boundary
+        horizon, NOT the term -- the same horizon convention as the projection).
+    guaranteed_rate
+        The minimum guaranteed annual rate ``i_g``. Defaults to
+        ``statutory_basis.discount_annual`` when that is a scalar; pass it
+        explicitly if the statutory basis uses a per-year discount curve (v1 takes
+        a scalar ``i_g``).
+    central_rates
+        ``(n_time,)`` annual central path for the intrinsic value. If omitted, the
+        forward path implied by ``initial_prices`` is used; exactly one of the two
+        must be given (no silent scenario-mean fallback).
+    initial_prices
+        ``(n_time+1,)`` ``P(0, t)`` the scenarios were calibrated to (e.g.
+        ``EconomicScenarios.initial_prices``), used to derive the forward central
+        path when ``central_rates`` is omitted.
+
+    Returns
+    -------
+    TVOGResult
+        ``guarantee_cost`` is the ``(n_scenarios,)`` cost distribution;
+        ``intrinsic_value`` the central-path cost; ``time_value`` the TVOG
+        (``mean(cost) - intrinsic``); ``total_value`` their sum. All are ``>= 0``:
+        the guarantee is a cost to the entity. Net it by ADDING ``total_value`` to
+        the fulfilment cash flows / BEL (subtracting from CSM / NBV);
+        ``intrinsic_value`` is the part a deterministic central-rate valuation
+        already captures, ``time_value`` the extra only stochastic scenarios show.
+    """
+    if isinstance(statutory_basis, BasisRouter):
+        raise NotImplementedError(
+            "interest_guarantee_tvog takes a single Basis (the guarantee is per "
+            "product); resolve the router per segment.")
+
+    reserve, _ = statutory_reserve(model_points, statutory_basis)
+    V = reserve.sum(axis=0)                            # (n_time+1,) portfolio reserve
+    n_time = V.shape[0] - 1
+    Vt = V[:n_time]                                    # reserve held over each month
+
+    rates = _validate_rate_block(rate_scenarios, "rate_scenarios")
+    if rates.shape[1] != n_time:
+        raise ValueError(
+            f"rate_scenarios must have {n_time} columns (the contract-boundary "
+            f"horizon = statutory_reserve(...)[0].shape[1] - 1), got "
+            f"{rates.shape[1]}")
+
+    if guaranteed_rate is None:
+        ig = statutory_basis.discount_annual
+        if np.ndim(ig) != 0:
+            raise ValueError(
+                "statutory_basis.discount_annual is a per-year curve; pass an "
+                "explicit scalar guaranteed_rate (v1 takes a scalar i_g)")
+        guaranteed_rate = float(ig)
+    ig_m = (1.0 + guaranteed_rate) ** (1.0 / 12.0) - 1.0
+
+    if central_rates is not None:
+        central = np.asarray(central_rates, dtype=np.float64)
+        if central.ndim != 1 or central.shape[0] != n_time:
+            raise ValueError(
+                f"central_rates must be 1-D of length {n_time} (n_time), got "
+                f"shape {central.shape}")
+        if not np.all(np.isfinite(central)) or np.any(central <= -1.0):
+            raise ValueError("central_rates must be finite and greater than -1")
+    elif initial_prices is not None:
+        central = _forward_central_path(initial_prices)
+        if central.shape[0] != n_time:
+            raise ValueError(
+                f"initial_prices implies a horizon of {central.shape[0]} months, "
+                f"but the reserve horizon is {n_time}")
+    else:
+        raise ValueError(
+            "supply central_rates or initial_prices to define the deterministic "
+            "central path (no scenario-mean fallback)")
+
+    def _cost_block(block: FloatArray) -> FloatArray:
+        """PV of the funded shortfall for each row of an annual-rate block."""
+        r_m = (1.0 + block) ** (1.0 / 12.0) - 1.0
+        shortfall = np.maximum(ig_m - r_m, 0.0)
+        ones = np.ones((block.shape[0], 1))
+        bom = np.concatenate(
+            [ones, np.cumprod(1.0 / (1.0 + r_m), axis=1)[:, :-1]], axis=1)
+        discount = bom / (1.0 + r_m)                   # end-of-month, (n_path, n_time)
+        return (discount * shortfall) @ Vt             # (n_path,)
+
+    guarantee_cost = _cost_block(rates)
+    intrinsic_value = float(_cost_block(central[None, :])[0])
+    time_value = float(guarantee_cost.mean() - intrinsic_value)
+    return TVOGResult(guarantee_cost=guarantee_cost,
+                      intrinsic_value=intrinsic_value, time_value=time_value)
