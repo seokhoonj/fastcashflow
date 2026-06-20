@@ -37,6 +37,7 @@ from fastcashflow._measurement_basis import _require_inception
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
 from fastcashflow._reinsurance import ReinsuranceMeasurement
+from fastcashflow.assets import DynamicSolvency
 
 
 def _to_years(monthly: FloatArray) -> FloatArray:
@@ -372,6 +373,59 @@ class ReinsuranceReport:
         return "\n".join(lines)
 
 
+def _ratio(r: float) -> str:
+    """Format a solvency ratio as a percentage, or ``n/a`` when not finite (a
+    non-positive required capital gives an unbounded ratio)."""
+    return "n/a" if not np.isfinite(r) else f"{r * 100:,.1f}%"
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicSolvencyReport:
+    """Formatted view of a :func:`~fastcashflow.dynamic_solvency` scenario overlay.
+
+    Lays out the static t=0 picture (available capital, required capital, ratio),
+    the coupled rate / dynamic-lapse scenario (the mark-to-market revaluation and
+    the forced-sale friction), and the after-scenario surplus and ratio. When the
+    scenario forces a sale, a liquidation block shows the total sold, the realized
+    loss and any unfunded shortfall. Output is ASCII English -- part of the API
+    surface a global user sees."""
+
+    result: DynamicSolvency
+
+    def __str__(self) -> str:
+        d = self.result
+        s, it, liq = d.static, d.interaction, d.liquidation
+        w = 30
+
+        def row(label: str, value: float) -> str:
+            return f"  {label:{w}}{value:>18,.0f}"
+
+        lines = [
+            "Dynamic solvency -- coupled rate / dynamic-lapse scenario overlay",
+            "  -- static (t=0) --",
+            row("Available capital", s.available_capital),
+            row("Required capital (SCR)", s.total_scr),
+            f"  {'Solvency ratio':{w}}{_ratio(s.solvency_ratio):>18}",
+            "  -- scenario --",
+            row("Base NAV", it.base_nav),
+            row("Stressed NAV", it.stressed_nav),
+            row("Revaluation loss", it.revaluation_loss),
+            row("Forced-sale loss", it.forced_sale_loss),
+            row("Total interaction loss", it.total_loss),
+            "  -- after scenario --",
+            row("Stressed available capital", d.stressed_available_capital),
+            f"  {'Stressed solvency ratio':{w}}{_ratio(d.stressed_ratio):>18}",
+        ]
+        if liq.total_realized_loss or liq.total_unfunded:
+            lines += [
+                "  -- liquidation --",
+                row("Forced sale (total)", float(liq.forced_sale.sum())),
+                row("Realized loss (total)", liq.total_realized_loss),
+                row("Unfunded (total)", liq.total_unfunded),
+            ]
+        return "\n".join(lines)
+
+
 @singledispatch
 def report(measurement) -> Report:
     """Assemble the IFRS 17 report from a GMM, PAA, VFA or reinsurance measurement.
@@ -415,6 +469,12 @@ def _(measurement: VFAMeasurement) -> Report:
 def _(measurement: ReinsuranceMeasurement) -> ReinsuranceReport:
     _require_inception(measurement, "report()")
     return _report_reinsurance(measurement)
+
+
+@report.register
+def _(result: DynamicSolvency) -> DynamicSolvencyReport:
+    """A dynamic-solvency scenario overlay reports its before / after picture."""
+    return DynamicSolvencyReport(result=result)
 
 
 def _report_gmm(m: GMMMeasurement) -> Report:

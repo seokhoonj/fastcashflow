@@ -101,7 +101,9 @@ from fastcashflow.assets import (
 )
 from fastcashflow import assets
 from fastcashflow._reinsurance import ReinsuranceMeasurement
-from fastcashflow.report import ReinsuranceReport, Report, report
+from fastcashflow.report import (
+    DynamicSolvencyReport, ReinsuranceReport, Report, report,
+)
 from fastcashflow.smithwilson import smith_wilson, smith_wilson_prices, smith_wilson_alpha
 from fastcashflow.esg import EconomicScenarios
 from fastcashflow.profit import ProfitSignature
@@ -134,7 +136,7 @@ __all__ = [
     "GMMMeasurement", "GMMAggregate", "CurrentEstimate",
     "PAAMeasurement", "PAAAggregate",
     "VFAMeasurement", "VFAAggregate",
-    "ReinsuranceMeasurement", "Report", "ReinsuranceReport",
+    "ReinsuranceMeasurement", "Report", "ReinsuranceReport", "DynamicSolvencyReport",
     "StochasticResult", "TVOGResult",
     "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
     "VFAPeriodMovement", "VFAReconciliation",

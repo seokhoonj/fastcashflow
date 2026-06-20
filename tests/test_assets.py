@@ -902,3 +902,22 @@ def test_dynamic_solvency_passes_through_assess_kwargs():
     taxed = assets.assess_solvency(pf, mp, basis, regime=fcf.KICS, tax_rate=0.22)
     assert np.isclose(d.static.tax_adjustment, taxed.tax_adjustment)
     assert d.static.tax_adjustment > 0.0
+
+
+def test_dynamic_solvency_report_renders():
+    """report(dynamic_solvency(...)) yields an ASCII DynamicSolvencyReport with the
+    static / scenario / after-scenario blocks, and ties to the result."""
+    mp = _mp()
+    basis = make_death_basis(mortality_q=0.001, lapse_q=0.03, discount_annual=0.03,
+                             mortality_cv=0.0)
+    pf = _solvency_portfolio()
+    d = assets.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
+                                shift=0.01, lapse_sensitivity=8.0, haircut=0.1)
+    rep = fcf.report(d)
+    assert isinstance(rep, fcf.DynamicSolvencyReport)
+    text = str(rep)
+    assert all(ord(c) < 128 for c in text)                 # ASCII only (global surface)
+    for label in ("Dynamic solvency", "Solvency ratio", "Total interaction loss",
+                  "Stressed solvency ratio"):
+        assert label in text
+    assert f"{d.stressed_available_capital:,.0f}" in text  # the figure ties to the result
