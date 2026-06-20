@@ -375,15 +375,26 @@ def interaction_loss(portfolio: AssetPortfolio, model_points: ModelPoints,
     ``reinvest_rate`` / ``opening_balance`` parameterise the liquidation roll-forward
     (a surplus earns the rate before a later shortfall; the opening cash cushion
     defaults to zero -- shortfalls are met purely by selling)."""
+    return _interaction(portfolio, model_points, basis, shift=shift,
+                        lapse_sensitivity=lapse_sensitivity, haircut=haircut,
+                        reinvest_rate=reinvest_rate, opening_balance=opening_balance)[0]
+
+
+def _interaction(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis,
+                 *, shift, lapse_sensitivity, haircut, reinvest_rate, opening_balance):
+    """The interaction loss AND the underlying forced-sale roll-forward, so a caller
+    that needs the liquidity trajectory (e.g. :func:`dynamic_solvency`) does not
+    re-run the stressed measurement."""
     base_nav = _portfolio_nav(portfolio, model_points, basis)
     mp_s, basis_s = interest_with_dynamic_lapse(shift, lapse_sensitivity).apply(
         model_points, basis)
     stressed_nav = _portfolio_nav(portfolio, mp_s, basis_s)
-    gap_s = cashflow_gap(portfolio, measure(mp_s, basis_s, full=True))
-    liq = liquidate(gap_s, haircut=haircut, reinvest_rate=reinvest_rate,
+    liq = liquidate(cashflow_gap(portfolio, measure(mp_s, basis_s, full=True)),
+                    haircut=haircut, reinvest_rate=reinvest_rate,
                     opening_balance=opening_balance)
-    return InteractionResult(base_nav=base_nav, stressed_nav=stressed_nav,
-                             forced_sale_loss=liq.total_realized_loss)
+    res = InteractionResult(base_nav=base_nav, stressed_nav=stressed_nav,
+                            forced_sale_loss=liq.total_realized_loss)
+    return res, liq
 
 
 def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
@@ -1125,6 +1136,69 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
         total_scr=total, solvency_ratio=ratio)
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class DynamicSolvency:
+    """The solvency picture after a coupled rate / dynamic-lapse scenario bites --
+    the dynamic asset-liability view layered on the static t=0 assessment.
+
+    ``static`` is the unchanged :func:`assess_solvency` picture (available capital,
+    SCR modules, t=0 ratio). ``interaction`` is the coupled-stress
+    :class:`InteractionResult` (mark-to-market revaluation plus the forced-sale
+    friction) and ``liquidation`` its underlying :class:`LiquidationResult` -- the
+    month-by-month surplus / forced-sale trajectory under the stressed run-off.
+    ``stressed_available_capital`` is the surplus after the scenario --
+    ``static.available_capital - interaction.total_loss`` -- and ``stressed_ratio``
+    is that over the (unchanged) required capital ``static.total_scr``.
+
+    This is a SCENARIO OVERLAY on the coverage ratio (how the ratio looks after this
+    specific rate / lapse / liquidation scenario), NOT a re-derived regulatory SCR:
+    the denominator is still the prescribed 1-in-200 capital, so the static path and
+    its FSS-validated numbers are untouched. The scenario answers a reverse-stress
+    question the static t=0 ratio cannot -- the asset-liability interaction and the
+    liquidity friction it forces."""
+
+    static: SolvencyAssessment
+    interaction: InteractionResult
+    liquidation: LiquidationResult
+    stressed_available_capital: float
+    stressed_ratio: float
+
+
+def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
+                     basis: Basis, *, regime: RegimeSpec, shift: float,
+                     lapse_sensitivity: float, haircut: float, reinvest_rate=0.0,
+                     opening_balance: float = 0.0, **assess_kwargs) -> DynamicSolvency:
+    """Layer a coupled rate / dynamic-lapse scenario onto the static solvency ratio.
+
+    Runs :func:`assess_solvency` for the static t=0 picture, then
+    :func:`interaction_loss` for the asset-liability interaction the static modules
+    miss (the dynamic-lapse-amplified mark-to-market fall plus the forced-sale
+    friction). The scenario loss is taken off available capital to give the
+    ``stressed_available_capital`` and a ``stressed_ratio`` over the unchanged
+    required capital -- the dynamic view feeding the coverage ratio.
+
+    ``shift`` / ``lapse_sensitivity`` / ``haircut`` define the coupled scenario (see
+    :func:`interaction_loss`); ``reinvest_rate`` / ``opening_balance`` parameterise
+    the liquidation roll-forward. Extra keyword arguments
+    (``interest_scenarios``, ``tax_rate``, ``catastrophe``, ...) pass through to
+    :func:`assess_solvency`. A zero scenario (``shift = haircut = 0``) leaves the
+    ratio at the static value."""
+    static = assess_solvency(portfolio, model_points, basis, regime=regime,
+                             **assess_kwargs)
+    interaction, liq = _interaction(
+        portfolio, model_points, basis, shift=shift,
+        lapse_sensitivity=lapse_sensitivity, haircut=haircut,
+        reinvest_rate=reinvest_rate, opening_balance=opening_balance)
+    stressed_ac = static.available_capital - interaction.total_loss
+    if static.total_scr > 0.0:
+        stressed_ratio = stressed_ac / static.total_scr
+    else:
+        stressed_ratio = float("inf") if stressed_ac >= 0.0 else float("-inf")
+    return DynamicSolvency(static=static, interaction=interaction, liquidation=liq,
+                           stressed_available_capital=stressed_ac,
+                           stressed_ratio=stressed_ratio)
+
+
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital",
@@ -1135,4 +1209,5 @@ __all__ = [
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",
     "aggregate_required_capital", "assess_solvency",
+    "DynamicSolvency", "dynamic_solvency",
 ]

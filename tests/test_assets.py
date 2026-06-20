@@ -776,3 +776,64 @@ def test_interaction_loss_zero_haircut_drops_friction():
                                   lapse_sensitivity=8.0, haircut=0.0)
     assert res.forced_sale_loss == 0.0
     assert np.isclose(res.total_loss, res.revaluation_loss)
+
+
+def _solvency_portfolio():
+    return assets.AssetPortfolio(holdings=(
+        alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
+
+
+def test_dynamic_solvency_decomposes():
+    """The dynamic ratio takes the coupled-stress interaction loss off the static
+    available capital and divides by the unchanged required capital; the parts
+    reproduce their standalone builds."""
+    mp, basis = _mp(), _basis()
+    pf = _solvency_portfolio()
+    d = assets.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
+                                shift=0.01, lapse_sensitivity=8.0, haircut=0.1)
+    static = assets.assess_solvency(pf, mp, basis, regime=fcf.SOLVENCY2)
+    interaction = assets.interaction_loss(pf, mp, basis, shift=0.01,
+                                          lapse_sensitivity=8.0, haircut=0.1)
+    assert np.isclose(d.static.solvency_ratio, static.solvency_ratio)
+    assert np.isclose(d.interaction.total_loss, interaction.total_loss)
+    assert np.isclose(d.stressed_available_capital,
+                      static.available_capital - interaction.total_loss)
+    assert np.isclose(d.stressed_ratio, d.stressed_available_capital / static.total_scr)
+    # the liquidation trajectory is exposed for the surplus / forced-sale path
+    assert np.isclose(d.liquidation.total_realized_loss, d.interaction.forced_sale_loss)
+
+
+def test_dynamic_solvency_zero_scenario_is_static():
+    """A null scenario (no shift, no haircut) leaves the ratio at the static value."""
+    mp, basis = _mp(), _basis()
+    pf = _solvency_portfolio()
+    d = assets.dynamic_solvency(pf, mp, basis, regime=fcf.KICS,
+                                shift=0.0, lapse_sensitivity=8.0, haircut=0.0)
+    assert d.interaction.total_loss == 0.0
+    assert np.isclose(d.stressed_ratio, d.static.solvency_ratio)
+    assert np.isclose(d.stressed_available_capital, d.static.available_capital)
+
+
+def test_dynamic_solvency_deeper_haircut_lowers_ratio():
+    """A deeper liquidation haircut crystallises more forced-sale loss, lowering the
+    stressed coverage ratio (the static ratio is unchanged)."""
+    mp, basis = _mp(), _basis()
+    pf = _solvency_portfolio()
+    shallow = assets.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
+                                      shift=0.01, lapse_sensitivity=8.0, haircut=0.05)
+    deep = assets.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
+                                   shift=0.01, lapse_sensitivity=8.0, haircut=0.30)
+    assert deep.interaction.forced_sale_loss > shallow.interaction.forced_sale_loss
+    assert deep.stressed_ratio < shallow.stressed_ratio
+    assert np.isclose(deep.static.solvency_ratio, shallow.static.solvency_ratio)
+
+
+def test_dynamic_solvency_passes_through_assess_kwargs():
+    """Extra kwargs (e.g. tax_rate) reach assess_solvency unchanged."""
+    mp, basis = _mp(), _basis()
+    pf = _solvency_portfolio()
+    d = assets.dynamic_solvency(pf, mp, basis, regime=fcf.KICS, shift=0.0,
+                                lapse_sensitivity=0.0, haircut=0.0, tax_rate=0.22)
+    taxed = assets.assess_solvency(pf, mp, basis, regime=fcf.KICS, tax_rate=0.22)
+    assert np.isclose(d.static.tax_adjustment, taxed.tax_adjustment)
+    assert d.static.tax_adjustment > 0.0
