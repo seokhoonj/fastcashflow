@@ -12,6 +12,8 @@ from fastcashflow._mass_lapse_reinsurance import (
     ATTACHMENT_TAIL_ANCHOR,
     AssumedTreatyMeasurement,
     CedantSolvencyRelief,
+    LapseDistribution,
+    LapseModel,
     LapseReliefResult,
     LapseTailDistribution,
     LapseXL,
@@ -30,6 +32,8 @@ from fastcashflow._mass_lapse_reinsurance import (
 __all__ = [
     "LapseXL",
     "MeasurementPeriod",
+    "LapseDistribution",
+    "LapseModel",
     "LapseTailDistribution",
     "ReinsurancePricing",
     "AssumedTreatyMeasurement",

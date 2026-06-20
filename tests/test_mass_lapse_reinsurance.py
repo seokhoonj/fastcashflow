@@ -318,6 +318,34 @@ def test_lapse_distribution_rejects_bad_anchors():
         lre.LapseTailDistribution.from_anchors((0.40, 1/200), (0.15, 1/30))  # swapped
 
 
+def test_lapse_tail_distribution_is_a_lapse_distribution():
+    """The baseline F(L) is a LapseDistribution -- the documented plug-in type."""
+    assert isinstance(lre.LapseTailDistribution.from_anchors(), lre.LapseDistribution)
+
+
+def test_survival_only_plugin_prices_via_base_defaults():
+    """The Model/Engine seam: a plug-in F(L) implementing ONLY survival prices
+    correctly -- the base class supplies expected_layer (survival integral) and
+    value_at_risk (bisection), so price_treaty needs nothing else."""
+    base = lre.LapseTailDistribution.from_anchors()   # has closed-form overrides
+
+    class SurvivalOnly(lre.LapseDistribution):        # implements survival alone
+        def survival(self, x):
+            return base.survival(x)
+
+    plug = SurvivalOnly()
+    assert np.isclose(plug.expected_layer(0.15, 0.40),
+                      base.expected_layer(0.15, 0.40), rtol=1e-4)   # integral default
+    assert np.isclose(plug.value_at_risk(0.995),
+                      base.value_at_risk(0.995), atol=1e-6)         # bisection default
+
+    treaty = lre.LapseXL(0.15, 0.40)
+    p_base = lre.price_treaty(1e9, treaty, base)
+    p_plug = lre.price_treaty(1e9, treaty, plug)                    # engine takes any F(L)
+    assert np.isclose(p_plug.premium, p_base.premium, rtol=1e-4)
+    assert np.isclose(p_plug.expected_recovery, p_base.expected_recovery, rtol=1e-4)
+
+
 def test_value_at_risk_returns_sf_anchor():
     """VaR_99.5(L) reproduces the 40% standard-formula stress (the calibration
     upper anchor)."""

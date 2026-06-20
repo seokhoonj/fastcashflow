@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 
@@ -488,8 +489,76 @@ SF_LAPSE_TAIL_ANCHOR = (0.40, 1.0 / 200.0)
 ATTACHMENT_TAIL_ANCHOR = (0.15, 1.0 / 30.0)
 
 
+class LapseDistribution:
+    """The Engine/Model seam: the distribution F(L) of the cumulative excess-
+    over-best-estimate lapse fraction ``L`` that reinsurer pricing integrates
+    against.
+
+    This is fastcashflow's plug-in point. The valuable, proprietary part of
+    mass-lapse reinsurance is the MODEL that produces F(L) -- calibrated to a
+    reinsurer's cross-portfolio lapse experience (its deepest moat), the
+    economic-to-lapse link, and channel-level clustering. fastcashflow is the
+    ENGINE: it takes ANY F(L) and returns the capital relief, pricing, capital,
+    risk adjustment and CSM. To plug in a model, subclass this and implement
+    ``survival``; ``expected_layer`` and ``value_at_risk`` then work for free
+    (pricing needs nothing else). A subclass MAY override them with closed forms
+    (as :class:`LapseTailDistribution` does) for speed and precision."""
+
+    __slots__ = ()
+
+    def survival(self, x: float) -> float:
+        """``P(L > x)`` -- the one method a plug-in F(L) must provide."""
+        raise NotImplementedError
+
+    def expected_layer(self, attachment: float, detachment: float) -> float:
+        """``E[clip(L - attachment, 0, detachment - attachment)]`` -- the expected
+        covered fraction, equal to the survival integral over the layer (the
+        identity any survival-only F(L) prices through). Numerical default;
+        override for a closed form."""
+        if not (0.0 <= attachment < detachment):
+            raise ValueError("require 0 <= attachment < detachment")
+        grid = np.linspace(attachment, detachment, 4001)
+        surv = np.array([self.survival(float(x)) for x in grid])
+        return float(np.trapezoid(surv, grid))
+
+    def value_at_risk(self, q: float) -> float:
+        """The ``q``-quantile of ``L`` -- the lapse level ``x`` with
+        ``survival(x) = 1 - q`` -- by bisection on the (decreasing) survival.
+        Numerical default; override for a closed form."""
+        if not (0.0 < q < 1.0):
+            raise ValueError(f"q must be in (0, 1), got {q}")
+        target = 1.0 - q
+        lo, hi = 0.0, 1.0
+        while self.survival(hi) > target and hi < 1e6:    # expand to bracket
+            hi *= 2.0
+        for _ in range(100):                              # bisection
+            mid = 0.5 * (lo + hi)
+            if self.survival(mid) > target:
+                lo = mid
+            else:
+                hi = mid
+        return 0.5 * (lo + hi)
+
+
+@runtime_checkable
+class LapseModel(Protocol):
+    """A lapse MODEL: produces a :class:`LapseDistribution` for a given context
+    (e.g. a book's channel mix or an economic scenario).
+
+    This is the proprietary layer fastcashflow deliberately leaves to the user.
+    A reinsurer's model -- calibrated to cross-portfolio tail data and the
+    channel-level clustering that actually drives mass lapse -- is its real IP,
+    and is never open-sourced. The baseline
+    :meth:`LapseTailDistribution.from_anchors` is a trivial context-free model;
+    the engine consumes only the returned distribution, so any model satisfying
+    this protocol drops in."""
+
+    def distribution(self, context=None) -> LapseDistribution:
+        ...
+
+
 @dataclass(frozen=True, slots=True)
-class LapseTailDistribution:
+class LapseTailDistribution(LapseDistribution):
     """Lognormal distribution of the cumulative excess-over-best-estimate lapse
     fraction ``L``, the public baseline F(L) for reinsurer pricing.
 
@@ -589,7 +658,7 @@ class ReinsurancePricing:
 
 
 def price_treaty(
-    loss_density: float, treaty: LapseXL, distribution, *,
+    loss_density: float, treaty: LapseXL, distribution: LapseDistribution, *,
     cost_of_capital: float = 0.06, var_level: float = 0.995,
     diversification_factor: float = 1.0,
 ) -> ReinsurancePricing:
