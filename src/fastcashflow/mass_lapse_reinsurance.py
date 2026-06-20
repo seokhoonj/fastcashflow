@@ -1,11 +1,11 @@
-"""Mass-lapse reinsurance namespace -- ``fcf.lapse_reinsurance.*``.
+"""Mass-lapse reinsurance namespace -- ``fcf.mass_lapse_reinsurance.*``.
 
 A non-proportional (lapse excess-of-loss) treaty that transfers the tail of
 mass-lapse risk and reduces the cedant's standard-formula lapse capital. The
 treaty's loss base is the mass-lapse own-funds strain (:func:`loss_density`);
 the layer between attachment and detachment is ceded.
 """
-from fastcashflow._lapse_reinsurance import (
+from fastcashflow._mass_lapse_reinsurance import (
     CREDIT_QUALITY_STEP_PD,
     SF_MASS_LAPSE_SHOCK,
     SF_MASS_LAPSE_SHOCK_GROUP_PENSION,

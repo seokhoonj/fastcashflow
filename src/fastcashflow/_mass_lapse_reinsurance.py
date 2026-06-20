@@ -7,7 +7,7 @@ beyond detachment. The detachment is usually set to the Solvency II standard-
 formula mass-lapse stress (40% over best-estimate lapse rates, Delegated
 Regulation Art. 142(6)(b)), so the layer caps exactly the regulatory shock.
 
-Public surface is the ``fcf.lapse_reinsurance`` namespace.
+Public surface is the ``fcf.mass_lapse_reinsurance`` namespace.
 
 The treaty's loss base is the own-funds strain of a mass lapse -- the
 :func:`lapse_loss_density`. When an extra fraction ``L`` (over best estimate) of

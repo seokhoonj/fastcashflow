@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import lapse_reinsurance as lre
+from fastcashflow import mass_lapse_reinsurance as lre
 from fastcashflow import ModelPoints
 from fastcashflow.engine import inforce_surrender_value, measure
 

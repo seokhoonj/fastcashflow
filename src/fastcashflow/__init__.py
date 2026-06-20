@@ -113,14 +113,14 @@ from fastcashflow.tvog import TVOGResult
 from fastcashflow._vfa import VFAMeasurement, VFAAggregate
 from fastcashflow.portfolio import GoCSettlement, settle_group_of_contracts
 from fastcashflow import (  # namespaces
-    gmm, paa, portfolio, reinsurance, lapse_reinsurance, samples, vfa, esg,
+    gmm, paa, portfolio, reinsurance, mass_lapse_reinsurance, samples, vfa, esg,
 )
 
 __version__ = "0.1.0.dev1"
 __all__ = [
     # measurement-model namespaces -- the headline entry points live here
     # (e.g. ``fastcashflow.gmm.measure``, ``fastcashflow.samples.basis``).
-    "gmm", "paa", "vfa", "reinsurance", "lapse_reinsurance", "samples", "esg",
+    "gmm", "paa", "vfa", "reinsurance", "mass_lapse_reinsurance", "samples", "esg",
     "Basis", "BasisRouter", "ModelPoints", "clear_codegen_cache",
     "report", "roll_forward", "reconcile", "group", "group_of_contracts",
     "transition",
