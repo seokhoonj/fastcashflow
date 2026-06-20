@@ -619,3 +619,75 @@ def price_treaty(
     return ReinsurancePricing(
         loss_density=S, capacity_at_risk=capacity_at_risk,
         expected_recovery=expected_recovery, capital=capital, premium=premium)
+
+
+# ---------------------------------------------------------------------------
+# Reinsurer-side IFRS 17 measurement of the assumed treaty (Phase D3).
+# The treaty is a stream of premium inflows and contingent recovery outflows --
+# a portfolio-level structure, not a per-policy projection, so it is measured by
+# direct discounting. Sign convention (the engine's): outflow-positive, so the
+# recovery the reinsurer pays is positive and the premium it receives is
+# negative; BEL = PV(recovery) - PV(premium). For an out-of-the-money treaty the
+# premium exceeds the expected recovery, so the BEL is negative (profitable) and
+# the unearned profit sits in the CSM.
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class AssumedTreatyMeasurement:
+    """IFRS 17 measurement of the treaty from the reinsurer's (assuming) side.
+
+    ``bel = PV(expected recovery) - PV(premium)`` (outflow-positive);
+    ``risk_adjustment`` is the cost-of-capital margin on the assumed capital over
+    the treaty. ``fulfilment_cash_flows = bel + risk_adjustment``; the CSM is the
+    unearned profit ``max(0, -fcf)`` and the loss component ``max(0, fcf)``
+    (General Measurement Model -- IFRS 17 Sec. 38, 47)."""
+
+    pv_premium: float
+    pv_expected_recovery: float
+    bel: float
+    risk_adjustment: float
+
+    @property
+    def fulfilment_cash_flows(self) -> float:
+        """``BEL + RA`` -- negative for a profitable assumed treaty."""
+        return self.bel + self.risk_adjustment
+
+    @property
+    def csm(self) -> float:
+        """Contractual service margin -- the unearned profit ``max(0, -FCF)``."""
+        return max(0.0, -self.fulfilment_cash_flows)
+
+    @property
+    def loss_component(self) -> float:
+        """Onerous loss component ``max(0, FCF)`` (zero unless the premium is
+        below the risk-adjusted expected recovery)."""
+        return max(0.0, self.fulfilment_cash_flows)
+
+
+def measure_assumed_treaty(
+    pricing: ReinsurancePricing, *, duration_years: int,
+    discount_annual: float = 0.0, risk_adjustment_cost_of_capital: float = 0.06,
+) -> AssumedTreatyMeasurement:
+    """Measure the assumed treaty over ``duration_years`` annual periods.
+
+    Premium is received in advance (start of each period); the expected recovery
+    is paid in arrears (end of each period, when the measurement window closes).
+    The risk adjustment is the cost of capital on the assumed capital held each
+    period. Discounting is a flat ``discount_annual``.
+
+    ``BEL = PV(recovery) - PV(premium)``, ``RA = ra_coc x capital x annuity``,
+    and the CSM / loss component follow the standard sign convention. A treaty
+    priced at exactly the cost of capital has BEL + RA ~ 0 (no unearned profit);
+    a premium loaded above the cost of capital leaves a positive CSM."""
+    if duration_years <= 0:
+        raise ValueError(f"duration_years must be positive, got {duration_years}")
+    v = 1.0 / (1.0 + discount_annual)
+    annuity_advance = sum(v ** t for t in range(duration_years))        # t = 0..n-1
+    annuity_arrear = sum(v ** t for t in range(1, duration_years + 1))  # t = 1..n
+    pv_premium = pricing.premium * annuity_advance
+    pv_recovery = pricing.expected_recovery * annuity_arrear
+    bel = pv_recovery - pv_premium
+    ra = risk_adjustment_cost_of_capital * pricing.capital * annuity_arrear
+    return AssumedTreatyMeasurement(
+        pv_premium=pv_premium, pv_expected_recovery=pv_recovery,
+        bel=bel, risk_adjustment=ra)

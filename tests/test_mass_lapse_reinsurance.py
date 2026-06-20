@@ -498,3 +498,69 @@ def test_cedant_relief_zero_when_updown_dominates():
     assert r.lapse_gross_scr > r.mass_gross_scr        # up/down is the biting leg
     assert np.isclose(r.lapse_relief, 0.0)
     assert np.isclose(r.total_benefit, 0.0)
+
+
+# ---------------------------------------------------------------------------
+# Reinsurer-side IFRS 17 treaty measurement (Phase D3)
+# ---------------------------------------------------------------------------
+
+def _pricing(premium, expected_recovery, capital):
+    return lre.ReinsurancePricing(
+        loss_density=1.0, capacity_at_risk=1.0, expected_recovery=expected_recovery,
+        capital=capital, premium=premium)
+
+
+def test_assumed_treaty_undiscounted():
+    """No discount, 3 annual periods: PV is 3x each leg; BEL = 3(E[rec]-premium);
+    RA = ra_coc x capital x 3; CSM = max(0, -(BEL+RA))."""
+    p = _pricing(premium=100.0, expected_recovery=30.0, capital=500.0)
+    m = lre.measure_assumed_treaty(p, duration_years=3, discount_annual=0.0,
+                                   risk_adjustment_cost_of_capital=0.06)
+    assert np.isclose(m.pv_premium, 300.0)
+    assert np.isclose(m.pv_expected_recovery, 90.0)
+    assert np.isclose(m.bel, 90.0 - 300.0)             # -210
+    assert np.isclose(m.risk_adjustment, 0.06 * 500.0 * 3)   # 90
+    assert np.isclose(m.fulfilment_cash_flows, -210.0 + 90.0)
+    assert np.isclose(m.csm, 120.0)                    # max(0, -(-120))
+    assert m.loss_component == 0.0
+
+
+def test_assumed_treaty_discounted_annuities():
+    """Premium in advance (t=0..n-1), recovery in arrears (t=1..n)."""
+    p = _pricing(premium=100.0, expected_recovery=30.0, capital=500.0)
+    r = 0.03
+    m = lre.measure_assumed_treaty(p, duration_years=3, discount_annual=r)
+    v = 1.0 / (1.0 + r)
+    adv = 1 + v + v ** 2
+    arr = v + v ** 2 + v ** 3
+    assert np.isclose(m.pv_premium, 100.0 * adv)
+    assert np.isclose(m.pv_expected_recovery, 30.0 * arr)
+    assert np.isclose(m.bel, 30.0 * arr - 100.0 * adv)
+    assert np.isclose(m.risk_adjustment, 0.06 * 500.0 * arr)
+
+
+def test_assumed_treaty_profitable_has_csm_no_loss():
+    """An out-of-the-money treaty (premium above expected recovery) has a
+    negative BEL and the unearned profit in the CSM, no loss component."""
+    p = _pricing(premium=100.0, expected_recovery=30.0, capital=500.0)
+    m = lre.measure_assumed_treaty(p, duration_years=2, discount_annual=0.02,
+                                   risk_adjustment_cost_of_capital=0.04)
+    assert m.bel < 0.0
+    assert m.csm > 0.0
+    assert m.loss_component == 0.0
+
+
+def test_assumed_treaty_onerous_has_loss_component():
+    """If the premium is below the risk-adjusted expected recovery the treaty is
+    onerous: positive FCF, a loss component, no CSM."""
+    p = _pricing(premium=0.0, expected_recovery=30.0, capital=0.0)
+    m = lre.measure_assumed_treaty(p, duration_years=2, discount_annual=0.0)
+    assert m.bel > 0.0
+    assert m.loss_component > 0.0
+    assert m.csm == 0.0
+
+
+def test_assumed_treaty_rejects_bad_duration():
+    p = _pricing(premium=100.0, expected_recovery=30.0, capital=500.0)
+    with pytest.raises(ValueError, match="duration_years must be positive"):
+        lre.measure_assumed_treaty(p, duration_years=0)
