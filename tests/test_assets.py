@@ -737,3 +737,42 @@ def test_liquidate_deeper_haircut_costs_more():
     dear = assets.liquidate(gap, haircut=0.25)
     assert dear.total_realized_loss > cheap.total_realized_loss > 0.0
     assert np.isclose(dear.total_realized_loss / cheap.total_realized_loss, 0.25 / 0.05)
+
+
+def test_interaction_loss_decomposes():
+    """total_loss = revaluation_loss + forced_sale_loss, and each leg reproduces its
+    standalone build (the coupled-stress NAV revaluation and the stressed-gap
+    liquidation)."""
+    from fastcashflow import solvency as sv
+    mp, basis = _mp(), _basis()
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=2e6, coupon_rate=0.03, maturity_years=12, frequency=1),))
+    shift, sens, hc = 0.01, 8.0, 0.1
+    res = assets.interaction_loss(pf, mp, basis, shift=shift,
+                                  lapse_sensitivity=sens, haircut=hc)
+    # base NAV reproduces portfolio_value - BEL
+    base_nav = (assets.portfolio_value(pf, basis.discount_annual)
+                - float(measure(mp, basis, full=False).bel.sum()))
+    assert np.isclose(res.base_nav, base_nav)
+    # stressed NAV reproduces the coupled-stress re-measure
+    mp_s, basis_s = sv.interest_with_dynamic_lapse(shift, sens).apply(mp, basis)
+    stressed_nav = (assets.portfolio_value(pf, basis_s.discount_annual)
+                    - float(measure(mp_s, basis_s, full=False).bel.sum()))
+    assert np.isclose(res.stressed_nav, stressed_nav)
+    # forced-sale leg reproduces liquidate on the stressed gap
+    gap_s = assets.cashflow_gap(pf, measure(mp_s, basis_s, full=True))
+    liq = assets.liquidate(gap_s, haircut=hc)
+    assert np.isclose(res.forced_sale_loss, liq.total_realized_loss)
+    assert np.isclose(res.total_loss, res.revaluation_loss + res.forced_sale_loss)
+
+
+def test_interaction_loss_zero_haircut_drops_friction():
+    """A zero haircut removes the forced-sale friction, leaving only the
+    mark-to-market revaluation."""
+    mp, basis = _mp(), _basis()
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=1e6, coupon_rate=0.04, maturity_years=10, frequency=1),))
+    res = assets.interaction_loss(pf, mp, basis, shift=0.01,
+                                  lapse_sensitivity=8.0, haircut=0.0)
+    assert res.forced_sale_loss == 0.0
+    assert np.isclose(res.total_loss, res.revaluation_loss)

@@ -33,7 +33,9 @@ from fastcashflow.alm import (
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.solvency import RegimeSpec, required_capital, KICSInterest
+from fastcashflow.solvency import (
+    RegimeSpec, required_capital, KICSInterest, interest_with_dynamic_lapse,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -317,6 +319,71 @@ def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
         balance[m] = bal
     return LiquidationResult(balance=balance, forced_sale=forced_sale,
                              realized_loss=realized_loss)
+
+
+@dataclass(frozen=True, slots=True)
+class InteractionResult:
+    """The asset-liability interaction loss under a coupled rate / dynamic-lapse
+    stress -- the two distinct, additive bites of the same rate move.
+
+    ``base_nav`` / ``stressed_nav`` are the net asset value (assets less BEL) before
+    and after the coupled stress, both at market value. ``revaluation_loss`` is
+    their difference -- the mark-to-market hit (bonds reprice down, the BEL moves
+    with the dynamic lapse). ``forced_sale_loss`` is the liquidation FRICTION ON TOP
+    -- the haircut cost of selling assets below fair value to meet the surge in
+    surrender outflow (a cost the fair-value revaluation does not see). ``total_loss``
+    is the two summed; they do not double count (one is mark-to-market, the other is
+    the friction below market)."""
+
+    base_nav: float
+    stressed_nav: float
+    forced_sale_loss: float
+
+    @property
+    def revaluation_loss(self) -> float:
+        """The mark-to-market NAV loss under the coupled stress."""
+        return self.base_nav - self.stressed_nav
+
+    @property
+    def total_loss(self) -> float:
+        """The full interaction loss -- revaluation plus forced-sale friction."""
+        return self.revaluation_loss + self.forced_sale_loss
+
+
+def _portfolio_nav(portfolio: AssetPortfolio, model_points: ModelPoints,
+                   basis: Basis) -> float:
+    """Net asset value at market: ``portfolio_value(curve) - BEL``."""
+    return (portfolio_value(portfolio, basis.discount_annual)
+            - float(measure(model_points, basis, full=False).bel.sum()))
+
+
+def interaction_loss(portfolio: AssetPortfolio, model_points: ModelPoints,
+                     basis: Basis, *, shift: float, lapse_sensitivity: float,
+                     haircut: float, reinvest_rate=0.0,
+                     opening_balance: float = 0.0) -> InteractionResult:
+    """The asset-liability interaction loss of a coupled rate / dynamic-lapse stress.
+
+    Ties the pieces together: a parallel ``shift`` reprices the bonds down and,
+    through :func:`~fastcashflow.solvency.interest_with_dynamic_lapse`
+    (``lapse_sensitivity`` the injected elasticity), lifts the lapse rate -- the
+    mark-to-market ``revaluation_loss``. The lifted lapse surges the surrender
+    outflow, deepening the liquidity shortfall on the stressed cash-flow gap
+    (:func:`cashflow_gap`); funding it as a forced seller (:func:`liquidate` at
+    ``haircut``) crystallises the ``forced_sale_loss`` on top. ``total_loss`` is the
+    full bite -- the friction the duration-matched, fair-value view alone misses.
+
+    ``reinvest_rate`` / ``opening_balance`` parameterise the liquidation roll-forward
+    (a surplus earns the rate before a later shortfall; the opening cash cushion
+    defaults to zero -- shortfalls are met purely by selling)."""
+    base_nav = _portfolio_nav(portfolio, model_points, basis)
+    mp_s, basis_s = interest_with_dynamic_lapse(shift, lapse_sensitivity).apply(
+        model_points, basis)
+    stressed_nav = _portfolio_nav(portfolio, mp_s, basis_s)
+    gap_s = cashflow_gap(portfolio, measure(mp_s, basis_s, full=True))
+    liq = liquidate(gap_s, haircut=haircut, reinvest_rate=reinvest_rate,
+                    opening_balance=opening_balance)
+    return InteractionResult(base_nav=base_nav, stressed_nav=stressed_nav,
+                             forced_sale_loss=liq.total_realized_loss)
 
 
 def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
@@ -1063,6 +1130,7 @@ __all__ = [
     "holding_value", "portfolio_value", "available_capital",
     "project_asset_cashflows", "CashflowGap", "cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
+    "InteractionResult", "interaction_loss",
     "net_interest_scr", "net_interest_kics_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",
