@@ -45,6 +45,7 @@ TARGETS = [
     ROOT / "README.md",
     ROOT / "docs" / "getting-started.md",
     *sorted((ROOT / "docs" / "tutorial").glob("*.md")),
+    *sorted((ROOT / "docs" / "solvency").glob("*.md")),
     *sorted((ROOT / "docs" / "cookbook").rglob("*.md")),
 ]
 
