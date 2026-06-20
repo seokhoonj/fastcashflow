@@ -343,11 +343,12 @@ def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
     haircut is the loss per unit of cash raised -- the depressed-price discount).
 
     ``available_assets`` (optional, ``(n_time + 1,)`` -- e.g. from
-    :func:`asset_value_path`) caps the forced sale at the asset stock still on the
-    book: a sale cannot exceed ``available_assets[m]`` net of what has already been
-    sold, and any shortfall beyond that is ``unfunded`` (the book is insolvent for
-    it). ``None`` (the default) assumes assets are always available -- the
-    historical behaviour, ``unfunded`` all zero.
+    :func:`asset_value_path`) caps the forced sale at the FAIR-VALUE asset stock
+    still on the book. Raising ``s`` of cash consumes ``s * (1 + haircut)`` of stock
+    (the haircut loss is destroyed fair value too), so a finite stock raises at most
+    ``stock / (1 + haircut)`` cash; any shortfall beyond that is ``unfunded`` (the
+    book is insolvent for it). ``None`` (the default) assumes assets are always
+    available -- the historical behaviour, ``unfunded`` all zero.
 
     ``haircut`` is the seam (the stressed-liquidation discount, e.g. 0.10); a
     forced sale under a wider stress carries a deeper haircut."""
@@ -359,15 +360,22 @@ def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
     forced_sale = np.zeros(n + 1, dtype=np.float64)
     realized_loss = np.zeros(n + 1, dtype=np.float64)
     unfunded = np.zeros(n + 1, dtype=np.float64)
-    sold = 0.0                                        # cumulative asset stock sold
+    sold_fv = 0.0                                     # cumulative FAIR VALUE of stock sold
 
     def settle(m: int, bal: float) -> float:
-        nonlocal sold
+        nonlocal sold_fv
+        # available_assets is fair value; raising `sell` cash at the haircut consumes
+        # sell * (1 + haircut) of fair value (the loss is destroyed stock too), so the
+        # cash a finite stock can raise is capacity / (1 + haircut).
         need = -bal
-        sell = need if avail is None else min(need, max(0.0, float(avail[m]) - sold))
+        if avail is None:
+            sell = need
+        else:
+            capacity = max(0.0, float(avail[m]) - sold_fv)
+            sell = min(need, capacity / (1.0 + haircut))
         forced_sale[m] = sell
         realized_loss[m] = sell * haircut
-        sold += sell
+        sold_fv += sell * (1.0 + haircut)
         bal += sell
         if bal < 0.0:                                 # stock exhausted -> uncovered
             unfunded[m] = -bal

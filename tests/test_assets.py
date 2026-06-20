@@ -776,11 +776,13 @@ def test_liquidate_caps_forced_sale_at_asset_stock():
     """A forced sale cannot exceed the asset stock; the uncovered shortfall is
     unfunded (insolvency)."""
     gap = _gap([0, 0, 0], [0, 0, 300])                 # net_cf = [0, 0, -300]
-    avail = np.array([1000.0, 1000.0, 200.0])          # only 200 stock at month 2
+    avail = np.array([1000.0, 1000.0, 220.0])          # 220 fair value at month 2
     r = assets.liquidate(gap, haircut=0.1, available_assets=avail)
-    assert np.allclose(r.forced_sale, [0, 0, 200])     # sell what is there
+    # 220 of fair value at a 10% haircut nets 220 / 1.1 = 200 cash (20 loss = the
+    # remaining 20 of stock destroyed), leaving 300 - 200 = 100 unfunded.
+    assert np.allclose(r.forced_sale, [0, 0, 200])
     assert np.allclose(r.realized_loss, [0, 0, 20])    # 200 * 0.1
-    assert np.allclose(r.unfunded, [0, 0, 100])        # 300 needed - 200 sold
+    assert np.allclose(r.unfunded, [0, 0, 100])
     assert np.isclose(r.total_unfunded, 100.0)
 
 
