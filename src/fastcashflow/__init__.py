@@ -91,6 +91,7 @@ from fastcashflow.alm import (
 from fastcashflow import alm
 from fastcashflow.assets import (
     Equity, Property, Cash, AssetPortfolio, SolvencyAssessment,
+    CashflowGap, project_asset_cashflows, cashflow_gap,
     portfolio_value, available_capital, net_interest_scr,
     equity_scr, property_scr, fx_scr, concentration_scr, market_module_scr,
     credit_scr, operational_scr, aggregate_required_capital, assess_solvency,
@@ -158,6 +159,7 @@ __all__ = [
     "key_rate_durations", "bond_duration", "bond_value", "effective_maturity",
     "alm_gap", "duration_gap",
     "assets", "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
+    "CashflowGap", "project_asset_cashflows", "cashflow_gap",
     "portfolio_value", "available_capital", "net_interest_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",

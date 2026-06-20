@@ -28,6 +28,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.alm import (
     Bond, bond_value, bond_cashflows, bond_duration, effective_maturity,
+    net_liability_cashflows,
 )
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
@@ -133,6 +134,52 @@ def project_asset_cashflows(portfolio: AssetPortfolio, n_months: int) -> FloatAr
             if 1 <= m <= n_months:
                 flow[m] += float(amt)
     return flow
+
+
+@dataclass(frozen=True, slots=True)
+class CashflowGap:
+    """The asset-liability cash-flow ladder on the shared monthly grid.
+
+    ``asset_cf`` / ``liability_cf`` are ``(n_time + 1,)`` -- the cash the asset
+    portfolio receives and the net cash the liability pays at each month, both
+    undiscounted. ``net_cf`` is their difference (positive = a month with a cash
+    surplus to reinvest, negative = a shortfall to fund) and ``cumulative_net`` its
+    running total (the funding position carried to each month, before any
+    reinvestment return -- the running balance a static matching view inspects)."""
+
+    asset_cf: FloatArray
+    liability_cf: FloatArray
+
+    @property
+    def net_cf(self) -> FloatArray:
+        return self.asset_cf - self.liability_cf
+
+    @property
+    def cumulative_net(self) -> FloatArray:
+        return np.cumsum(self.net_cf)
+
+
+def cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
+    """The month-by-month asset-liability cash-flow gap.
+
+    Nets the projected asset cash flows (:func:`project_asset_cashflows`) against
+    the net liability cash flows (:func:`fastcashflow.alm.net_liability_cashflows`)
+    on the engine's monthly grid. The liability's begin-of-month flows
+    (``annuity - premium`` and maturity benefits) and mid-month flows (death /
+    morbidity / disability / expense / surrender claims) are folded into one
+    outflow per month; the asset bonds' coupons and redemptions land at their
+    month boundaries. The result is the undiscounted liquidity ladder -- where the
+    book throws off surplus cash and where it must find cash -- the foundation for
+    the reinvestment / rollover trajectory to come.
+
+    Requires a ``full=True`` measurement (it carries the cash flows); account-value
+    (universal-life) books are rejected, as in ``net_liability_cashflows``."""
+    flow_bom, flow_mid = net_liability_cashflows(measurement)
+    n_time = flow_mid.shape[0]
+    liability_cf = flow_bom.copy()
+    liability_cf[:n_time] += flow_mid
+    asset_cf = project_asset_cashflows(portfolio, n_time)
+    return CashflowGap(asset_cf=asset_cf, liability_cf=liability_cf)
 
 
 def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
@@ -877,7 +924,7 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital",
-    "project_asset_cashflows",
+    "project_asset_cashflows", "CashflowGap", "cashflow_gap",
     "net_interest_scr", "net_interest_kics_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",

@@ -587,3 +587,43 @@ def test_project_asset_cashflows_rejects_bad_horizon():
         alm.Bond(face=1000, coupon_rate=0.05, maturity_years=3),))
     with pytest.raises(ValueError, match="n_months must be positive"):
         assets.project_asset_cashflows(pf, 0)
+
+
+def test_cashflow_gap_nets_asset_against_liability():
+    """The gap folds the liability begin- and mid-month flows into one outflow per
+    month and nets the projected asset cash flows against it on the shared grid."""
+    mp, basis = _mp(), _basis()
+    m = measure(mp, basis, full=True)
+    flow_bom, flow_mid = alm.net_liability_cashflows(m)
+    n_time = flow_mid.shape[0]
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=1000, coupon_rate=0.05, maturity_years=5, frequency=1),
+        assets.Equity(market_value=5000),))                # no scheduled CF
+    gap = assets.cashflow_gap(pf, m)
+    assert gap.asset_cf.shape == (n_time + 1,)
+    assert gap.liability_cf.shape == (n_time + 1,)
+    expected_liab = flow_bom.copy(); expected_liab[:n_time] += flow_mid
+    assert np.allclose(gap.liability_cf, expected_liab)
+    assert np.allclose(gap.asset_cf, assets.project_asset_cashflows(pf, n_time))
+    assert np.allclose(gap.net_cf, gap.asset_cf - gap.liability_cf)
+    assert np.allclose(gap.cumulative_net, np.cumsum(gap.net_cf))
+
+
+def test_cashflow_gap_no_assets_is_negative_liability():
+    """With no scheduled asset cash flows the net ladder is exactly the negative
+    liability outflow, and the running total ends at minus the total paid."""
+    mp, basis = _mp(), _basis()
+    m = measure(mp, basis, full=True)
+    pf = assets.AssetPortfolio(holdings=(assets.Equity(market_value=1000),))
+    gap = assets.cashflow_gap(pf, m)
+    assert np.allclose(gap.asset_cf, 0.0)
+    assert np.allclose(gap.net_cf, -gap.liability_cf)
+    assert np.isclose(gap.cumulative_net[-1], -gap.liability_cf.sum())
+
+
+def test_cashflow_gap_needs_full():
+    """A headline-only measurement carries no cash flows -- rejected upstream."""
+    mp, basis = _mp(), _basis()
+    pf = assets.AssetPortfolio(holdings=(assets.Cash(market_value=1.0),))
+    with pytest.raises(ValueError, match="full=True"):
+        assets.cashflow_gap(pf, measure(mp, basis, full=False))
