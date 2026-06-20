@@ -124,3 +124,91 @@ def smith_wilson(
     t = np.arange(1, years + 1, dtype=np.float64)
     p = smith_wilson_prices(maturities, rates, ufr=ufr, alpha=alpha, target=t)
     return p ** (-1.0 / t) - 1.0
+
+
+def _convergence_forward(
+    maturities: FloatArray, rates: FloatArray, *, w: float, alpha: float, cp: float,
+) -> float:
+    """Continuous instantaneous forward rate ``f(cp) = -P'(cp)/P(cp)`` of the fit.
+
+    ``w = ln(1 + UFR)``. ``cp`` (the convergence point) is assumed BEYOND the last
+    observed maturity, so the Wilson kernel's ``min(cp, u_i)`` is the observed
+    tenor ``u_i``; the discount function and its derivative then collapse to the
+    closed forms ``P(cp) = exp(-w*cp) * (1 + alpha*X - exp(-alpha*cp)*Y)`` and
+    ``P'(cp) = -w*P(cp) + exp(-w*cp)*alpha*exp(-alpha*cp)*Y`` with
+    ``X = sum(u_i * mu_i * zeta_i)`` and ``Y = sum(sinh(alpha*u_i) * mu_i * zeta_i)``
+    (``mu_i = exp(-w*u_i)``). This is the rate the convergence criterion targets.
+    """
+    u = np.asarray(maturities, dtype=np.float64)
+    r = np.asarray(rates, dtype=np.float64)
+    m = (1.0 + r) ** (-u)                          # observed prices
+    mu = np.exp(-w * u)
+    zeta = np.linalg.solve(_wilson(u, u, w, alpha), m - mu)
+    X = float(np.sum(u * mu * zeta))
+    Y = float(np.sum(np.sinh(alpha * u) * mu * zeta))
+    e = np.exp(-alpha * cp)
+    p = np.exp(-w * cp) * (1.0 + alpha * X - e * Y)
+    dp = -w * p + np.exp(-w * cp) * alpha * e * Y
+    return float(-dp / p)
+
+
+def smith_wilson_alpha(
+    maturities: FloatArray,
+    rates: FloatArray,
+    *,
+    ufr: float,
+    convergence_point: float,
+    tolerance: float = 1e-4,
+    alpha_min: float = 0.05,
+    alpha_max: float = 1.0,
+    max_iter: int = 100,
+) -> float:
+    """Solve the convergence-speed ``alpha`` from the long-end target.
+
+    Returns the smallest ``alpha >= alpha_min`` for which the fitted forward rate
+    at ``convergence_point`` (years) reaches the ultimate forward rate ``ufr`` to
+    within ``tolerance``, compared as ``|(1 + f) - (1 + ufr)|`` -- the criterion
+    the EIOPA and Korean risk-free-rate technical documentation use. ``alpha`` is
+    otherwise an input to :func:`smith_wilson`; this derives it from the last-
+    observed-term / convergence-point / UFR triple the supervisor publishes, so the
+    curve is pinned by those alone (the published per-currency ``alpha`` IS this
+    solver's output).
+
+    The forward rate at the convergence point moves monotonically closer to the UFR
+    as ``alpha`` rises (faster convergence), so the criterion holds on an upper
+    interval of ``alpha`` and the smallest qualifying value is found by bisection.
+    When already met at ``alpha_min`` the floor is returned; when not met even at
+    ``alpha_max`` the latter is returned (the closest achievable). From the
+    algorithm (A. Smith, T. Wilson, 2001) -- no third-party code is adapted.
+    """
+    if convergence_point <= 0:
+        raise ValueError("convergence_point must be positive")
+    if alpha_min <= 0 or alpha_max <= alpha_min:
+        raise ValueError("require 0 < alpha_min < alpha_max")
+    if tolerance <= 0:
+        raise ValueError("tolerance must be positive")
+    u_max = float(np.asarray(maturities, dtype=np.float64).max())
+    if convergence_point <= u_max:
+        raise ValueError(
+            "convergence_point must be beyond the last observed maturity "
+            f"({u_max}); the long-end forward is only defined past the fit")
+    w = np.log1p(ufr)
+
+    def gap(alpha: float) -> float:
+        f = _convergence_forward(maturities, rates, w=w, alpha=alpha, cp=convergence_point)
+        return abs(np.exp(f) - np.exp(w))          # |(1 + f) - (1 + ufr)|, level space
+
+    if gap(alpha_min) <= tolerance:
+        return alpha_min
+    if gap(alpha_max) > tolerance:
+        return alpha_max                           # cannot converge tighter; best effort
+    lo, hi = alpha_min, alpha_max                  # gap(lo) > tol >= gap(hi): bisect the boundary
+    for _ in range(max_iter):
+        mid = 0.5 * (lo + hi)
+        if gap(mid) <= tolerance:
+            hi = mid
+        else:
+            lo = mid
+        if hi - lo < 1e-12:
+            break
+    return hi

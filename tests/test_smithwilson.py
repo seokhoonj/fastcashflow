@@ -10,7 +10,8 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.smithwilson import smith_wilson, smith_wilson_prices
+from fastcashflow.smithwilson import (
+    smith_wilson, smith_wilson_prices, smith_wilson_alpha)
 
 
 # Korean government-bond curve (ECOS, observed) -- the won risk-free input.
@@ -86,6 +87,70 @@ def test_currency_agnostic_same_call():
     # exact fit holds for this currency too
     for u, r in zip(usd_mat, usd_rate):
         np.testing.assert_allclose(curve[int(u) - 1], r, atol=1e-12)
+
+
+def _fwd_at(t, *, alpha, h=1e-3):
+    # Continuous forward at maturity t from a central difference of the fitted
+    # log-prices: f(t) = -d ln P / dt. A black-box check of the solver's target.
+    p = smith_wilson_prices(KR_MAT, KR_RATE, ufr=KR_UFR, alpha=alpha,
+                            target=np.array([t - h, t + h]))
+    return (np.log(p[0]) - np.log(p[1])) / (2.0 * h)
+
+
+def test_alpha_flat_at_ufr_returns_floor():
+    # When the observed rates already sit at the UFR the fit is flat (zeta = 0) and
+    # the forward equals the UFR at any alpha, so the smallest qualifying alpha is
+    # the floor -- an analytic anchor independent of the matrix solve.
+    mat = np.array([1.0, 5.0, 10.0, 20.0])
+    rate = np.full(mat.shape, KR_UFR)
+    a = smith_wilson_alpha(mat, rate, ufr=KR_UFR, convergence_point=60.0, alpha_min=0.05)
+    assert a == 0.05
+
+
+def test_alpha_makes_forward_reach_ufr_at_cp():
+    # The defining property: at the solved alpha the fitted forward at the
+    # convergence point equals the UFR to within the tolerance.
+    cp = 60.0
+    a = smith_wilson_alpha(KR_MAT, KR_RATE, ufr=KR_UFR, convergence_point=cp,
+                           tolerance=1e-4)
+    assert 0.05 <= a <= 1.0
+    fwd_annual = np.exp(_fwd_at(cp, alpha=a)) - 1.0
+    assert np.isclose(fwd_annual, KR_UFR, atol=2e-4)
+
+
+def test_alpha_is_the_smallest_qualifying_value():
+    # Halving the solved alpha moves the forward at the convergence point farther
+    # from the UFR -- confirming the solver found the boundary, not an interior point.
+    cp = 60.0
+    a = smith_wilson_alpha(KR_MAT, KR_RATE, ufr=KR_UFR, convergence_point=cp,
+                           tolerance=1e-4)
+    ew = np.exp(np.log1p(KR_UFR))
+    gap_solved = abs(np.exp(_fwd_at(cp, alpha=a)) - ew)
+    gap_half = abs(np.exp(_fwd_at(cp, alpha=a * 0.5)) - ew)
+    assert gap_half > gap_solved
+
+
+def test_alpha_bisects_when_floor_insufficient():
+    # A long end well below a high UFR cannot converge at the floor, so the solver
+    # bisects to a strictly higher alpha that sits on the tolerance boundary (the
+    # forward at the convergence point is within -- but no tighter than -- the tol).
+    cp, ufr, tol = 40.0, 0.05, 1e-4
+    a = smith_wilson_alpha(KR_MAT, KR_RATE, ufr=ufr, convergence_point=cp, tolerance=tol)
+    assert a > 0.05                                        # floor did not suffice
+    p = smith_wilson_prices(KR_MAT, KR_RATE, ufr=ufr, alpha=a,
+                            target=np.array([cp - 1e-3, cp + 1e-3]))
+    fwd_annual = np.exp((np.log(p[0]) - np.log(p[1])) / 2e-3) - 1.0
+    assert abs(fwd_annual - ufr) <= 2 * tol               # within tolerance at the boundary
+
+
+def test_alpha_rejects_bad_input():
+    with pytest.raises(ValueError):                       # cp not past last maturity
+        smith_wilson_alpha(KR_MAT, KR_RATE, ufr=KR_UFR, convergence_point=20.0)
+    with pytest.raises(ValueError):                       # non-positive cp
+        smith_wilson_alpha(KR_MAT, KR_RATE, ufr=KR_UFR, convergence_point=0.0)
+    with pytest.raises(ValueError):                       # bad alpha bracket
+        smith_wilson_alpha(KR_MAT, KR_RATE, ufr=KR_UFR, convergence_point=60.0,
+                           alpha_min=0.5, alpha_max=0.5)
 
 
 def test_rejects_bad_input():
