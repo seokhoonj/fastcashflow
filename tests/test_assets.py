@@ -544,3 +544,46 @@ def test_preferred_equity_by_rating_table20():
         p = assets.AssetPortfolio(holdings=(
             assets.Equity(1_000_000.0, "preferred", credit_rating=rating),))
         assert np.isclose(assets.equity_scr(p, fcf.KICS), 1_000_000.0 * shock)
+
+
+# ---------------------------------------------------------------------------
+# Dynamic asset engine -- Phase A: asset cash-flow projection
+# ---------------------------------------------------------------------------
+
+def test_project_asset_cashflows_places_coupons_and_redemption():
+    """Each bond's coupons and final redemption land on the monthly grid at
+    round(time_years * 12); equity/property/cash carry no scheduled cash flow."""
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=1000, coupon_rate=0.05, maturity_years=3, frequency=1),
+        alm.Bond(face=2000, coupon_rate=0.04, maturity_years=2, frequency=2),
+        assets.Equity(market_value=5000),               # no scheduled CF
+    ))
+    cf = assets.project_asset_cashflows(pf, 36)
+    assert cf.shape == (37,)
+    # bond1: 50 at 12/24/36 (+1000 at 36); bond2: 40 at 6/12/18/24 (+2000 at 24)
+    assert np.isclose(cf[6], 40.0)
+    assert np.isclose(cf[12], 50.0 + 40.0)
+    assert np.isclose(cf[18], 40.0)
+    assert np.isclose(cf[24], 50.0 + 2040.0)
+    assert np.isclose(cf[36], 1050.0)
+    assert np.isclose(cf.sum(), 40 + 90 + 40 + 2090 + 1050)
+    # equity adds nothing
+    assert np.isclose(cf.sum(), 3310.0)
+
+
+def test_project_asset_cashflows_drops_flows_beyond_horizon():
+    """Cash flows past n_months are dropped (the horizon truncates the bond)."""
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=1000, coupon_rate=0.05, maturity_years=5, frequency=1),))
+    cf = assets.project_asset_cashflows(pf, 24)          # only years 1-2 fit
+    assert cf.shape == (25,)
+    assert np.isclose(cf[12], 50.0)
+    assert np.isclose(cf[24], 50.0)                      # year-2 coupon, no redemption yet
+    assert np.isclose(cf.sum(), 100.0)                  # years 3-5 (incl. 1000 face) dropped
+
+
+def test_project_asset_cashflows_rejects_bad_horizon():
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=1000, coupon_rate=0.05, maturity_years=3),))
+    with pytest.raises(ValueError, match="n_months must be positive"):
+        assets.project_asset_cashflows(pf, 0)

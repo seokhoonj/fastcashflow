@@ -25,7 +25,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fastcashflow.alm import Bond, bond_value, bond_duration, effective_maturity
+from fastcashflow._typing import FloatArray
+from fastcashflow.alm import (
+    Bond, bond_value, bond_cashflows, bond_duration, effective_maturity,
+)
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
@@ -102,6 +105,34 @@ def available_capital(portfolio_value: float, bel: float,
     surplus. (Other balance-sheet liabilities, if any, are the caller's to net
     out of the portfolio value.)"""
     return portfolio_value - (bel + risk_margin)
+
+
+def project_asset_cashflows(portfolio: AssetPortfolio, n_months: int) -> FloatArray:
+    """Project the portfolio's asset cash flows onto a monthly grid.
+
+    Returns ``(n_months + 1,)`` -- the cash received at each month ``0 .. n_months``
+    (month 0 normally zero). Each :class:`~fastcashflow.alm.Bond` contributes its
+    coupons and final redemption (:func:`~fastcashflow.alm.bond_cashflows`),
+    placed at month ``round(time_years x 12)``; cash flows beyond ``n_months`` are
+    dropped. Equity, property and cash carry NO scheduled cash flow in v1 (they
+    are stocks held at market value, not scheduled streams) -- dividends, rent and
+    cash interest are future work.
+
+    This is the asset-side counterpart to
+    :func:`fastcashflow.alm.net_liability_cashflows`; the two share the monthly
+    grid, so the asset-liability cash-flow gap is their difference."""
+    if n_months <= 0:
+        raise ValueError(f"n_months must be positive, got {n_months}")
+    flow = np.zeros(n_months + 1, dtype=np.float64)
+    for holding in portfolio.holdings:
+        if not isinstance(holding, Bond):
+            continue                                  # v1: only bonds have scheduled CFs
+        times, amounts = bond_cashflows(holding)
+        months = np.rint(np.asarray(times) * 12.0).astype(np.int64)
+        for m, amt in zip(months, amounts):
+            if 1 <= m <= n_months:
+                flow[m] += float(amt)
+    return flow
 
 
 def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
@@ -846,6 +877,7 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital",
+    "project_asset_cashflows",
     "net_interest_scr", "net_interest_kics_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",
