@@ -86,7 +86,7 @@ from fastcashflow.solvency import (
 from fastcashflow import solvency
 from fastcashflow.alm import (
     DurationResult, Bond, liability_duration, liability_dv01, key_rate_durations,
-    bond_duration, bond_value, effective_maturity, alm_gap,
+    bond_duration, bond_value, effective_maturity, alm_gap, duration_gap,
 )
 from fastcashflow import alm
 from fastcashflow.assets import (
@@ -156,7 +156,7 @@ __all__ = [
     "KICSInterest", "shock_spread",
     "alm", "DurationResult", "Bond", "liability_duration", "liability_dv01",
     "key_rate_durations", "bond_duration", "bond_value", "effective_maturity",
-    "alm_gap",
+    "alm_gap", "duration_gap",
     "assets", "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "portfolio_value", "available_capital", "net_interest_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",

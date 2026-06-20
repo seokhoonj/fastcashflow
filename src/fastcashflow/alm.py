@@ -48,12 +48,17 @@ class DurationResult:
     bond). ``macaulay`` / ``modified`` are durations in years (``macaulay`` is
     ``nan`` where it is not well defined -- a mixed-sign liability stream).
     ``dv01`` is the decrease in ``pv`` for a +1bp parallel rise in the curve
-    (positive for a normal positive-duration instrument)."""
+    (positive for a normal positive-duration instrument). ``convexity`` is the
+    second-order yield sensitivity ``(1/pv) d2pv/dy2`` in years^2 (the curvature
+    that the linear duration misses for a large rate move:
+    ``dpv/pv ~ -modified*dy + 0.5*convexity*dy^2``); ``nan`` where it is not well
+    defined (a near-zero ``pv``)."""
 
     pv: float
     macaulay: float
     modified: float
     dv01: float
+    convexity: float = float("nan")
 
 
 def _bel(model_points: ModelPoints, basis: Basis, discount_annual) -> float:
@@ -125,15 +130,25 @@ def liability_dv01(model_points: ModelPoints, basis: Basis, *,
 
 def liability_duration(model_points: ModelPoints, basis: Basis, *,
                        bump: float = _BP) -> DurationResult:
-    """The liability's interest-rate sensitivity -- ``pv`` (BEL), ``dv01`` and an
-    effective ``modified`` duration (``= dv01 / (|pv| * 1bp)``). ``macaulay`` is
+    """The liability's interest-rate sensitivity -- ``pv`` (BEL), ``dv01``, an
+    effective ``modified`` duration (``= dv01 / (|pv| * 1bp)``) and an effective
+    ``convexity`` (the second central difference of the BEL under a parallel curve
+    shift, ``(BEL(+b) + BEL(-b) - 2 BEL(0)) / (|pv| * b^2)``). ``macaulay`` is
     ``nan`` (the mixed-sign liability stream has no clean Macaulay time);
-    ``modified`` is ``nan`` when ``|pv|`` is negligible (the ratio is then
-    ill-conditioned -- read the ``dv01`` instead)."""
-    pv = _bel(model_points, basis, np.asarray(basis.discount_annual, np.float64))
+    ``modified`` / ``convexity`` are ``nan`` when ``|pv|`` is negligible (the
+    ratios are then ill-conditioned -- read the ``dv01`` instead)."""
+    base = np.asarray(basis.discount_annual, np.float64)
+    pv = _bel(model_points, basis, base)
     dv01 = liability_dv01(model_points, basis, bump=bump)
-    modified = dv01 / (abs(pv) * _BP) if abs(pv) > 1.0 else float("nan")
-    return DurationResult(pv=pv, macaulay=float("nan"), modified=modified, dv01=dv01)
+    if abs(pv) > 1.0:
+        modified = dv01 / (abs(pv) * _BP)
+        up = _bel(model_points, basis, base + bump)
+        dn = _bel(model_points, basis, base - bump)
+        convexity = (up + dn - 2.0 * pv) / (abs(pv) * bump * bump)
+    else:
+        modified = convexity = float("nan")
+    return DurationResult(pv=pv, macaulay=float("nan"), modified=modified,
+                          dv01=dv01, convexity=convexity)
 
 
 def key_rate_durations(model_points: ModelPoints, basis: Basis, *,
@@ -257,18 +272,20 @@ def _bond_irr(times: FloatArray, amounts: FloatArray, pv: float) -> float:
 
 
 def bond_duration(bond: Bond, discount_annual) -> DurationResult:
-    """The bond's market value, Macaulay / Modified duration and DV01. Macaulay is
-    the present-value-weighted time; Modified is ``Macaulay / (1 + y)`` with ``y``
-    the flat-equivalent yield; DV01 is ``Modified * value * 1bp`` (the value drop
-    per +1bp)."""
+    """The bond's market value, Macaulay / Modified duration, DV01 and convexity.
+    Macaulay is the present-value-weighted time; Modified is ``Macaulay / (1 + y)``
+    with ``y`` the flat-equivalent yield; DV01 is ``Modified * value * 1bp`` (the
+    value drop per +1bp); convexity is the yield-based
+    ``sum(t(t+1) CF_t (1+y)^-(t+2)) / value`` in years^2."""
     t, a = bond_cashflows(bond)
     pv_t = a * _annual_df(t, discount_annual)
     pv = float(pv_t.sum())
     macaulay = float((t * pv_t).sum() / pv)
     y = _bond_irr(t, a, pv)
     modified = macaulay / (1.0 + y)
+    convexity = float((t * (t + 1.0) * a * (1.0 + y) ** (-(t + 2.0))).sum() / pv)
     return DurationResult(pv=pv, macaulay=macaulay, modified=modified,
-                          dv01=modified * pv * _BP)
+                          dv01=modified * pv * _BP, convexity=convexity)
 
 
 def alm_gap(asset_dv01: float, liability_dv01: float) -> dict:
@@ -280,9 +297,34 @@ def alm_gap(asset_dv01: float, liability_dv01: float) -> dict:
             "dv01_gap": asset_dv01 - liability_dv01}
 
 
+def duration_gap(asset_duration: float, asset_value: float,
+                 liability_duration: float, liability_value: float) -> dict:
+    """The value-weighted (modified) duration gap of the surplus.
+
+    ``duration_gap = D_A - (L/A) * D_L`` with ``D_A`` / ``D_L`` the asset /
+    liability modified durations, ``A`` the asset market value and ``L`` the
+    liability value (the BEL). ``leverage = L/A`` is the liability-to-asset ratio
+    that scales the liability duration onto the asset base, because the surplus
+    ``E = A - L`` moves by ``dE = -(D_A*A - D_L*L)*dy = -A*duration_gap*dy``. So a
+    zero gap immunises the surplus against a small parallel yield move; a positive
+    gap (assets longer than the leveraged liabilities) means the surplus FALLS when
+    yields rise. ``surplus_dv01 = A * duration_gap * 1bp`` is that fall per +1bp --
+    the same quantity as the :func:`alm_gap` ``dv01_gap`` when the durations and
+    values are mutually consistent (``dv01 = modified * value * 1bp``).
+
+    Durations are modified (per unit yield); take them from
+    :attr:`DurationResult.modified` and the values from :attr:`DurationResult.pv`
+    (e.g. :func:`liability_duration` and a summed :func:`bond_duration`)."""
+    leverage = liability_value / asset_value
+    gap = asset_duration - leverage * liability_duration
+    return {"asset_duration": asset_duration, "liability_duration": liability_duration,
+            "leverage": leverage, "duration_gap": gap,
+            "surplus_dv01": asset_value * gap * _BP}
+
+
 __all__ = [
     "DurationResult", "Bond", "net_liability_cashflows",
     "liability_dv01", "liability_duration", "key_rate_durations",
     "bond_cashflows", "bond_value", "bond_duration", "effective_maturity",
-    "alm_gap",
+    "alm_gap", "duration_gap",
 ]

@@ -85,6 +85,67 @@ def test_bond_effective_matches_analytic():
     assert np.isclose(alm.bond_duration(bond, 0.05).dv01, eff, rtol=1e-4)
 
 
+def test_bond_convexity_matches_effective():
+    """The analytic yield convexity equals the second central difference of the
+    bond value under a parallel yield shift."""
+    bond = alm.Bond(face=100.0, coupon_rate=0.05, maturity_years=10, frequency=1)
+    d = alm.bond_duration(bond, 0.04)
+    h = 1e-3
+    pv = alm.bond_value(bond, 0.04)
+    eff = (alm.bond_value(bond, 0.04 + h) + alm.bond_value(bond, 0.04 - h)
+           - 2.0 * pv) / (pv * h * h)
+    assert np.isclose(d.convexity, eff, rtol=1e-4)
+    assert d.convexity > 0.0                          # a bullet bond is convex
+
+
+def test_bond_second_order_price_move():
+    """Duration + convexity predict a finite rate move better than duration alone:
+    dPV/PV ~ -modified*dy + 0.5*convexity*dy^2."""
+    bond = alm.Bond(face=100.0, coupon_rate=0.05, maturity_years=10, frequency=1)
+    d = alm.bond_duration(bond, 0.05)
+    dy = 0.01
+    actual = alm.bond_value(bond, 0.05 + dy) / d.pv - 1.0
+    linear = -d.modified * dy
+    quad = -d.modified * dy + 0.5 * d.convexity * dy * dy
+    assert abs(quad - actual) < abs(linear - actual)  # convexity tightens the fit
+
+
+def test_liability_convexity_finite_and_guarded():
+    """A positive-BEL liability has a finite effective convexity; at break-even the
+    near-zero BEL guards it (and modified) to nan."""
+    mp, basis = _mp(), _basis()
+    d = alm.liability_duration(mp, basis)
+    assert np.isfinite(d.convexity)
+    mp0 = fcf.ModelPoints.single(40, 0.0, 120, benefits={"DEATH": 1e8},
+                                 calculation_methods=PATTERNS)
+    net = pricing.solve_premium(mp0, basis, break_even=True)[0]
+    d0 = alm.liability_duration(replace(mp0, premium=np.full(1, net)), basis)
+    assert np.isnan(d0.convexity) and np.isnan(d0.modified)
+
+
+def test_duration_gap_immunises_surplus():
+    """duration_gap = D_A - (L/A) D_L; choosing D_A = (L/A) D_L zeroes the gap and
+    the surplus DV01."""
+    A, L, D_L = 1200.0, 1000.0, 8.0
+    D_A = (L / A) * D_L                                # immunising asset duration
+    g = alm.duration_gap(D_A, A, D_L, L)
+    assert np.isclose(g["leverage"], L / A)
+    assert np.isclose(g["duration_gap"], 0.0)
+    assert np.isclose(g["surplus_dv01"], 0.0)
+    # a longer asset duration opens a positive gap (surplus falls when rates rise)
+    assert alm.duration_gap(D_A + 1.0, A, D_L, L)["surplus_dv01"] > 0.0
+
+
+def test_duration_gap_matches_dv01_gap():
+    """surplus_dv01 equals the alm_gap dv01_gap when durations and values are
+    mutually consistent (dv01 = modified * value * 1bp)."""
+    A, L, D_A, D_L = 1200.0, 1000.0, 6.0, 9.0
+    asset_dv01 = D_A * A * 1e-4
+    liab_dv01 = D_L * L * 1e-4
+    g = alm.duration_gap(D_A, A, D_L, L)
+    assert np.isclose(g["surplus_dv01"], alm.alm_gap(asset_dv01, liab_dv01)["dv01_gap"])
+
+
 def test_matched_book_gap_is_zero():
     """A bond book sized to the liability DV01 immunises the parallel gap."""
     mp, basis = _mp(), _basis()
