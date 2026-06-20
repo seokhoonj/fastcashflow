@@ -230,6 +230,18 @@ def test_shock_spread_is_additive_and_held_flat():
     assert np.allclose(curve[2:], 0.036)        # held flat past the last entry
 
 
+def test_shock_spread_continuous_compounding():
+    # A continuous shock spread meets the annual curve as (1+base)*exp(spread)-1,
+    # NOT base+spread -- the form the FSS-published K-ICS shocks take.
+    mp, basis = _mp(), _basis()                  # base 0.03 flat
+    _, b = sv.shock_spread([0.01], name="x", compounding="continuous").apply(mp, basis)
+    curve = np.asarray(b.discount_annual, float)
+    assert curve[0] == pytest.approx((1.0 + 0.03) * np.exp(0.01) - 1.0)
+    assert curve[0] > 0.03 + 0.01                # exceeds the naive additive 0.04
+    with pytest.raises(ValueError):
+        sv.shock_spread([0.01], name="x", compounding="discrete")
+
+
 def test_kics_interest_capital_end_to_end():
     # An up shock raises the discount rate -> lowers PV(claims) of a death book ->
     # a GAIN (Delta BEL < 0), floored to 0; a down shock is the binding loss. Wire
@@ -248,6 +260,18 @@ def test_kics_interest_capital_end_to_end():
     assert res.interest_capital > 0.0                       # down shock binds
     assert c["interest_up"] == 0.0                          # up shock is a gain -> floored
     assert np.isclose(res.total_scr, res.insurance_scr + res.interest_capital)
+
+
+def test_kics_from_spreads_passes_compounding_through():
+    # from_spreads(compounding="continuous") applies every scenario in continuous
+    # space, so the up curve is (1+base)*exp(spread)-1 -- the FSS data path.
+    mp, basis = _mp(), _basis()                  # base 0.03 flat
+    ki = sv.KICSInterest.from_spreads(up=[0.01], down=[-0.01], flat=[0.004],
+                                      steep=[-0.004], mean_reversion=[0.0],
+                                      compounding="continuous")
+    _, b = ki.up.apply(mp, basis)
+    assert np.asarray(b.discount_annual, float)[0] == pytest.approx(
+        (1.0 + 0.03) * np.exp(0.01) - 1.0)
 
 
 # ---------------------------------------------------------------------------

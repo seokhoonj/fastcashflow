@@ -306,20 +306,30 @@ def shock_curve(rel_by_maturity: FloatArray, *, up: bool,
     return Stress(name=name or ("interest up" if up else "interest down"), apply=apply)
 
 
-def shock_spread(spread_by_maturity: FloatArray, *, name: str) -> Stress:
-    """Stress the risk-free discount curve by an ADDITIVE maturity shock spread.
+def shock_spread(spread_by_maturity: FloatArray, *, name: str,
+                 compounding: str = "annual") -> Stress:
+    """Stress the risk-free discount curve by a maturity-by-maturity shock spread.
 
     ``spread_by_maturity`` is the per-year shock spread (year ``y`` in entry
-    ``y - 1``), in the same units as :attr:`~fastcashflow.Basis.discount_annual`
-    (decimal -- a ``+0.473`` percentage-point spread is ``0.00473``); it is held
-    flat past its last entry. The shocked curve is ``base + spread``.
+    ``y - 1``); it is held flat past its last entry. This is the form the K-ICS
+    interest-rate scenarios take: the shocked curve is the base risk-free curve
+    plus the supervisor-published shock spread (the difference between the adjusted
+    risk-free term structures before and after the shock; handbook 4-2.(1)-7), as
+    opposed to the relative shock :func:`shock_curve` applies for the Solvency II
+    maturity-relative table.
 
-    This is the form the K-ICS interest-rate scenarios take: the shocked curve is
-    the base risk-free curve plus the supervisor-published maturity-by-maturity
-    shock spread (the difference between the adjusted risk-free term structures
-    before and after the shock; handbook 4-2.(1)-7), as opposed to the relative
-    shock :func:`shock_curve` applies for the Solvency II maturity-relative table.
+    ``compounding`` selects how the spread meets the annual-compounded curve:
+    ``"annual"`` (default) adds it directly, ``base + spread`` (the spread is in
+    :attr:`~fastcashflow.Basis.discount_annual` units -- a ``+0.473`` percentage-
+    point spread is ``0.00473``); ``"continuous"`` treats the spread as a
+    continuous-compounding shock and applies it in that space,
+    ``(1 + base) * exp(spread) - 1``. The FSS-published K-ICS shock-spread tables
+    are continuous-compounding, so ``compounding="continuous"`` consumes them
+    directly; a plain additive application would understate the shock by a level-
+    dependent amount (~the spread times the base, per maturity).
     """
+    if compounding not in ("annual", "continuous"):
+        raise ValueError("compounding must be 'annual' or 'continuous'")
     spread = np.asarray(spread_by_maturity, float)
 
     def apply(mp: ModelPoints, basis: Basis):
@@ -329,7 +339,8 @@ def shock_spread(spread_by_maturity: FloatArray, *, name: str) -> Stress:
         m = base.shape[0]
         s = spread[:m] if spread.shape[0] >= m else np.concatenate(
             [spread, np.full(m - spread.shape[0], spread[-1])])
-        return mp, replace(basis, discount_annual=base + s)
+        shocked = (1.0 + base) * np.exp(s) - 1.0 if compounding == "continuous" else base + s
+        return mp, replace(basis, discount_annual=shocked)
     return Stress(name=name, apply=apply)
 
 
@@ -366,19 +377,24 @@ class KICSInterest:
 
     @classmethod
     def from_spreads(cls, *, up: FloatArray, down: FloatArray, flat: FloatArray,
-                     steep: FloatArray, mean_reversion: FloatArray) -> "KICSInterest":
+                     steep: FloatArray, mean_reversion: FloatArray,
+                     compounding: str = "annual") -> "KICSInterest":
         """Build the five scenarios from per-maturity shock-spread arrays.
 
-        Each argument is the additive shock spread by maturity (year 1 in entry
-        0), in the same units as :attr:`~fastcashflow.Basis.discount_annual`
-        (decimal). See :func:`shock_spread` for the per-maturity application.
+        Each argument is the shock spread by maturity (year 1 in entry 0).
+        ``compounding`` is passed to :func:`shock_spread` for every scenario:
+        ``"annual"`` (default) adds the spread to the annual-compounded curve;
+        ``"continuous"`` applies it in continuous-compounding space, the form the
+        FSS-published K-ICS shock-spread tables take. The FSS tables give only the
+        ``up`` / ``flat`` scenarios, with ``down = -up`` and ``steep = -flat``.
         """
         return cls(
-            up=shock_spread(up, name="interest up"),
-            down=shock_spread(down, name="interest down"),
-            flat=shock_spread(flat, name="interest flat"),
-            steep=shock_spread(steep, name="interest steep"),
-            mean_reversion=shock_spread(mean_reversion, name="interest mean reversion"),
+            up=shock_spread(up, name="interest up", compounding=compounding),
+            down=shock_spread(down, name="interest down", compounding=compounding),
+            flat=shock_spread(flat, name="interest flat", compounding=compounding),
+            steep=shock_spread(steep, name="interest steep", compounding=compounding),
+            mean_reversion=shock_spread(mean_reversion, name="interest mean reversion",
+                                        compounding=compounding),
         )
 
     def capital(self, delta) -> tuple[float, dict[str, float]]:
