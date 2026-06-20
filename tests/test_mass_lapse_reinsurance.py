@@ -287,6 +287,102 @@ def test_cedant_relief_total_composition():
 
 
 # ---------------------------------------------------------------------------
+# Lapse tail distribution F(L) -- the reinsurer baseline (Phase D)
+# ---------------------------------------------------------------------------
+
+def test_lapse_distribution_reproduces_anchors():
+    """from_anchors calibrates the lognormal so the two public tail anchors are
+    reproduced: P(L > 15%) = 1/30, P(L > 40%) = 1/200."""
+    f = lre.LapseTailDistribution.from_anchors()
+    assert np.isclose(f.survival(0.15), 1.0 / 30.0, atol=1e-9)
+    assert np.isclose(f.survival(0.40), 1.0 / 200.0, atol=1e-9)
+    # survival is monotone decreasing, and 0 lapse is certain to be exceeded
+    assert f.survival(0.0) == 1.0
+    assert f.survival(0.05) > f.survival(0.15) > f.survival(0.40) > f.survival(0.80)
+
+
+def test_expected_layer_equals_survival_integral():
+    """The pluggable-interface identity: E[clip(L-a,0,b-a)] = integral_a^b
+    survival(x) dx. Validates the closed form against survival-only integration
+    (any drop-in F(L) can price via survival alone)."""
+    f = lre.LapseTailDistribution.from_anchors()
+    a, b = 0.15, 0.40
+    grid = np.linspace(a, b, 200_001)
+    surv = np.array([f.survival(x) for x in grid])
+    integral = np.trapezoid(surv, grid)
+    assert np.isclose(f.expected_layer(a, b), integral, rtol=1e-4)
+
+
+def test_lapse_distribution_rejects_bad_anchors():
+    with pytest.raises(ValueError, match="a higher lapse is rarer"):
+        lre.LapseTailDistribution.from_anchors((0.40, 1/200), (0.15, 1/30))  # swapped
+
+
+def test_value_at_risk_returns_sf_anchor():
+    """VaR_99.5(L) reproduces the 40% standard-formula stress (the calibration
+    upper anchor)."""
+    f = lre.LapseTailDistribution.from_anchors()
+    assert np.isclose(f.value_at_risk(0.995), 0.40, atol=1e-9)
+    assert np.isclose(f.value_at_risk(1.0 - 1/30), 0.15, atol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Reinsurer pricing (Phase D)
+# ---------------------------------------------------------------------------
+
+def test_price_treaty_components():
+    """expected_recovery = S x E[layer]; capital = (S x covered(VaR) - E[rec]) x
+    div; premium = E[rec] + coc x capital."""
+    S = 10_000_000_000.0
+    treaty = lre.LapseXL(0.15, 0.40)
+    f = lre.LapseTailDistribution.from_anchors()
+    coc, div = 0.06, 1.0
+    p = lre.price_treaty(S, treaty, f, cost_of_capital=coc, diversification_factor=div)
+
+    exp_rec = S * f.expected_layer(0.15, 0.40)
+    var_lapse = f.value_at_risk(0.995)                       # = 0.40
+    capital = (S * treaty.covered_fraction(var_lapse) - exp_rec) * div
+    assert np.isclose(p.expected_recovery, exp_rec)
+    assert np.isclose(p.capacity_at_risk, S * treaty.capacity)
+    assert np.isclose(p.capital, capital)
+    assert np.isclose(p.premium, exp_rec + coc * capital)
+    assert np.isclose(p.expected_profit, coc * capital)
+    # at the 40% VaR the layer is fully covered -> capacity saturates the VaR loss
+    assert np.isclose(S * treaty.covered_fraction(var_lapse), p.capacity_at_risk)
+
+
+def test_price_treaty_diversification_scales_the_load():
+    """The diversification factor scales the assumed capital (and so the cost-of-
+    capital load) linearly; the expected recovery is unchanged."""
+    S = 10_000_000_000.0
+    treaty = lre.LapseXL(0.15, 0.40)
+    f = lre.LapseTailDistribution.from_anchors()
+    full = lre.price_treaty(S, treaty, f, diversification_factor=1.0)
+    quarter = lre.price_treaty(S, treaty, f, diversification_factor=0.25)
+    assert np.isclose(quarter.capital, 0.25 * full.capital)
+    assert np.isclose(quarter.expected_recovery, full.expected_recovery)
+    assert np.isclose(quarter.expected_profit, 0.25 * full.expected_profit)
+    assert quarter.premium < full.premium
+
+
+def test_price_treaty_is_distribution_pluggable():
+    """price_treaty depends on the distribution only through expected_layer and
+    value_at_risk -- any object providing them prices the treaty (the drop-in
+    F(L) contract)."""
+    class FlatF:                                              # a trivial stand-in F(L)
+        def expected_layer(self, a, b):
+            return 0.02
+        def value_at_risk(self, q):
+            return 0.40
+    S = 1_000_000_000.0
+    treaty = lre.LapseXL(0.15, 0.40)
+    p = lre.price_treaty(S, treaty, FlatF(), cost_of_capital=0.06)
+    assert np.isclose(p.expected_recovery, S * 0.02)
+    assert np.isclose(p.capital, S * treaty.capacity - S * 0.02)
+    assert np.isclose(p.premium, S * 0.02 + 0.06 * (S * treaty.capacity - S * 0.02))
+
+
+# ---------------------------------------------------------------------------
 # Measurement period -- the time axis (EIOPA Annex 3.8 / 3.9 / footnote 10)
 # ---------------------------------------------------------------------------
 

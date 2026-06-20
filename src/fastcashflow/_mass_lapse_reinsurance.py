@@ -28,7 +28,15 @@ import numpy as np
 from fastcashflow.basis import Basis
 from fastcashflow.engine import inforce_surrender_value, measure
 from fastcashflow.model_points import ModelPoints
+from fastcashflow.numerics import _norm_ppf
 from fastcashflow.solvency import RegimeSpec, aggregate, required_capital
+
+_SQRT2 = math.sqrt(2.0)
+
+
+def _norm_cdf(x: float) -> float:
+    """Standard-normal CDF via the complementary error function."""
+    return 0.5 * math.erfc(-x / _SQRT2)
 
 # Solvency II standard-formula mass-lapse stress (Delegated Regulation
 # Art. 142(6)(b)): an instantaneous 40% lapse of the in-force (70% for the
@@ -431,3 +439,163 @@ def cedant_solvency_relief(
         counterparty_default=cpd,
         risk_margin_gross=rm_per_unit * insurance_gross,
         risk_margin_net=rm_per_unit * insurance_net)
+
+
+# ---------------------------------------------------------------------------
+# Reinsurer side: the lapse tail distribution and pricing (Phase D).
+#
+# The cedant side is deterministic because the standard formula fixes the lapse
+# at a single point (40%). The reinsurer prices over the WHOLE tail of the
+# cumulative excess-over-best-estimate lapse L, so it needs a distribution F(L).
+# Pricing depends on F only through ``survival(x) = P(L > x)``: the expected
+# layer is the integral of the survival over the layer (a standard identity),
+#
+#     E[clip(L - a, 0, b - a)] = integral_a^b P(L > x) dx,
+#
+# so any object exposing ``survival`` (and the ``expected_layer`` it implies) is
+# a drop-in F(L). :class:`LapseTailDistribution` is the public baseline,
+# calibrated to public Solvency II anchors; a reinsurer's proprietary F(L)
+# (dynamic lapse, dependence structure, cross-portfolio tail) replaces it
+# without touching the pricing.
+# ---------------------------------------------------------------------------
+
+# Public tail anchors for the excess-over-best-estimate lapse L (exceedance
+# probabilities): the 40% standard-formula stress is the 1-in-200 (99.5%) point
+# (Art. 142(6)(b)); EIOPA notes attachment points are typically set around a
+# 1-in-30 event (e.g. 15%). The second anchor is a calibration choice, not a
+# regulatory law -- override it with the book's own lapse volatility.
+SF_LAPSE_TAIL_ANCHOR = (0.40, 1.0 / 200.0)
+ATTACHMENT_TAIL_ANCHOR = (0.15, 1.0 / 30.0)
+
+
+@dataclass(frozen=True, slots=True)
+class LapseTailDistribution:
+    """Lognormal distribution of the cumulative excess-over-best-estimate lapse
+    fraction ``L``, the public baseline F(L) for reinsurer pricing.
+
+    Calibrated by :meth:`from_anchors` to two tail exceedance probabilities
+    (default: 15% at 1-in-30, 40% at 1-in-200). Pricing depends on a
+    distribution ONLY through :meth:`survival`; a reinsurer's proprietary F(L)
+    is a drop-in replacement that provides the same method. The closed-form
+    :meth:`expected_layer` equals ``integral_attach^detach survival(x) dx`` -- the
+    identity any survival-only F(L) can use numerically."""
+
+    mu: float
+    sigma: float
+
+    @classmethod
+    def from_anchors(cls, lower=ATTACHMENT_TAIL_ANCHOR,
+                     upper=SF_LAPSE_TAIL_ANCHOR) -> "LapseTailDistribution":
+        """Calibrate the lognormal to two ``(lapse_level, exceedance_prob)``
+        anchors. ``P(L > a) = p`` gives ``(ln a - mu)/sigma = z`` with
+        ``z = norm_ppf(1 - p)``; two anchors solve ``mu`` and ``sigma``."""
+        (a1, p1), (a2, p2) = lower, upper
+        if not (0.0 < a1 < a2 and 0.0 < p2 < p1 < 1.0):
+            raise ValueError(
+                "anchors must satisfy 0 < a1 < a2 and 0 < p2 < p1 < 1 "
+                f"(a higher lapse is rarer), got {lower}, {upper}")
+        z1, z2 = _norm_ppf(1.0 - p1), _norm_ppf(1.0 - p2)
+        sigma = (math.log(a2) - math.log(a1)) / (z2 - z1)
+        mu = math.log(a1) - sigma * z1
+        return cls(mu=mu, sigma=sigma)
+
+    def survival(self, x: float) -> float:
+        """``P(L > x)`` -- the only method pricing requires of an F(L)."""
+        if x <= 0.0:
+            return 1.0
+        return 1.0 - _norm_cdf((math.log(x) - self.mu) / self.sigma)
+
+    @property
+    def mean(self) -> float:
+        """``E[L]`` -- the expected excess lapse."""
+        return math.exp(self.mu + 0.5 * self.sigma * self.sigma)
+
+    def expected_excess(self, k: float) -> float:
+        """``E[(L - k)+]`` -- the lognormal stop-loss above ``k``."""
+        if k <= 0.0:
+            return self.mean
+        d1 = (self.mu + self.sigma * self.sigma - math.log(k)) / self.sigma
+        d2 = d1 - self.sigma
+        return self.mean * _norm_cdf(d1) - k * _norm_cdf(d2)
+
+    def expected_layer(self, attachment: float, detachment: float) -> float:
+        """``E[clip(L - attachment, 0, detachment - attachment)]`` -- the expected
+        covered excess-lapse fraction (equals the survival integral over the
+        layer)."""
+        return self.expected_excess(attachment) - self.expected_excess(detachment)
+
+    def value_at_risk(self, q: float) -> float:
+        """The ``q``-quantile of ``L`` -- ``exp(mu + sigma x norm_ppf(q))``. At
+        ``q = 0.995`` this is the 1-in-200 lapse (the standard-formula stress; by
+        calibration it returns the upper anchor)."""
+        if not (0.0 < q < 1.0):
+            raise ValueError(f"q must be in (0, 1), got {q}")
+        return math.exp(self.mu + self.sigma * _norm_ppf(q))
+
+
+@dataclass(frozen=True, slots=True)
+class ReinsurancePricing:
+    """The reinsurer's price and assumed capital for a :class:`LapseXL` treaty.
+
+    ``expected_recovery`` is the pure premium (expected loss) ``S x E[layer]``;
+    ``capital`` is the assumed risk capital -- the unexpected loss
+    ``VaR(recovery) - expected_recovery`` at ``var_level`` -- after the
+    reinsurer's diversification factor; ``premium`` loads the cost of capital on
+    top of the pure premium. ``expected_profit`` is the load (premium less
+    expected loss)."""
+
+    loss_density: float
+    capacity_at_risk: float          # S x capacity -- the most the layer can pay
+    expected_recovery: float
+    capital: float
+    premium: float
+
+    @property
+    def expected_profit(self) -> float:
+        """Premium less expected loss -- the cost-of-capital load."""
+        return self.premium - self.expected_recovery
+
+    @property
+    def premium_rate(self) -> float:
+        """Premium as a fraction of the capacity at risk (the market quote
+        convention -- typically a low single-digit percent)."""
+        return self.premium / self.capacity_at_risk if self.capacity_at_risk else 0.0
+
+    @property
+    def loss_on_line(self) -> float:
+        """Expected loss as a fraction of the capacity at risk."""
+        return (self.expected_recovery / self.capacity_at_risk
+                if self.capacity_at_risk else 0.0)
+
+
+def price_treaty(
+    loss_density: float, treaty: LapseXL, distribution, *,
+    cost_of_capital: float = 0.06, var_level: float = 0.995,
+    diversification_factor: float = 1.0,
+) -> ReinsurancePricing:
+    """Price the treaty from the reinsurer's side over the lapse tail
+    ``distribution`` (any object exposing ``expected_layer`` and
+    ``value_at_risk``; :class:`LapseTailDistribution` is the public baseline).
+
+    ``expected_recovery = S x E[layer]`` is the pure premium. The assumed capital
+    is the unexpected loss ``S x covered_fraction(VaR_level(L)) -
+    expected_recovery`` scaled by ``diversification_factor`` (1.0 = standalone;
+    a reinsurer diversifies the assumed lapse risk against its own book, so its
+    marginal capital is a fraction of standalone -- pass e.g. 0.25). The premium
+    loads ``cost_of_capital`` on that capital:
+
+        premium = expected_recovery + cost_of_capital x capital.
+
+    Everything tail-dependent flows through ``distribution`` -- the proprietary
+    F(L) the reinsurer plugs in sets the price."""
+    S = loss_density
+    capacity_at_risk = S * treaty.capacity
+    expected_recovery = S * distribution.expected_layer(
+        treaty.attachment, treaty.detachment)
+    var_lapse = distribution.value_at_risk(var_level)
+    unexpected = S * treaty.covered_fraction(var_lapse) - expected_recovery
+    capital = max(0.0, unexpected) * diversification_factor
+    premium = expected_recovery + cost_of_capital * capital
+    return ReinsurancePricing(
+        loss_density=S, capacity_at_risk=capacity_at_risk,
+        expected_recovery=expected_recovery, capital=capital, premium=premium)
