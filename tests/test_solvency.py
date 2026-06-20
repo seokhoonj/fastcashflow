@@ -546,3 +546,52 @@ def test_sii_catastrophe_is_seventh_sub_risk():
     mp, basis = _mp(), _basis()
     res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
     assert res.sub_risk_capital["catastrophe"] > 0.0         # death book -> cat is a loss
+
+
+# ---------------------------------------------------------------------------
+# Dynamic lapse -- the lapse<->rate coupling (the dynamic asset engine, Phase D)
+# ---------------------------------------------------------------------------
+
+def test_dynamic_lapse_multiplier_hand_calc():
+    """1 + sensitivity*rate_shock, floored at 0."""
+    assert np.isclose(sv.dynamic_lapse_multiplier(0.01, 5.0), 1.05)
+    assert np.isclose(sv.dynamic_lapse_multiplier(-0.01, 5.0), 0.95)   # rate fall -> less lapse
+    assert sv.dynamic_lapse_multiplier(0.01, 0.0) == 1.0               # no coupling
+    assert sv.dynamic_lapse_multiplier(-0.5, 5.0) == 0.0               # floored (1 - 2.5 < 0)
+
+
+def test_interest_with_dynamic_lapse_couples_curve_and_lapse():
+    """The coupled stress shifts the curve by +shift and scales lapse by the
+    dynamic multiplier (clamped to 1.0 like every rate)."""
+    mp, basis = _mp(), _basis()
+    shift = 0.01
+    _, shocked = sv.interest_with_dynamic_lapse(shift, 5.0).apply(mp, basis)
+    grid = (np.array([0]), np.array([40]), np.array([24]), np.array([0]), np.array([24]))
+    assert np.allclose(shocked.lapse_annual(*grid),
+                       np.minimum(basis.lapse_annual(*grid) * 1.05, 1.0))
+    assert np.allclose(np.asarray(shocked.discount_annual),
+                       np.asarray(basis.discount_annual, float) + shift)
+
+
+def test_dynamic_lapse_zero_sensitivity_is_pure_rate():
+    """sensitivity=0 leaves lapse untouched -- the coupled stress is then exactly a
+    parallel rate shift (the same measured BEL)."""
+    from dataclasses import replace
+    mp, basis = _mp(), _basis()
+    shift = 0.01
+    _, coupled = sv.interest_with_dynamic_lapse(shift, 0.0).apply(mp, basis)
+    pure = replace(basis, discount_annual=np.asarray(basis.discount_annual, float) + shift)
+    assert np.isclose(measure(mp, coupled, full=False).bel.sum(),
+                      measure(mp, pure, full=False).bel.sum())
+
+
+def test_dynamic_lapse_moves_bel_vs_uncoupled():
+    """With a positive lapse and sensitivity the coupling moves BEL away from the
+    rate-only stress -- the lapse<->rate correlation has a measurable effect."""
+    mp, basis = _mp(), _basis()
+    shift = 0.01
+    uncoupled = measure(mp, sv.interest_with_dynamic_lapse(shift, 0.0).apply(mp, basis)[1],
+                        full=False).bel.sum()
+    coupled = measure(mp, sv.interest_with_dynamic_lapse(shift, 8.0).apply(mp, basis)[1],
+                      full=False).bel.sum()
+    assert not np.isclose(coupled, uncoupled)

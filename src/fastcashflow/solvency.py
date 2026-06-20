@@ -283,6 +283,45 @@ def mass_lapse(fraction: float) -> Stress:
     return Stress(name=f"mass lapse {fraction:g}", apply=apply, bel_addon=addon)
 
 
+def dynamic_lapse_multiplier(rate_shock: float, sensitivity: float) -> float:
+    """The dynamic-lapse multiplier for a parallel rate move -- the lapse<->rate
+    coupling in one number.
+
+    A fixed linear form ``1 + sensitivity * rate_shock`` (floored at 0): when market
+    rates rise, policyholders surrender more to chase the higher yield, so a positive
+    ``sensitivity`` lifts the lapse rate (and a rate fall lowers it). ``rate_shock``
+    is the parallel shift as a fraction (``+0.01`` = +100bp); ``sensitivity`` is the
+    injected coefficient -- the lapse elasticity to a unit rate move. The FORM is
+    fixed and only the coefficient varies, so the engine resolves it to ONE scalar
+    multiplier up front and the kernel sees only the scaled lapse array -- the seam
+    costs nothing in the hot loop (no per-step callback)."""
+    return max(0.0, 1.0 + sensitivity * rate_shock)
+
+
+def interest_with_dynamic_lapse(shift: float, sensitivity: float, *,
+                                name: str | None = None) -> Stress:
+    """A coupled interest-rate / dynamic-lapse stress -- the asset-liability
+    interaction in one ``(model_points, basis)`` transform.
+
+    Applies a parallel ``shift`` (absolute, ``+0.01`` for +100bp) to the discount
+    curve AND scales the lapse rate by :func:`dynamic_lapse_multiplier`
+    (``shift``, ``sensitivity``) -- the lapse the same rate move induces.
+    Re-measuring and differencing against the base gives the liability-side loss
+    INCLUDING the lapse<->rate correlation; ``sensitivity = 0`` collapses it to a
+    pure parallel rate shock (the uncoupled view), so the coupling's marginal effect
+    is the difference between the two. ``sensitivity`` is the seam (the injected
+    elasticity of the fixed linear form); a relative regime curve is a separate
+    construct (:func:`shock_curve`) -- this is the analysis parallel shift used with
+    the dynamic asset engine."""
+    mult = dynamic_lapse_multiplier(shift, sensitivity)
+    def apply(mp: ModelPoints, basis: Basis):
+        base = np.asarray(basis.discount_annual, float)
+        return mp, replace(basis, discount_annual=base + shift,
+                           lapse_annual=_scaled(basis.lapse_annual, mult))
+    nm = name or f"rate {shift:+g} + dyn-lapse x{mult:g}"
+    return Stress(name=nm, apply=apply)
+
+
 def scale_annuity(factor: float) -> Stress:
     """Scale the annuity benefit amount by ``factor`` (revision risk -- the risk
     that in-payment annuity benefits are revised upward). A no-op for model points
@@ -780,6 +819,7 @@ __all__ = [
     "scale_mortality", "scale_longevity", "scale_lapse", "mass_lapse",
     "catastrophe_mortality",
     "scale_coverages", "scale_coverage_codes", "scale_annuity", "scale_expense",
+    "dynamic_lapse_multiplier", "interest_with_dynamic_lapse",
     "shock_curve", "shock_spread", "KICSInterest",
     "aggregate", "required_capital", "catastrophe_scr", "solvency_ratio",
     "SOLVENCY2", "KICS",
