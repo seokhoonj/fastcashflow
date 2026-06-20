@@ -678,6 +678,19 @@ _TOPLEVEL_CORRELATION_4 = np.array([
     [0.25, 0.25, 0.25, 1.00],
 ])
 
+# Solvency II BSCR top-level correlation (Delegated Regulation (EU) 2015/35, Annex
+# IV). Among (life, market, counterparty-default) every pair is 0.25 -- the same
+# values as K-ICS table 3, so the 3-module matrix is shared. With the non-life
+# (general insurance) module added the only differences from K-ICS are
+# non-life <-> default = 0.5 and life <-> non-life = 0 (the rest 0.25); order is
+# (life, general/non-life, market, default/credit).
+_SII_TOPLEVEL_CORRELATION_4 = np.array([
+    [1.00, 0.00, 0.25, 0.25],
+    [0.00, 1.00, 0.25, 0.50],
+    [0.25, 0.25, 1.00, 0.25],
+    [0.25, 0.50, 0.25, 1.00],
+])
+
 
 def aggregate_required_capital(insurance: float, market: float, credit: float, *,
                                regime, operational: float = 0.0,
@@ -686,23 +699,22 @@ def aggregate_required_capital(insurance: float, market: float, credit: float, *
     aggregate of the (life) insurance, market and credit modules plus the
     operational charge (added OUTSIDE the aggregate).
 
-    K-ICS uses the table-3 correlation (life-vs-general 0, every other pair 0.25;
-    ``general_insurance`` adds a fourth P&C module); Solvency II's top-level matrix
-    is not extracted, so the modules sum. The disclosed ``diversification effect``
-    is the simple module sum minus this aggregate. Use it to reproduce a disclosed
-    basic required capital from the published module risk amounts, or for a what-if
-    on the module mix without re-running a book."""
+    K-ICS uses the table-3 correlation; Solvency II uses the Annex IV BSCR matrix.
+    For (life, market, credit) the two coincide (all pairs 0.25), so the 3-module
+    aggregate is the same; with ``general_insurance`` (a fourth P&C module) they
+    differ only in general-vs-credit (K-ICS 0.25, Solvency II 0.5) and share
+    life-vs-general 0. The disclosed ``diversification effect`` is the simple module
+    sum minus this aggregate. Use it to reproduce a disclosed basic required capital
+    from the published module risk amounts, or for a what-if on the module mix
+    without re-running a book."""
     if general_insurance > 0.0:
         c = np.array([insurance, general_insurance, market, credit], dtype=np.float64)
-        R = _TOPLEVEL_CORRELATION_4
+        R = (_SII_TOPLEVEL_CORRELATION_4 if regime.name == "Solvency II"
+             else _TOPLEVEL_CORRELATION_4)
     else:
         c = np.array([insurance, market, credit], dtype=np.float64)
-        R = _TOPLEVEL_CORRELATION
-    if regime.name == "K-ICS":
-        agg = float(np.sqrt(c @ R @ c))
-    else:                                   # SII: top-level matrix not extracted
-        agg = float(c.sum())
-    return agg + operational
+        R = _TOPLEVEL_CORRELATION       # 3-module values coincide for K-ICS and SII
+    return float(np.sqrt(c @ R @ c)) + operational
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -760,10 +772,9 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     interest risk sits in the market module (net of assets and liabilities), NOT in
     the insurance module -- ``required_capital`` is run without interest here. The BSCR
     aggregates the insurance, market and credit modules at the top level: K-ICS uses
-    the table-3 correlation (all pairwise 0.25); Solvency II's top-level inter-module
-    matrix is not extracted here, so it falls back to a simple sum (no
-    diversification credit -- conservative). The operational-risk SCR is added on
-    top to form the basic required capital.
+    the table-3 correlation, Solvency II the Annex IV BSCR matrix; for the (life,
+    market, credit) modules the two coincide (all pairwise 0.25). The operational-risk
+    SCR is added on top to form the basic required capital.
 
     ``tax_adjustment`` (K-ICS chapter 7 -- the loss-absorbing capacity of deferred
     taxes) is then subtracted to give the total required capital, the ratio

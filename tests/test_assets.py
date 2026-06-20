@@ -127,6 +127,36 @@ def test_assess_solvency_kics_interest_enters_market_module():
     assert with_.insurance_scr == without.insurance_scr  # interest not in the insurance module
 
 
+def test_sii_toplevel_three_module_diversifies():
+    """Solvency II (Annex IV) aggregates the (life, market, credit) modules at
+    all-pairwise 0.25 -- the same values as K-ICS, and below the simple sum."""
+    import math
+    ins, mkt, cr = 300.0, 400.0, 200.0
+    sii = assets.aggregate_required_capital(ins, mkt, cr, regime=fcf.SOLVENCY2)
+    kics = assets.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS)
+    c = np.array([ins, mkt, cr])
+    R = np.array([[1.0, .25, .25], [.25, 1.0, .25], [.25, .25, 1.0]])
+    assert np.isclose(sii, math.sqrt(c @ R @ c))
+    assert np.isclose(sii, kics)                     # 3-module values coincide
+    assert sii < ins + mkt + cr                      # diversification vs the old simple sum
+
+
+def test_sii_toplevel_four_module_nonlife_default_half():
+    """With a general (non-life) module, Solvency II's non-life<->credit is 0.5
+    (vs K-ICS 0.25), so the SII top-level aggregate exceeds the K-ICS one."""
+    import math
+    ins, gen, mkt, cr = 300.0, 250.0, 400.0, 200.0
+    sii = assets.aggregate_required_capital(ins, mkt, cr, regime=fcf.SOLVENCY2,
+                                            general_insurance=gen)
+    kics = assets.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS,
+                                             general_insurance=gen)
+    c = np.array([ins, gen, mkt, cr])
+    R = np.array([[1.0, 0.0, .25, .25], [0.0, 1.0, .25, .50],
+                  [.25, .25, 1.0, .25], [.25, .50, .25, 1.0]])
+    assert np.isclose(sii, math.sqrt(c @ R @ c))
+    assert sii > kics                                # 0.5 vs 0.25 on general-credit
+
+
 def test_equity_scr_by_type():
     """Equity SCR aggregates the per-type amounts at the 0.75 inter-type correlation
     (handbook 4-3); a single type is just its amount; unknown type raises."""
@@ -369,11 +399,13 @@ def test_assess_solvency_components():
         alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
     a = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
     # no equity/property -> the market module is just the net interest SCR; the SII
-    # top-level BSCR is a simple sum (insurance + market + Art-176 credit); the total
-    # adds operational on top
+    # top-level BSCR aggregates insurance + market + Art-176 credit at all-pairwise
+    # 0.25 (Annex IV); the total adds operational on top
     assert np.isclose(a.market_module_scr, a.net_interest_scr)
     assert a.credit_scr > 0.0                               # SII Art-176 spread on the bond
-    assert np.isclose(a.bscr, a.insurance_scr + a.net_interest_scr + a.credit_scr)
+    m = np.array([a.insurance_scr, a.market_module_scr, a.credit_scr])
+    R = np.array([[1.0, .25, .25], [.25, 1.0, .25], [.25, .25, 1.0]])
+    assert np.isclose(a.bscr, np.sqrt(m @ R @ m))
     assert np.isclose(a.basic_required_capital, a.bscr + a.operational_scr)
     assert a.tax_adjustment == 0.0                          # no tax relief by default
     assert np.isclose(a.total_scr, a.basic_required_capital - a.tax_adjustment)
@@ -412,21 +444,23 @@ def test_assess_solvency_kics_no_curves():
 
 
 def test_top_level_aggregation_kics_vs_sii():
-    """K-ICS aggregates insurance, market and credit with the table-3 correlation
-    (all 0.25); Solvency II falls back to a simple sum (top-level matrix not
-    extracted)."""
+    """K-ICS (table 3) and Solvency II (Annex IV) both aggregate insurance, market
+    and credit at all-pairwise 0.25 -- the 3-module correlation values coincide, so
+    each BSCR is the sqrt aggregation of its own module amounts."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Equity(3_000_000.0, "developed")))
     k = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
     s = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
-    # SII: simple sum (insurance + market + Art-176 credit)
+    R = np.array([[1.0, 0.25, 0.25], [0.25, 1.0, 0.25], [0.25, 0.25, 1.0]])
+    # SII: sqrt aggregation at 0.25 (Annex IV), below the simple module sum
     assert s.credit_scr > 0.0
-    assert np.isclose(s.bscr, s.insurance_scr + s.market_module_scr + s.credit_scr)
-    # K-ICS: the bond now carries a credit charge -> 3-module sqrt aggregation
+    m_s = np.array([s.insurance_scr, s.market_module_scr, s.credit_scr])
+    assert np.isclose(s.bscr, np.sqrt(m_s @ R @ m_s))
+    assert s.bscr < s.insurance_scr + s.market_module_scr + s.credit_scr     # diversifies
+    # K-ICS: the bond now carries a credit charge -> same 3-module sqrt aggregation
     assert k.credit_scr > 0.0
     m = np.array([k.insurance_scr, k.market_module_scr, k.credit_scr])
-    R = np.array([[1.0, 0.25, 0.25], [0.25, 1.0, 0.25], [0.25, 0.25, 1.0]])
     assert np.isclose(k.bscr, np.sqrt(m @ R @ m))                            # K-ICS sqrt
     assert np.isclose(k.total_scr, k.bscr + k.operational_scr)               # + operational
 
@@ -494,10 +528,12 @@ def test_aggregate_required_capital_reproduces_disclosures():
                                             regime=fcf.KICS)
     div = (11_628_115 + 34_552_189 + 4_166_014) - agg
     assert np.isclose(div, 9_806_156, rtol=0, atol=2)
-    # Solvency II sums the modules (no top-level diversification)
+    # Solvency II aggregates the modules at the Annex IV 0.25 correlation (+ operational)
     s = assets.aggregate_required_capital(100.0, 200.0, 50.0, regime=fcf.SOLVENCY2,
                                           operational=10.0)
-    assert np.isclose(s, 360.0)
+    c = np.array([100.0, 200.0, 50.0])
+    R = np.array([[1.0, .25, .25], [.25, 1.0, .25], [.25, .25, 1.0]])
+    assert np.isclose(s, np.sqrt(c @ R @ c) + 10.0)
 
 
 def test_preferred_equity_by_rating_table20():
