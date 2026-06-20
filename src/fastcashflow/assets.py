@@ -29,7 +29,7 @@ from fastcashflow.alm import Bond, bond_value, bond_duration, effective_maturity
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.solvency import RegimeSpec, required_capital
+from fastcashflow.solvency import RegimeSpec, required_capital, KICSInterest
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,30 +104,73 @@ def available_capital(portfolio_value: float, bel: float,
     return portfolio_value - (bel + risk_margin)
 
 
+def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
+    """A callable mapping a curve :class:`~fastcashflow.solvency.Stress` to the NET
+    asset value DECREASE it causes -- ``NAV(base) - NAV(stress)`` with
+    ``NAV(c) = portfolio_value(c) - BEL(c)``. The asset and liability legs re-price
+    on the SAME shocked curve (the stress rebuilds ``basis.discount_annual``, which
+    prices the bonds and the liability alike), so a duration-matched book gives ~0."""
+    base_nav = (portfolio_value(portfolio, basis.discount_annual)
+                - float(measure(model_points, basis, full=False).bel.sum()))
+
+    def delta(stress) -> float:
+        mp_s, basis_s = stress.apply(model_points, basis)
+        stress_nav = (portfolio_value(portfolio, basis_s.discount_annual)
+                      - float(measure(mp_s, basis_s, full=False).bel.sum()))
+        return base_nav - stress_nav
+    return delta
+
+
 def net_interest_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
                      basis: Basis, *, interest_curves: tuple) -> float:
     """The net interest-rate SCR -- the worst loss in own funds (assets less
     liabilities) over the regime's up / down curve shocks.
 
     A rate rise lowers BOTH the asset value (bonds) and the BEL; the capital is
-    the fall in net asset value ``NAV(base) - NAV(stress)``, where ``NAV(c) =
-    portfolio_value(c) - BEL(c)``. Both sides re-price on the SAME shocked curve
-    (the shock's ``Stress`` rebuilds ``basis.discount_annual``, which prices the
-    bonds and the liability alike). The worst of the up / down shocks is taken,
-    floored at zero. A duration-matched book gives ~ 0 -- the immunised gap.
+    the fall in net asset value (see :func:`_nav_delta`). The worst of the up /
+    down shocks is taken, floored at zero. A duration-matched book gives ~ 0 -- the
+    immunised gap. This is the Solvency II form; K-ICS uses the five-scenario
+    :func:`net_interest_kics_scr`.
 
     ``interest_curves`` is the regime's tuple of interest-rate stresses
     (``RegimeSpec.interest_curves``); pass a non-empty tuple (the assembler
     handles a regime with no curves)."""
-    base_nav = (portfolio_value(portfolio, basis.discount_annual)
-                - float(measure(model_points, basis, full=False).bel.sum()))
-    worst = 0.0
-    for stress in interest_curves:
-        mp_s, basis_s = stress.apply(model_points, basis)
-        stress_nav = (portfolio_value(portfolio, basis_s.discount_annual)
-                      - float(measure(mp_s, basis_s, full=False).bel.sum()))
-        worst = max(worst, base_nav - stress_nav)
-    return worst
+    delta = _nav_delta(portfolio, model_points, basis)
+    return max(0.0, max((delta(s) for s in interest_curves), default=0.0))
+
+
+def net_interest_kics_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
+                          basis: Basis, *, scenarios: KICSInterest) -> float:
+    """The K-ICS net interest-rate SCR -- the five-scenario aggregation on NET asset
+    value (handbook p.205):
+
+        sqrt( max(up, down)^2 + max(flat, steep)^2 ) + mean_reversion
+
+    The net-asset-value decrease (assets less liabilities, both re-priced on the
+    same shocked curve; see :func:`_nav_delta`) is the per-scenario amount -- the
+    proper K-ICS interest risk is measured on the whole balance sheet, not the
+    liability alone. Each directional amount is floored at zero; the mean-reversion
+    amount is signed and can raise OR lower the charge (handbook 4-2.(1)-5), so the
+    result is returned without an outer floor (matching the formula). ``scenarios``
+    is the supervisor-published shock set as a
+    :class:`~fastcashflow.solvency.KICSInterest`."""
+    delta = _nav_delta(portfolio, model_points, basis)
+    cap, _ = scenarios.capital(delta)
+    return cap
+
+
+def _module_interest(portfolio, model_points, basis, regime,
+                     interest_scenarios) -> float:
+    """The market module's interest sub-risk: the K-ICS five-scenario net amount
+    when ``interest_scenarios`` is supplied, else the worst-of-curves net amount
+    when the regime carries interest curves (Solvency II), else zero."""
+    if interest_scenarios is not None:
+        return net_interest_kics_scr(portfolio, model_points, basis,
+                                     scenarios=interest_scenarios)
+    if regime.interest_curves is not None:
+        return net_interest_scr(portfolio, model_points, basis,
+                                interest_curves=regime.interest_curves)
+    return 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -418,16 +461,17 @@ def concentration_scr(portfolio: AssetPortfolio, regime, discount_annual, *,
 
 
 def market_module_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
-                      basis: Basis, *, regime) -> float:
+                      basis: Basis, *, regime,
+                      interest_scenarios: KICSInterest | None = None) -> float:
     """The market-risk module SCR -- the interest (net of liabilities), equity,
     property, FX and asset-concentration sub-risks aggregated through the regime's
-    market correlation matrix (``sqrt(c^T R c)``). Interest is the net
-    :func:`net_interest_scr` (zero when the regime supplies no interest curves,
-    e.g. K-ICS)."""
+    market correlation matrix (``sqrt(c^T R c)``). Interest is the K-ICS five-
+    scenario :func:`net_interest_kics_scr` when ``interest_scenarios`` is supplied
+    (the supervisor-published shock set), else the worst-of-curves
+    :func:`net_interest_scr` (Solvency II), else zero."""
     cal = _market_cal(regime)
-    interest = (net_interest_scr(portfolio, model_points, basis,
-                                 interest_curves=regime.interest_curves)
-                if regime.interest_curves is not None else 0.0)
+    interest = _module_interest(portfolio, model_points, basis, regime,
+                                interest_scenarios)
     c = np.array([interest, equity_scr(portfolio, regime),
                   property_scr(portfolio, regime),
                   fx_scr(portfolio, regime, basis.discount_annual),
@@ -702,13 +746,19 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
                     basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
                     tax_recoverability_limit: float | None = None,
                     catastrophe: float = 0.0, property_codes=(),
-                    general_insurance_scr: float = 0.0) -> SolvencyAssessment:
+                    general_insurance_scr: float = 0.0,
+                    interest_scenarios: KICSInterest | None = None) -> SolvencyAssessment:
     """Assemble the t=0 solvency ratio from the assets and the liability SCR.
 
     Runs :func:`~fastcashflow.required_capital` for the liability (insurance) SCR,
     values the portfolio, forms available capital (assets less the technical
     provision), and builds the market-risk module (net interest, equity, property,
-    FX, concentration) aggregated through the market correlation. The BSCR
+    FX, concentration) aggregated through the market correlation. ``interest_scenarios``
+    (a :class:`~fastcashflow.solvency.KICSInterest`) makes the net interest sub-risk
+    the K-ICS five-scenario amount on net asset value; without it the net interest is
+    the regime's worst-of curves (Solvency II) or zero (K-ICS supplies no curves). The
+    interest risk sits in the market module (net of assets and liabilities), NOT in
+    the insurance module -- ``required_capital`` is run without interest here. The BSCR
     aggregates the insurance, market and credit modules at the top level: K-ICS uses
     the table-3 correlation (all pairwise 0.25); Solvency II's top-level inter-module
     matrix is not extracted here, so it falls back to a simple sum (no
@@ -743,9 +793,7 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     ac = available_capital(pv, scr.base_bel, scr.risk_margin)
 
     cal = _market_cal(regime)
-    ni = (net_interest_scr(portfolio, model_points, basis,
-                           interest_curves=regime.interest_curves)
-          if regime.interest_curves is not None else 0.0)
+    ni = _module_interest(portfolio, model_points, basis, regime, interest_scenarios)
     eq = equity_scr(portfolio, regime)
     pr = property_scr(portfolio, regime)
     fx = fx_scr(portfolio, regime, basis.discount_annual)
@@ -786,7 +834,8 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
 
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
-    "holding_value", "portfolio_value", "available_capital", "net_interest_scr",
+    "holding_value", "portfolio_value", "available_capital",
+    "net_interest_scr", "net_interest_kics_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",
     "aggregate_required_capital", "assess_solvency",

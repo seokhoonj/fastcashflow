@@ -83,6 +83,50 @@ def test_unmatched_book_positive_net_interest():
     assert assets.net_interest_scr(p, mp, basis, interest_curves=_parallel_curves()) > 0.0
 
 
+def _kics_scenarios():
+    """A simple K-ICS five-scenario set: up +1pp parallel, flat short-up/long-down."""
+    up = np.full(10, 0.01)
+    flat = np.concatenate([np.full(3, 0.004), np.full(7, -0.004)])
+    return sv.KICSInterest.from_spreads(up=up, down=-up, flat=flat, steep=-flat,
+                                        mean_reversion=np.full(10, 0.0))
+
+
+def test_net_interest_kics_five_scenario_on_nav():
+    """K-ICS net interest aggregates the five scenarios on NET asset value by the
+    handbook p.205 formula -- recompute the five NAV-decrease amounts by hand."""
+    import math
+    mp, basis = _mp(), _basis()
+    p = assets.AssetPortfolio(holdings=(alm.Bond(2_000_000.0, 0.03, 10, 1),))
+    ki = _kics_scenarios()
+    nav_base = (assets.portfolio_value(p, basis.discount_annual)
+                - float(measure(mp, basis, full=False).bel.sum()))
+
+    def amt(stress):
+        _, b = stress.apply(mp, basis)
+        nav = (assets.portfolio_value(p, b.discount_annual)
+               - float(measure(mp, b, full=False).bel.sum()))
+        return nav_base - nav
+    up, down = max(0.0, amt(ki.up)), max(0.0, amt(ki.down))
+    flat, steep = max(0.0, amt(ki.flat)), max(0.0, amt(ki.steep))
+    mr = amt(ki.mean_reversion)                          # signed
+    expected = math.sqrt(max(up, down)**2 + max(flat, steep)**2) + mr
+    assert np.isclose(assets.net_interest_kics_scr(p, mp, basis, scenarios=ki), expected)
+
+
+def test_assess_solvency_kics_interest_enters_market_module():
+    """K-ICS interest now flows into the market module (net), not zero as before,
+    and not into the insurance module (no double count)."""
+    mp, basis = _mp(), _basis()
+    p = assets.AssetPortfolio(holdings=(assets.Cash(10_000_000.0),))    # unhedged
+    ki = _kics_scenarios()
+    without = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    with_ = assets.assess_solvency(p, mp, basis, regime=fcf.KICS, interest_scenarios=ki)
+    assert without.net_interest_scr == 0.0               # K-ICS supplied no curves before
+    assert with_.net_interest_scr > 0.0                  # now the five-scenario net amount
+    assert with_.market_module_scr > without.market_module_scr
+    assert with_.insurance_scr == without.insurance_scr  # interest not in the insurance module
+
+
 def test_equity_scr_by_type():
     """Equity SCR aggregates the per-type amounts at the 0.75 inter-type correlation
     (handbook 4-3); a single type is just its amount; unknown type raises."""
