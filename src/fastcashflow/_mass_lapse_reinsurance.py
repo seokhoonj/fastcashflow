@@ -28,6 +28,7 @@ import numpy as np
 from fastcashflow.basis import Basis
 from fastcashflow.engine import inforce_surrender_value, measure
 from fastcashflow.model_points import ModelPoints
+from fastcashflow.solvency import RegimeSpec, aggregate, required_capital
 
 # Solvency II standard-formula mass-lapse stress (Delegated Regulation
 # Art. 142(6)(b)): an instantaneous 40% lapse of the in-force (70% for the
@@ -219,3 +220,140 @@ def counterparty_default_scr(
     if ratio <= 0.20:
         return 5.0 * sigma
     return lgd
+
+
+# ---------------------------------------------------------------------------
+# Cedant solvency relief -- the full picture into the life underwriting module
+# (diversified) plus the counterparty-default add-back and the risk margin.
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class CedantSolvencyRelief:
+    """The cedant's full Solvency II benefit from a mass-lapse treaty.
+
+    The lapse sub-risk is the worst of lapse up / lapse down / mass; the treaty
+    cuts only the mass leg, so ``lapse_net`` can fall to the next-biting leg
+    (the relief is bounded by how far mass exceeds lapse up/down). The lapse
+    capital re-aggregates into the life underwriting module with the other
+    sub-risks, so the diversified ``insurance`` relief is smaller than the
+    standalone lapse relief. Buying the treaty adds ``counterparty_default``
+    (the reinsurer credit charge) and lowers the risk margin.
+
+    All mass-lapse figures use the per-policy loss density
+    (:func:`lapse_loss_density`, Art. 142(6)), so ``mass_gross`` may exceed the
+    aggregate ``solvency.mass_lapse`` used by a plain
+    :func:`fastcashflow.solvency.required_capital` run.
+    """
+
+    loss_density: float
+    mass_gross_scr: float
+    mass_net_scr: float
+    lapse_gross_scr: float
+    lapse_net_scr: float
+    insurance_gross_scr: float
+    insurance_net_scr: float
+    counterparty_default: float
+    risk_margin_gross: float
+    risk_margin_net: float
+
+    @property
+    def lapse_relief(self) -> float:
+        """Standalone lapse-module relief (before life diversification)."""
+        return self.lapse_gross_scr - self.lapse_net_scr
+
+    @property
+    def insurance_relief(self) -> float:
+        """Diversified life-underwriting-module SCR relief (RM_re for the
+        counterparty-default charge)."""
+        return self.insurance_gross_scr - self.insurance_net_scr
+
+    @property
+    def risk_margin_relief(self) -> float:
+        """Risk-margin reduction (an own-funds gain)."""
+        return self.risk_margin_gross - self.risk_margin_net
+
+    @property
+    def net_scr_benefit(self) -> float:
+        """SCR-side benefit: insurance relief less the counterparty-default
+        add-back (no inter-module diversification credit -- fcf v1)."""
+        return self.insurance_relief - self.counterparty_default
+
+    @property
+    def total_benefit(self) -> float:
+        """Total own-funds + SCR benefit before the reinsurance premium:
+        net SCR benefit plus the risk-margin relief."""
+        return self.net_scr_benefit + self.risk_margin_relief
+
+
+def _is_mass_lapse_variant(stress) -> bool:
+    return stress.name.startswith("mass lapse")
+
+
+def cedant_solvency_relief(
+    model_points: ModelPoints, basis: Basis, treaty: LapseXL, *,
+    regime: RegimeSpec, reinsurer_pd: float, shock: float = SF_MASS_LAPSE_SHOCK,
+    recoverables: float = 0.0, collateral: float = 0.0,
+    collateral_factor: float = 0.0,
+) -> CedantSolvencyRelief:
+    """The cedant's full Solvency II relief from ``treaty`` under ``regime``.
+
+    Re-aggregates the life underwriting module with the treaty-reduced lapse
+    capital, charges counterparty-default risk on the reinsurer, and scales the
+    risk margin. The lapse sub-risk is ``max(lapse_up, lapse_down, mass)``; the
+    treaty cuts the mass leg from ``shock x loss_density`` to its net (post-
+    recovery) value, so the lapse capital drops only to the next-biting leg.
+
+    ``reinsurer_pd`` is the reinsurer's probability of default
+    (:data:`CREDIT_QUALITY_STEP_PD` by credit quality step). The
+    counterparty-default charge uses the diversified insurance relief as the
+    risk-mitigating effect ``RM_re`` (Art. 192). The risk margin is scaled by
+    the regime's risk-margin-to-insurance ratio applied to the gross / net
+    insurance SCR.
+
+    Lapse up / down come from the regime's own lapse variants (everything in the
+    lapse sub-risk that is not the mass-lapse variant); the other sub-risk
+    capitals come from one gross :func:`fastcashflow.solvency.required_capital`
+    run and re-aggregate unchanged."""
+    gross = required_capital(model_points, basis, regime=regime)
+
+    lapse_sr = next(sr for sr in regime.sub_risks if sr.name == "lapse")
+    base_bel = float(measure(model_points, basis, full=False).bel.sum())
+
+    def delta(stress) -> float:
+        mp2, basis2 = stress.apply(model_points, basis)
+        d = float(measure(mp2, basis2, full=False).bel.sum()) - base_bel
+        if stress.bel_addon is not None:
+            d += stress.bel_addon(model_points, basis)
+        return d
+
+    updown = [max(0.0, delta(v)) for v in lapse_sr.variants
+              if not _is_mass_lapse_variant(v)]
+    floor = max(updown) if updown else 0.0           # the next-biting lapse leg
+
+    relief = capital_relief(model_points, basis, treaty, shock=shock)
+    mass_gross = relief.gross_scr
+    mass_net = relief.net_scr
+    lapse_gross = max(floor, mass_gross)
+    lapse_net = max(floor, mass_net)
+
+    caps = dict(gross.sub_risk_capital)
+    insurance_gross = aggregate({**caps, "lapse": lapse_gross}, regime)
+    insurance_net = aggregate({**caps, "lapse": lapse_net}, regime)
+    insurance_relief = insurance_gross - insurance_net
+
+    cpd = counterparty_default_scr(
+        recoverables, risk_mitigating_effect=insurance_relief,
+        probability_of_default=reinsurer_pd,
+        collateral=collateral, collateral_factor=collateral_factor)
+
+    rm_per_unit = (gross.risk_margin / gross.insurance_scr
+                   if gross.insurance_scr > 0.0 else 0.0)
+
+    return CedantSolvencyRelief(
+        loss_density=relief.loss_density,
+        mass_gross_scr=mass_gross, mass_net_scr=mass_net,
+        lapse_gross_scr=lapse_gross, lapse_net_scr=lapse_net,
+        insurance_gross_scr=insurance_gross, insurance_net_scr=insurance_net,
+        counterparty_default=cpd,
+        risk_margin_gross=rm_per_unit * insurance_gross,
+        risk_margin_net=rm_per_unit * insurance_net)

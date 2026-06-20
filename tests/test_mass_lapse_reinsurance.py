@@ -9,6 +9,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import mass_lapse_reinsurance as lre
+from fastcashflow import solvency as sv
 from fastcashflow import ModelPoints
 from fastcashflow.engine import inforce_surrender_value, measure
 
@@ -206,3 +207,99 @@ def test_counterparty_default_collateral_floors_at_zero():
     scr = lre.counterparty_default_scr(
         1_000_000.0, 0.0, 0.0005, collateral=10_000_000.0, collateral_factor=1.0)
     assert scr == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Cedant solvency relief (Phase B2 -- full diversified picture)
+# ---------------------------------------------------------------------------
+
+def _mass_biting_book():
+    """A profitable book with a high surrender value and a low base lapse, so the
+    mass-lapse stress is the biting lapse leg (the +/-50% gradual stresses are
+    small)."""
+    mp = ModelPoints(
+        issue_age=np.array([45, 50]), benefits={"DEATH": np.array([1e6, 1e6])},
+        premium=np.array([300_000.0, 250_000.0]), term_months=np.array([120, 120]),
+        count=np.array([2_000.0, 1_500.0]), calculation_methods=PATTERNS)
+    basis = make_death_basis(
+        mortality_q=0.001, lapse_q=0.008, discount_annual=0.03, mortality_cv=0.10,
+        surrender_value_curve=np.full(121, 120_000.0),
+        surrender_value_basis="amount_per_policy")
+    return mp, basis
+
+
+def test_cedant_relief_lapse_net_floored_by_next_leg():
+    """The treaty cuts only the mass leg; the net lapse capital cannot fall below
+    the next-biting lapse leg (lapse up / down). Here mass bites gross, and after
+    the treaty the up/down floor bites instead -- exactly the standard-formula
+    'lapse up/down may bite instead' effect."""
+    mp, basis = _mass_biting_book()
+    r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
+                                   regime=sv.SOLVENCY2,
+                                   reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
+    # mass is the gross biting leg; net mass is below the up/down floor
+    assert np.isclose(r.lapse_gross_scr, r.mass_gross_scr)
+    assert r.mass_net_scr < r.lapse_net_scr            # floored by up/down
+    assert r.lapse_net_scr > 0.0
+    assert r.lapse_relief > 0.0
+
+
+def test_cedant_relief_reaggregates_life_module():
+    """insurance_gross / net are the life module re-aggregated with the gross /
+    net lapse capital (the other sub-risks from one required_capital run)."""
+    mp, basis = _mass_biting_book()
+    treaty = lre.LapseXL(0.15, 0.40)
+    r = lre.cedant_solvency_relief(mp, basis, treaty, regime=sv.SOLVENCY2,
+                                   reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
+    caps = dict(sv.required_capital(mp, basis, regime=sv.SOLVENCY2).sub_risk_capital)
+    exp_gross = sv.aggregate({**caps, "lapse": r.lapse_gross_scr}, sv.SOLVENCY2)
+    exp_net = sv.aggregate({**caps, "lapse": r.lapse_net_scr}, sv.SOLVENCY2)
+    assert np.isclose(r.insurance_gross_scr, exp_gross)
+    assert np.isclose(r.insurance_net_scr, exp_net)
+    # diversification: the module relief does not exceed the standalone lapse relief
+    assert r.insurance_relief <= r.lapse_relief + 1.0
+
+
+def test_cedant_relief_counterparty_default_on_module_relief():
+    """The counterparty-default add-back uses the diversified insurance relief as
+    the risk-mitigating effect (Art 192 RM_re)."""
+    mp, basis = _mass_biting_book()
+    pd = lre.CREDIT_QUALITY_STEP_PD[2]
+    r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
+                                   regime=sv.SOLVENCY2, reinsurer_pd=pd)
+    assert np.isclose(
+        r.counterparty_default,
+        lre.counterparty_default_scr(0.0, r.insurance_relief, pd))
+    assert r.counterparty_default > 0.0
+
+
+def test_cedant_relief_total_composition():
+    """net SCR benefit = insurance relief - counterparty default; total benefit
+    adds the risk-margin relief."""
+    mp, basis = _mass_biting_book()
+    r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
+                                   regime=sv.SOLVENCY2,
+                                   reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
+    assert np.isclose(r.net_scr_benefit, r.insurance_relief - r.counterparty_default)
+    assert np.isclose(r.risk_margin_relief, r.risk_margin_gross - r.risk_margin_net)
+    assert np.isclose(r.total_benefit, r.net_scr_benefit + r.risk_margin_relief)
+    assert r.total_benefit > 0.0
+
+
+def test_cedant_relief_zero_when_updown_dominates():
+    """When lapse up/down already bites harder than mass, cutting the mass leg
+    gives no lapse relief -- the treaty does not help."""
+    mp = ModelPoints(
+        issue_age=np.array([45]), benefits={"DEATH": np.array([1e6])},
+        premium=np.array([300_000.0]), term_months=np.array([120]),
+        count=np.array([2_000.0]), calculation_methods=PATTERNS)
+    basis = make_death_basis(                          # high base lapse -> up/down dominates
+        mortality_q=0.001, lapse_q=0.05, discount_annual=0.03, mortality_cv=0.10,
+        surrender_value_curve=np.full(121, 80_000.0),
+        surrender_value_basis="amount_per_policy")
+    r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
+                                   regime=sv.SOLVENCY2,
+                                   reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
+    assert r.lapse_gross_scr > r.mass_gross_scr        # up/down is the biting leg
+    assert np.isclose(r.lapse_relief, 0.0)
+    assert np.isclose(r.total_benefit, 0.0)

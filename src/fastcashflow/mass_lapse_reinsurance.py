@@ -9,9 +9,11 @@ from fastcashflow._mass_lapse_reinsurance import (
     CREDIT_QUALITY_STEP_PD,
     SF_MASS_LAPSE_SHOCK,
     SF_MASS_LAPSE_SHOCK_GROUP_PENSION,
+    CedantSolvencyRelief,
     LapseReliefResult,
     LapseXL,
     capital_relief,
+    cedant_solvency_relief,
     counterparty_default_scr,
     lapse_loss_density as loss_density,
 )
@@ -19,9 +21,11 @@ from fastcashflow._mass_lapse_reinsurance import (
 __all__ = [
     "LapseXL",
     "LapseReliefResult",
+    "CedantSolvencyRelief",
     "loss_density",
     "capital_relief",
     "counterparty_default_scr",
+    "cedant_solvency_relief",
     "CREDIT_QUALITY_STEP_PD",
     "SF_MASS_LAPSE_SHOCK",
     "SF_MASS_LAPSE_SHOCK_GROUP_PENSION",
