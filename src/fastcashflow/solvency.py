@@ -152,6 +152,18 @@ def _scaled(fn, factor: float):
     return wrapped
 
 
+def _added_first_year(fn, addend: float):
+    """Wrap a 5-arg rate callable, ADDING ``addend`` in the first policy year only
+    (``duration == 0``) and clamping to 1.0. The time axis is the per-year duration
+    grid, so ``duration == 0`` is the next 12 months -- the window the Solvency II
+    life-catastrophe shock (Art 143) applies to. The factor is captured by closure."""
+    def wrapped(sex, issue_age, duration, issue_class, elapsed):
+        base = fn(sex, issue_age, duration, issue_class, elapsed)
+        bump = np.where(np.asarray(duration) == 0, addend, 0.0)
+        return np.minimum(base + bump, 1.0)
+    return wrapped
+
+
 def _classified_methods(model_points: ModelPoints, basis: Basis) -> dict:
     """The coverage -> :class:`CalculationMethod` map, validated to cover EVERY
     coverage code, so a mortality / morbidity stress can never silently skip an
@@ -191,6 +203,28 @@ def scale_mortality(factor: float) -> Stress:
                             coverages=coverages)
         return mp, new_basis
     return Stress(name=f"mortality x{factor:g}", apply=apply)
+
+
+def catastrophe_mortality(addend: float = 0.0015) -> Stress:
+    """Solvency II life-catastrophe stress (Delegated Regulation Art 143) -- an
+    instantaneous ABSOLUTE addition of ``addend`` (0.15 percentage points = 0.0015
+    by default) to the mortality rates over the next 12 months (the first policy
+    year). Like :func:`scale_mortality` it lifts BOTH the in-force decrement
+    (``mortality_annual``) and every DEATH coverage's claim rate, but the shift is
+    absolute and one-year, not a permanent relative scaling. Raises if the
+    coverages cannot be classified (no silent under-scaling)."""
+    def apply(mp: ModelPoints, basis: Basis):
+        methods = _classified_methods(mp, basis)
+        coverages = tuple(
+            replace(r, rate=_added_first_year(r.rate, addend))
+            if methods.get(r.code) == CalculationMethod.DEATH else r
+            for r in basis.coverages)
+        new_basis = replace(
+            basis,
+            mortality_annual=_added_first_year(basis.mortality_annual, addend),
+            coverages=coverages)
+        return mp, new_basis
+    return Stress(name=f"mortality cat +{addend:g}", apply=apply)
 
 
 def scale_longevity(factor: float) -> Stress:
@@ -606,21 +640,23 @@ def required_capital(
 # ---------------------------------------------------------------------------
 # Solvency II calibration (Delegated Regulation (EU) 2015/35, primary source).
 # Life underwriting sub-risks (Articles 137-143) and the life sub-risk
-# correlation matrix (Annex IV point 3). Catastrophe (Art 143, +0.15pp absolute
-# mortality) is excluded from v1 for symmetry with K-ICS; it could be added as an
-# additive mortality variant. Order is locked to the Annex IV axes for the
+# correlation matrix (Article 136 / Annex IV). Catastrophe (Art 143, +0.15pp
+# absolute mortality over the next 12 months) is the 7th sub-risk; its correlation
+# row (Cat vs mortality / longevity / disability / expense / revision / lapse) is
+# (0.25, 0, 0.25, 0.25, 0, 0.25). Order is locked to the Article 136 axes for the
 # sub-risks present: mortality / longevity / disability / expense / revision /
-# lapse.
+# lapse / catastrophe.
 # ---------------------------------------------------------------------------
 
 _SII_CORRELATION = np.array([
-    #  mortality  longevity  disability  expense  revision  lapse
-    [   1.00,     -0.25,      0.25,      0.25,     0.00,    0.00],   # mortality
-    [  -0.25,      1.00,      0.00,      0.25,     0.25,    0.25],   # longevity
-    [   0.25,      0.00,      1.00,      0.50,     0.00,    0.00],   # disability
-    [   0.25,      0.25,      0.50,      1.00,     0.50,    0.50],   # expense
-    [   0.00,      0.25,      0.00,      0.50,     1.00,    0.00],   # revision
-    [   0.00,      0.25,      0.00,      0.50,     0.00,    1.00],   # lapse
+    #  mortality  longevity  disability  expense  revision  lapse   catastrophe
+    [   1.00,     -0.25,      0.25,      0.25,     0.00,    0.00,    0.25],   # mortality
+    [  -0.25,      1.00,      0.00,      0.25,     0.25,    0.25,    0.00],   # longevity
+    [   0.25,      0.00,      1.00,      0.50,     0.00,    0.00,    0.25],   # disability
+    [   0.25,      0.25,      0.50,      1.00,     0.50,    0.50,    0.25],   # expense
+    [   0.00,      0.25,      0.00,      0.50,     1.00,    0.00,    0.00],   # revision
+    [   0.00,      0.25,      0.00,      0.50,     0.00,    1.00,    0.25],   # lapse
+    [   0.25,      0.00,      0.25,      0.25,     0.00,    0.25,    1.00],   # catastrophe
 ])
 
 # Interest-rate stress -- the EIOPA maturity-relative shock table (Art 166 up /
@@ -652,6 +688,8 @@ SOLVENCY2 = RegimeSpec(
         SubRisk("revision", (scale_annuity(1.03),), "single"),         # annuity benefits +3%
         SubRisk("lapse", (scale_lapse(1.50), scale_lapse(0.50),        # option-exercise +/-50%
                           mass_lapse(0.40)), "worst_of"),              # mass lapse 40%
+        SubRisk("catastrophe", (catastrophe_mortality(0.0015),),       # Art 143: +0.15pp
+                "single"),                                             #   mortality, next 12 months
     ),
     correlation=_SII_CORRELATION,
     interest_curves=(
@@ -714,6 +752,7 @@ _EXTRA_CROSS = {("property", "catastrophe"): 0.25}
 __all__ = [
     "Stress", "SubRisk", "RegimeSpec", "SCRResult",
     "scale_mortality", "scale_longevity", "scale_lapse", "mass_lapse",
+    "catastrophe_mortality",
     "scale_coverages", "scale_coverage_codes", "scale_annuity", "scale_expense",
     "shock_curve", "shock_spread", "KICSInterest",
     "aggregate", "required_capital", "catastrophe_scr", "solvency_ratio",

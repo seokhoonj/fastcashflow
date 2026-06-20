@@ -88,16 +88,16 @@ print(f"  solvency ratio         = {a.solvency_ratio:>14.1%}")
 출력:
 
 ```text
-  available capital      =       5,191,995
-  required capital (SCR) =       2,987,150
-    insurance risk       =       1,938,361
+  available capital      =       5,169,221
+  required capital (SCR) =       2,410,964
+    insurance risk       =       1,987,539
     market risk          =         713,427
     credit risk          =         307,115
     operational risk     =          28,246
-  solvency ratio         =         173.8%
+  solvency ratio         =         214.4%
 ```
 
-`지급여력비율 = 가용자본 / 요구자본` 의 173.8% 는 실제 대형 생보사의 공시 범위
+`지급여력비율 = 가용자본 / 요구자본` 의 214.4% 는 실제 대형 생보사의 공시 범위
 (대략 185~210%) 근처입니다 -- 합성데이터인데도 **구조와 크기** 가 현실 공시와 맞물립니다.
 요구자본은 보험·시장·신용·운영 위험의 집계입니다 (여기선 Solvency II regime 이라 신용은
 Art 176 스프레드).

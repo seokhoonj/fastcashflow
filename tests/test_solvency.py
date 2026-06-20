@@ -319,7 +319,8 @@ def test_kics_runs_end_to_end():
 def test_sii_parameters():
     spec = sv.SOLVENCY2
     names = [sr.name for sr in spec.sub_risks]
-    assert names == ["mortality", "longevity", "disability", "expense", "revision", "lapse"]
+    assert names == ["mortality", "longevity", "disability", "expense", "revision",
+                     "lapse", "catastrophe"]
     grid = (np.array([0]), np.array([40]), np.array([24]), np.array([0]), np.array([24]))
     base = _basis()
     _, b_m = spec.sub_risks[0].variants[0].apply(_mp(), _basis())
@@ -335,6 +336,7 @@ def test_sii_parameters():
     assert R[2, 3] == 0.50        # disability x expense
     assert R[3, 5] == 0.50        # expense x lapse
     assert R[0, 4] == 0.00        # mortality x revision
+    assert R[0, 6] == 0.25 and R[1, 6] == 0.00 and R[5, 6] == 0.25   # Art 136 cat row
     # cost-of-capital risk margin, EIOPA interest curves present
     assert spec.risk_margin_method == "cost_of_capital" and spec.risk_margin_coc_rate == 0.06
     assert spec.interest_curves is not None and len(spec.interest_curves) == 2
@@ -344,7 +346,8 @@ def test_sii_runs_end_to_end():
     mp, basis = _mp(), _basis()
     res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
     assert set(res.sub_risk_capital) == {
-        "mortality", "longevity", "disability", "expense", "revision", "lapse"}
+        "mortality", "longevity", "disability", "expense", "revision", "lapse",
+        "catastrophe"}
     assert res.insurance_scr > 0.0
     assert res.interest_capital >= 0.0
     assert res.scr_path is not None             # cost-of-capital margin builds a path
@@ -486,3 +489,32 @@ def test_property_ignored_for_solvency2():
     got = sv.required_capital(mp, basis, regime=sv.SOLVENCY2, property_codes=("PROP",))
     assert np.isclose(got.insurance_scr, base.insurance_scr)
     assert "property" not in got.sub_risk_capital
+
+
+# ---------------------------------------------------------------------------
+# Solvency II life catastrophe (Delegated Regulation Art 143 / Art 136 row)
+# ---------------------------------------------------------------------------
+
+def test_sii_catastrophe_adds_first_year_mortality_only():
+    """Art 143: +0.15pp absolute on the mortality rate over the next 12 months
+    (duration 0) only; later policy years are unchanged."""
+    base = _basis()
+    _, b = sv.catastrophe_mortality(0.0015).apply(_mp(), base)
+    g0 = (np.array([0]), np.array([40]), np.array([0]), np.array([0]), np.array([0]))
+    g5 = (np.array([0]), np.array([40]), np.array([5]), np.array([0]), np.array([0]))
+    assert np.allclose(b.mortality_annual(*g0), base.mortality_annual(*g0) + 0.0015)
+    assert np.allclose(b.mortality_annual(*g5), base.mortality_annual(*g5))   # unchanged
+
+
+def test_sii_catastrophe_is_seventh_sub_risk():
+    """Catastrophe is the 7th Solvency II life sub-risk; the correlation row matches
+    Article 136 (cat vs mortality/longevity/disability/expense/revision/lapse =
+    0.25/0/0.25/0.25/0/0.25) and a death book carries a positive cat capital."""
+    spec = sv.SOLVENCY2
+    assert [sr.name for sr in spec.sub_risks][-1] == "catastrophe"
+    assert spec.correlation.shape == (7, 7)
+    np.testing.assert_allclose(spec.correlation[6],
+                               [0.25, 0.0, 0.25, 0.25, 0.0, 0.25, 1.0])
+    mp, basis = _mp(), _basis()
+    res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    assert res.sub_risk_capital["catastrophe"] > 0.0         # death book -> cat is a loss

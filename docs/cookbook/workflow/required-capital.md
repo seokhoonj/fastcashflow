@@ -89,8 +89,9 @@ print(f"  {'total SCR':<10}{s.total_scr:>12,.0f}  risk margin {s.risk_margin:>10
   expense                0
   revision               0
   lapse         17,872,243
-  insurance   17,925,370  interest    3,301,100
-  total SCR   21,226,470  risk margin  4,799,547
+  catastrophe      209,175
+  insurance   17,982,661  interest    3,301,100
+  total SCR   21,283,761  risk margin  4,814,887
 ```
 
 정기보험이라 사망과 해지만 뭅니다 (장수는 사망률 감소가 부채를 줄여 0, 장해·사업비·
@@ -205,7 +206,7 @@ print(f"  K-ICS  ratio @ AC=20,000,000 : {fcf.solvency_ratio(k, 20_000_000.0):.1
 출력:
 
 ```text
-  SII    ratio @ AC=20,000,000 : 94.2%
+  SII    ratio @ AC=20,000,000 : 94.0%
   K-ICS  ratio @ AC=20,000,000 : 148.7%
 ```
 

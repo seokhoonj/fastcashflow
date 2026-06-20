@@ -52,19 +52,19 @@ print(f"solvency ratio    = {a.solvency_ratio:>13.1%}")
 
 ```text
 portfolio value   =      7,649,930
-BEL + risk margin =      5,359,741
-available capital =      2,290,189
-insurance SCR     =      1,423,820
+BEL + risk margin =      5,371,614
+available capital =      2,278,316
+insurance SCR     =      1,465,957
 net interest SCR  =         43,467
 operational SCR   =         23,868
-total SCR         =      1,693,030
-solvency ratio    =        135.3%
+total SCR         =      1,565,261
+solvency ratio    =        145.6%
 ```
 
-가용자본 = 자산 (7,649,930) - 기술준비금 (BEL+위험마진 5,359,741) = 2,290,189. SCR 은
+가용자본 = 자산 (7,649,930) - 기술준비금 (BEL+위험마진 5,371,614) = 2,278,316. SCR 은
 보험위험 + **순금리** (채권이 부채 DV01 에 매칭돼 43,467 로 작음 -- 면역에 가까움) +
 **운영위험** (보험료·BEL 의 factor, 23,868) + 채권의 **신용위험** (Solvency II 스프레드,
-Art 176). 비율 135.3% 는 가용자본 / 총 SCR. 채권이 부채 금리민감도를 헤지하니 순금리
+Art 176). 비율 145.6% 는 가용자본 / 총 SCR. 채권이 부채 금리민감도를 헤지하니 순금리
 SCR 이 작습니다.
 
 ## 주식 / 부동산 -- 시장위험 SCR
@@ -90,18 +90,19 @@ print(f"                     solvency ratio   {b.solvency_ratio:>13.1%}")
 ```text
 +3,000,000 equity -> equity SCR           1,050,000
                      market module         1,061,701
-                     BSCR                  2,687,396
+                     BSCR                  2,085,745
                      operational SCR          23,868
-                     total SCR             2,711,264
-                     available capital     5,290,189
-                     solvency ratio          195.1%
+                     total SCR             2,109,613
+                     available capital     5,278,316
+                     solvency ratio          250.2%
 ```
 
 주식하락 충격 (선진시장 -35%) 으로 주식 SCR 1,050,000 이 잡히고, 금리 (43,467) 와 함께
-시장모듈 (1,061,701, 상관 0.25) 로 묶입니다. BSCR 은 보험위험 (1,423,820)·시장모듈·채권
-신용위험 (Art 176 스프레드) 을 top-level 집계 -- Solvency II 는 단순합 (2,687,396), K-ICS 는
-0.25 상관집계. 거기에 운영위험 (23,868) 을 더해 총 SCR 2,711,264. 가용자본은
-주식만큼 올라 5,290,189 지만 SCR 도 같이 올라 비율은 195.1% 로 **분자만 오르던 과대가
+시장모듈 (1,061,701, 상관 0.25) 로 묶입니다. BSCR 은 보험위험 (1,465,957)·시장모듈·채권
+신용위험 (Art 176 스프레드) 을 top-level 집계 -- Solvency II 는 Annex IV 상관행렬, K-ICS 는
+table 3 으로, (보험·시장·신용) 세 모듈은 둘 다 0.25 상관집계 (값이 일치) -> 2,085,745. 거기에
+운영위험 (23,868) 을 더해 총 SCR 2,109,613. 가용자본은
+주식만큼 올라 5,278,316 지만 SCR 도 같이 올라 비율은 250.2% 로 **분자만 오르던 과대가
 사라졌습니다**.
 
 주식은 유형별로 충격이 다릅니다 (`Equity(..., "developed")` 등) -- 선진 35% / 신흥 48% /
