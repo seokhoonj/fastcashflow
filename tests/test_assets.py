@@ -694,3 +694,46 @@ def test_reinvest_opening_balance_and_rate_path():
     assert np.allclose(path.balance, r.balance)
     seed = _gap([0, 0, 0], [-200, 0, 0])                # month-0 premium inflow (net -(-200)=+200)
     assert np.isclose(assets.reinvest(seed, reinvest_rate=0.0).balance[0], 200.0)
+
+
+def test_liquidate_hand_calc():
+    """A shortfall the carried surplus cannot cover is met by a forced sale; the
+    sale crystallises haircut * shortfall and floors the account at zero."""
+    gap = _gap([0, 100, 0, 0], [0, 0, 300, 0])          # net_cf = [0, 100, -300, 0]
+    r = assets.liquidate(gap, haircut=0.1)              # reinvest_rate 0 -> isolate
+    assert np.allclose(r.balance, [0, 100, 0, 0])       # month-2 shortfall floored to 0
+    assert np.allclose(r.forced_sale, [0, 0, 200, 0])   # 300 needed, 100 surplus -> sell 200
+    assert np.allclose(r.realized_loss, [0, 0, 20, 0])  # 200 * 0.1
+    assert np.isclose(r.total_realized_loss, 20.0)
+
+
+def test_liquidate_surplus_earns_before_sale():
+    """The carried surplus earns one month of the reinvest rate before the shortfall
+    is netted, so a higher rate shrinks the forced sale."""
+    gap = _gap([0, 100, 0], [0, 0, 300])               # net_cf = [0, 100, -300]
+    f = 1.12 ** (1.0 / 12.0)
+    r = assets.liquidate(gap, haircut=0.2, reinvest_rate=0.12)
+    assert np.isclose(r.forced_sale[2], 300.0 - 100.0 * f)
+    assert np.isclose(r.realized_loss[2], (300.0 - 100.0 * f) * 0.2)
+
+
+def test_liquidate_no_shortfall_no_loss():
+    """A gap that never runs short triggers no sale and no realized loss."""
+    mp, basis = _mp(), _basis()
+    gap = assets.cashflow_gap(
+        assets.AssetPortfolio(holdings=(
+            alm.Bond(face=1e7, coupon_rate=0.05, maturity_years=10, frequency=1),)),
+        measure(mp, basis, full=True))
+    r = assets.liquidate(gap, haircut=0.15, opening_balance=1e7)
+    assert np.allclose(r.forced_sale, 0.0)
+    assert r.total_realized_loss == 0.0
+    assert np.all(r.balance >= 0.0)
+
+
+def test_liquidate_deeper_haircut_costs_more():
+    """The same shortfall under a wider stress (deeper haircut) realizes more loss."""
+    gap = _gap([0, 0, 0], [0, 500, 0])                 # net_cf = [0, -500, 0]
+    cheap = assets.liquidate(gap, haircut=0.05)
+    dear = assets.liquidate(gap, haircut=0.25)
+    assert dear.total_realized_loss > cheap.total_realized_loss > 0.0
+    assert np.isclose(dear.total_realized_loss / cheap.total_realized_loss, 0.25 / 0.05)

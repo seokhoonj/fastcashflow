@@ -260,6 +260,65 @@ def reinvest(gap: CashflowGap, *, reinvest_rate, funding_rate=None,
     return ReinvestmentResult(balance=balance, interest=interest, net_cf=net_cf)
 
 
+@dataclass(frozen=True, slots=True)
+class LiquidationResult:
+    """The forced-sale roll-forward of a cash-flow gap under a sell-to-fund policy.
+
+    ``balance`` is ``(n_time + 1,)`` -- the cash account at each month end, floored
+    at zero (a shortfall is met by selling assets, not by borrowing).
+    ``forced_sale`` is the cash raised by selling each month (zero when the carried
+    surplus covers the outflow) and ``realized_loss`` is the loss that sale
+    crystallises at the stressed haircut. ``total_realized_loss`` sums it -- the
+    cost of being a forced seller in a stressed market, the asset-side bite of the
+    lapse<->rate interaction."""
+
+    balance: FloatArray
+    forced_sale: FloatArray
+    realized_loss: FloatArray
+
+    @property
+    def total_realized_loss(self) -> float:
+        """The realized loss over the horizon (the forced-sale cost)."""
+        return float(self.realized_loss.sum())
+
+
+def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
+              opening_balance: float = 0.0) -> LiquidationResult:
+    """Roll the cash-flow gap forward, meeting shortfalls by selling assets.
+
+    The counterpart to :func:`reinvest` under a different liquidity policy: where
+    ``reinvest`` borrows to fund a deficit, ``liquidate`` sells assets to floor the
+    cash account at zero and recognises the loss of selling into a stressed market.
+    Each month the carried surplus earns one month of ``reinvest_rate`` and the net
+    cash flow lands; if the account would go negative, that shortfall is the cash
+    raised by a forced sale and ``haircut * shortfall`` is the realized loss (the
+    haircut is the loss per unit of cash raised -- the depressed-price discount).
+
+    ``haircut`` is the seam (the stressed-liquidation discount, e.g. 0.10); a
+    forced sale under a wider stress carries a deeper haircut. v1 assumes assets are
+    always available to sell (the gap account does not cap the sale at a remaining
+    asset stock -- a full asset-depletion model is later work)."""
+    net_cf = np.asarray(gap.net_cf, dtype=np.float64)
+    n = net_cf.shape[0] - 1
+    grow = _monthly_factors(reinvest_rate, n)
+    balance = np.empty(n + 1, dtype=np.float64)
+    forced_sale = np.zeros(n + 1, dtype=np.float64)
+    realized_loss = np.zeros(n + 1, dtype=np.float64)
+    bal = opening_balance + net_cf[0]
+    if bal < 0.0:                                     # a shortfall already at inception
+        forced_sale[0], realized_loss[0], bal = -bal, -bal * haircut, 0.0
+    balance[0] = bal
+    for m in range(1, n + 1):
+        bal = balance[m - 1] * grow[m] + net_cf[m]
+        if bal < 0.0:
+            forced_sale[m] = -bal
+            realized_loss[m] = -bal * haircut
+            bal = 0.0
+        balance[m] = bal
+    return LiquidationResult(balance=balance, forced_sale=forced_sale,
+                             realized_loss=realized_loss)
+
+
 def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
     """A callable mapping a curve :class:`~fastcashflow.solvency.Stress` to the NET
     asset value DECREASE it causes -- ``NAV(base) - NAV(stress)`` with
@@ -1003,7 +1062,7 @@ __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital",
     "project_asset_cashflows", "CashflowGap", "cashflow_gap",
-    "ReinvestmentResult", "reinvest",
+    "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
     "net_interest_scr", "net_interest_kics_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",
