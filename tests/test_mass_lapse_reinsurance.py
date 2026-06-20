@@ -592,3 +592,40 @@ def test_assumed_treaty_rejects_bad_duration():
     p = _pricing(premium=100.0, expected_recovery=30.0, capital=500.0)
     with pytest.raises(ValueError, match="duration_years must be positive"):
         lre.measure_assumed_treaty(p, duration_years=0)
+
+
+# ---------------------------------------------------------------------------
+# Analysis package report (Phase E)
+# ---------------------------------------------------------------------------
+
+def test_report_runs_and_is_ascii():
+    """The analysis package prints the three sections (cedant relief, reinsurer
+    pricing, IFRS 17 measurement) and is ASCII / English."""
+    import io
+    mp, basis = _mass_biting_book()
+    buf = io.StringIO()
+    lre.report(mp, basis, lre.LapseXL(0.15, 0.40), regime=sv.SOLVENCY2,
+               reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2],
+               diversification_factor=0.25, duration_years=3, discount_annual=0.03,
+               file=buf)
+    text = buf.getvalue()
+    assert "Cedant capital relief" in text
+    assert "Reinsurer pricing" in text
+    assert "IFRS 17 measurement" in text
+    assert "total benefit" in text
+    assert text.isascii()                         # user-facing output is ASCII
+
+
+def test_report_works_for_kics():
+    """The same report serves K-ICS -- the cedant relief reads the 30% shock from
+    the regime, no manual shock."""
+    import io
+    mp, basis = _mass_biting_book()
+    buf = io.StringIO()
+    lre.report(mp, basis, lre.LapseXL(0.10, 0.30), regime=sv.KICS,
+               reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2],
+               distribution=lre.LapseTailDistribution.from_anchors((0.10, 1/30), (0.30, 1/200)),
+               file=buf)
+    text = buf.getvalue()
+    assert "regime=K-ICS" in text
+    assert text.isascii()

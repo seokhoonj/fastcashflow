@@ -26,6 +26,7 @@ from fastcashflow._mass_lapse_reinsurance import (
     lapse_loss_density as loss_density,
     measure_assumed_treaty,
     price_treaty,
+    report,
     windowed_claim,
 )
 
@@ -46,6 +47,7 @@ __all__ = [
     "cedant_solvency_relief",
     "price_treaty",
     "measure_assumed_treaty",
+    "report",
     "SF_LAPSE_TAIL_ANCHOR",
     "ATTACHMENT_TAIL_ANCHOR",
     "CREDIT_QUALITY_STEP_PD",
