@@ -371,9 +371,23 @@ def _is_mass_lapse_variant(stress) -> bool:
     return stress.name.startswith("mass lapse")
 
 
+def _regime_mass_lapse_shock(lapse_sub_risk) -> float:
+    """The regime's own mass-lapse fraction, read from its lapse sub-risk's
+    mass-lapse variant (``mass_lapse`` names itself ``"mass lapse {fraction}"``)
+    -- 40% under Solvency II, 30% under K-ICS. Falls back to the Solvency II
+    shock if the regime has no mass-lapse variant."""
+    for v in lapse_sub_risk.variants:
+        if _is_mass_lapse_variant(v):
+            try:
+                return float(v.name.rsplit(None, 1)[1])
+            except (IndexError, ValueError):
+                break
+    return SF_MASS_LAPSE_SHOCK
+
+
 def cedant_solvency_relief(
     model_points: ModelPoints, basis: Basis, treaty: LapseXL, *,
-    regime: RegimeSpec, reinsurer_pd: float, shock: float = SF_MASS_LAPSE_SHOCK,
+    regime: RegimeSpec, reinsurer_pd: float, shock: float | None = None,
     recoverables: float = 0.0, collateral: float = 0.0,
     collateral_factor: float = 0.0,
 ) -> CedantSolvencyRelief:
@@ -395,10 +409,16 @@ def cedant_solvency_relief(
     Lapse up / down come from the regime's own lapse variants (everything in the
     lapse sub-risk that is not the mass-lapse variant); the other sub-risk
     capitals come from one gross :func:`fastcashflow.solvency.required_capital`
-    run and re-aggregate unchanged."""
+    run and re-aggregate unchanged.
+
+    ``shock`` defaults to the regime's own mass-lapse fraction (40% Solvency II,
+    30% K-ICS), read from its lapse sub-risk, so the relief is consistent with
+    the regime; pass it explicitly only to override."""
+    lapse_sr = next(sr for sr in regime.sub_risks if sr.name == "lapse")
+    if shock is None:
+        shock = _regime_mass_lapse_shock(lapse_sr)
     gross = required_capital(model_points, basis, regime=regime)
 
-    lapse_sr = next(sr for sr in regime.sub_risks if sr.name == "lapse")
     base_bel = float(measure(model_points, basis, full=False).bel.sum())
 
     def delta(stress) -> float:

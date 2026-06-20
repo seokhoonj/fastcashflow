@@ -446,6 +446,41 @@ def test_measurement_period_validation():
         lre.MeasurementPeriod(months=0)
 
 
+@pytest.mark.parametrize("regime, regime_shock", [
+    (sv.SOLVENCY2, 0.40),                         # DR Art 142(6)(b)
+    (sv.KICS, 0.30),                              # K-ICS handbook
+])
+def test_cedant_relief_uses_regime_mass_lapse_shock(regime, regime_shock):
+    """The mass-lapse shock defaults to the regime's own fraction -- 40% under
+    Solvency II, 30% under K-ICS -- so the same call works for both regimes.
+    The solvency module carries both calibrations."""
+    mp, basis = _mass_biting_book()
+    treaty = lre.LapseXL(0.10, regime_shock)      # detach at the regime shock
+    r = lre.cedant_solvency_relief(mp, basis, treaty, regime=regime,
+                                   reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
+    assert np.isclose(r.mass_gross_scr, regime_shock * r.loss_density)
+    assert r.lapse_gross_scr >= r.mass_gross_scr  # mass is a (the) biting leg here
+    assert r.total_benefit > 0.0
+
+
+def test_cedant_relief_shock_override():
+    """An explicit shock overrides the regime default."""
+    mp, basis = _mass_biting_book()
+    r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.10, 0.35),
+                                   regime=sv.KICS,
+                                   reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2],
+                                   shock=0.35)
+    assert np.isclose(r.mass_gross_scr, 0.35 * r.loss_density)
+
+
+def test_kics_tail_distribution_anchor():
+    """A K-ICS tail distribution calibrates to the 30% / 1-in-200 anchor (the
+    K-ICS mass-lapse stress), so VaR_99.5 returns 30%, not the Solvency II 40%."""
+    fk = lre.LapseTailDistribution.from_anchors((0.10, 1 / 30), (0.30, 1 / 200))
+    assert np.isclose(fk.value_at_risk(0.995), 0.30, atol=1e-9)
+    assert np.isclose(fk.survival(0.30), 1 / 200, atol=1e-9)
+
+
 def test_cedant_relief_zero_when_updown_dominates():
     """When lapse up/down already bites harder than mass, cutting the mass leg
     gives no lapse relief -- the treaty does not help."""
