@@ -182,6 +182,84 @@ def cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
     return CashflowGap(asset_cf=asset_cf, liability_cf=liability_cf)
 
 
+@dataclass(frozen=True, slots=True)
+class ReinvestmentResult:
+    """The reinvestment-account roll-forward of a cash-flow gap.
+
+    ``balance`` is ``(n_time + 1,)`` -- the account balance at each month end:
+    positive = surplus cash reinvested at the new-money rate, negative = a shortfall
+    funded (borrowed) at the funding rate. ``interest`` is the return credited
+    (charged) on the carried balance each month and ``net_cf`` echoes the gap's net
+    cash flow added each month (``interest`` and ``net_cf`` reconcile the balance:
+    ``balance[m] = balance[m-1] + interest[m] + net_cf[m]``).
+
+    This is the GAP account only -- the surplus reinvested / shortfall funded. The
+    held bonds' own returns are already in their coupon / redemption cash flows
+    (inside ``net_cf``), so the account does NOT re-credit a yield on bond
+    principal; ``opening_balance`` carries any initial cash cushion outside the
+    bonds."""
+
+    balance: FloatArray
+    interest: FloatArray
+    net_cf: FloatArray
+
+    @property
+    def closing_balance(self) -> float:
+        """The account balance at the horizon (surplus if positive)."""
+        return float(self.balance[-1])
+
+
+def _monthly_factors(rate, n: int) -> FloatArray:
+    """Per-month growth factors ``(1 + annual)^(1/12)`` for months ``1 .. n`` (index
+    0 unused), from a flat scalar annual rate or a per-month annual-rate array (the
+    monthly rate held flat past the array end). Annual compounding matches the
+    engine's discounting convention."""
+    r = np.asarray(rate, dtype=np.float64)
+    out = np.ones(n + 1, dtype=np.float64)
+    if r.ndim == 0:
+        out[1:] = (1.0 + float(r)) ** (1.0 / 12.0)
+        return out
+    if r.shape[0] < n:
+        r = np.concatenate([r, np.full(n - r.shape[0], r[-1])])
+    out[1:] = (1.0 + r[:n]) ** (1.0 / 12.0)
+    return out
+
+
+def reinvest(gap: CashflowGap, *, reinvest_rate, funding_rate=None,
+             opening_balance: float = 0.0) -> ReinvestmentResult:
+    """Roll the cash-flow gap forward, reinvesting surplus and funding shortfall.
+
+    Walks the monthly ``gap.net_cf`` ladder: each month the balance carried from the
+    prior month earns one month of the ``reinvest_rate`` (on a non-negative balance)
+    or pays the ``funding_rate`` (on a negative balance), then the month's net cash
+    flow lands at month end (it earns no return in the month it arrives). The
+    month-0 net flow (the inception premium) seeds the starting balance together
+    with ``opening_balance`` (default 0 -- a pure gap account); at a zero rate the
+    balance is then exactly the gap's ``cumulative_net``.
+
+    ``reinvest_rate`` / ``funding_rate`` are ANNUAL rates, a flat scalar or a
+    per-month path (the new-money curve -- the reinvestment-risk lever); the monthly
+    factor is ``(1 + annual)^(1/12)``. ``funding_rate`` defaults to
+    ``reinvest_rate`` (symmetric); a higher funding rate models a borrowing spread
+    over the reinvestment yield.
+
+    Returns a :class:`ReinvestmentResult`; ``closing_balance`` is the horizon
+    surplus (positive) or accumulated funding cost (negative)."""
+    net_cf = np.asarray(gap.net_cf, dtype=np.float64)
+    n = net_cf.shape[0] - 1
+    inv_f = _monthly_factors(reinvest_rate, n)
+    fund_f = inv_f if funding_rate is None else _monthly_factors(funding_rate, n)
+    balance = np.empty(n + 1, dtype=np.float64)
+    interest = np.zeros(n + 1, dtype=np.float64)
+    balance[0] = opening_balance + net_cf[0]
+    for m in range(1, n + 1):
+        prev = balance[m - 1]
+        factor = inv_f[m] if prev >= 0.0 else fund_f[m]
+        interest[m] = prev * (factor - 1.0)
+        balance[m] = prev + interest[m] + net_cf[m]
+    return ReinvestmentResult(balance=balance, interest=interest, net_cf=net_cf)
+
+
 def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
     """A callable mapping a curve :class:`~fastcashflow.solvency.Stress` to the NET
     asset value DECREASE it causes -- ``NAV(base) - NAV(stress)`` with
@@ -925,6 +1003,7 @@ __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "portfolio_value", "available_capital",
     "project_asset_cashflows", "CashflowGap", "cashflow_gap",
+    "ReinvestmentResult", "reinvest",
     "net_interest_scr", "net_interest_kics_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",

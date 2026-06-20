@@ -627,3 +627,70 @@ def test_cashflow_gap_needs_full():
     pf = assets.AssetPortfolio(holdings=(assets.Cash(market_value=1.0),))
     with pytest.raises(ValueError, match="full=True"):
         assets.cashflow_gap(pf, measure(mp, basis, full=False))
+
+
+def _gap(asset_cf, liability_cf):
+    return assets.CashflowGap(asset_cf=np.asarray(asset_cf, float),
+                              liability_cf=np.asarray(liability_cf, float))
+
+
+def test_reinvest_hand_calc():
+    """Surplus carried from a prior month earns one month of the new-money rate,
+    then the month's net cash lands (no return in its arrival month)."""
+    gap = _gap([0, 100, 0, 0], [0, 0, 50, 0])           # net_cf = [0, 100, -50, 0]
+    r = assets.reinvest(gap, reinvest_rate=0.12)
+    f = 1.12 ** (1.0 / 12.0)
+    assert np.isclose(r.balance[0], 0.0)
+    assert np.isclose(r.balance[1], 100.0)              # month-1 cash, not yet earning
+    assert np.isclose(r.balance[2], 100.0 * f - 50.0)   # month-1 surplus grew one month
+    assert np.isclose(r.balance[3], (100.0 * f - 50.0) * f)
+    assert np.isclose(r.interest[2], 100.0 * (f - 1.0))
+    assert np.isclose(r.closing_balance, r.balance[3])
+
+
+def test_reinvest_balance_reconciles():
+    """balance[m] == balance[m-1] + interest[m] + net_cf[m] on a real gap."""
+    mp, basis = _mp(), _basis()
+    gap = assets.cashflow_gap(
+        assets.AssetPortfolio(holdings=(
+            alm.Bond(face=1e6, coupon_rate=0.04, maturity_years=10, frequency=1),)),
+        measure(mp, basis, full=True))
+    r = assets.reinvest(gap, reinvest_rate=0.03, funding_rate=0.05)
+    step = r.balance[1:] - r.balance[:-1]
+    assert np.allclose(step, r.interest[1:] + r.net_cf[1:])
+
+
+def test_reinvest_zero_rate_is_cumulative_net():
+    """At a zero rate the roll-forward is exactly the gap's cumulative_net."""
+    mp, basis = _mp(), _basis()
+    gap = assets.cashflow_gap(
+        assets.AssetPortfolio(holdings=(assets.Equity(market_value=1.0),)),
+        measure(mp, basis, full=True))
+    r = assets.reinvest(gap, reinvest_rate=0.0)
+    assert np.allclose(r.balance, gap.cumulative_net)
+
+
+def test_reinvest_funding_spread_charges_more():
+    """A shortfall accrues at the funding rate; a higher funding rate deepens the
+    deficit, and funding_rate=None falls back to the reinvest rate (symmetric)."""
+    gap = _gap([0, 0, 0], [0, 100, 0])                  # net_cf = [0, -100, 0]
+    cheap = assets.reinvest(gap, reinvest_rate=0.03, funding_rate=0.05)
+    dear = assets.reinvest(gap, reinvest_rate=0.03, funding_rate=0.20)
+    assert dear.closing_balance < cheap.closing_balance < 0.0
+    ff = 1.20 ** (1.0 / 12.0)
+    assert np.isclose(dear.balance[2], -100.0 * ff)     # funded balance grows by cost
+    sym = assets.reinvest(gap, reinvest_rate=0.03)
+    same = assets.reinvest(gap, reinvest_rate=0.03, funding_rate=0.03)
+    assert np.isclose(sym.closing_balance, same.closing_balance)
+
+
+def test_reinvest_opening_balance_and_rate_path():
+    """opening_balance compounds at the rate; a constant rate path equals the
+    scalar; the inception (month-0) net flow seeds the balance."""
+    gap = _gap([0, 0, 0, 0], [0, 0, 0, 0])              # net_cf all zero
+    r = assets.reinvest(gap, reinvest_rate=0.12, opening_balance=1000.0)
+    assert np.isclose(r.balance[3], 1000.0 * 1.12 ** (3.0 / 12.0))
+    path = assets.reinvest(gap, reinvest_rate=np.full(3, 0.12), opening_balance=1000.0)
+    assert np.allclose(path.balance, r.balance)
+    seed = _gap([0, 0, 0], [-200, 0, 0])                # month-0 premium inflow (net -(-200)=+200)
+    assert np.isclose(assets.reinvest(seed, reinvest_rate=0.0).balance[0], 200.0)
