@@ -306,6 +306,105 @@ def shock_curve(rel_by_maturity: FloatArray, *, up: bool,
     return Stress(name=name or ("interest up" if up else "interest down"), apply=apply)
 
 
+def shock_spread(spread_by_maturity: FloatArray, *, name: str) -> Stress:
+    """Stress the risk-free discount curve by an ADDITIVE maturity shock spread.
+
+    ``spread_by_maturity`` is the per-year shock spread (year ``y`` in entry
+    ``y - 1``), in the same units as :attr:`~fastcashflow.Basis.discount_annual`
+    (decimal -- a ``+0.473`` percentage-point spread is ``0.00473``); it is held
+    flat past its last entry. The shocked curve is ``base + spread``.
+
+    This is the form the K-ICS interest-rate scenarios take: the shocked curve is
+    the base risk-free curve plus the supervisor-published maturity-by-maturity
+    shock spread (the difference between the adjusted risk-free term structures
+    before and after the shock; handbook 4-2.(1)-7), as opposed to the relative
+    shock :func:`shock_curve` applies for the Solvency II maturity-relative table.
+    """
+    spread = np.asarray(spread_by_maturity, float)
+
+    def apply(mp: ModelPoints, basis: Basis):
+        base = np.asarray(basis.discount_annual, float)
+        if base.ndim == 0:
+            base = np.full(spread.shape[0], float(base))
+        m = base.shape[0]
+        s = spread[:m] if spread.shape[0] >= m else np.concatenate(
+            [spread, np.full(m - spread.shape[0], spread[-1])])
+        return mp, replace(basis, discount_annual=base + s)
+    return Stress(name=name, apply=apply)
+
+
+@dataclass(frozen=True, slots=True)
+class KICSInterest:
+    """The five K-ICS interest-rate shock scenarios and their aggregation.
+
+    Each field is a :class:`Stress` adding the official maturity-by-maturity shock
+    spread to the risk-free discount curve: the level factor ``up`` / ``down``
+    (LTFR +/-15bp; handbook 4-2.(1)-6), the slope factor ``flat`` / ``steep``
+    (short-end up & long-end down / short-end down & long-end up), and
+    ``mean_reversion``. The shock spreads are published by the supervisor
+    (handbook 4-2.(1)-7), so build the scenarios from them with
+    :meth:`from_spreads`; do not bake a table in.
+
+    The interest-rate capital aggregates the five by the handbook (p.205) formula
+
+        sqrt( max(up, down)^2 + max(flat, steep)^2 ) + mean_reversion
+
+    The level pair and the twist pair are independent (correlation 0), hence the
+    sum-of-squares under the root; ``up`` / ``down`` are mutually exclusive
+    directions, so the worst of each pair is taken. Each directional amount is the
+    net-asset-value DECREASE under that scenario floored at zero
+    (``max(Delta BEL, 0)`` for a liability-only book; the asset leg is zero here).
+    The mean-reversion amount is SIGNED -- it can raise OR lower the charge
+    (handbook 4-2.(1)-5), so it is added outside the root without a floor.
+    """
+
+    up: Stress
+    down: Stress
+    flat: Stress
+    steep: Stress
+    mean_reversion: Stress
+
+    @classmethod
+    def from_spreads(cls, *, up: FloatArray, down: FloatArray, flat: FloatArray,
+                     steep: FloatArray, mean_reversion: FloatArray) -> "KICSInterest":
+        """Build the five scenarios from per-maturity shock-spread arrays.
+
+        Each argument is the additive shock spread by maturity (year 1 in entry
+        0), in the same units as :attr:`~fastcashflow.Basis.discount_annual`
+        (decimal). See :func:`shock_spread` for the per-maturity application.
+        """
+        return cls(
+            up=shock_spread(up, name="interest up"),
+            down=shock_spread(down, name="interest down"),
+            flat=shock_spread(flat, name="interest flat"),
+            steep=shock_spread(steep, name="interest steep"),
+            mean_reversion=shock_spread(mean_reversion, name="interest mean reversion"),
+        )
+
+    def capital(self, delta) -> tuple[float, dict[str, float]]:
+        """The interest-rate capital and its scenario breakdown.
+
+        ``delta`` maps a :class:`Stress` to the net-asset-value change it causes
+        (``Delta BEL`` for the liability leg). Returns ``(capital, components)``,
+        where ``components`` carries the five floored / signed scenario amounts
+        keyed ``interest_up`` ... ``interest_mean_reversion`` (for the SCR
+        breakdown). The capital is the handbook (p.205) aggregation."""
+        up = max(0.0, delta(self.up))
+        down = max(0.0, delta(self.down))
+        flat = max(0.0, delta(self.flat))
+        steep = max(0.0, delta(self.steep))
+        mr = delta(self.mean_reversion)                  # signed -- can be negative
+        level = max(up, down)
+        twist = max(flat, steep)
+        cap = float(np.sqrt(level * level + twist * twist) + mr)
+        components = {
+            "interest_up": up, "interest_down": down,
+            "interest_flat": flat, "interest_steep": steep,
+            "interest_mean_reversion": mr,
+        }
+        return cap, components
+
+
 # ---------------------------------------------------------------------------
 # Aggregation + the public entry point
 # ---------------------------------------------------------------------------
@@ -396,15 +495,24 @@ _PROPERTY_SHOCK = 1.16         # K-ICS handbook 2-5: long-term property/other +1
 def required_capital(
     model_points: ModelPoints, basis: Basis, *, regime: RegimeSpec,
     catastrophe: float = 0.0, property_codes=(),
+    interest_scenarios: KICSInterest | None = None,
 ) -> SCRResult:
     """Required capital (SCR) for a portfolio under ``regime``.
 
     Re-measures the liability under each sub-risk's stress, takes
     ``max(Delta BEL, 0)`` as the sub-risk capital, correlation-aggregates the
-    insurance module, adds the worst-of interest stress, and computes the regime
-    risk margin. v1 is liability-side: the total is ``insurance_scr +
+    insurance module, adds the interest-rate stress, and computes the regime risk
+    margin. v1 is liability-side: the total is ``insurance_scr +
     interest_capital`` (no inter-module diversification). Pass ``SCRResult`` on to
     :func:`fastcashflow.embedded_value` via its ``required_capital`` argument.
+
+    Interest-rate capital comes from ``interest_scenarios`` when supplied -- a
+    :class:`KICSInterest` (the five K-ICS shock scenarios, aggregated by the
+    handbook p.205 formula); its five scenario amounts also land in
+    ``sub_risk_capital`` (keys ``interest_up`` ...). Otherwise it is the worst-of
+    ``regime.interest_curves`` (the Solvency II maturity-relative up / down table),
+    or zero when neither is present. The K-ICS shock spreads are supervisor-
+    published, so they are supplied at call time rather than baked into the regime.
 
     Two EXTRA insurance sub-risks fold into the module through table 6 when the
     regime supports them: ``property_codes`` (the long-term property / other
@@ -439,7 +547,10 @@ def required_capital(
     insurance_scr = _aggregate_with_extras(base_caps, regime.correlation, extras_all)
 
     interest_capital = 0.0
-    if regime.interest_curves is not None:
+    if interest_scenarios is not None:
+        interest_capital, interest_components = interest_scenarios.capital(delta)
+        capital.update(interest_components)
+    elif regime.interest_curves is not None:
         interest_capital = max(0.0, max(delta(s) for s in regime.interest_curves))
 
     total_scr = insurance_scr + interest_capital
@@ -588,7 +699,7 @@ __all__ = [
     "Stress", "SubRisk", "RegimeSpec", "SCRResult",
     "scale_mortality", "scale_longevity", "scale_lapse", "mass_lapse",
     "scale_coverages", "scale_coverage_codes", "scale_annuity", "scale_expense",
-    "shock_curve",
+    "shock_curve", "shock_spread", "KICSInterest",
     "aggregate", "required_capital", "catastrophe_scr", "solvency_ratio",
     "SOLVENCY2", "KICS",
 ]

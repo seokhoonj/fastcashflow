@@ -188,6 +188,69 @@ def test_total_is_insurance_plus_interest():
 
 
 # ---------------------------------------------------------------------------
+# K-ICS interest-rate risk -- five-scenario aggregation (handbook 4-2, p.205)
+#   capital = sqrt( max(up, down)^2 + max(flat, steep)^2 ) + mean_reversion
+# ---------------------------------------------------------------------------
+
+def _flat_spreads(up, down, flat, steep, mr):
+    """A KICSInterest whose five scenarios are flat (single-maturity) spreads."""
+    return sv.KICSInterest.from_spreads(
+        up=[up], down=[down], flat=[flat], steep=[steep], mean_reversion=[mr])
+
+
+def test_kics_interest_aggregation_formula():
+    # Drive the formula with a stub delta keyed by scenario name: level pair
+    # max(30, 50) = 50, twist pair max(40, 20) = 40, mean reversion -10 (signed).
+    ki = _flat_spreads(0.01, -0.01, 0.005, -0.005, 0.0)
+    amounts = {"interest up": 30.0, "interest down": 50.0, "interest flat": 40.0,
+               "interest steep": 20.0, "interest mean reversion": -10.0}
+    cap, comp = ki.capital(lambda s: amounts[s.name])
+    assert cap == pytest.approx(math.sqrt(50.0**2 + 40.0**2) - 10.0)   # 64.0312... - 10
+    assert comp["interest_down"] == 50.0 and comp["interest_flat"] == 40.0
+    assert comp["interest_mean_reversion"] == -10.0                    # signed, kept
+
+
+def test_kics_interest_directional_amounts_are_floored_mean_reversion_signed():
+    # A scenario whose NAV change is a GAIN (negative Delta BEL) floors to 0 for the
+    # four directional legs, but mean reversion keeps its sign (can lower the charge).
+    ki = _flat_spreads(0.01, -0.01, 0.005, -0.005, 0.0)
+    amounts = {"interest up": -5.0, "interest down": 80.0, "interest flat": -3.0,
+               "interest steep": 0.0, "interest mean reversion": -12.0}
+    cap, comp = ki.capital(lambda s: amounts[s.name])
+    assert comp["interest_up"] == 0.0 and comp["interest_flat"] == 0.0   # floored
+    assert cap == pytest.approx(math.sqrt(80.0**2 + 0.0**2) - 12.0)      # 80 - 12 = 68
+
+
+def test_shock_spread_is_additive_and_held_flat():
+    # base 0.03 flat; a two-entry spread [0.004, 0.006] then held flat at 0.006.
+    mp, basis = _mp(), _basis()
+    _, b = sv.shock_spread([0.004, 0.006], name="x").apply(mp, basis)
+    curve = np.asarray(b.discount_annual, float)
+    assert curve[0] == pytest.approx(0.034) and curve[1] == pytest.approx(0.036)
+    assert np.allclose(curve[2:], 0.036)        # held flat past the last entry
+
+
+def test_kics_interest_capital_end_to_end():
+    # An up shock raises the discount rate -> lowers PV(claims) of a death book ->
+    # a GAIN (Delta BEL < 0), floored to 0; a down shock is the binding loss. Wire
+    # through required_capital and reproduce the aggregation from the components.
+    mp, basis = _mp(), _basis()
+    up, down = [0.010], [-0.010]                 # +/-1pp parallel, flat past year 1
+    flat, steep = [0.004], [-0.004]
+    ki = sv.KICSInterest.from_spreads(up=up, down=down, flat=flat, steep=steep,
+                                      mean_reversion=[0.0])
+    res = sv.required_capital(mp, basis, regime=sv.KICS, interest_scenarios=ki)
+    c = res.sub_risk_capital
+    expected = math.sqrt(max(c["interest_up"], c["interest_down"])**2
+                         + max(c["interest_flat"], c["interest_steep"])**2) \
+        + c["interest_mean_reversion"]
+    assert res.interest_capital == pytest.approx(expected)
+    assert res.interest_capital > 0.0                       # down shock binds
+    assert c["interest_up"] == 0.0                          # up shock is a gain -> floored
+    assert np.isclose(res.total_scr, res.insurance_scr + res.interest_capital)
+
+
+# ---------------------------------------------------------------------------
 # K-ICS calibration (primary-source numbers; Codex gate B cross-checks the source)
 # ---------------------------------------------------------------------------
 

@@ -81,7 +81,7 @@ from fastcashflow.pricing import solve_premium, interest_guarantee_tvog
 from fastcashflow.embedded_value import EmbeddedValue, embedded_value
 from fastcashflow.solvency import (
     RegimeSpec, SCRResult, SubRisk, Stress, required_capital, catastrophe_scr,
-    solvency_ratio, SOLVENCY2, KICS,
+    solvency_ratio, SOLVENCY2, KICS, KICSInterest, shock_spread,
 )
 from fastcashflow import solvency
 from fastcashflow.alm import (
@@ -151,6 +151,7 @@ __all__ = [
     "embedded_value", "EmbeddedValue",
     "solvency", "required_capital", "catastrophe_scr", "solvency_ratio",
     "RegimeSpec", "SCRResult", "SubRisk", "Stress", "SOLVENCY2", "KICS",
+    "KICSInterest", "shock_spread",
     "alm", "DurationResult", "Bond", "liability_duration", "liability_dv01",
     "key_rate_durations", "bond_duration", "bond_value", "effective_maturity",
     "alm_gap",
