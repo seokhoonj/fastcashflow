@@ -38,11 +38,16 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
 from fastcashflow.coverage import CalculationMethod
 from fastcashflow.curves import discount_monthly_curve
-from fastcashflow.engine import measure
+from fastcashflow.engine import inforce_surrender_value, measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _cost_of_capital_ra
 
 Transform = Callable[[ModelPoints, Basis], "tuple[ModelPoints, Basis]"]
+# A scalar BEL adjustment a stress adds AFTER re-measurement, evaluated on the
+# BASE (model_points, basis) -- used for a one-time shock-date cash flow the
+# (model_points, basis) transform cannot express (e.g. the mass-lapse surrender
+# value paid to the policies that leave at the valuation date).
+BelAddon = Callable[[ModelPoints, Basis], float]
 
 
 # ---------------------------------------------------------------------------
@@ -55,10 +60,16 @@ class Stress:
 
     ``apply`` returns a stressed ``(model_points, basis)`` pair; re-measuring it
     and differencing against the base gives the shock's loss in net asset value.
+
+    ``bel_addon`` (optional) adds a scalar to the stressed BEL after
+    re-measurement -- a one-time shock-date outflow the transform cannot carry
+    (the mass-lapse surrender value). It is evaluated on the BASE
+    ``(model_points, basis)``; ``None`` for a pure re-measure shock.
     """
 
     name: str
     apply: Transform
+    bel_addon: BelAddon | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,18 +257,30 @@ def scale_lapse(factor: float) -> Stress:
 
 def mass_lapse(fraction: float) -> Stress:
     """An instantaneous mass lapse -- ``fraction`` of the in-force surrenders at
-    once, modelled by haircutting ``ModelPoints.count`` to ``(1 - fraction)``.
+    the valuation date.
 
-    v1 simplification: the surrender value paid to the lapsing policies at the
-    shock date is NOT captured by a count haircut (the engine has no one-time
-    surrender primitive), so the mass-lapse capital can be understated for
-    contracts with a material surrender value. Documented; refine when a
-    one-time-surrender mechanism exists."""
+    Two effects, both captured. (1) The remaining ``(1 - fraction)`` in-force is
+    a count haircut on ``ModelPoints.count`` -- its future cash flows fall
+    proportionally (the lost-business value). (2) The leaving ``fraction`` is
+    paid its surrender value at the shock date -- a one-time outflow the count
+    haircut cannot express; it is added via :class:`Stress.bel_addon` as
+    ``fraction x sum(count x surrender_value)`` at the valuation date (see
+    :func:`fastcashflow.engine.inforce_surrender_value`). Together the stressed
+    liability is ``BEL(remaining) + surrender_value(leaving)``, so the capital is
+    ``fraction x sum(count x (surrender_value - per-policy BEL))``.
+
+    Zero one-time outflow when the basis prices no surrender value (the count
+    haircut alone, the historical behaviour). Account-backed (universal-life)
+    surrender is not yet included -- see ``inforce_surrender_value``."""
     def apply(mp: ModelPoints, basis: Basis):
         n = mp.n_mp
         count = np.ones(n) if mp.count is None else np.asarray(mp.count, float)
         return replace(mp, count=count * (1.0 - fraction)), basis
-    return Stress(name=f"mass lapse {fraction:g}", apply=apply)
+
+    def addon(mp: ModelPoints, basis: Basis) -> float:
+        return fraction * float(inforce_surrender_value(mp, basis).sum())
+
+    return Stress(name=f"mass lapse {fraction:g}", apply=apply, bel_addon=addon)
 
 
 def scale_annuity(factor: float) -> Stress:
@@ -576,7 +599,10 @@ def required_capital(
 
     def delta(stress: Stress) -> float:
         mp2, basis2 = stress.apply(model_points, basis)
-        return float(measure(mp2, basis2, full=False).bel.sum()) - base_bel
+        d = float(measure(mp2, basis2, full=False).bel.sum()) - base_bel
+        if stress.bel_addon is not None:
+            d += stress.bel_addon(model_points, basis)
+        return d
 
     capital: dict[str, float] = {}
     for sr in regime.sub_risks:

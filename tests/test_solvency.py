@@ -104,12 +104,14 @@ def test_longevity_shock_is_decrement_only():
     assert np.allclose(shock_cov["DEATH"].rate(*grid), base_cov["DEATH"].rate(*grid))
 
 
-def test_mass_lapse_is_count_haircut():
-    """Mass lapse = max(BEL(count*0.70) - BEL(count), 0). The count haircut omits
-    the t=0 surrender value paid to the lapsing policies (a documented v1
-    simplification that can understate the mass-lapse capital)."""
+def test_mass_lapse_is_count_haircut_when_no_surrender_value():
+    """With no surrender_value_curve the mass lapse is the pure count haircut:
+    max(BEL(count*0.70) - BEL(count), 0). The t=0 surrender-value add-on is zero
+    (the basis prices no surrender value), so only the lost-business term bites."""
     from dataclasses import replace
+    from fastcashflow.engine import inforce_surrender_value
     mp, basis = _mp(), _basis()
+    assert np.allclose(inforce_surrender_value(mp, basis), 0.0)   # no curve -> no add-on
     base = measure(mp, basis, full=False).bel.sum()
     n = mp.n_mp
     count = np.ones(n) if mp.count is None else np.asarray(mp.count, float)
@@ -117,6 +119,32 @@ def test_mass_lapse_is_count_haircut():
     expected = max(float(measure(mp_cut, basis, full=False).bel.sum() - base), 0.0)
     single = sv.RegimeSpec(
         name="ml", sub_risks=(sv.SubRisk("lapse", (sv.mass_lapse(0.30),), "single"),),
+        correlation=np.array([[1.0]]), risk_margin_method="percentile")
+    assert np.isclose(
+        sv.required_capital(mp, basis, regime=single).sub_risk_capital["lapse"], expected)
+
+
+def test_mass_lapse_adds_t0_surrender_value():
+    """With a surrender_value_curve the mass lapse adds the t=0 outflow: capital
+    = max(count-haircut delta + fraction * sum(count * surrender_value), 0). The
+    leaving fraction is paid its valuation-date surrender value -- the strain the
+    count haircut (future cash flows only) cannot carry."""
+    from dataclasses import replace
+    from fastcashflow.engine import inforce_surrender_value
+    f = 0.30
+    amount = np.full(_mp().term_months[0] + 1, 5_000.0)   # flat per-policy SV
+    basis = _basis(surrender_value_curve=amount,
+                   surrender_value_basis="amount_per_policy")
+    mp = _mp()
+    base = float(measure(mp, basis, full=False).bel.sum())
+    count = np.asarray(mp.count, float) if mp.count is not None else np.ones(mp.n_mp)
+    haircut = float(measure(replace(mp, count=count * (1.0 - f)), basis,
+                            full=False).bel.sum()) - base
+    addon = f * float(inforce_surrender_value(mp, basis).sum())
+    assert addon > 0.0                                   # the curve makes it bite
+    expected = max(0.0, haircut + addon)
+    single = sv.RegimeSpec(
+        name="ml", sub_risks=(sv.SubRisk("lapse", (sv.mass_lapse(f),), "single"),),
         correlation=np.array([[1.0]]), risk_margin_method="percentile")
     assert np.isclose(
         sv.required_capital(mp, basis, regime=single).sub_risk_capital["lapse"], expected)

@@ -516,7 +516,7 @@ def measure_inforce(
     rows = np.arange(n_mp)
     # Re-base the inception-run LRC to the valuation date (see _inforce_rescale):
     # exact for the LRC, which is linear in the in-force.
-    rescale = _inforce_rescale(m, model_points, em, rows)
+    rescale = _inforce_rescale(m.cashflows.inforce, model_points, em, rows)
     lrc = m.lrc_path[rows, em] * rescale
     # Subsequent onerous recognition is deferred (see docstring): zero loss, no
     # fcf re-test -- roll_forward / a later phase performs the unlocking.

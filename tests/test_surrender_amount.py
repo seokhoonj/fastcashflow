@@ -55,6 +55,39 @@ def _amount_basis(lapse_rate, amount_curve, discount=0.0):
     )
 
 
+@pytest.mark.parametrize("em", [0, 12])
+def test_inforce_surrender_value_amount_per_policy(em):
+    """``inforce_surrender_value = count * amount[em]``: the per-policy surrender
+    amount at the valuation duration, times the as-of count. The inception-run
+    survival to ``em`` cancels against the count rebase, leaving exactly
+    ``count * amount[em]`` for the amount-per-policy basis."""
+    from dataclasses import replace
+    from fastcashflow.engine import inforce_surrender_value
+    amount = np.array([1_000.0 * (t + 1) for t in range(61)])
+    basis = _amount_basis(0.12, amount)
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1e8},
+                            premium=10_000.0, term_months=60, count=1_000.0,
+                            calculation_methods=PATTERNS)
+    mp = replace(mp, elapsed_months=np.array([em], dtype=np.int64))
+    sv = inforce_surrender_value(mp, basis)
+    assert np.isclose(sv[0], 1_000.0 * amount[em])
+
+
+def test_inforce_surrender_value_zero_without_curve():
+    """No ``surrender_value_curve`` -> zero (lapse removes the contract with no
+    payment); the helper short-circuits before projecting."""
+    from fastcashflow.engine import inforce_surrender_value
+    basis = Basis(
+        mortality_annual=_flat_rate(0.001), lapse_annual=_flat_rate(0.01),
+        discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.0,
+        coverages=(CoverageRate("DEATH", _flat_rate(0.001)),),
+    )
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1e8},
+                            premium=10_000.0, term_months=60, count=1_000.0,
+                            calculation_methods=PATTERNS)
+    assert np.allclose(inforce_surrender_value(mp, basis), 0.0)
+
+
 def test_amount_per_policy_per_month_hand_calc():
     """``surrender_cf[t] = inforce[t] * lapse_monthly * amount[t]`` -- the base
     is the contractual amount at duration t, not cumulative premium. A

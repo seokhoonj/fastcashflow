@@ -223,8 +223,12 @@ frictional_spread=basis.cost_of_capital_rate)` 로 요구자본 보유비용을 
   가능), K-ICS 대재해는 가입금액 factor (ΔBEL 아님) 라 엔진 밖입니다.
 - **SII 장해 간이** -- +25% 단일 (원문 +35% 1년차 / +25% 이후 / 회복률 -20% 의 정상
   수준). 충격은 1차 출처 그대로, 연차 분리만 미모델.
-- **대량해지 해지환급금** -- count haircut 이라 해지 시점 환급금 유출은 미포착 (대량해지
-  자본 과소 가능) -- 문서화된 단순화.
+- **대량해지 해지환급금** -- 해지 시점 환급금 유출을 반영합니다: basis 의
+  `surrender_value_curve` 를 valuation date (가입 후 `elapsed_months`) 에서 평가해
+  떠나는 비율에 지급 (`fraction x sum(count x 환급금)`). 따라서 대량해지 자본 =
+  `fraction x sum(count x (환급금 - 계약별 BEL))` 로, 잃는 사업 가치에 즉시 유출이
+  더해집니다. 환급금 곡선이 없는 basis 는 count haircut 만 (과거 동작). 계좌형 (변액·UL)
+  의 계좌가치 기반 해지환급금은 아직 미포함 -- VFA 측 작업.
 - **K-ICS 금리** -- AFDNS 모델 도출이라 정적 표가 아님. `KICS.interest_curves` 는 None
   이고 공식 충격곡선을 caller 가 공급합니다. SII 는 EIOPA 표가 내장.
 

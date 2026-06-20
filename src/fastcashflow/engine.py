@@ -609,7 +609,7 @@ def measure_aggregate(
 # In-force subsequent measurement
 # ---------------------------------------------------------------------------
 
-def _inforce_rescale(m, model_points, em, rows) -> FloatArray:
+def _inforce_rescale(inforce, model_points, em, rows) -> FloatArray:
     """Per-MP factor that re-bases an inception-run projection to the valuation
     date: ``count / inforce[em] = 1 / survival(0->em)``.
 
@@ -619,11 +619,64 @@ def _inforce_rescale(m, model_points, em, rows) -> FloatArray:
     exactly the input ``count``; it is exact for every cash flow linear in the
     in-force. Where ``inforce[em]`` is zero (a fully run-off cohort) the bel is
     already zero, so the factor is 1 (a no-op).
+
+    ``inforce`` is the ``(n_mp, n_time)`` start-of-month in-force trajectory.
     """
-    inforce_em = m.cashflows.inforce[rows, em]
+    inforce_em = inforce[rows, em]
     safe = np.where(inforce_em > 0.0, inforce_em, 1.0)
     count = np.asarray(model_points.count, dtype=np.float64)
     return np.where(inforce_em > 0.0, count / safe, 1.0)
+
+
+def inforce_surrender_value(model_points: ModelPoints, basis: Basis) -> FloatArray:
+    """Per-MP surrender value of the in-force at its valuation date -- ``(n_mp,)``.
+
+    For each model point, the total surrender value that would be paid if its
+    entire as-of in-force (``count``) surrendered at the valuation date (the
+    moment ``elapsed_months`` after inception): the engine's own curve-based
+    surrender value, read at the valuation-date duration and re-based to the
+    as-of ``count`` (see :func:`_inforce_rescale`). This is the one-time outflow
+    a mass-lapse shock pays the leaving policies -- the strain the future-cash-
+    flow projection alone does not carry.
+
+    Zero where the basis prices no ``surrender_value_curve`` (lapse removes the
+    contract with no payment). Account-backed (universal-life) surrender is NOT
+    modelled here -- the account-value surrender is a VFA-side concern, and a
+    curve-less account book returns zero.
+
+    The per-mode value mirrors the ``surrender_cf`` block in
+    :func:`fastcashflow.projection.project_cashflows`: with ``surrender_cf =
+    (lapse_flow / inforce) x V``, this returns ``V`` (the total in-force
+    surrender value) at the valuation slice, re-based to ``count``.
+    """
+    em = np.asarray(model_points.elapsed_months, dtype=np.int64)
+    n_mp = em.shape[0]
+    curve = basis.surrender_value_curve
+    if curve is None:
+        return np.zeros(n_mp)
+    proj = project_cashflows(model_points, basis)
+    inforce = proj.inforce
+    rows = np.arange(n_mp)
+    c = np.asarray(curve, dtype=np.float64)
+    value_em = c[np.minimum(em, c.shape[0] - 1)]      # curve held flat past its end
+    mode = basis.surrender_value_basis
+    if mode == "cum_premium_factor":
+        cum_premium = np.cumsum(proj.premium_cf, axis=1)
+        v_total = cum_premium[rows, em] * value_em
+    elif mode == "amount_per_policy":
+        v_total = inforce[rows, em] * value_em
+    elif mode == "amount_per_unit":
+        base = model_points.surrender_base_amount
+        if base is None:
+            raise ValueError(
+                "surrender_value_basis='amount_per_unit' requires "
+                "ModelPoints.surrender_base_amount (no default base is inferred).")
+        v_total = inforce[rows, em] * value_em * np.asarray(base, dtype=np.float64)
+    else:
+        raise ValueError(
+            f"unknown surrender_value_basis {mode!r}; expected one of "
+            f"{SURRENDER_VALUE_BASES}.")
+    return v_total * _inforce_rescale(inforce, model_points, em, rows)
 
 
 def _measure_inforce_fast(
@@ -703,7 +756,7 @@ def _measure_inforce_fast(
     rows = np.arange(n_mp)
     # Re-base the inception-run projection to the valuation date (see
     # _inforce_rescale): exact for cash flows linear in the in-force.
-    rescale = _inforce_rescale(m, model_points, em, rows)
+    rescale = _inforce_rescale(m.cashflows.inforce, model_points, em, rows)
     bel = m.bel_path[rows, em] * rescale
     ra = m.ra_path[rows, em] * rescale
     if not settlement_mode:
@@ -933,7 +986,7 @@ def _measure_inforce_full(
     # sample-grade cum-premium base and is approximate (see measure_inforce).
     # CSM needs no rescale: its coverage-unit release is an inforce *fraction*,
     # which the uniform scale leaves unchanged.
-    rescale = _inforce_rescale(m, model_points, em, rows_arr)
+    rescale = _inforce_rescale(m.cashflows.inforce, model_points, em, rows_arr)
     return GMMMeasurement(
         bel=m.bel_path[rows_arr, em] * rescale,
         ra=m.ra_path[rows_arr, em] * rescale,

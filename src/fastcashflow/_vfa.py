@@ -1001,7 +1001,7 @@ def measure_inforce(
     p = _vfa_project(model_points, basis,
                      elapsed_months=em, account_value=state.account_value)
     rows = np.arange(n_mp)
-    rescale = _inforce_rescale(p, model_points, em, rows)
+    rescale = _inforce_rescale(p.cashflows.inforce, model_points, em, rows)
     bel = p.bel[rows, em] * rescale
     ra = p.ra[rows, em] * rescale
     variable_fee = p.variable_fee_path[rows, em] * rescale
