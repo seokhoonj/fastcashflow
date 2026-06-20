@@ -589,6 +589,39 @@ def test_asset_portfolio_cashflows_rejects_bad_horizon():
         assets.asset_portfolio_cashflows(pf, 0)
 
 
+def test_asset_value_path_runoff():
+    """The held portfolio amortises as the bond runs off: it starts at the t=0
+    portfolio value, a par bond stays at par on its coupon dates, and once the bond
+    redeems only the flat (equity) holding remains."""
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(1000.0, 0.05, 3, 1), assets.Equity(500.0)))
+    path = assets.asset_value_path(pf, 36, 0.05)
+    assert path.shape == (37,)
+    assert np.isclose(path[0], assets.asset_portfolio_value(pf, 0.05))  # t=0 == MV
+    assert np.isclose(path[0], 1500.0)                 # par bond 1000 + equity 500
+    assert np.isclose(path[12], 1500.0)                # par on the coupon date
+    assert np.isclose(path[24], 1500.0)
+    assert np.isclose(path[36], 500.0)                 # bond redeemed -> equity only
+    assert path[6] > 1500.0                            # mid-period: carries accrued coupon
+    assert np.all(path >= 0.0)
+
+
+def test_asset_value_path_matches_mv_at_zero():
+    """At month 0 the run-off value equals asset_portfolio_value for a mixed book."""
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(2000.0, 0.04, 5, 2), alm.Bond(1000.0, 0.06, 8, 1),
+        assets.Equity(3000.0), assets.Cash(500.0)))
+    path = assets.asset_value_path(pf, 120, 0.03)
+    assert np.isclose(path[0], assets.asset_portfolio_value(pf, 0.03))
+    assert np.isclose(path[-1], 3500.0)                # both bonds matured -> equity + cash
+
+
+def test_asset_value_path_rejects_bad_horizon():
+    pf = assets.AssetPortfolio(holdings=(alm.Bond(1000.0, 0.05, 3, 1),))
+    with pytest.raises(ValueError, match="n_months must be positive"):
+        assets.asset_value_path(pf, 0, 0.05)
+
+
 def test_cashflow_gap_nets_asset_against_liability():
     """The gap folds the liability begin- and mid-month flows into one outflow per
     month and nets the projected asset cash flows against it on the shared grid."""
@@ -737,6 +770,38 @@ def test_liquidate_deeper_haircut_costs_more():
     dear = assets.liquidate(gap, haircut=0.25)
     assert dear.total_realized_loss > cheap.total_realized_loss > 0.0
     assert np.isclose(dear.total_realized_loss / cheap.total_realized_loss, 0.25 / 0.05)
+
+
+def test_liquidate_caps_forced_sale_at_asset_stock():
+    """A forced sale cannot exceed the asset stock; the uncovered shortfall is
+    unfunded (insolvency)."""
+    gap = _gap([0, 0, 0], [0, 0, 300])                 # net_cf = [0, 0, -300]
+    avail = np.array([1000.0, 1000.0, 200.0])          # only 200 stock at month 2
+    r = assets.liquidate(gap, haircut=0.1, available_assets=avail)
+    assert np.allclose(r.forced_sale, [0, 0, 200])     # sell what is there
+    assert np.allclose(r.realized_loss, [0, 0, 20])    # 200 * 0.1
+    assert np.allclose(r.unfunded, [0, 0, 100])        # 300 needed - 200 sold
+    assert np.isclose(r.total_unfunded, 100.0)
+
+
+def test_liquidate_ample_assets_matches_uncapped():
+    """A non-binding cap reproduces the uncapped roll-forward, with no unfunded."""
+    gap = _gap([0, 100, 0], [0, 0, 300])               # net_cf = [0, 100, -300]
+    capped = assets.liquidate(gap, haircut=0.2, available_assets=np.full(3, 1e9))
+    uncapped = assets.liquidate(gap, haircut=0.2)
+    assert np.allclose(capped.forced_sale, uncapped.forced_sale)
+    assert np.allclose(capped.unfunded, 0.0)
+    assert np.isclose(capped.total_realized_loss, uncapped.total_realized_loss)
+
+
+def test_liquidate_stock_depletes_across_months():
+    """Sales accumulate against the stock: an earlier sale shrinks what a later
+    shortfall can raise."""
+    gap = _gap([0, 0, 0, 0], [0, 150, 0, 150])         # net_cf = [0, -150, 0, -150]
+    avail = np.array([300.0, 300.0, 300.0, 250.0])     # 250 left at month 3
+    r = assets.liquidate(gap, haircut=0.0, available_assets=avail)
+    assert np.allclose(r.forced_sale, [0, 150, 0, 100])   # month 3 capped: 250 - 150 sold
+    assert np.allclose(r.unfunded, [0, 0, 0, 50])         # 150 needed - 100 raised
 
 
 def test_interaction_loss_decomposes():

@@ -28,7 +28,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.alm import (
     Bond, bond_value, bond_cashflows, bond_duration, effective_maturity,
-    net_liability_cashflows,
+    net_liability_cashflows, _annual_df,
 )
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
@@ -136,6 +136,42 @@ def asset_portfolio_cashflows(portfolio: AssetPortfolio, n_months: int) -> Float
             if 1 <= m <= n_months:
                 flow[m] += float(amt)
     return flow
+
+
+def asset_value_path(portfolio: AssetPortfolio, n_months: int,
+                     discount_annual) -> FloatArray:
+    """Market value of the still-held portfolio at each month ``0 .. n_months`` under
+    run-off (no new business, no reinvestment).
+
+    Each :class:`~fastcashflow.alm.Bond` is revalued on its REMAINING (future) cash
+    flows -- as coupons and the redemption pay out, the bond amortises away (its
+    value at month ``t`` is the present value, re-based to ``t``, of the cash flows
+    dated after ``t``). Equity, property and cash are held flat at market value (v1:
+    no scheduled run-off). Returns ``(n_months + 1,)``.
+
+    This is the asset STOCK still on the book -- the cap on a forced sale
+    (:func:`liquidate`), distinct from the reinvested-cash account
+    (:func:`reinvest` / :func:`liquidate`) that carries the cash the run-off throws
+    off. At month 0 it equals :func:`asset_portfolio_value`; once every bond has
+    matured it is just the flat (equity / property / cash) holdings."""
+    if n_months <= 0:
+        raise ValueError(f"n_months must be positive, got {n_months}")
+    val_years = np.arange(n_months + 1, dtype=np.float64) / 12.0
+    df_val = _annual_df(val_years, discount_annual)         # DF from 0 to each month
+    flat = sum(float(h.market_value) for h in portfolio.holdings
+               if not isinstance(h, Bond))
+    path = np.full(n_months + 1, flat, dtype=np.float64)
+    for holding in portfolio.holdings:
+        if not isinstance(holding, Bond):
+            continue
+        times, amounts = bond_cashflows(holding)
+        cf_months = np.rint(np.asarray(times) * 12.0).astype(np.int64)
+        pv_cf = np.asarray(amounts) * _annual_df(times, discount_annual)
+        paid = np.zeros(n_months + 2, dtype=np.float64)     # pv of CFs paid AT each month
+        np.add.at(paid, np.minimum(cf_months, n_months + 1), pv_cf)
+        remaining = float(pv_cf.sum()) - np.cumsum(paid)[:n_months + 1]
+        path += remaining / df_val                          # re-base the remaining PV to t
+    return path
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,22 +306,32 @@ class LiquidationResult:
     at zero (a shortfall is met by selling assets, not by borrowing).
     ``forced_sale`` is the cash raised by selling each month (zero when the carried
     surplus covers the outflow) and ``realized_loss`` is the loss that sale
-    crystallises at the stressed haircut. ``total_realized_loss`` sums it -- the
-    cost of being a forced seller in a stressed market, the asset-side bite of the
-    lapse<->rate interaction."""
+    crystallises at the stressed haircut. ``unfunded`` is the cash a shortfall
+    needed but could NOT raise because the asset stock was exhausted (zero unless a
+    finite ``available_assets`` cap was supplied) -- an insolvency signal.
+    ``total_realized_loss`` / ``total_unfunded`` sum them: the cost of being a
+    forced seller in a stressed market and the shortfall the assets could not cover
+    -- the asset-side bite of the lapse<->rate interaction."""
 
     balance: FloatArray
     forced_sale: FloatArray
     realized_loss: FloatArray
+    unfunded: FloatArray
 
     @property
     def total_realized_loss(self) -> float:
         """The realized loss over the horizon (the forced-sale cost)."""
         return float(self.realized_loss.sum())
 
+    @property
+    def total_unfunded(self) -> float:
+        """The cash shortfall the asset stock could not cover (0 if uncapped)."""
+        return float(self.unfunded.sum())
+
 
 def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
-              opening_balance: float = 0.0) -> LiquidationResult:
+              opening_balance: float = 0.0,
+              available_assets=None) -> LiquidationResult:
     """Roll the cash-flow gap forward, meeting shortfalls by selling assets.
 
     The counterpart to :func:`reinvest` under a different liquidity policy: where
@@ -296,29 +342,49 @@ def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
     raised by a forced sale and ``haircut * shortfall`` is the realized loss (the
     haircut is the loss per unit of cash raised -- the depressed-price discount).
 
+    ``available_assets`` (optional, ``(n_time + 1,)`` -- e.g. from
+    :func:`asset_value_path`) caps the forced sale at the asset stock still on the
+    book: a sale cannot exceed ``available_assets[m]`` net of what has already been
+    sold, and any shortfall beyond that is ``unfunded`` (the book is insolvent for
+    it). ``None`` (the default) assumes assets are always available -- the
+    historical behaviour, ``unfunded`` all zero.
+
     ``haircut`` is the seam (the stressed-liquidation discount, e.g. 0.10); a
-    forced sale under a wider stress carries a deeper haircut. v1 assumes assets are
-    always available to sell (the gap account does not cap the sale at a remaining
-    asset stock -- a full asset-depletion model is later work)."""
+    forced sale under a wider stress carries a deeper haircut."""
     net_cf = np.asarray(gap.net_cf, dtype=np.float64)
     n = net_cf.shape[0] - 1
     grow = _monthly_factors(reinvest_rate, n)
+    avail = None if available_assets is None else np.asarray(available_assets, np.float64)
     balance = np.empty(n + 1, dtype=np.float64)
     forced_sale = np.zeros(n + 1, dtype=np.float64)
     realized_loss = np.zeros(n + 1, dtype=np.float64)
+    unfunded = np.zeros(n + 1, dtype=np.float64)
+    sold = 0.0                                        # cumulative asset stock sold
+
+    def settle(m: int, bal: float) -> float:
+        nonlocal sold
+        need = -bal
+        sell = need if avail is None else min(need, max(0.0, float(avail[m]) - sold))
+        forced_sale[m] = sell
+        realized_loss[m] = sell * haircut
+        sold += sell
+        bal += sell
+        if bal < 0.0:                                 # stock exhausted -> uncovered
+            unfunded[m] = -bal
+            bal = 0.0
+        return bal
+
     bal = opening_balance + net_cf[0]
     if bal < 0.0:                                     # a shortfall already at inception
-        forced_sale[0], realized_loss[0], bal = -bal, -bal * haircut, 0.0
+        bal = settle(0, bal)
     balance[0] = bal
     for m in range(1, n + 1):
         bal = balance[m - 1] * grow[m] + net_cf[m]
         if bal < 0.0:
-            forced_sale[m] = -bal
-            realized_loss[m] = -bal * haircut
-            bal = 0.0
+            bal = settle(m, bal)
         balance[m] = bal
     return LiquidationResult(balance=balance, forced_sale=forced_sale,
-                             realized_loss=realized_loss)
+                             realized_loss=realized_loss, unfunded=unfunded)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1200,7 +1266,7 @@ def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "asset_portfolio_value", "available_capital",
-    "asset_portfolio_cashflows", "CashflowGap", "cashflow_gap",
+    "asset_portfolio_cashflows", "asset_value_path", "CashflowGap", "cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
     "InteractionResult", "interaction_loss",
     "net_interest_scr", "net_interest_kics_scr",

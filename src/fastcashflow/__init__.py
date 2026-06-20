@@ -91,7 +91,7 @@ from fastcashflow.alm import (
 from fastcashflow import alm
 from fastcashflow.assets import (
     Equity, Property, Cash, AssetPortfolio, SolvencyAssessment,
-    CashflowGap, asset_portfolio_cashflows, cashflow_gap,
+    CashflowGap, asset_portfolio_cashflows, asset_value_path, cashflow_gap,
     ReinvestmentResult, reinvest, LiquidationResult, liquidate,
     InteractionResult, interaction_loss,
     asset_portfolio_value, available_capital, net_interest_scr,
@@ -162,7 +162,7 @@ __all__ = [
     "key_rate_durations", "bond_duration", "bond_value", "effective_maturity",
     "alm_gap", "duration_gap",
     "assets", "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
-    "CashflowGap", "asset_portfolio_cashflows", "cashflow_gap",
+    "CashflowGap", "asset_portfolio_cashflows", "asset_value_path", "cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
     "InteractionResult", "interaction_loss",
     "asset_portfolio_value", "available_capital", "net_interest_scr",
