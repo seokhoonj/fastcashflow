@@ -20,6 +20,7 @@ preferred form -- a flat band payout would create cliff-edge basis risk).
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -163,3 +164,58 @@ def capital_relief(model_points: ModelPoints, basis: Basis, treaty: LapseXL,
     return LapseReliefResult(
         loss_density=S, shock=shock, gross_scr=gross,
         recovery=recovery, net_scr=gross - recovery)
+
+
+# ---------------------------------------------------------------------------
+# Counterparty default risk on the reinsurer exposure
+# (Delegated Regulation Art. 189-201). Buying the treaty adds a credit charge
+# on the reinsurer, which partly offsets the lapse-SCR relief.
+# ---------------------------------------------------------------------------
+
+# Probability of default by credit quality step (Delegated Regulation Art. 199),
+# steps 0..6. A reinsurer is typically AAA/AA/A -> step 0/1/2.
+CREDIT_QUALITY_STEP_PD = (0.00002, 0.0001, 0.0005, 0.0024, 0.012, 0.042, 0.042)
+
+
+def counterparty_default_scr(
+    recoverables: float, risk_mitigating_effect: float,
+    probability_of_default: float, *,
+    collateral: float = 0.0, collateral_factor: float = 0.0,
+) -> float:
+    """SCR for counterparty default on a single type-1 reinsurance exposure
+    (Delegated Regulation Art. 192, 200, 201).
+
+    The reinsurance recoverable plus the loss of the treaty's risk-mitigating
+    effect on default is the loss-given-default (Art. 192(2)):
+
+        LGD = max(0, 0.50 x (recoverables + 0.50 x risk_mitigating_effect)
+                       - collateral_factor x collateral)
+
+    ``risk_mitigating_effect`` (``RM_re``) is the SCR reduction the treaty
+    provides -- here the lapse-SCR relief; on the reinsurer's default the cedant
+    loses both the recoverable and that mitigation. With a SINGLE counterparty
+    the Art. 201 variance collapses to ``V = PD (1 - PD) LGD^2`` (the Vinter +
+    Vintra cross terms cancel: ``(1 - PD) + 1.5 = 2.5 - PD``), so
+    ``sigma = LGD sqrt(PD (1 - PD))`` and Art. 200 gives, with
+    ``sigma / sum(LGD) = sqrt(PD (1 - PD))``:
+
+        sqrt(PD(1-PD)) <= 7%   ->  SCR_def = 3 sigma
+        7% < .         <= 20%  ->  SCR_def = 5 sigma
+        > 20%                  ->  SCR_def = LGD
+
+    Type 2 is zero for a pure reinsurance counterparty, so ``SCR_def`` is the
+    type-1 amount. A typical reinsurer (PD 0.01-0.24%) lands in the first case,
+    so the charge is small (~1-7% of LGD) -- the add-back that makes the net
+    mass-lapse benefit less than the gross relief."""
+    lgd = max(0.0, 0.50 * (recoverables + 0.50 * risk_mitigating_effect)
+                   - collateral_factor * collateral)
+    if lgd == 0.0:
+        return 0.0
+    pd = probability_of_default
+    sigma = lgd * math.sqrt(pd * (1.0 - pd))
+    ratio = math.sqrt(pd * (1.0 - pd))          # sigma / sum(LGD) for one exposure
+    if ratio <= 0.07:
+        return 3.0 * sigma
+    if ratio <= 0.20:
+        return 5.0 * sigma
+    return lgd

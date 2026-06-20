@@ -155,3 +155,54 @@ def test_capital_relief_group_pension_70_shock():
     assert np.isclose(r.gross_scr, 0.70 * S)
     assert np.isclose(r.recovery, 0.25 * S)         # full capacity (0.70 - 0.15 > 0.25)
     assert np.isclose(r.net_scr, (0.70 - 0.25) * S)
+
+
+# ---------------------------------------------------------------------------
+# Counterparty default risk on the reinsurer (DR Art 192/199/200/201)
+# ---------------------------------------------------------------------------
+
+def test_credit_quality_step_pd_table():
+    """DR Art 199 probability-of-default table, steps 0..6."""
+    assert lre.CREDIT_QUALITY_STEP_PD == (
+        0.00002, 0.0001, 0.0005, 0.0024, 0.012, 0.042, 0.042)
+
+
+def test_counterparty_default_lgd_formula():
+    """LGD = 0.50 x (recoverables + 0.50 x RM_re) - collateral_factor x collateral
+    (DR Art 192(2)). At PD in the first Art-200 case, SCR = 3 x LGD x sqrt(PD(1-PD))."""
+    import math
+    recoverables, rm_re = 1_000_000.0, 8_000_000.0
+    pd = 0.0005                                       # CQS 2, first case
+    lgd = 0.50 * (recoverables + 0.50 * rm_re)
+    expected = 3.0 * lgd * math.sqrt(pd * (1.0 - pd))
+    got = lre.counterparty_default_scr(recoverables, rm_re, pd)
+    assert np.isclose(got, expected)
+
+
+def test_counterparty_default_three_art200_cases():
+    """The three Art 200 thresholds on sqrt(PD(1-PD)): CQS3 -> 3 sigma,
+    CQS4 -> 5 sigma, CQS5 -> sum LGD."""
+    import math
+    rm_re = 8_000_000.0
+    lgd = 0.50 * 0.50 * rm_re                          # recoverables 0, no collateral
+
+    pd1 = 0.0024                                       # sqrt(pd(1-pd)) ~ 0.0489 <= 0.07
+    assert math.sqrt(pd1 * (1 - pd1)) <= 0.07
+    assert np.isclose(lre.counterparty_default_scr(0.0, rm_re, pd1),
+                      3.0 * lgd * math.sqrt(pd1 * (1 - pd1)))
+
+    pd2 = 0.012                                        # ~0.1089, in (0.07, 0.20]
+    assert 0.07 < math.sqrt(pd2 * (1 - pd2)) <= 0.20
+    assert np.isclose(lre.counterparty_default_scr(0.0, rm_re, pd2),
+                      5.0 * lgd * math.sqrt(pd2 * (1 - pd2)))
+
+    pd3 = 0.042                                        # ~0.2006 > 0.20 -> sum LGD
+    assert math.sqrt(pd3 * (1 - pd3)) > 0.20
+    assert np.isclose(lre.counterparty_default_scr(0.0, rm_re, pd3), lgd)
+
+
+def test_counterparty_default_collateral_floors_at_zero():
+    """Collateral above the recoverable+mitigation drives LGD (and SCR) to zero."""
+    scr = lre.counterparty_default_scr(
+        1_000_000.0, 0.0, 0.0005, collateral=10_000_000.0, collateral_factor=1.0)
+    assert scr == 0.0

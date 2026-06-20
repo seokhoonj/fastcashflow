@@ -6,11 +6,13 @@ treaty's loss base is the mass-lapse own-funds strain (:func:`loss_density`);
 the layer between attachment and detachment is ceded.
 """
 from fastcashflow._lapse_reinsurance import (
+    CREDIT_QUALITY_STEP_PD,
     SF_MASS_LAPSE_SHOCK,
     SF_MASS_LAPSE_SHOCK_GROUP_PENSION,
     LapseReliefResult,
     LapseXL,
     capital_relief,
+    counterparty_default_scr,
     lapse_loss_density as loss_density,
 )
 
@@ -19,6 +21,8 @@ __all__ = [
     "LapseReliefResult",
     "loss_density",
     "capital_relief",
+    "counterparty_default_scr",
+    "CREDIT_QUALITY_STEP_PD",
     "SF_MASS_LAPSE_SHOCK",
     "SF_MASS_LAPSE_SHOCK_GROUP_PENSION",
 ]
