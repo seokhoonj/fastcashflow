@@ -286,6 +286,70 @@ def test_cedant_relief_total_composition():
     assert r.total_benefit > 0.0
 
 
+# ---------------------------------------------------------------------------
+# Measurement period -- the time axis (EIOPA Annex 3.8 / 3.9 / footnote 10)
+# ---------------------------------------------------------------------------
+
+S_TEST = 10_000_000.0
+TREATY = lre.LapseXL(0.20, 0.40)            # attach 20%, detach 40% over BE, capacity 0.20
+
+
+def test_reset_window_claims_per_period():
+    """reset windows accumulate within each period and sum the claims. A single
+    24-month event with 30% in year 1 alone triggers the 20% attachment."""
+    incr = np.zeros(36)
+    incr[0] = 0.30                            # 30% excess lapse in month 0
+    m = lre.MeasurementPeriod(months=12, mode="reset")
+    claim = lre.windowed_claim(incr, TREATY, S_TEST, m, duration_months=36)
+    # only window 0 sees the 0.30 -> clip(0.30 - 0.20, 0, 0.20) = 0.10
+    assert np.isclose(claim, S_TEST * 0.10)
+
+
+def test_reset_12mo_misses_multiyear_event():
+    """EIOPA Annex 3.9: a 2-year event of 20% per year never reaches a 20%
+    attachment in any single 12-month window, so a 12-month reset treaty pays
+    nothing."""
+    incr = np.zeros(24)
+    incr[0] = 0.20                            # year 1: 20%
+    incr[12] = 0.20                           # year 2: 20%
+    m12 = lre.MeasurementPeriod(months=12, mode="reset")
+    assert np.isclose(lre.windowed_claim(incr, TREATY, S_TEST, m12, duration_months=24), 0.0)
+
+
+def test_longer_window_catches_multiyear_event():
+    """The same 20% + 20% event, measured over a 24-month window, accumulates to
+    40% and pays the full capacity (40% - 20% = 20%, capped at the 0.20 layer)."""
+    incr = np.zeros(24)
+    incr[0] = 0.20
+    incr[12] = 0.20
+    m24 = lre.MeasurementPeriod(months=24, mode="reset")
+    claim = lre.windowed_claim(incr, TREATY, S_TEST, m24, duration_months=24)
+    assert np.isclose(claim, S_TEST * 0.20)   # clip(0.40 - 0.20, 0, 0.20) = 0.20
+
+
+def test_rolling_high_water_mark_pays_once():
+    """EIOPA footnote 10: a single event falling in several overlapping windows
+    is paid once (the high-water mark), not summed across the windows."""
+    incr = np.zeros(36)
+    incr[12] = 0.30                           # one event at month 12
+    roll = lre.MeasurementPeriod(months=12, mode="rolling", step_months=3)
+    claim = lre.windowed_claim(incr, TREATY, S_TEST, roll, duration_months=36)
+    # windows starting at 3,6,9,12 all contain month 12 -> each claims S*0.10;
+    # high-water mark pays the max once, not 4x
+    assert np.isclose(claim, S_TEST * 0.10)
+    # a naive reset over the same path would also see it in one window here
+    reset = lre.MeasurementPeriod(months=12, mode="reset")
+    assert np.isclose(lre.windowed_claim(incr, TREATY, S_TEST, reset, duration_months=36),
+                      S_TEST * 0.10)
+
+
+def test_measurement_period_validation():
+    with pytest.raises(ValueError, match="mode must be"):
+        lre.MeasurementPeriod(months=12, mode="sliding")
+    with pytest.raises(ValueError, match="months must be positive"):
+        lre.MeasurementPeriod(months=0)
+
+
 def test_cedant_relief_zero_when_updown_dominates():
     """When lapse up/down already bites harder than mass, cutting the mass leg
     gives no lapse relief -- the treaty does not help."""

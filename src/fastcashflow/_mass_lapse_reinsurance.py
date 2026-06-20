@@ -118,6 +118,80 @@ class LapseXL:
         return loss_density * self.covered_fraction(excess_lapse)
 
 
+# ---------------------------------------------------------------------------
+# Measurement period -- the time axis (EIOPA Annex 3.8 / 3.9 / footnote 10).
+# The treaty aggregates lapses over a measurement window (the "risk window"),
+# NOT instantaneously: a claim exists where the window's accumulated excess
+# lapse passes the attachment. This is distinct from the treaty's contractual
+# duration. A 12-month window can miss a multi-year mass-lapse event (3.9); a
+# longer window catches it.
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class MeasurementPeriod:
+    """How the treaty aggregates lapses over time.
+
+    ``months`` is the window length (the risk window / cover period -- EIOPA
+    Annex 3.8, usually 12). ``mode`` is ``"reset"`` (non-overlapping windows; the
+    accumulation resets each period -- 3.8) or ``"rolling"`` (a new window starts
+    every ``step_months``, so windows overlap -- footnote 10). Under ``"rolling"``
+    a single event falls in several windows; the treaty pays the high-water mark
+    (the largest single-window claim), not the sum, to avoid paying several times
+    for the same claim (footnote 10's "adjustment mechanisms").
+    """
+
+    months: int = 12
+    mode: str = "reset"
+    step_months: int = 3
+
+    def __post_init__(self) -> None:
+        if self.months <= 0:
+            raise ValueError(f"months must be positive, got {self.months}")
+        if self.mode not in ("reset", "rolling"):
+            raise ValueError(f"mode must be 'reset' or 'rolling', got {self.mode!r}")
+        if self.mode == "rolling" and self.step_months <= 0:
+            raise ValueError(
+                f"step_months must be positive for rolling, got {self.step_months}")
+
+    def _window_starts(self, duration_months: int) -> list[int]:
+        """The month each measurement window opens within the treaty duration."""
+        if self.mode == "reset":
+            return list(range(0, duration_months, self.months))
+        return list(range(0, max(1, duration_months - self.months + 1), self.step_months))
+
+
+def windowed_claim(
+    excess_lapse_monthly, treaty: LapseXL, loss_density: float,
+    measurement: MeasurementPeriod, *, duration_months: int | None = None,
+) -> float:
+    """Total treaty claim over its duration from a monthly excess-lapse path.
+
+    ``excess_lapse_monthly`` is the per-month lapse fraction in EXCESS of best
+    estimate (of the original in-force). Each measurement window accumulates its
+    months' excess lapse; the window claim is the treaty recovery on that
+    accumulated excess (``loss_density x clip(window_sum - attachment, 0,
+    capacity)``). ``reset`` windows sum their claims (each period is a fresh
+    layer); ``rolling`` windows take the high-water mark -- the largest single
+    window claim -- so a single event spanning several overlapping windows is
+    paid once (EIOPA footnote 10).
+
+    A 12-month window may miss a multi-year event (e.g. 20% + 20% over two years
+    never reaches a 20% attachment in any one window), which a longer window
+    catches -- EIOPA Annex 3.9."""
+    incr = np.asarray(excess_lapse_monthly, dtype=np.float64)
+    n = duration_months if duration_months is not None else incr.shape[0]
+    claims = []
+    for start in measurement._window_starts(n):
+        end = min(start + measurement.months, incr.shape[0])
+        window_excess = float(incr[start:end].sum())
+        claims.append(treaty.recovery(window_excess, loss_density))
+    if not claims:
+        return 0.0
+    if measurement.mode == "reset":
+        return float(sum(claims))
+    return float(max(claims))                # rolling: high-water mark
+
+
 @dataclass(frozen=True, slots=True)
 class LapseReliefResult:
     """The cedant's mass-lapse capital relief from a :class:`LapseXL` treaty.

@@ -12,18 +12,22 @@ from fastcashflow._mass_lapse_reinsurance import (
     CedantSolvencyRelief,
     LapseReliefResult,
     LapseXL,
+    MeasurementPeriod,
     capital_relief,
     cedant_solvency_relief,
     counterparty_default_scr,
     lapse_loss_density as loss_density,
+    windowed_claim,
 )
 
 __all__ = [
     "LapseXL",
+    "MeasurementPeriod",
     "LapseReliefResult",
     "CedantSolvencyRelief",
     "loss_density",
     "capital_relief",
+    "windowed_claim",
     "counterparty_default_scr",
     "cedant_solvency_relief",
     "CREDIT_QUALITY_STEP_PD",
