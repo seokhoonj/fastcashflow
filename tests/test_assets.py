@@ -27,14 +27,14 @@ def _parallel_curves(n=10, base=0.03, bp=0.001):
             sv.shock_curve(np.full(n, -rel), up=False))
 
 
-def test_portfolio_value_sums_holdings():
+def test_asset_portfolio_value_sums_holdings():
     """A bond (priced at the curve) plus equity / cash (carried) sum up."""
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(100.0, 0.05, 10, 1), assets.Equity(50.0), assets.Cash(10.0)))
-    v = assets.portfolio_value(p, 0.05)
+    v = assets.asset_portfolio_value(p, 0.05)
     assert np.isclose(v, 100.0 + 50.0 + 10.0)          # the bond is at par at 5%
     # a per-year curve gives the same value as the equivalent flat scalar
-    assert np.isclose(assets.portfolio_value(p, np.full(10, 0.05)), v)
+    assert np.isclose(assets.asset_portfolio_value(p, np.full(10, 0.05)), v)
 
 
 def test_available_capital_hand_calc():
@@ -50,14 +50,14 @@ def test_net_interest_scr_formula_and_sign():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(alm.Bond(2_000_000.0, 0.03, 10, 1),))
     curves = _parallel_curves()
-    base_pv = assets.portfolio_value(p, basis.discount_annual)
+    base_pv = assets.asset_portfolio_value(p, basis.discount_annual)
     base_bel = float(measure(mp, basis, full=False).bel.sum())
     _, b_up = curves[0].apply(mp, basis)
-    assert assets.portfolio_value(p, b_up.discount_annual) < base_pv      # asset falls
+    assert assets.asset_portfolio_value(p, b_up.discount_annual) < base_pv      # asset falls
     assert float(measure(mp, b_up, full=False).bel.sum()) < base_bel      # BEL falls
 
     def nav(b):
-        return (assets.portfolio_value(p, b.discount_annual)
+        return (assets.asset_portfolio_value(p, b.discount_annual)
                 - float(measure(mp, b, full=False).bel.sum()))
     nav_base = base_pv - base_bel
     expected = max(0.0, max(nav_base - nav(s.apply(mp, basis)[1]) for s in curves))
@@ -98,12 +98,12 @@ def test_net_interest_kics_five_scenario_on_nav():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(alm.Bond(2_000_000.0, 0.03, 10, 1),))
     ki = _kics_scenarios()
-    nav_base = (assets.portfolio_value(p, basis.discount_annual)
+    nav_base = (assets.asset_portfolio_value(p, basis.discount_annual)
                 - float(measure(mp, basis, full=False).bel.sum()))
 
     def amt(stress):
         _, b = stress.apply(mp, basis)
-        nav = (assets.portfolio_value(p, b.discount_annual)
+        nav = (assets.asset_portfolio_value(p, b.discount_annual)
                - float(measure(mp, b, full=False).bel.sum()))
         return nav_base - nav
     up, down = max(0.0, amt(ki.up)), max(0.0, amt(ki.down))
@@ -410,7 +410,7 @@ def test_assess_solvency_components():
     assert a.tax_adjustment == 0.0                          # no tax relief by default
     assert np.isclose(a.total_scr, a.basic_required_capital - a.tax_adjustment)
     assert np.isclose(a.solvency_ratio, a.available_capital / a.total_scr)
-    assert np.isclose(a.available_capital, a.portfolio_value - (a.bel + a.risk_margin))
+    assert np.isclose(a.available_capital, a.asset_portfolio_value - (a.bel + a.risk_margin))
 
 
 def test_tax_adjustment_loss_absorption():
@@ -550,7 +550,7 @@ def test_preferred_equity_by_rating_table20():
 # Dynamic asset engine -- Phase A: asset cash-flow projection
 # ---------------------------------------------------------------------------
 
-def test_project_asset_cashflows_places_coupons_and_redemption():
+def test_asset_portfolio_cashflows_places_coupons_and_redemption():
     """Each bond's coupons and final redemption land on the monthly grid at
     round(time_years * 12); equity/property/cash carry no scheduled cash flow."""
     pf = assets.AssetPortfolio(holdings=(
@@ -558,7 +558,7 @@ def test_project_asset_cashflows_places_coupons_and_redemption():
         alm.Bond(face=2000, coupon_rate=0.04, maturity_years=2, frequency=2),
         assets.Equity(market_value=5000),               # no scheduled CF
     ))
-    cf = assets.project_asset_cashflows(pf, 36)
+    cf = assets.asset_portfolio_cashflows(pf, 36)
     assert cf.shape == (37,)
     # bond1: 50 at 12/24/36 (+1000 at 36); bond2: 40 at 6/12/18/24 (+2000 at 24)
     assert np.isclose(cf[6], 40.0)
@@ -571,22 +571,22 @@ def test_project_asset_cashflows_places_coupons_and_redemption():
     assert np.isclose(cf.sum(), 3310.0)
 
 
-def test_project_asset_cashflows_drops_flows_beyond_horizon():
+def test_asset_portfolio_cashflows_drops_flows_beyond_horizon():
     """Cash flows past n_months are dropped (the horizon truncates the bond)."""
     pf = assets.AssetPortfolio(holdings=(
         alm.Bond(face=1000, coupon_rate=0.05, maturity_years=5, frequency=1),))
-    cf = assets.project_asset_cashflows(pf, 24)          # only years 1-2 fit
+    cf = assets.asset_portfolio_cashflows(pf, 24)          # only years 1-2 fit
     assert cf.shape == (25,)
     assert np.isclose(cf[12], 50.0)
     assert np.isclose(cf[24], 50.0)                      # year-2 coupon, no redemption yet
     assert np.isclose(cf.sum(), 100.0)                  # years 3-5 (incl. 1000 face) dropped
 
 
-def test_project_asset_cashflows_rejects_bad_horizon():
+def test_asset_portfolio_cashflows_rejects_bad_horizon():
     pf = assets.AssetPortfolio(holdings=(
         alm.Bond(face=1000, coupon_rate=0.05, maturity_years=3),))
     with pytest.raises(ValueError, match="n_months must be positive"):
-        assets.project_asset_cashflows(pf, 0)
+        assets.asset_portfolio_cashflows(pf, 0)
 
 
 def test_cashflow_gap_nets_asset_against_liability():
@@ -604,7 +604,7 @@ def test_cashflow_gap_nets_asset_against_liability():
     assert gap.liability_cf.shape == (n_time + 1,)
     expected_liab = flow_bom.copy(); expected_liab[:n_time] += flow_mid
     assert np.allclose(gap.liability_cf, expected_liab)
-    assert np.allclose(gap.asset_cf, assets.project_asset_cashflows(pf, n_time))
+    assert np.allclose(gap.asset_cf, assets.asset_portfolio_cashflows(pf, n_time))
     assert np.allclose(gap.net_cf, gap.asset_cf - gap.liability_cf)
     assert np.allclose(gap.cumulative_net, np.cumsum(gap.net_cf))
 
@@ -750,13 +750,13 @@ def test_interaction_loss_decomposes():
     shift, sens, hc = 0.01, 8.0, 0.1
     res = assets.interaction_loss(pf, mp, basis, shift=shift,
                                   lapse_sensitivity=sens, haircut=hc)
-    # base NAV reproduces portfolio_value - BEL
-    base_nav = (assets.portfolio_value(pf, basis.discount_annual)
+    # base NAV reproduces asset_portfolio_value - BEL
+    base_nav = (assets.asset_portfolio_value(pf, basis.discount_annual)
                 - float(measure(mp, basis, full=False).bel.sum()))
     assert np.isclose(res.base_nav, base_nav)
     # stressed NAV reproduces the coupled-stress re-measure
     mp_s, basis_s = sv.interest_with_dynamic_lapse(shift, sens).apply(mp, basis)
-    stressed_nav = (assets.portfolio_value(pf, basis_s.discount_annual)
+    stressed_nav = (assets.asset_portfolio_value(pf, basis_s.discount_annual)
                     - float(measure(mp_s, basis_s, full=False).bel.sum()))
     assert np.isclose(res.stressed_nav, stressed_nav)
     # forced-sale leg reproduces liquidate on the stressed gap

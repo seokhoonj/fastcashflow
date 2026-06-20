@@ -38,7 +38,7 @@ bond = alm.Bond(face=liab_dv01 / per_face * 100.0, coupon_rate=0.03, maturity_ye
 port = fcf.AssetPortfolio(holdings=(bond, fcf.Cash(5_000_000.0)))
 
 a = fcf.assess_solvency(port, mp, basis, regime=fcf.SOLVENCY2)
-print(f"portfolio value   = {a.portfolio_value:>14,.0f}")
+print(f"portfolio value   = {a.asset_portfolio_value:>14,.0f}")
 print(f"BEL + risk margin = {a.bel + a.risk_margin:>14,.0f}")
 print(f"available capital = {a.available_capital:>14,.0f}")
 print(f"insurance SCR     = {a.insurance_scr:>14,.0f}")

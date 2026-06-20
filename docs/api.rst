@@ -352,7 +352,7 @@ the net interest-rate SCR, and the assembled solvency ratio.
 .. autoclass:: fastcashflow.Cash
    :members:
 
-.. autofunction:: fastcashflow.portfolio_value
+.. autofunction:: fastcashflow.asset_portfolio_value
 
 .. autofunction:: fastcashflow.available_capital
 

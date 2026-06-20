@@ -12,11 +12,11 @@
 
 ## 다룰 내용
 
-- `available_capital(portfolio_value, bel, risk_margin)` 의 구성
+- `available_capital(asset_portfolio_value, bel, risk_margin)` 의 구성
 - 부채측 (요구자본 트랙의 BEL / RA) 과 자산측 (1-2 챕터) 의 결합
 - 왜 가용자본이 규제 대차대조표의 핵심인지 -- 다음 챕터의 비율로 이어짐
 
 ## 관련 API / 쿡북
 
-- `fcf.assets` — `available_capital`, `portfolio_value`
+- `fcf.assets` — `available_capital`, `asset_portfolio_value`
 - 부채 튜토리얼 [BEL / RA / CSM](../tutorial/02-bel-ra-csm)

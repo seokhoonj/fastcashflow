@@ -4,7 +4,7 @@
 :class: tip
 
 - 자산을 **시장가치** 로 평가하는 자료구조 (`fcf.assets.AssetPortfolio`, `Equity` / `Property` / `Cash`)
-- 보유자산별 평가 (`holding_value`) 와 포트폴리오 합계 (`portfolio_value`)
+- 보유자산별 평가 (`holding_value`) 와 포트폴리오 합계 (`asset_portfolio_value`)
 - 자산측이 왜 부채 엔진과 **직교하는 별도 pillar** 인지, 그리고 지급여력 그림에서 어디에 놓이는지
 :::
 
@@ -18,5 +18,5 @@
 
 ## 관련 API / 쿡북
 
-- `fcf.assets` — `AssetPortfolio`, `portfolio_value`
+- `fcf.assets` — `AssetPortfolio`, `asset_portfolio_value`
 - 쿡북 8.8 [자산 - 가용자본 - 지급여력비율](../cookbook/workflow/solvency-balance-sheet)

@@ -95,22 +95,22 @@ def holding_value(holding, discount_annual) -> float:
     return float(holding.market_value)
 
 
-def portfolio_value(portfolio: AssetPortfolio, discount_annual) -> float:
+def asset_portfolio_value(portfolio: AssetPortfolio, discount_annual) -> float:
     """Total market value of the portfolio at the given discount curve."""
     return float(sum(holding_value(h, discount_annual) for h in portfolio.holdings))
 
 
-def available_capital(portfolio_value: float, bel: float,
+def available_capital(asset_portfolio_value: float, bel: float,
                       risk_margin: float) -> float:
     """Available capital (own funds) -- assets less liabilities on the prudential
-    balance sheet: ``portfolio_value - (bel + risk_margin)``. The liability is the
+    balance sheet: ``asset_portfolio_value - (bel + risk_margin)``. The liability is the
     technical provision (best estimate plus risk margin). Positive = solvent
     surplus. (Other balance-sheet liabilities, if any, are the caller's to net
     out of the portfolio value.)"""
-    return portfolio_value - (bel + risk_margin)
+    return asset_portfolio_value - (bel + risk_margin)
 
 
-def project_asset_cashflows(portfolio: AssetPortfolio, n_months: int) -> FloatArray:
+def asset_portfolio_cashflows(portfolio: AssetPortfolio, n_months: int) -> FloatArray:
     """Project the portfolio's asset cash flows onto a monthly grid.
 
     Returns ``(n_months + 1,)`` -- the cash received at each month ``0 .. n_months``
@@ -164,7 +164,7 @@ class CashflowGap:
 def cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
     """The month-by-month asset-liability cash-flow gap.
 
-    Nets the projected asset cash flows (:func:`project_asset_cashflows`) against
+    Nets the projected asset cash flows (:func:`asset_portfolio_cashflows`) against
     the net liability cash flows (:func:`fastcashflow.alm.net_liability_cashflows`)
     on the engine's monthly grid. The liability's begin-of-month flows
     (``annuity - premium`` and maturity benefits) and mid-month flows (death /
@@ -180,7 +180,7 @@ def cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
     n_time = flow_mid.shape[0]
     liability_cf = flow_bom.copy()
     liability_cf[:n_time] += flow_mid
-    asset_cf = project_asset_cashflows(portfolio, n_time)
+    asset_cf = asset_portfolio_cashflows(portfolio, n_time)
     return CashflowGap(asset_cf=asset_cf, liability_cf=liability_cf)
 
 
@@ -352,8 +352,8 @@ class InteractionResult:
 
 def _portfolio_nav(portfolio: AssetPortfolio, model_points: ModelPoints,
                    basis: Basis) -> float:
-    """Net asset value at market: ``portfolio_value(curve) - BEL``."""
-    return (portfolio_value(portfolio, basis.discount_annual)
+    """Net asset value at market: ``asset_portfolio_value(curve) - BEL``."""
+    return (asset_portfolio_value(portfolio, basis.discount_annual)
             - float(measure(model_points, basis, full=False).bel.sum()))
 
 
@@ -400,15 +400,15 @@ def _interaction(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Ba
 def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
     """A callable mapping a curve :class:`~fastcashflow.solvency.Stress` to the NET
     asset value DECREASE it causes -- ``NAV(base) - NAV(stress)`` with
-    ``NAV(c) = portfolio_value(c) - BEL(c)``. The asset and liability legs re-price
+    ``NAV(c) = asset_portfolio_value(c) - BEL(c)``. The asset and liability legs re-price
     on the SAME shocked curve (the stress rebuilds ``basis.discount_annual``, which
     prices the bonds and the liability alike), so a duration-matched book gives ~0."""
-    base_nav = (portfolio_value(portfolio, basis.discount_annual)
+    base_nav = (asset_portfolio_value(portfolio, basis.discount_annual)
                 - float(measure(model_points, basis, full=False).bel.sum()))
 
     def delta(stress) -> float:
         mp_s, basis_s = stress.apply(model_points, basis)
-        stress_nav = (portfolio_value(portfolio, basis_s.discount_annual)
+        stress_nav = (asset_portfolio_value(portfolio, basis_s.discount_annual)
                       - float(measure(mp_s, basis_s, full=False).bel.sum()))
         return base_nav - stress_nav
     return delta
@@ -704,7 +704,7 @@ def concentration_scr(portfolio: AssetPortfolio, regime, discount_annual, *,
     property, or for an unknown regime."""
     if regime.name not in ("K-ICS", "Solvency II"):
         return 0.0
-    ta = total_assets if total_assets is not None else portfolio_value(
+    ta = total_assets if total_assets is not None else asset_portfolio_value(
         portfolio, discount_annual)
     if ta <= 0.0:
         return 0.0
@@ -1014,7 +1014,7 @@ def aggregate_required_capital(insurance: float, market: float, credit: float, *
 class SolvencyAssessment:
     """The asset-inclusive solvency picture at t=0 -- the full ratio and its parts.
 
-    ``available_capital`` is ``portfolio_value - (bel + risk_margin)``. The market
+    ``available_capital`` is ``asset_portfolio_value - (bel + risk_margin)``. The market
     module aggregates the ``net_interest_scr`` (assets and liabilities), the
     ``equity_scr``, the ``property_scr``, the ``fx_scr`` and the
     ``concentration_scr`` through the market correlation; the
@@ -1026,7 +1026,7 @@ class SolvencyAssessment:
     from the basic required capital. ``solvency_ratio`` is
     ``available_capital / total_scr``."""
 
-    portfolio_value: float
+    asset_portfolio_value: float
     bel: float
     risk_margin: float
     available_capital: float
@@ -1093,7 +1093,7 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     """
     scr = required_capital(model_points, basis, regime=regime,
                            catastrophe=catastrophe, property_codes=property_codes)
-    pv = portfolio_value(portfolio, basis.discount_annual)
+    pv = asset_portfolio_value(portfolio, basis.discount_annual)
     ac = available_capital(pv, scr.base_bel, scr.risk_margin)
 
     cal = _market_cal(regime)
@@ -1127,7 +1127,7 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     else:
         ratio = float("inf") if ac >= 0.0 else float("-inf")
     return SolvencyAssessment(
-        portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
+        asset_portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
         available_capital=ac, insurance_scr=ins, general_insurance_scr=gen,
         net_interest_scr=ni,
         equity_scr=eq, property_scr=pr, fx_scr=fx, concentration_scr=conc,
@@ -1201,8 +1201,8 @@ def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
 
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
-    "holding_value", "portfolio_value", "available_capital",
-    "project_asset_cashflows", "CashflowGap", "cashflow_gap",
+    "holding_value", "asset_portfolio_value", "available_capital",
+    "asset_portfolio_cashflows", "CashflowGap", "cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
     "InteractionResult", "interaction_loss",
     "net_interest_scr", "net_interest_kics_scr",
