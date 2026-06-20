@@ -400,17 +400,15 @@ def _interaction(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Ba
 def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
     """A callable mapping a curve :class:`~fastcashflow.solvency.Stress` to the NET
     asset value DECREASE it causes -- ``NAV(base) - NAV(stress)`` with
-    ``NAV(c) = asset_portfolio_value(c) - BEL(c)``. The asset and liability legs re-price
-    on the SAME shocked curve (the stress rebuilds ``basis.discount_annual``, which
-    prices the bonds and the liability alike), so a duration-matched book gives ~0."""
-    base_nav = (asset_portfolio_value(portfolio, basis.discount_annual)
-                - float(measure(model_points, basis, full=False).bel.sum()))
+    ``NAV(c) = asset_portfolio_value(c) - BEL(c)`` (see :func:`_portfolio_nav`). The
+    asset and liability legs re-price on the SAME shocked curve (the stress rebuilds
+    ``basis.discount_annual``, which prices the bonds and the liability alike), so a
+    duration-matched book gives ~0."""
+    base_nav = _portfolio_nav(portfolio, model_points, basis)
 
     def delta(stress) -> float:
         mp_s, basis_s = stress.apply(model_points, basis)
-        stress_nav = (asset_portfolio_value(portfolio, basis_s.discount_annual)
-                      - float(measure(mp_s, basis_s, full=False).bel.sum()))
-        return base_nav - stress_nav
+        return base_nav - _portfolio_nav(portfolio, mp_s, basis_s)
     return delta
 
 
