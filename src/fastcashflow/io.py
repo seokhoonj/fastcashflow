@@ -1568,18 +1568,18 @@ def read_inforce_policies(
                 "plus the closing-state columns "
                 "(elapsed_months, count, prior_csm, lock_in_rate)."
             )
+    # A uniform column collapses to the scalar locked-in rate; a cohort-aware
+    # column (issue cohorts / GoCs with different inception rates, Sec. B72(b))
+    # is carried per row -- gmm.settle partitions by rate.
     lock = df["lock_in_rate"].to_numpy().astype(np.float64)
-    if lock.size and not np.all(lock == lock[0]):
-        raise NotImplementedError(
-            "lock_in_rate must be uniform across rows in v1; per-MP "
-            "(cohort-aware) lock-in rates are a future extension"
-        )
+    lock_in_rate = (float(lock[0]) if lock.size and np.all(lock == lock[0])
+                    else lock)
     state = InforceState(
         mp_id=df["mp_id"].to_numpy(),
         elapsed_months=df["elapsed_months"].to_numpy().astype(np.int64),
         count=df["count"].to_numpy().astype(np.float64),
         prior_csm=df["prior_csm"].to_numpy().astype(np.float64),
-        lock_in_rate=float(lock[0]) if lock.size else 0.0,
+        lock_in_rate=lock_in_rate,
         **_optional_state_columns(df),
     )
 
@@ -1966,18 +1966,17 @@ def read_inforce_state(path: Path | str) -> "InforceState":
             raise ValueError(
                 f"the in-force state file is missing required column {col!r}"
             )
+    # Uniform -> scalar; a cohort-aware column (per-row, Sec. B72(b)) is carried
+    # per row, which gmm.settle partitions by rate.
     lock = df["lock_in_rate"].to_numpy().astype(np.float64)
-    if lock.size and not np.all(lock == lock[0]):
-        raise NotImplementedError(
-            "lock_in_rate must be uniform across rows in v1; per-MP "
-            "(cohort-aware) lock-in rates are a future extension"
-        )
+    lock_in_rate = (float(lock[0]) if lock.size and np.all(lock == lock[0])
+                    else lock)
     return InforceState(
         mp_id=df["mp_id"].to_numpy(),
         elapsed_months=df["elapsed_months"].to_numpy().astype(np.int64),
         count=df["count"].to_numpy().astype(np.float64),
         prior_csm=df["prior_csm"].to_numpy().astype(np.float64),
-        lock_in_rate=float(lock[0]) if lock.size else 0.0,
+        lock_in_rate=lock_in_rate,
         **_optional_state_columns(df),
     )
 

@@ -40,16 +40,16 @@ def test_read_inforce_state_roundtrips(tmp_path: Path):
     assert state.lock_in_rate == 0.03
 
 
-def test_read_inforce_state_nonuniform_lock_in_errors(tmp_path: Path):
-    """v1 takes a scalar locked-in rate; non-uniform rows error out so the
-    detail is not silently dropped."""
+def test_read_inforce_state_nonuniform_lock_in_reads_per_row(tmp_path: Path):
+    """A cohort-aware (non-uniform) lock_in_rate column reads into a per-MP array
+    (gmm.settle then partitions by rate); a uniform column collapses to a scalar."""
     p = tmp_path / "state.csv"
     _write_state(p, [
         ("A", 36, 1.0, 0.0, 0.03),
         ("B", 24, 1.0, 0.0, 0.025),
     ])
-    with pytest.raises(NotImplementedError, match="lock_in_rate must be uniform"):
-        fcf.read_inforce_state(p)
+    state = fcf.read_inforce_state(p)
+    assert np.allclose(np.asarray(state.lock_in_rate, dtype=float), [0.03, 0.025])
 
 
 def test_read_inforce_state_missing_column_errors(tmp_path: Path):
