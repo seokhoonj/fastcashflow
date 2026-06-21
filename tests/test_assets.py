@@ -662,6 +662,33 @@ def test_cashflow_gap_needs_full():
         assets.cashflow_gap(pf, measure(mp, basis, full=False))
 
 
+def test_vfa_cashflow_gap_uses_the_guarantee_excess_basis():
+    """The VFA gap nets assets against the entity guarantee-excess liability (not
+    the gross account-value benefit) and -- unlike cashflow_gap -- accepts an
+    account-value book."""
+    basis = make_death_basis(mortality_q=0.002, lapse_q=0.004, discount_annual=0.03,
+                             ra_confidence=0.75, investment_return=0.0, fund_fee=0.02)
+    mp = fcf.ModelPoints.single(40, 0.0, 60, account_value=1000.0,
+                                minimum_accumulation_benefit=1200.0,
+                                calculation_methods=PATTERNS)
+    m = fcf.vfa.measure(mp, basis)
+    net = alm.vfa_net_liability_cashflows(m)
+    n_time = net.shape[0]
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=100, coupon_rate=0.05, maturity_years=5, frequency=1),
+        assets.Equity(market_value=500),))                  # no scheduled CF
+    gap = assets.vfa_cashflow_gap(pf, m)
+    assert gap.asset_cf.shape == (n_time + 1,)
+    assert gap.liability_cf.shape == (n_time + 1,)
+    expected_liab = np.zeros(n_time + 1); expected_liab[:n_time] = net
+    assert np.allclose(gap.liability_cf, expected_liab)
+    assert np.allclose(gap.asset_cf, assets.asset_portfolio_cashflows(pf, n_time))
+    assert np.allclose(gap.net_cf, gap.asset_cf - gap.liability_cf)
+    # The gross account-value benefit is excluded -- the liability is far smaller
+    # than the total benefit the unit fund pays.
+    assert abs(gap.liability_cf.sum()) < float(m.benefit_cf.sum())
+
+
 def _gap(asset_cf, liability_cf):
     return assets.CashflowGap(asset_cf=np.asarray(asset_cf, float),
                               liability_cf=np.asarray(liability_cf, float))

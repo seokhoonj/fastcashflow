@@ -28,7 +28,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.alm import (
     Bond, bond_value, bond_cashflows, bond_duration, effective_maturity,
-    net_liability_cashflows, _annual_df,
+    net_liability_cashflows, vfa_net_liability_cashflows, _annual_df,
 )
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
@@ -216,6 +216,26 @@ def cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
     n_time = flow_mid.shape[0]
     liability_cf = flow_bom.copy()
     liability_cf[:n_time] += flow_mid
+    asset_cf = asset_portfolio_cashflows(portfolio, n_time)
+    return CashflowGap(asset_cf=asset_cf, liability_cf=liability_cf)
+
+
+def vfa_cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
+    """The asset-liability cash-flow gap for a variable (VFA) book.
+
+    The VFA counterpart of :func:`cashflow_gap`: nets the projected asset cash
+    flows (:func:`asset_portfolio_cashflows`) against the VFA entity net liability
+    cash flow (:func:`fastcashflow.alm.vfa_net_liability_cashflows`) -- the
+    guarantee top-up plus expenses less the variable fee, on the engine's monthly
+    grid. Unlike ``cashflow_gap`` this is FOR account-value books, not against them:
+    the account-value benefit is funded by the unit fund, so the gap pits the
+    entity's own assets only against the guarantee-excess basis. Undiscounted
+    liquidity ladder -- where the general account throws off / must find cash to
+    carry the guarantee. Requires a ``full=True`` closed-form VA measurement."""
+    net = vfa_net_liability_cashflows(measurement)          # (n_time,)
+    n_time = net.shape[0]
+    liability_cf = np.zeros(n_time + 1, dtype=np.float64)
+    liability_cf[:n_time] = net
     asset_cf = asset_portfolio_cashflows(portfolio, n_time)
     return CashflowGap(asset_cf=asset_cf, liability_cf=liability_cf)
 
@@ -1275,6 +1295,7 @@ __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "asset_portfolio_value", "available_capital",
     "asset_portfolio_cashflows", "asset_value_path", "CashflowGap", "cashflow_gap",
+    "vfa_cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
     "InteractionResult", "interaction_loss",
     "net_interest_scr", "net_interest_kics_scr",
