@@ -161,8 +161,13 @@ def tvog_weights(
     fund_fee: float,
     investment_return: float,
     return_scenarios: FloatArray,
+    reduce: bool = True,
 ) -> FloatArray:
     """Per-month weights for the time value of a minimum guarantee.
+
+    ``reduce=True`` (default) returns the ``(n_time,)`` scenario-mean weights;
+    ``reduce=False`` returns the pre-mean ``(n_scenarios, n_time)`` matrix (its
+    mean over axis 0 is the reduced form), for a vectorised per-scenario pass.
 
     Returns a ``(n_time,)`` vector ``w`` for which the TVOG of a book equals
     ``w @ e``, where ``e[t]`` is the book's total of account value times
@@ -183,18 +188,19 @@ def tvog_weights(
         # TVOG is identically zero. Return it directly rather than route through
         # the separate cumulative growth / discount products, which over/underflow
         # (yielding 0 * inf = NaN) for an extreme-but-valid near-ruin return path.
-        return np.zeros(n_time)
+        return np.zeros(n_time) if reduce else np.zeros((return_scenarios.shape[0], n_time))
     f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
     r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
     central = np.full((1, n_time), r_m)
     stochastic = _discounted_growth(
         credited_monthly_rate(return_scenarios, minimum_crediting_rate),
         return_scenarios, f_m
-    ).mean(axis=0)
+    )                                                # (n_scenarios, n_time)
     central_factor = _discounted_growth(
         credited_monthly_rate(central, minimum_crediting_rate), central, f_m
     )[0]
-    return stochastic - central_factor
+    w = stochastic - central_factor                  # (n_scenarios, n_time)
+    return w.mean(axis=0) if reduce else w
 
 
 def tvog_term_weight(
@@ -203,8 +209,12 @@ def tvog_term_weight(
     fund_fee: float,
     investment_return: float,
     return_scenarios: FloatArray,
-) -> float:
+    reduce: bool = True,
+):
     """The maturity term-column credit-rate TVOG weight (one scalar).
+
+    ``reduce=True`` (default) returns the scalar scenario-mean weight;
+    ``reduce=False`` returns the pre-mean ``(n_scenarios,)`` vector.
 
     A maturity survivor exits at time = term -- one month past the width-n_time
     grid :func:`tvog_weights` covers (whose entries weight start-of-month
@@ -223,7 +233,7 @@ def tvog_term_weight(
     return_scenarios = _validate_return_scenarios(return_scenarios)
     n_time = return_scenarios.shape[1]
     if minimum_crediting_rate == NO_GUARANTEE_RATE:
-        return 0.0
+        return 0.0 if reduce else np.zeros(return_scenarios.shape[0])
     f_m = (1.0 + fund_fee) ** (1.0 / 12.0) - 1.0
     r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
     central = np.full((1, n_time), r_m)
@@ -245,7 +255,7 @@ def tvog_term_weight(
     ext_c = (av_c[-1]
              * (1.0 + credited_monthly_rate(r_m, minimum_crediting_rate))
              * (1.0 - f_m)) * (discount_factor_c[-1] / (1.0 + r_m))
-    return float(ext_s.mean() - ext_c)
+    return float(ext_s.mean() - ext_c) if reduce else (ext_s - ext_c)
 
 
 def guarantee_floor_time_value(
@@ -260,8 +270,12 @@ def guarantee_floor_time_value(
     fund_fee: float,
     investment_return: float,
     return_scenarios: FloatArray,
+    reduce: bool = True,
 ) -> FloatArray:
     """Per-model-point time value of the GMDB and GMAB account-value floors.
+
+    ``reduce=True`` (default) returns the ``(n_mp,)`` scenario-mean time value;
+    ``reduce=False`` returns the pre-mean ``(n_mp, n_scenarios)`` matrix.
 
     A death pays ``max(account value, GMDB)`` and a maturity pays
     ``max(account value, GMAB)`` -- put options on the account value, struck at
@@ -319,7 +333,9 @@ def guarantee_floor_time_value(
     discount_factor_c_mat = np.append(discount_factor_c, discount_factor_c[-1] / (1.0 + r_m))
 
     n_mp = account_value.shape[0]
+    n_scen = return_scenarios.shape[0]
     time_value = np.zeros(n_mp)
+    tv_mat = np.zeros((n_mp, n_scen))
     for mp in range(n_mp):
         av0 = account_value[mp]
         ti = int(term_index[mp])
@@ -347,7 +363,8 @@ def guarantee_floor_time_value(
         cost_c += maturity_survivors[mp] * gab_excess_c * discount_factor_c_mat[mi]
 
         time_value[mp] = float(cost_s.mean()) - cost_c
-    return time_value
+        tv_mat[mp] = cost_s - cost_c
+    return time_value if reduce else tv_mat
 
 
 def ul_guarantee_floor_time_value(
@@ -365,9 +382,13 @@ def ul_guarantee_floor_time_value(
     boundary: FloatArray,
     investment_return: float,
     return_scenarios: FloatArray,
+    reduce: bool = True,
 ) -> FloatArray:
     """Per-model-point time value of the GMDB / GMAB floors on a UNIVERSAL-LIFE
     account book.
+
+    ``reduce=True`` (default) returns the ``(n_mp,)`` scenario-mean time value;
+    ``reduce=False`` returns the pre-mean ``(n_mp, n_scenarios)`` matrix.
 
     Unlike :func:`guarantee_floor_time_value` (the closed-form variable-annuity
     account), the UL account path is additive and path-dependent -- a premium
@@ -428,7 +449,9 @@ def ul_guarantee_floor_time_value(
                     * np.maximum(0.0, gmab - av_term)
                     * discount_factor_bom[p, np.minimum(bound, n_time)])
 
-    return cost[1:].mean(axis=0) - cost[0]
+    if reduce:
+        return cost[1:].mean(axis=0) - cost[0]
+    return (cost[1:] - cost[0]).T            # (n_mp, n_scenarios)
 
 
 def ul_credit_rate_time_value(

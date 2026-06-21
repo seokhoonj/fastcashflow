@@ -450,6 +450,7 @@ def _vfa_project(
     *,
     elapsed_months: IntArray | None = None,
     account_value: FloatArray | None = None,
+    tv_reduce: bool = True,
     _proj: "Cashflows | None" = None,
 ) -> "_VFAProjection":
     """Project VFA cash flows / trajectories, optionally re-anchoring the AV.
@@ -674,12 +675,14 @@ def _vfa_project(
             fund_fee=basis.fund_fee,
             investment_return=basis.investment_return,
             return_scenarios=return_scenarios,
+            reduce=tv_reduce,
         )
         w_term = tvog_term_weight(
             minimum_crediting_rate=float(g_unique[0]),
             fund_fee=basis.fund_fee,
             investment_return=basis.investment_return,
             return_scenarios=return_scenarios,
+            reduce=tv_reduce,
         )
         # Maturity survivors sit in `exits` at term_idx (= term - 1) but exit at
         # time = term, credited the full final month -- peel them off that column
@@ -690,12 +693,23 @@ def _vfa_project(
         # longest-term maturity takes the one-month extension w_term. w_ext =
         # [w, w_term] selects either by term_idx + 1, matching measure_tvog's
         # dg_mat[:, term_idx + 1]. Deaths and non-maturity lapses stay at w[t].
-        w_ext = np.append(w, w_term)
-        time_value = model_points.account_value * (
-            exits @ w
-            - maturity_survivors * w[term_idx]
-            + maturity_survivors * w_ext[term_idx + 1]
-        )
+        av0 = model_points.account_value
+        if tv_reduce:
+            w_ext = np.append(w, w_term)
+            time_value = av0 * (
+                exits @ w
+                - maturity_survivors * w[term_idx]
+                + maturity_survivors * w_ext[term_idx + 1]
+            )
+        else:
+            # Per-scenario forms: w is (n_scen, n_time), w_term (n_scen,). The
+            # reduced expression vectorised over the scenario axis -> (n_mp, n_scen).
+            w_ext = np.concatenate([w, w_term[:, None]], axis=1)  # (n_scen, n_time+1)
+            time_value = av0[:, None] * (
+                exits @ w.T
+                - maturity_survivors[:, None] * w[:, term_idx].T
+                + maturity_survivors[:, None] * w_ext[:, term_idx + 1].T
+            )
         # The credit-rate guarantee above lifts the account growth; the GMDB
         # and GMAB are put-option floors on the account value. Add their time
         # value too -- each guarantee's intrinsic value is already in the BEL.
@@ -713,6 +727,7 @@ def _vfa_project(
             fund_fee=basis.fund_fee,
             investment_return=basis.investment_return,
             return_scenarios=return_scenarios,
+            reduce=tv_reduce,
         )
 
     # BEL and RA as trajectories. The BEL is reported net of the account
@@ -955,9 +970,14 @@ def measure_vfa_stochastic(model_points: ModelPoints, basis: Basis,
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns (e.g. :attr:`fastcashflow.EconomicScenarios.returns`).
-    v1 runs one :func:`measure_vfa` per scenario (correctness first -- it shares no
-    projection across scenarios; a vectorised pass is a future optimisation), so
-    keep the scenario count modest."""
+
+    Vectorised over the scenario axis: the deterministic projection (the intrinsic
+    BEL and RA) is scenario-independent and runs once; only the guarantee time
+    value varies by scenario, computed as one ``(n_mp, n_scenarios)`` matrix. The
+    per-scenario realised BEL is the intrinsic BEL plus that path's time value, and
+    the CSM / loss re-floor the fulfilment cash flow (BEL + RA + time value) per
+    scenario -- identical to running :func:`measure_vfa` once per path, but without
+    re-projecting."""
     from fastcashflow.stochastic import StochasticResult
     rs = np.asarray(return_scenarios, dtype=np.float64)
     if rs.ndim != 2:
@@ -965,20 +985,64 @@ def measure_vfa_stochastic(model_points: ModelPoints, basis: Basis,
     if rs.shape[0] == 0:
         raise ValueError("return_scenarios is empty; need at least one scenario")
     n_scen = rs.shape[0]
-    bel = np.empty(n_scen)
-    ra = np.empty(n_scen)
-    csm = np.empty(n_scen)
-    loss = np.empty(n_scen)
-    for s in range(n_scen):
-        m = measure_vfa(model_points, basis, rs[s:s + 1], full=False)
-        # The realised liability under this path: the deterministic BEL (intrinsic
-        # guarantee) plus this path's guarantee time value. csm / loss already
-        # reflect the path (measure_vfa folds time_value into the floor).
-        bel[s] = float(m.bel.sum() + m.time_value.sum())
-        ra[s] = float(m.ra.sum())
-        csm[s] = float(m.csm.sum())
-        loss[s] = float(m.loss_component.sum())
+    basis = _single_basis(basis, entry="measure_vfa_stochastic")
+
+    bel_mp, ra_mp, tv = _vfa_time_value_by_scenario(model_points, basis, rs)
+    # tv is (n_mp, n_scenarios); bel_mp / ra_mp are the scenario-independent
+    # intrinsic per-MP BEL and RA. The realised liability per path is the intrinsic
+    # BEL plus that path's guarantee time value; the CSM / loss re-floor the FCF
+    # (BEL + RA + time value) per scenario -- exactly the per-scenario measure_vfa.
+    fcf = (bel_mp + ra_mp)[:, None] + tv               # (n_mp, n_scenarios)
+    bel = float(bel_mp.sum()) + tv.sum(axis=0)         # (n_scenarios,)
+    ra = np.full(n_scen, float(ra_mp.sum()))
+    csm = np.maximum(0.0, -fcf).sum(axis=0)
+    loss = np.maximum(0.0, fcf).sum(axis=0)
     return StochasticResult(bel=bel, ra=ra, csm=csm, loss_component=loss)
+
+
+def _vfa_time_value_by_scenario(model_points: ModelPoints, basis: Basis,
+                                return_scenarios: FloatArray):
+    """The scenario-independent intrinsic per-MP BEL / RA and the
+    ``(n_mp, n_scenarios)`` guarantee time-value matrix -- the vectorised core of
+    :func:`measure_vfa_stochastic`. The universal-life (account) book re-rolls the
+    account under every scenario in one pass; the variable-annuity closed form
+    builds the credit-rate and floor time-value matrices directly."""
+    from fastcashflow.engine import (
+        _measure_full, _portfolio_has_account, _account_roll_inputs)
+    rs = np.asarray(return_scenarios, dtype=np.float64)
+    if _portfolio_has_account(model_points, basis):
+        r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
+        n_time = int(model_points.contract_boundary_months.max())
+        if rs.shape[1] != n_time:
+            raise ValueError(
+                f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
+                "the projection horizon")
+        m = _measure_full(model_points, basis, discount_monthly=np.full(n_time, r_m))
+        am = getattr(model_points, "annuitization_months", None)
+        if am is not None and np.any(np.asarray(am) > 0):
+            raise NotImplementedError(
+                "return_scenarios (guarantee time value) is not yet supported "
+                "for an annuitizing universal-life book.")
+        g_unique = np.unique(model_points.minimum_crediting_rate)
+        if g_unique.size > 1:
+            raise NotImplementedError(
+                "return_scenarios with per-MP varying minimum_crediting_rate "
+                "is not supported yet (a scalar guarantee in v1).")
+        (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
+         gmab, _g, _sc) = _account_roll_inputs(model_points, basis)
+        tv = ul_guarantee_floor_time_value(
+            account_value0=av0, face=face, prem_to_av=prem_to_av,
+            coi_rate_m=coi_rate_m, admin_fee=admin_fee, account_charge=account_charge,
+            gmab=gmab, minimum_crediting_rate=float(g_unique[0]),
+            deaths=m.cashflows.deaths,
+            maturity_survivors=m.cashflows.maturity_survivors,
+            boundary=np.asarray(model_points.contract_boundary_months, np.int64),
+            investment_return=basis.investment_return,
+            return_scenarios=rs, reduce=False)
+        return m.bel, m.ra, tv
+    # Variable-annuity closed form.
+    p = _vfa_project(model_points, basis, rs, tv_reduce=False)
+    return p.bel[:, 0], p.ra[:, 0], p.time_value
 
 
 def measure_stream(

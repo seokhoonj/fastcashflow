@@ -1424,3 +1424,73 @@ def test_vfa_stochastic_rejects_bad_scenarios():
         fcf.vfa.stochastic(mp, basis, np.array([0.01, 0.02]))
     with pytest.raises(ValueError, match="empty"):
         fcf.vfa.stochastic(mp, basis, np.zeros((0, 60)))
+
+
+# ---------------------------------------------------------------------------
+# vfa.stochastic is vectorised over the scenario axis -- it must reproduce the
+# per-scenario measure_vfa loop (the oracle) to machine precision, VA and UL.
+# ---------------------------------------------------------------------------
+
+def _stochastic_loop_oracle(mp, basis, rs):
+    """The reference: one measure_vfa per scenario, the realised BEL / RA / CSM /
+    loss summed -- exactly what vfa.stochastic vectorises."""
+    from fastcashflow._vfa import measure_vfa
+    n = rs.shape[0]
+    bel = np.empty(n); ra = np.empty(n); csm = np.empty(n); loss = np.empty(n)
+    for s in range(n):
+        m = measure_vfa(mp, basis, rs[s:s + 1], full=False)
+        bel[s] = m.bel.sum() + m.time_value.sum()
+        ra[s] = m.ra.sum()
+        csm[s] = m.csm.sum()
+        loss[s] = m.loss_component.sum()
+    return bel, ra, csm, loss
+
+
+def test_vfa_stochastic_vectorised_matches_loop_va():
+    """The variable-annuity closed-form path: vectorised == per-scenario loop."""
+    basis = _basis(investment_return=0.05, fund_fee=0.015)
+    mp = _vfa_guarantee_mp()
+    rs = _lognormal_returns(150, 60, seed=11)
+    res = fcf.vfa.stochastic(mp, basis, rs)
+    bel, ra, csm, loss = _stochastic_loop_oracle(mp, basis, rs)
+    assert np.allclose(res.bel, bel, atol=1e-6)
+    assert np.allclose(res.ra, ra, atol=1e-6)
+    assert np.allclose(res.csm, csm, atol=1e-6)
+    assert np.allclose(res.loss_component, loss, atol=1e-6)
+
+
+def _ul_guarantee_book():
+    """A universal-life account book (the DEATH coverage carries the account-chassis
+    flags) with GMDB / GMAB / crediting guarantees, two policies."""
+    coi = 0.0015
+    basis = fcf.Basis(
+        mortality_annual=0.004, lapse_annual=0.03, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.1, investment_return=0.024,
+        coi_annual=coi, premium_load=0.08,
+        coverages=(fcf.CoverageRate("DEATH", coi, funds_from_account=True,
+                                    pays_account_balance=True),))
+    mp = ModelPoints(
+        issue_age=np.array([40.0, 55.0]), premium=np.array([500_000.0, 300_000.0]),
+        term_months=np.array([36, 24]), account_value=np.array([0.0, 1_000_000.0]),
+        minimum_death_benefit=np.array([80_000_000.0, 50_000_000.0]),
+        minimum_accumulation_benefit=np.array([1_000_000.0, 500_000.0]),
+        minimum_crediting_rate=np.array([0.01, 0.01]), sex=np.array([0, 1]),
+        benefits={"DEATH": np.array([80_000_000.0, 50_000_000.0])},
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
+    return mp, basis
+
+
+def test_vfa_stochastic_vectorised_matches_loop_ul():
+    """The universal-life account path (re-rolled per scenario): vectorised ==
+    per-scenario loop, exactly (no closed-form rounding)."""
+    mp, basis = _ul_guarantee_book()
+    n_time = int(np.asarray(mp.contract_boundary_months).max())
+    r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
+    rng = np.random.default_rng(3)
+    rs = rng.normal(r_m, 0.04, (80, n_time))
+    res = fcf.vfa.stochastic(mp, basis, rs)
+    bel, ra, csm, loss = _stochastic_loop_oracle(mp, basis, rs)
+    assert np.array_equal(res.bel, bel) or np.allclose(res.bel, bel, atol=1e-6)
+    assert np.allclose(res.ra, ra, atol=1e-6)
+    assert np.allclose(res.csm, csm, atol=1e-6)
+    assert np.allclose(res.loss_component, loss, atol=1e-6)
