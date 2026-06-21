@@ -219,6 +219,12 @@ class VFAMeasurement:
     csm_accretion: FloatArray | None = None       # (n_mp, n_time)
     csm_release: FloatArray | None = None          # (n_mp, n_time)
     lic_path: FloatArray | None = None            # (n_mp, n_time+1) -- liability for incurred claims.
+    # The entity's own-pocket insurance cash flows, retained for the asset-liability
+    # gap (a unit-linked book's account-value benefits are funded by the unit fund;
+    # only the guarantee excess over the account value lands on the entity's general
+    # account). Full VA path only -- None on the headline / aggregate / UL paths.
+    guarantee_excess_cf: FloatArray | None = None  # (n_mp, n_time) GMDB/GMAB excess over AV
+    benefit_cf: FloatArray | None = None           # (n_mp, n_time) gross incurred benefit (AV + excess)
     # The terminal column holds the residual of claims whose settlement tail
     # runs past the horizon (stays non-zero by design, not a leak).
     discount_factor_bom: FloatArray | None = None      # (n_time+1,), or (n_mp, n_time+1) when portfolio-stitched
@@ -900,6 +906,8 @@ def measure_vfa(
         lic_path=p.lic_path,
         discount_factor_bom=p.discount_factor_bom,
         cashflows=p.cashflows,
+        guarantee_excess_cf=p.guarantee_excess_cf,
+        benefit_cf=p.benefit_cf,
         model_points=model_points,
     )
 

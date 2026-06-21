@@ -1295,3 +1295,32 @@ def test_measure_vfa_dynamic_lapse_rejects_account_backed():
         calculation_methods={"DEATH": CalculationMethod.DEATH})
     with pytest.raises(NotImplementedError, match="account-backed"):
         fcf.vfa.measure(mp, basis, lapse_sensitivity=0.5)
+
+
+# ---------------------------------------------------------------------------
+# VFA entity cash flows on the measurement (asset-liability gap foundation)
+# ---------------------------------------------------------------------------
+
+def test_vfa_measurement_exposes_guarantee_excess_cf_hand_calc():
+    """A full VA measurement carries the entity's guarantee-excess cash flow --
+    the GMDB/GMAB excess over the account value the entity funds from its own
+    general account (the account-value benefit itself is funded by the unit fund).
+
+    Flat account (zero return, zero fee): the account value stays at av0, so a
+    GMAB above it bites only at maturity, on the survivors -- every other column
+    is zero (no GMDB, so deaths pay the account value exactly)."""
+    basis = _basis(investment_return=0.0, fund_fee=0.0)
+    av0, gmab, term = 1000.0, 1200.0, 60
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0,
+                            minimum_accumulation_benefit=gmab,
+                            calculation_methods=PATTERNS)
+    res = fcf.vfa.measure(mp, basis)
+    ge = res.guarantee_excess_cf
+    assert ge is not None and ge.shape == (1, term)
+    surv = ((1 - Q) * (1 - LAPSE)) ** term             # in-force reaching term
+    assert np.isclose(ge[0, term - 1], surv * (gmab - av0))   # GMAB excess at maturity
+    other = ge[0, :term - 1].sum() + ge[0, term:].sum()
+    assert np.isclose(other, 0.0)                        # nothing elsewhere (no GMDB)
+    # Gross benefit is the account-value payout plus that excess.
+    assert res.benefit_cf is not None and res.benefit_cf.shape == (1, term)
+    assert res.benefit_cf[0, term - 1] > ge[0, term - 1]    # AV portion on top
