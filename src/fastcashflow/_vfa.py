@@ -225,6 +225,7 @@ class VFAMeasurement:
     # account). Full VA path only -- None on the headline / aggregate / UL paths.
     guarantee_excess_cf: FloatArray | None = None  # (n_mp, n_time) GMDB/GMAB excess over AV
     benefit_cf: FloatArray | None = None           # (n_mp, n_time) gross incurred benefit (AV + excess)
+    fee_cf: FloatArray | None = None               # (n_mp, n_time) variable fee skimmed (entity inflow)
     # The terminal column holds the residual of claims whose settlement tail
     # runs past the horizon (stays non-zero by design, not a leak).
     discount_factor_bom: FloatArray | None = None      # (n_time+1,), or (n_mp, n_time+1) when portfolio-stitched
@@ -422,6 +423,7 @@ class _VFAProjection:
     lic_path: FloatArray             # (n_mp, n_time+1)
     benefit_cf: FloatArray           # (n_mp, n_time) incurred benefit claims (builds the LIC)
     guarantee_excess_cf: FloatArray  # (n_mp, n_time) GMDB/GMAB excess over AV (the insurance claim, IC-excluded)
+    fee_cf: FloatArray               # (n_mp, n_time) variable fee skimmed (the entity's inflow)
     cashflows: "Cashflows"
     inforce: FloatArray              # (n_mp, n_time) coverage units
     r_m: float                       # monthly underlying-items return
@@ -715,7 +717,7 @@ def _vfa_project(
     return _VFAProjection(
         bel=bel, ra=ra, variable_fee_path=variable_fee_path,
         time_value=time_value, lic_path=lic_path, benefit_cf=benefit_cf,
-        guarantee_excess_cf=guarantee_excess_cf,
+        guarantee_excess_cf=guarantee_excess_cf, fee_cf=fee_cf,
         cashflows=proj, inforce=inforce,
         r_m=r_m, av=av, discount_factor_bom=discount_factor_bom,
         guarantee_excess_pv=guarantee_excess_pv, expense_pv=pv_expenses,
@@ -908,6 +910,7 @@ def measure_vfa(
         cashflows=p.cashflows,
         guarantee_excess_cf=p.guarantee_excess_cf,
         benefit_cf=p.benefit_cf,
+        fee_cf=p.fee_cf,
         model_points=model_points,
     )
 

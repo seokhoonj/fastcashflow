@@ -114,6 +114,40 @@ def net_liability_cashflows(measurement) -> tuple[FloatArray, FloatArray]:
     return flow_bom, flow_mid
 
 
+def vfa_net_liability_cashflows(measurement) -> FloatArray:
+    """The VFA entity general-account net liability cash flow per month ``(n_time,)``.
+
+    A variable / unit-linked contract's account value is invested in the
+    underlying items, so the account-value portion of every benefit is funded by
+    the unit fund -- only the GMDB / GMAB excess over the account value lands on
+    the entity's own general account (the bonds / equity that an
+    :class:`~fastcashflow.assets.AssetPortfolio` represents). Returns the per-month
+    net OUTFLOW summed over the portfolio:
+
+        guarantee_excess + expense - variable_fee
+
+    the guarantee top-up and expenses the general account funds, less the variable
+    fee it skims as income. This is the VFA counterpart of
+    :func:`net_liability_cashflows` (which nets the GROSS benefits of a non-account
+    book); here the gross account-value benefit is excluded because the unit fund,
+    not the entity, pays it. Discounting at the underlying-items return reproduces
+    the BEL before RA (at a zero return the undiscounted sum equals the BEL); the
+    undiscounted ladder is the liquidity foundation for the VFA asset-liability gap.
+
+    Requires a ``full=True`` closed-form VA measurement -- the headline-only,
+    aggregate and account-backed (universal-life) paths do not carry the entity
+    cash flows (``guarantee_excess_cf`` / ``fee_cf`` are ``None``)."""
+    ge = getattr(measurement, "guarantee_excess_cf", None)
+    fee = getattr(measurement, "fee_cf", None)
+    cf = measurement.cashflows
+    if ge is None or fee is None or cf is None:
+        raise ValueError(
+            "vfa_net_liability_cashflows needs a full=True closed-form VA "
+            "measurement (it carries guarantee_excess_cf / fee_cf / expense); the "
+            "headline-only, aggregate and account-backed (UL) paths do not.")
+    return (ge + cf.expense_cf - fee).sum(axis=0)
+
+
 def liability_dv01(model_points: ModelPoints, basis: Basis, *,
                    bump: float = _BP) -> float:
     """The liability DV01 -- the decrease in BEL for a +1bp parallel rise in the
@@ -324,6 +358,7 @@ def duration_gap(asset_duration: float, asset_value: float,
 
 __all__ = [
     "DurationResult", "Bond", "net_liability_cashflows",
+    "vfa_net_liability_cashflows",
     "liability_dv01", "liability_duration", "key_rate_durations",
     "bond_cashflows", "bond_value", "bond_duration", "effective_maturity",
     "alm_gap", "duration_gap",

@@ -1324,3 +1324,31 @@ def test_vfa_measurement_exposes_guarantee_excess_cf_hand_calc():
     # Gross benefit is the account-value payout plus that excess.
     assert res.benefit_cf is not None and res.benefit_cf.shape == (1, term)
     assert res.benefit_cf[0, term - 1] > ge[0, term - 1]    # AV portion on top
+
+
+def test_vfa_net_liability_cashflows_reconciles_to_bel_hand_calc():
+    """The entity general-account net liability cash flow is guarantee_excess +
+    expense - variable_fee; at a zero underlying return its undiscounted sum
+    equals the BEL (the unit-funded account-value benefit drops out)."""
+    from fastcashflow.alm import vfa_net_liability_cashflows
+    basis = _basis(investment_return=0.0, fund_fee=0.02, expense_cv=0.0,
+                   expense_items=(ExpenseItem("maintenance", "gamma_fixed", 5.0),))
+    av0, gmab, term = 1000.0, 1200.0, 60
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0,
+                            minimum_death_benefit=1100.0,
+                            minimum_accumulation_benefit=gmab,
+                            calculation_methods=PATTERNS)
+    res = fcf.vfa.measure(mp, basis)
+    net = vfa_net_liability_cashflows(res)
+    assert net.shape == (term,)
+    # Component identity: net = guarantee_excess + expense - fee, summed over MPs.
+    expected = (res.guarantee_excess_cf + res.cashflows.expense_cf
+                - res.fee_cf).sum(axis=0)
+    assert np.allclose(net, expected)
+    # At a zero return (discount factors all 1) the undiscounted sum is the BEL.
+    assert np.isclose(net.sum(), res.bel[0])
+    assert res.fee_cf.sum() > 0.0 and res.cashflows.expense_cf.sum() > 0.0  # both exercised
+
+    # The headline-only path carries no entity cash flows -> rejected.
+    with pytest.raises(ValueError, match="full=True"):
+        vfa_net_liability_cashflows(fcf.vfa.measure(mp, basis, full=False))
