@@ -37,7 +37,7 @@ from fastcashflow._measurement_basis import _require_inception
 from fastcashflow._paa import PAAMeasurement, _require_full_paa
 from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
 from fastcashflow._reinsurance import ReinsuranceMeasurement
-from fastcashflow.assets import DynamicSolvency
+from fastcashflow.solvency_assessment import DynamicSolvency
 
 
 def _to_years(monthly: FloatArray) -> FloatArray:

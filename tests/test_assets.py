@@ -4,6 +4,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import assets, alm
+from fastcashflow import solvency_assessment as sa
 from fastcashflow import solvency as sv
 from fastcashflow.engine import measure
 
@@ -61,7 +62,7 @@ def test_net_interest_scr_formula_and_sign():
                 - float(measure(mp, b, full=False).bel.sum()))
     nav_base = base_pv - base_bel
     expected = max(0.0, max(nav_base - nav(s.apply(mp, basis)[1]) for s in curves))
-    assert np.isclose(assets.net_interest_scr(p, mp, basis, interest_curves=curves),
+    assert np.isclose(sa.net_interest_scr(p, mp, basis, interest_curves=curves),
                       expected)
 
 
@@ -72,7 +73,7 @@ def test_matched_book_net_interest_near_zero():
     per_face = alm.bond_duration(alm.Bond(100.0, 0.03, 10, 1), 0.03).dv01
     face = liab_dv01 / per_face * 100.0
     p = assets.AssetPortfolio(holdings=(alm.Bond(face, 0.03, 10, 1),))
-    ni = assets.net_interest_scr(p, mp, basis, interest_curves=_parallel_curves())
+    ni = sa.net_interest_scr(p, mp, basis, interest_curves=_parallel_curves())
     assert ni < abs(face) * 1e-4                 # negligible vs the book (immunised)
 
 
@@ -80,7 +81,7 @@ def test_unmatched_book_positive_net_interest():
     """An all-cash book leaves the liability's rate move unhedged -> positive SCR."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(assets.Cash(10_000_000.0),))
-    assert assets.net_interest_scr(p, mp, basis, interest_curves=_parallel_curves()) > 0.0
+    assert sa.net_interest_scr(p, mp, basis, interest_curves=_parallel_curves()) > 0.0
 
 
 def _kics_scenarios():
@@ -110,7 +111,7 @@ def test_net_interest_kics_five_scenario_on_nav():
     flat, steep = max(0.0, amt(ki.flat)), max(0.0, amt(ki.steep))
     mr = amt(ki.mean_reversion)                          # signed
     expected = math.sqrt(max(up, down)**2 + max(flat, steep)**2) + mr
-    assert np.isclose(assets.net_interest_kics_scr(p, mp, basis, scenarios=ki), expected)
+    assert np.isclose(sa.net_interest_kics_scr(p, mp, basis, scenarios=ki), expected)
 
 
 def test_assess_solvency_kics_interest_enters_market_module():
@@ -119,8 +120,8 @@ def test_assess_solvency_kics_interest_enters_market_module():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(assets.Cash(10_000_000.0),))    # unhedged
     ki = _kics_scenarios()
-    without = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
-    with_ = assets.assess_solvency(p, mp, basis, regime=fcf.KICS, interest_scenarios=ki)
+    without = sa.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    with_ = sa.assess_solvency(p, mp, basis, regime=fcf.KICS, interest_scenarios=ki)
     assert without.net_interest_scr == 0.0               # K-ICS supplied no curves before
     assert with_.net_interest_scr > 0.0                  # now the five-scenario net amount
     assert with_.market_module_scr > without.market_module_scr
@@ -132,8 +133,8 @@ def test_sii_toplevel_three_module_diversifies():
     all-pairwise 0.25 -- the same values as K-ICS, and below the simple sum."""
     import math
     ins, mkt, cr = 300.0, 400.0, 200.0
-    sii = assets.aggregate_required_capital(ins, mkt, cr, regime=fcf.SOLVENCY2)
-    kics = assets.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS)
+    sii = sa.aggregate_required_capital(ins, mkt, cr, regime=fcf.SOLVENCY2)
+    kics = sa.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS)
     c = np.array([ins, mkt, cr])
     R = np.array([[1.0, .25, .25], [.25, 1.0, .25], [.25, .25, 1.0]])
     assert np.isclose(sii, math.sqrt(c @ R @ c))
@@ -146,9 +147,9 @@ def test_sii_toplevel_four_module_nonlife_default_half():
     (vs K-ICS 0.25), so the SII top-level aggregate exceeds the K-ICS one."""
     import math
     ins, gen, mkt, cr = 300.0, 250.0, 400.0, 200.0
-    sii = assets.aggregate_required_capital(ins, mkt, cr, regime=fcf.SOLVENCY2,
+    sii = sa.aggregate_required_capital(ins, mkt, cr, regime=fcf.SOLVENCY2,
                                             general_insurance=gen)
-    kics = assets.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS,
+    kics = sa.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS,
                                              general_insurance=gen)
     c = np.array([ins, gen, mkt, cr])
     R = np.array([[1.0, 0.0, .25, .25], [0.0, 1.0, .25, .50],
@@ -162,16 +163,16 @@ def test_equity_scr_by_type():
     (handbook 4-3); a single type is just its amount; unknown type raises."""
     import pytest
     one = assets.AssetPortfolio(holdings=(assets.Equity(3_000_000.0, "developed"),))
-    assert np.isclose(assets.equity_scr(one, fcf.KICS), 3_000_000.0 * 0.35)
+    assert np.isclose(sa.equity_scr(one, fcf.KICS), 3_000_000.0 * 0.35)
     p = assets.AssetPortfolio(holdings=(
         assets.Equity(1_000_000.0, "developed"), assets.Equity(500_000.0, "emerging")))
     dev, emg = 1_000_000.0 * 0.35, 500_000.0 * 0.48
-    assert np.isclose(assets.equity_scr(p, fcf.KICS),
+    assert np.isclose(sa.equity_scr(p, fcf.KICS),
                       np.sqrt(dev**2 + emg**2 + 2 * 0.75 * dev * emg))
-    assert assets.equity_scr(p, fcf.KICS) < dev + emg            # diversification
+    assert sa.equity_scr(p, fcf.KICS) < dev + emg            # diversification
     bad = assets.AssetPortfolio(holdings=(assets.Equity(1.0, "exotic"),))
     with pytest.raises(ValueError, match="risk_type"):
-        assets.equity_scr(bad, fcf.SOLVENCY2)
+        sa.equity_scr(bad, fcf.SOLVENCY2)
 
 
 def test_equity_subtypes_shocks():
@@ -180,12 +181,12 @@ def test_equity_subtypes_shocks():
     for risk_type, shock in [("infrastructure", 0.20), ("long_term", 0.20),
                              ("other", 0.49)]:
         p = assets.AssetPortfolio(holdings=(assets.Equity(1_000_000.0, risk_type),))
-        assert np.isclose(assets.equity_scr(p, fcf.KICS), 1_000_000.0 * shock)
+        assert np.isclose(sa.equity_scr(p, fcf.KICS), 1_000_000.0 * shock)
 
 
 def test_property_scr():
     p = assets.AssetPortfolio(holdings=(assets.Property(2_000_000.0),))
-    assert np.isclose(assets.property_scr(p, fcf.SOLVENCY2), 2_000_000.0 * 0.25)
+    assert np.isclose(sa.property_scr(p, fcf.SOLVENCY2), 2_000_000.0 * 0.25)
 
 
 def test_market_module_aggregates_sub_risks():
@@ -196,13 +197,13 @@ def test_market_module_aggregates_sub_risks():
         assets.Equity(3_000_000.0, "developed"), assets.Property(1_000_000.0)))
     # K-ICS: no interest curves -> interest 0; no foreign currency -> FX 0; the
     # property holding does exceed the 6% individual limit -> a concentration charge
-    eq = assets.equity_scr(p, fcf.KICS)
-    pr = assets.property_scr(p, fcf.KICS)
-    fx = assets.fx_scr(p, fcf.KICS, basis.discount_annual)
-    conc = assets.concentration_scr(p, fcf.KICS, basis.discount_annual)
+    eq = sa.equity_scr(p, fcf.KICS)
+    pr = sa.property_scr(p, fcf.KICS)
+    fx = sa.fx_scr(p, fcf.KICS, basis.discount_annual)
+    conc = sa.concentration_scr(p, fcf.KICS, basis.discount_annual)
     c = np.array([0.0, eq, pr, fx, conc])
-    R = assets._MARKET_CORRELATION
-    assert np.isclose(assets.market_module_scr(p, mp, basis, regime=fcf.KICS),
+    R = sa._MARKET_CORRELATION
+    assert np.isclose(sa.market_module_scr(p, mp, basis, regime=fcf.KICS),
                       np.sqrt(c @ R @ c))
 
 
@@ -213,8 +214,8 @@ def test_operational_scr_kics():
     bel = max(0.0, float(m.bel.sum()))
     prem = max(0.0, float(m.cashflows.premium_cf[:, :12].sum()))
     expected = max(prem * 0.035, bel * 0.004)
-    assert np.isclose(assets.operational_scr(mp, basis, fcf.KICS), expected)
-    assert assets.operational_scr(mp, basis, fcf.KICS) > 0.0
+    assert np.isclose(sa.operational_scr(mp, basis, fcf.KICS), expected)
+    assert sa.operational_scr(mp, basis, fcf.KICS) > 0.0
 
 
 def test_operational_scr_sii_cap():
@@ -226,10 +227,10 @@ def test_operational_scr_sii_cap():
     op_uncapped = max(prem * 0.04, bel * 0.0045)
     # a tiny BSCR makes the 0.3 x BSCR cap bite
     small = op_uncapped / 10.0
-    assert np.isclose(assets.operational_scr(mp, basis, fcf.SOLVENCY2, bscr=small),
+    assert np.isclose(sa.operational_scr(mp, basis, fcf.SOLVENCY2, bscr=small),
                       0.30 * small)
     # a large BSCR leaves it uncapped
-    assert np.isclose(assets.operational_scr(mp, basis, fcf.SOLVENCY2, bscr=1e12),
+    assert np.isclose(sa.operational_scr(mp, basis, fcf.SOLVENCY2, bscr=1e12),
                       op_uncapped)
 
 
@@ -242,12 +243,12 @@ def test_effective_maturity_hand_calc():
 
 def test_credit_bucket_boundaries():
     """Bucket k is k < m <= k+1 (so 0-1 is index 0), capped at the 14+ bucket."""
-    assert assets._credit_bucket(0.5) == 0
-    assert assets._credit_bucket(1.0) == 0
-    assert assets._credit_bucket(1.5) == 1
-    assert assets._credit_bucket(10.0) == 9
-    assert assets._credit_bucket(14.0) == 13
-    assert assets._credit_bucket(20.0) == 14
+    assert sa._credit_bucket(0.5) == 0
+    assert sa._credit_bucket(1.0) == 0
+    assert sa._credit_bucket(1.5) == 1
+    assert sa._credit_bucket(10.0) == 9
+    assert sa._credit_bucket(14.0) == 13
+    assert sa._credit_bucket(20.0) == 14
 
 
 def test_credit_scr_kics_hand_calc():
@@ -257,7 +258,7 @@ def test_credit_scr_kics_hand_calc():
     b = alm.Bond(100.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate")
     p = assets.AssetPortfolio(holdings=(b, assets.Cash(1000.0), assets.Equity(500.0)))
     mv = alm.bond_value(b, 0.03)
-    assert np.isclose(assets.credit_scr(p, fcf.KICS, 0.03), mv * 0.02)   # only the bond
+    assert np.isclose(sa.credit_scr(p, fcf.KICS, 0.03), mv * 0.02)   # only the bond
 
 
 def test_credit_scr_sii_spread():
@@ -267,12 +268,12 @@ def test_credit_scr_sii_spread():
     mod = alm.bond_duration(b, 0.03).modified                  # ~8.53 -> bucket 5-10
     factor = 0.070 + 0.007 * (mod - 5)                         # a + b x (dur - 5)
     p = assets.AssetPortfolio(holdings=(b, assets.Cash(1000.0)))
-    assert np.isclose(assets.credit_scr(p, fcf.SOLVENCY2, 0.03),
+    assert np.isclose(sa.credit_scr(p, fcf.SOLVENCY2, 0.03),
                       alm.bond_value(b, 0.03) * factor)
     # the piecewise stress at representative points
-    assert np.isclose(assets._sii_spread_stress("AAA", 3), 0.009 * 3)        # 0-5
-    assert np.isclose(assets._sii_spread_stress("BBB", 12), 0.200 + 0.010 * 2)  # 10-15
-    assert np.isclose(assets._sii_spread_stress("BB", 25), 0.466 + 0.005 * 5)   # 20+
+    assert np.isclose(sa._sii_spread_stress("AAA", 3), 0.009 * 3)        # 0-5
+    assert np.isclose(sa._sii_spread_stress("BBB", 12), 0.200 + 0.010 * 2)  # 10-15
+    assert np.isclose(sa._sii_spread_stress("BB", 25), 0.466 + 0.005 * 5)   # 20+
 
 
 def test_credit_scr_rating_and_class():
@@ -280,14 +281,14 @@ def test_credit_scr_rating_and_class():
     aa = alm.Bond(100.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate")
     bb = alm.Bond(100.0, 0.03, 10, 1, credit_rating="BB", exposure_class="corporate")
     sec = alm.Bond(100.0, 0.03, 10, 1, credit_rating="BB", exposure_class="securitisation")
-    s_aa = assets.credit_scr(assets.AssetPortfolio(holdings=(aa,)), fcf.KICS, 0.03)
-    s_bb = assets.credit_scr(assets.AssetPortfolio(holdings=(bb,)), fcf.KICS, 0.03)
-    s_sec = assets.credit_scr(assets.AssetPortfolio(holdings=(sec,)), fcf.KICS, 0.03)
+    s_aa = sa.credit_scr(assets.AssetPortfolio(holdings=(aa,)), fcf.KICS, 0.03)
+    s_bb = sa.credit_scr(assets.AssetPortfolio(holdings=(bb,)), fcf.KICS, 0.03)
+    s_sec = sa.credit_scr(assets.AssetPortfolio(holdings=(sec,)), fcf.KICS, 0.03)
     assert s_bb > s_aa                       # BB (grade 5) charges more than AA (1-2)
     assert s_sec > s_bb                      # securitisation BB charges more than corporate
     bad = alm.Bond(100.0, 0.03, 10, 1, exposure_class="exotic")
     with pytest.raises(ValueError, match="exposure_class"):
-        assets.credit_scr(assets.AssetPortfolio(holdings=(bad,)), fcf.KICS, 0.03)
+        sa.credit_scr(assets.AssetPortfolio(holdings=(bad,)), fcf.KICS, 0.03)
 
 
 def test_fx_scr_hand_calc():
@@ -298,7 +299,7 @@ def test_fx_scr_hand_calc():
         assets.Cash(1000.0, currency="USD"), assets.Cash(500.0, currency="JPY"),
         assets.Cash(2000.0)))                          # 2000 won: no FX
     expected = np.sqrt(250.0**2 + 200.0**2 + 2 * 0.5 * 250.0 * 200.0)
-    assert np.isclose(assets.fx_scr(p, fcf.KICS, 0.03), expected)
+    assert np.isclose(sa.fx_scr(p, fcf.KICS, 0.03), expected)
 
 
 def test_fx_scr_sii_flat_25():
@@ -307,20 +308,20 @@ def test_fx_scr_sii_flat_25():
     p = assets.AssetPortfolio(holdings=(
         assets.Cash(1000.0, currency="USD"), assets.Cash(500.0, currency="EUR"),
         assets.Cash(2000.0)))
-    assert np.isclose(assets.fx_scr(p, fcf.SOLVENCY2, 0.03), 0.25 * 1000 + 0.25 * 500)
+    assert np.isclose(sa.fx_scr(p, fcf.SOLVENCY2, 0.03), 0.25 * 1000 + 0.25 * 500)
     # an unlisted currency is fine under Solvency II (no table)
     q = assets.AssetPortfolio(holdings=(assets.Cash(800.0, currency="XYZ"),))
-    assert np.isclose(assets.fx_scr(q, fcf.SOLVENCY2, 0.03), 0.25 * 800)
+    assert np.isclose(sa.fx_scr(q, fcf.SOLVENCY2, 0.03), 0.25 * 800)
 
 
 def test_fx_scr_short_position_up_scenario():
     """A net-short currency (a foreign liability) loses under the won-down scenario:
     a short EUR 800 -> 35% x 800."""
     p = assets.AssetPortfolio(holdings=(assets.Cash(-800.0, currency="EUR"),))
-    assert np.isclose(assets.fx_scr(p, fcf.KICS, 0.03), 0.35 * 800.0)
+    assert np.isclose(sa.fx_scr(p, fcf.KICS, 0.03), 0.35 * 800.0)
     bad = assets.AssetPortfolio(holdings=(assets.Cash(1.0, currency="XXX"),))
     with pytest.raises(ValueError, match="currency"):
-        assets.fx_scr(bad, fcf.KICS, 0.03)
+        sa.fx_scr(bad, fcf.KICS, 0.03)
 
 
 def test_market_module_includes_fx_negative_correlation():
@@ -329,9 +330,9 @@ def test_market_module_includes_fx_negative_correlation():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
         assets.Equity(1000.0, "developed"), assets.Cash(1000.0, currency="USD")))
-    eq = assets.equity_scr(p, fcf.KICS)                # 350
-    fx = assets.fx_scr(p, fcf.KICS, basis.discount_annual)   # 250
-    got = assets.market_module_scr(p, mp, basis, regime=fcf.KICS)
+    eq = sa.equity_scr(p, fcf.KICS)                # 350
+    fx = sa.fx_scr(p, fcf.KICS, basis.discount_annual)   # 250
+    got = sa.market_module_scr(p, mp, basis, regime=fcf.KICS)
     assert np.isclose(got, np.sqrt(eq**2 + fx**2 + 2 * (-0.25) * eq * fx))
 
 
@@ -344,7 +345,7 @@ def test_concentration_scr_hand_calc():
         assets.Property(1_000_000.0), assets.Cash(8_000_000.0)))
     cp = (1_000_000.0 - 10_000_000.0 * 0.04) * 0.15
     pr = (1_000_000.0 - 10_000_000.0 * 0.06) * 0.20
-    got = assets.concentration_scr(p, fcf.KICS, 0.03, total_assets=10_000_000.0)
+    got = sa.concentration_scr(p, fcf.KICS, 0.03, total_assets=10_000_000.0)
     assert np.isclose(got, np.sqrt(cp**2 + pr**2))
 
 
@@ -352,8 +353,8 @@ def test_concentration_scr_untagged_is_zero():
     """A book with no tagged issuers and no property has no concentration charge,
     under both regimes."""
     p = assets.AssetPortfolio(holdings=(alm.Bond(1e6, 0.03, 5, 1), assets.Cash(1e6)))
-    assert assets.concentration_scr(p, fcf.KICS, 0.03) == 0.0
-    assert assets.concentration_scr(p, fcf.SOLVENCY2, 0.03) == 0.0
+    assert sa.concentration_scr(p, fcf.KICS, 0.03) == 0.0
+    assert sa.concentration_scr(p, fcf.SOLVENCY2, 0.03) == 0.0
 
 
 def test_concentration_scr_sii_excess():
@@ -362,11 +363,11 @@ def test_concentration_scr_sii_excess():
     g 27%); an AA issuer is CQS 1 (CT 3%, g 12%)."""
     bbb = assets.AssetPortfolio(holdings=(
         alm.Bond(1e6, 0.03, 5, 1, credit_rating="BBB", issuer="X"),))
-    assert np.isclose(assets.concentration_scr(bbb, fcf.SOLVENCY2, 0.03, total_assets=10e6),
+    assert np.isclose(sa.concentration_scr(bbb, fcf.SOLVENCY2, 0.03, total_assets=10e6),
                       max(0.0, 1e6 - 10e6 * 0.015) * 0.27)
     aa = assets.AssetPortfolio(holdings=(
         alm.Bond(1e6, 0.03, 5, 1, credit_rating="AA", issuer="Y"),))
-    assert np.isclose(assets.concentration_scr(aa, fcf.SOLVENCY2, 0.03, total_assets=10e6),
+    assert np.isclose(sa.concentration_scr(aa, fcf.SOLVENCY2, 0.03, total_assets=10e6),
                       max(0.0, 1e6 - 10e6 * 0.03) * 0.12)
 
 
@@ -376,8 +377,8 @@ def test_concentration_band_by_rating():
         alm.Bond(1e6, 0.03, 5, 1, credit_rating="AA", issuer="X"),))
     bb = assets.AssetPortfolio(holdings=(
         alm.Bond(1e6, 0.03, 5, 1, credit_rating="BB", issuer="X"),))
-    s_aa = assets.concentration_scr(aa, fcf.KICS, 0.03, total_assets=10e6)  # 4%/15%
-    s_bb = assets.concentration_scr(bb, fcf.KICS, 0.03, total_assets=10e6)  # 1.5%/50%
+    s_aa = sa.concentration_scr(aa, fcf.KICS, 0.03, total_assets=10e6)  # 4%/15%
+    s_bb = sa.concentration_scr(bb, fcf.KICS, 0.03, total_assets=10e6)  # 1.5%/50%
     assert np.isclose(s_aa, (1e6 - 10e6 * 0.04) * 0.15)
     assert np.isclose(s_bb, (1e6 - 10e6 * 0.015) * 0.50)
     assert s_bb > s_aa
@@ -387,7 +388,7 @@ def test_concentration_property_whole_book_limit():
     """Property concentration takes the worse of the individual (6%) and whole-book
     (25%) limits. Two 2m properties on 10m assets: whole-book excess (4m - 2.5m)."""
     p = assets.AssetPortfolio(holdings=(assets.Property(2e6), assets.Property(2e6)))
-    got = assets.concentration_scr(p, fcf.KICS, 0.03, total_assets=10e6)
+    got = sa.concentration_scr(p, fcf.KICS, 0.03, total_assets=10e6)
     individual = np.sqrt(2 * ((2e6 - 10e6 * 0.06) * 0.20) ** 2)
     whole = (4e6 - 10e6 * 0.25) * 0.20
     assert np.isclose(got, max(individual, whole))
@@ -397,7 +398,7 @@ def test_assess_solvency_components():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
-    a = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
+    a = sa.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
     # no equity/property -> the market module is just the net interest SCR; the SII
     # top-level BSCR aggregates insurance + market + Art-176 credit at all-pairwise
     # 0.25 (Annex IV); the total adds operational on top
@@ -419,14 +420,14 @@ def test_tax_adjustment_loss_absorption():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
-    base = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
-    taxed = assets.assess_solvency(p, mp, basis, regime=fcf.KICS, tax_rate=0.22)
+    base = sa.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    taxed = sa.assess_solvency(p, mp, basis, regime=fcf.KICS, tax_rate=0.22)
     assert np.isclose(taxed.tax_adjustment, base.basic_required_capital * 0.22)
     assert np.isclose(taxed.total_scr, base.basic_required_capital * (1 - 0.22))
     assert taxed.solvency_ratio > base.solvency_ratio       # tax relief lowers the SCR
     # the recoverability limit caps the relief
     cap = base.basic_required_capital * 0.22 / 3
-    capped = assets.assess_solvency(p, mp, basis, regime=fcf.KICS, tax_rate=0.22,
+    capped = sa.assess_solvency(p, mp, basis, regime=fcf.KICS, tax_rate=0.22,
                                     tax_recoverability_limit=cap)
     assert np.isclose(capped.tax_adjustment, cap)
 
@@ -436,7 +437,7 @@ def test_assess_solvency_kics_no_curves():
     an all-cash book then has total SCR == the insurance SCR (no market risk)."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(assets.Cash(8_000_000.0),))
-    a = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    a = sa.assess_solvency(p, mp, basis, regime=fcf.KICS)
     assert a.net_interest_scr == 0.0
     assert np.isclose(a.bscr, a.insurance_scr)              # all-cash -> no market risk
     assert np.isclose(a.total_scr, a.bscr + a.operational_scr)
@@ -450,8 +451,8 @@ def test_top_level_aggregation_kics_vs_sii():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Equity(3_000_000.0, "developed")))
-    k = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
-    s = assets.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
+    k = sa.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    s = sa.assess_solvency(p, mp, basis, regime=fcf.SOLVENCY2)
     R = np.array([[1.0, 0.25, 0.25], [0.25, 1.0, 0.25], [0.25, 0.25, 1.0]])
     # SII: sqrt aggregation at 0.25 (Annex IV), below the simple module sum
     assert s.credit_scr > 0.0
@@ -472,8 +473,8 @@ def test_equity_now_charges_scr():
     base = assets.AssetPortfolio(holdings=(
         alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Cash(5_000_000.0)))
     with_eq = assets.AssetPortfolio(holdings=base.holdings + (assets.Equity(3_000_000.0),))
-    a0 = assets.assess_solvency(base, mp, basis, regime=fcf.SOLVENCY2)
-    a1 = assets.assess_solvency(with_eq, mp, basis, regime=fcf.SOLVENCY2)
+    a0 = sa.assess_solvency(base, mp, basis, regime=fcf.SOLVENCY2)
+    a1 = sa.assess_solvency(with_eq, mp, basis, regime=fcf.SOLVENCY2)
     assert a1.available_capital > a0.available_capital
     assert a1.total_scr > a0.total_scr                       # equity now charges market SCR
     assert np.isclose(a1.equity_scr, 3_000_000.0 * 0.35)
@@ -486,14 +487,14 @@ def test_general_insurance_fourth_module():
     p = assets.AssetPortfolio(holdings=(
         alm.Bond(2_000_000.0, 0.03, 10, 1, credit_rating="A"), assets.Cash(3_000_000.0)))
     gen = 800_000.0
-    a = assets.assess_solvency(p, mp, basis, regime=fcf.KICS, general_insurance_scr=gen)
+    a = sa.assess_solvency(p, mp, basis, regime=fcf.KICS, general_insurance_scr=gen)
     m = np.array([a.insurance_scr, gen, a.market_module_scr, a.credit_scr])
     R = np.array([[1, 0, .25, .25], [0, 1, .25, .25],
                   [.25, .25, 1, .25], [.25, .25, .25, 1]])
     assert np.isclose(a.general_insurance_scr, gen)
     assert np.isclose(a.bscr, np.sqrt(m @ R @ m))
     # zero general -> the 3-module aggregation (unchanged)
-    a0 = assets.assess_solvency(p, mp, basis, regime=fcf.KICS)
+    a0 = sa.assess_solvency(p, mp, basis, regime=fcf.KICS)
     assert a0.general_insurance_scr == 0.0
     assert a.bscr > a0.bscr                                  # adding a module raises BSCR
 
@@ -515,21 +516,21 @@ def test_aggregate_required_capital_reproduces_disclosures():
     capital from the published module amounts. A pure-life book (general = 0) and a
     life + P&C book (general module added) both match the disclosure to the won."""
     # life insurer, general insurance = 0 (KRW millions)
-    basic = assets.aggregate_required_capital(
+    basic = sa.aggregate_required_capital(
         11_628_115, 34_552_189, 4_166_014, regime=fcf.KICS, operational=1_083_844)
     assert np.isclose(basic, 41_624_006, rtol=0, atol=2)
     # life + general insurance (KRW thousands)
-    basic_g = assets.aggregate_required_capital(
+    basic_g = sa.aggregate_required_capital(
         10_654_450_301, 7_191_902_855, 2_495_852_957, regime=fcf.KICS,
         operational=1_648_722_264, general_insurance=542_312_823)
     assert np.isclose(basic_g, 16_977_612_719, rtol=0, atol=2)
     # the diversification effect = simple sum - aggregate (ex operational)
-    agg = assets.aggregate_required_capital(11_628_115, 34_552_189, 4_166_014,
+    agg = sa.aggregate_required_capital(11_628_115, 34_552_189, 4_166_014,
                                             regime=fcf.KICS)
     div = (11_628_115 + 34_552_189 + 4_166_014) - agg
     assert np.isclose(div, 9_806_156, rtol=0, atol=2)
     # Solvency II aggregates the modules at the Annex IV 0.25 correlation (+ operational)
-    s = assets.aggregate_required_capital(100.0, 200.0, 50.0, regime=fcf.SOLVENCY2,
+    s = sa.aggregate_required_capital(100.0, 200.0, 50.0, regime=fcf.SOLVENCY2,
                                           operational=10.0)
     c = np.array([100.0, 200.0, 50.0])
     R = np.array([[1.0, .25, .25], [.25, 1.0, .25], [.25, .25, 1.0]])
@@ -543,7 +544,7 @@ def test_preferred_equity_by_rating_table20():
                           ("B", 0.35), ("unrated", 0.35)]:
         p = assets.AssetPortfolio(holdings=(
             assets.Equity(1_000_000.0, "preferred", credit_rating=rating),))
-        assert np.isclose(assets.equity_scr(p, fcf.KICS), 1_000_000.0 * shock)
+        assert np.isclose(sa.equity_scr(p, fcf.KICS), 1_000_000.0 * shock)
 
 
 # ---------------------------------------------------------------------------
@@ -704,7 +705,7 @@ def test_vfa_interaction_loss_null_scenario_is_zero():
     """No shock, no forced sale, static lapse -> base and stressed NAV coincide and
     the total loss is exactly zero."""
     pf, mp, basis = _vfa_book()
-    r = assets.vfa_interaction_loss(pf, mp, basis, return_shock=0.0,
+    r = sa.vfa_interaction_loss(pf, mp, basis, return_shock=0.0,
                                     lapse_sensitivity=0.0, haircut=0.0)
     assert np.isclose(r.base_nav, r.stressed_nav)
     assert np.isclose(r.revaluation_loss, 0.0)
@@ -718,16 +719,16 @@ def test_vfa_interaction_loss_av_drop_lifts_the_guarantee_cost():
     moneyness lapse holds more policies on the now-valuable guarantee, deepening
     the loss beyond the static-lapse case. total = revaluation + forced sale."""
     pf, mp, basis = _vfa_book()
-    static = assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
+    static = sa.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
                                          lapse_sensitivity=0.0, haircut=0.0)
-    dyn = assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
+    dyn = sa.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
                                       lapse_sensitivity=0.8, haircut=0.10)
     assert static.revaluation_loss > 0.0                       # AV drop -> ITM -> BEL up
     assert dyn.revaluation_loss > static.revaluation_loss      # moneyness lapse deepens it
     assert dyn.forced_sale_loss >= 0.0
     assert np.isclose(dyn.total_loss, dyn.revaluation_loss + dyn.forced_sale_loss)
     # The revaluation loss reconciles to an independent NAV recompute.
-    base_nav = assets._portfolio_nav_vfa(pf, mp, basis)
+    base_nav = sa._portfolio_nav_vfa(pf, mp, basis)
     assert np.isclose(static.base_nav, base_nav)
 
 
@@ -738,17 +739,17 @@ def test_dynamic_solvency_vfa_overlays_the_interaction_on_a_supplied_static():
     pf, mp, basis = _vfa_book()
     static_ac, total_scr = 1000.0, 400.0
 
-    null = assets.dynamic_solvency_vfa(
+    null = sa.dynamic_solvency_vfa(
         pf, mp, basis, static_available_capital=static_ac, total_scr=total_scr,
         return_shock=0.0, lapse_sensitivity=0.0, haircut=0.0)
     assert np.isclose(null.interaction.total_loss, 0.0)
     assert np.isclose(null.stressed_available_capital, static_ac)
     assert np.isclose(null.stressed_ratio, static_ac / total_scr)
 
-    dyn = assets.dynamic_solvency_vfa(
+    dyn = sa.dynamic_solvency_vfa(
         pf, mp, basis, static_available_capital=static_ac, total_scr=total_scr,
         return_shock=-0.30, lapse_sensitivity=0.8, haircut=0.10)
-    loss = assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
+    loss = sa.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
                                        lapse_sensitivity=0.8, haircut=0.10).total_loss
     assert np.isclose(dyn.interaction.total_loss, loss)
     assert np.isclose(dyn.stressed_available_capital, static_ac - loss)
@@ -756,7 +757,7 @@ def test_dynamic_solvency_vfa_overlays_the_interaction_on_a_supplied_static():
     assert dyn.stressed_ratio < null.stressed_ratio          # the shock erodes the ratio
 
     # A risk-free book (zero required capital) gives an unbounded ratio.
-    inf = assets.dynamic_solvency_vfa(
+    inf = sa.dynamic_solvency_vfa(
         pf, mp, basis, static_available_capital=static_ac, total_scr=0.0,
         return_shock=0.0, lapse_sensitivity=0.0, haircut=0.0)
     assert inf.stressed_ratio == float("inf")
@@ -915,7 +916,7 @@ def test_interaction_loss_decomposes():
     pf = assets.AssetPortfolio(holdings=(
         alm.Bond(face=2e6, coupon_rate=0.03, maturity_years=12, frequency=1),))
     shift, sens, hc = 0.01, 8.0, 0.1
-    res = assets.interaction_loss(pf, mp, basis, shift=shift,
+    res = sa.interaction_loss(pf, mp, basis, shift=shift,
                                   lapse_sensitivity=sens, haircut=hc)
     # base NAV reproduces asset_portfolio_value - BEL
     base_nav = (assets.asset_portfolio_value(pf, basis.discount_annual)
@@ -939,7 +940,7 @@ def test_interaction_loss_zero_haircut_drops_friction():
     mp, basis = _mp(), _basis()
     pf = assets.AssetPortfolio(holdings=(
         alm.Bond(face=1e6, coupon_rate=0.04, maturity_years=10, frequency=1),))
-    res = assets.interaction_loss(pf, mp, basis, shift=0.01,
+    res = sa.interaction_loss(pf, mp, basis, shift=0.01,
                                   lapse_sensitivity=8.0, haircut=0.0)
     assert res.forced_sale_loss == 0.0
     assert np.isclose(res.total_loss, res.revaluation_loss)
@@ -956,10 +957,10 @@ def test_dynamic_solvency_decomposes():
     reproduce their standalone builds."""
     mp, basis = _mp(), _basis()
     pf = _solvency_portfolio()
-    d = assets.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
+    d = sa.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
                                 shift=0.01, lapse_sensitivity=8.0, haircut=0.1)
-    static = assets.assess_solvency(pf, mp, basis, regime=fcf.SOLVENCY2)
-    interaction = assets.interaction_loss(pf, mp, basis, shift=0.01,
+    static = sa.assess_solvency(pf, mp, basis, regime=fcf.SOLVENCY2)
+    interaction = sa.interaction_loss(pf, mp, basis, shift=0.01,
                                           lapse_sensitivity=8.0, haircut=0.1)
     assert np.isclose(d.static.solvency_ratio, static.solvency_ratio)
     assert np.isclose(d.interaction.total_loss, interaction.total_loss)
@@ -974,7 +975,7 @@ def test_dynamic_solvency_zero_scenario_is_static():
     """A null scenario (no shift, no haircut) leaves the ratio at the static value."""
     mp, basis = _mp(), _basis()
     pf = _solvency_portfolio()
-    d = assets.dynamic_solvency(pf, mp, basis, regime=fcf.KICS,
+    d = sa.dynamic_solvency(pf, mp, basis, regime=fcf.KICS,
                                 shift=0.0, lapse_sensitivity=8.0, haircut=0.0)
     assert d.interaction.total_loss == 0.0
     assert np.isclose(d.stressed_ratio, d.static.solvency_ratio)
@@ -986,9 +987,9 @@ def test_dynamic_solvency_deeper_haircut_lowers_ratio():
     stressed coverage ratio (the static ratio is unchanged)."""
     mp, basis = _mp(), _basis()
     pf = _solvency_portfolio()
-    shallow = assets.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
+    shallow = sa.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
                                       shift=0.01, lapse_sensitivity=8.0, haircut=0.05)
-    deep = assets.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
+    deep = sa.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
                                    shift=0.01, lapse_sensitivity=8.0, haircut=0.30)
     assert deep.interaction.forced_sale_loss > shallow.interaction.forced_sale_loss
     assert deep.stressed_ratio < shallow.stressed_ratio
@@ -999,9 +1000,9 @@ def test_dynamic_solvency_passes_through_assess_kwargs():
     """Extra kwargs (e.g. tax_rate) reach assess_solvency unchanged."""
     mp, basis = _mp(), _basis()
     pf = _solvency_portfolio()
-    d = assets.dynamic_solvency(pf, mp, basis, regime=fcf.KICS, shift=0.0,
+    d = sa.dynamic_solvency(pf, mp, basis, regime=fcf.KICS, shift=0.0,
                                 lapse_sensitivity=0.0, haircut=0.0, tax_rate=0.22)
-    taxed = assets.assess_solvency(pf, mp, basis, regime=fcf.KICS, tax_rate=0.22)
+    taxed = sa.assess_solvency(pf, mp, basis, regime=fcf.KICS, tax_rate=0.22)
     assert np.isclose(d.static.tax_adjustment, taxed.tax_adjustment)
     assert d.static.tax_adjustment > 0.0
 
@@ -1013,7 +1014,7 @@ def test_dynamic_solvency_report_renders():
     basis = make_death_basis(mortality_q=0.001, lapse_q=0.03, discount_annual=0.03,
                              mortality_cv=0.0)
     pf = _solvency_portfolio()
-    d = assets.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
+    d = sa.dynamic_solvency(pf, mp, basis, regime=fcf.SOLVENCY2,
                                 shift=0.01, lapse_sensitivity=8.0, haircut=0.1)
     rep = fcf.report(d)
     assert isinstance(rep, fcf.DynamicSolvencyReport)
@@ -1032,7 +1033,7 @@ def test_vfa_assess_solvency_assembles_the_static_ratio():
     import fastcashflow.solvency as sv
     pf, mp, basis = _vfa_book()
     regime = sv.KICS
-    a = assets.vfa_assess_solvency(pf, mp, basis, regime=regime)
+    a = sa.vfa_assess_solvency(pf, mp, basis, regime=regime)
 
     # Insurance module is the VFA life SCR; BEL is the VFA net BEL.
     scr = sv.vfa_required_capital(mp, basis, regime=regime)
@@ -1041,10 +1042,10 @@ def test_vfa_assess_solvency_assembles_the_static_ratio():
     assert np.isclose(a.net_interest_scr,
                       sv.vfa_interest_scr(mp, basis, shift=0.01))   # parallel 100bp
     # Equity = asset equity + guarantee equity (added under one shock).
-    eq_shock = assets._market_cal(regime)["equity_shocks"]["developed"]
+    eq_shock = sa._market_cal(regime)["equity_shocks"]["developed"]
     assert np.isclose(
         a.equity_scr,
-        assets.equity_scr(pf, regime)
+        sa.equity_scr(pf, regime)
         + sv.vfa_equity_scr(mp, basis, equity_shock=eq_shock))
     assert a.equity_scr > 0.0                                 # the guarantee bites
     # Available capital = assets - (VFA BEL + risk margin); ratio = ac / total_scr.
@@ -1058,9 +1059,9 @@ def test_dynamic_solvency_vfa_computes_its_own_static_from_a_regime():
     vfa_assess_solvency, then overlay the scenario interaction on it."""
     import fastcashflow.solvency as sv
     pf, mp, basis = _vfa_book()
-    static = assets.vfa_assess_solvency(pf, mp, basis, regime=sv.KICS)
+    static = sa.vfa_assess_solvency(pf, mp, basis, regime=sv.KICS)
 
-    d = assets.dynamic_solvency_vfa(
+    d = sa.dynamic_solvency_vfa(
         pf, mp, basis, regime=sv.KICS, return_shock=-0.30,
         lapse_sensitivity=0.8, haircut=0.10)
     assert d.static is not None
@@ -1072,7 +1073,7 @@ def test_dynamic_solvency_vfa_computes_its_own_static_from_a_regime():
 
     # Neither a regime nor a supplied static position -> a clear error.
     with pytest.raises(ValueError, match="regime="):
-        assets.dynamic_solvency_vfa(pf, mp, basis, return_shock=0.0,
+        sa.dynamic_solvency_vfa(pf, mp, basis, return_shock=0.0,
                                     lapse_sensitivity=0.0, haircut=0.0)
 
 
@@ -1105,7 +1106,7 @@ def test_vfa_assess_solvency_supports_account_backed_ul():
     The interest and equity guarantee modules are positive (the GMAB bites)."""
     import fastcashflow.solvency as sv
     pf, mp, basis = _ul_book()
-    a = assets.vfa_assess_solvency(pf, mp, basis, regime=sv.KICS)
+    a = sa.vfa_assess_solvency(pf, mp, basis, regime=sv.KICS)
     scr = sv.vfa_required_capital(mp, basis, regime=sv.KICS)
     assert np.isclose(a.insurance_scr, scr.insurance_scr)
     assert np.isclose(a.bel, scr.base_bel)
@@ -1187,10 +1188,10 @@ def test_vfa_gap_and_interaction_support_account_backed_ul():
     m = fcf.vfa.measure(mp, basis, full=True)
     gap = assets.vfa_cashflow_gap(pf, m)
     assert np.all(np.isfinite(gap.net_cf))
-    il = assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.3,
+    il = sa.vfa_interaction_loss(pf, mp, basis, return_shock=-0.3,
                                      lapse_sensitivity=0.0, haircut=0.0)
     assert np.isfinite(il.total_loss)
-    ds = assets.dynamic_solvency_vfa(pf, mp, basis, regime=sv.KICS,
+    ds = sa.dynamic_solvency_vfa(pf, mp, basis, regime=sv.KICS,
                                      return_shock=-0.3, lapse_sensitivity=0.0,
                                      haircut=0.0)
     assert np.isfinite(ds.stressed_ratio)

@@ -756,10 +756,11 @@ def vfa_equity_scr(model_points: ModelPoints, basis: Basis, *,
     instantaneous 1-in-200 capital for the book's equity sensitivity.
 
     This is the DOMINANT variable-annuity market risk and the piece the asset-side
-    :func:`fastcashflow.assets.equity_scr` (which shocks only the entity's own
-    equity holdings) does not see. Measured on the STATIC lapse: the instantaneous
-    stress capital, distinct from the behavioural moneyness dynamic lapse, which is
-    the dynamic scenario overlay (:func:`fastcashflow.assets.dynamic_solvency_vfa`).
+    :func:`fastcashflow.solvency_assessment.equity_scr` (which shocks only the
+    entity's own equity holdings) does not see. Measured on the STATIC lapse: the
+    instantaneous stress capital, distinct from the behavioural moneyness dynamic
+    lapse, which is the dynamic scenario overlay
+    (:func:`fastcashflow.solvency_assessment.dynamic_solvency_vfa`).
     Closed-form variable-annuity path only."""
     from fastcashflow._vfa import measure_vfa
     base = float(measure_vfa(model_points, basis, full=False).bel.sum())

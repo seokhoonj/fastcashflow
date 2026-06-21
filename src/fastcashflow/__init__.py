@@ -91,19 +91,24 @@ from fastcashflow.alm import (
 )
 from fastcashflow import alm
 from fastcashflow.assets import (
-    Equity, Property, Cash, AssetPortfolio, SolvencyAssessment,
+    Equity, Property, Cash, AssetPortfolio,
     CashflowGap, asset_portfolio_cashflows, asset_value_path, cashflow_gap,
     vfa_cashflow_gap,
     ReinvestmentResult, reinvest, LiquidationResult, liquidate,
+    asset_portfolio_value, available_capital,
+)
+from fastcashflow import assets
+from fastcashflow.solvency_assessment import (
+    SolvencyAssessment,
     InteractionResult, interaction_loss, vfa_interaction_loss,
-    asset_portfolio_value, available_capital, net_interest_scr,
+    net_interest_scr,
     equity_scr, property_scr, fx_scr, concentration_scr, market_module_scr,
     credit_scr, operational_scr, aggregate_required_capital, assess_solvency,
     vfa_assess_solvency,
     DynamicSolvency, dynamic_solvency,
     VFADynamicSolvency, dynamic_solvency_vfa,
 )
-from fastcashflow import assets
+from fastcashflow import solvency_assessment
 from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import (
     DynamicSolvencyReport, ReinsuranceReport, Report, report,
@@ -168,7 +173,8 @@ __all__ = [
     "alm", "DurationResult", "Bond", "liability_duration", "liability_dv01",
     "key_rate_durations", "bond_duration", "bond_value", "effective_maturity",
     "alm_gap", "duration_gap",
-    "assets", "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
+    "assets", "solvency_assessment",
+    "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "CashflowGap", "asset_portfolio_cashflows", "asset_value_path", "cashflow_gap",
     "vfa_cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
