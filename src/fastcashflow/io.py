@@ -1711,7 +1711,7 @@ def load_sample_vfa_model_points() -> ModelPoints:
     maturity guarantees.
 
     Three single-premium account-value contracts that share a 2% minimum
-    credited rate (``minimum_crediting_rate``, uniform across the rows so the
+    crediting rate (``minimum_crediting_rate``, uniform across the rows so the
     stochastic time-value pass applies) and differ in their floors: one
     carries both a death (GMDB) and a maturity (GMAB) guarantee, one a
     maturity floor, one a death floor. Pair with

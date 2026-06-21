@@ -18,7 +18,7 @@ or loss, so the account-value cash flows are discounted, and the CSM is
 accreted, at the underlying-items return -- not a locked-in rate.
 fastcashflow is deterministic (a single scenario), so the VFA's hallmark --
 the CSM absorbing the variability of the underlying items -- reduces here to
-that return-rate accretion. A minimum guaranteed credited rate is supported
+that return-rate accretion. A minimum guaranteed crediting rate is supported
 -- the account is credited ``max(return, guarantee)`` each period. Its
 intrinsic cost appears in this deterministic measurement; the time value of
 the guarantee, the extra cost from return volatility, is measured
