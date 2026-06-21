@@ -1111,3 +1111,22 @@ def test_vfa_assess_solvency_supports_account_backed_ul():
     assert np.isclose(a.bel, scr.base_bel)
     assert a.net_interest_scr > 0.0 and a.equity_scr > 0.0
     assert np.isfinite(a.solvency_ratio)
+
+
+def test_vfa_gap_and_interaction_reject_account_backed_ul():
+    """The VFA asset-liability gap / interaction are VA-only: a UL book's entity
+    net-liability basis (charges vs guarantee net cost) is a separate derivation, so
+    they raise loudly rather than produce a misleading guarantee-only ladder."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _ul_book()
+    m = fcf.vfa.measure(mp, basis, full=True)
+    with pytest.raises(NotImplementedError, match="universal-life"):
+        alm.vfa_net_liability_cashflows(m)
+    with pytest.raises(NotImplementedError, match="universal-life"):
+        assets.vfa_cashflow_gap(pf, m)
+    with pytest.raises(NotImplementedError, match="universal-life"):
+        assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.3,
+                                    lapse_sensitivity=0.0, haircut=0.0)
+    # But the STATIC assessment still works for UL.
+    assert np.isfinite(assets.vfa_assess_solvency(pf, mp, basis,
+                                                  regime=sv.KICS).solvency_ratio)

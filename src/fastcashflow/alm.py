@@ -134,17 +134,34 @@ def vfa_net_liability_cashflows(measurement) -> FloatArray:
     the BEL before RA (at a zero return the undiscounted sum equals the BEL); the
     undiscounted ladder is the liquidity foundation for the VFA asset-liability gap.
 
-    Requires a ``full=True`` closed-form VA measurement -- the headline-only,
-    aggregate and account-backed (universal-life) paths do not carry the entity
-    cash flows (``guarantee_excess_cf`` / ``fee_cf`` are ``None``)."""
-    ge = getattr(measurement, "guarantee_excess_cf", None)
-    fee = getattr(measurement, "fee_cf", None)
+    Requires a ``full=True`` closed-form VA measurement. The account-backed
+    (universal-life) path is deliberately UNSUPPORTED (raises): a UL book's entity
+    net-liability basis -- premium loads / COI / admin charges funding the guarantee
+    net cost -- is a distinct decomposition (the charges are embedded in the account
+    roll, not a variable fee) and must reconcile to the UL net BEL, so it is a
+    separate actuarial derivation, not the VA ``guarantee_excess + expense - fee``
+    shape with ``fee = 0``. UL is fully supported for the STATIC solvency
+    (:func:`~fastcashflow.assets.vfa_assess_solvency`) and the moneyness lapse; only
+    the asset-liability GAP / interaction is VA-only."""
     cf = measurement.cashflows
-    if ge is None or fee is None or cf is None:
+    if cf is None:
+        raise ValueError(
+            "vfa_net_liability_cashflows needs a full=True measurement (it carries "
+            "the cash flows); the headline-only / aggregate paths do not.")
+    if getattr(cf, "account", None) is not None:
+        raise NotImplementedError(
+            "vfa_net_liability_cashflows does not support account-backed "
+            "(universal-life) books -- the entity net-liability basis on a UL book "
+            "(premium loads / COI / admin charges vs the guarantee net cost) is a "
+            "distinct decomposition from the VA guarantee-excess + expense - fee "
+            "shape and is not modelled. UL static solvency (vfa_assess_solvency) "
+            "and the moneyness lapse are supported; the asset-liability gap is VA-only.")
+    ge = measurement.guarantee_excess_cf
+    fee = measurement.fee_cf
+    if ge is None or fee is None:
         raise ValueError(
             "vfa_net_liability_cashflows needs a full=True closed-form VA "
-            "measurement (it carries guarantee_excess_cf / fee_cf / expense); the "
-            "headline-only, aggregate and account-backed (UL) paths do not.")
+            "measurement (guarantee_excess_cf / fee_cf); got a headline-only result.")
     return (ge + cf.expense_cf - fee).sum(axis=0)
 
 
