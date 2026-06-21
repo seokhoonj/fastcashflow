@@ -1212,6 +1212,7 @@ class StochasticSolvency:
 
 def stochastic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
                             basis: Basis, return_scenarios, *, regime: RegimeSpec,
+                            co_moving_assets: bool = False,
                             **assess_kwargs) -> StochasticSolvency:
     """The coverage-ratio distribution of a variable book over fund-return scenarios.
 
@@ -1228,17 +1229,33 @@ def stochastic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints
     ``returns`` are used). Extra keywords pass through to :func:`vfa_assess_solvency`.
     Both the variable-annuity and universal-life paths are supported.
 
-    v1 scope: only the LIABILITY side is stochastic -- the asset value and the
-    prescribed SCR are held at their t=0 (base-curve) values across scenarios, so the
-    distribution isolates the guarantee's bite on the ratio. Assets co-moving with
-    the scenarios (the entity's own holdings revalued per rate / equity path) is a
-    future extension."""
+    ``co_moving_assets`` (default ``False``) makes the entity's general-account
+    bonds MOVE WITH the scenario's RATE path. A variable book's account value is
+    unit-funded (it tracks the fund, not the entity), so the entity holds bonds for
+    the guarantee, and those co-move with INTEREST RATES, not the fund return -- a
+    different axis from ``return_scenarios``. So ``co_moving_assets=True`` needs an
+    :class:`~fastcashflow.EconomicScenarios` (the fund ``returns`` drive the
+    guarantee liability, the joint ``rates`` revalue the bonds, keeping their
+    correlation); a raw returns array carries no rate path and is rejected. Off (the
+    default) holds the asset value at its t=0 base-curve level. The prescribed
+    required capital stays at its t=0 value either way (a scenario overlay on the
+    ratio)."""
     from fastcashflow._vfa import measure_vfa_stochastic
     rs = getattr(return_scenarios, "returns", return_scenarios)
     static = vfa_assess_solvency(portfolio, model_points, basis, regime=regime,
                                  **assess_kwargs)
     dist = measure_vfa_stochastic(model_points, basis, rs)
-    ac = static.asset_portfolio_value - (dist.bel + static.risk_margin)
+    if co_moving_assets:
+        rates = getattr(return_scenarios, "rates", None)
+        if rates is None:
+            raise ValueError(
+                "co_moving_assets=True needs an EconomicScenarios -- its .rates "
+                "revalue the entity's bonds (which co-move with interest rates, not "
+                "the fund return); a raw returns array carries no rate path.")
+        asset_value = asset_value_by_scenario(portfolio, rates)
+    else:
+        asset_value = static.asset_portfolio_value
+    ac = asset_value - (dist.bel + static.risk_margin)
     if static.total_scr > 0.0:
         ratio = ac / static.total_scr
     else:

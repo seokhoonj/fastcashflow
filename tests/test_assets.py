@@ -1412,3 +1412,43 @@ def test_stochastic_solvency_gmm_co_moving_differs_from_fixed():
     # so its available capital exceeds the fixed-asset figure
     assert moving.available_capital[0] > fixed.available_capital[0]
     assert not np.allclose(moving.available_capital, fixed.available_capital)
+
+
+# ---------------------------------------------------------------------------
+# stochastic_solvency_vfa co_moving_assets (P3): the entity bonds co-move with the
+# scenario RATE path (the joint ESG), not the fund return.
+# ---------------------------------------------------------------------------
+
+def test_stochastic_solvency_vfa_co_moving_off_is_unchanged():
+    """co_moving_assets=False (the default) holds the asset value fixed."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis, es = _vfa_guarantee_book()
+    ss = fcf.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)
+    expected_ac = ss.static.asset_portfolio_value - (
+        fcf.vfa.stochastic(mp, basis, es.returns).bel + ss.static.risk_margin)
+    assert np.allclose(ss.available_capital, expected_ac)
+
+
+def test_stochastic_solvency_vfa_co_moving_requires_esg():
+    """The bonds co-move with rates, not the fund return, so a raw returns array
+    (no rate path) is rejected when co_moving_assets=True."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis, es = _vfa_guarantee_book()
+    with pytest.raises(ValueError, match="needs an EconomicScenarios"):
+        fcf.stochastic_solvency_vfa(pf, mp, basis, es.returns, regime=sv.KICS,
+                                    co_moving_assets=True)
+
+
+def test_stochastic_solvency_vfa_co_moving_uses_the_rate_path():
+    """co_moving_assets=True revalues the bonds on the ESG rate path (its .rates),
+    while the fund returns still drive the guarantee liability."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis, es = _vfa_guarantee_book()
+    ss = fcf.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS,
+                                     co_moving_assets=True)
+    dist = fcf.vfa.stochastic(mp, basis, es.returns)
+    asset_val = fcf.asset_value_by_scenario(pf, es.rates)
+    assert np.allclose(ss.available_capital, asset_val - (dist.bel + ss.static.risk_margin))
+    # the asset value now varies across scenarios (vs a single fixed level)
+    fixed = fcf.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)
+    assert not np.allclose(ss.available_capital, fixed.available_capital)
