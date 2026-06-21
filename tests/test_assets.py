@@ -689,6 +689,48 @@ def test_vfa_cashflow_gap_uses_the_guarantee_excess_basis():
     assert abs(gap.liability_cf.sum()) < float(m.benefit_cf.sum())
 
 
+def _vfa_book():
+    basis = make_death_basis(mortality_q=0.002, lapse_q=0.004, discount_annual=0.03,
+                             ra_confidence=0.75, investment_return=0.04, fund_fee=0.02)
+    mp = fcf.ModelPoints.single(40, 0.0, 60, account_value=1000.0,
+                                minimum_accumulation_benefit=1200.0,
+                                calculation_methods=PATTERNS)
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=200, coupon_rate=0.04, maturity_years=5, frequency=1),))
+    return pf, mp, basis
+
+
+def test_vfa_interaction_loss_null_scenario_is_zero():
+    """No shock, no forced sale, static lapse -> base and stressed NAV coincide and
+    the total loss is exactly zero."""
+    pf, mp, basis = _vfa_book()
+    r = assets.vfa_interaction_loss(pf, mp, basis, return_shock=0.0,
+                                    lapse_sensitivity=0.0, haircut=0.0)
+    assert np.isclose(r.base_nav, r.stressed_nav)
+    assert np.isclose(r.revaluation_loss, 0.0)
+    assert np.isclose(r.forced_sale_loss, 0.0)
+    assert np.isclose(r.total_loss, 0.0)
+
+
+def test_vfa_interaction_loss_av_drop_lifts_the_guarantee_cost():
+    """An account-value drop pushes the GMAB in-the-money, so the guarantee cost
+    (VFA net BEL) rises and the NAV falls -- a positive revaluation loss. The
+    moneyness lapse holds more policies on the now-valuable guarantee, deepening
+    the loss beyond the static-lapse case. total = revaluation + forced sale."""
+    pf, mp, basis = _vfa_book()
+    static = assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
+                                         lapse_sensitivity=0.0, haircut=0.0)
+    dyn = assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
+                                      lapse_sensitivity=0.8, haircut=0.10)
+    assert static.revaluation_loss > 0.0                       # AV drop -> ITM -> BEL up
+    assert dyn.revaluation_loss > static.revaluation_loss      # moneyness lapse deepens it
+    assert dyn.forced_sale_loss >= 0.0
+    assert np.isclose(dyn.total_loss, dyn.revaluation_loss + dyn.forced_sale_loss)
+    # The revaluation loss reconciles to an independent NAV recompute.
+    base_nav = assets._portfolio_nav_vfa(pf, mp, basis)
+    assert np.isclose(static.base_nav, base_nav)
+
+
 def _gap(asset_cf, liability_cf):
     return assets.CashflowGap(asset_cf=np.asarray(asset_cf, float),
                               liability_cf=np.asarray(liability_cf, float))

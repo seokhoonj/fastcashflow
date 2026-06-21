@@ -21,7 +21,7 @@ concentration).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -486,6 +486,66 @@ def _interaction(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Ba
     liq = liquidate(cashflow_gap(portfolio, measure(mp_s, basis_s, full=True)),
                     haircut=haircut, reinvest_rate=reinvest_rate,
                     opening_balance=opening_balance)
+    res = InteractionResult(base_nav=base_nav, stressed_nav=stressed_nav,
+                            forced_sale_loss=liq.total_realized_loss)
+    return res, liq
+
+
+def _portfolio_nav_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
+                       basis: Basis) -> float:
+    """Net asset value for a variable (VFA) book: assets at market less the VFA net
+    BEL (the guarantee-excess + expense - fee leg). The account-value portion of
+    the benefit is unit-funded, so only that net liability sits on the entity's
+    general account; the assets discount at the entity curve ``basis.discount_annual``
+    while the VFA BEL discounts internally at the underlying-items return."""
+    from fastcashflow._vfa import measure_vfa
+    return (asset_portfolio_value(portfolio, basis.discount_annual)
+            - float(measure_vfa(model_points, basis, full=False).bel.sum()))
+
+
+def vfa_interaction_loss(portfolio: AssetPortfolio, model_points: ModelPoints,
+                         basis: Basis, *, return_shock: float,
+                         lapse_sensitivity: float, haircut: float,
+                         reinvest_rate=0.0,
+                         opening_balance: float = 0.0) -> InteractionResult:
+    """The asset-liability interaction loss of a market shock on a variable book.
+
+    The VFA counterpart of :func:`interaction_loss`. An immediate proportional
+    account-value shock ``return_shock`` (a market drop today, ``-0.30`` = -30%)
+    lowers the account value, so the GMDB / GMAB moves in-the-money and the
+    guarantee cost (the VFA net BEL) rises -- the mark-to-market ``revaluation_loss``.
+    The moneyness dynamic lapse (:func:`fastcashflow.vfa.moneyness_lapse_scale`,
+    ``lapse_sensitivity`` the elasticity) holds MORE policies on the now-valuable
+    guarantee, deepening that cost AND surging the guarantee-excess outflow; funding
+    the liquidity shortfall on the stressed VFA cash-flow gap as a forced seller
+    (:func:`liquidate` at ``haircut``) crystallises the ``forced_sale_loss`` on top.
+    ``total_loss`` is the full bite of the coupled shock.
+
+    Only the LIABILITY side moves here (assets held at the unchanged entity curve);
+    a market shock to the entity's own equity / property holdings is the separable
+    static market SCR. The closed-form variable-annuity path only; an account-backed
+    (universal-life) book raises (the moneyness lapse is VA-only)."""
+    return _interaction_vfa(portfolio, model_points, basis, return_shock=return_shock,
+                            lapse_sensitivity=lapse_sensitivity, haircut=haircut,
+                            reinvest_rate=reinvest_rate,
+                            opening_balance=opening_balance)[0]
+
+
+def _interaction_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
+                     basis: Basis, *, return_shock, lapse_sensitivity, haircut,
+                     reinvest_rate, opening_balance):
+    """The VFA interaction loss AND the forced-sale roll-forward, so
+    :func:`dynamic_solvency` does not re-measure the stressed book."""
+    from fastcashflow._vfa import measure_vfa
+    base_nav = _portfolio_nav_vfa(portfolio, model_points, basis)
+    av = np.asarray(model_points.account_value, dtype=np.float64)
+    mp_s = replace(model_points, account_value=av * (1.0 + return_shock))
+    asset_val = asset_portfolio_value(portfolio, basis.discount_annual)
+    stressed_nav = asset_val - float(measure_vfa(
+        mp_s, basis, full=False, lapse_sensitivity=lapse_sensitivity).bel.sum())
+    m_s = measure_vfa(mp_s, basis, full=True, lapse_sensitivity=lapse_sensitivity)
+    liq = liquidate(vfa_cashflow_gap(portfolio, m_s), haircut=haircut,
+                    reinvest_rate=reinvest_rate, opening_balance=opening_balance)
     res = InteractionResult(base_nav=base_nav, stressed_nav=stressed_nav,
                             forced_sale_loss=liq.total_realized_loss)
     return res, liq
@@ -1297,7 +1357,7 @@ __all__ = [
     "asset_portfolio_cashflows", "asset_value_path", "CashflowGap", "cashflow_gap",
     "vfa_cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
-    "InteractionResult", "interaction_loss",
+    "InteractionResult", "interaction_loss", "vfa_interaction_loss",
     "net_interest_scr", "net_interest_kics_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",
