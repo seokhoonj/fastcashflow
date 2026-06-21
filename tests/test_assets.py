@@ -1113,20 +1113,50 @@ def test_vfa_assess_solvency_supports_account_backed_ul():
     assert np.isfinite(a.solvency_ratio)
 
 
-def test_vfa_gap_and_interaction_reject_account_backed_ul():
-    """The VFA asset-liability gap / interaction are VA-only: a UL book's entity
-    net-liability basis (charges vs guarantee net cost) is a separate derivation, so
-    they raise loudly rather than produce a misleading guarantee-only ladder."""
+def test_ul_vfa_net_liability_cashflows_reconciles_to_bel():
+    """HARD GATE: the UL entity net-liability cash flow reconciles to the UL net
+    BEL. With no crediting guarantee and a zero underlying-items return, credit ==
+    discount == 0, so the account-value pass-through and credited interest net
+    exactly against the held fund and the undiscounted entity_net sum == net BEL."""
+    from fastcashflow import (Basis, CalculationMethod, CoverageRate, ModelPoints,
+                              NO_GUARANTEE_RATE)
+    coi = 0.0015
+    basis = Basis(
+        mortality_annual=0.006, lapse_annual=0.03, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.1, investment_return=0.0,
+        coi_annual=coi, premium_load=0.08,
+        expense_items=(fcf.ExpenseItem("maint", "gamma_fixed", 300.0),),
+        coverages=(CoverageRate("DEATH", coi, funds_from_account=True,
+                                pays_account_balance=True),))
+    mp = ModelPoints(   # mixed terms, real GMDB / GMAB, load + admin + COI exercised
+        issue_age=np.array([40.0, 55.0]), premium=np.array([500_000.0, 300_000.0]),
+        term_months=np.array([60, 36]),
+        account_value=np.array([1_000_000.0, 500_000.0]),
+        minimum_death_benefit=np.array([5_000_000.0, 3_000_000.0]),
+        maturity_benefit=np.array([1_100_000.0, 520_000.0]),
+        minimum_crediting_rate=np.array([NO_GUARANTEE_RATE, NO_GUARANTEE_RATE]),
+        sex=np.array([0, 1]),
+        benefits={"DEATH": np.array([5_000_000.0, 3_000_000.0])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH})
+    m = fcf.vfa.measure(mp, basis, full=True)
+    net = alm.vfa_net_liability_cashflows(m)
+    assert net.shape == (m.cashflows.inforce.shape[1],)
+    assert np.isclose(net.sum(), float(m.bel.sum()))         # reconciles to the UL net BEL
+
+
+def test_vfa_gap_and_interaction_support_account_backed_ul():
+    """The VFA asset-liability gap / interaction now work on a UL book (the account
+    charge flows let the entity net liability be built on the guarantee-excess
+    basis), alongside the static assessment."""
     import fastcashflow.solvency as sv
     pf, mp, basis = _ul_book()
     m = fcf.vfa.measure(mp, basis, full=True)
-    with pytest.raises(NotImplementedError, match="universal-life"):
-        alm.vfa_net_liability_cashflows(m)
-    with pytest.raises(NotImplementedError, match="universal-life"):
-        assets.vfa_cashflow_gap(pf, m)
-    with pytest.raises(NotImplementedError, match="universal-life"):
-        assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.3,
-                                    lapse_sensitivity=0.0, haircut=0.0)
-    # But the STATIC assessment still works for UL.
-    assert np.isfinite(assets.vfa_assess_solvency(pf, mp, basis,
-                                                  regime=sv.KICS).solvency_ratio)
+    gap = assets.vfa_cashflow_gap(pf, m)
+    assert np.all(np.isfinite(gap.net_cf))
+    il = assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.3,
+                                     lapse_sensitivity=0.0, haircut=0.0)
+    assert np.isfinite(il.total_loss)
+    ds = assets.dynamic_solvency_vfa(pf, mp, basis, regime=sv.KICS,
+                                     return_shock=-0.3, lapse_sensitivity=0.0,
+                                     haircut=0.0)
+    assert np.isfinite(ds.stressed_ratio)

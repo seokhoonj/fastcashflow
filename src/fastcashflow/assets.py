@@ -227,12 +227,14 @@ def vfa_cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
     The VFA counterpart of :func:`cashflow_gap`: nets the projected asset cash
     flows (:func:`asset_portfolio_cashflows`) against the VFA entity net liability
     cash flow (:func:`fastcashflow.alm.vfa_net_liability_cashflows`) -- the
-    guarantee top-up plus expenses less the variable fee, on the engine's monthly
-    grid. Unlike ``cashflow_gap`` this is FOR account-value books, not against them:
-    the account-value benefit is funded by the unit fund, so the gap pits the
-    entity's own assets only against the guarantee-excess basis. Undiscounted
-    liquidity ladder -- where the general account throws off / must find cash to
-    carry the guarantee. Requires a ``full=True`` closed-form VA measurement."""
+    guarantee top-up plus expenses less the entity income (the variable fee for a
+    variable annuity, the account charges for universal life), on the engine's
+    monthly grid. Unlike ``cashflow_gap`` this is FOR account-value books, not
+    against them: the account-value benefit is funded by the unit fund, so the gap
+    pits the entity's own assets only against the guarantee-excess basis.
+    Undiscounted liquidity ladder -- where the general account throws off / must find
+    cash to carry the guarantee. Requires a ``full=True`` measurement; both the
+    variable-annuity and universal-life paths are supported."""
     net = vfa_net_liability_cashflows(measurement)          # (n_time,)
     n_time = net.shape[0]
     liability_cf = np.zeros(n_time + 1, dtype=np.float64)
@@ -524,8 +526,8 @@ def vfa_interaction_loss(portfolio: AssetPortfolio, model_points: ModelPoints,
 
     Only the LIABILITY side moves here (assets held at the unchanged entity curve);
     a market shock to the entity's own equity / property holdings is the separable
-    static market SCR. The closed-form variable-annuity path only; an account-backed
-    (universal-life) book raises (the moneyness lapse is VA-only)."""
+    static market SCR. Both the closed-form variable-annuity and the account-backed
+    universal-life paths are supported."""
     return _interaction_vfa(portfolio, model_points, basis, return_shock=return_shock,
                             lapse_sensitivity=lapse_sensitivity, haircut=haircut,
                             reinvest_rate=reinvest_rate,
@@ -1316,7 +1318,8 @@ def vfa_assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     -- a parallel ``+/- interest_shift`` to the underlying-items return (default
     100bp), the guarantee's rate sensitivity. Property / FX / concentration / credit
     / operational follow the asset-side modules (operational on the VFA BEL /
-    premium). Closed-form variable-annuity path only."""
+    premium). Both the closed-form variable-annuity and the universal-life paths are
+    supported."""
     from fastcashflow._vfa import measure_vfa
     scr = vfa_required_capital(model_points, basis, regime=regime,
                                catastrophe=catastrophe)
@@ -1482,8 +1485,8 @@ def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     carries the full :class:`SolvencyAssessment`), or supply
     ``static_available_capital`` and ``total_scr`` directly (from your own capital
     model). A null scenario (``return_shock = haircut = 0``, ``lapse_sensitivity =
-    0``) leaves the ratio at the static value. Closed-form variable-annuity path
-    only."""
+    0``) leaves the ratio at the static value. Both the closed-form variable-annuity
+    and the universal-life paths are supported."""
     static = None
     if regime is not None:
         static = vfa_assess_solvency(portfolio, model_points, basis, regime=regime,

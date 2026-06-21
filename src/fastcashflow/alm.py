@@ -126,36 +126,76 @@ def vfa_net_liability_cashflows(measurement) -> FloatArray:
 
         guarantee_excess + expense - variable_fee
 
-    the guarantee top-up and expenses the general account funds, less the variable
-    fee it skims as income. This is the VFA counterpart of
-    :func:`net_liability_cashflows` (which nets the GROSS benefits of a non-account
-    book); here the gross account-value benefit is excluded because the unit fund,
-    not the entity, pays it. Discounting at the underlying-items return reproduces
-    the BEL before RA (at a zero return the undiscounted sum equals the BEL); the
-    undiscounted ladder is the liquidity foundation for the VFA asset-liability gap.
+    the guarantee top-up and expenses the general account funds, less the income it
+    keeps. This is the VFA counterpart of :func:`net_liability_cashflows` (which
+    nets the GROSS benefits of a non-account book); here the gross account-value
+    benefit is excluded because the unit fund, not the entity, pays it. Discounting
+    at the underlying-items return reproduces the BEL before RA (at a zero return the
+    undiscounted sum equals the BEL); the undiscounted ladder is the liquidity
+    foundation for the VFA asset-liability gap.
 
-    Requires a ``full=True`` closed-form VA measurement. The account-backed
-    (universal-life) path is deliberately UNSUPPORTED (raises): a UL book's entity
-    net-liability basis -- premium loads / COI / admin charges funding the guarantee
-    net cost -- is a distinct decomposition (the charges are embedded in the account
-    roll, not a variable fee) and must reconcile to the UL net BEL, so it is a
-    separate actuarial derivation, not the VA ``guarantee_excess + expense - fee``
-    shape with ``fee = 0``. UL is fully supported for the STATIC solvency
-    (:func:`~fastcashflow.assets.vfa_assess_solvency`) and the moneyness lapse; only
-    the asset-liability GAP / interaction is VA-only."""
+    Two product shapes, both ``full=True``:
+
+    * closed-form VARIABLE-ANNUITY: income is the variable fee, so the net flow is
+      ``guarantee_excess + expense - variable_fee``.
+    * account-backed UNIVERSAL-LIFE: there is no variable fee; the entity income is
+      the bundle of account charges, so the net flow is the guarantee net cost
+      (NAR death excess + GMAB maturity excess) plus expense, less the premium load,
+      COI, admin and cost-deducting-rider charges and the retained surrender charge.
+      The account-value pass-through and credited interest net against the held fund;
+      with no crediting guarantee the undiscounted sum reconciles exactly to the UL
+      net BEL (the crediting-guarantee intrinsic value is the only residual when the
+      floor binds, carried by the BEL itself)."""
     cf = measurement.cashflows
     if cf is None:
         raise ValueError(
             "vfa_net_liability_cashflows needs a full=True measurement (it carries "
             "the cash flows); the headline-only / aggregate paths do not.")
-    if getattr(cf, "account", None) is not None:
-        raise NotImplementedError(
-            "vfa_net_liability_cashflows does not support account-backed "
-            "(universal-life) books -- the entity net-liability basis on a UL book "
-            "(premium loads / COI / admin charges vs the guarantee net cost) is a "
-            "distinct decomposition from the VA guarantee-excess + expense - fee "
-            "shape and is not modelled. UL static solvency (vfa_assess_solvency) "
-            "and the moneyness lapse are supported; the asset-liability gap is VA-only.")
+    account = getattr(cf, "account", None)
+    if account is not None:
+        # Universal-life: the entity net cost on the guarantee-excess basis. The
+        # account-value pass-through and credited interest telescope against the
+        # held fund, leaving the guarantee net cost + expense less the charge income.
+        n_time = cf.premium_cf.shape[1]
+        inforce = np.asarray(cf.inforce, dtype=np.float64)
+        deaths = np.asarray(cf.deaths, dtype=np.float64)
+        av_mid = np.asarray(account.av_mid, dtype=np.float64)
+        av = np.asarray(account.av, dtype=np.float64)
+        face = np.asarray(measurement.model_points.minimum_death_benefit, dtype=np.float64)
+        gmab = np.asarray(measurement.model_points.maturity_benefit, dtype=np.float64)
+        term = np.asarray(measurement.model_points.term_months, dtype=np.int64)
+        maturity_survivors = np.asarray(cf.maturity_survivors, dtype=np.float64)
+        rows = np.arange(term.shape[0])
+
+        nar_death_excess = (deaths * np.maximum(0.0, face[:, None] - av_mid)).sum(axis=0)
+        # GMAB maturity excess at each policy's term, on the matured (month-end) AV.
+        gmab_maturity_excess = np.zeros(n_time, dtype=np.float64)
+        np.add.at(gmab_maturity_excess, np.minimum(term, n_time - 1),
+                  maturity_survivors * np.maximum(
+                      0.0, gmab - av[rows, np.minimum(term, n_time)]))
+        expense = np.asarray(cf.expense_cf, dtype=np.float64).sum(axis=0)
+        premium_load_income = (
+            np.asarray(cf.premium_cf, dtype=np.float64)
+            - inforce * np.asarray(account.prem_to_av, dtype=np.float64)).sum(axis=0)
+        coi_drawn = (inforce * np.asarray(account.coi, dtype=np.float64)).sum(axis=0)
+        admin_drawn = (inforce * np.asarray(account.admin_charge, dtype=np.float64)).sum(axis=0)
+        account_charge_drawn = (
+            inforce * np.asarray(account.account_charge, dtype=np.float64)).sum(axis=0)
+        # Retained surrender charge = gross account surrendered less the net paid
+        # (surrender_cf already nets the charge). Maturing survivors are removed
+        # from the non-maturity exit count at their term - 1 exit column.
+        inforce_pad = np.concatenate(
+            [inforce, np.zeros((inforce.shape[0], 1), dtype=np.float64)], axis=1)
+        non_maturity_exits = (inforce_pad[:, :-1] - inforce_pad[:, 1:]) - deaths
+        np.add.at(non_maturity_exits, (rows, np.minimum(term - 1, n_time - 1)),
+                  -maturity_survivors)
+        surrender_charge_retained = (
+            non_maturity_exits * av_mid
+            - np.asarray(cf.surrender_cf, dtype=np.float64)).sum(axis=0)
+
+        return (nar_death_excess + gmab_maturity_excess + expense
+                - premium_load_income - coi_drawn - admin_drawn
+                - account_charge_drawn - surrender_charge_retained)
     ge = measurement.guarantee_excess_cf
     fee = measurement.fee_cf
     if ge is None or fee is None:
