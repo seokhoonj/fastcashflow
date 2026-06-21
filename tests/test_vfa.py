@@ -462,20 +462,25 @@ def test_vfa_tvog_matches_measure_tvog_mixed_term():
     assert np.isclose(folded, standalone)
 
 
-def test_vfa_scenarios_with_per_mp_varying_guarantee_is_rejected():
-    """Per-MP varying minimum_crediting_rate with stochastic return scenarios
-    is not supported in v1 -- the time-value pass is portfolio-level."""
+def test_vfa_scenarios_per_mp_varying_guarantee_partitions():
+    """Per-MP varying minimum_crediting_rate is supported: the time-value pass
+    partitions the book by crediting rate, each MP as on its own sub-book."""
     basis = _basis(investment_return=0.04)
-    mp = ModelPoints(
-        issue_age=np.array([40, 45]),
-        premium=np.array([0.0, 0.0]),
-        term_months=np.array([120, 120]),
-        account_value=np.array([1e8, 1e8]),
-        minimum_crediting_rate=np.array([0.04, 0.05]),
-        calculation_methods=PATTERNS,
-    )
-    with pytest.raises(NotImplementedError, match="per-MP varying"):
-        fcf.vfa.measure(mp, basis, np.full((10, 120), 0.003))
+    scen = _return_paths(0.04, vol=0.03, n=40, n_time=120, seed=8)
+
+    def book(ages, gs):
+        n = len(gs)
+        return ModelPoints(
+            issue_age=np.array(ages, float), premium=np.zeros(n),
+            term_months=np.full(n, 120), account_value=np.full(n, 1e8),
+            minimum_crediting_rate=np.array(gs), calculation_methods=PATTERNS)
+
+    both = fcf.vfa.measure(book([40, 45], [0.04, 0.05]), basis, scen)
+    a0 = fcf.vfa.measure(book([40], [0.04]), basis, scen)
+    a1 = fcf.vfa.measure(book([45], [0.05]), basis, scen)
+    assert np.isclose(both.time_value[0], a0.time_value[0])
+    assert np.isclose(both.time_value[1], a1.time_value[0])
+    assert not np.isclose(both.time_value[0], both.time_value[1])   # the rate matters
 
 
 def test_vfa_rejects_degenerate_return_scenarios():
@@ -579,22 +584,26 @@ def test_vfa_rejects_stray_negative_crediting_rate():
                            calculation_methods=PATTERNS)
 
 
-def test_vfa_scenarios_reject_mixed_sentinel_and_floor():
-    """A book mixing no-guarantee and a real 0% floor is genuinely
-    heterogeneous; the scalar-guarantee stochastic pass (v1) rejects it."""
+def test_vfa_scenarios_mixed_sentinel_and_floor_partitions():
+    """A book mixing no-guarantee and a real 0% floor is heterogeneous; the
+    time-value pass partitions it -- the no-guarantee MP and the 0%-floor MP each
+    measure as on their own sub-book (the sentinel group carries no credit floor)."""
     term = 60
     basis = _basis(investment_return=0.03)
     scen = _return_paths(0.03, vol=0.02, n=100, n_time=term, seed=5)
-    mp = ModelPoints(
-        issue_age=np.array([40, 40]),
-        premium=np.array([0.0, 0.0]),
-        term_months=np.array([term, term]),
-        account_value=np.array([1e8, 1e8]),
-        minimum_crediting_rate=np.array([fcf.NO_GUARANTEE_RATE, 0.0]),
-        calculation_methods=PATTERNS,
-    )
-    with pytest.raises(NotImplementedError, match="per-MP varying"):
-        fcf.vfa.measure(mp, basis, scen)
+
+    def book(gs):
+        n = len(gs)
+        return ModelPoints(
+            issue_age=np.full(n, 40.0), premium=np.zeros(n),
+            term_months=np.full(n, term), account_value=np.full(n, 1e8),
+            minimum_crediting_rate=np.array(gs), calculation_methods=PATTERNS)
+
+    mix = fcf.vfa.measure(book([fcf.NO_GUARANTEE_RATE, 0.0]), basis, scen)
+    sentinel = fcf.vfa.measure(book([fcf.NO_GUARANTEE_RATE]), basis, scen)
+    floor0 = fcf.vfa.measure(book([0.0]), basis, scen)
+    assert np.isclose(mix.time_value[0], sentinel.time_value[0])
+    assert np.isclose(mix.time_value[1], floor0.time_value[0])
 
 
 def test_vfa_ra_zero_without_expense_cv():
@@ -1494,3 +1503,75 @@ def test_vfa_stochastic_vectorised_matches_loop_ul():
     assert np.allclose(res.ra, ra, atol=1e-6)
     assert np.allclose(res.csm, csm, atol=1e-6)
     assert np.allclose(res.loss_component, loss, atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Per-MP varying crediting guarantee in the TVOG pass: the time-value pass
+# partitions the book by crediting rate (was a scalar-only v1 restriction).
+# ---------------------------------------------------------------------------
+
+def _va_mp_rates(gs):
+    n = len(gs)
+    return ModelPoints(
+        issue_age=np.full(n, 45.0), premium=np.zeros(n), term_months=np.full(n, 60),
+        account_value=np.full(n, 1e7), minimum_accumulation_benefit=np.full(n, 1.2e7),
+        minimum_death_benefit=np.full(n, 1.1e7), minimum_crediting_rate=np.array(gs),
+        benefits={"DEATH": np.zeros(n)},
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
+
+
+def test_va_per_mp_crediting_partitions_and_matches_alone():
+    """A mixed-crediting-rate variable-annuity book is measured per model point
+    exactly as if each rate were measured on its own sub-book."""
+    basis = _basis(investment_return=0.05, fund_fee=0.015)
+    rng = np.random.default_rng(1)
+    rs = rng.normal(0.05 / 12, 0.04, (60, 60))
+    mix = fcf.vfa.measure(_va_mp_rates([0.02, 0.04]), basis, return_scenarios=rs)
+    a0 = fcf.vfa.measure(_va_mp_rates([0.02]), basis, return_scenarios=rs)
+    a1 = fcf.vfa.measure(_va_mp_rates([0.04]), basis, return_scenarios=rs)
+    assert np.allclose(mix.time_value, [a0.time_value[0], a1.time_value[0]])
+    assert np.allclose(mix.csm, [a0.csm[0], a1.csm[0]])
+    assert np.allclose(mix.loss_component, [a0.loss_component[0], a1.loss_component[0]])
+    # the two rates give genuinely different time values (the partition matters)
+    assert not np.isclose(mix.time_value[0], mix.time_value[1])
+
+
+def test_va_per_mp_crediting_stochastic_matches_loop():
+    """vfa.stochastic on a mixed-crediting book still matches the per-scenario
+    loop (the vectorised partition is exact)."""
+    basis = _basis(investment_return=0.05, fund_fee=0.015)
+    rng = np.random.default_rng(2)
+    rs = rng.normal(0.05 / 12, 0.04, (40, 60))
+    mp = _va_mp_rates([0.02, 0.04])
+    res = fcf.vfa.stochastic(mp, basis, rs)
+    bel, ra, csm, loss = _stochastic_loop_oracle(mp, basis, rs)
+    assert np.allclose(res.bel, bel, atol=1e-6)
+    assert np.allclose(res.csm, csm, atol=1e-6)
+    assert np.allclose(res.loss_component, loss, atol=1e-6)
+
+
+def _ul_mp_rates(gs):
+    n = len(gs)
+    return ModelPoints(
+        issue_age=np.full(n, 40.0), premium=np.full(n, 5e5), term_months=np.full(n, 60),
+        account_value=np.zeros(n), minimum_death_benefit=np.full(n, 8e7),
+        minimum_accumulation_benefit=np.full(n, 1e6), minimum_crediting_rate=np.array(gs),
+        sex=np.zeros(n, int), benefits={"DEATH": np.full(n, 8e7)},
+        calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})
+
+
+def test_ul_per_mp_crediting_partitions_and_matches_alone():
+    """A mixed-crediting universal-life account book partitions per model point."""
+    basis = fcf.Basis(
+        mortality_annual=0.004, lapse_annual=0.03, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.1, investment_return=0.024,
+        coi_annual=0.0015, premium_load=0.08,
+        coverages=(fcf.CoverageRate("DEATH", 0.0015, funds_from_account=True,
+                                    pays_account_balance=True),))
+    rng = np.random.default_rng(3)
+    rs = rng.normal(0.024 / 12, 0.04, (50, 60))
+    mix = fcf.vfa.measure(_ul_mp_rates([0.01, 0.03]), basis, return_scenarios=rs)
+    u0 = fcf.vfa.measure(_ul_mp_rates([0.01]), basis, return_scenarios=rs)
+    u1 = fcf.vfa.measure(_ul_mp_rates([0.03]), basis, return_scenarios=rs)
+    assert np.allclose(mix.time_value, [u0.time_value[0], u1.time_value[0]])
+    assert np.allclose(mix.csm, [u0.csm[0], u1.csm[0]])

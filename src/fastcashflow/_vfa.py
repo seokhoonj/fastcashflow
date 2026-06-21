@@ -660,75 +660,56 @@ def _vfa_project(
                 "the projection horizon"
             )
         return_scenarios = _validate_return_scenarios(return_scenarios)
-        # tvog_weights is portfolio-level in v1, so it expects a uniform
-        # guarantee across model points; per-MP varying guarantees with
-        # stochastic returns are a future extension.
-        g_unique = np.unique(model_points.minimum_crediting_rate)
-        if g_unique.size > 1:
-            raise NotImplementedError(
-                "return_scenarios with per-MP varying minimum_crediting_rate "
-                "is not supported yet; the time-value pass uses a scalar "
-                "guarantee in v1"
-            )
-        w = tvog_weights(
-            minimum_crediting_rate=float(g_unique[0]),
-            fund_fee=basis.fund_fee,
-            investment_return=basis.investment_return,
-            return_scenarios=return_scenarios,
-            reduce=tv_reduce,
-        )
-        w_term = tvog_term_weight(
-            minimum_crediting_rate=float(g_unique[0]),
-            fund_fee=basis.fund_fee,
-            investment_return=basis.investment_return,
-            return_scenarios=return_scenarios,
-            reduce=tv_reduce,
-        )
-        # Maturity survivors sit in `exits` at term_idx (= term - 1) but exit at
-        # time = term, credited the full final month -- peel them off that column
-        # weight w[term_idx] and re-seat one month later, mirroring the GMAB /
-        # floor-time-value maturity handling (Sec. B119). The re-seat weight is
-        # per model point: an interior-term maturity (term < the portfolio
-        # horizon) takes that column's own weight w[term_idx + 1]; the
-        # longest-term maturity takes the one-month extension w_term. w_ext =
-        # [w, w_term] selects either by term_idx + 1, matching measure_tvog's
-        # dg_mat[:, term_idx + 1]. Deaths and non-maturity lapses stay at w[t].
+        # The credit-rate TVOG weights are portfolio-level (one crediting
+        # guarantee), so the time-value pass PARTITIONS the book by distinct
+        # minimum_crediting_rate: each group is uniform and shares the weights,
+        # and a mixed-guarantee book sums the per-group per-MP results (the
+        # credit-rate TVOG and the GMDB/GMAB floor are independent per model
+        # point). The GMDB/GMAB floors themselves already vary per model point.
+        g_arr = np.asarray(model_points.minimum_crediting_rate, dtype=np.float64)
+        n_scen = return_scenarios.shape[0]
         av0 = model_points.account_value
-        if tv_reduce:
-            w_ext = np.append(w, w_term)
-            time_value = av0 * (
-                exits @ w
-                - maturity_survivors * w[term_idx]
-                + maturity_survivors * w_ext[term_idx + 1]
-            )
-        else:
-            # Per-scenario forms: w is (n_scen, n_time), w_term (n_scen,). The
-            # reduced expression vectorised over the scenario axis -> (n_mp, n_scen).
-            w_ext = np.concatenate([w, w_term[:, None]], axis=1)  # (n_scen, n_time+1)
-            time_value = av0[:, None] * (
-                exits @ w.T
-                - maturity_survivors[:, None] * w[:, term_idx].T
-                + maturity_survivors[:, None] * w_ext[:, term_idx + 1].T
-            )
-        # The credit-rate guarantee above lifts the account growth; the GMDB
-        # and GMAB are put-option floors on the account value. Add their time
-        # value too -- each guarantee's intrinsic value is already in the BEL.
-        time_value = time_value + guarantee_floor_time_value(
-            account_value=model_points.account_value,
-            deaths=proj.deaths,
-            # Reuse the deterministic maturity column / survivor weight so the
-            # floor time value strikes the same per-contract maturity index the
-            # deterministic GMAB does (boundary-clamped; zero past a cut).
-            maturity_survivors=maturity_survivors,
-            term_index=term_idx,
-            minimum_death_benefit=model_points.minimum_death_benefit,
-            minimum_accumulation_benefit=model_points.minimum_accumulation_benefit,
-            minimum_crediting_rate=float(g_unique[0]),
-            fund_fee=basis.fund_fee,
-            investment_return=basis.investment_return,
-            return_scenarios=return_scenarios,
-            reduce=tv_reduce,
-        )
+        time_value = np.zeros(n_mp) if tv_reduce else np.zeros((n_mp, n_scen))
+        for g in np.unique(g_arr):
+            m = g_arr == g                                # this group's model points
+            gf = float(g)
+            w = tvog_weights(
+                minimum_crediting_rate=gf, fund_fee=basis.fund_fee,
+                investment_return=basis.investment_return,
+                return_scenarios=return_scenarios, reduce=tv_reduce)
+            w_term = tvog_term_weight(
+                minimum_crediting_rate=gf, fund_fee=basis.fund_fee,
+                investment_return=basis.investment_return,
+                return_scenarios=return_scenarios, reduce=tv_reduce)
+            # Maturity survivors sit in `exits` at term_idx (= term - 1) but exit
+            # at time = term, credited the full final month -- peel them off that
+            # column weight w[term_idx] and re-seat one month later (the GMAB /
+            # Sec. B119 handling). w_ext = [w, w_term] selects by term_idx + 1.
+            if tv_reduce:
+                w_ext = np.append(w, w_term)
+                credit = av0[m] * (
+                    exits[m] @ w
+                    - maturity_survivors[m] * w[term_idx[m]]
+                    + maturity_survivors[m] * w_ext[term_idx[m] + 1])
+            else:
+                # Per-scenario forms: w is (n_scen, n_time), w_term (n_scen,) ->
+                # the reduced expression vectorised over the scenario axis.
+                w_ext = np.concatenate([w, w_term[:, None]], axis=1)
+                credit = av0[m][:, None] * (
+                    exits[m] @ w.T
+                    - maturity_survivors[m][:, None] * w[:, term_idx[m]].T
+                    + maturity_survivors[m][:, None] * w_ext[:, term_idx[m] + 1].T)
+            # The GMDB and GMAB are put-option floors on the account value; add
+            # their time value (each guarantee's intrinsic value is in the BEL).
+            floor = guarantee_floor_time_value(
+                account_value=av0[m], deaths=proj.deaths[m],
+                maturity_survivors=maturity_survivors[m], term_index=term_idx[m],
+                minimum_death_benefit=model_points.minimum_death_benefit[m],
+                minimum_accumulation_benefit=model_points.minimum_accumulation_benefit[m],
+                minimum_crediting_rate=gf, fund_fee=basis.fund_fee,
+                investment_return=basis.investment_return,
+                return_scenarios=return_scenarios, reduce=tv_reduce)
+            time_value[m] = credit + floor
 
     # BEL and RA as trajectories. The BEL is reported net of the account
     # value the entity holds -- a smooth, modest figure that at inception
@@ -840,39 +821,19 @@ def measure_vfa(
             # Deterministic: the BEL carries the guarantee's intrinsic value only.
             time_value = zeros
         else:
-            # Guarantee time value: re-roll the account under the return
-            # scenarios and price the GMDB / GMAB floors (mean cost less the
-            # central intrinsic). v1 rejects an annuitizing book (the conversion
-            # floor differs from the GMDB/GMAB-at-maturity option) and a per-MP
-            # varying crediting guarantee (scalar in v1, as the VA path).
+            # Guarantee time value: re-roll the account under the return scenarios
+            # and price the GMDB / GMAB floors (mean cost less the central
+            # intrinsic), partitioned by the crediting guarantee. v1 still rejects
+            # an annuitizing book (the conversion floor differs from the
+            # GMDB/GMAB-at-maturity option) -- raised inside the helper.
             return_scenarios = np.asarray(return_scenarios, dtype=np.float64)
             if return_scenarios.ndim != 2 or return_scenarios.shape[1] != n_time:
                 raise ValueError(
                     f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
                     "the projection horizon")
-            from fastcashflow.engine import _account_roll_inputs
-            am = getattr(model_points, "annuitization_months", None)
-            if am is not None and np.any(np.asarray(am) > 0):
-                raise NotImplementedError(
-                    "return_scenarios (guarantee time value) is not yet supported "
-                    "for an annuitizing universal-life book.")
-            g_unique = np.unique(model_points.minimum_crediting_rate)
-            if g_unique.size > 1:
-                raise NotImplementedError(
-                    "return_scenarios with per-MP varying minimum_crediting_rate "
-                    "is not supported yet (a scalar guarantee in v1).")
-            (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
-             gmab, _g, _sc) = _account_roll_inputs(model_points, basis)
-            time_value = ul_guarantee_floor_time_value(
-                account_value0=av0, face=face, prem_to_av=prem_to_av,
-                coi_rate_m=coi_rate_m, admin_fee=admin_fee,
-                account_charge=account_charge, gmab=gmab,
-                minimum_crediting_rate=float(g_unique[0]),
-                deaths=m.cashflows.deaths,
-                maturity_survivors=m.cashflows.maturity_survivors,
-                boundary=np.asarray(model_points.contract_boundary_months, np.int64),
-                investment_return=basis.investment_return,
-                return_scenarios=return_scenarios)
+            time_value = _ul_floor_time_value(
+                model_points, basis, m.cashflows.deaths,
+                m.cashflows.maturity_survivors, return_scenarios, reduce=True)
         # Fold the time value into the inception FCF; the CSM absorbs it (with
         # time_value == 0 this reproduces the deterministic m.csm / m.loss_component).
         fcf = m.bel + m.ra + time_value
@@ -1000,6 +961,40 @@ def measure_vfa_stochastic(model_points: ModelPoints, basis: Basis,
     return StochasticResult(bel=bel, ra=ra, csm=csm, loss_component=loss)
 
 
+def _ul_floor_time_value(model_points: ModelPoints, basis: Basis,
+                         deaths: FloatArray, maturity_survivors: FloatArray,
+                         return_scenarios: FloatArray, *, reduce: bool = True):
+    """Per-MP guarantee time value of a universal-life account book, PARTITIONED by
+    distinct crediting guarantee (each group is uniform; the GMDB / GMAB floors
+    themselves vary per model point). Re-rolls the account under the return
+    scenarios and prices the floors (mean cost less the central intrinsic). Returns
+    ``(n_mp,)`` (``reduce``) or ``(n_mp, n_scenarios)``."""
+    from fastcashflow.engine import _account_roll_inputs
+    am = getattr(model_points, "annuitization_months", None)
+    if am is not None and np.any(np.asarray(am) > 0):
+        raise NotImplementedError(
+            "return_scenarios (guarantee time value) is not yet supported "
+            "for an annuitizing universal-life book.")
+    (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
+     gmab, _g, _sc) = _account_roll_inputs(model_points, basis)
+    g_arr = np.asarray(model_points.minimum_crediting_rate, dtype=np.float64)
+    boundary = np.asarray(model_points.contract_boundary_months, np.int64)
+    n_mp = av0.shape[0]
+    n_scen = return_scenarios.shape[0]
+    out = np.zeros(n_mp) if reduce else np.zeros((n_mp, n_scen))
+    for g in np.unique(g_arr):
+        m = g_arr == g                                    # this group's model points
+        out[m] = ul_guarantee_floor_time_value(
+            account_value0=av0[m], face=face[m], prem_to_av=prem_to_av[m],
+            coi_rate_m=coi_rate_m[m], admin_fee=admin_fee,    # admin_fee is shared (n_time,)
+            account_charge=account_charge[m], gmab=gmab[m],
+            minimum_crediting_rate=float(g), deaths=deaths[m],
+            maturity_survivors=maturity_survivors[m], boundary=boundary[m],
+            investment_return=basis.investment_return,
+            return_scenarios=return_scenarios, reduce=reduce)
+    return out
+
+
 def _vfa_time_value_by_scenario(model_points: ModelPoints, basis: Basis,
                                 return_scenarios: FloatArray):
     """The scenario-independent intrinsic per-MP BEL / RA and the
@@ -1007,8 +1002,7 @@ def _vfa_time_value_by_scenario(model_points: ModelPoints, basis: Basis,
     :func:`measure_vfa_stochastic`. The universal-life (account) book re-rolls the
     account under every scenario in one pass; the variable-annuity closed form
     builds the credit-rate and floor time-value matrices directly."""
-    from fastcashflow.engine import (
-        _measure_full, _portfolio_has_account, _account_roll_inputs)
+    from fastcashflow.engine import _measure_full, _portfolio_has_account
     rs = np.asarray(return_scenarios, dtype=np.float64)
     if _portfolio_has_account(model_points, basis):
         r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
@@ -1018,27 +1012,8 @@ def _vfa_time_value_by_scenario(model_points: ModelPoints, basis: Basis,
                 f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
                 "the projection horizon")
         m = _measure_full(model_points, basis, discount_monthly=np.full(n_time, r_m))
-        am = getattr(model_points, "annuitization_months", None)
-        if am is not None and np.any(np.asarray(am) > 0):
-            raise NotImplementedError(
-                "return_scenarios (guarantee time value) is not yet supported "
-                "for an annuitizing universal-life book.")
-        g_unique = np.unique(model_points.minimum_crediting_rate)
-        if g_unique.size > 1:
-            raise NotImplementedError(
-                "return_scenarios with per-MP varying minimum_crediting_rate "
-                "is not supported yet (a scalar guarantee in v1).")
-        (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
-         gmab, _g, _sc) = _account_roll_inputs(model_points, basis)
-        tv = ul_guarantee_floor_time_value(
-            account_value0=av0, face=face, prem_to_av=prem_to_av,
-            coi_rate_m=coi_rate_m, admin_fee=admin_fee, account_charge=account_charge,
-            gmab=gmab, minimum_crediting_rate=float(g_unique[0]),
-            deaths=m.cashflows.deaths,
-            maturity_survivors=m.cashflows.maturity_survivors,
-            boundary=np.asarray(model_points.contract_boundary_months, np.int64),
-            investment_return=basis.investment_return,
-            return_scenarios=rs, reduce=False)
+        tv = _ul_floor_time_value(model_points, basis, m.cashflows.deaths,
+                                  m.cashflows.maturity_survivors, rs, reduce=False)
         return m.bel, m.ra, tv
     # Variable-annuity closed form.
     p = _vfa_project(model_points, basis, rs, tv_reduce=False)
