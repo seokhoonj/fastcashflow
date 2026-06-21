@@ -1195,3 +1195,51 @@ def test_vfa_gap_and_interaction_support_account_backed_ul():
                                      return_shock=-0.3, lapse_sensitivity=0.0,
                                      haircut=0.0)
     assert np.isfinite(ds.stressed_ratio)
+
+
+def _vfa_guarantee_book():
+    """A VFA book with a costly guarantee + a backing bond portfolio + ESG returns."""
+    from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints, esg
+    basis = Basis(mortality_annual=0.004, lapse_annual=0.02, discount_annual=0.03,
+                  ra_confidence=0.75, mortality_cv=0.1, investment_return=0.05,
+                  fund_fee=0.015, coverages=(CoverageRate("DEATH", 0.004),))
+    mp = ModelPoints.single(45, 0.0, 60, account_value=1e7,
+                            minimum_accumulation_benefit=1.2e7,
+                            minimum_crediting_rate=0.02,
+                            benefits={"DEATH": 0.0},
+                            calculation_methods={"DEATH": CalculationMethod.DEATH})
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=1.5e7, coupon_rate=0.04, maturity_years=5, frequency=1),))
+    es = esg.simulate(np.array([1., 2., 3., 5., 10., 20.]),
+                      np.array([.031, .0355, .0368, .039, .0408, .041]),
+                      ufr=0.0405, alpha=0.10, mean_reversion=0.10, rate_vol=0.01,
+                      equity_vol=0.15, correlation=-0.2, n_scenarios=300,
+                      n_time=60, seed=7)
+    return pf, mp, basis, es
+
+
+def test_stochastic_solvency_vfa_reconciles_and_tails():
+    """The stochastic coverage ratio distributes over ESG scenarios: it accepts the
+    EconomicScenarios object, its mean reconciles to the static ratio less the
+    guarantee time-value drag, and cte(5) <= p5 <= mean (the tail ordering)."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis, es = _vfa_guarantee_book()
+    ss = fcf.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)   # ESG object
+    assert ss.ratio.shape == (300,)
+
+    dist = fcf.vfa.stochastic(mp, basis, es.returns)
+    tv_drag = dist.bel.mean() - ss.static.bel
+    expected_mean = (ss.static.available_capital - tv_drag) / ss.static.total_scr
+    assert np.isclose(ss.mean()["ratio"], expected_mean)
+    assert ss.cte(5) <= ss.percentile(5)["ratio"] <= ss.mean()["ratio"]
+    # The stochastic guarantee tail is worse than the prescribed-SCR t=0 ratio.
+    assert ss.mean()["ratio"] < ss.static.solvency_ratio
+
+
+def test_stochastic_solvency_vfa_accepts_a_raw_array_and_validates_cte():
+    import fastcashflow.solvency as sv
+    pf, mp, basis, es = _vfa_guarantee_book()
+    ss = fcf.stochastic_solvency_vfa(pf, mp, basis, es.returns, regime=sv.KICS)  # raw array
+    assert np.isfinite(ss.mean()["ratio"])
+    with pytest.raises(ValueError, match="q must be"):
+        ss.cte(0.0)

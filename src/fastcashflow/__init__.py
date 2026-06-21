@@ -107,6 +107,7 @@ from fastcashflow.solvency_assessment import (
     vfa_assess_solvency,
     DynamicSolvency, dynamic_solvency,
     VFADynamicSolvency, dynamic_solvency_vfa,
+    StochasticSolvency, stochastic_solvency_vfa,
 )
 from fastcashflow import solvency_assessment
 from fastcashflow._reinsurance import ReinsuranceMeasurement
@@ -185,6 +186,7 @@ __all__ = [
     "aggregate_required_capital", "assess_solvency", "vfa_assess_solvency",
     "DynamicSolvency", "dynamic_solvency",
     "VFADynamicSolvency", "dynamic_solvency_vfa",
+    "StochasticSolvency", "stochastic_solvency_vfa",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",

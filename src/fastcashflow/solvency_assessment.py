@@ -1129,6 +1129,78 @@ def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
         static=static)
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class StochasticSolvency:
+    """The coverage-ratio DISTRIBUTION of a variable book over fund-return scenarios.
+
+    ``static`` is the t=0 :func:`vfa_assess_solvency` picture. ``available_capital``
+    and ``ratio`` are ``(n_scenarios,)`` -- the assets less the per-scenario VFA net
+    liability (the realised guarantee cost) and risk margin, over the prescribed
+    (unchanged) required capital. Read the distribution with :meth:`mean`,
+    :meth:`percentile` and :meth:`cte`. The mean ratio sits below the static ratio by
+    the guarantee time-value drag (TVOG / SCR); the lower tail is the stochastic
+    guarantee bite the t=0 ratio hides."""
+
+    static: SolvencyAssessment
+    available_capital: FloatArray
+    ratio: FloatArray
+
+    def mean(self) -> dict[str, float]:
+        return {"available_capital": float(self.available_capital.mean()),
+                "ratio": float(self.ratio.mean())}
+
+    def percentile(self, q: float) -> dict[str, float]:
+        return {"available_capital": float(np.percentile(self.available_capital, q)),
+                "ratio": float(np.percentile(self.ratio, q))}
+
+    def cte(self, q: float) -> float:
+        """Conditional tail expectation of the coverage ratio at level ``q`` -- the
+        mean ratio over the WORST ``q`` percent of scenarios (the lowest ratios).
+        ``cte(5)`` is the mean of the lowest 5%, the tail solvency a percentile alone
+        does not show."""
+        if not 0.0 < q < 100.0:
+            raise ValueError("q must be in (0, 100)")
+        thresh = np.percentile(self.ratio, q)
+        tail = self.ratio[self.ratio <= thresh]
+        return float(tail.mean()) if tail.size else float(thresh)
+
+
+def stochastic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
+                            basis: Basis, return_scenarios, *, regime: RegimeSpec,
+                            **assess_kwargs) -> StochasticSolvency:
+    """The coverage-ratio distribution of a variable book over fund-return scenarios.
+
+    Runs the static :func:`vfa_assess_solvency` for the prescribed SCR and the asset
+    value, then the VFA liability distribution (:func:`fastcashflow.vfa.stochastic`)
+    over ``return_scenarios``: available capital per scenario is the assets less the
+    realised VFA net liability and risk margin, and the ratio is that over the
+    (unchanged) required capital -- the stochastic counterpart of the prescribed-SCR
+    ratio. The mean ratio reconciles to the static ratio less the guarantee
+    time-value drag.
+
+    ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
+    underlying-items returns OR an :class:`~fastcashflow.EconomicScenarios` (its
+    ``returns`` are used). Extra keywords pass through to :func:`vfa_assess_solvency`.
+    Both the variable-annuity and universal-life paths are supported.
+
+    v1 scope: only the LIABILITY side is stochastic -- the asset value and the
+    prescribed SCR are held at their t=0 (base-curve) values across scenarios, so the
+    distribution isolates the guarantee's bite on the ratio. Assets co-moving with
+    the scenarios (the entity's own holdings revalued per rate / equity path) is a
+    future extension."""
+    from fastcashflow._vfa import measure_vfa_stochastic
+    rs = getattr(return_scenarios, "returns", return_scenarios)
+    static = vfa_assess_solvency(portfolio, model_points, basis, regime=regime,
+                                 **assess_kwargs)
+    dist = measure_vfa_stochastic(model_points, basis, rs)
+    ac = static.asset_portfolio_value - (dist.bel + static.risk_margin)
+    if static.total_scr > 0.0:
+        ratio = ac / static.total_scr
+    else:
+        ratio = np.where(ac >= 0.0, np.inf, -np.inf)
+    return StochasticSolvency(static=static, available_capital=ac, ratio=ratio)
+
+
 __all__ = [
     "InteractionResult", "interaction_loss", "vfa_interaction_loss",
     "net_interest_scr", "net_interest_kics_scr",
@@ -1138,4 +1210,5 @@ __all__ = [
     "SolvencyAssessment", "assess_solvency", "vfa_assess_solvency",
     "DynamicSolvency", "dynamic_solvency",
     "VFADynamicSolvency", "dynamic_solvency_vfa",
+    "StochasticSolvency", "stochastic_solvency_vfa",
 ]
