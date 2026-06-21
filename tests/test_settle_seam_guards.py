@@ -38,20 +38,23 @@ def _gmm_book(**state_over):
 
 
 # ---------------------------------------------------------------------------
-# guard 1: a per-MP lock_in_rate is rejected with a clear v1-scope message on
-# every settle entry (it used to crash opaquely in float(state.lock_in_rate))
+# lock_in_rate carried as a uniform per-row array is collapsed to the scalar the
+# settlement body expects (a genuinely mixed array is partitioned -- gmm.settle --
+# or rejected -- settle_aggregate; both covered in test_gmm_settle.py).
 # ---------------------------------------------------------------------------
 
-def test_gmm_settle_rejects_per_mp_lock_in_rate():
+def test_gmm_settle_collapses_uniform_lock_in_array():
     mp, state, basis = _gmm_book(lock_in_rate=np.array([0.03]))
-    with pytest.raises(NotImplementedError, match="lock_in_rate must be uniform"):
-        fcf.gmm.settle(mp, state, basis, period_months=12)
+    mv = fcf.gmm.settle(mp, state, basis, period_months=12)
+    scalar = fcf.gmm.settle(*_gmm_book(), period_months=12)
+    assert np.allclose(mv.bel_closing, scalar.bel_closing)
 
 
-def test_gmm_settle_aggregate_rejects_per_mp_lock_in_rate():
+def test_gmm_settle_aggregate_collapses_uniform_lock_in_array():
     mp, state, basis = _gmm_book(lock_in_rate=np.array([0.03]))
-    with pytest.raises(NotImplementedError, match="lock_in_rate must be uniform"):
-        fcf.gmm.settle_aggregate(mp, state, basis, period_months=12)
+    agg = fcf.gmm.settle_aggregate(mp, state, basis, period_months=12)
+    scalar = fcf.gmm.settle_aggregate(*_gmm_book(), period_months=12)
+    assert np.allclose(agg.bel_closing, scalar.bel_closing)
 
 
 def test_scalar_lock_in_rate_still_settles():

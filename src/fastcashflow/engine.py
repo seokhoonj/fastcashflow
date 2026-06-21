@@ -21,7 +21,7 @@ import os
 import sys
 import unicodedata
 import warnings
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 import numpy as np
@@ -1216,18 +1216,65 @@ def _measure_inforce_segmented(
                    measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
 
 
-def _require_scalar_lock_in_rate(state, entry: str) -> None:
-    """gmm.settle / settle_aggregate value the locked-in CSM pass at a single
-    flat rate; ``InforceState.lock_in_rate`` may be a per-MP array (the dataclass
-    permits it), which would otherwise reach ``float(...)`` as an opaque numpy
-    TypeError. Reject it with the same message settle_stream uses, so all three
-    settle entry points share one clear v1-scope error."""
+def _has_mixed_lock_in(state) -> bool:
+    """True when ``state.lock_in_rate`` carries more than one distinct value -- a
+    cohort-aware book whose issue cohorts / GoCs locked in different inception
+    rates (Sec. B72(b)), which the scalar settlement path handles by partition."""
     lock = np.asarray(state.lock_in_rate, dtype=np.float64)
-    if lock.ndim != 0:
-        raise NotImplementedError(
-            f"{entry}: lock_in_rate must be uniform across rows in v1; per-MP "
-            "(cohort-aware) lock-in rates are a future extension"
-        )
+    return lock.ndim != 0 and np.unique(lock).size > 1
+
+
+def _collapse_uniform_lock_in(state):
+    """Collapse a uniform (single-valued) ``lock_in_rate`` array to the scalar the
+    scalar settlement body expects (``float(state.lock_in_rate)``). A genuinely
+    mixed array is handled earlier by :func:`_partition_by_lock_in`; this only sees
+    a uniform array (one distinct value carried per row)."""
+    lock = np.asarray(state.lock_in_rate, dtype=np.float64)
+    if lock.ndim == 0:
+        return state
+    return replace(state, lock_in_rate=float(lock.flat[0]))
+
+
+def _partition_by_lock_in(fn, model_points, state, basis, *,
+                          per_mp_kwargs=(), **kwargs):
+    """Run a per-model-point settlement entry once per distinct locked-in rate and
+    reassemble the per-MP movement.
+
+    Different issue cohorts / GoCs lock in different inception rates (Sec. B72(b));
+    the rate threads through the whole movement (CSM accretion, the 44(c) finance
+    wedge, the loss-component finance channel), so a mixed book is settled by
+    PARTITION: each uniform-rate group runs the scalar path, and the per-MP movement
+    fields are scattered back into the original row order. ``per_mp_kwargs`` names
+    the keyword arguments that are themselves per-MP arrays and must be sliced per
+    group; scalar metadata fields on the returned movement are taken as-is."""
+    lock = np.asarray(state.lock_in_rate, dtype=np.float64)
+    n_mp = lock.shape[0]
+    groups = [(float(g), np.flatnonzero(lock == g)) for g in np.unique(lock)]
+
+    def run(g, idx):
+        kw = dict(kwargs)
+        for k in per_mp_kwargs:
+            v = kw.get(k)
+            if isinstance(v, np.ndarray) and v.ndim >= 1:
+                kw[k] = v[idx]
+        # Collapse the group's uniform rate to a scalar so the recursive call
+        # takes the scalar path (the body does float(state.lock_in_rate)).
+        sub_state = replace(state.subset(idx), lock_in_rate=g)
+        return fn(model_points.subset(idx), sub_state, basis, **kw)
+
+    parts = [(idx, run(g, idx)) for g, idx in groups]
+    proto = parts[0][1]
+    out = {}
+    for f in fields(proto):
+        v = getattr(proto, f.name)
+        if isinstance(v, np.ndarray):                  # a per-MP movement line
+            combined = np.empty((n_mp,) + v.shape[1:], dtype=v.dtype)
+            for idx, mv in parts:
+                combined[idx] = getattr(mv, f.name)
+            out[f.name] = combined
+        else:                                          # shared metadata (period, ...)
+            out[f.name] = v
+    return type(proto)(**out)
 
 
 def settle(
@@ -1305,7 +1352,13 @@ def settle(
     _require_gmm_router(basis, entry="gmm.settle")
     basis = _single_basis(basis, entry="gmm.settle")
     state = _reconcile_state(model_points, state)
-    _require_scalar_lock_in_rate(state, "gmm.settle")
+    if _has_mixed_lock_in(state):                      # cohort-aware lock-in (B72(b))
+        return _partition_by_lock_in(
+            settle, model_points, state, basis,
+            per_mp_kwargs=("premium_experience_future_fraction",),
+            period_months=period_months,
+            premium_experience_future_fraction=premium_experience_future_fraction)
+    state = _collapse_uniform_lock_in(state)           # uniform array -> scalar body
     if state.prior_count is None:
         raise ValueError(
             "gmm.settle needs state.prior_count -- the in-force count at the "
@@ -1716,7 +1769,11 @@ def settle_aggregate(
     # chunk's model points and state rows always belong to the same
     # contracts; the per-chunk settle re-checks the aligned pair (a no-op).
     state = _reconcile_state(model_points, state)
-    _require_scalar_lock_in_rate(state, "gmm.settle_aggregate")
+    if _has_mixed_lock_in(state):
+        raise NotImplementedError(
+            "gmm.settle_aggregate: per-MP (cohort-aware) lock-in rates are not yet "
+            "supported here; gmm.settle (the per-MP movement) partitions by rate")
+    state = _collapse_uniform_lock_in(state)
     n_mp = int(model_points.issue_age.shape[0])
     # A per-MP fraction is sliced per chunk so the aggregate equals the per-MP
     # settle sum even when the premium split varies by contract (the per-chunk

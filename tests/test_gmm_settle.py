@@ -589,3 +589,58 @@ def test_write_measurement_writes_the_movement_with_markers(tmp_path):
                 "bel_closing", "measurement_basis"):
         assert col in df.columns
     assert df["measurement_basis"].to_list() == ["settlement"]
+
+
+# ---------------------------------------------------------------------------
+# Cohort-aware lock-in rate: a book whose issue cohorts / GoCs locked in
+# different inception rates (B72(b)) is settled by partition (was rejected).
+# ---------------------------------------------------------------------------
+
+def test_settle_cohort_aware_lock_in_partitions():
+    """A mixed locked-in-rate book settles each model point exactly as if its rate
+    were settled on its own sub-book -- every per-MP movement line matches."""
+    from dataclasses import fields, replace
+    basis = _basis()
+    mp, state = _book(basis, n=2)
+    mixed = fcf.gmm.settle(mp, replace(state, lock_in_rate=np.array([0.03, 0.05])),
+                           basis, period_months=12)
+    mp0, s0 = _book(basis, n=1)
+    mp1, s1 = _book(basis, n=1)
+    a0 = fcf.gmm.settle(mp0, replace(s0, lock_in_rate=0.03), basis, period_months=12)
+    a1 = fcf.gmm.settle(mp1, replace(s1, lock_in_rate=0.05), basis, period_months=12)
+    n_checked = 0
+    for f in fields(mixed):
+        v = getattr(mixed, f.name)
+        if isinstance(v, np.ndarray) and v.shape == (2,):
+            n_checked += 1
+            assert np.allclose(v, [getattr(a0, f.name)[0], getattr(a1, f.name)[0]],
+                               equal_nan=True), f.name
+    assert n_checked > 10                                  # the whole movement, not one line
+    # the locked-in rate genuinely differs the accretion between the two cohorts
+    assert not np.isclose(mixed.csm_accretion[0], mixed.csm_accretion[1])
+
+
+def test_settle_uniform_lock_in_array_equals_scalar():
+    """A uniform lock_in_rate carried as a per-row array gives the scalar result
+    (the array is collapsed, not partitioned)."""
+    from dataclasses import fields, replace
+    basis = _basis()
+    mp, state = _book(basis, n=2)
+    arr = fcf.gmm.settle(mp, replace(state, lock_in_rate=np.array([0.03, 0.03])),
+                         basis, period_months=12)
+    sca = fcf.gmm.settle(mp, replace(state, lock_in_rate=0.03), basis, period_months=12)
+    for f in fields(arr):
+        v = getattr(sca, f.name)
+        if isinstance(v, np.ndarray):
+            assert np.allclose(getattr(arr, f.name), v, equal_nan=True), f.name
+
+
+def test_settle_aggregate_rejects_cohort_aware_lock_in():
+    """settle_aggregate is not yet cohort-aware -- it rejects a mixed rate (use the
+    per-MP gmm.settle, which partitions)."""
+    from dataclasses import replace
+    basis = _basis()
+    mp, state = _book(basis, n=2)
+    with pytest.raises(NotImplementedError, match="cohort-aware"):
+        fcf.gmm.settle_aggregate(mp, replace(state, lock_in_rate=np.array([0.03, 0.05])),
+                                 basis, period_months=12)
