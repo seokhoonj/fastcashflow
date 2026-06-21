@@ -765,6 +765,33 @@ def vfa_equity_scr(model_points: ModelPoints, basis: Basis, *,
     return max(0.0, stressed - base)
 
 
+def vfa_interest_scr(model_points: ModelPoints, basis: Basis, *,
+                     shift: float = 0.01) -> float:
+    """The interest capital of a variable (VFA) book's net BEL.
+
+    Worst of re-measuring the VFA net BEL under a parallel ``+/- shift`` to the
+    underlying-items return -- the VFA basis rate that BOTH discounts the liability
+    and grows the account value. A return FALL lowers the account growth, pushing
+    the GMDB / GMAB in-the-money (higher guarantee cost): the binding direction.
+    Returns ``max(0, worst Delta BEL)``, the instantaneous interest-rate capital.
+
+    v1: a parallel shift to ``investment_return`` (the VFA's single rate driving
+    growth and discount together), the transparent proxy for the guarantee's rate
+    sensitivity. Distinct from the spot equity LEVEL shock (:func:`vfa_equity_scr`):
+    a rate-assumption move versus a one-time market fall, the two market sub-risks a
+    variable annuity carries. A regime-curve-calibrated VFA interest stress (a
+    maturity-relative curve, not a flat parallel move) is future work. Closed-form
+    variable-annuity path only."""
+    from fastcashflow._vfa import measure_vfa
+    base = float(measure_vfa(model_points, basis, full=False).bel.sum())
+    r = basis.investment_return
+    up = float(measure_vfa(
+        model_points, replace(basis, investment_return=r + shift), full=False).bel.sum())
+    dn = float(measure_vfa(
+        model_points, replace(basis, investment_return=r - shift), full=False).bel.sum())
+    return max(0.0, up - base, dn - base)
+
+
 # ---------------------------------------------------------------------------
 # Solvency II calibration (Delegated Regulation (EU) 2015/35, primary source).
 # Life underwriting sub-risks (Articles 137-143) and the life sub-risk
@@ -885,6 +912,6 @@ __all__ = [
     "dynamic_lapse_multiplier", "interest_with_dynamic_lapse",
     "shock_curve", "shock_spread", "KICSInterest",
     "aggregate", "required_capital", "vfa_required_capital",
-    "vfa_equity_scr", "catastrophe_scr", "solvency_ratio",
+    "vfa_equity_scr", "vfa_interest_scr", "catastrophe_scr", "solvency_ratio",
     "SOLVENCY2", "KICS",
 ]

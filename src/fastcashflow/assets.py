@@ -35,7 +35,7 @@ from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.solvency import (
     RegimeSpec, required_capital, vfa_required_capital, vfa_equity_scr,
-    KICSInterest, interest_with_dynamic_lapse,
+    vfa_interest_scr, KICSInterest, interest_with_dynamic_lapse,
 )
 
 
@@ -1298,8 +1298,8 @@ def vfa_assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
                         basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
                         tax_recoverability_limit: float | None = None,
                         catastrophe: float = 0.0, general_insurance_scr: float = 0.0,
-                        guarantee_equity_shock: float | None = None
-                        ) -> SolvencyAssessment:
+                        guarantee_equity_shock: float | None = None,
+                        interest_shift: float = 0.01) -> SolvencyAssessment:
     """The static t=0 solvency assessment for a variable (VFA) book.
 
     The VFA counterpart of :func:`assess_solvency`. The liability (insurance) SCR is
@@ -1312,9 +1312,9 @@ def vfa_assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     diversified. ``guarantee_equity_shock`` defaults to the regime's developed
     listed-equity shock (the unit fund's assumed equity stress).
 
-    v1 scope: the VFA INTEREST sub-risk (the guarantee's rate sensitivity) is NOT
-    modelled -- the net interest module is zero here (the dominant variable-annuity
-    market risk is equity, which is captured). Property / FX / concentration / credit
+    The net interest module is the VFA :func:`~fastcashflow.solvency.vfa_interest_scr`
+    -- a parallel ``+/- interest_shift`` to the underlying-items return (default
+    100bp), the guarantee's rate sensitivity. Property / FX / concentration / credit
     / operational follow the asset-side modules (operational on the VFA BEL /
     premium). Closed-form variable-annuity path only."""
     from fastcashflow._vfa import measure_vfa
@@ -1326,7 +1326,7 @@ def vfa_assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     cal = _market_cal(regime)
     eq_shock = (guarantee_equity_shock if guarantee_equity_shock is not None
                 else cal["equity_shocks"]["developed"])
-    ni = 0.0                                  # v1: VFA interest sub-risk not modelled
+    ni = vfa_interest_scr(model_points, basis, shift=interest_shift)
     eq = (equity_scr(portfolio, regime)
           + vfa_equity_scr(model_points, basis, equity_shock=eq_shock))
     pr = property_scr(portfolio, regime)

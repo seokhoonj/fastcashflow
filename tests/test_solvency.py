@@ -681,3 +681,26 @@ def test_vfa_equity_scr_hand_calc():
                                  minimum_accumulation_benefit=300.0,
                                  calculation_methods=PATTERNS)
     assert np.isclose(sv.vfa_equity_scr(otm, nofee, equity_shock=0.39), 0.0)
+
+
+def test_vfa_interest_scr_hand_calc():
+    """The VFA interest capital is the worst of re-measuring the net BEL under a
+    parallel +/- shift to the underlying-items return. A return fall pushes the
+    guarantee in-the-money (the binding direction), so the capital reconciles to the
+    down-shift re-measure, is positive, and grows with the shift."""
+    basis = make_death_basis(mortality_q=0.002, lapse_q=0.004, discount_annual=0.03,
+                             ra_confidence=0.75, investment_return=0.04, fund_fee=0.02)
+    mp = fcf.ModelPoints.single(40, 0.0, 120, account_value=1000.0,
+                                minimum_accumulation_benefit=1200.0,
+                                calculation_methods=PATTERNS)
+    from dataclasses import replace
+    base = float(fcf.vfa.measure(mp, basis, full=False).bel.sum())
+    up = float(fcf.vfa.measure(mp, replace(basis, investment_return=0.05),
+                               full=False).bel.sum())
+    dn = float(fcf.vfa.measure(mp, replace(basis, investment_return=0.03),
+                               full=False).bel.sum())
+    cap = sv.vfa_interest_scr(mp, basis, shift=0.01)
+    assert np.isclose(cap, max(0.0, up - base, dn - base))
+    assert np.isclose(cap, dn - base)                        # the fall binds
+    assert cap > 0.0
+    assert sv.vfa_interest_scr(mp, basis, shift=0.02) > cap  # grows with the shift

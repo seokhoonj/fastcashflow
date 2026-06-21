@@ -1038,7 +1038,8 @@ def test_vfa_assess_solvency_assembles_the_static_ratio():
     scr = sv.vfa_required_capital(mp, basis, regime=regime)
     assert np.isclose(a.insurance_scr, scr.insurance_scr)
     assert np.isclose(a.bel, scr.base_bel)
-    assert np.isclose(a.net_interest_scr, 0.0)               # v1: not modelled
+    assert np.isclose(a.net_interest_scr,
+                      sv.vfa_interest_scr(mp, basis, shift=0.01))   # parallel 100bp
     # Equity = asset equity + guarantee equity (added under one shock).
     eq_shock = assets._market_cal(regime)["equity_shocks"]["developed"]
     assert np.isclose(
