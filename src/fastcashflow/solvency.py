@@ -608,6 +608,7 @@ def required_capital(
     model_points: ModelPoints, basis: Basis, *, regime: RegimeSpec,
     catastrophe: float = 0.0, property_codes=(),
     interest_scenarios: KICSInterest | None = None,
+    measure_fn: Callable | None = None,
 ) -> SCRResult:
     """Required capital (SCR) for a portfolio under ``regime``.
 
@@ -617,6 +618,13 @@ def required_capital(
     margin. v1 is liability-side: the total is ``insurance_scr +
     interest_capital`` (no inter-module diversification). Pass ``SCRResult`` on to
     :func:`fastcashflow.embedded_value` via its ``required_capital`` argument.
+
+    ``measure_fn`` is the liability measurement the stresses re-run (default the
+    GMM :func:`~fastcashflow.engine.measure`); pass
+    :func:`~fastcashflow.vfa.measure` to price a variable book's sub-risks on its
+    net BEL (see :func:`vfa_required_capital`). It must accept ``(mp, basis,
+    full=...)`` and return a result carrying ``bel`` (and ``ra_path`` / ``bel_path``
+    for a cost-of-capital risk margin).
 
     Interest-rate capital comes from ``interest_scenarios`` when supplied -- a
     :class:`KICSInterest` (the five K-ICS shock scenarios, aggregated by the
@@ -633,12 +641,13 @@ def required_capital(
     ``catastrophe_correlation``. The risk margin EXCLUDES catastrophe (handbook: the
     margin is the insurance amount ex-catastrophe), but INCLUDES property.
     """
-    m_base = measure(model_points, basis, full=False)
+    mf = measure_fn if measure_fn is not None else measure
+    m_base = mf(model_points, basis, full=False)
     base_bel = float(m_base.bel.sum())
 
     def delta(stress: Stress) -> float:
         mp2, basis2 = stress.apply(model_points, basis)
-        d = float(measure(mp2, basis2, full=False).bel.sum()) - base_bel
+        d = float(mf(mp2, basis2, full=False).bel.sum()) - base_bel
         if stress.bel_addon is not None:
             d += stress.bel_addon(model_points, basis)
         return d
@@ -680,7 +689,7 @@ def required_capital(
         # confidence-level RA trajectory (the engine's own non-financial
         # risk-capital path). v1 approximation: the SCR run-off shape, not a full
         # SCR re-projection at each future month; clamped non-negative.
-        m_full = measure(model_points, basis, full=True)
+        m_full = mf(model_points, basis, full=True)
         driver = m_full.ra_path.sum(axis=0)
         d0 = float(driver[0])
         if d0 <= 0.0:
@@ -700,6 +709,35 @@ def required_capital(
         regime=regime.name, sub_risk_capital=capital, insurance_scr=insurance_scr,
         interest_capital=interest_capital, total_scr=total_scr,
         risk_margin=risk_margin, base_bel=base_bel, scr_path=scr_path)
+
+
+def vfa_required_capital(
+    model_points: ModelPoints, basis: Basis, *, regime: RegimeSpec,
+    catastrophe: float = 0.0, interest_scenarios: KICSInterest | None = None,
+) -> SCRResult:
+    """Required capital for a variable (VFA) book's LIFE sub-risks.
+
+    The VFA counterpart of :func:`required_capital`: re-runs the regime's life
+    sub-risks (mortality / longevity / lapse / expense / catastrophe / ...) on the
+    VFA NET BEL (guarantee-excess + expense - fee) through
+    :func:`fastcashflow.vfa.measure`, so the stresses bite the guarantee cost the
+    way they do for a variable annuity -- a lapse-DOWN holds more policies on a
+    valuable guarantee (raising the cost), an expense shock lifts the maintenance
+    leg. ``base_bel`` is therefore the VFA net BEL, not a GMM measure.
+
+    This is the LIFE module only. The dominant variable-annuity risk -- the equity
+    sensitivity of the guarantee (an account-value fall lifting the GMDB / GMAB
+    cost) -- is MARKET risk, added by the VFA solvency assembly, not here.
+    ``property_codes`` are not accepted (a variable book carries no
+    long-term-property coverage). Closed-form variable-annuity path only.
+
+    NOTE (v1 approximation, as on the GMM path): the mass-lapse variant's surrender
+    cash flow is the re-measured BEL change only; the t=0 surrender value (here the
+    account value) is not added back."""
+    from fastcashflow._vfa import measure_vfa
+    return required_capital(
+        model_points, basis, regime=regime, catastrophe=catastrophe,
+        interest_scenarios=interest_scenarios, measure_fn=measure_vfa)
 
 
 # ---------------------------------------------------------------------------
@@ -821,6 +859,7 @@ __all__ = [
     "scale_coverages", "scale_coverage_codes", "scale_annuity", "scale_expense",
     "dynamic_lapse_multiplier", "interest_with_dynamic_lapse",
     "shock_curve", "shock_spread", "KICSInterest",
-    "aggregate", "required_capital", "catastrophe_scr", "solvency_ratio",
+    "aggregate", "required_capital", "vfa_required_capital", "catastrophe_scr",
+    "solvency_ratio",
     "SOLVENCY2", "KICS",
 ]

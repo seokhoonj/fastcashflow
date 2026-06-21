@@ -595,3 +595,57 @@ def test_dynamic_lapse_moves_bel_vs_uncoupled():
     coupled = measure(mp, sv.interest_with_dynamic_lapse(shift, 8.0).apply(mp, basis)[1],
                       full=False).bel.sum()
     assert not np.isclose(coupled, uncoupled)
+
+
+# ---------------------------------------------------------------------------
+# VFA (variable) life sub-risk capital -- required_capital(measure_fn=measure_vfa)
+# ---------------------------------------------------------------------------
+
+def _vfa_life_regime():
+    return sv.RegimeSpec(
+        name="vfa-life",
+        sub_risks=(
+            sv.SubRisk("mortality", (sv.scale_mortality(1.15),), "single"),
+            sv.SubRisk("lapse", (sv.scale_lapse(1.5), sv.scale_lapse(0.5)),
+                       "worst_of"),
+            sv.SubRisk("expense", (sv.scale_expense(1.10, 0.01),), "single"),
+        ),
+        correlation=np.eye(3),
+        risk_margin_method="percentile", risk_margin_factor=0.0,
+    )
+
+
+def test_vfa_required_capital_routes_through_the_vfa_measure():
+    """vfa_required_capital prices the regime's life sub-risks on the VFA NET BEL:
+    base_bel is the VFA measure, and the lapse sub-risk reconciles to the worst-of
+    the up/down re-measures -- lapse-down holds policies on the valuable GMAB, so
+    the lapse capital is positive."""
+    basis = make_death_basis(
+        mortality_q=0.002, lapse_q=0.004, discount_annual=0.03, ra_confidence=0.75,
+        expense_cv=0.10, investment_return=0.0, fund_fee=0.02,
+        expense_items=(fcf.ExpenseItem("maintenance", "gamma_fixed", 5.0),))
+    mp = fcf.ModelPoints.single(40, 0.0, 120, account_value=1000.0,
+                                minimum_accumulation_benefit=1300.0,
+                                calculation_methods=PATTERNS)
+    regime = _vfa_life_regime()
+    scr = sv.vfa_required_capital(mp, basis, regime=regime)
+
+    base = float(fcf.vfa.measure(mp, basis, full=False).bel.sum())
+    assert np.isclose(scr.base_bel, base)            # routed through measure_vfa
+
+    lapse_sr = next(s for s in regime.sub_risks if s.name == "lapse")
+    deltas = [float(fcf.vfa.measure(*v.apply(mp, basis), full=False).bel.sum()) - base
+              for v in lapse_sr.variants]
+    assert np.isclose(scr.sub_risk_capital["lapse"], max(0.0, max(deltas)))
+    assert scr.sub_risk_capital["lapse"] > 0.0       # lapse-down holds the GMAB
+    assert scr.total_scr >= scr.sub_risk_capital["lapse"]   # module >= one sub-risk
+
+
+def test_required_capital_measure_fn_default_is_unchanged():
+    """The measure_fn refactor leaves the GMM path byte-identical (default arg)."""
+    mp, basis = _mp(), _basis()
+    regime = _dummy(corr=0.25)
+    a = sv.required_capital(mp, basis, regime=regime)
+    b = sv.required_capital(mp, basis, regime=regime, measure_fn=measure)
+    assert np.isclose(a.total_scr, b.total_scr)
+    assert np.isclose(a.base_bel, b.base_bel)
