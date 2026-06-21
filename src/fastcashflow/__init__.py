@@ -99,6 +99,7 @@ from fastcashflow.assets import (
     equity_scr, property_scr, fx_scr, concentration_scr, market_module_scr,
     credit_scr, operational_scr, aggregate_required_capital, assess_solvency,
     DynamicSolvency, dynamic_solvency,
+    VFADynamicSolvency, dynamic_solvency_vfa,
 )
 from fastcashflow import assets
 from fastcashflow._reinsurance import ReinsuranceMeasurement
@@ -174,6 +175,7 @@ __all__ = [
     "market_module_scr", "credit_scr", "operational_scr",
     "aggregate_required_capital", "assess_solvency",
     "DynamicSolvency", "dynamic_solvency",
+    "VFADynamicSolvency", "dynamic_solvency_vfa",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",

@@ -731,6 +731,37 @@ def test_vfa_interaction_loss_av_drop_lifts_the_guarantee_cost():
     assert np.isclose(static.base_nav, base_nav)
 
 
+def test_dynamic_solvency_vfa_overlays_the_interaction_on_a_supplied_static():
+    """The VFA dynamic solvency takes the scenario interaction loss off a supplied
+    static available capital and divides by the unchanged required capital. A null
+    scenario leaves the ratio static; a shock lowers it by total_loss / total_scr."""
+    pf, mp, basis = _vfa_book()
+    static_ac, total_scr = 1000.0, 400.0
+
+    null = assets.dynamic_solvency_vfa(
+        pf, mp, basis, static_available_capital=static_ac, total_scr=total_scr,
+        return_shock=0.0, lapse_sensitivity=0.0, haircut=0.0)
+    assert np.isclose(null.interaction.total_loss, 0.0)
+    assert np.isclose(null.stressed_available_capital, static_ac)
+    assert np.isclose(null.stressed_ratio, static_ac / total_scr)
+
+    dyn = assets.dynamic_solvency_vfa(
+        pf, mp, basis, static_available_capital=static_ac, total_scr=total_scr,
+        return_shock=-0.30, lapse_sensitivity=0.8, haircut=0.10)
+    loss = assets.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
+                                       lapse_sensitivity=0.8, haircut=0.10).total_loss
+    assert np.isclose(dyn.interaction.total_loss, loss)
+    assert np.isclose(dyn.stressed_available_capital, static_ac - loss)
+    assert np.isclose(dyn.stressed_ratio, (static_ac - loss) / total_scr)
+    assert dyn.stressed_ratio < null.stressed_ratio          # the shock erodes the ratio
+
+    # A risk-free book (zero required capital) gives an unbounded ratio.
+    inf = assets.dynamic_solvency_vfa(
+        pf, mp, basis, static_available_capital=static_ac, total_scr=0.0,
+        return_shock=0.0, lapse_sensitivity=0.0, haircut=0.0)
+    assert inf.stressed_ratio == float("inf")
+
+
 def _gap(asset_cf, liability_cf):
     return assets.CashflowGap(asset_cf=np.asarray(asset_cf, float),
                               liability_cf=np.asarray(liability_cf, float))

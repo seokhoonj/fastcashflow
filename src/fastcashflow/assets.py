@@ -1351,6 +1351,70 @@ def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
                            stressed_ratio=stressed_ratio)
 
 
+@dataclass(frozen=True, slots=True)
+class VFADynamicSolvency:
+    """A market-shock / moneyness-lapse scenario overlaid on a variable book's
+    coverage ratio.
+
+    The VFA counterpart of :class:`DynamicSolvency`. ``interaction`` is the VFA
+    asset-liability interaction loss (the guarantee-cost revaluation under the
+    account-value shock, amplified by the moneyness dynamic lapse, plus the
+    forced-sale friction); ``liquidation`` is the underlying forced-sale roll.
+    ``stressed_available_capital`` is ``static_available_capital -
+    interaction.total_loss`` and ``stressed_ratio`` is that over ``total_scr``.
+
+    Like ``DynamicSolvency`` this is a SCENARIO OVERLAY, not a re-derived SCR -- but
+    here the static position (``static_available_capital`` / ``total_scr``) is
+    SUPPLIED by the caller rather than computed by :func:`assess_solvency`, because
+    that static engine prices the liability through the GMM measure and does not yet
+    carry a variable book's guarantee-cost / expense / lapse SCR (a VFA-aware static
+    assessment is future work). This layer adds only the dynamic interaction the
+    static modules miss."""
+
+    interaction: InteractionResult
+    liquidation: LiquidationResult
+    static_available_capital: float
+    total_scr: float
+    stressed_available_capital: float
+    stressed_ratio: float
+
+
+def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
+                         basis: Basis, *, static_available_capital: float,
+                         total_scr: float, return_shock: float,
+                         lapse_sensitivity: float, haircut: float,
+                         reinvest_rate=0.0,
+                         opening_balance: float = 0.0) -> VFADynamicSolvency:
+    """Layer a market-shock / moneyness-lapse scenario onto a variable book's
+    coverage ratio.
+
+    Runs :func:`vfa_interaction_loss` for the asset-liability interaction a static
+    solvency view misses -- an immediate account-value shock ``return_shock`` moves
+    the GMDB / GMAB in-the-money, the moneyness dynamic lapse (``lapse_sensitivity``)
+    holds more policies on the guarantee, and the lifted guarantee-excess outflow is
+    funded as a forced seller (``haircut``). The total loss is taken off the
+    caller-supplied ``static_available_capital`` to give ``stressed_available_capital``
+    and a ``stressed_ratio`` over the (unchanged) ``total_scr``.
+
+    The static position is an input (see :class:`VFADynamicSolvency`): supply it from
+    your VFA capital model. A null scenario (``return_shock = haircut = 0``,
+    ``lapse_sensitivity = 0``) leaves the ratio at ``static_available_capital /
+    total_scr``. Closed-form variable-annuity path only."""
+    interaction, liq = _interaction_vfa(
+        portfolio, model_points, basis, return_shock=return_shock,
+        lapse_sensitivity=lapse_sensitivity, haircut=haircut,
+        reinvest_rate=reinvest_rate, opening_balance=opening_balance)
+    stressed_ac = static_available_capital - interaction.total_loss
+    if total_scr > 0.0:
+        stressed_ratio = stressed_ac / total_scr
+    else:
+        stressed_ratio = float("inf") if stressed_ac >= 0.0 else float("-inf")
+    return VFADynamicSolvency(
+        interaction=interaction, liquidation=liq,
+        static_available_capital=static_available_capital, total_scr=total_scr,
+        stressed_available_capital=stressed_ac, stressed_ratio=stressed_ratio)
+
+
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
     "holding_value", "asset_portfolio_value", "available_capital",
@@ -1363,4 +1427,5 @@ __all__ = [
     "market_module_scr", "credit_scr", "operational_scr",
     "aggregate_required_capital", "assess_solvency",
     "DynamicSolvency", "dynamic_solvency",
+    "VFADynamicSolvency", "dynamic_solvency_vfa",
 ]
