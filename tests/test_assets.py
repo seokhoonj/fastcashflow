@@ -1362,3 +1362,53 @@ def test_asset_value_by_scenario_flat_per_year_bootstrap_is_the_annual_rate():
 def test_asset_value_by_scenario_rejects_3d():
     with pytest.raises(ValueError, match="1-D .* or 2-D"):
         assets.asset_value_by_scenario(_bond_heavy_portfolio(), np.zeros((2, 3, 4)))
+
+
+# ---------------------------------------------------------------------------
+# stochastic_solvency_gmm co_moving_assets (P2): the asset value moves with the
+# rate scenario, so the ratio reflects the asset-liability duration gap.
+# ---------------------------------------------------------------------------
+
+def test_stochastic_solvency_gmm_co_moving_off_is_unchanged():
+    """co_moving_assets=False (the default) holds the asset value fixed -- the
+    liability-only distribution, identical to the prior behaviour."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _gmm_solvency_book()
+    scen = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
+    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SOLVENCY2)
+    expected_ac = ss.static.asset_portfolio_value - (
+        fcf.gmm.stochastic(mp, basis, scen).bel + ss.static.risk_margin)
+    assert np.allclose(ss.available_capital, expected_ac)   # asset value fixed
+
+
+def test_stochastic_solvency_gmm_co_moving_formula_and_anchor():
+    """co_moving_assets=True revalues the assets per scenario; a flat scenario equal
+    to the base discount reproduces the static ratio EXACTLY on both legs."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _gmm_solvency_book()
+    scen = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
+    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SOLVENCY2,
+                                     co_moving_assets=True)
+    dist = fcf.gmm.stochastic(mp, basis, scen)
+    asset_val = fcf.asset_value_by_scenario(pf, scen)
+    assert np.allclose(ss.available_capital, asset_val - (dist.bel + ss.static.risk_margin))
+
+    base = fcf.stochastic_solvency_gmm(pf, mp, basis, np.array([0.03]),
+                                       regime=sv.SOLVENCY2, co_moving_assets=True)
+    assert np.isclose(base.available_capital[0], ss.static.available_capital)
+    assert np.isclose(base.ratio[0], ss.static.solvency_ratio)
+
+
+def test_stochastic_solvency_gmm_co_moving_differs_from_fixed():
+    """With co-moving assets the available capital differs from the fixed-asset run
+    away from the base curve -- the bond revaluation is the duration-gap leg."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _gmm_solvency_book()
+    scen = np.array([0.01, 0.05])
+    fixed = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SOLVENCY2)
+    moving = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SOLVENCY2,
+                                         co_moving_assets=True)
+    # the low-rate scenario lifts the bond value above its base level (co-moving),
+    # so its available capital exceeds the fixed-asset figure
+    assert moving.available_capital[0] > fixed.available_capital[0]
+    assert not np.allclose(moving.available_capital, fixed.available_capital)

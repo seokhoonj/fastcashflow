@@ -33,6 +33,7 @@ from fastcashflow.solvency import (
 from fastcashflow.assets import (
     Equity, Property, Cash, AssetPortfolio, holding_value, asset_portfolio_value,
     available_capital, asset_portfolio_cashflows, asset_value_path,
+    asset_value_by_scenario,
     CashflowGap, cashflow_gap, vfa_cashflow_gap, liquidate, LiquidationResult,
 )
 
@@ -1247,6 +1248,7 @@ def stochastic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints
 
 def stochastic_solvency_gmm(portfolio: AssetPortfolio, model_points: ModelPoints,
                             basis: Basis, rate_scenarios, *, regime: RegimeSpec,
+                            co_moving_assets: bool = False,
                             **assess_kwargs) -> StochasticSolvency:
     """The coverage-ratio distribution of a book over discount-rate scenarios.
 
@@ -1263,17 +1265,22 @@ def stochastic_solvency_gmm(portfolio: AssetPortfolio, model_points: ModelPoints
     :class:`~fastcashflow.EconomicScenarios` (its ``rates`` are used). Extra
     keywords pass through to :func:`assess_solvency`.
 
-    v1 scope: only the LIABILITY side is stochastic -- the asset value and the
-    prescribed SCR are held at their t=0 (base-curve) values across scenarios, so
-    the distribution isolates the rate move's bite on the ratio. Assets co-moving
-    with the scenarios (the bond portfolio revalued per rate path) is a future
-    extension."""
+    ``co_moving_assets`` (default ``False``) makes the asset value MOVE WITH each
+    rate scenario: the bond portfolio is revalued on the same curve the liability is
+    discounted at (:func:`~fastcashflow.asset_value_by_scenario`), so a rate fall
+    lifts BOTH the BEL and the bonds and the ratio reflects the asset-liability
+    DURATION GAP, not just the liability move. Off (the default) holds the asset
+    value at its t=0 base-curve level -- the liability-only distribution. The
+    prescribed required capital (the denominator) is held at its t=0 value either
+    way (a scenario overlay on the ratio, not a re-derived SCR)."""
     from fastcashflow.stochastic import measure_stochastic
     rs = getattr(rate_scenarios, "rates", rate_scenarios)
     static = assess_solvency(portfolio, model_points, basis, regime=regime,
                              **assess_kwargs)
     dist = measure_stochastic(model_points, basis, rs)
-    ac = static.asset_portfolio_value - (dist.bel + static.risk_margin)
+    asset_value = (asset_value_by_scenario(portfolio, rs) if co_moving_assets
+                   else static.asset_portfolio_value)
+    ac = asset_value - (dist.bel + static.risk_margin)
     if static.total_scr > 0.0:
         ratio = ac / static.total_scr
     else:
