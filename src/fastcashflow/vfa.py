@@ -21,7 +21,7 @@ from fastcashflow._vfa import (
     VFAMeasurement, measure_vfa as measure, measure_aggregate,
     measure_inforce, measure_stream, settle, settle_aggregate,
     settle_stream, recognition_schedule, CSM_BASES,
-    GuaranteeTVOG, guarantee_tvog)
+    GuaranteeTVOG, guarantee_tvog, moneyness_lapse_multiplier)
 from fastcashflow.movement import VFASettlementMovement
 from fastcashflow.tvog import measure_tvog as tvog
 from fastcashflow.trace import (
@@ -31,4 +31,4 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
            "recognition_schedule", "tvog", "guarantee_tvog", "trace",
            "trace_diff", "CSM_BASES", "VFAMeasurement", "GuaranteeTVOG",
-           "VFASettlementMovement"]
+           "VFASettlementMovement", "moneyness_lapse_multiplier"]

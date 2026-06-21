@@ -69,6 +69,33 @@ from fastcashflow.tvog import (
 from fastcashflow.engine import _reconcile_state, _inforce_rescale
 
 
+def moneyness_lapse_multiplier(moneyness, sensitivity, *, floor: float = 0.0,
+                               cap=None):
+    """Dynamic-lapse multiplier as a function of account-value moneyness.
+
+    ``moneyness`` is the account value divided by the guarantee (the guaranteed
+    floor / GMAB): ``> 1`` means the guarantee is out-of-the-money (the account
+    already exceeds it), ``< 1`` means it is in-the-money (the floor is valuable).
+    The fixed linear form ``1 + sensitivity * (moneyness - 1)`` LIFTS lapse when the
+    guarantee is worthless (policyholders surrender to chase the account) and LOWERS
+    it when the floor bites (they hold the valuable guarantee), clamped to
+    ``[floor, cap]`` (``cap=None`` is no upper bound). At-the-money (``moneyness ==
+    1``) the multiplier is 1 (no adjustment).
+
+    ``sensitivity`` is the injected behavioural elasticity -- the seam; the FORM is
+    fixed, so a moneyness PATH (the account value is exogenous to lapse, a per-policy
+    level) resolves to a per-period multiplier array up front, with no per-step
+    callback. This is the account-value counterpart to
+    :func:`fastcashflow.solvency.dynamic_lapse_multiplier` (the parallel rate form).
+    It is a behavioural PRIMITIVE; feeding the resulting lapse back into the in-force
+    projection is a separate integration step. Accepts a scalar or an array and
+    returns the same shape."""
+    m = np.asarray(moneyness, dtype=np.float64)
+    mult = np.clip(1.0 + sensitivity * (m - 1.0), floor,
+                   np.inf if cap is None else cap)
+    return float(mult) if m.ndim == 0 else mult
+
+
 # What the ``csm`` on a VFAMeasurement represents -- so downstream accounting
 # output cannot mistake an in-force carry-only figure for a settlement CSM. The
 # discriminator is carried on the result (not just the docstring) and the

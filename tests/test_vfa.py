@@ -1176,3 +1176,28 @@ def test_vfa_measure_stream_matches_in_memory(tmp_path):
     ref = fcf.vfa.measure(
         fcf.read_vfa_model_points(pp, calculation_methods=PATTERNS), basis)
     assert np.allclose(sorted(parts["csm"].to_list()), sorted(ref.csm.tolist()))
+
+
+# ---------------------------------------------------------------------------
+# Moneyness-based dynamic lapse (account-value behaviour primitive)
+# ---------------------------------------------------------------------------
+
+def test_moneyness_lapse_multiplier_hand_calc():
+    """1 + sensitivity * (moneyness - 1): at-the-money is 1, out-of-the-money
+    lifts lapse, in-the-money lowers it, clamped to [floor, cap]."""
+    f = fcf.vfa.moneyness_lapse_multiplier
+    assert np.isclose(f(1.0, 0.4), 1.0)                # at-the-money: no adjustment
+    assert np.isclose(f(1.5, 0.4), 1.2)                # OTM (av > guarantee): more lapse
+    assert np.isclose(f(0.5, 0.4), 0.8)                # ITM (floor valuable): less lapse
+    assert f(0.0, 2.0, floor=0.0) == 0.0               # floored (1 + 2*(-1) = -1 -> 0)
+    assert np.isclose(f(5.0, 1.0, cap=2.0), 2.0)       # capped (1 + 4 = 5 -> 2)
+
+
+def test_moneyness_lapse_multiplier_path_is_monotone():
+    """A moneyness PATH maps to a per-period multiplier array, increasing in
+    moneyness (the account value is exogenous to lapse, so it pre-resolves)."""
+    path = np.array([0.6, 0.8, 1.0, 1.3, 1.8])
+    mult = fcf.vfa.moneyness_lapse_multiplier(path, 0.5)
+    assert mult.shape == path.shape
+    assert np.all(np.diff(mult) > 0.0)                 # rises with moneyness
+    assert np.isclose(mult[2], 1.0)                    # at-the-money entry is 1
