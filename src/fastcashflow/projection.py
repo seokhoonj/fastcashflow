@@ -79,6 +79,12 @@ class AccountTrajectory:
     av_mid: FloatArray  # (n_mp, n_time)   half-month-credited AV (death / lapse + NAR base)
     coi: FloatArray     # (n_mp, n_time)   cost-of-insurance charged (diagnostic)
     fund: FloatArray    # (n_mp, n_time+1) inforce-weighted AV held = inforce_pad * av
+    # Per-policy account charge flows (n_mp, n_time) for the UL entity net-liability
+    # decomposition (the asset-liability gap): premium credited net of load, admin
+    # fee drawn, cost-deducting rider charge drawn. None on books without the roll.
+    prem_to_av: FloatArray | None = None
+    admin_charge: FloatArray | None = None
+    account_charge: FloatArray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -410,6 +416,15 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
     av = np.zeros((av_rows, n_time + 1))
     av_mid = np.zeros((av_rows, n_time))
     coi_av = np.zeros((av_rows, n_time))
+    # Per-policy account charge flows emitted alongside coi_av for the UL entity
+    # net-liability decomposition (the asset-liability gap): the premium credited
+    # to the account (net of load), the admin fee drawn, and the cost-deducting
+    # rider charge drawn. (n_mp, n_time) like coi_av; in-force weighting is applied
+    # downstream. COI is coi_av; credited interest and the account-value pass-through
+    # net against the held fund and are not emitted.
+    prem_to_av_out = np.zeros((av_rows, n_time))
+    admin_out = np.zeros((av_rows, n_time))
+    account_charge_out = np.zeros((av_rows, n_time))
 
     n_edges = edge_from.shape[0]
     for mp in prange(n_mp):
@@ -473,6 +488,9 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     risk = 0.0
                 c_av = account_coi_rate[mp, t] * risk
                 coi_av[mp, t] = c_av
+                prem_to_av_out[mp, t] = account_prem_to_av[mp, t]
+                admin_out[mp, t] = account_admin_fee[t]
+                account_charge_out[mp, t] = account_charge[mp, t]
                 # The death-leg NAR-COI plus every cost-deducting rider's fixed
                 # charge are both drawn from the account this month.
                 a_av -= account_admin_fee[t] + c_av + account_charge[mp, t]
@@ -723,7 +741,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
     return (inforce, deaths, premium_cf, mortality_cf, morbidity_cf, expense_cf,
             annuity_cf, annuity_certain_cf, disability_cf, lapse_flow,
             maturity_cf, maturity_survivors,
-            av, av_mid, coi_av)
+            av, av_mid, coi_av,
+            prem_to_av_out, admin_out, account_charge_out)
 
 
 @njit(parallel=True, cache=True)
@@ -1448,7 +1467,8 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         (inforce, deaths, premium_cf, mortality_cf, morbidity_cf, expense_cf,
          annuity_cf, annuity_certain_cf, disability_cf, lapse_flow,
          maturity_cf, maturity_survivors,
-         av, av_mid, coi_av) = _project_kernel(
+         av, av_mid, coi_av,
+         prem_to_av_out, admin_out, account_charge_out) = _project_kernel(
             state_death_exit,
             state_lapse,
             state_death_benefit_factor,
@@ -1588,7 +1608,10 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         surrender_cf = np.where(mp_account[:, None], acct_surr, surrender_cf)
         # The entity holds the in-force-weighted account value (the VFA fund).
         fund = inforce_pad * av
-        account = AccountTrajectory(av=av, av_mid=av_mid, coi=coi_av, fund=fund)
+        account = AccountTrajectory(
+            av=av, av_mid=av_mid, coi=coi_av, fund=fund,
+            prem_to_av=prem_to_av_out, admin_charge=admin_out,
+            account_charge=account_charge_out)
     return Cashflows(
         inforce=inforce,
         deaths=deaths,
