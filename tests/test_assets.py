@@ -1144,6 +1144,40 @@ def test_ul_vfa_net_liability_cashflows_reconciles_to_bel():
     assert np.isclose(net.sum(), float(m.bel.sum()))         # reconciles to the UL net BEL
 
 
+def test_ul_vfa_net_liability_reconciles_with_cost_deducting_rider():
+    """HARD GATE (rider case): with a cost-deducting rider -- its charge drawn from
+    the account (entity income) AND its benefit paid as a morbidity claim (entity
+    outflow) -- the UL entity net liability still reconciles to the net BEL. Pins
+    that the rider claim is added back, not just the charge subtracted."""
+    from fastcashflow import (Basis, CalculationMethod, CoverageRate, ModelPoints,
+                              NO_GUARANTEE_RATE)
+    basis = Basis(
+        mortality_annual=0.006, lapse_annual=0.02, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.1, investment_return=0.0,
+        coi_annual=0.0015, premium_load=0.08,
+        expense_items=(fcf.ExpenseItem("maint", "gamma_fixed", 300.0),),
+        coverages=(CoverageRate("DEATH", 0.0015, funds_from_account=True,
+                                pays_account_balance=True),
+                   CoverageRate("CANCER", 0.004, funds_from_account=True,
+                                pays_account_balance=False)))
+    mp = ModelPoints(
+        issue_age=np.array([45.0, 50.0]), premium=np.array([400_000.0, 300_000.0]),
+        term_months=np.array([48, 36]),
+        account_value=np.array([800_000.0, 500_000.0]),
+        minimum_death_benefit=np.array([4_000_000.0, 3_000_000.0]),
+        maturity_benefit=np.array([900_000.0, 520_000.0]),
+        minimum_crediting_rate=np.array([NO_GUARANTEE_RATE, NO_GUARANTEE_RATE]),
+        sex=np.array([0, 1]),
+        benefits={"DEATH": np.array([4_000_000.0, 3_000_000.0]),
+                  "CANCER": np.array([200_000.0, 150_000.0])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH,
+                             "CANCER": CalculationMethod.MORBIDITY})
+    m = fcf.vfa.measure(mp, basis, full=True)
+    assert m.cashflows.account.account_charge.sum() > 0.0    # rider charge drawn
+    assert m.cashflows.morbidity_cf.sum() > 0.0              # rider benefit paid
+    assert np.isclose(alm.vfa_net_liability_cashflows(m).sum(), float(m.bel.sum()))
+
+
 def test_vfa_gap_and_interaction_support_account_backed_ul():
     """The VFA asset-liability gap / interaction now work on a UL book (the account
     charge flows let the entity net liability be built on the guarantee-excess

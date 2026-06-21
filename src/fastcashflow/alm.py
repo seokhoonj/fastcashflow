@@ -145,7 +145,12 @@ def vfa_net_liability_cashflows(measurement) -> FloatArray:
       The account-value pass-through and credited interest net against the held fund;
       with no crediting guarantee the undiscounted sum reconciles exactly to the UL
       net BEL (the crediting-guarantee intrinsic value is the only residual when the
-      floor binds, carried by the BEL itself)."""
+      floor binds, carried by the BEL itself).
+
+    The reconciliation is the UNDISCOUNTED-sum identity (exact at a zero
+    underlying-items return); like :func:`net_liability_cashflows` this is a monthly
+    LIQUIDITY ladder, so each month bundles begin- and mid-month flows into one
+    figure -- a non-zero-rate PV is liquidity-grade, not a to-the-cent BEL match."""
     cf = measurement.cashflows
     if cf is None:
         raise ValueError(
@@ -167,7 +172,17 @@ def vfa_net_liability_cashflows(measurement) -> FloatArray:
         maturity_survivors = np.asarray(cf.maturity_survivors, dtype=np.float64)
         rows = np.arange(term.shape[0])
 
-        nar_death_excess = (deaths * np.maximum(0.0, face[:, None] - av_mid)).sum(axis=0)
+        # Death entity cost = the death benefit less the account value released on
+        # death (deaths * av_mid, which nets against the held fund). For an account
+        # death (pays max(av_mid, face)) this is the NAR excess max(0, face - av_mid);
+        # written as mortality_cf - deaths*av_mid so any NON-account death rider
+        # claim in mortality_cf is also captured. Morbidity / disability rider claims
+        # are pure entity outflows (a cost-deducting rider draws account_charge as
+        # income but pays its benefit from the entity), so add them in full.
+        mortality_cf = np.asarray(cf.mortality_cf, dtype=np.float64)
+        death_entity = (mortality_cf - deaths * av_mid).sum(axis=0)
+        rider_claims = (np.asarray(cf.morbidity_cf, dtype=np.float64)
+                        + np.asarray(cf.disability_cf, dtype=np.float64)).sum(axis=0)
         # GMAB maturity excess at each policy's term, on the matured (month-end) AV.
         gmab_maturity_excess = np.zeros(n_time, dtype=np.float64)
         np.add.at(gmab_maturity_excess, np.minimum(term, n_time - 1),
@@ -193,7 +208,7 @@ def vfa_net_liability_cashflows(measurement) -> FloatArray:
             non_maturity_exits * av_mid
             - np.asarray(cf.surrender_cf, dtype=np.float64)).sum(axis=0)
 
-        return (nar_death_excess + gmab_maturity_excess + expense
+        return (death_entity + rider_claims + gmab_maturity_excess + expense
                 - premium_load_income - coi_drawn - admin_drawn
                 - account_charge_drawn - surrender_charge_retained)
     ge = measurement.guarantee_excess_cf
