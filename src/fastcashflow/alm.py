@@ -156,61 +156,15 @@ def vfa_net_liability_cashflows(measurement) -> FloatArray:
         raise ValueError(
             "vfa_net_liability_cashflows needs a full=True measurement (it carries "
             "the cash flows); the headline-only / aggregate paths do not.")
-    account = getattr(cf, "account", None)
-    if account is not None:
-        # Universal-life: the entity net cost on the guarantee-excess basis. The
-        # account-value pass-through and credited interest telescope against the
-        # held fund, leaving the guarantee net cost + expense less the charge income.
-        n_time = cf.premium_cf.shape[1]
-        inforce = np.asarray(cf.inforce, dtype=np.float64)
-        deaths = np.asarray(cf.deaths, dtype=np.float64)
-        av_mid = np.asarray(account.av_mid, dtype=np.float64)
-        av = np.asarray(account.av, dtype=np.float64)
-        face = np.asarray(measurement.model_points.minimum_death_benefit, dtype=np.float64)
-        gmab = np.asarray(measurement.model_points.maturity_benefit, dtype=np.float64)
-        term = np.asarray(measurement.model_points.term_months, dtype=np.int64)
-        maturity_survivors = np.asarray(cf.maturity_survivors, dtype=np.float64)
-        rows = np.arange(term.shape[0])
+    if getattr(cf, "account", None) is not None:
+        return _ul_net_liability_cashflows(measurement)
+    return _va_net_liability_cashflows(measurement)
 
-        # Death entity cost = the death benefit less the account value released on
-        # death (deaths * av_mid, which nets against the held fund). For an account
-        # death (pays max(av_mid, face)) this is the NAR excess max(0, face - av_mid);
-        # written as mortality_cf - deaths*av_mid so any NON-account death rider
-        # claim in mortality_cf is also captured. Morbidity / disability rider claims
-        # are pure entity outflows (a cost-deducting rider draws account_charge as
-        # income but pays its benefit from the entity), so add them in full.
-        mortality_cf = np.asarray(cf.mortality_cf, dtype=np.float64)
-        death_entity = (mortality_cf - deaths * av_mid).sum(axis=0)
-        rider_claims = (np.asarray(cf.morbidity_cf, dtype=np.float64)
-                        + np.asarray(cf.disability_cf, dtype=np.float64)).sum(axis=0)
-        # GMAB maturity excess at each policy's term, on the matured (month-end) AV.
-        gmab_maturity_excess = np.zeros(n_time, dtype=np.float64)
-        np.add.at(gmab_maturity_excess, np.minimum(term, n_time - 1),
-                  maturity_survivors * np.maximum(
-                      0.0, gmab - av[rows, np.minimum(term, n_time)]))
-        expense = np.asarray(cf.expense_cf, dtype=np.float64).sum(axis=0)
-        premium_load_income = (
-            np.asarray(cf.premium_cf, dtype=np.float64)
-            - inforce * np.asarray(account.prem_to_av, dtype=np.float64)).sum(axis=0)
-        coi_drawn = (inforce * np.asarray(account.coi, dtype=np.float64)).sum(axis=0)
-        admin_drawn = (inforce * np.asarray(account.admin_charge, dtype=np.float64)).sum(axis=0)
-        account_charge_drawn = (
-            inforce * np.asarray(account.account_charge, dtype=np.float64)).sum(axis=0)
-        # Retained surrender charge = gross account surrendered less the net paid
-        # (surrender_cf already nets the charge). Maturing survivors are removed
-        # from the non-maturity exit count at their term - 1 exit column.
-        inforce_pad = np.concatenate(
-            [inforce, np.zeros((inforce.shape[0], 1), dtype=np.float64)], axis=1)
-        non_maturity_exits = (inforce_pad[:, :-1] - inforce_pad[:, 1:]) - deaths
-        np.add.at(non_maturity_exits, (rows, np.minimum(term - 1, n_time - 1)),
-                  -maturity_survivors)
-        surrender_charge_retained = (
-            non_maturity_exits * av_mid
-            - np.asarray(cf.surrender_cf, dtype=np.float64)).sum(axis=0)
 
-        return (death_entity + rider_claims + gmab_maturity_excess + expense
-                - premium_load_income - coi_drawn - admin_drawn
-                - account_charge_drawn - surrender_charge_retained)
+def _va_net_liability_cashflows(measurement) -> FloatArray:
+    """Closed-form variable-annuity entity net liability: ``guarantee_excess +
+    expense - variable_fee`` (the fee is the entity's income)."""
+    cf = measurement.cashflows
     ge = measurement.guarantee_excess_cf
     fee = measurement.fee_cf
     if ge is None or fee is None:
@@ -218,6 +172,64 @@ def vfa_net_liability_cashflows(measurement) -> FloatArray:
             "vfa_net_liability_cashflows needs a full=True closed-form VA "
             "measurement (guarantee_excess_cf / fee_cf); got a headline-only result.")
     return (ge + cf.expense_cf - fee).sum(axis=0)
+
+
+def _ul_net_liability_cashflows(measurement) -> FloatArray:
+    """Universal-life entity net liability on the guarantee-excess basis. The
+    account-value pass-through and credited interest telescope against the held
+    fund, leaving the guarantee net cost + rider claims + expense less the account
+    charge income."""
+    cf = measurement.cashflows
+    account = cf.account
+    n_time = cf.premium_cf.shape[1]
+    inforce = np.asarray(cf.inforce, dtype=np.float64)
+    deaths = np.asarray(cf.deaths, dtype=np.float64)
+    av_mid = np.asarray(account.av_mid, dtype=np.float64)
+    av = np.asarray(account.av, dtype=np.float64)
+    gmab = np.asarray(measurement.model_points.maturity_benefit, dtype=np.float64)
+    term = np.asarray(measurement.model_points.term_months, dtype=np.int64)
+    maturity_survivors = np.asarray(cf.maturity_survivors, dtype=np.float64)
+    rows = np.arange(term.shape[0])
+
+    # Death entity cost = the death benefit less the account value released on death
+    # (deaths * av_mid, which nets against the held fund). For an account death
+    # (pays max(av_mid, face)) this is the NAR excess max(0, face - av_mid); written
+    # as mortality_cf - deaths*av_mid so any NON-account death claim in mortality_cf
+    # is captured too. Morbidity / disability rider claims are pure entity outflows
+    # (a cost-deducting rider draws account_charge as income but pays its benefit
+    # from the entity), so add them in full.
+    mortality_cf = np.asarray(cf.mortality_cf, dtype=np.float64)
+    death_entity = (mortality_cf - deaths * av_mid).sum(axis=0)
+    rider_claims = (np.asarray(cf.morbidity_cf, dtype=np.float64)
+                    + np.asarray(cf.disability_cf, dtype=np.float64)).sum(axis=0)
+    # GMAB maturity excess at each policy's term, on the matured (month-end) AV.
+    gmab_maturity_excess = np.zeros(n_time, dtype=np.float64)
+    np.add.at(gmab_maturity_excess, np.minimum(term, n_time - 1),
+              maturity_survivors * np.maximum(
+                  0.0, gmab - av[rows, np.minimum(term, n_time)]))
+    expense = np.asarray(cf.expense_cf, dtype=np.float64).sum(axis=0)
+    premium_load_income = (
+        np.asarray(cf.premium_cf, dtype=np.float64)
+        - inforce * np.asarray(account.prem_to_av, dtype=np.float64)).sum(axis=0)
+    coi_drawn = (inforce * np.asarray(account.coi, dtype=np.float64)).sum(axis=0)
+    admin_drawn = (inforce * np.asarray(account.admin_charge, dtype=np.float64)).sum(axis=0)
+    account_charge_drawn = (
+        inforce * np.asarray(account.account_charge, dtype=np.float64)).sum(axis=0)
+    # Retained surrender charge = gross account surrendered less the net paid
+    # (surrender_cf already nets the charge). Maturing survivors are removed from
+    # the non-maturity exit count at their term - 1 exit column.
+    inforce_pad = np.concatenate(
+        [inforce, np.zeros((inforce.shape[0], 1), dtype=np.float64)], axis=1)
+    non_maturity_exits = (inforce_pad[:, :-1] - inforce_pad[:, 1:]) - deaths
+    np.add.at(non_maturity_exits, (rows, np.minimum(term - 1, n_time - 1)),
+              -maturity_survivors)
+    surrender_charge_retained = (
+        non_maturity_exits * av_mid
+        - np.asarray(cf.surrender_cf, dtype=np.float64)).sum(axis=0)
+
+    return (death_entity + rider_claims + gmab_maturity_excess + expense
+            - premium_load_income - coi_drawn - admin_drawn
+            - account_charge_drawn - surrender_charge_retained)
 
 
 def liability_dv01(model_points: ModelPoints, basis: Basis, *,
