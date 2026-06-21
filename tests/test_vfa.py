@@ -1357,3 +1357,70 @@ def test_vfa_net_liability_cashflows_reconciles_to_bel_hand_calc():
     # The headline-only path carries no entity cash flows -> rejected.
     with pytest.raises(ValueError, match="full=True"):
         vfa_net_liability_cashflows(fcf.vfa.measure(mp, basis, full=False))
+
+
+# ---------------------------------------------------------------------------
+# VFA stochastic liability distribution (vfa.stochastic) -- ESG integration
+# ---------------------------------------------------------------------------
+
+def _vfa_guarantee_mp():
+    return ModelPoints.single(45, 0.0, 60, account_value=1000.0,
+                              minimum_accumulation_benefit=1200.0,
+                              minimum_crediting_rate=0.02,
+                              calculation_methods=PATTERNS)
+
+
+def _lognormal_returns(n_scen, n_time, mu=0.05, vol=0.15, seed=0):
+    rng = np.random.default_rng(seed)
+    sig = vol / np.sqrt(12)
+    return np.exp(rng.normal(mu / 12 - 0.5 * sig ** 2, sig,
+                             size=(n_scen, n_time))) - 1.0
+
+
+def test_vfa_stochastic_mean_reconciles_to_measure_with_tvog():
+    """vfa.stochastic's mean BEL is the risk-neutral price: it equals
+    vfa.measure(..., return_scenarios).bel + .time_value (the folded guarantee
+    time value), because the per-scenario guarantee cost averages to the TVOG."""
+    basis = _basis(investment_return=0.05, fund_fee=0.015)
+    mp = _vfa_guarantee_mp()
+    rs = _lognormal_returns(200, 60)
+    res = fcf.vfa.stochastic(mp, basis, rs)
+    assert res.bel.shape == (200,)
+    ref = fcf.vfa.measure(mp, basis, return_scenarios=rs)
+    assert np.isclose(res.mean()["bel"], float(ref.bel.sum() + ref.time_value.sum()))
+
+
+def test_vfa_stochastic_distribution_has_a_loss_tail():
+    """The convex guarantee makes the per-scenario loss component a distribution:
+    the upper percentile exceeds the mean, and every figure is non-negative where
+    it must be."""
+    basis = _basis(investment_return=0.05, fund_fee=0.015)
+    mp = _vfa_guarantee_mp()
+    res = fcf.vfa.stochastic(mp, basis, _lognormal_returns(400, 60))
+    assert res.percentile(95)["loss_component"] >= res.mean()["loss_component"]
+    assert np.all(res.csm >= 0.0) and np.all(res.loss_component >= 0.0)
+    # CSM and loss component are mutually exclusive per scenario (one is zero).
+    assert np.all((res.csm == 0.0) | (res.loss_component == 0.0))
+
+
+def test_vfa_stochastic_consumes_esg_returns():
+    """The ESG generator's risk-neutral fund returns feed vfa.stochastic directly
+    (the EconomicScenarios.returns field), closing the ESG -> VFA loop."""
+    from fastcashflow import esg
+    es = esg.simulate(np.array([1.0, 2.0, 3.0, 5.0, 10.0, 20.0]),
+                      np.array([0.031, 0.0355, 0.0368, 0.039, 0.0408, 0.041]),
+                      ufr=0.0405, alpha=0.10, mean_reversion=0.10, rate_vol=0.01,
+                      equity_vol=0.15, correlation=-0.2, n_scenarios=300,
+                      n_time=60, seed=7)
+    basis = _basis(investment_return=0.05, fund_fee=0.015)
+    res = fcf.vfa.stochastic(_vfa_guarantee_mp(), basis, es.returns)
+    assert res.bel.shape == (300,) and np.all(np.isfinite(res.bel))
+
+
+def test_vfa_stochastic_rejects_bad_scenarios():
+    basis = _basis(investment_return=0.05, fund_fee=0.015)
+    mp = _vfa_guarantee_mp()
+    with pytest.raises(ValueError, match="2-D"):
+        fcf.vfa.stochastic(mp, basis, np.array([0.01, 0.02]))
+    with pytest.raises(ValueError, match="empty"):
+        fcf.vfa.stochastic(mp, basis, np.zeros((0, 60)))

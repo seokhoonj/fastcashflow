@@ -938,6 +938,49 @@ def measure_vfa(
     )
 
 
+def measure_vfa_stochastic(model_points: ModelPoints, basis: Basis,
+                           return_scenarios: FloatArray):
+    """The VFA liability distribution over fund-return scenarios -- the VFA
+    counterpart of :func:`fastcashflow.gmm.stochastic`.
+
+    For each ``return_scenarios`` path the full guarantee cost (the credited-rate
+    floor plus the GMDB / GMAB account-value floors) is realised and folded into
+    the liability, giving a per-scenario BEL / RA / CSM / loss component. Read the
+    distribution off the returned
+    :class:`~fastcashflow.stochastic.StochasticResult` with ``mean`` /
+    ``percentile``. The mean BEL reconciles to ``vfa.measure(...,
+    return_scenarios).bel + .time_value`` (the risk-neutral price); the mean CSM
+    differs from the pooled-scenario CSM because the loss-component floor is convex
+    -- that convexity is the reason to read the distribution.
+
+    ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
+    underlying-items returns (e.g. :attr:`fastcashflow.EconomicScenarios.returns`).
+    v1 runs one :func:`measure_vfa` per scenario (correctness first -- it shares no
+    projection across scenarios; a vectorised pass is a future optimisation), so
+    keep the scenario count modest."""
+    from fastcashflow.stochastic import StochasticResult
+    rs = np.asarray(return_scenarios, dtype=np.float64)
+    if rs.ndim != 2:
+        raise ValueError("return_scenarios must be 2-D (n_scenarios, n_time)")
+    if rs.shape[0] == 0:
+        raise ValueError("return_scenarios is empty; need at least one scenario")
+    n_scen = rs.shape[0]
+    bel = np.empty(n_scen)
+    ra = np.empty(n_scen)
+    csm = np.empty(n_scen)
+    loss = np.empty(n_scen)
+    for s in range(n_scen):
+        m = measure_vfa(model_points, basis, rs[s:s + 1], full=False)
+        # The realised liability under this path: the deterministic BEL (intrinsic
+        # guarantee) plus this path's guarantee time value. csm / loss already
+        # reflect the path (measure_vfa folds time_value into the floor).
+        bel[s] = float(m.bel.sum() + m.time_value.sum())
+        ra[s] = float(m.ra.sum())
+        csm[s] = float(m.csm.sum())
+        loss[s] = float(m.loss_component.sum())
+    return StochasticResult(bel=bel, ra=ra, csm=csm, loss_component=loss)
+
+
 def measure_stream(
     input_path,
     output_dir,
