@@ -919,15 +919,57 @@ def _per_year_rel(points, n_years: int = 60) -> FloatArray:
     return np.interp(np.arange(1, n_years + 1), mats, vals)
 
 
+# Solvency II disability-morbidity sub-risk (Art 153): one scenario applied
+# together, then re-measured -- an INCREASE in disability / morbidity INCEPTION
+# rates (+35% over the next 12 months, +25% thereafter) AND a -20% DECREASE in
+# disability RECOVERY rates. Inception hits both the flat morbidity / diagnosis
+# coverage claim rates and the state-machine inception edges (waiver / CI
+# incidence, both morbidity inceptions); recovery hits the DI recovery edge
+# (disabled -> active). A product without a given rate is left unchanged.
+_SII_DISABILITY_INCEPTION_FIRST = 1.35
+_SII_DISABILITY_INCEPTION_LATER = 1.25
+_SII_DISABILITY_RECOVERY = 0.80
+_SII_DISABILITY_INCEPTION_RATES = ("waiver_incidence", "ci_incidence")
+
+
+def _sii_disability_shock() -> Stress:
+    """The combined Art 153 disability shock (inception up, recovery down)."""
+    cov = scale_coverages_first_year(
+        {CalculationMethod.MORBIDITY: _SII_DISABILITY_INCEPTION_FIRST,
+         CalculationMethod.DIAGNOSIS: _SII_DISABILITY_INCEPTION_FIRST},
+        {CalculationMethod.MORBIDITY: _SII_DISABILITY_INCEPTION_LATER,
+         CalculationMethod.DIAGNOSIS: _SII_DISABILITY_INCEPTION_LATER})
+
+    def apply(mp: ModelPoints, basis: Basis):
+        # 1. inception on the flat morbidity / diagnosis coverage claim rates
+        mp, basis = cov.apply(mp, basis)
+        over = {}
+        # 2. inception on the state-machine inception edges (if present)
+        for name in _SII_DISABILITY_INCEPTION_RATES:
+            field = _STATE_RATE_FIELD[name]
+            fn = getattr(basis, field)
+            if fn is not None:
+                over[field] = _split_first_year(
+                    fn, _SII_DISABILITY_INCEPTION_FIRST, _SII_DISABILITY_INCEPTION_LATER)
+        # 3. recovery down on the DI recovery edge (if present)
+        if basis.disability_recovery_annual is not None:
+            over["disability_recovery_annual"] = _scaled(
+                basis.disability_recovery_annual, _SII_DISABILITY_RECOVERY)
+        if over:
+            basis = replace(basis, **over)
+        return mp, basis
+
+    return Stress(name="disability", apply=apply)
+
+
 SOLVENCY2 = RegimeSpec(
     name="Solvency II",
     sub_risks=(
         SubRisk("mortality", (scale_mortality(1.15),), "single"),      # +15%
         SubRisk("longevity", (scale_longevity(0.80),), "single"),      # -20%
-        SubRisk("disability", (scale_coverages({                       # disability-morbidity:
-            CalculationMethod.MORBIDITY: 1.25,                        #   v1 single +25% (steady);
-            CalculationMethod.DIAGNOSIS: 1.25,                        #   the +35% year-1 and the
-        }),), "single"),                                              #   -20% recovery are not modelled
+        SubRisk("disability", (_sii_disability_shock(),), "single"),   # Art 153:
+                                                                       #   inception +35%/+25%,
+                                                                       #   recovery -20%
         SubRisk("expense", (scale_expense(1.10, 0.01),), "single"),    # +10%, inflation +1pp
         SubRisk("revision", (scale_annuity(1.03),), "single"),         # annuity benefits +3%
         SubRisk("lapse", (scale_lapse(1.50), scale_lapse(0.50),        # option-exercise +/-50%

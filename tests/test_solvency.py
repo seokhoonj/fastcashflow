@@ -873,3 +873,54 @@ def test_scale_coverages_first_year_bel_exceeds_uniform():
     m1 = 1.0 - (1.0 - 1.25 * annual_from_monthly(0.01)) ** (1.0 / 12.0)
     expected = 12 * m0 * 100_000.0 + 12 * m1 * 100_000.0
     assert np.isclose(bel_split, expected)
+
+
+# ---------------------------------------------------------------------------
+# SII disability sub-risk (Art 153) -- the composed inception-up / recovery-down
+# shock wired into SOLVENCY2 (Phase 3).
+# ---------------------------------------------------------------------------
+
+def _disability_only_regime():
+    """A one-sub-risk regime carrying just the SOLVENCY2 disability shock, so
+    sub_risk_capital['disability'] is the standalone Art 153 capital."""
+    dis = next(sr for sr in sv.SOLVENCY2.sub_risks if sr.name == "disability")
+    return sv.RegimeSpec(name="dis", sub_risks=(dis,),
+                         correlation=np.array([[1.0]]), risk_margin_method="percentile")
+
+
+def test_sii_disability_subrisk_includes_recovery():
+    """On a DI book whose only disability exposure is the recovery edge (a flat
+    death coverage, zero inception), the disability capital is exactly the -20%
+    recovery shock's delta BEL -- proving recovery is wired into the sub-risk."""
+    mp, basis = _di_seated_disabled(24), _di_recovery_basis(0.05)
+    base = float(measure(mp, basis, full=False).bel.sum())
+    _, rec = sv.scale_state_rate("disability_recovery", 0.80).apply(mp, basis)
+    expected = max(0.0, float(measure(mp, rec, full=False).bel.sum()) - base)
+    cap = sv.required_capital(
+        mp, basis, regime=_disability_only_regime()).sub_risk_capital["disability"]
+    assert expected > 0.0                          # recovery down raises the liability
+    assert np.isclose(cap, expected)
+
+
+def test_sii_disability_subrisk_first_year_exceeds_uniform():
+    """On a morbidity book the Art 153 capital exceeds the old uniform +25%
+    capital -- the +35% first-year inception bump adds strain."""
+    mp, basis = _morbidity_mp_basis()
+    base = float(measure(mp, basis, full=False).bel.sum())
+    _, uni = sv.scale_coverages(
+        {_MORB: 1.25, CalculationMethod.DIAGNOSIS: 1.25}).apply(mp, basis)
+    cap_old = max(0.0, float(measure(mp, uni, full=False).bel.sum()) - base)
+    cap_new = sv.required_capital(
+        mp, basis, regime=_disability_only_regime()).sub_risk_capital["disability"]
+    assert cap_old > 0.0
+    assert cap_new > cap_old
+
+
+def test_sii_disability_subrisk_zero_for_death_book():
+    """A plain death book has no disability / morbidity exposure, so the Art 153
+    shock leaves the BEL unchanged and the disability capital is zero (the
+    doc-exec term-life books are unaffected by the recalibration)."""
+    mp, basis = _mp(term=24), _basis()
+    cap = sv.required_capital(
+        mp, basis, regime=_disability_only_regime()).sub_risk_capital["disability"]
+    assert cap == 0.0
