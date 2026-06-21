@@ -1040,7 +1040,8 @@ def _state_lapse_stack(state_model, rate_dict):
     return np.ascontiguousarray(np.stack(rows))
 
 
-def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
+def project_cashflows(model_points: ModelPoints, basis: Basis,
+                      *, lapse_scale: FloatArray | None = None) -> Cashflows:
     """Project cash flows for every model point.
 
     The Pythonic wrapper: it extracts raw arrays from the inputs and
@@ -1048,6 +1049,13 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     evaluated on the per-policy-year grid, not the full ``(n_mp, n_time)``
     grid -- all change only once a year, so this is an identical result for
     a twelfth of the work.
+
+    ``lapse_scale`` is an optional per-policy-year multiplier on the lapse
+    decrement, shape ``(n_mp, n_years)`` -- the seam for a dynamic lapse whose
+    elasticity is resolved to a fixed multiplier array UP FRONT (e.g. an
+    account-value moneyness path). It scales the per-state lapse stack before
+    the kernel runs, so the hot loop sees only the already-scaled lapse array
+    (no per-step callback). ``None`` (the default) leaves the lapse untouched.
     """
     if model_points.term_months.shape[0] == 0:
         raise ValueError(
@@ -1061,6 +1069,14 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
     n_time = int(model_points.contract_boundary_months.max())  # months 0 .. n_time-1
     n_years = (n_time + 11) // 12
     durations = np.arange(n_years)
+
+    n_mp = model_points.term_months.shape[0]
+    if lapse_scale is not None:
+        lapse_scale = np.asarray(lapse_scale, dtype=np.float64)
+        if lapse_scale.shape != (n_mp, n_years):
+            raise ValueError(
+                f"lapse_scale must be (n_mp, n_years) = ({n_mp}, {n_years}); "
+                f"got {lapse_scale.shape}")
 
     sex_grid, _ = np.meshgrid(model_points.sex, durations, indexing="ij")
     issue_age_grid, duration_grid = np.meshgrid(
@@ -1092,6 +1108,14 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         basis.lapse_annual(
             sex_grid, issue_age_grid, duration_grid,
             issue_class_grid, elapsed_grid)))
+    # Dynamic-lapse seam: scale the per-policy-year monthly lapse before it is
+    # compiled into the state-machine transition edges (and the surrender-flow
+    # stack), so BOTH the in-force decrement and the reported surrender follow
+    # the scaled lapse consistently. The factor array is resolved up front (e.g.
+    # an account-value moneyness path), so the hot kernel sees only the scaled
+    # rate -- no per-step callback. ``lapse_paidup`` (below) takes the same scale.
+    if lapse_scale is not None:
+        lapse = np.ascontiguousarray(lapse * lapse_scale)
     # Align the basis' coverages to the order the model points were
     # built against, so coverage_index integers index the right rate row.
     # Reading the portfolio never had to know this order -- it is resolved
@@ -1404,9 +1428,12 @@ def project_cashflows(model_points: ModelPoints, basis: Basis) -> Cashflows:
         if model_references_rate(state_model, "lapse_paidup"):
             paidup_fn = (basis.lapse_paidup_annual
                          or basis.lapse_annual)
-            rate_dict["lapse_paidup"] = np.ascontiguousarray(annual_to_monthly(
+            paidup = annual_to_monthly(
                 paidup_fn(sex_grid, issue_age_grid, duration_grid,
-                          issue_class_grid, elapsed_grid)))
+                          issue_class_grid, elapsed_grid))
+            if lapse_scale is not None:
+                paidup = paidup * lapse_scale
+            rate_dict["lapse_paidup"] = np.ascontiguousarray(paidup)
         compiled = compile_state_model(state_model, rate_dict)
         edge_from = compiled.edge_from
         edge_to = compiled.edge_to

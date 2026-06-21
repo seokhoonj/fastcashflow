@@ -1201,3 +1201,97 @@ def test_moneyness_lapse_multiplier_path_is_monotone():
     assert mult.shape == path.shape
     assert np.all(np.diff(mult) > 0.0)                 # rises with moneyness
     assert np.isclose(mult[2], 1.0)                    # at-the-money entry is 1
+
+
+def test_moneyness_lapse_scale_resolves_the_av_path_hand_calc():
+    """The per-policy-year scale is the multiplier read off the closed-form
+    account-value path at each year start, divided by the GMAB."""
+    r, s = 0.06, 0.5
+    basis = _basis(investment_return=r, fund_fee=0.0)
+    av0, gmab, term = 1000.0, 1030.0, 24                # 2 policy years
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0,
+                            minimum_accumulation_benefit=gmab,
+                            calculation_methods=PATTERNS)
+    scale = fcf.vfa.moneyness_lapse_scale(mp, basis, s)
+    assert scale.shape == (1, 2)
+    growth = (1 + r) ** (1 / 12)                        # f = 0, so growth^12 = 1+r
+    m0 = av0 / gmab                                     # ITM at issue (< 1)
+    m1 = av0 * growth ** 12 / gmab                      # OTM after a year (> 1)
+    assert np.isclose(scale[0, 0], 1 + s * (m0 - 1))    # < 1: less lapse
+    assert np.isclose(scale[0, 1], 1 + s * (m1 - 1))    # > 1: more lapse
+    assert scale[0, 0] < 1.0 < scale[0, 1]
+
+
+def test_moneyness_lapse_scales_the_inforce_decrement_hand_calc():
+    """project_cashflows(lapse_scale=...) scales the monthly lapse per policy
+    year, so survival follows (1-Q)(1-LAPSE*scale_y) month by month."""
+    from fastcashflow.projection import project_cashflows
+    r, s = 0.06, 0.5
+    basis = _basis(investment_return=r, fund_fee=0.0)
+    av0, gmab, term = 1000.0, 1030.0, 24
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0,
+                            minimum_accumulation_benefit=gmab,
+                            calculation_methods=PATTERNS)
+    scale = fcf.vfa.moneyness_lapse_scale(mp, basis, s)
+    cf = project_cashflows(mp, basis, lapse_scale=scale)
+
+    surv_y0 = (1 - Q) * (1 - LAPSE * scale[0, 0])      # less lapse than static
+    surv_y1 = (1 - Q) * (1 - LAPSE * scale[0, 1])      # more lapse than static
+    n0 = cf.inforce[0, 0]
+    assert np.isclose(cf.inforce[0, 12], n0 * surv_y0 ** 12)
+    assert np.isclose(cf.inforce[0, 23], n0 * surv_y0 ** 12 * surv_y1 ** 11)
+    # Null: a zero scale-deviation (sensitivity 0) reproduces the static lapse.
+    flat = fcf.vfa.moneyness_lapse_scale(mp, basis, 0.0)
+    assert np.allclose(flat, 1.0)
+    assert np.allclose(project_cashflows(mp, basis, lapse_scale=flat).inforce,
+                       project_cashflows(mp, basis).inforce)
+
+
+def test_measure_vfa_dynamic_lapse_integration():
+    """measure(lapse_sensitivity=...) feeds the moneyness lapse into the VFA
+    measurement: sensitivity 0 is the static result; a positive sensitivity on
+    an out-of-the-money book lifts lapse, so fewer survivors reach the GMAB."""
+    r = 0.06
+    basis = _basis(investment_return=r, fund_fee=0.0)
+    # GMAB below the issue account value -> out-of-the-money throughout, so the
+    # moneyness multiplier is > 1 and dynamic lapse exceeds the static lapse.
+    av0, gmab, term = 1000.0, 800.0, 60
+    mp = ModelPoints.single(40, 0.0, term, account_value=av0,
+                            minimum_accumulation_benefit=gmab,
+                            calculation_methods=PATTERNS)
+    static = fcf.vfa.measure(mp, basis)
+    null = fcf.vfa.measure(mp, basis, lapse_sensitivity=0.0)
+    dyn = fcf.vfa.measure(mp, basis, lapse_sensitivity=0.8)
+    assert np.allclose(null.bel_path, static.bel_path)             # sensitivity 0 == static
+    # More lapse -> fewer survivors at term -> lower in-force tail.
+    assert dyn.cashflows.inforce[0, -1] < static.cashflows.inforce[0, -1]
+
+    # No GMAB: no floor to weigh, so the dynamic lapse collapses to the static.
+    no_g = ModelPoints.single(40, 0.0, term, account_value=av0,
+                              calculation_methods=PATTERNS)
+    assert np.allclose(
+        fcf.vfa.measure(no_g, basis, lapse_sensitivity=0.8).bel_path,
+        fcf.vfa.measure(no_g, basis).bel_path)
+
+
+def test_measure_vfa_dynamic_lapse_rejects_account_backed():
+    """The account-backed (universal-life) path does not carry the closed-form
+    moneyness lapse yet -- it raises rather than silently ignore the request."""
+    from fastcashflow import Basis, CalculationMethod, CoverageRate
+    coi = 0.0015
+    basis = Basis(
+        mortality_annual=0.004, lapse_annual=0.03, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.1, investment_return=0.06,
+        coi_annual=coi, premium_load=0.08,
+        coverages=(CoverageRate("DEATH", coi, funds_from_account=True,
+                                pays_account_balance=True),))
+    mp = ModelPoints(
+        issue_age=np.array([40.0]), premium=np.array([500_000.0]),
+        term_months=np.array([60]), account_value=np.array([1_000_000.0]),
+        minimum_death_benefit=np.array([80_000_000.0]),
+        minimum_accumulation_benefit=np.array([0.0]),
+        minimum_crediting_rate=np.array([0.0]), sex=np.array([0]),
+        benefits={"DEATH": np.array([80_000_000.0])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH})
+    with pytest.raises(NotImplementedError, match="account-backed"):
+        fcf.vfa.measure(mp, basis, lapse_sensitivity=0.5)

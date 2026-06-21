@@ -96,6 +96,47 @@ def moneyness_lapse_multiplier(moneyness, sensitivity, *, floor: float = 0.0,
     return float(mult) if m.ndim == 0 else mult
 
 
+def moneyness_lapse_scale(model_points: ModelPoints, basis: Basis,
+                          sensitivity: float, *, floor: float = 0.0,
+                          cap=None) -> FloatArray:
+    """Per-policy-year lapse multiplier from the account-value moneyness path.
+
+    Resolves the dynamic-lapse seam UP FRONT into the ``(n_mp, n_years)`` array
+    :func:`fastcashflow.projection.project_cashflows` consumes as ``lapse_scale``.
+    At the start of each policy year the account value -- the closed-form VFA
+    growth path ``av0 * growth ** month`` -- is divided by the GMAB
+    (``minimum_accumulation_benefit``, the guarantee a surrender forgoes) to get
+    the moneyness, then :func:`moneyness_lapse_multiplier` (``sensitivity``,
+    ``floor``, ``cap``) maps it to a lapse factor for that year. A contract with
+    no GMAB (guarantee ``<= 0``) gets a flat ``1.0`` -- no floor to weigh, so the
+    lapse is untouched.
+
+    The account value is exogenous to lapse (a per-policy level, not a count), so
+    the whole moneyness path is known before the decrement projection -- the
+    factor array is built once here and the kernel sees only the scaled lapse (no
+    per-step callback). This is the inception path (``elapsed_months = 0``); an
+    in-force re-anchored moneyness is a later extension. It is the account-value
+    counterpart to :func:`fastcashflow.solvency.interest_with_dynamic_lapse` (the
+    parallel-rate scalar form)."""
+    basis = _single_basis(basis, entry="moneyness_lapse_scale")
+    r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
+    f_m = (1.0 + basis.fund_fee) ** (1.0 / 12.0) - 1.0
+    credit_m = credited_monthly_rate(r_m, model_points.minimum_crediting_rate)
+    growth = (1.0 + credit_m) * (1.0 - f_m)                       # (n_mp,)
+    n_time = int(model_points.contract_boundary_months.max())
+    n_years = (n_time + 11) // 12
+    year_start = np.arange(n_years) * 12                          # 0, 12, 24, ...
+    av0 = np.asarray(model_points.account_value, dtype=np.float64)
+    av_year = av0[:, None] * growth[:, None] ** year_start[None, :]   # (n_mp, n_years)
+    gmab = np.asarray(model_points.minimum_accumulation_benefit, dtype=np.float64)
+    has_g = gmab > 0.0
+    safe_g = np.where(has_g, gmab, 1.0)[:, None]
+    scale = moneyness_lapse_multiplier(av_year / safe_g, sensitivity,
+                                       floor=floor, cap=cap)
+    scale = np.where(has_g[:, None], scale, 1.0)
+    return np.ascontiguousarray(scale)
+
+
 # What the ``csm`` on a VFAMeasurement represents -- so downstream accounting
 # output cannot mistake an in-force carry-only figure for a settlement CSM. The
 # discriminator is carried on the result (not just the docstring) and the
@@ -681,6 +722,9 @@ def measure_vfa(
     return_scenarios: FloatArray | None = None,
     *,
     full: bool = True,
+    lapse_sensitivity: float | None = None,
+    lapse_floor: float = 0.0,
+    lapse_cap=None,
 ) -> VFAMeasurement:
     """Measure a direct-participation portfolio under the Variable Fee Approach.
 
@@ -718,6 +762,13 @@ def measure_vfa(
     underlying-items returns -- is supplied, the time value of the guarantee
     enters the inception fulfilment cash flows too, so the CSM absorbs it,
     and ``time_value`` records that amount per model point.
+
+    ``lapse_sensitivity`` (default ``None`` -- a static lapse) turns on a dynamic
+    lapse driven by the account-value moneyness: the lapse decrement is scaled by
+    :func:`moneyness_lapse_scale` (``lapse_sensitivity``, ``lapse_floor``,
+    ``lapse_cap``), which lifts surrenders when the GMAB is out-of-the-money and
+    lowers them when the floor bites. Supported on the closed-form
+    variable-annuity path only; an account-backed (universal-life) book raises.
     """
     basis = _single_basis(basis, entry="measure_vfa")
     # Variable universal life: an account-backed (universal-life) book is
@@ -729,6 +780,11 @@ def measure_vfa(
     # variable-annuity product carries an account value too).
     from fastcashflow.engine import _measure_full, _portfolio_has_account
     if _portfolio_has_account(model_points, basis):
+        if lapse_sensitivity is not None:
+            raise NotImplementedError(
+                "lapse_sensitivity (moneyness dynamic lapse) is not supported on "
+                "the account-backed (universal-life) VFA path yet; it is "
+                "implemented on the closed-form variable-annuity path.")
         r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
         n_time = int(model_points.contract_boundary_months.max())
         m = _measure_full(model_points, basis,
@@ -797,7 +853,12 @@ def measure_vfa(
             lic_path=m.lic_path, discount_factor_bom=m.discount_factor_bom,
             cashflows=m.cashflows, model_points=model_points)
 
-    p = _vfa_project(model_points, basis, return_scenarios)
+    proj = None
+    if lapse_sensitivity is not None:
+        scale = moneyness_lapse_scale(model_points, basis, lapse_sensitivity,
+                                      floor=lapse_floor, cap=lapse_cap)
+        proj = project_cashflows(model_points, basis, lapse_scale=scale)
+    p = _vfa_project(model_points, basis, return_scenarios, _proj=proj)
     n_time = p.inforce.shape[1]
     variable_fee = p.variable_fee_path[:, 0]
     # The inception fulfilment cash flows -- with the guarantee time value --
