@@ -175,6 +175,19 @@ def _added_first_year(fn, addend: float):
     return wrapped
 
 
+def _split_first_year(fn, first_factor: float, later_factor: float):
+    """Wrap a 5-arg rate callable, scaling its output by ``first_factor`` in the
+    first policy year (``duration == 0``) and by ``later_factor`` thereafter,
+    clamping to 1.0. The per-year duration grid means ``duration == 0`` is the
+    next 12 months -- the shape of the Solvency II disability inception shock
+    (Art 153: +35% over the next year, +25% thereafter). Factors by closure."""
+    def wrapped(sex, issue_age, duration, issue_class, elapsed):
+        base = fn(sex, issue_age, duration, issue_class, elapsed)
+        factor = np.where(np.asarray(duration) == 0, first_factor, later_factor)
+        return np.minimum(base * factor, 1.0)
+    return wrapped
+
+
 def _classified_methods(model_points: ModelPoints, basis: Basis) -> dict:
     """The coverage -> :class:`CalculationMethod` map, validated to cover EVERY
     coverage code, so a mortality / morbidity stress can never silently skip an
@@ -391,6 +404,32 @@ def scale_coverages(factor_by_method: dict[CalculationMethod, float]) -> Stress:
             for r in basis.coverages)
         return mp, replace(basis, coverages=coverages)
     return Stress(name="coverage rates", apply=apply)
+
+
+def scale_coverages_first_year(first_by_method: dict, later_by_method: dict) -> Stress:
+    """Scale each coverage's claim rate by a DURATION-split factor: the first
+    policy year (``duration == 0``) by ``first_by_method[method]`` and later years
+    by ``later_by_method[method]`` -- the +35% next-12-months / +25%-thereafter
+    shape of the Solvency II disability / morbidity inception shock (Art 153).
+
+    The two dicts must carry the same methods (the first-year and steady factors
+    for each). Coverages whose method is in neither are left unchanged; the
+    in-force decrement is untouched. ``duration == 0`` is the next 12 months only
+    for business entering the projection at inception (the same caveat as the
+    Art 143 life-catastrophe first-year shock)."""
+    if set(first_by_method) != set(later_by_method):
+        raise ValueError(
+            "first_by_method and later_by_method must carry the same methods; got "
+            f"{sorted(first_by_method)} vs {sorted(later_by_method)}")
+    def apply(mp: ModelPoints, basis: Basis):
+        methods = _classified_methods(mp, basis)
+        coverages = tuple(
+            replace(r, rate=_split_first_year(
+                r.rate, first_by_method[methods[r.code]], later_by_method[methods[r.code]]))
+            if methods[r.code] in first_by_method else r
+            for r in basis.coverages)
+        return mp, replace(basis, coverages=coverages)
+    return Stress(name="coverage rates (first-year split)", apply=apply)
 
 
 def scale_coverage_codes(codes, factor: float) -> Stress:
@@ -958,7 +997,8 @@ __all__ = [
     "Stress", "SubRisk", "RegimeSpec", "SCRResult",
     "scale_mortality", "scale_longevity", "scale_lapse", "mass_lapse",
     "scale_state_rate", "catastrophe_mortality",
-    "scale_coverages", "scale_coverage_codes", "scale_annuity", "scale_expense",
+    "scale_coverages", "scale_coverages_first_year", "scale_coverage_codes",
+    "scale_annuity", "scale_expense",
     "dynamic_lapse_multiplier", "interest_with_dynamic_lapse",
     "shock_curve", "shock_spread", "KICSInterest",
     "aggregate", "required_capital", "vfa_required_capital",

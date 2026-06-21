@@ -804,3 +804,72 @@ def test_scale_state_rate_noop_when_rate_absent():
 def test_scale_state_rate_rejects_unknown_rate():
     with pytest.raises(ValueError, match="unknown state-machine rate"):
         sv.scale_state_rate("not_a_rate", 0.8)
+
+
+# ---------------------------------------------------------------------------
+# scale_coverages_first_year -- the +35% year-1 / +25%-thereafter duration split
+# (Phase 2 of the Solvency II disability inception shock, Art. 153).
+# ---------------------------------------------------------------------------
+
+_MORB = CalculationMethod.MORBIDITY
+
+
+def _morbidity_mp_basis(rate_monthly: float = 0.01):
+    """A single 2-year morbidity contract with a flat claim rate, no decrement
+    and no discount, so the claim PV is a clean per-month sum."""
+    rate = lambda s, a, d: np.full(np.asarray(d).shape, annual_from_monthly(rate_monthly))
+    basis = make_death_basis(mortality_q=0.0, lapse_q=0.0, discount_annual=0.0,
+                             mortality_cv=0.0,
+                             coverages=(fcf.CoverageRate("INP", rate),))
+    mp = fcf.ModelPoints.single(40, 0.0, 24, benefits={"INP": 100_000.0},
+                                calculation_methods={"INP": _MORB})
+    return mp, basis
+
+
+def test_scale_coverages_first_year_grid_split():
+    """The first policy year (duration == 0) is scaled by the first-year factor,
+    later years by the steady factor -- evaluated on the rate grid."""
+    mp, basis = _morbidity_mp_basis()
+    _, shocked = sv.scale_coverages_first_year({_MORB: 1.35}, {_MORB: 1.25}).apply(mp, basis)
+    base_cov = {r.code: r for r in basis.coverages}["INP"]
+    shock_cov = {r.code: r for r in shocked.coverages}["INP"]
+    for dur, factor in [(0, 1.35), (1, 1.25), (2, 1.25)]:
+        g = (np.array([0]), np.array([40]), np.array([dur]), np.array([0]), np.array([0]))
+        assert np.allclose(shock_cov.rate(*g), base_cov.rate(*g) * factor), dur
+
+
+def test_scale_coverages_first_year_clamps_to_one():
+    """A base rate high enough that the first-year factor would exceed 1.0 is
+    clamped (rates are probabilities)."""
+    mp, basis = _morbidity_mp_basis(rate_monthly=0.0)
+    high = lambda s, a, d: np.full(np.asarray(d).shape, 0.80)     # 0.80 annual, x1.35 = 1.08
+    basis = make_death_basis(mortality_q=0.0, lapse_q=0.0, discount_annual=0.0,
+                             mortality_cv=0.0, coverages=(fcf.CoverageRate("INP", high),))
+    _, shocked = sv.scale_coverages_first_year({_MORB: 1.35}, {_MORB: 1.25}).apply(mp, basis)
+    shock_cov = {r.code: r for r in shocked.coverages}["INP"]
+    g0 = (np.array([0]), np.array([40]), np.array([0]), np.array([0]), np.array([0]))
+    assert np.allclose(shock_cov.rate(*g0), 1.0)                  # 1.08 clamped to 1.0
+
+
+def test_scale_coverages_first_year_rejects_mismatched_methods():
+    with pytest.raises(ValueError, match="same methods"):
+        sv.scale_coverages_first_year({_MORB: 1.35}, {CalculationMethod.DIAGNOSIS: 1.25})
+
+
+def test_scale_coverages_first_year_bel_exceeds_uniform():
+    """The first-year split must add the +35% year-1 bump ON TOP of the steady
+    +25%: its BEL exceeds the uniform +25% shock, which exceeds the base."""
+    mp, basis = _morbidity_mp_basis()
+    base = float(measure(mp, basis, full=False).bel.sum())
+    _, split = sv.scale_coverages_first_year({_MORB: 1.35}, {_MORB: 1.25}).apply(mp, basis)
+    _, uniform = sv.scale_coverages({_MORB: 1.25}).apply(mp, basis)
+    bel_split = float(measure(mp, split, full=False).bel.sum())
+    bel_uniform = float(measure(mp, uniform, full=False).bel.sum())
+    assert bel_split > bel_uniform > base
+
+    # the year-0 half carries the +35%, the year-1 half the +25% -- check the
+    # two-segment composition (no decrement, no discount, so PV is additive).
+    m0 = 1.0 - (1.0 - 1.35 * annual_from_monthly(0.01)) ** (1.0 / 12.0)
+    m1 = 1.0 - (1.0 - 1.25 * annual_from_monthly(0.01)) ** (1.0 / 12.0)
+    expected = 12 * m0 * 100_000.0 + 12 * m1 * 100_000.0
+    assert np.isclose(bel_split, expected)
