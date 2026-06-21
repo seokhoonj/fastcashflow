@@ -99,6 +99,7 @@ from fastcashflow.assets import (
     asset_portfolio_value, available_capital, net_interest_scr,
     equity_scr, property_scr, fx_scr, concentration_scr, market_module_scr,
     credit_scr, operational_scr, aggregate_required_capital, assess_solvency,
+    vfa_assess_solvency,
     DynamicSolvency, dynamic_solvency,
     VFADynamicSolvency, dynamic_solvency_vfa,
 )
@@ -175,7 +176,7 @@ __all__ = [
     "asset_portfolio_value", "available_capital", "net_interest_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",
-    "aggregate_required_capital", "assess_solvency",
+    "aggregate_required_capital", "assess_solvency", "vfa_assess_solvency",
     "DynamicSolvency", "dynamic_solvency",
     "VFADynamicSolvency", "dynamic_solvency_vfa",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",

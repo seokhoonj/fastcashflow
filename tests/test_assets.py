@@ -1023,3 +1023,30 @@ def test_dynamic_solvency_report_renders():
                   "Stressed solvency ratio"):
         assert label in text
     assert f"{d.stressed_available_capital:,.0f}" in text  # the figure ties to the result
+
+
+def test_vfa_assess_solvency_assembles_the_static_ratio():
+    """The VFA static assessment prices the insurance module on the VFA net BEL,
+    adds the guarantee equity sensitivity to the asset-side equity SCR, and forms
+    the coverage ratio. The net interest module is zero (v1)."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _vfa_book()
+    regime = sv.KICS
+    a = assets.vfa_assess_solvency(pf, mp, basis, regime=regime)
+
+    # Insurance module is the VFA life SCR; BEL is the VFA net BEL.
+    scr = sv.vfa_required_capital(mp, basis, regime=regime)
+    assert np.isclose(a.insurance_scr, scr.insurance_scr)
+    assert np.isclose(a.bel, scr.base_bel)
+    assert np.isclose(a.net_interest_scr, 0.0)               # v1: not modelled
+    # Equity = asset equity + guarantee equity (added under one shock).
+    eq_shock = assets._market_cal(regime)["equity_shocks"]["developed"]
+    assert np.isclose(
+        a.equity_scr,
+        assets.equity_scr(pf, regime)
+        + sv.vfa_equity_scr(mp, basis, equity_shock=eq_shock))
+    assert a.equity_scr > 0.0                                 # the guarantee bites
+    # Available capital = assets - (VFA BEL + risk margin); ratio = ac / total_scr.
+    assert np.isclose(a.available_capital,
+                      a.asset_portfolio_value - a.bel - a.risk_margin)
+    assert np.isclose(a.solvency_ratio, a.available_capital / a.total_scr)

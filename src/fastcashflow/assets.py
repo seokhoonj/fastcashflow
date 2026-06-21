@@ -34,7 +34,8 @@ from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.solvency import (
-    RegimeSpec, required_capital, KICSInterest, interest_with_dynamic_lapse,
+    RegimeSpec, required_capital, vfa_required_capital, vfa_equity_scr,
+    KICSInterest, interest_with_dynamic_lapse,
 )
 
 
@@ -950,16 +951,21 @@ def _operational_cal(regime):
 
 
 def operational_scr(model_points: ModelPoints, basis: Basis, regime, *,
-                    bscr: float | None = None) -> float:
+                    bscr: float | None = None, measure_fn=None) -> float:
     """The operational-risk SCR -- a factor on the liability (premiums and BEL).
 
     K-ICS: ``max(premium x 3.5%, BEL x 0.4%)``. Solvency II: ``min(0.3 x bscr,
     max(0.04 x premium, 0.0045 x BEL)) + 0.25 x unit-linked expenses`` -- pass
     ``bscr`` (the basic SCR) for the cap; unit-linked expenses are 0 in v1. The
     premium exposure is the first projection year's earned premium; the BEL
-    exposure is floored at zero."""
+    exposure is floored at zero.
+
+    ``measure_fn`` is the liability measurement (default the GMM
+    :func:`~fastcashflow.engine.measure`); pass :func:`~fastcashflow.vfa.measure`
+    for a variable book's BEL / premium exposure."""
     cal = _operational_cal(regime)
-    m = measure(model_points, basis, full=True)
+    mf = measure_fn if measure_fn is not None else measure
+    m = mf(model_points, basis, full=True)
     bel = max(0.0, float(m.bel.sum()))
     premium = max(0.0, float(m.cashflows.premium_cf[:, :12].sum()))
     op = max(premium * cal["premium_factor"], bel * cal["bel_factor"])
@@ -1288,6 +1294,78 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
         total_scr=total, solvency_ratio=ratio)
 
 
+def vfa_assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
+                        basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
+                        tax_recoverability_limit: float | None = None,
+                        catastrophe: float = 0.0, general_insurance_scr: float = 0.0,
+                        guarantee_equity_shock: float | None = None
+                        ) -> SolvencyAssessment:
+    """The static t=0 solvency assessment for a variable (VFA) book.
+
+    The VFA counterpart of :func:`assess_solvency`. The liability (insurance) SCR is
+    :func:`~fastcashflow.solvency.vfa_required_capital` -- the life sub-risks priced
+    on the VFA NET BEL -- and available capital is the assets less the VFA technical
+    provision (VFA BEL + risk margin). The market module adds the guarantee's equity
+    sensitivity to the asset-side equity SCR: under one equity shock the entity's own
+    equity holdings fall AND the guarantee cost rises (the same risk factor), so the
+    equity component is ``equity_scr(portfolio) + vfa_equity_scr`` -- added, not
+    diversified. ``guarantee_equity_shock`` defaults to the regime's developed
+    listed-equity shock (the unit fund's assumed equity stress).
+
+    v1 scope: the VFA INTEREST sub-risk (the guarantee's rate sensitivity) is NOT
+    modelled -- the net interest module is zero here (the dominant variable-annuity
+    market risk is equity, which is captured). Property / FX / concentration / credit
+    / operational follow the asset-side modules (operational on the VFA BEL /
+    premium). Closed-form variable-annuity path only."""
+    from fastcashflow._vfa import measure_vfa
+    scr = vfa_required_capital(model_points, basis, regime=regime,
+                               catastrophe=catastrophe)
+    pv = asset_portfolio_value(portfolio, basis.discount_annual)
+    ac = available_capital(pv, scr.base_bel, scr.risk_margin)
+
+    cal = _market_cal(regime)
+    eq_shock = (guarantee_equity_shock if guarantee_equity_shock is not None
+                else cal["equity_shocks"]["developed"])
+    ni = 0.0                                  # v1: VFA interest sub-risk not modelled
+    eq = (equity_scr(portfolio, regime)
+          + vfa_equity_scr(model_points, basis, equity_shock=eq_shock))
+    pr = property_scr(portfolio, regime)
+    fx = fx_scr(portfolio, regime, basis.discount_annual)
+    conc = concentration_scr(portfolio, regime, basis.discount_annual, total_assets=pv)
+    c = np.array([ni, eq, pr, fx, conc], dtype=np.float64)
+    R = np.asarray(cal["market_correlation"], dtype=np.float64)
+    market = float(np.sqrt(max(0.0, c @ R @ c)))
+
+    ins = scr.insurance_scr
+    gen = max(0.0, general_insurance_scr)
+    cr = credit_scr(portfolio, regime, basis.discount_annual)
+    bscr = aggregate_required_capital(ins, market, cr, regime=regime,
+                                      general_insurance=gen)
+    op = operational_scr(model_points, basis, regime, bscr=bscr,
+                         measure_fn=measure_vfa)
+    basic = bscr + op
+
+    tax_adj = 0.0
+    if tax_rate > 0.0:
+        tax_adj = basic * tax_rate
+        if tax_recoverability_limit is not None:
+            tax_adj = min(tax_adj, max(0.0, tax_recoverability_limit))
+    total = basic - tax_adj
+
+    if total > 0.0:
+        ratio = ac / total
+    else:
+        ratio = float("inf") if ac >= 0.0 else float("-inf")
+    return SolvencyAssessment(
+        asset_portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
+        available_capital=ac, insurance_scr=ins, general_insurance_scr=gen,
+        net_interest_scr=ni,
+        equity_scr=eq, property_scr=pr, fx_scr=fx, concentration_scr=conc,
+        market_module_scr=market, credit_scr=cr, operational_scr=op, bscr=bscr,
+        basic_required_capital=basic, tax_adjustment=tax_adj,
+        total_scr=total, solvency_ratio=ratio)
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class DynamicSolvency:
     """The solvency picture after a coupled rate / dynamic-lapse scenario bites --
@@ -1425,7 +1503,7 @@ __all__ = [
     "net_interest_scr", "net_interest_kics_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_module_scr", "credit_scr", "operational_scr",
-    "aggregate_required_capital", "assess_solvency",
+    "aggregate_required_capital", "assess_solvency", "vfa_assess_solvency",
     "DynamicSolvency", "dynamic_solvency",
     "VFADynamicSolvency", "dynamic_solvency_vfa",
 ]
