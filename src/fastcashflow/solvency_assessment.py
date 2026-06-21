@@ -1245,6 +1245,42 @@ def stochastic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints
     return StochasticSolvency(static=static, available_capital=ac, ratio=ratio)
 
 
+def stochastic_solvency_gmm(portfolio: AssetPortfolio, model_points: ModelPoints,
+                            basis: Basis, rate_scenarios, *, regime: RegimeSpec,
+                            **assess_kwargs) -> StochasticSolvency:
+    """The coverage-ratio distribution of a book over discount-rate scenarios.
+
+    The GMM counterpart of :func:`stochastic_solvency_vfa`. Runs the static
+    :func:`assess_solvency` for the prescribed SCR and the asset value, then the
+    GMM liability distribution (:func:`fastcashflow.gmm.stochastic`) over
+    ``rate_scenarios``: available capital per scenario is the assets less that
+    scenario's BEL and the risk margin, and the ratio is that over the (unchanged)
+    required capital. A scenario equal to the basis's own discount curve
+    reproduces the static ratio exactly.
+
+    ``rate_scenarios`` is a 1-D ``(n_scenarios,)`` array of flat annual rates, a
+    2-D ``(n_scenarios, n_time)`` array of rate curves, OR an
+    :class:`~fastcashflow.EconomicScenarios` (its ``rates`` are used). Extra
+    keywords pass through to :func:`assess_solvency`.
+
+    v1 scope: only the LIABILITY side is stochastic -- the asset value and the
+    prescribed SCR are held at their t=0 (base-curve) values across scenarios, so
+    the distribution isolates the rate move's bite on the ratio. Assets co-moving
+    with the scenarios (the bond portfolio revalued per rate path) is a future
+    extension."""
+    from fastcashflow.stochastic import measure_stochastic
+    rs = getattr(rate_scenarios, "rates", rate_scenarios)
+    static = assess_solvency(portfolio, model_points, basis, regime=regime,
+                             **assess_kwargs)
+    dist = measure_stochastic(model_points, basis, rs)
+    ac = static.asset_portfolio_value - (dist.bel + static.risk_margin)
+    if static.total_scr > 0.0:
+        ratio = ac / static.total_scr
+    else:
+        ratio = np.where(ac >= 0.0, np.inf, -np.inf)
+    return StochasticSolvency(static=static, available_capital=ac, ratio=ratio)
+
+
 __all__ = [
     "InteractionResult", "interaction_loss", "vfa_interaction_loss",
     "net_interest_scr", "net_interest_kics_scr",
@@ -1254,5 +1290,5 @@ __all__ = [
     "SolvencyAssessment", "assess_solvency", "vfa_assess_solvency",
     "DynamicSolvency", "dynamic_solvency",
     "VFADynamicSolvency", "dynamic_solvency_vfa",
-    "StochasticSolvency", "stochastic_solvency_vfa",
+    "StochasticSolvency", "stochastic_solvency_vfa", "stochastic_solvency_gmm",
 ]

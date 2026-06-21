@@ -1243,3 +1243,69 @@ def test_stochastic_solvency_vfa_accepts_a_raw_array_and_validates_cte():
     assert np.isfinite(ss.mean()["ratio"])
     with pytest.raises(ValueError, match="q must be"):
         ss.cte(0.0)
+
+
+# ---------------------------------------------------------------------------
+# stochastic_solvency_gmm -- the GMM coverage-ratio distribution over rate
+# scenarios (the GMM counterpart of stochastic_solvency_vfa).
+# ---------------------------------------------------------------------------
+
+def _gmm_solvency_book():
+    """A GMM death book with a backing bond portfolio, flat base curve."""
+    from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
+    basis = Basis(mortality_annual=0.004, lapse_annual=0.02, discount_annual=0.03,
+                  ra_confidence=0.75, mortality_cv=0.1,
+                  coverages=(CoverageRate("DEATH", 0.004),))
+    mp = ModelPoints.single(45, 50_000.0, 60, benefits={"DEATH": 1e7},
+                            calculation_methods={"DEATH": CalculationMethod.DEATH})
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=1.5e7, coupon_rate=0.04, maturity_years=5, frequency=1),))
+    return pf, mp, basis
+
+
+def test_stochastic_solvency_gmm_reconciles_at_base_curve():
+    """A single scenario equal to the basis's own flat discount rate reproduces
+    the static coverage ratio exactly -- the null-scenario anchor."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _gmm_solvency_book()
+    static = fcf.assess_solvency(pf, mp, basis, regime=sv.SOLVENCY2)
+    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, np.array([0.03]), regime=sv.SOLVENCY2)
+    assert ss.ratio.shape == (1,)
+    assert np.isclose(ss.available_capital[0], static.available_capital)
+    assert np.isclose(ss.ratio[0], static.solvency_ratio)
+
+
+def test_stochastic_solvency_gmm_distributes_over_rate_scenarios():
+    """The available capital / ratio is assets less the per-scenario BEL and risk
+    margin, over the prescribed SCR -- and the tail orders cte <= percentile."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _gmm_solvency_book()
+    scen = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
+    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SOLVENCY2)
+    assert ss.ratio.shape == (5,)
+
+    dist = fcf.gmm.stochastic(mp, basis, scen)
+    expected_ac = ss.static.asset_portfolio_value - (dist.bel + ss.static.risk_margin)
+    assert np.allclose(ss.available_capital, expected_ac)
+    assert np.allclose(ss.ratio, expected_ac / ss.static.total_scr)
+    # available capital is the assets less the per-scenario BEL: the worst-BEL
+    # scenario carries the least capital (assets / risk margin held fixed)
+    assert np.argmax(dist.bel) == np.argmin(ss.available_capital)
+    assert ss.cte(40) <= ss.percentile(40)["ratio"]
+
+
+def test_stochastic_solvency_gmm_accepts_esg_object():
+    """It accepts an EconomicScenarios (its .rates feed the GMM distribution),
+    like its VFA counterpart accepts .returns."""
+    from fastcashflow import esg
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _gmm_solvency_book()
+    es = esg.simulate(np.array([1., 2., 3., 5., 10., 20.]),
+                      np.array([.031, .0355, .0368, .039, .0408, .041]),
+                      ufr=0.0405, alpha=0.10, mean_reversion=0.10, rate_vol=0.01,
+                      equity_vol=0.15, correlation=-0.2, n_scenarios=200,
+                      n_time=60, seed=7)
+    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, es, regime=sv.SOLVENCY2)   # ESG -> .rates
+    assert ss.ratio.shape == (200,)
+    assert np.isfinite(ss.mean()["ratio"])
+    assert ss.cte(5) <= ss.percentile(5)["ratio"] <= ss.mean()["ratio"]
