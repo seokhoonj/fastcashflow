@@ -167,6 +167,49 @@ def asset_value_path(portfolio: AssetPortfolio, n_months: int,
     return path
 
 
+def _annual_forward_curve(rate_scenarios: FloatArray) -> FloatArray:
+    """Per-year annual-forward discount curve from a monthly annual-rate path.
+
+    ``rate_scenarios`` is ``(n_scenarios, n_time)`` -- the annual rate at each
+    projection month, the discount path a stochastic liability uses (the month is
+    discounted by ``(1 + rate)^(1/12)``). The per-year forward for year ``j`` is the
+    geometric product of that year's twelve monthly growth factors, annualised, so
+    ``_annual_df`` reproduces the liability's cumulative discount factor at the year
+    grid EXACTLY (a partial final year is annualised by its month count). Returns
+    ``(n_scenarios, n_years)``."""
+    rs = np.asarray(rate_scenarios, dtype=np.float64)
+    growth = (1.0 + rs) ** (1.0 / 12.0)                     # monthly growth factor
+    n_scen, n_time = rs.shape
+    n_years = (n_time + 11) // 12
+    c = np.empty((n_scen, n_years))
+    for j in range(n_years):
+        block = growth[:, 12 * j: 12 * j + 12]             # this year's months (<=12)
+        c[:, j] = np.prod(block, axis=1) ** (12.0 / block.shape[1]) - 1.0
+    return c
+
+
+def asset_value_by_scenario(portfolio: AssetPortfolio,
+                            rate_scenarios: FloatArray) -> FloatArray:
+    """Market value of ``portfolio`` under each rate scenario -- the co-moving asset
+    leg of a stochastic solvency distribution.
+
+    A 1-D ``(n_scenarios,)`` array is one flat annual rate per scenario; a 2-D
+    ``(n_scenarios, n_time)`` array is the monthly annual-rate discount path,
+    bootstrapped to a per-year annual-forward curve (:func:`_annual_forward_curve`)
+    so a bond's discounting matches the liability's cumulative discount factor at the
+    year grid. Bonds reprice on the curve; equity / property / cash are held flat (a
+    rate move is the entity's interest exposure, the asset side of the duration gap).
+    Returns ``(n_scenarios,)``."""
+    rs = np.asarray(rate_scenarios, dtype=np.float64)
+    if rs.ndim == 1:
+        return np.array([asset_portfolio_value(portfolio, float(r)) for r in rs])
+    if rs.ndim != 2:
+        raise ValueError("rate_scenarios must be 1-D (flat rates) or 2-D (curves)")
+    curves = _annual_forward_curve(rs)
+    return np.array([asset_portfolio_value(portfolio, curves[s])
+                     for s in range(rs.shape[0])])
+
+
 @dataclass(frozen=True, slots=True)
 class CashflowGap:
     """The asset-liability cash-flow ladder on the shared monthly grid.
@@ -413,7 +456,8 @@ def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio",
     "holding_value", "asset_portfolio_value", "available_capital",
-    "asset_portfolio_cashflows", "asset_value_path", "CashflowGap", "cashflow_gap",
+    "asset_portfolio_cashflows", "asset_value_path", "asset_value_by_scenario",
+    "CashflowGap", "cashflow_gap",
     "vfa_cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
 ]

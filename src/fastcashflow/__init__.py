@@ -92,8 +92,8 @@ from fastcashflow.alm import (
 from fastcashflow import alm
 from fastcashflow.assets import (
     Equity, Property, Cash, AssetPortfolio,
-    CashflowGap, asset_portfolio_cashflows, asset_value_path, cashflow_gap,
-    vfa_cashflow_gap,
+    CashflowGap, asset_portfolio_cashflows, asset_value_path, asset_value_by_scenario,
+    cashflow_gap, vfa_cashflow_gap,
     ReinvestmentResult, reinvest, LiquidationResult, liquidate,
     asset_portfolio_value, available_capital,
 )
@@ -176,7 +176,8 @@ __all__ = [
     "alm_gap", "duration_gap",
     "assets", "solvency_assessment",
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
-    "CashflowGap", "asset_portfolio_cashflows", "asset_value_path", "cashflow_gap",
+    "CashflowGap", "asset_portfolio_cashflows", "asset_value_path",
+    "asset_value_by_scenario", "cashflow_gap",
     "vfa_cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
     "InteractionResult", "interaction_loss", "vfa_interaction_loss",

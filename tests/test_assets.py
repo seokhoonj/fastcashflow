@@ -1309,3 +1309,56 @@ def test_stochastic_solvency_gmm_accepts_esg_object():
     assert ss.ratio.shape == (200,)
     assert np.isfinite(ss.mean()["ratio"])
     assert ss.cte(5) <= ss.percentile(5)["ratio"] <= ss.mean()["ratio"]
+
+
+# ---------------------------------------------------------------------------
+# asset_value_by_scenario -- the co-moving asset leg (P1): revalue the portfolio
+# per rate scenario, the bond discounting matching the liability's at the year grid.
+# ---------------------------------------------------------------------------
+
+def _bond_heavy_portfolio():
+    return assets.AssetPortfolio(holdings=(
+        alm.Bond(1.5e7, 0.04, 10, 1), assets.Equity(5e5), assets.Cash(1e6)))
+
+
+def test_asset_value_by_scenario_flat_is_exact():
+    """A 1-D scenario is one flat rate per scenario -- each value is the portfolio
+    priced at that flat rate; a lower rate gives a higher value (bond duration)."""
+    pf = _bond_heavy_portfolio()
+    flat = np.array([0.01, 0.03, 0.05])
+    av = assets.asset_value_by_scenario(pf, flat)
+    exp = np.array([assets.asset_portfolio_value(pf, r) for r in flat])
+    assert np.allclose(av, exp)
+    assert av[0] > av[1] > av[2]                        # lower rate -> higher bond value
+
+
+def test_asset_value_by_scenario_curve_matches_liability_df_at_year_grid():
+    """The annual-forward bootstrap reproduces the liability's cumulative discount
+    factor at the year grid exactly -- so the co-moving asset and the stochastic
+    liability discount on the same curve (no asset-liability discounting drift)."""
+    from fastcashflow.alm import _annual_df
+    from fastcashflow.assets import _annual_forward_curve
+    rng = np.random.default_rng(0)
+    n_time = 60
+    rs = 0.03 + 0.01 * rng.standard_normal((4, n_time))
+    monthly = (1.0 + rs) ** (1.0 / 12.0) - 1.0
+    dfm = np.concatenate([np.ones((4, 1)),
+                          np.cumprod(1.0 / (1.0 + monthly), axis=1)], axis=1)
+    c = _annual_forward_curve(rs)
+    for s in range(4):
+        for j in range(1, c.shape[1] + 1):
+            asset_df = float(_annual_df(np.array([float(j)]), c[s])[0])
+            assert np.isclose(dfm[s, 12 * j], asset_df, rtol=1e-12), (s, j)
+
+
+def test_asset_value_by_scenario_flat_per_year_bootstrap_is_the_annual_rate():
+    """A path flat within each policy year bootstraps to that year's annual rate."""
+    from fastcashflow.assets import _annual_forward_curve
+    rates = [0.02, 0.04, 0.06, 0.06, 0.06]
+    path = np.repeat(np.array([rates]), 12, axis=1).reshape(1, 60)
+    assert np.allclose(_annual_forward_curve(path)[0], rates)
+
+
+def test_asset_value_by_scenario_rejects_3d():
+    with pytest.raises(ValueError, match="1-D .* or 2-D"):
+        assets.asset_value_by_scenario(_bond_heavy_portfolio(), np.zeros((2, 3, 4)))
