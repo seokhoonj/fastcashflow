@@ -255,6 +255,51 @@ def scale_lapse(factor: float) -> Stress:
     return Stress(name=f"lapse x{factor:g}", apply=apply)
 
 
+# Named in-force state-machine transition rates that live as their own Basis
+# field. A stress scales one by the name a Transition.rate carries -- e.g. the DI
+# recovery edge (disabled -> active) or a morbidity / waiver inception edge.
+# mortality and lapse are the core decrements with their own stresses.
+_STATE_RATE_FIELD = {
+    "waiver_incidence":    "waiver_incidence_annual",
+    "ci_incidence":        "ci_incidence_annual",
+    "ci_reincidence":      "ci_reincidence_annual",
+    "disability_recovery": "disability_recovery_annual",
+    "lapse_paidup":        "lapse_paidup_annual",
+}
+
+
+def scale_state_rate(rate_name: str, factor: float) -> Stress:
+    """Scale a named in-force state-machine transition rate by ``factor``.
+
+    ``rate_name`` is the string a :class:`~fastcashflow.state_model.Transition`
+    carries -- e.g. ``"disability_recovery"`` for the disability-income recovery
+    edge (disabled -> active), or ``"waiver_incidence"`` / ``"ci_incidence"`` for
+    a disability / morbidity inception edge. The rate lives in its own ``Basis``
+    field (mapped here); the stress rebuilds the basis with that one field scaled,
+    clamped to 1.0. A basis that does not supply the rate (the field is ``None``)
+    is left unchanged -- the shock is a no-op for a product without that
+    transition. ``mortality`` and ``lapse`` are the core decrements with their own
+    stresses (:func:`scale_mortality` / :func:`scale_lapse`); this is for the
+    optional transition rates a multi-state product declares.
+
+    A recovery shock is a DOWN scale (``factor < 1`` -- fewer recoveries, so the
+    disabled stay on claim longer and the liability rises); an inception shock is
+    an UP scale. Used to build the Solvency II disability sub-risk (Art. 153: a
+    decrease in disability recovery rates, an increase in inception rates)."""
+    try:
+        field = _STATE_RATE_FIELD[rate_name]
+    except KeyError:
+        raise ValueError(
+            f"unknown state-machine rate {rate_name!r}; known rates are "
+            f"{sorted(_STATE_RATE_FIELD)}") from None
+    def apply(mp: ModelPoints, basis: Basis):
+        fn = getattr(basis, field)
+        if fn is None:                       # product has no such transition
+            return mp, basis
+        return mp, replace(basis, **{field: _scaled(fn, factor)})
+    return Stress(name=f"{rate_name} x{factor:g}", apply=apply)
+
+
 def mass_lapse(fraction: float) -> Stress:
     """An instantaneous mass lapse -- ``fraction`` of the in-force surrenders at
     the valuation date.
@@ -912,7 +957,7 @@ _EXTRA_CROSS = {("property", "catastrophe"): 0.25}
 __all__ = [
     "Stress", "SubRisk", "RegimeSpec", "SCRResult",
     "scale_mortality", "scale_longevity", "scale_lapse", "mass_lapse",
-    "catastrophe_mortality",
+    "scale_state_rate", "catastrophe_mortality",
     "scale_coverages", "scale_coverage_codes", "scale_annuity", "scale_expense",
     "dynamic_lapse_multiplier", "interest_with_dynamic_lapse",
     "shock_curve", "shock_spread", "KICSInterest",

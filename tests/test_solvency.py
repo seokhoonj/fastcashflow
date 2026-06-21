@@ -17,8 +17,9 @@ from fastcashflow.coverage import CalculationMethod
 from fastcashflow.engine import measure
 from fastcashflow.numerics import _cost_of_capital_ra
 from fastcashflow.curves import discount_monthly_curve
+from fastcashflow.state_model import StateModel, State, Transition
 
-from conftest import make_death_basis, PATTERNS
+from conftest import make_death_basis, PATTERNS, annual_from_monthly
 
 
 def _basis(**over):
@@ -704,3 +705,102 @@ def test_vfa_interest_scr_hand_calc():
     assert np.isclose(cap, dn - base)                        # the fall binds
     assert cap > 0.0
     assert sv.vfa_interest_scr(mp, basis, shift=0.02) > cap  # grows with the shift
+
+
+# ---------------------------------------------------------------------------
+# scale_state_rate -- a named state-machine transition-rate shock (Phase 1 of
+# the Solvency II disability sub-risk: Art. 153 recovery / inception shocks).
+# ---------------------------------------------------------------------------
+
+def _di_recovery_model() -> StateModel:
+    """A two-state disability-income model: active -> disabled (inception) and
+    disabled -> active (recovery)."""
+    return StateModel(states=(
+        State("active", pays_premium=True, transitions=(
+            Transition("mortality"),
+            Transition("waiver_incidence", to="disabled"),
+            Transition("lapse"))),
+        State("disabled", pays_periodic_benefit=True, sojourn_tracking_months=12,
+              transitions=(
+                  Transition("mortality"),
+                  Transition("disability_recovery", to="active",
+                             sojourn_dependent=True))),
+    ), seating=(0, 1, 1))
+
+
+def _di_recovery_basis(recovery_monthly: float) -> fcf.Basis:
+    return fcf.Basis(
+        mortality_annual=lambda s, a, d: np.full(d.shape, annual_from_monthly(0.001)),
+        lapse_annual=lambda s, a, d: np.full(d.shape, 0.0),
+        waiver_incidence_annual=lambda s, a, d: np.full(d.shape, 0.0),
+        disability_recovery_annual=lambda s, a, p, sd: np.full(
+            sd.shape, annual_from_monthly(recovery_monthly), dtype=float),
+        discount_annual=0.0, ra_confidence=0.5, mortality_cv=0.0, disability_cv=0.0,
+        state_model=_di_recovery_model(),
+        coverages=(fcf.CoverageRate(
+            "DEATH", lambda s, a, d: np.full(d.shape, annual_from_monthly(0.001))),),
+    )
+
+
+def _di_seated_disabled(term_months: int) -> fcf.ModelPoints:
+    return fcf.ModelPoints(
+        issue_age=np.array([45], dtype=np.int64),
+        benefits={"DEATH": np.array([0.0])},
+        premium=np.array([0.0]),
+        term_months=np.array([term_months], dtype=np.int64),
+        disability_income=np.array([1_000_000.0]),
+        state=np.array([1], dtype=np.int64),       # seated on disabled
+        calculation_methods=PATTERNS,
+    )
+
+
+def test_scale_state_rate_recovery_hand_calc():
+    """A -20% recovery shock on a 2-month seated-disabled DI contract. Monthly
+    mortality q = 0.001, base monthly recovery r = 0.05, disability income
+    DI = 1,000,000, no discount.
+
+      t = 0: disabled occ = 1.0  -> income = 1.0 * DI
+      step 0->1 (ordered decrements: mortality then recovery):
+             disabled survivor = (1 - q)(1 - r)
+      t = 1: income = (1 - q)(1 - r) * DI
+
+      BEL = DI * [1 + (1 - q)(1 - r)]
+
+    The shock scales the ANNUAL recovery by 0.80; the engine's monthly recovery
+    becomes r' = 1 - (1 - 0.80 * A_r)^(1/12), where A_r is the base annual rate.
+    Lower recovery -> the disabled stay on claim -> BEL rises."""
+    q, r0 = 0.001, 0.05
+    DI = 1_000_000.0
+    mp = _di_seated_disabled(2)
+    basis = _di_recovery_basis(r0)
+
+    base_bel = DI * (1.0 + (1.0 - q) * (1.0 - r0))
+    assert np.isclose(measure(mp, basis, full=False).bel[0], base_bel), \
+        measure(mp, basis, full=False).bel[0]
+
+    _, shocked = sv.scale_state_rate("disability_recovery", 0.80).apply(mp, basis)
+    a_r = annual_from_monthly(r0)
+    r1 = 1.0 - (1.0 - 0.80 * a_r) ** (1.0 / 12.0)        # engine monthly from shocked annual
+    shock_bel = DI * (1.0 + (1.0 - q) * (1.0 - r1))
+    assert np.isclose(measure(mp, shocked, full=False).bel[0], shock_bel), \
+        measure(mp, shocked, full=False).bel[0]
+
+    # recovery down -> liability up; the shock is a positive disability strain
+    assert shock_bel > base_bel
+    assert np.isclose(shock_bel - base_bel, DI * (1.0 - q) * (r0 - r1))
+
+
+def test_scale_state_rate_noop_when_rate_absent():
+    """A product without the named transition (the field is None) is unchanged --
+    the shock is a no-op, so a plain death book's BEL does not move."""
+    mp = _mp(term=24)
+    basis = _basis()
+    assert basis.disability_recovery_annual is None
+    _, shocked = sv.scale_state_rate("disability_recovery", 0.80).apply(mp, basis)
+    assert np.isclose(measure(mp, shocked, full=False).bel.sum(),
+                      measure(mp, basis, full=False).bel.sum())
+
+
+def test_scale_state_rate_rejects_unknown_rate():
+    with pytest.raises(ValueError, match="unknown state-machine rate"):
+        sv.scale_state_rate("not_a_rate", 0.8)
