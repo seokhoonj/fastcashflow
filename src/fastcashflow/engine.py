@@ -364,7 +364,8 @@ def _account_risk_adjustment(model_points, basis, proj, discount_monthly):
 
 
 def _measure_full(model_points: ModelPoints, basis: Basis, *,
-                  discount_monthly: FloatArray | None = None) -> GMMMeasurement:
+                  discount_monthly: FloatArray | None = None,
+                  lapse_scale: FloatArray | None = None) -> GMMMeasurement:
     """Full GMM measurement: BEL, RA and CSM rolled forward over time.
 
     Returns a :class:`GMMMeasurement` carrying both the ``(n_mp,)`` inception
@@ -379,7 +380,7 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
     carries no ``settlement_pattern``, so the settlement factor below (keyed on
     ``basis.discount_monthly``) is never reached together with an override.
     """
-    proj = project_cashflows(model_points, basis)
+    proj = project_cashflows(model_points, basis, lapse_scale=lapse_scale)
     mortality_cf, morbidity_cf = proj.mortality_cf, proj.morbidity_cf
     if discount_monthly is None:
         discount_monthly = discount_monthly_curve(basis, proj.n_time)

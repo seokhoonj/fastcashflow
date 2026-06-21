@@ -128,7 +128,17 @@ def moneyness_lapse_scale(model_points: ModelPoints, basis: Basis,
     year_start = np.arange(n_years) * 12                          # 0, 12, 24, ...
     av0 = np.asarray(model_points.account_value, dtype=np.float64)
     av_year = av0[:, None] * growth[:, None] ** year_start[None, :]   # (n_mp, n_years)
-    gmab = np.asarray(model_points.minimum_accumulation_benefit, dtype=np.float64)
+    return _moneyness_scale_from_av_year(
+        av_year, model_points.minimum_accumulation_benefit, sensitivity, floor, cap)
+
+
+def _moneyness_scale_from_av_year(av_year, gmab, sensitivity, floor, cap):
+    """The shared moneyness -> per-policy-year lapse factor: ``av_year / GMAB`` mapped
+    through :func:`moneyness_lapse_multiplier`, with a flat ``1.0`` where the GMAB is
+    absent (``<= 0``). ``av_year`` is the account value at each policy-year start --
+    the closed-form path for the variable-annuity case, the rolled account path for
+    the universal-life case."""
+    gmab = np.asarray(gmab, dtype=np.float64)
     has_g = gmab > 0.0
     safe_g = np.where(has_g, gmab, 1.0)[:, None]
     scale = moneyness_lapse_multiplier(av_year / safe_g, sensitivity,
@@ -773,10 +783,12 @@ def measure_vfa(
 
     ``lapse_sensitivity`` (default ``None`` -- a static lapse) turns on a dynamic
     lapse driven by the account-value moneyness: the lapse decrement is scaled by
-    :func:`moneyness_lapse_scale` (``lapse_sensitivity``, ``lapse_floor``,
-    ``lapse_cap``), which lifts surrenders when the GMAB is out-of-the-money and
-    lowers them when the floor bites. Supported on the closed-form
-    variable-annuity path only; an account-backed (universal-life) book raises.
+    the per-policy-year moneyness factor (``lapse_sensitivity`` the elasticity,
+    clamped to ``[lapse_floor, lapse_cap]``), which lifts surrenders when the GMAB is
+    out-of-the-money and lowers them when the floor bites. The factor keys on the
+    GMAB; both the closed-form variable-annuity path (the account value is the
+    closed-form growth path) and the account-backed universal-life path (the value
+    is read from the rolled account) are supported.
     """
     basis = _single_basis(basis, entry="measure_vfa")
     # Variable universal life: an account-backed (universal-life) book is
@@ -788,15 +800,26 @@ def measure_vfa(
     # variable-annuity product carries an account value too).
     from fastcashflow.engine import _measure_full, _portfolio_has_account
     if _portfolio_has_account(model_points, basis):
-        if lapse_sensitivity is not None:
-            raise NotImplementedError(
-                "lapse_sensitivity (moneyness dynamic lapse) is not supported on "
-                "the account-backed (universal-life) VFA path yet; it is "
-                "implemented on the closed-form variable-annuity path.")
         r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
         n_time = int(model_points.contract_boundary_months.max())
+        lapse_scale = None
+        if lapse_sensitivity is not None:
+            # Moneyness dynamic lapse on the universal-life path. Roll the account
+            # once (static lapse) to read its value path, resolve the per-policy-year
+            # moneyness factor against the GMAB, then re-measure with the scaled
+            # lapse. The account value is a per-policy level (independent of the
+            # decrement count), so the static-roll path is the right driver.
+            m0 = _measure_full(model_points, basis,
+                               discount_monthly=np.full(n_time, r_m))
+            n_years = (n_time + 11) // 12
+            year_start = np.minimum(np.arange(n_years) * 12, n_time)
+            av_year = m0.cashflows.account.av[:, year_start]
+            lapse_scale = _moneyness_scale_from_av_year(
+                av_year, model_points.minimum_accumulation_benefit,
+                lapse_sensitivity, lapse_floor, lapse_cap)
         m = _measure_full(model_points, basis,
-                          discount_monthly=np.full(n_time, r_m))
+                          discount_monthly=np.full(n_time, r_m),
+                          lapse_scale=lapse_scale)
         zeros = np.zeros_like(m.bel)  # UL has no asset-based variable fee
         if return_scenarios is None:
             # Deterministic: the BEL carries the guarantee's intrinsic value only.

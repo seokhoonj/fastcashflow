@@ -1274,9 +1274,10 @@ def test_measure_vfa_dynamic_lapse_integration():
         fcf.vfa.measure(no_g, basis).bel_path)
 
 
-def test_measure_vfa_dynamic_lapse_rejects_account_backed():
-    """The account-backed (universal-life) path does not carry the closed-form
-    moneyness lapse yet -- it raises rather than silently ignore the request."""
+def test_measure_vfa_dynamic_lapse_on_account_backed_ul():
+    """The moneyness dynamic lapse works on the account-backed (universal-life)
+    path too: the account value is read from the rolled account, the GMAB sets the
+    moneyness. A deep in-the-money GMAB lowers lapse, so more policies survive."""
     from fastcashflow import Basis, CalculationMethod, CoverageRate
     coi = 0.0015
     basis = Basis(
@@ -1289,12 +1290,16 @@ def test_measure_vfa_dynamic_lapse_rejects_account_backed():
         issue_age=np.array([40.0]), premium=np.array([500_000.0]),
         term_months=np.array([60]), account_value=np.array([1_000_000.0]),
         minimum_death_benefit=np.array([80_000_000.0]),
-        minimum_accumulation_benefit=np.array([0.0]),
+        minimum_accumulation_benefit=np.array([40_000_000.0]),   # deep ITM GMAB
         minimum_crediting_rate=np.array([0.0]), sex=np.array([0]),
         benefits={"DEATH": np.array([80_000_000.0])},
         calculation_methods={"DEATH": CalculationMethod.DEATH})
-    with pytest.raises(NotImplementedError, match="account-backed"):
-        fcf.vfa.measure(mp, basis, lapse_sensitivity=0.5)
+    static = fcf.vfa.measure(mp, basis, full=True)
+    null = fcf.vfa.measure(mp, basis, full=True, lapse_sensitivity=0.0)
+    dyn = fcf.vfa.measure(mp, basis, full=True, lapse_sensitivity=0.8)
+    assert np.allclose(null.cashflows.inforce, static.cashflows.inforce)   # 0 == static
+    # GMAB deep in-the-money -> moneyness < 1 -> less lapse -> more survivors.
+    assert dyn.cashflows.inforce[0, -1] > static.cashflows.inforce[0, -1]
 
 
 # ---------------------------------------------------------------------------

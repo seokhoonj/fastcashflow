@@ -731,9 +731,13 @@ def vfa_required_capital(
     ``property_codes`` are not accepted (a variable book carries no
     long-term-property coverage). Closed-form variable-annuity path only.
 
-    NOTE (v1 approximation, as on the GMM path): the mass-lapse variant's surrender
-    cash flow is the re-measured BEL change only; the t=0 surrender value (here the
-    account value) is not added back."""
+    NOTE on mass lapse: unlike the GMM path (where a surrender_value_curve adds the
+    t=0 surrender outflow), a variable book's surrender value IS the account value,
+    which is UNIT-FUNDED -- the unit fund pays it, not the entity's general account.
+    So no t=0 add-back is correct here: the mass-lapse capital is the re-measured
+    change in the entity NET BEL (the guarantee-excess + expense - fee leg), driven
+    by the lost variable-fee income and the changed guarantee cost, not by an
+    account-value outflow."""
     from fastcashflow._vfa import measure_vfa
     return required_capital(
         model_points, basis, regime=regime, catastrophe=catastrophe,

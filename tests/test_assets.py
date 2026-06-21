@@ -1074,3 +1074,40 @@ def test_dynamic_solvency_vfa_computes_its_own_static_from_a_regime():
     with pytest.raises(ValueError, match="regime="):
         assets.dynamic_solvency_vfa(pf, mp, basis, return_shock=0.0,
                                     lapse_sensitivity=0.0, haircut=0.0)
+
+
+def _ul_book():
+    """A universal-life (account-backed) VFA book + a backing bond portfolio."""
+    from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
+    coi = 0.0015
+    basis = Basis(
+        mortality_annual=0.004, lapse_annual=0.03, discount_annual=0.03,
+        ra_confidence=0.75, mortality_cv=0.1, investment_return=0.06,
+        coi_annual=coi, premium_load=0.08,
+        coverages=(CoverageRate("DEATH", coi, funds_from_account=True,
+                                pays_account_balance=True),))
+    mp = ModelPoints(
+        issue_age=np.array([40.0]), premium=np.array([500_000.0]),
+        term_months=np.array([60]), account_value=np.array([1_000_000.0]),
+        minimum_death_benefit=np.array([80_000_000.0]),
+        minimum_accumulation_benefit=np.array([40_000_000.0]),
+        minimum_crediting_rate=np.array([0.0]), sex=np.array([0]),
+        benefits={"DEATH": np.array([80_000_000.0])},
+        calculation_methods={"DEATH": CalculationMethod.DEATH})
+    pf = assets.AssetPortfolio(holdings=(
+        alm.Bond(face=2_000_000, coupon_rate=0.04, maturity_years=5, frequency=1),))
+    return pf, mp, basis
+
+
+def test_vfa_assess_solvency_supports_account_backed_ul():
+    """The VFA static assessment works on a universal-life account book: the SCR
+    modules re-measure the UL net BEL via measure_vfa, so no special path is needed.
+    The interest and equity guarantee modules are positive (the GMAB bites)."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _ul_book()
+    a = assets.vfa_assess_solvency(pf, mp, basis, regime=sv.KICS)
+    scr = sv.vfa_required_capital(mp, basis, regime=sv.KICS)
+    assert np.isclose(a.insurance_scr, scr.insurance_scr)
+    assert np.isclose(a.bel, scr.base_bel)
+    assert a.net_interest_scr > 0.0 and a.equity_scr > 0.0
+    assert np.isfinite(a.solvency_ratio)
