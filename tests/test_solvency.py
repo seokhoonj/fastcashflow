@@ -649,3 +649,35 @@ def test_required_capital_measure_fn_default_is_unchanged():
     b = sv.required_capital(mp, basis, regime=regime, measure_fn=measure)
     assert np.isclose(a.total_scr, b.total_scr)
     assert np.isclose(a.base_bel, b.base_bel)
+
+
+def test_vfa_equity_scr_hand_calc():
+    """The VFA net BEL's equity capital is the rise in the net BEL when the account
+    value is shocked down -- both the GMAB going in-the-money (guarantee cost up) and
+    the variable fee income falling. Reconciles to the re-measure, is monotone in the
+    shock, and -- with no fee and an out-of-the-money guarantee -- is zero."""
+    basis = make_death_basis(mortality_q=0.002, lapse_q=0.004, discount_annual=0.03,
+                             ra_confidence=0.75, investment_return=0.0, fund_fee=0.02)
+    mp = fcf.ModelPoints.single(40, 0.0, 120, account_value=1000.0,
+                                minimum_accumulation_benefit=1100.0,
+                                calculation_methods=PATTERNS)
+    base = float(fcf.vfa.measure(mp, basis, full=False).bel.sum())
+
+    cap = sv.vfa_equity_scr(mp, basis, equity_shock=0.39)
+    from dataclasses import replace
+    mp_s = replace(mp, account_value=mp.account_value * (1 - 0.39))
+    expected = max(0.0, float(fcf.vfa.measure(mp_s, basis, full=False).bel.sum()) - base)
+    assert np.isclose(cap, expected)
+    assert cap > 0.0                                         # AV drop -> ITM + less fee
+    assert np.isclose(sv.vfa_equity_scr(mp, basis, equity_shock=0.0), 0.0)
+    # Monotone in the shock.
+    assert sv.vfa_equity_scr(mp, basis, equity_shock=0.50) > cap
+
+    # No fee and an out-of-the-money guarantee (still OTM after the shock): neither
+    # leg moves the net BEL, so the equity capital is zero.
+    nofee = make_death_basis(mortality_q=0.002, lapse_q=0.004, discount_annual=0.03,
+                             ra_confidence=0.75, investment_return=0.0, fund_fee=0.0)
+    otm = fcf.ModelPoints.single(40, 0.0, 120, account_value=1000.0,
+                                 minimum_accumulation_benefit=300.0,
+                                 calculation_methods=PATTERNS)
+    assert np.isclose(sv.vfa_equity_scr(otm, nofee, equity_shock=0.39), 0.0)
