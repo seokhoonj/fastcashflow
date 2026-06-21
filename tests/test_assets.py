@@ -1050,3 +1050,26 @@ def test_vfa_assess_solvency_assembles_the_static_ratio():
     assert np.isclose(a.available_capital,
                       a.asset_portfolio_value - a.bel - a.risk_margin)
     assert np.isclose(a.solvency_ratio, a.available_capital / a.total_scr)
+
+
+def test_dynamic_solvency_vfa_computes_its_own_static_from_a_regime():
+    """Passing regime= makes dynamic_solvency_vfa compute the static assessment via
+    vfa_assess_solvency, then overlay the scenario interaction on it."""
+    import fastcashflow.solvency as sv
+    pf, mp, basis = _vfa_book()
+    static = assets.vfa_assess_solvency(pf, mp, basis, regime=sv.KICS)
+
+    d = assets.dynamic_solvency_vfa(
+        pf, mp, basis, regime=sv.KICS, return_shock=-0.30,
+        lapse_sensitivity=0.8, haircut=0.10)
+    assert d.static is not None
+    assert np.isclose(d.static_available_capital, static.available_capital)
+    assert np.isclose(d.total_scr, static.total_scr)
+    assert np.isclose(d.stressed_available_capital,
+                      static.available_capital - d.interaction.total_loss)
+    assert d.stressed_ratio < static.solvency_ratio          # the shock erodes it
+
+    # Neither a regime nor a supplied static position -> a clear error.
+    with pytest.raises(ValueError, match="regime="):
+        assets.dynamic_solvency_vfa(pf, mp, basis, return_shock=0.0,
+                                    lapse_sensitivity=0.0, haircut=0.0)

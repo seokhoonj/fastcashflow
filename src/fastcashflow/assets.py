@@ -1441,12 +1441,11 @@ class VFADynamicSolvency:
     ``stressed_available_capital`` is ``static_available_capital -
     interaction.total_loss`` and ``stressed_ratio`` is that over ``total_scr``.
 
-    Like ``DynamicSolvency`` this is a SCENARIO OVERLAY, not a re-derived SCR -- but
-    here the static position (``static_available_capital`` / ``total_scr``) is
-    SUPPLIED by the caller rather than computed by :func:`assess_solvency`, because
-    that static engine prices the liability through the GMM measure and does not yet
-    carry a variable book's guarantee-cost / expense / lapse SCR (a VFA-aware static
-    assessment is future work). This layer adds only the dynamic interaction the
+    Like ``DynamicSolvency`` this is a SCENARIO OVERLAY, not a re-derived SCR. The
+    static position (``static_available_capital`` / ``total_scr``) is computed by
+    :func:`vfa_assess_solvency` when a ``regime`` is passed (``static`` then carries
+    the full :class:`SolvencyAssessment`), or supplied directly by the caller
+    (``static`` is then ``None``). This layer adds only the dynamic interaction the
     static modules miss."""
 
     interaction: InteractionResult
@@ -1455,14 +1454,17 @@ class VFADynamicSolvency:
     total_scr: float
     stressed_available_capital: float
     stressed_ratio: float
+    static: SolvencyAssessment | None = None
 
 
 def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
-                         basis: Basis, *, static_available_capital: float,
-                         total_scr: float, return_shock: float,
+                         basis: Basis, *, return_shock: float,
                          lapse_sensitivity: float, haircut: float,
-                         reinvest_rate=0.0,
-                         opening_balance: float = 0.0) -> VFADynamicSolvency:
+                         reinvest_rate=0.0, opening_balance: float = 0.0,
+                         regime: RegimeSpec | None = None,
+                         static_available_capital: float | None = None,
+                         total_scr: float | None = None,
+                         **assess_kwargs) -> VFADynamicSolvency:
     """Layer a market-shock / moneyness-lapse scenario onto a variable book's
     coverage ratio.
 
@@ -1470,14 +1472,29 @@ def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     solvency view misses -- an immediate account-value shock ``return_shock`` moves
     the GMDB / GMAB in-the-money, the moneyness dynamic lapse (``lapse_sensitivity``)
     holds more policies on the guarantee, and the lifted guarantee-excess outflow is
-    funded as a forced seller (``haircut``). The total loss is taken off the
-    caller-supplied ``static_available_capital`` to give ``stressed_available_capital``
-    and a ``stressed_ratio`` over the (unchanged) ``total_scr``.
+    funded as a forced seller (``haircut``). The total loss is taken off the static
+    available capital to give ``stressed_available_capital`` and a ``stressed_ratio``
+    over the (unchanged) ``total_scr``.
 
-    The static position is an input (see :class:`VFADynamicSolvency`): supply it from
-    your VFA capital model. A null scenario (``return_shock = haircut = 0``,
-    ``lapse_sensitivity = 0``) leaves the ratio at ``static_available_capital /
-    total_scr``. Closed-form variable-annuity path only."""
+    The static position comes one of two ways: pass ``regime=`` (with optional
+    :func:`vfa_assess_solvency` keyword arguments -- ``tax_rate``,
+    ``guarantee_equity_shock``, ...) to COMPUTE it (the result's ``static`` then
+    carries the full :class:`SolvencyAssessment`), or supply
+    ``static_available_capital`` and ``total_scr`` directly (from your own capital
+    model). A null scenario (``return_shock = haircut = 0``, ``lapse_sensitivity =
+    0``) leaves the ratio at the static value. Closed-form variable-annuity path
+    only."""
+    static = None
+    if regime is not None:
+        static = vfa_assess_solvency(portfolio, model_points, basis, regime=regime,
+                                     **assess_kwargs)
+        static_available_capital = static.available_capital
+        total_scr = static.total_scr
+    elif static_available_capital is None or total_scr is None:
+        raise ValueError(
+            "dynamic_solvency_vfa needs either regime= (to compute the static "
+            "assessment) or both static_available_capital= and total_scr=.")
+
     interaction, liq = _interaction_vfa(
         portfolio, model_points, basis, return_shock=return_shock,
         lapse_sensitivity=lapse_sensitivity, haircut=haircut,
@@ -1490,7 +1507,8 @@ def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     return VFADynamicSolvency(
         interaction=interaction, liquidation=liq,
         static_available_capital=static_available_capital, total_scr=total_scr,
-        stressed_available_capital=stressed_ac, stressed_ratio=stressed_ratio)
+        stressed_available_capital=stressed_ac, stressed_ratio=stressed_ratio,
+        static=static)
 
 
 __all__ = [
