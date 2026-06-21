@@ -1,7 +1,7 @@
 """Time value of options and guarantees (TVOG) for VFA business.
 
 A direct-participation (VFA) contract may carry a *minimum guaranteed
-credited rate*: the account is credited ``max(return, guarantee)`` each
+crediting rate*: the account is credited ``max(return, guarantee)`` each
 period, so the entity funds the shortfall whenever the return falls below
 the guarantee.
 
