@@ -4,12 +4,17 @@ Phase A: the loss density (the mass-lapse own-funds strain per unit of excess
 lapse) and the excess-of-loss layer mechanics (attachment / detachment /
 capacity / recovery).
 """
+import dataclasses
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
 import fastcashflow as fcf
 from fastcashflow import mass_lapse_reinsurance as lre
 from fastcashflow import solvency as sv
+from fastcashflow import solvency_assessment as sa
+from fastcashflow import assets, alm
 from fastcashflow import ModelPoints
 from fastcashflow.engine import inforce_surrender_value, measure
 
@@ -284,6 +289,116 @@ def test_cedant_relief_total_composition():
     assert np.isclose(r.risk_margin_relief, r.risk_margin_gross - r.risk_margin_net)
     assert np.isclose(r.total_benefit, r.net_scr_benefit + r.risk_margin_relief)
     assert r.total_benefit > 0.0
+
+
+# ---------------------------------------------------------------------------
+# Cedant relief into the solvency ratio (assess_solvency(relief=))
+# ---------------------------------------------------------------------------
+
+def _solvency_book():
+    """A mass-biting liability book plus an asset portfolio backing it, so the
+    treaty relief can be wired through to the coverage ratio."""
+    mp, basis = _mass_biting_book()
+    portfolio = assets.AssetPortfolio(holdings=(
+        alm.Bond(2_000_000.0, 0.03, 10, 1, credit_rating="A"),
+        assets.Equity(500_000.0)))
+    return portfolio, mp, basis
+
+
+def test_relief_into_ratio_applies_module_deltas():
+    """assess_solvency(relief=) drops the insurance module by the diversified
+    lapse relief, adds the counterparty-default charge into the credit module,
+    and lowers the risk margin -- raising available capital and the ratio."""
+    portfolio, mp, basis = _solvency_book()
+    treaty = lre.LapseXL(0.15, 0.40)
+    pd = lre.CREDIT_QUALITY_STEP_PD[2]
+    r = lre.cedant_solvency_relief(mp, basis, treaty, regime=sv.SOLVENCY2,
+                                   reinsurer_pd=pd)
+    assert r.insurance_relief > 0.0                     # the treaty bites this book
+
+    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2)
+    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=r)
+
+    # the three module deltas (insurance down, credit up, risk margin down)
+    assert np.isclose(net.insurance_scr, base.insurance_scr - r.insurance_relief)
+    assert np.isclose(net.credit_scr, base.credit_scr + r.counterparty_default)
+    assert np.isclose(net.risk_margin, base.risk_margin - r.risk_margin_relief)
+    # lower risk margin frees an equal amount of available capital
+    assert np.isclose(net.available_capital,
+                      base.available_capital + r.risk_margin_relief)
+    # the market module is untouched by a liability-side treaty
+    assert np.isclose(net.market_module_scr, base.market_module_scr)
+    # net of the small counterparty add-back the ratio still improves
+    assert net.total_scr < base.total_scr
+    assert net.solvency_ratio > base.solvency_ratio
+
+
+def test_relief_into_ratio_assembly_is_self_consistent():
+    """The reported net modules re-assemble to the reported net total_scr and
+    ratio -- the relief flows through the same BSCR / operational / tax / ratio
+    path, not a side calculation."""
+    portfolio, mp, basis = _solvency_book()
+    r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
+                                   regime=sv.SOLVENCY2,
+                                   reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
+    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=r)
+
+    bscr = sa.aggregate_required_capital(
+        net.insurance_scr, net.market_module_scr, net.credit_scr, regime=sv.SOLVENCY2)
+    assert np.isclose(net.bscr, bscr)
+    assert np.isclose(net.basic_required_capital, net.bscr + net.operational_scr)
+    assert np.isclose(net.total_scr, net.basic_required_capital - net.tax_adjustment)
+    assert np.isclose(net.solvency_ratio, net.available_capital / net.total_scr)
+
+
+def test_relief_into_ratio_counterparty_charge_diversifies():
+    """The counterparty-default charge enters the BSCR through the top-level
+    correlation, so it raises required capital by LESS than the standalone charge
+    (the credit module diversifies with the life and market modules at 0.25)."""
+    portfolio, mp, basis = _solvency_book()
+    r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
+                                   regime=sv.SOLVENCY2,
+                                   reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
+    assert r.counterparty_default > 0.0
+    with_cpd = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=r)
+    without = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2,
+                                 relief=replace(r, counterparty_default=0.0))
+    # the charge bites the BSCR, but the correlation dampens it below par
+    assert 0.0 < with_cpd.bscr - without.bscr < r.counterparty_default
+
+
+def test_relief_zero_fields_is_noop():
+    """A relief object whose benefits are all zero leaves the assessment
+    unchanged -- the wiring touches nothing when there is no relief."""
+    portfolio, mp, basis = _solvency_book()
+    zero = lre.CedantSolvencyRelief(
+        loss_density=0.0, mass_gross_scr=0.0, mass_net_scr=0.0,
+        lapse_gross_scr=0.0, lapse_net_scr=0.0,
+        insurance_gross_scr=0.0, insurance_net_scr=0.0,
+        counterparty_default=0.0, risk_margin_gross=0.0, risk_margin_net=0.0)
+    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2)
+    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=zero)
+    # SolvencyAssessment uses identity equality (eq=False) -- compare by value
+    assert dataclasses.astuple(net) == dataclasses.astuple(base)
+
+
+def test_relief_exceeding_module_raises():
+    """A relief larger than the module it offsets (e.g. computed under a different
+    regime / basis) raises rather than silently flooring to zero and understating
+    the required capital."""
+    portfolio, mp, basis = _solvency_book()
+    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2)
+    impossible = lre.CedantSolvencyRelief(
+        loss_density=0.0, mass_gross_scr=0.0, mass_net_scr=0.0,
+        lapse_gross_scr=0.0, lapse_net_scr=0.0,
+        insurance_gross_scr=0.0, insurance_net_scr=0.0,
+        counterparty_default=0.0,
+        risk_margin_gross=0.0, risk_margin_net=0.0)
+    too_big = replace(impossible, insurance_gross_scr=base.insurance_scr * 2.0)
+    # insurance_relief = 2x the module -> impossible, must raise
+    assert too_big.insurance_relief > base.insurance_scr
+    with pytest.raises(ValueError, match="exceeds the module"):
+        sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=too_big)
 
 
 # ---------------------------------------------------------------------------

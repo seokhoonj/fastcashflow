@@ -12,8 +12,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:                       # annotation only -- avoids a runtime cycle
+    from fastcashflow._mass_lapse_reinsurance import CedantSolvencyRelief
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
@@ -822,12 +826,16 @@ class SolvencyAssessment:
     solvency_ratio: float
 
 
+_RELIEF_TOL = 1e-9   # float-noise band before a relief is deemed to exceed its module
+
+
 def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
                     basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
                     tax_recoverability_limit: float | None = None,
                     catastrophe: float = 0.0, property_codes=(),
                     general_insurance_scr: float = 0.0,
-                    interest_scenarios: KICSInterest | None = None) -> SolvencyAssessment:
+                    interest_scenarios: KICSInterest | None = None,
+                    relief: "CedantSolvencyRelief | None" = None) -> SolvencyAssessment:
     """Assemble the t=0 solvency ratio from the assets and the liability SCR.
 
     Runs :func:`~fastcashflow.required_capital` for the liability (insurance) SCR,
@@ -860,6 +868,24 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     fourth top-level module (table 3: life-vs-general 0, else 0.25); the life-only
     engine leaves it at 0.
 
+    ``relief`` (a :class:`~fastcashflow.mass_lapse_reinsurance.CedantSolvencyRelief`
+    from :func:`~fastcashflow.mass_lapse_reinsurance.cedant_solvency_relief`) folds
+    a mass-lapse reinsurance treaty into the ratio: the insurance module drops by
+    ``relief.insurance_relief`` (the diversified life-module lapse relief), the
+    counterparty-default charge ``relief.counterparty_default`` is added into the
+    credit module, and the risk margin falls by ``relief.risk_margin_relief``
+    (raising available capital). Compute the relief under the SAME ``regime`` (its
+    own ``required_capital`` run must match). Both default off (``None``). Because
+    the counterparty-default charge here enters the BSCR through the top-level
+    correlation (it diversifies with the life and market modules), the ratio
+    benefit can differ from the undiversified ``relief.net_scr_benefit``; the
+    insurance / credit modules and the risk margin reported are the post-treaty
+    (net) figures. Pricing the relief on a ``catastrophe`` / ``property_codes``
+    insurance module is a small approximation -- the relief delta is built on the
+    base life module (those default off, the common case). A relief that exceeds
+    the module it offsets (almost always a regime / basis mismatch) raises a
+    ``ValueError`` rather than flooring to zero and understating the SCR.
+
     Notes: K-ICS supplies no interest curves (its scenarios are caller-supplied),
     so the net interest component is zero here -- equity and property still apply.
     Credit, FX and concentration risk are calibrated for both regimes (K-ICS
@@ -869,7 +895,6 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     scr = required_capital(model_points, basis, regime=regime,
                            catastrophe=catastrophe, property_codes=property_codes)
     pv = asset_portfolio_value(portfolio, basis.discount_annual)
-    ac = available_capital(pv, scr.base_bel, scr.risk_margin)
 
     cal = _market_cal(regime)
     ni = _module_interest(portfolio, model_points, basis, regime, interest_scenarios)
@@ -884,6 +909,25 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     ins = scr.insurance_scr
     gen = max(0.0, general_insurance_scr)   # general (P&C) insurance, caller-supplied
     cr = credit_scr(portfolio, regime, basis.discount_annual)
+    rm = scr.risk_margin
+    if relief is not None:                   # mass-lapse reinsurance into the ratio
+        # A relief that exceeds the module it offsets is a caller error -- almost
+        # always a relief computed under a different regime / basis than this
+        # assessment. Raise loudly rather than silently flooring it to zero (which
+        # would understate the SCR with no diagnostic).
+        if (relief.insurance_relief > ins + _RELIEF_TOL
+                or relief.risk_margin_relief > rm + _RELIEF_TOL):
+            raise ValueError(
+                "relief exceeds the module it offsets -- the relief was likely "
+                "computed under a different regime / basis than this assessment "
+                f"(insurance_relief={relief.insurance_relief:.6g} vs "
+                f"insurance_scr={ins:.6g}; risk_margin_relief="
+                f"{relief.risk_margin_relief:.6g} vs risk_margin={rm:.6g}).")
+        ins = max(0.0, ins - relief.insurance_relief)        # diversified lapse relief
+        cr = cr + relief.counterparty_default                # reinsurer credit charge
+        rm = max(0.0, rm - relief.risk_margin_relief)        # lower technical provision
+    ac = available_capital(pv, scr.base_bel, rm)
+
     bscr = aggregate_required_capital(ins, market, cr, regime=regime,
                                       general_insurance=gen)   # table 3 (no operational)
 
@@ -902,7 +946,7 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     else:
         ratio = float("inf") if ac >= 0.0 else float("-inf")
     return SolvencyAssessment(
-        asset_portfolio_value=pv, bel=scr.base_bel, risk_margin=scr.risk_margin,
+        asset_portfolio_value=pv, bel=scr.base_bel, risk_margin=rm,
         available_capital=ac, insurance_scr=ins, general_insurance_scr=gen,
         net_interest_scr=ni,
         equity_scr=eq, property_scr=pr, fx_scr=fx, concentration_scr=conc,
