@@ -18,8 +18,10 @@ activated unchanged by it. The anchor facts, from dev/inforce-redesign-FINAL.md
   assembled from the parts alone: the disk side of the closing_inputs()
   chain.
 * Part rows concatenated over chunks equal the in-memory per-MP movement
-  row for row; lock_in_rate must be uniform across the whole book (v1
-  scalar), validated globally, not per chunk.
+  row for row. gmm.settle_stream carries a per-row (cohort-aware, Sec.
+  B72(b)) lock_in_rate -- each chunk's settle partitions by rate. The other
+  streams (vfa / paa / reinsurance) keep the v1 scalar contract: lock_in_rate
+  uniform across the whole book, validated globally (not per chunk).
 """
 from dataclasses import replace
 
@@ -374,19 +376,52 @@ def test_duplicate_state_mp_id_rejected(tmp_path):
                               period_months=12)
 
 
-def test_lock_in_rate_must_be_uniform_across_the_whole_book(tmp_path):
-    """v1 scalar lock-in: validated GLOBALLY (a per-chunk check would pass a
-    book whose rates differ only across chunks)."""
+def test_gmm_stream_cohort_aware_lock_in_matches_in_memory(tmp_path):
+    """gmm.settle_stream carries a per-row (cohort-aware) lock_in_rate: a book
+    whose rates differ across chunk boundaries (Sec. B72(b)) streams to the same
+    movement the in-memory gmm.settle (which partitions by rate) produces, and
+    each row's own rate rides onto the part for the next period's chain."""
     basis = _gmm_basis()
     mp, state = _gmm_book()
-    lock = np.full(mp.n_mp, 0.03)
-    lock[-1] = 0.04                     # different rate in the LAST row --
-    ip, cp, _ = _write_gmm_files(       # only a later chunk would see it
-        mp, state, tmp_path, combined=True, lock_override=lock)
-    with pytest.raises(NotImplementedError, match="lock_in_rate"):
-        fcf.gmm.settle_stream(ip, tmp_path / "out", basis, coverages=cp,
+    # alternating rates so every chunk straddles both cohorts
+    lock = np.where(np.arange(mp.n_mp) % 2 == 0, 0.03, 0.05)
+    state = replace(state, lock_in_rate=lock)
+    mv = fcf.gmm.settle(mp, state, basis, period_months=12)
+    ip, cp, _ = _write_gmm_files(mp, state, tmp_path, combined=True,
+                                 lock_override=lock)
+    out = tmp_path / "out"
+    n = fcf.gmm.settle_stream(ip, out, basis, coverages=cp,
                               calculation_methods=CM, period_months=12,
                               chunk_size=3)
+    assert n == mp.n_mp
+    df = _parts(out)
+    order = np.argsort(np.asarray(mp.mp_id).astype(str))
+    for name in _GMM_LINES:
+        np.testing.assert_allclose(df[name].to_numpy(),
+                                   getattr(mv, name)[order],
+                                   rtol=1e-12, err_msg=name)
+    # the per-row locked rate rides onto each part's state-chain column
+    np.testing.assert_allclose(df["lock_in_rate"].to_numpy(), lock[order],
+                               rtol=1e-12)
+
+
+def test_vfa_lock_in_rate_must_be_uniform_across_the_whole_book(tmp_path):
+    """The non-cohort-aware streams (vfa / paa / reinsurance) keep the v1 scalar
+    contract: a mixed lock_in_rate is rejected GLOBALLY (a per-chunk check would
+    pass a book whose rates differ only across chunks)."""
+    basis = _vfa_basis()
+    mp, state = _vfa_book()
+    ip, _ = _write_vfa_files(mp, state, tmp_path, combined=True)
+    # tweak the on-disk combined file so the last row carries a different rate
+    df = pl.read_parquet(ip)
+    lock = np.full(mp.n_mp, 0.0)
+    lock[-1] = 0.01                     # only a later chunk would see it
+    df = df.with_columns(pl.Series("lock_in_rate", lock))
+    df.write_parquet(ip)
+    with pytest.raises(NotImplementedError, match="lock_in_rate"):
+        fcf.vfa.settle_stream(ip, tmp_path / "out", basis,
+                              calculation_methods=CM, period_months=12,
+                              chunk_size=2)
 
 
 def test_rejects_existing_output_parts(tmp_path):

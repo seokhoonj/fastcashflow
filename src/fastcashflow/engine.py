@@ -1294,6 +1294,24 @@ def _partition_by_lock_in(fn, model_points, state, basis, *,
             out[f.name] = combined
         else:                                          # shared metadata (period, ...)
             out[f.name] = v
+    # ``lock_in_rate`` is genuinely per-MP in a cohort-aware book, not shared
+    # metadata: scatter each group's rate to its rows. The scalar-metadata
+    # branch above would echo only the first group's rate, which would corrupt
+    # the on-disk write arm's per-row column and the closing_inputs() chain that
+    # seeds the next period's settle (each row must carry forward its OWN
+    # locked-in rate, Sec. B72(b)).
+    if "lock_in_rate" in out:
+        lock_out = np.empty(n_mp, dtype=np.float64)
+        for g, idx in groups:
+            lock_out[idx] = g
+        out["lock_in_rate"] = lock_out
+    # The settle body stamps each group's own subset as ``model_points``; the
+    # scalar-metadata branch would echo only the first group's subset, leaving
+    # the reassembled movement's per-row chain columns (elapsed_months / count,
+    # via closing_inputs() and the write arm) shorter than its lines. Restore
+    # the full-book model points so the movement is internally consistent.
+    if "model_points" in out:
+        out["model_points"] = model_points
     return type(proto)(**out)
 
 

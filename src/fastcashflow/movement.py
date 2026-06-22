@@ -1997,7 +1997,11 @@ def _(movement: PAASettlementMovement, path, *, ids=None):
 def _(movement: GMMSettlementMovement, path, *, ids=None):
     n = movement.bel_closing.shape[0]
     cols = {name: getattr(movement, name) for name in _GMM_SETTLEMENT_LINES}
-    cols["lock_in_rate"] = np.full(n, movement.lock_in_rate)
+    # Scalar (shared) or per-row (cohort-aware, Sec. B72(b)) locked-in rate:
+    # broadcast handles both, so each row's own rate rides onto the part and
+    # seeds the next period's settle from disk.
+    cols["lock_in_rate"] = np.broadcast_to(
+        np.asarray(movement.lock_in_rate, dtype=np.float64), (n,))
     cols["measurement_basis"] = [movement.measurement_basis] * n
     # The closing-state chain columns ride only when the source model
     # points are stamped (the settle entries always stamp them); a

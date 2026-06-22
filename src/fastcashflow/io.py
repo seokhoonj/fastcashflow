@@ -2298,19 +2298,24 @@ _STATE_REQUIRED = ("mp_id", "elapsed_months", "count", "prior_csm",
                    "lock_in_rate")
 
 
-def _state_from_chunk(df, lock_in_rate: float) -> "InforceState":
+def _state_from_chunk(df, lock_in_rate: float | None) -> "InforceState":
     """Build the per-chunk :class:`InforceState` from a state-carrying frame
-    slice. ``lock_in_rate`` is the globally validated scalar -- the chunk's
-    own column is not re-read (uniformity was checked across the whole
-    file, the v1 scalar contract)."""
+    slice. A float ``lock_in_rate`` is the globally validated scalar -- the
+    chunk's own column is not re-read (uniformity was checked across the whole
+    file, the v1 scalar contract). ``None`` means a cohort-aware book (Sec.
+    B72(b)): the chunk's own per-row ``lock_in_rate`` column is carried instead,
+    so the downstream ``gmm.settle`` partitions by rate; no global uniformity
+    scan applies."""
     from fastcashflow.model_points import InforceState
 
+    lir = (df["lock_in_rate"].to_numpy().astype(np.float64)
+           if lock_in_rate is None else lock_in_rate)
     return InforceState(
         mp_id=df["mp_id"].to_numpy(),
         elapsed_months=df["elapsed_months"].to_numpy().astype(np.int64),
         count=df["count"].to_numpy().astype(np.float64),
         prior_csm=df["prior_csm"].to_numpy().astype(np.float64),
-        lock_in_rate=lock_in_rate,
+        lock_in_rate=lir,
         **_optional_state_columns(df),
     )
 
@@ -2326,6 +2331,7 @@ def _settle_stream_driver(
     build_mp,
     settle_fn,
     entry: str,
+    cohort_aware_lock_in: bool = False,
 ) -> int:
     """Shared out-of-core driver for the settlement stream.
 
@@ -2346,8 +2352,11 @@ def _settle_stream_driver(
 
     ``lock_in_rate`` must be uniform across the whole book (the v1 scalar
     contract) -- validated globally, since a per-chunk check would pass a
-    book whose rates differ only across chunks. Returns the number of model
-    points processed.
+    book whose rates differ only across chunks. ``cohort_aware_lock_in``
+    lifts that restriction (only ``gmm.settle`` partitions by rate, Sec.
+    B72(b)): the per-chunk state carries its own per-row ``lock_in_rate``
+    column and ``settle_fn`` settles each rate cohort -- the global scan is
+    skipped. Returns the number of model points processed.
     """
     from fastcashflow.model_points import apply_inforce_state
 
@@ -2416,18 +2425,24 @@ def _settle_stream_driver(
             )
         lock_scan = state_scan
 
-    # v1 scalar lock-in, validated across the WHOLE book (the in-memory
-    # readers check the same thing per file).
-    locks = (lock_scan.select(pl.col("lock_in_rate").unique())
-             .collect()["lock_in_rate"].to_numpy())
-    if locks.size > 1:
-        raise NotImplementedError(
-            f"{entry}: lock_in_rate must be uniform across rows in v1 "
-            f"(found {locks.size} distinct values, e.g. "
-            f"{np.sort(locks)[:3].tolist()}); per-MP (cohort-aware) lock-in "
-            "rates are a future extension"
-        )
-    lock = float(locks[0]) if locks.size else 0.0
+    if cohort_aware_lock_in:
+        # The per-chunk state carries its own per-row lock_in_rate column;
+        # gmm.settle partitions each chunk by rate (Sec. B72(b)). No global
+        # uniformity scan -- a mixed book is the supported case.
+        lock = None
+    else:
+        # v1 scalar lock-in, validated across the WHOLE book (the in-memory
+        # readers check the same thing per file).
+        locks = (lock_scan.select(pl.col("lock_in_rate").unique())
+                 .collect()["lock_in_rate"].to_numpy())
+        if locks.size > 1:
+            raise NotImplementedError(
+                f"{entry}: lock_in_rate must be uniform across rows in v1 "
+                f"(found {locks.size} distinct values, e.g. "
+                f"{np.sort(locks)[:3].tolist()}); per-MP (cohort-aware) lock-in "
+                "rates are a future extension"
+            )
+        lock = float(locks[0]) if locks.size else 0.0
 
     processed = 0
     for part, offset in enumerate(range(0, n_total, chunk_size)):
@@ -2496,8 +2511,11 @@ def settle_stream(
       like a duplicate policies ``mp_id``.
 
     ``coverages`` is the per-contract coverage parquet (required, as in
-    :func:`~fastcashflow.gmm.measure_stream`); ``lock_in_rate`` must be
-    uniform across the whole book (v1 scalar, validated globally).
+    :func:`~fastcashflow.gmm.measure_stream`). ``lock_in_rate`` may vary by
+    row -- a cohort-aware book whose issue cohorts / GoCs locked in different
+    inception rates (Sec. B72(b)): each chunk's settle partitions by rate, so
+    the streamed close equals the in-memory :func:`~fastcashflow.gmm.settle`
+    per contract.
 
     **Chaining on disk**: each part carries the closing-state columns --
     ``count``, ``lock_in_rate``, ``elapsed_months`` and the closing
@@ -2519,6 +2537,7 @@ def settle_stream(
         settle_fn=lambda mp, st: settle(mp, st, basis,
                                         period_months=period_months),
         entry="gmm.settle_stream",
+        cohort_aware_lock_in=True,
     )
 
 

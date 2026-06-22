@@ -613,11 +613,40 @@ def test_settle_cohort_aware_lock_in_partitions():
         v = getattr(mixed, f.name)
         if isinstance(v, np.ndarray) and v.shape == (2,):
             n_checked += 1
-            assert np.allclose(v, [getattr(a0, f.name)[0], getattr(a1, f.name)[0]],
+            # np.ravel so the per-cohort scalar fields (lock_in_rate) compare
+            # alongside the per-MP movement lines
+            assert np.allclose(v, [np.ravel(getattr(a0, f.name))[0],
+                                   np.ravel(getattr(a1, f.name))[0]],
                                equal_nan=True), f.name
     assert n_checked > 10                                  # the whole movement, not one line
     # the locked-in rate genuinely differs the accretion between the two cohorts
     assert not np.isclose(mixed.csm_accretion[0], mixed.csm_accretion[1])
+    # lock_in_rate is carried per-row (cohort-aware), seeding the next period's
+    # chain with each row's own rate
+    assert np.allclose(mixed.lock_in_rate, [0.03, 0.05])
+
+
+def test_settle_cohort_aware_closing_inputs_chains_per_row():
+    """closing_inputs() on a mixed-rate movement carries each row's OWN locked-in
+    rate (and the full-book model points) forward, so chaining a second period
+    equals chaining each cohort on its own."""
+    from dataclasses import replace
+    basis = _basis()
+    mp, state = _book(basis, em_open=12, period=6, n=2)
+    state = replace(state, lock_in_rate=np.array([0.03, 0.05]))
+    first = settle(mp, state, basis, period_months=6)
+    mp_mid, state_mid = first.closing_inputs()
+    # the per-row locked rate and the full-book model points survive the chain
+    assert np.allclose(state_mid.lock_in_rate, [0.03, 0.05])
+    assert mp_mid.n_mp == 2
+    assert state_mid.prior_csm.shape == (2,)
+    # oracle: each row's chain equals that cohort settled alone end to end
+    for row, rate in ((0, 0.03), (1, 0.05)):
+        mp1, s1 = _book(basis, em_open=12, period=6, n=1)
+        f1 = settle(mp1, replace(s1, lock_in_rate=rate), basis, period_months=6)
+        _, sm1 = f1.closing_inputs()
+        assert np.isclose(state_mid.prior_csm[row], sm1.prior_csm[0])
+        assert np.isclose(state_mid.lock_in_rate[row], rate)
 
 
 def test_settle_uniform_lock_in_array_equals_scalar():
