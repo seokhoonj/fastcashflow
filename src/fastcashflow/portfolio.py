@@ -547,7 +547,7 @@ def _model_segments(sub_router, sub_mp):
 
 
 def _measure_model_segmented(sub_mp, sub_router, model, *, full=True,
-                             chunk_size=_CHUNK_SIZE):
+                             chunk_size=_CHUNK_SIZE, return_scenarios=None):
     """Measure one model's partition that spans several routing segments.
 
     ``measure_paa`` / ``measure_vfa`` take a single :class:`Basis`, so the
@@ -561,17 +561,33 @@ def _measure_model_segmented(sub_mp, sub_router, model, *, full=True,
     fused kernel, so a block still builds dense transients) rather than
     ``O(n_mp x n_time)``. The result is stamped with ``sub_mp`` so ``group(...)``
     resolves the axes, as ``fcf.gmm.measure`` does.
+
+    ``return_scenarios`` (VFA only -- the guarantee time value) is forwarded to
+    ``measure_vfa``. When given, the headline path is NOT chunked: the scenario
+    matrix is ``(n_scenarios, horizon)`` and ``measure_vfa`` validates its width
+    against each segment's horizon, so a short row-block would mismatch. The
+    per-model-point time value is additive, and the headline result still drops
+    trajectories, so each segment is measured in a single ``full=False`` call --
+    peak memory ``O(n_seg_mp x n_scenarios)`` for the scenario pass rather than
+    ``O(n_mp x n_time)`` trajectories.
     """
     measure_one, stitch_full, scatter_headline = _MODEL_EXEC[model]
     segs = _model_segments(sub_router, sub_mp)
+    extra = {} if return_scenarios is None else {"return_scenarios": return_scenarios}
     if full:
         if len(segs) == 1 and segs[0][1].size == sub_mp.n_mp:
             # One segment over the whole partition -- measure directly, no
             # re-scatter (measure_one already stamps model_points).
-            return measure_one(sub_mp, segs[0][0], full=True)
-        sub_results = [(idx, measure_one(sub_mp.subset(idx), basis, full=True))
+            return measure_one(sub_mp, segs[0][0], full=True, **extra)
+        sub_results = [(idx, measure_one(sub_mp.subset(idx), basis, full=True, **extra))
                        for basis, idx in segs]
         return replace(stitch_full(sub_mp.n_mp, sub_results), model_points=sub_mp)
+    if return_scenarios is not None:
+        # Scenario pass: measure each segment in one block (the scenario horizon
+        # must match the segment horizon, and the per-MP time value is additive).
+        results = [(idx, measure_one(sub_mp.subset(idx), basis, full=False, **extra))
+                   for basis, idx in segs]
+        return replace(scatter_headline(sub_mp.n_mp, results), model_points=sub_mp)
     # Headline path -- chunk within each segment to bound peak memory.
     results = []
     for basis, idx in segs:
@@ -584,7 +600,8 @@ def _measure_model_segmented(sub_mp, sub_router, model, *, full=True,
 
 def measure(model_points: ModelPoints, basis, *, full: bool = True,
             backend: str = "cpu",
-            chunk_size: int = _CHUNK_SIZE) -> PortfolioMeasurement:
+            chunk_size: int = _CHUNK_SIZE,
+            return_scenarios=None) -> PortfolioMeasurement:
     """Measure a mixed-model portfolio in one call.
 
     ``basis`` must be a :class:`~fastcashflow.basis.BasisRouter` whose segments
@@ -603,9 +620,18 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     ``full=True``. ``full=True`` keeps every trajectory (and is memory-bound).
 
     Each model's rows are routed to its own kernel and kept in a separate slot
-    of the result. A non-GMM row is never silently measured as GMM. Per-segment
-    VFA return scenarios (the guarantee time value) are a future extension --
-    the mixed path measures the VFA intrinsic value (deterministic) only.
+    of the result. A non-GMM row is never silently measured as GMM.
+
+    ``return_scenarios`` -- an ``(n_scenarios, horizon)`` array of monthly
+    underlying-items returns -- prices the guarantee time value (TVOG) of the
+    VFA partition, exactly as ``fcf.vfa.measure(..., return_scenarios=...)``
+    does for a single book; it is forwarded only to the VFA slot (GMM / PAA
+    carry no return guarantee). It is an error to pass it for a portfolio with
+    no VFA rows. When supplied, the VFA partition is measured without chunking
+    (the scenario horizon must match the segment horizon; the per-model-point
+    time value is additive), so ``chunk_size`` does not bound the VFA scenario
+    pass. Omitted (the default), the mixed path measures the VFA intrinsic value
+    (deterministic) only.
 
     When the router declares a single measurement model the model partition is a
     no-op, so the whole book routes straight to that model -- no per-row
@@ -630,12 +656,17 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
         # router's *declarations*, not the rows present, so a multi-model router
         # whose rows are currently one model still takes the partition path below.
         (model,) = declared
+        if return_scenarios is not None and model != "VFA":
+            raise ValueError(
+                "return_scenarios (the guarantee time value) applies to the VFA "
+                f"partition; this portfolio declares only {model}")
         index = np.arange(model_points.n_mp, dtype=np.int64)
         if model == "GMM":
             meas = _measure_gmm(model_points, basis, full=full, backend=backend)
         else:
             meas = _measure_model_segmented(
-                model_points, basis, model, full=full, chunk_size=chunk_size)
+                model_points, basis, model, full=full, chunk_size=chunk_size,
+                return_scenarios=return_scenarios if model == "VFA" else None)
         return PortfolioMeasurement(
             model_points=model_points,
             **{model.lower(): ModelMeasurement(index=index, measurement=meas)})
@@ -644,6 +675,10 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     if covered != model_points.n_mp:                  # factorisation must be total
         raise ValueError(
             f"model partition covers {covered} of {model_points.n_mp} rows")
+    if return_scenarios is not None and parts["VFA"].size == 0:
+        raise ValueError(
+            "return_scenarios (the guarantee time value) applies to the VFA "
+            "partition; this portfolio has no VFA rows")
     slots = {}
     gmm_idx = parts["GMM"]
     if gmm_idx.size:
@@ -655,7 +690,8 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
         if idx.size:
             meas = _measure_model_segmented(
                 model_points.subset(idx), _submodel_router(basis, model),
-                model, full=full, chunk_size=chunk_size)
+                model, full=full, chunk_size=chunk_size,
+                return_scenarios=return_scenarios if model == "VFA" else None)
             slots[model.lower()] = ModelMeasurement(index=idx, measurement=meas)
     return PortfolioMeasurement(model_points=model_points, **slots)
 

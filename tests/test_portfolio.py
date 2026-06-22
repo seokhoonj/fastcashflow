@@ -266,6 +266,118 @@ def test_portfolio_measures_all_three_models_in_one_call():
 
 
 # ---------------------------------------------------------------------------
+# return_scenarios: the guarantee time value (TVOG) reaches the VFA partition
+# of a mixed portfolio, exactly as fcf.vfa.measure does for a single book.
+# ---------------------------------------------------------------------------
+def _tvog_scenarios(n_scen=6, n_time=60, investment_return=0.04):
+    """A deterministic non-flat set of monthly underlying-items returns -- the
+    central monthly return plus a smooth per-scenario bump so the floor time
+    value is non-zero (a flat set would add no TVOG)."""
+    r_m = (1.0 + investment_return) ** (1.0 / 12.0) - 1.0
+    bumps = 0.03 * np.cos(np.outer(np.arange(1, n_scen + 1),
+                                   np.linspace(0.0, 3.0, n_time)))
+    return r_m + bumps
+
+
+def _mixed_gmm_vfa_router():
+    return BasisRouter(
+        {("G", "GA"): _flat_basis(),
+         ("V", "GA"): _flat_basis(investment_return=0.04)},
+        measurement_models={("V", "GA"): "VFA"})
+
+
+def _mixed_gmm_vfa_mp():
+    # Rows 0 (GMM) + 1, 2 (VFA, with GMDB/GMAB floors above the account so the
+    # guarantee put has time value). Non-VFA rows carry zero floors.
+    return ModelPoints(
+        issue_age=np.full(3, 40), premium=np.zeros(3),
+        term_months=np.full(3, 60), benefits={"DEATH": np.full(3, 1e4)},
+        account_value=np.array([0.0, 1e6, 1e6]),
+        minimum_death_benefit=np.array([0.0, 1.1e6, 1.1e6]),
+        minimum_accumulation_benefit=np.array([0.0, 1.1e6, 1.1e6]),
+        product=np.array(["G", "V", "V"]),
+        channel=np.array(["GA", "GA", "GA"]),
+        calculation_methods=PATTERNS)
+
+
+def test_portfolio_vfa_return_scenarios_match_standalone():
+    """return_scenarios prices the VFA partition's guarantee time value, and the
+    VFA slot is byte-identical to vfa.measure on those rows with the same
+    scenarios (routing is a numeric no-op). The scenarios bite (time value != 0),
+    and the GMM slot is untouched."""
+    router, mp = _mixed_gmm_vfa_router(), _mixed_gmm_vfa_mp()
+    scen = _tvog_scenarios(investment_return=0.04)
+    pm = measure(mp, router, return_scenarios=scen)
+    assert pm.vfa.index.tolist() == [1, 2]
+    ref = measure_vfa(mp.subset([1, 2]), _flat_basis(investment_return=0.04),
+                      return_scenarios=scen)
+    assert np.allclose(pm.vfa.measurement.time_value, ref.time_value)
+    assert np.allclose(pm.vfa.measurement.csm, ref.csm)
+    assert np.allclose(pm.vfa.measurement.bel, ref.bel)
+    assert np.any(np.abs(pm.vfa.measurement.time_value) > 1e-6)   # scenarios bite
+    # The GMM slot carries no return guarantee -- identical with or without scen.
+    base = measure(mp, router)
+    assert np.allclose(pm.gmm.measurement.bel, base.gmm.measurement.bel)
+    assert np.allclose(pm.gmm.measurement.csm, base.gmm.measurement.csm)
+
+
+def test_portfolio_vfa_return_scenarios_headline_matches_full():
+    """The headline (full=False) VFA scenario pass -- measured in one block, not
+    chunked -- gives the same time value / csm as the full pass."""
+    router, mp = _mixed_gmm_vfa_router(), _mixed_gmm_vfa_mp()
+    scen = _tvog_scenarios(investment_return=0.04)
+    full = measure(mp, router, return_scenarios=scen, full=True)
+    head = measure(mp, router, return_scenarios=scen, full=False, chunk_size=1)
+    assert np.allclose(head.vfa.measurement.time_value,
+                       full.vfa.measurement.time_value)
+    assert np.allclose(head.vfa.measurement.csm, full.vfa.measurement.csm)
+
+
+def test_portfolio_vfa_flat_scenarios_add_no_tvog():
+    """A flat scenario set adds no time value -- the VFA slot matches the
+    deterministic (no-scenario) mixed measurement."""
+    router, mp = _mixed_gmm_vfa_router(), _mixed_gmm_vfa_mp()
+    r_m = 1.04 ** (1.0 / 12.0) - 1.0
+    flat = np.full((5, 60), r_m)
+    pm = measure(mp, router, return_scenarios=flat)
+    base = measure(mp, router)
+    assert np.allclose(pm.vfa.measurement.time_value, 0.0, atol=1e-6)
+    assert np.allclose(pm.vfa.measurement.csm, base.vfa.measurement.csm)
+
+
+def test_portfolio_all_vfa_return_scenarios_single_declared():
+    """The single-declared-model fast path (whole book is VFA) also forwards
+    return_scenarios."""
+    router = BasisRouter(
+        {("V", "GA"): _flat_basis(investment_return=0.04)},
+        measurement_models={("V", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(2, 40), premium=np.zeros(2), term_months=np.full(2, 60),
+        account_value=np.full(2, 1e6),
+        minimum_death_benefit=np.full(2, 1.1e6),
+        minimum_accumulation_benefit=np.full(2, 1.1e6),
+        product=np.array(["V", "V"]), channel=np.array(["GA", "GA"]),
+        calculation_methods=PATTERNS)
+    scen = _tvog_scenarios(investment_return=0.04)
+    pm = measure(mp, router, return_scenarios=scen)
+    ref = measure_vfa(mp, _flat_basis(investment_return=0.04), return_scenarios=scen)
+    assert np.allclose(pm.vfa.measurement.time_value, ref.time_value)
+    assert np.allclose(pm.vfa.measurement.csm, ref.csm)
+
+
+def test_portfolio_return_scenarios_rejected_without_vfa():
+    """return_scenarios on a portfolio with no VFA rows is an error -- GMM / PAA
+    carry no return guarantee."""
+    router = BasisRouter(
+        {("G", "GA"): _flat_basis(), ("P", "GA"): _flat_basis()},
+        measurement_models={("P", "GA"): "PAA"})
+    mp = _mp(["G", "P"], ["GA", "GA"])
+    scen = _tvog_scenarios()
+    with pytest.raises(ValueError, match="VFA"):
+        measure(mp, router, return_scenarios=scen)
+
+
+# ---------------------------------------------------------------------------
 # P-5a aggregation contract: loss_component_total + summary (no cross-model
 # pooling of figures that mean different things)
 # ---------------------------------------------------------------------------
