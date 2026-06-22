@@ -75,7 +75,7 @@ per = alm.bond_duration(alm.Bond(100.0, 0.03, 15, 1), 0.03).dv01
 port = fcf.AssetPortfolio(holdings=(alm.Bond(dv01 / per * 100.0, 0.03, 15, 1),
                                     fcf.Cash(6_000_000.0), fcf.Equity(2_000_000.0)))
 
-a = fcf.assess_solvency(port, mp, basis, regime=fcf.SOLVENCY2)
+a = fcf.assess_solvency(port, mp, basis, regime=fcf.solvency.SII)
 print(f"  available capital      = {a.available_capital:>15,.0f}")
 print(f"  required capital (SCR) = {a.total_scr:>15,.0f}")
 print(f"    insurance risk       = {a.insurance_scr:>15,.0f}")
@@ -114,8 +114,8 @@ ins, mkt, cr, op = 11_628_115, 34_552_189, 4_166_014, 1_083_844   # 공시 모�
 tax, other = 11_153_682, 2_737_202                                # 법인세조정 / 기타요구자본
 avail = 65_740_200                                                # 지급여력금액 (가용자본)
 
-basic = fcf.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS, operational=op)
-div = (ins + mkt + cr) - fcf.aggregate_required_capital(ins, mkt, cr, regime=fcf.KICS)
+basic = fcf.aggregate_required_capital(ins, mkt, cr, regime=fcf.solvency.KICS, operational=op)
+div = (ins + mkt + cr) - fcf.aggregate_required_capital(ins, mkt, cr, regime=fcf.solvency.KICS)
 total = basic - tax + other                                       # 기본 - 법인세 + 기타
 print(f"basic required capital = {basic:>14,.0f}")
 print(f"  diversification      = {div:>14,.0f}")

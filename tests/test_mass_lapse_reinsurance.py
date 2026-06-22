@@ -240,7 +240,7 @@ def test_cedant_relief_lapse_net_floored_by_next_leg():
     'lapse up/down may bite instead' effect."""
     mp, basis = _mass_biting_book()
     r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
-                                   regime=sv.SOLVENCY2,
+                                   regime=sv.SII,
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
     # mass is the gross biting leg; net mass is below the up/down floor
     assert np.isclose(r.lapse_gross_scr, r.mass_gross_scr)
@@ -254,11 +254,11 @@ def test_cedant_relief_reaggregates_life_module():
     net lapse capital (the other sub-risks from one required_capital run)."""
     mp, basis = _mass_biting_book()
     treaty = lre.LapseXL(0.15, 0.40)
-    r = lre.cedant_solvency_relief(mp, basis, treaty, regime=sv.SOLVENCY2,
+    r = lre.cedant_solvency_relief(mp, basis, treaty, regime=sv.SII,
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
-    caps = dict(sv.required_capital(mp, basis, regime=sv.SOLVENCY2).sub_risk_capital)
-    exp_gross = sv.aggregate({**caps, "lapse": r.lapse_gross_scr}, sv.SOLVENCY2)
-    exp_net = sv.aggregate({**caps, "lapse": r.lapse_net_scr}, sv.SOLVENCY2)
+    caps = dict(sv.required_capital(mp, basis, regime=sv.SII).sub_risk_capital)
+    exp_gross = sv.aggregate({**caps, "lapse": r.lapse_gross_scr}, sv.SII)
+    exp_net = sv.aggregate({**caps, "lapse": r.lapse_net_scr}, sv.SII)
     assert np.isclose(r.insurance_gross_scr, exp_gross)
     assert np.isclose(r.insurance_net_scr, exp_net)
     # diversification: the module relief does not exceed the standalone lapse relief
@@ -271,7 +271,7 @@ def test_cedant_relief_counterparty_default_on_module_relief():
     mp, basis = _mass_biting_book()
     pd = lre.CREDIT_QUALITY_STEP_PD[2]
     r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
-                                   regime=sv.SOLVENCY2, reinsurer_pd=pd)
+                                   regime=sv.SII, reinsurer_pd=pd)
     assert np.isclose(
         r.counterparty_default,
         lre.counterparty_default_scr(0.0, r.insurance_relief, pd))
@@ -283,7 +283,7 @@ def test_cedant_relief_total_composition():
     adds the risk-margin relief."""
     mp, basis = _mass_biting_book()
     r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
-                                   regime=sv.SOLVENCY2,
+                                   regime=sv.SII,
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
     assert np.isclose(r.net_scr_benefit, r.insurance_relief - r.counterparty_default)
     assert np.isclose(r.risk_margin_relief, r.risk_margin_gross - r.risk_margin_net)
@@ -312,12 +312,12 @@ def test_relief_into_ratio_applies_module_deltas():
     portfolio, mp, basis = _solvency_book()
     treaty = lre.LapseXL(0.15, 0.40)
     pd = lre.CREDIT_QUALITY_STEP_PD[2]
-    r = lre.cedant_solvency_relief(mp, basis, treaty, regime=sv.SOLVENCY2,
+    r = lre.cedant_solvency_relief(mp, basis, treaty, regime=sv.SII,
                                    reinsurer_pd=pd)
     assert r.insurance_relief > 0.0                     # the treaty bites this book
 
-    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2)
-    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=r)
+    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII)
+    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=r)
 
     # the three module deltas (insurance down, credit up, risk margin down)
     assert np.isclose(net.insurance_scr, base.insurance_scr - r.insurance_relief)
@@ -339,12 +339,12 @@ def test_relief_into_ratio_assembly_is_self_consistent():
     path, not a side calculation."""
     portfolio, mp, basis = _solvency_book()
     r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
-                                   regime=sv.SOLVENCY2,
+                                   regime=sv.SII,
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
-    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=r)
+    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=r)
 
     bscr = sa.aggregate_required_capital(
-        net.insurance_scr, net.market_module_scr, net.credit_scr, regime=sv.SOLVENCY2)
+        net.insurance_scr, net.market_module_scr, net.credit_scr, regime=sv.SII)
     assert np.isclose(net.bscr, bscr)
     assert np.isclose(net.basic_required_capital, net.bscr + net.operational_scr)
     assert np.isclose(net.total_scr, net.basic_required_capital - net.tax_adjustment)
@@ -357,11 +357,11 @@ def test_relief_into_ratio_counterparty_charge_diversifies():
     (the credit module diversifies with the life and market modules at 0.25)."""
     portfolio, mp, basis = _solvency_book()
     r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
-                                   regime=sv.SOLVENCY2,
+                                   regime=sv.SII,
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
     assert r.counterparty_default > 0.0
-    with_cpd = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=r)
-    without = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2,
+    with_cpd = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=r)
+    without = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII,
                                  relief=replace(r, counterparty_default=0.0))
     # the charge bites the BSCR, but the correlation dampens it below par
     assert 0.0 < with_cpd.bscr - without.bscr < r.counterparty_default
@@ -376,8 +376,8 @@ def test_relief_zero_fields_is_noop():
         lapse_gross_scr=0.0, lapse_net_scr=0.0,
         insurance_gross_scr=0.0, insurance_net_scr=0.0,
         counterparty_default=0.0, risk_margin_gross=0.0, risk_margin_net=0.0)
-    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2)
-    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=zero)
+    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII)
+    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=zero)
     # SolvencyAssessment uses identity equality (eq=False) -- compare by value
     assert dataclasses.astuple(net) == dataclasses.astuple(base)
 
@@ -387,7 +387,7 @@ def test_relief_exceeding_module_raises():
     regime / basis) raises rather than silently flooring to zero and understating
     the required capital."""
     portfolio, mp, basis = _solvency_book()
-    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2)
+    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII)
     impossible = lre.CedantSolvencyRelief(
         loss_density=0.0, mass_gross_scr=0.0, mass_net_scr=0.0,
         lapse_gross_scr=0.0, lapse_net_scr=0.0,
@@ -398,7 +398,7 @@ def test_relief_exceeding_module_raises():
     # insurance_relief = 2x the module -> impossible, must raise
     assert too_big.insurance_relief > base.insurance_scr
     with pytest.raises(ValueError, match="exceeds the module"):
-        sa.assess_solvency(portfolio, mp, basis, regime=sv.SOLVENCY2, relief=too_big)
+        sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=too_big)
 
 
 # ---------------------------------------------------------------------------
@@ -590,7 +590,7 @@ def test_measurement_period_validation():
 
 
 @pytest.mark.parametrize("regime, regime_shock", [
-    (sv.SOLVENCY2, 0.40),                         # DR Art 142(6)(b)
+    (sv.SII, 0.40),                         # DR Art 142(6)(b)
     (sv.KICS, 0.30),                              # K-ICS handbook
 ])
 def test_cedant_relief_uses_regime_mass_lapse_shock(regime, regime_shock):
@@ -636,7 +636,7 @@ def test_cedant_relief_zero_when_updown_dominates():
         surrender_value_curve=np.full(121, 80_000.0),
         surrender_value_basis="amount_per_policy")
     r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
-                                   regime=sv.SOLVENCY2,
+                                   regime=sv.SII,
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
     assert r.lapse_gross_scr > r.mass_gross_scr        # up/down is the biting leg
     assert np.isclose(r.lapse_relief, 0.0)
@@ -719,7 +719,7 @@ def test_report_runs_and_is_ascii():
     import io
     mp, basis = _mass_biting_book()
     buf = io.StringIO()
-    lre.report(mp, basis, lre.LapseXL(0.15, 0.40), regime=sv.SOLVENCY2,
+    lre.report(mp, basis, lre.LapseXL(0.15, 0.40), regime=sv.SII,
                reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2],
                diversification_factor=0.25, duration_years=3, discount_annual=0.03,
                file=buf)

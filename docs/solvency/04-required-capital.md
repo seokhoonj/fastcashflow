@@ -21,5 +21,5 @@
 ## 관련 API / 쿡북
 
 - `fcf.assets` — `assess_solvency`, `SolvencyAssessment`, `aggregate_required_capital`
-- `fcf.required_capital`, `fcf.SOLVENCY2`, `fcf.KICS`
+- `fcf.required_capital`, `fcf.solvency.SII`, `fcf.solvency.KICS`
 - 쿡북 8.6 [요구자본 (Solvency II / K-ICS)](../cookbook/workflow/required-capital)

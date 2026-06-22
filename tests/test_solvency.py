@@ -346,7 +346,7 @@ def test_kics_runs_end_to_end():
 # ---------------------------------------------------------------------------
 
 def test_sii_parameters():
-    spec = sv.SOLVENCY2
+    spec = sv.SII
     names = [sr.name for sr in spec.sub_risks]
     assert names == ["mortality", "longevity", "disability", "expense", "revision",
                      "lapse", "catastrophe"]
@@ -373,7 +373,7 @@ def test_sii_parameters():
 
 def test_sii_runs_end_to_end():
     mp, basis = _mp(), _basis()
-    res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    res = sv.required_capital(mp, basis, regime=sv.SII)
     assert set(res.sub_risk_capital) == {
         "mortality", "longevity", "disability", "expense", "revision", "lapse",
         "catastrophe"}
@@ -389,7 +389,7 @@ def test_cost_of_capital_run_off_excludes_interest():
     its capital run-off starts at the insurance SCR, not the total (interest-rate
     risk is excluded) -- Codex gate D finding."""
     mp, basis = _mp(), _basis()
-    res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    res = sv.required_capital(mp, basis, regime=sv.SII)
     assert res.interest_capital > 0.0           # interest is material here
     assert np.isclose(res.scr_path[0], res.insurance_scr)
     assert np.all(res.scr_path >= 0.0)
@@ -397,7 +397,7 @@ def test_cost_of_capital_run_off_excludes_interest():
 
 def test_solvency_ratio():
     mp, basis = _mp(), _basis()
-    res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    res = sv.required_capital(mp, basis, regime=sv.SII)
     assert np.isclose(sv.solvency_ratio(res, 20_000_000.0),
                       20_000_000.0 / res.total_scr)
 
@@ -449,8 +449,8 @@ def test_catastrophe_ignored_when_regime_has_no_correlation():
     """Solvency II has no catastrophe_correlation -> a passed catastrophe is not
     folded (it would be a separate shock sub-risk there, deferred)."""
     mp, basis = _mp(), _basis()
-    base = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
-    got = sv.required_capital(mp, basis, regime=sv.SOLVENCY2, catastrophe=200_000.0)
+    base = sv.required_capital(mp, basis, regime=sv.SII)
+    got = sv.required_capital(mp, basis, regime=sv.SII, catastrophe=200_000.0)
     assert np.isclose(got.insurance_scr, base.insurance_scr)
 
 
@@ -514,8 +514,8 @@ def test_property_and_catastrophe_cross_correlation():
 def test_property_ignored_for_solvency2():
     """Solvency II has no property_correlation -> property_codes are ignored."""
     mp, basis = _mp_with_property(), _basis_with_property()
-    base = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
-    got = sv.required_capital(mp, basis, regime=sv.SOLVENCY2, property_codes=("PROP",))
+    base = sv.required_capital(mp, basis, regime=sv.SII)
+    got = sv.required_capital(mp, basis, regime=sv.SII, property_codes=("PROP",))
     assert np.isclose(got.insurance_scr, base.insurance_scr)
     assert "property" not in got.sub_risk_capital
 
@@ -539,13 +539,13 @@ def test_sii_catastrophe_is_seventh_sub_risk():
     """Catastrophe is the 7th Solvency II life sub-risk; the correlation row matches
     Article 136 (cat vs mortality/longevity/disability/expense/revision/lapse =
     0.25/0/0.25/0.25/0/0.25) and a death book carries a positive cat capital."""
-    spec = sv.SOLVENCY2
+    spec = sv.SII
     assert [sr.name for sr in spec.sub_risks][-1] == "catastrophe"
     assert spec.correlation.shape == (7, 7)
     np.testing.assert_allclose(spec.correlation[6],
                                [0.25, 0.0, 0.25, 0.25, 0.0, 0.25, 1.0])
     mp, basis = _mp(), _basis()
-    res = sv.required_capital(mp, basis, regime=sv.SOLVENCY2)
+    res = sv.required_capital(mp, basis, regime=sv.SII)
     assert res.sub_risk_capital["catastrophe"] > 0.0         # death book -> cat is a loss
 
 
@@ -877,13 +877,13 @@ def test_scale_coverages_first_year_bel_exceeds_uniform():
 
 # ---------------------------------------------------------------------------
 # SII disability sub-risk (Art 153) -- the composed inception-up / recovery-down
-# shock wired into SOLVENCY2 (Phase 3).
+# shock wired into SII (Phase 3).
 # ---------------------------------------------------------------------------
 
 def _disability_only_regime():
-    """A one-sub-risk regime carrying just the SOLVENCY2 disability shock, so
+    """A one-sub-risk regime carrying just the SII disability shock, so
     sub_risk_capital['disability'] is the standalone Art 153 capital."""
-    dis = next(sr for sr in sv.SOLVENCY2.sub_risks if sr.name == "disability")
+    dis = next(sr for sr in sv.SII.sub_risks if sr.name == "disability")
     return sv.RegimeSpec(name="dis", sub_risks=(dis,),
                          correlation=np.array([[1.0]]), risk_margin_method="percentile")
 

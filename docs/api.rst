@@ -302,7 +302,7 @@ asset side and available capital are caller-supplied.
 
 .. autofunction:: fastcashflow.solvency_ratio
 
-.. autodata:: fastcashflow.SOLVENCY2
+.. autodata:: fastcashflow.SII
    :no-value:
 
 .. autodata:: fastcashflow.KICS

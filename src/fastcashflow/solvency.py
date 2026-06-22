@@ -963,7 +963,7 @@ def _sii_disability_shock() -> Stress:
     return Stress(name="disability", apply=apply)
 
 
-SOLVENCY2 = RegimeSpec(
+SII = RegimeSpec(
     name="Solvency II",
     sub_risks=(
         SubRisk("mortality", (scale_mortality(1.15),), "single"),      # +15%
@@ -1046,5 +1046,5 @@ __all__ = [
     "shock_curve", "shock_spread", "KICSInterest",
     "aggregate", "required_capital", "vfa_required_capital",
     "vfa_equity_scr", "vfa_interest_scr", "catastrophe_scr", "solvency_ratio",
-    "SOLVENCY2", "KICS",
+    "SII", "KICS",
 ]
