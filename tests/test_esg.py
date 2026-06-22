@@ -12,7 +12,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import esg
 
-# A small Korean-style observed curve (as in tests/test_smithwilson.py).
+# A small Korean-style observed curve (as in tests/test_smith_wilson.py).
 _MAT = np.array([1.0, 2.0, 3.0, 5.0, 10.0, 20.0])
 _RATE = np.array([0.0310, 0.0355, 0.0368, 0.0390, 0.0408, 0.0410])
 _UFR, _ALPHA = 0.0405, 0.10

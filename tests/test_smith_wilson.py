@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.smithwilson import (
+from fastcashflow.smith_wilson import (
     smith_wilson, smith_wilson_prices, smith_wilson_alpha)
 
 

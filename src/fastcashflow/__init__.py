@@ -115,7 +115,10 @@ from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import (
     DynamicSolvencyReport, ReinsuranceReport, Report, report,
 )
-from fastcashflow.smithwilson import smith_wilson, smith_wilson_prices, smith_wilson_alpha
+from fastcashflow.smith_wilson import smith_wilson, smith_wilson_prices, smith_wilson_alpha
+from fastcashflow.nelson_siegel import (
+    nelson_siegel, nelson_siegel_svensson, fit_nelson_siegel_svensson,
+    NelsonSiegelSvensson)
 from fastcashflow.esg import EconomicScenarios
 from fastcashflow.profit import ProfitSignature
 from fastcashflow.state_model import (
@@ -160,6 +163,8 @@ __all__ = [
     "VFASettlementAggregate",
     "ReinsurancePeriodMovement", "ReinsuranceReconciliation",
     "smith_wilson", "smith_wilson_prices", "smith_wilson_alpha", "EconomicScenarios",
+    "nelson_siegel", "nelson_siegel_svensson", "fit_nelson_siegel_svensson",
+    "NelsonSiegelSvensson",
     "ProfitSignature",
     "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",
