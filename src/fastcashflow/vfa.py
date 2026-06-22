@@ -31,6 +31,17 @@ from fastcashflow.alm import (
     vfa_liability_duration as liability_duration,
     vfa_liability_dv01 as liability_dv01,
     vfa_net_liability_cashflows as net_liability_cashflows)
+# VFA-specific solvency / asset-liability tools, exposed under the vfa namespace
+# (the symmetric home for fcf.vfa.measure); the flat fcf.vfa_* names stay as
+# back-compat aliases.
+from fastcashflow.solvency import (
+    vfa_required_capital as required_capital,
+    vfa_equity_scr as equity_scr,
+    vfa_interest_scr as interest_scr)
+from fastcashflow.assets import vfa_cashflow_gap as cashflow_gap
+from fastcashflow.solvency_assessment import (
+    vfa_assess_solvency as assess_solvency,
+    vfa_interaction_loss as interaction_loss)
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
@@ -38,4 +49,6 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "trace_diff", "CSM_BASES", "VFAMeasurement", "GuaranteeTVOG",
            "VFASettlementMovement", "moneyness_lapse_multiplier",
            "moneyness_lapse_scale", "stochastic",
-           "liability_duration", "liability_dv01", "net_liability_cashflows"]
+           "liability_duration", "liability_dv01", "net_liability_cashflows",
+           "required_capital", "equity_scr", "interest_scr", "cashflow_gap",
+           "assess_solvency", "interaction_loss"]

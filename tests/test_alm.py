@@ -88,6 +88,17 @@ def test_alm_namespaces_mirror_module():
     assert fcf.vfa.net_liability_cashflows is alm.vfa_net_liability_cashflows
 
 
+def test_vfa_namespace_exposes_solvency_and_asset_tools():
+    """The VFA-specific solvency / asset-liability tools are reachable under the
+    fcf.vfa namespace, identical to their flat fcf.vfa_* back-compat names."""
+    assert fcf.vfa.required_capital is fcf.vfa_required_capital
+    assert fcf.vfa.equity_scr is fcf.vfa_equity_scr
+    assert fcf.vfa.interest_scr is fcf.vfa_interest_scr
+    assert fcf.vfa.cashflow_gap is fcf.vfa_cashflow_gap
+    assert fcf.vfa.assess_solvency is fcf.vfa_assess_solvency
+    assert fcf.vfa.interaction_loss is fcf.vfa_interaction_loss
+
+
 def _ul_guaranteed_mp():
     """A UL book with a 6% crediting guarantee above the 4% underlying return --
     the floor binds, so the liability is sensitive to the underlying return (an
