@@ -1029,30 +1029,51 @@ def measure_stream(
     chunk_size: int = 20_000_000,
     id_column: str | None = None,
     validate_unique_mp_id: bool = True,
+    return_scenarios: FloatArray | None = None,
 ) -> int:
     """Stream a VFA (account-value) valuation through a parquet file, chunk by chunk.
 
     The VFA counterpart of :func:`~fastcashflow.gmm.measure_stream`. The VFA base
     is a single policies frame (account value + guarantee floors, no coverages),
-    so it reads ``input_path`` in ``chunk_size`` blocks, measures each
-    deterministically with ``vfa.measure(..., full=False)``, and writes per-chunk
-    ``part-NNNNN.parquet`` results (bel / ra / csm). Returns the model points
+    so it reads ``input_path`` in ``chunk_size`` blocks, measures each with
+    ``vfa.measure(..., full=False)``, and writes per-chunk ``part-NNNNN.parquet``
+    results (bel / ra / csm / variable_fee / time_value). Returns the model points
     processed. ``basis`` is a single :class:`Basis`.
+
+    ``return_scenarios`` -- an ``(n_scenarios, horizon)`` array of monthly
+    underlying-items returns -- prices the guarantee time value (TVOG) of each
+    chunk, exactly as :func:`measure`. The per-model-point time value depends only
+    on a contract's own account path over its own term, so it is additive across
+    chunks and invariant to the chunk a row lands in: each chunk slices the
+    scenario prefix it needs (its own horizon ``contract_boundary_months.max()``),
+    and the result equals an in-memory ``measure(..., return_scenarios=...)`` over
+    the whole book. ``horizon`` must therefore cover the longest contract in the
+    file. Omitted (the default), the stream values deterministically and
+    ``time_value`` is 0.
 
     Marginal benefit note: streaming is for portfolios too large to hold in
     memory (a GMM book of 1e8 rows). Variable books are typically far smaller, so
     :func:`measure` / :func:`measure_aggregate` usually suffice; this exists for
-    API symmetry. Note too that it values **deterministically** -- the time value
-    of guarantees (TVOG) needs portfolio-wide ``return_scenarios`` that a per-chunk
-    stream does not carry, so ``time_value`` is 0 here; use :func:`measure` /
-    :func:`tvog` with scenarios for the TVOG.
+    API symmetry.
     """
     basis = _single_basis(basis, entry="vfa.measure_stream")
+    rs = None if return_scenarios is None else np.asarray(
+        return_scenarios, dtype=np.float64)
+
+    def measure_fn(mp):
+        if rs is None:
+            return measure_vfa(mp, basis, full=False)
+        # Slice the scenario prefix to this chunk's horizon -- a row's time value
+        # is decided within its own term, so the prefix is exact (and a too-short
+        # scenario surfaces as the shape check inside measure_vfa).
+        n_time = int(mp.contract_boundary_months.max())
+        return measure_vfa(mp, basis, full=False, return_scenarios=rs[:, :n_time])
+
     return _stream_single_file(
         input_path, output_dir, chunk_size=chunk_size, id_column=id_column,
         validate_unique_mp_id=validate_unique_mp_id,
         build_mp=lambda frame: _vfa_model_points_from_frame(frame, calculation_methods),
-        measure_fn=lambda mp: measure_vfa(mp, basis, full=False),
+        measure_fn=measure_fn,
     )
 
 

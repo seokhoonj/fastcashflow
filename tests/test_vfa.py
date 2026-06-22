@@ -1165,8 +1165,8 @@ def test_vfa_trace_diff_renders_assumption_and_headline():
 
 def test_vfa_measure_stream_matches_in_memory(tmp_path):
     """Streaming the VFA account-value book (single frame, no coverages) gives
-    the same per-policy CSM as the in-memory measure (deterministic; TVOG needs
-    portfolio-wide scenarios a stream does not carry)."""
+    the same per-policy CSM as the in-memory measure (deterministic path -- no
+    return_scenarios; the TVOG stream is covered separately)."""
     import polars as pl
 
     basis = _basis()
@@ -1185,6 +1185,40 @@ def test_vfa_measure_stream_matches_in_memory(tmp_path):
     ref = fcf.vfa.measure(
         fcf.read_vfa_model_points(pp, calculation_methods=PATTERNS), basis)
     assert np.allclose(sorted(parts["csm"].to_list()), sorted(ref.csm.tolist()))
+
+
+def test_vfa_measure_stream_return_scenarios_match_in_memory(tmp_path):
+    """Streaming with return_scenarios prices the guarantee time value (TVOG)
+    per chunk. Rows have DIFFERENT terms and chunk_size=1, so each chunk slices
+    the scenario prefix to its own horizon -- the per-policy time value / csm
+    still equal the in-memory measure over the whole book (a row's time value is
+    decided within its own term, so the prefix is exact and chunk-invariant)."""
+    import polars as pl
+
+    basis = _basis(investment_return=0.04, fund_fee=0.01)
+    pol = pl.DataFrame({"mp_id": ["V1", "V2"], "issue_age": [45, 50],
+                        "term_months": [120, 60],               # different horizons
+                        "account_value": [1e8, 1e8],
+                        "minimum_death_benefit": [1.1e8, 1.1e8],
+                        "minimum_accumulation_benefit": [1.1e8, 1.1e8]})
+    pp, od = tmp_path / "vpol.parquet", tmp_path / "out"
+    pol.write_parquet(pp)
+    r_m = 1.04 ** (1 / 12) - 1
+    n_time = 120                                                # the longest term
+    scen = r_m + 0.03 * np.cos(np.outer(np.arange(1, 7),
+                                        np.linspace(0.0, 3.0, n_time)))
+    n = fcf.vfa.measure_stream(pp, od, basis, chunk_size=1,
+                               calculation_methods=PATTERNS, return_scenarios=scen)
+    assert n == 2
+    parts = pl.concat([pl.read_parquet(p) for p in sorted(od.glob("part-*.parquet"))])
+    by_id = {row["id"]: row for row in parts.iter_rows(named=True)}
+    mp = fcf.read_vfa_model_points(pp, calculation_methods=PATTERNS)
+    ref = fcf.vfa.measure(mp, basis, return_scenarios=scen)
+    # mp order is V1, V2 (file order).
+    for i, mp_id in enumerate(["V1", "V2"]):
+        assert np.isclose(by_id[mp_id]["time_value"], ref.time_value[i])
+        assert np.isclose(by_id[mp_id]["csm"], ref.csm[i])
+    assert np.any(np.abs(ref.time_value) > 1e-6)                # scenarios bite
 
 
 # ---------------------------------------------------------------------------
