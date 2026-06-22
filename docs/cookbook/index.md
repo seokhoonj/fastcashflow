@@ -93,7 +93,7 @@
     같은 식이 두 자리에 작동하는 이유.
 * - 1.5
   - [할인율 곡선 구성 — Smith-Wilson](basics/discount-curve)
-  - 시장금리(국고채)에서 `discount_annual` 곡선을 `fcf.smith_wilson` 으로 구성.
+  - 시장금리(국고채)에서 `discount_annual` 곡선을 `fcf.curves.smith_wilson` 으로 구성.
 :::
 
 ### 2. 단순 상품

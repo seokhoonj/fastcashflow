@@ -3,7 +3,7 @@
 :::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
-- 관측 시장금리(국고채)에서 **만기별 할인율 곡선**을 만드는 법 — `fcf.smith_wilson`
+- 관측 시장금리(국고채)에서 **만기별 할인율 곡선**을 만드는 법 — `fcf.curves.smith_wilson`
 - **Smith-Wilson**: 관측 구간은 정확히 통과시키고, 장기 구간은 **UFR(ultimate
   forward rate, 장기수렴 선도금리)** 로 외삽 — K-IFRS17/K-ICS가 보험부채 할인율에
   규정하는 방법
@@ -82,7 +82,7 @@ import fastcashflow as fcf
 mat  = np.array([1, 2, 3, 5, 10, 20], dtype=float)        # 관측 만기 (년); 예시 LLP=20
 rate = np.array([0.0310, 0.0355, 0.0368, 0.0390, 0.0408, 0.0410])  # 국고채 현물
 
-curve = fcf.smith_wilson(mat, rate, ufr=0.0405, alpha=0.10, years=100)
+curve = fcf.curves.smith_wilson(mat, rate, ufr=0.0405, alpha=0.10, years=100)
 
 for y in (1, 5, 10, 20, 30, 50, 100):
     print(f"{y:>4d}y spot = {curve[y - 1]:>8.4%}")

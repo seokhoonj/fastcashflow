@@ -28,7 +28,7 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.smith_wilson import smith_wilson_prices
+from fastcashflow._smith_wilson import smith_wilson_prices
 
 _DT = 1.0 / 12.0                    # one month in years
 _SQRT_DT = _DT ** 0.5

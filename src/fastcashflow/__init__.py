@@ -115,10 +115,7 @@ from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import (
     DynamicSolvencyReport, ReinsuranceReport, Report, report,
 )
-from fastcashflow.smith_wilson import smith_wilson, smith_wilson_prices, smith_wilson_alpha
-from fastcashflow.nelson_siegel import (
-    nelson_siegel, nelson_siegel_svensson, fit_nelson_siegel_svensson,
-    NelsonSiegelSvensson)
+from fastcashflow.projection import Cashflows, AccountTrajectory
 from fastcashflow.esg import EconomicScenarios
 from fastcashflow.profit import ProfitSignature
 from fastcashflow.state_model import (
@@ -133,15 +130,18 @@ from fastcashflow.tvog import TVOGResult
 from fastcashflow._vfa import VFAMeasurement, VFAAggregate
 from fastcashflow.portfolio import GoCSettlement, settle_group_of_contracts
 from fastcashflow import (  # namespaces
-    gmm, paa, portfolio, reinsurance, mass_lapse_reinsurance, samples, vfa, esg,
+    core, curves, gmm, paa, portfolio, reinsurance, mass_lapse_reinsurance,
+    samples, vfa, esg,
 )
 
 __version__ = "0.1.0.dev1"
 __all__ = [
     # measurement-model namespaces -- the headline entry points live here
     # (e.g. ``fastcashflow.gmm.measure``, ``fastcashflow.samples.basis``).
-    "gmm", "paa", "vfa", "reinsurance", "mass_lapse_reinsurance", "samples", "esg",
-    "Basis", "BasisRouter", "ModelPoints", "clear_codegen_cache",
+    "core", "curves", "gmm", "paa", "vfa", "reinsurance", "mass_lapse_reinsurance",
+    "samples", "esg",
+    "Basis", "BasisRouter", "ModelPoints", "Cashflows", "AccountTrajectory",
+    "clear_codegen_cache",
     "report", "roll_forward", "reconcile", "group", "group_of_contracts",
     "compress", "CompressionResult",
     "transition",
@@ -162,9 +162,7 @@ __all__ = [
     "VFASettlementMovement", "VFASettlementReconciliation",
     "VFASettlementAggregate",
     "ReinsurancePeriodMovement", "ReinsuranceReconciliation",
-    "smith_wilson", "smith_wilson_prices", "smith_wilson_alpha", "EconomicScenarios",
-    "nelson_siegel", "nelson_siegel_svensson", "fit_nelson_siegel_svensson",
-    "NelsonSiegelSvensson",
+    "EconomicScenarios",
     "ProfitSignature",
     "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",

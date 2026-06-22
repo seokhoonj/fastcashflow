@@ -18,7 +18,7 @@ the magnitudes of two humps whose locations are set by the decays ``lambda1`` /
 ``lambda2``. Dropping the ``beta3`` / ``lambda2`` term recovers plain
 Nelson-Siegel (see :func:`nelson_siegel`).
 
-A compact, smooth alternative to Smith-Wilson (:mod:`fastcashflow.smith_wilson`):
+A compact, smooth alternative to Smith-Wilson (:mod:`fastcashflow._smith_wilson`):
 where Smith-Wilson interpolates exactly through the inputs and extrapolates to an
 ultimate forward rate, Nelson-Siegel-Svensson *smooths* a parametric shape
 through them (4 / 6 parameters), so it is the natural tool for fitting a noisy

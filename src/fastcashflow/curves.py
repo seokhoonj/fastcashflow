@@ -1,23 +1,26 @@
-"""Time-axis curves derived from an ``Basis`` set.
+"""``fastcashflow.curves`` -- the interest-rate / time-value curve domain.
 
-The orchestration layer (engine, PAA, VFA) calls these helpers to turn the
-high-level assumption object into the concrete per-month / per-year arrays
-the numerical primitives consume. Keeping these in their own layer lets the
-numerical primitives stay domain-object-free (numpy arrays only) and the
-``Basis`` dataclass stay math-free (just inputs).
+One namespace for everything about the term-structure curve, in two activities:
 
-Three helpers exposed:
+* CURVE CONSTRUCTION -- fit a market spot curve from observed data:
+  :func:`smith_wilson` / :func:`smith_wilson_alpha` / :func:`smith_wilson_prices`
+  (Smith-Wilson interpolation/extrapolation) and :func:`nelson_siegel` /
+  :func:`nelson_siegel_svensson` / :func:`fit_nelson_siegel_svensson`
+  (Nelson-Siegel-Svensson parametric fit). The result is an annual spot curve the
+  user writes onto ``Basis.discount_annual``.
+* CURVE TRANSFORM -- the three equivalent term-structure representations and the
+  maps between them. Spot/forward rates and discount factors are the same curve
+  in different views (``discount_factors`` <-> ``forward_rates`` are inverses):
+  :func:`discount_monthly_curve` / :func:`discount_factors` /
+  :func:`discount_factors_from_curve` / :func:`forward_rates`, plus the expense
+  multiplier :func:`inflation_index`. These read ``Basis`` (or a raw rate array)
+  and broadcast a per-year curve to per-month length, holding the last value flat
+  past the end.
 
-* discount factors -- :func:`discount_factors`,
-  :func:`discount_factors_from_curve`, :func:`discount_monthly_curve`.
-  Read ``Basis.discount_annual`` (scalar or per-year curve) and
-  broadcast a per-year array to per-month length, holding the last
-  value flat past the end.
-* expense inflation -- :func:`inflation_index`. Reads
-  ``Basis.expense_inflation`` (same scalar-or-curve shape) and
-  returns the cumulative ``(1+i)`` multiplier curve consumed by
-  :func:`fastcashflow.basis.derive_expense_components`.
-* (internal) :func:`_per_year_to_per_month` -- the shared broadcast helper.
+The discount/transform helpers are defined here; the builders are re-exported
+from :mod:`fastcashflow._smith_wilson` / :mod:`fastcashflow._nelson_siegel` so the
+whole curve domain has one home. ``project_cashflows`` (which CONSUMES a curve to
+project cash flows) lives in :mod:`fastcashflow.core`, not here.
 """
 from __future__ import annotations
 
@@ -25,6 +28,22 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
+# Curve builders -- re-exported so fcf.curves is the single home for the domain.
+from fastcashflow._smith_wilson import (
+    smith_wilson, smith_wilson_alpha, smith_wilson_prices)
+from fastcashflow._nelson_siegel import (
+    nelson_siegel, nelson_siegel_svensson, fit_nelson_siegel_svensson,
+    NelsonSiegelSvensson)
+
+__all__ = [
+    # construction (builders)
+    "smith_wilson", "smith_wilson_alpha", "smith_wilson_prices",
+    "nelson_siegel", "nelson_siegel_svensson", "fit_nelson_siegel_svensson",
+    "NelsonSiegelSvensson",
+    # transform (the three representations + expense inflation)
+    "discount_monthly_curve", "discount_factors", "discount_factors_from_curve",
+    "forward_rates", "inflation_index",
+]
 
 
 def _per_year_to_per_month(
