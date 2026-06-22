@@ -47,6 +47,7 @@ from fastcashflow.curves import (
 from fastcashflow.numerics import (
     _cost_of_capital_ra,
     _csm_kernel,
+    _csm_roll,
     _carry_lic_residual,
     _norm_ppf,
     _paragraph45_csm_algebra,
@@ -680,6 +681,27 @@ def inforce_surrender_value(model_points: ModelPoints, basis: Basis) -> FloatArr
     return v_total * _inforce_rescale(inforce, model_points, em, rows)
 
 
+def _lock_in_monthly_rates(lock_in_rate, n_mp: int, max_len: int):
+    """Build the per-month locked-in rate buffer the CSM roll-forward consumes.
+
+    A scalar (or uniform per-row) ``lock_in_rate`` gives the shared
+    ``(max_len,)`` curve -- the :func:`_csm_kernel` fast path. A genuinely mixed
+    per-MP rate (a cohort-aware book whose issue cohorts / GoCs locked in
+    different inception rates, Sec. B72(b)) gives an ``(n_mp, max_len)`` curve so
+    each row accretes at its own locked-in rate, which :func:`_csm_roll`
+    dispatches to the per-MP kernel. Raises on a wrong-length array."""
+    lock = np.asarray(lock_in_rate, dtype=np.float64)
+    uniform = lock.ndim == 0 or np.unique(lock).size == 1
+    if not uniform and lock.shape != (n_mp,):
+        raise ValueError(
+            f"lock_in_rate must be a scalar or one entry per model point "
+            f"({n_mp}), got shape {lock.shape}")
+    monthly = (1.0 + lock) ** (1.0 / 12.0) - 1.0          # 0-d or (n_mp,)
+    if uniform:
+        return np.full(max_len, float(monthly.reshape(-1)[0]))
+    return np.broadcast_to(monthly[:, None], (n_mp, max_len))
+
+
 def _measure_inforce_fast(
     model_points: ModelPoints,
     basis: Basis,
@@ -800,10 +822,9 @@ def _measure_inforce_fast(
         0.0,
     )
     inforce_seg = np.ascontiguousarray(inforce_seg)
-    lock_in_monthly = (1.0 + float(lock_in_rate)) ** (1.0 / 12.0) - 1.0
-    monthly_rates = np.full(max_len, lock_in_monthly)
-    csm_traj, _, _ = _csm_kernel(prior_csm, inforce_seg, monthly_rates,
-                                 basis.coverage_unit_discount)
+    monthly_rates = _lock_in_monthly_rates(lock_in_rate, n_mp, max_len)
+    csm_traj, _, _ = _csm_roll(prior_csm, inforce_seg, monthly_rates,
+                               basis.coverage_unit_discount)
     csm = csm_traj[:, period_months]
     # Sec. 44 loss component is left as zeros here. v1 only rolls the prior
     # CSM forward (accretion + coverage-unit release); the unlocking that
@@ -922,17 +943,16 @@ def _measure_inforce_full(
             "inception, which has no CSM to carry forward"
         )
 
-    lock_in_monthly = (1.0 + float(lock_in_rate)) ** (1.0 / 12.0) - 1.0
     csm_new = m.csm_path.copy()
     csm_accretion_new = m.csm_accretion.copy()
     csm_release_new = m.csm_release.copy()
 
     # Re-roll each MP's CSM trajectory from t = prior_t onwards under the
-    # locked-in rate and inforce-proportional release. Pack the per-MP
-    # segments into a single (n_mp, max_len) zero-padded buffer and call
-    # the parallel _csm_kernel once -- a per-MP Python loop calling the
-    # njit kernel one MP at a time defeats the kernel's prange(n_mp) outer
-    # loop and pays the dispatch overhead n_mp times.
+    # locked-in rate (scalar, or per-MP for a cohort-aware book) and
+    # inforce-proportional release. Pack the per-MP segments into a single
+    # (n_mp, max_len) zero-padded buffer and call the parallel kernel once --
+    # a per-MP Python loop calling the njit kernel one MP at a time defeats the
+    # kernel's prange(n_mp) outer loop and pays the dispatch overhead n_mp times.
     n_time_total = m.cashflows.inforce.shape[1]
     rows_arr = np.arange(n_mp)
     max_len = n_time_total - int(prior_t.min())
@@ -946,9 +966,9 @@ def _measure_inforce_full(
         0.0,
     )
     inforce_seg = np.ascontiguousarray(inforce_seg)
-    monthly_rates = np.full(max_len, lock_in_monthly)
-    csm_traj, acc, rel = _csm_kernel(prior_csm, inforce_seg, monthly_rates,
-                                     basis.coverage_unit_discount)
+    monthly_rates = _lock_in_monthly_rates(lock_in_rate, n_mp, max_len)
+    csm_traj, acc, rel = _csm_roll(prior_csm, inforce_seg, monthly_rates,
+                                   basis.coverage_unit_discount)
 
     # Scatter the per-MP segments back into the (n_mp, n_time_total+1) /
     # (n_mp, n_time_total) trajectories. csm_traj has one more column

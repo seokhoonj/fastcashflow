@@ -293,6 +293,57 @@ def test_inforce_full_settlement_roundtrip_to_measure():
     assert np.allclose(m.csm_release[:, prior_t:], mif.csm_release[:, prior_t:])
 
 
+def _two_mp_book():
+    """A two-contract book seated 36 months in, identical save the row index."""
+    return ModelPoints(
+        issue_age=np.array([40, 40]),
+        premium=np.array([50_000.0, 50_000.0]),
+        term_months=np.array([240, 240]),
+        benefits={"DEATH": np.array([100_000_000.0, 100_000_000.0])},
+        elapsed_months=np.array([36, 36]),
+        calculation_methods={"DEATH": CalculationMethod.DEATH},
+    )
+
+
+@pytest.mark.parametrize("full", [False, True])
+def test_inforce_cohort_aware_lock_in_matches_per_mp(full):
+    """A mixed locked-in-rate in-force book (Sec. B72(b)) carries each model
+    point's CSM forward at its OWN rate -- the per-MP kernel path. Oracle: every
+    row equals that row measured alone under its scalar rate, and the two
+    cohorts' as-of CSM genuinely differ because the locked rate differs."""
+    basis = _basis()
+    mp = _two_mp_book()
+    period = 12
+    prior_csm = measure(mp, basis).csm_path[:, 36 - period]
+    fn = _measure_inforce_full if full else _measure_inforce_fast
+    mixed = fn(mp, basis, prior_csm=prior_csm,
+               lock_in_rate=np.array([0.03, 0.05]), period_months=period)
+    a = fn(mp.subset([0]), basis, prior_csm=prior_csm[[0]],
+           lock_in_rate=0.03, period_months=period)
+    b = fn(mp.subset([1]), basis, prior_csm=prior_csm[[1]],
+           lock_in_rate=0.05, period_months=period)
+    assert np.isclose(mixed.csm[0], a.csm[0])
+    assert np.isclose(mixed.csm[1], b.csm[0])
+    # the locked-in rate genuinely separates the two cohorts' as-of CSM
+    assert not np.isclose(mixed.csm[0], mixed.csm[1])
+
+
+@pytest.mark.parametrize("full", [False, True])
+def test_inforce_uniform_lock_in_array_equals_scalar(full):
+    """A uniform lock_in_rate carried as a per-row array gives the scalar result
+    (collapsed to the shared-rate kernel, not the per-MP one)."""
+    basis = _basis()
+    mp = _two_mp_book()
+    period = 12
+    prior_csm = measure(mp, basis).csm_path[:, 36 - period]
+    fn = _measure_inforce_full if full else _measure_inforce_fast
+    arr = fn(mp, basis, prior_csm=prior_csm,
+             lock_in_rate=np.array([0.03, 0.03]), period_months=period)
+    sca = fn(mp, basis, prior_csm=prior_csm, lock_in_rate=0.03,
+             period_months=period)
+    assert np.allclose(arr.csm, sca.csm)
+
+
 def test_inforce_bel_smaller_term_left():
     """As ``elapsed_months`` grows (less of the term left), the as-of in-force
     BEL of a claims-only contract shrinks -- fewer future claims to discount.
