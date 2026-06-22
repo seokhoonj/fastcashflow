@@ -180,7 +180,7 @@ def _split_first_year(fn, first_factor: float, later_factor: float):
     first policy year (``duration == 0``) and by ``later_factor`` thereafter,
     clamping to 1.0. The per-year duration grid means ``duration == 0`` is the
     next 12 months -- the shape of the Solvency II disability inception shock
-    (Art 153: +35% over the next year, +25% thereafter). Factors by closure."""
+    (Art 139: +35% over the next year, +25% thereafter). Factors by closure."""
     def wrapped(sex, issue_age, duration, issue_class, elapsed):
         base = fn(sex, issue_age, duration, issue_class, elapsed)
         factor = np.where(np.asarray(duration) == 0, first_factor, later_factor)
@@ -297,7 +297,7 @@ def scale_state_rate(rate_name: str, factor: float) -> Stress:
 
     A recovery shock is a DOWN scale (``factor < 1`` -- fewer recoveries, so the
     disabled stay on claim longer and the liability rises); an inception shock is
-    an UP scale. Used to build the Solvency II disability sub-risk (Art. 153: a
+    an UP scale. Used to build the Solvency II disability sub-risk (Art. 139: a
     decrease in disability recovery rates, an increase in inception rates)."""
     try:
         field = _STATE_RATE_FIELD[rate_name]
@@ -411,7 +411,7 @@ def scale_coverages_first_year(first_by_method: dict, later_by_method: dict) -> 
     """Scale each coverage's claim rate by a DURATION-split factor: the first
     policy year (``duration == 0``) by ``first_by_method[method]`` and later years
     by ``later_by_method[method]`` -- the +35% next-12-months / +25%-thereafter
-    shape of the Solvency II disability / morbidity inception shock (Art 153).
+    shape of the Solvency II disability / morbidity inception shock (Art 139).
 
     The two dicts must carry the same methods (the first-year and steady factors
     for each). Coverages whose method is in neither are left unchanged; the
@@ -920,7 +920,7 @@ def _per_year_rel(points, n_years: int = 60) -> FloatArray:
     return np.interp(np.arange(1, n_years + 1), mats, vals)
 
 
-# Solvency II disability-morbidity sub-risk (Art 153): one scenario applied
+# Solvency II disability-morbidity sub-risk (Art 139): one scenario applied
 # together, then re-measured -- an INCREASE in disability / morbidity INCEPTION
 # rates (+35% over the next 12 months, +25% thereafter) AND a -20% DECREASE in
 # disability RECOVERY rates. Inception hits both the flat morbidity / diagnosis
@@ -934,7 +934,7 @@ _SII_DISABILITY_INCEPTION_RATES = ("waiver_incidence", "ci_incidence")
 
 
 def _sii_disability_shock() -> Stress:
-    """The combined Art 153 disability shock (inception up, recovery down)."""
+    """The combined Art 139 disability shock (inception up, recovery down)."""
     cov = scale_coverages_first_year(
         {CalculationMethod.MORBIDITY: _SII_DISABILITY_INCEPTION_FIRST,
          CalculationMethod.DIAGNOSIS: _SII_DISABILITY_INCEPTION_FIRST},
@@ -968,7 +968,7 @@ SII = RegimeSpec(
     sub_risks=(
         SubRisk("mortality", (scale_mortality(1.15),), "single"),      # +15%
         SubRisk("longevity", (scale_longevity(0.80),), "single"),      # -20%
-        SubRisk("disability", (_sii_disability_shock(),), "single"),   # Art 153:
+        SubRisk("disability", (_sii_disability_shock(),), "single"),   # Art 139:
                                                                        #   inception +35%/+25%,
                                                                        #   recovery -20%
         SubRisk("expense", (scale_expense(1.10, 0.01),), "single"),    # +10%, inflation +1pp

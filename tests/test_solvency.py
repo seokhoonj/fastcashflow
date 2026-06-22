@@ -709,7 +709,7 @@ def test_vfa_interest_scr_hand_calc():
 
 # ---------------------------------------------------------------------------
 # scale_state_rate -- a named state-machine transition-rate shock (Phase 1 of
-# the Solvency II disability sub-risk: Art. 153 recovery / inception shocks).
+# the Solvency II disability sub-risk: Art. 139 recovery / inception shocks).
 # ---------------------------------------------------------------------------
 
 def _di_recovery_model() -> StateModel:
@@ -808,7 +808,7 @@ def test_scale_state_rate_rejects_unknown_rate():
 
 # ---------------------------------------------------------------------------
 # scale_coverages_first_year -- the +35% year-1 / +25%-thereafter duration split
-# (Phase 2 of the Solvency II disability inception shock, Art. 153).
+# (Phase 2 of the Solvency II disability inception shock, Art. 139).
 # ---------------------------------------------------------------------------
 
 _MORB = CalculationMethod.MORBIDITY
@@ -876,13 +876,13 @@ def test_scale_coverages_first_year_bel_exceeds_uniform():
 
 
 # ---------------------------------------------------------------------------
-# SII disability sub-risk (Art 153) -- the composed inception-up / recovery-down
+# SII disability sub-risk (Art 139) -- the composed inception-up / recovery-down
 # shock wired into SII (Phase 3).
 # ---------------------------------------------------------------------------
 
 def _disability_only_regime():
     """A one-sub-risk regime carrying just the SII disability shock, so
-    sub_risk_capital['disability'] is the standalone Art 153 capital."""
+    sub_risk_capital['disability'] is the standalone Art 139 capital."""
     dis = next(sr for sr in sv.SII.sub_risks if sr.name == "disability")
     return sv.RegimeSpec(name="dis", sub_risks=(dis,),
                          correlation=np.array([[1.0]]), risk_margin_method="percentile")
@@ -903,7 +903,7 @@ def test_sii_disability_subrisk_includes_recovery():
 
 
 def test_sii_disability_subrisk_first_year_exceeds_uniform():
-    """On a morbidity book the Art 153 capital exceeds the old uniform +25%
+    """On a morbidity book the Art 139 capital exceeds the old uniform +25%
     capital -- the +35% first-year inception bump adds strain."""
     mp, basis = _morbidity_mp_basis()
     base = float(measure(mp, basis, full=False).bel.sum())
@@ -917,7 +917,7 @@ def test_sii_disability_subrisk_first_year_exceeds_uniform():
 
 
 def test_sii_disability_subrisk_zero_for_death_book():
-    """A plain death book has no disability / morbidity exposure, so the Art 153
+    """A plain death book has no disability / morbidity exposure, so the Art 139
     shock leaves the BEL unchanged and the disability capital is zero (the
     doc-exec term-life books are unaffected by the recalibration)."""
     mp, basis = _mp(term=24), _basis()
