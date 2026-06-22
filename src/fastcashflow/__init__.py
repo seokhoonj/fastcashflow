@@ -28,6 +28,7 @@ from fastcashflow.engine import (
     clear_codegen_cache,
 )
 from fastcashflow.grouping import group, group_of_contracts
+from fastcashflow.compression import compress, CompressionResult
 from fastcashflow.io import (
     read_basis,
     read_inforce_policies,
@@ -139,6 +140,7 @@ __all__ = [
     "gmm", "paa", "vfa", "reinsurance", "mass_lapse_reinsurance", "samples", "esg",
     "Basis", "BasisRouter", "ModelPoints", "clear_codegen_cache",
     "report", "roll_forward", "reconcile", "group", "group_of_contracts",
+    "compress", "CompressionResult",
     "transition",
     "close", "ClosePackage", "assemble_sofp", "assemble_finance",
     "assemble_service_result", "reconciliation_to_frame", "line_metadata",
