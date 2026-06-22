@@ -365,6 +365,37 @@ def test_portfolio_all_vfa_return_scenarios_single_declared():
     assert np.allclose(pm.vfa.measurement.csm, ref.csm)
 
 
+def test_portfolio_vfa_return_scenarios_multi_segment_distinct_terms():
+    """Two VFA segments of DIFFERENT terms with one scenario set sized to the
+    longest: each segment's scenario is sliced to its own horizon, so neither
+    hits a shape mismatch and both match the standalone measure (the short
+    segment against the scenario prefix it actually uses)."""
+    router = BasisRouter(
+        {("VL", "GA"): _flat_basis(investment_return=0.04),
+         ("VS", "GA"): _flat_basis(investment_return=0.04)},
+        measurement_models={("VL", "GA"): "VFA", ("VS", "GA"): "VFA"})
+    mp = ModelPoints(
+        issue_age=np.full(2, 40), premium=np.zeros(2),
+        term_months=np.array([120, 60]),            # long / short -> distinct horizons
+        benefits={"DEATH": np.full(2, 1e4)},
+        account_value=np.full(2, 1e6),
+        minimum_death_benefit=np.full(2, 1.1e6),
+        minimum_accumulation_benefit=np.full(2, 1.1e6),
+        product=np.array(["VL", "VS"]), channel=np.array(["GA", "GA"]),
+        calculation_methods=PATTERNS)
+    scen = _tvog_scenarios(n_time=120, investment_return=0.04)   # covers the longest
+    pm = measure(mp, router, return_scenarios=scen)
+    assert pm.vfa.index.tolist() == [0, 1]
+    refL = measure_vfa(mp.subset([0]), _flat_basis(investment_return=0.04),
+                       return_scenarios=scen)             # 120-month: full width
+    refS = measure_vfa(mp.subset([1]), _flat_basis(investment_return=0.04),
+                       return_scenarios=scen[:, :60])     # 60-month: its own prefix
+    assert np.isclose(pm.vfa.measurement.time_value[0], refL.time_value[0])
+    assert np.isclose(pm.vfa.measurement.time_value[1], refS.time_value[0])
+    assert np.isclose(pm.vfa.measurement.csm[0], refL.csm[0])
+    assert np.isclose(pm.vfa.measurement.csm[1], refS.csm[0])
+
+
 def test_portfolio_return_scenarios_rejected_without_vfa():
     """return_scenarios on a portfolio with no VFA rows is an error -- GMM / PAA
     carry no return guarantee."""

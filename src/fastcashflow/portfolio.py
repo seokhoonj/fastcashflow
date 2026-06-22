@@ -563,30 +563,51 @@ def _measure_model_segmented(sub_mp, sub_router, model, *, full=True,
     resolves the axes, as ``fcf.gmm.measure`` does.
 
     ``return_scenarios`` (VFA only -- the guarantee time value) is forwarded to
-    ``measure_vfa``. When given, the headline path is NOT chunked: the scenario
-    matrix is ``(n_scenarios, horizon)`` and ``measure_vfa`` validates its width
-    against each segment's horizon, so a short row-block would mismatch. The
-    per-model-point time value is additive, and the headline result still drops
-    trajectories, so each segment is measured in a single ``full=False`` call --
-    peak memory ``O(n_seg_mp x n_scenarios)`` for the scenario pass rather than
+    ``measure_vfa``. When given, the headline path is NOT chunked: each segment
+    is measured in a single ``full=False`` call, with the scenario matrix
+    ``(n_scenarios, horizon)`` sliced to that segment's own horizon
+    (``contract_boundary_months.max()``). A row's time value is decided within
+    its own term, so the prefix slice is exact and segments of different terms
+    each get the width ``measure_vfa`` expects; ``horizon`` must cover the
+    longest segment. The per-model-point time value is additive and the headline
+    result still drops trajectories, so peak memory is
+    ``O(n_seg_mp x n_scenarios)`` for the scenario pass rather than
     ``O(n_mp x n_time)`` trajectories.
     """
     measure_one, stitch_full, scatter_headline = _MODEL_EXEC[model]
     segs = _model_segments(sub_router, sub_mp)
-    extra = {} if return_scenarios is None else {"return_scenarios": return_scenarios}
+    rs = None if return_scenarios is None else np.asarray(
+        return_scenarios, dtype=np.float64)
+
+    def scen_extra(seg_mp):
+        # Slice the scenario prefix to this segment's horizon -- a row's time
+        # value is decided within its own term, so a short segment does not force
+        # the whole scenario set to its width (and a too-narrow set surfaces as
+        # the shape check inside measure_vfa). Mirrors vfa.measure_stream.
+        if rs is None:
+            return {}
+        n_time = int(seg_mp.contract_boundary_months.max())
+        return {"return_scenarios": rs[:, :n_time]}
+
     if full:
         if len(segs) == 1 and segs[0][1].size == sub_mp.n_mp:
             # One segment over the whole partition -- measure directly, no
             # re-scatter (measure_one already stamps model_points).
-            return measure_one(sub_mp, segs[0][0], full=True, **extra)
-        sub_results = [(idx, measure_one(sub_mp.subset(idx), basis, full=True, **extra))
-                       for basis, idx in segs]
+            return measure_one(sub_mp, segs[0][0], full=True, **scen_extra(sub_mp))
+        sub_results = []
+        for basis, idx in segs:
+            seg_mp = sub_mp.subset(idx)
+            sub_results.append(
+                (idx, measure_one(seg_mp, basis, full=True, **scen_extra(seg_mp))))
         return replace(stitch_full(sub_mp.n_mp, sub_results), model_points=sub_mp)
-    if return_scenarios is not None:
-        # Scenario pass: measure each segment in one block (the scenario horizon
-        # must match the segment horizon, and the per-MP time value is additive).
-        results = [(idx, measure_one(sub_mp.subset(idx), basis, full=False, **extra))
-                   for basis, idx in segs]
+    if rs is not None:
+        # Scenario pass: measure each segment in one block (no chunking), the
+        # scenario sliced to the segment horizon; the per-MP time value is additive.
+        results = []
+        for basis, idx in segs:
+            seg_mp = sub_mp.subset(idx)
+            results.append(
+                (idx, measure_one(seg_mp, basis, full=False, **scen_extra(seg_mp))))
         return replace(scatter_headline(sub_mp.n_mp, results), model_points=sub_mp)
     # Headline path -- chunk within each segment to bound peak memory.
     results = []
@@ -628,9 +649,10 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     does for a single book; it is forwarded only to the VFA slot (GMM / PAA
     carry no return guarantee). It is an error to pass it for a portfolio with
     no VFA rows. When supplied, the VFA partition is measured without chunking
-    (the scenario horizon must match the segment horizon; the per-model-point
-    time value is additive), so ``chunk_size`` does not bound the VFA scenario
-    pass. Omitted (the default), the mixed path measures the VFA intrinsic value
+    and the scenario is sliced to each segment's own horizon, so ``horizon`` need
+    only cover the longest VFA contract (the per-model-point time value is
+    additive), and ``chunk_size`` does not bound the VFA scenario pass. Omitted
+    (the default), the mixed path measures the VFA intrinsic value
     (deterministic) only.
 
     When the router declares a single measurement model the model partition is a
