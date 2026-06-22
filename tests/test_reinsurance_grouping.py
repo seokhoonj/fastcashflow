@@ -11,7 +11,8 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import ModelPoints, ReinsuranceMeasurement, group, group_of_contracts
+from fastcashflow import ModelPoints, group, group_of_contracts
+from fastcashflow.reinsurance import ReinsuranceMeasurement
 from conftest import PATTERNS, make_death_basis
 
 

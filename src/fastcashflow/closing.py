@@ -319,7 +319,7 @@ def assemble_service_result(reports, *, period_months: int = 12) -> pl.DataFrame
     for reinsurance contracts held (presented separately, paragraph 82), summed
     across the reports of each kind. ``reports`` is a list of
     :class:`~fastcashflow.Report` (issued) and / or
-    :class:`~fastcashflow.ReinsuranceReport` (held).
+    :class:`~fastcashflow.reinsurance.ReinsuranceReport` (held).
 
     The service result is sourced from :meth:`Report.by_period`, NOT the
     settlement reconciliation: insurance revenue (B120-B124) needs the gross
@@ -408,7 +408,7 @@ def close(reconciliations, *, reports=None, group_ids=None) -> ClosePackage:
     reconciliations of one reporting period (what :func:`fastcashflow.reconcile`
     returns, one per model / group) -- the source of the SoFP, the finance
     statement and the reconciliation detail. ``reports``, if given, is the list
-    of :class:`~fastcashflow.Report` / :class:`~fastcashflow.ReinsuranceReport`
+    of :class:`~fastcashflow.Report` / :class:`~fastcashflow.reinsurance.ReinsuranceReport`
     that adds the insurance service result statement (sourced from the report,
     not the settlement -- see :func:`assemble_service_result`). ``group_ids``, if
     given, names the group of contracts each reconciliation belongs to (parallel

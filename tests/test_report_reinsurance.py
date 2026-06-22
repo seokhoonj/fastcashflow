@@ -42,7 +42,7 @@ def test_reinsurance_report_field_formulas():
     """Hand-calc the report fields straight off the measurement arrays."""
     m = _measurement()
     rep = fcf.report(m)
-    assert isinstance(rep, fcf.ReinsuranceReport)
+    assert isinstance(rep, fcf.reinsurance.ReinsuranceReport)
 
     bel, ra, csm = m.bel_path, m.ra_path, m.csm_path
     discount_monthly = forward_rates(m.discount_factor_bom)

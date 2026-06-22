@@ -23,10 +23,7 @@ from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTAL
 from fastcashflow.disclosure import (
     line_metadata, reconciliation_to_frame, write_close_pack, write_reconciliation,
 )
-from fastcashflow.engine import (
-    GMMAggregate, GMMMeasurement, CurrentEstimate, CSMRecognitionSchedule,
-    clear_codegen_cache,
-)
+from fastcashflow.engine import clear_codegen_cache
 from fastcashflow.grouping import group, group_of_contracts
 from fastcashflow.compression import compress, CompressionResult
 from fastcashflow.io import (
@@ -49,27 +46,7 @@ from fastcashflow.model_points import (
     align_inforce_state,
     apply_inforce_state,
 )
-from fastcashflow.movement import (
-    GMMSettlementAggregate,
-    GMMSettlementMovement,
-    GMMSettlementReconciliation,
-    PAAPeriodMovement,
-    PAAReconciliation,
-    PAASettlementMovement,
-    PAASettlementReconciliation,
-    PeriodMovement,
-    Reconciliation,
-    ReinsurancePeriodMovement,
-    ReinsuranceReconciliation,
-    VFAPeriodMovement,
-    VFAReconciliation,
-    VFASettlementAggregate,
-    VFASettlementMovement,
-    VFASettlementReconciliation,
-    reconcile,
-    roll_forward,
-)
-from fastcashflow._paa import PAAMeasurement, PAAAggregate
+from fastcashflow.movement import reconcile, roll_forward
 from fastcashflow.plots import (
     plot_analysis_of_change,
     plot_cashflows,
@@ -87,15 +64,15 @@ from fastcashflow.solvency import (
 )
 from fastcashflow import solvency
 from fastcashflow.alm import (
-    DurationResult, Bond, liability_duration, liability_dv01, key_rate_dv01s,
+    liability_duration, liability_dv01, key_rate_dv01s,
     bond_duration, bond_value, effective_maturity, alm_gap, duration_gap,
 )
 from fastcashflow import alm
 from fastcashflow.assets import (
     Equity, Property, Cash, AssetPortfolio,
-    CashflowGap, asset_portfolio_cashflows, asset_value_path, asset_value_by_scenario,
+    asset_portfolio_cashflows, asset_value_path, asset_value_by_scenario,
     cashflow_gap, vfa_cashflow_gap,
-    ReinvestmentResult, reinvest, LiquidationResult, liquidate,
+    reinvest, liquidate,
     asset_portfolio_value, available_capital,
 )
 from fastcashflow import assets
@@ -111,12 +88,10 @@ from fastcashflow.solvency_assessment import (
     StochasticSolvency, stochastic_solvency_vfa, stochastic_solvency_gmm,
 )
 from fastcashflow import solvency_assessment
-from fastcashflow._reinsurance import ReinsuranceMeasurement
 from fastcashflow.report import (
-    DynamicSolvencyReport, ReinsuranceReport, Report, report,
+    DynamicSolvencyReport, Report, report,
 )
 from fastcashflow.projection import Cashflows, AccountTrajectory
-from fastcashflow.esg import EconomicScenarios
 from fastcashflow.profit import ProfitSignature
 from fastcashflow.state_model import (
     STATE_MODELS,
@@ -127,8 +102,7 @@ from fastcashflow.state_model import (
 from fastcashflow.stochastic import StochasticResult
 from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult
-from fastcashflow._vfa import VFAMeasurement, VFAAggregate
-from fastcashflow.portfolio import GoCSettlement, settle_group_of_contracts
+from fastcashflow.portfolio import settle_group_of_contracts
 from fastcashflow import (  # namespaces
     core, curves, gmm, paa, portfolio, reinsurance, mass_lapse_reinsurance,
     samples, vfa, esg,
@@ -148,21 +122,12 @@ __all__ = [
     "close", "ClosePackage", "assemble_sofp", "assemble_finance",
     "assemble_service_result", "reconciliation_to_frame", "line_metadata",
     "write_reconciliation", "write_close_pack",
-    "GMMMeasurement", "GMMAggregate", "CurrentEstimate",
-    "PAAMeasurement", "PAAAggregate",
-    "VFAMeasurement", "VFAAggregate",
-    "ReinsuranceMeasurement", "Report", "ReinsuranceReport", "DynamicSolvencyReport",
+    # result types now live in their producing namespace (fcf.gmm.GMMMeasurement,
+    # fcf.vfa.VFAMeasurement, fcf.reinsurance.ReinsuranceReport, fcf.esg.*, ...);
+    # only genuinely shared / universal result types stay flat below.
+    "Report", "DynamicSolvencyReport",
     "StochasticResult", "TVOGResult",
-    "PeriodMovement", "Reconciliation", "PAAPeriodMovement", "PAAReconciliation",
-    "VFAPeriodMovement", "VFAReconciliation",
-    "GMMSettlementMovement", "GMMSettlementReconciliation",
-    "GMMSettlementAggregate", "CSMRecognitionSchedule",
-    "GoCSettlement", "settle_group_of_contracts",
-    "PAASettlementMovement", "PAASettlementReconciliation",
-    "VFASettlementMovement", "VFASettlementReconciliation",
-    "VFASettlementAggregate",
-    "ReinsurancePeriodMovement", "ReinsuranceReconciliation",
-    "EconomicScenarios",
+    "settle_group_of_contracts",
     "ProfitSignature",
     "read_model_points", "read_vfa_model_points", "read_basis", "read_scenarios",
     "read_inforce_state", "read_inforce_policies",
@@ -175,15 +140,15 @@ __all__ = [
     "solvency", "required_capital", "vfa_required_capital",
     "vfa_equity_scr", "vfa_interest_scr", "catastrophe_scr", "solvency_ratio",
     "KICSInterest", "shock_spread",
-    "alm", "DurationResult", "Bond", "liability_duration", "liability_dv01",
+    "alm", "liability_duration", "liability_dv01",
     "key_rate_dv01s", "bond_duration", "bond_value", "effective_maturity",
     "alm_gap", "duration_gap",
     "assets", "solvency_assessment",
     "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
-    "CashflowGap", "asset_portfolio_cashflows", "asset_value_path",
+    "asset_portfolio_cashflows", "asset_value_path",
     "asset_value_by_scenario", "cashflow_gap",
     "vfa_cashflow_gap",
-    "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
+    "reinvest", "liquidate",
     "InteractionResult", "interaction_loss", "vfa_interaction_loss",
     "asset_portfolio_value", "available_capital", "net_interest_scr",
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",

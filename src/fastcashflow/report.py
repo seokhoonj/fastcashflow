@@ -270,7 +270,7 @@ class ReinsuranceReport:
     ``ra_release`` is the period release of the risk transferred (paragraph 64)
     excluding interest -- the same revenue-earned form as the issuer
     ``_report_gmm`` (the RA interest is in the finance line). The report (a P&L
-    view) and the :class:`~fastcashflow.ReinsuranceReconciliation` (a liability
+    view) and the :class:`~fastcashflow.reinsurance.ReinsuranceReconciliation` (a liability
     roll-forward) decompose the same opening->closing transition differently, so
     ``ra_release`` here is the revenue-earned amount, not the reconciliation's
     movement residual; the finance lines and the CSM release do tie out.

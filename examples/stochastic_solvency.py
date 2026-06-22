@@ -11,8 +11,9 @@ import numpy as np
 
 import fastcashflow as fcf
 from fastcashflow import (
-    AssetPortfolio, Basis, Bond, CalculationMethod, CoverageRate, ModelPoints, esg,
+    AssetPortfolio, Basis, CalculationMethod, CoverageRate, ModelPoints, esg,
 )
+from fastcashflow.alm import Bond
 from fastcashflow import solvency as sv
 
 

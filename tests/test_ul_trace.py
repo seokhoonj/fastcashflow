@@ -43,8 +43,8 @@ def test_ul_sample_measures_through_gmm_and_vfa():
         assert np.all(m.csm >= 0.0)
     # The sample is an account book -- the GMM measurement carries the sidecar.
     assert g.cashflows.account is not None
-    assert isinstance(g, fcf.GMMMeasurement)
-    assert isinstance(v, fcf.VFAMeasurement)
+    assert isinstance(g, fcf.gmm.GMMMeasurement)
+    assert isinstance(v, fcf.vfa.VFAMeasurement)
     # GMM (locked-in discount) and VFA (underlying return) differ on BEL.
     assert not np.allclose(g.bel, v.bel)
 
@@ -121,7 +121,7 @@ def test_ul_annuity_sample_measures_through_gmm():
     # Annuitizing contracts pay a survival income (phase 2) and no maturity lump.
     assert np.all(m.cashflows.annuity_cf.sum(axis=1) > 0.0)
     assert np.allclose(m.cashflows.maturity_cf, 0.0)
-    assert isinstance(m, fcf.GMMMeasurement)
+    assert isinstance(m, fcf.gmm.GMMMeasurement)
 
 
 def test_ul_annuity_sample_export_is_load_only():

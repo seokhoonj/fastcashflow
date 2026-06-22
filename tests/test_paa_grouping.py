@@ -10,7 +10,8 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import ModelPoints, PAAMeasurement, group, group_of_contracts
+from fastcashflow import ModelPoints, group, group_of_contracts
+from fastcashflow.paa import PAAMeasurement
 from fastcashflow.paa import measure as measure_paa
 from conftest import PATTERNS, make_death_basis
 

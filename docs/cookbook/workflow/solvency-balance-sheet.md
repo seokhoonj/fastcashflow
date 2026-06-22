@@ -3,7 +3,7 @@
 :::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
-- **자산 포트폴리오** 를 시가평가하고 (`fcf.AssetPortfolio`, `fcf.Bond` / `Equity` /
+- **자산 포트폴리오** 를 시가평가하고 (`fcf.AssetPortfolio`, `fcf.alm.Bond` / `Equity` /
   `Property` / `Cash`), **가용자본** (자산 - 부채) 을 산출 (`fcf.available_capital`)
 - 자산과 부채를 같은 곡선충격으로 재평가하는 **순금리 SCR** (`fcf.net_interest_scr`)
 - **주식 / 부동산 시장위험 SCR** (선진 -35% / 신흥 -48% / 부동산 -25%) 과 시장모듈 집계

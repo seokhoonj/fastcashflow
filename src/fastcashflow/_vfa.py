@@ -930,7 +930,7 @@ def measure_vfa_stochastic(model_points: ModelPoints, basis: Basis,
     -- that convexity is the reason to read the distribution.
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
-    underlying-items returns (e.g. :attr:`fastcashflow.EconomicScenarios.returns`).
+    underlying-items returns (e.g. :attr:`fastcashflow.esg.EconomicScenarios.returns`).
 
     Vectorised over the scenario axis: the deterministic projection (the intrinsic
     BEL and RA) is scenario-independent and runs once; only the guarantee time

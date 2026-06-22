@@ -49,22 +49,22 @@ Measurement (GMM)
 
 .. autofunction:: fastcashflow.gmm.recognition_schedule
 
-.. autoclass:: fastcashflow.GMMSettlementMovement
+.. autoclass:: fastcashflow.gmm.GMMSettlementMovement
    :members:
 
-.. autoclass:: fastcashflow.GMMSettlementReconciliation
+.. autoclass:: fastcashflow.gmm.GMMSettlementReconciliation
    :members:
 
-.. autoclass:: fastcashflow.GMMSettlementAggregate
+.. autoclass:: fastcashflow.gmm.GMMSettlementAggregate
    :members:
 
-.. autoclass:: fastcashflow.CSMRecognitionSchedule
+.. autoclass:: fastcashflow.gmm.CSMRecognitionSchedule
    :members:
 
-.. autoclass:: fastcashflow.GMMMeasurement
+.. autoclass:: fastcashflow.gmm.GMMMeasurement
    :members:
 
-.. autoclass:: fastcashflow.GMMAggregate
+.. autoclass:: fastcashflow.gmm.GMMAggregate
    :members:
 
 Premium allocation approach
@@ -82,16 +82,16 @@ Premium allocation approach
 
 .. autofunction:: fastcashflow.paa.settle_stream
 
-.. autoclass:: fastcashflow.PAASettlementMovement
+.. autoclass:: fastcashflow.paa.PAASettlementMovement
    :members:
 
-.. autoclass:: fastcashflow.PAASettlementReconciliation
+.. autoclass:: fastcashflow.paa.PAASettlementReconciliation
    :members:
 
-.. autoclass:: fastcashflow.PAAMeasurement
+.. autoclass:: fastcashflow.paa.PAAMeasurement
    :members:
 
-.. autoclass:: fastcashflow.PAAAggregate
+.. autoclass:: fastcashflow.paa.PAAAggregate
    :members:
 
 Variable fee approach
@@ -111,21 +111,21 @@ Variable fee approach
 
 .. autofunction:: fastcashflow.vfa.recognition_schedule
 
-.. autoclass:: fastcashflow.VFASettlementMovement
+.. autoclass:: fastcashflow.vfa.VFASettlementMovement
    :members:
 
-.. autoclass:: fastcashflow.VFASettlementReconciliation
+.. autoclass:: fastcashflow.vfa.VFASettlementReconciliation
    :members:
 
-.. autoclass:: fastcashflow.VFASettlementAggregate
+.. autoclass:: fastcashflow.vfa.VFASettlementAggregate
    :members:
 
-.. autoclass:: fastcashflow.VFAMeasurement
+.. autoclass:: fastcashflow.vfa.VFAMeasurement
    :members:
 
 .. autodata:: fastcashflow.vfa.CSM_BASES
 
-.. autoclass:: fastcashflow.VFAAggregate
+.. autoclass:: fastcashflow.vfa.VFAAggregate
    :members:
 
 .. autofunction:: fastcashflow.vfa.tvog
@@ -314,7 +314,7 @@ Asset-liability management
 Deterministic interest-rate sensitivity of the liability and the assets backing
 it -- duration, DV01, key-rate duration, and the asset-liability DV01 gap.
 
-.. autoclass:: fastcashflow.DurationResult
+.. autoclass:: fastcashflow.alm.DurationResult
    :members:
 
 .. autofunction:: fastcashflow.liability_duration
@@ -323,7 +323,7 @@ it -- duration, DV01, key-rate duration, and the asset-liability DV01 gap.
 
 .. autofunction:: fastcashflow.key_rate_dv01s
 
-.. autoclass:: fastcashflow.Bond
+.. autoclass:: fastcashflow.alm.Bond
    :members:
 
 .. autofunction:: fastcashflow.bond_duration
@@ -403,22 +403,22 @@ Period-close analysis of change
 
 .. autofunction:: fastcashflow.reconcile
 
-.. autoclass:: fastcashflow.PeriodMovement
+.. autoclass:: fastcashflow.gmm.PeriodMovement
    :members:
 
-.. autoclass:: fastcashflow.Reconciliation
+.. autoclass:: fastcashflow.gmm.Reconciliation
    :members:
 
-.. autoclass:: fastcashflow.PAAPeriodMovement
+.. autoclass:: fastcashflow.paa.PAAPeriodMovement
    :members:
 
-.. autoclass:: fastcashflow.PAAReconciliation
+.. autoclass:: fastcashflow.paa.PAAReconciliation
    :members:
 
-.. autoclass:: fastcashflow.VFAPeriodMovement
+.. autoclass:: fastcashflow.vfa.VFAPeriodMovement
    :members:
 
-.. autoclass:: fastcashflow.VFAReconciliation
+.. autoclass:: fastcashflow.vfa.VFAReconciliation
    :members:
 
 ``roll_forward`` and ``reconcile`` also accept the mixed-portfolio containers:

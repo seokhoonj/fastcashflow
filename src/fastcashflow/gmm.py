@@ -15,7 +15,11 @@ point's measurement as a tree.
 """
 from fastcashflow.engine import (
     measure, measure_aggregate, measure_inforce, settle, settle_aggregate,
-    recognition_schedule, CSMRecognitionSchedule)
+    recognition_schedule, CSMRecognitionSchedule,
+    GMMMeasurement, GMMAggregate, CurrentEstimate)
+from fastcashflow.movement import (
+    GMMSettlementMovement, GMMSettlementReconciliation, GMMSettlementAggregate,
+    PeriodMovement, Reconciliation)
 from fastcashflow.io import measure_stream, settle_stream
 from fastcashflow.pricing import interest_guarantee_tvog
 from fastcashflow.stochastic import measure_stochastic as stochastic
@@ -35,4 +39,8 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "stochastic", "interest_guarantee_tvog",
            "trace", "trace_diff", "trace_bel_step", "trace_csm_step",
            "liability_duration", "liability_dv01", "key_rate_dv01s",
-           "net_liability_cashflows"]
+           "net_liability_cashflows",
+           # result types (produced by gmm.measure / settle / roll_forward)
+           "GMMMeasurement", "GMMAggregate", "CurrentEstimate",
+           "GMMSettlementMovement", "GMMSettlementReconciliation",
+           "GMMSettlementAggregate", "PeriodMovement", "Reconciliation"]

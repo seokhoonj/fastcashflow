@@ -9,7 +9,7 @@
 - **Key-rate DV01** (연도 버킷별 민감도) 로 금리 노출의 만기 구조를 분해
   (`fcf.key_rate_dv01s`)
 - **채권** 듀레이션 (Macaulay / Modified / DV01) 과 **자산-부채 DV01 gap** 으로
-  면역화 (immunisation) 를 보는 법 (`fcf.Bond`, `fcf.bond_duration`, `fcf.alm_gap`)
+  면역화 (immunisation) 를 보는 법 (`fcf.alm.Bond`, `fcf.bond_duration`, `fcf.alm_gap`)
 :::
 
 ALM 의 실무적 시작은 거창한 동적 모델이 아니라 **결정론적 금리 민감도** -- 듀레이션과

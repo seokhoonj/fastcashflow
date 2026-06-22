@@ -11,7 +11,8 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import ExpenseItem, ModelPoints, VFAMeasurement, group, group_of_contracts
+from fastcashflow import ExpenseItem, ModelPoints, group, group_of_contracts
+from fastcashflow.vfa import VFAMeasurement
 from conftest import PATTERNS, make_death_basis
 
 

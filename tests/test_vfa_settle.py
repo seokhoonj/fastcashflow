@@ -519,7 +519,7 @@ def test_reconcile_returns_a_footing_settlement_table():
                       em_open=6, period=3)
     mv = fcf.vfa.settle(mp, state, basis, period_months=3)
     table = fcf.reconcile([mv])[0]
-    assert isinstance(table, fcf.VFASettlementReconciliation)
+    assert isinstance(table, fcf.vfa.VFASettlementReconciliation)
     assert table.period_months == 3
     # every printed block foots: opening + rows == closing (signed rows)
     assert np.isclose(table.bel_closing, table.bel_opening + table.bel_interest

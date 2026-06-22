@@ -5,7 +5,7 @@ liability to the closing one and decomposes the change into its drivers --
 the analysis of change (AoC). This is the step from a measurement
 calculator towards a reporting engine.
 
-``roll_forward`` slices a GMM :class:`~fastcashflow.GMMMeasurement` into
+``roll_forward`` slices a GMM :class:`~fastcashflow.gmm.GMMMeasurement` into
 reporting periods, reconciling each period's opening and closing BEL, RA
 and CSM. It models all three drivers of the movement:
 

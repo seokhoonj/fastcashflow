@@ -1225,7 +1225,7 @@ def stochastic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints
     time-value drag.
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
-    underlying-items returns OR an :class:`~fastcashflow.EconomicScenarios` (its
+    underlying-items returns OR an :class:`~fastcashflow.esg.EconomicScenarios` (its
     ``returns`` are used). Extra keywords pass through to :func:`vfa_assess_solvency`.
     Both the variable-annuity and universal-life paths are supported.
 
@@ -1234,7 +1234,7 @@ def stochastic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints
     unit-funded (it tracks the fund, not the entity), so the entity holds bonds for
     the guarantee, and those co-move with INTEREST RATES, not the fund return -- a
     different axis from ``return_scenarios``. So ``co_moving_assets=True`` needs an
-    :class:`~fastcashflow.EconomicScenarios` (the fund ``returns`` drive the
+    :class:`~fastcashflow.esg.EconomicScenarios` (the fund ``returns`` drive the
     guarantee liability, the joint ``rates`` revalue the bonds, keeping their
     correlation); a raw returns array carries no rate path and is rejected. Off (the
     default) holds the asset value at its t=0 base-curve level. The prescribed
@@ -1279,7 +1279,7 @@ def stochastic_solvency_gmm(portfolio: AssetPortfolio, model_points: ModelPoints
 
     ``rate_scenarios`` is a 1-D ``(n_scenarios,)`` array of flat annual rates, a
     2-D ``(n_scenarios, n_time)`` array of rate curves, OR an
-    :class:`~fastcashflow.EconomicScenarios` (its ``rates`` are used). Extra
+    :class:`~fastcashflow.esg.EconomicScenarios` (its ``rates`` are used). Extra
     keywords pass through to :func:`assess_solvency`.
 
     ``co_moving_assets`` (default ``False``) makes the asset value MOVE WITH each

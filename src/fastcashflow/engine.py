@@ -1125,7 +1125,7 @@ def measure_inforce(
     Paragraph-44(c) unlocking, experience adjustments and the loss-component
     movement live in :func:`fastcashflow.gmm.settle` (``loss_component`` is
     zero in this mode); the opening -> closing movement of a reporting period
-    comes from ``settle``'s :class:`~fastcashflow.GMMSettlementMovement`, not
+    comes from ``settle``'s :class:`~fastcashflow.gmm.GMMSettlementMovement`, not
     from this projector.
     """
     # A mixed-model router must go through fcf.portfolio.measure_inforce --

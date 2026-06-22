@@ -97,7 +97,7 @@ def test_ul_annuity_conversion_and_cashflows_hand_calc():
     assert np.isclose(m.bel[0], 30_000.0 - 1_000_000.0)
     assert np.isclose(m.csm[0], 970_000.0)
     assert np.isclose(m.loss_component[0], 0.0)
-    assert isinstance(m, fcf.GMMMeasurement)
+    assert isinstance(m, fcf.gmm.GMMMeasurement)
 
 
 def test_ul_annuity_gmab_floor_at_conversion():

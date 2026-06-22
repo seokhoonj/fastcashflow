@@ -22,10 +22,12 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import Basis, CalculationMethod, ModelPoints, CoverageRate
 from fastcashflow.basis import BasisRouter
-# Native aggregate types are public at the top level (fcf.GMMAggregate, ...);
+# Native aggregate types are public at the top level (fcf.gmm.GMMAggregate, ...);
 # the portfolio orchestrator entry + container live in the fcf.portfolio
 # namespace (like PortfolioMeasurement). Import each from its public home.
-from fastcashflow import GMMAggregate, PAAAggregate, VFAAggregate
+from fastcashflow.gmm import GMMAggregate
+from fastcashflow.paa import PAAAggregate
+from fastcashflow.vfa import VFAAggregate
 from fastcashflow.portfolio import measure, measure_aggregate, PortfolioAggregate
 
 
