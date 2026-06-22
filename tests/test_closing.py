@@ -155,7 +155,7 @@ def test_finance_sums_sources_and_keeps_loss_finance_a_memo():
     df = assemble_finance([recon])
     # total = 10 + 2 + 5 + 1 + 3 = 21 (finance_wedge included, B97(a))
     assert _fcell(df, _KIND_ISSUED, _FINANCE_TOTAL) == pytest.approx(21.0)
-    assert _fcell(df, _KIND_ISSUED, "Finance wedge") == pytest.approx(3.0)
+    assert _fcell(df, _KIND_ISSUED, "Locked-in rate adjustment") == pytest.approx(3.0)
     # the memo is reported but NOT part of the total
     memo = df.filter((pl.col("kind") == _KIND_ISSUED)
                      & (pl.col("line") == "Loss component finance"))

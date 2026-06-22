@@ -93,7 +93,7 @@ def _bel(model_points: ModelPoints, basis: Basis, discount_annual) -> float:
     _reject_account_book_alm(
         model_points, basis,
         "the ALM liability interest metrics (liability_dv01 / liability_duration "
-        "/ key_rate_durations)")
+        "/ key_rate_dv01s)")
     m = measure(model_points, replace(basis, discount_annual=discount_annual),
                 full=False)
     return float(m.bel.sum())
@@ -306,7 +306,7 @@ def liability_duration(model_points: ModelPoints, basis: Basis, *,
                           dv01=dv01, convexity=convexity)
 
 
-def key_rate_durations(model_points: ModelPoints, basis: Basis, *,
+def key_rate_dv01s(model_points: ModelPoints, basis: Basis, *,
                        bump: float = _BP) -> FloatArray:
     """Key-rate DV01s -- the liability DV01 attributed to each policy-year bucket
     of the curve, by bumping one year of the per-year discount curve at a time
@@ -537,7 +537,7 @@ def duration_gap(asset_duration: float, asset_value: float,
 __all__ = [
     "DurationResult", "Bond", "net_liability_cashflows",
     "vfa_net_liability_cashflows",
-    "liability_dv01", "liability_duration", "key_rate_durations",
+    "liability_dv01", "liability_duration", "key_rate_dv01s",
     "bond_cashflows", "bond_value", "bond_duration", "effective_maturity",
     "alm_gap", "duration_gap",
 ]

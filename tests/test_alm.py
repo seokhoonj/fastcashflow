@@ -70,7 +70,7 @@ def test_liability_interest_metrics_account_book_redirect_to_vfa():
     discounts at the underlying-items return); the error routes to the VFA
     interest sub-risk rather than raising the engine's mixed-book message."""
     mp, basis = _ul_mp(), _ul_basis()
-    for fn in (alm.liability_dv01, alm.liability_duration, alm.key_rate_durations):
+    for fn in (alm.liability_dv01, alm.liability_duration, alm.key_rate_dv01s):
         with pytest.raises(NotImplementedError, match="vfa.liability_duration"):
             fn(mp, basis)
 
@@ -81,7 +81,7 @@ def test_alm_namespaces_mirror_module():
     for fcf.vfa.measure), each the same object as its alm.* implementation."""
     assert fcf.gmm.liability_duration is alm.liability_duration
     assert fcf.gmm.liability_dv01 is alm.liability_dv01
-    assert fcf.gmm.key_rate_durations is alm.key_rate_durations
+    assert fcf.gmm.key_rate_dv01s is alm.key_rate_dv01s
     assert fcf.gmm.net_liability_cashflows is alm.net_liability_cashflows
     assert fcf.vfa.liability_duration is alm.vfa_liability_duration
     assert fcf.vfa.liability_dv01 is alm.vfa_liability_dv01
@@ -142,10 +142,10 @@ def test_liability_duration_result():
     assert np.isclose(d.dv01, d.modified * abs(d.pv) * 1e-4)
 
 
-def test_key_rate_durations_sum_to_parallel():
+def test_key_rate_dv01s_sum_to_parallel():
     """The per-year key-rate DV01s decompose the parallel DV01."""
     mp, basis = _mp(), _basis()
-    krd = alm.key_rate_durations(mp, basis)
+    krd = alm.key_rate_dv01s(mp, basis)
     assert np.isclose(krd.sum(), alm.liability_dv01(mp, basis), rtol=1e-3)
     assert krd.shape[0] == 10                          # 120-month term -> 10 years
 

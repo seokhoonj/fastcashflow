@@ -200,18 +200,18 @@ _FINANCE_LINES = (
     ("RA finance", "ra_interest"),          # finance on the risk adjustment
     ("CSM finance", "csm_accretion"),       # CSM interest at the locked-in rate (B72)
     ("LIC finance", "lic_finance"),         # 42(c): incurred-claims discount unwind
-    ("Finance wedge", "finance_wedge"),     # B97(a): current vs locked-in rate gap
+    ("Locked-in rate adjustment", "finance_wedge"),  # B97(a): current vs locked-in rate gap
 )
 _FINANCE_MEMO_LINES = (
     ("Loss component finance", "loss_component_finance"),  # 51(c): sub-component of BEL finance
 )
-_FINANCE_TOTAL = "Insurance finance expense"
+_FINANCE_TOTAL = "Insurance finance income or expenses"
 
 
 def _finance_position(recons, kind: str) -> dict[str, float]:
     """Sum each finance line of the reconciliations of one kind. Reads fields
     with getattr defaults so a model lacking a line (PAA has no CSM accretion,
-    VFA no finance wedge, reinsurance no LIC) contributes zero to it."""
+    VFA no locked-in adjustment, reinsurance no LIC) contributes zero to it."""
     fields = [field for _l, field in _FINANCE_LINES + _FINANCE_MEMO_LINES]
     acc = {field: 0.0 for field in fields}
     for recon in recons:
@@ -240,12 +240,13 @@ def _kind_finance_rows(kind: str, acc: dict[str, float]) -> list[dict]:
 def assemble_finance(reconciliations) -> pl.DataFrame:
     """The insurance finance statement (IFRS 17 paragraphs 87-89, B130-B136).
 
-    The period's insurance finance expense disaggregated by source -- finance on
-    the BEL, the RA, the CSM (accretion at the locked-in rate, B72), the
-    liability for incurred claims (42(c)), and the B97(a) finance wedge (the
-    current-vs-locked-in rate gap on the experience adjustment) -- for contracts
-    issued, reinsurance contracts held, and the net. The five sources sum to the
-    ``Insurance finance expense`` total line. ``Loss component finance`` is a
+    The period's insurance finance income or expenses disaggregated by source --
+    finance on the BEL, the RA, the CSM (accretion at the locked-in rate, B72),
+    the liability for incurred claims (42(c)), and the B97(a) locked-in rate
+    adjustment (the current-vs-locked-in rate gap on the experience adjustment) --
+    for contracts issued, reinsurance contracts held, and the net. The five
+    sources sum to the ``Insurance finance income or expenses`` total line.
+    ``Loss component finance`` is a
     memo: the loss component's share of the BEL finance (51(c)), already inside
     the BEL finance line, not an additional amount.
     """

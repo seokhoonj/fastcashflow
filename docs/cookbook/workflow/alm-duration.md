@@ -7,7 +7,7 @@
   (`fcf.liability_duration`, `fcf.liability_dv01`)
 - 공개 EV/IFRS17 공시처럼 **금리 +/-100bp** 부채 변화를 보는 법
 - **Key-rate DV01** (연도 버킷별 민감도) 로 금리 노출의 만기 구조를 분해
-  (`fcf.key_rate_durations`)
+  (`fcf.key_rate_dv01s`)
 - **채권** 듀레이션 (Macaulay / Modified / DV01) 과 **자산-부채 DV01 gap** 으로
   면역화 (immunisation) 를 보는 법 (`fcf.Bond`, `fcf.bond_duration`, `fcf.alm_gap`)
 :::
@@ -65,7 +65,7 @@ convexity 약간) 입니다. effective duration 4.56년 = BEL 의 금리 민감 
 평행 DV01 을 **연도 버킷별** 로 분해합니다 (각 연도의 곡선만 충격). 버킷 합이 평행 DV01.
 
 ```python
-krd = alm.key_rate_durations(mp, basis)
+krd = alm.key_rate_dv01s(mp, basis)
 for yr, k in enumerate(krd, 1):
     print(f"  year {yr:>2}: {k:>12,.0f}")
 print(f"  sum    : {krd.sum():>12,.0f}  (~ parallel DV01)")

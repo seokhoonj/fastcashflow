@@ -646,7 +646,7 @@ class ReinsurancePricing:
         return self.premium - self.expected_recovery
 
     @property
-    def premium_rate(self) -> float:
+    def rate_on_line(self) -> float:
         """Premium as a fraction of the capacity at risk (the market quote
         convention -- typically a low single-digit percent)."""
         return self.premium / self.capacity_at_risk if self.capacity_at_risk else 0.0
@@ -836,7 +836,7 @@ def report(
          f"   (loss-on-line {pricing.loss_on_line:.2%})"),
         f"  assumed capital                : {_money(pricing.capital)}",
         (f"  premium                        : {_money(pricing.premium)}"
-         f"   ({pricing.premium_rate:.2%} of capacity)"),
+         f"   ({pricing.rate_on_line:.2%} of capacity)"),
         f"  expected profit                : {_money(pricing.expected_profit)}",
         "",
         (f"[3] Reinsurer IFRS 17 measurement   (duration={duration_years}y, "

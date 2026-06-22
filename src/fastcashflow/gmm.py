@@ -26,7 +26,7 @@ from fastcashflow.trace import (
     show_trace_diff as trace_diff,
 )
 from fastcashflow.alm import (
-    liability_duration, liability_dv01, key_rate_durations,
+    liability_duration, liability_dv01, key_rate_dv01s,
     net_liability_cashflows)
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
@@ -34,5 +34,5 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "recognition_schedule", "CSMRecognitionSchedule",
            "stochastic", "interest_guarantee_tvog",
            "trace", "trace_diff", "trace_bel_step", "trace_csm_step",
-           "liability_duration", "liability_dv01", "key_rate_durations",
+           "liability_duration", "liability_dv01", "key_rate_dv01s",
            "net_liability_cashflows"]

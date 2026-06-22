@@ -321,7 +321,7 @@ it -- duration, DV01, key-rate duration, and the asset-liability DV01 gap.
 
 .. autofunction:: fastcashflow.liability_dv01
 
-.. autofunction:: fastcashflow.key_rate_durations
+.. autofunction:: fastcashflow.key_rate_dv01s
 
 .. autoclass:: fastcashflow.Bond
    :members:
