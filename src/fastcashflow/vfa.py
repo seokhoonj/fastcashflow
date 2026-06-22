@@ -27,10 +27,15 @@ from fastcashflow.movement import VFASettlementMovement
 from fastcashflow.tvog import measure_tvog as tvog
 from fastcashflow.trace import (
     show_trace_vfa as trace, show_trace_diff_vfa as trace_diff)
+from fastcashflow.alm import (
+    vfa_liability_duration as liability_duration,
+    vfa_liability_dv01 as liability_dv01,
+    vfa_net_liability_cashflows as net_liability_cashflows)
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
            "recognition_schedule", "tvog", "guarantee_tvog", "trace",
            "trace_diff", "CSM_BASES", "VFAMeasurement", "GuaranteeTVOG",
            "VFASettlementMovement", "moneyness_lapse_multiplier",
-           "moneyness_lapse_scale", "stochastic"]
+           "moneyness_lapse_scale", "stochastic",
+           "liability_duration", "liability_dv01", "net_liability_cashflows"]

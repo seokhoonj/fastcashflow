@@ -36,6 +36,83 @@ def test_net_cashflows_needs_full():
         alm.net_liability_cashflows(measure(mp, basis, full=False))
 
 
+def _ul_basis():
+    """A minimal universal-life basis -- account-backed DEATH coverage."""
+    from fastcashflow import Basis, CoverageRate
+    return Basis(
+        mortality_annual=lambda s, a, d: np.full(s.shape, 0.001),
+        lapse_annual=lambda s, a, d: np.full(s.shape, 0.0),
+        discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.1,
+        investment_return=0.04,
+        coverages=(CoverageRate("DEATH", lambda s, a, d: np.full(s.shape, 0.01),
+                                funds_from_account=True, pays_account_balance=True),))
+
+
+def _ul_mp():
+    from fastcashflow import CalculationMethod
+    return fcf.ModelPoints.single(40, 0.0, 120, benefits={"DEATH": 1e5},
+                                  account_value=1_000.0, minimum_death_benefit=1e5,
+                                  count=100.0,
+                                  calculation_methods={"DEATH": CalculationMethod.DEATH})
+
+
+def test_net_cashflows_account_book_redirects_to_vfa():
+    """An account-value (UL) book is routed to the entity net-liability ladder --
+    the error names vfa_net_liability_cashflows / vfa_cashflow_gap, not a bare
+    'unsupported'."""
+    m = fcf.vfa.measure(_ul_mp(), _ul_basis())
+    with pytest.raises(NotImplementedError, match="vfa_net_liability_cashflows"):
+        alm.net_liability_cashflows(m)
+
+
+def test_liability_interest_metrics_account_book_redirect_to_vfa():
+    """The discount-bump interest metrics do not apply to an account book (it
+    discounts at the underlying-items return); the error routes to the VFA
+    interest sub-risk rather than raising the engine's mixed-book message."""
+    mp, basis = _ul_mp(), _ul_basis()
+    for fn in (alm.liability_dv01, alm.liability_duration, alm.key_rate_durations):
+        with pytest.raises(NotImplementedError, match="vfa.liability_duration"):
+            fn(mp, basis)
+
+
+def test_alm_namespaces_mirror_module():
+    """ALM is exposed through the model namespaces like measure / trace: the GMM
+    metrics under fcf.gmm.*, the VFA metrics under fcf.vfa.* (the symmetric home
+    for fcf.vfa.measure), each the same object as its alm.* implementation."""
+    assert fcf.gmm.liability_duration is alm.liability_duration
+    assert fcf.gmm.liability_dv01 is alm.liability_dv01
+    assert fcf.gmm.key_rate_durations is alm.key_rate_durations
+    assert fcf.gmm.net_liability_cashflows is alm.net_liability_cashflows
+    assert fcf.vfa.liability_duration is alm.vfa_liability_duration
+    assert fcf.vfa.liability_dv01 is alm.vfa_liability_dv01
+    assert fcf.vfa.net_liability_cashflows is alm.vfa_net_liability_cashflows
+
+
+def _ul_guaranteed_mp():
+    """A UL book with a 6% crediting guarantee above the 4% underlying return --
+    the floor binds, so the liability is sensitive to the underlying return (an
+    interest gap the VFA duration captures)."""
+    from fastcashflow import CalculationMethod
+    return fcf.ModelPoints.single(40, 0.0, 120, benefits={"DEATH": 1e5},
+                                  account_value=1e4, minimum_death_benefit=1e5,
+                                  minimum_crediting_rate=0.06, count=100.0,
+                                  calculation_methods={"DEATH": CalculationMethod.DEATH})
+
+
+def test_vfa_liability_duration_responds_to_crediting_guarantee():
+    """fcf.vfa.liability_duration differences the VFA BEL against the underlying-
+    items return. With a binding crediting guarantee the BEL moves, so the dv01 is
+    non-zero and finite; the duration's dv01 matches vfa_liability_dv01, and the
+    modified duration is dv01 / (|pv| * 1bp)."""
+    mp, basis = _ul_guaranteed_mp(), _ul_basis()
+    dur = fcf.vfa.liability_duration(mp, basis)
+    dv01 = fcf.vfa.liability_dv01(mp, basis)
+    assert np.isfinite(dur.pv) and abs(dur.dv01) > 1.0          # the guarantee bites
+    assert np.isclose(dur.dv01, dv01)                          # the two agree
+    assert np.isclose(dur.modified, dur.dv01 / (abs(dur.pv) * 1e-4))
+    assert np.isnan(dur.macaulay)                              # mixed-sign stream
+
+
 def test_liability_dv01_sign_and_finite():
     """A positive-reserve liability falls in value when rates rise, so DV01 > 0."""
     mp, basis = _mp(), _basis()

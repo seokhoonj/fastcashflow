@@ -34,7 +34,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
-from fastcashflow.engine import measure
+from fastcashflow.engine import measure, _portfolio_has_account
 from fastcashflow.model_points import ModelPoints
 
 _BP = 1e-4    # one basis point
@@ -61,8 +61,39 @@ class DurationResult:
     convexity: float = float("nan")
 
 
+def _reject_account_book_alm(model_points: ModelPoints, basis: Basis,
+                             entry: str) -> None:
+    """Route an account-value (universal-life / variable) book away from the
+    GMM-style discount-bump interest metrics.
+
+    Such a book discounts its liability at the underlying-items return, not the
+    risk-free curve, so bumping ``discount_annual`` is not its interest
+    sensitivity. The VFA layer carries the symmetric tools: the interest
+    sensitivity is :func:`vfa_liability_duration` / :func:`vfa_liability_dv01`
+    (``fcf.vfa.liability_duration``, which bumps the underlying-items return), the
+    rate capital is the VFA interest sub-risk
+    (:func:`fastcashflow.vfa_interest_scr`), and the asset-liability cash-flow
+    ladder is :func:`fastcashflow.assets.vfa_cashflow_gap` over
+    :func:`vfa_net_liability_cashflows`.
+    """
+    if _portfolio_has_account(model_points, basis):
+        raise NotImplementedError(
+            f"{entry} does not apply to an account-value (universal-life / "
+            "variable) book -- its liability is discounted at the underlying-"
+            "items return, not the risk-free curve, so a discount-curve bump is "
+            "not its interest sensitivity. Use fcf.vfa.liability_duration / "
+            "fcf.vfa.liability_dv01 for the VFA interest sensitivity, "
+            "fcf.vfa_interest_scr for the rate capital, and "
+            "fcf.assets.vfa_cashflow_gap / fcf.vfa.net_liability_cashflows for "
+            "the asset-liability cash-flow ladder.")
+
+
 def _bel(model_points: ModelPoints, basis: Basis, discount_annual) -> float:
     """Portfolio BEL under a discount curve override (fast path)."""
+    _reject_account_book_alm(
+        model_points, basis,
+        "the ALM liability interest metrics (liability_dv01 / liability_duration "
+        "/ key_rate_durations)")
     m = measure(model_points, replace(basis, discount_annual=discount_annual),
                 full=False)
     return float(m.bel.sum())
@@ -89,9 +120,12 @@ def net_liability_cashflows(measurement) -> tuple[FloatArray, FloatArray]:
     ``discount_factor_bom`` / ``discount_factor_mid`` reproduces the BEL. The
     premium is the only inflow (a minus); every claim is an outflow (a plus).
 
-    Requires a ``full=True`` measurement. Account-value (universal-life) books are
-    rejected: their BEL is netted of the account fund after discounting, so the
-    raw cash flows do not reconstruct it.
+    Requires a ``full=True`` measurement. This is the GROSS-benefit ladder for a
+    non-account book; an account-value (universal-life / variable) book has its
+    own entity net-liability ladder -- use :func:`vfa_net_liability_cashflows`
+    (and :func:`fastcashflow.assets.vfa_cashflow_gap` for the asset-liability
+    gap), which net the account fund the entity holds. This function rejects an
+    account book rather than return a gross ladder its net BEL would not match.
     """
     cf = measurement.cashflows
     if cf is None:
@@ -100,9 +134,12 @@ def net_liability_cashflows(measurement) -> tuple[FloatArray, FloatArray]:
             "flows); the headline-only fast path does not carry them.")
     if getattr(cf, "account", None) is not None:
         raise NotImplementedError(
-            "net_liability_cashflows does not support account-value (UL) books -- "
-            "their BEL nets the account fund after discounting, so the raw cash "
-            "flows do not reconstruct it.")
+            "net_liability_cashflows is the gross-benefit ladder for a "
+            "non-account book; an account-value (universal-life / variable) book "
+            "nets the account fund after discounting, so the raw flows do not "
+            "reconstruct its net BEL. Use fcf.alm.vfa_net_liability_cashflows "
+            "(the entity net-liability ladder) / fcf.assets.vfa_cashflow_gap "
+            "instead.")
     n_time = cf.premium_cf.shape[1]
     flow_mid = (cf.mortality_cf + cf.morbidity_cf + cf.disability_cf
                 + cf.expense_cf + cf.surrender_cf).sum(axis=0)
@@ -286,6 +323,63 @@ def key_rate_durations(model_points: ModelPoints, basis: Basis, *,
         dn = _bel(model_points, basis, dn_curve)
         krd[k] = -(up - dn) / (2.0 * bump) * _BP
     return krd
+
+
+# ---------------------------------------------------------------------------
+# VFA (account-value) interest sensitivity -- the symmetric counterpart of the
+# liability_* metrics above. A variable / universal-life book discounts at the
+# underlying-items return, not the risk-free curve, so its interest sensitivity
+# bumps ``investment_return`` (which moves BOTH the discount and the account
+# growth, so the two effects partly offset -- the genuine VFA interest gap).
+# Exposed as ``fcf.vfa.liability_duration`` / ``fcf.vfa.liability_dv01``.
+# ---------------------------------------------------------------------------
+def _vfa_bel(model_points: ModelPoints, basis: Basis, investment_return) -> float:
+    """VFA portfolio BEL under an underlying-items-return override (fast path)."""
+    from fastcashflow._vfa import measure_vfa
+    m = measure_vfa(model_points,
+                    replace(basis, investment_return=investment_return), full=False)
+    return float(m.bel.sum())
+
+
+def vfa_liability_dv01(model_points: ModelPoints, basis: Basis, *,
+                       bump: float = _BP) -> float:
+    """The VFA liability DV01 -- the decrease in the VFA BEL for a +1bp parallel
+    rise in the underlying-items return, by central difference.
+
+    The VFA counterpart of :func:`liability_dv01`: where the GMM metric bumps the
+    risk-free discount curve, this bumps ``basis.investment_return`` (the rate the
+    account is credited and the liability discounted at), so the figure nets the
+    discount and account-growth responses. Exposed as ``fcf.vfa.liability_dv01``."""
+    base = float(np.asarray(basis.investment_return, dtype=np.float64))
+    up = _vfa_bel(model_points, basis, base + bump)
+    dn = _vfa_bel(model_points, basis, base - bump)
+    return -(up - dn) / (2.0 * bump) * _BP
+
+
+def vfa_liability_duration(model_points: ModelPoints, basis: Basis, *,
+                           bump: float = _BP) -> DurationResult:
+    """The VFA liability's interest sensitivity -- the VFA counterpart of
+    :func:`liability_duration`, differencing the VFA BEL against the
+    underlying-items return (``basis.investment_return``) rather than the
+    risk-free curve. ``pv`` is the VFA BEL; ``dv01`` / effective ``modified`` /
+    ``convexity`` mirror :func:`liability_duration` (``modified`` / ``convexity``
+    are ``nan`` when ``|pv|`` is negligible). ``macaulay`` is ``nan``.
+
+    A single-rate (flat) sensitivity: the underlying-items return is one scalar,
+    not a per-year curve, so there is no key-rate decomposition counterpart.
+    Exposed as ``fcf.vfa.liability_duration``."""
+    base = float(np.asarray(basis.investment_return, dtype=np.float64))
+    pv = _vfa_bel(model_points, basis, base)
+    dv01 = vfa_liability_dv01(model_points, basis, bump=bump)
+    if abs(pv) > 1.0:
+        modified = dv01 / (abs(pv) * _BP)
+        up = _vfa_bel(model_points, basis, base + bump)
+        dn = _vfa_bel(model_points, basis, base - bump)
+        convexity = (up + dn - 2.0 * pv) / (abs(pv) * bump * bump)
+    else:
+        modified = convexity = float("nan")
+    return DurationResult(pv=pv, macaulay=float("nan"), modified=modified,
+                          dv01=dv01, convexity=convexity)
 
 
 # ---------------------------------------------------------------------------
