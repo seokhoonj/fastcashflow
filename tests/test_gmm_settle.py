@@ -635,12 +635,41 @@ def test_settle_uniform_lock_in_array_equals_scalar():
             assert np.allclose(getattr(arr, f.name), v, equal_nan=True), f.name
 
 
-def test_settle_aggregate_rejects_cohort_aware_lock_in():
-    """settle_aggregate is not yet cohort-aware -- it rejects a mixed rate (use the
-    per-MP gmm.settle, which partitions)."""
+def test_settle_aggregate_cohort_aware_lock_in_equals_per_mp_sum():
+    """settle_aggregate is cohort-aware: a mixed locked-in-rate book aggregates to
+    the per-MP gmm.settle sum (each chunk partitions by rate, the lines are
+    additive), and the chunking is a memory knob, not a numbers knob."""
+    from dataclasses import fields, replace
+    from fastcashflow.movement import _GMM_SETTLEMENT_LINES
+    basis = _basis()
+    mp, state = _book(basis, n=2)
+    state = replace(state, lock_in_rate=np.array([0.03, 0.05]))
+    mv = fcf.gmm.settle(mp, state, basis, period_months=12)
+    agg = fcf.gmm.settle_aggregate(mp, state, basis, period_months=12)
+    for name in _GMM_SETTLEMENT_LINES:
+        assert np.isclose(getattr(agg, name), float(getattr(mv, name).sum())), name
+    # chunk_size is a memory knob, never a numbers knob (mixed rates split across
+    # chunk boundaries still foot to the same total)
+    one = fcf.gmm.settle_aggregate(mp, state, basis, period_months=12, chunk_size=1)
+    for name in _GMM_SETTLEMENT_LINES:
+        assert np.isclose(getattr(agg, name), getattr(one, name)), name
+    # the mixed book has no single locked rate -- the echo is NaN, the per-rate
+    # detail is in the per-MP movement
+    assert np.isnan(agg.lock_in_rate)
+
+
+def test_settle_aggregate_uniform_lock_in_array_echoes_scalar():
+    """A uniform lock_in_rate carried as a per-row array collapses: the aggregate
+    echoes the scalar rate (not NaN), matching the scalar-rate aggregate."""
     from dataclasses import replace
     basis = _basis()
     mp, state = _book(basis, n=2)
-    with pytest.raises(NotImplementedError, match="cohort-aware"):
-        fcf.gmm.settle_aggregate(mp, replace(state, lock_in_rate=np.array([0.03, 0.05])),
-                                 basis, period_months=12)
+    arr = fcf.gmm.settle_aggregate(
+        mp, replace(state, lock_in_rate=np.array([0.03, 0.03])),
+        basis, period_months=12)
+    sca = fcf.gmm.settle_aggregate(
+        mp, replace(state, lock_in_rate=0.03), basis, period_months=12)
+    assert arr.lock_in_rate == 0.03
+    from fastcashflow.movement import _GMM_SETTLEMENT_LINES
+    for name in _GMM_SETTLEMENT_LINES:
+        assert np.isclose(getattr(arr, name), getattr(sca, name)), name

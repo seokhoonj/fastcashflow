@@ -1769,11 +1769,17 @@ def settle_aggregate(
     # chunk's model points and state rows always belong to the same
     # contracts; the per-chunk settle re-checks the aligned pair (a no-op).
     state = _reconcile_state(model_points, state)
-    if _has_mixed_lock_in(state):
-        raise NotImplementedError(
-            "gmm.settle_aggregate: per-MP (cohort-aware) lock-in rates are not yet "
-            "supported here; gmm.settle (the per-MP movement) partitions by rate")
-    state = _collapse_uniform_lock_in(state)
+    # A cohort-aware (mixed) lock-in book is handled WITHIN each chunk: the
+    # per-chunk :func:`settle` partitions by rate (Sec. B72(b)) and returns a
+    # per-MP movement, and every settlement line is additive, so the chunk sum
+    # is the portfolio total regardless of how the rates mix across chunks. A
+    # uniform array collapses to the scalar the chunk body expects. The only
+    # scalar with no single value for a mixed book is the ``lock_in_rate`` echo
+    # (metadata that ``reconcile`` ignores), reported as NaN; the per-rate
+    # detail lives in the per-MP gmm.settle movement.
+    mixed_lock_in = _has_mixed_lock_in(state)
+    if not mixed_lock_in:
+        state = _collapse_uniform_lock_in(state)
     n_mp = int(model_points.issue_age.shape[0])
     # A per-MP fraction is sliced per chunk so the aggregate equals the per-MP
     # settle sum even when the premium split varies by contract (the per-chunk
@@ -1796,7 +1802,9 @@ def settle_aggregate(
         for name in _GMM_SETTLEMENT_LINES:
             parts[name].append(float(getattr(mv, name).sum()))
     return GMMSettlementAggregate(
-        period_months=period, lock_in_rate=float(state.lock_in_rate),
+        period_months=period,
+        lock_in_rate=(float("nan") if mixed_lock_in
+                      else float(state.lock_in_rate)),
         **{name: math.fsum(vals) for name, vals in parts.items()})
 
 
