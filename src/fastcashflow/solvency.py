@@ -329,7 +329,8 @@ def mass_lapse(fraction: float) -> Stress:
 
     Zero one-time outflow when the basis prices no surrender value (the count
     haircut alone, the historical behaviour). Account-backed (universal-life)
-    surrender is not yet included -- see ``inforce_surrender_value``."""
+    books pay the account value net of the surrender charge at the shock date --
+    ``inforce_surrender_value`` reads it from the account roll."""
     def apply(mp: ModelPoints, basis: Basis):
         n = mp.n_mp
         count = np.ones(n) if mp.count is None else np.asarray(mp.count, float)

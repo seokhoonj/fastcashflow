@@ -73,6 +73,67 @@ def test_inforce_surrender_value_amount_per_policy(em):
     assert np.isclose(sv[0], 1_000.0 * amount[em])
 
 
+def _ul_surrender_basis(surr_charge, **overrides):
+    """A minimal universal-life basis -- account-backed DEATH coverage, no COI /
+    expenses / lapse, flat surrender charge. With zero credit and no charges the
+    account value stays at ``av0``, so ``av_mid == av0`` and the surrender value
+    is a clean ``av0 * (1 - surr_charge)``."""
+    kw = dict(
+        mortality_annual=_flat_rate(0.0),
+        lapse_annual=_flat_rate(0.0),
+        discount_annual=0.03,
+        ra_confidence=0.75,
+        mortality_cv=0.0,
+        investment_return=0.0,                 # r_m = 0 -> credit = 0
+        surrender_charge_annual=(lambda s, a, d, ic, el:
+                                 np.full(s.shape, surr_charge, dtype=np.float64)),
+        coverages=(CoverageRate("DEATH", _flat_rate(0.0), funds_from_account=True,
+                                pays_account_balance=True),),
+    )
+    kw.update(overrides)
+    return Basis(**kw)
+
+
+@pytest.mark.parametrize("em", [0, 12, 24])
+def test_inforce_surrender_value_account_backed_hand_calc(em):
+    """Universal-life surrender value = ``count * av0 * (1 - surr_charge)``.
+
+    With zero credit / COI / expenses the account stays flat at ``av0``, so the
+    per-policy surrender value is ``av0 * (1 - surr_charge)`` at every duration,
+    paid to the full as-of count. Independent of the elapsed months (flat av)."""
+    from dataclasses import replace
+    from fastcashflow.engine import inforce_surrender_value
+    av0, surr_charge, count = 1_000.0, 0.10, 500.0
+    basis = _ul_surrender_basis(surr_charge)
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1e6},
+                            premium=0.0, term_months=60, count=count,
+                            account_value=av0, minimum_death_benefit=1e6,
+                            calculation_methods={"DEATH": CalculationMethod.DEATH})
+    mp = replace(mp, elapsed_months=np.array([em], dtype=np.int64))
+    sv = inforce_surrender_value(mp, basis)
+    assert np.isclose(sv[0], count * av0 * (1.0 - surr_charge))
+
+
+def test_inforce_surrender_value_account_backed_matches_av_mid():
+    """The UL surrender value reads the account roll's own ``av_mid`` net of the
+    charge -- cross-check against the measured trajectory for a credited account
+    (non-flat av), so the wiring is exact, not just the flat-av hand calc."""
+    from dataclasses import replace
+    from fastcashflow.engine import inforce_surrender_value
+    av0, surr_charge, count, em = 1_000.0, 0.08, 300.0, 18
+    basis = _ul_surrender_basis(surr_charge, investment_return=0.05)  # credited -> av grows
+    mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1e6},
+                            premium=0.0, term_months=60, count=count,
+                            account_value=av0, minimum_death_benefit=1e6,
+                            calculation_methods={"DEATH": CalculationMethod.DEATH})
+    mp = replace(mp, elapsed_months=np.array([em], dtype=np.int64))
+    m = fcf.vfa.measure(mp, basis)
+    av_mid_em = m.cashflows.account.av_mid[0, em]
+    sv = inforce_surrender_value(mp, basis)
+    assert av_mid_em > av0                                    # the account did grow
+    assert np.isclose(sv[0], count * av_mid_em * (1.0 - surr_charge))
+
+
 def test_inforce_surrender_value_zero_without_curve():
     """No ``surrender_value_curve`` -> zero (lapse removes the contract with no
     payment); the helper short-circuits before projecting."""

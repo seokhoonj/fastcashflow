@@ -85,6 +85,10 @@ class AccountTrajectory:
     prem_to_av: FloatArray | None = None
     admin_charge: FloatArray | None = None
     account_charge: FloatArray | None = None
+    # (n_mp, n_time) per-policy account surrender value, max(0, av_mid *
+    # (1 - surr_charge_rate)) -- the figure a surrender exit is paid, and what
+    # ``engine.inforce_surrender_value`` reads for the mass-lapse surrender strain.
+    surr_value: FloatArray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1602,16 +1606,19 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         non_maturity_exits[rows, term_idx] -= np.where(
             within, maturity_survivors, 0.0)
         # Surrender pays the account value net of the surrender charge:
-        # av_mid * (1 - surr_charge_rate). surr_charge_rate is 0 with no charge.
-        acct_surr = non_maturity_exits * np.maximum(
-            0.0, av_mid * (1.0 - account_surr_charge))
+        # max(0, av_mid * (1 - surr_charge_rate)). surr_charge_rate is 0 with no
+        # charge. surr_value is the per-policy figure; the flow weights it by the
+        # lapse exit count, and inforce_surrender_value reads it (re-based to the
+        # as-of count) for the mass-lapse surrender strain.
+        surr_value = np.maximum(0.0, av_mid * (1.0 - account_surr_charge))
+        acct_surr = non_maturity_exits * surr_value
         surrender_cf = np.where(mp_account[:, None], acct_surr, surrender_cf)
         # The entity holds the in-force-weighted account value (the VFA fund).
         fund = inforce_pad * av
         account = AccountTrajectory(
             av=av, av_mid=av_mid, coi=coi_av, fund=fund,
             prem_to_av=prem_to_av_out, admin_charge=admin_out,
-            account_charge=account_charge_out)
+            account_charge=account_charge_out, surr_value=surr_value)
     return Cashflows(
         inforce=inforce,
         deaths=deaths,

@@ -642,23 +642,35 @@ def inforce_surrender_value(model_points: ModelPoints, basis: Basis) -> FloatArr
     flow projection alone does not carry.
 
     Zero where the basis prices no ``surrender_value_curve`` (lapse removes the
-    contract with no payment). Account-backed (universal-life) surrender is NOT
-    modelled here -- the account-value surrender is a VFA-side concern, and a
-    curve-less account book returns zero.
+    contract with no payment).
 
-    The per-mode value mirrors the ``surrender_cf`` block in
-    :func:`fastcashflow.projection.project_cashflows`: with ``surrender_cf =
-    (lapse_flow / inforce) x V``, this returns ``V`` (the total in-force
-    surrender value) at the valuation slice, re-based to ``count``.
+    Account-backed (universal-life) books are surrendered for the account value
+    net of the surrender charge, ``max(0, av_mid x (1 - surr_charge_rate))``, read
+    at the valuation-date duration -- the figure a surrender exit is paid in
+    :func:`fastcashflow.projection.project_cashflows`. ``project_cashflows``
+    rejects a mixed account / term book, so an account portfolio is homogeneous;
+    ``av_mid`` is a per-policy level (independent of the in-force decrement), so
+    the total paid if the whole as-of ``count`` surrenders is ``per-policy value
+    x count`` (no ``_inforce_rescale``).
+
+    The curve (non-account) per-mode value mirrors the ``surrender_cf`` block in
+    ``project_cashflows``: with ``surrender_cf = (lapse_flow / inforce) x V``,
+    this returns ``V`` (the total in-force surrender value) at the valuation
+    slice, re-based to ``count``.
     """
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     n_mp = em.shape[0]
+    rows = np.arange(n_mp)
+    if _portfolio_has_account(model_points, basis):
+        proj = project_cashflows(model_points, basis)
+        count = (np.ones(n_mp) if model_points.count is None
+                 else np.asarray(model_points.count, dtype=np.float64))
+        return proj.account.surr_value[rows, em] * count
     curve = basis.surrender_value_curve
     if curve is None:
         return np.zeros(n_mp)
     proj = project_cashflows(model_points, basis)
     inforce = proj.inforce
-    rows = np.arange(n_mp)
     c = np.asarray(curve, dtype=np.float64)
     value_em = c[np.minimum(em, c.shape[0] - 1)]      # curve held flat past its end
     mode = basis.surrender_value_basis
