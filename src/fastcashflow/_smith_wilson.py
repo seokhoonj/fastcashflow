@@ -165,14 +165,18 @@ def smith_wilson_alpha(
 ) -> float:
     """Solve the convergence-speed ``alpha`` from the long-end target.
 
-    Returns the smallest ``alpha >= alpha_min`` for which the fitted forward rate
-    at ``convergence_point`` (years) reaches the ultimate forward rate ``ufr`` to
-    within ``tolerance``, compared as ``|(1 + f) - (1 + ufr)|`` -- the criterion
-    the EIOPA and Korean risk-free-rate technical documentation use. ``alpha`` is
-    otherwise an input to :func:`smith_wilson`; this derives it from the last-
-    observed-term / convergence-point / UFR triple the supervisor publishes, so the
-    curve is pinned by those alone (the published per-currency ``alpha`` IS this
-    solver's output).
+    Returns the smallest ``alpha >= alpha_min`` for which the fitted forward at
+    ``convergence_point`` (years) reaches the ultimate forward rate ``ufr`` to
+    within ``tolerance``. The EIOPA published criterion is on the forward
+    INTENSITY (the continuously-compounded instantaneous forward ``f``):
+    ``|f(CP) - omega| < 1bp`` with ``omega = ln(1 + UFR)``. This solver tests the
+    level-space equivalent ``|exp(f) - exp(omega)| = |(1 + f_annual) - (1 + ufr)|``
+    (the same convergence condition expressed in 1+rate space, scaled by about
+    ``1 + UFR``); at the default ``tolerance = 1e-4`` it reproduces the
+    supervisor's published per-currency ``alpha`` (validated against the FSS value).
+    ``alpha`` is otherwise an input to :func:`smith_wilson`; this derives it from
+    the last-observed-term / convergence-point / UFR triple the supervisor
+    publishes, so the curve is pinned by those alone.
 
     The forward rate at the convergence point moves monotonically closer to the UFR
     as ``alpha`` rises (faster convergence), so the criterion holds on an upper

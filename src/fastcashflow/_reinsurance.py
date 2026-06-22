@@ -56,7 +56,11 @@ class ReinsuranceMeasurement:
     Headline ``bel``, ``ra`` and ``csm`` are ``(n_mp,)`` inception figures --
     ``bel`` is the present value of reinsurance premiums less recoveries (a
     net cost when positive), ``ra`` is the risk transferred, ``csm`` is the
-    inception net cost or gain (may be negative). The trajectory fields are
+    inception net cost or gain (may be negative). The ``bel`` symbol is shared
+    with the GMM result for a uniform surface, but for reinsurance held it is the
+    present value of fulfilment cash flows of a reinsurance ASSET (IFRS 17 para 63),
+    not a liability -- a negative ``bel`` is a net reinsurance asset. The
+    trajectory fields are
     populated only on the full path; ``csm_path`` reconciles as
     ``csm_path[:, t+1] = csm_path[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
     """
