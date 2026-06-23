@@ -377,6 +377,57 @@ class SettlementReconciliation:
             self, "PAA settlement reconciliation", _PAA_RECON_BLOCKS)
 
 
+_PAA_SETTLEMENT_LINES = (
+    "lrc_opening", "premiums", "revenue", "lrc_experience", "lrc_closing",
+    "loss_component_opening", "loss_component_recognised",
+    "loss_component_reversed", "loss_component_closing",
+    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
+    "claims_experience", "expense_experience",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SettlementAggregate:
+    """Portfolio totals of the paragraph-55(b) PAA settlement movement.
+
+    What :func:`fastcashflow.paa.settle_aggregate` returns: every line of
+    :class:`SettlementMovement` summed over the model-point axis,
+    movement-positive (``reconcile`` applies the display negation of the
+    revenue / claims-paid / loss-component-reversed rows and reproduces the
+    per-MP movement's table). There is no CSM block -- the PAA holds the LRC
+    undiscounted and carries no CSM -- but the LIC carries a finance line (the
+    discount unwind on incurred claims). :meth:`closing_inputs` raises --
+    chaining needs the per-MP balances.
+    """
+
+    model: ClassVar[str] = PAA
+
+    period_months: int
+    revenue_basis: str
+    lrc_opening: float
+    premiums: float
+    revenue: float
+    lrc_experience: float
+    lrc_closing: float
+    loss_component_opening: float
+    loss_component_recognised: float
+    loss_component_reversed: float
+    loss_component_closing: float
+    lic_opening: float
+    claims_incurred: float
+    lic_finance: float
+    claims_paid: float
+    lic_closing: float
+    claims_experience: float = 0.0
+    expense_experience: float = 0.0
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """Always raises -- see the class docstring."""
+        from fastcashflow._measurement_basis import _AGGREGATE_NO_CHAIN
+        raise ValueError(_AGGREGATE_NO_CHAIN)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"lrc": measurement.lrc,
@@ -1119,7 +1170,7 @@ def settle_aggregate(
     revenue_basis: str = "time",
     period_months: int | None = None,
     chunk_size: int = 200_000,
-) -> "PAASettlementAggregate":
+) -> "SettlementAggregate":
     """Portfolio-total paragraph-55(b) PAA settlement in bounded memory.
 
     The PAA counterpart of :func:`~fastcashflow.gmm.settle_aggregate`: runs
@@ -1130,8 +1181,6 @@ def settle_aggregate(
     mp_id once, before chunking. The aggregate cannot be chained --
     ``closing_inputs()`` raises; chain per-MP movements instead.
     """
-    from fastcashflow.movement import (
-        _PAA_SETTLEMENT_LINES, PAASettlementAggregate)
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
     period = 12 if period_months is None else int(period_months)
@@ -1146,7 +1195,7 @@ def settle_aggregate(
                     revenue_basis=revenue_basis, period_months=period)
         for name in _PAA_SETTLEMENT_LINES:
             parts[name].append(float(getattr(mv, name).sum()))
-    return PAASettlementAggregate(
+    return SettlementAggregate(
         period_months=period, revenue_basis=revenue_basis,
         **{name: math.fsum(vals) for name, vals in parts.items()})
 

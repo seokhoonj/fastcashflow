@@ -17,9 +17,7 @@ from fastcashflow.engine import (
     measure, measure_aggregate, measure_inforce, settle, settle_aggregate,
     recognition_schedule, CSMRecognitionSchedule,
     Measurement, Aggregate, CurrentEstimate, PeriodMovement, Reconciliation,
-    SettlementMovement, SettlementReconciliation)
-from fastcashflow.movement import (
-    GMMSettlementAggregate)
+    SettlementMovement, SettlementReconciliation, SettlementAggregate)
 from fastcashflow.io import measure_stream, settle_stream
 from fastcashflow.pricing import interest_guarantee_tvog
 from fastcashflow.stochastic import measure_stochastic as stochastic
@@ -43,4 +41,4 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            # result types (produced by gmm.measure / settle / roll_forward)
            "Measurement", "Aggregate", "CurrentEstimate",
            "SettlementMovement", "SettlementReconciliation",
-           "GMMSettlementAggregate", "PeriodMovement", "Reconciliation"]
+           "SettlementAggregate", "PeriodMovement", "Reconciliation"]

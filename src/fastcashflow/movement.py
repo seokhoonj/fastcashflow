@@ -761,7 +761,7 @@ def _reconcile_paa_settlement(
 @write_measurement.register
 def _(movement: _paa.SettlementMovement, path, *, ids=None):
     n = movement.lrc_closing.shape[0]
-    cols = {name: getattr(movement, name) for name in _PAA_SETTLEMENT_LINES}
+    cols = {name: getattr(movement, name) for name in _paa._PAA_SETTLEMENT_LINES}
     cols["revenue_basis"] = [movement.revenue_basis] * n
     cols["measurement_basis"] = [movement.measurement_basis] * n
     # The closing-state chain columns ride only when the source model
@@ -778,7 +778,7 @@ def _(movement: _paa.SettlementMovement, path, *, ids=None):
 @write_measurement.register
 def _(movement: _gmm.SettlementMovement, path, *, ids=None):
     n = movement.bel_closing.shape[0]
-    cols = {name: getattr(movement, name) for name in _GMM_SETTLEMENT_LINES}
+    cols = {name: getattr(movement, name) for name in _gmm._GMM_SETTLEMENT_LINES}
     # Scalar (shared) or per-row (cohort-aware, Sec. B72(b)) locked-in rate:
     # broadcast handles both, so each row's own rate rides onto the part and
     # seeds the next period's settle from disk.
@@ -799,7 +799,7 @@ def _(movement: _gmm.SettlementMovement, path, *, ids=None):
 @write_measurement.register
 def _(movement: _reinsurance.SettlementMovement, path, *, ids=None):
     n = movement.bel_closing.shape[0]
-    cols = {name: getattr(movement, name) for name in _REINSURANCE_SETTLEMENT_LINES}
+    cols = {name: getattr(movement, name) for name in _reinsurance._REINSURANCE_SETTLEMENT_LINES}
     cols["lock_in_rate"] = np.full(n, movement.lock_in_rate)
     cols["measurement_basis"] = [movement.measurement_basis] * n
     if movement.model_points is not None:
@@ -813,7 +813,7 @@ def _(movement: _reinsurance.SettlementMovement, path, *, ids=None):
 @write_measurement.register
 def _(movement: _vfa.SettlementMovement, path, *, ids=None):
     n = movement.bel_closing.shape[0]
-    cols = {name: getattr(movement, name) for name in _VFA_SETTLEMENT_LINES}
+    cols = {name: getattr(movement, name) for name in _vfa._VFA_SETTLEMENT_LINES}
     cols["lock_in_rate"] = np.full(n, movement.lock_in_rate)
     cols["measurement_basis"] = [movement.measurement_basis] * n
     if movement.model_points is not None:
@@ -898,284 +898,14 @@ def reconcile(
 # The order is the write_measurement output column order -- the writer arm drives
 # its columns from this tuple, so the spine has one source. (The disclosure /
 # __str__ block order is separate, _GMM_RECON_BLOCKS.)
-_GMM_SETTLEMENT_LINES = (
-    "bel_opening", "bel_interest", "bel_release", "bel_experience",
-    "bel_closing",
-    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
-    "csm_opening", "csm_accretion", "csm_experience_unlocking",
-    "csm_premium_experience", "csm_investment_experience",
-    "claims_experience", "expense_experience",
-    "finance_wedge", "premium_experience_revenue",
-    "csm_release", "csm_closing",
-    "loss_component_opening", "loss_component_finance",
-    "loss_component_amortised", "loss_component_reversed",
-    "loss_component_recognised", "loss_component_closing",
-    "coverage_units_provided", "coverage_units_future",
-    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
-)
-
-_VFA_SETTLEMENT_LINES = (
-    "bel_opening", "bel_interest", "bel_release", "bel_experience",
-    "bel_closing",
-    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
-    "csm_opening", "csm_accretion", "csm_fv_share", "csm_future_service",
-    "csm_premium_experience", "premium_experience_revenue",
-    "csm_investment_experience", "claims_experience", "expense_experience",
-    "csm_release", "csm_closing",
-    "loss_component_opening", "loss_component_finance",
-    "loss_component_amortised", "loss_component_reversed",
-    "loss_component_recognised", "loss_component_closing",
-    "variable_fee_closing", "account_value_closing",
-    "coverage_units_provided", "coverage_units_future",
-    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
-)
-
-_REINSURANCE_SETTLEMENT_LINES = (
-    "bel_opening", "bel_interest", "bel_release", "bel_experience",
-    "bel_closing",
-    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
-    "csm_opening", "csm_accretion", "csm_experience_unlocking",
-    "finance_wedge", "csm_release", "csm_closing",
-    "loss_recovery_opening", "loss_recovery_recognised",
-    "loss_recovery_reversed", "loss_recovery_closing",
-    "coverage_units_provided", "coverage_units_future",
-)
-
-_PAA_SETTLEMENT_LINES = (
-    "lrc_opening", "premiums", "revenue", "lrc_experience", "lrc_closing",
-    "loss_component_opening", "loss_component_recognised",
-    "loss_component_reversed", "loss_component_closing",
-    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
-    "claims_experience", "expense_experience",
-)
-
-_AGGREGATE_NO_CHAIN = (
-    "an aggregate cannot seed the next period: chaining needs the per-MP "
-    "closing balances, which the sums no longer carry. Chain through the "
-    "per-MP movement's closing_inputs() instead (settle the book in row "
-    "blocks if it does not fit in memory)."
-)
 
 
-@dataclass(frozen=True, slots=True)
-class GMMSettlementAggregate:
-    """Portfolio totals of the paragraph-44 settlement movement.
-
-    What :func:`fastcashflow.gmm.settle_aggregate` returns: every line of
-    :class:`_gmm.SettlementMovement` summed over the model-point axis, in
-    bounded memory. The lines keep the MOVEMENT sign -- the release and
-    loss-component-reversed totals are positive run-offs, exactly like the
-    per-MP movement; :func:`reconcile` applies the display negation. Each
-    block therefore foots in movement form::
-
-        bel_closing == bel_opening + bel_interest - bel_release + bel_experience
-
-    and ``reconcile(aggregate)`` equals the per-MP movement's
-    reconciliation table fieldwise.
-
-    An aggregate is not a chaining citizen: the next period's settle needs
-    per-MP prior balances, which the sums no longer carry --
-    :meth:`closing_inputs` raises ValueError.
-    """
-
-    model: ClassVar[str] = GMM
-
-    period_months: int
-    lock_in_rate: float
-    bel_opening: float
-    bel_interest: float
-    bel_release: float
-    bel_experience: float
-    bel_closing: float
-    ra_opening: float
-    ra_interest: float
-    ra_release: float
-    ra_experience: float
-    ra_closing: float
-    csm_opening: float
-    csm_accretion: float
-    csm_experience_unlocking: float
-    csm_premium_experience: float
-    csm_investment_experience: float
-    finance_wedge: float
-    premium_experience_revenue: float
-    claims_experience: float
-    expense_experience: float
-    csm_release: float
-    csm_closing: float
-    loss_component_opening: float
-    loss_component_finance: float
-    loss_component_amortised: float
-    loss_component_reversed: float
-    loss_component_recognised: float
-    loss_component_closing: float
-    coverage_units_provided: float
-    coverage_units_future: float
-    lic_opening: float = 0.0
-    claims_incurred: float = 0.0
-    lic_finance: float = 0.0
-    claims_paid: float = 0.0
-    lic_closing: float = 0.0
-    measurement_basis: str = "settlement"
-
-    def closing_inputs(self):
-        """Always raises -- see the class docstring."""
-        raise ValueError(_AGGREGATE_NO_CHAIN)
 
 
-@dataclass(frozen=True, slots=True)
-class ReinsuranceSettlementAggregate:
-    """Portfolio totals of the paragraph-66 reinsurance settlement movement.
-
-    What :func:`fastcashflow.reinsurance.settle_aggregate` returns: every line
-    of :class:`_reinsurance.SettlementMovement` summed over the model-point axis,
-    movement-positive (``reconcile`` applies the display negation and
-    reproduces the per-MP movement's table). There is no loss-component line --
-    a reinsurance contract held cannot be onerous. :meth:`closing_inputs`
-    raises -- chaining needs the per-MP balances.
-    """
-
-    model: ClassVar[str] = REINSURANCE
-
-    period_months: int
-    lock_in_rate: float
-    bel_opening: float
-    bel_interest: float
-    bel_release: float
-    bel_experience: float
-    bel_closing: float
-    ra_opening: float
-    ra_interest: float
-    ra_release: float
-    ra_experience: float
-    ra_closing: float
-    csm_opening: float
-    csm_accretion: float
-    csm_experience_unlocking: float
-    finance_wedge: float
-    csm_release: float
-    csm_closing: float
-    coverage_units_provided: float
-    coverage_units_future: float
-    loss_recovery_opening: float = 0.0
-    loss_recovery_recognised: float = 0.0
-    loss_recovery_reversed: float = 0.0
-    loss_recovery_closing: float = 0.0
-    measurement_basis: str = "settlement"
-
-    def closing_inputs(self):
-        """Always raises -- see the class docstring."""
-        raise ValueError(_AGGREGATE_NO_CHAIN)
-
-
-@dataclass(frozen=True, slots=True)
-class VFASettlementAggregate:
-    """Portfolio totals of the paragraph-45 settlement movement.
-
-    What :func:`fastcashflow.vfa.settle_aggregate` returns: every line of
-    :class:`_vfa.SettlementMovement` summed over the model-point axis, in
-    bounded memory, movement-positive (the display negation happens in
-    :func:`reconcile`). ``reconcile(aggregate)`` equals the per-MP
-    movement's reconciliation table fieldwise, and :meth:`closing_inputs`
-    raises ValueError -- chaining needs per-MP balances.
-    """
-
-    model: ClassVar[str] = VFA
-
-    period_months: int
-    bel_opening: float
-    bel_interest: float
-    bel_release: float
-    bel_experience: float
-    bel_closing: float
-    ra_opening: float
-    ra_interest: float
-    ra_release: float
-    ra_experience: float
-    ra_closing: float
-    csm_opening: float
-    csm_accretion: float
-    csm_fv_share: float
-    csm_future_service: float
-    csm_premium_experience: float
-    premium_experience_revenue: float
-    csm_investment_experience: float
-    claims_experience: float
-    expense_experience: float
-    csm_release: float
-    csm_closing: float
-    loss_component_opening: float
-    loss_component_finance: float
-    loss_component_amortised: float
-    loss_component_reversed: float
-    loss_component_recognised: float
-    loss_component_closing: float
-    variable_fee_closing: float
-    account_value_closing: float
-    coverage_units_provided: float
-    coverage_units_future: float
-    lic_opening: float = 0.0
-    claims_incurred: float = 0.0
-    lic_finance: float = 0.0
-    claims_paid: float = 0.0
-    lic_closing: float = 0.0
-    lock_in_rate: float = 0.0            # state echo only; no VFA locked rate
-    csm_basis: str = CSM_BASIS_PARAGRAPH_45
-
-    @property
-    def measurement_basis(self) -> str:
-        """Cross-model time-basis discriminator, derived from ``csm_basis``
-        (mirrors :class:`_vfa.SettlementMovement`)."""
-        return _CSM_TO_MEASUREMENT_BASIS[self.csm_basis]
-
-    def closing_inputs(self):
-        """Always raises -- see the class docstring."""
-        raise ValueError(_AGGREGATE_NO_CHAIN)
-
-
-@dataclass(frozen=True, slots=True)
-class PAASettlementAggregate:
-    """Portfolio totals of the paragraph-55(b) PAA settlement movement.
-
-    What :func:`fastcashflow.paa.settle_aggregate` returns: every line of
-    :class:`_paa.SettlementMovement` summed over the model-point axis,
-    movement-positive (``reconcile`` applies the display negation of the
-    revenue / claims-paid / loss-component-reversed rows and reproduces the
-    per-MP movement's table). There is no CSM block -- the PAA holds the LRC
-    undiscounted and carries no CSM -- but the LIC carries a finance line (the
-    discount unwind on incurred claims). :meth:`closing_inputs` raises --
-    chaining needs the per-MP balances.
-    """
-
-    model: ClassVar[str] = PAA
-
-    period_months: int
-    revenue_basis: str
-    lrc_opening: float
-    premiums: float
-    revenue: float
-    lrc_experience: float
-    lrc_closing: float
-    loss_component_opening: float
-    loss_component_recognised: float
-    loss_component_reversed: float
-    loss_component_closing: float
-    lic_opening: float
-    claims_incurred: float
-    lic_finance: float
-    claims_paid: float
-    lic_closing: float
-    claims_experience: float = 0.0
-    expense_experience: float = 0.0
-    measurement_basis: str = "settlement"
-
-    def closing_inputs(self):
-        """Always raises -- see the class docstring."""
-        raise ValueError(_AGGREGATE_NO_CHAIN)
 
 
 @reconcile.register
-def _(aggregate: GMMSettlementAggregate) -> _gmm.SettlementReconciliation:
+def _(aggregate: _gmm.SettlementAggregate) -> _gmm.SettlementReconciliation:
     """The paragraph-44 settlement table of an aggregate -- identical to
     reconciling the per-MP movement (the oracle identity); the display
     negation of the run-off rows happens here, never in the aggregate."""
@@ -1218,7 +948,7 @@ def _(aggregate: GMMSettlementAggregate) -> _gmm.SettlementReconciliation:
 
 
 @reconcile.register
-def _(aggregate: ReinsuranceSettlementAggregate
+def _(aggregate: _reinsurance.SettlementAggregate
       ) -> _reinsurance.SettlementReconciliation:
     """The paragraph-66 reinsurance settlement table of an aggregate --
     identical to reconciling the per-MP movement; run-off rows display-negated
@@ -1250,7 +980,7 @@ def _(aggregate: ReinsuranceSettlementAggregate
 
 
 @reconcile.register
-def _(aggregate: PAASettlementAggregate) -> _paa.SettlementReconciliation:
+def _(aggregate: _paa.SettlementAggregate) -> _paa.SettlementReconciliation:
     """The paragraph-55(b) PAA settlement table of an aggregate -- identical to
     reconciling the per-MP movement; the revenue / claims-paid /
     loss-component-reversed rows are display-negated here, never in the
@@ -1279,7 +1009,7 @@ def _(aggregate: PAASettlementAggregate) -> _paa.SettlementReconciliation:
 
 
 @reconcile.register
-def _(aggregate: VFASettlementAggregate) -> _vfa.SettlementReconciliation:
+def _(aggregate: _vfa.SettlementAggregate) -> _vfa.SettlementReconciliation:
     """The paragraph-45 settlement table of an aggregate -- identical to
     reconciling the per-MP movement (the oracle identity); the display
     negation of the run-off rows happens here, never in the aggregate."""

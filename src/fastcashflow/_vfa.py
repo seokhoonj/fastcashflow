@@ -696,6 +696,89 @@ class SettlementReconciliation:
             self, "VFA settlement reconciliation", _VFA_RECON_BLOCKS)
 
 
+_VFA_SETTLEMENT_LINES = (
+    "bel_opening", "bel_interest", "bel_release", "bel_experience",
+    "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_opening", "csm_accretion", "csm_fv_share", "csm_future_service",
+    "csm_premium_experience", "premium_experience_revenue",
+    "csm_investment_experience", "claims_experience", "expense_experience",
+    "csm_release", "csm_closing",
+    "loss_component_opening", "loss_component_finance",
+    "loss_component_amortised", "loss_component_reversed",
+    "loss_component_recognised", "loss_component_closing",
+    "variable_fee_closing", "account_value_closing",
+    "coverage_units_provided", "coverage_units_future",
+    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SettlementAggregate:
+    """Portfolio totals of the paragraph-45 settlement movement.
+
+    What :func:`fastcashflow.vfa.settle_aggregate` returns: every line of
+    :class:`SettlementMovement` summed over the model-point axis, in
+    bounded memory, movement-positive (the display negation happens in
+    :func:`reconcile`). ``reconcile(aggregate)`` equals the per-MP
+    movement's reconciliation table fieldwise, and :meth:`closing_inputs`
+    raises ValueError -- chaining needs per-MP balances.
+    """
+
+    model: ClassVar[str] = VFA
+
+    period_months: int
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_fv_share: float
+    csm_future_service: float
+    csm_premium_experience: float
+    premium_experience_revenue: float
+    csm_investment_experience: float
+    claims_experience: float
+    expense_experience: float
+    csm_release: float
+    csm_closing: float
+    loss_component_opening: float
+    loss_component_finance: float
+    loss_component_amortised: float
+    loss_component_reversed: float
+    loss_component_recognised: float
+    loss_component_closing: float
+    variable_fee_closing: float
+    account_value_closing: float
+    coverage_units_provided: float
+    coverage_units_future: float
+    lic_opening: float = 0.0
+    claims_incurred: float = 0.0
+    lic_finance: float = 0.0
+    claims_paid: float = 0.0
+    lic_closing: float = 0.0
+    lock_in_rate: float = 0.0            # state echo only; no VFA locked rate
+    csm_basis: str = CSM_BASIS_PARAGRAPH_45
+
+    @property
+    def measurement_basis(self) -> str:
+        """Cross-model time-basis discriminator, derived from ``csm_basis``
+        (mirrors :class:`SettlementMovement`)."""
+        return _CSM_TO_MEASUREMENT_BASIS[self.csm_basis]
+
+    def closing_inputs(self):
+        """Always raises -- see the class docstring."""
+        from fastcashflow._measurement_basis import _AGGREGATE_NO_CHAIN
+        raise ValueError(_AGGREGATE_NO_CHAIN)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     _require_settlement_csm(measurement, "write_measurement")
@@ -2124,7 +2207,7 @@ def settle_aggregate(
     period_months: int | None = None,
     chunk_size: int = 200_000,
     premium_experience_future_fraction: float | FloatArray = 0.0,
-) -> "VFASettlementAggregate":
+) -> "SettlementAggregate":
     """Portfolio-total paragraph-45 settlement in bounded memory.
 
     :func:`settle` materialises ``(n_mp, n_time)`` projection intermediates
@@ -2135,7 +2218,7 @@ def settle_aggregate(
     scalar line totals; peak memory is ``O(chunk_size x n_time)``
     regardless of ``n_mp``.
 
-    Returns a :class:`~fastcashflow.movement.VFASettlementAggregate`: the
+    Returns a :class:`~fastcashflow.vfa.SettlementAggregate`: the
     movement's lines summed, movement-positive (``reconcile`` applies the
     display negation and reproduces the per-MP movement's table exactly).
     The aggregate cannot be chained -- ``closing_inputs()`` raises; chain
@@ -2143,8 +2226,6 @@ def settle_aggregate(
     once, before chunking, so a period-close file in its own row order
     never pairs one contract's rows with another's prior balances.
     """
-    from fastcashflow.movement import (
-        _VFA_SETTLEMENT_LINES, VFASettlementAggregate)
 
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
@@ -2176,7 +2257,7 @@ def settle_aggregate(
                     premium_experience_future_fraction=frac_arg)
         for name in _VFA_SETTLEMENT_LINES:
             parts[name].append(float(getattr(mv, name).sum()))
-    return VFASettlementAggregate(
+    return SettlementAggregate(
         period_months=period, lock_in_rate=float(state.lock_in_rate),
         **{name: math.fsum(vals) for name, vals in parts.items()})
 

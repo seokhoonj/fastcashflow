@@ -613,6 +613,90 @@ class SettlementReconciliation:
             self, "GMM settlement reconciliation", _GMM_RECON_BLOCKS)
 
 
+_GMM_SETTLEMENT_LINES = (
+    "bel_opening", "bel_interest", "bel_release", "bel_experience",
+    "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_opening", "csm_accretion", "csm_experience_unlocking",
+    "csm_premium_experience", "csm_investment_experience",
+    "claims_experience", "expense_experience",
+    "finance_wedge", "premium_experience_revenue",
+    "csm_release", "csm_closing",
+    "loss_component_opening", "loss_component_finance",
+    "loss_component_amortised", "loss_component_reversed",
+    "loss_component_recognised", "loss_component_closing",
+    "coverage_units_provided", "coverage_units_future",
+    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SettlementAggregate:
+    """Portfolio totals of the paragraph-44 settlement movement.
+
+    What :func:`fastcashflow.gmm.settle_aggregate` returns: every line of
+    :class:`SettlementMovement` summed over the model-point axis, in
+    bounded memory. The lines keep the MOVEMENT sign -- the release and
+    loss-component-reversed totals are positive run-offs, exactly like the
+    per-MP movement; :func:`reconcile` applies the display negation. Each
+    block therefore foots in movement form::
+
+        bel_closing == bel_opening + bel_interest - bel_release + bel_experience
+
+    and ``reconcile(aggregate)`` equals the per-MP movement's
+    reconciliation table fieldwise.
+
+    An aggregate is not a chaining citizen: the next period's settle needs
+    per-MP prior balances, which the sums no longer carry --
+    :meth:`closing_inputs` raises ValueError.
+    """
+
+    model: ClassVar[str] = GMM
+
+    period_months: int
+    lock_in_rate: float
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_experience_unlocking: float
+    csm_premium_experience: float
+    csm_investment_experience: float
+    finance_wedge: float
+    premium_experience_revenue: float
+    claims_experience: float
+    expense_experience: float
+    csm_release: float
+    csm_closing: float
+    loss_component_opening: float
+    loss_component_finance: float
+    loss_component_amortised: float
+    loss_component_reversed: float
+    loss_component_recognised: float
+    loss_component_closing: float
+    coverage_units_provided: float
+    coverage_units_future: float
+    lic_opening: float = 0.0
+    claims_incurred: float = 0.0
+    lic_finance: float = 0.0
+    claims_paid: float = 0.0
+    lic_closing: float = 0.0
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """Always raises -- see the class docstring."""
+        from fastcashflow._measurement_basis import _AGGREGATE_NO_CHAIN
+        raise ValueError(_AGGREGATE_NO_CHAIN)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,

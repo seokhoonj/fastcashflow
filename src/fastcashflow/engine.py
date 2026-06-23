@@ -84,6 +84,7 @@ from fastcashflow._gmm import (
     Reconciliation,
     SettlementMovement,
     SettlementReconciliation,
+    SettlementAggregate,
     _measure_full,
 )
 
@@ -1584,7 +1585,7 @@ def settle_aggregate(
     period_months: int | None = None,
     premium_experience_future_fraction: float | FloatArray = 0.0,
     chunk_size: int = 200_000,
-) -> "GMMSettlementAggregate":
+) -> "SettlementAggregate":
     """Portfolio-total paragraph-44 settlement in bounded memory.
 
     :func:`settle` materialises ``(n_mp, n_time)`` projection intermediates
@@ -1595,7 +1596,7 @@ def settle_aggregate(
     accumulates only the scalar line totals; peak memory is
     ``O(chunk_size x n_time)`` regardless of ``n_mp``.
 
-    Returns a :class:`~fastcashflow.movement.GMMSettlementAggregate`: the
+    Returns a :class:`~fastcashflow.gmm.SettlementAggregate`: the
     movement's lines summed, movement-positive (``reconcile`` applies the
     display negation and reproduces the per-MP movement's table exactly).
     The aggregate cannot be chained -- ``closing_inputs()`` raises; chain
@@ -1603,8 +1604,7 @@ def settle_aggregate(
     once, before chunking, so a period-close file in its own row order
     never pairs one contract's rows with another's prior balances.
     """
-    from fastcashflow.movement import (
-        _GMM_SETTLEMENT_LINES, GMMSettlementAggregate)
+    from fastcashflow._gmm import _GMM_SETTLEMENT_LINES, SettlementAggregate
 
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
@@ -1647,7 +1647,7 @@ def settle_aggregate(
                     premium_experience_future_fraction=frac_arg)
         for name in _GMM_SETTLEMENT_LINES:
             parts[name].append(float(getattr(mv, name).sum()))
-    return GMMSettlementAggregate(
+    return SettlementAggregate(
         period_months=period,
         lock_in_rate=(float("nan") if mixed_lock_in
                       else float(state.lock_in_rate)),

@@ -350,6 +350,64 @@ class SettlementReconciliation:
             _REINSURANCE_RECON_BLOCKS)
 
 
+_REINSURANCE_SETTLEMENT_LINES = (
+    "bel_opening", "bel_interest", "bel_release", "bel_experience",
+    "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_opening", "csm_accretion", "csm_experience_unlocking",
+    "finance_wedge", "csm_release", "csm_closing",
+    "loss_recovery_opening", "loss_recovery_recognised",
+    "loss_recovery_reversed", "loss_recovery_closing",
+    "coverage_units_provided", "coverage_units_future",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SettlementAggregate:
+    """Portfolio totals of the paragraph-66 reinsurance settlement movement.
+
+    What :func:`fastcashflow.reinsurance.settle_aggregate` returns: every line
+    of :class:`SettlementMovement` summed over the model-point axis,
+    movement-positive (``reconcile`` applies the display negation and
+    reproduces the per-MP movement's table). There is no loss-component line --
+    a reinsurance contract held cannot be onerous. :meth:`closing_inputs`
+    raises -- chaining needs the per-MP balances.
+    """
+
+    model: ClassVar[str] = REINSURANCE
+
+    period_months: int
+    lock_in_rate: float
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_experience_unlocking: float
+    finance_wedge: float
+    csm_release: float
+    csm_closing: float
+    coverage_units_provided: float
+    coverage_units_future: float
+    loss_recovery_opening: float = 0.0
+    loss_recovery_recognised: float = 0.0
+    loss_recovery_reversed: float = 0.0
+    loss_recovery_closing: float = 0.0
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """Always raises -- see the class docstring."""
+        from fastcashflow._measurement_basis import _AGGREGATE_NO_CHAIN
+        raise ValueError(_AGGREGATE_NO_CHAIN)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,
@@ -1104,7 +1162,7 @@ def settle_reinsurance_aggregate(
     underlying_loss_opening: FloatArray | None = None,
     underlying_loss_closing: FloatArray | None = None,
     recovery_percentage: float | None = None,
-) -> "ReinsuranceSettlementAggregate":
+) -> "SettlementAggregate":
     """Portfolio-total paragraph-66 reinsurance settlement in bounded memory.
 
     Runs :func:`settle_reinsurance` over row blocks of ``chunk_size`` model
@@ -1113,8 +1171,6 @@ def settle_reinsurance_aggregate(
     does not depend on the chunking. Replaces the carry-bridge aggregate
     :func:`measure_reinsurance_inforce_aggregate` with a true settlement.
     """
-    from fastcashflow.movement import (
-        _REINSURANCE_SETTLEMENT_LINES, ReinsuranceSettlementAggregate)
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")
     period = 12 if period_months is None else int(period_months)
@@ -1142,7 +1198,7 @@ def settle_reinsurance_aggregate(
             recovery_percentage=recovery_percentage)
         for name in _REINSURANCE_SETTLEMENT_LINES:
             parts[name].append(float(getattr(mv, name).sum()))
-    return ReinsuranceSettlementAggregate(
+    return SettlementAggregate(
         period_months=period, lock_in_rate=float(state.lock_in_rate),
         **{name: math.fsum(vals) for name, vals in parts.items()})
 

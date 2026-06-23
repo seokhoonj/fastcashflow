@@ -74,3 +74,11 @@ def _inforce_marker_columns(measurement, n: int) -> dict:
     if mp is not None and getattr(mp, "elapsed_months", None) is not None:
         cols["elapsed_months"] = np.asarray(mp.elapsed_months, dtype=np.int64)
     return cols
+
+
+_AGGREGATE_NO_CHAIN = (
+    "an aggregate cannot seed the next period: chaining needs the per-MP "
+    "closing balances, which the sums no longer carry. Chain through the "
+    "per-MP movement's closing_inputs() instead (settle the book in row "
+    "blocks if it does not fit in memory)."
+)

@@ -19,14 +19,12 @@ point's VFA measurement.
 """
 from fastcashflow._vfa import (
     Measurement, Aggregate, PeriodMovement, Reconciliation, SettlementMovement,
-    SettlementReconciliation,
+    SettlementReconciliation, SettlementAggregate,
     measure_vfa as measure, measure_aggregate,
     measure_inforce, measure_stream, settle, settle_aggregate,
     settle_stream, recognition_schedule, CSM_BASES,
     GuaranteeTVOG, guarantee_tvog, moneyness_lapse_multiplier,
     moneyness_lapse_scale, measure_vfa_stochastic as stochastic)
-from fastcashflow.movement import (
-    VFASettlementAggregate)
 from fastcashflow.tvog import measure_tvog as tvog
 from fastcashflow.trace import (
     show_trace_vfa as trace, show_trace_diff_vfa as trace_diff)
@@ -57,4 +55,4 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "assess_solvency", "interaction_loss",
            # result types (produced by vfa.measure / settle / roll_forward)
            "Aggregate", "PeriodMovement", "Reconciliation",
-           "SettlementReconciliation", "VFASettlementAggregate"]
+           "SettlementReconciliation", "SettlementAggregate"]

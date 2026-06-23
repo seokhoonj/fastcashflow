@@ -30,10 +30,10 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import (
     Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints)
-from fastcashflow.movement import (
-    _GMM_SETTLEMENT_LINES, _PAA_SETTLEMENT_LINES,
-    _REINSURANCE_SETTLEMENT_LINES, _VFA_SETTLEMENT_LINES,
-)
+from fastcashflow._gmm import _GMM_SETTLEMENT_LINES
+from fastcashflow._paa import _PAA_SETTLEMENT_LINES
+from fastcashflow._reinsurance import _REINSURANCE_SETTLEMENT_LINES
+from fastcashflow._vfa import _VFA_SETTLEMENT_LINES
 from conftest import PATTERNS, make_death_basis
 
 
