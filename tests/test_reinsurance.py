@@ -463,7 +463,7 @@ def test_reinsurance_roll_forward_and_reconcile_balance():
 
     movs = fcf.roll_forward(m, 12)
     recs = fcf.reconcile(movs)
-    assert all(isinstance(x, fcf.reinsurance.ReinsurancePeriodMovement) for x in movs)
+    assert all(isinstance(x, fcf.reinsurance.PeriodMovement) for x in movs)
     assert all(isinstance(x, fcf.reinsurance.ReinsuranceReconciliation) for x in recs)
 
     for mv in movs:                                   # per-MP blocks balance

@@ -52,162 +52,6 @@ import fastcashflow._vfa as _vfa
 import fastcashflow._reinsurance as _reinsurance
 
 
-@dataclass(frozen=True, slots=True, eq=False)
-class PeriodMovement:
-    """One reporting period's analysis of change.
-
-    The period covers months ``[month_start, month_end)``. Every array is
-    ``(n_mp,)``, and each block reconciles exactly::
-
-        bel_opening + bel_assumption_change + bel_experience
-            + bel_interest - bel_release == bel_closing
-
-    and likewise for RA and CSM (with ``csm_accretion`` in place of
-    ``*_interest``).
-
-    ``*_interest`` / ``csm_accretion`` is the unwind of discount at the
-    locked-in rate; ``*_release`` is the expected run-off over the period.
-    ``*_assumption_change`` and ``*_experience`` are the effect of an
-    assumption revision and of in-force experience -- non-zero only in the
-    period the change is recognised. Both relate to future service and so
-    adjust the CSM. ``loss_component_recognised`` is the part of an
-    unfavourable change beyond the CSM, which falls into the loss component.
-    """
-
-    model: ClassVar[str] = GMM
-
-    month_start: int
-    month_end: int
-    bel_opening: FloatArray
-    bel_assumption_change: FloatArray
-    bel_experience: FloatArray
-    bel_interest: FloatArray
-    bel_release: FloatArray
-    bel_closing: FloatArray
-    ra_opening: FloatArray
-    ra_assumption_change: FloatArray
-    ra_experience: FloatArray
-    ra_interest: FloatArray
-    ra_release: FloatArray
-    ra_closing: FloatArray
-    csm_opening: FloatArray
-    csm_assumption_change: FloatArray
-    csm_experience: FloatArray
-    csm_accretion: FloatArray
-    csm_release: FloatArray
-    csm_closing: FloatArray
-    loss_component_recognised: FloatArray
-
-
-@dataclass(frozen=True, slots=True, eq=False)
-class PAAPeriodMovement:
-    """One reporting period's movement of the PAA insurance contract liability.
-
-    The period covers months ``[month_start, month_end)``. Every array is
-    ``(n_mp,)``; the three components each reconcile exactly::
-
-        lrc_opening + premiums        - revenue                == lrc_closing
-        loss_component_opening        - loss_component_release == loss_component_closing
-        lic_opening + claims_incurred - claims_paid            == lic_closing
-
-    The LRC (liability for remaining coverage) is built up by premiums and
-    released by insurance revenue; the loss component runs off over the
-    coverage; the LIC (liability for incurred claims) is built up as claims
-    are incurred and run off as they are paid. All are held undiscounted.
-
-    When a settlement tail runs past the horizon, the final period's
-    ``lic_closing`` stays non-zero -- the parked LIC residual of claims still
-    outstanding at the horizon. The invariant above still holds.
-    """
-
-    model: ClassVar[str] = PAA
-
-    month_start: int
-    month_end: int
-    lrc_opening: FloatArray
-    premiums: FloatArray
-    revenue: FloatArray
-    lrc_closing: FloatArray
-    loss_component_opening: FloatArray
-    loss_component_release: FloatArray
-    loss_component_closing: FloatArray
-    lic_opening: FloatArray
-    claims_incurred: FloatArray
-    claims_paid: FloatArray
-    lic_closing: FloatArray
-
-
-@dataclass(frozen=True, slots=True, eq=False)
-class VFAPeriodMovement:
-    """One reporting period's movement of the VFA insurance contract liability.
-
-    The period covers months ``[month_start, month_end)``. Every array is
-    ``(n_mp,)`` and each block reconciles exactly::
-
-        bel_opening + bel_interest  - bel_release  == bel_closing
-        ra_opening  + ra_interest   - ra_release   == ra_closing
-        csm_opening + csm_accretion - csm_release  == csm_closing
-
-    ``*_interest`` / ``csm_accretion`` is the unwind at the underlying-items
-    return; ``*_release`` is the expected run-off over the period. Under the
-    VFA the CSM absorbs the variability of the underlying items, so the
-    entity's profit emerges as the CSM is released.
-    """
-
-    model: ClassVar[str] = VFA
-
-    month_start: int
-    month_end: int
-    bel_opening: FloatArray
-    bel_interest: FloatArray
-    bel_release: FloatArray
-    bel_closing: FloatArray
-    ra_opening: FloatArray
-    ra_interest: FloatArray
-    ra_release: FloatArray
-    ra_closing: FloatArray
-    csm_opening: FloatArray
-    csm_accretion: FloatArray
-    csm_release: FloatArray
-    csm_closing: FloatArray
-
-
-@dataclass(frozen=True, slots=True)
-class ReinsurancePeriodMovement:
-    """One reporting period's movement of a reinsurance-held asset/liability.
-
-    The period covers months ``[month_start, month_end)``. Every array is
-    ``(n_mp,)`` and each block reconciles exactly::
-
-        bel_opening + bel_interest  - bel_release  == bel_closing
-        ra_opening  + ra_interest   - ra_release   == ra_closing
-        csm_opening + csm_accretion - csm_release  == csm_closing
-
-    ``bel`` is the present value of reinsurance premiums less recoveries (a net
-    cost when positive); ``csm`` is the net cost / gain of the cover and may be
-    negative. ``*_interest`` / ``csm_accretion`` is the unwind at the discount
-    rate; ``*_release`` is the expected run-off over the period. There is no
-    loss component (Sec. 65).
-    """
-
-    model: ClassVar[str] = REINSURANCE
-
-    month_start: int
-    month_end: int
-    bel_opening: FloatArray
-    bel_interest: FloatArray
-    bel_release: FloatArray
-    bel_closing: FloatArray
-    ra_opening: FloatArray
-    ra_interest: FloatArray
-    ra_release: FloatArray
-    ra_closing: FloatArray
-    csm_opening: FloatArray
-    csm_accretion: FloatArray
-    csm_release: FloatArray
-    csm_closing: FloatArray
-
-
 @singledispatch
 def roll_forward(
     measurement,
@@ -298,7 +142,7 @@ def _(
     revised_at: int | None = None,
     actual_inforce: FloatArray | None = None,
     experience_at: int | None = None,
-) -> list[PeriodMovement]:
+) -> list[_gmm.PeriodMovement]:
     _require_inception(measurement, "roll_forward()")
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
@@ -397,7 +241,7 @@ def _(
         csm_release = np.concatenate(
             [measurement.csm_release[:, :k], re_rel], axis=1)
 
-    movements: list[PeriodMovement] = []
+    movements: list[_gmm.PeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
         bel_open, ra_open, csm_open = bel[:, a], ra[:, a], csm[:, a]
@@ -415,7 +259,7 @@ def _(
             bel_traj, ra_traj = post_bel, post_ra
         bel_interest = (bel_traj[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
         ra_interest = (ra_traj[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
-        movements.append(PeriodMovement(
+        movements.append(_gmm.PeriodMovement(
             month_start=a,
             month_end=b,
             bel_opening=bel_open,
@@ -443,7 +287,7 @@ def _(
 
 def _roll_forward_experience_chain(
     measurement: _gmm.Measurement, period_months: int, actual_inforce: FloatArray
-) -> list[PeriodMovement]:
+) -> list[_gmm.PeriodMovement]:
     """Roll a GMM measurement through in-force experience at every period.
 
     Row ``j`` of ``actual_inforce`` is the in-force actually remaining at
@@ -514,7 +358,7 @@ def _roll_forward_experience_chain(
         s = e
 
     zero = np.zeros(n_mp)
-    movements: list[PeriodMovement] = []
+    movements: list[_gmm.PeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
         bel_ex, ra_ex, csm_ex, loss = exp_lines.get(a, (zero, zero, zero, zero))
@@ -522,7 +366,7 @@ def _roll_forward_experience_chain(
                         + bel_ex * discount_monthly[..., a])
         ra_interest = ((ra[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
                        + ra_ex * discount_monthly[..., a])
-        movements.append(PeriodMovement(
+        movements.append(_gmm.PeriodMovement(
             month_start=a,
             month_end=b,
             bel_opening=bel[:, a],
@@ -550,7 +394,7 @@ def _roll_forward_experience_chain(
 
 def _roll_forward_paa(
     measurement: _paa.Measurement, period_months: int
-) -> list[PAAPeriodMovement]:
+) -> list[_paa.PeriodMovement]:
     """Slice a PAA measurement into LRC, loss-component and LIC movements."""
     _require_full_paa(measurement, "roll_forward")
     lrc = measurement.lrc_path
@@ -562,14 +406,14 @@ def _roll_forward_paa(
     n_time = lrc.shape[1] - 1
     total_revenue = revenue.sum(axis=1)
     safe_revenue = np.where(total_revenue > 0.0, total_revenue, 1.0)
-    movements: list[PAAPeriodMovement] = []
+    movements: list[_paa.PeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
         period_incurred = incurred[:, a:b].sum(axis=1)
         # the loss component runs off in proportion to insurance revenue
         loss_open = loss_component * revenue[:, a:].sum(axis=1) / safe_revenue
         loss_close = loss_component * revenue[:, b:].sum(axis=1) / safe_revenue
-        movements.append(PAAPeriodMovement(
+        movements.append(_paa.PeriodMovement(
             month_start=a,
             month_end=b,
             lrc_opening=lrc[:, a],
@@ -589,7 +433,7 @@ def _roll_forward_paa(
 
 def _roll_forward_vfa(
     measurement: _vfa.Measurement, period_months: int
-) -> list[VFAPeriodMovement]:
+) -> list[_vfa.PeriodMovement]:
     """Slice a VFA measurement into BEL, RA and CSM movements."""
     _require_full(measurement, "roll_forward")
     bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
@@ -603,12 +447,12 @@ def _roll_forward_vfa(
     # slice serves both -- a bare [a:b] would slice the model-point axis on the
     # 2-D curve.
     discount_monthly = forward_rates(discount_factor_bom)
-    movements: list[VFAPeriodMovement] = []
+    movements: list[_vfa.PeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
         bel_interest = (bel[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
         ra_interest = (ra[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
-        movements.append(VFAPeriodMovement(
+        movements.append(_vfa.PeriodMovement(
             month_start=a,
             month_end=b,
             bel_opening=bel[:, a],
@@ -629,7 +473,7 @@ def _roll_forward_vfa(
 
 def _roll_forward_reinsurance(
     measurement: _reinsurance.Measurement, period_months: int
-) -> list[ReinsurancePeriodMovement]:
+) -> list[_reinsurance.PeriodMovement]:
     """Slice a reinsurance-held measurement into BEL, RA and CSM movements.
 
     The reinsurance counterpart of :func:`_roll_forward_vfa`: BEL / RA unwind at
@@ -641,12 +485,12 @@ def _roll_forward_reinsurance(
     csm_release = measurement.csm_release
     n_time = csm.shape[1] - 1
     discount_monthly = forward_rates(measurement.discount_factor_bom)
-    movements: list[ReinsurancePeriodMovement] = []
+    movements: list[_reinsurance.PeriodMovement] = []
     for a in range(0, n_time, period_months):
         b = min(a + period_months, n_time)
         bel_interest = (bel[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
         ra_interest = (ra[:, a:b] * discount_monthly[..., a:b]).sum(axis=1)
-        movements.append(ReinsurancePeriodMovement(
+        movements.append(_reinsurance.PeriodMovement(
             month_start=a,
             month_end=b,
             bel_opening=bel[:, a],
@@ -780,7 +624,7 @@ class PAAReconciliation:
 
 
 def _reconcile_paa(
-    movements: list[PAAPeriodMovement],
+    movements: list[_paa.PeriodMovement],
 ) -> list[PAAReconciliation]:
     """Aggregate PAA period movements into portfolio-total reconciliations."""
     return [
@@ -847,7 +691,7 @@ class VFAReconciliation:
 
 
 def _reconcile_vfa(
-    movements: list[VFAPeriodMovement],
+    movements: list[_vfa.PeriodMovement],
 ) -> list[VFAReconciliation]:
     """Aggregate VFA period movements into portfolio-total reconciliations."""
     return [
@@ -877,7 +721,7 @@ class VFASettlementMovement:
 
     What :func:`fastcashflow.vfa.settle` returns: the opening -> closing
     movement of the BEL, RA, CSM and loss component over one reporting period
-    of ``period_months``, per model point. Unlike :class:`VFAPeriodMovement`
+    of ``period_months``, per model point. Unlike :class:`_vfa.PeriodMovement`
     (the *expected* movement sliced from an inception measurement), this is a
     *subsequent measurement*: the closing figures respond to the observed
     account value and in-force count, and the CSM absorbs the future-service
@@ -1423,7 +1267,7 @@ class ReinsuranceReconciliation:
 
 
 def _reconcile_reinsurance(
-    movements: list[ReinsurancePeriodMovement],
+    movements: list[_reinsurance.PeriodMovement],
 ) -> list[ReinsuranceReconciliation]:
     """Aggregate reinsurance period movements into portfolio-total reconciliations."""
     return [
@@ -2082,16 +1926,16 @@ def _(movement: VFASettlementMovement, path, *, ids=None):
 
 @singledispatch
 def reconcile(
-    movements: (list[PeriodMovement] | list[PAAPeriodMovement]
-                | list[VFAPeriodMovement]),
+    movements: (list[_gmm.PeriodMovement] | list[_paa.PeriodMovement]
+                | list[_vfa.PeriodMovement]),
 ) -> list[Reconciliation] | list[PAAReconciliation] | list[VFAReconciliation]:
     """Aggregate period movements into IFRS 17 reconciliation tables.
 
-    Each :class:`PeriodMovement` -- per model point -- becomes one
+    Each :class:`_gmm.PeriodMovement` -- per model point -- becomes one
     portfolio-total :class:`Reconciliation` in the layout of IFRS 17
     paragraph 101. Run-off rows are shown negative, so opening plus every
-    row equals closing. A list of :class:`PAAPeriodMovement` or
-    :class:`VFAPeriodMovement` is reconciled instead into the PAA
+    row equals closing. A list of :class:`_paa.PeriodMovement` or
+    :class:`_vfa.PeriodMovement` is reconciled instead into the PAA
     liability-for-remaining-coverage or VFA contractual-service-margin
     tables.
 
@@ -2100,9 +1944,9 @@ def reconcile(
     :class:`~fastcashflow.portfolio.PortfolioMovements` registers its own arm
     (returning a :class:`~fastcashflow.portfolio.PortfolioReconciliation`).
     """
-    if movements and isinstance(movements[0], PAAPeriodMovement):
+    if movements and isinstance(movements[0], _paa.PeriodMovement):
         return _reconcile_paa(movements)
-    if movements and isinstance(movements[0], VFAPeriodMovement):
+    if movements and isinstance(movements[0], _vfa.PeriodMovement):
         return _reconcile_vfa(movements)
     if movements and isinstance(movements[0], VFASettlementMovement):
         return _reconcile_vfa_settlement(movements)
@@ -2112,7 +1956,7 @@ def reconcile(
         return _reconcile_paa_settlement(movements)
     if movements and isinstance(movements[0], ReinsuranceSettlementMovement):
         return _reconcile_reinsurance_settlement(movements)
-    if movements and isinstance(movements[0], ReinsurancePeriodMovement):
+    if movements and isinstance(movements[0], _reinsurance.PeriodMovement):
         return _reconcile_reinsurance(movements)
     out: list[Reconciliation] = []
     for m in movements:

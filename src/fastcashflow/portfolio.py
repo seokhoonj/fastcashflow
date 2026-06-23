@@ -2061,8 +2061,8 @@ report.register(PortfolioGroups, _portfolio_report)
 class PortfolioMovements:
     """Result of :func:`fcf.roll_forward` on a portfolio container: one list of
     period movements per model present (``None`` when absent), keyed by model.
-    Each slot is the model's own movement list (``list[PeriodMovement]`` /
-    ``list[PAAPeriodMovement]`` / ``list[VFAPeriodMovement]``) -- a GMM CSM
+    Each slot is the model's own movement list (``list[gmm.PeriodMovement]`` /
+    ``list[paa.PeriodMovement]`` / ``list[vfa.PeriodMovement]``) -- a GMM CSM
     movement and a PAA LRC movement are never merged. Feed it to
     :func:`fcf.reconcile` for a :class:`PortfolioReconciliation`.
     """

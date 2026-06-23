@@ -300,6 +300,41 @@ class Aggregate:
     # different quantity, not modelled here.
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class PeriodMovement:
+    """One reporting period's movement of the VFA insurance contract liability.
+
+    The period covers months ``[month_start, month_end)``. Every array is
+    ``(n_mp,)`` and each block reconciles exactly::
+
+        bel_opening + bel_interest  - bel_release  == bel_closing
+        ra_opening  + ra_interest   - ra_release   == ra_closing
+        csm_opening + csm_accretion - csm_release  == csm_closing
+
+    ``*_interest`` / ``csm_accretion`` is the unwind at the underlying-items
+    return; ``*_release`` is the expected run-off over the period. Under the
+    VFA the CSM absorbs the variability of the underlying items, so the
+    entity's profit emerges as the CSM is released.
+    """
+
+    model: ClassVar[str] = VFA
+
+    month_start: int
+    month_end: int
+    bel_opening: FloatArray
+    bel_interest: FloatArray
+    bel_release: FloatArray
+    bel_closing: FloatArray
+    ra_opening: FloatArray
+    ra_interest: FloatArray
+    ra_release: FloatArray
+    ra_closing: FloatArray
+    csm_opening: FloatArray
+    csm_accretion: FloatArray
+    csm_release: FloatArray
+    csm_closing: FloatArray
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     _require_settlement_csm(measurement, "write_measurement")

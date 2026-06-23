@@ -139,6 +139,44 @@ class Aggregate:
     lic_path: FloatArray         # (n_time+1,) -- aggregate liability for incurred claims
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class PeriodMovement:
+    """One reporting period's movement of the PAA insurance contract liability.
+
+    The period covers months ``[month_start, month_end)``. Every array is
+    ``(n_mp,)``; the three components each reconcile exactly::
+
+        lrc_opening + premiums        - revenue                == lrc_closing
+        loss_component_opening        - loss_component_release == loss_component_closing
+        lic_opening + claims_incurred - claims_paid            == lic_closing
+
+    The LRC (liability for remaining coverage) is built up by premiums and
+    released by insurance revenue; the loss component runs off over the
+    coverage; the LIC (liability for incurred claims) is built up as claims
+    are incurred and run off as they are paid. All are held undiscounted.
+
+    When a settlement tail runs past the horizon, the final period's
+    ``lic_closing`` stays non-zero -- the parked LIC residual of claims still
+    outstanding at the horizon. The invariant above still holds.
+    """
+
+    model: ClassVar[str] = PAA
+
+    month_start: int
+    month_end: int
+    lrc_opening: FloatArray
+    premiums: FloatArray
+    revenue: FloatArray
+    lrc_closing: FloatArray
+    loss_component_opening: FloatArray
+    loss_component_release: FloatArray
+    loss_component_closing: FloatArray
+    lic_opening: FloatArray
+    claims_incurred: FloatArray
+    claims_paid: FloatArray
+    lic_closing: FloatArray
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"lrc": measurement.lrc,

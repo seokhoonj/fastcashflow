@@ -241,6 +241,53 @@ class Aggregate:
     csm_path: FloatArray         # (n_time+1,) -- aggregate CSM trajectory
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class PeriodMovement:
+    """One reporting period's analysis of change.
+
+    The period covers months ``[month_start, month_end)``. Every array is
+    ``(n_mp,)``, and each block reconciles exactly::
+
+        bel_opening + bel_assumption_change + bel_experience
+            + bel_interest - bel_release == bel_closing
+
+    and likewise for RA and CSM (with ``csm_accretion`` in place of
+    ``*_interest``).
+
+    ``*_interest`` / ``csm_accretion`` is the unwind of discount at the
+    locked-in rate; ``*_release`` is the expected run-off over the period.
+    ``*_assumption_change`` and ``*_experience`` are the effect of an
+    assumption revision and of in-force experience -- non-zero only in the
+    period the change is recognised. Both relate to future service and so
+    adjust the CSM. ``loss_component_recognised`` is the part of an
+    unfavourable change beyond the CSM, which falls into the loss component.
+    """
+
+    model: ClassVar[str] = GMM
+
+    month_start: int
+    month_end: int
+    bel_opening: FloatArray
+    bel_assumption_change: FloatArray
+    bel_experience: FloatArray
+    bel_interest: FloatArray
+    bel_release: FloatArray
+    bel_closing: FloatArray
+    ra_opening: FloatArray
+    ra_assumption_change: FloatArray
+    ra_experience: FloatArray
+    ra_interest: FloatArray
+    ra_release: FloatArray
+    ra_closing: FloatArray
+    csm_opening: FloatArray
+    csm_assumption_change: FloatArray
+    csm_experience: FloatArray
+    csm_accretion: FloatArray
+    csm_release: FloatArray
+    csm_closing: FloatArray
+    loss_component_recognised: FloatArray
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,

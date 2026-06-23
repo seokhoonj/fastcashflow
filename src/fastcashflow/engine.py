@@ -80,6 +80,7 @@ from fastcashflow._gmm import (
     Measurement,
     CurrentEstimate,
     Aggregate,
+    PeriodMovement,
     _measure_full,
 )
 
