@@ -34,14 +34,15 @@ from fastcashflow import (
     ModelPoints)
 from fastcashflow.basis import BasisRouter
 
-import fastcashflow.portfolio as _pf
-if not hasattr(_pf, "VFAGoCSettlement"):
+import fastcashflow.vfa as _vfa_ns
+if not hasattr(_vfa_ns, "GoCSettlement"):
     pytest.skip(
-        "VFA per-GoC settle (VFAGoCSettlement) is a contract skeleton, not "
+        "VFA per-GoC settle (fcf.vfa.GoCSettlement) is a contract skeleton, not "
         "yet implemented (v1.1; activates this module unchanged once it lands)",
         allow_module_level=True)
 
-from fastcashflow.portfolio import settle_group_of_contracts, VFAGoCSettlement
+from fastcashflow.portfolio import settle_group_of_contracts
+from fastcashflow.vfa import GoCSettlement
 from fastcashflow.numerics import _paragraph45_csm_algebra
 
 
@@ -278,7 +279,7 @@ def test_closing_inputs_allocates_group_balances():
 def test_vfa_only_book_returns_vfa_goc_settlement():
     mp, state = vfa_book()
     goc = settle_goc(mp, state, period=6)
-    assert isinstance(goc, VFAGoCSettlement)
+    assert isinstance(goc, GoCSettlement)
 
 
 def test_mixed_gmm_vfa_book_rejected_whole():

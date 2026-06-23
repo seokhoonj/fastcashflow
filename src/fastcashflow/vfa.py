@@ -19,7 +19,7 @@ point's VFA measurement.
 """
 from fastcashflow._vfa import (
     Measurement, Aggregate, PeriodMovement, Reconciliation, SettlementMovement,
-    SettlementReconciliation, SettlementAggregate,
+    SettlementReconciliation, SettlementAggregate, GoCSettlement,
     measure_vfa as measure, measure_aggregate,
     measure_inforce, measure_stream, settle, settle_aggregate,
     settle_stream, recognition_schedule, CSM_BASES,
@@ -42,7 +42,9 @@ from fastcashflow.solvency import (
 from fastcashflow.assets import vfa_cashflow_gap as cashflow_gap
 from fastcashflow.solvency_assessment import (
     vfa_assess_solvency as assess_solvency,
-    vfa_interaction_loss as interaction_loss)
+    vfa_interaction_loss as interaction_loss,
+    dynamic_solvency_vfa as dynamic_solvency)
+from fastcashflow._vfa import DynamicSolvency
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
@@ -55,4 +57,5 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "assess_solvency", "interaction_loss",
            # result types (produced by vfa.measure / settle / roll_forward)
            "Aggregate", "PeriodMovement", "Reconciliation",
-           "SettlementReconciliation", "SettlementAggregate"]
+           "SettlementReconciliation", "SettlementAggregate", "GoCSettlement",
+           "DynamicSolvency", "dynamic_solvency"]

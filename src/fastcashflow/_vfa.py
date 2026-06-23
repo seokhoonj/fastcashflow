@@ -30,7 +30,7 @@ with the policyholder bearing the investment risk.
 """
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, TYPE_CHECKING
 
 import math
 from dataclasses import dataclass
@@ -70,6 +70,10 @@ from fastcashflow.tvog import (
 # In-force helpers shared with the GMM path (engine does not import _vfa, and io
 # imports engine lazily, so this top-level import is cycle-free).
 from fastcashflow.engine import _reconcile_state, _inforce_rescale
+
+if TYPE_CHECKING:  # field types of DynamicSolvency (string annotations, no runtime import)
+    from fastcashflow.solvency_assessment import InteractionResult, SolvencyAssessment
+    from fastcashflow.assets import LiquidationResult
 
 
 def moneyness_lapse_multiplier(moneyness, sensitivity, *, floor: float = 0.0,
@@ -777,6 +781,172 @@ class SettlementAggregate:
         """Always raises -- see the class docstring."""
         from fastcashflow._measurement_basis import _AGGREGATE_NO_CHAIN
         raise ValueError(_AGGREGATE_NO_CHAIN)
+
+
+_VFA_GOC_SETTLEMENT_LINEAR = (
+    "bel_opening", "bel_interest", "bel_release", "bel_experience",
+    "bel_closing",
+    "ra_opening", "ra_interest", "ra_release", "ra_experience", "ra_closing",
+    "csm_fv_share", "csm_future_service", "csm_premium_experience",
+    "premium_experience_revenue", "csm_investment_experience",
+    "claims_experience", "expense_experience",
+    "csm_opening", "csm_accretion",
+    "variable_fee_closing", "account_value_closing", "loss_component_opening",
+    "loss_component_finance", "loss_component_amortised",
+    "lic_opening", "claims_incurred", "lic_finance", "claims_paid", "lic_closing",
+)
+
+_VFA_GOC_SETTLEMENT_NONLINEAR = (
+    "csm_release", "csm_closing", "loss_component_reversed",
+    "loss_component_recognised", "loss_component_closing",
+)
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class GoCSettlement:
+    """Group-of-contracts paragraph-45 settlement movement (VFA).
+
+    The VFA mirror of :class:`GoCSettlement`. Rows are IFRS 17 groups. The
+    LINEAR VFA settlement lines are group-summed -- including ``csm_fv_share``
+    (45(b)) and ``csm_future_service`` (45(c)), each carrying its own
+    ``v_half`` / ``k_obs``, so the group fv_share is the SUM of the per-MP
+    fv_shares (not a re-derivation from a re-summed group account value). The
+    paragraph-48/50(b) algebra and the single B119 release are applied once at
+    group grain on the group-summed inputs (the future-service change is
+    ``sum(csm_fv_share + csm_future_service)``). ``closing_inputs()`` allocates
+    the group closing CSM / loss component back to model points by closing-
+    count pro-rata (or an explicit weight) and carries each contract's observed
+    account value forward.
+    """
+
+    model: ClassVar[str] = VFA
+
+    group_labels: np.ndarray
+    group_sizes: IntArray
+    period_months: int
+    bel_opening: np.ndarray
+    bel_interest: np.ndarray
+    bel_release: np.ndarray
+    bel_experience: np.ndarray
+    bel_closing: np.ndarray
+    ra_opening: np.ndarray
+    ra_interest: np.ndarray
+    ra_release: np.ndarray
+    ra_experience: np.ndarray
+    ra_closing: np.ndarray
+    csm_fv_share: np.ndarray
+    csm_future_service: np.ndarray
+    csm_premium_experience: np.ndarray
+    premium_experience_revenue: np.ndarray
+    csm_investment_experience: np.ndarray
+    claims_experience: np.ndarray
+    expense_experience: np.ndarray
+    csm_opening: np.ndarray
+    csm_accretion: np.ndarray
+    variable_fee_closing: np.ndarray
+    account_value_closing: np.ndarray
+    loss_component_opening: np.ndarray
+    loss_component_finance: np.ndarray
+    loss_component_amortised: np.ndarray
+    lic_opening: np.ndarray
+    claims_incurred: np.ndarray
+    lic_finance: np.ndarray
+    claims_paid: np.ndarray
+    lic_closing: np.ndarray
+    coverage_units_provided: np.ndarray
+    coverage_units_future: np.ndarray
+    csm_release: np.ndarray
+    csm_closing: np.ndarray
+    loss_component_reversed: np.ndarray
+    loss_component_recognised: np.ndarray
+    loss_component_closing: np.ndarray
+    lock_in_rate: np.ndarray
+    model_points: ModelPoints | None = None
+    group_inverse: IntArray | None = None
+    lock_in_rate_by_mp: np.ndarray | float = 0.0
+    profitability_by_mp: np.ndarray | None = None
+    account_value_by_mp: np.ndarray | None = None
+    measurement_basis: str = "settlement"
+
+    _LINEAR: ClassVar[tuple[str, ...]] = _VFA_GOC_SETTLEMENT_LINEAR
+    _NONLINEAR: ClassVar[tuple[str, ...]] = _VFA_GOC_SETTLEMENT_NONLINEAR
+
+    def closing_inputs(self, *, allocation=None):
+        from fastcashflow.model_points import InforceState
+        mp = self.model_points
+        inv = self.group_inverse
+        if mp is None or inv is None or mp.mp_id is None:
+            raise ValueError(
+                "closing_inputs() needs the source model points with mp_id and "
+                "group membership; use settle_group_of_contracts to create it")
+        if self.account_value_by_mp is None:
+            raise ValueError(
+                "closing_inputs() needs the observed per-MP account value to "
+                "carry forward (it is stamped by settle_group_of_contracts)")
+        n_mp = mp.n_mp
+        if allocation is None:
+            weights = np.asarray(mp.count, dtype=np.float64)
+        else:
+            weights = np.asarray(allocation, dtype=np.float64)
+            if weights.shape != (n_mp,):
+                raise ValueError(
+                    f"allocation must have one entry per model point ({n_mp}), "
+                    f"got shape {weights.shape}")
+            if not np.all(np.isfinite(weights)) or np.any(weights < 0.0):
+                raise ValueError("allocation must be finite and >= 0")
+        n_groups = self.group_labels.shape[0]
+        denom = np.bincount(inv, weights=weights, minlength=n_groups)
+        share = np.zeros(n_mp, dtype=np.float64)
+        for g in range(n_groups):
+            rows = inv == g
+            if denom[g] > 0.0:
+                share[rows] = weights[rows] / denom[g]
+            else:
+                share[rows] = 1.0 / max(1, int(rows.sum()))
+        prior_csm = self.csm_closing[inv] * share
+        prior_lc = self.loss_component_closing[inv] * share
+        av = np.asarray(self.account_value_by_mp, dtype=np.float64)
+        state = InforceState(
+            mp_id=mp.mp_id,
+            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
+            count=np.asarray(mp.count, dtype=np.float64),
+            prior_csm=prior_csm,
+            lock_in_rate=self.lock_in_rate_by_mp,
+            account_value=av,
+            prior_count=np.asarray(mp.count, dtype=np.float64),
+            prior_account_value=av,
+            prior_loss_component=prior_lc,
+            profitability=self.profitability_by_mp,
+        )
+        return mp, state
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicSolvency:
+    """A market-shock / moneyness-lapse scenario overlaid on a variable book's
+    coverage ratio.
+
+    The VFA counterpart of :class:`DynamicSolvency`. ``interaction`` is the VFA
+    asset-liability interaction loss (the guarantee-cost revaluation under the
+    account-value shock, amplified by the moneyness dynamic lapse, plus the
+    forced-sale friction); ``liquidation`` is the underlying forced-sale roll.
+    ``stressed_available_capital`` is ``static_available_capital -
+    interaction.total_loss`` and ``stressed_ratio`` is that over ``total_scr``.
+
+    Like ``DynamicSolvency`` this is a SCENARIO OVERLAY, not a re-derived SCR. The
+    static position (``static_available_capital`` / ``total_scr``) is computed by
+    :func:`vfa_assess_solvency` when a ``regime`` is passed (``static`` then carries
+    the full :class:`SolvencyAssessment`), or supplied directly by the caller
+    (``static`` is then ``None``). This layer adds only the dynamic interaction the
+    static modules miss."""
+
+    interaction: InteractionResult
+    liquidation: LiquidationResult
+    static_available_capital: float
+    total_scr: float
+    stressed_available_capital: float
+    stressed_ratio: float
+    static: SolvencyAssessment | None = None
 
 
 @write_measurement.register

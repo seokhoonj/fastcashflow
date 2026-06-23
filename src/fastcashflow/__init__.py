@@ -84,7 +84,6 @@ from fastcashflow.solvency_assessment import (
     credit_scr, operational_scr, aggregate_required_capital, assess_solvency,
     vfa_assess_solvency,
     DynamicSolvency, dynamic_solvency,
-    VFADynamicSolvency, dynamic_solvency_vfa,
     StochasticSolvency, stochastic_solvency_vfa, stochastic_solvency_gmm,
 )
 from fastcashflow import solvency_assessment
@@ -155,7 +154,6 @@ __all__ = [
     "market_module_scr", "credit_scr", "operational_scr",
     "aggregate_required_capital", "assess_solvency", "vfa_assess_solvency",
     "DynamicSolvency", "dynamic_solvency",
-    "VFADynamicSolvency", "dynamic_solvency_vfa",
     "StochasticSolvency", "stochastic_solvency_vfa", "stochastic_solvency_gmm",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",

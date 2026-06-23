@@ -1092,34 +1092,6 @@ def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
                            stressed_ratio=stressed_ratio)
 
 
-@dataclass(frozen=True, slots=True)
-class VFADynamicSolvency:
-    """A market-shock / moneyness-lapse scenario overlaid on a variable book's
-    coverage ratio.
-
-    The VFA counterpart of :class:`DynamicSolvency`. ``interaction`` is the VFA
-    asset-liability interaction loss (the guarantee-cost revaluation under the
-    account-value shock, amplified by the moneyness dynamic lapse, plus the
-    forced-sale friction); ``liquidation`` is the underlying forced-sale roll.
-    ``stressed_available_capital`` is ``static_available_capital -
-    interaction.total_loss`` and ``stressed_ratio`` is that over ``total_scr``.
-
-    Like ``DynamicSolvency`` this is a SCENARIO OVERLAY, not a re-derived SCR. The
-    static position (``static_available_capital`` / ``total_scr``) is computed by
-    :func:`vfa_assess_solvency` when a ``regime`` is passed (``static`` then carries
-    the full :class:`SolvencyAssessment`), or supplied directly by the caller
-    (``static`` is then ``None``). This layer adds only the dynamic interaction the
-    static modules miss."""
-
-    interaction: InteractionResult
-    liquidation: LiquidationResult
-    static_available_capital: float
-    total_scr: float
-    stressed_available_capital: float
-    stressed_ratio: float
-    static: SolvencyAssessment | None = None
-
-
 def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
                          basis: Basis, *, return_shock: float,
                          lapse_sensitivity: float, haircut: float,
@@ -1127,7 +1099,7 @@ def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
                          regime: RegimeSpec | None = None,
                          static_available_capital: float | None = None,
                          total_scr: float | None = None,
-                         **assess_kwargs) -> VFADynamicSolvency:
+                         **assess_kwargs) -> "DynamicSolvency":
     """Layer a market-shock / moneyness-lapse scenario onto a variable book's
     coverage ratio.
 
@@ -1167,7 +1139,8 @@ def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
         stressed_ratio = stressed_ac / total_scr
     else:
         stressed_ratio = float("inf") if stressed_ac >= 0.0 else float("-inf")
-    return VFADynamicSolvency(
+    from fastcashflow._vfa import DynamicSolvency
+    return DynamicSolvency(
         interaction=interaction, liquidation=liq,
         static_available_capital=static_available_capital, total_scr=total_scr,
         stressed_available_capital=stressed_ac, stressed_ratio=stressed_ratio,
@@ -1313,6 +1286,6 @@ __all__ = [
     "aggregate_required_capital",
     "SolvencyAssessment", "assess_solvency", "vfa_assess_solvency",
     "DynamicSolvency", "dynamic_solvency",
-    "VFADynamicSolvency", "dynamic_solvency_vfa",
+    "dynamic_solvency_vfa",
     "StochasticSolvency", "stochastic_solvency_vfa", "stochastic_solvency_gmm",
 ]
