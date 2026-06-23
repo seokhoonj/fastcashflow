@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.report import ReinsuranceReport, Report
+from fastcashflow.report import Report
 
 
 def _report(revenue, **over):
@@ -122,7 +122,7 @@ def _reins_report(premium, **over):
         csm_opening=zeros2d, csm_accretion=zeros2d, csm_release=zeros2d,
         csm_closing=zeros2d)
     fields.update(over)
-    return ReinsuranceReport(**fields)
+    return fcf.reinsurance.Report(**fields)
 
 
 def test_reinsurance_by_period_buckets_and_has_no_loss_component():

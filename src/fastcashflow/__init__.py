@@ -123,7 +123,7 @@ __all__ = [
     "assemble_service_result", "reconciliation_to_frame", "line_metadata",
     "write_reconciliation", "write_close_pack",
     # result types now live in their producing namespace (fcf.gmm.Measurement,
-    # fcf.vfa.Measurement, fcf.reinsurance.ReinsuranceReport, fcf.esg.*, ...);
+    # fcf.vfa.Measurement, fcf.reinsurance.Report, fcf.esg.*, ...);
     # only genuinely shared / universal result types stay flat below.
     "Report", "DynamicSolvencyReport",
     "StochasticResult", "TVOGResult",

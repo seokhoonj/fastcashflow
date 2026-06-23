@@ -40,7 +40,7 @@ import fastcashflow._gmm as _gmm
 import fastcashflow._paa as _paa
 import fastcashflow._reinsurance as _reinsurance
 import fastcashflow._vfa as _vfa
-from fastcashflow.report import ReinsuranceReport, Report
+from fastcashflow.report import Report
 
 # The SoFP statement frame -- a presentation table (one row per kind x
 # component), not the tidy disclosure spine. opening + change == closing per row.
@@ -295,7 +295,7 @@ _SERVICE_ISSUED_LINES = (
     ("Insurance service expense", "insurance_service_expense"),
     ("Insurance service result", "insurance_service_result"),
 )
-# (display line, the ReinsuranceReport.by_period field) -- "Net reinsurance
+# (display line, the reinsurance.Report.by_period field) -- "Net reinsurance
 # result" (amounts recovered less premiums allocated, paragraph 86) is computed,
 # inserted after "Amounts recovered".
 _SERVICE_REINS_LINES = (
@@ -336,7 +336,7 @@ def assemble_service_result(reports, *, period_months: int = 12) -> pl.DataFrame
     for reinsurance contracts held (presented separately, paragraph 82), summed
     across the reports of each kind. ``reports`` is a list of
     :class:`~fastcashflow.Report` (issued) and / or
-    :class:`~fastcashflow.reinsurance.ReinsuranceReport` (held).
+    :class:`~fastcashflow.reinsurance.Report` (held).
 
     The service result is sourced from :meth:`Report.by_period`, NOT the
     settlement reconciliation: insurance revenue (B120-B124) needs the gross
@@ -350,9 +350,9 @@ def assemble_service_result(reports, *, period_months: int = 12) -> pl.DataFrame
     """
     reports = list(reports)
     for r in reports:
-        if not isinstance(r, (Report, ReinsuranceReport)):
+        if not isinstance(r, (Report, _reinsurance.Report)):
             raise TypeError(
-                "assemble_service_result: expects Report / ReinsuranceReport, "
+                "assemble_service_result: expects Report / reinsurance.Report, "
                 f"got {model_tag(r)}")
     rows = []
     issued = [r for r in reports if isinstance(r, Report)]
@@ -361,7 +361,7 @@ def assemble_service_result(reports, *, period_months: int = 12) -> pl.DataFrame
                                             period_months)
         ordered = [(line, agg[line]) for line, _f in _SERVICE_ISSUED_LINES]
         rows += _service_rows(_KIND_ISSUED, ordered, n_periods)
-    held = [r for r in reports if isinstance(r, ReinsuranceReport)]
+    held = [r for r in reports if isinstance(r, _reinsurance.Report)]
     if held:
         agg, n_periods = _aggregate_service(held, _SERVICE_REINS_LINES,
                                             period_months)
@@ -425,7 +425,7 @@ def close(reconciliations, *, reports=None, group_ids=None) -> ClosePackage:
     reconciliations of one reporting period (what :func:`fastcashflow.reconcile`
     returns, one per model / group) -- the source of the SoFP, the finance
     statement and the reconciliation detail. ``reports``, if given, is the list
-    of :class:`~fastcashflow.Report` / :class:`~fastcashflow.reinsurance.ReinsuranceReport`
+    of :class:`~fastcashflow.Report` / :class:`~fastcashflow.reinsurance.Report`
     that adds the insurance service result statement (sourced from the report,
     not the settlement -- see :func:`assemble_service_result`). ``group_ids``, if
     given, names the group of contracts each reconciliation belongs to (parallel

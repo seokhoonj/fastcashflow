@@ -21,7 +21,7 @@ from fastcashflow.closing import (
     _COMP_LRC, _COMP_LC, _COMP_LIC, _COMP_TOTAL, _FINANCE_TOTAL,
     _KIND_ISSUED, _KIND_REINSURANCE, _KIND_NET)
 import fastcashflow as fcf
-from fastcashflow.report import ReinsuranceReport, Report
+from fastcashflow.report import Report
 
 
 def _build(cls, **over):
@@ -227,7 +227,7 @@ def _reins_report(premium, recovered, **over):
         bel_finance_expense=z, ra_finance_expense=z, csm_finance_expense=z,
         csm_opening=z, csm_accretion=z, csm_release=z, csm_closing=z)
     fields.update(over)
-    return ReinsuranceReport(**fields)
+    return fcf.reinsurance.Report(**fields)
 
 
 def _scell(df, kind, line, period):

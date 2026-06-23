@@ -15,6 +15,7 @@ from fastcashflow._reinsurance import (
     SettlementMovement,
     SettlementReconciliation,
     SettlementAggregate,
+    Report,
     measure_reinsurance as measure,
     measure_reinsurance_aggregate as measure_aggregate,
     measure_reinsurance_inforce as measure_inforce,
@@ -24,7 +25,6 @@ from fastcashflow._reinsurance import (
     settle_reinsurance_aggregate as settle_aggregate,
     settle_reinsurance_stream as settle_stream,
 )
-from fastcashflow.report import ReinsuranceReport
 from fastcashflow.trace import (
     show_trace_reinsurance as trace,
     show_trace_diff_reinsurance as trace_diff,
@@ -40,4 +40,4 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "SettlementAggregate",
            # result types (produced by reinsurance.measure / roll_forward / report)
            "PeriodMovement", "Reconciliation",
-           "ReinsuranceReport"]
+           "Report"]

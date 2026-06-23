@@ -408,6 +408,145 @@ class SettlementAggregate:
         raise ValueError(_AGGREGATE_NO_CHAIN)
 
 
+_REINSURANCE_PERIOD_LINES = (
+    "reinsurance_premium_allocated", "amounts_recovered",
+    "reinsurance_service_result", "ra_release", "reinsurance_finance_expense",
+    "bel_finance_expense", "ra_finance_expense", "csm_finance_expense",
+    "csm_accretion", "csm_release",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Report:
+    """IFRS 17 reporting figures for a reinsurance contract held, period by period.
+
+    Reinsurance held is the *mirror* of an issued contract (IFRS 17 paragraph
+    82): the cedant pays reinsurance premiums (an outflow) and receives
+    recoveries of incurred claims (an inflow). Paragraph 86 lets the entity
+    present the premiums paid net against the amounts recovered, or separately,
+    so this report exposes the disaggregated components and leaves net-vs-gross
+    a presentation choice -- ``net_reinsurance_result`` (a property) is the
+    paragraph-86 net, not a stored field.
+
+    Each flow array is shaped ``(n_mp, n_time)`` -- one row per model point, one
+    column per month. ``reinsurance_premium_allocated`` (the systematic
+    allocation of premiums paid, the cost side) and ``amounts_recovered``
+    (recoveries of incurred claims, the income side) are both positive, matching
+    the measurement's outflow-positive premium and inflow-positive recovery.
+    ``reinsurance_service_result`` is the analog of the issuer service result --
+    the release of the risk transferred plus the release of the CSM
+    (``ra_release + csm_release``, IFRS 17 paragraphs 82 + B119), *not* the gross
+    recovery-less-premium netting (that is ``net_reinsurance_result``).
+    ``ra_release`` is the period release of the risk transferred (paragraph 64)
+    excluding interest -- the same revenue-earned form as the issuer
+    ``_report_gmm`` (the RA interest is in the finance line). The report (a P&L
+    view) and the :class:`~fastcashflow.reinsurance.Reconciliation` (a liability
+    roll-forward) decompose the same opening->closing transition differently, so
+    ``ra_release`` here is the revenue-earned amount, not the reconciliation's
+    movement residual; the finance lines and the CSM release do tie out.
+
+    ``reinsurance_finance_expense`` is the interest unwind on the BEL and RA
+    plus the CSM accretion at the locked-in rate, disaggregated by source (IFRS
+    17 B130-B136) into ``bel_finance_expense`` (finance on the estimates of
+    reinsurance cash flows), ``ra_finance_expense`` (finance on the risk
+    transferred) and ``csm_finance_expense`` (the CSM interest, B72). The three
+    sum to ``reinsurance_finance_expense`` up to floating-point rounding (the
+    aggregate is kept as its own expression, so the parts may differ from it by
+    a rounding step rather than re-deriving it).
+
+    The CSM analysis of change reconciles as
+    ``csm_opening + csm_accretion - csm_release = csm_closing``. There is no
+    loss component (IFRS 17 Sec. 65): the CSM is the net cost or gain of the
+    cover and may be negative -- a net cost is deferred and amortised, with no
+    floor -- so the trajectory carries any negative value through as-is.
+    """
+
+    model: ClassVar[str] = REINSURANCE
+
+    reinsurance_premium_allocated: FloatArray   # systematic allocation of premiums paid (cost side)
+    amounts_recovered: FloatArray               # recoveries of incurred claims (income side)
+    reinsurance_service_result: FloatArray      # ra_release + csm_release (paragraphs 82 + B119)
+    ra_release: FloatArray                      # period unwind of the risk transferred (paragraph 64)
+    reinsurance_finance_expense: FloatArray     # interest on BEL + RA + CSM accretion
+    bel_finance_expense: FloatArray   # B130-B136: finance on the reinsurance FCF estimates
+    ra_finance_expense: FloatArray    # B130-B136: finance on the risk transferred
+    csm_finance_expense: FloatArray   # B130-B136: CSM interest at the locked-in rate (B72)
+    csm_opening: FloatArray
+    csm_accretion: FloatArray
+    csm_release: FloatArray
+    csm_closing: FloatArray
+
+    @property
+    def net_reinsurance_result(self) -> FloatArray:
+        """IFRS 17 paragraph 86 net presentation: recoveries less premiums paid.
+
+        ``amounts_recovered - reinsurance_premium_allocated`` -- positive when
+        recoveries exceed the premiums allocated to the period. Paragraph 86
+        permits this net presentation or the two disaggregated line items;
+        the property supports the net choice without baking it into the report.
+        This is *not* the service result (which is ``ra_release + csm_release``).
+        """
+        return self.amounts_recovered - self.reinsurance_premium_allocated
+
+    def annual(self) -> dict[str, FloatArray]:
+        """Portfolio totals aggregated to policy years.
+
+        Each per-period line item is summed across model points and then
+        across the twelve months of each policy year.
+        """
+        from fastcashflow.report import _to_years
+        return {
+            name: _to_years(getattr(self, name).sum(axis=0))
+            for name in (
+                "reinsurance_premium_allocated", "amounts_recovered",
+                "reinsurance_service_result", "reinsurance_finance_expense",
+                "csm_accretion", "csm_release",
+            )
+        }
+
+    def by_period(self, period_months: int = 12, *, basis: str = "elapsed",
+                  inception_month=None) -> dict[str, FloatArray]:
+        """Portfolio totals bucketed into reporting periods of ``period_months``.
+
+        The reinsurance-held counterpart of :meth:`Report.by_period`: premiums
+        paid, amounts recovered, the service result, the RA release, and the
+        finance expense with its B130-B136 split, summed across model points
+        into each reporting period. There is no loss component (IFRS 17 Sec. 65).
+        ``basis`` and ``inception_month`` behave as in :meth:`Report.by_period`.
+        """
+        from fastcashflow.report import _by_period
+        return _by_period(self, _REINSURANCE_PERIOD_LINES, period_months, basis,
+                          inception_month, None)
+
+    def __str__(self) -> str:
+        annual = self.annual()
+        n_years = len(annual["reinsurance_premium_allocated"])
+        shown = min(n_years, 5)
+        rows = (
+            ("Reinsurance premium", annual["reinsurance_premium_allocated"]),
+            ("Amounts recovered",   annual["amounts_recovered"]),
+            ("Net result",          annual["amounts_recovered"]
+                                    - annual["reinsurance_premium_allocated"]),
+            ("Service result",      annual["reinsurance_service_result"]),
+            ("Finance expense",     annual["reinsurance_finance_expense"]),
+            ("CSM accretion",       annual["csm_accretion"]),
+            ("CSM release",         annual["csm_release"]),
+        )
+        title = "IFRS 17 reinsurance-held report -- annual portfolio totals"
+        if n_years > shown:
+            title += f" (first {shown} of {n_years} years)"
+        header = f"{'':20}" + "".join(
+            f"{f'Year {y + 1}':>14}" for y in range(shown)
+        )
+        lines = [title, header]
+        for name, series in rows:
+            lines.append(
+                f"{name:20}"
+                + "".join(f"{series[y]:>14,.0f}" for y in range(shown))
+            )
+        return "\n".join(lines)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,
