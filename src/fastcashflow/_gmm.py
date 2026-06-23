@@ -288,6 +288,63 @@ class PeriodMovement:
     loss_component_recognised: FloatArray
 
 
+@dataclass(frozen=True, slots=True)
+class Reconciliation:
+    """An IFRS 17 reconciliation of the insurance contract liability.
+
+    Portfolio totals for one reporting period, in the layout of IFRS 17
+    paragraph 101: the estimates of the present value of future cash flows
+    (``bel``), the risk adjustment (``ra``) and the CSM each reconcile from
+    opening to closing. ``*_future_service`` is the assumption and
+    experience effect; ``*_finance`` is the interest unwind; ``*_release``
+    is the run-off, shown negative -- so opening plus every row equals
+    closing.
+    """
+
+    model: ClassVar[str] = GMM
+
+    month_start: int
+    month_end: int
+    bel_opening: float
+    bel_future_service: float
+    bel_finance: float
+    bel_release: float
+    bel_closing: float
+    ra_opening: float
+    ra_future_service: float
+    ra_finance: float
+    ra_release: float
+    ra_closing: float
+    csm_opening: float
+    csm_future_service: float
+    csm_finance: float
+    csm_release: float
+    csm_closing: float
+    loss_component_recognised: float
+
+    def __str__(self) -> str:
+        rows = (
+            ("Opening", self.bel_opening, self.ra_opening, self.csm_opening),
+            ("Future service", self.bel_future_service,
+             self.ra_future_service, self.csm_future_service),
+            ("Finance", self.bel_finance, self.ra_finance, self.csm_finance),
+            ("Release", self.bel_release, self.ra_release, self.csm_release),
+            ("Closing", self.bel_closing, self.ra_closing, self.csm_closing),
+        )
+        lines = [
+            f"Reconciliation -- months {self.month_start + 1}-{self.month_end}",
+            f"{'':16}{'BEL':>18}{'RA':>18}{'CSM':>18}",
+        ]
+        for name, bel, ra, csm in rows:
+            lines.append(f"{name:16}{bel:>18,.0f}{ra:>18,.0f}{csm:>18,.0f}")
+        if self.loss_component_recognised:
+            lines.append(
+                f"{'Loss component':16}"
+                f"{self.loss_component_recognised:>18,.0f}"
+            )
+        return "\n".join(lines)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,

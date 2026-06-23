@@ -140,6 +140,50 @@ class PeriodMovement:
     csm_closing: FloatArray
 
 
+@dataclass(frozen=True, slots=True)
+class Reconciliation:
+    """An IFRS 17 reconciliation of a reinsurance-held asset/liability.
+
+    Portfolio totals for one reporting period -- the BEL, RA and CSM each
+    reconciled from opening to closing. ``*_finance`` is the unwind at the
+    discount rate; ``*_release`` is the run-off, shown negative -- so opening
+    plus every row equals closing. There is no loss component (Sec. 65).
+    """
+
+    model: ClassVar[str] = REINSURANCE
+
+    month_start: int
+    month_end: int
+    bel_opening: float
+    bel_finance: float
+    bel_release: float
+    bel_closing: float
+    ra_opening: float
+    ra_finance: float
+    ra_release: float
+    ra_closing: float
+    csm_opening: float
+    csm_finance: float
+    csm_release: float
+    csm_closing: float
+
+    def __str__(self) -> str:
+        rows = (
+            ("Opening", self.bel_opening, self.ra_opening, self.csm_opening),
+            ("Finance", self.bel_finance, self.ra_finance, self.csm_finance),
+            ("Release", self.bel_release, self.ra_release, self.csm_release),
+            ("Closing", self.bel_closing, self.ra_closing, self.csm_closing),
+        )
+        lines = [
+            f"Reinsurance reconciliation -- months "
+            f"{self.month_start + 1}-{self.month_end}",
+            f"{'':16}{'BEL':>18}{'RA':>18}{'CSM':>18}",
+        ]
+        for name, bel, ra, csm in rows:
+            lines.append(f"{name:16}{bel:>18,.0f}{ra:>18,.0f}{csm:>18,.0f}")
+        return "\n".join(lines)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,

@@ -2076,8 +2076,8 @@ class PortfolioMovements:
 class PortfolioReconciliation:
     """Result of :func:`fcf.reconcile` on a :class:`PortfolioMovements`: one list
     of reconciliation tables per model present (``None`` when absent), keyed by
-    model (``list[Reconciliation]`` / ``list[PAAReconciliation]`` /
-    ``list[VFAReconciliation]``).
+    model (``list[gmm.Reconciliation]`` / ``list[paa.Reconciliation]`` /
+    ``list[vfa.Reconciliation]``).
     """
 
     gmm: "list | None" = None

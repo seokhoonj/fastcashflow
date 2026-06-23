@@ -509,126 +509,12 @@ def _roll_forward_reinsurance(
     return movements
 
 
-@dataclass(frozen=True, slots=True)
-class Reconciliation:
-    """An IFRS 17 reconciliation of the insurance contract liability.
-
-    Portfolio totals for one reporting period, in the layout of IFRS 17
-    paragraph 101: the estimates of the present value of future cash flows
-    (``bel``), the risk adjustment (``ra``) and the CSM each reconcile from
-    opening to closing. ``*_future_service`` is the assumption and
-    experience effect; ``*_finance`` is the interest unwind; ``*_release``
-    is the run-off, shown negative -- so opening plus every row equals
-    closing.
-    """
-
-    model: ClassVar[str] = GMM
-
-    month_start: int
-    month_end: int
-    bel_opening: float
-    bel_future_service: float
-    bel_finance: float
-    bel_release: float
-    bel_closing: float
-    ra_opening: float
-    ra_future_service: float
-    ra_finance: float
-    ra_release: float
-    ra_closing: float
-    csm_opening: float
-    csm_future_service: float
-    csm_finance: float
-    csm_release: float
-    csm_closing: float
-    loss_component_recognised: float
-
-    def __str__(self) -> str:
-        rows = (
-            ("Opening", self.bel_opening, self.ra_opening, self.csm_opening),
-            ("Future service", self.bel_future_service,
-             self.ra_future_service, self.csm_future_service),
-            ("Finance", self.bel_finance, self.ra_finance, self.csm_finance),
-            ("Release", self.bel_release, self.ra_release, self.csm_release),
-            ("Closing", self.bel_closing, self.ra_closing, self.csm_closing),
-        )
-        lines = [
-            f"Reconciliation -- months {self.month_start + 1}-{self.month_end}",
-            f"{'':16}{'BEL':>18}{'RA':>18}{'CSM':>18}",
-        ]
-        for name, bel, ra, csm in rows:
-            lines.append(f"{name:16}{bel:>18,.0f}{ra:>18,.0f}{csm:>18,.0f}")
-        if self.loss_component_recognised:
-            lines.append(
-                f"{'Loss component':16}"
-                f"{self.loss_component_recognised:>18,.0f}"
-            )
-        return "\n".join(lines)
-
-
-@dataclass(frozen=True, slots=True)
-class PAAReconciliation:
-    """An IFRS 17 paragraph-100 reconciliation of the PAA liability.
-
-    Portfolio totals for one reporting period, split into the three
-    components -- the liability for remaining coverage (excluding the loss
-    component), the loss component, and the liability for incurred claims.
-    Run-off rows are shown negative, so opening plus every row equals
-    closing.
-    """
-
-    model: ClassVar[str] = PAA
-
-    month_start: int
-    month_end: int
-    lrc_opening: float
-    premiums: float
-    revenue: float
-    lrc_closing: float
-    loss_component_opening: float
-    loss_component_release: float
-    loss_component_closing: float
-    lic_opening: float
-    claims_incurred: float
-    claims_paid: float
-    lic_closing: float
-
-    def __str__(self) -> str:
-        blocks = (
-            ("LRC (excluding loss component)", (
-                ("Opening", self.lrc_opening),
-                ("Premiums received", self.premiums),
-                ("Insurance revenue", self.revenue),
-                ("Closing", self.lrc_closing),
-            )),
-            ("Loss component", (
-                ("Opening", self.loss_component_opening),
-                ("Released", self.loss_component_release),
-                ("Closing", self.loss_component_closing),
-            )),
-            ("Liability for incurred claims", (
-                ("Opening", self.lic_opening),
-                ("Claims incurred", self.claims_incurred),
-                ("Claims paid", self.claims_paid),
-                ("Closing", self.lic_closing),
-            )),
-        )
-        lines = [
-            f"PAA reconciliation -- months {self.month_start + 1}-{self.month_end}"
-        ]
-        for title, rows in blocks:
-            lines.append(f"  {title}")
-            for name, value in rows:
-                lines.append(f"    {name:22}{value:>18,.0f}")
-        return "\n".join(lines)
-
-
 def _reconcile_paa(
     movements: list[_paa.PeriodMovement],
-) -> list[PAAReconciliation]:
+) -> list[_paa.Reconciliation]:
     """Aggregate PAA period movements into portfolio-total reconciliations."""
     return [
-        PAAReconciliation(
+        _paa.Reconciliation(
             month_start=m.month_start,
             month_end=m.month_end,
             lrc_opening=float(m.lrc_opening.sum()),
@@ -647,55 +533,12 @@ def _reconcile_paa(
     ]
 
 
-@dataclass(frozen=True, slots=True)
-class VFAReconciliation:
-    """An IFRS 17 VFA reconciliation of the insurance contract liability.
-
-    Portfolio totals for one reporting period -- the BEL, RA and CSM each
-    reconciled from opening to closing. ``*_finance`` is the unwind at the
-    underlying-items return; ``*_release`` is the run-off, shown negative --
-    so opening plus every row equals closing.
-    """
-
-    model: ClassVar[str] = VFA
-
-    month_start: int
-    month_end: int
-    bel_opening: float
-    bel_finance: float
-    bel_release: float
-    bel_closing: float
-    ra_opening: float
-    ra_finance: float
-    ra_release: float
-    ra_closing: float
-    csm_opening: float
-    csm_finance: float
-    csm_release: float
-    csm_closing: float
-
-    def __str__(self) -> str:
-        rows = (
-            ("Opening", self.bel_opening, self.ra_opening, self.csm_opening),
-            ("Finance", self.bel_finance, self.ra_finance, self.csm_finance),
-            ("Release", self.bel_release, self.ra_release, self.csm_release),
-            ("Closing", self.bel_closing, self.ra_closing, self.csm_closing),
-        )
-        lines = [
-            f"VFA reconciliation -- months {self.month_start + 1}-{self.month_end}",
-            f"{'':16}{'BEL':>18}{'RA':>18}{'CSM':>18}",
-        ]
-        for name, bel, ra, csm in rows:
-            lines.append(f"{name:16}{bel:>18,.0f}{ra:>18,.0f}{csm:>18,.0f}")
-        return "\n".join(lines)
-
-
 def _reconcile_vfa(
     movements: list[_vfa.PeriodMovement],
-) -> list[VFAReconciliation]:
+) -> list[_vfa.Reconciliation]:
     """Aggregate VFA period movements into portfolio-total reconciliations."""
     return [
-        VFAReconciliation(
+        _vfa.Reconciliation(
             month_start=m.month_start,
             month_end=m.month_end,
             bel_opening=float(m.bel_opening.sum()),
@@ -1222,56 +1065,12 @@ def _reconcile_vfa_settlement(
     ]
 
 
-@dataclass(frozen=True, slots=True)
-class ReinsuranceReconciliation:
-    """An IFRS 17 reconciliation of a reinsurance-held asset/liability.
-
-    Portfolio totals for one reporting period -- the BEL, RA and CSM each
-    reconciled from opening to closing. ``*_finance`` is the unwind at the
-    discount rate; ``*_release`` is the run-off, shown negative -- so opening
-    plus every row equals closing. There is no loss component (Sec. 65).
-    """
-
-    model: ClassVar[str] = REINSURANCE
-
-    month_start: int
-    month_end: int
-    bel_opening: float
-    bel_finance: float
-    bel_release: float
-    bel_closing: float
-    ra_opening: float
-    ra_finance: float
-    ra_release: float
-    ra_closing: float
-    csm_opening: float
-    csm_finance: float
-    csm_release: float
-    csm_closing: float
-
-    def __str__(self) -> str:
-        rows = (
-            ("Opening", self.bel_opening, self.ra_opening, self.csm_opening),
-            ("Finance", self.bel_finance, self.ra_finance, self.csm_finance),
-            ("Release", self.bel_release, self.ra_release, self.csm_release),
-            ("Closing", self.bel_closing, self.ra_closing, self.csm_closing),
-        )
-        lines = [
-            f"Reinsurance reconciliation -- months "
-            f"{self.month_start + 1}-{self.month_end}",
-            f"{'':16}{'BEL':>18}{'RA':>18}{'CSM':>18}",
-        ]
-        for name, bel, ra, csm in rows:
-            lines.append(f"{name:16}{bel:>18,.0f}{ra:>18,.0f}{csm:>18,.0f}")
-        return "\n".join(lines)
-
-
 def _reconcile_reinsurance(
     movements: list[_reinsurance.PeriodMovement],
-) -> list[ReinsuranceReconciliation]:
+) -> list[_reinsurance.Reconciliation]:
     """Aggregate reinsurance period movements into portfolio-total reconciliations."""
     return [
-        ReinsuranceReconciliation(
+        _reinsurance.Reconciliation(
             month_start=m.month_start,
             month_end=m.month_end,
             bel_opening=float(m.bel_opening.sum()),
@@ -1928,11 +1727,11 @@ def _(movement: VFASettlementMovement, path, *, ids=None):
 def reconcile(
     movements: (list[_gmm.PeriodMovement] | list[_paa.PeriodMovement]
                 | list[_vfa.PeriodMovement]),
-) -> list[Reconciliation] | list[PAAReconciliation] | list[VFAReconciliation]:
+) -> list[_gmm.Reconciliation] | list[_paa.Reconciliation] | list[_vfa.Reconciliation]:
     """Aggregate period movements into IFRS 17 reconciliation tables.
 
     Each :class:`_gmm.PeriodMovement` -- per model point -- becomes one
-    portfolio-total :class:`Reconciliation` in the layout of IFRS 17
+    portfolio-total :class:`_gmm.Reconciliation` in the layout of IFRS 17
     paragraph 101. Run-off rows are shown negative, so opening plus every
     row equals closing. A list of :class:`_paa.PeriodMovement` or
     :class:`_vfa.PeriodMovement` is reconciled instead into the PAA
@@ -1958,9 +1757,9 @@ def reconcile(
         return _reconcile_reinsurance_settlement(movements)
     if movements and isinstance(movements[0], _reinsurance.PeriodMovement):
         return _reconcile_reinsurance(movements)
-    out: list[Reconciliation] = []
+    out: list[_gmm.Reconciliation] = []
     for m in movements:
-        out.append(Reconciliation(
+        out.append(_gmm.Reconciliation(
             month_start=m.month_start,
             month_end=m.month_end,
             bel_opening=float(m.bel_opening.sum()),

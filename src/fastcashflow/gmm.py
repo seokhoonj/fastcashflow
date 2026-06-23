@@ -16,10 +16,9 @@ point's measurement as a tree.
 from fastcashflow.engine import (
     measure, measure_aggregate, measure_inforce, settle, settle_aggregate,
     recognition_schedule, CSMRecognitionSchedule,
-    Measurement, Aggregate, CurrentEstimate, PeriodMovement)
+    Measurement, Aggregate, CurrentEstimate, PeriodMovement, Reconciliation)
 from fastcashflow.movement import (
-    GMMSettlementMovement, GMMSettlementReconciliation, GMMSettlementAggregate,
-    Reconciliation)
+    GMMSettlementMovement, GMMSettlementReconciliation, GMMSettlementAggregate)
 from fastcashflow.io import measure_stream, settle_stream
 from fastcashflow.pricing import interest_guarantee_tvog
 from fastcashflow.stochastic import measure_stochastic as stochastic

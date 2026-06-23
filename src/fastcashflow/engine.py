@@ -81,6 +81,7 @@ from fastcashflow._gmm import (
     CurrentEstimate,
     Aggregate,
     PeriodMovement,
+    Reconciliation,
     _measure_full,
 )
 

@@ -17,12 +17,6 @@ import numpy as np
 
 from fastcashflow.engine import _require_full
 from fastcashflow._measurement_basis import _require_inception
-from fastcashflow.movement import (
-    PAAReconciliation,
-    Reconciliation,
-    ReinsuranceReconciliation,
-    VFAReconciliation,
-)
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow._paa import _require_full_paa
 from fastcashflow._vfa import _require_settlement_csm
@@ -605,7 +599,7 @@ def _bel_ra_csm_component(component: str) -> str:
 
 
 @plot_analysis_of_change.register
-def _(reconciliation: Reconciliation, *, component="csm", ax=None,
+def _(reconciliation: _gmm.Reconciliation, *, component="csm", ax=None,
       title=None):
     r = reconciliation
     component = _bel_ra_csm_component(component)
@@ -637,21 +631,21 @@ def _finance_release_waterfall(r, component, ax, title, kind):
 
 
 @plot_analysis_of_change.register
-def _(reconciliation: VFAReconciliation, *, component="csm", ax=None,
+def _(reconciliation: _vfa.Reconciliation, *, component="csm", ax=None,
       title=None):
     return _finance_release_waterfall(reconciliation, component, ax, title,
                                       "VFA ")
 
 
 @plot_analysis_of_change.register
-def _(reconciliation: ReinsuranceReconciliation, *, component="csm", ax=None,
+def _(reconciliation: _reinsurance.Reconciliation, *, component="csm", ax=None,
       title=None):
     return _finance_release_waterfall(reconciliation, component, ax, title,
                                       "Reinsurance ")
 
 
 @plot_analysis_of_change.register
-def _(reconciliation: PAAReconciliation, *, component="lrc", ax=None,
+def _(reconciliation: _paa.Reconciliation, *, component="lrc", ax=None,
       title=None):
     r = reconciliation
     blocks = {

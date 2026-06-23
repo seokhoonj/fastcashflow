@@ -177,6 +177,63 @@ class PeriodMovement:
     lic_closing: FloatArray
 
 
+@dataclass(frozen=True, slots=True)
+class Reconciliation:
+    """An IFRS 17 paragraph-100 reconciliation of the PAA liability.
+
+    Portfolio totals for one reporting period, split into the three
+    components -- the liability for remaining coverage (excluding the loss
+    component), the loss component, and the liability for incurred claims.
+    Run-off rows are shown negative, so opening plus every row equals
+    closing.
+    """
+
+    model: ClassVar[str] = PAA
+
+    month_start: int
+    month_end: int
+    lrc_opening: float
+    premiums: float
+    revenue: float
+    lrc_closing: float
+    loss_component_opening: float
+    loss_component_release: float
+    loss_component_closing: float
+    lic_opening: float
+    claims_incurred: float
+    claims_paid: float
+    lic_closing: float
+
+    def __str__(self) -> str:
+        blocks = (
+            ("LRC (excluding loss component)", (
+                ("Opening", self.lrc_opening),
+                ("Premiums received", self.premiums),
+                ("Insurance revenue", self.revenue),
+                ("Closing", self.lrc_closing),
+            )),
+            ("Loss component", (
+                ("Opening", self.loss_component_opening),
+                ("Released", self.loss_component_release),
+                ("Closing", self.loss_component_closing),
+            )),
+            ("Liability for incurred claims", (
+                ("Opening", self.lic_opening),
+                ("Claims incurred", self.claims_incurred),
+                ("Claims paid", self.claims_paid),
+                ("Closing", self.lic_closing),
+            )),
+        )
+        lines = [
+            f"PAA reconciliation -- months {self.month_start + 1}-{self.month_end}"
+        ]
+        for title, rows in blocks:
+            lines.append(f"  {title}")
+            for name, value in rows:
+                lines.append(f"    {name:22}{value:>18,.0f}")
+        return "\n".join(lines)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"lrc": measurement.lrc,
