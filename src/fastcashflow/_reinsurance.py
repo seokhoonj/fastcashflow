@@ -51,7 +51,7 @@ from fastcashflow.engine import _reconcile_state
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class ReinsuranceMeasurement:
+class Measurement:
     """Measurement of a reinsurance contract held.
 
     Headline ``bel``, ``ra`` and ``csm`` are ``(n_mp,)`` inception figures --
@@ -91,6 +91,22 @@ class ReinsuranceMeasurement:
     # prior_t-anchored (column 0 = the opening date) -- one more reason the
     # inception-axis consumers must reject 'settlement_carry'.
     measurement_basis: str = MEASUREMENT_BASIS_INCEPTION
+
+    def _columns(self):
+        return [("BEL", self.bel), ("RA", self.ra), ("CSM", self.csm)]
+
+    def __repr__(self) -> str:
+        from fastcashflow._display import measurement_repr
+        return measurement_repr(f"{self.model}.Measurement", self._columns())
+
+    def __str__(self) -> str:
+        from fastcashflow._display import measurement_str
+        return measurement_str(f"{self.model}.Measurement", self._columns())
+
+
+# Public alias -- prefixed name kept for back-compat (same type object as the
+# `Measurement` class above).
+ReinsuranceMeasurement = Measurement
 
 
 @write_measurement.register

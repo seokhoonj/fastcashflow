@@ -12,9 +12,15 @@ site still reading ``type(x).__name__`` would silently collapse to
 """
 import pytest
 
+import fastcashflow as fcf
+from fastcashflow.reinsurance import QuotaShare
 from fastcashflow._measurement_model import (
     MODEL_TAGS, model_tag, supported_model_tags,
 )
+from fastcashflow._gmm import Measurement as _GmmMeasurement
+from fastcashflow._vfa import Measurement as _VfaMeasurement
+from fastcashflow._paa import Measurement as _PaaMeasurement
+from fastcashflow._reinsurance import Measurement as _ReinsuranceMeasurement
 from fastcashflow.grouping import group, group_of_contracts
 from fastcashflow.io import write_measurement
 from fastcashflow.report import report
@@ -110,3 +116,37 @@ def test_reconciliation_to_frame_default_message_uses_tag():
         match="reconciliation_to_frame: no disclosure spec for str",
     ):
         reconciliation_to_frame("not a reconciliation")
+
+
+# --- the per-model `Measurement` rename and its prefixed aliases (S5.3) -------
+
+def test_measurement_classes_share_the_name_but_stay_distinct():
+    # each model owns a class literally named `Measurement` (so it reads as
+    # `fcf.gmm.Measurement`); they are four distinct type objects, not one shared
+    cls = (_GmmMeasurement, _VfaMeasurement, _PaaMeasurement, _ReinsuranceMeasurement)
+    assert all(c.__name__ == "Measurement" for c in cls)
+    assert len(set(cls)) == 4
+
+
+def test_prefixed_names_are_aliases_not_subclasses():
+    # the old prefixed name is the SAME type object -- preserves every existing
+    # reference and isinstance check until the facade exposes fcf.<model>.Measurement
+    assert GMMMeasurement is _GmmMeasurement
+    assert VFAMeasurement is _VfaMeasurement
+    assert PAAMeasurement is _PaaMeasurement
+    assert ReinsuranceMeasurement is _ReinsuranceMeasurement
+
+
+def test_repr_reads_the_model_namespace_path():
+    # repr / str label come from self.model -> "<gmm.Measurement ...>", matching
+    # the public path fcf.gmm.Measurement (not the old hardcoded "GMMMeasurement")
+    mp = fcf.samples.model_points()
+    router = fcf.samples.basis()
+    g = fcf.gmm.measure(mp, router)
+    assert repr(g).startswith("<gmm.Measurement: n_mp=")
+    assert str(g).splitlines()[0] == "<gmm.Measurement -- 11 model points>"
+    # reinsurance gained a compact repr here (it relied on the dataclass auto-repr
+    # before S5.3, which the rename would have collapsed to a bare "Measurement(")
+    r = fcf.reinsurance.measure(mp, router.resolve(("TERM_LIFE_A", "FC")),
+                                treaty=QuotaShare(0.5))
+    assert repr(r).startswith("<reinsurance.Measurement: n_mp=")

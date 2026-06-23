@@ -88,7 +88,7 @@ print(m)
 ```
 
 ```text
-<GMMMeasurement -- 1 model point>
+<gmm.Measurement -- 1 model point>
                    BEL            RA           CSM          loss
     mp 0    -6,092,691        55,484     6,037,206             0
    Total    -6,092,691        55,484     6,037,206             0

@@ -38,7 +38,7 @@ print(m)   # BEL · RA · CSM · 손실요소 한눈에 (계약별 + 합계)
 출력:
 
 ```text
-<GMMMeasurement -- 11 model points>
+<gmm.Measurement -- 11 model points>
                    BEL            RA           CSM          loss
     mp 0       449,257        40,285             0       489,542
     mp 1      -907,592       150,809       756,783             0

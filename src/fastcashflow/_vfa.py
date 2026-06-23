@@ -185,7 +185,7 @@ def _require_settlement_csm(measurement: "VFAMeasurement", op: str) -> None:
     """
     if measurement.csm_basis == CSM_BASIS_CARRY_ONLY:
         raise ValueError(
-            f"{op}: this VFAMeasurement carries a carry-only in-force CSM "
+            f"{op}: this VFA measurement carries a carry-only in-force CSM "
             f"(csm_basis='{CSM_BASIS_CARRY_ONLY}', from vfa.measure_inforce -- "
             "the prior CSM rolled at the basis return, with the paragraph-45 "
             "remeasurement deferred). It is not a settlement figure, so it "
@@ -195,7 +195,7 @@ def _require_settlement_csm(measurement: "VFAMeasurement", op: str) -> None:
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class VFAMeasurement:
+class Measurement:
     """VFA measurement of a direct-participation (account-value) portfolio.
 
     The headline ``bel``, ``ra``, ``csm``, ``variable_fee``, ``time_value`` and
@@ -263,11 +263,17 @@ class VFAMeasurement:
 
     def __repr__(self) -> str:
         from fastcashflow._display import measurement_repr
-        return measurement_repr("VFAMeasurement", self._columns())
+        return measurement_repr(f"{self.model}.Measurement", self._columns())
 
     def __str__(self) -> str:
         from fastcashflow._display import measurement_str
-        return measurement_str("VFAMeasurement", self._columns())
+        return measurement_str(f"{self.model}.Measurement", self._columns())
+
+
+# Public alias -- prefixed name kept for back-compat (same type object as the
+# `Measurement` class above, so `fcf.vfa.VFAMeasurement` and every isinstance
+# keep working until the facade exposes `fcf.vfa.Measurement`).
+VFAMeasurement = Measurement
 
 
 @dataclass(frozen=True, slots=True, eq=False)

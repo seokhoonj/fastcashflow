@@ -35,7 +35,7 @@ from fastcashflow.numerics import _csm_kernel
 # ---------------------------------------------------------------------------
 
 @dataclass(frozen=True, slots=True, eq=False)
-class GMMMeasurement:
+class Measurement:
     """IFRS 17 GMM measurement: BEL, RA and CSM.
 
     The headline fields (``bel``, ``ra``, ``csm``, ``loss_component``) are
@@ -99,11 +99,11 @@ class GMMMeasurement:
 
     def __repr__(self) -> str:
         from fastcashflow._display import measurement_repr
-        return measurement_repr("GMMMeasurement", self._columns())
+        return measurement_repr(f"{self.model}.Measurement", self._columns())
 
     def __str__(self) -> str:
         from fastcashflow._display import measurement_str
-        return measurement_str("GMMMeasurement", self._columns())
+        return measurement_str(f"{self.model}.Measurement", self._columns())
 
     def estimate_at(self, month: int) -> "CurrentEstimate":
         """The current estimate (BEL / RA / CSM / LIC) at a future ``month``.
@@ -151,6 +151,12 @@ class GMMMeasurement:
             lic=lic,
             inforce=np.asarray(inforce, dtype=np.float64),
         )
+
+
+# Public alias -- the prefixed name kept for back-compat. The class is named
+# `Measurement` (so it reads as `fcf.gmm.Measurement`); this alias is the same
+# type object, preserving every existing `GMMMeasurement` reference / isinstance.
+GMMMeasurement = Measurement
 
 
 @dataclass(frozen=True, slots=True, eq=False)

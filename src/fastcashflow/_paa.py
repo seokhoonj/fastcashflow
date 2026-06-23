@@ -63,7 +63,7 @@ from fastcashflow.engine import _reconcile_state, _inforce_rescale
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class PAAMeasurement:
+class Measurement:
     """PAA measurement -- the Liability for Remaining Coverage and the
     underwriting result released from it.
 
@@ -111,11 +111,16 @@ class PAAMeasurement:
 
     def __repr__(self) -> str:
         from fastcashflow._display import measurement_repr
-        return measurement_repr("PAAMeasurement", self._columns())
+        return measurement_repr(f"{self.model}.Measurement", self._columns())
 
     def __str__(self) -> str:
         from fastcashflow._display import measurement_str
-        return measurement_str("PAAMeasurement", self._columns())
+        return measurement_str(f"{self.model}.Measurement", self._columns())
+
+
+# Public alias -- prefixed name kept for back-compat (same type object as the
+# `Measurement` class above).
+PAAMeasurement = Measurement
 
 
 @dataclass(frozen=True, slots=True, eq=False)
