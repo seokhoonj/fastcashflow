@@ -794,7 +794,7 @@ def measure_vfa(
     # (variable-annuity, no cost-of-insurance) handles the account-flag-absent
     # case. Branch STRICTLY on the coverage flags, never account_value (the
     # variable-annuity product carries an account value too).
-    from fastcashflow.engine import _measure_full, _portfolio_has_account
+    from fastcashflow.engine import valued_projection, _portfolio_has_account
     if _portfolio_has_account(model_points, basis):
         r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
         n_time = int(model_points.contract_boundary_months.max())
@@ -805,18 +805,21 @@ def measure_vfa(
             # moneyness factor against the GMAB, then re-measure with the scaled
             # lapse. The account value is a per-policy level (independent of the
             # decrement count), so the static-roll path is the right driver.
-            m0 = _measure_full(model_points, basis,
-                               discount_monthly=np.full(n_time, r_m))
+            vp0 = valued_projection(model_points, basis,
+                                    discount_monthly=np.full(n_time, r_m))
             n_years = (n_time + 11) // 12
             year_start = np.minimum(np.arange(n_years) * 12, n_time)
-            av_year = m0.cashflows.account.av[:, year_start]
+            av_year = vp0.cashflows.account.av[:, year_start]
             lapse_scale = _moneyness_scale_from_av_year(
                 av_year, model_points.minimum_accumulation_benefit,
                 lapse_sensitivity, lapse_floor, lapse_cap)
-        m = _measure_full(model_points, basis,
-                          discount_monthly=np.full(n_time, r_m),
-                          lapse_scale=lapse_scale)
-        zeros = np.zeros_like(m.bel)  # UL has no asset-based variable fee
+        # The VFA model assembles its OWN measurement from the shared neutral
+        # bundle (BEL / RA valued at the underlying-items return) -- it no longer
+        # borrows a GMM measurement; the CSM below is rolled independently.
+        vp = valued_projection(model_points, basis,
+                               discount_monthly=np.full(n_time, r_m),
+                               lapse_scale=lapse_scale)
+        zeros = np.zeros_like(vp.bel)  # UL has no asset-based variable fee
         if return_scenarios is None:
             # Deterministic: the BEL carries the guarantee's intrinsic value only.
             time_value = zeros
@@ -832,35 +835,34 @@ def measure_vfa(
                     f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
                     "the projection horizon")
             time_value = _ul_floor_time_value(
-                model_points, basis, m.cashflows.deaths,
-                m.cashflows.maturity_survivors, return_scenarios, reduce=True)
+                model_points, basis, vp.cashflows.deaths,
+                vp.cashflows.maturity_survivors, return_scenarios, reduce=True)
         # Fold the time value into the inception FCF; the CSM absorbs it (with
-        # time_value == 0 this reproduces the deterministic m.csm / m.loss_component).
-        fcf = m.bel + m.ra + time_value
+        # time_value == 0 this reproduces the deterministic intrinsic CSM / loss).
+        fcf = vp.bel + vp.ra + time_value
         loss_component = np.maximum(0.0, fcf)
         csm0 = np.maximum(0.0, -fcf)
         if not full:
             return VFAMeasurement(
-                bel=m.bel, ra=m.ra, csm=csm0, variable_fee=zeros,
+                bel=vp.bel, ra=vp.ra, csm=csm0, variable_fee=zeros,
                 time_value=time_value, loss_component=loss_component,
                 model_points=model_points)
         # Roll the CSM forward on VFA's OWN inception csm0 (which already folds
         # in the guarantee time value) -- the deterministic and stochastic paths
         # are identical here, so a single kernel call serves both. With
         # time_value == 0 this reproduces the GMM roll byte-for-byte (same csm0,
-        # same in-force coverage units, same flat underlying-items accretion),
-        # and VFA no longer borrows GMM's csm_path / accretion / release.
+        # same in-force coverage units, same flat underlying-items accretion).
         csm_path, csm_accretion, csm_release = _csm_kernel(
-            csm0, m.cashflows.inforce, np.full(n_time, r_m),
+            csm0, vp.cashflows.inforce, np.full(n_time, r_m),
             basis.coverage_unit_discount)
         return VFAMeasurement(
-            bel=m.bel, ra=m.ra, csm=csm_path[:, 0], variable_fee=zeros,
+            bel=vp.bel, ra=vp.ra, csm=csm_path[:, 0], variable_fee=zeros,
             time_value=time_value, loss_component=loss_component,
-            bel_path=m.bel_path, ra_path=m.ra_path, csm_path=csm_path,
-            account_value_path=m.cashflows.account.av,
+            bel_path=vp.bel_path, ra_path=vp.ra_path, csm_path=csm_path,
+            account_value_path=vp.cashflows.account.av,
             csm_accretion=csm_accretion, csm_release=csm_release,
-            lic_path=m.lic_path, discount_factor_bom=m.discount_factor_bom,
-            cashflows=m.cashflows, model_points=model_points)
+            lic_path=vp.lic_path, discount_factor_bom=vp.discount_factor_bom,
+            cashflows=vp.cashflows, model_points=model_points)
 
     proj = None
     if lapse_sensitivity is not None:
@@ -1004,7 +1006,7 @@ def _vfa_time_value_by_scenario(model_points: ModelPoints, basis: Basis,
     :func:`measure_vfa_stochastic`. The universal-life (account) book re-rolls the
     account under every scenario in one pass; the variable-annuity closed form
     builds the credit-rate and floor time-value matrices directly."""
-    from fastcashflow.engine import _measure_full, _portfolio_has_account
+    from fastcashflow.engine import valued_projection, _portfolio_has_account
     rs = np.asarray(return_scenarios, dtype=np.float64)
     if _portfolio_has_account(model_points, basis):
         r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
@@ -1013,10 +1015,10 @@ def _vfa_time_value_by_scenario(model_points: ModelPoints, basis: Basis,
             raise ValueError(
                 f"return_scenarios must be 2-D (n_scenarios, {n_time}) -- "
                 "the projection horizon")
-        m = _measure_full(model_points, basis, discount_monthly=np.full(n_time, r_m))
-        tv = _ul_floor_time_value(model_points, basis, m.cashflows.deaths,
-                                  m.cashflows.maturity_survivors, rs, reduce=False)
-        return m.bel, m.ra, tv
+        vp = valued_projection(model_points, basis, discount_monthly=np.full(n_time, r_m))
+        tv = _ul_floor_time_value(model_points, basis, vp.cashflows.deaths,
+                                  vp.cashflows.maturity_survivors, rs, reduce=False)
+        return vp.bel, vp.ra, tv
     # Variable-annuity closed form.
     p = _vfa_project(model_points, basis, rs, tv_reduce=False)
     return p.bel[:, 0], p.ra[:, 0], p.time_value
