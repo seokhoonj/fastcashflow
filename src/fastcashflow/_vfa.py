@@ -844,13 +844,15 @@ def measure_vfa(
                 bel=m.bel, ra=m.ra, csm=csm0, variable_fee=zeros,
                 time_value=time_value, loss_component=loss_component,
                 model_points=model_points)
-        if return_scenarios is None:
-            csm_path, csm_accretion, csm_release = (
-                m.csm_path, m.csm_accretion, m.csm_release)
-        else:
-            csm_path, csm_accretion, csm_release = _csm_kernel(
-                csm0, m.cashflows.inforce, np.full(n_time, r_m),
-                basis.coverage_unit_discount)
+        # Roll the CSM forward on VFA's OWN inception csm0 (which already folds
+        # in the guarantee time value) -- the deterministic and stochastic paths
+        # are identical here, so a single kernel call serves both. With
+        # time_value == 0 this reproduces the GMM roll byte-for-byte (same csm0,
+        # same in-force coverage units, same flat underlying-items accretion),
+        # and VFA no longer borrows GMM's csm_path / accretion / release.
+        csm_path, csm_accretion, csm_release = _csm_kernel(
+            csm0, m.cashflows.inforce, np.full(n_time, r_m),
+            basis.coverage_unit_discount)
         return VFAMeasurement(
             bel=m.bel, ra=m.ra, csm=csm_path[:, 0], variable_fee=zeros,
             time_value=time_value, loss_component=loss_component,
