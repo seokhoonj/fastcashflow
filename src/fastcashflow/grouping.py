@@ -28,6 +28,7 @@ from functools import singledispatch
 
 import numpy as np
 
+from fastcashflow._measurement_model import model_tag, supported_model_tags
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.curves import forward_rates
 from fastcashflow._paa import PAAMeasurement
@@ -230,8 +231,8 @@ def group(measurement, by):
     policies).
     """
     raise TypeError(
-        f"group is not implemented for {type(measurement).__name__}; supported: "
-        "GMMMeasurement, VFAMeasurement, ReinsuranceMeasurement, PAAMeasurement."
+        f"group is not implemented for {model_tag(measurement)}; "
+        f"supported: {', '.join(supported_model_tags(group))}."
     )
 
 
@@ -564,8 +565,8 @@ def group_of_contracts(measurement, *, portfolio: str = "product",
     """
     raise TypeError(
         "group_of_contracts is not implemented for "
-        f"{type(measurement).__name__}; supported: GMMMeasurement, "
-        "VFAMeasurement, ReinsuranceMeasurement, PAAMeasurement."
+        f"{model_tag(measurement)}; "
+        f"supported: {', '.join(supported_model_tags(group_of_contracts))}."
     )
 
 

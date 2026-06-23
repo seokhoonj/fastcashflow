@@ -32,7 +32,9 @@ from functools import singledispatch
 
 import numpy as np
 
-from fastcashflow._measurement_model import GMM, REINSURANCE
+from fastcashflow._measurement_model import (
+    GMM, REINSURANCE, model_tag, supported_model_tags,
+)
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
@@ -449,8 +451,9 @@ def report(measurement) -> Report:
     VFA report are never merged).
     """
     raise TypeError(
-        "report() expects a GMM, PAA, VFA or reinsurance measurement, got "
-        f"{type(measurement).__name__}"
+        "report() expects one of "
+        f"{', '.join(supported_model_tags(report))}, got "
+        f"{model_tag(measurement)}"
     )
 
 

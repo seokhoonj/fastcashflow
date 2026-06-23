@@ -35,7 +35,7 @@ from functools import singledispatch
 
 import numpy as np
 
-from fastcashflow._measurement_model import GMM, VFA, PAA, REINSURANCE
+from fastcashflow._measurement_model import GMM, VFA, PAA, REINSURANCE, model_tag
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
@@ -243,7 +243,7 @@ def roll_forward(
     rejected on the container).
     """
     raise TypeError(
-        f"roll_forward does not handle {type(measurement).__name__}"
+        f"roll_forward does not handle {model_tag(measurement)}"
     )
 
 

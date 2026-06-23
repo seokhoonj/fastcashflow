@@ -33,6 +33,7 @@ from dataclasses import dataclass
 import numpy as np
 import polars as pl
 
+from fastcashflow._measurement_model import model_tag
 from fastcashflow.disclosure import reconciliation_to_frame
 from fastcashflow.movement import (
     GMMSettlementReconciliation, PAASettlementReconciliation,
@@ -111,7 +112,7 @@ def _components(recon) -> _Components:
             lic_closing=0.0,
         )
     raise TypeError(
-        f"close: no SoFP mapping for {type(recon).__name__}")
+        f"close: no SoFP mapping for {model_tag(recon)}")
 
 
 def _zero_position() -> dict[str, float]:
@@ -336,7 +337,7 @@ def assemble_service_result(reports, *, period_months: int = 12) -> pl.DataFrame
         if not isinstance(r, (Report, ReinsuranceReport)):
             raise TypeError(
                 "assemble_service_result: expects Report / ReinsuranceReport, "
-                f"got {type(r).__name__}")
+                f"got {model_tag(r)}")
     rows = []
     issued = [r for r in reports if isinstance(r, Report)]
     if issued:

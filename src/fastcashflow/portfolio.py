@@ -24,7 +24,7 @@ from typing import ClassVar
 import numpy as np
 import polars as pl
 
-from fastcashflow._measurement_model import VFA
+from fastcashflow._measurement_model import VFA, model_tag
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
     PAAMeasurement, PAAAggregate, measure_paa, measure_aggregate as _paa_aggregate,
@@ -289,7 +289,7 @@ def _measurement_rows(measurement) -> int:
         if value is not None:
             return len(value)
     raise TypeError(
-        f"cannot determine the row count of a {type(measurement).__name__}")
+        f"cannot determine the row count of a {model_tag(measurement)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,8 +338,8 @@ class PortfolioMeasurement:
             if mm is not None and not isinstance(mm.measurement, expected):
                 raise TypeError(
                     f"PortfolioMeasurement.{slot} must hold a "
-                    f"{expected.__name__}, got "
-                    f"{type(mm.measurement).__name__}")
+                    f"{model_tag(expected)}, got "
+                    f"{model_tag(mm.measurement)}")
         present = [mm for mm in (self.gmm, self.paa, self.vfa) if mm is not None]
         n = self.model_points.n_mp
         covered = sum(mm.index.size for mm in present)
@@ -851,8 +851,8 @@ class PortfolioGroups:
             m = getattr(self, slot)
             if m is not None and not isinstance(m, expected):
                 raise TypeError(
-                    f"PortfolioGroups.{slot} must hold a {expected.__name__}, "
-                    f"got {type(m).__name__}")
+                    f"PortfolioGroups.{slot} must hold a {model_tag(expected)}, "
+                    f"got {model_tag(m)}")
 
     def loss_component_total(self) -> float:
         """The portfolio's total onerous-group loss -- the **only** quantity

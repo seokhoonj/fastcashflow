@@ -26,6 +26,7 @@ from functools import singledispatch
 
 import polars as pl
 
+from fastcashflow._measurement_model import model_tag
 from fastcashflow.io import _write_frame, write_measurement
 from fastcashflow.movement import (
     GMMSettlementReconciliation, PAASettlementReconciliation,
@@ -63,7 +64,7 @@ _RICH_SCHEMA = {
 # this disclosure frame never drift.
 
 
-def _recon_frame(recon, model: str, blocks, *, rich: bool = False) -> pl.DataFrame:
+def _recon_frame(recon, blocks, *, rich: bool = False) -> pl.DataFrame:
     """The canonical tidy frame for one reconciliation: one row per disclosure
     line, read from the block spec so the spine has a single source. period_start
     / period_end are the relative period (the close assembler re-stamps absolute
@@ -74,7 +75,7 @@ def _recon_frame(recon, model: str, blocks, *, rich: bool = False) -> pl.DataFra
     for block, lines in blocks:
         for line, field, para, memo in lines:
             row = {
-                "model": model, "group_id": None, "statement": "settlement",
+                "model": recon.model, "group_id": None, "statement": "settlement",
                 "period_start": 0, "period_end": int(recon.period_months),
                 "block": block, "line": line, "amount": float(getattr(recon, field)),
             }
@@ -90,27 +91,27 @@ def _recon_frame(recon, model: str, blocks, *, rich: bool = False) -> pl.DataFra
 def reconciliation_to_frame(recon) -> pl.DataFrame:
     """Return the lean canonical tidy frame for a settlement reconciliation."""
     raise TypeError(
-        f"reconciliation_to_frame: no disclosure spec for {type(recon).__name__}")
+        f"reconciliation_to_frame: no disclosure spec for {model_tag(recon)}")
 
 
 @reconciliation_to_frame.register
 def _(recon: GMMSettlementReconciliation) -> pl.DataFrame:
-    return _recon_frame(recon, "gmm", _GMM_RECON_BLOCKS)
+    return _recon_frame(recon, _GMM_RECON_BLOCKS)
 
 
 @reconciliation_to_frame.register
 def _(recon: VFASettlementReconciliation) -> pl.DataFrame:
-    return _recon_frame(recon, "vfa", _VFA_RECON_BLOCKS)
+    return _recon_frame(recon, _VFA_RECON_BLOCKS)
 
 
 @reconciliation_to_frame.register
 def _(recon: ReinsuranceSettlementReconciliation) -> pl.DataFrame:
-    return _recon_frame(recon, "reinsurance", _REINSURANCE_RECON_BLOCKS)
+    return _recon_frame(recon, _REINSURANCE_RECON_BLOCKS)
 
 
 @reconciliation_to_frame.register
 def _(recon: PAASettlementReconciliation) -> pl.DataFrame:
-    return _recon_frame(recon, "paa", _PAA_RECON_BLOCKS)
+    return _recon_frame(recon, _PAA_RECON_BLOCKS)
 
 
 # (model, block spec, reconciliation class) for the four settlement families --
@@ -137,8 +138,8 @@ def write_reconciliation(reconciliation, path) -> None:
               if isinstance(reconciliation, (list, tuple)) else [reconciliation])
     frames = []
     for i, recon in enumerate(recons):
-        model, blocks = _SPEC_BY_TYPE[type(recon)]
-        frame = _recon_frame(recon, model, blocks, rich=True)
+        _, blocks = _SPEC_BY_TYPE[type(recon)]
+        frame = _recon_frame(recon, blocks, rich=True)
         frames.append(frame.with_columns(pl.lit(i, dtype=pl.Int64).alias("period_index")))
     _write_frame(pl.concat(frames), str(path))
 

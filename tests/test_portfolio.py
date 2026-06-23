@@ -645,7 +645,7 @@ def test_portfolio_rejects_wrong_measurement_type_in_slot():
     router = BasisRouter({("A", "GA"): _flat_basis()})
     mp = _mp(["A", "A"], ["GA", "GA"])
     gmm_meas = fcf.gmm.measure(mp, router)
-    with pytest.raises(TypeError, match="paa must hold a PAAMeasurement"):
+    with pytest.raises(TypeError, match="paa must hold a paa, got gmm"):
         PortfolioMeasurement(model_points=mp,
                              paa=ModelMeasurement(np.arange(2), gmm_meas))
 
