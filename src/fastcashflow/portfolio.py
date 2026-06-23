@@ -50,9 +50,7 @@ from fastcashflow.grouping import (
     group, group_of_contracts, _GroupReducer, _join_keys, _finalise_gmm_group,
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
 from fastcashflow.model_points import ModelPoints, InforceState, align_inforce_state
-from fastcashflow.movement import (
-    roll_forward, reconcile, GMMSettlementReconciliation,
-    VFASettlementReconciliation)
+from fastcashflow.movement import roll_forward, reconcile
 from fastcashflow.numerics import _paragraph45_csm_algebra
 from fastcashflow.projection import Cashflows
 from fastcashflow.report import report, Report
@@ -1415,9 +1413,9 @@ def settle_group_of_contracts(
 
 
 @reconcile.register
-def _(settlement: GoCSettlement) -> GMMSettlementReconciliation:
+def _(settlement: GoCSettlement) -> _gmm.SettlementReconciliation:
     a = settlement
-    return GMMSettlementReconciliation(
+    return _gmm.SettlementReconciliation(
         period_months=a.period_months,
         bel_opening=float(a.bel_opening.sum()),
         bel_interest=float(a.bel_interest.sum()),
@@ -1470,11 +1468,11 @@ def _(settlement: GoCSettlement, path, *, ids=None):
 
 
 @reconcile.register
-def _(settlement: VFAGoCSettlement) -> VFASettlementReconciliation:
+def _(settlement: VFAGoCSettlement) -> _vfa.SettlementReconciliation:
     """The paragraph-45 settlement table of a VFA group-of-contracts movement
     -- run-off rows display-negated, exactly like the per-MP reconciliation."""
     a = settlement
-    return VFASettlementReconciliation(
+    return _vfa.SettlementReconciliation(
         period_months=a.period_months,
         bel_opening=float(a.bel_opening.sum()),
         bel_interest=float(a.bel_interest.sum()),

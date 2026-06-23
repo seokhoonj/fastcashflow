@@ -36,9 +36,10 @@ import polars as pl
 
 from fastcashflow._measurement_model import model_tag
 from fastcashflow.disclosure import reconciliation_to_frame
-from fastcashflow.movement import (
-    GMMSettlementReconciliation, PAASettlementReconciliation,
-    ReinsuranceSettlementReconciliation, VFASettlementReconciliation)
+import fastcashflow._gmm as _gmm
+import fastcashflow._paa as _paa
+import fastcashflow._reinsurance as _reinsurance
+import fastcashflow._vfa as _vfa
 from fastcashflow.report import ReinsuranceReport, Report
 
 # The SoFP statement frame -- a presentation table (one row per kind x
@@ -97,12 +98,12 @@ def _components_bel(recon) -> _Components:
     )
 
 
-_components.register(GMMSettlementReconciliation, _components_bel)
-_components.register(VFASettlementReconciliation, _components_bel)
+_components.register(_gmm.SettlementReconciliation, _components_bel)
+_components.register(_vfa.SettlementReconciliation, _components_bel)
 
 
 @_components.register
-def _(recon: PAASettlementReconciliation) -> _Components:
+def _(recon: _paa.SettlementReconciliation) -> _Components:
     # Onerous loss is additive on top of the unearned-premium LRC.
     return _Components(
         kind="issued",
@@ -116,7 +117,7 @@ def _(recon: PAASettlementReconciliation) -> _Components:
 
 
 @_components.register
-def _(recon: ReinsuranceSettlementReconciliation) -> _Components:
+def _(recon: _reinsurance.SettlementReconciliation) -> _Components:
     # Asset for remaining coverage; no loss component, no LIC block. The
     # loss-recovery component stays within the remaining-coverage asset.
     return _Components(

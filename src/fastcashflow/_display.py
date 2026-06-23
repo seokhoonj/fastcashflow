@@ -95,3 +95,19 @@ def measurement_str(cls_name: str, columns, max_rows: int = _MAX_ROWS) -> str:
         f"{'Total':>8}" + "".join(f"{a.sum():>{_COL_W},.0f}" for a in arrs)
     )
     return "\n".join(lines)
+
+
+def _format_settlement_reconciliation(recon, title: str, blocks) -> str:
+    """Render a settlement reconciliation as a blocked, right-aligned table.
+
+    Shared by the four settlement reconciliation ``__str__`` methods, driven from
+    the same ``_*_RECON_BLOCKS`` spec that disclosure.py serialises -- so the
+    printed table and the disclosure frame never drift. The Memo (P&L) block is
+    rendered like any other block (its lines sit outside the balance recursion;
+    the spec flags them ``is_memo`` for the disclosure layer, not for display)."""
+    lines = [f"{title} -- {recon.period_months}-month period"]
+    for block_title, rows in blocks:
+        lines.append(f"  {block_title}")
+        for name, field, _para, _memo in rows:
+            lines.append(f"    {name:30}{getattr(recon, field):>18,.0f}")
+    return "\n".join(lines)

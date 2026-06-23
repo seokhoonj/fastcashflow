@@ -277,6 +277,79 @@ class SettlementMovement:
         return mp, state
 
 
+_REINSURANCE_RECON_BLOCKS = (
+    ("BEL", (
+        ("Opening", "bel_opening", "100(a)", False),
+        ("Interest accreted", "bel_interest", "B72(a)", False),
+        ("Release for service", "bel_release", "B123", False),
+        ("Experience", "bel_experience", "B96", False),
+        ("Closing", "bel_closing", "100(a)", False),
+    )),
+    ("RA", (
+        ("Opening", "ra_opening", "101(b)", False),
+        ("Interest accreted", "ra_interest", "B72(a)", False),
+        ("Release for service", "ra_release", "B124", False),
+        ("Experience", "ra_experience", "B96(d)", False),
+        ("Closing", "ra_closing", "101(b)", False),
+    )),
+    ("CSM", (
+        ("Opening", "csm_opening", "101(c)", False),
+        ("Accretion", "csm_accretion", "66(b)/B72(b)", False),
+        ("Experience unlocking", "csm_experience_unlocking", "66(c)/B96", False),
+        ("Release for service", "csm_release", "66(e)/B119", False),
+        ("Closing", "csm_closing", "101(c)", False),
+    )),
+    ("Loss-recovery component", (
+        ("Opening", "loss_recovery_opening", "66B", False),
+        ("Recognised", "loss_recovery_recognised", "66A", False),
+        ("Reversed", "loss_recovery_reversed", "66B", False),
+        ("Closing", "loss_recovery_closing", "66B", False),
+    )),
+    ("Memo (P&L)", (
+        ("Finance wedge", "finance_wedge", "B97(a)", True),
+    )),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SettlementReconciliation:
+    """Portfolio totals of a :class:`SettlementMovement` -- the
+    paragraph-66 settlement table. Release rows are stored negative (display
+    convention); ``finance_wedge`` keeps the movement sign (a P&L line outside
+    the CSM block). There is no loss-component row -- a reinsurance contract
+    held cannot be onerous."""
+
+    model: ClassVar[str] = REINSURANCE
+
+    period_months: int
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_experience_unlocking: float
+    finance_wedge: float
+    csm_release: float
+    csm_closing: float
+    loss_recovery_opening: float = 0.0
+    loss_recovery_recognised: float = 0.0
+    loss_recovery_reversed: float = 0.0
+    loss_recovery_closing: float = 0.0
+
+    def __str__(self) -> str:
+        from fastcashflow._display import _format_settlement_reconciliation
+        return _format_settlement_reconciliation(
+            self, "Reinsurance settlement reconciliation",
+            _REINSURANCE_RECON_BLOCKS)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,

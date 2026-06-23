@@ -15,8 +15,6 @@ import fastcashflow as fcf
 from fastcashflow import InforceState, ModelPoints
 from fastcashflow.closing import close
 from fastcashflow.disclosure import write_close_pack
-from fastcashflow.movement import (
-    GMMSettlementReconciliation, ReinsuranceSettlementReconciliation)
 from fastcashflow.report import Report
 from conftest import PATTERNS, make_death_basis
 
@@ -78,9 +76,9 @@ def _settlement_movement():
 
 
 def test_close_pack_writes_the_aggregate_sheets(tmp_path):
-    gmm = _build(GMMSettlementReconciliation, bel_closing=700.0, ra_closing=200.0,
+    gmm = _build(fcf.gmm.SettlementReconciliation, bel_closing=700.0, ra_closing=200.0,
                  csm_closing=100.0, lic_closing=300.0, bel_interest=4.0)
-    held = _build(ReinsuranceSettlementReconciliation, bel_closing=-150.0,
+    held = _build(fcf.reinsurance.SettlementReconciliation, bel_closing=-150.0,
                   bel_interest=-1.0)
     pack = close([gmm, held], group_ids=["GoC-1", "RE-1"])
     out = tmp_path / "close_pack.xlsx"
@@ -99,7 +97,7 @@ def test_close_pack_writes_the_aggregate_sheets(tmp_path):
 
 
 def test_reconciliation_sheet_materialises_rich_audit_columns(tmp_path):
-    gmm = _build(GMMSettlementReconciliation, bel_closing=100.0, lic_closing=10.0)
+    gmm = _build(fcf.gmm.SettlementReconciliation, bel_closing=100.0, lic_closing=10.0)
     pack = close([gmm], group_ids=["GoC-1"])
     out = tmp_path / "pack.xlsx"
     write_close_pack(pack, out)
@@ -115,7 +113,7 @@ def test_reconciliation_sheet_materialises_rich_audit_columns(tmp_path):
 
 
 def test_service_result_sheet_present_when_reports_given(tmp_path):
-    gmm = _build(GMMSettlementReconciliation, bel_closing=100.0)
+    gmm = _build(fcf.gmm.SettlementReconciliation, bel_closing=100.0)
     pack = close([gmm], reports=[_report(np.array([[10.0] * 12]))])
     out = tmp_path / "pack.xlsx"
     write_close_pack(pack, out)
@@ -158,7 +156,7 @@ def test_sidecar_naming_keys_off_call_shape(tmp_path):
 
 
 def test_close_pack_rejects_non_xlsx(tmp_path):
-    gmm = _build(GMMSettlementReconciliation, bel_closing=1.0)
+    gmm = _build(fcf.gmm.SettlementReconciliation, bel_closing=1.0)
     pack = close([gmm])
     with pytest.raises(ValueError, match="xlsx"):
         write_close_pack(pack, tmp_path / "pack.parquet")

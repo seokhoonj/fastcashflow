@@ -13,7 +13,7 @@ import fastcashflow as fcf
 from fastcashflow import InforceState, ModelPoints
 from fastcashflow.disclosure import (
     reconciliation_to_frame, _GMM_RECON_BLOCKS, _LEAN_COLUMNS, _RECON_SPECS)
-from fastcashflow.movement import GMMSettlementReconciliation
+from fastcashflow.gmm import SettlementReconciliation
 from conftest import PATTERNS, make_death_basis
 
 

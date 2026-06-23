@@ -314,6 +314,69 @@ class SettlementMovement:
         return mp, state
 
 
+_PAA_RECON_BLOCKS = (
+    ("LRC", (
+        ("Opening", "lrc_opening", "100(a)", False),
+        ("Premiums received", "premiums", "55(a)", False),
+        ("Revenue recognised", "revenue", "B126", False),
+        ("Experience", "lrc_experience", "55(b)", False),
+        ("Closing", "lrc_closing", "100(a)", False),
+    )),
+    ("Loss component", (
+        ("Opening", "loss_component_opening", "57", False),
+        ("Recognised", "loss_component_recognised", "58", False),
+        ("Reversed", "loss_component_reversed", "58", False),
+        ("Closing", "loss_component_closing", "57", False),
+    )),
+    ("LIC", (
+        ("Opening", "lic_opening", "100(c)", False),
+        ("Claims incurred", "claims_incurred", "42(a)", False),
+        ("Finance", "lic_finance", "42(c)", False),
+        ("Claims paid", "claims_paid", "100(c)", False),
+        ("Closing", "lic_closing", "100(c)", False),
+    )),
+    ("Memo (P&L)", (
+        ("Claims experience", "claims_experience", "B97(b)", True),
+        ("Expense experience", "expense_experience", "B97(b)", True),
+    )),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SettlementReconciliation:
+    """Portfolio totals of a :class:`SettlementMovement` -- the
+    paragraph-55(b) settlement table. Revenue, claims-paid and
+    loss-component-reversed rows are stored negative (display convention),
+    so opening plus every row of a block equals its closing; the movement
+    keeps those lines positive."""
+
+    model: ClassVar[str] = PAA
+
+    period_months: int
+    revenue_basis: str
+    lrc_opening: float
+    premiums: float
+    revenue: float
+    lrc_experience: float
+    lrc_closing: float
+    loss_component_opening: float
+    loss_component_recognised: float
+    loss_component_reversed: float
+    loss_component_closing: float
+    lic_opening: float
+    claims_incurred: float
+    lic_finance: float
+    claims_paid: float
+    lic_closing: float
+    claims_experience: float = 0.0
+    expense_experience: float = 0.0
+
+    def __str__(self) -> str:
+        from fastcashflow._display import _format_settlement_reconciliation
+        return _format_settlement_reconciliation(
+            self, "PAA settlement reconciliation", _PAA_RECON_BLOCKS)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"lrc": measurement.lrc,

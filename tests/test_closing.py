@@ -20,9 +20,7 @@ from fastcashflow.closing import (
     ClosePackage, assemble_sofp, assemble_finance, assemble_service_result, close,
     _COMP_LRC, _COMP_LC, _COMP_LIC, _COMP_TOTAL, _FINANCE_TOTAL,
     _KIND_ISSUED, _KIND_REINSURANCE, _KIND_NET)
-from fastcashflow.movement import (
-    GMMSettlementReconciliation, PAASettlementReconciliation,
-    ReinsuranceSettlementReconciliation, VFASettlementReconciliation)
+import fastcashflow as fcf
 from fastcashflow.report import ReinsuranceReport, Report
 
 
@@ -51,7 +49,7 @@ def _cell(df, kind, component, col="closing"):
 def test_gmm_sofp_loss_component_is_within_the_lrc():
     """GMM: LRC = BEL + RA + CSM and LRC-excl-LC = LRC - loss component."""
     recon = _build(
-        GMMSettlementReconciliation,
+        fcf.gmm.SettlementReconciliation,
         bel_closing=700.0, ra_closing=200.0, csm_closing=100.0,
         loss_component_closing=150.0, lic_closing=300.0,
         bel_opening=650.0, ra_opening=180.0, csm_opening=120.0,
@@ -72,7 +70,7 @@ def test_gmm_sofp_loss_component_is_within_the_lrc():
 def test_paa_sofp_loss_component_is_additive():
     """PAA: LRC-excl-LC = lrc balance; the onerous loss is additive on top."""
     recon = _build(
-        PAASettlementReconciliation,
+        fcf.paa.SettlementReconciliation,
         lrc_closing=400.0, loss_component_closing=50.0, lic_closing=120.0,
         lrc_opening=500.0, loss_component_opening=0.0, lic_opening=100.0)
     df = assemble_sofp([recon])
@@ -86,11 +84,11 @@ def test_paa_sofp_loss_component_is_additive():
 def test_reinsurance_is_an_asset_that_nets_against_issued():
     """Reinsurance held: an asset (BEL+RA+CSM), no LC / no LIC, netted off."""
     issued = _build(
-        GMMSettlementReconciliation,
+        fcf.gmm.SettlementReconciliation,
         bel_closing=700.0, ra_closing=200.0, csm_closing=100.0,
         loss_component_closing=0.0, lic_closing=300.0)
     held = _build(
-        ReinsuranceSettlementReconciliation,
+        fcf.reinsurance.SettlementReconciliation,
         bel_closing=-250.0, ra_closing=40.0, csm_closing=60.0)
     df = assemble_sofp([issued, held])
     # reinsurance asset for remaining coverage = -250 + 40 + 60 = -150
@@ -108,13 +106,13 @@ def test_reinsurance_is_an_asset_that_nets_against_issued():
 
 def test_issued_aggregates_across_models():
     """GMM + VFA + PAA all land in the issued kind and sum component-wise."""
-    gmm = _build(GMMSettlementReconciliation,
+    gmm = _build(fcf.gmm.SettlementReconciliation,
                  bel_closing=100.0, ra_closing=0.0, csm_closing=0.0,
                  lic_closing=10.0)
-    vfa = _build(VFASettlementReconciliation,
+    vfa = _build(fcf.vfa.SettlementReconciliation,
                  bel_closing=200.0, ra_closing=0.0, csm_closing=0.0,
                  lic_closing=20.0)
-    paa = _build(PAASettlementReconciliation,
+    paa = _build(fcf.paa.SettlementReconciliation,
                  lrc_closing=300.0, lic_closing=30.0)
     df = assemble_sofp([gmm, vfa, paa])
     assert _cell(df, _KIND_ISSUED, _COMP_LRC) == pytest.approx(600.0)
@@ -124,7 +122,7 @@ def test_issued_aggregates_across_models():
 
 def test_every_row_foots_opening_plus_change_equals_closing():
     recon = _build(
-        GMMSettlementReconciliation,
+        fcf.gmm.SettlementReconciliation,
         bel_closing=700.0, ra_closing=200.0, csm_closing=100.0,
         loss_component_closing=150.0, lic_closing=300.0,
         bel_opening=650.0, ra_opening=180.0, csm_opening=120.0,
@@ -149,7 +147,7 @@ def test_finance_sums_sources_and_keeps_loss_finance_a_memo():
     """The five finance sources sum to the total; loss_component_finance is a
     memo (a share of BEL finance), excluded from the total."""
     recon = _build(
-        GMMSettlementReconciliation,
+        fcf.gmm.SettlementReconciliation,
         bel_interest=10.0, ra_interest=2.0, csm_accretion=5.0,
         lic_finance=1.0, finance_wedge=3.0, loss_component_finance=4.0)
     df = assemble_finance([recon])
@@ -165,7 +163,7 @@ def test_finance_sums_sources_and_keeps_loss_finance_a_memo():
 
 def test_finance_paa_has_only_lic_finance():
     """PAA holds the LRC undiscounted: its only finance line is the LIC unwind."""
-    recon = _build(PAASettlementReconciliation, lic_finance=7.0)
+    recon = _build(fcf.paa.SettlementReconciliation, lic_finance=7.0)
     df = assemble_finance([recon])
     assert _fcell(df, _KIND_ISSUED, "LIC finance") == pytest.approx(7.0)
     assert _fcell(df, _KIND_ISSUED, "BEL finance") == pytest.approx(0.0)
@@ -173,10 +171,10 @@ def test_finance_paa_has_only_lic_finance():
 
 
 def test_finance_reinsurance_nets_against_issued():
-    issued = _build(GMMSettlementReconciliation,
+    issued = _build(fcf.gmm.SettlementReconciliation,
                     bel_interest=10.0, ra_interest=2.0, csm_accretion=5.0,
                     lic_finance=1.0, finance_wedge=3.0)
-    held = _build(ReinsuranceSettlementReconciliation,
+    held = _build(fcf.reinsurance.SettlementReconciliation,
                   bel_interest=-1.0, ra_interest=0.5, csm_accretion=1.0,
                   finance_wedge=0.5)
     df = assemble_finance([issued, held])
@@ -189,9 +187,9 @@ def test_finance_reinsurance_nets_against_issued():
 
 
 def test_close_packages_sofp_finance_and_reconciliation_detail():
-    gmm = _build(GMMSettlementReconciliation, bel_closing=100.0, lic_closing=10.0,
+    gmm = _build(fcf.gmm.SettlementReconciliation, bel_closing=100.0, lic_closing=10.0,
                  bel_interest=4.0)
-    held = _build(ReinsuranceSettlementReconciliation, bel_closing=-30.0,
+    held = _build(fcf.reinsurance.SettlementReconciliation, bel_closing=-30.0,
                   bel_interest=-1.0)
     pack = close([gmm, held], group_ids=["GoC-1", "RE-1"])
     assert isinstance(pack, ClosePackage)
@@ -269,13 +267,13 @@ def test_service_result_reinsurance_net_is_recovered_less_premium():
 
 
 def test_service_result_rejects_non_report():
-    recon = _build(GMMSettlementReconciliation, bel_closing=1.0)
+    recon = _build(fcf.gmm.SettlementReconciliation, bel_closing=1.0)
     with pytest.raises(TypeError, match="Report"):
         assemble_service_result([recon])
 
 
 def test_close_with_reports_adds_service_result():
-    gmm = _build(GMMSettlementReconciliation, bel_closing=100.0)
+    gmm = _build(fcf.gmm.SettlementReconciliation, bel_closing=100.0)
     rep = _report(np.array([[10.0] * 12]), np.array([[4.0] * 12]))
     pack = close([gmm], reports=[rep])
     assert set(pack.to_frames()) == {"sofp", "finance", "service_result", "reconciliation"}
@@ -284,21 +282,21 @@ def test_close_with_reports_adds_service_result():
 
 
 def test_close_without_reports_omits_service_result():
-    gmm = _build(GMMSettlementReconciliation, bel_closing=100.0)
+    gmm = _build(fcf.gmm.SettlementReconciliation, bel_closing=100.0)
     pack = close([gmm])
     assert pack.service_result is None
     assert "service_result" not in pack.to_frames()
 
 
 def test_close_rejects_mixed_periods():
-    a = _build(GMMSettlementReconciliation, period_months=12, bel_closing=100.0)
-    b = _build(GMMSettlementReconciliation, period_months=6, bel_closing=50.0)
+    a = _build(fcf.gmm.SettlementReconciliation, period_months=12, bel_closing=100.0)
+    b = _build(fcf.gmm.SettlementReconciliation, period_months=6, bel_closing=50.0)
     with pytest.raises(ValueError, match="period_months"):
         close([a, b])
 
 
 def test_close_rejects_mismatched_group_ids():
-    a = _build(GMMSettlementReconciliation, bel_closing=100.0)
+    a = _build(fcf.gmm.SettlementReconciliation, bel_closing=100.0)
     with pytest.raises(ValueError, match="group_ids"):
         close([a], group_ids=["x", "y"])
 

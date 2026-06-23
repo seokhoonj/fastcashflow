@@ -28,11 +28,14 @@ import polars as pl
 
 from fastcashflow._measurement_model import model_tag
 from fastcashflow.io import _write_frame, write_measurement
-from fastcashflow.movement import (
-    GMMSettlementReconciliation, PAASettlementReconciliation,
-    ReinsuranceSettlementReconciliation, VFASettlementReconciliation,
-    _GMM_RECON_BLOCKS, _PAA_RECON_BLOCKS, _REINSURANCE_RECON_BLOCKS,
-    _VFA_RECON_BLOCKS)
+import fastcashflow._gmm as _gmm
+import fastcashflow._paa as _paa
+import fastcashflow._reinsurance as _reinsurance
+import fastcashflow._vfa as _vfa
+from fastcashflow._gmm import _GMM_RECON_BLOCKS
+from fastcashflow._paa import _PAA_RECON_BLOCKS
+from fastcashflow._reinsurance import _REINSURANCE_RECON_BLOCKS
+from fastcashflow._vfa import _VFA_RECON_BLOCKS
 
 # The lean canonical schema returned by reconciliation_to_frame / to_frame.
 _LEAN_COLUMNS = (
@@ -59,9 +62,9 @@ _RICH_SCHEMA = {
 # The settlement reconciliation block specs (_*_RECON_BLOCKS) are the single
 # source for each family's line spine -- the ordered (block -> lines) structure
 # with each line's display name, reconciliation field, IFRS 17 paragraph and
-# P&L-memo flag. They live in movement.py (next to the reconciliation classes,
-# whose __str__ render from them) and are imported here so the printed table and
-# this disclosure frame never drift.
+# P&L-memo flag. They live in the owning model modules (next to each settlement reconciliation
+# class, whose __str__ renders from them) and are imported here so the printed
+# table and this disclosure frame never drift.
 
 
 def _recon_frame(recon, blocks, *, rich: bool = False) -> pl.DataFrame:
@@ -95,32 +98,32 @@ def reconciliation_to_frame(recon) -> pl.DataFrame:
 
 
 @reconciliation_to_frame.register
-def _(recon: GMMSettlementReconciliation) -> pl.DataFrame:
+def _(recon: _gmm.SettlementReconciliation) -> pl.DataFrame:
     return _recon_frame(recon, _GMM_RECON_BLOCKS)
 
 
 @reconciliation_to_frame.register
-def _(recon: VFASettlementReconciliation) -> pl.DataFrame:
+def _(recon: _vfa.SettlementReconciliation) -> pl.DataFrame:
     return _recon_frame(recon, _VFA_RECON_BLOCKS)
 
 
 @reconciliation_to_frame.register
-def _(recon: ReinsuranceSettlementReconciliation) -> pl.DataFrame:
+def _(recon: _reinsurance.SettlementReconciliation) -> pl.DataFrame:
     return _recon_frame(recon, _REINSURANCE_RECON_BLOCKS)
 
 
 @reconciliation_to_frame.register
-def _(recon: PAASettlementReconciliation) -> pl.DataFrame:
+def _(recon: _paa.SettlementReconciliation) -> pl.DataFrame:
     return _recon_frame(recon, _PAA_RECON_BLOCKS)
 
 
 # (model, block spec, reconciliation class) for the four settlement families --
 # the single registry the spec-covers-fields oracle iterates.
 _RECON_SPECS = (
-    ("gmm", _GMM_RECON_BLOCKS, GMMSettlementReconciliation),
-    ("vfa", _VFA_RECON_BLOCKS, VFASettlementReconciliation),
-    ("reinsurance", _REINSURANCE_RECON_BLOCKS, ReinsuranceSettlementReconciliation),
-    ("paa", _PAA_RECON_BLOCKS, PAASettlementReconciliation),
+    ("gmm", _GMM_RECON_BLOCKS, _gmm.SettlementReconciliation),
+    ("vfa", _VFA_RECON_BLOCKS, _vfa.SettlementReconciliation),
+    ("reinsurance", _REINSURANCE_RECON_BLOCKS, _reinsurance.SettlementReconciliation),
+    ("paa", _PAA_RECON_BLOCKS, _paa.SettlementReconciliation),
 )
 _SPEC_BY_TYPE = {cls: (model, blocks) for model, blocks, cls in _RECON_SPECS}
 

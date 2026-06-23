@@ -592,6 +592,110 @@ class SettlementMovement:
         )
 
 
+_VFA_RECON_BLOCKS = (
+    ("BEL", (
+        ("Opening", "bel_opening", "100(a)", False),
+        ("Interest accreted", "bel_interest", "B72(a)", False),
+        ("Release for service", "bel_release", "B123", False),
+        ("Experience", "bel_experience", "B96", False),
+        ("Closing", "bel_closing", "100(a)", False),
+    )),
+    ("RA", (
+        ("Opening", "ra_opening", "101(b)", False),
+        ("Interest accreted", "ra_interest", "B72(a)", False),
+        ("Release for service", "ra_release", "B124", False),
+        ("Experience", "ra_experience", "B96(d)", False),
+        ("Closing", "ra_closing", "101(b)", False),
+    )),
+    ("CSM", (
+        ("Opening", "csm_opening", "101(c)", False),
+        ("Accretion", "csm_accretion", "45(b)/B72(b)", False),
+        ("Fair value share", "csm_fv_share", "45(b)", False),
+        ("Future service", "csm_future_service", "45(c)", False),
+        ("Premium experience", "csm_premium_experience", "B96(a)", False),
+        ("Investment experience", "csm_investment_experience", "B96(c)", False),
+        ("Loss component reversed", "loss_component_reversed", "50(b)", False),
+        ("Loss component recognised", "loss_component_recognised", "48", False),
+        ("Release for service", "csm_release", "45(e)/B119", False),
+        ("Closing", "csm_closing", "101(c)", False),
+    )),
+    ("Loss component", (
+        ("Opening", "loss_component_opening", "49", False),
+        ("Finance", "loss_component_finance", "51(c)", False),
+        ("Amortised", "loss_component_amortised", "50(a)", False),
+        ("Reversed", "loss_component_reversed", "50(b)", False),
+        ("Recognised", "loss_component_recognised", "48", False),
+        ("Closing", "loss_component_closing", "49", False),
+    )),
+    ("LIC", (
+        ("Opening", "lic_opening", "100(c)", False),
+        ("Claims incurred", "claims_incurred", "42(a)", False),
+        ("Finance", "lic_finance", "42(c)", False),
+        ("Claims paid", "claims_paid", "100(c)", False),
+        ("Closing", "lic_closing", "100(c)", False),
+    )),
+    ("Memo (P&L)", (
+        ("Premium experience (revenue)", "premium_experience_revenue", "B97(c)", True),
+        ("Claims experience", "claims_experience", "B97(b)", True),
+        ("Expense experience", "expense_experience", "B97(b)", True),
+    )),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SettlementReconciliation:
+    """Portfolio totals of a paragraph-45 VFA settlement movement.
+
+    One reporting period of ``period_months`` (the per-MP valuation dates
+    are elapsed months, which differ across cohorts -- so the table is
+    labelled by the period length, not by a policy-month range). The
+    release and loss-component-reversed rows are *stored* negative -- the
+    convention of every reconciliation type here -- so within each block
+    the opening plus every row equals the closing.
+    """
+
+    model: ClassVar[str] = VFA
+
+    period_months: int
+    bel_opening: float
+    bel_interest: float
+    bel_release: float
+    bel_experience: float
+    bel_closing: float
+    ra_opening: float
+    ra_interest: float
+    ra_release: float
+    ra_experience: float
+    ra_closing: float
+    csm_opening: float
+    csm_accretion: float
+    csm_fv_share: float
+    csm_future_service: float
+    csm_premium_experience: float
+    premium_experience_revenue: float
+    csm_investment_experience: float
+    claims_experience: float
+    expense_experience: float
+    loss_component_reversed: float
+    loss_component_recognised: float
+    csm_release: float
+    csm_closing: float
+    loss_component_opening: float
+    loss_component_finance: float
+    loss_component_amortised: float
+    loss_component_closing: float
+    lic_opening: float = 0.0
+    claims_incurred: float = 0.0
+    lic_finance: float = 0.0
+    claims_paid: float = 0.0
+    lic_closing: float = 0.0
+
+    def __str__(self) -> str:
+        from fastcashflow._display import _format_settlement_reconciliation
+        return _format_settlement_reconciliation(
+            self, "VFA settlement reconciliation", _VFA_RECON_BLOCKS)
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     _require_settlement_csm(measurement, "write_measurement")

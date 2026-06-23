@@ -83,6 +83,7 @@ from fastcashflow._gmm import (
     PeriodMovement,
     Reconciliation,
     SettlementMovement,
+    SettlementReconciliation,
     _measure_full,
 )
 

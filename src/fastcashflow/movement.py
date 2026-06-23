@@ -565,243 +565,20 @@ def _reconcile_vfa(
 # paragraph, is P&L memo). loss_component_reversed / recognised legitimately
 # appear in BOTH the CSM block (where they enter the CSM) and the Loss component
 # block (where they run it off).
-_GMM_RECON_BLOCKS = (
-    ("BEL", (
-        ("Opening", "bel_opening", "100(a)", False),
-        ("Interest accreted", "bel_interest", "B72(a)", False),
-        ("Release for service", "bel_release", "B123", False),
-        ("Experience", "bel_experience", "B96", False),
-        ("Closing", "bel_closing", "100(a)", False),
-    )),
-    ("RA", (
-        ("Opening", "ra_opening", "101(b)", False),
-        ("Interest accreted", "ra_interest", "B72(a)", False),
-        ("Release for service", "ra_release", "B124", False),
-        ("Experience", "ra_experience", "B96(d)", False),
-        ("Closing", "ra_closing", "101(b)", False),
-    )),
-    ("CSM", (
-        ("Opening", "csm_opening", "101(c)", False),
-        ("Accretion", "csm_accretion", "44(b)/B72(b)", False),
-        ("Experience unlocking", "csm_experience_unlocking", "44(c)/B96", False),
-        ("Premium experience", "csm_premium_experience", "B96(a)", False),
-        ("Investment experience", "csm_investment_experience", "B96(c)", False),
-        ("Loss component reversed", "loss_component_reversed", "50(b)", False),
-        ("Loss component recognised", "loss_component_recognised", "48", False),
-        ("Release for service", "csm_release", "44(e)/B119", False),
-        ("Closing", "csm_closing", "101(c)", False),
-    )),
-    ("Loss component", (
-        ("Opening", "loss_component_opening", "49", False),
-        ("Finance", "loss_component_finance", "51(c)", False),
-        ("Amortised", "loss_component_amortised", "50(a)", False),
-        ("Reversed", "loss_component_reversed", "50(b)", False),
-        ("Recognised", "loss_component_recognised", "48", False),
-        ("Closing", "loss_component_closing", "49", False),
-    )),
-    ("LIC", (
-        ("Opening", "lic_opening", "100(c)", False),
-        ("Claims incurred", "claims_incurred", "42(a)", False),
-        ("Finance", "lic_finance", "42(c)", False),
-        ("Claims paid", "claims_paid", "100(c)", False),
-        ("Closing", "lic_closing", "100(c)", False),
-    )),
-    ("Memo (P&L)", (
-        ("Finance wedge", "finance_wedge", "B97(a)", True),
-        ("Premium experience (revenue)", "premium_experience_revenue", "B97(c)", True),
-        ("Claims experience", "claims_experience", "B97(b)", True),
-        ("Expense experience", "expense_experience", "B97(b)", True),
-    )),
-)
 
 # VFA settlement reconciliation -- the paragraph-45 CSM (fair-value share +
 # future service, no finance wedge) and an account-value-linked LIC.
-_VFA_RECON_BLOCKS = (
-    ("BEL", (
-        ("Opening", "bel_opening", "100(a)", False),
-        ("Interest accreted", "bel_interest", "B72(a)", False),
-        ("Release for service", "bel_release", "B123", False),
-        ("Experience", "bel_experience", "B96", False),
-        ("Closing", "bel_closing", "100(a)", False),
-    )),
-    ("RA", (
-        ("Opening", "ra_opening", "101(b)", False),
-        ("Interest accreted", "ra_interest", "B72(a)", False),
-        ("Release for service", "ra_release", "B124", False),
-        ("Experience", "ra_experience", "B96(d)", False),
-        ("Closing", "ra_closing", "101(b)", False),
-    )),
-    ("CSM", (
-        ("Opening", "csm_opening", "101(c)", False),
-        ("Accretion", "csm_accretion", "45(b)/B72(b)", False),
-        ("Fair value share", "csm_fv_share", "45(b)", False),
-        ("Future service", "csm_future_service", "45(c)", False),
-        ("Premium experience", "csm_premium_experience", "B96(a)", False),
-        ("Investment experience", "csm_investment_experience", "B96(c)", False),
-        ("Loss component reversed", "loss_component_reversed", "50(b)", False),
-        ("Loss component recognised", "loss_component_recognised", "48", False),
-        ("Release for service", "csm_release", "45(e)/B119", False),
-        ("Closing", "csm_closing", "101(c)", False),
-    )),
-    ("Loss component", (
-        ("Opening", "loss_component_opening", "49", False),
-        ("Finance", "loss_component_finance", "51(c)", False),
-        ("Amortised", "loss_component_amortised", "50(a)", False),
-        ("Reversed", "loss_component_reversed", "50(b)", False),
-        ("Recognised", "loss_component_recognised", "48", False),
-        ("Closing", "loss_component_closing", "49", False),
-    )),
-    ("LIC", (
-        ("Opening", "lic_opening", "100(c)", False),
-        ("Claims incurred", "claims_incurred", "42(a)", False),
-        ("Finance", "lic_finance", "42(c)", False),
-        ("Claims paid", "claims_paid", "100(c)", False),
-        ("Closing", "lic_closing", "100(c)", False),
-    )),
-    ("Memo (P&L)", (
-        ("Premium experience (revenue)", "premium_experience_revenue", "B97(c)", True),
-        ("Claims experience", "claims_experience", "B97(b)", True),
-        ("Expense experience", "expense_experience", "B97(b)", True),
-    )),
-)
 
 # Reinsurance-held settlement reconciliation -- no loss component (paragraph 65,
 # a reinsurance contract held cannot be onerous); a loss-RECOVERY component
 # (66A-66B) instead, and no LIC block.
-_REINSURANCE_RECON_BLOCKS = (
-    ("BEL", (
-        ("Opening", "bel_opening", "100(a)", False),
-        ("Interest accreted", "bel_interest", "B72(a)", False),
-        ("Release for service", "bel_release", "B123", False),
-        ("Experience", "bel_experience", "B96", False),
-        ("Closing", "bel_closing", "100(a)", False),
-    )),
-    ("RA", (
-        ("Opening", "ra_opening", "101(b)", False),
-        ("Interest accreted", "ra_interest", "B72(a)", False),
-        ("Release for service", "ra_release", "B124", False),
-        ("Experience", "ra_experience", "B96(d)", False),
-        ("Closing", "ra_closing", "101(b)", False),
-    )),
-    ("CSM", (
-        ("Opening", "csm_opening", "101(c)", False),
-        ("Accretion", "csm_accretion", "66(b)/B72(b)", False),
-        ("Experience unlocking", "csm_experience_unlocking", "66(c)/B96", False),
-        ("Release for service", "csm_release", "66(e)/B119", False),
-        ("Closing", "csm_closing", "101(c)", False),
-    )),
-    ("Loss-recovery component", (
-        ("Opening", "loss_recovery_opening", "66B", False),
-        ("Recognised", "loss_recovery_recognised", "66A", False),
-        ("Reversed", "loss_recovery_reversed", "66B", False),
-        ("Closing", "loss_recovery_closing", "66B", False),
-    )),
-    ("Memo (P&L)", (
-        ("Finance wedge", "finance_wedge", "B97(a)", True),
-    )),
-)
 
 # PAA settlement reconciliation -- an LRC (unearned premium) roll, no BEL/RA/CSM.
-_PAA_RECON_BLOCKS = (
-    ("LRC", (
-        ("Opening", "lrc_opening", "100(a)", False),
-        ("Premiums received", "premiums", "55(a)", False),
-        ("Revenue recognised", "revenue", "B126", False),
-        ("Experience", "lrc_experience", "55(b)", False),
-        ("Closing", "lrc_closing", "100(a)", False),
-    )),
-    ("Loss component", (
-        ("Opening", "loss_component_opening", "57", False),
-        ("Recognised", "loss_component_recognised", "58", False),
-        ("Reversed", "loss_component_reversed", "58", False),
-        ("Closing", "loss_component_closing", "57", False),
-    )),
-    ("LIC", (
-        ("Opening", "lic_opening", "100(c)", False),
-        ("Claims incurred", "claims_incurred", "42(a)", False),
-        ("Finance", "lic_finance", "42(c)", False),
-        ("Claims paid", "claims_paid", "100(c)", False),
-        ("Closing", "lic_closing", "100(c)", False),
-    )),
-    ("Memo (P&L)", (
-        ("Claims experience", "claims_experience", "B97(b)", True),
-        ("Expense experience", "expense_experience", "B97(b)", True),
-    )),
-)
-
-
-def _format_settlement_reconciliation(recon, title: str, blocks) -> str:
-    """Render a settlement reconciliation as a blocked, right-aligned table.
-
-    Shared by the four settlement reconciliation ``__str__`` methods, driven from
-    the same ``_*_RECON_BLOCKS`` spec that disclosure.py serialises -- so the
-    printed table and the disclosure frame never drift. The Memo (P&L) block is
-    rendered like any other block (its lines sit outside the balance recursion;
-    the spec flags them ``is_memo`` for the disclosure layer, not for display)."""
-    lines = [f"{title} -- {recon.period_months}-month period"]
-    for block_title, rows in blocks:
-        lines.append(f"  {block_title}")
-        for name, field, _para, _memo in rows:
-            lines.append(f"    {name:30}{getattr(recon, field):>18,.0f}")
-    return "\n".join(lines)
-
-
-@dataclass(frozen=True, slots=True)
-class VFASettlementReconciliation:
-    """Portfolio totals of a paragraph-45 VFA settlement movement.
-
-    One reporting period of ``period_months`` (the per-MP valuation dates
-    are elapsed months, which differ across cohorts -- so the table is
-    labelled by the period length, not by a policy-month range). The
-    release and loss-component-reversed rows are *stored* negative -- the
-    convention of every reconciliation type here -- so within each block
-    the opening plus every row equals the closing.
-    """
-
-    model: ClassVar[str] = VFA
-
-    period_months: int
-    bel_opening: float
-    bel_interest: float
-    bel_release: float
-    bel_experience: float
-    bel_closing: float
-    ra_opening: float
-    ra_interest: float
-    ra_release: float
-    ra_experience: float
-    ra_closing: float
-    csm_opening: float
-    csm_accretion: float
-    csm_fv_share: float
-    csm_future_service: float
-    csm_premium_experience: float
-    premium_experience_revenue: float
-    csm_investment_experience: float
-    claims_experience: float
-    expense_experience: float
-    loss_component_reversed: float
-    loss_component_recognised: float
-    csm_release: float
-    csm_closing: float
-    loss_component_opening: float
-    loss_component_finance: float
-    loss_component_amortised: float
-    loss_component_closing: float
-    lic_opening: float = 0.0
-    claims_incurred: float = 0.0
-    lic_finance: float = 0.0
-    claims_paid: float = 0.0
-    lic_closing: float = 0.0
-
-    def __str__(self) -> str:
-        return _format_settlement_reconciliation(
-            self, "VFA settlement reconciliation", _VFA_RECON_BLOCKS)
 
 
 def _reconcile_vfa_settlement(
     movements: list[_vfa.SettlementMovement],
-) -> list[VFASettlementReconciliation]:
+) -> list[_vfa.SettlementReconciliation]:
     """Aggregate paragraph-45 settlement movements into portfolio totals.
 
     Release and loss-component-reversed rows are stored negative (the
@@ -812,7 +589,7 @@ def _reconcile_vfa_settlement(
     too.
     """
     return [
-        VFASettlementReconciliation(
+        _vfa.SettlementReconciliation(
             period_months=m.period_months,
             bel_opening=float(m.bel_opening.sum()),
             bel_interest=float(m.bel_interest.sum()),
@@ -876,61 +653,12 @@ def _reconcile_reinsurance(
     ]
 
 
-@dataclass(frozen=True, slots=True)
-class GMMSettlementReconciliation:
-    """Portfolio totals of a :class:`_gmm.SettlementMovement` -- the
-    paragraph-44 settlement table. Release and loss-component-reversed rows
-    are stored negative (display convention), so opening plus every row of a
-    block equals its closing; ``finance_wedge`` keeps the movement sign (it
-    is a P&L line outside the CSM block, not a CSM row)."""
-
-    model: ClassVar[str] = GMM
-
-    period_months: int
-    bel_opening: float
-    bel_interest: float
-    bel_release: float
-    bel_experience: float
-    bel_closing: float
-    ra_opening: float
-    ra_interest: float
-    ra_release: float
-    ra_experience: float
-    ra_closing: float
-    csm_opening: float
-    csm_accretion: float
-    csm_experience_unlocking: float
-    csm_premium_experience: float
-    csm_investment_experience: float
-    finance_wedge: float
-    premium_experience_revenue: float
-    claims_experience: float
-    expense_experience: float
-    loss_component_finance: float
-    loss_component_amortised: float
-    loss_component_reversed: float
-    loss_component_recognised: float
-    csm_release: float
-    csm_closing: float
-    loss_component_opening: float
-    loss_component_closing: float
-    lic_opening: float = 0.0
-    claims_incurred: float = 0.0
-    lic_finance: float = 0.0
-    claims_paid: float = 0.0
-    lic_closing: float = 0.0
-
-    def __str__(self) -> str:
-        return _format_settlement_reconciliation(
-            self, "GMM settlement reconciliation", _GMM_RECON_BLOCKS)
-
-
 def _reconcile_gmm_settlement(
     movements: list[_gmm.SettlementMovement],
-) -> list[GMMSettlementReconciliation]:
+) -> list[_gmm.SettlementReconciliation]:
     """Aggregate paragraph-44 settlement movements into portfolio totals."""
     return [
-        GMMSettlementReconciliation(
+        _gmm.SettlementReconciliation(
             period_months=m.period_months,
             bel_opening=float(m.bel_opening.sum()),
             bel_interest=float(m.bel_interest.sum()),
@@ -969,50 +697,12 @@ def _reconcile_gmm_settlement(
     ]
 
 
-@dataclass(frozen=True, slots=True)
-class ReinsuranceSettlementReconciliation:
-    """Portfolio totals of a :class:`_reinsurance.SettlementMovement` -- the
-    paragraph-66 settlement table. Release rows are stored negative (display
-    convention); ``finance_wedge`` keeps the movement sign (a P&L line outside
-    the CSM block). There is no loss-component row -- a reinsurance contract
-    held cannot be onerous."""
-
-    model: ClassVar[str] = REINSURANCE
-
-    period_months: int
-    bel_opening: float
-    bel_interest: float
-    bel_release: float
-    bel_experience: float
-    bel_closing: float
-    ra_opening: float
-    ra_interest: float
-    ra_release: float
-    ra_experience: float
-    ra_closing: float
-    csm_opening: float
-    csm_accretion: float
-    csm_experience_unlocking: float
-    finance_wedge: float
-    csm_release: float
-    csm_closing: float
-    loss_recovery_opening: float = 0.0
-    loss_recovery_recognised: float = 0.0
-    loss_recovery_reversed: float = 0.0
-    loss_recovery_closing: float = 0.0
-
-    def __str__(self) -> str:
-        return _format_settlement_reconciliation(
-            self, "Reinsurance settlement reconciliation",
-            _REINSURANCE_RECON_BLOCKS)
-
-
 def _reconcile_reinsurance_settlement(
     movements: list[_reinsurance.SettlementMovement],
-) -> list[ReinsuranceSettlementReconciliation]:
+) -> list[_reinsurance.SettlementReconciliation]:
     """Aggregate paragraph-66 reinsurance settlement movements into totals."""
     return [
-        ReinsuranceSettlementReconciliation(
+        _reinsurance.SettlementReconciliation(
             period_months=m.period_months,
             bel_opening=float(m.bel_opening.sum()),
             bel_interest=float(m.bel_interest.sum()),
@@ -1039,46 +729,12 @@ def _reconcile_reinsurance_settlement(
     ]
 
 
-@dataclass(frozen=True, slots=True)
-class PAASettlementReconciliation:
-    """Portfolio totals of a :class:`_paa.SettlementMovement` -- the
-    paragraph-55(b) settlement table. Revenue, claims-paid and
-    loss-component-reversed rows are stored negative (display convention),
-    so opening plus every row of a block equals its closing; the movement
-    keeps those lines positive."""
-
-    model: ClassVar[str] = PAA
-
-    period_months: int
-    revenue_basis: str
-    lrc_opening: float
-    premiums: float
-    revenue: float
-    lrc_experience: float
-    lrc_closing: float
-    loss_component_opening: float
-    loss_component_recognised: float
-    loss_component_reversed: float
-    loss_component_closing: float
-    lic_opening: float
-    claims_incurred: float
-    lic_finance: float
-    claims_paid: float
-    lic_closing: float
-    claims_experience: float = 0.0
-    expense_experience: float = 0.0
-
-    def __str__(self) -> str:
-        return _format_settlement_reconciliation(
-            self, "PAA settlement reconciliation", _PAA_RECON_BLOCKS)
-
-
 def _reconcile_paa_settlement(
     movements: list[_paa.SettlementMovement],
-) -> list[PAASettlementReconciliation]:
+) -> list[_paa.SettlementReconciliation]:
     """Aggregate paragraph-55(b) settlement movements into portfolio totals."""
     return [
-        PAASettlementReconciliation(
+        _paa.SettlementReconciliation(
             period_months=m.period_months,
             revenue_basis=m.revenue_basis,
             lrc_opening=float(m.lrc_opening.sum()),
@@ -1519,12 +1175,12 @@ class PAASettlementAggregate:
 
 
 @reconcile.register
-def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
+def _(aggregate: GMMSettlementAggregate) -> _gmm.SettlementReconciliation:
     """The paragraph-44 settlement table of an aggregate -- identical to
     reconciling the per-MP movement (the oracle identity); the display
     negation of the run-off rows happens here, never in the aggregate."""
     a = aggregate
-    return GMMSettlementReconciliation(
+    return _gmm.SettlementReconciliation(
         period_months=a.period_months,
         bel_opening=a.bel_opening,
         bel_interest=a.bel_interest,
@@ -1563,12 +1219,12 @@ def _(aggregate: GMMSettlementAggregate) -> GMMSettlementReconciliation:
 
 @reconcile.register
 def _(aggregate: ReinsuranceSettlementAggregate
-      ) -> ReinsuranceSettlementReconciliation:
+      ) -> _reinsurance.SettlementReconciliation:
     """The paragraph-66 reinsurance settlement table of an aggregate --
     identical to reconciling the per-MP movement; run-off rows display-negated
     here, never in the aggregate."""
     a = aggregate
-    return ReinsuranceSettlementReconciliation(
+    return _reinsurance.SettlementReconciliation(
         period_months=a.period_months,
         bel_opening=a.bel_opening,
         bel_interest=a.bel_interest,
@@ -1594,13 +1250,13 @@ def _(aggregate: ReinsuranceSettlementAggregate
 
 
 @reconcile.register
-def _(aggregate: PAASettlementAggregate) -> PAASettlementReconciliation:
+def _(aggregate: PAASettlementAggregate) -> _paa.SettlementReconciliation:
     """The paragraph-55(b) PAA settlement table of an aggregate -- identical to
     reconciling the per-MP movement; the revenue / claims-paid /
     loss-component-reversed rows are display-negated here, never in the
     aggregate."""
     a = aggregate
-    return PAASettlementReconciliation(
+    return _paa.SettlementReconciliation(
         period_months=a.period_months,
         revenue_basis=a.revenue_basis,
         lrc_opening=a.lrc_opening,
@@ -1623,12 +1279,12 @@ def _(aggregate: PAASettlementAggregate) -> PAASettlementReconciliation:
 
 
 @reconcile.register
-def _(aggregate: VFASettlementAggregate) -> VFASettlementReconciliation:
+def _(aggregate: VFASettlementAggregate) -> _vfa.SettlementReconciliation:
     """The paragraph-45 settlement table of an aggregate -- identical to
     reconciling the per-MP movement (the oracle identity); the display
     negation of the run-off rows happens here, never in the aggregate."""
     a = aggregate
-    return VFASettlementReconciliation(
+    return _vfa.SettlementReconciliation(
         period_months=a.period_months,
         bel_opening=a.bel_opening,
         bel_interest=a.bel_interest,
