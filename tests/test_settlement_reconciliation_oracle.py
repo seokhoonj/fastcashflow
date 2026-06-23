@@ -31,8 +31,6 @@ import fastcashflow as fcf
 from fastcashflow import (
     Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints)
 from fastcashflow.movement import (
-    GMMSettlementMovement, PAASettlementMovement,
-    ReinsuranceSettlementMovement, VFASettlementMovement,
     _GMM_SETTLEMENT_LINES, _PAA_SETTLEMENT_LINES,
     _REINSURANCE_SETTLEMENT_LINES, _VFA_SETTLEMENT_LINES,
 )
@@ -172,10 +170,10 @@ def vfa_settlement():
 
 # (lines tuple, movement class) for each of the four settlement families.
 _FAMILIES = (
-    ("gmm", _GMM_SETTLEMENT_LINES, GMMSettlementMovement),
-    ("vfa", _VFA_SETTLEMENT_LINES, VFASettlementMovement),
-    ("reinsurance", _REINSURANCE_SETTLEMENT_LINES, ReinsuranceSettlementMovement),
-    ("paa", _PAA_SETTLEMENT_LINES, PAASettlementMovement),
+    ("gmm", _GMM_SETTLEMENT_LINES, fcf.gmm.SettlementMovement),
+    ("vfa", _VFA_SETTLEMENT_LINES, fcf.vfa.SettlementMovement),
+    ("reinsurance", _REINSURANCE_SETTLEMENT_LINES, fcf.reinsurance.SettlementMovement),
+    ("paa", _PAA_SETTLEMENT_LINES, fcf.paa.SettlementMovement),
 )
 
 

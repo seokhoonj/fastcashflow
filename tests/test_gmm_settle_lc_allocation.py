@@ -37,17 +37,17 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import (
     Basis, CalculationMethod, CoverageRate, InforceState, ModelPoints)
-from fastcashflow.movement import GMMSettlementMovement
+from fastcashflow.gmm import SettlementMovement
 
 settle = getattr(fcf.gmm, "settle", None)
 _HAS_LC_ALLOC = (
     settle is not None
-    and "loss_component_amortised" in GMMSettlementMovement.__dataclass_fields__)
+    and "loss_component_amortised" in SettlementMovement.__dataclass_fields__)
 pytestmark = pytest.mark.skipif(
     not _HAS_LC_ALLOC,
     reason="paragraph 50(a)-52 loss-component allocation not implemented yet "
            "(the skeleton activates unchanged once the two new movement lines "
-           "land on GMMSettlementMovement)")
+           "land on SettlementMovement)")
 
 CM = {"DEATH": CalculationMethod.DEATH}
 

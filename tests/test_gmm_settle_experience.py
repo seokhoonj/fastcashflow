@@ -14,11 +14,11 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import (
     Basis, CalculationMethod, CoverageRate, InforceState, ModelPoints)
-from fastcashflow.movement import GMMSettlementMovement
+from fastcashflow.gmm import SettlementMovement
 
 settle = getattr(fcf.gmm, "settle", None)
 _HAS = (settle is not None
-        and "claims_experience" in GMMSettlementMovement.__dataclass_fields__)
+        and "claims_experience" in SettlementMovement.__dataclass_fields__)
 pytestmark = pytest.mark.skipif(
     not _HAS, reason="gmm.settle within-period experience not implemented yet")
 

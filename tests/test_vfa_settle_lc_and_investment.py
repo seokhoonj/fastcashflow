@@ -15,14 +15,14 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints
-from fastcashflow.movement import VFASettlementMovement
+from fastcashflow.vfa import SettlementMovement
 
 settle = getattr(fcf.vfa, "settle", None)
 _HAS = (settle is not None
         and "csm_investment_experience"
-        in VFASettlementMovement.__dataclass_fields__
+        in SettlementMovement.__dataclass_fields__
         and "loss_component_amortised"
-        in VFASettlementMovement.__dataclass_fields__)
+        in SettlementMovement.__dataclass_fields__)
 pytestmark = pytest.mark.skipif(
     not _HAS, reason="vfa.settle 50(a)-52 / B96(c) not implemented yet")
 

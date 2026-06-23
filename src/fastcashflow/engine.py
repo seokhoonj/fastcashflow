@@ -82,6 +82,7 @@ from fastcashflow._gmm import (
     Aggregate,
     PeriodMovement,
     Reconciliation,
+    SettlementMovement,
     _measure_full,
 )
 
@@ -919,7 +920,7 @@ def measure_inforce(
     Paragraph-44(c) unlocking, experience adjustments and the loss-component
     movement live in :func:`fastcashflow.gmm.settle` (``loss_component`` is
     zero in this mode); the opening -> closing movement of a reporting period
-    comes from ``settle``'s :class:`~fastcashflow.gmm.GMMSettlementMovement`, not
+    comes from ``settle``'s :class:`~fastcashflow.gmm.SettlementMovement`, not
     from this projector.
     """
     # A mixed-model router must go through fcf.portfolio.measure_inforce --
@@ -1128,7 +1129,7 @@ def settle(
     *,
     period_months: int | None = None,
     premium_experience_future_fraction: float | FloatArray = 0.0,
-) -> "GMMSettlementMovement":
+) -> "SettlementMovement":
     """Paragraph-44 subsequent-measurement settlement of a GMM in-force book.
 
     The opening -> closing movement over one reporting period: BEL / RA
@@ -1541,8 +1542,8 @@ def settle(
     else:
         expense_experience = np.zeros(n_mp)
 
-    from fastcashflow.movement import GMMSettlementMovement
-    return GMMSettlementMovement(
+    from fastcashflow._gmm import SettlementMovement
+    return SettlementMovement(
         bel_opening=bel_o, bel_interest=bel_i, bel_release=bel_r,
         bel_experience=bel_e, bel_closing=bel_c,
         ra_opening=ra_o, ra_interest=ra_i, ra_release=ra_r,

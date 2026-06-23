@@ -345,6 +345,174 @@ class Reconciliation:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class SettlementMovement:
+    """One period's IFRS 17 paragraph-44 settlement movement of a GMM book.
+
+    What :func:`fastcashflow.gmm.settle` returns: the opening -> closing
+    movement of the BEL, RA, CSM and loss component over one reporting
+    period, per model point. Every measurement array is ``(n_mp,)`` and each
+    block reconciles exactly::
+
+        bel_closing == bel_opening + bel_interest - bel_release + bel_experience
+        ra_closing  == ra_opening  + ra_interest  - ra_release  + ra_experience
+        csm_closing == csm_opening + csm_accretion + csm_experience_unlocking
+                       + csm_premium_experience + csm_investment_experience
+                       - loss_component_reversed + loss_component_recognised
+                       - csm_release
+        loss_component_closing == loss_component_opening
+                       + loss_component_finance - loss_component_amortised
+                       - loss_component_reversed + loss_component_recognised
+        lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
+
+    The GMM cross identity is THREE-term (unlike the VFA's two-term tie)::
+
+        csm_experience_unlocking + finance_wedge
+            == -(bel_experience + ra_experience)
+
+    because B72(c) measures the paragraph-44(c) CSM adjustment at the rates
+    determined on initial recognition while the BEL block is current-rate
+    (B72(a)); the gap is insurance finance income/expense (B97(a)), carried
+    as the named ``finance_wedge`` line OUTSIDE the CSM block. The RA part
+    of the change has no rate prescription (B96(d)) and enters the CSM at
+    its current measure -- a documented accounting policy.
+
+    ``csm_premium_experience`` (B96(a)) and ``premium_experience_revenue``
+    (B97(c)) are the two legs of the premium experience adjustment (actual
+    premium received over the period less the expected premium), split by the
+    entity's future-service fraction. The future-service leg enters the CSM
+    block (it is a NEW future-service change with no BEL/RA counterpart, so it
+    does NOT appear in the three-term tie above); the current/past leg is a
+    P&L memo (insurance revenue), in NO balance recursion, exactly like
+    ``finance_wedge``. Both are zero unless ``state.actual_premium`` is given.
+
+    ``claims_experience`` / ``expense_experience`` (B97(b)/(c)) are the
+    within-period claims / expense experience -- the actual claims / expenses
+    incurred over the period less the expected -- recognised in the insurance
+    service result (P&L memos, in NO balance recursion, not the CSM). Zero
+    unless ``state.actual_claims`` / ``state.actual_expenses`` are given.
+
+    ``csm_investment_experience`` (B96(c)) is the investment-component
+    counterpart: the expected less the actual investment component (surrender /
+    annuity repayments) that becomes payable over the period. The WHOLE
+    difference enters the CSM (no fraction -- B96(c) is entirely future
+    service), a new future-service change outside the three-term tie; the
+    investment component does not touch insurance revenue. Zero unless
+    ``state.actual_investment_component`` is given.
+
+    ``csm_accretion`` is direct compounding of the prior CSM at the
+    locked-in rate (44(b)/B72(b)); ``csm_release`` is the single period-end
+    B119 release on the post-adjustment balance, with the coverage-unit
+    fraction ``coverage_units_provided / (coverage_units_provided +
+    coverage_units_future)`` (em_open denominator, k_exp/k_obs mixed scale).
+
+    ``loss_component_finance`` (B97(a)/51(c)) and ``loss_component_amortised``
+    (49/50(a)/51(a)+(b)) are the INCURRED-service channel of an onerous group,
+    distinct from the FUTURE-service ``reversed`` / ``recognised`` lines
+    (48/50(b)). As coverage is provided the period's paragraph-51 changes are
+    split on the systematic loss-component ratio ``r = loss_component_opening /
+    pool_opening`` (``pool_opening`` = the opening PV of remaining claims and
+    expenses plus the RA): the loss component accretes ``r`` x the pool's
+    interest unwind and amortises ``r`` x the pool's release. The amortised
+    amount is the paragraph-49/B123(b) loss reversal -- presented in P&L and
+    EXCLUDED from insurance revenue (B124(a)(i) / (b)(iii)). Both are zero on a
+    profitable book (``r`` = 0) and the cumulative amortisation runs the loss
+    component to zero by the end of coverage (paragraph 52), exact because
+    ``r`` is re-derived every period. The future-service algebra acts on the
+    POST-amortisation loss component, so ``loss_component_reversed`` is capped
+    by the loss component net of this channel.
+
+    ``lic_opening`` / ``claims_incurred`` / ``lic_finance`` / ``claims_paid`` /
+    ``lic_closing`` are the liability for incurred claims (paragraphs 40(b) / 42
+    / 103(b) / 37), meaningful when the basis carries a ``settlement_pattern``:
+    claims build the LIC up as incurred (42(a)) and run it off over the pattern.
+    The LIC is measured at fulfilment cash flows -- the discounted PV of the
+    unpaid run-off plus the risk adjustment (40(b)/42(c)/37). ``claims_incurred``
+    and ``claims_paid`` stay NOMINAL cash amounts (``claims_paid`` the nominal
+    residual on the undiscounted trajectory); the discounting and RA move only
+    the balances, and ``lic_finance`` is the reconciling residual -- the insurance
+    finance (42(c) discount unwind) plus the discounting / RA measurement effect
+    -- so ``lic_closing == lic_opening + claims_incurred + lic_finance -
+    claims_paid``. The block is entirely expected-scale, reconstructed from the
+    projection each period. The LIC RA is the confidence-level margin on the
+    discounted run-off, split by risk class (a cost-of-capital LIC run-off is a
+    refinement). Without a settlement pattern claims are paid as incurred, so the
+    LIC is zero at both dates and ``lic_finance`` is zero.
+
+    v1 presentation limitation: ``lic_finance`` is a single reconciling line, so
+    the RA run-off / remeasurement is bundled with the 42(c) time-value movement
+    rather than separated into its own insurance-service line. The balances
+    (``lic_opening`` / ``lic_closing``) are the correct 40(b)/37 fulfilment cash
+    flow; a fully separated P&L attribution (pure 42(c) finance vs RA release vs
+    the nominal-minus-PV measurement of newly incurred claims) needs a monthly
+    finance-accrual decomposition and is a future refinement.
+    """
+
+    model: ClassVar[str] = GMM
+
+    bel_opening: FloatArray
+    bel_interest: FloatArray
+    bel_release: FloatArray
+    bel_experience: FloatArray
+    bel_closing: FloatArray
+    ra_opening: FloatArray
+    ra_interest: FloatArray
+    ra_release: FloatArray
+    ra_experience: FloatArray
+    ra_closing: FloatArray
+    csm_opening: FloatArray
+    csm_accretion: FloatArray            # 44(b)/B72(b): locked-in, direct compounding
+    csm_experience_unlocking: FloatArray  # 44(c)/B96(b)(d): locked-in measure
+    csm_premium_experience: FloatArray   # B96(a): future-service premium exp, into CSM
+    csm_investment_experience: FloatArray  # B96(c): investment-component exp, into CSM
+    finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, not CSM
+    premium_experience_revenue: FloatArray  # B97(c): current/past premium exp, P&L memo
+    claims_experience: FloatArray        # B97(b)/(c): actual-vs-expected claims, P&L memo
+    expense_experience: FloatArray       # B97(b)/(c): actual-vs-expected expenses, P&L memo
+    csm_release: FloatArray              # 44(e)/B119: single period-end release
+    csm_closing: FloatArray
+    loss_component_opening: FloatArray
+    loss_component_finance: FloatArray   # 51(c): r x pool interest unwind
+    loss_component_amortised: FloatArray  # 50(a)/51(a)+(b): the systematic loss reversal
+    loss_component_reversed: FloatArray
+    loss_component_recognised: FloatArray
+    loss_component_closing: FloatArray
+    coverage_units_provided: FloatArray  # k_exp x (tail[em_open] - tail[em_close])
+    coverage_units_future: FloatArray    # k_obs x tail[em_close]
+    lic_opening: FloatArray              # 40(b)/42/37: discounted PV + RA of incurred claims
+    claims_incurred: FloatArray          # 42(a)/103(b)(i): claims incurred this period (nominal)
+    lic_finance: FloatArray              # 42(c): discount unwind + discounting/RA measurement
+    claims_paid: FloatArray              # the settlement-pattern run-off (nominal residual)
+    lic_closing: FloatArray
+    period_months: int = 12
+    lock_in_rate: float = 0.0
+    model_points: object | None = None
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds
+        the next period's settle: ``prior_csm`` / ``prior_loss_component``
+        are this period's closing balances and ``prior_count`` the closing
+        count. The caller advances the pair to the next observation date
+        (``elapsed_months`` / ``count``) before the next call."""
+        from fastcashflow.model_points import InforceState
+        mp = self.model_points
+        if mp is None or mp.mp_id is None:
+            raise ValueError(
+                "closing_inputs() needs the source model points with mp_id "
+                "(the settle entry stamps them; per-MP chaining joins by id)")
+        state = InforceState(
+            mp_id=mp.mp_id,
+            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
+            count=np.asarray(mp.count, dtype=np.float64),
+            prior_csm=self.csm_closing,
+            lock_in_rate=self.lock_in_rate,
+            prior_count=np.asarray(mp.count, dtype=np.float64),
+            prior_loss_component=self.loss_component_closing,
+        )
+        return mp, state
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,

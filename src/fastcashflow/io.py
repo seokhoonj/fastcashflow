@@ -2524,8 +2524,8 @@ def settle_stream(
     parts alone: ``prior_csm <- csm_closing``, ``prior_loss_component <-
     loss_component_closing``, ``prior_count <- count``, then advance
     ``elapsed_months`` / ``count`` to the next observation. The disk side
-    of :meth:`GMMSettlementMovement.closing_inputs()
-    <fastcashflow.movement.GMMSettlementMovement.closing_inputs>`.
+    of :meth:`SettlementMovement.closing_inputs()
+    <fastcashflow.gmm.SettlementMovement.closing_inputs>`.
     """
     from fastcashflow.engine import settle
 

@@ -184,6 +184,99 @@ class Reconciliation:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class SettlementMovement:
+    """One period's IFRS 17 paragraph-66 settlement movement of a reinsurance
+    contract held.
+
+    The reinsurance counterpart of :class:`GMMSettlementMovement`. The BEL / RA
+    blocks and the CSM accretion / future-service unlocking / finance wedge /
+    B119 release are identical to the GMM settlement, with ONE modification:
+    a reinsurance contract held cannot be onerous (paragraph 65), so the CSM is
+    NOT floored and there is NO loss component. The closing CSM is simply::
+
+        csm_closing == csm_opening + csm_accretion + csm_experience_unlocking
+                       - csm_release
+
+    and may be negative throughout -- a net cost of cover, deferred and
+    amortised. The three-term cross identity still holds (the future-service
+    change is measured at the B72(c) locked-in rate, the wedge to the
+    current-rate BEL block is insurance finance income/expense)::
+
+        csm_experience_unlocking + finance_wedge
+            == -(bel_experience + ra_experience)
+
+    ``loss_recovery_opening`` / ``loss_recovery_recognised`` /
+    ``loss_recovery_reversed`` / ``loss_recovery_closing`` are the
+    loss-recovery component (paragraphs 66A-66B), present when the cover is held
+    over an ONEROUS underlying group: a separate tracked balance on the asset
+    for remaining coverage, re-derived each period as the underlying group's
+    loss component x the claim recovery % (B95B / B119D) and amortised in
+    lock-step with the underlying loss component (B119F, paragraphs 50-52) --
+    its change is a recovery recognised / reversed in P&L, excluded from the
+    premium allocation. It does NOT adjust the CSM here (the 66A CSM effect is a
+    one-time inception event in ``measure_reinsurance``: csm_after = csm0 -
+    loss_recovery). Identity::
+
+        loss_recovery_closing == loss_recovery_opening
+            + loss_recovery_recognised - loss_recovery_reversed
+
+    Zero unless ``underlying_loss_opening`` / ``underlying_loss_closing`` are
+    supplied (byte-identical to a book with no onerous underlying).
+    """
+
+    model: ClassVar[str] = REINSURANCE
+
+    bel_opening: FloatArray
+    bel_interest: FloatArray
+    bel_release: FloatArray
+    bel_experience: FloatArray
+    bel_closing: FloatArray
+    ra_opening: FloatArray
+    ra_interest: FloatArray
+    ra_release: FloatArray
+    ra_experience: FloatArray
+    ra_closing: FloatArray
+    csm_opening: FloatArray
+    csm_accretion: FloatArray            # 66(b)/B72(b): locked-in, direct compounding
+    csm_experience_unlocking: FloatArray  # 66(c): future-service change, no floor
+    finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, P&L
+    csm_release: FloatArray              # 66(e)/B119: single period-end release
+    csm_closing: FloatArray
+    loss_recovery_opening: FloatArray      # 66B/B119F: underlying loss x recovery %
+    loss_recovery_recognised: FloatArray   # more underlying loss -> more recovery
+    loss_recovery_reversed: FloatArray     # underlying loss amortises -> recovery reverses (P&L)
+    loss_recovery_closing: FloatArray
+    coverage_units_provided: FloatArray
+    coverage_units_future: FloatArray
+    period_months: int = 12
+    lock_in_rate: float = 0.0
+    model_points: object | None = None
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds the
+        next period's settle: ``prior_csm`` is this period's closing CSM (which
+        may be negative -- there is no loss component) and ``prior_count`` the
+        closing count. The caller advances ``elapsed_months`` / ``count`` to the
+        next observation date before the next call."""
+        from fastcashflow.model_points import InforceState
+        mp = self.model_points
+        if mp is None or mp.mp_id is None:
+            raise ValueError(
+                "closing_inputs() needs the source model points with mp_id "
+                "(the settle entry stamps them; per-MP chaining joins by id)")
+        state = InforceState(
+            mp_id=mp.mp_id,
+            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
+            count=np.asarray(mp.count, dtype=np.float64),
+            prior_csm=self.csm_closing,
+            lock_in_rate=self.lock_in_rate,
+            prior_count=np.asarray(mp.count, dtype=np.float64),
+        )
+        return mp, state
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,
@@ -726,7 +819,7 @@ def settle_reinsurance(
     underlying_loss_opening: FloatArray | None = None,
     underlying_loss_closing: FloatArray | None = None,
     recovery_percentage: float | None = None,
-) -> "ReinsuranceSettlementMovement":
+) -> "SettlementMovement":
     """Paragraph-66 subsequent-measurement settlement of a reinsurance contract
     held (the reinsurance counterpart of :func:`~fastcashflow.gmm.settle`).
 
@@ -909,8 +1002,7 @@ def settle_reinsurance(
         loss_recovery_recognised = np.zeros(n_mp)
         loss_recovery_reversed = np.zeros(n_mp)
 
-    from fastcashflow.movement import ReinsuranceSettlementMovement
-    return ReinsuranceSettlementMovement(
+    return SettlementMovement(
         bel_opening=bel_o, bel_interest=bel_i, bel_release=bel_r,
         bel_experience=bel_e, bel_closing=bel_c,
         ra_opening=ra_o, ra_interest=ra_i, ra_release=ra_r,

@@ -17,11 +17,11 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints
-from fastcashflow.movement import VFASettlementMovement
+from fastcashflow.vfa import SettlementMovement
 
 settle = getattr(fcf.vfa, "settle", None)
 _HAS_PE = (settle is not None
-           and "csm_premium_experience" in VFASettlementMovement.__dataclass_fields__)
+           and "csm_premium_experience" in SettlementMovement.__dataclass_fields__)
 pytestmark = pytest.mark.skipif(
     not _HAS_PE, reason="vfa.settle premium experience not implemented yet")
 

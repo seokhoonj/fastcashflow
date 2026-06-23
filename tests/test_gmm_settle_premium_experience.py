@@ -42,12 +42,12 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import (
     Basis, CalculationMethod, CoverageRate, InforceState, ModelPoints)
-from fastcashflow.movement import GMMSettlementMovement
+from fastcashflow.gmm import SettlementMovement
 
 settle = getattr(fcf.gmm, "settle", None)
 _HAS_PREMIUM_EXPERIENCE = (
     settle is not None
-    and "csm_premium_experience" in GMMSettlementMovement.__dataclass_fields__
+    and "csm_premium_experience" in SettlementMovement.__dataclass_fields__
     and "actual_premium" in InforceState.__dataclass_fields__)
 pytestmark = pytest.mark.skipif(
     not _HAS_PREMIUM_EXPERIENCE,

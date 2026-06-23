@@ -234,6 +234,86 @@ class Reconciliation:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True, slots=True, eq=False)
+class SettlementMovement:
+    """One period's IFRS 17 paragraph-55(b) settlement movement of a PAA book.
+
+    What :func:`fastcashflow.paa.settle` returns: the opening -> closing
+    movement of the LRC, loss component, and LIC over one reporting period,
+    per model point. Every measurement array is ``(n_mp,)`` and each block
+    reconciles exactly::
+
+        lrc_closing == lrc_opening + premiums - revenue + lrc_experience
+        loss_component_closing == loss_component_opening
+                       + loss_component_recognised - loss_component_reversed
+        lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
+
+    The LRC follows Sec. 55(b), with insurance revenue allocated under
+    Sec. B126. The loss component is recalculated under Sec. 57-58 at each
+    date rather than carried, so exactly one of the recognised / reversed
+    rows is positive. The LIC block supports settlement-pattern books and
+    provides the Sec. 100(c) incurred-claims movement, measured at fulfilment
+    cash flows -- the discounted PV of the unpaid run-off plus the risk
+    adjustment (40(b)/42(c)/37), exactly like the GMM LIC; ``claims_incurred`` /
+    ``claims_paid`` stay nominal and ``lic_finance`` is the reconciling
+    residual. (Sec. 59(b) permits omitting the LIC discounting for <=1yr claims;
+    discounting is also compliant and kept uniform with the GMM block.) There is
+    no CSM block -- the PAA carries no CSM -- and the LRC itself stays
+    undiscounted (Sec. 56); the finance line is on the LIC only.
+    """
+
+    model: ClassVar[str] = PAA
+
+    lrc_opening: FloatArray
+    premiums: FloatArray
+    revenue: FloatArray
+    lrc_experience: FloatArray
+    lrc_closing: FloatArray
+    loss_component_opening: FloatArray
+    loss_component_recognised: FloatArray
+    loss_component_reversed: FloatArray
+    loss_component_closing: FloatArray
+    lic_opening: FloatArray
+    claims_incurred: FloatArray
+    lic_finance: FloatArray
+    claims_paid: FloatArray
+    lic_closing: FloatArray
+    claims_experience: FloatArray        # B97(b)/(c): actual-vs-expected claims, P&L memo
+    expense_experience: FloatArray       # B97(b)/(c): actual-vs-expected expenses, P&L memo
+    period_months: int = 12
+    revenue_basis: str = "time"
+    model_points: object | None = None
+    measurement_basis: str = "settlement"
+
+    def closing_inputs(self):
+        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds
+        the next period's settle. The PAA has no CSM and no locked-in rate,
+        so those state slots carry neutral values; the closing loss component
+        is preserved for state-file continuity, though the next settle
+        recalculates it under Sec. 57-58 rather than reading it."""
+        from fastcashflow.model_points import InforceState
+        mp = self.model_points
+        if mp is None or mp.mp_id is None:
+            raise ValueError(
+                "closing_inputs() needs the source model points with mp_id "
+                "(the settle entry stamps them; per-MP chaining joins by id)")
+        n_mp = self.lrc_closing.shape[0]
+        state = InforceState(
+            mp_id=mp.mp_id,
+            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
+            count=np.asarray(mp.count, dtype=np.float64),
+            prior_csm=np.zeros(n_mp, dtype=np.float64),
+            lock_in_rate=0.0,
+            prior_count=np.asarray(mp.count, dtype=np.float64),
+            prior_loss_component=self.loss_component_closing,
+            # carry the closing LIC so the next period -- in particular a
+            # pure-LIC-runoff close past the contract boundary -- can run the
+            # incurred-claims tail down with no in-force to reconstruct it from.
+            prior_lic=self.lic_closing,
+        )
+        return mp, state
+
+
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"lrc": measurement.lrc,
@@ -644,7 +724,7 @@ def settle(
     *,
     revenue_basis: str = "time",
     period_months: int | None = None,
-) -> "PAASettlementMovement":
+) -> "SettlementMovement":
     """Paragraph-55(b) period-close settlement of a PAA in-force book.
 
     The opening -> closing movement over one reporting period: the Liability
@@ -945,8 +1025,7 @@ def settle(
     else:
         expense_experience = np.zeros(n_mp)
 
-    from fastcashflow.movement import PAASettlementMovement
-    return PAASettlementMovement(
+    return SettlementMovement(
         lrc_opening=lrc_opening,
         premiums=premiums,
         revenue=revenue,

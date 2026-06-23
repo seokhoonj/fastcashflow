@@ -558,220 +558,6 @@ def _reconcile_vfa(
     ]
 
 
-@dataclass(frozen=True, slots=True, eq=False)
-class VFASettlementMovement:
-    """One period's IFRS 17 paragraph-45 settlement movement of a VFA book.
-
-    What :func:`fastcashflow.vfa.settle` returns: the opening -> closing
-    movement of the BEL, RA, CSM and loss component over one reporting period
-    of ``period_months``, per model point. Unlike :class:`_vfa.PeriodMovement`
-    (the *expected* movement sliced from an inception measurement), this is a
-    *subsequent measurement*: the closing figures respond to the observed
-    account value and in-force count, and the CSM absorbs the future-service
-    change per paragraph 45. Every array is ``(n_mp,)`` and each block
-    reconciles exactly::
-
-        bel_closing == bel_opening + bel_interest - bel_release + bel_experience
-        ra_closing  == ra_opening  + ra_interest  - ra_release  + ra_experience
-        csm_closing == csm_opening + csm_accretion + csm_fv_share
-                       + csm_future_service + csm_premium_experience
-                       + csm_investment_experience
-                       - loss_component_reversed
-                       + loss_component_recognised - csm_release
-        loss_component_closing == loss_component_opening
-                       + loss_component_finance - loss_component_amortised
-                       - loss_component_reversed + loss_component_recognised
-        lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
-
-    The liability for incurred claims (``lic_opening`` / ``claims_incurred`` /
-    ``lic_finance`` / ``claims_paid`` / ``lic_closing``, paragraphs 40(b) /
-    42(c) / 103(b)) is present when the basis carries a ``settlement_pattern``:
-    benefit claims build it up as incurred and run it off over the pattern. The
-    LIC is measured at fulfilment cash flows -- the discounted PV of the unpaid
-    run-off (42(c)). It carries NO risk adjustment: the VFA RA prices expense
-    risk only (the benefit risk sits in the variable fee), so the incurred
-    benefits carry no RA in the LIC either. ``claims_incurred`` and
-    ``claims_paid`` stay nominal (``claims_paid`` the residual on the
-    undiscounted trajectory); ``lic_finance`` is the reconciling residual (the
-    42(c) discount unwind + discounting measurement effect), zero at both dates
-    without a pattern. It mirrors the GMM block (which adds the LIC RA).
-
-    and the blocks tie across: ``csm_fv_share + csm_future_service ==
-    -(bel_experience + ra_experience)`` -- the paragraph-45 future-service
-    change is exactly minus the observed-vs-expected FCF difference.
-    ``csm_premium_experience`` (B96(a)) and ``premium_experience_revenue``
-    (B97(c)) are the two legs of the premium experience adjustment (actual
-    premium received less the expected premium, split by the entity's
-    future-service fraction). The future leg is a NEW future-service change with
-    no BEL/RA counterpart, so it enters the CSM block but does NOT appear in the
-    cross-tie above; the current/past leg is a P&L memo, in no balance
-    recursion. Both are zero unless ``state.actual_premium`` is given.
-    ``csm_investment_experience`` (B96(c)) is the same for the investment
-    component (the account value returned on exits): expected less actual
-    account value payable, the whole difference into the CSM, outside the
-    cross-tie; zero unless ``state.actual_investment_component`` is given.
-    ``loss_component_finance`` / ``loss_component_amortised`` are the
-    paragraph-50(a)/51 incurred-service channel of an onerous book -- the
-    guarantee-excess + expense release (the claims+expenses pool, excluding the
-    account-value investment component) split on the loss-component ratio,
-    running the loss component to zero by the end of coverage (52); zero on a
-    profitable book.
-
-    Line semantics:
-
-    * ``bel_interest`` / ``ra_interest`` -- the unwind at the underlying-items
-      return over the period (the engine's roll-forward convention); the
-      fee / crediting wedge of the fund's own growth sits inside the release.
-    * ``bel_release`` / ``ra_release`` -- the *expected* run-off, the one
-      residual line per block.
-    * ``bel_experience`` / ``ra_experience`` -- observed minus expected close,
-      the future effect of the account-value and count deviation.
-    * ``csm_accretion`` -- ``prior_csm * ((1 + r_m)**period - 1)``, the
-      expected financial growth of the CSM. Under the VFA there is no
-      paragraph-B72(b) locked-rate accretion; this is the expected part of
-      the paragraph-45(b) change, presented jointly with ``csm_fv_share``
-      as the financial / entity's-share block.
-    * ``csm_fv_share`` -- paragraph 45(b), the change in the entity's share
-      of the underlying items: the observed-vs-expected variable-fee PV at
-      the closing date (fund-consistent end-of-month weight).
-    * ``csm_future_service`` -- paragraph 45(c), every other future-service
-      change: the guarantee cost (GMDB / GMAB), the crediting-floor cost and
-      the count deviation's future effect.
-    * ``loss_component_reversed`` / ``loss_component_recognised`` --
-      paragraphs 48 / 50(b): a favourable change reverses the loss component
-      before rebuilding the CSM; an unfavourable change beyond the CSM falls
-      into the loss component.
-    * ``csm_release`` -- paragraph B119, one period-end release of the
-      post-adjustment balance over the coverage units provided in the period
-      against those provided plus expected from the *opening* date.
-    * ``coverage_units_provided`` / ``coverage_units_future`` -- the B119
-      numerator and remainder behind that release (expected scale over the
-      period, observed scale from the closing date), kept per model point
-      so a group-of-contracts settlement can re-pool the release fraction
-      at the group grain.
-    * ``account_value_closing`` -- the *observed* fund value at the closing
-      date, echoed from the input state; with the closing balances it seeds
-      the next period's state (:meth:`closing_inputs`).
-
-    v1 limitations (documented, not silent): within-period experience --
-    actual deaths, lapses, benefits, expenses, AND the fees actually skimmed
-    on the realized fund path -- is assumed equal to expected; only the
-    closing count and observed account value deviate. Part of the
-    paragraph 45(b) realized entity share is therefore not captured, and the
-    period's total comprehensive income is approximate even though
-    opening-to-closing balances reconcile. The loss component moves through both
-    channels: the paragraph-48/50(b) future-service adjustments (``reversed`` /
-    ``recognised``) and the paragraph-50(a)-52 systematic incurred-service
-    allocation (``loss_component_finance`` / ``loss_component_amortised``, the
-    guarantee-excess + expense pool excluding the account-value investment
-    component), which runs the loss component to zero by the end of coverage. An
-    opening CSM that embeds a stochastic guarantee time value is accreted
-    and released but its time-value component is never remeasured (the
-    movement is deterministic, intrinsic-guarantee only). Floors and the
-    loss-component algebra operate per model point; within-group offsetting
-    between favourable and unfavourable contracts (the group-level CSM floor
-    of paragraphs 47-52) is not performed, consistent with the rest of the
-    engine.
-    """
-
-    model: ClassVar[str] = VFA
-
-    period_months: int
-    bel_opening: FloatArray
-    bel_interest: FloatArray
-    bel_release: FloatArray
-    bel_experience: FloatArray
-    bel_closing: FloatArray
-    ra_opening: FloatArray
-    ra_interest: FloatArray
-    ra_release: FloatArray
-    ra_experience: FloatArray
-    ra_closing: FloatArray
-    csm_opening: FloatArray
-    csm_accretion: FloatArray
-    csm_fv_share: FloatArray
-    csm_future_service: FloatArray
-    csm_premium_experience: FloatArray  # B96(a): future-service premium exp, into CSM
-    premium_experience_revenue: FloatArray  # B97(c): current/past premium exp, P&L memo
-    csm_investment_experience: FloatArray  # B96(c): investment-component exp, into CSM
-    claims_experience: FloatArray        # B97(b)/(c): actual-vs-expected claims, P&L memo
-    expense_experience: FloatArray       # B97(b)/(c): actual-vs-expected expenses, P&L memo
-    loss_component_reversed: FloatArray
-    loss_component_recognised: FloatArray
-    csm_release: FloatArray
-    csm_closing: FloatArray
-    loss_component_opening: FloatArray
-    loss_component_finance: FloatArray   # 51(c): r x pool interest unwind
-    loss_component_amortised: FloatArray  # 50(a)/51(a)+(b): the systematic loss reversal
-    loss_component_closing: FloatArray
-    variable_fee_closing: FloatArray
-    coverage_units_provided: FloatArray  # B119 numerator, expected scale
-    coverage_units_future: FloatArray    # B119 remainder, observed scale
-    account_value_closing: FloatArray    # observed fund value at the close
-    lic_opening: FloatArray              # 40(b)/42(c): discounted PV of incurred claims
-    claims_incurred: FloatArray          # 42(a)/103(b)(i): claims incurred this period (nominal)
-    lic_finance: FloatArray              # 42(c): discount unwind + discounting measurement
-    claims_paid: FloatArray              # the settlement-pattern run-off (nominal residual)
-    lic_closing: FloatArray
-    lock_in_rate: float = 0.0            # state echo only; no VFA locked rate
-    model_points: "object | None" = None
-    csm_basis: str = CSM_BASIS_PARAGRAPH_45
-
-    @property
-    def measurement_basis(self) -> str:
-        """Cross-model time-basis discriminator, derived from ``csm_basis``
-        (mirrors :class:`~fastcashflow.vfa.Measurement`)."""
-        return _CSM_TO_MEASUREMENT_BASIS[self.csm_basis]
-
-    def closing_inputs(self):
-        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds
-        the next period's settle: ``prior_csm`` / ``prior_loss_component``
-        are this period's closing balances, ``prior_count`` the closing
-        count and ``prior_account_value`` the observed closing fund value.
-        The caller advances the pair to the next observation date
-        (``elapsed_months`` / ``count`` / ``account_value``) before the
-        next call."""
-        from fastcashflow.model_points import InforceState
-        mp = self.model_points
-        if mp is None or mp.mp_id is None:
-            raise ValueError(
-                "closing_inputs() needs the source model points with mp_id "
-                "(the settle entry stamps them; per-MP chaining joins by id)")
-        state = InforceState(
-            mp_id=mp.mp_id,
-            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
-            count=np.asarray(mp.count, dtype=np.float64),
-            prior_csm=self.csm_closing,
-            lock_in_rate=self.lock_in_rate,
-            account_value=self.account_value_closing,
-            prior_count=np.asarray(mp.count, dtype=np.float64),
-            prior_account_value=self.account_value_closing,
-            prior_loss_component=self.loss_component_closing,
-        )
-        return mp, state
-
-    def closing_measurement(self) -> _vfa.Measurement:
-        """The closing balance sheet as a headline-only
-        :class:`~fastcashflow.vfa.Measurement`, tagged
-        ``csm_basis='paragraph_45_settlement'`` -- a settlement figure,
-        unlike the carry-only diagnostic, so the carry-only guard does not
-        reject it: ``write_measurement`` serialises it, and its figures seed
-        next period's ``prior_*`` state. (``report`` / ``group`` /
-        ``roll_forward`` still need the full trajectories a headline-only
-        result does not carry.) ``time_value`` is zero (the movement is
-        intrinsic-guarantee only)."""
-        return _vfa.Measurement(
-            bel=self.bel_closing,
-            ra=self.ra_closing,
-            csm=self.csm_closing,
-            variable_fee=self.variable_fee_closing,
-            time_value=np.zeros_like(self.bel_closing),
-            loss_component=self.loss_component_closing,
-            model_points=self.model_points,
-            csm_basis=CSM_BASIS_PARAGRAPH_45,
-        )
-
-
 # Settlement reconciliation display / disclosure block specs -- the single
 # source for each settlement family's line spine, shared by the __str__ methods
 # below and disclosure.py's reconciliation_to_frame / line_metadata (which
@@ -1014,7 +800,7 @@ class VFASettlementReconciliation:
 
 
 def _reconcile_vfa_settlement(
-    movements: list[VFASettlementMovement],
+    movements: list[_vfa.SettlementMovement],
 ) -> list[VFASettlementReconciliation]:
     """Aggregate paragraph-45 settlement movements into portfolio totals.
 
@@ -1090,177 +876,9 @@ def _reconcile_reinsurance(
     ]
 
 
-@dataclass(frozen=True, slots=True, eq=False)
-class GMMSettlementMovement:
-    """One period's IFRS 17 paragraph-44 settlement movement of a GMM book.
-
-    What :func:`fastcashflow.gmm.settle` returns: the opening -> closing
-    movement of the BEL, RA, CSM and loss component over one reporting
-    period, per model point. Every measurement array is ``(n_mp,)`` and each
-    block reconciles exactly::
-
-        bel_closing == bel_opening + bel_interest - bel_release + bel_experience
-        ra_closing  == ra_opening  + ra_interest  - ra_release  + ra_experience
-        csm_closing == csm_opening + csm_accretion + csm_experience_unlocking
-                       + csm_premium_experience + csm_investment_experience
-                       - loss_component_reversed + loss_component_recognised
-                       - csm_release
-        loss_component_closing == loss_component_opening
-                       + loss_component_finance - loss_component_amortised
-                       - loss_component_reversed + loss_component_recognised
-        lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
-
-    The GMM cross identity is THREE-term (unlike the VFA's two-term tie)::
-
-        csm_experience_unlocking + finance_wedge
-            == -(bel_experience + ra_experience)
-
-    because B72(c) measures the paragraph-44(c) CSM adjustment at the rates
-    determined on initial recognition while the BEL block is current-rate
-    (B72(a)); the gap is insurance finance income/expense (B97(a)), carried
-    as the named ``finance_wedge`` line OUTSIDE the CSM block. The RA part
-    of the change has no rate prescription (B96(d)) and enters the CSM at
-    its current measure -- a documented accounting policy.
-
-    ``csm_premium_experience`` (B96(a)) and ``premium_experience_revenue``
-    (B97(c)) are the two legs of the premium experience adjustment (actual
-    premium received over the period less the expected premium), split by the
-    entity's future-service fraction. The future-service leg enters the CSM
-    block (it is a NEW future-service change with no BEL/RA counterpart, so it
-    does NOT appear in the three-term tie above); the current/past leg is a
-    P&L memo (insurance revenue), in NO balance recursion, exactly like
-    ``finance_wedge``. Both are zero unless ``state.actual_premium`` is given.
-
-    ``claims_experience`` / ``expense_experience`` (B97(b)/(c)) are the
-    within-period claims / expense experience -- the actual claims / expenses
-    incurred over the period less the expected -- recognised in the insurance
-    service result (P&L memos, in NO balance recursion, not the CSM). Zero
-    unless ``state.actual_claims`` / ``state.actual_expenses`` are given.
-
-    ``csm_investment_experience`` (B96(c)) is the investment-component
-    counterpart: the expected less the actual investment component (surrender /
-    annuity repayments) that becomes payable over the period. The WHOLE
-    difference enters the CSM (no fraction -- B96(c) is entirely future
-    service), a new future-service change outside the three-term tie; the
-    investment component does not touch insurance revenue. Zero unless
-    ``state.actual_investment_component`` is given.
-
-    ``csm_accretion`` is direct compounding of the prior CSM at the
-    locked-in rate (44(b)/B72(b)); ``csm_release`` is the single period-end
-    B119 release on the post-adjustment balance, with the coverage-unit
-    fraction ``coverage_units_provided / (coverage_units_provided +
-    coverage_units_future)`` (em_open denominator, k_exp/k_obs mixed scale).
-
-    ``loss_component_finance`` (B97(a)/51(c)) and ``loss_component_amortised``
-    (49/50(a)/51(a)+(b)) are the INCURRED-service channel of an onerous group,
-    distinct from the FUTURE-service ``reversed`` / ``recognised`` lines
-    (48/50(b)). As coverage is provided the period's paragraph-51 changes are
-    split on the systematic loss-component ratio ``r = loss_component_opening /
-    pool_opening`` (``pool_opening`` = the opening PV of remaining claims and
-    expenses plus the RA): the loss component accretes ``r`` x the pool's
-    interest unwind and amortises ``r`` x the pool's release. The amortised
-    amount is the paragraph-49/B123(b) loss reversal -- presented in P&L and
-    EXCLUDED from insurance revenue (B124(a)(i) / (b)(iii)). Both are zero on a
-    profitable book (``r`` = 0) and the cumulative amortisation runs the loss
-    component to zero by the end of coverage (paragraph 52), exact because
-    ``r`` is re-derived every period. The future-service algebra acts on the
-    POST-amortisation loss component, so ``loss_component_reversed`` is capped
-    by the loss component net of this channel.
-
-    ``lic_opening`` / ``claims_incurred`` / ``lic_finance`` / ``claims_paid`` /
-    ``lic_closing`` are the liability for incurred claims (paragraphs 40(b) / 42
-    / 103(b) / 37), meaningful when the basis carries a ``settlement_pattern``:
-    claims build the LIC up as incurred (42(a)) and run it off over the pattern.
-    The LIC is measured at fulfilment cash flows -- the discounted PV of the
-    unpaid run-off plus the risk adjustment (40(b)/42(c)/37). ``claims_incurred``
-    and ``claims_paid`` stay NOMINAL cash amounts (``claims_paid`` the nominal
-    residual on the undiscounted trajectory); the discounting and RA move only
-    the balances, and ``lic_finance`` is the reconciling residual -- the insurance
-    finance (42(c) discount unwind) plus the discounting / RA measurement effect
-    -- so ``lic_closing == lic_opening + claims_incurred + lic_finance -
-    claims_paid``. The block is entirely expected-scale, reconstructed from the
-    projection each period. The LIC RA is the confidence-level margin on the
-    discounted run-off, split by risk class (a cost-of-capital LIC run-off is a
-    refinement). Without a settlement pattern claims are paid as incurred, so the
-    LIC is zero at both dates and ``lic_finance`` is zero.
-
-    v1 presentation limitation: ``lic_finance`` is a single reconciling line, so
-    the RA run-off / remeasurement is bundled with the 42(c) time-value movement
-    rather than separated into its own insurance-service line. The balances
-    (``lic_opening`` / ``lic_closing``) are the correct 40(b)/37 fulfilment cash
-    flow; a fully separated P&L attribution (pure 42(c) finance vs RA release vs
-    the nominal-minus-PV measurement of newly incurred claims) needs a monthly
-    finance-accrual decomposition and is a future refinement.
-    """
-
-    model: ClassVar[str] = GMM
-
-    bel_opening: FloatArray
-    bel_interest: FloatArray
-    bel_release: FloatArray
-    bel_experience: FloatArray
-    bel_closing: FloatArray
-    ra_opening: FloatArray
-    ra_interest: FloatArray
-    ra_release: FloatArray
-    ra_experience: FloatArray
-    ra_closing: FloatArray
-    csm_opening: FloatArray
-    csm_accretion: FloatArray            # 44(b)/B72(b): locked-in, direct compounding
-    csm_experience_unlocking: FloatArray  # 44(c)/B96(b)(d): locked-in measure
-    csm_premium_experience: FloatArray   # B96(a): future-service premium exp, into CSM
-    csm_investment_experience: FloatArray  # B96(c): investment-component exp, into CSM
-    finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, not CSM
-    premium_experience_revenue: FloatArray  # B97(c): current/past premium exp, P&L memo
-    claims_experience: FloatArray        # B97(b)/(c): actual-vs-expected claims, P&L memo
-    expense_experience: FloatArray       # B97(b)/(c): actual-vs-expected expenses, P&L memo
-    csm_release: FloatArray              # 44(e)/B119: single period-end release
-    csm_closing: FloatArray
-    loss_component_opening: FloatArray
-    loss_component_finance: FloatArray   # 51(c): r x pool interest unwind
-    loss_component_amortised: FloatArray  # 50(a)/51(a)+(b): the systematic loss reversal
-    loss_component_reversed: FloatArray
-    loss_component_recognised: FloatArray
-    loss_component_closing: FloatArray
-    coverage_units_provided: FloatArray  # k_exp x (tail[em_open] - tail[em_close])
-    coverage_units_future: FloatArray    # k_obs x tail[em_close]
-    lic_opening: FloatArray              # 40(b)/42/37: discounted PV + RA of incurred claims
-    claims_incurred: FloatArray          # 42(a)/103(b)(i): claims incurred this period (nominal)
-    lic_finance: FloatArray              # 42(c): discount unwind + discounting/RA measurement
-    claims_paid: FloatArray              # the settlement-pattern run-off (nominal residual)
-    lic_closing: FloatArray
-    period_months: int = 12
-    lock_in_rate: float = 0.0
-    model_points: object | None = None
-    measurement_basis: str = "settlement"
-
-    def closing_inputs(self):
-        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds
-        the next period's settle: ``prior_csm`` / ``prior_loss_component``
-        are this period's closing balances and ``prior_count`` the closing
-        count. The caller advances the pair to the next observation date
-        (``elapsed_months`` / ``count``) before the next call."""
-        from fastcashflow.model_points import InforceState
-        mp = self.model_points
-        if mp is None or mp.mp_id is None:
-            raise ValueError(
-                "closing_inputs() needs the source model points with mp_id "
-                "(the settle entry stamps them; per-MP chaining joins by id)")
-        state = InforceState(
-            mp_id=mp.mp_id,
-            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
-            count=np.asarray(mp.count, dtype=np.float64),
-            prior_csm=self.csm_closing,
-            lock_in_rate=self.lock_in_rate,
-            prior_count=np.asarray(mp.count, dtype=np.float64),
-            prior_loss_component=self.loss_component_closing,
-        )
-        return mp, state
-
-
 @dataclass(frozen=True, slots=True)
 class GMMSettlementReconciliation:
-    """Portfolio totals of a :class:`GMMSettlementMovement` -- the
+    """Portfolio totals of a :class:`_gmm.SettlementMovement` -- the
     paragraph-44 settlement table. Release and loss-component-reversed rows
     are stored negative (display convention), so opening plus every row of a
     block equals its closing; ``finance_wedge`` keeps the movement sign (it
@@ -1308,7 +926,7 @@ class GMMSettlementReconciliation:
 
 
 def _reconcile_gmm_settlement(
-    movements: list[GMMSettlementMovement],
+    movements: list[_gmm.SettlementMovement],
 ) -> list[GMMSettlementReconciliation]:
     """Aggregate paragraph-44 settlement movements into portfolio totals."""
     return [
@@ -1351,102 +969,9 @@ def _reconcile_gmm_settlement(
     ]
 
 
-@dataclass(frozen=True, slots=True, eq=False)
-class ReinsuranceSettlementMovement:
-    """One period's IFRS 17 paragraph-66 settlement movement of a reinsurance
-    contract held.
-
-    The reinsurance counterpart of :class:`GMMSettlementMovement`. The BEL / RA
-    blocks and the CSM accretion / future-service unlocking / finance wedge /
-    B119 release are identical to the GMM settlement, with ONE modification:
-    a reinsurance contract held cannot be onerous (paragraph 65), so the CSM is
-    NOT floored and there is NO loss component. The closing CSM is simply::
-
-        csm_closing == csm_opening + csm_accretion + csm_experience_unlocking
-                       - csm_release
-
-    and may be negative throughout -- a net cost of cover, deferred and
-    amortised. The three-term cross identity still holds (the future-service
-    change is measured at the B72(c) locked-in rate, the wedge to the
-    current-rate BEL block is insurance finance income/expense)::
-
-        csm_experience_unlocking + finance_wedge
-            == -(bel_experience + ra_experience)
-
-    ``loss_recovery_opening`` / ``loss_recovery_recognised`` /
-    ``loss_recovery_reversed`` / ``loss_recovery_closing`` are the
-    loss-recovery component (paragraphs 66A-66B), present when the cover is held
-    over an ONEROUS underlying group: a separate tracked balance on the asset
-    for remaining coverage, re-derived each period as the underlying group's
-    loss component x the claim recovery % (B95B / B119D) and amortised in
-    lock-step with the underlying loss component (B119F, paragraphs 50-52) --
-    its change is a recovery recognised / reversed in P&L, excluded from the
-    premium allocation. It does NOT adjust the CSM here (the 66A CSM effect is a
-    one-time inception event in ``measure_reinsurance``: csm_after = csm0 -
-    loss_recovery). Identity::
-
-        loss_recovery_closing == loss_recovery_opening
-            + loss_recovery_recognised - loss_recovery_reversed
-
-    Zero unless ``underlying_loss_opening`` / ``underlying_loss_closing`` are
-    supplied (byte-identical to a book with no onerous underlying).
-    """
-
-    model: ClassVar[str] = REINSURANCE
-
-    bel_opening: FloatArray
-    bel_interest: FloatArray
-    bel_release: FloatArray
-    bel_experience: FloatArray
-    bel_closing: FloatArray
-    ra_opening: FloatArray
-    ra_interest: FloatArray
-    ra_release: FloatArray
-    ra_experience: FloatArray
-    ra_closing: FloatArray
-    csm_opening: FloatArray
-    csm_accretion: FloatArray            # 66(b)/B72(b): locked-in, direct compounding
-    csm_experience_unlocking: FloatArray  # 66(c): future-service change, no floor
-    finance_wedge: FloatArray            # B97(a): current-vs-locked-in gap, P&L
-    csm_release: FloatArray              # 66(e)/B119: single period-end release
-    csm_closing: FloatArray
-    loss_recovery_opening: FloatArray      # 66B/B119F: underlying loss x recovery %
-    loss_recovery_recognised: FloatArray   # more underlying loss -> more recovery
-    loss_recovery_reversed: FloatArray     # underlying loss amortises -> recovery reverses (P&L)
-    loss_recovery_closing: FloatArray
-    coverage_units_provided: FloatArray
-    coverage_units_future: FloatArray
-    period_months: int = 12
-    lock_in_rate: float = 0.0
-    model_points: object | None = None
-    measurement_basis: str = "settlement"
-
-    def closing_inputs(self):
-        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds the
-        next period's settle: ``prior_csm`` is this period's closing CSM (which
-        may be negative -- there is no loss component) and ``prior_count`` the
-        closing count. The caller advances ``elapsed_months`` / ``count`` to the
-        next observation date before the next call."""
-        from fastcashflow.model_points import InforceState
-        mp = self.model_points
-        if mp is None or mp.mp_id is None:
-            raise ValueError(
-                "closing_inputs() needs the source model points with mp_id "
-                "(the settle entry stamps them; per-MP chaining joins by id)")
-        state = InforceState(
-            mp_id=mp.mp_id,
-            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
-            count=np.asarray(mp.count, dtype=np.float64),
-            prior_csm=self.csm_closing,
-            lock_in_rate=self.lock_in_rate,
-            prior_count=np.asarray(mp.count, dtype=np.float64),
-        )
-        return mp, state
-
-
 @dataclass(frozen=True, slots=True)
 class ReinsuranceSettlementReconciliation:
-    """Portfolio totals of a :class:`ReinsuranceSettlementMovement` -- the
+    """Portfolio totals of a :class:`_reinsurance.SettlementMovement` -- the
     paragraph-66 settlement table. Release rows are stored negative (display
     convention); ``finance_wedge`` keeps the movement sign (a P&L line outside
     the CSM block). There is no loss-component row -- a reinsurance contract
@@ -1483,7 +1008,7 @@ class ReinsuranceSettlementReconciliation:
 
 
 def _reconcile_reinsurance_settlement(
-    movements: list[ReinsuranceSettlementMovement],
+    movements: list[_reinsurance.SettlementMovement],
 ) -> list[ReinsuranceSettlementReconciliation]:
     """Aggregate paragraph-66 reinsurance settlement movements into totals."""
     return [
@@ -1514,89 +1039,9 @@ def _reconcile_reinsurance_settlement(
     ]
 
 
-@dataclass(frozen=True, slots=True, eq=False)
-class PAASettlementMovement:
-    """One period's IFRS 17 paragraph-55(b) settlement movement of a PAA book.
-
-    What :func:`fastcashflow.paa.settle` returns: the opening -> closing
-    movement of the LRC, loss component, and LIC over one reporting period,
-    per model point. Every measurement array is ``(n_mp,)`` and each block
-    reconciles exactly::
-
-        lrc_closing == lrc_opening + premiums - revenue + lrc_experience
-        loss_component_closing == loss_component_opening
-                       + loss_component_recognised - loss_component_reversed
-        lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
-
-    The LRC follows Sec. 55(b), with insurance revenue allocated under
-    Sec. B126. The loss component is recalculated under Sec. 57-58 at each
-    date rather than carried, so exactly one of the recognised / reversed
-    rows is positive. The LIC block supports settlement-pattern books and
-    provides the Sec. 100(c) incurred-claims movement, measured at fulfilment
-    cash flows -- the discounted PV of the unpaid run-off plus the risk
-    adjustment (40(b)/42(c)/37), exactly like the GMM LIC; ``claims_incurred`` /
-    ``claims_paid`` stay nominal and ``lic_finance`` is the reconciling
-    residual. (Sec. 59(b) permits omitting the LIC discounting for <=1yr claims;
-    discounting is also compliant and kept uniform with the GMM block.) There is
-    no CSM block -- the PAA carries no CSM -- and the LRC itself stays
-    undiscounted (Sec. 56); the finance line is on the LIC only.
-    """
-
-    model: ClassVar[str] = PAA
-
-    lrc_opening: FloatArray
-    premiums: FloatArray
-    revenue: FloatArray
-    lrc_experience: FloatArray
-    lrc_closing: FloatArray
-    loss_component_opening: FloatArray
-    loss_component_recognised: FloatArray
-    loss_component_reversed: FloatArray
-    loss_component_closing: FloatArray
-    lic_opening: FloatArray
-    claims_incurred: FloatArray
-    lic_finance: FloatArray
-    claims_paid: FloatArray
-    lic_closing: FloatArray
-    claims_experience: FloatArray        # B97(b)/(c): actual-vs-expected claims, P&L memo
-    expense_experience: FloatArray       # B97(b)/(c): actual-vs-expected expenses, P&L memo
-    period_months: int = 12
-    revenue_basis: str = "time"
-    model_points: object | None = None
-    measurement_basis: str = "settlement"
-
-    def closing_inputs(self):
-        """The closing-date ``(ModelPoints, InforceState)`` pair that seeds
-        the next period's settle. The PAA has no CSM and no locked-in rate,
-        so those state slots carry neutral values; the closing loss component
-        is preserved for state-file continuity, though the next settle
-        recalculates it under Sec. 57-58 rather than reading it."""
-        from fastcashflow.model_points import InforceState
-        mp = self.model_points
-        if mp is None or mp.mp_id is None:
-            raise ValueError(
-                "closing_inputs() needs the source model points with mp_id "
-                "(the settle entry stamps them; per-MP chaining joins by id)")
-        n_mp = self.lrc_closing.shape[0]
-        state = InforceState(
-            mp_id=mp.mp_id,
-            elapsed_months=np.asarray(mp.elapsed_months, dtype=np.int64),
-            count=np.asarray(mp.count, dtype=np.float64),
-            prior_csm=np.zeros(n_mp, dtype=np.float64),
-            lock_in_rate=0.0,
-            prior_count=np.asarray(mp.count, dtype=np.float64),
-            prior_loss_component=self.loss_component_closing,
-            # carry the closing LIC so the next period -- in particular a
-            # pure-LIC-runoff close past the contract boundary -- can run the
-            # incurred-claims tail down with no in-force to reconstruct it from.
-            prior_lic=self.lic_closing,
-        )
-        return mp, state
-
-
 @dataclass(frozen=True, slots=True)
 class PAASettlementReconciliation:
-    """Portfolio totals of a :class:`PAASettlementMovement` -- the
+    """Portfolio totals of a :class:`_paa.SettlementMovement` -- the
     paragraph-55(b) settlement table. Revenue, claims-paid and
     loss-component-reversed rows are stored negative (display convention),
     so opening plus every row of a block equals its closing; the movement
@@ -1629,7 +1074,7 @@ class PAASettlementReconciliation:
 
 
 def _reconcile_paa_settlement(
-    movements: list[PAASettlementMovement],
+    movements: list[_paa.SettlementMovement],
 ) -> list[PAASettlementReconciliation]:
     """Aggregate paragraph-55(b) settlement movements into portfolio totals."""
     return [
@@ -1658,7 +1103,7 @@ def _reconcile_paa_settlement(
 
 
 @write_measurement.register
-def _(movement: PAASettlementMovement, path, *, ids=None):
+def _(movement: _paa.SettlementMovement, path, *, ids=None):
     n = movement.lrc_closing.shape[0]
     cols = {name: getattr(movement, name) for name in _PAA_SETTLEMENT_LINES}
     cols["revenue_basis"] = [movement.revenue_basis] * n
@@ -1675,7 +1120,7 @@ def _(movement: PAASettlementMovement, path, *, ids=None):
 
 
 @write_measurement.register
-def _(movement: GMMSettlementMovement, path, *, ids=None):
+def _(movement: _gmm.SettlementMovement, path, *, ids=None):
     n = movement.bel_closing.shape[0]
     cols = {name: getattr(movement, name) for name in _GMM_SETTLEMENT_LINES}
     # Scalar (shared) or per-row (cohort-aware, Sec. B72(b)) locked-in rate:
@@ -1696,7 +1141,7 @@ def _(movement: GMMSettlementMovement, path, *, ids=None):
 
 
 @write_measurement.register
-def _(movement: ReinsuranceSettlementMovement, path, *, ids=None):
+def _(movement: _reinsurance.SettlementMovement, path, *, ids=None):
     n = movement.bel_closing.shape[0]
     cols = {name: getattr(movement, name) for name in _REINSURANCE_SETTLEMENT_LINES}
     cols["lock_in_rate"] = np.full(n, movement.lock_in_rate)
@@ -1710,7 +1155,7 @@ def _(movement: ReinsuranceSettlementMovement, path, *, ids=None):
 
 
 @write_measurement.register
-def _(movement: VFASettlementMovement, path, *, ids=None):
+def _(movement: _vfa.SettlementMovement, path, *, ids=None):
     n = movement.bel_closing.shape[0]
     cols = {name: getattr(movement, name) for name in _VFA_SETTLEMENT_LINES}
     cols["lock_in_rate"] = np.full(n, movement.lock_in_rate)
@@ -1747,13 +1192,13 @@ def reconcile(
         return _reconcile_paa(movements)
     if movements and isinstance(movements[0], _vfa.PeriodMovement):
         return _reconcile_vfa(movements)
-    if movements and isinstance(movements[0], VFASettlementMovement):
+    if movements and isinstance(movements[0], _vfa.SettlementMovement):
         return _reconcile_vfa_settlement(movements)
-    if movements and isinstance(movements[0], GMMSettlementMovement):
+    if movements and isinstance(movements[0], _gmm.SettlementMovement):
         return _reconcile_gmm_settlement(movements)
-    if movements and isinstance(movements[0], PAASettlementMovement):
+    if movements and isinstance(movements[0], _paa.SettlementMovement):
         return _reconcile_paa_settlement(movements)
-    if movements and isinstance(movements[0], ReinsuranceSettlementMovement):
+    if movements and isinstance(movements[0], _reinsurance.SettlementMovement):
         return _reconcile_reinsurance_settlement(movements)
     if movements and isinstance(movements[0], _reinsurance.PeriodMovement):
         return _reconcile_reinsurance(movements)
@@ -1861,7 +1306,7 @@ class GMMSettlementAggregate:
     """Portfolio totals of the paragraph-44 settlement movement.
 
     What :func:`fastcashflow.gmm.settle_aggregate` returns: every line of
-    :class:`GMMSettlementMovement` summed over the model-point axis, in
+    :class:`_gmm.SettlementMovement` summed over the model-point axis, in
     bounded memory. The lines keep the MOVEMENT sign -- the release and
     loss-component-reversed totals are positive run-offs, exactly like the
     per-MP movement; :func:`reconcile` applies the display negation. Each
@@ -1927,7 +1372,7 @@ class ReinsuranceSettlementAggregate:
     """Portfolio totals of the paragraph-66 reinsurance settlement movement.
 
     What :func:`fastcashflow.reinsurance.settle_aggregate` returns: every line
-    of :class:`ReinsuranceSettlementMovement` summed over the model-point axis,
+    of :class:`_reinsurance.SettlementMovement` summed over the model-point axis,
     movement-positive (``reconcile`` applies the display negation and
     reproduces the per-MP movement's table). There is no loss-component line --
     a reinsurance contract held cannot be onerous. :meth:`closing_inputs`
@@ -1972,7 +1417,7 @@ class VFASettlementAggregate:
     """Portfolio totals of the paragraph-45 settlement movement.
 
     What :func:`fastcashflow.vfa.settle_aggregate` returns: every line of
-    :class:`VFASettlementMovement` summed over the model-point axis, in
+    :class:`_vfa.SettlementMovement` summed over the model-point axis, in
     bounded memory, movement-positive (the display negation happens in
     :func:`reconcile`). ``reconcile(aggregate)`` equals the per-MP
     movement's reconciliation table fieldwise, and :meth:`closing_inputs`
@@ -2024,7 +1469,7 @@ class VFASettlementAggregate:
     @property
     def measurement_basis(self) -> str:
         """Cross-model time-basis discriminator, derived from ``csm_basis``
-        (mirrors :class:`VFASettlementMovement`)."""
+        (mirrors :class:`_vfa.SettlementMovement`)."""
         return _CSM_TO_MEASUREMENT_BASIS[self.csm_basis]
 
     def closing_inputs(self):
@@ -2037,7 +1482,7 @@ class PAASettlementAggregate:
     """Portfolio totals of the paragraph-55(b) PAA settlement movement.
 
     What :func:`fastcashflow.paa.settle_aggregate` returns: every line of
-    :class:`PAASettlementMovement` summed over the model-point axis,
+    :class:`_paa.SettlementMovement` summed over the model-point axis,
     movement-positive (``reconcile`` applies the display negation of the
     revenue / claims-paid / loss-component-reversed rows and reproduces the
     per-MP movement's table). There is no CSM block -- the PAA holds the LRC

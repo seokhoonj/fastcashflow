@@ -23,11 +23,11 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import (
     Basis, CalculationMethod, CoverageRate, InforceState, ModelPoints)
-from fastcashflow.movement import GMMSettlementMovement
+from fastcashflow.gmm import SettlementMovement
 
 settle = getattr(fcf.gmm, "settle", None)
 _HAS_LIC = (settle is not None
-            and "lic_closing" in GMMSettlementMovement.__dataclass_fields__)
+            and "lic_closing" in SettlementMovement.__dataclass_fields__)
 pytestmark = pytest.mark.skipif(
     not _HAS_LIC,
     reason="gmm.settle LIC block not implemented yet (the skeleton activates "

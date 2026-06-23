@@ -11,12 +11,11 @@ PAA has no CSM, so there is no carry); ``trace`` walks one model point's PAA
 measurement.
 """
 from fastcashflow._paa import (
-    Measurement, Aggregate, PeriodMovement, Reconciliation,
+    Measurement, Aggregate, PeriodMovement, Reconciliation, SettlementMovement,
     measure_paa as measure, measure_aggregate,
     measure_inforce, measure_stream, settle, settle_aggregate, settle_stream)
 from fastcashflow.movement import (
-    PAASettlementAggregate,
-    PAASettlementMovement, PAASettlementReconciliation)
+    PAASettlementAggregate, PAASettlementReconciliation)
 from fastcashflow.trace import (
     show_trace_paa as trace, show_trace_diff_paa as trace_diff)
 
@@ -25,4 +24,4 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce", "measure_stream",
            "trace", "trace_diff", "Measurement", "PAASettlementAggregate",
            # result types (produced by paa.measure / settle / roll_forward)
            "Aggregate", "PeriodMovement", "Reconciliation",
-           "PAASettlementMovement", "PAASettlementReconciliation"]
+           "SettlementMovement", "PAASettlementReconciliation"]
