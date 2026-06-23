@@ -2011,7 +2011,7 @@ def _(measurement: PortfolioMeasurement, *, portfolio: str = "product",
 @dataclass(frozen=True, slots=True)
 class PortfolioReport:
     """Result of :func:`fcf.report` on a portfolio container: one
-    :class:`~fastcashflow.report.Report` per model present (``None`` when absent),
+    :class:`~fastcashflow.Report` per model present (``None`` when absent),
     keyed by model. Accepts a :class:`PortfolioMeasurement` (per-model-point) or a
     :class:`PortfolioGroups` (grouped); a BEL and an LRC report are never pooled.
     """

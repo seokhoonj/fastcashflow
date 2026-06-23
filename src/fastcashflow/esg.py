@@ -4,7 +4,7 @@ A minimal, market-consistent generator that produces the scenarios the
 measurement engine consumes -- it does not value anything itself. Two factors:
 
 * a Hull-White one-factor (HW1F) short rate, calibrated so the model reprices the
-  initial risk-free curve (a :func:`~fastcashflow.smith_wilson_prices` discount
+  initial risk-free curve (a :func:`~fastcashflow.curves.smith_wilson_prices` discount
   curve); ``.rates`` feeds ``gmm.stochastic`` (annual rate per month).
 * a correlated lognormal (geometric Brownian motion) fund return whose
   risk-neutral drift is the short rate; ``.returns`` feeds ``vfa.measure`` /

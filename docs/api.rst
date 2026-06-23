@@ -294,18 +294,18 @@ asset side and available capital are caller-supplied.
 
 .. autofunction:: fastcashflow.catastrophe_scr
 
-.. autoclass:: fastcashflow.SCRResult
+.. autoclass:: fastcashflow.solvency.SCRResult
    :members:
 
-.. autoclass:: fastcashflow.RegimeSpec
+.. autoclass:: fastcashflow.solvency.RegimeSpec
    :members:
 
 .. autofunction:: fastcashflow.solvency_ratio
 
-.. autodata:: fastcashflow.SII
+.. autodata:: fastcashflow.solvency.SII
    :no-value:
 
-.. autodata:: fastcashflow.KICS
+.. autodata:: fastcashflow.solvency.KICS
    :no-value:
 
 Asset-liability management
