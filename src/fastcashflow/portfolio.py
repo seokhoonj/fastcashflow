@@ -24,6 +24,7 @@ from typing import ClassVar
 import numpy as np
 import polars as pl
 
+from fastcashflow._measurement_model import VFA
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
     PAAMeasurement, PAAAggregate, measure_paa, measure_aggregate as _paa_aggregate,
@@ -1066,6 +1067,8 @@ class VFAGoCSettlement:
     count pro-rata (or an explicit weight) and carries each contract's observed
     account value forward.
     """
+
+    model: ClassVar[str] = VFA
 
     group_labels: np.ndarray
     group_sizes: IntArray

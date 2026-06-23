@@ -25,11 +25,14 @@ full incurred-claims movement are left for later.
 """
 from __future__ import annotations
 
+from typing import ClassVar
+
 from dataclasses import dataclass
 from functools import singledispatch
 
 import numpy as np
 
+from fastcashflow._measurement_model import GMM, REINSURANCE
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
@@ -173,6 +176,8 @@ class Report:
     it). The split is the structural basis for a later P&L / OCI allocation.
     """
 
+    model: ClassVar[str] = GMM
+
     insurance_revenue: FloatArray
     insurance_service_expense: FloatArray
     insurance_service_result: FloatArray
@@ -290,6 +295,8 @@ class ReinsuranceReport:
     cover and may be negative -- a net cost is deferred and amortised, with no
     floor -- so the trajectory carries any negative value through as-is.
     """
+
+    model: ClassVar[str] = REINSURANCE
 
     reinsurance_premium_allocated: FloatArray   # systematic allocation of premiums paid (cost side)
     amounts_recovered: FloatArray               # recoveries of incurred claims (income side)

@@ -16,6 +16,7 @@ module load acyclic.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 import numpy as np
 
@@ -24,6 +25,7 @@ from fastcashflow._measurement_basis import (
     MEASUREMENT_BASIS_INCEPTION,
     _inforce_marker_columns,
 )
+from fastcashflow._measurement_model import GMM
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_kernel
 
@@ -50,6 +52,8 @@ class GMMMeasurement:
     settlement pattern is set, which also discounts claims to their payment
     dates in the BEL.
     """
+
+    model: ClassVar[str] = GMM
 
     # Headline -- always present, shape (n_mp,)
     bel: FloatArray              # inception Best Estimate of Liability
@@ -162,6 +166,8 @@ class CurrentEstimate:
     policy (money / ``inforce``).
     """
 
+    model: ClassVar[str] = GMM
+
     month: int
     bel: FloatArray          # (n_mp,) cohort BEL at `month`
     ra: FloatArray           # (n_mp,) cohort RA at `month`
@@ -223,6 +229,8 @@ class GMMAggregate:
     :func:`~fastcashflow.gmm.measure_aggregate` returns, computed in bounded
     memory so it works where a per-model-point ``measure(full=True)`` would OOM.
     """
+
+    model: ClassVar[str] = GMM
 
     bel: float                   # portfolio inception BEL total
     ra: float                    # portfolio inception RA total

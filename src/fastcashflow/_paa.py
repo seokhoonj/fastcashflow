@@ -34,11 +34,14 @@ Scope and simplifications, each with the standard's basis:
 """
 from __future__ import annotations
 
+from typing import ClassVar
+
 import math
 from dataclasses import dataclass, replace
 
 import numpy as np
 
+from fastcashflow._measurement_model import PAA
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow._measurement_basis import (
     MEASUREMENT_BASIS_INCEPTION,
@@ -71,6 +74,8 @@ class PAAMeasurement:
     the ``(n_mp, n_time+1)`` liability for incurred claims -- claims build it
     up as they are incurred and run it off as they are paid.
     """
+
+    model: ClassVar[str] = PAA
 
     # headline -- always present, shape (n_mp,)
     lrc: FloatArray              # inception Liability for Remaining Coverage
@@ -123,6 +128,8 @@ class PAAAggregate:
     a group re-floor engine: ``loss_component`` is the sum of each contract's
     floored loss, matching the headline -- not a group-level re-floor.
     """
+
+    model: ClassVar[str] = PAA
 
     lrc: float                   # portfolio inception LRC total
     loss_component: float        # portfolio inception loss-component total

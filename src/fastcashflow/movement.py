@@ -28,11 +28,14 @@ of its BEL, RA and CSM.
 """
 from __future__ import annotations
 
+from typing import ClassVar
+
 from dataclasses import dataclass
 from functools import singledispatch
 
 import numpy as np
 
+from fastcashflow._measurement_model import GMM, VFA, PAA, REINSURANCE
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import GMMMeasurement, _require_full
@@ -67,6 +70,8 @@ class PeriodMovement:
     adjust the CSM. ``loss_component_recognised`` is the part of an
     unfavourable change beyond the CSM, which falls into the loss component.
     """
+
+    model: ClassVar[str] = GMM
 
     month_start: int
     month_end: int
@@ -112,6 +117,8 @@ class PAAPeriodMovement:
     outstanding at the horizon. The invariant above still holds.
     """
 
+    model: ClassVar[str] = PAA
+
     month_start: int
     month_end: int
     lrc_opening: FloatArray
@@ -143,6 +150,8 @@ class VFAPeriodMovement:
     VFA the CSM absorbs the variability of the underlying items, so the
     entity's profit emerges as the CSM is released.
     """
+
+    model: ClassVar[str] = VFA
 
     month_start: int
     month_end: int
@@ -177,6 +186,8 @@ class ReinsurancePeriodMovement:
     rate; ``*_release`` is the expected run-off over the period. There is no
     loss component (Sec. 65).
     """
+
+    model: ClassVar[str] = REINSURANCE
 
     month_start: int
     month_end: int
@@ -664,6 +675,8 @@ class Reconciliation:
     closing.
     """
 
+    model: ClassVar[str] = GMM
+
     month_start: int
     month_end: int
     bel_opening: float
@@ -716,6 +729,8 @@ class PAAReconciliation:
     Run-off rows are shown negative, so opening plus every row equals
     closing.
     """
+
+    model: ClassVar[str] = PAA
 
     month_start: int
     month_end: int
@@ -794,6 +809,8 @@ class VFAReconciliation:
     underlying-items return; ``*_release`` is the run-off, shown negative --
     so opening plus every row equals closing.
     """
+
+    model: ClassVar[str] = VFA
 
     month_start: int
     month_end: int
@@ -966,6 +983,8 @@ class VFASettlementMovement:
     of paragraphs 47-52) is not performed, consistent with the rest of the
     engine.
     """
+
+    model: ClassVar[str] = VFA
 
     period_months: int
     bel_opening: FloatArray
@@ -1263,6 +1282,8 @@ class VFASettlementReconciliation:
     the opening plus every row equals the closing.
     """
 
+    model: ClassVar[str] = VFA
+
     period_months: int
     bel_opening: float
     bel_interest: float
@@ -1363,6 +1384,8 @@ class ReinsuranceReconciliation:
     discount rate; ``*_release`` is the run-off, shown negative -- so opening
     plus every row equals closing. There is no loss component (Sec. 65).
     """
+
+    model: ClassVar[str] = REINSURANCE
 
     month_start: int
     month_end: int
@@ -1524,6 +1547,8 @@ class GMMSettlementMovement:
     finance-accrual decomposition and is a future refinement.
     """
 
+    model: ClassVar[str] = GMM
+
     bel_opening: FloatArray
     bel_interest: FloatArray
     bel_release: FloatArray
@@ -1594,6 +1619,8 @@ class GMMSettlementReconciliation:
     are stored negative (display convention), so opening plus every row of a
     block equals its closing; ``finance_wedge`` keeps the movement sign (it
     is a P&L line outside the CSM block, not a CSM row)."""
+
+    model: ClassVar[str] = GMM
 
     period_months: int
     bel_opening: float
@@ -1719,6 +1746,8 @@ class ReinsuranceSettlementMovement:
     supplied (byte-identical to a book with no onerous underlying).
     """
 
+    model: ClassVar[str] = REINSURANCE
+
     bel_opening: FloatArray
     bel_interest: FloatArray
     bel_release: FloatArray
@@ -1776,6 +1805,8 @@ class ReinsuranceSettlementReconciliation:
     convention); ``finance_wedge`` keeps the movement sign (a P&L line outside
     the CSM block). There is no loss-component row -- a reinsurance contract
     held cannot be onerous."""
+
+    model: ClassVar[str] = REINSURANCE
 
     period_months: int
     bel_opening: float
@@ -1865,6 +1896,8 @@ class PAASettlementMovement:
     undiscounted (Sec. 56); the finance line is on the LIC only.
     """
 
+    model: ClassVar[str] = PAA
+
     lrc_opening: FloatArray
     premiums: FloatArray
     revenue: FloatArray
@@ -1922,6 +1955,8 @@ class PAASettlementReconciliation:
     loss-component-reversed rows are stored negative (display convention),
     so opening plus every row of a block equals its closing; the movement
     keeps those lines positive."""
+
+    model: ClassVar[str] = PAA
 
     period_months: int
     revenue_basis: str
@@ -2196,6 +2231,8 @@ class GMMSettlementAggregate:
     :meth:`closing_inputs` raises ValueError.
     """
 
+    model: ClassVar[str] = GMM
+
     period_months: int
     lock_in_rate: float
     bel_opening: float
@@ -2251,6 +2288,8 @@ class ReinsuranceSettlementAggregate:
     raises -- chaining needs the per-MP balances.
     """
 
+    model: ClassVar[str] = REINSURANCE
+
     period_months: int
     lock_in_rate: float
     bel_opening: float
@@ -2293,6 +2332,8 @@ class VFASettlementAggregate:
     movement's reconciliation table fieldwise, and :meth:`closing_inputs`
     raises ValueError -- chaining needs per-MP balances.
     """
+
+    model: ClassVar[str] = VFA
 
     period_months: int
     bel_opening: float
@@ -2358,6 +2399,8 @@ class PAASettlementAggregate:
     discount unwind on incurred claims). :meth:`closing_inputs` raises --
     chaining needs the per-MP balances.
     """
+
+    model: ClassVar[str] = PAA
 
     period_months: int
     revenue_basis: str

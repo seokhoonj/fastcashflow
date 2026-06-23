@@ -30,11 +30,14 @@ with the policyholder bearing the investment risk.
 """
 from __future__ import annotations
 
+from typing import ClassVar
+
 import math
 from dataclasses import dataclass
 
 import numpy as np
 
+from fastcashflow._measurement_model import VFA
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow._measurement_basis import (
     MEASUREMENT_BASIS_INCEPTION,
@@ -214,6 +217,8 @@ class VFAMeasurement:
     ``time_value``, not folded into ``bel``.
     """
 
+    model: ClassVar[str] = VFA
+
     # headline -- always present, shape (n_mp,)
     bel: FloatArray              # inception BEL (net of account value)
     ra: FloatArray               # inception RA (expense risk)
@@ -275,6 +280,8 @@ class VFAAggregate:
     ``loss_component`` are the sum of each contract's floored figure, matching the
     headline -- not a group-level re-floor.
     """
+
+    model: ClassVar[str] = VFA
 
     bel: float                       # portfolio inception BEL total
     ra: float                        # portfolio inception RA total

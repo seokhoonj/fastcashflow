@@ -25,10 +25,11 @@ from __future__ import annotations
 import math
 import warnings
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 import numpy as np
 
+from fastcashflow._measurement_model import REINSURANCE
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow._measurement_basis import (
     MEASUREMENT_BASIS_INCEPTION,
@@ -64,6 +65,8 @@ class ReinsuranceMeasurement:
     populated only on the full path; ``csm_path`` reconciles as
     ``csm_path[:, t+1] = csm_path[:, t] + csm_accretion[:, t] - csm_release[:, t]``.
     """
+
+    model: ClassVar[str] = REINSURANCE
 
     # headline -- always present, shape (n_mp,)
     bel: FloatArray            # PV(reinsurance premiums) - PV(recoveries)
@@ -113,6 +116,8 @@ class ReinsuranceAggregate:
     bounded memory.
     """
 
+    model: ClassVar[str] = REINSURANCE
+
     bel: float                      # portfolio inception BEL total
     ra: float                       # portfolio inception RA total
     csm: float                      # portfolio inception CSM total
@@ -135,6 +140,8 @@ class ReinsuranceInforceAggregate:
     (Sec. 44) without the Sec. 66 unlocking / loss-recovery component. It is
     deprecated once ``reinsurance.settle`` lands. A total cannot be chained.
     """
+
+    model: ClassVar[str] = REINSURANCE
 
     bel: float
     ra: float
