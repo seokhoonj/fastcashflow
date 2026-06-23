@@ -29,6 +29,7 @@ loss component sits in a different place in each measurement model:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import singledispatch
 
 import numpy as np
 import polars as pl
@@ -71,48 +72,62 @@ class _Components:
     lic_closing: float
 
 
+@singledispatch
 def _components(recon) -> _Components:
     """The SoFP carrying-amount components of one settlement reconciliation,
-    mapped per measurement model (see the module docstring)."""
-    if isinstance(recon, (GMMSettlementReconciliation, VFASettlementReconciliation)):
-        # Loss component is a sub-ledger within the LRC: LRC = BEL + RA + CSM,
-        # LRC-excl-LC = LRC - loss component.
-        lrc_open = recon.bel_opening + recon.ra_opening + recon.csm_opening
-        lrc_close = recon.bel_closing + recon.ra_closing + recon.csm_closing
-        return _Components(
-            kind="issued",
-            lrc_excl_lc_opening=lrc_open - recon.loss_component_opening,
-            lc_opening=recon.loss_component_opening,
-            lic_opening=recon.lic_opening,
-            lrc_excl_lc_closing=lrc_close - recon.loss_component_closing,
-            lc_closing=recon.loss_component_closing,
-            lic_closing=recon.lic_closing,
-        )
-    if isinstance(recon, PAASettlementReconciliation):
-        # Onerous loss is additive on top of the unearned-premium LRC.
-        return _Components(
-            kind="issued",
-            lrc_excl_lc_opening=recon.lrc_opening,
-            lc_opening=recon.loss_component_opening,
-            lic_opening=recon.lic_opening,
-            lrc_excl_lc_closing=recon.lrc_closing,
-            lc_closing=recon.loss_component_closing,
-            lic_closing=recon.lic_closing,
-        )
-    if isinstance(recon, ReinsuranceSettlementReconciliation):
-        # Asset for remaining coverage; no loss component, no LIC block. The
-        # loss-recovery component stays within the remaining-coverage asset.
-        return _Components(
-            kind="reinsurance",
-            lrc_excl_lc_opening=recon.bel_opening + recon.ra_opening + recon.csm_opening,
-            lc_opening=0.0,
-            lic_opening=0.0,
-            lrc_excl_lc_closing=recon.bel_closing + recon.ra_closing + recon.csm_closing,
-            lc_closing=0.0,
-            lic_closing=0.0,
-        )
+    mapped per measurement model (see the module docstring). Dispatches on the
+    reconciliation type; a new model registers its own mapping."""
     raise TypeError(
         f"close: no SoFP mapping for {model_tag(recon)}")
+
+
+def _components_bel(recon) -> _Components:
+    """GMM and VFA share the build-up: loss component is a sub-ledger within the
+    LRC (LRC = BEL + RA + CSM, LRC-excl-LC = LRC - loss component)."""
+    lrc_open = recon.bel_opening + recon.ra_opening + recon.csm_opening
+    lrc_close = recon.bel_closing + recon.ra_closing + recon.csm_closing
+    return _Components(
+        kind="issued",
+        lrc_excl_lc_opening=lrc_open - recon.loss_component_opening,
+        lc_opening=recon.loss_component_opening,
+        lic_opening=recon.lic_opening,
+        lrc_excl_lc_closing=lrc_close - recon.loss_component_closing,
+        lc_closing=recon.loss_component_closing,
+        lic_closing=recon.lic_closing,
+    )
+
+
+_components.register(GMMSettlementReconciliation, _components_bel)
+_components.register(VFASettlementReconciliation, _components_bel)
+
+
+@_components.register
+def _(recon: PAASettlementReconciliation) -> _Components:
+    # Onerous loss is additive on top of the unearned-premium LRC.
+    return _Components(
+        kind="issued",
+        lrc_excl_lc_opening=recon.lrc_opening,
+        lc_opening=recon.loss_component_opening,
+        lic_opening=recon.lic_opening,
+        lrc_excl_lc_closing=recon.lrc_closing,
+        lc_closing=recon.loss_component_closing,
+        lic_closing=recon.lic_closing,
+    )
+
+
+@_components.register
+def _(recon: ReinsuranceSettlementReconciliation) -> _Components:
+    # Asset for remaining coverage; no loss component, no LIC block. The
+    # loss-recovery component stays within the remaining-coverage asset.
+    return _Components(
+        kind="reinsurance",
+        lrc_excl_lc_opening=recon.bel_opening + recon.ra_opening + recon.csm_opening,
+        lc_opening=0.0,
+        lic_opening=0.0,
+        lrc_excl_lc_closing=recon.bel_closing + recon.ra_closing + recon.csm_closing,
+        lc_closing=0.0,
+        lic_closing=0.0,
+    )
 
 
 def _zero_position() -> dict[str, float]:
