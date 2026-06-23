@@ -104,13 +104,8 @@ class Measurement:
         return measurement_str(f"{self.model}.Measurement", self._columns())
 
 
-# Public alias -- prefixed name kept for back-compat (same type object as the
-# `Measurement` class above).
-ReinsuranceMeasurement = Measurement
-
-
 @write_measurement.register
-def _(measurement: ReinsuranceMeasurement, path, *, ids=None):
+def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,
             "csm": measurement.csm}
     # In-force output gets marker columns (see _measurement_basis).
@@ -243,7 +238,7 @@ def measure_reinsurance(
     underlying_loss_component: FloatArray | None = None,
     recovery_percentage: float | None = None,
     full: bool = True,
-) -> ReinsuranceMeasurement:
+) -> Measurement:
     """Measure a reinsurance contract held over a direct portfolio.
 
     ``treaty`` describes how the cover cedes the direct cash flows -- e.g.
@@ -303,7 +298,7 @@ def measure_reinsurance(
         loss_recovery_component = np.zeros(n_mp)
     csm0 = csm0 - loss_recovery_component
     if not full:
-        return ReinsuranceMeasurement(
+        return Measurement(
             bel=bel, ra=ra, csm=csm0,
             loss_recovery_component=loss_recovery_component,
             model_points=model_points)
@@ -320,7 +315,7 @@ def measure_reinsurance(
         basis.coverage_unit_discount,
     )
 
-    return ReinsuranceMeasurement(
+    return Measurement(
         bel=bel,
         ra=ra,
         csm=csm[:, 0],
@@ -450,7 +445,7 @@ def measure_reinsurance_inforce(
     treaty: Treaty,
     period_months: int | None = None,
     full: bool = True,
-) -> ReinsuranceMeasurement:
+) -> Measurement:
     """In-force subsequent measurement of a reinsurance contract held (IFRS 17
     Sec. 44, modified by Sec. 60-70) at the valuation date.
 
@@ -553,11 +548,11 @@ def measure_reinsurance_inforce(
     csm = csm_traj[:, period_months]
 
     if not full:
-        return ReinsuranceMeasurement(
+        return Measurement(
             bel=bel, ra=ra, csm=csm, model_points=model_points,
             measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
 
-    return ReinsuranceMeasurement(
+    return Measurement(
         bel=bel, ra=ra, csm=csm,
         measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY,
         bel_path=bel_path,

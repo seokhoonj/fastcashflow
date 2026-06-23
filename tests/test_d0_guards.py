@@ -29,7 +29,7 @@ from fastcashflow import (
 from fastcashflow.engine import _measure_inforce_fast, _measure_inforce_full
 from fastcashflow._vfa import (
     CSM_BASIS_CARRY_ONLY, CSM_BASIS_INITIAL, CSM_BASIS_PARAGRAPH_45,
-    CSM_BASIS_PROJECTED_RUNOFF, VFAMeasurement,
+    CSM_BASIS_PROJECTED_RUNOFF, Measurement,
 )
 
 CM = {"DEATH": CalculationMethod.DEATH}
@@ -159,7 +159,7 @@ def test_vfa_measurement_basis_is_derived_from_csm_basis():
                 CSM_BASIS_CARRY_ONLY: "settlement_carry",
                 CSM_BASIS_PARAGRAPH_45: "settlement"}
     for csm_basis, want in expected.items():
-        m = VFAMeasurement(bel=z, ra=z, csm=z, variable_fee=z, time_value=z,
+        m = Measurement(bel=z, ra=z, csm=z, variable_fee=z, time_value=z,
                            loss_component=z, csm_basis=csm_basis)
         assert m.measurement_basis == want
 
@@ -249,7 +249,7 @@ def test_vfa_carry_only_is_rejected_by_plots():
     result would reach it without the trajectory check -- every VFA plot arm
     guards on csm_basis (Codex review P1)."""
     z = np.ones(1)
-    carry = VFAMeasurement(bel=z, ra=z, csm=z, variable_fee=z, time_value=z,
+    carry = Measurement(bel=z, ra=z, csm=z, variable_fee=z, time_value=z,
                            loss_component=z, csm_basis=CSM_BASIS_CARRY_ONLY)
     for call in (lambda m: fcf.plot_liability(m),
                  lambda m: fcf.plot_cashflows(m),

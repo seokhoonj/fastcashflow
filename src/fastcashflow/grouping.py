@@ -31,10 +31,12 @@ import numpy as np
 from fastcashflow._measurement_model import model_tag, supported_model_tags
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.curves import forward_rates
-from fastcashflow._paa import PAAMeasurement
-from fastcashflow._reinsurance import ReinsuranceMeasurement
-from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
-from fastcashflow.engine import GMMMeasurement, _require_full
+from fastcashflow._vfa import _require_settlement_csm
+from fastcashflow.engine import _require_full
+import fastcashflow._gmm as _gmm
+import fastcashflow._paa as _paa
+import fastcashflow._vfa as _vfa
+import fastcashflow._reinsurance as _reinsurance
 from fastcashflow._measurement_basis import _require_inception
 from fastcashflow.numerics import _csm_kernel, _csm_roll
 from fastcashflow.projection import Cashflows
@@ -126,7 +128,7 @@ def _join_keys(cols, names=None) -> np.ndarray:
     return out.astype(object)
 
 
-def _resolve_group_ids(measurement: GMMMeasurement, by) -> np.ndarray:
+def _resolve_group_ids(measurement: _gmm.Measurement, by) -> np.ndarray:
     """Build the per-MP group label array from ``by``.
 
     ``by`` is one of: a single axis **name**; a **list** of axis names and/or
@@ -213,8 +215,8 @@ def group(measurement, by):
     :func:`group_of_contracts` is the preset for it; management-accounting,
     profitability and validation views are other choices of ``by``.
 
-    Dispatches on the measurement type (``GMMMeasurement``, ``VFAMeasurement``,
-    ``ReinsuranceMeasurement``, ``PAAMeasurement``). A
+    Dispatches on the measurement type (``_gmm.Measurement``, ``_vfa.Measurement``,
+    ``_reinsurance.Measurement``, ``_paa.Measurement``). A
     :class:`~fastcashflow.portfolio.PortfolioMeasurement` (the mixed-model
     container) is also accepted: each model slot is grouped on its own native
     measurement and a :class:`~fastcashflow.portfolio.PortfolioGroups` is
@@ -283,8 +285,8 @@ def _per_group_bom(bom, inforce, reducer, labels):
 
 
 def _finalise_gmm_group(bel, ra, grouped_cf, lic_path, out_bom, out_mid,
-                        labels, sizes, discount_units=False) -> GMMMeasurement:
-    """Build a grouped GMMMeasurement from already-summed group aggregates.
+                        labels, sizes, discount_units=False) -> _gmm.Measurement:
+    """Build a grouped _gmm.Measurement from already-summed group aggregates.
 
     The tail shared by the in-memory :func:`group` and the chunked per-group
     aggregate (``fcf.portfolio.measure_group_of_contracts``): given the within-group sums of
@@ -304,7 +306,7 @@ def _finalise_gmm_group(bel, ra, grouped_cf, lic_path, out_bom, out_mid,
         csm0, np.ascontiguousarray(grouped_cf.inforce), discount_monthly,
         discount_units,
     )
-    return GMMMeasurement(
+    return _gmm.Measurement(
         bel=bel[:, 0],
         ra=ra[:, 0],
         csm=csm[:, 0],
@@ -324,7 +326,7 @@ def _finalise_gmm_group(bel, ra, grouped_cf, lic_path, out_bom, out_mid,
 
 
 @group.register
-def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
+def _(measurement: _gmm.Measurement, by) -> _gmm.Measurement:
     _require_inception(measurement, "group()")
     _require_full(measurement, "group()")
     labels, reducer = _group_plan(measurement, by, measurement.bel_path.shape[0])
@@ -348,8 +350,8 @@ def _(measurement: GMMMeasurement, by) -> GMMMeasurement:
 
 def _finalise_vfa_group(bel, ra, grouped_cf, lic_path, time_value, variable_fee,
                         out_bom, labels, sizes,
-                        discount_units=False) -> VFAMeasurement:
-    """Build a grouped VFAMeasurement from already-summed group aggregates.
+                        discount_units=False) -> _vfa.Measurement:
+    """Build a grouped _vfa.Measurement from already-summed group aggregates.
 
     The VFA analogue of :func:`_finalise_gmm_group`, shared by :func:`group` and
     the chunked per-group aggregate. The inception fulfilment cash flows fold in
@@ -369,7 +371,7 @@ def _finalise_vfa_group(bel, ra, grouped_cf, lic_path, time_value, variable_fee,
         csm0, np.ascontiguousarray(grouped_cf.inforce), discount_monthly,
         discount_units,
     )
-    return VFAMeasurement(
+    return _vfa.Measurement(
         bel=bel[:, 0],
         ra=ra[:, 0],
         csm=csm[:, 0],
@@ -392,7 +394,7 @@ def _finalise_vfa_group(bel, ra, grouped_cf, lic_path, time_value, variable_fee,
 
 
 @group.register
-def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
+def _(measurement: _vfa.Measurement, by) -> _vfa.Measurement:
     _require_settlement_csm(measurement, "group")
     if measurement.bel_path is None:
         raise ValueError(
@@ -424,7 +426,7 @@ def _(measurement: VFAMeasurement, by) -> VFAMeasurement:
 
 
 @group.register
-def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
+def _(measurement: _reinsurance.Measurement, by) -> _reinsurance.Measurement:
     _require_inception(measurement, "group()")
     if measurement.cashflows is None or measurement.discount_factor_bom is None:
         raise ValueError(
@@ -448,7 +450,7 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
     csm, csm_accretion, csm_release = _csm_kernel(
         csm0, np.ascontiguousarray(grouped_cf.inforce), discount_monthly, False
     )
-    return ReinsuranceMeasurement(
+    return _reinsurance.Measurement(
         bel=bel,
         ra=ra,
         csm=csm[:, 0],
@@ -468,8 +470,8 @@ def _(measurement: ReinsuranceMeasurement, by) -> ReinsuranceMeasurement:
 
 
 def _finalise_paa_group(lrc_path, revenue, service_expense, lic_path, fcf,
-                        grouped_cf, labels, sizes) -> PAAMeasurement:
-    """Build a grouped PAAMeasurement from already-summed group aggregates.
+                        grouped_cf, labels, sizes) -> _paa.Measurement:
+    """Build a grouped _paa.Measurement from already-summed group aggregates.
 
     The PAA analogue of :func:`_finalise_gmm_group`, shared by :func:`group` and
     the chunked per-group aggregate. The LRC, revenue, service expense and LIC are
@@ -479,7 +481,7 @@ def _finalise_paa_group(lrc_path, revenue, service_expense, lic_path, fcf,
     contract nets a marginally onerous one within the group.
     """
     loss_component = np.maximum(0.0, fcf)
-    return PAAMeasurement(
+    return _paa.Measurement(
         lrc=lrc_path[:, 0],
         loss_component=loss_component,
         fcf=fcf,
@@ -495,7 +497,7 @@ def _finalise_paa_group(lrc_path, revenue, service_expense, lic_path, fcf,
 
 
 @group.register
-def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
+def _(measurement: _paa.Measurement, by) -> _paa.Measurement:
     _require_inception(measurement, "group()")
     if measurement.lrc_path is None or measurement.fcf is None:
         raise ValueError(
@@ -517,7 +519,7 @@ def _(measurement: PAAMeasurement, by) -> PAAMeasurement:
 @singledispatch
 def group_of_contracts(measurement, *, portfolio: str = "product",
                        cohort: str = "issue_year",
-                       profitability=None) -> GMMMeasurement:
+                       profitability=None) -> _gmm.Measurement:
     """Aggregate a measurement to the IFRS 17 group of insurance contracts.
 
     The unit of account (paragraphs 14-24) is a portfolio (14) x annual cohort
@@ -528,13 +530,13 @@ def group_of_contracts(measurement, *, portfolio: str = "product",
     Dispatches on the measurement type; the profitability axis differs by type
     (a new measurement registers with ``@group_of_contracts.register``):
 
-    * ``GMMMeasurement`` / ``VFAMeasurement`` / ``PAAMeasurement`` -- insurance
+    * ``_gmm.Measurement`` / ``_vfa.Measurement`` / ``_paa.Measurement`` -- insurance
       contracts issued, direct-participating, and short-coverage (PAA)
       contracts; profitability is the onerous / remaining split (paragraph 16,
       and 57 for the PAA). The per-type re-derivation differs (VFA accretes the
       CSM at the underlying-items return; the PAA has no CSM, only the LRC and
       the onerous loss), handled by :func:`group`'s own dispatch.
-    * ``ReinsuranceMeasurement`` -- reinsurance contracts held; profitability is
+    * ``_reinsurance.Measurement`` -- reinsurance contracts held; profitability is
       the net-gain split (paragraph 61, ``csm > 0``), and there is no loss
       component or floor (paragraph 65), so the grouped CSM is the sum of the
       contract CSMs.
@@ -617,7 +619,7 @@ def _group_of_contracts_onerous(measurement, *, portfolio="product",
     (paragraph 16, and 57 for the PAA); only ``group``'s per-type re-derivation
     differs.
     """
-    if isinstance(measurement, VFAMeasurement):
+    if isinstance(measurement, _vfa.Measurement):
         _require_settlement_csm(measurement, "group_of_contracts")
     else:
         # Before any axis resolution: an in-force result must be rejected for
@@ -629,14 +631,14 @@ def _group_of_contracts_onerous(measurement, *, portfolio="product",
     return group(measurement, [portfolio_arr, cohort_arr, prof])
 
 
-group_of_contracts.register(GMMMeasurement, _group_of_contracts_onerous)
-group_of_contracts.register(VFAMeasurement, _group_of_contracts_onerous)
-group_of_contracts.register(PAAMeasurement, _group_of_contracts_onerous)
+group_of_contracts.register(_gmm.Measurement, _group_of_contracts_onerous)
+group_of_contracts.register(_vfa.Measurement, _group_of_contracts_onerous)
+group_of_contracts.register(_paa.Measurement, _group_of_contracts_onerous)
 
 
 @group_of_contracts.register
-def _(measurement: ReinsuranceMeasurement, *, portfolio: str = "product",
-      cohort: str = "issue_year", profitability=None) -> ReinsuranceMeasurement:
+def _(measurement: _reinsurance.Measurement, *, portfolio: str = "product",
+      cohort: str = "issue_year", profitability=None) -> _reinsurance.Measurement:
     _require_inception(measurement, "group_of_contracts()")
     # Reinsurance held replaces the onerous test with a net gain at initial
     # recognition (paragraph 61). The CSM is the net cost (negative) or net gain

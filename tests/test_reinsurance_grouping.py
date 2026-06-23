@@ -12,7 +12,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import ModelPoints, group, group_of_contracts
-from fastcashflow.reinsurance import ReinsuranceMeasurement
+from fastcashflow.reinsurance import Measurement
 from conftest import PATTERNS, make_death_basis
 
 
@@ -48,7 +48,7 @@ def test_reinsurance_group_per_mp_reproduces_original():
     """Each MP in its own group reproduces the per-MP measurement (rate + additivity)."""
     m = _measure()
     g = group(m, np.arange(2))                      # one group per model point
-    assert isinstance(g, ReinsuranceMeasurement)
+    assert isinstance(g, Measurement)
     np.testing.assert_allclose(g.bel, m.bel, rtol=0, atol=1e-6)
     np.testing.assert_allclose(g.ra, m.ra, rtol=0, atol=1e-6)
     np.testing.assert_allclose(g.csm, m.csm, rtol=0, atol=1e-6)
@@ -85,7 +85,7 @@ def test_reinsurance_group_of_contracts_net_gain_split():
     mp = _two_reins(product=np.array(["RE", "RE"]))
     m = fcf.reinsurance.measure(mp, _basis(), treaty=fcf.reinsurance.QuotaShare(cession=0.4))
     g = group_of_contracts(m)
-    assert isinstance(g, ReinsuranceMeasurement)
+    assert isinstance(g, Measurement)
     # one product, one cohort -> groups split only by the net-gain classification
     n_classes = np.unique(m.csm > 0.0).size
     assert g.bel.shape[0] == n_classes

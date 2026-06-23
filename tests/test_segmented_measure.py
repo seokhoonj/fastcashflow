@@ -4,7 +4,7 @@
 contract's segment. `measure(mp, basis, full=False)` splits the portfolio by
 those keys, looks each segment's `Basis` up in the
 `{(product, channel): Basis}` dict, calls :func:`measure` per segment,
-and writes the per-mp results back to a single ``(n_mp,)`` `GMMMeasurement`.
+and writes the per-mp results back to a single ``(n_mp,)`` `Measurement`.
 """
 import fastcashflow as fcf
 from fastcashflow.basis import BasisRouter

@@ -1,7 +1,8 @@
 """Shared human-readable formatting for the input and result objects.
 
-``ModelPoints`` and the measurement dataclasses (``GMMMeasurement`` /
-``PAAMeasurement`` / ``VFAMeasurement``) hold per-model-point arrays. The
+``ModelPoints`` and the per-model ``Measurement`` dataclasses (one per model:
+``fcf.gmm.Measurement`` / ``fcf.paa.Measurement`` / ``fcf.vfa.Measurement``)
+hold per-model-point arrays. The
 default dataclass ``repr`` dumps every array -- hundreds of thousands of
 characters for a real portfolio. These helpers give a compact one-line
 ``repr`` and a readable multi-line ``str`` instead, so the object in a REPL

@@ -37,11 +37,14 @@ from fastcashflow._measurement_model import (
 )
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
-from fastcashflow.engine import GMMMeasurement, _require_full
+from fastcashflow.engine import _require_full
 from fastcashflow._measurement_basis import _require_inception
-from fastcashflow._paa import PAAMeasurement, _require_full_paa
-from fastcashflow._vfa import VFAMeasurement, _require_settlement_csm
-from fastcashflow._reinsurance import ReinsuranceMeasurement
+from fastcashflow._paa import _require_full_paa
+from fastcashflow._vfa import _require_settlement_csm
+import fastcashflow._gmm as _gmm
+import fastcashflow._paa as _paa
+import fastcashflow._vfa as _vfa
+import fastcashflow._reinsurance as _reinsurance
 from fastcashflow.solvency_assessment import DynamicSolvency
 
 
@@ -458,25 +461,25 @@ def report(measurement) -> Report:
 
 
 @report.register
-def _(measurement: GMMMeasurement) -> Report:
+def _(measurement: _gmm.Measurement) -> Report:
     _require_inception(measurement, "report()")
     return _report_gmm(measurement)
 
 
 @report.register
-def _(measurement: PAAMeasurement) -> Report:
+def _(measurement: _paa.Measurement) -> Report:
     _require_inception(measurement, "report()")
     return _report_paa(measurement)
 
 
 @report.register
-def _(measurement: VFAMeasurement) -> Report:
+def _(measurement: _vfa.Measurement) -> Report:
     _require_settlement_csm(measurement, "report")
     return _report_vfa(measurement)
 
 
 @report.register
-def _(measurement: ReinsuranceMeasurement) -> ReinsuranceReport:
+def _(measurement: _reinsurance.Measurement) -> ReinsuranceReport:
     _require_inception(measurement, "report()")
     return _report_reinsurance(measurement)
 
@@ -487,7 +490,7 @@ def _(result: DynamicSolvency) -> DynamicSolvencyReport:
     return DynamicSolvencyReport(result=result)
 
 
-def _report_gmm(m: GMMMeasurement) -> Report:
+def _report_gmm(m: _gmm.Measurement) -> Report:
     """GMM: revenue grosses up the RA release and the CSM release."""
     _require_full(m, "report()")
     bel, ra, csm = m.bel_path, m.ra_path, m.csm_path
@@ -531,7 +534,7 @@ def _report_gmm(m: GMMMeasurement) -> Report:
     )
 
 
-def _report_reinsurance(m: ReinsuranceMeasurement) -> ReinsuranceReport:
+def _report_reinsurance(m: _reinsurance.Measurement) -> ReinsuranceReport:
     """Reinsurance held: the cedant's premiums paid and recoveries received.
 
     IFRS 17 paragraphs 82 + 86 present income or expenses from reinsurance
@@ -599,7 +602,7 @@ def _report_reinsurance(m: ReinsuranceMeasurement) -> ReinsuranceReport:
     )
 
 
-def _report_paa(m: PAAMeasurement) -> Report:
+def _report_paa(m: _paa.Measurement) -> Report:
     """PAA: the service result is already revenue less expense; no CSM."""
     _require_full_paa(m, "report()")
     zeros = np.zeros_like(m.revenue)
@@ -619,7 +622,7 @@ def _report_paa(m: PAAMeasurement) -> Report:
     )
 
 
-def _report_vfa(m: VFAMeasurement) -> Report:
+def _report_vfa(m: _vfa.Measurement) -> Report:
     """VFA: profit emerges as the CSM releases; the RA covers expense risk."""
     _require_full(m, "report()")
     csm = m.csm_path

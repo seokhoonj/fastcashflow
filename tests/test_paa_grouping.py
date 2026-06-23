@@ -11,7 +11,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import ModelPoints, group, group_of_contracts
-from fastcashflow.paa import PAAMeasurement
+from fastcashflow.paa import Measurement
 from fastcashflow.paa import measure as measure_paa
 from conftest import PATTERNS, make_death_basis
 
@@ -42,7 +42,7 @@ def test_paa_group_per_mp_reproduces_original():
     """Each MP in its own group reproduces the per-MP measurement."""
     m = measure_paa(_two_contracts(), _basis())
     g = group(m, np.arange(2))
-    assert isinstance(g, PAAMeasurement)
+    assert isinstance(g, Measurement)
     np.testing.assert_allclose(g.lrc, m.lrc, rtol=0, atol=1e-6)
     np.testing.assert_allclose(g.fcf, m.fcf, rtol=0, atol=1e-6)
     np.testing.assert_allclose(g.loss_component, m.loss_component, rtol=0, atol=1e-6)
@@ -83,7 +83,7 @@ def test_paa_group_of_contracts_onerous_split():
     mp = _two_contracts(product=np.array(["MED", "MED"]))
     m = measure_paa(mp, _basis())
     g = group_of_contracts(m)                            # product x cohort x onerous
-    assert isinstance(g, PAAMeasurement)
+    assert isinstance(g, Measurement)
     assert g.lrc.shape[0] == 2                           # one onerous, one remaining
     assert g.loss_component.sum() > 0.0
     assert g.group_labels is not None and g.group_labels.shape[0] == 2

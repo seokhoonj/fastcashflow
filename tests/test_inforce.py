@@ -74,7 +74,7 @@ def test_inforce_rescale_matches_fresh_valuation_date_start():
 
 def test_inforce_fast_zero_elapsed_matches_value():
     """When every ``elapsed_months`` is 0 the in-force valuation collapses
-    to the new-business :func:`measure` (= ``GMMMeasurement.bel_path[:, 0]``)."""
+    to the new-business :func:`measure` (= ``Measurement.bel_path[:, 0]``)."""
     mp = ModelPoints.single(
         issue_age=40, benefits={"DEATH": 100_000_000.0},
         premium=50_000.0, term_months=120,

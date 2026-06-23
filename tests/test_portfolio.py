@@ -95,7 +95,7 @@ def test_portfolio_measures_paa_rows_matching_measure_paa():
 
 def test_portfolio_paa_stitches_ragged_segments():
     """Two PAA segments with different coverage terms stitch into one ragged
-    PAAMeasurement -- each row matches its standalone measure_paa, the shorter
+    Measurement -- each row matches its standalone measure_paa, the shorter
     segment zero-padded on the right (LRC is fully earned past coverage)."""
     router = BasisRouter(
         {("P", "GA"): _flat_basis(), ("Q", "GA"): _flat_basis()},
@@ -640,7 +640,7 @@ def test_portfolio_partition_must_be_complete():
 
 
 def test_portfolio_rejects_wrong_measurement_type_in_slot():
-    """A slot must hold its own model's native measurement -- a GMMMeasurement in
+    """A slot must hold its own model's native measurement -- a Measurement in
     the paa slot defeats the per-model separation invariant."""
     router = BasisRouter({("A", "GA"): _flat_basis()})
     mp = _mp(["A", "A"], ["GA", "GA"])

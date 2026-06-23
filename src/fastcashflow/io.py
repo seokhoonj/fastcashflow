@@ -19,7 +19,7 @@ waiting / reduction rules, ``issue_class``, ``elapsed_months`` or the VFA
 account fields), so they are accepted only as external input, never produced.
 
 The core engine stays identifier-free: the kernel never needs a policy id, so
-none is carried through ``ModelPoints`` or ``GMMMeasurement``. Identifiers are a
+none is carried through ``ModelPoints`` or ``Measurement``. Identifiers are a
 file-boundary concern -- pass them to :func:`write_measurement` (or via
 ``measure_stream``'s ``id_column``) to join results back to policies.
 """
@@ -52,12 +52,12 @@ from fastcashflow.model_points import (
 # ``engine`` is the largest module in the package (codegen + the numba CPU
 # kernels) and importing it at module load pulls all of that into any
 # downstream that needs the I/O layer. The two engine names used here --
-# ``GMMMeasurement`` for write_measurement's type hint and ``measure`` for the
+# ``Measurement`` for write_measurement's type hint and ``measure`` for the
 # ``measure_stream`` stream -- are imported under TYPE_CHECKING (for the hint)
 # and lazily inside ``measure_stream`` (for the call), so a script that only
 # reads model points or writes a results frame never imports engine.py.
 if TYPE_CHECKING:  # pragma: no cover -- import only for type hints
-    from fastcashflow.engine import GMMMeasurement
+    from fastcashflow.engine import Measurement
 
 
 def _read_frame(path) -> pl.DataFrame:

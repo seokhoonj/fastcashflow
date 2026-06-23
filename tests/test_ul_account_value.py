@@ -447,7 +447,7 @@ def test_measure_ul_margin_hand_calc():
     assert np.isclose(m.ra[0], 0.0)              # no death -> no NAR claim; expense_cv 0
     assert np.isclose(m.csm[0], load * premium + coi0)
     assert np.isclose(m.loss_component[0], 0.0)
-    assert isinstance(m, fcf.gmm.GMMMeasurement)     # routed through the GMM path
+    assert isinstance(m, fcf.gmm.Measurement)     # routed through the GMM path
 
 
 def test_measure_ul_single_premium_pass_through_is_zero():
@@ -493,8 +493,8 @@ def test_measure_ul_routing_changes_only_the_discount():
     gmm = fcf.gmm.measure(mp, basis, full=True)
     vfa = fcf.vfa.measure(mp, basis)
     assert gmm.csm[0] > 0 and vfa.csm[0] > 0
-    assert isinstance(gmm, fcf.gmm.GMMMeasurement)   # GMM routing
-    assert isinstance(vfa, fcf.vfa.VFAMeasurement)   # VFA routing
+    assert isinstance(gmm, fcf.gmm.Measurement)   # GMM routing
+    assert isinstance(vfa, fcf.vfa.Measurement)   # VFA routing
     # Different discount basis -> different BEL / CSM.
     assert not np.isclose(gmm.bel[0], vfa.bel[0])
 

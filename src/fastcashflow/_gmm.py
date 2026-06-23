@@ -1,7 +1,7 @@
 """GMM measurement assembly -- result types and the full-measurement builder.
 
 The GMM model owns its measurement here: the result dataclasses
-(:class:`GMMMeasurement`, :class:`CurrentEstimate`, :class:`GMMAggregate`), the
+(:class:`Measurement`, :class:`CurrentEstimate`, :class:`GMMAggregate`), the
 CSM orchestration (:func:`_compute_csm`), and the full-measurement assembler
 (:func:`_measure_full`) that values a projection into a GMM result. The
 assembler builds on the model-agnostic :func:`~fastcashflow.engine.valued_projection`
@@ -153,17 +153,11 @@ class Measurement:
         )
 
 
-# Public alias -- the prefixed name kept for back-compat. The class is named
-# `Measurement` (so it reads as `fcf.gmm.Measurement`); this alias is the same
-# type object, preserving every existing `GMMMeasurement` reference / isinstance.
-GMMMeasurement = Measurement
-
-
 @dataclass(frozen=True, slots=True, eq=False)
 class CurrentEstimate:
     """The GMM current estimate at one future month (IFRS 17 Sec. 40).
 
-    Returned by :meth:`GMMMeasurement.estimate_at`. The fields are the cohort
+    Returned by :meth:`Measurement.estimate_at`. The fields are the cohort
     BEL / RA / CSM / LIC at ``month`` -- the liability the entity would carry at
     that date if the central scenario runs to it -- each shape ``(n_mp,)``.
     ``inforce`` is the deterministic survivor count at ``month``. Derived views
@@ -248,7 +242,7 @@ class GMMAggregate:
 
 
 @write_measurement.register
-def _(measurement: GMMMeasurement, path, *, ids=None):
+def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,
             "csm": measurement.csm,
             "loss_component": measurement.loss_component}
@@ -285,12 +279,12 @@ def _compute_csm(bel0, ra0, inforce, discount_monthly, discount_units=False):
 
 def _measure_full(model_points: "ModelPoints", basis: "Basis", *,
                   discount_monthly: FloatArray | None = None,
-                  lapse_scale: FloatArray | None = None) -> GMMMeasurement:
+                  lapse_scale: FloatArray | None = None) -> Measurement:
     """Full GMM measurement: BEL, RA and CSM rolled forward over time.
 
     The shared neutral bundle from :func:`~fastcashflow.engine.valued_projection`
     plus the GMM CSM roll (:func:`_compute_csm`), assembled into a
-    :class:`GMMMeasurement` that carries both the ``(n_mp,)`` inception headline
+    :class:`Measurement` that carries both the ``(n_mp,)`` inception headline
     (column 0 of each trajectory) and the ``(n_mp, n_time+1)`` ``*_path``
     trajectories. Reached by ``measure(..., full=True)``. ``discount_monthly`` /
     ``lapse_scale`` are forwarded to :func:`~fastcashflow.engine.valued_projection`
@@ -305,7 +299,7 @@ def _measure_full(model_points: "ModelPoints", basis: "Basis", *,
         basis.coverage_unit_discount,
     )
 
-    return GMMMeasurement(
+    return Measurement(
         bel=vp.bel,
         ra=vp.ra,
         csm=csm[:, 0],

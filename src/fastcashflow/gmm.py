@@ -16,7 +16,7 @@ point's measurement as a tree.
 from fastcashflow.engine import (
     measure, measure_aggregate, measure_inforce, settle, settle_aggregate,
     recognition_schedule, CSMRecognitionSchedule,
-    GMMMeasurement, GMMAggregate, CurrentEstimate)
+    Measurement, GMMAggregate, CurrentEstimate)
 from fastcashflow.movement import (
     GMMSettlementMovement, GMMSettlementReconciliation, GMMSettlementAggregate,
     PeriodMovement, Reconciliation)
@@ -33,10 +33,6 @@ from fastcashflow.alm import (
     liability_duration, liability_dv01, key_rate_dv01s,
     net_liability_cashflows)
 
-# Canonical short name -- ``fcf.gmm.Measurement``. The prefixed ``GMMMeasurement``
-# stays as a back-compat alias (the same type object).
-Measurement = GMMMeasurement
-
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
            "recognition_schedule", "CSMRecognitionSchedule",
@@ -45,6 +41,6 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "liability_duration", "liability_dv01", "key_rate_dv01s",
            "net_liability_cashflows",
            # result types (produced by gmm.measure / settle / roll_forward)
-           "Measurement", "GMMMeasurement", "GMMAggregate", "CurrentEstimate",
+           "Measurement", "GMMAggregate", "CurrentEstimate",
            "GMMSettlementMovement", "GMMSettlementReconciliation",
            "GMMSettlementAggregate", "PeriodMovement", "Reconciliation"]

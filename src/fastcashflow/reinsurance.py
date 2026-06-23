@@ -9,7 +9,7 @@ from fastcashflow._reinsurance import (
     QuotaShare,
     ReinsuranceAggregate,
     ReinsuranceInforceAggregate,
-    ReinsuranceMeasurement,
+    Measurement,
     measure_reinsurance as measure,
     measure_reinsurance_aggregate as measure_aggregate,
     measure_reinsurance_inforce as measure_inforce,
@@ -32,15 +32,10 @@ from fastcashflow.trace import (
     show_trace_diff_reinsurance as trace_diff,
 )
 
-# Canonical short name -- ``fcf.reinsurance.Measurement``. The prefixed
-# ``ReinsuranceMeasurement`` stays as a back-compat alias (the same type object).
-Measurement = ReinsuranceMeasurement
-
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_inforce_aggregate", "measure_stream",
            "settle", "settle_aggregate", "settle_stream",
            "trace", "trace_diff", "QuotaShare", "Measurement",
-           "ReinsuranceMeasurement",
            "ReinsuranceAggregate", "ReinsuranceInforceAggregate",
            "ReinsuranceSettlementMovement",
            "ReinsuranceSettlementReconciliation",

@@ -122,8 +122,8 @@ __all__ = [
     "close", "ClosePackage", "assemble_sofp", "assemble_finance",
     "assemble_service_result", "reconciliation_to_frame", "line_metadata",
     "write_reconciliation", "write_close_pack",
-    # result types now live in their producing namespace (fcf.gmm.GMMMeasurement,
-    # fcf.vfa.VFAMeasurement, fcf.reinsurance.ReinsuranceReport, fcf.esg.*, ...);
+    # result types now live in their producing namespace (fcf.gmm.Measurement,
+    # fcf.vfa.Measurement, fcf.reinsurance.ReinsuranceReport, fcf.esg.*, ...);
     # only genuinely shared / universal result types stay flat below.
     "Report", "DynamicSolvencyReport",
     "StochasticResult", "TVOGResult",

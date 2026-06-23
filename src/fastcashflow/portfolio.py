@@ -27,17 +27,20 @@ import polars as pl
 from fastcashflow._measurement_model import VFA, model_tag
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
-    PAAMeasurement, PAAAggregate, measure_paa, measure_aggregate as _paa_aggregate,
+    PAAAggregate, measure_paa, measure_aggregate as _paa_aggregate,
     measure_inforce as _paa_inforce,
     _stitch_paa_measurements, _scatter_paa_headline)
 from fastcashflow._vfa import (
-    VFAMeasurement, VFAAggregate, measure_vfa, measure_aggregate as _vfa_aggregate,
+    VFAAggregate, measure_vfa, measure_aggregate as _vfa_aggregate,
     measure_inforce as _vfa_inforce, _require_settlement_csm,
     settle as _settle_vfa,
     _stitch_vfa_measurements, _scatter_vfa_headline)
+import fastcashflow._gmm as _gmm
+import fastcashflow._paa as _paa
+import fastcashflow._vfa as _vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
-    GMMMeasurement, GMMAggregate, _factorise_segments, measure as _measure_gmm,
+    GMMAggregate, _factorise_segments, measure as _measure_gmm,
     measure_aggregate as _gmm_aggregate, measure_inforce as _gmm_inforce,
     settle as _settle_gmm, _reconcile_state)
 from fastcashflow.io import (
@@ -247,9 +250,9 @@ def measure_stream(input_path, output_dir, basis, *, coverages=None,
     return processed
 
 #: The native measurement type each model slot must hold (the per-model
-#: separation invariant: a paa slot can never carry a GMMMeasurement).
+#: separation invariant: a paa slot can never carry a _gmm.Measurement).
 _SLOT_MEASUREMENT_TYPE = {
-    "gmm": GMMMeasurement, "paa": PAAMeasurement, "vfa": VFAMeasurement}
+    "gmm": _gmm.Measurement, "paa": _paa.Measurement, "vfa": _vfa.Measurement}
 
 #: Per non-GMM model: the single-Basis specialist, the full-trajectory stitch,
 #: and the headline-only scatter -- so a model's partition that spans several
@@ -299,7 +302,7 @@ class ModelMeasurement:
     """
 
     index: IntArray
-    measurement: "GMMMeasurement | PAAMeasurement | VFAMeasurement"
+    measurement: "_gmm.Measurement | _paa.Measurement | _vfa.Measurement"
 
     def __post_init__(self):
         index = np.asarray(self.index, dtype=np.int64)
@@ -332,7 +335,7 @@ class PortfolioMeasurement:
 
     def __post_init__(self):
         # Each slot must hold its own model's native measurement -- a paa slot
-        # carrying a GMMMeasurement would defeat the per-model separation.
+        # carrying a _gmm.Measurement would defeat the per-model separation.
         for slot, expected in _SLOT_MEASUREMENT_TYPE.items():
             mm = getattr(self, slot)
             if mm is not None and not isinstance(mm.measurement, expected):
@@ -821,7 +824,7 @@ _CF_STREAMS_2D = (
 
 #: The native grouped measurement type each slot of PortfolioGroups holds.
 _SLOT_GROUP_TYPE = {
-    "gmm": GMMMeasurement, "paa": PAAMeasurement, "vfa": VFAMeasurement}
+    "gmm": _gmm.Measurement, "paa": _paa.Measurement, "vfa": _vfa.Measurement}
 
 
 @dataclass(frozen=True, slots=True)
@@ -835,16 +838,16 @@ class PortfolioGroups:
     are never pooled; ``loss_component_total`` is the one cross-model sum.
 
     Each slot is the same native type :func:`fcf.group` returns
-    (``GMMMeasurement`` / ``PAAMeasurement`` / ``VFAMeasurement`` with
+    (``_gmm.Measurement`` / ``_paa.Measurement`` / ``_vfa.Measurement`` with
     ``group_labels`` / ``group_sizes`` set), so the group rows flow straight into
     :func:`fcf.roll_forward` / :func:`fcf.reconcile` / :func:`fcf.report`. There
     is no cross-model group of contracts: a portfolio (product) carries one measurement model, so
     a group always sits inside one model's slot.
     """
 
-    gmm: GMMMeasurement | None = None
-    paa: PAAMeasurement | None = None
-    vfa: VFAMeasurement | None = None
+    gmm: _gmm.Measurement | None = None
+    paa: _paa.Measurement | None = None
+    vfa: _vfa.Measurement | None = None
 
     def __post_init__(self):
         for slot, expected in _SLOT_GROUP_TYPE.items():

@@ -11,7 +11,7 @@ PAA has no CSM, so there is no carry); ``trace`` walks one model point's PAA
 measurement.
 """
 from fastcashflow._paa import (
-    PAAMeasurement, PAAAggregate, measure_paa as measure, measure_aggregate,
+    Measurement, PAAAggregate, measure_paa as measure, measure_aggregate,
     measure_inforce, measure_stream, settle, settle_aggregate, settle_stream)
 from fastcashflow.movement import (
     PAASettlementAggregate, PAAPeriodMovement, PAAReconciliation,
@@ -19,14 +19,9 @@ from fastcashflow.movement import (
 from fastcashflow.trace import (
     show_trace_paa as trace, show_trace_diff_paa as trace_diff)
 
-# Canonical short name -- ``fcf.paa.Measurement``. The prefixed ``PAAMeasurement``
-# stays as a back-compat alias (the same type object).
-Measurement = PAAMeasurement
-
 __all__ = ["measure", "measure_aggregate", "measure_inforce", "measure_stream",
            "settle", "settle_aggregate", "settle_stream",
-           "trace", "trace_diff", "Measurement", "PAAMeasurement",
-           "PAASettlementAggregate",
+           "trace", "trace_diff", "Measurement", "PAASettlementAggregate",
            # result types (produced by paa.measure / settle / roll_forward)
            "PAAAggregate", "PAAPeriodMovement", "PAAReconciliation",
            "PAASettlementMovement", "PAASettlementReconciliation"]

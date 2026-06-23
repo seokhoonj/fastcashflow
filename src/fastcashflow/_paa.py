@@ -118,11 +118,6 @@ class Measurement:
         return measurement_str(f"{self.model}.Measurement", self._columns())
 
 
-# Public alias -- prefixed name kept for back-compat (same type object as the
-# `Measurement` class above).
-PAAMeasurement = Measurement
-
-
 @dataclass(frozen=True, slots=True, eq=False)
 class PAAAggregate:
     """Portfolio-aggregate PAA view -- a scalable sum of measured model-point
@@ -145,7 +140,7 @@ class PAAAggregate:
 
 
 @write_measurement.register
-def _(measurement: PAAMeasurement, path, *, ids=None):
+def _(measurement: Measurement, path, *, ids=None):
     cols = {"lrc": measurement.lrc,
             "loss_component": measurement.loss_component}
     # In-force output gets marker columns (see _measurement_basis).
@@ -154,9 +149,9 @@ def _(measurement: PAAMeasurement, path, *, ids=None):
 
 
 def _scatter_paa_headline(n_mp, results):
-    """Scatter per-chunk headline-only PAAMeasurements into one ``(n_mp,)`` result.
+    """Scatter per-chunk headline-only Measurements into one ``(n_mp,)`` result.
 
-    ``results`` is ``[(idx, PAAMeasurement)]`` from ``measure_paa(..., full=False)``
+    ``results`` is ``[(idx, Measurement)]`` from ``measure_paa(..., full=False)``
     over row-blocks; only the headline ``lrc`` / ``loss_component`` / ``fcf`` are
     laid back, the trajectory fields staying ``None``. The portfolio orchestrator
     uses this on its ``full=False`` path so a chunked PAA partition costs
@@ -169,7 +164,7 @@ def _scatter_paa_headline(n_mp, results):
         lrc[idx] = m.lrc
         loss_component[idx] = m.loss_component
         fcf[idx] = m.fcf
-    return PAAMeasurement(lrc=lrc, loss_component=loss_component, fcf=fcf)
+    return Measurement(lrc=lrc, loss_component=loss_component, fcf=fcf)
 
 
 def _require_full_paa(measurement, entry: str) -> None:
@@ -184,16 +179,16 @@ def _require_full_paa(measurement, entry: str) -> None:
 
 
 def _stitch_paa_measurements(n_mp, sub_results):
-    """Scatter per-segment PAAMeasurements into one ``(n_mp, ...)`` result.
+    """Scatter per-segment Measurements into one ``(n_mp, ...)`` result.
 
-    ``sub_results`` is ``[(idx, PAAMeasurement)]`` -- each segment's headline
+    ``sub_results`` is ``[(idx, Measurement)]`` -- each segment's headline
     and trajectories are laid into the portfolio arrays at its rows and
     zero-padded on the right to the portfolio's longest horizon (a contract
     carries no LRC past its coverage period). Unlike the GMM stitch the PAA
     holds the LRC undiscounted, so there is no per-MP discount curve to lay --
     the scatter is a pure ragged zero-pad. The mixed-portfolio orchestrator
     (``fcf.portfolio.measure``) uses this to combine a PAA partition that spans
-    several routing segments into one ``PAAMeasurement``.
+    several routing segments into one ``Measurement``.
     """
     n_time = max(m.lrc_path.shape[1] - 1 for _, m in sub_results)
 
@@ -232,7 +227,7 @@ def _stitch_paa_measurements(n_mp, sub_results):
         maturity_cf=maturity_cf, maturity_survivors=maturity_survivors,
         **cf_arrays,
     )
-    return PAAMeasurement(
+    return Measurement(
         lrc=lrc, loss_component=loss_component, fcf=fcf,
         lrc_path=lrc_path, revenue=revenue, service_expense=service_expense,
         lic_path=lic_path, cashflows=cashflows,
@@ -245,7 +240,7 @@ def measure_paa(
     *,
     revenue_basis: str = "time",
     full: bool = True,
-) -> PAAMeasurement:
+) -> Measurement:
     """Measure a portfolio under the Premium Allocation Approach.
 
     The LRC rolls forward as ``LRC[t+1] = LRC[t] + premium[t] - revenue[t]``
@@ -315,7 +310,7 @@ def measure_paa(
         # Headline only: the inception opening LRC is 0 (the full path's
         # lrc[:, 0]); the trajectory, revenue and cash flows are dropped so the
         # chunked portfolio path retains O(n_mp) per row, not O(n_mp x n_time).
-        return PAAMeasurement(
+        return Measurement(
             lrc=np.zeros(model_points.n_mp), loss_component=loss_component,
             fcf=fcf, model_points=model_points)
 
@@ -361,7 +356,7 @@ def measure_paa(
     lrc = np.zeros((n_mp, n_time + 1))
     lrc[:, 1:] = np.cumsum(lrc_delta, axis=1)
 
-    return PAAMeasurement(
+    return Measurement(
         lrc=lrc[:, 0],
         loss_component=loss_component,
         fcf=fcf,
@@ -472,7 +467,7 @@ def measure_inforce(
     *,
     revenue_basis: str = "time",
     full: bool = True,
-) -> PAAMeasurement:
+) -> Measurement:
     """In-force diagnostic / runoff valuation of a PAA book at a single date.
 
     The PAA has no CSM, so there is no prior-CSM carry-forward (IFRS 17 Sec. 44
@@ -534,12 +529,12 @@ def measure_inforce(
     # fcf re-test -- roll_forward / a later phase performs the unlocking.
     loss = np.zeros(n_mp, dtype=np.float64)
     if not full:
-        return PAAMeasurement(
+        return Measurement(
             lrc=lrc, loss_component=loss, model_points=model_points,
             measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
     # Trajectory fields keep the full inception-to-horizon paths (as the GMM
     # in-force does); only the headline lrc is the as-of, re-based slice.
-    return PAAMeasurement(
+    return Measurement(
         lrc=lrc, loss_component=loss, fcf=None,
         lrc_path=m.lrc_path, revenue=m.revenue,
         service_expense=m.service_expense, lic_path=m.lic_path,

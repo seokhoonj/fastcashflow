@@ -53,7 +53,7 @@
 * - 지급하는 재보험료
   - `reinsurance_premium` = `cession` × 원수 보험료
 * - 보유 재보험계약 측정
-  - `fcf.reinsurance.measure(mp, basis, treaty=treaty)` → `ReinsuranceMeasurement`
+  - `fcf.reinsurance.measure(mp, basis, treaty=treaty)` → `reinsurance.Measurement`
 :::
 
 IFRS 17 은 보유 재보험계약을 일반모형 (GMM) 으로 측정하되 **두 가지를
@@ -328,7 +328,7 @@ symmetric identity OK
 
 재보험 CSM이 음수인 것은 **정상** 입니다 — 커버의 순원가를 이연한
 것이지 손실이 아닙니다. 재보험에는 손실요소가 없으므로
-`ReinsuranceMeasurement` 에 `loss_component` 필드도 없습니다. 원수계약의
+`reinsurance.Measurement` 에 `loss_component` 필드도 없습니다. 원수계약의
 음수 BEL = 이익 계약이듯, 재보험의 부호는 원수와 별개로 읽어야 합니다.
 
 | 재보험 BEL | 재보험 CSM | 의미 |

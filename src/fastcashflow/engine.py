@@ -73,11 +73,11 @@ from fastcashflow.state_model import (
 )
 # GMM owns its result types and full-measurement assembler in _gmm; re-exported
 # here so engine's fast / settlement / segmentation assemblers can construct a
-# GMMMeasurement and engine's callers (gmm / movement / grouping / report) keep
+# Measurement and engine's callers (gmm / movement / grouping / report) keep
 # importing these names from engine. _gmm imports valued_projection back at call
 # time, so this module-load direction (engine -> _gmm) stays acyclic.
 from fastcashflow._gmm import (
-    GMMMeasurement,
+    Measurement,
     CurrentEstimate,
     GMMAggregate,
     _measure_full,
@@ -268,7 +268,7 @@ def measure(
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
     segment_by=None,
-) -> GMMMeasurement:
+) -> Measurement:
     """GMM measurement -- the single entry point.
 
     ``full=True`` (default) returns the complete roll-forward: the
@@ -513,7 +513,7 @@ def _measure_inforce_fast(
     prior_csm: FloatArray | None = None,
     lock_in_rate: float | None = None,
     period_months: int | None = None,
-) -> GMMMeasurement:
+) -> Measurement:
     """In-force subsequent measurement (IFRS 17 Sec. 40-52).
 
     Each model point is valued at its valuation date -- the moment that is
@@ -589,7 +589,7 @@ def _measure_inforce_fast(
     if not settlement_mode:
         # Hypothetical: take the engine-computed CSM trajectory at t=elapsed.
         csm = m.csm_path[rows, em]
-        return GMMMeasurement(
+        return Measurement(
             bel=bel, ra=ra, csm=csm, loss_component=m.loss_component,
             measurement_basis=MEASUREMENT_BASIS_HYPOTHETICAL,
         )
@@ -637,7 +637,7 @@ def _measure_inforce_fast(
     # Returning max(0, bel + ra - csm) would conflate "carried CSM is short"
     # with "true onerous recognition" and mis-signal a Sec. 44 hit.
     loss = np.zeros(n_mp, dtype=np.float64)
-    return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss,
+    return Measurement(bel=bel, ra=ra, csm=csm, loss_component=loss,
                           measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
 
 
@@ -679,7 +679,7 @@ def _measure_inforce_full(
     prior_csm: FloatArray | None = None,
     lock_in_rate: float | None = None,
     period_months: int | None = None,
-) -> GMMMeasurement:
+) -> Measurement:
     """In-force subsequent measurement -- full-trajectory variant of
     :func:`_measure_inforce_fast`.
 
@@ -812,7 +812,7 @@ def _measure_inforce_full(
     # CSM needs no rescale: its coverage-unit release is an inforce *fraction*,
     # which the uniform scale leaves unchanged.
     rescale = _inforce_rescale(m.cashflows.inforce, model_points, em, rows_arr)
-    return GMMMeasurement(
+    return Measurement(
         bel=m.bel_path[rows_arr, em] * rescale,
         ra=m.ra_path[rows_arr, em] * rescale,
         csm=csm_new[rows_arr, em],
@@ -872,7 +872,7 @@ def measure_inforce(
     *,
     period_months: int | None = None,
     full: bool = True,
-) -> GMMMeasurement:
+) -> Measurement:
     """In-force diagnostic / runoff valuation at a single date.
 
     The diagnostic companion to :func:`fastcashflow.gmm.settle` (the
@@ -985,7 +985,7 @@ def _measure_inforce_segmented(
     period_months: int | None = None,
     full: bool = True,
     segment_by=("product", "channel"),
-) -> GMMMeasurement:
+) -> Measurement:
     """Settle a multi-segment in-force portfolio in one call.
 
     Each ``(product, channel)`` segment is routed to its own ``Basis`` and
@@ -1032,7 +1032,7 @@ def _measure_inforce_segmented(
             ra[idx] = m.ra
             csm[idx] = m.csm
             loss_component[idx] = m.loss_component
-        result = GMMMeasurement(bel=bel, ra=ra, csm=csm,
+        result = Measurement(bel=bel, ra=ra, csm=csm,
                                 loss_component=loss_component)
     # Re-tag: _stitch_full_measurements is shared with the new-business
     # segmented path and constructs a default ('inception') measurement.
@@ -2996,7 +2996,7 @@ def _measure_fast(
     *,
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
-) -> GMMMeasurement:
+) -> Measurement:
     """Fast GMM valuation: BEL, RA and CSM per model point.
 
     One fused kernel; no per-month arrays are materialised. This is the
@@ -3545,7 +3545,7 @@ def _measure_fast(
             acct_expense_cv,
             acct_z,
         )
-        return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
+        return Measurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
     # The CPU kernel takes (n_states, n_edges) via Python closure -- they are
     # not in the args tuple. The GPU kernel still takes n_states explicitly
@@ -3695,7 +3695,7 @@ def _measure_fast(
     else:
         raise ValueError(f"backend must be 'cpu' or 'gpu', got {backend!r}")
 
-    return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
+    return Measurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
 
 def _require_gmm_router(router, *, entry: str) -> None:
@@ -3726,7 +3726,7 @@ def _measure_segmented(
     backend: str = "cpu",
     discount_curve: FloatArray | None = None,
     segment_by=("product", "channel"),
-) -> GMMMeasurement:
+) -> Measurement:
     """Value a multi-segment portfolio: split, value each, concatenate.
 
     ``basis`` is the ``{(product, channel): Basis}`` dictionary
@@ -3736,7 +3736,7 @@ def _measure_segmented(
     matching rows, builds a sub-:class:`~fastcashflow.ModelPoints` via
     :meth:`~fastcashflow.ModelPoints.subset`, calls ``measure(..., full=False)`` with the
     segment's ``Basis``, and writes the per-row results back to a
-    single ``(n_mp,)`` :class:`GMMMeasurement`.
+    single ``(n_mp,)`` :class:`Measurement`.
 
     ``backend`` and ``discount_curve`` flow through to ``measure(..., full=False)`` --
     declared explicitly so a typo (e.g. ``backed="gpu"``) is rejected
@@ -3778,7 +3778,7 @@ def _measure_segmented(
         csm[idx] = val.csm
         loss_component[idx] = val.loss_component
 
-    return GMMMeasurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
+    return Measurement(bel=bel, ra=ra, csm=csm, loss_component=loss_component)
 
 
 def _factorise_segments(basis, model_points: ModelPoints, segment_by, n_mp):
@@ -3846,9 +3846,9 @@ def _factorise_segments(basis, model_points: ModelPoints, segment_by, n_mp):
 
 
 def _stitch_full_measurements(n_mp, sub_results):
-    """Scatter per-segment full GMMMeasurements into one (n_mp, n_time+1) result.
+    """Scatter per-segment full Measurements into one (n_mp, n_time+1) result.
 
-    ``sub_results`` is ``[(idx, GMMMeasurement)]`` -- each segment's full
+    ``sub_results`` is ``[(idx, Measurement)]`` -- each segment's full
     trajectories are laid into the portfolio arrays at its rows and zero-padded
     on the right to the portfolio's longest horizon (a contract carries no BEL /
     RA / CSM past its term). ``discount_factor_bom`` / ``discount_factor_mid`` become per-MP
@@ -3908,7 +3908,7 @@ def _stitch_full_measurements(n_mp, sub_results):
     cashflows = type(sub_results[0][1].cashflows)(
         maturity_cf=maturity_cf, maturity_survivors=maturity_survivors, **cf_arrays,
     )
-    return GMMMeasurement(
+    return Measurement(
         bel=bel, ra=ra, csm=csm, loss_component=loss_component,
         bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
         csm_accretion=csm_accretion, csm_release=csm_release, lic_path=lic_path,
@@ -3919,7 +3919,7 @@ def _stitch_full_measurements(n_mp, sub_results):
 def _measure_segmented_full(
     model_points: ModelPoints, basis: dict[tuple[str, str], Basis],
     *, segment_by=("product", "channel"),
-) -> GMMMeasurement:
+) -> Measurement:
     """Full multi-segment GMM measurement -- per-segment trajectories stitched.
 
     Each (product, channel) segment is measured under its own

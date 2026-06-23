@@ -26,10 +26,6 @@ from fastcashflow.io import write_measurement
 from fastcashflow.report import report
 from fastcashflow.movement import roll_forward
 from fastcashflow.disclosure import reconciliation_to_frame
-from fastcashflow._gmm import GMMMeasurement
-from fastcashflow._paa import PAAMeasurement
-from fastcashflow._vfa import VFAMeasurement
-from fastcashflow._reinsurance import ReinsuranceMeasurement
 
 
 def test_model_tags_canonical_order():
@@ -38,10 +34,10 @@ def test_model_tags_canonical_order():
 
 
 @pytest.mark.parametrize("cls,tag", [
-    (GMMMeasurement, "gmm"),
-    (PAAMeasurement, "paa"),
-    (VFAMeasurement, "vfa"),
-    (ReinsuranceMeasurement, "reinsurance"),
+    (_GmmMeasurement, "gmm"),
+    (_PaaMeasurement, "paa"),
+    (_VfaMeasurement, "vfa"),
+    (_ReinsuranceMeasurement, "reinsurance"),
 ])
 def test_model_tag_reads_classvar_off_the_class(cls, tag):
     # model_tag must accept a CLASS object (some diagnostics name an expected
@@ -118,7 +114,7 @@ def test_reconciliation_to_frame_default_message_uses_tag():
         reconciliation_to_frame("not a reconciliation")
 
 
-# --- the per-model `Measurement` rename and its prefixed aliases (S5.3) -------
+# --- the per-model `Measurement` rename (S5.3) + alias retirement (S5.4) ------
 
 def test_measurement_classes_share_the_name_but_stay_distinct():
     # each model owns a class literally named `Measurement` (so it reads as
@@ -128,23 +124,22 @@ def test_measurement_classes_share_the_name_but_stay_distinct():
     assert len(set(cls)) == 4
 
 
-def test_prefixed_names_are_aliases_not_subclasses():
-    # the old prefixed name is the SAME type object -- preserves every existing
-    # reference and isinstance check until the facade exposes fcf.<model>.Measurement
-    assert GMMMeasurement is _GmmMeasurement
-    assert VFAMeasurement is _VfaMeasurement
-    assert PAAMeasurement is _PaaMeasurement
-    assert ReinsuranceMeasurement is _ReinsuranceMeasurement
+def test_prefixed_names_are_retired():
+    # the old prefixed names were removed -- the canonical name is `Measurement`
+    # on each namespace, with no back-compat alias left
+    for ns, old in ((fcf.gmm, "GMMMeasurement"), (fcf.vfa, "VFAMeasurement"),
+                    (fcf.paa, "PAAMeasurement"),
+                    (fcf.reinsurance, "ReinsuranceMeasurement")):
+        assert not hasattr(ns, old)
+        assert old not in ns.__all__
 
 
 def test_namespace_facade_exposes_canonical_measurement():
-    # the canonical short name is reachable on each model namespace, and is the
-    # same type object as the back-compat prefixed alias
-    assert fcf.gmm.Measurement is _GmmMeasurement is GMMMeasurement
-    assert fcf.vfa.Measurement is _VfaMeasurement is VFAMeasurement
-    assert fcf.paa.Measurement is _PaaMeasurement is PAAMeasurement
-    assert fcf.reinsurance.Measurement is _ReinsuranceMeasurement is ReinsuranceMeasurement
-    # both names stay public until the alias is retired
+    # the canonical short name is the model's own Measurement class
+    assert fcf.gmm.Measurement is _GmmMeasurement
+    assert fcf.vfa.Measurement is _VfaMeasurement
+    assert fcf.paa.Measurement is _PaaMeasurement
+    assert fcf.reinsurance.Measurement is _ReinsuranceMeasurement
     for ns in (fcf.gmm, fcf.vfa, fcf.paa, fcf.reinsurance):
         assert "Measurement" in ns.__all__
 

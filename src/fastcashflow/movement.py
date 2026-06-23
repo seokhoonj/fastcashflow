@@ -5,7 +5,7 @@ liability to the closing one and decomposes the change into its drivers --
 the analysis of change (AoC). This is the step from a measurement
 calculator towards a reporting engine.
 
-``roll_forward`` slices a GMM :class:`~fastcashflow.gmm.GMMMeasurement` into
+``roll_forward`` slices a GMM :class:`~fastcashflow.gmm.Measurement` into
 reporting periods, reconciling each period's opening and closing BEL, RA
 and CSM. It models all three drivers of the movement:
 
@@ -38,15 +38,18 @@ import numpy as np
 from fastcashflow._measurement_model import GMM, VFA, PAA, REINSURANCE, model_tag
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
-from fastcashflow.engine import GMMMeasurement, _require_full
+from fastcashflow.engine import _require_full
 from fastcashflow._measurement_basis import _require_inception
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_roll
-from fastcashflow._paa import PAAMeasurement, _require_full_paa
+from fastcashflow._paa import _require_full_paa
 from fastcashflow._vfa import (
-    CSM_BASIS_PARAGRAPH_45, _CSM_TO_MEASUREMENT_BASIS, VFAMeasurement,
+    CSM_BASIS_PARAGRAPH_45, _CSM_TO_MEASUREMENT_BASIS,
     _require_settlement_csm)
-from fastcashflow._reinsurance import ReinsuranceMeasurement
+import fastcashflow._gmm as _gmm
+import fastcashflow._paa as _paa
+import fastcashflow._vfa as _vfa
+import fastcashflow._reinsurance as _reinsurance
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -257,7 +260,7 @@ def _reject_gmm_only_opts(revised, revised_at, actual_inforce, experience_at):
 
 
 @roll_forward.register
-def _(measurement: PAAMeasurement, period_months: int = 12, *,
+def _(measurement: _paa.Measurement, period_months: int = 12, *,
       revised=None, revised_at=None, actual_inforce=None, experience_at=None):
     _require_inception(measurement, "roll_forward()")
     if period_months < 1:
@@ -267,7 +270,7 @@ def _(measurement: PAAMeasurement, period_months: int = 12, *,
 
 
 @roll_forward.register
-def _(measurement: VFAMeasurement, period_months: int = 12, *,
+def _(measurement: _vfa.Measurement, period_months: int = 12, *,
       revised=None, revised_at=None, actual_inforce=None, experience_at=None):
     if period_months < 1:
         raise ValueError(f"period_months must be >= 1, got {period_months}")
@@ -277,7 +280,7 @@ def _(measurement: VFAMeasurement, period_months: int = 12, *,
 
 
 @roll_forward.register
-def _(measurement: ReinsuranceMeasurement, period_months: int = 12, *,
+def _(measurement: _reinsurance.Measurement, period_months: int = 12, *,
       revised=None, revised_at=None, actual_inforce=None, experience_at=None):
     _require_inception(measurement, "roll_forward()")
     if period_months < 1:
@@ -288,10 +291,10 @@ def _(measurement: ReinsuranceMeasurement, period_months: int = 12, *,
 
 @roll_forward.register
 def _(
-    measurement: GMMMeasurement,
+    measurement: _gmm.Measurement,
     period_months: int = 12,
     *,
-    revised: GMMMeasurement | None = None,
+    revised: _gmm.Measurement | None = None,
     revised_at: int | None = None,
     actual_inforce: FloatArray | None = None,
     experience_at: int | None = None,
@@ -439,7 +442,7 @@ def _(
 
 
 def _roll_forward_experience_chain(
-    measurement: GMMMeasurement, period_months: int, actual_inforce: FloatArray
+    measurement: _gmm.Measurement, period_months: int, actual_inforce: FloatArray
 ) -> list[PeriodMovement]:
     """Roll a GMM measurement through in-force experience at every period.
 
@@ -546,7 +549,7 @@ def _roll_forward_experience_chain(
 
 
 def _roll_forward_paa(
-    measurement: PAAMeasurement, period_months: int
+    measurement: _paa.Measurement, period_months: int
 ) -> list[PAAPeriodMovement]:
     """Slice a PAA measurement into LRC, loss-component and LIC movements."""
     _require_full_paa(measurement, "roll_forward")
@@ -585,7 +588,7 @@ def _roll_forward_paa(
 
 
 def _roll_forward_vfa(
-    measurement: VFAMeasurement, period_months: int
+    measurement: _vfa.Measurement, period_months: int
 ) -> list[VFAPeriodMovement]:
     """Slice a VFA measurement into BEL, RA and CSM movements."""
     _require_full(measurement, "roll_forward")
@@ -625,7 +628,7 @@ def _roll_forward_vfa(
 
 
 def _roll_forward_reinsurance(
-    measurement: ReinsuranceMeasurement, period_months: int
+    measurement: _reinsurance.Measurement, period_months: int
 ) -> list[ReinsurancePeriodMovement]:
     """Slice a reinsurance-held measurement into BEL, RA and CSM movements.
 
@@ -1030,7 +1033,7 @@ class VFASettlementMovement:
     @property
     def measurement_basis(self) -> str:
         """Cross-model time-basis discriminator, derived from ``csm_basis``
-        (mirrors :class:`~fastcashflow.vfa.VFAMeasurement`)."""
+        (mirrors :class:`~fastcashflow.vfa.Measurement`)."""
         return _CSM_TO_MEASUREMENT_BASIS[self.csm_basis]
 
     def closing_inputs(self):
@@ -1060,9 +1063,9 @@ class VFASettlementMovement:
         )
         return mp, state
 
-    def closing_measurement(self) -> VFAMeasurement:
+    def closing_measurement(self) -> _vfa.Measurement:
         """The closing balance sheet as a headline-only
-        :class:`~fastcashflow.vfa.VFAMeasurement`, tagged
+        :class:`~fastcashflow.vfa.Measurement`, tagged
         ``csm_basis='paragraph_45_settlement'`` -- a settlement figure,
         unlike the carry-only diagnostic, so the carry-only guard does not
         reject it: ``write_measurement`` serialises it, and its figures seed
@@ -1070,7 +1073,7 @@ class VFASettlementMovement:
         ``roll_forward`` still need the full trajectories a headline-only
         result does not carry.) ``time_value`` is zero (the movement is
         intrinsic-guarantee only)."""
-        return VFAMeasurement(
+        return _vfa.Measurement(
             bel=self.bel_closing,
             ra=self.ra_closing,
             csm=self.csm_closing,

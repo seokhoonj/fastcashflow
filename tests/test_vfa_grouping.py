@@ -12,7 +12,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import ExpenseItem, ModelPoints, group, group_of_contracts
-from fastcashflow.vfa import VFAMeasurement
+from fastcashflow.vfa import Measurement
 from conftest import PATTERNS, make_death_basis
 
 
@@ -54,7 +54,7 @@ def test_vfa_group_is_additive_and_refloors():
     m = fcf.vfa.measure(_two_vfa(), _vfa_basis())
     g = group(m, np.zeros(2, dtype=int))                 # both into one group
 
-    assert isinstance(g, VFAMeasurement)
+    assert isinstance(g, Measurement)
     assert g.bel.shape[0] == 1
     # additive parts
     assert np.isclose(g.bel[0], m.bel.sum())
@@ -96,7 +96,7 @@ def test_vfa_group_of_contracts_preset():
     mp = _two_vfa(product=np.array(["VA", "VA"]))
     m = fcf.vfa.measure(mp, _vfa_basis())
     g = group_of_contracts(m)                            # one product, one cohort, prof derived
-    assert isinstance(g, VFAMeasurement)
+    assert isinstance(g, Measurement)
     assert g.bel.shape[0] == 2                           # split only by onerous / remaining
     assert g.loss_component.sum() > 0.0
     assert g.group_labels is not None and g.group_labels.shape[0] == 2

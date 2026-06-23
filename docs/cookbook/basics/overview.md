@@ -28,10 +28,10 @@ flowchart TB
     end
     MP --> M["measure(model_points, basis)<br/>세그먼트 키로 Basis 라우팅"]
     BS --> M
-    M --> GMM["gmm.measure → GMMMeasurement"]
-    M --> PAA["paa.measure → PAAMeasurement"]
-    M --> VFA["vfa.measure → VFAMeasurement"]
-    M --> REI["reinsurance.measure → ReinsuranceMeasurement"]
+    M --> GMM["gmm.measure → gmm.Measurement"]
+    M --> PAA["paa.measure → paa.Measurement"]
+    M --> VFA["vfa.measure → vfa.Measurement"]
+    M --> REI["reinsurance.measure → reinsurance.Measurement"]
     GMM --> RES["측정결과 *Measurement<br/>bel · ra · csm · loss · cashflows"]
     PAA --> RES
     VFA --> RES

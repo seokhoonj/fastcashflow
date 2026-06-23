@@ -150,7 +150,7 @@ def _moneyness_scale_from_av_year(av_year, gmab, sensitivity, floor, cap):
     return np.ascontiguousarray(scale)
 
 
-# What the ``csm`` on a VFAMeasurement represents -- so downstream accounting
+# What the ``csm`` on a Measurement represents -- so downstream accounting
 # output cannot mistake an in-force carry-only figure for a settlement CSM. The
 # discriminator is carried on the result (not just the docstring) and the
 # accounting-output entry points (roll_forward / report / group / serialise)
@@ -174,7 +174,7 @@ _CSM_TO_MEASUREMENT_BASIS = {
 }
 
 
-def _require_settlement_csm(measurement: "VFAMeasurement", op: str) -> None:
+def _require_settlement_csm(measurement: "Measurement", op: str) -> None:
     """Reject a carry-only in-force CSM where a settlement CSM is required.
 
     ``vfa.measure_inforce`` returns a carry-only CSM (the prior CSM rolled at the
@@ -270,12 +270,6 @@ class Measurement:
         return measurement_str(f"{self.model}.Measurement", self._columns())
 
 
-# Public alias -- prefixed name kept for back-compat (same type object as the
-# `Measurement` class above, so `fcf.vfa.VFAMeasurement` and every isinstance
-# keep working until the facade exposes `fcf.vfa.Measurement`).
-VFAMeasurement = Measurement
-
-
 @dataclass(frozen=True, slots=True, eq=False)
 class VFAAggregate:
     """Portfolio-aggregate VFA view -- a scalable sum of measured model-point
@@ -307,7 +301,7 @@ class VFAAggregate:
 
 
 @write_measurement.register
-def _(measurement: VFAMeasurement, path, *, ids=None):
+def _(measurement: Measurement, path, *, ids=None):
     _require_settlement_csm(measurement, "write_measurement")
     cols = {"bel": measurement.bel, "ra": measurement.ra,
             "csm": measurement.csm,
@@ -321,9 +315,9 @@ def _(measurement: VFAMeasurement, path, *, ids=None):
 
 
 def _scatter_vfa_headline(n_mp, results):
-    """Scatter per-chunk headline-only VFAMeasurements into one ``(n_mp,)`` result.
+    """Scatter per-chunk headline-only Measurements into one ``(n_mp,)`` result.
 
-    ``results`` is ``[(idx, VFAMeasurement)]`` from ``measure_vfa(..., full=False)``
+    ``results`` is ``[(idx, Measurement)]`` from ``measure_vfa(..., full=False)``
     over row-blocks; only the headline ``bel`` / ``ra`` / ``csm`` /
     ``variable_fee`` / ``time_value`` / ``loss_component`` are laid back, the
     trajectory fields staying ``None``. The portfolio orchestrator uses this on
@@ -343,15 +337,15 @@ def _scatter_vfa_headline(n_mp, results):
         variable_fee[idx] = m.variable_fee
         time_value[idx] = m.time_value
         loss_component[idx] = m.loss_component
-    return VFAMeasurement(
+    return Measurement(
         bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
         time_value=time_value, loss_component=loss_component)
 
 
 def _stitch_vfa_measurements(n_mp, sub_results):
-    """Scatter per-segment VFAMeasurements into one ``(n_mp, ...)`` result.
+    """Scatter per-segment Measurements into one ``(n_mp, ...)`` result.
 
-    ``sub_results`` is ``[(idx, VFAMeasurement)]`` -- each segment's headline and
+    ``sub_results`` is ``[(idx, Measurement)]`` -- each segment's headline and
     trajectories are laid into the portfolio arrays at its rows and zero-padded
     on the right to the portfolio's longest horizon (a contract carries no BEL /
     CSM past its term). Like the GMM stitch, ``discount_factor_bom`` becomes per-MP 2-D:
@@ -360,7 +354,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
     each row's last factor (a flat curve -> zero forward rate) so a rate read off
     it is finite, not a 0/0. The mixed-portfolio orchestrator
     (``fcf.portfolio.measure``) uses this to combine a VFA partition that spans
-    several routing segments into one ``VFAMeasurement``.
+    several routing segments into one ``Measurement``.
     """
     n_time = max(m.bel_path.shape[1] - 1 for _, m in sub_results)
 
@@ -416,7 +410,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
         maturity_cf=maturity_cf, maturity_survivors=maturity_survivors,
         **cf_arrays,
     )
-    return VFAMeasurement(
+    return Measurement(
         bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
         time_value=time_value, loss_component=loss_component,
         bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
@@ -752,7 +746,7 @@ def measure_vfa(
     lapse_sensitivity: float | None = None,
     lapse_floor: float = 0.0,
     lapse_cap=None,
-) -> VFAMeasurement:
+) -> Measurement:
     """Measure a direct-participation portfolio under the Variable Fee Approach.
 
     The account value rolls forward as
@@ -856,7 +850,7 @@ def measure_vfa(
         loss_component = np.maximum(0.0, fcf)
         csm0 = np.maximum(0.0, -fcf)
         if not full:
-            return VFAMeasurement(
+            return Measurement(
                 bel=vp.bel, ra=vp.ra, csm=csm0, variable_fee=zeros,
                 time_value=time_value, loss_component=loss_component,
                 model_points=model_points)
@@ -868,7 +862,7 @@ def measure_vfa(
         csm_path, csm_accretion, csm_release = _csm_kernel(
             csm0, vp.cashflows.inforce, np.full(n_time, r_m),
             basis.coverage_unit_discount)
-        return VFAMeasurement(
+        return Measurement(
             bel=vp.bel, ra=vp.ra, csm=csm_path[:, 0], variable_fee=zeros,
             time_value=time_value, loss_component=loss_component,
             bel_path=vp.bel_path, ra_path=vp.ra_path, csm_path=csm_path,
@@ -895,7 +889,7 @@ def measure_vfa(
         # Headline only: the inception CSM is csm0 (the full path's csm[:, 0]),
         # so the release kernel is skipped; the trajectory and cash-flow fields
         # are dropped so the chunked portfolio path retains O(n_mp) per row.
-        return VFAMeasurement(
+        return Measurement(
             bel=p.bel[:, 0], ra=p.ra[:, 0], csm=csm0, variable_fee=variable_fee,
             time_value=p.time_value, loss_component=loss_component,
             model_points=model_points)
@@ -908,7 +902,7 @@ def measure_vfa(
         basis.coverage_unit_discount,
     )
 
-    return VFAMeasurement(
+    return Measurement(
         bel=p.bel[:, 0],
         ra=p.ra[:, 0],
         csm=csm[:, 0],
@@ -1155,7 +1149,7 @@ def measure_inforce(
     basis: Basis,
     *,
     period_months: int | None = None,
-) -> VFAMeasurement:
+) -> Measurement:
     """In-force diagnostic / runoff valuation of a VFA book at a single date.
 
     Unlike the PAA (no CSM) and like the GMM carry
@@ -1279,7 +1273,7 @@ def measure_inforce(
     csm = csm_traj[:, period]
     loss_component = np.zeros(n_mp)        # paragraph-45 onerous unlocking deferred
 
-    return VFAMeasurement(
+    return Measurement(
         bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
         time_value=time_value, loss_component=loss_component,
         model_points=model_points, csm_basis=CSM_BASIS_CARRY_ONLY)
