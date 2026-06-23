@@ -364,19 +364,51 @@ def _account_risk_adjustment(model_points, basis, proj, discount_monthly):
     return confidence_margin
 
 
-def _measure_full(model_points: ModelPoints, basis: Basis, *,
-                  discount_monthly: FloatArray | None = None,
-                  lapse_scale: FloatArray | None = None) -> GMMMeasurement:
-    """Full GMM measurement: BEL, RA and CSM rolled forward over time.
+@dataclass(frozen=True, slots=True, eq=False)
+class ValuedProjection:
+    """Neutral valuation bundle -- the model-agnostic prefix of a full
+    measurement.
 
-    Returns a :class:`GMMMeasurement` carrying both the ``(n_mp,)`` inception
-    headline (column 0 of each trajectory) and the ``(n_mp, n_time+1)``
-    ``*_path`` trajectories. Reached by ``measure(..., full=True)``.
+    The projected cash flows valued into BEL / RA trajectories plus the discount
+    context, with NO CSM and NO model identity. Produced by
+    :func:`valued_projection` (downstream of the cash-flow projection). Each
+    model's full measurement assembles its own result from this bundle plus its
+    own CSM / LRC machinery, so no model borrows another's measurement
+    container. ``bel`` / ``ra`` are the ``(n_mp,)`` inception headline (column 0
+    of the trajectories).
+    """
 
-    ``discount_monthly`` overrides the discount / CSM-accretion curve (default: the
-    locked-in ``discount_monthly_curve``). ``vfa.measure`` passes the flat
-    underlying-items return here to measure a universal-life account book under
-    the VFA model -- the account roll (generation) is identical to GMM, only the
+    bel_path: FloatArray              # (n_mp, n_time+1) -- BEL trajectory
+    ra_path: FloatArray               # (n_mp, n_time+1) -- RA trajectory
+    lic_path: FloatArray              # (n_mp, n_time+1) -- liability for incurred claims
+    discount_factor_bom: FloatArray   # beginning-of-month discount factors
+    discount_factor_mid: FloatArray   # mid-of-month discount factors
+    discount_monthly: FloatArray      # per-month discount / CSM-accretion rate curve
+    cashflows: Cashflows              # the underlying projection
+
+    @property
+    def bel(self) -> FloatArray:
+        return self.bel_path[:, 0]
+
+    @property
+    def ra(self) -> FloatArray:
+        return self.ra_path[:, 0]
+
+
+def valued_projection(model_points: ModelPoints, basis: Basis, *,
+                      discount_monthly: FloatArray | None = None,
+                      lapse_scale: FloatArray | None = None) -> ValuedProjection:
+    """Value a cash-flow projection into the neutral BEL / RA bundle.
+
+    The model-agnostic core of a full measurement: project the cash flows, then
+    roll them forward into the BEL trajectory and price the RA, returning a
+    :class:`ValuedProjection` (no CSM, no model identity). This is the prefix
+    every GMM-family model shares; each model then adds its own CSM / LRC on top.
+
+    ``discount_monthly`` overrides the discount / CSM-accretion curve (default:
+    the locked-in ``discount_monthly_curve``). ``vfa.measure`` passes the flat
+    underlying-items return here to value a universal-life account book under the
+    VFA model -- the account roll (generation) is identical to GMM, only the
     discount rate differs. The override is only used by the account path, which
     carries no ``settlement_pattern``, so the settlement factor below (keyed on
     ``basis.discount_monthly``) is never reached together with an override.
@@ -434,25 +466,52 @@ def _measure_full(model_points: ModelPoints, basis: Basis, *,
             pv_survival_ra = pv_survival - pv_certain
         ra = _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
                               pv_survival_ra, discount_monthly)
+    return ValuedProjection(
+        bel_path=bel,
+        ra_path=ra,
+        lic_path=lic_path,
+        discount_factor_bom=discount_factor_bom,
+        discount_factor_mid=discount_factor_mid,
+        discount_monthly=discount_monthly,
+        cashflows=proj,
+    )
+
+
+def _measure_full(model_points: ModelPoints, basis: Basis, *,
+                  discount_monthly: FloatArray | None = None,
+                  lapse_scale: FloatArray | None = None) -> GMMMeasurement:
+    """Full GMM measurement: BEL, RA and CSM rolled forward over time.
+
+    The shared neutral bundle from :func:`valued_projection` plus the GMM CSM
+    roll (:func:`_compute_csm`), assembled into a :class:`GMMMeasurement` that
+    carries both the ``(n_mp,)`` inception headline (column 0 of each trajectory)
+    and the ``(n_mp, n_time+1)`` ``*_path`` trajectories. Reached by
+    ``measure(..., full=True)``. ``discount_monthly`` / ``lapse_scale`` are
+    forwarded to :func:`valued_projection` (see there for the override
+    semantics).
+    """
+    vp = valued_projection(model_points, basis,
+                           discount_monthly=discount_monthly,
+                           lapse_scale=lapse_scale)
     csm, csm_accretion, csm_release, loss_component = _compute_csm(
-        bel[:, 0], ra[:, 0], proj.inforce, discount_monthly,
+        vp.bel, vp.ra, vp.cashflows.inforce, vp.discount_monthly,
         basis.coverage_unit_discount,
     )
 
     return GMMMeasurement(
-        bel=bel[:, 0],
-        ra=ra[:, 0],
+        bel=vp.bel,
+        ra=vp.ra,
         csm=csm[:, 0],
         loss_component=loss_component,
-        bel_path=bel,
-        ra_path=ra,
+        bel_path=vp.bel_path,
+        ra_path=vp.ra_path,
         csm_path=csm,
         csm_accretion=csm_accretion,
         csm_release=csm_release,
-        lic_path=lic_path,
-        cashflows=proj,
-        discount_factor_bom=discount_factor_bom,
-        discount_factor_mid=discount_factor_mid,
+        lic_path=vp.lic_path,
+        cashflows=vp.cashflows,
+        discount_factor_bom=vp.discount_factor_bom,
+        discount_factor_mid=vp.discount_factor_mid,
     )
 
 
