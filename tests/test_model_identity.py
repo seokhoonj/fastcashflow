@@ -137,6 +137,18 @@ def test_prefixed_names_are_aliases_not_subclasses():
     assert ReinsuranceMeasurement is _ReinsuranceMeasurement
 
 
+def test_namespace_facade_exposes_canonical_measurement():
+    # the canonical short name is reachable on each model namespace, and is the
+    # same type object as the back-compat prefixed alias
+    assert fcf.gmm.Measurement is _GmmMeasurement is GMMMeasurement
+    assert fcf.vfa.Measurement is _VfaMeasurement is VFAMeasurement
+    assert fcf.paa.Measurement is _PaaMeasurement is PAAMeasurement
+    assert fcf.reinsurance.Measurement is _ReinsuranceMeasurement is ReinsuranceMeasurement
+    # both names stay public until the alias is retired
+    for ns in (fcf.gmm, fcf.vfa, fcf.paa, fcf.reinsurance):
+        assert "Measurement" in ns.__all__
+
+
 def test_repr_reads_the_model_namespace_path():
     # repr / str label come from self.model -> "<gmm.Measurement ...>", matching
     # the public path fcf.gmm.Measurement (not the old hardcoded "GMMMeasurement")

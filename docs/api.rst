@@ -61,7 +61,7 @@ Measurement (GMM)
 .. autoclass:: fastcashflow.gmm.CSMRecognitionSchedule
    :members:
 
-.. autoclass:: fastcashflow.gmm.GMMMeasurement
+.. autoclass:: fastcashflow.gmm.Measurement
    :members:
 
 .. autoclass:: fastcashflow.gmm.GMMAggregate
@@ -88,7 +88,7 @@ Premium allocation approach
 .. autoclass:: fastcashflow.paa.PAASettlementReconciliation
    :members:
 
-.. autoclass:: fastcashflow.paa.PAAMeasurement
+.. autoclass:: fastcashflow.paa.Measurement
    :members:
 
 .. autoclass:: fastcashflow.paa.PAAAggregate
@@ -120,7 +120,7 @@ Variable fee approach
 .. autoclass:: fastcashflow.vfa.VFASettlementAggregate
    :members:
 
-.. autoclass:: fastcashflow.vfa.VFAMeasurement
+.. autoclass:: fastcashflow.vfa.Measurement
    :members:
 
 .. autodata:: fastcashflow.vfa.CSM_BASES
@@ -242,7 +242,7 @@ Reinsurance
 .. autoclass:: fastcashflow.reinsurance.QuotaShare
    :members:
 
-.. autoclass:: fastcashflow.reinsurance.ReinsuranceMeasurement
+.. autoclass:: fastcashflow.reinsurance.Measurement
    :members:
 
 .. autoclass:: fastcashflow.reinsurance.ReinsuranceSettlementMovement

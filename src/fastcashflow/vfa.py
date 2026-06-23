@@ -45,10 +45,15 @@ from fastcashflow.solvency_assessment import (
     vfa_assess_solvency as assess_solvency,
     vfa_interaction_loss as interaction_loss)
 
+# Canonical short name -- ``fcf.vfa.Measurement``. The prefixed ``VFAMeasurement``
+# stays as a back-compat alias (the same type object).
+Measurement = VFAMeasurement
+
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
            "recognition_schedule", "tvog", "guarantee_tvog", "trace",
-           "trace_diff", "CSM_BASES", "VFAMeasurement", "GuaranteeTVOG",
+           "trace_diff", "CSM_BASES", "Measurement", "VFAMeasurement",
+           "GuaranteeTVOG",
            "VFASettlementMovement", "moneyness_lapse_multiplier",
            "moneyness_lapse_scale", "stochastic",
            "liability_duration", "liability_dv01", "net_liability_cashflows",

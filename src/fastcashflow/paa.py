@@ -19,9 +19,14 @@ from fastcashflow.movement import (
 from fastcashflow.trace import (
     show_trace_paa as trace, show_trace_diff_paa as trace_diff)
 
+# Canonical short name -- ``fcf.paa.Measurement``. The prefixed ``PAAMeasurement``
+# stays as a back-compat alias (the same type object).
+Measurement = PAAMeasurement
+
 __all__ = ["measure", "measure_aggregate", "measure_inforce", "measure_stream",
            "settle", "settle_aggregate", "settle_stream",
-           "trace", "trace_diff", "PAAMeasurement", "PAASettlementAggregate",
+           "trace", "trace_diff", "Measurement", "PAAMeasurement",
+           "PAASettlementAggregate",
            # result types (produced by paa.measure / settle / roll_forward)
            "PAAAggregate", "PAAPeriodMovement", "PAAReconciliation",
            "PAASettlementMovement", "PAASettlementReconciliation"]
