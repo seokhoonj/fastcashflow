@@ -271,7 +271,7 @@ class Measurement:
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class VFAAggregate:
+class Aggregate:
     """Portfolio-aggregate VFA view -- a scalable sum of measured model-point
     results, holding no per-model-point row. Inception totals plus the run-off
     trajectories summed over the model-point axis. Computed in bounded memory, so
@@ -1093,7 +1093,7 @@ def measure_aggregate(
     basis: Basis,
     *,
     chunk_size: int = 200_000,
-) -> VFAAggregate:
+) -> Aggregate:
     """Portfolio-aggregate VFA measurement in bounded memory.
 
     The VFA analogue of :func:`fastcashflow.gmm.measure_aggregate`: BEL / RA /
@@ -1103,7 +1103,7 @@ def measure_aggregate(
     ``chunk_size`` model points and accumulates only the ``(n_time+1,)`` sums, so
     peak memory is ``O(chunk_size x n_time)`` regardless of ``n_mp``.
 
-    Returns a :class:`VFAAggregate` (scalar totals + aggregate ``bel_path`` /
+    Returns a :class:`Aggregate` (scalar totals + aggregate ``bel_path`` /
     ``ra_path`` / ``csm_path`` / ``lic_path``). ``account_value`` does not carry: it is
     a per-policy level whose closed-form growth never terminates at the boundary,
     so summing it is horizon-dependent (the ``group`` VFA result drops it for the
@@ -1137,7 +1137,7 @@ def measure_aggregate(
         variable_fee += float(m.variable_fee.sum())
         time_value += float(m.time_value.sum())
         loss += float(m.loss_component.sum())
-    return VFAAggregate(
+    return Aggregate(
         bel=bel, ra=ra, csm=csm, variable_fee=variable_fee,
         time_value=time_value, loss_component=loss, bel_path=bel_path,
         ra_path=ra_path, csm_path=csm_path, lic_path=lic_path)

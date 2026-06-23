@@ -18,7 +18,7 @@ time-value analysis of the credited-rate guarantee over return scenarios
 point's VFA measurement.
 """
 from fastcashflow._vfa import (
-    Measurement, VFAAggregate, measure_vfa as measure, measure_aggregate,
+    Measurement, Aggregate, measure_vfa as measure, measure_aggregate,
     measure_inforce, measure_stream, settle, settle_aggregate,
     settle_stream, recognition_schedule, CSM_BASES,
     GuaranteeTVOG, guarantee_tvog, moneyness_lapse_multiplier,
@@ -55,5 +55,5 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "required_capital", "equity_scr", "interest_scr", "cashflow_gap",
            "assess_solvency", "interaction_loss",
            # result types (produced by vfa.measure / settle / roll_forward)
-           "VFAAggregate", "VFAPeriodMovement", "VFAReconciliation",
+           "Aggregate", "VFAPeriodMovement", "VFAReconciliation",
            "VFASettlementReconciliation", "VFASettlementAggregate"]

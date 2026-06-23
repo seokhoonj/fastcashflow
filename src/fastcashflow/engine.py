@@ -79,7 +79,7 @@ from fastcashflow.state_model import (
 from fastcashflow._gmm import (
     Measurement,
     CurrentEstimate,
-    GMMAggregate,
+    Aggregate,
     _measure_full,
 )
 
@@ -354,7 +354,7 @@ def measure_aggregate(
     basis: "Basis | dict[tuple[str, str], Basis]",
     *,
     chunk_size: int = 200_000,
-) -> GMMAggregate:
+) -> Aggregate:
     """Portfolio-aggregate ``full=True`` measurement in bounded memory.
 
     ``measure(full=True)`` materialises dense ``(n_mp, n_time+1)`` trajectories
@@ -365,7 +365,7 @@ def measure_aggregate(
     ``chunk_size`` model points and accumulates only that ``(n_time+1,)`` sum,
     so peak memory is ``O(chunk_size x n_time)`` regardless of ``n_mp``.
 
-    Returns an :class:`GMMAggregate` (scalar totals + aggregate
+    Returns an :class:`Aggregate` (scalar totals + aggregate
     ``bel_path`` / ``ra_path`` / ``csm_path``). For the per-model-point detail
     (movement, in-force slicing) use :func:`measure` on a book small enough to
     hold every trajectory. ``basis`` may be a single :class:`Basis` or a
@@ -393,7 +393,7 @@ def measure_aggregate(
         ra += float(m.ra.sum())
         csm += float(m.csm.sum())
         loss += float(m.loss_component.sum())
-    return GMMAggregate(
+    return Aggregate(
         bel=bel, ra=ra, csm=csm, loss_component=loss,
         bel_path=bel_path, ra_path=ra_path, csm_path=csm_path,
     )

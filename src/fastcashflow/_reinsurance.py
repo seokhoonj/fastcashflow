@@ -114,7 +114,7 @@ def _(measurement: Measurement, path, *, ids=None):
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class ReinsuranceAggregate:
+class Aggregate:
     """Portfolio-aggregate reinsurance-held trajectories -- the scalable view.
 
     BEL / RA / CSM are additive across contracts, so a large ceded book's
@@ -140,7 +140,7 @@ class ReinsuranceAggregate:
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class ReinsuranceInforceAggregate:
+class InforceAggregate:
     """Portfolio-aggregate reinsurance-held in-force carry -- the scale bridge.
 
     A headline-only total: the period-close BEL / RA / CSM of a ceded book,
@@ -162,7 +162,7 @@ class ReinsuranceInforceAggregate:
 
     def closing_inputs(self):
         raise ValueError(
-            "a ReinsuranceInforceAggregate is a portfolio total, not a per-MP "
+            "a InforceAggregate is a portfolio total, not a per-MP "
             "chaining citizen; carry the per-MP reinsurance.measure_inforce "
             "(or reinsurance.settle once available) to roll a period forward")
 
@@ -339,7 +339,7 @@ def measure_reinsurance_aggregate(
     *,
     treaty: Treaty,
     chunk_size: int = 200_000,
-) -> ReinsuranceAggregate:
+) -> Aggregate:
     """Portfolio-aggregate reinsurance-held measurement in bounded memory.
 
     The reinsurance counterpart of :func:`~fastcashflow.gmm.measure_aggregate`:
@@ -348,7 +348,7 @@ def measure_reinsurance_aggregate(
     model-point axis. Runs :func:`measure_reinsurance` over row-blocks of
     ``chunk_size`` model points and accumulates only the ``(n_time+1,)`` /
     ``(n_time,)`` sums, so peak memory is ``O(chunk_size x n_time)`` regardless of
-    ``n_mp``. Returns a :class:`ReinsuranceAggregate` (scalar totals + aggregate
+    ``n_mp``. Returns a :class:`Aggregate` (scalar totals + aggregate
     ``csm_path`` / ``recovery`` / ``reinsurance_premium``) -- a scalable sum of
     the measured results, not a group remeasurement. ``basis`` is a single
     :class:`Basis`, as for :func:`measure_reinsurance`.
@@ -380,7 +380,7 @@ def measure_reinsurance_aggregate(
         bel += float(m.bel.sum())
         ra += float(m.ra.sum())
         csm += float(m.csm.sum())
-    return ReinsuranceAggregate(
+    return Aggregate(
         bel=bel, ra=ra, csm=csm, bel_path=bel_path, ra_path=ra_path,
         csm_path=csm_path, recovery=recovery,
         reinsurance_premium=reinsurance_premium)
@@ -576,14 +576,14 @@ def measure_reinsurance_inforce_aggregate(
     treaty: Treaty,
     period_months: int | None = None,
     chunk_size: int = 200_000,
-) -> ReinsuranceInforceAggregate:
+) -> InforceAggregate:
     """Portfolio-aggregate reinsurance-held in-force carry in bounded memory.
 
     The carry bridge for a ceded book's period close: runs
     :func:`measure_reinsurance_inforce` over row-blocks of ``chunk_size`` model
     points and accumulates only the headline BEL / RA / CSM, so peak memory is
     ``O(chunk_size x n_time)`` regardless of ``n_mp``. Returns a
-    :class:`ReinsuranceInforceAggregate` -- a scalable SUM of the measured
+    :class:`InforceAggregate` -- a scalable SUM of the measured
     per-model-point results, equal to them to machine precision, not a group
     remeasurement.
 
@@ -632,7 +632,7 @@ def measure_reinsurance_inforce_aggregate(
         bel += float(m.bel.sum())
         ra += float(m.ra.sum())
         csm += float(m.csm.sum())
-    return ReinsuranceInforceAggregate(
+    return InforceAggregate(
         bel=bel, ra=ra, csm=csm, period_months=period)
 
 

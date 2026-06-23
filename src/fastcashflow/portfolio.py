@@ -27,11 +27,11 @@ import polars as pl
 from fastcashflow._measurement_model import VFA, model_tag
 from fastcashflow._typing import IntArray
 from fastcashflow._paa import (
-    PAAAggregate, measure_paa, measure_aggregate as _paa_aggregate,
+    measure_paa, measure_aggregate as _paa_aggregate,
     measure_inforce as _paa_inforce,
     _stitch_paa_measurements, _scatter_paa_headline)
 from fastcashflow._vfa import (
-    VFAAggregate, measure_vfa, measure_aggregate as _vfa_aggregate,
+    measure_vfa, measure_aggregate as _vfa_aggregate,
     measure_inforce as _vfa_inforce, _require_settlement_csm,
     settle as _settle_vfa,
     _stitch_vfa_measurements, _scatter_vfa_headline)
@@ -40,7 +40,7 @@ import fastcashflow._paa as _paa
 import fastcashflow._vfa as _vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow.engine import (
-    GMMAggregate, _factorise_segments, measure as _measure_gmm,
+    _factorise_segments, measure as _measure_gmm,
     measure_aggregate as _gmm_aggregate, measure_inforce as _gmm_inforce,
     settle as _settle_gmm, _reconcile_state)
 from fastcashflow.io import (
@@ -454,9 +454,9 @@ class PortfolioAggregate:
     ``loss_component_total`` is the one cross-model sum.
     """
 
-    gmm: GMMAggregate | None = None
-    paa: PAAAggregate | None = None
-    vfa: VFAAggregate | None = None
+    gmm: _gmm.Aggregate | None = None
+    paa: _paa.Aggregate | None = None
+    vfa: _vfa.Aggregate | None = None
 
     def loss_component_total(self) -> float:
         """Portfolio total onerous-contract loss -- the only cross-model sum

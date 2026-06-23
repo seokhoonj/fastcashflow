@@ -1,7 +1,7 @@
 """GMM measurement assembly -- result types and the full-measurement builder.
 
 The GMM model owns its measurement here: the result dataclasses
-(:class:`Measurement`, :class:`CurrentEstimate`, :class:`GMMAggregate`), the
+(:class:`Measurement`, :class:`CurrentEstimate`, :class:`Aggregate`), the
 CSM orchestration (:func:`_compute_csm`), and the full-measurement assembler
 (:func:`_measure_full`) that values a projection into a GMM result. The
 assembler builds on the model-agnostic :func:`~fastcashflow.engine.valued_projection`
@@ -218,7 +218,7 @@ class CurrentEstimate:
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class GMMAggregate:
+class Aggregate:
     """Portfolio-aggregate GMM trajectories -- the scalable ``full=True`` view.
 
     BEL / RA / CSM are additive across contracts, so a large book's liability

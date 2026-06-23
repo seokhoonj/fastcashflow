@@ -119,7 +119,7 @@ class Measurement:
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class PAAAggregate:
+class Aggregate:
     """Portfolio-aggregate PAA view -- a scalable sum of measured model-point
     results, holding no per-model-point row. Inception totals plus the run-off
     trajectories summed over the model-point axis (``lrc`` is the column-0 total).
@@ -410,7 +410,7 @@ def measure_aggregate(
     *,
     revenue_basis: str = "time",
     chunk_size: int = 200_000,
-) -> PAAAggregate:
+) -> Aggregate:
     """Portfolio-aggregate PAA measurement in bounded memory.
 
     The PAA analogue of :func:`fastcashflow.gmm.measure_aggregate`: the LRC,
@@ -422,7 +422,7 @@ def measure_aggregate(
     of ``n_mp`` (the PAA has no fused kernel -- a block still materialises dense
     transients, so chunking is the memory lever).
 
-    Returns a :class:`PAAAggregate` (scalar LRC / loss-component totals + the
+    Returns a :class:`Aggregate` (scalar LRC / loss-component totals + the
     aggregate ``lrc_path`` / ``revenue`` / ``service_expense`` / ``lic_path``). It is
     a scalable sum of the measured model-point results -- not a group
     remeasurement; the onerous loss is each contract's floored loss summed, not a
@@ -455,7 +455,7 @@ def measure_aggregate(
         lic_path[:nt1] += m.lic_path.sum(axis=0)
         lrc += float(m.lrc.sum())
         loss += float(m.loss_component.sum())
-    return PAAAggregate(
+    return Aggregate(
         lrc=lrc, loss_component=loss, lrc_path=lrc_path, revenue=revenue,
         service_expense=service_expense, lic_path=lic_path)
 

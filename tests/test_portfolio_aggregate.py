@@ -22,12 +22,9 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import Basis, CalculationMethod, ModelPoints, CoverageRate
 from fastcashflow.basis import BasisRouter
-# Native aggregate types are public at the top level (fcf.gmm.GMMAggregate, ...);
-# the portfolio orchestrator entry + container live in the fcf.portfolio
-# namespace (like PortfolioMeasurement). Import each from its public home.
-from fastcashflow.gmm import GMMAggregate
-from fastcashflow.paa import PAAAggregate
-from fastcashflow.vfa import VFAAggregate
+# Native aggregate types are public on each model namespace (fcf.gmm.Aggregate,
+# fcf.paa.Aggregate, fcf.vfa.Aggregate); the portfolio orchestrator entry +
+# container live in the fcf.portfolio namespace (like PortfolioMeasurement).
 from fastcashflow.portfolio import measure, measure_aggregate, PortfolioAggregate
 
 
@@ -66,22 +63,22 @@ def test_aggregate_is_the_sum_of_full_per_mp_measurement():
     full = measure(mp, router, full=True)
     assert isinstance(agg, PortfolioAggregate)
 
-    # GMM block -- reuses engine.GMMAggregate
-    assert isinstance(agg.gmm, GMMAggregate)
+    # GMM block -- reuses engine.Aggregate
+    assert isinstance(agg.gmm, fcf.gmm.Aggregate)
     assert np.isclose(agg.gmm.bel, full.gmm.measurement.bel.sum())
     assert np.isclose(agg.gmm.csm, full.gmm.measurement.csm.sum())
     assert np.allclose(agg.gmm.bel_path,
                        full.gmm.measurement.bel_path.sum(axis=0))
 
     # PAA block
-    assert isinstance(agg.paa, PAAAggregate)
+    assert isinstance(agg.paa, fcf.paa.Aggregate)
     assert np.isclose(agg.paa.lrc, full.paa.measurement.lrc.sum())
     assert np.allclose(agg.paa.lrc_path,
                        full.paa.measurement.lrc_path.sum(axis=0))
     assert np.allclose(agg.paa.lic_path, full.paa.measurement.lic_path.sum(axis=0))
 
     # VFA block (note: lic_path is carried here too -- VFA full measurement has it)
-    assert isinstance(agg.vfa, VFAAggregate)
+    assert isinstance(agg.vfa, fcf.vfa.Aggregate)
     assert np.isclose(agg.vfa.csm, full.vfa.measurement.csm.sum())
     assert np.allclose(agg.vfa.csm_path,
                        full.vfa.measurement.csm_path.sum(axis=0))
