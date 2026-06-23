@@ -57,36 +57,12 @@ from fastcashflow.plots import (
 )
 from fastcashflow.pricing import solve_premium, interest_guarantee_tvog
 from fastcashflow.embedded_value import EmbeddedValue, embedded_value
-from fastcashflow.solvency import (
-    required_capital,
-    vfa_required_capital, vfa_equity_scr, vfa_interest_scr, catastrophe_scr,
-    solvency_ratio, KICSInterest, shock_spread,
-)
+# Asset / solvency surface is namespace-only (fcf.solvency / fcf.alm / fcf.assets);
+# fcf.solvency is the merged facade over the _solvency (engine) + _solvency_assessment
+# (assembly) impl modules. No flat re-exports -- reach members via their namespace.
 from fastcashflow import solvency
-from fastcashflow.alm import (
-    liability_duration, liability_dv01, key_rate_dv01s,
-    bond_duration, bond_value, effective_maturity, alm_gap, duration_gap,
-)
 from fastcashflow import alm
-from fastcashflow.assets import (
-    Equity, Property, Cash, AssetPortfolio,
-    asset_portfolio_cashflows, asset_value_path, asset_value_by_scenario,
-    cashflow_gap, vfa_cashflow_gap,
-    reinvest, liquidate,
-    asset_portfolio_value, available_capital,
-)
 from fastcashflow import assets
-from fastcashflow.solvency_assessment import (
-    SolvencyAssessment,
-    InteractionResult, interaction_loss, vfa_interaction_loss,
-    net_interest_scr,
-    equity_scr, property_scr, fx_scr, concentration_scr, market_module_scr,
-    credit_scr, operational_scr, aggregate_required_capital, assess_solvency,
-    vfa_assess_solvency,
-    DynamicSolvency, dynamic_solvency,
-    StochasticSolvency, stochastic_solvency_vfa, stochastic_solvency_gmm,
-)
-from fastcashflow import solvency_assessment
 from fastcashflow.report import (
     DynamicSolvencyReport, Report, report,
 )
@@ -136,25 +112,8 @@ __all__ = [
     "describe_basis",
     "solve_premium", "interest_guarantee_tvog",
     "embedded_value", "EmbeddedValue",
-    "solvency", "required_capital", "vfa_required_capital",
-    "vfa_equity_scr", "vfa_interest_scr", "catastrophe_scr", "solvency_ratio",
-    "KICSInterest", "shock_spread",
-    "alm", "liability_duration", "liability_dv01",
-    "key_rate_dv01s", "bond_duration", "bond_value", "effective_maturity",
-    "alm_gap", "duration_gap",
-    "assets", "solvency_assessment",
-    "Equity", "Property", "Cash", "AssetPortfolio", "SolvencyAssessment",
-    "asset_portfolio_cashflows", "asset_value_path",
-    "asset_value_by_scenario", "cashflow_gap",
-    "vfa_cashflow_gap",
-    "reinvest", "liquidate",
-    "InteractionResult", "interaction_loss", "vfa_interaction_loss",
-    "asset_portfolio_value", "available_capital", "net_interest_scr",
-    "equity_scr", "property_scr", "fx_scr", "concentration_scr",
-    "market_module_scr", "credit_scr", "operational_scr",
-    "aggregate_required_capital", "assess_solvency", "vfa_assess_solvency",
-    "DynamicSolvency", "dynamic_solvency",
-    "StochasticSolvency", "stochastic_solvency_vfa", "stochastic_solvency_gmm",
+    # asset / solvency: namespace-only (members under fcf.solvency / fcf.alm / fcf.assets)
+    "solvency", "alm", "assets",
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",

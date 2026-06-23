@@ -4,7 +4,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import assets, alm
-from fastcashflow import solvency_assessment as sa
+from fastcashflow import _solvency_assessment as sa
 from fastcashflow import solvency as sv
 from fastcashflow.engine import measure
 
@@ -1224,7 +1224,7 @@ def test_stochastic_solvency_vfa_reconciles_and_tails():
     guarantee time-value drag, and cte(5) <= p5 <= mean (the tail ordering)."""
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
-    ss = fcf.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)   # ESG object
+    ss = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)   # ESG object
     assert ss.ratio.shape == (300,)
 
     dist = fcf.vfa.stochastic(mp, basis, es.returns)
@@ -1239,7 +1239,7 @@ def test_stochastic_solvency_vfa_reconciles_and_tails():
 def test_stochastic_solvency_vfa_accepts_a_raw_array_and_validates_cte():
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
-    ss = fcf.stochastic_solvency_vfa(pf, mp, basis, es.returns, regime=sv.KICS)  # raw array
+    ss = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es.returns, regime=sv.KICS)  # raw array
     assert np.isfinite(ss.mean()["ratio"])
     with pytest.raises(ValueError, match="q must be"):
         ss.cte(0.0)
@@ -1268,8 +1268,8 @@ def test_stochastic_solvency_gmm_reconciles_at_base_curve():
     the static coverage ratio exactly -- the null-scenario anchor."""
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
-    static = fcf.assess_solvency(pf, mp, basis, regime=sv.SII)
-    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, np.array([0.03]), regime=sv.SII)
+    static = fcf.solvency.assess_solvency(pf, mp, basis, regime=sv.SII)
+    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, np.array([0.03]), regime=sv.SII)
     assert ss.ratio.shape == (1,)
     assert np.isclose(ss.available_capital[0], static.available_capital)
     assert np.isclose(ss.ratio[0], static.solvency_ratio)
@@ -1281,7 +1281,7 @@ def test_stochastic_solvency_gmm_distributes_over_rate_scenarios():
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
     scen = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
-    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII)
+    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII)
     assert ss.ratio.shape == (5,)
 
     dist = fcf.gmm.stochastic(mp, basis, scen)
@@ -1305,7 +1305,7 @@ def test_stochastic_solvency_gmm_accepts_esg_object():
                       ufr=0.0405, alpha=0.10, mean_reversion=0.10, rate_vol=0.01,
                       equity_vol=0.15, correlation=-0.2, n_scenarios=200,
                       n_time=60, seed=7)
-    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, es, regime=sv.SII)   # ESG -> .rates
+    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, es, regime=sv.SII)   # ESG -> .rates
     assert ss.ratio.shape == (200,)
     assert np.isfinite(ss.mean()["ratio"])
     assert ss.cte(5) <= ss.percentile(5)["ratio"] <= ss.mean()["ratio"]
@@ -1375,7 +1375,7 @@ def test_stochastic_solvency_gmm_co_moving_off_is_unchanged():
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
     scen = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
-    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII)
+    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII)
     expected_ac = ss.static.asset_portfolio_value - (
         fcf.gmm.stochastic(mp, basis, scen).bel + ss.static.risk_margin)
     assert np.allclose(ss.available_capital, expected_ac)   # asset value fixed
@@ -1387,13 +1387,13 @@ def test_stochastic_solvency_gmm_co_moving_formula_and_anchor():
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
     scen = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
-    ss = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII,
+    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII,
                                      co_moving_assets=True)
     dist = fcf.gmm.stochastic(mp, basis, scen)
-    asset_val = fcf.asset_value_by_scenario(pf, scen)
+    asset_val = fcf.assets.asset_value_by_scenario(pf, scen)
     assert np.allclose(ss.available_capital, asset_val - (dist.bel + ss.static.risk_margin))
 
-    base = fcf.stochastic_solvency_gmm(pf, mp, basis, np.array([0.03]),
+    base = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, np.array([0.03]),
                                        regime=sv.SII, co_moving_assets=True)
     assert np.isclose(base.available_capital[0], ss.static.available_capital)
     assert np.isclose(base.ratio[0], ss.static.solvency_ratio)
@@ -1405,8 +1405,8 @@ def test_stochastic_solvency_gmm_co_moving_differs_from_fixed():
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
     scen = np.array([0.01, 0.05])
-    fixed = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII)
-    moving = fcf.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII,
+    fixed = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII)
+    moving = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII,
                                          co_moving_assets=True)
     # the low-rate scenario lifts the bond value above its base level (co-moving),
     # so its available capital exceeds the fixed-asset figure
@@ -1423,7 +1423,7 @@ def test_stochastic_solvency_vfa_co_moving_off_is_unchanged():
     """co_moving_assets=False (the default) holds the asset value fixed."""
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
-    ss = fcf.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)
+    ss = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)
     expected_ac = ss.static.asset_portfolio_value - (
         fcf.vfa.stochastic(mp, basis, es.returns).bel + ss.static.risk_margin)
     assert np.allclose(ss.available_capital, expected_ac)
@@ -1435,7 +1435,7 @@ def test_stochastic_solvency_vfa_co_moving_requires_esg():
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
     with pytest.raises(ValueError, match="needs an EconomicScenarios"):
-        fcf.stochastic_solvency_vfa(pf, mp, basis, es.returns, regime=sv.KICS,
+        fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es.returns, regime=sv.KICS,
                                     co_moving_assets=True)
 
 
@@ -1444,11 +1444,11 @@ def test_stochastic_solvency_vfa_co_moving_uses_the_rate_path():
     while the fund returns still drive the guarantee liability."""
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
-    ss = fcf.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS,
+    ss = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS,
                                      co_moving_assets=True)
     dist = fcf.vfa.stochastic(mp, basis, es.returns)
-    asset_val = fcf.asset_value_by_scenario(pf, es.rates)
+    asset_val = fcf.assets.asset_value_by_scenario(pf, es.rates)
     assert np.allclose(ss.available_capital, asset_val - (dist.bel + ss.static.risk_margin))
     # the asset value now varies across scenarios (vs a single fixed level)
-    fixed = fcf.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)
+    fixed = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)
     assert not np.allclose(ss.available_capital, fixed.available_capital)

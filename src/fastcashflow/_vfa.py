@@ -72,7 +72,7 @@ from fastcashflow.tvog import (
 from fastcashflow.engine import _reconcile_state, _inforce_rescale
 
 if TYPE_CHECKING:  # field types of DynamicSolvency (string annotations, no runtime import)
-    from fastcashflow.solvency_assessment import InteractionResult, SolvencyAssessment
+    from fastcashflow._solvency_assessment import InteractionResult, SolvencyAssessment
     from fastcashflow.assets import LiquidationResult
 
 

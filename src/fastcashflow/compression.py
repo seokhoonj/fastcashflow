@@ -40,7 +40,7 @@ from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis
 from fastcashflow.engine import measure
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.solvency import Stress, scale_lapse, scale_mortality
+from fastcashflow._solvency import Stress, scale_lapse, scale_mortality
 
 #: Default calibration stresses (besides the base run). A compact set spanning the
 #: dominant biometric / behaviour sensitivities; the caller may pass its own.

@@ -35,12 +35,12 @@ from fastcashflow.alm import (
 # VFA-specific solvency / asset-liability tools, exposed under the vfa namespace
 # (the symmetric home for fcf.vfa.measure); the flat fcf.vfa_* names stay as
 # back-compat aliases.
-from fastcashflow.solvency import (
+from fastcashflow._solvency import (
     vfa_required_capital as required_capital,
     vfa_equity_scr as equity_scr,
     vfa_interest_scr as interest_scr)
 from fastcashflow.assets import vfa_cashflow_gap as cashflow_gap
-from fastcashflow.solvency_assessment import (
+from fastcashflow._solvency_assessment import (
     vfa_assess_solvency as assess_solvency,
     vfa_interaction_loss as interaction_loss,
     dynamic_solvency_vfa as dynamic_solvency)

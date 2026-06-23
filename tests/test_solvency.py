@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import solvency as sv
+from fastcashflow import _solvency as sv
 from fastcashflow.coverage import CalculationMethod
 from fastcashflow.engine import measure
 from fastcashflow.numerics import _cost_of_capital_ra

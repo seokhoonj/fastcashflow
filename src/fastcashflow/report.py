@@ -45,7 +45,7 @@ import fastcashflow._gmm as _gmm
 import fastcashflow._paa as _paa
 import fastcashflow._vfa as _vfa
 import fastcashflow._reinsurance as _reinsurance
-from fastcashflow.solvency_assessment import DynamicSolvency
+from fastcashflow._solvency_assessment import DynamicSolvency
 
 
 def _to_years(monthly: FloatArray) -> FloatArray:
@@ -258,7 +258,7 @@ def _ratio(r: float) -> str:
 
 @dataclass(frozen=True, slots=True)
 class DynamicSolvencyReport:
-    """Formatted view of a :func:`~fastcashflow.dynamic_solvency` scenario overlay.
+    """Formatted view of a :func:`~fastcashflow.solvency.dynamic_solvency` scenario overlay.
 
     Lays out the static t=0 picture (available capital, required capital, ratio),
     the coupled rate / dynamic-lapse scenario (the mark-to-market revaluation and

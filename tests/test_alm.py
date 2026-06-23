@@ -90,13 +90,13 @@ def test_alm_namespaces_mirror_module():
 
 def test_vfa_namespace_exposes_solvency_and_asset_tools():
     """The VFA-specific solvency / asset-liability tools are reachable under the
-    fcf.vfa namespace, identical to their flat fcf.vfa_* back-compat names."""
-    assert fcf.vfa.required_capital is fcf.vfa_required_capital
-    assert fcf.vfa.equity_scr is fcf.vfa_equity_scr
-    assert fcf.vfa.interest_scr is fcf.vfa_interest_scr
-    assert fcf.vfa.cashflow_gap is fcf.vfa_cashflow_gap
-    assert fcf.vfa.assess_solvency is fcf.vfa_assess_solvency
-    assert fcf.vfa.interaction_loss is fcf.vfa_interaction_loss
+    fcf.vfa namespace (the only home -- flat fcf.vfa_* aliases were removed)."""
+    assert callable(fcf.vfa.required_capital)
+    assert callable(fcf.vfa.equity_scr)
+    assert callable(fcf.vfa.interest_scr)
+    assert callable(fcf.vfa.cashflow_gap)
+    assert callable(fcf.vfa.assess_solvency)
+    assert callable(fcf.vfa.interaction_loss)
 
 
 def _ul_guaranteed_mp():

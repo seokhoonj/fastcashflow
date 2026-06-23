@@ -4,12 +4,12 @@
 :class: tip
 
 - 부채의 **금리 민감도** -- DV01 과 effective duration -- 을 재측정으로 산출
-  (`fcf.liability_duration`, `fcf.liability_dv01`)
+  (`fcf.alm.liability_duration`, `fcf.alm.liability_dv01`)
 - 공개 EV/IFRS17 공시처럼 **금리 +/-100bp** 부채 변화를 보는 법
 - **Key-rate DV01** (연도 버킷별 민감도) 로 금리 노출의 만기 구조를 분해
-  (`fcf.key_rate_dv01s`)
+  (`fcf.alm.key_rate_dv01s`)
 - **채권** 듀레이션 (Macaulay / Modified / DV01) 과 **자산-부채 DV01 gap** 으로
-  면역화 (immunisation) 를 보는 법 (`fcf.alm.Bond`, `fcf.bond_duration`, `fcf.alm_gap`)
+  면역화 (immunisation) 를 보는 법 (`fcf.alm.Bond`, `fcf.alm.bond_duration`, `fcf.alm.alm_gap`)
 :::
 
 ALM 의 실무적 시작은 거창한 동적 모델이 아니라 **결정론적 금리 민감도** -- 듀레이션과

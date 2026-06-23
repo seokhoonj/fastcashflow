@@ -3,11 +3,11 @@
 :::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
-- **자산 포트폴리오** 를 시가평가하고 (`fcf.AssetPortfolio`, `fcf.alm.Bond` / `Equity` /
-  `Property` / `Cash`), **가용자본** (자산 - 부채) 을 산출 (`fcf.available_capital`)
-- 자산과 부채를 같은 곡선충격으로 재평가하는 **순금리 SCR** (`fcf.net_interest_scr`)
+- **자산 포트폴리오** 를 시가평가하고 (`fcf.assets.AssetPortfolio`, `fcf.alm.Bond` / `Equity` /
+  `Property` / `Cash`), **가용자본** (자산 - 부채) 을 산출 (`fcf.assets.available_capital`)
+- 자산과 부채를 같은 곡선충격으로 재평가하는 **순금리 SCR** (`fcf.solvency.net_interest_scr`)
 - **주식 / 부동산 시장위험 SCR** (선진 -35% / 신흥 -48% / 부동산 -25%) 과 시장모듈 집계
-- 한 번에 **지급여력비율** 까지 조립 (`fcf.assess_solvency`) -- 보험위험 + 시장위험을
+- 한 번에 **지급여력비율** 까지 조립 (`fcf.solvency.assess_solvency`) -- 보험위험 + 시장위험을
   BSCR 로 묶어 (K-ICS 는 상관집계, Solvency II 는 단순합)
 :::
 
@@ -35,9 +35,9 @@ basis = fcf.Basis(mortality_annual=0.012, lapse_annual=0.0, discount_annual=0.03
 liab_dv01 = alm.liability_dv01(mp, basis)
 per_face = alm.bond_duration(alm.Bond(100.0, 0.03, 10, 1), 0.03).dv01
 bond = alm.Bond(face=liab_dv01 / per_face * 100.0, coupon_rate=0.03, maturity_years=10, frequency=1)
-port = fcf.AssetPortfolio(holdings=(bond, fcf.Cash(5_000_000.0)))
+port = fcf.assets.AssetPortfolio(holdings=(bond, fcf.assets.Cash(5_000_000.0)))
 
-a = fcf.assess_solvency(port, mp, basis, regime=fcf.solvency.SII)
+a = fcf.solvency.assess_solvency(port, mp, basis, regime=fcf.solvency.SII)
 print(f"portfolio value   = {a.asset_portfolio_value:>14,.0f}")
 print(f"BEL + risk margin = {a.bel + a.risk_margin:>14,.0f}")
 print(f"available capital = {a.available_capital:>14,.0f}")
@@ -73,9 +73,9 @@ SCR 이 작습니다.
 3,000,000 (선진시장) 을 더하면:
 
 ```python
-port2 = fcf.AssetPortfolio(holdings=(bond, fcf.Cash(5_000_000.0),
-                                     fcf.Equity(3_000_000.0, "developed")))
-b = fcf.assess_solvency(port2, mp, basis, regime=fcf.solvency.SII)
+port2 = fcf.assets.AssetPortfolio(holdings=(bond, fcf.assets.Cash(5_000_000.0),
+                                     fcf.assets.Equity(3_000_000.0, "developed")))
+b = fcf.solvency.assess_solvency(port2, mp, basis, regime=fcf.solvency.SII)
 print(f"+3,000,000 equity -> equity SCR      {b.equity_scr:>14,.0f}")
 print(f"                     market module    {b.market_module_scr:>14,.0f}")
 print(f"                     BSCR             {b.bscr:>14,.0f}")
@@ -110,10 +110,10 @@ table 3 으로, (보험·시장·신용) 세 모듈은 둘 다 0.25 상관집계
 0.75 로 묶여** 단순합보다 작습니다:
 
 ```python
-mix = fcf.AssetPortfolio(holdings=(
-    fcf.Equity(3_000_000.0, "developed"), fcf.Equity(2_000_000.0, "infrastructure"),
-    fcf.Equity(1_000_000.0, "other")))
-print(f"equity SCR (3 types) = {fcf.equity_scr(mix, fcf.solvency.KICS):>12,.0f}")
+mix = fcf.assets.AssetPortfolio(holdings=(
+    fcf.assets.Equity(3_000_000.0, "developed"), fcf.assets.Equity(2_000_000.0, "infrastructure"),
+    fcf.assets.Equity(1_000_000.0, "other")))
+print(f"equity SCR (3 types) = {fcf.solvency.equity_scr(mix, fcf.solvency.KICS):>12,.0f}")
 print(f"  vs simple sum       = {3e6*0.35 + 2e6*0.20 + 1e6*0.49:>12,.0f}")
 ```
 
@@ -130,14 +130,14 @@ equity SCR (3 types) =    1,788,393
 격자의 위험계수 (부도 + 등급하락 부담률, 시가의 %) 로 매깁니다 (공공 / 일반기업 / 유동화
 익스포저별로 표가 다름). `Bond` 에 `credit_rating` (AAA~D / unrated) 과 `exposure_class`
 (corporate / public / securitisation) 를 주면 됩니다. 유효만기는 현금흐름가중 평균만기
-(`fcf.effective_maturity`) 라 같은 만기라도 쿠폰이 크면 짧아집니다.
+(`fcf.alm.effective_maturity`) 라 같은 만기라도 쿠폰이 크면 짧아집니다.
 
 ```python
-mixed = fcf.AssetPortfolio(holdings=(
+mixed = fcf.assets.AssetPortfolio(holdings=(
     alm.Bond(3_000_000.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate"),
     alm.Bond(2_000_000.0, 0.04, 8, 1, credit_rating="BBB", exposure_class="corporate"),
-    fcf.Cash(2_000_000.0)))
-k = fcf.assess_solvency(mixed, mp, basis, regime=fcf.solvency.KICS)
+    fcf.assets.Cash(2_000_000.0)))
+k = fcf.solvency.assess_solvency(mixed, mp, basis, regime=fcf.solvency.KICS)
 print(f"insurance SCR     = {k.insurance_scr:>14,.0f}")
 print(f"credit SCR        = {k.credit_scr:>14,.0f}")
 print(f"market module SCR = {k.market_module_scr:>14,.0f}")
@@ -174,11 +174,11 @@ table 3 상관 (전부 0.25) 으로 묶습니다 (여기선 K-ICS 라 곡선 미
 빠지는 국내 특성).
 
 ```python
-fxport = fcf.AssetPortfolio(holdings=(
+fxport = fcf.assets.AssetPortfolio(holdings=(
     alm.Bond(3_000_000.0, 0.03, 10, 1, credit_rating="A", currency="USD"),
     alm.Bond(2_000_000.0, 0.03, 8, 1, credit_rating="AA", currency="EUR"),
-    fcf.Cash(2_500_000.0)))
-k = fcf.assess_solvency(fxport, mp, basis, regime=fcf.solvency.KICS)
+    fcf.assets.Cash(2_500_000.0)))
+k = fcf.solvency.assess_solvency(fxport, mp, basis, regime=fcf.solvency.KICS)
 print(f"FX SCR            = {k.fx_scr:>14,.0f}")
 print(f"credit SCR        = {k.credit_scr:>14,.0f}")
 print(f"market module SCR = {k.market_module_scr:>14,.0f}")
@@ -213,12 +213,12 @@ sqrt(750k^2 + 700k^2 + 2 x 0.5 x 750k x 700k) = 1,255,986. 외화 비중이 크�
 `issuer` (거래상대방) 를 달면 같은 발행자끼리 묶입니다.
 
 ```python
-conc = fcf.AssetPortfolio(holdings=(
+conc = fcf.assets.AssetPortfolio(holdings=(
     alm.Bond(4_000_000.0, 0.03, 7, 1, credit_rating="A", issuer="BankA"),
     alm.Bond(2_000_000.0, 0.04, 5, 1, credit_rating="A", issuer="BankA"),  # same issuer
-    fcf.Property(3_000_000.0),
-    fcf.Cash(3_000_000.0)))
-k = fcf.assess_solvency(conc, mp, basis, regime=fcf.solvency.KICS)
+    fcf.assets.Property(3_000_000.0),
+    fcf.assets.Cash(3_000_000.0)))
+k = fcf.solvency.assess_solvency(conc, mp, basis, regime=fcf.solvency.KICS)
 print(f"concentration SCR = {k.concentration_scr:>14,.0f}")
 print(f"market module SCR = {k.market_module_scr:>14,.0f}")
 print(f"insurance SCR     = {k.insurance_scr:>14,.0f}")
@@ -251,9 +251,9 @@ K-ICS 는 이를 **총요구자본 = 기본요구자본 - 법인세조정액** �
 회사별 (직전 3년 세전이익 기준) 이라 인자로 받습니다 (기본값 0 = 미반영, 보수적).
 
 ```python
-port = fcf.AssetPortfolio(holdings=(
-    alm.Bond(3_000_000.0, 0.03, 10, 1, credit_rating="AA"), fcf.Cash(4_000_000.0)))
-a = fcf.assess_solvency(port, mp, basis, regime=fcf.solvency.KICS, tax_rate=0.22)
+port = fcf.assets.AssetPortfolio(holdings=(
+    alm.Bond(3_000_000.0, 0.03, 10, 1, credit_rating="AA"), fcf.assets.Cash(4_000_000.0)))
+a = fcf.solvency.assess_solvency(port, mp, basis, regime=fcf.solvency.KICS, tax_rate=0.22)
 print(f"basic required capital = {a.basic_required_capital:>14,.0f}")
 print(f"  tax adjustment       = {a.tax_adjustment:>14,.0f}")
 print(f"total required capital = {a.total_scr:>14,.0f}")

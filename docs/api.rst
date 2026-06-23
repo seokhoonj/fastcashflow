@@ -290,9 +290,9 @@ Regime-agnostic required capital (SCR) by shock-and-aggregate, with the Solvency
 II and K-ICS calibrations. Liability-side (insurance and interest risk); the
 asset side and available capital are caller-supplied.
 
-.. autofunction:: fastcashflow.required_capital
+.. autofunction:: fastcashflow.solvency.required_capital
 
-.. autofunction:: fastcashflow.catastrophe_scr
+.. autofunction:: fastcashflow.solvency.catastrophe_scr
 
 .. autoclass:: fastcashflow.solvency.SCRResult
    :members:
@@ -300,7 +300,7 @@ asset side and available capital are caller-supplied.
 .. autoclass:: fastcashflow.solvency.RegimeSpec
    :members:
 
-.. autofunction:: fastcashflow.solvency_ratio
+.. autofunction:: fastcashflow.solvency.solvency_ratio
 
 .. autodata:: fastcashflow.solvency.SII
    :no-value:
@@ -317,22 +317,22 @@ it -- duration, DV01, key-rate duration, and the asset-liability DV01 gap.
 .. autoclass:: fastcashflow.alm.DurationResult
    :members:
 
-.. autofunction:: fastcashflow.liability_duration
+.. autofunction:: fastcashflow.alm.liability_duration
 
-.. autofunction:: fastcashflow.liability_dv01
+.. autofunction:: fastcashflow.alm.liability_dv01
 
-.. autofunction:: fastcashflow.key_rate_dv01s
+.. autofunction:: fastcashflow.alm.key_rate_dv01s
 
 .. autoclass:: fastcashflow.alm.Bond
    :members:
 
-.. autofunction:: fastcashflow.bond_duration
+.. autofunction:: fastcashflow.alm.bond_duration
 
-.. autofunction:: fastcashflow.bond_value
+.. autofunction:: fastcashflow.alm.bond_value
 
-.. autofunction:: fastcashflow.effective_maturity
+.. autofunction:: fastcashflow.alm.effective_maturity
 
-.. autofunction:: fastcashflow.alm_gap
+.. autofunction:: fastcashflow.alm.alm_gap
 
 Solvency balance sheet (assets)
 -------------------------------
@@ -340,43 +340,43 @@ Solvency balance sheet (assets)
 Static (t=0) asset valuation -- the portfolio market value, available capital,
 the net interest-rate SCR, and the assembled solvency ratio.
 
-.. autoclass:: fastcashflow.AssetPortfolio
+.. autoclass:: fastcashflow.assets.AssetPortfolio
    :members:
 
-.. autoclass:: fastcashflow.Equity
+.. autoclass:: fastcashflow.assets.Equity
    :members:
 
-.. autoclass:: fastcashflow.Property
+.. autoclass:: fastcashflow.assets.Property
    :members:
 
-.. autoclass:: fastcashflow.Cash
+.. autoclass:: fastcashflow.assets.Cash
    :members:
 
-.. autofunction:: fastcashflow.asset_portfolio_value
+.. autofunction:: fastcashflow.assets.asset_portfolio_value
 
-.. autofunction:: fastcashflow.available_capital
+.. autofunction:: fastcashflow.assets.available_capital
 
-.. autofunction:: fastcashflow.net_interest_scr
+.. autofunction:: fastcashflow.solvency.net_interest_scr
 
-.. autofunction:: fastcashflow.equity_scr
+.. autofunction:: fastcashflow.solvency.equity_scr
 
-.. autofunction:: fastcashflow.property_scr
+.. autofunction:: fastcashflow.solvency.property_scr
 
-.. autofunction:: fastcashflow.fx_scr
+.. autofunction:: fastcashflow.solvency.fx_scr
 
-.. autofunction:: fastcashflow.concentration_scr
+.. autofunction:: fastcashflow.solvency.concentration_scr
 
-.. autofunction:: fastcashflow.market_module_scr
+.. autofunction:: fastcashflow.solvency.market_module_scr
 
-.. autofunction:: fastcashflow.credit_scr
+.. autofunction:: fastcashflow.solvency.credit_scr
 
-.. autofunction:: fastcashflow.operational_scr
+.. autofunction:: fastcashflow.solvency.operational_scr
 
-.. autofunction:: fastcashflow.aggregate_required_capital
+.. autofunction:: fastcashflow.solvency.aggregate_required_capital
 
-.. autofunction:: fastcashflow.assess_solvency
+.. autofunction:: fastcashflow.solvency.assess_solvency
 
-.. autoclass:: fastcashflow.SolvencyAssessment
+.. autoclass:: fastcashflow.solvency.SolvencyAssessment
    :members:
 
 Reporting

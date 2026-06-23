@@ -26,7 +26,7 @@ from fastcashflow.model_points import ModelPoints
 from fastcashflow.alm import (
     Bond, bond_value, bond_duration, effective_maturity, _annual_df,
 )
-from fastcashflow.solvency import (
+from fastcashflow._solvency import (
     RegimeSpec, required_capital, vfa_required_capital, vfa_equity_scr,
     vfa_interest_scr, KICSInterest, interest_with_dynamic_lapse,
 )
@@ -605,7 +605,7 @@ def operational_scr(model_points: ModelPoints, basis: Basis, regime, *,
 # (public / corporate / securitisation -- handbook tables 29 / 30 / 31). The
 # factor is a percent of market value (it already embeds the spread shock), so
 # the charge is factor x market value -- no re-measure. Effective maturity is the
-# cash-flow-weighted average maturity (:func:`fastcashflow.effective_maturity`).
+# cash-flow-weighted average maturity (:func:`fastcashflow.alm.effective_maturity`).
 # External (S&P) ratings map to the K-ICS grades AAA/AA -> 1-2, A -> 3, BBB -> 4,
 # BB -> 5, B -> 6, CCC and below -> 7, D -> default. Solvency II uses the Art-176
 # spread stress (piecewise-linear in modified duration by credit quality step).
@@ -839,7 +839,7 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
                     relief: "CedantSolvencyRelief | None" = None) -> SolvencyAssessment:
     """Assemble the t=0 solvency ratio from the assets and the liability SCR.
 
-    Runs :func:`~fastcashflow.required_capital` for the liability (insurance) SCR,
+    Runs :func:`~fastcashflow.solvency.required_capital` for the liability (insurance) SCR,
     values the portfolio, forms available capital (assets less the technical
     provision), and builds the market-risk module (net interest, equity, property,
     FX, concentration) aggregated through the market correlation. ``interest_scenarios``
@@ -862,7 +862,7 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     relief is uncapped at ``basic x tax_rate``).
 
     ``catastrophe`` (the K-ICS catastrophe amount from
-    :func:`~fastcashflow.catastrophe_scr`) and ``property_codes`` (the long-term
+    :func:`~fastcashflow.solvency.catastrophe_scr`) and ``property_codes`` (the long-term
     property / other coverages, a +16% rate shock) fold into the insurance module
     (table-6 correlation); both default to off. ``general_insurance_scr`` (a
     caller-supplied P&C amount for a life + general book) enters the BSCR as a
@@ -1257,7 +1257,7 @@ def stochastic_solvency_gmm(portfolio: AssetPortfolio, model_points: ModelPoints
 
     ``co_moving_assets`` (default ``False``) makes the asset value MOVE WITH each
     rate scenario: the bond portfolio is revalued on the same curve the liability is
-    discounted at (:func:`~fastcashflow.asset_value_by_scenario`), so a rate fall
+    discounted at (:func:`~fastcashflow.assets.asset_value_by_scenario`), so a rate fall
     lifts BOTH the BEL and the bonds and the ratio reflects the asset-liability
     DURATION GAP, not just the liability move. Off (the default) holds the asset
     value at its t=0 base-curve level -- the liability-only distribution. The

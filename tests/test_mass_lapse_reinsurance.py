@@ -13,7 +13,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import mass_lapse_reinsurance as lre
 from fastcashflow import solvency as sv
-from fastcashflow import solvency_assessment as sa
+from fastcashflow import _solvency_assessment as sa
 from fastcashflow import assets, alm
 from fastcashflow import ModelPoints
 from fastcashflow.engine import inforce_surrender_value, measure

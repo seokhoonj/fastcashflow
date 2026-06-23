@@ -31,7 +31,7 @@ from fastcashflow.basis import Basis
 from fastcashflow.engine import inforce_surrender_value, measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _norm_ppf
-from fastcashflow.solvency import RegimeSpec, aggregate, required_capital
+from fastcashflow._solvency import RegimeSpec, aggregate, required_capital
 
 _SQRT2 = math.sqrt(2.0)
 

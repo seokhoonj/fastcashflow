@@ -72,7 +72,7 @@ def _reject_account_book_alm(model_points: ModelPoints, basis: Basis,
     sensitivity is :func:`vfa_liability_duration` / :func:`vfa_liability_dv01`
     (``fcf.vfa.liability_duration``, which bumps the underlying-items return), the
     rate capital is the VFA interest sub-risk
-    (:func:`fastcashflow.vfa_interest_scr`), and the asset-liability cash-flow
+    (:func:`fastcashflow.vfa.interest_scr`), and the asset-liability cash-flow
     ladder is :func:`fastcashflow.assets.vfa_cashflow_gap` over
     :func:`vfa_net_liability_cashflows`.
     """
@@ -83,7 +83,7 @@ def _reject_account_book_alm(model_points: ModelPoints, basis: Basis,
             "items return, not the risk-free curve, so a discount-curve bump is "
             "not its interest sensitivity. Use fcf.vfa.liability_duration / "
             "fcf.vfa.liability_dv01 for the VFA interest sensitivity, "
-            "fcf.vfa_interest_scr for the rate capital, and "
+            "fcf.vfa.interest_scr for the rate capital, and "
             "fcf.assets.vfa_cashflow_gap / fcf.vfa.net_liability_cashflows for "
             "the asset-liability cash-flow ladder.")
 
@@ -394,10 +394,10 @@ class Bond:
 
     ``credit_rating`` (external / S&P scale: AAA, AA, A, BBB, BB, B, CCC, D, or
     "unrated") and ``exposure_class`` ("corporate", "public", "securitisation")
-    drive the credit-risk SCR (:func:`fastcashflow.credit_scr`); ``currency`` (ISO
-    code, "KRW" for domestic) drives the FX SCR (:func:`fastcashflow.fx_scr`);
+    drive the credit-risk SCR (:func:`fastcashflow.solvency.credit_scr`); ``currency`` (ISO
+    code, "KRW" for domestic) drives the FX SCR (:func:`fastcashflow.solvency.fx_scr`);
     ``issuer`` (counterparty name) groups exposures for the concentration SCR
-    (:func:`fastcashflow.concentration_scr`). None of these affect the price or
+    (:func:`fastcashflow.solvency.concentration_scr`). None of these affect the price or
     duration; the market value is in the reporting currency."""
 
     face: float
