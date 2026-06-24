@@ -43,7 +43,7 @@ if not hasattr(_vfa_ns, "GoCSettlement"):
 
 from fastcashflow.portfolio import settle_group_of_contracts
 from fastcashflow.vfa import GoCSettlement
-from fastcashflow.numerics import _paragraph45_csm_algebra
+from fastcashflow.numerics import _csm_loss_component_step
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +141,7 @@ def vfa_goc_oracle(mv, w):
     lc_open = float(mv.loss_component_opening.sum())
     cu_p = float((w * mv.coverage_units_provided).sum())
     cu_f = float((w * mv.coverage_units_future).sum())
-    csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
+    csm_after, lc_rev, lc_rec, lc_close = _csm_loss_component_step(
         csm_open + accretion, x, lc_open)
     denom = cu_p + cu_f
     frac = cu_p / denom if denom > 0 else 0.0

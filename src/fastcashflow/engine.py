@@ -46,7 +46,7 @@ from fastcashflow.numerics import (
     _csm_roll,
     _carry_lic_residual,
     _norm_ppf,
-    _paragraph45_csm_algebra,
+    _csm_loss_component_step,
     _rollforward_kernel,
     _settlement_factor,
     _settlement_lic_discounted,
@@ -1191,7 +1191,7 @@ def settle(
     csm_accretion = prior_csm * ((1.0 + lock) ** (period / 12.0) - 1.0)
     accreted = prior_csm + csm_accretion
     csm_after, lc_reversed, lc_recognised, lc_closing = (
-        _paragraph45_csm_algebra(
+        _csm_loss_component_step(
             accreted, csm_experience_unlocking + csm_premium_experience
             + csm_investment_experience,
             lc_after_incurred))

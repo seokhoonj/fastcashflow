@@ -20,7 +20,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import (
     Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints)
-from fastcashflow._vfa import _paragraph45_csm_algebra, _vfa_project
+from fastcashflow._vfa import _csm_loss_component_step, _vfa_project
 
 
 def _basis(*, investment_return=0.05, fund_fee=0.015, expense=1_000.0,
@@ -225,7 +225,7 @@ def test_lc_algebra_sign_grid(accreted, x, lc_open, csm_after, lc_reversed,
                               lc_recognised, lc_closing):
     """The paragraph-48/50(b) step, every sign case, exact scalar values --
     plus the conservation identity (csm_after - A) - (dLC) == x."""
-    after, reversed_, recognised, closing = _paragraph45_csm_algebra(
+    after, reversed_, recognised, closing = _csm_loss_component_step(
         np.array([accreted]), np.array([x]), np.array([lc_open]))
     assert after[0] == csm_after
     assert reversed_[0] == lc_reversed

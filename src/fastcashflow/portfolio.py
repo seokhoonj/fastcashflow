@@ -51,7 +51,7 @@ from fastcashflow.grouping import (
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
 from fastcashflow.model_points import ModelPoints, InforceState, align_inforce_state
 from fastcashflow.movement import roll_forward, reconcile
-from fastcashflow.numerics import _paragraph45_csm_algebra
+from fastcashflow.numerics import _csm_loss_component_step
 from fastcashflow.projection import Cashflows
 from fastcashflow.report import report, Report
 from fastcashflow.trace import (
@@ -1015,7 +1015,7 @@ def _finalise_goc_settlement(pre: dict[str, np.ndarray]) -> dict[str, np.ndarray
     lc_after_incurred = (pre["loss_component_opening"]
                          + pre["loss_component_finance"]
                          - pre["loss_component_amortised"])
-    csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
+    csm_after, lc_rev, lc_rec, lc_close = _csm_loss_component_step(
         accreted,
         pre["csm_experience_unlocking"] + pre["csm_premium_experience"]
         + pre["csm_investment_experience"],
@@ -1048,7 +1048,7 @@ def _finalise_vfa_goc_settlement(
                          + pre["loss_component_finance"]
                          - pre["loss_component_amortised"])
     x = pre["csm_fv_share"] + pre["csm_future_service"]
-    csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
+    csm_after, lc_rev, lc_rec, lc_close = _csm_loss_component_step(
         accreted,
         x + pre["csm_premium_experience"] + pre["csm_investment_experience"],
         lc_after_incurred)

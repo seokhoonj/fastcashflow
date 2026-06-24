@@ -1900,7 +1900,7 @@ def measure_inforce(
 # The paragraph-48/50(b) CSM / loss-component step is shared with the GMM
 # settlement (gmm.settle) and lives in numerics; re-exported here for the
 # existing VFA call sites and tests.
-from fastcashflow.numerics import _paragraph45_csm_algebra  # noqa: E402,F401
+from fastcashflow.numerics import _csm_loss_component_step  # noqa: E402,F401
 
 
 def settle(
@@ -2206,7 +2206,7 @@ def settle(
     accreted = prior_csm * (1.0 + r_m) ** period
     csm_accretion = accreted - prior_csm
     csm_after, lc_reversed, lc_recognised, lc_closing = (
-        _paragraph45_csm_algebra(
+        _csm_loss_component_step(
             accreted, x + csm_premium_experience + csm_investment_experience,
             lc_after_incurred))
 

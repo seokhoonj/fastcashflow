@@ -58,7 +58,7 @@ if not hasattr(_pf, "settle_group_of_contracts"):
         allow_module_level=True)
 
 from fastcashflow.portfolio import settle_group_of_contracts, GoCSettlement
-from fastcashflow.numerics import _paragraph45_csm_algebra
+from fastcashflow.numerics import _csm_loss_component_step
 from conftest import PATTERNS, make_death_basis
 
 
@@ -393,7 +393,7 @@ def test_case4_all_dead_group_releases_in_full():
 # Sec. 2 structure: the algebra is the shared helper; the linear lines tie
 # ===========================================================================
 def test_group_algebra_is_the_shared_paragraph45_helper():
-    """The group-grain CSM/LC step is the SAME numerics._paragraph45_csm_algebra
+    """The group-grain CSM/LC step is the SAME numerics._csm_loss_component_step
     used by the per-MP gmm.settle and vfa.settle -- not a re-implementation
     (A1 panel pin). Feeding the group-summed inputs through that helper
     reproduces the GoCSettlement non-linear lines."""
@@ -406,7 +406,7 @@ def test_group_algebra_is_the_shared_paragraph45_helper():
     accreted = float((mv.csm_opening + mv.csm_accretion).sum())
     x = float(mv.csm_experience_unlocking.sum())
     lc_open = float(mv.loss_component_opening.sum())
-    csm_after, lc_rev, lc_rec, lc_close = _paragraph45_csm_algebra(
+    csm_after, lc_rev, lc_rec, lc_close = _csm_loss_component_step(
         np.array(accreted), np.array(x), np.array(lc_open))
     # the helper's csm_after, before the B119 release, is csm_release + closing
     np.testing.assert_allclose(goc.csm_release[0] + goc.csm_closing[0],

@@ -533,8 +533,9 @@ def _csm_roll(csm0, coverage_units, discount_monthly, discount_units=False):
     return _csm_kernel(csm0, coverage_units, discount_monthly, discount_units)
 
 
-def _paragraph45_csm_algebra(accreted, x, lc_open):
-    """The paragraph-45/48/50(b) CSM and loss-component step, branchless.
+def _csm_loss_component_step(accreted, x, lc_open):
+    """The CSM and loss-component step, branchless (IFRS 17 para 44/45
+    settlement; 48 / 50(b) loss component).
 
     ``accreted`` is the opening CSM accreted to the adjustment date, ``x`` the
     favourable(+)/unfavourable(-) future-service change, ``lc_open`` the
