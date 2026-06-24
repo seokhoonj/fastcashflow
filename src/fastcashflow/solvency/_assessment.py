@@ -26,7 +26,7 @@ from fastcashflow.model_points import ModelPoints
 from fastcashflow.alm import (
     Bond, bond_value, bond_duration, effective_maturity, _annual_df,
 )
-from fastcashflow._solvency import (
+from fastcashflow.solvency._engine import (
     RegimeSpec, required_capital,
     KICSInterest, interest_with_dynamic_lapse,
 )

@@ -4,8 +4,8 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import assets, alm
-from fastcashflow import _solvency_assessment as sa
-import fastcashflow._vfa_solvency as vs
+from fastcashflow.solvency import _assessment as sa
+from fastcashflow.solvency import _vfa as vs
 from fastcashflow import solvency as sv
 from fastcashflow.engine import measure
 

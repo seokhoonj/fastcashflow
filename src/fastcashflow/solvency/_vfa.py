@@ -1,12 +1,12 @@
 """VFA solvency -- the variable-book required capital, SCR modules, and dynamic /
 stochastic solvency, exposed prefix-free under ``fcf.vfa.*``.
 
-Apart from the generic ``_solvency`` engine because VFA risk is structurally
+Apart from the generic ``_engine`` because VFA risk is structurally
 distinct: the GMDB / GMAB guarantee is an account-value market risk with
 moneyness-driven dynamic lapse, not a ``measure_fn`` variant of the GMM path.
 Only ``vfa_required_capital`` is a thin wrapper over the generic engine; the rest
-are genuine VFA computations. Generic primitives import one-way from ``_solvency``
-/ ``_solvency_assessment`` / ``assets``; ``measure_vfa`` and the merged
+are genuine VFA computations. Generic primitives import one-way from ``_engine``
+/ ``_assessment`` / ``assets``; ``measure_vfa`` and the merged
 ``DynamicAssessment`` import lazily in-body to avoid a runtime cycle.
 """
 from __future__ import annotations
@@ -21,10 +21,10 @@ from fastcashflow.assets import (
     AssetPortfolio, available_capital, asset_portfolio_value,
     asset_value_by_scenario, LiquidationResult, liquidate, vfa_cashflow_gap,
 )
-from fastcashflow._solvency import (
+from fastcashflow.solvency._engine import (
     required_capital, RegimeSpec, KICSInterest, SCRResult,
 )
-from fastcashflow._solvency_assessment import (
+from fastcashflow.solvency._assessment import (
     Assessment, InteractionResult, StochasticAssessment, DynamicAssessment,
     equity_scr, property_scr, fx_scr, concentration_scr, credit_scr,
     operational_scr, basic_scr,

@@ -45,7 +45,7 @@ import fastcashflow._gmm as _gmm
 import fastcashflow._paa as _paa
 import fastcashflow._vfa as _vfa
 import fastcashflow._reinsurance as _reinsurance
-from fastcashflow._solvency_assessment import DynamicAssessment
+from fastcashflow.solvency._assessment import DynamicAssessment
 
 
 def _to_years(monthly: FloatArray) -> FloatArray:

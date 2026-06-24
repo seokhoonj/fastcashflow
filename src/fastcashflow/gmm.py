@@ -30,8 +30,8 @@ from fastcashflow.trace import (
 from fastcashflow.alm import (
     liability_duration, liability_dv01, key_rate_dv01s,
     net_liability_cashflows)
-from fastcashflow._solvency import required_capital
-from fastcashflow._solvency_assessment import (
+from fastcashflow.solvency._engine import required_capital
+from fastcashflow.solvency._assessment import (
     assess, assess_dynamic, assess_stochastic)
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
