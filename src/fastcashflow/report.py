@@ -271,7 +271,13 @@ class DynamicSolvencyReport:
 
     def __str__(self) -> str:
         d = self.result
-        s, it, liq = d.static, d.interaction, d.liquidation
+        it, liq = d.interaction, d.liquidation
+        # static_available_capital / total_scr are stored on both paths (the GMM
+        # path back-fills them from ``static``; the VFA path supplies them with
+        # ``static`` possibly None), so read them directly rather than off ``static``.
+        static_ac, static_scr = d.static_available_capital, d.total_scr
+        static_ratio = (static_ac / static_scr if static_scr
+                        else float("inf") if static_ac >= 0.0 else float("-inf"))
         w = 30
 
         def row(label: str, value: float) -> str:
@@ -280,9 +286,9 @@ class DynamicSolvencyReport:
         lines = [
             "Dynamic solvency -- coupled rate / dynamic-lapse scenario overlay",
             "  -- static (t=0) --",
-            row("Available capital", s.available_capital),
-            row("Required capital (SCR)", s.total_scr),
-            f"  {'Solvency ratio':{w}}{_ratio(s.solvency_ratio):>18}",
+            row("Available capital", static_ac),
+            row("Required capital (SCR)", static_scr),
+            f"  {'Solvency ratio':{w}}{_ratio(static_ratio):>18}",
             "  -- scenario --",
             row("Base NAV", it.base_nav),
             row("Stressed NAV", it.stressed_nav),

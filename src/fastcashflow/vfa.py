@@ -44,7 +44,7 @@ from fastcashflow._solvency_assessment import (
     vfa_assess_solvency as assess_solvency,
     vfa_interaction_loss as interaction_loss,
     dynamic_solvency_vfa as dynamic_solvency)
-from fastcashflow._vfa import DynamicSolvency
+from fastcashflow._solvency_assessment import DynamicSolvency
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",

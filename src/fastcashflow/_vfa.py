@@ -30,7 +30,7 @@ with the policyholder bearing the investment risk.
 """
 from __future__ import annotations
 
-from typing import ClassVar, TYPE_CHECKING
+from typing import ClassVar
 
 import math
 from dataclasses import dataclass
@@ -70,10 +70,6 @@ from fastcashflow.tvog import (
 # In-force helpers shared with the GMM path (engine does not import _vfa, and io
 # imports engine lazily, so this top-level import is cycle-free).
 from fastcashflow.engine import _reconcile_state, _inforce_rescale
-
-if TYPE_CHECKING:  # field types of DynamicSolvency (string annotations, no runtime import)
-    from fastcashflow._solvency_assessment import InteractionResult, SolvencyAssessment
-    from fastcashflow.assets import LiquidationResult
 
 
 def moneyness_lapse_multiplier(moneyness, sensitivity, *, floor: float = 0.0,
@@ -919,35 +915,6 @@ class GoCSettlement:
             profitability=self.profitability_by_mp,
         )
         return mp, state
-
-
-@dataclass(frozen=True, slots=True)
-class DynamicSolvency:
-    """A market-shock / moneyness-lapse scenario overlaid on a variable book's
-    coverage ratio.
-
-    The VFA counterpart of :class:`DynamicSolvency`. ``interaction`` is the VFA
-    asset-liability interaction loss (the guarantee-cost revaluation under the
-    account-value shock, amplified by the moneyness dynamic lapse, plus the
-    forced-sale friction); ``liquidation`` is the underlying forced-sale roll.
-    ``stressed_available_capital`` is ``static_available_capital -
-    interaction.total_loss`` and ``stressed_ratio`` is that over ``total_scr``.
-
-    Like ``DynamicSolvency`` this is a SCENARIO OVERLAY, not a re-derived SCR. The
-    static position (``static_available_capital`` / ``total_scr``) is computed by
-    :func:`vfa_assess_solvency` when a ``regime`` is passed (``static`` then carries
-    the full :class:`SolvencyAssessment`), or supplied directly by the caller
-    (``static`` is then ``None``). This layer adds only the dynamic interaction the
-    static modules miss."""
-
-    interaction: InteractionResult
-    liquidation: LiquidationResult
-    static_available_capital: float
-    total_scr: float
-    stressed_available_capital: float
-    stressed_ratio: float
-    static: SolvencyAssessment | None = None
-
 
 @write_measurement.register
 def _(measurement: Measurement, path, *, ids=None):

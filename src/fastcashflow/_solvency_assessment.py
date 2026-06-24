@@ -1050,11 +1050,13 @@ class DynamicSolvency:
     question the static t=0 ratio cannot -- the asset-liability interaction and the
     liquidity friction it forces."""
 
-    static: SolvencyAssessment
     interaction: InteractionResult
     liquidation: LiquidationResult
+    static_available_capital: float
+    total_scr: float
     stressed_available_capital: float
     stressed_ratio: float
+    static: SolvencyAssessment | None = None
 
 
 def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
@@ -1088,6 +1090,8 @@ def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     else:
         stressed_ratio = float("inf") if stressed_ac >= 0.0 else float("-inf")
     return DynamicSolvency(static=static, interaction=interaction, liquidation=liq,
+                           static_available_capital=static.available_capital,
+                           total_scr=static.total_scr,
                            stressed_available_capital=stressed_ac,
                            stressed_ratio=stressed_ratio)
 
@@ -1139,7 +1143,6 @@ def dynamic_solvency_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
         stressed_ratio = stressed_ac / total_scr
     else:
         stressed_ratio = float("inf") if stressed_ac >= 0.0 else float("-inf")
-    from fastcashflow._vfa import DynamicSolvency
     return DynamicSolvency(
         interaction=interaction, liquidation=liq,
         static_available_capital=static_available_capital, total_scr=total_scr,
