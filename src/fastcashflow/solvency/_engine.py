@@ -38,7 +38,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
 from fastcashflow.coverage import CalculationMethod
 from fastcashflow.curves import discount_monthly_curve
-from fastcashflow.engine import measure
+from fastcashflow.gmm._engine import measure
 from fastcashflow._measurement.inforce import inforce_surrender_value
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _cost_of_capital_ra
@@ -706,7 +706,7 @@ def required_capital(
     :func:`fastcashflow.embedded_value` via its ``required_capital`` argument.
 
     ``measure_fn`` is the liability measurement the stresses re-run (default the
-    GMM :func:`~fastcashflow.engine.measure`); pass
+    GMM :func:`~fastcashflow.gmm._engine.measure`); pass
     :func:`~fastcashflow.vfa.measure` to price a variable book's sub-risks on its
     net BEL (see :func:`vfa_required_capital`). It must accept ``(mp, basis,
     full=...)`` and return a result carrying ``bel`` (and ``ra_path`` / ``bel_path``

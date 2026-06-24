@@ -30,7 +30,7 @@ from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
-from fastcashflow.engine import measure
+from fastcashflow.gmm._engine import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow.projection import project_cashflows

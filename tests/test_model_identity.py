@@ -17,7 +17,7 @@ from fastcashflow.reinsurance import QuotaShare
 from fastcashflow._measurement.model import (
     MODEL_TAGS, model_tag, supported_model_tags,
 )
-from fastcashflow._gmm import Measurement as _GmmMeasurement
+from fastcashflow.gmm._results import Measurement as _GmmMeasurement
 from fastcashflow._vfa import Measurement as _VfaMeasurement
 from fastcashflow._paa import Measurement as _PaaMeasurement
 from fastcashflow._reinsurance import Measurement as _ReinsuranceMeasurement

@@ -38,7 +38,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis
-from fastcashflow.engine import measure
+from fastcashflow.gmm._engine import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.solvency._engine import Stress, scale_lapse, scale_mortality
 

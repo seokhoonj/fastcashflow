@@ -15,7 +15,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow.basis import BasisRouter
-from fastcashflow.engine import _measure_inforce_full, _measure_inforce_fast
+from fastcashflow.gmm._engine import _measure_inforce_full, _measure_inforce_fast
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.basis import annual_to_monthly
 from fastcashflow.io import (

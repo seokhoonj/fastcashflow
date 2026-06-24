@@ -22,7 +22,7 @@ from dataclasses import replace
 import numpy as np
 
 from fastcashflow._typing import FloatArray
-from fastcashflow.engine import Measurement, _require_full
+from fastcashflow.gmm._engine import Measurement, _require_full
 from fastcashflow._measurement.basis import _require_inception
 from fastcashflow.numerics import _csm_roll
 

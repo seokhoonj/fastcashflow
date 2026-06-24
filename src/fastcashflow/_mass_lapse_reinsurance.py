@@ -28,7 +28,7 @@ from typing import IO, Protocol, runtime_checkable
 import numpy as np
 
 from fastcashflow.basis import Basis
-from fastcashflow.engine import measure
+from fastcashflow.gmm._engine import measure
 from fastcashflow._measurement.inforce import inforce_surrender_value
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _norm_ppf

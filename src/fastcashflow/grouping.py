@@ -32,8 +32,8 @@ from fastcashflow._measurement.model import model_tag, supported_model_tags
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.curves import forward_rates
 from fastcashflow._vfa import _require_settlement_csm
-from fastcashflow.engine import _require_full
-import fastcashflow._gmm as _gmm
+from fastcashflow.gmm._engine import _require_full
+import fastcashflow.gmm._results as _gmm
 import fastcashflow._paa as _paa
 import fastcashflow._vfa as _vfa
 import fastcashflow._reinsurance as _reinsurance

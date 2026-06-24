@@ -139,7 +139,7 @@ def _inforce_mp(term, boundary, elapsed):
 
 
 def test_inforce_past_boundary_raises_value_error():
-    from fastcashflow.engine import _measure_inforce_fast, _measure_inforce_full
+    from fastcashflow.gmm._engine import _measure_inforce_fast, _measure_inforce_full
     # term 120, boundary 12, elapsed 24 -- inside the term but past the
     # boundary, the case that used to IndexError off the 12-wide trajectory
     mp = _inforce_mp(term=120, boundary=12, elapsed=24)
@@ -152,7 +152,7 @@ def test_inforce_past_boundary_raises_value_error():
 
 
 def test_inforce_within_boundary_is_fine():
-    from fastcashflow.engine import _measure_inforce_fast
+    from fastcashflow.gmm._engine import _measure_inforce_fast
     mp = _inforce_mp(term=120, boundary=12, elapsed=6)
     v = _measure_inforce_fast(mp, _basis())
     assert np.isfinite(v.bel[0])

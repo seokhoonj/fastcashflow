@@ -28,11 +28,11 @@ import polars as pl
 
 from fastcashflow._measurement.model import model_tag
 from fastcashflow.io import _write_frame, write_measurement
-import fastcashflow._gmm as _gmm
+import fastcashflow.gmm._results as _gmm
 import fastcashflow._paa as _paa
 import fastcashflow._reinsurance as _reinsurance
 import fastcashflow._vfa as _vfa
-from fastcashflow._gmm import _GMM_RECON_BLOCKS
+from fastcashflow.gmm._results import _GMM_RECON_BLOCKS
 from fastcashflow._paa import _PAA_RECON_BLOCKS
 from fastcashflow._reinsurance import _REINSURANCE_RECON_BLOCKS
 from fastcashflow._vfa import _VFA_RECON_BLOCKS

@@ -7,7 +7,7 @@ from fastcashflow import assets, alm
 from fastcashflow.solvency import _assessment as sa
 from fastcashflow.solvency import _vfa as vs
 from fastcashflow import solvency as sv
-from fastcashflow.engine import measure
+from fastcashflow.gmm._engine import measure
 
 from conftest import make_death_basis, PATTERNS
 

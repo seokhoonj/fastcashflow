@@ -26,7 +26,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import Basis, CalculationMethod, ModelPoints, CoverageRate
-from fastcashflow.engine import _measure_inforce_fast
+from fastcashflow.gmm._engine import _measure_inforce_fast
 from fastcashflow.gmm import measure
 from conftest import PATTERNS
 

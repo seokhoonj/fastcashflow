@@ -4,11 +4,11 @@ The GMM model owns its measurement here: the result dataclasses
 (:class:`Measurement`, :class:`CurrentEstimate`, :class:`Aggregate`), the
 CSM orchestration (:func:`_compute_csm`), and the full-measurement assembler
 (:func:`_measure_full`) that values a projection into a GMM result. The
-assembler builds on the model-agnostic :func:`~fastcashflow.engine.valued_projection`
+assembler builds on the model-agnostic :func:`~fastcashflow._measurement.projection.valued_projection`
 bundle and adds the GMM CSM roll, so no other model borrows a GMM container.
 
 The shared valuation kernel (the cash-flow projection, ``valued_projection`` and
-the GMM fast ``@njit`` codegen cluster) lives in :mod:`fastcashflow.engine`;
+the GMM fast ``@njit`` codegen cluster) lives in :mod:`fastcashflow.gmm._engine`;
 this module is imported back by ``engine`` for the result types and the
 assembler, while ``valued_projection`` is imported here at call time to keep the
 module load acyclic.
@@ -738,12 +738,12 @@ def _measure_full(model_points: "ModelPoints", basis: "Basis", *,
                   lapse_scale: FloatArray | None = None) -> Measurement:
     """Full GMM measurement: BEL, RA and CSM rolled forward over time.
 
-    The shared neutral bundle from :func:`~fastcashflow.engine.valued_projection`
+    The shared neutral bundle from :func:`~fastcashflow._measurement.projection.valued_projection`
     plus the GMM CSM roll (:func:`_compute_csm`), assembled into a
     :class:`Measurement` that carries both the ``(n_mp,)`` inception headline
     (column 0 of each trajectory) and the ``(n_mp, n_time+1)`` ``*_path``
     trajectories. Reached by ``measure(..., full=True)``. ``discount_monthly`` /
-    ``lapse_scale`` are forwarded to :func:`~fastcashflow.engine.valued_projection`
+    ``lapse_scale`` are forwarded to :func:`~fastcashflow._measurement.projection.valued_projection`
     (see there for the override semantics).
     """
     from fastcashflow._measurement.projection import valued_projection

@@ -28,7 +28,7 @@ import numpy as np
 from dataclasses import replace
 import fastcashflow as fcf
 from fastcashflow import alm
-from fastcashflow.engine import measure
+from fastcashflow.gmm import measure
 
 mp = fcf.ModelPoints.single(40, 50_000.0, 120, benefits={"DEATH": 100_000_000.0},
                             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH})

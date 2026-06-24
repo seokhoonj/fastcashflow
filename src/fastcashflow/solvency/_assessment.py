@@ -21,7 +21,7 @@ if TYPE_CHECKING:                       # annotation only -- avoids a runtime cy
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
-from fastcashflow.engine import measure
+from fastcashflow.gmm._engine import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.alm import (
     Bond, bond_value, bond_duration, effective_maturity, _annual_df,
@@ -523,7 +523,7 @@ def operational_scr(model_points: ModelPoints, basis: Basis, regime, *,
     exposure is floored at zero.
 
     ``measure_fn`` is the liability measurement (default the GMM
-    :func:`~fastcashflow.engine.measure`); pass :func:`~fastcashflow.vfa.measure`
+    :func:`~fastcashflow.gmm._engine.measure`); pass :func:`~fastcashflow.vfa.measure`
     for a variable book's BEL / premium exposure."""
     cal = _operational_cal(regime)
     mf = measure_fn if measure_fn is not None else measure

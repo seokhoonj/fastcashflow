@@ -14,7 +14,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow.solvency import _engine as sv
 from fastcashflow.coverage import CalculationMethod
-from fastcashflow.engine import measure
+from fastcashflow.gmm._engine import measure
 from fastcashflow.numerics import _cost_of_capital_ra
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.state_model import StateModel, State, Transition
@@ -478,7 +478,7 @@ def test_property_subrisk_shock_and_fold():
     got = sv.required_capital(mp, basis, regime=sv.KICS, property_codes=("PROP",))
     # property capital = max(0, delta BEL under a +16% PROP-rate shock)
     shocked = sv.scale_coverage_codes(("PROP",), 1.16).apply(mp, basis)
-    from fastcashflow.engine import measure as _measure
+    from fastcashflow.gmm._engine import measure as _measure
     dbel = (float(_measure(*shocked, full=False).bel.sum())
             - float(_measure(mp, basis, full=False).bel.sum()))
     assert np.isclose(got.sub_risk_capital["property"], max(0.0, dbel))

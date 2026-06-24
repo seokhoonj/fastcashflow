@@ -114,7 +114,7 @@ def _expected_premium_oracle(basis, *, em_open=12, period=12, scale=1000.0,
                              term=36):
     """Recompute the expected within-period premium independently."""
     from dataclasses import replace
-    from fastcashflow.engine import _measure_full
+    from fastcashflow.gmm._engine import _measure_full
     unit = ModelPoints(
         issue_age=np.array([40]), premium=np.array([100.0]),
         term_months=np.array([term]), benefits={"DEATH": np.array([1e6])},
