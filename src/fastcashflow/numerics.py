@@ -15,7 +15,7 @@ Contents:
 * settlement-pattern helpers (``_settlement_lic``, ``_settlement_factor``)
 * the standard-normal inverse CDF (``_norm_ppf``)
 * the cost-of-capital RA accumulator (``_cost_of_capital_ra``)
-* the BEL / RA / CSM time-loop kernels (``_rollforward_kernel``,
+* the BEL / RA / CSM time-loop kernels (``_roll_forward_kernel``,
   ``_csm_kernel``)
 """
 from __future__ import annotations
@@ -328,7 +328,7 @@ def _risk_adjustment(basis, pv_claims, pv_morbidity, pv_disability,
 
 
 @njit(parallel=True, cache=True)
-def _rollforward_kernel(mortality_cf, morbidity_cf, disability_cf, expense_cf,
+def _roll_forward_kernel(mortality_cf, morbidity_cf, disability_cf, expense_cf,
                         premium_cf, annuity_cf, maturity_cf, surrender_cf,
                         contract_boundary_months, discount_monthly):
     """Backward pass -- the BEL and the four RA present-value trajectories.

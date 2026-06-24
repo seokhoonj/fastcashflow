@@ -47,7 +47,7 @@ from fastcashflow.numerics import (
     _carry_lic_residual,
     _norm_ppf,
     _csm_loss_component_step,
-    _rollforward_kernel,
+    _roll_forward_kernel,
     _settlement_factor,
     _settlement_lic_discounted,
 )
@@ -1102,7 +1102,7 @@ def settle(
     zero_ann = np.zeros_like(cf.annuity_cf)
     zero_mat = np.zeros_like(cf.maturity_cf)
     zero_surr = np.zeros_like(cf.surrender_cf)
-    outflow_path = _rollforward_kernel(
+    outflow_path = _roll_forward_kernel(
         mort_claim, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
         zero_prem, zero_ann, zero_mat, zero_surr,
         boundary, discount_monthly)[0]
@@ -1170,7 +1170,7 @@ def settle(
     # basis equal to the lock-in gives a zero wedge identically.
     lock = float(state.lock_in_rate)
     lock_monthly = np.full(n_time, (1.0 + lock) ** (1.0 / 12.0) - 1.0)
-    bel_lock = _rollforward_kernel(
+    bel_lock = _roll_forward_kernel(
         cf.mortality_cf, cf.morbidity_cf, cf.disability_cf, cf.expense_cf,
         cf.premium_cf, cf.annuity_cf, cf.maturity_cf, cf.surrender_cf,
         boundary, lock_monthly)[0]
@@ -2486,7 +2486,7 @@ def _fast_kernel_scalar(issue_index, sex, term_months, contract_boundary_months,
             # max(matured account value, GMAB) (the maturity benefit doubles as
             # the guaranteed accumulation-benefit floor). Seeded at the boundary
             # and discounted with the boundary start-of-month factor, mirroring
-            # the full path's _rollforward_kernel maturity seed.
+            # the full path's _roll_forward_kernel maturity seed.
             gmab = account_gmab[mp]
             mat_av = av_term if av_term > gmab else gmab
             pm = (inforce_t * mat_av * discount_factor_bom[boundary]

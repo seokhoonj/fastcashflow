@@ -53,7 +53,7 @@ from fastcashflow.io import (
     write_measurement, _write_measurement_columns, _stream_policies_coverages)
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import (
-    _carry_lic_residual, _risk_adjustment, _rollforward_kernel,
+    _carry_lic_residual, _risk_adjustment, _roll_forward_kernel,
     _norm_ppf, _settlement_factor, _settlement_lic, _settlement_lic_discounted)
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
@@ -582,7 +582,7 @@ def measure_paa(
         factor = _settlement_factor(basis.settlement_pattern, basis.discount_monthly)
         onerous_mortality_cf = onerous_mortality_cf * factor
         onerous_morbidity_cf = onerous_morbidity_cf * factor
-    bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
+    bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _roll_forward_kernel(
         onerous_mortality_cf, onerous_morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.contract_boundary_months,
@@ -1029,7 +1029,7 @@ def settle(
         onerous_morbidity_cf = onerous_morbidity_cf * factor
     discount_monthly = discount_monthly_curve(basis, n_time)
     bel, pv_claims, pv_morbidity, pv_disability, pv_survival = (
-        _rollforward_kernel(
+        _roll_forward_kernel(
             onerous_mortality_cf, onerous_morbidity_cf, cf.disability_cf,
             cf.expense_cf, cf.premium_cf, cf.annuity_cf, cf.maturity_cf,
             cf.surrender_cf, boundary, discount_monthly))

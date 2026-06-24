@@ -250,7 +250,7 @@ def test_two_rate_unlocking_matches_first_principles():
     bom_l = (1.0 + 0.03) ** (-t / 12.0)                   # locked-in factors
     mid_l = (1.0 + 0.03) ** (-(t + 0.5) / 12.0)
     bom_l_T = (1.0 + 0.03) ** (-term / 12.0)
-    # engine timing (numerics._rollforward_kernel): premiums and annuities at
+    # engine timing (numerics._roll_forward_kernel): premiums and annuities at
     # the month start, claims / morbidity / disability / expenses / surrender
     # mid-month, the maturity benefit at the boundary
     out_mid = (cf.mortality_cf + cf.morbidity_cf + cf.expense_cf

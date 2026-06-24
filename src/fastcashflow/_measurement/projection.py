@@ -22,7 +22,7 @@ from fastcashflow.numerics import (
     _cost_of_capital_ra,
     _norm_ppf,
     _risk_adjustment,
-    _rollforward_kernel,
+    _roll_forward_kernel,
     _settlement_factor,
     _settlement_lic,
 )
@@ -66,7 +66,7 @@ def _account_risk_adjustment(model_points, basis, proj, discount_monthly):
     # for an account book) purely to harvest its PV. A book with no such rider
     # has morbidity_cf == 0, so pv_morbidity == 0 and the term vanishes
     # (byte-identical). expense_cf rides the morbidity slot for the same reason.
-    _, pv_nar, pv_expense, pv_morbidity, pv_annuity = _rollforward_kernel(
+    _, pv_nar, pv_expense, pv_morbidity, pv_annuity = _roll_forward_kernel(
         nar_claim, proj.expense_cf, proj.morbidity_cf, zeros_t, zeros_t,
         proj.annuity_cf, zeros_mp, zeros_t,
         model_points.contract_boundary_months, discount_monthly)
@@ -149,7 +149,7 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
         morbidity_cf = morbidity_cf * factor
     discount_factor_bom, discount_factor_mid = discount_factors_from_curve(discount_monthly)
 
-    bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _rollforward_kernel(
+    bel, pv_claims, pv_morbidity, pv_disability, pv_survival = _roll_forward_kernel(
         mortality_cf, morbidity_cf, proj.disability_cf, proj.expense_cf,
         proj.premium_cf, proj.annuity_cf, proj.maturity_cf, proj.surrender_cf,
         model_points.contract_boundary_months, discount_monthly,
@@ -176,7 +176,7 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
             # pv_survival slot, with the kernel's exact start-of-month discount.
             zero = np.zeros_like(ac)
             zero_mat = np.zeros(ac.shape[0])
-            _, _, _, _, pv_certain = _rollforward_kernel(
+            _, _, _, _, pv_certain = _roll_forward_kernel(
                 zero, zero, zero, zero, zero, ac, zero_mat, zero,
                 model_points.contract_boundary_months, discount_monthly,
             )
