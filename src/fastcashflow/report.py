@@ -258,7 +258,7 @@ def _ratio(r: float) -> str:
 
 @dataclass(frozen=True, slots=True)
 class DynamicAssessmentReport:
-    """Formatted view of a :func:`~fastcashflow.solvency.assess_dynamic` scenario overlay.
+    """Formatted view of a :func:`~fastcashflow.gmm.assess_dynamic` scenario overlay.
 
     Lays out the static t=0 picture (available capital, required capital, ratio),
     the coupled rate / dynamic-lapse scenario (the mark-to-market revaluation and

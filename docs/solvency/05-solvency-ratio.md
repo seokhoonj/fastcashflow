@@ -18,5 +18,5 @@
 
 ## 관련 API / 쿡북
 
-- `fcf.solvency.assess`, `fcf.solvency.ratio`
+- `fcf.gmm.assess`, `fcf.solvency.ratio`
 - 쿡북 8.8 [자산 - 가용자본 - 지급여력비율](../cookbook/workflow/solvency-balance-sheet)

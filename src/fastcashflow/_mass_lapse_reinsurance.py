@@ -326,7 +326,7 @@ class CedantSolvencyRelief:
     All mass-lapse figures use the per-policy loss density
     (:func:`lapse_loss_density`, Art. 142(6)), so ``mass_gross`` may exceed the
     aggregate ``solvency.mass_lapse`` used by a plain
-    :func:`fastcashflow.solvency.required_capital` run.
+    :func:`fastcashflow.gmm.required_capital` run.
     """
 
     loss_density: float
@@ -410,7 +410,7 @@ def cedant_solvency_relief(
 
     Lapse up / down come from the regime's own lapse variants (everything in the
     lapse sub-risk that is not the mass-lapse variant); the other sub-risk
-    capitals come from one gross :func:`fastcashflow.solvency.required_capital`
+    capitals come from one gross :func:`fastcashflow.gmm.required_capital`
     run and re-aggregate unchanged.
 
     ``shock`` defaults to the regime's own mass-lapse fraction (40% Solvency II,

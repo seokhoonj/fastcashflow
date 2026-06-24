@@ -290,7 +290,7 @@ Regime-agnostic required capital (SCR) by shock-and-aggregate, with the Solvency
 II and K-ICS calibrations. Liability-side (insurance and interest risk); the
 asset side and available capital are caller-supplied.
 
-.. autofunction:: fastcashflow.solvency.required_capital
+.. autofunction:: fastcashflow.gmm.required_capital
 
 .. autofunction:: fastcashflow.solvency.kics_catastrophe
 
@@ -374,7 +374,7 @@ the net interest-rate SCR, and the assembled solvency ratio.
 
 .. autofunction:: fastcashflow.solvency.basic_scr
 
-.. autofunction:: fastcashflow.solvency.assess
+.. autofunction:: fastcashflow.gmm.assess
 
 .. autoclass:: fastcashflow.solvency.Assessment
    :members:

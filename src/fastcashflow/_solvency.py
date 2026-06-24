@@ -958,7 +958,7 @@ __all__ = [
     "scale_annuity", "scale_expense",
     "dynamic_lapse_multiplier", "interest_with_dynamic_lapse",
     "shock_curve", "shock_spread", "KICSInterest",
-    "aggregate", "required_capital", 
+    "aggregate",
     "kics_catastrophe", "ratio",
     "SII", "KICS",
 ]

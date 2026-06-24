@@ -75,7 +75,7 @@ per = alm.bond_duration(alm.Bond(100.0, 0.03, 15, 1), 0.03).dv01
 port = fcf.assets.AssetPortfolio(holdings=(alm.Bond(dv01 / per * 100.0, 0.03, 15, 1),
                                     fcf.assets.Cash(6_000_000.0), fcf.assets.Equity(2_000_000.0)))
 
-a = fcf.solvency.assess(port, mp, basis, regime=fcf.solvency.SII)
+a = fcf.gmm.assess(port, mp, basis, regime=fcf.solvency.SII)
 print(f"  available capital      = {a.available_capital:>15,.0f}")
 print(f"  required capital (SCR) = {a.total_scr:>15,.0f}")
 print(f"    insurance risk       = {a.insurance_scr:>15,.0f}")

@@ -256,7 +256,7 @@ def test_cedant_relief_reaggregates_life_module():
     treaty = lre.LapseXL(0.15, 0.40)
     r = lre.cedant_solvency_relief(mp, basis, treaty, regime=sv.SII,
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
-    caps = dict(sv.required_capital(mp, basis, regime=sv.SII).sub_risk_capital)
+    caps = dict(fcf.gmm.required_capital(mp, basis, regime=sv.SII).sub_risk_capital)
     exp_gross = sv.aggregate({**caps, "lapse": r.lapse_gross_scr}, sv.SII)
     exp_net = sv.aggregate({**caps, "lapse": r.lapse_net_scr}, sv.SII)
     assert np.isclose(r.insurance_gross_scr, exp_gross)

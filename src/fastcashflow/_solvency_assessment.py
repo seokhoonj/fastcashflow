@@ -788,7 +788,7 @@ def assess(portfolio: AssetPortfolio, model_points: ModelPoints,
                     relief: "CedantSolvencyRelief | None" = None) -> Assessment:
     """Assemble the t=0 solvency ratio from the assets and the liability SCR.
 
-    Runs :func:`~fastcashflow.solvency.required_capital` for the liability (insurance) SCR,
+    Runs :func:`~fastcashflow.gmm.required_capital` for the liability (insurance) SCR,
     values the portfolio, forms available capital (assets less the technical
     provision), and builds the market-risk module (net interest, equity, property,
     FX, concentration) aggregated through the market correlation. ``interest_scenarios``
@@ -1068,6 +1068,6 @@ __all__ = [
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_scr", "credit_scr", "operational_scr",
     "basic_scr",
-    "Assessment", "assess", "DynamicAssessment", "assess_dynamic",
-    "StochasticAssessment", "assess_stochastic", "available_capital",
+    "Assessment", "DynamicAssessment", "StochasticAssessment",
+    "available_capital",
 ]
