@@ -110,7 +110,7 @@ def test_mass_lapse_is_count_haircut_when_no_surrender_value():
     max(BEL(count*0.70) - BEL(count), 0). The t=0 surrender-value add-on is zero
     (the basis prices no surrender value), so only the lost-business term bites."""
     from dataclasses import replace
-    from fastcashflow.engine import inforce_surrender_value
+    from fastcashflow._measurement.inforce import inforce_surrender_value
     mp, basis = _mp(), _basis()
     assert np.allclose(inforce_surrender_value(mp, basis), 0.0)   # no curve -> no add-on
     base = measure(mp, basis, full=False).bel.sum()
@@ -131,7 +131,7 @@ def test_mass_lapse_adds_t0_surrender_value():
     leaving fraction is paid its valuation-date surrender value -- the strain the
     count haircut (future cash flows only) cannot carry."""
     from dataclasses import replace
-    from fastcashflow.engine import inforce_surrender_value
+    from fastcashflow._measurement.inforce import inforce_surrender_value
     f = 0.30
     amount = np.full(_mp().term_months[0] + 1, 5_000.0)   # flat per-policy SV
     basis = _basis(surrender_value_curve=amount,

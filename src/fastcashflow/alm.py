@@ -34,7 +34,8 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
-from fastcashflow.engine import measure, _portfolio_has_account
+from fastcashflow.engine import measure
+from fastcashflow._measurement.account import _portfolio_has_account
 from fastcashflow.model_points import ModelPoints
 
 _BP = 1e-4    # one basis point

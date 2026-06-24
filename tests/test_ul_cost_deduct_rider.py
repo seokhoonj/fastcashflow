@@ -208,7 +208,7 @@ def test_cost_deduct_rider_priced_in_account_ra():
 
     # The RA gains exactly z * morbidity_cv * pv(morbidity_cf), the rider's
     # health benefit priced through morbidity risk (mid-month discounting).
-    from fastcashflow.engine import _norm_ppf
+    from fastcashflow.numerics import _norm_ppf
     i_m = (1.03) ** (1.0 / 12.0) - 1.0
     morb = m_priced.cashflows.morbidity_cf[0]
     t = np.arange(morb.shape[0])

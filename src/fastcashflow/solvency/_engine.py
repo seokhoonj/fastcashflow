@@ -38,7 +38,8 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
 from fastcashflow.coverage import CalculationMethod
 from fastcashflow.curves import discount_monthly_curve
-from fastcashflow.engine import inforce_surrender_value, measure
+from fastcashflow.engine import measure
+from fastcashflow._measurement.inforce import inforce_surrender_value
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _cost_of_capital_ra
 
@@ -323,7 +324,7 @@ def mass_lapse(fraction: float) -> Stress:
     paid its surrender value at the shock date -- a one-time outflow the count
     haircut cannot express; it is added via :class:`Stress.bel_addon` as
     ``fraction x sum(count x surrender_value)`` at the valuation date (see
-    :func:`fastcashflow.engine.inforce_surrender_value`). Together the stressed
+    :func:`fastcashflow._measurement.inforce.inforce_surrender_value`). Together the stressed
     liability is ``BEL(remaining) + surrender_value(leaving)``, so the capital is
     ``fraction x sum(count x (surrender_value - per-policy BEL))``.
 

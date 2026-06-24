@@ -83,7 +83,8 @@ def _assert_self_consistent(make_mp):
     # _measure_full, it runs the account-aware scalar kernel directly. Confirm
     # the routing actually exercises the scalar fast path (requires_full is now
     # False for an account book; the account check was removed from it).
-    from fastcashflow.engine import requires_full, _portfolio_has_account
+    from fastcashflow.engine import requires_full
+    from fastcashflow._measurement.account import _portfolio_has_account
     assert _portfolio_has_account(mp, basis)
     assert not requires_full(mp, basis), (
         "Step 4: an account book must run the scalar fast path, not auto-route "
@@ -351,7 +352,7 @@ def test_ul_credit_rate_tvog_hand_roll():
     # bare return), differenced on the death / surrender / maturity exits and
     # discounted at the path's own return, reproduces both the intrinsic (central
     # path) and a single scenario's guarantee cost to floating-point.
-    from fastcashflow.engine import _account_roll_inputs
+    from fastcashflow._measurement.account import _account_roll_inputs
     from fastcashflow.projection import project_cashflows
     from fastcashflow.tvog import credited_monthly_rate
 

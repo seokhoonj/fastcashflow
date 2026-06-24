@@ -28,7 +28,8 @@ from typing import IO, Protocol, runtime_checkable
 import numpy as np
 
 from fastcashflow.basis import Basis
-from fastcashflow.engine import inforce_surrender_value, measure
+from fastcashflow.engine import measure
+from fastcashflow._measurement.inforce import inforce_surrender_value
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow.solvency._engine import RegimeSpec, aggregate, required_capital
@@ -72,7 +73,7 @@ def lapse_loss_density(model_points: ModelPoints, basis: Basis) -> float:
     standard-formula mass-lapse scenario prescribes.
 
     Surrender value is the valuation-date in-force surrender value
-    (:func:`fastcashflow.engine.inforce_surrender_value`); zero where the basis
+    (:func:`fastcashflow._measurement.inforce.inforce_surrender_value`); zero where the basis
     prices none. Note ``S`` is NOT zero for a surrender-value-less book: a
     profitable model point (negative BEL) still loses its embedded value when it
     lapses (``surrender_value - BEL = -BEL > 0``), so ``S = sum max(0, -BEL)``

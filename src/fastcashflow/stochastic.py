@@ -172,7 +172,7 @@ def measure_stochastic(
     # month of incurrence in the settlement factor would otherwise have to
     # vary per scenario). Other configurations fall back to the per-scenario
     # measure(full=False) loop, which handles them correctly if more slowly.
-    from fastcashflow.engine import _portfolio_has_account
+    from fastcashflow._measurement.account import _portfolio_has_account
     if (basis.ra_method == "confidence_level"
             and basis.settlement_pattern is None
             and not _portfolio_has_account(model_points, basis)):

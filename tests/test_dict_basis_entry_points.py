@@ -82,7 +82,7 @@ def test_measure_inforce_routes_a_multi_segment_dict(tmp_path):
     """measure_inforce settles a multi-segment portfolio in one call: each
     (product, channel) routes to its own Basis, and the routed result equals
     the per-segment single-basis settlement -- no manual subsetting needed."""
-    from fastcashflow.engine import _reconcile_state
+    from fastcashflow._measurement.inforce import _reconcile_state
     fcf.samples.export(str(tmp_path), template="gmm", quiet=True)
     basis = fcf.read_basis(str(tmp_path / "basis.xlsx"))     # dict, 7 segments
     mp, state = fcf.read_inforce_policies(

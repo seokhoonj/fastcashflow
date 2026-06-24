@@ -14,7 +14,7 @@ in :mod:`fastcashflow.projection` and :mod:`fastcashflow.engine`.
     df_bom, df_mid = fcf.curves.discount_factors(basis, cf.premium_cf.shape[1])
     bel = (cf.mortality_cf * df_mid).sum() - (cf.premium_cf * df_bom).sum()
 """
-from fastcashflow.engine import inforce_surrender_value
+from fastcashflow._measurement.inforce import inforce_surrender_value
 from fastcashflow.projection import project_cashflows
 
 __all__ = ["project_cashflows", "inforce_surrender_value"]

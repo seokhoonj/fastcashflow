@@ -62,7 +62,7 @@ def test_inforce_surrender_value_amount_per_policy(em):
     survival to ``em`` cancels against the count rebase, leaving exactly
     ``count * amount[em]`` for the amount-per-policy basis."""
     from dataclasses import replace
-    from fastcashflow.engine import inforce_surrender_value
+    from fastcashflow._measurement.inforce import inforce_surrender_value
     amount = np.array([1_000.0 * (t + 1) for t in range(61)])
     basis = _amount_basis(0.12, amount)
     mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1e8},
@@ -102,7 +102,7 @@ def test_inforce_surrender_value_account_backed_hand_calc(em):
     per-policy surrender value is ``av0 * (1 - surr_charge)`` at every duration,
     paid to the full as-of count. Independent of the elapsed months (flat av)."""
     from dataclasses import replace
-    from fastcashflow.engine import inforce_surrender_value
+    from fastcashflow._measurement.inforce import inforce_surrender_value
     av0, surr_charge, count = 1_000.0, 0.10, 500.0
     basis = _ul_surrender_basis(surr_charge)
     mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1e6},
@@ -119,7 +119,7 @@ def test_inforce_surrender_value_account_backed_matches_av_mid():
     charge -- cross-check against the measured trajectory for a credited account
     (non-flat av), so the wiring is exact, not just the flat-av hand calc."""
     from dataclasses import replace
-    from fastcashflow.engine import inforce_surrender_value
+    from fastcashflow._measurement.inforce import inforce_surrender_value
     av0, surr_charge, count, em = 1_000.0, 0.08, 300.0, 18
     basis = _ul_surrender_basis(surr_charge, investment_return=0.05)  # credited -> av grows
     mp = ModelPoints.single(issue_age=40, benefits={"DEATH": 1e6},
@@ -137,7 +137,7 @@ def test_inforce_surrender_value_account_backed_matches_av_mid():
 def test_inforce_surrender_value_zero_without_curve():
     """No ``surrender_value_curve`` -> zero (lapse removes the contract with no
     payment); the helper short-circuits before projecting."""
-    from fastcashflow.engine import inforce_surrender_value
+    from fastcashflow._measurement.inforce import inforce_surrender_value
     basis = Basis(
         mortality_annual=_flat_rate(0.001), lapse_annual=_flat_rate(0.01),
         discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.0,

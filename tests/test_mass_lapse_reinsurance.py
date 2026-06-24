@@ -16,7 +16,8 @@ from fastcashflow import solvency as sv
 from fastcashflow.solvency import _assessment as sa
 from fastcashflow import assets, alm
 from fastcashflow import ModelPoints
-from fastcashflow.engine import inforce_surrender_value, measure
+from fastcashflow.engine import measure
+from fastcashflow._measurement.inforce import inforce_surrender_value
 
 from conftest import make_death_basis, PATTERNS
 

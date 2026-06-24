@@ -87,7 +87,7 @@ class AccountTrajectory:
     account_charge: FloatArray | None = None
     # (n_mp, n_time) per-policy account surrender value, max(0, av_mid *
     # (1 - surr_charge_rate)) -- the figure a surrender exit is paid, and what
-    # ``engine.inforce_surrender_value`` reads for the mass-lapse surrender strain.
+    # ``_measurement.inforce.inforce_surrender_value`` reads for the mass-lapse surrender strain.
     surr_value: FloatArray | None = None
 
 
