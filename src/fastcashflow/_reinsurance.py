@@ -29,9 +29,9 @@ from typing import ClassVar, Protocol
 
 import numpy as np
 
-from fastcashflow._measurement_model import REINSURANCE
+from fastcashflow._measurement.model import REINSURANCE
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow._measurement_basis import (
+from fastcashflow._measurement.basis import (
     MEASUREMENT_BASIS_INCEPTION,
     MEASUREMENT_BASIS_SETTLEMENT,
     MEASUREMENT_BASIS_SETTLEMENT_CARRY,
@@ -86,7 +86,7 @@ class Measurement:
     model_points: "ModelPoints | None" = None  # stamped by measure_reinsurance, for group axes
     group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
     group_sizes: IntArray | None = None     # model points per group, aligned with labels
-    # Time basis (see _measurement_basis). NOTE the in-force anchors differ by
+    # Time basis (see _measurement.basis). NOTE the in-force anchors differ by
     # field: bel_path/ra_path stay inception-anchored while csm_path is
     # prior_t-anchored (column 0 = the opening date) -- one more reason the
     # inception-axis consumers must reject 'settlement_carry'.
@@ -404,7 +404,7 @@ class SettlementAggregate:
 
     def closing_inputs(self):
         """Always raises -- see the class docstring."""
-        from fastcashflow._measurement_basis import _AGGREGATE_NO_CHAIN
+        from fastcashflow._measurement.basis import _AGGREGATE_NO_CHAIN
         raise ValueError(_AGGREGATE_NO_CHAIN)
 
 
@@ -551,7 +551,7 @@ class Report:
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"bel": measurement.bel, "ra": measurement.ra,
             "csm": measurement.csm}
-    # In-force output gets marker columns (see _measurement_basis).
+    # In-force output gets marker columns (see _measurement.basis).
     cols.update(_inforce_marker_columns(measurement, measurement.bel.shape[0]))
     _write_measurement_columns(cols, path, ids)
 

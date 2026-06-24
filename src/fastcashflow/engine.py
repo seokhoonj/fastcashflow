@@ -28,7 +28,7 @@ import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
-from fastcashflow._measurement_basis import (
+from fastcashflow._measurement.basis import (
     MEASUREMENT_BASIS_HYPOTHETICAL,
     MEASUREMENT_BASIS_SETTLEMENT_CARRY,
 )

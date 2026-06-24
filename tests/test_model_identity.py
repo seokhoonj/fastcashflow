@@ -14,7 +14,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow.reinsurance import QuotaShare
-from fastcashflow._measurement_model import (
+from fastcashflow._measurement.model import (
     MODEL_TAGS, model_tag, supported_model_tags,
 )
 from fastcashflow._gmm import Measurement as _GmmMeasurement

@@ -21,11 +21,11 @@ from typing import ClassVar
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow._measurement_basis import (
+from fastcashflow._measurement.basis import (
     MEASUREMENT_BASIS_INCEPTION,
     _inforce_marker_columns,
 )
-from fastcashflow._measurement_model import GMM
+from fastcashflow._measurement.model import GMM
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_kernel
 
@@ -86,7 +86,7 @@ class Measurement:
     group_labels: "np.ndarray | None" = None
     # The number of model points in each group, aligned with ``group_labels``.
     group_sizes: IntArray | None = None
-    # Time basis of the result (see _measurement_basis): 'inception' for
+    # Time basis of the result (see _measurement.basis): 'inception' for
     # new-business measure(); in-force results re-base the headline to the
     # valuation date while the trajectories stay on the inception axis, so
     # inception-axis consumers (group / roll_forward / report / transition /
@@ -693,7 +693,7 @@ class SettlementAggregate:
 
     def closing_inputs(self):
         """Always raises -- see the class docstring."""
-        from fastcashflow._measurement_basis import _AGGREGATE_NO_CHAIN
+        from fastcashflow._measurement.basis import _AGGREGATE_NO_CHAIN
         raise ValueError(_AGGREGATE_NO_CHAIN)
 
 

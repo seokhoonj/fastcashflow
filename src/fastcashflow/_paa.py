@@ -41,9 +41,9 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
-from fastcashflow._measurement_model import PAA
+from fastcashflow._measurement.model import PAA
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow._measurement_basis import (
+from fastcashflow._measurement.basis import (
     MEASUREMENT_BASIS_INCEPTION,
     MEASUREMENT_BASIS_SETTLEMENT_CARRY,
     _inforce_marker_columns,
@@ -96,7 +96,7 @@ class Measurement:
     model_points: "ModelPoints | None" = None  # stamped by measure_paa, for group axes
     group_labels: "np.ndarray | None" = None   # per-group label on a grouped result
     group_sizes: IntArray | None = None     # model points per group, aligned with labels
-    # Time basis of the result (see _measurement_basis): the in-force LRC is an
+    # Time basis of the result (see _measurement.basis): the in-force LRC is an
     # as-of re-based headline over inception-axis trajectories, so
     # inception-axis consumers reject it via _require_inception.
     measurement_basis: str = MEASUREMENT_BASIS_INCEPTION
@@ -424,7 +424,7 @@ class SettlementAggregate:
 
     def closing_inputs(self):
         """Always raises -- see the class docstring."""
-        from fastcashflow._measurement_basis import _AGGREGATE_NO_CHAIN
+        from fastcashflow._measurement.basis import _AGGREGATE_NO_CHAIN
         raise ValueError(_AGGREGATE_NO_CHAIN)
 
 
@@ -432,7 +432,7 @@ class SettlementAggregate:
 def _(measurement: Measurement, path, *, ids=None):
     cols = {"lrc": measurement.lrc,
             "loss_component": measurement.loss_component}
-    # In-force output gets marker columns (see _measurement_basis).
+    # In-force output gets marker columns (see _measurement.basis).
     cols.update(_inforce_marker_columns(measurement, measurement.lrc.shape[0]))
     _write_measurement_columns(cols, path, ids)
 

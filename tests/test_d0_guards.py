@@ -6,7 +6,7 @@ derivable from column-0 FCF). Before D0, feeding such a result to the
 inception-axis consumers silently produced wrong numbers -- the pinned trap
 below showed group() re-flooring the carried CSM away with no warning. D0
 stamps ``measurement_basis`` on every measurement and a single predicate
-(:func:`fastcashflow._measurement_basis._require_inception`) rejects
+(:func:`fastcashflow._measurement.basis._require_inception`) rejects
 non-inception results from group / group_of_contracts / roll_forward /
 report / transition / plot_*; ``write_measurement`` stays allowed but adds
 marker columns so the file output is distinguishable too.

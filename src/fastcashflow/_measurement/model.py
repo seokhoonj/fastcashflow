@@ -17,7 +17,7 @@ lowercase tokens, the structural tag every per-model result carries
 portfolio partition keys and the disclosure frames name the measurements from
 one place, instead of repeating string literals (with the identity riding
 implicitly on each result class's name). The sibling
-:mod:`fastcashflow._measurement_basis` holds the orthogonal axis -- the time
+:mod:`fastcashflow._measurement.basis` holds the orthogonal axis -- the time
 basis (inception / settlement-carry / hypothetical) of a result. This module
 has no internal dependencies, so any module may import it without a cycle.
 """

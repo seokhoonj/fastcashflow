@@ -36,7 +36,7 @@ import numpy as np
 import openpyxl
 import polars as pl
 
-from fastcashflow._measurement_model import model_tag, supported_model_tags
+from fastcashflow._measurement.model import model_tag, supported_model_tags
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import (
     Basis, BasisRouter, CoverageRate, ExpenseItem,

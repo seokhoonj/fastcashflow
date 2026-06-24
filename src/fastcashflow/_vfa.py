@@ -37,9 +37,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from fastcashflow._measurement_model import VFA
+from fastcashflow._measurement.model import VFA
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow._measurement_basis import (
+from fastcashflow._measurement.basis import (
     MEASUREMENT_BASIS_INCEPTION,
     MEASUREMENT_BASIS_SETTLEMENT,
     MEASUREMENT_BASIS_SETTLEMENT_CARRY,
@@ -165,7 +165,7 @@ CSM_BASES = (CSM_BASIS_INITIAL, CSM_BASIS_PROJECTED_RUNOFF,
              CSM_BASIS_CARRY_ONLY, CSM_BASIS_PARAGRAPH_45)
 
 # The VFA keeps csm_basis as the stored field (single source of truth) and
-# derives the cross-model measurement_basis from it (see _measurement_basis).
+# derives the cross-model measurement_basis from it (see _measurement.basis).
 _CSM_TO_MEASUREMENT_BASIS = {
     CSM_BASIS_INITIAL: MEASUREMENT_BASIS_INCEPTION,
     CSM_BASIS_PROJECTED_RUNOFF: MEASUREMENT_BASIS_INCEPTION,
@@ -775,7 +775,7 @@ class SettlementAggregate:
 
     def closing_inputs(self):
         """Always raises -- see the class docstring."""
-        from fastcashflow._measurement_basis import _AGGREGATE_NO_CHAIN
+        from fastcashflow._measurement.basis import _AGGREGATE_NO_CHAIN
         raise ValueError(_AGGREGATE_NO_CHAIN)
 
 

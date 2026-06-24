@@ -35,11 +35,11 @@ from functools import singledispatch
 
 import numpy as np
 
-from fastcashflow._measurement_model import GMM, VFA, PAA, REINSURANCE, model_tag
+from fastcashflow._measurement.model import GMM, VFA, PAA, REINSURANCE, model_tag
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow.engine import _require_full
-from fastcashflow._measurement_basis import _require_inception
+from fastcashflow._measurement.basis import _require_inception
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import _require_full_paa
