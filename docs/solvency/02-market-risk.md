@@ -4,7 +4,7 @@
 :class: tip
 
 - 자산측 **시장위험** 하위모듈: 금리 · 주식 · 부동산 · 환 · 신용 · 집중
-- 각 충격을 자산 (그리고 금리는 순자산) 에 적용해 SCR 을 내는 법 (`fcf.assets.market_module_scr`)
+- 각 충격을 자산 (그리고 금리는 순자산) 에 적용해 SCR 을 내는 법 (`fcf.assets.market_scr`)
 - Solvency II 와 K-ICS 의 시장위험 calibration 차이
 :::
 
@@ -16,9 +16,9 @@
 - 주식 (`equity_scr`, 유형별 + 0.75 상관) · 부동산 (`property_scr`)
 - 환 (`fx_scr`) · 신용 (`credit_scr`) · 집중 (`concentration_scr`)
 - 운영위험 (`operational_scr`)
-- 시장모듈 집계 (`market_module_scr`)
+- 시장모듈 집계 (`market_scr`)
 
 ## 관련 API / 쿡북
 
-- `fcf.assets` — `market_module_scr`, `net_interest_scr`, `equity_scr`, `credit_scr`, ...
+- `fcf.assets` — `market_scr`, `net_interest_scr`, `equity_scr`, `credit_scr`, ...
 - 쿡북 8.6 [요구자본 (Solvency II / K-ICS)](../cookbook/workflow/required-capital)

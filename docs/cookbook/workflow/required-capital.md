@@ -137,7 +137,7 @@ K-ICS 가 덜 보수적입니다 -- 충격이 작고 (사망 +12.5% vs +15%, 해
 
 ```python
 sa = 100_000_000.0                              # death sum assured (benefit x count)
-cat = fcf.solvency.catastrophe_scr(pandemic_death=sa, accident_death=sa)
+cat = fcf.solvency.kics_catastrophe(pandemic_death=sa, accident_death=sa)
 kc = fcf.solvency.required_capital(mp, basis, regime=fcf.solvency.KICS, catastrophe=cat)
 print(f"catastrophe amount     = {cat:>14,.0f}")
 print(f"insurance SCR (ex-cat) = {k.insurance_scr:>14,.0f}")

@@ -327,7 +327,7 @@ def test_relief_into_ratio_applies_module_deltas():
     assert np.isclose(net.available_capital,
                       base.available_capital + r.risk_margin_relief)
     # the market module is untouched by a liability-side treaty
-    assert np.isclose(net.market_module_scr, base.market_module_scr)
+    assert np.isclose(net.market_scr, base.market_scr)
     # net of the small counterparty add-back the ratio still improves
     assert net.total_scr < base.total_scr
     assert net.solvency_ratio > base.solvency_ratio
@@ -343,10 +343,10 @@ def test_relief_into_ratio_assembly_is_self_consistent():
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
     net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=r)
 
-    bscr = sa.aggregate_required_capital(
-        net.insurance_scr, net.market_module_scr, net.credit_scr, regime=sv.SII)
-    assert np.isclose(net.bscr, bscr)
-    assert np.isclose(net.basic_required_capital, net.bscr + net.operational_scr)
+    bscr = sa.basic_scr(
+        net.insurance_scr, net.market_scr, net.credit_scr, regime=sv.SII)
+    assert np.isclose(net.basic_scr, bscr)
+    assert np.isclose(net.basic_required_capital, net.basic_scr + net.operational_scr)
     assert np.isclose(net.total_scr, net.basic_required_capital - net.tax_adjustment)
     assert np.isclose(net.solvency_ratio, net.available_capital / net.total_scr)
 
@@ -364,7 +364,7 @@ def test_relief_into_ratio_counterparty_charge_diversifies():
     without = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII,
                                  relief=replace(r, counterparty_default=0.0))
     # the charge bites the BSCR, but the correlation dampens it below par
-    assert 0.0 < with_cpd.bscr - without.bscr < r.counterparty_default
+    assert 0.0 < with_cpd.basic_scr - without.basic_scr < r.counterparty_default
 
 
 def test_relief_zero_fields_is_noop():

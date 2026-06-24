@@ -5,7 +5,7 @@
 
 - **요구자본 (SCR)** 전체: 보험 (life underwriting) + 시장 + 신용 + 운영 모듈 집계
 - 부채측 보험위험 SCR (`fcf.solvency.required_capital`) 과 자산측 시장 · 신용 모듈을 묶는 법
-  (`fcf.assets.assess_solvency`, `aggregate_required_capital`)
+  (`fcf.assets.assess_solvency`, `basic_scr`)
 - **regime-agnostic** 엔진 -- 호출은 그대로, `regime` 만 Solvency II / K-ICS 로 바꿈
 :::
 
@@ -20,6 +20,6 @@
 
 ## 관련 API / 쿡북
 
-- `fcf.assets` — `assess_solvency`, `SolvencyAssessment`, `aggregate_required_capital`
+- `fcf.assets` — `assess_solvency`, `SolvencyAssessment`, `basic_scr`
 - `fcf.solvency.required_capital`, `fcf.solvency.SII`, `fcf.solvency.KICS`
 - 쿡북 8.6 [요구자본 (Solvency II / K-ICS)](../cookbook/workflow/required-capital)

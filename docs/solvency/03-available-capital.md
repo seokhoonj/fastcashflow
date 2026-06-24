@@ -3,7 +3,7 @@
 :::{admonition} 이 챕터에서 배우는 것
 :class: tip
 
-- **가용자본** = 자산 시장가치 빼기 부채 (BEL + RA) (`fcf.assets.available_capital`)
+- **가용자본** = 자산 시장가치 빼기 부채 (BEL + RA) (`fcf.solvency.available_capital`)
 - 부채 엔진의 산출 (BEL, RA) 이 자산측과 만나 순자산가치가 되는 자리
 - 가용자본이 지급여력비율의 **분자** 라는 것
 :::

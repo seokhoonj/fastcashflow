@@ -455,7 +455,7 @@ def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
 
 __all__ = [
     "Equity", "Property", "Cash", "AssetPortfolio",
-    "holding_value", "asset_portfolio_value", "available_capital",
+    "holding_value", "asset_portfolio_value",
     "asset_portfolio_cashflows", "asset_value_path", "asset_value_by_scenario",
     "CashflowGap", "cashflow_gap",
     "vfa_cashflow_gap",

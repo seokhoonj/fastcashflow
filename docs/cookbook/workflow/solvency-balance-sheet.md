@@ -4,7 +4,7 @@
 :class: tip
 
 - **자산 포트폴리오** 를 시가평가하고 (`fcf.assets.AssetPortfolio`, `fcf.alm.Bond` / `Equity` /
-  `Property` / `Cash`), **가용자본** (자산 - 부채) 을 산출 (`fcf.assets.available_capital`)
+  `Property` / `Cash`), **가용자본** (자산 - 부채) 을 산출 (`fcf.solvency.available_capital`)
 - 자산과 부채를 같은 곡선충격으로 재평가하는 **순금리 SCR** (`fcf.solvency.net_interest_scr`)
 - **주식 / 부동산 시장위험 SCR** (선진 -35% / 신흥 -48% / 부동산 -25%) 과 시장모듈 집계
 - 한 번에 **지급여력비율** 까지 조립 (`fcf.solvency.assess_solvency`) -- 보험위험 + 시장위험을
@@ -77,8 +77,8 @@ port2 = fcf.assets.AssetPortfolio(holdings=(bond, fcf.assets.Cash(5_000_000.0),
                                      fcf.assets.Equity(3_000_000.0, "developed")))
 b = fcf.solvency.assess_solvency(port2, mp, basis, regime=fcf.solvency.SII)
 print(f"+3,000,000 equity -> equity SCR      {b.equity_scr:>14,.0f}")
-print(f"                     market module    {b.market_module_scr:>14,.0f}")
-print(f"                     BSCR             {b.bscr:>14,.0f}")
+print(f"                     market module    {b.market_scr:>14,.0f}")
+print(f"                     BSCR             {b.basic_scr:>14,.0f}")
 print(f"                     operational SCR  {b.operational_scr:>14,.0f}")
 print(f"                     total SCR        {b.total_scr:>14,.0f}")
 print(f"                     available capital{b.available_capital:>14,.0f}")
@@ -140,8 +140,8 @@ mixed = fcf.assets.AssetPortfolio(holdings=(
 k = fcf.solvency.assess_solvency(mixed, mp, basis, regime=fcf.solvency.KICS)
 print(f"insurance SCR     = {k.insurance_scr:>14,.0f}")
 print(f"credit SCR        = {k.credit_scr:>14,.0f}")
-print(f"market module SCR = {k.market_module_scr:>14,.0f}")
-print(f"BSCR              = {k.bscr:>14,.0f}")
+print(f"market module SCR = {k.market_scr:>14,.0f}")
+print(f"BSCR              = {k.basic_scr:>14,.0f}")
 print(f"operational SCR   = {k.operational_scr:>14,.0f}")
 print(f"total SCR         = {k.total_scr:>14,.0f}")
 print(f"solvency ratio    = {k.solvency_ratio:>13.1%}")
@@ -181,9 +181,9 @@ fxport = fcf.assets.AssetPortfolio(holdings=(
 k = fcf.solvency.assess_solvency(fxport, mp, basis, regime=fcf.solvency.KICS)
 print(f"FX SCR            = {k.fx_scr:>14,.0f}")
 print(f"credit SCR        = {k.credit_scr:>14,.0f}")
-print(f"market module SCR = {k.market_module_scr:>14,.0f}")
+print(f"market module SCR = {k.market_scr:>14,.0f}")
 print(f"insurance SCR     = {k.insurance_scr:>14,.0f}")
-print(f"BSCR              = {k.bscr:>14,.0f}")
+print(f"BSCR              = {k.basic_scr:>14,.0f}")
 print(f"total SCR         = {k.total_scr:>14,.0f}")
 print(f"solvency ratio    = {k.solvency_ratio:>13.1%}")
 ```
@@ -220,9 +220,9 @@ conc = fcf.assets.AssetPortfolio(holdings=(
     fcf.assets.Cash(3_000_000.0)))
 k = fcf.solvency.assess_solvency(conc, mp, basis, regime=fcf.solvency.KICS)
 print(f"concentration SCR = {k.concentration_scr:>14,.0f}")
-print(f"market module SCR = {k.market_module_scr:>14,.0f}")
+print(f"market module SCR = {k.market_scr:>14,.0f}")
 print(f"insurance SCR     = {k.insurance_scr:>14,.0f}")
-print(f"BSCR              = {k.bscr:>14,.0f}")
+print(f"BSCR              = {k.basic_scr:>14,.0f}")
 print(f"total SCR         = {k.total_scr:>14,.0f}")
 print(f"solvency ratio    = {k.solvency_ratio:>13.1%}")
 ```

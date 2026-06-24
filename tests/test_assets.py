@@ -5,6 +5,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import assets, alm
 from fastcashflow import _solvency_assessment as sa
+import fastcashflow._vfa_solvency as vs
 from fastcashflow import solvency as sv
 from fastcashflow.engine import measure
 
@@ -124,7 +125,7 @@ def test_assess_solvency_kics_interest_enters_market_module():
     with_ = sa.assess_solvency(p, mp, basis, regime=fcf.solvency.KICS, interest_scenarios=ki)
     assert without.net_interest_scr == 0.0               # K-ICS supplied no curves before
     assert with_.net_interest_scr > 0.0                  # now the five-scenario net amount
-    assert with_.market_module_scr > without.market_module_scr
+    assert with_.market_scr > without.market_scr
     assert with_.insurance_scr == without.insurance_scr  # interest not in the insurance module
 
 
@@ -133,8 +134,8 @@ def test_sii_toplevel_three_module_diversifies():
     all-pairwise 0.25 -- the same values as K-ICS, and below the simple sum."""
     import math
     ins, mkt, cr = 300.0, 400.0, 200.0
-    sii = sa.aggregate_required_capital(ins, mkt, cr, regime=fcf.solvency.SII)
-    kics = sa.aggregate_required_capital(ins, mkt, cr, regime=fcf.solvency.KICS)
+    sii = sa.basic_scr(ins, mkt, cr, regime=fcf.solvency.SII)
+    kics = sa.basic_scr(ins, mkt, cr, regime=fcf.solvency.KICS)
     c = np.array([ins, mkt, cr])
     R = np.array([[1.0, .25, .25], [.25, 1.0, .25], [.25, .25, 1.0]])
     assert np.isclose(sii, math.sqrt(c @ R @ c))
@@ -147,9 +148,9 @@ def test_sii_toplevel_four_module_nonlife_default_half():
     (vs K-ICS 0.25), so the SII top-level aggregate exceeds the K-ICS one."""
     import math
     ins, gen, mkt, cr = 300.0, 250.0, 400.0, 200.0
-    sii = sa.aggregate_required_capital(ins, mkt, cr, regime=fcf.solvency.SII,
+    sii = sa.basic_scr(ins, mkt, cr, regime=fcf.solvency.SII,
                                             general_insurance=gen)
-    kics = sa.aggregate_required_capital(ins, mkt, cr, regime=fcf.solvency.KICS,
+    kics = sa.basic_scr(ins, mkt, cr, regime=fcf.solvency.KICS,
                                              general_insurance=gen)
     c = np.array([ins, gen, mkt, cr])
     R = np.array([[1.0, 0.0, .25, .25], [0.0, 1.0, .25, .50],
@@ -203,7 +204,7 @@ def test_market_module_aggregates_sub_risks():
     conc = sa.concentration_scr(p, fcf.solvency.KICS, basis.discount_annual)
     c = np.array([0.0, eq, pr, fx, conc])
     R = sa._MARKET_CORRELATION
-    assert np.isclose(sa.market_module_scr(p, mp, basis, regime=fcf.solvency.KICS),
+    assert np.isclose(sa.market_scr(p, mp, basis, regime=fcf.solvency.KICS),
                       np.sqrt(c @ R @ c))
 
 
@@ -332,7 +333,7 @@ def test_market_module_includes_fx_negative_correlation():
         assets.Equity(1000.0, "developed"), assets.Cash(1000.0, currency="USD")))
     eq = sa.equity_scr(p, fcf.solvency.KICS)                # 350
     fx = sa.fx_scr(p, fcf.solvency.KICS, basis.discount_annual)   # 250
-    got = sa.market_module_scr(p, mp, basis, regime=fcf.solvency.KICS)
+    got = sa.market_scr(p, mp, basis, regime=fcf.solvency.KICS)
     assert np.isclose(got, np.sqrt(eq**2 + fx**2 + 2 * (-0.25) * eq * fx))
 
 
@@ -402,12 +403,12 @@ def test_assess_solvency_components():
     # no equity/property -> the market module is just the net interest SCR; the SII
     # top-level BSCR aggregates insurance + market + Art-176 credit at all-pairwise
     # 0.25 (Annex IV); the total adds operational on top
-    assert np.isclose(a.market_module_scr, a.net_interest_scr)
+    assert np.isclose(a.market_scr, a.net_interest_scr)
     assert a.credit_scr > 0.0                               # SII Art-176 spread on the bond
-    m = np.array([a.insurance_scr, a.market_module_scr, a.credit_scr])
+    m = np.array([a.insurance_scr, a.market_scr, a.credit_scr])
     R = np.array([[1.0, .25, .25], [.25, 1.0, .25], [.25, .25, 1.0]])
-    assert np.isclose(a.bscr, np.sqrt(m @ R @ m))
-    assert np.isclose(a.basic_required_capital, a.bscr + a.operational_scr)
+    assert np.isclose(a.basic_scr, np.sqrt(m @ R @ m))
+    assert np.isclose(a.basic_required_capital, a.basic_scr + a.operational_scr)
     assert a.tax_adjustment == 0.0                          # no tax relief by default
     assert np.isclose(a.total_scr, a.basic_required_capital - a.tax_adjustment)
     assert np.isclose(a.solvency_ratio, a.available_capital / a.total_scr)
@@ -439,8 +440,8 @@ def test_assess_solvency_kics_no_curves():
     p = assets.AssetPortfolio(holdings=(assets.Cash(8_000_000.0),))
     a = sa.assess_solvency(p, mp, basis, regime=fcf.solvency.KICS)
     assert a.net_interest_scr == 0.0
-    assert np.isclose(a.bscr, a.insurance_scr)              # all-cash -> no market risk
-    assert np.isclose(a.total_scr, a.bscr + a.operational_scr)
+    assert np.isclose(a.basic_scr, a.insurance_scr)              # all-cash -> no market risk
+    assert np.isclose(a.total_scr, a.basic_scr + a.operational_scr)
     assert np.isfinite(a.solvency_ratio)
 
 
@@ -456,14 +457,14 @@ def test_top_level_aggregation_kics_vs_sii():
     R = np.array([[1.0, 0.25, 0.25], [0.25, 1.0, 0.25], [0.25, 0.25, 1.0]])
     # SII: sqrt aggregation at 0.25 (Annex IV), below the simple module sum
     assert s.credit_scr > 0.0
-    m_s = np.array([s.insurance_scr, s.market_module_scr, s.credit_scr])
-    assert np.isclose(s.bscr, np.sqrt(m_s @ R @ m_s))
-    assert s.bscr < s.insurance_scr + s.market_module_scr + s.credit_scr     # diversifies
+    m_s = np.array([s.insurance_scr, s.market_scr, s.credit_scr])
+    assert np.isclose(s.basic_scr, np.sqrt(m_s @ R @ m_s))
+    assert s.basic_scr < s.insurance_scr + s.market_scr + s.credit_scr     # diversifies
     # K-ICS: the bond now carries a credit charge -> same 3-module sqrt aggregation
     assert k.credit_scr > 0.0
-    m = np.array([k.insurance_scr, k.market_module_scr, k.credit_scr])
-    assert np.isclose(k.bscr, np.sqrt(m @ R @ m))                            # K-ICS sqrt
-    assert np.isclose(k.total_scr, k.bscr + k.operational_scr)               # + operational
+    m = np.array([k.insurance_scr, k.market_scr, k.credit_scr])
+    assert np.isclose(k.basic_scr, np.sqrt(m @ R @ m))                            # K-ICS sqrt
+    assert np.isclose(k.total_scr, k.basic_scr + k.operational_scr)               # + operational
 
 
 def test_equity_now_charges_scr():
@@ -488,15 +489,15 @@ def test_general_insurance_fourth_module():
         alm.Bond(2_000_000.0, 0.03, 10, 1, credit_rating="A"), assets.Cash(3_000_000.0)))
     gen = 800_000.0
     a = sa.assess_solvency(p, mp, basis, regime=fcf.solvency.KICS, general_insurance_scr=gen)
-    m = np.array([a.insurance_scr, gen, a.market_module_scr, a.credit_scr])
+    m = np.array([a.insurance_scr, gen, a.market_scr, a.credit_scr])
     R = np.array([[1, 0, .25, .25], [0, 1, .25, .25],
                   [.25, .25, 1, .25], [.25, .25, .25, 1]])
     assert np.isclose(a.general_insurance_scr, gen)
-    assert np.isclose(a.bscr, np.sqrt(m @ R @ m))
+    assert np.isclose(a.basic_scr, np.sqrt(m @ R @ m))
     # zero general -> the 3-module aggregation (unchanged)
     a0 = sa.assess_solvency(p, mp, basis, regime=fcf.solvency.KICS)
     assert a0.general_insurance_scr == 0.0
-    assert a.bscr > a0.bscr                                  # adding a module raises BSCR
+    assert a.basic_scr > a0.basic_scr                                  # adding a module raises BSCR
 
 
 def test_general_insurance_disclosed_reproduction():
@@ -511,26 +512,26 @@ def test_general_insurance_disclosed_reproduction():
     assert np.isclose(basic, 16_977_612_719, rtol=0, atol=2)   # disclosed, to the won
 
 
-def test_aggregate_required_capital_reproduces_disclosures():
+def test_basic_scr_reproduces_disclosures():
     """The public top-level aggregation reproduces disclosed K-ICS basic required
     capital from the published module amounts. A pure-life book (general = 0) and a
     life + P&C book (general module added) both match the disclosure to the won."""
     # life insurer, general insurance = 0 (KRW millions)
-    basic = sa.aggregate_required_capital(
+    basic = sa.basic_scr(
         11_628_115, 34_552_189, 4_166_014, regime=fcf.solvency.KICS, operational=1_083_844)
     assert np.isclose(basic, 41_624_006, rtol=0, atol=2)
     # life + general insurance (KRW thousands)
-    basic_g = sa.aggregate_required_capital(
+    basic_g = sa.basic_scr(
         10_654_450_301, 7_191_902_855, 2_495_852_957, regime=fcf.solvency.KICS,
         operational=1_648_722_264, general_insurance=542_312_823)
     assert np.isclose(basic_g, 16_977_612_719, rtol=0, atol=2)
     # the diversification effect = simple sum - aggregate (ex operational)
-    agg = sa.aggregate_required_capital(11_628_115, 34_552_189, 4_166_014,
+    agg = sa.basic_scr(11_628_115, 34_552_189, 4_166_014,
                                             regime=fcf.solvency.KICS)
     div = (11_628_115 + 34_552_189 + 4_166_014) - agg
     assert np.isclose(div, 9_806_156, rtol=0, atol=2)
     # Solvency II aggregates the modules at the Annex IV 0.25 correlation (+ operational)
-    s = sa.aggregate_required_capital(100.0, 200.0, 50.0, regime=fcf.solvency.SII,
+    s = sa.basic_scr(100.0, 200.0, 50.0, regime=fcf.solvency.SII,
                                           operational=10.0)
     c = np.array([100.0, 200.0, 50.0])
     R = np.array([[1.0, .25, .25], [.25, 1.0, .25], [.25, .25, 1.0]])
@@ -705,7 +706,7 @@ def test_vfa_interaction_loss_null_scenario_is_zero():
     """No shock, no forced sale, static lapse -> base and stressed NAV coincide and
     the total loss is exactly zero."""
     pf, mp, basis = _vfa_book()
-    r = sa.vfa_interaction_loss(pf, mp, basis, return_shock=0.0,
+    r = fcf.vfa.interaction_loss(pf, mp, basis, return_shock=0.0,
                                     lapse_sensitivity=0.0, haircut=0.0)
     assert np.isclose(r.base_nav, r.stressed_nav)
     assert np.isclose(r.revaluation_loss, 0.0)
@@ -719,16 +720,16 @@ def test_vfa_interaction_loss_av_drop_lifts_the_guarantee_cost():
     moneyness lapse holds more policies on the now-valuable guarantee, deepening
     the loss beyond the static-lapse case. total = revaluation + forced sale."""
     pf, mp, basis = _vfa_book()
-    static = sa.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
+    static = fcf.vfa.interaction_loss(pf, mp, basis, return_shock=-0.30,
                                          lapse_sensitivity=0.0, haircut=0.0)
-    dyn = sa.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
+    dyn = fcf.vfa.interaction_loss(pf, mp, basis, return_shock=-0.30,
                                       lapse_sensitivity=0.8, haircut=0.10)
     assert static.revaluation_loss > 0.0                       # AV drop -> ITM -> BEL up
     assert dyn.revaluation_loss > static.revaluation_loss      # moneyness lapse deepens it
     assert dyn.forced_sale_loss >= 0.0
     assert np.isclose(dyn.total_loss, dyn.revaluation_loss + dyn.forced_sale_loss)
     # The revaluation loss reconciles to an independent NAV recompute.
-    base_nav = sa._portfolio_nav_vfa(pf, mp, basis)
+    base_nav = vs._portfolio_nav_vfa(pf, mp, basis)
     assert np.isclose(static.base_nav, base_nav)
 
 
@@ -739,17 +740,17 @@ def test_dynamic_solvency_vfa_overlays_the_interaction_on_a_supplied_static():
     pf, mp, basis = _vfa_book()
     static_ac, total_scr = 1000.0, 400.0
 
-    null = sa.dynamic_solvency_vfa(
+    null = fcf.vfa.dynamic_solvency(
         pf, mp, basis, static_available_capital=static_ac, total_scr=total_scr,
         return_shock=0.0, lapse_sensitivity=0.0, haircut=0.0)
     assert np.isclose(null.interaction.total_loss, 0.0)
     assert np.isclose(null.stressed_available_capital, static_ac)
     assert np.isclose(null.stressed_ratio, static_ac / total_scr)
 
-    dyn = sa.dynamic_solvency_vfa(
+    dyn = fcf.vfa.dynamic_solvency(
         pf, mp, basis, static_available_capital=static_ac, total_scr=total_scr,
         return_shock=-0.30, lapse_sensitivity=0.8, haircut=0.10)
-    loss = sa.vfa_interaction_loss(pf, mp, basis, return_shock=-0.30,
+    loss = fcf.vfa.interaction_loss(pf, mp, basis, return_shock=-0.30,
                                        lapse_sensitivity=0.8, haircut=0.10).total_loss
     assert np.isclose(dyn.interaction.total_loss, loss)
     assert np.isclose(dyn.stressed_available_capital, static_ac - loss)
@@ -757,7 +758,7 @@ def test_dynamic_solvency_vfa_overlays_the_interaction_on_a_supplied_static():
     assert dyn.stressed_ratio < null.stressed_ratio          # the shock erodes the ratio
 
     # A risk-free book (zero required capital) gives an unbounded ratio.
-    inf = sa.dynamic_solvency_vfa(
+    inf = fcf.vfa.dynamic_solvency(
         pf, mp, basis, static_available_capital=static_ac, total_scr=0.0,
         return_shock=0.0, lapse_sensitivity=0.0, haircut=0.0)
     assert inf.stressed_ratio == float("inf")
@@ -1033,20 +1034,20 @@ def test_vfa_assess_solvency_assembles_the_static_ratio():
     import fastcashflow.solvency as sv
     pf, mp, basis = _vfa_book()
     regime = sv.KICS
-    a = sa.vfa_assess_solvency(pf, mp, basis, regime=regime)
+    a = fcf.vfa.assess_solvency(pf, mp, basis, regime=regime)
 
     # Insurance module is the VFA life SCR; BEL is the VFA net BEL.
-    scr = sv.vfa_required_capital(mp, basis, regime=regime)
+    scr = fcf.vfa.required_capital(mp, basis, regime=regime)
     assert np.isclose(a.insurance_scr, scr.insurance_scr)
     assert np.isclose(a.bel, scr.base_bel)
     assert np.isclose(a.net_interest_scr,
-                      sv.vfa_interest_scr(mp, basis, shift=0.01))   # parallel 100bp
+                      fcf.vfa.interest_scr(mp, basis, shift=0.01))   # parallel 100bp
     # Equity = asset equity + guarantee equity (added under one shock).
     eq_shock = sa._market_cal(regime)["equity_shocks"]["developed"]
     assert np.isclose(
         a.equity_scr,
         sa.equity_scr(pf, regime)
-        + sv.vfa_equity_scr(mp, basis, equity_shock=eq_shock))
+        + fcf.vfa.equity_scr(mp, basis, equity_shock=eq_shock))
     assert a.equity_scr > 0.0                                 # the guarantee bites
     # Available capital = assets - (VFA BEL + risk margin); ratio = ac / total_scr.
     assert np.isclose(a.available_capital,
@@ -1059,9 +1060,9 @@ def test_dynamic_solvency_vfa_computes_its_own_static_from_a_regime():
     vfa_assess_solvency, then overlay the scenario interaction on it."""
     import fastcashflow.solvency as sv
     pf, mp, basis = _vfa_book()
-    static = sa.vfa_assess_solvency(pf, mp, basis, regime=sv.KICS)
+    static = fcf.vfa.assess_solvency(pf, mp, basis, regime=sv.KICS)
 
-    d = sa.dynamic_solvency_vfa(
+    d = fcf.vfa.dynamic_solvency(
         pf, mp, basis, regime=sv.KICS, return_shock=-0.30,
         lapse_sensitivity=0.8, haircut=0.10)
     assert d.static is not None
@@ -1073,7 +1074,7 @@ def test_dynamic_solvency_vfa_computes_its_own_static_from_a_regime():
 
     # Neither a regime nor a supplied static position -> a clear error.
     with pytest.raises(ValueError, match="regime="):
-        sa.dynamic_solvency_vfa(pf, mp, basis, return_shock=0.0,
+        fcf.vfa.dynamic_solvency(pf, mp, basis, return_shock=0.0,
                                     lapse_sensitivity=0.0, haircut=0.0)
 
 
@@ -1106,8 +1107,8 @@ def test_vfa_assess_solvency_supports_account_backed_ul():
     The interest and equity guarantee modules are positive (the GMAB bites)."""
     import fastcashflow.solvency as sv
     pf, mp, basis = _ul_book()
-    a = sa.vfa_assess_solvency(pf, mp, basis, regime=sv.KICS)
-    scr = sv.vfa_required_capital(mp, basis, regime=sv.KICS)
+    a = fcf.vfa.assess_solvency(pf, mp, basis, regime=sv.KICS)
+    scr = fcf.vfa.required_capital(mp, basis, regime=sv.KICS)
     assert np.isclose(a.insurance_scr, scr.insurance_scr)
     assert np.isclose(a.bel, scr.base_bel)
     assert a.net_interest_scr > 0.0 and a.equity_scr > 0.0
@@ -1188,10 +1189,10 @@ def test_vfa_gap_and_interaction_support_account_backed_ul():
     m = fcf.vfa.measure(mp, basis, full=True)
     gap = assets.vfa_cashflow_gap(pf, m)
     assert np.all(np.isfinite(gap.net_cf))
-    il = sa.vfa_interaction_loss(pf, mp, basis, return_shock=-0.3,
+    il = fcf.vfa.interaction_loss(pf, mp, basis, return_shock=-0.3,
                                      lapse_sensitivity=0.0, haircut=0.0)
     assert np.isfinite(il.total_loss)
-    ds = sa.dynamic_solvency_vfa(pf, mp, basis, regime=sv.KICS,
+    ds = fcf.vfa.dynamic_solvency(pf, mp, basis, regime=sv.KICS,
                                      return_shock=-0.3, lapse_sensitivity=0.0,
                                      haircut=0.0)
     assert np.isfinite(ds.stressed_ratio)
@@ -1224,7 +1225,7 @@ def test_stochastic_solvency_vfa_reconciles_and_tails():
     guarantee time-value drag, and cte(5) <= p5 <= mean (the tail ordering)."""
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
-    ss = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)   # ESG object
+    ss = fcf.vfa.stochastic_solvency(pf, mp, basis, es, regime=sv.KICS)   # ESG object
     assert ss.ratio.shape == (300,)
 
     dist = fcf.vfa.stochastic(mp, basis, es.returns)
@@ -1239,7 +1240,7 @@ def test_stochastic_solvency_vfa_reconciles_and_tails():
 def test_stochastic_solvency_vfa_accepts_a_raw_array_and_validates_cte():
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
-    ss = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es.returns, regime=sv.KICS)  # raw array
+    ss = fcf.vfa.stochastic_solvency(pf, mp, basis, es.returns, regime=sv.KICS)  # raw array
     assert np.isfinite(ss.mean()["ratio"])
     with pytest.raises(ValueError, match="q must be"):
         ss.cte(0.0)
@@ -1269,7 +1270,7 @@ def test_stochastic_solvency_gmm_reconciles_at_base_curve():
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
     static = fcf.solvency.assess_solvency(pf, mp, basis, regime=sv.SII)
-    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, np.array([0.03]), regime=sv.SII)
+    ss = fcf.solvency.stochastic_solvency(pf, mp, basis, np.array([0.03]), regime=sv.SII)
     assert ss.ratio.shape == (1,)
     assert np.isclose(ss.available_capital[0], static.available_capital)
     assert np.isclose(ss.ratio[0], static.solvency_ratio)
@@ -1281,7 +1282,7 @@ def test_stochastic_solvency_gmm_distributes_over_rate_scenarios():
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
     scen = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
-    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII)
+    ss = fcf.solvency.stochastic_solvency(pf, mp, basis, scen, regime=sv.SII)
     assert ss.ratio.shape == (5,)
 
     dist = fcf.gmm.stochastic(mp, basis, scen)
@@ -1305,7 +1306,7 @@ def test_stochastic_solvency_gmm_accepts_esg_object():
                       ufr=0.0405, alpha=0.10, mean_reversion=0.10, rate_vol=0.01,
                       equity_vol=0.15, correlation=-0.2, n_scenarios=200,
                       n_time=60, seed=7)
-    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, es, regime=sv.SII)   # ESG -> .rates
+    ss = fcf.solvency.stochastic_solvency(pf, mp, basis, es, regime=sv.SII)   # ESG -> .rates
     assert ss.ratio.shape == (200,)
     assert np.isfinite(ss.mean()["ratio"])
     assert ss.cte(5) <= ss.percentile(5)["ratio"] <= ss.mean()["ratio"]
@@ -1375,7 +1376,7 @@ def test_stochastic_solvency_gmm_co_moving_off_is_unchanged():
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
     scen = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
-    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII)
+    ss = fcf.solvency.stochastic_solvency(pf, mp, basis, scen, regime=sv.SII)
     expected_ac = ss.static.asset_portfolio_value - (
         fcf.gmm.stochastic(mp, basis, scen).bel + ss.static.risk_margin)
     assert np.allclose(ss.available_capital, expected_ac)   # asset value fixed
@@ -1387,13 +1388,13 @@ def test_stochastic_solvency_gmm_co_moving_formula_and_anchor():
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
     scen = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
-    ss = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII,
+    ss = fcf.solvency.stochastic_solvency(pf, mp, basis, scen, regime=sv.SII,
                                      co_moving_assets=True)
     dist = fcf.gmm.stochastic(mp, basis, scen)
     asset_val = fcf.assets.asset_value_by_scenario(pf, scen)
     assert np.allclose(ss.available_capital, asset_val - (dist.bel + ss.static.risk_margin))
 
-    base = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, np.array([0.03]),
+    base = fcf.solvency.stochastic_solvency(pf, mp, basis, np.array([0.03]),
                                        regime=sv.SII, co_moving_assets=True)
     assert np.isclose(base.available_capital[0], ss.static.available_capital)
     assert np.isclose(base.ratio[0], ss.static.solvency_ratio)
@@ -1405,8 +1406,8 @@ def test_stochastic_solvency_gmm_co_moving_differs_from_fixed():
     import fastcashflow.solvency as sv
     pf, mp, basis = _gmm_solvency_book()
     scen = np.array([0.01, 0.05])
-    fixed = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII)
-    moving = fcf.solvency.stochastic_solvency_gmm(pf, mp, basis, scen, regime=sv.SII,
+    fixed = fcf.solvency.stochastic_solvency(pf, mp, basis, scen, regime=sv.SII)
+    moving = fcf.solvency.stochastic_solvency(pf, mp, basis, scen, regime=sv.SII,
                                          co_moving_assets=True)
     # the low-rate scenario lifts the bond value above its base level (co-moving),
     # so its available capital exceeds the fixed-asset figure
@@ -1423,7 +1424,7 @@ def test_stochastic_solvency_vfa_co_moving_off_is_unchanged():
     """co_moving_assets=False (the default) holds the asset value fixed."""
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
-    ss = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)
+    ss = fcf.vfa.stochastic_solvency(pf, mp, basis, es, regime=sv.KICS)
     expected_ac = ss.static.asset_portfolio_value - (
         fcf.vfa.stochastic(mp, basis, es.returns).bel + ss.static.risk_margin)
     assert np.allclose(ss.available_capital, expected_ac)
@@ -1435,7 +1436,7 @@ def test_stochastic_solvency_vfa_co_moving_requires_esg():
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
     with pytest.raises(ValueError, match="needs an EconomicScenarios"):
-        fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es.returns, regime=sv.KICS,
+        fcf.vfa.stochastic_solvency(pf, mp, basis, es.returns, regime=sv.KICS,
                                     co_moving_assets=True)
 
 
@@ -1444,11 +1445,11 @@ def test_stochastic_solvency_vfa_co_moving_uses_the_rate_path():
     while the fund returns still drive the guarantee liability."""
     import fastcashflow.solvency as sv
     pf, mp, basis, es = _vfa_guarantee_book()
-    ss = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS,
+    ss = fcf.vfa.stochastic_solvency(pf, mp, basis, es, regime=sv.KICS,
                                      co_moving_assets=True)
     dist = fcf.vfa.stochastic(mp, basis, es.returns)
     asset_val = fcf.assets.asset_value_by_scenario(pf, es.rates)
     assert np.allclose(ss.available_capital, asset_val - (dist.bel + ss.static.risk_margin))
     # the asset value now varies across scenarios (vs a single fixed level)
-    fixed = fcf.solvency.stochastic_solvency_vfa(pf, mp, basis, es, regime=sv.KICS)
+    fixed = fcf.vfa.stochastic_solvency(pf, mp, basis, es, regime=sv.KICS)
     assert not np.allclose(ss.available_capital, fixed.available_capital)

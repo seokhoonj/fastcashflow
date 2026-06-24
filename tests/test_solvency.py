@@ -402,14 +402,14 @@ def test_solvency_ratio():
                       20_000_000.0 / res.total_scr)
 
 
-def test_catastrophe_scr_hand_calc():
+def test_kics_catastrophe_hand_calc():
     """K-ICS catastrophe (handbook 2-8): pandemic = death SA x 0.1%; large accident
     = sum of zone-exposure x max(SA x shock - prior claims, 0); total = sqrt of the
     two (correlation 0)."""
-    assert np.isclose(sv.catastrophe_scr(pandemic_death=1e12), 1e12 * 0.001)
-    ad = sv.catastrophe_scr(accident_death=1e12)
+    assert np.isclose(sv.kics_catastrophe(pandemic_death=1e12), 1e12 * 0.001)
+    ad = sv.kics_catastrophe(accident_death=1e12)
     assert np.isclose(ad, 0.0000711 * 1e12 * 0.15 + 0.0003733 * 1e12 * 0.015)
-    full = sv.catastrophe_scr(pandemic_death=1e12, accident_death=1e12,
+    full = sv.kics_catastrophe(pandemic_death=1e12, accident_death=1e12,
                               disability=5e11, property=2e11)
     pan = 1e12 * 0.001
     large = (0.0000711 * 1e12 * 0.15 + 0.0003733 * 1e12 * 0.015
@@ -419,9 +419,9 @@ def test_catastrophe_scr_hand_calc():
     assert np.isclose(full, np.sqrt(pan**2 + large**2))
 
 
-def test_catastrophe_prior_year_claims_offset():
+def test_kics_catastrophe_prior_year_claims_offset():
     """Prior-year claims net the large-accident exposure, floored at zero."""
-    off = sv.catastrophe_scr(accident_death=1e12, prior_year_claims={"death": 1e11})
+    off = sv.kics_catastrophe(accident_death=1e12, prior_year_claims={"death": 1e11})
     # 1e12 x 1.5% = 1.5e10 < 1e11 -> second term floored to 0
     assert np.isclose(off, 0.0000711 * max(1e12 * 0.15 - 1e11, 0.0))
 
@@ -629,7 +629,7 @@ def test_vfa_required_capital_routes_through_the_vfa_measure():
                                 minimum_accumulation_benefit=1300.0,
                                 calculation_methods=PATTERNS)
     regime = _vfa_life_regime()
-    scr = sv.vfa_required_capital(mp, basis, regime=regime)
+    scr = fcf.vfa.required_capital(mp, basis, regime=regime)
 
     base = float(fcf.vfa.measure(mp, basis, full=False).bel.sum())
     assert np.isclose(scr.base_bel, base)            # routed through measure_vfa
@@ -664,15 +664,15 @@ def test_vfa_equity_scr_hand_calc():
                                 calculation_methods=PATTERNS)
     base = float(fcf.vfa.measure(mp, basis, full=False).bel.sum())
 
-    cap = sv.vfa_equity_scr(mp, basis, equity_shock=0.39)
+    cap = fcf.vfa.equity_scr(mp, basis, equity_shock=0.39)
     from dataclasses import replace
     mp_s = replace(mp, account_value=mp.account_value * (1 - 0.39))
     expected = max(0.0, float(fcf.vfa.measure(mp_s, basis, full=False).bel.sum()) - base)
     assert np.isclose(cap, expected)
     assert cap > 0.0                                         # AV drop -> ITM + less fee
-    assert np.isclose(sv.vfa_equity_scr(mp, basis, equity_shock=0.0), 0.0)
+    assert np.isclose(fcf.vfa.equity_scr(mp, basis, equity_shock=0.0), 0.0)
     # Monotone in the shock.
-    assert sv.vfa_equity_scr(mp, basis, equity_shock=0.50) > cap
+    assert fcf.vfa.equity_scr(mp, basis, equity_shock=0.50) > cap
 
     # No fee and an out-of-the-money guarantee (still OTM after the shock): neither
     # leg moves the net BEL, so the equity capital is zero.
@@ -681,7 +681,7 @@ def test_vfa_equity_scr_hand_calc():
     otm = fcf.ModelPoints.single(40, 0.0, 120, account_value=1000.0,
                                  minimum_accumulation_benefit=300.0,
                                  calculation_methods=PATTERNS)
-    assert np.isclose(sv.vfa_equity_scr(otm, nofee, equity_shock=0.39), 0.0)
+    assert np.isclose(fcf.vfa.equity_scr(otm, nofee, equity_shock=0.39), 0.0)
 
 
 def test_vfa_interest_scr_hand_calc():
@@ -700,11 +700,11 @@ def test_vfa_interest_scr_hand_calc():
                                full=False).bel.sum())
     dn = float(fcf.vfa.measure(mp, replace(basis, investment_return=0.03),
                                full=False).bel.sum())
-    cap = sv.vfa_interest_scr(mp, basis, shift=0.01)
+    cap = fcf.vfa.interest_scr(mp, basis, shift=0.01)
     assert np.isclose(cap, max(0.0, up - base, dn - base))
     assert np.isclose(cap, dn - base)                        # the fall binds
     assert cap > 0.0
-    assert sv.vfa_interest_scr(mp, basis, shift=0.02) > cap  # grows with the shift
+    assert fcf.vfa.interest_scr(mp, basis, shift=0.02) > cap  # grows with the shift
 
 
 # ---------------------------------------------------------------------------

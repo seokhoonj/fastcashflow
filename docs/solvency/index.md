@@ -5,7 +5,7 @@
 
 - **자산 포트폴리오와 시장가치** -- 자산을 시장가치로 평가하는 법 (`fcf.assets.AssetPortfolio`)
 - **시장위험 SCR** -- 금리 · 주식 · 부동산 · 환 · 신용 · 집중 충격
-- **가용자본** -- 자산 빼기 부채 (`fcf.assets.available_capital`)
+- **가용자본** -- 자산 빼기 부채 (`fcf.solvency.available_capital`)
 - **요구자본 통합** -- 보험 + 시장 + 신용 + 운영 모듈 집계 (`fcf.assets.assess_solvency`)
 - **지급여력비율** -- 가용자본 나누기 요구자본, Solvency II / K-ICS
 - **대량해지 재보험 자본경감** -- 비비례 lapse-XL 로 lapse SCR 을 줄이는 법

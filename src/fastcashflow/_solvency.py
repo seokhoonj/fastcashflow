@@ -661,7 +661,7 @@ _ACCIDENT_TERMS = {            # category -> [(zone exposure ratio, shock), ...]
 }
 
 
-def catastrophe_scr(*, pandemic_death: float = 0.0, accident_death: float = 0.0,
+def kics_catastrophe(*, pandemic_death: float = 0.0, accident_death: float = 0.0,
                     disability: float = 0.0, property: float = 0.0,
                     prior_year_claims: dict[str, float] | None = None) -> float:
     """The K-ICS catastrophe risk amount (handbook 2-8) -- a factor on sum assured.
@@ -722,7 +722,7 @@ def required_capital(
     Two EXTRA insurance sub-risks fold into the module through table 6 when the
     regime supports them: ``property_codes`` (the long-term property / other
     coverages -- a +16% rate shock, re-measured) via ``property_correlation``, and
-    ``catastrophe`` (the factor-based amount from :func:`catastrophe_scr`) via
+    ``catastrophe`` (the factor-based amount from :func:`kics_catastrophe`) via
     ``catastrophe_correlation``. The risk margin EXCLUDES catastrophe (handbook: the
     margin is the insurance amount ex-catastrophe), but INCLUDES property.
     """
@@ -794,92 +794,6 @@ def required_capital(
         regime=regime.name, sub_risk_capital=capital, insurance_scr=insurance_scr,
         interest_capital=interest_capital, total_scr=total_scr,
         risk_margin=risk_margin, base_bel=base_bel, scr_path=scr_path)
-
-
-def vfa_required_capital(
-    model_points: ModelPoints, basis: Basis, *, regime: RegimeSpec,
-    catastrophe: float = 0.0, interest_scenarios: KICSInterest | None = None,
-) -> SCRResult:
-    """Required capital for a variable (VFA) book's LIFE sub-risks.
-
-    The VFA counterpart of :func:`required_capital`: re-runs the regime's life
-    sub-risks (mortality / longevity / lapse / expense / catastrophe / ...) on the
-    VFA NET BEL (guarantee-excess + expense - fee) through
-    :func:`fastcashflow.vfa.measure`, so the stresses bite the guarantee cost the
-    way they do for a variable annuity -- a lapse-DOWN holds more policies on a
-    valuable guarantee (raising the cost), an expense shock lifts the maintenance
-    leg. ``base_bel`` is therefore the VFA net BEL, not a GMM measure.
-
-    This is the LIFE module only. The dominant variable-annuity risk -- the equity
-    sensitivity of the guarantee (an account-value fall lifting the GMDB / GMAB
-    cost) -- is MARKET risk, added by the VFA solvency assembly, not here.
-    ``property_codes`` are not accepted (a variable book carries no
-    long-term-property coverage). Closed-form variable-annuity path only.
-
-    NOTE on mass lapse: unlike the GMM path (where a surrender_value_curve adds the
-    t=0 surrender outflow), a variable book's surrender value IS the account value,
-    which is UNIT-FUNDED -- the unit fund pays it, not the entity's general account.
-    So no t=0 add-back is correct here: the mass-lapse capital is the re-measured
-    change in the entity NET BEL (the guarantee-excess + expense - fee leg), driven
-    by the lost variable-fee income and the changed guarantee cost, not by an
-    account-value outflow."""
-    from fastcashflow._vfa import measure_vfa
-    return required_capital(
-        model_points, basis, regime=regime, catastrophe=catastrophe,
-        interest_scenarios=interest_scenarios, measure_fn=measure_vfa)
-
-
-def vfa_equity_scr(model_points: ModelPoints, basis: Basis, *,
-                   equity_shock: float) -> float:
-    """The equity capital of a variable (VFA) book's net BEL.
-
-    An immediate equity-type shock drops the account value by ``equity_shock`` (a
-    fraction, ``0.39`` = -39%). The lower account value moves the VFA net BEL on two
-    legs, BOTH raising the liability: the GMDB / GMAB goes in-the-money so the
-    GUARANTEE cost rises (the dominant, headline driver), and the variable FEE
-    income (skimmed off the account value) falls. Returns ``max(0, Delta BEL)``, the
-    instantaneous 1-in-200 capital for the book's equity sensitivity.
-
-    This is the DOMINANT variable-annuity market risk and the piece the asset-side
-    :func:`fastcashflow.solvency.equity_scr` (which shocks only the
-    entity's own equity holdings) does not see. Measured on the STATIC lapse: the
-    instantaneous stress capital, distinct from the behavioural moneyness dynamic
-    lapse, which is the dynamic scenario overlay
-    (:func:`fastcashflow.solvency.dynamic_solvency_vfa`).
-    Closed-form variable-annuity path only."""
-    from fastcashflow._vfa import measure_vfa
-    base = float(measure_vfa(model_points, basis, full=False).bel.sum())
-    av = np.asarray(model_points.account_value, dtype=np.float64)
-    mp_s = replace(model_points, account_value=av * (1.0 - equity_shock))
-    stressed = float(measure_vfa(mp_s, basis, full=False).bel.sum())
-    return max(0.0, stressed - base)
-
-
-def vfa_interest_scr(model_points: ModelPoints, basis: Basis, *,
-                     shift: float = 0.01) -> float:
-    """The interest capital of a variable (VFA) book's net BEL.
-
-    Worst of re-measuring the VFA net BEL under a parallel ``+/- shift`` to the
-    underlying-items return -- the VFA basis rate that BOTH discounts the liability
-    and grows the account value. A return FALL lowers the account growth, pushing
-    the GMDB / GMAB in-the-money (higher guarantee cost): the binding direction.
-    Returns ``max(0, worst Delta BEL)``, the instantaneous interest-rate capital.
-
-    v1: a parallel shift to ``investment_return`` (the VFA's single rate driving
-    growth and discount together), the transparent proxy for the guarantee's rate
-    sensitivity. Distinct from the spot equity LEVEL shock (:func:`vfa_equity_scr`):
-    a rate-assumption move versus a one-time market fall, the two market sub-risks a
-    variable annuity carries. A regime-curve-calibrated VFA interest stress (a
-    maturity-relative curve, not a flat parallel move) is future work. Closed-form
-    variable-annuity path only."""
-    from fastcashflow._vfa import measure_vfa
-    base = float(measure_vfa(model_points, basis, full=False).bel.sum())
-    r = basis.investment_return
-    up = float(measure_vfa(
-        model_points, replace(basis, investment_return=r + shift), full=False).bel.sum())
-    dn = float(measure_vfa(
-        model_points, replace(basis, investment_return=r - shift), full=False).bel.sum())
-    return max(0.0, up - base, dn - base)
 
 
 # ---------------------------------------------------------------------------
@@ -1044,7 +958,7 @@ __all__ = [
     "scale_annuity", "scale_expense",
     "dynamic_lapse_multiplier", "interest_with_dynamic_lapse",
     "shock_curve", "shock_spread", "KICSInterest",
-    "aggregate", "required_capital", "vfa_required_capital",
-    "vfa_equity_scr", "vfa_interest_scr", "catastrophe_scr", "solvency_ratio",
+    "aggregate", "required_capital", 
+    "kics_catastrophe", "solvency_ratio",
     "SII", "KICS",
 ]

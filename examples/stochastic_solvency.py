@@ -48,7 +48,7 @@ def main() -> None:
     print(f"  loss p95  {dist.percentile(95)['loss_component']:>16,.0f}")
 
     # The coverage-ratio distribution: the static t=0 ratio vs the stochastic tail.
-    ss = fcf.solvency.stochastic_solvency_vfa(portfolio, mp, basis, scenarios, regime=sv.KICS)
+    ss = fcf.vfa.stochastic_solvency(portfolio, mp, basis, scenarios, regime=sv.KICS)
     print("Coverage ratio")
     print(f"  static (t=0)   {ss.static.solvency_ratio:>8.2%}")
     print(f"  stochastic mean{ss.mean()['ratio']:>8.2%}")
