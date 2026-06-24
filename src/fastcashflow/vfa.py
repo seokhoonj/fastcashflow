@@ -34,18 +34,18 @@ from fastcashflow.alm import (
     vfa_net_liability_cashflows as net_liability_cashflows)
 # VFA-specific solvency / asset-liability tools -- the sole home is fcf.vfa.*
 # (the symmetric counterpart to fcf.vfa.measure). Impl lives in _vfa_solvency
-# (the VFA bodies) / assets (cashflow gap); the merged DynamicSolvency result
+# (the VFA bodies) / assets (cashflow gap); the merged DynamicAssessment result
 # type is owned by the solvency assembly.
 from fastcashflow._vfa_solvency import (
     vfa_required_capital as required_capital,
     vfa_equity_scr as equity_scr,
     vfa_interest_scr as interest_scr,
-    vfa_assess_solvency as assess_solvency,
+    assess_vfa as assess,
     vfa_interaction_loss as interaction_loss,
-    dynamic_solvency_vfa as dynamic_solvency,
-    stochastic_solvency_vfa as stochastic_solvency)
+    assess_dynamic_vfa as assess_dynamic,
+    assess_stochastic_vfa as assess_stochastic)
 from fastcashflow.assets import vfa_cashflow_gap as cashflow_gap
-from fastcashflow._solvency_assessment import DynamicSolvency
+from fastcashflow._solvency_assessment import DynamicAssessment
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
@@ -55,8 +55,8 @@ __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "moneyness_lapse_scale", "stochastic",
            "liability_duration", "liability_dv01", "net_liability_cashflows",
            "required_capital", "equity_scr", "interest_scr", "cashflow_gap",
-           "assess_solvency", "interaction_loss", "stochastic_solvency",
+           "assess", "interaction_loss", "assess_stochastic",
            # result types (produced by vfa.measure / settle / roll_forward)
            "Aggregate", "PeriodMovement", "Reconciliation",
            "SettlementReconciliation", "SettlementAggregate", "GoCSettlement",
-           "DynamicSolvency", "dynamic_solvency"]
+           "DynamicAssessment", "assess_dynamic"]

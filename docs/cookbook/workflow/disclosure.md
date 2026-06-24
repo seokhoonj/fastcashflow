@@ -6,7 +6,7 @@
 - 한국 보험사 공개공시 (DART 사업/분기보고서) 의 세 핵심 표를 fastcashflow 로 재현:
   **IFRS17 보험계약부채** (최선추정 + 위험조정 + 보험계약마진), **K-ICS 지급여력**
   (가용자본 / 요구자본 / 비율), **금리 민감도**
-- 이 챕터들에서 만든 도구 (`measure` / `estimate_at` / `assess_solvency`) 가 실제
+- 이 챕터들에서 만든 도구 (`measure` / `estimate_at` / `assess`) 가 실제
   공시 골격과 어떻게 맞물리는지
 :::
 
@@ -60,7 +60,7 @@ print(f"  insurance liability    = {bel + ra + csm:>15,.0f}")
 
 ## K-ICS 지급여력 -- 가용자본 / 요구자본 / 비율
 
-보장성 계약을 채권·현금·주식으로 백업한 포지션. `assess_solvency` 가 가용자본, 요구자본
+보장성 계약을 채권·현금·주식으로 백업한 포지션. `assess` 가 가용자본, 요구자본
 (보험위험 + 시장위험), 비율을 냅니다.
 
 ```python
@@ -75,14 +75,14 @@ per = alm.bond_duration(alm.Bond(100.0, 0.03, 15, 1), 0.03).dv01
 port = fcf.assets.AssetPortfolio(holdings=(alm.Bond(dv01 / per * 100.0, 0.03, 15, 1),
                                     fcf.assets.Cash(6_000_000.0), fcf.assets.Equity(2_000_000.0)))
 
-a = fcf.solvency.assess_solvency(port, mp, basis, regime=fcf.solvency.SII)
+a = fcf.solvency.assess(port, mp, basis, regime=fcf.solvency.SII)
 print(f"  available capital      = {a.available_capital:>15,.0f}")
 print(f"  required capital (SCR) = {a.total_scr:>15,.0f}")
 print(f"    insurance risk       = {a.insurance_scr:>15,.0f}")
 print(f"    market risk          = {a.market_scr:>15,.0f}")
 print(f"    credit risk          = {a.credit_scr:>15,.0f}")
 print(f"    operational risk     = {a.operational_scr:>15,.0f}")
-print(f"  solvency ratio         = {a.solvency_ratio:>14.1%}")
+print(f"  solvency ratio         = {a.ratio:>14.1%}")
 ```
 
 출력:

@@ -30,12 +30,12 @@ from fastcashflow.trace import (
 from fastcashflow.alm import (
     liability_duration, liability_dv01, key_rate_dv01s,
     net_liability_cashflows)
-from fastcashflow._solvency_assessment import stochastic_solvency
+from fastcashflow._solvency_assessment import assess_stochastic
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_stream", "settle", "settle_aggregate", "settle_stream",
            "recognition_schedule", "CSMRecognitionSchedule",
-           "stochastic", "stochastic_solvency", "interest_guarantee_tvog",
+           "stochastic", "assess_stochastic", "interest_guarantee_tvog",
            "trace", "trace_diff", "trace_bel_step", "trace_csm_step",
            "liability_duration", "liability_dv01", "key_rate_dv01s",
            "net_liability_cashflows",

@@ -2,7 +2,7 @@
 
 The full required-capital / solvency-capital surface: the regime-agnostic
 SCR engine (stresses, regimes SII/K-ICS, ``required_capital``) and the
-balance-sheet assembly (asset/liability SCR modules, ``assess_solvency``,
+balance-sheet assembly (asset/liability SCR modules, ``assess``,
 dynamic and stochastic solvency). A thin facade re-exporting the two private
 implementation modules ``_solvency`` (engine) and ``_solvency_assessment``
 (assembly); both surfaces are disjoint, so the union is unambiguous.

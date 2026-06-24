@@ -395,10 +395,10 @@ def test_cost_of_capital_run_off_excludes_interest():
     assert np.all(res.scr_path >= 0.0)
 
 
-def test_solvency_ratio():
+def test_ratio():
     mp, basis = _mp(), _basis()
     res = sv.required_capital(mp, basis, regime=sv.SII)
-    assert np.isclose(sv.solvency_ratio(res, 20_000_000.0),
+    assert np.isclose(sv.ratio(res, 20_000_000.0),
                       20_000_000.0 / res.total_scr)
 
 

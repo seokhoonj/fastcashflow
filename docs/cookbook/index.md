@@ -249,7 +249,7 @@
 * - 8.6
   - [요구자본 (Solvency II / K-ICS)](workflow/required-capital)
   - 충격 -> 재측정 -> 상관집계로 위험기반 요구자본 (SCR). 같은 엔진에 제도만 바꿔
-    (`SII` / `KICS`) -- `required_capital`, `solvency_ratio`.
+    (`SII` / `KICS`) -- `required_capital`, `ratio`.
 * - 8.7
   - [ALM -- 듀레이션 / DV01 / gap](workflow/alm-duration)
   - 부채·채권의 금리 민감도 (DV01 / duration / key-rate) 와 자산-부채 DV01 gap (면역화) --
@@ -257,11 +257,11 @@
 * - 8.8
   - [자산 - 가용자본 - 지급여력비율](workflow/solvency-balance-sheet)
   - 자산 시가평가 + 가용자본 (자산-부채) + 순금리 SCR 로 지급여력비율 조립 --
-    `AssetPortfolio`, `available_capital`, `assess_solvency`.
+    `AssetPortfolio`, `available_capital`, `assess`.
 * - 8.9
   - [공시 재현 -- IFRS17 + K-ICS](workflow/disclosure)
   - 한국 보험사 공개공시 골격 재현 -- IFRS17 보험계약부채 (BEL/RA/CSM), K-ICS 지급여력비율,
-    금리 민감도. `estimate_at` / `assess_solvency`.
+    금리 민감도. `estimate_at` / `assess`.
 :::
 
 ### 9. 결산 워크플로

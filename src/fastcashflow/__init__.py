@@ -64,7 +64,7 @@ from fastcashflow import solvency
 from fastcashflow import alm
 from fastcashflow import assets
 from fastcashflow.report import (
-    DynamicSolvencyReport, Report, report,
+    DynamicAssessmentReport, Report, report,
 )
 from fastcashflow.projection import Cashflows, AccountTrajectory
 from fastcashflow.profit import ProfitSignature
@@ -100,7 +100,7 @@ __all__ = [
     # result types now live in their producing namespace (fcf.gmm.Measurement,
     # fcf.vfa.Measurement, fcf.reinsurance.Report, fcf.esg.*, ...);
     # only genuinely shared / universal result types stay flat below.
-    "Report", "DynamicSolvencyReport",
+    "Report", "DynamicAssessmentReport",
     "StochasticResult", "TVOGResult",
     "settle_group_of_contracts",
     "ProfitSignature",

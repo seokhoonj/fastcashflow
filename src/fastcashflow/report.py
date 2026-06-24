@@ -45,7 +45,7 @@ import fastcashflow._gmm as _gmm
 import fastcashflow._paa as _paa
 import fastcashflow._vfa as _vfa
 import fastcashflow._reinsurance as _reinsurance
-from fastcashflow._solvency_assessment import DynamicSolvency
+from fastcashflow._solvency_assessment import DynamicAssessment
 
 
 def _to_years(monthly: FloatArray) -> FloatArray:
@@ -257,8 +257,8 @@ def _ratio(r: float) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class DynamicSolvencyReport:
-    """Formatted view of a :func:`~fastcashflow.solvency.dynamic_solvency` scenario overlay.
+class DynamicAssessmentReport:
+    """Formatted view of a :func:`~fastcashflow.solvency.assess_dynamic` scenario overlay.
 
     Lays out the static t=0 picture (available capital, required capital, ratio),
     the coupled rate / dynamic-lapse scenario (the mark-to-market revaluation and
@@ -267,7 +267,7 @@ class DynamicSolvencyReport:
     loss and any unfunded shortfall. Output is ASCII English -- part of the API
     surface a global user sees."""
 
-    result: DynamicSolvency
+    result: DynamicAssessment
 
     def __str__(self) -> str:
         d = self.result
@@ -356,9 +356,9 @@ def _(measurement: _reinsurance.Measurement) -> _reinsurance.Report:
 
 
 @report.register
-def _(result: DynamicSolvency) -> DynamicSolvencyReport:
+def _(result: DynamicAssessment) -> DynamicAssessmentReport:
     """A dynamic-solvency scenario overlay reports its before / after picture."""
-    return DynamicSolvencyReport(result=result)
+    return DynamicAssessmentReport(result=result)
 
 
 def _report_gmm(m: _gmm.Measurement) -> Report:

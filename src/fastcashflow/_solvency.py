@@ -635,7 +635,7 @@ def _aggregate_with_extras(base_caps, base_corr, extras) -> float:
     return float(np.sqrt(c @ R @ c))
 
 
-def solvency_ratio(scr: SCRResult, available_capital: float) -> float:
+def ratio(scr: SCRResult, available_capital: float) -> float:
     """The solvency ratio -- available capital over the required capital
     (``available_capital / scr.total_scr``).
 
@@ -959,6 +959,6 @@ __all__ = [
     "dynamic_lapse_multiplier", "interest_with_dynamic_lapse",
     "shock_curve", "shock_spread", "KICSInterest",
     "aggregate", "required_capital", 
-    "kics_catastrophe", "solvency_ratio",
+    "kics_catastrophe", "ratio",
     "SII", "KICS",
 ]

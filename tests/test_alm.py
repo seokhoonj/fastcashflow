@@ -95,7 +95,7 @@ def test_vfa_namespace_exposes_solvency_and_asset_tools():
     assert callable(fcf.vfa.equity_scr)
     assert callable(fcf.vfa.interest_scr)
     assert callable(fcf.vfa.cashflow_gap)
-    assert callable(fcf.vfa.assess_solvency)
+    assert callable(fcf.vfa.assess)
     assert callable(fcf.vfa.interaction_loss)
 
 

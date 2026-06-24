@@ -2,9 +2,9 @@
 
 Assembles the asset-side market and credit SCR, the liability SCR
 (:mod:`fastcashflow.solvency`), and available capital into the coverage ratio
-(:func:`assess_solvency` / :func:`vfa_assess_solvency`), plus the asset-liability
-interaction loss and the dynamic-scenario overlay (:func:`dynamic_solvency` /
-:func:`dynamic_solvency_vfa`). Sits above :mod:`fastcashflow.assets` (the asset
+(:func:`assess` / :func:`assess_vfa`), plus the asset-liability
+interaction loss and the dynamic-scenario overlay (:func:`assess_dynamic` /
+:func:`assess_dynamic_vfa`). Sits above :mod:`fastcashflow.assets` (the asset
 model and the cash-flow gap), :mod:`fastcashflow.alm` and
 :mod:`fastcashflow.solvency`; it adds the asset-side risk modules and the assembly.
 """
@@ -100,7 +100,7 @@ def interaction_loss(portfolio: AssetPortfolio, model_points: ModelPoints,
 def _interaction(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis,
                  *, shift, lapse_sensitivity, haircut, reinvest_rate, opening_balance):
     """The interaction loss AND the underlying forced-sale roll-forward, so a caller
-    that needs the liquidity trajectory (e.g. :func:`dynamic_solvency`) does not
+    that needs the liquidity trajectory (e.g. :func:`assess_dynamic`) does not
     re-run the stressed measurement."""
     base_nav = _portfolio_nav(portfolio, model_points, basis)
     mp_s, basis_s = interest_with_dynamic_lapse(shift, lapse_sensitivity).apply(
@@ -730,8 +730,13 @@ def basic_scr(insurance: float, market: float, credit: float, *,
     return float(np.sqrt(c @ R @ c)) + operational
 
 
+def _pct(r: float) -> str:
+    """Format a coverage ratio for display -- 'n/a' for a non-finite (risk-free) ratio."""
+    return "n/a" if not np.isfinite(r) else f"{r:.1%}"
+
+
 @dataclass(frozen=True, slots=True, eq=False)
-class SolvencyAssessment:
+class Assessment:
     """The asset-inclusive solvency picture at t=0 -- the full ratio and its parts.
 
     ``available_capital`` is ``asset_portfolio_value - (bel + risk_margin)``. The market
@@ -743,7 +748,7 @@ class SolvencyAssessment:
     the top level; ``basic_required_capital`` adds the
     ``operational_scr`` on top of the BSCR. ``total_scr`` (the ratio denominator)
     subtracts the ``tax_adjustment`` (loss-absorbing capacity of deferred taxes)
-    from the basic required capital. ``solvency_ratio`` is
+    from the basic required capital. ``ratio`` is
     ``available_capital / total_scr``."""
 
     asset_portfolio_value: float
@@ -764,19 +769,23 @@ class SolvencyAssessment:
     basic_required_capital: float
     tax_adjustment: float
     total_scr: float
-    solvency_ratio: float
+    ratio: float
+
+    def __repr__(self) -> str:
+        return (f"<solvency.Assessment: AC={self.available_capital:,.0f}, "
+                f"SCR={self.total_scr:,.0f}, ratio={_pct(self.ratio)}>")
 
 
 _RELIEF_TOL = 1e-9   # float-noise band before a relief is deemed to exceed its module
 
 
-def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
+def assess(portfolio: AssetPortfolio, model_points: ModelPoints,
                     basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
                     tax_recoverability_limit: float | None = None,
                     catastrophe: float = 0.0, property_codes=(),
                     general_insurance_scr: float = 0.0,
                     interest_scenarios: KICSInterest | None = None,
-                    relief: "CedantSolvencyRelief | None" = None) -> SolvencyAssessment:
+                    relief: "CedantSolvencyRelief | None" = None) -> Assessment:
     """Assemble the t=0 solvency ratio from the assets and the liability SCR.
 
     Runs :func:`~fastcashflow.solvency.required_capital` for the liability (insurance) SCR,
@@ -886,22 +895,22 @@ def assess_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
         ratio = ac / total
     else:
         ratio = float("inf") if ac >= 0.0 else float("-inf")
-    return SolvencyAssessment(
+    return Assessment(
         asset_portfolio_value=pv, bel=scr.base_bel, risk_margin=rm,
         available_capital=ac, insurance_scr=ins, general_insurance_scr=gen,
         net_interest_scr=ni,
         equity_scr=eq, property_scr=pr, fx_scr=fx, concentration_scr=conc,
         market_scr=market, credit_scr=cr, operational_scr=op, basic_scr=bscr,
         basic_required_capital=basic, tax_adjustment=tax_adj,
-        total_scr=total, solvency_ratio=ratio)
+        total_scr=total, ratio=ratio)
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class DynamicSolvency:
+class DynamicAssessment:
     """The solvency picture after a coupled rate / dynamic-lapse scenario bites --
     the dynamic asset-liability view layered on the static t=0 assessment.
 
-    ``static`` is the unchanged :func:`assess_solvency` picture (available capital,
+    ``static`` is the unchanged :func:`assess` picture (available capital,
     SCR modules, t=0 ratio). ``interaction`` is the coupled-stress
     :class:`InteractionResult` (mark-to-market revaluation plus the forced-sale
     friction) and ``liquidation`` its underlying :class:`LiquidationResult` -- the
@@ -923,16 +932,22 @@ class DynamicSolvency:
     total_scr: float
     stressed_available_capital: float
     stressed_ratio: float
-    static: SolvencyAssessment | None = None
+    static: Assessment | None = None
+
+    def __repr__(self) -> str:
+        return (f"<solvency.DynamicAssessment: "
+                f"stressed_AC={self.stressed_available_capital:,.0f}, "
+                f"SCR={self.total_scr:,.0f}, "
+                f"stressed_ratio={_pct(self.stressed_ratio)}>")
 
 
-def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
+def assess_dynamic(portfolio: AssetPortfolio, model_points: ModelPoints,
                      basis: Basis, *, regime: RegimeSpec, shift: float,
                      lapse_sensitivity: float, haircut: float, reinvest_rate=0.0,
-                     opening_balance: float = 0.0, **assess_kwargs) -> DynamicSolvency:
+                     opening_balance: float = 0.0, **assess_kwargs) -> DynamicAssessment:
     """Layer a coupled rate / dynamic-lapse scenario onto the static solvency ratio.
 
-    Runs :func:`assess_solvency` for the static t=0 picture, then
+    Runs :func:`assess` for the static t=0 picture, then
     :func:`interaction_loss` for the asset-liability interaction the static modules
     miss (the dynamic-lapse-amplified mark-to-market fall plus the forced-sale
     friction). The scenario loss is taken off available capital to give the
@@ -943,9 +958,9 @@ def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     :func:`interaction_loss`); ``reinvest_rate`` / ``opening_balance`` parameterise
     the liquidation roll-forward. Extra keyword arguments
     (``interest_scenarios``, ``tax_rate``, ``catastrophe``, ...) pass through to
-    :func:`assess_solvency`. A zero scenario (``shift = haircut = 0``) leaves the
+    :func:`assess`. A zero scenario (``shift = haircut = 0``) leaves the
     ratio at the static value."""
-    static = assess_solvency(portfolio, model_points, basis, regime=regime,
+    static = assess(portfolio, model_points, basis, regime=regime,
                              **assess_kwargs)
     interaction, liq = _interaction(
         portfolio, model_points, basis, shift=shift,
@@ -956,7 +971,7 @@ def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
         stressed_ratio = stressed_ac / static.total_scr
     else:
         stressed_ratio = float("inf") if stressed_ac >= 0.0 else float("-inf")
-    return DynamicSolvency(static=static, interaction=interaction, liquidation=liq,
+    return DynamicAssessment(static=static, interaction=interaction, liquidation=liq,
                            static_available_capital=static.available_capital,
                            total_scr=static.total_scr,
                            stressed_available_capital=stressed_ac,
@@ -964,10 +979,10 @@ def dynamic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class StochasticSolvency:
+class StochasticAssessment:
     """The coverage-ratio DISTRIBUTION of a variable book over fund-return scenarios.
 
-    ``static`` is the t=0 :func:`vfa_assess_solvency` picture. ``available_capital``
+    ``static`` is the t=0 :func:`assess_vfa` picture. ``available_capital``
     and ``ratio`` are ``(n_scenarios,)`` -- the assets less the per-scenario VFA net
     liability (the realised guarantee cost) and risk margin, over the prescribed
     (unchanged) required capital. Read the distribution with :meth:`mean`,
@@ -975,9 +990,15 @@ class StochasticSolvency:
     the guarantee time-value drag (TVOG / SCR); the lower tail is the stochastic
     guarantee bite the t=0 ratio hides."""
 
-    static: SolvencyAssessment
+    static: Assessment
     available_capital: FloatArray
     ratio: FloatArray
+
+    def __repr__(self) -> str:
+        n = self.ratio.size
+        finite = self.ratio[np.isfinite(self.ratio)]
+        mr = _pct(float(finite.mean())) if finite.size else "n/a"
+        return f"<solvency.StochasticAssessment: n_scen={n}, mean_ratio={mr}>"
 
     def mean(self) -> dict[str, float]:
         return {"available_capital": float(self.available_capital.mean()),
@@ -999,14 +1020,14 @@ class StochasticSolvency:
         return float(tail.mean()) if tail.size else float(thresh)
 
 
-def stochastic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
+def assess_stochastic(portfolio: AssetPortfolio, model_points: ModelPoints,
                             basis: Basis, rate_scenarios, *, regime: RegimeSpec,
                             co_moving_assets: bool = False,
-                            **assess_kwargs) -> StochasticSolvency:
+                            **assess_kwargs) -> StochasticAssessment:
     """The coverage-ratio distribution of a book over discount-rate scenarios.
 
-    The GMM counterpart of :func:`stochastic_solvency_vfa`. Runs the static
-    :func:`assess_solvency` for the prescribed SCR and the asset value, then the
+    The GMM counterpart of :func:`assess_stochastic_vfa`. Runs the static
+    :func:`assess` for the prescribed SCR and the asset value, then the
     GMM liability distribution (:func:`fastcashflow.gmm.stochastic`) over
     ``rate_scenarios``: available capital per scenario is the assets less that
     scenario's BEL and the risk margin, and the ratio is that over the (unchanged)
@@ -1016,7 +1037,7 @@ def stochastic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     ``rate_scenarios`` is a 1-D ``(n_scenarios,)`` array of flat annual rates, a
     2-D ``(n_scenarios, n_time)`` array of rate curves, OR an
     :class:`~fastcashflow.esg.EconomicScenarios` (its ``rates`` are used). Extra
-    keywords pass through to :func:`assess_solvency`.
+    keywords pass through to :func:`assess`.
 
     ``co_moving_assets`` (default ``False``) makes the asset value MOVE WITH each
     rate scenario: the bond portfolio is revalued on the same curve the liability is
@@ -1028,7 +1049,7 @@ def stochastic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
     way (a scenario overlay on the ratio, not a re-derived SCR)."""
     from fastcashflow.stochastic import measure_stochastic
     rs = getattr(rate_scenarios, "rates", rate_scenarios)
-    static = assess_solvency(portfolio, model_points, basis, regime=regime,
+    static = assess(portfolio, model_points, basis, regime=regime,
                              **assess_kwargs)
     dist = measure_stochastic(model_points, basis, rs)
     asset_value = (asset_value_by_scenario(portfolio, rs) if co_moving_assets
@@ -1038,7 +1059,7 @@ def stochastic_solvency(portfolio: AssetPortfolio, model_points: ModelPoints,
         ratio = ac / static.total_scr
     else:
         ratio = np.where(ac >= 0.0, np.inf, -np.inf)
-    return StochasticSolvency(static=static, available_capital=ac, ratio=ratio)
+    return StochasticAssessment(static=static, available_capital=ac, ratio=ratio)
 
 
 __all__ = [
@@ -1047,6 +1068,6 @@ __all__ = [
     "equity_scr", "property_scr", "fx_scr", "concentration_scr",
     "market_scr", "credit_scr", "operational_scr",
     "basic_scr",
-    "SolvencyAssessment", "assess_solvency", "DynamicSolvency", "dynamic_solvency",
-    "StochasticSolvency", "stochastic_solvency", "available_capital",
+    "Assessment", "assess", "DynamicAssessment", "assess_dynamic",
+    "StochasticAssessment", "assess_stochastic", "available_capital",
 ]

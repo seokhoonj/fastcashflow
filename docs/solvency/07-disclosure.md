@@ -20,4 +20,4 @@
 ## 관련 API / 쿡북
 
 - 쿡북 8.9 [공시 재현 -- IFRS17 + K-ICS](../cookbook/workflow/disclosure)
-- `fcf.assets.assess_solvency`, `fcf.mass_lapse_reinsurance.report`
+- `fcf.solvency.assess`, `fcf.mass_lapse_reinsurance.report`

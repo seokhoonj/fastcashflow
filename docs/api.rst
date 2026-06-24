@@ -300,7 +300,7 @@ asset side and available capital are caller-supplied.
 .. autoclass:: fastcashflow.solvency.RegimeSpec
    :members:
 
-.. autofunction:: fastcashflow.solvency.solvency_ratio
+.. autofunction:: fastcashflow.solvency.ratio
 
 .. autodata:: fastcashflow.solvency.SII
    :no-value:
@@ -374,9 +374,9 @@ the net interest-rate SCR, and the assembled solvency ratio.
 
 .. autofunction:: fastcashflow.solvency.basic_scr
 
-.. autofunction:: fastcashflow.solvency.assess_solvency
+.. autofunction:: fastcashflow.solvency.assess
 
-.. autoclass:: fastcashflow.solvency.SolvencyAssessment
+.. autoclass:: fastcashflow.solvency.Assessment
    :members:
 
 Reporting

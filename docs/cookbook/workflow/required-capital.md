@@ -10,7 +10,7 @@
 - 위험마진 두 방식 (SII cost-of-capital / K-ICS percentile) 과 보험위험 SCR 의
   하위위험 분해
 - 부채측 SCR 을 가용자본과 묶어 **지급여력비율** 을 내는 법, 그리고 자산측이
-  왜 사용자 입력인지 (`fcf.solvency.solvency_ratio`)
+  왜 사용자 입력인지 (`fcf.solvency.ratio`)
 :::
 
 위험기반 지급여력제도 (Solvency II, K-ICS) 는 요구자본을 **충격 후 재평가** 로 정합니다 --
@@ -199,8 +199,8 @@ risk margin (incl prop)=        687,105
 입니다 (자산 모델 밖).
 
 ```python
-print(f"  SII    ratio @ AC=20,000,000 : {fcf.solvency.solvency_ratio(s, 20_000_000.0):.1%}")
-print(f"  K-ICS  ratio @ AC=20,000,000 : {fcf.solvency.solvency_ratio(k, 20_000_000.0):.1%}")
+print(f"  SII    ratio @ AC=20,000,000 : {fcf.solvency.ratio(s, 20_000_000.0):.1%}")
+print(f"  K-ICS  ratio @ AC=20,000,000 : {fcf.solvency.ratio(k, 20_000_000.0):.1%}")
 ```
 
 출력:
@@ -217,7 +217,7 @@ frictional_spread=basis.cost_of_capital_rate)` 로 요구자본 보유비용을 
 ## 함정 / 검증
 
 - **부채측만 (v1)** -- 자산측 시장위험 (주식·부동산·신용), 가용자본, 운영위험은 자산
-  모델이 필요해 범위 밖. `solvency_ratio` 의 가용자본은 사용자 입력이고, 자산위험이 큰
+  모델이 필요해 범위 밖. `ratio` 의 가용자본은 사용자 입력이고, 자산위험이 큰
   책 (book) 에서는 비율의 상한입니다.
 - **대재해 제외** -- SII 대재해 (+0.15%p) 는 v1 대칭을 위해 뺐고 (additive 변형으로 추가
   가능), K-ICS 대재해는 가입금액 factor (ΔBEL 아님) 라 엔진 밖입니다.

@@ -292,7 +292,7 @@ def test_cedant_relief_total_composition():
 
 
 # ---------------------------------------------------------------------------
-# Cedant relief into the solvency ratio (assess_solvency(relief=))
+# Cedant relief into the solvency ratio (assess(relief=))
 # ---------------------------------------------------------------------------
 
 def _solvency_book():
@@ -306,7 +306,7 @@ def _solvency_book():
 
 
 def test_relief_into_ratio_applies_module_deltas():
-    """assess_solvency(relief=) drops the insurance module by the diversified
+    """assess(relief=) drops the insurance module by the diversified
     lapse relief, adds the counterparty-default charge into the credit module,
     and lowers the risk margin -- raising available capital and the ratio."""
     portfolio, mp, basis = _solvency_book()
@@ -316,8 +316,8 @@ def test_relief_into_ratio_applies_module_deltas():
                                    reinsurer_pd=pd)
     assert r.insurance_relief > 0.0                     # the treaty bites this book
 
-    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII)
-    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=r)
+    base = sa.assess(portfolio, mp, basis, regime=sv.SII)
+    net = sa.assess(portfolio, mp, basis, regime=sv.SII, relief=r)
 
     # the three module deltas (insurance down, credit up, risk margin down)
     assert np.isclose(net.insurance_scr, base.insurance_scr - r.insurance_relief)
@@ -330,7 +330,7 @@ def test_relief_into_ratio_applies_module_deltas():
     assert np.isclose(net.market_scr, base.market_scr)
     # net of the small counterparty add-back the ratio still improves
     assert net.total_scr < base.total_scr
-    assert net.solvency_ratio > base.solvency_ratio
+    assert net.ratio > base.ratio
 
 
 def test_relief_into_ratio_assembly_is_self_consistent():
@@ -341,14 +341,14 @@ def test_relief_into_ratio_assembly_is_self_consistent():
     r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
                                    regime=sv.SII,
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
-    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=r)
+    net = sa.assess(portfolio, mp, basis, regime=sv.SII, relief=r)
 
     bscr = sa.basic_scr(
         net.insurance_scr, net.market_scr, net.credit_scr, regime=sv.SII)
     assert np.isclose(net.basic_scr, bscr)
     assert np.isclose(net.basic_required_capital, net.basic_scr + net.operational_scr)
     assert np.isclose(net.total_scr, net.basic_required_capital - net.tax_adjustment)
-    assert np.isclose(net.solvency_ratio, net.available_capital / net.total_scr)
+    assert np.isclose(net.ratio, net.available_capital / net.total_scr)
 
 
 def test_relief_into_ratio_counterparty_charge_diversifies():
@@ -360,8 +360,8 @@ def test_relief_into_ratio_counterparty_charge_diversifies():
                                    regime=sv.SII,
                                    reinsurer_pd=lre.CREDIT_QUALITY_STEP_PD[2])
     assert r.counterparty_default > 0.0
-    with_cpd = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=r)
-    without = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII,
+    with_cpd = sa.assess(portfolio, mp, basis, regime=sv.SII, relief=r)
+    without = sa.assess(portfolio, mp, basis, regime=sv.SII,
                                  relief=replace(r, counterparty_default=0.0))
     # the charge bites the BSCR, but the correlation dampens it below par
     assert 0.0 < with_cpd.basic_scr - without.basic_scr < r.counterparty_default
@@ -376,9 +376,9 @@ def test_relief_zero_fields_is_noop():
         lapse_gross_scr=0.0, lapse_net_scr=0.0,
         insurance_gross_scr=0.0, insurance_net_scr=0.0,
         counterparty_default=0.0, risk_margin_gross=0.0, risk_margin_net=0.0)
-    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII)
-    net = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=zero)
-    # SolvencyAssessment uses identity equality (eq=False) -- compare by value
+    base = sa.assess(portfolio, mp, basis, regime=sv.SII)
+    net = sa.assess(portfolio, mp, basis, regime=sv.SII, relief=zero)
+    # Assessment uses identity equality (eq=False) -- compare by value
     assert dataclasses.astuple(net) == dataclasses.astuple(base)
 
 
@@ -387,7 +387,7 @@ def test_relief_exceeding_module_raises():
     regime / basis) raises rather than silently flooring to zero and understating
     the required capital."""
     portfolio, mp, basis = _solvency_book()
-    base = sa.assess_solvency(portfolio, mp, basis, regime=sv.SII)
+    base = sa.assess(portfolio, mp, basis, regime=sv.SII)
     impossible = lre.CedantSolvencyRelief(
         loss_density=0.0, mass_gross_scr=0.0, mass_net_scr=0.0,
         lapse_gross_scr=0.0, lapse_net_scr=0.0,
@@ -398,7 +398,7 @@ def test_relief_exceeding_module_raises():
     # insurance_relief = 2x the module -> impossible, must raise
     assert too_big.insurance_relief > base.insurance_scr
     with pytest.raises(ValueError, match="exceeds the module"):
-        sa.assess_solvency(portfolio, mp, basis, regime=sv.SII, relief=too_big)
+        sa.assess(portfolio, mp, basis, regime=sv.SII, relief=too_big)
 
 
 # ---------------------------------------------------------------------------
