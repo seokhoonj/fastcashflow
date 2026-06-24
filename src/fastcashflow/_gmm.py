@@ -746,7 +746,7 @@ def _measure_full(model_points: "ModelPoints", basis: "Basis", *,
     ``lapse_scale`` are forwarded to :func:`~fastcashflow.engine.valued_projection`
     (see there for the override semantics).
     """
-    from fastcashflow.engine import valued_projection
+    from fastcashflow._measurement.projection import valued_projection
     vp = valued_projection(model_points, basis,
                            discount_monthly=discount_monthly,
                            lapse_scale=lapse_scale)

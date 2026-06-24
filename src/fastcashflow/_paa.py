@@ -59,7 +59,7 @@ from fastcashflow.model_points import ModelPoints
 from fastcashflow.projection import Cashflows, project_cashflows
 # In-force helpers shared with the GMM path (engine does not import _paa, and
 # io imports engine lazily, so this top-level import is cycle-free).
-from fastcashflow.engine import _reconcile_state, _inforce_rescale
+from fastcashflow._measurement.inforce import _inforce_rescale, _reconcile_state
 
 
 @dataclass(frozen=True, slots=True, eq=False)

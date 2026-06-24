@@ -47,7 +47,7 @@ from fastcashflow.io import (
     write_measurement, _write_measurement_columns, _stream_policies_coverages)
 # In-force helpers shared with the GMM path (engine does not import
 # _reinsurance, so this top-level import is cycle-free -- same pattern as _paa).
-from fastcashflow.engine import _reconcile_state
+from fastcashflow._measurement.inforce import _reconcile_state
 
 
 @dataclass(frozen=True, slots=True, eq=False)

@@ -69,7 +69,7 @@ from fastcashflow.tvog import (
 )
 # In-force helpers shared with the GMM path (engine does not import _vfa, and io
 # imports engine lazily, so this top-level import is cycle-free).
-from fastcashflow.engine import _reconcile_state, _inforce_rescale
+from fastcashflow._measurement.inforce import _inforce_rescale, _reconcile_state
 
 
 def moneyness_lapse_multiplier(moneyness, sensitivity, *, floor: float = 0.0,
@@ -1417,7 +1417,8 @@ def measure_vfa(
     # (variable-annuity, no cost-of-insurance) handles the account-flag-absent
     # case. Branch STRICTLY on the coverage flags, never account_value (the
     # variable-annuity product carries an account value too).
-    from fastcashflow.engine import valued_projection, _portfolio_has_account
+    from fastcashflow._measurement.projection import valued_projection
+    from fastcashflow._measurement.account import _portfolio_has_account
     if _portfolio_has_account(model_points, basis):
         r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
         n_time = int(model_points.contract_boundary_months.max())
@@ -1596,7 +1597,7 @@ def _ul_floor_time_value(model_points: ModelPoints, basis: Basis,
     themselves vary per model point). Re-rolls the account under the return
     scenarios and prices the floors (mean cost less the central intrinsic). Returns
     ``(n_mp,)`` (``reduce``) or ``(n_mp, n_scenarios)``."""
-    from fastcashflow.engine import _account_roll_inputs
+    from fastcashflow._measurement.account import _account_roll_inputs
     am = getattr(model_points, "annuitization_months", None)
     if am is not None and np.any(np.asarray(am) > 0):
         raise NotImplementedError(
@@ -1629,7 +1630,8 @@ def _vfa_time_value_by_scenario(model_points: ModelPoints, basis: Basis,
     :func:`measure_vfa_stochastic`. The universal-life (account) book re-rolls the
     account under every scenario in one pass; the variable-annuity closed form
     builds the credit-rate and floor time-value matrices directly."""
-    from fastcashflow.engine import valued_projection, _portfolio_has_account
+    from fastcashflow._measurement.projection import valued_projection
+    from fastcashflow._measurement.account import _portfolio_has_account
     rs = np.asarray(return_scenarios, dtype=np.float64)
     if _portfolio_has_account(model_points, basis):
         r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
@@ -2475,8 +2477,8 @@ def recognition_schedule(
     from the valuation date (default 12 / 36 / 60); ``period_months`` is the
     settlement period (default 12).
     """
-    from fastcashflow.engine import (
-        _validate_band_edges, _build_recognition_schedule)
+    from fastcashflow._measurement.recognition import (
+        _build_recognition_schedule, _validate_band_edges)
     edges = _validate_band_edges(band_edges_months)
     mv = settle(model_points, state, basis, period_months=period_months)
     inforce = measure_vfa(model_points, basis, full=True).cashflows.inforce
