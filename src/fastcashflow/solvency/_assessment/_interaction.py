@@ -17,7 +17,7 @@ from fastcashflow.solvency._engine import (
     KICSInterest, interest_with_dynamic_lapse,
 )
 from fastcashflow.assets import (
-    AssetPortfolio, asset_portfolio_value, cashflow_gap, liquidate,
+    Portfolio, portfolio_value, cashflow_gap, liquidate,
 )
 
 
@@ -50,14 +50,14 @@ class InteractionResult:
         return self.revaluation_loss + self.forced_sale_loss
 
 
-def _portfolio_nav(portfolio: AssetPortfolio, model_points: ModelPoints,
+def _portfolio_nav(portfolio: Portfolio, model_points: ModelPoints,
                    basis: Basis) -> float:
-    """Net asset value at market: ``asset_portfolio_value(curve) - BEL``."""
-    return (asset_portfolio_value(portfolio, basis.discount_annual)
+    """Net asset value at market: ``portfolio_value(curve) - BEL``."""
+    return (portfolio_value(portfolio, basis.discount_annual)
             - float(measure(model_points, basis, full=False).bel.sum()))
 
 
-def interaction_loss(portfolio: AssetPortfolio, model_points: ModelPoints,
+def interaction_loss(portfolio: Portfolio, model_points: ModelPoints,
                      basis: Basis, *, shift: float, lapse_sensitivity: float,
                      haircut: float, reinvest_rate=0.0,
                      opening_balance: float = 0.0) -> InteractionResult:
@@ -80,7 +80,7 @@ def interaction_loss(portfolio: AssetPortfolio, model_points: ModelPoints,
                         reinvest_rate=reinvest_rate, opening_balance=opening_balance)[0]
 
 
-def _interaction(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis,
+def _interaction(portfolio: Portfolio, model_points: ModelPoints, basis: Basis,
                  *, shift, lapse_sensitivity, haircut, reinvest_rate, opening_balance):
     """The interaction loss AND the underlying forced-sale roll-forward, so a caller
     that needs the liquidity trajectory (e.g. :func:`assess_dynamic`) does not
@@ -97,10 +97,10 @@ def _interaction(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Ba
     return res, liq
 
 
-def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basis):
+def _nav_delta(portfolio: Portfolio, model_points: ModelPoints, basis: Basis):
     """A callable mapping a curve :class:`~fastcashflow.solvency.Stress` to the NET
     asset value DECREASE it causes -- ``NAV(base) - NAV(stress)`` with
-    ``NAV(c) = asset_portfolio_value(c) - BEL(c)`` (see :func:`_portfolio_nav`). The
+    ``NAV(c) = portfolio_value(c) - BEL(c)`` (see :func:`_portfolio_nav`). The
     asset and liability legs re-price on the SAME shocked curve (the stress rebuilds
     ``basis.discount_annual``, which prices the bonds and the liability alike), so a
     duration-matched book gives ~0."""
@@ -112,7 +112,7 @@ def _nav_delta(portfolio: AssetPortfolio, model_points: ModelPoints, basis: Basi
     return delta
 
 
-def net_interest_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
+def net_interest_scr(portfolio: Portfolio, model_points: ModelPoints,
                      basis: Basis, *, interest_curves: tuple) -> float:
     """The net interest-rate SCR -- the worst loss in own funds (assets less
     liabilities) over the regime's up / down curve shocks.
@@ -130,7 +130,7 @@ def net_interest_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
     return max(0.0, max((delta(s) for s in interest_curves), default=0.0))
 
 
-def net_interest_kics_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
+def net_interest_kics_scr(portfolio: Portfolio, model_points: ModelPoints,
                           basis: Basis, *, scenarios: KICSInterest) -> float:
     """The K-ICS net interest-rate SCR -- the five-scenario aggregation on NET asset
     value (handbook p.205):

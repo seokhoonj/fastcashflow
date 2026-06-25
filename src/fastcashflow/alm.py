@@ -48,12 +48,12 @@ def _reject_account_book_alm(model_points: ModelPoints, basis: Basis,
     Such a book discounts its liability at the underlying-items return, not the
     risk-free curve, so bumping ``discount_annual`` is not its interest
     sensitivity. The VFA layer carries the symmetric tools: the interest
-    sensitivity is :func:`vfa_liability_duration` / :func:`vfa_liability_dv01`
+    sensitivity is :func:`fastcashflow.vfa.liability_duration` / :func:`fastcashflow.vfa.liability_dv01`
     (``fcf.vfa.liability_duration``, which bumps the underlying-items return), the
     rate capital is the VFA interest sub-risk
     (:func:`fastcashflow.vfa.interest_scr`), and the asset-liability cash-flow
-    ladder is :func:`fastcashflow.assets.vfa_cashflow_gap` over
-    :func:`vfa_net_liability_cashflows`.
+    ladder is :func:`fastcashflow.vfa.cashflow_gap` over
+    :func:`fastcashflow.vfa.net_liability_cashflows`.
     """
     if _portfolio_has_account(model_points, basis):
         raise NotImplementedError(
@@ -63,7 +63,7 @@ def _reject_account_book_alm(model_points: ModelPoints, basis: Basis,
             "not its interest sensitivity. Use fcf.vfa.liability_duration / "
             "fcf.vfa.liability_dv01 for the VFA interest sensitivity, "
             "fcf.vfa.interest_scr for the rate capital, and "
-            "fcf.assets.vfa_cashflow_gap / fcf.vfa.net_liability_cashflows for "
+            "fcf.vfa.cashflow_gap / fcf.vfa.net_liability_cashflows for "
             "the asset-liability cash-flow ladder.")
 
 
@@ -101,8 +101,8 @@ def net_liability_cashflows(measurement) -> tuple[FloatArray, FloatArray]:
 
     Requires a ``full=True`` measurement. This is the GROSS-benefit ladder for a
     non-account book; an account-value (universal-life / variable) book has its
-    own entity net-liability ladder -- use :func:`vfa_net_liability_cashflows`
-    (and :func:`fastcashflow.assets.vfa_cashflow_gap` for the asset-liability
+    own entity net-liability ladder -- use :func:`fastcashflow.vfa.net_liability_cashflows`
+    (and :func:`fastcashflow.vfa.cashflow_gap` for the asset-liability
     gap), which net the account fund the entity holds. This function rejects an
     account book rather than return a gross ladder its net BEL would not match.
     """
@@ -116,8 +116,8 @@ def net_liability_cashflows(measurement) -> tuple[FloatArray, FloatArray]:
             "net_liability_cashflows is the gross-benefit ladder for a "
             "non-account book; an account-value (universal-life / variable) book "
             "nets the account fund after discounting, so the raw flows do not "
-            "reconstruct its net BEL. Use fcf.alm.vfa_net_liability_cashflows "
-            "(the entity net-liability ladder) / fcf.assets.vfa_cashflow_gap "
+            "reconstruct its net BEL. Use fcf.vfa.net_liability_cashflows "
+            "(the entity net-liability ladder) / fcf.vfa.cashflow_gap "
             "instead.")
     n_time = cf.premium_cf.shape[1]
     flow_mid = (cf.mortality_cf + cf.morbidity_cf + cf.disability_cf
@@ -130,14 +130,14 @@ def net_liability_cashflows(measurement) -> tuple[FloatArray, FloatArray]:
     return flow_bom, flow_mid
 
 
-def vfa_net_liability_cashflows(measurement) -> FloatArray:
+def _vfa_net_liability_cashflows(measurement) -> FloatArray:
     """The VFA entity general-account net liability cash flow per month ``(n_time,)``.
 
     A variable / unit-linked contract's account value is invested in the
     underlying items, so the account-value portion of every benefit is funded by
     the unit fund -- only the GMDB / GMAB excess over the account value lands on
     the entity's own general account (the bonds / equity that an
-    :class:`~fastcashflow.assets.AssetPortfolio` represents). Returns the per-month
+    :class:`~fastcashflow.assets.Portfolio` represents). Returns the per-month
     net OUTFLOW summed over the portfolio:
 
         guarantee_excess + expense - variable_fee
@@ -170,7 +170,7 @@ def vfa_net_liability_cashflows(measurement) -> FloatArray:
     cf = measurement.cashflows
     if cf is None:
         raise ValueError(
-            "vfa_net_liability_cashflows needs a full=True measurement (it carries "
+            "fcf.vfa.net_liability_cashflows needs a full=True measurement (it carries "
             "the cash flows); the headline-only / aggregate paths do not.")
     if getattr(cf, "account", None) is not None:
         return _ul_net_liability_cashflows(measurement)
@@ -185,7 +185,7 @@ def _va_net_liability_cashflows(measurement) -> FloatArray:
     fee = measurement.fee_cf
     if ge is None or fee is None:
         raise ValueError(
-            "vfa_net_liability_cashflows needs a full=True closed-form VA "
+            "fcf.vfa.net_liability_cashflows needs a full=True closed-form VA "
             "measurement (guarantee_excess_cf / fee_cf); got a headline-only result.")
     return (ge + cf.expense_cf - fee).sum(axis=0)
 
@@ -320,7 +320,7 @@ def _vfa_bel(model_points: ModelPoints, basis: Basis, investment_return) -> floa
     return float(m.bel.sum())
 
 
-def vfa_liability_dv01(model_points: ModelPoints, basis: Basis, *,
+def _vfa_liability_dv01(model_points: ModelPoints, basis: Basis, *,
                        bump: float = _BP) -> float:
     """The VFA liability DV01 -- the decrease in the VFA BEL for a +1bp parallel
     rise in the underlying-items return, by central difference.
@@ -335,7 +335,7 @@ def vfa_liability_dv01(model_points: ModelPoints, basis: Basis, *,
     return -(up - dn) / (2.0 * bump) * _BP
 
 
-def vfa_liability_duration(model_points: ModelPoints, basis: Basis, *,
+def _vfa_liability_duration(model_points: ModelPoints, basis: Basis, *,
                            bump: float = _BP) -> DurationResult:
     """The VFA liability's interest sensitivity -- the VFA counterpart of
     :func:`liability_duration`, differencing the VFA BEL against the
@@ -349,7 +349,7 @@ def vfa_liability_duration(model_points: ModelPoints, basis: Basis, *,
     Exposed as ``fcf.vfa.liability_duration``."""
     base = float(np.asarray(basis.investment_return, dtype=np.float64))
     pv = _vfa_bel(model_points, basis, base)
-    dv01 = vfa_liability_dv01(model_points, basis, bump=bump)
+    dv01 = _vfa_liability_dv01(model_points, basis, bump=bump)
     if abs(pv) > 1.0:
         modified = dv01 / (abs(pv) * _BP)
         up = _vfa_bel(model_points, basis, base + bump)
@@ -361,7 +361,7 @@ def vfa_liability_duration(model_points: ModelPoints, basis: Basis, *,
                           dv01=dv01, convexity=convexity)
 
 
-def alm_gap(asset_dv01: float, liability_dv01: float) -> dict:
+def gap(asset_dv01: float, liability_dv01: float) -> dict:
     """The asset-liability DV01 gap -- ``asset_dv01 - liability_dv01``. Zero means
     the net value is immunised against a small parallel rate move (the asset and
     liability fall by the same amount per 1bp). Both inputs are DV01s on the same
@@ -382,7 +382,7 @@ def duration_gap(asset_duration: float, asset_value: float,
     zero gap immunises the surplus against a small parallel yield move; a positive
     gap (assets longer than the leveraged liabilities) means the surplus FALLS when
     yields rise. ``surplus_dv01 = A * duration_gap * 1bp`` is that fall per +1bp --
-    the same quantity as the :func:`alm_gap` ``dv01_gap`` when the durations and
+    the same quantity as the :func:`gap` ``dv01_gap`` when the durations and
     values are mutually consistent (``dv01 = modified * value * 1bp``).
 
     Durations are modified (per unit yield); take them from
@@ -397,7 +397,6 @@ def duration_gap(asset_duration: float, asset_value: float,
 
 __all__ = [
     "DurationResult", "net_liability_cashflows",
-    "vfa_net_liability_cashflows",
     "liability_dv01", "liability_duration", "key_rate_dv01s",
-    "alm_gap", "duration_gap",
+    "gap", "duration_gap",
 ]

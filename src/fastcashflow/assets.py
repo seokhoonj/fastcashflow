@@ -27,7 +27,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow._duration import DurationResult, _BP
 from fastcashflow.alm import (
-    net_liability_cashflows, vfa_net_liability_cashflows,
+    net_liability_cashflows, _vfa_net_liability_cashflows,
 )
 
 
@@ -73,7 +73,7 @@ Holding = "Bond | Equity | Property | Cash"
 
 
 @dataclass(frozen=True, slots=True)
-class AssetPortfolio:
+class Portfolio:
     """An immutable set of holdings. Bonds are priced off the discount curve;
     equity / property / cash carry a given market value."""
 
@@ -88,7 +88,7 @@ def holding_value(holding, discount_annual) -> float:
     return float(holding.market_value)
 
 
-def asset_portfolio_value(portfolio: AssetPortfolio, discount_annual) -> float:
+def portfolio_value(portfolio: Portfolio, discount_annual) -> float:
     """Total market value of the portfolio at the given discount curve."""
     return float(sum(holding_value(h, discount_annual) for h in portfolio.holdings))
 
@@ -103,7 +103,7 @@ def available_capital(asset_portfolio_value: float, bel: float,
     return asset_portfolio_value - (bel + risk_margin)
 
 
-def asset_portfolio_cashflows(portfolio: AssetPortfolio, n_months: int) -> FloatArray:
+def portfolio_cashflows(portfolio: Portfolio, n_months: int) -> FloatArray:
     """Project the portfolio's asset cash flows onto a monthly grid.
 
     Returns ``(n_months + 1,)`` -- the cash received at each month ``0 .. n_months``
@@ -131,7 +131,7 @@ def asset_portfolio_cashflows(portfolio: AssetPortfolio, n_months: int) -> Float
     return flow
 
 
-def asset_value_path(portfolio: AssetPortfolio, n_months: int,
+def portfolio_value_path(portfolio: Portfolio, n_months: int,
                      discount_annual) -> FloatArray:
     """Market value of the still-held portfolio at each month ``0 .. n_months`` under
     run-off (no new business, no reinvestment).
@@ -145,7 +145,7 @@ def asset_value_path(portfolio: AssetPortfolio, n_months: int,
     This is the asset STOCK still on the book -- the cap on a forced sale
     (:func:`liquidate`), distinct from the reinvested-cash account
     (:func:`reinvest` / :func:`liquidate`) that carries the cash the run-off throws
-    off. At month 0 it equals :func:`asset_portfolio_value`; once every bond has
+    off. At month 0 it equals :func:`portfolio_value`; once every bond has
     matured it is just the flat (equity / property / cash) holdings."""
     if n_months <= 0:
         raise ValueError(f"n_months must be positive, got {n_months}")
@@ -188,7 +188,7 @@ def _annual_forward_curve(rate_scenarios: FloatArray) -> FloatArray:
     return c
 
 
-def asset_value_by_scenario(portfolio: AssetPortfolio,
+def portfolio_value_by_scenario(portfolio: Portfolio,
                             rate_scenarios: FloatArray) -> FloatArray:
     """Market value of ``portfolio`` under each rate scenario -- the co-moving asset
     leg of a stochastic solvency distribution.
@@ -202,11 +202,11 @@ def asset_value_by_scenario(portfolio: AssetPortfolio,
     Returns ``(n_scenarios,)``."""
     rs = np.asarray(rate_scenarios, dtype=np.float64)
     if rs.ndim == 1:
-        return np.array([asset_portfolio_value(portfolio, float(r)) for r in rs])
+        return np.array([portfolio_value(portfolio, float(r)) for r in rs])
     if rs.ndim != 2:
         raise ValueError("rate_scenarios must be 1-D (flat rates) or 2-D (curves)")
     curves = _annual_forward_curve(rs)
-    return np.array([asset_portfolio_value(portfolio, curves[s])
+    return np.array([portfolio_value(portfolio, curves[s])
                      for s in range(rs.shape[0])])
 
 
@@ -233,10 +233,10 @@ class CashflowGap:
         return np.cumsum(self.net_cf)
 
 
-def cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
+def cashflow_gap(portfolio: Portfolio, measurement) -> CashflowGap:
     """The month-by-month asset-liability cash-flow gap.
 
-    Nets the projected asset cash flows (:func:`asset_portfolio_cashflows`) against
+    Nets the projected asset cash flows (:func:`portfolio_cashflows`) against
     the net liability cash flows (:func:`fastcashflow.alm.net_liability_cashflows`)
     on the engine's monthly grid. The liability's begin-of-month flows
     (``annuity - premium`` and maturity benefits) and mid-month flows (death /
@@ -252,16 +252,16 @@ def cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
     n_time = flow_mid.shape[0]
     liability_cf = flow_bom.copy()
     liability_cf[:n_time] += flow_mid
-    asset_cf = asset_portfolio_cashflows(portfolio, n_time)
+    asset_cf = portfolio_cashflows(portfolio, n_time)
     return CashflowGap(asset_cf=asset_cf, liability_cf=liability_cf)
 
 
-def vfa_cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
+def _vfa_cashflow_gap(portfolio: Portfolio, measurement) -> CashflowGap:
     """The asset-liability cash-flow gap for a variable (VFA) book.
 
     The VFA counterpart of :func:`cashflow_gap`: nets the projected asset cash
-    flows (:func:`asset_portfolio_cashflows`) against the VFA entity net liability
-    cash flow (:func:`fastcashflow.alm.vfa_net_liability_cashflows`) -- the
+    flows (:func:`portfolio_cashflows`) against the VFA entity net liability
+    cash flow (:func:`fastcashflow.vfa.net_liability_cashflows`) -- the
     guarantee top-up plus expenses less the entity income (the variable fee for a
     variable annuity, the account charges for universal life), on the engine's
     monthly grid. Unlike ``cashflow_gap`` this is FOR account-value books, not
@@ -270,11 +270,11 @@ def vfa_cashflow_gap(portfolio: AssetPortfolio, measurement) -> CashflowGap:
     Undiscounted liquidity ladder -- where the general account throws off / must find
     cash to carry the guarantee. Requires a ``full=True`` measurement; both the
     variable-annuity and universal-life paths are supported."""
-    net = vfa_net_liability_cashflows(measurement)          # (n_time,)
+    net = _vfa_net_liability_cashflows(measurement)          # (n_time,)
     n_time = net.shape[0]
     liability_cf = np.zeros(n_time + 1, dtype=np.float64)
     liability_cf[:n_time] = net
-    asset_cf = asset_portfolio_cashflows(portfolio, n_time)
+    asset_cf = portfolio_cashflows(portfolio, n_time)
     return CashflowGap(asset_cf=asset_cf, liability_cf=liability_cf)
 
 
@@ -401,7 +401,7 @@ def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
     haircut is the loss per unit of cash raised -- the depressed-price discount).
 
     ``available_assets`` (optional, ``(n_time + 1,)`` -- e.g. from
-    :func:`asset_value_path`) caps the forced sale at the FAIR-VALUE asset stock
+    :func:`portfolio_value_path`) caps the forced sale at the FAIR-VALUE asset stock
     still on the book. Raising ``s`` of cash consumes ``s * (1 + haircut)`` of stock
     (the haircut loss is destroyed fair value too), so a finite stock raises at most
     ``stock / (1 + haircut)`` cash; any shortfall beyond that is ``unfunded`` (the
@@ -572,11 +572,10 @@ def bond_duration(bond: Bond, discount_annual) -> DurationResult:
 
 
 __all__ = [
-    "Equity", "Property", "Cash", "Bond", "AssetPortfolio",
-    "holding_value", "asset_portfolio_value", "available_capital",
-    "asset_portfolio_cashflows", "asset_value_path", "asset_value_by_scenario",
+    "Equity", "Property", "Cash", "Bond", "Portfolio",
+    "holding_value", "portfolio_value", "available_capital",
+    "portfolio_cashflows", "portfolio_value_path", "portfolio_value_by_scenario",
     "bond_cashflows", "bond_value", "bond_duration", "effective_maturity",
     "CashflowGap", "cashflow_gap",
-    "vfa_cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",
 ]

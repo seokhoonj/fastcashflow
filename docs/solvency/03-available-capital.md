@@ -18,5 +18,5 @@
 
 ## 관련 API / 쿡북
 
-- `fcf.assets` — `available_capital`, `asset_portfolio_value`
+- `fcf.assets` — `available_capital`, `portfolio_value`
 - 부채 튜토리얼 [BEL / RA / CSM](../tutorial/02-bel-ra-csm)

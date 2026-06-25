@@ -13,7 +13,7 @@ from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.solvency._engine import KICSInterest
 from fastcashflow.assets import (
-    Equity, Property, AssetPortfolio, holding_value, asset_portfolio_value,
+    Equity, Property, Portfolio, holding_value, portfolio_value,
 )
 from fastcashflow.solvency._assessment._interaction import _module_interest
 from fastcashflow.solvency._assessment._credit import _rating_row, _SII_CQS
@@ -91,7 +91,7 @@ def _market_cal(regime):
             f"(known: {sorted(_MARKET_CALIBRATION)})")
 
 
-def equity_scr(portfolio: AssetPortfolio, regime) -> float:
+def equity_scr(portfolio: Portfolio, regime) -> float:
     """The equity market-risk SCR -- the per-type amounts (each type's holdings'
     market value times its price-fall shock) aggregated at the 0.75 inter-type
     correlation (handbook 4-3). Types: developed / emerging listed, infrastructure,
@@ -119,7 +119,7 @@ def equity_scr(portfolio: AssetPortfolio, regime) -> float:
     return float(np.sqrt(max(0.0, a @ R @ a)))
 
 
-def property_scr(portfolio: AssetPortfolio, regime) -> float:
+def property_scr(portfolio: Portfolio, regime) -> float:
     """The property market-risk SCR -- property market value times the regime's
     price-fall shock."""
     shock = _market_cal(regime)["property_shock"]
@@ -165,7 +165,7 @@ def _fx_aggregate(losses) -> float:
     return float(np.sqrt(max(0.0, L @ R @ L)))
 
 
-def fx_scr(portfolio: AssetPortfolio, regime, discount_annual) -> float:
+def fx_scr(portfolio: Portfolio, regime, discount_annual) -> float:
     """The FX-risk SCR on the net foreign-currency exposure (vs the won, the local
     currency here).
 
@@ -241,7 +241,7 @@ def _concentration_band(rating: str) -> str:
     return _RATING_TO_BAND.get(base, "5-7")
 
 
-def concentration_scr(portfolio: AssetPortfolio, regime, discount_annual, *,
+def concentration_scr(portfolio: Portfolio, regime, discount_annual, *,
                       total_assets: float | None = None) -> float:
     """The asset-concentration SCR -- ``sqrt(counterparty^2 + property^2)``.
 
@@ -257,7 +257,7 @@ def concentration_scr(portfolio: AssetPortfolio, regime, discount_annual, *,
     property, or for an unknown regime."""
     if regime.name not in ("K-ICS", "Solvency II"):
         return 0.0
-    ta = total_assets if total_assets is not None else asset_portfolio_value(
+    ta = total_assets if total_assets is not None else portfolio_value(
         portfolio, discount_annual)
     if ta <= 0.0:
         return 0.0
@@ -306,7 +306,7 @@ def concentration_scr(portfolio: AssetPortfolio, regime, discount_annual, *,
     return float(np.sqrt(counterparty ** 2 + property_conc ** 2))
 
 
-def market_scr(portfolio: AssetPortfolio, model_points: ModelPoints,
+def market_scr(portfolio: Portfolio, model_points: ModelPoints,
                       basis: Basis, *, regime,
                       interest_scenarios: KICSInterest | None = None) -> float:
     """The market-risk module SCR -- the interest (net of liabilities), equity,

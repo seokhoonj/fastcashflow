@@ -72,7 +72,7 @@ basis = fcf.Basis(mortality_annual=0.012, lapse_annual=0.03, discount_annual=0.0
     ra_confidence=0.75, mortality_cv=0.10, coverages=(fcf.CoverageRate("DEATH", 0.012),))
 dv01 = alm.liability_dv01(mp, basis)
 per = fcf.assets.bond_duration(fcf.assets.Bond(100.0, 0.03, 15, 1), 0.03).dv01
-port = fcf.assets.AssetPortfolio(holdings=(fcf.assets.Bond(dv01 / per * 100.0, 0.03, 15, 1),
+port = fcf.assets.Portfolio(holdings=(fcf.assets.Bond(dv01 / per * 100.0, 0.03, 15, 1),
                                     fcf.assets.Cash(6_000_000.0), fcf.assets.Equity(2_000_000.0)))
 
 a = fcf.gmm.assess(port, mp, basis, regime=fcf.solvency.SII)

@@ -14,7 +14,7 @@ from fastcashflow import (
     Basis, CalculationMethod, CoverageRate, ModelPoints, esg,
 )
 from fastcashflow.assets import Bond
-from fastcashflow.assets import AssetPortfolio
+from fastcashflow.assets import Portfolio
 from fastcashflow import solvency as sv
 
 
@@ -29,7 +29,7 @@ def main() -> None:
                             minimum_crediting_rate=0.02,
                             benefits={"DEATH": 0.0},
                             calculation_methods={"DEATH": CalculationMethod.DEATH})
-    portfolio = AssetPortfolio(holdings=(
+    portfolio = Portfolio(holdings=(
         Bond(face=1.5e7, coupon_rate=0.04, maturity_years=5, frequency=1),))
 
     # Risk-neutral scenarios (Hull-White rates + lognormal fund returns).

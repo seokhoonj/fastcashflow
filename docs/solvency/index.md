@@ -3,7 +3,7 @@
 :::{admonition} 이 트랙이 다루는 것
 :class: tip
 
-- **자산 포트폴리오와 시장가치** -- 자산을 시장가치로 평가하는 법 (`fcf.assets.AssetPortfolio`)
+- **자산 포트폴리오와 시장가치** -- 자산을 시장가치로 평가하는 법 (`fcf.assets.Portfolio`)
 - **시장위험 SCR** -- 금리 · 주식 · 부동산 · 환 · 신용 · 집중 충격
 - **가용자본** -- 자산 빼기 부채 (`fcf.solvency.available_capital`)
 - **요구자본 통합** -- 보험 + 시장 + 신용 + 운영 모듈 집계 (`fcf.gmm.assess`)

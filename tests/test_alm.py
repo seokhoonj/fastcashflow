@@ -58,10 +58,10 @@ def _ul_mp():
 
 def test_net_cashflows_account_book_redirects_to_vfa():
     """An account-value (UL) book is routed to the entity net-liability ladder --
-    the error names vfa_net_liability_cashflows / vfa_cashflow_gap, not a bare
-    'unsupported'."""
+    the error names the public fcf.vfa.net_liability_cashflows / fcf.vfa.cashflow_gap
+    entry points, not a bare 'unsupported'."""
     m = fcf.vfa.measure(_ul_mp(), _ul_basis())
-    with pytest.raises(NotImplementedError, match="vfa_net_liability_cashflows"):
+    with pytest.raises(NotImplementedError, match="fcf.vfa.net_liability_cashflows"):
         alm.net_liability_cashflows(m)
 
 
@@ -83,9 +83,9 @@ def test_alm_namespaces_mirror_module():
     assert fcf.gmm.liability_dv01 is alm.liability_dv01
     assert fcf.gmm.key_rate_dv01s is alm.key_rate_dv01s
     assert fcf.gmm.net_liability_cashflows is alm.net_liability_cashflows
-    assert fcf.vfa.liability_duration is alm.vfa_liability_duration
-    assert fcf.vfa.liability_dv01 is alm.vfa_liability_dv01
-    assert fcf.vfa.net_liability_cashflows is alm.vfa_net_liability_cashflows
+    assert fcf.vfa.liability_duration is alm._vfa_liability_duration
+    assert fcf.vfa.liability_dv01 is alm._vfa_liability_dv01
+    assert fcf.vfa.net_liability_cashflows is alm._vfa_net_liability_cashflows
 
 
 def test_vfa_namespace_exposes_solvency_and_asset_tools():
@@ -110,10 +110,10 @@ def _ul_guaranteed_mp():
                                   calculation_methods={"DEATH": CalculationMethod.DEATH})
 
 
-def test_vfa_liability_duration_responds_to_crediting_guarantee():
+def test__vfa_liability_duration_responds_to_crediting_guarantee():
     """fcf.vfa.liability_duration differences the VFA BEL against the underlying-
     items return. With a binding crediting guarantee the BEL moves, so the dv01 is
-    non-zero and finite; the duration's dv01 matches vfa_liability_dv01, and the
+    non-zero and finite; the duration's dv01 matches _vfa_liability_dv01, and the
     modified duration is dv01 / (|pv| * 1bp)."""
     mp, basis = _ul_guaranteed_mp(), _ul_basis()
     dur = fcf.vfa.liability_duration(mp, basis)
@@ -225,13 +225,13 @@ def test_duration_gap_immunises_surplus():
 
 
 def test_duration_gap_matches_dv01_gap():
-    """surplus_dv01 equals the alm_gap dv01_gap when durations and values are
+    """surplus_dv01 equals the gap dv01_gap when durations and values are
     mutually consistent (dv01 = modified * value * 1bp)."""
     A, L, D_A, D_L = 1200.0, 1000.0, 6.0, 9.0
     asset_dv01 = D_A * A * 1e-4
     liab_dv01 = D_L * L * 1e-4
     g = alm.duration_gap(D_A, A, D_L, L)
-    assert np.isclose(g["surplus_dv01"], alm.alm_gap(asset_dv01, liab_dv01)["dv01_gap"])
+    assert np.isclose(g["surplus_dv01"], alm.gap(asset_dv01, liab_dv01)["dv01_gap"])
 
 
 def test_matched_book_gap_is_zero():
@@ -240,7 +240,7 @@ def test_matched_book_gap_is_zero():
     liab = alm.liability_dv01(mp, basis)
     per_face = assets.bond_duration(assets.Bond(100.0, 0.03, 10, 1), 0.03).dv01
     matched = assets.Bond(100.0 * liab / per_face, 0.03, 10, 1)
-    g = alm.alm_gap(assets.bond_duration(matched, 0.03).dv01, liab)
+    g = alm.gap(assets.bond_duration(matched, 0.03).dv01, liab)
     assert np.isclose(g["dv01_gap"], 0.0, atol=abs(liab) * 1e-6)
 
 

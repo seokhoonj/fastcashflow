@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 
 from fastcashflow.assets import (
-    Bond, bond_value, bond_duration, effective_maturity, AssetPortfolio)
+    Bond, bond_value, bond_duration, effective_maturity, Portfolio)
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ def _credit_bucket(maturity: float) -> int:
     return min(14, max(0, math.ceil(maturity) - 1))
 
 
-def credit_scr(portfolio: AssetPortfolio, regime, discount_annual) -> float:
+def credit_scr(portfolio: Portfolio, regime, discount_annual) -> float:
     """The credit-risk SCR -- each bond's market value times its credit factor.
 
     The factor is read off the K-ICS (rating x effective-maturity) grid for the

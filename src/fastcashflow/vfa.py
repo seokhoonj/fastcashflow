@@ -30,9 +30,9 @@ from fastcashflow.tvog import measure_tvog as tvog
 from fastcashflow.trace import (
     show_trace_vfa as trace, show_trace_diff_vfa as trace_diff)
 from fastcashflow.alm import (
-    vfa_liability_duration as liability_duration,
-    vfa_liability_dv01 as liability_dv01,
-    vfa_net_liability_cashflows as net_liability_cashflows)
+    _vfa_liability_duration as liability_duration,
+    _vfa_liability_dv01 as liability_dv01,
+    _vfa_net_liability_cashflows as net_liability_cashflows)
 # VFA-specific solvency / asset-liability tools -- the sole home is fcf.vfa.*
 # (the symmetric counterpart to fcf.vfa.measure). Impl lives in solvency._vfa
 # (the VFA bodies) / assets (cashflow gap); the merged DynamicAssessment result
@@ -45,7 +45,7 @@ from fastcashflow.solvency._vfa import (
     vfa_interaction_loss as interaction_loss,
     assess_dynamic_vfa as assess_dynamic,
     assess_stochastic_vfa as assess_stochastic)
-from fastcashflow.assets import vfa_cashflow_gap as cashflow_gap
+from fastcashflow.assets import _vfa_cashflow_gap as cashflow_gap
 from fastcashflow.solvency._assessment import DynamicAssessment
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",

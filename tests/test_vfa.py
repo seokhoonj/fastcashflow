@@ -1374,11 +1374,11 @@ def test_vfa_measurement_exposes_guarantee_excess_cf_hand_calc():
     assert res.benefit_cf[0, term - 1] > ge[0, term - 1]    # AV portion on top
 
 
-def test_vfa_net_liability_cashflows_reconciles_to_bel_hand_calc():
+def test__vfa_net_liability_cashflows_reconciles_to_bel_hand_calc():
     """The entity general-account net liability cash flow is guarantee_excess +
     expense - variable_fee; at a zero underlying return its undiscounted sum
     equals the BEL (the unit-funded account-value benefit drops out)."""
-    from fastcashflow.alm import vfa_net_liability_cashflows
+    from fastcashflow.alm import _vfa_net_liability_cashflows
     basis = _basis(investment_return=0.0, fund_fee=0.02, expense_cv=0.0,
                    expense_items=(ExpenseItem("maintenance", "gamma_fixed", 5.0),))
     av0, gmab, term = 1000.0, 1200.0, 60
@@ -1387,7 +1387,7 @@ def test_vfa_net_liability_cashflows_reconciles_to_bel_hand_calc():
                             minimum_accumulation_benefit=gmab,
                             calculation_methods=PATTERNS)
     res = fcf.vfa.measure(mp, basis)
-    net = vfa_net_liability_cashflows(res)
+    net = _vfa_net_liability_cashflows(res)
     assert net.shape == (term,)
     # Component identity: net = guarantee_excess + expense - fee, summed over MPs.
     expected = (res.guarantee_excess_cf + res.cashflows.expense_cf
@@ -1399,7 +1399,7 @@ def test_vfa_net_liability_cashflows_reconciles_to_bel_hand_calc():
 
     # The headline-only path carries no entity cash flows -> rejected.
     with pytest.raises(ValueError, match="full=True"):
-        vfa_net_liability_cashflows(fcf.vfa.measure(mp, basis, full=False))
+        _vfa_net_liability_cashflows(fcf.vfa.measure(mp, basis, full=False))
 
 
 # ---------------------------------------------------------------------------

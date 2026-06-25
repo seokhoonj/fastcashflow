@@ -23,8 +23,8 @@ from fastcashflow.solvency._engine import (
     RegimeSpec, required_capital, KICSInterest,
 )
 from fastcashflow.assets import (
-    AssetPortfolio, asset_portfolio_value, available_capital,
-    asset_value_by_scenario, LiquidationResult,
+    Portfolio, portfolio_value, available_capital,
+    portfolio_value_by_scenario, LiquidationResult,
 )
 from fastcashflow.solvency._assessment._interaction import (
     InteractionResult, _interaction, net_interest_scr,
@@ -83,7 +83,7 @@ class Assessment:
 _RELIEF_TOL = 1e-9   # float-noise band before a relief is deemed to exceed its module
 
 
-def assess(portfolio: AssetPortfolio, model_points: ModelPoints,
+def assess(portfolio: Portfolio, model_points: ModelPoints,
                     basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
                     tax_recoverability_limit: float | None = None,
                     catastrophe: float = 0.0, property_codes=(),
@@ -148,7 +148,7 @@ def assess(portfolio: AssetPortfolio, model_points: ModelPoints,
     """
     scr = required_capital(model_points, basis, regime=regime,
                            catastrophe=catastrophe, property_codes=property_codes)
-    pv = asset_portfolio_value(portfolio, basis.discount_annual)
+    pv = portfolio_value(portfolio, basis.discount_annual)
 
     cal = _market_cal(regime)
     ni = _module_interest(portfolio, model_points, basis, regime, interest_scenarios)
@@ -245,7 +245,7 @@ class DynamicAssessment:
                 f"stressed_ratio={_pct(self.stressed_ratio)}>")
 
 
-def assess_dynamic(portfolio: AssetPortfolio, model_points: ModelPoints,
+def assess_dynamic(portfolio: Portfolio, model_points: ModelPoints,
                      basis: Basis, *, regime: RegimeSpec, shift: float,
                      lapse_sensitivity: float, haircut: float, reinvest_rate=0.0,
                      opening_balance: float = 0.0, **assess_kwargs) -> DynamicAssessment:
@@ -324,7 +324,7 @@ class StochasticAssessment:
         return float(tail.mean()) if tail.size else float(thresh)
 
 
-def assess_stochastic(portfolio: AssetPortfolio, model_points: ModelPoints,
+def assess_stochastic(portfolio: Portfolio, model_points: ModelPoints,
                             basis: Basis, rate_scenarios, *, regime: RegimeSpec,
                             co_moving_assets: bool = False,
                             **assess_kwargs) -> StochasticAssessment:
@@ -345,7 +345,7 @@ def assess_stochastic(portfolio: AssetPortfolio, model_points: ModelPoints,
 
     ``co_moving_assets`` (default ``False``) makes the asset value MOVE WITH each
     rate scenario: the bond portfolio is revalued on the same curve the liability is
-    discounted at (:func:`~fastcashflow.assets.asset_value_by_scenario`), so a rate fall
+    discounted at (:func:`~fastcashflow.assets.portfolio_value_by_scenario`), so a rate fall
     lifts BOTH the BEL and the bonds and the ratio reflects the asset-liability
     DURATION GAP, not just the liability move. Off (the default) holds the asset
     value at its t=0 base-curve level -- the liability-only distribution. The
@@ -356,7 +356,7 @@ def assess_stochastic(portfolio: AssetPortfolio, model_points: ModelPoints,
     static = assess(portfolio, model_points, basis, regime=regime,
                              **assess_kwargs)
     dist = measure_stochastic(model_points, basis, rs)
-    asset_value = (asset_value_by_scenario(portfolio, rs) if co_moving_assets
+    asset_value = (portfolio_value_by_scenario(portfolio, rs) if co_moving_assets
                    else static.asset_portfolio_value)
     ac = asset_value - (dist.bel + static.risk_margin)
     if static.total_scr > 0.0:

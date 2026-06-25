@@ -332,7 +332,7 @@ it -- duration, DV01, key-rate duration, and the asset-liability DV01 gap.
 
 .. autofunction:: fastcashflow.alm.effective_maturity
 
-.. autofunction:: fastcashflow.alm.alm_gap
+.. autofunction:: fastcashflow.alm.gap
 
 Solvency balance sheet (assets)
 -------------------------------
@@ -340,7 +340,7 @@ Solvency balance sheet (assets)
 Static (t=0) asset valuation -- the portfolio market value, available capital,
 the net interest-rate SCR, and the assembled solvency ratio.
 
-.. autoclass:: fastcashflow.assets.AssetPortfolio
+.. autoclass:: fastcashflow.assets.Portfolio
    :members:
 
 .. autoclass:: fastcashflow.assets.Equity
@@ -352,7 +352,7 @@ the net interest-rate SCR, and the assembled solvency ratio.
 .. autoclass:: fastcashflow.assets.Cash
    :members:
 
-.. autofunction:: fastcashflow.assets.asset_portfolio_value
+.. autofunction:: fastcashflow.assets.portfolio_value
 
 .. autofunction:: fastcashflow.solvency.available_capital
 

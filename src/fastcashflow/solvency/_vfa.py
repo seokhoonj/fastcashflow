@@ -18,8 +18,8 @@ import numpy as np
 from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.assets import (
-    AssetPortfolio, available_capital, asset_portfolio_value,
-    asset_value_by_scenario, liquidate, vfa_cashflow_gap,
+    Portfolio, available_capital, portfolio_value,
+    portfolio_value_by_scenario, liquidate, _vfa_cashflow_gap,
 )
 from fastcashflow.solvency._engine import (
     required_capital, RegimeSpec, KICSInterest, SCRResult,
@@ -120,7 +120,7 @@ def vfa_interest_scr(model_points: ModelPoints, basis: Basis, *,
         model_points, replace(basis, investment_return=r - shift), full=False).bel.sum())
     return max(0.0, up - base, dn - base)
 
-def _portfolio_nav_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
+def _portfolio_nav_vfa(portfolio: Portfolio, model_points: ModelPoints,
                        basis: Basis) -> float:
     """Net asset value for a variable (VFA) book: assets at market less the VFA net
     BEL (the guarantee-excess + expense - fee leg). The account-value portion of
@@ -128,10 +128,10 @@ def _portfolio_nav_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     general account; the assets discount at the entity curve ``basis.discount_annual``
     while the VFA BEL discounts internally at the underlying-items return."""
     from fastcashflow._measurement.vfa import measure
-    return (asset_portfolio_value(portfolio, basis.discount_annual)
+    return (portfolio_value(portfolio, basis.discount_annual)
             - float(measure(model_points, basis, full=False).bel.sum()))
 
-def _interaction_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
+def _interaction_vfa(portfolio: Portfolio, model_points: ModelPoints,
                      basis: Basis, *, return_shock, lapse_sensitivity, haircut,
                      reinvest_rate, opening_balance):
     """The VFA interaction loss AND the forced-sale roll-forward, so
@@ -140,17 +140,17 @@ def _interaction_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     base_nav = _portfolio_nav_vfa(portfolio, model_points, basis)
     av = np.asarray(model_points.account_value, dtype=np.float64)
     mp_s = replace(model_points, account_value=av * (1.0 + return_shock))
-    asset_val = asset_portfolio_value(portfolio, basis.discount_annual)
+    asset_val = portfolio_value(portfolio, basis.discount_annual)
     stressed_nav = asset_val - float(measure(
         mp_s, basis, full=False, lapse_sensitivity=lapse_sensitivity).bel.sum())
     m_s = measure(mp_s, basis, full=True, lapse_sensitivity=lapse_sensitivity)
-    liq = liquidate(vfa_cashflow_gap(portfolio, m_s), haircut=haircut,
+    liq = liquidate(_vfa_cashflow_gap(portfolio, m_s), haircut=haircut,
                     reinvest_rate=reinvest_rate, opening_balance=opening_balance)
     res = InteractionResult(base_nav=base_nav, stressed_nav=stressed_nav,
                             forced_sale_loss=liq.total_realized_loss)
     return res, liq
 
-def vfa_interaction_loss(portfolio: AssetPortfolio, model_points: ModelPoints,
+def vfa_interaction_loss(portfolio: Portfolio, model_points: ModelPoints,
                          basis: Basis, *, return_shock: float,
                          lapse_sensitivity: float, haircut: float,
                          reinvest_rate=0.0,
@@ -177,7 +177,7 @@ def vfa_interaction_loss(portfolio: AssetPortfolio, model_points: ModelPoints,
                             reinvest_rate=reinvest_rate,
                             opening_balance=opening_balance)[0]
 
-def assess_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
+def assess_vfa(portfolio: Portfolio, model_points: ModelPoints,
                         basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
                         tax_recoverability_limit: float | None = None,
                         catastrophe: float = 0.0, general_insurance_scr: float = 0.0,
@@ -204,7 +204,7 @@ def assess_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     from fastcashflow._measurement.vfa import measure
     scr = vfa_required_capital(model_points, basis, regime=regime,
                                catastrophe=catastrophe)
-    pv = asset_portfolio_value(portfolio, basis.discount_annual)
+    pv = portfolio_value(portfolio, basis.discount_annual)
     ac = available_capital(pv, scr.base_bel, scr.risk_margin)
 
     cal = _market_cal(regime)
@@ -249,7 +249,7 @@ def assess_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
         basic_required_capital=basic, tax_adjustment=tax_adj,
         total_scr=total, ratio=ratio)
 
-def assess_dynamic_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
+def assess_dynamic_vfa(portfolio: Portfolio, model_points: ModelPoints,
                          basis: Basis, *, return_shock: float,
                          lapse_sensitivity: float, haircut: float,
                          reinvest_rate=0.0, opening_balance: float = 0.0,
@@ -302,7 +302,7 @@ def assess_dynamic_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
         stressed_available_capital=stressed_ac, stressed_ratio=stressed_ratio,
         static=static)
 
-def assess_stochastic_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
+def assess_stochastic_vfa(portfolio: Portfolio, model_points: ModelPoints,
                             basis: Basis, return_scenarios, *, regime: RegimeSpec,
                             co_moving_assets: bool = False,
                             **assess_kwargs) -> StochasticAssessment:
@@ -344,7 +344,7 @@ def assess_stochastic_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
                 "co_moving_assets=True needs an EconomicScenarios -- its .rates "
                 "revalue the entity's bonds (which co-move with interest rates, not "
                 "the fund return); a raw returns array carries no rate path.")
-        asset_value = asset_value_by_scenario(portfolio, rates)
+        asset_value = portfolio_value_by_scenario(portfolio, rates)
     else:
         asset_value = static.asset_portfolio_value
     ac = asset_value - (dist.bel + static.risk_margin)

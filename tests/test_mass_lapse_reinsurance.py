@@ -300,7 +300,7 @@ def _solvency_book():
     """A mass-biting liability book plus an asset portfolio backing it, so the
     treaty relief can be wired through to the coverage ratio."""
     mp, basis = _mass_biting_book()
-    portfolio = assets.AssetPortfolio(holdings=(
+    portfolio = assets.Portfolio(holdings=(
         assets.Bond(2_000_000.0, 0.03, 10, 1, credit_rating="A"),
         assets.Equity(500_000.0)))
     return portfolio, mp, basis

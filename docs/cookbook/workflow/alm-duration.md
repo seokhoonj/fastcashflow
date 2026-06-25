@@ -9,7 +9,7 @@
 - **Key-rate DV01** (연도 버킷별 민감도) 로 금리 노출의 만기 구조를 분해
   (`fcf.alm.key_rate_dv01s`)
 - **채권** 듀레이션 (Macaulay / Modified / DV01) 과 **자산-부채 DV01 gap** 으로
-  면역화 (immunisation) 를 보는 법 (`fcf.assets.Bond`, `fcf.assets.bond_duration`, `fcf.alm.alm_gap`)
+  면역화 (immunisation) 를 보는 법 (`fcf.assets.Bond`, `fcf.assets.bond_duration`, `fcf.alm.gap`)
 :::
 
 ALM 의 실무적 시작은 거창한 동적 모델이 아니라 **결정론적 금리 민감도** -- 듀레이션과
@@ -102,7 +102,7 @@ print(f"bond: value {bd.pv:.2f}  Macaulay {bd.macaulay:.2f}yr  "
 
 face = d.dv01 / bd.dv01 * 100.0           # face sized so bond DV01 == liability DV01
 matched = fcf.assets.Bond(face=face, coupon_rate=0.03, maturity_years=10, frequency=1)
-g = alm.alm_gap(fcf.assets.bond_duration(matched, 0.03).dv01, d.dv01)
+g = alm.gap(fcf.assets.bond_duration(matched, 0.03).dv01, d.dv01)
 print(f"bond face to match: {face:>14,.0f}")
 print(f"|dv01 gap|       = {abs(g['dv01_gap']):>14,.2f}  (~0 = immunised)")
 ```
