@@ -79,16 +79,16 @@ from fastcashflow.transition import transition
 from fastcashflow.tvog import TVOGResult
 from fastcashflow.portfolio import settle_group_of_contracts
 from fastcashflow import (  # namespaces
-    core, curves, gmm, paa, portfolio, reinsurance, mass_lapse_reinsurance,
-    samples, vfa, esg,
+    curves, gmm, paa, portfolio, projection, reinsurance,
+    mass_lapse_reinsurance, samples, vfa, esg,
 )
 
 __version__ = "0.1.0.dev1"
 __all__ = [
     # measurement-model namespaces -- the headline entry points live here
     # (e.g. ``fastcashflow.gmm.measure``, ``fastcashflow.samples.basis``).
-    "core", "curves", "gmm", "paa", "vfa", "reinsurance", "mass_lapse_reinsurance",
-    "samples", "esg",
+    "curves", "gmm", "paa", "vfa", "reinsurance", "mass_lapse_reinsurance",
+    "samples", "esg", "projection",
     "Basis", "BasisRouter", "ModelPoints", "Cashflows", "AccountTrajectory",
     "clear_codegen_cache",
     "report", "roll_forward", "reconcile", "group", "group_of_contracts",

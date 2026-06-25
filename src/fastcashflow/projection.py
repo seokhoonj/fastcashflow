@@ -56,6 +56,13 @@ from fastcashflow.state_model import (
     resolve_state_model,
 )
 
+# Public surface of the ``fastcashflow.projection`` namespace: the raw
+# cash-flow projection entry point and its two result types. A non-IFRS17
+# user (pricing, ALM, experience study) projects the flows here and values
+# them against a curve from ``fastcashflow.curves``, without the measurement
+# layer (BEL / RA / CSM).
+__all__ = ["project_cashflows", "Cashflows", "AccountTrajectory"]
+
 
 @dataclass(frozen=True, slots=True)
 class AccountTrajectory:

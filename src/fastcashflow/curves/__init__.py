@@ -21,7 +21,7 @@ The discount/transform helpers are defined here; the builders are re-exported
 from :mod:`fastcashflow.curves._smith_wilson` /
 :mod:`fastcashflow.curves._nelson_siegel` so the whole curve domain has one
 home. ``project_cashflows`` (which CONSUMES a curve to project cash flows)
-lives in :mod:`fastcashflow.core`, not here.
+lives in :mod:`fastcashflow.projection`, not here.
 """
 from __future__ import annotations
 
