@@ -10,10 +10,10 @@ import fastcashflow as fcf
 from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.trace import (
-    _resolve_basis,
     show_trace_bel_step, show_trace_csm_step, show_trace, show_trace_diff, show_trace_paa,
     show_trace_vfa,
 )
+from fastcashflow.trace._common import _resolve_basis
 
 
 def _shock_mortality(rate_fn, factor: float):

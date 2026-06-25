@@ -11,7 +11,6 @@ The per-model trace logic lives in the sibling modules (:mod:`.gmm`,
 :mod:`.vfa`, :mod:`.paa`, :mod:`.reinsurance`); the shared rendering and
 diff-formatting primitives live in :mod:`._common`.
 """
-from fastcashflow.trace._common import _resolve_basis
 from fastcashflow.trace.gmm import (
     show_trace, show_trace_diff, show_trace_bel_step, show_trace_csm_step)
 from fastcashflow.trace.vfa import show_trace_vfa, show_trace_diff_vfa
@@ -25,5 +24,4 @@ __all__ = [
     "show_trace_vfa", "show_trace_diff_vfa",
     "show_trace_paa", "show_trace_diff_paa",
     "show_trace_reinsurance", "show_trace_diff_reinsurance",
-    "_resolve_basis",
 ]
