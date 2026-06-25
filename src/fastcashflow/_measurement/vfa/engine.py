@@ -809,7 +809,7 @@ def measure_stochastic(model_points: ModelPoints, basis: Basis,
     floor plus the GMDB / GMAB account-value floors) is realised and folded into
     the liability, giving a per-scenario BEL / RA / CSM / loss component. Read the
     distribution off the returned
-    :class:`~fastcashflow.stochastic.StochasticResult` with ``mean`` /
+    :class:`~fastcashflow.StochasticResult` with ``mean`` /
     ``percentile``. The mean BEL reconciles to ``vfa.measure(...,
     return_scenarios).bel + .time_value`` (the risk-neutral price); the mean CSM
     differs from the pooled-scenario CSM because the loss-component floor is convex
@@ -825,7 +825,7 @@ def measure_stochastic(model_points: ModelPoints, basis: Basis,
     the CSM / loss re-floor the fulfilment cash flow (BEL + RA + time value) per
     scenario -- identical to running :func:`measure` once per path, but without
     re-projecting."""
-    from fastcashflow.stochastic import StochasticResult
+    from fastcashflow._measurement.stochastic import StochasticResult
     rs = np.asarray(return_scenarios, dtype=np.float64)
     if rs.ndim != 2:
         raise ValueError("return_scenarios must be 2-D (n_scenarios, n_time)")

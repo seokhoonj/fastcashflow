@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
 
     from fastcashflow.basis import Basis
-    from fastcashflow.stochastic import StochasticResult
+    from fastcashflow._measurement.stochastic import StochasticResult
 
 __all__ = [
     "plot_liability",

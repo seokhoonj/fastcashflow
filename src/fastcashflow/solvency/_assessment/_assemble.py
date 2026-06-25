@@ -351,7 +351,7 @@ def assess_stochastic(portfolio: AssetPortfolio, model_points: ModelPoints,
     value at its t=0 base-curve level -- the liability-only distribution. The
     prescribed required capital (the denominator) is held at its t=0 value either
     way (a scenario overlay on the ratio, not a re-derived SCR)."""
-    from fastcashflow.stochastic import measure_stochastic
+    from fastcashflow._measurement.stochastic import measure_stochastic
     rs = getattr(rate_scenarios, "rates", rate_scenarios)
     static = assess(portfolio, model_points, basis, regime=regime,
                              **assess_kwargs)

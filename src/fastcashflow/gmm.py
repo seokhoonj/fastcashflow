@@ -21,7 +21,7 @@ from fastcashflow._measurement.gmm import (
 from fastcashflow._measurement.recognition import CSMRecognitionSchedule
 from fastcashflow.io import measure_stream, settle_stream
 from fastcashflow.pricing import interest_guarantee_tvog
-from fastcashflow.stochastic import measure_stochastic as stochastic
+from fastcashflow._measurement.stochastic import measure_stochastic as stochastic
 from fastcashflow.trace import (
     show_trace_bel_step as trace_bel_step,
     show_trace_csm_step as trace_csm_step,
