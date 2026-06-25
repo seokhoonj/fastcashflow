@@ -8,7 +8,7 @@ assembler builds on the model-agnostic :func:`~fastcashflow._measurement.project
 bundle and adds the GMM CSM roll, so no other model borrows a GMM container.
 
 The shared valuation kernel (the cash-flow projection, ``valued_projection`` and
-the GMM fast ``@njit`` codegen cluster) lives in :mod:`fastcashflow.gmm._engine`;
+the GMM fast ``@njit`` codegen cluster) lives in :mod:`fastcashflow._measurement.gmm.engine`;
 this module is imported back by ``engine`` for the result types and the
 assembler, while ``valued_projection`` is imported here at call time to keep the
 module load acyclic.

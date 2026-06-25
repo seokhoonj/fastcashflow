@@ -669,7 +669,7 @@ def test_settle_aggregate_cohort_aware_lock_in_equals_per_mp_sum():
     the per-MP gmm.settle sum (each chunk partitions by rate, the lines are
     additive), and the chunking is a memory knob, not a numbers knob."""
     from dataclasses import fields, replace
-    from fastcashflow.gmm._results import _GMM_SETTLEMENT_LINES
+    from fastcashflow._measurement.gmm import _GMM_SETTLEMENT_LINES
     basis = _basis()
     mp, state = _book(basis, n=2)
     state = replace(state, lock_in_rate=np.array([0.03, 0.05]))
@@ -699,6 +699,6 @@ def test_settle_aggregate_uniform_lock_in_array_echoes_scalar():
     sca = fcf.gmm.settle_aggregate(
         mp, replace(state, lock_in_rate=0.03), basis, period_months=12)
     assert arr.lock_in_rate == 0.03
-    from fastcashflow.gmm._results import _GMM_SETTLEMENT_LINES
+    from fastcashflow._measurement.gmm import _GMM_SETTLEMENT_LINES
     for name in _GMM_SETTLEMENT_LINES:
         assert np.isclose(getattr(arr, name), getattr(sca, name)), name

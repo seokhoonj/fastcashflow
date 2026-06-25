@@ -23,7 +23,7 @@ from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTAL
 from fastcashflow.disclosure import (
     line_metadata, reconciliation_to_frame, write_close_pack, write_reconciliation,
 )
-from fastcashflow.gmm._codegen import clear_codegen_cache
+from fastcashflow._measurement.gmm import clear_codegen_cache
 from fastcashflow.grouping import group, group_of_contracts
 from fastcashflow.compression import compress, CompressionResult
 from fastcashflow.io import (

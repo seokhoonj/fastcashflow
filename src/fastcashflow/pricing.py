@@ -18,7 +18,7 @@ import numpy as np
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.curves import discount_monthly_curve
-from fastcashflow.gmm._engine import measure
+from fastcashflow._measurement.gmm import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.embedded_value import EmbeddedValue, embedded_value
 from fastcashflow.profit import (

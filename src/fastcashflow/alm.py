@@ -34,7 +34,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
-from fastcashflow.gmm._engine import measure
+from fastcashflow._measurement.gmm import measure
 from fastcashflow._measurement.account import _portfolio_has_account
 from fastcashflow.model_points import ModelPoints
 

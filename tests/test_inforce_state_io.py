@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.gmm._engine import _measure_inforce_full, _measure_inforce_fast
+from fastcashflow._measurement.gmm import _measure_inforce_full, _measure_inforce_fast
 
 
 def _write_state(path: Path, rows: list[tuple]) -> None:

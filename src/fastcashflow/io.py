@@ -57,7 +57,7 @@ from fastcashflow.model_points import (
 # and lazily inside ``measure_stream`` (for the call), so a script that only
 # reads model points or writes a results frame never imports engine.py.
 if TYPE_CHECKING:  # pragma: no cover -- import only for type hints
-    from fastcashflow.gmm._engine import Measurement
+    from fastcashflow._measurement.gmm import Measurement
 
 
 def _read_frame(path) -> pl.DataFrame:
@@ -2101,7 +2101,7 @@ def measure_stream(
     # Lazy import -- only ``measure_stream`` actually drives a valuation, so we
     # keep the engine import off the I/O hot path. A script that only reads
     # model points or writes results never pays the engine import cost.
-    from fastcashflow.gmm._engine import measure
+    from fastcashflow._measurement.gmm import measure
 
     return _stream_policies_coverages(
         input_path, output_dir, coverages=coverages,
@@ -2527,7 +2527,7 @@ def settle_stream(
     of :meth:`SettlementMovement.closing_inputs()
     <fastcashflow.gmm.SettlementMovement.closing_inputs>`.
     """
-    from fastcashflow.gmm._engine import settle
+    from fastcashflow._measurement.gmm import settle
 
     build_mp = _coverages_build_mp(coverages, calculation_methods,
                                    entry="gmm.settle_stream")

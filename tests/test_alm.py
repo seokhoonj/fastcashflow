@@ -6,7 +6,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import alm, pricing
-from fastcashflow.gmm._engine import measure
+from fastcashflow._measurement.gmm import measure
 
 from conftest import make_death_basis, PATTERNS
 

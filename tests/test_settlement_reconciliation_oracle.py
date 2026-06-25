@@ -30,7 +30,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import (
     Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints)
-from fastcashflow.gmm._results import _GMM_SETTLEMENT_LINES
+from fastcashflow._measurement.gmm import _GMM_SETTLEMENT_LINES
 from fastcashflow._paa import _PAA_SETTLEMENT_LINES
 from fastcashflow._reinsurance import _REINSURANCE_SETTLEMENT_LINES
 from fastcashflow.vfa._results import _VFA_SETTLEMENT_LINES

@@ -8,7 +8,7 @@ here, build / apply a discount curve from :mod:`fastcashflow.curves`, and value
 them, without touching the measurement layer.
 
 A thin re-export facade (the gmm.py / vfa.py pattern); the implementations live
-in :mod:`fastcashflow.projection` and :mod:`fastcashflow.gmm._engine`.
+in :mod:`fastcashflow.projection` and :mod:`fastcashflow._measurement.gmm`.
 
     cf = fcf.core.project_cashflows(mp, basis)          # -> fcf.Cashflows
     df_bom, df_mid = fcf.curves.discount_factors(basis, cf.premium_cf.shape[1])

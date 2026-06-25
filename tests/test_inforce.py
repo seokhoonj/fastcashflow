@@ -16,7 +16,7 @@ import pytest
 from fastcashflow import Basis, CalculationMethod, ExpenseItem, ModelPoints, CoverageRate
 # _measure_inforce_fast / _measure_inforce_full are the engine-internal workhorses behind
 # the public fcf.gmm.measure_inforce; tested directly here.
-from fastcashflow.gmm._engine import _measure_inforce_full, _measure_inforce_fast
+from fastcashflow._measurement.gmm import _measure_inforce_full, _measure_inforce_fast
 from fastcashflow.gmm import measure
 
 

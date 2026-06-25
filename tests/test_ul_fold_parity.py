@@ -83,7 +83,7 @@ def _assert_self_consistent(make_mp):
     # _measure_full, it runs the account-aware scalar kernel directly. Confirm
     # the routing actually exercises the scalar fast path (requires_full is now
     # False for an account book; the account check was removed from it).
-    from fastcashflow.gmm._engine import requires_full
+    from fastcashflow._measurement.gmm import requires_full
     from fastcashflow._measurement.account import _portfolio_has_account
     assert _portfolio_has_account(mp, basis)
     assert not requires_full(mp, basis), (

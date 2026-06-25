@@ -36,7 +36,7 @@ import polars as pl
 
 from fastcashflow._measurement.model import model_tag
 from fastcashflow.disclosure import reconciliation_to_frame
-import fastcashflow.gmm._results as _gmm
+from fastcashflow._measurement import gmm as _gmm
 import fastcashflow._paa as _paa
 import fastcashflow._reinsurance as _reinsurance
 import fastcashflow.vfa._results as _vfa

@@ -13,7 +13,7 @@ which cash flow shifted, and what the net effect on BEL / RA / CSM is.
 The right tool for shock analysis and what-if questions.
 
 Both functions make no new calculations; they slice the result of
-:func:`fastcashflow.gmm._engine.measure` and print it.
+:func:`fastcashflow._measurement.gmm.measure` and print it.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.coverage import CalculationMethod, method_attrs
 from fastcashflow.curves import discount_factors, discount_monthly_curve
 from fastcashflow._typing import FloatArray
-from fastcashflow.gmm._engine import measure
+from fastcashflow._measurement.gmm import measure
 from fastcashflow.model_points import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow._paa import measure_paa

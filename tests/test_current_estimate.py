@@ -20,7 +20,7 @@ from fastcashflow.gmm import measure
 # _measure_inforce_fast is the engine-internal workhorse behind the public
 # gmm.measure_inforce; called directly here (as in tests/test_inforce.py) so the
 # re-anchor sweep does not need to build an InforceState.
-from fastcashflow.gmm._engine import _measure_inforce_fast
+from fastcashflow._measurement.gmm import _measure_inforce_fast
 from fastcashflow.movement import roll_forward
 
 

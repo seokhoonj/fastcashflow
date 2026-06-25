@@ -71,7 +71,7 @@ from fastcashflow.state_model import (
 # Measurement and engine's callers (gmm / movement / grouping / report) keep
 # importing these names from engine. _gmm imports valued_projection back at call
 # time, so this module-load direction (engine -> _gmm) stays acyclic.
-from fastcashflow.gmm._results import (
+from fastcashflow._measurement.gmm.results import (
     Measurement,
     CurrentEstimate,
     Aggregate,
@@ -84,7 +84,7 @@ from fastcashflow.gmm._results import (
 )
 # The fast-path kernel codegen (per-topology numba generation + the scalar
 # fallback kernel) lives in _codegen; the fast measurement path calls these.
-from fastcashflow.gmm._codegen import (
+from fastcashflow._measurement.gmm.codegen import (
     _get_markov_kernel,
     _get_semi_markov_kernel,
     _scalar_kernel,
@@ -1289,7 +1289,7 @@ def settle(
     else:
         expense_experience = np.zeros(n_mp)
 
-    from fastcashflow.gmm._results import SettlementMovement
+    from fastcashflow._measurement.gmm.results import SettlementMovement
     return SettlementMovement(
         bel_opening=bel_o, bel_interest=bel_i, bel_release=bel_r,
         bel_experience=bel_e, bel_closing=bel_c,
@@ -1349,7 +1349,7 @@ def settle_aggregate(
     once, before chunking, so a period-close file in its own row order
     never pairs one contract's rows with another's prior balances.
     """
-    from fastcashflow.gmm._results import _GMM_SETTLEMENT_LINES, SettlementAggregate
+    from fastcashflow._measurement.gmm.results import _GMM_SETTLEMENT_LINES, SettlementAggregate
 
     if chunk_size < 1:
         raise ValueError(f"chunk_size must be >= 1, got {chunk_size}")

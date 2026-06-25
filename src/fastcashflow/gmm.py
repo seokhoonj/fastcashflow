@@ -13,10 +13,9 @@ distribution; ``measure_aggregate`` is the bounded-memory portfolio-aggregate
 ``measure_stream`` is the out-of-core variant; ``trace`` walks one model
 point's measurement as a tree.
 """
-from fastcashflow.gmm._engine import (
+from fastcashflow._measurement.gmm import (
     measure, measure_aggregate, measure_inforce, settle, settle_aggregate,
-    recognition_schedule)
-from fastcashflow.gmm._results import (
+    recognition_schedule,
     Measurement, Aggregate, CurrentEstimate, PeriodMovement, Reconciliation,
     SettlementMovement, SettlementReconciliation, SettlementAggregate)
 from fastcashflow._measurement.recognition import CSMRecognitionSchedule
