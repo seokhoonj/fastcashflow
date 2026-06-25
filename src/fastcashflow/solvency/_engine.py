@@ -18,7 +18,7 @@ computed by re-running :func:`fastcashflow.gmm.measure` on a stressed
 (BEL is liability-positive, so an adverse stress raises it). The module capital is
 ``sqrt(c^T R c)`` over the sub-risk capital vector ``c`` and the regime
 correlation matrix ``R``. The result feeds
-:func:`fastcashflow.embedded_value` as the required-capital input.
+:func:`fastcashflow.pricing.embedded_value` as the required-capital input.
 
 Scope (v1): the liability-side modules a cash-flow engine can shock -- life /
 long-term underwriting sub-risks (mortality, longevity, morbidity / disability,
@@ -703,7 +703,7 @@ def required_capital(
     insurance module, adds the interest-rate stress, and computes the regime risk
     margin. v1 is liability-side: the total is ``insurance_scr +
     interest_capital`` (no inter-module diversification). Pass ``SCRResult`` on to
-    :func:`fastcashflow.embedded_value` via its ``required_capital`` argument.
+    :func:`fastcashflow.pricing.embedded_value` via its ``required_capital`` argument.
 
     ``measure_fn`` is the liability measurement the stresses re-run (default the
     GMM :func:`~fastcashflow._measurement.gmm.measure`); pass

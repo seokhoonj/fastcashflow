@@ -11,8 +11,8 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import pricing
-from fastcashflow.embedded_value import EmbeddedValue, embedded_value
-from fastcashflow.profit import ProfitSignature
+from fastcashflow.pricing.embedded_value import EmbeddedValue, embedded_value
+from fastcashflow.pricing.profit import ProfitSignature
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import _cost_of_capital_ra
 

@@ -5,7 +5,7 @@ claims, expenses and the in-force run-off do not depend on it, so
 ``FCF = A - premium * B``. Two valuations pin down ``A`` and ``B``, and the
 premium that meets a profitability target then has a closed form -- no iteration.
 
-Profit testing (re-exported from :mod:`fastcashflow.profit`) adds the value and
+Profit testing (re-exported from :mod:`fastcashflow.pricing.profit`) adds the value and
 emergence of new business: the present-value metrics (``nbv``, ``profit_margin``),
 the per-period ``signature``, and the rate metrics (``irr``, ``break_even_year``).
 """
@@ -20,8 +20,8 @@ from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._measurement.gmm import measure
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.embedded_value import EmbeddedValue, embedded_value
-from fastcashflow.profit import (
+from fastcashflow.pricing.embedded_value import EmbeddedValue, embedded_value
+from fastcashflow.pricing.profit import (
     ProfitSignature, break_even_year, irr, nbv, profit_margin, signature,
 )
 from fastcashflow.tvog import TVOGResult

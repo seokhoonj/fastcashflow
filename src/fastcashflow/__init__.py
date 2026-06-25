@@ -56,7 +56,7 @@ from fastcashflow.plots import (
     plot_stochastic,
 )
 from fastcashflow.pricing import solve_premium, interest_guarantee_tvog
-from fastcashflow.embedded_value import EmbeddedValue, embedded_value
+from fastcashflow.pricing.embedded_value import EmbeddedValue, embedded_value
 # Asset / solvency surface is namespace-only (fcf.solvency / fcf.alm / fcf.assets);
 # fcf.solvency is the merged facade over the _solvency (engine) + _solvency_assessment
 # (assembly) impl modules. No flat re-exports -- reach members via their namespace.
@@ -67,7 +67,7 @@ from fastcashflow.reporting.report import (
     DynamicAssessmentReport, Report, report,
 )
 from fastcashflow.projection import Cashflows, AccountTrajectory
-from fastcashflow.profit import ProfitSignature
+from fastcashflow.pricing.profit import ProfitSignature
 from fastcashflow.state_model import (
     STATE_MODELS,
     State,

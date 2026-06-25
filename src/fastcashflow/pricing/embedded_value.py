@@ -31,7 +31,7 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import discount_factors_from_curve
-from fastcashflow.profit import ProfitSignature
+from fastcashflow.pricing.profit import ProfitSignature
 
 
 @dataclass(frozen=True, slots=True, eq=False)
