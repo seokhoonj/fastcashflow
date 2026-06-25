@@ -59,7 +59,7 @@ def _validate_band_edges(band_edges_months) -> tuple:
     return edges
 
 
-def _build_recognition_schedule(csm_closing, inforce, em, boundary, edges):
+def _build_schedule(csm_closing, inforce, em, boundary, edges):
     """Allocate the per-MP closing CSM to maturity bands by each contract's
     forward coverage-unit (in-force) fraction; the bands sum to the closing
     CSM. Onerous contracts (CSM <= 0) contribute nothing. Shared by the GMM

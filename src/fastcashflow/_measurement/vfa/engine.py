@@ -862,14 +862,14 @@ def _ul_floor_time_value(model_points: ModelPoints, basis: Basis,
     themselves vary per model point). Re-rolls the account under the return
     scenarios and prices the floors (mean cost less the central intrinsic). Returns
     ``(n_mp,)`` (``reduce``) or ``(n_mp, n_scenarios)``."""
-    from fastcashflow._measurement.account import _account_roll_inputs
+    from fastcashflow._measurement.account import _roll_inputs
     am = getattr(model_points, "annuitization_months", None)
     if am is not None and np.any(np.asarray(am) > 0):
         raise NotImplementedError(
             "return_scenarios (guarantee time value) is not yet supported "
             "for an annuitizing universal-life book.")
     (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
-     gmab, _g, _sc) = _account_roll_inputs(model_points, basis)
+     gmab, _g, _sc) = _roll_inputs(model_points, basis)
     g_arr = np.asarray(model_points.minimum_crediting_rate, dtype=np.float64)
     boundary = np.asarray(model_points.contract_boundary_months, np.int64)
     n_mp = av0.shape[0]
@@ -1743,13 +1743,13 @@ def recognition_schedule(
     settlement period (default 12).
     """
     from fastcashflow._measurement.recognition import (
-        _build_recognition_schedule, _validate_band_edges)
+        _build_schedule, _validate_band_edges)
     edges = _validate_band_edges(band_edges_months)
     mv = settle(model_points, state, basis, period_months=period_months)
     inforce = measure(model_points, basis, full=True).cashflows.inforce
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
-    return _build_recognition_schedule(
+    return _build_schedule(
         np.asarray(mv.csm_closing, dtype=np.float64), inforce, em, boundary,
         edges)
 

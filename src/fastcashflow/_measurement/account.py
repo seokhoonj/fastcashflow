@@ -1,7 +1,7 @@
 """Universal-life account-chassis primitives shared across the measurement models.
 
 :func:`_portfolio_has_account` detects an account-backed book from the
-per-coverage flags; :func:`_account_roll_inputs` factors the account-roll inputs
+per-coverage flags; :func:`_roll_inputs` factors the account-roll inputs
 a stochastic guarantee time-value pass re-rolls under return scenarios. Both are
 model-neutral (the account roll is identical under GMM and VFA), so they live in
 the shared measurement layer rather than the GMM engine.
@@ -31,7 +31,7 @@ def _portfolio_has_account(model_points: ModelPoints, basis: Basis) -> bool:
                for r in basis.coverages)
 
 
-def _account_roll_inputs(model_points: ModelPoints, basis: Basis):
+def _roll_inputs(model_points: ModelPoints, basis: Basis):
     """Per-policy universal-life account-roll inputs for a stochastic TVOG pass.
 
     Factors the same chain the measure path runs inline (coverage-rate grid ->

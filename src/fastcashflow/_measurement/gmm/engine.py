@@ -96,7 +96,7 @@ from fastcashflow._measurement.gmm.codegen import (
 # stochastic / _vfa / _paa / _reinsurance / tvog) keep importing these names from
 # engine. _measurement imports nothing from engine / _gmm, so this stays acyclic.
 from fastcashflow._measurement.account import (
-    _account_roll_inputs,
+    _roll_inputs,
     _portfolio_has_account,
 )
 from fastcashflow._measurement.projection import (
@@ -104,7 +104,7 @@ from fastcashflow._measurement.projection import (
     valued_projection,
 )
 from fastcashflow._measurement.recognition import (
-    _build_recognition_schedule,
+    _build_schedule,
     CSMRecognitionSchedule,
     _validate_band_edges,
 )
@@ -1426,7 +1426,7 @@ def recognition_schedule(
     inforce = measure(model_points, basis, full=True).cashflows.inforce
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
-    return _build_recognition_schedule(
+    return _build_schedule(
         np.asarray(mv.csm_closing, dtype=np.float64), inforce, em, boundary,
         edges)
 

@@ -611,9 +611,9 @@ def _measure_tvog_ul(
     surrenders = inforce_pad[:, :-1] - inforce_pad[:, 1:] - proj.deaths   # (n_mp, n_time)
     surrenders[np.arange(n_mp), term_idx] -= maturity_survivors
 
-    from fastcashflow._measurement.account import _account_roll_inputs
+    from fastcashflow._measurement.account import _roll_inputs
     (av0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
-     gmab, _g, surr_charge_rate) = _account_roll_inputs(model_points, basis)
+     gmab, _g, surr_charge_rate) = _roll_inputs(model_points, basis)
 
     cost = ul_credit_rate_time_value(
         account_value0=av0, face=face, prem_to_av=prem_to_av,

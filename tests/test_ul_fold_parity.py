@@ -352,7 +352,7 @@ def test_ul_credit_rate_tvog_hand_roll():
     # bare return), differenced on the death / surrender / maturity exits and
     # discounted at the path's own return, reproduces both the intrinsic (central
     # path) and a single scenario's guarantee cost to floating-point.
-    from fastcashflow._measurement.account import _account_roll_inputs
+    from fastcashflow._measurement.account import _roll_inputs
     from fastcashflow.projection import project_cashflows
     from fastcashflow.tvog import credited_monthly_rate
 
@@ -372,7 +372,7 @@ def test_ul_credit_rate_tvog_hand_roll():
     pad = np.concatenate([inforce, np.zeros((n_mp, 1))], axis=1)
     surr = pad[:, :-1] - pad[:, 1:] - deaths
     surr[np.arange(n_mp), term_idx] -= matsurv
-    (av0, face, prem, coi, admin, charge, gmab, _g, sc) = _account_roll_inputs(mp, basis)
+    (av0, face, prem, coi, admin, charge, gmab, _g, sc) = _roll_inputs(mp, basis)
     bound = np.asarray(mp.contract_boundary_months, np.int64)
 
     def hand(returns):
