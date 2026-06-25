@@ -16,11 +16,11 @@ from fastcashflow.basis import (
     Basis, BasisRouter, CoverageRate, EXPENSE_BASES, RA_METHODS,
     SURRENDER_VALUE_BASES, ExpenseItem, derive_expense_components, describe_basis,
 )
-from fastcashflow.closing import (
+from fastcashflow.reporting.closing import (
     ClosePackage, assemble_finance, assemble_service_result, assemble_sofp, close,
 )
 from fastcashflow.coverage import CalculationMethod, RISK_MORBIDITY, RISK_MORTALITY
-from fastcashflow.disclosure import (
+from fastcashflow.reporting.disclosure import (
     line_metadata, reconciliation_to_frame, write_close_pack, write_reconciliation,
 )
 from fastcashflow._measurement.gmm import clear_codegen_cache
@@ -63,7 +63,7 @@ from fastcashflow.embedded_value import EmbeddedValue, embedded_value
 from fastcashflow import solvency
 from fastcashflow import alm
 from fastcashflow import assets
-from fastcashflow.report import (
+from fastcashflow.reporting.report import (
     DynamicAssessmentReport, Report, report,
 )
 from fastcashflow.projection import Cashflows, AccountTrajectory

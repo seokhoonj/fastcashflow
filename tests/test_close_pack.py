@@ -13,9 +13,9 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import InforceState, ModelPoints
-from fastcashflow.closing import close
-from fastcashflow.disclosure import write_close_pack
-from fastcashflow.report import Report
+from fastcashflow.reporting.closing import close
+from fastcashflow.reporting.disclosure import write_close_pack
+from fastcashflow.reporting.report import Report
 from conftest import PATTERNS, make_death_basis
 
 

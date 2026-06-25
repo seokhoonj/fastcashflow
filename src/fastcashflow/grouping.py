@@ -224,7 +224,7 @@ def group(measurement, by):
     Returns a measurement of the same type whose rows are the groups, in
     ascending label order -- usable in turn by
     :func:`~fastcashflow.roll_forward`, :func:`~fastcashflow.reconcile` and
-    :func:`~fastcashflow.report`. Its ``group_labels`` attribute carries the
+    :func:`~fastcashflow.reporting.report`. Its ``group_labels`` attribute carries the
     composite label of each row, so a caller can map a group back to its key
     (e.g. ``"|"``-split a :func:`group_of_contracts` label into portfolio /
     cohort / profitability) without rebuilding the keys; ``group_sizes`` carries

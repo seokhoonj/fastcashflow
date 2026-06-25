@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow.report import report as _report
+from fastcashflow.reporting.report import report as _report
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -89,7 +89,7 @@ def signature(measurement, period_months: int = 12) -> ProfitSignature:
     """The IFRS 17 profit signature -- the per-period insurance service result
     (CSM release + RA release on a best-estimate run), summed over the book.
 
-    Built from :func:`~fastcashflow.report`; the present value of the signature
+    Built from :func:`~fastcashflow.reporting.report`; the present value of the signature
     at the locked-in rate approximately reconciles to the portfolio :func:`nbv`
     total (the exact new-business value is the NBV; the annual signature is an
     aggregated presentation that re-discounts a year's profit from its mid-point).

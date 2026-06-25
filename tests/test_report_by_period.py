@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow.report import Report
+from fastcashflow.reporting.report import Report
 
 
 def _report(revenue, **over):

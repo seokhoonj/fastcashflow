@@ -40,7 +40,7 @@ def transition(measurement: Measurement, fair_value: FloatArray) -> Measurement:
 
     Returns a measurement with the re-set CSM and loss component; the BEL
     and RA are unchanged. It flows on into :func:`~fastcashflow.roll_forward`,
-    :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.report`.
+    :func:`~fastcashflow.reconcile` and :func:`~fastcashflow.reporting.report`.
     """
     # transition() assumes column 0 IS the transition date and re-floors from
     # it -- a settlement-carry result (headline as-of, trajectories on the

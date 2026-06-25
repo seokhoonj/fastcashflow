@@ -35,12 +35,12 @@ import numpy as np
 import polars as pl
 
 from fastcashflow._measurement.model import model_tag
-from fastcashflow.disclosure import reconciliation_to_frame
+from fastcashflow.reporting.disclosure import reconciliation_to_frame
 from fastcashflow._measurement import gmm as _gmm
 from fastcashflow._measurement import paa as _paa
 from fastcashflow._measurement import reinsurance as _reinsurance
 from fastcashflow._measurement import vfa as _vfa
-from fastcashflow.report import Report
+from fastcashflow.reporting.report import Report
 
 # The SoFP statement frame -- a presentation table (one row per kind x
 # component), not the tidy disclosure spine. opening + change == closing per row.
@@ -385,7 +385,7 @@ class ClosePackage:
     ``service_result`` is the insurance service result statement
     (:func:`assemble_service_result`), present only when ``close`` is given the
     reports; ``reconciliation`` is the stacked per-model settlement detail (the
-    lean tidy frame of :func:`~fastcashflow.disclosure.reconciliation_to_frame`,
+    lean tidy frame of :func:`~fastcashflow.reporting.disclosure.reconciliation_to_frame`,
     one block of rows per reconciliation, stamped with ``group_id``). The
     disclosure emitter materialises these into the multi-sheet close-pack artifact.
     """

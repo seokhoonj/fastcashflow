@@ -203,7 +203,7 @@ def _index_frame(period_months: int, reconciliation: pl.DataFrame,
 
 
 def write_close_pack(package, path, *, movements=None) -> None:
-    """Write a close pack (a :class:`~fastcashflow.closing.ClosePackage`) to a
+    """Write a close pack (a :class:`~fastcashflow.reporting.closing.ClosePackage`) to a
     multi-sheet ``.xlsx`` -- the aggregate IFRS 17 statements an entity reads --
     and, when ``movements`` is given, a per-model-point parquet sidecar.
 

@@ -11,7 +11,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import InforceState, ModelPoints
-from fastcashflow.disclosure import (
+from fastcashflow.reporting.disclosure import (
     reconciliation_to_frame, _GMM_RECON_BLOCKS, _LEAN_COLUMNS, _RECON_SPECS)
 from fastcashflow.gmm import SettlementReconciliation
 from conftest import PATTERNS, make_death_basis
@@ -83,7 +83,7 @@ def test_gmm_to_frame_is_lean_and_faithful():
 
 
 def test_write_reconciliation_round_trips_with_rich_columns(tmp_path):
-    from fastcashflow.disclosure import write_reconciliation
+    from fastcashflow.reporting.disclosure import write_reconciliation
     recon = _gmm_recon()
     out = tmp_path / "recon.parquet"
     write_reconciliation(recon, out)
@@ -105,7 +105,7 @@ def test_write_reconciliation_round_trips_with_rich_columns(tmp_path):
 
 
 def test_write_reconciliation_list_stacks_period_index(tmp_path):
-    from fastcashflow.disclosure import write_reconciliation
+    from fastcashflow.reporting.disclosure import write_reconciliation
     recon = _gmm_recon()
     out = tmp_path / "schedule.parquet"
     write_reconciliation([recon, recon, recon], out)
@@ -114,7 +114,7 @@ def test_write_reconciliation_list_stacks_period_index(tmp_path):
 
 
 def test_line_metadata_covers_every_spec_line():
-    from fastcashflow.disclosure import line_metadata, _RECON_SPECS
+    from fastcashflow.reporting.disclosure import line_metadata, _RECON_SPECS
     meta = line_metadata()
     n_spec = sum(len(lines) for _m, blocks, _c in _RECON_SPECS
                  for _b, lines in blocks)

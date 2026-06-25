@@ -468,7 +468,7 @@ class Report:
         Each per-period line item is summed across model points and then
         across the twelve months of each policy year.
         """
-        from fastcashflow.report import _to_years
+        from fastcashflow.reporting.report import _to_years
         return {
             name: _to_years(getattr(self, name).sum(axis=0))
             for name in (
@@ -488,7 +488,7 @@ class Report:
         into each reporting period. There is no loss component (IFRS 17 Sec. 65).
         ``basis`` and ``inception_month`` behave as in :meth:`Report.by_period`.
         """
-        from fastcashflow.report import _by_period
+        from fastcashflow.reporting.report import _by_period
         return _by_period(self, _REINSURANCE_PERIOD_LINES, period_months, basis,
                           inception_month, None)
 

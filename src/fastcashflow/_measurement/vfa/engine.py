@@ -1074,7 +1074,7 @@ def measure_inforce(
        The result is tagged ``csm_basis = 'carry_only'`` (see
        :data:`fastcashflow.vfa.CSM_BASES`), and the accounting-output entry
        points -- :func:`~fastcashflow.roll_forward`,
-       :func:`~fastcashflow.report`, :func:`~fastcashflow.group`,
+       :func:`~fastcashflow.reporting.report`, :func:`~fastcashflow.group`,
        :func:`~fastcashflow.group_of_contracts` and
        :func:`~fastcashflow.write_measurement` -- reject it, so this figure
        cannot be silently consumed as a settlement CSM.

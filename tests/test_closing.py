@@ -16,12 +16,12 @@ import numpy as np
 import polars as pl
 import pytest
 
-from fastcashflow.closing import (
+from fastcashflow.reporting.closing import (
     ClosePackage, assemble_sofp, assemble_finance, assemble_service_result, close,
     _COMP_LRC, _COMP_LC, _COMP_LIC, _COMP_TOTAL, _FINANCE_TOTAL,
     _KIND_ISSUED, _KIND_REINSURANCE, _KIND_NET)
 import fastcashflow as fcf
-from fastcashflow.report import Report
+from fastcashflow.reporting.report import Report
 
 
 def _build(cls, **over):

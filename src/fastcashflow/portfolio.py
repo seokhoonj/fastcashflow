@@ -52,7 +52,7 @@ from fastcashflow.model_points import ModelPoints, InforceState, align_inforce_s
 from fastcashflow._measurement.movement import roll_forward, reconcile
 from fastcashflow.numerics import _csm_loss_component_step
 from fastcashflow.projection import Cashflows
-from fastcashflow.report import report, Report
+from fastcashflow.reporting.report import report, Report
 from fastcashflow.trace import (
     show_trace, show_trace_vfa, show_trace_paa,
     show_trace_diff, show_trace_diff_vfa, show_trace_diff_paa)
