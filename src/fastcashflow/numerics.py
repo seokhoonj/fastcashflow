@@ -6,8 +6,8 @@ unpacks domain objects to raw arrays + scalars and calls in here. The split
 keeps these primitives numba-friendly and unit-testable on bare numpy.
 
 The orchestration-specific ``@njit`` kernels (``_project_kernel`` in
-projection.py, ``_fast_kernel_scalar`` and the codegen fast kernel in
-engine.py) stay next to their callers -- they have only one call site each.
+projection.py, ``_scalar_kernel`` and the codegen fast kernel in
+gmm/_codegen.py) stay next to their callers -- they have only one call site each.
 The primitives below are the ones that genuinely cross modules.
 
 Contents:

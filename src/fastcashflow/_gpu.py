@@ -5,7 +5,7 @@ use, so a machine without CUDA can still import and use the rest of the
 package.
 
 The kernel mirrors the CPU codegen fast kernel
-(``engine._get_fast_kernel_codegen``) exactly; the
+(``gmm._codegen._get_markov_kernel``) exactly; the
 cross-check test ``test_fast_gpu_matches_cpu`` guards against divergence.
 """
 from __future__ import annotations
