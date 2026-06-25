@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import alm, pricing
+from fastcashflow import alm, assets, pricing
 from fastcashflow._measurement.gmm import measure
 
 from conftest import make_death_basis, PATTERNS
@@ -153,8 +153,8 @@ def test_key_rate_dv01s_sum_to_parallel():
 def test_bond_textbook_duration():
     """A 5% annual-coupon 10-year bond at a flat 5% is par; Macaulay / Modified /
     DV01 match an independent closed-form computation."""
-    bond = alm.Bond(face=100.0, coupon_rate=0.05, maturity_years=10, frequency=1)
-    d = alm.bond_duration(bond, 0.05)
+    bond = assets.Bond(face=100.0, coupon_rate=0.05, maturity_years=10, frequency=1)
+    d = assets.bond_duration(bond, 0.05)
     assert np.isclose(d.pv, 100.0)                    # par
     t = np.arange(1, 11, dtype=float)
     cf = np.full(10, 5.0); cf[-1] += 100.0
@@ -167,20 +167,20 @@ def test_bond_textbook_duration():
 
 def test_bond_effective_matches_analytic():
     """Re-pricing the bond at +/-1bp (effective DV01) matches the analytic DV01."""
-    bond = alm.Bond(80.0, 0.04, 7, frequency=2)
-    eff = -(alm.bond_value(bond, 0.05 + 1e-4)
-            - alm.bond_value(bond, 0.05 - 1e-4)) / (2.0 * 1e-4) * 1e-4
-    assert np.isclose(alm.bond_duration(bond, 0.05).dv01, eff, rtol=1e-4)
+    bond = assets.Bond(80.0, 0.04, 7, frequency=2)
+    eff = -(assets.bond_value(bond, 0.05 + 1e-4)
+            - assets.bond_value(bond, 0.05 - 1e-4)) / (2.0 * 1e-4) * 1e-4
+    assert np.isclose(assets.bond_duration(bond, 0.05).dv01, eff, rtol=1e-4)
 
 
 def test_bond_convexity_matches_effective():
     """The analytic yield convexity equals the second central difference of the
     bond value under a parallel yield shift."""
-    bond = alm.Bond(face=100.0, coupon_rate=0.05, maturity_years=10, frequency=1)
-    d = alm.bond_duration(bond, 0.04)
+    bond = assets.Bond(face=100.0, coupon_rate=0.05, maturity_years=10, frequency=1)
+    d = assets.bond_duration(bond, 0.04)
     h = 1e-3
-    pv = alm.bond_value(bond, 0.04)
-    eff = (alm.bond_value(bond, 0.04 + h) + alm.bond_value(bond, 0.04 - h)
+    pv = assets.bond_value(bond, 0.04)
+    eff = (assets.bond_value(bond, 0.04 + h) + assets.bond_value(bond, 0.04 - h)
            - 2.0 * pv) / (pv * h * h)
     assert np.isclose(d.convexity, eff, rtol=1e-4)
     assert d.convexity > 0.0                          # a bullet bond is convex
@@ -189,10 +189,10 @@ def test_bond_convexity_matches_effective():
 def test_bond_second_order_price_move():
     """Duration + convexity predict a finite rate move better than duration alone:
     dPV/PV ~ -modified*dy + 0.5*convexity*dy^2."""
-    bond = alm.Bond(face=100.0, coupon_rate=0.05, maturity_years=10, frequency=1)
-    d = alm.bond_duration(bond, 0.05)
+    bond = assets.Bond(face=100.0, coupon_rate=0.05, maturity_years=10, frequency=1)
+    d = assets.bond_duration(bond, 0.05)
     dy = 0.01
-    actual = alm.bond_value(bond, 0.05 + dy) / d.pv - 1.0
+    actual = assets.bond_value(bond, 0.05 + dy) / d.pv - 1.0
     linear = -d.modified * dy
     quad = -d.modified * dy + 0.5 * d.convexity * dy * dy
     assert abs(quad - actual) < abs(linear - actual)  # convexity tightens the fit
@@ -238,9 +238,9 @@ def test_matched_book_gap_is_zero():
     """A bond book sized to the liability DV01 immunises the parallel gap."""
     mp, basis = _mp(), _basis()
     liab = alm.liability_dv01(mp, basis)
-    per_face = alm.bond_duration(alm.Bond(100.0, 0.03, 10, 1), 0.03).dv01
-    matched = alm.Bond(100.0 * liab / per_face, 0.03, 10, 1)
-    g = alm.alm_gap(alm.bond_duration(matched, 0.03).dv01, liab)
+    per_face = assets.bond_duration(assets.Bond(100.0, 0.03, 10, 1), 0.03).dv01
+    matched = assets.Bond(100.0 * liab / per_face, 0.03, 10, 1)
+    g = alm.alm_gap(assets.bond_duration(matched, 0.03).dv01, liab)
     assert np.isclose(g["dv01_gap"], 0.0, atol=abs(liab) * 1e-6)
 
 

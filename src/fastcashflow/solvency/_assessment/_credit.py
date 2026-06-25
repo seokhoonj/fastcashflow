@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import math
 
-from fastcashflow.alm import Bond, bond_value, bond_duration, effective_maturity
-from fastcashflow.assets import AssetPortfolio
+from fastcashflow.assets import (
+    Bond, bond_value, bond_duration, effective_maturity, AssetPortfolio)
 
 
 # ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ from fastcashflow.assets import AssetPortfolio
 # (public / corporate / securitisation -- handbook tables 29 / 30 / 31). The
 # factor is a percent of market value (it already embeds the spread shock), so
 # the charge is factor x market value -- no re-measure. Effective maturity is the
-# cash-flow-weighted average maturity (:func:`fastcashflow.alm.effective_maturity`).
+# cash-flow-weighted average maturity (:func:`fastcashflow.assets.effective_maturity`).
 # External (S&P) ratings map to the K-ICS grades AAA/AA -> 1-2, A -> 3, BBB -> 4,
 # BB -> 5, B -> 6, CCC and below -> 7, D -> default. Solvency II uses the Art-176
 # spread stress (piecewise-linear in modified duration by credit quality step).

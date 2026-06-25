@@ -13,7 +13,7 @@ import fastcashflow as fcf
 from fastcashflow import (
     Basis, CalculationMethod, CoverageRate, ModelPoints, esg,
 )
-from fastcashflow.alm import Bond
+from fastcashflow.assets import Bond
 from fastcashflow.assets import AssetPortfolio
 from fastcashflow import solvency as sv
 

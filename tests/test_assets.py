@@ -32,7 +32,7 @@ def _parallel_curves(n=10, base=0.03, bp=0.001):
 def test_asset_portfolio_value_sums_holdings():
     """A bond (priced at the curve) plus equity / cash (carried) sum up."""
     p = assets.AssetPortfolio(holdings=(
-        alm.Bond(100.0, 0.05, 10, 1), assets.Equity(50.0), assets.Cash(10.0)))
+        assets.Bond(100.0, 0.05, 10, 1), assets.Equity(50.0), assets.Cash(10.0)))
     v = assets.asset_portfolio_value(p, 0.05)
     assert np.isclose(v, 100.0 + 50.0 + 10.0)          # the bond is at par at 5%
     # a per-year curve gives the same value as the equivalent flat scalar
@@ -50,7 +50,7 @@ def test_net_interest_scr_formula_and_sign():
     """A rate rise lowers both the asset value and the BEL; the net interest SCR
     is the worst-of own-funds loss over the up / down shocks."""
     mp, basis = _mp(), _basis()
-    p = assets.AssetPortfolio(holdings=(alm.Bond(2_000_000.0, 0.03, 10, 1),))
+    p = assets.AssetPortfolio(holdings=(assets.Bond(2_000_000.0, 0.03, 10, 1),))
     curves = _parallel_curves()
     base_pv = assets.asset_portfolio_value(p, basis.discount_annual)
     base_bel = float(measure(mp, basis, full=False).bel.sum())
@@ -71,9 +71,9 @@ def test_matched_book_net_interest_near_zero():
     """A bond book sized to the liability DV01 immunises the net interest SCR."""
     mp, basis = _mp(), _basis()
     liab_dv01 = alm.liability_dv01(mp, basis)
-    per_face = alm.bond_duration(alm.Bond(100.0, 0.03, 10, 1), 0.03).dv01
+    per_face = assets.bond_duration(assets.Bond(100.0, 0.03, 10, 1), 0.03).dv01
     face = liab_dv01 / per_face * 100.0
-    p = assets.AssetPortfolio(holdings=(alm.Bond(face, 0.03, 10, 1),))
+    p = assets.AssetPortfolio(holdings=(assets.Bond(face, 0.03, 10, 1),))
     ni = sa.net_interest_scr(p, mp, basis, interest_curves=_parallel_curves())
     assert ni < abs(face) * 1e-4                 # negligible vs the book (immunised)
 
@@ -98,7 +98,7 @@ def test_net_interest_kics_five_scenario_on_nav():
     handbook p.205 formula -- recompute the five NAV-decrease amounts by hand."""
     import math
     mp, basis = _mp(), _basis()
-    p = assets.AssetPortfolio(holdings=(alm.Bond(2_000_000.0, 0.03, 10, 1),))
+    p = assets.AssetPortfolio(holdings=(assets.Bond(2_000_000.0, 0.03, 10, 1),))
     ki = _kics_scenarios()
     nav_base = (assets.asset_portfolio_value(p, basis.discount_annual)
                 - float(measure(mp, basis, full=False).bel.sum()))
@@ -238,8 +238,8 @@ def test_operational_scr_sii_cap():
 def test_effective_maturity_hand_calc():
     """Effective maturity = sum(t x CF) / sum(CF). A 10y 3% annual bond:
     sum(t x CF) = 3 x (1+..+10) + 100 x 10 = 1165; sum(CF) = 130; 1165/130."""
-    b = alm.Bond(100.0, 0.03, 10, 1)
-    assert np.isclose(alm.effective_maturity(b), 1165.0 / 130.0)
+    b = assets.Bond(100.0, 0.03, 10, 1)
+    assert np.isclose(assets.effective_maturity(b), 1165.0 / 130.0)
 
 
 def test_credit_bucket_boundaries():
@@ -256,21 +256,21 @@ def test_credit_scr_kics_hand_calc():
     """K-ICS credit SCR = market value x factor[rating row][maturity bucket].
     An AA corporate bond (10y 3%) has effective maturity 8.96 -> bucket 8, and the
     corporate '1-2' row there is 2.0% (handbook table 30)."""
-    b = alm.Bond(100.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate")
+    b = assets.Bond(100.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate")
     p = assets.AssetPortfolio(holdings=(b, assets.Cash(1000.0), assets.Equity(500.0)))
-    mv = alm.bond_value(b, 0.03)
+    mv = assets.bond_value(b, 0.03)
     assert np.isclose(sa.credit_scr(p, fcf.solvency.KICS, 0.03), mv * 0.02)   # only the bond
 
 
 def test_credit_scr_sii_spread():
     """Solvency II credit (Art 176 spread) = market value times a stress that is
     piecewise-linear in modified duration by credit quality step."""
-    b = alm.Bond(100.0, 0.03, 10, 1, credit_rating="A")        # CQS 2
-    mod = alm.bond_duration(b, 0.03).modified                  # ~8.53 -> bucket 5-10
+    b = assets.Bond(100.0, 0.03, 10, 1, credit_rating="A")        # CQS 2
+    mod = assets.bond_duration(b, 0.03).modified                  # ~8.53 -> bucket 5-10
     factor = 0.070 + 0.007 * (mod - 5)                         # a + b x (dur - 5)
     p = assets.AssetPortfolio(holdings=(b, assets.Cash(1000.0)))
     assert np.isclose(sa.credit_scr(p, fcf.solvency.SII, 0.03),
-                      alm.bond_value(b, 0.03) * factor)
+                      assets.bond_value(b, 0.03) * factor)
     # the piecewise stress at representative points
     assert np.isclose(sa._sii_spread_stress("AAA", 3), 0.009 * 3)        # 0-5
     assert np.isclose(sa._sii_spread_stress("BBB", 12), 0.200 + 0.010 * 2)  # 10-15
@@ -279,15 +279,15 @@ def test_credit_scr_sii_spread():
 
 def test_credit_scr_rating_and_class():
     """A lower rating and a riskier exposure class both raise the factor."""
-    aa = alm.Bond(100.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate")
-    bb = alm.Bond(100.0, 0.03, 10, 1, credit_rating="BB", exposure_class="corporate")
-    sec = alm.Bond(100.0, 0.03, 10, 1, credit_rating="BB", exposure_class="securitisation")
+    aa = assets.Bond(100.0, 0.03, 10, 1, credit_rating="AA", exposure_class="corporate")
+    bb = assets.Bond(100.0, 0.03, 10, 1, credit_rating="BB", exposure_class="corporate")
+    sec = assets.Bond(100.0, 0.03, 10, 1, credit_rating="BB", exposure_class="securitisation")
     s_aa = sa.credit_scr(assets.AssetPortfolio(holdings=(aa,)), fcf.solvency.KICS, 0.03)
     s_bb = sa.credit_scr(assets.AssetPortfolio(holdings=(bb,)), fcf.solvency.KICS, 0.03)
     s_sec = sa.credit_scr(assets.AssetPortfolio(holdings=(sec,)), fcf.solvency.KICS, 0.03)
     assert s_bb > s_aa                       # BB (grade 5) charges more than AA (1-2)
     assert s_sec > s_bb                      # securitisation BB charges more than corporate
-    bad = alm.Bond(100.0, 0.03, 10, 1, exposure_class="exotic")
+    bad = assets.Bond(100.0, 0.03, 10, 1, exposure_class="exotic")
     with pytest.raises(ValueError, match="exposure_class"):
         sa.credit_scr(assets.AssetPortfolio(holdings=(bad,)), fcf.solvency.KICS, 0.03)
 
@@ -342,7 +342,7 @@ def test_concentration_scr_hand_calc():
     an AA issuer (band 1-2: limit 4%, factor 15%) with 1m exposure charges
     (1m - 400k) x 15% = 90k; a 1m property charges (1m - 600k) x 20% = 80k."""
     p = assets.AssetPortfolio(holdings=(
-        alm.Bond(1_000_000.0, 0.03, 5, 1, credit_rating="AA", issuer="KB"),
+        assets.Bond(1_000_000.0, 0.03, 5, 1, credit_rating="AA", issuer="KB"),
         assets.Property(1_000_000.0), assets.Cash(8_000_000.0)))
     cp = (1_000_000.0 - 10_000_000.0 * 0.04) * 0.15
     pr = (1_000_000.0 - 10_000_000.0 * 0.06) * 0.20
@@ -353,7 +353,7 @@ def test_concentration_scr_hand_calc():
 def test_concentration_scr_untagged_is_zero():
     """A book with no tagged issuers and no property has no concentration charge,
     under both regimes."""
-    p = assets.AssetPortfolio(holdings=(alm.Bond(1e6, 0.03, 5, 1), assets.Cash(1e6)))
+    p = assets.AssetPortfolio(holdings=(assets.Bond(1e6, 0.03, 5, 1), assets.Cash(1e6)))
     assert sa.concentration_scr(p, fcf.solvency.KICS, 0.03) == 0.0
     assert sa.concentration_scr(p, fcf.solvency.SII, 0.03) == 0.0
 
@@ -363,11 +363,11 @@ def test_concentration_scr_sii_excess():
     max(0, exposure - CT(CQS) x assets) x g(CQS). A BBB issuer is CQS 3 (CT 1.5%,
     g 27%); an AA issuer is CQS 1 (CT 3%, g 12%)."""
     bbb = assets.AssetPortfolio(holdings=(
-        alm.Bond(1e6, 0.03, 5, 1, credit_rating="BBB", issuer="X"),))
+        assets.Bond(1e6, 0.03, 5, 1, credit_rating="BBB", issuer="X"),))
     assert np.isclose(sa.concentration_scr(bbb, fcf.solvency.SII, 0.03, total_assets=10e6),
                       max(0.0, 1e6 - 10e6 * 0.015) * 0.27)
     aa = assets.AssetPortfolio(holdings=(
-        alm.Bond(1e6, 0.03, 5, 1, credit_rating="AA", issuer="Y"),))
+        assets.Bond(1e6, 0.03, 5, 1, credit_rating="AA", issuer="Y"),))
     assert np.isclose(sa.concentration_scr(aa, fcf.solvency.SII, 0.03, total_assets=10e6),
                       max(0.0, 1e6 - 10e6 * 0.03) * 0.12)
 
@@ -375,9 +375,9 @@ def test_concentration_scr_sii_excess():
 def test_concentration_band_by_rating():
     """Lower-rated issuers fall in a tighter band (lower limit, higher factor)."""
     aa = assets.AssetPortfolio(holdings=(
-        alm.Bond(1e6, 0.03, 5, 1, credit_rating="AA", issuer="X"),))
+        assets.Bond(1e6, 0.03, 5, 1, credit_rating="AA", issuer="X"),))
     bb = assets.AssetPortfolio(holdings=(
-        alm.Bond(1e6, 0.03, 5, 1, credit_rating="BB", issuer="X"),))
+        assets.Bond(1e6, 0.03, 5, 1, credit_rating="BB", issuer="X"),))
     s_aa = sa.concentration_scr(aa, fcf.solvency.KICS, 0.03, total_assets=10e6)  # 4%/15%
     s_bb = sa.concentration_scr(bb, fcf.solvency.KICS, 0.03, total_assets=10e6)  # 1.5%/50%
     assert np.isclose(s_aa, (1e6 - 10e6 * 0.04) * 0.15)
@@ -398,7 +398,7 @@ def test_concentration_property_whole_book_limit():
 def test_assess_components():
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
-        alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
+        assets.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
     a = sa.assess(p, mp, basis, regime=fcf.solvency.SII)
     # no equity/property -> the market module is just the net interest SCR; the SII
     # top-level BSCR aggregates insurance + market + Art-176 credit at all-pairwise
@@ -420,7 +420,7 @@ def test_tax_adjustment_loss_absorption():
     limit) is subtracted from the basic required capital, raising the ratio."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
-        alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
+        assets.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
     base = sa.assess(p, mp, basis, regime=fcf.solvency.KICS)
     taxed = sa.assess(p, mp, basis, regime=fcf.solvency.KICS, tax_rate=0.22)
     assert np.isclose(taxed.tax_adjustment, base.basic_required_capital * 0.22)
@@ -451,7 +451,7 @@ def test_top_level_aggregation_kics_vs_sii():
     each BSCR is the sqrt aggregation of its own module amounts."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
-        alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Equity(3_000_000.0, "developed")))
+        assets.Bond(2_000_000.0, 0.03, 10, 1), assets.Equity(3_000_000.0, "developed")))
     k = sa.assess(p, mp, basis, regime=fcf.solvency.KICS)
     s = sa.assess(p, mp, basis, regime=fcf.solvency.SII)
     R = np.array([[1.0, 0.25, 0.25], [0.25, 1.0, 0.25], [0.25, 0.25, 1.0]])
@@ -472,7 +472,7 @@ def test_equity_now_charges_scr():
     where it lifted only the numerator is fixed)."""
     mp, basis = _mp(), _basis()
     base = assets.AssetPortfolio(holdings=(
-        alm.Bond(2_000_000.0, 0.03, 10, 1), assets.Cash(5_000_000.0)))
+        assets.Bond(2_000_000.0, 0.03, 10, 1), assets.Cash(5_000_000.0)))
     with_eq = assets.AssetPortfolio(holdings=base.holdings + (assets.Equity(3_000_000.0),))
     a0 = sa.assess(base, mp, basis, regime=fcf.solvency.SII)
     a1 = sa.assess(with_eq, mp, basis, regime=fcf.solvency.SII)
@@ -486,7 +486,7 @@ def test_general_insurance_fourth_module():
     (table 3: life-vs-general 0, else 0.25), matching disclosed K-ICS structure."""
     mp, basis = _mp(), _basis()
     p = assets.AssetPortfolio(holdings=(
-        alm.Bond(2_000_000.0, 0.03, 10, 1, credit_rating="A"), assets.Cash(3_000_000.0)))
+        assets.Bond(2_000_000.0, 0.03, 10, 1, credit_rating="A"), assets.Cash(3_000_000.0)))
     gen = 800_000.0
     a = sa.assess(p, mp, basis, regime=fcf.solvency.KICS, general_insurance_scr=gen)
     m = np.array([a.insurance_scr, gen, a.market_scr, a.credit_scr])
@@ -556,8 +556,8 @@ def test_asset_portfolio_cashflows_places_coupons_and_redemption():
     """Each bond's coupons and final redemption land on the monthly grid at
     round(time_years * 12); equity/property/cash carry no scheduled cash flow."""
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=1000, coupon_rate=0.05, maturity_years=3, frequency=1),
-        alm.Bond(face=2000, coupon_rate=0.04, maturity_years=2, frequency=2),
+        assets.Bond(face=1000, coupon_rate=0.05, maturity_years=3, frequency=1),
+        assets.Bond(face=2000, coupon_rate=0.04, maturity_years=2, frequency=2),
         assets.Equity(market_value=5000),               # no scheduled CF
     ))
     cf = assets.asset_portfolio_cashflows(pf, 36)
@@ -576,7 +576,7 @@ def test_asset_portfolio_cashflows_places_coupons_and_redemption():
 def test_asset_portfolio_cashflows_drops_flows_beyond_horizon():
     """Cash flows past n_months are dropped (the horizon truncates the bond)."""
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=1000, coupon_rate=0.05, maturity_years=5, frequency=1),))
+        assets.Bond(face=1000, coupon_rate=0.05, maturity_years=5, frequency=1),))
     cf = assets.asset_portfolio_cashflows(pf, 24)          # only years 1-2 fit
     assert cf.shape == (25,)
     assert np.isclose(cf[12], 50.0)
@@ -586,7 +586,7 @@ def test_asset_portfolio_cashflows_drops_flows_beyond_horizon():
 
 def test_asset_portfolio_cashflows_rejects_bad_horizon():
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=1000, coupon_rate=0.05, maturity_years=3),))
+        assets.Bond(face=1000, coupon_rate=0.05, maturity_years=3),))
     with pytest.raises(ValueError, match="n_months must be positive"):
         assets.asset_portfolio_cashflows(pf, 0)
 
@@ -596,7 +596,7 @@ def test_asset_value_path_runoff():
     portfolio value, a par bond stays at par on its coupon dates, and once the bond
     redeems only the flat (equity) holding remains."""
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(1000.0, 0.05, 3, 1), assets.Equity(500.0)))
+        assets.Bond(1000.0, 0.05, 3, 1), assets.Equity(500.0)))
     path = assets.asset_value_path(pf, 36, 0.05)
     assert path.shape == (37,)
     assert np.isclose(path[0], assets.asset_portfolio_value(pf, 0.05))  # t=0 == MV
@@ -611,7 +611,7 @@ def test_asset_value_path_runoff():
 def test_asset_value_path_matches_mv_at_zero():
     """At month 0 the run-off value equals asset_portfolio_value for a mixed book."""
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(2000.0, 0.04, 5, 2), alm.Bond(1000.0, 0.06, 8, 1),
+        assets.Bond(2000.0, 0.04, 5, 2), assets.Bond(1000.0, 0.06, 8, 1),
         assets.Equity(3000.0), assets.Cash(500.0)))
     path = assets.asset_value_path(pf, 120, 0.03)
     assert np.isclose(path[0], assets.asset_portfolio_value(pf, 0.03))
@@ -619,7 +619,7 @@ def test_asset_value_path_matches_mv_at_zero():
 
 
 def test_asset_value_path_rejects_bad_horizon():
-    pf = assets.AssetPortfolio(holdings=(alm.Bond(1000.0, 0.05, 3, 1),))
+    pf = assets.AssetPortfolio(holdings=(assets.Bond(1000.0, 0.05, 3, 1),))
     with pytest.raises(ValueError, match="n_months must be positive"):
         assets.asset_value_path(pf, 0, 0.05)
 
@@ -632,7 +632,7 @@ def test_cashflow_gap_nets_asset_against_liability():
     flow_bom, flow_mid = alm.net_liability_cashflows(m)
     n_time = flow_mid.shape[0]
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=1000, coupon_rate=0.05, maturity_years=5, frequency=1),
+        assets.Bond(face=1000, coupon_rate=0.05, maturity_years=5, frequency=1),
         assets.Equity(market_value=5000),))                # no scheduled CF
     gap = assets.cashflow_gap(pf, m)
     assert gap.asset_cf.shape == (n_time + 1,)
@@ -677,7 +677,7 @@ def test_vfa_cashflow_gap_uses_the_guarantee_excess_basis():
     net = alm.vfa_net_liability_cashflows(m)
     n_time = net.shape[0]
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=100, coupon_rate=0.05, maturity_years=5, frequency=1),
+        assets.Bond(face=100, coupon_rate=0.05, maturity_years=5, frequency=1),
         assets.Equity(market_value=500),))                  # no scheduled CF
     gap = assets.vfa_cashflow_gap(pf, m)
     assert gap.asset_cf.shape == (n_time + 1,)
@@ -698,7 +698,7 @@ def _vfa_book():
                                 minimum_accumulation_benefit=1200.0,
                                 calculation_methods=PATTERNS)
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=200, coupon_rate=0.04, maturity_years=5, frequency=1),))
+        assets.Bond(face=200, coupon_rate=0.04, maturity_years=5, frequency=1),))
     return pf, mp, basis
 
 
@@ -788,7 +788,7 @@ def test_reinvest_balance_reconciles():
     mp, basis = _mp(), _basis()
     gap = assets.cashflow_gap(
         assets.AssetPortfolio(holdings=(
-            alm.Bond(face=1e6, coupon_rate=0.04, maturity_years=10, frequency=1),)),
+            assets.Bond(face=1e6, coupon_rate=0.04, maturity_years=10, frequency=1),)),
         measure(mp, basis, full=True))
     r = assets.reinvest(gap, reinvest_rate=0.03, funding_rate=0.05)
     step = r.balance[1:] - r.balance[:-1]
@@ -857,7 +857,7 @@ def test_liquidate_no_shortfall_no_loss():
     mp, basis = _mp(), _basis()
     gap = assets.cashflow_gap(
         assets.AssetPortfolio(holdings=(
-            alm.Bond(face=1e7, coupon_rate=0.05, maturity_years=10, frequency=1),)),
+            assets.Bond(face=1e7, coupon_rate=0.05, maturity_years=10, frequency=1),)),
         measure(mp, basis, full=True))
     r = assets.liquidate(gap, haircut=0.15, opening_balance=1e7)
     assert np.allclose(r.forced_sale, 0.0)
@@ -915,7 +915,7 @@ def test_interaction_loss_decomposes():
     from fastcashflow import solvency as sv
     mp, basis = _mp(), _basis()
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=2e6, coupon_rate=0.03, maturity_years=12, frequency=1),))
+        assets.Bond(face=2e6, coupon_rate=0.03, maturity_years=12, frequency=1),))
     shift, sens, hc = 0.01, 8.0, 0.1
     res = sa.interaction_loss(pf, mp, basis, shift=shift,
                                   lapse_sensitivity=sens, haircut=hc)
@@ -940,7 +940,7 @@ def test_interaction_loss_zero_haircut_drops_friction():
     mark-to-market revaluation."""
     mp, basis = _mp(), _basis()
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=1e6, coupon_rate=0.04, maturity_years=10, frequency=1),))
+        assets.Bond(face=1e6, coupon_rate=0.04, maturity_years=10, frequency=1),))
     res = sa.interaction_loss(pf, mp, basis, shift=0.01,
                                   lapse_sensitivity=8.0, haircut=0.0)
     assert res.forced_sale_loss == 0.0
@@ -949,7 +949,7 @@ def test_interaction_loss_zero_haircut_drops_friction():
 
 def _solvency_portfolio():
     return assets.AssetPortfolio(holdings=(
-        alm.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
+        assets.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
 
 
 def test_assess_dynamic_decomposes():
@@ -1097,7 +1097,7 @@ def _ul_book():
         benefits={"DEATH": np.array([80_000_000.0])},
         calculation_methods={"DEATH": CalculationMethod.DEATH})
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=2_000_000, coupon_rate=0.04, maturity_years=5, frequency=1),))
+        assets.Bond(face=2_000_000, coupon_rate=0.04, maturity_years=5, frequency=1),))
     return pf, mp, basis
 
 
@@ -1210,7 +1210,7 @@ def _vfa_guarantee_book():
                             benefits={"DEATH": 0.0},
                             calculation_methods={"DEATH": CalculationMethod.DEATH})
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=1.5e7, coupon_rate=0.04, maturity_years=5, frequency=1),))
+        assets.Bond(face=1.5e7, coupon_rate=0.04, maturity_years=5, frequency=1),))
     es = esg.simulate(np.array([1., 2., 3., 5., 10., 20.]),
                       np.array([.031, .0355, .0368, .039, .0408, .041]),
                       ufr=0.0405, alpha=0.10, mean_reversion=0.10, rate_vol=0.01,
@@ -1260,7 +1260,7 @@ def _gmm_solvency_book():
     mp = ModelPoints.single(45, 50_000.0, 60, benefits={"DEATH": 1e7},
                             calculation_methods={"DEATH": CalculationMethod.DEATH})
     pf = assets.AssetPortfolio(holdings=(
-        alm.Bond(face=1.5e7, coupon_rate=0.04, maturity_years=5, frequency=1),))
+        assets.Bond(face=1.5e7, coupon_rate=0.04, maturity_years=5, frequency=1),))
     return pf, mp, basis
 
 
@@ -1319,7 +1319,7 @@ def test_assess_stochastic_gmm_accepts_esg_object():
 
 def _bond_heavy_portfolio():
     return assets.AssetPortfolio(holdings=(
-        alm.Bond(1.5e7, 0.04, 10, 1), assets.Equity(5e5), assets.Cash(1e6)))
+        assets.Bond(1.5e7, 0.04, 10, 1), assets.Equity(5e5), assets.Cash(1e6)))
 
 
 def test_asset_value_by_scenario_flat_is_exact():
@@ -1337,7 +1337,7 @@ def test_asset_value_by_scenario_curve_matches_liability_df_at_year_grid():
     """The annual-forward bootstrap reproduces the liability's cumulative discount
     factor at the year grid exactly -- so the co-moving asset and the stochastic
     liability discount on the same curve (no asset-liability discounting drift)."""
-    from fastcashflow.alm import _annual_df
+    from fastcashflow.assets import _annual_df
     from fastcashflow.assets import _annual_forward_curve
     rng = np.random.default_rng(0)
     n_time = 60

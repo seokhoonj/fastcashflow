@@ -25,9 +25,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray
+from fastcashflow._duration import DurationResult, _BP
 from fastcashflow.alm import (
-    Bond, bond_value, bond_cashflows,
-    net_liability_cashflows, vfa_net_liability_cashflows, _annual_df,
+    net_liability_cashflows, vfa_net_liability_cashflows,
 )
 
 
@@ -81,7 +81,7 @@ class AssetPortfolio:
 
 
 def holding_value(holding, discount_annual) -> float:
-    """Market value of one holding -- a :class:`~fastcashflow.alm.Bond` priced at
+    """Market value of one holding -- a :class:`~fastcashflow.assets.Bond` priced at
     the curve, otherwise the holding's carried ``market_value``."""
     if isinstance(holding, Bond):
         return bond_value(holding, discount_annual)
@@ -107,8 +107,8 @@ def asset_portfolio_cashflows(portfolio: AssetPortfolio, n_months: int) -> Float
     """Project the portfolio's asset cash flows onto a monthly grid.
 
     Returns ``(n_months + 1,)`` -- the cash received at each month ``0 .. n_months``
-    (month 0 normally zero). Each :class:`~fastcashflow.alm.Bond` contributes its
-    coupons and final redemption (:func:`~fastcashflow.alm.bond_cashflows`),
+    (month 0 normally zero). Each :class:`~fastcashflow.assets.Bond` contributes its
+    coupons and final redemption (:func:`~fastcashflow.assets.bond_cashflows`),
     placed at month ``round(time_years x 12)``; cash flows beyond ``n_months`` are
     dropped. Equity, property and cash carry NO scheduled cash flow in v1 (they
     are stocks held at market value, not scheduled streams) -- dividends, rent and
@@ -136,7 +136,7 @@ def asset_value_path(portfolio: AssetPortfolio, n_months: int,
     """Market value of the still-held portfolio at each month ``0 .. n_months`` under
     run-off (no new business, no reinvestment).
 
-    Each :class:`~fastcashflow.alm.Bond` is revalued on its REMAINING (future) cash
+    Each :class:`~fastcashflow.assets.Bond` is revalued on its REMAINING (future) cash
     flows -- as coupons and the redemption pay out, the bond amortises away (its
     value at month ``t`` is the present value, re-based to ``t``, of the cash flows
     dated after ``t``). Equity, property and cash are held flat at market value (v1:
@@ -453,10 +453,129 @@ def liquidate(gap: CashflowGap, *, haircut: float, reinvest_rate=0.0,
                              realized_loss=realized_loss, unfunded=unfunded)
 
 
+# ---------------------------------------------------------------------------
+# Bonds -- the asset side's interest-rate sensitivity (single-sign cash flows,
+# so the textbook Macaulay / Modified duration applies cleanly).
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class Bond:
+    """A fixed-coupon bullet bond. ``coupon_rate`` is the annual coupon as a
+    fraction of ``face``; ``frequency`` is the number of coupons per year.
+
+    ``credit_rating`` (external / S&P scale: AAA, AA, A, BBB, BB, B, CCC, D, or
+    "unrated") and ``exposure_class`` ("corporate", "public", "securitisation")
+    drive the credit-risk SCR (:func:`fastcashflow.solvency.credit_scr`); ``currency`` (ISO
+    code, "KRW" for domestic) drives the FX SCR (:func:`fastcashflow.solvency.fx_scr`);
+    ``issuer`` (counterparty name) groups exposures for the concentration SCR
+    (:func:`fastcashflow.solvency.concentration_scr`). None of these affect the price or
+    duration; the market value is in the reporting currency."""
+
+    face: float
+    coupon_rate: float
+    maturity_years: float
+    frequency: int = 1
+    credit_rating: str = "AA"
+    exposure_class: str = "corporate"
+    currency: str = "KRW"
+    issuer: str = ""
+
+
+def bond_cashflows(bond: Bond) -> tuple[FloatArray, FloatArray]:
+    """The bond's ``(times_years, amounts)`` -- a coupon at each period and the
+    face repaid with the final coupon."""
+    n = int(round(bond.maturity_years * bond.frequency))
+    times = np.arange(1, n + 1, dtype=np.float64) / bond.frequency
+    coupon = bond.face * bond.coupon_rate / bond.frequency
+    amounts = np.full(n, coupon, dtype=np.float64)
+    amounts[-1] += bond.face
+    return times, amounts
+
+
+def effective_maturity(bond: Bond) -> float:
+    """The cash-flow-weighted average maturity ``sum(t * CF_t) / sum(CF_t)``
+    (K-ICS effective maturity, undiscounted as written in the standard). Used to
+    pick the credit-risk maturity bucket. A coupon bond's effective maturity is
+    shorter than its final maturity (early coupons pull the weight in)."""
+    t, a = bond_cashflows(bond)
+    total = float(a.sum())
+    return float((t * a).sum() / total) if total > 0.0 else 0.0
+
+
+def _annual_df(times: FloatArray, discount_annual) -> FloatArray:
+    """Annual-compounding discount factors at ``times`` (years) for a flat scalar
+    rate or a per-year rate array (the spot, year by year, held flat past its
+    end). Constant-force monthly discounting agrees with this at the year grid."""
+    times = np.asarray(times, dtype=np.float64)
+    c = np.asarray(discount_annual, dtype=np.float64)
+    if c.ndim == 0:
+        return (1.0 + float(c)) ** (-times)
+    n_max = int(np.ceil(times.max())) if times.size else 0
+    rates = np.array([c[min(k, c.shape[0] - 1)] for k in range(n_max)])
+    cum = np.concatenate([[0.0], np.cumsum(np.log1p(rates))])   # cum[n] = sum_{k<n} ln(1+c_k)
+    floor = np.floor(times).astype(np.int64)
+    frac = times - floor
+    last_ln = np.array([np.log1p(c[min(k, c.shape[0] - 1)]) for k in floor])
+    return np.exp(-(cum[floor] + frac * last_ln))
+
+
+def bond_value(bond: Bond, discount_annual) -> float:
+    """Market value of the bond -- its cash flows discounted at the curve."""
+    t, a = bond_cashflows(bond)
+    return float((a * _annual_df(t, discount_annual)).sum())
+
+
+def _bond_irr(times: FloatArray, amounts: FloatArray, pv: float) -> float:
+    """The flat annual yield reproducing ``pv`` (bisection; price falls in yield).
+
+    The bracket ``(-0.99, 100)`` contains any realistic bond yield -- a
+    positive-cash-flow bond has price ``-> +inf`` as the yield approaches -100%
+    and ``-> 0`` as it grows, so the root is always inside. Raises if the price is
+    not bracketed (e.g. non-positive or non-monotone cash flows)."""
+    lo, hi = -0.99, 100.0
+
+    def f(y: float) -> float:
+        return float((amounts * (1.0 + y) ** (-times)).sum()) - pv
+
+    f_lo, f_hi = f(lo), f(hi)
+    if f_lo * f_hi > 0.0:
+        raise ValueError(
+            "bond yield is not bracketed in (-0.99, 100) -- check the bond cash "
+            "flows and price")
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        f_mid = f(mid)
+        if abs(f_mid) < 1e-10 or (hi - lo) < 1e-13:
+            return mid
+        if f_lo * f_mid < 0.0:
+            hi = mid
+        else:
+            lo, f_lo = mid, f_mid
+    return 0.5 * (lo + hi)
+
+
+def bond_duration(bond: Bond, discount_annual) -> DurationResult:
+    """The bond's market value, Macaulay / Modified duration, DV01 and convexity.
+    Macaulay is the present-value-weighted time; Modified is ``Macaulay / (1 + y)``
+    with ``y`` the flat-equivalent yield; DV01 is ``Modified * value * 1bp`` (the
+    value drop per +1bp); convexity is the yield-based
+    ``sum(t(t+1) CF_t (1+y)^-(t+2)) / value`` in years^2."""
+    t, a = bond_cashflows(bond)
+    pv_t = a * _annual_df(t, discount_annual)
+    pv = float(pv_t.sum())
+    macaulay = float((t * pv_t).sum() / pv)
+    y = _bond_irr(t, a, pv)
+    modified = macaulay / (1.0 + y)
+    convexity = float((t * (t + 1.0) * a * (1.0 + y) ** (-(t + 2.0))).sum() / pv)
+    return DurationResult(pv=pv, macaulay=macaulay, modified=modified,
+                          dv01=modified * pv * _BP, convexity=convexity)
+
+
 __all__ = [
-    "Equity", "Property", "Cash", "AssetPortfolio",
+    "Equity", "Property", "Cash", "Bond", "AssetPortfolio",
     "holding_value", "asset_portfolio_value", "available_capital",
     "asset_portfolio_cashflows", "asset_value_path", "asset_value_by_scenario",
+    "bond_cashflows", "bond_value", "bond_duration", "effective_maturity",
     "CashflowGap", "cashflow_gap",
     "vfa_cashflow_gap",
     "ReinvestmentResult", "reinvest", "LiquidationResult", "liquidate",

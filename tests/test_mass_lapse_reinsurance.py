@@ -301,7 +301,7 @@ def _solvency_book():
     treaty relief can be wired through to the coverage ratio."""
     mp, basis = _mass_biting_book()
     portfolio = assets.AssetPortfolio(holdings=(
-        alm.Bond(2_000_000.0, 0.03, 10, 1, credit_rating="A"),
+        assets.Bond(2_000_000.0, 0.03, 10, 1, credit_rating="A"),
         assets.Equity(500_000.0)))
     return portfolio, mp, basis
 
