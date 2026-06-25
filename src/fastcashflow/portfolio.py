@@ -42,7 +42,7 @@ from fastcashflow._measurement.gmm import (
     measure_aggregate as _gmm_aggregate, measure_inforce as _gmm_inforce,
     settle as _settle_gmm)
 from fastcashflow._measurement.inforce import _reconcile_state
-from fastcashflow.io import (
+from fastcashflow.data.io import (
     _stream_validate, write_measurement, _model_points_from_frames,
     _parse_calculation_methods, _write_measurement_columns)
 from fastcashflow.grouping import (

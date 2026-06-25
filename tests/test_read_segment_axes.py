@@ -10,7 +10,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import read_basis
-from fastcashflow.io import BasisRouter
+from fastcashflow.data.io import BasisRouter
 
 
 def _export(tmp_path):

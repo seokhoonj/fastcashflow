@@ -658,7 +658,7 @@ def test_workbook_elapsed_axis_drives_semi_markov_reincidence(tmp_path):
     actually flows from the workbook into the ``(sex, age, year, cohort)``
     evaluation."""
     import openpyxl
-    from fastcashflow.io import _flex_rate_table
+    from fastcashflow.data.io import _flex_rate_table
 
     # Sheet with the new sojourn axis. Six-month exclusion window then a
     # flat 5% recurrence -- a recurrence-cancer waiting period of one half-year.

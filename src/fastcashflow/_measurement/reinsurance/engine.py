@@ -37,7 +37,7 @@ from fastcashflow.curves import (
 from fastcashflow.numerics import _csm_kernel, _norm_ppf
 from fastcashflow.model_points import InforceState, ModelPoints
 from fastcashflow.projection import project_cashflows
-from fastcashflow.io import (
+from fastcashflow.data.io import (
     write_measurement, _write_measurement_columns, _stream_policies_coverages)
 # In-force helpers shared with the GMM path (engine does not import
 # _reinsurance, so this top-level import is cycle-free -- same pattern as _paa).
@@ -772,7 +772,7 @@ def settle_stream(
     enough for :func:`settle` / :func:`settle_aggregate`; this exists for API
     symmetry with the other models.
     """
-    from fastcashflow.io import _settle_stream_driver, _coverages_build_mp
+    from fastcashflow.data.io import _settle_stream_driver, _coverages_build_mp
     basis = _single_basis(basis, entry="reinsurance.settle_stream")
     build_mp = _coverages_build_mp(coverages, calculation_methods,
                                    entry="reinsurance.settle_stream")

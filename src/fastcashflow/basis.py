@@ -159,10 +159,10 @@ def _as_rate_fn(spec: RateLike):
     # DataFrame: polars (iter_rows) or pandas (to_dict). Checked before the
     # array branch -- a DataFrame is not a 1-D sequence.
     if hasattr(spec, "iter_rows"):                       # polars.DataFrame
-        from fastcashflow.io import _rate_fn_from_records
+        from fastcashflow.data.io import _rate_fn_from_records
         return _rate_fn_from_records(list(spec.iter_rows(named=True)))
     if hasattr(spec, "to_dict"):                         # pandas.DataFrame
-        from fastcashflow.io import _rate_fn_from_records
+        from fastcashflow.data.io import _rate_fn_from_records
         return _rate_fn_from_records(spec.to_dict("records"))
     # 1-D array-like -> annual rate by policy year
     arr = np.asarray(spec, dtype=np.float64)
@@ -1017,8 +1017,8 @@ def describe_basis(obj, *, file=None) -> None:
     what is inside the object without scanning every dataclass field.
 
     Pass a single :class:`Basis` to see one segment, or pass the
-    :class:`BasisRouter` returned by :func:`fastcashflow.io.read_basis` /
-    :func:`fastcashflow.io.load_sample_basis` to also see the
+    :class:`BasisRouter` returned by :func:`fastcashflow.data.io.read_basis` /
+    :func:`fastcashflow.data.io.load_sample_basis` to also see the
     ``(product, channel)`` keys.
     """
     import sys

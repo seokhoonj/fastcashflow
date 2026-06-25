@@ -18,7 +18,7 @@ from fastcashflow.basis import BasisRouter
 from fastcashflow._measurement.gmm import _measure_inforce_full, _measure_inforce_fast
 from fastcashflow import Basis, CalculationMethod, CoverageRate, ModelPoints
 from fastcashflow.basis import annual_to_monthly
-from fastcashflow.io import (
+from fastcashflow.data.io import (
     _axis_tables, _flex_rate_table, _read_expense_tables, _read_state,
     _truncate_list,
 )

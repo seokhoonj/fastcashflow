@@ -153,7 +153,7 @@ def measure(
     to its own basis. ``segment_by`` names the routing axes (resolved via
     :meth:`ModelPoints.axis`, so any ``attributes`` column works) and the dict
     keys are tuples of those axes in order. Left as ``None`` (the default) it is
-    taken from the basis: a :class:`~fastcashflow.io.BasisRouter` from
+    taken from the basis: a :class:`~fastcashflow.data.io.BasisRouter` from
     :func:`read_basis` carries the axes its workbook declared, and a plain dict
     falls back to ``("product", "channel")``. So a workbook keyed by
     ``(product, channel, risk_class)`` routes by all three with no

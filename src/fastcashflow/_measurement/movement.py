@@ -37,7 +37,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow._measurement.gmm import _require_full
 from fastcashflow._measurement.basis import _require_inception
-from fastcashflow.io import write_measurement, _write_measurement_columns
+from fastcashflow.data.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._measurement.paa import _require_full as _require_full_paa
 from fastcashflow._measurement.vfa import _require_settlement_csm

@@ -39,7 +39,7 @@ from fastcashflow._measurement.model import VFA
 from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow._measurement.basis import _inforce_marker_columns
 from fastcashflow.basis import Basis, _single_basis
-from fastcashflow.io import (
+from fastcashflow.data.io import (
     write_measurement, _write_measurement_columns,
     _stream_single_file, _vfa_model_points_from_frame)
 from fastcashflow.numerics import (
@@ -1702,7 +1702,7 @@ def settle_stream(
     :meth:`SettlementMovement.closing_inputs()
     <fastcashflow.vfa.SettlementMovement.closing_inputs>`.
     """
-    from fastcashflow.io import _settle_stream_driver
+    from fastcashflow.data.io import _settle_stream_driver
 
     basis = _single_basis(basis, entry="vfa.settle_stream")
     return _settle_stream_driver(

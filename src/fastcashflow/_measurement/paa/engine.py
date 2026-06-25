@@ -44,7 +44,7 @@ from fastcashflow._measurement.basis import (
     _inforce_marker_columns,
 )
 from fastcashflow.basis import Basis, _single_basis
-from fastcashflow.io import (
+from fastcashflow.data.io import (
     write_measurement, _write_measurement_columns, _stream_policies_coverages)
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.numerics import (
@@ -856,7 +856,7 @@ def settle_stream(
     ``prior_count`` in the state (the LRC roll reconstructs the rest). Returns
     the number of model points processed.
     """
-    from fastcashflow.io import _settle_stream_driver, _coverages_build_mp
+    from fastcashflow.data.io import _settle_stream_driver, _coverages_build_mp
     basis = _single_basis(basis, entry="paa.settle_stream")
     build_mp = _coverages_build_mp(coverages, calculation_methods,
                                    entry="paa.settle_stream")

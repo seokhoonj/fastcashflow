@@ -14,7 +14,7 @@ import pytest
 
 import fastcashflow as fcf
 from fastcashflow import CalculationMethod, ModelPoints
-from fastcashflow.io import BasisRouter
+from fastcashflow.data.io import BasisRouter
 from conftest import make_death_basis
 
 

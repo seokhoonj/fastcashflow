@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from fastcashflow import io as _io
+from fastcashflow.data import io as _io
 
 #: Available sample templates -- see :func:`templates`.
 _TEMPLATES = ("gmm", "vfa", "paa", "ul", "ul-annuity", "ul-cost-deduct",

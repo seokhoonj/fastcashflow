@@ -26,7 +26,7 @@ from fastcashflow._measurement.basis import (
     _inforce_marker_columns,
 )
 from fastcashflow._measurement.model import GMM
-from fastcashflow.io import write_measurement, _write_measurement_columns
+from fastcashflow.data.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_kernel
 
 
