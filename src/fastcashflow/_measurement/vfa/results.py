@@ -8,7 +8,7 @@ The VFA model owns its measurement result types here: the headline/trajectory
 the guarantee :class:`GuaranteeTVOG`, with the ``CSM_BASIS_*`` vocabulary and
 the settlement / reconciliation block specs. These are pure data containers (no
 projection logic); the measurement and settlement engine that produces them
-lives in :mod:`fastcashflow.vfa._engine`.
+lives in :mod:`fastcashflow._measurement.vfa.engine`.
 """
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ class Measurement:
     # runs past the horizon (stays non-zero by design, not a leak).
     discount_factor_bom: FloatArray | None = None      # (n_time+1,), or (n_mp, n_time+1) when portfolio-stitched
     cashflows: "Cashflows | None" = None
-    model_points: "ModelPoints | None" = None     # stamped by measure_vfa, for group axes
+    model_points: "ModelPoints | None" = None     # stamped by vfa.measure, for group axes
     group_labels: "np.ndarray | None" = None       # per-group label on a grouped result
     group_sizes: IntArray | None = None         # model points per group, aligned with labels
     csm_basis: str = CSM_BASIS_PROJECTED_RUNOFF  # what the csm represents (see CSM_BASES)
@@ -129,7 +129,7 @@ class Aggregate:
     """Portfolio-aggregate VFA view -- a scalable sum of measured model-point
     results, holding no per-model-point row. Inception totals plus the run-off
     trajectories summed over the model-point axis. Computed in bounded memory, so
-    it works where a per-model-point ``measure_vfa(full=True)`` would OOM. Not an
+    it works where a per-model-point ``vfa.measure(full=True)`` would OOM. Not an
     IFRS group remeasurement and not a group re-floor engine: ``csm`` /
     ``loss_component`` are the sum of each contract's floored figure, matching the
     headline -- not a group-level re-floor.
@@ -783,7 +783,7 @@ class GuaranteeTVOG:
       account exits. Zero when the book carries no crediting guarantee.
     * ``account_floor`` -- the GMDB / GMAB account-value floors (a death pays
       ``max(account, GMDB)``, a maturity ``max(account, GMAB)``), measured through
-      :func:`measure_vfa` and summed over the model points. They pay the SHORTFALL
+      :func:`vfa.measure` and summed over the model points. They pay the SHORTFALL
       when the account falls below the guaranteed benefit.
 
     The crediting floor lifts the account from below the credited rate; the GMDB /

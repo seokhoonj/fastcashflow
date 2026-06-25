@@ -6,7 +6,7 @@ distinct: the GMDB / GMAB guarantee is an account-value market risk with
 moneyness-driven dynamic lapse, not a ``measure_fn`` variant of the GMM path.
 Only ``vfa_required_capital`` is a thin wrapper over the generic engine; the rest
 are genuine VFA computations. Generic primitives import one-way from ``_engine``
-/ ``_assessment`` / ``assets``; ``measure_vfa`` and the merged
+/ ``_assessment`` / ``assets``; ``measure`` and the merged
 ``DynamicAssessment`` import lazily in-body to avoid a runtime cycle.
 """
 from __future__ import annotations
@@ -64,10 +64,10 @@ def vfa_required_capital(
     change in the entity NET BEL (the guarantee-excess + expense - fee leg), driven
     by the lost variable-fee income and the changed guarantee cost, not by an
     account-value outflow."""
-    from fastcashflow.vfa._engine import measure_vfa
+    from fastcashflow._measurement.vfa import measure
     return required_capital(
         model_points, basis, regime=regime, catastrophe=catastrophe,
-        interest_scenarios=interest_scenarios, measure_fn=measure_vfa)
+        interest_scenarios=interest_scenarios, measure_fn=measure)
 
 def vfa_equity_scr(model_points: ModelPoints, basis: Basis, *,
                    equity_shock: float) -> float:
@@ -87,11 +87,11 @@ def vfa_equity_scr(model_points: ModelPoints, basis: Basis, *,
     lapse, which is the dynamic scenario overlay
     (:func:`fastcashflow.vfa.assess_dynamic`).
     Closed-form variable-annuity path only."""
-    from fastcashflow.vfa._engine import measure_vfa
-    base = float(measure_vfa(model_points, basis, full=False).bel.sum())
+    from fastcashflow._measurement.vfa import measure
+    base = float(measure(model_points, basis, full=False).bel.sum())
     av = np.asarray(model_points.account_value, dtype=np.float64)
     mp_s = replace(model_points, account_value=av * (1.0 - equity_shock))
-    stressed = float(measure_vfa(mp_s, basis, full=False).bel.sum())
+    stressed = float(measure(mp_s, basis, full=False).bel.sum())
     return max(0.0, stressed - base)
 
 def vfa_interest_scr(model_points: ModelPoints, basis: Basis, *,
@@ -111,12 +111,12 @@ def vfa_interest_scr(model_points: ModelPoints, basis: Basis, *,
     variable annuity carries. A regime-curve-calibrated VFA interest stress (a
     maturity-relative curve, not a flat parallel move) is future work. Closed-form
     variable-annuity path only."""
-    from fastcashflow.vfa._engine import measure_vfa
-    base = float(measure_vfa(model_points, basis, full=False).bel.sum())
+    from fastcashflow._measurement.vfa import measure
+    base = float(measure(model_points, basis, full=False).bel.sum())
     r = basis.investment_return
-    up = float(measure_vfa(
+    up = float(measure(
         model_points, replace(basis, investment_return=r + shift), full=False).bel.sum())
-    dn = float(measure_vfa(
+    dn = float(measure(
         model_points, replace(basis, investment_return=r - shift), full=False).bel.sum())
     return max(0.0, up - base, dn - base)
 
@@ -127,23 +127,23 @@ def _portfolio_nav_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     the benefit is unit-funded, so only that net liability sits on the entity's
     general account; the assets discount at the entity curve ``basis.discount_annual``
     while the VFA BEL discounts internally at the underlying-items return."""
-    from fastcashflow.vfa._engine import measure_vfa
+    from fastcashflow._measurement.vfa import measure
     return (asset_portfolio_value(portfolio, basis.discount_annual)
-            - float(measure_vfa(model_points, basis, full=False).bel.sum()))
+            - float(measure(model_points, basis, full=False).bel.sum()))
 
 def _interaction_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
                      basis: Basis, *, return_shock, lapse_sensitivity, haircut,
                      reinvest_rate, opening_balance):
     """The VFA interaction loss AND the forced-sale roll-forward, so
     :func:`assess_dynamic` does not re-measure the stressed book."""
-    from fastcashflow.vfa._engine import measure_vfa
+    from fastcashflow._measurement.vfa import measure
     base_nav = _portfolio_nav_vfa(portfolio, model_points, basis)
     av = np.asarray(model_points.account_value, dtype=np.float64)
     mp_s = replace(model_points, account_value=av * (1.0 + return_shock))
     asset_val = asset_portfolio_value(portfolio, basis.discount_annual)
-    stressed_nav = asset_val - float(measure_vfa(
+    stressed_nav = asset_val - float(measure(
         mp_s, basis, full=False, lapse_sensitivity=lapse_sensitivity).bel.sum())
-    m_s = measure_vfa(mp_s, basis, full=True, lapse_sensitivity=lapse_sensitivity)
+    m_s = measure(mp_s, basis, full=True, lapse_sensitivity=lapse_sensitivity)
     liq = liquidate(vfa_cashflow_gap(portfolio, m_s), haircut=haircut,
                     reinvest_rate=reinvest_rate, opening_balance=opening_balance)
     res = InteractionResult(base_nav=base_nav, stressed_nav=stressed_nav,
@@ -201,7 +201,7 @@ def assess_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     / operational follow the asset-side modules (operational on the VFA BEL /
     premium). Both the closed-form variable-annuity and the universal-life paths are
     supported."""
-    from fastcashflow.vfa._engine import measure_vfa
+    from fastcashflow._measurement.vfa import measure
     scr = vfa_required_capital(model_points, basis, regime=regime,
                                catastrophe=catastrophe)
     pv = asset_portfolio_value(portfolio, basis.discount_annual)
@@ -226,7 +226,7 @@ def assess_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     bscr = basic_scr(ins, market, cr, regime=regime,
                                       general_insurance=gen)
     op = operational_scr(model_points, basis, regime, bscr=bscr,
-                         measure_fn=measure_vfa)
+                         measure_fn=measure)
     basic = bscr + op
 
     tax_adj = 0.0
@@ -332,11 +332,11 @@ def assess_stochastic_vfa(portfolio: AssetPortfolio, model_points: ModelPoints,
     default) holds the asset value at its t=0 base-curve level. The prescribed
     required capital stays at its t=0 value either way (a scenario overlay on the
     ratio)."""
-    from fastcashflow.vfa._engine import measure_vfa_stochastic
+    from fastcashflow._measurement.vfa import measure_stochastic
     rs = getattr(return_scenarios, "returns", return_scenarios)
     static = assess_vfa(portfolio, model_points, basis, regime=regime,
                                  **assess_kwargs)
-    dist = measure_vfa_stochastic(model_points, basis, rs)
+    dist = measure_stochastic(model_points, basis, rs)
     if co_moving_assets:
         rates = getattr(return_scenarios, "rates", None)
         if rates is None:

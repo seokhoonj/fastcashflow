@@ -1699,7 +1699,7 @@ def load_sample_vfa_basis() -> Basis:
     VFA economic inputs set: ``investment_return`` (the underlying-items
     return the account value grows at) and ``fund_fee`` (the variable fee the
     entity keeps, which is the source of the CSM). Pair with
-    :func:`load_sample_vfa_model_points`; ``measure_vfa`` takes a single
+    :func:`load_sample_vfa_model_points`; ``vfa.measure`` takes a single
     :class:`Basis`.
     """
     source = resources.files("fastcashflow") / "sample_data" / "sample_vfa_basis.xlsx"

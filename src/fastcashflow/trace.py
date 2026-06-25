@@ -31,7 +31,7 @@ from fastcashflow.model_points import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow._paa import measure_paa
 from fastcashflow._reinsurance import QuotaShare, Treaty, measure_reinsurance
-from fastcashflow.vfa._engine import measure_vfa
+from fastcashflow._measurement import vfa as _vfa
 
 
 def _emit_tree(items: list[object], out: list[str], prefix: str) -> None:
@@ -576,7 +576,7 @@ def show_trace_vfa(
     """Print a tree of how one VFA model point's BEL / RA / CSM is computed.
 
     The VFA (variable-fee, account-value) counterpart of :func:`show_trace`.
-    It slices to a single row, runs :func:`measure_vfa`, and shows the
+    It slices to a single row, runs :func:`_vfa.measure`, and shows the
     account-value trajectory, the GMDB / GMAB floors (where the guarantee
     bites), the variable fee and the BEL / RA / CSM -- plus the guarantee
     time value (TVOG) when ``return_scenarios`` is supplied. Use it on
@@ -592,7 +592,7 @@ def show_trace_vfa(
     i = mp_index
     basis = _resolve_basis(basis, model_points, i)
     sub = model_points.subset([i])
-    m = measure_vfa(sub, basis, return_scenarios=return_scenarios)
+    m = _vfa.measure(sub, basis, return_scenarios=return_scenarios)
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
@@ -1483,8 +1483,8 @@ def show_trace_diff_vfa(
     ra_basis = _resolve_basis(basis_a, model_points, i)
     rb_basis = _resolve_basis(basis_b, model_points, i)
     sub = model_points.subset([i])
-    ma = measure_vfa(sub, ra_basis, return_scenarios=return_scenarios)
-    mb = measure_vfa(sub, rb_basis, return_scenarios=return_scenarios)
+    ma = _vfa.measure(sub, ra_basis, return_scenarios=return_scenarios)
+    mb = _vfa.measure(sub, rb_basis, return_scenarios=return_scenarios)
 
     def g(m, name):
         return float(getattr(m, name)[0])

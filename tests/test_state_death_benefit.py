@@ -136,7 +136,7 @@ def test_negative_factor_rejected():
 # F6.6b -- the VFA path rejects a non-default factor (the silent-wrong hole)
 # ---------------------------------------------------------------------------
 def test_vfa_path_rejects_factor():
-    """measure_vfa pays the GMDB/GMAB floor on the occupancy decrement, which
+    """vfa.measure pays the GMDB/GMAB floor on the occupancy decrement, which
     never reads the GMM death-claim factor -- a factor here would be silently
     ignored, so it is rejected."""
     vfa_basis = Basis(

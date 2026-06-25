@@ -40,10 +40,10 @@ from fastcashflow.curves import forward_rates
 from fastcashflow._measurement.gmm import _require_full
 from fastcashflow._measurement.basis import _require_inception
 from fastcashflow._paa import _require_full_paa
-from fastcashflow.vfa._engine import _require_settlement_csm
+from fastcashflow._measurement.vfa import _require_settlement_csm
 from fastcashflow._measurement import gmm as _gmm
 import fastcashflow._paa as _paa
-import fastcashflow.vfa._results as _vfa
+from fastcashflow._measurement import vfa as _vfa
 import fastcashflow._reinsurance as _reinsurance
 from fastcashflow.solvency._assessment import DynamicAssessment
 

@@ -714,7 +714,7 @@ def measure_tvog(
 
     # Maturity survivors exit at time = term, not term - 1; weight them at the
     # matured-term discounted-growth column (one month past the n_time grid) so
-    # this standalone path matches the folded measure_vfa credit-rate TVOG
+    # this standalone path matches the folded vfa.measure credit-rate TVOG
     # (test_vfa_tvog_matches_measure_tvog). Boundary-clamp the maturity column
     # exactly as the deterministic VFA path. Peel the per-MP maturity
     # account-value mass out of exit_value BEFORE the term re-seat (a mixed-term

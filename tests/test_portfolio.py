@@ -15,7 +15,7 @@ import fastcashflow as fcf
 from fastcashflow import Basis, ModelPoints, CoverageRate
 from fastcashflow import group
 from fastcashflow._paa import measure_paa
-from fastcashflow.vfa._engine import measure_vfa
+from fastcashflow._measurement import vfa as _vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow.portfolio import measure, PortfolioMeasurement, ModelMeasurement
 from conftest import PATTERNS
@@ -119,7 +119,7 @@ def test_portfolio_paa_stitches_ragged_segments():
 def test_portfolio_vfa_stitches_segments_with_distinct_curves():
     """VFA segments are executed (P-4) and stitched. Each segment discounts at
     its own underlying-items return, so discount_factor_bom is per-MP 2-D -- each row
-    carries its segment's curve, and every figure matches measure_vfa alone."""
+    carries its segment's curve, and every figure matches _vfa.measure alone."""
     router = BasisRouter(
         {("V1", "GA"): _flat_basis(investment_return=0.03),
          ("V2", "GA"): _flat_basis(investment_return=0.06)},
@@ -132,8 +132,8 @@ def test_portfolio_vfa_stitches_segments_with_distinct_curves():
     pm = measure(mp, router)
     assert pm.vfa.index.tolist() == [0, 1, 2]
     assert pm.gmm is None and pm.paa is None
-    refV1 = measure_vfa(mp.subset([0, 2]), _flat_basis(investment_return=0.03))
-    refV2 = measure_vfa(mp.subset([1]), _flat_basis(investment_return=0.06))
+    refV1 = _vfa.measure(mp.subset([0, 2]), _flat_basis(investment_return=0.03))
+    refV2 = _vfa.measure(mp.subset([1]), _flat_basis(investment_return=0.06))
     assert np.allclose(pm.vfa.measurement.bel[[0, 2]], refV1.bel)
     assert np.allclose(pm.vfa.measurement.bel[1], refV2.bel)
     assert np.allclose(pm.vfa.measurement.csm[[0, 2]], refV1.csm)
@@ -161,8 +161,8 @@ def test_portfolio_vfa_ragged_stitch_pads_and_flat_fills():
         product=np.array(["L", "S", "L"]), channel=np.array(["GA", "GA", "GA"]),
         calculation_methods=PATTERNS)
     pm = measure(mp, router)
-    refL = measure_vfa(mp.subset([0, 2]), _flat_basis(investment_return=0.06))
-    refS = measure_vfa(mp.subset([1]), _flat_basis(investment_return=0.06))
+    refL = _vfa.measure(mp.subset([0, 2]), _flat_basis(investment_return=0.06))
+    refS = _vfa.measure(mp.subset([1]), _flat_basis(investment_return=0.06))
     nL, nS = refL.bel_path.shape[1] - 1, refS.bel_path.shape[1] - 1
     assert nS < nL
     db = pm.vfa.measurement.discount_factor_bom
@@ -190,9 +190,9 @@ def test_portfolio_vfa_roll_forward_matches_per_segment():
         calculation_methods=PATTERNS)
     pm = measure(mp, router)
     mv = fcf.roll_forward(pm.vfa.measurement)
-    rv1 = fcf.roll_forward(measure_vfa(mp.subset([0, 2]),
+    rv1 = fcf.roll_forward(_vfa.measure(mp.subset([0, 2]),
                                        _flat_basis(investment_return=0.03)))
-    rv2 = fcf.roll_forward(measure_vfa(mp.subset([1]),
+    rv2 = fcf.roll_forward(_vfa.measure(mp.subset([1]),
                                        _flat_basis(investment_return=0.06)))
     assert np.allclose(mv[0].bel_interest[[0, 2]], rv1[0].bel_interest)
     assert np.allclose(mv[0].bel_interest[1], rv2[0].bel_interest)
@@ -259,7 +259,7 @@ def test_portfolio_measures_all_three_models_in_one_call():
     assert np.allclose(pm.paa.measurement.lrc_path,
                        measure_paa(mp.subset([1]), _flat_basis()).lrc_path)
     assert np.allclose(pm.vfa.measurement.csm,
-                       measure_vfa(mp.subset([2, 3]),
+                       _vfa.measure(mp.subset([2, 3]),
                                    _flat_basis(investment_return=0.04)).csm)
     assert sorted(np.concatenate(
         [pm.gmm.index, pm.paa.index, pm.vfa.index])) == [0, 1, 2, 3]
@@ -309,7 +309,7 @@ def test_portfolio_vfa_return_scenarios_match_standalone():
     scen = _tvog_scenarios(investment_return=0.04)
     pm = measure(mp, router, return_scenarios=scen)
     assert pm.vfa.index.tolist() == [1, 2]
-    ref = measure_vfa(mp.subset([1, 2]), _flat_basis(investment_return=0.04),
+    ref = _vfa.measure(mp.subset([1, 2]), _flat_basis(investment_return=0.04),
                       return_scenarios=scen)
     assert np.allclose(pm.vfa.measurement.time_value, ref.time_value)
     assert np.allclose(pm.vfa.measurement.csm, ref.csm)
@@ -360,7 +360,7 @@ def test_portfolio_all_vfa_return_scenarios_single_declared():
         calculation_methods=PATTERNS)
     scen = _tvog_scenarios(investment_return=0.04)
     pm = measure(mp, router, return_scenarios=scen)
-    ref = measure_vfa(mp, _flat_basis(investment_return=0.04), return_scenarios=scen)
+    ref = _vfa.measure(mp, _flat_basis(investment_return=0.04), return_scenarios=scen)
     assert np.allclose(pm.vfa.measurement.time_value, ref.time_value)
     assert np.allclose(pm.vfa.measurement.csm, ref.csm)
 
@@ -386,9 +386,9 @@ def test_portfolio_vfa_return_scenarios_multi_segment_distinct_terms():
     scen = _tvog_scenarios(n_time=120, investment_return=0.04)   # covers the longest
     pm = measure(mp, router, return_scenarios=scen)
     assert pm.vfa.index.tolist() == [0, 1]
-    refL = measure_vfa(mp.subset([0]), _flat_basis(investment_return=0.04),
+    refL = _vfa.measure(mp.subset([0]), _flat_basis(investment_return=0.04),
                        return_scenarios=scen)             # 120-month: full width
-    refS = measure_vfa(mp.subset([1]), _flat_basis(investment_return=0.04),
+    refS = _vfa.measure(mp.subset([1]), _flat_basis(investment_return=0.04),
                        return_scenarios=scen[:, :60])     # 60-month: its own prefix
     assert np.isclose(pm.vfa.measurement.time_value[0], refL.time_value[0])
     assert np.isclose(pm.vfa.measurement.time_value[1], refS.time_value[0])
@@ -703,7 +703,7 @@ def test_write_measurement_portfolio_preflights_carry_only_vfa(tmp_path):
     partial gmm/paa output left on disk."""
     from dataclasses import replace
 
-    from fastcashflow.vfa._results import CSM_BASIS_CARRY_ONLY
+    from fastcashflow._measurement.vfa import CSM_BASIS_CARRY_ONLY
 
     pm = _three_model_portfolio()
     carry = replace(pm.vfa.measurement, csm_basis=CSM_BASIS_CARRY_ONLY)

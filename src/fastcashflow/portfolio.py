@@ -30,14 +30,13 @@ from fastcashflow._paa import (
     measure_paa, measure_aggregate as _paa_aggregate,
     measure_inforce as _paa_inforce,
     _stitch_paa_measurements, _scatter_paa_headline)
-from fastcashflow.vfa._engine import (
-    measure_vfa, measure_aggregate as _vfa_aggregate,
+from fastcashflow._measurement.vfa import (
+    measure_aggregate as _vfa_aggregate,
     measure_inforce as _vfa_inforce, _require_settlement_csm,
-    settle as _settle_vfa,
-    _stitch_vfa_measurements, _scatter_vfa_headline)
+    settle as _settle_vfa)
 from fastcashflow._measurement import gmm as _gmm
 import fastcashflow._paa as _paa
-import fastcashflow.vfa._results as _vfa
+from fastcashflow._measurement import vfa as _vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow._measurement.gmm import (
     _factorise_segments, measure as _measure_gmm,
@@ -261,7 +260,7 @@ _SLOT_MEASUREMENT_TYPE = {
 #: segment stitch), not the PAA/VFA scatter.
 _MODEL_EXEC = {
     "PAA": (measure_paa, _stitch_paa_measurements, _scatter_paa_headline),
-    "VFA": (measure_vfa, _stitch_vfa_measurements, _scatter_vfa_headline)}
+    "VFA": (_vfa.measure, _vfa._stitch_measurements, _vfa._scatter_headline)}
 
 #: Default chunk for the ``full=False`` PAA/VFA path -- matches
 #: ``engine.measure_aggregate``. Bounds peak memory to ``O(chunk x n_time)``
@@ -275,7 +274,7 @@ _CHUNK_SIZE = 200_000
 _MEASURE_FULL = {
     "GMM": lambda mp, b: _measure_gmm(mp, b, full=True),
     "PAA": lambda mp, b: measure_paa(mp, b, full=True),
-    "VFA": lambda mp, b: measure_vfa(mp, b, full=True)}
+    "VFA": lambda mp, b: _vfa.measure(mp, b, full=True)}
 
 #: Per model: the leaf bounded-memory aggregate (single Basis). ``measure_aggregate``
 #: reuses these so the chunked-sum logic lives once in each model's namespace, not
@@ -553,7 +552,7 @@ def _measure_model_segmented(sub_mp, sub_router, model, *, full=True,
                              chunk_size=_CHUNK_SIZE, return_scenarios=None):
     """Measure one model's partition that spans several routing segments.
 
-    ``measure_paa`` / ``measure_vfa`` take a single :class:`Basis`, so the
+    ``measure_paa`` / ``vfa.measure`` take a single :class:`Basis`, so the
     orchestrator splits the partition by segment and combines the per-segment
     results -- the PAA / VFA analogue of the GMM ``_measure_segmented``.
 
@@ -566,12 +565,12 @@ def _measure_model_segmented(sub_mp, sub_router, model, *, full=True,
     resolves the axes, as ``fcf.gmm.measure`` does.
 
     ``return_scenarios`` (VFA only -- the guarantee time value) is forwarded to
-    ``measure_vfa``. When given, the headline path is NOT chunked: each segment
+    ``vfa.measure``. When given, the headline path is NOT chunked: each segment
     is measured in a single ``full=False`` call, with the scenario matrix
     ``(n_scenarios, horizon)`` sliced to that segment's own horizon
     (``contract_boundary_months.max()``). A row's time value is decided within
     its own term, so the prefix slice is exact and segments of different terms
-    each get the width ``measure_vfa`` expects; ``horizon`` must cover the
+    each get the width ``vfa.measure`` expects; ``horizon`` must cover the
     longest segment. The per-model-point time value is additive and the headline
     result still drops trajectories, so peak memory is
     ``O(n_seg_mp x n_scenarios)`` for the scenario pass rather than
@@ -586,7 +585,7 @@ def _measure_model_segmented(sub_mp, sub_router, model, *, full=True,
         # Slice the scenario prefix to this segment's horizon -- a row's time
         # value is decided within its own term, so a short segment does not force
         # the whole scenario set to its width (and a too-narrow set surfaces as
-        # the shape check inside measure_vfa). Mirrors vfa.measure_stream.
+        # the shape check inside vfa.measure). Mirrors vfa.measure_stream.
         if rs is None:
             return {}
         n_time = int(seg_mp.contract_boundary_months.max())
@@ -1799,7 +1798,7 @@ def _resolve_full_group_ids(model_points, by):
 #: Per model: the single-Basis headline-only measure, for the default
 #: profitability axis (loss component at inception).
 _HEADLINE_MEASURE = {
-    "GMM": _measure_gmm, "PAA": measure_paa, "VFA": measure_vfa}
+    "GMM": _measure_gmm, "PAA": measure_paa, "VFA": _vfa.measure}
 
 
 # ---------------------------------------------------------------------------

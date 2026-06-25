@@ -1103,7 +1103,7 @@ def _ul_book():
 
 def test_assess_vfa_supports_account_backed_ul():
     """The VFA static assessment works on a universal-life account book: the SCR
-    modules re-measure the UL net BEL via measure_vfa, so no special path is needed.
+    modules re-measure the UL net BEL via vfa.measure, so no special path is needed.
     The interest and equity guarantee modules are positive (the GMAB bites)."""
     import fastcashflow.solvency as sv
     pf, mp, basis = _ul_book()

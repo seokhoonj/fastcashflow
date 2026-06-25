@@ -425,7 +425,7 @@ def test_vfa_large_tvog_turns_the_contract_onerous():
 
 
 def test_vfa_tvog_matches_measure_tvog():
-    """The TVOG folded into measure_vfa equals the stand-alone measure_tvog."""
+    """The TVOG folded into measure equals the stand-alone measure_tvog."""
     basis = _basis(investment_return=0.04)
     mp = ModelPoints.single(40, 0.0, 120,
                              account_value=1e8, minimum_crediting_rate=0.045,
@@ -834,7 +834,7 @@ def test_vfa_measure_handles_boundary_before_term():
     """A contract whose Sec. 34 boundary cuts before the term: the projection
     runs only to the boundary, the GMAB maturity (at the term, beyond the
     horizon) is not applied, and nothing indexes out of bounds (regression for
-    the term_idx clamp in _vfa_project)."""
+    the term_idx clamp in _project)."""
     import fastcashflow as fcf
     mp = ModelPoints(
         issue_age=np.array([40]), premium=np.array([0.0]),
@@ -942,17 +942,17 @@ def test_vfa_measure_inforce_csm_basis_is_carry_only_and_guarded(tmp_path):
 
 
 def test_vfa_project_exposes_guarantee_excess_and_expense_pv():
-    """_vfa_project exposes the guarantee-excess PV (G) and expense PV (E) for
+    """_project exposes the guarantee-excess PV (G) and expense PV (E) for
     the paragraph-45 settlement movement's future-service term (c) = -(dG+dE+dRA).
     G[:,0] must equal the BEL increase from adding the GMDB (with r=0, f=0 it is
     the total death decrement times the per-death excess gmdb-av0)."""
-    from fastcashflow.vfa._engine import _vfa_project
+    from fastcashflow._measurement.vfa import _project
     basis = _basis(investment_return=0.0, fund_fee=0.0)
     av0, gmdb, term = 1000.0, 1200.0, 60
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
                             minimum_death_benefit=gmdb,
                             calculation_methods=PATTERNS)
-    p = _vfa_project(mp, basis)
+    p = _project(mp, basis)
     base = fcf.vfa.measure(ModelPoints.single(40, 0.0, term, account_value=av0,
                            calculation_methods=PATTERNS),
                            basis)
@@ -1070,7 +1070,7 @@ def test_vfa_credit_tvog_maturity_carries_term_weight():
     deterministic (no-scenario) run is unaffected.
     """
     from fastcashflow.tvog import tvog_weights, tvog_term_weight
-    from fastcashflow.vfa._engine import _vfa_project
+    from fastcashflow._measurement.vfa import _project
     g, r, f, term, av0 = 0.05, 0.04, 0.015, 6, 1e8
     basis = make_death_basis(mortality_q=0.001, lapse_q=0.01, discount_annual=0.03,
                              ra_confidence=0.75, mortality_cv=0.10, expense_cv=0.10,
@@ -1088,7 +1088,7 @@ def test_vfa_credit_tvog_maturity_carries_term_weight():
               return_scenarios=scen)
     w = tvog_weights(**kw)
     w_term = tvog_term_weight(**kw)
-    p = _vfa_project(mp, basis, scen)
+    p = _project(mp, basis, scen)
     inforce = p.inforce
     ip = np.concatenate([inforce, np.zeros((1, 1))], axis=1)
     exits = ip[:, :-1] - ip[:, 1:]
@@ -1471,17 +1471,17 @@ def test_vfa_stochastic_rejects_bad_scenarios():
 
 # ---------------------------------------------------------------------------
 # vfa.stochastic is vectorised over the scenario axis -- it must reproduce the
-# per-scenario measure_vfa loop (the oracle) to machine precision, VA and UL.
+# per-scenario measure loop (the oracle) to machine precision, VA and UL.
 # ---------------------------------------------------------------------------
 
 def _stochastic_loop_oracle(mp, basis, rs):
-    """The reference: one measure_vfa per scenario, the realised BEL / RA / CSM /
+    """The reference: one measure per scenario, the realised BEL / RA / CSM /
     loss summed -- exactly what vfa.stochastic vectorises."""
-    from fastcashflow.vfa._engine import measure_vfa
+    from fastcashflow._measurement.vfa import measure
     n = rs.shape[0]
     bel = np.empty(n); ra = np.empty(n); csm = np.empty(n); loss = np.empty(n)
     for s in range(n):
-        m = measure_vfa(mp, basis, rs[s:s + 1], full=False)
+        m = measure(mp, basis, rs[s:s + 1], full=False)
         bel[s] = m.bel.sum() + m.time_value.sum()
         ra[s] = m.ra.sum()
         csm[s] = m.csm.sum()

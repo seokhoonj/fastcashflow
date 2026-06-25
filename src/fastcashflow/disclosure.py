@@ -31,11 +31,11 @@ from fastcashflow.io import _write_frame, write_measurement
 from fastcashflow._measurement import gmm as _gmm
 import fastcashflow._paa as _paa
 import fastcashflow._reinsurance as _reinsurance
-import fastcashflow.vfa._results as _vfa
+from fastcashflow._measurement import vfa as _vfa
 from fastcashflow._measurement.gmm import _GMM_RECON_BLOCKS
 from fastcashflow._paa import _PAA_RECON_BLOCKS
 from fastcashflow._reinsurance import _REINSURANCE_RECON_BLOCKS
-from fastcashflow.vfa._results import _VFA_RECON_BLOCKS
+from fastcashflow._measurement.vfa import _VFA_RECON_BLOCKS
 
 # The lean canonical schema returned by reconciliation_to_frame / to_frame.
 _LEAN_COLUMNS = (

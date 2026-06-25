@@ -18,7 +18,7 @@ from fastcashflow._measurement.model import (
     MODEL_TAGS, model_tag, supported_model_tags,
 )
 from fastcashflow._measurement.gmm import Measurement as _GmmMeasurement
-from fastcashflow.vfa._results import Measurement as _VfaMeasurement
+from fastcashflow._measurement.vfa import Measurement as _VfaMeasurement
 from fastcashflow._paa import Measurement as _PaaMeasurement
 from fastcashflow._reinsurance import Measurement as _ReinsuranceMeasurement
 from fastcashflow.grouping import group, group_of_contracts

@@ -265,7 +265,7 @@ def validate_factor(grid, name: str, expected_shape: tuple) -> FloatArray:
 def _single_basis(basis, *, entry: str) -> "Basis":
     """Resolve a :class:`Basis` or :class:`BasisRouter` to a single ``Basis``.
 
-    The entry points that do not route segments (``measure_vfa`` /
+    The entry points that do not route segments (``vfa.measure`` /
     ``measure_paa`` / ``measure_reinsurance`` / ``measure_inforce``) accept a
     one-segment :class:`BasisRouter` and unwrap it; a genuinely multi-segment
     router is rejected with an actionable message rather than crashing deep in
@@ -560,7 +560,7 @@ class Basis:
         surgery, outpatient) -- the morbidity-risk component of the RA.
     expense_cv :
         Coefficient of variation of expense cash flows -- the expense-risk
-        component of the Risk Adjustment. **VFA-only in v1**: ``measure_vfa``
+        component of the Risk Adjustment. **VFA-only in v1**: ``vfa.measure``
         uses it directly, but the GMM / PAA RA sums the mortality /
         morbidity / disability / longevity components only. Adding the
         expense term to the GMM RA -- and so closing the gap to the

@@ -39,7 +39,7 @@ from fastcashflow.disclosure import reconciliation_to_frame
 from fastcashflow._measurement import gmm as _gmm
 import fastcashflow._paa as _paa
 import fastcashflow._reinsurance as _reinsurance
-import fastcashflow.vfa._results as _vfa
+from fastcashflow._measurement import vfa as _vfa
 from fastcashflow.report import Report
 
 # The SoFP statement frame -- a presentation table (one row per kind x

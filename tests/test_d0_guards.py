@@ -27,7 +27,7 @@ from fastcashflow import (
     InforceState, ModelPoints,
 )
 from fastcashflow._measurement.gmm import _measure_inforce_fast, _measure_inforce_full
-from fastcashflow.vfa._results import (
+from fastcashflow._measurement.vfa import (
     CSM_BASIS_CARRY_ONLY, CSM_BASIS_INITIAL, CSM_BASIS_PARAGRAPH_45,
     CSM_BASIS_PROJECTED_RUNOFF, Measurement,
 )

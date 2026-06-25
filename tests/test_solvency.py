@@ -599,7 +599,7 @@ def test_dynamic_lapse_moves_bel_vs_uncoupled():
 
 
 # ---------------------------------------------------------------------------
-# VFA (variable) life sub-risk capital -- required_capital(measure_fn=measure_vfa)
+# VFA (variable) life sub-risk capital -- required_capital(measure_fn=vfa.measure)
 # ---------------------------------------------------------------------------
 
 def _vfa_life_regime():
@@ -632,7 +632,7 @@ def test_vfa_required_capital_routes_through_the_vfa_measure():
     scr = fcf.vfa.required_capital(mp, basis, regime=regime)
 
     base = float(fcf.vfa.measure(mp, basis, full=False).bel.sum())
-    assert np.isclose(scr.base_bel, base)            # routed through measure_vfa
+    assert np.isclose(scr.base_bel, base)            # routed through vfa.measure
 
     lapse_sr = next(s for s in regime.sub_risks if s.name == "lapse")
     deltas = [float(fcf.vfa.measure(*v.apply(mp, basis), full=False).bel.sum()) - base

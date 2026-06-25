@@ -20,7 +20,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import (
     Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints)
-from fastcashflow.vfa._engine import _csm_loss_component_step, _vfa_project
+from fastcashflow._measurement.vfa import _csm_loss_component_step, _project
 
 
 def _basis(*, investment_return=0.05, fund_fee=0.015, expense=1_000.0,
@@ -296,7 +296,7 @@ def test_interest_line_is_the_rate_times_the_expected_trajectory():
     """bel_interest is computed directly -- r_m times the expected
     trajectory's BEL over the period months (re-based to the opening count),
     the roll-forward convention -- pinned against an independent
-    recomputation from _vfa_project."""
+    recomputation from _project."""
     basis = _basis()
     em_open, period = 6, 3
     mp0 = ModelPoints.single(40, 0.0, 24, account_value=1e6,
@@ -304,7 +304,7 @@ def test_interest_line_is_the_rate_times_the_expected_trajectory():
     mp, state = _book(basis, mp0, em_open=em_open, period=period)
     mv = fcf.vfa.settle(mp, state, basis, period_months=period)
 
-    p = _vfa_project(mp, basis,
+    p = _project(mp, basis,
                      elapsed_months=np.array([em_open], dtype=np.int64),
                      account_value=np.asarray(state.prior_account_value))
     r_m = p.r_m

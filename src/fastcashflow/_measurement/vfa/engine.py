@@ -72,7 +72,7 @@ from fastcashflow.tvog import (
 from fastcashflow._measurement.inforce import _inforce_rescale, _reconcile_state
 # Result types and the CSM-basis vocabulary live in the sibling results module
 # (this module is the engine that produces them).
-from fastcashflow.vfa._results import (
+from fastcashflow._measurement.vfa.results import (
     Aggregate, CSM_BASIS_CARRY_ONLY, GuaranteeTVOG, Measurement,
     SettlementAggregate, SettlementMovement, _VFA_SETTLEMENT_LINES)
 
@@ -195,10 +195,10 @@ def _(measurement: Measurement, path, *, ids=None):
     _write_measurement_columns(cols, path, ids)
 
 
-def _scatter_vfa_headline(n_mp, results):
+def _scatter_headline(n_mp, results):
     """Scatter per-chunk headline-only Measurements into one ``(n_mp,)`` result.
 
-    ``results`` is ``[(idx, Measurement)]`` from ``measure_vfa(..., full=False)``
+    ``results`` is ``[(idx, Measurement)]`` from ``measure(..., full=False)``
     over row-blocks; only the headline ``bel`` / ``ra`` / ``csm`` /
     ``variable_fee`` / ``time_value`` / ``loss_component`` are laid back, the
     trajectory fields staying ``None``. The portfolio orchestrator uses this on
@@ -223,7 +223,7 @@ def _scatter_vfa_headline(n_mp, results):
         time_value=time_value, loss_component=loss_component)
 
 
-def _stitch_vfa_measurements(n_mp, sub_results):
+def _stitch_measurements(n_mp, sub_results):
     """Scatter per-segment Measurements into one ``(n_mp, ...)`` result.
 
     ``sub_results`` is ``[(idx, Measurement)]`` -- each segment's headline and
@@ -303,7 +303,7 @@ def _stitch_vfa_measurements(n_mp, sub_results):
 
 @dataclass(frozen=True, slots=True)
 class _VFAProjection:
-    """AV-anchored VFA projection shared by :func:`measure_vfa` (inception) and
+    """AV-anchored VFA projection shared by :func:`measure` (inception) and
     ``vfa.measure_inforce`` (subsequent measurement).
 
     Holds the trajectory building blocks that do not depend on the CSM choice:
@@ -331,7 +331,7 @@ class _VFAProjection:
     expense_pv: FloatArray           # (n_mp, n_time+1) PV of expenses
 
 
-def _vfa_project(
+def _project(
     model_points: ModelPoints,
     basis: Basis,
     return_scenarios: FloatArray | None = None,
@@ -359,7 +359,7 @@ def _vfa_project(
     projection -- the legs differ only in the AV anchor, and sharing makes
     the in-force / coverage-unit arrays bit-identical between them.
     """
-    basis = _single_basis(basis, entry="measure_vfa")
+    basis = _single_basis(basis, entry="measure")
     # The VFA death money is ``deaths * death_benefit`` (below), computed from
     # the occupancy decrement -- it never reads the GMM death-claim factor. A
     # state-conditioned death benefit or occupancy exit would be silently
@@ -368,7 +368,7 @@ def _vfa_project(
     if any(s.death_benefit_factor != 1.0 for s in state_model.states):
         raise NotImplementedError(
             "state-conditioned death benefit (State.death_benefit_factor) is "
-            "not supported on the VFA path; measure_vfa pays the GMDB/GMAB "
+            "not supported on the VFA path; measure pays the GMDB/GMAB "
             "floor on the occupancy decrement, which the GMM death-claim "
             "factor does not reach."
         )
@@ -618,7 +618,7 @@ def _vfa_project(
     )
 
 
-def measure_vfa(
+def measure(
     model_points: ModelPoints,
     basis: Basis,
     return_scenarios: FloatArray | None = None,
@@ -674,11 +674,11 @@ def measure_vfa(
     closed-form growth path) and the account-backed universal-life path (the value
     is read from the rolled account) are supported.
     """
-    basis = _single_basis(basis, entry="measure_vfa")
+    basis = _single_basis(basis, entry="measure")
     # Variable universal life: an account-backed (universal-life) book is
     # measured through the SHARED recursive account roll (the projection fold,
     # identical to the GMM path), discounted at the underlying-items return --
-    # the only thing the VFA model changes. The closed-form _vfa_project
+    # the only thing the VFA model changes. The closed-form _project
     # (variable-annuity, no cost-of-insurance) handles the account-flag-absent
     # case. Branch STRICTLY on the coverage flags, never account_value (the
     # variable-annuity product carries an account value too).
@@ -758,7 +758,7 @@ def measure_vfa(
         scale = moneyness_lapse_scale(model_points, basis, lapse_sensitivity,
                                       floor=lapse_floor, cap=lapse_cap)
         proj = project_cashflows(model_points, basis, lapse_scale=scale)
-    p = _vfa_project(model_points, basis, return_scenarios, _proj=proj)
+    p = _project(model_points, basis, return_scenarios, _proj=proj)
     n_time = p.inforce.shape[1]
     variable_fee = p.variable_fee_path[:, 0]
     # The inception fulfilment cash flows -- with the guarantee time value --
@@ -807,7 +807,7 @@ def measure_vfa(
     )
 
 
-def measure_vfa_stochastic(model_points: ModelPoints, basis: Basis,
+def measure_stochastic(model_points: ModelPoints, basis: Basis,
                            return_scenarios: FloatArray):
     """The VFA liability distribution over fund-return scenarios -- the VFA
     counterpart of :func:`fastcashflow.gmm.stochastic`.
@@ -830,7 +830,7 @@ def measure_vfa_stochastic(model_points: ModelPoints, basis: Basis,
     value varies by scenario, computed as one ``(n_mp, n_scenarios)`` matrix. The
     per-scenario realised BEL is the intrinsic BEL plus that path's time value, and
     the CSM / loss re-floor the fulfilment cash flow (BEL + RA + time value) per
-    scenario -- identical to running :func:`measure_vfa` once per path, but without
+    scenario -- identical to running :func:`measure` once per path, but without
     re-projecting."""
     from fastcashflow.stochastic import StochasticResult
     rs = np.asarray(return_scenarios, dtype=np.float64)
@@ -839,13 +839,13 @@ def measure_vfa_stochastic(model_points: ModelPoints, basis: Basis,
     if rs.shape[0] == 0:
         raise ValueError("return_scenarios is empty; need at least one scenario")
     n_scen = rs.shape[0]
-    basis = _single_basis(basis, entry="measure_vfa_stochastic")
+    basis = _single_basis(basis, entry="measure_stochastic")
 
     bel_mp, ra_mp, tv = _vfa_time_value_by_scenario(model_points, basis, rs)
     # tv is (n_mp, n_scenarios); bel_mp / ra_mp are the scenario-independent
     # intrinsic per-MP BEL and RA. The realised liability per path is the intrinsic
     # BEL plus that path's guarantee time value; the CSM / loss re-floor the FCF
-    # (BEL + RA + time value) per scenario -- exactly the per-scenario measure_vfa.
+    # (BEL + RA + time value) per scenario -- exactly the per-scenario measure.
     fcf = (bel_mp + ra_mp)[:, None] + tv               # (n_mp, n_scenarios)
     bel = float(bel_mp.sum()) + tv.sum(axis=0)         # (n_scenarios,)
     ra = np.full(n_scen, float(ra_mp.sum()))
@@ -892,7 +892,7 @@ def _vfa_time_value_by_scenario(model_points: ModelPoints, basis: Basis,
                                 return_scenarios: FloatArray):
     """The scenario-independent intrinsic per-MP BEL / RA and the
     ``(n_mp, n_scenarios)`` guarantee time-value matrix -- the vectorised core of
-    :func:`measure_vfa_stochastic`. The universal-life (account) book re-rolls the
+    :func:`measure_stochastic`. The universal-life (account) book re-rolls the
     account under every scenario in one pass; the variable-annuity closed form
     builds the credit-rate and floor time-value matrices directly."""
     from fastcashflow._measurement.projection import valued_projection
@@ -910,7 +910,7 @@ def _vfa_time_value_by_scenario(model_points: ModelPoints, basis: Basis,
                                   vp.cashflows.maturity_survivors, rs, reduce=False)
         return vp.bel, vp.ra, tv
     # Variable-annuity closed form.
-    p = _vfa_project(model_points, basis, rs, tv_reduce=False)
+    p = _project(model_points, basis, rs, tv_reduce=False)
     return p.bel[:, 0], p.ra[:, 0], p.time_value
 
 
@@ -956,12 +956,12 @@ def measure_stream(
 
     def measure_fn(mp):
         if rs is None:
-            return measure_vfa(mp, basis, full=False)
+            return measure(mp, basis, full=False)
         # Slice the scenario prefix to this chunk's horizon -- a row's time value
         # is decided within its own term, so the prefix is exact (and a too-short
-        # scenario surfaces as the shape check inside measure_vfa).
+        # scenario surfaces as the shape check inside measure).
         n_time = int(mp.contract_boundary_months.max())
-        return measure_vfa(mp, basis, full=False, return_scenarios=rs[:, :n_time])
+        return measure(mp, basis, full=False, return_scenarios=rs[:, :n_time])
 
     return _stream_single_file(
         input_path, output_dir, chunk_size=chunk_size, id_column=id_column,
@@ -982,7 +982,7 @@ def measure_aggregate(
     The VFA analogue of :func:`fastcashflow.gmm.measure_aggregate`: BEL / RA /
     CSM / variable fee / time value are additive across contracts, so the
     portfolio's run-off is the per-model-point trajectories summed over the
-    model-point axis. Runs ``measure_vfa(..., full=True)`` over row-blocks of
+    model-point axis. Runs ``measure(..., full=True)`` over row-blocks of
     ``chunk_size`` model points and accumulates only the ``(n_time+1,)`` sums, so
     peak memory is ``O(chunk_size x n_time)`` regardless of ``n_mp``.
 
@@ -1008,7 +1008,7 @@ def measure_aggregate(
     bel = ra = csm = variable_fee = time_value = loss = 0.0
     for start in range(0, n_mp, chunk_size):
         idx = np.arange(start, min(start + chunk_size, n_mp))
-        m = measure_vfa(model_points.subset(idx), basis, full=True)
+        m = measure(model_points.subset(idx), basis, full=True)
         nt = m.bel_path.shape[1]
         bel_path[:nt] += m.bel_path.sum(axis=0)
         ra_path[:nt] += m.ra_path.sum(axis=0)
@@ -1044,7 +1044,7 @@ def measure_inforce(
     flows (BEL / RA / variable fee / guarantee intrinsic value) are re-measured
     from the **observed** fund value at the valuation date
     (``state.account_value``): the account-value path is re-anchored at that
-    observed value (:func:`_vfa_project`), the decrements come from the inception
+    observed value (:func:`_project`), the decrements come from the inception
     projection (they depend on policy duration, not the fund), and the result is
     sliced at each contract's ``elapsed_months`` and re-based by
     ``count / inforce[elapsed]`` (exact for cash flows linear in the in-force).
@@ -1117,7 +1117,7 @@ def measure_inforce(
 
     # Re-anchor the account-value path at the observed fund value at em, then
     # re-base the sliced headline to the valuation date (see _inforce_rescale).
-    p = _vfa_project(model_points, basis,
+    p = _project(model_points, basis,
                      elapsed_months=em, account_value=state.account_value)
     rows = np.arange(n_mp)
     rescale = _inforce_rescale(p.cashflows.inforce, model_points, em, rows)
@@ -1329,9 +1329,9 @@ def settle(
     from dataclasses import replace as _replace
     proj_mp = _replace(model_points, count=np.ones(n_mp))
     proj = project_cashflows(proj_mp, basis)
-    p_exp = _vfa_project(proj_mp, basis, elapsed_months=em_open,
+    p_exp = _project(proj_mp, basis, elapsed_months=em_open,
                          account_value=state.prior_account_value, _proj=proj)
-    p_obs = _vfa_project(proj_mp, basis, elapsed_months=em_close,
+    p_obs = _project(proj_mp, basis, elapsed_months=em_close,
                          account_value=observed_av, _proj=proj)
     rows = np.arange(n_mp)
     inforce = p_exp.inforce                       # the ONE shared array
@@ -1746,7 +1746,7 @@ def recognition_schedule(
         _build_recognition_schedule, _validate_band_edges)
     edges = _validate_band_edges(band_edges_months)
     mv = settle(model_points, state, basis, period_months=period_months)
-    inforce = measure_vfa(model_points, basis, full=True).cashflows.inforce
+    inforce = measure(model_points, basis, full=True).cashflows.inforce
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     boundary = np.asarray(model_points.contract_boundary_months, dtype=np.int64)
     return _build_recognition_schedule(
@@ -1761,7 +1761,7 @@ def guarantee_tvog(
 
     Sums the two guarantees a participating account can carry -- the
     minimum-crediting-rate floor (:func:`measure_tvog`) and the GMDB / GMAB
-    account-value floors (:func:`measure_vfa`, summed over the model points).
+    account-value floors (:func:`measure`, summed over the model points).
     They bite on disjoint regions of the account value, so the sum is the book's
     full guarantee time value. A book with no crediting guarantee (every
     ``minimum_crediting_rate`` is :data:`NO_GUARANTEE_RATE`) contributes a zero
@@ -1774,7 +1774,7 @@ def guarantee_tvog(
     else:
         credited_rate_floor = measure_tvog(
             model_points, basis, return_scenarios).time_value
-    account_floor = float(np.sum(measure_vfa(
+    account_floor = float(np.sum(measure(
         model_points, basis, return_scenarios=return_scenarios).time_value))
     return GuaranteeTVOG(
         credited_rate_floor=credited_rate_floor, account_floor=account_floor)
