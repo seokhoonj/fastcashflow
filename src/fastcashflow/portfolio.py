@@ -30,14 +30,14 @@ from fastcashflow._paa import (
     measure_paa, measure_aggregate as _paa_aggregate,
     measure_inforce as _paa_inforce,
     _stitch_paa_measurements, _scatter_paa_headline)
-from fastcashflow._vfa import (
+from fastcashflow.vfa._engine import (
     measure_vfa, measure_aggregate as _vfa_aggregate,
     measure_inforce as _vfa_inforce, _require_settlement_csm,
     settle as _settle_vfa,
     _stitch_vfa_measurements, _scatter_vfa_headline)
 import fastcashflow.gmm._results as _gmm
 import fastcashflow._paa as _paa
-import fastcashflow._vfa as _vfa
+import fastcashflow.vfa._results as _vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow.gmm._engine import (
     _factorise_segments, measure as _measure_gmm,

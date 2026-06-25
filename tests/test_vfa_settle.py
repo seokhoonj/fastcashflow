@@ -20,7 +20,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import (
     Basis, CoverageRate, ExpenseItem, InforceState, ModelPoints)
-from fastcashflow._vfa import _csm_loss_component_step, _vfa_project
+from fastcashflow.vfa._engine import _csm_loss_component_step, _vfa_project
 
 
 def _basis(*, investment_return=0.05, fund_fee=0.015, expense=1_000.0,

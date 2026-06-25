@@ -15,7 +15,7 @@ import fastcashflow as fcf
 from fastcashflow import Basis, ModelPoints, CoverageRate
 from fastcashflow import group
 from fastcashflow._paa import measure_paa
-from fastcashflow._vfa import measure_vfa
+from fastcashflow.vfa._engine import measure_vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow.portfolio import measure, PortfolioMeasurement, ModelMeasurement
 from conftest import PATTERNS
@@ -703,7 +703,7 @@ def test_write_measurement_portfolio_preflights_carry_only_vfa(tmp_path):
     partial gmm/paa output left on disk."""
     from dataclasses import replace
 
-    from fastcashflow._vfa import CSM_BASIS_CARRY_ONLY
+    from fastcashflow.vfa._results import CSM_BASIS_CARRY_ONLY
 
     pm = _three_model_portfolio()
     carry = replace(pm.vfa.measurement, csm_basis=CSM_BASIS_CARRY_ONLY)

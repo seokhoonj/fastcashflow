@@ -946,7 +946,7 @@ def test_vfa_project_exposes_guarantee_excess_and_expense_pv():
     the paragraph-45 settlement movement's future-service term (c) = -(dG+dE+dRA).
     G[:,0] must equal the BEL increase from adding the GMDB (with r=0, f=0 it is
     the total death decrement times the per-death excess gmdb-av0)."""
-    from fastcashflow._vfa import _vfa_project
+    from fastcashflow.vfa._engine import _vfa_project
     basis = _basis(investment_return=0.0, fund_fee=0.0)
     av0, gmdb, term = 1000.0, 1200.0, 60
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
@@ -1070,7 +1070,7 @@ def test_vfa_credit_tvog_maturity_carries_term_weight():
     deterministic (no-scenario) run is unaffected.
     """
     from fastcashflow.tvog import tvog_weights, tvog_term_weight
-    from fastcashflow._vfa import _vfa_project
+    from fastcashflow.vfa._engine import _vfa_project
     g, r, f, term, av0 = 0.05, 0.04, 0.015, 6, 1e8
     basis = make_death_basis(mortality_q=0.001, lapse_q=0.01, discount_annual=0.03,
                              ra_confidence=0.75, mortality_cv=0.10, expense_cv=0.10,
@@ -1477,7 +1477,7 @@ def test_vfa_stochastic_rejects_bad_scenarios():
 def _stochastic_loop_oracle(mp, basis, rs):
     """The reference: one measure_vfa per scenario, the realised BEL / RA / CSM /
     loss summed -- exactly what vfa.stochastic vectorises."""
-    from fastcashflow._vfa import measure_vfa
+    from fastcashflow.vfa._engine import measure_vfa
     n = rs.shape[0]
     bel = np.empty(n); ra = np.empty(n); csm = np.empty(n); loss = np.empty(n)
     for s in range(n):

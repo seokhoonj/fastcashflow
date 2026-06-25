@@ -336,7 +336,7 @@ def key_rate_dv01s(model_points: ModelPoints, basis: Basis, *,
 # ---------------------------------------------------------------------------
 def _vfa_bel(model_points: ModelPoints, basis: Basis, investment_return) -> float:
     """VFA portfolio BEL under an underlying-items-return override (fast path)."""
-    from fastcashflow._vfa import measure_vfa
+    from fastcashflow.vfa._engine import measure_vfa
     m = measure_vfa(model_points,
                     replace(basis, investment_return=investment_return), full=False)
     return float(m.bel.sum())

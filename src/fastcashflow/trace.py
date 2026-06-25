@@ -31,7 +31,7 @@ from fastcashflow.model_points import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow._paa import measure_paa
 from fastcashflow._reinsurance import QuotaShare, Treaty, measure_reinsurance
-from fastcashflow._vfa import measure_vfa
+from fastcashflow.vfa._engine import measure_vfa
 
 
 def _emit_tree(items: list[object], out: list[str], prefix: str) -> None:

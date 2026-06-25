@@ -43,12 +43,12 @@ from fastcashflow._measurement.basis import _require_inception
 from fastcashflow.io import write_measurement, _write_measurement_columns
 from fastcashflow.numerics import _csm_roll
 from fastcashflow._paa import _require_full_paa
-from fastcashflow._vfa import (
-    CSM_BASIS_PARAGRAPH_45, _CSM_TO_MEASUREMENT_BASIS,
-    _require_settlement_csm)
+from fastcashflow.vfa._results import (
+    CSM_BASIS_PARAGRAPH_45, _CSM_TO_MEASUREMENT_BASIS)
+from fastcashflow.vfa._engine import _require_settlement_csm
 import fastcashflow.gmm._results as _gmm
 import fastcashflow._paa as _paa
-import fastcashflow._vfa as _vfa
+import fastcashflow.vfa._results as _vfa
 import fastcashflow._reinsurance as _reinsurance
 
 
