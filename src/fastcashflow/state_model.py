@@ -235,11 +235,6 @@ class State:
         # reaches the cap, while the lives stay in force (a guaranteed-payout
         # LTC / dementia annuity: pay 36 months, then keep cover with no
         # payment). ``0`` means unbounded (the historical behaviour).
-        # ``periodic_benefit_term_months`` caps how many months a benefit state
-        # pays -- the monthly ``disability_income`` stops once a cohort's sojourn
-        # reaches the cap, while the lives stay in force (a guaranteed-payout
-        # LTC / dementia annuity: pay 36 months, then keep cover with no
-        # payment). ``0`` means unbounded (the historical behaviour).
         cap = int(self.periodic_benefit_term_months)
         object.__setattr__(self, "periodic_benefit_term_months", cap)
         if cap < 0:

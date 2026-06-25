@@ -19,7 +19,7 @@ from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.assets import (
     AssetPortfolio, available_capital, asset_portfolio_value,
-    asset_value_by_scenario, LiquidationResult, liquidate, vfa_cashflow_gap,
+    asset_value_by_scenario, liquidate, vfa_cashflow_gap,
 )
 from fastcashflow.solvency._engine import (
     required_capital, RegimeSpec, KICSInterest, SCRResult,
@@ -28,7 +28,7 @@ from fastcashflow.solvency._assessment import (
     Assessment, InteractionResult, StochasticAssessment, DynamicAssessment,
     equity_scr, property_scr, fx_scr, concentration_scr, credit_scr,
     operational_scr, basic_scr,
-    _market_cal, _module_interest,
+    _market_cal,
 )
 
 __all__ = [

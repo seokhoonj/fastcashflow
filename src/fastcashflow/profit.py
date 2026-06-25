@@ -24,7 +24,6 @@ from dataclasses import dataclass
 import numpy as np
 
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.report import report as _report
 
 

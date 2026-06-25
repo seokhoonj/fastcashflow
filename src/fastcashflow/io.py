@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import importlib.resources as resources
 import warnings
-from dataclasses import replace
 from functools import singledispatch
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -91,7 +90,6 @@ def _write_frame(df: pl.DataFrame, path) -> None:
         # Caveat: openpyxl reads an all-None row back as a blank separator, so
         # a fully-null data row would not survive an xlsx round-trip. Use csv,
         # parquet or feather for round-tripping frames that may carry such rows.
-        import openpyxl
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.append(list(df.columns))

@@ -140,21 +140,6 @@ def _discounted_growth(
     return av_factor * discount_factor
 
 
-def _pv_account_benefits(
-    exit_value: FloatArray,
-    monthly_credit: FloatArray,
-    monthly_return: FloatArray,
-    fund_fee_m: float,
-) -> FloatArray:
-    """PV of account-value exit benefits given monthly credit and return paths.
-
-    ``exit_value`` is the ``(n_time,)`` portfolio total of account value times
-    exiting policies per month, before any growth. Returns the
-    ``(n_scenarios,)`` present value.
-    """
-    return _discounted_growth(monthly_credit, monthly_return, fund_fee_m) @ exit_value
-
-
 def tvog_weights(
     *,
     minimum_crediting_rate: float,

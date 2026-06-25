@@ -11,7 +11,7 @@ model and the cash-flow gap), :mod:`fastcashflow.alm` and
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -24,17 +24,16 @@ from fastcashflow.basis import Basis
 from fastcashflow._measurement.gmm import measure
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.alm import (
-    Bond, bond_value, bond_duration, effective_maturity, _annual_df,
+    Bond, bond_value, bond_duration, effective_maturity,
 )
 from fastcashflow.solvency._engine import (
     RegimeSpec, required_capital,
     KICSInterest, interest_with_dynamic_lapse,
 )
 from fastcashflow.assets import (
-    Equity, Property, Cash, AssetPortfolio, holding_value, asset_portfolio_value,
-    available_capital, asset_portfolio_cashflows, asset_value_path,
-    asset_value_by_scenario,
-    CashflowGap, cashflow_gap, vfa_cashflow_gap, liquidate, LiquidationResult,
+    Equity, Property, AssetPortfolio, holding_value, asset_portfolio_value,
+    available_capital, asset_value_by_scenario,
+    cashflow_gap, liquidate, LiquidationResult,
 )
 
 

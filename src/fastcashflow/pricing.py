@@ -15,7 +15,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._measurement.gmm import measure

@@ -30,8 +30,6 @@ with the policyholder bearing the investment risk.
 """
 from __future__ import annotations
 
-from typing import ClassVar
-
 import math
 from dataclasses import dataclass
 
@@ -39,12 +37,7 @@ import numpy as np
 
 from fastcashflow._measurement.model import VFA
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow._measurement.basis import (
-    MEASUREMENT_BASIS_INCEPTION,
-    MEASUREMENT_BASIS_SETTLEMENT,
-    MEASUREMENT_BASIS_SETTLEMENT_CARRY,
-    _inforce_marker_columns,
-)
+from fastcashflow._measurement.basis import _inforce_marker_columns
 from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import (
     write_measurement, _write_measurement_columns,

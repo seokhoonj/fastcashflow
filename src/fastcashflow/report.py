@@ -33,7 +33,7 @@ from functools import singledispatch
 import numpy as np
 
 from fastcashflow._measurement.model import (
-    GMM, REINSURANCE, model_tag, supported_model_tags,
+    GMM, model_tag, supported_model_tags,
 )
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates

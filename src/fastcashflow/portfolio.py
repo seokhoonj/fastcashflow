@@ -24,7 +24,7 @@ from typing import ClassVar
 import numpy as np
 import polars as pl
 
-from fastcashflow._measurement.model import VFA, model_tag
+from fastcashflow._measurement.model import model_tag
 from fastcashflow._typing import IntArray
 from fastcashflow._measurement.paa import (
     measure_aggregate as _paa_aggregate,
