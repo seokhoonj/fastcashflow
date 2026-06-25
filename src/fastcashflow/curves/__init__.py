@@ -18,9 +18,10 @@ One namespace for everything about the term-structure curve, in two activities:
   past the end.
 
 The discount/transform helpers are defined here; the builders are re-exported
-from :mod:`fastcashflow._smith_wilson` / :mod:`fastcashflow._nelson_siegel` so the
-whole curve domain has one home. ``project_cashflows`` (which CONSUMES a curve to
-project cash flows) lives in :mod:`fastcashflow.core`, not here.
+from :mod:`fastcashflow.curves._smith_wilson` /
+:mod:`fastcashflow.curves._nelson_siegel` so the whole curve domain has one
+home. ``project_cashflows`` (which CONSUMES a curve to project cash flows)
+lives in :mod:`fastcashflow.core`, not here.
 """
 from __future__ import annotations
 
@@ -29,9 +30,9 @@ import numpy as np
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
 # Curve builders -- re-exported so fcf.curves is the single home for the domain.
-from fastcashflow._smith_wilson import (
+from fastcashflow.curves._smith_wilson import (
     smith_wilson, smith_wilson_alpha, smith_wilson_prices)
-from fastcashflow._nelson_siegel import (
+from fastcashflow.curves._nelson_siegel import (
     nelson_siegel, nelson_siegel_svensson, fit_nelson_siegel_svensson,
     NelsonSiegelSvensson)
 

@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow._nelson_siegel import _ns_loadings
+from fastcashflow.curves._nelson_siegel import _ns_loadings
 
 
 _PARAMS = dict(beta0=0.04, beta1=-0.02, beta2=0.01, beta3=0.005,
