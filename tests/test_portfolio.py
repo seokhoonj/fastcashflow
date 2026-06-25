@@ -14,7 +14,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow import Basis, ModelPoints, CoverageRate
 from fastcashflow import group
-from fastcashflow._paa import measure_paa
+from fastcashflow._measurement import paa as _paa
 from fastcashflow._measurement import vfa as _vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow.portfolio import measure, PortfolioMeasurement, ModelMeasurement
@@ -73,7 +73,7 @@ def test_portfolio_rejects_single_basis():
 
 def test_portfolio_measures_paa_rows_matching_measure_paa():
     """A PAA segment is now executed (P-4), not raised: the portfolio's PAA
-    slice is identical to measure_paa on that subset -- routing is a no-op."""
+    slice is identical to _paa.measure on that subset -- routing is a no-op."""
     router = BasisRouter({("A", "GA"): _flat_basis(), ("B", "GA"): _flat_basis()},
                          measurement_models={("B", "GA"): "PAA"})
     mp = ModelPoints(                               # row 0 GMM, rows 1-2 PAA
@@ -85,7 +85,7 @@ def test_portfolio_measures_paa_rows_matching_measure_paa():
     assert pm.gmm.index.tolist() == [0]
     assert pm.paa.index.tolist() == [1, 2]
     assert pm.vfa is None
-    ref = measure_paa(mp.subset([1, 2]), _flat_basis())
+    ref = _paa.measure(mp.subset([1, 2]), _flat_basis())
     assert np.allclose(pm.paa.measurement.lrc, ref.lrc)
     assert np.allclose(pm.paa.measurement.lrc_path, ref.lrc_path)
     assert np.allclose(pm.paa.measurement.revenue, ref.revenue)
@@ -95,7 +95,7 @@ def test_portfolio_measures_paa_rows_matching_measure_paa():
 
 def test_portfolio_paa_stitches_ragged_segments():
     """Two PAA segments with different coverage terms stitch into one ragged
-    Measurement -- each row matches its standalone measure_paa, the shorter
+    Measurement -- each row matches its standalone _paa.measure, the shorter
     segment zero-padded on the right (LRC is fully earned past coverage)."""
     router = BasisRouter(
         {("P", "GA"): _flat_basis(), ("Q", "GA"): _flat_basis()},
@@ -108,8 +108,8 @@ def test_portfolio_paa_stitches_ragged_segments():
         calculation_methods=PATTERNS)
     pm = measure(mp, router)
     assert pm.paa.index.tolist() == [0, 1, 2]
-    refP = measure_paa(mp.subset([0, 2]), _flat_basis())
-    refQ = measure_paa(mp.subset([1]), _flat_basis())
+    refP = _paa.measure(mp.subset([0, 2]), _flat_basis())
+    refQ = _paa.measure(mp.subset([1]), _flat_basis())
     wP, wQ = refP.lrc_path.shape[1], refQ.lrc_path.shape[1]
     assert np.allclose(pm.paa.measurement.lrc_path[[0, 2], :wP], refP.lrc_path)
     assert np.allclose(pm.paa.measurement.lrc_path[1, :wQ], refQ.lrc_path[0])
@@ -257,7 +257,7 @@ def test_portfolio_measures_all_three_models_in_one_call():
     assert np.allclose(pm.gmm.measurement.bel,
                        fcf.gmm.measure(mp.subset([0]), _flat_basis()).bel)
     assert np.allclose(pm.paa.measurement.lrc_path,
-                       measure_paa(mp.subset([1]), _flat_basis()).lrc_path)
+                       _paa.measure(mp.subset([1]), _flat_basis()).lrc_path)
     assert np.allclose(pm.vfa.measurement.csm,
                        _vfa.measure(mp.subset([2, 3]),
                                    _flat_basis(investment_return=0.04)).csm)
@@ -577,7 +577,7 @@ def test_single_model_paa_router_skips_partition(monkeypatch):
     assert calls == []
     assert pm.paa.index.tolist() == [0, 1] and pm.gmm is None
     assert np.allclose(pm.paa.measurement.lrc_path[0],
-                       measure_paa(mp.subset([0]), _flat_basis()).lrc_path[0])
+                       _paa.measure(mp.subset([0]), _flat_basis()).lrc_path[0])
 
 
 def test_single_model_vfa_router_skips_partition(monkeypatch):

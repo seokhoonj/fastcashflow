@@ -26,16 +26,15 @@ import polars as pl
 
 from fastcashflow._measurement.model import VFA, model_tag
 from fastcashflow._typing import IntArray
-from fastcashflow._paa import (
-    measure_paa, measure_aggregate as _paa_aggregate,
-    measure_inforce as _paa_inforce,
-    _stitch_paa_measurements, _scatter_paa_headline)
+from fastcashflow._measurement.paa import (
+    measure_aggregate as _paa_aggregate,
+    measure_inforce as _paa_inforce)
 from fastcashflow._measurement.vfa import (
     measure_aggregate as _vfa_aggregate,
     measure_inforce as _vfa_inforce, _require_settlement_csm,
     settle as _settle_vfa)
 from fastcashflow._measurement import gmm as _gmm
-import fastcashflow._paa as _paa
+from fastcashflow._measurement import paa as _paa
 from fastcashflow._measurement import vfa as _vfa
 from fastcashflow.basis import BasisRouter
 from fastcashflow._measurement.gmm import (
@@ -259,7 +258,7 @@ _SLOT_MEASUREMENT_TYPE = {
 #: not here: it routes through ``fcf.gmm.measure`` (its own ``full`` flag and
 #: segment stitch), not the PAA/VFA scatter.
 _MODEL_EXEC = {
-    "PAA": (measure_paa, _stitch_paa_measurements, _scatter_paa_headline),
+    "PAA": (_paa.measure, _paa._stitch_measurements, _paa._scatter_headline),
     "VFA": (_vfa.measure, _vfa._stitch_measurements, _vfa._scatter_headline)}
 
 #: Default chunk for the ``full=False`` PAA/VFA path -- matches
@@ -273,7 +272,7 @@ _CHUNK_SIZE = 200_000
 #: discount curve.
 _MEASURE_FULL = {
     "GMM": lambda mp, b: _measure_gmm(mp, b, full=True),
-    "PAA": lambda mp, b: measure_paa(mp, b, full=True),
+    "PAA": lambda mp, b: _paa.measure(mp, b, full=True),
     "VFA": lambda mp, b: _vfa.measure(mp, b, full=True)}
 
 #: Per model: the leaf bounded-memory aggregate (single Basis). ``measure_aggregate``
@@ -552,7 +551,7 @@ def _measure_model_segmented(sub_mp, sub_router, model, *, full=True,
                              chunk_size=_CHUNK_SIZE, return_scenarios=None):
     """Measure one model's partition that spans several routing segments.
 
-    ``measure_paa`` / ``vfa.measure`` take a single :class:`Basis`, so the
+    ``paa.measure`` / ``vfa.measure`` take a single :class:`Basis`, so the
     orchestrator splits the partition by segment and combines the per-segment
     results -- the PAA / VFA analogue of the GMM ``_measure_segmented``.
 
@@ -1798,7 +1797,7 @@ def _resolve_full_group_ids(model_points, by):
 #: Per model: the single-Basis headline-only measure, for the default
 #: profitability axis (loss component at inception).
 _HEADLINE_MEASURE = {
-    "GMM": _measure_gmm, "PAA": measure_paa, "VFA": _vfa.measure}
+    "GMM": _measure_gmm, "PAA": _paa.measure, "VFA": _vfa.measure}
 
 
 # ---------------------------------------------------------------------------

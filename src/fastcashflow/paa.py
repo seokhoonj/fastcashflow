@@ -10,10 +10,10 @@ view, valuing an in-force book's remaining LRC at its valuation date (the
 PAA has no CSM, so there is no carry); ``trace`` walks one model point's PAA
 measurement.
 """
-from fastcashflow._paa import (
+from fastcashflow._measurement.paa import (
     Measurement, Aggregate, PeriodMovement, Reconciliation, SettlementMovement,
     SettlementReconciliation, SettlementAggregate,
-    measure_paa as measure, measure_aggregate,
+    measure, measure_aggregate,
     measure_inforce, measure_stream, settle, settle_aggregate, settle_stream)
 from fastcashflow.trace import (
     show_trace_paa as trace, show_trace_diff_paa as trace_diff)

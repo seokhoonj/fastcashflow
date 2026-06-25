@@ -29,7 +29,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow._measurement.gmm import measure
 from fastcashflow.model_points import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow.numerics import _norm_ppf
-from fastcashflow._paa import measure_paa
+from fastcashflow._measurement import paa as _paa
 from fastcashflow._reinsurance import QuotaShare, Treaty, measure_reinsurance
 from fastcashflow._measurement import vfa as _vfa
 
@@ -839,7 +839,7 @@ def show_trace_paa(
     i = mp_index
     basis = _resolve_basis(basis, model_points, i)
     sub = model_points.subset([i])
-    m = measure_paa(sub, basis, revenue_basis=revenue_basis)
+    m = _paa.measure(sub, basis, revenue_basis=revenue_basis)
 
     # ---- Header
     sex_v = int(sub.sex[0]) if sub.sex is not None else 0
@@ -1531,8 +1531,8 @@ def show_trace_diff_paa(
     ra_basis = _resolve_basis(basis_a, model_points, i)
     rb_basis = _resolve_basis(basis_b, model_points, i)
     sub = model_points.subset([i])
-    ma = measure_paa(sub, ra_basis, revenue_basis=revenue_basis)
-    mb = measure_paa(sub, rb_basis, revenue_basis=revenue_basis)
+    ma = _paa.measure(sub, ra_basis, revenue_basis=revenue_basis)
+    mb = _paa.measure(sub, rb_basis, revenue_basis=revenue_basis)
 
     final_lines: list[object] = [
         f"LRC[0]          {_money_delta(float(ma.lrc[0]), float(mb.lrc[0]))}",

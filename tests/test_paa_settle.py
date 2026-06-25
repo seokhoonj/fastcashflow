@@ -204,7 +204,7 @@ def test_loss_component_recalculation_hand_calc():
 
 def test_inception_anchor_matches_measure_paa():
     """em_open == 0 with prior_count == count(0): the opening LC IS the
-    inception onerous test of measure_paa."""
+    inception onerous test of paa.measure."""
     basis = _basis(mortality_q=0.002)
     surv = _unit_inforce(basis, **ONEROUS)
     mp, state = _book(**ONEROUS, em_close=3, prior_count=1.0,
