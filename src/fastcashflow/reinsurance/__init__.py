@@ -36,10 +36,10 @@ from fastcashflow.trace import (
     show_trace_reinsurance as trace,
     show_trace_diff_reinsurance as trace_diff,
 )
-# Assumed / mass-lapse reinsurance toolkit, nested as fcf.reinsurance.mass_lapse.
-# (The facade module imports only the _mass_lapse_reinsurance package, never
-# the reinsurance held-measurement engine, so this binding is cycle-free.)
-import fastcashflow.mass_lapse_reinsurance as mass_lapse
+# Assumed / mass-lapse reinsurance toolkit, exposed as fcf.reinsurance.mass_lapse.
+# The mass_lapse submodule imports only the private _mass_lapse_reinsurance
+# package (never this held-measurement facade), so this binding is cycle-free.
+from fastcashflow.reinsurance import mass_lapse
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",
            "measure_inforce_aggregate", "measure_stream",
