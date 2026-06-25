@@ -373,7 +373,7 @@ def test_pv_path_reverse_cumsum_anchors():
     inception PV (the whole-stream sum at unit discount), the terminal column is
     0 (nothing left), and with positive flows it decays monotonically. A
     non-unit discount re-anchors each column by its bom factor."""
-    from fastcashflow._reinsurance import _pv_path
+    from fastcashflow._measurement.reinsurance import _pv_path
 
     month_pv = np.array([[4.0, 3.0, 2.0, 1.0]])      # (1 mp, 4 months)
     p = _pv_path(month_pv, np.ones(5))               # unit discount, n_time+1

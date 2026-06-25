@@ -266,7 +266,7 @@ def _single_basis(basis, *, entry: str) -> "Basis":
     """Resolve a :class:`Basis` or :class:`BasisRouter` to a single ``Basis``.
 
     The entry points that do not route segments (``vfa.measure`` /
-    ``paa.measure`` / ``measure_reinsurance`` / ``measure_inforce``) accept a
+    ``paa.measure`` / ``reinsurance.measure`` / ``measure_inforce``) accept a
     one-segment :class:`BasisRouter` and unwrap it; a genuinely multi-segment
     router is rejected with an actionable message rather than crashing deep in
     the kernel. A plain :class:`Basis` passes through unchanged. A bare ``dict``

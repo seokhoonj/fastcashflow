@@ -36,7 +36,7 @@ from fastcashflow._measurement.gmm import _require_full
 from fastcashflow._measurement import gmm as _gmm
 from fastcashflow._measurement import paa as _paa
 from fastcashflow._measurement import vfa as _vfa
-import fastcashflow._reinsurance as _reinsurance
+from fastcashflow._measurement import reinsurance as _reinsurance
 from fastcashflow._measurement.basis import _require_inception
 from fastcashflow.numerics import _csm_kernel, _csm_roll
 from fastcashflow.projection import Cashflows

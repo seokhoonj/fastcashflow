@@ -20,7 +20,7 @@ from fastcashflow._measurement.model import (
 from fastcashflow._measurement.gmm import Measurement as _GmmMeasurement
 from fastcashflow._measurement.vfa import Measurement as _VfaMeasurement
 from fastcashflow._measurement.paa import Measurement as _PaaMeasurement
-from fastcashflow._reinsurance import Measurement as _ReinsuranceMeasurement
+from fastcashflow._measurement.reinsurance import Measurement as _ReinsuranceMeasurement
 from fastcashflow.grouping import group, group_of_contracts
 from fastcashflow.io import write_measurement
 from fastcashflow.report import report

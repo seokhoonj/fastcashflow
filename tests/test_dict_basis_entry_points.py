@@ -4,7 +4,7 @@ Regression for P1-2: ``read_basis`` ALWAYS returns a ``BasisRouter`` (a
 dict subclass), so even a single-segment workbook arrives as a one-entry
 dict. ``gmm.measure`` and ``gmm.measure_inforce`` ROUTE a dict per segment;
 the other entry points (``vfa.measure`` / ``paa.measure`` /
-``measure_reinsurance``) used to crash on it with a deep ``AttributeError``.
+``reinsurance.measure``) used to crash on it with a deep ``AttributeError``.
 They now unwrap a single-segment dict and reject a genuinely multi-segment
 dict with an actionable ``ValueError`` -- so the documented file -> measure
 workflow works on the shipped sample.
