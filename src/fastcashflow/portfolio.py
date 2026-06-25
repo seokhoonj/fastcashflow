@@ -25,7 +25,7 @@ import numpy as np
 import polars as pl
 
 from fastcashflow._measurement.model import model_tag
-from fastcashflow._typing import IntArray
+from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow._measurement.paa import (
     measure_aggregate as _paa_aggregate,
     measure_inforce as _paa_inforce)
@@ -920,44 +920,44 @@ class GoCSettlement:
     group_labels: np.ndarray
     group_sizes: IntArray
     period_months: int
-    bel_opening: np.ndarray
-    bel_interest: np.ndarray
-    bel_release: np.ndarray
-    bel_experience: np.ndarray
-    bel_closing: np.ndarray
-    ra_opening: np.ndarray
-    ra_interest: np.ndarray
-    ra_release: np.ndarray
-    ra_experience: np.ndarray
-    ra_closing: np.ndarray
-    finance_wedge: np.ndarray
-    premium_experience_revenue: np.ndarray
-    csm_opening: np.ndarray
-    csm_accretion: np.ndarray
-    csm_experience_unlocking: np.ndarray
-    csm_premium_experience: np.ndarray
-    csm_investment_experience: np.ndarray
-    claims_experience: np.ndarray
-    expense_experience: np.ndarray
-    loss_component_opening: np.ndarray
-    loss_component_finance: np.ndarray
-    loss_component_amortised: np.ndarray
-    lic_opening: np.ndarray
-    claims_incurred: np.ndarray
-    lic_finance: np.ndarray
-    claims_paid: np.ndarray
-    lic_closing: np.ndarray
-    coverage_units_provided: np.ndarray
-    coverage_units_future: np.ndarray
-    csm_release: np.ndarray
-    csm_closing: np.ndarray
-    loss_component_reversed: np.ndarray
-    loss_component_recognised: np.ndarray
-    loss_component_closing: np.ndarray
-    lock_in_rate: np.ndarray
+    bel_opening: FloatArray
+    bel_interest: FloatArray
+    bel_release: FloatArray
+    bel_experience: FloatArray
+    bel_closing: FloatArray
+    ra_opening: FloatArray
+    ra_interest: FloatArray
+    ra_release: FloatArray
+    ra_experience: FloatArray
+    ra_closing: FloatArray
+    finance_wedge: FloatArray
+    premium_experience_revenue: FloatArray
+    csm_opening: FloatArray
+    csm_accretion: FloatArray
+    csm_experience_unlocking: FloatArray
+    csm_premium_experience: FloatArray
+    csm_investment_experience: FloatArray
+    claims_experience: FloatArray
+    expense_experience: FloatArray
+    loss_component_opening: FloatArray
+    loss_component_finance: FloatArray
+    loss_component_amortised: FloatArray
+    lic_opening: FloatArray
+    claims_incurred: FloatArray
+    lic_finance: FloatArray
+    claims_paid: FloatArray
+    lic_closing: FloatArray
+    coverage_units_provided: FloatArray
+    coverage_units_future: FloatArray
+    csm_release: FloatArray
+    csm_closing: FloatArray
+    loss_component_reversed: FloatArray
+    loss_component_recognised: FloatArray
+    loss_component_closing: FloatArray
+    lock_in_rate: FloatArray
     model_points: ModelPoints | None = None
     group_inverse: IntArray | None = None
-    lock_in_rate_by_mp: np.ndarray | float = 0.0
+    lock_in_rate_by_mp: FloatArray | float = 0.0
     profitability_by_mp: np.ndarray | None = None
     measurement_basis: str = "settlement"
 

@@ -36,7 +36,7 @@ import openpyxl
 import polars as pl
 
 from fastcashflow._measurement.model import model_tag, supported_model_tags
-from fastcashflow._typing import FloatArray
+from fastcashflow._typing import FloatArray, IntArray
 from fastcashflow.basis import (
     Basis, BasisRouter, CoverageRate, ExpenseItem,
 )
@@ -914,7 +914,7 @@ def read_basis(path: Path | str) -> "BasisRouter":
 # Model points -- built from policies + coverages frames
 # ---------------------------------------------------------------------------
 
-def _read_state(col: pl.Series) -> np.ndarray:
+def _read_state(col: pl.Series) -> IntArray:
     """Convert a model-point ``state`` column to engine state codes.
 
     Accepts the readable names a practitioner edits in a spreadsheet --
