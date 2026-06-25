@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 import fastcashflow as fcf
-from fastcashflow import mass_lapse_reinsurance as lre
+from fastcashflow.reinsurance import mass_lapse as lre
 from fastcashflow import solvency as sv
 from fastcashflow.solvency import _assessment as sa
 from fastcashflow import assets, alm

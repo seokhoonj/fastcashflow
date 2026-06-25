@@ -1,4 +1,4 @@
-"""Mass-lapse reinsurance namespace -- ``fcf.mass_lapse_reinsurance.*``.
+"""Mass-lapse reinsurance namespace -- ``fcf.reinsurance.mass_lapse.*``.
 
 A non-proportional (lapse excess-of-loss) treaty that transfers the tail of
 mass-lapse risk and reduces the cedant's standard-formula lapse capital. The

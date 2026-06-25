@@ -1,7 +1,7 @@
 """Mass-lapse reinsurance implementation package.
 
 Private -- the public surface is the facade module
-:mod:`fastcashflow.mass_lapse_reinsurance` (``fcf.mass_lapse_reinsurance``).
+:mod:`fastcashflow.reinsurance.mass_lapse` (``fcf.reinsurance.mass_lapse``).
 Layered cedant -> reinsurer -> report (a one-directional DAG, no cycle). This
 __init__ re-exports the names the facade and cross-module callers import from
 ``fastcashflow._mass_lapse_reinsurance``.

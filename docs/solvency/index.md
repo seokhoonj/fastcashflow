@@ -27,7 +27,7 @@
 :class: note
 이 트랙은 현재 **뼈대만** 잡혀 있습니다. 각 챕터는 학습 목표와 다룰 내용의
 윤곽만 있고, 실행 예제 (`fcf` 코드 + 출력) 는 순차적으로 채워집니다. 자산측
-엔진 (`fcf.assets`) 과 대량해지 엔진 (`fcf.mass_lapse_reinsurance`) 은 이미
+엔진 (`fcf.assets`) 과 대량해지 엔진 (`fcf.reinsurance.mass_lapse`) 은 이미
 구현 · 테스트되어 있으므로, 남은 일은 서술과 예제입니다.
 :::
 

@@ -122,8 +122,8 @@ def assess(portfolio: AssetPortfolio, model_points: ModelPoints,
     fourth top-level module (table 3: life-vs-general 0, else 0.25); the life-only
     engine leaves it at 0.
 
-    ``relief`` (a :class:`~fastcashflow.mass_lapse_reinsurance.CedantSolvencyRelief`
-    from :func:`~fastcashflow.mass_lapse_reinsurance.cedant_solvency_relief`) folds
+    ``relief`` (a :class:`~fastcashflow.reinsurance.mass_lapse.CedantSolvencyRelief`
+    from :func:`~fastcashflow.reinsurance.mass_lapse.cedant_solvency_relief`) folds
     a mass-lapse reinsurance treaty into the ratio: the insurance module drops by
     ``relief.insurance_relief`` (the diversified life-module lapse relief), the
     counterparty-default charge ``relief.counterparty_default`` is added into the
