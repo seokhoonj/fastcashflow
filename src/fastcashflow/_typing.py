@@ -1,9 +1,14 @@
 """Shared type aliases.
 
-``FloatArray`` / ``IntArray`` are the canonical names for the numpy 1D/2D
-arrays the engine moves around -- they exist so that an explicit
-``NDArray[np.float64]`` doesn't appear in every signature. ``RateFn``
-describes the unified callable shape every annual rate assumption uses.
+``FloatArray`` / ``IntArray`` / ``BoolArray`` are the canonical names for the
+numpy 1D/2D arrays the engine *computes on* -- they exist so that an explicit
+``NDArray[np.float64]`` doesn't appear in every signature. A bare ``np.ndarray``
+annotation is reserved, deliberately, for non-compute metadata arrays the engine
+only carries (object-dtype group labels / segment codes / mp ids, datetime issue
+dates) and for heterogeneous ``dict[str, np.ndarray]`` / ``list[np.ndarray]``
+containers whose element dtype varies: there a typed alias would assert a dtype
+the array does not have. ``RateFn`` describes the unified callable shape every
+annual rate assumption uses.
 """
 from __future__ import annotations
 
@@ -14,6 +19,7 @@ from numpy.typing import NDArray
 
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
+BoolArray = NDArray[np.bool_]
 
 # The unified rate callable shape -- every annual rate function in
 # Basis (mortality, lapse, waiver_incidence, ci_incidence, and the

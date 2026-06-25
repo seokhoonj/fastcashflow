@@ -35,7 +35,7 @@ from types import MappingProxyType
 
 import numpy as np
 
-from fastcashflow._typing import FloatArray, IntArray
+from fastcashflow._typing import BoolArray, FloatArray, IntArray
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,10 +73,10 @@ class CompiledStateModel:
     edge_from: IntArray
     edge_to: IntArray
     edge_prob: FloatArray
-    edge_lump_sum: np.ndarray
+    edge_lump_sum: BoolArray
     n_states: int
-    premium_state: np.ndarray
-    benefit_state: np.ndarray
+    premium_state: BoolArray
+    benefit_state: BoolArray
     state_duration_max: IntArray | None = None
     periodic_benefit_term_months: IntArray | None = None
     # Per-state exact in-force death-exit probability -- ``survive x mortality``,
@@ -99,7 +99,7 @@ class CompiledStateModel:
     # (or dropped), instead of advancing along the residual stay edge.
     state_det_at: IntArray | None = None
     state_det_to: IntArray | None = None
-    state_det_lump: np.ndarray | None = None
+    state_det_lump: BoolArray | None = None
 
 
 @dataclass(frozen=True, slots=True)
