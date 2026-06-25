@@ -24,7 +24,7 @@ from fastcashflow._measurement.reinsurance import Measurement as _ReinsuranceMea
 from fastcashflow.grouping import group, group_of_contracts
 from fastcashflow.io import write_measurement
 from fastcashflow.report import report
-from fastcashflow.movement import roll_forward
+from fastcashflow._measurement.movement import roll_forward
 from fastcashflow.disclosure import reconciliation_to_frame
 
 

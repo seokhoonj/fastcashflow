@@ -46,7 +46,7 @@ from fastcashflow.model_points import (
     align_inforce_state,
     apply_inforce_state,
 )
-from fastcashflow.movement import reconcile, roll_forward
+from fastcashflow._measurement.movement import reconcile, roll_forward
 from fastcashflow.plots import (
     plot_analysis_of_change,
     plot_cashflows,
@@ -75,7 +75,7 @@ from fastcashflow.state_model import (
     Transition,
 )
 from fastcashflow._measurement.stochastic import StochasticResult
-from fastcashflow.transition import transition
+from fastcashflow._measurement.transition import transition
 from fastcashflow.tvog import TVOGResult
 from fastcashflow.portfolio import settle_group_of_contracts
 from fastcashflow import (  # namespaces

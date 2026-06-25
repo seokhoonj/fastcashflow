@@ -49,7 +49,7 @@ from fastcashflow.grouping import (
     group, group_of_contracts, _GroupReducer, _join_keys, _finalise_gmm_group,
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
 from fastcashflow.model_points import ModelPoints, InforceState, align_inforce_state
-from fastcashflow.movement import roll_forward, reconcile
+from fastcashflow._measurement.movement import roll_forward, reconcile
 from fastcashflow.numerics import _csm_loss_component_step
 from fastcashflow.projection import Cashflows
 from fastcashflow.report import report, Report

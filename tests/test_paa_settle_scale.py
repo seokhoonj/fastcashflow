@@ -13,7 +13,7 @@ import polars as pl
 
 import fastcashflow as fcf
 from fastcashflow import InforceState, ModelPoints
-from fastcashflow.movement import reconcile
+from fastcashflow._measurement.movement import reconcile
 from conftest import PATTERNS, make_death_basis
 
 settle_aggregate = getattr(fcf.paa, "settle_aggregate", None)

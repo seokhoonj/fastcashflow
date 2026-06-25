@@ -21,7 +21,7 @@ from fastcashflow.gmm import measure
 # gmm.measure_inforce; called directly here (as in tests/test_inforce.py) so the
 # re-anchor sweep does not need to build an InforceState.
 from fastcashflow._measurement.gmm import _measure_inforce_fast
-from fastcashflow.movement import roll_forward
+from fastcashflow._measurement.movement import roll_forward
 
 
 def _flat_rate(value):
