@@ -46,12 +46,14 @@ def _eval_rate(
     """Evaluate a 5-arg rate callable at scalar inputs and return a float."""
     if fn is None:
         return 0.0
-    s = np.array([sex], dtype=np.int64)
-    a = np.array([issue_age], dtype=np.float64)
-    d = np.array([duration], dtype=np.int64)
-    ic = np.array([issue_class], dtype=np.int64)
-    em = np.array([elapsed], dtype=np.int64)
-    return float(np.asarray(fn(s, a, d, ic, em)).flat[0])
+    rate = fn(
+        np.array([sex], dtype=np.int64),
+        np.array([issue_age], dtype=np.float64),
+        np.array([duration], dtype=np.int64),
+        np.array([issue_class], dtype=np.int64),
+        np.array([elapsed], dtype=np.int64),
+    )
+    return float(np.asarray(rate).flat[0])
 
 
 def _key_months(term: int, n_time: int) -> list[int]:
@@ -83,7 +85,7 @@ def _resolve_basis(
 ) -> Basis:
     """Return the :class:`Basis` to use for row ``i``.
 
-    Mirrors the dict-routing behaviour of :func:`show_trace`. Factored
+    Mirrors the dict-routing behaviour of :func:`trace`. Factored
     out so the diff variant can resolve two bases the same way.
     """
     if not isinstance(basis, BasisRouter):

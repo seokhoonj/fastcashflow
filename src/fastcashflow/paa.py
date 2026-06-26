@@ -15,8 +15,8 @@ from fastcashflow._measurement.paa import (
     SettlementReconciliation, SettlementAggregate,
     measure, measure_aggregate,
     measure_inforce, measure_stream, settle, settle_aggregate, settle_stream)
-from fastcashflow.trace import (
-    show_trace_paa as trace, show_trace_diff_paa as trace_diff)
+from fastcashflow._trace.paa import (
+    trace, trace_diff)
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce", "measure_stream",
            "settle", "settle_aggregate", "settle_stream",

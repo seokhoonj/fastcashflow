@@ -144,7 +144,7 @@ def test_reinsurance_trace_renders_and_matches_measure():
 
 
 def test_reinsurance_trace_routes_a_dict_basis():
-    """A dict / BasisRouter basis routes by (product, channel), like show_trace."""
+    """A dict / BasisRouter basis routes by (product, channel), like trace."""
     import io
 
     mp = fcf.samples.model_points()

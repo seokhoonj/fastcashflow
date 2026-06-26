@@ -1,13 +1,13 @@
 """Step-by-step calculation trace for a single GMM model point.
 
-:func:`show_trace` renders the BEL / RA / CSM build of one contract as an
+:func:`trace` renders the BEL / RA / CSM build of one contract as an
 ASCII tree: which segment-level tables apply, which rates were looked up
 year by year, what cash flows came out, how those discount and roll
 forward to the headline numbers. Intended for hand-checking against an
 external pricing system or an actuary's own spreadsheet -- find the step
 where the engine and the expectation diverge.
 
-:func:`show_trace_diff` is the two-basis variant: it shows, at each step,
+:func:`trace_diff` is the two-basis variant: it shows, at each step,
 how a change of assumption propagates -- which rate moved, by how much,
 which cash flow shifted, and what the net effect on BEL / RA / CSM is.
 The right tool for shock analysis and what-if questions.
@@ -27,13 +27,13 @@ from fastcashflow.coverage import CalculationMethod, method_attrs
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.model_points import ModelPoints
 from fastcashflow._measurement.gmm import measure
-from fastcashflow.trace._common import (
+from fastcashflow._trace.common import (
     _emit_tree, _fmt_callable, _eval_rate, _key_months, _colw,
     _resolve_basis, _money_delta, _rate_delta, _basis_diff_lines,
 )
 
 
-def show_trace(
+def trace(
     mp_index: int,
     model_points: ModelPoints,
     basis: Basis | dict,
@@ -295,7 +295,7 @@ def show_trace(
     # ---- Universal-life account mechanic (only when the contract is an
     # account book -- cf.account is the AccountTrajectory sidecar the shared
     # projection populates). Gated on account is not None so a non-account
-    # contract's trace stays byte-identical. This mirrors show_trace_vfa's
+    # contract's trace stays byte-identical. This mirrors trace_vfa's
     # account section, but for the GMM-measured UL: the account value carried
     # forward, the COI charged, the net amount at risk the COI prices, the
     # in-force-weighted fund the BEL nets, and that the death benefit tops the
@@ -500,7 +500,7 @@ def show_trace(
     file.write("\n".join(out) + "\n")
 
 
-def show_trace_diff(
+def trace_diff(
     mp_index: int,
     model_points: ModelPoints,
     basis_a: Basis | dict,
@@ -741,7 +741,7 @@ def show_trace_diff(
     file.write("\n".join(out) + "\n")
 
 
-def show_trace_bel_step(
+def trace_bel_step(
     mp_index: int,
     model_points: ModelPoints,
     basis: Basis | dict,
@@ -777,7 +777,7 @@ def show_trace_bel_step(
     basis
         A :class:`Basis` or the :class:`~fastcashflow.BasisRouter` from
         :func:`fastcashflow.io.read_basis` (routed by the row's
-        ``(product, channel)`` like :func:`show_trace`).
+        ``(product, channel)`` like :func:`trace`).
     months
         Anchor months at which to unroll the recursion. ``None`` uses
         ``{0, 12, term//2, term-1, term}`` -- inception, end of year 1,
@@ -899,11 +899,11 @@ def show_trace_bel_step(
 
 
 # ---------------------------------------------------------------------------
-# show_trace_csm_step -- term-by-term unrolling of the CSM forward recursion
+# trace_csm_step -- term-by-term unrolling of the CSM forward recursion
 # ---------------------------------------------------------------------------
 
 
-def show_trace_csm_step(
+def trace_csm_step(
     mp_index: int,
     model_points: ModelPoints,
     basis: Basis | dict,
@@ -936,7 +936,7 @@ def show_trace_csm_step(
     mp_index
         0-based row index in ``model_points``.
     model_points, basis, file
-        Same shape as :func:`show_trace_bel_step`.
+        Same shape as :func:`trace_bel_step`.
     months
         Months at which to unroll the step (each row shows the
         computation that produced ``csm[t]`` from ``csm[t-1]``).

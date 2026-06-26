@@ -27,8 +27,8 @@ from fastcashflow._measurement.vfa import (
     moneyness_lapse_multiplier, moneyness_lapse_scale,
     measure_stochastic as stochastic)
 from fastcashflow._measurement.tvog import measure_tvog as tvog
-from fastcashflow.trace import (
-    show_trace_vfa as trace, show_trace_diff_vfa as trace_diff)
+from fastcashflow._trace.vfa import (
+    trace, trace_diff)
 from fastcashflow.alm import (
     _vfa_liability_duration as liability_duration,
     _vfa_liability_dv01 as liability_dv01,

@@ -1,8 +1,8 @@
 """Step-by-step calculation trace for one PAA (short-duration) contract.
 
-:func:`show_trace_paa` renders the LRC roll-forward (premium received,
+:func:`trace` renders the LRC roll-forward (premium received,
 revenue recognised), the insurance service result and the LIC as an ASCII
-tree; :func:`show_trace_diff_paa` is its two-basis assumption-change variant.
+tree; :func:`trace_diff` is its two-basis assumption-change variant.
 The PAA carries no CSM, so the tree shows the LRC / revenue movement rather
 than the BEL / CSM build.
 """
@@ -16,13 +16,13 @@ import numpy as np
 from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 from fastcashflow._measurement import paa as _paa
-from fastcashflow.trace._common import (
+from fastcashflow._trace.common import (
     _emit_tree, _fmt_callable, _key_months, _colw, _resolve_basis,
     _money_delta, _basis_diff_lines, _diff_mp_header,
 )
 
 
-def show_trace_paa(
+def trace(
     mp_index: int,
     model_points: ModelPoints,
     basis: Basis | dict,
@@ -33,12 +33,12 @@ def show_trace_paa(
     """Print a tree of how one PAA model point's LRC / revenue / LIC is built.
 
     The PAA (Premium Allocation Approach, the short-duration simplification)
-    counterpart of :func:`show_trace`. PAA has no CSM -- the liability for
+    counterpart of :func:`trace`. PAA has no CSM -- the liability for
     remaining coverage (LRC) is an unearned-premium-style balance -- so the
     tree shows the LRC roll-forward (premium in, revenue released), the
     insurance service result (revenue less service expense) and the
     liability for incurred claims (LIC). Use it on PAA contracts;
-    :func:`show_trace` traces the GMM ``measure`` (BEL / RA / CSM).
+    :func:`trace` traces the GMM ``measure`` (BEL / RA / CSM).
     """
     out: list[str] = []
     if file is None:
@@ -151,7 +151,7 @@ def show_trace_paa(
     file.write("\n".join(out) + "\n")
 
 
-def show_trace_diff_paa(
+def trace_diff(
     mp_index: int,
     model_points: ModelPoints,
     basis_a: Basis | dict,
@@ -165,7 +165,7 @@ def show_trace_diff_paa(
     """Diff one PAA model point's headline (LRC / revenue / service result /
     LIC / loss) across two bases, with the assumption changes that drive it.
 
-    The PAA counterpart of :func:`show_trace_diff` -- a headline-level diff. PAA
+    The PAA counterpart of :func:`trace_diff` -- a headline-level diff. PAA
     has no CSM; the metrics are the unearned-premium LRC, the recognised
     revenue, the insurance service result, the incurred-claims liability peak
     and the loss component.

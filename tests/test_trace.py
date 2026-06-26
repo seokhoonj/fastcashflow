@@ -1,4 +1,4 @@
-"""Sanity tests for ``show_trace`` / ``show_trace_diff`` -- the per-mp
+"""Sanity tests for ``trace`` / ``trace_diff`` -- the per-mp
 calculation walk and the two-basis comparison."""
 import io
 from dataclasses import replace
@@ -9,11 +9,7 @@ import pytest
 import fastcashflow as fcf
 from fastcashflow.basis import Basis, BasisRouter
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.trace import (
-    show_trace_bel_step, show_trace_csm_step, show_trace, show_trace_diff, show_trace_paa,
-    show_trace_vfa,
-)
-from fastcashflow.trace._common import _resolve_basis
+from fastcashflow._trace.common import _resolve_basis
 
 
 def _shock_mortality(rate_fn, factor: float):

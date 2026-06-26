@@ -32,9 +32,9 @@ from fastcashflow._measurement.reinsurance import (
     settle_aggregate,
     settle_stream,
 )
-from fastcashflow.trace import (
-    show_trace_reinsurance as trace,
-    show_trace_diff_reinsurance as trace_diff,
+from fastcashflow._trace.reinsurance import (
+    trace,
+    trace_diff,
 )
 # Assumed / mass-lapse reinsurance toolkit, exposed as fcf.reinsurance.mass_lapse.
 # The mass_lapse submodule imports only the private _mass_lapse

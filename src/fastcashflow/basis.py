@@ -298,7 +298,7 @@ class ExpenseItem:
     expense_type
         Free-form label for reporting / audit (e.g. ``"acquisition"``,
         ``"maintenance"``, ``"collection"``, ``"LAE"``,
-        ``"overhead"``). Engine ignores it; ``show_trace`` and
+        ``"overhead"``). Engine ignores it; ``trace`` and
         ``describe_basis`` echo it.
     basis
         Dispatch key -- one of :data:`EXPENSE_BASES`. The five values

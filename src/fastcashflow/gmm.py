@@ -22,11 +22,11 @@ from fastcashflow._measurement.recognition import CSMRecognitionSchedule
 from fastcashflow.io import measure_stream, settle_stream
 from fastcashflow.pricing import interest_guarantee_tvog
 from fastcashflow._measurement.stochastic import measure_stochastic as stochastic
-from fastcashflow.trace import (
-    show_trace_bel_step as trace_bel_step,
-    show_trace_csm_step as trace_csm_step,
-    show_trace as trace,
-    show_trace_diff as trace_diff,
+from fastcashflow._trace.gmm import (
+    trace,
+    trace_diff,
+    trace_bel_step,
+    trace_csm_step,
 )
 from fastcashflow.alm import (
     liability_duration, liability_dv01, key_rate_dv01s,

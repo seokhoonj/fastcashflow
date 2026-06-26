@@ -1,9 +1,9 @@
 """Step-by-step calculation trace for one held reinsurance contract.
 
-:func:`show_trace_reinsurance` renders the ceded cash flows (recovery,
+:func:`trace` renders the ceded cash flows (recovery,
 reinsurance premium), the BEL = PV(premium) - PV(recovery), the
 risk-transfer RA and the CSM build (net cost / gain, no loss component) as an
-ASCII tree; :func:`show_trace_diff_reinsurance` is its two-basis variant.
+ASCII tree; :func:`trace_diff` is its two-basis variant.
 """
 from __future__ import annotations
 
@@ -16,13 +16,13 @@ from fastcashflow.model_points import ModelPoints
 from fastcashflow.numerics import _norm_ppf
 from fastcashflow._measurement.reinsurance import QuotaShare, Treaty
 from fastcashflow._measurement import reinsurance as _reinsurance
-from fastcashflow.trace._common import (
+from fastcashflow._trace.common import (
     _emit_tree, _fmt_callable, _key_months, _colw, _resolve_basis,
     _money_delta, _basis_diff_lines, _diff_mp_header,
 )
 
 
-def show_trace_reinsurance(
+def trace(
     mp_index: int,
     model_points: ModelPoints,
     basis: Basis | dict,
@@ -32,14 +32,14 @@ def show_trace_reinsurance(
 ) -> None:
     """Print a tree of how one reinsurance-held model point's BEL / RA / CSM is built.
 
-    The reinsurance-held counterpart of :func:`show_trace`. The ``treaty`` (e.g.
+    The reinsurance-held counterpart of :func:`trace`. The ``treaty`` (e.g.
     :class:`~fastcashflow.reinsurance.QuotaShare`) cedes the direct portfolio's
     claims and premiums; the tree shows the ceded flows (recovery, reinsurance
     premium), the BEL = PV(reinsurance premium) - PV(recovery) (a net cost when
     positive), the RA = risk transferred (the margin on the ceded claims, IFRS 17
     paragraph 64), and the CSM = -(BEL - RA) -- the net cost or gain of the cover,
     which may be negative and carries no loss component (paragraph 65). Use it on a
-    reinsurance held; :func:`show_trace` traces the direct GMM ``measure``.
+    reinsurance held; :func:`trace` traces the direct GMM ``measure``.
     """
     out: list[str] = []
     if file is None:
@@ -166,11 +166,11 @@ def show_trace_reinsurance(
 
 
 # ---------------------------------------------------------------------------
-# show_trace_diff -- two-basis comparison
+# trace_diff -- two-basis comparison
 # ---------------------------------------------------------------------------
 
 
-def show_trace_diff_reinsurance(
+def trace_diff(
     mp_index: int,
     model_points: ModelPoints,
     basis_a: Basis | dict,
@@ -184,7 +184,7 @@ def show_trace_diff_reinsurance(
     """Diff one reinsurance-held model point's headline (BEL / RA / CSM) across
     two bases (same ``treaty``), with the assumption changes that drive it.
 
-    The reinsurance counterpart of :func:`show_trace_diff` -- a headline-level
+    The reinsurance counterpart of :func:`trace_diff` -- a headline-level
     diff. The CSM is the net cost / gain of the cover and may be negative; there
     is no loss component (paragraph 65).
     """
@@ -213,5 +213,5 @@ def show_trace_diff_reinsurance(
 
 
 # ---------------------------------------------------------------------------
-# show_trace_bel_step -- term-by-term unrolling of the BEL backward recursion
+# trace_bel_step -- term-by-term unrolling of the BEL backward recursion
 # ---------------------------------------------------------------------------

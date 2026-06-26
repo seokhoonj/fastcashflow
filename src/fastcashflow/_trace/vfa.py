@@ -1,9 +1,9 @@
 """Step-by-step calculation trace for one VFA (variable-fee) contract.
 
-:func:`show_trace_vfa` renders the account-value trajectory, the GMDB / GMAB
+:func:`trace` renders the account-value trajectory, the GMDB / GMAB
 floor bites, the variable fee and the BEL / RA / CSM build as an ASCII tree;
-:func:`show_trace_diff_vfa` is its two-basis assumption-change variant. The
-GMM tracer (:func:`fastcashflow.trace.gmm.show_trace`) measures GMM contracts,
+:func:`trace_diff` is its two-basis assumption-change variant. The
+GMM tracer (:func:`fastcashflow._trace.gmm.trace`) measures GMM contracts,
 so a variable contract uses this module instead.
 """
 from __future__ import annotations
@@ -17,13 +17,13 @@ from fastcashflow.basis import Basis
 from fastcashflow._typing import FloatArray
 from fastcashflow.model_points import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow._measurement import vfa as _vfa
-from fastcashflow.trace._common import (
+from fastcashflow._trace.common import (
     _emit_tree, _fmt_callable, _key_months, _colw, _resolve_basis,
     _money_delta, _basis_diff_lines, _diff_mp_header,
 )
 
 
-def show_trace_vfa(
+def trace(
     mp_index: int,
     model_points: ModelPoints,
     basis: Basis | dict,
@@ -33,12 +33,12 @@ def show_trace_vfa(
 ) -> None:
     """Print a tree of how one VFA model point's BEL / RA / CSM is computed.
 
-    The VFA (variable-fee, account-value) counterpart of :func:`show_trace`.
+    The VFA (variable-fee, account-value) counterpart of :func:`trace`.
     It slices to a single row, runs :func:`_vfa.measure`, and shows the
     account-value trajectory, the GMDB / GMAB floors (where the guarantee
     bites), the variable fee and the BEL / RA / CSM -- plus the guarantee
     time value (TVOG) when ``return_scenarios`` is supplied. Use it on
-    direct-participation contracts; :func:`show_trace` traces the GMM
+    direct-participation contracts; :func:`trace` traces the GMM
     ``measure`` and does not cover the account-value mechanic.
     """
     out: list[str] = []
@@ -270,7 +270,7 @@ def show_trace_vfa(
     file.write("\n".join(out) + "\n")
 
 
-def show_trace_diff_vfa(
+def trace_diff(
     mp_index: int,
     model_points: ModelPoints,
     basis_a: Basis | dict,
@@ -284,7 +284,7 @@ def show_trace_diff_vfa(
     """Diff one VFA model point's headline (BEL / RA / fee / CSM / TVOG / loss)
     across two bases, with the assumption changes that drive it.
 
-    The VFA counterpart of :func:`show_trace_diff` -- a headline-level diff
+    The VFA counterpart of :func:`trace_diff` -- a headline-level diff
     (assumption changes plus the metric deltas), not the per-month path deltas
     the GMM version also prints. ``return_scenarios`` (if given) is applied to
     both measures so the time-value (TVOG) delta is meaningful.
