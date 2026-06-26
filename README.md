@@ -13,6 +13,12 @@ licence wall and no closed binaries.
 
 ## Installation
 
+> [!WARNING]
+> **Work in progress** — fastcashflow is in active development. The public API,
+> namespace layout and numerical results may still change between commits, and it
+> is not yet on PyPI. Install from GitHub for the latest, and pin a commit if you
+> need a stable surface.
+
 ```bash
 pip install git+https://github.com/seokhoonj/fastcashflow.git
 ```
