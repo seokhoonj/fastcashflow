@@ -1,4 +1,4 @@
-"""reinsurance.settle -- IFRS 17 para 65/66 subsequent measurement (skeleton).
+"""reinsurance.settle -- IFRS 17 paragraphs 65/66 subsequent measurement (skeleton).
 
 Authoritative skeleton: written before the implementation and activated
 unchanged once it lands. Anchor facts from the G-gate
@@ -6,14 +6,14 @@ unchanged once it lands. Anchor facts from the G-gate
 (dev/scratch_reinsurance_settle_gate.py, re-run here through the public entry).
 
 The reinsurance CSM is adjusted in subsequent measurement "in the same manner
-as a group of insurance contracts issued" (para 66: interest accreted,
+as a group of insurance contracts issued" (paragraph 66: interest accreted,
 future-service change, coverage-unit release) BUT -- pocket guide verbatim --
 "reinsurance contracts held cannot be onerous. Accordingly, the requirements
 on onerous contracts do not apply": NO zero floor, NO loss component. So
 reinsurance.settle is the gmm.settle algorithm with the CSM step replaced by
 ``csm_after = csm_opening + csm_accretion + csm_experience_unlocking`` (no
 floor, no paragraph-48/50(b) algebra), then the single B119 release. The
-loss-recovery component (para 66A-66B) needs the underlying group's loss
+loss-recovery component (paragraphs 66A-66B) needs the underlying group's loss
 component (cross-contract) and is a documented v1 cut.
 
 Pinned numbers (the handcalc's net-cost book: QuotaShare 0.4, age 40, premium
@@ -120,7 +120,7 @@ def test_on_track_telescopes_to_carry_bridge():
 
 
 # ---------------------------------------------------------------------------
-# the decisive reinsurance fact: the CSM is NOT floored (para 65)
+# the decisive reinsurance fact: the CSM is NOT floored (paragraph 65)
 # ---------------------------------------------------------------------------
 def test_csm_is_not_floored_net_cost_stays_negative():
     mp, state, basis, treaty = _book(count_factor=1.5)   # off-track, more cost

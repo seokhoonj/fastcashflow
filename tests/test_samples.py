@@ -91,7 +91,7 @@ def test_export_paa(tmp_path):
 
 def test_sample_supports_group_of_contracts_cohorts():
     """The bundled sample carries issue_date, so group_of_contracts splits by
-    annual cohort (IFRS 17 Sec. 22) -- 2025 and 2026 here -- on top of the
+    annual cohort (IFRS 17 paragraph 22) -- 2025 and 2026 here -- on top of the
     portfolio (product) and the derived onerous / remaining profitability."""
     m = measure(fcf.samples.model_points(), fcf.samples.basis())
     g = fcf.group_of_contracts(m)

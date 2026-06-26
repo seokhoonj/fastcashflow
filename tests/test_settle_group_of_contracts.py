@@ -34,7 +34,7 @@ mixing GMM and VFA is rejected WHOLE, never partially.
 coverage_units is REQUIRED with no default (O-7 confirmed: the B119 benefit-
 amount axis is a place the standard leaves to entity judgement, so the library
 does not silently pick one). profitability is an explicit grouping key -- never
-derived from a carry (Sec. 24 lock at inception); it may ride on an InforceState
+derived from a carry (paragraph 24 lock at inception); it may ride on an InforceState
 column. OPEN-2 = (c): lock_in_rate may be a per-MP array, required uniform
 WITHIN each group (a GoC sits in one cohort, so one locked-in rate; B73 leaves
 the cohort weighted-average to the user, the engine only checks uniformity).
@@ -516,7 +516,7 @@ def test_coverage_units_is_required():
 
 def test_profitability_must_be_explicit_not_derived():
     """profitability is an explicit grouping key -- never derived from the
-    carry (Sec. 24 lock at inception). Omitting it is rejected, not silently
+    carry (paragraph 24 lock at inception). Omitting it is rejected, not silently
     classified by an inception-FCF sign."""
     counts = [SURV[6] * 1.08, SURV[6] * 0.80]
     mp, state = book(benefits=BENEFITS, em_close=6, prior_counts=[1.0, 1.0],
@@ -528,7 +528,7 @@ def test_profitability_must_be_explicit_not_derived():
 
 
 def test_rejects_missing_issue_date_for_default_cohort():
-    """No silent single-cohort fallback (Sec. 22): the default cohort needs
+    """No silent single-cohort fallback (paragraph 22): the default cohort needs
     issue_date; issue_age / term are never a cohort substitute."""
     n = 2
     ids = np.array(["G0", "G1"])
@@ -683,7 +683,7 @@ def test_closing_inputs_seeds_per_mp_pro_rata():
 
 def test_reconcile_arm_negates_run_off_for_display():
     """Sec. 1 (B2/P0-2): fcf.reconcile(GoCSettlement) builds the group-grain
-    Sec. 44 table, negating the run-off lines for display exactly as the per-MP
+    paragraph 44 table, negating the run-off lines for display exactly as the per-MP
     reconcile does -- the GoCSettlement itself keeps them movement-positive."""
     counts = [SURV[6] * 1.02, SURV[6] * 0.98]
     mp, state = book(benefits=BENEFITS, em_close=6, prior_counts=[1.0, 1.0],
@@ -716,7 +716,7 @@ def test_write_measurement_arm_has_labels_and_marker(tmp_path):
 
 def test_profitability_carried_as_inforce_column():
     """Sec. 10 (B2/P0-4): InforceState carries an optional 'profitability'
-    column (the inception-frozen class, Sec. 24), and the entry accepts the
+    column (the inception-frozen class, paragraph 24), and the entry accepts the
     column name as the profitability key."""
     counts = [SURV[6] * 1.08, SURV[6] * 0.80]
     mp, state = book(benefits=BENEFITS, em_close=6, prior_counts=[1.0, 1.0],

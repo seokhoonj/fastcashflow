@@ -163,7 +163,7 @@ def test_reinsurance_trace_rejects_bad_index():
 
 
 def test_reinsurance_inforce_carries_csm_and_rebases_bel():
-    """In-force subsequent measurement (Sec. 44): the prior reinsurance CSM is
+    """In-force subsequent measurement (paragraph 44): the prior reinsurance CSM is
     carried forward (accreted at lock-in, released over coverage units) and the
     BEL / RA are the inception slice re-based to the valuation-date count.
 

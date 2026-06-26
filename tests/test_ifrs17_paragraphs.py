@@ -12,13 +12,13 @@ same gross inputs, and the engine's discretisation is the mechanic under test.
 
 Paragraph -> test name:
 
-* Sec.32        -- test_sec32_bel_is_pv_of_future_cashflows
-* Sec.34 / B65  -- test_sec34_b65_contract_boundary
-* Sec.37        -- test_sec37_ra_addition_to_bel
-* Sec.38(b)     -- test_sec38_initial_csm_profitable
-* Sec.38(c)     -- test_sec38_loss_component_onerous
-* Sec.44(b)     -- test_sec44_csm_accretion_at_locked_in_rate
-* Sec.44(e)+B119 -- test_sec44_b119_csm_release_proportional_to_coverage_units
+* paragraph 32        -- test_sec32_bel_is_pv_of_future_cashflows
+* paragraph 34 / B65  -- test_sec34_b65_contract_boundary
+* paragraph 37        -- test_sec37_ra_addition_to_bel
+* paragraph 38(b)     -- test_sec38_initial_csm_profitable
+* paragraph 38(c)     -- test_sec38_loss_component_onerous
+* paragraph 44(b)     -- test_sec44_csm_accretion_at_locked_in_rate
+* paragraph 44(e)+B119 -- test_sec44_b119_csm_release_proportional_to_coverage_units
 * B96           -- test_b96_higher_discount_reduces_pv_of_claims
 """
 import numpy as np
@@ -42,11 +42,11 @@ def _flat_assumptions(**overrides):
 
 
 # ---------------------------------------------------------------------------
-# Sec.32 -- BEL is the present value of expected future cash flows
+# paragraph 32 -- BEL is the present value of expected future cash flows
 # ---------------------------------------------------------------------------
 
 def test_sec32_bel_is_pv_of_future_cashflows():
-    """Sec.32: BEL = PV(future cash outflows) - PV(future cash inflows).
+    """paragraph 32: BEL = PV(future cash outflows) - PV(future cash inflows).
 
     A 2-month, 1-policy contract with zero discount, 1% mortality, no lapse
     and no expenses, so every figure is derived by hand.
@@ -72,11 +72,11 @@ def test_sec32_bel_is_pv_of_future_cashflows():
 
 
 # ---------------------------------------------------------------------------
-# Sec.34 + B65 -- contract boundary
+# paragraph 34 + B65 -- contract boundary
 # ---------------------------------------------------------------------------
 
 def test_sec34_b65_contract_boundary():
-    """Sec.34 / B65: cash flows outside the contract boundary are excluded.
+    """paragraph 34 / B65: cash flows outside the contract boundary are excluded.
 
     The projection horizon ends at ``term_months``; no premium, claim or
     expense cash flow is projected beyond it.
@@ -96,11 +96,11 @@ def test_sec34_b65_contract_boundary():
 
 
 # ---------------------------------------------------------------------------
-# Sec.37 -- RA addition to BEL
+# paragraph 37 -- RA addition to BEL
 # ---------------------------------------------------------------------------
 
 def test_sec37_ra_addition_to_bel():
-    """Sec.37: FCF = BEL + RA; CSM and loss component derive from this sum.
+    """paragraph 37: FCF = BEL + RA; CSM and loss component derive from this sum.
 
     Identity at initial recognition: ``csm - loss_component = -(bel + ra)``.
     For a profitable group csm = -FCF and loss = 0; for an onerous group
@@ -119,11 +119,11 @@ def test_sec37_ra_addition_to_bel():
 
 
 # ---------------------------------------------------------------------------
-# Sec.38 -- initial CSM and loss component
+# paragraph 38 -- initial CSM and loss component
 # ---------------------------------------------------------------------------
 
 def test_sec38_initial_csm_profitable():
-    """Sec.38(b): for a profitable group CSM_0 = max(0, -FCF), loss = 0."""
+    """paragraph 38(b): for a profitable group CSM_0 = max(0, -FCF), loss = 0."""
     res = measure(
         ModelPoints.single(
             issue_age=35, benefits={"DEATH": 1_000_000.0},
@@ -139,7 +139,7 @@ def test_sec38_initial_csm_profitable():
 
 
 def test_sec38_loss_component_onerous():
-    """Sec.38(c): for an onerous group CSM_0 = 0, loss component = max(0, FCF)."""
+    """paragraph 38(c): for an onerous group CSM_0 = 0, loss component = max(0, FCF)."""
     res = measure(
         ModelPoints.single(
             issue_age=40, benefits={"DEATH": 1_000_000.0},
@@ -159,11 +159,11 @@ def test_sec38_loss_component_onerous():
 
 
 # ---------------------------------------------------------------------------
-# Sec.44 -- subsequent measurement of CSM
+# paragraph 44 -- subsequent measurement of CSM
 # ---------------------------------------------------------------------------
 
 def test_sec44_csm_accretion_at_locked_in_rate():
-    """Sec.44(b): CSM accretes interest at the discount rate locked in at inception.
+    """paragraph 44(b): CSM accretes interest at the discount rate locked in at inception.
 
     The roll-forward decomposes as ``csm[t+1] = csm[t] + accretion[t] -
     release[t]``; accretion is opening CSM times the locked-in monthly rate.
@@ -184,7 +184,7 @@ def test_sec44_csm_accretion_at_locked_in_rate():
 
 
 def test_sec44_b119_csm_release_proportional_to_coverage_units():
-    """Sec.44(e) + B119: CSM released in proportion to coverage units provided.
+    """paragraph 44(e) + B119: CSM released in proportion to coverage units provided.
 
     The engine uses in-force as the coverage-unit series. With zero mortality
     and zero lapse the in-force stays constant, so each month's release is

@@ -8,16 +8,16 @@ bridge invariants and the A3 / O-3 dispositions):
 * It is a BRIDGE, not a settle. The reinsurance leaf has no ``settle`` yet, so
   a carry-based scale variation fills the capability gap. headline-only,
   ``measurement_basis == 'settlement_carry'``; the docstring announces it is
-  deprecated once ``reinsurance.settle`` lands (Sec. 66 unlocking and the
+  deprecated once ``reinsurance.settle`` lands (paragraph 66 unlocking and the
   loss-recovery component are absent in this bridge).
 * The aggregate is the per-MP ``measure_inforce`` summed over the model-point
   axis: headline ``bel`` / ``ra`` / ``csm`` equal the per-MP sums to rtol
-  1e-10. There is no loss component (Sec. 65).
+  1e-10. There is no loss component (paragraph 65).
 * ``chunk_size`` is a memory knob, never a numbers knob: chunk_size=1 and one
   big chunk agree to machine precision. The period-close state is joined onto
   the model points ONCE before chunking (a shuffled state still aligns).
 * zero-count rows are REJECTED -- the bridge is carry-only, so a derecognized
-  row (Sec. 76 count=0) belongs to a future ``reinsurance.settle`` and the
+  row (paragraph 76 count=0) belongs to a future ``reinsurance.settle`` and the
   message says so. This diverges from ``gmm.settle``, which handles count=0 as
   normal derecognition.
 * An aggregate cannot be chained -- ``closing_inputs()`` raises ValueError.
@@ -90,7 +90,7 @@ def test_aggregate_equals_per_mp_inforce_sum():
         np.testing.assert_allclose(getattr(agg, name),
                                    float(getattr(per, name).sum()),
                                    rtol=1e-10, err_msg=name)
-    # no loss component on a reinsurance asset (Sec. 65)
+    # no loss component on a reinsurance asset (paragraph 65)
     assert not hasattr(agg, "loss_component")
 
 
@@ -129,7 +129,7 @@ def test_shuffled_state_joins_by_mp_id_once_before_chunking():
 
 
 # ---------------------------------------------------------------------------
-# zero-count rows are rejected -- the bridge is carry-only (Sec. 76 -> settle)
+# zero-count rows are rejected -- the bridge is carry-only (paragraph 76 -> settle)
 # ---------------------------------------------------------------------------
 def test_rejects_zero_count_rows():
     mp, state, basis, treaty = _book()

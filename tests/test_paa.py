@@ -253,7 +253,7 @@ def test_paa_measure_stream_matches_in_memory(tmp_path):
 
 
 def test_paa_revenue_stops_at_the_contract_boundary():
-    """B126(a) straight-line revenue runs to the contract boundary (Sec. 34),
+    """B126(a) straight-line revenue runs to the contract boundary (paragraph 34),
     not the nominal term: a contract with a boundary cut (boundary < term)
     recognises no revenue past coverage end. Keying the in-coverage mask on
     term_months over-allocated premium to post-boundary months with no service.

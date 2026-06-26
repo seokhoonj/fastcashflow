@@ -1,7 +1,7 @@
 """Current-estimate trajectory accessor -- ``Measurement.estimate_at(t)``.
 
 ``estimate_at(t)`` returns the cohort BEL / RA / CSM / LIC at a future month t
-(IFRS 17 Sec. 40, the deterministic nested-projection view). It is column t of
+(IFRS 17 paragraph 40, the deterministic nested-projection view). It is column t of
 the measurement's trajectories, so it must agree with two independent code
 paths:
 

@@ -10,7 +10,7 @@ activated unchanged by it. The anchor facts, from dev/paa-settle-contract.md
   flows (the v1 cut) the unit projection rebuilds every opening figure.
   ``state.prior_count`` is the only required prior-date input; ``prior_csm``
   / ``lock_in_rate`` / ``prior_loss_component`` are ignored (the PAA has no
-  CSM and holds the LRC undiscounted, Sec. 56).
+  CSM and holds the LRC undiscounted, paragraph 56).
 * One unit projection, two scales: the expected leg at
   ``k_exp = prior_count / unit_inforce[em_open]``, the observation at
   ``k_obs = count / unit_inforce[em_close]``. The experience line is
@@ -22,8 +22,8 @@ activated unchanged by it. The anchor facts, from dev/paa-settle-contract.md
   meaningless. settlement_pattern books are ACCEPTED (the OPEN-3 decision),
   unlike gmm/vfa.settle which reject them.
 * Paragraph-55(b) items zeroed by documented engine cuts: acquisition cash
-  flows and their amortisation (Sec. 59(a) expensed-as-incurred), the
-  financing adjustment (Sec. 56 undiscounted), investment components (v1).
+  flows and their amortisation (paragraph 59(a) expensed-as-incurred), the
+  financing adjustment (paragraph 56 undiscounted), investment components (v1).
 * No CSM block, no finance_wedge (no two-rate gap without discounting), no
   coverage units (B119 is the CSM release denominator -- PAA has none).
 """
@@ -124,9 +124,9 @@ def test_55b_roll_hand_calc_on_track():
 
 
 def test_55b_zeroed_items_are_documented_cuts():
-    """Sec. 55(b)(ii)/(iii)/(iv)/(vi) have no movement lines BY DESIGN:
-    acquisition cash flows are expensed (Sec. 59(a)), the LRC is undiscounted
-    (Sec. 56), investment components are a v1 cut. The movement carries no
+    """paragraph 55(b)(ii)/(iii)/(iv)/(vi) have no movement lines BY DESIGN:
+    acquisition cash flows are expensed (paragraph 59(a)), the LRC is undiscounted
+    (paragraph 56), investment components are a v1 cut. The movement carries no
     such fields -- and no CSM block at all."""
     mp, state = _book(**PROFITABLE)
     mv = settle(mp, state, _basis(), period_months=3)
@@ -275,7 +275,7 @@ def test_final_settlement_releases_lrc_and_keeps_the_lic_tail():
     """em_close == boundary with count == 0: the LRC fully releases through
     revenue, the LC fully reverses -- and the LIC tail STAYS OUTSTANDING
     (claims incurred before the boundary are a liability regardless of the
-    coverage period ending; the reason Sec. 100(c) is its own table)."""
+    coverage period ending; the reason paragraph 100(c) is its own table)."""
     basis = _basis(mortality_q=0.002, discount_annual=0.03,
                    settlement_pattern=np.array([0.6, 0.4]))
     surv = _unit_inforce(basis, **ONEROUS)
@@ -547,7 +547,7 @@ def test_bundled_paa_sample_settles():
     _assert_blocks(mv)
     assert np.all(mv.lic_closing > 0)          # the pattern leaves a tail
     # Both contracts are onerous AT INCEPTION, driven by the t=0 acquisition
-    # expense. The Sec. 57-58 re-test measures the REMAINING coverage: with
+    # expense. The paragraphs 57-58 re-test measures the REMAINING coverage: with
     # the acquisition outflow behind it, PA001's remaining book is already
     # profitable by month 3 (loss component zero at BOTH dates) while PA002
     # stays onerous -- the re-test discriminates where an inception carry

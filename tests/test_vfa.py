@@ -831,7 +831,7 @@ def test_vfa_measure_inforce_bel_scales_with_count():
 
 
 def test_vfa_measure_handles_boundary_before_term():
-    """A contract whose Sec. 34 boundary cuts before the term: the projection
+    """A contract whose paragraph 34 boundary cuts before the term: the projection
     runs only to the boundary, the GMAB maturity (at the term, beyond the
     horizon) is not applied, and nothing indexes out of bounds (regression for
     the term_idx clamp in _project)."""
@@ -848,7 +848,7 @@ def test_vfa_measure_handles_boundary_before_term():
 
 
 def test_vfa_measure_inforce_rejects_as_of_at_boundary():
-    """An as-of date at (or beyond) a contract's own Sec. 34 boundary is rejected
+    """An as-of date at (or beyond) a contract's own paragraph 34 boundary is rejected
     -- no remaining coverage to value -- rather than indexing a dead in-force
     column."""
     import fastcashflow as fcf
@@ -872,7 +872,7 @@ def test_vfa_measure_inforce_mixed_book_judges_each_contract_on_its_own_boundary
     contract makes the portfolio horizon larger."""
     import fastcashflow as fcf
     basis = _basis()
-    # A: term 60 but the Sec. 34 boundary cuts at 24, with a huge GMAB that must
+    # A: term 60 but the paragraph 34 boundary cuts at 24, with a huge GMAB that must
     # NOT apply (the maturity is past the boundary). B: a full 60-month contract,
     # so the portfolio horizon n_time = 60 > A's boundary 24.
     a_alone = ModelPoints(

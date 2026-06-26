@@ -3,7 +3,7 @@ of the GMM B96(a)).
 
 Authoritative skeleton. Anchors from dev/paa-premium-experience-gate.md. PAA has
 no CSM, so the actual premium received over the period (state.actual_premium)
-simply enters the LRC (the unearned premium, Sec. 55(a)) and earns as revenue
+simply enters the LRC (the unearned premium, paragraph 55(a)) and earns as revenue
 over the remaining coverage -- no future/current split, no new movement line.
 The premiums line becomes the actual cash and the closing LRC reflects it; the
 block identity lrc_closing == lrc_opening + premiums - revenue + lrc_experience
@@ -87,7 +87,7 @@ def test_premiums_line_is_the_actual_received():
 
 def test_extra_premium_sits_in_the_closing_lrc():
     """The actual-minus-expected premium adds to the closing LRC (unearned,
-    Sec. 55(a)); it is byte-identical when no actual premium is given."""
+    paragraph 55(a)); it is byte-identical when no actual premium is given."""
     base_mp, base_state = _book(premium=120.0, benefit=480.0, em_close=6)
     base = settle(base_mp, base_state, _basis(), period_months=6)
     mp, state = _book(premium=120.0, benefit=480.0, actual_premium=150.0,
@@ -112,7 +112,7 @@ def test_absent_actual_premium_is_byte_identical():
 
 
 def test_more_premium_reduces_the_loss_component_on_an_onerous_book():
-    """A higher LRC (more premium received) makes the Sec. 57-58 re-test less
+    """A higher LRC (more premium received) makes the paragraphs 57-58 re-test less
     onerous: the closing loss component falls."""
     onerous = _basis(mortality_q=0.05)                # claims make it onerous
     base_mp, base_state = _book(premium=60.0, benefit=6000.0, em_close=6,

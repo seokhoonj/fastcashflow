@@ -1,4 +1,4 @@
-"""IFRS 17 contract boundary (Sec. 34) -- ``ModelPoints.contract_boundary_months``.
+"""IFRS 17 contract boundary (paragraph 34) -- ``ModelPoints.contract_boundary_months``.
 
 The projection stops at the boundary; cash flows past it leave the current
 contract, and the maturity benefit is paid only when the boundary reaches the
