@@ -442,8 +442,8 @@ def test_axis_tables_sparse_row():
 def test_read_expense_tables_missing_column():
     """The expense_tables sheet without ``value`` column is named in the error."""
     ws = _make_sheet("expense_tables", [
-        ("table_id", "expense_type", "basis"),     # no 'value'
-        ("EXP", "acquisition", "premium_pct"),
+        ("table_id", "category", "base"),     # no 'value'
+        ("EXP", "acquisition", "premium"),
     ])
     with pytest.raises(ValueError, match="missing required column"):
         _read_expense_tables(ws)
@@ -955,11 +955,11 @@ def test_guards_expense_item_and_trace_month():
     """ExpenseItem validates its basis / value at construction; the BEL / CSM
     step tracers reject a non-integer anchor month instead of truncating it."""
     from fastcashflow.basis import ExpenseItem
-    with pytest.raises(ValueError, match="unknown expense basis"):
+    with pytest.raises(ValueError, match="unknown expense .category, base. pair"):
         ExpenseItem("acquisition", "alpha", 0.1)
     with pytest.raises(ValueError, match="value must be finite"):
-        ExpenseItem("acquisition", "alpha_fixed", float("nan"))
-    ExpenseItem("acquisition", "alpha_fixed", 100.0)  # valid
+        ExpenseItem("acquisition", "per_policy", float("nan"))
+    ExpenseItem("acquisition", "per_policy", 100.0)  # valid
 
     mp = fcf.samples.model_points()
     basis = fcf.samples.basis()

@@ -302,7 +302,7 @@ def test_inception_paths_still_flow_end_to_end():
         mortality_annual=_flat_rate(0.005), lapse_annual=_flat_rate(0.05),
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
         morbidity_cv=0.10, expense_inflation=0.02,
-        expense_items=(ExpenseItem("maintenance", "gamma_fixed", 1_000.0),),
+        expense_items=(ExpenseItem("maintenance", "per_policy", 1_000.0),),
         coverages=(CoverageRate("DEATH", _flat_rate(0.005)),),
     )
     m = fcf.gmm.measure(mp, basis, full=True)

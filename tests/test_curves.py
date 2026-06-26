@@ -22,7 +22,7 @@ def _flat_basis(**overrides) -> Basis:
         discount_annual=0.05,
         expense_inflation=0.02,
         expense_items=(
-            ExpenseItem("maintenance", "gamma_fixed", 12_000.0),
+            ExpenseItem("maintenance", "per_policy", 12_000.0),
         ),
         ra_confidence=0.75,
         mortality_cv=0.0,
@@ -78,7 +78,7 @@ def test_bel_with_curve_discount_matches_hand_calc():
         # zero everything except maintenance + discount
         expense_inflation=0.0,
         expense_items=(
-            ExpenseItem("maintenance", "gamma_fixed", 12_000.0),
+            ExpenseItem("maintenance", "per_policy", 12_000.0),
         ),
         discount_annual=np.array([0.03, 0.05]),    # 3% year 0, 5% year 1
     )
@@ -105,7 +105,7 @@ def test_bel_value_matches_measure_with_curve_discount():
     basis = _flat_basis(
         expense_inflation=0.02,
         expense_items=(
-            ExpenseItem("maintenance", "gamma_fixed", 12_000.0),
+            ExpenseItem("maintenance", "per_policy", 12_000.0),
         ),
         discount_annual=np.array([0.03, 0.05, 0.06]),
     )
@@ -124,7 +124,7 @@ def test_csm_accretes_at_curve_rate():
     basis = _flat_basis(
         expense_inflation=0.02,
         expense_items=(
-            ExpenseItem("maintenance", "gamma_fixed", 12_000.0),
+            ExpenseItem("maintenance", "per_policy", 12_000.0),
         ),
         discount_annual=np.array([0.03, 0.10]),   # step UP at year 1
     )

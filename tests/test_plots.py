@@ -122,7 +122,7 @@ def vfa_book():
     """A VFA-measured account-value contract (expense_cv drives its RA)."""
     vfa_basis = replace(
         _flat_basis(), expense_cv=0.10,
-        expense_items=(fcf.ExpenseItem("maintenance", "gamma_fixed", 60_000.0),))
+        expense_items=(fcf.ExpenseItem("maintenance", "per_policy", 60_000.0),))
     m = fcf.vfa.measure(
         fcf.ModelPoints.single(40, 0.0, 60, account_value=1e8,
             calculation_methods={"DEATH": fcf.CalculationMethod.DEATH}), vfa_basis)

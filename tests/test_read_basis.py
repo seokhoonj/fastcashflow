@@ -40,7 +40,7 @@ def test_defaults_inherited():
     # assumption on the Basis object, not on the row itself.
     for basis in (ga, fc):
         maint = [r for r in basis.expense_items
-                 if r.basis == "gamma_fixed"]
+                 if r.category == "maintenance" and r.base == "per_policy"]
         assert len(maint) == 1
         assert maint[0].value == 90_000.0
         assert basis.expense_inflation == 0.02
@@ -72,7 +72,8 @@ def test_per_segment_acquisition_amount():
         (("WHOLE_LIFE_A","GA"), 1_900_000.0),
     ):
         rows = basis.resolve(key).expense_items
-        acq = [r for r in rows if r.basis == "alpha_fixed"]
+        acq = [r for r in rows
+               if r.category == "acquisition" and r.base == "per_policy"]
         assert len(acq) == 1, f"{key}: expected one per_policy_init row"
         assert acq[0].value == expected_acq, (key, expected_acq, acq[0].value)
 

@@ -2,15 +2,17 @@
 for the expense ledger and its projection onto the six kernel-side
 primitives the compiled time loop consumes.
 
-Basis names follow the Korean actuarial alpha / beta / gamma convention
-plus a dedicated LAE (Loss Adjustment Expense) slot and a
-surrender-value-linked maintenance slot:
+An expense is two axes: ``category`` (WHAT for) x ``base`` (proportional to
+WHAT). The category maps to the Korean actuarial alpha / beta / gamma
+convention -- acquisition = alpha, maintenance = beta, collection = gamma,
+claims = LAE (Loss Adjustment Expense):
 
-    alpha_pro_rata / alpha_fixed -- acquisition (init, t=0)
-    beta_pro_rata                -- maintenance pro-rated on premium
-    gamma_fixed                  -- maintenance per-policy fixed
-    lae_pro_rata                 -- LAE on claim-type outflow
-    surrender_value_pro_rata     -- maintenance on the in-force surrender value
+    (acquisition, per_policy) / (acquisition, premium)  -- alpha, at issue (t=0)
+    (maintenance, premium)                              -- beta, % premium
+    (maintenance, per_policy)                           -- beta, per-policy fixed
+    (maintenance, surrender_value)                      -- beta, % in-force CSV
+    (collection,  premium)                              -- gamma, % premium
+    (claims,      claim)                                -- LAE, on claim outflow
 """
 import numpy as np
 import pytest
@@ -30,7 +32,7 @@ def test_empty_rows_emit_zero_primitives():
 
 def test_alpha_fixed_row_lands_in_alpha_fixed_primitive():
     """An ``alpha_fixed`` row contributes only to the alpha_fixed primitive."""
-    rows = (ExpenseItem("acquisition", "alpha_fixed", 50_000.0),)
+    rows = (ExpenseItem("acquisition", "per_policy", 50_000.0),)
     (alpha_pro_rata, alpha_fixed, beta_pro_rata,
      gamma_fixed, lae_pro_rata, _surr) = derive_expense_components(rows, 12)
     assert alpha_fixed == 50_000.0
@@ -40,7 +42,7 @@ def test_alpha_fixed_row_lands_in_alpha_fixed_primitive():
 
 def test_alpha_pro_rata_row_lands_in_alpha_pro_rata_primitive():
     """An ``alpha_pro_rata`` row contributes only to alpha_pro_rata."""
-    rows = (ExpenseItem("acquisition", "alpha_pro_rata", 1.20),)
+    rows = (ExpenseItem("acquisition", "premium", 1.20),)
     (alpha_pro_rata, alpha_fixed, beta_pro_rata,
      gamma_fixed, lae_pro_rata, _surr) = derive_expense_components(rows, 12)
     assert alpha_pro_rata == 1.20
@@ -49,7 +51,7 @@ def test_alpha_pro_rata_row_lands_in_alpha_pro_rata_primitive():
 
 def test_beta_pro_rata_row_lands_in_beta_pro_rata_primitive():
     """A ``beta_pro_rata`` row contributes only to beta_pro_rata."""
-    rows = (ExpenseItem("collection", "beta_pro_rata", 0.01),)
+    rows = (ExpenseItem("maintenance", "premium", 0.01),)
     (alpha_pro_rata, alpha_fixed, beta_pro_rata,
      gamma_fixed, lae_pro_rata, _surr) = derive_expense_components(rows, 12)
     assert beta_pro_rata == 0.01
@@ -63,7 +65,7 @@ def test_gamma_fixed_grows_with_inflation():
     the multiplier is 1; at ``t=12`` it equals ``1 + inflation``.
     """
     rows = (
-        ExpenseItem("maintenance", "gamma_fixed", 36_000.0),
+        ExpenseItem("maintenance", "per_policy", 36_000.0),
     )
     n_time = 24
     infl = (1.03) ** (np.arange(n_time) / 12.0)
@@ -77,7 +79,7 @@ def test_gamma_fixed_grows_with_inflation():
 
 def test_lae_pro_rata_grows_with_inflation():
     """A ``lae_pro_rata`` row's monthly fraction grows with the inflation curve."""
-    rows = (ExpenseItem("LAE", "lae_pro_rata", 0.02),)
+    rows = (ExpenseItem("claims", "claim", 0.02),)
     n_time = 24
     infl = (1.02) ** (np.arange(n_time) / 12.0)
     _, _, _, _, lae_pro_rata, _ = derive_expense_components(rows, n_time, infl)
@@ -88,10 +90,10 @@ def test_lae_pro_rata_grows_with_inflation():
 def test_multiple_rows_sum_into_each_primitive():
     """When several rows share a basis, their values add up."""
     rows = (
-        ExpenseItem("acquisition", "alpha_fixed", 50_000.0),
-        ExpenseItem("acquisition_extra", "alpha_fixed", 10_000.0),
-        ExpenseItem("maintenance", "gamma_fixed", 36_000.0),
-        ExpenseItem("overhead", "gamma_fixed", 12_000.0),
+        ExpenseItem("acquisition", "per_policy", 50_000.0),
+        ExpenseItem("acquisition", "per_policy", 10_000.0),
+        ExpenseItem("maintenance", "per_policy", 36_000.0),
+        ExpenseItem("maintenance", "per_policy", 12_000.0),
     )
     _, alpha_fixed, _, gamma_fixed, _, _ = derive_expense_components(rows, 12)
     assert alpha_fixed == 60_000.0
@@ -99,19 +101,24 @@ def test_multiple_rows_sum_into_each_primitive():
     assert gamma_fixed[0] == pytest.approx((36_000.0 + 12_000.0) / 12.0)
 
 
-def test_unknown_basis_raises():
-    """An unrecognised basis is flagged loudly at construction, with the
-    supported list -- not deferred to derive_expense_components at measure."""
-    with pytest.raises(ValueError, match="unknown expense basis"):
-        ExpenseItem("???", "yearly_payroll", 1000.0)
+def test_unknown_pair_raises():
+    """An unrecognised (category, base) pair is flagged loudly at construction,
+    with the supported list -- not deferred to derive at measure."""
+    with pytest.raises(ValueError, match="unknown expense .category, base. pair"):
+        ExpenseItem("overhead", "yearly_payroll", 1000.0)
+    # a valid category with an invalid base for it also raises (claims has no
+    # premium base).
+    with pytest.raises(ValueError, match="unknown expense .category, base. pair"):
+        ExpenseItem("claims", "premium", 0.02)
 
 
-def test_expense_bases_constant_is_complete():
-    """``EXPENSE_BASES`` matches the dispatch table the helper implements."""
-    for basis in EXPENSE_BASES:
-        rows = (ExpenseItem("x", basis, 1.0),)
+def test_every_valid_pair_dispatches():
+    """Every supported (category, base) pair projects without error."""
+    from fastcashflow.basis import _EXPENSE_DISPATCH
+    for (category, base) in _EXPENSE_DISPATCH:
+        rows = (ExpenseItem(category, base, 1.0),)
         derive_expense_components(rows, 12)             # no error
-    assert len(EXPENSE_BASES) == 6
+    assert len(EXPENSE_BASES) == 4              # per_policy / premium / surrender_value / claim
 
 
 def test_helper_exported_at_package_level():
@@ -152,10 +159,10 @@ def _basis_rows():
         discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.05,
         expense_inflation=0.03,
         expense_items=(
-            ExpenseItem("acquisition",  "alpha_fixed",    120_000.0),
-            ExpenseItem("acquisition",  "alpha_pro_rata",        0.20),
-            ExpenseItem("collection",   "beta_pro_rata",         0.02),
-            ExpenseItem("maintenance",  "gamma_fixed",       36_000.0),
+            ExpenseItem("acquisition", "per_policy",    120_000.0),
+            ExpenseItem("acquisition", "premium",        0.20),
+            ExpenseItem("maintenance", "premium",         0.02),
+            ExpenseItem("maintenance", "per_policy",       36_000.0),
         ),
         coverages=(CoverageRate("DEATH", mort),),
     )
@@ -172,7 +179,7 @@ def test_lae_pro_rata_row_lifts_expense():
     with_lae = dataclasses.replace(
         base_rows,
         expense_items=base_rows.expense_items + (
-            ExpenseItem("LAE", "lae_pro_rata", 0.02),
+            ExpenseItem("claims", "claim", 0.02),
         ),
     )
     m_base = fcf.gmm.measure(mp, base_rows)
@@ -214,7 +221,7 @@ def test_surrender_value_pro_rata_lands_in_sixth_primitive():
     """A ``surrender_value_pro_rata`` row contributes only to the 6th primitive
     -- a scalar annual rate with NO inflation applied (it rides the surrender
     curve's own growth)."""
-    rows = (ExpenseItem("maintenance", "surrender_value_pro_rata", 0.004),)
+    rows = (ExpenseItem("maintenance", "surrender_value", 0.004),)
     infl = (1.05) ** (np.arange(12) / 12.0)        # would inflate an inflating basis
     a_pr, a_fx, b_pr, gamma, lae, surr = derive_expense_components(rows, 12, infl)
     assert surr == 0.004                            # scalar, not inflated
@@ -250,7 +257,7 @@ def test_surrender_value_pro_rata_hand_calc():
     rate = 0.004
     base, value = _surrender_basis()
     with_surr, _ = _surrender_basis(
-        (ExpenseItem("maintenance", "surrender_value_pro_rata", rate),))
+        (ExpenseItem("maintenance", "surrender_value", rate),))
     m0 = fcf.gmm.measure(mp, base)
     m1 = fcf.gmm.measure(mp, with_surr)
     inforce = m0.cashflows.inforce              # identical in both runs
@@ -270,7 +277,7 @@ def test_surrender_value_pro_rata_routes_fast_to_full():
     returns the full-path BEL."""
     mp = _term_life_mp()
     with_surr, _ = _surrender_basis(
-        (ExpenseItem("maintenance", "surrender_value_pro_rata", 0.004),))
+        (ExpenseItem("maintenance", "surrender_value", 0.004),))
     m_full = fcf.gmm.measure(mp, with_surr, full=True)
     m_fast = fcf.gmm.measure(mp, with_surr, full=False)
     assert np.isclose(m_full.bel_path[0, 0], m_fast.bel[0])
@@ -290,7 +297,7 @@ def test_surrender_value_pro_rata_requires_curve():
         mortality_annual=mort, lapse_annual=lapse, discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.05,
         expense_items=(
-            ExpenseItem("maintenance", "surrender_value_pro_rata", 0.004),),
+            ExpenseItem("maintenance", "surrender_value", 0.004),),
         coverages=(CoverageRate("DEATH", mort),),
     )
     with pytest.raises(ValueError, match="requires Basis.surrender_value_curve"):
@@ -310,7 +317,7 @@ def test_surrender_value_pro_rata_rejected_on_account_book():
         surrender_value_curve=np.full(n_time, 1_000_000.0),
         surrender_value_basis="amount_per_policy",
         expense_items=basis.expense_items + (
-            ExpenseItem("maintenance", "surrender_value_pro_rata", 0.004),),
+            ExpenseItem("maintenance", "surrender_value", 0.004),),
     )
     with pytest.raises(ValueError, match="account-backed"):
         fcf.gmm.measure(mp, account_basis)

@@ -57,7 +57,7 @@ def make_vfa_basis(*, investment_return=0.05, fund_fee=0.015):
         discount_annual=investment_return, ra_confidence=0.75,
         mortality_cv=0.0, expense_cv=0.10,
         investment_return=investment_return, fund_fee=fund_fee,
-        expense_items=(ExpenseItem("maintenance", "gamma_fixed", 1_000.0),),
+        expense_items=(ExpenseItem("maintenance", "per_policy", 1_000.0),),
         coverages=(CoverageRate("DEATH", death_fn),))
 
 

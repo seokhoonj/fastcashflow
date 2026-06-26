@@ -349,7 +349,7 @@ def test_vfa_onerous_when_expenses_exceed_the_fee():
         ModelPoints.single(40, 0.0, 60, account_value=1e8,
                            calculation_methods=PATTERNS),
         _basis(expense_items=(
-            ExpenseItem("acquisition", "alpha_fixed", 10_000_000.0),
+            ExpenseItem("acquisition", "per_policy", 10_000_000.0),
         )),
     )
     assert np.isclose(profitable.loss_component[0], 0.0)
@@ -612,7 +612,7 @@ def test_vfa_ra_zero_without_expense_cv():
         ModelPoints.single(40, 0.0, 60, account_value=1e8,
                            calculation_methods=PATTERNS),
         _basis(expense_items=(
-            ExpenseItem("maintenance", "gamma_fixed", 120_000.0),
+            ExpenseItem("maintenance", "per_policy", 120_000.0),
         )),
     )
     assert np.allclose(res.ra, 0.0)
@@ -622,7 +622,7 @@ def test_vfa_ra_scales_with_expense_cv():
     """The VFA RA is a confidence-level margin linear in the expense CV."""
     mp = ModelPoints.single(40, 0.0, 60, account_value=1e8,
                             calculation_methods=PATTERNS)
-    _g120k = (ExpenseItem("maintenance", "gamma_fixed", 120_000.0),)
+    _g120k = (ExpenseItem("maintenance", "per_policy", 120_000.0),)
     r1 = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.10))
     r2 = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.20))
     assert r1.ra_path[0, 0] > 0.0
@@ -633,7 +633,7 @@ def test_vfa_ra_reduces_the_csm():
     """The RA is part of the fulfilment cash flows, so it reduces the CSM."""
     mp = ModelPoints.single(40, 0.0, 60, account_value=1e8,
                             calculation_methods=PATTERNS)
-    _g120k = (ExpenseItem("maintenance", "gamma_fixed", 120_000.0),)
+    _g120k = (ExpenseItem("maintenance", "per_policy", 120_000.0),)
     no_ra = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.0))
     with_ra = fcf.vfa.measure(mp, _basis(expense_items=_g120k, expense_cv=0.30))
     assert with_ra.csm_path[0, 0] < no_ra.csm_path[0, 0]
@@ -658,7 +658,7 @@ def test_load_sample_vfa_is_measurable():
 def test_vfa_report_releases_the_ra_into_revenue():
     """The report releases the VFA RA into insurance revenue."""
     basis = _basis(expense_items=(
-        ExpenseItem("maintenance", "gamma_fixed", 120_000.0),
+        ExpenseItem("maintenance", "per_policy", 120_000.0),
     ), expense_cv=0.25)
     m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 60, account_value=1e8,
                         calculation_methods=PATTERNS), basis)
@@ -1042,7 +1042,7 @@ def test_vfa_fee_fix_leaves_bel_ra_csm_unchanged():
     basis = make_death_basis(mortality_q=0.005 / 12, lapse_q=0.04 / 12,
                              discount_annual=0.03, ra_confidence=0.75,
                              mortality_cv=0.10, investment_return=0.06, fund_fee=0.015,
-                             expense_items=(ExpenseItem("maintenance", "gamma_fixed",
+                             expense_items=(ExpenseItem("maintenance", "per_policy",
                                                         100_000.0),))
     basis = replace(basis, expense_cv=0.10, settlement_pattern=np.array([0.5, 0.3, 0.2]))
     m = fcf.vfa.measure(ModelPoints.single(40, 0.0, 120, account_value=1e8,
@@ -1380,7 +1380,7 @@ def test__vfa_net_liability_cashflows_reconciles_to_bel_hand_calc():
     equals the BEL (the unit-funded account-value benefit drops out)."""
     from fastcashflow.alm._vfa import net_liability_cashflows
     basis = _basis(investment_return=0.0, fund_fee=0.02, expense_cv=0.0,
-                   expense_items=(ExpenseItem("maintenance", "gamma_fixed", 5.0),))
+                   expense_items=(ExpenseItem("maintenance", "per_policy", 5.0),))
     av0, gmab, term = 1000.0, 1200.0, 60
     mp = ModelPoints.single(40, 0.0, term, account_value=av0,
                             minimum_death_benefit=1100.0,

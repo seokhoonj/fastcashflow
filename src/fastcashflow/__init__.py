@@ -13,8 +13,9 @@ Conventional import alias::
 quantity this engine computes.
 """
 from fastcashflow.basis import (
-    Basis, BasisRouter, CoverageRate, EXPENSE_BASES, RA_METHODS,
-    SURRENDER_VALUE_BASES, ExpenseItem, derive_expense_components, describe_basis,
+    Basis, BasisRouter, CoverageRate, EXPENSE_BASES, EXPENSE_CATEGORIES,
+    RA_METHODS, SURRENDER_VALUE_BASES, ExpenseItem, derive_expense_components,
+    describe_basis,
 )
 from fastcashflow.reporting.closing import (
     ClosePackage, assemble_finance, assemble_service_result, assemble_sofp, close,
@@ -117,6 +118,7 @@ __all__ = [
     "plot_liability", "plot_cashflows", "plot_csm_runoff",
     "plot_risk_adjustment", "plot_analysis_of_change", "plot_stochastic",
     "CalculationMethod", "CoverageRate", "ExpenseItem", "EXPENSE_BASES",
+    "EXPENSE_CATEGORIES",
     "RA_METHODS", "SURRENDER_VALUE_BASES",
     "derive_expense_components",
     "RISK_MORTALITY", "RISK_MORBIDITY",

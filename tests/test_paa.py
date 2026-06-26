@@ -65,8 +65,8 @@ def test_paa_lrc_builds_and_releases():
 def test_paa_service_result_is_the_underwriting_profit():
     """Total service result = premiums - claims - expenses."""
     basis = _basis(expense_items=(
-        ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
-        ExpenseItem("maintenance",  "gamma_fixed",  12_000.0),
+        ExpenseItem("acquisition", "per_policy",    100_000.0),
+        ExpenseItem("maintenance", "per_policy",  12_000.0),
     ))
     res = fcf.paa.measure(ModelPoints.single(45, 60_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS), basis)
     cf = res.cashflows
@@ -106,7 +106,7 @@ def test_paa_onerous_test_honours_cost_of_capital_ra():
 def test_paa_revenue_basis_claims():
     """B126(b): revenue allocated by the expected timing of incurred claims."""
     basis = _basis(expense_items=(
-        ExpenseItem("acquisition", "alpha_fixed", 500_000.0),
+        ExpenseItem("acquisition", "per_policy", 500_000.0),
     ))
     mps = ModelPoints.single(40, 50_000.0, 12, benefits={"DEATH": 1e8}, calculation_methods=PATTERNS)
     by_time = fcf.paa.measure(mps, basis, revenue_basis="time")

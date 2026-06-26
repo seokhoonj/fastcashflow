@@ -1127,7 +1127,7 @@ def test_ul__vfa_net_liability_cashflows_reconciles_to_bel():
         mortality_annual=0.006, lapse_annual=0.03, discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.1, investment_return=0.0,
         coi_annual=coi, premium_load=0.08,
-        expense_items=(fcf.ExpenseItem("maint", "gamma_fixed", 300.0),),
+        expense_items=(fcf.ExpenseItem("maintenance", "per_policy", 300.0),),
         coverages=(CoverageRate("DEATH", coi, funds_from_account=True,
                                 pays_account_balance=True),))
     mp = ModelPoints(   # mixed terms, real GMDB / GMAB, load + admin + COI exercised
@@ -1157,7 +1157,7 @@ def test_ul_vfa_net_liability_reconciles_with_cost_deducting_rider():
         mortality_annual=0.006, lapse_annual=0.02, discount_annual=0.03,
         ra_confidence=0.75, mortality_cv=0.1, investment_return=0.0,
         coi_annual=0.0015, premium_load=0.08,
-        expense_items=(fcf.ExpenseItem("maint", "gamma_fixed", 300.0),),
+        expense_items=(fcf.ExpenseItem("maintenance", "per_policy", 300.0),),
         coverages=(CoverageRate("DEATH", 0.0015, funds_from_account=True,
                                 pays_account_balance=True),
                    CoverageRate("CANCER", 0.004, funds_from_account=True,

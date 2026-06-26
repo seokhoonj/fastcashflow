@@ -71,7 +71,7 @@
     `surrender_value_basis` 가 해석 결정)
 * - `expense_tables`
   - 선택
-  - 사업비 항목 ledger (`expense_type` × `basis` × `value`)
+  - 사업비 항목 ledger (`category` × `base` × `value`)
 * - `inflation_tables`
   - 선택
   - 사업비 인플레이션 (`table_id` × `year`)
@@ -124,7 +124,7 @@ reader 가 자동 감지** 합니다:
 `inflation_tables` 는 `table_id` × `year` × `rate`,
 `surrender_value_tables` 는 `table_id` × `duration_month` × `factor` (또는
 `amount`; segments 의 `surrender_value_basis` 가 해석),
-`expense_tables` 는 `table_id` × `expense_type` × `basis` × `value` 입니다.
+`expense_tables` 는 `table_id` × `category` × `base` × `value` 입니다.
 
 ## 작동 예제 — 견본을 만들고 읽어 평가
 

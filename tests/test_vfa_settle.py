@@ -26,7 +26,7 @@ from fastcashflow._measurement.vfa import _csm_loss_component_step, _project
 def _basis(*, investment_return=0.05, fund_fee=0.015, expense=1_000.0,
            settlement_pattern=None):
     death_fn = lambda s, ia, d: np.full(s.shape, 0.012)
-    items = ((ExpenseItem("maintenance", "gamma_fixed", expense),)
+    items = ((ExpenseItem("maintenance", "per_policy", expense),)
              if expense else ())
     return Basis(
         mortality_annual=death_fn,

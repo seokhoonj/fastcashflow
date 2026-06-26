@@ -26,8 +26,8 @@ def test_value_matches_measure():
         discount_annual=0.03,
         expense_inflation=0.02,
         expense_items=(
-            ExpenseItem("acquisition",  "alpha_fixed",    250_000.0),
-            ExpenseItem("maintenance",  "gamma_fixed",  48_000.0),
+            ExpenseItem("acquisition", "per_policy",    250_000.0),
+            ExpenseItem("maintenance", "per_policy",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,
@@ -86,8 +86,8 @@ def test_fast_gpu_matches_cpu():
         discount_annual=0.03,
         expense_inflation=0.02,
         expense_items=(
-            ExpenseItem("acquisition",  "alpha_fixed",    250_000.0),
-            ExpenseItem("maintenance",  "gamma_fixed",  48_000.0),
+            ExpenseItem("acquisition", "per_policy",    250_000.0),
+            ExpenseItem("maintenance", "per_policy",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,
@@ -128,8 +128,8 @@ def test_fast_gpu_matches_cpu_with_transition():
         discount_annual=0.03,
         expense_inflation=0.02,
         expense_items=(
-            ExpenseItem("acquisition",  "alpha_fixed",    200_000.0),
-            ExpenseItem("maintenance",  "gamma_fixed",  48_000.0),
+            ExpenseItem("acquisition", "per_policy",    200_000.0),
+            ExpenseItem("maintenance", "per_policy",  48_000.0),
         ),
         ra_confidence=0.85,
         mortality_cv=0.12,

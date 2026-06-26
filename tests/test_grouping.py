@@ -18,8 +18,8 @@ def _basis():
         discount_annual   = 0.03,
         expense_inflation = 0.02,
         expense_items     = (
-            ExpenseItem("acquisition",  "alpha_fixed",    100_000.0),
-            ExpenseItem("maintenance",  "gamma_fixed",  60_000.0),
+            ExpenseItem("acquisition", "per_policy",    100_000.0),
+            ExpenseItem("maintenance", "per_policy",  60_000.0),
         ),
         ra_confidence     = 0.75,
         mortality_cv      = 0.10,

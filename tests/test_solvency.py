@@ -624,7 +624,7 @@ def test_vfa_required_capital_routes_through_the_vfa_measure():
     basis = make_death_basis(
         mortality_q=0.002, lapse_q=0.004, discount_annual=0.03, ra_confidence=0.75,
         expense_cv=0.10, investment_return=0.0, fund_fee=0.02,
-        expense_items=(fcf.ExpenseItem("maintenance", "gamma_fixed", 5.0),))
+        expense_items=(fcf.ExpenseItem("maintenance", "per_policy", 5.0),))
     mp = fcf.ModelPoints.single(40, 0.0, 120, account_value=1000.0,
                                 minimum_accumulation_benefit=1300.0,
                                 calculation_methods=PATTERNS)

@@ -1455,7 +1455,7 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
             and (np.any(model_points.coverage_step_month)
                  or np.any(model_points.coverage_escalation_annual))):
         return True
-    if any(item.basis == "surrender_value_pro_rata"
+    if any(item.category == "maintenance" and item.base == "surrender_value"
            for item in basis.expense_items):
         return True
     sm = resolve_state_model(basis)

@@ -136,7 +136,7 @@ def vfa_settlement():
         lapse_annual=lambda s, ia, d: np.full(s.shape, 0.05),
         discount_annual=0.05, ra_confidence=0.75, mortality_cv=0.0,
         expense_cv=0.10, investment_return=0.05, fund_fee=0.015,
-        expense_items=(ExpenseItem("maintenance", "gamma_fixed", 1_000.0),),
+        expense_items=(ExpenseItem("maintenance", "per_policy", 1_000.0),),
         settlement_pattern=np.array([0.6, 0.4]),
         coverages=(CoverageRate("DEATH", death_fn),))
     mp0 = ModelPoints.single(40, 100.0, 24, account_value=1e6,

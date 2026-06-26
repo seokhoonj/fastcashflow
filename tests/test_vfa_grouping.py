@@ -27,7 +27,7 @@ def _vfa_basis(**overrides):
         fund_fee          = 0.015,
         # a fixed acquisition cost makes the tiny-account-value policy onerous
         # (expense-dominated) and the large one profitable (fee-dominated)
-        expense_items     = (ExpenseItem("acquisition", "alpha_fixed", 5_000_000.0),),
+        expense_items     = (ExpenseItem("acquisition", "per_policy", 5_000_000.0),),
     )
     kw.update(overrides)
     return make_death_basis(**kw)

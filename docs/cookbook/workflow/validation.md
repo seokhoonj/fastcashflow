@@ -104,8 +104,8 @@ mp[0]  (TERM_LIFE_A/FC, sex=M, issue_age=35, term=240m, premium_term=240m, count
 |   +- discount_annual      = ndarray len=101 [0.03103, ..., 0.0405]
 |   +- expense_inflation    = ndarray len=1 [0.02, ..., 0.02]
 |   +- expense_items        = tuple  (len=2)
-|   |   +- ExpenseItem('acquisition', basis='alpha_fixed', value=700000)
-|   |   `- ExpenseItem('maintenance', basis='gamma_fixed', value=90000)
+|   |   +- ExpenseItem('acquisition', 'per_policy', value=700000)
+|   |   `- ExpenseItem('maintenance', 'per_policy', value=90000)
 |   +- ra: method='confidence_level', conf=0.75
 |   `- cv: mort=0.1 morb=0.12 long=0 disab=0
 +- Coverages (rate-driven, n=5)

@@ -381,9 +381,9 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseItem, ...]]:
     """Read the optional ``expense_tables`` sheet.
 
     Each row is one ``ExpenseItem`` -- the item-form expense ledger the
-    engine dispatches on. Columns: ``table_id``, ``expense_type``,
-    ``basis``, ``value``. The same ``table_id`` may span multiple rows
-    (an acquisition row plus a maintenance row, plus an LAE row, ...).
+    engine dispatches on. Columns: ``table_id``, ``category``, ``base``,
+    ``value``. The same ``table_id`` may span multiple rows (an acquisition
+    row plus a maintenance row, plus a claims row, ...).
     Returns ``{table_id: tuple[ExpenseItem, ...]}`` for the
     segments-side ``expense_table`` lookup to consume. Inflation is
     *not* a row attribute -- it lives on the segment as the global
@@ -395,14 +395,14 @@ def _read_expense_tables(ws) -> dict[str, tuple[ExpenseItem, ...]]:
     for r in _sheet_dicts(ws):
         if first:
             _require_row_cols(
-                r, ("table_id", "expense_type", "basis", "value"),
+                r, ("table_id", "category", "base", "value"),
                 sheet=ws.title,
             )
             first = False
         tid = str(r["table_id"]).strip()
         by_id.setdefault(tid, []).append(ExpenseItem(
-            expense_type=str(r["expense_type"]).strip(),
-            basis=str(r["basis"]).strip(),
+            category=str(r["category"]).strip(),
+            base=str(r["base"]).strip(),
             value=float(r["value"]),
         ))
     return {tid: tuple(rows) for tid, rows in by_id.items()}

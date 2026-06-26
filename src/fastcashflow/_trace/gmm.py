@@ -147,7 +147,7 @@ def trace(
         basis_lines.append("expense_items        = ()  (no expense)")
     else:
         row_lines: list[object] = [
-            (f"ExpenseItem({r.expense_type!r}, basis={r.basis!r}, "
+            (f"ExpenseItem({r.category!r}, {r.base!r}, "
              f"value={r.value:g})")
             for r in rows
         ]
