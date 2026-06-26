@@ -12,7 +12,7 @@ valuation date from the observed fund value (with a carry-only CSM, no
 paragraph-45 remeasurement); ``measure_aggregate`` is the bounded-memory
 portfolio-aggregate view for books too large to hold every trajectory and
 ``measure_stream`` its out-of-core variant; ``tvog`` is the standalone
-time-value analysis of the credited-rate guarantee over return scenarios
+time-value analysis of the crediting-rate guarantee over return scenarios
 (the GMDB / GMAB floor time value lives in
 ``measure(..., return_scenarios).time_value``); ``trace`` walks one model
 point's VFA measurement.

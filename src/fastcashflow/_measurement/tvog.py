@@ -457,14 +457,14 @@ def ul_credit_rate_time_value(
     investment_return: float,
     return_scenarios: FloatArray,
 ) -> FloatArray:
-    """Per-path cost of the credited-rate floor on a UNIVERSAL-LIFE account book.
+    """Per-path cost of the crediting-rate floor on a UNIVERSAL-LIFE account book.
 
     The minimum-crediting-rate guarantee credits ``max(return, floor)`` each
     month; the entity funds the shortfall when the return is below the floor.
     That funded extra account value is paid out on the policy's account exits.
     Unlike :func:`ul_guarantee_floor_time_value` -- which prices a put on the
     account from BELOW (``max(0, guarantee - av)``) on a single floored roll --
-    the credited-rate floor is the account-value LIFT the guarantee itself funds,
+    the crediting-rate floor is the account-value LIFT the guarantee itself funds,
     so the account is rolled TWICE per path: once credited at the floor
     (``credited_monthly_rate(return, minimum_crediting_rate)``) and once at the
     bare return (no floor). Their exit-payout difference is the guarantee's cost.
@@ -480,7 +480,7 @@ def ul_credit_rate_time_value(
     ``max(av_mid, face)`` (the lift only above the face), and a maturity pays
     ``max(av_term, gmab)`` (the lift only above the GMAB). Below those strikes the
     death / maturity payout is unchanged by the floor (it is the separately-valued
-    GMDB / GMAB floor that bites there), so the credited-rate and GMDB / GMAB
+    GMDB / GMAB floor that bites there), so the crediting-rate and GMDB / GMAB
     guarantees partition the account-value region with no double count.
 
     Discounting is at the underlying-items return (the VFA basis). Row 0 of the
@@ -566,7 +566,7 @@ def _measure_tvog_ul(
     return_scenarios: FloatArray,
     g_annual: float,
 ) -> TVOGResult:
-    """measure_tvog for a universal-life account book -- the credited-rate floor.
+    """measure_tvog for a universal-life account book -- the crediting-rate floor.
 
     The closed-form variable-annuity path (:func:`tvog_weights`) cannot price a UL
     account (additive, COI feedback), so the account is re-rolled floored vs bare
@@ -576,7 +576,7 @@ def _measure_tvog_ul(
     am = getattr(model_points, "annuitization_months", None)
     if am is not None and np.any(np.asarray(am) > 0):
         raise NotImplementedError(
-            "measure_tvog (credited-rate floor) is not yet supported for an "
+            "measure_tvog (crediting-rate floor) is not yet supported for an "
             "annuitizing universal-life book.")
 
     inforce = proj.inforce
@@ -627,18 +627,18 @@ def measure_tvog(
 ) -> TVOGResult:
     """Measure the time value of a VFA contract's minimum-crediting-rate guarantee.
 
-    Values the credited-rate floor only -- the guarantee that the account is
+    Values the crediting-rate floor only -- the guarantee that the account is
     credited ``max(return, minimum_crediting_rate)`` each month. The GMDB / GMAB
     account-value floors are NOT included here; their time value is folded into
     ``vfa.measure(..., return_scenarios).time_value`` instead. This function is
-    the standalone credited-rate analysis.
+    the standalone crediting-rate analysis.
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns -- one path per scenario, ``n_time`` being the
     projection horizon. The model points must carry a crediting guarantee --
     a ``minimum_crediting_rate`` of ``0.0`` (a real 0% floor, ``max(return, 0)``)
     or a positive rate. A contract with no crediting guarantee
-    (``NO_GUARANTEE_RATE``) is rejected: it has no credited-rate time value to
+    (``NO_GUARANTEE_RATE``) is rejected: it has no crediting-rate time value to
     measure (use ``vfa.measure(..., return_scenarios).time_value`` for the
     GMDB / GMAB floor time value instead). In v1 the rate is taken as a
     portfolio-wide scalar (per-MP varying rates with stochastic returns are a
@@ -664,7 +664,7 @@ def measure_tvog(
         )
     if g_unique.size == 0 or float(g_unique[0]) == NO_GUARANTEE_RATE:
         raise ValueError(
-            "measure_tvog values a credited-rate guarantee, and this contract "
+            "measure_tvog values a crediting-rate guarantee, and this contract "
             "carries none (minimum_crediting_rate == NO_GUARANTEE_RATE). A 0.0 "
             "rate is a real 0% floor and is valued here; the GMDB / GMAB "
             "account-value floors are valued by "
@@ -686,7 +686,7 @@ def measure_tvog(
             f"horizon), got {return_scenarios.shape[1]}"
         )
 
-    # A universal-life account book takes the re-rolled credited-rate floor; the
+    # A universal-life account book takes the re-rolled crediting-rate floor; the
     # closed-form path below is the variable-annuity (account_value-only) case.
     if proj.account is not None:
         return _measure_tvog_ul(model_points, basis, proj, return_scenarios, g_annual)

@@ -43,7 +43,7 @@ def validate_crediting_rate(rate: FloatArray) -> None:
     nor the :data:`NO_GUARANTEE_RATE` sentinel.
 
     A stray negative (a ``-0.02`` from a sign error, say) must not be silently
-    read as "no guarantee" by the credited-rate floor, so only the exact
+    read as "no guarantee" by the crediting-rate floor, so only the exact
     sentinel is permitted below zero.
     """
     rate = np.asarray(rate, dtype=np.float64)

@@ -805,7 +805,7 @@ def measure_stochastic(model_points: ModelPoints, basis: Basis,
     """The VFA liability distribution over fund-return scenarios -- the VFA
     counterpart of :func:`fastcashflow.gmm.stochastic`.
 
-    For each ``return_scenarios`` path the full guarantee cost (the credited-rate
+    For each ``return_scenarios`` path the full guarantee cost (the crediting-rate
     floor plus the GMDB / GMAB account-value floors) is realised and folded into
     the liability, giving a per-scenario BEL / RA / CSM / loss component. Read the
     distribution off the returned

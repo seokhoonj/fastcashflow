@@ -381,7 +381,7 @@ def test_vfa_tvog_folds_into_bel_and_reduces_csm():
 
 
 def test_vfa_tvog_floors_only_points_to_measure_time_value():
-    """vfa.tvog values an explicit credited-rate guarantee only and refuses a
+    """vfa.tvog values an explicit crediting-rate guarantee only and refuses a
     contract with none (the NO_GUARANTEE_RATE default), pointing to
     measure().time_value -- where the GMDB / GMAB floor time value lives.
 
@@ -400,7 +400,7 @@ def test_vfa_tvog_floors_only_points_to_measure_time_value():
                                  calculation_methods=PATTERNS)
     plain = ModelPoints.single(40, 0.0, term, account_value=1e8,
                                calculation_methods=PATTERNS)
-    # the standalone credited-rate tvog refuses a no-crediting-guarantee contract
+    # the standalone crediting-rate tvog refuses a no-crediting-guarantee contract
     with pytest.raises(ValueError, match="time_value"):
         fcf.vfa.tvog(floored, basis, scenarios)
     # the GMAB floor's time value shows up in measure().time_value
@@ -532,7 +532,7 @@ def test_tvog_boundary_cut_contract_does_not_index_out_of_bounds():
 def test_vfa_crediting_sentinel_vs_zero_floor_vs_positive():
     """The three crediting-rate cases, valued under scenarios that straddle
     zero (so a 0% floor genuinely bites; a positive central return would hide
-    the distinction). No GMDB/GMAB here, so time_value is the credited-rate
+    the distinction). No GMDB/GMAB here, so time_value is the crediting-rate
     TVOG alone. NO_GUARANTEE_RATE -> credit = return -> zero TVOG; 0.0 -> a real
     0% floor with a positive time value; a positive rate floors higher still."""
     term = 60

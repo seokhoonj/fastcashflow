@@ -256,7 +256,7 @@ def test_account_book_gated_on_raw_consumers():
     # The standalone vfa.tvog diagnostic is NOT gated: it values the CREDITED-RATE
     # floor for a universal-life book (a different guarantee from the GMDB/GMAB
     # account-value floors, whose time value comes through vfa.measure --
-    # test_vfa_ul_guarantee_time_value; the credited-rate floor is
+    # test_vfa_ul_guarantee_time_value; the crediting-rate floor is
     # test_ul_credit_rate_tvog_*). _two_mp carries a per-MP-varying crediting rate
     # (0.0 vs 0.01), so it raises for THAT reason (scalar guarantee in v1), not an
     # account gate -- a uniform-rate UL book is measured (test below).
@@ -297,12 +297,12 @@ def test_reinsurance_universal_life_cedes_nar():
     assert np.isfinite(np.atleast_1d(r.ra)).all()
 
 
-# --- credited-rate floor TVOG for a universal-life book (standalone vfa.tvog) ---
+# --- crediting-rate floor TVOG for a universal-life book (standalone vfa.tvog) ---
 #
 # The minimum-crediting-rate guarantee credits max(return, floor) each month; the
 # entity funds the shortfall, and that funded extra account value is paid out on
 # the account exits. Unlike the GMDB / GMAB floors (a put on the account, valued
-# through vfa.measure(return_scenarios)), the credited-rate floor is the account
+# through vfa.measure(return_scenarios)), the crediting-rate floor is the account
 # LIFT itself, so the account is re-rolled floored vs bare and the exit-payout
 # difference is the cost. measure_tvog routes a universal-life book here.
 
@@ -427,7 +427,7 @@ def test_ul_credit_rate_tvog_monotone_in_g():
 
 
 def test_ul_credit_rate_tvog_rejects():
-    # NO_GUARANTEE_RATE has no credited-rate floor (ValueError); a per-MP varying
+    # NO_GUARANTEE_RATE has no crediting-rate floor (ValueError); a per-MP varying
     # rate is a scalar-only v1 restriction (NotImplementedError); an annuitizing
     # book uses a different conversion floor (NotImplementedError); the scenario
     # width must match the horizon.
@@ -497,7 +497,7 @@ def test_ul_surrender_charge_fast_matches_full():
 
 
 def test_ul_surrender_charge_reduces_credit_floor_tvog():
-    # The credited-rate floor's surrender leg pays av_mid * (1 - charge), so a
+    # The crediting-rate floor's surrender leg pays av_mid * (1 - charge), so a
     # surrender charge reduces that leg (death / maturity legs are unchanged).
     mp = _credit_mp(g=0.05, term=24)
     base = _ul_basis()
@@ -520,7 +520,7 @@ def test_ul_surrender_charge_reduces_credit_floor_tvog():
 # ------------------ combined guarantee TVOG (credited floor + GMDB/GMAB) ------------------
 
 def test_guarantee_tvog_is_additive():
-    # guarantee_tvog sums the credited-rate floor (vfa.tvog) and the GMDB/GMAB
+    # guarantee_tvog sums the crediting-rate floor (vfa.tvog) and the GMDB/GMAB
     # account-value floors (vfa.measure.time_value, over the model points) -- the
     # two disjoint guarantees -- so total equals the two separate calls.
     mp = _credit_mp(g=0.05, term=24, gmab=12_000_000.0)   # both guarantees live
