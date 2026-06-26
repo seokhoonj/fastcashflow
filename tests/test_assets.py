@@ -679,7 +679,7 @@ def test__vfa_cashflow_gap_uses_the_guarantee_excess_basis():
     pf = assets.Portfolio(holdings=(
         assets.Bond(face=100, coupon_rate=0.05, maturity_years=5, frequency=1),
         assets.Equity(market_value=500),))                  # no scheduled CF
-    gap = assets._vfa_cashflow_gap(pf, m)
+    gap = assets._vfa.cashflow_gap(pf, m)
     assert gap.asset_cf.shape == (n_time + 1,)
     assert gap.liability_cf.shape == (n_time + 1,)
     expected_liab = np.zeros(n_time + 1); expected_liab[:n_time] = net
@@ -1187,7 +1187,7 @@ def test_vfa_gap_and_interaction_support_account_backed_ul():
     import fastcashflow.solvency as sv
     pf, mp, basis = _ul_book()
     m = fcf.vfa.measure(mp, basis, full=True)
-    gap = assets._vfa_cashflow_gap(pf, m)
+    gap = assets._vfa.cashflow_gap(pf, m)
     assert np.all(np.isfinite(gap.net_cf))
     il = fcf.vfa.interaction_loss(pf, mp, basis, return_shock=-0.3,
                                      lapse_sensitivity=0.0, haircut=0.0)

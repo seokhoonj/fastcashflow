@@ -38,7 +38,7 @@ from fastcashflow.alm._vfa import (
 from fastcashflow.solvency._vfa import (
     required_capital, equity_scr, interest_scr, assess,
     interaction_loss, assess_dynamic, assess_stochastic)
-from fastcashflow.assets import _vfa_cashflow_gap as cashflow_gap
+from fastcashflow.assets._vfa import cashflow_gap
 from fastcashflow.solvency._assessment import DynamicAssessment
 
 __all__ = ["measure", "measure_aggregate", "measure_inforce",

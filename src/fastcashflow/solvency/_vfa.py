@@ -19,8 +19,9 @@ from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.assets import (
     Portfolio, available_capital, portfolio_value,
-    portfolio_value_by_scenario, liquidate, _vfa_cashflow_gap,
+    portfolio_value_by_scenario, liquidate,
 )
+from fastcashflow.assets._vfa import cashflow_gap
 from fastcashflow.solvency._engine import (
     required_capital as _engine_required_capital, RegimeSpec, KICSInterest, SCRResult,
 )
@@ -144,7 +145,7 @@ def _interaction(portfolio: Portfolio, model_points: ModelPoints,
     stressed_nav = asset_val - float(measure(
         mp_s, basis, full=False, lapse_sensitivity=lapse_sensitivity).bel.sum())
     m_s = measure(mp_s, basis, full=True, lapse_sensitivity=lapse_sensitivity)
-    liq = liquidate(_vfa_cashflow_gap(portfolio, m_s), haircut=haircut,
+    liq = liquidate(cashflow_gap(portfolio, m_s), haircut=haircut,
                     reinvest_rate=reinvest_rate, opening_balance=opening_balance)
     res = InteractionResult(base_nav=base_nav, stressed_nav=stressed_nav,
                             forced_sale_loss=liq.total_realized_loss)
