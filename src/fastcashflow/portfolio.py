@@ -26,21 +26,12 @@ import polars as pl
 
 from fastcashflow._measurement.model import model_tag
 from fastcashflow._typing import FloatArray, IntArray
-from fastcashflow._measurement.paa import (
-    measure_aggregate as _paa_aggregate,
-    measure_inforce as _paa_inforce)
-from fastcashflow._measurement.vfa import (
-    measure_aggregate as _vfa_aggregate,
-    measure_inforce as _vfa_inforce, _require_settlement_csm,
-    settle as _settle_vfa)
+from fastcashflow._measurement.vfa import _require_settlement_csm
 from fastcashflow._measurement import gmm as _gmm
 from fastcashflow._measurement import paa as _paa
 from fastcashflow._measurement import vfa as _vfa
 from fastcashflow.basis import BasisRouter
-from fastcashflow._measurement.gmm import (
-    _factorise_segments, measure as _measure_gmm,
-    measure_aggregate as _gmm_aggregate, measure_inforce as _gmm_inforce,
-    settle as _settle_gmm)
+from fastcashflow._measurement.gmm import _factorise_segments
 from fastcashflow._measurement.inforce import _reconcile_state
 from fastcashflow.io import (
     _stream_validate, write_measurement, _model_points_from_frames,
@@ -169,17 +160,17 @@ def measure_inforce(model_points: ModelPoints, state: InforceState, basis, *,
     slots = {}
     gmm_idx = parts["GMM"]
     if gmm_idx.size:
-        slots["gmm"] = ModelMeasurement(index=gmm_idx, measurement=_gmm_inforce(
+        slots["gmm"] = ModelMeasurement(index=gmm_idx, measurement=_gmm.measure_inforce(
             model_points.subset(gmm_idx), state.subset(gmm_idx),
             _submodel_router(basis, "GMM"), period_months=period_months, full=full))
     paa_idx = parts["PAA"]
     if paa_idx.size:
-        slots["paa"] = ModelMeasurement(index=paa_idx, measurement=_paa_inforce(
+        slots["paa"] = ModelMeasurement(index=paa_idx, measurement=_paa.measure_inforce(
             model_points.subset(paa_idx), state.subset(paa_idx),
             _submodel_router(basis, "PAA"), full=full))
     vfa_idx = parts["VFA"]
     if vfa_idx.size:
-        slots["vfa"] = ModelMeasurement(index=vfa_idx, measurement=_vfa_inforce(
+        slots["vfa"] = ModelMeasurement(index=vfa_idx, measurement=_vfa.measure_inforce(
             model_points.subset(vfa_idx), state.subset(vfa_idx),
             _submodel_router(basis, "VFA"), period_months=period_months))
     return PortfolioMeasurement(model_points=model_points, **slots)
@@ -269,7 +260,7 @@ _CHUNK_SIZE = 200_000
 #: which needs each chunk's full per-MP result to group-sum and to read the
 #: discount curve.
 _MEASURE_FULL = {
-    "GMM": lambda mp, b: _measure_gmm(mp, b, full=True),
+    "GMM": lambda mp, b: _gmm.measure(mp, b, full=True),
     "PAA": lambda mp, b: _paa.measure(mp, b, full=True),
     "VFA": lambda mp, b: _vfa.measure(mp, b, full=True)}
 
@@ -277,7 +268,7 @@ _MEASURE_FULL = {
 #: reuses these so the chunked-sum logic lives once in each model's namespace, not
 #: duplicated in the orchestrator.
 _LEAF_AGGREGATE = {
-    "GMM": _gmm_aggregate, "PAA": _paa_aggregate, "VFA": _vfa_aggregate}
+    "GMM": _gmm.measure_aggregate, "PAA": _paa.measure_aggregate, "VFA": _vfa.measure_aggregate}
 
 
 def _measurement_rows(measurement) -> int:
@@ -683,7 +674,7 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
                 f"partition; this portfolio declares only {model}")
         index = np.arange(model_points.n_mp, dtype=np.int64)
         if model == "GMM":
-            meas = _measure_gmm(model_points, basis, full=full, backend=backend)
+            meas = _gmm.measure(model_points, basis, full=full, backend=backend)
         else:
             meas = _measure_model_segmented(
                 model_points, basis, model, full=full, chunk_size=chunk_size,
@@ -703,7 +694,7 @@ def measure(model_points: ModelPoints, basis, *, full: bool = True,
     slots = {}
     gmm_idx = parts["GMM"]
     if gmm_idx.size:
-        slots["gmm"] = ModelMeasurement(index=gmm_idx, measurement=_measure_gmm(
+        slots["gmm"] = ModelMeasurement(index=gmm_idx, measurement=_gmm.measure(
             model_points.subset(gmm_idx), _submodel_router(basis, "GMM"),
             full=full, backend=backend))
     for model in ("PAA", "VFA"):
@@ -1224,7 +1215,7 @@ def settle_group_of_contracts(
                                         lock_in_rate=group_lock[g])
                     frac_arg = (float(pe_frac) if pe_frac.ndim == 0
                                 else pe_frac[rows])
-                    mv = _settle_vfa(model_points.subset(rows), sub_state,
+                    mv = _vfa.settle(model_points.subset(rows), sub_state,
                                      seg_basis, period_months=period,
                                      premium_experience_future_fraction=frac_arg)
                     for name in _vfa._VFA_GOC_SETTLEMENT_LINEAR:
@@ -1251,7 +1242,7 @@ def settle_group_of_contracts(
                 sub_state = replace(state.subset(rows), lock_in_rate=group_lock[g])
                 frac_arg = (float(pe_frac) if pe_frac.ndim == 0
                             else pe_frac[rows])
-                mv = _settle_gmm(
+                mv = _gmm.settle(
                     model_points.subset(rows), sub_state, seg_basis,
                     period_months=period,
                     premium_experience_future_fraction=frac_arg)
@@ -1795,7 +1786,7 @@ def _resolve_full_group_ids(model_points, by):
 #: Per model: the single-Basis headline-only measure, for the default
 #: profitability axis (loss component at inception).
 _HEADLINE_MEASURE = {
-    "GMM": _measure_gmm, "PAA": _paa.measure, "VFA": _vfa.measure}
+    "GMM": _gmm.measure, "PAA": _paa.measure, "VFA": _vfa.measure}
 
 
 # ---------------------------------------------------------------------------

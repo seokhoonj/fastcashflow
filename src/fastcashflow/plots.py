@@ -15,10 +15,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from fastcashflow._measurement.gmm import _require_full
 from fastcashflow._measurement.basis import _require_inception
 from fastcashflow.numerics import _norm_ppf
-from fastcashflow._measurement.paa import _require_full as _require_full_paa
 from fastcashflow._measurement.vfa import _require_settlement_csm
 from fastcashflow._measurement import gmm as _gmm
 from fastcashflow._measurement import paa as _paa
@@ -206,7 +204,7 @@ def _component_lines(series, ax, title):
 
 
 def _bel_ra_csm_lines(measurement, ax, title):
-    _require_full(measurement, "plot_liability()")
+    _gmm._require_full(measurement, "plot_liability()")
     return _component_lines(
         (("BEL", "bel", measurement.bel_path),
          ("RA", "ra", measurement.ra_path),
@@ -241,7 +239,7 @@ def _(measurement: _paa.Measurement, *, ax=None,
     # split); the label says so, and plot_analysis_of_change shows the loss
     # component's own run-off (component="loss_component").
     _require_inception(measurement, "plot_liability()")
-    _require_full_paa(measurement, "plot_liability()")
+    _paa._require_full(measurement, "plot_liability()")
     return _component_lines(
         (("LRC (excl. loss component)", "bel", measurement.lrc_path),
          ("LIC", "ra", measurement.lic_path)), ax, title)
@@ -313,7 +311,7 @@ def _direct_cashflow_chart(measurement, period_months, ax, title):
 def _(measurement: _gmm.Measurement, *, period_months=12, ax=None,
       title="Projected cash flows"):
     _require_inception(measurement, "plot_cashflows()")
-    _require_full(measurement, "plot_cashflows()")
+    _gmm._require_full(measurement, "plot_cashflows()")
     return _direct_cashflow_chart(measurement, period_months, ax, title)
 
 
@@ -321,7 +319,7 @@ def _(measurement: _gmm.Measurement, *, period_months=12, ax=None,
 def _(measurement: _vfa.Measurement, *, period_months=12, ax=None,
       title="Projected cash flows"):
     _require_settlement_csm(measurement, "plot_cashflows()")
-    _require_full(measurement, "plot_cashflows()")
+    _gmm._require_full(measurement, "plot_cashflows()")
     return _direct_cashflow_chart(measurement, period_months, ax, title)
 
 
@@ -329,7 +327,7 @@ def _(measurement: _vfa.Measurement, *, period_months=12, ax=None,
 def _(measurement: _paa.Measurement, *, period_months=12, ax=None,
       title="Projected cash flows"):
     _require_inception(measurement, "plot_cashflows()")
-    _require_full_paa(measurement, "plot_cashflows()")
+    _paa._require_full(measurement, "plot_cashflows()")
     return _direct_cashflow_chart(measurement, period_months, ax, title)
 
 
@@ -337,7 +335,7 @@ def _(measurement: _paa.Measurement, *, period_months=12, ax=None,
 def _(measurement: _reinsurance.Measurement, *, period_months=12, ax=None,
       title="Projected ceded cash flows"):
     _require_inception(measurement, "plot_cashflows()")
-    _require_full(measurement, "plot_cashflows()")
+    _gmm._require_full(measurement, "plot_cashflows()")
     return _cashflow_bars(
         measurement.recovery.sum(axis=0),
         measurement.reinsurance_premium.sum(axis=0),
@@ -363,7 +361,7 @@ def plot_csm_runoff(measurement, *, ax: Axes | None = None,
 
 
 def _csm_area(measurement, ax, title, *, clamp):
-    _require_full(measurement, "plot_csm_runoff()")
+    _gmm._require_full(measurement, "plot_csm_runoff()")
     ax = _axes(ax)
     csm = measurement.csm_path.sum(axis=0)
     months = np.arange(csm.shape[0])
