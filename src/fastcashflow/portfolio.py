@@ -44,7 +44,7 @@ from fastcashflow._measurement.movement import roll_forward, reconcile
 from fastcashflow.numerics import _csm_loss_component_step
 from fastcashflow.projection import Cashflows
 from fastcashflow.reporting.report import report, Report
-from fastcashflow._trace import gmm as _t_gmm, vfa as _t_vfa, paa as _t_paa
+from fastcashflow import _trace
 
 #: The orchestrator's public surface -- the measurement entry points and their
 #: result containers. Set explicitly so ``from fastcashflow.portfolio import *``
@@ -61,9 +61,9 @@ __all__ = [
 ]
 
 #: Route one model point to its model's tracer (the mixed-portfolio trace).
-_MODEL_TRACE = {"GMM": _t_gmm.trace, "VFA": _t_vfa.trace, "PAA": _t_paa.trace}
-_MODEL_TRACE_DIFF = {"GMM": _t_gmm.trace_diff, "VFA": _t_vfa.trace_diff,
-                     "PAA": _t_paa.trace_diff}
+_MODEL_TRACE = {"GMM": _trace.gmm.trace, "VFA": _trace.vfa.trace, "PAA": _trace.paa.trace}
+_MODEL_TRACE_DIFF = {"GMM": _trace.gmm.trace_diff, "VFA": _trace.vfa.trace_diff,
+                     "PAA": _trace.paa.trace_diff}
 
 
 def _model_of_row(mp_index: int, model_points: ModelPoints,

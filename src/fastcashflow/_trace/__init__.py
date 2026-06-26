@@ -8,3 +8,5 @@ re-exports on the model facades (``fcf.gmm.trace``, ``fcf.vfa.trace``,
 rendering / diff helpers live in :mod:`.common`. Facades and ``portfolio`` import
 the per-model modules directly.
 """
+
+from fastcashflow._trace import gmm, vfa, paa, reinsurance  # noqa: F401 (submodule access)
