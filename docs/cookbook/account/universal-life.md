@@ -291,11 +291,11 @@ payment_k = locked_annuity_payment x ((1 + 실제수익률) / (1 + 예정이율)
 **변액 payout 은 `vfa.measure` 전용입니다.** VFA 는 할인율 = 펀드수익률이라, 지급액의
 펀드 재부유와 할인의 펀드가 **상쇄**되어 BEL 이 "예정이율짜리 정기연금 (AIR-적립금)"
 으로 떨어집니다 — 투자위험은 계약자가 전부 지고 보험사엔 장수위험만 남습니다. GMM
-(locked-in 할인) 에선 상쇄가 안 돼 무의미하므로 `gmm.measure` 는 변액 payout 책을
+(locked-in 할인) 에선 상쇄가 안 돼 무의미하므로 `gmm.measure` 는 변액 payout 포트폴리오를
 거부합니다.
 
 번들 샘플 `"ul-var-annuity"` 는 0 번 = 실적배당 (예정이율 2%), 1 번 = 고정 GAO 의
-혼재 책입니다 (`vfa.measure` 가 둘 다 측정):
+혼재 포트폴리오입니다 (`vfa.measure` 가 둘 다 측정):
 
 ```python
 va_mp    = fcf.samples.model_points("ul-var-annuity")
