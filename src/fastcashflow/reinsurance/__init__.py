@@ -37,7 +37,7 @@ from fastcashflow.trace import (
     show_trace_diff_reinsurance as trace_diff,
 )
 # Assumed / mass-lapse reinsurance toolkit, exposed as fcf.reinsurance.mass_lapse.
-# The mass_lapse submodule imports only the private _mass_lapse_reinsurance
+# The mass_lapse submodule imports only the private _mass_lapse
 # package (never this held-measurement facade), so this binding is cycle-free.
 from fastcashflow.reinsurance import mass_lapse
 

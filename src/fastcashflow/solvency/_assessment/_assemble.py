@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:                       # annotation only -- avoids a runtime cycle
-    from fastcashflow._mass_lapse_reinsurance import CedantSolvencyRelief
+    from fastcashflow._mass_lapse import CedantSolvencyRelief
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis

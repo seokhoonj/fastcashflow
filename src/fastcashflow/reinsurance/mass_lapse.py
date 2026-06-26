@@ -5,7 +5,7 @@ mass-lapse risk and reduces the cedant's standard-formula lapse capital. The
 treaty's loss base is the mass-lapse own-funds strain (:func:`loss_density`);
 the layer between attachment and detachment is ceded.
 """
-from fastcashflow._mass_lapse_reinsurance import (
+from fastcashflow._mass_lapse import (
     CREDIT_QUALITY_STEP_PD,
     SF_MASS_LAPSE_SHOCK,
     SF_MASS_LAPSE_SHOCK_GROUP_PENSION,

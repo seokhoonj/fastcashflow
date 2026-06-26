@@ -12,9 +12,9 @@ from typing import IO
 from fastcashflow.basis import Basis
 from fastcashflow.model_points import ModelPoints
 from fastcashflow.solvency._engine import RegimeSpec
-from fastcashflow._mass_lapse_reinsurance._cedant import (
+from fastcashflow._mass_lapse._cedant import (
     LapseXL, cedant_solvency_relief)
-from fastcashflow._mass_lapse_reinsurance._reinsurer import (
+from fastcashflow._mass_lapse._reinsurer import (
     LapseDistribution, LapseTailDistribution, price_treaty,
     measure_assumed_treaty)
 

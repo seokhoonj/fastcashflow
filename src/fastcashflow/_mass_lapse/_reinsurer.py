@@ -16,7 +16,7 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 
 from fastcashflow.numerics import _norm_ppf
-from fastcashflow._mass_lapse_reinsurance._cedant import LapseXL
+from fastcashflow._mass_lapse._cedant import LapseXL
 
 
 _SQRT2 = math.sqrt(2.0)
