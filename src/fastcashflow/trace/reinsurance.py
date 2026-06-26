@@ -37,8 +37,8 @@ def show_trace_reinsurance(
     claims and premiums; the tree shows the ceded flows (recovery, reinsurance
     premium), the BEL = PV(reinsurance premium) - PV(recovery) (a net cost when
     positive), the RA = risk transferred (the margin on the ceded claims, IFRS 17
-    para 64), and the CSM = -(BEL - RA) -- the net cost or gain of the cover,
-    which may be negative and carries no loss component (para 65). Use it on a
+    paragraph 64), and the CSM = -(BEL - RA) -- the net cost or gain of the cover,
+    which may be negative and carries no loss component (paragraph 65). Use it on a
     reinsurance held; :func:`show_trace` traces the direct GMM ``measure``.
     """
     out: list[str] = []
@@ -129,7 +129,7 @@ def show_trace_reinsurance(
         f"PV(ceded morbidity)     = {pv_ceded_morb:>15,.2f}",
         f"RA = z({basis.ra_confidence:g})={z:.4f} x "
         f"(mort_cv*PV_mort + morb_cv*PV_morb) = {ra:>15,.2f}",
-        f"CSM[0] = -(BEL - RA) = {csm0:>15,.2f}  (negative when a net cost; para 65)",
+        f"CSM[0] = -(BEL - RA) = {csm0:>15,.2f}  (negative when a net cost; paragraph 65)",
     ]
 
     # ---- CSM roll-forward
@@ -148,8 +148,8 @@ def show_trace_reinsurance(
     # ---- Final headline
     final_lines: list[object] = [
         f"BEL = {bel:>15,.2f}  (PV reinsurance premium - PV recoveries; net cost)",
-        f"RA  = {ra:>15,.2f}  (risk transferred to the reinsurer, para 64)",
-        f"CSM = {csm0:>15,.2f}  (net cost / gain; may be negative, para 65, no loss component)",
+        f"RA  = {ra:>15,.2f}  (risk transferred to the reinsurer, paragraph 64)",
+        f"CSM = {csm0:>15,.2f}  (net cost / gain; may be negative, paragraph 65, no loss component)",
     ]
 
     out.append(header)
@@ -186,7 +186,7 @@ def show_trace_diff_reinsurance(
 
     The reinsurance counterpart of :func:`show_trace_diff` -- a headline-level
     diff. The CSM is the net cost / gain of the cover and may be negative; there
-    is no loss component (Sec. 65).
+    is no loss component (paragraph 65).
     """
     if file is None:
         file = sys.stdout

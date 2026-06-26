@@ -274,7 +274,7 @@ class AssumedTreatyMeasurement:
     ``risk_adjustment`` is the cost-of-capital margin on the assumed capital over
     the treaty. ``fulfilment_cash_flows = bel + risk_adjustment``; the CSM is the
     unearned profit ``max(0, -fcf)`` and the loss component ``max(0, fcf)``
-    (General Measurement Model -- IFRS 17 Sec. 38, 47)."""
+    (General Measurement Model -- IFRS 17 paragraph 38, 47)."""
 
     pv_premium: float
     pv_expected_recovery: float

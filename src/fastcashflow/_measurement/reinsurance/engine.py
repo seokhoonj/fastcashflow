@@ -129,7 +129,7 @@ def measure(
     # group, the matching recovery is recognised as immediate income and the
     # reinsurance CSM is reduced by it -- csm_after = csm0 - loss_recovery
     # (IASB AP2C Dec 2019, Examples 1-3). loss_recovery = underlying loss x the
-    # claim recovery % (B95B / B119D). No floor (para 65): the CSM may go
+    # claim recovery % (B95B / B119D). No floor (paragraph 65): the CSM may go
     # negative. Absent the input => zero (byte-identical). B119C (timing: the
     # cover entered before/at the onerous underlying) is the caller's
     # responsibility -- supply underlying_loss_component only when it holds.
@@ -293,7 +293,7 @@ def measure_inforce(
     full: bool = True,
 ) -> Measurement:
     """In-force subsequent measurement of a reinsurance contract held (IFRS 17
-    Sec. 44, modified by Sec. 60-70) at the valuation date.
+    paragraph 44, modified by paragraphs 60-70) at the valuation date.
 
     The reinsurance counterpart of :func:`~fastcashflow.gmm.measure_inforce`.
     Each model point is valued at its ``elapsed_months`` duration: the BEL
@@ -303,7 +303,7 @@ def measure_inforce(
     closing reinsurance CSM (``state.prior_csm``) is carried forward -- accreted
     at ``state.lock_in_rate`` and released over the coverage units across
     ``period_months`` (default 12). The CSM is the net cost or gain of the
-    cover and may be negative; there is no loss component (Sec. 65), so the
+    cover and may be negative; there is no loss component (paragraph 65), so the
     onerous unlocking deferred in ``gmm.measure_inforce`` does not arise here.
 
     ``state`` (an :class:`~fastcashflow.InforceState`) supplies the period-close
@@ -352,7 +352,7 @@ def measure_inforce(
         bad = int(np.argmax(runoff))
         raise ValueError(
             f"elapsed_months[{bad}]={int(em[bad])} >= "
-            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the paragraph 34 "
             "horizon; equal to term_months when no boundary cut); the contract "
             "has no remaining coverage at the valuation date. "
             "reinsurance.measure_inforce needs an as-of date strictly before the "
@@ -366,7 +366,7 @@ def measure_inforce(
     bel = bel_path[rows, em] * rescale
     ra = ra_path[rows, em] * rescale
 
-    # CSM carry-forward (Sec. 44): roll the prior closing CSM one period over the
+    # CSM carry-forward (paragraph 44): roll the prior closing CSM one period over the
     # coverage units (the direct in-force, which the recoveries scale with) from
     # t = em - period_months to t = em. No loss-component floor -- a reinsurance
     # CSM may stay negative (a net cost deferred).
@@ -435,13 +435,13 @@ def measure_inforce_aggregate(
 
     It is a bridge, not a settlement (``measurement_basis == 'settlement_carry'``):
     the reinsurance leaf has no ``settle``, so the prior CSM is rolled one
-    period (Sec. 44) without the Sec. 66 reinsurance-specific unlocking or a
+    period (paragraph 44) without the paragraph 66 reinsurance-specific unlocking or a
     loss-recovery component, and the function is deprecated once
     ``reinsurance.settle`` lands. ``basis`` is a single :class:`Basis`, as for
     :func:`measure_inforce`.
 
     A zero-count row is REJECTED: this carry bridge cannot value a contract
-    derecognized during the period (Sec. 76) -- that needs a settlement, which
+    derecognized during the period (paragraph 76) -- that needs a settlement, which
     ``reinsurance.settle`` will provide. (``gmm.settle`` handles count=0 as
     normal derecognition; this bridge does not.)
     """
@@ -462,7 +462,7 @@ def measure_inforce_aggregate(
     if np.any(count == 0.0):
         bad = int(np.argmin(count))
         raise ValueError(
-            f"count[{bad}]=0 is a row derecognized during the period (Sec. 76); "
+            f"count[{bad}]=0 is a row derecognized during the period (paragraph 76); "
             "this carry bridge cannot value it. Use reinsurance.settle for a "
             "period close with derecognition, or drop the row before valuing.")
     period = 12 if period_months is None else int(period_months)
@@ -510,7 +510,7 @@ def settle(
     On-track experience makes every experience line zero and telescopes the
     closing CSM to the carry bridge (:func:`measure_inforce`)
     exactly. A row whose closing date reaches the contract boundary with
-    ``count = 0`` is a final settlement (full B119 derecognition, Sec. 76).
+    ``count = 0`` is a final settlement (full B119 derecognition, paragraph 76).
 
     The loss-recovery component (paragraphs 66A-66B / B119F) is tracked when the
     cover is held over an onerous underlying group: pass

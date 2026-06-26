@@ -276,7 +276,7 @@ def _lock_in_monthly_rates(lock_in_rate, n_mp: int, max_len: int):
     A scalar (or uniform per-row) ``lock_in_rate`` gives the shared
     ``(max_len,)`` curve -- the :func:`_csm_kernel` fast path. A genuinely mixed
     per-MP rate (a cohort-aware book whose issue cohorts / GoCs locked in
-    different inception rates, Sec. B72(b)) gives an ``(n_mp, max_len)`` curve so
+    different inception rates, paragraph B72(b)) gives an ``(n_mp, max_len)`` curve so
     each row accretes at its own locked-in rate, which :func:`_csm_roll`
     dispatches to the per-MP kernel. Raises on a wrong-length array."""
     lock = np.asarray(lock_in_rate, dtype=np.float64)
@@ -299,7 +299,7 @@ def _measure_inforce_fast(
     lock_in_rate: float | None = None,
     period_months: int | None = None,
 ) -> Measurement:
-    """In-force subsequent measurement (IFRS 17 Sec. 40-52).
+    """In-force subsequent measurement (IFRS 17 paragraphs 40-52).
 
     Each model point is valued at its valuation date -- the moment that is
     ``elapsed_months[mp]`` months after that contract's inception. The
@@ -322,7 +322,7 @@ def _measure_inforce_fast(
       alone.
 
     * **Settlement carry-forward** (``prior_csm`` and ``lock_in_rate``
-      both given). Implements IFRS 17 Sec. 44: the prior period's closing
+      both given). Implements IFRS 17 paragraph 44: the prior period's closing
       CSM is accreted at the locked-in rate and released over the
       coverage units forward to the valuation date. ``prior_csm`` is the
       closing CSM at month ``elapsed_months - period_months``;
@@ -332,10 +332,10 @@ def _measure_inforce_fast(
       coverage-unit release only -- assumption-change unlocking and
       experience adjustments are future work and run via
       :func:`roll_forward` with full prior and current measurements.
-      Because the Sec. 44 onerous trigger needs CSM unlocking to fire
+      Because the paragraph 44 onerous trigger needs CSM unlocking to fire
       meaningfully, ``loss_component`` is returned as zeros in this mode;
       do not interpret ``bel + ra > csm`` from a settlement call as a
-      Sec. 44 loss-component recognition.
+      paragraph 44 loss-component recognition.
 
     A ``ModelPoints`` with ``elapsed_months`` all zero and ``prior_csm``
     not given reproduces the new-business ``measure(..., full=False)`` result.
@@ -346,7 +346,7 @@ def _measure_inforce_fast(
     m = _measure_full(model_points, basis)
     n_mp = m.bel.shape[0]
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    # The as-of date must lie strictly within each contract's own Sec. 34
+    # The as-of date must lie strictly within each contract's own paragraph 34
     # boundary. The BEL / RA trajectory and the in-force only extend to
     # t = contract_boundary_months (== term_months when no boundary cut); at or
     # beyond the boundary there is no remaining coverage to value, and
@@ -360,7 +360,7 @@ def _measure_inforce_fast(
         bad = int(np.argmax(runoff))
         raise ValueError(
             f"elapsed_months[{bad}]={int(em[bad])} >= "
-            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the paragraph 34 "
             "horizon; equal to term_months when no boundary cut); the contract "
             "has no remaining coverage at the valuation date. measure_inforce "
             "needs an as-of date strictly before the contract boundary."
@@ -415,12 +415,12 @@ def _measure_inforce_fast(
     csm_traj, _, _ = _csm_roll(prior_csm, inforce_seg, monthly_rates,
                                basis.coverage_unit_discount)
     csm = csm_traj[:, period_months]
-    # Sec. 44 loss component is left as zeros here. v1 only rolls the prior
+    # paragraph 44 loss component is left as zeros here. v1 only rolls the prior
     # CSM forward (accretion + coverage-unit release); the unlocking that
     # would actually drive the carried CSM negative -- assumption changes
     # and experience variances over the period -- is roll_forward()'s job.
     # Returning max(0, bel + ra - csm) would conflate "carried CSM is short"
-    # with "true onerous recognition" and mis-signal a Sec. 44 hit.
+    # with "true onerous recognition" and mis-signal a paragraph 44 hit.
     loss = np.zeros(n_mp, dtype=np.float64)
     return Measurement(bel=bel, ra=ra, csm=csm, loss_component=loss,
                           measurement_basis=MEASUREMENT_BASIS_SETTLEMENT_CARRY)
@@ -482,7 +482,7 @@ def _measure_inforce_full(
       and the cash flow detail are unchanged -- they are forward
       projections that do not depend on the prior period's CSM.
       ``loss_component`` is returned as zeros in this mode for the same
-      reason as :func:`_measure_inforce_fast`: Sec. 44 onerous recognition is
+      reason as :func:`_measure_inforce_fast`: paragraph 44 onerous recognition is
       only meaningful with CSM unlocking, which v1 does not perform.
 
     Use this when the downstream needs a full trajectory (movement
@@ -508,7 +508,7 @@ def _measure_inforce_full(
     period_months = int(period_months) if period_months is not None else 12
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     # Guard on the contract boundary, not term: the projected trajectory and
-    # in-force only extend to t = contract_boundary_months (Sec. 34; == term when
+    # in-force only extend to t = contract_boundary_months (paragraph 34; == term when
     # no cut). At or beyond the boundary there is no remaining coverage, and
     # indexing there is a stale zero or an IndexError. boundary is backfilled to
     # term in ModelPoints.__post_init__ (never None, <= term).
@@ -518,7 +518,7 @@ def _measure_inforce_full(
         bad = int(np.argmax(runoff))
         raise ValueError(
             f"elapsed_months[{bad}]={int(em[bad])} >= "
-            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the paragraph 34 "
             "horizon; equal to term_months when no boundary cut); the contract "
             "has no remaining coverage at the valuation date. roll_forward needs "
             "an as-of date strictly before the contract boundary."
@@ -576,10 +576,10 @@ def _measure_inforce_full(
     csm_accretion_new[ii_step, jj_step] = acc[dst_mask_step]
     csm_release_new[ii_step, jj_step] = rel[dst_mask_step]
 
-    # See _measure_inforce_fast(): Sec. 44 loss component is zeroed in settlement
+    # See _measure_inforce_fast(): paragraph 44 loss component is zeroed in settlement
     # mode v1. Unlocking and experience adjustments belong to
     # roll_forward() / Phase B v2; max(0, fcf - csm) here would mis-signal
-    # a Sec. 44 hit when the only thing missing is the unlocking step.
+    # a paragraph 44 hit when the only thing missing is the unlocking step.
     loss_new = np.zeros(n_mp, dtype=np.float64)
 
     # Headline bel/ra/csm are the as-of valuation-date values (month
@@ -628,7 +628,7 @@ def measure_inforce(
     The diagnostic companion to :func:`fastcashflow.gmm.settle` (the
     paragraph-44 period-close settlement). Each model point is valued at its
     ``elapsed_months`` duration: the BEL / RA are full current estimates at
-    that date (Sec. 40), while the CSM is a **carry-only approximation** --
+    that date (paragraph 40), while the CSM is a **carry-only approximation** --
     the prior period's closing CSM (``state.prior_csm``) accreted at
     ``state.lock_in_rate`` and released over coverage units across
     ``period_months`` (default 12), with no paragraph-44(c) unlocking. The
@@ -793,7 +793,7 @@ def _measure_inforce_segmented(
 def _has_mixed_lock_in(state) -> bool:
     """True when ``state.lock_in_rate`` carries more than one distinct value -- a
     cohort-aware book whose issue cohorts / GoCs locked in different inception
-    rates (Sec. B72(b)), which the scalar settlement path handles by partition."""
+    rates (paragraph B72(b)), which the scalar settlement path handles by partition."""
     lock = np.asarray(state.lock_in_rate, dtype=np.float64)
     return lock.ndim != 0 and np.unique(lock).size > 1
 
@@ -814,7 +814,7 @@ def _partition_by_lock_in(fn, model_points, state, basis, *,
     """Run a per-model-point settlement entry once per distinct locked-in rate and
     reassemble the per-MP movement.
 
-    Different issue cohorts / GoCs lock in different inception rates (Sec. B72(b));
+    Different issue cohorts / GoCs lock in different inception rates (paragraph B72(b));
     the rate threads through the whole movement (CSM accretion, the 44(c) finance
     wedge, the loss-component finance channel), so a mixed book is settled by
     PARTITION: each uniform-rate group runs the scalar path, and the per-MP movement
@@ -853,7 +853,7 @@ def _partition_by_lock_in(fn, model_points, state, basis, *,
     # branch above would echo only the first group's rate, which would corrupt
     # the on-disk write arm's per-row column and the closing_inputs() chain that
     # seeds the next period's settle (each row must carry forward its OWN
-    # locked-in rate, Sec. B72(b)).
+    # locked-in rate, paragraph B72(b)).
     if "lock_in_rate" in out:
         lock_out = np.empty(n_mp, dtype=np.float64)
         for g, idx in groups:
@@ -1361,7 +1361,7 @@ def settle_aggregate(
     # contracts; the per-chunk settle re-checks the aligned pair (a no-op).
     state = _reconcile_state(model_points, state)
     # A cohort-aware (mixed) lock-in book is handled WITHIN each chunk: the
-    # per-chunk :func:`settle` partitions by rate (Sec. B72(b)) and returns a
+    # per-chunk :func:`settle` partitions by rate (paragraph B72(b)) and returns a
     # per-MP movement, and every settlement line is additive, so the chunk sum
     # is the portfolio total regardless of how the rates mix across chunks. A
     # uniform array collapses to the scalar the chunk body expects. The only
@@ -1544,7 +1544,7 @@ def _measure_fast(
                 "live in the full projection kernel only)."
             )
         return _measure_full(model_points, basis)
-    # A contract boundary shorter than the term (Sec. 34 cut) pays the boundary
+    # A contract boundary shorter than the term (paragraph 34 cut) pays the boundary
     # survivors their account value as a terminal surrender; the full path's
     # exit accounting handles that, the scalar account fold (v1) does not, so
     # route a boundary-cut account book to the full measurement.

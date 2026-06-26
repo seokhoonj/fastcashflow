@@ -108,7 +108,7 @@ class Measurement:
     def estimate_at(self, month: int) -> "CurrentEstimate":
         """The current estimate (BEL / RA / CSM / LIC) at a future ``month``.
 
-        This is the deterministic nested-projection view (IFRS 17 Sec. 40): the
+        This is the deterministic nested-projection view (IFRS 17 paragraph 40): the
         cohort liability the entity would carry at month ``t`` if the central
         best-estimate scenario unfolds to it. It is column ``t`` of the
         trajectories -- so ``estimate_at(0).bel`` equals the inception headline
@@ -155,7 +155,7 @@ class Measurement:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class CurrentEstimate:
-    """The GMM current estimate at one future month (IFRS 17 Sec. 40).
+    """The GMM current estimate at one future month (IFRS 17 paragraph 40).
 
     Returned by :meth:`Measurement.estimate_at`. The fields are the cohort
     BEL / RA / CSM / LIC at ``month`` -- the liability the entity would carry at
@@ -177,7 +177,7 @@ class CurrentEstimate:
 
     @property
     def fcf(self) -> FloatArray:
-        """Fulfilment cash flows = BEL + RA (IFRS 17 Sec. 32, 37)."""
+        """Fulfilment cash flows = BEL + RA (IFRS 17 paragraph 32, 37)."""
         return self.bel + self.ra
 
     @property
@@ -713,7 +713,7 @@ def _(measurement: Measurement, path, *, ids=None):
 # ---------------------------------------------------------------------------
 
 def _compute_csm(bel0, ra0, inforce, discount_monthly, discount_units=False):
-    """CSM at initial recognition (Sec. 38) and deterministic roll-forward (Sec. 44).
+    """CSM at initial recognition (paragraph 38) and deterministic roll-forward (paragraph 44).
 
     Pure-array orchestration: fulfilment cash flows ``FCF = BEL + RA``,
     initial CSM = ``max(0, -FCF)``, loss component = ``max(0, FCF)``, then

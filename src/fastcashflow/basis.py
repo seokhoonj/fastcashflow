@@ -509,7 +509,7 @@ class Basis:
         key on sex / issue_age / issue_class when the workbook carries those
         axes (the engine reads the callable on the full grid either way).
     discount_annual :
-        Annual locked-in discount rate (Sec. 36). Either a flat scalar or a
+        Annual locked-in discount rate (paragraph 36). Either a flat scalar or a
         per-year ``(n_years,)`` array; the engine expands either to a
         per-month rate curve via
         :func:`fastcashflow.curves.discount_monthly_curve`. Used for
@@ -919,7 +919,7 @@ class Basis:
         """First-year monthly discount rate, used as a representative scalar.
 
         Reserved for the few places that need a single rate -- the claims
-        settlement-pattern present-value factor (Sec. 40 / B71) -- where the
+        settlement-pattern present-value factor (paragraph 40 / B71) -- where the
         in-year rate is the right reference. The per-month rate curve the
         kernels consume is composed by
         :func:`fastcashflow.curves.discount_monthly_curve`, which handles

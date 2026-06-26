@@ -1,8 +1,8 @@
 """IFRS 17 Premium Allocation Approach (PAA) -- the simplified measurement.
 
 The PAA is the simplified model the standard permits for short-coverage
-contracts -- IFRS 17 paragraphs 53-59 (eligibility, Sec. 53; the liability
-for remaining coverage, Sec. 55; insurance revenue, Sec. B126). Instead of
+contracts -- IFRS 17 paragraphs 53-59 (eligibility, paragraph 53; the liability
+for remaining coverage, paragraph 55; insurance revenue, paragraph B126). Instead of
 the GMM's BEL / RA / CSM, the Liability for Remaining Coverage (LRC) is
 measured like an unearned premium: premiums build it up, insurance revenue
 draws it down as coverage is provided. There is no CSM -- profit emerges
@@ -10,25 +10,25 @@ as revenue is earned.
 
 Scope and simplifications, each with the standard's basis:
 
-* Acquisition cash flows are expensed as incurred -- the Sec. 59(a) option,
+* Acquisition cash flows are expensed as incurred -- the paragraph 59(a) option,
   available when the coverage period is one year or less -- so they are not
   held in the LRC.
-* The LRC is held undiscounted: Sec. 56 does not require a financing
+* The LRC is held undiscounted: paragraph 56 does not require a financing
   adjustment when the time between providing service and the related
   premium due date is one year or less.
-* Insurance revenue is allocated by ``revenue_basis``: Sec. B126(a)
+* Insurance revenue is allocated by ``revenue_basis``: paragraph B126(a)
   (passage of time -- premium earned straight-line over the coverage
-  period, the default) or Sec. B126(b) (the expected timing of incurred
+  period, the default) or paragraph B126(b) (the expected timing of incurred
   claims and expenses).
-* The onerous test (Sec. 57-58) is applied at inception. The loss is
+* The onerous test (paragraphs 57-58) is applied at inception. The loss is
   ``max(0, fulfilment cash flows for remaining coverage - LRC)``, which at
   inception equals ``max(0, the GMM fulfilment cash flows)``. It is
   reported separately rather than folded into the LRC carrying amount.
 * The Liability for Incurred Claims runs off a claims settlement pattern;
   with no pattern set, claims settle when incurred and it is zero. In the
   settlement measurement it is measured at fulfilment cash flows -- the
-  discounted PV of the unpaid run-off plus the risk adjustment (Sec. 40(b)
-  / 42(c) / 37), like the GMM LIC. (Sec. 59(b) permits omitting the
+  discounted PV of the unpaid run-off plus the risk adjustment (paragraph 40(b)
+  / 42(c) / 37), like the GMM LIC. (paragraph 59(b) permits omitting the
   discounting when claims are paid within a year of being incurred;
   discounting is also compliant and kept uniform with the GMM block.)
 """
@@ -169,7 +169,7 @@ def measure(
     releases it. A single-premium contract gives the textbook pro-rata
     unearned premium reserve.
 
-    ``revenue_basis`` selects the Sec. B126 allocation of insurance revenue,
+    ``revenue_basis`` selects the paragraph B126 allocation of insurance revenue,
     which always sums to the total premium:
 
     * ``"time"``   -- B126(a), passage of time: the premium earned
@@ -207,10 +207,10 @@ def measure(
         # discount them to their payment dates in the fulfilment cash flows,
         # exactly as the GMM onerous test does (engine._measure_full), so the
         # PAA loss component matches GMM for identical incurred claims. The LIC
-        # below stays undiscounted (Sec. 59); only the onerous-test FCF / RA
+        # below stays undiscounted (paragraph 59); only the onerous-test FCF / RA
         # see the settlement discount. With a discount curve a settlement
         # pattern is rejected at Basis construction, so discount_monthly is the
-        # scalar in-year reference (Sec. 40 / B71 -- the rate at incurrence).
+        # scalar in-year reference (paragraph 40 / B71 -- the rate at incurrence).
         factor = _settlement_factor(basis.settlement_pattern, basis.discount_monthly)
         onerous_mortality_cf = onerous_mortality_cf * factor
         onerous_morbidity_cf = onerous_morbidity_cf * factor
@@ -250,12 +250,12 @@ def measure(
         lic_path = _settlement_lic(incurred, basis.settlement_pattern)
 
     # Insurance revenue -- total premium allocated across the periods of
-    # service (Sec. B126), so total revenue equals total premium.
+    # service (paragraph B126), so total revenue equals total premium.
     # B126(a) straight-line weight -- a flat in-coverage mask. Used for the
     # 'time' basis and as the 'claims' fallback when a contract has no claims
     # pattern (B126(b) -> B126(a)); the fallback used the decaying in-force
     # before, which is neither basis. The mask runs to the CONTRACT BOUNDARY
-    # (Sec. 34, where coverage ends), not term_months: a contract with a
+    # (paragraph 34, where coverage ends), not term_months: a contract with a
     # boundary cut (boundary < term) provides no service past the boundary, so
     # spreading revenue to term over-allocates it past coverage end.
     in_coverage = (np.arange(proj.n_time)[None, :]
@@ -391,7 +391,7 @@ def measure_inforce(
 ) -> Measurement:
     """In-force diagnostic / runoff valuation of a PAA book at a single date.
 
-    The PAA has no CSM, so there is no prior-CSM carry-forward (IFRS 17 Sec. 44
+    The PAA has no CSM, so there is no prior-CSM carry-forward (IFRS 17 paragraph 44
     is the CSM roll, which the PAA does not have): the in-force Liability for
     Remaining Coverage is the unearned premium still to be earned at each
     contract's ``elapsed_months`` duration. The projection runs from inception
@@ -404,7 +404,7 @@ def measure_inforce(
     ``elapsed_months`` / ``count``, reconciled onto ``model_points`` by
     :func:`~fastcashflow.apply_inforce_state`; its ``prior_csm`` /
     ``lock_in_rate`` are ignored -- the PAA has no CSM. The subsequent onerous
-    re-test on remaining coverage (Sec. 57-58) belongs to the PAA period-close
+    re-test on remaining coverage (paragraphs 57-58) belongs to the PAA period-close
     settlement (a later phase), so ``loss_component`` is zero and ``fcf`` is
     ``None`` here -- this is a diagnostic / runoff view, like
     ``gmm.measure_inforce``.
@@ -427,7 +427,7 @@ def measure_inforce(
     n_mp = m.lrc.shape[0]
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
     # The LRC trajectory and in-force only extend to t = contract_boundary_months
-    # (Sec. 34; == term when no boundary cut). At or beyond the boundary there is
+    # (paragraph 34; == term when no boundary cut). At or beyond the boundary there is
     # no remaining coverage, and _inforce_rescale's inforce[rows, em] would read a
     # stale zero or index out of bounds. boundary is backfilled to term in
     # ModelPoints.__post_init__ (never None, <= term).
@@ -437,7 +437,7 @@ def measure_inforce(
         bad = int(np.argmax(runoff))
         raise ValueError(
             f"elapsed_months[{bad}]={int(em[bad])} >= "
-            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the paragraph 34 "
             "horizon; equal to term_months when no boundary cut); the contract "
             "has no remaining coverage at the valuation date. paa.measure_inforce "
             "needs an as-of date strictly before the contract boundary.")
@@ -474,15 +474,15 @@ def settle(
     """Paragraph-55(b) period-close settlement of a PAA in-force book.
 
     The opening -> closing movement over one reporting period: the Liability
-    for Remaining Coverage rolled per Sec. 55(b), the loss component
-    recalculated per Sec. 57-58 at each date (no balance tracking), and the
+    for Remaining Coverage rolled per paragraph 55(b), the loss component
+    recalculated per paragraphs 57-58 at each date (no balance tracking), and the
     Liability for Incurred Claims rolled on the expected basis -- including
     settlement-pattern books, unlike ``gmm.settle`` / ``vfa.settle``.
 
     The PAA's structural simplification: the opening balances are
     RECONSTRUCTED from a unit projection rather than carried. The GMM CSM is
     history-dependent (accumulated unlocking) and must arrive in
-    ``state.prior_csm``; the PAA LRC is the mechanical Sec. 55(b) roll, so
+    ``state.prior_csm``; the PAA LRC is the mechanical paragraph 55(b) roll, so
     with expected within-period cash flows (the v1 cut) the unit projection
     rebuilds every opening figure exactly. ``state.prior_count`` is therefore
     the only required prior-date input; ``prior_csm`` / ``lock_in_rate`` /
@@ -499,22 +499,22 @@ def settle(
     entirely at ``k_exp``: incurred claims are past events, not in-force, so
     re-scaling them by the closing count would be meaningless.
 
-    Sec. 55(b)(i) premium experience (the PAA counterpart of the GMM B96(a)):
+    paragraph 55(b)(i) premium experience (the PAA counterpart of the GMM B96(a)):
     when ``state.actual_premium`` is given, the ``premiums`` line is the actual
     premium received over the period rather than the expected. PAA has no CSM,
-    so the difference sits in the LRC (the unearned premium, Sec. 55(a)) and is
+    so the difference sits in the LRC (the unearned premium, paragraph 55(a)) and is
     earned as revenue over the remaining coverage -- there is no future/current
-    split. The higher LRC also feeds the Sec. 57-58 onerous re-test. Absent
+    split. The higher LRC also feeds the paragraphs 57-58 onerous re-test. Absent
     the input the premiums stay expected (byte-identical).
 
-    Sec. 55(b) items with no movement line are documented engine cuts, not
+    paragraph 55(b) items with no movement line are documented engine cuts, not
     omissions: acquisition cash flows and their amortisation are zero under
-    the Sec. 59(a) expensed-as-incurred option, the financing adjustment is
-    zero because the LRC is held undiscounted (Sec. 56), and investment
+    the paragraph 59(a) expensed-as-incurred option, the financing adjustment is
+    zero because the LRC is held undiscounted (paragraph 56), and investment
     components are out of scope for the short-coverage book (v1). For the
-    Sec. 100(c) incurred-claims table the LIC lines supply the cash-flow
+    paragraph 100(c) incurred-claims table the LIC lines supply the cash-flow
     column; the risk-adjustment column is structurally zero (the PAA LIC
-    carries no risk adjustment, Sec. 59(b)).
+    carries no risk adjustment, paragraph 59(b)).
 
     A pure-LIC-runoff close (opening date at or past the contract boundary,
     only the claims tail of already-incurred claims left) is supported: coverage
@@ -528,9 +528,9 @@ def settle(
 
     v1 scope (documented cuts, mirroring the gmm / vfa settles): within-period
     cash flows are as expected -- the observed input is the closing count only
-    (actual premiums received are the Sec. 55(b)(i) input verbatim, so they and
-    actual claims paid are the v1.1 priority); no subsequent Sec. 53 eligibility
-    re-test; no OCI (the Sec. 56 undiscounted LRC has no finance line at all).
+    (actual premiums received are the paragraph 55(b)(i) input verbatim, so they and
+    actual claims paid are the v1.1 priority); no subsequent paragraph 53 eligibility
+    re-test; no OCI (the paragraph 56 undiscounted LRC has no finance line at all).
     """
     if revenue_basis not in ("time", "claims"):
         raise ValueError(
@@ -540,7 +540,7 @@ def settle(
     if state.prior_count is None:
         raise ValueError(
             "paa.settle needs state.prior_count -- the in-force count at the "
-            "opening date (the expected leg's scale for the Sec. 55(b) roll)."
+            "opening date (the expected leg's scale for the paragraph 55(b) roll)."
         )
     period = 12 if period_months is None else int(period_months)
     if period < 1:
@@ -587,7 +587,7 @@ def settle(
             "snapshot."
         )
 
-    # One unit projection, two scales (contract Sec. 2): seed count=1 so the
+    # One unit projection, two scales (contract paragraph 2): seed count=1 so the
     # k factors carry the actual book scale.
     unit_mp = replace(model_points, count=np.ones(n_mp, dtype=np.float64))
     unit = measure(unit_mp, basis, revenue_basis=revenue_basis, full=True)
@@ -635,12 +635,12 @@ def settle(
     lrc_closing    = k_obs * unit.lrc_path[rows, cap]
     lrc_experience = (k_obs - k_exp) * unit.lrc_path[rows, cap]
 
-    # Sec. 55(b)(i) premium experience (the PAA counterpart of the GMM B96(a)):
+    # paragraph 55(b)(i) premium experience (the PAA counterpart of the GMM B96(a)):
     # the premiums line is the ACTUAL premium received over the period. PAA has
     # no CSM, so the difference from expected sits in the LRC (the unearned
-    # premium, Sec. 55(a)) and is earned as revenue over the remaining coverage
+    # premium, paragraph 55(a)) and is earned as revenue over the remaining coverage
     # -- there is no future/current split. The higher LRC also feeds the
-    # Sec. 57-58 onerous re-test below (more premium -> a higher LRC -> less
+    # paragraphs 57-58 onerous re-test below (more premium -> a higher LRC -> less
     # onerous). Absent state.actual_premium => premiums stay expected
     # (byte-identical). The block identity lrc_closing == lrc_opening +
     # premiums - revenue + lrc_experience is preserved.
@@ -650,7 +650,7 @@ def settle(
         premiums = actual_premium
         lrc_closing = lrc_closing + premium_experience
 
-    # Sec. 57-58 re-test: the fulfilment cash flows for remaining coverage at
+    # paragraphs 57-58 re-test: the fulfilment cash flows for remaining coverage at
     # each date, with the settlement discount on claims exactly as the
     # inception onerous test applies it (measure above).
     onerous_mortality_cf, onerous_morbidity_cf = cf.mortality_cf, cf.morbidity_cf

@@ -2,7 +2,7 @@
 
 The short-duration simplified model. ``measure`` returns the LRC/revenue
 roll-forward; ``settle`` is the paragraph-55(b) period-close settlement of an
-in-force book (LRC roll, Sec. 57-58 loss-component re-test, LIC movement);
+in-force book (LRC roll, paragraphs 57-58 loss-component re-test, LIC movement);
 ``measure_aggregate`` is the bounded-memory portfolio-aggregate view for
 books too large to hold every trajectory and ``measure_stream`` its
 out-of-core variant; ``measure_inforce`` is the in-force diagnostic / runoff

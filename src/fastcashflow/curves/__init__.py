@@ -71,7 +71,7 @@ def _per_year_to_per_month(
 def discount_monthly_curve(basis: Basis, n_time: int) -> FloatArray:
     """Per-month locked-in monthly discount rate, shape ``(n_time,)``.
 
-    Locked-in basis (Sec. 36) is held either as a flat annual rate or a
+    Locked-in basis (paragraph 36) is held either as a flat annual rate or a
     per-year annual curve on ``basis.discount_annual``. Within a
     policy year a constant-force conversion turns the annual to monthly
     (twelve monthly applications reproduce the annual exactly).
@@ -128,7 +128,7 @@ def discount_factors(basis: Basis, n_time: int) -> tuple[FloatArray, FloatArray]
       (claims and expenses, which arise during the month).
 
     The discount basis is the locked-in rate or rate curve carried on
-    ``basis`` (Sec. 36); a flat scalar gives the closed-form ``(1+i)^-t``
+    ``basis`` (paragraph 36); a flat scalar gives the closed-form ``(1+i)^-t``
     expression and a per-year curve gives the cumulative-product form.
     """
     return discount_factors_from_curve(discount_monthly_curve(basis, n_time))

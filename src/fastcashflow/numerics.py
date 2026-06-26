@@ -82,7 +82,7 @@ def _settlement_lic_discounted(
     incurred: FloatArray, settlement_pattern: FloatArray,
     discount_monthly: float,
 ) -> FloatArray:
-    """Discounted liability for incurred claims (Sec. 40(b) / 42(c)).
+    """Discounted liability for incurred claims (paragraph 40(b) / 42(c)).
 
     The present-value mirror of :func:`_settlement_lic`: a claim incurred ``j``
     months ago contributes the present value -- at the current month boundary --
@@ -177,7 +177,7 @@ def _settlement_factor(
       ``n_time`` is held flat at the last curve value, so a settlement
       pattern with more lags than the curve still terminates.
 
-    The curve form is the right reference under a discount curve (Sec. 40
+    The curve form is the right reference under a discount curve (paragraph 40
     / B71 -- the rate at the month of incurrence). Callers may continue
     to pass a scalar where a representative single factor is desired (the
     fused fast path, in particular, multiplies a per-policy coverage
@@ -366,7 +366,7 @@ def _roll_forward_kernel(mortality_cf, morbidity_cf, disability_cf, expense_cf,
     full = 1.0 / (1.0 + discount_monthly)
 
     for mp in prange(n_mp):
-        # The backward pass runs from the Sec. 34 contract boundary (= term
+        # The backward pass runs from the paragraph 34 contract boundary (= term
         # when there is no boundary cut). maturity_cf is already 0 when the
         # boundary is short of the term (the projection withheld it), so
         # seeding at the boundary is correct either way.
@@ -534,7 +534,7 @@ def _csm_roll(csm0, coverage_units, discount_monthly, discount_units=False):
 
 
 def _csm_loss_component_step(accreted, x, lc_open):
-    """The CSM and loss-component step, branchless (IFRS 17 para 44/45
+    """The CSM and loss-component step, branchless (IFRS 17 paragraph 44/45
     settlement; 48 / 50(b) loss component).
 
     ``accreted`` is the opening CSM accreted to the adjustment date, ``x`` the

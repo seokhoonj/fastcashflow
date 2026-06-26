@@ -19,7 +19,7 @@ MEASUREMENT_BASIS_INCEPTION = "inception"
 # contract would produce under the current basis (engine-internal mode).
 MEASUREMENT_BASIS_HYPOTHETICAL = "hypothetical"
 # In-force diagnostic: BEL / RA re-based to the valuation date (current-rate
-# remeasurement), CSM carried from the prior close without Sec. 44 unlocking
+# remeasurement), CSM carried from the prior close without paragraph 44 unlocking
 # (loss component hard zero). Not settlement-grade; the settle family is.
 MEASUREMENT_BASIS_SETTLEMENT_CARRY = "settlement_carry"
 # Paragraph-44/45 settlement output (the settle family's closing figures).

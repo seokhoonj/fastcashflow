@@ -140,7 +140,7 @@ def valued_projection(model_points: ModelPoints, basis: Basis, *,
         lic_path = _settlement_lic(mortality_cf + morbidity_cf, basis.settlement_pattern)
         # Claims are paid over the pattern, not at incurrence -- discount
         # them to their payment dates in the fulfilment cash flows. With a
-        # discount curve we use the in-year scalar (Sec. 40 / B71 -- the
+        # discount curve we use the in-year scalar (paragraph 40 / B71 -- the
         # rate at the month of incurrence is the right reference); the
         # full-curve treatment would require a time-varying settlement
         # factor inside the kernel, deferred.

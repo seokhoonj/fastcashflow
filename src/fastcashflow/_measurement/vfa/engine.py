@@ -420,7 +420,7 @@ def _project(
     # value (the GMM convention: maturity paid at time term).
     #
     # Maturity is realised only when the term falls within *that contract's own*
-    # Sec. 34 boundary -- the projection runs each contract over range(boundary),
+    # paragraph 34 boundary -- the projection runs each contract over range(boundary),
     # so maturity_survivors is non-zero only when term <= boundary. Decide
     # eligibility per contract, NOT from the portfolio-wide horizon n_time (= max
     # boundary): in a mixed book a short contract would otherwise read
@@ -473,7 +473,7 @@ def _project(
     # in the growth or the fee. The maturity survivors are NOT in
     # non_maturity_exits (removed at term_idx above): they reach the maturity
     # date with the matured av[term] and so correctly keep the final month's
-    # fee. A Sec. 34 boundary cut sets maturity_survivors = 0, so a censored
+    # fee. A paragraph 34 boundary cut sets maturity_survivors = 0, so a censored
     # contract pays no final-month fee, matching its un-grown start-of-month
     # payout. Written subtractively (== inforce_pad[:, 1:] + maturity_survivors
     # at term_idx) so it never MUTATES inforce_pad: the slice inforce_pad[:, 1:]
@@ -565,7 +565,7 @@ def _project(
             # Maturity survivors sit in `exits` at term_idx (= term - 1) but exit
             # at time = term, credited the full final month -- peel them off that
             # column weight w[term_idx] and re-seat one month later (the GMAB /
-            # Sec. B119 handling). w_ext = [w, w_term] selects by term_idx + 1.
+            # paragraph B119 handling). w_ext = [w, w_term] selects by term_idx + 1.
             if tv_reduce:
                 w_ext = np.append(w, w_term)
                 credit = av0[m] * (
@@ -1091,7 +1091,7 @@ def measure_inforce(
             "must use the real fund. GMM / PAA in-force do not need it.)")
     n_mp = model_points.n_mp
     em = np.asarray(model_points.elapsed_months, dtype=np.int64)
-    # The valuation date must lie strictly within each contract's own Sec. 34
+    # The valuation date must lie strictly within each contract's own paragraph 34
     # boundary. The projection runs each contract over range(boundary), so its
     # in-force is filled for months 0 .. boundary-1; at or beyond the boundary
     # there is no remaining coverage to value. Decide this **per contract** --
@@ -1104,7 +1104,7 @@ def measure_inforce(
         bad = int(np.argmax(runoff))
         raise ValueError(
             f"elapsed_months[{bad}]={int(em[bad])} >= "
-            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the Sec. 34 "
+            f"contract_boundary_months[{bad}]={int(boundary[bad])} (the paragraph 34 "
             "horizon); the contract has no remaining coverage at the valuation "
             "date. Value it strictly before its boundary.")
 
@@ -1210,7 +1210,7 @@ def settle(
     deviation this reproduces the ``measure_inforce`` monthly carry exactly
     (a telescoping identity of the release weights).
 
-    A contract whose Sec. 34 boundary falls inside the period is a **final
+    A contract whose paragraph 34 boundary falls inside the period is a **final
     settlement**: allowed, provided its closing ``count`` and
     ``account_value`` are zero (validated) -- its remaining CSM releases in
     full. The opening date must lie strictly within every contract's
@@ -1290,7 +1290,7 @@ def settle(
         raise ValueError(
             f"elapsed_months[{bad}] - period_months = {int(em_open[bad])} >= "
             f"contract_boundary_months[{bad}]={int(boundary[bad])} (the "
-            "Sec. 34 horizon); the contract had no remaining coverage at the "
+            "paragraph 34 horizon); the contract had no remaining coverage at the "
             "opening date, so there is nothing to settle.")
     # A boundary inside the period is a final settlement -- legitimate, but
     # the closing snapshot must agree that the contract is gone.

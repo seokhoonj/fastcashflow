@@ -135,7 +135,7 @@ def trace_diff(mp_index: int, model_points: ModelPoints, basis_a, basis_b, *,
 def measure_inforce(model_points: ModelPoints, state: InforceState, basis, *,
                     period_months: int | None = None, full: bool = True,
                     backend: str = "cpu") -> PortfolioMeasurement:
-    """In-force subsequent measurement of a mixed-model portfolio (IFRS 17 Sec. 44).
+    """In-force subsequent measurement of a mixed-model portfolio (IFRS 17 paragraph 44).
 
     The portfolio counterpart of :func:`fcf.gmm.measure_inforce`: each row is
     routed to its segment's model and valued at its ``elapsed_months`` valuation
@@ -1105,7 +1105,7 @@ def settle_group_of_contracts(
     your own groupby), and a book mixing GMM and VFA is rejected whole: a group
     of contracts sits in one product, hence one measurement model. The
     ``premium_experience_future_fraction`` argument applies to both the GMM and
-    VFA paths (Sec. B96(a); each routes the future leg into its own
+    VFA paths (paragraph B96(a); each routes the future leg into its own
     paragraph-45 algebra).
     """
     if not isinstance(basis, BasisRouter):

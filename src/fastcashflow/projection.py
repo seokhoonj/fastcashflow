@@ -440,7 +440,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
     n_edges = edge_from.shape[0]
     for mp in prange(n_mp):
         term = term_months[mp]
-        boundary = contract_boundary_months[mp]  # Sec. 34 horizon (<= term)
+        boundary = contract_boundary_months[mp]  # paragraph 34 horizon (<= term)
         premium_term = premium_term_months[mp]   # months the premium is paid
         prem_freq = premium_frequency_months[mp]        # months between premiums
         ann_freq = annuity_frequency_months[mp]         # months between annuity payouts
@@ -809,7 +809,7 @@ def _project_kernel_semi_markov(
 
     for mp in prange(n_mp):
         term = term_months[mp]
-        boundary = contract_boundary_months[mp]  # Sec. 34 horizon (<= term)
+        boundary = contract_boundary_months[mp]  # paragraph 34 horizon (<= term)
         premium_term = premium_term_months[mp]
         prem_freq = premium_frequency_months[mp]
         ann_freq = annuity_frequency_months[mp]
@@ -1092,7 +1092,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             "model_points is empty (n_mp=0); measure() cannot project a "
             "zero-policy portfolio. Filter empty segments upstream."
         )
-    # The projection horizon is the contract boundary (Sec. 34), which
+    # The projection horizon is the contract boundary (paragraph 34), which
     # defaults to ``term_months`` -- so a book with no boundary cut sizes the
     # arrays exactly as before. A shorter boundary trims both the loop and the
     # array width.

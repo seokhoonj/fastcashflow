@@ -473,7 +473,7 @@ def _roll_forward_reinsurance(
 
     The reinsurance counterpart of :func:`_roll_forward_vfa`: BEL / RA unwind at
     the discount rate and the CSM accretes and releases over coverage units,
-    with no loss component (Sec. 65)."""
+    with no loss component (paragraph 65)."""
     _require_full(measurement, "roll_forward")
     bel, ra, csm = measurement.bel_path, measurement.ra_path, measurement.csm_path
     csm_accretion = measurement.csm_accretion
@@ -774,7 +774,7 @@ def _(movement: _paa.SettlementMovement, path, *, ids=None):
 def _(movement: _gmm.SettlementMovement, path, *, ids=None):
     n = movement.bel_closing.shape[0]
     cols = {name: getattr(movement, name) for name in _gmm._GMM_SETTLEMENT_LINES}
-    # Scalar (shared) or per-row (cohort-aware, Sec. B72(b)) locked-in rate:
+    # Scalar (shared) or per-row (cohort-aware, paragraph B72(b)) locked-in rate:
     # broadcast handles both, so each row's own rate rides onto the part and
     # seeds the next period's settle from disk.
     cols["lock_in_rate"] = np.broadcast_to(

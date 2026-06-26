@@ -33,7 +33,7 @@ class Measurement:
     net cost when positive), ``ra`` is the risk transferred, ``csm`` is the
     inception net cost or gain (may be negative). The ``bel`` symbol is shared
     with the GMM result for a uniform surface, but for reinsurance held it is the
-    present value of fulfilment cash flows of a reinsurance ASSET (IFRS 17 para 63),
+    present value of fulfilment cash flows of a reinsurance ASSET (IFRS 17 paragraph 63),
     not a liability -- a negative ``bel`` is a net reinsurance asset. The
     trajectory fields are
     populated only on the full path; ``csm_path`` reconciles as
@@ -93,7 +93,7 @@ class PeriodMovement:
     cost when positive); ``csm`` is the net cost / gain of the cover and may be
     negative. ``*_interest`` / ``csm_accretion`` is the unwind at the discount
     rate; ``*_release`` is the expected run-off over the period. There is no
-    loss component (Sec. 65).
+    loss component (paragraph 65).
     """
 
     model: ClassVar[str] = REINSURANCE
@@ -121,7 +121,7 @@ class Reconciliation:
     Portfolio totals for one reporting period -- the BEL, RA and CSM each
     reconciled from opening to closing. ``*_finance`` is the unwind at the
     discount rate; ``*_release`` is the run-off, shown negative -- so opening
-    plus every row equals closing. There is no loss component (Sec. 65).
+    plus every row equals closing. There is no loss component (paragraph 65).
     """
 
     model: ClassVar[str] = REINSURANCE
@@ -430,7 +430,7 @@ class Report:
 
     The CSM analysis of change reconciles as
     ``csm_opening + csm_accretion - csm_release = csm_closing``. There is no
-    loss component (IFRS 17 Sec. 65): the CSM is the net cost or gain of the
+    loss component (IFRS 17 paragraph 65): the CSM is the net cost or gain of the
     cover and may be negative -- a net cost is deferred and amortised, with no
     floor -- so the trajectory carries any negative value through as-is.
     """
@@ -485,7 +485,7 @@ class Report:
         The reinsurance-held counterpart of :meth:`Report.by_period`: premiums
         paid, amounts recovered, the service result, the RA release, and the
         finance expense with its B130-B136 split, summed across model points
-        into each reporting period. There is no loss component (IFRS 17 Sec. 65).
+        into each reporting period. There is no loss component (IFRS 17 paragraph 65).
         ``basis`` and ``inception_month`` behave as in :meth:`Report.by_period`.
         """
         from fastcashflow.reporting.report import _by_period
@@ -530,7 +530,7 @@ class Aggregate:
     summed over the model-point axis. Holds the scalar inception totals plus the
     ``(n_time+1,)`` aggregate ``bel_path`` / ``ra_path`` / ``csm_path`` (matching
     the GMM / VFA aggregates) and the ``(n_time,)`` aggregate ``recovery`` /
-    ``reinsurance_premium``. There is no loss component (Sec. 65). What
+    ``reinsurance_premium``. There is no loss component (paragraph 65). What
     :func:`~fastcashflow.reinsurance.measure_aggregate` returns, computed in
     bounded memory.
     """
@@ -553,10 +553,10 @@ class InforceAggregate:
 
     A headline-only total: the period-close BEL / RA / CSM of a ceded book,
     summed over the model-point axis from :func:`measure_inforce`.
-    There is no loss component (Sec. 65). ``measurement_basis`` is
+    There is no loss component (paragraph 65). ``measurement_basis`` is
     ``'settlement_carry'`` -- this is a carry bridge, not a settlement: the
     reinsurance leaf has no ``settle`` yet, so the prior CSM is rolled forward
-    (Sec. 44) without the Sec. 66 unlocking / loss-recovery component. It is
+    (paragraph 44) without the paragraph 66 unlocking / loss-recovery component. It is
     deprecated once ``reinsurance.settle`` lands. A total cannot be chained.
     """
 

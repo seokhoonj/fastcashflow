@@ -25,7 +25,7 @@ every earlier transition. The residual ``prod_j(1 - rate_j)`` stays in the
 state. A transition either moves occupancy to another transient state (waiver
 inception: active -> waiver; recovery: disabled -> active) or removes it from
 the in-force set entirely (death, lapse). The fulfilment cash flows reflect
-the contract's actual terms at the measurement date (IFRS 17 Sec. 33-34).
+the contract's actual terms at the measurement date (IFRS 17 paragraphs 33-34).
 """
 from __future__ import annotations
 

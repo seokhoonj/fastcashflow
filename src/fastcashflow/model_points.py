@@ -15,7 +15,7 @@ from fastcashflow.coverage import CalculationMethod
 # the coverage in force while collecting no premium. The state places the
 # model point's starting in-force on the active or the waiver track; during
 # the projection active in-force can itself transition to waiver at the
-# waiver-inception rate (IFRS 17 Sec. 33-34 -- the fulfilment cash flows
+# waiver-inception rate (IFRS 17 paragraphs 33-34 -- the fulfilment cash flows
 # reflect the contract's actual terms at the measurement date).
 STATE_ACTIVE = 0
 STATE_WAIVER = 1
@@ -136,7 +136,7 @@ class ModelPoints:
     # surrender_base_amount. Explicit -- no default base is inferred, since
     # the right base differs by product. None unless that mode is used.
     surrender_base_amount: FloatArray | None = None
-    # IFRS 17 contract boundary (Sec. 34): the month past which cash flows
+    # IFRS 17 contract boundary (paragraph 34): the month past which cash flows
     # leave the current contract (e.g. a step-rated renewable's next renewal,
     # where the insurer can reprice). The projection stops here; the maturity
     # benefit is paid only when the boundary equals the coverage term. None
@@ -445,7 +445,7 @@ class ModelPoints:
             raise ValueError("premium_term_months must be >= 0")
         object.__setattr__(self, "premium_term_months", premium_term)
         # contract_boundary_months defaults to the full coverage term -- no
-        # Sec. 34 boundary cut (the historical behaviour). When supplied it
+        # paragraph 34 boundary cut (the historical behaviour). When supplied it
         # must be in [1, term]: the projection runs to the boundary and the
         # maturity benefit is withheld when the boundary is short of the term.
         boundary = self.contract_boundary_months
@@ -990,7 +990,7 @@ class InforceState:
     * ``prior_csm`` -- closing CSM at month
       ``elapsed_months - period_months``, the prior reporting date's
       result carried into this period.
-    * ``lock_in_rate`` -- annual locked-in discount rate (Sec. B72(b)).
+    * ``lock_in_rate`` -- annual locked-in discount rate (paragraph B72(b)).
       Usually scalar; per-MP cohort-aware rates are accepted for GoC-grain
       settlement, where the portfolio entry validates uniformity inside each
       group before calling the scalar GMM kernel.
@@ -1014,18 +1014,18 @@ class InforceState:
     * ``actual_premium`` -- observed per-MP premium cash actually received over
       the reporting period (``None`` means as expected). ``gmm.settle`` splits
       the experience adjustment ``actual_premium - expected_premium`` between
-      future service (CSM, Sec. B96(a)) and current/past service (P&L, Sec.
+      future service (CSM, paragraph B96(a)) and current/past service (P&L, paragraph
       B97(c)). May be negative (a net refund period, TRG 2018-09 Example B).
     * ``actual_investment_component`` -- observed per-MP investment component
       actually paid over the period (surrender values, annuity / maturity
       repayments -- the amounts repaid regardless of an insured event;
       ``None`` means as expected). ``gmm.settle`` routes the whole difference
-      ``expected - actual`` into the CSM (Sec. B96(c)); investment components
+      ``expected - actual`` into the CSM (paragraph B96(c)); investment components
       do not affect insurance revenue.
     * ``actual_claims`` / ``actual_expenses`` -- observed per-MP claims incurred
       / expenses incurred over the period (``None`` means as expected). The
       difference from expected is an experience adjustment relating to past /
-      current service (Sec. B97(b)/(c)): it is recognised in the insurance
+      current service (paragraph B97(b)/(c)): it is recognised in the insurance
       service result (P&L) and does NOT adjust the CSM. Reported on
       ``gmm.settle`` as ``claims_experience`` / ``expense_experience``.
     * ``prior_lic`` -- closing liability for incurred claims at the prior

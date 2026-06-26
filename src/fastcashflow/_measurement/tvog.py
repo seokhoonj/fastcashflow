@@ -208,7 +208,7 @@ def tvog_term_weight(
     of the guarantee's discounted-growth factor. Returns the mean-over-scenarios
     less-central weight at the matured term, extending each path by that final
     month exactly as :func:`guarantee_floor_time_value` does for the GMAB
-    (Sec. B119), so the deterministic GMAB, the floor time value and the
+    (paragraph B119), so the deterministic GMAB, the floor time value and the
     credit-rate TVOG agree on the maturity date. ``0.0`` when there is no
     crediting guarantee -- the short-circuit avoids forming the
     over/underflowing cumulative product (0 * inf = NaN) on an

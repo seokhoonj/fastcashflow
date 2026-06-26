@@ -211,18 +211,18 @@ class SettlementMovement:
                        + loss_component_recognised - loss_component_reversed
         lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid
 
-    The LRC follows Sec. 55(b), with insurance revenue allocated under
-    Sec. B126. The loss component is recalculated under Sec. 57-58 at each
+    The LRC follows paragraph 55(b), with insurance revenue allocated under
+    paragraph B126. The loss component is recalculated under paragraphs 57-58 at each
     date rather than carried, so exactly one of the recognised / reversed
     rows is positive. The LIC block supports settlement-pattern books and
-    provides the Sec. 100(c) incurred-claims movement, measured at fulfilment
+    provides the paragraph 100(c) incurred-claims movement, measured at fulfilment
     cash flows -- the discounted PV of the unpaid run-off plus the risk
     adjustment (40(b)/42(c)/37), exactly like the GMM LIC; ``claims_incurred`` /
     ``claims_paid`` stay nominal and ``lic_finance`` is the reconciling
-    residual. (Sec. 59(b) permits omitting the LIC discounting for <=1yr claims;
+    residual. (paragraph 59(b) permits omitting the LIC discounting for <=1yr claims;
     discounting is also compliant and kept uniform with the GMM block.) There is
     no CSM block -- the PAA carries no CSM -- and the LRC itself stays
-    undiscounted (Sec. 56); the finance line is on the LIC only.
+    undiscounted (paragraph 56); the finance line is on the LIC only.
     """
 
     model: ClassVar[str] = PAA
@@ -253,7 +253,7 @@ class SettlementMovement:
         the next period's settle. The PAA has no CSM and no locked-in rate,
         so those state slots carry neutral values; the closing loss component
         is preserved for state-file continuity, though the next settle
-        recalculates it under Sec. 57-58 rather than reading it."""
+        recalculates it under paragraphs 57-58 rather than reading it."""
         from fastcashflow.model_points import InforceState
         mp = self.model_points
         if mp is None or mp.mp_id is None:

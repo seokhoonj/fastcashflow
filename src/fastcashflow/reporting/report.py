@@ -411,7 +411,7 @@ def _report_reinsurance(m: _reinsurance.Measurement) -> _reinsurance.Report:
     IFRS 17 paragraphs 82 + 86 present income or expenses from reinsurance
     contracts held separately from issued contracts. The service result is the
     release of the risk transferred (paragraph 64) plus the release of the CSM
-    (the net cost / gain of the cover, Sec. 65) -- the same release-based build
+    (the net cost / gain of the cover, paragraph 65) -- the same release-based build
     as the issuer ``_report_gmm`` service result, with the premiums paid and
     recoveries received exposed as disaggregated line items (the paragraph-86
     net is then a presentation choice, computed by the report property).
@@ -425,7 +425,7 @@ def _report_reinsurance(m: _reinsurance.Measurement) -> _reinsurance.Report:
     not the reconciliation's movement residual; the finance lines and the CSM
     release, however, do tie out to the reconciliation. The finance expense is
     the interest on the BEL and RA at the locked-in rate plus the CSM accretion,
-    disaggregated by source (B130-B136). There is no loss component (Sec. 65);
+    disaggregated by source (B130-B136). There is no loss component (paragraph 65);
     the CSM may be negative and the trajectory carries it through.
     """
     _require_full(m, "report()")

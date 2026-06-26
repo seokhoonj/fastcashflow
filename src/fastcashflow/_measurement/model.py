@@ -1,11 +1,11 @@
 """Measurement identity -- which engine measurement produced a result.
 
 IFRS 17 has THREE measurement models: the General Measurement Model (GMM, the
-default building blocks, Sec. 32-52), the Premium Allocation Approach (PAA, the
-short-duration simplification, Sec. 53-59) and the Variable Fee Approach (VFA,
+default building blocks, paragraphs 32-52), the Premium Allocation Approach (PAA, the
+short-duration simplification, paragraphs 53-59) and the Variable Fee Approach (VFA,
 the variation for direct participating contracts). Reinsurance contracts held
 are NOT a fourth model -- they are measured under GMM with the modifications of
-Sec. 60-70 (a net-cost-or-gain CSM that may be negative, no loss component, a
+paragraphs 60-70 (a net-cost-or-gain CSM that may be negative, no loss component, a
 loss-recovery component). But in this engine reinsurance has its own ``measure``
 entry point and its own result type, so it carries a fourth family tag
 alongside the three models.
@@ -29,7 +29,7 @@ from typing import ClassVar, Protocol
 # GMM / PAA / VFA are the three IFRS 17 measurement models (in the standard's
 # order: general model, then the PAA simplification, then the VFA variation);
 # ``reinsurance`` is the fourth family -- reinsurance held, measured under GMM
-# with the Sec. 60-70 modifications, not a fourth model. Lowercase so they read
+# with the paragraphs 60-70 modifications, not a fourth model. Lowercase so they read
 # as the public namespace path (``fcf.gmm`` / ``fcf.paa`` / ...) and the result
 # repr (``gmm.Measurement``).
 GMM = "gmm"
