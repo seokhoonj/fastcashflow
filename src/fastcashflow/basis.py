@@ -301,11 +301,18 @@ class ExpenseItem:
         ``"overhead"``). Engine ignores it; ``trace`` and
         ``describe_basis`` echo it.
     basis
-        Dispatch key -- one of :data:`EXPENSE_BASES`. The five values
-        follow the Korean actuarial alpha / beta / gamma convention
-        plus a dedicated LAE (Loss Adjustment Expense) slot, each split
-        into ``pro_rata`` (proportional to a base amount) or ``fixed``
-        (per-policy flat).
+        Dispatch key -- one of :data:`EXPENSE_BASES`. The values follow
+        the Korean actuarial alpha / beta / gamma convention plus a
+        dedicated LAE (Loss Adjustment Expense) slot and a
+        surrender-value-linked maintenance slot, each split into
+        ``pro_rata`` (proportional to a base amount) or ``fixed``
+        (per-policy flat). ``surrender_value_pro_rata`` charges a
+        maintenance fee on the in-force surrender value each month --
+        the reserve-/surrender-value-linked maintenance basis (the Korean
+        "% of surrender-reserve" loading); it requires a
+        ``surrender_value_curve`` on the basis and is not
+        supported on an account-backed (universal-life / VFA) book, where
+        the account ``fund_fee`` already charges the account value.
     value
         Numeric value -- a fraction (0..1) for the ``_pro_rata`` bases,
         an amount per policy for the ``_fixed`` bases.
@@ -314,9 +321,10 @@ class ExpenseItem:
     -----
     The basis decides whether the global ``expense_inflation`` applies:
     ``gamma_fixed`` and ``lae_pro_rata`` recur every month and so
-    inflate; the two ``alpha_*`` bases pay once at ``t=0`` and
-    ``beta_pro_rata`` rides the premium itself, so a second inflation
-    factor would double-count.
+    inflate; the two ``alpha_*`` bases pay once at ``t=0``,
+    ``beta_pro_rata`` rides the premium itself, and
+    ``surrender_value_pro_rata`` rides the surrender-value curve's own
+    growth, so for those a second inflation factor would double-count.
     """
 
     expense_type: str
@@ -344,11 +352,12 @@ class ExpenseItem:
 #: maintenance, gamma = per-policy fixed maintenance; LAE is the
 #: claim-prorated Loss Adjustment Expense slot.
 EXPENSE_BASES = (
-    "alpha_pro_rata",   # acquisition, % of annualised premium, t=0
-    "alpha_fixed",      # acquisition, per policy, t=0
-    "beta_pro_rata",    # maintenance, % of premium, every paying month
-    "gamma_fixed",      # maintenance, per policy, every month
-    "lae_pro_rata",     # LAE, % of claim-type outflow, every month
+    "alpha_pro_rata",            # acquisition, % of annualised premium, t=0
+    "alpha_fixed",               # acquisition, per policy, t=0
+    "beta_pro_rata",             # maintenance, % of premium, every paying month
+    "gamma_fixed",               # maintenance, per policy, every month
+    "lae_pro_rata",              # LAE, % of claim-type outflow, every month
+    "surrender_value_pro_rata",  # maintenance, % of in-force surrender value, every month
 )
 
 # The valid value-sets for the string-typed Basis fields, named once so the
@@ -367,11 +376,11 @@ SURRENDER_VALUE_BASES = (
 def derive_expense_components(
     expense_items: tuple["ExpenseItem", ...], n_time: int,
     inflation_index: FloatArray | None = None,
-) -> tuple[float, float, float, FloatArray, FloatArray]:
-    """Project ``expense_items`` onto the five kernel-side primitives.
+) -> tuple[float, float, float, FloatArray, FloatArray, float]:
+    """Project ``expense_items`` onto the six kernel-side primitives.
 
     Returns ``(alpha_pro_rata, alpha_fixed, beta_pro_rata, gamma_fixed,
-    lae_pro_rata)``:
+    lae_pro_rata, surrender_value_pro_rata)``:
 
     - ``alpha_pro_rata`` -- sum of ``value`` over ``alpha_pro_rata``
       rows. Paid at ``t=0`` on annualized premium.
@@ -386,6 +395,15 @@ def derive_expense_components(
       each ``lae_pro_rata`` row contributes
       ``value * inflation_index[t]``. Applied to the month's
       claim + morbidity + disability total.
+    - ``surrender_value_pro_rata`` -- sum of ``value`` over
+      ``surrender_value_pro_rata`` rows. A scalar annual rate charged each
+      in-force month on the in-force surrender value
+      (``value / 12 * inforce_surrender_value[t]``); the surrender-value
+      base is built downstream in ``project_cashflows`` from the basis'
+      ``surrender_value_curve`` / ``surrender_value_basis``. NOT inflated:
+      the base (a reserve-/surrender-value curve) already carries its own
+      growth, so a second inflation factor would double-count -- the same
+      reasoning that exempts the ``alpha_*`` and ``beta_pro_rata`` bases.
 
     ``inflation_index`` is the ``(n_time,)`` per-month inflation
     multiplier produced by :func:`fastcashflow.curves.inflation_index`;
@@ -399,6 +417,7 @@ def derive_expense_components(
     beta_pro_rata = 0.0
     gamma_fixed = np.zeros(n_time, dtype=np.float64)
     lae_pro_rata = np.zeros(n_time, dtype=np.float64)
+    surrender_value_pro_rata = 0.0
     if inflation_index is None:
         inflation_index = np.ones(n_time, dtype=np.float64)
     for row in expense_items:
@@ -412,12 +431,15 @@ def derive_expense_components(
             gamma_fixed += row.value * inflation_index / 12.0
         elif row.basis == "lae_pro_rata":
             lae_pro_rata += row.value * inflation_index
+        elif row.basis == "surrender_value_pro_rata":
+            surrender_value_pro_rata += row.value
         else:
             raise ValueError(
                 f"unknown expense basis {row.basis!r}; expected one of "
                 f"{EXPENSE_BASES}"
             )
-    return alpha_pro_rata, alpha_fixed, beta_pro_rata, gamma_fixed, lae_pro_rata
+    return (alpha_pro_rata, alpha_fixed, beta_pro_rata, gamma_fixed,
+            lae_pro_rata, surrender_value_pro_rata)
 
 
 @dataclass(frozen=True, slots=True)

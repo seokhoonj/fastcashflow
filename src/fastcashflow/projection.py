@@ -164,8 +164,8 @@ def reject_account_book(cashflows: "Cashflows | None", entry: str) -> None:
 
 def _expense_kernel_args(
     basis: Basis, n_time: int,
-) -> tuple[float, float, float, FloatArray, FloatArray]:
-    """Return the five expense primitives the kernels take.
+) -> tuple[float, float, float, FloatArray, FloatArray, float]:
+    """Return the six expense primitives the kernels take.
 
     Projects ``Basis.expense_items`` onto the kernel-side inputs,
     threading ``Basis.expense_inflation`` through the recurring
@@ -178,8 +178,13 @@ def _expense_kernel_args(
     - ``lae_pro_rata`` -- ``(n_time,)`` LAE fraction applied each
       month to ``(claim + morbidity + disability)`` (with global
       inflation baked in).
+    - ``surrender_value_pro_rata`` -- scalar annual rate charged each
+      in-force month on the in-force surrender value. The base is built in
+      :func:`project_cashflows` post-projection (it needs the surrender
+      value, which depends on the in-force path), so this scalar is the
+      only kernel-side input.
 
-    An empty ``expense_items`` produces five zeros -- the no-expense
+    An empty ``expense_items`` produces six zeros -- the no-expense
     basis -- so the kernel can run unchanged.
     """
     return derive_expense_components(
@@ -1205,11 +1210,13 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                 sex_grid, issue_age_grid, duration_grid,
                 issue_class_grid, elapsed_grid),
             "annuity_factor_annual", (len(model_points.issue_age), n_years))
-    # Expense primitives -- the five inputs the kernel consumes. Honours
+    # Expense primitives -- the six inputs the kernel consumes. Honours
     # Basis.expense_items when set, otherwise the legacy alpha / beta
     # / gamma / expense_inflation scalars (see _expense_kernel_args).
+    # ``expense_surrender_pro_rata`` is added post-projection (it rides the
+    # in-force surrender value, computed after the time loop).
     (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,
-     gamma_fixed, lae_pro_rata) = _expense_kernel_args(
+     gamma_fixed, lae_pro_rata, expense_surrender_pro_rata) = _expense_kernel_args(
         basis, n_time,
     )
 
@@ -1549,6 +1556,25 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
     # state ``lapse_flow == inforce x lapse``, the historical formula.
     # ``surrender_value_curve = None`` falls back to zero, the historical
     # "lapse silently removes" behaviour.
+    # surrender_value_pro_rata expense rides the in-force surrender value, so it
+    # needs a surrender_value_curve and is undefined on an account-backed book
+    # (the account fund_fee already charges the account value -- a second charge
+    # would double-count). Guard both at measure time rather than silently
+    # emitting a zero / double-counted expense leg.
+    if expense_surrender_pro_rata != 0.0:
+        if basis.surrender_value_curve is None:
+            raise ValueError(
+                "a 'surrender_value_pro_rata' ExpenseItem requires "
+                "Basis.surrender_value_curve (the surrender value it charges "
+                "on); none is set, so the expense base would be silently zero."
+            )
+        if has_account:
+            raise ValueError(
+                "a 'surrender_value_pro_rata' ExpenseItem is not supported on an "
+                "account-backed (universal-life / VFA) book -- the account "
+                "fund_fee already charges the account value. Remove the item or "
+                "measure the account business without it."
+            )
     surrender_cf = np.zeros_like(expense_cf)
     curve = basis.surrender_value_curve
     if curve is not None:
@@ -1560,6 +1586,11 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         idx = np.minimum(np.arange(n_time), c.shape[0] - 1)
         value = c[idx]
         mode = basis.surrender_value_basis
+        # ``inforce_sv`` is the surrender value held by the in-force survivors
+        # each month (per-policy surrender value x in-force) -- the base the
+        # surrender_value_pro_rata maintenance expense charges. It mirrors each
+        # surrender mode's per-policy value but weights by ``inforce`` (the
+        # begin-of-month survivors), not ``lapse_flow`` (the month's exits).
         if mode == "cum_premium_factor":
             # Sample-grade: a factor on cumulative premium. ``cum_premium``
             # aggregates inforce * premium each month; the effective lapse
@@ -1570,12 +1601,16 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             cum_premium = np.cumsum(premium_cf, axis=1)
             inforce_safe = np.where(inforce > 0.0, inforce, 1.0)
             surrender_cf = (lapse_flow / inforce_safe) * cum_premium * value
+            # per-policy SV = (cum_premium / inforce) * value, so the in-force
+            # aggregate cancels the inforce divisor: cum_premium * value.
+            inforce_sv = cum_premium * value
         elif mode == "amount_per_policy":
             # Contractual per-policy amount at policy-duration t. The number
             # lapsing in month t is ``lapse_flow[t]``; each pays ``value[t]``.
             # Linear in the in-force, so the in-force ``count / inforce[elapsed]``
             # rescale re-bases it exactly.
             surrender_cf = lapse_flow * value
+            inforce_sv = inforce * value
         elif mode == "amount_per_unit":
             # Same as amount_per_policy, scaled by the per-MP base amount
             # (sum insured / basic premium / ...). Explicit -- no default base.
@@ -1586,13 +1621,19 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                     "ModelPoints.surrender_base_amount (no default base is "
                     "inferred)."
                 )
-            surrender_cf = (lapse_flow * value
-                            * np.asarray(base, dtype=np.float64)[:, None])
+            base_col = np.asarray(base, dtype=np.float64)[:, None]
+            surrender_cf = lapse_flow * value * base_col
+            inforce_sv = inforce * value * base_col
         else:
             raise ValueError(
                 f"unknown surrender_value_basis {mode!r}; expected one of "
                 f"{SURRENDER_VALUE_BASES}."
             )
+        # surrender_value_pro_rata maintenance: rate/12 of the in-force
+        # surrender value each month, added to the expense leg. No inflation --
+        # the surrender-value curve already carries its own growth.
+        if expense_surrender_pro_rata != 0.0:
+            expense_cf += (expense_surrender_pro_rata / 12.0) * inforce_sv
     account = None
     if has_account:
         # Account-backed surrender overrides the curve-based surrender for the

@@ -1436,12 +1436,14 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
 
     The full-only features (v1): non-zero ``issue_class`` (the fast grid is built
     at class 0), benefit escalation / step-up, a state-conditioned death benefit
-    (``State.death_benefit_factor != 1``) and a deterministic transition
-    (``Transition.after_sojourn_months``). A universal-life account is NOT in this
-    set as of Step 4: the scalar fused kernel carries the account roll itself, so
-    an account book runs on the fast path directly (the routing exceptions --
-    account + state machine, account + gpu, account + discount_curve override --
-    are handled in :func:`_measure_fast`, not here).
+    (``State.death_benefit_factor != 1``), a deterministic transition
+    (``Transition.after_sojourn_months``) and a ``surrender_value_pro_rata``
+    expense item (the fused kernel does not carry the in-force surrender value the
+    expense charges on; the full path builds it post-projection). A universal-life
+    account is NOT in this set as of Step 4: the scalar fused kernel carries the
+    account roll itself, so an account book runs on the fast path directly (the
+    routing exceptions -- account + state machine, account + gpu, account +
+    discount_curve override -- are handled in :func:`_measure_fast`, not here).
     The fast path auto-routes such a book to the full kernel instead of raising,
     so -- per segment in ``_measure_segmented`` -- only the segments that need it
     pay, and the rest stay fast. The seed of the planned portfolio-orchestrator
@@ -1452,6 +1454,9 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
     if (model_points.coverage_step_month is not None
             and (np.any(model_points.coverage_step_month)
                  or np.any(model_points.coverage_escalation_annual))):
+        return True
+    if any(item.basis == "surrender_value_pro_rata"
+           for item in basis.expense_items):
         return True
     sm = resolve_state_model(basis)
     if any(s.death_benefit_factor != 1.0 for s in sm.states):
@@ -1815,14 +1820,17 @@ def _measure_fast(
         len(aligned_coverages), 2, n_ages, n_years
     ), f"coverage_rates shape {coverage_rates.shape} != (n_cov, 2, n_ages, n_years)"
 
-    # Expense primitives -- the five inputs every value-side kernel
+    # Expense primitives -- the inputs every value-side kernel
     # consumes (alpha / beta / gamma scalars plus two per-month curves).
     # See projection._expense_kernel_args -- this engine path uses the
     # same helper so the item-form vs legacy dispatch is consistent across
-    # the fast path (full=False) and the full path (full=True).
+    # the fast path (full=False) and the full path (full=True). The fused
+    # path does not carry surrender_value_pro_rata -- a book with that item
+    # is routed to the full path by ``requires_full`` -- so the trailing
+    # primitive is discarded here.
     from fastcashflow.projection import _expense_kernel_args
     (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,
-     gamma_fixed, lae_pro_rata) = _expense_kernel_args(
+     gamma_fixed, lae_pro_rata, _expense_surrender_pro_rata) = _expense_kernel_args(
         basis, n_time,
     )
     if discount_curve is None:
