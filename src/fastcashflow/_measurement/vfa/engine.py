@@ -53,7 +53,7 @@ from fastcashflow.numerics import (
 from fastcashflow.model_points import ModelPoints, NO_GUARANTEE_RATE
 from fastcashflow.projection import Cashflows, project_cashflows
 from fastcashflow.state_model import resolve_state_model
-from fastcashflow.tvog import (
+from fastcashflow._measurement.tvog import (
     guarantee_floor_time_value, ul_guarantee_floor_time_value,
     measure_tvog,
     tvog_weights, tvog_term_weight,

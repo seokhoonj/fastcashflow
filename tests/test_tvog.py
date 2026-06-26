@@ -107,7 +107,7 @@ def test_tvog_weights_no_guarantee_is_exact_zero_even_at_extreme_returns():
     zero, and the short-circuit returns exact zeros rather than routing through
     the over/underflowing cumulative growth/discount products (a near-ruin but
     valid return path would otherwise give 0 * inf = NaN)."""
-    from fastcashflow.tvog import tvog_weights
+    from fastcashflow._measurement.tvog import tvog_weights
     term = 240
     extreme = np.full((8, term), -0.95)        # valid (> -1) but near-ruin
     w = tvog_weights(minimum_crediting_rate=fcf.NO_GUARANTEE_RATE,
@@ -121,7 +121,7 @@ def test_tvog_weights_rejects_nonfinite_rate():
     """A non-finite crediting rate is rejected at the helper boundary -- the
     scalar TVOG helpers bypass the ModelPoints finite check, so the domain
     validator must reject it itself."""
-    from fastcashflow.tvog import tvog_weights
+    from fastcashflow._measurement.tvog import tvog_weights
     with pytest.raises(ValueError, match="finite"):
         tvog_weights(minimum_crediting_rate=np.nan, fund_fee=0.015,
                      investment_return=0.04,
@@ -139,7 +139,7 @@ def test_tvog_term_weight_extends_one_month():
     assertion (w_term >= w[-1]) is deliberately NOT made -- it holds on average
     but inverts on small scenario sets from Monte-Carlo noise.
     """
-    from fastcashflow.tvog import (
+    from fastcashflow._measurement.tvog import (
         tvog_weights, tvog_term_weight, _av_and_discount, credited_monthly_rate)
     g, f, r = 0.06, 0.015, 0.04
     rng = np.random.default_rng(11)

@@ -354,7 +354,7 @@ def test_ul_credit_rate_tvog_hand_roll():
     # path) and a single scenario's guarantee cost to floating-point.
     from fastcashflow._measurement.account import _roll_inputs
     from fastcashflow.projection import project_cashflows
-    from fastcashflow.tvog import credited_monthly_rate
+    from fastcashflow._measurement.tvog import credited_monthly_rate
 
     g, r = 0.03, 0.024
     basis = _ul_basis()

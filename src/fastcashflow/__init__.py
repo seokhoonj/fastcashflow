@@ -76,7 +76,7 @@ from fastcashflow.state_model import (
 )
 from fastcashflow._measurement.stochastic import StochasticResult
 from fastcashflow._measurement.transition import transition
-from fastcashflow.tvog import TVOGResult
+from fastcashflow._measurement.tvog import TVOGResult
 from fastcashflow.portfolio import settle_group_of_contracts
 from fastcashflow import samples
 from fastcashflow import (  # namespaces

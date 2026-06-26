@@ -209,7 +209,7 @@ def _account_kernel_args(
     monthly ``gamma_fixed`` (NOT in-force weighted); crediting is the declared
     ``investment_return`` floored at each contract's ``minimum_crediting_rate``.
     """
-    from fastcashflow.tvog import credited_monthly_rate
+    from fastcashflow._measurement.tvog import credited_monthly_rate
 
     n_mp = model_points.issue_age.shape[0]
     # Per-MP gate: an MP carries the account roll iff one of its coverages is

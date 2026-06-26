@@ -24,7 +24,7 @@ from fastcashflow.pricing.embedded_value import EmbeddedValue, embedded_value
 from fastcashflow.pricing.profit import (
     ProfitSignature, break_even_year, irr, nbv, profit_margin, signature,
 )
-from fastcashflow.tvog import TVOGResult
+from fastcashflow._measurement.tvog import TVOGResult
 
 __all__ = ["solve_premium", "statutory_reserve", "statutory_profit_signature",
            "interest_guarantee_tvog", "embedded_value",

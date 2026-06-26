@@ -258,7 +258,7 @@ def test_floor_tvog_matches_independent_reimplementation():
     value, since volatility mostly lets scenarios escape the floor here.)
     """
     from fastcashflow.projection import project_cashflows
-    from fastcashflow.tvog import guarantee_floor_time_value
+    from fastcashflow._measurement.tvog import guarantee_floor_time_value
 
     basis = _basis(investment_return=0.04, fund_fee=0.0)
     av0, gmdb, gmab, term = 1000.0, 1100.0, 1100.0, 24
@@ -1069,7 +1069,7 @@ def test_vfa_credit_tvog_maturity_carries_term_weight():
     maturity re-seat -- proving deaths / non-maturity lapses are untouched. The
     deterministic (no-scenario) run is unaffected.
     """
-    from fastcashflow.tvog import tvog_weights, tvog_term_weight
+    from fastcashflow._measurement.tvog import tvog_weights, tvog_term_weight
     from fastcashflow._measurement.vfa import _project
     g, r, f, term, av0 = 0.05, 0.04, 0.015, 6, 1e8
     basis = make_death_basis(mortality_q=0.001, lapse_q=0.01, discount_annual=0.03,
