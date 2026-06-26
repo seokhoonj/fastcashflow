@@ -83,9 +83,9 @@ def test_alm_namespaces_mirror_module():
     assert fcf.gmm.liability_dv01 is alm.liability_dv01
     assert fcf.gmm.key_rate_dv01s is alm.key_rate_dv01s
     assert fcf.gmm.net_liability_cashflows is alm.net_liability_cashflows
-    assert fcf.vfa.liability_duration is alm._vfa_liability_duration
-    assert fcf.vfa.liability_dv01 is alm._vfa_liability_dv01
-    assert fcf.vfa.net_liability_cashflows is alm._vfa_net_liability_cashflows
+    assert fcf.vfa.liability_duration is alm._vfa.liability_duration
+    assert fcf.vfa.liability_dv01 is alm._vfa.liability_dv01
+    assert fcf.vfa.net_liability_cashflows is alm._vfa.net_liability_cashflows
 
 
 def test_vfa_namespace_exposes_solvency_and_asset_tools():
@@ -113,7 +113,7 @@ def _ul_guaranteed_mp():
 def test__vfa_liability_duration_responds_to_crediting_guarantee():
     """fcf.vfa.liability_duration differences the VFA BEL against the underlying-
     items return. With a binding crediting guarantee the BEL moves, so the dv01 is
-    non-zero and finite; the duration's dv01 matches _vfa_liability_dv01, and the
+    non-zero and finite; the duration's dv01 matches fcf.vfa.liability_dv01, and the
     modified duration is dv01 / (|pv| * 1bp)."""
     mp, basis = _ul_guaranteed_mp(), _ul_basis()
     dur = fcf.vfa.liability_duration(mp, basis)

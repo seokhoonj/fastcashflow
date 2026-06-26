@@ -26,9 +26,8 @@ import numpy as np
 
 from fastcashflow._typing import FloatArray
 from fastcashflow._duration import DurationResult, _BP
-from fastcashflow.alm import (
-    net_liability_cashflows, _vfa_net_liability_cashflows,
-)
+from fastcashflow.alm import net_liability_cashflows
+from fastcashflow.alm import _vfa as _alm_vfa
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,7 +269,7 @@ def _vfa_cashflow_gap(portfolio: Portfolio, measurement) -> CashflowGap:
     Undiscounted liquidity ladder -- where the general account throws off / must find
     cash to carry the guarantee. Requires a ``full=True`` measurement; both the
     variable-annuity and universal-life paths are supported."""
-    net = _vfa_net_liability_cashflows(measurement)          # (n_time,)
+    net = _alm_vfa.net_liability_cashflows(measurement)      # (n_time,)
     n_time = net.shape[0]
     liability_cf = np.zeros(n_time + 1, dtype=np.float64)
     liability_cf[:n_time] = net

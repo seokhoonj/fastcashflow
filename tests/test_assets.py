@@ -674,7 +674,7 @@ def test__vfa_cashflow_gap_uses_the_guarantee_excess_basis():
                                 minimum_accumulation_benefit=1200.0,
                                 calculation_methods=PATTERNS)
     m = fcf.vfa.measure(mp, basis)
-    net = alm._vfa_net_liability_cashflows(m)
+    net = alm._vfa.net_liability_cashflows(m)
     n_time = net.shape[0]
     pf = assets.Portfolio(holdings=(
         assets.Bond(face=100, coupon_rate=0.05, maturity_years=5, frequency=1),
@@ -1141,7 +1141,7 @@ def test_ul__vfa_net_liability_cashflows_reconciles_to_bel():
         benefits={"DEATH": np.array([5_000_000.0, 3_000_000.0])},
         calculation_methods={"DEATH": CalculationMethod.DEATH})
     m = fcf.vfa.measure(mp, basis, full=True)
-    net = alm._vfa_net_liability_cashflows(m)
+    net = alm._vfa.net_liability_cashflows(m)
     assert net.shape == (m.cashflows.inforce.shape[1],)
     assert np.isclose(net.sum(), float(m.bel.sum()))         # reconciles to the UL net BEL
 
@@ -1177,7 +1177,7 @@ def test_ul_vfa_net_liability_reconciles_with_cost_deducting_rider():
     m = fcf.vfa.measure(mp, basis, full=True)
     assert m.cashflows.account.account_charge.sum() > 0.0    # rider charge drawn
     assert m.cashflows.morbidity_cf.sum() > 0.0              # rider benefit paid
-    assert np.isclose(alm._vfa_net_liability_cashflows(m).sum(), float(m.bel.sum()))
+    assert np.isclose(alm._vfa.net_liability_cashflows(m).sum(), float(m.bel.sum()))
 
 
 def test_vfa_gap_and_interaction_support_account_backed_ul():
