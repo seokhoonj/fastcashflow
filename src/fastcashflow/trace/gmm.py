@@ -52,8 +52,8 @@ def show_trace(
         not pay for the trace of one contract.
     basis
         A single :class:`Basis`, or the :class:`~fastcashflow.BasisRouter`
-        returned by :func:`fastcashflow.data.io.read_basis` /
-        :func:`fastcashflow.data.io.load_sample_basis`. With the router
+        returned by :func:`fastcashflow.io.read_basis` /
+        :func:`fastcashflow.io.load_sample_basis`. With the router
         form the function looks up the segment via the model point's
         ``(product, channel)``.
     file
@@ -522,7 +522,7 @@ def show_trace_diff(
         each :func:`measure` so the diff cost stays proportional to one MP.
     basis_a, basis_b
         Two basis to compare. Either a :class:`Basis` or the
-        :class:`~fastcashflow.BasisRouter` from :func:`fastcashflow.data.io.read_basis`.
+        :class:`~fastcashflow.BasisRouter` from :func:`fastcashflow.io.read_basis`.
         With a router, each is routed independently by the model point's
         ``(product, channel)`` -- comparing two segments is also fine.
     label_a, label_b
@@ -776,7 +776,7 @@ def show_trace_bel_step(
         running :func:`measure`.
     basis
         A :class:`Basis` or the :class:`~fastcashflow.BasisRouter` from
-        :func:`fastcashflow.data.io.read_basis` (routed by the row's
+        :func:`fastcashflow.io.read_basis` (routed by the row's
         ``(product, channel)`` like :func:`show_trace`).
     months
         Anchor months at which to unroll the recursion. ``None`` uses

@@ -26,7 +26,7 @@ from fastcashflow.reporting.disclosure import (
 from fastcashflow._measurement.gmm import clear_codegen_cache
 from fastcashflow.grouping import group, group_of_contracts
 from fastcashflow.compression import compress, CompressionResult
-from fastcashflow.data.io import (
+from fastcashflow.io import (
     read_basis,
     read_inforce_policies,
     read_inforce_state,
@@ -78,7 +78,7 @@ from fastcashflow._measurement.stochastic import StochasticResult
 from fastcashflow._measurement.transition import transition
 from fastcashflow.tvog import TVOGResult
 from fastcashflow.portfolio import settle_group_of_contracts
-from fastcashflow.data import samples
+from fastcashflow import samples
 from fastcashflow import (  # namespaces
     curves, gmm, paa, portfolio, projection, reinsurance, vfa, esg,
 )
@@ -86,7 +86,7 @@ from fastcashflow import (  # namespaces
 __version__ = "0.1.0.dev1"
 __all__ = [
     # measurement-model namespaces -- the headline entry points live here
-    # (e.g. ``fastcashflow.gmm.measure``, ``fastcashflow.data.samples.basis``).
+    # (e.g. ``fastcashflow.gmm.measure``, ``fastcashflow.samples.basis``).
     "curves", "gmm", "paa", "vfa", "reinsurance",
     "samples", "esg", "projection",
     "Basis", "BasisRouter", "ModelPoints", "Cashflows", "AccountTrajectory",

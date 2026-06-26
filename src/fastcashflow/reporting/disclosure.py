@@ -27,7 +27,7 @@ from functools import singledispatch
 import polars as pl
 
 from fastcashflow._measurement.model import model_tag
-from fastcashflow.data.io import _write_frame, write_measurement
+from fastcashflow.io import _write_frame, write_measurement
 from fastcashflow._measurement import gmm as _gmm
 from fastcashflow._measurement import paa as _paa
 from fastcashflow._measurement import reinsurance as _reinsurance

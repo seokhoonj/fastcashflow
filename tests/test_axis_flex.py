@@ -14,7 +14,7 @@ import openpyxl
 import pytest
 
 from fastcashflow import Basis, CoverageRate
-from fastcashflow.data.io import _flex_rate_table
+from fastcashflow.io import _flex_rate_table
 from conftest import PATTERNS
 
 def _sheet(rows):
