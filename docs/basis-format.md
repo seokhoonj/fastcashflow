@@ -26,7 +26,7 @@ fastcashflow 엔진에 들어가는 **계리 가정**을 정의하는 입력 포
 | `incidence_rate_tables` | 특약 발생률 가정 |
 | `waiver_tables` | 납입면제 발생률 가정 |
 | `lapse_tables` | 해지율 가정 |
-| `discount_tables` | 할인율 곡선 (locked-in, Sec. 36) |
+| `discount_tables` | 할인율 곡선 (locked-in, 문단 36) |
 | `expense_tables` | item-form 사업비 ledger (basis dispatch — §3.3) |
 | `inflation_tables` | 사업비 인플레이션 곡선 (`table_id` × `year` → `rate`) |
 | `surrender_value_tables` (optional) | 해약환급금 곡선 |

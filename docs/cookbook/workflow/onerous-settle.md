@@ -7,10 +7,10 @@
 
 | 메커니즘 | IFRS 17 | movement 라인 | 켜는 입력 |
 |---|---|---|---|
-| 손실요소 체계적 배분 | Sec. 50(a)-52 | `loss_component_finance` / `_amortised` | `prior_loss_component` (손실부담 계약) |
-| 발생손해부채 (LIC) | Sec. 40(b) / 42(c) / 37 | `lic_opening` / `claims_incurred` / `lic_finance` / `claims_paid` / `lic_closing` | `settlement_pattern` (산출기초) |
-| 보험료 경험조정 | Sec. B96(a) / B97(c) | `csm_premium_experience` / `premium_experience_revenue` | `actual_premium` (결산 상태) |
-| 투자요소 경험조정 | Sec. B96(c) | `csm_investment_experience` | `actual_investment_component` (결산 상태) |
+| 손실요소 체계적 배분 | 문단 50(a)-52 | `loss_component_finance` / `_amortised` | `prior_loss_component` (손실부담 계약) |
+| 발생손해부채 (LIC) | 문단 40(b) / 42(c) / 37 | `lic_opening` / `claims_incurred` / `lic_finance` / `claims_paid` / `lic_closing` | `settlement_pattern` (산출기초) |
+| 보험료 경험조정 | 문단 B96(a) / B97(c) | `csm_premium_experience` / `premium_experience_revenue` | `actual_premium` (결산 상태) |
+| 투자요소 경험조정 | 문단 B96(c) | `csm_investment_experience` | `actual_investment_component` (결산 상태) |
 
 예제는 `gmm.settle` 로 보이지만 **`vfa.settle` 도 같은 라인을 똑같이 냅니다**
 (맨 끝 절). 자기 입력이 없으면 라인은 0 으로, 결과는 기존 결산과 byte 단위로
@@ -69,22 +69,22 @@ def book(b, *, prior_csm=0.0, lc_open=0.0,
     return mp, state
 ```
 
-## 손실요소 체계적 배분 — Sec. 50(a)-52
+## 손실요소 체계적 배분 — 문단 50(a)-52
 
 손실부담 계약 (직전 CSM = 0, 손실요소를 운반) 은 보장이 제공되면서 **손실요소를
-당기로 환입** 합니다 (Sec. 50(a)/51). 엔진은 매기 비율 `r = 손실요소 /
+당기로 환입** 합니다 (문단 50(a)/51). 엔진은 매기 비율 `r = 손실요소 /
 (claims+expenses+RA pool)` 로 그 기의 claims/RA release 를 손실요소와 잔여
 LRC 에 나눕니다. 손실요소로 간 몫 (`loss_component_amortised`) 은 손실의
-환입이라 **보험수익에서 제외** 되고 (Sec. 49 / B123(b)), 손실요소는 보장기간
-말에 0 으로 수렴합니다 (Sec. 52). 투자요소 (해지환급금 / 만기 / 연금) 는
-claims 가 아니므로 pool 에서 빠집니다 (Sec. 51(a) / 85).
+환입이라 **보험수익에서 제외** 되고 (문단 49 / B123(b)), 손실요소는 보장기간
+말에 0 으로 수렴합니다 (문단 52). 투자요소 (해지환급금 / 만기 / 연금) 는
+claims 가 아니므로 pool 에서 빠집니다 (문단 51(a) / 85).
 
 ```python
 # 손실요소 40,000 을 운반하는 손실부담 보유계약
 mp, state = book(basis(), prior_csm=0.0, lc_open=40_000.0)
 mv = fcf.gmm.settle(mp, state, basis(), period_months=12)
 
-print("=== loss component (Sec. 50(a)-52) ===")
+print("=== loss component (문단 50(a)-52) ===")
 print(f"loss_component_opening   = {float(mv.loss_component_opening[0]):>12,.2f}")
 print(f"loss_component_finance   = {float(mv.loss_component_finance[0]):>12,.2f}")    # 51(c) 이자부리
 print(f"loss_component_amortised = {float(mv.loss_component_amortised[0]):>12,.2f}")  # 50(a) 환입
@@ -94,7 +94,7 @@ print(f"loss_component_closing   = {float(mv.loss_component_closing[0]):>12,.2f}
 출력:
 
 ```
-=== loss component (Sec. 50(a)-52) ===
+=== loss component (문단 50(a)-52) ===
 loss_component_opening   =    40,000.00
 loss_component_finance   =       905.86
 loss_component_amortised =    21,262.30
@@ -102,19 +102,19 @@ loss_component_closing   =    19,643.56
 ```
 
 항등식은 `closing == opening + finance - amortised - reversed + recognised`
-입니다 (`reversed` / `recognised` 는 Sec. 48/50(b) 미래서비스 채널, 여기선 0).
+입니다 (`reversed` / `recognised` 는 문단 48/50(b) 미래서비스 채널, 여기선 0).
 1 년 만에 손실요소가 40,000 -> 19,644 로 줄며, 그 환입 (21,262) 이 당기 P&L 에
 손실 환입으로 잡힙니다. 직전엔 손실요소가 remeasurement 사이 정적이었습니다.
 
 ## 발생손해부채 (LIC) — `settlement_pattern`
 
 청구가 발생 즉시 지급되지 않고 **정산 패턴** 으로 풀려나가면, 미지급 청구가
-발생손해부채 (LIC, Liability for Incurred Claims) 로 쌓입니다 (Sec. 40(b)).
+발생손해부채 (LIC, Liability for Incurred Claims) 로 쌓입니다 (문단 40(b)).
 산출기초에 `settlement_pattern` (발생월·익월·… 지급 비율, 합 = 1) 을 주면
 `gmm.settle` 이 LIC 블록을 냅니다. LIC 는 **이행현금흐름** 으로 측정합니다 —
-미지급 runoff 의 할인 현재가치 + 위험조정 (Sec. 40(b)/42(c)/37). `claims_incurred`
+미지급 runoff 의 할인 현재가치 + 위험조정 (문단 40(b)/42(c)/37). `claims_incurred`
 와 `claims_paid` 는 명목 현금 그대로 (`claims_paid` 는 무할인 잔차) 두고, 할인·
-위험조정은 잔액만 움직이며, `lic_finance` 가 그 차이 — 보험금융손익 (Sec. 42(c)
+위험조정은 잔액만 움직이며, `lic_finance` 가 그 차이 — 보험금융손익 (문단 42(c)
 할인 unwind) + 할인·위험조정 측정효과 — 를 받는 잔차라 블록이 닫힙니다
 (`lic_closing == lic_opening + claims_incurred + lic_finance - claims_paid`).
 
@@ -124,7 +124,7 @@ sp = basis(settlement=np.array([0.6, 0.3, 0.1]))
 mp, state = book(sp)
 mv = fcf.gmm.settle(mp, state, sp, period_months=12)
 
-print("=== liability for incurred claims (Sec. 40(b)/42/37) ===")
+print("=== liability for incurred claims (문단 40(b)/42/37) ===")
 print(f"lic_opening     = {float(mv.lic_opening[0]):>13,.2f}")      # 할인 PV + RA
 print(f"claims_incurred = {float(mv.claims_incurred[0]):>13,.2f}")  # 42(a) 명목
 print(f"lic_finance     = {float(mv.lic_finance[0]):>13,.2f}")      # 42(c) + 측정효과
@@ -135,7 +135,7 @@ print(f"lic_closing     = {float(mv.lic_closing[0]):>13,.2f}")
 출력:
 
 ```
-=== liability for incurred claims (Sec. 40(b)/42/37) ===
+=== liability for incurred claims (문단 40(b)/42/37) ===
 lic_opening     =    506,684.39
 claims_incurred = 11,003,258.44
 lic_finance     =     -1,951.44
@@ -151,10 +151,10 @@ runoff 의 신뢰수준 마진을 위험군별로 쪼갠 것입니다 (cost-of-c
 향후 정교화). `settlement_pattern` 이 없으면 청구는 발생 즉시 지급되어 LIC 는
 양쪽 0, `lic_finance` 0, `claims_paid == claims_incurred` 입니다.
 
-## 보험료 경험조정 — Sec. B96(a) / B97(c)
+## 보험료 경험조정 — 문단 B96(a) / B97(c)
 
 이번 분기 실제 수취 보험료가 기대와 다르면, 그 차이를 미래서비스 (CSM,
-Sec. B96(a)) 와 당기·과거서비스 (보험수익, Sec. B97(c)) 로 나눕니다. 분할은
+문단 B96(a)) 와 당기·과거서비스 (보험수익, 문단 B97(c)) 로 나눕니다. 분할은
 회사 차원 판단이라 `premium_experience_future_fraction` (기본 0.0 = 전부 수익) 로
 노출합니다. 실제 보험료는 결산 상태의 `actual_premium` 으로 줍니다.
 
@@ -164,7 +164,7 @@ mp, state = book(basis(), prior_csm=8_000.0, actual_premium=1_350_000.0)
 mv = fcf.gmm.settle(mp, state, basis(), period_months=12,
                     premium_experience_future_fraction=0.5)  # 절반은 CSM, 절반은 수익
 
-print("=== premium experience (Sec. B96(a)/B97(c)) ===")
+print("=== premium experience (문단 B96(a)/B97(c)) ===")
 print(f"csm_premium_experience     = {float(mv.csm_premium_experience[0]):>12,.2f}")      # B96(a) -> CSM
 print(f"premium_experience_revenue = {float(mv.premium_experience_revenue[0]):>12,.2f}")  # B97(c) -> P&L
 ```
@@ -172,7 +172,7 @@ print(f"premium_experience_revenue = {float(mv.premium_experience_revenue[0]):>1
 출력:
 
 ```
-=== premium experience (Sec. B96(a)/B97(c)) ===
+=== premium experience (문단 B96(a)/B97(c)) ===
 csm_premium_experience     =    18,443.48
 premium_experience_revenue =    18,443.48
 ```
@@ -184,11 +184,11 @@ premium_experience_revenue =    18,443.48
 미래 보험료를 줄이는 효과는 이미 건수 채널이 잡으므로, frac 의 기본값 0.0 이
 이중계상을 막습니다.)
 
-## 투자요소 경험조정 — Sec. B96(c)
+## 투자요소 경험조정 — 문단 B96(c)
 
 투자요소 (해지환급금 / 만기 / 연금 — 보험사고와 무관하게 환급하는 금액,
-Sec. 부록 A) 의 실제 지급이 기대와 다르면, 그 차이 **전부** 가 CSM 을 조정
-합니다 (Sec. B96(c) 는 전부 미래서비스라 분할 없음). 투자요소는 보험수익을
+문단 부록 A) 의 실제 지급이 기대와 다르면, 그 차이 **전부** 가 CSM 을 조정
+합니다 (문단 B96(c) 는 전부 미래서비스라 분할 없음). 투자요소는 보험수익을
 건드리지 않습니다. 실제 지급액은 `actual_investment_component` 로 줍니다.
 
 ```python
@@ -206,14 +206,14 @@ b_surr = Basis(
 mp, state = book(b_surr, prior_csm=8_000.0, actual_ic=1_200_000.0)
 mv = fcf.gmm.settle(mp, state, b_surr, period_months=12)
 
-print("=== investment-component experience (Sec. B96(c)) ===")
+print("=== investment-component experience (문단 B96(c)) ===")
 print(f"csm_investment_experience  = {float(mv.csm_investment_experience[0]):>12,.2f}")
 ```
 
 출력:
 
 ```
-=== investment-component experience (Sec. B96(c)) ===
+=== investment-component experience (문단 B96(c)) ===
 csm_investment_experience  =   -33,157.15
 ```
 
@@ -225,9 +225,9 @@ csm_investment_experience  =   -33,157.15
 ## VFA 대응 — `vfa.settle`
 
 변액 (VFA) 도 같은 네 라인을 똑같이 냅니다. 한 가지 통합이 있습니다:
-**VFA 의 투자요소는 계좌가치** 라, Sec. 51(a) 의 claims+expenses pool (투자요소
-는 Sec. 85 로 제외) 이 VFA 에선 **보증초과액** (GMDB/GMAB 가 계좌가치를 넘는
-보험 부분) + 사업비 로 자동으로 투자요소를 뺀 모양이 되고, Sec. B96(c) 의
+**VFA 의 투자요소는 계좌가치** 라, 문단 51(a) 의 claims+expenses pool (투자요소
+는 문단 85 로 제외) 이 VFA 에선 **보증초과액** (GMDB/GMAB 가 계좌가치를 넘는
+보험 부분) + 사업비 로 자동으로 투자요소를 뺀 모양이 되고, 문단 B96(c) 의
 투자요소는 출금 시 돌려주는 계좌가치 (`benefit_cf - guarantee_excess_cf`) 입
 니다. 호출은 동일합니다:
 
@@ -241,10 +241,10 @@ mv = fcf.vfa.settle(vfa_mp, vfa_state, vfa_basis, period_months=12,
 ## 함정 / 검증
 
 - **손실요소 pool 은 claims+expenses 만** — 해지환급금 / 만기 / 연금 (투자
-  요소) 은 빠집니다 (Sec. 51(a) / 85). 순수 보장 계약은 투자요소가 없어 배분
+  요소) 은 빠집니다 (문단 51(a) / 85). 순수 보장 계약은 투자요소가 없어 배분
   숫자가 기존과 같습니다.
 - **`settlement_pattern` 은 합이 정확히 1.** LIC 는 이행현금흐름 (할인 PV +
-  위험조정, Sec. 40(b)/42(c)/37) 으로 측정하고, 명목 in/out 과 잔액의 차이는
+  위험조정, 문단 40(b)/42(c)/37) 으로 측정하고, 명목 in/out 과 잔액의 차이는
   `lic_finance` 가 받습니다. LIC 할인은 평탄 월금리 (`discount_monthly`) 를 씁니다.
 - **`premium_experience_future_fraction` 기본 0.0** — 해지구동 미래 보험료가
   이미 건수 채널에 잡히므로, 0 이 이중계상을 막습니다. 진짜 미래 coverage 의

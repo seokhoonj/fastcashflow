@@ -116,7 +116,7 @@
   - 가입 90일 면책 / 가입 2년 감액. coverage rule (담보 룰 축).
 * - 2.4
   - [갱신형 보험과 계약의 경계](simple/renewable)
-  - IFRS 17 Sec. 34 계약의 경계 — 차기갱신 vs 최종만기. `contract_boundary_months`
+  - IFRS 17 문단 34 계약의 경계 — 차기갱신 vs 최종만기. `contract_boundary_months`
     로 측정 범위를 차기갱신에서 끊기.
 :::
 
@@ -275,9 +275,9 @@
   - 다루는 것
 * - 9.1
   - [결산 / 보유계약 평가](workflow/settlement)
-  - 분기말 마감파일 한 장으로 Sec. 44 기초 → 기말 정산. `gmm.settle`,
+  - 분기말 마감파일 한 장으로 문단 44 기초 → 기말 정산. `gmm.settle`,
     변동분석표 (`reconcile`), 분기 체이닝 (`closing_inputs`), 진단 뷰
-    (`gmm.measure_inforce`), 단기 계약의 `paa.settle` (Sec. 55(b)).
+    (`gmm.measure_inforce`), 단기 계약의 `paa.settle` (문단 55(b)).
 * - 9.2
   - [변동분해](workflow/movement)
   - 신계약 측정을 보고기간별로 잘라 BEL / CSM 움직임을 미래서비스 / 이자 /
@@ -285,13 +285,13 @@
     경험 (`actual_inforce`).
 * - 9.3
   - [손실부담 계약과 경험조정의 결산](workflow/onerous-settle)
-  - settle 의 고급 라인. 손실요소 체계적 배분 (Sec. 50(a)-52), 발생손해부채
-    (`settlement_pattern`, Sec. 40(b)), 보험료 (Sec. B96(a)) / 투자요소
-    (Sec. B96(c)) 경험조정.
+  - settle 의 고급 라인. 손실요소 체계적 배분 (문단 50(a)-52), 발생손해부채
+    (`settlement_pattern`, 문단 40(b)), 보험료 (문단 B96(a)) / 투자요소
+    (문단 B96(c)) 경험조정.
 * - 9.4
   - [결산팩 — 공시 명세서 조립](workflow/close-pack)
   - 세그먼트별 정산표를 IFRS 17 공시 명세서로 조립. `close` (SoFP /
-    보험금융손익 / 보험서비스손익), 재보험 차감 (Sec. 78), 멀티시트 엑셀
+    보험금융손익 / 보험서비스손익), 재보험 차감 (문단 78), 멀티시트 엑셀
     (`write_close_pack`), 감사 컬럼 (`line_metadata`).
 * - 9.5
   - [샘플 워크북으로 결산하기](workflow/sample-walkthrough)
