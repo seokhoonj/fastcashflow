@@ -41,7 +41,7 @@ from fastcashflow.grouping import (
     _finalise_vfa_group, _finalise_paa_group, _INFORCE_EPS)
 from fastcashflow.model_points import ModelPoints, InforceState, align_inforce_state
 from fastcashflow._measurement.movement import roll_forward, reconcile
-from fastcashflow.numerics import _csm_loss_component_step
+from fastcashflow._numerics import _csm_loss_component_step
 from fastcashflow.projection import Cashflows
 from fastcashflow.reporting.report import report, Report
 from fastcashflow import _trace

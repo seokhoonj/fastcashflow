@@ -47,7 +47,7 @@ from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import (
     write_measurement, _write_measurement_columns, _stream_policies_coverages)
 from fastcashflow.curves import discount_monthly_curve
-from fastcashflow.numerics import (
+from fastcashflow._numerics import (
     _carry_lic_residual, _risk_adjustment, _roll_forward_kernel,
     _norm_ppf, _settlement_factor, _settlement_lic, _settlement_lic_discounted)
 from fastcashflow.model_points import ModelPoints

@@ -42,7 +42,7 @@ from fastcashflow.basis import Basis, _single_basis
 from fastcashflow.io import (
     write_measurement, _write_measurement_columns,
     _stream_single_file, _vfa_model_points_from_frame)
-from fastcashflow.numerics import (
+from fastcashflow._numerics import (
     _carry_lic_residual,
     _csm_kernel,
     _norm_ppf,
@@ -1158,7 +1158,7 @@ def measure_inforce(
 # The paragraph-48/50(b) CSM / loss-component step is shared with the GMM
 # settlement (gmm.settle) and lives in numerics; re-exported here for the
 # existing VFA call sites and tests.
-from fastcashflow.numerics import _csm_loss_component_step  # noqa: E402,F401
+from fastcashflow._numerics import _csm_loss_component_step  # noqa: E402,F401
 
 
 def settle(

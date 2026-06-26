@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from fastcashflow._measurement.basis import _require_inception
-from fastcashflow.numerics import _norm_ppf
+from fastcashflow._numerics import _norm_ppf
 from fastcashflow._measurement.vfa import _require_settlement_csm
 from fastcashflow._measurement import gmm as _gmm
 from fastcashflow._measurement import paa as _paa

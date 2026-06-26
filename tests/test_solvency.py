@@ -15,7 +15,7 @@ import fastcashflow as fcf
 from fastcashflow.solvency import _engine as sv
 from fastcashflow.coverage import CalculationMethod
 from fastcashflow._measurement.gmm import measure
-from fastcashflow.numerics import _cost_of_capital_ra
+from fastcashflow._numerics import _cost_of_capital_ra
 from fastcashflow.curves import discount_monthly_curve
 from fastcashflow.state_model import StateModel, State, Transition
 

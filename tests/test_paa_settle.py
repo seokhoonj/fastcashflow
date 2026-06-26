@@ -244,7 +244,7 @@ def test_lic_block_hand_calc_settlement_pattern():
     np.testing.assert_allclose(mv.lrc_experience, [0.0], atol=1e-10)
     # the LIC opening is the discounted PV + RA (z x cv-weighted), built from the
     # unit claim run-off via the discounted settlement kernel (k_exp == 1 here)
-    from fastcashflow.numerics import _norm_ppf, _settlement_lic_discounted
+    from fastcashflow._numerics import _norm_ppf, _settlement_lic_discounted
     pattern = np.array([0.6, 0.4])
     unit = ModelPoints(
         issue_age=np.array([40]), premium=np.array([60.0]),

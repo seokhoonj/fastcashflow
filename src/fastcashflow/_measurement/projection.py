@@ -18,7 +18,7 @@ from fastcashflow.curves import (
     discount_factors_from_curve,
     discount_monthly_curve,
 )
-from fastcashflow.numerics import (
+from fastcashflow._numerics import (
     _cost_of_capital_ra,
     _norm_ppf,
     _risk_adjustment,

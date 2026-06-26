@@ -25,7 +25,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.curves import forward_rates
 from fastcashflow._measurement.gmm import Measurement, _require_full
 from fastcashflow._measurement.basis import _require_inception
-from fastcashflow.numerics import _csm_roll
+from fastcashflow._numerics import _csm_roll
 
 
 def transition(measurement: Measurement, fair_value: FloatArray) -> Measurement:

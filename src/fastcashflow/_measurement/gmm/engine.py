@@ -41,7 +41,7 @@ from fastcashflow.curves import (
     discount_factors_from_curve,
     forward_rates,
 )
-from fastcashflow.numerics import (
+from fastcashflow._numerics import (
     _csm_kernel,
     _csm_roll,
     _carry_lic_residual,

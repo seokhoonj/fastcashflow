@@ -3,7 +3,7 @@ import numpy as np
 
 from fastcashflow import ExpenseItem, ModelPoints
 from fastcashflow.gmm import measure
-from fastcashflow.numerics import _norm_ppf
+from fastcashflow._numerics import _norm_ppf
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 

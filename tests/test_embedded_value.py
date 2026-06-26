@@ -14,7 +14,7 @@ from fastcashflow import pricing
 from fastcashflow.pricing.embedded_value import EmbeddedValue, embedded_value
 from fastcashflow.pricing.profit import ProfitSignature
 from fastcashflow.curves import discount_monthly_curve
-from fastcashflow.numerics import _cost_of_capital_ra
+from fastcashflow._numerics import _cost_of_capital_ra
 
 from conftest import make_death_basis, PATTERNS
 

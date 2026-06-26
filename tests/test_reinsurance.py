@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from fastcashflow import ModelPoints
-from fastcashflow.numerics import _norm_ppf
+from fastcashflow._numerics import _norm_ppf
 from conftest import PATTERNS, annual_from_monthly as _annual, make_death_basis
 
 # Some tests here exercise the deprecated carry bridge (measure_inforce) as a

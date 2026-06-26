@@ -138,7 +138,7 @@ def test_lic_opening_is_the_discounted_pv_plus_ra():
     """The LIC opening is k_exp x (discounted PV of the unpaid run-off + RA),
     the paragraph-40(b)/42(c)/37 fulfilment cash flow -- built directly from the
     unit claim run-off via the discounted settlement kernel and the z x cv RA."""
-    from fastcashflow.numerics import _norm_ppf, _settlement_lic_discounted
+    from fastcashflow._numerics import _norm_ppf, _settlement_lic_discounted
     basis = _basis()                                  # discount=0.03, cv=0.10
     em_open, period, term, scale = 12, 12, 36, 1000.0
     mp, state = _book(basis, em_open=em_open, period=period, term=term,

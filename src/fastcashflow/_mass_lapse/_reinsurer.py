@@ -15,7 +15,7 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
-from fastcashflow.numerics import _norm_ppf
+from fastcashflow._numerics import _norm_ppf
 from fastcashflow._mass_lapse._cedant import LapseXL
 
 

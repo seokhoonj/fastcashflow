@@ -8,7 +8,7 @@ import math
 import numpy as np
 import pytest
 
-from fastcashflow.numerics import (
+from fastcashflow._numerics import (
     _carry_lic_residual, _norm_ppf, _settlement_factor, _settlement_lic)
 
 

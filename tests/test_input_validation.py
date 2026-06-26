@@ -705,7 +705,7 @@ def test_coverage_arrays_rejects_unresolved_code():
 
 def test_settlement_lic_rejects_bad_settlement_pattern_sum():
     """numerics._settlement_lic's pattern.sum() != 1 guard."""
-    from fastcashflow.numerics import _settlement_lic
+    from fastcashflow._numerics import _settlement_lic
     incurred = np.zeros((1, 12))
     with pytest.raises(ValueError, match="settlement_pattern must sum to 1"):
         _settlement_lic(incurred, np.array([0.3, 0.3, 0.3]))
@@ -713,14 +713,14 @@ def test_settlement_lic_rejects_bad_settlement_pattern_sum():
 
 def test_settlement_factor_rejects_bad_pattern_sum():
     """numerics._settlement_factor's pattern.sum() != 1 guard."""
-    from fastcashflow.numerics import _settlement_factor
+    from fastcashflow._numerics import _settlement_factor
     with pytest.raises(ValueError, match="settlement_pattern must sum to 1"):
         _settlement_factor(np.array([0.3, 0.3, 0.3]), discount_monthly=0.0)
 
 
 def test_settlement_factor_rejects_bad_rate_shape():
     """_settlement_factor rejects a 2-D discount_monthly."""
-    from fastcashflow.numerics import _settlement_factor
+    from fastcashflow._numerics import _settlement_factor
     with pytest.raises(ValueError, match="discount_monthly must be a scalar"):
         _settlement_factor(
             np.array([1.0]), discount_monthly=np.zeros((3, 3)),
@@ -729,7 +729,7 @@ def test_settlement_factor_rejects_bad_rate_shape():
 
 def test_norm_ppf_rejects_p_outside_open_interval():
     """numerics._norm_ppf rejects p at the boundary and outside."""
-    from fastcashflow.numerics import _norm_ppf
+    from fastcashflow._numerics import _norm_ppf
     for bad in (-0.1, 0.0, 1.0, 1.5):
         with pytest.raises(ValueError, match="open interval"):
             _norm_ppf(bad)

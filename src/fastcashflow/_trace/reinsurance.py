@@ -13,7 +13,7 @@ from typing import IO
 from fastcashflow.basis import Basis
 from fastcashflow.curves import discount_factors
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.numerics import _norm_ppf
+from fastcashflow._numerics import _norm_ppf
 from fastcashflow._measurement.reinsurance import QuotaShare, Treaty
 from fastcashflow._measurement import reinsurance as _reinsurance
 from fastcashflow._trace.common import (

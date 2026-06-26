@@ -172,7 +172,7 @@ def test_guaranteed_period_ra_excludes_certain_payments():
     """The longevity RA prices ONLY the survival-contingent tail (t >= G); the
     guaranteed payments are certain, so they carry no longevity risk and the BEL
     still includes them."""
-    from fastcashflow.numerics import _norm_ppf
+    from fastcashflow._numerics import _norm_ppf
     G, term = 6, 24
     basis = _ra_basis()
     m = measure(_annuity_payout_mp(term=term, annuity_guarantee_months=G), basis)
@@ -196,7 +196,7 @@ def test_guarantee_ra_below_pure_life_ra():
 
 def test_no_guarantee_ra_unchanged():
     """Without a guarantee, the longevity RA prices the whole survival stream."""
-    from fastcashflow.numerics import _norm_ppf
+    from fastcashflow._numerics import _norm_ppf
     term = 24
     basis = _ra_basis()
     m = measure(_annuity_payout_mp(term=term), basis)

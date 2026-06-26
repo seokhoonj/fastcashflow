@@ -41,7 +41,7 @@ from fastcashflow.curves import discount_monthly_curve
 from fastcashflow._measurement.gmm import measure
 from fastcashflow._measurement.inforce import inforce_surrender_value
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.numerics import _cost_of_capital_ra
+from fastcashflow._numerics import _cost_of_capital_ra
 
 Transform = Callable[[ModelPoints, Basis], "tuple[ModelPoints, Basis]"]
 # A scalar BEL adjustment a stress adds AFTER re-measurement, evaluated on the

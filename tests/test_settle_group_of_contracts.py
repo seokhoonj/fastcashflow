@@ -58,7 +58,7 @@ if not hasattr(_pf, "settle_group_of_contracts"):
         allow_module_level=True)
 
 from fastcashflow.portfolio import settle_group_of_contracts, GoCSettlement
-from fastcashflow.numerics import _csm_loss_component_step
+from fastcashflow._numerics import _csm_loss_component_step
 from conftest import PATTERNS, make_death_basis
 
 

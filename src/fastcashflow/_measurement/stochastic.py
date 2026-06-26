@@ -32,7 +32,7 @@ from fastcashflow._typing import FloatArray
 from fastcashflow.basis import Basis
 from fastcashflow._measurement.gmm import measure
 from fastcashflow.model_points import ModelPoints
-from fastcashflow.numerics import _norm_ppf
+from fastcashflow._numerics import _norm_ppf
 from fastcashflow.projection import project_cashflows
 
 
@@ -74,7 +74,7 @@ def _stochastic_inception_kernel(
     curve per scenario. The cash flows are scenario-independent; the outer
     ``prange`` runs each scenario on its own core, re-discounting the shared
     flows with that scenario's curve. The backward recursion reproduces
-    :func:`fastcashflow.numerics._roll_forward_kernel` at the inception column
+    :func:`fastcashflow._numerics._roll_forward_kernel` at the inception column
     (``t = 0``): premiums and annuities fall at month start, claims / expenses
     / surrender mid-month, the maturity benefit seeds ``t = boundary``. The
     recursion stops at the IFRS 17 contract boundary -- ``project_cashflows``

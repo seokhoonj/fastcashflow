@@ -43,7 +43,7 @@ if not hasattr(_vfa_ns, "GoCSettlement"):
 
 from fastcashflow.portfolio import settle_group_of_contracts
 from fastcashflow.vfa import GoCSettlement
-from fastcashflow.numerics import _csm_loss_component_step
+from fastcashflow._numerics import _csm_loss_component_step
 
 
 # ---------------------------------------------------------------------------
