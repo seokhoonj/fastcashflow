@@ -1,74 +1,28 @@
-"""Risk-neutral economic scenario generator (ESG).
+"""Hull-White one-factor (HW1F) economic scenario generator -- the v1 ESG model.
 
-A minimal, market-consistent generator that produces the scenarios the
-measurement engine consumes -- it does not value anything itself. Two factors:
+A HW1F short rate calibrated so the model reprices the initial Smith-Wilson
+risk-free curve, plus a correlated lognormal (geometric Brownian motion) fund
+return whose risk-neutral drift is the short rate. :func:`simulate` builds both
+factors and returns an :class:`~fastcashflow.esg._core.EconomicScenarios`
+(``.rates`` feeds ``gmm.stochastic``; ``.returns`` feeds ``vfa.measure`` /
+``measure_tvog``); :func:`hull_white_rates` is the rates-only wrapper. The
+model-agnostic result and the correlated normal draw live in
+:mod:`~fastcashflow.esg._core`.
 
-* a Hull-White one-factor (HW1F) short rate, calibrated so the model reprices the
-  initial risk-free curve (a :func:`~fastcashflow.curves.smith_wilson_prices` discount
-  curve); ``.rates`` feeds ``gmm.stochastic`` (annual rate per month).
-* a correlated lognormal (geometric Brownian motion) fund return whose
-  risk-neutral drift is the short rate; ``.returns`` feeds ``vfa.measure`` /
-  ``measure_tvog`` (monthly simple return).
-
-Correctness is by no-arbitrage, not hand calculation: under the risk-neutral
-measure the Monte-Carlo average of the stochastic discount factor reprices the
-zero-coupon bond, and the discounted fund value is a martingale --
-:meth:`EconomicScenarios.martingale_error` reports both.
-
-Scope (v1): HW1F + lognormal, calibrated to the Smith-Wilson curve, with the
-mean reversion / volatilities supplied by the caller (not fitted to a swaption
-surface), antithetic variance reduction. Out of scope: a real-world measure,
-multi-factor / stochastic-vol models, and quasi-Monte-Carlo.
+Calibration is exact on the discrete monthly grid (only Monte-Carlo noise
+remains, no monthly-discretisation bias); the mean reversion / volatilities are
+supplied by the caller, not fitted to a swaption surface; antithetic variance
+reduction. Out of scope: a real-world measure, multi-factor / stochastic-vol
+models, and quasi-Monte-Carlo.
 """
 from __future__ import annotations
-
-from dataclasses import dataclass
 
 import numpy as np
 from numba import njit, prange
 
 from fastcashflow._typing import FloatArray
 from fastcashflow.curves._smith_wilson import smith_wilson_prices
-
-_DT = 1.0 / 12.0                    # one month in years
-_SQRT_DT = _DT ** 0.5
-
-
-@dataclass(frozen=True, slots=True, eq=False)
-class EconomicScenarios:
-    """Correlated risk-neutral scenarios from :func:`simulate`.
-
-    ``rates`` is ``(n_scenarios, n_time)`` -- the HW1F short rate as an **annual**
-    rate for each projection month, the ``scenarios`` input to ``gmm.stochastic``.
-    ``returns`` is ``(n_scenarios, n_time)`` -- the lognormal fund **monthly simple
-    return**, the ``return_scenarios`` input to ``vfa.measure`` / ``measure_tvog``.
-    The fields are used directly; no further unit conversion is needed.
-    """
-
-    rates: FloatArray             # (n_scen, n_time) annual short rate per month
-    returns: FloatArray           # (n_scen, n_time) monthly fund return
-    short_rate: FloatArray        # (n_scen, n_time) continuous short rate r_t
-    initial_prices: FloatArray    # (n_time+1,) P(0,t) the model is calibrated to
-
-    def martingale_error(self):
-        """The two no-arbitrage check errors, as relative deviations.
-
-        Returns ``(bond_error, equity_error)``:
-
-        * ``bond_error`` -- the worst relative deviation, over all maturities, of
-          the Monte-Carlo zero-coupon price ``mean_s exp(-sum_t r/12)`` from the
-          calibrated ``P(0, T)``. Zero under perfect calibration / infinite paths.
-        * ``equity_error`` -- the relative deviation of the discounted terminal
-          fund value ``mean_s [ prod_t (1 + return) * exp(-sum_t r/12) ]`` from 1
-          (the fund is a tradeable, so its discounted value is a martingale).
-        """
-        disc = np.exp(-np.cumsum(self.short_rate, axis=1) * _DT)   # (n_scen, n_time)
-        mc_price = disc.mean(axis=0)                               # (n_time,)
-        p0 = self.initial_prices[1:]                              # P(0, 1..n_time)
-        bond_error = float(np.max(np.abs(mc_price / p0 - 1.0)))
-        fund = np.cumprod(1.0 + self.returns, axis=1)             # S_t / S_0
-        equity_error = float(np.abs((fund * disc).mean(axis=0)[-1] - 1.0))
-        return bond_error, equity_error
+from fastcashflow.esg._core import EconomicScenarios, _normals, _DT, _SQRT_DT
 
 
 def _initial_prices(maturities, rates, ufr, alpha, n_time):
@@ -102,23 +56,6 @@ def _hw_drift(prices, a, sigma, n_time):
     a_t = 0.5 * _DT * var_t - np.log(prices[1:]) / _DT                   # A_T, T=1..n_time
     a_full = np.concatenate(([0.0], a_t))                               # A_0..A_{n_time}
     return a_full[1:] - a_full[:-1]                                     # alpha_0..alpha_{n_time-1}
-
-
-def _normals(n_scenarios, n_time, seed, antithetic):
-    """Two independent standard-normal matrices ``(n_scenarios, n_time)``,
-    deterministic in the seed. With ``antithetic`` the second half of each path
-    set is the negation of the first (a variance-reduction pairing); an odd count
-    drops the one spare mirror path. Two 2-D draws (not one 3-D array) keep the
-    correlation step a plain elementwise combination."""
-    rng = np.random.default_rng(seed)
-    if antithetic:
-        half = (n_scenarios + 1) // 2
-        za = rng.standard_normal((half, n_time))
-        zb = rng.standard_normal((half, n_time))
-        return (np.concatenate([za, -za])[:n_scenarios],
-                np.concatenate([zb, -zb])[:n_scenarios])
-    return (rng.standard_normal((n_scenarios, n_time)),
-            rng.standard_normal((n_scenarios, n_time)))
 
 
 @njit(parallel=True, cache=True)
@@ -238,6 +175,3 @@ def hull_white_rates(
         rate_vol=rate_vol, equity_vol=0.0, correlation=0.0,
         n_scenarios=n_scenarios, n_time=n_time, seed=seed, antithetic=antithetic,
     ).rates
-
-
-__all__ = ["EconomicScenarios", "simulate", "hull_white_rates"]
