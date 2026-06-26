@@ -47,7 +47,7 @@ def _norm_cdf(x: float) -> float:
 
 # Public tail anchors for the excess-over-best-estimate lapse L (exceedance
 # probabilities): the 40% standard-formula stress is the 1-in-200 (99.5%) point
-# (Art. 142(6)(b)); EIOPA notes attachment points are typically set around a
+# (Article 142(6)(b)); EIOPA notes attachment points are typically set around a
 # 1-in-30 event (e.g. 15%). The second anchor is a calibration choice, not a
 # regulatory law -- override it with the book's own lapse volatility.
 SF_LAPSE_TAIL_ANCHOR = (0.40, 1.0 / 200.0)

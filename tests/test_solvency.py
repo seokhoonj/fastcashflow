@@ -365,7 +365,7 @@ def test_sii_parameters():
     assert R[2, 3] == 0.50        # disability x expense
     assert R[3, 5] == 0.50        # expense x lapse
     assert R[0, 4] == 0.00        # mortality x revision
-    assert R[0, 6] == 0.25 and R[1, 6] == 0.00 and R[5, 6] == 0.25   # Art 136 cat row
+    assert R[0, 6] == 0.25 and R[1, 6] == 0.00 and R[5, 6] == 0.25   # Article 136 cat row
     # cost-of-capital risk margin, EIOPA interest curves present
     assert spec.risk_margin_method == "cost_of_capital" and spec.risk_margin_coc_rate == 0.06
     assert spec.interest_curves is not None and len(spec.interest_curves) == 2
@@ -521,11 +521,11 @@ def test_property_ignored_for_solvency2():
 
 
 # ---------------------------------------------------------------------------
-# Solvency II life catastrophe (Delegated Regulation Art 143 / Art 136 row)
+# Solvency II life catastrophe (Delegated Regulation Article 143 / Article 136 row)
 # ---------------------------------------------------------------------------
 
 def test_sii_catastrophe_adds_first_year_mortality_only():
-    """Art 143: +0.15pp absolute on the mortality rate over the next 12 months
+    """Article 143: +0.15pp absolute on the mortality rate over the next 12 months
     (duration 0) only; later policy years are unchanged."""
     base = _basis()
     _, b = sv.catastrophe_mortality(0.0015).apply(_mp(), base)
@@ -709,7 +709,7 @@ def test_vfa_interest_scr_hand_calc():
 
 # ---------------------------------------------------------------------------
 # scale_state_rate -- a named state-machine transition-rate shock (Phase 1 of
-# the Solvency II disability sub-risk: Art. 139 recovery / inception shocks).
+# the Solvency II disability sub-risk: Article 139 recovery / inception shocks).
 # ---------------------------------------------------------------------------
 
 def _di_recovery_model() -> StateModel:
@@ -808,7 +808,7 @@ def test_scale_state_rate_rejects_unknown_rate():
 
 # ---------------------------------------------------------------------------
 # scale_coverages_first_year -- the +35% year-1 / +25%-thereafter duration split
-# (Phase 2 of the Solvency II disability inception shock, Art. 139).
+# (Phase 2 of the Solvency II disability inception shock, Article 139).
 # ---------------------------------------------------------------------------
 
 _MORB = CalculationMethod.MORBIDITY
@@ -876,13 +876,13 @@ def test_scale_coverages_first_year_bel_exceeds_uniform():
 
 
 # ---------------------------------------------------------------------------
-# SII disability sub-risk (Art 139) -- the composed inception-up / recovery-down
+# SII disability sub-risk (Article 139) -- the composed inception-up / recovery-down
 # shock wired into SII (Phase 3).
 # ---------------------------------------------------------------------------
 
 def _disability_only_regime():
     """A one-sub-risk regime carrying just the SII disability shock, so
-    sub_risk_capital['disability'] is the standalone Art 139 capital."""
+    sub_risk_capital['disability'] is the standalone Article 139 capital."""
     dis = next(sr for sr in sv.SII.sub_risks if sr.name == "disability")
     return sv.RegimeSpec(name="dis", sub_risks=(dis,),
                          correlation=np.array([[1.0]]), risk_margin_method="percentile")
@@ -903,7 +903,7 @@ def test_sii_disability_subrisk_includes_recovery():
 
 
 def test_sii_disability_subrisk_first_year_exceeds_uniform():
-    """On a morbidity book the Art 139 capital exceeds the old uniform +25%
+    """On a morbidity book the Article 139 capital exceeds the old uniform +25%
     capital -- the +35% first-year inception bump adds strain."""
     mp, basis = _morbidity_mp_basis()
     base = float(measure(mp, basis, full=False).bel.sum())
@@ -917,7 +917,7 @@ def test_sii_disability_subrisk_first_year_exceeds_uniform():
 
 
 def test_sii_disability_subrisk_zero_for_death_book():
-    """A plain death book has no disability / morbidity exposure, so the Art 139
+    """A plain death book has no disability / morbidity exposure, so the Article 139
     shock leaves the BEL unchanged and the disability capital is zero (the
     doc-exec term-life books are unaffected by the recalibration)."""
     mp, basis = _mp(term=24), _basis()

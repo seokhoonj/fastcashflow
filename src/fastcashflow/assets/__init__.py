@@ -15,7 +15,7 @@ regulatory numbers.
 The asset-side SCR modules are the market risk (interest / equity / property / FX /
 asset concentration) and the credit risk (bond default + downgrade). Both regimes
 are calibrated: K-ICS from the handbook (tables 22 / 29-31 / 23-24) and Solvency II
-from the Delegated Regulation (Art 176 spread, Art 188 currency, Art 184-187
+from the Delegated Regulation (Article 176 spread, Article 188 currency, Articles 184-187
 concentration).
 """
 from __future__ import annotations

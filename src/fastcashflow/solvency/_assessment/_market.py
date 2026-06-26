@@ -134,7 +134,7 @@ def property_scr(portfolio: Portfolio, regime) -> float:
 # currencies only) under a won-up (rates fall) and a won-down scenario through a
 # 0.5 inter-currency correlation, and take the worse of the two. FX derivative
 # price volatility is a further term, taken as 0 here. Solvency II currency risk
-# (Art 188) is a flat 25% shock per currency, summed. Holding values are in the
+# (Article 188) is a flat 25% shock per currency, summed. Holding values are in the
 # reporting currency (won); the currency tag only selects the shock.
 # ---------------------------------------------------------------------------
 
@@ -147,7 +147,7 @@ _FX_SHOCK_KRW = {              # K-ICS table 22, won-base currency shock (percen
     "TRY": 55, "TWD": 20, "USD": 25, "ZAR": 45,
 }
 
-_SII_FX_SHOCK = 0.25           # Solvency II Art 188: 25% per foreign currency
+_SII_FX_SHOCK = 0.25           # Solvency II Article 188: 25% per foreign currency
 
 _FX_CORRELATION = 0.5          # table 22: inter-currency correlation (declining only)
 
@@ -171,7 +171,7 @@ def fx_scr(portfolio: Portfolio, regime, discount_annual) -> float:
 
     K-ICS: each currency's table-22 shock, summing the net-asset-value losses of
     the declining currencies under a won-up and a won-down scenario through a 0.5
-    correlation, the worse of the two. Solvency II (Art 188): a flat 25% per
+    correlation, the worse of the two. Solvency II (Article 188): a flat 25% per
     currency, each currency's larger of the up / down loss, SUMMED (no
     diversification). Returns 0 for an unknown regime."""
     if regime.name not in ("K-ICS", "Solvency II"):
@@ -183,7 +183,7 @@ def fx_scr(portfolio: Portfolio, regime, discount_annual) -> float:
             continue
         exposure[cur] = exposure.get(cur, 0.0) + holding_value(h, discount_annual)
 
-    if regime.name == "Solvency II":        # Art 188: 25% flat, per-currency, summed
+    if regime.name == "Solvency II":        # Article 188: 25% flat, per-currency, summed
         return float(sum(_SII_FX_SHOCK * abs(e) for e in exposure.values()))
 
     for cur in exposure:                    # K-ICS: table 22 must list the currency
@@ -202,7 +202,7 @@ def fx_scr(portfolio: Portfolio, regime, discount_annual) -> float:
 # separately (individual and whole-book limits, the worse of the two). The asset
 # concentration SCR is sqrt(counterparty^2 + property^2). It enters the market
 # module as the independent (correlation-0) fifth sub-risk. Solvency II
-# concentration (Art 184-187) is a single-name excess charge, root-sum-of-squares.
+# concentration (Articles 184-187) is a single-name excess charge, root-sum-of-squares.
 # ---------------------------------------------------------------------------
 
 _CONCENTRATION_BANDS = {       # K-ICS table 23: (limit % of total assets, factor)
@@ -215,7 +215,7 @@ _PROPERTY_CONCENTRATION = {    # K-ICS table 24
 }
 _BAND_ORDER = {"1-2": 0, "3-4": 1, "5-7": 2}   # higher = more conservative
 
-# Solvency II concentration (Art 185 threshold CT, Art 186 risk factor g) by CQS.
+# Solvency II concentration (Article 185 threshold CT, Article 186 risk factor g) by CQS.
 _SII_CONC_THRESHOLD = {0: 0.03, 1: 0.03, 2: 0.03, 3: 0.015, 4: 0.015, 5: 0.015, 6: 0.015}
 _SII_CONC_FACTOR = {0: 0.12, 1: 0.12, 2: 0.21, 3: 0.27, 4: 0.73, 5: 0.73, 6: 0.73}
 
@@ -251,7 +251,7 @@ def concentration_scr(portfolio: Portfolio, regime, discount_annual, *,
     correlation 0. Property: each holding above the individual limit (6% of total
     assets) and the whole book above the total limit (25%) are charged 20% (table
     24), taking the worse of the two. ``total_assets`` defaults to the portfolio
-    value. Solvency II (Art 184-187) uses the single-name excess
+    value. Solvency II (Articles 184-187) uses the single-name excess
     ``max(0, exposure - threshold(CQS) x assets) x g(CQS)`` aggregated as a
     root-sum-of-squares. Returns 0 when a book has no tagged issuers and no
     property, or for an unknown regime."""
@@ -262,7 +262,7 @@ def concentration_scr(portfolio: Portfolio, regime, discount_annual, *,
     if ta <= 0.0:
         return 0.0
 
-    if regime.name == "Solvency II":        # Art 184-187: single-name excess, RSS
+    if regime.name == "Solvency II":        # Articles 184-187: single-name excess, RSS
         exp_s, cqs_s = {}, {}
         for h in portfolio.holdings:
             issuer = getattr(h, "issuer", "").strip()

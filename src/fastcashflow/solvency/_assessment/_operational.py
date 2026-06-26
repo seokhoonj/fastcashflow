@@ -13,7 +13,7 @@ from fastcashflow.model_points import ModelPoints
 # ---------------------------------------------------------------------------
 # Operational risk -- a liability-side factor charge, added on top of the BSCR.
 # K-ICS (table 40): max(premium exposure x 3.5%, current-estimate liability x
-# 0.4%) for general life / long-term. Solvency II (Art 204): min(0.3 x BSCR,
+# 0.4%) for general life / long-term. Solvency II (Article 204): min(0.3 x BSCR,
 # max(0.04 x premiums, 0.0045 x technical provisions)) + 0.25 x unit-linked
 # expenses. Computed from the liability (premiums and BEL) -- no asset model.
 # ---------------------------------------------------------------------------

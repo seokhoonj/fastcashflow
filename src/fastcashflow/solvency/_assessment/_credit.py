@@ -59,7 +59,7 @@ _CREDIT_FACTORS = {            # K-ICS handbook tables 29 / 30 / 31, in PERCENT;
     },
 }
 
-# Solvency II spread risk on bonds (Art 176): the stress factor is piecewise-linear
+# Solvency II spread risk on bonds (Article 176): the stress factor is piecewise-linear
 # in modified duration, a + b x (dur - lower), with (a, b) per credit quality step
 # (CQS 0-6) and duration bucket [0-5, 5-10, 10-15, 15-20, 20+].
 _SII_SPREAD = {                # CQS -> [(lower, a, b), ...]
@@ -132,7 +132,7 @@ def credit_scr(portfolio: Portfolio, regime, discount_annual) -> float:
     for h in portfolio.holdings:
         if not isinstance(h, Bond):
             continue
-        if factors == "sii_spread":             # Solvency II Art 176
+        if factors == "sii_spread":             # Solvency II Article 176
             mod = bond_duration(h, discount_annual).modified
             factor = _sii_spread_stress(h.credit_rating, mod)
         else:                                   # K-ICS rating x maturity grid

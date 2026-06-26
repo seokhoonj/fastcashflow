@@ -263,7 +263,7 @@ def test_credit_scr_kics_hand_calc():
 
 
 def test_credit_scr_sii_spread():
-    """Solvency II credit (Art 176 spread) = market value times a stress that is
+    """Solvency II credit (Article 176 spread) = market value times a stress that is
     piecewise-linear in modified duration by credit quality step."""
     b = assets.Bond(100.0, 0.03, 10, 1, credit_rating="A")        # CQS 2
     mod = assets.bond_duration(b, 0.03).modified                  # ~8.53 -> bucket 5-10
@@ -304,7 +304,7 @@ def test_fx_scr_hand_calc():
 
 
 def test_fx_scr_sii_flat_25():
-    """Solvency II currency risk (Art 188) is a flat 25% per foreign currency,
+    """Solvency II currency risk (Article 188) is a flat 25% per foreign currency,
     summed (no diversification); any currency applies (no table lookup)."""
     p = assets.Portfolio(holdings=(
         assets.Cash(1000.0, currency="USD"), assets.Cash(500.0, currency="EUR"),
@@ -359,7 +359,7 @@ def test_concentration_scr_untagged_is_zero():
 
 
 def test_concentration_scr_sii_excess():
-    """Solvency II concentration (Art 184-187): single-name excess
+    """Solvency II concentration (Articles 184-187): single-name excess
     max(0, exposure - CT(CQS) x assets) x g(CQS). A BBB issuer is CQS 3 (CT 1.5%,
     g 27%); an AA issuer is CQS 1 (CT 3%, g 12%)."""
     bbb = assets.Portfolio(holdings=(
@@ -401,10 +401,10 @@ def test_assess_components():
         assets.Bond(2_600_000.0, 0.03, 10, 1), assets.Cash(3_000_000.0)))
     a = sa.assess(p, mp, basis, regime=fcf.solvency.SII)
     # no equity/property -> the market module is just the net interest SCR; the SII
-    # top-level BSCR aggregates insurance + market + Art-176 credit at all-pairwise
+    # top-level BSCR aggregates insurance + market + Article 176 credit at all-pairwise
     # 0.25 (Annex IV); the total adds operational on top
     assert np.isclose(a.market_scr, a.net_interest_scr)
-    assert a.credit_scr > 0.0                               # SII Art-176 spread on the bond
+    assert a.credit_scr > 0.0                               # SII Article 176 spread on the bond
     m = np.array([a.insurance_scr, a.market_scr, a.credit_scr])
     R = np.array([[1.0, .25, .25], [.25, 1.0, .25], [.25, .25, 1.0]])
     assert np.isclose(a.basic_scr, np.sqrt(m @ R @ m))

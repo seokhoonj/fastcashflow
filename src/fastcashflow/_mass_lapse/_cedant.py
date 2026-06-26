@@ -22,8 +22,8 @@ from fastcashflow.solvency._engine import RegimeSpec, aggregate, required_capita
 
 
 # Solvency II standard-formula mass-lapse stress (Delegated Regulation
-# Art. 142(6)(b)): an instantaneous 40% lapse of the in-force (70% for the
-# management of group pension funds, Art. 2(3)(b)(iii)/(iv) of the Directive).
+# Article 142(6)(b)): an instantaneous 40% lapse of the in-force (70% for the
+# management of group pension funds, Article 2(3)(b)(iii)/(iv) of the Directive).
 SF_MASS_LAPSE_SHOCK = 0.40
 SF_MASS_LAPSE_SHOCK_GROUP_PENSION = 0.70
 
@@ -35,7 +35,7 @@ def lapse_loss_density(model_points: ModelPoints, basis: Basis) -> float:
     For each model point the loss from surrendering is the surrender value paid
     less the liability released, ``surrender_value - BEL``; a profitable
     contract (negative BEL) loses both the surrender value and the future
-    profit, so its loss is largest. Following Delegated Regulation Art. 142(6)
+    profit, so its loss is largest. Following Delegated Regulation Article 142(6)
     -- the discontinuance "which most negatively affects the basic own funds of
     the undertaking on a per policy basis" -- only model points where
     surrendering IS a loss contribute (``max(0, .)``); a model point that is
@@ -70,7 +70,7 @@ class LapseXL:
     """A mass-lapse excess-of-loss treaty layer.
 
     ``attachment`` and ``detachment`` are excess lapse fractions OVER the
-    best-estimate lapse rate (Delegated Regulation Art. 142(6) measures the
+    best-estimate lapse rate (Delegated Regulation Article 142(6) measures the
     shock as a lapse rate over assumed best estimate). The cedant retains
     losses below ``attachment``; the reinsurer pays the layer up to
     ``detachment``; the cedant retains losses beyond ``detachment``. A typical
@@ -234,11 +234,11 @@ def capital_relief(model_points: ModelPoints, basis: Basis, treaty: LapseXL,
 
 # ---------------------------------------------------------------------------
 # Counterparty default risk on the reinsurer exposure
-# (Delegated Regulation Art. 189-201). Buying the treaty adds a credit charge
+# (Delegated Regulation Articles 189-201). Buying the treaty adds a credit charge
 # on the reinsurer, which partly offsets the lapse-SCR relief.
 # ---------------------------------------------------------------------------
 
-# Probability of default by credit quality step (Delegated Regulation Art. 199),
+# Probability of default by credit quality step (Delegated Regulation Article 199),
 # steps 0..6. A reinsurer is typically AAA/AA/A -> step 0/1/2.
 CREDIT_QUALITY_STEP_PD = (0.00002, 0.0001, 0.0005, 0.0024, 0.012, 0.042, 0.042)
 
@@ -249,10 +249,10 @@ def counterparty_default_scr(
     collateral: float = 0.0, collateral_factor: float = 0.0,
 ) -> float:
     """SCR for counterparty default on a single type-1 reinsurance exposure
-    (Delegated Regulation Art. 192, 200, 201).
+    (Delegated Regulation Article 192, 200, 201).
 
     The reinsurance recoverable plus the loss of the treaty's risk-mitigating
-    effect on default is the loss-given-default (Art. 192(2)):
+    effect on default is the loss-given-default (Article 192(2)):
 
         LGD = max(0, 0.50 x (recoverables + 0.50 x risk_mitigating_effect)
                        - collateral_factor x collateral)
@@ -260,9 +260,9 @@ def counterparty_default_scr(
     ``risk_mitigating_effect`` (``RM_re``) is the SCR reduction the treaty
     provides -- here the lapse-SCR relief; on the reinsurer's default the cedant
     loses both the recoverable and that mitigation. With a SINGLE counterparty
-    the Art. 201 variance collapses to ``V = PD (1 - PD) LGD^2`` (the Vinter +
+    the Article 201 variance collapses to ``V = PD (1 - PD) LGD^2`` (the Vinter +
     Vintra cross terms cancel: ``(1 - PD) + 1.5 = 2.5 - PD``), so
-    ``sigma = LGD sqrt(PD (1 - PD))`` and Art. 200 gives, with
+    ``sigma = LGD sqrt(PD (1 - PD))`` and Article 200 gives, with
     ``sigma / sum(LGD) = sqrt(PD (1 - PD))``:
 
         sqrt(PD(1-PD)) <= 7%   ->  SCR_def = 3 sigma
@@ -305,7 +305,7 @@ class CedantSolvencyRelief:
     (the reinsurer credit charge) and lowers the risk margin.
 
     All mass-lapse figures use the per-policy loss density
-    (:func:`lapse_loss_density`, Art. 142(6)), so ``mass_gross`` may exceed the
+    (:func:`lapse_loss_density`, Article 142(6)), so ``mass_gross`` may exceed the
     aggregate ``solvency.mass_lapse`` used by a plain
     :func:`fastcashflow.gmm.required_capital` run.
     """
@@ -385,7 +385,7 @@ def cedant_solvency_relief(
     ``reinsurer_pd`` is the reinsurer's probability of default
     (:data:`CREDIT_QUALITY_STEP_PD` by credit quality step). The
     counterparty-default charge uses the diversified insurance relief as the
-    risk-mitigating effect ``RM_re`` (Art. 192). The risk margin is scaled by
+    risk-mitigating effect ``RM_re`` (Article 192). The risk margin is scaled by
     the regime's risk-margin-to-insurance ratio applied to the gross / net
     insurance SCR.
 

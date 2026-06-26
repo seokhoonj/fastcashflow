@@ -45,7 +45,7 @@ def _two_contracts(**extra) -> ModelPoints:
 # ---------------------------------------------------------------------------
 
 def test_loss_density_is_per_policy_max_not_aggregate():
-    """S sums max(0, isv - bel) per model point (the Art. 142(6) per-policy
+    """S sums max(0, isv - bel) per model point (the Article 142(6) per-policy
     worst-discontinuance selection), so an onerous MP contributes 0 rather than
     netting against the profitable MP. S therefore exceeds the aggregate form
     (which solvency.mass_lapse uses)."""
@@ -165,18 +165,18 @@ def test_capital_relief_group_pension_70_shock():
 
 
 # ---------------------------------------------------------------------------
-# Counterparty default risk on the reinsurer (DR Art 192/199/200/201)
+# Counterparty default risk on the reinsurer (DR Article 192/199/200/201)
 # ---------------------------------------------------------------------------
 
 def test_credit_quality_step_pd_table():
-    """DR Art 199 probability-of-default table, steps 0..6."""
+    """DR Article 199 probability-of-default table, steps 0..6."""
     assert lre.CREDIT_QUALITY_STEP_PD == (
         0.00002, 0.0001, 0.0005, 0.0024, 0.012, 0.042, 0.042)
 
 
 def test_counterparty_default_lgd_formula():
     """LGD = 0.50 x (recoverables + 0.50 x RM_re) - collateral_factor x collateral
-    (DR Art 192(2)). At PD in the first Art-200 case, SCR = 3 x LGD x sqrt(PD(1-PD))."""
+    (DR Article 192(2)). At PD in the first Article 200 case, SCR = 3 x LGD x sqrt(PD(1-PD))."""
     import math
     recoverables, rm_re = 1_000_000.0, 8_000_000.0
     pd = 0.0005                                       # CQS 2, first case
@@ -187,7 +187,7 @@ def test_counterparty_default_lgd_formula():
 
 
 def test_counterparty_default_three_art200_cases():
-    """The three Art 200 thresholds on sqrt(PD(1-PD)): CQS3 -> 3 sigma,
+    """The three Article 200 thresholds on sqrt(PD(1-PD)): CQS3 -> 3 sigma,
     CQS4 -> 5 sigma, CQS5 -> sum LGD."""
     import math
     rm_re = 8_000_000.0
@@ -268,7 +268,7 @@ def test_cedant_relief_reaggregates_life_module():
 
 def test_cedant_relief_counterparty_default_on_module_relief():
     """The counterparty-default add-back uses the diversified insurance relief as
-    the risk-mitigating effect (Art 192 RM_re)."""
+    the risk-mitigating effect (Article 192 RM_re)."""
     mp, basis = _mass_biting_book()
     pd = lre.CREDIT_QUALITY_STEP_PD[2]
     r = lre.cedant_solvency_relief(mp, basis, lre.LapseXL(0.15, 0.40),
@@ -591,7 +591,7 @@ def test_measurement_period_validation():
 
 
 @pytest.mark.parametrize("regime, regime_shock", [
-    (sv.SII, 0.40),                         # DR Art 142(6)(b)
+    (sv.SII, 0.40),                         # DR Article 142(6)(b)
     (sv.KICS, 0.30),                              # K-ICS handbook
 ])
 def test_cedant_relief_uses_regime_mass_lapse_shock(regime, regime_shock):

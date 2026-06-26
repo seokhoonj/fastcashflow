@@ -168,7 +168,7 @@ def _added_first_year(fn, addend: float):
     """Wrap a 5-arg rate callable, ADDING ``addend`` in the first policy year only
     (``duration == 0``) and clamping to 1.0. The time axis is the per-year duration
     grid, so ``duration == 0`` is the next 12 months -- the window the Solvency II
-    life-catastrophe shock (Art 143) applies to. The factor is captured by closure."""
+    life-catastrophe shock (Article 143) applies to. The factor is captured by closure."""
     def wrapped(sex, issue_age, duration, issue_class, elapsed):
         base = fn(sex, issue_age, duration, issue_class, elapsed)
         bump = np.where(np.asarray(duration) == 0, addend, 0.0)
@@ -181,7 +181,7 @@ def _split_first_year(fn, first_factor: float, later_factor: float):
     first policy year (``duration == 0``) and by ``later_factor`` thereafter,
     clamping to 1.0. The per-year duration grid means ``duration == 0`` is the
     next 12 months -- the shape of the Solvency II disability inception shock
-    (Art 139: +35% over the next year, +25% thereafter). Factors by closure."""
+    (Article 139: +35% over the next year, +25% thereafter). Factors by closure."""
     def wrapped(sex, issue_age, duration, issue_class, elapsed):
         base = fn(sex, issue_age, duration, issue_class, elapsed)
         factor = np.where(np.asarray(duration) == 0, first_factor, later_factor)
@@ -231,7 +231,7 @@ def scale_mortality(factor: float) -> Stress:
 
 
 def catastrophe_mortality(addend: float = 0.0015) -> Stress:
-    """Solvency II life-catastrophe stress (Delegated Regulation Art 143) -- an
+    """Solvency II life-catastrophe stress (Delegated Regulation Article 143) -- an
     instantaneous ABSOLUTE addition of ``addend`` (0.15 percentage points = 0.0015
     by default) to the mortality rates over the next 12 months (the first policy
     year). Like :func:`scale_mortality` it lifts BOTH the in-force decrement
@@ -298,7 +298,7 @@ def scale_state_rate(rate_name: str, factor: float) -> Stress:
 
     A recovery shock is a DOWN scale (``factor < 1`` -- fewer recoveries, so the
     disabled stay on claim longer and the liability rises); an inception shock is
-    an UP scale. Used to build the Solvency II disability sub-risk (Art. 139: a
+    an UP scale. Used to build the Solvency II disability sub-risk (Article 139: a
     decrease in disability recovery rates, an increase in inception rates)."""
     try:
         field = _STATE_RATE_FIELD[rate_name]
@@ -412,13 +412,13 @@ def scale_coverages_first_year(first_by_method: dict, later_by_method: dict) -> 
     """Scale each coverage's claim rate by a DURATION-split factor: the first
     policy year (``duration == 0``) by ``first_by_method[method]`` and later years
     by ``later_by_method[method]`` -- the +35% next-12-months / +25%-thereafter
-    shape of the Solvency II disability / morbidity inception shock (Art 139).
+    shape of the Solvency II disability / morbidity inception shock (Article 139).
 
     The two dicts must carry the same methods (the first-year and steady factors
     for each). Coverages whose method is in neither are left unchanged; the
     in-force decrement is untouched. ``duration == 0`` is the next 12 months only
     for business entering the projection at inception (the same caveat as the
-    Art 143 life-catastrophe first-year shock)."""
+    Article 143 life-catastrophe first-year shock)."""
     if set(first_by_method) != set(later_by_method):
         raise ValueError(
             "first_by_method and later_by_method must carry the same methods; got "
@@ -800,7 +800,7 @@ def required_capital(
 # ---------------------------------------------------------------------------
 # Solvency II calibration (Delegated Regulation (EU) 2015/35, primary source).
 # Life underwriting sub-risks (Articles 137-143) and the life sub-risk
-# correlation matrix (Article 136 / Annex IV). Catastrophe (Art 143, +0.15pp
+# correlation matrix (Article 136 / Annex IV). Catastrophe (Article 143, +0.15pp
 # absolute mortality over the next 12 months) is the 7th sub-risk; its correlation
 # row (Cat vs mortality / longevity / disability / expense / revision / lapse) is
 # (0.25, 0, 0.25, 0.25, 0, 0.25). Order is locked to the Article 136 axes for the
@@ -819,8 +819,8 @@ _SII_CORRELATION = np.array([
     [   0.25,      0.00,      0.25,      0.25,     0.00,    0.25,    1.00],   # catastrophe
 ])
 
-# Interest-rate stress -- the EIOPA maturity-relative shock table (Art 166 up /
-# Art 167 down), interpolated to a per-year array. Up is floored at +1pp; the
+# Interest-rate stress -- the EIOPA maturity-relative shock table (Article 166 up /
+# Article 167 down), interpolated to a per-year array. Up is floored at +1pp; the
 # down shock leaves already-negative base rates unshocked.
 _SII_RATE_UP = [(1, 0.70), (2, 0.70), (3, 0.64), (5, 0.55),
                 (10, 0.42), (15, 0.33), (20, 0.26), (90, 0.20)]
@@ -835,7 +835,7 @@ def _per_year_rel(points, n_years: int = 60) -> FloatArray:
     return np.interp(np.arange(1, n_years + 1), mats, vals)
 
 
-# Solvency II disability-morbidity sub-risk (Art 139): one scenario applied
+# Solvency II disability-morbidity sub-risk (Article 139): one scenario applied
 # together, then re-measured -- an INCREASE in disability / morbidity INCEPTION
 # rates (+35% over the next 12 months, +25% thereafter) AND a -20% DECREASE in
 # disability RECOVERY rates. Inception hits both the flat morbidity / diagnosis
@@ -849,7 +849,7 @@ _SII_DISABILITY_INCEPTION_RATES = ("waiver_incidence", "ci_incidence")
 
 
 def _sii_disability_shock() -> Stress:
-    """The combined Art 139 disability shock (inception up, recovery down)."""
+    """The combined Article 139 disability shock (inception up, recovery down)."""
     cov = scale_coverages_first_year(
         {CalculationMethod.MORBIDITY: _SII_DISABILITY_INCEPTION_FIRST,
          CalculationMethod.DIAGNOSIS: _SII_DISABILITY_INCEPTION_FIRST},
@@ -883,14 +883,14 @@ SII = RegimeSpec(
     sub_risks=(
         SubRisk("mortality", (scale_mortality(1.15),), "single"),      # +15%
         SubRisk("longevity", (scale_longevity(0.80),), "single"),      # -20%
-        SubRisk("disability", (_sii_disability_shock(),), "single"),   # Art 139:
+        SubRisk("disability", (_sii_disability_shock(),), "single"),   # Article 139:
                                                                        #   inception +35%/+25%,
                                                                        #   recovery -20%
         SubRisk("expense", (scale_expense(1.10, 0.01),), "single"),    # +10%, inflation +1pp
         SubRisk("revision", (scale_annuity(1.03),), "single"),         # annuity benefits +3%
         SubRisk("lapse", (scale_lapse(1.50), scale_lapse(0.50),        # option-exercise +/-50%
                           mass_lapse(0.40)), "worst_of"),              # mass lapse 40%
-        SubRisk("catastrophe", (catastrophe_mortality(0.0015),),       # Art 143: +0.15pp
+        SubRisk("catastrophe", (catastrophe_mortality(0.0015),),       # Article 143: +0.15pp
                 "single"),                                             #   mortality, next 12 months
     ),
     correlation=_SII_CORRELATION,
@@ -901,7 +901,7 @@ SII = RegimeSpec(
                     name="interest down"),
     ),
     risk_margin_method="cost_of_capital",
-    risk_margin_coc_rate=0.06,    # RM = CoC 6% x sum SCR(t)/(1+r)^(t+1) (Art 37, 39)
+    risk_margin_coc_rate=0.06,    # RM = CoC 6% x sum SCR(t)/(1+r)^(t+1) (Article 37, 39)
 )
 
 
