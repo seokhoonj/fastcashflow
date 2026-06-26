@@ -1156,7 +1156,7 @@ def measure_inforce(
 
 
 # The paragraph-48/50(b) CSM / loss-component step is shared with the GMM
-# settlement (gmm.settle) and lives in numerics; re-exported here for the
+# settlement (gmm.settle) and lives in _numerics; re-exported here for the
 # existing VFA call sites and tests.
 from fastcashflow._numerics import _csm_loss_component_step  # noqa: E402,F401
 
