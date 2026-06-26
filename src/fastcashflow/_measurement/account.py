@@ -35,7 +35,7 @@ def _roll_inputs(model_points: ModelPoints, basis: Basis):
     """Per-policy universal-life account-roll inputs for a stochastic TVOG pass.
 
     Factors the same chain the measure path runs inline (coverage-rate grid ->
-    expense gamma -> :func:`projection._account_kernel_args`) so a guarantee
+    maintenance_per_policy expense -> :func:`projection._account_kernel_args`) so a guarantee
     time-value pass can re-roll the account under return scenarios. Returns
     ``(account_value0, face, prem_to_av, coi_rate_m, admin_fee, account_charge,
     gmab, minimum_crediting_rate, surr_charge_rate)`` -- everything the scenario
@@ -60,11 +60,11 @@ def _roll_inputs(model_points: ModelPoints, basis: Basis):
     issue_index = np.asarray(model_points.issue_age, np.int64) - min_age
     coverage_rates_per_mp = np.ascontiguousarray(           # (cov, mp, year)
         coverage_rates[:, np.asarray(model_points.sex, np.int64), issue_index, :])
-    _a, _b, _c, gamma_fixed, _lae, _surr = _expense_kernel_args(basis, n_time)
+    _a, _b, _c, maintenance_per_policy, _lae, _surr, _face = _expense_kernel_args(basis, n_time)
     (_has, _mp_acc, account_value0, face, prem_to_av, coi_rate_m, admin_fee,
      _credit, account_charge, surr_charge_rate) = _account_kernel_args(
         model_points, basis, coverage_rates_per_mp, cov_funds, cov_pays,
-        gamma_fixed, n_time, n_years)
+        maintenance_per_policy, n_time, n_years)
     gmab = np.asarray(model_points.maturity_benefit, dtype=np.float64)
     return (account_value0, face, prem_to_av, coi_rate_m, admin_fee,
             account_charge, gmab,

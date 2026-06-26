@@ -224,6 +224,7 @@ class ModelPoints:
     coverage_escalation_annual: FloatArray | None = None  # CSR: annual benefit growth (0 = level)
     coverage_escalation_cap: FloatArray | None = None     # CSR: max benefit multiple (0 = unbounded)
     coverage_term: IntArray | None = None        # CSR: coverage maturity, months from issue (0 = to contract boundary)
+    coverage_is_main: IntArray | None = None     # CSR: 1 = main contract, 0 = rider; the sum assured (face) is the main coverage's amount
     count: FloatArray | None = None              # policies the row stands for
     sex: IntArray | None = None                  # 0 = male, 1 = female
     state: IntArray | None = None                # contract state (STATE_*)
@@ -670,6 +671,13 @@ class ModelPoints:
         coverage_term = self.coverage_term
         coverage_term = (np.zeros(n_cov, np.int64) if coverage_term is None
                     else np.asarray(coverage_term, np.int64))
+        # Main-contract marker: 1 on the main coverage, 0 on riders.
+        # The policy's sum assured (face) is the main coverage's amount; a
+        # face-proportional expense reads it from here. 0 everywhere = no main
+        # flagged (the default; only a (maintenance, face) expense needs it).
+        coverage_is_main = self.coverage_is_main
+        coverage_is_main = (np.zeros(n_cov, np.int64) if coverage_is_main is None
+                       else np.asarray(coverage_is_main, np.int64))
         # Each CSR-aligned rule array carries one entry per coverage. A wrong
         # length would silently drop a coverage's rule (too short) or misread
         # it (too long); a non-finite or negative month / factor would silently
@@ -684,6 +692,7 @@ class ModelPoints:
             ("coverage_escalation_annual", coverage_escalation_annual),
             ("coverage_escalation_cap", coverage_escalation_cap),
             ("coverage_term", coverage_term),
+            ("coverage_is_main", coverage_is_main),
         ):
             if arr.shape != (n_cov,):
                 raise ValueError(
@@ -703,6 +712,7 @@ class ModelPoints:
         object.__setattr__(self, "coverage_escalation_annual", coverage_escalation_annual)
         object.__setattr__(self, "coverage_escalation_cap", coverage_escalation_cap)
         object.__setattr__(self, "coverage_term", coverage_term)
+        object.__setattr__(self, "coverage_is_main", coverage_is_main)
         # Segment metadata + mp_id -- normalise to object arrays so they slice
         # with the per-row fields. ``None`` stays None (a single-segment book).
         for name in ("product", "channel", "mp_id"):
@@ -954,6 +964,7 @@ class ModelPoints:
         kwargs["coverage_reduction_end"] = self.coverage_reduction_end[cov_idx]
         kwargs["coverage_reduction_factor"] = self.coverage_reduction_factor[cov_idx]
         kwargs["coverage_term"] = self.coverage_term[cov_idx]
+        kwargs["coverage_is_main"] = self.coverage_is_main[cov_idx]
 
         # Segment metadata + mp_id + optional surrender base -- slice if set;
         # otherwise stay None.

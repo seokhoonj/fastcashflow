@@ -25,7 +25,7 @@ orphan: true
 | `incidence_rate_tables` | 특약 발생률 가정 (구조 동일) |
 | `waiver_tables` | 납입면제 발생률 가정 (구조 동일) |
 | `lapse_tables` | 해지율 가정 (`table_id` × `duration` → `rate`) |
-| `expense_tables` | 사업비 ledger (`table_id` × `category` × `base` × `value`). `category`(acquisition/maintenance/collection/claims = α/β/γ/LAE) × `base`(per_policy/premium/surrender_value/claim) 짝이 kernel-side primitive 를 결정 |
+| `expense_tables` | 사업비 ledger (`table_id` × `category` × `base` × `value`). `category`(acquisition/maintenance/collection/lae; 앞 셋 = α/β/γ) × `base`(per_policy/premium/surrender_value/face/claim) 짝이 kernel-side primitive(`<category>_<base>`) 를 결정 |
 | `discount_tables` | 할인율 곡선 (`table_id` × `year` → `rate`; locked-in, 문단 36) |
 | `inflation_tables` | 사업비 인플레이션 곡선 (`table_id` × `year` → `rate`) |
 | `surrender_value_tables` (optional) | 해약환급금 곡선 (`table_id` × `duration_month` → `factor` 환급률 또는 `amount` 금액; segments 의 `surrender_value_basis` 가 해석) |

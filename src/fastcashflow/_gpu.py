@@ -27,8 +27,8 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
                        premium_factor, annuity_factor, coverage_risk,
                        coverage_is_diagnosis, maturity_benefit, annuity_payment,
                        disability_income, disability_benefit,
-                       alpha_pro_rata, alpha_fixed, beta_pro_rata,
-                       gamma_fixed, lae_pro_rata,
+                       acquisition_premium, acquisition_per_policy, maintenance_premium,
+                       maintenance_per_policy, lae,
                        discount_factor_bom, discount_factor_mid,
                        mortality_factor, morbidity_factor, longevity_factor,
                        disability_factor, lapse_monthly, state_lapse, surrender_curve,
@@ -112,13 +112,13 @@ def _value_cuda_kernel(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
             pv_annuity += inforce_t * annuity * annuity_factor[sx, age_idx, year] * discount_factor_bom_t
         pv_disability += benefit_occ * disability_income[mp] * discount_factor_mid_t
         ann_prem = premium[mp] * premium_factor[sx, age_idx, year] * 12.0 / prem_freq
-        alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
+        acquisition_expense = (cnt * (acquisition_premium * ann_prem + acquisition_per_policy)
                  if t == 0 else 0.0)
-        beta = (inforce_t * beta_pro_rata * ann_prem / 12.0
+        maintenance_premium_expense = (inforce_t * maintenance_premium * ann_prem / 12.0
                 if t < premium_term else 0.0)
-        gamma = inforce_t * gamma_fixed[t]
-        lae = lae_pro_rata[t] * inforce_t * (claim_rate + morb_rate)
-        pv_expense += (alpha + beta + gamma + lae) * discount_factor_mid_t
+        maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]
+        lae_expense = lae[t] * inforce_t * (claim_rate + morb_rate)
+        pv_expense += (acquisition_expense + maintenance_premium_expense + maintenance_per_policy_expense + lae_expense) * discount_factor_mid_t
         lapse_flow = 0.0
         for s in range(n_states):
             lapse_flow += occ[s] * state_lapse[s, sx, age_idx, year]
@@ -197,8 +197,8 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
               premium_factor, annuity_factor, coverage_risk,
               coverage_is_diagnosis, maturity_benefit, annuity_payment,
               disability_income, disability_benefit,
-              alpha_pro_rata, alpha_fixed, beta_pro_rata,
-              gamma_fixed, lae_pro_rata,
+              acquisition_premium, acquisition_per_policy, maintenance_premium,
+              maintenance_per_policy, lae,
               discount_factor_bom, discount_factor_mid,
               mortality_factor, morbidity_factor, longevity_factor,
               disability_factor, lapse_monthly, state_lapse, surrender_curve,
@@ -247,8 +247,8 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
     d_annuity = cuda.to_device(annuity_payment)
     d_disability_income = cuda.to_device(disability_income)
     d_disability_benefit = cuda.to_device(disability_benefit)
-    d_gamma_fixed = cuda.to_device(gamma_fixed)
-    d_lae_pro_rata = cuda.to_device(lae_pro_rata)
+    d_gamma_fixed = cuda.to_device(maintenance_per_policy)
+    d_lae_pro_rata = cuda.to_device(lae)
     d_discount_factor_bom = cuda.to_device(discount_factor_bom)
     d_discount_factor_mid = cuda.to_device(discount_factor_mid)
     d_lapse_monthly = cuda.to_device(lapse_monthly)
@@ -273,7 +273,7 @@ def fast_gpu(edge_from, edge_to, edge_prob, edge_lump_sum, n_states,
         d_annuity_factor,
         d_coverage_risk, d_coverage_is_diagnosis, d_maturity, d_annuity,
         d_disability_income, d_disability_benefit,
-        alpha_pro_rata, alpha_fixed, beta_pro_rata,
+        acquisition_premium, acquisition_per_policy, maintenance_premium,
         d_gamma_fixed, d_lae_pro_rata, d_discount_factor_bom,
         d_discount_factor_mid, mortality_factor, morbidity_factor, longevity_factor,
         disability_factor, d_lapse_monthly, d_state_lapse, d_surrender_curve,

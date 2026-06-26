@@ -164,27 +164,28 @@ def reject_account_book(cashflows: "Cashflows | None", entry: str) -> None:
 
 def _expense_kernel_args(
     basis: Basis, n_time: int,
-) -> tuple[float, float, float, FloatArray, FloatArray, float]:
-    """Return the six expense primitives the kernels take.
+) -> tuple[float, float, float, FloatArray, FloatArray, float, float]:
+    """Return the seven expense primitives the kernels take.
 
     Projects ``Basis.expense_items`` onto the kernel-side inputs,
     threading ``Basis.expense_inflation`` through the recurring
     rows via :func:`fastcashflow.curves.inflation_index`:
 
-    - ``alpha_pro_rata``, ``alpha_fixed``, ``beta_pro_rata`` -- scalars used at
-      ``t=0`` (alpha) and every premium-paying month (beta).
-    - ``gamma_fixed`` -- ``(n_time,)`` per-policy monthly maintenance
+    - ``acquisition_premium``, ``acquisition_per_policy``, ``maintenance_premium``
+      -- scalars used at ``t=0`` (acquisition) and every premium-paying month
+      (maintenance on premium).
+    - ``maintenance_per_policy`` -- ``(n_time,)`` per-policy monthly maintenance
       amount (with global inflation baked in).
-    - ``lae_pro_rata`` -- ``(n_time,)`` LAE fraction applied each
+    - ``lae`` -- ``(n_time,)`` Loss-Adjustment-Expense fraction applied each
       month to ``(claim + morbidity + disability)`` (with global
       inflation baked in).
-    - ``surrender_value_pro_rata`` -- scalar annual rate charged each
-      in-force month on the in-force surrender value. The base is built in
-      :func:`project_cashflows` post-projection (it needs the surrender
-      value, which depends on the in-force path), so this scalar is the
-      only kernel-side input.
+    - ``maintenance_surrender_value`` / ``maintenance_face`` -- scalar annual
+      rates charged each in-force month on the in-force surrender value / the
+      policy's sum assured. Both bases are built in :func:`project_cashflows`
+      post-projection (they need the in-force path), so these scalars are the
+      only kernel-side inputs.
 
-    An empty ``expense_items`` produces six zeros -- the no-expense
+    An empty ``expense_items`` produces seven zeros -- the no-expense
     basis -- so the kernel can run unchanged.
     """
     return derive_expense_components(
@@ -194,7 +195,7 @@ def _expense_kernel_args(
 
 def _account_kernel_args(
     model_points, basis, coverage_rates, coverage_funds_from_account,
-    coverage_pays_account_balance, gamma_fixed, n_time, n_years,
+    coverage_pays_account_balance, maintenance_per_policy, n_time, n_years,
 ):
     """Build the per-policy universal-life account-roll inputs for the kernel.
 
@@ -211,7 +212,7 @@ def _account_kernel_args(
     The COI rate the account is charged is the monthly rate of the
     ``funds_from_account`` coverage each MP carries (its ``rate_table`` is
     ``coi_annual``); the admin fee deducted from the account is the per-policy
-    monthly ``gamma_fixed`` (NOT in-force weighted); crediting is the declared
+    monthly ``maintenance_per_policy`` (NOT in-force weighted); crediting is the declared
     ``investment_return`` floored at each contract's ``minimum_crediting_rate``.
     """
     from fastcashflow._measurement.tvog import credited_monthly_rate
@@ -307,9 +308,9 @@ def _account_kernel_args(
                         coverage_rates[ci, mp, year_of_month] * cov_amt[k])
     account_charge = np.ascontiguousarray(account_charge)
 
-    # Admin fee = per-policy monthly gamma_fixed (NOT inforce_t-weighted). Crediting
+    # Admin fee = per-policy monthly maintenance_per_policy (NOT inforce_t-weighted). Crediting
     # = declared return floored at each contract's guarantee.
-    admin_fee = np.ascontiguousarray(np.asarray(gamma_fixed, np.float64))
+    admin_fee = np.ascontiguousarray(np.asarray(maintenance_per_policy, np.float64))
     r_m = (1.0 + basis.investment_return) ** (1.0 / 12.0) - 1.0
     credit = np.ascontiguousarray(
         credited_monthly_rate(r_m, model_points.minimum_crediting_rate))
@@ -380,8 +381,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     coverage_risk, coverage_is_diagnosis,
                     coverage_pays_account_balance, maturity_benefit,
                     annuity_payment, disability_income, disability_benefit,
-                    alpha_pro_rata, alpha_fixed, beta_pro_rata,
-                    gamma_fixed, lae_pro_rata,
+                    acquisition_premium, acquisition_per_policy, maintenance_premium,
+                    maintenance_per_policy, lae,
                     has_account, mp_account, account_value0, account_face,
                     account_prem_to_av, account_coi_rate, account_admin_fee,
                     account_credit, account_charge,
@@ -637,22 +638,25 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: alpha / beta / gamma maintenance plus LAE on the
             # month's claim + morbidity total. Dispatched from
-            # Basis.expense_items by basis (alpha_pro_rata /
-            # alpha_fixed / beta_pro_rata / gamma_fixed / lae_pro_rata).
+            # Basis.expense_items by basis (acquisition_premium /
+            # acquisition_per_policy / maintenance_premium / maintenance_per_policy / lae).
             ann_prem = premium[mp] * premium_factor[mp, year] * 12.0 / prem_freq
-            alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
-                     if t == 0 else 0.0)
-            beta = (inforce_t * beta_pro_rata * ann_prem / 12.0
-                    if t < premium_term else 0.0)
-            gamma = inforce_t * gamma_fixed[t]
+            acquisition_expense = (
+                cnt * (acquisition_premium * ann_prem + acquisition_per_policy)
+                if t == 0 else 0.0)
+            maintenance_premium_expense = (
+                inforce_t * maintenance_premium * ann_prem / 12.0
+                if t < premium_term else 0.0)
+            maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]
             # LAE applies to claim + morbidity claims only --
             # disability income is a periodic annuity-like benefit, lump
             # sums are one-off transitions, and conflating either with
             # LAE would double-count. Add a dedicated basis later if the
             # practice ever needs it.
-            lae = lae_pro_rata[t] * (
+            lae_expense = lae[t] * (
                 mortality_cf[mp, t] + morbidity_cf[mp, t])
-            expense_cf[mp, t] = alpha + beta + gamma + lae
+            expense_cf[mp, t] = (acquisition_expense + maintenance_premium_expense
+                                 + maintenance_per_policy_expense + lae_expense)
             # Advance the occupancy along the transition edges; a lump-sum
             # transition pays its benefit on the occupancy it carries.
             for s in range(n_states):
@@ -780,8 +784,8 @@ def _project_kernel_semi_markov(
     coverage_escalation_annual, coverage_escalation_cap, coverage_term, coverage_rates,
     coverage_risk, coverage_is_diagnosis,
     maturity_benefit, annuity_payment, disability_income, disability_benefit,
-    alpha_pro_rata, alpha_fixed, beta_pro_rata,
-    gamma_fixed, lae_pro_rata, n_time,
+    acquisition_premium, acquisition_per_policy, maintenance_premium,
+    maintenance_per_policy, lae, n_time,
 ):
     """Detailed semi-Markov projection -- main pass only.
 
@@ -899,19 +903,22 @@ def _project_kernel_semi_markov(
             disability_cf[mp, t] = benefit_occ * disability_income[mp]
             # Expense: same dispatch as _project_kernel (see its comment).
             ann_prem = premium[mp] * premium_factor[mp, year] * 12.0 / prem_freq
-            alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
-                     if t == 0 else 0.0)
-            beta = (inforce_t * beta_pro_rata * ann_prem / 12.0
-                    if t < premium_term else 0.0)
-            gamma = inforce_t * gamma_fixed[t]
+            acquisition_expense = (
+                cnt * (acquisition_premium * ann_prem + acquisition_per_policy)
+                if t == 0 else 0.0)
+            maintenance_premium_expense = (
+                inforce_t * maintenance_premium * ann_prem / 12.0
+                if t < premium_term else 0.0)
+            maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]
             # LAE applies to claim + morbidity claims only --
             # disability income is a periodic annuity-like benefit, lump
             # sums are one-off transitions, and conflating either with
             # LAE would double-count. Add a dedicated basis later if the
             # practice ever needs it.
-            lae = lae_pro_rata[t] * (
+            lae_expense = lae[t] * (
                 mortality_cf[mp, t] + morbidity_cf[mp, t])
-            expense_cf[mp, t] = alpha + beta + gamma + lae
+            expense_cf[mp, t] = (acquisition_expense + maintenance_premium_expense
+                                 + maintenance_per_policy_expense + lae_expense)
 
             for i in range(total_cohorts):
                 occ_next[i] = 0.0
@@ -1218,13 +1225,12 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                 sex_grid, issue_age_grid, duration_grid,
                 issue_class_grid, elapsed_grid),
             "annuity_factor_annual", (len(model_points.issue_age), n_years))
-    # Expense primitives -- the six inputs the kernel consumes. Honours
-    # Basis.expense_items when set, otherwise the legacy alpha / beta
-    # / gamma / expense_inflation scalars (see _expense_kernel_args).
-    # ``expense_surrender_pro_rata`` is added post-projection (it rides the
-    # in-force surrender value, computed after the time loop).
-    (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,
-     gamma_fixed, lae_pro_rata, expense_surrender_pro_rata) = _expense_kernel_args(
+    # Expense primitives, named (category)_(base). The surrender-value and face
+    # maintenance components are added post-projection (they ride the in-force
+    # surrender value / sum assured, known only after the time loop).
+    (expense_acquisition_premium, expense_acquisition_per_policy, expense_maintenance_premium,
+     maintenance_per_policy, lae, expense_maintenance_surrender_value,
+     expense_maintenance_face) = _expense_kernel_args(
         basis, n_time,
     )
 
@@ -1234,7 +1240,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
      account_prem_to_av, account_coi_rate, account_admin_fee,
      account_credit, account_charge, account_surr_charge) = _account_kernel_args(
         model_points, basis, coverage_rates, coverage_funds_from_account,
-        coverage_pays_account_balance, gamma_fixed, n_time, n_years,
+        coverage_pays_account_balance, maintenance_per_policy, n_time, n_years,
     )
     # v1 supports a homogeneous account portfolio (every model point carries the
     # account-backed death coverage). A MIXED book -- some account rows, some
@@ -1447,11 +1453,11 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             model_points.annuity_payment,
             model_points.disability_income,
             model_points.disability_benefit,
-            expense_alpha_pro_rata,
-            expense_alpha_fixed,
-            expense_beta_pro_rata,
-            gamma_fixed,
-            lae_pro_rata,
+            expense_acquisition_premium,
+            expense_acquisition_per_policy,
+            expense_maintenance_premium,
+            maintenance_per_policy,
+            lae,
             n_time,
         )
     else:
@@ -1535,11 +1541,11 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             model_points.annuity_payment,
             model_points.disability_income,
             model_points.disability_benefit,
-            expense_alpha_pro_rata,
-            expense_alpha_fixed,
-            expense_beta_pro_rata,
-            gamma_fixed,
-            lae_pro_rata,
+            expense_acquisition_premium,
+            expense_acquisition_per_policy,
+            expense_maintenance_premium,
+            maintenance_per_policy,
+            lae,
             has_account,
             mp_account,
             account_value0,
@@ -1566,21 +1572,21 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
     # state ``lapse_flow == inforce x lapse``, the historical formula.
     # ``surrender_value_curve = None`` falls back to zero, the historical
     # "lapse silently removes" behaviour.
-    # surrender_value_pro_rata expense rides the in-force surrender value, so it
+    # maintenance_surrender_value expense rides the in-force surrender value, so it
     # needs a surrender_value_curve and is undefined on an account-backed book
     # (the account fund_fee already charges the account value -- a second charge
     # would double-count). Guard both at measure time rather than silently
     # emitting a zero / double-counted expense leg.
-    if expense_surrender_pro_rata != 0.0:
+    if expense_maintenance_surrender_value != 0.0:
         if basis.surrender_value_curve is None:
             raise ValueError(
-                "a 'surrender_value_pro_rata' ExpenseItem requires "
+                "a 'maintenance_surrender_value' ExpenseItem requires "
                 "Basis.surrender_value_curve (the surrender value it charges "
                 "on); none is set, so the expense base would be silently zero."
             )
         if has_account:
             raise ValueError(
-                "a 'surrender_value_pro_rata' ExpenseItem is not supported on an "
+                "a 'maintenance_surrender_value' ExpenseItem is not supported on an "
                 "account-backed (universal-life / VFA) book -- the account "
                 "fund_fee already charges the account value. Remove the item or "
                 "measure the account business without it."
@@ -1598,7 +1604,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
         mode = basis.surrender_value_basis
         # ``inforce_sv`` is the surrender value held by the in-force survivors
         # each month (per-policy surrender value x in-force) -- the base the
-        # surrender_value_pro_rata maintenance expense charges. It mirrors each
+        # maintenance_surrender_value maintenance expense charges. It mirrors each
         # surrender mode's per-policy value but weights by ``inforce`` (the
         # begin-of-month survivors), not ``lapse_flow`` (the month's exits).
         if mode == "cum_premium_factor":
@@ -1639,11 +1645,29 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
                 f"unknown surrender_value_basis {mode!r}; expected one of "
                 f"{SURRENDER_VALUE_BASES}."
             )
-        # surrender_value_pro_rata maintenance: rate/12 of the in-force
+        # maintenance_surrender_value maintenance: rate/12 of the in-force
         # surrender value each month, added to the expense leg. No inflation --
         # the surrender-value curve already carries its own growth.
-        if expense_surrender_pro_rata != 0.0:
-            expense_cf += (expense_surrender_pro_rata / 12.0) * inforce_sv
+        if expense_maintenance_surrender_value != 0.0:
+            expense_cf += (expense_maintenance_surrender_value / 12.0) * inforce_sv
+    # maintenance_face maintenance: rate/12 of the policy's sum assured (the
+    # main coverage's amount, flagged by coverage_is_main) on every in-force
+    # month. Inflated like maintenance_per_policy -- the sum assured is level,
+    # so the maintenance rate inflates. Independent of the surrender curve.
+    if expense_maintenance_face != 0.0:
+        is_main = model_points.coverage_is_main
+        if not np.any(is_main):
+            raise ValueError(
+                "a (maintenance, face) ExpenseItem charges on the policy's sum "
+                "assured -- the main coverage's amount -- but no coverage is "
+                "flagged as the main contract. Set ModelPoints.coverage_is_main."
+            )
+        main_amount = model_points.coverage_amount * is_main
+        cov_mp = np.repeat(np.arange(n_mp), np.diff(model_points.coverage_offset))
+        face_amount = np.bincount(cov_mp, weights=main_amount, minlength=n_mp)
+        expense_cf += ((expense_maintenance_face / 12.0)
+                       * inflation_index(basis, n_time)
+                       * face_amount[:, None] * inforce)
     account = None
     if has_account:
         # Account-backed surrender overrides the curve-based surrender for the

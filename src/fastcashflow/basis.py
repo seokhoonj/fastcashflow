@@ -302,12 +302,11 @@ class ExpenseItem:
         WHAT the expense is for -- one of :data:`EXPENSE_CATEGORIES`:
         ``"acquisition"`` (at issue), ``"maintenance"`` (every in-force
         month), ``"collection"`` (premium-collection cost, paying months),
-        ``"claims"`` (claims-handling / loss-adjustment expense). This maps
-        to the Korean actuarial alpha / beta / gamma convention --
-        acquisition = alpha, maintenance = beta, collection = gamma -- with
-        claims-handling the LAE (Loss Adjustment Expense) slot. The category
-        also fixes the timing and whether ``expense_inflation`` applies (see
-        Notes).
+        ``"lae"`` (Loss Adjustment Expense, claims-handling cost). The first
+        three map to the Korean actuarial alpha / beta / gamma convention --
+        acquisition = alpha, maintenance = beta, collection = gamma. The
+        category also fixes the timing and whether ``expense_inflation``
+        applies (see Notes).
     base
         WHAT the expense is proportional to -- one of :data:`EXPENSE_BASES`:
         ``"per_policy"`` (a flat amount per policy), ``"premium"`` (a
@@ -353,39 +352,43 @@ class ExpenseItem:
             )
 
 
-#: WHAT an expense is for -- the ``ExpenseItem.category`` axis. Maps to the
-#: Korean actuarial alpha / beta / gamma convention: acquisition = alpha,
-#: maintenance = beta, collection = gamma; claims-handling is the LAE
-#: (Loss Adjustment Expense) slot.
+#: WHAT an expense is for -- the ``ExpenseItem.category`` axis. The first three
+#: map to the Korean actuarial alpha / beta / gamma convention (acquisition =
+#: alpha, maintenance = beta, collection = gamma); ``lae`` is the Loss
+#: Adjustment Expense -- claims-handling cost.
 EXPENSE_CATEGORIES = (
     "acquisition",   # alpha -- at issue (t=0)
     "maintenance",   # beta  -- every in-force month
     "collection",    # gamma -- premium-collection cost, paying months
-    "claims",        # LAE   -- claims-handling, on claim outflow
+    "lae",           # LAE   -- Loss Adjustment Expense, on claim outflow
 )
 
 #: WHAT an expense is proportional to -- the ``ExpenseItem.base`` axis.
-#: (``face`` / ``account_value`` are reserved for future maintenance bases.)
+#: (``account_value`` is reserved for a future maintenance base.)
 EXPENSE_BASES = (
     "per_policy",        # a flat amount per policy
     "premium",           # a fraction of premium
     "surrender_value",   # a fraction of the in-force cash surrender value
+    "face",              # a fraction of the main coverage's sum assured
     "claim",             # a fraction of the month's claim outflow
 )
 
 #: Valid ``(category, base)`` pairs -> the kernel-side primitive each feeds.
-#: The primitive fixes the timing / inflation math, so several pairs may
-#: share one primitive when their kernel arithmetic is identical
-#: (collection-premium and maintenance-premium are both "% of premium during
-#: paying months"). The Korean alpha/beta/gamma name is noted per pair.
+#: The primitive name IS ``<category>_<base>`` so internal and external
+#: vocabulary match (the kernel reads ``maintenance_premium``, the user writes
+#: ``("maintenance", "premium")``). Two pairs may share one primitive when the
+#: kernel arithmetic is identical: ``(collection, premium)`` reuses the
+#: ``maintenance_premium`` bucket (both are "% of premium during paying
+#: months"); ``(lae, claim)`` is the Loss Adjustment Expense, named ``lae``.
 _EXPENSE_DISPATCH = {
-    ("acquisition", "per_policy"):      "alpha_fixed",                # alpha, per policy, t=0
-    ("acquisition", "premium"):         "alpha_pro_rata",             # alpha, % premium, t=0
-    ("maintenance", "per_policy"):      "gamma_fixed",                # beta, per policy, monthly
-    ("maintenance", "premium"):         "beta_pro_rata",              # beta, % premium, paying
-    ("maintenance", "surrender_value"): "surrender_value_pro_rata",   # beta, % CSV, monthly
-    ("collection",  "premium"):         "beta_pro_rata",              # gamma, % premium, paying
-    ("claims",      "claim"):           "lae_pro_rata",               # LAE, % claim, monthly
+    ("acquisition", "per_policy"):      "acquisition_per_policy",
+    ("acquisition", "premium"):         "acquisition_premium",
+    ("maintenance", "per_policy"):      "maintenance_per_policy",
+    ("maintenance", "premium"):         "maintenance_premium",
+    ("maintenance", "surrender_value"): "maintenance_surrender_value",
+    ("maintenance", "face"):            "maintenance_face",
+    ("collection",  "premium"):         "maintenance_premium",
+    ("lae",         "claim"):           "lae",
 }
 
 # The valid value-sets for the string-typed Basis fields, named once so the
@@ -404,29 +407,29 @@ SURRENDER_VALUE_BASES = (
 def derive_expense_components(
     expense_items: tuple["ExpenseItem", ...], n_time: int,
     inflation_index: FloatArray | None = None,
-) -> tuple[float, float, float, FloatArray, FloatArray, float]:
-    """Project ``expense_items`` onto the six kernel-side primitives.
+) -> tuple[float, float, float, FloatArray, FloatArray, float, float]:
+    """Project ``expense_items`` onto the seven kernel-side primitives.
 
     Each :class:`ExpenseItem` is dispatched by its ``(category, base)``
     pair (see :data:`_EXPENSE_DISPATCH`) onto one of these primitives.
-    Returns ``(alpha_pro_rata, alpha_fixed, beta_pro_rata, gamma_fixed,
-    lae_pro_rata, surrender_value_pro_rata)``:
+    Returns ``(acquisition_premium, acquisition_per_policy, maintenance_premium, maintenance_per_policy,
+    lae, maintenance_surrender_value, maintenance_face)``:
 
-    - ``alpha_pro_rata`` -- sum of ``value`` over ``(acquisition, premium)``
+    - ``acquisition_premium`` -- sum of ``value`` over ``(acquisition, premium)``
       rows. Paid at ``t=0`` on annualized premium.
-    - ``alpha_fixed`` -- sum of ``value`` over ``(acquisition, per_policy)``
+    - ``acquisition_per_policy`` -- sum of ``value`` over ``(acquisition, per_policy)``
       rows. Paid at ``t=0`` per policy.
-    - ``beta_pro_rata`` -- sum of ``value`` over ``(maintenance, premium)``
+    - ``maintenance_premium`` -- sum of ``value`` over ``(maintenance, premium)``
       AND ``(collection, premium)`` rows. Charged each premium-paying month
       on the actual premium.
-    - ``gamma_fixed[t]`` -- per-month per-policy maintenance: each
+    - ``maintenance_per_policy[t]`` -- per-month per-policy maintenance: each
       ``(maintenance, per_policy)`` row contributes ``value / 12 *
       inflation_index[t]``.
-    - ``lae_pro_rata[t]`` -- LAE (Loss Adjustment Expense) fraction:
+    - ``lae[t]`` -- LAE (Loss Adjustment Expense) fraction:
       each ``(claims, claim)`` row contributes
       ``value * inflation_index[t]``. Applied to the month's
       claim + morbidity + disability total.
-    - ``surrender_value_pro_rata`` -- sum of ``value`` over
+    - ``maintenance_surrender_value`` -- sum of ``value`` over
       ``(maintenance, surrender_value)`` rows. A scalar annual rate charged
       each in-force month on the in-force surrender value
       (``value / 12 * inforce_surrender_value[t]``); the surrender-value
@@ -434,7 +437,14 @@ def derive_expense_components(
       ``surrender_value_curve`` / ``surrender_value_basis``. NOT inflated:
       the base (a reserve-/surrender-value curve) already carries its own
       growth, so a second inflation factor would double-count -- the same
-      reasoning that exempts the ``alpha_*`` and ``beta_pro_rata`` bases.
+      reasoning that exempts the ``alpha_*`` and ``maintenance_premium`` bases.
+    - ``maintenance_face`` -- sum of ``value`` over ``(maintenance, face)``
+      rows. A scalar annual rate charged each in-force month on the policy's
+      sum assured (``value / 12 * inflation_index[t] * face_amount``); the
+      face amount (the main coverage's ``coverage_amount``, flagged by
+      ``ModelPoints.coverage_is_main``) is applied downstream in
+      ``project_cashflows``. Inflated like ``maintenance_per_policy``: the base (a level
+      sum assured) does not grow, so the maintenance rate inflates.
 
     ``inflation_index`` is the ``(n_time,)`` per-month inflation
     multiplier produced by :func:`fastcashflow.curves.inflation_index`;
@@ -443,40 +453,43 @@ def derive_expense_components(
     compounds across years. Pass ``None`` for a no-inflation basis
     (every month equal to 1.0).
     """
-    alpha_pro_rata = 0.0
-    alpha_fixed = 0.0
-    beta_pro_rata = 0.0
-    gamma_fixed = np.zeros(n_time, dtype=np.float64)
-    lae_pro_rata = np.zeros(n_time, dtype=np.float64)
-    surrender_value_pro_rata = 0.0
+    acquisition_premium = 0.0
+    acquisition_per_policy = 0.0
+    maintenance_premium = 0.0
+    maintenance_per_policy = np.zeros(n_time, dtype=np.float64)
+    lae = np.zeros(n_time, dtype=np.float64)
+    maintenance_surrender_value = 0.0
+    maintenance_face = 0.0
     if inflation_index is None:
         inflation_index = np.ones(n_time, dtype=np.float64)
     for row in expense_items:
         # The (category, base) pair selects the kernel primitive; the math
         # below is keyed on that primitive, not the pair, so collection-premium
-        # and maintenance-premium both land in beta_pro_rata. The pair is
+        # and maintenance-premium both land in maintenance_premium. The pair is
         # validated at ExpenseItem construction, so a miss here is defensive.
         prim = _EXPENSE_DISPATCH.get((row.category, row.base))
-        if prim == "alpha_fixed":
-            alpha_fixed += row.value
-        elif prim == "alpha_pro_rata":
-            alpha_pro_rata += row.value
-        elif prim == "beta_pro_rata":
-            beta_pro_rata += row.value
-        elif prim == "gamma_fixed":
-            gamma_fixed += row.value * inflation_index / 12.0
-        elif prim == "lae_pro_rata":
-            lae_pro_rata += row.value * inflation_index
-        elif prim == "surrender_value_pro_rata":
-            surrender_value_pro_rata += row.value
+        if prim == "acquisition_per_policy":
+            acquisition_per_policy += row.value
+        elif prim == "acquisition_premium":
+            acquisition_premium += row.value
+        elif prim == "maintenance_premium":
+            maintenance_premium += row.value
+        elif prim == "maintenance_per_policy":
+            maintenance_per_policy += row.value * inflation_index / 12.0
+        elif prim == "lae":
+            lae += row.value * inflation_index
+        elif prim == "maintenance_surrender_value":
+            maintenance_surrender_value += row.value
+        elif prim == "maintenance_face":
+            maintenance_face += row.value
         else:
             raise ValueError(
                 f"unknown expense (category, base) pair "
                 f"({row.category!r}, {row.base!r}); expected one of "
                 f"{tuple(_EXPENSE_DISPATCH)}"
             )
-    return (alpha_pro_rata, alpha_fixed, beta_pro_rata, gamma_fixed,
-            lae_pro_rata, surrender_value_pro_rata)
+    return (acquisition_premium, acquisition_per_policy, maintenance_premium, maintenance_per_policy,
+            lae, maintenance_surrender_value, maintenance_face)
 
 
 @dataclass(frozen=True, slots=True)
@@ -576,16 +589,16 @@ class Basis:
     expense_items :
         Row-form expense ledger -- a tuple of :class:`ExpenseItem`. Each
         row carries a ``category`` (:data:`EXPENSE_CATEGORIES` --
-        acquisition / maintenance / collection / claims, the Korean
-        alpha / beta / gamma convention), a ``base``
+        acquisition / maintenance / collection / lae; the first three are the
+        Korean alpha / beta / gamma convention), a ``base``
         (:data:`EXPENSE_BASES` -- per_policy / premium / surrender_value /
-        claim) and a numeric value. The engine projects every row through
+        face / claim) and a numeric value. The engine projects every row through
         :func:`derive_expense_components` into the kernel-side primitives
-        (alpha / beta / gamma / LAE fractions). An empty tuple is the
+        (named ``<category>_<base>``). An empty tuple is the
         no-expense basis.
     expense_inflation :
         Global annual inflation applied to the recurring expense items
-        (``gamma_fixed`` and ``lae_pro_rata``). Either a flat scalar
+        (``maintenance_per_policy`` and ``lae``). Either a flat scalar
         -- closed-form ``(1+i)^(t/12)`` growth -- or a per-year
         ``(n_years,)`` array (compounds across years, in-year fractional
         ramp on the current year, held flat past the end). Macro-economic

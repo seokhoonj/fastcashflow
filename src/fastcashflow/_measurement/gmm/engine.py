@@ -1439,9 +1439,10 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
     (``ModelPoints.coverage_term`` -- a coverage ending before the contract
     boundary), a state-conditioned death benefit (``State.death_benefit_factor
     != 1``), a deterministic transition (``Transition.after_sojourn_months``)
-    and a ``surrender_value_pro_rata`` expense item (the fused kernel does not
-    carry the in-force surrender value the expense charges on; the full path
-    builds it post-projection). A universal-life
+    and a ``(maintenance, surrender_value)`` or ``(maintenance, face)`` expense
+    item (the fused kernel does not carry the in-force surrender value / sum
+    assured these charge on; the full path builds them post-projection). A
+    universal-life
     account is NOT in this set as of Step 4: the scalar fused kernel carries the
     account roll itself, so an account book runs on the fast path directly (the
     routing exceptions -- account + state machine, account + gpu, account +
@@ -1460,7 +1461,7 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
     if (model_points.coverage_term is not None
             and np.any(model_points.coverage_term)):
         return True
-    if any(item.category == "maintenance" and item.base == "surrender_value"
+    if any(item.category == "maintenance" and item.base in ("surrender_value", "face")
            for item in basis.expense_items):
         return True
     sm = resolve_state_model(basis)
@@ -1830,12 +1831,13 @@ def _measure_fast(
     # See projection._expense_kernel_args -- this engine path uses the
     # same helper so the item-form vs legacy dispatch is consistent across
     # the fast path (full=False) and the full path (full=True). The fused
-    # path does not carry surrender_value_pro_rata -- a book with that item
+    # path does not carry maintenance_surrender_value -- a book with that item
     # is routed to the full path by ``requires_full`` -- so the trailing
     # primitive is discarded here.
     from fastcashflow.projection import _expense_kernel_args
-    (expense_alpha_pro_rata, expense_alpha_fixed, expense_beta_pro_rata,
-     gamma_fixed, lae_pro_rata, _expense_surrender_pro_rata) = _expense_kernel_args(
+    (expense_acquisition_premium, expense_acquisition_per_policy, expense_maintenance_premium,
+     maintenance_per_policy, lae, _expense_maintenance_surrender_value,
+     _expense_maintenance_face) = _expense_kernel_args(
         basis, n_time,
     )
     if discount_curve is None:
@@ -1911,7 +1913,7 @@ def _measure_fast(
     # once per call, off the hot loop. Shared by both paths below.
     use_surrender = bool(np.any(surrender_curve_kernel != 0.0))
     use_annuity = bool(np.any(model_points.annuity_payment != 0.0))
-    use_lae = bool(np.any(lae_pro_rata != 0.0))
+    use_lae = bool(np.any(lae != 0.0))
     use_morbidity = bool(np.any(coverage_risk != 0))
     use_disability = bool(np.any(model_points.disability_income != 0.0))
 
@@ -1922,7 +1924,7 @@ def _measure_fast(
     # view (cov, mp, year); build it from the dense (cov, sex, age, year) grid at
     # each MP's (sex, age). The fast path only reaches here at issue_class 0 (the
     # requires_full guard routes class != 0 to full), so the dense-grid lookup
-    # equals the per-MP rate. account_admin_fee carries gamma_fixed.
+    # equals the per-MP rate. account_admin_fee carries maintenance_per_policy.
     if has_account:
         from fastcashflow.projection import _account_kernel_args
         coverage_rates_per_mp = np.ascontiguousarray(
@@ -1932,7 +1934,7 @@ def _measure_fast(
          acct_credit, acct_charge, acct_surr_charge) = _account_kernel_args(
             model_points, basis, coverage_rates_per_mp,
             coverage_funds_from_account, coverage_pays_account_balance,
-            gamma_fixed, n_time, n_years,
+            maintenance_per_policy, n_time, n_years,
         )
         # v1 supports a homogeneous account portfolio only (every MP carries the
         # account-backed death coverage). A mixed account / plain book needs a
@@ -1990,11 +1992,11 @@ def _measure_fast(
             coverage_is_diagnosis,
             model_points.maturity_benefit,
             model_points.annuity_payment,
-            expense_alpha_pro_rata,
-            expense_alpha_fixed,
-            expense_beta_pro_rata,
-            gamma_fixed,
-            lae_pro_rata,
+            expense_acquisition_premium,
+            expense_acquisition_per_policy,
+            expense_maintenance_premium,
+            maintenance_per_policy,
+            lae,
             discount_factor_bom,
             discount_factor_mid,
             mortality_factor,
@@ -2064,11 +2066,11 @@ def _measure_fast(
         model_points.annuity_payment,
         model_points.disability_income,
         model_points.disability_benefit,
-        expense_alpha_pro_rata,
-        expense_alpha_fixed,
-        expense_beta_pro_rata,
-        gamma_fixed,
-        lae_pro_rata,
+        expense_acquisition_premium,
+        expense_acquisition_per_policy,
+        expense_maintenance_premium,
+        maintenance_per_policy,
+        lae,
         discount_factor_bom,
         discount_factor_mid,
         mortality_factor,
@@ -2117,11 +2119,11 @@ def _measure_fast(
                 model_points.annuity_payment,
                 model_points.disability_income,
                 model_points.disability_benefit,
-                expense_alpha_pro_rata,
-                expense_alpha_fixed,
-                expense_beta_pro_rata,
-                gamma_fixed,
-                lae_pro_rata,
+                expense_acquisition_premium,
+                expense_acquisition_per_policy,
+                expense_maintenance_premium,
+                maintenance_per_policy,
+                lae,
                 discount_factor_bom,
                 discount_factor_mid,
                 mortality_factor,

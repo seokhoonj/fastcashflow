@@ -133,8 +133,8 @@ def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     line(0, "           coverage_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
-    line(0, "           alpha_pro_rata, alpha_fixed, beta_pro_rata,")
-    line(0, "           gamma_fixed, lae_pro_rata,")
+    line(0, "           acquisition_premium, acquisition_per_policy, maintenance_premium,")
+    line(0, "           maintenance_per_policy, lae,")
     line(0, "           discount_factor_bom, discount_factor_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
@@ -243,15 +243,15 @@ def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             line(12, "eff_lapse = lapse_flow / inforce_t if inforce_t > 0.0 else 0.0")
             line(12, "pv_surrender += (eff_lapse")
             line(12, "                 * cum_premium * surrender_curve[t] * discount_factor_mid_t)")
-    line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
-    line(12, "beta = inforce_t * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
-    line(12, "gamma = inforce_t * gamma_fixed[t]")
+    line(12, "acquisition_expense = cnt * (acquisition_premium * ann_prem + acquisition_per_policy) if t == 0 else 0.0")
+    line(12, "maintenance_premium_expense = inforce_t * maintenance_premium * ann_prem / 12.0 if t < premium_term else 0.0")
+    line(12, "maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]")
     if use_lae:
-        line(12, "lae = lae_pro_rata[t] * "
+        line(12, "lae_expense = lae[t] * "
                 "inforce_t * (claim_rate + morb_rate)")
-        line(12, "pv_expense += (alpha + beta + gamma + lae) * discount_factor_mid_t")
+        line(12, "pv_expense += (acquisition_expense + maintenance_premium_expense + maintenance_per_policy_expense + lae_expense) * discount_factor_mid_t")
     else:
-        line(12, "pv_expense += (alpha + beta + gamma) * discount_factor_mid_t")
+        line(12, "pv_expense += (acquisition_expense + maintenance_premium_expense + maintenance_per_policy_expense) * discount_factor_mid_t")
     emit_edge_step(12, scale="", include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -615,8 +615,8 @@ def _semi_markov_kernel_source(
     line(0, "           coverage_is_diagnosis, maturity_benefit, "
             "annuity_payment,")
     line(0, "           disability_income, disability_benefit,")
-    line(0, "           alpha_pro_rata, alpha_fixed, beta_pro_rata,")
-    line(0, "           gamma_fixed, lae_pro_rata,")
+    line(0, "           acquisition_premium, acquisition_per_policy, maintenance_premium,")
+    line(0, "           maintenance_per_policy, lae,")
     line(0, "           discount_factor_bom, discount_factor_mid, mortality_factor,")
     line(0, "           morbidity_factor, longevity_factor, "
             "disability_factor,")
@@ -730,15 +730,15 @@ def _semi_markov_kernel_source(
             line(12, "eff_lapse = lapse_flow / inforce_t if inforce_t > 0.0 else 0.0")
             line(12, "pv_surrender += (eff_lapse")
             line(12, "                 * cum_premium * surrender_curve[t] * discount_factor_mid_t)")
-    line(12, "alpha = cnt * (alpha_pro_rata * ann_prem + alpha_fixed) if t == 0 else 0.0")
-    line(12, "beta = inforce_t * beta_pro_rata * ann_prem / 12.0 if t < premium_term else 0.0")
-    line(12, "gamma = inforce_t * gamma_fixed[t]")
+    line(12, "acquisition_expense = cnt * (acquisition_premium * ann_prem + acquisition_per_policy) if t == 0 else 0.0")
+    line(12, "maintenance_premium_expense = inforce_t * maintenance_premium * ann_prem / 12.0 if t < premium_term else 0.0")
+    line(12, "maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]")
     if use_lae:
-        line(12, "lae = lae_pro_rata[t] * "
+        line(12, "lae_expense = lae[t] * "
                 "inforce_t * (claim_rate + morb_rate)")
-        line(12, "pv_expense += (alpha + beta + gamma + lae) * discount_factor_mid_t")
+        line(12, "pv_expense += (acquisition_expense + maintenance_premium_expense + maintenance_per_policy_expense + lae_expense) * discount_factor_mid_t")
     else:
-        line(12, "pv_expense += (alpha + beta + gamma) * discount_factor_mid_t")
+        line(12, "pv_expense += (acquisition_expense + maintenance_premium_expense + maintenance_per_policy_expense) * discount_factor_mid_t")
     emit_edge_step(12, include_lump=True)
 
     line(8, f"total = {sum_all}")
@@ -884,8 +884,8 @@ def _scalar_kernel(issue_index, sex, term_months, contract_boundary_months,
                          annuity_frequency_months, coverage_index, coverage_amount, coverage_offset,
                          coverage_rates, premium_factor, annuity_factor, coverage_risk, coverage_is_diagnosis,
                          maturity_benefit, annuity_payment,
-                         alpha_pro_rata, alpha_fixed, beta_pro_rata,
-                         gamma_fixed, lae_pro_rata,
+                         acquisition_premium, acquisition_per_policy, maintenance_premium,
+                         maintenance_per_policy, lae,
                          discount_factor_bom, discount_factor_mid,
                          mortality_factor, morbidity_factor, longevity_factor,
                          coverage_waiting, coverage_reduction_end, coverage_reduction_factor,
@@ -1051,16 +1051,16 @@ def _scalar_kernel(issue_index, sex, term_months, contract_boundary_months,
                 else:
                     ann_due -= 1
             ann_prem = prem * premium_factor[sx, age_idx, year] * 12.0 / prem_freq
-            alpha = (cnt * (alpha_pro_rata * ann_prem + alpha_fixed)
+            acquisition_expense = (cnt * (acquisition_premium * ann_prem + acquisition_per_policy)
                      if t == 0 else 0.0)
-            beta = (inforce_t * beta_pro_rata * ann_prem / 12.0
+            maintenance_premium_expense = (inforce_t * maintenance_premium * ann_prem / 12.0
                     if t < premium_term else 0.0)
-            gamma = inforce_t * gamma_fixed[t]
+            maintenance_per_policy_expense = inforce_t * maintenance_per_policy[t]
             if use_lae:
-                lae = lae_pro_rata[t] * inforce_t * (claim_rate + morb_rate)
-                pv_expense += (alpha + beta + gamma + lae) * discount_factor_mid_t
+                lae_expense = lae[t] * inforce_t * (claim_rate + morb_rate)
+                pv_expense += (acquisition_expense + maintenance_premium_expense + maintenance_per_policy_expense + lae_expense) * discount_factor_mid_t
             else:
-                pv_expense += (alpha + beta + gamma) * discount_factor_mid_t
+                pv_expense += (acquisition_expense + maintenance_premium_expense + maintenance_per_policy_expense) * discount_factor_mid_t
             if use_surrender:
                 if surrender_is_amount:
                     # amount_per_policy / amount_per_unit: surrender_curve[t] is

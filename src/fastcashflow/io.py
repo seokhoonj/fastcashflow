@@ -1313,7 +1313,8 @@ def _model_points_from_frames(pol: pl.DataFrame, cov: pl.DataFrame,
                                 ("step_factor", "coverage_step_factor", 1.0),
                                 ("escalation_annual", "coverage_escalation_annual", 0.0),
                                 ("escalation_cap", "coverage_escalation_cap", 0.0),
-                                ("term", "coverage_term", 0)):
+                                ("term", "coverage_term", 0),
+                                ("is_main", "coverage_is_main", 0)):
         if col in cov.columns:
             rule = cov[col].fill_null(default).to_numpy()
             fields[field] = rule[is_cov][order]
