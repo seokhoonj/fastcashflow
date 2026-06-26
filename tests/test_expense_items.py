@@ -32,7 +32,7 @@ def test_empty_rows_emit_zero_primitives():
     assert np.all(maintenance_per_policy == 0.0) and np.all(lae == 0.0)
 
 
-def test_alpha_fixed_row_lands_in_alpha_fixed_primitive():
+def test_acquisition_per_policy_row_lands_in_its_primitive():
     """An ``acquisition_per_policy`` row contributes only to the acquisition_per_policy primitive."""
     rows = (ExpenseItem("acquisition", "per_policy", 50_000.0),)
     (acquisition_premium, acquisition_per_policy, maintenance_premium,
@@ -42,7 +42,7 @@ def test_alpha_fixed_row_lands_in_alpha_fixed_primitive():
     assert np.all(maintenance_per_policy == 0.0) and np.all(lae == 0.0)
 
 
-def test_alpha_pro_rata_row_lands_in_alpha_pro_rata_primitive():
+def test_acquisition_premium_row_lands_in_its_primitive():
     """An ``acquisition_premium`` row contributes only to acquisition_premium."""
     rows = (ExpenseItem("acquisition", "premium", 1.20),)
     (acquisition_premium, acquisition_per_policy, maintenance_premium,
@@ -51,7 +51,7 @@ def test_alpha_pro_rata_row_lands_in_alpha_pro_rata_primitive():
     assert acquisition_per_policy == 0.0 and maintenance_premium == 0.0
 
 
-def test_beta_pro_rata_row_lands_in_beta_pro_rata_primitive():
+def test_maintenance_premium_row_lands_in_its_primitive():
     """A ``maintenance_premium`` row contributes only to maintenance_premium."""
     rows = (ExpenseItem("maintenance", "premium", 0.01),)
     (acquisition_premium, acquisition_per_policy, maintenance_premium,
@@ -59,7 +59,7 @@ def test_beta_pro_rata_row_lands_in_beta_pro_rata_primitive():
     assert maintenance_premium == 0.01
 
 
-def test_gamma_fixed_grows_with_inflation():
+def test_maintenance_per_policy_grows_with_inflation():
     """A ``maintenance_per_policy`` row's monthly amount is ``value/12 * inflation_index[t]``.
 
     Inflation is the macro-economic assumption on ``Basis``, not a
@@ -79,7 +79,7 @@ def test_gamma_fixed_grows_with_inflation():
     )
 
 
-def test_lae_pro_rata_grows_with_inflation():
+def test_lae_grows_with_inflation():
     """A ``lae`` row's monthly fraction grows with the inflation curve."""
     rows = (ExpenseItem("lae", "claim", 0.02),)
     n_time = 24
@@ -170,7 +170,7 @@ def _basis_rows():
     )
 
 
-def test_lae_pro_rata_row_lifts_expense():
+def test_lae_row_lifts_expense():
     """Adding an LAE row raises the expense cash flow in every month with
     any claim activity -- the new line the engine could not express
     before the item form."""
@@ -219,7 +219,7 @@ def test_empty_expense_items_is_zero_expense_basis():
 # surrender value) is built post-projection, where the in-force path is known.
 # ---------------------------------------------------------------------------
 
-def test_surrender_value_pro_rata_lands_in_sixth_primitive():
+def test_maintenance_surrender_value_lands_in_sixth_primitive():
     """A ``maintenance_surrender_value`` row contributes only to the 6th primitive
     -- a scalar annual rate with NO inflation applied (it rides the surrender
     curve's own growth)."""
@@ -250,7 +250,7 @@ def _surrender_basis(extra_items=(), value=2_000_000.0, n_time=120):
     return basis, value
 
 
-def test_surrender_value_pro_rata_hand_calc():
+def test_maintenance_surrender_value_hand_calc():
     """The surrender-linked expense each month equals ``rate/12 x value x
     inforce[t]`` -- charged on the begin-of-month in-force surrender value, not
     the lapsing exits. Hand-checked against the in-force path (read off the
@@ -273,7 +273,7 @@ def test_surrender_value_pro_rata_hand_calc():
     assert m1.bel_path[0, 0] > m0.bel_path[0, 0]
 
 
-def test_surrender_value_pro_rata_routes_fast_to_full():
+def test_maintenance_surrender_value_routes_fast_to_full():
     """The fused fast path does not carry the in-force surrender value, so a book
     with this item routes to the full path (``requires_full``); the fast call
     returns the full-path BEL."""
@@ -285,7 +285,7 @@ def test_surrender_value_pro_rata_routes_fast_to_full():
     assert np.isclose(m_full.bel_path[0, 0], m_fast.bel[0])
 
 
-def test_surrender_value_pro_rata_requires_curve():
+def test_maintenance_surrender_value_requires_curve():
     """A ``maintenance_surrender_value`` item with no ``surrender_value_curve``
     errors at measure time -- the expense base would otherwise be silently
     zero."""
@@ -306,7 +306,7 @@ def test_surrender_value_pro_rata_requires_curve():
         fcf.gmm.measure(_term_life_mp(), basis)
 
 
-def test_surrender_value_pro_rata_rejected_on_account_book():
+def test_maintenance_surrender_value_rejected_on_account_book():
     """The item is undefined on an account-backed (UL / VFA) book -- the account
     fund_fee already charges the account value, so a second charge here would
     double-count. Rejected at measure time."""
