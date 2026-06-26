@@ -376,7 +376,7 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
                     coverage_reduction_end, coverage_reduction_factor,
     coverage_step_month, coverage_step_factor,
-    coverage_escalation_annual, coverage_escalation_cap, coverage_rates,
+    coverage_escalation_annual, coverage_escalation_cap, coverage_term, coverage_rates,
                     coverage_risk, coverage_is_diagnosis,
                     coverage_pays_account_balance, maturity_benefit,
                     annuity_payment, disability_income, disability_benefit,
@@ -567,7 +567,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                         continue          # account-backed death pays from the AV
                     if (coverage_waiting[k] != 0 or coverage_reduction_end[k] != 0
                             or coverage_step_month[k] != 0
-                            or coverage_escalation_annual[k] != 0.0):
+                            or coverage_escalation_annual[k] != 0.0
+                            or coverage_term[k] != 0):
                         continue          # rule-bearing coverages run separately
                     rate = coverage_rates[cov_idx, mp, year] * coverage_amount[k]
                     if coverage_risk[cov_idx] == 0:
@@ -707,12 +708,14 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             step_factor = coverage_step_factor[k]
             esc = coverage_escalation_annual[k]
             cap = coverage_escalation_cap[k]
-            if wait == 0 and red_end == 0 and step_month == 0 and esc == 0.0:
+            if (wait == 0 and red_end == 0 and step_month == 0 and esc == 0.0
+                    and coverage_term[k] == 0):
                 continue          # rule-free -- already in the aggregate
             benefit = coverage_amount[k]
             red_factor = coverage_reduction_factor[k]
             mortality_risk = coverage_risk[cov_idx] == 0
-            for t in range(wait, boundary):
+            cov_end = boundary if coverage_term[k] == 0 else min(boundary, coverage_term[k])
+            for t in range(wait, cov_end):
                 mult = _benefit_factor(t, t // 12, red_factor, red_end,
                                        step_month, step_factor, esc, cap)
                 amt = (inforce[mp, t] * coverage_rates[cov_idx, mp, t // 12]
@@ -740,7 +743,8 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
             undiagnosed = 1.0   # fraction of the in-force still undiagnosed
             d_year = -1
             d_rate = 0.0
-            for t in range(boundary):
+            cov_end = boundary if coverage_term[k] == 0 else min(boundary, coverage_term[k])
+            for t in range(cov_end):
                 year = t // 12
                 if year != d_year:
                     d_rate = coverage_rates[cov_idx, mp, year]
@@ -773,7 +777,7 @@ def _project_kernel_semi_markov(
     coverage_index, coverage_amount, coverage_offset, coverage_waiting,
     coverage_reduction_end, coverage_reduction_factor,
     coverage_step_month, coverage_step_factor,
-    coverage_escalation_annual, coverage_escalation_cap, coverage_rates,
+    coverage_escalation_annual, coverage_escalation_cap, coverage_term, coverage_rates,
     coverage_risk, coverage_is_diagnosis,
     maturity_benefit, annuity_payment, disability_income, disability_benefit,
     alpha_pro_rata, alpha_fixed, beta_pro_rata,
@@ -842,7 +846,8 @@ def _project_kernel_semi_markov(
                         continue          # diagnosis coverages run separately
                     if (coverage_waiting[k] != 0 or coverage_reduction_end[k] != 0
                             or coverage_step_month[k] != 0
-                            or coverage_escalation_annual[k] != 0.0):
+                            or coverage_escalation_annual[k] != 0.0
+                            or coverage_term[k] != 0):
                         continue          # rule-bearing coverages run separately
                     rate = coverage_rates[cov_idx, mp, year] * coverage_amount[k]
                     if coverage_risk[cov_idx] == 0:
@@ -976,12 +981,14 @@ def _project_kernel_semi_markov(
             step_factor = coverage_step_factor[k]
             esc = coverage_escalation_annual[k]
             cap = coverage_escalation_cap[k]
-            if wait == 0 and red_end == 0 and step_month == 0 and esc == 0.0:
+            if (wait == 0 and red_end == 0 and step_month == 0 and esc == 0.0
+                    and coverage_term[k] == 0):
                 continue          # rule-free -- already in the main pass
             benefit = coverage_amount[k]
             red_factor = coverage_reduction_factor[k]
             mortality_risk = coverage_risk[cov_idx] == 0
-            for t in range(wait, boundary):
+            cov_end = boundary if coverage_term[k] == 0 else min(boundary, coverage_term[k])
+            for t in range(wait, cov_end):
                 mult = _benefit_factor(t, t // 12, red_factor, red_end,
                                        step_month, step_factor, esc, cap)
                 amt = (inforce[mp, t] * coverage_rates[cov_idx, mp, t // 12]
@@ -1009,7 +1016,8 @@ def _project_kernel_semi_markov(
             undiagnosed = 1.0   # fraction of the in-force still undiagnosed
             d_year = -1
             d_rate = 0.0
-            for t in range(boundary):
+            cov_end = boundary if coverage_term[k] == 0 else min(boundary, coverage_term[k])
+            for t in range(cov_end):
                 year = t // 12
                 if year != d_year:
                     d_rate = coverage_rates[cov_idx, mp, year]
@@ -1431,6 +1439,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             model_points.coverage_step_factor,
             model_points.coverage_escalation_annual,
             model_points.coverage_escalation_cap,
+            model_points.coverage_term,
             coverage_rates,
             coverage_risk,
             coverage_is_diagnosis,
@@ -1517,6 +1526,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             model_points.coverage_step_factor,
             model_points.coverage_escalation_annual,
             model_points.coverage_escalation_cap,
+            model_points.coverage_term,
             coverage_rates,
             coverage_risk,
             coverage_is_diagnosis,

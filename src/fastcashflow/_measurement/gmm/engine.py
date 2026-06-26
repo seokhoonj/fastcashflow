@@ -1435,11 +1435,13 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
     """True when a book uses a mechanic the fused fast path does not apply.
 
     The full-only features (v1): non-zero ``issue_class`` (the fast grid is built
-    at class 0), benefit escalation / step-up, a state-conditioned death benefit
-    (``State.death_benefit_factor != 1``), a deterministic transition
-    (``Transition.after_sojourn_months``) and a ``surrender_value_pro_rata``
-    expense item (the fused kernel does not carry the in-force surrender value the
-    expense charges on; the full path builds it post-projection). A universal-life
+    at class 0), benefit escalation / step-up, a per-coverage maturity
+    (``ModelPoints.coverage_term`` -- a coverage ending before the contract
+    boundary), a state-conditioned death benefit (``State.death_benefit_factor
+    != 1``), a deterministic transition (``Transition.after_sojourn_months``)
+    and a ``surrender_value_pro_rata`` expense item (the fused kernel does not
+    carry the in-force surrender value the expense charges on; the full path
+    builds it post-projection). A universal-life
     account is NOT in this set as of Step 4: the scalar fused kernel carries the
     account roll itself, so an account book runs on the fast path directly (the
     routing exceptions -- account + state machine, account + gpu, account +
@@ -1454,6 +1456,9 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
     if (model_points.coverage_step_month is not None
             and (np.any(model_points.coverage_step_month)
                  or np.any(model_points.coverage_escalation_annual))):
+        return True
+    if (model_points.coverage_term is not None
+            and np.any(model_points.coverage_term)):
         return True
     if any(item.category == "maintenance" and item.base == "surrender_value"
            for item in basis.expense_items):

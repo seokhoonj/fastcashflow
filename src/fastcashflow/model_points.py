@@ -92,10 +92,13 @@ class ModelPoints:
       slice ``[coverage_offset[mp] : coverage_offset[mp+1]]``.
 
     Each coverage may carry a benefit rule: ``coverage_waiting`` (months from
-    issue with no benefit) and ``coverage_reduction_end`` / ``coverage_reduction_factor``
-    (a benefit multiplier in force until a cut-off month). Both are CSR
-    arrays aligned with ``coverage_index`` and default to off -- no waiting, full
-    benefit.
+    issue with no benefit), ``coverage_reduction_end`` / ``coverage_reduction_factor``
+    (a benefit multiplier in force until a cut-off month) and ``coverage_term``
+    (the coverage's own maturity in months from issue -- it pays nothing from
+    that month on, even when the contract boundary runs longer, e.g. a
+    whole-life main with an 80-age term rider; 0 = run to the contract
+    boundary). All are CSR arrays aligned with ``coverage_index`` and default
+    to off -- no waiting, full benefit, no per-coverage maturity.
 
     The coverage list is built one of two ways. ``benefits`` is the general
     form: a ``{cov_idx: amount array}`` map keyed by coverage code (the index
@@ -220,6 +223,7 @@ class ModelPoints:
     coverage_step_factor: FloatArray | None = None   # CSR: benefit factor from step_month on
     coverage_escalation_annual: FloatArray | None = None  # CSR: annual benefit growth (0 = level)
     coverage_escalation_cap: FloatArray | None = None     # CSR: max benefit multiple (0 = unbounded)
+    coverage_term: IntArray | None = None        # CSR: coverage maturity, months from issue (0 = to contract boundary)
     count: FloatArray | None = None              # policies the row stands for
     sex: IntArray | None = None                  # 0 = male, 1 = female
     state: IntArray | None = None                # contract state (STATE_*)
@@ -659,6 +663,13 @@ class ModelPoints:
         coverage_escalation_cap = self.coverage_escalation_cap
         coverage_escalation_cap = (np.zeros(n_cov) if coverage_escalation_cap is None
                               else np.asarray(coverage_escalation_cap, np.float64))
+        # Per-coverage maturity: the coverage pays no benefit at or after this
+        # month-from-issue, even when the contract boundary runs longer (a
+        # whole-life main + an 80-age term rider). 0 = no per-coverage limit
+        # (runs to the contract boundary, the historical behaviour).
+        coverage_term = self.coverage_term
+        coverage_term = (np.zeros(n_cov, np.int64) if coverage_term is None
+                    else np.asarray(coverage_term, np.int64))
         # Each CSR-aligned rule array carries one entry per coverage. A wrong
         # length would silently drop a coverage's rule (too short) or misread
         # it (too long); a non-finite or negative month / factor would silently
@@ -672,6 +683,7 @@ class ModelPoints:
             ("coverage_step_factor", coverage_step_factor),
             ("coverage_escalation_annual", coverage_escalation_annual),
             ("coverage_escalation_cap", coverage_escalation_cap),
+            ("coverage_term", coverage_term),
         ):
             if arr.shape != (n_cov,):
                 raise ValueError(
@@ -690,6 +702,7 @@ class ModelPoints:
         object.__setattr__(self, "coverage_step_factor", coverage_step_factor)
         object.__setattr__(self, "coverage_escalation_annual", coverage_escalation_annual)
         object.__setattr__(self, "coverage_escalation_cap", coverage_escalation_cap)
+        object.__setattr__(self, "coverage_term", coverage_term)
         # Segment metadata + mp_id -- normalise to object arrays so they slice
         # with the per-row fields. ``None`` stays None (a single-segment book).
         for name in ("product", "channel", "mp_id"):
@@ -940,6 +953,7 @@ class ModelPoints:
         kwargs["coverage_waiting"] = self.coverage_waiting[cov_idx]
         kwargs["coverage_reduction_end"] = self.coverage_reduction_end[cov_idx]
         kwargs["coverage_reduction_factor"] = self.coverage_reduction_factor[cov_idx]
+        kwargs["coverage_term"] = self.coverage_term[cov_idx]
 
         # Segment metadata + mp_id + optional surrender base -- slice if set;
         # otherwise stay None.
