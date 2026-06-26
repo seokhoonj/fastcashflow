@@ -2,7 +2,7 @@
 
 :func:`trace` renders the ceded cash flows (recovery,
 reinsurance premium), the BEL = PV(premium) - PV(recovery), the
-risk-transfer RA and the CSM build (net cost / gain, no loss component) as an
+risk-transfer RA and the CSM build (net cost or gain, no loss component) as an
 ASCII tree; :func:`trace_diff` is its two-basis variant.
 """
 from __future__ import annotations
@@ -149,7 +149,7 @@ def trace(
     final_lines: list[object] = [
         f"BEL = {bel:>15,.2f}  (PV reinsurance premium - PV recoveries; net cost)",
         f"RA  = {ra:>15,.2f}  (risk transferred to the reinsurer, paragraph 64)",
-        f"CSM = {csm0:>15,.2f}  (net cost / gain; may be negative, paragraph 65, no loss component)",
+        f"CSM = {csm0:>15,.2f}  (net cost or gain; may be negative, paragraph 65, no loss component)",
     ]
 
     out.append(header)
@@ -185,7 +185,7 @@ def trace_diff(
     two bases (same ``treaty``), with the assumption changes that drive it.
 
     The reinsurance counterpart of :func:`trace_diff` -- a headline-level
-    diff. The CSM is the net cost / gain of the cover and may be negative; there
+    diff. The CSM is the net cost or gain of the cover and may be negative; there
     is no loss component (paragraph 65).
     """
     if file is None:

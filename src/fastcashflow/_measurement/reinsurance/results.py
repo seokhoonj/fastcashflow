@@ -45,12 +45,12 @@ class Measurement:
     # headline -- always present, shape (n_mp,)
     bel: FloatArray            # PV(reinsurance premiums) - PV(recoveries)
     ra: FloatArray             # risk transferred to the reinsurer
-    csm: FloatArray            # inception net cost/gain (after any 66A loss recovery)
+    csm: FloatArray            # inception net cost or gain (after any 66A loss recovery)
     loss_recovery_component: FloatArray | None = None  # (n_mp,) 66A/66B: underlying loss x recovery %
     # trajectory -- full only (None on the headline-only path)
     bel_path: FloatArray | None = None         # (n_mp, n_time+1)
     ra_path: FloatArray | None = None          # (n_mp, n_time+1)
-    csm_path: FloatArray | None = None         # (n_mp, n_time+1) -- net cost/gain trajectory
+    csm_path: FloatArray | None = None         # (n_mp, n_time+1) -- net cost or gain trajectory
     csm_accretion: FloatArray | None = None    # (n_mp, n_time)
     csm_release: FloatArray | None = None      # (n_mp, n_time)
     recovery: FloatArray | None = None         # (n_mp, n_time) -- recoveries received
@@ -90,7 +90,7 @@ class PeriodMovement:
         csm_opening + csm_accretion - csm_release  == csm_closing
 
     ``bel`` is the present value of reinsurance premiums less recoveries (a net
-    cost when positive); ``csm`` is the net cost / gain of the cover and may be
+    cost when positive); ``csm`` is the net cost or gain of the cover and may be
     negative. ``*_interest`` / ``csm_accretion`` is the unwind at the discount
     rate; ``*_release`` is the expected run-off over the period. There is no
     loss component (paragraph 65).

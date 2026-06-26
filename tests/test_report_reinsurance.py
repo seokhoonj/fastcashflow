@@ -90,7 +90,7 @@ def test_reinsurance_report_field_formulas():
 def test_reinsurance_report_csm_can_be_negative():
     """Ceding a profitable book has a net cost: a negative CSM, no loss component.
 
-    Sec. 65 -- the reinsurance CSM is the net cost / gain of the cover and may
+    paragraph 65 -- the reinsurance CSM is the net cost or gain of the cover and may
     be negative; the report carries the negative trajectory through with no
     loss-component floor (the ReinsuranceReport has no loss_component field).
     """

@@ -633,7 +633,7 @@ def settle(
     csm_experience_unlocking = -(delta_lock + ra_e)
     finance_wedge = -(bel_e - delta_lock)
     csm_accretion = prior_csm * ((1.0 + lock) ** (period / 12.0) - 1.0)
-    # Paragraph 65: NO floor, NO loss component -- the net cost/gain rolls on.
+    # Paragraph 65: NO floor, NO loss component -- the net cost or gain rolls on.
     csm_after = prior_csm + csm_accretion + csm_experience_unlocking
 
     tail = np.zeros((n_mp, n_time + 1))
