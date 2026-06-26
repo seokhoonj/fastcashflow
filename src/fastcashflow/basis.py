@@ -596,6 +596,14 @@ class Basis:
         :func:`derive_expense_components` into the kernel-side primitives
         (named ``<category>_<base>``). An empty tuple is the
         no-expense basis.
+
+        IFRS 17 (paragraphs B65-B66): only DIRECTLY ATTRIBUTABLE expenses
+        enter the fulfilment cash flows. Put the directly-attributable
+        amount in ``value`` -- i.e. gross expense already multiplied by the
+        company's direct-allocation ratio. The engine does NOT split
+        direct from indirect; the non-attributable portion is excluded from
+        the FCF by simply not being entered (that allocation is an ETL /
+        expense-policy step upstream of measurement).
     expense_inflation :
         Global annual inflation applied to the recurring expense items
         (``maintenance_per_policy`` and ``lae``). Either a flat scalar

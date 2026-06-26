@@ -163,6 +163,13 @@ Adjustment Expense, 손해사정비). 유효한 `(category, base)` 짝과 적용
 보험료 자체가 시간 변동, `surrender_value` 는 해약환급금 곡선 자체가 성장하므로
 모두 이중 적용 회피.
 
+> **직접귀속분만 입력 (IFRS17 paragraphs B65-B66)**: 이행현금흐름엔 **직접귀속
+> (directly attributable)** 사업비만 들어갑니다. `value` 에는 **직접귀속분**을
+> 넣으세요 -- 총사업비에 회사의 직접배분율을 이미 곱한 값. fcf 는 직접/간접을
+> **분리하지 않습니다**; 간접(비귀속)분은 IFRS17 B66 에 따라 **애초에 입력하지 않음**
+> 으로써 FCF 에서 제외됩니다. 직접/간접 배분은 측정 상류의 ETL / 사업비 정책 단계
+> 책임입니다 (워크북의 직접배분율 `CV$5` 등에 해당).
+
 segments 시트의 `expense_table` (선택) 컬럼이 segment 별 어느 table_id 를
 쓸지 결정. 빈 셀이면 expense 없음 (no-expense basis).
 
