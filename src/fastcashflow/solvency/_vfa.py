@@ -4,7 +4,7 @@ stochastic solvency, exposed prefix-free under ``fcf.vfa.*``.
 Apart from the generic ``_engine`` because VFA risk is structurally
 distinct: the GMDB / GMAB guarantee is an account-value market risk with
 moneyness-driven dynamic lapse, not a ``measure_fn`` variant of the GMM path.
-Only ``vfa_required_capital`` is a thin wrapper over the generic engine; the rest
+Only ``required_capital`` is a thin wrapper over the generic engine; the rest
 are genuine VFA computations. Generic primitives import one-way from ``_engine``
 / ``_assessment`` / ``assets``; ``measure`` and the merged
 ``DynamicAssessment`` import lazily in-body to avoid a runtime cycle.
@@ -22,28 +22,28 @@ from fastcashflow.assets import (
     portfolio_value_by_scenario, liquidate, _vfa_cashflow_gap,
 )
 from fastcashflow.solvency._engine import (
-    required_capital, RegimeSpec, KICSInterest, SCRResult,
+    required_capital as _engine_required_capital, RegimeSpec, KICSInterest, SCRResult,
 )
 from fastcashflow.solvency._assessment import (
     Assessment, InteractionResult, StochasticAssessment, DynamicAssessment,
-    equity_scr, property_scr, fx_scr, concentration_scr, credit_scr,
+    equity_scr as _asset_equity_scr, property_scr, fx_scr, concentration_scr, credit_scr,
     operational_scr, basic_scr,
     _market_cal,
 )
 
 __all__ = [
-    "vfa_required_capital", "vfa_equity_scr", "vfa_interest_scr",
-    "vfa_interaction_loss", "assess_vfa",
-    "assess_dynamic_vfa", "assess_stochastic_vfa",
+    "required_capital", "equity_scr", "interest_scr",
+    "interaction_loss", "assess",
+    "assess_dynamic", "assess_stochastic",
 ]
 
-def vfa_required_capital(
+def required_capital(
     model_points: ModelPoints, basis: Basis, *, regime: RegimeSpec,
     catastrophe: float = 0.0, interest_scenarios: KICSInterest | None = None,
 ) -> SCRResult:
     """Required capital for a variable (VFA) book's LIFE sub-risks.
 
-    The VFA counterpart of :func:`required_capital`: re-runs the regime's life
+    The VFA counterpart of :func:`fastcashflow.solvency.required_capital`: re-runs the regime's life
     sub-risks (mortality / longevity / lapse / expense / catastrophe / ...) on the
     VFA NET BEL (guarantee-excess + expense - fee) through
     :func:`fastcashflow.vfa.measure`, so the stresses bite the guarantee cost the
@@ -65,11 +65,11 @@ def vfa_required_capital(
     by the lost variable-fee income and the changed guarantee cost, not by an
     account-value outflow."""
     from fastcashflow._measurement.vfa import measure
-    return required_capital(
+    return _engine_required_capital(
         model_points, basis, regime=regime, catastrophe=catastrophe,
         interest_scenarios=interest_scenarios, measure_fn=measure)
 
-def vfa_equity_scr(model_points: ModelPoints, basis: Basis, *,
+def equity_scr(model_points: ModelPoints, basis: Basis, *,
                    equity_shock: float) -> float:
     """The equity capital of a variable (VFA) book's net BEL.
 
@@ -94,7 +94,7 @@ def vfa_equity_scr(model_points: ModelPoints, basis: Basis, *,
     stressed = float(measure(mp_s, basis, full=False).bel.sum())
     return max(0.0, stressed - base)
 
-def vfa_interest_scr(model_points: ModelPoints, basis: Basis, *,
+def interest_scr(model_points: ModelPoints, basis: Basis, *,
                      shift: float = 0.01) -> float:
     """The interest capital of a variable (VFA) book's net BEL.
 
@@ -106,7 +106,7 @@ def vfa_interest_scr(model_points: ModelPoints, basis: Basis, *,
 
     v1: a parallel shift to ``investment_return`` (the VFA's single rate driving
     growth and discount together), the transparent proxy for the guarantee's rate
-    sensitivity. Distinct from the spot equity LEVEL shock (:func:`vfa_equity_scr`):
+    sensitivity. Distinct from the spot equity LEVEL shock (:func:`equity_scr`):
     a rate-assumption move versus a one-time market fall, the two market sub-risks a
     variable annuity carries. A regime-curve-calibrated VFA interest stress (a
     maturity-relative curve, not a flat parallel move) is future work. Closed-form
@@ -120,7 +120,7 @@ def vfa_interest_scr(model_points: ModelPoints, basis: Basis, *,
         model_points, replace(basis, investment_return=r - shift), full=False).bel.sum())
     return max(0.0, up - base, dn - base)
 
-def _portfolio_nav_vfa(portfolio: Portfolio, model_points: ModelPoints,
+def _portfolio_nav(portfolio: Portfolio, model_points: ModelPoints,
                        basis: Basis) -> float:
     """Net asset value for a variable (VFA) book: assets at market less the VFA net
     BEL (the guarantee-excess + expense - fee leg). The account-value portion of
@@ -131,13 +131,13 @@ def _portfolio_nav_vfa(portfolio: Portfolio, model_points: ModelPoints,
     return (portfolio_value(portfolio, basis.discount_annual)
             - float(measure(model_points, basis, full=False).bel.sum()))
 
-def _interaction_vfa(portfolio: Portfolio, model_points: ModelPoints,
+def _interaction(portfolio: Portfolio, model_points: ModelPoints,
                      basis: Basis, *, return_shock, lapse_sensitivity, haircut,
                      reinvest_rate, opening_balance):
     """The VFA interaction loss AND the forced-sale roll-forward, so
     :func:`assess_dynamic` does not re-measure the stressed book."""
     from fastcashflow._measurement.vfa import measure
-    base_nav = _portfolio_nav_vfa(portfolio, model_points, basis)
+    base_nav = _portfolio_nav(portfolio, model_points, basis)
     av = np.asarray(model_points.account_value, dtype=np.float64)
     mp_s = replace(model_points, account_value=av * (1.0 + return_shock))
     asset_val = portfolio_value(portfolio, basis.discount_annual)
@@ -150,14 +150,14 @@ def _interaction_vfa(portfolio: Portfolio, model_points: ModelPoints,
                             forced_sale_loss=liq.total_realized_loss)
     return res, liq
 
-def vfa_interaction_loss(portfolio: Portfolio, model_points: ModelPoints,
+def interaction_loss(portfolio: Portfolio, model_points: ModelPoints,
                          basis: Basis, *, return_shock: float,
                          lapse_sensitivity: float, haircut: float,
                          reinvest_rate=0.0,
                          opening_balance: float = 0.0) -> InteractionResult:
     """The asset-liability interaction loss of a market shock on a variable book.
 
-    The VFA counterpart of :func:`interaction_loss`. An immediate proportional
+    The VFA counterpart of :func:`fastcashflow.solvency.interaction_loss`. An immediate proportional
     account-value shock ``return_shock`` (a market drop today, ``-0.30`` = -30%)
     lowers the account value, so the GMDB / GMAB moves in-the-money and the
     guarantee cost (the VFA net BEL) rises -- the mark-to-market ``revaluation_loss``.
@@ -172,12 +172,12 @@ def vfa_interaction_loss(portfolio: Portfolio, model_points: ModelPoints,
     a market shock to the entity's own equity / property holdings is the separable
     static market SCR. Both the closed-form variable-annuity and the account-backed
     universal-life paths are supported."""
-    return _interaction_vfa(portfolio, model_points, basis, return_shock=return_shock,
+    return _interaction(portfolio, model_points, basis, return_shock=return_shock,
                             lapse_sensitivity=lapse_sensitivity, haircut=haircut,
                             reinvest_rate=reinvest_rate,
                             opening_balance=opening_balance)[0]
 
-def assess_vfa(portfolio: Portfolio, model_points: ModelPoints,
+def assess(portfolio: Portfolio, model_points: ModelPoints,
                         basis: Basis, *, regime: RegimeSpec, tax_rate: float = 0.0,
                         tax_recoverability_limit: float | None = None,
                         catastrophe: float = 0.0, general_insurance_scr: float = 0.0,
@@ -185,13 +185,13 @@ def assess_vfa(portfolio: Portfolio, model_points: ModelPoints,
                         interest_shift: float = 0.01) -> Assessment:
     """The static t=0 solvency assessment for a variable (VFA) book.
 
-    The VFA counterpart of :func:`assess`. The liability (insurance) SCR is
+    The VFA counterpart of :func:`fastcashflow.solvency.assess`. The liability (insurance) SCR is
     :func:`~fastcashflow.vfa.required_capital` -- the life sub-risks priced
     on the VFA NET BEL -- and available capital is the assets less the VFA technical
     provision (VFA BEL + risk margin). The market module adds the guarantee's equity
     sensitivity to the asset-side equity SCR: under one equity shock the entity's own
     equity holdings fall AND the guarantee cost rises (the same risk factor), so the
-    equity component is ``equity_scr(portfolio) + vfa_equity_scr`` -- added, not
+    equity component is the asset-side ``fcf.solvency.equity_scr(portfolio)`` plus the VFA ``equity_scr`` -- added, not
     diversified. ``guarantee_equity_shock`` defaults to the regime's developed
     listed-equity shock (the unit fund's assumed equity stress).
 
@@ -202,7 +202,7 @@ def assess_vfa(portfolio: Portfolio, model_points: ModelPoints,
     premium). Both the closed-form variable-annuity and the universal-life paths are
     supported."""
     from fastcashflow._measurement.vfa import measure
-    scr = vfa_required_capital(model_points, basis, regime=regime,
+    scr = required_capital(model_points, basis, regime=regime,
                                catastrophe=catastrophe)
     pv = portfolio_value(portfolio, basis.discount_annual)
     ac = available_capital(pv, scr.base_bel, scr.risk_margin)
@@ -210,9 +210,9 @@ def assess_vfa(portfolio: Portfolio, model_points: ModelPoints,
     cal = _market_cal(regime)
     eq_shock = (guarantee_equity_shock if guarantee_equity_shock is not None
                 else cal["equity_shocks"]["developed"])
-    ni = vfa_interest_scr(model_points, basis, shift=interest_shift)
-    eq = (equity_scr(portfolio, regime)
-          + vfa_equity_scr(model_points, basis, equity_shock=eq_shock))
+    ni = interest_scr(model_points, basis, shift=interest_shift)
+    eq = (_asset_equity_scr(portfolio, regime)
+          + equity_scr(model_points, basis, equity_shock=eq_shock))
     pr = property_scr(portfolio, regime)
     fx = fx_scr(portfolio, regime, basis.discount_annual)
     conc = concentration_scr(portfolio, regime, basis.discount_annual, total_assets=pv)
@@ -249,7 +249,7 @@ def assess_vfa(portfolio: Portfolio, model_points: ModelPoints,
         basic_required_capital=basic, tax_adjustment=tax_adj,
         total_scr=total, ratio=ratio)
 
-def assess_dynamic_vfa(portfolio: Portfolio, model_points: ModelPoints,
+def assess_dynamic(portfolio: Portfolio, model_points: ModelPoints,
                          basis: Basis, *, return_shock: float,
                          lapse_sensitivity: float, haircut: float,
                          reinvest_rate=0.0, opening_balance: float = 0.0,
@@ -260,7 +260,7 @@ def assess_dynamic_vfa(portfolio: Portfolio, model_points: ModelPoints,
     """Layer a market-shock / moneyness-lapse scenario onto a variable book's
     coverage ratio.
 
-    Runs :func:`vfa_interaction_loss` for the asset-liability interaction a static
+    Runs :func:`interaction_loss` for the asset-liability interaction a static
     solvency view misses -- an immediate account-value shock ``return_shock`` moves
     the GMDB / GMAB in-the-money, the moneyness dynamic lapse (``lapse_sensitivity``)
     holds more policies on the guarantee, and the lifted guarantee-excess outflow is
@@ -269,7 +269,7 @@ def assess_dynamic_vfa(portfolio: Portfolio, model_points: ModelPoints,
     over the (unchanged) ``total_scr``.
 
     The static position comes one of two ways: pass ``regime=`` (with optional
-    :func:`assess_vfa` keyword arguments -- ``tax_rate``,
+    :func:`assess` keyword arguments -- ``tax_rate``,
     ``guarantee_equity_shock``, ...) to COMPUTE it (the result's ``static`` then
     carries the full :class:`Assessment`), or supply
     ``static_available_capital`` and ``total_scr`` directly (from your own capital
@@ -278,16 +278,16 @@ def assess_dynamic_vfa(portfolio: Portfolio, model_points: ModelPoints,
     and the universal-life paths are supported."""
     static = None
     if regime is not None:
-        static = assess_vfa(portfolio, model_points, basis, regime=regime,
+        static = assess(portfolio, model_points, basis, regime=regime,
                                      **assess_kwargs)
         static_available_capital = static.available_capital
         total_scr = static.total_scr
     elif static_available_capital is None or total_scr is None:
         raise ValueError(
-            "assess_dynamic_vfa needs either regime= (to compute the static "
+            "assess_dynamic needs either regime= (to compute the static "
             "assessment) or both static_available_capital= and total_scr=.")
 
-    interaction, liq = _interaction_vfa(
+    interaction, liq = _interaction(
         portfolio, model_points, basis, return_shock=return_shock,
         lapse_sensitivity=lapse_sensitivity, haircut=haircut,
         reinvest_rate=reinvest_rate, opening_balance=opening_balance)
@@ -302,13 +302,13 @@ def assess_dynamic_vfa(portfolio: Portfolio, model_points: ModelPoints,
         stressed_available_capital=stressed_ac, stressed_ratio=stressed_ratio,
         static=static)
 
-def assess_stochastic_vfa(portfolio: Portfolio, model_points: ModelPoints,
+def assess_stochastic(portfolio: Portfolio, model_points: ModelPoints,
                             basis: Basis, return_scenarios, *, regime: RegimeSpec,
                             co_moving_assets: bool = False,
                             **assess_kwargs) -> StochasticAssessment:
     """The coverage-ratio distribution of a variable book over fund-return scenarios.
 
-    Runs the static :func:`assess_vfa` for the prescribed SCR and the asset
+    Runs the static :func:`assess` for the prescribed SCR and the asset
     value, then the VFA liability distribution (:func:`fastcashflow.vfa.stochastic`)
     over ``return_scenarios``: available capital per scenario is the assets less the
     realised VFA net liability and risk margin, and the ratio is that over the
@@ -318,7 +318,7 @@ def assess_stochastic_vfa(portfolio: Portfolio, model_points: ModelPoints,
 
     ``return_scenarios`` is an ``(n_scenarios, n_time)`` array of monthly
     underlying-items returns OR an :class:`~fastcashflow.esg.EconomicScenarios` (its
-    ``returns`` are used). Extra keywords pass through to :func:`assess_vfa`.
+    ``returns`` are used). Extra keywords pass through to :func:`assess`.
     Both the variable-annuity and universal-life paths are supported.
 
     ``co_moving_assets`` (default ``False``) makes the entity's general-account
@@ -334,7 +334,7 @@ def assess_stochastic_vfa(portfolio: Portfolio, model_points: ModelPoints,
     ratio)."""
     from fastcashflow._measurement.vfa import measure_stochastic
     rs = getattr(return_scenarios, "returns", return_scenarios)
-    static = assess_vfa(portfolio, model_points, basis, regime=regime,
+    static = assess(portfolio, model_points, basis, regime=regime,
                                  **assess_kwargs)
     dist = measure_stochastic(model_points, basis, rs)
     if co_moving_assets:

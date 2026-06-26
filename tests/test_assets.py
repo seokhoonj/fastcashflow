@@ -729,7 +729,7 @@ def test_vfa_interaction_loss_av_drop_lifts_the_guarantee_cost():
     assert dyn.forced_sale_loss >= 0.0
     assert np.isclose(dyn.total_loss, dyn.revaluation_loss + dyn.forced_sale_loss)
     # The revaluation loss reconciles to an independent NAV recompute.
-    base_nav = vs._portfolio_nav_vfa(pf, mp, basis)
+    base_nav = vs._portfolio_nav(pf, mp, basis)
     assert np.isclose(static.base_nav, base_nav)
 
 

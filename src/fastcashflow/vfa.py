@@ -38,13 +38,8 @@ from fastcashflow.alm import (
 # (the VFA bodies) / assets (cashflow gap); the merged DynamicAssessment result
 # type is owned by the solvency assembly.
 from fastcashflow.solvency._vfa import (
-    vfa_required_capital as required_capital,
-    vfa_equity_scr as equity_scr,
-    vfa_interest_scr as interest_scr,
-    assess_vfa as assess,
-    vfa_interaction_loss as interaction_loss,
-    assess_dynamic_vfa as assess_dynamic,
-    assess_stochastic_vfa as assess_stochastic)
+    required_capital, equity_scr, interest_scr, assess,
+    interaction_loss, assess_dynamic, assess_stochastic)
 from fastcashflow.assets import _vfa_cashflow_gap as cashflow_gap
 from fastcashflow.solvency._assessment import DynamicAssessment
 

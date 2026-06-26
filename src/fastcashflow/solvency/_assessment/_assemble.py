@@ -286,7 +286,7 @@ def assess_dynamic(portfolio: Portfolio, model_points: ModelPoints,
 class StochasticAssessment:
     """The coverage-ratio DISTRIBUTION of a variable book over fund-return scenarios.
 
-    ``static`` is the t=0 :func:`assess_vfa` picture. ``available_capital``
+    ``static`` is the t=0 :func:`fastcashflow.vfa.assess` picture. ``available_capital``
     and ``ratio`` are ``(n_scenarios,)`` -- the assets less the per-scenario VFA net
     liability (the realised guarantee cost) and risk margin, over the prescribed
     (unchanged) required capital. Read the distribution with :meth:`mean`,
@@ -330,7 +330,7 @@ def assess_stochastic(portfolio: Portfolio, model_points: ModelPoints,
                             **assess_kwargs) -> StochasticAssessment:
     """The coverage-ratio distribution of a book over discount-rate scenarios.
 
-    The GMM counterpart of :func:`assess_stochastic_vfa`. Runs the static
+    The GMM counterpart of :func:`fastcashflow.vfa.assess_stochastic`. Runs the static
     :func:`assess` for the prescribed SCR and the asset value, then the
     GMM liability distribution (:func:`fastcashflow.gmm.stochastic`) over
     ``rate_scenarios``: available capital per scenario is the assets less that

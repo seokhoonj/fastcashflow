@@ -708,7 +708,7 @@ def required_capital(
     ``measure_fn`` is the liability measurement the stresses re-run (default the
     GMM :func:`~fastcashflow._measurement.gmm.measure`); pass
     :func:`~fastcashflow.vfa.measure` to price a variable book's sub-risks on its
-    net BEL (see :func:`vfa_required_capital`). It must accept ``(mp, basis,
+    net BEL (see :func:`fastcashflow.vfa.required_capital`). It must accept ``(mp, basis,
     full=...)`` and return a result carrying ``bel`` (and ``ra_path`` / ``bel_path``
     for a cost-of-capital risk margin).
 
