@@ -52,6 +52,7 @@ def test_compile_waiver_edges():
         "mortality": np.array([[0.01]]),
         "waiver_incidence": np.array([[0.05]]),
         "lapse": np.array([[0.02]]),
+        "lapse_waiver": np.array([[0.0]]),   # default: waiver does not lapse
     }
     compiled = compile_state_model(STATE_MODELS["WAIVER"], rates)
     assert compiled.n_states == 2
@@ -319,6 +320,42 @@ def test_paidup_lapse_falls_back_to_lapse_annual():
     paid = measure(ModelPoints.single(**kw, state=STATE_PAIDUP), basis)
     step = 0.99 * 0.95        # falls back to the 5% active lapse
     assert np.allclose(paid.cashflows.inforce[0, :3], [1.0, step, step ** 2])
+
+
+def test_waiver_state_uses_its_own_lapse():
+    """STATE_MODELS["WAIVER"] waiver state can carry its OWN lapse via
+    Basis.lapse_waiver_annual. A waiver-seated contract then decrements by
+    mortality + the waiver lapse -- the residual surrender of a premium-waived
+    contract (e.g. cashing out the surrender value)."""
+    q = _annual(0.01)
+    basis = Basis(
+        mortality_annual=lambda s, a, d: np.full(a.shape, q),
+        lapse_annual=lambda s, a, d: np.full(d.shape, _annual(0.02)),
+        lapse_waiver_annual=lambda s, a, d: np.full(d.shape, _annual(0.05)),
+        discount_annual=0.0, ra_confidence=0.75, mortality_cv=0.10,
+        coverages=(CoverageRate("DEATH",
+                                lambda s, a, d: np.full(a.shape, q)),),
+        state_model=STATE_MODELS["WAIVER"],
+    )
+    kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
+              term_months=3,
+              calculation_methods={"DEATH": CalculationMethod.DEATH})
+    wv = measure(ModelPoints.single(**kw, state=STATE_WAIVER), basis)
+    step = 0.99 * 0.95        # (1 - mortality)(1 - waiver lapse)
+    assert np.allclose(wv.cashflows.inforce[0, :3], [1.0, step, step ** 2])
+
+
+def test_waiver_lapse_defaults_to_zero():
+    """With lapse_waiver_annual unset the waiver state does NOT lapse -- it
+    decays by mortality alone (the pure-waiver default, backward-compatible
+    with the model before lapse_waiver existed)."""
+    basis = _basis(q=0.01, lapse=0.05, state_model=STATE_MODELS["WAIVER"])
+    kw = dict(issue_age=40, benefits={"DEATH": 100_000.0}, premium=0.0,
+              term_months=3,
+              calculation_methods={"DEATH": CalculationMethod.DEATH})
+    wv = measure(ModelPoints.single(**kw, state=STATE_WAIVER), basis)
+    step = 0.99               # mortality alone -- no waiver lapse
+    assert np.allclose(wv.cashflows.inforce[0, :3], [1.0, step, step ** 2])
 
 
 def test_measure_and_value_agree_under_custom_model():

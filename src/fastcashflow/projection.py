@@ -1064,9 +1064,10 @@ def _add_state_mortality_rates(rate_dict, state_model, basis, sex_grid,
 
 # Transition rates that remove occupancy from the in-force set as a lapse (the
 # surrender trigger). A state may carry at most one; the surrender value is paid
-# on ``occupancy x this rate``, so a non-lapsing state (e.g. WAIVER) contributes
-# nothing and a paid-up state lapses at its own ``lapse_paidup`` rate.
-_LAPSE_RATES = ("lapse", "lapse_paidup")
+# on ``occupancy x this rate``, so a paid-up state lapses at its own
+# ``lapse_paidup`` rate and a waiver state at its own ``lapse_waiver`` rate
+# (which defaults to 0 -- a non-lapsing waiver -- unless a rate is set).
+_LAPSE_RATES = ("lapse", "lapse_paidup", "lapse_waiver")
 
 
 def _state_lapse_stack(state_model, rate_dict):
@@ -1486,6 +1487,22 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             if lapse_scale is not None:
                 paidup = paidup * lapse_scale
             rate_dict["lapse_paidup"] = np.ascontiguousarray(paidup)
+        if model_references_rate(state_model, "lapse_waiver"):
+            # Unlike lapse_paidup (falls back to the active lapse), the waiver
+            # state defaults to NO lapse -- a waived contract holds free cover,
+            # so anti-selection keeps it in force. A 0 rate preserves the
+            # pure-waiver behaviour; set ``lapse_waiver_annual`` (typically low)
+            # to model the residual waived-state surrender.
+            if basis.lapse_waiver_annual is None:
+                waiver_lapse = np.zeros_like(rate_dict["lapse"])
+            else:
+                waiver_lapse = annual_to_monthly(
+                    basis.lapse_waiver_annual(
+                        sex_grid, issue_age_grid, duration_grid,
+                        issue_class_grid, elapsed_grid))
+                if lapse_scale is not None:
+                    waiver_lapse = waiver_lapse * lapse_scale
+            rate_dict["lapse_waiver"] = np.ascontiguousarray(waiver_lapse)
         compiled = compile_state_model(state_model, rate_dict)
         edge_from = compiled.edge_from
         edge_to = compiled.edge_to

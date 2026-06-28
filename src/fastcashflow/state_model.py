@@ -359,12 +359,16 @@ class StateModel:
 # The default in-force model -- two transient states. ``active`` pays premium
 # and is subject to mortality, waiver inception and lapse; ``waiver`` (premium
 # waived on a triggering event) keeps the coverage in force, pays no premium
-# and is subject to mortality alone -- it does not lapse. The waiver-inception
-# transition moves active in-force onto the waiver state. ``seating`` seats
-# STATE_ACTIVE (code 0) on the active state and both STATE_WAIVER (1) and
-# STATE_PAIDUP (2) on the waiver state: a paid-up contract and a waiver
-# contract have identical cash flows, differing only in the cause premiums
-# ceased.
+# and is subject to mortality and its OWN lapse ``lapse_waiver``. The
+# waiver-inception transition moves active in-force onto the waiver state.
+# ``lapse_waiver`` (Basis.lapse_waiver_annual) defaults to a 0 rate, so the
+# waiver state does NOT lapse unless a rate is set -- the pure-waiver default
+# (a waived contract holds free-of-premium cover, so anti-selection keeps it
+# in force). Set a (typically low) ``lapse_waiver_annual`` to model the
+# residual waived-state surrender. ``seating`` seats STATE_ACTIVE (code 0) on
+# the active state and both STATE_WAIVER (1) and STATE_PAIDUP (2) on the waiver
+# state: a paid-up contract and a waiver contract have identical cash flows,
+# differing only in the cause premiums ceased.
 WAIVER_MODEL = StateModel(
     states=(
         State("active", pays_premium=True, transitions=(
@@ -374,6 +378,7 @@ WAIVER_MODEL = StateModel(
         )),
         State("waiver", pays_premium=False, transitions=(
             Transition("mortality"),
+            Transition("lapse_waiver"),
         )),
     ),
     seating=(0, 1, 1),
@@ -404,6 +409,7 @@ WAIVER_PAIDUP_MODEL = StateModel(
         )),
         State("waiver", pays_premium=False, transitions=(
             Transition("mortality"),
+            Transition("lapse_waiver"),
         )),
         State("paidup", pays_premium=False, transitions=(
             Transition("mortality"),
