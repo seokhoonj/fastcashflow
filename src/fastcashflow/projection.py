@@ -370,6 +370,7 @@ def _benefit_factor(t, year, red_factor, red_end, step_month, step_factor,
 
 @njit(parallel=True, cache=True)
 def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
+                    state_premium_term_to,
                     edge_from, edge_to, edge_prob, edge_lump_sum,
                     n_states, premium_state, benefit_state, start_state,
                     term_months, contract_boundary_months, count, premium, premium_factor, annuity_factor,
@@ -694,6 +695,28 @@ def _project_kernel(state_death_exit, state_lapse, state_death_benefit_factor,
                 else:
                     maturity_cf[mp] = total_next * maturity_benefit[mp]
                 maturity_survivors[mp] = total_next
+            # Calendar-keyed deterministic transition: when the premium-paying
+            # period ends (entering month ``premium_term``), the source state's
+            # occupancy moves prob-1 to its at_premium_term destination -- the
+            # active -> paid-up relabel. Per-MP timing (premium_term varies by
+            # model point); applied to the start-of-next-month occupancy so the
+            # destination state holds it from month ``premium_term`` onward.
+            # dest -2 leaves the in-force set (to=None cover-end at premium_term).
+            # The move reads a SNAPSHOT of the pre-move occupancy (reusing ``occ``
+            # as scratch -- it is overwritten just below) so it is independent of
+            # state order and safe against chained destinations: each state moves
+            # only its own original occupancy, never occupancy it just received.
+            if premium_term > 0 and t + 1 == premium_term:
+                for s in range(n_states):
+                    occ[s] = occ_next[s]            # snapshot of pre-move occupancy
+                for s in range(n_states):
+                    dto = state_premium_term_to[s]
+                    if dto == -1 or dto == s:
+                        continue                    # no transition / self -> stay
+                    occ_next[s] -= occ[s]           # remove this state's own occupancy
+                    if dto >= 0:
+                        occ_next[dto] += occ[s]      # ... add it to the destination
+                    # dto == -2: leaves the in-force set (not added anywhere)
             for s in range(n_states):
                 occ[s] = occ_next[s]
 
@@ -1522,6 +1545,7 @@ def project_cashflows(model_points: ModelPoints, basis: Basis,
             state_death_exit,
             state_lapse,
             state_death_benefit_factor,
+            compiled.state_premium_term_to,
             edge_from,
             edge_to,
             edge_prob,

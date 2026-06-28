@@ -139,9 +139,9 @@ def test_t6_lump_on_exit():
 def test_transition_rate_vs_deterministic_mutual_exclusion():
     with pytest.raises(ValueError, match="carries no rate"):
         Transition(rate="recovery", after_sojourn_months=5)
-    with pytest.raises(ValueError, match="needs either a rate or after_sojourn_months"):
+    with pytest.raises(ValueError, match="needs a rate"):
         Transition()
-    with pytest.raises(ValueError, match="already sojourn-keyed"):
+    with pytest.raises(ValueError, match="already keyed"):
         Transition(after_sojourn_months=5, sojourn_dependent=True)
 
 
