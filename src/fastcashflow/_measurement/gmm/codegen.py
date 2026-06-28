@@ -43,6 +43,7 @@ from numba import njit, prange
 
 def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
                                  premium_state, benefit_state,
+                                 premium_term_to=None,
                                  use_morbidity=True, use_annuity=True,
                                  use_disability=True, use_lae=True,
                                  use_surrender=True,
@@ -68,6 +69,17 @@ def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
     edge_lump_sum = [bool(x) for x in edge_lump_sum]
     premium_state = [bool(x) for x in premium_state]
     benefit_state = [bool(x) for x in benefit_state]
+    # Calendar-keyed (at_premium_term) deterministic transitions: per-state
+    # destination (-1 none, -2 exit, >=0 dest state). The movers relabel
+    # occupancy at the model point's premium_term -- emitted inside every
+    # occupancy-advance pass so each pass's in-force trajectory switches at
+    # premium_term consistently. A self destination (dto == s) is a no-op.
+    if premium_term_to is None:
+        premium_term_to = [-1] * n_states
+    else:
+        premium_term_to = [int(x) for x in premium_term_to]
+    _movers = [(s, premium_term_to[s]) for s in range(n_states)
+               if premium_term_to[s] != -1 and premium_term_to[s] != s]
 
     sum_all = " + ".join(f"occ_{i}" for i in range(n_states))
     sum_prem = " + ".join(f"occ_{i}" for i in range(n_states)
@@ -118,6 +130,18 @@ def _markov_kernel_source(n_states, edge_from, edge_to, edge_lump_sum,
             if include_lump and ls:
                 line(indent,
                      f"pv_disability += flow_{e} * disability_benefit[mp] * discount_factor_mid_t")
+        # Calendar-keyed move (active -> paid-up at premium_term): snapshot each
+        # mover's pre-move occupancy, then relabel -- order-independent, safe for
+        # chained / self destinations (mirrors the detailed kernel).
+        if _movers:
+            line(indent, "if premium_term > 0 and t + 1 == premium_term:")
+            for s, _dto in _movers:
+                line(indent + 4, f"_pt_src_{s} = occ_next_{s}")
+            for s, dto in _movers:
+                line(indent + 4, f"occ_next_{s} -= _pt_src_{s}")
+                if dto >= 0:
+                    line(indent + 4, f"occ_next_{dto} += _pt_src_{s}")
+                # dto == -2: exit the in-force set (not added anywhere)
         for i in range(n_states):
             line(indent, f"occ_{i} = occ_next_{i}")
 
@@ -354,6 +378,7 @@ def _atomic_write_text(path: Path, content: str) -> None:
 
 def _get_markov_kernel(n_states, edge_from, edge_to, edge_lump_sum,
                               premium_state, benefit_state,
+                              premium_term_to=None,
                               use_morbidity=True, use_annuity=True,
                               use_disability=True, use_lae=True,
                               use_surrender=True, surrender_is_amount=False):
@@ -372,6 +397,8 @@ def _get_markov_kernel(n_states, edge_from, edge_to, edge_lump_sum,
       no JIT cost. Hashing the *source* automatically invalidates the
       cache when the codegen logic itself changes.
     """
+    if premium_term_to is None:
+        premium_term_to = [-1] * int(n_states)
     key = (
         int(n_states),
         tuple(int(x) for x in edge_from),
@@ -379,6 +406,7 @@ def _get_markov_kernel(n_states, edge_from, edge_to, edge_lump_sum,
         tuple(bool(x) for x in edge_lump_sum),
         tuple(bool(x) for x in premium_state),
         tuple(bool(x) for x in benefit_state),
+        tuple(int(x) for x in premium_term_to),
         bool(use_morbidity), bool(use_annuity), bool(use_disability),
         bool(use_lae), bool(use_surrender), bool(surrender_is_amount),
     )
@@ -388,7 +416,7 @@ def _get_markov_kernel(n_states, edge_from, edge_to, edge_lump_sum,
 
     src = _markov_kernel_source(
         n_states, edge_from, edge_to, edge_lump_sum,
-        premium_state, benefit_state,
+        premium_state, benefit_state, premium_term_to=premium_term_to,
         use_morbidity=use_morbidity, use_annuity=use_annuity,
         use_disability=use_disability, use_lae=use_lae,
         use_surrender=use_surrender, surrender_is_amount=surrender_is_amount,

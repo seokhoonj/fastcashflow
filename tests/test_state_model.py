@@ -606,3 +606,26 @@ def test_at_premium_term_chain_uses_snapshot_no_cascade():
     # mortality-only (no lapse).
     p_surv = (1 - 0.001) * (1 - 0.05)
     assert np.isclose(inf[25] / inf[24], p_surv)
+
+
+def test_at_premium_term_fused_matches_detailed():
+    """The fused fast path (full=False) reproduces the detailed path for a
+    paid-up model with the at_premium_term transition -- the codegen kernel
+    applies the active -> paid-up relabel identically (B-2)."""
+    basis = _paidup_basis(active_lapse=0.01, paidup_lapse=0.05,
+                          waiver_lapse=0.02, waiver_rate=0.005)
+    basis = Basis(  # add a discount so the PV is a non-trivial comparison
+        mortality_annual=basis.mortality_annual, lapse_annual=basis.lapse_annual,
+        lapse_paidup_annual=basis.lapse_paidup_annual,
+        lapse_waiver_annual=basis.lapse_waiver_annual,
+        waiver_incidence_annual=basis.waiver_incidence_annual,
+        discount_annual=0.03, ra_confidence=0.75, mortality_cv=0.10,
+        coverages=basis.coverages, state_model=STATE_MODELS["WAIVER_PAIDUP"])
+    mp = ModelPoints.single(issue_age=40, premium=10_000.0, term_months=60,
+                            premium_term_months=24, state=STATE_ACTIVE,
+                            benefits={"CA": 1_000_000.0},
+                            calculation_methods={"CA": CalculationMethod.DIAGNOSIS})
+    detailed = measure(mp, basis)
+    fused = measure(mp, basis, full=False)
+    assert np.isclose(np.asarray(detailed.bel)[0], np.asarray(fused.bel)[0])
+    assert np.isclose(np.asarray(detailed.csm)[0], np.asarray(fused.csm)[0])

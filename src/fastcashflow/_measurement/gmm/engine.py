@@ -1469,11 +1469,6 @@ def requires_full(model_points: ModelPoints, basis: Basis) -> bool:
         return True
     if any(tr.after_sojourn_months for s in sm.states for tr in s.transitions):
         return True
-    # The calendar-keyed (at_premium_term) deterministic transition is applied
-    # by the detailed Markov kernel only; route it to the full path until the
-    # fused kernel learns it (B-2).
-    if any(tr.at_premium_term for s in sm.states for tr in s.transitions):
-        return True
     return False
 
 
@@ -2162,6 +2157,7 @@ def _measure_fast(
             kernel = _get_markov_kernel(
                 n_states, edge_from, edge_to, edge_lump_sum,
                 premium_state, benefit_state,
+                premium_term_to=compiled.state_premium_term_to,
                 use_morbidity=use_morbidity, use_annuity=use_annuity,
                 use_disability=use_disability, use_lae=use_lae,
                 use_surrender=use_surrender,
