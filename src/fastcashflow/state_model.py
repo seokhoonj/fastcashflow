@@ -100,6 +100,14 @@ class CompiledStateModel:
     state_det_at: IntArray | None = None
     state_det_to: IntArray | None = None
     state_det_lump: BoolArray | None = None
+    # Per-state calendar-keyed deterministic transition (the <=1 Transition with
+    # ``at_premium_term=True``), ``(n_states,)`` int. ``state_premium_term_to[s]``
+    # = destination state index for state ``s``'s at-premium_term transition,
+    # or -1 if it has none. Unlike state_det_at (sojourn-keyed, semi-Markov),
+    # this fires at the model point's own ``premium_term_months`` -- a per-MP
+    # calendar trigger the Markov kernel applies directly (active -> paid-up when
+    # the premium-paying period ends). No probability, no sojourn cohorts.
+    state_premium_term_to: IntArray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,28 +147,38 @@ class Transition:
     pays_lump_sum: bool = False
     sojourn_dependent: bool = False
     after_sojourn_months: int = 0
+    at_premium_term: bool = False
 
     def __post_init__(self) -> None:
-        det = int(self.after_sojourn_months) > 0
+        det_sojourn = int(self.after_sojourn_months) > 0
+        det_cal = bool(self.at_premium_term)
+        det = det_sojourn or det_cal
         object.__setattr__(self, "after_sojourn_months", int(self.after_sojourn_months))
         if self.after_sojourn_months < 0:
             raise ValueError(
                 "Transition.after_sojourn_months must be non-negative, got "
                 f"{self.after_sojourn_months}"
             )
+        if det_sojourn and det_cal:
+            raise ValueError(
+                "a Transition has at most one deterministic trigger; set either "
+                "after_sojourn_months (sojourn-keyed) or at_premium_term "
+                "(calendar-keyed at the model point's premium_term), not both"
+            )
         if det and self.rate is not None:
             raise ValueError(
-                "a deterministic transition (after_sojourn_months > 0) carries no "
-                "rate; it fires with probability one"
+                "a deterministic transition (after_sojourn_months > 0 or "
+                "at_premium_term) carries no rate; it fires with probability one"
             )
         if not det and self.rate is None:
             raise ValueError(
-                "a Transition needs either a rate or after_sojourn_months > 0"
+                "a Transition needs a rate, after_sojourn_months > 0, or "
+                "at_premium_term"
             )
         if det and self.sojourn_dependent:
             raise ValueError(
-                "after_sojourn_months is already sojourn-keyed; do not also set "
-                "sojourn_dependent"
+                "a deterministic transition is already keyed (sojourn or "
+                "premium_term); do not also set sojourn_dependent"
             )
 
 
@@ -256,16 +274,20 @@ class State:
                 f"state {self.name!r}: death_benefit_factor must be "
                 f"non-negative, got {factor}"
             )
-        # Deterministic transitions (Transition.after_sojourn_months > 0): at
-        # most one per state (two prob-1 edges from one cohort are ill-defined),
-        # and it must clear the pay cap (pay the cap, then move / exit).
-        det_months = [tr.after_sojourn_months for tr in self.transitions
-                      if tr.after_sojourn_months > 0]
-        if len(det_months) > 1:
+        # Deterministic transitions: at most one per state (two prob-1 edges
+        # from one cohort are ill-defined), counting BOTH the sojourn-keyed
+        # (after_sojourn_months > 0) and the calendar-keyed (at_premium_term)
+        # forms; and it must clear the pay cap (pay the cap, then move / exit).
+        det_trs = [tr for tr in self.transitions
+                   if tr.after_sojourn_months > 0 or tr.at_premium_term]
+        if len(det_trs) > 1:
             raise ValueError(
                 f"state {self.name!r}: at most one deterministic transition "
-                f"(after_sojourn_months > 0) per state, got {len(det_months)}"
+                f"(after_sojourn_months > 0 or at_premium_term) per state, "
+                f"got {len(det_trs)}"
             )
+        det_months = [tr.after_sojourn_months for tr in self.transitions
+                      if tr.after_sojourn_months > 0]
         det = max(det_months) if det_months else 0
         if det > 0 and cap > 0 and det < cap:
             raise ValueError(
@@ -359,12 +381,16 @@ class StateModel:
 # The default in-force model -- two transient states. ``active`` pays premium
 # and is subject to mortality, waiver inception and lapse; ``waiver`` (premium
 # waived on a triggering event) keeps the coverage in force, pays no premium
-# and is subject to mortality alone -- it does not lapse. The waiver-inception
-# transition moves active in-force onto the waiver state. ``seating`` seats
-# STATE_ACTIVE (code 0) on the active state and both STATE_WAIVER (1) and
-# STATE_PAIDUP (2) on the waiver state: a paid-up contract and a waiver
-# contract have identical cash flows, differing only in the cause premiums
-# ceased.
+# and is subject to mortality and its OWN lapse ``lapse_waiver``. The
+# waiver-inception transition moves active in-force onto the waiver state.
+# ``lapse_waiver`` (Basis.lapse_waiver_annual) defaults to a 0 rate, so the
+# waiver state does NOT lapse unless a rate is set -- the pure-waiver default
+# (a waived contract holds free-of-premium cover, so anti-selection keeps it
+# in force). Set a (typically low) ``lapse_waiver_annual`` to model the
+# residual waived-state surrender. ``seating`` seats STATE_ACTIVE (code 0) on
+# the active state and both STATE_WAIVER (1) and STATE_PAIDUP (2) on the waiver
+# state: a paid-up contract and a waiver contract have identical cash flows,
+# differing only in the cause premiums ceased.
 WAIVER_MODEL = StateModel(
     states=(
         State("active", pays_premium=True, transitions=(
@@ -374,6 +400,7 @@ WAIVER_MODEL = StateModel(
         )),
         State("waiver", pays_premium=False, transitions=(
             Transition("mortality"),
+            Transition("lapse_waiver"),
         )),
     ),
     seating=(0, 1, 1),
@@ -391,19 +418,26 @@ WAIVER_MODEL = StateModel(
 # mortality + its own lapse; there is no waiver-inception out of paid-up (you
 # cannot waive a premium you no longer pay). ``seating`` seats STATE_ACTIVE on
 # active (0), STATE_WAIVER on waiver (1) and STATE_PAIDUP on paid-up (2).
-# There is no active -> paid-up transition: paid-up contracts are seated on
-# the paid-up state at the valuation date (an in-force valuation of the
-# paid-up cohort), since premium cessation is a ``premium_term_months`` control,
-# not a modelled transition.
+# The active state carries a calendar-keyed ``at_premium_term`` transition to
+# paid-up: when a model point's premium-paying period ends (month
+# ``premium_term_months``), its active occupancy moves prob-1 to paid-up -- a
+# deterministic per-MP relabel (not a rate, not a sojourn cohort). So a
+# new-business projection seasons active -> paid-up at premium_term, and an
+# in-force valuation of an already-paid-up cohort can still seat directly on
+# paid-up (STATE_PAIDUP). Waiver stays a separate state through premium_term
+# (a premium-waived contract is not the same population as a normal paid-up
+# one), so it keeps ``lapse_waiver``, not ``lapse_paidup``.
 WAIVER_PAIDUP_MODEL = StateModel(
     states=(
         State("active", pays_premium=True, transitions=(
             Transition("mortality"),
             Transition("waiver_incidence", to="waiver"),
             Transition("lapse"),
+            Transition(at_premium_term=True, to="paidup"),
         )),
         State("waiver", pays_premium=False, transitions=(
             Transition("mortality"),
+            Transition("lapse_waiver"),
         )),
         State("paidup", pays_premium=False, transitions=(
             Transition("mortality"),
@@ -530,12 +564,21 @@ def compile_state_model(
     edge_prob: list[FloatArray] = []
     edge_lump_sum: list[bool] = []
     death_exit_rows: list[FloatArray] = []
+    premium_term_to: list[int] = []   # per-state calendar (at_premium_term) dest
     for i, state in enumerate(model.states):
         # ``survive`` accumulates prod_{j}(1 - rate_j) across the transitions
         # applied so far; a leaving transition fires on those survivors.
         survive = np.ones(grid)
         death_exit = np.zeros(grid)   # exact death exit for the deaths reporter
+        pt_to = -1                    # this state's at-premium_term dest (-1 none)
         for tr in state.transitions:
+            # The calendar-keyed deterministic transition carries no rate and
+            # does not reduce ``survive`` (it is applied separately by the
+            # kernel at the model point's premium_term); record its destination
+            # (-2 = exit the in-force set, to=None) and skip the rate edge.
+            if tr.at_premium_term:
+                pt_to = index[tr.to] if tr.to is not None else -2
+                continue
             # A state's mortality decrement is routed to its own rate name
             # (State.mortality_rate_name, default "mortality") so a post-diagnosis
             # state can carry an elevated mortality without re-declaring the
@@ -564,6 +607,7 @@ def compile_state_model(
         edge_prob.append(survive)
         edge_lump_sum.append(False)
         death_exit_rows.append(death_exit)
+        premium_term_to.append(pt_to)
 
     return CompiledStateModel(
         edge_from=np.array(edge_from, dtype=np.int64),
@@ -578,6 +622,7 @@ def compile_state_model(
         state_death_benefit_factor=np.array(
             [s.death_benefit_factor for s in model.states], dtype=np.float64),
         state_det_at=None, state_det_to=None, state_det_lump=None,
+        state_premium_term_to=np.array(premium_term_to, dtype=np.int64),
     )
 
 
@@ -616,6 +661,14 @@ def compile_state_model_with_duration(
       count per state (``max(s.sojourn_tracking_months, 1)``). Untracked states have
       value 1; tracked states have the declared ``sojourn_tracking_months``.
     """
+    if any(tr.at_premium_term for s in model.states for tr in s.transitions):
+        raise NotImplementedError(
+            "at_premium_term (calendar-keyed) transitions are supported on the "
+            "Markov projection path only; this model also has sojourn-tracked "
+            "states, which route to the semi-Markov path. Combining a "
+            "premium_term calendar transition with sojourn tracking is a later "
+            "step."
+        )
     arrays = {name: np.asarray(arr, dtype=np.float64)
               for name, arr in rates.items()}
     if not arrays:

@@ -20,6 +20,7 @@ _RATE_FN_FIELDS: tuple[str, ...] = (
     "mortality_annual",
     "lapse_annual",
     "lapse_paidup_annual",
+    "lapse_waiver_annual",
     "waiver_incidence_annual",
     "ci_incidence_annual",
     "premium_factor_annual",
@@ -754,6 +755,16 @@ class Basis:
     # premium-paying actives -- the Korean post-payment lapse jump. When
     # None the paid-up state falls back to ``lapse_annual``.
     lapse_paidup_annual: RateFn | None = None
+    # Lapse rate for the WAIVER state -- used only by a state model whose
+    # waiver state references the ``lapse_waiver`` transition rate (e.g.
+    # STATE_MODELS["WAIVER"]). A premium-waived contract (waiver triggered by
+    # a diagnosis / disability) usually surrenders at a much LOWER rate than a
+    # premium-paying active -- it holds valuable free-of-premium cover, so
+    # anti-selection keeps it in force; the only realistic exit is cashing out
+    # the surrender value. When None the waiver state does NOT lapse (rate 0),
+    # so the default preserves the pure-waiver behaviour; set a (low) rate to
+    # model the residual waived-state surrender.
+    lapse_waiver_annual: RateFn | None = None
     # Premium SHAPE -- a multiplicative factor on the level ``ModelPoints.premium``
     # by ``(sex, issue_age, duration, issue_class, elapsed)`` (the standard 5-arg
     # RateFn). The charge each premium-paying month is

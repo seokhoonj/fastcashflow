@@ -1764,6 +1764,17 @@ def _measure_fast(
                     annual_to_monthly(paidup_fn(
                         sex_grid, issue_age_grid, duration_grid,
                         issue_class_grid, elapsed_grid)))
+            if model_references_rate(state_model, "lapse_waiver"):
+                # Waiver state defaults to NO lapse (rate 0) -- the pure-waiver
+                # behaviour -- unless lapse_waiver_annual is set (see the same
+                # block in projection.project_cashflows).
+                if basis.lapse_waiver_annual is None:
+                    rate_dict["lapse_waiver"] = np.zeros_like(rate_dict["lapse"])
+                else:
+                    rate_dict["lapse_waiver"] = np.ascontiguousarray(
+                        annual_to_monthly(basis.lapse_waiver_annual(
+                            sex_grid, issue_age_grid, duration_grid,
+                            issue_class_grid, elapsed_grid)))
             compiled = compile_state_model(state_model, rate_dict)
             state_lapse_grid = _state_lapse_stack(state_model, rate_dict)
             edge_from = compiled.edge_from
@@ -2146,6 +2157,7 @@ def _measure_fast(
             kernel = _get_markov_kernel(
                 n_states, edge_from, edge_to, edge_lump_sum,
                 premium_state, benefit_state,
+                premium_term_to=compiled.state_premium_term_to,
                 use_morbidity=use_morbidity, use_annuity=use_annuity,
                 use_disability=use_disability, use_lae=use_lae,
                 use_surrender=use_surrender,
